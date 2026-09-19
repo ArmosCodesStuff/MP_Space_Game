@@ -39,7 +39,7 @@ history pick the work up from it alone. Update it in the same change as the code
 **State as of 2026-09-18: version 0.3.0 plus Unreleased (see it for everything since: docking arms
 and the unload queue, the fleet and hauler pods, the idle economy, base menu, bunker-buster missile,
 painted turrets, docking bombers and more).** Typecheck clean against the real `GodotSharp.dll`,
-`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 327 checks across
+`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 338 checks across
 a single-player run and a host with two guests. Unlike earlier releases, this one was also **looked at**:
 `tools/screens/run.sh` renders the select screen, the creator, a fresh spawn under the base, both
 classes in the hub, the K window, a bomber strike, and turret close-ups on a virtual display; layout
@@ -180,6 +180,41 @@ reachable, which is fine: both harnesses build from the `nupkgs` folder that shi
 ---
 
 ## Unreleased
+
+### Chunk 6a: light raiders and the pin
+
+**Checked:** smoke test **three runs in a row, 338 checks each** (11 new, one of them over the network;
+a pin that does not slow, a boost that does not boost, and all raiders on one post were each put in
+on purpose in a copy and caught); screenshot sweep **59 frames, 0 lint**; three raiders pinning a
+battleship looked at.
+
+#### Added
+
+- **Light raiders** (enemy fighters; the black-and-red sprite, 34 u, 25 hull — the hull a default).
+  Host-simulated and sent to guests; hostile, so every player weapon can hit them and point defence
+  treats them as small craft. They go after the nearest **player ship, miner, salvager or hauler**.
+- **Their approach**: they cruise at 100 u/s (an unupgraded capital ship), then from **1600 u** — the
+  distance 3 s at **500%** covers, plus their 100 u reach — they **boost for 3 s**, landing at their
+  post rather than on the target.
+- **Their posts**: **ahead, left and right** of the target by its heading, **90 u off its hull**
+  (inside 90% of their 100 u reach). Measured from the hull, so they sit beside a long ship, not on it.
+- **The pin**: while a light holds its post within 100 u, the target is **held to 20% of its top speed,
+  thrusting forward, unable to turn** — player ships (the host tells the owner's helm), miners,
+  salvagers and the hauler (20% along its lane). A faint red tether shows the web.
+- **Their laser**: **1 DPS** each (the raider damage x).
+- Nothing spawns them yet in play: patrols (6c) and raids (7) will. The tests spawn them directly.
+
+#### Changed (tests)
+
+- The raider block hands the ship back at full hull, and the armed-dummy check counts the missile's
+  own damage — regeneration had fooled a "hull changed" wait.
+
+#### Decided
+
+- **Boost distance: 1600 u**, from the player's own formula (3 s at 500% + 100 u), which lands the
+  raider at its post; the literal "1200 u" would overshoot by 300 u.
+
+### Earlier in Unreleased
 
 ### Chunk 6, art: the enemy fighters (staged; no code yet)
 

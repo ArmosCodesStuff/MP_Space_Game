@@ -204,7 +204,7 @@ Recorded here so every chunk builds from the written word, not from memory.
   of their weapon range** so they never lose DPS to repositioning. **Patrols: 3 lights + 1 heavy.**
 - **New chunk (after 6) — base weapons**: a 5 DPS laser at 300 u and a tracking 25-damage missile at
   600 u, ~120 u/s, one every 5 s. **Chunk 4's distance is decided: 1500 u** to each field's edge.
-- **Chunk 6 is split**: 6a light fighters and the pin; 6b heavy fighters and the predicted-impact
+- **Chunk 6 is split**: 6a light fighters and the pin (DONE); 6b heavy fighters and the predicted-impact
   missile; 6c patrols (3 light + 1 heavy). Art for both is staged in `art_unused/`.
 - **Chunk 7 — raids**: on a failed mission the boss sends patrols in **from the perimeter of the base
   map** against the miners, salvagers, hauler and players.
