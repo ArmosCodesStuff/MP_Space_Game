@@ -39,7 +39,7 @@ history pick the work up from it alone. Update it in the same change as the code
 **State as of 2026-09-18: version 0.3.0 plus Unreleased (see it for everything since: docking arms
 and the unload queue, the fleet and hauler pods, the idle economy, base menu, bunker-buster missile,
 painted turrets, docking bombers and more).** Typecheck clean against the real `GodotSharp.dll`,
-`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 305 checks across
+`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 312 checks across
 a single-player run and a host with two guests. Unlike earlier releases, this one was also **looked at**:
 `tools/screens/run.sh` renders the select screen, the creator, a fresh spawn under the base, both
 classes in the hub, the K window, a bomber strike, and turret close-ups on a virtual display; layout
@@ -179,6 +179,28 @@ reachable, which is fine: both harnesses build from the `nupkgs` folder that shi
 ---
 
 ## Unreleased
+
+### Chunk 3 of 9: the boss health bar
+
+**Checked:** smoke test **three runs in a row, 312 checks each** (7 new; the bounce and the merging each
+broken on purpose in a copy and caught); screenshot sweep **54 frames, 0 lint**; the bar mid-bounce and
+**the new player missile (carried over from chunk 2)** looked at, close up.
+
+#### Added
+
+- **The boss's health bar**, top centre in the arena: name, tier and hull over a red bar. **Every hit
+  leaves a chunk** — exactly the slice it took — that **bobs up and down a few times, quickly, the
+  bounces dying away, while it turns white and fades** (0.8 s). **Hits within 60 ms share one chunk**,
+  so a stream of small hits reads as one clean chunk. Guests see it too (it follows the boss's hull).
+
+#### Fixed
+
+- **The bar threw on its first draw** before any boss existed (every peer, found by the run): it starts
+  hidden and never draws without a boss.
+- **Test: the burst check could not fail** — it hit ten times inside one frame, and the bar reads the
+  hull once a frame. It now spans frames, and a merge mutant proves it.
+
+### Earlier in Unreleased
 
 ### Chunk 2 of 9: boss and combat tuning
 

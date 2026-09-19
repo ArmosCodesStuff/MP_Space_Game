@@ -183,7 +183,7 @@ Recorded here so every chunk builds from the written word, not from memory.
   regeneration). **Regeneration: 0.5% of max hull per second in combat, 3% out of combat.** Music:
   in the "target selected, not yet fighting" state the **ambient plays 50% softer** under the softened
   combat track. **Player (battleship) missiles: sharper tip, 20% skinnier, 25% longer, higher detail.**
-- **Chunk 3 — the boss health bar**: damage leaves a chunk that bounces up and down a few times,
+- **Chunk 3 — the boss health bar (DONE)**: damage leaves a chunk that bounces up and down a few times,
   quickly, turning white as it fades.
 - **Chunk 4 — layout**: the salvage field ~500 u further left; the mining belt 300–500 u closer; both
   the **same distance from the base, measured to each area's boundary**.
