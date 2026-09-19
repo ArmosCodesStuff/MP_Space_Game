@@ -170,6 +170,42 @@ levels once a second and ship and hauler state ten times a second; a guest's own
   such as Tailscale or ZeroTier (everyone joins the VPN; use its addresses). There is no relay
   server or NAT punch-through: that needs infrastructure outside the game.
 
+## The player's specification for the coming chunks (2-8), as given
+
+Recorded here so every chunk builds from the written word, not from memory.
+
+- **Chunk 2 — boss and combat tuning.** Boss hull **1200** at tier 0. Boss lasers about **3 DPS** base.
+  Cadence: the **death beam every 30 s**; a telegraphed **charge every 30 s on the opposite cadence**
+  (15 s apart); **trident missile volleys in between** — **3 missiles, 0° and ±25°, 15 damage each,
+  2× the size, ~10% slower, ~20% more range**. **Damage from one ongoing source lands at most once per
+  0.35 s** on a player; **persistent mechanics (the beam, zones) check every 0.51 s**; the beam does
+  **100 per landed instance**. **Out of combat = 12 s** without dealing or taking damage (music and
+  regeneration). **Regeneration: 0.5% of max hull per second in combat, 3% out of combat.** Music:
+  in the "target selected, not yet fighting" state the **ambient plays 50% softer** under the softened
+  combat track. **Player (battleship) missiles: sharper tip, 20% skinnier, 25% longer, higher detail.**
+- **Chunk 3 — the boss health bar**: damage leaves a chunk that bounces up and down a few times,
+  quickly, turning white as it fades.
+- **Chunk 4 — layout**: the salvage field ~500 u further left; the mining belt 300–500 u closer; both
+  the **same distance from the base, measured to each area's boundary**.
+- **Chunk 5 — utility hull and rebuilds**: miners/salvagers 60 hull, hauler 150; destroyed ones are
+  rebuilt at the base after 30 s for **10% of all money invested so far in that category's upgrades**
+  (a running total per category: miner, salvager, hauler).
+- **Chunk 6 — enemy fighters.** A variable **raider damage x**: **light fighters 1 DPS** (x), **heavy
+  fighters 2x**. **Light fighters** (the black-and-red sprite, **2× a carrier fighter's size**) are
+  **webifiers**: within **100 u** they **pin** a target — it is held to **20% of max speed with forced
+  thrust and cannot turn** (a soft crowd control). They cruise **as slow as an unupgraded capital ship**
+  but **boost to 500% for ~3 s** once about **1200 u** out (the distance ~3 s of boost covers, plus
+  100 u), landing **near** the target, not on it, in **formation: ahead, left and right**. **Heavy
+  fighters** (the battleship cut in half, skinnier, the **front turret only**, **~4× a light fighter's
+  size**) hang back **behind the target**, facing it, choosing an angle of approach, until it is
+  tackled; then they close to their short, high-DPS lasers. Heavies also fire a **fat missile (at least
+  the player missile's size) within 500 u, 7 s to impact, at the target's predicted position**, with a
+  **red circle marking the blast** (the boss telegraph's red) — dodgeable. Both types hold **within 90%
+  of their weapon range** so they never lose DPS to repositioning. **Patrols: 3 lights + 1 heavy.**
+- **Chunk 7 — raids**: on a failed mission the boss sends patrols in **from the perimeter of the base
+  map** against the miners, salvagers, hauler and players.
+- **Chunk 8 — the BASE button in the arena, and a dedicated multiplayer arena test.**
+
 ## Sound and look
 
 - **Sounds are local and cosmetic**: every peer plays what it sees (`Sfx`). Loudness is by the camera

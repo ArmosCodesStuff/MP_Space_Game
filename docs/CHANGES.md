@@ -39,7 +39,7 @@ history pick the work up from it alone. Update it in the same change as the code
 **State as of 2026-09-18: version 0.3.0 plus Unreleased (see it for everything since: docking arms
 and the unload queue, the fleet and hauler pods, the idle economy, base menu, bunker-buster missile,
 painted turrets, docking bombers and more).** Typecheck clean against the real `GodotSharp.dll`,
-`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 284 checks across
+`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 292 checks across
 a single-player run and a host with two guests. Unlike earlier releases, this one was also **looked at**:
 `tools/screens/run.sh` renders the select screen, the creator, a fresh spawn under the base, both
 classes in the hub, the K window, a bomber strike, and turret close-ups on a virtual display; layout
@@ -74,6 +74,7 @@ travel, and no economy beyond an idle ore/salvage counter.
 | Mouse wheel | zoom: 33% further out to 1.5× closer |
 | Y | free camera: arrow keys or the screen edge move it (5000 u tether); Y again returns |
 | L | pilot: level, EXP, points and upgrades |
+| V | warp (every capital ship; 3 s warm-up, 30 s cooldown) |
 | Left-click a building | its menu (TIO: WARP TO TARGET; base: BASE) |
 | B | base menu: upgrades, and REFIT (the only way to change class, name or colours; costs 10%) |
 | 1 – 6 | open hotkeys: bound and remappable, empty until abilities or items fill them |
@@ -178,6 +179,26 @@ reachable, which is fine: both harnesses build from the `nupkgs` folder that shi
 ---
 
 ## Unreleased
+
+### Chunk 1 of 8: warp
+
+**Checked:** smoke test **three runs in a row, 292 checks each** (8 new, each proven able to fail by
+breaking warp on purpose); screenshot sweep **53 frames, 0 lint**; the warp frames looked at.
+
+#### Added
+
+- **Warp (V) for every capital ship** — a fixed key and a **hull cooldown, never an ability-bar slot**.
+  After a **3 s warm-up** (an accent-coloured charge around the hull) the ship jumps to the **selected
+  entity if it is within 45° of the bow**, stopping just short of it (its radius + half the ship + 60 u),
+  otherwise **2000 u straight ahead**. Then a **30 s cooldown**. The hull bar reads WARP READY /
+  WARPING 1.4 s / WARP 12 s. Other players see the charge and a clean snap, not a glide.
+- **The camera cuts to your ship after a jump** (a 2000 u pan was disorienting).
+
+#### Changed
+
+- **Fire mode moves from V to G.** V is a fixed key now; a saved binding on a fixed key is ignored.
+
+### Earlier in Unreleased
 
 ### Sound, UI remaster, double-click clear, boss tiers (this batch, part 1 of 2)
 
