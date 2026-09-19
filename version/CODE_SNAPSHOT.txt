@@ -1,8 +1,8 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-19 21:18 at git commit bac5f7a: typecheck clean, smoke test 3/3 passes
-//   (338 checks), 59-frame UI sweep 0 findings.
-// 52 files, 8950 lines. Code only: sprites, sounds and docs are in the zip.
+// Taken 2026-09-19 21:46 at git commit d1f5bd4: typecheck clean, smoke test 3/3 passes
+//   (345 checks), 60-frame UI sweep 0 findings.
+// 52 files, 9134 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -31,7 +31,7 @@
 //   scripts/Gatherer.cs                            249 lines   sha256 f64121c0c5f7
 //   scripts/Hauler.cs                              316 lines   sha256 b471204daf64
 //   scripts/HealthBar.cs                            36 lines   sha256 97c42a282205
-//   scripts/Hub.cs                                1060 lines   sha256 67933d3868dc
+//   scripts/Hub.cs                                1118 lines   sha256 9133b35048bd
 //   scripts/MainMenu.cs                            224 lines   sha256 39dbc31417c6
 //   scripts/Missions.cs                             26 lines   sha256 6870c2208143
 //   scripts/Music.cs                                78 lines   sha256 19cdf8e2b59c
@@ -41,7 +41,7 @@
 //   scripts/Plume.cs                                25 lines   sha256 cdbeb9b8fc58
 //   scripts/Progression.cs                          73 lines   sha256 d3b0cd99118f
 //   scripts/Radar.cs                               129 lines   sha256 189719fcc94f
-//   scripts/Raider.cs                              176 lines   sha256 8d06ba020c76
+//   scripts/Raider.cs                              242 lines   sha256 8bdf5f176bf2
 //   scripts/SessionMenu.cs                          89 lines   sha256 5febd0d32676
 //   scripts/Settings.cs                             58 lines   sha256 80100257eda5
 //   scripts/Sfx.cs                                  65 lines   sha256 4a51ee11de9a
@@ -55,11 +55,11 @@
 //   scripts/Torpedo.cs                             154 lines   sha256 8bcbf075476e
 //   scripts/Txt.cs                                  31 lines   sha256 0b56559599f8
 //   scripts/Ui.cs                                   99 lines   sha256 0a376702a4e8
-//   scripts/Yard.cs                                413 lines   sha256 0f285072a4e9
+//   scripts/Yard.cs                                414 lines   sha256 e22f4c9c64df
 //   typecheck/typecheck.sh                          57 lines   sha256 e68277c09f34
-//   tools/screens/Shots.cs.txt                     386 lines   sha256 655fd6cfb25b
+//   tools/screens/Shots.cs.txt                     397 lines   sha256 a6975ade9542
 //   tools/screens/run.sh                            40 lines   sha256 a47174d56c6a
-//   tools/smoketest/SmokeTest.cs.txt              1335 lines   sha256 72d77ecd3a80
+//   tools/smoketest/SmokeTest.cs.txt              1383 lines   sha256 f457f8e58c81
 //   tools/smoketest/run.sh                          52 lines   sha256 67c03204c10d
 //==============================================================================
 
@@ -2364,7 +2364,7 @@ public static class HealthBar
 
 //==============================================================================
 // FILE: scripts/Hub.cs
-// 1060 lines   sha256 67933d3868dc
+// 1118 lines   sha256 9133b35048bd
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -2913,18 +2913,18 @@ public partial class Hub : Node2D
         if (Yard.Hauler != null && Yard.Hauler.State is not (Hauler.St.Destroyed or Hauler.St.Away)) yield return Yard.Hauler;
     }
 
-    public Raider SpawnRaider(Vector2 at)
+    public Raider SpawnRaider(Vector2 at, RaiderKind kind = RaiderKind.Light)
     {
         if (!Net.IsHost) return null;
-        var r = new Raider { Hub = this, NetId = ++_raiderIds, Position = at, Name = $"Raider_{_raiderIds}" };
+        var r = new Raider { Hub = this, Kind = kind, NetId = ++_raiderIds, Position = at, Name = $"Raider_{_raiderIds}" };
         Raiders.Add(r); AddChild(r);
-        if (Net.IsOnline) Rpc(nameof(NetRaiderSpawn), r.NetId, at);
+        if (Net.IsOnline) Rpc(nameof(NetRaiderSpawn), r.NetId, at, (int)kind);
         return r;
     }
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetRaiderSpawn(int id, Vector2 at)
+    private void NetRaiderSpawn(int id, Vector2 at, int kind)
     {
-        var r = new Raider { Hub = this, NetId = id, Position = at, Name = $"Raider_{id}" };
+        var r = new Raider { Hub = this, Kind = (RaiderKind)kind, NetId = id, Position = at, Name = $"Raider_{id}" };
         Raiders.Add(r); AddChild(r);
     }
 
@@ -2941,6 +2941,41 @@ public partial class Hub : Node2D
         if (r == null) return;
         AddChild(new Explosion { Position = r.Position, Radius = 28f });
         Raiders.Remove(r); r.QueueFree();
+    }
+
+    // A heavy's missile: flies 7 s to a marked point, and the host lands the blast there.
+    private readonly List<(Vector2 at, double left, int from)> _blasts = new();
+    public int BlastsPending => _blasts.Count;
+    public void HeavyMissile(Vector2 from, Vector2 at, int raiderId)
+    {
+        if (!Net.IsHost) return;
+        _blasts.Add((at, Raider.MissileFlight, raiderId));
+        ShowHeavyMissile(from, at);
+        if (Net.IsOnline) Rpc(nameof(NetHeavyMissile), from, at);
+    }
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void NetHeavyMissile(Vector2 from, Vector2 at) => ShowHeavyMissile(from, at);
+    private void ShowHeavyMissile(Vector2 from, Vector2 at)
+    {
+        AddChild(new Telegraph { Line = false, A = at, Radius = Raider.BlastRadius, Duration = Raider.MissileFlight });
+        AddChild(new HeavyMissileVisual { From = from, To = at, Flight = Raider.MissileFlight });
+    }
+    private void TickBlasts(double delta)
+    {
+        for (int i = _blasts.Count - 1; i >= 0; i--)
+        {
+            var b = _blasts[i]; b.left -= delta;
+            if (b.left > 0) { _blasts[i] = b; continue; }
+            _blasts.RemoveAt(i);
+            foreach (var t in RaiderTargets().ToList())
+                if (Raider.Gap(b.at, t) <= Raider.BlastRadius)
+                    switch (t)
+                    {
+                        case PlayerShip p: p.Hit(Raider.MissileDamage, b.at, $"heavy:{b.from}:missile"); break;
+                        case Gatherer g: g.TakeDamage(Raider.MissileDamage); break;
+                        case Hauler h: h.TakeDamage(Raider.MissileDamage); break;
+                    }
+        }
     }
 
     private void SendRaiders(double delta)
@@ -3079,6 +3114,7 @@ public partial class Hub : Node2D
     public override void _Process(double delta)
     {
         SendRaiders(delta);
+        if (Net.IsHost) TickBlasts(delta);
         TickMission(delta);
         if (Music.I != null)
         {
@@ -3424,6 +3460,28 @@ public partial class MissionBar : Node2D
         DrawRect(new Rect2(at - new Vector2(W / 2, H / 2), new Vector2(W * k, H)), new Color(1f, 0.4f, 0.3f, 0.95f));
         DrawRect(new Rect2(at - new Vector2(W / 2, H / 2), new Vector2(W, H)), new Color(1f, 0.6f, 0.5f), false, 1.5f);
         Txt.Centre(this, ThemeDB.FallbackFont, at + new Vector2(0, -16), "OPENING PORTAL", Txt.Size(14), new Color(1f, 0.7f, 0.6f));
+    }
+}
+
+// The heavy's fat missile, drawn flying straight to its marked point (the host lands the blast).
+public partial class HeavyMissileVisual : Node2D
+{
+    public Vector2 From, To; public double Flight;
+    private double _t;
+    public override void _Ready() { Position = From; Rotation = (To - From).Angle() + Mathf.Pi / 2f; ZIndex = 6; }
+    public override void _Process(double delta)
+    {
+        _t += delta;
+        Position = From.Lerp(To, (float)System.Math.Min(1, _t / Flight));
+        if (_t >= Flight) { GetParent().AddChild(new Explosion { Position = To, Radius = Raider.BlastRadius * 0.8f }); QueueFree(); }
+        QueueRedraw();
+    }
+    public override void _Draw()
+    {   // fat: wider and longer than the player's missile
+        var body = new Color(0.45f, 0.30f, 0.28f);
+        DrawRect(new Rect2(-5f, -16f, 10f, 34f), body);
+        DrawColoredPolygon(new[] { new Vector2(-5f, -16f), new Vector2(0, -25f), new Vector2(5f, -16f) }, new Color(1f, 0.3f, 0.25f));
+        DrawCircle(new Vector2(0, 19f), 4.2f, new Color(1f, 0.6f, 0.3f));
     }
 }
 
@@ -5075,7 +5133,7 @@ public partial class Radar : Control
 
 //==============================================================================
 // FILE: scripts/Raider.cs
-// 176 lines   sha256 8d06ba020c76
+// 242 lines   sha256 8bdf5f176bf2
 //==============================================================================
 using Godot;
 using System.Linq;
@@ -5090,25 +5148,41 @@ using System.Linq;
 //   target (by its heading), 90 u out: inside 90% of their 100 u reach, so they never
 //   lose damage to repositioning. Held there, a light PINS its target: the target is
 //   kept to 20% of its top speed, thrusting forward, unable to turn -- a soft lock.
-//   It fires a 1 DPS laser (the raider damage "x"; a heavy's is 2x -- chunk 6b).
+//   It fires a 1 DPS laser (the raider damage "x").
+//
+//   HEAVY: the battleship cut in half -- 4x a light's size, one turret. It hangs back
+//   BEHIND its target (the approach is from the rear), facing it, 450 u out, until the
+//   target is pinned; then it afterburns in to 135 u off the hull and fires a short,
+//   hard laser: 2x the raider damage. Within 500 u it also fires a fat missile at where
+//   the target WILL be in 7 s (its speed carried forward): a red circle marks the spot
+//   for all 7 s, and the blast lands there -- move off the line and it misses.
 //
 // Targets: the nearest player ship, miner, salvager or hauler.
 // ─────────────────────────────────────────────────────────────────────────────
-public enum RaiderKind { Light }
+public enum RaiderKind { Light, Heavy }
 
 public partial class Raider : Node2D, IHittable
 {
     public Hub Hub;
     public RaiderKind Kind = RaiderKind.Light;
     public int NetId { get; set; }
-    public double Hp = LightHull;
+    public double Hp;
     public bool Alive => Hp > 0;
-    public float HitRadius => Length * 0.4f;
+    public bool Heavy => Kind == RaiderKind.Heavy;
+    public float Length => Heavy ? HeavyLength : LightLength;
+    public double MaxHull => Heavy ? HeavyHull : LightHull;
+    public float HitRadius => Length * (Heavy ? 0.3f : 0.4f);
     public bool Selectable => true;
 
-    public const float Length = 34f;                   // twice a carrier fighter
-    public const double LightHull = 25;
-    public const double RaiderDps = 1.0;               // x
+    public const float LightLength = 34f;              // twice a carrier fighter
+    public const float HeavyLength = 4f * LightLength; // 136 u
+    public const double LightHull = 25, HeavyHull = 100;
+    public const double RaiderDps = 1.0;               // x -- a light's laser; a heavy's is 2x
+    public const double HeavyDps = 2 * RaiderDps;
+    public const float Afterburn = 300f;               // a heavy closing on a pinned target
+    public const float HeavyReach = 150f, HeavyHold = 0.9f * HeavyReach, WaitOut = 450f;
+    public const float MissileRange = 500f, BlastRadius = 90f;
+    public const double MissileFlight = 7.0, MissileEvery = 12.0, MissileDamage = 30;
     public const double ShotEvery = 1.0;
     public const float Cruise = 100f;                  // an unupgraded capital ship's pace
     public const float BoostMult = 5f;                 // 500%
@@ -5123,7 +5197,9 @@ public partial class Raider : Node2D, IHittable
     public bool Latched { get; private set; }
     public bool Boosting => _boostLeft > 0;
     public float Speed { get; private set; }
-    private double _boostLeft, _shot;
+    private double _boostLeft, _shot, _missileCd = 2.0;
+    private Vector2 _lastTargetPos; private Vector2 _targetVel;
+    private Sprite2D _turret;
     private bool _boostUsed;
     private Vector2 _netPos; private float _netRot; private bool _hasNet;
     private Vector2? _tether;                          // guests: where the web goes
@@ -5131,9 +5207,18 @@ public partial class Raider : Node2D, IHittable
 
     public override void _Ready()
     {
-        var tex = GD.Load<Texture2D>("res://enemy_light_fighter.png");
+        Hp = MaxHull;
+        var tex = GD.Load<Texture2D>(Heavy ? "res://enemy_heavy_hull.png" : "res://enemy_light_fighter.png");
         _sprite = new Sprite2D { Texture = tex, Scale = Vector2.One * (Length / tex.GetHeight()) };
         AddChild(_sprite);
+        if (Heavy)
+        {   // the battleship's front turret on its mount (62.4 px down the 150 px half-hull), dark as the hull
+            _sprite.Modulate = new Color(0.62f, 0.40f, 0.40f);
+            var tt = GD.Load<Texture2D>("res://turret_bs_main.png");
+            _turret = new Sprite2D { Texture = tt, Position = new Vector2(0, (62.4f - 75f) * Length / 150f),
+                                     Scale = Vector2.One * (Length / 150f) * 0.8f, Modulate = new Color(0.62f, 0.40f, 0.40f), ZIndex = 1 };
+            AddChild(_turret);
+        }
         ZIndex = 5;
         Combat.Hostiles.Add(this);
     }
@@ -5206,6 +5291,8 @@ public partial class Raider : Node2D, IHittable
         if (!Alive) return;
         if (!Up(Target)) { Target = Hub.RaiderTargets().OrderBy(t => t.Position.DistanceTo(Position)).FirstOrDefault(); Latched = false; _boostUsed = false; }
         if (Target == null) { Speed = 0; QueueRedraw(); return; }
+        _targetVel = dt > 0 ? (Target.Position - _lastTargetPos) / dt : Vector2.Zero; _lastTargetPos = Target.Position;
+        if (Heavy) { TickHeavy(delta); QueueRedraw(); return; }
 
         // my post around the target: ahead, left or right by its heading, 90 u out
         var mates = Hub.Raiders.Where(r => r.Alive && r.Target == Target).OrderBy(r => r.NetId).ToList();
@@ -5239,6 +5326,42 @@ public partial class Raider : Node2D, IHittable
         QueueRedraw();
     }
 
+    static bool PinnedNow(Node2D t) => t switch { PlayerShip p => p.Pinned, Gatherer g => g.Pinned, Hauler h => h.Pinned, _ => false };
+
+    // the heavy: wait astern until the target is pinned, then afterburn in; missiles within 500 u
+    private void TickHeavy(double delta)
+    {
+        float dt = (float)delta;
+        var astern = -Vector2.Up.Rotated(Target.Rotation);                    // it comes in from the rear
+        bool pinned = PinnedNow(Target);
+        var dest = pinned ? Target.Position + astern * (Extent(Target, astern) + HeavyHold)
+                          : Target.Position + astern * WaitOut;
+        float top = pinned ? Afterburn : Cruise;
+        float d = Position.DistanceTo(dest);
+        Speed = Mathf.Min(top, d * 6f);
+        Position = Position.MoveToward(dest, Speed * dt);
+        var face = (Target.Position - Position).Angle() + Mathf.Pi / 2f;
+        Rotation = Mathf.LerpAngle(Rotation, face, Mathf.Clamp(4f * dt, 0f, 1f));
+        if (_turret != null) _turret.GlobalRotation = face;                  // its one turret tracks the target
+        Latched = pinned && Gap(Position, Target) <= HeavyReach;
+        if (Latched)
+        {
+            _shot -= delta;
+            if (_shot <= 0)
+            {
+                _shot = 0.5;
+                Strike(Target, HeavyDps * 0.5);
+                Combat.Flash(ToGlobal(_turret?.Position ?? Vector2.Zero), Target.Position, new Color(1f, 0.35f, 0.25f));
+            }
+        }
+        _missileCd -= delta;
+        if (_missileCd <= 0 && Position.DistanceTo(Target.Position) <= MissileRange)
+        {   // at where it WILL be: its velocity carried 7 s forward
+            _missileCd = MissileEvery;
+            Hub.HeavyMissile(Position, Target.Position + _targetVel * (float)MissileFlight, NetId);
+        }
+    }
+
     public void SetNet(Vector2 p, float rot, double hp, Vector2? tether) { _netPos = p; _netRot = rot; _hasNet = true; Hp = hp; _tether = tether; }
     public Vector2? TetherTo => Net.Sim ? (Latched && Up(Target) ? Target.Position : null) : _tether;
 
@@ -5249,8 +5372,9 @@ public partial class Raider : Node2D, IHittable
             var inv = GlobalTransform.AffineInverse();
             DrawLine(Vector2.Zero, inv * to, new Color(1f, 0.3f, 0.25f, 0.35f), 1.5f);
         }
-        if (Boosting) Plume.Draw(this, new Vector2(0, Length * 0.5f), Vector2.Down, Length * 1.6f, new Color(1f, 0.35f, 0.25f), 1f, true);
-        else Plume.Draw(this, new Vector2(0, Length * 0.5f), Vector2.Down, Length, new Color(1f, 0.35f, 0.25f), 0.5f, Speed > 1f);
+        float plume = Heavy ? Length * 0.5f : Length;
+        if (Boosting || (Heavy && Speed > Cruise + 1f)) Plume.Draw(this, new Vector2(0, Length * 0.5f), Vector2.Down, plume * 1.6f, new Color(1f, 0.35f, 0.25f), 1f, true);
+        else Plume.Draw(this, new Vector2(0, Length * 0.5f), Vector2.Down, plume, new Color(1f, 0.35f, 0.25f), 0.5f, Speed > 1f);
     }
 }
 
@@ -6962,7 +7086,7 @@ public static class Ui
 
 //==============================================================================
 // FILE: scripts/Yard.cs
-// 413 lines   sha256 0f285072a4e9
+// 414 lines   sha256 e22f4c9c64df
 //==============================================================================
 using Godot;
 using System;
@@ -7060,12 +7184,13 @@ public partial class Yard : Node2D
     private static Trip _trip;
     public static double TripCredits;                 // earned while away (a bounty), paid on return
     public static double LastAway, LastAwayOre, LastAwaySalvage;   // what the last return credited
+    public static double TripStartCredits;            // the credits set aside when the last trip began
 
     public void SaveForTrip()
     {
         _trip = new Trip(Ore, Salvage, Credits, new Dictionary<string, int>(_levels), new Dictionary<string, double>(_invested),
                          FleetRate(GatherKind.Miner), FleetRate(GatherKind.Salvager));
-        TripCredits = 0; TripClock = 0;
+        TripCredits = 0; TripClock = 0; TripStartCredits = Credits;
     }
 
     private void ReturnFromTrip()
@@ -7442,7 +7567,7 @@ echo "0 errors." >&2
 
 //==============================================================================
 // FILE: tools/screens/Shots.cs.txt
-// 386 lines   sha256 655fd6cfb25b
+// 397 lines   sha256 a6975ade9542
 //==============================================================================
 // Screenshot driver. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Shots.cs, registers it as an autoload, and runs the real
@@ -7674,6 +7799,17 @@ public partial class _Shots : Node
             foreach (var r in raid) if (GodotObject.IsInstanceValid(r)) r.TakeDamage(999);
             zp.SetValue(H, z0); rs.Position = keepR; rs.Velocity = Vector2.Zero; await W(0.3);
         }
+        // a heavy raider waiting astern, its missile flying at the ship's predicted spot (the red circle)
+        {
+            var hs2 = H.GetNode<PlayerShip>("Ship_1"); var keepH2 = hs2.Position;
+            // facing east, so "astern" is west: the heavy waits beside the HUD, not under it
+            hs2.Position = new Vector2(4000, -2500); hs2.Velocity = Vector2.Zero; hs2.Rotation = Mathf.Pi / 2f; await W(0.3);
+            var hv = H.SpawnRaider(hs2.Position + new Vector2(-600, 0), RaiderKind.Heavy);
+            var zp = typeof(Hub).GetProperty("ZoomLevel"); float z0 = (float)zp.GetValue(H); zp.SetValue(H, 0.85f);   // ship and heavy both in view
+            await W(4.5); await Snap("49_heavy_waiting_missile");
+            if (GodotObject.IsInstanceValid(hv)) hv.TakeDamage(9999);
+            zp.SetValue(H, z0); hs2.Position = keepH2; hs2.Velocity = Vector2.Zero; await W(0.3);
+        }
         // a waypoint picked on the radar: its ring there, and the HUD naming it
         {
             H.SelectWaypoint("BASE", Hub.BasePos, 260f); await W(0.3);
@@ -7878,7 +8014,7 @@ ls /tmp/shots
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 1335 lines   sha256 72d77ecd3a80
+// 1383 lines   sha256 f457f8e58c81
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -8729,6 +8865,49 @@ public partial class _Test : Node
             me.Position = keepPos; me.Velocity = Vector2.Zero; me.TakeDamage(-(me.MaxHp - me.Hp));   // hand over at full hull
         }
 
+        // ── raiders (6b): the heavy -- waits astern, a predicted missile, afterburns in on a pinned target ──
+        {
+            var hm = Me; var keepH = hm.Position;
+            hm.Position = new Vector2(4000, -2500); hm.Velocity = Vector2.Zero; hm.Rotation = 0f; await Wait(0.3);
+            var hv = H.SpawnRaider(hm.Position + new Vector2(0, 900), RaiderKind.Heavy);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(hv.Heavy && Math.Abs(hv.Length - 4 * Raider.LightLength) < 1e-3 && Math.Abs(Raider.HeavyDps - 2 * Raider.RaiderDps) < 1e-9 && Raider.RaiderDps == 1,
+                  "a heavy raider: four times a light's size, twice the raider damage (2 DPS)");
+            double HvLaser() => hm.DamageBySource.Where(kv => kv.Key == $"raider:{hv.NetId}").Sum(kv => kv.Value);
+            double HvMissile() => hm.DamageBySource.Where(kv => kv.Key == $"heavy:{hv.NetId}:missile").Sum(kv => kv.Value);
+            await Wait(6.0);                                                   // 450 u at 100 u/s, easing in
+            var sternDir = -Vector2.Up.Rotated(hm.Rotation);
+            float offAstern = Mathf.RadToDeg(Mathf.Abs(sternDir.AngleTo(hv.Position - hm.Position))), waitOut = hv.Position.DistanceTo(hm.Position);
+            Check(offAstern < 20 && Math.Abs(waitOut - Raider.WaitOut) < 40 && HvLaser() == 0,
+                  $"its target unpinned, it waits astern ({offAstern:0} deg off, {waitOut:0} u out) and holds its laser");
+            for (int i = 0; i < 60 * 14 && H.BlastsPending == 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            var blastRing = Nodes<Telegraph>().FirstOrDefault(t => !t.Line && Math.Abs(t.Radius - Raider.BlastRadius) < 0.1f);
+            Check(H.BlastsPending == 1 && blastRing != null && blastRing.A.DistanceTo(hm.Position) < 6f && Math.Abs(blastRing.Duration - 7) < 1e-6,
+                  "within 500 u it fires at where the target will be; a red circle marks it for 7 s");
+            double mm0 = HvMissile();
+            for (int i = 0; i < 60 * 9 && H.BlastsPending > 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(Math.Abs(HvMissile() - mm0 - Raider.MissileDamage) < 1e-6, $"staying on the circle, the blast lands ({HvMissile() - mm0:0})");
+            typeof(Raider).GetField("_missileCd", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(hv, 0.0);
+            for (int i = 0; i < 60 && H.BlastsPending == 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            hm.Position += new Vector2(300, 0); hm.Velocity = Vector2.Zero;                        // off the circle
+            double mm1 = HvMissile();
+            for (int i = 0; i < 60 * 9 && H.BlastsPending > 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(H.BlastsPending == 0 && HvMissile() == mm1, "moving off the circle dodges it");
+            var lights = new[] { H.SpawnRaider(hm.Position + new Vector2(0, -250)), H.SpawnRaider(hm.Position + new Vector2(250, 0)), H.SpawnRaider(hm.Position + new Vector2(-250, 0)) };
+            for (int i = 0; i < 60 * 8 && !hm.Pinned; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await Wait(0.15); var hp1 = hv.Position; await Wait(0.2);
+            float burn = (hv.Position - hp1).Length() / 0.2f;
+            Check(hm.Pinned && burn > 250f, $"its target pinned, it afterburns in ({burn:0} u/s)");
+            for (int i = 0; i < 60 * 4 && !hv.Latched; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            double hl0 = HvLaser(); await Wait(3.0);
+            double hdps = (HvLaser() - hl0) / 3.0;
+            Check(hv.Latched && Raider.Gap(hv.Position, hm) <= Raider.HeavyReach && Math.Abs(hdps - 2) < 0.4,
+                  $"from 135 u off the hull its laser does 2 DPS ({hdps:0.00})");
+            foreach (var r in H.Raiders.ToList()) r.TakeDamage(9999);
+            await Wait(0.3);
+            hm.Position = keepH; hm.Velocity = Vector2.Zero; hm.TakeDamage(-(hm.MaxHp - hm.Hp));
+        }
+
         // ── enemy fire, shields, stasis, the escape pod, re-boarding ──
         {
             var d3x = H.GetNode<TargetDummy>("TargetDummy3");
@@ -8946,7 +9125,9 @@ public partial class _Test : Node
             for (int i = 0; i < 60 * 8 && Hub.InArena; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             await Wait(1.0);
             Check(!Hub.InArena && H.Yard != null, "home again after the win");
-            Check(H.Yard.Credits >= 3000 - 1e-6 && H.Yard.Credits < 3000 + 400, $"the bounty's 2000 credits are paid at home ({H.Yard.Credits:0})");
+            // exactly the credits set aside at departure + the 2000 bounty (a hauler sale before
+            // departure is part of what was set aside, so a fixed window was fragile)
+            Check(Math.Abs(H.Yard.Credits - Yard.TripStartCredits - 2000) < 1e-6, $"the bounty's 2000 credits are paid at home ({Yard.TripStartCredits:0} + 2000 = {H.Yard.Credits:0})");
             // the literal 1/20 asked for -- not Yard.AwayShare, or the check could never fail
             double want = H.Yard.FleetRate(GatherKind.Miner) * Yard.LastAway / 20.0;
             Check(Yard.LastAway > 1 && Yard.LastAwayOre > 0 && Math.Abs(Yard.LastAwayOre - want) < 1e-6,
@@ -9098,6 +9279,7 @@ public partial class _Test : Node
             Check(ships.Any(s => s.Pilot == "Third"), "the second guest's identity reached the host");
             H.AwardPartyExp(40);                  // shared: every pilot in the session gets it
             H.SpawnRaider(new Vector2(-3500, 3500));   // far off: the guests must see it
+            H.SpawnRaider(new Vector2(-3700, 3700), RaiderKind.Heavy);
             Check(!H.AllReady, "the host cannot warp until every pilot is ready");
             H.SetMyReady(true); Me.AutopilotTo = null;
             for (int i = 0; i < 600 && !H.AllReady; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
@@ -9169,7 +9351,9 @@ public partial class _Test : Node
             for (int i = 0; i < 480 && Character.Exp != 40; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(Character.Exp == 40, $"the host's EXP award reached this guest (exp {Character.Exp})");
             for (int i = 0; i < 60 * 6 && H.Raiders.Count == 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            Check(H.Raiders.Count >= 1 && Combat.Hostiles.OfType<Raider>().Any(), "the host's raider reached this guest (a hostile it can target)");
+            for (int i = 0; i < 60 * 3 && !H.Raiders.Any(r => r.Heavy); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(H.Raiders.Count >= 2 && Combat.Hostiles.OfType<Raider>().Any() && H.Raiders.Any(r => r.Heavy),
+                  "the host's raiders reached this guest, a heavy as a heavy (hostiles it can target)");
             var gm = H.Yard.Gatherers.First(x => x.Kind == GatherKind.Miner);
             Check(H.Yard.Gatherers.Any(x => x.Position.DistanceTo(Hub.BasePos) > 400) && H.Yard.Hauler.Position.Y == Hub.LaneY,
                   "guest sees the host's miner out working and the hauler on its lane");
