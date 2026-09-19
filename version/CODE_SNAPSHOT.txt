@@ -1,8 +1,8 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-19 19:31 at git commit e627ec9: typecheck clean, smoke test 3/3 passes
-//   (305 checks), 53-frame UI sweep 0 findings.
-// 49 files, 8238 lines. Code only: sprites, sounds and docs are in the zip.
+// Taken 2026-09-19 19:47 at git commit 1f0dae1: typecheck clean, smoke test 3/3 passes
+//   (312 checks), 54-frame UI sweep 0 findings.
+// 50 files, 8350 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -19,6 +19,7 @@
 //   scripts/Autopilot.cs                            40 lines   sha256 807538219f53
 //   scripts/BasePanel.cs                           105 lines   sha256 024b285073bc
 //   scripts/Boss.cs                                184 lines   sha256 d723ed53971e
+//   scripts/BossBar.cs                              74 lines   sha256 2f4eb7ef7796
 //   scripts/Character.cs                           168 lines   sha256 266190f479e4
 //   scripts/CharacterCreator.cs                    211 lines   sha256 136099a8d1c7
 //   scripts/CharacterSelect.cs                     171 lines   sha256 dc2bfeccc820
@@ -29,7 +30,7 @@
 //   scripts/Gatherer.cs                            207 lines   sha256 06c31c1dfb04
 //   scripts/Hauler.cs                              283 lines   sha256 551cdf41401d
 //   scripts/HealthBar.cs                            36 lines   sha256 97c42a282205
-//   scripts/Hub.cs                                 975 lines   sha256 bbf88fe14a70
+//   scripts/Hub.cs                                 976 lines   sha256 60faf4a5cfa0
 //   scripts/MainMenu.cs                            224 lines   sha256 39dbc31417c6
 //   scripts/Missions.cs                             26 lines   sha256 6870c2208143
 //   scripts/Music.cs                                78 lines   sha256 19cdf8e2b59c
@@ -54,9 +55,9 @@
 //   scripts/Ui.cs                                   99 lines   sha256 0a376702a4e8
 //   scripts/Yard.cs                                387 lines   sha256 1cd1e412db23
 //   typecheck/typecheck.sh                          57 lines   sha256 e68277c09f34
-//   tools/screens/Shots.cs.txt                     325 lines   sha256 c380f230b2d7
+//   tools/screens/Shots.cs.txt                     341 lines   sha256 126ea45a2c12
 //   tools/screens/run.sh                            40 lines   sha256 a47174d56c6a
-//   tools/smoketest/SmokeTest.cs.txt              1196 lines   sha256 080b901cb5b4
+//   tools/smoketest/SmokeTest.cs.txt              1217 lines   sha256 baa3ddb80e62
 //   tools/smoketest/run.sh                          52 lines   sha256 67c03204c10d
 //==============================================================================
 
@@ -761,6 +762,85 @@ public partial class Boss : Node2D, IHittable
     private void NetState(Vector2 p, float rot, double hp) { _netPos = p; _netRot = rot; _hasNet = true; Hp = hp; }
 
     public int TelegraphsPending => (_pendingBeam != null ? 1 : 0) + (_pendingWave != null ? 1 : 0);
+}
+
+//==============================================================================
+// FILE: scripts/BossBar.cs
+// 74 lines   sha256 2f4eb7ef7796
+//==============================================================================
+using Godot;
+using System;
+using System.Collections.Generic;
+
+// THE BOSS'S HEALTH BAR -- top centre, in the arena only.
+// Every hit leaves a CHUNK: the slice of the bar it took. The chunk bobs up and down
+// a few times, quickly, the bounces dying away, while it turns from red to white and
+// fades off. Hits within 60 ms of each other share one chunk, so a stream of small
+// hits reads as one clean chunk rather than a flicker of dozens. Driven by the boss's
+// hull, which every peer already has, so guests see it too.
+public partial class BossBar : Control
+{
+    public Hub Hub;
+    public const float W = 640, H = 18, Bounce = 6f;
+    public const double Life = 0.8, BounceFor = 0.45, Merge = 0.06, BounceHz = 6.67;
+    public class Chunk { public double From, To, T; }          // From/To: fractions of max hull
+    public readonly List<Chunk> Chunks = new();
+    private readonly StyleBox _panel = Ui.PanelStyle(8);        // built once: _Draw runs every frame
+    private double _lastHp = -1;
+
+    // vertical offset: a quick up-and-down, dying away
+    public static float Offset(double t) =>
+        t >= BounceFor ? 0f : (float)(Bounce * Math.Exp(-6 * t) * Math.Sin(2 * Math.PI * BounceHz * t));
+    public static float Whiteness(double t) => (float)Math.Clamp(t / (Life * 0.5), 0, 1);       // red -> white
+    public static float Alpha(double t) => (float)Math.Clamp(1 - (t - Life * 0.4) / (Life * 0.6), 0, 1);
+
+    public override void _Ready()
+    {
+        Name = "BossBar";
+        AnchorLeft = AnchorRight = 0.5f; OffsetLeft = -W / 2; OffsetRight = W / 2; OffsetTop = 104; OffsetBottom = 104 + H;
+        MouseFilter = MouseFilterEnum.Ignore;
+        Visible = false;                                          // hidden until there is a boss
+    }
+
+    public override void _Process(double delta)
+    {
+        var boss = Hub?.Boss;
+        Visible = Hub.InArena && IsInstanceValid(boss);
+        if (!Visible) { _lastHp = -1; Chunks.Clear(); return; }
+        double max = Math.Max(1, boss.MaxHp), hp = boss.Hp;
+        if (_lastHp >= 0 && hp < _lastHp - 1e-9)
+        {
+            double from = hp / max, to = _lastHp / max;
+            var last = Chunks.Count > 0 ? Chunks[^1] : null;
+            if (last != null && last.T < Merge && Math.Abs(last.From - to) < 1e-6) last.From = from;    // extend: same burst
+            else Chunks.Add(new Chunk { From = from, To = to });
+        }
+        _lastHp = hp;
+        foreach (var c in Chunks) c.T += delta;
+        Chunks.RemoveAll(c => c.T >= Life);
+        QueueRedraw();
+    }
+
+    public override void _Draw()
+    {
+        var boss = Hub?.Boss;
+        if (!IsInstanceValid(boss)) return;                       // the first draw can come before any boss
+        _panel.Draw(GetCanvasItem(), new Rect2(-10, -26, W + 20, H + 34));
+        Txt.D(this, ThemeDB.FallbackFont, new Vector2(0, -8), $"{Missions.BossName}  ·  TIER {Missions.Tier}  ·  {boss.Hp:0} / {boss.MaxHp:0}",
+              HorizontalAlignment.Center, W, 13, new Color(1f, 0.85f, 0.8f));
+        float frac = (float)Math.Clamp(boss.Hp / Math.Max(1, boss.MaxHp), 0, 1);
+        DrawRect(new Rect2(0, 0, W, H), new Color(0.10f, 0.05f, 0.05f, 0.95f));
+        DrawRect(new Rect2(0, 0, W * frac, H), new Color(0.80f, 0.16f, 0.14f));
+        DrawRect(new Rect2(0, 0, W * frac, 3), new Color(1f, 0.45f, 0.4f, 0.6f));            // a shine along the top
+        var red = new Color(0.95f, 0.25f, 0.2f);
+        foreach (var c in Chunks)
+        {
+            var col = red.Lerp(Colors.White, Whiteness(c.T)); col.A = Alpha(c.T);
+            float x0 = (float)(c.From * W), x1 = (float)(c.To * W);
+            DrawRect(new Rect2(x0, Offset(c.T), Math.Max(1f, x1 - x0), H), col);
+        }
+        DrawRect(new Rect2(0, 0, W, H), new Color(0.9f, 0.5f, 0.45f, 0.7f), false, 1.5f);
+    }
 }
 
 //==============================================================================
@@ -2167,7 +2247,7 @@ public static class HealthBar
 
 //==============================================================================
 // FILE: scripts/Hub.cs
-// 975 lines   sha256 bbf88fe14a70
+// 976 lines   sha256 60faf4a5cfa0
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -2328,6 +2408,7 @@ public partial class Hub : Node2D
         layer.AddChild(helpPanel);
 
         layer.AddChild(new HullHud { Hub = this });
+        layer.AddChild(new BossBar { Hub = this });                 // shows itself in the arena
         layer.AddChild(new Radar { Hub = this });
         layer.AddChild(new AbilityBar { Hub = this });
         if (!InArena) layer.AddChild(new HaulerHud { Hub = this });
@@ -6912,7 +6993,7 @@ echo "0 errors." >&2
 
 //==============================================================================
 // FILE: tools/screens/Shots.cs.txt
-// 325 lines   sha256 c380f230b2d7
+// 341 lines   sha256 126ea45a2c12
 //==============================================================================
 // Screenshot driver. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Shots.cs, registers it as an autoload, and runs the real
@@ -7115,6 +7196,21 @@ public partial class _Shots : Node
             await W(2.2); await Snap("40_warp_charging");
             await W(0.95); await Snap("41_warp_arrival");      // the camera cuts to the ship on a jump
         }
+        // the player's missile, close up: the camera rides a stand-in over it
+        {
+            var ms = H.GetNode<PlayerShip>("Ship_1"); var md = H.GetNode<TargetDummy>("TargetDummy1");
+            ms.Position = md.Position + new Vector2(0, 700); ms.Velocity = Vector2.Zero; ms.Rotation = 0f; await W(0.8);
+            typeof(Hub).GetField("_selected", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).SetValue(H, md);
+            ms.UseAbility("missile", md.NetId); await W(0.5);
+            var mt = H.GetChildren().OfType<Torpedo>().FirstOrDefault(x => x.Heavy);
+            if (mt != null)
+            {
+                ms.Visible = false; GetViewport().GetCamera2D().Zoom = new Vector2(5f, 5f);
+                for (int i = 0; i < 20; i++) { ms.Position = mt.GlobalPosition; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+                await Snap("43_missile_closeup");
+                ms.Visible = true; GetViewport().GetCamera2D().Zoom = new Vector2(0.9f, 0.9f);
+            }
+        }
         // a shield hit on each of the four sides, then stasis with the escape pod out
         {
             var sh = H.GetNode<PlayerShip>("Ship_1");
@@ -7233,6 +7329,7 @@ public partial class _Shots : Node
             GetViewport().GetCamera2D().Zoom = new Vector2(0.62f, 0.62f); await W(1.5);
             for (int i = 0; i < 60 * 14 && !N<Telegraph>().Any(t => t.Line); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             await W(1.0); await Snap("38_arena_beam_telegraph");
+            if (GodotObject.IsInstanceValid(H.Boss)) { H.Boss.TakeDamage(90); await W(0.09); await Snap("42_boss_bar_chunk"); }
             for (int i = 0; i < 60 * 16 && !N<Telegraph>().Any(t => !t.Line); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             await W(0.9); await Snap("39_arena_shockwave_telegraph");
         }
@@ -7287,7 +7384,7 @@ ls /tmp/shots
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 1196 lines   sha256 080b901cb5b4
+// 1217 lines   sha256 baa3ddb80e62
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -7976,6 +8073,7 @@ public partial class _Test : Node
             Character.Exp = 0; Character.Level = 1; Character.Points = 0; System.Array.Clear(Character.Bought);
             int up = Progression.AddExp(260);
             Check(up == 2 && Character.Level == 3 && Character.Exp == 10 && Character.Points == 2, "260 EXP from level 1: level 3, 10 over, 2 points");
+            Check(!Nodes<BossBar>().First().Visible, "outside the arena there is no boss bar");
             Key(global::Godot.Key.L); await Wait(0.1);
             var pw = Nodes<PilotWindow>().FirstOrDefault();
             Check(pw != null, "L opens the PILOT window");
@@ -8161,6 +8259,26 @@ public partial class _Test : Node
             Key(global::Godot.Key.Q); await Wait(0.1);                           // point defence up
             Check(Math.Abs(boss.MaxHp - 1200) < 1e-6 && Math.Abs(Boss.GunDamage / Boss.GunEvery - 3) < 1e-9, "the boss: 1200 hull at tier 0; its guns 3 DPS");
             // stand in the beam on purpose with a thick hull (test only), and watch the rhythm
+            // the boss's health bar: a chunk per hit, bouncing, whitening, fading; bursts merge
+            var bar = Nodes<BossBar>().First();
+            Check(bar.Visible, "in the arena the boss's health bar shows");
+            double hpA = boss.Hp;
+            boss.TakeDamage(60); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            var ck = bar.Chunks.LastOrDefault();
+            Check(ck != null && Math.Abs(ck.To - hpA / boss.MaxHp) < 1e-6 && Math.Abs(ck.From - (hpA - 60) / boss.MaxHp) < 1e-6,
+                  "a hit leaves a chunk: exactly the slice of the bar it took");
+            await Wait(0.06);
+            float off = BossBar.Offset(ck.T), wh = BossBar.Whiteness(ck.T);
+            Check(Math.Abs(off) > 1f && wh > 0f && wh < 1f, $"the chunk bobs ({off:0.0} px) and is turning white ({wh:0.00})");
+            Check(BossBar.Offset(BossBar.BounceFor) == 0 && BossBar.Alpha(BossBar.Life) <= 0.001 && BossBar.Whiteness(BossBar.Life * 0.5) >= 0.999,
+                  "the bounce dies away; white by half-life; gone by the end");
+            await Wait(BossBar.Life + 0.1);
+            Check(bar.Chunks.Count == 0, "and then it is gone from the bar");
+            // one small hit a frame for three frames (50 ms): inside the 60 ms window, so one chunk
+            // (the bar reads the hull once a frame, so hits within ONE frame could never test this)
+            for (int i = 0; i < 3; i++) { boss.TakeDamage(1); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(bar.Chunks.Count == 1, $"a burst of small hits, frame after frame, shares one chunk ({bar.Chunks.Count})");
             var me2 = Me; me2.MaxHp = 5000; me2.TakeDamage(-(5000 - me2.Hp));
             double tBeam = -1, tCharge = -1, tVolley = -1, arenaT = 0; int trident = 0; float spread = 0;
             async void Watch()
