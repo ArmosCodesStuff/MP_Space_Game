@@ -39,7 +39,7 @@ history pick the work up from it alone. Update it in the same change as the code
 **State as of 2026-09-18: version 0.3.0 plus Unreleased (see it for everything since: docking arms
 and the unload queue, the fleet and hauler pods, the idle economy, base menu, bunker-buster missile,
 painted turrets, docking bombers and more).** Typecheck clean against the real `GodotSharp.dll`,
-`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 312 checks across
+`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 313 checks across
 a single-player run and a host with two guests. Unlike earlier releases, this one was also **looked at**:
 `tools/screens/run.sh` renders the select screen, the creator, a fresh spawn under the base, both
 classes in the hub, the K window, a bomber strike, and turret close-ups on a virtual display; layout
@@ -179,6 +179,24 @@ reachable, which is fine: both harnesses build from the `nupkgs` folder that shi
 ---
 
 ## Unreleased
+
+### Chunk 4 of 9: the layout
+
+**Checked:** smoke test **three runs in a row, 313 checks each** (the edge check proven by putting the
+belt back in a copy: 1205 u, caught); screenshot sweep **55 frames, 0 lint**; the whole yard looked at
+from above.
+
+#### Changed
+
+- **Both fields' nearest edges are 1500 u from the base's centre** (≈6.7 battleship lengths), measured
+  to each field's boundary: the belt's nearest rock (the sun moves from y −1500 to −1794) and the
+  wreck's visible edge toward the base (its centre moves from x −1250 to −1840). That leaves a band
+  for a blockade outside the base's 600 u missile cover. Measured in the running game: belt 1499 u,
+  wreck 1501 u.
+- **The base's income estimate** (the 1/20 credit while away) uses each ship's real route instead of a
+  fixed 1000 u.
+
+### Earlier in Unreleased
 
 ### Chunk 3 of 9: the boss health bar
 

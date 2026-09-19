@@ -185,7 +185,7 @@ Recorded here so every chunk builds from the written word, not from memory.
   combat track. **Player (battleship) missiles: sharper tip, 20% skinnier, 25% longer, higher detail.**
 - **Chunk 3 — the boss health bar (DONE)**: damage leaves a chunk that bounces up and down a few times,
   quickly, turning white as it fades.
-- **Chunk 4 — layout**: the salvage field ~500 u further left; the mining belt 300–500 u closer; both
+- **Chunk 4 — layout (DONE: 1500 u to each field's edge)**: the salvage field ~500 u further left; the mining belt 300–500 u closer; both
   the **same distance from the base, measured to each area's boundary**.
 - **Chunk 5 — utility hull and rebuilds**: miners/salvagers 60 hull, hauler 150; destroyed ones are
   rebuilt at the base after 30 s for **10% of all money invested so far in that category's upgrades**
