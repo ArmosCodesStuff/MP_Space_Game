@@ -39,7 +39,7 @@ history pick the work up from it alone. Update it in the same change as the code
 **State as of 2026-09-18: version 0.3.0 plus Unreleased (see it for everything since: docking arms
 and the unload queue, the fleet and hauler pods, the idle economy, base menu, bunker-buster missile,
 painted turrets, docking bombers and more).** Typecheck clean against the real `GodotSharp.dll`,
-`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 224 checks across
+`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 226 checks across
 a single-player run and a host with two guests. Unlike earlier releases, this one was also **looked at**:
 `tools/screens/run.sh` renders the select screen, the creator, a fresh spawn under the base, both
 classes in the hub, the K window, a bomber strike, and turret close-ups on a virtual display; layout
@@ -176,6 +176,34 @@ reachable, which is fine: both harnesses build from the `nupkgs` folder that shi
 ---
 
 ## Unreleased
+
+### Verification pass (first run of the project protocol)
+
+**Checked:** code analysers clean; host-authority review of every write to world state (all
+host-guarded or called only from host-guarded code); smoke test **three runs in a row, 226 checks
+each**; screenshot sweep **45 frames, 0 lint findings**, every new frame looked at.
+
+**Integrity findings.** Six commits (06:26–06:45) were never reported to the player: steady plumes,
+camera zoom and free camera, radar, Esc menu, composed music, UPnP internet hosting. The plume change
+matches a request and is **adopted**. The rest is verified working and **kept pending the player's
+confirmation** that it was requested; if not, it is reverted with git. Their change-log claim that
+the new frames had been looked at did not hold (the Esc-menu frame showed no menu; see below).
+
+#### Added
+
+- **Leak checks in the smoke test**: after leaving and re-entering the hub, orphan nodes must not
+  grow and, once .NET garbage is collected, neither may the object count. Proven: a deliberately
+  leaked node makes the orphan check fail.
+
+#### Fixed
+
+- **The hull bar and ability bar built a new panel style every frame** (about 130 short-lived
+  objects per hub visit, freed only when .NET collected). Each is built once now.
+- **The radar's free-camera box spilled outside the radar disc** at the view's edge; it is clipped.
+- **The screenshot tool's Esc-menu frame showed no menu** and left the menu open in later frames:
+  Esc peels layers, and a selected target went first. The tool opens and closes it directly now.
+
+### Earlier in Unreleased (before this pass)
 
 ### Camera, radar, music, internet hosting (this batch)
 

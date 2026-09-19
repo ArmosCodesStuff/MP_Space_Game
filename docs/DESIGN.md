@@ -434,6 +434,13 @@ Each of these compiled clean and was wrong at runtime. The smoke test covers all
   without a display.
 - **A translucent panel shows the world through it.** A faint line in the BASE menu was the
   player's own green hull bar behind it. Menus that sit over the world are fully opaque.
+- **Measure leaks after forcing a .NET collection.** Godot objects wrapped by C# are freed only when
+  the collector runs, so raw object counts climb and then collapse; they look like leaks until you
+  collect first. Orphan-node counts need no collection.
+- **Tools that press Esc depend on what is open.** Esc peels layers (a selected target goes before
+  the Esc menu); automation should open and close things directly.
+- **The version/ folder is the baseline**: `CODE_SNAPSHOT.txt` (all code, split back to verify) and
+  `MANIFEST.sha256` (every tracked file). The next session starts with `sha256sum -c` against it.
 - **Sandboxes restart.** Twice a run was lost to a container restart (uptime reset, processes gone,
   files kept). If a background run goes quiet, check `uptime` before suspecting the code.
 - **Background processes die when the command that started them ends** (in this sandbox). A
