@@ -30,9 +30,12 @@ public partial class Yard : Node2D
     public Hauler Hauler;
 
     private readonly Dictionary<string, int> _levels = new();
-    private double _ownOre, _ownSalvage, _ownCredits;
-    private readonly Dictionary<string, int> _ownLevels = new();
-    private bool _parked;
+    // A guest's OWN base, set aside while it visits someone else's. Static: the scene is
+    // reloaded when the party goes to the arena and back, and an instance field went
+    // with it -- a guest who followed the party lost its own base.
+    private static double _ownOre, _ownSalvage, _ownCredits;
+    private static readonly Dictionary<string, int> _ownLevels = new();
+    private static bool _parked;
     private double _totalsCd, _stateCd, _t;
 
     // ── the service arms ─────────────────────────────────────────────────────
@@ -63,6 +66,9 @@ public partial class Yard : Node2D
 
     public override void _Ready()
     {
+        // a pilot coming home offline (the host left, or the mission ended) gets back
+        // the base it set aside
+        if (_parked && !Net.IsOnline) CallDeferred(nameof(RestoreOwn));
         ZIndex = 3;                                        // above the base
         Hauler = new Hauler { Yard = this, Name = "Hauler" };
         AddChild(Hauler);
@@ -376,4 +382,6 @@ public partial class Yard : Node2D
             DrawLine(o0 + across, o0 + across + a.Open * 12f, col, 1.5f);
         }
     }
+
+    private void RestoreOwn() => OnSessionChanged(false);
 }

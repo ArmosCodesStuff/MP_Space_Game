@@ -263,6 +263,8 @@ public partial class Hub : Node2D
     // on the guest it became the host's ship, and the guest never got one of its own.
     private void OnSessionChanged()
     {
+        // the host gone while the party is in the arena: home, to your own base
+        if (InArena && !Net.IsOnline) { GoTo(SectorKind.Home); return; }
         Yard?.OnSessionChanged(!Net.IsHost);    // parks or restores your own yard (home only)
         RebuildShips();
         // a guest that just connected introduces itself; the host and existing

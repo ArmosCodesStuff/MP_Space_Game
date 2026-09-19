@@ -114,7 +114,9 @@ public partial class _Test : Node
     }
 
     // ── single player ────────────────────────────────────────────────────────
-    PlayerShip Me => H.GetNodeOrNull<PlayerShip>("Ship_1");
+    // MY ship on every peer: "Ship_1" is only right offline and on the host (id 1);
+    // on a guest it is the HOST's ship.
+    PlayerShip Me => Nodes<PlayerShip>().FirstOrDefault(x => x.Mine);
     // class changes go through the creator path now (there are no class hotkeys)
     async Task SetClass(ShipClass c) { Character.Class = c; Priv(H, "ApplyLocalIdentity"); await Wait(0.1); }
     System.Collections.Generic.List<(Vector2 p, float age)> Smoke(Torpedo t) =>
@@ -808,6 +810,11 @@ public partial class _Test : Node
             Check(Torpedo.Intercepted > down0, "point defence shoots the boss's missiles down");
             var aMissile = Nodes<Torpedo>().FirstOrDefault(t => t.HostileFire);
             Check(Turret.PdPriority(boss) == 2 && (aMissile == null || Turret.PdPriority(aMissile) == 0), "point defence takes missiles before anything else");
+            var tiny = new TinyTarget();
+            Check(Turret.PdPriority(tiny) == 1 && Turret.PdPriority(tiny) < Turret.PdPriority(boss), "then small craft (fighter-sized), then everything else");
+            Telegraph ring = null;
+            for (int i = 0; i < 60 * 18 && ring == null; i++) { ring = Nodes<Telegraph>().FirstOrDefault(t => !t.Line); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            Check(ring != null && ring.Radius == Boss.WaveRadius, "the shockwave is telegraphed: a red ring before it lands");
             // the kill: shared EXP for it and the mission, the bounty's credits, then home
             Character.Exp = 0; Character.Level = 1; Character.Points = 0;
             boss.TakeDamage(boss.Hp + 1); await Wait(0.2);
@@ -1043,4 +1050,14 @@ public partial class _Test : Node
             Check(ships.Count == 1 && ships[0].Mine && ships[0].Name == "Ship_1", "guest rebuilt to its own single ship");
         }
     }
+}
+
+// A fighter-sized stand-in, only for the PD priority check.
+public class TinyTarget : IHittable
+{
+    public int NetId => 0;
+    public Vector2 Position => Vector2.Zero;
+    public float HitRadius => 8f;
+    public bool Alive => true;
+    public void TakeDamage(double d) { }
 }
