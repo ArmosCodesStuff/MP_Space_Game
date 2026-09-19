@@ -17,8 +17,8 @@ public partial class Boss : Node2D, IHittable
 {
     public Hub Hub;
     // hull and every attack scale with the selected tier (Missions.Scale)
-    public double Scale = 1;
-    public double MaxHp => Missions.Current.Hull * Scale;
+    public double Strength = 1;          // S(L): hull and damage (was "Scale", which hid Node2D.Scale)
+    public double MaxHp => Missions.Current.Hull * Strength;
     public const float Length = 360f, HalfWidth = 70f;
     public const int Id = 3000;
     public double Hp;
@@ -49,7 +49,7 @@ public partial class Boss : Node2D, IHittable
 
     public override void _Ready()
     {
-        Scale = Missions.Scale(Missions.Tier); Hp = MaxHp;
+        Strength = Missions.Scale(Missions.Tier); Hp = MaxHp;
         Name = "Boss";
         var tex = GD.Load<Texture2D>("res://boss_silver_lancer.png");
         AddChild(new Sprite2D { Texture = tex, Scale = Vector2.One * (Length / tex.GetHeight()) });
@@ -95,7 +95,7 @@ public partial class Boss : Node2D, IHittable
         var nose = ToGlobal(new Vector2(0, -Length * 0.5f));
         PlayerShip Nearest(float within) => pilots.Where(p => p.Position.DistanceTo(Position) <= within).OrderBy(p => p.Position.DistanceTo(Position)).FirstOrDefault();
         _guns -= delta;
-        if (_guns <= 0) { _guns = GunEvery; var t = Nearest(900f); if (t != null) { t.Hit(GunDamage * Scale, Position, "boss:guns"); Combat.Flash(nose, t.Position, new Color(1f, 0.5f, 0.35f), boss: true); } }
+        if (_guns <= 0) { _guns = GunEvery; var t = Nearest(900f); if (t != null) { t.Hit(GunDamage * Strength, Position, "boss:guns"); Combat.Flash(nose, t.Position, new Color(1f, 0.5f, 0.35f), boss: true); } }
         _missiles -= delta;
         if (_missiles <= 0)
         {   // a trident at the nearest ship: straight at it and 25 degrees either side
@@ -105,7 +105,7 @@ public partial class Boss : Node2D, IHittable
             foreach (float deg in new[] { -TridentSpread, 0f, TridentSpread })
             {
                 var dir = aim.Rotated(Mathf.DegToRad(deg));
-                Combat.LaunchTorpedo(nose + dir * 14f, dir, TridentSpeed, TridentRange, TridentDamage * Scale, t.NetId, 1.4f,
+                Combat.LaunchTorpedo(nose + dir * 14f, dir, TridentSpeed, TridentRange, TridentDamage * Strength, t.NetId, 1.4f,
                                      heavy: false, hostile: true, hitSource: "boss:missiles", size: 2f);
             }
         }
@@ -126,7 +126,7 @@ public partial class Boss : Node2D, IHittable
             {
                 _beamTickT = BeamTick;
                 foreach (var p in pilots)
-                    if (DistToSegment(p.Position, live.a, live.b) <= BeamWidth / 2f + p.HitRadius) p.Hit(BeamDamage * Scale, Position, "boss:beam");
+                    if (DistToSegment(p.Position, live.a, live.b) <= BeamWidth / 2f + p.HitRadius) p.Hit(BeamDamage * Strength, Position, "boss:beam");
             }
             if ((_beamLive -= delta) < 0) _pendingBeam = null;
         }
@@ -143,7 +143,7 @@ public partial class Boss : Node2D, IHittable
         if (_dashTo is { } to)
         {
             Position = Position.MoveToward(to, ChargeSpeed * (float)delta);
-            foreach (var p in pilots) if (Covers(p.Position, p.HitRadius)) p.Hit(ChargeDamage * Scale, Position, "boss:charge");
+            foreach (var p in pilots) if (Covers(p.Position, p.HitRadius)) p.Hit(ChargeDamage * Strength, Position, "boss:charge");
             if (Position.DistanceTo(to) < 1f) _dashTo = null;
         }
         _wave -= delta;
@@ -154,7 +154,7 @@ public partial class Boss : Node2D, IHittable
         }
         if (_pendingWave is { } c && (_waveT -= delta) <= 0)
         {
-            foreach (var p in pilots) if (p.Position.DistanceTo(c) <= WaveRadius + p.HitRadius) p.Hit(45 * Scale, c, "boss:wave");
+            foreach (var p in pilots) if (p.Position.DistanceTo(c) <= WaveRadius + p.HitRadius) p.Hit(45 * Strength, c, "boss:wave");
             _pendingWave = null;
         }
     }

@@ -595,7 +595,7 @@ public partial class Hub : Node2D
     public Raider SpawnRaider(Vector2 at, RaiderKind kind = RaiderKind.Light, int patrol = 0, double scale = 1)
     {
         if (!Net.IsHost) return null;
-        var r = new Raider { Hub = this, Kind = kind, Patrol = patrol, Scale = scale, NetId = ++_raiderIds, Position = at, Name = $"Raider_{_raiderIds}" };
+        var r = new Raider { Hub = this, Kind = kind, Patrol = patrol, Strength = scale, NetId = ++_raiderIds, Position = at, Name = $"Raider_{_raiderIds}" };
         Raiders.Add(r); AddChild(r);
         if (Net.IsOnline) Rpc(nameof(NetRaiderSpawn), r.NetId, at, (int)kind, scale);
         return r;
@@ -603,7 +603,7 @@ public partial class Hub : Node2D
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
     private void NetRaiderSpawn(int id, Vector2 at, int kind, double scale)
     {
-        var r = new Raider { Hub = this, Kind = (RaiderKind)kind, Scale = scale, NetId = id, Position = at, Name = $"Raider_{id}" };
+        var r = new Raider { Hub = this, Kind = (RaiderKind)kind, Strength = scale, NetId = id, Position = at, Name = $"Raider_{id}" };
         Raiders.Add(r); AddChild(r);
     }
 

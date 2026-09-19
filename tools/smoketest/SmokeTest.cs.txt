@@ -1239,7 +1239,7 @@ public partial class _Test : Node
             Check(raid.Count == 8 && raid.Count(r => r.Heavy) == 2 && raid.Select(r => r.Patrol).Distinct().Count() == 2,
                   "a failed mission: the boss sends 2 patrols (3 lights and a heavy each)");
             Check(raid.All(r => Math.Abs(r.Position.DistanceTo(Hub.BasePos) - Hub.RaidEdge) < 110f), "in from the edge of the base's map (3200 u out)");
-            Check(raid.All(r => Math.Abs(r.Scale - sL) < 1e-9 && Math.Abs(r.MaxHull - (r.Heavy ? 100 : 25) * sL) < 1e-6),
+            Check(raid.All(r => Math.Abs(r.Strength - sL) < 1e-9 && Math.Abs(r.MaxHull - (r.Heavy ? 100 : 25) * sL) < 1e-6),
                   $"at the failed boss's level: hull and damage x{sL:0.00} (1.1^(L-1), L = {failLevel})");
             foreach (var r in raid) r.TakeDamage(1e9);
             await Wait(0.3);
