@@ -382,7 +382,10 @@ public partial class Hub : Node2D
     public double MissionT { get; private set; }
     public const double PortalOpenTime = 3.0;
     // the mission portal opens off the TIO's top-right corner
-    public Vector2 MissionPortalPos => TioPos + new Vector2(_tioSprite.GetRect().Size.X * _tioSprite.Scale.X / 2f + 110f, -TioHeight / 2f - 70f);
+    // From constants, not the TIO's sprite: in the arena, or in the frame a scene is being
+    // swapped, there is no sprite -- and asking for this crashed (found by the arena run).
+    public const float TioHalfWidth = TioHeight * 630f / 876f / 2f;     // the art is 630 x 876 px
+    public Vector2 MissionPortalPos => TioPos + new Vector2(TioHalfWidth + 110f, -TioHeight / 2f - 70f);
     private readonly Dictionary<int, bool> _ready = new();
     public IEnumerable<int> PartyIds => _ships.Keys;                 // the party is everyone in the session
     public bool IsReady(int id) => _ready.TryGetValue(id, out var r) && r;

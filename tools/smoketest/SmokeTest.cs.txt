@@ -47,7 +47,7 @@ public partial class _Test : Node
         await Wait(0.4);
         // An exception must end the run as a failure. Without this the async test
         // simply stopped, nothing called Quit, and the run idled to its time limit.
-        try { if (role == "solo") await Solo(); else await Mp(role); }
+        try { if (role == "solo") await Solo(); else if (role is "ahost" or "aguest") await ArenaMp(role); else await Mp(role); }
         catch (Exception ex) { Check(false, $"test threw: {ex.GetType().Name}: {ex.Message}"); GD.Print(ex.StackTrace); }
         GD.Print($"DONE {role} fails={fails}");
         // let the mixer release the loops first -- in REAL time: at a fixed frame rate
@@ -1348,6 +1348,65 @@ public partial class _Test : Node
     }
 
     // ── multiplayer ──────────────────────────────────────────────────────────
+    // ── a dedicated two-player arena run (its own port, after the three-player run) ──
+    // Mission 1: both READY, both at the portal, into the arena together; the boss dies;
+    // both home. Mission 2: into the arena again; the host drops -- the guest must land
+    // home, offline, with its OWN base (a marker credit total set before it joined).
+    async Task ArenaMp(string role)
+    {
+        const int Port = 27125;
+        async Task ToArena(string who, int mission)
+        {
+            // the home world must be BUILT first: the scene swap is deferred, and for a frame
+            // or two the old one is still current
+            for (int i = 0; i < 60 * 5 && (H == null || Hub.InArena || H.GetNodeOrNull("TIO") == null || !H.IsNodeReady()); i++)
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            H.SetMyReady(true);
+            for (int i = 0; i < 60 * 12 && H.Mission != Hub.MissionState.PortalOpen; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            for (int i = 0; i < 60 * 14 && !Hub.InArena; i++)
+            {
+                if (H != null && Me != null && H.Mission == Hub.MissionState.PortalOpen) { Me.Position = H.MissionPortalPos; Me.Velocity = Vector2.Zero; }
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            }
+            Check(Hub.InArena, $"{who}: into the arena with the other pilot (mission {mission})");
+        }
+        if (role == "ahost")
+        {
+            Character.Name = "Arena Host";
+            Net.I.Host(Port);
+            for (int i = 0; i < 60 * 10 && Net.I.Players.Count < 2; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(Net.I.Players.Count == 2, "arena host: the guest joined");
+            await Wait(1.0);
+            await ToArena("arena host", 1);
+            await Wait(1.5);
+            H.Boss.TakeDamage(H.Boss.Hp + 1);
+            for (int i = 0; i < 60 * 10 && Hub.InArena; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(!Hub.InArena && Net.IsOnline, "arena host: the boss down, home -- still hosting");
+            await Wait(2.0);
+            await ToArena("arena host", 2);
+            await Wait(1.5);
+            Net.I.GoOffline();                                   // the host drops, mid-arena
+            await Wait(2.0);
+        }
+        else
+        {
+            Character.Name = "Arena Guest";
+            H.Yard.Credits = 12345;                               // its own base, before it visits
+            await Wait(0.8);
+            Net.I.Join($"127.0.0.1:{Port}");
+            for (int i = 0; i < 60 * 10 && !(Net.IsOnline && Net.LocalId != 1); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(Net.IsOnline && Net.LocalId != 1, "arena guest: joined");
+            await ToArena("arena guest", 1);
+            for (int i = 0; i < 60 * 15 && Hub.InArena; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(!Hub.InArena && Net.IsOnline, "arena guest: home with the host after the win");
+            await ToArena("arena guest", 2);
+            for (int i = 0; i < 60 * 20 && (Hub.InArena || Net.IsOnline); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await Wait(1.0);
+            Check(!Hub.InArena && !Net.IsOnline && H.Yard != null && Math.Abs(H.Yard.Credits - 12345) < 1e-6,
+                  $"arena guest: the host gone mid-arena, it lands home offline with its own base ({H.Yard?.Credits:0} credits)");
+        }
+    }
+
     async Task Mp(string role)
     {
         await Wait(0.1);

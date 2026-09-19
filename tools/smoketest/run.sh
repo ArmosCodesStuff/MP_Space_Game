@@ -45,8 +45,13 @@ sleep 0.5
 (timeout 60 "$G" --headless --path . -- guest2 2>&1 | grep --line-buffered -E "$F" | grep --line-buffered -vE "$N" | sed -u 's/^/[third] /' > guest2.log) &
 timeout 60 "$G" --headless --path . -- guest 2>&1 | grep --line-buffered -E "$F" | grep --line-buffered -vE "$N" | sed -u 's/^/[guest] /' > guest.log
 wait
-cat solo.log host.log guest.log guest2.log
-BAD=$(cat solo.log host.log guest.log guest2.log | grep -cE "FAIL|Exception|ERROR")
-DONE=$(cat solo.log host.log guest.log guest2.log | grep -c "DONE")
-if [ "$BAD" -gt 0 ] || [ "$DONE" -ne 4 ]; then echo "SMOKE TEST FAILED ($BAD problems, $DONE/4 runs finished)"; exit 1; fi
+# the dedicated two-player arena run: after the three-player run, on its own port
+(timeout 60 "$G" --headless --path . -- ahost 2>&1 | grep --line-buffered -E "$F" | grep --line-buffered -vE "$N" | sed -u 's/^/[ahost] /' > ahost.log) &
+sleep 0.5
+timeout 60 "$G" --headless --path . -- aguest 2>&1 | grep --line-buffered -E "$F" | grep --line-buffered -vE "$N" | sed -u 's/^/[aguest]/' > aguest.log
+wait
+cat solo.log host.log guest.log guest2.log ahost.log aguest.log
+BAD=$(cat solo.log host.log guest.log guest2.log ahost.log aguest.log | grep -cE "FAIL|Exception|ERROR")
+DONE=$(cat solo.log host.log guest.log guest2.log ahost.log aguest.log | grep -c "DONE")
+if [ "$BAD" -gt 0 ] || [ "$DONE" -ne 6 ]; then echo "SMOKE TEST FAILED ($BAD problems, $DONE/6 runs finished)"; exit 1; fi
 echo "SMOKE TEST PASSED"
