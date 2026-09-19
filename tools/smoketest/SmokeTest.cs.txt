@@ -527,6 +527,33 @@ public partial class _Test : Node
             Ready(); me.Position = d2w.Position + new Vector2(0, -900); var s3 = me.Position; await Wait(0.2);
             Key(global::Godot.Key.V); await Wait(PlayerShip.WarpWarmup + 0.2);
             Check(Math.Abs((me.Position - s3).Y + 2000f) < 40f && H.Selected == d2w, "a target behind (outside 45 degrees): straight ahead instead");
+            // aimed when it JUMPS, by the heading then: swing onto a target during the charge...
+            Ready(); me.Position = d2w.Position + new Vector2(0, -900); await Wait(0.2);          // facing north, d2 behind
+            Click(Scr(d2w.Position)); await Wait(0.05);
+            Key(global::Godot.Key.V); await Wait(1.0);
+            me.Rotation = Mathf.Pi; await Wait(PlayerShip.WarpWarmup - 1.0 + 0.2);                // now facing it
+            Check(Math.Abs(me.Position.DistanceTo(d2w.Position) - want) < 20f, "V pressed facing away, then turned onto the target: it warps to the target");
+            // ...or turn away from it, and it goes straight on along the new heading
+            Ready(); me.Position = d2w.Position + new Vector2(0, 1400); await Wait(0.2);           // facing north, d2 ahead
+            var s4 = me.Position;
+            Key(global::Godot.Key.V); await Wait(1.0);
+            me.Rotation = Mathf.Pi / 2f; await Wait(PlayerShip.WarpWarmup - 1.0 + 0.2);            // now facing east
+            var mv = me.Position - s4;
+            Check(Math.Abs(mv.X - 2000f) < 40f && Math.Abs(mv.Y) < 40f, $"V pressed facing the target, then turned east: 2000 u east ({mv.X:0}, {mv.Y:0})");
+            // the radar: click a marker to select it -- an enemy as the target, a landmark as a waypoint
+            Ready(); me.Position = warpHome + new Vector2(0, 300); me.Rotation = 0f; await Wait(0.6);
+            var radar = Nodes<Radar>().First(); var rr = radar.GetGlobalRect(); float rad = rr.Size.X / 2f;
+            Vector2 OnRadar(Vector2 w) => rr.Position + new Vector2(rad, rad) + (w - me.ViewPosition) * ((rad - 6f) / Radar.Range);
+            H.ClearSelection();
+            Click(OnRadar(d2w.Position)); await Wait(0.05);
+            Check(H.Selected == d2w, "clicking an enemy on the radar makes it the target");
+            Click(OnRadar(Hub.BasePos)); await Wait(0.05);
+            Check(H.Selected == null && H.Waypoint == Hub.BasePos && H.WaypointName == "BASE", "clicking the base on the radar makes it a waypoint (and drops the target)");
+            me.Position = Hub.BasePos + new Vector2(0, 1500); me.Rotation = 0f; await Wait(0.2);    // the base dead ahead
+            Key(global::Godot.Key.V); await Wait(PlayerShip.WarpWarmup + 0.2);
+            float wantB = 260f + PlayerShip.Art[me.Class].Length * 0.5f + PlayerShip.WarpStandoff;
+            Check(Math.Abs(me.Position.DistanceTo(Hub.BasePos) - wantB) < 20f, $"a warp to the waypoint lands just short of the base ({me.Position.DistanceTo(Hub.BasePos):0} u)");
+            H.ClearSelection();
             Ready(); me.Position = warpHome;
         }
 

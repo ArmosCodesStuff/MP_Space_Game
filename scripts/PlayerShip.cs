@@ -325,24 +325,23 @@ public partial class PlayerShip : Node2D, IHittable
 
     // ── WARP (V) -- every capital ship ─────────────────────────────────────────
     // A fixed key and a hull cooldown, never an ability-bar slot. After a 3 s warm-up
-    // the ship jumps to the selected entity if it lies within 45 degrees of the bow
+    // the ship jumps to the selected target or waypoint if it lies within 45 degrees of the bow
     // (stopping just short of it), otherwise 2000 u straight ahead. Movement is the
     // owner's, so the owner jumps; everyone else sees the charge and a clean snap.
     public const double WarpWarmup = 3.0, WarpCooldown = 30.0;
     public const float WarpRange = 2000f, WarpCone = Mathf.Pi / 4f, WarpStandoff = 60f;
     private double _warpLeft = -1, _warpCd, _warpFlash;
-    private int _warpTarget; private Vector2 _warpPoint; private bool _remoteWarping;
+    private bool _remoteWarping;
     public bool Warping => _warpLeft >= 0;
     public double WarpWarmupLeft => Math.Max(0, _warpLeft);
     public double WarpCooldownLeft => _warpCd;
     public bool CanWarp => Alive && !Warping && _warpCd <= 0;
 
-    public bool StartWarp(IHittable selected)
+    // V starts the charge; WHERE it goes is decided when it jumps, by the heading then --
+    // so a pilot can press V and swing onto a target while it charges.
+    public bool StartWarp()
     {
         if (!Mine || !CanWarp) return false;
-        var bow = Vector2.Up.Rotated(Rotation);
-        if (selected != null && selected.Alive && Mathf.Abs(bow.AngleTo(selected.Position - Position)) <= WarpCone) _warpTarget = selected.NetId;
-        else { _warpTarget = 0; _warpPoint = Position + bow * WarpRange; }
         _warpLeft = WarpWarmup;
         return true;
     }
@@ -359,13 +358,11 @@ public partial class PlayerShip : Node2D, IHittable
         if (!Alive) { _warpLeft = -1; return; }
         _warpLeft -= dt;
         if (_warpLeft > 0) return;
-        var dest = _warpPoint;
-        if (_warpTarget != 0)
-        {
-            var t = Combat.ById(_warpTarget);
-            dest = t != null && t.Alive ? WarpArrival(Position, t.Position, t.HitRadius, MyArt.Length)
-                                        : Position + Vector2.Up.Rotated(Rotation) * WarpRange;   // it's gone: straight on
-        }
+        // now: the target or waypoint if it lies within 45 degrees of the bow, else straight on
+        var bow = Vector2.Up.Rotated(Rotation);
+        var dest = Position + bow * WarpRange;
+        var aim = (GetParent() as Hub)?.WarpAim() ?? (false, Vector2.Zero, 0f);
+        if (aim.has && Mathf.Abs(bow.AngleTo(aim.at - Position)) <= WarpCone) dest = WarpArrival(Position, aim.at, aim.radius, MyArt.Length);
         Position = dest; Velocity = Vector2.Zero;
         _warpLeft = -1; _warpCd = WarpCooldown; _warpFlash = 0.6;
     }

@@ -19,7 +19,40 @@ public partial class Radar : Control
     {
         Name = "Radar";
         AnchorLeft = AnchorRight = 1f;
-        MouseFilter = MouseFilterEnum.Ignore;
+        MouseFilter = MouseFilterEnum.Stop;              // it takes clicks: pick things on it
+    }
+
+    // A click on the radar picks the nearest thing within 9 px of the click on its face: an
+    // enemy becomes the target; a landmark or another pilot becomes a waypoint to warp to.
+    public const float PickPx = 9f;
+    public override void _GuiInput(InputEvent e)
+    {
+        if (e is not InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } mb) return;
+        AcceptEvent();
+        var me = Hub?.MyShipPublic; if (me == null) return;
+        float r = Size.X * 0.5f; var c = new Vector2(r, r); float k = (r - 6f) / Range;
+        if (mb.Position.DistanceTo(c) > r) return;
+        var world = me.ViewPosition + (mb.Position - c) / k;
+        float tol = PickPx / k;
+        IHittable best = null; float bd = tol;
+        foreach (var h in Combat.Hostiles)
+        {
+            if (h == null || !h.Alive || !h.Selectable) continue;
+            float d = world.DistanceTo(h.Position); if (d <= bd) { bd = d; best = h; }
+        }
+        if (best != null) { Hub.SelectTarget(best); return; }
+        var marks = new System.Collections.Generic.List<(string name, Vector2 at, float radius)>();
+        if (!Hub.InArena)
+        {
+            marks.Add(("BASE", Hub.BasePos, 260f)); marks.Add(("THREAT INTELLIGENCE", Hub.TioPos, 140f));
+            marks.Add(("PORTAL", Hub.PortalPos, 160f)); marks.Add(("SALVAGE FIELD", Hub.WreckPos, 340f));
+            marks.Add(("MINING BELT", Hub.SunPos, 540f));
+            if (Hub.Mission == Hub.MissionState.PortalOpen) marks.Add(("MISSION PORTAL", Hub.MissionPortalPos, 160f));
+        }
+        foreach (var s in Hub.Ships) if (s != me) marks.Add((s.Pilot, s.Position, s.HitRadius));
+        (string name, Vector2 at, float radius)? pick = null; float pd = tol;
+        foreach (var m in marks) { float d = world.DistanceTo(m.at); if (d <= pd) { pd = d; pick = m; } }
+        if (pick is { } p) Hub.SelectWaypoint(p.name, p.at, p.radius);
     }
 
     public override void _Process(double delta)
@@ -68,6 +101,7 @@ public partial class Radar : Control
             var p = P(s.Position); if (!Inside(p)) p = c + (p - c).Normalized() * (r - 5f);
             Arrow(p, s.Rotation, new Color(0.55f, 0.85f, 1f));
         }
+        if (Hub.Waypoint is { } wp) { var p = P(wp); if (!Inside(p)) p = c + (p - c).Normalized() * (r - 5f); DrawArc(p, 6f, 0, Mathf.Tau, 16, new Color(1f, 0.85f, 0.3f), 1.4f); }
         if (!me.Alive) DrawCircle(P(me.Position), 2.5f, new Color(0.5f, 0.6f, 0.8f));   // the ship in stasis
         Arrow(c, me.Alive ? me.Rotation : 0f, Colors.White);
         if (Hub.FreeCamera)

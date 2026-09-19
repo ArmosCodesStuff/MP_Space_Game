@@ -61,6 +61,20 @@ public partial class Hub : Node2D
     public static SectorKind Sector = SectorKind.Home;
     public static bool InArena => Sector == SectorKind.Arena;
     public static Hub I { get; private set; }
+
+    // A WAYPOINT: a landmark or a pilot picked on the radar -- somewhere to warp to, never a
+    // target for weapons. A target and a waypoint exclude each other; Esc or a double-click
+    // on empty space clears either.
+    public Vector2? Waypoint { get; private set; }
+    public string WaypointName { get; private set; } = "";
+    public float WaypointRadius { get; private set; }
+    public void SelectTarget(IHittable h) { _selected = h; Waypoint = null; }
+    public void SelectWaypoint(string name, Vector2 at, float radius) { _selected = null; Waypoint = at; WaypointName = name; WaypointRadius = radius; }
+    public void ClearSelection() { _selected = null; Waypoint = null; }
+    // what a warp aims at right now: the target, else the waypoint
+    public (bool has, Vector2 at, float radius) WarpAim() =>
+        _selected != null && _selected.Alive ? (true, _selected.Position, _selected.HitRadius)
+        : Waypoint is { } w ? (true, w, WaypointRadius) : (false, Vector2.Zero, 0f);
     public Boss Boss { get; private set; }
     private double _arenaEndT = -1;                         // counts down to going home
     public bool MissionWon { get; private set; }
@@ -617,7 +631,7 @@ public partial class Hub : Node2D
             float d = world.DistanceTo(h.Position);
             if (d <= h.HitRadius + 16f && d < bd) { bd = d; best = h; }
         }
-        if (best != null) { _selected = best; return true; }
+        if (best != null) { SelectTarget(best); return true; }
         // buildings: a left-click on one opens its menu
         if (IsInstanceValid(_tioSprite) && _tioSprite.GetRect().HasPoint(_tioSprite.ToLocal(world))) { OpenTio(); return true; }
         if (!InArena && world.DistanceTo(BasePos) < 200f) { if (!IsInstanceValid(_base)) ToggleBase(); return true; }
@@ -669,6 +683,7 @@ public partial class Hub : Node2D
             ship = $"    |    {Character.Name}  {(me.Class == ShipClass.Battleship ? "BATTLESHIP" : "CARRIER")}"
                  + $"  {Mathf.Abs(me.SpeedAhead):0} u/s{(me.SpeedAhead < -1 ? " astern" : "")}";
             ship += Selected != null ? "    target: " + (Selected is TargetDummy td ? $"TARGET DUMMY {td.Number}" : $"#{Selected.NetId}")
+                  : Waypoint != null ? $"    waypoint: {WaypointName}"
                                      : "    no target (Tab / click)";
             if (Placing) ship += $"    PLACING {_placingLabel}: left-click to confirm, right-click / Esc to cancel";
         }
@@ -755,7 +770,7 @@ public partial class Hub : Node2D
             else if (IsInstanceValid(_base)) ToggleBase();
             else if (IsInstanceValid(_pilot)) TogglePilot();
             else if (IsInstanceValid(_tio)) { _tio.QueueFree(); _tio = null; }
-            else if (Selected != null) _selected = null;
+            else if (Selected != null || Waypoint != null) ClearSelection();
             else ToggleEscMenu();                                   // the menu holds "quit to main menu"
         }
     }
@@ -784,7 +799,7 @@ public partial class Hub : Node2D
             {
                 if (Placing) { var confirm = _placing; CancelPlacement(); confirm(at); }
                 // a double-click on empty space clears the target
-                else if (!SelectAt(at) && mb.DoubleClick) _selected = null;
+                else if (!SelectAt(at) && mb.DoubleClick) ClearSelection();
                 GetViewport().SetInputAsHandled();
             }
             else if (mb.ButtonIndex == MouseButton.Right && Placing)
@@ -805,7 +820,7 @@ public partial class Hub : Node2D
             else if (kk.Keycode == Key.K) ToggleStats();
             else if (kk.Keycode == Key.B && !InArena) ToggleBase();
             else if (kk.Keycode == Key.L) TogglePilot();
-            else if (kk.Keycode == Key.V) MyShipPublic?.StartWarp(_selected);   // warp: a fixed key, not a slot
+            else if (kk.Keycode == Key.V) MyShipPublic?.StartWarp();   // warp: a fixed key, not a slot
             else
             {
                 // in stasis the only order is F: re-board once the ship is ready
