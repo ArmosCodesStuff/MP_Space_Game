@@ -222,7 +222,7 @@ Recorded here so every chunk builds from the written word, not from memory.
      boss. Boss "levels" replace tiers (numbering from 0 or 1: to be agreed).
   8. **Last: a full code review** — every variable, line, function and reference — with a task list
      worked recursively until the code is clean.
-- **Chunk 7 — raids**: on a failed mission the boss sends patrols in **from the perimeter of the base
+- **Chunk 7 — raids (DONE)**: on a failed mission the boss sends patrols in **from the perimeter of the base
   map** against the miners, salvagers, hauler and players.
 - **Chunk 8 — the BASE button in the arena, and a dedicated multiplayer arena test.**
 

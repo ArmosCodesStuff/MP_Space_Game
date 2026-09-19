@@ -39,7 +39,7 @@ history pick the work up from it alone. Update it in the same change as the code
 **State as of 2026-09-18: version 0.3.0 plus Unreleased (see it for everything since: docking arms
 and the unload queue, the fleet and hauler pods, the idle economy, base menu, bunker-buster missile,
 painted turrets, docking bombers and more).** Typecheck clean against the real `GodotSharp.dll`,
-`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 367 checks across
+`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 372 checks across
 a single-player run and a host with two guests. Unlike earlier releases, this one was also **looked at**:
 `tools/screens/run.sh` renders the select screen, the creator, a fresh spawn under the base, both
 classes in the hub, the K window, a bomber strike, and turret close-ups on a virtual display; layout
@@ -180,6 +180,24 @@ reachable, which is fine: both harnesses build from the `nupkgs` folder that shi
 ---
 
 ## Unreleased
+
+### Chunk 7: raids
+
+**Checked:** smoke test **three runs in a row, 372 checks each** (5 new; raids after a win, and unscaled
+raiders, were each put in on purpose in a copy and caught); screenshot sweep, 0 lint; a raid closing and
+the HUD's count looked at.
+
+#### Added
+
+- **A failed mission brings a raid.** When the whole party is in stasis and goes home, the boss sends
+  its raiders after them: **2 patrols** (3 lights and a heavy each) **plus 1 per extra pilot**, in from
+  the **edge of the base's map (3200 u)**, **3 s after the party is home** (so every guest's world has
+  loaded first). A won mission brings none.
+- **Raiders are as strong as the failed boss**: hull and every damage (lasers, the heavy's missile)
+  × **S(L) = 1.1^(L−1)**, L the failed boss's level (today's tier + 1; the same scale exactly).
+- **The HUD counts them** ("RAIDERS 8").
+
+### Earlier in Unreleased
 
 ### Connecting with friends elsewhere
 
