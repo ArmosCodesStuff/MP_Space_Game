@@ -99,7 +99,6 @@ public class ShipStats
             Add("Fighters", "fighter_interval", "Reload",           0.35, "s", 2, inverse: true);
             Add("Fighters", "fighter_range",    "Weapon range",     300, "u", 0);
             Add("Fighters", "fighter_speed",    "Top speed",        352, "u/s", 0);
-            Add("Fighters", "fighter_accel",    "Acceleration",     900, "u/s²", 0);
             Add("Fighters", "fighter_burst",    "Firing before rest", 15, "s", 0);
             Add("Fighters", "fighter_rest",     "Rest, docked inside", 3, "s", 0, inverse: true);
             Add("Fighters", "fighter_turn",     "Turn rate",        3.5, "rad/s", 1);

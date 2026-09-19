@@ -222,8 +222,16 @@ battleship size, docked bombers, strike, plumes, own ship without a bar).
 - **Service bays sit on each pad's north edge**, parallel to it; the **top bay unloads from the
   north** too.
 
+#### Removed
+
+- **`fighter_accel`** — fighters fly at a steady speed with a turn rate now, so the stat did nothing
+  (it still showed in the K window).
+
 #### Fixed
 
+- **The K window no longer counts fighters as sustained damage.** They strafe and rest, so their
+  2.0 DPS (four fighters) is now shown as the rate while firing, outside the sustained total.
+- **Two comments** still described fighters orbiting and bombers docked parallel to the hull.
 - **A faded shield left its last faint frame on screen** for good (no redraw as the glow reached
   zero). Found in the screenshots.
 

@@ -185,10 +185,11 @@ public partial class Turret : Node2D
 }
 
 // ── Wing craft ───────────────────────────────────────────────────────────────
-// Fighters and bombers fly with real acceleration, so the acceleration stat on the sheet is a real number.
-//
-//   FIGHTERS hold an orbit until ordered to attack the selected target; they fight
-//            it while it stays within the carrier's control range. Recall returns them.
+//   FIGHTERS wait docked INSIDE the carrier. Ordered to attack the selected target
+//            (while it is within control range), they launch and fly strafing runs
+//            like aircraft -- steady speed, limited turn rate: 3 shots, through the
+//            target by 1.2x its diameter, turn, repeat. After 15 s engaged they dock
+//            and rest 3 s. Recall brings them home.
 //   BOMBERS  are an active ability. They wait DOCKED on the carrier's flanks, half to
 //            port and half to starboard, rearming there. On the order they fly at the
 //            target, turn to face it at launch distance, and launch torpedoes straight
@@ -243,7 +244,7 @@ public partial class Wing : Node2D
     private ShipStats S => Carrier.Stats;
     private bool F => Kind == WingKind.Fighter;
     private float Speed => (float)(F ? S["fighter_speed"] : S["bomber_speed"]);
-    private float Accel => (float)(F ? S["fighter_accel"] : S["bomber_accel"]);
+    private float Accel => (float)S["bomber_accel"];            // bombers only: fighters fly at a steady speed
     private float Range => (float)(F ? S["fighter_range"] : S["launch_range"]);
 
     public void Init(PlayerShip carrier, WingKind kind, Vector2 at)
@@ -423,7 +424,7 @@ public partial class Wing : Node2D
         }
     }
 
-    // Docked: fixed to the carrier's flank, heading with it.
+    // Docked: in its slot on the carrier's flank, nose out, tail to the hull.
     public void SnapToDock()
     {
         var (p, rot) = Carrier.DockSlot(this);

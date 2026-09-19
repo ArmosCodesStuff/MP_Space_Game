@@ -165,15 +165,17 @@ public partial class StatsWindow : CanvasLayer
         }
         else
         {
-            D("Per fighter", s.FighterDpsEach);
-            D($"Fighters ({s["fighter_count"]:0})", s.FighterDps);
+            // fighters strafe (3 shots a pass, then turn) and rest, so this is their rate
+            // WHILE firing a burst, not a sustained figure
+            D("Per fighter, while firing a burst", s.FighterDpsEach);
+            D($"Fighters ({s["fighter_count"]:0}), all firing at once", s.FighterDps);
             _derived.AddChild(Cell($"Bomber strike: {s.TorpedoesPerRun:0} torpedoes × {s["torpedo_damage"]:0.0} = "
                                  + $"{s.TorpedoesPerRun * s["torpedo_damage"]:0.0} damage if all hit (unguided)", false, false, acc));
         }
         D("Per PD turret (while firing)", s.PdDpsPerTurret);
         D($"PD sustained, if re-activated as soon as it recharges ({s.PdDuty * 100:0}% duty)", s.PdSustainedDps);
-        double total = s.MainDps + s.MissileDps + s.PdSustainedDps + s.FighterDps;
-        _derived.AddChild(Cell($"SUSTAINED TOTAL:  {total:0.00} DPS" + (s.Class == ShipClass.Carrier ? "  (+ bomber strikes)" : ""), true, false, acc));
+        double total = s.MainDps + s.MissileDps + s.PdSustainedDps;
+        _derived.AddChild(Cell($"SUSTAINED TOTAL:  {total:0.00} DPS" + (s.Class == ShipClass.Carrier ? "  (+ fighter runs, + bomber strikes)" : ""), true, false, acc));
         _derived.AddChild(new Control { CustomMinimumSize = new Vector2(0, 8) });
 
         // ── every stat: base / bonus / final ──

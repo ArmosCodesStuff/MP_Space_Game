@@ -273,9 +273,9 @@ every hostile needs a `NetId` that is the same on every peer (the dummies are 10
 | | Sustained DPS, if everything hits | Kills the other in |
 |---|---|---|
 | Battleship | 7.60 (6.0 main + 1.0 PD at 50% duty + 0.60 missiles) | 26.3 s |
-| Carrier | ≈ 4.7 (1.5 PD + 2.0 fighters + ≈1.2 torpedoes) | ≈ 64 s |
+| Carrier | ≈ 3.5 (1.5 PD + ≈0.8 fighters on strafing runs + ≈1.2 torpedoes) | ≈ 86 s |
 
-⚠ **The battleship wins by about 2.4×**, and more in practice: torpedoes are unguided. Recorded
+⚠ **The battleship wins by about 3.3×**, and more in practice: torpedoes are unguided. Recorded
 rather than quietly patched. Levers, each a one-line change in `Stats.cs`: eight fighters instead of
 four; fighters at 1.0 DPS; two main barrels instead of four; carrier hull at 300.
 
