@@ -39,7 +39,7 @@ history pick the work up from it alone. Update it in the same change as the code
 **State as of 2026-09-18: version 0.3.0 plus Unreleased (see it for everything since: docking arms
 and the unload queue, the fleet and hauler pods, the idle economy, base menu, bunker-buster missile,
 painted turrets, docking bombers and more).** Typecheck clean against the real `GodotSharp.dll`,
-`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 338 checks across
+`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 345 checks across
 a single-player run and a host with two guests. Unlike earlier releases, this one was also **looked at**:
 `tools/screens/run.sh` renders the select screen, the creator, a fresh spawn under the base, both
 classes in the hub, the K window, a bomber strike, and turret close-ups on a virtual display; layout
@@ -180,6 +180,35 @@ reachable, which is fine: both harnesses build from the `nupkgs` folder that shi
 ---
 
 ## Unreleased
+
+### Chunk 6b: heavy raiders and the predicted missile
+
+**Checked:** smoke test **three runs in a row, 345 checks each** (7 new, one over the network; a heavy
+that never waits, a blast that cannot be dodged, and a 1x laser were each put in on purpose in a copy
+and caught); screenshot sweep **60 frames, 0 lint**; a heavy waiting astern with its missile in flight
+and the red circle looked at.
+
+#### Added
+
+- **Heavy raiders**: the battleship cut in half (the bow half), 30% skinnier, dark red, **4× a light's
+  size (136 u)**, with **one turret** — the battleship's front turret — tracking the target on its own.
+  Hull 100 (a default).
+- **They wait**: **astern of the target** (the approach is from the rear), facing it, **450 u out**,
+  holding their laser — until the target is **pinned**. Then they **afterburn** in (300 u/s, a default)
+  to **135 u off the hull** (90% of a 150 u reach) and fire a short, hard laser at **2× the raider
+  damage (2 DPS)**.
+- **Their missile**: within **500 u**, a fat missile at **where the target will be in 7 s** (its speed
+  carried forward). A **red circle** in the boss's red marks the spot for all 7 s; the blast (90 u,
+  30 damage — defaults) lands exactly there, so **moving off the circle dodges it**. One every 12 s
+  (a default). Guests see the circle and the missile; the host lands the blast.
+
+#### Changed (tests)
+
+- **The bounty-credit check is exact**: home credits = the credits set aside at departure + 2000
+  (`Yard.TripStartCredits`). A fixed 3000–3400 window failed whenever the hauler sold a load just
+  before departure — legal, and shifted into view by the longer run.
+
+### Earlier in Unreleased
 
 ### Chunk 6a: light raiders and the pin
 
