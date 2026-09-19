@@ -181,6 +181,19 @@ reachable, which is fine: both harnesses build from the `nupkgs` folder that shi
 
 ## Unreleased
 
+### Chunk 6, art: the enemy fighters (staged; no code yet)
+
+- **Light fighter** (`art_unused/enemy_light_fighter.png`): the player's black-and-red sprite, cropped,
+  saved at **twice a carrier fighter's texture size** (278 px against 139), so it draws at 34 u to the
+  fighter's 17 u.
+- **Heavy fighter** (`art_unused/enemy_heavy_hull.png`): the battleship's hull **cut in half
+  horizontally** (the bow half), **30% skinnier**, the cut closed with a tapered stern and a dark rim.
+  Its **one turret** is the battleship's main turret on the front mount (150.5, 62.4 px), turning on its
+  own in the game, as on the battleship. To be drawn about 4× a light fighter (≈136 u).
+- Both looked at. They move out of `art_unused/` when the fighters' code lands (chunk 6a/6b).
+
+### Earlier in Unreleased
+
 ### Radar selection; warp aims when it jumps
 
 **Checked:** smoke test **three runs in a row, 327 checks each** (5 new; a warp that ignores the heading
