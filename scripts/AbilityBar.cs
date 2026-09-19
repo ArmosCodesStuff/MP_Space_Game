@@ -21,11 +21,13 @@ public partial class AbilityBar : Control
 
     // What a slot says, whether it is lit (active/engaged), and how much of it is
     // still recharging (0..1).
-    public struct SlotState { public string Line; public bool Lit; public float Busy; }
+    public struct SlotState { public string Line; public bool Lit, Fail; public float Busy; }
 
     public static SlotState StateOf(PlayerShip s, string id, IHittable selected)
     {
         var st = new SlotState { Line = "READY" };
+        var why = s.FailNote(id);                       // a refused press: say why, briefly
+        if (why != null) { st.Line = why; st.Fail = true; return st; }
         var S = s.Stats;
         switch (id)
         {
@@ -93,17 +95,18 @@ public partial class AbilityBar : Control
                 continue;
             }
             var st = StateOf(s, ab.Id, Hub.Selected);
-            DrawRect(r, st.Lit ? new Color(0.16f, 0.30f, 0.22f, 0.95f) : new Color(0.08f, 0.09f, 0.12f, 0.92f));
+            DrawRect(r, st.Fail ? new Color(0.32f, 0.08f, 0.08f, 0.95f) : st.Lit ? new Color(0.16f, 0.30f, 0.22f, 0.95f) : new Color(0.08f, 0.09f, 0.12f, 0.92f));
             if (st.Busy > 0)   // recharge sweep: a dark band shrinking from the top
                 DrawRect(new Rect2(r.Position, new Vector2(SlotW, SlotH * Mathf.Clamp(st.Busy, 0, 1))), new Color(0, 0, 0, 0.55f));
-            DrawRect(r, st.Lit ? new Color(0.45f, 1f, 0.6f) : new Color(0.45f, 0.55f, 0.7f, 0.7f), false, 1.5f);
+            DrawRect(r, st.Fail ? new Color(1f, 0.35f, 0.3f) : st.Lit ? new Color(0.45f, 1f, 0.6f) : new Color(0.45f, 0.55f, 0.7f, 0.7f), false, 1.5f);
 
             string key = Abilities.KeyName(Abilities.KeyFor(s.Class, ab.Id));
             Txt.D(this, font, r.Position + new Vector2(6, 16), key, HorizontalAlignment.Left, 0, 13, new Color(1f, 0.85f, 0.4f));
             if (ab.Kind == AbilityKind.Hold)
                 Txt.D(this, font, r.Position + new Vector2(0, 16), "hold", HorizontalAlignment.Right, SlotW - 6, 11, new Color(1, 1, 1, 0.45f));
             Txt.D(this, font, r.Position + new Vector2(0, 38), ab.Short, HorizontalAlignment.Center, SlotW, 16, Colors.White);
-            Txt.D(this, font, r.Position + new Vector2(0, 56), st.Line, HorizontalAlignment.Center, SlotW, 11, new Color(0.8f, 0.9f, 1f, 0.85f));
+            Txt.D(this, font, r.Position + new Vector2(0, 56), st.Line, HorizontalAlignment.Center, SlotW, 11,
+                  st.Fail ? new Color(1f, 0.55f, 0.5f) : new Color(0.8f, 0.9f, 1f, 0.85f));
         }
     }
 }

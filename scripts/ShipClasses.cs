@@ -121,7 +121,7 @@ public partial class Turret : Node2D
         {
             _cd += Interval;
             Target.TakeDamage(ShotDamage); Ship.NoteCombat();
-            Combat.Flash(wp, Target.Position, new Color(0.7f, 0.95f, 1f));
+            Combat.Flash(wp + Vector2.Right.Rotated(GlobalRotation) * BarrelLength, Target.Position, new Color(0.7f, 0.95f, 1f));
         }
         QueueRedraw();
     }
@@ -208,7 +208,7 @@ public partial class Wing : Node2D
     public int Ammo;
     public Vector2 Velocity;
 
-    public const float FighterLength = 17f, BomberLength = 37.5f;   // halved / three-quarters in this release
+    public const float FighterLength = 17f, BomberLength = 28.125f;   // bomber: snout-nosed, 25% smaller   // halved / three-quarters in this release
     private Sprite2D _sprite;
     private double _cd;
 
@@ -219,6 +219,9 @@ public partial class Wing : Node2D
     // home and dock INSIDE the carrier for a 3 s rest; with nothing to fight they
     // stay inside.
     public const int BurstShots = 3;
+    // HARD LIMIT: fighters leave the hangar at least this far apart. Deliberately a constant,
+    // not a stat: no upgrade or rate-of-fire bonus may ever change it.
+    public const double LaunchInterval = 0.83;
     public const float Overshoot = 1.2f;
     private enum FSt { Docked, Launch, Approach, Burst, Overshoot, Turn, Home }
     private FSt _f = FSt.Docked;
@@ -230,6 +233,7 @@ public partial class Wing : Node2D
     public string FighterPhase => _f.ToString();
     public int ShotsThisPass => _shots;
     public float LastOvershoot { get; private set; }   // how far past the target the last pass went
+    public double LaunchedAt { get; private set; } = -1; // the carrier's clock when it last left the hangar
     private enum BSt { Docked, Approach, Aim, Launch, Return, Backing }
     public const float CrawlSpeed = 0.25f;     // bombers keep closing at this fraction of top speed while they launch
     public bool Launching => _b == BSt.Launch;
@@ -304,7 +308,7 @@ public partial class Wing : Node2D
             case FSt.Docked:
                 Position = Carrier.Position; Velocity = Carrier.Velocity; _heading = Carrier.Rotation - Mathf.Pi / 2f;
                 if (_rest > 0) { _rest -= delta; break; }
-                if (engage) { _f = FSt.Launch; _launchT = 0; _engaged = 0; Carrier.Signal(Carrier.Position); }
+                if (engage && Carrier.TakeLaunchSlot()) { _f = FSt.Launch; _launchT = 0; _engaged = 0; LaunchedAt = Carrier.Clock; Carrier.Signal(Carrier.Position); }
                 break;
             case FSt.Launch:                       // out along the carrier's heading, clear of the hull
                 _launchT += delta; Fly(dt);

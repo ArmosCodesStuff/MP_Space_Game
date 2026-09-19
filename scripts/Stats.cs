@@ -72,7 +72,7 @@ public class ShipStats
 
             // A magazine, reloaded by hand (R): 2 missiles, then a 16 s reload.
             Add("Missile", "missile_damage",   "Damage",            5.0, "", 1);
-            Add("Missile", "missile_mag",      "Magazine",          2, "", 0);
+            Add("Missile", "missile_mag",      "Magazine",          1, "", 0);
             Add("Missile", "missile_refire",   "Between shots",     0.6, "s", 1, inverse: true);
             Add("Missile", "missile_reload",   "Reload (R)",        16.0, "s", 1, inverse: true);
             Add("Missile", "missile_range",    "Range",             900, "u", 0);
@@ -93,7 +93,7 @@ public class ShipStats
 
         if (!bs)
         {
-            Add("Fighters", "fighter_count",    "Craft",            4, "", 0);
+            Add("Fighters", "fighter_count",    "Craft",            3, "", 0);
             Add("Fighters", "fighter_hp",       "Hull each",        48, "", 0);
             Add("Fighters", "fighter_damage",   "Damage per shot",  0.175, "", 3);
             Add("Fighters", "fighter_interval", "Reload",           0.35, "s", 2, inverse: true);
@@ -110,8 +110,8 @@ public class ShipStats
             Add("Bombers", "bomber_hp",       "Hull each",          110, "", 0);
             Add("Bombers", "torpedo_damage",  "Torpedo damage",     3.0, "", 1);
             Add("Bombers", "bomber_ammo",     "Torpedoes per run",  4, "", 0);
-            Add("Bombers", "torpedo_interval","Between launches",   0.35, "s", 2, inverse: true);
-            Add("Bombers", "torpedo_speed",   "Torpedo speed",      120, "u/s", 0);
+            Add("Bombers", "torpedo_interval","Between launches",   0.5, "s", 2, inverse: true);
+            Add("Bombers", "torpedo_speed",   "Torpedo speed",      90, "u/s", 0);
             Add("Bombers", "torpedo_range",   "Torpedo run",        1215, "u", 0);
             Add("Bombers", "launch_range",    "Launch distance",    567, "u", 0);
             Add("Bombers", "bomber_rearm",    "Rearm on the carrier", 6, "s", 1, inverse: true);

@@ -29,7 +29,11 @@ public partial class Hub : Node2D
     public static readonly Vector2 StemFoot = new(0f, 175f);  // where the pad hangs from the station
     public static readonly Vector2 SunPos    = new(0, -1500);
     public static readonly Vector2 WreckPos  = new(-1250, 60);
-    public static readonly Vector2 PortalPos = new(1500, 219);   // on the lane through that pad
+    public static readonly Vector2 PortalPos = new(1500, 219);
+    // Threat Intelligence Operations: south-west of the base, clear of the wreck, the
+    // salvage routes, the haul lane and the dummies. (Bounty missions come next.)
+    public static readonly Vector2 TioPos = new(-650, 640);
+    public const float TioHeight = 260f;   // on the lane through that pad
     // three dummies south-east of the base, below the haul lane and far enough apart
     // that a click is never ambiguous
     public static readonly Vector2[] DummyPos = { new(600, 670), new(900, 550), new(900, 850) };
@@ -84,6 +88,7 @@ public partial class Hub : Node2D
     private IHittable _selected;
     public IHittable Selected => _selected != null && _selected.Alive ? _selected : null;
     private readonly List<(Vector2 a, Vector2 b, Color c, double t)> _flashes = new();
+    public IReadOnlyList<(Vector2 a, Vector2 b, Color c, double t)> Flashes => _flashes;
 
     public override void _Ready()
     {
@@ -96,6 +101,10 @@ public partial class Hub : Node2D
         sky.AddChild(stars);
 
         BuildWorld();
+        // Hit flashes get their own layer ABOVE the hulls (ships sit at z 4) and below the
+        // turret sprites, so a shot is seen leaving a turret on top of the ship -- drawn at
+        // the world's own level they started underneath it.
+        AddChild(new FlashLayer { Hub = this, ZIndex = 8, ZAsRelative = false });
         _cam = new Camera2D { Zoom = new Vector2(DefaultZoom, DefaultZoom) }; AddChild(_cam); _cam.MakeCurrent();
 
         var layer = new CanvasLayer(); AddChild(layer);
@@ -209,6 +218,13 @@ public partial class Hub : Node2D
 
         AddChild(new Sprite2D { Texture = GD.Load<Texture2D>("res://base_station.png"), Name = "Base",
                                 Position = BasePos, Scale = new Vector2(BaseScale, BaseScale), ZIndex = 2 });
+        var tioTex = GD.Load<Texture2D>("res://tio_building.png");
+        var tio = new Sprite2D { Texture = tioTex, Name = "TIO", Position = TioPos, Scale = Vector2.One * (TioHeight / tioTex.GetHeight()), ZIndex = 2 };
+        AddChild(tio);
+        var tioName = new Label { Text = "THREAT INTELLIGENCE OPERATIONS", HorizontalAlignment = HorizontalAlignment.Center,
+                                  Position = TioPos + new Vector2(-200, TioHeight / 2 + 6), Size = new Vector2(400, 20), Modulate = new Color(0.8f, 0.85f, 0.95f, 0.8f) };
+        tioName.AddThemeFontSizeOverride("font_size", 14);
+        AddChild(tioName);
 
         Portal = new Portal { Position = PortalPos, Name = "Portal" };
         AddChild(Portal);
@@ -446,8 +462,6 @@ public partial class Hub : Node2D
 
     public override void _Draw()
     {
-        foreach (var f in _flashes)
-            DrawLine(f.a, f.b, new Color(f.c.R, f.c.G, f.c.B, (float)(f.t / 0.10) * 0.9f), 2f);
 
         // Hull bars on every ship, and other players' names. Drawn here rather than on
         // the ship so they stay upright while it turns.
@@ -681,5 +695,17 @@ public partial class HullHud : Control
                   : s.CanReboard ? "SHIP READY  —  press F to re-board"
                   : $"SHIP IN STASIS  {(int)s.StasisLeft / 60}:{(int)s.StasisLeft % 60:00}  —  flying the escape pod",
               HorizontalAlignment.Center, W, 15, Colors.White);
+    }
+}
+
+// Draws the hub's hit flashes (see Hub._Ready for why it is a layer of its own).
+public partial class FlashLayer : Node2D
+{
+    public Hub Hub;
+    public override void _Process(double delta) => QueueRedraw();
+    public override void _Draw()
+    {
+        foreach (var f in Hub.Flashes)
+            DrawLine(f.a, f.b, new Color(f.c.R, f.c.G, f.c.B, (float)(f.t / 0.10) * 0.9f), 2f);
     }
 }

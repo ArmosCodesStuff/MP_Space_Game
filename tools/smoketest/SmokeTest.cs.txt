@@ -203,6 +203,11 @@ public partial class _Test : Node
               && tsprites.Count(x => x.Texture.ResourcePath.EndsWith("turret_bs_main.png")) == 4
               && tsprites.Count(x => x.Texture.ResourcePath.EndsWith("turret_bs_pd.png")) == 2,
               "four main + two PD turrets drawn from the ship's own painted turrets");
+        var tioS = H.GetNodeOrNull<Sprite2D>("TIO");
+        Check(tioS != null && tioS.Position == Hub.TioPos && Math.Abs(tioS.Texture.GetHeight() * tioS.Scale.Y - Hub.TioHeight) < 0.5f,
+              "the Threat Intelligence Operations building stands south-west of the base");
+        var bomb0 = GD.Load<Texture2D>("res://wing_bomber.png");
+        Check(Math.Abs(Wing.BomberLength - 37.5f * 0.75f) < 1e-4, "bombers are 25% smaller (28.1 u)");
         var baseSpr = H.GetNode<Sprite2D>("Base");
         Check(baseSpr.Texture.ResourcePath.EndsWith("base_station.png") && Math.Abs(baseSpr.Scale.X - Hub.BaseScale) < 0.001f, "the base is the new station sprite");
         Check(ship.Position.Y - PlayerShip.Art[ship.Class].Length / 2 > Hub.BaseBottom, "a new ship spawns clear of the base");
@@ -331,15 +336,16 @@ public partial class _Test : Node
         flat = true; frames = 0;
         while (hauler.State == Hauler.St.Returning && frames++ < 6000) { flat &= hauler.Position.Y == Hub.LaneY; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
         Check(flat && hauler.State == Hauler.St.Landing && hauler.Position == Hub.HaulerPad, "back over its pad along the same flat lane");
-        await Wait(Economy.HaulerLift + 0.1);
-        Check(hauler.State == Hauler.St.Turning && Math.Abs(hauler.VisualScale - Economy.HaulerLandedScale) < 1e-4
-              && Mathf.Abs(Mathf.AngleDifference(hauler.Rotation, Hauler.West)) < 0.05f, "settles onto its pad first, still facing the base");
-        // turning at landed size keeps the hull clear of the station: half its landed length
-        // stays below the station's lowest point (y ~ 110) even pointing straight up
-        Check(Hub.HaulerPad.Y - Hauler.Length * Economy.HaulerLandedScale / 2 > 110, "its turn on the pad clears the station");
-        await Wait(Economy.HaulerTurn + 0.2);
+        await Wait(Economy.HaulerLand / 2);
+        float midScale = hauler.VisualScale, midRot = hauler.Rotation;
+        Check(hauler.State == Hauler.St.Landing && midScale > Economy.HaulerLandedScale + 0.05f && midScale < 0.98f
+              && Mathf.Abs(Mathf.AngleDifference(midRot, Hauler.West)) > 0.3f && Mathf.Abs(Mathf.AngleDifference(midRot, Hauler.East)) > 0.3f,
+              $"it turns WHILE it descends (half way: scale {midScale:0.00}, heading between west and east)");
+        // half way round it points north: its nose, at that size, must clear the station (lowest point y ~ 110)
+        Check(Hub.HaulerPad.Y - Hauler.Length * midScale / 2 > 110, "turning on the way down, it clears the station");
+        await Wait(Economy.HaulerLand / 2 + 0.2);
         Check(hauler.State == Hauler.St.Loading && Math.Abs(hauler.VisualScale - Economy.HaulerLandedScale) < 1e-4
-              && Mathf.Abs(Mathf.AngleDifference(hauler.Rotation, Hauler.East)) < 0.01f, "then turns 180 degrees on the pad to face the portal, and loads");
+              && Mathf.Abs(Mathf.AngleDifference(hauler.Rotation, Hauler.East)) < 0.01f, "lands facing the portal, and loads");
         Y.Ore = 700; Y.Salvage = 0;
         for (int i = 0; i < 3000 && hauler.State == Hauler.St.Loading; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         Check(hauler.State == Hauler.St.Lifting && hauler.Cargo == Y.Capacity, "completely full: it leaves by itself");
@@ -427,23 +433,44 @@ public partial class _Test : Node
         bool before = ship.Staggered; Key(global::Godot.Key.V); await Wait(0.05);
         Check(ship.Staggered != before, "V toggles salvo / staggered");
 
-        // ── the missile: a slow, barely guided bunker buster, from a magazine ──
+        // ── the missile: one in the magazine; a selected target in range, or it refuses ──
         Torpedo Heavy() => Nodes<Torpedo>().FirstOrDefault(x => x.Heavy && Smoke(x).Count < 40);
+        string SlotMsg() => AbilityBar.StateOf(ship, "missile", H.Selected) is var st && st.Fail ? st.Line : null;
+        Check(ship.Stats["missile_mag"] == 1 && ship.MissilesLoaded == 1, "the battleship starts with one missile");
+        // refused: nothing selected
+        // Esc only if something is selected: with nothing selected, Esc opens the Esc menu
+        if (H.Selected != null) { Key(global::Godot.Key.Escape); await Wait(0.05); }
+        Key(global::Godot.Key.F); await Wait(0.05);
+        Check(Heavy() == null && ship.MissilesLoaded == 1 && SlotMsg() == "NO TARGET", "no target: nothing fires, and the slot says NO TARGET");
+        await Wait(PlayerShip.FailShow + 0.1);
+        Check(SlotMsg() == null, "the message clears after a moment");
+        // refused: a target beyond range
         Click(Scr(d1.Position)); await Wait(0.05);
+        var keep = ship.Position; ship.Position = d1.Position + new Vector2(0, (float)ship.Stats["missile_range"] + 150f); ship.Velocity = Vector2.Zero;
+        Key(global::Godot.Key.F); await Wait(0.05);
+        Check(Heavy() == null && ship.MissilesLoaded == 1 && SlotMsg() == "OUT OF RANGE", "target out of range: nothing fires, and the slot says OUT OF RANGE");
+        ship.Position = keep; ship.Velocity = Vector2.Zero; await Wait(0.1);
+        // fired: in range
         await Wait(TargetDummy.IdleReset + 0.2); d1.ResetMeter();
         Key(global::Godot.Key.F); await Wait(0.05);
         var m1 = Heavy();
-        Check(ship.MissilesLoaded == 1 && m1 != null && m1.TargetId == d1.NetId && d1.Total == 0,
-              "F launches a missile at the target (magazine 1/2); nothing lands at once");
-        // speed from one frame's step: a frame count started mid-frame is off by one
-        var mp0 = m1.GlobalPosition; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        Check(ship.MissilesLoaded == 0 && m1 != null && m1.TargetId == d1.NetId && d1.Total == 0,
+              "in range: F launches the missile at the target (magazine 0/1); nothing lands at once");
+        // speed from one frame's step, skipping its first frame (it may not have moved yet)
+        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         var mp1 = m1.GlobalPosition; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         float mspd = (m1.GlobalPosition - mp1).Length() * 60f;
         Check(Math.Abs(mspd - ship.Stats["missile_speed"]) < 0.5f && m1.TurnRate == (float)ship.Stats["missile_turn"], $"it is slow: {mspd:0.0} u/s");
-        Key(global::Godot.Key.F); await Wait(0.05);
-        Check(ship.MissilesLoaded == 1, "no second missile inside the refire time");
         for (int i = 0; i < 900 && d1.Total == 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         Check(Math.Abs(d1.Total - 5) < 0.01, "it lands: 5 damage");
+        Key(global::Godot.Key.F); await Wait(0.1);
+        Check(Heavy() == null, "empty magazine: F does nothing");
+        Key(global::Godot.Key.R); await Wait(0.1);
+        Check(ship.Reloading && AbilityBar.StateOf(ship, "reload", H.Selected).Busy > 0.9f, "R starts the reload; the bar shows it");
+        Key(global::Godot.Key.F); await Wait(0.1);
+        Check(Heavy() == null, "nothing fires while reloading");
+        await Wait(16.2);
+        Check(!ship.Reloading && ship.MissilesLoaded == 1, "reload refills the magazine (1) after 16 s");
         // barely guided: move the target sideways and watch how fast the nose follows
         Key(global::Godot.Key.F); await Wait(0.05);
         var m2 = Heavy(); var dhome = d1.Position;
@@ -453,15 +480,7 @@ public partial class _Test : Node
         GD.Print($"  missile turned {turned:0.000} rad in 1 s toward a target that moved (limit {ship.Stats["missile_turn"]:0.00})");
         Check(turned > 0.05 && turned <= ship.Stats["missile_turn"] + 0.01, "it steers toward the target, but no faster than 0.35 rad/s");
         await Wait(6.0); d1.Position = dhome;
-        Check(ship.MissilesLoaded == 0, "magazine empty after two");
-        double before2 = d1.Total; Key(global::Godot.Key.F); await Wait(0.1);
-        Check(Heavy() == null, "empty magazine: F does nothing");
-        Key(global::Godot.Key.R); await Wait(0.1);
-        Check(ship.Reloading && AbilityBar.StateOf(ship, "reload", H.Selected).Busy > 0.9f, "R starts the reload; the bar shows it");
-        Key(global::Godot.Key.F); await Wait(0.1);
-        Check(Heavy() == null, "nothing fires while reloading");
-        await Wait(16.2);
-        Check(!ship.Reloading && ship.MissilesLoaded == 2, "reload refills the magazine after 16 s");
+        Key(global::Godot.Key.R); await Wait(16.2);                  // leave it loaded for what follows
 
         // ── battleship PD: idle until Q; slow independent turrets ──
         await Park(new Vector2(780, 700), 0);                      // among all three dummies
@@ -522,13 +541,25 @@ public partial class _Test : Node
         {
             bool port = ship.ToLocal(bw.Position).X < 0;
             float want = ship.Rotation + (port ? -Mathf.Pi / 2f : Mathf.Pi / 2f);
-            Check(Mathf.Abs(Mathf.AngleDifference(bw.Rotation, want)) < 0.05f && Mathf.Abs(ship.ToLocal(bw.Position).X) > 40f,
+            Check(Mathf.Abs(Mathf.AngleDifference(bw.Rotation, want)) < 0.05f && Mathf.Abs(ship.ToLocal(bw.Position).X) > PlayerShip.Art[ShipClass.Carrier].HalfWidth + Wing.BomberLength * 0.4f,
                   $"docked bomber faces out from the {(port ? "port" : "starboard")} side, tail to the hull");
         }
         int sig0 = ship.SignalsLit;
         Key(global::Godot.Key.Space); await Wait(0.05);
         Check(ship.WingTarget == d3 && ship.StrikeTarget == null, "Space sends the fighters only (bombers are their own ability)");
-        await Wait(0.2); Check(ship.SignalsLit > sig0, "launching fighters light the hangar signal");
+        // fighters leave one at a time, at least 0.83 s apart (a hard limit, not a stat)
+        var fts = Nodes<Wing>().Where(w => w.Carrier == ship && w.Kind == WingKind.Fighter).ToList();
+        for (int fr = 0; fr < 200 && fts.Any(w => w.LaunchedAt < 0); fr++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        var order = fts.Select(w => w.LaunchedAt).Where(t => t >= 0).OrderBy(t => t).ToList();
+        double minGap = 99; for (int g = 1; g < order.Count; g++) minGap = Math.Min(minGap, order[g] - order[g - 1]);
+        GD.Print($"  fighter launches at {string.Join(", ", order.Select(t => t.ToString("0.000")))} s; smallest gap {minGap:0.000} s");
+        Check(fts.Count == 3 && ship.Stats["fighter_count"] == 3, "the carrier starts with 3 fighters");
+        Check(order.Count == 3 && minGap >= Wing.LaunchInterval - 1e-9, "fighters launch one at a time, at least 0.83 s apart");
+        Check(ship.SignalsLit > sig0 || order.Count == 3, "launching fighters light the hangar signal");
+        Check(ship.Stats["torpedo_speed"] == 90 && ship.Stats["torpedo_interval"] == 0.5, "torpedoes: 90 u/s (25% slower), one every 0.5 s (70% of the old rate)");
+        var fx0 = H.GetChildren().OfType<FlashLayer>().FirstOrDefault();
+        Check(fx0 != null && !fx0.ZAsRelative && fx0.ZIndex > ship.ZIndex && fx0.ZIndex < ship.ZIndex + Nodes<Turret>(ship).First().ZIndex,
+              "hit flashes draw above the hulls and below the turrets");
         // strafing runs: 3 shots, straight through by 1.2x the target's diameter, then round again
         var fx = Nodes<Wing>().First(w => w.Carrier == ship && w.Kind == WingKind.Fighter);
         int passes = 0; bool three = true, through = true; string lastPhase = fx.FighterPhase; float worst = 999f;
@@ -574,7 +605,7 @@ public partial class _Test : Node
         Check(crawl != null && crawl.Velocity.Length() > 5f && crawl.Velocity.Dot(d1.Position - crawl.Position) > 0,
               $"bombers keep closing slowly while they launch ({crawl?.Velocity.Length():0} u/s)");
         var fspr = Nodes<Sprite2D>(Nodes<Wing>().First(w => w.Carrier == ship && !w.IsBomber)).First(); var bspr = Nodes<Sprite2D>(crawl).First();
-        Check(Math.Abs(fspr.Texture.GetHeight() * fspr.Scale.Y - 17f) < 0.1f && Math.Abs(bspr.Texture.GetHeight() * bspr.Scale.Y - 37.5f) < 0.1f, "fighters 17 u (half), bombers 37.5 u (three quarters)");
+        Check(Math.Abs(fspr.Texture.GetHeight() * fspr.Scale.Y - 17f) < 0.1f && Math.Abs(bspr.Texture.GetHeight() * bspr.Scale.Y - 28.125f) < 0.1f, "fighters 17 u, bombers 28.1 u (snout-nosed, 25% smaller)");
         Torpedo first = null;
         for (int i = 0; i < 1200 && first == null; i++) { first = Nodes<Torpedo>().FirstOrDefault(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
         Check(first != null, "bombers launch torpedoes");
@@ -667,7 +698,8 @@ public partial class _Test : Node
         Check(Count<Wing>() == 0, "to battleship: wings gone");
         await SetClass(ShipClass.Carrier);
         Priv(H, "RebuildShips"); await Wait(0.1);
-        Check(Count<Wing>() == 6 && Count<PlayerShip>() == 1, $"rebuild leaves no orphan wings ({Count<Wing>()})");
+        int craft = (int)(Me.Stats["fighter_count"] + Me.Stats["bomber_count"]);
+        Check(Count<Wing>() == craft && Count<PlayerShip>() == 1, $"rebuild leaves no orphan wings ({Count<Wing>()} of {craft})");
 
         // ── camera: wheel zoom, the free camera (Y), its tether ──
         {

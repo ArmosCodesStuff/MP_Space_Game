@@ -35,7 +35,7 @@ public static class Abilities
             new AbilityDef { Id = "firemode", Name = "Fire mode",     Short = "MODE",   Default = Key.V,
                              Blurb = "Salvo (all barrels at once) or staggered (one at a time). Same rate." },
             new AbilityDef { Id = "missile",  Name = "Missile",       Short = "MSL",    Default = Key.F,
-                             Blurb = "A slow bunker buster, barely guided: at the target if in range, else the nearest. Uses the magazine." },
+                             Blurb = "A slow bunker buster, barely guided. Needs a selected target in range. Uses the magazine." },
             new AbilityDef { Id = "reload",   Name = "Reload missiles", Short = "RELOAD", Default = Key.R,
                              Blurb = "Refills the missile magazine. Nothing fires while it runs." },
             new AbilityDef { Id = "pd",       Name = "Point defence", Short = "PD",     Default = Key.Q,

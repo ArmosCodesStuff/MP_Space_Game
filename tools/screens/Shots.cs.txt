@@ -282,8 +282,7 @@ public partial class _Shots : Node
             h.Position = new Vector2(Hub.HaulerPad.X + 3, Hub.LaneY);
             for (int i = 0; i < 600 && h.State != Hauler.St.Landing; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             await Frame(Hub.HaulerPad + new Vector2(0, -20), 2.0f); await Snap("28d_hauler_landing");
-            for (int i = 0; i < 900 && h.State != Hauler.St.Turning; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            await W(1.4); await Snap("28e_hauler_turning_on_pad");
+            await W(0.5); await Snap("28e_hauler_turning_while_landing");      // about half way down, half way round
             Me().Visible = true;
         }
         GetTree().Quit();

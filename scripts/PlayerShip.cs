@@ -102,8 +102,8 @@ public partial class PlayerShip : Node2D, IHittable
         [ShipClass.Carrier] = new ClassArt {
             Texture = "res://carrier_player.png", Length = 170f, HalfWidth = 24.5f,
             // bombers back in, tail to the hull: half the hull's beam (24.5) plus half a
-            // 37.5 u bomber, spaced by a bomber's 32 u span
-            DockX = 44f, DockY = 5f, DockSpacing = 36f,
+            // 28.1 u bomber, spaced by a bomber's ~28 u span
+            DockX = 39.5f, DockY = 5f, DockSpacing = 30f,
             Pds = new Vector2[] { new(-5.78f, 8.04f), new(5.78f, 8.04f), new(0f, 18.76f) },
             PdTurret = "res://turret_carrier.png", TurretTexScale = 0.2013f,
             PdBarrel = 3.7f, PdRing = 2.9f },
@@ -259,6 +259,14 @@ public partial class PlayerShip : Node2D, IHittable
     {
         // the fire mode is the owner's own intent (it rides in NetState), not a host order
         if (id == "firemode") { Staggered = !Staggered; return; }
+        // The missile needs a selected target within range. Checked here, on the owner's
+        // machine, so the slot can say why at once; the host checks again.
+        if (id == "missile" && Class == ShipClass.Battleship)
+        {
+            var t = targetId != 0 ? Combat.ById(targetId) : null;
+            string why = t == null ? "NO TARGET" : Position.DistanceTo(t.Position) > Stats["missile_range"] ? "OUT OF RANGE" : null;
+            if (why != null) { Fail(id, why); return; }
+        }
         if (Net.Sim) DoAbility(id, targetId);
         else RpcId(1, nameof(RequestAbility), id, targetId);
     }
@@ -291,6 +299,23 @@ public partial class PlayerShip : Node2D, IHittable
         }
     }
 
+    // A refused ability: its slot shows the reason, in red, for a moment.
+    public const double FailShow = 1.5;
+    private readonly Dictionary<string, (string msg, double until)> _fails = new();
+    private double _clock;                                          // game seconds, for timing
+    public double Clock => _clock;
+    public void Fail(string id, string msg) => _fails[id] = (msg, _clock + FailShow);
+    public string FailNote(string id) => _fails.TryGetValue(id, out var f) && _clock < f.until ? f.msg : null;
+
+    // Fighters leave the hangar one at a time, at least Wing.LaunchInterval apart.
+    private double _nextLaunch;
+    public bool TakeLaunchSlot()
+    {
+        if (_clock < _nextLaunch) return false;
+        _nextLaunch = _clock + Wing.LaunchInterval;
+        return true;
+    }
+
     public void NoteStrikeDone() { if (--_strikesOut <= 0) StrikeTarget = null; }
 
     // A bunker buster: launched off the nose toward the target (the selection if in
@@ -301,8 +326,7 @@ public partial class PlayerShip : Node2D, IHittable
     {
         if (!Net.Sim || !CanFireMissile) return;
         float range = (float)Stats["missile_range"];
-        if (t == null || Position.DistanceTo(t.Position) > range) t = Combat.NearestHostile(Position, range);
-        if (t == null) return;
+        if (t == null || Position.DistanceTo(t.Position) > range) return;   // a target in range, or nothing
         _mag--; _missileRefire = Stats["missile_refire"];
         var nose = ToGlobal(new Vector2(0, -MyArt.Length * 0.5f));
         Combat.LaunchTorpedo(nose, t.Position - nose, (float)Stats["missile_speed"], range * 1.4f,
@@ -345,6 +369,7 @@ public partial class PlayerShip : Node2D, IHittable
     public override void _Process(double delta)
     {
         float dt = (float)delta;
+        _clock += delta;
         if (!Alive) _stasis = Math.Max(0, _stasis - delta);   // the host's clock rules; guests re-sync each packet
         if (_combatT > 0) _combatT = Math.Max(0, _combatT - delta);
         UpdatePod();

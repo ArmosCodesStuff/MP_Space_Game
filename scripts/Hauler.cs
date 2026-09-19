@@ -26,7 +26,7 @@ using System;
 // ─────────────────────────────────────────────────────────────────────────────
 public partial class Hauler : Node2D
 {
-    public enum St { Loading, Lifting, Departing, Charging, Away, Arriving, Returning, Turning, Landing }
+    public enum St { Loading, Lifting, Departing, Charging, Away, Arriving, Returning, Landing }
 
     public Yard Yard;
     public St State = St.Loading;
@@ -116,16 +116,15 @@ public partial class Hauler : Node2D
             case St.Arriving: if (T >= 2.0) Go(St.Returning); break;
             case St.Returning:
                 Rotation = West;
-                if (Slide(Hub.HaulerPad.X, dt)) Go(St.Landing);   // settle first, then turn on the pad
+                if (Slide(Hub.HaulerPad.X, dt)) Go(St.Landing);   // over the pad: descend, turning as it goes
                 break;
-            case St.Turning:
-            {
-                float k = Mathf.Clamp((float)(T / Economy.HaulerTurn), 0f, 1f);
+            case St.Landing:
+            {   // down onto the pad, swinging from west to east on the way: it arrives facing the portal
+                float k = Mathf.Clamp((float)(T / Economy.HaulerLand), 0f, 1f);
                 Rotation = West + Mathf.Pi * k * k * (3f - 2f * k);
                 if (k >= 1f) { Rotation = East; Go(St.Loading); }
                 break;
             }
-            case St.Landing: Rotation = West; if (T >= Economy.HaulerLift) Go(St.Turning); break;
         }
         Position = new Vector2(Position.X, Hub.LaneY);                 // the lane: every move is flat
     }
@@ -144,9 +143,8 @@ public partial class Hauler : Node2D
     public float Altitude => State switch
     {
         St.Loading => 0f,
-        St.Turning => 0f,                 // turns on the pad, at landed size, clear of the station
         St.Lifting => Ease((float)(T / Economy.HaulerLift)),
-        St.Landing => 1f - Ease((float)(T / Economy.HaulerLift)),
+        St.Landing => 1f - Ease((float)(T / Economy.HaulerLand)),
         _ => 1f,
     };
     private static float Ease(float k) { k = Mathf.Clamp(k, 0f, 1f); return k * k * (3f - 2f * k); }

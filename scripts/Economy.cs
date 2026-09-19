@@ -28,8 +28,8 @@ public static class Economy
     public const double HaulerSpeed = 60;        // u/s -- it moves slowly
     public const double HaulerAway = 30;         // seconds through the portal
     public const double HaulerCharge = 3;        // seconds of blue aura before the jump
-    public const double HaulerTurn = 3;          // seconds to swing 180 degrees
-    public const double HaulerLift = 1.5;        // seconds to lift off / settle onto the pad
+    public const double HaulerLift = 1.5;        // seconds to lift off the pad
+    public const double HaulerLand = 3.0;        // seconds to descend onto it, turning 180 degrees on the way
     public const float  HaulerLandedScale = 0.65f;   // 200 u long in flight, 130 u landed
 
     // ── upgrades ─────────────────────────────────────────────────────────────
