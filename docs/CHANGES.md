@@ -39,7 +39,7 @@ history pick the work up from it alone. Update it in the same change as the code
 **State as of 2026-09-18: version 0.3.0 plus Unreleased (see it for everything since: docking arms
 and the unload queue, the fleet and hauler pods, the idle economy, base menu, bunker-buster missile,
 painted turrets, docking bombers and more).** Typecheck clean against the real `GodotSharp.dll`,
-`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 353 checks across
+`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 367 checks across
 a single-player run and a host with two guests. Unlike earlier releases, this one was also **looked at**:
 `tools/screens/run.sh` renders the select screen, the creator, a fresh spawn under the base, both
 classes in the hub, the K window, a bomber strike, and turret close-ups on a virtual display; layout
@@ -180,6 +180,44 @@ reachable, which is fine: both harnesses build from the `nupkgs` folder that shi
 ---
 
 ## Unreleased
+
+### Connecting with friends elsewhere
+
+**Checked:** smoke test **three runs in a row, 367 checks each** (14 new, some on the host's run; a
+double NAT taken for the internet, an address shown before the click, and no rate limit were each put
+in on purpose in a copy and caught); screenshot sweep, 0 lint; the address hidden and revealed looked
+at. **Not testable here:** a real router and the live public-address service (the sandbox has
+neither — the host's run proves the "nothing learned" path end to end).
+
+#### Changed
+
+- **The address friends in other cities need.** Hosting now asks a public "what is my IP" service
+  (`api.ipify.org`) as well as the router (UPnP), and decides from both:
+  **Internet** (the router opened the port and is the internet's edge: friends join public:port);
+  **Manual** (the router would not open it: forward UDP 27015 to this PC, then friends join
+  public:port); **network only** (the router's outside address is private or differs from the public
+  one — another router or the provider's shared address is in the way — or nothing could be learned).
+  Before, a router without UPnP left only the local 192.168… address, useless from another city.
+- **The address is behind a click-to-reveal** in the multiplayer panel ("•••.•••.•••.•••" until
+  clicked), and **no status line prints it**. COPY ADDRESS copies it without revealing it.
+- **Host, join and offline answer one press a second** (game time).
+- **Single player is proven silent**: no socket, no web lookup, no router job (`Net.NetworkIdle`);
+  lookups die with their session.
+
+#### Decided (the player's answers)
+
+- The connection fix went ahead of raids.
+- Party size: boss hull +60% and boss damage +20% per extra pilot; the bounty +50% per extra pilot,
+  **split evenly**, so a solo pilot earns the most.
+- Boss kills: 200 EXP at equal level, proportionate to the level chosen; +250 the first time each
+  level is beaten. The first boss is level 1.
+- **Awaiting the player's approval before it is built**: the formula proposed in reply —
+  S(L) = 1.1^(L−1); boss hull × S(L) × (1 + 0.6(P−1)), damage × S(L) × (1 + 0.2(P−1)); a failed level-L
+  mission's raids × S(L); kill EXP = round(200 × boss level ÷ pilot level), +250 first clear of that
+  level, +100 for completing; 1000 EXP per pilot level; bounty 2000 × S(L) × (1 + 0.5(P−1)) split
+  evenly among P.
+
+### Earlier in Unreleased
 
 ### Base weapons
 

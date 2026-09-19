@@ -207,11 +207,11 @@ Recorded here so every chunk builds from the written word, not from memory.
 - **Chunk 6 is split**: 6a light fighters and the pin (DONE); 6b heavy fighters and the predicted-impact
   missile (DONE); 6c patrols (3 light + 1 heavy) (DONE). Art for both is staged in `art_unused/`.
 - **The player's next batch, as given (after chunks 7 and 8 unless reordered):**
-  1. **Internet address**: the host's panel shows the address a friend in another city needs — the
+  1. **(DONE) Internet address**: the host's panel shows the address a friend in another city needs — the
      public IP (asked of a public "what is my IP" service, compared with the router's own report to
      catch shared/carrier NAT) and the port — behind a **click-to-reveal** button. (Today it is the
      router's report via UPnP when that works, else only the LAN address.)
-  2. **Single player stays silent** (already: no socket or lookups offline — to be proven by a test);
+  2. **(DONE) Single player stays silent** (already: no socket or lookups offline — to be proven by a test);
      the multiplayer buttons get a **1 s rate limit**.
   3. **Party size scales the boss and the rewards.** (Formula: to be agreed.)
   4. **EXP to the next level is always 1000.**
