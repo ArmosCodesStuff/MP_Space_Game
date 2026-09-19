@@ -32,7 +32,7 @@ public static class Abilities
         {
             new AbilityDef { Id = "guns",     Name = "Main guns",     Short = "GUNS",   Kind = AbilityKind.Hold, Default = Key.Space,
                              Blurb = "Hold to fire. The barrels aim at the cursor and swing slowly." },
-            new AbilityDef { Id = "firemode", Name = "Fire mode",     Short = "MODE",   Default = Key.V,
+            new AbilityDef { Id = "firemode", Name = "Fire mode",     Short = "MODE",   Default = Key.G,
                              Blurb = "Salvo (all barrels at once) or staggered (one at a time). Same rate." },
             new AbilityDef { Id = "missile",  Name = "Missile",       Short = "MSL",    Default = Key.F,
                              Blurb = "A slow bunker buster, barely guided. Needs a selected target in range. Uses the magazine." },
@@ -57,7 +57,7 @@ public static class Abilities
     // Fixed hub controls. Binding one of these would break flying or the menus.
     public static readonly HashSet<Key> Reserved = new()
     {
-        Key.W, Key.A, Key.S, Key.D, Key.Tab, Key.Escape, Key.K, Key.B, Key.L, Key.Enter, Key.KpEnter,
+        Key.W, Key.A, Key.S, Key.D, Key.Tab, Key.Escape, Key.K, Key.B, Key.L, Key.V, Key.Enter, Key.KpEnter,
         Key.Y, Key.Up, Key.Down, Key.Left, Key.Right,        // the free camera
     };
 
@@ -81,7 +81,8 @@ public static class Abilities
 
     public static Key KeyFor(ShipClass c, string id)
     {
-        if (Settings.Keys.TryGetValue(SettingKey(c, id), out var k)) return (Key)k;
+        // a saved binding on a fixed key (V is warp now) is ignored: the default stands
+        if (Settings.Keys.TryGetValue(SettingKey(c, id), out var k) && !Reserved.Contains((Key)k)) return (Key)k;
         foreach (var a in For(c)) if (a.Id == id) return a.Default;
         return Key.None;
     }
@@ -118,7 +119,7 @@ public static class Abilities
     // ability list yet (the seven reserved ones) gets a placeholder.
     public static string ControlsHint(ShipClass c)
     {
-        const string common = "W ahead  ·  S astern  ·  A/D rudder  ·  left-click select  ·  Tab nearest enemy  ·  wheel zoom  ·  Y free camera  ·  K abilities & stats  ·  B base  ·  L pilot  ·  Esc menu";
+        const string common = "W ahead  ·  S astern  ·  A/D rudder  ·  left-click select  ·  Tab nearest enemy  ·  wheel zoom  ·  Y free camera  ·  K abilities & stats  ·  B base  ·  L pilot  ·  V warp  ·  Esc menu";
         if (!ByClass.ContainsKey(c)) return "placeholder";
         return c switch
         {

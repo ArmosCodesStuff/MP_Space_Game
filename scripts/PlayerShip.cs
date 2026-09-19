@@ -316,6 +316,53 @@ public partial class PlayerShip : Node2D, IHittable
         }
     }
 
+    // ── WARP (V) -- every capital ship ─────────────────────────────────────────
+    // A fixed key and a hull cooldown, never an ability-bar slot. After a 3 s warm-up
+    // the ship jumps to the selected entity if it lies within 45 degrees of the bow
+    // (stopping just short of it), otherwise 2000 u straight ahead. Movement is the
+    // owner's, so the owner jumps; everyone else sees the charge and a clean snap.
+    public const double WarpWarmup = 3.0, WarpCooldown = 30.0;
+    public const float WarpRange = 2000f, WarpCone = Mathf.Pi / 4f, WarpStandoff = 60f;
+    private double _warpLeft = -1, _warpCd, _warpFlash;
+    private int _warpTarget; private Vector2 _warpPoint; private bool _remoteWarping;
+    public bool Warping => _warpLeft >= 0;
+    public double WarpWarmupLeft => Math.Max(0, _warpLeft);
+    public double WarpCooldownLeft => _warpCd;
+    public bool CanWarp => Alive && !Warping && _warpCd <= 0;
+
+    public bool StartWarp(IHittable selected)
+    {
+        if (!Mine || !CanWarp) return false;
+        var bow = Vector2.Up.Rotated(Rotation);
+        if (selected != null && selected.Alive && Mathf.Abs(bow.AngleTo(selected.Position - Position)) <= WarpCone) _warpTarget = selected.NetId;
+        else { _warpTarget = 0; _warpPoint = Position + bow * WarpRange; }
+        _warpLeft = WarpWarmup;
+        return true;
+    }
+
+    // where a warp to `target` ends: on the line from here, just short of its hull
+    public static Vector2 WarpArrival(Vector2 from, Vector2 target, float targetRadius, float shipLength) =>
+        target - (target - from).Normalized() * (targetRadius + shipLength * 0.5f + WarpStandoff);
+
+    private void TickWarp(float dt)
+    {
+        _warpFlash = Math.Max(0, _warpFlash - dt);
+        if (_warpCd > 0) _warpCd = Math.Max(0, _warpCd - dt);
+        if (!Warping) return;
+        if (!Alive) { _warpLeft = -1; return; }
+        _warpLeft -= dt;
+        if (_warpLeft > 0) return;
+        var dest = _warpPoint;
+        if (_warpTarget != 0)
+        {
+            var t = Combat.ById(_warpTarget);
+            dest = t != null && t.Alive ? WarpArrival(Position, t.Position, t.HitRadius, MyArt.Length)
+                                        : Position + Vector2.Up.Rotated(Rotation) * WarpRange;   // it's gone: straight on
+        }
+        Position = dest; Velocity = Vector2.Zero;
+        _warpLeft = -1; _warpCd = WarpCooldown; _warpFlash = 0.6;
+    }
+
     // A refused ability: its slot shows the reason, in red, for a moment.
     public const double FailShow = 1.5;
     private readonly Dictionary<string, (string msg, double until)> _fails = new();
@@ -390,7 +437,7 @@ public partial class PlayerShip : Node2D, IHittable
         if (!Alive) _stasis = Math.Max(0, _stasis - delta);   // the host's clock rules; guests re-sync each packet
         if (_combatT > 0) _combatT = Math.Max(0, _combatT - delta);
         UpdatePod();
-        if (Mine) LocalFlight(dt);
+        if (Mine) { TickWarp(dt); LocalFlight(dt); }
         else      RemoteFollow(dt);
 
         if (Net.Sim) TickAbilities(delta);
@@ -504,7 +551,7 @@ public partial class PlayerShip : Node2D, IHittable
         var pod = IsInstanceValid(_pod) ? _pod.Position : Position;
         float podRot = IsInstanceValid(_pod) ? _pod.Rotation : 0f;
         Rpc(nameof(NetState), Position.X, Position.Y, Velocity.X, Velocity.Y, Rotation,
-            AimPoint.X, AimPoint.Y, Trigger, Staggered, pod.X, pod.Y, podRot);
+            AimPoint.X, AimPoint.Y, Trigger, Staggered, pod.X, pod.Y, podRot, Warping);
     }
 
     // The pod exists exactly while the ship is in stasis: flown by its owner,
@@ -562,13 +609,15 @@ public partial class PlayerShip : Node2D, IHittable
         // Dead reckoning: carry the last known velocity forward so a remote ship
         // keeps moving smoothly between the 20 Hz updates instead of stuttering.
         _netPos += _netVel * dt;
-        Position = Position.Lerp(_netPos, Mathf.Clamp(12f * dt, 0f, 1f));
+        // a warp is a jump, not a glide: snap across it (and flash where it lands)
+        if (Position.DistanceTo(_netPos) > 600f) { Position = _netPos; _warpFlash = 0.6; }
+        else Position = Position.Lerp(_netPos, Mathf.Clamp(12f * dt, 0f, 1f));
         Rotation = Mathf.LerpAngle(Rotation, _netRot, Mathf.Clamp(12f * dt, 0f, 1f));
     }
 
     [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
     private void NetState(float px, float py, float vx, float vy, float rot, float ax, float ay, bool trigger, bool staggered,
-                          float podX, float podY, float podRot)
+                          float podX, float podY, float podRot, bool warping)
     {
         // Only the ship's own owner may move it. Without this check any peer could
         // shove anyone else's ship around, which is the classic authority hole.
@@ -580,6 +629,7 @@ public partial class PlayerShip : Node2D, IHittable
         Trigger = trigger;          // the host fires on this; a guest only draws
         Staggered = staggered;
         if (IsInstanceValid(_pod) && !_pod.Local) _pod.SetNet(new Vector2(podX, podY), podRot);
+        _remoteWarping = warping;
     }
 
     // The host's side of the conversation: hull, ability state, and the wing.
@@ -631,6 +681,22 @@ public partial class PlayerShip : Node2D, IHittable
 
     public override void _Draw()
     {
+        // warp: a charge building in the accent colour (lighting), then a flash where it lands
+        if (Warping || _remoteWarping)
+        {
+            float k = Mine ? 1f - (float)(_warpLeft / WarpWarmup) : 0.6f;
+            float pulse = 0.5f + 0.5f * Mathf.Sin(Time.GetTicksMsec() / (60f - 30f * k));
+            DrawSetTransform(Vector2.Zero, 0f, new Vector2(0.45f, 1f));
+            for (int i = 0; i < 3; i++)
+                DrawArc(Vector2.Zero, MyArt.Length * (0.55f + 0.08f * i) + 5f * pulse, 0, Mathf.Tau, 48,
+                        new Color(Accent.R, Accent.G, Accent.B, (0.25f + 0.5f * k) / (i + 1)), 2f);
+            DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
+        }
+        if (_warpFlash > 0)
+        {
+            float f = (float)(_warpFlash / 0.6);
+            DrawCircle(Vector2.Zero, MyArt.Length * (0.4f + 0.6f * (1f - f)), new Color(Accent.R, Accent.G, Accent.B, 0.35f * f));
+        }
         // engine plumes at the stern, in the accent colour
         if (Alive)
             Plume.Draw(this, new Vector2(0, MyArt.Length * 0.5f), Vector2.Down, MyArt.Length, Accent,

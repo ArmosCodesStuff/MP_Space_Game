@@ -795,6 +795,7 @@ public partial class Hub : Node2D
             else if (kk.Keycode == Key.K) ToggleStats();
             else if (kk.Keycode == Key.B && !InArena) ToggleBase();
             else if (kk.Keycode == Key.L) TogglePilot();
+            else if (kk.Keycode == Key.V) MyShipPublic?.StartWarp(_selected);   // warp: a fixed key, not a slot
             else
             {
                 // in stasis the only order is F: re-board once the ship is ready
@@ -925,6 +926,11 @@ public partial class HullHud : Control
                   : s.CanReboard ? "SHIP READY  —  press F to re-board"
                   : $"SHIP IN STASIS  {(int)s.StasisLeft / 60}:{(int)s.StasisLeft % 60:00}  —  flying the escape pod",
               HorizontalAlignment.Center, W, 15, Colors.White);
+        // the hull's warp: ready, charging, or cooling down
+        if (s.Alive)
+            Txt.D(this, ThemeDB.FallbackFont, new Vector2(W - 150, H - 5),
+                  s.Warping ? $"WARPING  {s.WarpWarmupLeft:0.0} s" : s.WarpCooldownLeft > 0 ? $"WARP  {s.WarpCooldownLeft:0} s" : "WARP  READY",
+                  HorizontalAlignment.Right, 144, 12, s.Warping ? new Color(0.7f, 0.9f, 1f) : s.WarpCooldownLeft > 0 ? new Color(0.75f, 0.78f, 0.85f) : new Color(0.55f, 1f, 0.65f));
     }
 }
 

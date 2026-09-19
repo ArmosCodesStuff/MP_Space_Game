@@ -395,17 +395,19 @@ public partial class _Test : Node
         Check(Enumerable.Range(1, 6).All(i => Abilities.KeyFor(ShipClass.Battleship, $"open{i}") == global::Godot.Key.Key0 + i)
               && Abilities.For(ShipClass.Carrier).Count(a => a.Open) == 6 && Abilities.For((ShipClass)99).Length == 6,
               "six open hotkeys (1-6) on every class, including undefined ones");
+        win.StartCapture("missile"); Key(global::Godot.Key.H); await Wait(0.05);
+        Check(Abilities.KeyFor(ShipClass.Battleship, "missile") == global::Godot.Key.H && Settings.Keys.ContainsKey("Battleship.missile"), "missile rebound to H and saved");
         win.StartCapture("missile"); Key(global::Godot.Key.G); await Wait(0.05);
-        Check(Abilities.KeyFor(ShipClass.Battleship, "missile") == global::Godot.Key.G && Settings.Keys.ContainsKey("Battleship.missile"), "missile rebound to G and saved");
-        win.StartCapture("missile"); Key(global::Godot.Key.V); await Wait(0.05);
-        Check(Abilities.KeyFor(ShipClass.Battleship, "missile") == global::Godot.Key.V && Abilities.KeyFor(ShipClass.Battleship, "firemode") == global::Godot.Key.G,
-              "binding a taken key swaps the two");
+        Check(Abilities.KeyFor(ShipClass.Battleship, "missile") == global::Godot.Key.G && Abilities.KeyFor(ShipClass.Battleship, "firemode") == global::Godot.Key.H,
+              "binding a taken key (G, fire mode's) swaps the two");
         win.StartCapture("missile"); Key(global::Godot.Key.W); await Wait(0.05);
-        Check(Abilities.KeyFor(ShipClass.Battleship, "missile") == global::Godot.Key.V, "a reserved key (W) is refused");
+        Check(Abilities.KeyFor(ShipClass.Battleship, "missile") == global::Godot.Key.G, "a reserved key (W) is refused");
+        win.StartCapture("missile"); Key(global::Godot.Key.V); await Wait(0.05);
+        Check(Abilities.KeyFor(ShipClass.Battleship, "missile") == global::Godot.Key.G, "V is warp, a fixed key: refused too");
         win.StartCapture("pd"); Key(global::Godot.Key.Escape); await Wait(0.05);
         Check(Count<StatsWindow>() == 1 && Abilities.KeyFor(ShipClass.Battleship, "pd") == global::Godot.Key.Q, "Esc cancels a capture without closing the window");
         Nodes<Button>(win).First(b => b.Name == "ResetKeys").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
-        Check(Abilities.KeyFor(ShipClass.Battleship, "missile") == global::Godot.Key.F && Abilities.KeyFor(ShipClass.Battleship, "firemode") == global::Godot.Key.V, "reset restores defaults");
+        Check(Abilities.KeyFor(ShipClass.Battleship, "missile") == global::Godot.Key.F && Abilities.KeyFor(ShipClass.Battleship, "firemode") == global::Godot.Key.G, "reset restores defaults (fire mode on G)");
         Key(global::Godot.Key.K); await Wait(0.1);
         Check(Count<StatsWindow>() == 0, "K closes it");
 
@@ -437,8 +439,8 @@ public partial class _Test : Node
         GD.Print($"  salvo {salvo:0.0} dmg / 20s;  staggered {stag:0.0} / 20s;  sheet {ship.Stats.MainDps:0.000} DPS");
         Check(Math.Abs(salvo - 120) <= 6.01, "salvo delivers the sheet's 6.0 DPS (±1 salvo)");
         Check(Math.Abs(stag - 120) <= 1.51, "staggered delivers the sheet's 6.0 DPS (±1 shot)");
-        bool before = ship.Staggered; Key(global::Godot.Key.V); await Wait(0.05);
-        Check(ship.Staggered != before, "V toggles salvo / staggered");
+        bool before = ship.Staggered; Key(global::Godot.Key.G); await Wait(0.05);
+        Check(ship.Staggered != before, "G toggles salvo / staggered");
 
         // ── the missile: one in the magazine; a selected target in range, or it refuses ──
         Torpedo Heavy() => Nodes<Torpedo>().FirstOrDefault(x => x.Heavy && Smoke(x).Count < 40);
@@ -488,6 +490,35 @@ public partial class _Test : Node
         Check(turned > 0.05 && turned <= ship.Stats["missile_turn"] + 0.01, "it steers toward the target, but no faster than 0.35 rad/s");
         await Wait(6.0); d1.Position = dhome;
         Key(global::Godot.Key.R); await Wait(16.2);                  // leave it loaded for what follows
+
+        // ── warp (V): every capital ship; a hull cooldown, not a slot ──
+        {
+            var me = Me; var warpHome = me.Position; var d2w = H.GetNode<TargetDummy>("TargetDummy2");
+            void Ready() { typeof(PlayerShip).GetField("_warpCd", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(me, 0.0); me.Velocity = Vector2.Zero; me.Rotation = 0f; }
+            void Deselect() => typeof(Hub).GetField("_selected", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(H, null);
+            Check(Abilities.For(me.Class).All(a => a.Id != "warp"), "warp takes no slot on the ability bar");
+            Ready(); Deselect(); var start = me.Position;
+            Key(global::Godot.Key.V); await Wait(0.2);
+            Check(me.Warping && me.Position.DistanceTo(start) < 20f, "V starts a 3 s warm-up; the ship holds until it jumps");
+            await Wait(PlayerShip.WarpWarmup);
+            var moved = me.Position - start;
+            Check(!me.Warping && Math.Abs(moved.Length() - 2000f) < 40f && Mathf.Abs(Vector2.Up.AngleTo(moved)) < 0.05f,
+                  $"nothing selected ahead: 2000 u straight ahead ({moved.Length():0} u)");
+            Check(Math.Abs(me.WarpCooldownLeft - PlayerShip.WarpCooldown) < 0.6 && PlayerShip.WarpCooldown == 30, "then a 30 s cooldown");
+            Key(global::Godot.Key.V); await Wait(0.1);
+            Check(!me.Warping, "V does nothing while it cools down");
+            // a target within 45 degrees of the bow: arrive just short of it
+            Ready(); me.Position = d2w.Position + new Vector2(0, 1400); await Wait(0.3);
+            Click(Scr(d2w.Position)); await Wait(0.05);
+            Key(global::Godot.Key.V); await Wait(PlayerShip.WarpWarmup + 0.2);
+            float want = d2w.HitRadius + PlayerShip.Art[me.Class].Length * 0.5f + PlayerShip.WarpStandoff;
+            Check(Math.Abs(me.Position.DistanceTo(d2w.Position) - want) < 20f, $"a target ahead: it warps to just short of it ({me.Position.DistanceTo(d2w.Position):0} u, wanted {want:0})");
+            // a target behind: outside the cone, so straight ahead instead
+            Ready(); me.Position = d2w.Position + new Vector2(0, -900); var s3 = me.Position; await Wait(0.2);
+            Key(global::Godot.Key.V); await Wait(PlayerShip.WarpWarmup + 0.2);
+            Check(Math.Abs((me.Position - s3).Y + 2000f) < 40f && H.Selected == d2w, "a target behind (outside 45 degrees): straight ahead instead");
+            Ready(); me.Position = warpHome;
+        }
 
         // ── battleship PD: idle until Q; slow independent turrets ──
         await Park(new Vector2(780, 700), 0);                      // among all three dummies
