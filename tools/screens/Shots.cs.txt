@@ -298,6 +298,18 @@ public partial class _Shots : Node
             await W(0.5); await Snap("28e_hauler_turning_while_landing");      // about half way down, half way round
             Me().Visible = true;
         }
+        // the arena, last: the trip replaces the hub scene, so nothing may follow it that
+        // holds an old reference. The boss, its death-beam telegraph, its shockwave telegraph.
+        {
+            H.EnterSector(Hub.SectorKind.Arena); await W(1.5);
+            var boss = H.Boss; var ash = H.GetNode<PlayerShip>("Ship_1");
+            ash.Position = boss.Position + new Vector2(120, 560); ash.Velocity = Vector2.Zero; ash.Rotation = 0f;
+            GetViewport().GetCamera2D().Zoom = new Vector2(0.62f, 0.62f); await W(1.5);
+            for (int i = 0; i < 60 * 14 && !N<Telegraph>().Any(t => t.Line); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await W(1.0); await Snap("38_arena_beam_telegraph");
+            for (int i = 0; i < 60 * 16 && !N<Telegraph>().Any(t => !t.Line); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await W(0.9); await Snap("39_arena_shockwave_telegraph");
+        }
         GetTree().Quit();
     }
 }

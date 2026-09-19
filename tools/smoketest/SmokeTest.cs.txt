@@ -816,7 +816,8 @@ public partial class _Test : Node
             await Wait(1.0);
             Check(!Hub.InArena && H.Yard != null, "home again after the win");
             Check(H.Yard.Credits >= 3000 - 1e-6 && H.Yard.Credits < 3000 + 400, $"the bounty's 2000 credits are paid at home ({H.Yard.Credits:0})");
-            double want = H.Yard.FleetRate(GatherKind.Miner) * Yard.LastAway * Yard.AwayShare;
+            // the literal 1/20 asked for -- not Yard.AwayShare, or the check could never fail
+            double want = H.Yard.FleetRate(GatherKind.Miner) * Yard.LastAway / 20.0;
             Check(Yard.LastAway > 1 && Yard.LastAwayOre > 0 && Math.Abs(Yard.LastAwayOre - want) < 1e-6,
                   $"while away the base earned 1/20 of its rate ({Yard.LastAwayOre:0.0} ore for {Yard.LastAway:0} s)");
             // a wipe: every ship in stasis at once -> the mission fails, home with nothing
