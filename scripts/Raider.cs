@@ -38,7 +38,9 @@ public partial class Raider : Node2D, IHittable
     public bool Alive => Hp > 0;
     public bool Heavy => Kind == RaiderKind.Heavy;
     public float Length => Heavy ? HeavyLength : LightLength;
-    public double MaxHull => Heavy ? HeavyHull : LightHull;
+    // a raid's raiders are as strong as the boss that was failed: S(L) = 1.1^(L-1)
+    public double Scale = 1;
+    public double MaxHull => (Heavy ? HeavyHull : LightHull) * Scale;
     public float HitRadius => Length * (Heavy ? 0.3f : 0.4f);
     public bool Selectable => true;
 
@@ -190,7 +192,7 @@ public partial class Raider : Node2D, IHittable
             if (_shot <= 0)
             {
                 _shot = ShotEvery;
-                Strike(Target, RaiderDps * ShotEvery);
+                Strike(Target, RaiderDps * ShotEvery * Scale);
                 Combat.Flash(Position, Target.Position, new Color(1f, 0.3f, 0.25f));
             }
         }
@@ -247,7 +249,7 @@ public partial class Raider : Node2D, IHittable
             if (_shot <= 0)
             {
                 _shot = 0.5;
-                Strike(Target, HeavyDps * 0.5);
+                Strike(Target, HeavyDps * 0.5 * Scale);
                 Combat.Flash(ToGlobal(_turret?.Position ?? Vector2.Zero), Target.Position, new Color(1f, 0.35f, 0.25f));
             }
         }
@@ -255,7 +257,7 @@ public partial class Raider : Node2D, IHittable
         if (_missileCd <= 0 && Position.DistanceTo(Target.Position) <= MissileRange)
         {   // at where it WILL be: its velocity carried 7 s forward
             _missileCd = MissileEvery;
-            Hub.HeavyMissile(Position, Target.Position + _targetVel * (float)MissileFlight, NetId);
+            Hub.HeavyMissile(Position, Target.Position + _targetVel * (float)MissileFlight, NetId, MissileDamage * Scale);
         }
     }
 

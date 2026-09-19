@@ -1195,6 +1195,8 @@ public partial class _Test : Node
             for (int i = 0; i < 60 * 8 && Hub.InArena; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             await Wait(1.0);
             Check(!Hub.InArena && H.Yard != null, "home again after the win");
+            await Wait(Hub.RaidDelay + 0.5);
+            Check(H.Raiders.Count == 0, "a won mission brings no raid");
             // exactly the credits set aside at departure + the 2000 bounty (a hauler sale before
             // departure is part of what was set aside, so a fixed window was fragile)
             Check(Math.Abs(H.Yard.Credits - Yard.TripStartCredits - 2000) < 1e-6, $"the bounty's 2000 credits are paid at home ({Yard.TripStartCredits:0} + 2000 = {H.Yard.Credits:0})");
@@ -1217,11 +1219,25 @@ public partial class _Test : Node
             Key(global::Godot.Key.Escape); await Wait(0.1);
             // a wipe: every ship in stasis at once -> the mission fails, home with nothing
             H.EnterSector(Hub.SectorKind.Arena); await Wait(1.5);
-            int exp1 = Character.Exp;
+            int exp1 = Character.Exp; int failLevel = Missions.Tier + 1;
             Me.TakeDamage(Me.Hp + 1);
             for (int i = 0; i < 60 * 8 && Hub.InArena; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             await Wait(1.0);
             Check(!Hub.InArena && Character.Exp == exp1 && Me.Alive, "the whole party in stasis: the mission fails, home with no reward");
+            // ...and the boss sends its raiders after you: 2 patrols (solo), from the map's edge, at the failed level's strength
+            Check(H.Raiders.Count == 0, "the raid is not there at once (every guest's world loads first)");
+            // measured the frame they appear: a raider that spots a miner boosts inward at once
+            for (int i = 0; i < 60 * 5 && H.Raiders.Count == 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            double sL = Math.Pow(1.1, failLevel - 1);
+            var raid = H.Raiders.ToList();
+            GD.Print($"  raid: {raid.Count} raiders, level {failLevel} (x{sL:0.00}), {raid.Min(r => r.Position.DistanceTo(Hub.BasePos)):0}-{raid.Max(r => r.Position.DistanceTo(Hub.BasePos)):0} u out");
+            Check(raid.Count == 8 && raid.Count(r => r.Heavy) == 2 && raid.Select(r => r.Patrol).Distinct().Count() == 2,
+                  "a failed mission: the boss sends 2 patrols (3 lights and a heavy each)");
+            Check(raid.All(r => Math.Abs(r.Position.DistanceTo(Hub.BasePos) - Hub.RaidEdge) < 110f), "in from the edge of the base's map (3200 u out)");
+            Check(raid.All(r => Math.Abs(r.Scale - sL) < 1e-9 && Math.Abs(r.MaxHull - (r.Heavy ? 100 : 25) * sL) < 1e-6),
+                  $"at the failed boss's level: hull and damage x{sL:0.00} (1.1^(L-1), L = {failLevel})");
+            foreach (var r in raid) r.TakeDamage(1e9);
+            await Wait(0.3);
             // the fighter-class autopilot, flown on its own (no player fighter class yet)
             Vector2 fp = Vector2.Zero, fv = Vector2.Zero; float fh = 0f; var goal = new Vector2(800, -600);
             for (int i = 0; i < 60 * 12; i++)

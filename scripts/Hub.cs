@@ -203,6 +203,8 @@ public partial class Hub : Node2D
         };
 
         if (InArena) BuildArena();                   // registered as a target AFTER Combat.Clear
+        else if (PendingRaidLevel > 0 && Net.IsHost) { _raidLevel = PendingRaidLevel; _raidIn = RaidDelay; }
+        PendingRaidLevel = 0;
         for (int i = 0; i < (InArena ? 0 : DummyPos.Length); i++)       // the dummies live at home
         {
             int n = i + 1;
@@ -464,7 +466,12 @@ public partial class Hub : Node2D
         if (!Net.IsHost) return;
         // the whole party in stasis at once: the mission fails, everyone goes home
         if (!MissionWon && _arenaEndT < 0 && _ships.Count > 0 && _ships.Values.All(s => IsInstanceValid(s) && !s.Alive)) _arenaEndT = 3.0;
-        if (_arenaEndT >= 0 && (_arenaEndT -= delta) <= 0) { _arenaEndT = -1; EnterSector(SectorKind.Home); }
+        if (_arenaEndT >= 0 && (_arenaEndT -= delta) <= 0)
+        {
+            _arenaEndT = -1;
+            if (!MissionWon) PendingRaidLevel = Missions.Tier + 1;     // failed: the boss sends its raiders after you
+            EnterSector(SectorKind.Home);
+        }
     }
 
     // host: a missile was shot down; every guest bursts its copy
@@ -532,6 +539,33 @@ public partial class Hub : Node2D
         _ready.Clear(); for (int i = 0; i < ids.Length && i < ready.Length; i++) _ready[ids[i]] = ready[i] != 0;
     }
 
+    // ── raids: a failed mission brings the boss's raiders to your base ─────────
+    // Level L (the failed boss's): raiders at S(L) = 1.1^(L-1), the boss's own scaling.
+    // 2 patrols, and 1 more per extra pilot in the session, in from the map's edge 3 s
+    // after the party is home (so every guest's world is loaded before they appear).
+    public static int PendingRaidLevel;                        // survives the scene change home
+    public const float RaidEdge = 3200f;
+    public const double RaidDelay = 3.0;
+    private double _raidIn = -1; private int _raidLevel;
+    public int RaidLevel => _raidLevel;
+    public static double RaidScale(int level) => Missions.Scale(level - 1);   // S(L) = 1.1^(L-1)
+
+    private void StartRaid(int level)
+    {
+        int patrols = 2 + System.Math.Max(0, _ships.Count - 1);
+        for (int i = 0; i < patrols; i++)
+        {
+            float a = Mathf.Tau * i / patrols + 0.4f;
+            SpawnPatrol(BasePos + Vector2.Right.Rotated(a) * RaidEdge, RaidScale(level));
+        }
+    }
+
+    private void TickRaid(double delta)
+    {
+        if (_raidIn < 0) return;
+        if ((_raidIn -= delta) <= 0) { _raidIn = -1; StartRaid(_raidLevel); }
+    }
+
     // ── raiders (enemy fighters): host-simulated, replicated ──────────────────
     public readonly List<Raider> Raiders = new();
     private int _raiderIds = 5000;
@@ -548,27 +582,27 @@ public partial class Hub : Node2D
 
     // A patrol: 3 lights and 1 heavy, spawned together at `at` on the perimeter.
     private int _patrols;
-    public int SpawnPatrol(Vector2 at)
+    public int SpawnPatrol(Vector2 at, double scale = 1)
     {
         if (!Net.IsHost) return 0;
         int id = ++_patrols;
-        SpawnRaider(at + new Vector2(-40, 0), RaiderKind.Light, id); SpawnRaider(at, RaiderKind.Light, id);
-        SpawnRaider(at + new Vector2(40, 0), RaiderKind.Light, id); SpawnRaider(at + new Vector2(0, 90), RaiderKind.Heavy, id);
+        SpawnRaider(at + new Vector2(-40, 0), RaiderKind.Light, id, scale); SpawnRaider(at, RaiderKind.Light, id, scale);
+        SpawnRaider(at + new Vector2(40, 0), RaiderKind.Light, id, scale); SpawnRaider(at + new Vector2(0, 90), RaiderKind.Heavy, id, scale);
         return id;
     }
 
-    public Raider SpawnRaider(Vector2 at, RaiderKind kind = RaiderKind.Light, int patrol = 0)
+    public Raider SpawnRaider(Vector2 at, RaiderKind kind = RaiderKind.Light, int patrol = 0, double scale = 1)
     {
         if (!Net.IsHost) return null;
-        var r = new Raider { Hub = this, Kind = kind, Patrol = patrol, NetId = ++_raiderIds, Position = at, Name = $"Raider_{_raiderIds}" };
+        var r = new Raider { Hub = this, Kind = kind, Patrol = patrol, Scale = scale, NetId = ++_raiderIds, Position = at, Name = $"Raider_{_raiderIds}" };
         Raiders.Add(r); AddChild(r);
-        if (Net.IsOnline) Rpc(nameof(NetRaiderSpawn), r.NetId, at, (int)kind);
+        if (Net.IsOnline) Rpc(nameof(NetRaiderSpawn), r.NetId, at, (int)kind, scale);
         return r;
     }
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetRaiderSpawn(int id, Vector2 at, int kind)
+    private void NetRaiderSpawn(int id, Vector2 at, int kind, double scale)
     {
-        var r = new Raider { Hub = this, Kind = (RaiderKind)kind, NetId = id, Position = at, Name = $"Raider_{id}" };
+        var r = new Raider { Hub = this, Kind = (RaiderKind)kind, Scale = scale, NetId = id, Position = at, Name = $"Raider_{id}" };
         Raiders.Add(r); AddChild(r);
     }
 
@@ -588,12 +622,12 @@ public partial class Hub : Node2D
     }
 
     // A heavy's missile: flies 7 s to a marked point, and the host lands the blast there.
-    private readonly List<(Vector2 at, double left, int from)> _blasts = new();
+    private readonly List<(Vector2 at, double left, int from, double damage)> _blasts = new();
     public int BlastsPending => _blasts.Count;
-    public void HeavyMissile(Vector2 from, Vector2 at, int raiderId)
+    public void HeavyMissile(Vector2 from, Vector2 at, int raiderId, double damage)
     {
         if (!Net.IsHost) return;
-        _blasts.Add((at, Raider.MissileFlight, raiderId));
+        _blasts.Add((at, Raider.MissileFlight, raiderId, damage));
         ShowHeavyMissile(from, at);
         if (Net.IsOnline) Rpc(nameof(NetHeavyMissile), from, at);
     }
@@ -615,9 +649,9 @@ public partial class Hub : Node2D
                 if (Raider.Gap(b.at, t) <= Raider.BlastRadius)
                     switch (t)
                     {
-                        case PlayerShip p: p.Hit(Raider.MissileDamage, b.at, $"heavy:{b.from}:missile"); break;
-                        case Gatherer g: g.TakeDamage(Raider.MissileDamage); break;
-                        case Hauler h: h.TakeDamage(Raider.MissileDamage); break;
+                        case PlayerShip p: p.Hit(b.damage, b.at, $"heavy:{b.from}:missile"); break;
+                        case Gatherer g: g.TakeDamage(b.damage); break;
+                        case Hauler h: h.TakeDamage(b.damage); break;
                     }
         }
     }
@@ -758,6 +792,7 @@ public partial class Hub : Node2D
     public override void _Process(double delta)
     {
         SendRaiders(delta);
+        if (Net.IsHost) TickRaid(delta);
         if (Net.IsHost) TickBlasts(delta);
         TickMission(delta);
         if (Music.I != null)
@@ -796,6 +831,7 @@ public partial class Hub : Node2D
             ship += Selected != null ? "    target: " + (Selected is TargetDummy td ? $"TARGET DUMMY {td.Number}" : $"#{Selected.NetId}")
                   : Waypoint != null ? $"    waypoint: {WaypointName}"
                                      : "    no target (Tab / click)";
+            if (Raiders.Count > 0) ship += $"    |    RAIDERS {Raiders.Count}";
             if (Placing) ship += $"    PLACING {_placingLabel}: left-click to confirm, right-click / Esc to cancel";
         }
         string place = Yard == null
