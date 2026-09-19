@@ -45,7 +45,9 @@ public partial class _Test : Node
         try { if (role == "solo") await Solo(); else await Mp(role); }
         catch (Exception ex) { Check(false, $"test threw: {ex.GetType().Name}: {ex.Message}"); GD.Print(ex.StackTrace); }
         GD.Print($"DONE {role} fails={fails}");
-        Music.I?.Silence(); await Wait(0.2);          // let the mixer release the loops first
+        // let the mixer release the loops first -- in REAL time: at a fixed frame rate
+        // 0.2 s of game time can pass in milliseconds, before the mixer has cycled
+        Music.I?.Silence(); await Wait(0.1); OS.DelayMsec(200); await Wait(0.1);
         GetTree().Quit(fails);
     }
 

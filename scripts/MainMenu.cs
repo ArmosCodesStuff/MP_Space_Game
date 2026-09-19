@@ -218,6 +218,6 @@ public partial class MainMenu : Node2D
     private void QuitSoon()
     {
         Music.I?.Silence();
-        GetTree().CreateTimer(0.15).Timeout += () => GetTree().Quit();
+        GetTree().CreateTimer(0.15).Timeout += () => { OS.DelayMsec(50); GetTree().Quit(); };
     }
 }

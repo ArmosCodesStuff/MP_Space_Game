@@ -152,6 +152,24 @@ levels once a second and ship and hauler state ten times a second; a guest's own
   and credits — the world's for its host, a guest's own parked totals for a guest — on a second
   click.
 
+## Camera, radar, music, and playing over the internet
+
+- **Camera**: wheel zoom between `DefaultZoom / ZoomOutMax` (33% further out) and `× ZoomInMax`
+  (1.5). **Y** frees it; arrows or the screen edge pan it, tethered to `ClassArt.CameraRange`
+  (5000; `PlayerShip.FighterCameraRange` 2500 for fighter-class ships). All in `Hub.MoveCamera`.
+- **Radar** (`Radar.cs`): local only, draws what this machine knows; size is `Settings.RadarSize`.
+- **Esc menu** (`EscMenu.cs`): the last Esc layer. Multiplayer cannot pause, so it locks the helm.
+- **Music** (`Music.cs`, an autoload): both loops always play; their levels cross-fade by mood,
+  which the hub sets each frame from the selection and `PlayerShip.InCombat` (host-tracked: dealing
+  or taking damage within 8 s). `Music.CombatZone` forces combat for instanced systems. Silence it
+  a moment before quitting (real time), or the mixer still holds the loops at exit.
+- **Internet play** (`Net.cs`): ENet over UDP 27015 with a direct connection, so the host must be
+  reachable. HOST tries UPnP on a background thread and reports one of: reachable from the
+  internet (public address shown and copyable); router refused / no UPnP; carrier-grade NAT
+  (100.64.0.0/10), which no home setting can fix. The fallbacks are a manual port forward, or a VPN
+  such as Tailscale or ZeroTier (everyone joins the VPN; use its addresses). There is no relay
+  server or NAT punch-through: that needs infrastructure outside the game.
+
 ## Damage, death and the two colours
 
 - **Who can be hit**: player weapons hit `Combat.Hostiles`; enemy fire hits `Combat.Players`. A

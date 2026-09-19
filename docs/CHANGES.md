@@ -39,7 +39,7 @@ history pick the work up from it alone. Update it in the same change as the code
 **State as of 2026-09-18: version 0.3.0 plus Unreleased (see it for everything since: docking arms
 and the unload queue, the fleet and hauler pods, the idle economy, base menu, bunker-buster missile,
 painted turrets, docking bombers and more).** Typecheck clean against the real `GodotSharp.dll`,
-`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 203 checks across
+`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 224 checks across
 a single-player run and a host with two guests. Unlike earlier releases, this one was also **looked at**:
 `tools/screens/run.sh` renders the select screen, the creator, a fresh spawn under the base, both
 classes in the hub, the K window, a bomber strike, and turret close-ups on a virtual display; layout
@@ -71,9 +71,11 @@ travel, and no economy beyond an idle ore/salvage counter.
 | Right-click | cancel a placement. Nothing else. |
 | **Tab** | select the hostile **nearest your ship**, always. No cycling. |
 | K | abilities & keys (remapping) / stats window |
+| Mouse wheel | zoom: 33% further out to 1.5× closer |
+| Y | free camera: arrow keys or the screen edge move it (5000 u tether); Y again returns |
 | B | base menu: upgrades, and REFIT (the only way to change class, name or colours; costs 10%) |
 | 1 – 6 | open hotkeys: bound and remappable, empty until abilities or items fill them |
-| Esc | back one layer: text box → placement → creator → K window → base menu → target → main menu |
+| Esc | back one layer: text box → placement → creator → K window → base menu → target → **Esc menu** (radar size, music volume, quit) |
 
 ### Abilities — default keys, all remappable in K
 
@@ -174,6 +176,51 @@ reachable, which is fine: both harnesses build from the `nupkgs` folder that shi
 ---
 
 ## Unreleased
+
+### Camera, radar, music, internet hosting (this batch)
+
+**Checked:** smoke test **three runs in a row, 224 checks each** (new: zoom limits, free camera and
+its 5000 u tether, edge pan, radar sizes, Esc menu, music moods, the hosting fallback);
+screenshot sweep **45 frames, 0 lint findings**, the new frames looked at. **Not checkable here:**
+the music has been verified technically (length, seamless loops, levels) but not listened to; and
+internet hosting through a real router, across real networks, has not been tried.
+
+#### Added
+
+- **Camera zoom**: the mouse wheel, from **33% further out** than the default to **1.5× closer**.
+- **Free camera (Y)**: move it with the **arrow keys** or the **mouse against a screen edge**, up to
+  **5000 u** from your ship (2500 for a fighter-class ship, when there is one). **Y** again returns
+  to the ship and keeps your zoom. The HUD says FREE CAMERA; the radar boxes what it sees.
+- **Radar**, top right: north-up, centred on you (on your pod in stasis), 3000 u. Base, portal,
+  wreck, asteroids, gatherers, hauler, hostiles (selected one ringed), other players.
+- **Esc menu**: Esc, once nothing else is open, opens it: **radar size** (small, medium, large),
+  **music volume**, RESUME, QUIT TO MAIN MENU. Settings save at once. The helm locks while it is
+  open; the world keeps running (multiplayer cannot pause).
+- **Stateful music**: two original loops, composed for the game in code (`music_ambient.ogg`,
+  64 s; `music_combat.ogg`, 32 s at 120 BPM), both seamless. **Ambient** when nothing is selected;
+  **combat at 20%** when an enemy is selected; **combat at 100%** when you dealt or took damage in
+  the last 8 s (host-tracked, so it works for guests), or in a combat zone (`Music.CombatZone`, for
+  the instanced systems to come). Every level is a share of the music volume. Replace either file
+  with a real track of the same name and nothing else changes.
+- **Internet hosting**: HOST asks your router (**UPnP**) to forward UDP 27015 to this PC and reads
+  back your public address, so friends in other cities or countries can join. The multiplayer panel
+  shows "friends anywhere join: IP:port" with **COPY ADDRESS**. When the router will not (UPnP off),
+  or your provider shares one public address among many homes (**carrier-grade NAT**), it says so
+  and what to do instead (forward the port, or Tailscale/ZeroTier). The port is closed again when
+  you stop hosting. LAN hosting starts at once either way.
+
+#### Changed
+
+- **Engine plumes hold steady** unless the craft is moving or thrusting.
+- **Esc no longer drops straight to the main menu**; that is QUIT in the Esc menu.
+- **Fixed keys** now include **Y and the arrow keys** (camera); the mouse wheel zooms.
+
+#### Fixed
+
+- **The music loops were "still in use at exit"**: the player now silences them a moment before
+  quitting, in real time, so the audio mixer lets them go.
+
+### Earlier in Unreleased
 
 ### Inspection, combat and death, wings, engines (this batch)
 
