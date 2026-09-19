@@ -159,6 +159,17 @@ public partial class _Shots : Node
             await Snap("14_hauler_charging");
             GetViewport().GetCamera2D().Zoom = new Vector2(0.9f, 0.9f);
         }
+        // the Esc menu, and the free camera zoomed right out (its view boxed on the radar)
+        {
+            var hub = H;
+            Key(global::Godot.Key.Escape); await W(0.4); await Snap("32_esc_menu"); Key(global::Godot.Key.Escape); await W(0.2);
+            hub.SetZoom(Hub.DefaultZoom / Hub.ZoomOutMax); hub.ToggleFreeCamera();
+            Input.ParseInputEvent(new InputEventKey { Keycode = global::Godot.Key.Right, PhysicalKeycode = global::Godot.Key.Right, Pressed = true });
+            await W(1.2);
+            Input.ParseInputEvent(new InputEventKey { Keycode = global::Godot.Key.Right, PhysicalKeycode = global::Godot.Key.Right, Pressed = false });
+            await W(0.6); await Snap("33_free_camera_zoomed_out");
+            hub.ToggleFreeCamera(); hub.SetZoom(Hub.DefaultZoom); await W(1.5);
+        }
         await Close(ShipClass.Battleship, "9_battleship_closeup");
         // a shield hit on each of the four sides, then stasis with the escape pod out
         {
