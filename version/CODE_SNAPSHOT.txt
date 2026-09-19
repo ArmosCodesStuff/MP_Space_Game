@@ -1,8 +1,8 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-19 22:59 at git commit c895e06: typecheck clean, smoke test 3/3 passes
-//   (372 checks), UI sweep 0 findings.
-// 53 files, 9524 lines. Code only: sprites, sounds and docs are in the zip.
+// Taken 2026-09-19 23:26 at git commit b062d04: typecheck clean, smoke test 3/3 passes
+//   (374 checks, 0 compiler warnings), 62-frame UI sweep 0 findings.
+// 53 files, 9531 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -19,7 +19,7 @@
 //   scripts/Autopilot.cs                            40 lines   sha256 807538219f53
 //   scripts/BaseDefense.cs                          55 lines   sha256 1d8daa0fbd67
 //   scripts/BasePanel.cs                           118 lines   sha256 1b56ed68d885
-//   scripts/Boss.cs                                184 lines   sha256 d723ed53971e
+//   scripts/Boss.cs                                184 lines   sha256 ca5ba20f715f
 //   scripts/BossBar.cs                              74 lines   sha256 2f4eb7ef7796
 //   scripts/Character.cs                           168 lines   sha256 266190f479e4
 //   scripts/CharacterCreator.cs                    211 lines   sha256 136099a8d1c7
@@ -32,7 +32,7 @@
 //   scripts/Gatherer.cs                            249 lines   sha256 f64121c0c5f7
 //   scripts/Hauler.cs                              316 lines   sha256 b471204daf64
 //   scripts/HealthBar.cs                            36 lines   sha256 97c42a282205
-//   scripts/Hub.cs                                1166 lines   sha256 c466ecaa0e58
+//   scripts/Hub.cs                                1168 lines   sha256 7e6898256fc1
 //   scripts/MainMenu.cs                            224 lines   sha256 39dbc31417c6
 //   scripts/Missions.cs                             26 lines   sha256 6870c2208143
 //   scripts/Music.cs                                78 lines   sha256 19cdf8e2b59c
@@ -42,7 +42,7 @@
 //   scripts/Plume.cs                                25 lines   sha256 cdbeb9b8fc58
 //   scripts/Progression.cs                          73 lines   sha256 d3b0cd99118f
 //   scripts/Radar.cs                               129 lines   sha256 189719fcc94f
-//   scripts/Raider.cs                              278 lines   sha256 09d8db7a2431
+//   scripts/Raider.cs                              278 lines   sha256 d6f5fa831e2c
 //   scripts/SessionMenu.cs                         118 lines   sha256 1a8a8f39d03b
 //   scripts/Settings.cs                             58 lines   sha256 80100257eda5
 //   scripts/Sfx.cs                                  65 lines   sha256 4a51ee11de9a
@@ -60,7 +60,7 @@
 //   typecheck/typecheck.sh                          57 lines   sha256 e68277c09f34
 //   tools/screens/Shots.cs.txt                     433 lines   sha256 f7b91abe5ced
 //   tools/screens/run.sh                            40 lines   sha256 a47174d56c6a
-//   tools/smoketest/SmokeTest.cs.txt              1500 lines   sha256 04736c65fade
+//   tools/smoketest/SmokeTest.cs.txt              1505 lines   sha256 95331ec5e0f2
 //   tools/smoketest/run.sh                          52 lines   sha256 67c03204c10d
 //==============================================================================
 
@@ -653,7 +653,7 @@ public partial class BasePanel : PanelContainer
 
 //==============================================================================
 // FILE: scripts/Boss.cs
-// 184 lines   sha256 d723ed53971e
+// 184 lines   sha256 ca5ba20f715f
 //==============================================================================
 using Godot;
 using System.Linq;
@@ -674,8 +674,8 @@ public partial class Boss : Node2D, IHittable
 {
     public Hub Hub;
     // hull and every attack scale with the selected tier (Missions.Scale)
-    public double Scale = 1;
-    public double MaxHp => Missions.Current.Hull * Scale;
+    public double Strength = 1;          // S(L): hull and damage (was "Scale", which hid Node2D.Scale)
+    public double MaxHp => Missions.Current.Hull * Strength;
     public const float Length = 360f, HalfWidth = 70f;
     public const int Id = 3000;
     public double Hp;
@@ -706,7 +706,7 @@ public partial class Boss : Node2D, IHittable
 
     public override void _Ready()
     {
-        Scale = Missions.Scale(Missions.Tier); Hp = MaxHp;
+        Strength = Missions.Scale(Missions.Tier); Hp = MaxHp;
         Name = "Boss";
         var tex = GD.Load<Texture2D>("res://boss_silver_lancer.png");
         AddChild(new Sprite2D { Texture = tex, Scale = Vector2.One * (Length / tex.GetHeight()) });
@@ -752,7 +752,7 @@ public partial class Boss : Node2D, IHittable
         var nose = ToGlobal(new Vector2(0, -Length * 0.5f));
         PlayerShip Nearest(float within) => pilots.Where(p => p.Position.DistanceTo(Position) <= within).OrderBy(p => p.Position.DistanceTo(Position)).FirstOrDefault();
         _guns -= delta;
-        if (_guns <= 0) { _guns = GunEvery; var t = Nearest(900f); if (t != null) { t.Hit(GunDamage * Scale, Position, "boss:guns"); Combat.Flash(nose, t.Position, new Color(1f, 0.5f, 0.35f), boss: true); } }
+        if (_guns <= 0) { _guns = GunEvery; var t = Nearest(900f); if (t != null) { t.Hit(GunDamage * Strength, Position, "boss:guns"); Combat.Flash(nose, t.Position, new Color(1f, 0.5f, 0.35f), boss: true); } }
         _missiles -= delta;
         if (_missiles <= 0)
         {   // a trident at the nearest ship: straight at it and 25 degrees either side
@@ -762,7 +762,7 @@ public partial class Boss : Node2D, IHittable
             foreach (float deg in new[] { -TridentSpread, 0f, TridentSpread })
             {
                 var dir = aim.Rotated(Mathf.DegToRad(deg));
-                Combat.LaunchTorpedo(nose + dir * 14f, dir, TridentSpeed, TridentRange, TridentDamage * Scale, t.NetId, 1.4f,
+                Combat.LaunchTorpedo(nose + dir * 14f, dir, TridentSpeed, TridentRange, TridentDamage * Strength, t.NetId, 1.4f,
                                      heavy: false, hostile: true, hitSource: "boss:missiles", size: 2f);
             }
         }
@@ -783,7 +783,7 @@ public partial class Boss : Node2D, IHittable
             {
                 _beamTickT = BeamTick;
                 foreach (var p in pilots)
-                    if (DistToSegment(p.Position, live.a, live.b) <= BeamWidth / 2f + p.HitRadius) p.Hit(BeamDamage * Scale, Position, "boss:beam");
+                    if (DistToSegment(p.Position, live.a, live.b) <= BeamWidth / 2f + p.HitRadius) p.Hit(BeamDamage * Strength, Position, "boss:beam");
             }
             if ((_beamLive -= delta) < 0) _pendingBeam = null;
         }
@@ -800,7 +800,7 @@ public partial class Boss : Node2D, IHittable
         if (_dashTo is { } to)
         {
             Position = Position.MoveToward(to, ChargeSpeed * (float)delta);
-            foreach (var p in pilots) if (Covers(p.Position, p.HitRadius)) p.Hit(ChargeDamage * Scale, Position, "boss:charge");
+            foreach (var p in pilots) if (Covers(p.Position, p.HitRadius)) p.Hit(ChargeDamage * Strength, Position, "boss:charge");
             if (Position.DistanceTo(to) < 1f) _dashTo = null;
         }
         _wave -= delta;
@@ -811,7 +811,7 @@ public partial class Boss : Node2D, IHittable
         }
         if (_pendingWave is { } c && (_waveT -= delta) <= 0)
         {
-            foreach (var p in pilots) if (p.Position.DistanceTo(c) <= WaveRadius + p.HitRadius) p.Hit(45 * Scale, c, "boss:wave");
+            foreach (var p in pilots) if (p.Position.DistanceTo(c) <= WaveRadius + p.HitRadius) p.Hit(45 * Strength, c, "boss:wave");
             _pendingWave = null;
         }
     }
@@ -2425,7 +2425,7 @@ public static class HealthBar
 
 //==============================================================================
 // FILE: scripts/Hub.cs
-// 1166 lines   sha256 c466ecaa0e58
+// 1168 lines   sha256 7e6898256fc1
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -2578,6 +2578,7 @@ public partial class Hub : Node2D
         var baseBtn = new Button { Text = "BASE (B)", Name = "BaseButton", FocusMode = Control.FocusModeEnum.None };
         baseBtn.Pressed += ToggleBase;
         var baseWrap = Ui.Wrap(baseBtn); baseWrap.Position = new Vector2(256, 48);
+        baseWrap.Visible = !InArena;                                   // no base out there
         layer.AddChild(baseWrap);
         var pilotBtn = new Button { Text = "PILOT (L)", Name = "PilotButton", FocusMode = Control.FocusModeEnum.None };
         pilotBtn.Pressed += TogglePilot;
@@ -3023,7 +3024,7 @@ public partial class Hub : Node2D
     public Raider SpawnRaider(Vector2 at, RaiderKind kind = RaiderKind.Light, int patrol = 0, double scale = 1)
     {
         if (!Net.IsHost) return null;
-        var r = new Raider { Hub = this, Kind = kind, Patrol = patrol, Scale = scale, NetId = ++_raiderIds, Position = at, Name = $"Raider_{_raiderIds}" };
+        var r = new Raider { Hub = this, Kind = kind, Patrol = patrol, Strength = scale, NetId = ++_raiderIds, Position = at, Name = $"Raider_{_raiderIds}" };
         Raiders.Add(r); AddChild(r);
         if (Net.IsOnline) Rpc(nameof(NetRaiderSpawn), r.NetId, at, (int)kind, scale);
         return r;
@@ -3031,7 +3032,7 @@ public partial class Hub : Node2D
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
     private void NetRaiderSpawn(int id, Vector2 at, int kind, double scale)
     {
-        var r = new Raider { Hub = this, Kind = (RaiderKind)kind, Scale = scale, NetId = id, Position = at, Name = $"Raider_{id}" };
+        var r = new Raider { Hub = this, Kind = (RaiderKind)kind, Strength = scale, NetId = id, Position = at, Name = $"Raider_{id}" };
         Raiders.Add(r); AddChild(r);
     }
 
@@ -3426,6 +3427,7 @@ public partial class Hub : Node2D
 
     private void ToggleBase()
     {
+        if (Yard == null) return;                                      // the arena: there is no base to open
         if (IsInstanceValid(_base)) { _base.QueueFree(); _base = null; return; }
         _base = new BasePanel { Hub = this };
         if (IsInstanceValid(_pilot)) TogglePilot();                // the two share a spot
@@ -5311,7 +5313,7 @@ public partial class Radar : Control
 
 //==============================================================================
 // FILE: scripts/Raider.cs
-// 278 lines   sha256 09d8db7a2431
+// 278 lines   sha256 d6f5fa831e2c
 //==============================================================================
 using Godot;
 using System.Linq;
@@ -5354,8 +5356,8 @@ public partial class Raider : Node2D, IHittable
     public bool Heavy => Kind == RaiderKind.Heavy;
     public float Length => Heavy ? HeavyLength : LightLength;
     // a raid's raiders are as strong as the boss that was failed: S(L) = 1.1^(L-1)
-    public double Scale = 1;
-    public double MaxHull => (Heavy ? HeavyHull : LightHull) * Scale;
+    public double Strength = 1;          // S(L) (was "Scale", which hid Node2D.Scale)
+    public double MaxHull => (Heavy ? HeavyHull : LightHull) * Strength;
     public float HitRadius => Length * (Heavy ? 0.3f : 0.4f);
     public bool Selectable => true;
 
@@ -5507,7 +5509,7 @@ public partial class Raider : Node2D, IHittable
             if (_shot <= 0)
             {
                 _shot = ShotEvery;
-                Strike(Target, RaiderDps * ShotEvery * Scale);
+                Strike(Target, RaiderDps * ShotEvery * Strength);
                 Combat.Flash(Position, Target.Position, new Color(1f, 0.3f, 0.25f));
             }
         }
@@ -5564,7 +5566,7 @@ public partial class Raider : Node2D, IHittable
             if (_shot <= 0)
             {
                 _shot = 0.5;
-                Strike(Target, HeavyDps * 0.5 * Scale);
+                Strike(Target, HeavyDps * 0.5 * Strength);
                 Combat.Flash(ToGlobal(_turret?.Position ?? Vector2.Zero), Target.Position, new Color(1f, 0.35f, 0.25f));
             }
         }
@@ -5572,7 +5574,7 @@ public partial class Raider : Node2D, IHittable
         if (_missileCd <= 0 && Position.DistanceTo(Target.Position) <= MissileRange)
         {   // at where it WILL be: its velocity carried 7 s forward
             _missileCd = MissileEvery;
-            Hub.HeavyMissile(Position, Target.Position + _targetVel * (float)MissileFlight, NetId, MissileDamage * Scale);
+            Hub.HeavyMissile(Position, Target.Position + _targetVel * (float)MissileFlight, NetId, MissileDamage * Strength);
         }
     }
 
@@ -8293,7 +8295,7 @@ ls /tmp/shots
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 1500 lines   sha256 04736c65fade
+// 1505 lines   sha256 95331ec5e0f2
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -9409,6 +9411,11 @@ public partial class _Test : Node
             var boss = H.Boss;
             Check(boss != null && boss.Alive && H.Yard == null && !Nodes<TargetDummy>().Any() && Combat.Hostiles.Contains(boss),
                   "the arena: the Silver Lancer, and no base or dummies");
+            Key(global::Godot.Key.B); await Wait(0.1);
+            var bb = Nodes<Button>().FirstOrDefault(b => b.Name == "BaseButton");
+            Check(bb != null && !bb.IsVisibleInTree(), "in the arena the BASE button is hidden");
+            bb?.EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.1);                 // and even pressed, there is nothing to open
+            Check(Count<BasePanel>() == 0, "neither B nor the button opens a base menu out there");
             Check(Music.CombatZone, "the arena counts as combat for the music");
             Me.Position = boss.Position + new Vector2(0, 500); Me.Velocity = Vector2.Zero; Me.Rotation = 0;
             Key(global::Godot.Key.Q); await Wait(0.1);                           // point defence up
@@ -9531,7 +9538,7 @@ public partial class _Test : Node
             Check(raid.Count == 8 && raid.Count(r => r.Heavy) == 2 && raid.Select(r => r.Patrol).Distinct().Count() == 2,
                   "a failed mission: the boss sends 2 patrols (3 lights and a heavy each)");
             Check(raid.All(r => Math.Abs(r.Position.DistanceTo(Hub.BasePos) - Hub.RaidEdge) < 110f), "in from the edge of the base's map (3200 u out)");
-            Check(raid.All(r => Math.Abs(r.Scale - sL) < 1e-9 && Math.Abs(r.MaxHull - (r.Heavy ? 100 : 25) * sL) < 1e-6),
+            Check(raid.All(r => Math.Abs(r.Strength - sL) < 1e-9 && Math.Abs(r.MaxHull - (r.Heavy ? 100 : 25) * sL) < 1e-6),
                   $"at the failed boss's level: hull and damage x{sL:0.00} (1.1^(L-1), L = {failLevel})");
             foreach (var r in raid) r.TakeDamage(1e9);
             await Wait(0.3);
