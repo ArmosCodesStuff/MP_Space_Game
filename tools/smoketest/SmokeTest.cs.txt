@@ -210,6 +210,16 @@ public partial class _Test : Node
               && tsprites.Count(x => x.Texture.ResourcePath.EndsWith("turret_bs_main.png")) == 4
               && tsprites.Count(x => x.Texture.ResourcePath.EndsWith("turret_bs_pd.png")) == 2,
               "four main + two PD turrets drawn from the ship's own painted turrets");
+        // the fields: each one's nearest edge 1500 u from the base -- room for a blockade
+        {
+            var rocks = H.GetChildren().OfType<Sprite2D>().Where(x => x.Texture != null && x.Texture.ResourcePath.Contains("asteroid_")).ToList();
+            float beltEdge = rocks.Min(x => x.Position.DistanceTo(Hub.BasePos) - x.Texture.GetWidth() * x.Scale.X * 0.34f);
+            var wreck = H.GetChildren().OfType<Sprite2D>().First(x => x.Texture != null && x.Texture.ResourcePath.EndsWith("behemoth_wreck.png"));
+            float wreckEdge = wreck.Position.DistanceTo(Hub.BasePos) - 340f;                 // its visible edge toward the base
+            GD.Print($"  field edges from the base: belt {beltEdge:0} u, wreck {wreckEdge:0} u");
+            Check(rocks.Count == 9 && Math.Abs(beltEdge - 1500) < 8 && Math.Abs(wreckEdge - 1500) < 8,
+                  "the mining belt's and the wreck's nearest edges are both 1500 u from the base");
+        }
         var tioS = H.GetNodeOrNull<Sprite2D>("TIO");
         Check(tioS != null && tioS.Position == Hub.TioPos && Math.Abs(tioS.Texture.GetHeight() * tioS.Scale.Y - Hub.TioHeight) < 0.5f,
               "the Threat Intelligence Operations building stands south-west of the base");

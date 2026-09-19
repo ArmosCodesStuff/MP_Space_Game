@@ -199,6 +199,14 @@ public partial class _Shots : Node
             await W(2.2); await Snap("40_warp_charging");
             await W(0.95); await Snap("41_warp_arrival");      // the camera cuts to the ship on a jump
         }
+        // the whole yard from above: the base, the belt and the wreck at 1500 u
+        {
+            var os = H.GetNode<PlayerShip>("Ship_1"); os.Visible = false; os.Position = Hub.BasePos + new Vector2(-600, -500); os.Velocity = Vector2.Zero;
+            GetViewport().GetCamera2D().Zoom = new Vector2(0.28f, 0.28f);
+            for (int i = 0; i < 40; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await Snap("44_layout_overview");
+            os.Visible = true; GetViewport().GetCamera2D().Zoom = new Vector2(0.9f, 0.9f);
+        }
         // the player's missile, close up: the camera rides a stand-in over it
         {
             var ms = H.GetNode<PlayerShip>("Ship_1"); var md = H.GetNode<TargetDummy>("TargetDummy1");

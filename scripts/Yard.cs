@@ -107,14 +107,17 @@ public partial class Yard : Node2D
         SyncFleet();
     }
 
-    // A fleet's steady income: each ship fills its hold, flies about 1000 u each way,
-    // and unloads. (An estimate: good enough for a 1/20 share.)
+    // A fleet's steady income: each ship fills its hold, flies its real route out and
+    // back, and unloads. (An estimate: good enough for a 1/20 share.)
     public double FleetRate(GatherKind k)
     {
         double rate = 0;
         foreach (var g in Gatherers)
             if (g.Kind == k)
-                rate += g.Hold / (g.Hold / g.Rate + 2 * 1000.0 / g.Speed + g.Hold / Economy.UnloadRate);
+            {
+                double trip = WorkSpot(g).spot.DistanceTo(Hub.BasePos);           // its real route, one way
+                rate += g.Hold / (g.Hold / g.Rate + 2 * trip / g.Speed + g.Hold / Economy.UnloadRate);
+            }
         return rate;
     }
 

@@ -28,8 +28,13 @@ public partial class Hub : Node2D
     public static float LaneY => HaulerPad.Y;
     public const float BaseBottom = 260f;                     // the pad's lower edge
     public static readonly Vector2 StemFoot = new(0f, 175f);  // where the pad hangs from the station
-    public static readonly Vector2 SunPos    = new(0, -1500);
-    public static readonly Vector2 WreckPos  = new(-1250, 60);
+    // Both fields' nearest edges sit 1500 u from the base's centre (about 6.7 battleship
+    // lengths): room for a blockade outside the base's 600 u missile cover. Measured to each
+    // field's boundary -- the belt's nearest rock edge (sun at y -1794 with 9 rocks on the
+    // 520 x 286 ellipse, rocks 15 u), the wreck's visible edge toward the base (340 u out).
+    public const float FieldEdge = 1500f;
+    public static readonly Vector2 SunPos    = new(0, -1794);
+    public static readonly Vector2 WreckPos  = new(-1840, 60);
     public static readonly Vector2 PortalPos = new(1500, 219);
     // Threat Intelligence Operations: south-west of the base, clear of the wreck, the
     // salvage routes, the haul lane and the dummies. (Bounty missions come next.)
@@ -237,7 +242,7 @@ public partial class Hub : Node2D
             AddChild(r); _rocks.Add(r);
         }
 
-        // the wreck, close enough to the base to read as part of the yard
+        // the wreck: its edge FieldEdge from the base, like the belt's
         AddChild(new Sprite2D { Texture = GD.Load<Texture2D>("res://behemoth_wreck.png"),
                                 Position = WreckPos, Scale = new Vector2(0.34f, 0.34f), ZIndex = 1 });
 
