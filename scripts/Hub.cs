@@ -369,6 +369,11 @@ public partial class Hub : Node2D
     public void OpenTio()
     {
         if (IsInstanceValid(_tio)) return;
+        if (Net.IsHost && Mission == MissionState.Idle)
+        {   // docking at the TIO selects the newest unlocked tier
+            Missions.Tier = Missions.Unlocked(Missions.Current.Id);
+            BroadcastMission();
+        }
         if (IsInstanceValid(_base)) ToggleBase();
         if (IsInstanceValid(_pilot)) TogglePilot();
         _tio = new TioWindow { Hub = this };
@@ -421,6 +426,9 @@ public partial class Hub : Node2D
     {
         if (!Net.IsHost || MissionWon) return;
         MissionWon = true;
+        // this tier is beaten: the next unlocks, and is selected when the TIO is next opened
+        var id = Missions.Current.Id;
+        if (!Character.BossBeaten.TryGetValue(id, out var best) || Missions.Tier > best) { Character.BossBeaten[id] = Missions.Tier; Character.Save(); }
         AwardPartyExp(Missions.BossExp + Missions.MissionExp);
         Yard.TripCredits += Missions.BossCredits;
         _arenaEndT = 4.0;
@@ -444,6 +452,14 @@ public partial class Hub : Node2D
     private void NetMissileDown(int id)
     {
         foreach (var t in GetChildren().OfType<Torpedo>()) if (t.NetId == id) t.Intercept();
+    }
+
+    // host: pick a tier between 0 and the newest unlocked
+    public void SelectTier(int tier)
+    {
+        if (!Net.IsHost || Mission != MissionState.Idle) return;
+        Missions.Tier = System.Math.Clamp(tier, 0, Missions.Unlocked(Missions.Current.Id));
+        BroadcastMission();
     }
 
     public void StartMission()
@@ -485,11 +501,12 @@ public partial class Hub : Node2D
     {
         if (!Net.IsOnline) return;
         var ids = _ready.Keys.ToArray(); var rs = ids.Select(i => _ready[i] ? 1 : 0).ToArray();   // RPCs carry int[], not bool[]
-        Rpc(nameof(NetMission), (int)Mission, MissionT, ids, rs);
+        Rpc(nameof(NetMission), (int)Mission, MissionT, ids, rs, Missions.Tier);
     }
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetMission(int state, double t, int[] ids, int[] ready)
+    private void NetMission(int state, double t, int[] ids, int[] ready, int tier)
     {
+        Missions.Tier = tier;
         Mission = (MissionState)state; MissionT = t;
         _ready.Clear(); for (int i = 0; i < ids.Length && i < ready.Length; i++) _ready[ids[i]] = ready[i] != 0;
     }
@@ -646,7 +663,7 @@ public partial class Hub : Node2D
             if (Placing) ship += $"    PLACING {_placingLabel}: left-click to confirm, right-click / Esc to cancel";
         }
         string place = Yard == null
-            ? $"ARENA  ·  {Missions.BossName}  {(IsInstanceValid(Boss) ? Boss.Hp : 0):0} / {Boss.MaxHull:0}" + (MissionWon ? "  ·  DEFEATED" : "")
+            ? $"ARENA  ·  {Missions.BossName} (TIER {Missions.Tier})  {(IsInstanceValid(Boss) ? Boss.Hp : 0):0} / {(IsInstanceValid(Boss) ? Boss.MaxHp : 0):0}" + (MissionWon ? "  ·  DEFEATED" : "")
             : $"ORE {Yard.Ore:0}    SALVAGE {Yard.Salvage:0}    CREDITS {Yard.Credits:0}"
               + $"    HAULER {Yard.Hauler.Cargo:0}/{Yard.Capacity:0} {Yard.Hauler.State.ToString().ToUpper()}";
         _hud.Text = place + ship

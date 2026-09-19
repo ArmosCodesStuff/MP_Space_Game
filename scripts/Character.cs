@@ -24,6 +24,8 @@ public static class Character
     // pilot progression (see Progression)
     public static int Exp, Level = 1, Points;
     public static readonly int[] Bought = new int[Progression.All.Length];
+    // the highest tier of each boss this pilot has beaten (absent = none yet)
+    public static readonly Dictionary<string, int> BossBeaten = new();
 
     // One saved character, as the select screen lists it.
     public class Slot
@@ -44,7 +46,7 @@ public static class Character
         Accent = new(1.00f, 0.78f, 0.35f);
         Class = ShipClass.Battleship;
         Bonuses.Clear();
-        Exp = 0; Level = 1; Points = 0; Array.Clear(Bought);
+        Exp = 0; Level = 1; Points = 0; Array.Clear(Bought); BossBeaten.Clear();
     }
 
     public static void Save()
@@ -59,6 +61,7 @@ public static class Character
         foreach (var kv in Bonuses) c.SetValue("bonus", kv.Key, kv.Value);
         c.SetValue("progress", "exp", Exp); c.SetValue("progress", "level", Level); c.SetValue("progress", "points", Points);
         for (int i = 0; i < Bought.Length; i++) c.SetValue("progress", "bought_" + Progression.All[i].Id, Bought[i]);
+        foreach (var kv in BossBeaten) c.SetValue("bosses", kv.Key, kv.Value);
         c.Save(PathOf(Id));
     }
 
@@ -78,6 +81,8 @@ public static class Character
         Exp = (int)c.GetValue("progress", "exp", 0); Level = Math.Max(1, (int)c.GetValue("progress", "level", 1));
         Points = Math.Max(0, (int)c.GetValue("progress", "points", 0));
         for (int i = 0; i < Bought.Length; i++) Bought[i] = Math.Clamp((int)c.GetValue("progress", "bought_" + Progression.All[i].Id, 0), 0, Progression.MaxPerUpgrade);
+        BossBeaten.Clear();
+        if (c.HasSection("bosses")) foreach (var k in c.GetSectionKeys("bosses")) BossBeaten[k] = (int)c.GetValue("bosses", k, -1);
         return true;
     }
 

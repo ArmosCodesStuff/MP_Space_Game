@@ -11,10 +11,12 @@ using System.Linq;
 public partial class Boss : Node2D, IHittable
 {
     public Hub Hub;
-    public const double MaxHull = 3000;
+    // hull and every attack scale with the selected tier (Missions.Scale)
+    public double Scale = 1;
+    public double MaxHp => Missions.Current.Hull * Scale;
     public const float Length = 360f, HalfWidth = 70f;
     public const int Id = 3000;
-    public double Hp = MaxHull;
+    public double Hp;
     public bool Alive => Hp > 0;
     public int NetId => Id;
     public float HitRadius => HalfWidth;
@@ -34,6 +36,7 @@ public partial class Boss : Node2D, IHittable
 
     public override void _Ready()
     {
+        Scale = Missions.Scale(Missions.Tier); Hp = MaxHp;
         Name = "Boss";
         var tex = GD.Load<Texture2D>("res://boss_silver_lancer.png");
         AddChild(new Sprite2D { Texture = tex, Scale = Vector2.One * (Length / tex.GetHeight()) });
@@ -79,7 +82,7 @@ public partial class Boss : Node2D, IHittable
         var nose = ToGlobal(new Vector2(0, -Length * 0.5f));
         PlayerShip Nearest(float within) => pilots.Where(p => p.Position.DistanceTo(Position) <= within).OrderBy(p => p.Position.DistanceTo(Position)).FirstOrDefault();
         _guns -= delta;
-        if (_guns <= 0) { _guns = 1.2; var t = Nearest(900f); if (t != null) { t.Hit(6, Position); Combat.Flash(nose, t.Position, new Color(1f, 0.5f, 0.35f), boss: true); } }
+        if (_guns <= 0) { _guns = 1.2; var t = Nearest(900f); if (t != null) { t.Hit(6 * Scale, Position); Combat.Flash(nose, t.Position, new Color(1f, 0.5f, 0.35f), boss: true); } }
         _missiles -= delta;
         if (_missiles <= 0)
         {
@@ -88,7 +91,7 @@ public partial class Boss : Node2D, IHittable
             {
                 var t = pilots[i % pilots.Count];
                 var dir = Vector2.Up.Rotated(Rotation + (i - 1.5f) * 0.35f);
-                Combat.LaunchTorpedo(nose + dir * 10f, dir, 150f, 1600f, 20, t.NetId, 1.4f, heavy: false, hostile: true);
+                Combat.LaunchTorpedo(nose + dir * 10f, dir, 150f, 1600f, 20 * Scale, t.NetId, 1.4f, heavy: false, hostile: true);
             }
         }
         _beam -= delta;
@@ -103,7 +106,7 @@ public partial class Boss : Node2D, IHittable
         if (_pendingBeam is { } beam && (_beamT -= delta) <= 0)
         {
             foreach (var p in pilots)
-                if (DistToSegment(p.Position, beam.a, beam.b) <= BeamWidth / 2f + p.HitRadius) p.Hit(60, Position);
+                if (DistToSegment(p.Position, beam.a, beam.b) <= BeamWidth / 2f + p.HitRadius) p.Hit(60 * Scale, Position);
             _pendingBeam = null;
         }
         _wave -= delta;
@@ -114,7 +117,7 @@ public partial class Boss : Node2D, IHittable
         }
         if (_pendingWave is { } c && (_waveT -= delta) <= 0)
         {
-            foreach (var p in pilots) if (p.Position.DistanceTo(c) <= WaveRadius + p.HitRadius) p.Hit(45, c);
+            foreach (var p in pilots) if (p.Position.DistanceTo(c) <= WaveRadius + p.HitRadius) p.Hit(45 * Scale, c);
             _pendingWave = null;
         }
     }

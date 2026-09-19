@@ -846,6 +846,19 @@ public partial class _Test : Node
             double want = H.Yard.FleetRate(GatherKind.Miner) * Yard.LastAway / 20.0;
             Check(Yard.LastAway > 1 && Yard.LastAwayOre > 0 && Math.Abs(Yard.LastAwayOre - want) < 1e-6,
                   $"while away the base earned 1/20 of its rate ({Yard.LastAwayOre:0.0} ore for {Yard.LastAway:0} s)");
+            // difficulty: the win unlocked tier 1, and docking at the TIO selects it
+            Check(Character.BossBeaten.TryGetValue("silver_lancer", out var beat) && beat == 0, "the win records tier 0 as beaten");
+            Check(Math.Abs(Missions.Scale(1) - 1.1) < 1e-9 && Math.Abs(Missions.Scale(2) - 1.21) < 1e-9
+                  && Math.Abs(Missions.Current.Hull * Missions.Scale(1) - 3300) < 1e-6, "each tier is 10% stronger, multiplicatively (tier 1: 3300 hull)");
+            H.OpenTio(); await Wait(0.1);
+            var tw2 = Nodes<TioWindow>().First();
+            Check(Missions.Tier == 1, "docking at the TIO selects the newest unlocked tier (1)");
+            Check(Nodes<Button>(tw2).First(b => b.Name == "TierUp").Disabled, "no tier beyond the newest unlocked");
+            Nodes<Button>(tw2).First(b => b.Name == "TierDown").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
+            Check(Missions.Tier == 0, "the host can pick an easier, beaten tier");
+            Nodes<Button>(tw2).First(b => b.Name == "TierUp").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
+            Check(Missions.Tier == 1, "and back up to the newest");
+            Key(global::Godot.Key.Escape); await Wait(0.1);
             // a wipe: every ship in stasis at once -> the mission fails, home with nothing
             H.EnterSector(Hub.SectorKind.Arena); await Wait(1.5);
             int exp1 = Character.Exp;
