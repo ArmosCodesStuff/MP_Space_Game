@@ -1,8 +1,8 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-19 22:14 at git commit 05d4ce2: typecheck clean, smoke test 3/3 passes
-//   (353 checks), 61-frame UI sweep 0 findings.
-// 53 files, 9314 lines. Code only: sprites, sounds and docs are in the zip.
+// Taken 2026-09-19 22:42 at git commit f6eed54: typecheck clean, smoke test 3/3 passes
+//   (367 checks), UI sweep 0 findings.
+// 53 files, 9461 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -36,14 +36,14 @@
 //   scripts/MainMenu.cs                            224 lines   sha256 39dbc31417c6
 //   scripts/Missions.cs                             26 lines   sha256 6870c2208143
 //   scripts/Music.cs                                78 lines   sha256 19cdf8e2b59c
-//   scripts/Net.cs                                 246 lines   sha256 ce3ebadd0342
+//   scripts/Net.cs                                 315 lines   sha256 5e33bf91c007
 //   scripts/PilotWindow.cs                          54 lines   sha256 d7c6f1a8a09f
 //   scripts/PlayerShip.cs                          746 lines   sha256 19cfe2adecdd
 //   scripts/Plume.cs                                25 lines   sha256 cdbeb9b8fc58
 //   scripts/Progression.cs                          73 lines   sha256 d3b0cd99118f
 //   scripts/Radar.cs                               129 lines   sha256 189719fcc94f
 //   scripts/Raider.cs                              276 lines   sha256 9d48f9260987
-//   scripts/SessionMenu.cs                          89 lines   sha256 5febd0d32676
+//   scripts/SessionMenu.cs                         118 lines   sha256 1a8a8f39d03b
 //   scripts/Settings.cs                             58 lines   sha256 80100257eda5
 //   scripts/Sfx.cs                                  65 lines   sha256 4a51ee11de9a
 //   scripts/Shield.cs                               71 lines   sha256 99c7fa4a2a8e
@@ -58,9 +58,9 @@
 //   scripts/Ui.cs                                   99 lines   sha256 0a376702a4e8
 //   scripts/Yard.cs                                414 lines   sha256 e22f4c9c64df
 //   typecheck/typecheck.sh                          57 lines   sha256 e68277c09f34
-//   tools/screens/Shots.cs.txt                     413 lines   sha256 dc299a7ad662
+//   tools/screens/Shots.cs.txt                     424 lines   sha256 d3de74e7f986
 //   tools/screens/run.sh                            40 lines   sha256 a47174d56c6a
-//   tools/smoketest/SmokeTest.cs.txt              1446 lines   sha256 bded03f25f20
+//   tools/smoketest/SmokeTest.cs.txt              1484 lines   sha256 5a601784bdeb
 //   tools/smoketest/run.sh                          52 lines   sha256 67c03204c10d
 //==============================================================================
 
@@ -3903,9 +3903,10 @@ public partial class Music : Node
 
 //==============================================================================
 // FILE: scripts/Net.cs
-// 246 lines   sha256 ce3ebadd0342
+// 315 lines   sha256 5e33bf91c007
 //==============================================================================
 using Godot;
+using System.Linq;
 using System;
 using System.Collections.Generic;
 
@@ -4011,7 +4012,7 @@ public partial class Net : Node
     // your public address, so friends in other cities or countries can join. When the
     // router will not (UPnP off), or your provider shares one public address among
     // many homes (carrier-grade NAT), the status says so and what to do instead.
-    public enum Reach { None, Checking, Internet, LanOnly }
+    public enum Reach { None, Checking, Internet, Manual, LanOnly }
     public Reach Reachability { get; private set; } = Reach.None;
     public string InternetAddress { get; private set; } = "";
     public string LanAddress { get; private set; } = "";
@@ -4030,31 +4031,95 @@ public partial class Net : Node
             else { ext = u.QueryExternalAddress(); _upnp = u; }
         }
         catch (Exception e) { why = e.Message; }
-        Callable.From(() => InternetResult(gen, port, ext, why)).CallDeferred();
+        _upnpBusy = false;
+        Callable.From(() => RouterResult(gen, port, ext, why)).CallDeferred();
     }
 
-    private void InternetResult(int gen, int port, string ext, string why)
+    // ── what friends elsewhere need: decided from the router's report AND the public address ──
+    // The router (UPnP) says whether it opened the port and what it thinks its outside address
+    // is; a public "what is my IP" service says what the internet actually sees. Together:
+    //   INTERNET   the router opened the port and IS the edge: friends join <public>:<port>
+    //   MANUAL     the router would not open it (UPnP off): forward UDP <port>, then <public>:<port>
+    //   LAN ONLY   the router's outside address is private or differs from the public one --
+    //              another router or the provider's shared address (carrier-grade NAT) is in
+    //              the way -- or nothing could be learned at all
+    // The status line never prints the public address: the panel shows it behind a reveal.
+    public const string PublicIpService = "https://api.ipify.org";
+    private HttpRequest _ipReq;
+    private string _publicIp = "", _routerExt = "", _routerWhy = "";
+    private bool _publicDone, _routerDone;
+    private volatile bool _upnpBusy;
+    private int _hostPort;
+    // single player (and between sessions): no socket, no lookup, no router job
+    public bool NetworkIdle => _peer == null && _ipReq == null && !_upnpBusy;
+
+    public static (Reach reach, string address, string message) Describe(string routerExt, bool mapped, string publicIp, int port, string lan)
     {
-        if (gen != _hostGen || !IsHost || !IsOnline) return;            // the session changed meanwhile
-        if (ext.Length > 0 && !IsSharedAddress(ext))
+        bool pub = publicIp.Length > 0;
+        if (mapped && routerExt.Length > 0 && !IsSharedAddress(routerExt) && (!pub || publicIp == routerExt))
+            return (Reach.Internet, $"{routerExt}:{port}",
+                    "Hosting for the internet: friends anywhere can join. Their address is below (click to reveal, or copy it).");
+        if (mapped && (IsSharedAddress(routerExt) || (pub && publicIp != routerExt)))
+            return (Reach.LanOnly, lan,
+                    $"Hosting for your network ({lan}). Your router opened the port, but it is not the last step to the internet: "
+                  + "another router, or your provider's shared address (carrier-grade NAT), sits in between, so friends elsewhere "
+                  + "cannot reach you directly. Use Tailscale or ZeroTier, or let a friend host.");
+        if (pub)
+            return (Reach.Manual, $"{publicIp}:{port}",
+                    $"Hosting. Your router would not open port {port} by itself (UPnP is off or unsupported): forward UDP {port} "
+                  + $"to this PC ({lan.Split(':')[0]}) in your router's settings, then friends elsewhere join with the address below.");
+        return (Reach.LanOnly, lan,
+                $"Hosting for your network ({lan}). Neither your router nor the internet could be asked for your public address. "
+              + $"For friends elsewhere, forward UDP {port} to this PC, or use Tailscale or ZeroTier.");
+    }
+
+    // What the panel shows. (Public so a test can show the reveal without a real router.)
+    public void Reachable(Reach r, string address, string message)
+    {
+        Reachability = r; InternetAddress = r is Reach.Internet or Reach.Manual ? address : "";
+        Say(message);
+    }
+
+    private void AskPublicIp(int gen)
+    {
+        FreeIpReq();
+        _ipReq = new HttpRequest { Timeout = 6 };
+        AddChild(_ipReq);
+        _ipReq.RequestCompleted += (result, code, headers, body) =>
         {
-            _mappedPort = port; Reachability = Reach.Internet; InternetAddress = $"{ext}:{port}";
-            Say($"Hosting for the internet. Friends anywhere join: {InternetAddress}   (same network: {LanAddress})");
-        }
-        else if (ext.Length > 0)
-        {
-            _mappedPort = port; Reachability = Reach.LanOnly;
-            Say($"Hosting for your network ({LanAddress}). Your router opened the port, but your internet provider "
-              + "shares one public address among many homes (carrier-grade NAT), so friends elsewhere cannot reach "
-              + "you directly. Use Tailscale or ZeroTier, or let a friend host.");
-        }
-        else
-        {
-            Reachability = Reach.LanOnly;
-            Say($"Hosting for your network ({LanAddress}). Your router did not open port {port} automatically "
-              + $"(UPnP is off or unsupported{(why.Length > 0 && why != "no-upnp" && why != "refused" ? ": " + why : "")}). "
-              + $"For friends elsewhere, forward UDP {port} to this PC in your router, or use Tailscale or ZeroTier.");
-        }
+            string ip = result == (long)HttpRequest.Result.Success && code == 200 ? System.Text.Encoding.UTF8.GetString(body).Trim() : "";
+            _publicIp = LooksLikeIpv4(ip) ? ip : "";
+            _publicDone = true;
+            Callable.From(FreeIpReq).CallDeferred();
+            TryDecide(gen);
+        };
+        if (_ipReq.Request(PublicIpService) != Error.Ok) { _publicDone = true; FreeIpReq(); TryDecide(gen); }
+    }
+    private void FreeIpReq()
+    {
+        if (_ipReq == null) return;
+        if (IsInstanceValid(_ipReq)) { _ipReq.CancelRequest(); _ipReq.QueueFree(); }
+        _ipReq = null;
+    }
+    public static bool LooksLikeIpv4(string s)
+    {
+        var p = s.Split('.');
+        return p.Length == 4 && p.All(x => int.TryParse(x, out int v) && v >= 0 && v <= 255);
+    }
+
+    private void RouterResult(int gen, int port, string ext, string why)
+    {
+        if (gen != _hostGen) return;
+        _routerExt = ext; _routerWhy = why; _routerDone = true;
+        if (ext.Length > 0) _mappedPort = port;
+        TryDecide(gen);
+    }
+
+    private void TryDecide(int gen)
+    {
+        if (gen != _hostGen || !IsHost || !IsOnline || !(_routerDone && _publicDone)) return;   // the session changed, or one answer is still out
+        var d = Describe(_routerExt, _routerExt.Length > 0, _publicIp, _hostPort, LanAddress);
+        Reachable(d.reach, d.address, d.message);
     }
 
     // Private and carrier-grade (100.64.0.0/10) addresses cannot be reached from outside.
@@ -4081,10 +4146,13 @@ public partial class Net : Node
         _isHost = true; _localId = 1;
         Players.Clear(); Players[1] = new PlayerInfo { Id = 1 };
         LanAddress = LocalLan(port); Reachability = Reach.Checking; InternetAddress = "";
-        Say($"Hosting on your network ({LanAddress}). Asking your router to open port {port} for internet play...");
+        Say($"Hosting on your network ({LanAddress}). Asking your router to open port {port}, and the internet for your public address...");
         SessionChanged?.Invoke();
-        int gen = ++_hostGen;
+        int gen = ++_hostGen; _hostPort = port;
+        _publicIp = _routerExt = _routerWhy = ""; _publicDone = _routerDone = false;
+        _upnpBusy = true;
         System.Threading.Tasks.Task.Run(() => OpenRouterPort(port, gen));
+        AskPublicIp(gen);
         return true;
     }
 
@@ -4116,6 +4184,7 @@ public partial class Net : Node
             System.Threading.Tasks.Task.Run(() => u.DeletePortMapping(mp, "UDP"));
         }
         _upnp = null; _mappedPort = 0; _hostGen++;
+        FreeIpReq();                                        // no lookup outlives its session
         Reachability = Reach.None; InternetAddress = ""; LanAddress = "";
         // An explicit offline peer rather than null: IsServer() and GetUniqueId() then
         // answer 1 / true offline instead of depending on engine fallback behaviour.
@@ -5487,7 +5556,7 @@ public partial class Raider : Node2D, IHittable
 
 //==============================================================================
 // FILE: scripts/SessionMenu.cs
-// 89 lines   sha256 5febd0d32676
+// 118 lines   sha256 1a8a8f39d03b
 //==============================================================================
 using Godot;
 
@@ -5527,9 +5596,12 @@ public partial class SessionMenu : CanvasLayer
 
         // FocusMode None: a clicked button must not keep keyboard focus, or Space/Enter
         // would press it again mid-flight.
-        _options.AddChild(Btn("HOST THIS WORLD", () => Net.I?.Host()));
-        _options.AddChild(Btn("JOIN",            DoJoin));
-        _options.AddChild(Btn("PLAY OFFLINE",    () => Net.I?.GoOffline()));
+        // one press a second: starting or stopping a session is not free, and nothing
+        // should be able to hammer it
+        _hostBtn = Btn("HOST THIS WORLD", () => Limited(() => Net.I?.Host())); _hostBtn.Name = "Host";
+        _joinBtn = Btn("JOIN", () => Limited(DoJoin)); _joinBtn.Name = "Join";
+        _offBtn = Btn("PLAY OFFLINE", () => Limited(() => Net.I?.GoOffline())); _offBtn.Name = "Offline";
+        _options.AddChild(_hostBtn); _options.AddChild(_joinBtn); _options.AddChild(_offBtn);
 
         _status = new Label { Text = Net.I?.LastStatus ?? "", AutowrapMode = TextServer.AutowrapMode.WordSmart,
                               CustomMinimumSize = new Vector2(320, 0) };
@@ -5537,11 +5609,15 @@ public partial class SessionMenu : CanvasLayer
         // the address friends should type, one click to the clipboard
         _copy = Btn("COPY ADDRESS", () =>
         {
-            var a = Net.I?.Reachability == Net.Reach.Internet ? Net.I.InternetAddress : Net.I?.LanAddress;
+            var a = Net.I?.Reachability is Net.Reach.Internet or Net.Reach.Manual ? Net.I.InternetAddress : Net.I?.LanAddress;
             if (!string.IsNullOrEmpty(a)) DisplayServer.ClipboardSet(a);
         });
         _copy.Name = "CopyAddress";
         _options.AddChild(_copy);
+        // the address friends in other cities need -- hidden until clicked
+        _reveal = Btn("", () => { _revealed = !_revealed; Refresh(); });
+        _reveal.Name = "RevealAddress";
+        _options.AddChild(_reveal);
         if (Net.I != null) { Net.I.Status += OnStatus; Net.I.SessionChanged += Refresh; Net.I.PlayerJoined += OnPeers; Net.I.PlayerLeft += OnPeers; }
         Refresh();
     }
@@ -5556,7 +5632,18 @@ public partial class SessionMenu : CanvasLayer
     private void OnStatus(string s) { _status.Text = s; Refresh(); }
     public override void _Process(double delta)
     {
+        _now += delta;
+        bool locked = Locked;                                   // the 1 s rate limit, shown on the buttons
+        foreach (var btn in new[] { _hostBtn, _joinBtn, _offBtn }) if (btn != null) btn.Disabled = locked;
         if (_copy != null) _copy.Visible = Net.I != null && Net.IsHost && Net.IsOnline && Net.I.Reachability != Net.Reach.Checking;
+        if (_reveal != null)
+        {
+            bool shown = Net.I != null && Net.IsHost && Net.IsOnline && Net.I.Reachability is (Net.Reach.Internet or Net.Reach.Manual);
+            _reveal.Visible = shown;
+            if (!shown) _revealed = false;
+            _reveal.Text = _revealed ? $"Friends elsewhere join: {Net.I?.InternetAddress}   (click to hide)"
+                                     : "Friends elsewhere join: \u2022\u2022\u2022.\u2022\u2022\u2022.\u2022\u2022\u2022.\u2022\u2022\u2022   (click to reveal)";
+        }
     }
     private void OnPeers(int _) => Refresh();
 
@@ -5571,6 +5658,17 @@ public partial class SessionMenu : CanvasLayer
 
     private void DoJoin() => Net.I?.Join(_addr.Text);
 
+    private Button _hostBtn, _joinBtn, _offBtn, _reveal;
+    private bool _revealed;
+    public const double PressGap = 1.0;
+    private double _now, _lockedUntil;                          // game time: in play, the same as real time
+    public bool Locked => _now < _lockedUntil;
+    private void Limited(System.Action a)
+    {
+        if (Locked) return;
+        _lockedUntil = _now + PressGap;
+        a();
+    }
     private static Button Btn(string text, System.Action onPress)
     {
         var b = new Button { Text = text, FocusMode = Control.FocusModeEnum.None };
@@ -7674,7 +7772,7 @@ echo "0 errors." >&2
 
 //==============================================================================
 // FILE: tools/screens/Shots.cs.txt
-// 413 lines   sha256 dc299a7ad662
+// 424 lines   sha256 d3de74e7f986
 //==============================================================================
 // Screenshot driver. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Shots.cs, registers it as an autoload, and runs the real
@@ -7933,6 +8031,17 @@ public partial class _Shots : Node
             await Snap("50_base_defence"); bs3.Visible = true;
             rz.TakeDamage(99999); zp.SetValue(H, z0); bs3.Position = keepB; bs3.Velocity = Vector2.Zero; await W(0.3);
         }
+        // hosting: the address friends in other cities need, hidden until clicked, then shown
+        {
+            Net.I.Host(); await W(0.5);
+            Net.I.Reachable(Net.Reach.Manual, "203.0.113.7:27015", "Hosting. Your router would not open port 27015 by itself (UPnP is off or unsupported): forward UDP 27015 to this PC in your router's settings, then friends elsewhere join with the address below.");
+            var sm = H.GetTree().Root.FindChild("SessionMenu", true, false) as SessionMenu;
+            await W(0.3); await Snap("51_address_hidden");
+            var rv = sm?.FindChild("RevealAddress", true, false) as Button;
+            rv?.EmitSignal(BaseButton.SignalName.Pressed); await W(0.2); await Snap("52_address_revealed");
+            rv?.EmitSignal(BaseButton.SignalName.Pressed);
+            Net.I.GoOffline(); await W(0.5);
+        }
         // a waypoint picked on the radar: its ring there, and the HUD naming it
         {
             H.SelectWaypoint("BASE", Hub.BasePos, 260f); await W(0.3);
@@ -8137,7 +8246,7 @@ ls /tmp/shots
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 1446 lines   sha256 bded03f25f20
+// 1484 lines   sha256 5a601784bdeb
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -8884,6 +8993,31 @@ public partial class _Test : Node
                   $"rebuilt on its pad for 10% of the hauler's investment ({hcost:0} cr)");
         }
 
+        // ── networking: silent offline; what friends elsewhere need; one press a second ──
+        {
+            Check(Net.I.NetworkIdle, "single player: no socket, no web lookup, no router job running");
+            var inet = Net.Describe("203.0.113.7", true, "203.0.113.7", 27015, "192.168.1.5:27015");
+            var shared = Net.Describe("100.72.1.9", true, "", 27015, "192.168.1.5:27015");
+            var dbl = Net.Describe("198.51.100.4", true, "203.0.113.7", 27015, "192.168.1.5:27015");
+            var manual = Net.Describe("", false, "203.0.113.7", 27015, "192.168.1.5:27015");
+            var none = Net.Describe("", false, "", 27015, "192.168.1.5:27015");
+            Check(inet.reach == Net.Reach.Internet && inet.address == "203.0.113.7:27015", "router opened the port and is the internet's edge: friends join public:port");
+            Check(shared.reach == Net.Reach.LanOnly && dbl.reach == Net.Reach.LanOnly,
+                  "a private router address, or one that differs from the public address: another NAT is in the way, network only");
+            Check(manual.reach == Net.Reach.Manual && manual.address == "203.0.113.7:27015" && manual.message.Contains("forward UDP 27015"),
+                  "the router will not open it: the public address, and how to forward the port");
+            Check(none.reach == Net.Reach.LanOnly, "nothing learned: network only");
+            Check(new[] { inet, shared, dbl, manual, none }.All(d => !d.message.Contains("203.0.113.7")), "no status line ever prints the public address");
+            var sm = Nodes<SessionMenu>().First();
+            var off = Nodes<Button>(sm).First(b => b.Name == "Offline");
+            off.EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.1);
+            Check(sm.Locked && new[] { "Host", "Join", "Offline" }.All(n => Nodes<Button>(sm).First(b => b.Name == n).Disabled),
+                  "one press a second: after a press, host, join and offline wait");
+            await Wait(SessionMenu.PressGap);
+            Check(!sm.Locked && !Nodes<Button>(sm).First(b => b.Name == "Host").Disabled, "and are back after 1 s");
+            Check(Net.I.NetworkIdle, "and offline stays silent");
+        }
+
         // ── pilot progression: EXP, levels, points, flat upgrades ──
         {
             Check(Progression.Cost(0) == 1 && Progression.Cost(1) == 2 && Progression.Cost(2) == 3, "upgrade costs 1, 2, 3, ... points");
@@ -9463,6 +9597,17 @@ public partial class _Test : Node
             var ships = Nodes<PlayerShip>().ToList();
             Check(ships.Count == 3, $"host sees 3 ships: itself and two guests ({ships.Count})");
             Check(ships.Any(s => s.Pilot == "Third"), "the second guest's identity reached the host");
+            // hosting here (no router, no internet in the sandbox): both answers come back empty -> network only
+            for (int i = 0; i < 60 * 9 && Net.I.Reachability == Net.Reach.Checking; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            var smh = Nodes<SessionMenu>().First(); var rev = Nodes<Button>(smh).First(b => b.Name == "RevealAddress");
+            Check(Net.I.Reachability == Net.Reach.LanOnly && !rev.Visible, $"no router or internet here: network only, nothing to reveal ({Net.I.Reachability})");
+            Net.I.Reachable(Net.Reach.Manual, "203.0.113.7:27015", "Hosting (test).");
+            await Wait(0.1);
+            Check(rev.Visible && !rev.Text.Contains("203.0.113.7") && !Net.I.LastStatus.Contains("203.0.113.7"), "the address friends need is hidden until clicked");
+            rev.EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
+            Check(rev.Text.Contains("203.0.113.7:27015"), "click: it shows the public address and port");
+            rev.EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
+            Check(!rev.Text.Contains("203.0.113.7"), "click again: hidden");
             H.AwardPartyExp(40);                  // shared: every pilot in the session gets it
             H.SpawnRaider(new Vector2(-3500, 3500));   // far off: the guests must see it
             H.SpawnRaider(new Vector2(-3700, 3700), RaiderKind.Heavy);
@@ -9485,6 +9630,8 @@ public partial class _Test : Node
             await Wait(15.0);
             Net.I.GoOffline();   // drop the guest
             await Wait(2.0);
+            for (int i = 0; i < 60 * 4 && !Net.I.NetworkIdle; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(Net.I.NetworkIdle, "back offline: no socket, no lookup, no router job left running");
         }
         else if (role == "guest2")
         {   // a third player: joins, sees everyone, leaves with the session
