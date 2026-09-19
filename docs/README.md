@@ -12,7 +12,7 @@ If you are a fresh session with no history of this project, read in this order:
 3. This file for the mechanics of working on it.
 
 **You also need the code.** These documents describe the project; they do not replace it. Whoever
-starts the session should attach the project zip (~3 MB, 25 scripts, ~4,500 lines).
+starts the session should attach the project zip (~3 MB, 28 scripts, ~4,900 lines).
 
 | File | For |
 |---|---|
