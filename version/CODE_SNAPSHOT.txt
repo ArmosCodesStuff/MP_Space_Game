@@ -1,8 +1,8 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-19 20:31 at git commit 4cd1dac: typecheck clean, smoke test 3/3 passes
-//   (322 checks), 57-frame UI sweep 0 findings.
-// 51 files, 8542 lines. Code only: sprites, sounds and docs are in the zip.
+// Taken 2026-09-19 20:51 at git commit 7a35b87: typecheck clean, smoke test 3/3 passes
+//   (327 checks), 58-frame UI sweep 0 findings.
+// 51 files, 8624 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -31,16 +31,16 @@
 //   scripts/Gatherer.cs                            239 lines   sha256 d9734a73710e
 //   scripts/Hauler.cs                              310 lines   sha256 94eb35ea7868
 //   scripts/HealthBar.cs                            36 lines   sha256 97c42a282205
-//   scripts/Hub.cs                                 981 lines   sha256 28dc04804db7
+//   scripts/Hub.cs                                 997 lines   sha256 3bff29b5b545
 //   scripts/MainMenu.cs                            224 lines   sha256 39dbc31417c6
 //   scripts/Missions.cs                             26 lines   sha256 6870c2208143
 //   scripts/Music.cs                                78 lines   sha256 19cdf8e2b59c
 //   scripts/Net.cs                                 246 lines   sha256 ce3ebadd0342
 //   scripts/PilotWindow.cs                          54 lines   sha256 d7c6f1a8a09f
-//   scripts/PlayerShip.cs                          741 lines   sha256 096a3fa923dc
+//   scripts/PlayerShip.cs                          738 lines   sha256 555875b41cc8
 //   scripts/Plume.cs                                25 lines   sha256 cdbeb9b8fc58
 //   scripts/Progression.cs                          73 lines   sha256 d3b0cd99118f
-//   scripts/Radar.cs                                93 lines   sha256 eff30cd82bb4
+//   scripts/Radar.cs                               129 lines   sha256 189719fcc94f
 //   scripts/SessionMenu.cs                          89 lines   sha256 5febd0d32676
 //   scripts/Settings.cs                             58 lines   sha256 80100257eda5
 //   scripts/Sfx.cs                                  65 lines   sha256 4a51ee11de9a
@@ -56,9 +56,9 @@
 //   scripts/Ui.cs                                   99 lines   sha256 0a376702a4e8
 //   scripts/Yard.cs                                413 lines   sha256 0f285072a4e9
 //   typecheck/typecheck.sh                          57 lines   sha256 e68277c09f34
-//   tools/screens/Shots.cs.txt                     370 lines   sha256 bcc6383cebb2
+//   tools/screens/Shots.cs.txt                     376 lines   sha256 931039bb2292
 //   tools/screens/run.sh                            40 lines   sha256 a47174d56c6a
-//   tools/smoketest/SmokeTest.cs.txt              1255 lines   sha256 76789df6aab2
+//   tools/smoketest/SmokeTest.cs.txt              1282 lines   sha256 6695caed8309
 //   tools/smoketest/run.sh                          52 lines   sha256 67c03204c10d
 //==============================================================================
 
@@ -2347,7 +2347,7 @@ public static class HealthBar
 
 //==============================================================================
 // FILE: scripts/Hub.cs
-// 981 lines   sha256 28dc04804db7
+// 997 lines   sha256 3bff29b5b545
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -2412,6 +2412,20 @@ public partial class Hub : Node2D
     public static SectorKind Sector = SectorKind.Home;
     public static bool InArena => Sector == SectorKind.Arena;
     public static Hub I { get; private set; }
+
+    // A WAYPOINT: a landmark or a pilot picked on the radar -- somewhere to warp to, never a
+    // target for weapons. A target and a waypoint exclude each other; Esc or a double-click
+    // on empty space clears either.
+    public Vector2? Waypoint { get; private set; }
+    public string WaypointName { get; private set; } = "";
+    public float WaypointRadius { get; private set; }
+    public void SelectTarget(IHittable h) { _selected = h; Waypoint = null; }
+    public void SelectWaypoint(string name, Vector2 at, float radius) { _selected = null; Waypoint = at; WaypointName = name; WaypointRadius = radius; }
+    public void ClearSelection() { _selected = null; Waypoint = null; }
+    // what a warp aims at right now: the target, else the waypoint
+    public (bool has, Vector2 at, float radius) WarpAim() =>
+        _selected != null && _selected.Alive ? (true, _selected.Position, _selected.HitRadius)
+        : Waypoint is { } w ? (true, w, WaypointRadius) : (false, Vector2.Zero, 0f);
     public Boss Boss { get; private set; }
     private double _arenaEndT = -1;                         // counts down to going home
     public bool MissionWon { get; private set; }
@@ -2968,7 +2982,7 @@ public partial class Hub : Node2D
             float d = world.DistanceTo(h.Position);
             if (d <= h.HitRadius + 16f && d < bd) { bd = d; best = h; }
         }
-        if (best != null) { _selected = best; return true; }
+        if (best != null) { SelectTarget(best); return true; }
         // buildings: a left-click on one opens its menu
         if (IsInstanceValid(_tioSprite) && _tioSprite.GetRect().HasPoint(_tioSprite.ToLocal(world))) { OpenTio(); return true; }
         if (!InArena && world.DistanceTo(BasePos) < 200f) { if (!IsInstanceValid(_base)) ToggleBase(); return true; }
@@ -3020,6 +3034,7 @@ public partial class Hub : Node2D
             ship = $"    |    {Character.Name}  {(me.Class == ShipClass.Battleship ? "BATTLESHIP" : "CARRIER")}"
                  + $"  {Mathf.Abs(me.SpeedAhead):0} u/s{(me.SpeedAhead < -1 ? " astern" : "")}";
             ship += Selected != null ? "    target: " + (Selected is TargetDummy td ? $"TARGET DUMMY {td.Number}" : $"#{Selected.NetId}")
+                  : Waypoint != null ? $"    waypoint: {WaypointName}"
                                      : "    no target (Tab / click)";
             if (Placing) ship += $"    PLACING {_placingLabel}: left-click to confirm, right-click / Esc to cancel";
         }
@@ -3106,7 +3121,7 @@ public partial class Hub : Node2D
             else if (IsInstanceValid(_base)) ToggleBase();
             else if (IsInstanceValid(_pilot)) TogglePilot();
             else if (IsInstanceValid(_tio)) { _tio.QueueFree(); _tio = null; }
-            else if (Selected != null) _selected = null;
+            else if (Selected != null || Waypoint != null) ClearSelection();
             else ToggleEscMenu();                                   // the menu holds "quit to main menu"
         }
     }
@@ -3135,7 +3150,7 @@ public partial class Hub : Node2D
             {
                 if (Placing) { var confirm = _placing; CancelPlacement(); confirm(at); }
                 // a double-click on empty space clears the target
-                else if (!SelectAt(at) && mb.DoubleClick) _selected = null;
+                else if (!SelectAt(at) && mb.DoubleClick) ClearSelection();
                 GetViewport().SetInputAsHandled();
             }
             else if (mb.ButtonIndex == MouseButton.Right && Placing)
@@ -3156,7 +3171,7 @@ public partial class Hub : Node2D
             else if (kk.Keycode == Key.K) ToggleStats();
             else if (kk.Keycode == Key.B && !InArena) ToggleBase();
             else if (kk.Keycode == Key.L) TogglePilot();
-            else if (kk.Keycode == Key.V) MyShipPublic?.StartWarp(_selected);   // warp: a fixed key, not a slot
+            else if (kk.Keycode == Key.V) MyShipPublic?.StartWarp();   // warp: a fixed key, not a slot
             else
             {
                 // in stasis the only order is F: re-board once the ship is ready
@@ -3192,6 +3207,7 @@ public partial class Hub : Node2D
         _hudLayer.AddChild(_base);
     }
     public bool CreatorOpen => IsInstanceValid(_creator);
+    public bool StatsOpen => IsInstanceValid(_statsWin);
 
     public void TogglePilot()
     {
@@ -3986,7 +4002,7 @@ public partial class PilotWindow : PanelContainer
 
 //==============================================================================
 // FILE: scripts/PlayerShip.cs
-// 741 lines   sha256 096a3fa923dc
+// 738 lines   sha256 555875b41cc8
 //==============================================================================
 using Godot;
 using System;
@@ -4315,24 +4331,23 @@ public partial class PlayerShip : Node2D, IHittable
 
     // ── WARP (V) -- every capital ship ─────────────────────────────────────────
     // A fixed key and a hull cooldown, never an ability-bar slot. After a 3 s warm-up
-    // the ship jumps to the selected entity if it lies within 45 degrees of the bow
+    // the ship jumps to the selected target or waypoint if it lies within 45 degrees of the bow
     // (stopping just short of it), otherwise 2000 u straight ahead. Movement is the
     // owner's, so the owner jumps; everyone else sees the charge and a clean snap.
     public const double WarpWarmup = 3.0, WarpCooldown = 30.0;
     public const float WarpRange = 2000f, WarpCone = Mathf.Pi / 4f, WarpStandoff = 60f;
     private double _warpLeft = -1, _warpCd, _warpFlash;
-    private int _warpTarget; private Vector2 _warpPoint; private bool _remoteWarping;
+    private bool _remoteWarping;
     public bool Warping => _warpLeft >= 0;
     public double WarpWarmupLeft => Math.Max(0, _warpLeft);
     public double WarpCooldownLeft => _warpCd;
     public bool CanWarp => Alive && !Warping && _warpCd <= 0;
 
-    public bool StartWarp(IHittable selected)
+    // V starts the charge; WHERE it goes is decided when it jumps, by the heading then --
+    // so a pilot can press V and swing onto a target while it charges.
+    public bool StartWarp()
     {
         if (!Mine || !CanWarp) return false;
-        var bow = Vector2.Up.Rotated(Rotation);
-        if (selected != null && selected.Alive && Mathf.Abs(bow.AngleTo(selected.Position - Position)) <= WarpCone) _warpTarget = selected.NetId;
-        else { _warpTarget = 0; _warpPoint = Position + bow * WarpRange; }
         _warpLeft = WarpWarmup;
         return true;
     }
@@ -4349,13 +4364,11 @@ public partial class PlayerShip : Node2D, IHittable
         if (!Alive) { _warpLeft = -1; return; }
         _warpLeft -= dt;
         if (_warpLeft > 0) return;
-        var dest = _warpPoint;
-        if (_warpTarget != 0)
-        {
-            var t = Combat.ById(_warpTarget);
-            dest = t != null && t.Alive ? WarpArrival(Position, t.Position, t.HitRadius, MyArt.Length)
-                                        : Position + Vector2.Up.Rotated(Rotation) * WarpRange;   // it's gone: straight on
-        }
+        // now: the target or waypoint if it lies within 45 degrees of the bow, else straight on
+        var bow = Vector2.Up.Rotated(Rotation);
+        var dest = Position + bow * WarpRange;
+        var aim = (GetParent() as Hub)?.WarpAim() ?? (false, Vector2.Zero, 0f);
+        if (aim.has && Mathf.Abs(bow.AngleTo(aim.at - Position)) <= WarpCone) dest = WarpArrival(Position, aim.at, aim.radius, MyArt.Length);
         Position = dest; Velocity = Vector2.Zero;
         _warpLeft = -1; _warpCd = WarpCooldown; _warpFlash = 0.6;
     }
@@ -4840,7 +4853,7 @@ public static class Progression
 
 //==============================================================================
 // FILE: scripts/Radar.cs
-// 93 lines   sha256 eff30cd82bb4
+// 129 lines   sha256 189719fcc94f
 //==============================================================================
 using Godot;
 
@@ -4863,11 +4876,46 @@ public partial class Radar : Control
     {
         Name = "Radar";
         AnchorLeft = AnchorRight = 1f;
-        MouseFilter = MouseFilterEnum.Ignore;
+        MouseFilter = MouseFilterEnum.Stop;              // it takes clicks: pick things on it
+    }
+
+    // A click on the radar picks the nearest thing within 9 px of the click on its face: an
+    // enemy becomes the target; a landmark or another pilot becomes a waypoint to warp to.
+    public const float PickPx = 9f;
+    public override void _GuiInput(InputEvent e)
+    {
+        if (e is not InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } mb) return;
+        AcceptEvent();
+        var me = Hub?.MyShipPublic; if (me == null) return;
+        float r = Size.X * 0.5f; var c = new Vector2(r, r); float k = (r - 6f) / Range;
+        if (mb.Position.DistanceTo(c) > r) return;
+        var world = me.ViewPosition + (mb.Position - c) / k;
+        float tol = PickPx / k;
+        IHittable best = null; float bd = tol;
+        foreach (var h in Combat.Hostiles)
+        {
+            if (h == null || !h.Alive || !h.Selectable) continue;
+            float d = world.DistanceTo(h.Position); if (d <= bd) { bd = d; best = h; }
+        }
+        if (best != null) { Hub.SelectTarget(best); return; }
+        var marks = new System.Collections.Generic.List<(string name, Vector2 at, float radius)>();
+        if (!Hub.InArena)
+        {
+            marks.Add(("BASE", Hub.BasePos, 260f)); marks.Add(("THREAT INTELLIGENCE", Hub.TioPos, 140f));
+            marks.Add(("PORTAL", Hub.PortalPos, 160f)); marks.Add(("SALVAGE FIELD", Hub.WreckPos, 340f));
+            marks.Add(("MINING BELT", Hub.SunPos, 540f));
+            if (Hub.Mission == Hub.MissionState.PortalOpen) marks.Add(("MISSION PORTAL", Hub.MissionPortalPos, 160f));
+        }
+        foreach (var s in Hub.Ships) if (s != me) marks.Add((s.Pilot, s.Position, s.HitRadius));
+        (string name, Vector2 at, float radius)? pick = null; float pd = tol;
+        foreach (var m in marks) { float d = world.DistanceTo(m.at); if (d <= pd) { pd = d; pick = m; } }
+        if (pick is { } p) Hub.SelectWaypoint(p.name, p.at, p.radius);
     }
 
     public override void _Process(double delta)
     {
+        // the K window opens over this corner: the radar steps aside while it is open
+        Visible = Hub != null && !Hub.StatsOpen;
         float s = Sizes[Mathf.Clamp(Settings.RadarSize, 0, 2)];
         OffsetLeft = -10f - s; OffsetRight = -10f; OffsetTop = 10f; OffsetBottom = 10f + s;
         QueueRedraw();
@@ -4912,6 +4960,7 @@ public partial class Radar : Control
             var p = P(s.Position); if (!Inside(p)) p = c + (p - c).Normalized() * (r - 5f);
             Arrow(p, s.Rotation, new Color(0.55f, 0.85f, 1f));
         }
+        if (Hub.Waypoint is { } wp) { var p = P(wp); if (!Inside(p)) p = c + (p - c).Normalized() * (r - 5f); DrawArc(p, 6f, 0, Mathf.Tau, 16, new Color(1f, 0.85f, 0.3f), 1.4f); }
         if (!me.Alive) DrawCircle(P(me.Position), 2.5f, new Color(0.5f, 0.6f, 0.8f));   // the ship in stasis
         Arrow(c, me.Alive ? me.Rotation : 0f, Colors.White);
         if (Hub.FreeCamera)
@@ -7124,7 +7173,7 @@ echo "0 errors." >&2
 
 //==============================================================================
 // FILE: tools/screens/Shots.cs.txt
-// 370 lines   sha256 bcc6383cebb2
+// 376 lines   sha256 931039bb2292
 //==============================================================================
 // Screenshot driver. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Shots.cs, registers it as an autoload, and runs the real
@@ -7323,7 +7372,7 @@ public partial class _Shots : Node
         {
             var ws = H.GetNode<PlayerShip>("Ship_1");
             typeof(PlayerShip).GetField("_warpCd", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).SetValue(ws, 0.0);
-            ws.Velocity = Vector2.Zero; ws.StartWarp(null);
+            ws.Velocity = Vector2.Zero; ws.StartWarp();
             await W(2.2); await Snap("40_warp_charging");
             await W(0.95); await Snap("41_warp_arrival");      // the camera cuts to the ship on a jump
         }
@@ -7345,6 +7394,12 @@ public partial class _Shots : Node
             for (int i = 0; i < 30; i++) { hs.Position = dm.Position; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
             await Snap("46_damaged_miner");
             hs.Visible = true; zp.SetValue(H, z0); await W(0.2);
+        }
+        // a waypoint picked on the radar: its ring there, and the HUD naming it
+        {
+            H.SelectWaypoint("BASE", Hub.BasePos, 260f); await W(0.3);
+            await Snap("47_radar_waypoint");
+            H.ClearSelection(); await W(0.1);
         }
         // the whole yard from above: the base, the belt and the wreck at 1500 u
         {
@@ -7544,7 +7599,7 @@ ls /tmp/shots
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 1255 lines   sha256 76789df6aab2
+// 1282 lines   sha256 6695caed8309
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -8075,6 +8130,33 @@ public partial class _Test : Node
             Ready(); me.Position = d2w.Position + new Vector2(0, -900); var s3 = me.Position; await Wait(0.2);
             Key(global::Godot.Key.V); await Wait(PlayerShip.WarpWarmup + 0.2);
             Check(Math.Abs((me.Position - s3).Y + 2000f) < 40f && H.Selected == d2w, "a target behind (outside 45 degrees): straight ahead instead");
+            // aimed when it JUMPS, by the heading then: swing onto a target during the charge...
+            Ready(); me.Position = d2w.Position + new Vector2(0, -900); await Wait(0.2);          // facing north, d2 behind
+            Click(Scr(d2w.Position)); await Wait(0.05);
+            Key(global::Godot.Key.V); await Wait(1.0);
+            me.Rotation = Mathf.Pi; await Wait(PlayerShip.WarpWarmup - 1.0 + 0.2);                // now facing it
+            Check(Math.Abs(me.Position.DistanceTo(d2w.Position) - want) < 20f, "V pressed facing away, then turned onto the target: it warps to the target");
+            // ...or turn away from it, and it goes straight on along the new heading
+            Ready(); me.Position = d2w.Position + new Vector2(0, 1400); await Wait(0.2);           // facing north, d2 ahead
+            var s4 = me.Position;
+            Key(global::Godot.Key.V); await Wait(1.0);
+            me.Rotation = Mathf.Pi / 2f; await Wait(PlayerShip.WarpWarmup - 1.0 + 0.2);            // now facing east
+            var mv = me.Position - s4;
+            Check(Math.Abs(mv.X - 2000f) < 40f && Math.Abs(mv.Y) < 40f, $"V pressed facing the target, then turned east: 2000 u east ({mv.X:0}, {mv.Y:0})");
+            // the radar: click a marker to select it -- an enemy as the target, a landmark as a waypoint
+            Ready(); me.Position = warpHome + new Vector2(0, 300); me.Rotation = 0f; await Wait(0.6);
+            var radar = Nodes<Radar>().First(); var rr = radar.GetGlobalRect(); float rad = rr.Size.X / 2f;
+            Vector2 OnRadar(Vector2 w) => rr.Position + new Vector2(rad, rad) + (w - me.ViewPosition) * ((rad - 6f) / Radar.Range);
+            H.ClearSelection();
+            Click(OnRadar(d2w.Position)); await Wait(0.05);
+            Check(H.Selected == d2w, "clicking an enemy on the radar makes it the target");
+            Click(OnRadar(Hub.BasePos)); await Wait(0.05);
+            Check(H.Selected == null && H.Waypoint == Hub.BasePos && H.WaypointName == "BASE", "clicking the base on the radar makes it a waypoint (and drops the target)");
+            me.Position = Hub.BasePos + new Vector2(0, 1500); me.Rotation = 0f; await Wait(0.2);    // the base dead ahead
+            Key(global::Godot.Key.V); await Wait(PlayerShip.WarpWarmup + 0.2);
+            float wantB = 260f + PlayerShip.Art[me.Class].Length * 0.5f + PlayerShip.WarpStandoff;
+            Check(Math.Abs(me.Position.DistanceTo(Hub.BasePos) - wantB) < 20f, $"a warp to the waypoint lands just short of the base ({me.Position.DistanceTo(Hub.BasePos):0} u)");
+            H.ClearSelection();
             Ready(); me.Position = warpHome;
         }
 
