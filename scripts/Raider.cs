@@ -75,7 +75,23 @@ public partial class Raider : Node2D, IHittable
         Hauler h => h.State is not (Hauler.St.Destroyed or Hauler.St.Away),
         _ => false,
     };
-    static float Radius(Node2D t) => t switch { PlayerShip p => p.HitRadius, Hauler => 60f, _ => 16f };
+    // How far the target's hull reaches from its centre along `dir`: an ellipse with the
+    // hull's half-length and half-width. Posts and reach are measured from the HULL, so a
+    // raider holds station beside a long ship, never on top of its bow.
+    public static float Extent(Node2D t, Vector2 dir)
+    {
+        (float len, float wid) = t switch
+        {
+            PlayerShip p => (PlayerShip.Art[p.Class].Length * 0.5f, PlayerShip.Art[p.Class].HalfWidth),
+            Hauler h => (Hauler.Length * 0.5f * h.VisualScale, Hauler.Length * 0.12f * h.VisualScale),
+            _ => (20f, 12f),
+        };
+        var fwd = Vector2.Up.Rotated(t.Rotation); var side = new Vector2(-fwd.Y, fwd.X);
+        float a = dir.Dot(fwd), b = dir.Dot(side);
+        return 1f / Mathf.Sqrt(a * a / (len * len) + b * b / (wid * wid));
+    }
+    public static float Gap(Vector2 from, Node2D t) =>
+        from.DistanceTo(t.Position) - Extent(t, (from - t.Position).Normalized());
     void Strike(Node2D t, double d)
     {
         switch (t)
@@ -115,7 +131,8 @@ public partial class Raider : Node2D, IHittable
         // my post around the target: ahead, left or right by its heading, 90 u out
         var mates = Hub.Raiders.Where(r => r.Alive && r.Target == Target).OrderBy(r => r.NetId).ToList();
         int slot = Mathf.Max(0, mates.IndexOf(this)) % Posts.Length;
-        var post = Target.Position + Vector2.Up.Rotated(Target.Rotation + Posts[slot]) * (Hold + Radius(Target) * 0.5f);
+        var postDir = Vector2.Up.Rotated(Target.Rotation + Posts[slot]);
+        var post = Target.Position + postDir * (Extent(Target, postDir) + Hold);
         float toTarget = Position.DistanceTo(Target.Position);
 
         if (!_boostUsed && toTarget <= BoostAt) { _boostUsed = true; _boostLeft = BoostTime; }
@@ -125,7 +142,7 @@ public partial class Raider : Node2D, IHittable
         Speed = Mathf.Min(top, d * 6f);                                       // ease onto the post
         // once posted it keeps station however the target moves
         Position = Position.MoveToward(post, (Latched ? Mathf.Max(top, d * 12f) : Speed) * dt);
-        Latched = Position.DistanceTo(post) < 12f && toTarget <= PinRange + Radius(Target);
+        Latched = Position.DistanceTo(post) < 12f && Gap(Position, Target) <= PinRange;
         var face = (Target.Position - Position).Angle() + Mathf.Pi / 2f;
         Rotation = Mathf.LerpAngle(Rotation, face, Mathf.Clamp(8f * dt, 0f, 1f));
 

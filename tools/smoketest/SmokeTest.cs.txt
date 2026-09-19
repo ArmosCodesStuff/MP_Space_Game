@@ -799,7 +799,7 @@ public partial class _Test : Node
             me.TakeDamage(-(me.MaxHp - me.Hp));
         }
 
-        // ── raiders (6a): the light fighter -- cruise, rboost, post, pin, laser ──
+        // ── raiders (6a): the light fighter -- cruise, boost, post, pin, laser ──
         {
             var me = Me; var keepPos = me.Position;
             me.Position = new Vector2(4000, 2500); me.Velocity = Vector2.Zero; me.Rotation = 0f; await Wait(0.3);
@@ -813,8 +813,8 @@ public partial class _Test : Node
             float rboost = (r1.Position - b0).Length() / 0.4f;
             Check(Math.Abs(atBoost - 1600) < 30 && Math.Abs(rboost - 500) < 30, $"at 1600 u ({atBoost:0}) it boosts to 500% ({rboost:0} u/s)");
             for (int i = 0; i < 60 * 6 && !r1.Latched; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            float rheld = r1.Position.DistanceTo(me.Position);
-            Check(r1.Latched && rheld > 60 && rheld <= Raider.PinRange + me.HitRadius, $"it lands near its target, not on rtop: posted {rheld:0} u out");
+            float rheld = Raider.Gap(r1.Position, me);                 // from the HULL: beside the ship, never on it
+            Check(r1.Latched && rheld > 60 && rheld <= Raider.PinRange, $"it lands near its target, not on top: posted {rheld:0} u off the hull");
             var r2 = H.SpawnRaider(me.Position + new Vector2(300, 0)); var r3 = H.SpawnRaider(me.Position + new Vector2(-300, 0));
             for (int i = 0; i < 60 * 6 && !(r2.Latched && r3.Latched); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             var bow = Vector2.Up.Rotated(me.Rotation);
@@ -828,7 +828,7 @@ public partial class _Test : Node
             Input.ParseInputEvent(new InputEventKey { Keycode = global::Godot.Key.A, PhysicalKeycode = global::Godot.Key.A, Pressed = false });
             float rspd = me.Velocity.Length(), rtop = (float)me.Stats["max_speed"];
             Check(Mathf.Abs(Mathf.AngleDifference(rot0, me.Rotation)) < 0.01f && rspd <= rtop * 0.2f + 1f && me.SpeedAhead > 5f,
-                  $"pinned: A does not turn it, and forced thrust holds it to 20% of rtop speed ({rspd:0} of {rtop:0} u/s)");
+                  $"pinned: A does not turn it, and forced thrust holds it to 20% of top speed ({rspd:0} of {rtop:0} u/s)");
             double Raided() => me.DamageBySource.Where(kv => kv.Key.StartsWith("raider:")).Sum(kv => kv.Value);
             double dm0 = Raided(); await Wait(5.0);
             double dps = (Raided() - dm0) / 5.0;
