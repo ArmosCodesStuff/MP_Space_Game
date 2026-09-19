@@ -713,6 +713,26 @@ public partial class _Test : Node
             Priv(H, "ApplyLocalIdentity");
         }
 
+        // ── damage rules: one hit per source per 0.35 s; regeneration; 12 s out of combat ──
+        {
+            var me = Me; double hp0 = me.Hp;
+            me.Hit(5, me.Position + Vector2.Up * 100, "test:a"); me.Hit(5, me.Position + Vector2.Up * 100, "test:a");
+            Check(Math.Abs(hp0 - me.Hp - 5) < 0.2, "the same source lands only once inside 0.35 s");
+            me.Hit(5, me.Position + Vector2.Up * 100, "test:b");
+            Check(Math.Abs(hp0 - me.Hp - 10) < 0.3, "a different source lands at once");
+            await Wait(0.4); double hp1 = me.Hp;
+            me.Hit(5, me.Position + Vector2.Up * 100, "test:a");
+            Check(hp1 - me.Hp > 4.5, "after 0.35 s the first source lands again");
+            Check(PlayerShip.CombatHold == 12, "out of combat means 12 s without dealing or taking damage");
+            me.TakeDamage(me.Hp - me.MaxHp * 0.5); me.NoteCombat(); double h0 = me.Hp;
+            await Wait(1.0);
+            Check(Math.Abs((me.Hp - h0) / me.MaxHp - 0.005) < 0.0015, $"in combat it regenerates 0.5% of max hull a second ({(me.Hp - h0) / me.MaxHp * 100:0.00}%)");
+            typeof(PlayerShip).GetField("_combatT", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(me, 0.0);
+            double h1 = me.Hp; await Wait(1.0);
+            Check(Math.Abs((me.Hp - h1) / me.MaxHp - 0.03) < 0.004, $"out of combat, 3% a second ({(me.Hp - h1) / me.MaxHp * 100:0.00}%)");
+            me.TakeDamage(-(me.MaxHp - me.Hp));
+        }
+
         // ── enemy fire, shields, stasis, the escape pod, re-boarding ──
         {
             var d3x = H.GetNode<TargetDummy>("TargetDummy3");
@@ -724,8 +744,8 @@ public partial class _Test : Node
             var shield = Nodes<ShieldFlash>(sh).First();
             Check(shield.Glow(2) > 0 && shield.Glow(0) == 0, "the shield lights the side facing the dummy (astern), not the bow");
             sh.Position = d3x.Position + new Vector2(0, -1200); await Wait(6.0);
-            double hp1 = sh.Hp; await Wait(6.0);
-            Check(sh.Hp == hp1, "outside 150 u it holds fire");
+            double taken1 = sh.DamageBySource.Values.Sum(); await Wait(6.0);        // (hull regenerates: count damage instead)
+            Check(sh.DamageBySource.Values.Sum() == taken1, "outside 150 u it holds fire");
             Check(sh.Covers(sh.Position + Vector2.Up.Rotated(sh.Rotation) * (PlayerShip.Art[sh.Class].Length * 0.45f), 0f)
                   && !sh.Covers(sh.Position + Vector2.Right.Rotated(sh.Rotation) * (PlayerShip.Art[sh.Class].HalfWidth + 12f), 0f),
                   "the collider is a capsule: the bow is inside, a point just off the beam is not");
@@ -746,7 +766,7 @@ public partial class _Test : Node
             await Wait(0.7);
             Check(sh.CanReboard, "after the timer the ship is ready");
             Key(global::Godot.Key.F); await Wait(0.2);
-            Check(sh.Alive && Math.Abs(sh.Hp - sh.MaxHp * 0.33) < 0.01 && Nodes<EscapePod>().Count() == 0, "F re-boards at 33% hull; the pod is gone");
+            Check(sh.Alive && sh.Hp >= sh.MaxHp * 0.33 - 1e-6 && sh.Hp < sh.MaxHp * 0.34 && Nodes<EscapePod>().Count() == 0, "F re-boards at 33% hull (regenerating from there); the pod is gone");
             sh.TakeDamage(-(sh.MaxHp - sh.Hp));  // (test only) back to full for what follows
         }
 
@@ -848,6 +868,31 @@ public partial class _Test : Node
             Check(Music.CombatZone, "the arena counts as combat for the music");
             Me.Position = boss.Position + new Vector2(0, 500); Me.Velocity = Vector2.Zero; Me.Rotation = 0;
             Key(global::Godot.Key.Q); await Wait(0.1);                           // point defence up
+            Check(Math.Abs(boss.MaxHp - 1200) < 1e-6 && Math.Abs(Boss.GunDamage / Boss.GunEvery - 3) < 1e-9, "the boss: 1200 hull at tier 0; its guns 3 DPS");
+            // stand in the beam on purpose with a thick hull (test only), and watch the rhythm
+            var me2 = Me; me2.MaxHp = 5000; me2.TakeDamage(-(5000 - me2.Hp));
+            double tBeam = -1, tCharge = -1, tVolley = -1, arenaT = 0; int trident = 0; float spread = 0;
+            async void Watch()
+            {
+                while (Hub.InArena && GodotObject.IsInstanceValid(boss))
+                {
+                    arenaT += 1.0 / 60;
+                    foreach (var tl in Nodes<Telegraph>().Where(x => x.Line))
+                    {
+                        if (tBeam < 0 && Math.Abs(tl.Width - Boss.BeamWidth) < 0.1f) tBeam = arenaT;
+                        if (tCharge < 0 && Math.Abs(tl.Width - Boss.HalfWidth * 2f) < 0.1f) tCharge = arenaT;
+                    }
+                    if (tVolley < 0 && boss.Volleys > 0)
+                    {
+                        tVolley = arenaT;
+                        var big = Nodes<Torpedo>().Where(x => x.HostileFire && x.Size == 2f).ToList();
+                        trident = big.Count;
+                        if (big.Count == 3) spread = big.Max(x => x.Dir.Angle()) - big.Min(x => x.Dir.Angle());
+                    }
+                    await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                }
+            }
+            Watch();
             Telegraph beam = null;
             for (int i = 0; i < 60 * 14 && beam == null; i++) { beam = Nodes<Telegraph>().FirstOrDefault(t => t.Line); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
             Check(beam != null && boss.TelegraphsPending > 0, "the death beam is telegraphed: a red line before it fires");
@@ -865,6 +910,17 @@ public partial class _Test : Node
             Telegraph ring = null;
             for (int i = 0; i < 60 * 18 && ring == null; i++) { ring = Nodes<Telegraph>().FirstOrDefault(t => !t.Line); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
             Check(ring != null && ring.Radius == Boss.WaveRadius, "the shockwave is telegraphed: a red ring before it lands");
+            for (int i = 0; i < 60 * 25 && (tCharge < 0 || boss.Charging || tVolley < 0); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await Wait(1.0);
+            GD.Print($"  boss rhythm: beam {tBeam:0.0} s, trident {tVolley:0.0} s, charge {tCharge:0.0} s; trident of {trident}, spread {Mathf.RadToDeg(spread):0} deg");
+            // the watcher starts a moment after the boss's clock, so compare the gaps, not the times
+            Check(tBeam > 0 && Math.Abs(tCharge - tBeam - 15) < 0.4 && Math.Abs(tVolley - tBeam - 7.5) < 0.4,
+                  "the rhythm: the charge 15 s after the beam, a trident half-way between");
+            Check(trident == 3 && Math.Abs(Mathf.RadToDeg(spread) - 50) < 3, "a trident: three double-size missiles, the outer two 25 degrees off the middle");
+            double beamDmg = me2.DamageBySource.TryGetValue("boss:beam", out var bd) ? bd : 0, chargeDmg = me2.DamageBySource.TryGetValue("boss:charge", out var cd) ? cd : 0;
+            Check(Math.Abs(beamDmg - 200) < 1e-6, $"the beam, live 1 s and checked every 0.51 s, lands twice: 2 x 100 ({beamDmg:0})");
+            Check(Math.Abs(chargeDmg - 40) < 1e-6, $"the charge rams for 40 ({chargeDmg:0})");
+            Check(Music.I == null || Math.Abs(Boss.TridentSpeed - 135f) < 1e-3, "trident missiles fly at 135 u/s (10% slower)");
             // the kill: shared EXP for it and the mission, the bounty's credits, then home
             Character.Exp = 0; Character.Level = 1; Character.Points = 0;
             boss.TakeDamage(boss.Hp + 1); await Wait(0.2);
@@ -880,7 +936,7 @@ public partial class _Test : Node
             // difficulty: the win unlocked tier 1, and docking at the TIO selects it
             Check(Character.BossBeaten.TryGetValue("silver_lancer", out var beat) && beat == 0, "the win records tier 0 as beaten");
             Check(Math.Abs(Missions.Scale(1) - 1.1) < 1e-9 && Math.Abs(Missions.Scale(2) - 1.21) < 1e-9
-                  && Math.Abs(Missions.Current.Hull * Missions.Scale(1) - 3300) < 1e-6, "each tier is 10% stronger, multiplicatively (tier 1: 3300 hull)");
+                  && Math.Abs(Missions.Current.Hull * Missions.Scale(1) - 1320) < 1e-6, "each tier is 10% stronger, multiplicatively (tier 1: 1320 hull)");
             H.OpenTio(); await Wait(0.1);
             var tw2 = Nodes<TioWindow>().First();
             Check(Missions.Tier == 1, "docking at the TIO selects the newest unlocked tier (1)");
@@ -943,6 +999,7 @@ public partial class _Test : Node
             H.GetType().GetField("_selected", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(H, H.GetNode<TargetDummy>("TargetDummy1"));
             await Wait(2.5);
             Check(mus.Target == Music.Mood.Alert && Mathf.IsEqualApprox(mus.CombatLevel, 0.2f), $"enemy selected: combat music at 20% ({mus.CombatLevel:0.00})");
+            Check(Math.Abs(Music.I.AmbientLevel - 0.35f) < 0.02, $"and the ambient at half its alert level under it (0.35: {Music.I.AmbientLevel:0.00})");
             sh.Hit(1, sh.Position + Vector2.Up.Rotated(sh.Rotation) * 80f); await Wait(2.0);
             Check(sh.InCombat && mus.Target == Music.Mood.Combat && Mathf.IsEqualApprox(mus.CombatLevel, 1f) && mus.AmbientLevel == 0f,
                   "taking damage: combat music at 100%");

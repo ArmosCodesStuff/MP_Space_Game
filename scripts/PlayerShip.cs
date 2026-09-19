@@ -47,7 +47,14 @@ public partial class PlayerShip : Node2D, IHittable
     public const double StasisTime = 120, ReboardHull = 0.33;
 
     // ── "in combat": dealt or took damage in the last CombatHold seconds (host) ──
-    public const double CombatHold = 8;
+    // Out of combat after 12 s: the one global rule (music and regeneration use it).
+    public const double CombatHold = 12;
+    // Regeneration, always: 0.5% of max hull a second in combat, 3% out of it.
+    public const double RegenInCombat = 0.005, RegenOutOfCombat = 0.03;
+    // One ongoing source (an ability, a weapon) lands on a ship at most once per 0.35 s.
+    public const double HitGap = 0.35;
+    private readonly System.Collections.Generic.Dictionary<string, double> _lastHitBy = new();
+    public readonly System.Collections.Generic.Dictionary<string, double> DamageBySource = new();   // host: damage taken, by source
     private double _combatT;
     public bool InCombat => _combatT > 0;
     public void NoteCombat() { if (Net.Sim) _combatT = CombatHold; }
@@ -405,9 +412,15 @@ public partial class PlayerShip : Node2D, IHittable
     }
 
     // A hit that knows where it came from: damage, and the shield lights that side.
-    public void Hit(double d, Vector2 from)
+    public void Hit(double d, Vector2 from, string source = null)
     {
         if (!Net.Sim || !Alive) return;
+        if (source != null)
+        {
+            if (_lastHitBy.TryGetValue(source, out var at) && _clock - at < HitGap) return;
+            _lastHitBy[source] = _clock;
+        }
+        DamageBySource[source ?? "?"] = (DamageBySource.TryGetValue(source ?? "?", out var sum) ? sum : 0) + d;
         var v = (from - Position).Rotated(-Rotation);
         float side = Mathf.Atan2(v.X, -v.Y);            // 0 = ahead, clockwise
         _shield?.Flash(side);
@@ -436,6 +449,7 @@ public partial class PlayerShip : Node2D, IHittable
         _clock += delta;
         if (!Alive) _stasis = Math.Max(0, _stasis - delta);   // the host's clock rules; guests re-sync each packet
         if (_combatT > 0) _combatT = Math.Max(0, _combatT - delta);
+        if (Alive && Hp < MaxHp) Hp = Math.Min(MaxHp, Hp + MaxHp * (InCombat ? RegenInCombat : RegenOutOfCombat) * delta);
         UpdatePod();
         if (Mine) { TickWarp(dt); LocalFlight(dt); }
         else      RemoteFollow(dt);

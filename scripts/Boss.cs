@@ -3,10 +3,15 @@ using System.Linq;
 
 // THE SILVER LANCER -- the first bounty boss. Host-simulated; every peer draws it from
 // the host's 10 Hz state and plays its telegraphs from the host's events.
-//   GUNS       every 1.2 s: 6 damage at the nearest ship within 900 u
-//   MISSILES   every 7 s: 4 guided missiles, 20 each -- INTERCEPTABLE (PD shoots them)
-//   DEATH BEAM every 12 s: a red line telegraph for 2 s, then 60 to any ship in it
-//   SHOCKWAVE  every 17 s: a red ring telegraph for 1.8 s, then 45 within 340 u
+// One rhythm, 30 s long (all damage x the tier's scale):
+//   GUNS       always: 3.6 every 1.2 s (3 DPS) at the nearest ship within 900 u
+//   DEATH BEAM at 6 s, then every 30 s: a red line for 2 s, then live for 1 s,
+//              checking every 0.51 s: 100 each time it lands on a ship
+//   CHARGE     15 s after each beam: a red line for 1.5 s, then a ram along it at
+//              1200 u/s: 40 to any ship in its path
+//   TRIDENT    between them (every 15 s from 13.5 s): 3 guided missiles, 0 and +-25
+//              degrees, 15 each, twice the size -- INTERCEPTABLE (PD shoots them)
+//   SHOCKWAVE  every 17 s: a red ring for 1.8 s, then 45 within 340 u
 // Slow and heavy: it closes on the party to about 650 u and turns ponderously.
 public partial class Boss : Node2D, IHittable
 {
@@ -29,7 +34,15 @@ public partial class Boss : Node2D, IHittable
 
     public const double BeamWindup = 2.0, WaveWindup = 1.8;
     public const float BeamLength = 1800f, BeamWidth = 70f, WaveRadius = 340f;
-    private double _guns = 2.0, _missiles = 4.0, _beam = 6.0, _wave = 10.0, _send;
+    public const double GunDamage = 3.6, GunEvery = 1.2;                       // 3 DPS
+    public const double BeamEvery = 30, BeamLive = 1.0, BeamTick = 0.51, BeamDamage = 100;
+    public const double ChargeWindup = 1.5, ChargeDamage = 40; public const float ChargeSpeed = 1200f, ChargeLength = 900f;
+    public const double TridentEvery = 15, TridentDamage = 15; public const float TridentSpread = 25f, TridentSpeed = 135f, TridentRange = 1920f;
+    private double _guns = 2.0, _missiles = 13.5, _beam = 6.0, _charge = 21.0, _wave = 10.0, _send;
+    private double _beamLive = -1, _beamTickT;
+    private (Vector2 a, Vector2 b)? _pendingCharge; private double _chargeT; private Vector2? _dashTo;
+    public int Volleys { get; private set; }                                   // for the smoke test
+    public bool Charging => _dashTo.HasValue;
     private (Vector2 a, Vector2 b)? _pendingBeam; private double _beamT;
     private Vector2? _pendingWave; private double _waveT;
     private Vector2 _netPos; private float _netRot; private bool _hasNet;
@@ -70,7 +83,7 @@ public partial class Boss : Node2D, IHittable
             float want = (centre - Position).Angle() + Mathf.Pi / 2f;
             Rotation += Mathf.Clamp(Mathf.AngleDifference(Rotation, want), -0.3f * dt, 0.3f * dt);
             float d = Position.DistanceTo(centre);
-            if (d > 650f) Position += (centre - Position).Normalized() * 30f * dt;
+            if (d > 650f && !Charging) Position += (centre - Position).Normalized() * 30f * dt;
             Tick(pilots, delta);
         }
         _send -= delta;
@@ -82,32 +95,56 @@ public partial class Boss : Node2D, IHittable
         var nose = ToGlobal(new Vector2(0, -Length * 0.5f));
         PlayerShip Nearest(float within) => pilots.Where(p => p.Position.DistanceTo(Position) <= within).OrderBy(p => p.Position.DistanceTo(Position)).FirstOrDefault();
         _guns -= delta;
-        if (_guns <= 0) { _guns = 1.2; var t = Nearest(900f); if (t != null) { t.Hit(6 * Scale, Position); Combat.Flash(nose, t.Position, new Color(1f, 0.5f, 0.35f), boss: true); } }
+        if (_guns <= 0) { _guns = GunEvery; var t = Nearest(900f); if (t != null) { t.Hit(GunDamage * Scale, Position, "boss:guns"); Combat.Flash(nose, t.Position, new Color(1f, 0.5f, 0.35f), boss: true); } }
         _missiles -= delta;
         if (_missiles <= 0)
-        {
-            _missiles = 7.0;
-            for (int i = 0; i < 4; i++)
+        {   // a trident at the nearest ship: straight at it and 25 degrees either side
+            _missiles = TridentEvery; Volleys++;
+            var t = pilots.OrderBy(p => p.Position.DistanceTo(Position)).First();
+            var aim = (t.Position - nose).Normalized();
+            foreach (float deg in new[] { -TridentSpread, 0f, TridentSpread })
             {
-                var t = pilots[i % pilots.Count];
-                var dir = Vector2.Up.Rotated(Rotation + (i - 1.5f) * 0.35f);
-                Combat.LaunchTorpedo(nose + dir * 10f, dir, 150f, 1600f, 20 * Scale, t.NetId, 1.4f, heavy: false, hostile: true);
+                var dir = aim.Rotated(Mathf.DegToRad(deg));
+                Combat.LaunchTorpedo(nose + dir * 14f, dir, TridentSpeed, TridentRange, TridentDamage * Scale, t.NetId, 1.4f,
+                                     heavy: false, hostile: true, hitSource: "boss:missiles", size: 2f);
             }
         }
         _beam -= delta;
         if (_beam <= 0 && _pendingBeam == null)
         {   // the death beam: telegraph first, then it fires down the same line
-            _beam = 12.0;
+            _beam = BeamEvery;
             var t = pilots.OrderBy(p => p.Position.DistanceTo(Position)).First();
             var a = nose; var b = a + (t.Position - a).Normalized() * BeamLength;
             _pendingBeam = (a, b); _beamT = BeamWindup;
             Tele(true, a, b, BeamWidth, BeamWindup);
         }
-        if (_pendingBeam is { } beam && (_beamT -= delta) <= 0)
+        if (_pendingBeam is { } beam && _beamLive < 0 && (_beamT -= delta) <= 0) { _beamLive = BeamLive; _beamTickT = 0; }
+        if (_pendingBeam is { } live && _beamLive >= 0)
+        {   // live for 1 s: a check every 0.51 s, 100 each time it lands
+            _beamTickT -= delta;
+            if (_beamTickT <= 0)
+            {
+                _beamTickT = BeamTick;
+                foreach (var p in pilots)
+                    if (DistToSegment(p.Position, live.a, live.b) <= BeamWidth / 2f + p.HitRadius) p.Hit(BeamDamage * Scale, Position, "boss:beam");
+            }
+            if ((_beamLive -= delta) < 0) _pendingBeam = null;
+        }
+        _charge -= delta;
+        if (_charge <= 0 && _pendingCharge == null && !_dashTo.HasValue)
+        {   // the charge: a red line first, then a ram down it
+            _charge = BeamEvery;
+            var t = pilots.OrderBy(p => p.Position.DistanceTo(Position)).First();
+            var a = Position; var bb = a + (t.Position - a).Normalized() * ChargeLength;
+            _pendingCharge = (a, bb); _chargeT = ChargeWindup;
+            Tele(true, a, bb, HalfWidth * 2f, ChargeWindup);
+        }
+        if (_pendingCharge is { } ch && (_chargeT -= delta) <= 0) { _dashTo = ch.b; Rotation = (ch.b - ch.a).Angle() + Mathf.Pi / 2f; _pendingCharge = null; }
+        if (_dashTo is { } to)
         {
-            foreach (var p in pilots)
-                if (DistToSegment(p.Position, beam.a, beam.b) <= BeamWidth / 2f + p.HitRadius) p.Hit(60 * Scale, Position);
-            _pendingBeam = null;
+            Position = Position.MoveToward(to, ChargeSpeed * (float)delta);
+            foreach (var p in pilots) if (Covers(p.Position, p.HitRadius)) p.Hit(ChargeDamage * Scale, Position, "boss:charge");
+            if (Position.DistanceTo(to) < 1f) _dashTo = null;
         }
         _wave -= delta;
         if (_wave <= 0 && _pendingWave == null)
@@ -117,7 +154,7 @@ public partial class Boss : Node2D, IHittable
         }
         if (_pendingWave is { } c && (_waveT -= delta) <= 0)
         {
-            foreach (var p in pilots) if (p.Position.DistanceTo(c) <= WaveRadius + p.HitRadius) p.Hit(45 * Scale, c);
+            foreach (var p in pilots) if (p.Position.DistanceTo(c) <= WaveRadius + p.HitRadius) p.Hit(45 * Scale, c, "boss:wave");
             _pendingWave = null;
         }
     }

@@ -175,11 +175,11 @@ public partial class Hub : Node2D
         };
         // Torpedoes: the host's copy deals damage; guests get the launch and fly a
         // cosmetic copy (the run is straight and steady, so it lands in the same place).
-        Combat.OnTorpedo = (from, dir, speed, range, dmg, target, turn, heavy, hostile, source) =>
+        Combat.OnTorpedo = (from, dir, speed, range, dmg, target, turn, heavy, hostile, source, hitSource, size) =>
         {
             int id = hostile ? Combat.NextMissileId() : 0;       // hostile missiles can be shot down
-            SpawnTorpedo(from, dir, speed, range, dmg, false, target, turn, heavy, hostile, source, id);
-            if (Net.IsHost && Net.IsOnline) Rpc(nameof(NetTorpedo), from, dir, speed, range, target, turn, heavy, hostile, id);
+            SpawnTorpedo(from, dir, speed, range, dmg, false, target, turn, heavy, hostile, source, id, hitSource, size);
+            if (Net.IsHost && Net.IsOnline) Rpc(nameof(NetTorpedo), from, dir, speed, range, target, turn, heavy, hostile, id, size);
         };
 
         if (InArena) BuildArena();                   // registered as a target AFTER Combat.Clear
@@ -569,10 +569,12 @@ public partial class Hub : Node2D
 
     public PlayerShip MyShipPublic => MyShip;
     private void SpawnTorpedo(Vector2 from, Vector2 dir, float speed, float range, double dmg, bool cosmetic,
-                              int target = 0, float turn = 0f, bool heavy = false, bool hostile = false, PlayerShip source = null, int id = 0)
+                              int target = 0, float turn = 0f, bool heavy = false, bool hostile = false, PlayerShip source = null, int id = 0,
+                              string hitSource = null, float size = 1f)
     {
         AddChild(new Torpedo { Position = from, Dir = dir, Speed = speed, Range = range, Damage = dmg, Cosmetic = cosmetic,
-                               TargetId = target, TurnRate = turn, Heavy = heavy, HostileFire = hostile, Source = source , NetId = id });
+                               TargetId = target, TurnRate = turn, Heavy = heavy, HostileFire = hostile, Source = source, NetId = id,
+                               HitSource = hitSource, Size = size });
     }
 
     private PlayerShip MyShip => _ships.TryGetValue(Net.LocalId, out var s) && IsInstanceValid(s) ? s : null;
@@ -812,8 +814,8 @@ public partial class Hub : Node2D
     }
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetTorpedo(Vector2 from, Vector2 dir, float speed, float range, int target, float turn, bool heavy, bool hostile, int id)
-        => SpawnTorpedo(from, dir, speed, range, 0, true, target, turn, heavy, hostile, null, id);
+    private void NetTorpedo(Vector2 from, Vector2 dir, float speed, float range, int target, float turn, bool heavy, bool hostile, int id, float size)
+        => SpawnTorpedo(from, dir, speed, range, 0, true, target, turn, heavy, hostile, null, id, null, size);
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
     private void NetFlash(Vector2 a, Vector2 b, Color c, bool boss) => AddFlash(a, b, c, boss);

@@ -82,11 +82,11 @@ public static class Combat
     // a small turn rate, and heavy for its looks.
     // hostile = fired BY an enemy, so it seeks and hits player ships, not hostiles.
     // source: the player ship that fired it (host only), credited with combat on a hit.
-    public static System.Action<Vector2, Vector2, float, float, double, int, float, bool, bool, PlayerShip> OnTorpedo;
+    public static System.Action<Vector2, Vector2, float, float, double, int, float, bool, bool, PlayerShip, string, float> OnTorpedo;
     public static void LaunchTorpedo(Vector2 from, Vector2 dir, float speed, float range, double damage,
                                      int targetId = 0, float turnRate = 0f, bool heavy = false, bool hostile = false,
-                                     PlayerShip source = null)
-        => OnTorpedo?.Invoke(from, dir.Normalized(), speed, range, damage, targetId, turnRate, heavy, hostile, source);
+                                     PlayerShip source = null, string hitSource = null, float size = 1f)
+        => OnTorpedo?.Invoke(from, dir.Normalized(), speed, range, damage, targetId, turnRate, heavy, hostile, source, hitSource, size);
 
     public static void Clear() { Hostiles.Clear(); Players.Clear(); OnFlash = null; OnTorpedo = null; }
 }

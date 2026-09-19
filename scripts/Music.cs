@@ -2,7 +2,7 @@ using Godot;
 
 // Stateful music (an autoload). Two loops play continuously and cross-fade by mood:
 //   Ambient : nothing selected                   ambient full, combat silent
-//   Alert   : an enemy is selected               ambient 70%, combat 20%
+//   Alert   : an enemy is selected               ambient 35%, combat 20%
 //   Combat  : you dealt or took damage in the
 //             last 8 s, or you are in a combat
 //             zone (CombatZone: for the instanced
@@ -54,7 +54,9 @@ public partial class Music : Node
     public override void _Process(double delta)
     {
         var mood = CombatZone ? Mood.Combat : Target;
-        float a = mood switch { Mood.Ambient => 1f, Mood.Alert => 0.7f, _ => 0f };
+        // Alert (a target selected, no fighting yet): the ambient at half its level (0.35),
+        // so it does not compete with the softened combat track under it
+        float a = mood switch { Mood.Ambient => 1f, Mood.Alert => 0.35f, _ => 0f };
         float c = mood switch { Mood.Ambient => 0f, Mood.Alert => 0.2f, _ => 1f };
         float step = FadePerSecond * (float)delta;
         AmbientLevel = Mathf.MoveToward(AmbientLevel, a, step);

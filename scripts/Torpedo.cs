@@ -37,7 +37,9 @@ public partial class Torpedo : Node2D, IHittable
     // As a TARGET (hostile missiles only): small, and one hit brings it down. The host
     // resolves the hit and tells every guest to burst its copy (by NetId).
     public int NetId { get; set; }
-    public float HitRadius => 8f;
+    public float HitRadius => 8f * Size;
+    public string HitSource;          // the damage source's name (a player lands one hit per source per 0.35 s)
+    public float Size = 1f;           // a boss's missiles are twice the size
     public bool Alive => !_spent;
     public bool Selectable => false;
     public static int Intercepted;                       // missiles shot down (host), for the record
@@ -87,7 +89,7 @@ public partial class Torpedo : Node2D, IHittable
                 if (h == null || !h.Alive || !h.Covers(GlobalPosition, 4f)) continue;
                 if (!Cosmetic && Net.Sim)
                 {   // a player ship is told where the hit came from, for its shield
-                    if (h is PlayerShip ps) ps.Hit(Damage, GlobalPosition - Dir * 10f); else h.TakeDamage(Damage);
+                    if (h is PlayerShip ps) ps.Hit(Damage, GlobalPosition - Dir * 10f, HitSource); else h.TakeDamage(Damage);
                     if (IsInstanceValid(Source)) Source.NoteCombat();
                 }
                 Detonate(); break;
@@ -119,11 +121,22 @@ public partial class Torpedo : Node2D, IHittable
         if (!_spent)
         {
             if (Heavy)
-            {   // a fat, blunt-nosed round with fins and a big exhaust
-                DrawRect(new Rect2(-4f, -14f, 8f, 26f), new Color(0.55f, 0.57f, 0.52f));
-                DrawRect(new Rect2(-4f, -14f, 8f, 5f), new Color(0.85f, 0.25f, 0.2f));
-                DrawRect(new Rect2(-7f, 7f, 14f, 3f), new Color(0.35f, 0.36f, 0.33f));
-                DrawCircle(new Vector2(0, 13f), 3.6f, new Color(1f, 0.75f, 0.35f));
+            {   // the bunker buster: long and slim (6.4 x 32.5), a sharp nose, swept fins, a band and a seam
+                var body = new Color(0.58f, 0.60f, 0.56f); var dark = new Color(0.30f, 0.31f, 0.29f);
+                DrawRect(new Rect2(-3.2f, -12f, 6.4f, 26f), body);
+                DrawColoredPolygon(new[] { new Vector2(-3.2f, -12f), new Vector2(0, -19.5f), new Vector2(3.2f, -12f) }, new Color(0.85f, 0.25f, 0.2f));
+                DrawRect(new Rect2(-3.2f, -10f, 6.4f, 2f), new Color(0.85f, 0.25f, 0.2f));
+                DrawLine(new Vector2(0, -8f), new Vector2(0, 11f), dark, 0.8f);
+                DrawColoredPolygon(new[] { new Vector2(-3.2f, 6f), new Vector2(-7f, 13f), new Vector2(-3.2f, 12f) }, dark);
+                DrawColoredPolygon(new[] { new Vector2(3.2f, 6f), new Vector2(7f, 13f), new Vector2(3.2f, 12f) }, dark);
+                DrawCircle(new Vector2(0, 13.5f), 2.8f, new Color(1f, 0.75f, 0.35f));
+            }
+            else if (Size != 1f)
+            {
+                DrawSetTransform(Vector2.Zero, 0f, Vector2.One * Size);
+                DrawRect(new Rect2(-2.2f, -9f, 4.4f, 18f), new Color(0.85f, 0.85f, 0.8f));
+                DrawCircle(new Vector2(0, 9f), 2.4f, new Color(1f, 0.7f, 0.3f));
+                DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
             }
             else
             {
