@@ -1,8 +1,8 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-19 17:40 at git commit 8284bb5: typecheck clean, smoke test 3/3 passes
-//   (269 checks), 51-frame UI sweep 0 findings.
-// 48 files, 7750 lines. Code only: sprites and docs are in the zip.
+// Taken 2026-09-19 18:37 at git commit fe8604e: typecheck clean, smoke test 3/3 passes
+//   (284 checks), 51-frame UI sweep 0 findings.
+// 49 files, 7999 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -15,24 +15,24 @@
 //   Hub.tscn                                        10 lines   sha256 3a99e0df7b39
 //   MainMenu.tscn                                    6 lines   sha256 8a8dbe40f248
 //   scripts/Abilities.cs                           130 lines   sha256 7baad2ebc660
-//   scripts/AbilityBar.cs                          112 lines   sha256 2be6639b4144
+//   scripts/AbilityBar.cs                          112 lines   sha256 4a1331fe370c
 //   scripts/Autopilot.cs                            40 lines   sha256 807538219f53
 //   scripts/BasePanel.cs                           105 lines   sha256 024b285073bc
-//   scripts/Boss.cs                                144 lines   sha256 517b4ee7f2fb
-//   scripts/Character.cs                           163 lines   sha256 fa3d97b062c8
+//   scripts/Boss.cs                                147 lines   sha256 441112037874
+//   scripts/Character.cs                           168 lines   sha256 266190f479e4
 //   scripts/CharacterCreator.cs                    211 lines   sha256 136099a8d1c7
-//   scripts/CharacterSelect.cs                     170 lines   sha256 d94669c91111
-//   scripts/Combat.cs                               91 lines   sha256 6927ed45a2dd
+//   scripts/CharacterSelect.cs                     171 lines   sha256 dc2bfeccc820
+//   scripts/Combat.cs                               92 lines   sha256 f1fd26635780
 //   scripts/Economy.cs                              75 lines   sha256 904973fc4761
 //   scripts/EscMenu.cs                              59 lines   sha256 999b01e6cd29
 //   scripts/EscapePod.cs                            50 lines   sha256 324c55cb503b
 //   scripts/Gatherer.cs                            207 lines   sha256 06c31c1dfb04
 //   scripts/Hauler.cs                              283 lines   sha256 551cdf41401d
 //   scripts/HealthBar.cs                            36 lines   sha256 97c42a282205
-//   scripts/Hub.cs                                 943 lines   sha256 8eb7fd7416e6
-//   scripts/MainMenu.cs                            223 lines   sha256 37a0b3acc8e0
-//   scripts/Missions.cs                              8 lines   sha256 d7f55e83348b
-//   scripts/Music.cs                                75 lines   sha256 ccb8fea42553
+//   scripts/Hub.cs                                 965 lines   sha256 895097b65cc1
+//   scripts/MainMenu.cs                            224 lines   sha256 39dbc31417c6
+//   scripts/Missions.cs                             26 lines   sha256 576c2255742a
+//   scripts/Music.cs                                76 lines   sha256 5b0efe1bc3be
 //   scripts/Net.cs                                 246 lines   sha256 ce3ebadd0342
 //   scripts/PilotWindow.cs                          54 lines   sha256 bd3c2ab6785f
 //   scripts/PlayerShip.cs                          661 lines   sha256 5338160848be
@@ -41,21 +41,22 @@
 //   scripts/Radar.cs                                93 lines   sha256 eff30cd82bb4
 //   scripts/SessionMenu.cs                          89 lines   sha256 5febd0d32676
 //   scripts/Settings.cs                             58 lines   sha256 80100257eda5
+//   scripts/Sfx.cs                                  65 lines   sha256 4a51ee11de9a
 //   scripts/Shield.cs                               71 lines   sha256 99c7fa4a2a8e
 //   scripts/ShipClasses.cs                         492 lines   sha256 10726adf655f
 //   scripts/Stats.cs                               159 lines   sha256 d877c0d2eda1
-//   scripts/StatsWindow.cs                         200 lines   sha256 64b8cf18dc5a
+//   scripts/StatsWindow.cs                         198 lines   sha256 8b5c9f76adc7
 //   scripts/TargetDummy.cs                         117 lines   sha256 f7845c23ab57
 //   scripts/Telegraph.cs                            47 lines   sha256 89f6af49c4d7
-//   scripts/TioWindow.cs                            50 lines   sha256 4eb0ba9f2020
-//   scripts/Torpedo.cs                             140 lines   sha256 f29608651339
+//   scripts/TioWindow.cs                            61 lines   sha256 0b5382e679d6
+//   scripts/Torpedo.cs                             141 lines   sha256 8c9d94a81a69
 //   scripts/Txt.cs                                  31 lines   sha256 0b56559599f8
-//   scripts/Ui.cs                                   22 lines   sha256 1e0f8043bb72
+//   scripts/Ui.cs                                   99 lines   sha256 0a376702a4e8
 //   scripts/Yard.cs                                387 lines   sha256 1cd1e412db23
 //   typecheck/typecheck.sh                          57 lines   sha256 e68277c09f34
 //   tools/screens/Shots.cs.txt                     317 lines   sha256 383dcce54bff
 //   tools/screens/run.sh                            40 lines   sha256 a47174d56c6a
-//   tools/smoketest/SmokeTest.cs.txt              1063 lines   sha256 c9fbd25f735b
+//   tools/smoketest/SmokeTest.cs.txt              1108 lines   sha256 e2e708eadc74
 //   tools/smoketest/run.sh                          52 lines   sha256 67c03204c10d
 //==============================================================================
 
@@ -302,7 +303,7 @@ public static class Abilities
 
 //==============================================================================
 // FILE: scripts/AbilityBar.cs
-// 112 lines   sha256 2be6639b4144
+// 112 lines   sha256 4a1331fe370c
 //==============================================================================
 using Godot;
 
@@ -312,7 +313,7 @@ using Godot;
 // Keys follow the current bindings, so a remap in the K window shows here at once.
 public partial class AbilityBar : Control
 {
-    private readonly StyleBoxFlat _panel = Ui.PanelStyle();   // built once: _Draw runs every frame
+    private readonly StyleBox _panel = Ui.PanelStyle();   // built once: _Draw runs every frame
     public Hub Hub;
     public const float SlotW = 118, SlotH = 64, Gap = 8, GroupGap = 22;   // extra space before the open slots
 
@@ -574,7 +575,7 @@ public partial class BasePanel : PanelContainer
 
 //==============================================================================
 // FILE: scripts/Boss.cs
-// 144 lines   sha256 517b4ee7f2fb
+// 147 lines   sha256 441112037874
 //==============================================================================
 using Godot;
 using System.Linq;
@@ -589,10 +590,12 @@ using System.Linq;
 public partial class Boss : Node2D, IHittable
 {
     public Hub Hub;
-    public const double MaxHull = 3000;
+    // hull and every attack scale with the selected tier (Missions.Scale)
+    public double Scale = 1;
+    public double MaxHp => Missions.Current.Hull * Scale;
     public const float Length = 360f, HalfWidth = 70f;
     public const int Id = 3000;
-    public double Hp = MaxHull;
+    public double Hp;
     public bool Alive => Hp > 0;
     public int NetId => Id;
     public float HitRadius => HalfWidth;
@@ -612,6 +615,7 @@ public partial class Boss : Node2D, IHittable
 
     public override void _Ready()
     {
+        Scale = Missions.Scale(Missions.Tier); Hp = MaxHp;
         Name = "Boss";
         var tex = GD.Load<Texture2D>("res://boss_silver_lancer.png");
         AddChild(new Sprite2D { Texture = tex, Scale = Vector2.One * (Length / tex.GetHeight()) });
@@ -657,7 +661,7 @@ public partial class Boss : Node2D, IHittable
         var nose = ToGlobal(new Vector2(0, -Length * 0.5f));
         PlayerShip Nearest(float within) => pilots.Where(p => p.Position.DistanceTo(Position) <= within).OrderBy(p => p.Position.DistanceTo(Position)).FirstOrDefault();
         _guns -= delta;
-        if (_guns <= 0) { _guns = 1.2; var t = Nearest(900f); if (t != null) { t.Hit(6, Position); Combat.Flash(nose, t.Position, new Color(1f, 0.5f, 0.35f)); } }
+        if (_guns <= 0) { _guns = 1.2; var t = Nearest(900f); if (t != null) { t.Hit(6 * Scale, Position); Combat.Flash(nose, t.Position, new Color(1f, 0.5f, 0.35f), boss: true); } }
         _missiles -= delta;
         if (_missiles <= 0)
         {
@@ -666,7 +670,7 @@ public partial class Boss : Node2D, IHittable
             {
                 var t = pilots[i % pilots.Count];
                 var dir = Vector2.Up.Rotated(Rotation + (i - 1.5f) * 0.35f);
-                Combat.LaunchTorpedo(nose + dir * 10f, dir, 150f, 1600f, 20, t.NetId, 1.4f, heavy: false, hostile: true);
+                Combat.LaunchTorpedo(nose + dir * 10f, dir, 150f, 1600f, 20 * Scale, t.NetId, 1.4f, heavy: false, hostile: true);
             }
         }
         _beam -= delta;
@@ -681,7 +685,7 @@ public partial class Boss : Node2D, IHittable
         if (_pendingBeam is { } beam && (_beamT -= delta) <= 0)
         {
             foreach (var p in pilots)
-                if (DistToSegment(p.Position, beam.a, beam.b) <= BeamWidth / 2f + p.HitRadius) p.Hit(60, Position);
+                if (DistToSegment(p.Position, beam.a, beam.b) <= BeamWidth / 2f + p.HitRadius) p.Hit(60 * Scale, Position);
             _pendingBeam = null;
         }
         _wave -= delta;
@@ -692,7 +696,7 @@ public partial class Boss : Node2D, IHittable
         }
         if (_pendingWave is { } c && (_waveT -= delta) <= 0)
         {
-            foreach (var p in pilots) if (p.Position.DistanceTo(c) <= WaveRadius + p.HitRadius) p.Hit(45, c);
+            foreach (var p in pilots) if (p.Position.DistanceTo(c) <= WaveRadius + p.HitRadius) p.Hit(45 * Scale, c);
             _pendingWave = null;
         }
     }
@@ -723,7 +727,7 @@ public partial class Boss : Node2D, IHittable
 
 //==============================================================================
 // FILE: scripts/Character.cs
-// 163 lines   sha256 fa3d97b062c8
+// 168 lines   sha256 266190f479e4
 //==============================================================================
 using Godot;
 using System;
@@ -751,6 +755,8 @@ public static class Character
     // pilot progression (see Progression)
     public static int Exp, Level = 1, Points;
     public static readonly int[] Bought = new int[Progression.All.Length];
+    // the highest tier of each boss this pilot has beaten (absent = none yet)
+    public static readonly Dictionary<string, int> BossBeaten = new();
 
     // One saved character, as the select screen lists it.
     public class Slot
@@ -771,7 +777,7 @@ public static class Character
         Accent = new(1.00f, 0.78f, 0.35f);
         Class = ShipClass.Battleship;
         Bonuses.Clear();
-        Exp = 0; Level = 1; Points = 0; Array.Clear(Bought);
+        Exp = 0; Level = 1; Points = 0; Array.Clear(Bought); BossBeaten.Clear();
     }
 
     public static void Save()
@@ -786,6 +792,7 @@ public static class Character
         foreach (var kv in Bonuses) c.SetValue("bonus", kv.Key, kv.Value);
         c.SetValue("progress", "exp", Exp); c.SetValue("progress", "level", Level); c.SetValue("progress", "points", Points);
         for (int i = 0; i < Bought.Length; i++) c.SetValue("progress", "bought_" + Progression.All[i].Id, Bought[i]);
+        foreach (var kv in BossBeaten) c.SetValue("bosses", kv.Key, kv.Value);
         c.Save(PathOf(Id));
     }
 
@@ -805,6 +812,8 @@ public static class Character
         Exp = (int)c.GetValue("progress", "exp", 0); Level = Math.Max(1, (int)c.GetValue("progress", "level", 1));
         Points = Math.Max(0, (int)c.GetValue("progress", "points", 0));
         for (int i = 0; i < Bought.Length; i++) Bought[i] = Math.Clamp((int)c.GetValue("progress", "bought_" + Progression.All[i].Id, 0), 0, Progression.MaxPerUpgrade);
+        BossBeaten.Clear();
+        if (c.HasSection("bosses")) foreach (var k in c.GetSectionKeys("bosses")) BossBeaten[k] = (int)c.GetValue("bosses", k, -1);
         return true;
     }
 
@@ -1107,7 +1116,7 @@ public partial class ShipPreview : Control
 
 //==============================================================================
 // FILE: scripts/CharacterSelect.cs
-// 170 lines   sha256 d94669c91111
+// 171 lines   sha256 dc2bfeccc820
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -1125,6 +1134,7 @@ public partial class CharacterSelect : Control
 
     public override void _Ready()
     {
+        Ui.Install(GetTree());                                  // the game-wide look
         var bg = new ColorRect { Color = new Color(0.02f, 0.03f, 0.06f) };
         bg.SetAnchorsPreset(LayoutPreset.FullRect);
         bg.MouseFilter = MouseFilterEnum.Ignore;
@@ -1282,7 +1292,7 @@ public partial class CharacterSelect : Control
 
 //==============================================================================
 // FILE: scripts/Combat.cs
-// 91 lines   sha256 6927ed45a2dd
+// 92 lines   sha256 f1fd26635780
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -1359,8 +1369,9 @@ public static class Combat
     }
 
     // Set by the live world so combat can draw without knowing what world it is in.
-    public static System.Action<Vector2, Vector2, Color> OnFlash;
-    public static void Flash(Vector2 a, Vector2 b, Color c) => OnFlash?.Invoke(a, b, c);
+    // A laser shot's flash (and its sound). `boss`: a boss's weapon -- its deeper buzz.
+    public static System.Action<Vector2, Vector2, Color, bool> OnFlash;
+    public static void Flash(Vector2 a, Vector2 b, Color c, bool boss = false) => OnFlash?.Invoke(a, b, c, boss);
 
     // Set by the live world: launches a projectile there (and, on a host, tells
     // guests). Unguided torpedoes pass targetId 0; the missile passes its target and
@@ -2118,7 +2129,7 @@ public static class HealthBar
 
 //==============================================================================
 // FILE: scripts/Hub.cs
-// 943 lines   sha256 8eb7fd7416e6
+// 965 lines   sha256 895097b65cc1
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -2229,6 +2240,7 @@ public partial class Hub : Node2D
 
     public override void _Ready()
     {
+        Ui.Install(GetTree());                                  // the game-wide look
         // Background stars: a static, tiled image on a deep screen-space layer, behind
         // everything in the world. Purely local -- nothing about it is networked.
         var sky = new CanvasLayer { Layer = -100, Name = "Stars" }; AddChild(sky);
@@ -2289,10 +2301,10 @@ public partial class Hub : Node2D
         Combat.Clear();
         // Flashes are made on the host, where the shots happen. Guests are sent them,
         // or a guest firing at the dummy would see nothing at all.
-        Combat.OnFlash = (a, b, c) =>
+        Combat.OnFlash = (a, b, c, boss) =>
         {
-            _flashes.Add((a, b, c, 0.10));
-            if (Net.IsHost && Net.IsOnline) Rpc(nameof(NetFlash), a, b, c);
+            AddFlash(a, b, c, boss);
+            if (Net.IsHost && Net.IsOnline) Rpc(nameof(NetFlash), a, b, c, boss);
         };
         // Torpedoes: the host's copy deals damage; guests get the launch and fly a
         // cosmetic copy (the run is straight and steady, so it lands in the same place).
@@ -2490,6 +2502,11 @@ public partial class Hub : Node2D
     public void OpenTio()
     {
         if (IsInstanceValid(_tio)) return;
+        if (Net.IsHost && Mission == MissionState.Idle)
+        {   // docking at the TIO selects the newest unlocked tier
+            Missions.Tier = Missions.Unlocked(Missions.Current.Id);
+            BroadcastMission();
+        }
         if (IsInstanceValid(_base)) ToggleBase();
         if (IsInstanceValid(_pilot)) TogglePilot();
         _tio = new TioWindow { Hub = this };
@@ -2542,6 +2559,9 @@ public partial class Hub : Node2D
     {
         if (!Net.IsHost || MissionWon) return;
         MissionWon = true;
+        // this tier is beaten: the next unlocks, and is selected when the TIO is next opened
+        var id = Missions.Current.Id;
+        if (!Character.BossBeaten.TryGetValue(id, out var best) || Missions.Tier > best) { Character.BossBeaten[id] = Missions.Tier; Character.Save(); }
         AwardPartyExp(Missions.BossExp + Missions.MissionExp);
         Yard.TripCredits += Missions.BossCredits;
         _arenaEndT = 4.0;
@@ -2565,6 +2585,14 @@ public partial class Hub : Node2D
     private void NetMissileDown(int id)
     {
         foreach (var t in GetChildren().OfType<Torpedo>()) if (t.NetId == id) t.Intercept();
+    }
+
+    // host: pick a tier between 0 and the newest unlocked
+    public void SelectTier(int tier)
+    {
+        if (!Net.IsHost || Mission != MissionState.Idle) return;
+        Missions.Tier = System.Math.Clamp(tier, 0, Missions.Unlocked(Missions.Current.Id));
+        BroadcastMission();
     }
 
     public void StartMission()
@@ -2606,11 +2634,12 @@ public partial class Hub : Node2D
     {
         if (!Net.IsOnline) return;
         var ids = _ready.Keys.ToArray(); var rs = ids.Select(i => _ready[i] ? 1 : 0).ToArray();   // RPCs carry int[], not bool[]
-        Rpc(nameof(NetMission), (int)Mission, MissionT, ids, rs);
+        Rpc(nameof(NetMission), (int)Mission, MissionT, ids, rs, Missions.Tier);
     }
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetMission(int state, double t, int[] ids, int[] ready)
+    private void NetMission(int state, double t, int[] ids, int[] ready, int tier)
     {
+        Missions.Tier = tier;
         Mission = (MissionState)state; MissionT = t;
         _ready.Clear(); for (int i = 0; i < ids.Length && i < ready.Length; i++) _ready[ids[i]] = ready[i] != 0;
     }
@@ -2701,7 +2730,8 @@ public partial class Hub : Node2D
     // Left-click in the world: the hostile under the cursor (its hit circle, plus a
     // little slack), nearest the click if circles overlap. Clicking empty space keeps
     // the current target, so a stray click never drops it; Esc clears it.
-    private void SelectAt(Vector2 world)
+    // true if the click landed on something (a hostile to select, or a building)
+    private bool SelectAt(Vector2 world)
     {
         IHittable best = null; float bd = float.MaxValue;
         foreach (var h in Combat.Hostiles)
@@ -2710,10 +2740,11 @@ public partial class Hub : Node2D
             float d = world.DistanceTo(h.Position);
             if (d <= h.HitRadius + 16f && d < bd) { bd = d; best = h; }
         }
-        if (best != null) { _selected = best; return; }
+        if (best != null) { _selected = best; return true; }
         // buildings: a left-click on one opens its menu
-        if (IsInstanceValid(_tioSprite) && _tioSprite.GetRect().HasPoint(_tioSprite.ToLocal(world))) { OpenTio(); return; }
-        if (!InArena && world.DistanceTo(BasePos) < 200f && !IsInstanceValid(_base)) ToggleBase();
+        if (IsInstanceValid(_tioSprite) && _tioSprite.GetRect().HasPoint(_tioSprite.ToLocal(world))) { OpenTio(); return true; }
+        if (!InArena && world.DistanceTo(BasePos) < 200f) { if (!IsInstanceValid(_base)) ToggleBase(); return true; }
+        return false;
     }
 
     public void BeginPlacement(string label, System.Action<Vector2> confirm)
@@ -2765,7 +2796,7 @@ public partial class Hub : Node2D
             if (Placing) ship += $"    PLACING {_placingLabel}: left-click to confirm, right-click / Esc to cancel";
         }
         string place = Yard == null
-            ? $"ARENA  ·  {Missions.BossName}  {(IsInstanceValid(Boss) ? Boss.Hp : 0):0} / {Boss.MaxHull:0}" + (MissionWon ? "  ·  DEFEATED" : "")
+            ? $"ARENA  ·  {Missions.BossName} (TIER {Missions.Tier})  {(IsInstanceValid(Boss) ? Boss.Hp : 0):0} / {(IsInstanceValid(Boss) ? Boss.MaxHp : 0):0}" + (MissionWon ? "  ·  DEFEATED" : "")
             : $"ORE {Yard.Ore:0}    SALVAGE {Yard.Salvage:0}    CREDITS {Yard.Credits:0}"
               + $"    HAULER {Yard.Hauler.Cargo:0}/{Yard.Capacity:0} {Yard.Hauler.State.ToString().ToUpper()}";
         _hud.Text = place + ship
@@ -2875,7 +2906,8 @@ public partial class Hub : Node2D
             if (mb.ButtonIndex == MouseButton.Left)
             {
                 if (Placing) { var confirm = _placing; CancelPlacement(); confirm(at); }
-                else SelectAt(at);
+                // a double-click on empty space clears the target
+                else if (!SelectAt(at) && mb.DoubleClick) _selected = null;
                 GetViewport().SetInputAsHandled();
             }
             else if (mb.ButtonIndex == MouseButton.Right && Placing)
@@ -2914,7 +2946,8 @@ public partial class Hub : Node2D
         => SpawnTorpedo(from, dir, speed, range, 0, true, target, turn, heavy, hostile, null, id);
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
-    private void NetFlash(Vector2 a, Vector2 b, Color c) => _flashes.Add((a, b, c, 0.10));
+    private void NetFlash(Vector2 a, Vector2 b, Color c, bool boss) => AddFlash(a, b, c, boss);
+    private void AddFlash(Vector2 a, Vector2 b, Color c, bool boss) { _flashes.Add((a, b, c, 0.10)); Sfx.Laser(a, b, boss); }
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
     private void NetDummy(int number, double last, double avg, double total)
@@ -2998,7 +3031,7 @@ public partial class Portal : Node2D
 // The player's hull, big and always on screen: a bar along the bottom centre.
 public partial class HullHud : Control
 {
-    private readonly StyleBoxFlat _panel = Ui.PanelStyle();   // built once: _Draw runs every frame
+    private readonly StyleBox _panel = Ui.PanelStyle();   // built once: _Draw runs every frame
     public Hub Hub;
     private const float W = 440, H = 22;
 
@@ -3066,7 +3099,7 @@ public partial class MissionBar : Node2D
 
 //==============================================================================
 // FILE: scripts/MainMenu.cs
-// 223 lines   sha256 37a0b3acc8e0
+// 224 lines   sha256 39dbc31417c6
 //==============================================================================
 using Godot;
 using System;
@@ -3098,6 +3131,7 @@ public partial class MainMenu : Node2D
 
     public override void _Ready()
     {
+        Ui.Install(GetTree());                                  // the game-wide look
         Settings.Load(); Settings.ApplyVolume();
         var vs = GetViewport().GetVisibleRect().Size;
         var centre = vs * 0.5f + new Vector2(0, 60);
@@ -3294,12 +3328,30 @@ public partial class MainMenu : Node2D
 
 //==============================================================================
 // FILE: scripts/Missions.cs
-// 8 lines   sha256 d7f55e83348b
+// 26 lines   sha256 576c2255742a
 //==============================================================================
-// Bounty missions from Threat Intelligence Operations: the numbers, in one place.
+using System;
+
+// Bounty missions from Threat Intelligence Operations: bosses, difficulty tiers, rewards.
+//   Bosses are data (more types slot in here). Each boss has TIERS: tier n is
+//   1.1^n times as strong (hull and every attack). Beating a tier unlocks the next,
+//   and the TIO selects the newest unlocked tier whenever the host opens it.
+//   The host picks; the tier travels to the guests with the mission state.
 public static class Missions
 {
-    public const string BossName = "SILVER LANCER";
+    public class BossType { public string Id, Name; public double Hull; }
+    public static readonly BossType[] Bosses =
+    {
+        new() { Id = "silver_lancer", Name = "SILVER LANCER", Hull = 3000 },
+    };
+    public static BossType Current => Bosses[0];
+    public static string BossName => Current.Name;
+
+    public const double TierStep = 1.10;                   // each tier 10% stronger, multiplicatively
+    public static double Scale(int tier) => Math.Pow(TierStep, tier);
+    public static int Tier;                                // the selected tier (host decides)
+    public static int Unlocked(string bossId) => Character.BossBeaten.TryGetValue(bossId, out var t) ? t + 1 : 0;
+
     public const int BossExp = 300;          // each pilot, for the kill (shared)
     public const int MissionExp = 100;       // each pilot, for completing the mission (shared)
     public const int BossCredits = 2000;
@@ -3307,7 +3359,7 @@ public static class Missions
 
 //==============================================================================
 // FILE: scripts/Music.cs
-// 75 lines   sha256 ccb8fea42553
+// 76 lines   sha256 5b0efe1bc3be
 //==============================================================================
 using Godot;
 
@@ -3329,6 +3381,7 @@ public partial class Music : Node
     public static bool CombatZone;                     // set by an instanced combat system
     public const float FadePerSecond = 0.7f;           // about 1.5 s for a full cross-fade
     public const float AmbientTrim = 0.45f;            // the ambient loop is meant to sit far back
+    public const float Master = 0.65f;                 // the whole score, 35% quieter than it started
 
     private AudioStreamPlayer _amb, _cmb;
     private AudioStreamOggVorbis _ambS, _cmbS;
@@ -3370,8 +3423,8 @@ public partial class Music : Node
         AmbientLevel = Mathf.MoveToward(AmbientLevel, a, step);
         CombatLevel = Mathf.MoveToward(CombatLevel, c, step);
         float vol = Settings.MusicOn ? Settings.MusicVolume : 0f;       // the Esc menu's MUSIC ON/OFF
-        _amb.VolumeDb = Db(AmbientLevel * AmbientTrim * vol);
-        _cmb.VolumeDb = Db(CombatLevel * vol);
+        _amb.VolumeDb = Db(AmbientLevel * AmbientTrim * vol * Master);
+        _cmb.VolumeDb = Db(CombatLevel * vol * Master);
     }
 
     // Stop both loops. Call this a moment BEFORE quitting: the mixer lets go of its
@@ -4725,6 +4778,76 @@ public static class Settings
 }
 
 //==============================================================================
+// FILE: scripts/Sfx.cs
+// 65 lines   sha256 4a51ee11de9a
+//==============================================================================
+using Godot;
+using System.Collections.Generic;
+
+// SOUND EFFECTS -- local and cosmetic: every peer plays what it sees.
+//   Lasers: a low buzz where the shot leaves (lighter for normal ships and craft, a
+//     deep grinding one for a boss) and a crackle where it hits.
+//   Self-propelled projectiles (missiles, torpedoes): a soft whoosh at launch, and a
+//     low thunk with a soft reverb tail when they hit.
+// Loudness follows the CAMERA: the distance from the view's centre to the sound, and
+// the zoom (zoomed out, the listener is further away). A laser hit is also softer and
+// a little lower the longer the shot that made it.
+public static class Sfx
+{
+    public const float ListenerHeight = 700f;       // at zoom 1: how far "above" the view the ears are
+    public const float Cull = 5000f;                // past this effective distance: silent
+    static readonly string[] Names = { "laser_light", "laser_boss", "laser_hit", "missile_whoosh", "impact_thunk" };
+    static readonly Dictionary<string, AudioStream> _streams = new();
+    static readonly Dictionary<string, double> _last = new();
+    static readonly Dictionary<string, double> _gap = new() { ["laser_light"] = 0.04, ["laser_boss"] = 0.08, ["laser_hit"] = 0.03, ["missile_whoosh"] = 0.05, ["impact_thunk"] = 0.05 };
+    public static readonly Dictionary<string, int> Played = new();            // for the smoke test
+    static Node _pool; static int _next;
+    const int Voices = 16;
+
+    // decibels for a sound `dist` from the view's centre, at camera zoom `zoom`
+    public static float VolumeAt(float dist, float zoom)
+    {
+        float h = ListenerHeight / Mathf.Max(0.05f, zoom);
+        float eff = Mathf.Sqrt(dist * dist + h * h);
+        if (eff > Cull) return float.NegativeInfinity;
+        return -20f * Mathf.Log(eff / ListenerHeight) / Mathf.Log(10f);
+    }
+
+    public static void Laser(Vector2 from, Vector2 to, bool boss)
+    {
+        Play(boss ? "laser_boss" : "laser_light", from, boss ? 0f : -6f, boss ? 0.9f : 1.0f);
+        float shot = from.DistanceTo(to);
+        Play("laser_hit", to, -4f - 3f * shot / 1000f, 1.0f - 0.12f * Mathf.Clamp(shot / 1000f, 0f, 1f));
+    }
+    public static void Missile(Vector2 at) => Play("missile_whoosh", at, -8f, 1f);
+    public static void Impact(Vector2 at) => Play("impact_thunk", at, -2f, 1f);
+
+    static void Play(string name, Vector2 at, float trimDb, float pitch)
+    {
+        var tree = Engine.GetMainLoop() as SceneTree;
+        var cam = tree?.Root.GetViewport().GetCamera2D();
+        if (cam == null) return;
+        double now = Time.GetTicksMsec() / 1000.0;
+        if (_last.TryGetValue(name, out var t) && now - t < _gap[name]) return;     // a wing firing is not a wall of noise
+        float db = VolumeAt(cam.GetScreenCenterPosition().DistanceTo(at), cam.Zoom.X);
+        if (float.IsNegativeInfinity(db)) return;
+        _last[name] = now;
+        Played[name] = Played.TryGetValue(name, out var n) ? n + 1 : 1;
+        if (!IsInstanceValid(_pool))
+        {
+            _pool = new Node { Name = "SfxPool" };
+            tree.Root.CallDeferred(Node.MethodName.AddChild, _pool);
+            for (int i = 0; i < Voices; i++) _pool.AddChild(new AudioStreamPlayer());
+            foreach (var s in Names) _streams[s] = GD.Load<AudioStream>($"res://sfx/{s}.wav");
+        }
+        var p = _pool.GetChild<AudioStreamPlayer>(_next); _next = (_next + 1) % Voices;
+        p.Stream = _streams[name]; p.VolumeDb = db + trimDb; p.PitchScale = pitch;
+        if (p.IsInsideTree()) p.Play(); else p.CallDeferred(AudioStreamPlayer.MethodName.Play);
+    }
+    static bool IsInstanceValid(Node n) => n != null && GodotObject.IsInstanceValid(n);
+}
+
+//==============================================================================
 // FILE: scripts/Shield.cs
 // 71 lines   sha256 99c7fa4a2a8e
 //==============================================================================
@@ -5463,7 +5586,7 @@ public class ShipStats
 
 //==============================================================================
 // FILE: scripts/StatsWindow.cs
-// 200 lines   sha256 64b8cf18dc5a
+// 198 lines   sha256 8b5c9f76adc7
 //==============================================================================
 using Godot;
 
@@ -5487,9 +5610,7 @@ public partial class StatsWindow : CanvasLayer
     {
         Layer = 15;
         var panel = new PanelContainer { Position = new Vector2(1920 - 16 - 560, 60), CustomMinimumSize = new Vector2(560, 0) };
-        var sb = new StyleBoxFlat { BgColor = new Color(0.06f, 0.08f, 0.12f, 1f), BorderColor = new Color(0.3f, 0.4f, 0.55f) };
-        sb.SetBorderWidthAll(1); sb.SetCornerRadiusAll(6); sb.SetContentMarginAll(14);
-        panel.AddThemeStyleboxOverride("panel", sb);
+        panel.AddThemeStyleboxOverride("panel", Ui.PanelStyle(14));      // the one panel look
         // anchor to the right edge so it stays put at any window size
         panel.AnchorLeft = panel.AnchorRight = 1f;
         panel.OffsetLeft = -16 - 560; panel.OffsetRight = -16; panel.OffsetTop = 60;
@@ -5842,7 +5963,7 @@ public partial class Telegraph : Node2D
 
 //==============================================================================
 // FILE: scripts/TioWindow.cs
-// 50 lines   sha256 4eb0ba9f2020
+// 61 lines   sha256 0b5382e679d6
 //==============================================================================
 using Godot;
 using System.Linq;
@@ -5856,7 +5977,8 @@ public partial class TioWindow : PanelContainer
 {
     public Hub Hub;
     private Label _party, _status;
-    private Button _ready;
+    private Button _ready, _down, _up;
+    private Label _tier;
 
     public override void _Ready()
     {
@@ -5869,6 +5991,12 @@ public partial class TioWindow : PanelContainer
         var bounty = new Label { Text = $"BOUNTY  ·  {Missions.BossName}\nReward: {Missions.BossExp} EXP each for the kill, {Missions.MissionExp} EXP each for completing it, {Missions.BossCredits} credits.",
                                  AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(440, 0) };
         col.AddChild(bounty);
+        var diff = new HBoxContainer { Name = "Difficulty" }; diff.AddThemeConstantOverride("separation", 8); col.AddChild(diff);
+        diff.AddChild(new Label { Text = "DIFFICULTY", Modulate = new Color(0.55f, 0.8f, 1f) });
+        _down = new Button { Name = "TierDown", Text = "◀", FocusMode = FocusModeEnum.None }; _down.Pressed += () => Hub.SelectTier(Missions.Tier - 1);
+        _tier = new Label { CustomMinimumSize = new Vector2(230, 0), HorizontalAlignment = HorizontalAlignment.Center };
+        _up = new Button { Name = "TierUp", Text = "▶", FocusMode = FocusModeEnum.None }; _up.Pressed += () => Hub.SelectTier(Missions.Tier + 1);
+        diff.AddChild(_down); diff.AddChild(_tier); diff.AddChild(_up);
         col.AddChild(new Label { Text = "PARTY  (everyone in the session)", Modulate = new Color(0.55f, 0.8f, 1f) });
         _party = new Label(); col.AddChild(_party);
         var row = new HBoxContainer(); row.AddThemeConstantOverride("separation", 10); col.AddChild(row);
@@ -5882,6 +6010,10 @@ public partial class TioWindow : PanelContainer
     public override void _Process(double delta)
     {
         if (Hub == null) return;
+        int top = Missions.Unlocked(Missions.Current.Id);
+        _tier.Text = $"TIER {Missions.Tier}  ·  ×{Missions.Scale(Missions.Tier):0.00}" + (Missions.Tier == top ? "  (newest)" : "");
+        _down.Disabled = !Net.IsHost || Missions.Tier <= 0 || Hub.Mission != Hub.MissionState.Idle;
+        _up.Disabled = !Net.IsHost || Missions.Tier >= top || Hub.Mission != Hub.MissionState.Idle;
         _party.Text = string.Join("\n", Hub.PartyIds.OrderBy(i => i).Select(i => $"  {Hub.PilotName(i)}   {(Hub.IsReady(i) ? "READY" : "not ready")}"));
         bool mine = Hub.IsReady(Net.LocalId);
         _ready.Text = mine ? "READY  ✓" : "READY";
@@ -5897,7 +6029,7 @@ public partial class TioWindow : PanelContainer
 
 //==============================================================================
 // FILE: scripts/Torpedo.cs
-// 140 lines   sha256 f29608651339
+// 141 lines   sha256 8c9d94a81a69
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -5953,6 +6085,7 @@ public partial class Torpedo : Node2D, IHittable
 
     public override void _Ready()
     {
+        Sfx.Missile(GlobalPosition);                        // self-propelled: a soft whoosh at launch
         ZIndex = 6; Rotation = Dir.Angle() + Mathf.Pi / 2f;
         if (HostileFire && NetId != 0) Combat.Hostiles.Add(this);
     }
@@ -6003,7 +6136,7 @@ public partial class Torpedo : Node2D, IHittable
         QueueRedraw();
     }
 
-    private void Detonate() { _spent = true; _burst = 0; }
+    private void Detonate() { _spent = true; _burst = 0; Sfx.Impact(GlobalPosition); }
 
     public override void _Draw()
     {
@@ -6078,21 +6211,71 @@ public static class Txt
 
 //==============================================================================
 // FILE: scripts/Ui.cs
-// 22 lines   sha256 1e0f8043bb72
+// 99 lines   sha256 0a376702a4e8
 //==============================================================================
 using Godot;
 
-// The one panel look for every piece of HUD and menu: dark, slightly see-through,
-// a thin blue-grey border, rounded corners. Everything readable sits on one.
+// THE LOOK -- one panel and one button style for every screen.
+// Panels: a vertical gradient (lighter at the top), a bright 1 px top edge like light
+// on a bevel, a crisp border, 3 px corners and a soft drop shadow outside the panel.
+// Built as small generated textures (a flat style cannot shade), cached, and installed
+// as the root window's theme so every Control inherits it.
 public static class Ui
 {
-    public static StyleBoxFlat PanelStyle(int pad = 10, float alpha = 0.96f)   // 0.90 let bright world art (hologram bars) bleed through
+    const int Shadow = 5, Corner = 3;
+    static readonly System.Collections.Generic.Dictionary<string, ImageTexture> _tex = new();
+    static Theme _theme;
+
+    // A panel or button face: size N, gradient top->bottom, border, top highlight, optional shadow.
+    static ImageTexture Face(string key, Color top, Color bottom, Color border, Color highlight, bool shadow, float alpha = 1f)
     {
-        var s = new StyleBoxFlat { BgColor = new Color(0.04f, 0.06f, 0.10f, alpha), BorderColor = new Color(0.30f, 0.40f, 0.55f, 0.8f) };
-        s.SetBorderWidthAll(1); s.SetCornerRadiusAll(6);
-        s.ContentMarginLeft = s.ContentMarginRight = pad; s.ContentMarginTop = s.ContentMarginBottom = pad * 0.6f;
+        key += alpha.ToString("0.00");
+        if (_tex.TryGetValue(key, out var t)) return t;
+        int pad = shadow ? Shadow : 0, inner = 24, n = inner + 2 * pad;
+        var img = Image.CreateEmpty(n, n, false, Image.Format.Rgba8);
+        for (int y = 0; y < n; y++)
+            for (int x = 0; x < n; x++)
+            {
+                // distance outside the rounded inner rect (0 inside)
+                float dx = Mathf.Max(Mathf.Max(pad + Corner - x, x - (n - 1 - pad - Corner)), 0);
+                float dy = Mathf.Max(Mathf.Max(pad + Corner - y, y - (n - 1 - pad - Corner)), 0);
+                float cornerD = Mathf.Sqrt(dx * dx + dy * dy) - Corner;                  // >0 outside the corner arc
+                bool inRect = x >= pad && x < n - pad && y >= pad && y < n - pad;
+                bool inside = inRect && cornerD <= 0.5f;
+                if (!inside)
+                {
+                    if (!shadow) { img.SetPixel(x, y, new Color(0, 0, 0, 0)); continue; }
+                    float od = Mathf.Max(Mathf.Max(pad - x, x - (n - 1 - pad)), Mathf.Max(pad - y, y - (n - 1 - pad)));
+                    od = Mathf.Max(od, cornerD);
+                    float a = Mathf.Clamp(1f - od / Shadow, 0f, 1f);
+                    img.SetPixel(x, y, new Color(0, 0, 0, 0.45f * a * a * alpha)); continue;
+                }
+                float k = (float)(y - pad) / (inner - 1);
+                var c = top.Lerp(bottom, k);
+                bool edge = x == pad || x == n - 1 - pad || y == pad || y == n - 1 - pad || cornerD > -1f;
+                if (edge) c = border;
+                else if (y == pad + 1) c = highlight;                                      // light on the top bevel
+                img.SetPixel(x, y, new Color(c.R, c.G, c.B, c.A * alpha));
+            }
+        return _tex[key] = ImageTexture.CreateFromImage(img);
+    }
+
+    static StyleBoxTexture Box(ImageTexture face, bool shadow, float padX, float padY)
+    {
+        int m = (shadow ? Shadow : 0) + Corner + 2;
+        var s = new StyleBoxTexture { Texture = face };
+        s.TextureMarginLeft = s.TextureMarginRight = s.TextureMarginTop = s.TextureMarginBottom = m;
+        if (shadow) { s.ExpandMarginLeft = s.ExpandMarginRight = s.ExpandMarginTop = s.ExpandMarginBottom = Shadow; }
+        s.ContentMarginLeft = s.ContentMarginRight = padX; s.ContentMarginTop = s.ContentMarginBottom = padY;
         return s;
     }
+
+    static readonly Color Border = new(0.36f, 0.47f, 0.63f), Top = new(0.12f, 0.15f, 0.21f), Bottom = new(0.045f, 0.055f, 0.085f),
+                          Shine = new(0.52f, 0.64f, 0.82f);
+
+    // Every panel in the game. Opaque by default: menus sit over the world.
+    public static StyleBoxTexture PanelStyle(int pad = 10, float alpha = 1f) =>
+        Box(Face("panel", Top, Bottom, Border, Shine, true, alpha), true, pad, pad * 0.6f);
 
     public static PanelContainer Wrap(Control c, int pad = 6)
     {
@@ -6101,6 +6284,33 @@ public static class Ui
         p.AddChild(c);
         return p;
     }
+
+    // The game-wide theme: buttons, text fields and bars in the same shaded style.
+    public static Theme Theme
+    {
+        get
+        {
+            if (_theme != null) return _theme;
+            _theme = new Theme();
+            StyleBox Btn(string k, Color t, Color b, Color border, Color shine) => Box(Face("btn_" + k, t, b, border, shine, false), false, 10, 5);
+            _theme.SetStylebox("normal", "Button", Btn("normal", new Color(0.16f, 0.19f, 0.26f), new Color(0.08f, 0.09f, 0.13f), new Color(0.32f, 0.41f, 0.55f), new Color(0.40f, 0.50f, 0.66f)));
+            _theme.SetStylebox("hover", "Button", Btn("hover", new Color(0.21f, 0.26f, 0.35f), new Color(0.10f, 0.12f, 0.17f), new Color(0.55f, 0.70f, 0.92f), new Color(0.62f, 0.76f, 0.95f)));
+            _theme.SetStylebox("pressed", "Button", Btn("pressed", new Color(0.07f, 0.08f, 0.11f), new Color(0.15f, 0.19f, 0.26f), new Color(0.55f, 0.70f, 0.92f), new Color(0.10f, 0.12f, 0.16f)));
+            _theme.SetStylebox("disabled", "Button", Btn("disabled", new Color(0.09f, 0.10f, 0.12f), new Color(0.06f, 0.065f, 0.08f), new Color(0.20f, 0.23f, 0.28f), new Color(0.13f, 0.15f, 0.18f)));
+            _theme.SetStylebox("focus", "Button", new StyleBoxEmpty());
+            _theme.SetStylebox("hover_pressed", "Button", _theme.GetStylebox("pressed", "Button"));
+            _theme.SetColor("font_disabled_color", "Button", new Color(0.55f, 0.58f, 0.64f));
+            _theme.SetStylebox("normal", "LineEdit", Btn("edit", new Color(0.04f, 0.05f, 0.08f), new Color(0.07f, 0.08f, 0.11f), new Color(0.30f, 0.38f, 0.50f), new Color(0.05f, 0.06f, 0.09f)));
+            _theme.SetStylebox("focus", "LineEdit", new StyleBoxEmpty());
+            _theme.SetStylebox("background", "ProgressBar", Btn("barbg", new Color(0.04f, 0.05f, 0.07f), new Color(0.07f, 0.08f, 0.10f), new Color(0.26f, 0.32f, 0.42f), new Color(0.05f, 0.06f, 0.08f)));
+            _theme.SetStylebox("fill", "ProgressBar", Btn("barfill", new Color(0.45f, 0.72f, 1f), new Color(0.22f, 0.45f, 0.78f), new Color(0.50f, 0.75f, 1f), new Color(0.75f, 0.9f, 1f)));
+            _theme.SetStylebox("panel", "PanelContainer", PanelStyle());
+            return _theme;
+        }
+    }
+
+    // Once per launch (idempotent): the whole window takes the theme.
+    public static void Install(SceneTree tree) { if (tree.Root.Theme != Theme) tree.Root.Theme = Theme; }
 }
 
 //==============================================================================
@@ -6926,7 +7136,7 @@ ls /tmp/shots
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 1063 lines   sha256 c9fbd25f735b
+// 1108 lines   sha256 e2e708eadc74
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -6959,6 +7169,11 @@ public partial class _Test : Node
     void Click(Vector2 canvas, MouseButton b = MouseButton.Left) { var at = Win(canvas);
         Input.ParseInputEvent(new InputEventMouseButton { Position = at, GlobalPosition = at, ButtonIndex = b, Pressed = true });
         Input.ParseInputEvent(new InputEventMouseButton { Position = at, GlobalPosition = at, ButtonIndex = b, Pressed = false }); }
+    void DoubleClick(Vector2 canvas) { var at = Win(canvas);
+        Input.ParseInputEvent(new InputEventMouseButton { Position = at, GlobalPosition = at, ButtonIndex = MouseButton.Left, Pressed = true });
+        Input.ParseInputEvent(new InputEventMouseButton { Position = at, GlobalPosition = at, ButtonIndex = MouseButton.Left, Pressed = false });
+        Input.ParseInputEvent(new InputEventMouseButton { Position = at, GlobalPosition = at, ButtonIndex = MouseButton.Left, Pressed = true, DoubleClick = true });
+        Input.ParseInputEvent(new InputEventMouseButton { Position = at, GlobalPosition = at, ButtonIndex = MouseButton.Left, Pressed = false }); }
     void AimWorld(Vector2 w) { var at = WorldToWin(w); Input.ParseInputEvent(new InputEventMouseMotion { Position = at, GlobalPosition = at }); }
     object Priv(object o, string m, params object[] a) => o.GetType().GetMethod(m, BindingFlags.NonPublic | BindingFlags.Instance).Invoke(o, a);
 
@@ -7644,6 +7859,20 @@ public partial class _Test : Node
             sh.TakeDamage(-(sh.MaxHp - sh.Hp));  // (test only) back to full for what follows
         }
 
+        // a double-click on empty space clears the target; a single click there does not
+        {
+            var dd = H.GetNode<TargetDummy>("TargetDummy1");
+            Click(Scr(dd.Position)); await Wait(0.05);
+            var empty = Me.Position + new Vector2(-260, -260);
+            Click(Scr(empty)); await Wait(0.05);
+            Check(H.Selected == dd, "a single click on empty space keeps the target");
+            DoubleClick(Scr(empty)); await Wait(0.05);
+            Check(H.Selected == null, "a double-click on empty space clears it");
+            Click(Scr(dd.Position)); await Wait(0.05);
+            DoubleClick(Scr(dd.Position)); await Wait(0.05);
+            Check(H.Selected == dd, "a double-click on a target keeps it selected");
+        }
+
         // selection rules still hold
         await Park(d1.Position + new Vector2(-300, 300));
         Key(global::Godot.Key.Tab); await Wait(0.05);
@@ -7757,6 +7986,19 @@ public partial class _Test : Node
             double want = H.Yard.FleetRate(GatherKind.Miner) * Yard.LastAway / 20.0;
             Check(Yard.LastAway > 1 && Yard.LastAwayOre > 0 && Math.Abs(Yard.LastAwayOre - want) < 1e-6,
                   $"while away the base earned 1/20 of its rate ({Yard.LastAwayOre:0.0} ore for {Yard.LastAway:0} s)");
+            // difficulty: the win unlocked tier 1, and docking at the TIO selects it
+            Check(Character.BossBeaten.TryGetValue("silver_lancer", out var beat) && beat == 0, "the win records tier 0 as beaten");
+            Check(Math.Abs(Missions.Scale(1) - 1.1) < 1e-9 && Math.Abs(Missions.Scale(2) - 1.21) < 1e-9
+                  && Math.Abs(Missions.Current.Hull * Missions.Scale(1) - 3300) < 1e-6, "each tier is 10% stronger, multiplicatively (tier 1: 3300 hull)");
+            H.OpenTio(); await Wait(0.1);
+            var tw2 = Nodes<TioWindow>().First();
+            Check(Missions.Tier == 1, "docking at the TIO selects the newest unlocked tier (1)");
+            Check(Nodes<Button>(tw2).First(b => b.Name == "TierUp").Disabled, "no tier beyond the newest unlocked");
+            Nodes<Button>(tw2).First(b => b.Name == "TierDown").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
+            Check(Missions.Tier == 0, "the host can pick an easier, beaten tier");
+            Nodes<Button>(tw2).First(b => b.Name == "TierUp").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
+            Check(Missions.Tier == 1, "and back up to the newest");
+            Key(global::Godot.Key.Escape); await Wait(0.1);
             // a wipe: every ship in stasis at once -> the mission fails, home with nothing
             H.EnterSector(Hub.SectorKind.Arena); await Wait(1.5);
             int exp1 = Character.Exp;
@@ -7829,6 +8071,19 @@ public partial class _Test : Node
         Check(GetTree().CurrentScene is MainMenu, "QUIT TO MAIN MENU returns to the main menu");
         GetTree().ChangeSceneToFile("res://Hub.tscn"); await Wait(0.4);
         Check(H != null && Count<PlayerShip>() == 1, "hub re-enters cleanly");
+
+        // ── sound: the music 35% quieter; effects by the camera's distance and zoom ──
+        Check(Math.Abs(Music.Master - 0.65f) < 1e-6, "the music plays 35% quieter than it started");
+        Check(Math.Abs(Sfx.VolumeAt(0, 1)) < 1e-4 && Sfx.VolumeAt(1000, 1) < Sfx.VolumeAt(0, 1) - 3
+              && Sfx.VolumeAt(0, 0.5f) < Sfx.VolumeAt(0, 1) - 3 && float.IsNegativeInfinity(Sfx.VolumeAt(6000, 1)),
+              "effects: 0 dB at the view's centre, quieter with distance and when zoomed out, silent far away");
+        Check(new[] { "laser_light", "laser_boss", "laser_hit", "missile_whoosh", "impact_thunk" }.All(n => GD.Load<AudioStream>($"res://sfx/{n}.wav") != null),
+              "all five effects load");
+        int P(string n) => Sfx.Played.TryGetValue(n, out var v) ? v : 0;
+        GD.Print($"  sounds played: light laser {P("laser_light")}, boss laser {P("laser_boss")}, hit {P("laser_hit")}, whoosh {P("missile_whoosh")}, thunk {P("impact_thunk")}");
+        Check(P("laser_light") > 0 && P("laser_hit") > 0, "lasers buzz where they fire and crackle where they hit");
+        Check(P("laser_boss") > 0, "the boss's lasers have their own, deeper buzz");
+        Check(P("missile_whoosh") > 0 && P("impact_thunk") > 0, "missiles and torpedoes whoosh at launch and thunk when they hit");
 
         // leaks: leaving and re-entering the hub must not grow the orphan-node or object
         // counts (the first cycle warms caches; compare the next two against it)
