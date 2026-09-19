@@ -1,8 +1,8 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-19 09:01 at git commit e31fe67: typecheck clean, smoke test 3/3 passes
-//   (256 checks), 49-frame UI sweep 0 findings.
-// 45 files, 7262 lines. Code only: sprites and docs are in the zip.
+// Taken 2026-09-19 17:40 at git commit 8284bb5: typecheck clean, smoke test 3/3 passes
+//   (269 checks), 51-frame UI sweep 0 findings.
+// 48 files, 7750 lines. Code only: sprites and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -16,43 +16,46 @@
 //   MainMenu.tscn                                    6 lines   sha256 8a8dbe40f248
 //   scripts/Abilities.cs                           130 lines   sha256 7baad2ebc660
 //   scripts/AbilityBar.cs                          112 lines   sha256 2be6639b4144
+//   scripts/Autopilot.cs                            40 lines   sha256 807538219f53
 //   scripts/BasePanel.cs                           105 lines   sha256 024b285073bc
+//   scripts/Boss.cs                                144 lines   sha256 517b4ee7f2fb
 //   scripts/Character.cs                           163 lines   sha256 fa3d97b062c8
 //   scripts/CharacterCreator.cs                    211 lines   sha256 136099a8d1c7
 //   scripts/CharacterSelect.cs                     170 lines   sha256 d94669c91111
-//   scripts/Combat.cs                               87 lines   sha256 98a26f36c8bb
+//   scripts/Combat.cs                               91 lines   sha256 6927ed45a2dd
 //   scripts/Economy.cs                              75 lines   sha256 904973fc4761
-//   scripts/EscMenu.cs                              56 lines   sha256 9b3d2c47a0ea
+//   scripts/EscMenu.cs                              59 lines   sha256 999b01e6cd29
 //   scripts/EscapePod.cs                            50 lines   sha256 324c55cb503b
 //   scripts/Gatherer.cs                            207 lines   sha256 06c31c1dfb04
 //   scripts/Hauler.cs                              283 lines   sha256 551cdf41401d
 //   scripts/HealthBar.cs                            36 lines   sha256 97c42a282205
-//   scripts/Hub.cs                                 861 lines   sha256 bbe8a8349d94
+//   scripts/Hub.cs                                 943 lines   sha256 8eb7fd7416e6
 //   scripts/MainMenu.cs                            223 lines   sha256 37a0b3acc8e0
 //   scripts/Missions.cs                              8 lines   sha256 d7f55e83348b
-//   scripts/Music.cs                                74 lines   sha256 10bf5088a60c
+//   scripts/Music.cs                                75 lines   sha256 ccb8fea42553
 //   scripts/Net.cs                                 246 lines   sha256 ce3ebadd0342
 //   scripts/PilotWindow.cs                          54 lines   sha256 bd3c2ab6785f
-//   scripts/PlayerShip.cs                          657 lines   sha256 46e905d007b2
+//   scripts/PlayerShip.cs                          661 lines   sha256 5338160848be
 //   scripts/Plume.cs                                25 lines   sha256 cdbeb9b8fc58
 //   scripts/Progression.cs                          73 lines   sha256 d3b0cd99118f
-//   scripts/Radar.cs                                92 lines   sha256 fa7ef2b9e654
+//   scripts/Radar.cs                                93 lines   sha256 eff30cd82bb4
 //   scripts/SessionMenu.cs                          89 lines   sha256 5febd0d32676
-//   scripts/Settings.cs                             55 lines   sha256 7caa698e0b7e
+//   scripts/Settings.cs                             58 lines   sha256 80100257eda5
 //   scripts/Shield.cs                               71 lines   sha256 99c7fa4a2a8e
-//   scripts/ShipClasses.cs                         487 lines   sha256 c2fdedd109e0
+//   scripts/ShipClasses.cs                         492 lines   sha256 10726adf655f
 //   scripts/Stats.cs                               159 lines   sha256 d877c0d2eda1
 //   scripts/StatsWindow.cs                         200 lines   sha256 64b8cf18dc5a
 //   scripts/TargetDummy.cs                         117 lines   sha256 f7845c23ab57
-//   scripts/TioWindow.cs                            54 lines   sha256 7e0c25a66c05
-//   scripts/Torpedo.cs                             119 lines   sha256 3f295b986fea
+//   scripts/Telegraph.cs                            47 lines   sha256 89f6af49c4d7
+//   scripts/TioWindow.cs                            50 lines   sha256 4eb0ba9f2020
+//   scripts/Torpedo.cs                             140 lines   sha256 f29608651339
 //   scripts/Txt.cs                                  31 lines   sha256 0b56559599f8
 //   scripts/Ui.cs                                   22 lines   sha256 1e0f8043bb72
-//   scripts/Yard.cs                                336 lines   sha256 7b626c30998b
+//   scripts/Yard.cs                                387 lines   sha256 1cd1e412db23
 //   typecheck/typecheck.sh                          57 lines   sha256 e68277c09f34
-//   tools/screens/Shots.cs.txt                     303 lines   sha256 c908e67e7f73
+//   tools/screens/Shots.cs.txt                     317 lines   sha256 383dcce54bff
 //   tools/screens/run.sh                            40 lines   sha256 a47174d56c6a
-//   tools/smoketest/SmokeTest.cs.txt               991 lines   sha256 bf412657e588
+//   tools/smoketest/SmokeTest.cs.txt              1063 lines   sha256 c9fbd25f735b
 //   tools/smoketest/run.sh                          52 lines   sha256 67c03204c10d
 //==============================================================================
 
@@ -415,6 +418,51 @@ public partial class AbilityBar : Control
 }
 
 //==============================================================================
+// FILE: scripts/Autopilot.cs
+// 40 lines   sha256 807538219f53
+//==============================================================================
+using Godot;
+
+// AUTOPILOT -- flies a ship to a point for its pilot (READY for a bounty flies you to
+// the mission portal). Two variants, because the controls differ:
+//   CAPITAL ships steer like naval vessels: rudder and throttle, no strafing, a
+//     turning radius. The autopilot turns the bow onto the target, throttles down
+//     as it closes, and stops inside the given radius.
+//   FIGHTER-class ships point and thrust directly. (No player fighter class exists
+//     yet; this variant is ready for the first one, and is tested on its own.)
+// Both return the same inputs the keys would give, so the ship's own physics apply.
+public static class Autopilot
+{
+    // -> (throttle -1..1, rudder -1..1) for PlayerShip.Steer
+    public static (float throttle, float rudder) Capital(Vector2 pos, float rotation, Vector2 vel, float maxSpeed, Vector2 target, float stopRadius)
+    {
+        var to = target - pos; float dist = to.Length();
+        if (dist <= stopRadius) return (vel.Length() > 4f ? -0.5f : 0f, 0f);         // there: take the way off
+        var bow = Vector2.Up.Rotated(rotation);
+        float off = bow.AngleTo(to);                                                   // + means the target is to starboard
+        float rudder = Mathf.Clamp(off / 0.35f, -1f, 1f);
+        // full ahead when roughly aligned, easing as it closes so it can stop in the radius
+        float align = Mathf.Clamp(1f - Mathf.Abs(off) / 1.2f, 0.15f, 1f);
+        float brake = Mathf.Clamp((dist - stopRadius) / (maxSpeed * 3f), 0.2f, 1f);
+        float throttle = align * brake;
+        if (vel.Length() > maxSpeed * brake + 5f) throttle = -0.3f;                   // too fast for the distance left
+        return (throttle, rudder);
+    }
+
+    // -> (turn -1..1, thrust 0..1): point at the target and burn, braking to arrive
+    public static (float turn, float thrust) Fighter(Vector2 pos, float heading, Vector2 vel, Vector2 target, float maxSpeed, float stopRadius)
+    {
+        var to = target - pos; float dist = to.Length();
+        float off = Mathf.AngleDifference(heading, to.Angle());
+        float turn = Mathf.Clamp(off / 0.25f, -1f, 1f);
+        if (dist <= stopRadius) return (turn, 0f);
+        float want = Mathf.Min(maxSpeed, Mathf.Sqrt(2f * maxSpeed * dist));
+        float thrust = Mathf.Abs(off) < 0.6f && vel.Length() < want ? 1f : 0f;
+        return (turn, thrust);
+    }
+}
+
+//==============================================================================
 // FILE: scripts/BasePanel.cs
 // 105 lines   sha256 024b285073bc
 //==============================================================================
@@ -522,6 +570,155 @@ public partial class BasePanel : PanelContainer
             _reset.Disabled = Hub.CreatorOpen;
         }
     }
+}
+
+//==============================================================================
+// FILE: scripts/Boss.cs
+// 144 lines   sha256 517b4ee7f2fb
+//==============================================================================
+using Godot;
+using System.Linq;
+
+// THE SILVER LANCER -- the first bounty boss. Host-simulated; every peer draws it from
+// the host's 10 Hz state and plays its telegraphs from the host's events.
+//   GUNS       every 1.2 s: 6 damage at the nearest ship within 900 u
+//   MISSILES   every 7 s: 4 guided missiles, 20 each -- INTERCEPTABLE (PD shoots them)
+//   DEATH BEAM every 12 s: a red line telegraph for 2 s, then 60 to any ship in it
+//   SHOCKWAVE  every 17 s: a red ring telegraph for 1.8 s, then 45 within 340 u
+// Slow and heavy: it closes on the party to about 650 u and turns ponderously.
+public partial class Boss : Node2D, IHittable
+{
+    public Hub Hub;
+    public const double MaxHull = 3000;
+    public const float Length = 360f, HalfWidth = 70f;
+    public const int Id = 3000;
+    public double Hp = MaxHull;
+    public bool Alive => Hp > 0;
+    public int NetId => Id;
+    public float HitRadius => HalfWidth;
+    public bool Covers(Vector2 p, float pad)      // a capsule along its keel, like a player ship
+    {
+        var fwd = Vector2.Up.Rotated(Rotation); float half = Length * 0.5f - HalfWidth;
+        float t = Mathf.Clamp((p - Position).Dot(fwd), -half, half);
+        return p.DistanceTo(Position + fwd * t) <= HalfWidth + pad;
+    }
+
+    public const double BeamWindup = 2.0, WaveWindup = 1.8;
+    public const float BeamLength = 1800f, BeamWidth = 70f, WaveRadius = 340f;
+    private double _guns = 2.0, _missiles = 4.0, _beam = 6.0, _wave = 10.0, _send;
+    private (Vector2 a, Vector2 b)? _pendingBeam; private double _beamT;
+    private Vector2? _pendingWave; private double _waveT;
+    private Vector2 _netPos; private float _netRot; private bool _hasNet;
+
+    public override void _Ready()
+    {
+        Name = "Boss";
+        var tex = GD.Load<Texture2D>("res://boss_silver_lancer.png");
+        AddChild(new Sprite2D { Texture = tex, Scale = Vector2.One * (Length / tex.GetHeight()) });
+        ZIndex = 4;
+        Combat.Hostiles.Add(this);
+    }
+    public override void _ExitTree() => Combat.Hostiles.Remove(this);
+
+    public void TakeDamage(double d)
+    {
+        if (!Net.Sim || !Alive) return;
+        Hp = System.Math.Max(0, Hp - d);
+        if (Hp <= 0) Hub.BossDefeated();
+    }
+
+    private System.Collections.Generic.IEnumerable<PlayerShip> Pilots => Combat.Players.OfType<PlayerShip>().Where(p => p.Alive);
+
+    public override void _Process(double delta)
+    {
+        float dt = (float)delta;
+        if (!Net.Sim)
+        {
+            if (_hasNet) { Position = Position.Lerp(_netPos, Mathf.Clamp(10f * dt, 0f, 1f)); Rotation = Mathf.LerpAngle(Rotation, _netRot, Mathf.Clamp(10f * dt, 0f, 1f)); }
+            return;
+        }
+        if (!Alive) return;
+        var pilots = Pilots.ToList();
+        if (pilots.Count > 0)
+        {   // close on the party, ponderously
+            var centre = pilots.Aggregate(Vector2.Zero, (s, p) => s + p.Position) / pilots.Count;
+            float want = (centre - Position).Angle() + Mathf.Pi / 2f;
+            Rotation += Mathf.Clamp(Mathf.AngleDifference(Rotation, want), -0.3f * dt, 0.3f * dt);
+            float d = Position.DistanceTo(centre);
+            if (d > 650f) Position += (centre - Position).Normalized() * 30f * dt;
+            Tick(pilots, delta);
+        }
+        _send -= delta;
+        if (_send <= 0 && Net.IsOnline) { _send = 0.1; Rpc(nameof(NetState), Position, Rotation, Hp); }
+    }
+
+    private void Tick(System.Collections.Generic.List<PlayerShip> pilots, double delta)
+    {
+        var nose = ToGlobal(new Vector2(0, -Length * 0.5f));
+        PlayerShip Nearest(float within) => pilots.Where(p => p.Position.DistanceTo(Position) <= within).OrderBy(p => p.Position.DistanceTo(Position)).FirstOrDefault();
+        _guns -= delta;
+        if (_guns <= 0) { _guns = 1.2; var t = Nearest(900f); if (t != null) { t.Hit(6, Position); Combat.Flash(nose, t.Position, new Color(1f, 0.5f, 0.35f)); } }
+        _missiles -= delta;
+        if (_missiles <= 0)
+        {
+            _missiles = 7.0;
+            for (int i = 0; i < 4; i++)
+            {
+                var t = pilots[i % pilots.Count];
+                var dir = Vector2.Up.Rotated(Rotation + (i - 1.5f) * 0.35f);
+                Combat.LaunchTorpedo(nose + dir * 10f, dir, 150f, 1600f, 20, t.NetId, 1.4f, heavy: false, hostile: true);
+            }
+        }
+        _beam -= delta;
+        if (_beam <= 0 && _pendingBeam == null)
+        {   // the death beam: telegraph first, then it fires down the same line
+            _beam = 12.0;
+            var t = pilots.OrderBy(p => p.Position.DistanceTo(Position)).First();
+            var a = nose; var b = a + (t.Position - a).Normalized() * BeamLength;
+            _pendingBeam = (a, b); _beamT = BeamWindup;
+            Tele(true, a, b, BeamWidth, BeamWindup);
+        }
+        if (_pendingBeam is { } beam && (_beamT -= delta) <= 0)
+        {
+            foreach (var p in pilots)
+                if (DistToSegment(p.Position, beam.a, beam.b) <= BeamWidth / 2f + p.HitRadius) p.Hit(60, Position);
+            _pendingBeam = null;
+        }
+        _wave -= delta;
+        if (_wave <= 0 && _pendingWave == null)
+        {
+            _wave = 17.0; _pendingWave = Position; _waveT = WaveWindup;
+            Tele(false, Position, Vector2.Zero, WaveRadius, WaveWindup);
+        }
+        if (_pendingWave is { } c && (_waveT -= delta) <= 0)
+        {
+            foreach (var p in pilots) if (p.Position.DistanceTo(c) <= WaveRadius + p.HitRadius) p.Hit(45, c);
+            _pendingWave = null;
+        }
+    }
+
+    public static float DistToSegment(Vector2 p, Vector2 a, Vector2 b)
+    {
+        var ab = b - a; float t = Mathf.Clamp((p - a).Dot(ab) / ab.LengthSquared(), 0f, 1f);
+        return p.DistanceTo(a + ab * t);
+    }
+
+    // host: show a telegraph here and on every guest
+    private void Tele(bool line, Vector2 a, Vector2 b, float size, double time)
+    {
+        ShowTelegraph(line, a, b, size, time);
+        if (Net.IsOnline) Rpc(nameof(NetTelegraph), line, a, b, size, time);
+    }
+    private void ShowTelegraph(bool line, Vector2 a, Vector2 b, float size, double time) =>
+        GetParent().AddChild(new Telegraph { Line = line, A = a, B = b, Width = size, Radius = size, Duration = time });
+
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void NetTelegraph(bool line, Vector2 a, Vector2 b, float size, double time) => ShowTelegraph(line, a, b, size, time);
+
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
+    private void NetState(Vector2 p, float rot, double hp) { _netPos = p; _netRot = rot; _hasNet = true; Hp = hp; }
+
+    public int TelegraphsPending => (_pendingBeam != null ? 1 : 0) + (_pendingWave != null ? 1 : 0);
 }
 
 //==============================================================================
@@ -1085,7 +1282,7 @@ public partial class CharacterSelect : Control
 
 //==============================================================================
 // FILE: scripts/Combat.cs
-// 87 lines   sha256 98a26f36c8bb
+// 91 lines   sha256 6927ed45a2dd
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -1105,7 +1302,7 @@ public static class Combat
         IHittable best = null; float bd = range;
         foreach (var h in Hostiles)
         {
-            if (h == null || !h.Alive) continue;
+            if (h == null || !h.Alive || !h.Selectable) continue;      // never "nearest enemy" a missile
             float d = from.DistanceTo(h.Position);
             if (d < bd) { bd = d; best = h; }
         }
@@ -1120,6 +1317,10 @@ public static class Combat
         foreach (var p in Players) if (p != null && p.Alive && p.NetId == id) return p;
         return null;
     }
+
+    // Interceptable missiles get ids the host hands out and sends with the launch.
+    private static int _nextMissile = 10000;
+    public static int NextMissileId() => ++_nextMissile;
 
     public static IHittable ById(int id)
     {
@@ -1257,7 +1458,7 @@ public static class Economy
 
 //==============================================================================
 // FILE: scripts/EscMenu.cs
-// 56 lines   sha256 9b3d2c47a0ea
+// 59 lines   sha256 999b01e6cd29
 //==============================================================================
 using Godot;
 
@@ -1283,6 +1484,9 @@ public partial class EscMenu : CanvasLayer
 
         col.AddChild(new Label { Text = "Radar size" });
         col.AddChild(Choice(new[] { "SMALL", "MEDIUM", "LARGE" }, () => Settings.RadarSize, i => Settings.RadarSize = i, "Radar"));
+        var music = new Button { Name = "MusicToggle", FocusMode = Control.FocusModeEnum.None, Text = Settings.MusicOn ? "MUSIC: ON" : "MUSIC: OFF" };
+        music.Pressed += () => { Settings.MusicOn = !Settings.MusicOn; Settings.Save(); music.Text = Settings.MusicOn ? "MUSIC: ON" : "MUSIC: OFF"; };
+        col.AddChild(music);
         col.AddChild(new Label { Text = "Music volume" });
         var steps = new[] { 0f, 0.25f, 0.5f, 0.75f, 1f };
         col.AddChild(Choice(new[] { "0%", "25%", "50%", "75%", "100%" },
@@ -1914,7 +2118,7 @@ public static class HealthBar
 
 //==============================================================================
 // FILE: scripts/Hub.cs
-// 861 lines   sha256 bbe8a8349d94
+// 943 lines   sha256 8eb7fd7416e6
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -1966,7 +2170,17 @@ public partial class Hub : Node2D
     private readonly List<Node2D> _rocks = new();
     public IReadOnlyList<Node2D> Rocks => _rocks;
     public Portal Portal { get; private set; }
-    public Yard Yard { get; private set; }                    // the idle economy
+    public Yard Yard { get; private set; }                    // the idle economy (home only)
+
+    // ── sectors: HOME (the base) and the ARENA (a bounty). One scene, built either
+    // way; the host moves every peer between them together (EnterSector). ──────
+    public enum SectorKind { Home, Arena }
+    public static SectorKind Sector = SectorKind.Home;
+    public static bool InArena => Sector == SectorKind.Arena;
+    public static Hub I { get; private set; }
+    public Boss Boss { get; private set; }
+    private double _arenaEndT = -1;                         // counts down to going home
+    public bool MissionWon { get; private set; }
     private EscMenu _esc;
     public bool EscMenuOpen => IsInstanceValid(_esc);
     public void ToggleEscMenu()
@@ -2023,7 +2237,9 @@ public partial class Hub : Node2D
         stars.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         sky.AddChild(stars);
 
-        BuildWorld();
+        I = this;
+        Music.CombatZone = InArena;
+        if (!InArena) BuildWorld();                  // the arena's boss comes after Combat.Clear, below
         // Hit flashes get their own layer ABOVE the hulls (ships sit at z 4) and below the
         // turret sprites, so a shot is seen leaving a turret on top of the ship -- drawn at
         // the world's own level they started underneath it.
@@ -2064,7 +2280,7 @@ public partial class Hub : Node2D
         layer.AddChild(new HullHud { Hub = this });
         layer.AddChild(new Radar { Hub = this });
         layer.AddChild(new AbilityBar { Hub = this });
-        layer.AddChild(new HaulerHud { Hub = this });
+        if (!InArena) layer.AddChild(new HaulerHud { Hub = this });
 
         // Normally the select screen has loaded a character; this covers running the
         // hub directly (editor F6, smoke test).
@@ -2082,11 +2298,13 @@ public partial class Hub : Node2D
         // cosmetic copy (the run is straight and steady, so it lands in the same place).
         Combat.OnTorpedo = (from, dir, speed, range, dmg, target, turn, heavy, hostile, source) =>
         {
-            SpawnTorpedo(from, dir, speed, range, dmg, false, target, turn, heavy, hostile, source);
-            if (Net.IsHost && Net.IsOnline) Rpc(nameof(NetTorpedo), from, dir, speed, range, target, turn, heavy, hostile);
+            int id = hostile ? Combat.NextMissileId() : 0;       // hostile missiles can be shot down
+            SpawnTorpedo(from, dir, speed, range, dmg, false, target, turn, heavy, hostile, source, id);
+            if (Net.IsHost && Net.IsOnline) Rpc(nameof(NetTorpedo), from, dir, speed, range, target, turn, heavy, hostile, id);
         };
 
-        for (int i = 0; i < DummyPos.Length; i++)
+        if (InArena) BuildArena();                   // registered as a target AFTER Combat.Clear
+        for (int i = 0; i < (InArena ? 0 : DummyPos.Length); i++)       // the dummies live at home
         {
             int n = i + 1;
             var d = new TargetDummy { Name = $"TargetDummy{n}", Number = n, Armed = n == 3, Position = DummyPos[i], ZIndex = 3 };
@@ -2167,7 +2385,9 @@ public partial class Hub : Node2D
     // on the guest it became the host's ship, and the guest never got one of its own.
     private void OnSessionChanged()
     {
-        Yard.OnSessionChanged(!Net.IsHost);     // parks or restores your own yard
+        // the host gone while the party is in the arena: home, to your own base
+        if (InArena && !Net.IsOnline) { GoTo(SectorKind.Home); return; }
+        Yard?.OnSessionChanged(!Net.IsHost);    // parks or restores your own yard (home only)
         RebuildShips();
         // a guest that just connected introduces itself; the host and existing
         // guests introduce themselves to it from OnPlayerJoined
@@ -2278,6 +2498,8 @@ public partial class Hub : Node2D
 
     public void SetMyReady(bool ready)
     {
+        // READY also flies you to where the mission portal opens (a manual key cancels it)
+        if (_ships.TryGetValue(Net.LocalId, out var me) && IsInstanceValid(me)) me.AutopilotTo = ready ? MissionPortalPos : null;
         if (Net.IsHost) { _ready[Net.LocalId] = ready; BroadcastMission(); }
         else RpcId(1, nameof(RequestReady), ready);
     }
@@ -2290,6 +2512,61 @@ public partial class Hub : Node2D
         _ready[who] = ready; BroadcastMission();
     }
 
+    public const float PortalEnterRadius = 190f;
+
+    // ── moving the party between sectors (host decides; every peer follows) ──
+    public void EnterSector(SectorKind k)
+    {
+        if (!Net.IsHost) return;
+        if (k == SectorKind.Arena) Yard?.SaveForTrip();
+        if (Net.IsOnline) Rpc(nameof(NetSector), (int)k);
+        GoTo(k);
+    }
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void NetSector(int k) => GoTo((SectorKind)k);
+    private void GoTo(SectorKind k)
+    {
+        Sector = k;
+        GetTree().CallDeferred(SceneTree.MethodName.ChangeSceneToFile, "res://Hub.tscn");
+    }
+
+    // ── the arena: the boss, and how it ends ────────────────────────────────
+    private void BuildArena()
+    {
+        Boss = new Boss { Hub = this, Position = BasePos + new Vector2(0, -700f), Rotation = Mathf.Pi };
+        AddChild(Boss);
+    }
+
+    // host: the boss is dead -- shared EXP for the kill and the mission, credits home
+    public void BossDefeated()
+    {
+        if (!Net.IsHost || MissionWon) return;
+        MissionWon = true;
+        AwardPartyExp(Missions.BossExp + Missions.MissionExp);
+        Yard.TripCredits += Missions.BossCredits;
+        _arenaEndT = 4.0;
+        if (Net.IsOnline) Rpc(nameof(NetWon));
+    }
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void NetWon() => MissionWon = true;
+
+    private void TickArena(double delta)
+    {
+        Yard.TripClock += delta;                              // what the base is missing, in game time
+        if (!Net.IsHost) return;
+        // the whole party in stasis at once: the mission fails, everyone goes home
+        if (!MissionWon && _arenaEndT < 0 && _ships.Count > 0 && _ships.Values.All(s => IsInstanceValid(s) && !s.Alive)) _arenaEndT = 3.0;
+        if (_arenaEndT >= 0 && (_arenaEndT -= delta) <= 0) { _arenaEndT = -1; EnterSector(SectorKind.Home); }
+    }
+
+    // host: a missile was shot down; every guest bursts its copy
+    public void MissileDown(int id) { if (Net.IsHost && Net.IsOnline) Rpc(nameof(NetMissileDown), id); }
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void NetMissileDown(int id)
+    {
+        foreach (var t in GetChildren().OfType<Torpedo>()) if (t.NetId == id) t.Intercept();
+    }
+
     public void StartMission()
     {
         if (!Net.IsHost || !AllReady || Mission != MissionState.Idle) return;
@@ -2299,6 +2576,12 @@ public partial class Hub : Node2D
 
     private void TickMission(double delta)
     {
+        if (InArena) { TickArena(delta); return; }
+        // everyone READY opens the portal; everyone AT the portal goes through
+        if (Net.IsHost && Mission == MissionState.Idle && AllReady) StartMission();
+        if (Net.IsHost && Mission == MissionState.PortalOpen && _ships.Count > 0
+            && _ships.Values.All(s => IsInstanceValid(s) && s.Position.DistanceTo(MissionPortalPos) <= PortalEnterRadius))
+        { EnterSector(SectorKind.Arena); return; }
         if (Mission == MissionState.Opening)
         {   // every peer animates the bar; only the host decides the portal is open
             MissionT += delta;
@@ -2388,10 +2671,10 @@ public partial class Hub : Node2D
 
     public PlayerShip MyShipPublic => MyShip;
     private void SpawnTorpedo(Vector2 from, Vector2 dir, float speed, float range, double dmg, bool cosmetic,
-                              int target = 0, float turn = 0f, bool heavy = false, bool hostile = false, PlayerShip source = null)
+                              int target = 0, float turn = 0f, bool heavy = false, bool hostile = false, PlayerShip source = null, int id = 0)
     {
         AddChild(new Torpedo { Position = from, Dir = dir, Speed = speed, Range = range, Damage = dmg, Cosmetic = cosmetic,
-                               TargetId = target, TurnRate = turn, Heavy = heavy, HostileFire = hostile, Source = source });
+                               TargetId = target, TurnRate = turn, Heavy = heavy, HostileFire = hostile, Source = source , NetId = id });
     }
 
     private PlayerShip MyShip => _ships.TryGetValue(Net.LocalId, out var s) && IsInstanceValid(s) ? s : null;
@@ -2430,7 +2713,7 @@ public partial class Hub : Node2D
         if (best != null) { _selected = best; return; }
         // buildings: a left-click on one opens its menu
         if (IsInstanceValid(_tioSprite) && _tioSprite.GetRect().HasPoint(_tioSprite.ToLocal(world))) { OpenTio(); return; }
-        if (world.DistanceTo(BasePos) < 200f && !IsInstanceValid(_base)) ToggleBase();
+        if (!InArena && world.DistanceTo(BasePos) < 200f && !IsInstanceValid(_base)) ToggleBase();
     }
 
     public void BeginPlacement(string label, System.Action<Vector2> confirm)
@@ -2481,8 +2764,11 @@ public partial class Hub : Node2D
                                      : "    no target (Tab / click)";
             if (Placing) ship += $"    PLACING {_placingLabel}: left-click to confirm, right-click / Esc to cancel";
         }
-        _hud.Text = $"ORE {Yard.Ore:0}    SALVAGE {Yard.Salvage:0}    CREDITS {Yard.Credits:0}"
-                  + $"    HAULER {Yard.Hauler.Cargo:0}/{Yard.Capacity:0} {Yard.Hauler.State.ToString().ToUpper()}" + ship
+        string place = Yard == null
+            ? $"ARENA  ·  {Missions.BossName}  {(IsInstanceValid(Boss) ? Boss.Hp : 0):0} / {Boss.MaxHull:0}" + (MissionWon ? "  ·  DEFEATED" : "")
+            : $"ORE {Yard.Ore:0}    SALVAGE {Yard.Salvage:0}    CREDITS {Yard.Credits:0}"
+              + $"    HAULER {Yard.Hauler.Cargo:0}/{Yard.Capacity:0} {Yard.Hauler.State.ToString().ToUpper()}";
+        _hud.Text = place + ship
                   + (Net.IsOnline ? (Net.IsHost ? $"        HOSTING ({_ships.Count})" : $"        GUEST ({_ships.Count})") : "        OFFLINE")
                   + (FreeCamera ? "        FREE CAMERA (Y)" : "");
     }
@@ -2608,7 +2894,7 @@ public partial class Hub : Node2D
             if (kk.Keycode == Key.Y) ToggleFreeCamera();
             else if (kk.Keycode == Key.Tab) SelectNearest();
             else if (kk.Keycode == Key.K) ToggleStats();
-            else if (kk.Keycode == Key.B) ToggleBase();
+            else if (kk.Keycode == Key.B && !InArena) ToggleBase();
             else if (kk.Keycode == Key.L) TogglePilot();
             else
             {
@@ -2624,8 +2910,8 @@ public partial class Hub : Node2D
     }
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetTorpedo(Vector2 from, Vector2 dir, float speed, float range, int target, float turn, bool heavy, bool hostile)
-        => SpawnTorpedo(from, dir, speed, range, 0, true, target, turn, heavy, hostile);
+    private void NetTorpedo(Vector2 from, Vector2 dir, float speed, float range, int target, float turn, bool heavy, bool hostile, int id)
+        => SpawnTorpedo(from, dir, speed, range, 0, true, target, turn, heavy, hostile, null, id);
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
     private void NetFlash(Vector2 a, Vector2 b, Color c) => _flashes.Add((a, b, c, 0.10));
@@ -2660,7 +2946,7 @@ public partial class Hub : Node2D
     // REFIT: the only way into the ship menu (it costs 10%; see Yard.ResetCost).
     public void ResetShip()
     {
-        if (IsInstanceValid(_creator)) return;
+        if (IsInstanceValid(_creator) || Yard == null) return;       // REFIT is at the base
         Yard.ChargeReset();
         if (IsInstanceValid(_base)) ToggleBase();
         OpenCreator();
@@ -3021,7 +3307,7 @@ public static class Missions
 
 //==============================================================================
 // FILE: scripts/Music.cs
-// 74 lines   sha256 10bf5088a60c
+// 75 lines   sha256 ccb8fea42553
 //==============================================================================
 using Godot;
 
@@ -3083,8 +3369,9 @@ public partial class Music : Node
         float step = FadePerSecond * (float)delta;
         AmbientLevel = Mathf.MoveToward(AmbientLevel, a, step);
         CombatLevel = Mathf.MoveToward(CombatLevel, c, step);
-        _amb.VolumeDb = Db(AmbientLevel * AmbientTrim * Settings.MusicVolume);
-        _cmb.VolumeDb = Db(CombatLevel * Settings.MusicVolume);
+        float vol = Settings.MusicOn ? Settings.MusicVolume : 0f;       // the Esc menu's MUSIC ON/OFF
+        _amb.VolumeDb = Db(AmbientLevel * AmbientTrim * vol);
+        _cmb.VolumeDb = Db(CombatLevel * vol);
     }
 
     // Stop both loops. Call this a moment BEFORE quitting: the mixer lets go of its
@@ -3410,7 +3697,7 @@ public partial class PilotWindow : PanelContainer
 
 //==============================================================================
 // FILE: scripts/PlayerShip.cs
-// 657 lines   sha256 46e905d007b2
+// 661 lines   sha256 5338160848be
 //==============================================================================
 using Godot;
 using System;
@@ -3442,6 +3729,7 @@ public partial class PlayerShip : Node2D, IHittable
     public ShipClass Class = ShipClass.Battleship;
     public ShipStats Stats = new(ShipClass.Battleship);
     public bool Alive { get; private set; } = true;
+    public Vector2? AutopilotTo;                          // set by READY: the owner's ship flies itself there
 
     // ── as a target: for ENEMY fire only (Combat.Players) ──────────────────
     public const int NetIdBase = 2000;                  // same on every peer: 2000 + owner
@@ -3892,6 +4180,9 @@ public partial class PlayerShip : Node2D, IHittable
             if (Input.IsKeyPressed(Key.A)) rudder -= 1f;
             if (Input.IsKeyPressed(Key.D)) rudder += 1f;
         }
+        if (throttle != 0f || rudder != 0f) AutopilotTo = null;        // any helm key takes the controls back
+        else if (AutopilotTo is { } dest)
+            (throttle, rudder) = Autopilot.Capital(Position, Rotation, Velocity, (float)Stats["max_speed"], dest, 60f);
         Thrusting = throttle != 0f;
         Steer(throttle, rudder, dt);
 
@@ -4180,7 +4471,7 @@ public static class Progression
 
 //==============================================================================
 // FILE: scripts/Radar.cs
-// 92 lines   sha256 fa7ef2b9e654
+// 93 lines   sha256 eff30cd82bb4
 //==============================================================================
 using Godot;
 
@@ -4232,11 +4523,12 @@ public partial class Radar : Control
 
         foreach (var rock in Hub.Rocks) { var p = P(rock.Position); if (Inside(p)) DrawCircle(p, 1.2f, new Color(0.55f, 0.45f, 0.35f, 0.8f)); }
         { var p = P(Hub.WreckPos); if (Inside(p)) DrawCircle(p, 4f, new Color(0.5f, 0.35f, 0.25f, 0.9f)); }
-        { var p = P(Hub.TioPos); if (Inside(p)) DrawRect(new Rect2(p - new Vector2(3, 4), new Vector2(6, 8)), new Color(0.6f, 0.64f, 0.7f)); }   // the TIO
-        { var p = P(Hub.BasePos); if (Inside(p)) DrawRect(new Rect2(p - new Vector2(4, 4), new Vector2(8, 8)), new Color(0.75f, 0.78f, 0.8f)); }
+        if (Hub.Boss != null && IsInstanceValid(Hub.Boss)) { var p = P(Hub.Boss.Position); if (Inside(p)) DrawCircle(p, 6f, new Color(1f, 0.3f, 0.25f)); }   // the boss
+        if (!Hub.InArena) { var p = P(Hub.TioPos); if (Inside(p)) DrawRect(new Rect2(p - new Vector2(3, 4), new Vector2(6, 8)), new Color(0.6f, 0.64f, 0.7f)); }   // the TIO
+        if (!Hub.InArena) { var p = P(Hub.BasePos); if (Inside(p)) DrawRect(new Rect2(p - new Vector2(4, 4), new Vector2(8, 8)), new Color(0.75f, 0.78f, 0.8f)); }
         { var p = P(Hub.PortalPos); if (Inside(p)) DrawArc(p, 5f, 0, Mathf.Tau, 16, new Color(0.4f, 0.8f, 1f), 1.5f); }
-        foreach (var g in Hub.Yard.Gatherers) { var p = P(g.Position); if (Inside(p)) DrawCircle(p, 1.8f, Plume.Utility); }
-        if (Hub.Yard.Hauler != null && Hub.Yard.Hauler.Visible) { var p = P(Hub.Yard.Hauler.Position); if (Inside(p)) DrawRect(new Rect2(p - new Vector2(3, 1.5f), new Vector2(6, 3)), Plume.Utility); }
+        if (Hub.Yard != null) foreach (var g in Hub.Yard.Gatherers) { var p = P(g.Position); if (Inside(p)) DrawCircle(p, 1.8f, Plume.Utility); }
+        if (Hub.Yard?.Hauler != null && Hub.Yard.Hauler.Visible) { var p = P(Hub.Yard.Hauler.Position); if (Inside(p)) DrawRect(new Rect2(p - new Vector2(3, 1.5f), new Vector2(6, 3)), Plume.Utility); }
         foreach (var h in Combat.Hostiles)
         {
             if (h == null || !h.Alive) continue;
@@ -4371,7 +4663,7 @@ public partial class SessionMenu : CanvasLayer
 
 //==============================================================================
 // FILE: scripts/Settings.cs
-// 55 lines   sha256 7caa698e0b7e
+// 58 lines   sha256 80100257eda5
 //==============================================================================
 using Godot;
 
@@ -4386,6 +4678,7 @@ public static class Settings
     public static readonly float[] VolumeSteps = { 0f, 0.25f, 0.5f, 0.75f, 1f };
     public static int VolumeIdx = 3;
     public static float MusicVolume = 0.6f;          // 0..1, a share of the master volume
+    public static bool MusicOn = true;               // on by default; the Esc menu toggles it
     public static int RadarSize = 1;                 // 0 small, 1 medium, 2 large
     public static float Volume => VolumeSteps[Mathf.Clamp(VolumeIdx, 0, VolumeSteps.Length - 1)];
 
@@ -4407,6 +4700,7 @@ public static class Settings
         var c = new ConfigFile();
         c.SetValue("audio", "volume_idx", VolumeIdx);
         c.SetValue("audio", "music", MusicVolume);
+        c.SetValue("audio", "music_on", MusicOn);
         c.SetValue("ui", "radar_size", RadarSize);
         foreach (var kv in Keys) c.SetValue("keys", kv.Key, kv.Value);
         c.Save(Path);
@@ -4419,6 +4713,7 @@ public static class Settings
         if (c.Load(Path) != Error.Ok) return;
         VolumeIdx = (int)c.GetValue("audio", "volume_idx", VolumeIdx);
         MusicVolume = (float)c.GetValue("audio", "music", MusicVolume);
+        MusicOn = (bool)c.GetValue("audio", "music_on", true);
         RadarSize = Mathf.Clamp((int)c.GetValue("ui", "radar_size", RadarSize), 0, 2);
         Keys.Clear();
         if (c.HasSection("keys"))
@@ -4507,8 +4802,9 @@ public partial class ShieldFlash : Node2D
 
 //==============================================================================
 // FILE: scripts/ShipClasses.cs
-// 487 lines   sha256 c2fdedd109e0
+// 492 lines   sha256 10726adf655f
 //==============================================================================
+using System.Linq;
 using Godot;
 using System;
 
@@ -4540,6 +4836,8 @@ public interface IHittable
     // Does a projectile at p (with pad for its own size) touch this? A circle by
     // default; a long ship answers with a capsule along its keel.
     bool Covers(Vector2 p, float pad) => p.DistanceTo(Position) <= HitRadius + pad;
+    // Missiles can be shot down, but they are never SELECTED (click or Tab).
+    bool Selectable => true;
 }
 
 // ── Turret ───────────────────────────────────────────────────────────────────
@@ -4637,11 +4935,13 @@ public partial class Turret : Node2D
         QueueRedraw();
     }
 
-    // Nearest hostile in range that no other PD turret on this ship has claimed;
-    // if every one in range is claimed, the nearest regardless.
+    // Point defence shoots MISSILES first, then small craft (fighters), then anything
+    // else; within that, the nearest one no sibling turret has claimed (if all are
+    // claimed, the nearest regardless).
+    public static int PdPriority(IHittable h) => h is Torpedo ? 0 : h.HitRadius < 20f ? 1 : 2;
     private IHittable Acquire(Vector2 from)
     {
-        var inRange = Combat.Near(from, Range);
+        var inRange = Combat.Near(from, Range).OrderBy(h => PdPriority(h)).ThenBy(h => from.DistanceTo(h.Position)).ToList();
         foreach (var h in inRange)
         {
             bool claimed = false;
@@ -5489,21 +5789,74 @@ public partial class TargetDummy : Node2D, IHittable
 }
 
 //==============================================================================
+// FILE: scripts/Telegraph.cs
+// 47 lines   sha256 89f6af49c4d7
+//==============================================================================
+using Godot;
+
+// A TELEGRAPH: the red warning for a high-damage attack, shown for its whole wind-up
+// so pilots can get out. A LINE (a beam: from, to, width) or a CIRCLE (centre,
+// radius). It fills as the moment approaches, then flashes when the attack lands and
+// frees itself. Pure visuals: the host resolves the hit when the time is up.
+public partial class Telegraph : Node2D
+{
+    public bool Line;
+    public Vector2 A, B;           // line: from and to (world); circle: A is the centre
+    public float Width, Radius;
+    public double Duration;
+    private double _t;
+    private const double Flash = 0.35;
+
+    public override void _Ready() { ZIndex = 7; ZAsRelative = false; }
+
+    public override void _Process(double delta)
+    {
+        _t += delta;
+        if (_t > Duration + Flash) QueueFree();
+        QueueRedraw();
+    }
+
+    public override void _Draw()
+    {
+        float k = (float)Mathf.Clamp(_t / Duration, 0, 1);
+        bool firing = _t >= Duration;
+        float pulse = 0.5f + 0.5f * Mathf.Sin((float)_t * (8f + 10f * k));
+        var edge = new Color(1f, 0.15f, 0.12f, firing ? 1f : 0.55f + 0.35f * pulse);
+        var fill = firing ? new Color(1f, 0.85f, 0.8f, 0.7f * (float)(1 - (_t - Duration) / Flash)) : new Color(1f, 0.1f, 0.08f, 0.10f + 0.12f * k);
+        if (Line)
+        {
+            var dir = (B - A).Normalized(); var side = new Vector2(-dir.Y, dir.X) * Width / 2f;
+            DrawColoredPolygon(new[] { A + side, B + side, B - side, A - side }, fill);
+            if (!firing)   // the wind-up creeps down the beam's length
+                DrawColoredPolygon(new[] { A + side, A + (B - A) * k + side, A + (B - A) * k - side, A - side }, new Color(1f, 0.15f, 0.1f, 0.22f));
+            DrawPolyline(new[] { A + side, B + side, B - side, A - side, A + side }, edge, 2.5f);
+        }
+        else
+        {
+            DrawCircle(A, Radius, fill);
+            if (!firing) DrawCircle(A, Radius * k, new Color(1f, 0.15f, 0.1f, 0.20f));   // the wind-up grows outward
+            DrawArc(A, Radius, 0, Mathf.Tau, 72, edge, 3f);
+        }
+    }
+}
+
+//==============================================================================
 // FILE: scripts/TioWindow.cs
-// 54 lines   sha256 7e0c25a66c05
+// 50 lines   sha256 4eb0ba9f2020
 //==============================================================================
 using Godot;
 using System.Linq;
 
 // WARP TO TARGET -- the Threat Intelligence Operations window (left-click the TIO).
-// A bounty, the party (everyone in the session) with each pilot's READY, and WARP,
-// which only the host can press and only once every pilot is ready. WARP opens the
-// mission portal: a 3 s bar at the TIO's top right, then the portal itself.
+// A bounty, and the party (everyone in the session) with each pilot's READY. READY
+// flies your ship to where the portal opens; once EVERY pilot is ready the portal
+// opens (a 3 s bar at the TIO's top right), and once every ship is at it, the party
+// goes through together.
 public partial class TioWindow : PanelContainer
 {
     public Hub Hub;
     private Label _party, _status;
-    private Button _ready, _warp;
+    private Button _ready;
 
     public override void _Ready()
     {
@@ -5521,9 +5874,7 @@ public partial class TioWindow : PanelContainer
         var row = new HBoxContainer(); row.AddThemeConstantOverride("separation", 10); col.AddChild(row);
         _ready = new Button { Name = "Ready", FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(215, 36) };
         _ready.Pressed += () => Hub.SetMyReady(!Hub.IsReady(Net.LocalId));
-        _warp = new Button { Name = "Warp", FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(215, 36) };
-        _warp.Pressed += () => Hub.StartMission();
-        row.AddChild(_ready); row.AddChild(_warp);
+        row.AddChild(_ready);
         _status = new Label(); col.AddChild(_status);
         col.AddChild(new Label { Text = "Esc closes.", Modulate = new Color(1, 1, 1, 0.45f) });
     }
@@ -5535,21 +5886,18 @@ public partial class TioWindow : PanelContainer
         bool mine = Hub.IsReady(Net.LocalId);
         _ready.Text = mine ? "READY  ✓" : "READY";
         int waiting = Hub.PartyIds.Count(i => !Hub.IsReady(i));
-        _warp.Visible = Net.IsHost;
-        _warp.Disabled = !Hub.AllReady || Hub.Mission != Hub.MissionState.Idle;
-        _warp.Text = waiting > 0 ? $"WARP  (waiting for {waiting})" : "WARP";
         _status.Text = Hub.Mission switch
         {
             Hub.MissionState.Opening    => $"Opening the portal…  {Hub.MissionT:0.0} / {Hub.PortalOpenTime:0} s",
-            Hub.MissionState.PortalOpen => "The portal is open, at the top right of this building.",
-            _ => Net.IsHost ? "When every pilot is ready, WARP opens the portal." : "When every pilot is ready, the host warps.",
+            Hub.MissionState.PortalOpen => "The portal is open: the party goes through when every ship is at it.",
+            _ => waiting > 0 ? $"Waiting for {waiting} pilot(s) to press READY. READY flies you to the portal." : "Everyone is ready.",
         };
     }
 }
 
 //==============================================================================
 // FILE: scripts/Torpedo.cs
-// 119 lines   sha256 3f295b986fea
+// 140 lines   sha256 f29608651339
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -5567,7 +5915,7 @@ using System.Collections.Generic;
 // it is HEAVY -- a slow bunker buster with a bigger body, darker smoke and a bigger
 // blast. Guests run the same guidance on the same positions, so their cosmetic
 // copy follows the host's.
-public partial class Torpedo : Node2D
+public partial class Torpedo : Node2D, IHittable
 {
     public Vector2 Dir;
     public float Speed, Range;
@@ -5587,7 +5935,28 @@ public partial class Torpedo : Node2D
 
     public const float SmokeLife = 1.6f, PuffEvery = 0.03f;
 
-    public override void _Ready() { ZIndex = 6; Rotation = Dir.Angle() + Mathf.Pi / 2f; }
+    // As a TARGET (hostile missiles only): small, and one hit brings it down. The host
+    // resolves the hit and tells every guest to burst its copy (by NetId).
+    public int NetId { get; set; }
+    public float HitRadius => 8f;
+    public bool Alive => !_spent;
+    public bool Selectable => false;
+    public static int Intercepted;                       // missiles shot down (host), for the record
+    public void TakeDamage(double d)
+    {
+        if (!Net.Sim || _spent) return;
+        Intercepted++;
+        Intercept();
+        Hub.I?.MissileDown(NetId);
+    }
+    public void Intercept() { if (!_spent) Detonate(); Combat.Hostiles.Remove(this); }
+
+    public override void _Ready()
+    {
+        ZIndex = 6; Rotation = Dir.Angle() + Mathf.Pi / 2f;
+        if (HostileFire && NetId != 0) Combat.Hostiles.Add(this);
+    }
+    public override void _ExitTree() => Combat.Hostiles.Remove(this);
 
     public override void _Process(double delta)
     {
@@ -5736,7 +6105,7 @@ public static class Ui
 
 //==============================================================================
 // FILE: scripts/Yard.cs
-// 336 lines   sha256 7b626c30998b
+// 387 lines   sha256 1cd1e412db23
 //==============================================================================
 using Godot;
 using System;
@@ -5770,9 +6139,12 @@ public partial class Yard : Node2D
     public Hauler Hauler;
 
     private readonly Dictionary<string, int> _levels = new();
-    private double _ownOre, _ownSalvage, _ownCredits;
-    private readonly Dictionary<string, int> _ownLevels = new();
-    private bool _parked;
+    // A guest's OWN base, set aside while it visits someone else's. Static: the scene is
+    // reloaded when the party goes to the arena and back, and an instance field went
+    // with it -- a guest who followed the party lost its own base.
+    private static double _ownOre, _ownSalvage, _ownCredits;
+    private static readonly Dictionary<string, int> _ownLevels = new();
+    private static bool _parked;
     private double _totalsCd, _stateCd, _t;
 
     // ── the service arms ─────────────────────────────────────────────────────
@@ -5803,10 +6175,56 @@ public partial class Yard : Node2D
 
     public override void _Ready()
     {
+        // a pilot coming home offline (the host left, or the mission ended) gets back
+        // the base it set aside
+        if (_parked && !Net.IsOnline) CallDeferred(nameof(RestoreOwn));
         ZIndex = 3;                                        // above the base
         Hauler = new Hauler { Yard = this, Name = "Hauler" };
         AddChild(Hauler);
         SyncFleet();
+        ReturnFromTrip();
+    }
+
+    // ── away on a mission ────────────────────────────────────────────────────
+    // The base is not simulated while the party is in the arena. It is saved on the
+    // way out; on return it gets back what it had, any credits earned out there, and
+    // 1/20 of what its fleet would have gathered in the time away.
+    public const double AwayShare = 1.0 / 20.0;
+    private sealed record Trip(double Ore, double Salvage, double Credits, Dictionary<string, int> Levels,
+                               double OrePerSec, double SalvagePerSec);
+    public static double TripClock;                   // game seconds in the arena (Hub counts them)
+    private static Trip _trip;
+    public static double TripCredits;                 // earned while away (a bounty), paid on return
+    public static double LastAway, LastAwayOre, LastAwaySalvage;   // what the last return credited
+
+    public void SaveForTrip()
+    {
+        _trip = new Trip(Ore, Salvage, Credits, new Dictionary<string, int>(_levels),
+                         FleetRate(GatherKind.Miner), FleetRate(GatherKind.Salvager));
+        TripCredits = 0; TripClock = 0;
+    }
+
+    private void ReturnFromTrip()
+    {
+        if (_trip == null) return;
+        var t = _trip; _trip = null;
+        LastAway = TripClock;
+        LastAwayOre = t.OrePerSec * LastAway * AwayShare; LastAwaySalvage = t.SalvagePerSec * LastAway * AwayShare;
+        Ore = t.Ore + LastAwayOre; Salvage = t.Salvage + LastAwaySalvage;
+        Credits = t.Credits + TripCredits; TripCredits = 0;
+        _levels.Clear(); foreach (var kv in t.Levels) _levels[kv.Key] = kv.Value;
+        SyncFleet();
+    }
+
+    // A fleet's steady income: each ship fills its hold, flies about 1000 u each way,
+    // and unloads. (An estimate: good enough for a 1/20 share.)
+    public double FleetRate(GatherKind k)
+    {
+        double rate = 0;
+        foreach (var g in Gatherers)
+            if (g.Kind == k)
+                rate += g.Hold / (g.Hold / g.Rate + 2 * 1000.0 / g.Speed + g.Hold / Economy.UnloadRate);
+        return rate;
     }
 
     // ── upgrades ─────────────────────────────────────────────────────────────
@@ -6073,6 +6491,8 @@ public partial class Yard : Node2D
             DrawLine(o0 + across, o0 + across + a.Open * 12f, col, 1.5f);
         }
     }
+
+    private void RestoreOwn() => OnSessionChanged(false);
 }
 
 //==============================================================================
@@ -6139,7 +6559,7 @@ echo "0 errors." >&2
 
 //==============================================================================
 // FILE: tools/screens/Shots.cs.txt
-// 303 lines   sha256 c908e67e7f73
+// 317 lines   sha256 383dcce54bff
 //==============================================================================
 // Screenshot driver. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Shots.cs, registers it as an autoload, and runs the real
@@ -6307,10 +6727,12 @@ public partial class _Shots : Node
             var hub = H; var pship = hub.GetNode<PlayerShip>("Ship_1");
             Character.Points = 4;
             hub.TogglePilot(); await W(0.4); await Snap("34_pilot_window"); hub.TogglePilot(); await W(0.2);
-            pship.Position = Hub.TioPos + new Vector2(240, -40); pship.Velocity = Vector2.Zero;
+            // outside the portal's entry radius, or the party would go through mid-sweep
+            pship.Position = Hub.TioPos + new Vector2(240, 180); pship.Velocity = Vector2.Zero;
             GetViewport().GetCamera2D().Zoom = new Vector2(1.1f, 1.1f); await W(1.6);
             hub.OpenTio(); await W(0.4); await Snap("35_tio_warp_to_target");
-            hub.SetMyReady(true); hub.StartMission(); await W(1.6); await Snap("36_mission_opening_bar");
+            hub.SetMyReady(true); pship.AutopilotTo = null;              // READY, but stay for the pictures
+            await W(1.6); await Snap("36_mission_opening_bar");
             await W(2.0); await Snap("37_mission_portal_open");
             var tw = hub.GetTree().Root.FindChild("TioWindow", true, false); if (tw != null) tw.QueueFree();
             GetViewport().GetCamera2D().Zoom = new Vector2(0.9f, 0.9f); await W(0.3);
@@ -6441,6 +6863,18 @@ public partial class _Shots : Node
             await W(0.5); await Snap("28e_hauler_turning_while_landing");      // about half way down, half way round
             Me().Visible = true;
         }
+        // the arena, last: the trip replaces the hub scene, so nothing may follow it that
+        // holds an old reference. The boss, its death-beam telegraph, its shockwave telegraph.
+        {
+            H.EnterSector(Hub.SectorKind.Arena); await W(1.5);
+            var boss = H.Boss; var ash = H.GetNode<PlayerShip>("Ship_1");
+            ash.Position = boss.Position + new Vector2(120, 560); ash.Velocity = Vector2.Zero; ash.Rotation = 0f;
+            GetViewport().GetCamera2D().Zoom = new Vector2(0.62f, 0.62f); await W(1.5);
+            for (int i = 0; i < 60 * 14 && !N<Telegraph>().Any(t => t.Line); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await W(1.0); await Snap("38_arena_beam_telegraph");
+            for (int i = 0; i < 60 * 16 && !N<Telegraph>().Any(t => !t.Line); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await W(0.9); await Snap("39_arena_shockwave_telegraph");
+        }
         GetTree().Quit();
     }
 }
@@ -6492,7 +6926,7 @@ ls /tmp/shots
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 991 lines   sha256 bf412657e588
+// 1063 lines   sha256 c9fbd25f735b
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -6610,7 +7044,9 @@ public partial class _Test : Node
     }
 
     // ── single player ────────────────────────────────────────────────────────
-    PlayerShip Me => H.GetNodeOrNull<PlayerShip>("Ship_1");
+    // MY ship on every peer: "Ship_1" is only right offline and on the host (id 1);
+    // on a guest it is the HOST's ship.
+    PlayerShip Me => Nodes<PlayerShip>().FirstOrDefault(x => x.Mine);
     // class changes go through the creator path now (there are no class hotkeys)
     async Task SetClass(ShipClass c) { Character.Class = c; Priv(H, "ApplyLocalIdentity"); await Wait(0.1); }
     System.Collections.Generic.List<(Vector2 p, float age)> Smoke(Torpedo t) =>
@@ -7171,33 +7607,6 @@ public partial class _Test : Node
             Priv(H, "ApplyLocalIdentity");
         }
 
-        // ── buildings open their menus; the TIO's mission portal ──
-        {
-            var me = Me; var tioHome = me.Position;
-            me.Position = Hub.TioPos + new Vector2(260, 0); me.Velocity = Vector2.Zero; await Wait(1.5);
-            Click(Scr(Hub.TioPos)); await Wait(0.1);
-            Check(H.TioOpen && Nodes<TioWindow>().Any(), "left-click on the TIO opens WARP TO TARGET");
-            var tw = Nodes<TioWindow>().First();
-            var warp = Nodes<Button>(tw).First(b => b.Name == "Warp");
-            Check(!H.IsReady(Net.LocalId) && warp.Disabled, "WARP is locked until every pilot is ready");
-            Nodes<Button>(tw).First(b => b.Name == "Ready").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.1);
-            Check(H.AllReady && !warp.Disabled, "alone, my READY makes the party ready: WARP unlocks");
-            warp.EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.1);
-            Check(H.Mission == Hub.MissionState.Opening && H.GetNodeOrNull("MissionPortal") == null, "WARP starts the 3 s opening; no portal yet");
-            await Wait(Hub.PortalOpenTime + 0.2);
-            var mp = H.GetNodeOrNull<Node2D>("MissionPortal");
-            var tio = H.GetNode<Sprite2D>("TIO"); float halfW = tio.GetRect().Size.X * tio.Scale.X / 2f;
-            Check(H.Mission == Hub.MissionState.PortalOpen && mp != null && mp.Position.X > Hub.TioPos.X + halfW && mp.Position.Y < Hub.TioPos.Y - Hub.TioHeight / 2f,
-                  "after 3 s the portal opens off the TIO's top-right corner");
-            Key(global::Godot.Key.Escape); await Wait(0.1);
-            Check(!H.TioOpen, "Esc closes it");
-            me.Position = Hub.BasePos + new Vector2(0, 330); await Wait(1.5);
-            Click(Scr(Hub.BasePos)); await Wait(0.1);
-            Check(Nodes<BasePanel>().Any(), "left-click on the base station opens the BASE menu");
-            Key(global::Godot.Key.B); await Wait(0.1);
-            me.Position = tioHome; me.Velocity = Vector2.Zero; await Wait(0.5);
-        }
-
         // ── enemy fire, shields, stasis, the escape pod, re-boarding ──
         {
             var d3x = H.GetNode<TargetDummy>("TargetDummy3");
@@ -7286,6 +7695,91 @@ public partial class _Test : Node
             Check(!H.FreeCamera && H.CameraPosition.DistanceTo(sh.ViewPosition) < 30f && Mathf.IsEqualApprox(H.ZoomLevel, kept),
                   "Y again returns to the ship, keeping the zoom");
             H.SetZoom(Hub.DefaultZoom);
+        }
+
+        // ── buildings open menus; READY -> autopilot -> portal -> ARENA -> home ──
+        // (Late in the run on purpose: the trip replaces the whole hub scene, so every
+        //  node reference taken before it -- dummies, ships -- is stale afterwards.)
+        {
+            var tioHome = Me.Position;
+            Me.Position = Hub.TioPos + new Vector2(260, 0); Me.Velocity = Vector2.Zero; await Wait(1.5);
+            Click(Scr(Hub.TioPos)); await Wait(0.1);
+            Check(H.TioOpen && Nodes<TioWindow>().Any(), "left-click on the TIO opens WARP TO TARGET");
+            var tw = Nodes<TioWindow>().First();
+            Check(!Nodes<Button>(tw).Any(b => b.Name == "Warp"), "no WARP button: READY drives the mission");
+            H.Yard.Credits = 1000;
+            // start well away from where the portal opens, so the autopilot has a real trip
+            Me.Position = H.MissionPortalPos + new Vector2(300, 700); Me.Velocity = Vector2.Zero; await Wait(0.3);
+            Nodes<Button>(tw).First(b => b.Name == "Ready").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.1);
+            Check(H.AllReady && H.Mission == Hub.MissionState.Opening && Me.AutopilotTo == H.MissionPortalPos,
+                  "READY: the party (just me) is ready, the portal starts opening, and my ship flies itself there");
+            await Wait(Hub.PortalOpenTime + 0.2);
+            var mp = H.GetNodeOrNull<Node2D>("MissionPortal");
+            var tio = H.GetNode<Sprite2D>("TIO"); float halfW = tio.GetRect().Size.X * tio.Scale.X / 2f;
+            Check(H.Mission == Hub.MissionState.PortalOpen && mp != null && mp.Position.X > Hub.TioPos.X + halfW && mp.Position.Y < Hub.TioPos.Y - Hub.TioHeight / 2f,
+                  "after 3 s the portal opens off the TIO's top-right corner");
+            float d0 = Me.Position.DistanceTo(H.MissionPortalPos);
+            for (int i = 0; i < 60 * 45 && !Hub.InArena; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await Wait(1.0);
+            Check(Hub.InArena, $"the capital-ship autopilot flew {d0:0} u to the portal and the party went through");
+            var boss = H.Boss;
+            Check(boss != null && boss.Alive && H.Yard == null && !Nodes<TargetDummy>().Any() && Combat.Hostiles.Contains(boss),
+                  "the arena: the Silver Lancer, and no base or dummies");
+            Check(Music.CombatZone, "the arena counts as combat for the music");
+            Me.Position = boss.Position + new Vector2(0, 500); Me.Velocity = Vector2.Zero; Me.Rotation = 0;
+            Key(global::Godot.Key.Q); await Wait(0.1);                           // point defence up
+            Telegraph beam = null;
+            for (int i = 0; i < 60 * 14 && beam == null; i++) { beam = Nodes<Telegraph>().FirstOrDefault(t => t.Line); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            Check(beam != null && boss.TelegraphsPending > 0, "the death beam is telegraphed: a red line before it fires");
+            int down0 = Torpedo.Intercepted;
+            for (int i = 0; i < 60 * 10 && Torpedo.Intercepted == down0; i++)
+            {
+                if (!Me.PdActive && Me.PdReady) Key(global::Godot.Key.Q);
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            }
+            Check(Torpedo.Intercepted > down0, "point defence shoots the boss's missiles down");
+            var aMissile = Nodes<Torpedo>().FirstOrDefault(t => t.HostileFire);
+            Check(Turret.PdPriority(boss) == 2 && (aMissile == null || Turret.PdPriority(aMissile) == 0), "point defence takes missiles before anything else");
+            var tiny = new TinyTarget();
+            Check(Turret.PdPriority(tiny) == 1 && Turret.PdPriority(tiny) < Turret.PdPriority(boss), "then small craft (fighter-sized), then everything else");
+            Telegraph ring = null;
+            for (int i = 0; i < 60 * 18 && ring == null; i++) { ring = Nodes<Telegraph>().FirstOrDefault(t => !t.Line); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            Check(ring != null && ring.Radius == Boss.WaveRadius, "the shockwave is telegraphed: a red ring before it lands");
+            // the kill: shared EXP for it and the mission, the bounty's credits, then home
+            Character.Exp = 0; Character.Level = 1; Character.Points = 0;
+            boss.TakeDamage(boss.Hp + 1); await Wait(0.2);
+            Check(H.MissionWon && Character.Level == 3 && Character.Exp == 150, "the kill pays 300 + 100 EXP (level 1 -> 3, 150 over)");
+            for (int i = 0; i < 60 * 8 && Hub.InArena; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await Wait(1.0);
+            Check(!Hub.InArena && H.Yard != null, "home again after the win");
+            Check(H.Yard.Credits >= 3000 - 1e-6 && H.Yard.Credits < 3000 + 400, $"the bounty's 2000 credits are paid at home ({H.Yard.Credits:0})");
+            // the literal 1/20 asked for -- not Yard.AwayShare, or the check could never fail
+            double want = H.Yard.FleetRate(GatherKind.Miner) * Yard.LastAway / 20.0;
+            Check(Yard.LastAway > 1 && Yard.LastAwayOre > 0 && Math.Abs(Yard.LastAwayOre - want) < 1e-6,
+                  $"while away the base earned 1/20 of its rate ({Yard.LastAwayOre:0.0} ore for {Yard.LastAway:0} s)");
+            // a wipe: every ship in stasis at once -> the mission fails, home with nothing
+            H.EnterSector(Hub.SectorKind.Arena); await Wait(1.5);
+            int exp1 = Character.Exp;
+            Me.TakeDamage(Me.Hp + 1);
+            for (int i = 0; i < 60 * 8 && Hub.InArena; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await Wait(1.0);
+            Check(!Hub.InArena && Character.Exp == exp1 && Me.Alive, "the whole party in stasis: the mission fails, home with no reward");
+            // the fighter-class autopilot, flown on its own (no player fighter class yet)
+            Vector2 fp = Vector2.Zero, fv = Vector2.Zero; float fh = 0f; var goal = new Vector2(800, -600);
+            for (int i = 0; i < 60 * 12; i++)
+            {
+                var (turn, thrust) = Autopilot.Fighter(fp, fh, fv, goal, 300f, 30f);
+                fh += turn * 4f / 60f; fv += Vector2.Right.Rotated(fh) * thrust * 600f / 60f; fv *= 0.985f;
+                if (fv.Length() > 300f) fv = fv.Normalized() * 300f;
+                fp += fv / 60f;
+            }
+            Check(fp.DistanceTo(goal) < 80f, $"the fighter-class autopilot reaches its point ({fp.DistanceTo(goal):0} u off)");
+            Check(Settings.MusicOn, "music is on by default");
+            Character.Exp = 0; Character.Level = 1; Character.Points = 0; Character.Save();
+            Me.Position = Hub.BasePos + new Vector2(0, 330); Me.Velocity = Vector2.Zero; await Wait(1.5);
+            Click(Scr(Hub.BasePos)); await Wait(0.1);
+            Check(Nodes<BasePanel>().Any(), "left-click on the base station opens the BASE menu");
+            Key(global::Godot.Key.B); await Wait(0.1);
         }
 
         // ── radar and the Esc menu ──
@@ -7383,7 +7877,7 @@ public partial class _Test : Node
             Check(ships.Any(s => s.Pilot == "Third"), "the second guest's identity reached the host");
             H.AwardPartyExp(40);                  // shared: every pilot in the session gets it
             Check(!H.AllReady, "the host cannot warp until every pilot is ready");
-            H.SetMyReady(true);
+            H.SetMyReady(true); Me.AutopilotTo = null;
             for (int i = 0; i < 600 && !H.AllReady; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(H.AllReady && H.PartyIds.Count() == 3, "both guests' READY reached the host: the party of three is ready");
             H.StartMission();
@@ -7411,6 +7905,7 @@ public partial class _Test : Node
             Priv(H, "ApplyLocalIdentity"); Priv(H, "SendIdentity", 0);
             await Wait(6.0);
             H.SetMyReady(true);                           // READY for the bounty
+            Nodes<PlayerShip>().First(x => x.Mine).AutopilotTo = null;   // stay put: the scene must not change mid-test
             var all = Nodes<PlayerShip>().ToList();
             Check(all.Count == 3 && all.Any(s => s.Pilot == "HostPilot") && all.Any(s => s.Pilot == "Guesty"),
                   $"third player sees the host and the other guest ({string.Join(", ", all.Select(s => s.Pilot))})");
@@ -7431,6 +7926,7 @@ public partial class _Test : Node
             Check(Nodes<PlayerShip>().Count() >= 2, $"guest sees the host ({Nodes<PlayerShip>().Count()} ships)");
             H.Yard.BuyUpgrade("salvage_rate");            // a request: the host decides
             H.SetMyReady(true);                           // READY for the bounty
+            Nodes<PlayerShip>().First(x => x.Mine).AutopilotTo = null;   // stay put: the scene must not change mid-test
             var dummy = H.GetNode<TargetDummy>("TargetDummy1");
             if (mine != null) { mine.Position = dummy.Position + new Vector2(-300, 300); mine.Velocity = Vector2.Zero; }
             await Wait(1.5);
@@ -7484,6 +7980,16 @@ public partial class _Test : Node
             Check(ships.Count == 1 && ships[0].Mine && ships[0].Name == "Ship_1", "guest rebuilt to its own single ship");
         }
     }
+}
+
+// A fighter-sized stand-in, only for the PD priority check.
+public class TinyTarget : IHittable
+{
+    public int NetId => 0;
+    public Vector2 Position => Vector2.Zero;
+    public float HitRadius => 8f;
+    public bool Alive => true;
+    public void TakeDamage(double d) { }
 }
 
 //==============================================================================
