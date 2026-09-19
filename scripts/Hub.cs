@@ -1,0 +1,616 @@
+using Godot;
+using System;
+using System.Collections.Generic;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HUB — the safe world. It idles whether or not you are here, and it is where
+// every session starts, online or off.
+//
+// Layout, as specified:
+//     small sun + a short asteroid belt ABOVE the base
+//     a salvage wreck to the LEFT
+//     the base in the CENTRE
+//     the outbound wormhole to the RIGHT  (trade runs, and the way to other systems)
+//
+// Everything that produces is host-owned (Net.Sim). Clients render the same world
+// but never tick it, so two players in one hub always see the same numbers.
+// ─────────────────────────────────────────────────────────────────────────────
+public partial class Hub : Node2D
+{
+    // ── the hub's layout ─────────────────────────────────────────────────────
+    public static readonly Vector2 BasePos = Vector2.Zero;
+    // The base: base_station.png, 1024 x 1024 (its centre is the station's centre),
+    // drawn at 0.6. Its bottom pad was enlarged to 140 x 84 u and is the hauler's
+    // landing pad. The haul lane is the pad's centre line; the portal sits on it, so
+    // the hauler's every move is flat.
+    public const float BaseScale = 0.6f;
+    public static readonly Vector2 HaulerPad = new(0f, 219f);     // the enlarged bottom pad's centre: base_station.png row 877, (877 - 512) x 0.6
+    public static float LaneY => HaulerPad.Y;
+    public const float BaseBottom = 260f;                     // the pad's lower edge
+    public static readonly Vector2 StemFoot = new(0f, 175f);  // where the pad hangs from the station
+    public static readonly Vector2 SunPos    = new(0, -1500);
+    public static readonly Vector2 WreckPos  = new(-1250, 60);
+    public static readonly Vector2 PortalPos = new(1500, 219);   // on the lane through that pad
+    // three dummies south-east of the base, below the haul lane and far enough apart
+    // that a click is never ambiguous
+    public static readonly Vector2[] DummyPos = { new(600, 670), new(900, 550), new(900, 850) };
+    public const float BeltR = 520f;          // a short belt, tight around the sun
+    public const int   BeltRocks = 9;
+
+    // True while the keyboard and mouse belong to the UI: a text box has focus or the
+    // character creator is open. PlayerShip reads this before flying or aiming.
+    public static bool ControlsLocked { get; private set; }
+
+    private readonly List<Node2D> _rocks = new();
+    public IReadOnlyList<Node2D> Rocks => _rocks;
+    public Portal Portal { get; private set; }
+    public Yard Yard { get; private set; }                    // the idle economy
+    private BasePanel _base;
+    private readonly Dictionary<int, PlayerShip> _ships = new();
+    private Camera2D _cam;
+    private Label _hud, _help;
+    private CanvasLayer _hudLayer;
+    private CharacterCreator _creator;
+    private StatsWindow _statsWin;
+    private readonly List<TargetDummy> _dummies = new();
+
+    // A non-instant ability waiting for its spot: left-click confirms it at the
+    // cursor, right-click or Esc cancels. Nothing uses this yet; it is the slot the
+    // first placed ability plugs into, so left-click stays "select, or confirm".
+    private System.Action<Vector2> _placing;
+    private string _placingLabel;
+    public bool Placing => _placing != null;
+
+    // The local player's selected target. A UI choice, not an order: it is sent to
+    // the host only as the argument of an order (Space, F).
+    private IHittable _selected;
+    public IHittable Selected => _selected != null && _selected.Alive ? _selected : null;
+    private readonly List<(Vector2 a, Vector2 b, Color c, double t)> _flashes = new();
+
+    public override void _Ready()
+    {
+        // Background stars: a static, tiled image on a deep screen-space layer, behind
+        // everything in the world. Purely local -- nothing about it is networked.
+        var sky = new CanvasLayer { Layer = -100, Name = "Stars" }; AddChild(sky);
+        var stars = new TextureRect { Texture = GD.Load<Texture2D>("res://stars.png"),
+                                      StretchMode = TextureRect.StretchModeEnum.Tile, MouseFilter = Control.MouseFilterEnum.Ignore };
+        stars.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+        sky.AddChild(stars);
+
+        BuildWorld();
+        _cam = new Camera2D { Zoom = new Vector2(0.9f, 0.9f) }; AddChild(_cam); _cam.MakeCurrent();
+
+        var layer = new CanvasLayer(); AddChild(layer);
+        _hudLayer = layer;
+        var baseBtn = new Button { Text = "BASE (B)", Name = "BaseButton", FocusMode = Control.FocusModeEnum.None };
+        baseBtn.Pressed += ToggleBase;
+        var baseWrap = Ui.Wrap(baseBtn); baseWrap.Position = new Vector2(256, 48);
+        layer.AddChild(baseWrap);
+        // the stats line sits on its own panel so it reads over anything behind it
+        var hudPanel = new PanelContainer { Position = new Vector2(10, 8), Name = "HudPanel", MouseFilter = Control.MouseFilterEnum.Ignore };
+        hudPanel.AddThemeStyleboxOverride("panel", Ui.PanelStyle(12));
+        layer.AddChild(hudPanel);
+        _hud = new Label();
+        _hud.AddThemeFontSizeOverride("font_size", 16);
+        hudPanel.AddChild(_hud);
+
+        // class-specific controls line; rewritten each frame so a class change or a
+        // rebind shows at once (see Abilities.ControlsHint)
+        _help = new Label { Text = "",
+                               Modulate = new Color(1, 1, 1, 0.5f) };
+        _help.AddThemeFontSizeOverride("font_size", 12);
+        // anchored to the bottom edge; offsets, not Position, place an anchored control
+        var helpPanel = Ui.Wrap(_help, 5);          // the controls line sits on a panel too
+        helpPanel.Name = "HelpPanel";
+        helpPanel.AnchorTop = helpPanel.AnchorBottom = 1f;
+        helpPanel.OffsetLeft = 8; helpPanel.OffsetTop = -34; helpPanel.OffsetBottom = -6;
+        helpPanel.GrowVertical = Control.GrowDirection.Begin;
+        layer.AddChild(helpPanel);
+
+        layer.AddChild(new HullHud { Hub = this });
+        layer.AddChild(new AbilityBar { Hub = this });
+        layer.AddChild(new HaulerHud { Hub = this });
+
+        // Normally the select screen has loaded a character; this covers running the
+        // hub directly (editor F6, smoke test).
+        Character.EnsureLoaded();
+        Settings.EnsureLoaded();       // ability key bindings
+        Combat.Clear();
+        // Flashes are made on the host, where the shots happen. Guests are sent them,
+        // or a guest firing at the dummy would see nothing at all.
+        Combat.OnFlash = (a, b, c) =>
+        {
+            _flashes.Add((a, b, c, 0.10));
+            if (Net.IsHost && Net.IsOnline) Rpc(nameof(NetFlash), a, b, c);
+        };
+        // Torpedoes: the host's copy deals damage; guests get the launch and fly a
+        // cosmetic copy (the run is straight and steady, so it lands in the same place).
+        Combat.OnTorpedo = (from, dir, speed, range, dmg, target, turn, heavy) =>
+        {
+            SpawnTorpedo(from, dir, speed, range, dmg, false, target, turn, heavy);
+            if (Net.IsHost && Net.IsOnline) Rpc(nameof(NetTorpedo), from, dir, speed, range, target, turn, heavy);
+        };
+
+        for (int i = 0; i < DummyPos.Length; i++)
+        {
+            int n = i + 1;
+            var d = new TargetDummy { Name = $"TargetDummy{n}", Number = n, Position = DummyPos[i], ZIndex = 3 };
+            AddChild(d); _dummies.Add(d);
+            Combat.Hostiles.Add(d);
+            d.Published = (last, avg, total) => { if (Net.IsOnline) Rpc(nameof(NetDummy), n, last, avg, total); };
+        }
+
+        if (Net.I != null)
+        {
+            Net.I.PlayerJoined   += OnPlayerJoined;
+            Net.I.PlayerLeft     += DespawnFor;
+            Net.I.SessionChanged += OnSessionChanged;
+        }
+        RebuildShips();
+    }
+
+    // Net is an autoload and outlives this scene. Every handler added in _Ready comes
+    // off here, or the next join or status line calls into a freed Hub.
+    public override void _ExitTree()
+    {
+        if (Net.I != null)
+        {
+            Net.I.PlayerJoined   -= OnPlayerJoined;
+            Net.I.PlayerLeft     -= DespawnFor;
+            Net.I.SessionChanged -= OnSessionChanged;
+        }
+        Combat.Clear();
+        ControlsLocked = false;
+    }
+
+    // ── world ────────────────────────────────────────────────────────────────
+    private void BuildWorld()
+    {
+        var neb = GD.Load<Texture2D>("res://nebula.png");
+        AddChild(new Sprite2D { Texture = neb, Position = new Vector2(0, -200), Scale = new Vector2(7, 7),
+                                Modulate = new Color(0.30f, 0.42f, 0.72f, 0.28f), ZIndex = -10 });
+
+        AddChild(new Sun { Position = SunPos });
+
+        var tex = new[] { "res://asteroid_1.png", "res://asteroid_2.png", "res://asteroid_3.png" };
+        for (int i = 0; i < BeltRocks; i++)
+        {
+            float a = Mathf.Tau * i / BeltRocks;
+            var r = new Sprite2D {
+                Texture = GD.Load<Texture2D>(tex[i % 3]),
+                Position = SunPos + new Vector2(Mathf.Cos(a), Mathf.Sin(a) * 0.55f) * BeltR,
+                Scale = new Vector2(0.5f, 0.5f), ZIndex = 1 };
+            AddChild(r); _rocks.Add(r);
+        }
+
+        // the wreck: smaller than the old behemoth, and close enough to feel like part of the yard
+        AddChild(new Sprite2D { Texture = GD.Load<Texture2D>("res://behemoth_wreck.png"),
+                                Position = WreckPos, Scale = new Vector2(0.34f, 0.34f), ZIndex = 1 });
+
+        AddChild(new Sprite2D { Texture = GD.Load<Texture2D>("res://base_station.png"), Name = "Base",
+                                Position = BasePos, Scale = new Vector2(BaseScale, BaseScale), ZIndex = 2 });
+
+        Portal = new Portal { Position = PortalPos, Name = "Portal" };
+        AddChild(Portal);
+        Yard = new Yard { Hub = this, Name = "Yard" };
+        AddChild(Yard);
+    }
+
+    // ── ships and sessions ───────────────────────────────────────────────────
+    // Ships are keyed and authorised by peer id, and LocalId changes when you host,
+    // join or drop. So on any session change every ship is thrown away and rebuilt
+    // from Net.Players. Before this, joining left your offline ship keyed as peer 1:
+    // on the guest it became the host's ship, and the guest never got one of its own.
+    private void OnSessionChanged()
+    {
+        Yard.OnSessionChanged(!Net.IsHost);     // parks or restores your own yard
+        RebuildShips();
+        // a guest that just connected introduces itself; the host and existing
+        // guests introduce themselves to it from OnPlayerJoined
+        if (Net.IsOnline && !Net.IsHost) SendIdentity();
+    }
+
+    private void RebuildShips()
+    {
+        foreach (var s in _ships.Values)
+            if (IsInstanceValid(s)) { RemoveChild(s); s.QueueFree(); }   // out now, so the name frees up
+        _ships.Clear();
+
+        SpawnFor(Net.LocalId);          // your own ship, always
+        if (Net.I != null)
+            foreach (var id in Net.I.Players.Keys) SpawnFor(id);
+        if (IsInstanceValid(_statsWin)) _statsWin.Ship = MyShip;
+    }
+
+    private void OnPlayerJoined(int peerId)
+    {
+        SpawnFor(peerId);
+        SendIdentity(peerId);           // tell the newcomer who we are
+    }
+
+    private void SpawnFor(int peerId)
+    {
+        if (_ships.ContainsKey(peerId)) return;
+        var s = new PlayerShip { Name = PlayerShip.NodeName(peerId) };
+        AddChild(s);
+        // spawn clear of the base: its half-height (180 u) plus a ship's half-length and a gap
+        s.Init(peerId, BasePos + new Vector2(0, BaseBottom + 100f + 60 * _ships.Count));
+        _ships[peerId] = s;
+
+        if (peerId == Net.LocalId)
+            s.SetIdentity(Character.Name, Character.Main, Character.Accent, Character.Class);
+        else if (Net.I != null && Net.I.Players.TryGetValue(peerId, out var p) && p.HasIdentity)
+            s.SetIdentity(p.Name, p.Main, p.Accent, p.Class);
+    }
+
+    private void DespawnFor(int peerId)
+    {
+        if (!_ships.TryGetValue(peerId, out var s)) return;
+        _ships.Remove(peerId);
+        if (IsInstanceValid(s)) { RemoveChild(s); s.QueueFree(); }
+    }
+
+    // ── identity ─────────────────────────────────────────────────────────────
+    // Identity is owner-announced (see Character). It rides on the Hub rather than
+    // the ship because the Hub exists on every peer before any ship does, so an
+    // announcement can never arrive at a node that is not there yet.
+    private void ApplyLocalIdentity()
+    {
+        if (_ships.TryGetValue(Net.LocalId, out var me) && IsInstanceValid(me))
+            me.SetIdentity(Character.Name, Character.Main, Character.Accent, Character.Class);
+    }
+
+    private void SendIdentity(int toPeer = 0)
+    {
+        if (!Net.IsOnline) return;
+        // a guest mid-handshake still reports LocalId 1; peers would rightly reject
+        // that as impersonating the host, so wait for the real id (OnSessionChanged)
+        if (!Net.IsHost && Net.LocalId == 1) return;
+        var args = new Variant[] { Net.LocalId, Character.Name, Character.Main, Character.Accent, (int)Character.Class };
+        if (toPeer == 0) Rpc(nameof(NetIdentity), args);
+        else             RpcId(toPeer, nameof(NetIdentity), args);
+    }
+
+    [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void NetIdentity(int peer, string name, Color main, Color accent, int cls)
+    {
+        // a peer may only describe itself
+        if (Multiplayer.GetRemoteSenderId() != peer || Net.I == null) return;
+        if (!Net.I.Players.TryGetValue(peer, out var p)) Net.I.Players[peer] = p = new Net.PlayerInfo { Id = peer };
+        if (name.Length > 24) name = name[..24];
+        var c = System.Enum.IsDefined(typeof(ShipClass), cls) ? (ShipClass)cls : ShipClass.Battleship;
+        p.Name = name; p.Main = main; p.Accent = accent; p.Class = c; p.HasIdentity = true;
+        if (_ships.TryGetValue(peer, out var s) && IsInstanceValid(s)) s.SetIdentity(name, main, accent, c);
+    }
+
+    // ── character creator ────────────────────────────────────────────────────
+    // One instance, owned here. C used to AddChild a new creator on every press, so
+    // they stacked; and only the first-run one applied the class to your ship.
+    private void OpenCreator()
+    {
+        if (IsInstanceValid(_creator)) return;
+        _creator = new CharacterCreator();
+        _creator.Changed += ApplyLocalIdentity;
+        _creator.Done += _ => { ApplyLocalIdentity(); SendIdentity(); _creator = null; };
+        AddChild(_creator);
+    }
+
+    private void CloseCreator()
+    {
+        if (IsInstanceValid(_creator)) _creator.Close();
+    }
+
+    public PlayerShip MyShipPublic => MyShip;
+    private void SpawnTorpedo(Vector2 from, Vector2 dir, float speed, float range, double dmg, bool cosmetic,
+                              int target = 0, float turn = 0f, bool heavy = false)
+    {
+        AddChild(new Torpedo { Position = from, Dir = dir, Speed = speed, Range = range, Damage = dmg, Cosmetic = cosmetic,
+                               TargetId = target, TurnRate = turn, Heavy = heavy });
+    }
+
+    private PlayerShip MyShip => _ships.TryGetValue(Net.LocalId, out var s) && IsInstanceValid(s) ? s : null;
+
+    private void ToggleStats()
+    {
+        if (IsInstanceValid(_statsWin)) { _statsWin.QueueFree(); _statsWin = null; return; }
+        if (MyShip == null) return;
+        _statsWin = new StatsWindow { Ship = MyShip };
+        AddChild(_statsWin);
+    }
+
+    // Tab: ALWAYS the live hostile nearest your ship, at any range. No cycling --
+    // pressing it again re-picks the nearest, so it never lands on a far target.
+    // Switch to anything else with a left-click.
+    private void SelectNearest()
+    {
+        var me = MyShip;
+        if (me == null) return;
+        var all = Combat.Near(me.Position, float.MaxValue);
+        _selected = all.Count > 0 ? all[0] : null;
+    }
+
+    // Left-click in the world: the hostile under the cursor (its hit circle, plus a
+    // little slack), nearest the click if circles overlap. Clicking empty space keeps
+    // the current target, so a stray click never drops it; Esc clears it.
+    private void SelectAt(Vector2 world)
+    {
+        IHittable best = null; float bd = float.MaxValue;
+        foreach (var h in Combat.Hostiles)
+        {
+            if (h == null || !h.Alive) continue;
+            float d = world.DistanceTo(h.Position);
+            if (d <= h.HitRadius + 16f && d < bd) { bd = d; best = h; }
+        }
+        if (best != null) _selected = best;
+    }
+
+    public void BeginPlacement(string label, System.Action<Vector2> confirm)
+    {
+        _placing = confirm; _placingLabel = label;
+    }
+
+    private void CancelPlacement() { _placing = null; _placingLabel = null; }
+
+    // ── tick ─────────────────────────────────────────────────────────────────
+    public override void _Process(double delta)
+    {
+        ControlsLocked = IsInstanceValid(_creator) || GetViewport().GuiGetFocusOwner() is LineEdit
+                         || (IsInstanceValid(_statsWin) && _statsWin.Capturing);
+        // bars and labels keep a constant on-screen size whatever the zoom
+        HealthBar.UiScale = Txt.UiScale = 1f / _cam.Zoom.X;
+        if (_selected != null && !_selected.Alive) _selected = null;
+
+        // ONLY the host produces. A client that ticked its own copy would drift
+        // from the host's within seconds and then argue about it.
+        if (_ships.TryGetValue(Net.LocalId, out var mine) && IsInstanceValid(mine))
+            _cam.Position = _cam.Position.Lerp(mine.Position, Mathf.Clamp(6f * (float)delta, 0f, 1f));
+
+        for (int i = _flashes.Count - 1; i >= 0; i--)
+        {
+            var f = _flashes[i];
+            f.t -= delta;
+            if (f.t <= 0) _flashes.RemoveAt(i); else _flashes[i] = f;
+        }
+        QueueRedraw();
+
+        string ship = "";
+        var me = MyShip;
+        if (me != null)
+        {
+            // weapon and ability state lives on the ability bar; this line is who and where
+            _help.Text = Abilities.ControlsHint(me.Class);
+            ship = $"    |    {Character.Name}  {(me.Class == ShipClass.Battleship ? "BATTLESHIP" : "CARRIER")}"
+                 + $"  {Mathf.Abs(me.SpeedAhead):0} u/s{(me.SpeedAhead < -1 ? " astern" : "")}";
+            ship += Selected != null ? "    target: " + (Selected is TargetDummy td ? $"TARGET DUMMY {td.Number}" : $"#{Selected.NetId}")
+                                     : "    no target (Tab / click)";
+            if (Placing) ship += $"    PLACING {_placingLabel}: left-click to confirm, right-click / Esc to cancel";
+        }
+        _hud.Text = $"ORE {Yard.Ore:0}    SALVAGE {Yard.Salvage:0}    CREDITS {Yard.Credits:0}"
+                  + $"    HAULER {Yard.Hauler.Cargo:0}/{Yard.Capacity:0} {Yard.Hauler.State.ToString().ToUpper()}" + ship
+                  + (Net.IsOnline ? (Net.IsHost ? $"        HOSTING ({_ships.Count})" : $"        GUEST ({_ships.Count})") : "        OFFLINE");
+    }
+
+    public override void _Draw()
+    {
+        foreach (var f in _flashes)
+            DrawLine(f.a, f.b, new Color(f.c.R, f.c.G, f.c.B, (float)(f.t / 0.10) * 0.9f), 2f);
+
+        // Hull bars on every ship, and other players' names. Drawn here rather than on
+        // the ship so they stay upright while it turns.
+        var font = ThemeDB.FallbackFont;
+        float k = Txt.UiScale;
+        foreach (var s in _ships.Values)
+        {
+            if (!IsInstanceValid(s) || !s.IsVisibleInTree()) continue;   // hidden ships show nothing
+            DrawSetTransform(s.Position, 0f, Vector2.One);
+            // above the hull whatever the class: half its length plus a margin, unscaled
+            // by zoom (HealthBar scales positions by UiScale, so divide it back out)
+            float above = (s.MyArt.Length * 0.5f + 16f) / Txt.UiScale;
+            HealthBar.Draw(this, new Vector2(-40, -above), 80, 6, s.Hp, s.MaxHp,
+                           s.Hp / Mathf.Max(1, s.MaxHp) > 0.35 ? new Color(0.4f, 0.9f, 0.5f) : new Color(1f, 0.4f, 0.3f), null);
+            DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
+            if (!s.Mine)
+                Txt.Centre(this, font, s.Position + new Vector2(0, -(s.MyArt.Length * 0.5f + 28f)), s.Pilot, Txt.Size(16), new Color(0.75f, 0.9f, 1f, 0.85f));
+        }
+
+        // a pending placement shows where the click will land
+        if (Placing)
+        {
+            var m = GetGlobalMousePosition();
+            DrawArc(m, 60f, 0, Mathf.Tau, 40, new Color(0.5f, 1f, 0.7f, 0.8f), 2f);
+            DrawLine(m - new Vector2(12, 0), m + new Vector2(12, 0), new Color(0.5f, 1f, 0.7f), 2f);
+            DrawLine(m - new Vector2(0, 12), m + new Vector2(0, 12), new Color(0.5f, 1f, 0.7f), 2f);
+        }
+
+        // selection brackets on the chosen target
+        var t = Selected;
+        if (t != null)
+        {
+            float r = t.HitRadius + 12f, L = 14f;
+            var c = new Color(1f, 0.85f, 0.3f);
+            foreach (var (sx, sy) in new[] { (-1, -1), (1, -1), (-1, 1), (1, 1) })
+            {
+                var corner = t.Position + new Vector2(sx * r, sy * r);
+                DrawLine(corner, corner - new Vector2(sx * L, 0), c, 2.5f);
+                DrawLine(corner, corner - new Vector2(0, sy * L), c, 2.5f);
+            }
+        }
+    }
+
+    // _Input, not _UnhandledInput: these must run before the GUI swallows the event.
+    public override void _Input(InputEvent e)
+    {
+        var focus = GetViewport().GuiGetFocusOwner();
+
+        // Clicking anywhere outside a focused text box lets go of it. Godot keeps
+        // LineEdit focus on a click that lands on nothing focusable -- the world, a
+        // panel background -- so the address box stayed live and ate the keyboard.
+        if (e is InputEventMouseButton mb && mb.Pressed && focus is LineEdit le
+            && !le.GetGlobalRect().HasPoint(mb.Position))
+            le.ReleaseFocus();
+
+        if (e is InputEventKey k && k.Pressed && !k.Echo && k.Keycode == Key.Escape)
+        {
+            // Esc peels back one layer: text box, placement, creator, stats window,
+            // target, then the menu. Handled FIRST: ChangeSceneToFile pulls this node
+            // out of the tree at once, after which GetViewport() is null.
+            if (IsInstanceValid(_statsWin) && _statsWin.Capturing) return;   // the window takes this Esc
+            GetViewport().SetInputAsHandled();
+            if (focus is LineEdit le2) le2.ReleaseFocus();
+            else if (Placing) CancelPlacement();
+            else if (IsInstanceValid(_creator)) CloseCreator();
+            else if (IsInstanceValid(_statsWin)) ToggleStats();
+            else if (IsInstanceValid(_base)) ToggleBase();
+            else if (Selected != null) _selected = null;
+            else { Net.I?.GoOffline(); GetTree().ChangeSceneToFile("res://MainMenu.tscn"); }
+        }
+    }
+
+    public override void _UnhandledInput(InputEvent e)
+    {
+        // (C no longer opens the ship menu: that is REFIT, in the BASE menu, and it costs.)
+        if (IsInstanceValid(_creator)) return;          // the panel owns the screen
+        var mine = MyShip;
+        if (mine == null) return;
+
+        // LEFT-CLICK is reserved for two things only: confirming a pending placement,
+        // otherwise selecting what is under the cursor. It never fires a weapon or
+        // orders a wing -- attacks are Space. RIGHT-CLICK only cancels a placement.
+        // Only clicks the GUI did not take arrive here, so UI clicks never select.
+        if (e is InputEventMouseButton mb && mb.Pressed)
+        {
+            var at = GetGlobalMousePosition();
+            if (mb.ButtonIndex == MouseButton.Left)
+            {
+                if (Placing) { var confirm = _placing; CancelPlacement(); confirm(at); }
+                else SelectAt(at);
+                GetViewport().SetInputAsHandled();
+            }
+            else if (mb.ButtonIndex == MouseButton.Right && Placing)
+            {
+                CancelPlacement();
+                GetViewport().SetInputAsHandled();
+            }
+            return;
+        }
+
+        if (e is InputEventKey kk && kk.Pressed && !kk.Echo)
+        {
+            // fixed controls first; every other key is looked up in this class's
+            // ability bindings (remappable in the K window). Class is changed only in
+            // the creator (C) -- there are no class hotkeys.
+            if (kk.Keycode == Key.Tab) SelectNearest();
+            else if (kk.Keycode == Key.K) ToggleStats();
+            else if (kk.Keycode == Key.B) ToggleBase();
+            else
+            {
+                var ab = Abilities.ByKey(mine.Class, kk.Keycode);
+                if (ab == null) return;
+                if (ab.Kind == AbilityKind.Press && !ab.Open) mine.UseAbility(ab.Id, Selected?.NetId ?? 0);
+                // Hold abilities (the main guns) are read by polling in PlayerShip.
+            }
+            GetViewport().SetInputAsHandled();
+        }
+    }
+
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void NetTorpedo(Vector2 from, Vector2 dir, float speed, float range, int target, float turn, bool heavy)
+        => SpawnTorpedo(from, dir, speed, range, 0, true, target, turn, heavy);
+
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
+    private void NetFlash(Vector2 a, Vector2 b, Color c) => _flashes.Add((a, b, c, 0.10));
+
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void NetDummy(int number, double last, double avg, double total)
+    {
+        if (number >= 1 && number <= _dummies.Count) _dummies[number - 1].SetReadout(last, avg, total);
+    }
+
+    private void ToggleBase()
+    {
+        if (IsInstanceValid(_base)) { _base.QueueFree(); _base = null; return; }
+        _base = new BasePanel { Hub = this };
+        _hudLayer.AddChild(_base);
+    }
+    public bool CreatorOpen => IsInstanceValid(_creator);
+
+    // REFIT: the only way into the ship menu (it costs 10%; see Yard.ResetCost).
+    public void ResetShip()
+    {
+        if (IsInstanceValid(_creator)) return;
+        Yard.ChargeReset();
+        if (IsInstanceValid(_base)) ToggleBase();
+        OpenCreator();
+    }
+}
+
+// A small warm star for the belt to sit around. Drawn rather than spritework so
+// it can pulse without another asset.
+public partial class Sun : Node2D
+{
+    private double _t;
+    public override void _Process(double delta) { _t += delta; QueueRedraw(); }
+    public override void _Draw()
+    {
+        float p = 1f + 0.03f * Mathf.Sin((float)_t * 1.3f);
+        DrawCircle(Vector2.Zero, 210f * p, new Color(1f, 0.82f, 0.42f, 0.10f));
+        DrawCircle(Vector2.Zero, 150f * p, new Color(1f, 0.78f, 0.33f, 0.22f));
+        DrawCircle(Vector2.Zero, 104f * p, new Color(1f, 0.86f, 0.48f));
+        DrawCircle(Vector2.Zero,  78f * p, new Color(1f, 0.96f, 0.80f));
+    }
+}
+
+// The outbound wormhole: trade runs leave through it, and it is the door to
+// every hostile system.
+public partial class Portal : Node2D
+{
+    private double _t, _flash;
+    public void Flash() => _flash = 0.8;        // a hauler jumping through, either way
+    public override void _Process(double delta) { _t += delta; _flash = System.Math.Max(0, _flash - delta); QueueRedraw(); }
+    public override void _Draw()
+    {
+        float s = (float)_t;
+        if (_flash > 0)
+        {
+            float k = (float)(_flash / 0.8);
+            DrawCircle(Vector2.Zero, 60f + 110f * (1f - k), new Color(0.6f, 0.85f, 1f, 0.55f * k));
+        }
+        for (int i = 0; i < 4; i++)
+        {
+            float r = 70f + i * 26f + 6f * Mathf.Sin(s * 1.7f + i);
+            DrawArc(Vector2.Zero, r, 0, Mathf.Tau, 40,
+                    new Color(0.45f, 0.75f, 1f, 0.55f - 0.10f * i), 3f);
+        }
+        DrawCircle(Vector2.Zero, 56f, new Color(0.10f, 0.16f, 0.34f, 0.85f));
+    }
+}
+
+// The player's hull, big and always on screen: a bar along the bottom centre.
+public partial class HullHud : Control
+{
+    public Hub Hub;
+    private const float W = 440, H = 22;
+
+    public override void _Ready()
+    {
+        AnchorLeft = AnchorRight = 0.5f; AnchorTop = AnchorBottom = 1f;
+        OffsetLeft = -W / 2; OffsetRight = W / 2; OffsetTop = -150; OffsetBottom = -150 + H;
+        MouseFilter = MouseFilterEnum.Ignore;
+    }
+
+    public override void _Process(double delta) => QueueRedraw();
+
+    public override void _Draw()
+    {
+        var s = Hub?.MyShipPublic;
+        if (s == null) return;
+        Ui.PanelStyle().Draw(GetCanvasItem(), new Rect2(-8, -6, W + 16, H + 12));   // its panel
+        float frac = (float)Mathf.Clamp(s.Hp / Mathf.Max(1, s.MaxHp), 0, 1);
+        var fill = frac > 0.35f ? new Color(0.35f, 0.85f, 0.45f) : new Color(1f, 0.35f, 0.3f);
+        DrawRect(new Rect2(0, 0, W, H), new Color(0.08f, 0.09f, 0.12f, 0.9f));
+        DrawRect(new Rect2(0, 0, W * frac, H), fill);
+        DrawRect(new Rect2(0, 0, W, H), new Color(0.6f, 0.7f, 0.85f, 0.6f), false, 1.5f);
+        Txt.D(this, ThemeDB.FallbackFont, new Vector2(0, H - 5), $"HULL  {s.Hp:0} / {s.MaxHp:0}",
+              HorizontalAlignment.Center, W, 15, Colors.White);
+    }
+}

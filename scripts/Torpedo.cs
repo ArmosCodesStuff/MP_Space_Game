@@ -1,0 +1,113 @@
+using Godot;
+using System.Collections.Generic;
+
+// A bomber's torpedo. It runs STRAIGHT at a steady speed along the heading it was
+// launched on -- no tracking, no acceleration -- trailing smoke, and detonates on
+// the first hostile it touches or when its run is spent. Aim is the bomber's job;
+// a target that moves can step out of the way.
+//
+// The host's copy deals the damage. Guests are sent the launch (from, heading) and
+// fly a cosmetic copy of their own: the run is deterministic, so it goes where the
+// host's goes and bursts in the same place, without streaming positions.
+// The battleship's missile is the same projectile with two differences: it is
+// BARELY guided (its heading turns toward its target at no more than TurnRate), and
+// it is HEAVY -- a slow bunker buster with a bigger body, darker smoke and a bigger
+// blast. Guests run the same guidance on the same positions, so their cosmetic
+// copy follows the host's.
+public partial class Torpedo : Node2D
+{
+    public Vector2 Dir;
+    public float Speed, Range;
+    public double Damage;
+    public bool Cosmetic;             // a guest's copy: draws and bursts, never damages
+    public int TargetId;              // 0 = unguided
+    public float TurnRate;            // rad/s the heading may turn toward the target
+    public bool Heavy;                // the bunker buster's look
+
+    private float _flown;
+    private bool _spent;
+    private double _burst;            // time since detonation, for the flash
+    private readonly List<(Vector2 p, float age)> _smoke = new();
+    private float _puffCd;
+
+    public const float SmokeLife = 1.6f, PuffEvery = 0.03f;
+
+    public override void _Ready() { ZIndex = 6; Rotation = Dir.Angle() + Mathf.Pi / 2f; }
+
+    public override void _Process(double delta)
+    {
+        float dt = (float)delta;
+        for (int i = _smoke.Count - 1; i >= 0; i--)
+        {
+            var s = _smoke[i]; s.age += dt;
+            if (s.age >= SmokeLife) _smoke.RemoveAt(i); else _smoke[i] = s;
+        }
+
+        if (!_spent)
+        {
+            var tgt = TurnRate > 0 && TargetId != 0 ? Combat.ById(TargetId) : null;
+            if (tgt != null)
+            {   // barely guided: the nose creeps toward the target, never snaps
+                float want = (tgt.Position - GlobalPosition).Angle(), have = Dir.Angle();
+                float turn = Mathf.Clamp(Mathf.AngleDifference(have, want), -TurnRate * dt, TurnRate * dt);
+                Dir = Dir.Rotated(turn);
+                Rotation = Dir.Angle() + Mathf.Pi / 2f;
+            }
+            float step = Speed * dt;
+            GlobalPosition += Dir * step; _flown += step;
+            _puffCd -= dt;
+            if (_puffCd <= 0) { _puffCd += PuffEvery; _smoke.Add((GlobalPosition - Dir * 8f, 0f)); }
+
+            foreach (var h in Combat.Hostiles)
+            {
+                if (h == null || !h.Alive || GlobalPosition.DistanceTo(h.Position) > h.HitRadius + 4f) continue;
+                if (!Cosmetic && Net.Sim) h.TakeDamage(Damage);
+                Detonate(); break;
+            }
+            if (!_spent && _flown >= Range) Detonate();
+        }
+        else
+        {
+            _burst += delta;
+            // linger until the last of the smoke has faded, then go
+            if (_smoke.Count == 0 && _burst > 0.5) QueueFree();
+        }
+        QueueRedraw();
+    }
+
+    private void Detonate() { _spent = true; _burst = 0; }
+
+    public override void _Draw()
+    {
+        // smoke is stored in world space; draw it relative to this node
+        var inv = GlobalTransform.AffineInverse();
+        foreach (var (p, age) in _smoke)
+        {
+            float k = age / SmokeLife;
+            // bright enough to read against black space; spreads as it fades
+            var smoke = Heavy ? new Color(0.45f, 0.43f, 0.42f) : new Color(0.86f, 0.86f, 0.88f);
+            DrawCircle(inv * p, (Heavy ? 5f : 3.5f) + (Heavy ? 14f : 10f) * k, new Color(smoke.R, smoke.G, smoke.B, 0.75f * (1f - k) * (1f - k * 0.3f)));
+        }
+        if (!_spent)
+        {
+            if (Heavy)
+            {   // a fat, blunt-nosed round with fins and a big exhaust
+                DrawRect(new Rect2(-4f, -14f, 8f, 26f), new Color(0.55f, 0.57f, 0.52f));
+                DrawRect(new Rect2(-4f, -14f, 8f, 5f), new Color(0.85f, 0.25f, 0.2f));
+                DrawRect(new Rect2(-7f, 7f, 14f, 3f), new Color(0.35f, 0.36f, 0.33f));
+                DrawCircle(new Vector2(0, 13f), 3.6f, new Color(1f, 0.75f, 0.35f));
+            }
+            else
+            {
+                DrawRect(new Rect2(-2.2f, -9f, 4.4f, 18f), new Color(0.85f, 0.85f, 0.8f));
+                DrawCircle(new Vector2(0, 9f), 2.4f, new Color(1f, 0.7f, 0.3f));
+            }
+        }
+        else if (_burst < 0.5)
+        {
+            float k = (float)(_burst / 0.5), big = Heavy ? 2f : 1f;
+            DrawCircle(Vector2.Zero, (10f + 30f * k) * big, new Color(1f, 0.7f, 0.3f, 0.8f * (1f - k)));
+            if (Heavy) DrawArc(Vector2.Zero, 70f * k, 0, Mathf.Tau, 40, new Color(1f, 0.9f, 0.6f, 0.7f * (1f - k)), 3f);
+        }
+    }
+}

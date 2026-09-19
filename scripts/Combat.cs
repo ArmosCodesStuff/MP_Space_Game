@@ -1,0 +1,75 @@
+using Godot;
+using System.Collections.Generic;
+
+// Combat services. Everything here is HOST-SIDE: target lookup, damage, and the
+// hit flashes clients are told to draw. A client asking "who is nearest" and
+// acting on it would be inventing damage, which is exactly what Net forbids.
+// (Target SELECTION is the exception: it is a local UI choice, and a guest sends
+// the chosen NetId to the host as a request.)
+public static class Combat
+{
+    // Registered by whatever world is live (hub, hostile system, someone else's world).
+    public static readonly List<IHittable> Hostiles = new();
+
+    public static IHittable NearestHostile(Vector2 from, float range)
+    {
+        IHittable best = null; float bd = range;
+        foreach (var h in Hostiles)
+        {
+            if (h == null || !h.Alive) continue;
+            float d = from.DistanceTo(h.Position);
+            if (d < bd) { bd = d; best = h; }
+        }
+        return best;
+    }
+
+    public static IHittable ById(int id)
+    {
+        foreach (var h in Hostiles) if (h != null && h.Alive && h.NetId == id) return h;
+        return null;
+    }
+
+    // Live hostiles within `within` of a point, nearest first. Tab cycles through this.
+    public static List<IHittable> Near(Vector2 p, float within)
+    {
+        var l = new List<IHittable>();
+        foreach (var h in Hostiles) if (h != null && h.Alive && p.DistanceTo(h.Position) <= within) l.Add(h);
+        l.Sort((a, b) => p.DistanceTo(a.Position).CompareTo(p.DistanceTo(b.Position)));
+        return l;
+    }
+
+    // An aimed shot: the first hostile whose hit circle the ray crosses, within range.
+    // `end` is where the shot stops -- the hit point, or the end of its reach.
+    public static IHittable RayHit(Vector2 from, Vector2 dir, float range, out Vector2 end)
+    {
+        dir = dir.Normalized();
+        IHittable best = null; float bestT = range;
+        foreach (var h in Hostiles)
+        {
+            if (h == null || !h.Alive) continue;
+            var to = h.Position - from;
+            float t = to.Dot(dir);                              // along the ray
+            if (t < 0 || t > range + h.HitRadius) continue;
+            float miss = (to - dir * t).Length();               // off the ray
+            if (miss > h.HitRadius) continue;
+            float entry = Mathf.Max(0f, t - Mathf.Sqrt(h.HitRadius * h.HitRadius - miss * miss));
+            if (entry < bestT) { bestT = entry; best = h; }
+        }
+        end = from + dir * (best != null ? bestT : range);
+        return best;
+    }
+
+    // Set by the live world so combat can draw without knowing what world it is in.
+    public static System.Action<Vector2, Vector2, Color> OnFlash;
+    public static void Flash(Vector2 a, Vector2 b, Color c) => OnFlash?.Invoke(a, b, c);
+
+    // Set by the live world: launches a projectile there (and, on a host, tells
+    // guests). Unguided torpedoes pass targetId 0; the missile passes its target and
+    // a small turn rate, and heavy for its looks.
+    public static System.Action<Vector2, Vector2, float, float, double, int, float, bool> OnTorpedo;
+    public static void LaunchTorpedo(Vector2 from, Vector2 dir, float speed, float range, double damage,
+                                     int targetId = 0, float turnRate = 0f, bool heavy = false)
+        => OnTorpedo?.Invoke(from, dir.Normalized(), speed, range, damage, targetId, turnRate, heavy);
+
+    public static void Clear() { Hostiles.Clear(); OnFlash = null; OnTorpedo = null; }
+}
