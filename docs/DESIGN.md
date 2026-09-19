@@ -202,10 +202,26 @@ Recorded here so every chunk builds from the written word, not from memory.
   the player missile's size) within 500 u, 7 s to impact, at the target's predicted position**, with a
   **red circle marking the blast** (the boss telegraph's red) — dodgeable. Both types hold **within 90%
   of their weapon range** so they never lose DPS to repositioning. **Patrols: 3 lights + 1 heavy.**
-- **New chunk (after 6) — base weapons**: a 5 DPS laser at 300 u and a tracking 25-damage missile at
+- **New chunk (after 6) — base weapons (DONE)**: a 5 DPS laser at 300 u and a tracking 25-damage missile at
   600 u, ~120 u/s, one every 5 s. **Chunk 4's distance is decided: 1500 u** to each field's edge.
 - **Chunk 6 is split**: 6a light fighters and the pin (DONE); 6b heavy fighters and the predicted-impact
   missile (DONE); 6c patrols (3 light + 1 heavy) (DONE). Art for both is staged in `art_unused/`.
+- **The player's next batch, as given (after chunks 7 and 8 unless reordered):**
+  1. **Internet address**: the host's panel shows the address a friend in another city needs — the
+     public IP (asked of a public "what is my IP" service, compared with the router's own report to
+     catch shared/carrier NAT) and the port — behind a **click-to-reveal** button. (Today it is the
+     router's report via UPnP when that works, else only the LAN address.)
+  2. **Single player stays silent** (already: no socket or lookups offline — to be proven by a test);
+     the multiplayer buttons get a **1 s rate limit**.
+  3. **Party size scales the boss and the rewards.** (Formula: to be agreed.)
+  4. **EXP to the next level is always 1000.**
+  5. **EXP by level**: reward = base × enemy level ÷ pilot level (a level-5 enemy for a level-10 pilot:
+     half; a level-2 boss for a level-1 pilot: double). Base: 200 at equal level (to be confirmed).
+  6. **+250 EXP for a first kill** of a boss (per boss or per boss level: to be agreed).
+  7. **Raids after a failed mission are scaled like its boss**: a level-n wave is 1.1^n, like a level-n
+     boss. Boss "levels" replace tiers (numbering from 0 or 1: to be agreed).
+  8. **Last: a full code review** — every variable, line, function and reference — with a task list
+     worked recursively until the code is clean.
 - **Chunk 7 — raids**: on a failed mission the boss sends patrols in **from the perimeter of the base
   map** against the miners, salvagers, hauler and players.
 - **Chunk 8 — the BASE button in the arena, and a dedicated multiplayer arena test.**

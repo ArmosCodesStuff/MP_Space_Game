@@ -39,7 +39,7 @@ history pick the work up from it alone. Update it in the same change as the code
 **State as of 2026-09-18: version 0.3.0 plus Unreleased (see it for everything since: docking arms
 and the unload queue, the fleet and hauler pods, the idle economy, base menu, bunker-buster missile,
 painted turrets, docking bombers and more).** Typecheck clean against the real `GodotSharp.dll`,
-`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 348 checks across
+`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 353 checks across
 a single-player run and a host with two guests. Unlike earlier releases, this one was also **looked at**:
 `tools/screens/run.sh` renders the select screen, the creator, a fresh spawn under the base, both
 classes in the hub, the K window, a bomber strike, and turret close-ups on a virtual display; layout
@@ -180,6 +180,21 @@ reachable, which is fine: both harnesses build from the `nupkgs` folder that shi
 ---
 
 ## Unreleased
+
+### Base weapons
+
+**Checked:** smoke test **three runs in a row, 353 checks each** (5 new; a base that fires at anything
+hostile, a 200 u/s missile and an 800 u laser were each put in on purpose in a copy and caught);
+screenshot sweep **61 frames, 0 lint**; the turret and a base missile striking a raider looked at.
+
+#### Added
+
+- **The base's own weapons**, on a turret on the station's upper deck (ranges from the base's centre):
+  a **5 DPS laser at 300 u** (2.5 every 0.5 s) and a **tracking missile every 5 s: 25 damage, 600 u,
+  120 u/s** (1.2× the capital ships' average top speed). **Raiders only — never the practice dummies.**
+  Host-simulated; guests see every shot, and their turret tracks locally.
+
+### Earlier in Unreleased
 
 ### Chunk 6c: patrols
 
