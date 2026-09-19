@@ -14,6 +14,7 @@ public partial class CharacterSelect : Control
 
     public override void _Ready()
     {
+        Ui.Install(GetTree());                                  // the game-wide look
         var bg = new ColorRect { Color = new Color(0.02f, 0.03f, 0.06f) };
         bg.SetAnchorsPreset(LayoutPreset.FullRect);
         bg.MouseFilter = MouseFilterEnum.Ignore;

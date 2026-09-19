@@ -20,9 +20,7 @@ public partial class StatsWindow : CanvasLayer
     {
         Layer = 15;
         var panel = new PanelContainer { Position = new Vector2(1920 - 16 - 560, 60), CustomMinimumSize = new Vector2(560, 0) };
-        var sb = new StyleBoxFlat { BgColor = new Color(0.06f, 0.08f, 0.12f, 1f), BorderColor = new Color(0.3f, 0.4f, 0.55f) };
-        sb.SetBorderWidthAll(1); sb.SetCornerRadiusAll(6); sb.SetContentMarginAll(14);
-        panel.AddThemeStyleboxOverride("panel", sb);
+        panel.AddThemeStyleboxOverride("panel", Ui.PanelStyle(14));      // the one panel look
         // anchor to the right edge so it stays put at any window size
         panel.AnchorLeft = panel.AnchorRight = 1f;
         panel.OffsetLeft = -16 - 560; panel.OffsetRight = -16; panel.OffsetTop = 60;

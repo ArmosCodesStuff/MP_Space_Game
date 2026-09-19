@@ -107,6 +107,7 @@ public partial class Hub : Node2D
 
     public override void _Ready()
     {
+        Ui.Install(GetTree());                                  // the game-wide look
         // Background stars: a static, tiled image on a deep screen-space layer, behind
         // everything in the world. Purely local -- nothing about it is networked.
         var sky = new CanvasLayer { Layer = -100, Name = "Stars" }; AddChild(sky);
@@ -877,7 +878,7 @@ public partial class Portal : Node2D
 // The player's hull, big and always on screen: a bar along the bottom centre.
 public partial class HullHud : Control
 {
-    private readonly StyleBoxFlat _panel = Ui.PanelStyle();   // built once: _Draw runs every frame
+    private readonly StyleBox _panel = Ui.PanelStyle();   // built once: _Draw runs every frame
     public Hub Hub;
     private const float W = 440, H = 22;
 

@@ -28,6 +28,7 @@ public partial class MainMenu : Node2D
 
     public override void _Ready()
     {
+        Ui.Install(GetTree());                                  // the game-wide look
         Settings.Load(); Settings.ApplyVolume();
         var vs = GetViewport().GetVisibleRect().Size;
         var centre = vs * 0.5f + new Vector2(0, 60);

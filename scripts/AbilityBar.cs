@@ -6,7 +6,7 @@ using Godot;
 // Keys follow the current bindings, so a remap in the K window shows here at once.
 public partial class AbilityBar : Control
 {
-    private readonly StyleBoxFlat _panel = Ui.PanelStyle();   // built once: _Draw runs every frame
+    private readonly StyleBox _panel = Ui.PanelStyle();   // built once: _Draw runs every frame
     public Hub Hub;
     public const float SlotW = 118, SlotH = 64, Gap = 8, GroupGap = 22;   // extra space before the open slots
 
