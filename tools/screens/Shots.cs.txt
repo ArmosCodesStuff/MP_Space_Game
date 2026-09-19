@@ -159,6 +159,19 @@ public partial class _Shots : Node
             await Snap("14_hauler_charging");
             GetViewport().GetCamera2D().Zoom = new Vector2(0.9f, 0.9f);
         }
+        // the PILOT window; the TIO's WARP TO TARGET; the opening bar; the mission portal
+        {
+            var hub = H; var pship = hub.GetNode<PlayerShip>("Ship_1");
+            Character.Points = 4;
+            hub.TogglePilot(); await W(0.4); await Snap("34_pilot_window"); hub.TogglePilot(); await W(0.2);
+            pship.Position = Hub.TioPos + new Vector2(240, -40); pship.Velocity = Vector2.Zero;
+            GetViewport().GetCamera2D().Zoom = new Vector2(1.1f, 1.1f); await W(1.6);
+            hub.OpenTio(); await W(0.4); await Snap("35_tio_warp_to_target");
+            hub.SetMyReady(true); hub.StartMission(); await W(1.6); await Snap("36_mission_opening_bar");
+            await W(2.0); await Snap("37_mission_portal_open");
+            var tw = hub.GetTree().Root.FindChild("TioWindow", true, false); if (tw != null) tw.QueueFree();
+            GetViewport().GetCamera2D().Zoom = new Vector2(0.9f, 0.9f); await W(0.3);
+        }
         // the Esc menu, and the free camera zoomed right out (its view boxed on the radar)
         {
             var hub = H;
