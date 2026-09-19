@@ -640,6 +640,41 @@ public partial class _Test : Node
         Check(d1.Total == 0, "a target that moves after launch is missed (the torpedo does not track)");
         d1.Position = home;
 
+        // ── pilot progression: EXP, levels, points, flat upgrades ──
+        {
+            Check(Progression.Cost(0) == 1 && Progression.Cost(1) == 2 && Progression.Cost(2) == 3, "upgrade costs 1, 2, 3, ... points");
+            Check(Progression.ExpToNext(1) == 100 && Progression.ExpToNext(2) == 150, "levels need 100 x 1.5^(level-1) EXP");
+            Character.Exp = 0; Character.Level = 1; Character.Points = 0; System.Array.Clear(Character.Bought);
+            int up = Progression.AddExp(260);
+            Check(up == 2 && Character.Level == 3 && Character.Exp == 10 && Character.Points == 2, "260 EXP from level 1: level 3, 10 over, 2 points");
+            Key(global::Godot.Key.L); await Wait(0.1);
+            var pw = Nodes<PilotWindow>().FirstOrDefault();
+            Check(pw != null, "L opens the PILOT window");
+            Button PBuy(string id) => Nodes<Button>(Nodes<HBoxContainer>(pw).First(r => r.Name == "Pilot_" + id)).First(b => b.Name == "Buy");
+            var me = Me; double hull0 = me.MaxHp, hp0 = me.Hp;
+            Character.Points = 3;
+            PBuy("hull").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
+            Check(Character.Bought[1] == 1 && Character.Points == 2 && me.MaxHp == hull0 + 5 && me.Hp == hp0 + 5, "Hull (1 pt): +5 hull on the ship at once");
+            PBuy("hull").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
+            Check(Character.Bought[1] == 2 && Character.Points == 0 && me.MaxHp == hull0 + 10, "Hull again (2 pts): +10 in all");
+            Check(PBuy("speed").Disabled, "with no points left, BUY is disabled");
+            Character.Points = 6;
+            PBuy("damage").EmitSignal(BaseButton.SignalName.Pressed); PBuy("speed").EmitSignal(BaseButton.SignalName.Pressed); PBuy("turn").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
+            var baseSheet = new ShipStats(me.Class);
+            Check(Math.Abs(me.Stats[Progression.DamageStat(me.Class)] - baseSheet[Progression.DamageStat(me.Class)] - 1) < 1e-9
+                  && Math.Abs(me.Stats["max_speed"] - baseSheet["max_speed"] - 1) < 1e-9
+                  && Math.Abs(me.Stats["turn_rate"] - baseSheet["turn_rate"] - Mathf.DegToRad(1f)) < 1e-6,
+                  "Weapons +1 damage (main weapon), Engines +1 speed, Rudder +1 degree/s");
+            string cid = Character.Id; int[] saved = (int[])Character.Bought.Clone();
+            Character.Save(); System.Array.Clear(Character.Bought); Character.Load(cid);
+            Check(Character.Bought.SequenceEqual(saved) && Character.Level == 3, "purchases and level are saved with the character");
+            Key(global::Godot.Key.L); await Wait(0.1);
+            Check(Count<PilotWindow>() == 0, "L closes it");
+            // leave the pilot as found for what follows
+            System.Array.Clear(Character.Bought); Character.Points = 0; Character.Level = 1; Character.Exp = 0; Character.Save();
+            Priv(H, "ApplyLocalIdentity");
+        }
+
         // ── enemy fire, shields, stasis, the escape pod, re-boarding ──
         {
             var d3x = H.GetNode<TargetDummy>("TargetDummy3");
@@ -812,6 +847,7 @@ public partial class _Test : Node
             H.GetNode<PlayerShip>("Ship_1").Position = new Vector2(-900, 900);   // out of the way
             Net.I.Host(27115);
             H.Yard.Credits = 1000;                     // for the guest's purchase request
+            Character.Exp = 0; Character.Level = 1;
             Check(Net.I.Reachability == Net.Reach.Checking && Net.I.LanAddress.EndsWith(":27115"), "hosting starts at once; the router is asked in the background");
             await Wait(9.0);
             // no router in the sandbox: it must say so, and how to get friends in anyway
@@ -822,6 +858,8 @@ public partial class _Test : Node
             var ships = Nodes<PlayerShip>().ToList();
             Check(ships.Count == 3, $"host sees 3 ships: itself and two guests ({ships.Count})");
             Check(ships.Any(s => s.Pilot == "Third"), "the second guest's identity reached the host");
+            H.AwardPartyExp(40);                  // shared: every pilot in the session gets it
+            Check(Character.Exp == 40, "the host gets its own share of the EXP");
             Check(H.Yard.Level("salvage_rate") == 1 && H.Yard.Credits == 900, "a guest's BUY request was honoured by the host");
             var g = ships.FirstOrDefault(s => s.Pilot == "Guesty");
             Check(g != null && g.Name == PlayerShip.NodeName(g.OwnerId), "guest ship named by its id");
@@ -880,6 +918,8 @@ public partial class _Test : Node
             var host = Nodes<PlayerShip>().FirstOrDefault(s => s.OwnerId == 1);
             Check(Nodes<PlayerShip>().Count() == 3 && Nodes<PlayerShip>().Any(s => s.Pilot == "Third"), "guest sees the other guest too (3 ships)");
             Check(H.Yard.Level("salvage_rate") == 1, "the upgrade the host granted reached the guest");
+            for (int i = 0; i < 480 && Character.Exp != 40; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(Character.Exp == 40, $"the host's EXP award reached this guest (exp {Character.Exp})");
             var gm = H.Yard.Gatherers.First(x => x.Kind == GatherKind.Miner);
             Check(H.Yard.Gatherers.Any(x => x.Position.DistanceTo(Hub.BasePos) > 400) && H.Yard.Hauler.Position.Y == Hub.LaneY,
                   "guest sees the host's miner out working and the hauler on its lane");

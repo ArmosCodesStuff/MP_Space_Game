@@ -57,6 +57,7 @@ public partial class Hub : Node2D
     }
     public System.Collections.Generic.IEnumerable<PlayerShip> Ships => _ships.Values;
     private BasePanel _base;
+    private PilotWindow _pilot;
     private readonly Dictionary<int, PlayerShip> _ships = new();
     private Camera2D _cam;
 
@@ -113,6 +114,10 @@ public partial class Hub : Node2D
         baseBtn.Pressed += ToggleBase;
         var baseWrap = Ui.Wrap(baseBtn); baseWrap.Position = new Vector2(256, 48);
         layer.AddChild(baseWrap);
+        var pilotBtn = new Button { Text = "PILOT (L)", Name = "PilotButton", FocusMode = Control.FocusModeEnum.None };
+        pilotBtn.Pressed += TogglePilot;
+        var pilotWrap = Ui.Wrap(pilotBtn); pilotWrap.Position = new Vector2(356, 48);
+        layer.AddChild(pilotWrap);
         // the stats line sits on its own panel so it reads over anything behind it
         var hudPanel = new PanelContainer { Position = new Vector2(10, 8), Name = "HudPanel", MouseFilter = Control.MouseFilterEnum.Ignore };
         hudPanel.AddThemeStyleboxOverride("panel", Ui.PanelStyle(12));
@@ -292,7 +297,10 @@ public partial class Hub : Node2D
     private void ApplyLocalIdentity()
     {
         if (_ships.TryGetValue(Net.LocalId, out var me) && IsInstanceValid(me))
+        {
             me.SetIdentity(Character.Name, Character.Main, Character.Accent, Character.Class);
+            me.SetProgress(Character.Bought);
+        }
     }
 
     private void SendIdentity(int toPeer = 0)
@@ -301,13 +309,13 @@ public partial class Hub : Node2D
         // a guest mid-handshake still reports LocalId 1; peers would rightly reject
         // that as impersonating the host, so wait for the real id (OnSessionChanged)
         if (!Net.IsHost && Net.LocalId == 1) return;
-        var args = new Variant[] { Net.LocalId, Character.Name, Character.Main, Character.Accent, (int)Character.Class };
+        var args = new Variant[] { Net.LocalId, Character.Name, Character.Main, Character.Accent, (int)Character.Class, Character.Bought, Character.Level };
         if (toPeer == 0) Rpc(nameof(NetIdentity), args);
         else             RpcId(toPeer, nameof(NetIdentity), args);
     }
 
     [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetIdentity(int peer, string name, Color main, Color accent, int cls)
+    private void NetIdentity(int peer, string name, Color main, Color accent, int cls, int[] bought, int level)
     {
         // a peer may only describe itself
         if (Multiplayer.GetRemoteSenderId() != peer || Net.I == null) return;
@@ -315,8 +323,21 @@ public partial class Hub : Node2D
         if (name.Length > 24) name = name[..24];
         var c = System.Enum.IsDefined(typeof(ShipClass), cls) ? (ShipClass)cls : ShipClass.Battleship;
         p.Name = name; p.Main = main; p.Accent = accent; p.Class = c; p.HasIdentity = true;
-        if (_ships.TryGetValue(peer, out var s) && IsInstanceValid(s)) s.SetIdentity(name, main, accent, c);
+        // purchases the claimed level could not have paid for are refused outright
+        long spent = 0; foreach (var n in bought ?? System.Array.Empty<int>()) spent += (long)n * (n + 1) / 2;
+        if (spent > System.Math.Max(0, level - 1)) bought = new int[Progression.All.Length];
+        if (_ships.TryGetValue(peer, out var s) && IsInstanceValid(s)) { s.SetIdentity(name, main, accent, c); s.SetProgress(bought); }
     }
+
+    // ── shared EXP: the host awards it; every pilot in the session gets it ─────
+    public void AwardPartyExp(int amount)
+    {
+        if (!Net.IsHost) return;
+        Progression.AddExp(amount);
+        if (Net.IsOnline) Rpc(nameof(NetExp), amount);
+    }
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void NetExp(int amount) => Progression.AddExp(amount);
 
     // ── character creator ────────────────────────────────────────────────────
     // One instance, owned here; REFIT opens it and it cannot stack.
@@ -531,6 +552,7 @@ public partial class Hub : Node2D
             else if (IsInstanceValid(_creator)) CloseCreator();
             else if (IsInstanceValid(_statsWin)) ToggleStats();
             else if (IsInstanceValid(_base)) ToggleBase();
+            else if (IsInstanceValid(_pilot)) TogglePilot();
             else if (Selected != null) _selected = null;
             else ToggleEscMenu();                                   // the menu holds "quit to main menu"
         }
@@ -579,6 +601,7 @@ public partial class Hub : Node2D
             else if (kk.Keycode == Key.Tab) SelectNearest();
             else if (kk.Keycode == Key.K) ToggleStats();
             else if (kk.Keycode == Key.B) ToggleBase();
+            else if (kk.Keycode == Key.L) TogglePilot();
             else
             {
                 // in stasis the only order is F: re-board once the ship is ready
@@ -609,9 +632,22 @@ public partial class Hub : Node2D
     {
         if (IsInstanceValid(_base)) { _base.QueueFree(); _base = null; return; }
         _base = new BasePanel { Hub = this };
+        if (IsInstanceValid(_pilot)) TogglePilot();                // the two share a spot
         _hudLayer.AddChild(_base);
     }
     public bool CreatorOpen => IsInstanceValid(_creator);
+
+    public void TogglePilot()
+    {
+        if (IsInstanceValid(_pilot)) { _pilot.QueueFree(); _pilot = null; return; }
+        if (IsInstanceValid(_base)) ToggleBase();                 // the two share a spot
+        _pilot = new PilotWindow { Hub = this };
+        _hudLayer.AddChild(_pilot);
+    }
+    public bool PilotOpen => IsInstanceValid(_pilot);
+
+    // A purchase: refit the ship now, and tell the host (it resolves hull and damage).
+    public void PilotChanged() { ApplyLocalIdentity(); SendIdentity(); }
 
     // REFIT: the only way into the ship menu (it costs 10%; see Yard.ResetCost).
     public void ResetShip()

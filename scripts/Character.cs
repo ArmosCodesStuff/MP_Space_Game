@@ -21,6 +21,9 @@ public static class Character
     // Stat bonuses as fractions keyed by stat id (see ShipStats). Saved with the
     // character; nothing grants any yet.
     public static readonly Dictionary<string, double> Bonuses = new();
+    // pilot progression (see Progression)
+    public static int Exp, Level = 1, Points;
+    public static readonly int[] Bought = new int[Progression.All.Length];
 
     // One saved character, as the select screen lists it.
     public class Slot
@@ -41,6 +44,7 @@ public static class Character
         Accent = new(1.00f, 0.78f, 0.35f);
         Class = ShipClass.Battleship;
         Bonuses.Clear();
+        Exp = 0; Level = 1; Points = 0; Array.Clear(Bought);
     }
 
     public static void Save()
@@ -53,6 +57,8 @@ public static class Character
         c.SetValue("id", "accent", Accent);
         c.SetValue("id", "class", (int)Class);
         foreach (var kv in Bonuses) c.SetValue("bonus", kv.Key, kv.Value);
+        c.SetValue("progress", "exp", Exp); c.SetValue("progress", "level", Level); c.SetValue("progress", "points", Points);
+        for (int i = 0; i < Bought.Length; i++) c.SetValue("progress", "bought_" + Progression.All[i].Id, Bought[i]);
         c.Save(PathOf(Id));
     }
 
@@ -69,6 +75,9 @@ public static class Character
         Bonuses.Clear();
         if (c.HasSection("bonus"))
             foreach (var k in c.GetSectionKeys("bonus")) Bonuses[k] = (double)c.GetValue("bonus", k, 0.0);
+        Exp = (int)c.GetValue("progress", "exp", 0); Level = Math.Max(1, (int)c.GetValue("progress", "level", 1));
+        Points = Math.Max(0, (int)c.GetValue("progress", "points", 0));
+        for (int i = 0; i < Bought.Length; i++) Bought[i] = Math.Clamp((int)c.GetValue("progress", "bought_" + Progression.All[i].Id, 0), 0, Progression.MaxPerUpgrade);
         return true;
     }
 

@@ -18,11 +18,11 @@ using System.Collections.Generic;
 public class Stat
 {
     public string Id, Label, Unit, Group;
-    public double Base, Bonus;
+    public double Base, Bonus, Flat;   // Flat: pilot upgrades, added before the bonus
     public bool Inverse;           // an interval: bonus divides instead of multiplies
     public int Decimals = 1;
 
-    public double Value => Inverse ? Base / (1.0 + Bonus) : Base * (1.0 + Bonus);
+    public double Value => Inverse ? (Base + Flat) / (1.0 + Bonus) : (Base + Flat) * (1.0 + Bonus);
     public string Fmt(double v) => v.ToString("F" + Decimals) + (Unit.Length > 0 ? " " + Unit : "");
 }
 
@@ -40,7 +40,7 @@ public class ShipStats
         All.Add(s); _byId[id] = s;
     }
 
-    public ShipStats(ShipClass cls, IReadOnlyDictionary<string, double> bonuses = null)
+    public ShipStats(ShipClass cls, IReadOnlyDictionary<string, double> bonuses = null, IReadOnlyDictionary<string, double> flats = null)
     {
         Class = cls;
         bool bs = cls == ShipClass.Battleship;
@@ -122,6 +122,9 @@ public class ShipStats
         if (bonuses != null)
             foreach (var kv in bonuses)
                 if (_byId.TryGetValue(kv.Key, out var s)) s.Bonus = kv.Value;
+        if (flats != null)
+            foreach (var kv in flats)
+                if (_byId.TryGetValue(kv.Key, out var s)) s.Flat = kv.Value;
 
         // Bombers reach twice as far as the fighters are controlled: defined FROM the
         // control range, and it takes the same bonus, so the two can never drift apart.

@@ -186,7 +186,7 @@ public partial class PlayerShip : Node2D, IHittable
 
         // Your own ship carries your bonuses. Other ships use base stats: bonuses
         // are not replicated yet (and nothing grants any yet).
-        Stats = new ShipStats(Class, Mine ? Character.Bonuses : null);
+        Stats = new ShipStats(Class, Mine ? Character.Bonuses : null, Progression.Flats(_bought, Class));
         MaxHp = Hp = Stats["hull"];
         _mag = (int)Stats["missile_mag"]; _missileReload = _missileRefire = 0;
 
@@ -221,6 +221,22 @@ public partial class PlayerShip : Node2D, IHittable
     }
 
     public void SetClass(ShipClass c) { Class = c; FitClass(); }
+
+    // The pilot's purchased upgrades (Progression). The host needs them too: it resolves
+    // hull and damage. Changing them refits the stats, keeping the damage taken so far.
+    private int[] _bought = new int[Progression.All.Length];
+    public int[] Bought => _bought;
+    public void SetProgress(int[] bought)
+    {
+        var b = new int[Progression.All.Length];
+        for (int i = 0; i < b.Length && i < (bought?.Length ?? 0); i++) b[i] = Math.Clamp(bought[i], 0, Progression.MaxPerUpgrade);
+        if (b.AsSpan().SequenceEqual(_bought)) return;
+        _bought = b;
+        double lost = MaxHp - Hp;
+        Stats = new ShipStats(Class, Mine ? Character.Bonuses : null, Progression.Flats(_bought, Class));
+        MaxHp = Stats["hull"];
+        if (Alive) Hp = Math.Max(1, MaxHp - lost);
+    }
 
     public void SetIdentity(string pilot, Color main, Color accent, ShipClass cls)
     {
