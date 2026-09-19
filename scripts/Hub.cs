@@ -856,6 +856,7 @@ public partial class Hub : Node2D
         _hudLayer.AddChild(_base);
     }
     public bool CreatorOpen => IsInstanceValid(_creator);
+    public bool StatsOpen => IsInstanceValid(_statsWin);
 
     public void TogglePilot()
     {

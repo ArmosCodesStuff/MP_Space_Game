@@ -57,6 +57,8 @@ public partial class Radar : Control
 
     public override void _Process(double delta)
     {
+        // the K window opens over this corner: the radar steps aside while it is open
+        Visible = Hub != null && !Hub.StatsOpen;
         float s = Sizes[Mathf.Clamp(Settings.RadarSize, 0, 2)];
         OffsetLeft = -10f - s; OffsetRight = -10f; OffsetTop = 10f; OffsetBottom = 10f + s;
         QueueRedraw();
