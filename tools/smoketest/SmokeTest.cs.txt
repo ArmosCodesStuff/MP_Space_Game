@@ -1112,6 +1112,9 @@ public partial class _Test : Node
             var boss = H.Boss;
             Check(boss != null && boss.Alive && H.Yard == null && !Nodes<TargetDummy>().Any() && Combat.Hostiles.Contains(boss),
                   "the arena: the Silver Lancer, and no base or dummies");
+            Key(global::Godot.Key.B); await Wait(0.1);
+            var bb = Nodes<Button>().FirstOrDefault(b => b.Name == "BaseButton");
+            Check(Count<BasePanel>() == 0 && (bb == null || !bb.IsVisibleInTree()), "in the arena there is no BASE button, and B opens nothing");
             Check(Music.CombatZone, "the arena counts as combat for the music");
             Me.Position = boss.Position + new Vector2(0, 500); Me.Velocity = Vector2.Zero; Me.Rotation = 0;
             Key(global::Godot.Key.Q); await Wait(0.1);                           // point defence up

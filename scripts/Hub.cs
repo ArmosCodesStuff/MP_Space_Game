@@ -149,6 +149,7 @@ public partial class Hub : Node2D
         var baseBtn = new Button { Text = "BASE (B)", Name = "BaseButton", FocusMode = Control.FocusModeEnum.None };
         baseBtn.Pressed += ToggleBase;
         var baseWrap = Ui.Wrap(baseBtn); baseWrap.Position = new Vector2(256, 48);
+        baseWrap.Visible = !InArena;                                   // no base out there
         layer.AddChild(baseWrap);
         var pilotBtn = new Button { Text = "PILOT (L)", Name = "PilotButton", FocusMode = Control.FocusModeEnum.None };
         pilotBtn.Pressed += TogglePilot;
@@ -997,6 +998,7 @@ public partial class Hub : Node2D
 
     private void ToggleBase()
     {
+        if (Yard == null) return;                                      // the arena: there is no base to open
         if (IsInstanceValid(_base)) { _base.QueueFree(); _base = null; return; }
         _base = new BasePanel { Hub = this };
         if (IsInstanceValid(_pilot)) TogglePilot();                // the two share a spot
