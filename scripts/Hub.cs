@@ -124,16 +124,16 @@ public partial class Hub : Node2D
         };
         // Torpedoes: the host's copy deals damage; guests get the launch and fly a
         // cosmetic copy (the run is straight and steady, so it lands in the same place).
-        Combat.OnTorpedo = (from, dir, speed, range, dmg, target, turn, heavy) =>
+        Combat.OnTorpedo = (from, dir, speed, range, dmg, target, turn, heavy, hostile) =>
         {
-            SpawnTorpedo(from, dir, speed, range, dmg, false, target, turn, heavy);
-            if (Net.IsHost && Net.IsOnline) Rpc(nameof(NetTorpedo), from, dir, speed, range, target, turn, heavy);
+            SpawnTorpedo(from, dir, speed, range, dmg, false, target, turn, heavy, hostile);
+            if (Net.IsHost && Net.IsOnline) Rpc(nameof(NetTorpedo), from, dir, speed, range, target, turn, heavy, hostile);
         };
 
         for (int i = 0; i < DummyPos.Length; i++)
         {
             int n = i + 1;
-            var d = new TargetDummy { Name = $"TargetDummy{n}", Number = n, Position = DummyPos[i], ZIndex = 3 };
+            var d = new TargetDummy { Name = $"TargetDummy{n}", Number = n, Armed = n == 3, Position = DummyPos[i], ZIndex = 3 };
             AddChild(d); _dummies.Add(d);
             Combat.Hostiles.Add(d);
             d.Published = (last, avg, total) => { if (Net.IsOnline) Rpc(nameof(NetDummy), n, last, avg, total); };
@@ -300,10 +300,10 @@ public partial class Hub : Node2D
 
     public PlayerShip MyShipPublic => MyShip;
     private void SpawnTorpedo(Vector2 from, Vector2 dir, float speed, float range, double dmg, bool cosmetic,
-                              int target = 0, float turn = 0f, bool heavy = false)
+                              int target = 0, float turn = 0f, bool heavy = false, bool hostile = false)
     {
         AddChild(new Torpedo { Position = from, Dir = dir, Speed = speed, Range = range, Damage = dmg, Cosmetic = cosmetic,
-                               TargetId = target, TurnRate = turn, Heavy = heavy });
+                               TargetId = target, TurnRate = turn, Heavy = heavy, HostileFire = hostile });
     }
 
     private PlayerShip MyShip => _ships.TryGetValue(Net.LocalId, out var s) && IsInstanceValid(s) ? s : null;
@@ -361,7 +361,7 @@ public partial class Hub : Node2D
         // ONLY the host produces. A client that ticked its own copy would drift
         // from the host's within seconds and then argue about it.
         if (_ships.TryGetValue(Net.LocalId, out var mine) && IsInstanceValid(mine))
-            _cam.Position = _cam.Position.Lerp(mine.Position, Mathf.Clamp(6f * (float)delta, 0f, 1f));
+            _cam.Position = _cam.Position.Lerp(mine.ViewPosition, Mathf.Clamp(6f * (float)delta, 0f, 1f));   // the pod, while in stasis
 
         for (int i = _flashes.Count - 1; i >= 0; i--)
         {
@@ -503,6 +503,8 @@ public partial class Hub : Node2D
             else if (kk.Keycode == Key.B) ToggleBase();
             else
             {
+                // in stasis the only order is F: re-board once the ship is ready
+                if (!mine.Alive) { if (kk.Keycode == Key.F) mine.UseAbility("reboard", 0); GetViewport().SetInputAsHandled(); return; }
                 var ab = Abilities.ByKey(mine.Class, kk.Keycode);
                 if (ab == null) return;
                 if (ab.Kind == AbilityKind.Press && !ab.Open) mine.UseAbility(ab.Id, Selected?.NetId ?? 0);
@@ -513,8 +515,8 @@ public partial class Hub : Node2D
     }
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetTorpedo(Vector2 from, Vector2 dir, float speed, float range, int target, float turn, bool heavy)
-        => SpawnTorpedo(from, dir, speed, range, 0, true, target, turn, heavy);
+    private void NetTorpedo(Vector2 from, Vector2 dir, float speed, float range, int target, float turn, bool heavy, bool hostile)
+        => SpawnTorpedo(from, dir, speed, range, 0, true, target, turn, heavy, hostile);
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
     private void NetFlash(Vector2 a, Vector2 b, Color c) => _flashes.Add((a, b, c, 0.10));
@@ -609,7 +611,9 @@ public partial class HullHud : Control
         DrawRect(new Rect2(0, 0, W, H), new Color(0.08f, 0.09f, 0.12f, 0.9f));
         DrawRect(new Rect2(0, 0, W * frac, H), fill);
         DrawRect(new Rect2(0, 0, W, H), new Color(0.6f, 0.7f, 0.85f, 0.6f), false, 1.5f);
-        Txt.D(this, ThemeDB.FallbackFont, new Vector2(0, H - 5), $"HULL  {s.Hp:0} / {s.MaxHp:0}",
+        Txt.D(this, ThemeDB.FallbackFont, new Vector2(0, H - 5), s.Alive ? $"HULL  {s.Hp:0} / {s.MaxHp:0}"
+                  : s.CanReboard ? "SHIP READY  —  press F to re-board"
+                  : $"SHIP IN STASIS  {(int)s.StasisLeft / 60}:{(int)s.StasisLeft % 60:00}  —  flying the escape pod",
               HorizontalAlignment.Center, W, 15, Colors.White);
     }
 }

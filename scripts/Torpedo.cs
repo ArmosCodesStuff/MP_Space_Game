@@ -23,6 +23,7 @@ public partial class Torpedo : Node2D
     public int TargetId;              // 0 = unguided
     public float TurnRate;            // rad/s the heading may turn toward the target
     public bool Heavy;                // the bunker buster's look
+    public bool HostileFire;          // fired by an enemy: seeks and hits player ships
 
     private float _flown;
     private bool _spent;
@@ -45,7 +46,7 @@ public partial class Torpedo : Node2D
 
         if (!_spent)
         {
-            var tgt = TurnRate > 0 && TargetId != 0 ? Combat.ById(TargetId) : null;
+            var tgt = TurnRate > 0 && TargetId != 0 ? (HostileFire ? Combat.PlayerById(TargetId) : Combat.ById(TargetId)) : null;
             if (tgt != null)
             {   // barely guided: the nose creeps toward the target, never snaps
                 float want = (tgt.Position - GlobalPosition).Angle(), have = Dir.Angle();
@@ -58,10 +59,13 @@ public partial class Torpedo : Node2D
             _puffCd -= dt;
             if (_puffCd <= 0) { _puffCd += PuffEvery; _smoke.Add((GlobalPosition - Dir * 8f, 0f)); }
 
-            foreach (var h in Combat.Hostiles)
+            foreach (var h in HostileFire ? Combat.Players : Combat.Hostiles)
             {
-                if (h == null || !h.Alive || GlobalPosition.DistanceTo(h.Position) > h.HitRadius + 4f) continue;
-                if (!Cosmetic && Net.Sim) h.TakeDamage(Damage);
+                if (h == null || !h.Alive || !h.Covers(GlobalPosition, 4f)) continue;
+                if (!Cosmetic && Net.Sim)
+                {   // a player ship is told where the hit came from, for its shield
+                    if (h is PlayerShip ps) ps.Hit(Damage, GlobalPosition - Dir * 10f); else h.TakeDamage(Damage);
+                }
                 Detonate(); break;
             }
             if (!_spent && _flown >= Range) Detonate();

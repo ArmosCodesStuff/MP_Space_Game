@@ -9,6 +9,12 @@ using Godot;
 // Host-owned like all combat: the host counts, and sends the readout to guests.
 public partial class TargetDummy : Node2D, IHittable
 {
+    // An ARMED dummy fights back: every 5 s it fires a guided missile at the nearest
+    // player ship within 150 u, for 50 damage. Host-owned like all combat.
+    public bool Armed;
+    public const float ArmedRange = 150f, ArmedInterval = 5f;
+    public const double ArmedDamage = 50;
+    private double _fireCd;
     // Several dummies, each with its own id (1000, 1001, ...) and label number,
     // so target switching can be tested. Ids are assigned by the Hub in order,
     // identically on every peer.
@@ -49,6 +55,27 @@ public partial class TargetDummy : Node2D, IHittable
     public override void _Process(double delta)
     {
         _hitFlash = Mathf.Max(0, _hitFlash - delta);
+        if (Armed && Net.Sim)
+        {
+            _fireCd = System.Math.Max(0, _fireCd - delta);
+            if (_fireCd <= 0)
+            {
+                IHittable best = null; float bd = ArmedRange;
+                foreach (var p in Combat.Players)
+                {
+                    if (p == null || !p.Alive) continue;
+                    float d = GlobalPosition.DistanceTo(p.Position);
+                    if (d <= bd) { bd = d; best = p; }
+                }
+                if (best != null)
+                {
+                    var dir = (best.Position - GlobalPosition).Normalized();
+                    Combat.LaunchTorpedo(GlobalPosition + dir * (HitRadius + 8f), dir, 170f, 400f, ArmedDamage,
+                                         best.NetId, 2.5f, heavy: false, hostile: true);
+                    _fireCd = ArmedInterval;
+                }
+            }
+        }
         _idle += delta;
         if (Net.Sim)
         {
@@ -71,6 +98,8 @@ public partial class TargetDummy : Node2D, IHittable
 
     public override void _Draw()
     {
+        if (Armed)   // its reach, faintly: stay outside this ring
+            DrawArc(Vector2.Zero, ArmedRange, 0, Mathf.Tau, 64, new Color(1f, 0.35f, 0.3f, 0.22f), 1.5f);
         // a drawn hulk: an armoured octagon with a bullseye, tinted hostile red
         var hull = new Color(0.45f, 0.18f, 0.16f);
         var pts = new Vector2[8];

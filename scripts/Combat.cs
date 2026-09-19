@@ -23,6 +23,15 @@ public static class Combat
         return best;
     }
 
+    // Player ships, as targets for ENEMY fire only (a hostile dummy's missile). Ships
+    // register themselves; an escape pod is in no list, so nothing can touch it.
+    public static readonly List<IHittable> Players = new();
+    public static IHittable PlayerById(int id)
+    {
+        foreach (var p in Players) if (p != null && p.Alive && p.NetId == id) return p;
+        return null;
+    }
+
     public static IHittable ById(int id)
     {
         foreach (var h in Hostiles) if (h != null && h.Alive && h.NetId == id) return h;
@@ -66,10 +75,11 @@ public static class Combat
     // Set by the live world: launches a projectile there (and, on a host, tells
     // guests). Unguided torpedoes pass targetId 0; the missile passes its target and
     // a small turn rate, and heavy for its looks.
-    public static System.Action<Vector2, Vector2, float, float, double, int, float, bool> OnTorpedo;
+    // hostile = fired BY an enemy, so it seeks and hits player ships, not hostiles.
+    public static System.Action<Vector2, Vector2, float, float, double, int, float, bool, bool> OnTorpedo;
     public static void LaunchTorpedo(Vector2 from, Vector2 dir, float speed, float range, double damage,
-                                     int targetId = 0, float turnRate = 0f, bool heavy = false)
-        => OnTorpedo?.Invoke(from, dir.Normalized(), speed, range, damage, targetId, turnRate, heavy);
+                                     int targetId = 0, float turnRate = 0f, bool heavy = false, bool hostile = false)
+        => OnTorpedo?.Invoke(from, dir.Normalized(), speed, range, damage, targetId, turnRate, heavy, hostile);
 
-    public static void Clear() { Hostiles.Clear(); OnFlash = null; OnTorpedo = null; }
+    public static void Clear() { Hostiles.Clear(); Players.Clear(); OnFlash = null; OnTorpedo = null; }
 }

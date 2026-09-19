@@ -16,7 +16,7 @@ using System.Collections.Generic;
 //     reports hull, ability state and wing positions back;
 //   everyone else interpolates.
 // ─────────────────────────────────────────────────────────────────────────────
-public partial class PlayerShip : Node2D
+public partial class PlayerShip : Node2D, IHittable
 {
     public int OwnerId = 1;
 
@@ -27,7 +27,30 @@ public partial class PlayerShip : Node2D
 
     public ShipClass Class = ShipClass.Battleship;
     public ShipStats Stats = new(ShipClass.Battleship);
-    public bool Alive = true;
+    public bool Alive { get; private set; } = true;
+
+    // ── as a target: for ENEMY fire only (Combat.Players) ──────────────────
+    public const int NetIdBase = 2000;                  // same on every peer: 2000 + owner
+    public int NetId => NetIdBase + OwnerId;
+    public float HitRadius => MyArt.HalfWidth;
+    // A capsule along the keel: a circle would be far too wide for a long hull.
+    public bool Covers(Vector2 p, float pad)
+    {
+        var fwd = Vector2.Up.Rotated(Rotation);
+        float half = Mathf.Max(0f, MyArt.Length * 0.5f - MyArt.HalfWidth);
+        float t = Mathf.Clamp((p - Position).Dot(fwd), -half, half);
+        return p.DistanceTo(Position + fwd * t) <= MyArt.HalfWidth + pad;
+    }
+
+    // ── death: stasis, and the escape pod ───────────────────────────────────
+    public const double StasisTime = 120, ReboardHull = 0.33;
+    private double _stasis;
+    public double StasisLeft => _stasis;
+    public bool CanReboard => !Alive && _stasis <= 0;
+    private EscapePod _pod;
+    private ShieldFlash _shield;
+    // where the camera should look: the pod while the ship is in stasis
+    public Vector2 ViewPosition => !Alive && IsInstanceValid(_pod) ? _pod.Position : Position;
     public double Hp, MaxHp;
 
     // ── art: sprite, size, and where the turrets sit ─────────────────────────
@@ -37,6 +60,7 @@ public partial class PlayerShip : Node2D
     {
         public string Texture;
         public float Length;          // nose to tail, world units
+        public float HalfWidth = 20f; // half the hull's beam: the collider and the shield
         public Vector2[] Mains = Array.Empty<Vector2>(), Pds = Array.Empty<Vector2>();
 
         // The turrets are the ones painted on the ship: cut out of the hull art into
@@ -59,7 +83,7 @@ public partial class PlayerShip : Node2D
         // (texture 300 px at 224 u = 0.7467 u/px; every offset and size below is the
         // art's measured pixel position times that)
         [ShipClass.Battleship] = new ClassArt {
-            Texture = "res://battleship_hull.png", Length = 224f,
+            Texture = "res://battleship_hull.png", Length = 224f, HalfWidth = 40f,
             Mains = new Vector2[] { new(0.41f, -65.41f), new(0.38f, -36.81f), new(0.59f, 48.76f), new(0.38f, 76.23f) },
             Pds   = new Vector2[] { new(-33.25f, 0.45f), new(34.97f, 0.45f) },
             MainTurret = "res://turret_bs_main.png", PdTurret = "res://turret_bs_pd.png", TurretTexScale = 0.7467f,
@@ -67,7 +91,7 @@ public partial class PlayerShip : Node2D
         // Carrier, 170 u (full art 1668 px: 0.1019 u/px). Its three painted domes are
         // its point-defence turrets.
         [ShipClass.Carrier] = new ClassArt {
-            Texture = "res://carrier_player.png", Length = 170f,
+            Texture = "res://carrier_player.png", Length = 170f, HalfWidth = 24.5f,
             DockX = 41.5f, DockY = 5f, DockSpacing = 40f,   // 37.5 u bombers: wingtips meet the engine pods
             Pds = new Vector2[] { new(-5.78f, 8.04f), new(5.78f, 8.04f), new(0f, 18.76f) },
             PdTurret = "res://turret_carrier.png", TurretTexScale = 0.2013f,
@@ -131,6 +155,7 @@ public partial class PlayerShip : Node2D
         Position = _netPos = at;
         AimPoint = at + new Vector2(0, -400);
         SetMultiplayerAuthority(ownerId);
+        if (!Combat.Players.Contains(this)) Combat.Players.Add(this);
         _sprite = new Sprite2D();
         AddChild(_sprite);
         ZIndex = 4;
@@ -157,6 +182,8 @@ public partial class PlayerShip : Node2D
         _sprite.Texture = tex;
         _sprite.Scale = Vector2.One * (art.Length / tex.GetHeight());
         _sprite.Modulate = Main;
+        if (!IsInstanceValid(_shield)) { _shield = new ShieldFlash(); AddChild(_shield); }
+        _shield.HalfWidth = art.HalfWidth; _shield.HalfLength = art.Length * 0.5f; _shield.Tint = Accent;
 
         for (int i = 0; i < Math.Min((int)Stats["main_count"], art.Mains.Length); i++) AddTurret(art.Mains[i], false);
         for (int i = 0; i < Math.Min((int)Stats["pd_count"], art.Pds.Length); i++) AddTurret(art.Pds[i], true);
@@ -187,6 +214,7 @@ public partial class PlayerShip : Node2D
         Pilot = pilot; Main = main; Accent = accent;
         if (cls != Class) SetClass(cls);
         else if (_sprite != null) _sprite.Modulate = Main;
+        if (IsInstanceValid(_shield)) _shield.Tint = Accent;
         foreach (var t in _turrets) t.Recolor();
     }
 
@@ -233,6 +261,7 @@ public partial class PlayerShip : Node2D
         var t = targetId != 0 ? Combat.ById(targetId) : null;
         switch (id)
         {
+            case "reboard": if (CanReboard) { Alive = true; Hp = MaxHp * ReboardHull; _stasis = 0; } break;
             case "pd":      if (PdReady) _pdLeft = Stats["pd_active"]; break;
             case "missile": FireMissile(t); break;
             case "reload":  if (Class == ShipClass.Battleship && !Reloading && _mag < (int)Stats["missile_mag"])
@@ -268,9 +297,31 @@ public partial class PlayerShip : Node2D
 
     public void TakeDamage(double d)
     {
-        if (!Net.Sim) return;                 // only the host resolves damage
+        if (!Net.Sim || !Alive) return;       // only the host resolves damage
         Hp -= d;
-        if (Hp <= 0) { Hp = 0; Alive = false; }
+        if (Hp <= 0) Die();
+    }
+
+    // A hit that knows where it came from: damage, and the shield lights that side.
+    public void Hit(double d, Vector2 from)
+    {
+        if (!Net.Sim || !Alive) return;
+        var v = (from - Position).Rotated(-Rotation);
+        float side = Mathf.Atan2(v.X, -v.Y);            // 0 = ahead, clockwise
+        _shield?.Flash(side);
+        if (Net.IsOnline) Rpc(nameof(NetShield), side);
+        TakeDamage(d);
+    }
+
+    [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
+    private void NetShield(float side) { if (Multiplayer.GetRemoteSenderId() == 1) _shield?.Flash(side); }
+
+    // Into stasis where it lies; the pilot takes to the escape pod.
+    private void Die()
+    {
+        Hp = 0; Alive = false; _stasis = StasisTime;
+        Velocity = Vector2.Zero; Trigger = false; _pdLeft = 0;
+        WingTarget = null; StrikeTarget = null;
     }
 
     public bool Mine => Net.OwnedByMe(this);
@@ -279,6 +330,8 @@ public partial class PlayerShip : Node2D
     public override void _Process(double delta)
     {
         float dt = (float)delta;
+        if (!Alive) _stasis = Math.Max(0, _stasis - delta);   // the host's clock rules; guests re-sync each packet
+        UpdatePod();
         if (Mine) LocalFlight(dt);
         else      RemoteFollow(dt);
 
@@ -351,6 +404,12 @@ public partial class PlayerShip : Node2D
     // ── the owner steers it: naval handling ──────────────────────────────────
     private void LocalFlight(float dt)
     {
+        if (!Alive)
+        {   // in stasis the hull stays put; the pod flies (EscapePod reads the keys)
+            Velocity = Vector2.Zero; Trigger = false;
+            SendState(dt);
+            return;
+        }
         // Input.IsKeyPressed polls the raw keyboard, so it does not care that a text
         // box has focus. Hub decides when the controls belong to the UI instead.
         bool locked = Hub.ControlsLocked;
@@ -372,13 +431,34 @@ public partial class PlayerShip : Node2D
             Trigger = Class == ShipClass.Battleship && Input.IsKeyPressed(Abilities.KeyFor(Class, "guns"));
         }
 
+        SendState(dt);
+    }
+
+    private void SendState(float dt)
+    {
         _sendCd -= dt;
-        if (_sendCd <= 0 && Net.IsOnline)
+        if (_sendCd > 0 || !Net.IsOnline) return;
+        _sendCd = SendInterval;
+        var pod = IsInstanceValid(_pod) ? _pod.Position : Position;
+        float podRot = IsInstanceValid(_pod) ? _pod.Rotation : 0f;
+        Rpc(nameof(NetState), Position.X, Position.Y, Velocity.X, Velocity.Y, Rotation,
+            AimPoint.X, AimPoint.Y, Trigger, Staggered, pod.X, pod.Y, podRot);
+    }
+
+    // The pod exists exactly while the ship is in stasis: flown by its owner,
+    // shown to everyone else at the position the owner reports.
+    private void UpdatePod()
+    {
+        if (!Alive && !IsInstanceValid(_pod))
         {
-            _sendCd = SendInterval;
-            Rpc(nameof(NetState), Position.X, Position.Y, Velocity.X, Velocity.Y, Rotation,
-                AimPoint.X, AimPoint.Y, Trigger, Staggered);
+            _pod = new EscapePod { Name = $"Pod_{OwnerId}", Local = Mine, Position = Position, Rotation = Rotation };
+            GetParent().AddChild(_pod);
         }
+        else if (Alive && IsInstanceValid(_pod)) { _pod.QueueFree(); _pod = null; }
+        // stasis: a cold, pulsing blue; no turrets
+        if (_sprite != null)
+            _sprite.Modulate = Alive ? Main : new Color(0.45f, 0.62f, 0.95f, 0.55f + 0.12f * Mathf.Sin(Time.GetTicksMsec() / 300f));
+        foreach (var t in _turrets) t.Visible = Alive;
     }
 
     // Public so the smoke test can drive the helm exactly. Velocity is split into
@@ -425,7 +505,8 @@ public partial class PlayerShip : Node2D
     }
 
     [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
-    private void NetState(float px, float py, float vx, float vy, float rot, float ax, float ay, bool trigger, bool staggered)
+    private void NetState(float px, float py, float vx, float vy, float rot, float ax, float ay, bool trigger, bool staggered,
+                          float podX, float podY, float podRot)
     {
         // Only the ship's own owner may move it. Without this check any peer could
         // shove anyone else's ship around, which is the classic authority hole.
@@ -436,6 +517,7 @@ public partial class PlayerShip : Node2D
         AimPoint = new Vector2(ax, ay);
         Trigger = trigger;          // the host fires on this; a guest only draws
         Staggered = staggered;
+        if (IsInstanceValid(_pod) && !_pod.Local) _pod.SetNet(new Vector2(podX, podY), podRot);
     }
 
     // The host's side of the conversation: hull, ability state, and the wing.
@@ -448,16 +530,16 @@ public partial class PlayerShip : Node2D
             pos[i] = _wings[i].Position; rot[i] = _wings[i].Rotation;
             st[i] = _wings[i].StateCode; rearm[i] = (float)_wings[i].RearmLeft;
         }
-        Rpc(nameof(NetHostState), Hp, MaxHp, _pdLeft, _pdRecharge, _mag, _missileReload,
+        Rpc(nameof(NetHostState), Hp, MaxHp, Alive, _stasis, _pdLeft, _pdRecharge, _mag, _missileReload,
             WingTarget?.NetId ?? 0, pos, rot, st, rearm);
     }
 
     [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
-    private void NetHostState(double hp, double maxHp, double pdLeft, double pdRecharge, int mag, double reload,
+    private void NetHostState(double hp, double maxHp, bool alive, double stasis, double pdLeft, double pdRecharge, int mag, double reload,
                               int wingTarget, Vector2[] wingPos, float[] wingRot, int[] wingState, float[] wingRearm)
     {
         if (Multiplayer.GetRemoteSenderId() != 1) return;   // only the host speaks for combat state
-        Hp = hp; MaxHp = maxHp;
+        Hp = hp; MaxHp = maxHp; Alive = alive; _stasis = stasis;
         _pdLeft = pdLeft; _pdRecharge = pdRecharge; _mag = mag; _missileReload = reload;
         WingTarget = wingTarget != 0 ? Combat.ById(wingTarget) : null;
         for (int i = 0; i < Math.Min(_wings.Count, wingPos.Length); i++)
@@ -474,10 +556,19 @@ public partial class PlayerShip : Node2D
     {
         foreach (var w in _wings) if (IsInstanceValid(w)) w.QueueFree();
         _wings.Clear();
+        if (IsInstanceValid(_pod)) _pod.QueueFree();
+        Combat.Players.Remove(this);
     }
 
     public override void _Draw()
     {
+        if (!Alive)
+        {   // the stasis countdown over the hull, upright whatever the heading
+            DrawSetTransform(Vector2.Zero, -Rotation, Vector2.One);
+            string t = CanReboard ? "READY  ·  F" : $"STASIS  {(int)_stasis / 60}:{(int)_stasis % 60:00}";
+            Txt.Centre(this, ThemeDB.FallbackFont, new Vector2(0, -MyArt.Length * 0.5f - 14f), t, Txt.Size(14), new Color(0.6f, 0.85f, 1f));
+            DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
+        }
         if (Mine) return;
         // a soft ring so other players read as players, not as fleet ships
         DrawArc(Vector2.Zero, 34f, 0, Mathf.Tau, 24, new Color(0.55f, 0.85f, 1f, 0.5f), 2f);

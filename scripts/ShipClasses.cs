@@ -26,6 +26,9 @@ public interface IHittable
     float HitRadius { get; }
     bool Alive { get; }
     void TakeDamage(double d);
+    // Does a projectile at p (with pad for its own size) touch this? A circle by
+    // default; a long ship answers with a capsule along its keel.
+    bool Covers(Vector2 p, float pad) => p.DistanceTo(Position) <= HitRadius + pad;
 }
 
 // ── Turret ───────────────────────────────────────────────────────────────────
@@ -249,7 +252,7 @@ public partial class Wing : Node2D
     public void Tick(double delta)
     {
         if (!Alive) return;
-        if (!IsInstanceValid(Carrier) || !Carrier.Alive) { Alive = false; QueueFree(); return; }
+        if (!IsInstanceValid(Carrier)) { Alive = false; QueueFree(); return; }   // a carrier in stasis keeps its wing
         Visible = Carrier.IsVisibleInTree();          // a hidden carrier hides its wing
 
         if (!Net.Sim)
