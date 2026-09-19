@@ -545,10 +545,21 @@ public partial class Hub : Node2D
         if (Yard.Hauler != null && Yard.Hauler.State is not (Hauler.St.Destroyed or Hauler.St.Away)) yield return Yard.Hauler;
     }
 
-    public Raider SpawnRaider(Vector2 at, RaiderKind kind = RaiderKind.Light)
+    // A patrol: 3 lights and 1 heavy, spawned together at `at` on the perimeter.
+    private int _patrols;
+    public int SpawnPatrol(Vector2 at)
+    {
+        if (!Net.IsHost) return 0;
+        int id = ++_patrols;
+        SpawnRaider(at + new Vector2(-40, 0), RaiderKind.Light, id); SpawnRaider(at, RaiderKind.Light, id);
+        SpawnRaider(at + new Vector2(40, 0), RaiderKind.Light, id); SpawnRaider(at + new Vector2(0, 90), RaiderKind.Heavy, id);
+        return id;
+    }
+
+    public Raider SpawnRaider(Vector2 at, RaiderKind kind = RaiderKind.Light, int patrol = 0)
     {
         if (!Net.IsHost) return null;
-        var r = new Raider { Hub = this, Kind = kind, NetId = ++_raiderIds, Position = at, Name = $"Raider_{_raiderIds}" };
+        var r = new Raider { Hub = this, Kind = kind, Patrol = patrol, NetId = ++_raiderIds, Position = at, Name = $"Raider_{_raiderIds}" };
         Raiders.Add(r); AddChild(r);
         if (Net.IsOnline) Rpc(nameof(NetRaiderSpawn), r.NetId, at, (int)kind);
         return r;

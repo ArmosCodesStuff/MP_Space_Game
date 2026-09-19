@@ -21,6 +21,11 @@ using System.Linq;
 //   for all 7 s, and the blast lands there -- move off the line and it misses.
 //
 // Targets: the nearest player ship, miner, salvager or hauler.
+//
+// PATROLS: 3 lights and 1 heavy circle a perimeter round the base (1800 u out) together.
+// When a target comes within 2000 u of the patrol, its lights break off to tackle it, and
+// its heavy takes the SAME target and waits astern for the pin. (A raider on its own,
+// in no patrol, simply goes for the nearest target.)
 // ─────────────────────────────────────────────────────────────────────────────
 public enum RaiderKind { Light, Heavy }
 
@@ -46,6 +51,9 @@ public partial class Raider : Node2D, IHittable
     public const float HeavyReach = 150f, HeavyHold = 0.9f * HeavyReach, WaitOut = 450f;
     public const float MissileRange = 500f, BlastRadius = 90f;
     public const double MissileFlight = 7.0, MissileEvery = 12.0, MissileDamage = 30;
+    public const float PerimeterR = 1800f, Detect = 2000f, PatrolSpeed = 100f;
+    public int Patrol;                                 // 0: on its own
+    private float _orbit;                              // patrols: its angle round the perimeter
     public const double ShotEvery = 1.0;
     public const float Cruise = 100f;                  // an unupgraded capital ship's pace
     public const float BoostMult = 5f;                 // 500%
@@ -152,8 +160,8 @@ public partial class Raider : Node2D, IHittable
             return;
         }
         if (!Alive) return;
-        if (!Up(Target)) { Target = Hub.RaiderTargets().OrderBy(t => t.Position.DistanceTo(Position)).FirstOrDefault(); Latched = false; _boostUsed = false; }
-        if (Target == null) { Speed = 0; QueueRedraw(); return; }
+        if (!Up(Target)) { Target = Choose(); Latched = false; _boostUsed = false; }
+        if (Target == null) { Speed = 0; if (Patrol != 0) Circle(delta); QueueRedraw(); return; }
         _targetVel = dt > 0 ? (Target.Position - _lastTargetPos) / dt : Vector2.Zero; _lastTargetPos = Target.Position;
         if (Heavy) { TickHeavy(delta); QueueRedraw(); return; }
 
@@ -187,6 +195,32 @@ public partial class Raider : Node2D, IHittable
             }
         }
         QueueRedraw();
+    }
+
+    // what to go after: alone, the nearest target; in a patrol, only once one is within
+    // 2000 u of the patrol -- and a patrol's heavy takes whatever its lights have taken
+    private Node2D Choose()
+    {
+        var all = Hub.RaiderTargets().ToList();
+        if (Patrol == 0) return all.OrderBy(t => t.Position.DistanceTo(Position)).FirstOrDefault();
+        var mates = Hub.Raiders.Where(r => r.Patrol == Patrol && r.Alive && r != this).ToList();
+        if (Heavy) return mates.Where(r => !r.Heavy && Up(r.Target)).Select(r => r.Target).FirstOrDefault();
+        var near = all.Where(t => t.Position.DistanceTo(Position) <= Detect).OrderBy(t => t.Position.DistanceTo(Position)).FirstOrDefault();
+        if (near != null) return near;
+        return mates.Where(r => !r.Heavy && Up(r.Target)).Select(r => r.Target).FirstOrDefault();   // a mate spotted one
+    }
+
+    // a patrol with nothing to do circles the perimeter round the base, together
+    private void Circle(double delta)
+    {
+        float dt = (float)delta;
+        if (_orbit == 0f) _orbit = (Position - Hub.BasePos).Angle();
+        _orbit += PatrolSpeed / PerimeterR * dt;
+        var spot = Hub.BasePos + Vector2.Right.Rotated(_orbit) * PerimeterR;
+        var step = spot - Position;
+        Position = Position.MoveToward(spot, PatrolSpeed * 1.5f * dt);     // catches its moving spot, at a believable pace
+        if (step.Length() > 1f) Rotation = Mathf.LerpAngle(Rotation, step.Angle() + Mathf.Pi / 2f, Mathf.Clamp(4f * dt, 0f, 1f));
+        Speed = PatrolSpeed;
     }
 
     static bool PinnedNow(Node2D t) => t switch { PlayerShip p => p.Pinned, Gatherer g => g.Pinned, Hauler h => h.Pinned, _ => false };

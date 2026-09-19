@@ -890,6 +890,26 @@ public partial class _Test : Node
             hm.Position = keepH; hm.Velocity = Vector2.Zero; hm.TakeDamage(-(hm.MaxHp - hm.Hp));
         }
 
+        // ── raiders (6c): patrols -- 3 lights and 1 heavy; nothing within 2000 u, no target ──
+        {
+            int pid = H.SpawnPatrol(Hub.BasePos + new Vector2(0, 6500));
+            var pat = H.Raiders.Where(r => r.Patrol == pid).ToList();
+            Check(pat.Count == 4 && pat.Count(r => !r.Heavy) == 3 && pat.Count(r => r.Heavy) == 1, "a patrol: three lights and one heavy");
+            await Wait(1.0);
+            float pd0 = pat[0].Position.DistanceTo(Hub.BasePos);
+            Check(pat.All(r => r.Target == null) && pd0 < 6500 - 60 && pd0 > 6500 - 200,
+                  $"nothing within 2000 u: they take no target, and head for the perimeter at a patrol's pace ({6500 - pd0:0} u in 1 s)");
+            var pm = Me; var keepP = pm.Position;
+            pm.Position = pat[0].Position + new Vector2(0, -1500); pm.Velocity = Vector2.Zero;
+            await Wait(0.5);
+            var heavyP = pat.First(r => r.Heavy);
+            Check(pat.Where(r => !r.Heavy).All(r => r.Target == pm) && heavyP.Target == pm,
+                  "a ship within 2000 u: the lights go for it, and their heavy takes the same target");
+            foreach (var r in pat) if (GodotObject.IsInstanceValid(r)) r.TakeDamage(9999);
+            await Wait(0.3);
+            pm.Position = keepP; pm.Velocity = Vector2.Zero; pm.TakeDamage(-(pm.MaxHp - pm.Hp));
+        }
+
         // ── enemy fire, shields, stasis, the escape pod, re-boarding ──
         {
             var d3x = H.GetNode<TargetDummy>("TargetDummy3");
