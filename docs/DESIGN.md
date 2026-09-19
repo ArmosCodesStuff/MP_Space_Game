@@ -170,6 +170,17 @@ levels once a second and ship and hauler state ten times a second; a guest's own
   such as Tailscale or ZeroTier (everyone joins the VPN; use its addresses). There is no relay
   server or NAT punch-through: that needs infrastructure outside the game.
 
+## The arena
+
+- **A scene change**: `Hub.GoTo` reloads the game scene with `Hub.Sector` set; the host tells every
+  guest to do the same. Anything that must survive the trip lives outside the scene (static): the
+  host's trip record (`Yard._trip`) and a guest's set-aside base (`Yard._own*`).
+- **Telegraph first**: every high-damage boss attack shows a red zone for its whole wind-up
+  (`Telegraph`), then the host resolves the hit.
+- **Point defence order**: missiles, then small craft, then anything else (`Turret.PdPriority`).
+- **Test harness trap**: three processes on fixed timings do not choreograph scene changes well; the
+  multiplayer arena needs its own purpose-built test.
+
 ## Pilot progression and missions
 
 - **EXP is shared**: the host awards it (`Hub.AwardPartyExp`) to every pilot in the session, for

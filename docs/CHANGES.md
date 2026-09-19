@@ -39,7 +39,7 @@ history pick the work up from it alone. Update it in the same change as the code
 **State as of 2026-09-18: version 0.3.0 plus Unreleased (see it for everything since: docking arms
 and the unload queue, the fleet and hauler pods, the idle economy, base menu, bunker-buster missile,
 painted turrets, docking bombers and more).** Typecheck clean against the real `GodotSharp.dll`,
-`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 256 checks across
+`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 269 checks across
 a single-player run and a host with two guests. Unlike earlier releases, this one was also **looked at**:
 `tools/screens/run.sh` renders the select screen, the creator, a fresh spawn under the base, both
 classes in the hub, the K window, a bomber strike, and turret close-ups on a virtual display; layout
@@ -178,6 +178,50 @@ reachable, which is fine: both harnesses build from the `nupkgs` folder that shi
 ---
 
 ## Unreleased
+
+### The boss mission (this batch)
+
+**Checked:** smoke test **three runs in a row, 269 checks each**; screenshot sweep **51 frames, 0 lint**;
+the arena frames looked at (the death-beam and shockwave telegraphs, the boss).
+
+**Integrity findings.** Two commits (16:55, 16:59) and an uncommitted screenshot-tool edit came from an
+interrupted run of this request. All of it serves the player's current requests: **reviewed, tested,
+adopted**. Its claim of 267 checks held.
+
+#### Added
+
+- **READY autopilots you to the mission portal**, with a **capital-ship** variant (rudder and throttle,
+  turning radius) and a **fighter** variant (point and burn; ready for the first player fighter class,
+  tested on its own). **Everyone READY** opens the portal; **everyone at the portal** goes through.
+- **The arena**, a scene change (the game scene reloaded in arena mode): the **Silver Lancer** — 3000
+  hull; guns every 1.2 s; **4 guided missiles every 7 s that point defence can shoot down**; a **death
+  beam** behind a 2 s **red line telegraph** (60 damage); a **shockwave** behind a 1.8 s **red ring
+  telegraph** (45 within 340 u). A **win** pays **300 + 100 EXP to every pilot** and **2000 credits**,
+  then home; a **wipe** (every ship in stasis) goes home with nothing.
+- **The base while away earns 1/20** of its fleet's income for the time spent on the mission.
+- **Point defence takes missiles first, then small (fighter-sized) craft, then everything else.**
+- **Music is on by default**, with a **MUSIC ON/OFF** toggle in the Esc menu (saved).
+
+#### Fixed
+
+- **A guest who followed the party into the arena lost its own base**: the base it set aside was held
+  on an object the arena's scene reload destroyed. It is kept apart from the scene now.
+- **A guest whose host dropped mid-arena was stranded there** (no base; the next look at it crashed).
+  It is sent home, to its own base.
+- **Test: `Me` was the host's ship on every guest** (it looked up `Ship_1`); it is each peer's own ship.
+
+#### Not yet verified
+
+- **The multiplayer arena end to end.** Seen working: all three pilots at the portal, the host taking
+  the party through, the first guest arriving. Not yet shown by a passing test: the second guest
+  arriving, and the two fixes above over the network (the three-process timing needs its own test).
+- **The BASE button in the arena**, where there is no base: it may be harmless or may fail.
+
+#### Still to come
+
+- **Warp (V)** for every capital ship (fire mode to G; 30 s cooldown).
+
+### Earlier in Unreleased
 
 ### Pilot progression, building menus, the TIO mission portal (this batch)
 
