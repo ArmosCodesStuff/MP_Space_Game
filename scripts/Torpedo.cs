@@ -24,6 +24,7 @@ public partial class Torpedo : Node2D
     public float TurnRate;            // rad/s the heading may turn toward the target
     public bool Heavy;                // the bunker buster's look
     public bool HostileFire;          // fired by an enemy: seeks and hits player ships
+    public PlayerShip Source;         // who fired it (host copy only): a hit counts as their combat
 
     private float _flown;
     private bool _spent;
@@ -65,6 +66,7 @@ public partial class Torpedo : Node2D
                 if (!Cosmetic && Net.Sim)
                 {   // a player ship is told where the hit came from, for its shield
                     if (h is PlayerShip ps) ps.Hit(Damage, GlobalPosition - Dir * 10f); else h.TakeDamage(Damage);
+                    if (IsInstanceValid(Source)) Source.NoteCombat();
                 }
                 Detonate(); break;
             }

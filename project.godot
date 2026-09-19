@@ -10,6 +10,7 @@ config/features=PackedStringArray("4.7", "C#", "Forward Plus")
 
 ; Net owns the session and must exist before any world does.
 Net="*res://scripts/Net.cs"
+Music="*res://scripts/Music.cs"
 
 [display]
 

@@ -44,6 +44,12 @@ public partial class PlayerShip : Node2D, IHittable
 
     // ── death: stasis, and the escape pod ───────────────────────────────────
     public const double StasisTime = 120, ReboardHull = 0.33;
+
+    // ── "in combat": dealt or took damage in the last CombatHold seconds (host) ──
+    public const double CombatHold = 8;
+    private double _combatT;
+    public bool InCombat => _combatT > 0;
+    public void NoteCombat() { if (Net.Sim) _combatT = CombatHold; }
     private double _stasis;
     public double StasisLeft => _stasis;
     public bool CanReboard => !Alive && _stasis <= 0;
@@ -300,7 +306,7 @@ public partial class PlayerShip : Node2D, IHittable
         _mag--; _missileRefire = Stats["missile_refire"];
         var nose = ToGlobal(new Vector2(0, -MyArt.Length * 0.5f));
         Combat.LaunchTorpedo(nose, t.Position - nose, (float)Stats["missile_speed"], range * 1.4f,
-                             Stats["missile_damage"], t.NetId, (float)Stats["missile_turn"], heavy: true);
+                             Stats["missile_damage"], t.NetId, (float)Stats["missile_turn"], heavy: true, source: this);
     }
 
     public void TakeDamage(double d)
@@ -318,6 +324,7 @@ public partial class PlayerShip : Node2D, IHittable
         float side = Mathf.Atan2(v.X, -v.Y);            // 0 = ahead, clockwise
         _shield?.Flash(side);
         if (Net.IsOnline) Rpc(nameof(NetShield), side);
+        NoteCombat();                                   // taking damage is combat
         TakeDamage(d);
     }
 
@@ -339,6 +346,7 @@ public partial class PlayerShip : Node2D, IHittable
     {
         float dt = (float)delta;
         if (!Alive) _stasis = Math.Max(0, _stasis - delta);   // the host's clock rules; guests re-sync each packet
+        if (_combatT > 0) _combatT = Math.Max(0, _combatT - delta);
         UpdatePod();
         if (Mine) LocalFlight(dt);
         else      RemoteFollow(dt);
@@ -539,16 +547,16 @@ public partial class PlayerShip : Node2D, IHittable
             pos[i] = _wings[i].Position; rot[i] = _wings[i].Rotation;
             st[i] = _wings[i].StateCode; rearm[i] = (float)_wings[i].RearmLeft;
         }
-        Rpc(nameof(NetHostState), Hp, MaxHp, Alive, _stasis, _pdLeft, _pdRecharge, _mag, _missileReload,
+        Rpc(nameof(NetHostState), Hp, MaxHp, Alive, _stasis, _combatT, _pdLeft, _pdRecharge, _mag, _missileReload,
             WingTarget?.NetId ?? 0, pos, rot, st, rearm);
     }
 
     [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
-    private void NetHostState(double hp, double maxHp, bool alive, double stasis, double pdLeft, double pdRecharge, int mag, double reload,
+    private void NetHostState(double hp, double maxHp, bool alive, double stasis, double combat, double pdLeft, double pdRecharge, int mag, double reload,
                               int wingTarget, Vector2[] wingPos, float[] wingRot, int[] wingState, float[] wingRearm)
     {
         if (Multiplayer.GetRemoteSenderId() != 1) return;   // only the host speaks for combat state
-        Hp = hp; MaxHp = maxHp; Alive = alive; _stasis = stasis;
+        Hp = hp; MaxHp = maxHp; Alive = alive; _stasis = stasis; _combatT = combat;
         _pdLeft = pdLeft; _pdRecharge = pdRecharge; _mag = mag; _missileReload = reload;
         WingTarget = wingTarget != 0 ? Combat.ById(wingTarget) : null;
         for (int i = 0; i < Math.Min(_wings.Count, wingPos.Length); i++)

@@ -120,7 +120,7 @@ public partial class Turret : Node2D
         else for (int n = 0; _cd <= 0 && n < 8; n++)
         {
             _cd += Interval;
-            Target.TakeDamage(ShotDamage);
+            Target.TakeDamage(ShotDamage); Ship.NoteCombat();
             Combat.Flash(wp, Target.Position, new Color(0.7f, 0.95f, 1f));
         }
         QueueRedraw();
@@ -148,6 +148,7 @@ public partial class Turret : Node2D
         var from = GlobalPosition + dir * BarrelLength;
         var hit = Combat.RayHit(from, dir, Range, out var end);
         hit?.TakeDamage(ShotDamage);
+        if (hit != null) Ship.NoteCombat();
         Combat.Flash(from, end, new Color(1f, 0.85f, 0.5f));
     }
 
@@ -320,7 +321,7 @@ public partial class Wing : Node2D
                 if (_cd <= 0 && _shots < BurstShots)
                 {
                     _cd += S["fighter_interval"]; _shots++;
-                    t.TakeDamage(S["fighter_damage"]);
+                    t.TakeDamage(S["fighter_damage"]); Carrier.NoteCombat();
                     Combat.Flash(Position, t.Position, new Color(0.7f, 0.95f, 1f));
                 }
                 if (_shots >= BurstShots) _f = FSt.Overshoot;
@@ -398,7 +399,7 @@ public partial class Wing : Node2D
                     _cd += S["torpedo_interval"]; Ammo--;
                     var dir = Vector2.Up.Rotated(Rotation);           // straight off the nose
                     Combat.LaunchTorpedo(Position + dir * BomberLength * 0.45f, dir, (float)S["torpedo_speed"],
-                                         (float)S["torpedo_range"], S["torpedo_damage"]);
+                                         (float)S["torpedo_range"], S["torpedo_damage"], source: Carrier);
                 }
                 if (Ammo <= 0) { _b = BSt.Return; Carrier.NoteStrikeDone(); }
                 break;

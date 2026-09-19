@@ -144,9 +144,9 @@ public partial class Hub : Node2D
         };
         // Torpedoes: the host's copy deals damage; guests get the launch and fly a
         // cosmetic copy (the run is straight and steady, so it lands in the same place).
-        Combat.OnTorpedo = (from, dir, speed, range, dmg, target, turn, heavy, hostile) =>
+        Combat.OnTorpedo = (from, dir, speed, range, dmg, target, turn, heavy, hostile, source) =>
         {
-            SpawnTorpedo(from, dir, speed, range, dmg, false, target, turn, heavy, hostile);
+            SpawnTorpedo(from, dir, speed, range, dmg, false, target, turn, heavy, hostile, source);
             if (Net.IsHost && Net.IsOnline) Rpc(nameof(NetTorpedo), from, dir, speed, range, target, turn, heavy, hostile);
         };
 
@@ -180,6 +180,7 @@ public partial class Hub : Node2D
         }
         Combat.Clear();
         ControlsLocked = false;
+        if (Music.I != null) Music.I.Target = Music.Mood.Ambient;
     }
 
     // ── world ────────────────────────────────────────────────────────────────
@@ -348,10 +349,10 @@ public partial class Hub : Node2D
 
     public PlayerShip MyShipPublic => MyShip;
     private void SpawnTorpedo(Vector2 from, Vector2 dir, float speed, float range, double dmg, bool cosmetic,
-                              int target = 0, float turn = 0f, bool heavy = false, bool hostile = false)
+                              int target = 0, float turn = 0f, bool heavy = false, bool hostile = false, PlayerShip source = null)
     {
         AddChild(new Torpedo { Position = from, Dir = dir, Speed = speed, Range = range, Damage = dmg, Cosmetic = cosmetic,
-                               TargetId = target, TurnRate = turn, Heavy = heavy, HostileFire = hostile });
+                               TargetId = target, TurnRate = turn, Heavy = heavy, HostileFire = hostile, Source = source });
     }
 
     private PlayerShip MyShip => _ships.TryGetValue(Net.LocalId, out var s) && IsInstanceValid(s) ? s : null;
@@ -400,6 +401,12 @@ public partial class Hub : Node2D
     // ── tick ─────────────────────────────────────────────────────────────────
     public override void _Process(double delta)
     {
+        if (Music.I != null)
+        {
+            var own = MyShip;
+            Music.I.Target = own != null && own.InCombat ? Music.Mood.Combat
+                           : Selected != null ? Music.Mood.Alert : Music.Mood.Ambient;
+        }
         ControlsLocked = IsInstanceValid(_creator) || IsInstanceValid(_esc) || GetViewport().GuiGetFocusOwner() is LineEdit
                          || (IsInstanceValid(_statsWin) && _statsWin.Capturing);
         // bars and labels keep a constant on-screen size whatever the zoom
