@@ -1,8 +1,8 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-19 21:58 at git commit b1ce49f: typecheck clean, smoke test 3/3 passes
-//   (348 checks), 60-frame UI sweep 0 findings.
-// 52 files, 9199 lines. Code only: sprites, sounds and docs are in the zip.
+// Taken 2026-09-19 22:14 at git commit 05d4ce2: typecheck clean, smoke test 3/3 passes
+//   (353 checks), 61-frame UI sweep 0 findings.
+// 53 files, 9314 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -17,6 +17,7 @@
 //   scripts/Abilities.cs                           131 lines   sha256 f5ca74e381e7
 //   scripts/AbilityBar.cs                          112 lines   sha256 4a1331fe370c
 //   scripts/Autopilot.cs                            40 lines   sha256 807538219f53
+//   scripts/BaseDefense.cs                          55 lines   sha256 1d8daa0fbd67
 //   scripts/BasePanel.cs                           118 lines   sha256 1b56ed68d885
 //   scripts/Boss.cs                                184 lines   sha256 d723ed53971e
 //   scripts/BossBar.cs                              74 lines   sha256 2f4eb7ef7796
@@ -31,7 +32,7 @@
 //   scripts/Gatherer.cs                            249 lines   sha256 f64121c0c5f7
 //   scripts/Hauler.cs                              316 lines   sha256 b471204daf64
 //   scripts/HealthBar.cs                            36 lines   sha256 97c42a282205
-//   scripts/Hub.cs                                1129 lines   sha256 acd17832188d
+//   scripts/Hub.cs                                1130 lines   sha256 96927c4ab9c0
 //   scripts/MainMenu.cs                            224 lines   sha256 39dbc31417c6
 //   scripts/Missions.cs                             26 lines   sha256 6870c2208143
 //   scripts/Music.cs                                78 lines   sha256 19cdf8e2b59c
@@ -57,9 +58,9 @@
 //   scripts/Ui.cs                                   99 lines   sha256 0a376702a4e8
 //   scripts/Yard.cs                                414 lines   sha256 e22f4c9c64df
 //   typecheck/typecheck.sh                          57 lines   sha256 e68277c09f34
-//   tools/screens/Shots.cs.txt                     397 lines   sha256 a6975ade9542
+//   tools/screens/Shots.cs.txt                     413 lines   sha256 dc299a7ad662
 //   tools/screens/run.sh                            40 lines   sha256 a47174d56c6a
-//   tools/smoketest/SmokeTest.cs.txt              1403 lines   sha256 2120031e0e70
+//   tools/smoketest/SmokeTest.cs.txt              1446 lines   sha256 bded03f25f20
 //   tools/smoketest/run.sh                          52 lines   sha256 67c03204c10d
 //==============================================================================
 
@@ -464,6 +465,66 @@ public static class Autopilot
         float want = Mathf.Min(maxSpeed, Mathf.Sqrt(2f * maxSpeed * dist));
         float thrust = Mathf.Abs(off) < 0.6f && vel.Length() < want ? 1f : 0f;
         return (turn, thrust);
+    }
+}
+
+//==============================================================================
+// FILE: scripts/BaseDefense.cs
+// 55 lines   sha256 1d8daa0fbd67
+//==============================================================================
+using Godot;
+using System.Linq;
+
+// THE BASE'S OWN WEAPONS -- a laser and a tracking missile, on a turret at the station's
+// heart. Host-simulated (its shots reach guests like every other shot); it fires only at
+// RAIDERS -- never at the practice dummies. Ranges are from the base's centre.
+//   LASER    5 DPS (2.5 every 0.5 s) at the nearest raider within 300 u
+//   MISSILE  every 5 s, 25 damage, tracking, 120 u/s (1.2x a capital ship's average top
+//            speed), at the nearest raider within 600 u
+public partial class BaseDefense : Node2D
+{
+    public Hub Hub;
+    public const float LaserRange = 300f, MissileRange = 600f, MissileSpeed = 120f;
+    public const double LaserDps = 5, LaserTick = 0.5, MissileDamage = 25, MissileEvery = 5;
+    public double LaserDealt { get; private set; }          // for the record (and the smoke test)
+    public int MissilesFired { get; private set; }
+    private double _laser, _missile = 1.0;
+    private Sprite2D _turret;
+
+    public override void _Ready()
+    {
+        Name = "BaseDefense";
+        Position = Hub.BasePos + new Vector2(0, -60);          // on the station's upper deck
+        var tt = GD.Load<Texture2D>("res://turret_bs_main.png");
+        _turret = new Sprite2D { Texture = tt, Scale = Vector2.One * 0.75f, Modulate = new Color(0.78f, 0.82f, 0.9f) };
+        AddChild(_turret);
+        ZIndex = 4;
+    }
+
+    private Raider Nearest(float within) => Combat.Hostiles.OfType<Raider>()
+        .Where(r => r.Alive && r.Position.DistanceTo(Hub.BasePos) <= within)
+        .OrderBy(r => r.Position.DistanceTo(Hub.BasePos)).FirstOrDefault();
+
+    public override void _Process(double delta)
+    {
+        var aim = Nearest(MissileRange);
+        if (aim != null) _turret.GlobalRotation = (aim.Position - GlobalPosition).Angle() + Mathf.Pi / 2f;
+        if (!Net.Sim) return;                                   // guests: the turret tracks; the host fires
+        _laser -= delta; _missile -= delta;
+        var close = Nearest(LaserRange);
+        if (close != null && _laser <= 0)
+        {
+            _laser = LaserTick;
+            double hit = LaserDps * LaserTick;
+            close.TakeDamage(hit); LaserDealt += hit;
+            Combat.Flash(GlobalPosition, close.Position, new Color(0.6f, 0.9f, 1f));
+        }
+        if (aim != null && _missile <= 0)
+        {
+            _missile = MissileEvery; MissilesFired++;
+            var dir = (aim.Position - GlobalPosition).Normalized();
+            Combat.LaunchTorpedo(GlobalPosition + dir * 20f, dir, MissileSpeed, MissileRange * 1.6f, MissileDamage, aim.NetId, 2.5f);
+        }
     }
 }
 
@@ -2364,7 +2425,7 @@ public static class HealthBar
 
 //==============================================================================
 // FILE: scripts/Hub.cs
-// 1129 lines   sha256 acd17832188d
+// 1130 lines   sha256 96927c4ab9c0
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -2630,6 +2691,7 @@ public partial class Hub : Node2D
 
         AddChild(new Sprite2D { Texture = GD.Load<Texture2D>("res://base_station.png"), Name = "Base",
                                 Position = BasePos, Scale = new Vector2(BaseScale, BaseScale), ZIndex = 2 });
+        AddChild(new BaseDefense { Hub = this });                 // the base's own laser and missiles
         var tioTex = GD.Load<Texture2D>("res://tio_building.png");
         var tio = new Sprite2D { Texture = tioTex, Name = "TIO", Position = TioPos, Scale = Vector2.One * (TioHeight / tioTex.GetHeight()), ZIndex = 2 };
         AddChild(tio);
@@ -7612,7 +7674,7 @@ echo "0 errors." >&2
 
 //==============================================================================
 // FILE: tools/screens/Shots.cs.txt
-// 397 lines   sha256 a6975ade9542
+// 413 lines   sha256 dc299a7ad662
 //==============================================================================
 // Screenshot driver. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Shots.cs, registers it as an autoload, and runs the real
@@ -7855,6 +7917,22 @@ public partial class _Shots : Node
             if (GodotObject.IsInstanceValid(hv)) hv.TakeDamage(9999);
             zp.SetValue(H, z0); hs2.Position = keepH2; hs2.Velocity = Vector2.Zero; await W(0.3);
         }
+        // the base's own weapons: its turret burning a raider inside 300 u
+        {
+            var bs3 = H.GetNode<PlayerShip>("Ship_1"); var keepB = bs3.Position;
+            bs3.Position = Hub.BasePos + new Vector2(380, 120); bs3.Visible = false; bs3.Velocity = Vector2.Zero; await W(0.8);   // the camera over the station
+            var rz = H.SpawnRaider(Hub.BasePos + new Vector2(0, 280)); rz.Hp = 5000;
+            var zp = typeof(Hub).GetProperty("ZoomLevel"); float z0 = (float)zp.GetValue(H); zp.SetValue(H, 1.0f);
+            var bdn = H.GetNode<BaseDefense>("BaseDefense"); double seen = bdn.LaserDealt;
+            for (int i = 0; i < 180; i++)
+            {   // hold it in reach, and snap on the frame a laser shot lands (its flash lasts 0.1 s)
+                rz.Position = Hub.BasePos + new Vector2(140, 250);
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                if (i > 60 && bdn.LaserDealt > seen + 5) break;
+            }
+            await Snap("50_base_defence"); bs3.Visible = true;
+            rz.TakeDamage(99999); zp.SetValue(H, z0); bs3.Position = keepB; bs3.Velocity = Vector2.Zero; await W(0.3);
+        }
         // a waypoint picked on the radar: its ring there, and the HUD naming it
         {
             H.SelectWaypoint("BASE", Hub.BasePos, 260f); await W(0.3);
@@ -8059,7 +8137,7 @@ ls /tmp/shots
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 1403 lines   sha256 2120031e0e70
+// 1446 lines   sha256 bded03f25f20
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -8971,6 +9049,49 @@ public partial class _Test : Node
             foreach (var r in pat) if (GodotObject.IsInstanceValid(r)) r.TakeDamage(9999);
             await Wait(0.3);
             pm.Position = keepP; pm.Velocity = Vector2.Zero; pm.TakeDamage(-(pm.MaxHp - pm.Hp));
+        }
+
+        // ── the base's own weapons: a 5 DPS laser at 300 u, a tracking 25-damage missile at 600 u -- raiders only ──
+        {
+            var bd = Nodes<BaseDefense>().First();
+            Check(BaseDefense.LaserRange == 300 && BaseDefense.MissileRange == 600 && BaseDefense.LaserDps == 5 && BaseDefense.MissileDamage == 25
+                  && Math.Abs(BaseDefense.MissileSpeed - 1.2f * 100f) < 1e-3, "the base: a 5 DPS laser at 300 u; a 25-damage missile at 600 u, 120 u/s");
+            var dd = H.GetNode<TargetDummy>("TargetDummy1"); var dHome = dd.Position;
+            dd.Position = Hub.BasePos + new Vector2(0, 250); dd.ResetMeter();
+            double l0 = bd.LaserDealt; int m0 = bd.MissilesFired; await Wait(2.0);
+            Check(bd.LaserDealt == l0 && bd.MissilesFired == m0 && dd.Total == 0, "it never fires at the practice dummies");
+            dd.Position = dHome;
+            var spot1 = Hub.BasePos + new Vector2(0, 280);
+            var rb = H.SpawnRaider(spot1); rb.Hp = 1000;
+            double lz = bd.LaserDealt;
+            for (int i = 0; i < 120; i++) { rb.Position = spot1; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            double laser2 = bd.LaserDealt - lz;
+            Check(Math.Abs(laser2 - 10) < 2.6, $"a raider inside 300 u: the laser burns it at 5 DPS ({laser2:0.0} in 2 s)");
+            rb.TakeDamage(99999); await Wait(0.2);
+            var spot2 = Hub.BasePos + new Vector2(0, 500);
+            var rc = H.SpawnRaider(spot2); rc.Hp = 1000;
+            int mz = bd.MissilesFired; double lz2 = bd.LaserDealt;
+            Torpedo bm = null;
+            for (int i = 0; i < 60 * 6 && bm == null; i++)
+            {
+                rc.Position = spot2;
+                bm = Nodes<Torpedo>().FirstOrDefault(t => !t.HostileFire && !t.Heavy && t.TargetId == rc.NetId);
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            }
+            var bp1 = bm?.GlobalPosition ?? Vector2.Zero;
+            for (int i = 0; i < 15; i++) { rc.Position = spot2; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            float bspd = bm != null && GodotObject.IsInstanceValid(bm) ? (bm.GlobalPosition - bp1).Length() / 0.25f : 0f;
+            double hpc = rc.Hp;
+            for (int i = 0; i < 60 * 6 && rc.Hp == hpc; i++) { rc.Position = spot2; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            Check(bm != null && bd.MissilesFired > mz && bd.LaserDealt == lz2 && Math.Abs(bspd - 120f) < 6f && Math.Abs(hpc - rc.Hp - 25) < 1e-6,
+                  $"a raider at 500 u: no laser, but a tracking missile at {bspd:0} u/s lands for {hpc - rc.Hp:0}");
+            rc.TakeDamage(99999); await Wait(0.2);
+            var spot3 = Hub.BasePos + new Vector2(0, 700);
+            var rd = H.SpawnRaider(spot3); rd.Hp = 1000;
+            int mw = bd.MissilesFired; double lw = bd.LaserDealt;
+            for (int i = 0; i < 60 * 6; i++) { rd.Position = spot3; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            Check(bd.MissilesFired == mw && bd.LaserDealt == lw, "a raider at 700 u: out of reach, nothing fires");
+            rd.TakeDamage(99999); await Wait(0.2);
         }
 
         // ── enemy fire, shields, stasis, the escape pod, re-boarding ──
