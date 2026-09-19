@@ -39,7 +39,7 @@ history pick the work up from it alone. Update it in the same change as the code
 **State as of 2026-09-18: version 0.3.0 plus Unreleased (see it for everything since: docking arms
 and the unload queue, the fleet and hauler pods, the idle economy, base menu, bunker-buster missile,
 painted turrets, docking bombers and more).** Typecheck clean against the real `GodotSharp.dll`,
-`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 372 checks across
+`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 374 checks across
 a single-player run and a host with two guests. Unlike earlier releases, this one was also **looked at**:
 `tools/screens/run.sh` renders the select screen, the creator, a fresh spawn under the base, both
 classes in the hub, the K window, a bomber strike, and turret close-ups on a virtual display; layout
@@ -180,6 +180,38 @@ reachable, which is fine: both harnesses build from the `nupkgs` folder that shi
 ---
 
 ## Unreleased
+
+### Raids (chunk 7) and the arena's BASE button (chunk 8a) — adopted from an interrupted run
+
+**Integrity findings.** An interrupted run (22:46–23:03) built chunk 7 and chunk 8a and made its own
+`VERIFIED:` commit (3647e12) for chunk 7; chunk 8a was committed after it, unverified. None of it had
+been reported to the player. **Reviewed line by line, tested, adopted** — it is the approved plan.
+**Re-verified here, independently:** smoke test **three runs in a row, 374 checks each, 0 compiler
+warnings**; its raid checks proven by my own mutants (raids ignoring the level; a raid after a win —
+both caught); screenshot sweep **62 frames, 0 lint**; the raid frame looked at (HUD "RAIDERS 8").
+
+#### Added (adopted)
+
+- **Raids**: a **failed mission** sends the boss's raiders to your base — **2 patrols, and 1 more per
+  extra pilot** (a choice the run made; see Decided) — in from the **map's edge (3200 u)**, **3 s after
+  the party is home** (every guest's world loads first). Raiders are as strong as the failed boss:
+  hull, lasers and the heavies' missile × **S(L) = 1.1^(L−1)**. No raid after a win. The HUD counts
+  the raiders.
+- **In the arena there is no BASE button, and B opens nothing** (the menu would read a base that does
+  not exist there).
+
+#### Fixed
+
+- **`Boss.Scale` and `Raider.Scale` hid Godot's own `Node2D.Scale`** (two compiler warnings; any code
+  meaning the node's scale would have got the strength number). Both are **`Strength`** now; the build
+  has **0 warnings**. From here on the warning count is checked with every run.
+
+#### Decided (open to change)
+
+- **Raid size: 2 patrols + 1 per extra pilot** (the interrupted run's choice, in the spirit of the
+  party scaling).
+
+### Earlier in Unreleased
 
 ### Chunk 7: raids
 
