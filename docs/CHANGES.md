@@ -39,7 +39,7 @@ history pick the work up from it alone. Update it in the same change as the code
 **State as of 2026-09-18: version 0.3.0 plus Unreleased (see it for everything since: docking arms
 and the unload queue, the fleet and hauler pods, the idle economy, base menu, bunker-buster missile,
 painted turrets, docking bombers and more).** Typecheck clean against the real `GodotSharp.dll`,
-`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 313 checks across
+`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 322 checks across
 a single-player run and a host with two guests. Unlike earlier releases, this one was also **looked at**:
 `tools/screens/run.sh` renders the select screen, the creator, a fresh spawn under the base, both
 classes in the hub, the K window, a bomber strike, and turret close-ups on a virtual display; layout
@@ -179,6 +179,32 @@ reachable, which is fine: both harnesses build from the `nupkgs` folder that shi
 ---
 
 ## Unreleased
+
+### Chunk 5 of 9: utility-ship hull and rebuilds
+
+**Checked:** smoke test **three runs in a row, 322 checks each** (9 new; a 20% rebuild price and a rebuild
+that never waits, each put in on purpose in a copy, were caught); screenshot sweep **57 frames, 0 lint**;
+a damaged miner's hull bar and the base menu's rebuild line looked at, close.
+
+#### Added
+
+- **Hull for the utility ships**: miners and salvagers **60**, the hauler **150**. A damaged one shows a
+  small hull bar under it (green to red).
+- **Losing one**: it is destroyed with a burst — its cargo is lost, and it gives up its unloading arm or
+  its place in the queue to the next ship. **30 s later it is rebuilt at the base** (the hauler on its
+  pad) **for 10% of everything invested so far in its category's upgrades**; short of that, it waits
+  until it can be paid for. (Nothing damages them yet: the enemy fighters, next, will.)
+- **Investment per category** (miners, salvagers, hauler): every upgrade's price is added to its
+  category's running total. Kept across the arena trip and a guest's visit, and sent to guests.
+- **The base menu shows it**: on each tab, "Invested so far" and what a rebuild costs, and any ship
+  being rebuilt ("rebuilt in 28 s", or "waiting for 600 cr").
+
+#### Fixed
+
+- **The base, pilot and TIO windows overlapped the multiplayer panel when it was open** (42 px, found
+  by the UI lint): they open at x 360 now.
+
+### Earlier in Unreleased
 
 ### Chunk 4 of 9: the layout
 

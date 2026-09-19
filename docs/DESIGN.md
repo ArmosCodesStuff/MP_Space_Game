@@ -187,7 +187,7 @@ Recorded here so every chunk builds from the written word, not from memory.
   quickly, turning white as it fades.
 - **Chunk 4 — layout (DONE: 1500 u to each field's edge)**: the salvage field ~500 u further left; the mining belt 300–500 u closer; both
   the **same distance from the base, measured to each area's boundary**.
-- **Chunk 5 — utility hull and rebuilds**: miners/salvagers 60 hull, hauler 150; destroyed ones are
+- **Chunk 5 — utility hull and rebuilds (DONE)**: miners/salvagers 60 hull, hauler 150; destroyed ones are
   rebuilt at the base after 30 s for **10% of all money invested so far in that category's upgrades**
   (a running total per category: miner, salvager, hauler).
 - **Chunk 6 — enemy fighters.** A variable **raider damage x**: **light fighters 1 DPS** (x), **heavy
