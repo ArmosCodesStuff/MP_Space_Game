@@ -39,7 +39,7 @@ history pick the work up from it alone. Update it in the same change as the code
 **State as of 2026-09-18: version 0.3.0 plus Unreleased (see it for everything since: docking arms
 and the unload queue, the fleet and hauler pods, the idle economy, base menu, bunker-buster missile,
 painted turrets, docking bombers and more).** Typecheck clean against the real `GodotSharp.dll`,
-`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 374 checks across
+`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 383 checks across
 a single-player run and a host with two guests. Unlike earlier releases, this one was also **looked at**:
 `tools/screens/run.sh` renders the select screen, the creator, a fresh spawn under the base, both
 classes in the hub, the K window, a bomber strike, and turret close-ups on a virtual display; layout
@@ -180,6 +180,27 @@ reachable, which is fine: both harnesses build from the `nupkgs` folder that shi
 ---
 
 ## Unreleased
+
+### Chunk 8b: a dedicated two-player arena test
+
+**Checked:** smoke test **three runs in a row, 383 checks each, 0 compiler warnings** (9 new, on a
+two-player run of their own; undoing the stranded-guest fix in a copy was caught); screenshot sweep
+**62 frames, 0 lint**.
+
+#### Added (tests)
+
+- **A two-player arena run** (`ahost` / `aguest`, its own port, after the three-player run): both
+  pilots READY, both at the portal, **into the arena together**; the boss dies, **both home**; into the
+  arena again, **the host drops** — and the guest **lands home, offline, with its own base** (a marker
+  credit total set before it joined: 12345). The first network-level proof of the two arena fixes.
+
+#### Fixed
+
+- **`MissionPortalPos` crashed without the TIO's sprite** — in the arena, or in the frame a scene is
+  being swapped (found by the new run: a guest pressing READY just after coming home). It is computed
+  from constants now (the TIO is 260 u tall, its art 630 × 876 px).
+
+### Earlier in Unreleased
 
 ### Raids (chunk 7) and the arena's BASE button (chunk 8a) — adopted from an interrupted run
 
