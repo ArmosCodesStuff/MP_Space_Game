@@ -255,6 +255,17 @@ public partial class _Shots : Node
             await Snap("50_base_defence"); bs3.Visible = true;
             rz.TakeDamage(99999); zp.SetValue(H, z0); bs3.Position = keepB; bs3.Velocity = Vector2.Zero; await W(0.3);
         }
+        // hosting: the address friends in other cities need, hidden until clicked, then shown
+        {
+            Net.I.Host(); await W(0.5);
+            Net.I.Reachable(Net.Reach.Manual, "203.0.113.7:27015", "Hosting. Your router would not open port 27015 by itself (UPnP is off or unsupported): forward UDP 27015 to this PC in your router's settings, then friends elsewhere join with the address below.");
+            var sm = H.GetTree().Root.FindChild("SessionMenu", true, false) as SessionMenu;
+            await W(0.3); await Snap("51_address_hidden");
+            var rv = sm?.FindChild("RevealAddress", true, false) as Button;
+            rv?.EmitSignal(BaseButton.SignalName.Pressed); await W(0.2); await Snap("52_address_revealed");
+            rv?.EmitSignal(BaseButton.SignalName.Pressed);
+            Net.I.GoOffline(); await W(0.5);
+        }
         // a waypoint picked on the radar: its ring there, and the HUD naming it
         {
             H.SelectWaypoint("BASE", Hub.BasePos, 260f); await W(0.3);
