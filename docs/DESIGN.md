@@ -170,6 +170,15 @@ levels once a second and ship and hauler state ten times a second; a guest's own
   such as Tailscale or ZeroTier (everyone joins the VPN; use its addresses). There is no relay
   server or NAT punch-through: that needs infrastructure outside the game.
 
+## Sound and look
+
+- **Sounds are local and cosmetic**: every peer plays what it sees (`Sfx`). Loudness is by the camera
+  (distance from the view's centre, and zoom as listener height); per-sound rate limits keep a wing
+  from becoming noise. Boss weapons flag their flashes `boss` for the deeper buzz.
+- **One look** (`Ui`): shaded panels from small generated textures, one theme for all controls,
+  installed on the root window. New UI takes the theme; nothing builds its own panel style.
+- **Boss tiers**: 1.1^n, unlocked by beating the tier below, auto-selected at the TIO, saved per pilot.
+
 ## The arena
 
 - **A scene change**: `Hub.GoTo` reloads the game scene with `Hub.Sector` set; the host tells every

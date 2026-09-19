@@ -39,7 +39,7 @@ history pick the work up from it alone. Update it in the same change as the code
 **State as of 2026-09-18: version 0.3.0 plus Unreleased (see it for everything since: docking arms
 and the unload queue, the fleet and hauler pods, the idle economy, base menu, bunker-buster missile,
 painted turrets, docking bombers and more).** Typecheck clean against the real `GodotSharp.dll`,
-`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 269 checks across
+`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 284 checks across
 a single-player run and a host with two guests. Unlike earlier releases, this one was also **looked at**:
 `tools/screens/run.sh` renders the select screen, the creator, a fresh spawn under the base, both
 classes in the hub, the K window, a bomber strike, and turret close-ups on a virtual display; layout
@@ -178,6 +178,40 @@ reachable, which is fine: both harnesses build from the `nupkgs` folder that shi
 ---
 
 ## Unreleased
+
+### Sound, UI remaster, double-click clear, boss tiers (this batch, part 1 of 2)
+
+**Checked:** smoke test **three runs in a row, 284 checks each**; screenshot sweep **51 frames, 0 lint**;
+the new UI and the TIO's difficulty row looked at.
+
+#### Changed
+
+- **Music is 35% quieter**: the whole score plays through a 0.65 master (so every slider position is quieter).
+- **UI remaster**: every panel is a shaded, sharper face — a vertical gradient, a bright top edge, a
+  crisp border, 3 px corners and a soft drop shadow — and buttons, text fields and bars share one theme
+  in the same style (installed on the root window). **The old flat panel style is deleted**, including
+  the K window's own copy.
+
+#### Added
+
+- **Sound effects** (synthesised, `sfx/`): lasers **buzz** where they fire (a light buzz for ships and
+  craft, a **deep grinding buzz for a boss**) and **crackle** where they hit; missiles and torpedoes
+  **whoosh** at launch and land with a **low thunk and a soft reverb**. Loudness follows the camera —
+  the distance from the view's centre and the zoom — and a laser hit is also softer and lower the
+  longer the shot.
+- **Double-click on empty space clears the target** (a single click there does not).
+- **Boss difficulty tiers**: tier n is **1.1^n** as strong (hull and every attack). Beating a tier
+  unlocks the next, and the TIO **selects the newest unlocked tier** when the host opens it; the host
+  can step down to any beaten tier (◀ ▶). Saved per pilot; the tier reaches the guests with the mission.
+  Bosses are data now, ready for more types.
+
+#### Still to come (in order)
+
+- **Light and heavy enemy fighters** (tackle and afterburn), then **base raids** on failure, then
+  regeneration, the death beam's ticks and invulnerability, the boss health bar, trident missiles.
+- Carried over: the BASE button in the arena, the multiplayer arena test, warp (V).
+
+### Earlier in Unreleased
 
 ### The boss mission (this batch)
 
