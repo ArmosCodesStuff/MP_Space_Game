@@ -1,8 +1,8 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-19 22:42 at git commit f6eed54: typecheck clean, smoke test 3/3 passes
-//   (367 checks), UI sweep 0 findings.
-// 53 files, 9461 lines. Code only: sprites, sounds and docs are in the zip.
+// Taken 2026-09-19 22:59 at git commit c895e06: typecheck clean, smoke test 3/3 passes
+//   (372 checks), UI sweep 0 findings.
+// 53 files, 9524 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -32,7 +32,7 @@
 //   scripts/Gatherer.cs                            249 lines   sha256 f64121c0c5f7
 //   scripts/Hauler.cs                              316 lines   sha256 b471204daf64
 //   scripts/HealthBar.cs                            36 lines   sha256 97c42a282205
-//   scripts/Hub.cs                                1130 lines   sha256 96927c4ab9c0
+//   scripts/Hub.cs                                1166 lines   sha256 c466ecaa0e58
 //   scripts/MainMenu.cs                            224 lines   sha256 39dbc31417c6
 //   scripts/Missions.cs                             26 lines   sha256 6870c2208143
 //   scripts/Music.cs                                78 lines   sha256 19cdf8e2b59c
@@ -42,7 +42,7 @@
 //   scripts/Plume.cs                                25 lines   sha256 cdbeb9b8fc58
 //   scripts/Progression.cs                          73 lines   sha256 d3b0cd99118f
 //   scripts/Radar.cs                               129 lines   sha256 189719fcc94f
-//   scripts/Raider.cs                              276 lines   sha256 9d48f9260987
+//   scripts/Raider.cs                              278 lines   sha256 09d8db7a2431
 //   scripts/SessionMenu.cs                         118 lines   sha256 1a8a8f39d03b
 //   scripts/Settings.cs                             58 lines   sha256 80100257eda5
 //   scripts/Sfx.cs                                  65 lines   sha256 4a51ee11de9a
@@ -58,9 +58,9 @@
 //   scripts/Ui.cs                                   99 lines   sha256 0a376702a4e8
 //   scripts/Yard.cs                                414 lines   sha256 e22f4c9c64df
 //   typecheck/typecheck.sh                          57 lines   sha256 e68277c09f34
-//   tools/screens/Shots.cs.txt                     424 lines   sha256 d3de74e7f986
+//   tools/screens/Shots.cs.txt                     433 lines   sha256 f7b91abe5ced
 //   tools/screens/run.sh                            40 lines   sha256 a47174d56c6a
-//   tools/smoketest/SmokeTest.cs.txt              1484 lines   sha256 5a601784bdeb
+//   tools/smoketest/SmokeTest.cs.txt              1500 lines   sha256 04736c65fade
 //   tools/smoketest/run.sh                          52 lines   sha256 67c03204c10d
 //==============================================================================
 
@@ -2425,7 +2425,7 @@ public static class HealthBar
 
 //==============================================================================
 // FILE: scripts/Hub.cs
-// 1130 lines   sha256 96927c4ab9c0
+// 1166 lines   sha256 c466ecaa0e58
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -2632,6 +2632,8 @@ public partial class Hub : Node2D
         };
 
         if (InArena) BuildArena();                   // registered as a target AFTER Combat.Clear
+        else if (PendingRaidLevel > 0 && Net.IsHost) { _raidLevel = PendingRaidLevel; _raidIn = RaidDelay; }
+        PendingRaidLevel = 0;
         for (int i = 0; i < (InArena ? 0 : DummyPos.Length); i++)       // the dummies live at home
         {
             int n = i + 1;
@@ -2893,7 +2895,12 @@ public partial class Hub : Node2D
         if (!Net.IsHost) return;
         // the whole party in stasis at once: the mission fails, everyone goes home
         if (!MissionWon && _arenaEndT < 0 && _ships.Count > 0 && _ships.Values.All(s => IsInstanceValid(s) && !s.Alive)) _arenaEndT = 3.0;
-        if (_arenaEndT >= 0 && (_arenaEndT -= delta) <= 0) { _arenaEndT = -1; EnterSector(SectorKind.Home); }
+        if (_arenaEndT >= 0 && (_arenaEndT -= delta) <= 0)
+        {
+            _arenaEndT = -1;
+            if (!MissionWon) PendingRaidLevel = Missions.Tier + 1;     // failed: the boss sends its raiders after you
+            EnterSector(SectorKind.Home);
+        }
     }
 
     // host: a missile was shot down; every guest bursts its copy
@@ -2961,6 +2968,33 @@ public partial class Hub : Node2D
         _ready.Clear(); for (int i = 0; i < ids.Length && i < ready.Length; i++) _ready[ids[i]] = ready[i] != 0;
     }
 
+    // ── raids: a failed mission brings the boss's raiders to your base ─────────
+    // Level L (the failed boss's): raiders at S(L) = 1.1^(L-1), the boss's own scaling.
+    // 2 patrols, and 1 more per extra pilot in the session, in from the map's edge 3 s
+    // after the party is home (so every guest's world is loaded before they appear).
+    public static int PendingRaidLevel;                        // survives the scene change home
+    public const float RaidEdge = 3200f;
+    public const double RaidDelay = 3.0;
+    private double _raidIn = -1; private int _raidLevel;
+    public int RaidLevel => _raidLevel;
+    public static double RaidScale(int level) => Missions.Scale(level - 1);   // S(L) = 1.1^(L-1)
+
+    private void StartRaid(int level)
+    {
+        int patrols = 2 + System.Math.Max(0, _ships.Count - 1);
+        for (int i = 0; i < patrols; i++)
+        {
+            float a = Mathf.Tau * i / patrols + 0.4f;
+            SpawnPatrol(BasePos + Vector2.Right.Rotated(a) * RaidEdge, RaidScale(level));
+        }
+    }
+
+    private void TickRaid(double delta)
+    {
+        if (_raidIn < 0) return;
+        if ((_raidIn -= delta) <= 0) { _raidIn = -1; StartRaid(_raidLevel); }
+    }
+
     // ── raiders (enemy fighters): host-simulated, replicated ──────────────────
     public readonly List<Raider> Raiders = new();
     private int _raiderIds = 5000;
@@ -2977,27 +3011,27 @@ public partial class Hub : Node2D
 
     // A patrol: 3 lights and 1 heavy, spawned together at `at` on the perimeter.
     private int _patrols;
-    public int SpawnPatrol(Vector2 at)
+    public int SpawnPatrol(Vector2 at, double scale = 1)
     {
         if (!Net.IsHost) return 0;
         int id = ++_patrols;
-        SpawnRaider(at + new Vector2(-40, 0), RaiderKind.Light, id); SpawnRaider(at, RaiderKind.Light, id);
-        SpawnRaider(at + new Vector2(40, 0), RaiderKind.Light, id); SpawnRaider(at + new Vector2(0, 90), RaiderKind.Heavy, id);
+        SpawnRaider(at + new Vector2(-40, 0), RaiderKind.Light, id, scale); SpawnRaider(at, RaiderKind.Light, id, scale);
+        SpawnRaider(at + new Vector2(40, 0), RaiderKind.Light, id, scale); SpawnRaider(at + new Vector2(0, 90), RaiderKind.Heavy, id, scale);
         return id;
     }
 
-    public Raider SpawnRaider(Vector2 at, RaiderKind kind = RaiderKind.Light, int patrol = 0)
+    public Raider SpawnRaider(Vector2 at, RaiderKind kind = RaiderKind.Light, int patrol = 0, double scale = 1)
     {
         if (!Net.IsHost) return null;
-        var r = new Raider { Hub = this, Kind = kind, Patrol = patrol, NetId = ++_raiderIds, Position = at, Name = $"Raider_{_raiderIds}" };
+        var r = new Raider { Hub = this, Kind = kind, Patrol = patrol, Scale = scale, NetId = ++_raiderIds, Position = at, Name = $"Raider_{_raiderIds}" };
         Raiders.Add(r); AddChild(r);
-        if (Net.IsOnline) Rpc(nameof(NetRaiderSpawn), r.NetId, at, (int)kind);
+        if (Net.IsOnline) Rpc(nameof(NetRaiderSpawn), r.NetId, at, (int)kind, scale);
         return r;
     }
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetRaiderSpawn(int id, Vector2 at, int kind)
+    private void NetRaiderSpawn(int id, Vector2 at, int kind, double scale)
     {
-        var r = new Raider { Hub = this, Kind = (RaiderKind)kind, NetId = id, Position = at, Name = $"Raider_{id}" };
+        var r = new Raider { Hub = this, Kind = (RaiderKind)kind, Scale = scale, NetId = id, Position = at, Name = $"Raider_{id}" };
         Raiders.Add(r); AddChild(r);
     }
 
@@ -3017,12 +3051,12 @@ public partial class Hub : Node2D
     }
 
     // A heavy's missile: flies 7 s to a marked point, and the host lands the blast there.
-    private readonly List<(Vector2 at, double left, int from)> _blasts = new();
+    private readonly List<(Vector2 at, double left, int from, double damage)> _blasts = new();
     public int BlastsPending => _blasts.Count;
-    public void HeavyMissile(Vector2 from, Vector2 at, int raiderId)
+    public void HeavyMissile(Vector2 from, Vector2 at, int raiderId, double damage)
     {
         if (!Net.IsHost) return;
-        _blasts.Add((at, Raider.MissileFlight, raiderId));
+        _blasts.Add((at, Raider.MissileFlight, raiderId, damage));
         ShowHeavyMissile(from, at);
         if (Net.IsOnline) Rpc(nameof(NetHeavyMissile), from, at);
     }
@@ -3044,9 +3078,9 @@ public partial class Hub : Node2D
                 if (Raider.Gap(b.at, t) <= Raider.BlastRadius)
                     switch (t)
                     {
-                        case PlayerShip p: p.Hit(Raider.MissileDamage, b.at, $"heavy:{b.from}:missile"); break;
-                        case Gatherer g: g.TakeDamage(Raider.MissileDamage); break;
-                        case Hauler h: h.TakeDamage(Raider.MissileDamage); break;
+                        case PlayerShip p: p.Hit(b.damage, b.at, $"heavy:{b.from}:missile"); break;
+                        case Gatherer g: g.TakeDamage(b.damage); break;
+                        case Hauler h: h.TakeDamage(b.damage); break;
                     }
         }
     }
@@ -3187,6 +3221,7 @@ public partial class Hub : Node2D
     public override void _Process(double delta)
     {
         SendRaiders(delta);
+        if (Net.IsHost) TickRaid(delta);
         if (Net.IsHost) TickBlasts(delta);
         TickMission(delta);
         if (Music.I != null)
@@ -3225,6 +3260,7 @@ public partial class Hub : Node2D
             ship += Selected != null ? "    target: " + (Selected is TargetDummy td ? $"TARGET DUMMY {td.Number}" : $"#{Selected.NetId}")
                   : Waypoint != null ? $"    waypoint: {WaypointName}"
                                      : "    no target (Tab / click)";
+            if (Raiders.Count > 0) ship += $"    |    RAIDERS {Raiders.Count}";
             if (Placing) ship += $"    PLACING {_placingLabel}: left-click to confirm, right-click / Esc to cancel";
         }
         string place = Yard == null
@@ -5275,7 +5311,7 @@ public partial class Radar : Control
 
 //==============================================================================
 // FILE: scripts/Raider.cs
-// 276 lines   sha256 9d48f9260987
+// 278 lines   sha256 09d8db7a2431
 //==============================================================================
 using Godot;
 using System.Linq;
@@ -5317,7 +5353,9 @@ public partial class Raider : Node2D, IHittable
     public bool Alive => Hp > 0;
     public bool Heavy => Kind == RaiderKind.Heavy;
     public float Length => Heavy ? HeavyLength : LightLength;
-    public double MaxHull => Heavy ? HeavyHull : LightHull;
+    // a raid's raiders are as strong as the boss that was failed: S(L) = 1.1^(L-1)
+    public double Scale = 1;
+    public double MaxHull => (Heavy ? HeavyHull : LightHull) * Scale;
     public float HitRadius => Length * (Heavy ? 0.3f : 0.4f);
     public bool Selectable => true;
 
@@ -5469,7 +5507,7 @@ public partial class Raider : Node2D, IHittable
             if (_shot <= 0)
             {
                 _shot = ShotEvery;
-                Strike(Target, RaiderDps * ShotEvery);
+                Strike(Target, RaiderDps * ShotEvery * Scale);
                 Combat.Flash(Position, Target.Position, new Color(1f, 0.3f, 0.25f));
             }
         }
@@ -5526,7 +5564,7 @@ public partial class Raider : Node2D, IHittable
             if (_shot <= 0)
             {
                 _shot = 0.5;
-                Strike(Target, HeavyDps * 0.5);
+                Strike(Target, HeavyDps * 0.5 * Scale);
                 Combat.Flash(ToGlobal(_turret?.Position ?? Vector2.Zero), Target.Position, new Color(1f, 0.35f, 0.25f));
             }
         }
@@ -5534,7 +5572,7 @@ public partial class Raider : Node2D, IHittable
         if (_missileCd <= 0 && Position.DistanceTo(Target.Position) <= MissileRange)
         {   // at where it WILL be: its velocity carried 7 s forward
             _missileCd = MissileEvery;
-            Hub.HeavyMissile(Position, Target.Position + _targetVel * (float)MissileFlight, NetId);
+            Hub.HeavyMissile(Position, Target.Position + _targetVel * (float)MissileFlight, NetId, MissileDamage * Scale);
         }
     }
 
@@ -7772,7 +7810,7 @@ echo "0 errors." >&2
 
 //==============================================================================
 // FILE: tools/screens/Shots.cs.txt
-// 424 lines   sha256 d3de74e7f986
+// 433 lines   sha256 f7b91abe5ced
 //==============================================================================
 // Screenshot driver. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Shots.cs, registers it as an autoload, and runs the real
@@ -8042,6 +8080,15 @@ public partial class _Shots : Node
             rv?.EmitSignal(BaseButton.SignalName.Pressed);
             Net.I.GoOffline(); await W(0.5);
         }
+        // a raid: two patrols in from the map's edge, and the HUD's count
+        {
+            var rs2 = H.GetNode<PlayerShip>("Ship_1"); var keepR2 = rs2.Position;
+            rs2.Position = Hub.BasePos + new Vector2(0, 2600); rs2.Velocity = Vector2.Zero; rs2.Rotation = 0f; await W(0.5);
+            H.SpawnPatrol(rs2.Position + new Vector2(-500, 350), 1.1); H.SpawnPatrol(rs2.Position + new Vector2(500, 350), 1.1);
+            await W(1.0); await Snap("53_raid_incoming");
+            foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e9);
+            rs2.Position = keepR2; rs2.Velocity = Vector2.Zero; await W(0.3);
+        }
         // a waypoint picked on the radar: its ring there, and the HUD naming it
         {
             H.SelectWaypoint("BASE", Hub.BasePos, 260f); await W(0.3);
@@ -8246,7 +8293,7 @@ ls /tmp/shots
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 1484 lines   sha256 5a601784bdeb
+// 1500 lines   sha256 04736c65fade
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -9445,6 +9492,8 @@ public partial class _Test : Node
             for (int i = 0; i < 60 * 8 && Hub.InArena; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             await Wait(1.0);
             Check(!Hub.InArena && H.Yard != null, "home again after the win");
+            await Wait(Hub.RaidDelay + 0.5);
+            Check(H.Raiders.Count == 0, "a won mission brings no raid");
             // exactly the credits set aside at departure + the 2000 bounty (a hauler sale before
             // departure is part of what was set aside, so a fixed window was fragile)
             Check(Math.Abs(H.Yard.Credits - Yard.TripStartCredits - 2000) < 1e-6, $"the bounty's 2000 credits are paid at home ({Yard.TripStartCredits:0} + 2000 = {H.Yard.Credits:0})");
@@ -9467,11 +9516,25 @@ public partial class _Test : Node
             Key(global::Godot.Key.Escape); await Wait(0.1);
             // a wipe: every ship in stasis at once -> the mission fails, home with nothing
             H.EnterSector(Hub.SectorKind.Arena); await Wait(1.5);
-            int exp1 = Character.Exp;
+            int exp1 = Character.Exp; int failLevel = Missions.Tier + 1;
             Me.TakeDamage(Me.Hp + 1);
             for (int i = 0; i < 60 * 8 && Hub.InArena; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             await Wait(1.0);
             Check(!Hub.InArena && Character.Exp == exp1 && Me.Alive, "the whole party in stasis: the mission fails, home with no reward");
+            // ...and the boss sends its raiders after you: 2 patrols (solo), from the map's edge, at the failed level's strength
+            Check(H.Raiders.Count == 0, "the raid is not there at once (every guest's world loads first)");
+            // measured the frame they appear: a raider that spots a miner boosts inward at once
+            for (int i = 0; i < 60 * 5 && H.Raiders.Count == 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            double sL = Math.Pow(1.1, failLevel - 1);
+            var raid = H.Raiders.ToList();
+            GD.Print($"  raid: {raid.Count} raiders, level {failLevel} (x{sL:0.00}), {raid.Min(r => r.Position.DistanceTo(Hub.BasePos)):0}-{raid.Max(r => r.Position.DistanceTo(Hub.BasePos)):0} u out");
+            Check(raid.Count == 8 && raid.Count(r => r.Heavy) == 2 && raid.Select(r => r.Patrol).Distinct().Count() == 2,
+                  "a failed mission: the boss sends 2 patrols (3 lights and a heavy each)");
+            Check(raid.All(r => Math.Abs(r.Position.DistanceTo(Hub.BasePos) - Hub.RaidEdge) < 110f), "in from the edge of the base's map (3200 u out)");
+            Check(raid.All(r => Math.Abs(r.Scale - sL) < 1e-9 && Math.Abs(r.MaxHull - (r.Heavy ? 100 : 25) * sL) < 1e-6),
+                  $"at the failed boss's level: hull and damage x{sL:0.00} (1.1^(L-1), L = {failLevel})");
+            foreach (var r in raid) r.TakeDamage(1e9);
+            await Wait(0.3);
             // the fighter-class autopilot, flown on its own (no player fighter class yet)
             Vector2 fp = Vector2.Zero, fv = Vector2.Zero; float fh = 0f; var goal = new Vector2(800, -600);
             for (int i = 0; i < 60 * 12; i++)
