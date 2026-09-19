@@ -1,5 +1,6 @@
 using Godot;
 using System.Collections.Generic;
+using System.Linq;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HUB — the safe world. It idles whether or not you are here, and it is where
@@ -58,6 +59,9 @@ public partial class Hub : Node2D
     public System.Collections.Generic.IEnumerable<PlayerShip> Ships => _ships.Values;
     private BasePanel _base;
     private PilotWindow _pilot;
+    private TioWindow _tio;
+    private Sprite2D _tioSprite;
+    private Portal _missionPortal;
     private readonly Dictionary<int, PlayerShip> _ships = new();
     private Camera2D _cam;
 
@@ -226,6 +230,8 @@ public partial class Hub : Node2D
         var tioTex = GD.Load<Texture2D>("res://tio_building.png");
         var tio = new Sprite2D { Texture = tioTex, Name = "TIO", Position = TioPos, Scale = Vector2.One * (TioHeight / tioTex.GetHeight()), ZIndex = 2 };
         AddChild(tio);
+        _tioSprite = tio;
+        AddChild(new MissionBar { Hub = this, ZIndex = 6 });
         // its name, drawn in the world like every world label (a UI control here counted
         // as "off-screen" whenever the camera looked elsewhere)
         AddChild(new WorldLabel { Text = "THREAT INTELLIGENCE OPERATIONS", Position = TioPos + new Vector2(0, TioHeight / 2 + 16), ZIndex = 2 });
@@ -329,6 +335,85 @@ public partial class Hub : Node2D
         if (_ships.TryGetValue(peer, out var s) && IsInstanceValid(s)) { s.SetIdentity(name, main, accent, c); s.SetProgress(bought); }
     }
 
+    // ── missions: Threat Intelligence Operations (host-authoritative) ────────
+    public enum MissionState { Idle, Opening, PortalOpen }
+    public MissionState Mission { get; private set; }
+    public double MissionT { get; private set; }
+    public const double PortalOpenTime = 3.0;
+    // the mission portal opens off the TIO's top-right corner
+    public Vector2 MissionPortalPos => TioPos + new Vector2(_tioSprite.GetRect().Size.X * _tioSprite.Scale.X / 2f + 110f, -TioHeight / 2f - 70f);
+    private readonly Dictionary<int, bool> _ready = new();
+    public IEnumerable<int> PartyIds => _ships.Keys;                 // the party is everyone in the session
+    public bool IsReady(int id) => _ready.TryGetValue(id, out var r) && r;
+    public bool AllReady => _ships.Count > 0 && _ships.Keys.All(IsReady);
+    public string PilotName(int id) => _ships.TryGetValue(id, out var s) && IsInstanceValid(s) ? s.Pilot : $"pilot {id}";
+    public bool TioOpen => IsInstanceValid(_tio);
+
+    public void OpenTio()
+    {
+        if (IsInstanceValid(_tio)) return;
+        if (IsInstanceValid(_base)) ToggleBase();
+        if (IsInstanceValid(_pilot)) TogglePilot();
+        _tio = new TioWindow { Hub = this };
+        _hudLayer.AddChild(_tio);
+    }
+
+    public void SetMyReady(bool ready)
+    {
+        if (Net.IsHost) { _ready[Net.LocalId] = ready; BroadcastMission(); }
+        else RpcId(1, nameof(RequestReady), ready);
+    }
+    [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void RequestReady(bool ready)
+    {
+        if (!Net.IsHost) return;
+        int who = Multiplayer.GetRemoteSenderId();
+        if (!_ships.ContainsKey(who)) return;                        // only a pilot in the session
+        _ready[who] = ready; BroadcastMission();
+    }
+
+    public void StartMission()
+    {
+        if (!Net.IsHost || !AllReady || Mission != MissionState.Idle) return;
+        Mission = MissionState.Opening; MissionT = 0;
+        BroadcastMission();
+    }
+
+    private void TickMission(double delta)
+    {
+        if (Mission == MissionState.Opening)
+        {   // every peer animates the bar; only the host decides the portal is open
+            MissionT += delta;
+            if (Net.IsHost && MissionT >= PortalOpenTime) { Mission = MissionState.PortalOpen; MissionT = 0; BroadcastMission(); }
+        }
+        SyncMissionPortal();
+    }
+
+    private void SyncMissionPortal()
+    {
+        bool want = Mission == MissionState.PortalOpen;
+        if (want && !IsInstanceValid(_missionPortal))
+        {
+            _missionPortal = new Portal { Name = "MissionPortal", Position = MissionPortalPos,
+                                          Tint = new Color(1f, 0.35f, 0.3f), Core = new Color(0.30f, 0.05f, 0.05f) };
+            AddChild(_missionPortal); _missionPortal.Flash();
+        }
+        else if (!want && IsInstanceValid(_missionPortal)) { _missionPortal.QueueFree(); _missionPortal = null; }
+    }
+
+    private void BroadcastMission()
+    {
+        if (!Net.IsOnline) return;
+        var ids = _ready.Keys.ToArray(); var rs = ids.Select(i => _ready[i] ? 1 : 0).ToArray();   // RPCs carry int[], not bool[]
+        Rpc(nameof(NetMission), (int)Mission, MissionT, ids, rs);
+    }
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void NetMission(int state, double t, int[] ids, int[] ready)
+    {
+        Mission = (MissionState)state; MissionT = t;
+        _ready.Clear(); for (int i = 0; i < ids.Length && i < ready.Length; i++) _ready[ids[i]] = ready[i] != 0;
+    }
+
     // ── shared EXP: the host awards it; every pilot in the session gets it ─────
     public void AwardPartyExp(int amount)
     {
@@ -424,7 +509,10 @@ public partial class Hub : Node2D
             float d = world.DistanceTo(h.Position);
             if (d <= h.HitRadius + 16f && d < bd) { bd = d; best = h; }
         }
-        if (best != null) _selected = best;
+        if (best != null) { _selected = best; return; }
+        // buildings: a left-click on one opens its menu
+        if (IsInstanceValid(_tioSprite) && _tioSprite.GetRect().HasPoint(_tioSprite.ToLocal(world))) { OpenTio(); return; }
+        if (world.DistanceTo(BasePos) < 200f && !IsInstanceValid(_base)) ToggleBase();
     }
 
     public void BeginPlacement(string label, System.Action<Vector2> confirm)
@@ -437,6 +525,7 @@ public partial class Hub : Node2D
     // ── tick ─────────────────────────────────────────────────────────────────
     public override void _Process(double delta)
     {
+        TickMission(delta);
         if (Music.I != null)
         {
             var own = MyShip;
@@ -553,6 +642,7 @@ public partial class Hub : Node2D
             else if (IsInstanceValid(_statsWin)) ToggleStats();
             else if (IsInstanceValid(_base)) ToggleBase();
             else if (IsInstanceValid(_pilot)) TogglePilot();
+            else if (IsInstanceValid(_tio)) { _tio.QueueFree(); _tio = null; }
             else if (Selected != null) _selected = null;
             else ToggleEscMenu();                                   // the menu holds "quit to main menu"
         }
@@ -680,6 +770,7 @@ public partial class Sun : Node2D
 public partial class Portal : Node2D
 {
     private double _t, _flash;
+    public Color Tint = new(0.45f, 0.75f, 1f), Core = new(0.10f, 0.16f, 0.34f);   // the mission portal is red
     public void Flash() => _flash = 0.8;        // a hauler jumping through, either way
     public override void _Process(double delta) { _t += delta; _flash = System.Math.Max(0, _flash - delta); QueueRedraw(); }
     public override void _Draw()
@@ -694,9 +785,9 @@ public partial class Portal : Node2D
         {
             float r = 70f + i * 26f + 6f * Mathf.Sin(s * 1.7f + i);
             DrawArc(Vector2.Zero, r, 0, Mathf.Tau, 40,
-                    new Color(0.45f, 0.75f, 1f, 0.55f - 0.10f * i), 3f);
+                    new Color(Tint.R, Tint.G, Tint.B, 0.55f - 0.10f * i), 3f);
         }
-        DrawCircle(Vector2.Zero, 56f, new Color(0.10f, 0.16f, 0.34f, 0.85f));
+        DrawCircle(Vector2.Zero, 56f, new Color(Core.R, Core.G, Core.B, 0.85f));
     }
 }
 
@@ -750,4 +841,21 @@ public partial class WorldLabel : Node2D
 {
     public string Text = "";
     public override void _Draw() => Txt.Centre(this, ThemeDB.FallbackFont, Vector2.Zero, Text, Txt.Size(14), new Color(0.8f, 0.85f, 0.95f, 0.8f));
+}
+
+// The mission portal's opening bar, at the TIO's top right: world-drawn, on every peer.
+public partial class MissionBar : Node2D
+{
+    public Hub Hub;
+    public override void _Process(double delta) => QueueRedraw();
+    public override void _Draw()
+    {
+        if (Hub.Mission != Hub.MissionState.Opening) return;
+        var at = Hub.MissionPortalPos; const float W = 180f, H = 12f;
+        float k = Mathf.Clamp((float)(Hub.MissionT / Hub.PortalOpenTime), 0f, 1f);
+        DrawRect(new Rect2(at - new Vector2(W / 2, H / 2), new Vector2(W, H)), new Color(0.05f, 0.05f, 0.08f, 0.9f));
+        DrawRect(new Rect2(at - new Vector2(W / 2, H / 2), new Vector2(W * k, H)), new Color(1f, 0.4f, 0.3f, 0.95f));
+        DrawRect(new Rect2(at - new Vector2(W / 2, H / 2), new Vector2(W, H)), new Color(1f, 0.6f, 0.5f), false, 1.5f);
+        Txt.Centre(this, ThemeDB.FallbackFont, at + new Vector2(0, -16), "OPENING PORTAL", Txt.Size(14), new Color(1f, 0.7f, 0.6f));
+    }
 }

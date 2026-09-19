@@ -675,6 +675,33 @@ public partial class _Test : Node
             Priv(H, "ApplyLocalIdentity");
         }
 
+        // ── buildings open their menus; the TIO's mission portal ──
+        {
+            var me = Me; var tioHome = me.Position;
+            me.Position = Hub.TioPos + new Vector2(260, 0); me.Velocity = Vector2.Zero; await Wait(1.5);
+            Click(Scr(Hub.TioPos)); await Wait(0.1);
+            Check(H.TioOpen && Nodes<TioWindow>().Any(), "left-click on the TIO opens WARP TO TARGET");
+            var tw = Nodes<TioWindow>().First();
+            var warp = Nodes<Button>(tw).First(b => b.Name == "Warp");
+            Check(!H.IsReady(Net.LocalId) && warp.Disabled, "WARP is locked until every pilot is ready");
+            Nodes<Button>(tw).First(b => b.Name == "Ready").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.1);
+            Check(H.AllReady && !warp.Disabled, "alone, my READY makes the party ready: WARP unlocks");
+            warp.EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.1);
+            Check(H.Mission == Hub.MissionState.Opening && H.GetNodeOrNull("MissionPortal") == null, "WARP starts the 3 s opening; no portal yet");
+            await Wait(Hub.PortalOpenTime + 0.2);
+            var mp = H.GetNodeOrNull<Node2D>("MissionPortal");
+            var tio = H.GetNode<Sprite2D>("TIO"); float halfW = tio.GetRect().Size.X * tio.Scale.X / 2f;
+            Check(H.Mission == Hub.MissionState.PortalOpen && mp != null && mp.Position.X > Hub.TioPos.X + halfW && mp.Position.Y < Hub.TioPos.Y - Hub.TioHeight / 2f,
+                  "after 3 s the portal opens off the TIO's top-right corner");
+            Key(global::Godot.Key.Escape); await Wait(0.1);
+            Check(!H.TioOpen, "Esc closes it");
+            me.Position = Hub.BasePos + new Vector2(0, 330); await Wait(1.5);
+            Click(Scr(Hub.BasePos)); await Wait(0.1);
+            Check(Nodes<BasePanel>().Any(), "left-click on the base station opens the BASE menu");
+            Key(global::Godot.Key.B); await Wait(0.1);
+            me.Position = tioHome; me.Velocity = Vector2.Zero; await Wait(0.5);
+        }
+
         // ── enemy fire, shields, stasis, the escape pod, re-boarding ──
         {
             var d3x = H.GetNode<TargetDummy>("TargetDummy3");
@@ -859,6 +886,11 @@ public partial class _Test : Node
             Check(ships.Count == 3, $"host sees 3 ships: itself and two guests ({ships.Count})");
             Check(ships.Any(s => s.Pilot == "Third"), "the second guest's identity reached the host");
             H.AwardPartyExp(40);                  // shared: every pilot in the session gets it
+            Check(!H.AllReady, "the host cannot warp until every pilot is ready");
+            H.SetMyReady(true);
+            for (int i = 0; i < 600 && !H.AllReady; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(H.AllReady && H.PartyIds.Count() == 3, "both guests' READY reached the host: the party of three is ready");
+            H.StartMission();
             Check(Character.Exp == 40, "the host gets its own share of the EXP");
             Check(H.Yard.Level("salvage_rate") == 1 && H.Yard.Credits == 900, "a guest's BUY request was honoured by the host");
             var g = ships.FirstOrDefault(s => s.Pilot == "Guesty");
@@ -882,6 +914,7 @@ public partial class _Test : Node
             Character.Name = "Third"; Character.Class = ShipClass.Battleship;
             Priv(H, "ApplyLocalIdentity"); Priv(H, "SendIdentity", 0);
             await Wait(6.0);
+            H.SetMyReady(true);                           // READY for the bounty
             var all = Nodes<PlayerShip>().ToList();
             Check(all.Count == 3 && all.Any(s => s.Pilot == "HostPilot") && all.Any(s => s.Pilot == "Guesty"),
                   $"third player sees the host and the other guest ({string.Join(", ", all.Select(s => s.Pilot))})");
@@ -901,6 +934,7 @@ public partial class _Test : Node
             Check(mine != null && mine.OwnerId == Net.LocalId && Net.LocalId != 1, $"guest owns its own ship (id {Net.LocalId})");
             Check(Nodes<PlayerShip>().Count() >= 2, $"guest sees the host ({Nodes<PlayerShip>().Count()} ships)");
             H.Yard.BuyUpgrade("salvage_rate");            // a request: the host decides
+            H.SetMyReady(true);                           // READY for the bounty
             var dummy = H.GetNode<TargetDummy>("TargetDummy1");
             if (mine != null) { mine.Position = dummy.Position + new Vector2(-300, 300); mine.Velocity = Vector2.Zero; }
             await Wait(1.5);
@@ -938,6 +972,8 @@ public partial class _Test : Node
             var gb = Nodes<Wing>().Where(w => w.Carrier == mine && w.IsBomber).ToArray();
             Check(gb.Length == 2 && gb.All(w => w.Docked && w.GlobalPosition.DistanceTo(mine.DockSlot(w).pos) < 8f),
                   "guest sees its bombers docked on the carrier (state and position from the host)");
+            Check(H.GetNodeOrNull("MissionPortal") != null && H.Mission == Hub.MissionState.PortalOpen,
+                  "the host's mission portal opened here too (the party was ready)");
             await Wait(6.0);                       // the host closes the session ~24.5 s in
             Check(!Net.IsOnline && Net.LocalId == 1, "guest fell back offline when host left");
             // Back to its OWN world, with nothing lost: everything held -- stock, the
