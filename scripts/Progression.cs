@@ -4,9 +4,9 @@ using System;
 // ─────────────────────────────────────────────────────────────────────────────
 // PILOT PROGRESSION -- EXP, levels, and the points they buy.
 //
-//   EXP comes from completing missions and killing bosses, and is SHARED: the host
-//   awards it to everyone in the session (Hub.AwardPartyExp).
-//   Each level needs 100 x 1.5^(level-1) EXP and pays 1 point.
+//   EXP comes from boss kills: the host announces the kill and its level, and every
+//   pilot computes its own share (Missions: the kill by level, +250 first clear, +100).
+//   Every level needs 1000 EXP and pays 1 point.
 //   Points buy flat upgrades; each upgrade's next level costs one more point than
 //   the last (1, 2, 3, ...).
 //
@@ -34,7 +34,8 @@ public static class Progression
     public const int MaxPerUpgrade = 60;       // a sanity cap on what a peer may claim
 
     public static int Cost(int owned) => owned + 1;                        // 1, 2, 3, ...
-    public static int ExpToNext(int level) => (int)Math.Round(100 * Math.Pow(1.5, level - 1));
+    public const int ExpPerLevel = 1000;
+    public static int ExpToNext(int level) => ExpPerLevel;                  // always 1000
 
     // Flat stat additions for a set of purchases, on a given hull.
     public static System.Collections.Generic.Dictionary<string, double> Flats(int[] bought, ShipClass c)
@@ -58,6 +59,18 @@ public static class Progression
         }
         Character.Save();
         return gained;
+    }
+
+    // A boss beaten at `level`: this pilot's own EXP -- the kill by its own level, the first
+    // clear of that level, completing the mission -- and the record. Returns the EXP given.
+    public static int AwardBossKill(int level)
+    {
+        var id = Missions.Current.Id;
+        if (!Character.BossCleared.TryGetValue(id, out var set)) Character.BossCleared[id] = set = new System.Collections.Generic.HashSet<int>();
+        bool first = set.Add(level);
+        int exp = Missions.KillExpFor(level, Character.Level) + (first ? Missions.FirstClearExp : 0) + Missions.CompletionExp;
+        AddExp(exp);                                                         // (saves)
+        return exp;
     }
 
     public static bool TryBuy(string id)

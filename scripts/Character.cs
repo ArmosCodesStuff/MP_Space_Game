@@ -1,5 +1,6 @@
 using Godot;
 using System;
+using System.Linq;
 using System.Collections.Generic;
 
 // Who you are. Your ship is your character, so this travels with you between
@@ -24,8 +25,8 @@ public static class Character
     // pilot progression (see Progression)
     public static int Exp, Level = 1, Points;
     public static readonly int[] Bought = new int[Progression.All.Length];
-    // the highest tier of each boss this pilot has beaten (absent = none yet)
-    public static readonly Dictionary<string, int> BossBeaten = new();
+    // the levels of each boss this pilot has beaten (the +250 first-clear bonus, and unlocking)
+    public static readonly Dictionary<string, HashSet<int>> BossCleared = new();
 
     // One saved character, as the select screen lists it.
     public class Slot
@@ -46,7 +47,7 @@ public static class Character
         Accent = new(1.00f, 0.78f, 0.35f);
         Class = ShipClass.Battleship;
         Bonuses.Clear();
-        Exp = 0; Level = 1; Points = 0; Array.Clear(Bought); BossBeaten.Clear();
+        Exp = 0; Level = 1; Points = 0; Array.Clear(Bought); BossCleared.Clear();
     }
 
     public static void Save()
@@ -61,7 +62,7 @@ public static class Character
         foreach (var kv in Bonuses) c.SetValue("bonus", kv.Key, kv.Value);
         c.SetValue("progress", "exp", Exp); c.SetValue("progress", "level", Level); c.SetValue("progress", "points", Points);
         for (int i = 0; i < Bought.Length; i++) c.SetValue("progress", "bought_" + Progression.All[i].Id, Bought[i]);
-        foreach (var kv in BossBeaten) c.SetValue("bosses", kv.Key, kv.Value);
+        foreach (var kv in BossCleared) c.SetValue("boss_cleared", kv.Key, string.Join(",", kv.Value.OrderBy(x => x)));
         c.Save(PathOf(Id));
     }
 
@@ -81,8 +82,14 @@ public static class Character
         Exp = (int)c.GetValue("progress", "exp", 0); Level = Math.Max(1, (int)c.GetValue("progress", "level", 1));
         Points = Math.Max(0, (int)c.GetValue("progress", "points", 0));
         for (int i = 0; i < Bought.Length; i++) Bought[i] = Math.Clamp((int)c.GetValue("progress", "bought_" + Progression.All[i].Id, 0), 0, Progression.MaxPerUpgrade);
-        BossBeaten.Clear();
-        if (c.HasSection("bosses")) foreach (var k in c.GetSectionKeys("bosses")) BossBeaten[k] = (int)c.GetValue("bosses", k, -1);
+        BossCleared.Clear();
+        if (c.HasSection("boss_cleared"))
+            foreach (var k in c.GetSectionKeys("boss_cleared"))
+                BossCleared[k] = ((string)c.GetValue("boss_cleared", k, "")).Split(',', StringSplitOptions.RemoveEmptyEntries)
+                                 .Select(x => int.TryParse(x, out var n) ? n : 0).Where(n => n >= 1).ToHashSet();
+        else if (c.HasSection("bosses"))   // an old save: tiers from 0 -- tier t beaten means levels 1..t+1
+            foreach (var k in c.GetSectionKeys("bosses"))
+                BossCleared[k] = Enumerable.Range(1, Math.Max(0, (int)c.GetValue("bosses", k, -1) + 1)).ToHashSet();
         return true;
     }
 

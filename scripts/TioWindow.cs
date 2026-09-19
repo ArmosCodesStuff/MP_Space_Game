@@ -11,7 +11,7 @@ public partial class TioWindow : PanelContainer
     public Hub Hub;
     private Label _party, _status;
     private Button _ready, _down, _up;
-    private Label _tier;
+    private Label _tier, _bounty;
 
     public override void _Ready()
     {
@@ -21,14 +21,13 @@ public partial class TioWindow : PanelContainer
         var col = new VBoxContainer(); col.AddThemeConstantOverride("separation", 6); AddChild(col);
         var head = new Label { Text = "WARP TO TARGET" }; head.AddThemeFontSizeOverride("font_size", 20); col.AddChild(head);
         col.AddChild(new Label { Text = "Threat Intelligence Operations", Modulate = new Color(1, 1, 1, 0.6f) });
-        var bounty = new Label { Text = $"BOUNTY  ·  {Missions.BossName}\nReward: {Missions.BossExp} EXP each for the kill, {Missions.MissionExp} EXP each for completing it, {Missions.BossCredits} credits.",
-                                 AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(440, 0) };
-        col.AddChild(bounty);
+        _bounty = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(440, 0) };
+        col.AddChild(_bounty);
         var diff = new HBoxContainer { Name = "Difficulty" }; diff.AddThemeConstantOverride("separation", 8); col.AddChild(diff);
         diff.AddChild(new Label { Text = "DIFFICULTY", Modulate = new Color(0.55f, 0.8f, 1f) });
-        _down = new Button { Name = "TierDown", Text = "◀", FocusMode = FocusModeEnum.None }; _down.Pressed += () => Hub.SelectTier(Missions.Tier - 1);
+        _down = new Button { Name = "LevelDown", Text = "◀", FocusMode = FocusModeEnum.None }; _down.Pressed += () => Hub.SelectLevel(Missions.Level - 1);
         _tier = new Label { CustomMinimumSize = new Vector2(230, 0), HorizontalAlignment = HorizontalAlignment.Center };
-        _up = new Button { Name = "TierUp", Text = "▶", FocusMode = FocusModeEnum.None }; _up.Pressed += () => Hub.SelectTier(Missions.Tier + 1);
+        _up = new Button { Name = "LevelUp", Text = "▶", FocusMode = FocusModeEnum.None }; _up.Pressed += () => Hub.SelectLevel(Missions.Level + 1);
         diff.AddChild(_down); diff.AddChild(_tier); diff.AddChild(_up);
         col.AddChild(new Label { Text = "PARTY  (everyone in the session)", Modulate = new Color(0.55f, 0.8f, 1f) });
         _party = new Label(); col.AddChild(_party);
@@ -44,9 +43,15 @@ public partial class TioWindow : PanelContainer
     {
         if (Hub == null) return;
         int top = Missions.Unlocked(Missions.Current.Id);
-        _tier.Text = $"TIER {Missions.Tier}  ·  ×{Missions.Scale(Missions.Tier):0.00}" + (Missions.Tier == top ? "  (newest)" : "");
-        _down.Disabled = !Net.IsHost || Missions.Tier <= 0 || Hub.Mission != Hub.MissionState.Idle;
-        _up.Disabled = !Net.IsHost || Missions.Tier >= top || Hub.Mission != Hub.MissionState.Idle;
+        int lv = Missions.Level, party = System.Math.Max(1, Hub.PartySize);
+        _tier.Text = $"LEVEL {lv}  ·  ×{Missions.S(lv):0.00}" + (lv == top ? "  (newest)" : "");
+        _down.Disabled = !Net.IsHost || lv <= 1 || Hub.Mission != Hub.MissionState.Idle;
+        _up.Disabled = !Net.IsHost || lv >= top || Hub.Mission != Hub.MissionState.Idle;
+        bool first = !(Character.BossCleared.TryGetValue(Missions.Current.Id, out var cl) && cl.Contains(lv));
+        _bounty.Text = $"BOUNTY  ·  {Missions.BossName}  ·  party of {party}\n"
+                     + $"You: {Missions.KillExpFor(lv, Character.Level)} EXP for the kill (your level {Character.Level})"
+                     + (first ? $" + {Missions.FirstClearExp} first clear" : "") + $" + {Missions.CompletionExp} completing, "
+                     + $"{Missions.BountyEach(lv, party):0} credits each.";
         _party.Text = string.Join("\n", Hub.PartyIds.OrderBy(i => i).Select(i => $"  {Hub.PilotName(i)}   {(Hub.IsReady(i) ? "READY" : "not ready")}"));
         bool mine = Hub.IsReady(Net.LocalId);
         _ready.Text = mine ? "READY  ✓" : "READY";

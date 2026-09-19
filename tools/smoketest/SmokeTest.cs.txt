@@ -771,10 +771,20 @@ public partial class _Test : Node
         // ── pilot progression: EXP, levels, points, flat upgrades ──
         {
             Check(Progression.Cost(0) == 1 && Progression.Cost(1) == 2 && Progression.Cost(2) == 3, "upgrade costs 1, 2, 3, ... points");
-            Check(Progression.ExpToNext(1) == 100 && Progression.ExpToNext(2) == 150, "levels need 100 x 1.5^(level-1) EXP");
-            Character.Exp = 0; Character.Level = 1; Character.Points = 0; System.Array.Clear(Character.Bought);
-            int up = Progression.AddExp(260);
-            Check(up == 2 && Character.Level == 3 && Character.Exp == 10 && Character.Points == 2, "260 EXP from level 1: level 3, 10 over, 2 points");
+            Check(Progression.ExpToNext(1) == 1000 && Progression.ExpToNext(7) == 1000, "every level needs 1000 EXP");
+            Character.Exp = 0; Character.Level = 1; Character.BossCleared.Clear(); Character.Points = 0; System.Array.Clear(Character.Bought);
+            int up = Progression.AddExp(2600);
+            Check(up == 2 && Character.Level == 3 && Character.Exp == 600 && Character.Points == 2, "2600 EXP from level 1: level 3, 600 over, 2 points");
+            // the approved formula, in literal numbers (so the checks can fail)
+            Check(Math.Abs(Missions.S(1) - 1) < 1e-12 && Math.Abs(Missions.S(5) - 1.4641) < 1e-9, "boss levels start at 1: S(L) = 1.1^(L-1) (level 5: x1.4641)");
+            Check(Math.Abs(Missions.HullMult(1, 3) - 2.2) < 1e-9 && Math.Abs(Missions.DamageMult(1, 3) - 1.4) < 1e-9, "a party of 3: boss hull x2.2, damage x1.4");
+            Check(Missions.KillExpFor(5, 10) == 100 && Missions.KillExpFor(2, 1) == 400 && Missions.KillExpFor(1, 1) == 200, "kill EXP 200 x boss level / pilot level (5 vs 10: 100; 2 vs 1: 400)");
+            Check(Math.Abs(Missions.BountyEach(1, 1) - 2000) < 1e-9 && Math.Abs(Missions.BountyEach(1, 2) - 1500) < 1e-9 && Math.Abs(Missions.BountyEach(1, 3) - 4000.0 / 3) < 1e-9,
+                  "the bounty, +50% per extra pilot, split: 2000 solo, 1500 each for two, 1333 each for three");
+            Character.BossCleared.Clear(); Character.Exp = 0; Character.Level = 1;
+            int k1 = Progression.AwardBossKill(1), k2 = Progression.AwardBossKill(1);
+            Check(k1 == 550 && k2 == 300, $"a level-1 boss: 200 + 250 first clear + 100 = 550; again: 300 ({k1}, {k2})");
+            Character.BossCleared.Clear(); Character.Exp = 0; Character.Level = 3;
             Check(!Nodes<BossBar>().First().Visible, "outside the arena there is no boss bar");
             Key(global::Godot.Key.L); await Wait(0.1);
             var pw = Nodes<PilotWindow>().FirstOrDefault();
@@ -1194,9 +1204,9 @@ public partial class _Test : Node
             Check(Math.Abs(chargeDmg - 40) < 1e-6, $"the charge rams for 40 ({chargeDmg:0})");
             Check(Music.I == null || Math.Abs(Boss.TridentSpeed - 135f) < 1e-3, "trident missiles fly at 135 u/s (10% slower)");
             // the kill: shared EXP for it and the mission, the bounty's credits, then home
-            Character.Exp = 0; Character.Level = 1; Character.Points = 0;
+            Character.Exp = 0; Character.Level = 1; Character.BossCleared.Clear(); Character.Points = 0; Character.BossCleared.Clear();
             boss.TakeDamage(boss.Hp + 1); await Wait(0.2);
-            Check(H.MissionWon && Character.Level == 3 && Character.Exp == 150, "the kill pays 300 + 100 EXP (level 1 -> 3, 150 over)");
+            Check(H.MissionWon && Character.Level == 1 && Character.Exp == 550, $"the kill of a level-1 boss pays a level-1 pilot 200 + 250 first clear + 100 = 550 (exp {Character.Exp})");
             for (int i = 0; i < 60 * 8 && Hub.InArena; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             await Wait(1.0);
             Check(!Hub.InArena && H.Yard != null, "home again after the win");
@@ -1209,22 +1219,22 @@ public partial class _Test : Node
             double want = H.Yard.FleetRate(GatherKind.Miner) * Yard.LastAway / 20.0;
             Check(Yard.LastAway > 1 && Yard.LastAwayOre > 0 && Math.Abs(Yard.LastAwayOre - want) < 1e-6,
                   $"while away the base earned 1/20 of its rate ({Yard.LastAwayOre:0.0} ore for {Yard.LastAway:0} s)");
-            // difficulty: the win unlocked tier 1, and docking at the TIO selects it
-            Check(Character.BossBeaten.TryGetValue("silver_lancer", out var beat) && beat == 0, "the win records tier 0 as beaten");
-            Check(Math.Abs(Missions.Scale(1) - 1.1) < 1e-9 && Math.Abs(Missions.Scale(2) - 1.21) < 1e-9
-                  && Math.Abs(Missions.Current.Hull * Missions.Scale(1) - 1320) < 1e-6, "each tier is 10% stronger, multiplicatively (tier 1: 1320 hull)");
+            // levels: the win cleared level 1; docking at the TIO selects level 2
+            Check(Character.BossCleared.TryGetValue("silver_lancer", out var cleared) && cleared.Contains(1), "the win records level 1 as cleared");
+            Check(Math.Abs(Missions.S(2) - 1.1) < 1e-9 && Math.Abs(Missions.S(3) - 1.21) < 1e-9 && Math.Abs(Missions.Current.Hull * Missions.S(2) - 1320) < 1e-6,
+                  "each level is 10% stronger, multiplicatively (level 2: 1320 hull)");
             H.OpenTio(); await Wait(0.1);
             var tw2 = Nodes<TioWindow>().First();
-            Check(Missions.Tier == 1, "docking at the TIO selects the newest unlocked tier (1)");
-            Check(Nodes<Button>(tw2).First(b => b.Name == "TierUp").Disabled, "no tier beyond the newest unlocked");
-            Nodes<Button>(tw2).First(b => b.Name == "TierDown").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
-            Check(Missions.Tier == 0, "the host can pick an easier, beaten tier");
-            Nodes<Button>(tw2).First(b => b.Name == "TierUp").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
-            Check(Missions.Tier == 1, "and back up to the newest");
+            Check(Missions.Level == 2, "docking at the TIO selects the newest unlocked level (2)");
+            Check(Nodes<Button>(tw2).First(b => b.Name == "LevelUp").Disabled, "no level beyond the newest unlocked");
+            Nodes<Button>(tw2).First(b => b.Name == "LevelDown").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
+            Check(Missions.Level == 1, "the host can pick an easier, cleared level");
+            Nodes<Button>(tw2).First(b => b.Name == "LevelUp").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
+            Check(Missions.Level == 2, "and back up to the newest");
             Key(global::Godot.Key.Escape); await Wait(0.1);
             // a wipe: every ship in stasis at once -> the mission fails, home with nothing
             H.EnterSector(Hub.SectorKind.Arena); await Wait(1.5);
-            int exp1 = Character.Exp; int failLevel = Missions.Tier + 1;
+            int exp1 = Character.Exp; int failLevel = Missions.Level;
             Me.TakeDamage(Me.Hp + 1);
             for (int i = 0; i < 60 * 8 && Hub.InArena; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             await Wait(1.0);
@@ -1254,7 +1264,7 @@ public partial class _Test : Node
             }
             Check(fp.DistanceTo(goal) < 80f, $"the fighter-class autopilot reaches its point ({fp.DistanceTo(goal):0} u off)");
             Check(Settings.MusicOn, "music is on by default");
-            Character.Exp = 0; Character.Level = 1; Character.Points = 0; Character.Save();
+            Character.Exp = 0; Character.Level = 1; Character.BossCleared.Clear(); Character.Points = 0; Character.Save();
             Me.Position = Hub.BasePos + new Vector2(0, 330); Me.Velocity = Vector2.Zero; await Wait(1.5);
             Click(Scr(Hub.BasePos)); await Wait(0.1);
             Check(Nodes<BasePanel>().Any(), "left-click on the base station opens the BASE menu");
@@ -1392,6 +1402,7 @@ public partial class _Test : Node
         {
             Character.Name = "Arena Guest";
             H.Yard.Credits = 12345;                               // its own base, before it visits
+            Character.Exp = 0; Character.Level = 1; Character.BossCleared.Clear();
             await Wait(0.8);
             Net.I.Join($"127.0.0.1:{Port}");
             for (int i = 0; i < 60 * 10 && !(Net.IsOnline && Net.LocalId != 1); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
@@ -1399,11 +1410,13 @@ public partial class _Test : Node
             await ToArena("arena guest", 1);
             for (int i = 0; i < 60 * 15 && Hub.InArena; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(!Hub.InArena && Net.IsOnline, "arena guest: home with the host after the win");
+            Check(Character.Exp == 550, $"arena guest: its own EXP for the kill (550; exp {Character.Exp})");
             await ToArena("arena guest", 2);
             for (int i = 0; i < 60 * 20 && (Hub.InArena || Net.IsOnline); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             await Wait(1.0);
-            Check(!Hub.InArena && !Net.IsOnline && H.Yard != null && Math.Abs(H.Yard.Credits - 12345) < 1e-6,
-                  $"arena guest: the host gone mid-arena, it lands home offline with its own base ({H.Yard?.Credits:0} credits)");
+            double want = 12345 + Missions.BountyEach(1, 2);        // its own base + its share of the first bounty
+            Check(!Hub.InArena && !Net.IsOnline && H.Yard != null && Math.Abs(H.Yard.Credits - want) < 1e-6,
+                  $"arena guest: the host gone mid-arena, home offline with its own base and its bounty share ({H.Yard?.Credits:0} of {want:0})");
         }
     }
 
@@ -1416,7 +1429,7 @@ public partial class _Test : Node
             H.GetNode<PlayerShip>("Ship_1").Position = new Vector2(-900, 900);   // out of the way
             Net.I.Host(27115);
             H.Yard.Credits = 1000;                     // for the guest's purchase request
-            Character.Exp = 0; Character.Level = 1;
+            Character.Exp = 0; Character.Level = 1; Character.BossCleared.Clear();
             Check(Net.I.Reachability == Net.Reach.Checking && Net.I.LanAddress.EndsWith(":27115"), "hosting starts at once; the router is asked in the background");
             await Wait(9.0);
             // no router in the sandbox: it must say so, and how to get friends in anyway
@@ -1438,7 +1451,8 @@ public partial class _Test : Node
             Check(rev.Text.Contains("203.0.113.7:27015"), "click: it shows the public address and port");
             rev.EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
             Check(!rev.Text.Contains("203.0.113.7"), "click again: hidden");
-            H.AwardPartyExp(40);                  // shared: every pilot in the session gets it
+            Character.BossCleared.Clear();
+            H.AnnounceBossKill(1);                // every pilot: its own EXP by its own level
             H.SpawnRaider(new Vector2(-3500, 3500));   // far off: the guests must see it
             H.SpawnRaider(new Vector2(-3700, 3700), RaiderKind.Heavy);
             Check(!H.AllReady, "the host cannot warp until every pilot is ready");
@@ -1446,7 +1460,7 @@ public partial class _Test : Node
             for (int i = 0; i < 600 && !H.AllReady; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(H.AllReady && H.PartyIds.Count() == 3, "both guests' READY reached the host: the party of three is ready");
             H.StartMission();
-            Check(Character.Exp == 40, "the host gets its own share of the EXP");
+            Check(Character.Exp == 550, $"the host gets its own EXP for the kill (level 1: 550; exp {Character.Exp})");
             Check(H.Yard.Level("salvage_rate") == 1 && H.Yard.Credits == 900, "a guest's BUY request was honoured by the host");
             var g = ships.FirstOrDefault(s => s.Pilot == "Guesty");
             Check(g != null && g.Name == PlayerShip.NodeName(g.OwnerId), "guest ship named by its id");
@@ -1511,8 +1525,8 @@ public partial class _Test : Node
             var host = Nodes<PlayerShip>().FirstOrDefault(s => s.OwnerId == 1);
             Check(Nodes<PlayerShip>().Count() == 3 && Nodes<PlayerShip>().Any(s => s.Pilot == "Third"), "guest sees the other guest too (3 ships)");
             Check(H.Yard.Level("salvage_rate") == 1, "the upgrade the host granted reached the guest");
-            for (int i = 0; i < 480 && Character.Exp != 40; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            Check(Character.Exp == 40, $"the host's EXP award reached this guest (exp {Character.Exp})");
+            for (int i = 0; i < 480 && Character.Exp != 550; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(Character.Exp == 550, $"the host's kill reached this guest, which took its own 550 (exp {Character.Exp})");
             for (int i = 0; i < 60 * 6 && H.Raiders.Count == 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             for (int i = 0; i < 60 * 3 && !H.Raiders.Any(r => r.Heavy); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(H.Raiders.Count >= 2 && Combat.Hostiles.OfType<Raider>().Any() && H.Raiders.Any(r => r.Heavy),
@@ -1543,7 +1557,8 @@ public partial class _Test : Node
             // ships' cargo, and credits from a sale -- is at least the 5000 it had, and
             // nowhere near the host's few hundred.
             double own = H.Yard.Ore + H.Yard.Salvage + H.Yard.Hauler.Cargo + H.Yard.Gatherers.Sum(x => x.Cargo) + H.Yard.Credits;
-            Check(own >= 5000 - 1e-6 && own < 5400, $"guest's own totals restored, nothing lost ({own:0.00} held)");
+            double share = Missions.BountyEach(1, 3);                // the host's announced kill, a party of three
+            Check(own - share >= 5000 - 1e-6 && own - share < 5400, $"guest's own totals restored, nothing lost, plus its bounty share ({own:0.00} held, {share:0.00} of it the share)");
             Check(H.Yard.Level("salvage_rate") == 0, "guest's own upgrade levels restored (the host's level 1 stays in the host's world)");
             Check(H.Yard.Hauler.Cargo <= H.Yard.Capacity && H.Yard.Gatherers.All(x => x.Cargo == 0 || x.State == Gatherer.St.Working),
                   "economy ships restart docked and empty in your own world");

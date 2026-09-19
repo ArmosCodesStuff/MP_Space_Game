@@ -56,7 +56,7 @@ public partial class BossBar : Control
         var boss = Hub?.Boss;
         if (!IsInstanceValid(boss)) return;                       // the first draw can come before any boss
         _panel.Draw(GetCanvasItem(), new Rect2(-10, -26, W + 20, H + 34));
-        Txt.D(this, ThemeDB.FallbackFont, new Vector2(0, -8), $"{Missions.BossName}  ·  TIER {Missions.Tier}  ·  {boss.Hp:0} / {boss.MaxHp:0}",
+        Txt.D(this, ThemeDB.FallbackFont, new Vector2(0, -8), $"{Missions.BossName}  ·  LEVEL {Missions.Level}  ·  {boss.Hp:0} / {boss.MaxHp:0}",
               HorizontalAlignment.Center, W, 13, new Color(1f, 0.85f, 0.8f));
         float frac = (float)Math.Clamp(boss.Hp / Math.Max(1, boss.MaxHp), 0, 1);
         DrawRect(new Rect2(0, 0, W, H), new Color(0.10f, 0.05f, 0.05f, 0.95f));

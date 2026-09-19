@@ -95,6 +95,10 @@ public partial class Yard : Node2D
     public static double TripCredits;                 // earned while away (a bounty), paid on return
     public static double LastAway, LastAwayOre, LastAwaySalvage;   // what the last return credited
     public static double TripStartCredits;            // the credits set aside when the last trip began
+    // a guest's share of a bounty goes to its OWN base, set aside while it visits
+    public static void AddGuestShare(double credits) => _ownCredits += credits;
+    // the host's share, earned in the arena (where there is no yard): paid on the way home
+    public static void AddHostShare(double credits) => TripCredits += credits;
 
     public void SaveForTrip()
     {

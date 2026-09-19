@@ -398,7 +398,7 @@ public partial class Hub : Node2D
         if (IsInstanceValid(_tio)) return;
         if (Net.IsHost && Mission == MissionState.Idle)
         {   // docking at the TIO selects the newest unlocked tier
-            Missions.Tier = Missions.Unlocked(Missions.Current.Id);
+            Missions.Level = Missions.Unlocked(Missions.Current.Id);
             BroadcastMission();
         }
         if (IsInstanceValid(_base)) ToggleBase();
@@ -453,11 +453,9 @@ public partial class Hub : Node2D
     {
         if (!Net.IsHost || MissionWon) return;
         MissionWon = true;
-        // this tier is beaten: the next unlocks, and is selected when the TIO is next opened
-        var id = Missions.Current.Id;
-        if (!Character.BossBeaten.TryGetValue(id, out var best) || Missions.Tier > best) { Character.BossBeaten[id] = Missions.Tier; Character.Save(); }
-        AwardPartyExp(Missions.BossExp + Missions.MissionExp);
-        Yard.TripCredits += Missions.BossCredits;
+        // every pilot gets its own EXP (its level, its first clears) and its share of the bounty;
+        // the host's own record (and so the next level unlocking) updates in its own award
+        AnnounceBossKill(Missions.Level);
         _arenaEndT = 4.0;
         if (Net.IsOnline) Rpc(nameof(NetWon));
     }
@@ -473,7 +471,7 @@ public partial class Hub : Node2D
         if (_arenaEndT >= 0 && (_arenaEndT -= delta) <= 0)
         {
             _arenaEndT = -1;
-            if (!MissionWon) PendingRaidLevel = Missions.Tier + 1;     // failed: the boss sends its raiders after you
+            if (!MissionWon) PendingRaidLevel = Missions.Level;        // failed: the boss sends its raiders after you
             EnterSector(SectorKind.Home);
         }
     }
@@ -486,11 +484,11 @@ public partial class Hub : Node2D
         foreach (var t in GetChildren().OfType<Torpedo>()) if (t.NetId == id) t.Intercept();
     }
 
-    // host: pick a tier between 0 and the newest unlocked
-    public void SelectTier(int tier)
+    // host: pick a level between 1 and the newest unlocked
+    public void SelectLevel(int level)
     {
         if (!Net.IsHost || Mission != MissionState.Idle) return;
-        Missions.Tier = System.Math.Clamp(tier, 0, Missions.Unlocked(Missions.Current.Id));
+        Missions.Level = System.Math.Clamp(level, 1, Missions.Unlocked(Missions.Current.Id));
         BroadcastMission();
     }
 
@@ -533,12 +531,12 @@ public partial class Hub : Node2D
     {
         if (!Net.IsOnline) return;
         var ids = _ready.Keys.ToArray(); var rs = ids.Select(i => _ready[i] ? 1 : 0).ToArray();   // RPCs carry int[], not bool[]
-        Rpc(nameof(NetMission), (int)Mission, MissionT, ids, rs, Missions.Tier);
+        Rpc(nameof(NetMission), (int)Mission, MissionT, ids, rs, Missions.Level);
     }
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetMission(int state, double t, int[] ids, int[] ready, int tier)
+    private void NetMission(int state, double t, int[] ids, int[] ready, int level)
     {
-        Missions.Tier = tier;
+        Missions.Level = level;
         Mission = (MissionState)state; MissionT = t;
         _ready.Clear(); for (int i = 0; i < ids.Length && i < ready.Length; i++) _ready[ids[i]] = ready[i] != 0;
     }
@@ -552,7 +550,7 @@ public partial class Hub : Node2D
     public const double RaidDelay = 3.0;
     private double _raidIn = -1; private int _raidLevel;
     public int RaidLevel => _raidLevel;
-    public static double RaidScale(int level) => Missions.Scale(level - 1);   // S(L) = 1.1^(L-1)
+    public static double RaidScale(int level) => Missions.S(level);           // S(L) = 1.1^(L-1)
 
     private void StartRaid(int level)
     {
@@ -678,15 +676,25 @@ public partial class Hub : Node2D
         }
     }
 
-    // ── shared EXP: the host awards it; every pilot in the session gets it ─────
-    public void AwardPartyExp(int amount)
+    // ── a boss kill, as each guest receives it: its own EXP, its own share of the bounty ──
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void NetBossKill(int level, int party)
+    {
+        Progression.AwardBossKill(level);
+        Yard.AddGuestShare(Missions.BountyEach(level, party));              // to its own base, set aside while it visits
+    }
+    public int PartySize => _ships.Count;
+
+    // host: a level-L boss is down -- every pilot's own EXP and its share of the bounty
+    public void AnnounceBossKill(int level)
     {
         if (!Net.IsHost) return;
-        Progression.AddExp(amount);
-        if (Net.IsOnline) Rpc(nameof(NetExp), amount);
+        int party = System.Math.Max(1, PartySize);
+        Progression.AwardBossKill(level);
+        if (Yard != null) Yard.TripCredits += Missions.BountyEach(level, party);
+        else Yard.AddHostShare(Missions.BountyEach(level, party));
+        if (Net.IsOnline) Rpc(nameof(NetBossKill), level, party);
     }
-    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetExp(int amount) => Progression.AddExp(amount);
 
     // ── character creator ────────────────────────────────────────────────────
     // One instance, owned here; REFIT opens it and it cannot stack.
@@ -839,7 +847,7 @@ public partial class Hub : Node2D
             if (Placing) ship += $"    PLACING {_placingLabel}: left-click to confirm, right-click / Esc to cancel";
         }
         string place = Yard == null
-            ? $"ARENA  ·  {Missions.BossName} (TIER {Missions.Tier})  {(IsInstanceValid(Boss) ? Boss.Hp : 0):0} / {(IsInstanceValid(Boss) ? Boss.MaxHp : 0):0}" + (MissionWon ? "  ·  DEFEATED" : "")
+            ? $"ARENA  ·  {Missions.BossName} (LEVEL {Missions.Level})  {(IsInstanceValid(Boss) ? Boss.Hp : 0):0} / {(IsInstanceValid(Boss) ? Boss.MaxHp : 0):0}" + (MissionWon ? "  ·  DEFEATED" : "")
             : $"ORE {Yard.Ore:0}    SALVAGE {Yard.Salvage:0}    CREDITS {Yard.Credits:0}"
               + $"    HAULER {Yard.Hauler.Cargo:0}/{Yard.Capacity:0} {Yard.Hauler.State.ToString().ToUpper()}";
         _hud.Text = place + ship
