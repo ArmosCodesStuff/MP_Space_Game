@@ -685,6 +685,7 @@ public partial class _Test : Node
             Character.Exp = 0; Character.Level = 1; Character.Points = 0; System.Array.Clear(Character.Bought);
             int up = Progression.AddExp(260);
             Check(up == 2 && Character.Level == 3 && Character.Exp == 10 && Character.Points == 2, "260 EXP from level 1: level 3, 10 over, 2 points");
+            Check(!Nodes<BossBar>().First().Visible, "outside the arena there is no boss bar");
             Key(global::Godot.Key.L); await Wait(0.1);
             var pw = Nodes<PilotWindow>().FirstOrDefault();
             Check(pw != null, "L opens the PILOT window");
@@ -870,6 +871,24 @@ public partial class _Test : Node
             Key(global::Godot.Key.Q); await Wait(0.1);                           // point defence up
             Check(Math.Abs(boss.MaxHp - 1200) < 1e-6 && Math.Abs(Boss.GunDamage / Boss.GunEvery - 3) < 1e-9, "the boss: 1200 hull at tier 0; its guns 3 DPS");
             // stand in the beam on purpose with a thick hull (test only), and watch the rhythm
+            // the boss's health bar: a chunk per hit, bouncing, whitening, fading; bursts merge
+            var bar = Nodes<BossBar>().First();
+            Check(bar.Visible, "in the arena the boss's health bar shows");
+            double hpA = boss.Hp;
+            boss.TakeDamage(60); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            var ck = bar.Chunks.LastOrDefault();
+            Check(ck != null && Math.Abs(ck.To - hpA / boss.MaxHp) < 1e-6 && Math.Abs(ck.From - (hpA - 60) / boss.MaxHp) < 1e-6,
+                  "a hit leaves a chunk: exactly the slice of the bar it took");
+            await Wait(0.06);
+            float off = BossBar.Offset(ck.T), wh = BossBar.Whiteness(ck.T);
+            Check(Math.Abs(off) > 1f && wh > 0f && wh < 1f, $"the chunk bobs ({off:0.0} px) and is turning white ({wh:0.00})");
+            Check(BossBar.Offset(BossBar.BounceFor) == 0 && BossBar.Alpha(BossBar.Life) <= 0.001 && BossBar.Whiteness(BossBar.Life * 0.5) >= 0.999,
+                  "the bounce dies away; white by half-life; gone by the end");
+            await Wait(BossBar.Life + 0.1);
+            Check(bar.Chunks.Count == 0, "and then it is gone from the bar");
+            for (int i = 0; i < 10; i++) boss.TakeDamage(1);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(bar.Chunks.Count == 1, $"a burst of small hits shares one chunk ({bar.Chunks.Count})");
             var me2 = Me; me2.MaxHp = 5000; me2.TakeDamage(-(5000 - me2.Hp));
             double tBeam = -1, tCharge = -1, tVolley = -1, arenaT = 0; int trident = 0; float spread = 0;
             async void Watch()

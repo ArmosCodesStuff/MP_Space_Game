@@ -157,6 +157,7 @@ public partial class Hub : Node2D
         layer.AddChild(helpPanel);
 
         layer.AddChild(new HullHud { Hub = this });
+        layer.AddChild(new BossBar { Hub = this });                 // shows itself in the arena
         layer.AddChild(new Radar { Hub = this });
         layer.AddChild(new AbilityBar { Hub = this });
         if (!InArena) layer.AddChild(new HaulerHud { Hub = this });
