@@ -266,6 +266,15 @@ public partial class _Shots : Node
             rv?.EmitSignal(BaseButton.SignalName.Pressed);
             Net.I.GoOffline(); await W(0.5);
         }
+        // a raid: two patrols in from the map's edge, and the HUD's count
+        {
+            var rs2 = H.GetNode<PlayerShip>("Ship_1"); var keepR2 = rs2.Position;
+            rs2.Position = Hub.BasePos + new Vector2(0, 2600); rs2.Velocity = Vector2.Zero; rs2.Rotation = 0f; await W(0.5);
+            H.SpawnPatrol(rs2.Position + new Vector2(-500, 350), 1.1); H.SpawnPatrol(rs2.Position + new Vector2(500, 350), 1.1);
+            await W(1.0); await Snap("53_raid_incoming");
+            foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e9);
+            rs2.Position = keepR2; rs2.Velocity = Vector2.Zero; await W(0.3);
+        }
         // a waypoint picked on the radar: its ring there, and the HUD naming it
         {
             H.SelectWaypoint("BASE", Hub.BasePos, 260f); await W(0.3);
