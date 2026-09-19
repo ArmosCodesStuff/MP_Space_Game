@@ -67,6 +67,49 @@ public partial class Yard : Node2D
         Hauler = new Hauler { Yard = this, Name = "Hauler" };
         AddChild(Hauler);
         SyncFleet();
+        ReturnFromTrip();
+    }
+
+    // ── away on a mission ────────────────────────────────────────────────────
+    // The base is not simulated while the party is in the arena. It is saved on the
+    // way out; on return it gets back what it had, any credits earned out there, and
+    // 1/20 of what its fleet would have gathered in the time away.
+    public const double AwayShare = 1.0 / 20.0;
+    private sealed record Trip(double Ore, double Salvage, double Credits, Dictionary<string, int> Levels,
+                               double OrePerSec, double SalvagePerSec);
+    public static double TripClock;                   // game seconds in the arena (Hub counts them)
+    private static Trip _trip;
+    public static double TripCredits;                 // earned while away (a bounty), paid on return
+    public static double LastAway, LastAwayOre, LastAwaySalvage;   // what the last return credited
+
+    public void SaveForTrip()
+    {
+        _trip = new Trip(Ore, Salvage, Credits, new Dictionary<string, int>(_levels),
+                         FleetRate(GatherKind.Miner), FleetRate(GatherKind.Salvager));
+        TripCredits = 0; TripClock = 0;
+    }
+
+    private void ReturnFromTrip()
+    {
+        if (_trip == null) return;
+        var t = _trip; _trip = null;
+        LastAway = TripClock;
+        LastAwayOre = t.OrePerSec * LastAway * AwayShare; LastAwaySalvage = t.SalvagePerSec * LastAway * AwayShare;
+        Ore = t.Ore + LastAwayOre; Salvage = t.Salvage + LastAwaySalvage;
+        Credits = t.Credits + TripCredits; TripCredits = 0;
+        _levels.Clear(); foreach (var kv in t.Levels) _levels[kv.Key] = kv.Value;
+        SyncFleet();
+    }
+
+    // A fleet's steady income: each ship fills its hold, flies about 1000 u each way,
+    // and unloads. (An estimate: good enough for a 1/20 share.)
+    public double FleetRate(GatherKind k)
+    {
+        double rate = 0;
+        foreach (var g in Gatherers)
+            if (g.Kind == k)
+                rate += g.Hold / (g.Hold / g.Rate + 2 * 1000.0 / g.Speed + g.Hold / Economy.UnloadRate);
+        return rate;
     }
 
     // ── upgrades ─────────────────────────────────────────────────────────────

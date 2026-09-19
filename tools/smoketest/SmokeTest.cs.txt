@@ -675,33 +675,6 @@ public partial class _Test : Node
             Priv(H, "ApplyLocalIdentity");
         }
 
-        // ── buildings open their menus; the TIO's mission portal ──
-        {
-            var me = Me; var tioHome = me.Position;
-            me.Position = Hub.TioPos + new Vector2(260, 0); me.Velocity = Vector2.Zero; await Wait(1.5);
-            Click(Scr(Hub.TioPos)); await Wait(0.1);
-            Check(H.TioOpen && Nodes<TioWindow>().Any(), "left-click on the TIO opens WARP TO TARGET");
-            var tw = Nodes<TioWindow>().First();
-            var warp = Nodes<Button>(tw).First(b => b.Name == "Warp");
-            Check(!H.IsReady(Net.LocalId) && warp.Disabled, "WARP is locked until every pilot is ready");
-            Nodes<Button>(tw).First(b => b.Name == "Ready").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.1);
-            Check(H.AllReady && !warp.Disabled, "alone, my READY makes the party ready: WARP unlocks");
-            warp.EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.1);
-            Check(H.Mission == Hub.MissionState.Opening && H.GetNodeOrNull("MissionPortal") == null, "WARP starts the 3 s opening; no portal yet");
-            await Wait(Hub.PortalOpenTime + 0.2);
-            var mp = H.GetNodeOrNull<Node2D>("MissionPortal");
-            var tio = H.GetNode<Sprite2D>("TIO"); float halfW = tio.GetRect().Size.X * tio.Scale.X / 2f;
-            Check(H.Mission == Hub.MissionState.PortalOpen && mp != null && mp.Position.X > Hub.TioPos.X + halfW && mp.Position.Y < Hub.TioPos.Y - Hub.TioHeight / 2f,
-                  "after 3 s the portal opens off the TIO's top-right corner");
-            Key(global::Godot.Key.Escape); await Wait(0.1);
-            Check(!H.TioOpen, "Esc closes it");
-            me.Position = Hub.BasePos + new Vector2(0, 330); await Wait(1.5);
-            Click(Scr(Hub.BasePos)); await Wait(0.1);
-            Check(Nodes<BasePanel>().Any(), "left-click on the base station opens the BASE menu");
-            Key(global::Godot.Key.B); await Wait(0.1);
-            me.Position = tioHome; me.Velocity = Vector2.Zero; await Wait(0.5);
-        }
-
         // ── enemy fire, shields, stasis, the escape pod, re-boarding ──
         {
             var d3x = H.GetNode<TargetDummy>("TargetDummy3");
@@ -790,6 +763,85 @@ public partial class _Test : Node
             Check(!H.FreeCamera && H.CameraPosition.DistanceTo(sh.ViewPosition) < 30f && Mathf.IsEqualApprox(H.ZoomLevel, kept),
                   "Y again returns to the ship, keeping the zoom");
             H.SetZoom(Hub.DefaultZoom);
+        }
+
+        // ── buildings open menus; READY -> autopilot -> portal -> ARENA -> home ──
+        // (Late in the run on purpose: the trip replaces the whole hub scene, so every
+        //  node reference taken before it -- dummies, ships -- is stale afterwards.)
+        {
+            var tioHome = Me.Position;
+            Me.Position = Hub.TioPos + new Vector2(260, 0); Me.Velocity = Vector2.Zero; await Wait(1.5);
+            Click(Scr(Hub.TioPos)); await Wait(0.1);
+            Check(H.TioOpen && Nodes<TioWindow>().Any(), "left-click on the TIO opens WARP TO TARGET");
+            var tw = Nodes<TioWindow>().First();
+            Check(!Nodes<Button>(tw).Any(b => b.Name == "Warp"), "no WARP button: READY drives the mission");
+            H.Yard.Credits = 1000;
+            // start well away from where the portal opens, so the autopilot has a real trip
+            Me.Position = H.MissionPortalPos + new Vector2(300, 700); Me.Velocity = Vector2.Zero; await Wait(0.3);
+            Nodes<Button>(tw).First(b => b.Name == "Ready").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.1);
+            Check(H.AllReady && H.Mission == Hub.MissionState.Opening && Me.AutopilotTo == H.MissionPortalPos,
+                  "READY: the party (just me) is ready, the portal starts opening, and my ship flies itself there");
+            await Wait(Hub.PortalOpenTime + 0.2);
+            var mp = H.GetNodeOrNull<Node2D>("MissionPortal");
+            var tio = H.GetNode<Sprite2D>("TIO"); float halfW = tio.GetRect().Size.X * tio.Scale.X / 2f;
+            Check(H.Mission == Hub.MissionState.PortalOpen && mp != null && mp.Position.X > Hub.TioPos.X + halfW && mp.Position.Y < Hub.TioPos.Y - Hub.TioHeight / 2f,
+                  "after 3 s the portal opens off the TIO's top-right corner");
+            float d0 = Me.Position.DistanceTo(H.MissionPortalPos);
+            for (int i = 0; i < 60 * 45 && !Hub.InArena; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await Wait(1.0);
+            Check(Hub.InArena, $"the capital-ship autopilot flew {d0:0} u to the portal and the party went through");
+            var boss = H.Boss;
+            Check(boss != null && boss.Alive && H.Yard == null && !Nodes<TargetDummy>().Any() && Combat.Hostiles.Contains(boss),
+                  "the arena: the Silver Lancer, and no base or dummies");
+            Check(Music.CombatZone, "the arena counts as combat for the music");
+            Me.Position = boss.Position + new Vector2(0, 500); Me.Velocity = Vector2.Zero; Me.Rotation = 0;
+            Key(global::Godot.Key.Q); await Wait(0.1);                           // point defence up
+            Telegraph beam = null;
+            for (int i = 0; i < 60 * 14 && beam == null; i++) { beam = Nodes<Telegraph>().FirstOrDefault(t => t.Line); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            Check(beam != null && boss.TelegraphsPending > 0, "the death beam is telegraphed: a red line before it fires");
+            int down0 = Torpedo.Intercepted;
+            for (int i = 0; i < 60 * 10 && Torpedo.Intercepted == down0; i++)
+            {
+                if (!Me.PdActive && Me.PdReady) Key(global::Godot.Key.Q);
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            }
+            Check(Torpedo.Intercepted > down0, "point defence shoots the boss's missiles down");
+            var aMissile = Nodes<Torpedo>().FirstOrDefault(t => t.HostileFire);
+            Check(Turret.PdPriority(boss) == 2 && (aMissile == null || Turret.PdPriority(aMissile) == 0), "point defence takes missiles before anything else");
+            // the kill: shared EXP for it and the mission, the bounty's credits, then home
+            Character.Exp = 0; Character.Level = 1; Character.Points = 0;
+            boss.TakeDamage(boss.Hp + 1); await Wait(0.2);
+            Check(H.MissionWon && Character.Level == 3 && Character.Exp == 150, "the kill pays 300 + 100 EXP (level 1 -> 3, 150 over)");
+            for (int i = 0; i < 60 * 8 && Hub.InArena; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await Wait(1.0);
+            Check(!Hub.InArena && H.Yard != null, "home again after the win");
+            Check(H.Yard.Credits >= 3000 - 1e-6 && H.Yard.Credits < 3000 + 400, $"the bounty's 2000 credits are paid at home ({H.Yard.Credits:0})");
+            double want = H.Yard.FleetRate(GatherKind.Miner) * Yard.LastAway * Yard.AwayShare;
+            Check(Yard.LastAway > 1 && Yard.LastAwayOre > 0 && Math.Abs(Yard.LastAwayOre - want) < 1e-6,
+                  $"while away the base earned 1/20 of its rate ({Yard.LastAwayOre:0.0} ore for {Yard.LastAway:0} s)");
+            // a wipe: every ship in stasis at once -> the mission fails, home with nothing
+            H.EnterSector(Hub.SectorKind.Arena); await Wait(1.5);
+            int exp1 = Character.Exp;
+            Me.TakeDamage(Me.Hp + 1);
+            for (int i = 0; i < 60 * 8 && Hub.InArena; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await Wait(1.0);
+            Check(!Hub.InArena && Character.Exp == exp1 && Me.Alive, "the whole party in stasis: the mission fails, home with no reward");
+            // the fighter-class autopilot, flown on its own (no player fighter class yet)
+            Vector2 fp = Vector2.Zero, fv = Vector2.Zero; float fh = 0f; var goal = new Vector2(800, -600);
+            for (int i = 0; i < 60 * 12; i++)
+            {
+                var (turn, thrust) = Autopilot.Fighter(fp, fh, fv, goal, 300f, 30f);
+                fh += turn * 4f / 60f; fv += Vector2.Right.Rotated(fh) * thrust * 600f / 60f; fv *= 0.985f;
+                if (fv.Length() > 300f) fv = fv.Normalized() * 300f;
+                fp += fv / 60f;
+            }
+            Check(fp.DistanceTo(goal) < 80f, $"the fighter-class autopilot reaches its point ({fp.DistanceTo(goal):0} u off)");
+            Check(Settings.MusicOn, "music is on by default");
+            Character.Exp = 0; Character.Level = 1; Character.Points = 0; Character.Save();
+            Me.Position = Hub.BasePos + new Vector2(0, 330); Me.Velocity = Vector2.Zero; await Wait(1.5);
+            Click(Scr(Hub.BasePos)); await Wait(0.1);
+            Check(Nodes<BasePanel>().Any(), "left-click on the base station opens the BASE menu");
+            Key(global::Godot.Key.B); await Wait(0.1);
         }
 
         // ── radar and the Esc menu ──
@@ -887,7 +939,7 @@ public partial class _Test : Node
             Check(ships.Any(s => s.Pilot == "Third"), "the second guest's identity reached the host");
             H.AwardPartyExp(40);                  // shared: every pilot in the session gets it
             Check(!H.AllReady, "the host cannot warp until every pilot is ready");
-            H.SetMyReady(true);
+            H.SetMyReady(true); Me.AutopilotTo = null;
             for (int i = 0; i < 600 && !H.AllReady; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(H.AllReady && H.PartyIds.Count() == 3, "both guests' READY reached the host: the party of three is ready");
             H.StartMission();
@@ -915,6 +967,7 @@ public partial class _Test : Node
             Priv(H, "ApplyLocalIdentity"); Priv(H, "SendIdentity", 0);
             await Wait(6.0);
             H.SetMyReady(true);                           // READY for the bounty
+            Nodes<PlayerShip>().First(x => x.Mine).AutopilotTo = null;   // stay put: the scene must not change mid-test
             var all = Nodes<PlayerShip>().ToList();
             Check(all.Count == 3 && all.Any(s => s.Pilot == "HostPilot") && all.Any(s => s.Pilot == "Guesty"),
                   $"third player sees the host and the other guest ({string.Join(", ", all.Select(s => s.Pilot))})");
@@ -935,6 +988,7 @@ public partial class _Test : Node
             Check(Nodes<PlayerShip>().Count() >= 2, $"guest sees the host ({Nodes<PlayerShip>().Count()} ships)");
             H.Yard.BuyUpgrade("salvage_rate");            // a request: the host decides
             H.SetMyReady(true);                           // READY for the bounty
+            Nodes<PlayerShip>().First(x => x.Mine).AutopilotTo = null;   // stay put: the scene must not change mid-test
             var dummy = H.GetNode<TargetDummy>("TargetDummy1");
             if (mine != null) { mine.Position = dummy.Position + new Vector2(-300, 300); mine.Velocity = Vector2.Zero; }
             await Wait(1.5);

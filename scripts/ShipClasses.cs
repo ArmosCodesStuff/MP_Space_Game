@@ -1,3 +1,4 @@
+using System.Linq;
 using Godot;
 using System;
 
@@ -29,6 +30,8 @@ public interface IHittable
     // Does a projectile at p (with pad for its own size) touch this? A circle by
     // default; a long ship answers with a capsule along its keel.
     bool Covers(Vector2 p, float pad) => p.DistanceTo(Position) <= HitRadius + pad;
+    // Missiles can be shot down, but they are never SELECTED (click or Tab).
+    bool Selectable => true;
 }
 
 // ── Turret ───────────────────────────────────────────────────────────────────
@@ -126,11 +129,13 @@ public partial class Turret : Node2D
         QueueRedraw();
     }
 
-    // Nearest hostile in range that no other PD turret on this ship has claimed;
-    // if every one in range is claimed, the nearest regardless.
+    // Point defence shoots MISSILES first, then small craft (fighters), then anything
+    // else; within that, the nearest one no sibling turret has claimed (if all are
+    // claimed, the nearest regardless).
+    public static int PdPriority(IHittable h) => h is Torpedo ? 0 : h.HitRadius < 20f ? 1 : 2;
     private IHittable Acquire(Vector2 from)
     {
-        var inRange = Combat.Near(from, Range);
+        var inRange = Combat.Near(from, Range).OrderBy(h => PdPriority(h)).ThenBy(h => from.DistanceTo(h.Position)).ToList();
         foreach (var h in inRange)
         {
             bool claimed = false;

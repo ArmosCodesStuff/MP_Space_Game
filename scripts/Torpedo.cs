@@ -14,7 +14,7 @@ using System.Collections.Generic;
 // it is HEAVY -- a slow bunker buster with a bigger body, darker smoke and a bigger
 // blast. Guests run the same guidance on the same positions, so their cosmetic
 // copy follows the host's.
-public partial class Torpedo : Node2D
+public partial class Torpedo : Node2D, IHittable
 {
     public Vector2 Dir;
     public float Speed, Range;
@@ -34,7 +34,28 @@ public partial class Torpedo : Node2D
 
     public const float SmokeLife = 1.6f, PuffEvery = 0.03f;
 
-    public override void _Ready() { ZIndex = 6; Rotation = Dir.Angle() + Mathf.Pi / 2f; }
+    // As a TARGET (hostile missiles only): small, and one hit brings it down. The host
+    // resolves the hit and tells every guest to burst its copy (by NetId).
+    public int NetId { get; set; }
+    public float HitRadius => 8f;
+    public bool Alive => !_spent;
+    public bool Selectable => false;
+    public static int Intercepted;                       // missiles shot down (host), for the record
+    public void TakeDamage(double d)
+    {
+        if (!Net.Sim || _spent) return;
+        Intercepted++;
+        Intercept();
+        Hub.I?.MissileDown(NetId);
+    }
+    public void Intercept() { if (!_spent) Detonate(); Combat.Hostiles.Remove(this); }
+
+    public override void _Ready()
+    {
+        ZIndex = 6; Rotation = Dir.Angle() + Mathf.Pi / 2f;
+        if (HostileFire && NetId != 0) Combat.Hostiles.Add(this);
+    }
+    public override void _ExitTree() => Combat.Hostiles.Remove(this);
 
     public override void _Process(double delta)
     {

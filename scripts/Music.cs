@@ -58,8 +58,9 @@ public partial class Music : Node
         float step = FadePerSecond * (float)delta;
         AmbientLevel = Mathf.MoveToward(AmbientLevel, a, step);
         CombatLevel = Mathf.MoveToward(CombatLevel, c, step);
-        _amb.VolumeDb = Db(AmbientLevel * AmbientTrim * Settings.MusicVolume);
-        _cmb.VolumeDb = Db(CombatLevel * Settings.MusicVolume);
+        float vol = Settings.MusicOn ? Settings.MusicVolume : 0f;       // the Esc menu's MUSIC ON/OFF
+        _amb.VolumeDb = Db(AmbientLevel * AmbientTrim * vol);
+        _cmb.VolumeDb = Db(CombatLevel * vol);
     }
 
     // Stop both loops. Call this a moment BEFORE quitting: the mixer lets go of its

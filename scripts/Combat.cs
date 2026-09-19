@@ -16,7 +16,7 @@ public static class Combat
         IHittable best = null; float bd = range;
         foreach (var h in Hostiles)
         {
-            if (h == null || !h.Alive) continue;
+            if (h == null || !h.Alive || !h.Selectable) continue;      // never "nearest enemy" a missile
             float d = from.DistanceTo(h.Position);
             if (d < bd) { bd = d; best = h; }
         }
@@ -31,6 +31,10 @@ public static class Combat
         foreach (var p in Players) if (p != null && p.Alive && p.NetId == id) return p;
         return null;
     }
+
+    // Interceptable missiles get ids the host hands out and sends with the launch.
+    private static int _nextMissile = 10000;
+    public static int NextMissileId() => ++_nextMissile;
 
     public static IHittable ById(int id)
     {

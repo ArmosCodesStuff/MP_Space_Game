@@ -22,6 +22,9 @@ public partial class EscMenu : CanvasLayer
 
         col.AddChild(new Label { Text = "Radar size" });
         col.AddChild(Choice(new[] { "SMALL", "MEDIUM", "LARGE" }, () => Settings.RadarSize, i => Settings.RadarSize = i, "Radar"));
+        var music = new Button { Name = "MusicToggle", FocusMode = Control.FocusModeEnum.None, Text = Settings.MusicOn ? "MUSIC: ON" : "MUSIC: OFF" };
+        music.Pressed += () => { Settings.MusicOn = !Settings.MusicOn; Settings.Save(); music.Text = Settings.MusicOn ? "MUSIC: ON" : "MUSIC: OFF"; };
+        col.AddChild(music);
         col.AddChild(new Label { Text = "Music volume" });
         var steps = new[] { 0f, 0.25f, 0.5f, 0.75f, 1f };
         col.AddChild(Choice(new[] { "0%", "25%", "50%", "75%", "100%" },

@@ -48,7 +48,17 @@ public partial class Hub : Node2D
     private readonly List<Node2D> _rocks = new();
     public IReadOnlyList<Node2D> Rocks => _rocks;
     public Portal Portal { get; private set; }
-    public Yard Yard { get; private set; }                    // the idle economy
+    public Yard Yard { get; private set; }                    // the idle economy (home only)
+
+    // ── sectors: HOME (the base) and the ARENA (a bounty). One scene, built either
+    // way; the host moves every peer between them together (EnterSector). ──────
+    public enum SectorKind { Home, Arena }
+    public static SectorKind Sector = SectorKind.Home;
+    public static bool InArena => Sector == SectorKind.Arena;
+    public static Hub I { get; private set; }
+    public Boss Boss { get; private set; }
+    private double _arenaEndT = -1;                         // counts down to going home
+    public bool MissionWon { get; private set; }
     private EscMenu _esc;
     public bool EscMenuOpen => IsInstanceValid(_esc);
     public void ToggleEscMenu()
@@ -105,7 +115,9 @@ public partial class Hub : Node2D
         stars.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         sky.AddChild(stars);
 
-        BuildWorld();
+        I = this;
+        Music.CombatZone = InArena;
+        if (!InArena) BuildWorld();                  // the arena's boss comes after Combat.Clear, below
         // Hit flashes get their own layer ABOVE the hulls (ships sit at z 4) and below the
         // turret sprites, so a shot is seen leaving a turret on top of the ship -- drawn at
         // the world's own level they started underneath it.
@@ -146,7 +158,7 @@ public partial class Hub : Node2D
         layer.AddChild(new HullHud { Hub = this });
         layer.AddChild(new Radar { Hub = this });
         layer.AddChild(new AbilityBar { Hub = this });
-        layer.AddChild(new HaulerHud { Hub = this });
+        if (!InArena) layer.AddChild(new HaulerHud { Hub = this });
 
         // Normally the select screen has loaded a character; this covers running the
         // hub directly (editor F6, smoke test).
@@ -164,11 +176,13 @@ public partial class Hub : Node2D
         // cosmetic copy (the run is straight and steady, so it lands in the same place).
         Combat.OnTorpedo = (from, dir, speed, range, dmg, target, turn, heavy, hostile, source) =>
         {
-            SpawnTorpedo(from, dir, speed, range, dmg, false, target, turn, heavy, hostile, source);
-            if (Net.IsHost && Net.IsOnline) Rpc(nameof(NetTorpedo), from, dir, speed, range, target, turn, heavy, hostile);
+            int id = hostile ? Combat.NextMissileId() : 0;       // hostile missiles can be shot down
+            SpawnTorpedo(from, dir, speed, range, dmg, false, target, turn, heavy, hostile, source, id);
+            if (Net.IsHost && Net.IsOnline) Rpc(nameof(NetTorpedo), from, dir, speed, range, target, turn, heavy, hostile, id);
         };
 
-        for (int i = 0; i < DummyPos.Length; i++)
+        if (InArena) BuildArena();                   // registered as a target AFTER Combat.Clear
+        for (int i = 0; i < (InArena ? 0 : DummyPos.Length); i++)       // the dummies live at home
         {
             int n = i + 1;
             var d = new TargetDummy { Name = $"TargetDummy{n}", Number = n, Armed = n == 3, Position = DummyPos[i], ZIndex = 3 };
@@ -249,7 +263,7 @@ public partial class Hub : Node2D
     // on the guest it became the host's ship, and the guest never got one of its own.
     private void OnSessionChanged()
     {
-        Yard.OnSessionChanged(!Net.IsHost);     // parks or restores your own yard
+        Yard?.OnSessionChanged(!Net.IsHost);    // parks or restores your own yard (home only)
         RebuildShips();
         // a guest that just connected introduces itself; the host and existing
         // guests introduce themselves to it from OnPlayerJoined
@@ -360,6 +374,8 @@ public partial class Hub : Node2D
 
     public void SetMyReady(bool ready)
     {
+        // READY also flies you to where the mission portal opens (a manual key cancels it)
+        if (_ships.TryGetValue(Net.LocalId, out var me) && IsInstanceValid(me)) me.AutopilotTo = ready ? MissionPortalPos : null;
         if (Net.IsHost) { _ready[Net.LocalId] = ready; BroadcastMission(); }
         else RpcId(1, nameof(RequestReady), ready);
     }
@@ -372,6 +388,61 @@ public partial class Hub : Node2D
         _ready[who] = ready; BroadcastMission();
     }
 
+    public const float PortalEnterRadius = 190f;
+
+    // ── moving the party between sectors (host decides; every peer follows) ──
+    public void EnterSector(SectorKind k)
+    {
+        if (!Net.IsHost) return;
+        if (k == SectorKind.Arena) Yard?.SaveForTrip();
+        if (Net.IsOnline) Rpc(nameof(NetSector), (int)k);
+        GoTo(k);
+    }
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void NetSector(int k) => GoTo((SectorKind)k);
+    private void GoTo(SectorKind k)
+    {
+        Sector = k;
+        GetTree().CallDeferred(SceneTree.MethodName.ChangeSceneToFile, "res://Hub.tscn");
+    }
+
+    // ── the arena: the boss, and how it ends ────────────────────────────────
+    private void BuildArena()
+    {
+        Boss = new Boss { Hub = this, Position = BasePos + new Vector2(0, -700f), Rotation = Mathf.Pi };
+        AddChild(Boss);
+    }
+
+    // host: the boss is dead -- shared EXP for the kill and the mission, credits home
+    public void BossDefeated()
+    {
+        if (!Net.IsHost || MissionWon) return;
+        MissionWon = true;
+        AwardPartyExp(Missions.BossExp + Missions.MissionExp);
+        Yard.TripCredits += Missions.BossCredits;
+        _arenaEndT = 4.0;
+        if (Net.IsOnline) Rpc(nameof(NetWon));
+    }
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void NetWon() => MissionWon = true;
+
+    private void TickArena(double delta)
+    {
+        Yard.TripClock += delta;                              // what the base is missing, in game time
+        if (!Net.IsHost) return;
+        // the whole party in stasis at once: the mission fails, everyone goes home
+        if (!MissionWon && _arenaEndT < 0 && _ships.Count > 0 && _ships.Values.All(s => IsInstanceValid(s) && !s.Alive)) _arenaEndT = 3.0;
+        if (_arenaEndT >= 0 && (_arenaEndT -= delta) <= 0) { _arenaEndT = -1; EnterSector(SectorKind.Home); }
+    }
+
+    // host: a missile was shot down; every guest bursts its copy
+    public void MissileDown(int id) { if (Net.IsHost && Net.IsOnline) Rpc(nameof(NetMissileDown), id); }
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void NetMissileDown(int id)
+    {
+        foreach (var t in GetChildren().OfType<Torpedo>()) if (t.NetId == id) t.Intercept();
+    }
+
     public void StartMission()
     {
         if (!Net.IsHost || !AllReady || Mission != MissionState.Idle) return;
@@ -381,6 +452,12 @@ public partial class Hub : Node2D
 
     private void TickMission(double delta)
     {
+        if (InArena) { TickArena(delta); return; }
+        // everyone READY opens the portal; everyone AT the portal goes through
+        if (Net.IsHost && Mission == MissionState.Idle && AllReady) StartMission();
+        if (Net.IsHost && Mission == MissionState.PortalOpen && _ships.Count > 0
+            && _ships.Values.All(s => IsInstanceValid(s) && s.Position.DistanceTo(MissionPortalPos) <= PortalEnterRadius))
+        { EnterSector(SectorKind.Arena); return; }
         if (Mission == MissionState.Opening)
         {   // every peer animates the bar; only the host decides the portal is open
             MissionT += delta;
@@ -470,10 +547,10 @@ public partial class Hub : Node2D
 
     public PlayerShip MyShipPublic => MyShip;
     private void SpawnTorpedo(Vector2 from, Vector2 dir, float speed, float range, double dmg, bool cosmetic,
-                              int target = 0, float turn = 0f, bool heavy = false, bool hostile = false, PlayerShip source = null)
+                              int target = 0, float turn = 0f, bool heavy = false, bool hostile = false, PlayerShip source = null, int id = 0)
     {
         AddChild(new Torpedo { Position = from, Dir = dir, Speed = speed, Range = range, Damage = dmg, Cosmetic = cosmetic,
-                               TargetId = target, TurnRate = turn, Heavy = heavy, HostileFire = hostile, Source = source });
+                               TargetId = target, TurnRate = turn, Heavy = heavy, HostileFire = hostile, Source = source , NetId = id });
     }
 
     private PlayerShip MyShip => _ships.TryGetValue(Net.LocalId, out var s) && IsInstanceValid(s) ? s : null;
@@ -512,7 +589,7 @@ public partial class Hub : Node2D
         if (best != null) { _selected = best; return; }
         // buildings: a left-click on one opens its menu
         if (IsInstanceValid(_tioSprite) && _tioSprite.GetRect().HasPoint(_tioSprite.ToLocal(world))) { OpenTio(); return; }
-        if (world.DistanceTo(BasePos) < 200f && !IsInstanceValid(_base)) ToggleBase();
+        if (!InArena && world.DistanceTo(BasePos) < 200f && !IsInstanceValid(_base)) ToggleBase();
     }
 
     public void BeginPlacement(string label, System.Action<Vector2> confirm)
@@ -563,8 +640,11 @@ public partial class Hub : Node2D
                                      : "    no target (Tab / click)";
             if (Placing) ship += $"    PLACING {_placingLabel}: left-click to confirm, right-click / Esc to cancel";
         }
-        _hud.Text = $"ORE {Yard.Ore:0}    SALVAGE {Yard.Salvage:0}    CREDITS {Yard.Credits:0}"
-                  + $"    HAULER {Yard.Hauler.Cargo:0}/{Yard.Capacity:0} {Yard.Hauler.State.ToString().ToUpper()}" + ship
+        string place = Yard == null
+            ? $"ARENA  ·  {Missions.BossName}  {(IsInstanceValid(Boss) ? Boss.Hp : 0):0} / {Boss.MaxHull:0}" + (MissionWon ? "  ·  DEFEATED" : "")
+            : $"ORE {Yard.Ore:0}    SALVAGE {Yard.Salvage:0}    CREDITS {Yard.Credits:0}"
+              + $"    HAULER {Yard.Hauler.Cargo:0}/{Yard.Capacity:0} {Yard.Hauler.State.ToString().ToUpper()}";
+        _hud.Text = place + ship
                   + (Net.IsOnline ? (Net.IsHost ? $"        HOSTING ({_ships.Count})" : $"        GUEST ({_ships.Count})") : "        OFFLINE")
                   + (FreeCamera ? "        FREE CAMERA (Y)" : "");
     }
@@ -690,7 +770,7 @@ public partial class Hub : Node2D
             if (kk.Keycode == Key.Y) ToggleFreeCamera();
             else if (kk.Keycode == Key.Tab) SelectNearest();
             else if (kk.Keycode == Key.K) ToggleStats();
-            else if (kk.Keycode == Key.B) ToggleBase();
+            else if (kk.Keycode == Key.B && !InArena) ToggleBase();
             else if (kk.Keycode == Key.L) TogglePilot();
             else
             {
@@ -706,8 +786,8 @@ public partial class Hub : Node2D
     }
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetTorpedo(Vector2 from, Vector2 dir, float speed, float range, int target, float turn, bool heavy, bool hostile)
-        => SpawnTorpedo(from, dir, speed, range, 0, true, target, turn, heavy, hostile);
+    private void NetTorpedo(Vector2 from, Vector2 dir, float speed, float range, int target, float turn, bool heavy, bool hostile, int id)
+        => SpawnTorpedo(from, dir, speed, range, 0, true, target, turn, heavy, hostile, null, id);
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
     private void NetFlash(Vector2 a, Vector2 b, Color c) => _flashes.Add((a, b, c, 0.10));
@@ -742,7 +822,7 @@ public partial class Hub : Node2D
     // REFIT: the only way into the ship menu (it costs 10%; see Yard.ResetCost).
     public void ResetShip()
     {
-        if (IsInstanceValid(_creator)) return;
+        if (IsInstanceValid(_creator) || Yard == null) return;       // REFIT is at the base
         Yard.ChargeReset();
         if (IsInstanceValid(_base)) ToggleBase();
         OpenCreator();

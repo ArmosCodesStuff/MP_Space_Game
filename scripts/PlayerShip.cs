@@ -28,6 +28,7 @@ public partial class PlayerShip : Node2D, IHittable
     public ShipClass Class = ShipClass.Battleship;
     public ShipStats Stats = new(ShipClass.Battleship);
     public bool Alive { get; private set; } = true;
+    public Vector2? AutopilotTo;                          // set by READY: the owner's ship flies itself there
 
     // ── as a target: for ENEMY fire only (Combat.Players) ──────────────────
     public const int NetIdBase = 2000;                  // same on every peer: 2000 + owner
@@ -478,6 +479,9 @@ public partial class PlayerShip : Node2D, IHittable
             if (Input.IsKeyPressed(Key.A)) rudder -= 1f;
             if (Input.IsKeyPressed(Key.D)) rudder += 1f;
         }
+        if (throttle != 0f || rudder != 0f) AutopilotTo = null;        // any helm key takes the controls back
+        else if (AutopilotTo is { } dest)
+            (throttle, rudder) = Autopilot.Capital(Position, Rotation, Velocity, (float)Stats["max_speed"], dest, 60f);
         Thrusting = throttle != 0f;
         Steer(throttle, rudder, dt);
 
