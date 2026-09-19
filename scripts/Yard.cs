@@ -48,11 +48,15 @@ public partial class Yard : Node2D
 
     public readonly Arm[] Arms =
     {
-        new() { Pad = new(0f, -197f),        Open = Vector2.Left, Reach = 27f, Face = 42f },   // the top arm loads from the west
-        new() { Pad = new(-169.7f, -98.2f),  Open = Vector2.Up,   Reach = 27f, Face = 48f },
-        new() { Pad = new(169.7f, -98.2f),   Open = Vector2.Up,   Reach = 27f, Face = 48f },
-        new() { Pad = new(-169.7f, 98.2f),   Open = Vector2.Up,   Reach = 27f, Face = 48f },
-        new() { Pad = new(169.7f, 98.2f),    Open = Vector2.Up,   Reach = 27f, Face = 48f },
+        // Measured from the art (each pad's rotated outline): its centre, and its
+        // north-facing edge -- the outward normal (Open), the distance to it (Reach) and
+        // its length (Face). The four diagonal pads are turned 30 degrees, so their
+        // north faces tilt with them; every bay, the top one included, loads from its north face.
+        new() { Pad = new(0f, -195.9f),      Open = new(0f, -1f),          Reach = 22.2f, Face = 54.6f },
+        new() { Pad = new(-169.5f, -97.9f),  Open = new(0.501f, -0.865f),  Reach = 28.1f, Face = 45.6f },
+        new() { Pad = new(169.5f, -97.9f),   Open = new(-0.501f, -0.865f), Reach = 28.1f, Face = 45.6f },
+        new() { Pad = new(-169.5f, 97.9f),   Open = new(-0.501f, -0.865f), Reach = 28.1f, Face = 45.6f },
+        new() { Pad = new(169.5f, 97.9f),    Open = new(0.501f, -0.865f),  Reach = 28.1f, Face = 45.6f },
     };
 
     private readonly List<Gatherer> _queue = new();

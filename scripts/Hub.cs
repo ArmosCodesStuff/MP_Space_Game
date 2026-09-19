@@ -234,7 +234,7 @@ public partial class Hub : Node2D
         var s = new PlayerShip { Name = PlayerShip.NodeName(peerId) };
         AddChild(s);
         // spawn clear of the base: its half-height (180 u) plus a ship's half-length and a gap
-        s.Init(peerId, BasePos + new Vector2(0, BaseBottom + 100f + 60 * _ships.Count));
+        s.Init(peerId, BasePos + new Vector2(0, BaseBottom + 140f + 60 * _ships.Count));   // clear of the pad even at 224 u
         _ships[peerId] = s;
 
         if (peerId == Net.LocalId)
@@ -401,6 +401,9 @@ public partial class Hub : Node2D
         foreach (var s in _ships.Values)
         {
             if (!IsInstanceValid(s) || !s.IsVisibleInTree()) continue;   // hidden ships show nothing
+            // Your own hull shows on the HUD bar; over your ship it is only clutter. Other
+            // players' ships keep their bars, so you can see how they are doing.
+            if (s.Mine) continue;
             DrawSetTransform(s.Position, 0f, Vector2.One);
             // above the hull whatever the class: half its length plus a margin, unscaled
             // by zoom (HealthBar scales positions by UiScale, so divide it back out)
@@ -408,8 +411,7 @@ public partial class Hub : Node2D
             HealthBar.Draw(this, new Vector2(-40, -above), 80, 6, s.Hp, s.MaxHp,
                            s.Hp / Mathf.Max(1, s.MaxHp) > 0.35 ? new Color(0.4f, 0.9f, 0.5f) : new Color(1f, 0.4f, 0.3f), null);
             DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
-            if (!s.Mine)
-                Txt.Centre(this, font, s.Position + new Vector2(0, -(s.MyArt.Length * 0.5f + 28f)), s.Pilot, Txt.Size(16), new Color(0.75f, 0.9f, 1f, 0.85f));
+            Txt.Centre(this, font, s.Position + new Vector2(0, -(s.MyArt.Length * 0.5f + 28f)), s.Pilot, Txt.Size(16), new Color(0.75f, 0.9f, 1f, 0.85f));
         }
 
         // a pending placement shows where the click will land

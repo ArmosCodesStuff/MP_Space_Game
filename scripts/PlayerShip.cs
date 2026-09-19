@@ -53,15 +53,17 @@ public partial class PlayerShip : Node2D
 
     public static readonly Dictionary<ShipClass, ClassArt> Art = new()
     {
-        // Battleship, 160 u (texture 300 px: 0.5333 u/px). Its four painted double-barrel
+        // Battleship, 224 u (texture 300 px: 0.7467 u/px). Its four painted double-barrel
         // turrets on the centreline are the four main guns (one gun per turret); the
         // two small sponson turrets are point defence. Offsets measured from the art.
+        // (texture 300 px at 224 u = 0.7467 u/px; every offset and size below is the
+        // art's measured pixel position times that)
         [ShipClass.Battleship] = new ClassArt {
-            Texture = "res://battleship_hull.png", Length = 160f,
-            Mains = new Vector2[] { new(0.29f, -46.72f), new(0.27f, -26.29f), new(0.42f, 34.83f), new(0.27f, 54.45f) },
-            Pds   = new Vector2[] { new(-23.75f, 0.32f), new(24.98f, 0.32f) },
-            MainTurret = "res://turret_bs_main.png", PdTurret = "res://turret_bs_pd.png", TurretTexScale = 0.5333f,
-            MainBarrel = 14.9f, PdBarrel = 7.0f, PdRing = 3.6f },
+            Texture = "res://battleship_hull.png", Length = 224f,
+            Mains = new Vector2[] { new(0.41f, -65.41f), new(0.38f, -36.81f), new(0.59f, 48.76f), new(0.38f, 76.23f) },
+            Pds   = new Vector2[] { new(-33.25f, 0.45f), new(34.97f, 0.45f) },
+            MainTurret = "res://turret_bs_main.png", PdTurret = "res://turret_bs_pd.png", TurretTexScale = 0.7467f,
+            MainBarrel = 20.9f, PdBarrel = 9.8f, PdRing = 5.0f },
         // Carrier, 170 u (full art 1668 px: 0.1019 u/px). Its three painted domes are
         // its point-defence turrets.
         [ShipClass.Carrier] = new ClassArt {

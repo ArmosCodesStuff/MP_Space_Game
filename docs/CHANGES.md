@@ -175,6 +175,35 @@ reachable, which is fine: both harnesses build from the `nupkgs` folder that shi
 
 ## Unreleased
 
+### Code inspection, docking bays, player bars, bigger battleship (this batch, in progress)
+
+**Checked so far:** typecheck, build 0 warnings, smoke 186/186, 41-frame sweep with 0 lint findings;
+the bays and the battleship looked at in rendered frames.
+
+#### Inspection (step 1)
+
+- **Whole-codebase audit:** a full rebuild shows **0 compiler warnings**; **no references** to
+  removed features remain in code or comments; **every network message** checks its sender or is
+  host-only by design (`RequestAbility` checks the sender owns the ship); **every change to
+  host-owned state** is host-guarded or applies host data. No incorrect calls were found.
+- **Removed** the unused `Gatherer.BoltCount`.
+- **Comments state what the code does, not its history**: eight comments that narrated old
+  behaviour ("used to…", "was 700", "the old 8 s cooldown") were rewritten. History lives here.
+- Found, not yet fixed: a ship at 0 hull only stops being "alive", and its wing deletes itself for
+  good. The escape pod and stasis work in this batch replaces that.
+- **Git**: the project is now a git repository; the verified build is the first commit.
+
+#### Changed
+
+- **Docking bays follow the pads.** Each bay's open face is the north-facing edge of its pad,
+  measured from the art. The four diagonal pads are turned 30°, so their bars now lie along their
+  tilted north edges instead of floating level above them, and ships nose straight into them.
+- **The top bay loads from the north** (was the west), bar and all.
+- **Your own ship shows no health bar over itself**; your hull is on the HUD bar. Other players'
+  ships keep their bars and names.
+- **The battleship is 40% larger**: 224 u (was 160), with every turret mount, turret sprite,
+  barrel length and PD ring scaled to match. Ships spawn 40 u further from the base to clear it.
+
 ### UI and visual audit (this batch)
 
 **Checked:** every feature through the full smoke test (186 checks, three runs in a row); every
