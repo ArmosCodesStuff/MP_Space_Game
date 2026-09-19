@@ -580,7 +580,8 @@ public partial class Hub : Node2D
     // Left-click in the world: the hostile under the cursor (its hit circle, plus a
     // little slack), nearest the click if circles overlap. Clicking empty space keeps
     // the current target, so a stray click never drops it; Esc clears it.
-    private void SelectAt(Vector2 world)
+    // true if the click landed on something (a hostile to select, or a building)
+    private bool SelectAt(Vector2 world)
     {
         IHittable best = null; float bd = float.MaxValue;
         foreach (var h in Combat.Hostiles)
@@ -589,10 +590,11 @@ public partial class Hub : Node2D
             float d = world.DistanceTo(h.Position);
             if (d <= h.HitRadius + 16f && d < bd) { bd = d; best = h; }
         }
-        if (best != null) { _selected = best; return; }
+        if (best != null) { _selected = best; return true; }
         // buildings: a left-click on one opens its menu
-        if (IsInstanceValid(_tioSprite) && _tioSprite.GetRect().HasPoint(_tioSprite.ToLocal(world))) { OpenTio(); return; }
-        if (!InArena && world.DistanceTo(BasePos) < 200f && !IsInstanceValid(_base)) ToggleBase();
+        if (IsInstanceValid(_tioSprite) && _tioSprite.GetRect().HasPoint(_tioSprite.ToLocal(world))) { OpenTio(); return true; }
+        if (!InArena && world.DistanceTo(BasePos) < 200f) { if (!IsInstanceValid(_base)) ToggleBase(); return true; }
+        return false;
     }
 
     public void BeginPlacement(string label, System.Action<Vector2> confirm)
@@ -754,7 +756,8 @@ public partial class Hub : Node2D
             if (mb.ButtonIndex == MouseButton.Left)
             {
                 if (Placing) { var confirm = _placing; CancelPlacement(); confirm(at); }
-                else SelectAt(at);
+                // a double-click on empty space clears the target
+                else if (!SelectAt(at) && mb.DoubleClick) _selected = null;
                 GetViewport().SetInputAsHandled();
             }
             else if (mb.ButtonIndex == MouseButton.Right && Placing)

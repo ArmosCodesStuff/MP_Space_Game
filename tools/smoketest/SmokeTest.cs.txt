@@ -29,6 +29,11 @@ public partial class _Test : Node
     void Click(Vector2 canvas, MouseButton b = MouseButton.Left) { var at = Win(canvas);
         Input.ParseInputEvent(new InputEventMouseButton { Position = at, GlobalPosition = at, ButtonIndex = b, Pressed = true });
         Input.ParseInputEvent(new InputEventMouseButton { Position = at, GlobalPosition = at, ButtonIndex = b, Pressed = false }); }
+    void DoubleClick(Vector2 canvas) { var at = Win(canvas);
+        Input.ParseInputEvent(new InputEventMouseButton { Position = at, GlobalPosition = at, ButtonIndex = MouseButton.Left, Pressed = true });
+        Input.ParseInputEvent(new InputEventMouseButton { Position = at, GlobalPosition = at, ButtonIndex = MouseButton.Left, Pressed = false });
+        Input.ParseInputEvent(new InputEventMouseButton { Position = at, GlobalPosition = at, ButtonIndex = MouseButton.Left, Pressed = true, DoubleClick = true });
+        Input.ParseInputEvent(new InputEventMouseButton { Position = at, GlobalPosition = at, ButtonIndex = MouseButton.Left, Pressed = false }); }
     void AimWorld(Vector2 w) { var at = WorldToWin(w); Input.ParseInputEvent(new InputEventMouseMotion { Position = at, GlobalPosition = at }); }
     object Priv(object o, string m, params object[] a) => o.GetType().GetMethod(m, BindingFlags.NonPublic | BindingFlags.Instance).Invoke(o, a);
 
@@ -712,6 +717,20 @@ public partial class _Test : Node
             Key(global::Godot.Key.F); await Wait(0.2);
             Check(sh.Alive && Math.Abs(sh.Hp - sh.MaxHp * 0.33) < 0.01 && Nodes<EscapePod>().Count() == 0, "F re-boards at 33% hull; the pod is gone");
             sh.TakeDamage(-(sh.MaxHp - sh.Hp));  // (test only) back to full for what follows
+        }
+
+        // a double-click on empty space clears the target; a single click there does not
+        {
+            var dd = H.GetNode<TargetDummy>("TargetDummy1");
+            Click(Scr(dd.Position)); await Wait(0.05);
+            var empty = Me.Position + new Vector2(-260, -260);
+            Click(Scr(empty)); await Wait(0.05);
+            Check(H.Selected == dd, "a single click on empty space keeps the target");
+            DoubleClick(Scr(empty)); await Wait(0.05);
+            Check(H.Selected == null, "a double-click on empty space clears it");
+            Click(Scr(dd.Position)); await Wait(0.05);
+            DoubleClick(Scr(dd.Position)); await Wait(0.05);
+            Check(H.Selected == dd, "a double-click on a target keeps it selected");
         }
 
         // selection rules still hold
