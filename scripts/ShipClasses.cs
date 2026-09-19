@@ -1,6 +1,5 @@
 using Godot;
 using System;
-using System.Collections.Generic;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SHIP CLASSES — the first two of an intended nine.
@@ -235,8 +234,8 @@ public partial class Wing : Node2D
         Carrier = carrier; Kind = kind; Position = at;
         MaxHp = Hp = F ? S["fighter_hp"] : S["bomber_hp"];
         Ammo = (int)S["bomber_ammo"];
-        // Fighter: the carrier's own hull, small (34 u long). Bomber: its own airframe,
-        // larger (50 u) so the two read apart at a glance.
+        // Fighter and bomber have their own airframes, and the bomber is the larger of
+        // the two (FighterLength, BomberLength) so they read apart at a glance.
         var tex = GD.Load<Texture2D>(F ? "res://wing_fighter.png" : "res://wing_bomber.png");
         float len = F ? FighterLength : BomberLength;
         _sprite = new Sprite2D { Texture = tex, Scale = Vector2.One * (len / tex.GetHeight()) };

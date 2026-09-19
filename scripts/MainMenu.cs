@@ -70,7 +70,7 @@ public partial class MainMenu : Node2D
         var stack = new VBoxContainer(); stack.AddThemeConstantOverride("separation", 24); centre2.AddChild(stack);
         stack.AddChild(title);
         var col = new VBoxContainer { CustomMinimumSize = new Vector2(360, 0) }; col.AddThemeConstantOverride("separation", 8); stack.AddChild(Ui.Wrap(col, 16));
-        // Warships has no save file yet -- only character.cfg and settings.cfg -- so the
+        // Warships has no save file yet -- only characters and settings -- so the
         // Continue / New Game pair carried over from Space Fleet Idle could never enable
         // Continue. One entry point until there is world state worth continuing.
         var launch = Big("PLAY"); launch.Pressed += () => GetTree().ChangeSceneToFile("res://CharacterSelect.tscn"); col.AddChild(launch);

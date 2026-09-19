@@ -1,5 +1,4 @@
 using Godot;
-using System.Collections.Generic;
 
 // The K window, two tabs:
 //   ABILITIES & KEYS : every ability of the class, what it does, and its key. Click a

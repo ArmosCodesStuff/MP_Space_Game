@@ -1,5 +1,4 @@
 using Godot;
-using System;
 using System.Collections.Generic;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -498,7 +497,7 @@ public partial class Hub : Node2D
         {
             // fixed controls first; every other key is looked up in this class's
             // ability bindings (remappable in the K window). Class is changed only in
-            // the creator (C) -- there are no class hotkeys.
+            // REFIT in the base menu -- there are no class hotkeys.
             if (kk.Keycode == Key.Tab) SelectNearest();
             else if (kk.Keycode == Key.K) ToggleStats();
             else if (kk.Keycode == Key.B) ToggleBase();
