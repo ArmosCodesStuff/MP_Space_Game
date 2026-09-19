@@ -1,8 +1,8 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-19 19:47 at git commit 1f0dae1: typecheck clean, smoke test 3/3 passes
-//   (312 checks), 54-frame UI sweep 0 findings.
-// 50 files, 8350 lines. Code only: sprites, sounds and docs are in the zip.
+// Taken 2026-09-19 20:04 at git commit 4b6f5d4: typecheck clean, smoke test 3/3 passes
+//   (313 checks), 55-frame UI sweep 0 findings.
+// 50 files, 8378 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -30,7 +30,7 @@
 //   scripts/Gatherer.cs                            207 lines   sha256 06c31c1dfb04
 //   scripts/Hauler.cs                              283 lines   sha256 551cdf41401d
 //   scripts/HealthBar.cs                            36 lines   sha256 97c42a282205
-//   scripts/Hub.cs                                 976 lines   sha256 60faf4a5cfa0
+//   scripts/Hub.cs                                 981 lines   sha256 28dc04804db7
 //   scripts/MainMenu.cs                            224 lines   sha256 39dbc31417c6
 //   scripts/Missions.cs                             26 lines   sha256 6870c2208143
 //   scripts/Music.cs                                78 lines   sha256 19cdf8e2b59c
@@ -53,11 +53,11 @@
 //   scripts/Torpedo.cs                             154 lines   sha256 8bcbf075476e
 //   scripts/Txt.cs                                  31 lines   sha256 0b56559599f8
 //   scripts/Ui.cs                                   99 lines   sha256 0a376702a4e8
-//   scripts/Yard.cs                                387 lines   sha256 1cd1e412db23
+//   scripts/Yard.cs                                390 lines   sha256 c1cbbfa92d8a
 //   typecheck/typecheck.sh                          57 lines   sha256 e68277c09f34
-//   tools/screens/Shots.cs.txt                     341 lines   sha256 126ea45a2c12
+//   tools/screens/Shots.cs.txt                     351 lines   sha256 8d87bc5a132d
 //   tools/screens/run.sh                            40 lines   sha256 a47174d56c6a
-//   tools/smoketest/SmokeTest.cs.txt              1217 lines   sha256 baa3ddb80e62
+//   tools/smoketest/SmokeTest.cs.txt              1227 lines   sha256 81cb129c3ea9
 //   tools/smoketest/run.sh                          52 lines   sha256 67c03204c10d
 //==============================================================================
 
@@ -2247,7 +2247,7 @@ public static class HealthBar
 
 //==============================================================================
 // FILE: scripts/Hub.cs
-// 976 lines   sha256 60faf4a5cfa0
+// 981 lines   sha256 28dc04804db7
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -2279,8 +2279,13 @@ public partial class Hub : Node2D
     public static float LaneY => HaulerPad.Y;
     public const float BaseBottom = 260f;                     // the pad's lower edge
     public static readonly Vector2 StemFoot = new(0f, 175f);  // where the pad hangs from the station
-    public static readonly Vector2 SunPos    = new(0, -1500);
-    public static readonly Vector2 WreckPos  = new(-1250, 60);
+    // Both fields' nearest edges sit 1500 u from the base's centre (about 6.7 battleship
+    // lengths): room for a blockade outside the base's 600 u missile cover. Measured to each
+    // field's boundary -- the belt's nearest rock edge (sun at y -1794 with 9 rocks on the
+    // 520 x 286 ellipse, rocks 15 u), the wreck's visible edge toward the base (340 u out).
+    public const float FieldEdge = 1500f;
+    public static readonly Vector2 SunPos    = new(0, -1794);
+    public static readonly Vector2 WreckPos  = new(-1840, 60);
     public static readonly Vector2 PortalPos = new(1500, 219);
     // Threat Intelligence Operations: south-west of the base, clear of the wreck, the
     // salvage routes, the haul lane and the dummies. (Bounty missions come next.)
@@ -2488,7 +2493,7 @@ public partial class Hub : Node2D
             AddChild(r); _rocks.Add(r);
         }
 
-        // the wreck, close enough to the base to read as part of the yard
+        // the wreck: its edge FieldEdge from the base, like the belt's
         AddChild(new Sprite2D { Texture = GD.Load<Texture2D>("res://behemoth_wreck.png"),
                                 Position = WreckPos, Scale = new Vector2(0.34f, 0.34f), ZIndex = 1 });
 
@@ -6539,7 +6544,7 @@ public static class Ui
 
 //==============================================================================
 // FILE: scripts/Yard.cs
-// 387 lines   sha256 1cd1e412db23
+// 390 lines   sha256 c1cbbfa92d8a
 //==============================================================================
 using Godot;
 using System;
@@ -6650,14 +6655,17 @@ public partial class Yard : Node2D
         SyncFleet();
     }
 
-    // A fleet's steady income: each ship fills its hold, flies about 1000 u each way,
-    // and unloads. (An estimate: good enough for a 1/20 share.)
+    // A fleet's steady income: each ship fills its hold, flies its real route out and
+    // back, and unloads. (An estimate: good enough for a 1/20 share.)
     public double FleetRate(GatherKind k)
     {
         double rate = 0;
         foreach (var g in Gatherers)
             if (g.Kind == k)
-                rate += g.Hold / (g.Hold / g.Rate + 2 * 1000.0 / g.Speed + g.Hold / Economy.UnloadRate);
+            {
+                double trip = WorkSpot(g).spot.DistanceTo(Hub.BasePos);           // its real route, one way
+                rate += g.Hold / (g.Hold / g.Rate + 2 * trip / g.Speed + g.Hold / Economy.UnloadRate);
+            }
         return rate;
     }
 
@@ -6993,7 +7001,7 @@ echo "0 errors." >&2
 
 //==============================================================================
 // FILE: tools/screens/Shots.cs.txt
-// 341 lines   sha256 126ea45a2c12
+// 351 lines   sha256 8d87bc5a132d
 //==============================================================================
 // Screenshot driver. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Shots.cs, registers it as an autoload, and runs the real
@@ -7196,6 +7204,16 @@ public partial class _Shots : Node
             await W(2.2); await Snap("40_warp_charging");
             await W(0.95); await Snap("41_warp_arrival");      // the camera cuts to the ship on a jump
         }
+        // the whole yard from above: the base, the belt and the wreck at 1500 u
+        {
+            var os = H.GetNode<PlayerShip>("Ship_1"); os.Visible = false; os.Position = Hub.BasePos + new Vector2(-600, -500); os.Velocity = Vector2.Zero;
+            // the hub sets the camera's zoom from its own ZoomLevel every frame: set that instead
+            var zp = typeof(Hub).GetProperty("ZoomLevel"); float z0 = (float)zp.GetValue(H);
+            zp.SetValue(H, 0.26f);
+            for (int i = 0; i < 40; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await Snap("44_layout_overview");
+            zp.SetValue(H, z0); os.Visible = true;
+        }
         // the player's missile, close up: the camera rides a stand-in over it
         {
             var ms = H.GetNode<PlayerShip>("Ship_1"); var md = H.GetNode<TargetDummy>("TargetDummy1");
@@ -7384,7 +7402,7 @@ ls /tmp/shots
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 1217 lines   sha256 baa3ddb80e62
+// 1227 lines   sha256 81cb129c3ea9
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -7598,6 +7616,16 @@ public partial class _Test : Node
               && tsprites.Count(x => x.Texture.ResourcePath.EndsWith("turret_bs_main.png")) == 4
               && tsprites.Count(x => x.Texture.ResourcePath.EndsWith("turret_bs_pd.png")) == 2,
               "four main + two PD turrets drawn from the ship's own painted turrets");
+        // the fields: each one's nearest edge 1500 u from the base -- room for a blockade
+        {
+            var rocks = H.GetChildren().OfType<Sprite2D>().Where(x => x.Texture != null && x.Texture.ResourcePath.Contains("asteroid_")).ToList();
+            float beltEdge = rocks.Min(x => x.Position.DistanceTo(Hub.BasePos) - x.Texture.GetWidth() * x.Scale.X * 0.34f);
+            var wreck = H.GetChildren().OfType<Sprite2D>().First(x => x.Texture != null && x.Texture.ResourcePath.EndsWith("behemoth_wreck.png"));
+            float wreckEdge = wreck.Position.DistanceTo(Hub.BasePos) - 340f;                 // its visible edge toward the base
+            GD.Print($"  field edges from the base: belt {beltEdge:0} u, wreck {wreckEdge:0} u");
+            Check(rocks.Count == 9 && Math.Abs(beltEdge - 1500) < 8 && Math.Abs(wreckEdge - 1500) < 8,
+                  "the mining belt's and the wreck's nearest edges are both 1500 u from the base");
+        }
         var tioS = H.GetNodeOrNull<Sprite2D>("TIO");
         Check(tioS != null && tioS.Position == Hub.TioPos && Math.Abs(tioS.Texture.GetHeight() * tioS.Scale.Y - Hub.TioHeight) < 0.5f,
               "the Threat Intelligence Operations building stands south-west of the base");
