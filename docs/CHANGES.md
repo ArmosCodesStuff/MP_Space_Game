@@ -39,7 +39,7 @@ history pick the work up from it alone. Update it in the same change as the code
 **State as of 2026-09-18: version 0.3.0 plus Unreleased (see it for everything since: docking arms
 and the unload queue, the fleet and hauler pods, the idle economy, base menu, bunker-buster missile,
 painted turrets, docking bombers and more).** Typecheck clean against the real `GodotSharp.dll`,
-`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 186 checks across
+`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 203 checks across
 a single-player run and a host with two guests. Unlike earlier releases, this one was also **looked at**:
 `tools/screens/run.sh` renders the select screen, the creator, a fresh spawn under the base, both
 classes in the hub, the K window, a bomber strike, and turret close-ups on a virtual display; layout
@@ -174,6 +174,60 @@ reachable, which is fine: both harnesses build from the `nupkgs` folder that shi
 ---
 
 ## Unreleased
+
+### Inspection, combat and death, wings, engines (this batch)
+
+**Checked:** code analysers clean; smoke test **three runs in a row, 203 checks each**; screenshot
+sweep **43 frames, 0 lint findings**, with the new frames looked at (bays, shield, stasis and pod,
+battleship size, docked bombers, strike, plumes, own ship without a bar).
+
+#### Inspection (step 1)
+
+- Ran the compiler's analysers (unused/unread private members, unused assignments and parameters,
+  needless usings) over all code: only **4 needless `using` lines** — removed. Public members used
+  only by tests are test hooks and stay; `BeginPlacement` stays as the hook for placed abilities.
+- **Stale comments fixed**: the ship menu no longer opens with C; saves are per character, not
+  `character.cfg`; the fighter and bomber comment quoted old sizes. `Gatherer.BoltCount` (dead) removed.
+
+#### Added
+
+- **Enemy fire hits players**: player ships have a **capsule collider along the keel** (half-width
+  40 u battleship, 24.5 u carrier). Nothing else changed about who can hit whom.
+- **Shield flash**: a hexagonal projection lights the **side that was hit** (front, right, back or
+  left, relative to the ship's heading) in the **accent colour**, and fades. One generic panel for
+  all four sides. Visual only.
+- **Armed target dummy**: the bottom-right dummy fires a guided missile every **5 s** at the nearest
+  player ship within **150 u**, for **50 damage**; a faint red ring shows its reach.
+- **Death and the escape pod**: at 0 hull the ship goes into **stasis** where it lies (cold blue,
+  turrets dark, a countdown over it) for **2 minutes**, and the pilot flies an **escape pod** (24 u,
+  60% of a salvager) that nothing can target. After the timer, **F** re-boards the ship at **33%
+  hull**. The camera follows the pod meanwhile.
+- **Fighters dock inside the carrier** (out of sight) when idle and to rest; **bombers back into
+  their slots**, nose out, tail to the hull, and stay visible. A faint, flashing yellow and orange
+  **signal light** marks every landing and take-off.
+- **Fighter strafing runs** (all fighters): each pass fires **3 shots**, carries on **through the
+  target by 1.2× its diameter**, then turns for the next pass. Fighters fly like aircraft now
+  (steady speed, 3.5 rad/s turn). After 15 s engaged they dock and rest 3 s.
+- **Engine plumes on everything**, sized by the ship's length and brightened by throttle: player
+  ships, fighters, bombers and escape pods in the **accent colour**; miners, salvagers and the
+  hauler in **light yellow**, unaffected by player colours. Missiles keep their smoke trails.
+
+#### Changed
+
+- **Colours**: the **hull colour** is the ship and its turrets; the **accent colour** is engines and
+  lighting only (plumes, shields, PD arcs). The ship menu's preview shows the accent as a plume.
+- **Battleship 224 u** long (was 160, +40%); turrets, mounts and collider scale with it.
+- **Your own ship shows no health bar** over itself (the HUD's hull bar is yours); other players'
+  bars remain.
+- **Service bays sit on each pad's north edge**, parallel to it; the **top bay unloads from the
+  north** too.
+
+#### Fixed
+
+- **A faded shield left its last faint frame on screen** for good (no redraw as the glow reached
+  zero). Found in the screenshots.
+
+### Earlier in Unreleased (previous batch)
 
 ### Code inspection, docking bays, player bars, bigger battleship (this batch, in progress)
 

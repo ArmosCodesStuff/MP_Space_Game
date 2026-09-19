@@ -152,6 +152,22 @@ levels once a second and ship and hauler state ten times a second; a guest's own
   and credits — the world's for its host, a guest's own parked totals for a guest — on a second
   click.
 
+## Damage, death and the two colours
+
+- **Who can be hit**: player weapons hit `Combat.Hostiles`; enemy fire hits `Combat.Players`. A
+  player ship's collider is a capsule along its keel (`PlayerShip.Covers`); everything else is a
+  circle (`IHittable.Covers`). Escape pods are in neither list: nothing can touch them.
+- **Hits** go through `PlayerShip.Hit(damage, from)` on the host, which applies the damage and tells
+  every peer which side to light on the shield (`ShieldFlash`: one generic hex panel, four sides).
+- **Death**: 0 hull puts the ship into a 2-minute **stasis** where it lies; the owner flies an
+  **escape pod**; afterwards **F** re-boards at 33% hull (a request the host decides). Stasis and
+  hull are host state, replicated with the rest.
+- **Hull colour** is the ship and its turrets. **Accent colour** is engines and lighting only:
+  plumes on the player's ship and everything it launches, shields, PD arcs. Utility ships' engines
+  are always light yellow (`Plume.Utility`). Missiles keep their smoke.
+- **Fighters** fly strafing runs: 3 shots, through the target by 1.2× its diameter, turn, repeat;
+  they live inside the carrier when docked. **Bombers** back into slots, nose out.
+
 ## Ship classes
 
 Nine planned, three to a page in the selector, **two flyable**. The selector, save format and UI are
@@ -161,7 +177,7 @@ hotkeys (the developer removed 1/2).
 
 | | Hull | Length | Main guns | PD turrets | Wing | Sprite |
 |---|---|---|---|---|---|---|
-| **Battleship** | 300 | 160 u | 4 × 1.5 DPS | 2 (slow, τ/3) | — | `battleship_hull.png` |
+| **Battleship** | 300 | 224 u | 4 × 1.5 DPS | 2 (slow, τ/3) | — | `battleship_hull.png` |
 | **Carrier** | 200 | 170 u | — | 3 (fast, τ/1.2) | 4 fighters + 2 bombers | `carrier_player.png` |
 
 **Damage**: main gun 1.5 per shot per second · PD 1.0 DPS per turret · fighter 0.5 DPS · torpedo 3 ·
