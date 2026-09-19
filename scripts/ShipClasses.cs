@@ -183,8 +183,7 @@ public partial class Turret : Node2D
 }
 
 // ── Wing craft ───────────────────────────────────────────────────────────────
-// Fighters and bombers fly with real acceleration now (they used to move at a flat
-// speed), so the acceleration stat on the sheet is a real number.
+// Fighters and bombers fly with real acceleration, so the acceleration stat on the sheet is a real number.
 //
 //   FIGHTERS hold an orbit until ordered to attack the selected target; they fight
 //            it while it stays within the carrier's control range. Recall returns them.

@@ -8,8 +8,7 @@ using System.Collections.Generic;
 public partial class MainMenu : Node2D
 {
     // Pirates make ATTACK RUNS: they fly in, shoot, and carry straight on past, then turn and come
-    // back. They used to rotate 90 degrees at 240 units and halve speed, which locked them into a
-    // permanent orbit -- hypnotic, and nothing ever looked like it was fighting.
+    // back.
     private struct Foe { public Vector2 P, V; public float Hp, Rot; public bool Alive; public double Respawn;
                          public bool Passing; public double Gun; }
     private struct Shot { public Vector2 A, B; public double T; public bool Hostile; }

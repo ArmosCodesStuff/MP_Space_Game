@@ -71,7 +71,7 @@ public class ShipStats
             Add("Main guns", "main_range",    "Range",              720, "u", 0);
             Add("Main guns", "main_turn",     "Turret turn rate",   Mathf.Tau / 4f, "rad/s", 2);
 
-            // A magazine, reloaded by hand (R). Same long-run rate as the old 8 s cooldown.
+            // A magazine, reloaded by hand (R): 2 missiles, then a 16 s reload.
             Add("Missile", "missile_damage",   "Damage",            5.0, "", 1);
             Add("Missile", "missile_mag",      "Magazine",          2, "", 0);
             Add("Missile", "missile_refire",   "Between shots",     0.6, "s", 1, inverse: true);
@@ -103,7 +103,7 @@ public class ShipStats
             Add("Fighters", "fighter_accel",    "Acceleration",     900, "u/s²", 0);
             Add("Fighters", "fighter_burst",    "Firing before rest", 15, "s", 0);
             Add("Fighters", "fighter_rest",     "Rest at the carrier", 3, "s", 0, inverse: true);
-            Add("Fighters", "control_range",    "Control range",    1400, "u", 0);   // doubled in 0.3.x (was 700)
+            Add("Fighters", "control_range",    "Control range",    1400, "u", 0);
 
             // An active ability. Torpedoes run straight and steady: no tracking, so a
             // moving target can step out of the way.

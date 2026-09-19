@@ -183,7 +183,7 @@ public partial class Hub : Node2D
             AddChild(r); _rocks.Add(r);
         }
 
-        // the wreck: smaller than the old behemoth, and close enough to feel like part of the yard
+        // the wreck, close enough to the base to read as part of the yard
         AddChild(new Sprite2D { Texture = GD.Load<Texture2D>("res://behemoth_wreck.png"),
                                 Position = WreckPos, Scale = new Vector2(0.34f, 0.34f), ZIndex = 1 });
 
@@ -284,8 +284,7 @@ public partial class Hub : Node2D
     }
 
     // ── character creator ────────────────────────────────────────────────────
-    // One instance, owned here. C used to AddChild a new creator on every press, so
-    // they stacked; and only the first-run one applied the class to your ship.
+    // One instance, owned here; REFIT opens it and it cannot stack.
     private void OpenCreator()
     {
         if (IsInstanceValid(_creator)) return;
@@ -468,7 +467,6 @@ public partial class Hub : Node2D
 
     public override void _UnhandledInput(InputEvent e)
     {
-        // (C no longer opens the ship menu: that is REFIT, in the BASE menu, and it costs.)
         if (IsInstanceValid(_creator)) return;          // the panel owns the screen
         var mine = MyShip;
         if (mine == null) return;

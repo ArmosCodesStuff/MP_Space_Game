@@ -11,7 +11,7 @@ public static class Txt
     public static int Size(int basePx) => Mathf.Max(6, Mathf.RoundToInt(basePx * UiScale));
 
     // Drop-in for DrawString: same arguments, same resulting position, but never clipped.
-    // `width` is now only used to preserve the original alignment box, not to truncate.
+    // `width` sets the alignment box; text is never truncated to it.
     public static void D(CanvasItem c, Font f, Vector2 pos, string text,
                          HorizontalAlignment align, float width, int size, Color col)
     {

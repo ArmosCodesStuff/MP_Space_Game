@@ -42,7 +42,6 @@ public partial class Gatherer : Node2D
     public double Speed => Yard.Value(M ? "miner_speed" : "salvager_speed");
     public double Rate  => Yard.Value(M ? "mine_rate" : "salvage_rate");
     public bool Beaming => State == St.Working;
-    public int BoltCount => _bolts.Count;
 
     public override void _Ready()
     {
