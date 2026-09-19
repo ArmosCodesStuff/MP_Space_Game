@@ -886,9 +886,11 @@ public partial class _Test : Node
                   "the bounce dies away; white by half-life; gone by the end");
             await Wait(BossBar.Life + 0.1);
             Check(bar.Chunks.Count == 0, "and then it is gone from the bar");
-            for (int i = 0; i < 10; i++) boss.TakeDamage(1);
-            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            Check(bar.Chunks.Count == 1, $"a burst of small hits shares one chunk ({bar.Chunks.Count})");
+            // one small hit a frame for three frames (50 ms): inside the 60 ms window, so one chunk
+            // (the bar reads the hull once a frame, so hits within ONE frame could never test this)
+            for (int i = 0; i < 3; i++) { boss.TakeDamage(1); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(bar.Chunks.Count == 1, $"a burst of small hits, frame after frame, shares one chunk ({bar.Chunks.Count})");
             var me2 = Me; me2.MaxHp = 5000; me2.TakeDamage(-(5000 - me2.Hp));
             double tBeam = -1, tCharge = -1, tVolley = -1, arenaT = 0; int trident = 0; float spread = 0;
             async void Watch()
