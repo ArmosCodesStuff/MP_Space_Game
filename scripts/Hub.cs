@@ -543,7 +543,9 @@ public partial class Hub : Node2D
         var anchor = me.ViewPosition;                                  // the pod, while in stasis
         if (!FreeCamera)
         {
-            _cam.Position = _cam.Position.Lerp(anchor, Mathf.Clamp(6f * dt, 0f, 1f));
+            // follow smoothly -- but cut straight to the ship after a warp: panning 2000 u is disorienting
+            if (_cam.Position.DistanceTo(anchor) > 1200f) _cam.Position = anchor;
+            else _cam.Position = _cam.Position.Lerp(anchor, Mathf.Clamp(6f * dt, 0f, 1f));
             return;
         }
         var pan = Vector2.Zero;

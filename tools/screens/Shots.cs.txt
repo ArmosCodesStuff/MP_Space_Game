@@ -191,6 +191,14 @@ public partial class _Shots : Node
             hub.ToggleFreeCamera(); hub.SetZoom(Hub.DefaultZoom); await W(1.5);
         }
         await Close(ShipClass.Battleship, "9_battleship_closeup");
+        // warp: the charge building, then the flash where it lands (and the hull bar's WARP readout)
+        {
+            var ws = H.GetNode<PlayerShip>("Ship_1");
+            typeof(PlayerShip).GetField("_warpCd", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).SetValue(ws, 0.0);
+            ws.Velocity = Vector2.Zero; ws.StartWarp(null);
+            await W(2.2); await Snap("40_warp_charging");
+            await W(0.95); await Snap("41_warp_arrival");      // the camera cuts to the ship on a jump
+        }
         // a shield hit on each of the four sides, then stasis with the escape pod out
         {
             var sh = H.GetNode<PlayerShip>("Ship_1");
