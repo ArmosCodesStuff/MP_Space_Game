@@ -45,7 +45,7 @@ public partial class EscMenu : CanvasLayer
         for (int i = 0; i < labels.Length; i++)
         {
             int idx = i;
-            var b = new Button { Text = labels[i], Name = labels[i], ToggleMode = true, ButtonGroup = group,
+            var b = new Button { Text = labels[i], Name = $"{name}{i}", ToggleMode = true, ButtonGroup = group,
                                  FocusMode = Control.FocusModeEnum.None, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
                                  ButtonPressed = current() == i };
             b.Pressed += () => { set(idx); Settings.Save(); };

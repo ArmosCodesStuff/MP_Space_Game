@@ -98,6 +98,73 @@ public partial class Net : Node
         SessionChanged?.Invoke();
     }
 
+    // ── internet hosting ────────────────────────────────────────────────────
+    // Hosting starts at once for your own network. Meanwhile, on a background thread,
+    // the game asks your router (UPnP) to forward the port to this PC and reads back
+    // your public address, so friends in other cities or countries can join. When the
+    // router will not (UPnP off), or your provider shares one public address among
+    // many homes (carrier-grade NAT), the status says so and what to do instead.
+    public enum Reach { None, Checking, Internet, LanOnly }
+    public Reach Reachability { get; private set; } = Reach.None;
+    public string InternetAddress { get; private set; } = "";
+    public string LanAddress { get; private set; } = "";
+    private Upnp _upnp; private int _mappedPort, _hostGen;
+
+    private void OpenRouterPort(int port, int gen)
+    {
+        string ext = "", why = "";
+        try
+        {
+            var u = new Upnp();
+            int r = u.Discover(2000, 2, "InternetGatewayDevice");
+            var gw = u.GetGateway();
+            if (r != (int)Upnp.UpnpResult.Success || gw == null || !gw.IsValidGateway()) why = "no-upnp";
+            else if (u.AddPortMapping(port, port, "Warships", "UDP", 0) != (int)Upnp.UpnpResult.Success) why = "refused";
+            else { ext = u.QueryExternalAddress(); _upnp = u; }
+        }
+        catch (Exception e) { why = e.Message; }
+        Callable.From(() => InternetResult(gen, port, ext, why)).CallDeferred();
+    }
+
+    private void InternetResult(int gen, int port, string ext, string why)
+    {
+        if (gen != _hostGen || !IsHost || !IsOnline) return;            // the session changed meanwhile
+        if (ext.Length > 0 && !IsSharedAddress(ext))
+        {
+            _mappedPort = port; Reachability = Reach.Internet; InternetAddress = $"{ext}:{port}";
+            Say($"Hosting for the internet. Friends anywhere join: {InternetAddress}   (same network: {LanAddress})");
+        }
+        else if (ext.Length > 0)
+        {
+            _mappedPort = port; Reachability = Reach.LanOnly;
+            Say($"Hosting for your network ({LanAddress}). Your router opened the port, but your internet provider "
+              + "shares one public address among many homes (carrier-grade NAT), so friends elsewhere cannot reach "
+              + "you directly. Use Tailscale or ZeroTier, or let a friend host.");
+        }
+        else
+        {
+            Reachability = Reach.LanOnly;
+            Say($"Hosting for your network ({LanAddress}). Your router did not open port {port} automatically "
+              + $"(UPnP is off or unsupported{(why.Length > 0 && why != "no-upnp" && why != "refused" ? ": " + why : "")}). "
+              + $"For friends elsewhere, forward UDP {port} to this PC in your router, or use Tailscale or ZeroTier.");
+        }
+    }
+
+    // Private and carrier-grade (100.64.0.0/10) addresses cannot be reached from outside.
+    public static bool IsSharedAddress(string ip)
+    {
+        var p = ip.Split('.');
+        if (p.Length != 4 || !int.TryParse(p[0], out int a) || !int.TryParse(p[1], out int b)) return false;
+        return a == 10 || (a == 172 && b >= 16 && b <= 31) || (a == 192 && b == 168) || (a == 100 && b >= 64 && b <= 127) || a == 127;
+    }
+
+    private static string LocalLan(int port)
+    {
+        foreach (var a in IP.GetLocalAddresses())
+            if (a.Contains('.') && IsSharedAddress(a) && !a.StartsWith("127.") && !a.StartsWith("100.")) return $"{a}:{port}";
+        return $"127.0.0.1:{port}";
+    }
+
     public bool Host(int port = DefaultPort)
     {
         Shutdown();
@@ -106,8 +173,11 @@ public partial class Net : Node
         _peer = p; Multiplayer.MultiplayerPeer = p;
         _isHost = true; _localId = 1;
         Players.Clear(); Players[1] = new PlayerInfo { Id = 1 };
-        Say($"Hosting on port {port}. Others can join your world.");
+        LanAddress = LocalLan(port); Reachability = Reach.Checking; InternetAddress = "";
+        Say($"Hosting on your network ({LanAddress}). Asking your router to open port {port} for internet play...");
         SessionChanged?.Invoke();
+        int gen = ++_hostGen;
+        System.Threading.Tasks.Task.Run(() => OpenRouterPort(port, gen));
         return true;
     }
 
@@ -133,6 +203,13 @@ public partial class Net : Node
     private void Shutdown()
     {
         if (_peer != null) { _peer.Close(); _peer = null; }
+        if (_upnp != null && _mappedPort != 0)
+        {   // close the router port we opened (in the background: routers can be slow)
+            var u = _upnp; int mp = _mappedPort;
+            System.Threading.Tasks.Task.Run(() => u.DeletePortMapping(mp, "UDP"));
+        }
+        _upnp = null; _mappedPort = 0; _hostGen++;
+        Reachability = Reach.None; InternetAddress = ""; LanAddress = "";
         // An explicit offline peer rather than null: IsServer() and GetUniqueId() then
         // answer 1 / true offline instead of depending on engine fallback behaviour.
         Multiplayer.MultiplayerPeer = new OfflineMultiplayerPeer();

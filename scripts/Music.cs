@@ -20,6 +20,7 @@ public partial class Music : Node
     public const float AmbientTrim = 0.45f;            // the ambient loop is meant to sit far back
 
     private AudioStreamPlayer _amb, _cmb;
+    private AudioStreamOggVorbis _ambS, _cmbS;
     public float AmbientLevel { get; private set; }
     public float CombatLevel { get; private set; }
 
@@ -27,17 +28,26 @@ public partial class Music : Node
     {
         I = this;
         ProcessMode = ProcessModeEnum.Always;
-        _amb = Loop("res://music_ambient.ogg");
-        _cmb = Loop("res://music_combat.ogg");
+        (_amb, _ambS) = Loop("res://music_ambient.ogg");
+        (_cmb, _cmbS) = Loop("res://music_combat.ogg");
     }
 
-    private AudioStreamPlayer Loop(string path)
+    // Release the streams on the way out; left playing, they were reported as
+    // "resources still in use at exit".
+    public override void _ExitTree()
+    {
+        foreach (var p in new[] { _amb, _cmb }) if (IsInstanceValid(p)) { p.Stop(); p.Stream = null; }
+        _ambS?.Dispose(); _cmbS?.Dispose(); _ambS = _cmbS = null;
+        if (I == this) I = null;
+    }
+
+    private (AudioStreamPlayer, AudioStreamOggVorbis) Loop(string path)
     {
         var s = GD.Load<AudioStreamOggVorbis>(path);
         s.Loop = true;                                 // both files are built to loop seamlessly
         var p = new AudioStreamPlayer { Stream = s, VolumeDb = -80f };
         AddChild(p); p.Play();
-        return p;
+        return (p, s);
     }
 
     public override void _Process(double delta)
@@ -50,6 +60,14 @@ public partial class Music : Node
         CombatLevel = Mathf.MoveToward(CombatLevel, c, step);
         _amb.VolumeDb = Db(AmbientLevel * AmbientTrim * Settings.MusicVolume);
         _cmb.VolumeDb = Db(CombatLevel * Settings.MusicVolume);
+    }
+
+    // Stop both loops. Call this a moment BEFORE quitting: the mixer lets go of its
+    // playbacks on its next cycle, and quitting in the same frame left them "still in
+    // use at exit".
+    public void Silence()
+    {
+        foreach (var p in new[] { _amb, _cmb }) if (IsInstanceValid(p)) { p.Stop(); p.Stream = null; }
     }
 
     private static float Db(float linear) => linear <= 0.0005f ? -80f : Mathf.LinearToDb(linear);

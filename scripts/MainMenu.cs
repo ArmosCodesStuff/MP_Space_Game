@@ -77,7 +77,7 @@ public partial class MainMenu : Node2D
         col.AddChild(new Label { Text = "Volume", HorizontalAlignment = HorizontalAlignment.Center });
         var vol = new HBoxContainer(); vol.AddThemeConstantOverride("separation", 4); col.AddChild(vol);
         for (int i = 0; i < Settings.VolumeSteps.Length; i++) { int idx = i; var b = new Button { Text = $"{Settings.VolumeSteps[i] * 100:F0}%", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill }; b.Pressed += () => { Settings.VolumeIdx = idx; Settings.ApplyVolume(); Settings.Save(); _info.Text = $"Volume {Settings.Volume * 100:F0}%"; }; vol.AddChild(b); }
-        var quit = Big("QUIT"); quit.Pressed += () => GetTree().Quit(); col.AddChild(quit);
+        var quit = Big("QUIT"); quit.Pressed += () => QuitSoon(); col.AddChild(quit);
         _info = new Label { HorizontalAlignment = HorizontalAlignment.Center, Text = $"Volume {Settings.Volume * 100:F0}%" }; _info.AddThemeFontSizeOverride("font_size", 12); col.AddChild(_info);
         var ver = new Label { Text = "Warships  early build", HorizontalAlignment = HorizontalAlignment.Center }; ver.AddThemeFontSizeOverride("font_size", 11); ver.AddThemeColorOverride("font_color", new Color(0.5f, 0.55f, 0.65f)); col.AddChild(ver);
     }
@@ -212,5 +212,12 @@ public partial class MainMenu : Node2D
         DrawSetTransform(at, rot, new Vector2(scale, scale));
         DrawTexture(tex, -tex.GetSize() * 0.5f);
         DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
+    }
+
+    // silence the music first, then quit on the next moment (see Music.Silence)
+    private void QuitSoon()
+    {
+        Music.I?.Silence();
+        GetTree().CreateTimer(0.15).Timeout += () => GetTree().Quit();
     }
 }

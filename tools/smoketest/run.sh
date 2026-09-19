@@ -34,7 +34,9 @@ grep -E "Warning\(s\)|Error\(s\)" build.log
 timeout 180 "$G" --headless --import --path . >/dev/null 2>&1 || true
 
 F='PASS|FAIL|DONE|Exception|   at |ERROR: [^B]|^  [a-z]'
-N='RID alloc|PagedAlloc'
+# Expected engine chatter, not failures: allocator notes, and Godot's own report that
+# no UPnP router exists (true in a sandbox; the game falls back and says so).
+N='RID alloc|PagedAlloc|find any UPNPDevices'
 set +e
 # fixed 60 fps: identical frame timing every run, so the DPS checks are exact
 timeout 1200 "$G" --headless --fixed-fps 60 --path . -- solo 2>&1 | grep --line-buffered -E "$F" | grep --line-buffered -vE "$N" | sed -u 's/^/[solo]  /' > solo.log

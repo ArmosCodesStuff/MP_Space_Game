@@ -8,6 +8,7 @@ public partial class SessionMenu : CanvasLayer
 {
     private LineEdit _addr;
     private Label _status;
+    private Button _copy;
     private Button _toggle;
     private VBoxContainer _options;
 
@@ -39,8 +40,17 @@ public partial class SessionMenu : CanvasLayer
         _options.AddChild(Btn("JOIN",            DoJoin));
         _options.AddChild(Btn("PLAY OFFLINE",    () => Net.I?.GoOffline()));
 
-        _status = new Label { Text = Net.I?.LastStatus ?? "" };
+        _status = new Label { Text = Net.I?.LastStatus ?? "", AutowrapMode = TextServer.AutowrapMode.WordSmart,
+                              CustomMinimumSize = new Vector2(320, 0) };
         _options.AddChild(_status);
+        // the address friends should type, one click to the clipboard
+        _copy = Btn("COPY ADDRESS", () =>
+        {
+            var a = Net.I?.Reachability == Net.Reach.Internet ? Net.I.InternetAddress : Net.I?.LanAddress;
+            if (!string.IsNullOrEmpty(a)) DisplayServer.ClipboardSet(a);
+        });
+        _copy.Name = "CopyAddress";
+        _options.AddChild(_copy);
         if (Net.I != null) { Net.I.Status += OnStatus; Net.I.SessionChanged += Refresh; Net.I.PlayerJoined += OnPeers; Net.I.PlayerLeft += OnPeers; }
         Refresh();
     }
@@ -53,6 +63,10 @@ public partial class SessionMenu : CanvasLayer
     }
 
     private void OnStatus(string s) { _status.Text = s; Refresh(); }
+    public override void _Process(double delta)
+    {
+        if (_copy != null) _copy.Visible = Net.I != null && Net.IsHost && Net.IsOnline && Net.I.Reachability != Net.Reach.Checking;
+    }
     private void OnPeers(int _) => Refresh();
 
     // The folded button's label: what it is, and where you stand.

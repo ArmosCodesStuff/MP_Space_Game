@@ -45,6 +45,7 @@ public partial class _Test : Node
         try { if (role == "solo") await Solo(); else await Mp(role); }
         catch (Exception ex) { Check(false, $"test threw: {ex.GetType().Name}: {ex.Message}"); GD.Print(ex.StackTrace); }
         GD.Print($"DONE {role} fails={fails}");
+        Music.I?.Silence(); await Wait(0.2);          // let the mixer release the loops first
         GetTree().Quit(fails);
     }
 
@@ -666,11 +667,80 @@ public partial class _Test : Node
         Priv(H, "RebuildShips"); await Wait(0.1);
         Check(Count<Wing>() == 6 && Count<PlayerShip>() == 1, $"rebuild leaves no orphan wings ({Count<Wing>()})");
 
+        // ── camera: wheel zoom, the free camera (Y), its tether ──
+        {
+            var sh = Me;
+            void Wheel(MouseButton b) { Input.ParseInputEvent(new InputEventMouseButton { ButtonIndex = b, Pressed = true, Position = Win(new Vector2(960, 540)) }); }
+            for (int i = 0; i < 30; i++) Wheel(MouseButton.WheelDown); await Wait(0.1);
+            Check(Mathf.IsEqualApprox(H.ZoomLevel, Hub.DefaultZoom / Hub.ZoomOutMax), $"wheel out stops at 33% further out ({H.ZoomLevel:0.000})");
+            for (int i = 0; i < 40; i++) Wheel(MouseButton.WheelUp); await Wait(0.1);
+            Check(Mathf.IsEqualApprox(H.ZoomLevel, Hub.DefaultZoom * Hub.ZoomInMax), $"wheel in stops at 1.5x ({H.ZoomLevel:0.000})");
+            H.SetZoom(Hub.DefaultZoom * 0.8f); float kept = H.ZoomLevel;
+            Input.ParseInputEvent(new InputEventMouseMotion { Position = Win(new Vector2(960, 540)), GlobalPosition = Win(new Vector2(960, 540)) });
+            Key(global::Godot.Key.Y); await Wait(0.05);
+            Check(H.FreeCamera, "Y frees the camera");
+            var cam0 = H.CameraPosition;
+            KeyDown(global::Godot.Key.Right); await Wait(1.0); KeyUp(global::Godot.Key.Right);
+            Check(H.CameraPosition.X - cam0.X > 800, $"arrow keys move it ({H.CameraPosition.X - cam0.X:0} u in 1 s)");
+            KeyDown(global::Godot.Key.Right); await Wait(6.0); KeyUp(global::Godot.Key.Right);
+            float tether = H.CameraPosition.DistanceTo(sh.ViewPosition);
+            Check(Mathf.Abs(tether - sh.MyArt.CameraRange) < 1f && sh.MyArt.CameraRange == 5000f, $"it stops 5000 u from the ship ({tether:0})");
+            var cam1 = H.CameraPosition;
+            Input.ParseInputEvent(new InputEventMouseMotion { Position = Win(new Vector2(2, 540)), GlobalPosition = Win(new Vector2(2, 540)) });
+            await Wait(0.5);
+            Input.ParseInputEvent(new InputEventMouseMotion { Position = Win(new Vector2(960, 540)), GlobalPosition = Win(new Vector2(960, 540)) });
+            Check(H.CameraPosition.X < cam1.X - 100f, "the mouse against the screen edge pans it too");
+            Key(global::Godot.Key.Y); await Wait(2.0);
+            Check(!H.FreeCamera && H.CameraPosition.DistanceTo(sh.ViewPosition) < 30f && Mathf.IsEqualApprox(H.ZoomLevel, kept),
+                  "Y again returns to the ship, keeping the zoom");
+            H.SetZoom(Hub.DefaultZoom);
+        }
+
+        // ── radar and the Esc menu ──
+        {
+            var radar = Nodes<Radar>().First();
+            Check(Mathf.IsEqualApprox(radar.Size.X, Radar.Sizes[Settings.RadarSize]), "the radar sits top right at the chosen size");
+            Key(global::Godot.Key.Escape); await Wait(0.1);
+            Check(H.EscMenuOpen && Hub.ControlsLocked, "Esc (nothing else open) opens the menu; the helm is locked");
+            var menu = Nodes<EscMenu>().First();
+            Nodes<Button>(menu).First(b => b.Text == "LARGE").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.1);
+            Check(Settings.RadarSize == 2 && Mathf.IsEqualApprox(radar.Size.X, Radar.Sizes[2]), "LARGE radar: saved and applied");
+            Nodes<Button>(menu).First(b => b.Text == "SMALL").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.1);
+            Check(Mathf.IsEqualApprox(radar.Size.X, Radar.Sizes[0]), "SMALL radar applied");
+            Nodes<Button>(menu).First(b => b.Text == "MEDIUM").EmitSignal(BaseButton.SignalName.Pressed);
+            Nodes<Button>(menu).First(b => b.Text == "50%").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.1);
+            Check(Mathf.IsEqualApprox(Settings.MusicVolume, 0.5f), "music volume set from the menu");
+            Key(global::Godot.Key.Escape); await Wait(0.1);
+            Check(!H.EscMenuOpen, "Esc closes the menu");
+        }
+
+        // ── music by mood: ambient, 20% combat on a selected enemy, 100% in combat ──
+        {
+            var sh = Me; var mus = Music.I;
+            Check(mus != null, "the music player is running");
+            H.GetType().GetField("_selected", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(H, null);
+            await Wait(9.0);
+            Check(mus.Target == Music.Mood.Ambient && Mathf.IsEqualApprox(mus.AmbientLevel, 1f) && mus.CombatLevel == 0f, "nothing selected: ambient only");
+            H.GetType().GetField("_selected", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(H, H.GetNode<TargetDummy>("TargetDummy1"));
+            await Wait(2.5);
+            Check(mus.Target == Music.Mood.Alert && Mathf.IsEqualApprox(mus.CombatLevel, 0.2f), $"enemy selected: combat music at 20% ({mus.CombatLevel:0.00})");
+            sh.Hit(1, sh.Position + Vector2.Up.Rotated(sh.Rotation) * 80f); await Wait(2.0);
+            Check(sh.InCombat && mus.Target == Music.Mood.Combat && Mathf.IsEqualApprox(mus.CombatLevel, 1f) && mus.AmbientLevel == 0f,
+                  "taking damage: combat music at 100%");
+            H.GetType().GetField("_selected", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(H, null);
+            await Wait(PlayerShip.CombatHold + 3.0);
+            Check(!sh.InCombat && mus.Target == Music.Mood.Ambient, "8 s after the last damage, back to ambient");
+            sh.TakeDamage(-1);
+        }
+
         Key(global::Godot.Key.K); await Wait(0.1);
         Key(global::Godot.Key.Escape); await Wait(0.1);
         Check(Count<StatsWindow>() == 0 && H != null, "Esc closes the K window first");
-        Key(global::Godot.Key.Escape); await Wait(0.3);
-        Check(GetTree().CurrentScene is MainMenu, "Esc returns to the main menu");
+        H.GetType().GetField("_selected", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(H, null);
+        Key(global::Godot.Key.Escape); await Wait(0.1);
+        Nodes<Button>(Nodes<EscMenu>().First()).First(b => b.Name == "Quit").EmitSignal(BaseButton.SignalName.Pressed);
+        await Wait(0.3);
+        Check(GetTree().CurrentScene is MainMenu, "QUIT TO MAIN MENU returns to the main menu");
         GetTree().ChangeSceneToFile("res://Hub.tscn"); await Wait(0.4);
         Check(H != null && Count<PlayerShip>() == 1, "hub re-enters cleanly");
     }
@@ -685,7 +755,13 @@ public partial class _Test : Node
             H.GetNode<PlayerShip>("Ship_1").Position = new Vector2(-900, 900);   // out of the way
             Net.I.Host(27115);
             H.Yard.Credits = 1000;                     // for the guest's purchase request
+            Check(Net.I.Reachability == Net.Reach.Checking && Net.I.LanAddress.EndsWith(":27115"), "hosting starts at once; the router is asked in the background");
             await Wait(9.0);
+            // no router in the sandbox: it must say so, and how to get friends in anyway
+            Check(Net.I.Reachability == Net.Reach.LanOnly && Net.I.LastStatus.Contains("forward UDP 27115") && Net.I.LastStatus.Contains("Tailscale"),
+                  $"no UPnP router: LAN hosting stands, and the status explains the fix");
+            Check(Net.IsSharedAddress("100.72.1.5") && Net.IsSharedAddress("192.168.1.20") && !Net.IsSharedAddress("81.2.3.4"),
+                  "carrier-grade and private addresses are recognised as unreachable from outside");
             var ships = Nodes<PlayerShip>().ToList();
             Check(ships.Count == 3, $"host sees 3 ships: itself and two guests ({ships.Count})");
             Check(ships.Any(s => s.Pilot == "Third"), "the second guest's identity reached the host");
