@@ -35,6 +35,7 @@ public partial class Yard : Node2D
     // with it -- a guest who followed the party lost its own base.
     private static double _ownOre, _ownSalvage, _ownCredits;
     private static readonly Dictionary<string, int> _ownLevels = new();
+    private static readonly Dictionary<string, double> _ownInvested = new();
     private static bool _parked;
     private double _totalsCd, _stateCd, _t;
 
@@ -81,7 +82,13 @@ public partial class Yard : Node2D
     // way out; on return it gets back what it had, any credits earned out there, and
     // 1/20 of what its fleet would have gathered in the time away.
     public const double AwayShare = 1.0 / 20.0;
-    private sealed record Trip(double Ore, double Salvage, double Credits, Dictionary<string, int> Levels,
+    // everything spent on upgrades so far, per category (MINERS, SALVAGERS, HAULER)
+    private readonly Dictionary<string, double> _invested = new();
+    public static readonly string[] Categories = { "MINERS", "SALVAGERS", "HAULER" };
+    public double Invested(string category) => _invested.TryGetValue(category, out var v) ? v : 0;
+    public double RebuildCost(string category) => Math.Round(Invested(category) * Economy.RebuildShare);
+
+    private sealed record Trip(double Ore, double Salvage, double Credits, Dictionary<string, int> Levels, Dictionary<string, double> Invested,
                                double OrePerSec, double SalvagePerSec);
     public static double TripClock;                   // game seconds in the arena (Hub counts them)
     private static Trip _trip;
@@ -90,7 +97,7 @@ public partial class Yard : Node2D
 
     public void SaveForTrip()
     {
-        _trip = new Trip(Ore, Salvage, Credits, new Dictionary<string, int>(_levels),
+        _trip = new Trip(Ore, Salvage, Credits, new Dictionary<string, int>(_levels), new Dictionary<string, double>(_invested),
                          FleetRate(GatherKind.Miner), FleetRate(GatherKind.Salvager));
         TripCredits = 0; TripClock = 0;
     }
@@ -104,6 +111,7 @@ public partial class Yard : Node2D
         Ore = t.Ore + LastAwayOre; Salvage = t.Salvage + LastAwaySalvage;
         Credits = t.Credits + TripCredits; TripCredits = 0;
         _levels.Clear(); foreach (var kv in t.Levels) _levels[kv.Key] = kv.Value;
+        _invested.Clear(); foreach (var kv in t.Invested) _invested[kv.Key] = kv.Value;
         SyncFleet();
     }
 
@@ -142,6 +150,7 @@ public partial class Yard : Node2D
         double cost = Economy.Cost(u, lv);
         if (Economy.Maxed(u, lv) || Credits < cost) return false;
         Credits -= cost; _levels[id] = lv + 1;
+        _invested[u.Tab] = Invested(u.Tab) + cost;                // what a rebuild in this category is 10% of
         SyncFleet();
         return true;
     }
@@ -285,6 +294,7 @@ public partial class Yard : Node2D
             Bank();                                        // nothing your ships carry is lost
             (_ownOre, _ownSalvage, _ownCredits) = (Ore, Salvage, Credits);
             _ownLevels.Clear(); foreach (var kv in _levels) _ownLevels[kv.Key] = kv.Value;
+            _ownInvested.Clear(); foreach (var kv in _invested) _ownInvested[kv.Key] = kv.Value;
             _parked = true;
             ResetShips();                                  // the host's packets drive them now
         }
@@ -292,6 +302,7 @@ public partial class Yard : Node2D
         {
             (Ore, Salvage, Credits) = (_ownOre, _ownSalvage, _ownCredits);
             _levels.Clear(); foreach (var kv in _ownLevels) _levels[kv.Key] = kv.Value;
+            _invested.Clear(); foreach (var kv in _ownInvested) _invested[kv.Key] = kv.Value;
             _parked = false;
             ResetShips();                                  // not the host's last state
         }
@@ -328,15 +339,16 @@ public partial class Yard : Node2D
         {
             _totalsCd = 1.0;
             var lv = Economy.All.Select(u => Level(u.Id)).ToArray();
-            Rpc(nameof(NetTotals), Ore, Salvage, Credits, lv);
+            Rpc(nameof(NetTotals), Ore, Salvage, Credits, lv, Categories.Select(Invested).ToArray());
         }
         _stateCd -= delta;
         if (_stateCd <= 0) { _stateCd = 0.1; SendState(); }
     }
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetTotals(double ore, double salvage, double credits, int[] levels)
+    private void NetTotals(double ore, double salvage, double credits, int[] levels, double[] invested)
     {
+        for (int i = 0; i < Math.Min(invested.Length, Categories.Length); i++) _invested[Categories[i]] = invested[i];
         (Ore, Salvage, Credits) = (ore, salvage, credits);
         for (int i = 0; i < Math.Min(levels.Length, Economy.All.Length); i++) _levels[Economy.All[i].Id] = levels[i];
         SyncFleet();
@@ -345,29 +357,32 @@ public partial class Yard : Node2D
     private void SendState()
     {
         int n = Gatherers.Count;
-        var gp = new Vector2[n]; var gr = new float[n]; var gs = new int[n]; var gc = new float[n]; var gb = new Vector2[n];
+        var gp = new Vector2[n]; var gr = new float[n]; var gs = new int[n]; var gc = new float[n]; var gb = new Vector2[n]; var gh = new float[n];
         for (int i = 0; i < n; i++)
         {
             var g = Gatherers[i];
-            (gp[i], gr[i], gs[i], gc[i], gb[i]) = (g.Position, g.Rotation, (int)g.State, (float)g.Cargo, g.BeamTo);
+            (gp[i], gr[i], gs[i], gc[i], gb[i], gh[i]) = (g.Position, g.Rotation, (int)g.State, (float)g.Cargo, g.BeamTo, (float)g.Hull);
         }
         var h = Hauler;
-        Rpc(nameof(NetState), gp, gr, gs, gc, gb, h.Position, h.Rotation, (int)h.State, (float)h.T, (float)h.Cargo, (float)h.LastSale);
+        Rpc(nameof(NetState), gp, gr, gs, gc, gb, gh, h.Position, h.Rotation, (int)h.State, (float)h.T, (float)h.Cargo, (float)h.LastSale, (float)h.Hull);
     }
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
-    private void NetState(Vector2[] gp, float[] gr, int[] gs, float[] gc, Vector2[] gb,
-                          Vector2 hp, float hr, int hs, float ht, float hc, float sale)
+    private void NetState(Vector2[] gp, float[] gr, int[] gs, float[] gc, Vector2[] gb, float[] gh,
+                          Vector2 hp, float hr, int hs, float ht, float hc, float sale, float hh)
     {
         // the fleet follows the levels (1 s); until they agree, skip the ships this once
         if (gp.Length == Gatherers.Count)
-            for (int i = 0; i < gp.Length; i++) Gatherers[i].SetNet(gp[i], gr[i], gs[i], gc[i], gb[i]);
-        Hauler.SetNet(hp, hr, hs, ht, hc, sale);
+            for (int i = 0; i < gp.Length; i++) Gatherers[i].SetNet(gp[i], gr[i], gs[i], gc[i], gb[i], gh[i]);
+        Hauler.SetNet(hp, hr, hs, ht, hc, sale, hh);
     }
 
     // ── the hologram docking bars: two bars across each arm's open face ──────
     public override void _Draw()
     {
+        // a damaged ship shows its hull: a small bar under it, green to red
+        foreach (var g in Gatherers) HullBar(g.Position + new Vector2(-15, 26), 30, g.Hull, g.MaxHull, g.Visible);
+        if (Hauler != null) HullBar(Hauler.Position + new Vector2(-40, 50), 80, Hauler.Hull, Hauler.MaxHull, Hauler.State is not (Hauler.St.Destroyed or Hauler.St.Away));
         for (int i = 0; i < Arms.Length; i++)
         {
             var a = Arms[i];
@@ -387,4 +402,12 @@ public partial class Yard : Node2D
     }
 
     private void RestoreOwn() => OnSessionChanged(false);
+
+    private void HullBar(Vector2 world, float w, double hull, double max, bool shown)
+    {
+        if (!shown || hull >= max) return;
+        var at = ToLocal(world); float k = (float)Math.Clamp(hull / max, 0, 1);
+        DrawRect(new Rect2(at, new Vector2(w, 3.5f)), new Color(0.1f, 0.1f, 0.12f, 0.85f));
+        DrawRect(new Rect2(at, new Vector2(w * k, 3.5f)), new Color(1f - k, 0.35f + 0.55f * k, 0.3f));
+    }
 }

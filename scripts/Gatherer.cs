@@ -19,13 +19,42 @@ public enum GatherKind { Miner, Salvager }
 
 public partial class Gatherer : Node2D
 {
-    public enum St { Outbound, Working, Queued, Docking, Unloading }
+    public enum St { Outbound, Working, Queued, Docking, Unloading, Destroyed }
 
     public Yard Yard;
     public GatherKind Kind;
     public int Index;                        // which miner (or salvager): 0, 1, 2 ...
     public St State = St.Outbound;
     public double Cargo;
+    // hull, and being rebuilt (host-owned; guests get hull and state)
+    public double Hull = Economy.UtilityHull;
+    public double MaxHull => Economy.UtilityHull;
+    public double RebuildIn;
+    public bool WaitingForCredits;
+    public string Category => Kind == GatherKind.Miner ? "MINERS" : "SALVAGERS";
+
+    public void TakeDamage(double d)
+    {
+        if (!Net.Sim || State == St.Destroyed) return;
+        Hull -= d;
+        if (Hull > 0) return;
+        Yard.Release(this);                          // its arm or its place in the queue goes to the next
+        State = St.Destroyed; Hull = 0; Cargo = 0; Velocity = Vector2.Zero; Visible = false;   // gone at once
+        RebuildIn = Economy.RebuildDelay; WaitingForCredits = false;
+        GetParent().AddChild(new Explosion { Position = Position, Radius = 30f });
+    }
+
+    // 30 s after it was lost it is rebuilt at the base, for 10% of its category's investment
+    private void TickRebuild(float dt)
+    {
+        RebuildIn = System.Math.Max(0, RebuildIn - dt);
+        if (RebuildIn > 0) return;
+        double cost = Yard.RebuildCost(Category);
+        if (Yard.Credits < cost) { WaitingForCredits = true; return; }
+        Yard.Credits -= cost; WaitingForCredits = false;
+        Hull = MaxHull; State = St.Outbound; Position = Hub.BasePos; Velocity = Vector2.Zero;
+        GetParent().AddChild(new Explosion { Position = Position, Radius = 26f, Tint = new Color(0.5f, 0.8f, 1f) });
+    }
     public Vector2 Velocity;
     public Vector2 BeamTo;                   // world point the beam works (host-chosen)
     public const float Length = 40f;
@@ -51,19 +80,21 @@ public partial class Gatherer : Node2D
         ZIndex = 1;
     }
 
-    public void SetNet(Vector2 p, float rot, int state, float cargo, Vector2 beam)
+    public void SetNet(Vector2 p, float rot, int state, float cargo, Vector2 beam, float hull)
     {
+        Hull = hull;
         (_netPos, _netRot, _hasNet) = (p, rot, true);
         (State, Cargo, BeamTo) = ((St)state, cargo, beam);
     }
 
     // back to work, empty (a session change)
-    public void ResetToWork() { State = St.Outbound; Cargo = 0; Velocity = Vector2.Zero; _hasNet = false; }
+    public void ResetToWork() { State = St.Outbound; Cargo = 0; Velocity = Vector2.Zero; _hasNet = false; Hull = MaxHull; RebuildIn = 0; WaitingForCredits = false; }
 
     public override void _Process(double delta)
     {
         float dt = (float)delta;
         _t += delta;
+        Visible = State != St.Destroyed;         // a lost ship is gone until it is rebuilt
         if (Net.Sim) Simulate(dt);
         else if (_hasNet)
         {
@@ -80,6 +111,7 @@ public partial class Gatherer : Node2D
 
     private void Simulate(float dt)
     {
+        if (State == St.Destroyed) { TickRebuild(dt); return; }
         switch (State)
         {
             case St.Outbound:

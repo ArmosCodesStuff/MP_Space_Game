@@ -13,6 +13,7 @@ public partial class BasePanel : PanelContainer
 {
     public Hub Hub;
     private string _tab = "MINERS";
+    private Label _fleet;          // this category's investment, its rebuild cost, and what is being rebuilt
     private VBoxContainer _body;
     private Label _credits;
     private readonly Dictionary<string, (Label info, Button buy)> _rows = new();
@@ -63,6 +64,7 @@ public partial class BasePanel : PanelContainer
             _body.AddChild(_reset);
             return;
         }
+        _fleet = new Label { Name = "Fleet", Modulate = new Color(0.8f, 0.88f, 1f) }; _body.AddChild(_fleet);
         _body.AddChild(new Label { Text = "+10% upgrades cost 1.25× per level.  +1 upgrades cost 2× per level; each row shows its cap.",
                                    Modulate = new Color(1, 1, 1, 0.55f) });
         foreach (var u in Economy.All.Where(u => u.Tab == tab))
@@ -84,6 +86,14 @@ public partial class BasePanel : PanelContainer
     {
         if (_armed > 0) _armed -= delta;
         _credits.Text = $"Credits: {Y.Credits:0}";
+        if (IsInstanceValid(_fleet) && _tab != "REFIT")
+        {
+            string lost = _tab == "HAULER"
+                ? (Y.Hauler != null && Y.Hauler.State == Hauler.St.Destroyed ? Rebuilding("Hauler", Y.Hauler.RebuildIn, Y.Hauler.WaitingForCredits, _tab) : "")
+                : string.Join("", Y.Gatherers.Where(g => g.Category == _tab && g.State == Gatherer.St.Destroyed)
+                                            .Select(g => Rebuilding($"{(g.Kind == GatherKind.Miner ? "Miner" : "Salvager")} {g.Index + 1}", g.RebuildIn, g.WaitingForCredits, _tab)));
+            _fleet.Text = $"Invested so far: {Y.Invested(_tab):0} cr  ·  a rebuild costs {Y.RebuildCost(_tab):0} cr (10%)" + lost;
+        }
         foreach (var (id, (info, buy)) in _rows)
         {
             var u = Economy.ById(id); int lv = Y.Level(id);
@@ -102,4 +112,7 @@ public partial class BasePanel : PanelContainer
             _reset.Disabled = Hub.CreatorOpen;
         }
     }
+
+    string Rebuilding(string who, double inS, bool waiting, string tab) =>
+        waiting ? $"\n  {who} lost: rebuild waiting for {Y.RebuildCost(tab):0} cr" : $"\n  {who} lost: rebuilt in {inS:0} s";
 }

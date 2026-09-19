@@ -688,6 +688,34 @@ public partial class _Test : Node
         Check(d1.Total == 0, "a target that moves after launch is missed (the torpedo does not track)");
         d1.Position = home;
 
+        // ── utility ships: hull, loss, and a rebuild for 10% of the category's investment ──
+        {
+            var Yd = H.Yard;
+            var mn = Yd.Gatherers.First(g => g.Kind == GatherKind.Miner);
+            var sv = Yd.Gatherers.First(g => g.Kind == GatherKind.Salvager);
+            Check(mn.MaxHull == 60 && sv.MaxHull == 60 && Yd.Hauler.MaxHull == 150, "miners and salvagers have 60 hull, the hauler 150");
+            Yd.Credits = 100000; double inv0 = Yd.Invested("MINERS"); int lv0 = Yd.Level("miner_hold");
+            double price = Economy.Cost(Economy.ById("miner_hold"), lv0);
+            Check(Yd.TryBuy("miner_hold") && Math.Abs(Yd.Invested("MINERS") - inv0 - price) < 1e-6, $"buying an upgrade adds its price to its category's investment (+{price:0})");
+            double cost = Yd.RebuildCost("MINERS");
+            Check(cost > 0 && Math.Abs(cost - Math.Round(Yd.Invested("MINERS") * 0.10)) < 1e-6, $"a rebuild costs 10% of it ({cost:0} of {Yd.Invested("MINERS"):0})");
+            mn.TakeDamage(59);
+            Check(mn.State != Gatherer.St.Destroyed && Math.Abs(mn.Hull - 1) < 1e-6, "59 damage leaves a miner at 1 hull");
+            mn.TakeDamage(5); await Wait(0.05);
+            Check(mn.State == Gatherer.St.Destroyed && !mn.Visible && mn.Cargo == 0 && Math.Abs(mn.RebuildIn - 30) < 0.2 && Yd.ArmOf(mn) < 0 && Yd.QueueIndex(mn) < 0,
+                  "destroyed: gone, its cargo lost, its arm and queue place given up, rebuilt in 30 s");
+            Yd.Credits = cost - 1; mn.RebuildIn = 0.1; await Wait(0.3);
+            Check(mn.State == Gatherer.St.Destroyed && mn.WaitingForCredits, "short of the rebuild cost, it waits");
+            Yd.Credits = cost + 500; await Wait(0.2);
+            Check(mn.State != Gatherer.St.Destroyed && mn.Hull == 60 && mn.Visible && Math.Abs(Yd.Credits - 500) < 1e-6, "paid for: rebuilt at the base at full hull, exactly 10% charged");
+            double hcost = Yd.RebuildCost("HAULER");
+            Yd.Hauler.ResetToPad(); Yd.Hauler.TakeDamage(150); await Wait(0.05);
+            Check(Yd.Hauler.State == Hauler.St.Destroyed && Yd.Hauler.WarpedOut && Math.Abs(Yd.Hauler.RebuildIn - 30) < 0.2, "the hauler, destroyed: gone for 30 s");
+            Yd.Hauler.RebuildIn = 0.1; Yd.Credits = hcost + 100; await Wait(0.3);
+            Check(Yd.Hauler.State == Hauler.St.Loading && Yd.Hauler.Hull == 150 && Math.Abs(Yd.Credits - 100) < 1e-6,
+                  $"rebuilt on its pad for 10% of the hauler's investment ({hcost:0} cr)");
+        }
+
         // ── pilot progression: EXP, levels, points, flat upgrades ──
         {
             Check(Progression.Cost(0) == 1 && Progression.Cost(1) == 2 && Progression.Cost(2) == 3, "upgrade costs 1, 2, 3, ... points");

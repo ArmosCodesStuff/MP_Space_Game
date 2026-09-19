@@ -26,7 +26,7 @@ using System;
 // ─────────────────────────────────────────────────────────────────────────────
 public partial class Hauler : Node2D
 {
-    public enum St { Loading, Lifting, Departing, Charging, Away, Arriving, Returning, Landing }
+    public enum St { Loading, Lifting, Departing, Charging, Away, Arriving, Returning, Landing, Destroyed }
 
     public Yard Yard;
     public St State = St.Loading;
@@ -63,10 +63,26 @@ public partial class Hauler : Node2D
         ResetToPad();
     }
 
-    public void ResetToPad() { Go(St.Loading); Cargo = 0; _speed = 0; _hasNet = false; Position = Hub.HaulerPad; Rotation = East; }
+    public void ResetToPad() { Go(St.Loading); Cargo = 0; _speed = 0; _hasNet = false; Position = Hub.HaulerPad; Rotation = East; Hull = MaxHull; RebuildIn = 0; WaitingForCredits = false; }
 
-    public void SetNet(Vector2 p, float rot, int state, float t, float cargo, float sale)
+    // hull, and being rebuilt (host-owned; guests get hull and state). Out of reach while away.
+    public double Hull = Economy.HaulerHull;
+    public double MaxHull => Economy.HaulerHull;
+    public double RebuildIn;
+    public bool WaitingForCredits;
+    public void TakeDamage(double d)
     {
+        if (!Net.Sim || State is St.Destroyed or St.Away) return;
+        Hull -= d;
+        if (Hull > 0) return;
+        Hull = 0; Cargo = 0; _speed = 0; Go(St.Destroyed); Effects();          // gone at once
+        RebuildIn = Economy.RebuildDelay; WaitingForCredits = false;
+        GetParent().AddChild(new Explosion { Position = Position, Radius = 70f });
+    }
+
+    public void SetNet(Vector2 p, float rot, int state, float t, float cargo, float sale, float hull)
+    {
+        Hull = hull;
         (_netPos, _netRot, _hasNet) = (p, rot, true);
         if ((St)state != State || Math.Abs(T - t) > 0.5) T = t;
         (State, Cargo, LastSale) = ((St)state, cargo, sale);
@@ -118,6 +134,17 @@ public partial class Hauler : Node2D
                 Rotation = West;
                 if (Slide(Hub.HaulerPad.X, dt)) Go(St.Landing);   // over the pad: descend, turning as it goes
                 break;
+            case St.Destroyed:
+            {   // rebuilt on its pad 30 s later, for 10% of what the hauler's upgrades have cost
+                RebuildIn = System.Math.Max(0, RebuildIn - dt);
+                if (RebuildIn > 0) break;
+                double cost = Yard.RebuildCost("HAULER");
+                if (Yard.Credits < cost) { WaitingForCredits = true; break; }
+                Yard.Credits -= cost;
+                ResetToPad();
+                GetParent().AddChild(new Explosion { Position = Position, Radius = 60f, Tint = new Color(0.5f, 0.8f, 1f) });
+                break;
+            }
             case St.Landing:
             {   // down onto the pad, swinging from west to east on the way: it arrives facing the portal
                 float k = Mathf.Clamp((float)(T / Economy.HaulerLand), 0f, 1f);
@@ -155,7 +182,7 @@ public partial class Hauler : Node2D
     private void Effects()
     {
         bool gone = State == St.Away && T >= 0.35;
-        _sprite.Visible = _overlay.Visible = !gone;
+        _sprite.Visible = _overlay.Visible = !gone && State != St.Destroyed;
         _sprite.Position = State == St.Charging
             ? new Vector2(_rng.RandfRange(-1f, 1f), _rng.RandfRange(-1f, 1f)) * (0.5f + 2.5f * (float)Math.Min(1, T / Economy.HaulerCharge))
             : Vector2.Zero;
