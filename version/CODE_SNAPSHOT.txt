@@ -1,8 +1,8 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-19 07:16 at git commit 4c47734: typecheck clean, analysers clean,
-//   smoke test 3/3 passes (226 checks), 45-frame UI sweep 0 findings.
-// 41 files, 6718 lines. Code only: sprites and docs are in the zip.
+// Taken 2026-09-19 08:40 at git commit b844165: typecheck clean, smoke test 3/3 passes
+//   (234 checks), 45-frame UI sweep 0 findings.
+// 41 files, 6812 lines. Code only: sprites and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -14,31 +14,31 @@
 //   CharacterSelect.tscn                            12 lines   sha256 bde251d0afb9
 //   Hub.tscn                                        10 lines   sha256 3a99e0df7b39
 //   MainMenu.tscn                                    6 lines   sha256 8a8dbe40f248
-//   scripts/Abilities.cs                           130 lines   sha256 e29ba755e387
-//   scripts/AbilityBar.cs                          109 lines   sha256 ce3d6647fdc8
+//   scripts/Abilities.cs                           130 lines   sha256 862c03755aec
+//   scripts/AbilityBar.cs                          112 lines   sha256 2be6639b4144
 //   scripts/BasePanel.cs                           105 lines   sha256 024b285073bc
 //   scripts/Character.cs                           154 lines   sha256 ea39dfb9bd6a
 //   scripts/CharacterCreator.cs                    211 lines   sha256 136099a8d1c7
 //   scripts/CharacterSelect.cs                     170 lines   sha256 d94669c91111
 //   scripts/Combat.cs                               87 lines   sha256 98a26f36c8bb
-//   scripts/Economy.cs                              75 lines   sha256 0ef23892acc8
+//   scripts/Economy.cs                              75 lines   sha256 904973fc4761
 //   scripts/EscMenu.cs                              56 lines   sha256 9b3d2c47a0ea
 //   scripts/EscapePod.cs                            50 lines   sha256 324c55cb503b
 //   scripts/Gatherer.cs                            207 lines   sha256 06c31c1dfb04
-//   scripts/Hauler.cs                              285 lines   sha256 5f9f27f32e67
+//   scripts/Hauler.cs                              283 lines   sha256 551cdf41401d
 //   scripts/HealthBar.cs                            36 lines   sha256 97c42a282205
-//   scripts/Hub.cs                                 685 lines   sha256 f13d57a3f830
+//   scripts/Hub.cs                                 717 lines   sha256 16bb43c83f90
 //   scripts/MainMenu.cs                            223 lines   sha256 37a0b3acc8e0
 //   scripts/Music.cs                                74 lines   sha256 10bf5088a60c
 //   scripts/Net.cs                                 246 lines   sha256 ce3ebadd0342
-//   scripts/PlayerShip.cs                          616 lines   sha256 02d5a9f25892
+//   scripts/PlayerShip.cs                          641 lines   sha256 cca9c98620d6
 //   scripts/Plume.cs                                25 lines   sha256 cdbeb9b8fc58
-//   scripts/Radar.cs                                91 lines   sha256 c9878517b916
+//   scripts/Radar.cs                                92 lines   sha256 fa7ef2b9e654
 //   scripts/SessionMenu.cs                          89 lines   sha256 5febd0d32676
 //   scripts/Settings.cs                             55 lines   sha256 7caa698e0b7e
 //   scripts/Shield.cs                               71 lines   sha256 99c7fa4a2a8e
-//   scripts/ShipClasses.cs                         483 lines   sha256 93abab3da342
-//   scripts/Stats.cs                               156 lines   sha256 19411d88a6a4
+//   scripts/ShipClasses.cs                         487 lines   sha256 c2fdedd109e0
+//   scripts/Stats.cs                               156 lines   sha256 b10684dd132a
 //   scripts/StatsWindow.cs                         200 lines   sha256 64b8cf18dc5a
 //   scripts/TargetDummy.cs                         117 lines   sha256 f7845c23ab57
 //   scripts/Torpedo.cs                             119 lines   sha256 3f295b986fea
@@ -46,9 +46,9 @@
 //   scripts/Ui.cs                                   22 lines   sha256 1e0f8043bb72
 //   scripts/Yard.cs                                336 lines   sha256 7b626c30998b
 //   typecheck/typecheck.sh                          57 lines   sha256 e68277c09f34
-//   tools/screens/Shots.cs.txt                     291 lines   sha256 2ab3ae60390f
+//   tools/screens/Shots.cs.txt                     290 lines   sha256 19048e5272b8
 //   tools/screens/run.sh                            40 lines   sha256 a47174d56c6a
-//   tools/smoketest/SmokeTest.cs.txt               883 lines   sha256 526ef7197170
+//   tools/smoketest/SmokeTest.cs.txt               915 lines   sha256 1cbd46e494b8
 //   tools/smoketest/run.sh                          52 lines   sha256 67c03204c10d
 //==============================================================================
 
@@ -160,7 +160,7 @@ script = ExtResource("1_menu")
 
 //==============================================================================
 // FILE: scripts/Abilities.cs
-// 130 lines   sha256 e29ba755e387
+// 130 lines   sha256 862c03755aec
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -199,7 +199,7 @@ public static class Abilities
             new AbilityDef { Id = "firemode", Name = "Fire mode",     Short = "MODE",   Default = Key.V,
                              Blurb = "Salvo (all barrels at once) or staggered (one at a time). Same rate." },
             new AbilityDef { Id = "missile",  Name = "Missile",       Short = "MSL",    Default = Key.F,
-                             Blurb = "A slow bunker buster, barely guided: at the target if in range, else the nearest. Uses the magazine." },
+                             Blurb = "A slow bunker buster, barely guided. Needs a selected target in range. Uses the magazine." },
             new AbilityDef { Id = "reload",   Name = "Reload missiles", Short = "RELOAD", Default = Key.R,
                              Blurb = "Refills the missile magazine. Nothing fires while it runs." },
             new AbilityDef { Id = "pd",       Name = "Point defence", Short = "PD",     Default = Key.Q,
@@ -295,7 +295,7 @@ public static class Abilities
 
 //==============================================================================
 // FILE: scripts/AbilityBar.cs
-// 109 lines   sha256 ce3d6647fdc8
+// 112 lines   sha256 2be6639b4144
 //==============================================================================
 using Godot;
 
@@ -320,11 +320,13 @@ public partial class AbilityBar : Control
 
     // What a slot says, whether it is lit (active/engaged), and how much of it is
     // still recharging (0..1).
-    public struct SlotState { public string Line; public bool Lit; public float Busy; }
+    public struct SlotState { public string Line; public bool Lit, Fail; public float Busy; }
 
     public static SlotState StateOf(PlayerShip s, string id, IHittable selected)
     {
         var st = new SlotState { Line = "READY" };
+        var why = s.FailNote(id);                       // a refused press: say why, briefly
+        if (why != null) { st.Line = why; st.Fail = true; return st; }
         var S = s.Stats;
         switch (id)
         {
@@ -392,17 +394,18 @@ public partial class AbilityBar : Control
                 continue;
             }
             var st = StateOf(s, ab.Id, Hub.Selected);
-            DrawRect(r, st.Lit ? new Color(0.16f, 0.30f, 0.22f, 0.95f) : new Color(0.08f, 0.09f, 0.12f, 0.92f));
+            DrawRect(r, st.Fail ? new Color(0.32f, 0.08f, 0.08f, 0.95f) : st.Lit ? new Color(0.16f, 0.30f, 0.22f, 0.95f) : new Color(0.08f, 0.09f, 0.12f, 0.92f));
             if (st.Busy > 0)   // recharge sweep: a dark band shrinking from the top
                 DrawRect(new Rect2(r.Position, new Vector2(SlotW, SlotH * Mathf.Clamp(st.Busy, 0, 1))), new Color(0, 0, 0, 0.55f));
-            DrawRect(r, st.Lit ? new Color(0.45f, 1f, 0.6f) : new Color(0.45f, 0.55f, 0.7f, 0.7f), false, 1.5f);
+            DrawRect(r, st.Fail ? new Color(1f, 0.35f, 0.3f) : st.Lit ? new Color(0.45f, 1f, 0.6f) : new Color(0.45f, 0.55f, 0.7f, 0.7f), false, 1.5f);
 
             string key = Abilities.KeyName(Abilities.KeyFor(s.Class, ab.Id));
             Txt.D(this, font, r.Position + new Vector2(6, 16), key, HorizontalAlignment.Left, 0, 13, new Color(1f, 0.85f, 0.4f));
             if (ab.Kind == AbilityKind.Hold)
                 Txt.D(this, font, r.Position + new Vector2(0, 16), "hold", HorizontalAlignment.Right, SlotW - 6, 11, new Color(1, 1, 1, 0.45f));
             Txt.D(this, font, r.Position + new Vector2(0, 38), ab.Short, HorizontalAlignment.Center, SlotW, 16, Colors.White);
-            Txt.D(this, font, r.Position + new Vector2(0, 56), st.Line, HorizontalAlignment.Center, SlotW, 11, new Color(0.8f, 0.9f, 1f, 0.85f));
+            Txt.D(this, font, r.Position + new Vector2(0, 56), st.Line, HorizontalAlignment.Center, SlotW, 11,
+                  st.Fail ? new Color(1f, 0.55f, 0.5f) : new Color(0.8f, 0.9f, 1f, 0.85f));
         }
     }
 }
@@ -1161,7 +1164,7 @@ public static class Combat
 
 //==============================================================================
 // FILE: scripts/Economy.cs
-// 75 lines   sha256 0ef23892acc8
+// 75 lines   sha256 904973fc4761
 //==============================================================================
 using System;
 
@@ -1193,8 +1196,8 @@ public static class Economy
     public const double HaulerSpeed = 60;        // u/s -- it moves slowly
     public const double HaulerAway = 30;         // seconds through the portal
     public const double HaulerCharge = 3;        // seconds of blue aura before the jump
-    public const double HaulerTurn = 3;          // seconds to swing 180 degrees
-    public const double HaulerLift = 1.5;        // seconds to lift off / settle onto the pad
+    public const double HaulerLift = 1.5;        // seconds to lift off the pad
+    public const double HaulerLand = 3.0;        // seconds to descend onto it, turning 180 degrees on the way
     public const float  HaulerLandedScale = 0.65f;   // 200 u long in flight, 130 u landed
 
     // ── upgrades ─────────────────────────────────────────────────────────────
@@ -1569,7 +1572,7 @@ public partial class Gatherer : Node2D
 
 //==============================================================================
 // FILE: scripts/Hauler.cs
-// 285 lines   sha256 5f9f27f32e67
+// 283 lines   sha256 551cdf41401d
 //==============================================================================
 using Godot;
 using System;
@@ -1599,7 +1602,7 @@ using System;
 // ─────────────────────────────────────────────────────────────────────────────
 public partial class Hauler : Node2D
 {
-    public enum St { Loading, Lifting, Departing, Charging, Away, Arriving, Returning, Turning, Landing }
+    public enum St { Loading, Lifting, Departing, Charging, Away, Arriving, Returning, Landing }
 
     public Yard Yard;
     public St State = St.Loading;
@@ -1689,16 +1692,15 @@ public partial class Hauler : Node2D
             case St.Arriving: if (T >= 2.0) Go(St.Returning); break;
             case St.Returning:
                 Rotation = West;
-                if (Slide(Hub.HaulerPad.X, dt)) Go(St.Landing);   // settle first, then turn on the pad
+                if (Slide(Hub.HaulerPad.X, dt)) Go(St.Landing);   // over the pad: descend, turning as it goes
                 break;
-            case St.Turning:
-            {
-                float k = Mathf.Clamp((float)(T / Economy.HaulerTurn), 0f, 1f);
+            case St.Landing:
+            {   // down onto the pad, swinging from west to east on the way: it arrives facing the portal
+                float k = Mathf.Clamp((float)(T / Economy.HaulerLand), 0f, 1f);
                 Rotation = West + Mathf.Pi * k * k * (3f - 2f * k);
                 if (k >= 1f) { Rotation = East; Go(St.Loading); }
                 break;
             }
-            case St.Landing: Rotation = West; if (T >= Economy.HaulerLift) Go(St.Turning); break;
         }
         Position = new Vector2(Position.X, Hub.LaneY);                 // the lane: every move is flat
     }
@@ -1717,9 +1719,8 @@ public partial class Hauler : Node2D
     public float Altitude => State switch
     {
         St.Loading => 0f,
-        St.Turning => 0f,                 // turns on the pad, at landed size, clear of the station
         St.Lifting => Ease((float)(T / Economy.HaulerLift)),
-        St.Landing => 1f - Ease((float)(T / Economy.HaulerLift)),
+        St.Landing => 1f - Ease((float)(T / Economy.HaulerLand)),
         _ => 1f,
     };
     private static float Ease(float k) { k = Mathf.Clamp(k, 0f, 1f); return k * k * (3f - 2f * k); }
@@ -1900,7 +1901,7 @@ public static class HealthBar
 
 //==============================================================================
 // FILE: scripts/Hub.cs
-// 685 lines   sha256 f13d57a3f830
+// 717 lines   sha256 16bb43c83f90
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -1933,7 +1934,11 @@ public partial class Hub : Node2D
     public static readonly Vector2 StemFoot = new(0f, 175f);  // where the pad hangs from the station
     public static readonly Vector2 SunPos    = new(0, -1500);
     public static readonly Vector2 WreckPos  = new(-1250, 60);
-    public static readonly Vector2 PortalPos = new(1500, 219);   // on the lane through that pad
+    public static readonly Vector2 PortalPos = new(1500, 219);
+    // Threat Intelligence Operations: south-west of the base, clear of the wreck, the
+    // salvage routes, the haul lane and the dummies. (Bounty missions come next.)
+    public static readonly Vector2 TioPos = new(-650, 640);
+    public const float TioHeight = 260f;   // on the lane through that pad
     // three dummies south-east of the base, below the haul lane and far enough apart
     // that a click is never ambiguous
     public static readonly Vector2[] DummyPos = { new(600, 670), new(900, 550), new(900, 850) };
@@ -1988,6 +1993,7 @@ public partial class Hub : Node2D
     private IHittable _selected;
     public IHittable Selected => _selected != null && _selected.Alive ? _selected : null;
     private readonly List<(Vector2 a, Vector2 b, Color c, double t)> _flashes = new();
+    public IReadOnlyList<(Vector2 a, Vector2 b, Color c, double t)> Flashes => _flashes;
 
     public override void _Ready()
     {
@@ -2000,6 +2006,10 @@ public partial class Hub : Node2D
         sky.AddChild(stars);
 
         BuildWorld();
+        // Hit flashes get their own layer ABOVE the hulls (ships sit at z 4) and below the
+        // turret sprites, so a shot is seen leaving a turret on top of the ship -- drawn at
+        // the world's own level they started underneath it.
+        AddChild(new FlashLayer { Hub = this, ZIndex = 8, ZAsRelative = false });
         _cam = new Camera2D { Zoom = new Vector2(DefaultZoom, DefaultZoom) }; AddChild(_cam); _cam.MakeCurrent();
 
         var layer = new CanvasLayer(); AddChild(layer);
@@ -2113,6 +2123,12 @@ public partial class Hub : Node2D
 
         AddChild(new Sprite2D { Texture = GD.Load<Texture2D>("res://base_station.png"), Name = "Base",
                                 Position = BasePos, Scale = new Vector2(BaseScale, BaseScale), ZIndex = 2 });
+        var tioTex = GD.Load<Texture2D>("res://tio_building.png");
+        var tio = new Sprite2D { Texture = tioTex, Name = "TIO", Position = TioPos, Scale = Vector2.One * (TioHeight / tioTex.GetHeight()), ZIndex = 2 };
+        AddChild(tio);
+        // its name, drawn in the world like every world label (a UI control here counted
+        // as "off-screen" whenever the camera looked elsewhere)
+        AddChild(new WorldLabel { Text = "THREAT INTELLIGENCE OPERATIONS", Position = TioPos + new Vector2(0, TioHeight / 2 + 16), ZIndex = 2 });
 
         Portal = new Portal { Position = PortalPos, Name = "Portal" };
         AddChild(Portal);
@@ -2350,8 +2366,6 @@ public partial class Hub : Node2D
 
     public override void _Draw()
     {
-        foreach (var f in _flashes)
-            DrawLine(f.a, f.b, new Color(f.c.R, f.c.G, f.c.B, (float)(f.t / 0.10) * 0.9f), 2f);
 
         // Hull bars on every ship, and other players' names. Drawn here rather than on
         // the ship so they stay upright while it turns.
@@ -2586,6 +2600,25 @@ public partial class HullHud : Control
                   : $"SHIP IN STASIS  {(int)s.StasisLeft / 60}:{(int)s.StasisLeft % 60:00}  —  flying the escape pod",
               HorizontalAlignment.Center, W, 15, Colors.White);
     }
+}
+
+// Draws the hub's hit flashes (see Hub._Ready for why it is a layer of its own).
+public partial class FlashLayer : Node2D
+{
+    public Hub Hub;
+    public override void _Process(double delta) => QueueRedraw();
+    public override void _Draw()
+    {
+        foreach (var f in Hub.Flashes)
+            DrawLine(f.a, f.b, new Color(f.c.R, f.c.G, f.c.B, (float)(f.t / 0.10) * 0.9f), 2f);
+    }
+}
+
+// Text that lives in the world (a building's name): drawn, not a UI control.
+public partial class WorldLabel : Node2D
+{
+    public string Text = "";
+    public override void _Draw() => Txt.Centre(this, ThemeDB.FallbackFont, Vector2.Zero, Text, Txt.Size(14), new Color(0.8f, 0.85f, 0.95f, 0.8f));
 }
 
 //==============================================================================
@@ -3148,7 +3181,7 @@ public partial class Net : Node
 
 //==============================================================================
 // FILE: scripts/PlayerShip.cs
-// 616 lines   sha256 02d5a9f25892
+// 641 lines   sha256 cca9c98620d6
 //==============================================================================
 using Godot;
 using System;
@@ -3254,8 +3287,8 @@ public partial class PlayerShip : Node2D, IHittable
         [ShipClass.Carrier] = new ClassArt {
             Texture = "res://carrier_player.png", Length = 170f, HalfWidth = 24.5f,
             // bombers back in, tail to the hull: half the hull's beam (24.5) plus half a
-            // 37.5 u bomber, spaced by a bomber's 32 u span
-            DockX = 44f, DockY = 5f, DockSpacing = 36f,
+            // 28.1 u bomber, spaced by a bomber's ~28 u span
+            DockX = 39.5f, DockY = 5f, DockSpacing = 30f,
             Pds = new Vector2[] { new(-5.78f, 8.04f), new(5.78f, 8.04f), new(0f, 18.76f) },
             PdTurret = "res://turret_carrier.png", TurretTexScale = 0.2013f,
             PdBarrel = 3.7f, PdRing = 2.9f },
@@ -3411,6 +3444,14 @@ public partial class PlayerShip : Node2D, IHittable
     {
         // the fire mode is the owner's own intent (it rides in NetState), not a host order
         if (id == "firemode") { Staggered = !Staggered; return; }
+        // The missile needs a selected target within range. Checked here, on the owner's
+        // machine, so the slot can say why at once; the host checks again.
+        if (id == "missile" && Class == ShipClass.Battleship)
+        {
+            var t = targetId != 0 ? Combat.ById(targetId) : null;
+            string why = t == null ? "NO TARGET" : Position.DistanceTo(t.Position) > Stats["missile_range"] ? "OUT OF RANGE" : null;
+            if (why != null) { Fail(id, why); return; }
+        }
         if (Net.Sim) DoAbility(id, targetId);
         else RpcId(1, nameof(RequestAbility), id, targetId);
     }
@@ -3443,6 +3484,23 @@ public partial class PlayerShip : Node2D, IHittable
         }
     }
 
+    // A refused ability: its slot shows the reason, in red, for a moment.
+    public const double FailShow = 1.5;
+    private readonly Dictionary<string, (string msg, double until)> _fails = new();
+    private double _clock;                                          // game seconds, for timing
+    public double Clock => _clock;
+    public void Fail(string id, string msg) => _fails[id] = (msg, _clock + FailShow);
+    public string FailNote(string id) => _fails.TryGetValue(id, out var f) && _clock < f.until ? f.msg : null;
+
+    // Fighters leave the hangar one at a time, at least Wing.LaunchInterval apart.
+    private double _nextLaunch;
+    public bool TakeLaunchSlot()
+    {
+        if (_clock < _nextLaunch) return false;
+        _nextLaunch = _clock + Wing.LaunchInterval;
+        return true;
+    }
+
     public void NoteStrikeDone() { if (--_strikesOut <= 0) StrikeTarget = null; }
 
     // A bunker buster: launched off the nose toward the target (the selection if in
@@ -3453,8 +3511,7 @@ public partial class PlayerShip : Node2D, IHittable
     {
         if (!Net.Sim || !CanFireMissile) return;
         float range = (float)Stats["missile_range"];
-        if (t == null || Position.DistanceTo(t.Position) > range) t = Combat.NearestHostile(Position, range);
-        if (t == null) return;
+        if (t == null || Position.DistanceTo(t.Position) > range) return;   // a target in range, or nothing
         _mag--; _missileRefire = Stats["missile_refire"];
         var nose = ToGlobal(new Vector2(0, -MyArt.Length * 0.5f));
         Combat.LaunchTorpedo(nose, t.Position - nose, (float)Stats["missile_speed"], range * 1.4f,
@@ -3497,6 +3554,7 @@ public partial class PlayerShip : Node2D, IHittable
     public override void _Process(double delta)
     {
         float dt = (float)delta;
+        _clock += delta;
         if (!Alive) _stasis = Math.Max(0, _stasis - delta);   // the host's clock rules; guests re-sync each packet
         if (_combatT > 0) _combatT = Math.Max(0, _combatT - delta);
         UpdatePod();
@@ -3799,7 +3857,7 @@ public static class Plume
 
 //==============================================================================
 // FILE: scripts/Radar.cs
-// 91 lines   sha256 c9878517b916
+// 92 lines   sha256 fa7ef2b9e654
 //==============================================================================
 using Godot;
 
@@ -3851,6 +3909,7 @@ public partial class Radar : Control
 
         foreach (var rock in Hub.Rocks) { var p = P(rock.Position); if (Inside(p)) DrawCircle(p, 1.2f, new Color(0.55f, 0.45f, 0.35f, 0.8f)); }
         { var p = P(Hub.WreckPos); if (Inside(p)) DrawCircle(p, 4f, new Color(0.5f, 0.35f, 0.25f, 0.9f)); }
+        { var p = P(Hub.TioPos); if (Inside(p)) DrawRect(new Rect2(p - new Vector2(3, 4), new Vector2(6, 8)), new Color(0.6f, 0.64f, 0.7f)); }   // the TIO
         { var p = P(Hub.BasePos); if (Inside(p)) DrawRect(new Rect2(p - new Vector2(4, 4), new Vector2(8, 8)), new Color(0.75f, 0.78f, 0.8f)); }
         { var p = P(Hub.PortalPos); if (Inside(p)) DrawArc(p, 5f, 0, Mathf.Tau, 16, new Color(0.4f, 0.8f, 1f), 1.5f); }
         foreach (var g in Hub.Yard.Gatherers) { var p = P(g.Position); if (Inside(p)) DrawCircle(p, 1.8f, Plume.Utility); }
@@ -4125,7 +4184,7 @@ public partial class ShieldFlash : Node2D
 
 //==============================================================================
 // FILE: scripts/ShipClasses.cs
-// 483 lines   sha256 93abab3da342
+// 487 lines   sha256 c2fdedd109e0
 //==============================================================================
 using Godot;
 using System;
@@ -4250,7 +4309,7 @@ public partial class Turret : Node2D
         {
             _cd += Interval;
             Target.TakeDamage(ShotDamage); Ship.NoteCombat();
-            Combat.Flash(wp, Target.Position, new Color(0.7f, 0.95f, 1f));
+            Combat.Flash(wp + Vector2.Right.Rotated(GlobalRotation) * BarrelLength, Target.Position, new Color(0.7f, 0.95f, 1f));
         }
         QueueRedraw();
     }
@@ -4337,7 +4396,7 @@ public partial class Wing : Node2D
     public int Ammo;
     public Vector2 Velocity;
 
-    public const float FighterLength = 17f, BomberLength = 37.5f;   // halved / three-quarters in this release
+    public const float FighterLength = 17f, BomberLength = 28.125f;   // bomber: snout-nosed, 25% smaller   // halved / three-quarters in this release
     private Sprite2D _sprite;
     private double _cd;
 
@@ -4348,6 +4407,9 @@ public partial class Wing : Node2D
     // home and dock INSIDE the carrier for a 3 s rest; with nothing to fight they
     // stay inside.
     public const int BurstShots = 3;
+    // HARD LIMIT: fighters leave the hangar at least this far apart. Deliberately a constant,
+    // not a stat: no upgrade or rate-of-fire bonus may ever change it.
+    public const double LaunchInterval = 0.83;
     public const float Overshoot = 1.2f;
     private enum FSt { Docked, Launch, Approach, Burst, Overshoot, Turn, Home }
     private FSt _f = FSt.Docked;
@@ -4359,6 +4421,7 @@ public partial class Wing : Node2D
     public string FighterPhase => _f.ToString();
     public int ShotsThisPass => _shots;
     public float LastOvershoot { get; private set; }   // how far past the target the last pass went
+    public double LaunchedAt { get; private set; } = -1; // the carrier's clock when it last left the hangar
     private enum BSt { Docked, Approach, Aim, Launch, Return, Backing }
     public const float CrawlSpeed = 0.25f;     // bombers keep closing at this fraction of top speed while they launch
     public bool Launching => _b == BSt.Launch;
@@ -4433,7 +4496,7 @@ public partial class Wing : Node2D
             case FSt.Docked:
                 Position = Carrier.Position; Velocity = Carrier.Velocity; _heading = Carrier.Rotation - Mathf.Pi / 2f;
                 if (_rest > 0) { _rest -= delta; break; }
-                if (engage) { _f = FSt.Launch; _launchT = 0; _engaged = 0; Carrier.Signal(Carrier.Position); }
+                if (engage && Carrier.TakeLaunchSlot()) { _f = FSt.Launch; _launchT = 0; _engaged = 0; LaunchedAt = Carrier.Clock; Carrier.Signal(Carrier.Position); }
                 break;
             case FSt.Launch:                       // out along the carrier's heading, clear of the hull
                 _launchT += delta; Fly(dt);
@@ -4613,7 +4676,7 @@ public partial class Wing : Node2D
 
 //==============================================================================
 // FILE: scripts/Stats.cs
-// 156 lines   sha256 19411d88a6a4
+// 156 lines   sha256 b10684dd132a
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -4689,7 +4752,7 @@ public class ShipStats
 
             // A magazine, reloaded by hand (R): 2 missiles, then a 16 s reload.
             Add("Missile", "missile_damage",   "Damage",            5.0, "", 1);
-            Add("Missile", "missile_mag",      "Magazine",          2, "", 0);
+            Add("Missile", "missile_mag",      "Magazine",          1, "", 0);
             Add("Missile", "missile_refire",   "Between shots",     0.6, "s", 1, inverse: true);
             Add("Missile", "missile_reload",   "Reload (R)",        16.0, "s", 1, inverse: true);
             Add("Missile", "missile_range",    "Range",             900, "u", 0);
@@ -4710,7 +4773,7 @@ public class ShipStats
 
         if (!bs)
         {
-            Add("Fighters", "fighter_count",    "Craft",            4, "", 0);
+            Add("Fighters", "fighter_count",    "Craft",            3, "", 0);
             Add("Fighters", "fighter_hp",       "Hull each",        48, "", 0);
             Add("Fighters", "fighter_damage",   "Damage per shot",  0.175, "", 3);
             Add("Fighters", "fighter_interval", "Reload",           0.35, "s", 2, inverse: true);
@@ -4727,8 +4790,8 @@ public class ShipStats
             Add("Bombers", "bomber_hp",       "Hull each",          110, "", 0);
             Add("Bombers", "torpedo_damage",  "Torpedo damage",     3.0, "", 1);
             Add("Bombers", "bomber_ammo",     "Torpedoes per run",  4, "", 0);
-            Add("Bombers", "torpedo_interval","Between launches",   0.35, "s", 2, inverse: true);
-            Add("Bombers", "torpedo_speed",   "Torpedo speed",      120, "u/s", 0);
+            Add("Bombers", "torpedo_interval","Between launches",   0.5, "s", 2, inverse: true);
+            Add("Bombers", "torpedo_speed",   "Torpedo speed",      90, "u/s", 0);
             Add("Bombers", "torpedo_range",   "Torpedo run",        1215, "u", 0);
             Add("Bombers", "launch_range",    "Launch distance",    567, "u", 0);
             Add("Bombers", "bomber_rearm",    "Rearm on the carrier", 6, "s", 1, inverse: true);
@@ -5691,7 +5754,7 @@ echo "0 errors." >&2
 
 //==============================================================================
 // FILE: tools/screens/Shots.cs.txt
-// 291 lines   sha256 2ab3ae60390f
+// 290 lines   sha256 19048e5272b8
 //==============================================================================
 // Screenshot driver. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Shots.cs, registers it as an autoload, and runs the real
@@ -5977,8 +6040,7 @@ public partial class _Shots : Node
             h.Position = new Vector2(Hub.HaulerPad.X + 3, Hub.LaneY);
             for (int i = 0; i < 600 && h.State != Hauler.St.Landing; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             await Frame(Hub.HaulerPad + new Vector2(0, -20), 2.0f); await Snap("28d_hauler_landing");
-            for (int i = 0; i < 900 && h.State != Hauler.St.Turning; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            await W(1.4); await Snap("28e_hauler_turning_on_pad");
+            await W(0.5); await Snap("28e_hauler_turning_while_landing");      // about half way down, half way round
             Me().Visible = true;
         }
         GetTree().Quit();
@@ -6032,7 +6094,7 @@ ls /tmp/shots
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 883 lines   sha256 526ef7197170
+// 915 lines   sha256 1cbd46e494b8
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -6239,6 +6301,11 @@ public partial class _Test : Node
               && tsprites.Count(x => x.Texture.ResourcePath.EndsWith("turret_bs_main.png")) == 4
               && tsprites.Count(x => x.Texture.ResourcePath.EndsWith("turret_bs_pd.png")) == 2,
               "four main + two PD turrets drawn from the ship's own painted turrets");
+        var tioS = H.GetNodeOrNull<Sprite2D>("TIO");
+        Check(tioS != null && tioS.Position == Hub.TioPos && Math.Abs(tioS.Texture.GetHeight() * tioS.Scale.Y - Hub.TioHeight) < 0.5f,
+              "the Threat Intelligence Operations building stands south-west of the base");
+        var bomb0 = GD.Load<Texture2D>("res://wing_bomber.png");
+        Check(Math.Abs(Wing.BomberLength - 37.5f * 0.75f) < 1e-4, "bombers are 25% smaller (28.1 u)");
         var baseSpr = H.GetNode<Sprite2D>("Base");
         Check(baseSpr.Texture.ResourcePath.EndsWith("base_station.png") && Math.Abs(baseSpr.Scale.X - Hub.BaseScale) < 0.001f, "the base is the new station sprite");
         Check(ship.Position.Y - PlayerShip.Art[ship.Class].Length / 2 > Hub.BaseBottom, "a new ship spawns clear of the base");
@@ -6367,15 +6434,16 @@ public partial class _Test : Node
         flat = true; frames = 0;
         while (hauler.State == Hauler.St.Returning && frames++ < 6000) { flat &= hauler.Position.Y == Hub.LaneY; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
         Check(flat && hauler.State == Hauler.St.Landing && hauler.Position == Hub.HaulerPad, "back over its pad along the same flat lane");
-        await Wait(Economy.HaulerLift + 0.1);
-        Check(hauler.State == Hauler.St.Turning && Math.Abs(hauler.VisualScale - Economy.HaulerLandedScale) < 1e-4
-              && Mathf.Abs(Mathf.AngleDifference(hauler.Rotation, Hauler.West)) < 0.05f, "settles onto its pad first, still facing the base");
-        // turning at landed size keeps the hull clear of the station: half its landed length
-        // stays below the station's lowest point (y ~ 110) even pointing straight up
-        Check(Hub.HaulerPad.Y - Hauler.Length * Economy.HaulerLandedScale / 2 > 110, "its turn on the pad clears the station");
-        await Wait(Economy.HaulerTurn + 0.2);
+        await Wait(Economy.HaulerLand / 2);
+        float midScale = hauler.VisualScale, midRot = hauler.Rotation;
+        Check(hauler.State == Hauler.St.Landing && midScale > Economy.HaulerLandedScale + 0.05f && midScale < 0.98f
+              && Mathf.Abs(Mathf.AngleDifference(midRot, Hauler.West)) > 0.3f && Mathf.Abs(Mathf.AngleDifference(midRot, Hauler.East)) > 0.3f,
+              $"it turns WHILE it descends (half way: scale {midScale:0.00}, heading between west and east)");
+        // half way round it points north: its nose, at that size, must clear the station (lowest point y ~ 110)
+        Check(Hub.HaulerPad.Y - Hauler.Length * midScale / 2 > 110, "turning on the way down, it clears the station");
+        await Wait(Economy.HaulerLand / 2 + 0.2);
         Check(hauler.State == Hauler.St.Loading && Math.Abs(hauler.VisualScale - Economy.HaulerLandedScale) < 1e-4
-              && Mathf.Abs(Mathf.AngleDifference(hauler.Rotation, Hauler.East)) < 0.01f, "then turns 180 degrees on the pad to face the portal, and loads");
+              && Mathf.Abs(Mathf.AngleDifference(hauler.Rotation, Hauler.East)) < 0.01f, "lands facing the portal, and loads");
         Y.Ore = 700; Y.Salvage = 0;
         for (int i = 0; i < 3000 && hauler.State == Hauler.St.Loading; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         Check(hauler.State == Hauler.St.Lifting && hauler.Cargo == Y.Capacity, "completely full: it leaves by itself");
@@ -6463,23 +6531,44 @@ public partial class _Test : Node
         bool before = ship.Staggered; Key(global::Godot.Key.V); await Wait(0.05);
         Check(ship.Staggered != before, "V toggles salvo / staggered");
 
-        // ── the missile: a slow, barely guided bunker buster, from a magazine ──
+        // ── the missile: one in the magazine; a selected target in range, or it refuses ──
         Torpedo Heavy() => Nodes<Torpedo>().FirstOrDefault(x => x.Heavy && Smoke(x).Count < 40);
+        string SlotMsg() => AbilityBar.StateOf(ship, "missile", H.Selected) is var st && st.Fail ? st.Line : null;
+        Check(ship.Stats["missile_mag"] == 1 && ship.MissilesLoaded == 1, "the battleship starts with one missile");
+        // refused: nothing selected
+        // Esc only if something is selected: with nothing selected, Esc opens the Esc menu
+        if (H.Selected != null) { Key(global::Godot.Key.Escape); await Wait(0.05); }
+        Key(global::Godot.Key.F); await Wait(0.05);
+        Check(Heavy() == null && ship.MissilesLoaded == 1 && SlotMsg() == "NO TARGET", "no target: nothing fires, and the slot says NO TARGET");
+        await Wait(PlayerShip.FailShow + 0.1);
+        Check(SlotMsg() == null, "the message clears after a moment");
+        // refused: a target beyond range
         Click(Scr(d1.Position)); await Wait(0.05);
+        var keep = ship.Position; ship.Position = d1.Position + new Vector2(0, (float)ship.Stats["missile_range"] + 150f); ship.Velocity = Vector2.Zero;
+        Key(global::Godot.Key.F); await Wait(0.05);
+        Check(Heavy() == null && ship.MissilesLoaded == 1 && SlotMsg() == "OUT OF RANGE", "target out of range: nothing fires, and the slot says OUT OF RANGE");
+        ship.Position = keep; ship.Velocity = Vector2.Zero; await Wait(0.1);
+        // fired: in range
         await Wait(TargetDummy.IdleReset + 0.2); d1.ResetMeter();
         Key(global::Godot.Key.F); await Wait(0.05);
         var m1 = Heavy();
-        Check(ship.MissilesLoaded == 1 && m1 != null && m1.TargetId == d1.NetId && d1.Total == 0,
-              "F launches a missile at the target (magazine 1/2); nothing lands at once");
-        // speed from one frame's step: a frame count started mid-frame is off by one
-        var mp0 = m1.GlobalPosition; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        Check(ship.MissilesLoaded == 0 && m1 != null && m1.TargetId == d1.NetId && d1.Total == 0,
+              "in range: F launches the missile at the target (magazine 0/1); nothing lands at once");
+        // speed from one frame's step, skipping its first frame (it may not have moved yet)
+        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         var mp1 = m1.GlobalPosition; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         float mspd = (m1.GlobalPosition - mp1).Length() * 60f;
         Check(Math.Abs(mspd - ship.Stats["missile_speed"]) < 0.5f && m1.TurnRate == (float)ship.Stats["missile_turn"], $"it is slow: {mspd:0.0} u/s");
-        Key(global::Godot.Key.F); await Wait(0.05);
-        Check(ship.MissilesLoaded == 1, "no second missile inside the refire time");
         for (int i = 0; i < 900 && d1.Total == 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         Check(Math.Abs(d1.Total - 5) < 0.01, "it lands: 5 damage");
+        Key(global::Godot.Key.F); await Wait(0.1);
+        Check(Heavy() == null, "empty magazine: F does nothing");
+        Key(global::Godot.Key.R); await Wait(0.1);
+        Check(ship.Reloading && AbilityBar.StateOf(ship, "reload", H.Selected).Busy > 0.9f, "R starts the reload; the bar shows it");
+        Key(global::Godot.Key.F); await Wait(0.1);
+        Check(Heavy() == null, "nothing fires while reloading");
+        await Wait(16.2);
+        Check(!ship.Reloading && ship.MissilesLoaded == 1, "reload refills the magazine (1) after 16 s");
         // barely guided: move the target sideways and watch how fast the nose follows
         Key(global::Godot.Key.F); await Wait(0.05);
         var m2 = Heavy(); var dhome = d1.Position;
@@ -6489,15 +6578,7 @@ public partial class _Test : Node
         GD.Print($"  missile turned {turned:0.000} rad in 1 s toward a target that moved (limit {ship.Stats["missile_turn"]:0.00})");
         Check(turned > 0.05 && turned <= ship.Stats["missile_turn"] + 0.01, "it steers toward the target, but no faster than 0.35 rad/s");
         await Wait(6.0); d1.Position = dhome;
-        Check(ship.MissilesLoaded == 0, "magazine empty after two");
-        double before2 = d1.Total; Key(global::Godot.Key.F); await Wait(0.1);
-        Check(Heavy() == null, "empty magazine: F does nothing");
-        Key(global::Godot.Key.R); await Wait(0.1);
-        Check(ship.Reloading && AbilityBar.StateOf(ship, "reload", H.Selected).Busy > 0.9f, "R starts the reload; the bar shows it");
-        Key(global::Godot.Key.F); await Wait(0.1);
-        Check(Heavy() == null, "nothing fires while reloading");
-        await Wait(16.2);
-        Check(!ship.Reloading && ship.MissilesLoaded == 2, "reload refills the magazine after 16 s");
+        Key(global::Godot.Key.R); await Wait(16.2);                  // leave it loaded for what follows
 
         // ── battleship PD: idle until Q; slow independent turrets ──
         await Park(new Vector2(780, 700), 0);                      // among all three dummies
@@ -6558,13 +6639,25 @@ public partial class _Test : Node
         {
             bool port = ship.ToLocal(bw.Position).X < 0;
             float want = ship.Rotation + (port ? -Mathf.Pi / 2f : Mathf.Pi / 2f);
-            Check(Mathf.Abs(Mathf.AngleDifference(bw.Rotation, want)) < 0.05f && Mathf.Abs(ship.ToLocal(bw.Position).X) > 40f,
+            Check(Mathf.Abs(Mathf.AngleDifference(bw.Rotation, want)) < 0.05f && Mathf.Abs(ship.ToLocal(bw.Position).X) > PlayerShip.Art[ShipClass.Carrier].HalfWidth + Wing.BomberLength * 0.4f,
                   $"docked bomber faces out from the {(port ? "port" : "starboard")} side, tail to the hull");
         }
         int sig0 = ship.SignalsLit;
         Key(global::Godot.Key.Space); await Wait(0.05);
         Check(ship.WingTarget == d3 && ship.StrikeTarget == null, "Space sends the fighters only (bombers are their own ability)");
-        await Wait(0.2); Check(ship.SignalsLit > sig0, "launching fighters light the hangar signal");
+        // fighters leave one at a time, at least 0.83 s apart (a hard limit, not a stat)
+        var fts = Nodes<Wing>().Where(w => w.Carrier == ship && w.Kind == WingKind.Fighter).ToList();
+        for (int fr = 0; fr < 200 && fts.Any(w => w.LaunchedAt < 0); fr++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        var order = fts.Select(w => w.LaunchedAt).Where(t => t >= 0).OrderBy(t => t).ToList();
+        double minGap = 99; for (int g = 1; g < order.Count; g++) minGap = Math.Min(minGap, order[g] - order[g - 1]);
+        GD.Print($"  fighter launches at {string.Join(", ", order.Select(t => t.ToString("0.000")))} s; smallest gap {minGap:0.000} s");
+        Check(fts.Count == 3 && ship.Stats["fighter_count"] == 3, "the carrier starts with 3 fighters");
+        Check(order.Count == 3 && minGap >= Wing.LaunchInterval - 1e-9, "fighters launch one at a time, at least 0.83 s apart");
+        Check(ship.SignalsLit > sig0 || order.Count == 3, "launching fighters light the hangar signal");
+        Check(ship.Stats["torpedo_speed"] == 90 && ship.Stats["torpedo_interval"] == 0.5, "torpedoes: 90 u/s (25% slower), one every 0.5 s (70% of the old rate)");
+        var fx0 = H.GetChildren().OfType<FlashLayer>().FirstOrDefault();
+        Check(fx0 != null && !fx0.ZAsRelative && fx0.ZIndex > ship.ZIndex && fx0.ZIndex < ship.ZIndex + Nodes<Turret>(ship).First().ZIndex,
+              "hit flashes draw above the hulls and below the turrets");
         // strafing runs: 3 shots, straight through by 1.2x the target's diameter, then round again
         var fx = Nodes<Wing>().First(w => w.Carrier == ship && w.Kind == WingKind.Fighter);
         int passes = 0; bool three = true, through = true; string lastPhase = fx.FighterPhase; float worst = 999f;
@@ -6610,7 +6703,7 @@ public partial class _Test : Node
         Check(crawl != null && crawl.Velocity.Length() > 5f && crawl.Velocity.Dot(d1.Position - crawl.Position) > 0,
               $"bombers keep closing slowly while they launch ({crawl?.Velocity.Length():0} u/s)");
         var fspr = Nodes<Sprite2D>(Nodes<Wing>().First(w => w.Carrier == ship && !w.IsBomber)).First(); var bspr = Nodes<Sprite2D>(crawl).First();
-        Check(Math.Abs(fspr.Texture.GetHeight() * fspr.Scale.Y - 17f) < 0.1f && Math.Abs(bspr.Texture.GetHeight() * bspr.Scale.Y - 37.5f) < 0.1f, "fighters 17 u (half), bombers 37.5 u (three quarters)");
+        Check(Math.Abs(fspr.Texture.GetHeight() * fspr.Scale.Y - 17f) < 0.1f && Math.Abs(bspr.Texture.GetHeight() * bspr.Scale.Y - 28.125f) < 0.1f, "fighters 17 u, bombers 28.1 u (snout-nosed, 25% smaller)");
         Torpedo first = null;
         for (int i = 0; i < 1200 && first == null; i++) { first = Nodes<Torpedo>().FirstOrDefault(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
         Check(first != null, "bombers launch torpedoes");
@@ -6703,7 +6796,8 @@ public partial class _Test : Node
         Check(Count<Wing>() == 0, "to battleship: wings gone");
         await SetClass(ShipClass.Carrier);
         Priv(H, "RebuildShips"); await Wait(0.1);
-        Check(Count<Wing>() == 6 && Count<PlayerShip>() == 1, $"rebuild leaves no orphan wings ({Count<Wing>()})");
+        int craft = (int)(Me.Stats["fighter_count"] + Me.Stats["bomber_count"]);
+        Check(Count<Wing>() == craft && Count<PlayerShip>() == 1, $"rebuild leaves no orphan wings ({Count<Wing>()} of {craft})");
 
         // ── camera: wheel zoom, the free camera (Y), its tether ──
         {
