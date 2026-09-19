@@ -910,6 +910,49 @@ public partial class _Test : Node
             pm.Position = keepP; pm.Velocity = Vector2.Zero; pm.TakeDamage(-(pm.MaxHp - pm.Hp));
         }
 
+        // ── the base's own weapons: a 5 DPS laser at 300 u, a tracking 25-damage missile at 600 u -- raiders only ──
+        {
+            var bd = Nodes<BaseDefense>().First();
+            Check(BaseDefense.LaserRange == 300 && BaseDefense.MissileRange == 600 && BaseDefense.LaserDps == 5 && BaseDefense.MissileDamage == 25
+                  && Math.Abs(BaseDefense.MissileSpeed - 1.2f * 100f) < 1e-3, "the base: a 5 DPS laser at 300 u; a 25-damage missile at 600 u, 120 u/s");
+            var dd = H.GetNode<TargetDummy>("TargetDummy1"); var dHome = dd.Position;
+            dd.Position = Hub.BasePos + new Vector2(0, 250); dd.ResetMeter();
+            double l0 = bd.LaserDealt; int m0 = bd.MissilesFired; await Wait(2.0);
+            Check(bd.LaserDealt == l0 && bd.MissilesFired == m0 && dd.Total == 0, "it never fires at the practice dummies");
+            dd.Position = dHome;
+            var spot1 = Hub.BasePos + new Vector2(0, 280);
+            var rb = H.SpawnRaider(spot1); rb.Hp = 1000;
+            double lz = bd.LaserDealt;
+            for (int i = 0; i < 120; i++) { rb.Position = spot1; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            double laser2 = bd.LaserDealt - lz;
+            Check(Math.Abs(laser2 - 10) < 2.6, $"a raider inside 300 u: the laser burns it at 5 DPS ({laser2:0.0} in 2 s)");
+            rb.TakeDamage(99999); await Wait(0.2);
+            var spot2 = Hub.BasePos + new Vector2(0, 500);
+            var rc = H.SpawnRaider(spot2); rc.Hp = 1000;
+            int mz = bd.MissilesFired; double lz2 = bd.LaserDealt;
+            Torpedo bm = null;
+            for (int i = 0; i < 60 * 6 && bm == null; i++)
+            {
+                rc.Position = spot2;
+                bm = Nodes<Torpedo>().FirstOrDefault(t => !t.HostileFire && !t.Heavy && t.TargetId == rc.NetId);
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            }
+            var bp1 = bm?.GlobalPosition ?? Vector2.Zero;
+            for (int i = 0; i < 15; i++) { rc.Position = spot2; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            float bspd = bm != null && GodotObject.IsInstanceValid(bm) ? (bm.GlobalPosition - bp1).Length() / 0.25f : 0f;
+            double hpc = rc.Hp;
+            for (int i = 0; i < 60 * 6 && rc.Hp == hpc; i++) { rc.Position = spot2; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            Check(bm != null && bd.MissilesFired > mz && bd.LaserDealt == lz2 && Math.Abs(bspd - 120f) < 6f && Math.Abs(hpc - rc.Hp - 25) < 1e-6,
+                  $"a raider at 500 u: no laser, but a tracking missile at {bspd:0} u/s lands for {hpc - rc.Hp:0}");
+            rc.TakeDamage(99999); await Wait(0.2);
+            var spot3 = Hub.BasePos + new Vector2(0, 700);
+            var rd = H.SpawnRaider(spot3); rd.Hp = 1000;
+            int mw = bd.MissilesFired; double lw = bd.LaserDealt;
+            for (int i = 0; i < 60 * 6; i++) { rd.Position = spot3; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            Check(bd.MissilesFired == mw && bd.LaserDealt == lw, "a raider at 700 u: out of reach, nothing fires");
+            rd.TakeDamage(99999); await Wait(0.2);
+        }
+
         // ── enemy fire, shields, stasis, the escape pod, re-boarding ──
         {
             var d3x = H.GetNode<TargetDummy>("TargetDummy3");

@@ -262,6 +262,7 @@ public partial class Hub : Node2D
 
         AddChild(new Sprite2D { Texture = GD.Load<Texture2D>("res://base_station.png"), Name = "Base",
                                 Position = BasePos, Scale = new Vector2(BaseScale, BaseScale), ZIndex = 2 });
+        AddChild(new BaseDefense { Hub = this });                 // the base's own laser and missiles
         var tioTex = GD.Load<Texture2D>("res://tio_building.png");
         var tio = new Sprite2D { Texture = tioTex, Name = "TIO", Position = TioPos, Scale = Vector2.One * (TioHeight / tioTex.GetHeight()), ZIndex = 2 };
         AddChild(tio);
