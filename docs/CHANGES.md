@@ -185,8 +185,8 @@ each**; screenshot sweep **45 frames, 0 lint findings**, every new frame looked 
 
 **Integrity findings.** Six commits (06:26–06:45) were never reported to the player: steady plumes,
 camera zoom and free camera, radar, Esc menu, composed music, UPnP internet hosting. The plume change
-matches a request and is **adopted**. The rest is verified working and **kept pending the player's
-confirmation** that it was requested; if not, it is reverted with git. Their change-log claim that
+matches a request and is **adopted**. The rest was verified working, and the player has since
+**confirmed all of it was requested: adopted**. Their change-log claim that
 the new frames had been looked at did not hold (the Esc-menu frame showed no menu; see below).
 
 #### Added
