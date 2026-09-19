@@ -39,7 +39,7 @@ history pick the work up from it alone. Update it in the same change as the code
 **State as of 2026-09-18: version 0.3.0 plus Unreleased (see it for everything since: docking arms
 and the unload queue, the fleet and hauler pods, the idle economy, base menu, bunker-buster missile,
 painted turrets, docking bombers and more).** Typecheck clean against the real `GodotSharp.dll`,
-`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 322 checks across
+`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 327 checks across
 a single-player run and a host with two guests. Unlike earlier releases, this one was also **looked at**:
 `tools/screens/run.sh` renders the select screen, the creator, a fresh spawn under the base, both
 classes in the hub, the K window, a bomber strike, and turret close-ups on a virtual display; layout
@@ -74,7 +74,8 @@ travel, and no economy beyond an idle ore/salvage counter.
 | Mouse wheel | zoom: 33% further out to 1.5× closer |
 | Y | free camera: arrow keys or the screen edge move it (5000 u tether); Y again returns |
 | L | pilot: level, EXP, points and upgrades |
-| V | warp (every capital ship; 3 s warm-up, 30 s cooldown) |
+| V | warp (every capital ship; 3 s warm-up, 30 s cooldown; aims at the jump) |
+| Click the radar | select an enemy there, or make a landmark or pilot a waypoint |
 | Left-click a building | its menu (TIO: WARP TO TARGET; base: BASE) |
 | B | base menu: upgrades, and REFIT (the only way to change class, name or colours; costs 10%) |
 | 1 – 6 | open hotkeys: bound and remappable, empty until abilities or items fill them |
@@ -179,6 +180,34 @@ reachable, which is fine: both harnesses build from the `nupkgs` folder that shi
 ---
 
 ## Unreleased
+
+### Radar selection; warp aims when it jumps
+
+**Checked:** smoke test **three runs in a row, 327 checks each** (5 new; a warp that ignores the heading
+at the jump, and a radar that ignores clicks, were each put in on purpose in a copy and caught);
+screenshot sweep **58 frames, 0 lint**; the radar's waypoint ring and the HUD's waypoint line looked at.
+
+#### Added
+
+- **Click a marker on the radar to select it.** An enemy becomes the target, as a click in the world
+  would make it. A landmark — the base, Threat Intelligence, the portal, the mission portal while it
+  is open, the salvage field, the mining belt — or another pilot becomes a **waypoint**: somewhere to
+  warp to, never a target for weapons. The radar rings the waypoint and the HUD names it
+  ("waypoint: BASE"). A target and a waypoint replace each other; Esc or a double-click on empty space
+  clears either.
+
+#### Changed
+
+- **Warp aims at the moment it jumps.** V only starts the 3 s charge; when it jumps, it goes to the
+  target or waypoint if that lies within 45° of the bow **at that moment**, else 2000 u along the
+  heading **at that moment**. So a pilot can press V and swing onto a target while it charges.
+
+#### Fixed
+
+- **The radar and the K window overlapped** (224 × 180 px; the UI lint found it once the radar took
+  clicks): the radar steps aside while the K window is open.
+
+### Earlier in Unreleased
 
 ### Chunk 5 of 9: utility-ship hull and rebuilds
 
