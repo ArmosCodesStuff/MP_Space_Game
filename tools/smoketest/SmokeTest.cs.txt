@@ -743,6 +743,31 @@ public partial class _Test : Node
                   $"rebuilt on its pad for 10% of the hauler's investment ({hcost:0} cr)");
         }
 
+        // ── networking: silent offline; what friends elsewhere need; one press a second ──
+        {
+            Check(Net.I.NetworkIdle, "single player: no socket, no web lookup, no router job running");
+            var inet = Net.Describe("203.0.113.7", true, "203.0.113.7", 27015, "192.168.1.5:27015");
+            var shared = Net.Describe("100.72.1.9", true, "", 27015, "192.168.1.5:27015");
+            var dbl = Net.Describe("198.51.100.4", true, "203.0.113.7", 27015, "192.168.1.5:27015");
+            var manual = Net.Describe("", false, "203.0.113.7", 27015, "192.168.1.5:27015");
+            var none = Net.Describe("", false, "", 27015, "192.168.1.5:27015");
+            Check(inet.reach == Net.Reach.Internet && inet.address == "203.0.113.7:27015", "router opened the port and is the internet's edge: friends join public:port");
+            Check(shared.reach == Net.Reach.LanOnly && dbl.reach == Net.Reach.LanOnly,
+                  "a private router address, or one that differs from the public address: another NAT is in the way, network only");
+            Check(manual.reach == Net.Reach.Manual && manual.address == "203.0.113.7:27015" && manual.message.Contains("forward UDP 27015"),
+                  "the router will not open it: the public address, and how to forward the port");
+            Check(none.reach == Net.Reach.LanOnly, "nothing learned: network only");
+            Check(new[] { inet, shared, dbl, manual, none }.All(d => !d.message.Contains("203.0.113.7")), "no status line ever prints the public address");
+            var sm = Nodes<SessionMenu>().First();
+            var off = Nodes<Button>(sm).First(b => b.Name == "Offline");
+            off.EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.1);
+            Check(sm.Locked && new[] { "Host", "Join", "Offline" }.All(n => Nodes<Button>(sm).First(b => b.Name == n).Disabled),
+                  "one press a second: after a press, host, join and offline wait");
+            await Wait(SessionMenu.PressGap);
+            Check(!sm.Locked && !Nodes<Button>(sm).First(b => b.Name == "Host").Disabled, "and are back after 1 s");
+            Check(Net.I.NetworkIdle, "and offline stays silent");
+        }
+
         // ── pilot progression: EXP, levels, points, flat upgrades ──
         {
             Check(Progression.Cost(0) == 1 && Progression.Cost(1) == 2 && Progression.Cost(2) == 3, "upgrade costs 1, 2, 3, ... points");
@@ -1322,6 +1347,17 @@ public partial class _Test : Node
             var ships = Nodes<PlayerShip>().ToList();
             Check(ships.Count == 3, $"host sees 3 ships: itself and two guests ({ships.Count})");
             Check(ships.Any(s => s.Pilot == "Third"), "the second guest's identity reached the host");
+            // hosting here (no router, no internet in the sandbox): both answers come back empty -> network only
+            for (int i = 0; i < 60 * 9 && Net.I.Reachability == Net.Reach.Checking; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            var smh = Nodes<SessionMenu>().First(); var rev = Nodes<Button>(smh).First(b => b.Name == "RevealAddress");
+            Check(Net.I.Reachability == Net.Reach.LanOnly && !rev.Visible, $"no router or internet here: network only, nothing to reveal ({Net.I.Reachability})");
+            Net.I.Reachable(Net.Reach.Manual, "203.0.113.7:27015", "Hosting (test).");
+            await Wait(0.1);
+            Check(rev.Visible && !rev.Text.Contains("203.0.113.7") && !Net.I.LastStatus.Contains("203.0.113.7"), "the address friends need is hidden until clicked");
+            rev.EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
+            Check(rev.Text.Contains("203.0.113.7:27015"), "click: it shows the public address and port");
+            rev.EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
+            Check(!rev.Text.Contains("203.0.113.7"), "click again: hidden");
             H.AwardPartyExp(40);                  // shared: every pilot in the session gets it
             H.SpawnRaider(new Vector2(-3500, 3500));   // far off: the guests must see it
             H.SpawnRaider(new Vector2(-3700, 3700), RaiderKind.Heavy);
@@ -1344,6 +1380,8 @@ public partial class _Test : Node
             await Wait(15.0);
             Net.I.GoOffline();   // drop the guest
             await Wait(2.0);
+            for (int i = 0; i < 60 * 4 && !Net.I.NetworkIdle; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(Net.I.NetworkIdle, "back offline: no socket, no lookup, no router job left running");
         }
         else if (role == "guest2")
         {   // a third player: joins, sees everyone, leaves with the session

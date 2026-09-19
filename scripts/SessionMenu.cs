@@ -36,9 +36,12 @@ public partial class SessionMenu : CanvasLayer
 
         // FocusMode None: a clicked button must not keep keyboard focus, or Space/Enter
         // would press it again mid-flight.
-        _options.AddChild(Btn("HOST THIS WORLD", () => Net.I?.Host()));
-        _options.AddChild(Btn("JOIN",            DoJoin));
-        _options.AddChild(Btn("PLAY OFFLINE",    () => Net.I?.GoOffline()));
+        // one press a second: starting or stopping a session is not free, and nothing
+        // should be able to hammer it
+        _hostBtn = Btn("HOST THIS WORLD", () => Limited(() => Net.I?.Host())); _hostBtn.Name = "Host";
+        _joinBtn = Btn("JOIN", () => Limited(DoJoin)); _joinBtn.Name = "Join";
+        _offBtn = Btn("PLAY OFFLINE", () => Limited(() => Net.I?.GoOffline())); _offBtn.Name = "Offline";
+        _options.AddChild(_hostBtn); _options.AddChild(_joinBtn); _options.AddChild(_offBtn);
 
         _status = new Label { Text = Net.I?.LastStatus ?? "", AutowrapMode = TextServer.AutowrapMode.WordSmart,
                               CustomMinimumSize = new Vector2(320, 0) };
@@ -46,11 +49,15 @@ public partial class SessionMenu : CanvasLayer
         // the address friends should type, one click to the clipboard
         _copy = Btn("COPY ADDRESS", () =>
         {
-            var a = Net.I?.Reachability == Net.Reach.Internet ? Net.I.InternetAddress : Net.I?.LanAddress;
+            var a = Net.I?.Reachability is Net.Reach.Internet or Net.Reach.Manual ? Net.I.InternetAddress : Net.I?.LanAddress;
             if (!string.IsNullOrEmpty(a)) DisplayServer.ClipboardSet(a);
         });
         _copy.Name = "CopyAddress";
         _options.AddChild(_copy);
+        // the address friends in other cities need -- hidden until clicked
+        _reveal = Btn("", () => { _revealed = !_revealed; Refresh(); });
+        _reveal.Name = "RevealAddress";
+        _options.AddChild(_reveal);
         if (Net.I != null) { Net.I.Status += OnStatus; Net.I.SessionChanged += Refresh; Net.I.PlayerJoined += OnPeers; Net.I.PlayerLeft += OnPeers; }
         Refresh();
     }
@@ -65,7 +72,18 @@ public partial class SessionMenu : CanvasLayer
     private void OnStatus(string s) { _status.Text = s; Refresh(); }
     public override void _Process(double delta)
     {
+        _now += delta;
+        bool locked = Locked;                                   // the 1 s rate limit, shown on the buttons
+        foreach (var btn in new[] { _hostBtn, _joinBtn, _offBtn }) if (btn != null) btn.Disabled = locked;
         if (_copy != null) _copy.Visible = Net.I != null && Net.IsHost && Net.IsOnline && Net.I.Reachability != Net.Reach.Checking;
+        if (_reveal != null)
+        {
+            bool shown = Net.I != null && Net.IsHost && Net.IsOnline && Net.I.Reachability is (Net.Reach.Internet or Net.Reach.Manual);
+            _reveal.Visible = shown;
+            if (!shown) _revealed = false;
+            _reveal.Text = _revealed ? $"Friends elsewhere join: {Net.I?.InternetAddress}   (click to hide)"
+                                     : "Friends elsewhere join: \u2022\u2022\u2022.\u2022\u2022\u2022.\u2022\u2022\u2022.\u2022\u2022\u2022   (click to reveal)";
+        }
     }
     private void OnPeers(int _) => Refresh();
 
@@ -80,6 +98,17 @@ public partial class SessionMenu : CanvasLayer
 
     private void DoJoin() => Net.I?.Join(_addr.Text);
 
+    private Button _hostBtn, _joinBtn, _offBtn, _reveal;
+    private bool _revealed;
+    public const double PressGap = 1.0;
+    private double _now, _lockedUntil;                          // game time: in play, the same as real time
+    public bool Locked => _now < _lockedUntil;
+    private void Limited(System.Action a)
+    {
+        if (Locked) return;
+        _lockedUntil = _now + PressGap;
+        a();
+    }
     private static Button Btn(string text, System.Action onPress)
     {
         var b = new Button { Text = text, FocusMode = Control.FocusModeEnum.None };

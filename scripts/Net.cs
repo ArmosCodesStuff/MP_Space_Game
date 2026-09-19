@@ -1,4 +1,5 @@
 using Godot;
+using System.Linq;
 using System;
 using System.Collections.Generic;
 
@@ -104,7 +105,7 @@ public partial class Net : Node
     // your public address, so friends in other cities or countries can join. When the
     // router will not (UPnP off), or your provider shares one public address among
     // many homes (carrier-grade NAT), the status says so and what to do instead.
-    public enum Reach { None, Checking, Internet, LanOnly }
+    public enum Reach { None, Checking, Internet, Manual, LanOnly }
     public Reach Reachability { get; private set; } = Reach.None;
     public string InternetAddress { get; private set; } = "";
     public string LanAddress { get; private set; } = "";
@@ -123,31 +124,95 @@ public partial class Net : Node
             else { ext = u.QueryExternalAddress(); _upnp = u; }
         }
         catch (Exception e) { why = e.Message; }
-        Callable.From(() => InternetResult(gen, port, ext, why)).CallDeferred();
+        _upnpBusy = false;
+        Callable.From(() => RouterResult(gen, port, ext, why)).CallDeferred();
     }
 
-    private void InternetResult(int gen, int port, string ext, string why)
+    // ── what friends elsewhere need: decided from the router's report AND the public address ──
+    // The router (UPnP) says whether it opened the port and what it thinks its outside address
+    // is; a public "what is my IP" service says what the internet actually sees. Together:
+    //   INTERNET   the router opened the port and IS the edge: friends join <public>:<port>
+    //   MANUAL     the router would not open it (UPnP off): forward UDP <port>, then <public>:<port>
+    //   LAN ONLY   the router's outside address is private or differs from the public one --
+    //              another router or the provider's shared address (carrier-grade NAT) is in
+    //              the way -- or nothing could be learned at all
+    // The status line never prints the public address: the panel shows it behind a reveal.
+    public const string PublicIpService = "https://api.ipify.org";
+    private HttpRequest _ipReq;
+    private string _publicIp = "", _routerExt = "", _routerWhy = "";
+    private bool _publicDone, _routerDone;
+    private volatile bool _upnpBusy;
+    private int _hostPort;
+    // single player (and between sessions): no socket, no lookup, no router job
+    public bool NetworkIdle => _peer == null && _ipReq == null && !_upnpBusy;
+
+    public static (Reach reach, string address, string message) Describe(string routerExt, bool mapped, string publicIp, int port, string lan)
     {
-        if (gen != _hostGen || !IsHost || !IsOnline) return;            // the session changed meanwhile
-        if (ext.Length > 0 && !IsSharedAddress(ext))
+        bool pub = publicIp.Length > 0;
+        if (mapped && routerExt.Length > 0 && !IsSharedAddress(routerExt) && (!pub || publicIp == routerExt))
+            return (Reach.Internet, $"{routerExt}:{port}",
+                    "Hosting for the internet: friends anywhere can join. Their address is below (click to reveal, or copy it).");
+        if (mapped && (IsSharedAddress(routerExt) || (pub && publicIp != routerExt)))
+            return (Reach.LanOnly, lan,
+                    $"Hosting for your network ({lan}). Your router opened the port, but it is not the last step to the internet: "
+                  + "another router, or your provider's shared address (carrier-grade NAT), sits in between, so friends elsewhere "
+                  + "cannot reach you directly. Use Tailscale or ZeroTier, or let a friend host.");
+        if (pub)
+            return (Reach.Manual, $"{publicIp}:{port}",
+                    $"Hosting. Your router would not open port {port} by itself (UPnP is off or unsupported): forward UDP {port} "
+                  + $"to this PC ({lan.Split(':')[0]}) in your router's settings, then friends elsewhere join with the address below.");
+        return (Reach.LanOnly, lan,
+                $"Hosting for your network ({lan}). Neither your router nor the internet could be asked for your public address. "
+              + $"For friends elsewhere, forward UDP {port} to this PC, or use Tailscale or ZeroTier.");
+    }
+
+    // What the panel shows. (Public so a test can show the reveal without a real router.)
+    public void Reachable(Reach r, string address, string message)
+    {
+        Reachability = r; InternetAddress = r is Reach.Internet or Reach.Manual ? address : "";
+        Say(message);
+    }
+
+    private void AskPublicIp(int gen)
+    {
+        FreeIpReq();
+        _ipReq = new HttpRequest { Timeout = 6 };
+        AddChild(_ipReq);
+        _ipReq.RequestCompleted += (result, code, headers, body) =>
         {
-            _mappedPort = port; Reachability = Reach.Internet; InternetAddress = $"{ext}:{port}";
-            Say($"Hosting for the internet. Friends anywhere join: {InternetAddress}   (same network: {LanAddress})");
-        }
-        else if (ext.Length > 0)
-        {
-            _mappedPort = port; Reachability = Reach.LanOnly;
-            Say($"Hosting for your network ({LanAddress}). Your router opened the port, but your internet provider "
-              + "shares one public address among many homes (carrier-grade NAT), so friends elsewhere cannot reach "
-              + "you directly. Use Tailscale or ZeroTier, or let a friend host.");
-        }
-        else
-        {
-            Reachability = Reach.LanOnly;
-            Say($"Hosting for your network ({LanAddress}). Your router did not open port {port} automatically "
-              + $"(UPnP is off or unsupported{(why.Length > 0 && why != "no-upnp" && why != "refused" ? ": " + why : "")}). "
-              + $"For friends elsewhere, forward UDP {port} to this PC in your router, or use Tailscale or ZeroTier.");
-        }
+            string ip = result == (long)HttpRequest.Result.Success && code == 200 ? System.Text.Encoding.UTF8.GetString(body).Trim() : "";
+            _publicIp = LooksLikeIpv4(ip) ? ip : "";
+            _publicDone = true;
+            Callable.From(FreeIpReq).CallDeferred();
+            TryDecide(gen);
+        };
+        if (_ipReq.Request(PublicIpService) != Error.Ok) { _publicDone = true; FreeIpReq(); TryDecide(gen); }
+    }
+    private void FreeIpReq()
+    {
+        if (_ipReq == null) return;
+        if (IsInstanceValid(_ipReq)) { _ipReq.CancelRequest(); _ipReq.QueueFree(); }
+        _ipReq = null;
+    }
+    public static bool LooksLikeIpv4(string s)
+    {
+        var p = s.Split('.');
+        return p.Length == 4 && p.All(x => int.TryParse(x, out int v) && v >= 0 && v <= 255);
+    }
+
+    private void RouterResult(int gen, int port, string ext, string why)
+    {
+        if (gen != _hostGen) return;
+        _routerExt = ext; _routerWhy = why; _routerDone = true;
+        if (ext.Length > 0) _mappedPort = port;
+        TryDecide(gen);
+    }
+
+    private void TryDecide(int gen)
+    {
+        if (gen != _hostGen || !IsHost || !IsOnline || !(_routerDone && _publicDone)) return;   // the session changed, or one answer is still out
+        var d = Describe(_routerExt, _routerExt.Length > 0, _publicIp, _hostPort, LanAddress);
+        Reachable(d.reach, d.address, d.message);
     }
 
     // Private and carrier-grade (100.64.0.0/10) addresses cannot be reached from outside.
@@ -174,10 +239,13 @@ public partial class Net : Node
         _isHost = true; _localId = 1;
         Players.Clear(); Players[1] = new PlayerInfo { Id = 1 };
         LanAddress = LocalLan(port); Reachability = Reach.Checking; InternetAddress = "";
-        Say($"Hosting on your network ({LanAddress}). Asking your router to open port {port} for internet play...");
+        Say($"Hosting on your network ({LanAddress}). Asking your router to open port {port}, and the internet for your public address...");
         SessionChanged?.Invoke();
-        int gen = ++_hostGen;
+        int gen = ++_hostGen; _hostPort = port;
+        _publicIp = _routerExt = _routerWhy = ""; _publicDone = _routerDone = false;
+        _upnpBusy = true;
         System.Threading.Tasks.Task.Run(() => OpenRouterPort(port, gen));
+        AskPublicIp(gen);
         return true;
     }
 
@@ -209,6 +277,7 @@ public partial class Net : Node
             System.Threading.Tasks.Task.Run(() => u.DeletePortMapping(mp, "UDP"));
         }
         _upnp = null; _mappedPort = 0; _hostGen++;
+        FreeIpReq();                                        // no lookup outlives its session
         Reachability = Reach.None; InternetAddress = ""; LanAddress = "";
         // An explicit offline peer rather than null: IsServer() and GetUniqueId() then
         // answer 1 / true offline instead of depending on engine fallback behaviour.
