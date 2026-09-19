@@ -170,6 +170,13 @@ levels once a second and ship and hauler state ten times a second; a guest's own
   such as Tailscale or ZeroTier (everyone joins the VPN; use its addresses). There is no relay
   server or NAT punch-through: that needs infrastructure outside the game.
 
+## Launch limits and targeting rules
+
+- **Fighters launch at least 0.83 s apart**, always. It is a constant, never a stat, so nothing that
+  scales rates of fire can touch it.
+- **The missile needs a selected target in range.** Refusals are shown on the ability's own slot
+  (`PlayerShip.Fail` / `FailNote`), the pattern for any ability that can be refused.
+
 ## Damage, death and the two colours
 
 - **Who can be hit**: player weapons hit `Combat.Hostiles`; enemy fire hits `Combat.Players`. A

@@ -39,7 +39,7 @@ history pick the work up from it alone. Update it in the same change as the code
 **State as of 2026-09-18: version 0.3.0 plus Unreleased (see it for everything since: docking arms
 and the unload queue, the fleet and hauler pods, the idle economy, base menu, bunker-buster missile,
 painted turrets, docking bombers and more).** Typecheck clean against the real `GodotSharp.dll`,
-`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 226 checks across
+`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 234 checks across
 a single-player run and a host with two guests. Unlike earlier releases, this one was also **looked at**:
 `tools/screens/run.sh` renders the select screen, the creator, a fresh spawn under the base, both
 classes in the hub, the K window, a bomber strike, and turret close-ups on a virtual display; layout
@@ -176,6 +176,41 @@ reachable, which is fine: both harnesses build from the `nupkgs` folder that shi
 ---
 
 ## Unreleased
+
+### Missiles, wing, hauler landing, PD, TIO (this batch)
+
+**Checked:** smoke test **three runs in a row, 234 checks each**; every new check proven able to fail
+(the feature broken on purpose in a copy); screenshot sweep **45 frames, 0 lint findings**, looked at.
+
+#### Changed
+
+- **Missiles need a selected target within range.** No more fallback to the nearest hostile. Pressing
+  F without one fires nothing; the missile slot shows **NO TARGET** or **OUT OF RANGE** in red for
+  1.5 s (checked on the owner's machine at once; the host checks again).
+- **The battleship starts with one missile** (magazine 1).
+- **The carrier starts with three fighters** (was four).
+- **Fighters leave the hangar at least 0.83 s apart.** A fixed constant (`Wing.LaunchInterval`), not a
+  stat: no upgrade or rate-of-fire bonus may change it.
+- **Torpedoes: 90 u/s** (25% slower) **and one every 0.5 s** (70% of the old rate) — the new baseline.
+- **Bombers are snout-nosed and 25% smaller** (28.1 u): the long nose boom is replaced by a broad,
+  rounded snout carrying the trefoil. Their docking slots are re-fitted. The old sprite is in
+  `art_unused/wing_bomber_longnose.png`.
+- **The hauler turns while it descends** onto its pad (3 s), arriving facing the portal. The separate
+  turn on the pad is gone (`Hauler.St.Turning` and `Economy.HaulerTurn` removed).
+- **Hit flashes are drawn above the hulls** and below the turrets, and PD shots leave from the barrel
+  tip: they used to be drawn at the world's own level, so they looked as if fired from under the ship.
+
+#### Added
+
+- **Threat Intelligence Operations**, a building south-west of the base, from the player's sprite made
+  exactly symmetrical; its name is drawn beneath it and it has a radar marker. (Its missions: next.)
+- **The boss sprite**, cropped and staged in `art_unused/boss_silver_lancer.png` until the boss exists.
+
+#### Decided
+
+- The "level 13 cost" idea is **dropped** at the player's request.
+
+### Earlier in Unreleased
 
 ### Verification pass (first run of the project protocol)
 
