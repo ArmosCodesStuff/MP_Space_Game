@@ -39,7 +39,7 @@ history pick the work up from it alone. Update it in the same change as the code
 **State as of 2026-09-18: version 0.3.0 plus Unreleased (see it for everything since: docking arms
 and the unload queue, the fleet and hauler pods, the idle economy, base menu, bunker-buster missile,
 painted turrets, docking bombers and more).** Typecheck clean against the real `GodotSharp.dll`,
-`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 345 checks across
+`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 348 checks across
 a single-player run and a host with two guests. Unlike earlier releases, this one was also **looked at**:
 `tools/screens/run.sh` renders the select screen, the creator, a fresh spawn under the base, both
 classes in the hub, the K window, a bomber strike, and turret close-ups on a virtual display; layout
@@ -180,6 +180,22 @@ reachable, which is fine: both harnesses build from the `nupkgs` folder that shi
 ---
 
 ## Unreleased
+
+### Chunk 6c: patrols
+
+**Checked:** smoke test **three runs in a row, 348 checks each** (3 new; no detection limit, and a heavy
+that never joins its lights, were each put in on purpose in a copy and caught); screenshot sweep
+**60 frames, 0 lint** (patrols reuse the raider art already looked at).
+
+#### Added
+
+- **Patrols**: **3 lights and 1 heavy**, spawned together (`Hub.SpawnPatrol`). With nothing in reach they
+  **circle a perimeter 1800 u round the base** (catching their spot at 150 u/s). When a player ship or
+  utility ship comes **within 2000 u** (a default), the **lights break off to tackle it** and **their heavy
+  takes the same target**, waiting astern for the pin. A raider in no patrol still goes for the nearest
+  target. Raids (chunk 7) will spawn patrols in play.
+
+### Earlier in Unreleased
 
 ### Chunk 6b: heavy raiders and the predicted missile
 
