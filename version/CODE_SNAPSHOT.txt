@@ -1,8 +1,8 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-19 18:37 at git commit fe8604e: typecheck clean, smoke test 3/3 passes
-//   (284 checks), 51-frame UI sweep 0 findings.
-// 49 files, 7999 lines. Code only: sprites, sounds and docs are in the zip.
+// Taken 2026-09-19 19:10 at git commit bf86e75: typecheck clean, smoke test 3/3 passes
+//   (292 checks), 53-frame UI sweep 0 findings.
+// 49 files, 8113 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -14,7 +14,7 @@
 //   CharacterSelect.tscn                            12 lines   sha256 bde251d0afb9
 //   Hub.tscn                                        10 lines   sha256 3a99e0df7b39
 //   MainMenu.tscn                                    6 lines   sha256 8a8dbe40f248
-//   scripts/Abilities.cs                           130 lines   sha256 7baad2ebc660
+//   scripts/Abilities.cs                           131 lines   sha256 f5ca74e381e7
 //   scripts/AbilityBar.cs                          112 lines   sha256 4a1331fe370c
 //   scripts/Autopilot.cs                            40 lines   sha256 807538219f53
 //   scripts/BasePanel.cs                           105 lines   sha256 024b285073bc
@@ -29,13 +29,13 @@
 //   scripts/Gatherer.cs                            207 lines   sha256 06c31c1dfb04
 //   scripts/Hauler.cs                              283 lines   sha256 551cdf41401d
 //   scripts/HealthBar.cs                            36 lines   sha256 97c42a282205
-//   scripts/Hub.cs                                 965 lines   sha256 895097b65cc1
+//   scripts/Hub.cs                                 973 lines   sha256 22b37a69f0f4
 //   scripts/MainMenu.cs                            224 lines   sha256 39dbc31417c6
 //   scripts/Missions.cs                             26 lines   sha256 576c2255742a
 //   scripts/Music.cs                                76 lines   sha256 5b0efe1bc3be
 //   scripts/Net.cs                                 246 lines   sha256 ce3ebadd0342
 //   scripts/PilotWindow.cs                          54 lines   sha256 bd3c2ab6785f
-//   scripts/PlayerShip.cs                          661 lines   sha256 5338160848be
+//   scripts/PlayerShip.cs                          727 lines   sha256 6fc07148ad52
 //   scripts/Plume.cs                                25 lines   sha256 cdbeb9b8fc58
 //   scripts/Progression.cs                          73 lines   sha256 d3b0cd99118f
 //   scripts/Radar.cs                                93 lines   sha256 eff30cd82bb4
@@ -54,9 +54,9 @@
 //   scripts/Ui.cs                                   99 lines   sha256 0a376702a4e8
 //   scripts/Yard.cs                                387 lines   sha256 1cd1e412db23
 //   typecheck/typecheck.sh                          57 lines   sha256 e68277c09f34
-//   tools/screens/Shots.cs.txt                     317 lines   sha256 383dcce54bff
+//   tools/screens/Shots.cs.txt                     325 lines   sha256 c380f230b2d7
 //   tools/screens/run.sh                            40 lines   sha256 a47174d56c6a
-//   tools/smoketest/SmokeTest.cs.txt              1108 lines   sha256 e2e708eadc74
+//   tools/smoketest/SmokeTest.cs.txt              1139 lines   sha256 2082bd51ca50
 //   tools/smoketest/run.sh                          52 lines   sha256 67c03204c10d
 //==============================================================================
 
@@ -168,7 +168,7 @@ script = ExtResource("1_menu")
 
 //==============================================================================
 // FILE: scripts/Abilities.cs
-// 130 lines   sha256 7baad2ebc660
+// 131 lines   sha256 f5ca74e381e7
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -204,7 +204,7 @@ public static class Abilities
         {
             new AbilityDef { Id = "guns",     Name = "Main guns",     Short = "GUNS",   Kind = AbilityKind.Hold, Default = Key.Space,
                              Blurb = "Hold to fire. The barrels aim at the cursor and swing slowly." },
-            new AbilityDef { Id = "firemode", Name = "Fire mode",     Short = "MODE",   Default = Key.V,
+            new AbilityDef { Id = "firemode", Name = "Fire mode",     Short = "MODE",   Default = Key.G,
                              Blurb = "Salvo (all barrels at once) or staggered (one at a time). Same rate." },
             new AbilityDef { Id = "missile",  Name = "Missile",       Short = "MSL",    Default = Key.F,
                              Blurb = "A slow bunker buster, barely guided. Needs a selected target in range. Uses the magazine." },
@@ -229,7 +229,7 @@ public static class Abilities
     // Fixed hub controls. Binding one of these would break flying or the menus.
     public static readonly HashSet<Key> Reserved = new()
     {
-        Key.W, Key.A, Key.S, Key.D, Key.Tab, Key.Escape, Key.K, Key.B, Key.L, Key.Enter, Key.KpEnter,
+        Key.W, Key.A, Key.S, Key.D, Key.Tab, Key.Escape, Key.K, Key.B, Key.L, Key.V, Key.Enter, Key.KpEnter,
         Key.Y, Key.Up, Key.Down, Key.Left, Key.Right,        // the free camera
     };
 
@@ -253,7 +253,8 @@ public static class Abilities
 
     public static Key KeyFor(ShipClass c, string id)
     {
-        if (Settings.Keys.TryGetValue(SettingKey(c, id), out var k)) return (Key)k;
+        // a saved binding on a fixed key (V is warp now) is ignored: the default stands
+        if (Settings.Keys.TryGetValue(SettingKey(c, id), out var k) && !Reserved.Contains((Key)k)) return (Key)k;
         foreach (var a in For(c)) if (a.Id == id) return a.Default;
         return Key.None;
     }
@@ -290,7 +291,7 @@ public static class Abilities
     // ability list yet (the seven reserved ones) gets a placeholder.
     public static string ControlsHint(ShipClass c)
     {
-        const string common = "W ahead  ·  S astern  ·  A/D rudder  ·  left-click select  ·  Tab nearest enemy  ·  wheel zoom  ·  Y free camera  ·  K abilities & stats  ·  B base  ·  L pilot  ·  Esc menu";
+        const string common = "W ahead  ·  S astern  ·  A/D rudder  ·  left-click select  ·  Tab nearest enemy  ·  wheel zoom  ·  Y free camera  ·  K abilities & stats  ·  B base  ·  L pilot  ·  V warp  ·  Esc menu";
         if (!ByClass.ContainsKey(c)) return "placeholder";
         return c switch
         {
@@ -2129,7 +2130,7 @@ public static class HealthBar
 
 //==============================================================================
 // FILE: scripts/Hub.cs
-// 965 lines   sha256 895097b65cc1
+// 973 lines   sha256 22b37a69f0f4
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -2676,7 +2677,9 @@ public partial class Hub : Node2D
         var anchor = me.ViewPosition;                                  // the pod, while in stasis
         if (!FreeCamera)
         {
-            _cam.Position = _cam.Position.Lerp(anchor, Mathf.Clamp(6f * dt, 0f, 1f));
+            // follow smoothly -- but cut straight to the ship after a warp: panning 2000 u is disorienting
+            if (_cam.Position.DistanceTo(anchor) > 1200f) _cam.Position = anchor;
+            else _cam.Position = _cam.Position.Lerp(anchor, Mathf.Clamp(6f * dt, 0f, 1f));
             return;
         }
         var pan = Vector2.Zero;
@@ -2928,6 +2931,7 @@ public partial class Hub : Node2D
             else if (kk.Keycode == Key.K) ToggleStats();
             else if (kk.Keycode == Key.B && !InArena) ToggleBase();
             else if (kk.Keycode == Key.L) TogglePilot();
+            else if (kk.Keycode == Key.V) MyShipPublic?.StartWarp(_selected);   // warp: a fixed key, not a slot
             else
             {
                 // in stasis the only order is F: re-board once the ship is ready
@@ -3058,6 +3062,11 @@ public partial class HullHud : Control
                   : s.CanReboard ? "SHIP READY  —  press F to re-board"
                   : $"SHIP IN STASIS  {(int)s.StasisLeft / 60}:{(int)s.StasisLeft % 60:00}  —  flying the escape pod",
               HorizontalAlignment.Center, W, 15, Colors.White);
+        // the hull's warp: ready, charging, or cooling down
+        if (s.Alive)
+            Txt.D(this, ThemeDB.FallbackFont, new Vector2(W - 150, H - 5),
+                  s.Warping ? $"WARPING  {s.WarpWarmupLeft:0.0} s" : s.WarpCooldownLeft > 0 ? $"WARP  {s.WarpCooldownLeft:0} s" : "WARP  READY",
+                  HorizontalAlignment.Right, 144, 12, s.Warping ? new Color(0.7f, 0.9f, 1f) : s.WarpCooldownLeft > 0 ? new Color(0.75f, 0.78f, 0.85f) : new Color(0.55f, 1f, 0.65f));
     }
 }
 
@@ -3750,7 +3759,7 @@ public partial class PilotWindow : PanelContainer
 
 //==============================================================================
 // FILE: scripts/PlayerShip.cs
-// 661 lines   sha256 5338160848be
+// 727 lines   sha256 6fc07148ad52
 //==============================================================================
 using Godot;
 using System;
@@ -4070,6 +4079,53 @@ public partial class PlayerShip : Node2D, IHittable
         }
     }
 
+    // ── WARP (V) -- every capital ship ─────────────────────────────────────────
+    // A fixed key and a hull cooldown, never an ability-bar slot. After a 3 s warm-up
+    // the ship jumps to the selected entity if it lies within 45 degrees of the bow
+    // (stopping just short of it), otherwise 2000 u straight ahead. Movement is the
+    // owner's, so the owner jumps; everyone else sees the charge and a clean snap.
+    public const double WarpWarmup = 3.0, WarpCooldown = 30.0;
+    public const float WarpRange = 2000f, WarpCone = Mathf.Pi / 4f, WarpStandoff = 60f;
+    private double _warpLeft = -1, _warpCd, _warpFlash;
+    private int _warpTarget; private Vector2 _warpPoint; private bool _remoteWarping;
+    public bool Warping => _warpLeft >= 0;
+    public double WarpWarmupLeft => Math.Max(0, _warpLeft);
+    public double WarpCooldownLeft => _warpCd;
+    public bool CanWarp => Alive && !Warping && _warpCd <= 0;
+
+    public bool StartWarp(IHittable selected)
+    {
+        if (!Mine || !CanWarp) return false;
+        var bow = Vector2.Up.Rotated(Rotation);
+        if (selected != null && selected.Alive && Mathf.Abs(bow.AngleTo(selected.Position - Position)) <= WarpCone) _warpTarget = selected.NetId;
+        else { _warpTarget = 0; _warpPoint = Position + bow * WarpRange; }
+        _warpLeft = WarpWarmup;
+        return true;
+    }
+
+    // where a warp to `target` ends: on the line from here, just short of its hull
+    public static Vector2 WarpArrival(Vector2 from, Vector2 target, float targetRadius, float shipLength) =>
+        target - (target - from).Normalized() * (targetRadius + shipLength * 0.5f + WarpStandoff);
+
+    private void TickWarp(float dt)
+    {
+        _warpFlash = Math.Max(0, _warpFlash - dt);
+        if (_warpCd > 0) _warpCd = Math.Max(0, _warpCd - dt);
+        if (!Warping) return;
+        if (!Alive) { _warpLeft = -1; return; }
+        _warpLeft -= dt;
+        if (_warpLeft > 0) return;
+        var dest = _warpPoint;
+        if (_warpTarget != 0)
+        {
+            var t = Combat.ById(_warpTarget);
+            dest = t != null && t.Alive ? WarpArrival(Position, t.Position, t.HitRadius, MyArt.Length)
+                                        : Position + Vector2.Up.Rotated(Rotation) * WarpRange;   // it's gone: straight on
+        }
+        Position = dest; Velocity = Vector2.Zero;
+        _warpLeft = -1; _warpCd = WarpCooldown; _warpFlash = 0.6;
+    }
+
     // A refused ability: its slot shows the reason, in red, for a moment.
     public const double FailShow = 1.5;
     private readonly Dictionary<string, (string msg, double until)> _fails = new();
@@ -4144,7 +4200,7 @@ public partial class PlayerShip : Node2D, IHittable
         if (!Alive) _stasis = Math.Max(0, _stasis - delta);   // the host's clock rules; guests re-sync each packet
         if (_combatT > 0) _combatT = Math.Max(0, _combatT - delta);
         UpdatePod();
-        if (Mine) LocalFlight(dt);
+        if (Mine) { TickWarp(dt); LocalFlight(dt); }
         else      RemoteFollow(dt);
 
         if (Net.Sim) TickAbilities(delta);
@@ -4258,7 +4314,7 @@ public partial class PlayerShip : Node2D, IHittable
         var pod = IsInstanceValid(_pod) ? _pod.Position : Position;
         float podRot = IsInstanceValid(_pod) ? _pod.Rotation : 0f;
         Rpc(nameof(NetState), Position.X, Position.Y, Velocity.X, Velocity.Y, Rotation,
-            AimPoint.X, AimPoint.Y, Trigger, Staggered, pod.X, pod.Y, podRot);
+            AimPoint.X, AimPoint.Y, Trigger, Staggered, pod.X, pod.Y, podRot, Warping);
     }
 
     // The pod exists exactly while the ship is in stasis: flown by its owner,
@@ -4316,13 +4372,15 @@ public partial class PlayerShip : Node2D, IHittable
         // Dead reckoning: carry the last known velocity forward so a remote ship
         // keeps moving smoothly between the 20 Hz updates instead of stuttering.
         _netPos += _netVel * dt;
-        Position = Position.Lerp(_netPos, Mathf.Clamp(12f * dt, 0f, 1f));
+        // a warp is a jump, not a glide: snap across it (and flash where it lands)
+        if (Position.DistanceTo(_netPos) > 600f) { Position = _netPos; _warpFlash = 0.6; }
+        else Position = Position.Lerp(_netPos, Mathf.Clamp(12f * dt, 0f, 1f));
         Rotation = Mathf.LerpAngle(Rotation, _netRot, Mathf.Clamp(12f * dt, 0f, 1f));
     }
 
     [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
     private void NetState(float px, float py, float vx, float vy, float rot, float ax, float ay, bool trigger, bool staggered,
-                          float podX, float podY, float podRot)
+                          float podX, float podY, float podRot, bool warping)
     {
         // Only the ship's own owner may move it. Without this check any peer could
         // shove anyone else's ship around, which is the classic authority hole.
@@ -4334,6 +4392,7 @@ public partial class PlayerShip : Node2D, IHittable
         Trigger = trigger;          // the host fires on this; a guest only draws
         Staggered = staggered;
         if (IsInstanceValid(_pod) && !_pod.Local) _pod.SetNet(new Vector2(podX, podY), podRot);
+        _remoteWarping = warping;
     }
 
     // The host's side of the conversation: hull, ability state, and the wing.
@@ -4385,6 +4444,22 @@ public partial class PlayerShip : Node2D, IHittable
 
     public override void _Draw()
     {
+        // warp: a charge building in the accent colour (lighting), then a flash where it lands
+        if (Warping || _remoteWarping)
+        {
+            float k = Mine ? 1f - (float)(_warpLeft / WarpWarmup) : 0.6f;
+            float pulse = 0.5f + 0.5f * Mathf.Sin(Time.GetTicksMsec() / (60f - 30f * k));
+            DrawSetTransform(Vector2.Zero, 0f, new Vector2(0.45f, 1f));
+            for (int i = 0; i < 3; i++)
+                DrawArc(Vector2.Zero, MyArt.Length * (0.55f + 0.08f * i) + 5f * pulse, 0, Mathf.Tau, 48,
+                        new Color(Accent.R, Accent.G, Accent.B, (0.25f + 0.5f * k) / (i + 1)), 2f);
+            DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
+        }
+        if (_warpFlash > 0)
+        {
+            float f = (float)(_warpFlash / 0.6);
+            DrawCircle(Vector2.Zero, MyArt.Length * (0.4f + 0.6f * (1f - f)), new Color(Accent.R, Accent.G, Accent.B, 0.35f * f));
+        }
         // engine plumes at the stern, in the accent colour
         if (Alive)
             Plume.Draw(this, new Vector2(0, MyArt.Length * 0.5f), Vector2.Down, MyArt.Length, Accent,
@@ -6769,7 +6844,7 @@ echo "0 errors." >&2
 
 //==============================================================================
 // FILE: tools/screens/Shots.cs.txt
-// 317 lines   sha256 383dcce54bff
+// 325 lines   sha256 c380f230b2d7
 //==============================================================================
 // Screenshot driver. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Shots.cs, registers it as an autoload, and runs the real
@@ -6964,6 +7039,14 @@ public partial class _Shots : Node
             hub.ToggleFreeCamera(); hub.SetZoom(Hub.DefaultZoom); await W(1.5);
         }
         await Close(ShipClass.Battleship, "9_battleship_closeup");
+        // warp: the charge building, then the flash where it lands (and the hull bar's WARP readout)
+        {
+            var ws = H.GetNode<PlayerShip>("Ship_1");
+            typeof(PlayerShip).GetField("_warpCd", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).SetValue(ws, 0.0);
+            ws.Velocity = Vector2.Zero; ws.StartWarp(null);
+            await W(2.2); await Snap("40_warp_charging");
+            await W(0.95); await Snap("41_warp_arrival");      // the camera cuts to the ship on a jump
+        }
         // a shield hit on each of the four sides, then stasis with the escape pod out
         {
             var sh = H.GetNode<PlayerShip>("Ship_1");
@@ -7136,7 +7219,7 @@ ls /tmp/shots
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 1108 lines   sha256 e2e708eadc74
+// 1139 lines   sha256 2082bd51ca50
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -7535,17 +7618,19 @@ public partial class _Test : Node
         Check(Enumerable.Range(1, 6).All(i => Abilities.KeyFor(ShipClass.Battleship, $"open{i}") == global::Godot.Key.Key0 + i)
               && Abilities.For(ShipClass.Carrier).Count(a => a.Open) == 6 && Abilities.For((ShipClass)99).Length == 6,
               "six open hotkeys (1-6) on every class, including undefined ones");
+        win.StartCapture("missile"); Key(global::Godot.Key.H); await Wait(0.05);
+        Check(Abilities.KeyFor(ShipClass.Battleship, "missile") == global::Godot.Key.H && Settings.Keys.ContainsKey("Battleship.missile"), "missile rebound to H and saved");
         win.StartCapture("missile"); Key(global::Godot.Key.G); await Wait(0.05);
-        Check(Abilities.KeyFor(ShipClass.Battleship, "missile") == global::Godot.Key.G && Settings.Keys.ContainsKey("Battleship.missile"), "missile rebound to G and saved");
-        win.StartCapture("missile"); Key(global::Godot.Key.V); await Wait(0.05);
-        Check(Abilities.KeyFor(ShipClass.Battleship, "missile") == global::Godot.Key.V && Abilities.KeyFor(ShipClass.Battleship, "firemode") == global::Godot.Key.G,
-              "binding a taken key swaps the two");
+        Check(Abilities.KeyFor(ShipClass.Battleship, "missile") == global::Godot.Key.G && Abilities.KeyFor(ShipClass.Battleship, "firemode") == global::Godot.Key.H,
+              "binding a taken key (G, fire mode's) swaps the two");
         win.StartCapture("missile"); Key(global::Godot.Key.W); await Wait(0.05);
-        Check(Abilities.KeyFor(ShipClass.Battleship, "missile") == global::Godot.Key.V, "a reserved key (W) is refused");
+        Check(Abilities.KeyFor(ShipClass.Battleship, "missile") == global::Godot.Key.G, "a reserved key (W) is refused");
+        win.StartCapture("missile"); Key(global::Godot.Key.V); await Wait(0.05);
+        Check(Abilities.KeyFor(ShipClass.Battleship, "missile") == global::Godot.Key.G, "V is warp, a fixed key: refused too");
         win.StartCapture("pd"); Key(global::Godot.Key.Escape); await Wait(0.05);
         Check(Count<StatsWindow>() == 1 && Abilities.KeyFor(ShipClass.Battleship, "pd") == global::Godot.Key.Q, "Esc cancels a capture without closing the window");
         Nodes<Button>(win).First(b => b.Name == "ResetKeys").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
-        Check(Abilities.KeyFor(ShipClass.Battleship, "missile") == global::Godot.Key.F && Abilities.KeyFor(ShipClass.Battleship, "firemode") == global::Godot.Key.V, "reset restores defaults");
+        Check(Abilities.KeyFor(ShipClass.Battleship, "missile") == global::Godot.Key.F && Abilities.KeyFor(ShipClass.Battleship, "firemode") == global::Godot.Key.G, "reset restores defaults (fire mode on G)");
         Key(global::Godot.Key.K); await Wait(0.1);
         Check(Count<StatsWindow>() == 0, "K closes it");
 
@@ -7577,8 +7662,8 @@ public partial class _Test : Node
         GD.Print($"  salvo {salvo:0.0} dmg / 20s;  staggered {stag:0.0} / 20s;  sheet {ship.Stats.MainDps:0.000} DPS");
         Check(Math.Abs(salvo - 120) <= 6.01, "salvo delivers the sheet's 6.0 DPS (±1 salvo)");
         Check(Math.Abs(stag - 120) <= 1.51, "staggered delivers the sheet's 6.0 DPS (±1 shot)");
-        bool before = ship.Staggered; Key(global::Godot.Key.V); await Wait(0.05);
-        Check(ship.Staggered != before, "V toggles salvo / staggered");
+        bool before = ship.Staggered; Key(global::Godot.Key.G); await Wait(0.05);
+        Check(ship.Staggered != before, "G toggles salvo / staggered");
 
         // ── the missile: one in the magazine; a selected target in range, or it refuses ──
         Torpedo Heavy() => Nodes<Torpedo>().FirstOrDefault(x => x.Heavy && Smoke(x).Count < 40);
@@ -7628,6 +7713,35 @@ public partial class _Test : Node
         Check(turned > 0.05 && turned <= ship.Stats["missile_turn"] + 0.01, "it steers toward the target, but no faster than 0.35 rad/s");
         await Wait(6.0); d1.Position = dhome;
         Key(global::Godot.Key.R); await Wait(16.2);                  // leave it loaded for what follows
+
+        // ── warp (V): every capital ship; a hull cooldown, not a slot ──
+        {
+            var me = Me; var warpHome = me.Position; var d2w = H.GetNode<TargetDummy>("TargetDummy2");
+            void Ready() { typeof(PlayerShip).GetField("_warpCd", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(me, 0.0); me.Velocity = Vector2.Zero; me.Rotation = 0f; }
+            void Deselect() => typeof(Hub).GetField("_selected", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(H, null);
+            Check(Abilities.For(me.Class).All(a => a.Id != "warp"), "warp takes no slot on the ability bar");
+            Ready(); Deselect(); var start = me.Position;
+            Key(global::Godot.Key.V); await Wait(0.2);
+            Check(me.Warping && me.Position.DistanceTo(start) < 20f, "V starts a 3 s warm-up; the ship holds until it jumps");
+            await Wait(PlayerShip.WarpWarmup);
+            var moved = me.Position - start;
+            Check(!me.Warping && Math.Abs(moved.Length() - 2000f) < 40f && Mathf.Abs(Vector2.Up.AngleTo(moved)) < 0.05f,
+                  $"nothing selected ahead: 2000 u straight ahead ({moved.Length():0} u)");
+            Check(Math.Abs(me.WarpCooldownLeft - PlayerShip.WarpCooldown) < 0.6 && PlayerShip.WarpCooldown == 30, "then a 30 s cooldown");
+            Key(global::Godot.Key.V); await Wait(0.1);
+            Check(!me.Warping, "V does nothing while it cools down");
+            // a target within 45 degrees of the bow: arrive just short of it
+            Ready(); me.Position = d2w.Position + new Vector2(0, 1400); await Wait(0.3);
+            Click(Scr(d2w.Position)); await Wait(0.05);
+            Key(global::Godot.Key.V); await Wait(PlayerShip.WarpWarmup + 0.2);
+            float want = d2w.HitRadius + PlayerShip.Art[me.Class].Length * 0.5f + PlayerShip.WarpStandoff;
+            Check(Math.Abs(me.Position.DistanceTo(d2w.Position) - want) < 20f, $"a target ahead: it warps to just short of it ({me.Position.DistanceTo(d2w.Position):0} u, wanted {want:0})");
+            // a target behind: outside the cone, so straight ahead instead
+            Ready(); me.Position = d2w.Position + new Vector2(0, -900); var s3 = me.Position; await Wait(0.2);
+            Key(global::Godot.Key.V); await Wait(PlayerShip.WarpWarmup + 0.2);
+            Check(Math.Abs((me.Position - s3).Y + 2000f) < 40f && H.Selected == d2w, "a target behind (outside 45 degrees): straight ahead instead");
+            Ready(); me.Position = warpHome;
+        }
 
         // ── battleship PD: idle until Q; slow independent turrets ──
         await Park(new Vector2(780, 700), 0);                      // among all three dummies
