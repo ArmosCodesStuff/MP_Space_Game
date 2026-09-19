@@ -160,6 +160,19 @@ public partial class _Shots : Node
             GetViewport().GetCamera2D().Zoom = new Vector2(0.9f, 0.9f);
         }
         await Close(ShipClass.Battleship, "9_battleship_closeup");
+        // a shield hit on each of the four sides, then stasis with the escape pod out
+        {
+            var sh = H.GetNode<PlayerShip>("Ship_1");
+            foreach (var dir in new[] { Vector2.Up, Vector2.Right, Vector2.Down, Vector2.Left })
+                sh.Hit(1, sh.Position + dir.Rotated(sh.Rotation) * 300f);
+            await W(0.08); await Snap("30_shield_hit_all_sides");
+            sh.TakeDamage(sh.Hp + 1); await W(1.5);
+            GetViewport().GetCamera2D().Zoom = new Vector2(1.6f, 1.6f);
+            await W(1.0); await Snap("31_stasis_and_pod");
+            typeof(PlayerShip).GetField("_stasis", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).SetValue(sh, 0.0);
+            sh.UseAbility("reboard", 0); await W(0.3);
+            GetViewport().GetCamera2D().Zoom = new Vector2(3.2f, 3.2f);
+        }
         await Close(ShipClass.Carrier, "10_carrier_closeup");
 
         // ── QA: every remaining feature and UI state, one frame each ─────────────
