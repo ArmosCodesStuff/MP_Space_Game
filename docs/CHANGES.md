@@ -39,7 +39,7 @@ history pick the work up from it alone. Update it in the same change as the code
 **State as of 2026-09-18: version 0.3.0 plus Unreleased (see it for everything since: docking arms
 and the unload queue, the fleet and hauler pods, the idle economy, base menu, bunker-buster missile,
 painted turrets, docking bombers and more).** Typecheck clean against the real `GodotSharp.dll`,
-`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 234 checks across
+`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 256 checks across
 a single-player run and a host with two guests. Unlike earlier releases, this one was also **looked at**:
 `tools/screens/run.sh` renders the select screen, the creator, a fresh spawn under the base, both
 classes in the hub, the K window, a bomber strike, and turret close-ups on a virtual display; layout
@@ -73,6 +73,8 @@ travel, and no economy beyond an idle ore/salvage counter.
 | K | abilities & keys (remapping) / stats window |
 | Mouse wheel | zoom: 33% further out to 1.5× closer |
 | Y | free camera: arrow keys or the screen edge move it (5000 u tether); Y again returns |
+| L | pilot: level, EXP, points and upgrades |
+| Left-click a building | its menu (TIO: WARP TO TARGET; base: BASE) |
 | B | base menu: upgrades, and REFIT (the only way to change class, name or colours; costs 10%) |
 | 1 – 6 | open hotkeys: bound and remappable, empty until abilities or items fill them |
 | Esc | back one layer: text box → placement → creator → K window → base menu → target → **Esc menu** (radar size, music volume, quit) |
@@ -176,6 +178,42 @@ reachable, which is fine: both harnesses build from the `nupkgs` folder that shi
 ---
 
 ## Unreleased
+
+### Pilot progression, building menus, the TIO mission portal (this batch)
+
+**Checked:** smoke test **three runs in a row, 256 checks each** (22 new, including the party of
+three over the network); screenshot sweep **49 frames, 0 lint findings**, the new frames looked at.
+
+#### Added
+
+- **Pilot progression.** EXP comes from completing missions and killing bosses and is **shared by
+  everyone in the session** (the host awards it). Each level needs **100 × 1.5^(level−1)** EXP and
+  pays **1 point**. The **PILOT window (L**, or the PILOT button) spends points on flat upgrades:
+  **Rudder +1°/s turn, Hull +5, Engines +1 speed, Weapons +1 damage** (the battleship's main guns,
+  the carrier's torpedoes). Each upgrade's next level costs one more point (**1, 2, 3, …**).
+  Saved with the character; the ship refits at once, keeping damage already taken.
+- **Flat stat bonuses**: every stat is now (base + flat) × (1 + bonus); pilot upgrades are the flat part.
+- **The host knows each pilot's upgrades** (they travel with the pilot's identity), because the host
+  resolves hull and damage. It refuses purchases the pilot's claimed level could not have paid for.
+- **Left-click opens a building's menu**: the TIO opens **WARP TO TARGET**, the base station opens BASE.
+  A hostile under the cursor is still selected first.
+- **WARP TO TARGET**: the Silver Lancer bounty (300 EXP each for the kill, 100 each for completing,
+  2000 credits), **the party — everyone in the session — with each pilot's READY**, and **WARP**
+  (host only, unlocked when everyone is ready). WARP runs a **3 s bar at the TIO's top right**, then
+  the **red mission portal** opens there, on every screen.
+
+#### Still to come (next, in order)
+
+- **The boss arena**: the scene change through the mission portal, the Silver Lancer (≈3000 hull,
+  guided missiles and a gun battery, slow and heavy), and the EXP and credits on the kill.
+- **Warp (V)** for every capital ship.
+
+#### Known limits
+
+- **Progression is kept on each pilot's own machine.** The host checks a claim is affordable at the
+  pilot's level, but cannot check the level itself; a server that owns characters would.
+
+### Earlier in Unreleased
 
 ### Missiles, wing, hauler landing, PD, TIO (this batch)
 

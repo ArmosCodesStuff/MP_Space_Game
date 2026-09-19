@@ -170,6 +170,16 @@ levels once a second and ship and hauler state ten times a second; a guest's own
   such as Tailscale or ZeroTier (everyone joins the VPN; use its addresses). There is no relay
   server or NAT punch-through: that needs infrastructure outside the game.
 
+## Pilot progression and missions
+
+- **EXP is shared**: the host awards it (`Hub.AwardPartyExp`) to every pilot in the session, for
+  mission completion and boss kills. Levels need 100 × 1.5^(level−1); each pays one point.
+- **Upgrades are flat** and cost 1, 2, 3, … per upgrade. They are applied as the stat's `Flat`
+  part, before any percentage bonus. The host gets them with the pilot's identity and validates
+  that the claimed purchases are affordable at the claimed level.
+- **Missions are host-authoritative**: party = everyone in the session; READY is a request the host
+  records and broadcasts; WARP needs everyone ready; the portal opens after a 3 s bar.
+
 ## Launch limits and targeting rules
 
 - **Fighters launch at least 0.83 s apart**, always. It is a constant, never a stat, so nothing that
