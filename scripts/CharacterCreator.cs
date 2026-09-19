@@ -190,7 +190,7 @@ public partial class ShipPreview : Control
         var c = Vector2.Zero;
         var drawSize = worldSize * k;
         // the accent lights the engines: a plume at the stern shows the choice
-        Plume.Draw(this, c + new Vector2(0, drawSize.Y * 0.5f), Vector2.Down, drawSize.Y, Accent, 0.8f);
+        Plume.Draw(this, c + new Vector2(0, drawSize.Y * 0.5f), Vector2.Down, drawSize.Y, Accent, 0.8f, false);
         DrawTextureRect(tex, new Rect2(c - drawSize * 0.5f, drawSize), false, Main);
 
         // turrets: the same cut-out sprites the game turns, pointing forward, in the

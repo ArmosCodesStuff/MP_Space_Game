@@ -60,7 +60,7 @@ public partial class StatsWindow : CanvasLayer
         var reset = new Button { Text = "RESET TO DEFAULTS", FocusMode = Control.FocusModeEnum.None, Name = "ResetKeys" };
         reset.Pressed += () => { if (IsInstanceValid(Ship)) { Abilities.ResetDefaults(Ship.Class); _keyMsg.Text = "Defaults restored."; RebuildKeys(); } };
         _keysPane.AddChild(reset);
-        _keysPane.AddChild(new Label { Text = "Fixed, not bindable: W A S D (helm), Tab, K, B, Esc, Enter.",
+        _keysPane.AddChild(new Label { Text = "Fixed, not bindable: W A S D (helm), Tab, K, B, Y and the arrow keys (camera), Esc, Enter.",
                                        AutowrapMode = TextServer.AutowrapMode.WordSmart, Modulate = new Color(1, 1, 1, 0.5f) });
 
         // ── stats pane ──

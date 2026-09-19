@@ -46,5 +46,5 @@ public partial class EscapePod : Node2D
     }
 
     public override void _Draw() =>
-        Plume.Draw(this, new Vector2(0, Length * 0.5f), Vector2.Down, Length, Engine, Velocity.Length() / Speed);
+        Plume.Draw(this, new Vector2(0, Length * 0.5f), Vector2.Down, Length, Engine, Velocity.Length() / Speed, Velocity.Length() > 2f);
 }

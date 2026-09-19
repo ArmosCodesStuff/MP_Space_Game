@@ -477,6 +477,6 @@ public partial class Wing : Node2D
         if (Inside || (!F && _b == BSt.Docked)) return;          // engines off when docked
         float len = F ? FighterLength : BomberLength;
         Plume.Draw(this, new Vector2(0, len * 0.5f), Vector2.Down, len, Carrier.Accent,
-                   Velocity.Length() / Mathf.Max(1f, Speed));
+                   Velocity.Length() / Mathf.Max(1f, Speed), Velocity.Length() > 2f);
     }
 }

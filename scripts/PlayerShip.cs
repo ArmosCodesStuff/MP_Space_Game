@@ -61,6 +61,9 @@ public partial class PlayerShip : Node2D, IHittable
         public string Texture;
         public float Length;          // nose to tail, world units
         public float HalfWidth = 20f; // half the hull's beam: the collider and the shield
+        // How far the free camera (Y) may wander from the ship. Capital ships 5000;
+        // a fighter-class ship, when there is one, gets FighterCameraRange.
+        public float CameraRange = 5000f;
         public Vector2[] Mains = Array.Empty<Vector2>(), Pds = Array.Empty<Vector2>();
 
         // The turrets are the ones painted on the ship: cut out of the hull art into
@@ -100,10 +103,12 @@ public partial class PlayerShip : Node2D, IHittable
             PdBarrel = 3.7f, PdRing = 2.9f },
     };
 
+    public const float FighterCameraRange = 2500f;
     public ClassArt MyArt => Art[Class];
 
     // ── the owner's intent, replicated at 20 Hz ──────────────────────────────
     public Vector2 AimPoint;               // where the main guns point
+    public bool Thrusting;                 // the owner is on the throttle (plume flicker)
     public bool Trigger;                   // guns key held (battleship)
     public bool Staggered;                 // fire mode: false = salvo, true = staggered
 
@@ -424,6 +429,7 @@ public partial class PlayerShip : Node2D, IHittable
             if (Input.IsKeyPressed(Key.A)) rudder -= 1f;
             if (Input.IsKeyPressed(Key.D)) rudder += 1f;
         }
+        Thrusting = throttle != 0f;
         Steer(throttle, rudder, dt);
 
         // the main guns aim at the cursor; the hull does not follow it
@@ -575,7 +581,7 @@ public partial class PlayerShip : Node2D, IHittable
         // engine plumes at the stern, in the accent colour
         if (Alive)
             Plume.Draw(this, new Vector2(0, MyArt.Length * 0.5f), Vector2.Down, MyArt.Length, Accent,
-                       0.25f + 0.75f * Mathf.Abs(SpeedAhead) / (float)Stats["max_speed"]);
+                       0.25f + 0.75f * Mathf.Abs(SpeedAhead) / (float)Stats["max_speed"], Thrusting || Mathf.Abs(SpeedAhead) > 2f);
         for (int i = _signals.Count - 1; i >= 0; i--)
         {
             var (p, t) = _signals[i];

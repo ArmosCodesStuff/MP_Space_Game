@@ -10,6 +10,8 @@ public static class Settings
 
     public static readonly float[] VolumeSteps = { 0f, 0.25f, 0.5f, 0.75f, 1f };
     public static int VolumeIdx = 3;
+    public static float MusicVolume = 0.6f;          // 0..1, a share of the master volume
+    public static int RadarSize = 1;                 // 0 small, 1 medium, 2 large
     public static float Volume => VolumeSteps[Mathf.Clamp(VolumeIdx, 0, VolumeSteps.Length - 1)];
 
     public static void ApplyVolume()
@@ -29,6 +31,8 @@ public static class Settings
     {
         var c = new ConfigFile();
         c.SetValue("audio", "volume_idx", VolumeIdx);
+        c.SetValue("audio", "music", MusicVolume);
+        c.SetValue("ui", "radar_size", RadarSize);
         foreach (var kv in Keys) c.SetValue("keys", kv.Key, kv.Value);
         c.Save(Path);
     }
@@ -39,6 +43,8 @@ public static class Settings
         var c = new ConfigFile();
         if (c.Load(Path) != Error.Ok) return;
         VolumeIdx = (int)c.GetValue("audio", "volume_idx", VolumeIdx);
+        MusicVolume = (float)c.GetValue("audio", "music", MusicVolume);
+        RadarSize = Mathf.Clamp((int)c.GetValue("ui", "radar_size", RadarSize), 0, 2);
         Keys.Clear();
         if (c.HasSection("keys"))
             foreach (var k in c.GetSectionKeys("keys")) Keys[k] = (int)c.GetValue("keys", k, 0);

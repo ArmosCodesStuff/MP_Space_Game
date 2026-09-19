@@ -166,7 +166,7 @@ public partial class Gatherer : Node2D
     public override void _Draw()
     {
         // a light yellow plume: utility ships ignore every player colour
-        Plume.Draw(this, new Vector2(0, Length * 0.5f), Vector2.Down, Length, Plume.Utility, Velocity.Length() / (float)Speed);
+        Plume.Draw(this, new Vector2(0, Length * 0.5f), Vector2.Down, Length, Plume.Utility, Velocity.Length() / (float)Speed, Velocity.Length() > 2f);
         var inv = GlobalTransform.AffineInverse();
         if (Beaming && M)
         {   // one shaft: a steady core with a soft glow that breathes

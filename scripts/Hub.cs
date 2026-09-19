@@ -44,9 +44,28 @@ public partial class Hub : Node2D
     public IReadOnlyList<Node2D> Rocks => _rocks;
     public Portal Portal { get; private set; }
     public Yard Yard { get; private set; }                    // the idle economy
+    private EscMenu _esc;
+    public bool EscMenuOpen => IsInstanceValid(_esc);
+    public void ToggleEscMenu()
+    {
+        if (IsInstanceValid(_esc)) { _esc.QueueFree(); _esc = null; return; }
+        _esc = new EscMenu { Hub = this }; AddChild(_esc);
+    }
+    public System.Collections.Generic.IEnumerable<PlayerShip> Ships => _ships.Values;
     private BasePanel _base;
     private readonly Dictionary<int, PlayerShip> _ships = new();
     private Camera2D _cam;
+
+    // ── camera ──────────────────────────────────────────────────────────────
+    // The wheel zooms, from 33% further out than the default to 1.5x closer. Y frees
+    // the camera: arrow keys, or the mouse against a screen edge, move it -- no
+    // further than the ship's CameraRange (5000 for capital ships). Y again returns
+    // it to the ship, keeping the zoom.
+    public const float DefaultZoom = 0.9f, ZoomOutMax = 1.33f, ZoomInMax = 1.5f;
+    public const float PanSpeed = 1400f, EdgeBand = 14f;
+    public float ZoomLevel { get; private set; } = DefaultZoom;
+    public bool FreeCamera { get; private set; }
+    public Vector2 CameraPosition => _cam.Position;
     private Label _hud, _help;
     private CanvasLayer _hudLayer;
     private CharacterCreator _creator;
@@ -77,7 +96,7 @@ public partial class Hub : Node2D
         sky.AddChild(stars);
 
         BuildWorld();
-        _cam = new Camera2D { Zoom = new Vector2(0.9f, 0.9f) }; AddChild(_cam); _cam.MakeCurrent();
+        _cam = new Camera2D { Zoom = new Vector2(DefaultZoom, DefaultZoom) }; AddChild(_cam); _cam.MakeCurrent();
 
         var layer = new CanvasLayer(); AddChild(layer);
         _hudLayer = layer;
@@ -107,6 +126,7 @@ public partial class Hub : Node2D
         layer.AddChild(helpPanel);
 
         layer.AddChild(new HullHud { Hub = this });
+        layer.AddChild(new Radar { Hub = this });
         layer.AddChild(new AbilityBar { Hub = this });
         layer.AddChild(new HaulerHud { Hub = this });
 
@@ -298,6 +318,34 @@ public partial class Hub : Node2D
         if (IsInstanceValid(_creator)) _creator.Close();
     }
 
+    private void MoveCamera(PlayerShip me, float dt)
+    {
+        _cam.Zoom = _cam.Zoom.Lerp(new Vector2(ZoomLevel, ZoomLevel), Mathf.Clamp(10f * dt, 0f, 1f));
+        var anchor = me.ViewPosition;                                  // the pod, while in stasis
+        if (!FreeCamera)
+        {
+            _cam.Position = _cam.Position.Lerp(anchor, Mathf.Clamp(6f * dt, 0f, 1f));
+            return;
+        }
+        var pan = Vector2.Zero;
+        if (!ControlsLocked)
+        {
+            if (Input.IsKeyPressed(Key.Left))  pan.X -= 1;
+            if (Input.IsKeyPressed(Key.Right)) pan.X += 1;
+            if (Input.IsKeyPressed(Key.Up))    pan.Y -= 1;
+            if (Input.IsKeyPressed(Key.Down))  pan.Y += 1;
+            var m = GetViewport().GetMousePosition(); var vs = GetViewport().GetVisibleRect().Size;
+            if (m.X <= EdgeBand) pan.X -= 1; else if (m.X >= vs.X - EdgeBand) pan.X += 1;
+            if (m.Y <= EdgeBand) pan.Y -= 1; else if (m.Y >= vs.Y - EdgeBand) pan.Y += 1;
+        }
+        if (pan != Vector2.Zero) _cam.Position += pan.Normalized() * PanSpeed / ZoomLevel * dt;
+        var off = _cam.Position - anchor;                               // the tether
+        if (off.Length() > me.MyArt.CameraRange) _cam.Position = anchor + off.Normalized() * me.MyArt.CameraRange;
+    }
+
+    public void SetZoom(float z) => ZoomLevel = Mathf.Clamp(z, DefaultZoom / ZoomOutMax, DefaultZoom * ZoomInMax);
+    public void ToggleFreeCamera() => FreeCamera = !FreeCamera;
+
     public PlayerShip MyShipPublic => MyShip;
     private void SpawnTorpedo(Vector2 from, Vector2 dir, float speed, float range, double dmg, bool cosmetic,
                               int target = 0, float turn = 0f, bool heavy = false, bool hostile = false)
@@ -352,7 +400,7 @@ public partial class Hub : Node2D
     // ── tick ─────────────────────────────────────────────────────────────────
     public override void _Process(double delta)
     {
-        ControlsLocked = IsInstanceValid(_creator) || GetViewport().GuiGetFocusOwner() is LineEdit
+        ControlsLocked = IsInstanceValid(_creator) || IsInstanceValid(_esc) || GetViewport().GuiGetFocusOwner() is LineEdit
                          || (IsInstanceValid(_statsWin) && _statsWin.Capturing);
         // bars and labels keep a constant on-screen size whatever the zoom
         HealthBar.UiScale = Txt.UiScale = 1f / _cam.Zoom.X;
@@ -361,7 +409,7 @@ public partial class Hub : Node2D
         // ONLY the host produces. A client that ticked its own copy would drift
         // from the host's within seconds and then argue about it.
         if (_ships.TryGetValue(Net.LocalId, out var mine) && IsInstanceValid(mine))
-            _cam.Position = _cam.Position.Lerp(mine.ViewPosition, Mathf.Clamp(6f * (float)delta, 0f, 1f));   // the pod, while in stasis
+            MoveCamera(mine, (float)delta);
 
         for (int i = _flashes.Count - 1; i >= 0; i--)
         {
@@ -385,7 +433,8 @@ public partial class Hub : Node2D
         }
         _hud.Text = $"ORE {Yard.Ore:0}    SALVAGE {Yard.Salvage:0}    CREDITS {Yard.Credits:0}"
                   + $"    HAULER {Yard.Hauler.Cargo:0}/{Yard.Capacity:0} {Yard.Hauler.State.ToString().ToUpper()}" + ship
-                  + (Net.IsOnline ? (Net.IsHost ? $"        HOSTING ({_ships.Count})" : $"        GUEST ({_ships.Count})") : "        OFFLINE");
+                  + (Net.IsOnline ? (Net.IsHost ? $"        HOSTING ({_ships.Count})" : $"        GUEST ({_ships.Count})") : "        OFFLINE")
+                  + (FreeCamera ? "        FREE CAMERA (Y)" : "");
     }
 
     public override void _Draw()
@@ -457,12 +506,13 @@ public partial class Hub : Node2D
             if (IsInstanceValid(_statsWin) && _statsWin.Capturing) return;   // the window takes this Esc
             GetViewport().SetInputAsHandled();
             if (focus is LineEdit le2) le2.ReleaseFocus();
+            else if (IsInstanceValid(_esc)) ToggleEscMenu();
             else if (Placing) CancelPlacement();
             else if (IsInstanceValid(_creator)) CloseCreator();
             else if (IsInstanceValid(_statsWin)) ToggleStats();
             else if (IsInstanceValid(_base)) ToggleBase();
             else if (Selected != null) _selected = null;
-            else { Net.I?.GoOffline(); GetTree().ChangeSceneToFile("res://MainMenu.tscn"); }
+            else ToggleEscMenu();                                   // the menu holds "quit to main menu"
         }
     }
 
@@ -476,6 +526,13 @@ public partial class Hub : Node2D
         // otherwise selecting what is under the cursor. It never fires a weapon or
         // orders a wing -- attacks are Space. RIGHT-CLICK only cancels a placement.
         // Only clicks the GUI did not take arrive here, so UI clicks never select.
+        if (e is InputEventMouseButton wheel && wheel.Pressed
+            && (wheel.ButtonIndex == MouseButton.WheelUp || wheel.ButtonIndex == MouseButton.WheelDown))
+        {   // the wheel zooms: up is closer
+            SetZoom(ZoomLevel * (wheel.ButtonIndex == MouseButton.WheelUp ? 1.1f : 1f / 1.1f));
+            GetViewport().SetInputAsHandled();
+            return;
+        }
         if (e is InputEventMouseButton mb && mb.Pressed)
         {
             var at = GetGlobalMousePosition();
@@ -498,7 +555,8 @@ public partial class Hub : Node2D
             // fixed controls first; every other key is looked up in this class's
             // ability bindings (remappable in the K window). Class is changed only in
             // REFIT in the base menu -- there are no class hotkeys.
-            if (kk.Keycode == Key.Tab) SelectNearest();
+            if (kk.Keycode == Key.Y) ToggleFreeCamera();
+            else if (kk.Keycode == Key.Tab) SelectNearest();
             else if (kk.Keycode == Key.K) ToggleStats();
             else if (kk.Keycode == Key.B) ToggleBase();
             else

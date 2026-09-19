@@ -178,7 +178,7 @@ public partial class Hauler : Node2D
         // three light-yellow plumes at its three nozzles (x = -17.7, 0, +17.7 u at full size)
         float vs = VisualScale, thr = State is St.Departing or St.Returning ? 1f : 0.2f;
         foreach (float nx in new[] { -17.7f, 0f, 17.7f })
-            Plume.Draw(this, new Vector2(nx, Length * 0.5f) * vs, Vector2.Down, Length * 0.45f * vs, Plume.Utility, thr);
+            Plume.Draw(this, new Vector2(nx, Length * 0.5f) * vs, Vector2.Down, Length * 0.45f * vs, Plume.Utility, thr, thr > 0.5f);
         var tex = _sprite.Texture;
         var size = tex.GetSize() * (Length / tex.GetHeight()) * VisualScale;
         var drop = (new Vector2(10f, 16f) * (0.15f + Altitude)).Rotated(-Rotation);   // screen down-right, in the hull's frame
