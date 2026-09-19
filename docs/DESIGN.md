@@ -174,7 +174,7 @@ levels once a second and ship and hauler state ten times a second; a guest's own
 
 Recorded here so every chunk builds from the written word, not from memory.
 
-- **Chunk 2 — boss and combat tuning.** Boss hull **1200** at tier 0. Boss lasers about **3 DPS** base.
+- **Chunk 2 — boss and combat tuning. (DONE)** Boss hull **1200** at tier 0. Boss lasers about **3 DPS** base.
   Cadence: the **death beam every 30 s**; a telegraphed **charge every 30 s on the opposite cadence**
   (15 s apart); **trident missile volleys in between** — **3 missiles, 0° and ±25°, 15 damage each,
   2× the size, ~10% slower, ~20% more range**. **Damage from one ongoing source lands at most once per
@@ -202,6 +202,8 @@ Recorded here so every chunk builds from the written word, not from memory.
   the player missile's size) within 500 u, 7 s to impact, at the target's predicted position**, with a
   **red circle marking the blast** (the boss telegraph's red) — dodgeable. Both types hold **within 90%
   of their weapon range** so they never lose DPS to repositioning. **Patrols: 3 lights + 1 heavy.**
+- **New chunk (after 6) — base weapons**: a 5 DPS laser at 300 u and a tracking 25-damage missile at
+  600 u, ~120 u/s, one every 5 s. **Chunk 4's distance is decided: 1500 u** to each field's edge.
 - **Chunk 7 — raids**: on a failed mission the boss sends patrols in **from the perimeter of the base
   map** against the miners, salvagers, hauler and players.
 - **Chunk 8 — the BASE button in the arena, and a dedicated multiplayer arena test.**

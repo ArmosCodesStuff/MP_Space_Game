@@ -39,7 +39,7 @@ history pick the work up from it alone. Update it in the same change as the code
 **State as of 2026-09-18: version 0.3.0 plus Unreleased (see it for everything since: docking arms
 and the unload queue, the fleet and hauler pods, the idle economy, base menu, bunker-buster missile,
 painted turrets, docking bombers and more).** Typecheck clean against the real `GodotSharp.dll`,
-`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 292 checks across
+`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 305 checks across
 a single-player run and a host with two guests. Unlike earlier releases, this one was also **looked at**:
 `tools/screens/run.sh` renders the select screen, the creator, a fresh spawn under the base, both
 classes in the hub, the K window, a bomber strike, and turret close-ups on a virtual display; layout
@@ -179,6 +179,41 @@ reachable, which is fine: both harnesses build from the `nupkgs` folder that shi
 ---
 
 ## Unreleased
+
+### Chunk 2 of 9: boss and combat tuning
+
+**Checked:** smoke test **three runs in a row, 305 checks each** (13 new; four rules broken on purpose
+in a copy — per-source hits, regeneration, the beam's tick, the trident's spread — and every one was
+caught); screenshot sweep **53 frames, 0 lint**. **Not looked at yet:** the new player missile's shape.
+
+#### Changed
+
+- **The boss (tier 0): 1200 hull; guns 3 DPS** (3.6 every 1.2 s).
+- **The boss's rhythm (30 s)**: the **death beam** (first at 6 s, then every 30 s) is now **live for 1 s
+  after its telegraph, checking every 0.51 s, 100 each time it lands**; a **charge** 15 s after each
+  beam — a red line for 1.5 s, then a ram along it at 1200 u/s, **40** to any ship in its path; a
+  **trident volley** half-way between — **3 guided missiles at 0° and ±25°, 15 each, twice the size,
+  135 u/s (10% slower), 1920 u (20% further)**, all interceptable. (All boss damage × the tier's scale.)
+- **One source lands at most once per 0.35 s on a player** (a trident's three missiles are one source).
+- **Regeneration**: 0.5% of max hull a second in combat, 3% out of it.
+- **Out of combat = 12 s** without dealing or taking damage (music and regeneration).
+- **Music**: with a target selected (the softened combat track), the ambient plays at half (0.35).
+- **The player's missile**: sharper nose, 20% skinnier, 25% longer, swept fins, a band and a seam.
+
+#### Added
+
+- **Damage taken by source** (`PlayerShip.DamageBySource`), host-side — used by the tests, ready for a
+  damage meter.
+
+#### Decided
+
+- **Field distance (chunk 4)**: both fields' edges **1500 u from the base's centre** (≈6.7 battleship
+  lengths), leaving a blockade band outside the base's 600 u missile cover.
+- **New chunk — base weapons** (after the enemy fighters): a **5 DPS laser, 300 u**, and a **tracking
+  25-damage missile, 600 u, ~120 u/s** (1.2× the capital ships' average top speed), **one every 5 s**
+  (default).
+
+### Earlier in Unreleased
 
 ### Chunk 1 of 8: warp
 
