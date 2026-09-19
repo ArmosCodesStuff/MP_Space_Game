@@ -221,10 +221,9 @@ public partial class Hub : Node2D
         var tioTex = GD.Load<Texture2D>("res://tio_building.png");
         var tio = new Sprite2D { Texture = tioTex, Name = "TIO", Position = TioPos, Scale = Vector2.One * (TioHeight / tioTex.GetHeight()), ZIndex = 2 };
         AddChild(tio);
-        var tioName = new Label { Text = "THREAT INTELLIGENCE OPERATIONS", HorizontalAlignment = HorizontalAlignment.Center,
-                                  Position = TioPos + new Vector2(-200, TioHeight / 2 + 6), Size = new Vector2(400, 20), Modulate = new Color(0.8f, 0.85f, 0.95f, 0.8f) };
-        tioName.AddThemeFontSizeOverride("font_size", 14);
-        AddChild(tioName);
+        // its name, drawn in the world like every world label (a UI control here counted
+        // as "off-screen" whenever the camera looked elsewhere)
+        AddChild(new WorldLabel { Text = "THREAT INTELLIGENCE OPERATIONS", Position = TioPos + new Vector2(0, TioHeight / 2 + 16), ZIndex = 2 });
 
         Portal = new Portal { Position = PortalPos, Name = "Portal" };
         AddChild(Portal);
@@ -708,4 +707,11 @@ public partial class FlashLayer : Node2D
         foreach (var f in Hub.Flashes)
             DrawLine(f.a, f.b, new Color(f.c.R, f.c.G, f.c.B, (float)(f.t / 0.10) * 0.9f), 2f);
     }
+}
+
+// Text that lives in the world (a building's name): drawn, not a UI control.
+public partial class WorldLabel : Node2D
+{
+    public string Text = "";
+    public override void _Draw() => Txt.Centre(this, ThemeDB.FallbackFont, Vector2.Zero, Text, Txt.Size(14), new Color(0.8f, 0.85f, 0.95f, 0.8f));
 }
