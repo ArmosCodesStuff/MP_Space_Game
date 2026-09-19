@@ -6,6 +6,7 @@ using Godot;
 // Keys follow the current bindings, so a remap in the K window shows here at once.
 public partial class AbilityBar : Control
 {
+    private readonly StyleBoxFlat _panel = Ui.PanelStyle();   // built once: _Draw runs every frame
     public Hub Hub;
     public const float SlotW = 118, SlotH = 64, Gap = 8, GroupGap = 22;   // extra space before the open slots
 
@@ -76,7 +77,7 @@ public partial class AbilityBar : Control
         float total = list.Length * SlotW + (list.Length - 1) * Gap + (hasOwn ? GroupGap : 0);
         float x = -total / 2f;
         var font = ThemeDB.FallbackFont;
-        Ui.PanelStyle().Draw(GetCanvasItem(), new Rect2(x - 8, -8, total + 16, SlotH + 16));   // the bar's panel
+        _panel.Draw(GetCanvasItem(), new Rect2(x - 8, -8, total + 16, SlotH + 16));   // the bar's panel
         for (int i = 0; i < list.Length; i++)
         {
             var ab = list[i];

@@ -654,6 +654,7 @@ public partial class Portal : Node2D
 // The player's hull, big and always on screen: a bar along the bottom centre.
 public partial class HullHud : Control
 {
+    private readonly StyleBoxFlat _panel = Ui.PanelStyle();   // built once: _Draw runs every frame
     public Hub Hub;
     private const float W = 440, H = 22;
 
@@ -670,7 +671,7 @@ public partial class HullHud : Control
     {
         var s = Hub?.MyShipPublic;
         if (s == null) return;
-        Ui.PanelStyle().Draw(GetCanvasItem(), new Rect2(-8, -6, W + 16, H + 12));   // its panel
+        _panel.Draw(GetCanvasItem(), new Rect2(-8, -6, W + 16, H + 12));   // its panel
         float frac = (float)Mathf.Clamp(s.Hp / Mathf.Max(1, s.MaxHp), 0, 1);
         var fill = frac > 0.35f ? new Color(0.35f, 0.85f, 0.45f) : new Color(1f, 0.35f, 0.3f);
         DrawRect(new Rect2(0, 0, W, H), new Color(0.08f, 0.09f, 0.12f, 0.9f));

@@ -69,10 +69,17 @@ public partial class Radar : Control
         if (!me.Alive) DrawCircle(P(me.Position), 2.5f, new Color(0.5f, 0.6f, 0.8f));   // the ship in stasis
         Arrow(c, me.Alive ? me.Rotation : 0f, Colors.White);
         if (Hub.FreeCamera)
-        {   // what the free camera sees
+        {   // what the free camera sees -- clipped to the disc: drawn whole, the box
+            // ran outside the radar whenever the view reached its edge
             var half = Hub.GetViewportRect().Size * 0.5f / Hub.ZoomLevel * k;
             var cp = P(Hub.CameraPosition);
-            DrawRect(new Rect2(cp - half, half * 2f), new Color(1f, 1f, 1f, 0.5f), false, 1f);
+            Vector2[] q = { cp - half, cp + new Vector2(half.X, -half.Y), cp + half, cp + new Vector2(-half.X, half.Y) };
+            for (int e = 0; e < 4; e++)
+                for (int i = 0; i < 24; i++)
+                {
+                    Vector2 p0 = q[e].Lerp(q[(e + 1) % 4], i / 24f), p1 = q[e].Lerp(q[(e + 1) % 4], (i + 1) / 24f);
+                    if (((p0 + p1) * 0.5f).DistanceTo(c) <= r - 1f) DrawLine(p0, p1, new Color(1f, 1f, 1f, 0.5f), 1f);
+                }
         }
     }
 

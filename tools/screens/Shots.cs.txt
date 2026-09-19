@@ -162,7 +162,12 @@ public partial class _Shots : Node
         // the Esc menu, and the free camera zoomed right out (its view boxed on the radar)
         {
             var hub = H;
-            Key(global::Godot.Key.Escape); await W(0.4); await Snap("32_esc_menu"); Key(global::Godot.Key.Escape); await W(0.2);
+            // open and close it directly: Esc peels layers (a selected target goes first),
+            // so key presses here depend on whatever the frames before left open
+            if (!hub.EscMenuOpen) hub.ToggleEscMenu();
+            await W(0.4); await Snap("32_esc_menu");
+            if (hub.EscMenuOpen) hub.ToggleEscMenu();
+            await W(0.2);
             hub.SetZoom(Hub.DefaultZoom / Hub.ZoomOutMax); hub.ToggleFreeCamera();
             Input.ParseInputEvent(new InputEventKey { Keycode = global::Godot.Key.Right, PhysicalKeycode = global::Godot.Key.Right, Pressed = true });
             await W(1.2);

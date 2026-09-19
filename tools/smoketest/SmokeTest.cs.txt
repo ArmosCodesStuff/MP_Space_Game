@@ -745,6 +745,29 @@ public partial class _Test : Node
         Check(GetTree().CurrentScene is MainMenu, "QUIT TO MAIN MENU returns to the main menu");
         GetTree().ChangeSceneToFile("res://Hub.tscn"); await Wait(0.4);
         Check(H != null && Count<PlayerShip>() == 1, "hub re-enters cleanly");
+
+        // leaks: leaving and re-entering the hub must not grow the orphan-node or object
+        // counts (the first cycle warms caches; compare the next two against it)
+        async Task Cycle()
+        {
+            GetTree().ChangeSceneToFile("res://MainMenu.tscn"); await Wait(0.5);
+            GetTree().ChangeSceneToFile("res://Hub.tscn"); await Wait(1.0);
+        }
+        // Collect .NET garbage first, so the count shows real leaks, not objects merely
+        // waiting for the collector (it runs whenever it likes).
+        async Task<double> Settled()
+        {
+            for (int g = 0; g < 2; g++) { System.GC.Collect(); System.GC.WaitForPendingFinalizers(); }
+            for (int f = 0; f < 3; f++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            return Performance.GetMonitor(Performance.Monitor.ObjectCount);
+        }
+        await Cycle();
+        double objA = await Settled(), orphA = Performance.GetMonitor(Performance.Monitor.ObjectOrphanNodeCount);
+        await Cycle(); await Cycle();
+        double objB = await Settled(), orphB = Performance.GetMonitor(Performance.Monitor.ObjectOrphanNodeCount);
+        GD.Print($"  leak check: orphan nodes {orphA:0} -> {orphB:0}; objects {objA:0} -> {objB:0} (after collection)");
+        Check(orphB <= orphA, "no orphan nodes accumulate across leaving and re-entering the hub");
+        Check(objB <= objA + 20, "no objects accumulate across leaving and re-entering the hub");
     }
 
     // ── multiplayer ──────────────────────────────────────────────────────────
