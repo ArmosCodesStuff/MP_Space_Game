@@ -1,8 +1,8 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-19 19:10 at git commit bf86e75: typecheck clean, smoke test 3/3 passes
-//   (292 checks), 53-frame UI sweep 0 findings.
-// 49 files, 8113 lines. Code only: sprites, sounds and docs are in the zip.
+// Taken 2026-09-19 19:31 at git commit e627ec9: typecheck clean, smoke test 3/3 passes
+//   (305 checks), 53-frame UI sweep 0 findings.
+// 49 files, 8238 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -18,24 +18,24 @@
 //   scripts/AbilityBar.cs                          112 lines   sha256 4a1331fe370c
 //   scripts/Autopilot.cs                            40 lines   sha256 807538219f53
 //   scripts/BasePanel.cs                           105 lines   sha256 024b285073bc
-//   scripts/Boss.cs                                147 lines   sha256 441112037874
+//   scripts/Boss.cs                                184 lines   sha256 d723ed53971e
 //   scripts/Character.cs                           168 lines   sha256 266190f479e4
 //   scripts/CharacterCreator.cs                    211 lines   sha256 136099a8d1c7
 //   scripts/CharacterSelect.cs                     171 lines   sha256 dc2bfeccc820
-//   scripts/Combat.cs                               92 lines   sha256 f1fd26635780
+//   scripts/Combat.cs                               92 lines   sha256 0a5dd1c784a2
 //   scripts/Economy.cs                              75 lines   sha256 904973fc4761
 //   scripts/EscMenu.cs                              59 lines   sha256 999b01e6cd29
 //   scripts/EscapePod.cs                            50 lines   sha256 324c55cb503b
 //   scripts/Gatherer.cs                            207 lines   sha256 06c31c1dfb04
 //   scripts/Hauler.cs                              283 lines   sha256 551cdf41401d
 //   scripts/HealthBar.cs                            36 lines   sha256 97c42a282205
-//   scripts/Hub.cs                                 973 lines   sha256 22b37a69f0f4
+//   scripts/Hub.cs                                 975 lines   sha256 bbf88fe14a70
 //   scripts/MainMenu.cs                            224 lines   sha256 39dbc31417c6
-//   scripts/Missions.cs                             26 lines   sha256 576c2255742a
-//   scripts/Music.cs                                76 lines   sha256 5b0efe1bc3be
+//   scripts/Missions.cs                             26 lines   sha256 6870c2208143
+//   scripts/Music.cs                                78 lines   sha256 19cdf8e2b59c
 //   scripts/Net.cs                                 246 lines   sha256 ce3ebadd0342
 //   scripts/PilotWindow.cs                          54 lines   sha256 bd3c2ab6785f
-//   scripts/PlayerShip.cs                          727 lines   sha256 6fc07148ad52
+//   scripts/PlayerShip.cs                          741 lines   sha256 096a3fa923dc
 //   scripts/Plume.cs                                25 lines   sha256 cdbeb9b8fc58
 //   scripts/Progression.cs                          73 lines   sha256 d3b0cd99118f
 //   scripts/Radar.cs                                93 lines   sha256 eff30cd82bb4
@@ -49,14 +49,14 @@
 //   scripts/TargetDummy.cs                         117 lines   sha256 f7845c23ab57
 //   scripts/Telegraph.cs                            47 lines   sha256 89f6af49c4d7
 //   scripts/TioWindow.cs                            61 lines   sha256 0b5382e679d6
-//   scripts/Torpedo.cs                             141 lines   sha256 8c9d94a81a69
+//   scripts/Torpedo.cs                             154 lines   sha256 8bcbf075476e
 //   scripts/Txt.cs                                  31 lines   sha256 0b56559599f8
 //   scripts/Ui.cs                                   99 lines   sha256 0a376702a4e8
 //   scripts/Yard.cs                                387 lines   sha256 1cd1e412db23
 //   typecheck/typecheck.sh                          57 lines   sha256 e68277c09f34
 //   tools/screens/Shots.cs.txt                     325 lines   sha256 c380f230b2d7
 //   tools/screens/run.sh                            40 lines   sha256 a47174d56c6a
-//   tools/smoketest/SmokeTest.cs.txt              1139 lines   sha256 2082bd51ca50
+//   tools/smoketest/SmokeTest.cs.txt              1196 lines   sha256 080b901cb5b4
 //   tools/smoketest/run.sh                          52 lines   sha256 67c03204c10d
 //==============================================================================
 
@@ -576,17 +576,22 @@ public partial class BasePanel : PanelContainer
 
 //==============================================================================
 // FILE: scripts/Boss.cs
-// 147 lines   sha256 441112037874
+// 184 lines   sha256 d723ed53971e
 //==============================================================================
 using Godot;
 using System.Linq;
 
 // THE SILVER LANCER -- the first bounty boss. Host-simulated; every peer draws it from
 // the host's 10 Hz state and plays its telegraphs from the host's events.
-//   GUNS       every 1.2 s: 6 damage at the nearest ship within 900 u
-//   MISSILES   every 7 s: 4 guided missiles, 20 each -- INTERCEPTABLE (PD shoots them)
-//   DEATH BEAM every 12 s: a red line telegraph for 2 s, then 60 to any ship in it
-//   SHOCKWAVE  every 17 s: a red ring telegraph for 1.8 s, then 45 within 340 u
+// One rhythm, 30 s long (all damage x the tier's scale):
+//   GUNS       always: 3.6 every 1.2 s (3 DPS) at the nearest ship within 900 u
+//   DEATH BEAM at 6 s, then every 30 s: a red line for 2 s, then live for 1 s,
+//              checking every 0.51 s: 100 each time it lands on a ship
+//   CHARGE     15 s after each beam: a red line for 1.5 s, then a ram along it at
+//              1200 u/s: 40 to any ship in its path
+//   TRIDENT    between them (every 15 s from 13.5 s): 3 guided missiles, 0 and +-25
+//              degrees, 15 each, twice the size -- INTERCEPTABLE (PD shoots them)
+//   SHOCKWAVE  every 17 s: a red ring for 1.8 s, then 45 within 340 u
 // Slow and heavy: it closes on the party to about 650 u and turns ponderously.
 public partial class Boss : Node2D, IHittable
 {
@@ -609,7 +614,15 @@ public partial class Boss : Node2D, IHittable
 
     public const double BeamWindup = 2.0, WaveWindup = 1.8;
     public const float BeamLength = 1800f, BeamWidth = 70f, WaveRadius = 340f;
-    private double _guns = 2.0, _missiles = 4.0, _beam = 6.0, _wave = 10.0, _send;
+    public const double GunDamage = 3.6, GunEvery = 1.2;                       // 3 DPS
+    public const double BeamEvery = 30, BeamLive = 1.0, BeamTick = 0.51, BeamDamage = 100;
+    public const double ChargeWindup = 1.5, ChargeDamage = 40; public const float ChargeSpeed = 1200f, ChargeLength = 900f;
+    public const double TridentEvery = 15, TridentDamage = 15; public const float TridentSpread = 25f, TridentSpeed = 135f, TridentRange = 1920f;
+    private double _guns = 2.0, _missiles = 13.5, _beam = 6.0, _charge = 21.0, _wave = 10.0, _send;
+    private double _beamLive = -1, _beamTickT;
+    private (Vector2 a, Vector2 b)? _pendingCharge; private double _chargeT; private Vector2? _dashTo;
+    public int Volleys { get; private set; }                                   // for the smoke test
+    public bool Charging => _dashTo.HasValue;
     private (Vector2 a, Vector2 b)? _pendingBeam; private double _beamT;
     private Vector2? _pendingWave; private double _waveT;
     private Vector2 _netPos; private float _netRot; private bool _hasNet;
@@ -650,7 +663,7 @@ public partial class Boss : Node2D, IHittable
             float want = (centre - Position).Angle() + Mathf.Pi / 2f;
             Rotation += Mathf.Clamp(Mathf.AngleDifference(Rotation, want), -0.3f * dt, 0.3f * dt);
             float d = Position.DistanceTo(centre);
-            if (d > 650f) Position += (centre - Position).Normalized() * 30f * dt;
+            if (d > 650f && !Charging) Position += (centre - Position).Normalized() * 30f * dt;
             Tick(pilots, delta);
         }
         _send -= delta;
@@ -662,32 +675,56 @@ public partial class Boss : Node2D, IHittable
         var nose = ToGlobal(new Vector2(0, -Length * 0.5f));
         PlayerShip Nearest(float within) => pilots.Where(p => p.Position.DistanceTo(Position) <= within).OrderBy(p => p.Position.DistanceTo(Position)).FirstOrDefault();
         _guns -= delta;
-        if (_guns <= 0) { _guns = 1.2; var t = Nearest(900f); if (t != null) { t.Hit(6 * Scale, Position); Combat.Flash(nose, t.Position, new Color(1f, 0.5f, 0.35f), boss: true); } }
+        if (_guns <= 0) { _guns = GunEvery; var t = Nearest(900f); if (t != null) { t.Hit(GunDamage * Scale, Position, "boss:guns"); Combat.Flash(nose, t.Position, new Color(1f, 0.5f, 0.35f), boss: true); } }
         _missiles -= delta;
         if (_missiles <= 0)
-        {
-            _missiles = 7.0;
-            for (int i = 0; i < 4; i++)
+        {   // a trident at the nearest ship: straight at it and 25 degrees either side
+            _missiles = TridentEvery; Volleys++;
+            var t = pilots.OrderBy(p => p.Position.DistanceTo(Position)).First();
+            var aim = (t.Position - nose).Normalized();
+            foreach (float deg in new[] { -TridentSpread, 0f, TridentSpread })
             {
-                var t = pilots[i % pilots.Count];
-                var dir = Vector2.Up.Rotated(Rotation + (i - 1.5f) * 0.35f);
-                Combat.LaunchTorpedo(nose + dir * 10f, dir, 150f, 1600f, 20 * Scale, t.NetId, 1.4f, heavy: false, hostile: true);
+                var dir = aim.Rotated(Mathf.DegToRad(deg));
+                Combat.LaunchTorpedo(nose + dir * 14f, dir, TridentSpeed, TridentRange, TridentDamage * Scale, t.NetId, 1.4f,
+                                     heavy: false, hostile: true, hitSource: "boss:missiles", size: 2f);
             }
         }
         _beam -= delta;
         if (_beam <= 0 && _pendingBeam == null)
         {   // the death beam: telegraph first, then it fires down the same line
-            _beam = 12.0;
+            _beam = BeamEvery;
             var t = pilots.OrderBy(p => p.Position.DistanceTo(Position)).First();
             var a = nose; var b = a + (t.Position - a).Normalized() * BeamLength;
             _pendingBeam = (a, b); _beamT = BeamWindup;
             Tele(true, a, b, BeamWidth, BeamWindup);
         }
-        if (_pendingBeam is { } beam && (_beamT -= delta) <= 0)
+        if (_pendingBeam is { } beam && _beamLive < 0 && (_beamT -= delta) <= 0) { _beamLive = BeamLive; _beamTickT = 0; }
+        if (_pendingBeam is { } live && _beamLive >= 0)
+        {   // live for 1 s: a check every 0.51 s, 100 each time it lands
+            _beamTickT -= delta;
+            if (_beamTickT <= 0)
+            {
+                _beamTickT = BeamTick;
+                foreach (var p in pilots)
+                    if (DistToSegment(p.Position, live.a, live.b) <= BeamWidth / 2f + p.HitRadius) p.Hit(BeamDamage * Scale, Position, "boss:beam");
+            }
+            if ((_beamLive -= delta) < 0) _pendingBeam = null;
+        }
+        _charge -= delta;
+        if (_charge <= 0 && _pendingCharge == null && !_dashTo.HasValue)
+        {   // the charge: a red line first, then a ram down it
+            _charge = BeamEvery;
+            var t = pilots.OrderBy(p => p.Position.DistanceTo(Position)).First();
+            var a = Position; var bb = a + (t.Position - a).Normalized() * ChargeLength;
+            _pendingCharge = (a, bb); _chargeT = ChargeWindup;
+            Tele(true, a, bb, HalfWidth * 2f, ChargeWindup);
+        }
+        if (_pendingCharge is { } ch && (_chargeT -= delta) <= 0) { _dashTo = ch.b; Rotation = (ch.b - ch.a).Angle() + Mathf.Pi / 2f; _pendingCharge = null; }
+        if (_dashTo is { } to)
         {
-            foreach (var p in pilots)
-                if (DistToSegment(p.Position, beam.a, beam.b) <= BeamWidth / 2f + p.HitRadius) p.Hit(60 * Scale, Position);
-            _pendingBeam = null;
+            Position = Position.MoveToward(to, ChargeSpeed * (float)delta);
+            foreach (var p in pilots) if (Covers(p.Position, p.HitRadius)) p.Hit(ChargeDamage * Scale, Position, "boss:charge");
+            if (Position.DistanceTo(to) < 1f) _dashTo = null;
         }
         _wave -= delta;
         if (_wave <= 0 && _pendingWave == null)
@@ -697,7 +734,7 @@ public partial class Boss : Node2D, IHittable
         }
         if (_pendingWave is { } c && (_waveT -= delta) <= 0)
         {
-            foreach (var p in pilots) if (p.Position.DistanceTo(c) <= WaveRadius + p.HitRadius) p.Hit(45 * Scale, c);
+            foreach (var p in pilots) if (p.Position.DistanceTo(c) <= WaveRadius + p.HitRadius) p.Hit(45 * Scale, c, "boss:wave");
             _pendingWave = null;
         }
     }
@@ -1293,7 +1330,7 @@ public partial class CharacterSelect : Control
 
 //==============================================================================
 // FILE: scripts/Combat.cs
-// 92 lines   sha256 f1fd26635780
+// 92 lines   sha256 0a5dd1c784a2
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -1379,11 +1416,11 @@ public static class Combat
     // a small turn rate, and heavy for its looks.
     // hostile = fired BY an enemy, so it seeks and hits player ships, not hostiles.
     // source: the player ship that fired it (host only), credited with combat on a hit.
-    public static System.Action<Vector2, Vector2, float, float, double, int, float, bool, bool, PlayerShip> OnTorpedo;
+    public static System.Action<Vector2, Vector2, float, float, double, int, float, bool, bool, PlayerShip, string, float> OnTorpedo;
     public static void LaunchTorpedo(Vector2 from, Vector2 dir, float speed, float range, double damage,
                                      int targetId = 0, float turnRate = 0f, bool heavy = false, bool hostile = false,
-                                     PlayerShip source = null)
-        => OnTorpedo?.Invoke(from, dir.Normalized(), speed, range, damage, targetId, turnRate, heavy, hostile, source);
+                                     PlayerShip source = null, string hitSource = null, float size = 1f)
+        => OnTorpedo?.Invoke(from, dir.Normalized(), speed, range, damage, targetId, turnRate, heavy, hostile, source, hitSource, size);
 
     public static void Clear() { Hostiles.Clear(); Players.Clear(); OnFlash = null; OnTorpedo = null; }
 }
@@ -2130,7 +2167,7 @@ public static class HealthBar
 
 //==============================================================================
 // FILE: scripts/Hub.cs
-// 973 lines   sha256 22b37a69f0f4
+// 975 lines   sha256 bbf88fe14a70
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -2309,11 +2346,11 @@ public partial class Hub : Node2D
         };
         // Torpedoes: the host's copy deals damage; guests get the launch and fly a
         // cosmetic copy (the run is straight and steady, so it lands in the same place).
-        Combat.OnTorpedo = (from, dir, speed, range, dmg, target, turn, heavy, hostile, source) =>
+        Combat.OnTorpedo = (from, dir, speed, range, dmg, target, turn, heavy, hostile, source, hitSource, size) =>
         {
             int id = hostile ? Combat.NextMissileId() : 0;       // hostile missiles can be shot down
-            SpawnTorpedo(from, dir, speed, range, dmg, false, target, turn, heavy, hostile, source, id);
-            if (Net.IsHost && Net.IsOnline) Rpc(nameof(NetTorpedo), from, dir, speed, range, target, turn, heavy, hostile, id);
+            SpawnTorpedo(from, dir, speed, range, dmg, false, target, turn, heavy, hostile, source, id, hitSource, size);
+            if (Net.IsHost && Net.IsOnline) Rpc(nameof(NetTorpedo), from, dir, speed, range, target, turn, heavy, hostile, id, size);
         };
 
         if (InArena) BuildArena();                   // registered as a target AFTER Combat.Clear
@@ -2703,10 +2740,12 @@ public partial class Hub : Node2D
 
     public PlayerShip MyShipPublic => MyShip;
     private void SpawnTorpedo(Vector2 from, Vector2 dir, float speed, float range, double dmg, bool cosmetic,
-                              int target = 0, float turn = 0f, bool heavy = false, bool hostile = false, PlayerShip source = null, int id = 0)
+                              int target = 0, float turn = 0f, bool heavy = false, bool hostile = false, PlayerShip source = null, int id = 0,
+                              string hitSource = null, float size = 1f)
     {
         AddChild(new Torpedo { Position = from, Dir = dir, Speed = speed, Range = range, Damage = dmg, Cosmetic = cosmetic,
-                               TargetId = target, TurnRate = turn, Heavy = heavy, HostileFire = hostile, Source = source , NetId = id });
+                               TargetId = target, TurnRate = turn, Heavy = heavy, HostileFire = hostile, Source = source, NetId = id,
+                               HitSource = hitSource, Size = size });
     }
 
     private PlayerShip MyShip => _ships.TryGetValue(Net.LocalId, out var s) && IsInstanceValid(s) ? s : null;
@@ -2946,8 +2985,8 @@ public partial class Hub : Node2D
     }
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetTorpedo(Vector2 from, Vector2 dir, float speed, float range, int target, float turn, bool heavy, bool hostile, int id)
-        => SpawnTorpedo(from, dir, speed, range, 0, true, target, turn, heavy, hostile, null, id);
+    private void NetTorpedo(Vector2 from, Vector2 dir, float speed, float range, int target, float turn, bool heavy, bool hostile, int id, float size)
+        => SpawnTorpedo(from, dir, speed, range, 0, true, target, turn, heavy, hostile, null, id, null, size);
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
     private void NetFlash(Vector2 a, Vector2 b, Color c, bool boss) => AddFlash(a, b, c, boss);
@@ -3337,7 +3376,7 @@ public partial class MainMenu : Node2D
 
 //==============================================================================
 // FILE: scripts/Missions.cs
-// 26 lines   sha256 576c2255742a
+// 26 lines   sha256 6870c2208143
 //==============================================================================
 using System;
 
@@ -3351,7 +3390,7 @@ public static class Missions
     public class BossType { public string Id, Name; public double Hull; }
     public static readonly BossType[] Bosses =
     {
-        new() { Id = "silver_lancer", Name = "SILVER LANCER", Hull = 3000 },
+        new() { Id = "silver_lancer", Name = "SILVER LANCER", Hull = 1200 },
     };
     public static BossType Current => Bosses[0];
     public static string BossName => Current.Name;
@@ -3368,13 +3407,13 @@ public static class Missions
 
 //==============================================================================
 // FILE: scripts/Music.cs
-// 76 lines   sha256 5b0efe1bc3be
+// 78 lines   sha256 19cdf8e2b59c
 //==============================================================================
 using Godot;
 
 // Stateful music (an autoload). Two loops play continuously and cross-fade by mood:
 //   Ambient : nothing selected                   ambient full, combat silent
-//   Alert   : an enemy is selected               ambient 70%, combat 20%
+//   Alert   : an enemy is selected               ambient 35%, combat 20%
 //   Combat  : you dealt or took damage in the
 //             last 8 s, or you are in a combat
 //             zone (CombatZone: for the instanced
@@ -3426,7 +3465,9 @@ public partial class Music : Node
     public override void _Process(double delta)
     {
         var mood = CombatZone ? Mood.Combat : Target;
-        float a = mood switch { Mood.Ambient => 1f, Mood.Alert => 0.7f, _ => 0f };
+        // Alert (a target selected, no fighting yet): the ambient at half its level (0.35),
+        // so it does not compete with the softened combat track under it
+        float a = mood switch { Mood.Ambient => 1f, Mood.Alert => 0.35f, _ => 0f };
         float c = mood switch { Mood.Ambient => 0f, Mood.Alert => 0.2f, _ => 1f };
         float step = FadePerSecond * (float)delta;
         AmbientLevel = Mathf.MoveToward(AmbientLevel, a, step);
@@ -3759,7 +3800,7 @@ public partial class PilotWindow : PanelContainer
 
 //==============================================================================
 // FILE: scripts/PlayerShip.cs
-// 727 lines   sha256 6fc07148ad52
+// 741 lines   sha256 096a3fa923dc
 //==============================================================================
 using Godot;
 using System;
@@ -3810,7 +3851,14 @@ public partial class PlayerShip : Node2D, IHittable
     public const double StasisTime = 120, ReboardHull = 0.33;
 
     // ── "in combat": dealt or took damage in the last CombatHold seconds (host) ──
-    public const double CombatHold = 8;
+    // Out of combat after 12 s: the one global rule (music and regeneration use it).
+    public const double CombatHold = 12;
+    // Regeneration, always: 0.5% of max hull a second in combat, 3% out of it.
+    public const double RegenInCombat = 0.005, RegenOutOfCombat = 0.03;
+    // One ongoing source (an ability, a weapon) lands on a ship at most once per 0.35 s.
+    public const double HitGap = 0.35;
+    private readonly System.Collections.Generic.Dictionary<string, double> _lastHitBy = new();
+    public readonly System.Collections.Generic.Dictionary<string, double> DamageBySource = new();   // host: damage taken, by source
     private double _combatT;
     public bool InCombat => _combatT > 0;
     public void NoteCombat() { if (Net.Sim) _combatT = CombatHold; }
@@ -4168,9 +4216,15 @@ public partial class PlayerShip : Node2D, IHittable
     }
 
     // A hit that knows where it came from: damage, and the shield lights that side.
-    public void Hit(double d, Vector2 from)
+    public void Hit(double d, Vector2 from, string source = null)
     {
         if (!Net.Sim || !Alive) return;
+        if (source != null)
+        {
+            if (_lastHitBy.TryGetValue(source, out var at) && _clock - at < HitGap) return;
+            _lastHitBy[source] = _clock;
+        }
+        DamageBySource[source ?? "?"] = (DamageBySource.TryGetValue(source ?? "?", out var sum) ? sum : 0) + d;
         var v = (from - Position).Rotated(-Rotation);
         float side = Mathf.Atan2(v.X, -v.Y);            // 0 = ahead, clockwise
         _shield?.Flash(side);
@@ -4199,6 +4253,7 @@ public partial class PlayerShip : Node2D, IHittable
         _clock += delta;
         if (!Alive) _stasis = Math.Max(0, _stasis - delta);   // the host's clock rules; guests re-sync each packet
         if (_combatT > 0) _combatT = Math.Max(0, _combatT - delta);
+        if (Alive && Hp < MaxHp) Hp = Math.Min(MaxHp, Hp + MaxHp * (InCombat ? RegenInCombat : RegenOutOfCombat) * delta);
         UpdatePod();
         if (Mine) { TickWarp(dt); LocalFlight(dt); }
         else      RemoteFollow(dt);
@@ -6104,7 +6159,7 @@ public partial class TioWindow : PanelContainer
 
 //==============================================================================
 // FILE: scripts/Torpedo.cs
-// 141 lines   sha256 8c9d94a81a69
+// 154 lines   sha256 8bcbf075476e
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -6145,7 +6200,9 @@ public partial class Torpedo : Node2D, IHittable
     // As a TARGET (hostile missiles only): small, and one hit brings it down. The host
     // resolves the hit and tells every guest to burst its copy (by NetId).
     public int NetId { get; set; }
-    public float HitRadius => 8f;
+    public float HitRadius => 8f * Size;
+    public string HitSource;          // the damage source's name (a player lands one hit per source per 0.35 s)
+    public float Size = 1f;           // a boss's missiles are twice the size
     public bool Alive => !_spent;
     public bool Selectable => false;
     public static int Intercepted;                       // missiles shot down (host), for the record
@@ -6195,7 +6252,7 @@ public partial class Torpedo : Node2D, IHittable
                 if (h == null || !h.Alive || !h.Covers(GlobalPosition, 4f)) continue;
                 if (!Cosmetic && Net.Sim)
                 {   // a player ship is told where the hit came from, for its shield
-                    if (h is PlayerShip ps) ps.Hit(Damage, GlobalPosition - Dir * 10f); else h.TakeDamage(Damage);
+                    if (h is PlayerShip ps) ps.Hit(Damage, GlobalPosition - Dir * 10f, HitSource); else h.TakeDamage(Damage);
                     if (IsInstanceValid(Source)) Source.NoteCombat();
                 }
                 Detonate(); break;
@@ -6227,11 +6284,22 @@ public partial class Torpedo : Node2D, IHittable
         if (!_spent)
         {
             if (Heavy)
-            {   // a fat, blunt-nosed round with fins and a big exhaust
-                DrawRect(new Rect2(-4f, -14f, 8f, 26f), new Color(0.55f, 0.57f, 0.52f));
-                DrawRect(new Rect2(-4f, -14f, 8f, 5f), new Color(0.85f, 0.25f, 0.2f));
-                DrawRect(new Rect2(-7f, 7f, 14f, 3f), new Color(0.35f, 0.36f, 0.33f));
-                DrawCircle(new Vector2(0, 13f), 3.6f, new Color(1f, 0.75f, 0.35f));
+            {   // the bunker buster: long and slim (6.4 x 32.5), a sharp nose, swept fins, a band and a seam
+                var body = new Color(0.58f, 0.60f, 0.56f); var dark = new Color(0.30f, 0.31f, 0.29f);
+                DrawRect(new Rect2(-3.2f, -12f, 6.4f, 26f), body);
+                DrawColoredPolygon(new[] { new Vector2(-3.2f, -12f), new Vector2(0, -19.5f), new Vector2(3.2f, -12f) }, new Color(0.85f, 0.25f, 0.2f));
+                DrawRect(new Rect2(-3.2f, -10f, 6.4f, 2f), new Color(0.85f, 0.25f, 0.2f));
+                DrawLine(new Vector2(0, -8f), new Vector2(0, 11f), dark, 0.8f);
+                DrawColoredPolygon(new[] { new Vector2(-3.2f, 6f), new Vector2(-7f, 13f), new Vector2(-3.2f, 12f) }, dark);
+                DrawColoredPolygon(new[] { new Vector2(3.2f, 6f), new Vector2(7f, 13f), new Vector2(3.2f, 12f) }, dark);
+                DrawCircle(new Vector2(0, 13.5f), 2.8f, new Color(1f, 0.75f, 0.35f));
+            }
+            else if (Size != 1f)
+            {
+                DrawSetTransform(Vector2.Zero, 0f, Vector2.One * Size);
+                DrawRect(new Rect2(-2.2f, -9f, 4.4f, 18f), new Color(0.85f, 0.85f, 0.8f));
+                DrawCircle(new Vector2(0, 9f), 2.4f, new Color(1f, 0.7f, 0.3f));
+                DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
             }
             else
             {
@@ -7219,7 +7287,7 @@ ls /tmp/shots
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 1139 lines   sha256 2082bd51ca50
+// 1196 lines   sha256 080b901cb5b4
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -7936,6 +8004,26 @@ public partial class _Test : Node
             Priv(H, "ApplyLocalIdentity");
         }
 
+        // ── damage rules: one hit per source per 0.35 s; regeneration; 12 s out of combat ──
+        {
+            var me = Me; double hp0 = me.Hp;
+            me.Hit(5, me.Position + Vector2.Up * 100, "test:a"); me.Hit(5, me.Position + Vector2.Up * 100, "test:a");
+            Check(Math.Abs(hp0 - me.Hp - 5) < 0.2, "the same source lands only once inside 0.35 s");
+            me.Hit(5, me.Position + Vector2.Up * 100, "test:b");
+            Check(Math.Abs(hp0 - me.Hp - 10) < 0.3, "a different source lands at once");
+            await Wait(0.4); double hp1 = me.Hp;
+            me.Hit(5, me.Position + Vector2.Up * 100, "test:a");
+            Check(hp1 - me.Hp > 4.5, "after 0.35 s the first source lands again");
+            Check(PlayerShip.CombatHold == 12, "out of combat means 12 s without dealing or taking damage");
+            me.TakeDamage(me.Hp - me.MaxHp * 0.5); me.NoteCombat(); double h0 = me.Hp;
+            await Wait(1.0);
+            Check(Math.Abs((me.Hp - h0) / me.MaxHp - 0.005) < 0.0015, $"in combat it regenerates 0.5% of max hull a second ({(me.Hp - h0) / me.MaxHp * 100:0.00}%)");
+            typeof(PlayerShip).GetField("_combatT", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(me, 0.0);
+            double h1 = me.Hp; await Wait(1.0);
+            Check(Math.Abs((me.Hp - h1) / me.MaxHp - 0.03) < 0.004, $"out of combat, 3% a second ({(me.Hp - h1) / me.MaxHp * 100:0.00}%)");
+            me.TakeDamage(-(me.MaxHp - me.Hp));
+        }
+
         // ── enemy fire, shields, stasis, the escape pod, re-boarding ──
         {
             var d3x = H.GetNode<TargetDummy>("TargetDummy3");
@@ -7947,8 +8035,8 @@ public partial class _Test : Node
             var shield = Nodes<ShieldFlash>(sh).First();
             Check(shield.Glow(2) > 0 && shield.Glow(0) == 0, "the shield lights the side facing the dummy (astern), not the bow");
             sh.Position = d3x.Position + new Vector2(0, -1200); await Wait(6.0);
-            double hp1 = sh.Hp; await Wait(6.0);
-            Check(sh.Hp == hp1, "outside 150 u it holds fire");
+            double taken1 = sh.DamageBySource.Values.Sum(); await Wait(6.0);        // (hull regenerates: count damage instead)
+            Check(sh.DamageBySource.Values.Sum() == taken1, "outside 150 u it holds fire");
             Check(sh.Covers(sh.Position + Vector2.Up.Rotated(sh.Rotation) * (PlayerShip.Art[sh.Class].Length * 0.45f), 0f)
                   && !sh.Covers(sh.Position + Vector2.Right.Rotated(sh.Rotation) * (PlayerShip.Art[sh.Class].HalfWidth + 12f), 0f),
                   "the collider is a capsule: the bow is inside, a point just off the beam is not");
@@ -7969,7 +8057,7 @@ public partial class _Test : Node
             await Wait(0.7);
             Check(sh.CanReboard, "after the timer the ship is ready");
             Key(global::Godot.Key.F); await Wait(0.2);
-            Check(sh.Alive && Math.Abs(sh.Hp - sh.MaxHp * 0.33) < 0.01 && Nodes<EscapePod>().Count() == 0, "F re-boards at 33% hull; the pod is gone");
+            Check(sh.Alive && sh.Hp >= sh.MaxHp * 0.33 - 1e-6 && sh.Hp < sh.MaxHp * 0.34 && Nodes<EscapePod>().Count() == 0, "F re-boards at 33% hull (regenerating from there); the pod is gone");
             sh.TakeDamage(-(sh.MaxHp - sh.Hp));  // (test only) back to full for what follows
         }
 
@@ -8071,6 +8159,31 @@ public partial class _Test : Node
             Check(Music.CombatZone, "the arena counts as combat for the music");
             Me.Position = boss.Position + new Vector2(0, 500); Me.Velocity = Vector2.Zero; Me.Rotation = 0;
             Key(global::Godot.Key.Q); await Wait(0.1);                           // point defence up
+            Check(Math.Abs(boss.MaxHp - 1200) < 1e-6 && Math.Abs(Boss.GunDamage / Boss.GunEvery - 3) < 1e-9, "the boss: 1200 hull at tier 0; its guns 3 DPS");
+            // stand in the beam on purpose with a thick hull (test only), and watch the rhythm
+            var me2 = Me; me2.MaxHp = 5000; me2.TakeDamage(-(5000 - me2.Hp));
+            double tBeam = -1, tCharge = -1, tVolley = -1, arenaT = 0; int trident = 0; float spread = 0;
+            async void Watch()
+            {
+                while (Hub.InArena && GodotObject.IsInstanceValid(boss))
+                {
+                    arenaT += 1.0 / 60;
+                    foreach (var tl in Nodes<Telegraph>().Where(x => x.Line))
+                    {
+                        if (tBeam < 0 && Math.Abs(tl.Width - Boss.BeamWidth) < 0.1f) tBeam = arenaT;
+                        if (tCharge < 0 && Math.Abs(tl.Width - Boss.HalfWidth * 2f) < 0.1f) tCharge = arenaT;
+                    }
+                    if (tVolley < 0 && boss.Volleys > 0)
+                    {
+                        tVolley = arenaT;
+                        var big = Nodes<Torpedo>().Where(x => x.HostileFire && x.Size == 2f).ToList();
+                        trident = big.Count;
+                        if (big.Count == 3) spread = big.Max(x => x.Dir.Angle()) - big.Min(x => x.Dir.Angle());
+                    }
+                    await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                }
+            }
+            Watch();
             Telegraph beam = null;
             for (int i = 0; i < 60 * 14 && beam == null; i++) { beam = Nodes<Telegraph>().FirstOrDefault(t => t.Line); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
             Check(beam != null && boss.TelegraphsPending > 0, "the death beam is telegraphed: a red line before it fires");
@@ -8088,6 +8201,17 @@ public partial class _Test : Node
             Telegraph ring = null;
             for (int i = 0; i < 60 * 18 && ring == null; i++) { ring = Nodes<Telegraph>().FirstOrDefault(t => !t.Line); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
             Check(ring != null && ring.Radius == Boss.WaveRadius, "the shockwave is telegraphed: a red ring before it lands");
+            for (int i = 0; i < 60 * 25 && (tCharge < 0 || boss.Charging || tVolley < 0); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await Wait(1.0);
+            GD.Print($"  boss rhythm: beam {tBeam:0.0} s, trident {tVolley:0.0} s, charge {tCharge:0.0} s; trident of {trident}, spread {Mathf.RadToDeg(spread):0} deg");
+            // the watcher starts a moment after the boss's clock, so compare the gaps, not the times
+            Check(tBeam > 0 && Math.Abs(tCharge - tBeam - 15) < 0.4 && Math.Abs(tVolley - tBeam - 7.5) < 0.4,
+                  "the rhythm: the charge 15 s after the beam, a trident half-way between");
+            Check(trident == 3 && Math.Abs(Mathf.RadToDeg(spread) - 50) < 3, "a trident: three double-size missiles, the outer two 25 degrees off the middle");
+            double beamDmg = me2.DamageBySource.TryGetValue("boss:beam", out var bd) ? bd : 0, chargeDmg = me2.DamageBySource.TryGetValue("boss:charge", out var cd) ? cd : 0;
+            Check(Math.Abs(beamDmg - 200) < 1e-6, $"the beam, live 1 s and checked every 0.51 s, lands twice: 2 x 100 ({beamDmg:0})");
+            Check(Math.Abs(chargeDmg - 40) < 1e-6, $"the charge rams for 40 ({chargeDmg:0})");
+            Check(Music.I == null || Math.Abs(Boss.TridentSpeed - 135f) < 1e-3, "trident missiles fly at 135 u/s (10% slower)");
             // the kill: shared EXP for it and the mission, the bounty's credits, then home
             Character.Exp = 0; Character.Level = 1; Character.Points = 0;
             boss.TakeDamage(boss.Hp + 1); await Wait(0.2);
@@ -8103,7 +8227,7 @@ public partial class _Test : Node
             // difficulty: the win unlocked tier 1, and docking at the TIO selects it
             Check(Character.BossBeaten.TryGetValue("silver_lancer", out var beat) && beat == 0, "the win records tier 0 as beaten");
             Check(Math.Abs(Missions.Scale(1) - 1.1) < 1e-9 && Math.Abs(Missions.Scale(2) - 1.21) < 1e-9
-                  && Math.Abs(Missions.Current.Hull * Missions.Scale(1) - 3300) < 1e-6, "each tier is 10% stronger, multiplicatively (tier 1: 3300 hull)");
+                  && Math.Abs(Missions.Current.Hull * Missions.Scale(1) - 1320) < 1e-6, "each tier is 10% stronger, multiplicatively (tier 1: 1320 hull)");
             H.OpenTio(); await Wait(0.1);
             var tw2 = Nodes<TioWindow>().First();
             Check(Missions.Tier == 1, "docking at the TIO selects the newest unlocked tier (1)");
@@ -8166,6 +8290,7 @@ public partial class _Test : Node
             H.GetType().GetField("_selected", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(H, H.GetNode<TargetDummy>("TargetDummy1"));
             await Wait(2.5);
             Check(mus.Target == Music.Mood.Alert && Mathf.IsEqualApprox(mus.CombatLevel, 0.2f), $"enemy selected: combat music at 20% ({mus.CombatLevel:0.00})");
+            Check(Math.Abs(Music.I.AmbientLevel - 0.35f) < 0.02, $"and the ambient at half its alert level under it (0.35: {Music.I.AmbientLevel:0.00})");
             sh.Hit(1, sh.Position + Vector2.Up.Rotated(sh.Rotation) * 80f); await Wait(2.0);
             Check(sh.InCombat && mus.Target == Music.Mood.Combat && Mathf.IsEqualApprox(mus.CombatLevel, 1f) && mus.AmbientLevel == 0f,
                   "taking damage: combat music at 100%");
