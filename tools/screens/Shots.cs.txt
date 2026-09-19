@@ -239,6 +239,22 @@ public partial class _Shots : Node
             if (GodotObject.IsInstanceValid(hv)) hv.TakeDamage(9999);
             zp.SetValue(H, z0); hs2.Position = keepH2; hs2.Velocity = Vector2.Zero; await W(0.3);
         }
+        // the base's own weapons: its turret burning a raider inside 300 u
+        {
+            var bs3 = H.GetNode<PlayerShip>("Ship_1"); var keepB = bs3.Position;
+            bs3.Position = Hub.BasePos + new Vector2(380, 120); bs3.Visible = false; bs3.Velocity = Vector2.Zero; await W(0.8);   // the camera over the station
+            var rz = H.SpawnRaider(Hub.BasePos + new Vector2(0, 280)); rz.Hp = 5000;
+            var zp = typeof(Hub).GetProperty("ZoomLevel"); float z0 = (float)zp.GetValue(H); zp.SetValue(H, 1.0f);
+            var bdn = H.GetNode<BaseDefense>("BaseDefense"); double seen = bdn.LaserDealt;
+            for (int i = 0; i < 180; i++)
+            {   // hold it in reach, and snap on the frame a laser shot lands (its flash lasts 0.1 s)
+                rz.Position = Hub.BasePos + new Vector2(140, 250);
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                if (i > 60 && bdn.LaserDealt > seen + 5) break;
+            }
+            await Snap("50_base_defence"); bs3.Visible = true;
+            rz.TakeDamage(99999); zp.SetValue(H, z0); bs3.Position = keepB; bs3.Velocity = Vector2.Zero; await W(0.3);
+        }
         // a waypoint picked on the radar: its ring there, and the HUD naming it
         {
             H.SelectWaypoint("BASE", Hub.BasePos, 260f); await W(0.3);
