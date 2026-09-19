@@ -202,10 +202,12 @@ public partial class _Shots : Node
         // the whole yard from above: the base, the belt and the wreck at 1500 u
         {
             var os = H.GetNode<PlayerShip>("Ship_1"); os.Visible = false; os.Position = Hub.BasePos + new Vector2(-600, -500); os.Velocity = Vector2.Zero;
-            GetViewport().GetCamera2D().Zoom = new Vector2(0.28f, 0.28f);
+            // the hub sets the camera's zoom from its own ZoomLevel every frame: set that instead
+            var zp = typeof(Hub).GetProperty("ZoomLevel"); float z0 = (float)zp.GetValue(H);
+            zp.SetValue(H, 0.26f);
             for (int i = 0; i < 40; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             await Snap("44_layout_overview");
-            os.Visible = true; GetViewport().GetCamera2D().Zoom = new Vector2(0.9f, 0.9f);
+            zp.SetValue(H, z0); os.Visible = true;
         }
         // the player's missile, close up: the camera rides a stand-in over it
         {
