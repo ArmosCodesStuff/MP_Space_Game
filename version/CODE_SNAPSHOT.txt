@@ -1,8 +1,8 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-19 21:46 at git commit d1f5bd4: typecheck clean, smoke test 3/3 passes
-//   (345 checks), 60-frame UI sweep 0 findings.
-// 52 files, 9134 lines. Code only: sprites, sounds and docs are in the zip.
+// Taken 2026-09-19 21:58 at git commit b1ce49f: typecheck clean, smoke test 3/3 passes
+//   (348 checks), 60-frame UI sweep 0 findings.
+// 52 files, 9199 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -31,7 +31,7 @@
 //   scripts/Gatherer.cs                            249 lines   sha256 f64121c0c5f7
 //   scripts/Hauler.cs                              316 lines   sha256 b471204daf64
 //   scripts/HealthBar.cs                            36 lines   sha256 97c42a282205
-//   scripts/Hub.cs                                1118 lines   sha256 9133b35048bd
+//   scripts/Hub.cs                                1129 lines   sha256 acd17832188d
 //   scripts/MainMenu.cs                            224 lines   sha256 39dbc31417c6
 //   scripts/Missions.cs                             26 lines   sha256 6870c2208143
 //   scripts/Music.cs                                78 lines   sha256 19cdf8e2b59c
@@ -41,7 +41,7 @@
 //   scripts/Plume.cs                                25 lines   sha256 cdbeb9b8fc58
 //   scripts/Progression.cs                          73 lines   sha256 d3b0cd99118f
 //   scripts/Radar.cs                               129 lines   sha256 189719fcc94f
-//   scripts/Raider.cs                              242 lines   sha256 8bdf5f176bf2
+//   scripts/Raider.cs                              276 lines   sha256 9d48f9260987
 //   scripts/SessionMenu.cs                          89 lines   sha256 5febd0d32676
 //   scripts/Settings.cs                             58 lines   sha256 80100257eda5
 //   scripts/Sfx.cs                                  65 lines   sha256 4a51ee11de9a
@@ -59,7 +59,7 @@
 //   typecheck/typecheck.sh                          57 lines   sha256 e68277c09f34
 //   tools/screens/Shots.cs.txt                     397 lines   sha256 a6975ade9542
 //   tools/screens/run.sh                            40 lines   sha256 a47174d56c6a
-//   tools/smoketest/SmokeTest.cs.txt              1383 lines   sha256 f457f8e58c81
+//   tools/smoketest/SmokeTest.cs.txt              1403 lines   sha256 2120031e0e70
 //   tools/smoketest/run.sh                          52 lines   sha256 67c03204c10d
 //==============================================================================
 
@@ -2364,7 +2364,7 @@ public static class HealthBar
 
 //==============================================================================
 // FILE: scripts/Hub.cs
-// 1118 lines   sha256 9133b35048bd
+// 1129 lines   sha256 acd17832188d
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -2913,10 +2913,21 @@ public partial class Hub : Node2D
         if (Yard.Hauler != null && Yard.Hauler.State is not (Hauler.St.Destroyed or Hauler.St.Away)) yield return Yard.Hauler;
     }
 
-    public Raider SpawnRaider(Vector2 at, RaiderKind kind = RaiderKind.Light)
+    // A patrol: 3 lights and 1 heavy, spawned together at `at` on the perimeter.
+    private int _patrols;
+    public int SpawnPatrol(Vector2 at)
+    {
+        if (!Net.IsHost) return 0;
+        int id = ++_patrols;
+        SpawnRaider(at + new Vector2(-40, 0), RaiderKind.Light, id); SpawnRaider(at, RaiderKind.Light, id);
+        SpawnRaider(at + new Vector2(40, 0), RaiderKind.Light, id); SpawnRaider(at + new Vector2(0, 90), RaiderKind.Heavy, id);
+        return id;
+    }
+
+    public Raider SpawnRaider(Vector2 at, RaiderKind kind = RaiderKind.Light, int patrol = 0)
     {
         if (!Net.IsHost) return null;
-        var r = new Raider { Hub = this, Kind = kind, NetId = ++_raiderIds, Position = at, Name = $"Raider_{_raiderIds}" };
+        var r = new Raider { Hub = this, Kind = kind, Patrol = patrol, NetId = ++_raiderIds, Position = at, Name = $"Raider_{_raiderIds}" };
         Raiders.Add(r); AddChild(r);
         if (Net.IsOnline) Rpc(nameof(NetRaiderSpawn), r.NetId, at, (int)kind);
         return r;
@@ -5133,7 +5144,7 @@ public partial class Radar : Control
 
 //==============================================================================
 // FILE: scripts/Raider.cs
-// 242 lines   sha256 8bdf5f176bf2
+// 276 lines   sha256 9d48f9260987
 //==============================================================================
 using Godot;
 using System.Linq;
@@ -5158,6 +5169,11 @@ using System.Linq;
 //   for all 7 s, and the blast lands there -- move off the line and it misses.
 //
 // Targets: the nearest player ship, miner, salvager or hauler.
+//
+// PATROLS: 3 lights and 1 heavy circle a perimeter round the base (1800 u out) together.
+// When a target comes within 2000 u of the patrol, its lights break off to tackle it, and
+// its heavy takes the SAME target and waits astern for the pin. (A raider on its own,
+// in no patrol, simply goes for the nearest target.)
 // ─────────────────────────────────────────────────────────────────────────────
 public enum RaiderKind { Light, Heavy }
 
@@ -5183,6 +5199,9 @@ public partial class Raider : Node2D, IHittable
     public const float HeavyReach = 150f, HeavyHold = 0.9f * HeavyReach, WaitOut = 450f;
     public const float MissileRange = 500f, BlastRadius = 90f;
     public const double MissileFlight = 7.0, MissileEvery = 12.0, MissileDamage = 30;
+    public const float PerimeterR = 1800f, Detect = 2000f, PatrolSpeed = 100f;
+    public int Patrol;                                 // 0: on its own
+    private float _orbit;                              // patrols: its angle round the perimeter
     public const double ShotEvery = 1.0;
     public const float Cruise = 100f;                  // an unupgraded capital ship's pace
     public const float BoostMult = 5f;                 // 500%
@@ -5289,8 +5308,8 @@ public partial class Raider : Node2D, IHittable
             return;
         }
         if (!Alive) return;
-        if (!Up(Target)) { Target = Hub.RaiderTargets().OrderBy(t => t.Position.DistanceTo(Position)).FirstOrDefault(); Latched = false; _boostUsed = false; }
-        if (Target == null) { Speed = 0; QueueRedraw(); return; }
+        if (!Up(Target)) { Target = Choose(); Latched = false; _boostUsed = false; }
+        if (Target == null) { Speed = 0; if (Patrol != 0) Circle(delta); QueueRedraw(); return; }
         _targetVel = dt > 0 ? (Target.Position - _lastTargetPos) / dt : Vector2.Zero; _lastTargetPos = Target.Position;
         if (Heavy) { TickHeavy(delta); QueueRedraw(); return; }
 
@@ -5324,6 +5343,32 @@ public partial class Raider : Node2D, IHittable
             }
         }
         QueueRedraw();
+    }
+
+    // what to go after: alone, the nearest target; in a patrol, only once one is within
+    // 2000 u of the patrol -- and a patrol's heavy takes whatever its lights have taken
+    private Node2D Choose()
+    {
+        var all = Hub.RaiderTargets().ToList();
+        if (Patrol == 0) return all.OrderBy(t => t.Position.DistanceTo(Position)).FirstOrDefault();
+        var mates = Hub.Raiders.Where(r => r.Patrol == Patrol && r.Alive && r != this).ToList();
+        if (Heavy) return mates.Where(r => !r.Heavy && Up(r.Target)).Select(r => r.Target).FirstOrDefault();
+        var near = all.Where(t => t.Position.DistanceTo(Position) <= Detect).OrderBy(t => t.Position.DistanceTo(Position)).FirstOrDefault();
+        if (near != null) return near;
+        return mates.Where(r => !r.Heavy && Up(r.Target)).Select(r => r.Target).FirstOrDefault();   // a mate spotted one
+    }
+
+    // a patrol with nothing to do circles the perimeter round the base, together
+    private void Circle(double delta)
+    {
+        float dt = (float)delta;
+        if (_orbit == 0f) _orbit = (Position - Hub.BasePos).Angle();
+        _orbit += PatrolSpeed / PerimeterR * dt;
+        var spot = Hub.BasePos + Vector2.Right.Rotated(_orbit) * PerimeterR;
+        var step = spot - Position;
+        Position = Position.MoveToward(spot, PatrolSpeed * 1.5f * dt);     // catches its moving spot, at a believable pace
+        if (step.Length() > 1f) Rotation = Mathf.LerpAngle(Rotation, step.Angle() + Mathf.Pi / 2f, Mathf.Clamp(4f * dt, 0f, 1f));
+        Speed = PatrolSpeed;
     }
 
     static bool PinnedNow(Node2D t) => t switch { PlayerShip p => p.Pinned, Gatherer g => g.Pinned, Hauler h => h.Pinned, _ => false };
@@ -8014,7 +8059,7 @@ ls /tmp/shots
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 1383 lines   sha256 f457f8e58c81
+// 1403 lines   sha256 2120031e0e70
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -8906,6 +8951,26 @@ public partial class _Test : Node
             foreach (var r in H.Raiders.ToList()) r.TakeDamage(9999);
             await Wait(0.3);
             hm.Position = keepH; hm.Velocity = Vector2.Zero; hm.TakeDamage(-(hm.MaxHp - hm.Hp));
+        }
+
+        // ── raiders (6c): patrols -- 3 lights and 1 heavy; nothing within 2000 u, no target ──
+        {
+            int pid = H.SpawnPatrol(Hub.BasePos + new Vector2(0, 6500));
+            var pat = H.Raiders.Where(r => r.Patrol == pid).ToList();
+            Check(pat.Count == 4 && pat.Count(r => !r.Heavy) == 3 && pat.Count(r => r.Heavy) == 1, "a patrol: three lights and one heavy");
+            await Wait(1.0);
+            float pd0 = pat[0].Position.DistanceTo(Hub.BasePos);
+            Check(pat.All(r => r.Target == null) && pd0 < 6500 - 60 && pd0 > 6500 - 200,
+                  $"nothing within 2000 u: they take no target, and head for the perimeter at a patrol's pace ({6500 - pd0:0} u in 1 s)");
+            var pm = Me; var keepP = pm.Position;
+            pm.Position = pat[0].Position + new Vector2(0, -1500); pm.Velocity = Vector2.Zero;
+            await Wait(0.5);
+            var heavyP = pat.First(r => r.Heavy);
+            Check(pat.Where(r => !r.Heavy).All(r => r.Target == pm) && heavyP.Target == pm,
+                  "a ship within 2000 u: the lights go for it, and their heavy takes the same target");
+            foreach (var r in pat) if (GodotObject.IsInstanceValid(r)) r.TakeDamage(9999);
+            await Wait(0.3);
+            pm.Position = keepP; pm.Velocity = Vector2.Zero; pm.TakeDamage(-(pm.MaxHp - pm.Hp));
         }
 
         // ── enemy fire, shields, stasis, the escape pod, re-boarding ──
