@@ -228,6 +228,17 @@ public partial class _Shots : Node
             foreach (var r in raid) if (GodotObject.IsInstanceValid(r)) r.TakeDamage(999);
             zp.SetValue(H, z0); rs.Position = keepR; rs.Velocity = Vector2.Zero; await W(0.3);
         }
+        // a heavy raider waiting astern, its missile flying at the ship's predicted spot (the red circle)
+        {
+            var hs2 = H.GetNode<PlayerShip>("Ship_1"); var keepH2 = hs2.Position;
+            // facing east, so "astern" is west: the heavy waits beside the HUD, not under it
+            hs2.Position = new Vector2(4000, -2500); hs2.Velocity = Vector2.Zero; hs2.Rotation = Mathf.Pi / 2f; await W(0.3);
+            var hv = H.SpawnRaider(hs2.Position + new Vector2(-600, 0), RaiderKind.Heavy);
+            var zp = typeof(Hub).GetProperty("ZoomLevel"); float z0 = (float)zp.GetValue(H); zp.SetValue(H, 0.85f);   // ship and heavy both in view
+            await W(4.5); await Snap("49_heavy_waiting_missile");
+            if (GodotObject.IsInstanceValid(hv)) hv.TakeDamage(9999);
+            zp.SetValue(H, z0); hs2.Position = keepH2; hs2.Velocity = Vector2.Zero; await W(0.3);
+        }
         // a waypoint picked on the radar: its ring there, and the HUD naming it
         {
             H.SelectWaypoint("BASE", Hub.BasePos, 260f); await W(0.3);
