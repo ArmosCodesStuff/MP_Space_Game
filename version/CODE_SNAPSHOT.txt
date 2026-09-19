@@ -1,8 +1,8 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-19 20:04 at git commit 4b6f5d4: typecheck clean, smoke test 3/3 passes
-//   (313 checks), 55-frame UI sweep 0 findings.
-// 50 files, 8378 lines. Code only: sprites, sounds and docs are in the zip.
+// Taken 2026-09-19 20:31 at git commit 4cd1dac: typecheck clean, smoke test 3/3 passes
+//   (322 checks), 57-frame UI sweep 0 findings.
+// 51 files, 8542 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -17,25 +17,26 @@
 //   scripts/Abilities.cs                           131 lines   sha256 f5ca74e381e7
 //   scripts/AbilityBar.cs                          112 lines   sha256 4a1331fe370c
 //   scripts/Autopilot.cs                            40 lines   sha256 807538219f53
-//   scripts/BasePanel.cs                           105 lines   sha256 024b285073bc
+//   scripts/BasePanel.cs                           118 lines   sha256 1b56ed68d885
 //   scripts/Boss.cs                                184 lines   sha256 d723ed53971e
 //   scripts/BossBar.cs                              74 lines   sha256 2f4eb7ef7796
 //   scripts/Character.cs                           168 lines   sha256 266190f479e4
 //   scripts/CharacterCreator.cs                    211 lines   sha256 136099a8d1c7
 //   scripts/CharacterSelect.cs                     171 lines   sha256 dc2bfeccc820
 //   scripts/Combat.cs                               92 lines   sha256 0a5dd1c784a2
-//   scripts/Economy.cs                              75 lines   sha256 904973fc4761
+//   scripts/Economy.cs                              79 lines   sha256 54c91c058b3f
 //   scripts/EscMenu.cs                              59 lines   sha256 999b01e6cd29
 //   scripts/EscapePod.cs                            50 lines   sha256 324c55cb503b
-//   scripts/Gatherer.cs                            207 lines   sha256 06c31c1dfb04
-//   scripts/Hauler.cs                              283 lines   sha256 551cdf41401d
+//   scripts/Explosion.cs                            18 lines   sha256 12209b0c72ce
+//   scripts/Gatherer.cs                            239 lines   sha256 d9734a73710e
+//   scripts/Hauler.cs                              310 lines   sha256 94eb35ea7868
 //   scripts/HealthBar.cs                            36 lines   sha256 97c42a282205
 //   scripts/Hub.cs                                 981 lines   sha256 28dc04804db7
 //   scripts/MainMenu.cs                            224 lines   sha256 39dbc31417c6
 //   scripts/Missions.cs                             26 lines   sha256 6870c2208143
 //   scripts/Music.cs                                78 lines   sha256 19cdf8e2b59c
 //   scripts/Net.cs                                 246 lines   sha256 ce3ebadd0342
-//   scripts/PilotWindow.cs                          54 lines   sha256 bd3c2ab6785f
+//   scripts/PilotWindow.cs                          54 lines   sha256 d7c6f1a8a09f
 //   scripts/PlayerShip.cs                          741 lines   sha256 096a3fa923dc
 //   scripts/Plume.cs                                25 lines   sha256 cdbeb9b8fc58
 //   scripts/Progression.cs                          73 lines   sha256 d3b0cd99118f
@@ -49,15 +50,15 @@
 //   scripts/StatsWindow.cs                         198 lines   sha256 8b5c9f76adc7
 //   scripts/TargetDummy.cs                         117 lines   sha256 f7845c23ab57
 //   scripts/Telegraph.cs                            47 lines   sha256 89f6af49c4d7
-//   scripts/TioWindow.cs                            61 lines   sha256 0b5382e679d6
+//   scripts/TioWindow.cs                            61 lines   sha256 189754fab72b
 //   scripts/Torpedo.cs                             154 lines   sha256 8bcbf075476e
 //   scripts/Txt.cs                                  31 lines   sha256 0b56559599f8
 //   scripts/Ui.cs                                   99 lines   sha256 0a376702a4e8
-//   scripts/Yard.cs                                390 lines   sha256 c1cbbfa92d8a
+//   scripts/Yard.cs                                413 lines   sha256 0f285072a4e9
 //   typecheck/typecheck.sh                          57 lines   sha256 e68277c09f34
-//   tools/screens/Shots.cs.txt                     351 lines   sha256 8d87bc5a132d
+//   tools/screens/Shots.cs.txt                     370 lines   sha256 bcc6383cebb2
 //   tools/screens/run.sh                            40 lines   sha256 a47174d56c6a
-//   tools/smoketest/SmokeTest.cs.txt              1227 lines   sha256 81cb129c3ea9
+//   tools/smoketest/SmokeTest.cs.txt              1255 lines   sha256 76789df6aab2
 //   tools/smoketest/run.sh                          52 lines   sha256 67c03204c10d
 //==============================================================================
 
@@ -467,7 +468,7 @@ public static class Autopilot
 
 //==============================================================================
 // FILE: scripts/BasePanel.cs
-// 105 lines   sha256 024b285073bc
+// 118 lines   sha256 1b56ed68d885
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -484,6 +485,7 @@ public partial class BasePanel : PanelContainer
 {
     public Hub Hub;
     private string _tab = "MINERS";
+    private Label _fleet;          // this category's investment, its rebuild cost, and what is being rebuilt
     private VBoxContainer _body;
     private Label _credits;
     private readonly Dictionary<string, (Label info, Button buy)> _rows = new();
@@ -495,7 +497,7 @@ public partial class BasePanel : PanelContainer
     public override void _Ready()
     {
         Name = "BasePanel";
-        Position = new Vector2(300, 92);   // clear of the multiplayer panel, even when it is open (it reaches x ~283)
+        Position = new Vector2(360, 92);   // clear of the multiplayer panel, even when it is open (it reaches x ~283)
         AddThemeStyleboxOverride("panel", Ui.PanelStyle(10, 1f));   // fully opaque: the world (a hull bar) showed through as a faint line
         var col = new VBoxContainer { CustomMinimumSize = new Vector2(500, 0) };
         col.AddThemeConstantOverride("separation", 6);
@@ -534,6 +536,7 @@ public partial class BasePanel : PanelContainer
             _body.AddChild(_reset);
             return;
         }
+        _fleet = new Label { Name = "Fleet", Modulate = new Color(0.8f, 0.88f, 1f) }; _body.AddChild(_fleet);
         _body.AddChild(new Label { Text = "+10% upgrades cost 1.25× per level.  +1 upgrades cost 2× per level; each row shows its cap.",
                                    Modulate = new Color(1, 1, 1, 0.55f) });
         foreach (var u in Economy.All.Where(u => u.Tab == tab))
@@ -555,6 +558,14 @@ public partial class BasePanel : PanelContainer
     {
         if (_armed > 0) _armed -= delta;
         _credits.Text = $"Credits: {Y.Credits:0}";
+        if (IsInstanceValid(_fleet) && _tab != "REFIT")
+        {
+            string lost = _tab == "HAULER"
+                ? (Y.Hauler != null && Y.Hauler.State == Hauler.St.Destroyed ? Rebuilding("Hauler", Y.Hauler.RebuildIn, Y.Hauler.WaitingForCredits, _tab) : "")
+                : string.Join("", Y.Gatherers.Where(g => g.Category == _tab && g.State == Gatherer.St.Destroyed)
+                                            .Select(g => Rebuilding($"{(g.Kind == GatherKind.Miner ? "Miner" : "Salvager")} {g.Index + 1}", g.RebuildIn, g.WaitingForCredits, _tab)));
+            _fleet.Text = $"Invested so far: {Y.Invested(_tab):0} cr  ·  a rebuild costs {Y.RebuildCost(_tab):0} cr (10%)" + lost;
+        }
         foreach (var (id, (info, buy)) in _rows)
         {
             var u = Economy.ById(id); int lv = Y.Level(id);
@@ -573,6 +584,9 @@ public partial class BasePanel : PanelContainer
             _reset.Disabled = Hub.CreatorOpen;
         }
     }
+
+    string Rebuilding(string who, double inS, bool waiting, string tab) =>
+        waiting ? $"\n  {who} lost: rebuild waiting for {Y.RebuildCost(tab):0} cr" : $"\n  {who} lost: rebuilt in {inS:0} s";
 }
 
 //==============================================================================
@@ -1507,7 +1521,7 @@ public static class Combat
 
 //==============================================================================
 // FILE: scripts/Economy.cs
-// 75 lines   sha256 904973fc4761
+// 79 lines   sha256 54c91c058b3f
 //==============================================================================
 using System;
 
@@ -1539,6 +1553,10 @@ public static class Economy
     public const double HaulerSpeed = 60;        // u/s -- it moves slowly
     public const double HaulerAway = 30;         // seconds through the portal
     public const double HaulerCharge = 3;        // seconds of blue aura before the jump
+    // ── hull, and rebuilding what is lost ──
+    public const double UtilityHull = 60, HaulerHull = 150;
+    public const double RebuildDelay = 30;         // seconds after it is destroyed
+    public const double RebuildShare = 0.10;       // of everything invested so far in its category
     public const double HaulerLift = 1.5;        // seconds to lift off the pad
     public const double HaulerLand = 3.0;        // seconds to descend onto it, turning 180 degrees on the way
     public const float  HaulerLandedScale = 0.65f;   // 200 u long in flight, 130 u landed
@@ -1705,8 +1723,31 @@ public partial class EscapePod : Node2D
 }
 
 //==============================================================================
+// FILE: scripts/Explosion.cs
+// 18 lines   sha256 12209b0c72ce
+//==============================================================================
+using Godot;
+
+// A short burst where something is destroyed (or appears): a flash and a ring, then gone.
+public partial class Explosion : Node2D
+{
+    public float Radius = 30f;
+    public Color Tint = new(1f, 0.7f, 0.3f);
+    public const double Life = 0.6;
+    private double _t;
+    public override void _Ready() { ZIndex = 7; ZAsRelative = false; }
+    public override void _Process(double delta) { _t += delta; if (_t >= Life) QueueFree(); QueueRedraw(); }
+    public override void _Draw()
+    {
+        float k = (float)(_t / Life);
+        DrawCircle(Vector2.Zero, Radius * (0.4f + 0.8f * k), new Color(Tint.R, Tint.G, Tint.B, 0.55f * (1 - k)));
+        DrawArc(Vector2.Zero, Radius * (0.6f + 1.2f * k), 0, Mathf.Tau, 32, new Color(1f, 0.9f, 0.7f, 0.8f * (1 - k)), 2f);
+    }
+}
+
+//==============================================================================
 // FILE: scripts/Gatherer.cs
-// 207 lines   sha256 06c31c1dfb04
+// 239 lines   sha256 d9734a73710e
 //==============================================================================
 using Godot;
 using System;
@@ -1729,13 +1770,42 @@ public enum GatherKind { Miner, Salvager }
 
 public partial class Gatherer : Node2D
 {
-    public enum St { Outbound, Working, Queued, Docking, Unloading }
+    public enum St { Outbound, Working, Queued, Docking, Unloading, Destroyed }
 
     public Yard Yard;
     public GatherKind Kind;
     public int Index;                        // which miner (or salvager): 0, 1, 2 ...
     public St State = St.Outbound;
     public double Cargo;
+    // hull, and being rebuilt (host-owned; guests get hull and state)
+    public double Hull = Economy.UtilityHull;
+    public double MaxHull => Economy.UtilityHull;
+    public double RebuildIn;
+    public bool WaitingForCredits;
+    public string Category => Kind == GatherKind.Miner ? "MINERS" : "SALVAGERS";
+
+    public void TakeDamage(double d)
+    {
+        if (!Net.Sim || State == St.Destroyed) return;
+        Hull -= d;
+        if (Hull > 0) return;
+        Yard.Release(this);                          // its arm or its place in the queue goes to the next
+        State = St.Destroyed; Hull = 0; Cargo = 0; Velocity = Vector2.Zero; Visible = false;   // gone at once
+        RebuildIn = Economy.RebuildDelay; WaitingForCredits = false;
+        GetParent().AddChild(new Explosion { Position = Position, Radius = 30f });
+    }
+
+    // 30 s after it was lost it is rebuilt at the base, for 10% of its category's investment
+    private void TickRebuild(float dt)
+    {
+        RebuildIn = System.Math.Max(0, RebuildIn - dt);
+        if (RebuildIn > 0) return;
+        double cost = Yard.RebuildCost(Category);
+        if (Yard.Credits < cost) { WaitingForCredits = true; return; }
+        Yard.Credits -= cost; WaitingForCredits = false;
+        Hull = MaxHull; State = St.Outbound; Position = Hub.BasePos; Velocity = Vector2.Zero;
+        GetParent().AddChild(new Explosion { Position = Position, Radius = 26f, Tint = new Color(0.5f, 0.8f, 1f) });
+    }
     public Vector2 Velocity;
     public Vector2 BeamTo;                   // world point the beam works (host-chosen)
     public const float Length = 40f;
@@ -1761,19 +1831,21 @@ public partial class Gatherer : Node2D
         ZIndex = 1;
     }
 
-    public void SetNet(Vector2 p, float rot, int state, float cargo, Vector2 beam)
+    public void SetNet(Vector2 p, float rot, int state, float cargo, Vector2 beam, float hull)
     {
+        Hull = hull;
         (_netPos, _netRot, _hasNet) = (p, rot, true);
         (State, Cargo, BeamTo) = ((St)state, cargo, beam);
     }
 
     // back to work, empty (a session change)
-    public void ResetToWork() { State = St.Outbound; Cargo = 0; Velocity = Vector2.Zero; _hasNet = false; }
+    public void ResetToWork() { State = St.Outbound; Cargo = 0; Velocity = Vector2.Zero; _hasNet = false; Hull = MaxHull; RebuildIn = 0; WaitingForCredits = false; }
 
     public override void _Process(double delta)
     {
         float dt = (float)delta;
         _t += delta;
+        Visible = State != St.Destroyed;         // a lost ship is gone until it is rebuilt
         if (Net.Sim) Simulate(dt);
         else if (_hasNet)
         {
@@ -1790,6 +1862,7 @@ public partial class Gatherer : Node2D
 
     private void Simulate(float dt)
     {
+        if (State == St.Destroyed) { TickRebuild(dt); return; }
         switch (State)
         {
             case St.Outbound:
@@ -1918,7 +1991,7 @@ public partial class Gatherer : Node2D
 
 //==============================================================================
 // FILE: scripts/Hauler.cs
-// 283 lines   sha256 551cdf41401d
+// 310 lines   sha256 94eb35ea7868
 //==============================================================================
 using Godot;
 using System;
@@ -1948,7 +2021,7 @@ using System;
 // ─────────────────────────────────────────────────────────────────────────────
 public partial class Hauler : Node2D
 {
-    public enum St { Loading, Lifting, Departing, Charging, Away, Arriving, Returning, Landing }
+    public enum St { Loading, Lifting, Departing, Charging, Away, Arriving, Returning, Landing, Destroyed }
 
     public Yard Yard;
     public St State = St.Loading;
@@ -1985,10 +2058,26 @@ public partial class Hauler : Node2D
         ResetToPad();
     }
 
-    public void ResetToPad() { Go(St.Loading); Cargo = 0; _speed = 0; _hasNet = false; Position = Hub.HaulerPad; Rotation = East; }
+    public void ResetToPad() { Go(St.Loading); Cargo = 0; _speed = 0; _hasNet = false; Position = Hub.HaulerPad; Rotation = East; Hull = MaxHull; RebuildIn = 0; WaitingForCredits = false; }
 
-    public void SetNet(Vector2 p, float rot, int state, float t, float cargo, float sale)
+    // hull, and being rebuilt (host-owned; guests get hull and state). Out of reach while away.
+    public double Hull = Economy.HaulerHull;
+    public double MaxHull => Economy.HaulerHull;
+    public double RebuildIn;
+    public bool WaitingForCredits;
+    public void TakeDamage(double d)
     {
+        if (!Net.Sim || State is St.Destroyed or St.Away) return;
+        Hull -= d;
+        if (Hull > 0) return;
+        Hull = 0; Cargo = 0; _speed = 0; Go(St.Destroyed); Effects();          // gone at once
+        RebuildIn = Economy.RebuildDelay; WaitingForCredits = false;
+        GetParent().AddChild(new Explosion { Position = Position, Radius = 70f });
+    }
+
+    public void SetNet(Vector2 p, float rot, int state, float t, float cargo, float sale, float hull)
+    {
+        Hull = hull;
         (_netPos, _netRot, _hasNet) = (p, rot, true);
         if ((St)state != State || Math.Abs(T - t) > 0.5) T = t;
         (State, Cargo, LastSale) = ((St)state, cargo, sale);
@@ -2040,6 +2129,17 @@ public partial class Hauler : Node2D
                 Rotation = West;
                 if (Slide(Hub.HaulerPad.X, dt)) Go(St.Landing);   // over the pad: descend, turning as it goes
                 break;
+            case St.Destroyed:
+            {   // rebuilt on its pad 30 s later, for 10% of what the hauler's upgrades have cost
+                RebuildIn = System.Math.Max(0, RebuildIn - dt);
+                if (RebuildIn > 0) break;
+                double cost = Yard.RebuildCost("HAULER");
+                if (Yard.Credits < cost) { WaitingForCredits = true; break; }
+                Yard.Credits -= cost;
+                ResetToPad();
+                GetParent().AddChild(new Explosion { Position = Position, Radius = 60f, Tint = new Color(0.5f, 0.8f, 1f) });
+                break;
+            }
             case St.Landing:
             {   // down onto the pad, swinging from west to east on the way: it arrives facing the portal
                 float k = Mathf.Clamp((float)(T / Economy.HaulerLand), 0f, 1f);
@@ -2077,7 +2177,7 @@ public partial class Hauler : Node2D
     private void Effects()
     {
         bool gone = State == St.Away && T >= 0.35;
-        _sprite.Visible = _overlay.Visible = !gone;
+        _sprite.Visible = _overlay.Visible = !gone && State != St.Destroyed;
         _sprite.Position = State == St.Charging
             ? new Vector2(_rng.RandfRange(-1f, 1f), _rng.RandfRange(-1f, 1f)) * (0.5f + 2.5f * (float)Math.Min(1, T / Economy.HaulerCharge))
             : Vector2.Zero;
@@ -3827,7 +3927,7 @@ public partial class Net : Node
 
 //==============================================================================
 // FILE: scripts/PilotWindow.cs
-// 54 lines   sha256 bd3c2ab6785f
+// 54 lines   sha256 d7c6f1a8a09f
 //==============================================================================
 using Godot;
 
@@ -3845,7 +3945,7 @@ public partial class PilotWindow : PanelContainer
     public override void _Ready()
     {
         Name = "PilotWindow";
-        Position = new Vector2(300, 92);
+        Position = new Vector2(360, 92);
         AddThemeStyleboxOverride("panel", Ui.PanelStyle(10, 1f));
         var col = new VBoxContainer(); col.AddThemeConstantOverride("separation", 6); AddChild(col);
         _head = new Label(); _head.AddThemeFontSizeOverride("font_size", 20); col.AddChild(_head);
@@ -6179,7 +6279,7 @@ public partial class Telegraph : Node2D
 
 //==============================================================================
 // FILE: scripts/TioWindow.cs
-// 61 lines   sha256 0b5382e679d6
+// 61 lines   sha256 189754fab72b
 //==============================================================================
 using Godot;
 using System.Linq;
@@ -6199,7 +6299,7 @@ public partial class TioWindow : PanelContainer
     public override void _Ready()
     {
         Name = "TioWindow";
-        Position = new Vector2(300, 92);
+        Position = new Vector2(360, 92);
         AddThemeStyleboxOverride("panel", Ui.PanelStyle(10, 1f));
         var col = new VBoxContainer(); col.AddThemeConstantOverride("separation", 6); AddChild(col);
         var head = new Label { Text = "WARP TO TARGET" }; head.AddThemeFontSizeOverride("font_size", 20); col.AddChild(head);
@@ -6544,7 +6644,7 @@ public static class Ui
 
 //==============================================================================
 // FILE: scripts/Yard.cs
-// 390 lines   sha256 c1cbbfa92d8a
+// 413 lines   sha256 0f285072a4e9
 //==============================================================================
 using Godot;
 using System;
@@ -6583,6 +6683,7 @@ public partial class Yard : Node2D
     // with it -- a guest who followed the party lost its own base.
     private static double _ownOre, _ownSalvage, _ownCredits;
     private static readonly Dictionary<string, int> _ownLevels = new();
+    private static readonly Dictionary<string, double> _ownInvested = new();
     private static bool _parked;
     private double _totalsCd, _stateCd, _t;
 
@@ -6629,7 +6730,13 @@ public partial class Yard : Node2D
     // way out; on return it gets back what it had, any credits earned out there, and
     // 1/20 of what its fleet would have gathered in the time away.
     public const double AwayShare = 1.0 / 20.0;
-    private sealed record Trip(double Ore, double Salvage, double Credits, Dictionary<string, int> Levels,
+    // everything spent on upgrades so far, per category (MINERS, SALVAGERS, HAULER)
+    private readonly Dictionary<string, double> _invested = new();
+    public static readonly string[] Categories = { "MINERS", "SALVAGERS", "HAULER" };
+    public double Invested(string category) => _invested.TryGetValue(category, out var v) ? v : 0;
+    public double RebuildCost(string category) => Math.Round(Invested(category) * Economy.RebuildShare);
+
+    private sealed record Trip(double Ore, double Salvage, double Credits, Dictionary<string, int> Levels, Dictionary<string, double> Invested,
                                double OrePerSec, double SalvagePerSec);
     public static double TripClock;                   // game seconds in the arena (Hub counts them)
     private static Trip _trip;
@@ -6638,7 +6745,7 @@ public partial class Yard : Node2D
 
     public void SaveForTrip()
     {
-        _trip = new Trip(Ore, Salvage, Credits, new Dictionary<string, int>(_levels),
+        _trip = new Trip(Ore, Salvage, Credits, new Dictionary<string, int>(_levels), new Dictionary<string, double>(_invested),
                          FleetRate(GatherKind.Miner), FleetRate(GatherKind.Salvager));
         TripCredits = 0; TripClock = 0;
     }
@@ -6652,6 +6759,7 @@ public partial class Yard : Node2D
         Ore = t.Ore + LastAwayOre; Salvage = t.Salvage + LastAwaySalvage;
         Credits = t.Credits + TripCredits; TripCredits = 0;
         _levels.Clear(); foreach (var kv in t.Levels) _levels[kv.Key] = kv.Value;
+        _invested.Clear(); foreach (var kv in t.Invested) _invested[kv.Key] = kv.Value;
         SyncFleet();
     }
 
@@ -6690,6 +6798,7 @@ public partial class Yard : Node2D
         double cost = Economy.Cost(u, lv);
         if (Economy.Maxed(u, lv) || Credits < cost) return false;
         Credits -= cost; _levels[id] = lv + 1;
+        _invested[u.Tab] = Invested(u.Tab) + cost;                // what a rebuild in this category is 10% of
         SyncFleet();
         return true;
     }
@@ -6833,6 +6942,7 @@ public partial class Yard : Node2D
             Bank();                                        // nothing your ships carry is lost
             (_ownOre, _ownSalvage, _ownCredits) = (Ore, Salvage, Credits);
             _ownLevels.Clear(); foreach (var kv in _levels) _ownLevels[kv.Key] = kv.Value;
+            _ownInvested.Clear(); foreach (var kv in _invested) _ownInvested[kv.Key] = kv.Value;
             _parked = true;
             ResetShips();                                  // the host's packets drive them now
         }
@@ -6840,6 +6950,7 @@ public partial class Yard : Node2D
         {
             (Ore, Salvage, Credits) = (_ownOre, _ownSalvage, _ownCredits);
             _levels.Clear(); foreach (var kv in _ownLevels) _levels[kv.Key] = kv.Value;
+            _invested.Clear(); foreach (var kv in _ownInvested) _invested[kv.Key] = kv.Value;
             _parked = false;
             ResetShips();                                  // not the host's last state
         }
@@ -6876,15 +6987,16 @@ public partial class Yard : Node2D
         {
             _totalsCd = 1.0;
             var lv = Economy.All.Select(u => Level(u.Id)).ToArray();
-            Rpc(nameof(NetTotals), Ore, Salvage, Credits, lv);
+            Rpc(nameof(NetTotals), Ore, Salvage, Credits, lv, Categories.Select(Invested).ToArray());
         }
         _stateCd -= delta;
         if (_stateCd <= 0) { _stateCd = 0.1; SendState(); }
     }
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetTotals(double ore, double salvage, double credits, int[] levels)
+    private void NetTotals(double ore, double salvage, double credits, int[] levels, double[] invested)
     {
+        for (int i = 0; i < Math.Min(invested.Length, Categories.Length); i++) _invested[Categories[i]] = invested[i];
         (Ore, Salvage, Credits) = (ore, salvage, credits);
         for (int i = 0; i < Math.Min(levels.Length, Economy.All.Length); i++) _levels[Economy.All[i].Id] = levels[i];
         SyncFleet();
@@ -6893,29 +7005,32 @@ public partial class Yard : Node2D
     private void SendState()
     {
         int n = Gatherers.Count;
-        var gp = new Vector2[n]; var gr = new float[n]; var gs = new int[n]; var gc = new float[n]; var gb = new Vector2[n];
+        var gp = new Vector2[n]; var gr = new float[n]; var gs = new int[n]; var gc = new float[n]; var gb = new Vector2[n]; var gh = new float[n];
         for (int i = 0; i < n; i++)
         {
             var g = Gatherers[i];
-            (gp[i], gr[i], gs[i], gc[i], gb[i]) = (g.Position, g.Rotation, (int)g.State, (float)g.Cargo, g.BeamTo);
+            (gp[i], gr[i], gs[i], gc[i], gb[i], gh[i]) = (g.Position, g.Rotation, (int)g.State, (float)g.Cargo, g.BeamTo, (float)g.Hull);
         }
         var h = Hauler;
-        Rpc(nameof(NetState), gp, gr, gs, gc, gb, h.Position, h.Rotation, (int)h.State, (float)h.T, (float)h.Cargo, (float)h.LastSale);
+        Rpc(nameof(NetState), gp, gr, gs, gc, gb, gh, h.Position, h.Rotation, (int)h.State, (float)h.T, (float)h.Cargo, (float)h.LastSale, (float)h.Hull);
     }
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
-    private void NetState(Vector2[] gp, float[] gr, int[] gs, float[] gc, Vector2[] gb,
-                          Vector2 hp, float hr, int hs, float ht, float hc, float sale)
+    private void NetState(Vector2[] gp, float[] gr, int[] gs, float[] gc, Vector2[] gb, float[] gh,
+                          Vector2 hp, float hr, int hs, float ht, float hc, float sale, float hh)
     {
         // the fleet follows the levels (1 s); until they agree, skip the ships this once
         if (gp.Length == Gatherers.Count)
-            for (int i = 0; i < gp.Length; i++) Gatherers[i].SetNet(gp[i], gr[i], gs[i], gc[i], gb[i]);
-        Hauler.SetNet(hp, hr, hs, ht, hc, sale);
+            for (int i = 0; i < gp.Length; i++) Gatherers[i].SetNet(gp[i], gr[i], gs[i], gc[i], gb[i], gh[i]);
+        Hauler.SetNet(hp, hr, hs, ht, hc, sale, hh);
     }
 
     // ── the hologram docking bars: two bars across each arm's open face ──────
     public override void _Draw()
     {
+        // a damaged ship shows its hull: a small bar under it, green to red
+        foreach (var g in Gatherers) HullBar(g.Position + new Vector2(-15, 26), 30, g.Hull, g.MaxHull, g.Visible);
+        if (Hauler != null) HullBar(Hauler.Position + new Vector2(-40, 50), 80, Hauler.Hull, Hauler.MaxHull, Hauler.State is not (Hauler.St.Destroyed or Hauler.St.Away));
         for (int i = 0; i < Arms.Length; i++)
         {
             var a = Arms[i];
@@ -6935,6 +7050,14 @@ public partial class Yard : Node2D
     }
 
     private void RestoreOwn() => OnSessionChanged(false);
+
+    private void HullBar(Vector2 world, float w, double hull, double max, bool shown)
+    {
+        if (!shown || hull >= max) return;
+        var at = ToLocal(world); float k = (float)Math.Clamp(hull / max, 0, 1);
+        DrawRect(new Rect2(at, new Vector2(w, 3.5f)), new Color(0.1f, 0.1f, 0.12f, 0.85f));
+        DrawRect(new Rect2(at, new Vector2(w * k, 3.5f)), new Color(1f - k, 0.35f + 0.55f * k, 0.3f));
+    }
 }
 
 //==============================================================================
@@ -7001,7 +7124,7 @@ echo "0 errors." >&2
 
 //==============================================================================
 // FILE: tools/screens/Shots.cs.txt
-// 351 lines   sha256 8d87bc5a132d
+// 370 lines   sha256 bcc6383cebb2
 //==============================================================================
 // Screenshot driver. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Shots.cs, registers it as an autoload, and runs the real
@@ -7204,6 +7327,25 @@ public partial class _Shots : Node
             await W(2.2); await Snap("40_warp_charging");
             await W(0.95); await Snap("41_warp_arrival");      // the camera cuts to the ship on a jump
         }
+        // hull: a damaged miner's bar; a lost salvager in the base menu, waiting to be rebuilt
+        {
+            var yd = H.Yard; var hs = H.GetNode<PlayerShip>("Ship_1");
+            var dm = yd.Gatherers.First(g => g.Kind == GatherKind.Miner);
+            var lost = yd.Gatherers.First(g => g.Kind == GatherKind.Salvager);
+            dm.TakeDamage(27); lost.TakeDamage(999);
+            hs.Position = dm.Position + new Vector2(60, 90); hs.Velocity = Vector2.Zero;
+            var zp = typeof(Hub).GetProperty("ZoomLevel"); float z0 = (float)zp.GetValue(H); zp.SetValue(H, 1.6f);
+            await W(1.2);
+            var bp = new BasePanel { Hub = H }; H.GetChildren().OfType<CanvasLayer>().First(l => l.GetChildren().Any(c => c is HullHud)).AddChild(bp);
+            await W(0.2); bp.ShowTab("SALVAGERS"); await W(0.3);
+            await Snap("45_hull_and_rebuild");
+            bp.QueueFree();
+            // and the damaged miner itself, close: the camera rides a hidden stand-in over it
+            hs.Visible = false; zp.SetValue(H, 3f);
+            for (int i = 0; i < 30; i++) { hs.Position = dm.Position; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            await Snap("46_damaged_miner");
+            hs.Visible = true; zp.SetValue(H, z0); await W(0.2);
+        }
         // the whole yard from above: the base, the belt and the wreck at 1500 u
         {
             var os = H.GetNode<PlayerShip>("Ship_1"); os.Visible = false; os.Position = Hub.BasePos + new Vector2(-600, -500); os.Velocity = Vector2.Zero;
@@ -7402,7 +7544,7 @@ ls /tmp/shots
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 1227 lines   sha256 81cb129c3ea9
+// 1255 lines   sha256 76789df6aab2
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -8093,6 +8235,34 @@ public partial class _Test : Node
         GD.Print($"  moved target took {d1.Total:0} damage");
         Check(d1.Total == 0, "a target that moves after launch is missed (the torpedo does not track)");
         d1.Position = home;
+
+        // ── utility ships: hull, loss, and a rebuild for 10% of the category's investment ──
+        {
+            var Yd = H.Yard;
+            var mn = Yd.Gatherers.First(g => g.Kind == GatherKind.Miner);
+            var sv = Yd.Gatherers.First(g => g.Kind == GatherKind.Salvager);
+            Check(mn.MaxHull == 60 && sv.MaxHull == 60 && Yd.Hauler.MaxHull == 150, "miners and salvagers have 60 hull, the hauler 150");
+            Yd.Credits = 100000; double inv0 = Yd.Invested("MINERS"); int lv0 = Yd.Level("miner_hold");
+            double price = Economy.Cost(Economy.ById("miner_hold"), lv0);
+            Check(Yd.TryBuy("miner_hold") && Math.Abs(Yd.Invested("MINERS") - inv0 - price) < 1e-6, $"buying an upgrade adds its price to its category's investment (+{price:0})");
+            double cost = Yd.RebuildCost("MINERS");
+            Check(cost > 0 && Math.Abs(cost - Math.Round(Yd.Invested("MINERS") * 0.10)) < 1e-6, $"a rebuild costs 10% of it ({cost:0} of {Yd.Invested("MINERS"):0})");
+            mn.TakeDamage(59);
+            Check(mn.State != Gatherer.St.Destroyed && Math.Abs(mn.Hull - 1) < 1e-6, "59 damage leaves a miner at 1 hull");
+            mn.TakeDamage(5); await Wait(0.05);
+            Check(mn.State == Gatherer.St.Destroyed && !mn.Visible && mn.Cargo == 0 && Math.Abs(mn.RebuildIn - 30) < 0.2 && Yd.ArmOf(mn) < 0 && Yd.QueueIndex(mn) < 0,
+                  "destroyed: gone, its cargo lost, its arm and queue place given up, rebuilt in 30 s");
+            Yd.Credits = cost - 1; mn.RebuildIn = 0.1; await Wait(0.3);
+            Check(mn.State == Gatherer.St.Destroyed && mn.WaitingForCredits, "short of the rebuild cost, it waits");
+            Yd.Credits = cost + 500; await Wait(0.2);
+            Check(mn.State != Gatherer.St.Destroyed && mn.Hull == 60 && mn.Visible && Math.Abs(Yd.Credits - 500) < 1e-6, "paid for: rebuilt at the base at full hull, exactly 10% charged");
+            double hcost = Yd.RebuildCost("HAULER");
+            Yd.Hauler.ResetToPad(); Yd.Hauler.TakeDamage(150); await Wait(0.05);
+            Check(Yd.Hauler.State == Hauler.St.Destroyed && Yd.Hauler.WarpedOut && Math.Abs(Yd.Hauler.RebuildIn - 30) < 0.2, "the hauler, destroyed: gone for 30 s");
+            Yd.Hauler.RebuildIn = 0.1; Yd.Credits = hcost + 100; await Wait(0.3);
+            Check(Yd.Hauler.State == Hauler.St.Loading && Yd.Hauler.Hull == 150 && Math.Abs(Yd.Credits - 100) < 1e-6,
+                  $"rebuilt on its pad for 10% of the hauler's investment ({hcost:0} cr)");
+        }
 
         // ── pilot progression: EXP, levels, points, flat upgrades ──
         {
