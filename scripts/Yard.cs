@@ -94,12 +94,13 @@ public partial class Yard : Node2D
     private static Trip _trip;
     public static double TripCredits;                 // earned while away (a bounty), paid on return
     public static double LastAway, LastAwayOre, LastAwaySalvage;   // what the last return credited
+    public static double TripStartCredits;            // the credits set aside when the last trip began
 
     public void SaveForTrip()
     {
         _trip = new Trip(Ore, Salvage, Credits, new Dictionary<string, int>(_levels), new Dictionary<string, double>(_invested),
                          FleetRate(GatherKind.Miner), FleetRate(GatherKind.Salvager));
-        TripCredits = 0; TripClock = 0;
+        TripCredits = 0; TripClock = 0; TripStartCredits = Credits;
     }
 
     private void ReturnFromTrip()

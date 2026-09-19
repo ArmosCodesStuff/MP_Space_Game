@@ -847,6 +847,49 @@ public partial class _Test : Node
             me.Position = keepPos; me.Velocity = Vector2.Zero; me.TakeDamage(-(me.MaxHp - me.Hp));   // hand over at full hull
         }
 
+        // ── raiders (6b): the heavy -- waits astern, a predicted missile, afterburns in on a pinned target ──
+        {
+            var hm = Me; var keepH = hm.Position;
+            hm.Position = new Vector2(4000, -2500); hm.Velocity = Vector2.Zero; hm.Rotation = 0f; await Wait(0.3);
+            var hv = H.SpawnRaider(hm.Position + new Vector2(0, 900), RaiderKind.Heavy);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(hv.Heavy && Math.Abs(hv.Length - 4 * Raider.LightLength) < 1e-3 && Math.Abs(Raider.HeavyDps - 2 * Raider.RaiderDps) < 1e-9 && Raider.RaiderDps == 1,
+                  "a heavy raider: four times a light's size, twice the raider damage (2 DPS)");
+            double HvLaser() => hm.DamageBySource.Where(kv => kv.Key == $"raider:{hv.NetId}").Sum(kv => kv.Value);
+            double HvMissile() => hm.DamageBySource.Where(kv => kv.Key == $"heavy:{hv.NetId}:missile").Sum(kv => kv.Value);
+            await Wait(6.0);                                                   // 450 u at 100 u/s, easing in
+            var sternDir = -Vector2.Up.Rotated(hm.Rotation);
+            float offAstern = Mathf.RadToDeg(Mathf.Abs(sternDir.AngleTo(hv.Position - hm.Position))), waitOut = hv.Position.DistanceTo(hm.Position);
+            Check(offAstern < 20 && Math.Abs(waitOut - Raider.WaitOut) < 40 && HvLaser() == 0,
+                  $"its target unpinned, it waits astern ({offAstern:0} deg off, {waitOut:0} u out) and holds its laser");
+            for (int i = 0; i < 60 * 14 && H.BlastsPending == 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            var blastRing = Nodes<Telegraph>().FirstOrDefault(t => !t.Line && Math.Abs(t.Radius - Raider.BlastRadius) < 0.1f);
+            Check(H.BlastsPending == 1 && blastRing != null && blastRing.A.DistanceTo(hm.Position) < 6f && Math.Abs(blastRing.Duration - 7) < 1e-6,
+                  "within 500 u it fires at where the target will be; a red circle marks it for 7 s");
+            double mm0 = HvMissile();
+            for (int i = 0; i < 60 * 9 && H.BlastsPending > 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(Math.Abs(HvMissile() - mm0 - Raider.MissileDamage) < 1e-6, $"staying on the circle, the blast lands ({HvMissile() - mm0:0})");
+            typeof(Raider).GetField("_missileCd", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(hv, 0.0);
+            for (int i = 0; i < 60 && H.BlastsPending == 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            hm.Position += new Vector2(300, 0); hm.Velocity = Vector2.Zero;                        // off the circle
+            double mm1 = HvMissile();
+            for (int i = 0; i < 60 * 9 && H.BlastsPending > 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(H.BlastsPending == 0 && HvMissile() == mm1, "moving off the circle dodges it");
+            var lights = new[] { H.SpawnRaider(hm.Position + new Vector2(0, -250)), H.SpawnRaider(hm.Position + new Vector2(250, 0)), H.SpawnRaider(hm.Position + new Vector2(-250, 0)) };
+            for (int i = 0; i < 60 * 8 && !hm.Pinned; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await Wait(0.15); var hp1 = hv.Position; await Wait(0.2);
+            float burn = (hv.Position - hp1).Length() / 0.2f;
+            Check(hm.Pinned && burn > 250f, $"its target pinned, it afterburns in ({burn:0} u/s)");
+            for (int i = 0; i < 60 * 4 && !hv.Latched; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            double hl0 = HvLaser(); await Wait(3.0);
+            double hdps = (HvLaser() - hl0) / 3.0;
+            Check(hv.Latched && Raider.Gap(hv.Position, hm) <= Raider.HeavyReach && Math.Abs(hdps - 2) < 0.4,
+                  $"from 135 u off the hull its laser does 2 DPS ({hdps:0.00})");
+            foreach (var r in H.Raiders.ToList()) r.TakeDamage(9999);
+            await Wait(0.3);
+            hm.Position = keepH; hm.Velocity = Vector2.Zero; hm.TakeDamage(-(hm.MaxHp - hm.Hp));
+        }
+
         // ── enemy fire, shields, stasis, the escape pod, re-boarding ──
         {
             var d3x = H.GetNode<TargetDummy>("TargetDummy3");
@@ -1064,7 +1107,9 @@ public partial class _Test : Node
             for (int i = 0; i < 60 * 8 && Hub.InArena; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             await Wait(1.0);
             Check(!Hub.InArena && H.Yard != null, "home again after the win");
-            Check(H.Yard.Credits >= 3000 - 1e-6 && H.Yard.Credits < 3000 + 400, $"the bounty's 2000 credits are paid at home ({H.Yard.Credits:0})");
+            // exactly the credits set aside at departure + the 2000 bounty (a hauler sale before
+            // departure is part of what was set aside, so a fixed window was fragile)
+            Check(Math.Abs(H.Yard.Credits - Yard.TripStartCredits - 2000) < 1e-6, $"the bounty's 2000 credits are paid at home ({Yard.TripStartCredits:0} + 2000 = {H.Yard.Credits:0})");
             // the literal 1/20 asked for -- not Yard.AwayShare, or the check could never fail
             double want = H.Yard.FleetRate(GatherKind.Miner) * Yard.LastAway / 20.0;
             Check(Yard.LastAway > 1 && Yard.LastAwayOre > 0 && Math.Abs(Yard.LastAwayOre - want) < 1e-6,
@@ -1216,6 +1261,7 @@ public partial class _Test : Node
             Check(ships.Any(s => s.Pilot == "Third"), "the second guest's identity reached the host");
             H.AwardPartyExp(40);                  // shared: every pilot in the session gets it
             H.SpawnRaider(new Vector2(-3500, 3500));   // far off: the guests must see it
+            H.SpawnRaider(new Vector2(-3700, 3700), RaiderKind.Heavy);
             Check(!H.AllReady, "the host cannot warp until every pilot is ready");
             H.SetMyReady(true); Me.AutopilotTo = null;
             for (int i = 0; i < 600 && !H.AllReady; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
@@ -1287,7 +1333,9 @@ public partial class _Test : Node
             for (int i = 0; i < 480 && Character.Exp != 40; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(Character.Exp == 40, $"the host's EXP award reached this guest (exp {Character.Exp})");
             for (int i = 0; i < 60 * 6 && H.Raiders.Count == 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            Check(H.Raiders.Count >= 1 && Combat.Hostiles.OfType<Raider>().Any(), "the host's raider reached this guest (a hostile it can target)");
+            for (int i = 0; i < 60 * 3 && !H.Raiders.Any(r => r.Heavy); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(H.Raiders.Count >= 2 && Combat.Hostiles.OfType<Raider>().Any() && H.Raiders.Any(r => r.Heavy),
+                  "the host's raiders reached this guest, a heavy as a heavy (hostiles it can target)");
             var gm = H.Yard.Gatherers.First(x => x.Kind == GatherKind.Miner);
             Check(H.Yard.Gatherers.Any(x => x.Position.DistanceTo(Hub.BasePos) > 400) && H.Yard.Hauler.Position.Y == Hub.LaneY,
                   "guest sees the host's miner out working and the hauler on its lane");

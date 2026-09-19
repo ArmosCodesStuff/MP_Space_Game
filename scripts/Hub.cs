@@ -545,18 +545,18 @@ public partial class Hub : Node2D
         if (Yard.Hauler != null && Yard.Hauler.State is not (Hauler.St.Destroyed or Hauler.St.Away)) yield return Yard.Hauler;
     }
 
-    public Raider SpawnRaider(Vector2 at)
+    public Raider SpawnRaider(Vector2 at, RaiderKind kind = RaiderKind.Light)
     {
         if (!Net.IsHost) return null;
-        var r = new Raider { Hub = this, NetId = ++_raiderIds, Position = at, Name = $"Raider_{_raiderIds}" };
+        var r = new Raider { Hub = this, Kind = kind, NetId = ++_raiderIds, Position = at, Name = $"Raider_{_raiderIds}" };
         Raiders.Add(r); AddChild(r);
-        if (Net.IsOnline) Rpc(nameof(NetRaiderSpawn), r.NetId, at);
+        if (Net.IsOnline) Rpc(nameof(NetRaiderSpawn), r.NetId, at, (int)kind);
         return r;
     }
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetRaiderSpawn(int id, Vector2 at)
+    private void NetRaiderSpawn(int id, Vector2 at, int kind)
     {
-        var r = new Raider { Hub = this, NetId = id, Position = at, Name = $"Raider_{id}" };
+        var r = new Raider { Hub = this, Kind = (RaiderKind)kind, NetId = id, Position = at, Name = $"Raider_{id}" };
         Raiders.Add(r); AddChild(r);
     }
 
@@ -573,6 +573,41 @@ public partial class Hub : Node2D
         if (r == null) return;
         AddChild(new Explosion { Position = r.Position, Radius = 28f });
         Raiders.Remove(r); r.QueueFree();
+    }
+
+    // A heavy's missile: flies 7 s to a marked point, and the host lands the blast there.
+    private readonly List<(Vector2 at, double left, int from)> _blasts = new();
+    public int BlastsPending => _blasts.Count;
+    public void HeavyMissile(Vector2 from, Vector2 at, int raiderId)
+    {
+        if (!Net.IsHost) return;
+        _blasts.Add((at, Raider.MissileFlight, raiderId));
+        ShowHeavyMissile(from, at);
+        if (Net.IsOnline) Rpc(nameof(NetHeavyMissile), from, at);
+    }
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void NetHeavyMissile(Vector2 from, Vector2 at) => ShowHeavyMissile(from, at);
+    private void ShowHeavyMissile(Vector2 from, Vector2 at)
+    {
+        AddChild(new Telegraph { Line = false, A = at, Radius = Raider.BlastRadius, Duration = Raider.MissileFlight });
+        AddChild(new HeavyMissileVisual { From = from, To = at, Flight = Raider.MissileFlight });
+    }
+    private void TickBlasts(double delta)
+    {
+        for (int i = _blasts.Count - 1; i >= 0; i--)
+        {
+            var b = _blasts[i]; b.left -= delta;
+            if (b.left > 0) { _blasts[i] = b; continue; }
+            _blasts.RemoveAt(i);
+            foreach (var t in RaiderTargets().ToList())
+                if (Raider.Gap(b.at, t) <= Raider.BlastRadius)
+                    switch (t)
+                    {
+                        case PlayerShip p: p.Hit(Raider.MissileDamage, b.at, $"heavy:{b.from}:missile"); break;
+                        case Gatherer g: g.TakeDamage(Raider.MissileDamage); break;
+                        case Hauler h: h.TakeDamage(Raider.MissileDamage); break;
+                    }
+        }
     }
 
     private void SendRaiders(double delta)
@@ -711,6 +746,7 @@ public partial class Hub : Node2D
     public override void _Process(double delta)
     {
         SendRaiders(delta);
+        if (Net.IsHost) TickBlasts(delta);
         TickMission(delta);
         if (Music.I != null)
         {
@@ -1056,5 +1092,27 @@ public partial class MissionBar : Node2D
         DrawRect(new Rect2(at - new Vector2(W / 2, H / 2), new Vector2(W * k, H)), new Color(1f, 0.4f, 0.3f, 0.95f));
         DrawRect(new Rect2(at - new Vector2(W / 2, H / 2), new Vector2(W, H)), new Color(1f, 0.6f, 0.5f), false, 1.5f);
         Txt.Centre(this, ThemeDB.FallbackFont, at + new Vector2(0, -16), "OPENING PORTAL", Txt.Size(14), new Color(1f, 0.7f, 0.6f));
+    }
+}
+
+// The heavy's fat missile, drawn flying straight to its marked point (the host lands the blast).
+public partial class HeavyMissileVisual : Node2D
+{
+    public Vector2 From, To; public double Flight;
+    private double _t;
+    public override void _Ready() { Position = From; Rotation = (To - From).Angle() + Mathf.Pi / 2f; ZIndex = 6; }
+    public override void _Process(double delta)
+    {
+        _t += delta;
+        Position = From.Lerp(To, (float)System.Math.Min(1, _t / Flight));
+        if (_t >= Flight) { GetParent().AddChild(new Explosion { Position = To, Radius = Raider.BlastRadius * 0.8f }); QueueFree(); }
+        QueueRedraw();
+    }
+    public override void _Draw()
+    {   // fat: wider and longer than the player's missile
+        var body = new Color(0.45f, 0.30f, 0.28f);
+        DrawRect(new Rect2(-5f, -16f, 10f, 34f), body);
+        DrawColoredPolygon(new[] { new Vector2(-5f, -16f), new Vector2(0, -25f), new Vector2(5f, -16f) }, new Color(1f, 0.3f, 0.25f));
+        DrawCircle(new Vector2(0, 19f), 4.2f, new Color(1f, 0.6f, 0.3f));
     }
 }

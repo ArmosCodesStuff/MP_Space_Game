@@ -11,25 +11,41 @@ using System.Linq;
 //   target (by its heading), 90 u out: inside 90% of their 100 u reach, so they never
 //   lose damage to repositioning. Held there, a light PINS its target: the target is
 //   kept to 20% of its top speed, thrusting forward, unable to turn -- a soft lock.
-//   It fires a 1 DPS laser (the raider damage "x"; a heavy's is 2x -- chunk 6b).
+//   It fires a 1 DPS laser (the raider damage "x").
+//
+//   HEAVY: the battleship cut in half -- 4x a light's size, one turret. It hangs back
+//   BEHIND its target (the approach is from the rear), facing it, 450 u out, until the
+//   target is pinned; then it afterburns in to 135 u off the hull and fires a short,
+//   hard laser: 2x the raider damage. Within 500 u it also fires a fat missile at where
+//   the target WILL be in 7 s (its speed carried forward): a red circle marks the spot
+//   for all 7 s, and the blast lands there -- move off the line and it misses.
 //
 // Targets: the nearest player ship, miner, salvager or hauler.
 // ─────────────────────────────────────────────────────────────────────────────
-public enum RaiderKind { Light }
+public enum RaiderKind { Light, Heavy }
 
 public partial class Raider : Node2D, IHittable
 {
     public Hub Hub;
     public RaiderKind Kind = RaiderKind.Light;
     public int NetId { get; set; }
-    public double Hp = LightHull;
+    public double Hp;
     public bool Alive => Hp > 0;
-    public float HitRadius => Length * 0.4f;
+    public bool Heavy => Kind == RaiderKind.Heavy;
+    public float Length => Heavy ? HeavyLength : LightLength;
+    public double MaxHull => Heavy ? HeavyHull : LightHull;
+    public float HitRadius => Length * (Heavy ? 0.3f : 0.4f);
     public bool Selectable => true;
 
-    public const float Length = 34f;                   // twice a carrier fighter
-    public const double LightHull = 25;
-    public const double RaiderDps = 1.0;               // x
+    public const float LightLength = 34f;              // twice a carrier fighter
+    public const float HeavyLength = 4f * LightLength; // 136 u
+    public const double LightHull = 25, HeavyHull = 100;
+    public const double RaiderDps = 1.0;               // x -- a light's laser; a heavy's is 2x
+    public const double HeavyDps = 2 * RaiderDps;
+    public const float Afterburn = 300f;               // a heavy closing on a pinned target
+    public const float HeavyReach = 150f, HeavyHold = 0.9f * HeavyReach, WaitOut = 450f;
+    public const float MissileRange = 500f, BlastRadius = 90f;
+    public const double MissileFlight = 7.0, MissileEvery = 12.0, MissileDamage = 30;
     public const double ShotEvery = 1.0;
     public const float Cruise = 100f;                  // an unupgraded capital ship's pace
     public const float BoostMult = 5f;                 // 500%
@@ -44,7 +60,9 @@ public partial class Raider : Node2D, IHittable
     public bool Latched { get; private set; }
     public bool Boosting => _boostLeft > 0;
     public float Speed { get; private set; }
-    private double _boostLeft, _shot;
+    private double _boostLeft, _shot, _missileCd = 2.0;
+    private Vector2 _lastTargetPos; private Vector2 _targetVel;
+    private Sprite2D _turret;
     private bool _boostUsed;
     private Vector2 _netPos; private float _netRot; private bool _hasNet;
     private Vector2? _tether;                          // guests: where the web goes
@@ -52,9 +70,18 @@ public partial class Raider : Node2D, IHittable
 
     public override void _Ready()
     {
-        var tex = GD.Load<Texture2D>("res://enemy_light_fighter.png");
+        Hp = MaxHull;
+        var tex = GD.Load<Texture2D>(Heavy ? "res://enemy_heavy_hull.png" : "res://enemy_light_fighter.png");
         _sprite = new Sprite2D { Texture = tex, Scale = Vector2.One * (Length / tex.GetHeight()) };
         AddChild(_sprite);
+        if (Heavy)
+        {   // the battleship's front turret on its mount (62.4 px down the 150 px half-hull), dark as the hull
+            _sprite.Modulate = new Color(0.62f, 0.40f, 0.40f);
+            var tt = GD.Load<Texture2D>("res://turret_bs_main.png");
+            _turret = new Sprite2D { Texture = tt, Position = new Vector2(0, (62.4f - 75f) * Length / 150f),
+                                     Scale = Vector2.One * (Length / 150f) * 0.8f, Modulate = new Color(0.62f, 0.40f, 0.40f), ZIndex = 1 };
+            AddChild(_turret);
+        }
         ZIndex = 5;
         Combat.Hostiles.Add(this);
     }
@@ -127,6 +154,8 @@ public partial class Raider : Node2D, IHittable
         if (!Alive) return;
         if (!Up(Target)) { Target = Hub.RaiderTargets().OrderBy(t => t.Position.DistanceTo(Position)).FirstOrDefault(); Latched = false; _boostUsed = false; }
         if (Target == null) { Speed = 0; QueueRedraw(); return; }
+        _targetVel = dt > 0 ? (Target.Position - _lastTargetPos) / dt : Vector2.Zero; _lastTargetPos = Target.Position;
+        if (Heavy) { TickHeavy(delta); QueueRedraw(); return; }
 
         // my post around the target: ahead, left or right by its heading, 90 u out
         var mates = Hub.Raiders.Where(r => r.Alive && r.Target == Target).OrderBy(r => r.NetId).ToList();
@@ -160,6 +189,42 @@ public partial class Raider : Node2D, IHittable
         QueueRedraw();
     }
 
+    static bool PinnedNow(Node2D t) => t switch { PlayerShip p => p.Pinned, Gatherer g => g.Pinned, Hauler h => h.Pinned, _ => false };
+
+    // the heavy: wait astern until the target is pinned, then afterburn in; missiles within 500 u
+    private void TickHeavy(double delta)
+    {
+        float dt = (float)delta;
+        var astern = -Vector2.Up.Rotated(Target.Rotation);                    // it comes in from the rear
+        bool pinned = PinnedNow(Target);
+        var dest = pinned ? Target.Position + astern * (Extent(Target, astern) + HeavyHold)
+                          : Target.Position + astern * WaitOut;
+        float top = pinned ? Afterburn : Cruise;
+        float d = Position.DistanceTo(dest);
+        Speed = Mathf.Min(top, d * 6f);
+        Position = Position.MoveToward(dest, Speed * dt);
+        var face = (Target.Position - Position).Angle() + Mathf.Pi / 2f;
+        Rotation = Mathf.LerpAngle(Rotation, face, Mathf.Clamp(4f * dt, 0f, 1f));
+        if (_turret != null) _turret.GlobalRotation = face;                  // its one turret tracks the target
+        Latched = pinned && Gap(Position, Target) <= HeavyReach;
+        if (Latched)
+        {
+            _shot -= delta;
+            if (_shot <= 0)
+            {
+                _shot = 0.5;
+                Strike(Target, HeavyDps * 0.5);
+                Combat.Flash(ToGlobal(_turret?.Position ?? Vector2.Zero), Target.Position, new Color(1f, 0.35f, 0.25f));
+            }
+        }
+        _missileCd -= delta;
+        if (_missileCd <= 0 && Position.DistanceTo(Target.Position) <= MissileRange)
+        {   // at where it WILL be: its velocity carried 7 s forward
+            _missileCd = MissileEvery;
+            Hub.HeavyMissile(Position, Target.Position + _targetVel * (float)MissileFlight, NetId);
+        }
+    }
+
     public void SetNet(Vector2 p, float rot, double hp, Vector2? tether) { _netPos = p; _netRot = rot; _hasNet = true; Hp = hp; _tether = tether; }
     public Vector2? TetherTo => Net.Sim ? (Latched && Up(Target) ? Target.Position : null) : _tether;
 
@@ -170,7 +235,8 @@ public partial class Raider : Node2D, IHittable
             var inv = GlobalTransform.AffineInverse();
             DrawLine(Vector2.Zero, inv * to, new Color(1f, 0.3f, 0.25f, 0.35f), 1.5f);
         }
-        if (Boosting) Plume.Draw(this, new Vector2(0, Length * 0.5f), Vector2.Down, Length * 1.6f, new Color(1f, 0.35f, 0.25f), 1f, true);
-        else Plume.Draw(this, new Vector2(0, Length * 0.5f), Vector2.Down, Length, new Color(1f, 0.35f, 0.25f), 0.5f, Speed > 1f);
+        float plume = Heavy ? Length * 0.5f : Length;
+        if (Boosting || (Heavy && Speed > Cruise + 1f)) Plume.Draw(this, new Vector2(0, Length * 0.5f), Vector2.Down, plume * 1.6f, new Color(1f, 0.35f, 0.25f), 1f, true);
+        else Plume.Draw(this, new Vector2(0, Length * 0.5f), Vector2.Down, plume, new Color(1f, 0.35f, 0.25f), 0.5f, Speed > 1f);
     }
 }
