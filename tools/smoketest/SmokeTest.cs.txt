@@ -513,14 +513,33 @@ public partial class _Test : Node
         Check(H.Selected == d3, "carrier: left-click selects dummy 3");
         Click(Scr(d3.Position), MouseButton.Right); await Wait(0.05);
         Check(ship.WingTarget == null && ship.StrikeTarget == null, "carrier: clicks never order an attack");
+        Check(Nodes<Wing>().Where(w => w.Carrier == ship && w.Kind == WingKind.Fighter).All(w => w.Inside && !w.Visible),
+              "idle fighters wait docked inside the carrier, out of sight");
+        foreach (var bw in Nodes<Wing>().Where(w => w.Carrier == ship && w.IsBomber && w.Docked))
+        {
+            bool port = ship.ToLocal(bw.Position).X < 0;
+            float want = ship.Rotation + (port ? -Mathf.Pi / 2f : Mathf.Pi / 2f);
+            Check(Mathf.Abs(Mathf.AngleDifference(bw.Rotation, want)) < 0.05f && Mathf.Abs(ship.ToLocal(bw.Position).X) > 40f,
+                  $"docked bomber faces out from the {(port ? "port" : "starboard")} side, tail to the hull");
+        }
+        int sig0 = ship.SignalsLit;
         Key(global::Godot.Key.Space); await Wait(0.05);
         Check(ship.WingTarget == d3 && ship.StrikeTarget == null, "Space sends the fighters only (bombers are their own ability)");
-        await Wait(3.0);
-        d3.ResetMeter(); await Wait(8.0);                  // inside the first 15 s of firing
-        // PD is still recharging from above, so only fighters are hitting d3
-        double fdps = d3.Total / 8.0;
-        GD.Print($"  fighters measured {fdps:0.000} DPS; sheet {ship.Stats.FighterDps:0.000}");
-        Check(Math.Abs(fdps - ship.Stats.FighterDps) < 0.12, "fighters deliver the sheet's DPS");
+        await Wait(0.2); Check(ship.SignalsLit > sig0, "launching fighters light the hangar signal");
+        // strafing runs: 3 shots, straight through by 1.2x the target's diameter, then round again
+        var fx = Nodes<Wing>().First(w => w.Carrier == ship && w.Kind == WingKind.Fighter);
+        int passes = 0; bool three = true, through = true; string lastPhase = fx.FighterPhase; float worst = 999f;
+        for (int i = 0; i < 780; i++)                     // 13 s, inside the first 15 s of firing
+        {
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            string ph = fx.FighterPhase;
+            if (lastPhase == "Burst" && ph == "Overshoot") { passes++; three &= fx.ShotsThisPass == Wing.BurstShots; }
+            if (lastPhase == "Overshoot" && ph == "Turn") { through &= fx.LastOvershoot >= Wing.Overshoot * 2f * d3.HitRadius - 0.5f; worst = Mathf.Min(worst, fx.LastOvershoot); }
+            lastPhase = ph;
+        }
+        GD.Print($"  fighter: {passes} passes in 13 s; shortest overshoot {worst:0} u (needs {Wing.Overshoot * 2f * d3.HitRadius:0})");
+        Check(passes >= 2 && three, $"fighters strafe: every pass fires exactly 3 shots ({passes} passes)");
+        Check(through, "each pass carries on through the target by at least 1.2x its diameter, then turns");
         var fighters = Nodes<Wing>().Where(w => w.Carrier == ship && !w.IsBomber).ToList();
         for (int i = 0; i < 1200 && !fighters.All(f => f.Resting); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         Check(fighters.All(f => f.Resting), "after 15 s of firing, every fighter heads home to rest");
@@ -586,6 +605,43 @@ public partial class _Test : Node
         GD.Print($"  moved target took {d1.Total:0} damage");
         Check(d1.Total == 0, "a target that moves after launch is missed (the torpedo does not track)");
         d1.Position = home;
+
+        // ── enemy fire, shields, stasis, the escape pod, re-boarding ──
+        {
+            var d3x = H.GetNode<TargetDummy>("TargetDummy3");
+            Check(d3x.Armed && !H.GetNode<TargetDummy>("TargetDummy1").Armed, "only the bottom-right dummy is armed");
+            var sh = Me; double hp0 = sh.Hp;
+            sh.Position = d3x.Position + new Vector2(0, -120); sh.Velocity = Vector2.Zero; sh.Rotation = 0f;
+            for (int i = 0; i < 600 && sh.Hp == hp0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(Math.Abs(hp0 - sh.Hp - 50) < 0.01, $"the armed dummy's missile hits a ship within 150 u for 50 ({hp0 - sh.Hp:0})");
+            var shield = Nodes<ShieldFlash>(sh).First();
+            Check(shield.Glow(2) > 0 && shield.Glow(0) == 0, "the shield lights the side facing the dummy (astern), not the bow");
+            sh.Position = d3x.Position + new Vector2(0, -1200); await Wait(6.0);
+            double hp1 = sh.Hp; await Wait(6.0);
+            Check(sh.Hp == hp1, "outside 150 u it holds fire");
+            Check(sh.Covers(sh.Position + Vector2.Up.Rotated(sh.Rotation) * (PlayerShip.Art[sh.Class].Length * 0.45f), 0f)
+                  && !sh.Covers(sh.Position + Vector2.Right.Rotated(sh.Rotation) * (PlayerShip.Art[sh.Class].HalfWidth + 12f), 0f),
+                  "the collider is a capsule: the bow is inside, a point just off the beam is not");
+            // death
+            sh.TakeDamage(sh.Hp + 1); await Wait(0.2);
+            var pod = Nodes<EscapePod>().FirstOrDefault();
+            Check(!sh.Alive && sh.StasisLeft > 119 && pod != null && !Combat.Hostiles.Contains(pod as IHittable) && !Combat.Players.Any(p => (object)p == pod),
+                  "destroyed: stasis (2:00) and an escape pod that nothing can target");
+            Check(pod != null && Math.Abs(pod.GetChildren().OfType<Sprite2D>().First().Texture.GetHeight() * pod.GetChildren().OfType<Sprite2D>().First().Scale.Y - 24f) < 0.5f,
+                  "the pod is 24 u long (60% of a salvager's 40)");
+            var podStart = pod.Position;
+            KeyDown(global::Godot.Key.W); await Wait(1.0); KeyUp(global::Godot.Key.W);
+            Check(pod.Position.DistanceTo(podStart) > 20f && sh.Velocity == Vector2.Zero, "W flies the pod; the ship stays put in stasis");
+            Check(H.GetType().GetField("_cam", BindingFlags.NonPublic | BindingFlags.Instance) != null && sh.ViewPosition == pod.Position, "the camera follows the pod");
+            Key(global::Godot.Key.F); await Wait(0.1);
+            Check(!sh.Alive, "F does nothing before stasis ends");
+            typeof(PlayerShip).GetField("_stasis", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(sh, 0.5);
+            await Wait(0.7);
+            Check(sh.CanReboard, "after the timer the ship is ready");
+            Key(global::Godot.Key.F); await Wait(0.2);
+            Check(sh.Alive && Math.Abs(sh.Hp - sh.MaxHp * 0.33) < 0.01 && Nodes<EscapePod>().Count() == 0, "F re-boards at 33% hull; the pod is gone");
+            sh.TakeDamage(-(sh.MaxHp - sh.Hp));  // (test only) back to full for what follows
+        }
 
         // selection rules still hold
         await Park(d1.Position + new Vector2(-300, 300));

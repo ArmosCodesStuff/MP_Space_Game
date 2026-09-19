@@ -208,20 +208,34 @@ public partial class Wing : Node2D
 
     public const float FighterLength = 17f, BomberLength = 37.5f;   // halved / three-quarters in this release
     private Sprite2D _sprite;
-    private double _cd, _orbitA;
-    // Fighters fly in bursts: after 15 s of firing a fighter goes back to the centre of
-    // the carrier and rests 3 s there before rejoining.
-    private double _fired, _rest;
-    private bool _goingHome;
-    public bool Resting => _goingHome || _rest > 0;
-    private enum BSt { Docked, Approach, Aim, Launch, Return }
+    private double _cd;
+
+    // ── fighters: strafing runs ──────────────────────────────────────────────
+    // Each pass: 3 shots, straight THROUGH the target until 1.2x its diameter past
+    // it, then turn for the next. They fly like aircraft -- steady speed, limited
+    // turn rate -- so the pass and the turn are real. After 15 s engaged they fly
+    // home and dock INSIDE the carrier for a 3 s rest; with nothing to fight they
+    // stay inside.
+    public const int BurstShots = 3;
+    public const float Overshoot = 1.2f;
+    private enum FSt { Docked, Launch, Approach, Burst, Overshoot, Turn, Home }
+    private FSt _f = FSt.Docked;
+    private float _heading;                     // fighter's nose, world angle
+    private int _shots;                         // shots fired this pass
+    private double _engaged, _rest, _launchT;
+    public bool Resting => F && (_f == FSt.Home || (_f == FSt.Docked && _rest > 0));
+    public bool Inside => F && _f == FSt.Docked;
+    public string FighterPhase => _f.ToString();
+    public int ShotsThisPass => _shots;
+    public float LastOvershoot { get; private set; }   // how far past the target the last pass went
+    private enum BSt { Docked, Approach, Aim, Launch, Return, Backing }
     public const float CrawlSpeed = 0.25f;     // bombers keep closing at this fraction of top speed while they launch
     public bool Launching => _b == BSt.Launch;
     private BSt _b = BSt.Docked;
     public bool Docked => _b == BSt.Docked;
     public bool Armed => _b == BSt.Docked && _rearm <= 0 && Ammo > 0;
     public double RearmLeft => _b == BSt.Docked ? Math.Max(0, _rearm) : 0;
-    private double _rearm;
+    private double _rearm, _backT;
 
     // Where the host says this craft is. Guests steer toward it.
     private Vector2 _netPos; private float _netRot; private bool _hasNet;
@@ -244,7 +258,6 @@ public partial class Wing : Node2D
         _sprite = new Sprite2D { Texture = tex, Scale = Vector2.One * (len / tex.GetHeight()) };
         AddChild(_sprite);
         ZIndex = 4;
-        _orbitA = GD.Randf() * Mathf.Tau;
     }
 
     public void SetNet(Vector2 p, float rot) { _netPos = p; _netRot = rot; _hasNet = true; }
@@ -253,7 +266,8 @@ public partial class Wing : Node2D
     {
         if (!Alive) return;
         if (!IsInstanceValid(Carrier)) { Alive = false; QueueFree(); return; }   // a carrier in stasis keeps its wing
-        Visible = Carrier.IsVisibleInTree();          // a hidden carrier hides its wing
+        Visible = Carrier.IsVisibleInTree() && !Inside;   // docked fighters are inside the hull
+        QueueRedraw();                                     // the engine plume
 
         if (!Net.Sim)
         {   // the host flies the wing; a guest follows where it says it is -- except a
@@ -265,8 +279,7 @@ public partial class Wing : Node2D
                 Position = Position.Lerp(_netPos, Mathf.Clamp(10f * (float)delta, 0f, 1f));
                 Rotation = Mathf.LerpAngle(Rotation, _netRot, Mathf.Clamp(10f * (float)delta, 0f, 1f));
             }
-            else if (F) Orbit(delta, 160f);
-            else SnapToDock();
+            else if (!F) SnapToDock();
             return;
         }
 
@@ -276,36 +289,75 @@ public partial class Wing : Node2D
 
     private void TickFighter(double delta)
     {
-        if (_goingHome)
-        {
-            FlyToward(Carrier.Position, Speed, delta, Carrier.Velocity);
-            if (Position.DistanceTo(Carrier.Position) < 8f) { _goingHome = false; _rest = S["fighter_rest"]; }
-            return;
-        }
-        if (_rest > 0)
-        {   // resting at the carrier's centre, riding with it
-            Position = Carrier.Position; Velocity = Carrier.Velocity; Rotation = Carrier.Rotation;
-            _rest -= delta;
-            if (_rest <= 0) { _rest = 0; _fired = 0; }
-            return;
-        }
+        float dt = (float)delta;
         var t = Carrier.WingTarget;
-        bool inControl = t != null && t.Alive && Carrier.Position.DistanceTo(t.Position) <= S["control_range"];
-        if (!inControl) { if (_cd < 0) _cd = 0; Orbit(delta, 160f); return; }
-
-        float d = Position.DistanceTo(t.Position);
-        if (d > Range * 0.8f) FlyToward(t.Position, Speed, delta);
-        else { FlyToward(Position, Speed, delta); FaceToward(t.Position, delta); }   // brake and hold
-
-        if (d > Range) { if (_cd < 0) _cd = 0; return; }
-        _fired += delta;
-        if (_fired >= S["fighter_burst"]) { _goingHome = true; _cd = 0; return; }
-        for (int n = 0; _cd <= 0 && n < 8; n++)
-        {   // carried remainder, as with the turrets, so measured DPS matches the sheet
-            _cd += S["fighter_interval"];
-            t.TakeDamage(S["fighter_damage"]);
-            Combat.Flash(Position, t.Position, new Color(0.7f, 0.95f, 1f));
+        bool engage = t != null && t.Alive && Carrier.Alive && Carrier.Position.DistanceTo(t.Position) <= S["control_range"];
+        if (_f is FSt.Approach or FSt.Burst or FSt.Overshoot or FSt.Turn)
+        {
+            _engaged += delta;
+            if (!engage || _engaged >= S["fighter_burst"]) _f = FSt.Home;
         }
+        switch (_f)
+        {
+            case FSt.Docked:
+                Position = Carrier.Position; Velocity = Carrier.Velocity; _heading = Carrier.Rotation - Mathf.Pi / 2f;
+                if (_rest > 0) { _rest -= delta; break; }
+                if (engage) { _f = FSt.Launch; _launchT = 0; _engaged = 0; Carrier.Signal(Carrier.Position); }
+                break;
+            case FSt.Launch:                       // out along the carrier's heading, clear of the hull
+                _launchT += delta; Fly(dt);
+                if (_launchT > 0.5) _f = FSt.Approach;
+                break;
+            case FSt.Approach:
+                SteerTo(t.Position, dt); Fly(dt);
+                if (Position.DistanceTo(t.Position) <= Range && OffAngle(t.Position) < Mathf.DegToRad(12f))
+                { _f = FSt.Burst; _shots = 0; _cd = 0; }
+                break;
+            case FSt.Burst:
+                SteerTo(t.Position, dt); Fly(dt);
+                _cd -= delta;
+                if (_cd <= 0 && _shots < BurstShots)
+                {
+                    _cd += S["fighter_interval"]; _shots++;
+                    t.TakeDamage(S["fighter_damage"]);
+                    Combat.Flash(Position, t.Position, new Color(0.7f, 0.95f, 1f));
+                }
+                if (_shots >= BurstShots) _f = FSt.Overshoot;
+                break;
+            case FSt.Overshoot:                    // straight on, through and past it
+            {
+                Fly(dt);
+                float beyond = (Position - t.Position).Dot(Vector2.Right.Rotated(_heading));
+                if (beyond >= Overshoot * 2f * t.HitRadius) { LastOvershoot = beyond; _f = FSt.Turn; }
+                break;
+            }
+            case FSt.Turn:                         // come round for the next pass
+                SteerTo(t.Position, dt); Fly(dt);
+                if (OffAngle(t.Position) < Mathf.DegToRad(20f)) _f = FSt.Approach;
+                break;
+            case FSt.Home:
+                SteerTo(Carrier.Position, dt); Fly(dt, 0.7f);
+                if (Position.DistanceTo(Carrier.Position) < 60f)
+                {   // in through the hangar
+                    _f = FSt.Docked; _rest = _engaged > 0 ? S["fighter_rest"] : 0; _engaged = 0;
+                    Carrier.Signal(Carrier.Position);
+                }
+                break;
+        }
+        Rotation = _heading + Mathf.Pi / 2f;
+    }
+
+    private float TurnRate => (float)S["fighter_turn"];
+    private float OffAngle(Vector2 p) => Mathf.Abs(Mathf.AngleDifference(_heading, (p - Position).Angle()));
+    private void SteerTo(Vector2 p, float dt)
+    {
+        float diff = Mathf.AngleDifference(_heading, (p - Position).Angle());
+        _heading += Mathf.Clamp(diff, -TurnRate * dt, TurnRate * dt);
+    }
+    private void Fly(float dt, float throttle = 1f)
+    {
+        Velocity = Vector2.Right.Rotated(_heading) * Speed * throttle;
+        Position += Velocity * dt;
     }
 
     private void TickBomber(double delta)
@@ -317,7 +369,7 @@ public partial class Wing : Node2D
             case BSt.Docked:
                 SnapToDock();
                 if (_rearm > 0) { _rearm -= delta; if (_rearm <= 0) Ammo = (int)S["bomber_ammo"]; }
-                if (live && Armed) { _b = BSt.Approach; Velocity = Carrier.Velocity; }
+                if (live && Armed) { _b = BSt.Approach; Velocity = Carrier.Velocity; Carrier.Signal(Position); }
                 break;
 
             case BSt.Approach:
@@ -351,10 +403,21 @@ public partial class Wing : Node2D
                 break;
 
             case BSt.Return:
-            {   // home to this bomber's own slot, match the carrier's way, and lock on
-                var (slot, _) = Carrier.DockSlot(this);
-                FlyToward(slot, Speed, delta, Carrier.Velocity);
-                if (Position.DistanceTo(slot) < 6f) { _b = BSt.Docked; _rearm = S["bomber_rearm"]; SnapToDock(); }
+            {   // to a point just outboard of its own slot...
+                var (slot, rot) = Carrier.DockSlot(this);
+                var outward = Vector2.Up.Rotated(rot);
+                FlyToward(slot + outward * 45f, Speed, delta, Carrier.Velocity);
+                if (Position.DistanceTo(slot + outward * 45f) < 8f) { _b = BSt.Backing; _backT = 0; }
+                break;
+            }
+            case BSt.Backing:
+            {   // ...then turn nose-out and back in, tail first
+                var (slot, rot) = Carrier.DockSlot(this);
+                _backT += delta;
+                Rotation = Mathf.LerpAngle(Rotation, rot, Mathf.Clamp(6f * (float)delta, 0f, 1f));
+                if (_backT > 0.4) Position = Position.MoveToward(slot, 60f * (float)delta) + Carrier.Velocity * (float)delta;
+                else Position += Carrier.Velocity * (float)delta;
+                if (Position.DistanceTo(slot) < 1.5f) { _b = BSt.Docked; _rearm = S["bomber_rearm"]; SnapToDock(); Carrier.Signal(slot); }
                 break;
             }
         }
@@ -367,17 +430,18 @@ public partial class Wing : Node2D
         Position = p; Rotation = rot; Velocity = Carrier.Velocity;
     }
 
-    // Replicated so a guest's ability bar knows what its bombers are doing.
-    public int StateCode => (int)_b;
-    public void SetNetState(int code, double rearm) { if (!Net.Sim) { _b = (BSt)code; _rearm = rearm; } }
-    public bool IsBomber => Kind == WingKind.Bomber;
-
-    private void Orbit(double delta, float r)
+    // Replicated so a guest shows the same state: its ability bar, docked fighters
+    // hidden inside, and the signal light when anything lands or takes off.
+    public int StateCode => F ? 100 + (int)_f : (int)_b;
+    public void SetNetState(int code, double rearm)
     {
-        _orbitA += delta * 0.9;
-        var want = Carrier.Position + new Vector2(Mathf.Cos((float)_orbitA), Mathf.Sin((float)_orbitA)) * r;
-        FlyToward(want, Speed * 0.55f, delta);
+        if (Net.Sim) return;
+        bool wasDocked = F ? _f == FSt.Docked : _b == BSt.Docked;
+        if (code >= 100) _f = (FSt)(code - 100); else { _b = (BSt)code; _rearm = rearm; }
+        bool docked = F ? _f == FSt.Docked : _b == BSt.Docked;
+        if (docked != wasDocked) Carrier.Signal(docked && !F ? Carrier.DockSlot(this).pos : Position);
     }
+    public bool IsBomber => Kind == WingKind.Bomber;
 
     // Accelerate toward a point, easing off to arrive rather than overshoot.
     // `carry` is the velocity of whatever the craft is homing on (the carrier, when
@@ -405,5 +469,13 @@ public partial class Wing : Node2D
         if (!Net.Sim) return;
         Hp -= d;
         if (Hp <= 0) { Alive = false; QueueFree(); }
+    }
+
+    public override void _Draw()
+    {
+        if (Inside || (!F && _b == BSt.Docked)) return;          // engines off when docked
+        float len = F ? FighterLength : BomberLength;
+        Plume.Draw(this, new Vector2(0, len * 0.5f), Vector2.Down, len, Carrier.Accent,
+                   Velocity.Length() / Mathf.Max(1f, Speed));
     }
 }

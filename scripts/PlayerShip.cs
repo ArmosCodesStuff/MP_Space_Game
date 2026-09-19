@@ -92,7 +92,9 @@ public partial class PlayerShip : Node2D, IHittable
         // its point-defence turrets.
         [ShipClass.Carrier] = new ClassArt {
             Texture = "res://carrier_player.png", Length = 170f, HalfWidth = 24.5f,
-            DockX = 41.5f, DockY = 5f, DockSpacing = 40f,   // 37.5 u bombers: wingtips meet the engine pods
+            // bombers back in, tail to the hull: half the hull's beam (24.5) plus half a
+            // 37.5 u bomber, spaced by a bomber's 32 u span
+            DockX = 44f, DockY = 5f, DockSpacing = 36f,
             Pds = new Vector2[] { new(-5.78f, 8.04f), new(5.78f, 8.04f), new(0f, 18.76f) },
             PdTurret = "res://turret_carrier.png", TurretTexScale = 0.2013f,
             PdBarrel = 3.7f, PdRing = 2.9f },
@@ -229,7 +231,8 @@ public partial class PlayerShip : Node2D, IHittable
         int onSide = port ? (n + 1) / 2 : n / 2, j = i / 2;
         var art = MyArt;
         var local = new Vector2(port ? -art.DockX : art.DockX, art.DockY + (j - (onSide - 1) / 2f) * art.DockSpacing);
-        return (ToGlobal(local), Rotation);
+        // nose out, tail to the hull: backed into the slot
+        return (ToGlobal(local), Rotation + (port ? -Mathf.Pi / 2f : Mathf.Pi / 2f));
     }
 
     public int WingCount(WingKind k) { int n = 0; foreach (var w in _wings) if (w.Alive && w.Kind == k) n++; return n; }
@@ -451,7 +454,7 @@ public partial class PlayerShip : Node2D, IHittable
     {
         if (!Alive && !IsInstanceValid(_pod))
         {
-            _pod = new EscapePod { Name = $"Pod_{OwnerId}", Local = Mine, Position = Position, Rotation = Rotation };
+            _pod = new EscapePod { Name = $"Pod_{OwnerId}", Local = Mine, Position = Position, Rotation = Rotation, Engine = Accent };
             GetParent().AddChild(_pod);
         }
         else if (Alive && IsInstanceValid(_pod)) { _pod.QueueFree(); _pod = null; }
@@ -560,8 +563,31 @@ public partial class PlayerShip : Node2D, IHittable
         Combat.Players.Remove(this);
     }
 
+    // ── signal lights: a faint, flashing yellow/orange wherever a craft lands or
+    // takes off -- the hangar for fighters, a slot for bombers ──────────────────
+    private readonly System.Collections.Generic.List<(Vector2 local, double t)> _signals = new();
+    public const double SignalTime = 1.2;
+    public void Signal(Vector2 world) => _signals.Add((ToLocal(world), SignalTime));
+    public int SignalsLit => _signals.Count;
+
     public override void _Draw()
     {
+        // engine plumes at the stern, in the accent colour
+        if (Alive)
+            Plume.Draw(this, new Vector2(0, MyArt.Length * 0.5f), Vector2.Down, MyArt.Length, Accent,
+                       0.25f + 0.75f * Mathf.Abs(SpeedAhead) / (float)Stats["max_speed"]);
+        for (int i = _signals.Count - 1; i >= 0; i--)
+        {
+            var (p, t) = _signals[i];
+            t -= GetProcessDeltaTime();
+            if (t <= 0) { _signals.RemoveAt(i); continue; }
+            _signals[i] = (p, t);
+            bool yellow = (int)(t * 7) % 2 == 0;                           // flashing
+            var c = yellow ? new Color(1f, 0.9f, 0.35f) : new Color(1f, 0.55f, 0.15f);
+            float k = (float)(t / SignalTime);
+            DrawCircle(p, 7f, new Color(c.R, c.G, c.B, 0.10f * k));            // nearly transparent
+            DrawCircle(p, 2.5f, new Color(c.R, c.G, c.B, 0.35f * k));
+        }
         if (!Alive)
         {   // the stasis countdown over the hull, upright whatever the heading
             DrawSetTransform(Vector2.Zero, -Rotation, Vector2.One);

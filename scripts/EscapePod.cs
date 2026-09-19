@@ -8,6 +8,7 @@ public partial class EscapePod : Node2D
 {
     public const float Length = 24f, Speed = 95f, Accel = 260f;
     public bool Local;                  // true on the owner's machine
+    public Color Engine = Colors.White; // the owner's accent: it is a player craft with an engine
     public Vector2 Velocity;
     private Vector2 _net; private bool _hasNet;
 
@@ -39,7 +40,11 @@ public partial class EscapePod : Node2D
         var want = dir == Vector2.Zero ? Vector2.Zero : dir.Normalized() * Speed;
         Velocity = Velocity.MoveToward(want, Accel * dt);
         Position += Velocity * dt;
+        QueueRedraw();
         if (Velocity.LengthSquared() > 25f)
             Rotation = Mathf.LerpAngle(Rotation, Velocity.Angle() + Mathf.Pi / 2f, Mathf.Clamp(8f * dt, 0f, 1f));
     }
+
+    public override void _Draw() =>
+        Plume.Draw(this, new Vector2(0, Length * 0.5f), Vector2.Down, Length, Engine, Velocity.Length() / Speed);
 }
