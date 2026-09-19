@@ -367,6 +367,12 @@ public partial class PlayerShip : Node2D, IHittable
         _warpLeft = -1; _warpCd = WarpCooldown; _warpFlash = 0.6;
     }
 
+    // ── pinned: a light raider holding station on this ship (host decides, the owner flies it) ──
+    // Held to 20% of top speed, thrusting forward, unable to turn -- a soft lock.
+    private double _pinT;
+    public bool Pinned { get; private set; }
+    public void PinFor(double s) { if (Net.Sim) { _pinT = Math.Max(_pinT, s); Pinned = true; } }
+
     // A refused ability: its slot shows the reason, in red, for a moment.
     public const double FailShow = 1.5;
     private readonly Dictionary<string, (string msg, double until)> _fails = new();
@@ -447,6 +453,7 @@ public partial class PlayerShip : Node2D, IHittable
         if (!Alive) _stasis = Math.Max(0, _stasis - delta);   // the host's clock rules; guests re-sync each packet
         if (_combatT > 0) _combatT = Math.Max(0, _combatT - delta);
         if (Alive && Hp < MaxHp) Hp = Math.Min(MaxHp, Hp + MaxHp * (InCombat ? RegenInCombat : RegenOutOfCombat) * delta);
+        _pinT = Math.Max(0, _pinT - delta); Pinned = _pinT > 0;
         UpdatePod();
         if (Mine) { TickWarp(dt); LocalFlight(dt); }
         else      RemoteFollow(dt);
@@ -540,6 +547,7 @@ public partial class PlayerShip : Node2D, IHittable
         if (throttle != 0f || rudder != 0f) AutopilotTo = null;        // any helm key takes the controls back
         else if (AutopilotTo is { } dest)
             (throttle, rudder) = Autopilot.Capital(Position, Rotation, Velocity, (float)Stats["max_speed"], dest, 60f);
+        if (Pinned) { throttle = 1f; rudder = 0f; AutopilotTo = null; }         // forced thrust, no rudder
         Thrusting = throttle != 0f;
         Steer(throttle, rudder, dt);
 
@@ -596,7 +604,7 @@ public partial class PlayerShip : Node2D, IHittable
         if (throttle > 0) along += (float)Stats["thrust"] * throttle * dt;
         else if (throttle < 0) along += (float)Stats["reverse_thrust"] * throttle * dt;
         along -= along * Mathf.Clamp((float)Stats["water_drag"] * dt, 0f, 1f);
-        along = Mathf.Clamp(along, -(float)Stats["reverse_speed"], (float)Stats["max_speed"]);
+        along = Mathf.Clamp(along, -(float)Stats["reverse_speed"], (float)Stats["max_speed"] * (Pinned ? Raider.PinSpeed : 1f));
         across *= Mathf.Exp(-(float)Stats["keel"] * dt);
 
         // turning circle: yaw rate = speed / radius, capped by the rudder; astern the
@@ -604,7 +612,7 @@ public partial class PlayerShip : Node2D, IHittable
         float cap = Mathf.Min(Mathf.Abs(along) / (float)Stats["turn_radius"], (float)Stats["turn_rate"]);
         float want = rudder * cap * Mathf.Sign(along == 0 ? 1 : along);
         _yawRate = Mathf.MoveToward(_yawRate, want, 2.5f * dt);     // the rudder takes a moment to bite
-        if (Mathf.Abs(along) < 0.5f) _yawRate = 0f;
+        if (Mathf.Abs(along) < 0.5f || Pinned) _yawRate = 0f;                // pinned: it cannot turn
         Rotation += _yawRate * dt;
 
         fwd = Vector2.Up.Rotated(Rotation); side = new Vector2(-fwd.Y, fwd.X);
@@ -653,16 +661,16 @@ public partial class PlayerShip : Node2D, IHittable
             pos[i] = _wings[i].Position; rot[i] = _wings[i].Rotation;
             st[i] = _wings[i].StateCode; rearm[i] = (float)_wings[i].RearmLeft;
         }
-        Rpc(nameof(NetHostState), Hp, MaxHp, Alive, _stasis, _combatT, _pdLeft, _pdRecharge, _mag, _missileReload,
+        Rpc(nameof(NetHostState), Hp, MaxHp, Alive, _stasis, Pinned, _combatT, _pdLeft, _pdRecharge, _mag, _missileReload,
             WingTarget?.NetId ?? 0, pos, rot, st, rearm);
     }
 
     [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
-    private void NetHostState(double hp, double maxHp, bool alive, double stasis, double combat, double pdLeft, double pdRecharge, int mag, double reload,
+    private void NetHostState(double hp, double maxHp, bool alive, double stasis, bool pinned, double combat, double pdLeft, double pdRecharge, int mag, double reload,
                               int wingTarget, Vector2[] wingPos, float[] wingRot, int[] wingState, float[] wingRearm)
     {
         if (Multiplayer.GetRemoteSenderId() != 1) return;   // only the host speaks for combat state
-        Hp = hp; MaxHp = maxHp; Alive = alive; _stasis = stasis; _combatT = combat;
+        Hp = hp; MaxHp = maxHp; Alive = alive; _stasis = stasis; Pinned = pinned; _combatT = combat;
         _pdLeft = pdLeft; _pdRecharge = pdRecharge; _mag = mag; _missileReload = reload;
         WingTarget = wingTarget != 0 ? Combat.ById(wingTarget) : null;
         for (int i = 0; i < Math.Min(_wings.Count, wingPos.Length); i++)

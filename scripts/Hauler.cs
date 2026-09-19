@@ -70,6 +70,9 @@ public partial class Hauler : Node2D
     public double MaxHull => Economy.HaulerHull;
     public double RebuildIn;
     public bool WaitingForCredits;
+    private double _pinT;
+    public bool Pinned => _pinT > 0;
+    public void PinFor(double s) { if (Net.Sim) _pinT = System.Math.Max(_pinT, s); }
     public void TakeDamage(double d)
     {
         if (!Net.Sim || State is St.Destroyed or St.Away) return;
@@ -109,6 +112,7 @@ public partial class Hauler : Node2D
 
     private void Simulate(float dt)
     {
+        _pinT = System.Math.Max(0, _pinT - dt);
         switch (State)
         {
             case St.Loading:
@@ -160,7 +164,9 @@ public partial class Hauler : Node2D
     private bool Slide(float toX, float dt)
     {
         float d = toX - Position.X, dist = Mathf.Abs(d);
-        _speed = Mathf.MoveToward(_speed, Mathf.Min((float)Economy.HaulerSpeed, Mathf.Sqrt(2f * Accel * dist)), Accel * dt);
+        float top = (float)Economy.HaulerSpeed * (Pinned ? Raider.PinSpeed : 1f);    // pinned: 20% along its lane
+        _speed = Mathf.MoveToward(_speed, Mathf.Min(top, Mathf.Sqrt(2f * Accel * dist)), Accel * dt);
+        if (Pinned) _speed = Mathf.Min(_speed, top);
         Position += new Vector2(Mathf.Sign(d) * Mathf.Min(_speed * dt, dist), 0);
         if (dist >= 0.5f) return false;
         Position = new Vector2(toX, Position.Y); _speed = 0; return true;

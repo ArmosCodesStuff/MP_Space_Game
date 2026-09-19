@@ -32,6 +32,9 @@ public partial class Gatherer : Node2D
     public double RebuildIn;
     public bool WaitingForCredits;
     public string Category => Kind == GatherKind.Miner ? "MINERS" : "SALVAGERS";
+    private double _pinT;
+    public bool Pinned => _pinT > 0;
+    public void PinFor(double s) { if (Net.Sim) _pinT = System.Math.Max(_pinT, s); }
 
     public void TakeDamage(double d)
     {
@@ -112,6 +115,13 @@ public partial class Gatherer : Node2D
     private void Simulate(float dt)
     {
         if (State == St.Destroyed) { TickRebuild(dt); return; }
+        if (_pinT > 0)
+        {   // pinned by a raider: thrusting forward at 20% of its speed, unable to turn
+            _pinT -= dt;
+            Velocity = Vector2.Up.Rotated(Rotation) * (float)Speed * Raider.PinSpeed;
+            Position += Velocity * dt;
+            return;
+        }
         switch (State)
         {
             case St.Outbound:

@@ -531,6 +531,68 @@ public partial class Hub : Node2D
         _ready.Clear(); for (int i = 0; i < ids.Length && i < ready.Length; i++) _ready[ids[i]] = ready[i] != 0;
     }
 
+    // ── raiders (enemy fighters): host-simulated, replicated ──────────────────
+    public readonly List<Raider> Raiders = new();
+    private int _raiderIds = 5000;
+    private double _raiderSend;
+
+    // what a raider may go after: player ships, and the utility ships at home
+    public IEnumerable<Node2D> RaiderTargets()
+    {
+        foreach (var s in _ships.Values) if (IsInstanceValid(s) && s.Alive) yield return s;
+        if (Yard == null) yield break;
+        foreach (var g in Yard.Gatherers) if (g.State != Gatherer.St.Destroyed) yield return g;
+        if (Yard.Hauler != null && Yard.Hauler.State is not (Hauler.St.Destroyed or Hauler.St.Away)) yield return Yard.Hauler;
+    }
+
+    public Raider SpawnRaider(Vector2 at)
+    {
+        if (!Net.IsHost) return null;
+        var r = new Raider { Hub = this, NetId = ++_raiderIds, Position = at, Name = $"Raider_{_raiderIds}" };
+        Raiders.Add(r); AddChild(r);
+        if (Net.IsOnline) Rpc(nameof(NetRaiderSpawn), r.NetId, at);
+        return r;
+    }
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void NetRaiderSpawn(int id, Vector2 at)
+    {
+        var r = new Raider { Hub = this, NetId = id, Position = at, Name = $"Raider_{id}" };
+        Raiders.Add(r); AddChild(r);
+    }
+
+    public void RaiderDown(Raider r)
+    {
+        AddChild(new Explosion { Position = r.Position, Radius = 28f });
+        Raiders.Remove(r); r.QueueFree();
+        if (Net.IsHost && Net.IsOnline) Rpc(nameof(NetRaiderGone), r.NetId);
+    }
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void NetRaiderGone(int id)
+    {
+        var r = Raiders.FirstOrDefault(x => x.NetId == id);
+        if (r == null) return;
+        AddChild(new Explosion { Position = r.Position, Radius = 28f });
+        Raiders.Remove(r); r.QueueFree();
+    }
+
+    private void SendRaiders(double delta)
+    {
+        if (!Net.IsHost || !Net.IsOnline || Raiders.Count == 0) return;
+        _raiderSend -= delta; if (_raiderSend > 0) return; _raiderSend = 0.1;
+        Rpc(nameof(NetRaiders), Raiders.Select(r => r.NetId).ToArray(), Raiders.Select(r => r.Position).ToArray(),
+            Raiders.Select(r => r.Rotation).ToArray(), Raiders.Select(r => r.Hp).ToArray(),
+            Raiders.Select(r => r.TetherTo ?? new Vector2(float.NaN, float.NaN)).ToArray());
+    }
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
+    private void NetRaiders(int[] ids, Vector2[] pos, float[] rot, double[] hp, Vector2[] tether)
+    {
+        for (int i = 0; i < ids.Length; i++)
+        {
+            var r = Raiders.FirstOrDefault(x => x.NetId == ids[i]);
+            r?.SetNet(pos[i], rot[i], hp[i], float.IsNaN(tether[i].X) ? null : tether[i]);
+        }
+    }
+
     // ── shared EXP: the host awards it; every pilot in the session gets it ─────
     public void AwardPartyExp(int amount)
     {
@@ -648,6 +710,7 @@ public partial class Hub : Node2D
     // ── tick ─────────────────────────────────────────────────────────────────
     public override void _Process(double delta)
     {
+        SendRaiders(delta);
         TickMission(delta);
         if (Music.I != null)
         {

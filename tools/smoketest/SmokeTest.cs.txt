@@ -799,14 +799,64 @@ public partial class _Test : Node
             me.TakeDamage(-(me.MaxHp - me.Hp));
         }
 
+        // ── raiders (6a): the light fighter -- cruise, rboost, post, pin, laser ──
+        {
+            var me = Me; var keepPos = me.Position;
+            me.Position = new Vector2(4000, 2500); me.Velocity = Vector2.Zero; me.Rotation = 0f; await Wait(0.3);
+            var r1 = H.SpawnRaider(me.Position + new Vector2(0, 2300));
+            await Wait(0.5); var rp0 = r1.Position; await Wait(0.5);
+            float cruise = (r1.Position - rp0).Length() / 0.5f;
+            Check(r1.Target == me && Math.Abs(cruise - 100f) < 8f && !r1.Boosting, $"a light raider goes for the nearest ship at an unupgraded capital ship's pace ({cruise:0} u/s)");
+            Check(Math.Abs(Raider.BoostAt - 1600f) < 1e-3, "it boosts from 1600 u (3 s at 500%, plus its 100 u reach)");
+            for (int i = 0; i < 60 * 20 && !r1.Boosting; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            float atBoost = r1.Position.DistanceTo(me.Position); var b0 = r1.Position; await Wait(0.4);
+            float rboost = (r1.Position - b0).Length() / 0.4f;
+            Check(Math.Abs(atBoost - 1600) < 30 && Math.Abs(rboost - 500) < 30, $"at 1600 u ({atBoost:0}) it boosts to 500% ({rboost:0} u/s)");
+            for (int i = 0; i < 60 * 6 && !r1.Latched; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            float rheld = r1.Position.DistanceTo(me.Position);
+            Check(r1.Latched && rheld > 60 && rheld <= Raider.PinRange + me.HitRadius, $"it lands near its target, not on rtop: posted {rheld:0} u out");
+            var r2 = H.SpawnRaider(me.Position + new Vector2(300, 0)); var r3 = H.SpawnRaider(me.Position + new Vector2(-300, 0));
+            for (int i = 0; i < 60 * 6 && !(r2.Latched && r3.Latched); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            var bow = Vector2.Up.Rotated(me.Rotation);
+            var angs = new[] { r1, r2, r3 }.Select(r => Mathf.RadToDeg(bow.AngleTo(r.Position - me.Position))).OrderBy(a => a).ToList();
+            Check(r2.Latched && r3.Latched && Math.Abs(angs[0] + 90) < 20 && Math.Abs(angs[1]) < 20 && Math.Abs(angs[2] - 90) < 20,
+                  $"three hold posts ahead, left and right ({string.Join(", ", angs.Select(a => a.ToString("0")))} deg off the bow)");
+            Check(me.Pinned, "rheld there, they pin it");
+            float rot0 = me.Rotation;
+            Input.ParseInputEvent(new InputEventKey { Keycode = global::Godot.Key.A, PhysicalKeycode = global::Godot.Key.A, Pressed = true });
+            await Wait(1.0);
+            Input.ParseInputEvent(new InputEventKey { Keycode = global::Godot.Key.A, PhysicalKeycode = global::Godot.Key.A, Pressed = false });
+            float rspd = me.Velocity.Length(), rtop = (float)me.Stats["max_speed"];
+            Check(Mathf.Abs(Mathf.AngleDifference(rot0, me.Rotation)) < 0.01f && rspd <= rtop * 0.2f + 1f && me.SpeedAhead > 5f,
+                  $"pinned: A does not turn it, and forced thrust holds it to 20% of rtop speed ({rspd:0} of {rtop:0} u/s)");
+            double Raided() => me.DamageBySource.Where(kv => kv.Key.StartsWith("raider:")).Sum(kv => kv.Value);
+            double dm0 = Raided(); await Wait(5.0);
+            double dps = (Raided() - dm0) / 5.0;
+            Check(Math.Abs(dps - 3.0) < 0.7, $"three lights, 1 DPS each ({dps:0.00} DPS)");
+            foreach (var r in new[] { r1, r2, r3 }) r.TakeDamage(999);
+            await Wait(0.5);
+            Check(H.Raiders.Count == 0 && !Combat.Hostiles.OfType<Raider>().Any() && !me.Pinned, "shot down, they are gone -- and the pin lets go");
+            var mnr = H.Yard.Gatherers.First(g => g.Kind == GatherKind.Miner && g.State != Gatherer.St.Destroyed);
+            var r4 = H.SpawnRaider(mnr.Position + new Vector2(120, 0));
+            for (int i = 0; i < 60 * 8 && !r4.Latched; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            float mr0 = mnr.Rotation; var mp0 = mnr.Position; await Wait(0.5);
+            float rmspd = (mnr.Position - mp0).Length() / 0.5f;
+            Check(r4.Target == mnr && mnr.Pinned && Math.Abs(rmspd - (float)mnr.Speed * 0.2f) < 3f && Math.Abs(Mathf.AngleDifference(mr0, mnr.Rotation)) < 0.01f,
+                  $"a miner is pinned the same way: forward at 20%, no turning ({rmspd:0} u/s)");
+            r4.TakeDamage(999); await Wait(0.3);
+            me.Position = keepPos; me.Velocity = Vector2.Zero; me.TakeDamage(-(me.MaxHp - me.Hp));   // hand over at full hull
+        }
+
         // ── enemy fire, shields, stasis, the escape pod, re-boarding ──
         {
             var d3x = H.GetNode<TargetDummy>("TargetDummy3");
             Check(d3x.Armed && !H.GetNode<TargetDummy>("TargetDummy1").Armed, "only the bottom-right dummy is armed");
-            var sh = Me; double hp0 = sh.Hp;
+            var sh = Me;
+            double Dummy() => sh.DamageBySource.TryGetValue("?", out var v) ? v : 0;    // (hull regenerates: count the hit itself)
+            double hit0 = Dummy();
             sh.Position = d3x.Position + new Vector2(0, -120); sh.Velocity = Vector2.Zero; sh.Rotation = 0f;
-            for (int i = 0; i < 600 && sh.Hp == hp0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            Check(Math.Abs(hp0 - sh.Hp - 50) < 0.01, $"the armed dummy's missile hits a ship within 150 u for 50 ({hp0 - sh.Hp:0})");
+            for (int i = 0; i < 600 && Dummy() == hit0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(Math.Abs(Dummy() - hit0 - 50) < 0.01, $"the armed dummy's missile hits a ship within 150 u for 50 ({Dummy() - hit0:0})");
             var shield = Nodes<ShieldFlash>(sh).First();
             Check(shield.Glow(2) > 0 && shield.Glow(0) == 0, "the shield lights the side facing the dummy (astern), not the bow");
             sh.Position = d3x.Position + new Vector2(0, -1200); await Wait(6.0);
@@ -1165,6 +1215,7 @@ public partial class _Test : Node
             Check(ships.Count == 3, $"host sees 3 ships: itself and two guests ({ships.Count})");
             Check(ships.Any(s => s.Pilot == "Third"), "the second guest's identity reached the host");
             H.AwardPartyExp(40);                  // shared: every pilot in the session gets it
+            H.SpawnRaider(new Vector2(-3500, 3500));   // far off: the guests must see it
             Check(!H.AllReady, "the host cannot warp until every pilot is ready");
             H.SetMyReady(true); Me.AutopilotTo = null;
             for (int i = 0; i < 600 && !H.AllReady; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
@@ -1235,6 +1286,8 @@ public partial class _Test : Node
             Check(H.Yard.Level("salvage_rate") == 1, "the upgrade the host granted reached the guest");
             for (int i = 0; i < 480 && Character.Exp != 40; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(Character.Exp == 40, $"the host's EXP award reached this guest (exp {Character.Exp})");
+            for (int i = 0; i < 60 * 6 && H.Raiders.Count == 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(H.Raiders.Count >= 1 && Combat.Hostiles.OfType<Raider>().Any(), "the host's raider reached this guest (a hostile it can target)");
             var gm = H.Yard.Gatherers.First(x => x.Kind == GatherKind.Miner);
             Check(H.Yard.Gatherers.Any(x => x.Position.DistanceTo(Hub.BasePos) > 400) && H.Yard.Hauler.Position.Y == Hub.LaneY,
                   "guest sees the host's miner out working and the hauler on its lane");
