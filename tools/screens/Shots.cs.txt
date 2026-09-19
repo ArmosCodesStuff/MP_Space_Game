@@ -199,6 +199,25 @@ public partial class _Shots : Node
             await W(2.2); await Snap("40_warp_charging");
             await W(0.95); await Snap("41_warp_arrival");      // the camera cuts to the ship on a jump
         }
+        // hull: a damaged miner's bar; a lost salvager in the base menu, waiting to be rebuilt
+        {
+            var yd = H.Yard; var hs = H.GetNode<PlayerShip>("Ship_1");
+            var dm = yd.Gatherers.First(g => g.Kind == GatherKind.Miner);
+            var lost = yd.Gatherers.First(g => g.Kind == GatherKind.Salvager);
+            dm.TakeDamage(27); lost.TakeDamage(999);
+            hs.Position = dm.Position + new Vector2(60, 90); hs.Velocity = Vector2.Zero;
+            var zp = typeof(Hub).GetProperty("ZoomLevel"); float z0 = (float)zp.GetValue(H); zp.SetValue(H, 1.6f);
+            await W(1.2);
+            var bp = new BasePanel { Hub = H }; H.GetChildren().OfType<CanvasLayer>().First(l => l.GetChildren().Any(c => c is HullHud)).AddChild(bp);
+            await W(0.2); bp.ShowTab("SALVAGERS"); await W(0.3);
+            await Snap("45_hull_and_rebuild");
+            bp.QueueFree();
+            // and the damaged miner itself, close: the camera rides a hidden stand-in over it
+            hs.Visible = false; zp.SetValue(H, 3f);
+            for (int i = 0; i < 30; i++) { hs.Position = dm.Position; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            await Snap("46_damaged_miner");
+            hs.Visible = true; zp.SetValue(H, z0); await W(0.2);
+        }
         // the whole yard from above: the base, the belt and the wreck at 1500 u
         {
             var os = H.GetNode<PlayerShip>("Ship_1"); os.Visible = false; os.Position = Hub.BasePos + new Vector2(-600, -500); os.Velocity = Vector2.Zero;
