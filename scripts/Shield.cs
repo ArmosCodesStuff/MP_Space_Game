@@ -13,6 +13,7 @@ public partial class ShieldFlash : Node2D
     public Color Tint = new(0.55f, 0.88f, 1f);         // the owner's accent: shields are "misc lighting"
     private readonly float[] _glow = new float[4];     // front, right, back, left
     private const float Fade = 0.7f;
+    private bool _wasLit;
 
     // localAngle: the impact direction in the ship's frame, 0 = straight ahead (-y).
     public void Flash(float localAngle)
@@ -30,7 +31,10 @@ public partial class ShieldFlash : Node2D
     {
         bool any = false;
         for (int i = 0; i < 4; i++) { _glow[i] = Mathf.Max(0f, _glow[i] - (float)delta / Fade); any |= _glow[i] > 0; }
-        if (any) QueueRedraw();
+        // redraw while lit AND once more as it goes out: skipping that last redraw left
+        // the final faint frame of hexagons on screen for good
+        if (any || _wasLit) QueueRedraw();
+        _wasLit = any;
     }
 
     public override void _Draw()
