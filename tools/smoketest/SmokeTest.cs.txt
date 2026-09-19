@@ -900,6 +900,19 @@ public partial class _Test : Node
         GetTree().ChangeSceneToFile("res://Hub.tscn"); await Wait(0.4);
         Check(H != null && Count<PlayerShip>() == 1, "hub re-enters cleanly");
 
+        // ── sound: the music 35% quieter; effects by the camera's distance and zoom ──
+        Check(Math.Abs(Music.Master - 0.65f) < 1e-6, "the music plays 35% quieter than it started");
+        Check(Math.Abs(Sfx.VolumeAt(0, 1)) < 1e-4 && Sfx.VolumeAt(1000, 1) < Sfx.VolumeAt(0, 1) - 3
+              && Sfx.VolumeAt(0, 0.5f) < Sfx.VolumeAt(0, 1) - 3 && float.IsNegativeInfinity(Sfx.VolumeAt(6000, 1)),
+              "effects: 0 dB at the view's centre, quieter with distance and when zoomed out, silent far away");
+        Check(new[] { "laser_light", "laser_boss", "laser_hit", "missile_whoosh", "impact_thunk" }.All(n => GD.Load<AudioStream>($"res://sfx/{n}.wav") != null),
+              "all five effects load");
+        int P(string n) => Sfx.Played.TryGetValue(n, out var v) ? v : 0;
+        GD.Print($"  sounds played: light laser {P("laser_light")}, boss laser {P("laser_boss")}, hit {P("laser_hit")}, whoosh {P("missile_whoosh")}, thunk {P("impact_thunk")}");
+        Check(P("laser_light") > 0 && P("laser_hit") > 0, "lasers buzz where they fire and crackle where they hit");
+        Check(P("laser_boss") > 0, "the boss's lasers have their own, deeper buzz");
+        Check(P("missile_whoosh") > 0 && P("impact_thunk") > 0, "missiles and torpedoes whoosh at launch and thunk when they hit");
+
         // leaks: leaving and re-entering the hub must not grow the orphan-node or object
         // counts (the first cycle warms caches; compare the next two against it)
         async Task Cycle()

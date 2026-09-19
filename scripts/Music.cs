@@ -18,6 +18,7 @@ public partial class Music : Node
     public static bool CombatZone;                     // set by an instanced combat system
     public const float FadePerSecond = 0.7f;           // about 1.5 s for a full cross-fade
     public const float AmbientTrim = 0.45f;            // the ambient loop is meant to sit far back
+    public const float Master = 0.65f;                 // the whole score, 35% quieter than it started
 
     private AudioStreamPlayer _amb, _cmb;
     private AudioStreamOggVorbis _ambS, _cmbS;
@@ -59,8 +60,8 @@ public partial class Music : Node
         AmbientLevel = Mathf.MoveToward(AmbientLevel, a, step);
         CombatLevel = Mathf.MoveToward(CombatLevel, c, step);
         float vol = Settings.MusicOn ? Settings.MusicVolume : 0f;       // the Esc menu's MUSIC ON/OFF
-        _amb.VolumeDb = Db(AmbientLevel * AmbientTrim * vol);
-        _cmb.VolumeDb = Db(CombatLevel * vol);
+        _amb.VolumeDb = Db(AmbientLevel * AmbientTrim * vol * Master);
+        _cmb.VolumeDb = Db(CombatLevel * vol * Master);
     }
 
     // Stop both loops. Call this a moment BEFORE quitting: the mixer lets go of its

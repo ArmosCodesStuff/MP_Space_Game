@@ -73,8 +73,9 @@ public static class Combat
     }
 
     // Set by the live world so combat can draw without knowing what world it is in.
-    public static System.Action<Vector2, Vector2, Color> OnFlash;
-    public static void Flash(Vector2 a, Vector2 b, Color c) => OnFlash?.Invoke(a, b, c);
+    // A laser shot's flash (and its sound). `boss`: a boss's weapon -- its deeper buzz.
+    public static System.Action<Vector2, Vector2, Color, bool> OnFlash;
+    public static void Flash(Vector2 a, Vector2 b, Color c, bool boss = false) => OnFlash?.Invoke(a, b, c, boss);
 
     // Set by the live world: launches a projectile there (and, on a host, tells
     // guests). Unguided torpedoes pass targetId 0; the missile passes its target and

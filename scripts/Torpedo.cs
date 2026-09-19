@@ -52,6 +52,7 @@ public partial class Torpedo : Node2D, IHittable
 
     public override void _Ready()
     {
+        Sfx.Missile(GlobalPosition);                        // self-propelled: a soft whoosh at launch
         ZIndex = 6; Rotation = Dir.Angle() + Mathf.Pi / 2f;
         if (HostileFire && NetId != 0) Combat.Hostiles.Add(this);
     }
@@ -102,7 +103,7 @@ public partial class Torpedo : Node2D, IHittable
         QueueRedraw();
     }
 
-    private void Detonate() { _spent = true; _burst = 0; }
+    private void Detonate() { _spent = true; _burst = 0; Sfx.Impact(GlobalPosition); }
 
     public override void _Draw()
     {
