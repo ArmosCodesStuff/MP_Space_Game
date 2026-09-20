@@ -1,8 +1,8 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-20 02:51 at git commit 1227754: typecheck clean, smoke test 3/3 passes
-//   (394 checks, 0 compiler warnings, 0 analyser findings), 65-frame UI sweep complete, 0 lint.
-// 56 files, 9828 lines. Code only: sprites, sounds and docs are in the zip.
+// Taken 2026-09-20 03:17 at git commit 75055f4: typecheck clean, smoke test 3/3 passes
+//   (397 checks, 0 compiler warnings, 0 analyser findings), 65-frame UI sweep complete, 0 lint.
+// 56 files, 9872 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -19,7 +19,7 @@
 //   scripts/Autopilot.cs                            40 lines   sha256 807538219f53
 //   scripts/BaseDefense.cs                          55 lines   sha256 1d8daa0fbd67
 //   scripts/BasePanel.cs                           118 lines   sha256 1b56ed68d885
-//   scripts/Boss.cs                                186 lines   sha256 f74fb606fe8d
+//   scripts/Boss.cs                                205 lines   sha256 f99f980993e3
 //   scripts/BossBar.cs                              74 lines   sha256 5758de5d8e72
 //   scripts/Character.cs                           175 lines   sha256 27d1b45e6c39
 //   scripts/CharacterCreator.cs                    211 lines   sha256 136099a8d1c7
@@ -42,12 +42,12 @@
 //   scripts/Plume.cs                                25 lines   sha256 cdbeb9b8fc58
 //   scripts/Progression.cs                          86 lines   sha256 c9a5dc290c4d
 //   scripts/Radar.cs                               129 lines   sha256 189719fcc94f
-//   scripts/Raider.cs                              279 lines   sha256 789f9221058d
+//   scripts/Raider.cs                              288 lines   sha256 669fda8aafe0
 //   scripts/SessionMenu.cs                         120 lines   sha256 ecdca865f3ee
 //   scripts/Settings.cs                             58 lines   sha256 80100257eda5
 //   scripts/Sfx.cs                                  65 lines   sha256 4a51ee11de9a
 //   scripts/Shield.cs                               71 lines   sha256 99c7fa4a2a8e
-//   scripts/ShipClasses.cs                         510 lines   sha256 4248e920696f
+//   scripts/ShipClasses.cs                         509 lines   sha256 0b56a0779739
 //   scripts/Stats.cs                               159 lines   sha256 003a2581b786
 //   scripts/StatsWindow.cs                         198 lines   sha256 8b5c9f76adc7
 //   scripts/TargetDummy.cs                         132 lines   sha256 93fe3de91ba6
@@ -63,7 +63,7 @@
 //   tools/analyse/xref.py                           19 lines   sha256 9359eb94c161
 //   tools/screens/Shots.cs.txt                     437 lines   sha256 bb52f9c6f5e0
 //   tools/screens/run.sh                            42 lines   sha256 73a5b3c63476
-//   tools/smoketest/SmokeTest.cs.txt              1623 lines   sha256 7b860a49656f
+//   tools/smoketest/SmokeTest.cs.txt              1640 lines   sha256 7e5de52a98d2
 //   tools/smoketest/run.sh                          57 lines   sha256 568b677787fd
 //==============================================================================
 
@@ -656,7 +656,7 @@ public partial class BasePanel : PanelContainer
 
 //==============================================================================
 // FILE: scripts/Boss.cs
-// 186 lines   sha256 f74fb606fe8d
+// 205 lines   sha256 f99f980993e3
 //==============================================================================
 using Godot;
 using System.Linq;
@@ -693,7 +693,12 @@ public partial class Boss : Node2D, IHittable
         return p.DistanceTo(Position + fwd * t) <= HalfWidth + pad;
     }
 
-    public const double BeamWindup = 2.0, WaveWindup = 1.8;
+    public const double BeamWindup = 6.0, WaveWindup = 1.8;
+    // As the beam charges, the boss launches two light ESCORTS at its target -- one 45 degrees
+    // to port, one to starboard -- boosting all the way in to pin the pilot in the beam. Fragile
+    // on purpose (point defence, 1 DPS a turret, must be able to kill them inside the charge).
+    public const float EscortAngle = 45f;
+    public const double EscortHull = 3;           // 3 s at one PD turret (1 DPS): killable inside the charge
     public const float BeamLength = 1800f, BeamWidth = 70f, WaveRadius = 340f;
     public const double GunDamage = 3.6, GunEvery = 1.2;                       // 3 DPS
     public const double BeamEvery = 30, BeamLive = 3.0, BeamTick = 0.25, BeamDamage = 50;
@@ -704,6 +709,19 @@ public partial class Boss : Node2D, IHittable
     private (Vector2 a, Vector2 b)? _pendingCharge; private double _chargeT; private Vector2? _dashTo;
     public int Volleys { get; private set; }                                   // for the smoke test
     public bool Charging => _dashTo.HasValue;
+    // the beam's escorts: port and starboard of the nose, straight at the pilot
+    public void LaunchEscorts(Node2D target)
+    {
+        if (!Net.Sim || target == null || GetParent() is not Hub hub) return;
+        var nose = Vector2.Up.Rotated(Rotation);
+        foreach (float side in new[] { -EscortAngle, EscortAngle })
+        {
+            var dir = nose.Rotated(Mathf.DegToRad(side));
+            var r = hub.SpawnRaider(Position + dir * (HalfWidth + 60f), RaiderKind.Light, 0, Missions.S(Missions.Level));
+            r?.Escort(target, dir, BeamWindup, EscortHull * Missions.S(Missions.Level));
+        }
+    }
+
     private (Vector2 a, Vector2 b)? _pendingBeam; private double _beamT;
     private Vector2? _pendingWave; private double _waveT;
     private Vector2 _netPos; private float _netRot; private bool _hasNet;
@@ -713,7 +731,7 @@ public partial class Boss : Node2D, IHittable
         int party = System.Math.Max(1, Hub.PartySize);
         HullMult = Missions.HullMult(Missions.Level, party); DamageMult = Missions.DamageMult(Missions.Level, party); Hp = MaxHp;
         Name = "Boss";
-        var tex = GD.Load<Texture2D>("res://boss_silver_lancer.png");
+        var tex = GD.Load<Texture2D>("res://boss_raider.png");     // raider red, a white skull on its centre
         AddChild(new Sprite2D { Texture = tex, Scale = Vector2.One * (Length / tex.GetHeight()) });
         ZIndex = 4;
         Combat.Hostiles.Add(this);
@@ -779,6 +797,7 @@ public partial class Boss : Node2D, IHittable
             var a = nose; var b = a + (t.Position - a).Normalized() * BeamLength;
             _pendingBeam = (a, b); _beamT = BeamWindup;
             Tele(true, a, b, BeamWidth, BeamWindup);
+            LaunchEscorts(t);
         }
         if (_pendingBeam is { } beam && _beamLive < 0 && (_beamT -= delta) <= 0) { _beamLive = BeamLive; _beamTickT = 0; }
         if (_pendingBeam is { } live && _beamLive >= 0)
@@ -5387,7 +5406,7 @@ public partial class Radar : Control
 
 //==============================================================================
 // FILE: scripts/Raider.cs
-// 279 lines   sha256 789f9221058d
+// 288 lines   sha256 669fda8aafe0
 //==============================================================================
 using Godot;
 using System.Linq;
@@ -5459,6 +5478,14 @@ public partial class Raider : Node2D, IHittable
     static readonly float[] Posts = { 0f, -Mathf.Pi / 2f, Mathf.Pi / 2f };               // ahead, left, right
 
     public Node2D Target { get; private set; }
+    // An ESCORT (launched by a boss): its target is set, its boost lasts until it is posted
+    // (or `boostFor` runs out), and it is fragile.
+    public bool IsEscort { get; private set; }
+    public void Escort(Node2D target, Vector2 launchDir, double boostFor, double hull)
+    {
+        Target = target; IsEscort = true; _boostUsed = true; _boostLeft = boostFor; Hp = hull;
+        Rotation = launchDir.Angle() + Mathf.Pi / 2f;
+    }
     public bool Latched { get; private set; }
     public bool Boosting => _boostLeft > 0;
     public float Speed { get; private set; }
@@ -5568,6 +5595,7 @@ public partial class Raider : Node2D, IHittable
 
         if (!_boostUsed && toTarget <= BoostAt) { _boostUsed = true; _boostLeft = BoostTime; }
         _boostLeft = System.Math.Max(0, _boostLeft - delta);
+        if (IsEscort && Latched) _boostLeft = 0;                          // posted: the long boost is over
         float top = Boosting ? Cruise * BoostMult : Cruise;
         float d = Position.DistanceTo(post);
         Speed = Mathf.Min(top, d * 6f);                                       // ease onto the post
@@ -6005,7 +6033,7 @@ public partial class ShieldFlash : Node2D
 
 //==============================================================================
 // FILE: scripts/ShipClasses.cs
-// 510 lines   sha256 4248e920696f
+// 509 lines   sha256 0b56a0779739
 //==============================================================================
 using System.Linq;
 using Godot;
@@ -6260,7 +6288,6 @@ public partial class Wing : Node2D
         _lastSlot = slot; _haveSlot = true;
         return v;
     }
-    public double BackingFor => _b == BSt.Backing ? _backT : 0;
     public const float CrawlSpeed = 0.25f;     // bombers keep closing at this fraction of top speed while they launch
     public bool Launching => _b == BSt.Launch;
     private BSt _b = BSt.Docked;
@@ -8487,7 +8514,7 @@ ls /tmp/shots
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 1623 lines   sha256 7b860a49656f
+// 1640 lines   sha256 7e5de52a98d2
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -9709,6 +9736,15 @@ public partial class _Test : Node
             Telegraph beam = null;
             for (int i = 0; i < 60 * 14 && beam == null; i++) { beam = Nodes<Telegraph>().FirstOrDefault(t => t.Line); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
             Check(beam != null && boss.TelegraphsPending > 0, "the death beam is telegraphed: a red line before it fires");
+            // the beam charges 6 s, and launches two fragile escorts at the pilot: 45 degrees to port and starboard
+            var escorts = H.Raiders.Where(r => r.IsEscort).ToList();
+            var bnose = Vector2.Up.Rotated(boss.Rotation);
+            var escAng = escorts.Select(r => Mathf.RadToDeg(bnose.AngleTo(r.Position - boss.Position))).OrderBy(x => x).ToList();
+            Check(Math.Abs(beam.Duration - Boss.BeamWindup) < 1e-6 && Boss.BeamWindup == 6 && escorts.Count == 2
+                  && Math.Abs(escAng[0] + 45) < 12 && Math.Abs(escAng[1] - 45) < 12
+                  && escorts.All(r => r.Target == me2 && r.Boosting && r.Hp > 0 && r.Hp <= Boss.EscortHull * Missions.S(Missions.Level) + 1e-6),   // (point defence may already be on them)
+                  $"the beam charges 6 s; two escorts launch at the pilot, 45 degrees to port and starboard ({string.Join(", ", escAng.Select(x => x.ToString("0")))}), boosting, fragile"
+);
             int down0 = Torpedo.Intercepted;
             for (int i = 0; i < 60 * 10 && Torpedo.Intercepted == down0; i++)
             {
@@ -9716,6 +9752,7 @@ public partial class _Test : Node
                 await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             }
             Check(Torpedo.Intercepted > down0, "point defence shoots the boss's missiles down");
+            Check(!H.Raiders.Any(r => r.IsEscort), "point defence, switched on, kills the beam's escorts");
             var aMissile = Nodes<Torpedo>().FirstOrDefault(t => t.HostileFire);
             Check(Turret.PdPriority(boss) == 2 && (aMissile == null || Turret.PdPriority(aMissile) == 0), "point defence takes missiles before anything else");
             var tiny = new TinyTarget();
@@ -9723,6 +9760,13 @@ public partial class _Test : Node
             Telegraph ring = null;
             for (int i = 0; i < 60 * 18 && ring == null; i++) { ring = Nodes<Telegraph>().FirstOrDefault(t => !t.Line); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
             Check(ring != null && ring.Radius == Boss.WaveRadius, "the shockwave is telegraphed: a red ring before it lands");
+            // without point defence, a pair of escorts reaches the pilot and pins it inside the charge
+            for (int i = 0; i < 60 * 8 && Me.PdActive; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            boss.LaunchEscorts(me2);
+            bool pinnedInTime = false;
+            for (int i = 0; i < (int)(60 * Boss.BeamWindup) && !pinnedInTime; i++) { pinnedInTime = me2.Pinned; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            Check(pinnedInTime, "left alone (no point defence), the escorts pin the pilot before the charge ends");
+            foreach (var r in H.Raiders.Where(r => r.IsEscort).ToList()) r.TakeDamage(999);
             for (int i = 0; i < 60 * 25 && (tCharge < 0 || boss.Charging || tVolley < 0); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             await Wait(1.0);
             GD.Print($"  boss rhythm: beam {tBeam:0.0} s, trident {tVolley:0.0} s, charge {tCharge:0.0} s; trident of {trident}, spread {Mathf.RadToDeg(spread):0} deg");
