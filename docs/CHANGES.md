@@ -44,7 +44,14 @@ a single-player run and a host with two guests. Unlike earlier releases, this on
 `tools/screens/run.sh` renders the select screen, the creator, a fresh spawn under the base, both
 classes in the hub, the K window, a bomber strike, and turret close-ups on a virtual display; layout
 faults have been fixed from those frames more than once.
-Still unconfirmed: how it looks on the developer's own machine and GPU.
+
+**As of 2026-09-20 the whole harness also runs natively on the developer's Windows machine** (see
+Unreleased → *The harnesses run on Windows*): typecheck 0 errors, build 0 warnings, analysers 0
+findings, xref 0 unused, smoke **417 pass / 6 of 6 runs** (the 2 short of 419 assert the sandbox's
+missing router and internet), sweep **67 frames, 0 lint** on the real GPU with the project's own
+Forward+ renderer. So "how it looks on the developer's own GPU" is no longer unconfirmed for the
+swept states. What remains unconfirmed is how it feels in a hand-played session — nothing here
+replaces someone actually flying it.
 
 ### What the game is right now
 
@@ -106,14 +113,23 @@ travel, and no economy beyond an idle ore/salvage counter.
 
 ### How to verify a change
 
-1. **Typecheck:** `cd typecheck && sh typecheck.sh` → must print `0 errors.` and exit 0. Needs the
-   .NET 8 SDK and `typecheck/GodotSharp.dll` (gitignored; the developer supplies it from
+**Every harness now has a Windows PowerShell port**, so the project can be verified on the
+developer's own machine with no WSL — see `docs/README.md` for the exact commands and
+`DESIGN.md` for what differs. The Linux originals are unchanged and still the sandbox path.
+
+1. **Typecheck:** `cd typecheck && sh typecheck.sh` (Windows: `typecheck\typecheck.ps1`) → must
+   print `0 errors.` and exit 0. Needs the .NET 8 SDK and `typecheck/GodotSharp.dll` (gitignored;
+   on Windows it is already in the NuGet cache at
    `C:\Users\<you>\.nuget\packages\godotsharp\4.7.2\lib\net8.0\`). Exits 2 without an SDK.
 2. **Smoke test:** `sh tools/smoketest/run.sh <path to Godot_v4.7.2-stable_mono_linux.x86_64>`
    → must end `SMOKE TEST PASSED`. Real engine, headless, solo at a fixed 60 fps plus a host and a
    guest over localhost, in its own `user://`. Add checks to `tools/smoketest/SmokeTest.cs.txt`.
+   Windows: `tools\smoketest\run.ps1 <godot win64 exe>`, and the bar there is **417 pass, 6/6 runs**,
+   not `SMOKE TEST PASSED` — two checks assert the sandbox's lack of a router and internet and
+   cannot pass on a real network. See DESIGN.md → Smoke test before touching them.
 3. **Look at it:** `sh tools/screens/run.sh <same binary>` → frames in `/tmp/shots/`. Do this for
-   anything visual; the smoke test cannot see.
+   anything visual; the smoke test cannot see. Windows: `tools\screens\run.ps1 <godot win64 exe>`
+   → `%TEMP%\shots`, no virtual display needed, real GPU and the project's own renderer.
 4. **Prove new checks can fail:** break the feature on purpose, watch the check fail, restore.
    Probed so far: C-key stacking, salvo/staggered equal rate, Tab-nearest, torpedo no-tracking.
    Run it **three times** before calling it done; one run hid a flaky check this release.
@@ -180,6 +196,47 @@ reachable, which is fine: both harnesses build from the `nupkgs` folder that shi
 ---
 
 ## Unreleased
+
+### The harnesses run on Windows
+
+**Checked:** every harness run on Windows against the numbers the sandbox produces — typecheck
+**0 errors** (real `GodotSharp.dll`), `dotnet build` **0 warnings 0 errors**, analysers **0 findings**,
+cross-reference **UNUSED ANYWHERE: 0**, smoke test **417 pass, 6/6 runs finished**, sweep **67 frames,
+SWEEP DONE, 0 LINT**. Frames looked at. No game code changed.
+
+#### Added
+
+- **PowerShell ports of all four shell harnesses**, so the project can be verified on Windows with no
+  WSL: `typecheck\typecheck.ps1`, `tools\analyse\run.ps1`, `tools\smoketest\run.ps1`,
+  `tools\screens\run.ps1`. `tools/analyse/xref.py` already ran under Windows `python` unchanged.
+  The originals are untouched and remain the Linux path.
+- The runners take the plain `Godot_v4.7.2-stable_mono_win64.exe` and **swap themselves to the
+  `_console.exe`** beside it, refusing to run if it is absent: the GUI binary writes nothing to
+  stdout, so a headless run's every check would be invisible.
+- The Windows analyser **builds in place instead of reusing the smoke test's offline build folder** —
+  NuGet is reachable on Windows, so the "run the smoke test first" prerequisite does not apply. It
+  refuses to run if a `.editorconfig` already exists at the root, and always removes its own.
+- The Windows sweep **needs no virtual display** and renders on the real GPU with the project's own
+  Forward+ renderer. `-Compat` forces the Linux `opengl3` / `gl_compatibility` path for comparison.
+
+#### Known broken
+
+- **Two of the 419 smoke checks cannot pass on Windows** — `no UPnP router…` and `no router or
+  internet here…`. Both hard-require `Net.Reach.LanOnly`, i.e. the sandbox's absence of a router and
+  of internet; on a real network reachability resolves otherwise and they fail by construction. They
+  are not regressions and the behaviour they cover is real. **The Windows bar is 417, the Linux bar is
+  419.** Making them branch on the environment is not done.
+
+#### Changed
+
+- `project.godot` **adopted as the Godot editor re-saves it**. The editor drops every setting equal to
+  an engine default and keeps no comments, so seven lines and two comments went on the first Windows
+  open. All seven confirmed equal to the 4.7.2 defaults by asking the engine, so behaviour is
+  unchanged; the two comments' reasoning now lives in `DESIGN.md`, where the editor cannot delete it.
+- `.gitignore` now covers `*.import` and `*.uid` — Godot import output, regenerated on the first open
+  after extracting. Checked first that no `.tscn` references a generated `uid://`.
+
+### Earlier in Unreleased
 
 ### Chunk G: the equipment menu
 

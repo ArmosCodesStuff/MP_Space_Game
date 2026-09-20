@@ -32,6 +32,26 @@ starts the session should attach the project zip (~6 MB with history, 35 scripts
 
 ## Checking your work
 
+**On Windows**, every harness has a PowerShell port that needs no WSL. They are the same checks,
+validated against the numbers the Linux originals produce:
+
+    powershell -ExecutionPolicy Bypass -File typecheck\typecheck.ps1          # 0 errors.
+    dotnet build                                                              # 0 Warning(s), 0 Error(s)
+    powershell -ExecutionPolicy Bypass -File tools\analyse\run.ps1            # ANALYSERS: 0 findings
+    python tools\analyse\xref.py                                              # UNUSED ANYWHERE: 0
+    powershell -ExecutionPolicy Bypass -File tools\smoketest\run.ps1 <godot win64 exe>
+    powershell -ExecutionPolicy Bypass -File tools\screens\run.ps1  <godot win64 exe>
+
+Pass the plain `Godot_v4.7.2-stable_mono_win64.exe`; the runners swap themselves to the
+`_console.exe` beside it, because the GUI binary prints nothing. The smoke test's bar on Windows is
+**417 pass, 6/6 runs** — see DESIGN.md → Smoke test for why two checks cannot pass off a sandbox.
+The sweep's bar is **67 frames, SWEEP DONE, 0 LINT**, into `%TEMP%\shots`.
+
+The Windows analyser does *not* need the smoke test run first: NuGet is reachable here, so it
+restores and builds in place rather than reusing the smoke test's offline build folder.
+
+**On Linux** (the sandbox the project is developed in), the originals:
+
     cd typecheck && sh typecheck.sh
 
 It prints its mode on every run. **`REAL GodotSharp.dll` is the only one worth trusting.** If it

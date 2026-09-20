@@ -517,6 +517,44 @@ That makes the check identical to what Godot compiles -- same reference assembly
 an invented or misspelled API cannot pass. The stub remains only as a fallback. The one gap that
 survives is Godot's source generators, which synthesise things like `MethodName.Foo`; this codebase
 uses `nameof()` instead, so nothing depends on them.
+
+## project.godot belongs to the editor, not to us
+
+`project.godot` was hand-written in the sandbox, where there is no editor: settings were listed
+explicitly and carried comments explaining the choice. The first time the project was opened in the
+Godot editor on Windows, the editor re-saved the file in its own canonical form — added its standard
+header, reordered the sections, dropped every comment, and **deleted every setting whose value
+already equalled the engine default**. Seven lines went:
+
+| Dropped | We had | Engine default (4.7.2, confirmed) |
+|---|---|---|
+| `display/window/vsync/vsync_mode` | 1 | 1 |
+| `display/window/size/resizable` | true | true |
+| `gui/…/default_font_subpixel_positioning` | 1 | 1 |
+| `gui/…/default_font_antialiasing` | 1 | 1 |
+| `rendering/renderer/rendering_method` | forward_plus | forward_plus |
+| `rendering/renderer/rendering_method.mobile` | mobile | mobile |
+| `rendering/textures/…/default_texture_filter` | 1 | 1 |
+
+Confirmed by asking the engine, not by reading docs: a throwaway project plus
+`godot --headless --script` printing `ProjectSettings.get_setting(...)` for each key. All seven
+matched. **The behaviour is identical either way** — the editor's version was adopted as the
+baseline, because re-adding the lines only makes the editor strip them again on its next save.
+
+Two things were lost that were worth keeping, so they live here now:
+
+- **`Net` is an autoload because it owns the session and must exist before any world does.**
+- **MSDF fonts (`default_font_multichannel_signed_distance_field`) keep glyphs sharp at any camera
+  zoom; `generate_mipmaps` does the same when zoomed out.** Both survived the rewrite (they are not
+  defaults) — only the comments explaining them were lost.
+
+The seven dropped settings were all deliberate choices that happen to match today's defaults. If a
+future Godot version changes one, this table is the record of what was intended.
+
+*Rule: never treat a `project.godot` diff after an editor session as tampering. Check whether the
+removed lines equal the engine defaults first — ask the engine — and keep the reasoning in this file,
+where the editor cannot delete it.*
+
 ## Traps that have already cost time
 
 Each of these compiled clean and was wrong at runtime. The smoke test covers all of them.
@@ -593,6 +631,17 @@ Each of these compiled clean and was wrong at runtime. The smoke test covers all
   finding — find out whose fault it is before touching either side.
 - **Carried-over code carries old assumptions.** The menu kept Space Fleet Idle's title and a
   CONTINUE button for a save file Warships never writes.
+- **PowerShell variable names are case-insensitive.** `$F` (the output filter regex) and a
+  `foreach ($f in ...)` loop are the *same variable*; the loop silently overwrote the regex with a
+  file path and the smoke test died parsing `C:\Users\...` as a pattern. Nothing warns.
+- **PowerShell's `-match` is case-INSENSITIVE; `grep -E` is not.** Ported filters must use `-cmatch`
+  / `-cnotmatch`. A case-blind `FAIL` also matches every run's own `fails=0` summary line, which
+  turned a clean 417-pass run into "11 problems". A ported check that counts things must be
+  re-validated against the count the original produced.
+- **The plain `Godot_...win64.exe` writes nothing to stdout.** It is a GUI-subsystem binary, so
+  every `GD.Print` from a headless run vanishes and the harness sees an empty log. Use the
+  `_console.exe` beside it; both Windows runners swap to it automatically and refuse to run if it
+  is missing.
 
 ## Smoke test
 
@@ -607,6 +656,20 @@ Two lessons from building it: a check that samples short-lived state once (a 0.1
 coin flip, so watch across frames; and order checks so none runs after the other process has ended
 the session.
 
+`tools/smoketest/run.ps1` is the same harness for Windows, driving the win64 mono build. It runs the
+whole suite: **417 pass, 6/6 runs finished**, against the 419 the sandbox reports. The two that
+cannot pass here are not regressions — they assert the *sandbox's* network, and say so in their own
+comments (`// no router in the sandbox`, `// no router, no internet in the sandbox`):
+
+- `no UPnP router: LAN hosting stands, and the status explains the fix`
+- `no router or internet here: network only, nothing to reveal`
+
+Both hard-require `Net.Reach.LanOnly`. On a real machine behind a real router with real internet,
+reachability resolves to something else and the assertion fails by construction. **Windows is
+therefore a 417/417 bar, not 419/419**, until those two checks learn to branch on the environment.
+Do not "fix" them by relaxing the assertion: what they verify — that a player with no route out is
+told so, and offered the port-forward and Tailscale routes — is real behaviour worth keeping.
+
 ## Screenshots
 
 `tools/screens/run.sh` renders **41 frames** covering every screen state, and runs a **UI lint**
@@ -618,6 +681,18 @@ display (Xvfb, Mesa software GL, compatibility renderer): the select screen, the
 classes in the hub, the K window and a bomber strike. The smoke test cannot see, and these frames
 have caught what it could not: a hull bar drawn over the carrier's nose, and previews too small
 to read.
+
+`tools/screens/run.ps1` is the Windows equivalent: **67 frames, SWEEP DONE, 0 LINT**, matching the
+sandbox. It needs no virtual display, so the whole Xvfb dance — and the stale `/tmp/.X99-lock` trap
+— does not apply. It renders on the real GPU with the project's own Forward+/Vulkan renderer rather
+than Mesa software GL, which is the point of running it here: these frames are what the developer
+actually sees. `-Compat` forces the Linux path (`opengl3` / `gl_compatibility`) when comparing runs
+side by side. `Shots.cs.txt` hard-codes `/tmp/shots/`; the Windows runner rewrites that in its
+*copy* to `%TEMP%\shots` and refuses to run if the string ever stops being there.
+
+Note that Windows display scaling can enlarge the frames (1600x900 requested, 2560x1440 rendered at
+160%). The lint is geometry-based and still passed at 0, so this reads as a stronger result, not a
+weaker one — but frames from the two platforms are not pixel-comparable.
 
 ## Next
 

@@ -1,3 +1,11 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+
 config_version=5
 
 [application]
@@ -8,36 +16,27 @@ config/features=PackedStringArray("4.7", "C#", "Forward Plus")
 
 [autoload]
 
-; Net owns the session and must exist before any world does.
 Net="*res://scripts/Net.cs"
 Music="*res://scripts/Music.cs"
 
 [display]
 
-window/vsync/vsync_mode=1
 window/size/viewport_width=1920
 window/size/viewport_height=1080
-window/size/resizable=true
 window/size/mode=3
 window/size/borderless=true
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 
-[gui]
-
-; MSDF keeps glyphs sharp at any camera zoom; mipmaps do the same when zoomed out.
-theme/default_font_multichannel_signed_distance_field=true
-theme/default_font_generate_mipmaps=true
-theme/default_font_subpixel_positioning=1
-theme/default_font_antialiasing=1
-
 [dotnet]
 
 project/assembly_name="Warships"
 
+[gui]
+
+theme/default_font_multichannel_signed_distance_field=true
+theme/default_font_generate_mipmaps=true
+
 [rendering]
 
-renderer/rendering_method="forward_plus"
-renderer/rendering_method.mobile="mobile"
-textures/canvas_textures/default_texture_filter=1
 environment/defaults/default_clear_color=Color(0, 0, 0, 1)
