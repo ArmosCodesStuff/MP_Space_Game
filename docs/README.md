@@ -12,7 +12,8 @@ If you are a fresh session with no history of this project, read in this order:
 3. This file for the mechanics of working on it.
 
 **You also need the code.** These documents describe the project; they do not replace it. Whoever
-starts the session should attach the project zip (~6 MB with history, 35 scripts, ~5700 lines).
+starts the session should attach the project zip (~6 MB with history, 46 scripts; 67 code files,
+11628 lines in `version/CODE_SNAPSHOT.txt`).
 
 | File | For |
 |---|---|
@@ -67,6 +68,7 @@ validated against the numbers the Linux originals produce:
     python tools\analyse\xref.py                                              # UNUSED ANYWHERE: 0
     powershell -ExecutionPolicy Bypass -File tools\smoketest\run.ps1
     powershell -ExecutionPolicy Bypass -File tools\screens\run.ps1
+    powershell -ExecutionPolicy Bypass -File tools\snapshot.ps1              # rebuild version\CODE_SNAPSHOT.txt
 
 `-Godot <path>` is optional on both runners; without it they resolve the engine themselves. If you
 do pass one, pass the plain `Godot_v4.7.2-stable_mono_win64.exe` -- they swap themselves to the

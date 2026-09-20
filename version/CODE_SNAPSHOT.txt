@@ -1,9 +1,9 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-20 06:37 at git commit 13447fd: typecheck clean, dotnet build 0 warnings,
-//   0 analyser findings, 0 unused members; smoke test 3/3 runs at 432 checks on Windows
-//   (434 in a sandbox with no router and no internet); 67-frame UI sweep complete, 0 lint.
-// 66 files, 11493 lines. Code only: sprites, sounds and docs are in the zip.
+// Taken 2026-09-20 15:01 at git commit 643c29f: typecheck clean, dotnet build 0 warnings,
+//   0 analyser findings, 0 unused members; smoke test 3/3 runs at 435 checks on Windows
+//   (437 in a sandbox with no router and no internet); 67-frame UI sweep complete, 0 lint.
+// 67 files, 11628 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -21,7 +21,7 @@
 //   scripts/Autopilot.cs                            40 lines   sha256 807538219f53
 //   scripts/BaseDefense.cs                          55 lines   sha256 1d8daa0fbd67
 //   scripts/BasePanel.cs                           119 lines   sha256 9115697ad5aa
-//   scripts/Boss.cs                                285 lines   sha256 6747d73030b2
+//   scripts/Boss.cs                                300 lines   sha256 4029a62f29a0
 //   scripts/BossBar.cs                              85 lines   sha256 679ea3b792b9
 //   scripts/Character.cs                           220 lines   sha256 9221d9084893
 //   scripts/CharacterCreator.cs                    218 lines   sha256 d1c4d4f7012f
@@ -75,7 +75,8 @@
 //   tools/screens/Shots.cs.txt                     457 lines   sha256 8355cd3b6808
 //   tools/smoketest/run.ps1                        151 lines   sha256 4eed3fc767ae
 //   tools/smoketest/run.sh                          57 lines   sha256 568b677787fd
-//   tools/smoketest/SmokeTest.cs.txt              1898 lines   sha256 9c09a4d47f4c
+//   tools/smoketest/SmokeTest.cs.txt              1923 lines   sha256 20d385908fdf
+//   tools/snapshot.ps1                              95 lines   sha256 d6d85575ba26
 //==============================================================================
 
 //==============================================================================
@@ -780,7 +781,7 @@ public partial class BasePanel : PanelContainer
 
 //==============================================================================
 // FILE: scripts/Boss.cs
-// 285 lines   sha256 6747d73030b2
+// 300 lines   sha256 4029a62f29a0
 //==============================================================================
 using Godot;
 using System.Linq;
@@ -871,6 +872,10 @@ public partial class Boss : Node2D, IHittable
     }
 
     private double _beamT; private bool _beamCharging;
+    // Set the first frame the target is webbed: the boss stops turning and the aim is final.
+    // Cleared when a beam starts, never carried from the last one.
+    private bool _beamAimLocked;
+    public bool BeamAimLocked => _beamAimLocked;
     private double _beamArm = -1;                 // >= 0: escorts away, counting down to the charge
     private PlayerShip _beamTarget;
     private Vector2? _pendingWave; private double _waveT;
@@ -982,17 +987,28 @@ public partial class Boss : Node2D, IHittable
         }
         if (_beamArm >= 0 && (_beamArm -= delta) <= 0)
         {   // locked down now; the telegraph rides the hull, so the line cannot lie
-            _beamArm = -1; _beamCharging = true; _beamT = BeamWindup;
+            _beamArm = -1; _beamCharging = true; _beamT = BeamWindup; _beamAimLocked = false;
             if (!IsInstanceValid(_beamTarget) || !_beamTarget.Alive) _beamTarget = pilots.FirstOrDefault();
             Tele(true, new Vector2(0, -Length * 0.5f), new Vector2(0, -Length * 0.5f - BeamLength), BeamWidth, BeamWindup, onHull: true);
         }
         if (_beamCharging)
-        {   // held still, tracking with nothing but its own ponderous turn: a quick pilot who is
-            // not webbed can still get outside the arc before it fires
-            if (IsInstanceValid(_beamTarget) && _beamTarget.Alive)
+        {   // Held still, tracking with nothing but its own ponderous turn: a quick pilot who is
+            // not webbed can still get outside the arc before it fires.
+            //
+            // ONCE THE WEB IS ON, THE AIM IS FINAL. The escorts exist to stop the pilot, and the
+            // moment they have, the boss stops turning too -- it has what it was waiting for, and
+            // the line it is showing is the line it will fire. Tracking a pinned target would be
+            // the beam chasing something that cannot dodge, which reads as the game cheating in
+            // its own favour; locking reads as the trap closing. It also means the pilot's last
+            // chance is BEFORE the web lands, not after.
+            if (!_beamAimLocked && IsInstanceValid(_beamTarget) && _beamTarget.Alive)
             {
-                float aim = (_beamTarget.Position - Position).Angle() + Mathf.Pi / 2f;
-                Rotation += Mathf.Clamp(Mathf.AngleDifference(Rotation, aim), -TurnRate * (float)delta, TurnRate * (float)delta);
+                if (_beamTarget.Pinned) _beamAimLocked = true;
+                else
+                {
+                    float aim = (_beamTarget.Position - Position).Angle() + Mathf.Pi / 2f;
+                    Rotation += Mathf.Clamp(Mathf.AngleDifference(Rotation, aim), -TurnRate * (float)delta, TurnRate * (float)delta);
+                }
             }
             if ((_beamT -= delta) <= 0) { _beamCharging = false; _beamLive = BeamLive; _beamTickT = 0; }
         }
@@ -10000,7 +10016,7 @@ echo "SMOKE TEST PASSED"
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 1898 lines   sha256 9c09a4d47f4c
+// 1923 lines   sha256 20d385908fdf
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -11485,6 +11501,31 @@ public partial class _Test : Node
             Check(Boss.BeamLength == 10000f && Math.Abs((beam.B - beam.A).Length() - 10000f) < 1f
                   && Boss.DistToSegment(farOut, segA, segB) < 1f,
                   $"beam and indicator both reach 10000 u -- a point 5000 u out is inside it, where the old 1800 u fell short (indicator {(beam.B - beam.A).Length():0} u)");
+            // Tracking, then LOCKED. Twist the hull well off the pilot first, both times: a boss
+            // that is already pointing the right way looks identical whether it is turning or
+            // frozen, and a check that cannot tell them apart proves nothing. 0.3 rad/s over
+            // 0.5 s closes 0.15 rad, so "it moved" and "it did not" are far apart here.
+            boss.Rotation += 0.6f;
+            float offBy0 = Mathf.Abs(Mathf.AngleDifference(boss.Rotation, (me2.Position - boss.Position).Angle() + Mathf.Pi / 2f));
+            await Wait(0.5);
+            float offBy1 = Mathf.Abs(Mathf.AngleDifference(boss.Rotation, (me2.Position - boss.Position).Angle() + Mathf.Pi / 2f));
+            Check(boss.BeamCharging && !me2.Pinned && !boss.BeamAimLocked && offBy0 - offBy1 > 0.1f,
+                  $"while the pilot is free the boss keeps turning onto it ({offBy0:0.000} -> {offBy1:0.000} rad off in 0.5 s)");
+            // The web lands and the aim is final: the escorts existed to stop the pilot, and the
+            // moment they have, the boss stops too. The red line it is showing is the line it
+            // fires. The pilot's last chance to leave the arc is BEFORE the web, not after.
+            boss.Rotation += 0.6f;
+            me2.PinFor(2.0);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);   // the frame the lock latches
+            float heldAt = boss.Rotation;
+            await Wait(0.5);
+            Check(boss.BeamCharging && me2.Pinned && boss.BeamAimLocked
+                  && Mathf.Abs(Mathf.AngleDifference(boss.Rotation, heldAt)) < 1e-4f,
+                  $"once the pilot is webbed the boss stops turning: the aim is final (turned {Mathf.AngleDifference(boss.Rotation, heldAt):0.0000} rad in 0.5 s)");
+            // The two twists were a probe, and the aim is now locked, so put it back on the pilot by
+            // hand: the beam below has to be the real shot, and the damage check at the end of this
+            // scenario is the only thing that proves the locked line still lands.
+            boss.Rotation = (me2.Position - boss.Position).Angle() + Mathf.Pi / 2f;
             int down0 = Torpedo.Intercepted;
             for (int i = 0; i < 60 * 10 && Torpedo.Intercepted == down0; i++)
             {
@@ -11900,3 +11941,103 @@ public class TinyTarget : IHittable
     public bool Alive => true;
     public void TakeDamage(double d) { }
 }
+
+//==============================================================================
+// FILE: tools/snapshot.ps1
+// 95 lines   sha256 d6d85575ba26
+//==============================================================================
+# Regenerate version/CODE_SNAPSHOT.txt.
+#
+# The file list is derived here rather than inherited from the previous snapshot, so a
+# file that was never in it (typecheck/GodotStub.cs was missing for the project's whole
+# history) cannot stay missing just because it was missing before.
+#
+# Format, measured from the file rather than guessed:
+#   divider      = "//" + 78 "="
+#   contents row = "//   " + <path left, count right, inside one 50-char field>
+#                  + " lines   sha256 " + <first 12 hex>      (total length 83)
+#   file block   = blank line, divider, "// FILE: <path>", "// <N> lines   sha256 <12>",
+#                  divider, then the file verbatim
+#
+# Lives in the repo rather than in a session's scratch folder for the same reason verify.ps1
+# does: a generator kept outside the project is a generator the next session does not have.
+$ErrorActionPreference = 'Stop'
+Set-Location (Join-Path $PSScriptRoot '..')
+$env:Path += ';C:\Program Files\Git\cmd'
+
+# --others --exclude-standard as well as the index: a brand-new file is not in `git ls-files`
+# until it is staged, and a snapshot that quietly leaves out the file you just wrote is the
+# same silent omission this generator exists to prevent.
+$tracked = @(& git ls-files --cached --others --exclude-standard | Sort-Object -Unique)
+function Dir-Files($prefix) {
+  @($tracked | Where-Object { $_ -like "$prefix/*" -and ($_ -split '/').Count -eq (($prefix -split '/').Count + 1) }) |
+    Where-Object { $_ -notmatch '\.(uid|dll|import)$' } |
+    Sort-Object { $_ } -CaseSensitive
+}
+
+# Root files keep the original snapshot's order, which is not alphabetical.
+$fixed = @('project.godot', 'Warships.csproj', 'CharacterSelect.tscn', 'Hub.tscn', 'MainMenu.tscn')
+$final = @($fixed)
+# Everything else is DISCOVERED, not listed. A hard-coded set of directories is how
+# typecheck/GodotStub.cs stayed out of this file for the project's whole history, and it would
+# have quietly dropped verify.ps1 and tools/find-godot.ps1 the moment they were added.
+$code = @($tracked | Where-Object { $_ -match '\.(cs|sh|ps1|py|tscn|csproj|godot|editorconfig)$' -or $_ -match '\.cs\.txt$' })
+$final += @($code | Where-Object { $_ -notin $fixed -and $_ -notlike '*/*' } | Sort-Object { $_ } -CaseSensitive)
+$final += @($code | Where-Object { $_ -like 'scripts/*' }   | Sort-Object { $_ } -CaseSensitive)
+$final += @($code | Where-Object { $_ -like 'typecheck/*' } | Sort-Object { $_ } -CaseSensitive)
+$final += @($code | Where-Object { $_ -like 'tools/*' }     | Sort-Object { $_ } -CaseSensitive)
+$final = @($final | Select-Object -Unique)
+
+foreach ($p in $final) { if ($tracked -notcontains $p) { throw "not tracked: $p" } }
+
+$info = @{}; $total = 0
+foreach ($p in $final) {
+  $win = $p -replace '/', '\'
+  if (-not (Test-Path $win)) { throw "missing: $win" }
+  $n = @(Get-Content $win).Count
+  $h = (Get-FileHash $win -Algorithm SHA256).Hash.ToLower().Substring(0, 12)
+  $info[$p] = @{ N = $n; H = $h }
+  $total += $n
+}
+
+$D = '//' + ('=' * 78)
+$commit = (& git rev-parse --short HEAD).Trim()
+$stamp = (Get-Date).ToString('yyyy-MM-dd HH:mm')
+
+$out = New-Object System.Text.StringBuilder
+function W($s) { [void]$out.Append($s); [void]$out.Append("`n") }
+
+W $D
+W '// WARSHIPS -- code snapshot (master copy)'
+W "// Taken $stamp at git commit ${commit}: typecheck clean, dotnet build 0 warnings,"
+W '//   0 analyser findings, 0 unused members; smoke test 3/3 runs at 435 checks on Windows'
+W '//   (437 in a sandbox with no router and no internet); 67-frame UI sweep complete, 0 lint.'
+W "// $($final.Count) files, $total lines. Code only: sprites, sounds and docs are in the zip."
+W '//'
+W '// Each file starts with a divider and a "// FILE: <path>" line. To split it back into'
+W '// files, cut at each divider: everything after the divider''s third line, up to the next'
+W '// divider, is that file verbatim.'
+W '//'
+W '// Contents:'
+foreach ($p in $final) {
+  $n = [string]$info[$p].N
+  $pad = 50 - $p.Length - $n.Length
+  if ($pad -lt 1) { $pad = 1 }
+  W ('//   ' + $p + (' ' * $pad) + $n + ' lines   sha256 ' + $info[$p].H)
+}
+W $D
+
+foreach ($p in $final) {
+  $win = $p -replace '/', '\'
+  W ''
+  W $D
+  W "// FILE: $p"
+  W "// $($info[$p].N) lines   sha256 $($info[$p].H)"
+  W $D
+  $txt = [System.IO.File]::ReadAllText($win) -replace "`r`n", "`n"
+  [void]$out.Append($txt)
+  if (-not $txt.EndsWith("`n")) { [void]$out.Append("`n") }
+}
+
+[System.IO.File]::WriteAllText((Join-Path (Get-Location) 'version\CODE_SNAPSHOT.txt'), $out.ToString())
+"files: $($final.Count)   lines: $total"

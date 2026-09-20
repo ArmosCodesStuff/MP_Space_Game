@@ -47,7 +47,7 @@ faults have been fixed from those frames more than once.
 
 **As of 2026-09-20 the whole harness also runs natively on the developer's Windows machine** (see
 Unreleased → *The harnesses run on Windows*): typecheck 0 errors, build 0 warnings, analysers 0
-findings, xref 0 unused, smoke **433 pass / 6 of 6 runs** (the 2 short of 435 assert the sandbox's
+findings, xref 0 unused, smoke **435 pass / 6 of 6 runs** (the 2 short of 437 assert the sandbox's
 missing router and internet), sweep **67 frames, 0 lint** on the real GPU with the project's own
 Forward+ renderer. So "how it looks on the developer's own GPU" is no longer unconfirmed for the
 swept states. What remains unconfirmed is how it feels in a hand-played session — nothing here
@@ -310,8 +310,8 @@ Full detail, including what was found and deliberately *not* changed, is in `REV
 ### The death beam: escorts first, and an honest tell
 
 **Checked:** typecheck 0 errors; build 0 warnings; analysers 0 findings; xref 0 unused; smoke
-**426 pass, 6/6 runs, three runs in a row**; sweep 67 frames, 0 lint; the bar and the beam looked
-at. Six mutants, one at a time — every new check was
+**435 pass, 6/6 runs, three runs in a row**; sweep 67 frames, 0 lint; the bar and the beam looked
+at. Eight mutants, one at a time — every new check was
 made to fail on purpose, and one of them **failed to fail** and had to be rewritten (below).
 
 #### Added
@@ -326,6 +326,13 @@ made to fail on purpose, and one of them **failed to fail** and had to be rewrit
   line updates cross the wire.
 - **It tracks while it charges, at its own ponderous 0.3 rad/s** — so a pilot who is *not* webbed
   can still out-angle the beam before it fires.
+- **The moment the web lands, the aim is final.** The boss stops turning as well as moving: the
+  escorts existed to stop the pilot, and once they have, the line on screen is the line that fires.
+  Tracking a target that cannot dodge would be the beam chasing something pinned, which reads as
+  the game cheating in its own favour; freezing reads as the trap closing. It also puts the pilot's
+  last chance *before* the web rather than after it. The lock is cleared at the start of every
+  charge, never carried from the last one, and killing the escorts leaves the boss tracking all the
+  way to the shot.
 - **The beam opens with its escorts, not with a red line.** Two lights launch 45° to port and
   starboard, **shiver on the spot** while their noses come round onto the pilot, then break into a
   boost with a **plume three times over** and flank the pilot **port and starboard** (they take
@@ -375,6 +382,8 @@ behaviour, not just the switch that is supposed to cause it.*
 | the super bar reading the far timer | the bar resets as the beam commits |
 | movement ignoring `Locked`, flag intact | the boss is locked in place *(missed at first — see above)* |
 | the old 1800 u beam reach | beam and indicator both reach 10000 u |
+| the aim never locking (tracks through the web) | once the pilot is webbed the boss stops turning — *turned 0.1550 rad, its full 0.3 rad/s across the 0.5 s window* |
+| the aim locked from the first frame | while the pilot is free the boss keeps turning onto it — *0.600 → 0.600 rad off, no movement at all* |
 
 ### The harnesses run on Windows
 

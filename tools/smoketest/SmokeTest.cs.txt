@@ -1481,6 +1481,31 @@ public partial class _Test : Node
             Check(Boss.BeamLength == 10000f && Math.Abs((beam.B - beam.A).Length() - 10000f) < 1f
                   && Boss.DistToSegment(farOut, segA, segB) < 1f,
                   $"beam and indicator both reach 10000 u -- a point 5000 u out is inside it, where the old 1800 u fell short (indicator {(beam.B - beam.A).Length():0} u)");
+            // Tracking, then LOCKED. Twist the hull well off the pilot first, both times: a boss
+            // that is already pointing the right way looks identical whether it is turning or
+            // frozen, and a check that cannot tell them apart proves nothing. 0.3 rad/s over
+            // 0.5 s closes 0.15 rad, so "it moved" and "it did not" are far apart here.
+            boss.Rotation += 0.6f;
+            float offBy0 = Mathf.Abs(Mathf.AngleDifference(boss.Rotation, (me2.Position - boss.Position).Angle() + Mathf.Pi / 2f));
+            await Wait(0.5);
+            float offBy1 = Mathf.Abs(Mathf.AngleDifference(boss.Rotation, (me2.Position - boss.Position).Angle() + Mathf.Pi / 2f));
+            Check(boss.BeamCharging && !me2.Pinned && !boss.BeamAimLocked && offBy0 - offBy1 > 0.1f,
+                  $"while the pilot is free the boss keeps turning onto it ({offBy0:0.000} -> {offBy1:0.000} rad off in 0.5 s)");
+            // The web lands and the aim is final: the escorts existed to stop the pilot, and the
+            // moment they have, the boss stops too. The red line it is showing is the line it
+            // fires. The pilot's last chance to leave the arc is BEFORE the web, not after.
+            boss.Rotation += 0.6f;
+            me2.PinFor(2.0);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);   // the frame the lock latches
+            float heldAt = boss.Rotation;
+            await Wait(0.5);
+            Check(boss.BeamCharging && me2.Pinned && boss.BeamAimLocked
+                  && Mathf.Abs(Mathf.AngleDifference(boss.Rotation, heldAt)) < 1e-4f,
+                  $"once the pilot is webbed the boss stops turning: the aim is final (turned {Mathf.AngleDifference(boss.Rotation, heldAt):0.0000} rad in 0.5 s)");
+            // The two twists were a probe, and the aim is now locked, so put it back on the pilot by
+            // hand: the beam below has to be the real shot, and the damage check at the end of this
+            // scenario is the only thing that proves the locked line still lands.
+            boss.Rotation = (me2.Position - boss.Position).Angle() + Mathf.Pi / 2f;
             int down0 = Torpedo.Intercepted;
             for (int i = 0; i < 60 * 10 && Torpedo.Intercepted == down0; i++)
             {

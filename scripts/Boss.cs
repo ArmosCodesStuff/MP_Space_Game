@@ -87,6 +87,10 @@ public partial class Boss : Node2D, IHittable
     }
 
     private double _beamT; private bool _beamCharging;
+    // Set the first frame the target is webbed: the boss stops turning and the aim is final.
+    // Cleared when a beam starts, never carried from the last one.
+    private bool _beamAimLocked;
+    public bool BeamAimLocked => _beamAimLocked;
     private double _beamArm = -1;                 // >= 0: escorts away, counting down to the charge
     private PlayerShip _beamTarget;
     private Vector2? _pendingWave; private double _waveT;
@@ -198,17 +202,28 @@ public partial class Boss : Node2D, IHittable
         }
         if (_beamArm >= 0 && (_beamArm -= delta) <= 0)
         {   // locked down now; the telegraph rides the hull, so the line cannot lie
-            _beamArm = -1; _beamCharging = true; _beamT = BeamWindup;
+            _beamArm = -1; _beamCharging = true; _beamT = BeamWindup; _beamAimLocked = false;
             if (!IsInstanceValid(_beamTarget) || !_beamTarget.Alive) _beamTarget = pilots.FirstOrDefault();
             Tele(true, new Vector2(0, -Length * 0.5f), new Vector2(0, -Length * 0.5f - BeamLength), BeamWidth, BeamWindup, onHull: true);
         }
         if (_beamCharging)
-        {   // held still, tracking with nothing but its own ponderous turn: a quick pilot who is
-            // not webbed can still get outside the arc before it fires
-            if (IsInstanceValid(_beamTarget) && _beamTarget.Alive)
+        {   // Held still, tracking with nothing but its own ponderous turn: a quick pilot who is
+            // not webbed can still get outside the arc before it fires.
+            //
+            // ONCE THE WEB IS ON, THE AIM IS FINAL. The escorts exist to stop the pilot, and the
+            // moment they have, the boss stops turning too -- it has what it was waiting for, and
+            // the line it is showing is the line it will fire. Tracking a pinned target would be
+            // the beam chasing something that cannot dodge, which reads as the game cheating in
+            // its own favour; locking reads as the trap closing. It also means the pilot's last
+            // chance is BEFORE the web lands, not after.
+            if (!_beamAimLocked && IsInstanceValid(_beamTarget) && _beamTarget.Alive)
             {
-                float aim = (_beamTarget.Position - Position).Angle() + Mathf.Pi / 2f;
-                Rotation += Mathf.Clamp(Mathf.AngleDifference(Rotation, aim), -TurnRate * (float)delta, TurnRate * (float)delta);
+                if (_beamTarget.Pinned) _beamAimLocked = true;
+                else
+                {
+                    float aim = (_beamTarget.Position - Position).Angle() + Mathf.Pi / 2f;
+                    Rotation += Mathf.Clamp(Mathf.AngleDifference(Rotation, aim), -TurnRate * (float)delta, TurnRate * (float)delta);
+                }
             }
             if ((_beamT -= delta) <= 0) { _beamCharging = false; _beamLive = BeamLive; _beamTickT = 0; }
         }

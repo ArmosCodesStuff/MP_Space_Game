@@ -276,6 +276,14 @@ Recorded here so every chunk builds from the written word, not from memory.
   fly out of, because the boss can only track at its own 0.3 rad/s while it charges. That is the
   whole shape of the mechanic: **beat the lights and the beam becomes dodgeable; ignore them and it
   cannot miss.**
+- **The web ends the aiming, not just the dodging.** The first frame the pilot is webbed the boss
+  stops turning too, and the red line it is already showing is the line it fires. This is a
+  fairness rule rather than a balance one: a boss that kept tracking a target it had pinned would
+  be chasing something that cannot dodge, and the pilot would watch the line follow them with
+  nothing to do about it — the game visibly playing against its own telegraph. Freezing makes the
+  telegraph a promise, and moves the pilot's last decision to *before* the web lands, where they
+  still have a ship that answers the rudder. The lock resets at the start of every charge, so
+  breaking the web on one cycle never carries into the next.
 - **Point defence order**: missiles, then small craft, then anything else (`Turret.PdPriority`).
 - **Test harness trap**: three processes on fixed timings do not choreograph scene changes well; the
   multiplayer arena needs its own purpose-built test.
