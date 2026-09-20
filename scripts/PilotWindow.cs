@@ -1,6 +1,6 @@
 using Godot;
 
-// PILOT (L): level, EXP, points, and the four upgrades they buy. Each row's BUY costs
+// PILOT (L): level, EXP (1000 a level), points, and the four upgrades they buy. Each row's BUY costs
 // one more point than its last purchase (1, 2, 3, ...). Purchases save at once and
 // refit the ship; the host is told with the pilot's identity.
 public partial class PilotWindow : PanelContainer
@@ -21,7 +21,7 @@ public partial class PilotWindow : PanelContainer
         _exp = new Label(); col.AddChild(_exp);
         _bar = new ProgressBar { CustomMinimumSize = new Vector2(440, 10), ShowPercentage = false, MaxValue = 1 }; col.AddChild(_bar);
         _points = new Label(); col.AddChild(_points);
-        col.AddChild(new Label { Text = "EXP: completing missions and killing bosses, shared by everyone in the session.",
+        col.AddChild(new Label { Text = "EXP from boss kills: 200 x the boss's level / yours, +250 the first time you beat a level, +100 for completing. Every pilot earns their own.",
                                  AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(440, 0), Modulate = new Color(1, 1, 1, 0.6f) });
         for (int i = 0; i < Progression.All.Length; i++)
         {
