@@ -85,11 +85,24 @@ public partial class Raider : Node2D, IHittable
     // An ESCORT (launched by a boss): its target is set, its boost lasts until it is posted
     // (or `boostFor` runs out), and it is fragile.
     public bool IsEscort { get; private set; }
-    public void Escort(Node2D target, Vector2 launchDir, double boostFor, double hull)
+    public const double EscortShiver = 1.0;            // hangs at the launch point, shaking, coming round onto the pilot
+    public const float EscortShake = 3f;               // how far the shiver throws it
+    public const float EscortPlume = 3f;               // its boost plume: three times the usual reach
+    private double _shiver; private Vector2 _shiverHome; private float _escortPost;
+    // An ESCORT (launched by a boss): it hangs at the launch point shivering while its nose comes
+    // round onto the pilot, then breaks into a long boost and flanks -- one to PORT, one to
+    // STARBOARD, holding station the way a raid's lights do. Fragile on purpose.
+    public void Escort(Node2D target, Vector2 launchDir, double boostFor, double hull, float post)
     {
         Target = target; IsEscort = true; _boostUsed = true; _boostLeft = boostFor; Hp = hull;
         Rotation = launchDir.Angle() + Mathf.Pi / 2f;
+        _shiver = EscortShiver; _shiverHome = Position; _escortPost = post;
     }
+    public bool Shivering => _shiver > 0;
+    // Roughly when an escort launched now would have its web on the target: the shiver, then the
+    // run in at boost speed. A PREDICTION, not a promise -- the pilot may shoot it down first,
+    // and the boss commits to its beam on this estimate either way.
+    public static double WebEta(float distance) => EscortShiver + distance / (Cruise * BoostMult);
     public bool Latched { get; private set; }
     public bool Boosting => _boostLeft > 0;
     public float Speed { get; private set; }
@@ -195,10 +208,23 @@ public partial class Raider : Node2D, IHittable
         _targetVel = dt > 0 && moved.Length() < MaxStep ? moved / dt : Vector2.Zero; _lastTargetPos = Target.Position;
         if (Heavy) { TickHeavy(delta); QueueRedraw(); return; }
 
-        // my post around the target: ahead, left or right by its heading, 90 u out
-        var mates = Hub.Raiders.Where(r => r.Alive && r.Target == Target).OrderBy(r => r.NetId).ToList();
+        if (_shiver > 0)
+        {   // shaking on the spot, nose swinging onto the pilot -- then it lights up and goes
+            _shiver -= delta;
+            float ms = Time.GetTicksMsec();
+            Position = _shiverHome + new Vector2(Mathf.Sin(ms * 0.061f), Mathf.Cos(ms * 0.083f)) * EscortShake;
+            var onto = (Target.Position - Position).Angle() + Mathf.Pi / 2f;
+            Rotation = Mathf.LerpAngle(Rotation, onto, Mathf.Clamp(6f * dt, 0f, 1f));
+            Speed = 0;
+            QueueRedraw();
+            return;                                   // the boost is not spent while it sits here
+        }
+
+        // my post around the target: ahead, left or right by its heading, 90 u out. An escort
+        // keeps the side it was launched on instead of taking a slot, so the pair always flanks.
+        var mates = Hub.Raiders.Where(r => r.Alive && !r.IsEscort && r.Target == Target).OrderBy(r => r.NetId).ToList();
         int slot = Mathf.Max(0, mates.IndexOf(this)) % Posts.Length;
-        var postDir = Vector2.Up.Rotated(Target.Rotation + Posts[slot]);
+        var postDir = Vector2.Up.Rotated(Target.Rotation + (IsEscort ? _escortPost : Posts[slot]));
         var post = Target.Position + postDir * (Extent(Target, postDir) + Hold);
         float toTarget = Position.DistanceTo(Target.Position);
 
@@ -303,7 +329,9 @@ public partial class Raider : Node2D, IHittable
             DrawLine(Vector2.Zero, inv * to, new Color(1f, 0.3f, 0.25f, 0.35f), 1.5f);
         }
         float plume = Heavy ? Length * 0.5f : Length;
-        if (Boosting || (Heavy && Speed > Cruise + 1f)) Plume.Draw(this, new Vector2(0, Length * 0.5f), Vector2.Down, plume * 1.6f, new Color(1f, 0.35f, 0.25f), 1f, true);
+        // an escort's run-in is unmistakable: it goes on the boost with a plume three times over
+        if (Boosting && IsEscort && !Shivering) Plume.Draw(this, new Vector2(0, Length * 0.5f), Vector2.Down, plume * EscortPlume, new Color(1f, 0.35f, 0.25f), 1f, true);
+        else if (Boosting || (Heavy && Speed > Cruise + 1f)) Plume.Draw(this, new Vector2(0, Length * 0.5f), Vector2.Down, plume * 1.6f, new Color(1f, 0.35f, 0.25f), 1f, true);
         else Plume.Draw(this, new Vector2(0, Length * 0.5f), Vector2.Down, plume, new Color(1f, 0.35f, 0.25f), 0.5f, Speed > 1f);
     }
 }

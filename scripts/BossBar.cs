@@ -12,6 +12,9 @@ public partial class BossBar : Control
 {
     public Hub Hub;
     public const float W = 640, H = 18, Bounce = 6f;
+    // Under it, much skinnier: the wind-up to the boss's next SUPER MOVE -- the ram, or the death
+    // beam's escorts going out. It fills to full exactly as that move commits, then starts again.
+    public const float SuperH = 5f, SuperPad = 3f;
     public const double Life = 0.8, BounceFor = 0.45, Merge = 0.06, BounceHz = 6.67;
     public class Chunk { public double From, To, T; }          // From/To: fractions of max hull
     public readonly List<Chunk> Chunks = new();
@@ -27,7 +30,7 @@ public partial class BossBar : Control
     public override void _Ready()
     {
         Name = "BossBar";
-        AnchorLeft = AnchorRight = 0.5f; OffsetLeft = -W / 2; OffsetRight = W / 2; OffsetTop = 104; OffsetBottom = 104 + H;
+        AnchorLeft = AnchorRight = 0.5f; OffsetLeft = -W / 2; OffsetRight = W / 2; OffsetTop = 104; OffsetBottom = 104 + H + SuperPad + SuperH;
         MouseFilter = MouseFilterEnum.Ignore;
         Visible = false;                                          // hidden until there is a boss
     }
@@ -55,7 +58,7 @@ public partial class BossBar : Control
     {
         var boss = Hub?.Boss;
         if (!IsInstanceValid(boss)) return;                       // the first draw can come before any boss
-        _panel.Draw(GetCanvasItem(), new Rect2(-10, -26, W + 20, H + 34));
+        _panel.Draw(GetCanvasItem(), new Rect2(-10, -26, W + 20, H + 34 + SuperPad + SuperH));
         Txt.D(this, ThemeDB.FallbackFont, new Vector2(0, -8), $"{Missions.BossName}  ·  LEVEL {Missions.Level}  ·  {boss.Hp:0} / {boss.MaxHp:0}",
               HorizontalAlignment.Center, W, 13, new Color(1f, 0.85f, 0.8f));
         float frac = (float)Math.Clamp(boss.Hp / Math.Max(1, boss.MaxHp), 0, 1);
@@ -70,5 +73,13 @@ public partial class BossBar : Control
             DrawRect(new Rect2(x0, Offset(c.T), Math.Max(1f, x1 - x0), H), col);
         }
         DrawRect(new Rect2(0, 0, W, H), new Color(0.9f, 0.5f, 0.45f, 0.7f), false, 1.5f);
+
+        // the super-move wind-up: skinny, directly under, filling towards the next one
+        float y = H + SuperPad, sf = (float)Math.Clamp(boss.SuperFill, 0, 1);
+        DrawRect(new Rect2(0, y, W, SuperH), new Color(0.06f, 0.06f, 0.10f, 0.95f));
+        // it warms towards white as it tops out, so a full bar reads at a glance mid-fight
+        var warm = new Color(0.55f, 0.65f, 1f).Lerp(new Color(1f, 0.95f, 0.85f), sf * sf);
+        DrawRect(new Rect2(0, y, W * sf, SuperH), warm);
+        DrawRect(new Rect2(0, y, W, SuperH), new Color(0.6f, 0.7f, 1f, 0.5f), false, 1f);
     }
 }

@@ -265,6 +265,17 @@ Recorded here so every chunk builds from the written word, not from memory.
   host's trip record (`Yard._trip`) and a guest's set-aside base (`Yard._own*`).
 - **Telegraph first**: every high-damage boss attack shows a red zone for its whole wind-up
   (`Telegraph`), then the host resolves the hit.
+- **A telegraph belongs to its weapon.** The beam and the ram are drawn as **children of the boss**
+  in its own frame, and it **holds station** for their wind-ups, so the line shown is the line fired.
+  The shockwave stays a world-space circle — it is an effect at a place, not out of the hull.
+- **The death beam is a trap you can spring or break.** It opens with two escorts, not a red line:
+  they shiver at the launch point while coming round onto the pilot, boost in on a triple-length
+  plume, flank **port and starboard**, and web. The charge begins when their web *should* have
+  landed — a **prediction** made at launch (shiver + run-in at boost speed, plus a second), never a
+  wait on them arriving. So killing the escorts cannot cancel the beam; it earns you a beam you can
+  fly out of, because the boss can only track at its own 0.3 rad/s while it charges. That is the
+  whole shape of the mechanic: **beat the lights and the beam becomes dodgeable; ignore them and it
+  cannot miss.**
 - **Point defence order**: missiles, then small craft, then anything else (`Turret.PdPriority`).
 - **Test harness trap**: three processes on fixed timings do not choreograph scene changes well; the
   multiplayer arena needs its own purpose-built test.
@@ -658,6 +669,24 @@ Each of these compiled clean and was wrong at runtime. The smoke test covers all
   path only ever holds a complete character. *Rule: any file a second instance might read gets
   written to a temp path and renamed into place, never saved over.* The same shape applies to
   `user://settings.cfg` if it ever grows a concurrent reader.
+- **A telegraph pinned to the world drifts off the thing that draws it.** The boss's beam line was
+  a fixed world segment computed once from its nose, while the boss kept closing and turning for
+  the whole 6 s wind-up: the warning and the weapon parted company. Two halves to the fix, and both
+  are needed — **hold the hull still** for the wind-up, and **parent the telegraph to the boss** so
+  it is drawn in the hull's own frame. Parenting also buys guests the same tell with no extra
+  traffic, because they already lerp the boss's rotation. *Rule: a tell belongs to the thing that
+  makes it, not to the spot it was made at.*
+- **A tell that rides the hull needs the hull's angle at a useful rate.** At 10 Hz a guest's copy of
+  the boss was up to ~2.6° stale, which at the beam's 10000 u reach is ~450 u at the far end — far wider
+  than the beam, so a guest could see a hit land outside the line it was shown. It sends at 30 Hz
+  while a super move is locked down, and guests stop smoothing it: interpolation that was
+  cosmetic becomes a lie once the hull is the sight. *Anything whose ORIENTATION becomes
+  load-bearing needs both its update rate AND its interpolation revisited, not just its position.*
+- **A check can pass for the wrong reason when the setup makes it vacuous.** "The boss is locked in
+  place" asserted zero drift, and a mutant that ignored the lock entirely still passed: inside its
+  650 u standoff the boss would not have closed anyway, so the assertion tested nothing but the
+  flag. Arrange the conditions under which the behaviour would actually differ, or the check is
+  decoration. Sibling of the constant-comparison lesson above.
 - **A flaky result may be a real bug wearing a costume.** The extra errors above looked at first
   like environment noise, were not reproducible on demand, and the evidence was lost because the WSL
   VM shuts down between commands and takes `/tmp` with it. Copy logs out of `/tmp` in the *same*
@@ -688,7 +717,7 @@ coin flip, so watch across frames; and order checks so none runs after the other
 the session.
 
 `tools/smoketest/run.ps1` is the same harness for Windows, driving the win64 mono build. It runs the
-whole suite: **419 pass, 6/6 runs finished**, against the 421 the sandbox reports. The two that
+whole suite: **426 pass, 6/6 runs finished**, against the 428 the sandbox reports. The two that
 cannot pass here are not regressions — they assert the *sandbox's* network, and say so in their own
 comments (`// no router in the sandbox`, `// no router, no internet in the sandbox`):
 
@@ -697,14 +726,14 @@ comments (`// no router in the sandbox`, `// no router, no internet in the sandb
 
 Both hard-require `Net.Reach.LanOnly`. On a real machine behind a real router with real internet,
 reachability resolves to something else and the assertion fails by construction. **Windows is
-therefore a 419/419 bar, not 421/421**, until those two checks learn to branch on the environment.
+therefore a 426/426 bar, not 428/428**, until those two checks learn to branch on the environment.
 Do not "fix" them by relaxing the assertion: what they verify — that a player with no route out is
 told so, and offered the port-forward and Tailscale routes — is real behaviour worth keeping.
 
 **WSL does not get you back to the sandbox's number.** It was set up expecting it would — those
 conditions looked reproducible — and it reports exactly the same count as Windows, with the same two
 failures. WSL2 has internet and sits behind its own NAT, so `LanOnly` does not hold there either.
-Only a machine with no router *and* no internet reaches the full 421. WSL is still worth having (it
+Only a machine with no router *and* no internet reaches the full 428. WSL is still worth having (it
 runs the `.sh` scripts unmodified, and typecheck and xref are clean there), but it is not an oracle
 for those two checks.
 *Rule: an environment assumption is worth testing before it is relied on. This one was wrong.*

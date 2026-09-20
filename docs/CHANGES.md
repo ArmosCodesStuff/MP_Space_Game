@@ -47,7 +47,7 @@ faults have been fixed from those frames more than once.
 
 **As of 2026-09-20 the whole harness also runs natively on the developer's Windows machine** (see
 Unreleased → *The harnesses run on Windows*): typecheck 0 errors, build 0 warnings, analysers 0
-findings, xref 0 unused, smoke **419 pass / 6 of 6 runs** (the 2 short of 421 assert the sandbox's
+findings, xref 0 unused, smoke **426 pass / 6 of 6 runs** (the 2 short of 428 assert the sandbox's
 missing router and internet), sweep **67 frames, 0 lint** on the real GPU with the project's own
 Forward+ renderer. So "how it looks on the developer's own GPU" is no longer unconfirmed for the
 swept states. What remains unconfirmed is how it feels in a hand-played session — nothing here
@@ -130,7 +130,7 @@ developer's own machine with no WSL — see `docs/README.md` for the exact comma
 2. **Smoke test:** `sh tools/smoketest/run.sh <path to Godot_v4.7.2-stable_mono_linux.x86_64>`
    → must end `SMOKE TEST PASSED`. Real engine, headless, solo at a fixed 60 fps plus a host and a
    guest over localhost, in its own `user://`. Add checks to `tools/smoketest/SmokeTest.cs.txt`.
-   Windows: `tools\smoketest\run.ps1 <godot win64 exe>`, and the bar there is **419 pass, 6/6 runs**,
+   Windows: `tools\smoketest\run.ps1 <godot win64 exe>`, and the bar there is **426 pass, 6/6 runs**,
    not `SMOKE TEST PASSED` — two checks assert the sandbox's lack of a router and internet and
    cannot pass on a real network. See DESIGN.md → Smoke test before touching them.
 3. **Look at it:** `sh tools/screens/run.sh <same binary>` → frames in `/tmp/shots/`. Do this for
@@ -203,6 +203,75 @@ reachable, which is fine: both harnesses build from the `nupkgs` folder that shi
 
 ## Unreleased
 
+### The death beam: escorts first, and an honest tell
+
+**Checked:** typecheck 0 errors; build 0 warnings; analysers 0 findings; xref 0 unused; smoke
+**426 pass, 6/6 runs, three runs in a row**; sweep 67 frames, 0 lint; the bar and the beam looked
+at. Six mutants, one at a time — every new check was
+made to fail on purpose, and one of them **failed to fail** and had to be rewritten (below).
+
+#### Added
+
+- **The boss holds still while a super move winds up.** It used to keep closing at 30 u/s and
+  turning through the whole 6 s beam charge while the red line stayed pinned to the spot it drew it
+  from — the tell drifted off the hull. It now locks position for the beam charge *and* the ram
+  wind-up.
+- **The tell rides the hull.** Rather than freezing a world-space line, the telegraph is now a
+  **child of the boss** in its local frame, so the line drawn and the line fired are the same thing
+  by construction. Guests get it for free: they already lerp the boss's rotation, so no per-frame
+  line updates cross the wire.
+- **It tracks while it charges, at its own ponderous 0.3 rad/s** — so a pilot who is *not* webbed
+  can still out-angle the beam before it fires.
+- **The beam opens with its escorts, not with a red line.** Two lights launch 45° to port and
+  starboard, **shiver on the spot** while their noses come round onto the pilot, then break into a
+  boost with a **plume three times over** and flank the pilot **port and starboard** (they take
+  fixed sides now instead of raid slots, so the pair always straddles it).
+- **The charge is timed off a _predicted_ web**, not off the escorts actually arriving: the shiver
+  plus the run-in at boost speed, then one second. So shooting the escorts down never cancels the
+  beam — it means facing the beam free to move, which is the reward for beating the mechanic.
+- **A skinny bar under the boss's hull bar** fills towards its next super move (the ram, or the
+  beam's escorts going out — 15 s apart) and warms towards white as it tops out.
+- **The beam reaches 10000 u**, indicator and damage alike (was 1800). Once it is charging,
+  **distance is no escape — only angle is**, which is what makes out-turning it the counterplay and
+  the web the trap. **Activation is unchanged**: the same 30 s rhythm, the same nearest-pilot
+  target, the same predicted-web trigger. This is reach, not trigger.
+
+#### Changed
+
+- The boss sends its state at **30 Hz while locked**, 10 Hz otherwise, **and guests stop smoothing
+  it while it is locked** — they take the host's position and angle flat. With the tell riding the
+  hull the hull's *angle* became load-bearing, and smoothing is no longer cosmetic: the lerp lags
+  about 0.1 s, which at 0.3 rad/s is ~1.7°, some **300 u at the beam's 10000 u reach** against a
+  beam 70 u wide. A guest would have watched the hit land far outside the line it was shown. The
+  boss is standing still and turning slowly while locked, so there is nothing to smooth away.
+  Found while reviewing the multiplayer code, not by a test.
+- The rhythm check now times the beam from its **commit** (escorts launching) rather than its red
+  line. The rhythm itself is unchanged; the line is simply later now, and timing off it measured
+  the new delay instead of the beat.
+
+#### A check that could not fail
+
+The first version of "the boss is locked in place" asserted zero drift — and a mutant that ignored
+the lock **entirely** still passed it, because the boss sits inside its own 650 u standoff during
+that part of the run and would not have closed anyway. The check was really only reading the
+`Locked` flag. It now pushes the boss out past 650 u first, where it wants to close at 30 u/s, and
+puts it back afterwards — left out there, its tridents take so long to arrive that the
+point-defence check below times out. Re-run against the same mutant it now fails, **drifting
+22.500 u**: 30 u/s across the 0.75 s window, to the unit.
+*This is the constant-comparison lesson again in a new costume: a check must be able to observe the
+behaviour, not just the switch that is supposed to cause it.*
+
+#### Mutants, one at a time — all five caught
+
+| Mutant | Check it had to break |
+|---|---|
+| `Locked` always false | the boss is locked in place |
+| the beam telegraph back in world space | the tell rides the hull |
+| `EscortShiver = 0` | the escorts shiver before the run in |
+| the super bar reading the far timer | the bar resets as the beam commits |
+| movement ignoring `Locked`, flag intact | the boss is locked in place *(missed at first — see above)* |
+| the old 1800 u beam reach | beam and indicator both reach 10000 u |
+
 ### The harnesses run on Windows
 
 **Checked:** every harness run on Windows against the numbers the sandbox produces — typecheck
@@ -233,11 +302,11 @@ Frames looked at. No game code changed.
 
 #### Known broken
 
-- **Two of the 421 smoke checks cannot pass on any machine with a router and internet** — `no UPnP
+- **Two of the 428 smoke checks cannot pass on any machine with a router and internet** — `no UPnP
   router…` and `no router or internet here…`. Both hard-require `Net.Reach.LanOnly`, i.e. the
   sandbox's absence of a router and of internet; on a real network reachability resolves otherwise
   and they fail by construction. They are not regressions and the behaviour they cover is real.
-  **419 is the bar on Windows *and* under WSL**; only the sandbox itself reaches 421. Making them
+  **426 is the bar on Windows *and* under WSL**; only the sandbox itself reaches 428. Making them
   branch on the environment is not done.
 *(The non-atomic character save that was listed here is now fixed — see Fixed, below.)*
 

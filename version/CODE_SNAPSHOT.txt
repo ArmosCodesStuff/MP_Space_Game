@@ -1,9 +1,9 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-20 02:47 at git commit 5d802ea: typecheck clean, dotnet build 0 warnings,
-//   0 analyser findings, 0 unused members; smoke test 3/3 runs at 419 checks on Windows
-//   (421 in a sandbox with no router and no internet); 67-frame UI sweep complete, 0 lint.
-// 64 files, 10936 lines. Code only: sprites, sounds and docs are in the zip.
+// Taken 2026-09-20 03:52 at git commit d0f234a: typecheck clean, dotnet build 0 warnings,
+//   0 analyser findings, 0 unused members; smoke test 3/3 runs at 426 checks on Windows
+//   (428 in a sandbox with no router and no internet); 67-frame UI sweep complete, 0 lint.
+// 64 files, 11079 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -20,8 +20,8 @@
 //   scripts/Autopilot.cs                            40 lines   sha256 807538219f53
 //   scripts/BaseDefense.cs                          55 lines   sha256 1d8daa0fbd67
 //   scripts/BasePanel.cs                           118 lines   sha256 1b56ed68d885
-//   scripts/Boss.cs                                205 lines   sha256 f99f980993e3
-//   scripts/BossBar.cs                              74 lines   sha256 5758de5d8e72
+//   scripts/Boss.cs                                276 lines   sha256 db1c34eee686
+//   scripts/BossBar.cs                              85 lines   sha256 679ea3b792b9
 //   scripts/Character.cs                           209 lines   sha256 3279a20e9a12
 //   scripts/CharacterCreator.cs                    211 lines   sha256 136099a8d1c7
 //   scripts/CharacterSelect.cs                     171 lines   sha256 dc2bfeccc820
@@ -45,7 +45,7 @@
 //   scripts/Plume.cs                                25 lines   sha256 cdbeb9b8fc58
 //   scripts/Progression.cs                          86 lines   sha256 c9a5dc290c4d
 //   scripts/Radar.cs                               129 lines   sha256 189719fcc94f
-//   scripts/Raider.cs                              309 lines   sha256 f6f9139ee094
+//   scripts/Raider.cs                              337 lines   sha256 6ce1e35e69c8
 //   scripts/SessionMenu.cs                         120 lines   sha256 ecdca865f3ee
 //   scripts/Settings.cs                             58 lines   sha256 80100257eda5
 //   scripts/Sfx.cs                                  69 lines   sha256 c5ce9c91a433
@@ -73,7 +73,7 @@
 //   tools/screens/Shots.cs.txt                     457 lines   sha256 8355cd3b6808
 //   tools/smoketest/run.ps1                        136 lines   sha256 35cc2f8b8daf
 //   tools/smoketest/run.sh                          57 lines   sha256 568b677787fd
-//   tools/smoketest/SmokeTest.cs.txt              1802 lines   sha256 1f0fc0e4154f
+//   tools/smoketest/SmokeTest.cs.txt              1835 lines   sha256 9dd729707224
 //==============================================================================
 
 //==============================================================================
@@ -664,7 +664,7 @@ public partial class BasePanel : PanelContainer
 
 //==============================================================================
 // FILE: scripts/Boss.cs
-// 205 lines   sha256 f99f980993e3
+// 276 lines   sha256 db1c34eee686
 //==============================================================================
 using Godot;
 using System.Linq;
@@ -707,7 +707,12 @@ public partial class Boss : Node2D, IHittable
     // on purpose (point defence, 1 DPS a turret, must be able to kill them inside the charge).
     public const float EscortAngle = 45f;
     public const double EscortHull = 3;           // 3 s at one PD turret (1 DPS): killable inside the charge
-    public const float BeamLength = 1800f, BeamWidth = 70f, WaveRadius = 340f;
+    public const double WebToBeam = 1.0;          // the beam starts charging 1 s after the web should land
+    public const float TurnRate = 0.3f;           // its native turn, ponderous (rad/s) -- and all it has while charging
+    // The beam reaches right across the arena: once it is charging, distance is no escape --
+    // only angle is. Its ACTIVATION is unchanged (the 30 s rhythm, the nearest pilot, the escorts'
+    // predicted web); this is reach, not trigger.
+    public const float BeamLength = 10000f, BeamWidth = 70f, WaveRadius = 340f;
     public const double GunDamage = 3.6, GunEvery = 1.2;                       // 3 DPS
     public const double BeamEvery = 30, BeamLive = 3.0, BeamTick = 0.25, BeamDamage = 50;
     public const double ChargeWindup = 1.5, ChargeDamage = 40; public const float ChargeSpeed = 1200f, ChargeLength = 900f;
@@ -717,22 +722,48 @@ public partial class Boss : Node2D, IHittable
     private (Vector2 a, Vector2 b)? _pendingCharge; private double _chargeT; private Vector2? _dashTo;
     public int Volleys { get; private set; }                                   // for the smoke test
     public bool Charging => _dashTo.HasValue;
-    // the beam's escorts: port and starboard of the nose, straight at the pilot
-    public void LaunchEscorts(Node2D target)
+    public bool BeamCharging => _beamCharging;
+    // Frozen: a super move is winding up. It holds station so the red line it drew is the line
+    // it actually fires down -- the tell used to drift off the hull while it kept closing.
+    public bool Locked => _beamCharging || _pendingCharge != null || _dashTo.HasValue;
+    // Where the beam goes RIGHT NOW: straight out of the nose. The telegraph is a child of the
+    // boss drawn down the same axis, so the drawing and the hit are the same line by construction.
+    public (Vector2 a, Vector2 b) BeamSegment()
     {
-        if (!Net.Sim || target == null || GetParent() is not Hub hub) return;
+        var nose = ToGlobal(new Vector2(0, -Length * 0.5f));
+        return (nose, nose + Vector2.Up.Rotated(Rotation) * BeamLength);
+    }
+    // The beam's escorts: port and starboard of the nose, straight at the pilot. Returns roughly
+    // how long until their web should land -- the boss commits its beam on that estimate, so
+    // shooting them down does not cancel the beam, it only means facing it free to move.
+    public double LaunchEscorts(Node2D target)
+    {
+        if (!Net.Sim || target == null || GetParent() is not Hub hub) return Raider.EscortShiver;
         var nose = Vector2.Up.Rotated(Rotation);
+        double eta = 0; bool port = true;
         foreach (float side in new[] { -EscortAngle, EscortAngle })
         {
             var dir = nose.Rotated(Mathf.DegToRad(side));
-            var r = hub.SpawnRaider(Position + dir * (HalfWidth + 60f), RaiderKind.Light, 0, Missions.S(Missions.Level));
-            r?.Escort(target, dir, BeamWindup, EscortHull * Missions.S(Missions.Level));
+            var at = Position + dir * (HalfWidth + 60f);
+            var r = hub.SpawnRaider(at, RaiderKind.Light, 0, Missions.S(Missions.Level));
+            // the one launched to port flanks to port, the other to starboard
+            r?.Escort(target, dir, BeamWindup, EscortHull * Missions.S(Missions.Level), port ? -Mathf.Pi / 2f : Mathf.Pi / 2f);
+            eta = System.Math.Max(eta, Raider.WebEta(at.DistanceTo(target.Position)));
+            port = false;
         }
+        return eta;
     }
 
-    private (Vector2 a, Vector2 b)? _pendingBeam; private double _beamT;
+    private double _beamT; private bool _beamCharging;
+    private double _beamArm = -1;                 // >= 0: escorts away, counting down to the charge
+    private PlayerShip _beamTarget;
     private Vector2? _pendingWave; private double _waveT;
-    private Vector2 _netPos; private float _netRot; private bool _hasNet;
+    // The skinny bar under the health bar: how far along the wait for the next SUPER MOVE --
+    // the ram, or the death beam's escorts going out. Both are 15 s apart once the fight settles.
+    private double _superGap = 6.0;
+    public double NextSuperIn => System.Math.Max(0, System.Math.Min(_beam, _charge));
+    public double SuperFill => _superGap <= 0 ? 0 : System.Math.Clamp(1 - NextSuperIn / _superGap, 0, 1);
+    private Vector2 _netPos; private float _netRot; private bool _hasNet; private bool _netLocked;
 
     public override void _Ready()
     {
@@ -760,22 +791,41 @@ public partial class Boss : Node2D, IHittable
         float dt = (float)delta;
         if (!Net.Sim)
         {
-            if (_hasNet) { Position = Position.Lerp(_netPos, Mathf.Clamp(10f * dt, 0f, 1f)); Rotation = Mathf.LerpAngle(Rotation, _netRot, Mathf.Clamp(10f * dt, 0f, 1f)); }
+            if (_hasNet)
+            {
+                if (_netLocked)
+                {   // Locked, the hull IS the telegraph, and smoothing it is no longer cosmetic:
+                    // the lerp lags about 0.1 s, which at 0.3 rad/s is ~1.7 degrees -- some 300 u
+                    // at the beam's 10000 u reach, against a beam 70 u wide. A guest would watch
+                    // the hit land far outside the line it was shown. Take the host's figures flat;
+                    // the boss is standing still and turning slowly, so there is nothing to smooth.
+                    Position = _netPos; Rotation = _netRot;
+                }
+                else { Position = Position.Lerp(_netPos, Mathf.Clamp(10f * dt, 0f, 1f)); Rotation = Mathf.LerpAngle(Rotation, _netRot, Mathf.Clamp(10f * dt, 0f, 1f)); }
+            }
             return;
         }
         if (!Alive) return;
         var pilots = Pilots.ToList();
         if (pilots.Count > 0)
-        {   // close on the party, ponderously
-            var centre = pilots.Aggregate(Vector2.Zero, (s, p) => s + p.Position) / pilots.Count;
-            float want = (centre - Position).Angle() + Mathf.Pi / 2f;
-            Rotation += Mathf.Clamp(Mathf.AngleDifference(Rotation, want), -0.3f * dt, 0.3f * dt);
-            float d = Position.DistanceTo(centre);
-            if (d > 650f && !Charging) Position += (centre - Position).Normalized() * 30f * dt;
+        {   // close on the party, ponderously -- unless a super move has it locked down, when it
+            // neither closes nor turns except as that move's own aim decides
+            if (!Locked)
+            {
+                var centre = pilots.Aggregate(Vector2.Zero, (s, p) => s + p.Position) / pilots.Count;
+                float want = (centre - Position).Angle() + Mathf.Pi / 2f;
+                Rotation += Mathf.Clamp(Mathf.AngleDifference(Rotation, want), -TurnRate * dt, TurnRate * dt);
+                float d = Position.DistanceTo(centre);
+                if (d > 650f) Position += (centre - Position).Normalized() * 30f * dt;
+            }
             Tick(pilots, delta);
         }
         _send -= delta;
-        if (_send <= 0 && Net.IsOnline) { _send = 0.1; Rpc(nameof(NetState), Position, Rotation, Hp); }
+        // While a super move winds up the HULL IS THE TELEGRAPH, so a guest needs its angle far
+        // more often than 10 Hz. Turning at 0.3 rad/s, 100 ms between figures is ~1.7 degrees,
+        // which at the beam's 10000 u reach puts the far end ~300 u off against a beam 70 u wide.
+        // 30 Hz while locked, and guests stop smoothing it (see _netLocked), closes that.
+        if (_send <= 0 && Net.IsOnline) { _send = Locked ? 1.0 / 30 : 0.1; Rpc(nameof(NetState), Position, Rotation, Hp, Locked); }
     }
 
     private void Tick(System.Collections.Generic.List<PlayerShip> pilots, double delta)
@@ -798,37 +848,54 @@ public partial class Boss : Node2D, IHittable
             }
         }
         _beam -= delta;
-        if (_beam <= 0 && _pendingBeam == null)
-        {   // the death beam: telegraph first, then it fires down the same line
-            _beam = BeamEvery;
-            var t = pilots.OrderBy(p => p.Position.DistanceTo(Position)).First();
-            var a = nose; var b = a + (t.Position - a).Normalized() * BeamLength;
-            _pendingBeam = (a, b); _beamT = BeamWindup;
-            Tele(true, a, b, BeamWidth, BeamWindup);
-            LaunchEscorts(t);
+        if (_beam <= 0 && _beamArm < 0 && !_beamCharging && _beamLive < 0)
+        {   // the death beam OPENS WITH ITS ESCORTS. The charge follows when their web should
+            // land -- an estimate made now, not a wait on them actually arriving, so killing
+            // them still ends in a beam: one the pilot is free to fly out of.
+            _beam = BeamEvery; _superGap = System.Math.Min(_beam, _charge);
+            _beamTarget = pilots.OrderBy(p => p.Position.DistanceTo(Position)).First();
+            _beamArm = LaunchEscorts(_beamTarget) + WebToBeam;
         }
-        if (_pendingBeam is { } beam && _beamLive < 0 && (_beamT -= delta) <= 0) { _beamLive = BeamLive; _beamTickT = 0; }
-        if (_pendingBeam is { } live && _beamLive >= 0)
-        {   // live for 1 s: a check every 0.51 s, 100 each time it lands
+        if (_beamArm >= 0 && (_beamArm -= delta) <= 0)
+        {   // locked down now; the telegraph rides the hull, so the line cannot lie
+            _beamArm = -1; _beamCharging = true; _beamT = BeamWindup;
+            if (!IsInstanceValid(_beamTarget) || !_beamTarget.Alive) _beamTarget = pilots.FirstOrDefault();
+            Tele(true, new Vector2(0, -Length * 0.5f), new Vector2(0, -Length * 0.5f - BeamLength), BeamWidth, BeamWindup, onHull: true);
+        }
+        if (_beamCharging)
+        {   // held still, tracking with nothing but its own ponderous turn: a quick pilot who is
+            // not webbed can still get outside the arc before it fires
+            if (IsInstanceValid(_beamTarget) && _beamTarget.Alive)
+            {
+                float aim = (_beamTarget.Position - Position).Angle() + Mathf.Pi / 2f;
+                Rotation += Mathf.Clamp(Mathf.AngleDifference(Rotation, aim), -TurnRate * (float)delta, TurnRate * (float)delta);
+            }
+            if ((_beamT -= delta) <= 0) { _beamCharging = false; _beamLive = BeamLive; _beamTickT = 0; }
+        }
+        if (_beamLive >= 0)
+        {   // live: a check every 0.25 s, down the nose as it points at this instant
             _beamTickT -= delta;
             if (_beamTickT <= 0)
             {
                 _beamTickT = BeamTick;
+                var (la, lb) = BeamSegment();
                 foreach (var p in pilots)
-                    if (DistToSegment(p.Position, live.a, live.b) <= BeamWidth / 2f + p.HitRadius) p.Hit(BeamDamage * DamageMult, Position, "boss:beam");
+                    if (DistToSegment(p.Position, la, lb) <= BeamWidth / 2f + p.HitRadius) p.Hit(BeamDamage * DamageMult, Position, "boss:beam");
             }
-            if ((_beamLive -= delta) < 0) _pendingBeam = null;
+            _beamLive -= delta;
         }
         _charge -= delta;
-        if (_charge <= 0 && _pendingCharge == null && !_dashTo.HasValue)
-        {   // the charge: a red line first, then a ram down it
-            _charge = BeamEvery;
+        if (_charge <= 0 && _pendingCharge == null && !_dashTo.HasValue && !_beamCharging)
+        {   // the ram: come round onto the pilot, then hold dead still for the wind-up so the
+            // line drawn is the line rammed down
+            _charge = BeamEvery; _superGap = System.Math.Min(_beam, _charge);
             var t = pilots.OrderBy(p => p.Position.DistanceTo(Position)).First();
-            var a = Position; var bb = a + (t.Position - a).Normalized() * ChargeLength;
+            Rotation = (t.Position - Position).Angle() + Mathf.Pi / 2f;
+            var a = Position; var bb = a + Vector2.Up.Rotated(Rotation) * ChargeLength;
             _pendingCharge = (a, bb); _chargeT = ChargeWindup;
-            Tele(true, a, bb, HalfWidth * 2f, ChargeWindup);
+            Tele(true, Vector2.Zero, new Vector2(0, -ChargeLength), HalfWidth * 2f, ChargeWindup, onHull: true);
         }
-        if (_pendingCharge is { } ch && (_chargeT -= delta) <= 0) { _dashTo = ch.b; Rotation = (ch.b - ch.a).Angle() + Mathf.Pi / 2f; _pendingCharge = null; }
+        if (_pendingCharge is { } ch && (_chargeT -= delta) <= 0) { _dashTo = ch.b; _pendingCharge = null; }
         if (_dashTo is { } to)
         {
             Position = Position.MoveToward(to, ChargeSpeed * (float)delta);
@@ -854,27 +921,31 @@ public partial class Boss : Node2D, IHittable
         return p.DistanceTo(a + ab * t);
     }
 
-    // host: show a telegraph here and on every guest
-    private void Tele(bool line, Vector2 a, Vector2 b, float size, double time)
+    // host: show a telegraph here and on every guest.
+    // onHull: a and b are in the BOSS'S OWN FRAME and the telegraph is parented to it, so the
+    // warning swings with the hull instead of being pinned to the spot the boss stood on when it
+    // drew it. Guests already lerp the boss's rotation from NetState, so their copy tracks too --
+    // no per-frame line updates over the wire.
+    private void Tele(bool line, Vector2 a, Vector2 b, float size, double time, bool onHull = false)
     {
-        ShowTelegraph(line, a, b, size, time);
-        if (Net.IsOnline) Rpc(nameof(NetTelegraph), line, a, b, size, time);
+        ShowTelegraph(line, a, b, size, time, onHull);
+        if (Net.IsOnline) Rpc(nameof(NetTelegraph), line, a, b, size, time, onHull);
     }
-    private void ShowTelegraph(bool line, Vector2 a, Vector2 b, float size, double time) =>
-        GetParent().AddChild(new Telegraph { Line = line, A = a, B = b, Width = size, Radius = size, Duration = time });
+    private void ShowTelegraph(bool line, Vector2 a, Vector2 b, float size, double time, bool onHull) =>
+        (onHull ? (Node)this : GetParent()).AddChild(new Telegraph { Line = line, A = a, B = b, Width = size, Radius = size, Duration = time });
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetTelegraph(bool line, Vector2 a, Vector2 b, float size, double time) => ShowTelegraph(line, a, b, size, time);
+    private void NetTelegraph(bool line, Vector2 a, Vector2 b, float size, double time, bool onHull) => ShowTelegraph(line, a, b, size, time, onHull);
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
-    private void NetState(Vector2 p, float rot, double hp) { _netPos = p; _netRot = rot; _hasNet = true; Hp = hp; }
+    private void NetState(Vector2 p, float rot, double hp, bool locked) { _netPos = p; _netRot = rot; _hasNet = true; Hp = hp; _netLocked = locked; }
 
-    public int TelegraphsPending => (_pendingBeam != null ? 1 : 0) + (_pendingWave != null ? 1 : 0);
+    public int TelegraphsPending => (_beamCharging ? 1 : 0) + (_pendingWave != null ? 1 : 0);
 }
 
 //==============================================================================
 // FILE: scripts/BossBar.cs
-// 74 lines   sha256 5758de5d8e72
+// 85 lines   sha256 679ea3b792b9
 //==============================================================================
 using Godot;
 using System;
@@ -890,6 +961,9 @@ public partial class BossBar : Control
 {
     public Hub Hub;
     public const float W = 640, H = 18, Bounce = 6f;
+    // Under it, much skinnier: the wind-up to the boss's next SUPER MOVE -- the ram, or the death
+    // beam's escorts going out. It fills to full exactly as that move commits, then starts again.
+    public const float SuperH = 5f, SuperPad = 3f;
     public const double Life = 0.8, BounceFor = 0.45, Merge = 0.06, BounceHz = 6.67;
     public class Chunk { public double From, To, T; }          // From/To: fractions of max hull
     public readonly List<Chunk> Chunks = new();
@@ -905,7 +979,7 @@ public partial class BossBar : Control
     public override void _Ready()
     {
         Name = "BossBar";
-        AnchorLeft = AnchorRight = 0.5f; OffsetLeft = -W / 2; OffsetRight = W / 2; OffsetTop = 104; OffsetBottom = 104 + H;
+        AnchorLeft = AnchorRight = 0.5f; OffsetLeft = -W / 2; OffsetRight = W / 2; OffsetTop = 104; OffsetBottom = 104 + H + SuperPad + SuperH;
         MouseFilter = MouseFilterEnum.Ignore;
         Visible = false;                                          // hidden until there is a boss
     }
@@ -933,7 +1007,7 @@ public partial class BossBar : Control
     {
         var boss = Hub?.Boss;
         if (!IsInstanceValid(boss)) return;                       // the first draw can come before any boss
-        _panel.Draw(GetCanvasItem(), new Rect2(-10, -26, W + 20, H + 34));
+        _panel.Draw(GetCanvasItem(), new Rect2(-10, -26, W + 20, H + 34 + SuperPad + SuperH));
         Txt.D(this, ThemeDB.FallbackFont, new Vector2(0, -8), $"{Missions.BossName}  ·  LEVEL {Missions.Level}  ·  {boss.Hp:0} / {boss.MaxHp:0}",
               HorizontalAlignment.Center, W, 13, new Color(1f, 0.85f, 0.8f));
         float frac = (float)Math.Clamp(boss.Hp / Math.Max(1, boss.MaxHp), 0, 1);
@@ -948,6 +1022,14 @@ public partial class BossBar : Control
             DrawRect(new Rect2(x0, Offset(c.T), Math.Max(1f, x1 - x0), H), col);
         }
         DrawRect(new Rect2(0, 0, W, H), new Color(0.9f, 0.5f, 0.45f, 0.7f), false, 1.5f);
+
+        // the super-move wind-up: skinny, directly under, filling towards the next one
+        float y = H + SuperPad, sf = (float)Math.Clamp(boss.SuperFill, 0, 1);
+        DrawRect(new Rect2(0, y, W, SuperH), new Color(0.06f, 0.06f, 0.10f, 0.95f));
+        // it warms towards white as it tops out, so a full bar reads at a glance mid-fight
+        var warm = new Color(0.55f, 0.65f, 1f).Lerp(new Color(1f, 0.95f, 0.85f), sf * sf);
+        DrawRect(new Rect2(0, y, W * sf, SuperH), warm);
+        DrawRect(new Rect2(0, y, W, SuperH), new Color(0.6f, 0.7f, 1f, 0.5f), false, 1f);
     }
 }
 
@@ -5680,7 +5762,7 @@ public partial class Radar : Control
 
 //==============================================================================
 // FILE: scripts/Raider.cs
-// 309 lines   sha256 f6f9139ee094
+// 337 lines   sha256 6ce1e35e69c8
 //==============================================================================
 using Godot;
 using System.Linq;
@@ -5769,11 +5851,24 @@ public partial class Raider : Node2D, IHittable
     // An ESCORT (launched by a boss): its target is set, its boost lasts until it is posted
     // (or `boostFor` runs out), and it is fragile.
     public bool IsEscort { get; private set; }
-    public void Escort(Node2D target, Vector2 launchDir, double boostFor, double hull)
+    public const double EscortShiver = 1.0;            // hangs at the launch point, shaking, coming round onto the pilot
+    public const float EscortShake = 3f;               // how far the shiver throws it
+    public const float EscortPlume = 3f;               // its boost plume: three times the usual reach
+    private double _shiver; private Vector2 _shiverHome; private float _escortPost;
+    // An ESCORT (launched by a boss): it hangs at the launch point shivering while its nose comes
+    // round onto the pilot, then breaks into a long boost and flanks -- one to PORT, one to
+    // STARBOARD, holding station the way a raid's lights do. Fragile on purpose.
+    public void Escort(Node2D target, Vector2 launchDir, double boostFor, double hull, float post)
     {
         Target = target; IsEscort = true; _boostUsed = true; _boostLeft = boostFor; Hp = hull;
         Rotation = launchDir.Angle() + Mathf.Pi / 2f;
+        _shiver = EscortShiver; _shiverHome = Position; _escortPost = post;
     }
+    public bool Shivering => _shiver > 0;
+    // Roughly when an escort launched now would have its web on the target: the shiver, then the
+    // run in at boost speed. A PREDICTION, not a promise -- the pilot may shoot it down first,
+    // and the boss commits to its beam on this estimate either way.
+    public static double WebEta(float distance) => EscortShiver + distance / (Cruise * BoostMult);
     public bool Latched { get; private set; }
     public bool Boosting => _boostLeft > 0;
     public float Speed { get; private set; }
@@ -5879,10 +5974,23 @@ public partial class Raider : Node2D, IHittable
         _targetVel = dt > 0 && moved.Length() < MaxStep ? moved / dt : Vector2.Zero; _lastTargetPos = Target.Position;
         if (Heavy) { TickHeavy(delta); QueueRedraw(); return; }
 
-        // my post around the target: ahead, left or right by its heading, 90 u out
-        var mates = Hub.Raiders.Where(r => r.Alive && r.Target == Target).OrderBy(r => r.NetId).ToList();
+        if (_shiver > 0)
+        {   // shaking on the spot, nose swinging onto the pilot -- then it lights up and goes
+            _shiver -= delta;
+            float ms = Time.GetTicksMsec();
+            Position = _shiverHome + new Vector2(Mathf.Sin(ms * 0.061f), Mathf.Cos(ms * 0.083f)) * EscortShake;
+            var onto = (Target.Position - Position).Angle() + Mathf.Pi / 2f;
+            Rotation = Mathf.LerpAngle(Rotation, onto, Mathf.Clamp(6f * dt, 0f, 1f));
+            Speed = 0;
+            QueueRedraw();
+            return;                                   // the boost is not spent while it sits here
+        }
+
+        // my post around the target: ahead, left or right by its heading, 90 u out. An escort
+        // keeps the side it was launched on instead of taking a slot, so the pair always flanks.
+        var mates = Hub.Raiders.Where(r => r.Alive && !r.IsEscort && r.Target == Target).OrderBy(r => r.NetId).ToList();
         int slot = Mathf.Max(0, mates.IndexOf(this)) % Posts.Length;
-        var postDir = Vector2.Up.Rotated(Target.Rotation + Posts[slot]);
+        var postDir = Vector2.Up.Rotated(Target.Rotation + (IsEscort ? _escortPost : Posts[slot]));
         var post = Target.Position + postDir * (Extent(Target, postDir) + Hold);
         float toTarget = Position.DistanceTo(Target.Position);
 
@@ -5987,7 +6095,9 @@ public partial class Raider : Node2D, IHittable
             DrawLine(Vector2.Zero, inv * to, new Color(1f, 0.3f, 0.25f, 0.35f), 1.5f);
         }
         float plume = Heavy ? Length * 0.5f : Length;
-        if (Boosting || (Heavy && Speed > Cruise + 1f)) Plume.Draw(this, new Vector2(0, Length * 0.5f), Vector2.Down, plume * 1.6f, new Color(1f, 0.35f, 0.25f), 1f, true);
+        // an escort's run-in is unmistakable: it goes on the boost with a plume three times over
+        if (Boosting && IsEscort && !Shivering) Plume.Draw(this, new Vector2(0, Length * 0.5f), Vector2.Down, plume * EscortPlume, new Color(1f, 0.35f, 0.25f), 1f, true);
+        else if (Boosting || (Heavy && Speed > Cruise + 1f)) Plume.Draw(this, new Vector2(0, Length * 0.5f), Vector2.Down, plume * 1.6f, new Color(1f, 0.35f, 0.25f), 1f, true);
         else Plume.Draw(this, new Vector2(0, Length * 0.5f), Vector2.Down, plume, new Color(1f, 0.35f, 0.25f), 0.5f, Speed > 1f);
     }
 }
@@ -9527,7 +9637,7 @@ echo "SMOKE TEST PASSED"
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 1802 lines   sha256 1f0fc0e4154f
+// 1835 lines   sha256 9dd729707224
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -10888,11 +10998,12 @@ public partial class _Test : Node
                 while (Hub.InArena && GodotObject.IsInstanceValid(boss))
                 {
                     arenaT += 1.0 / 60;
+                    // The beam's place in the rhythm is where it COMMITS -- its escorts going out.
+                    // Its red line comes later by the escorts' predicted web plus a second, so
+                    // timing the rhythm off the telegraph would measure that delay, not the rhythm.
+                    if (tBeam < 0 && H.Raiders.Any(r => r.IsEscort)) tBeam = arenaT;
                     foreach (var tl in Nodes<Telegraph>().Where(x => x.Line))
-                    {
-                        if (tBeam < 0 && Math.Abs(tl.Width - Boss.BeamWidth) < 0.1f) tBeam = arenaT;
                         if (tCharge < 0 && Math.Abs(tl.Width - Boss.HalfWidth * 2f) < 0.1f) tCharge = arenaT;
-                    }
                     if (tVolley < 0 && boss.Volleys > 0)
                     {
                         tVolley = arenaT;
@@ -10904,18 +11015,50 @@ public partial class _Test : Node
                 }
             }
             Watch();
+            // The death beam OPENS WITH ITS ESCORTS, well before any red line: two fragile lights
+            // 45 degrees to port and starboard of the nose, shivering on the spot while they come
+            // round onto the pilot. The beam only starts charging once their web should have landed.
+            var escorts = new System.Collections.Generic.List<Raider>();
+            for (int i = 0; i < 60 * 20 && escorts.Count < 2; i++) { escorts = H.Raiders.Where(r => r.IsEscort).ToList(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            var bnose = Vector2.Up.Rotated(boss.Rotation);
+            var escAng = escorts.Select(r => Mathf.RadToDeg(bnose.AngleTo(r.Position - boss.Position))).OrderBy(x => x).ToList();
+            Check(escorts.Count == 2 && Math.Abs(escAng[0] + 45) < 12 && Math.Abs(escAng[1] - 45) < 12
+                  && escorts.All(r => r.Target == me2 && r.Hp > 0 && r.Hp <= Boss.EscortHull * Missions.S(Missions.Level) + 1e-6),
+                  $"two escorts launch at the pilot, 45 degrees to port and starboard ({string.Join(", ", escAng.Select(x => x.ToString("0")))}), fragile");
+            Check(escorts.All(r => r.Shivering), "the escorts shiver at the launch point before the run in");
+            Check(Nodes<Telegraph>().All(t => !t.Line), "no beam line yet: the escorts go first, the charge follows their web");
+            // the bar under the boss's hull resets as a super commits and counts the 15 s to the next
+            Check(boss.SuperFill < 0.15 && Math.Abs(boss.NextSuperIn - 15) < 1.5,
+                  $"the super-move bar resets as the beam commits, counting the 15 s to the ram ({boss.NextSuperIn:0.0} s, fill {boss.SuperFill:0.00})");
             Telegraph beam = null;
             for (int i = 0; i < 60 * 14 && beam == null; i++) { beam = Nodes<Telegraph>().FirstOrDefault(t => t.Line); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
             Check(beam != null && boss.TelegraphsPending > 0, "the death beam is telegraphed: a red line before it fires");
-            // the beam charges 6 s, and launches two fragile escorts at the pilot: 45 degrees to port and starboard
-            var escorts = H.Raiders.Where(r => r.IsEscort).ToList();
-            var bnose = Vector2.Up.Rotated(boss.Rotation);
-            var escAng = escorts.Select(r => Mathf.RadToDeg(bnose.AngleTo(r.Position - boss.Position))).OrderBy(x => x).ToList();
-            Check(Math.Abs(beam.Duration - Boss.BeamWindup) < 1e-6 && Boss.BeamWindup == 6 && escorts.Count == 2
-                  && Math.Abs(escAng[0] + 45) < 12 && Math.Abs(escAng[1] - 45) < 12
-                  && escorts.All(r => r.Target == me2 && r.Boosting && r.Hp > 0 && r.Hp <= Boss.EscortHull * Missions.S(Missions.Level) + 1e-6),   // (point defence may already be on them)
-                  $"the beam charges 6 s; two escorts launch at the pilot, 45 degrees to port and starboard ({string.Join(", ", escAng.Select(x => x.ToString("0")))}), boosting, fragile"
-);
+            Check(Math.Abs(beam.Duration - Boss.BeamWindup) < 1e-6 && Boss.BeamWindup == 6, "the beam charges 6 s");
+            // the warning is parented to the boss, so it swings with the hull instead of being
+            // pinned to the spot the boss stood on: the line drawn IS the line fired
+            Check(beam.GetParent() == boss, "the beam's telegraph rides the hull rather than the world");
+            // Push it out past its 650 u standoff BEFORE measuring. Inside that range it would
+            // not close anyway, so watching for drift there proves nothing -- a mutant that
+            // ignored the lock completely still passed this. Out here it wants to close at
+            // 30 u/s, which is 22 u over the window below, so holding still is a real claim.
+            var bossWasAt = boss.Position;
+            boss.Position += (boss.Position - me2.Position).Normalized() * 700f;
+            var lockAt = boss.Position;
+            double standoff = boss.Position.DistanceTo(me2.Position);
+            await Wait(0.75);
+            Check(boss.BeamCharging && boss.Locked && standoff > 650 && boss.Position.DistanceTo(lockAt) < 0.01f,
+                  $"the boss is locked in place while the beam charges, {standoff:0} u out where it would otherwise close (drifted {boss.Position.DistanceTo(lockAt):0.000} u)");
+            boss.Position = bossWasAt;   // put it back: left out there its tridents take so long to
+                                         // arrive that the point-defence check below times out
+            // Reach, not trigger: activation is still the 30 s rhythm, the nearest pilot and the
+            // escorts' predicted web -- only how far the thing carries has changed. Compared with
+            // the spec's number as a literal, never with BeamLength itself, and checked on the
+            // real segment so the drawn indicator and the hit line are both covered.
+            var (segA, segB) = boss.BeamSegment();
+            var farOut = segA + (segB - segA).Normalized() * 5000f;
+            Check(Boss.BeamLength == 10000f && Math.Abs((beam.B - beam.A).Length() - 10000f) < 1f
+                  && Boss.DistToSegment(farOut, segA, segB) < 1f,
+                  $"beam and indicator both reach 10000 u -- a point 5000 u out is inside it, where the old 1800 u fell short (indicator {(beam.B - beam.A).Length():0} u)");
             int down0 = Torpedo.Intercepted;
             for (int i = 0; i < 60 * 10 && Torpedo.Intercepted == down0; i++)
             {

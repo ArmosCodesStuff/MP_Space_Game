@@ -39,7 +39,40 @@ ticked only when it has been read line by line and everything found in it is fix
   player's decision**: a new placement feature will use it.
 - Result: **0 unused members**.
 
+## Pass 2b — re-run deeper, at every visibility: nothing new has accumulated
+
+`xref.py` only looks at **public** members, which is why it keeps reporting zero. Re-scanned with a
+wider net — every declared member at any visibility (fields, consts, properties, methods), plus
+every declared type, counted against both game scripts and both test harnesses:
+
+- **1140 members across 46 scripts. Referenced nowhere: 0. Types named nowhere else: 0.**
+- **16 test-only members**, all read-only observers the checks rely on — the category this file
+  already rules intended. (`Boss.BeamCharging` and `BossBar`'s new hooks joined the list.)
+- **112 members are `public` but only ever used inside their own file.** Not dead — over-exposed.
+  Narrowing them is a real tidy-up and a safe one (none are touched by the harnesses), but it is
+  cosmetic and was **not** done: it would touch a third of the code base for no behaviour change.
+
+Conclusion: the cull asked for in passes 1 and 2 is still done. There is no accumulated dead code
+to remove. What remains is pass 3.
+
 ## Pass 3 — line by line (to do, in this order)
+
+**Multiplayer authority sweep (across all files, ahead of the line-by-line):** every `[Rpc]` in the
+code base read and checked against its authority.
+
+- 28 RPCs. Every `AnyPeer` one — the ones a guest can call on the host — validates its caller:
+  `NetIdentity` refuses a peer describing anyone but itself *and* refuses progression the claimed
+  level could not have paid for; `RequestReady` checks the sender is a pilot in the session;
+  `PlayerShip.RequestAbility` and `NetState` check the sender owns that ship; `NetHostState` and
+  `NetShield` accept only peer 1.
+- All **nine** damage entry points (`TakeDamage` / `Hit`) open with `!Net.Sim`.
+- Two nits, neither a hole, **not fixed**: `Hub.NetMySector` casts an unvalidated `int` to
+  `SectorKind` where `NetIdentity` uses `Enum.IsDefined` (it only feeds `RpcHome`'s filter, so a bad
+  value costs that peer its own home RPCs and nothing else); and `Yard.RequestBuy` /
+  `RequestDispatchRpc` check `Net.IsHost` but not that the sender is in the session, where
+  `RequestReady` does. Shared-base spending is intended — the inconsistency is the finding.
+- **Fixed:** the boss now sends state at 30 Hz while a super move is locked. See DESIGN.md — a tell
+  that rides the hull makes the hull's *angle* load-bearing, and 10 Hz was not enough for it.
 
 | # | File | Lines | Why this position | Reviewed |
 |---|---|---|---|---|

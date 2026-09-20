@@ -1357,11 +1357,12 @@ public partial class _Test : Node
                 while (Hub.InArena && GodotObject.IsInstanceValid(boss))
                 {
                     arenaT += 1.0 / 60;
+                    // The beam's place in the rhythm is where it COMMITS -- its escorts going out.
+                    // Its red line comes later by the escorts' predicted web plus a second, so
+                    // timing the rhythm off the telegraph would measure that delay, not the rhythm.
+                    if (tBeam < 0 && H.Raiders.Any(r => r.IsEscort)) tBeam = arenaT;
                     foreach (var tl in Nodes<Telegraph>().Where(x => x.Line))
-                    {
-                        if (tBeam < 0 && Math.Abs(tl.Width - Boss.BeamWidth) < 0.1f) tBeam = arenaT;
                         if (tCharge < 0 && Math.Abs(tl.Width - Boss.HalfWidth * 2f) < 0.1f) tCharge = arenaT;
-                    }
                     if (tVolley < 0 && boss.Volleys > 0)
                     {
                         tVolley = arenaT;
@@ -1373,18 +1374,50 @@ public partial class _Test : Node
                 }
             }
             Watch();
+            // The death beam OPENS WITH ITS ESCORTS, well before any red line: two fragile lights
+            // 45 degrees to port and starboard of the nose, shivering on the spot while they come
+            // round onto the pilot. The beam only starts charging once their web should have landed.
+            var escorts = new System.Collections.Generic.List<Raider>();
+            for (int i = 0; i < 60 * 20 && escorts.Count < 2; i++) { escorts = H.Raiders.Where(r => r.IsEscort).ToList(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            var bnose = Vector2.Up.Rotated(boss.Rotation);
+            var escAng = escorts.Select(r => Mathf.RadToDeg(bnose.AngleTo(r.Position - boss.Position))).OrderBy(x => x).ToList();
+            Check(escorts.Count == 2 && Math.Abs(escAng[0] + 45) < 12 && Math.Abs(escAng[1] - 45) < 12
+                  && escorts.All(r => r.Target == me2 && r.Hp > 0 && r.Hp <= Boss.EscortHull * Missions.S(Missions.Level) + 1e-6),
+                  $"two escorts launch at the pilot, 45 degrees to port and starboard ({string.Join(", ", escAng.Select(x => x.ToString("0")))}), fragile");
+            Check(escorts.All(r => r.Shivering), "the escorts shiver at the launch point before the run in");
+            Check(Nodes<Telegraph>().All(t => !t.Line), "no beam line yet: the escorts go first, the charge follows their web");
+            // the bar under the boss's hull resets as a super commits and counts the 15 s to the next
+            Check(boss.SuperFill < 0.15 && Math.Abs(boss.NextSuperIn - 15) < 1.5,
+                  $"the super-move bar resets as the beam commits, counting the 15 s to the ram ({boss.NextSuperIn:0.0} s, fill {boss.SuperFill:0.00})");
             Telegraph beam = null;
             for (int i = 0; i < 60 * 14 && beam == null; i++) { beam = Nodes<Telegraph>().FirstOrDefault(t => t.Line); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
             Check(beam != null && boss.TelegraphsPending > 0, "the death beam is telegraphed: a red line before it fires");
-            // the beam charges 6 s, and launches two fragile escorts at the pilot: 45 degrees to port and starboard
-            var escorts = H.Raiders.Where(r => r.IsEscort).ToList();
-            var bnose = Vector2.Up.Rotated(boss.Rotation);
-            var escAng = escorts.Select(r => Mathf.RadToDeg(bnose.AngleTo(r.Position - boss.Position))).OrderBy(x => x).ToList();
-            Check(Math.Abs(beam.Duration - Boss.BeamWindup) < 1e-6 && Boss.BeamWindup == 6 && escorts.Count == 2
-                  && Math.Abs(escAng[0] + 45) < 12 && Math.Abs(escAng[1] - 45) < 12
-                  && escorts.All(r => r.Target == me2 && r.Boosting && r.Hp > 0 && r.Hp <= Boss.EscortHull * Missions.S(Missions.Level) + 1e-6),   // (point defence may already be on them)
-                  $"the beam charges 6 s; two escorts launch at the pilot, 45 degrees to port and starboard ({string.Join(", ", escAng.Select(x => x.ToString("0")))}), boosting, fragile"
-);
+            Check(Math.Abs(beam.Duration - Boss.BeamWindup) < 1e-6 && Boss.BeamWindup == 6, "the beam charges 6 s");
+            // the warning is parented to the boss, so it swings with the hull instead of being
+            // pinned to the spot the boss stood on: the line drawn IS the line fired
+            Check(beam.GetParent() == boss, "the beam's telegraph rides the hull rather than the world");
+            // Push it out past its 650 u standoff BEFORE measuring. Inside that range it would
+            // not close anyway, so watching for drift there proves nothing -- a mutant that
+            // ignored the lock completely still passed this. Out here it wants to close at
+            // 30 u/s, which is 22 u over the window below, so holding still is a real claim.
+            var bossWasAt = boss.Position;
+            boss.Position += (boss.Position - me2.Position).Normalized() * 700f;
+            var lockAt = boss.Position;
+            double standoff = boss.Position.DistanceTo(me2.Position);
+            await Wait(0.75);
+            Check(boss.BeamCharging && boss.Locked && standoff > 650 && boss.Position.DistanceTo(lockAt) < 0.01f,
+                  $"the boss is locked in place while the beam charges, {standoff:0} u out where it would otherwise close (drifted {boss.Position.DistanceTo(lockAt):0.000} u)");
+            boss.Position = bossWasAt;   // put it back: left out there its tridents take so long to
+                                         // arrive that the point-defence check below times out
+            // Reach, not trigger: activation is still the 30 s rhythm, the nearest pilot and the
+            // escorts' predicted web -- only how far the thing carries has changed. Compared with
+            // the spec's number as a literal, never with BeamLength itself, and checked on the
+            // real segment so the drawn indicator and the hit line are both covered.
+            var (segA, segB) = boss.BeamSegment();
+            var farOut = segA + (segB - segA).Normalized() * 5000f;
+            Check(Boss.BeamLength == 10000f && Math.Abs((beam.B - beam.A).Length() - 10000f) < 1f
+                  && Boss.DistToSegment(farOut, segA, segB) < 1f,
+                  $"beam and indicator both reach 10000 u -- a point 5000 u out is inside it, where the old 1800 u fell short (indicator {(beam.B - beam.A).Length():0} u)");
             int down0 = Torpedo.Intercepted;
             for (int i = 0; i < 60 * 10 && Torpedo.Intercepted == down0; i++)
             {
