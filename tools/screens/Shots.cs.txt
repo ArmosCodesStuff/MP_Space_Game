@@ -279,6 +279,12 @@ public partial class _Shots : Node
             foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e9);
             rs2.Position = keepR2; rs2.Velocity = Vector2.Zero; await W(0.3);
         }
+        // the equipment window (I): five parts and five chips, the class's own
+        {
+            H.ToggleEquipment(); await W(0.4);
+            await Snap("55_equipment");
+            H.ToggleEquipment(); await W(0.2);
+        }
         // a waypoint picked on the radar: its ring there, and the HUD naming it
         {
             H.SelectWaypoint("BASE", Hub.BasePos, 260f); await W(0.3);
