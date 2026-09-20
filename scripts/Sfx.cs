@@ -16,7 +16,8 @@ public static class Sfx
     static readonly string[] Names = { "laser_light", "laser_boss", "laser_hit", "missile_whoosh", "impact_thunk" };
     static readonly Dictionary<string, AudioStream> _streams = new();
     static readonly Dictionary<string, double> _last = new();
-    static readonly Dictionary<string, double> _gap = new() { ["laser_light"] = 0.04, ["laser_boss"] = 0.08, ["laser_hit"] = 0.03, ["missile_whoosh"] = 0.05, ["impact_thunk"] = 0.05 };
+    static readonly Dictionary<string, string> _alias = new() { ["cannon"] = "impact_thunk" };   // a sound played its own way
+    static readonly Dictionary<string, double> _gap = new() { ["cannon"] = 0.05, ["laser_light"] = 0.04, ["laser_boss"] = 0.08, ["laser_hit"] = 0.03, ["missile_whoosh"] = 0.05, ["impact_thunk"] = 0.05 };
     public static readonly Dictionary<string, int> Played = new();            // for the smoke test
     static Node _pool; static int _next;
     const int Voices = 16;
@@ -38,6 +39,8 @@ public static class Sfx
     }
     public static void Missile(Vector2 at) => Play("missile_whoosh", at, -8f, 1f);
     public static void Impact(Vector2 at) => Play("impact_thunk", at, -2f, 1f);
+    // a battleship gun: the thunk, higher and quieter -- a cannon's report, not a laser's buzz
+    public static void Cannon(Vector2 at) => Play("cannon", at, -9f, 1.7f);
 
     static void Play(string name, Vector2 at, float trimDb, float pitch)
     {
@@ -56,6 +59,7 @@ public static class Sfx
             tree.Root.CallDeferred(Node.MethodName.AddChild, _pool);
             for (int i = 0; i < Voices; i++) _pool.AddChild(new AudioStreamPlayer());
             foreach (var s in Names) _streams[s] = GD.Load<AudioStream>($"res://sfx/{s}.wav");
+            foreach (var kv in _alias) _streams[kv.Key] = _streams[kv.Value];
         }
         var p = _pool.GetChild<AudioStreamPlayer>(_next); _next = (_next + 1) % Voices;
         p.Stream = _streams[name]; p.VolumeDb = db + trimDb; p.PitchScale = pitch;

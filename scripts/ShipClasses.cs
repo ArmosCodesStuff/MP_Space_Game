@@ -152,6 +152,11 @@ public partial class Turret : Node2D
         if (!Net.Sim) return;
         var dir = Vector2.Right.Rotated(GlobalRotation);
         var from = GlobalPosition + dir * BarrelLength;
+        if (!PointDefense)
+        {   // the main guns fire SHELLS: straight, 4x the missile's speed, as far as their range
+            Combat.FireShell(from, dir, (float)S["missile_speed"] * Shell.SpeedMult, Range, ShotDamage, Ship);
+            return;
+        }
         var hit = Combat.RayHit(from, dir, Range, out var end);
         hit?.TakeDamage(ShotDamage);
         if (hit != null) Ship.NoteCombat();

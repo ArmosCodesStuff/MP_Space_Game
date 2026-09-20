@@ -400,7 +400,7 @@ public partial class _Test : Node
         Check(Count<StatsWindow>() == 1, "K opens the ability & stats window");
         var win = Nodes<StatsWindow>().First();
         var labels = Nodes<Label>(win).Select(l => l.Text).ToList();
-        Check(labels.Any(x => x.Contains("Main guns (4 barrels):  6.00 DPS")) && labels.Any(x => x.Contains("Turning radius")), "stats tab: gun DPS and helm stats");
+        Check(labels.Any(x => x.Contains("Main guns (4 barrels):  23.60 DPS")) && labels.Any(x => x.Contains("Turning radius")), "stats tab: gun DPS and helm stats");
         Check(Nodes<HBoxContainer>(win).Count(r => r.Name.ToString().StartsWith("Key_")) == 11, "keys tab lists the battleship's 5 abilities + 6 open slots");
         Check(Enumerable.Range(1, 6).All(i => Abilities.KeyFor(ShipClass.Battleship, $"open{i}") == global::Godot.Key.Key0 + i)
               && Abilities.For(ShipClass.Carrier).Count(a => a.Open) == 6 && Abilities.For((ShipClass)99).Length == 6,
@@ -444,14 +444,16 @@ public partial class _Test : Node
         Check(dummy.Total == 0, "no fire without Space");
 
         ship.Staggered = false; dummy.ResetMeter();
-        KeyDown(global::Godot.Key.Space); await Wait(20.0); KeyUp(global::Godot.Key.Space);
+        // shells take ~1 s to arrive: wait for the last ones before reading the total
+        KeyDown(global::Godot.Key.Space); await Wait(20.0); KeyUp(global::Godot.Key.Space); await Wait(1.5);
         double salvo = dummy.Total; await Wait(1.2);
         ship.Staggered = true; dummy.ResetMeter();
-        KeyDown(global::Godot.Key.Space); await Wait(20.0); KeyUp(global::Godot.Key.Space);
+        KeyDown(global::Godot.Key.Space); await Wait(20.0); KeyUp(global::Godot.Key.Space); await Wait(1.5);
         double stag = dummy.Total;
         GD.Print($"  salvo {salvo:0.0} dmg / 20s;  staggered {stag:0.0} / 20s;  sheet {ship.Stats.MainDps:0.000} DPS");
-        Check(Math.Abs(salvo - 120) <= 6.01, "salvo delivers the sheet's 6.0 DPS (±1 salvo)");
-        Check(Math.Abs(stag - 120) <= 1.51, "staggered delivers the sheet's 6.0 DPS (±1 shot)");
+        double want20 = ship.Stats.MainDps * 20, oneShot = ship.Stats["main_damage"];
+        Check(Math.Abs(salvo - want20) <= 4 * oneShot + 0.01, $"salvo delivers the sheet's {ship.Stats.MainDps:0.0} DPS (±1 salvo)");
+        Check(Math.Abs(stag - want20) <= oneShot + 0.01, $"staggered delivers the sheet's {ship.Stats.MainDps:0.0} DPS (±1 shot)");
         bool before = ship.Staggered; Key(global::Godot.Key.G); await Wait(0.05);
         Check(ship.Staggered != before, "G toggles salvo / staggered");
 
@@ -503,6 +505,33 @@ public partial class _Test : Node
         Check(turned > 0.05 && turned <= ship.Stats["missile_turn"] + 0.01, "it steers toward the target, but no faster than 0.35 rad/s");
         await Wait(6.0); d1.Position = dhome;
         Key(global::Godot.Key.R); await Wait(16.2);                  // leave it loaded for what follows
+
+        // ── the main guns fire SHELLS: straight, 4x the missile's speed, damage on arrival ──
+        {
+            var gs = Me; var gd = H.GetNode<TargetDummy>("TargetDummy1");
+            var gKeep = gs.Position; gs.Position = gd.Position + new Vector2(0, 520); gs.Velocity = Vector2.Zero; gs.Rotation = 0f; await Wait(0.6);
+            AimWorld(gd.Position); await Wait(1.2);                                   // turrets swing onto it
+            await Wait(TargetDummy.IdleReset + 0.2); gd.ResetMeter();
+            Input.ParseInputEvent(new InputEventKey { Keycode = global::Godot.Key.Space, PhysicalKeycode = global::Godot.Key.Space, Pressed = true });
+            Shell sh1 = null;
+            for (int i = 0; i < 90 && sh1 == null; i++) { AimWorld(gd.Position); sh1 = Nodes<Shell>().FirstOrDefault(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            Input.ParseInputEvent(new InputEventKey { Keycode = global::Godot.Key.Space, PhysicalKeycode = global::Godot.Key.Space, Pressed = false });
+            double atFire = gd.Total;
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            var sp0 = sh1.Position; var sd0 = sh1.Dir;
+            for (int i = 0; i < 10; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            float shSpd = GodotObject.IsInstanceValid(sh1) ? (sh1.Position - sp0).Length() / (10f / 60f) : 0f;
+            Check(Math.Abs(shSpd - 4 * (float)gs.Stats["missile_speed"]) < 6f && GodotObject.IsInstanceValid(sh1) && sh1.Dir == sd0 && atFire == 0,
+                  $"the guns fire shells at 4x the missile's speed ({shSpd:0} u/s), straight, and nothing lands at once");
+            for (int i = 0; i < 90 && gd.Total == 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(gd.Total > 0 && Math.Abs(gd.Total % gs.Stats["main_damage"]) < 1e-6 && gs.Stats["main_damage"] == 5.9, $"a shell lands for 5.9 ({gd.Total:0.0})");
+            // the balance: the battleship's total is 1.25x the carrier's measured 19.07 DPS; the carrier reaches 1.5x as far
+            var bsS = new ShipStats(ShipClass.Battleship); var caS = new ShipStats(ShipClass.Carrier);
+            double bsTotal = bsS.MainDps + bsS.MissileDps;
+            Check(Math.Abs(bsTotal / 19.07 - 1.25) < 0.02, $"the battleship's damage ({bsTotal:0.00} DPS) is 1.25x the carrier's measured 19.07");
+            Check(Math.Abs(caS["control_range"] - 1.5 * bsS["main_range"]) < 1e-6, "the carrier reaches 1.5x as far as the battleship's guns (1080 u)");
+            gs.Position = gKeep; gs.Velocity = Vector2.Zero; await Wait(0.5);
+        }
 
         // ── warp (V): every capital ship; a hull cooldown, not a slot ──
         {
@@ -597,8 +626,8 @@ public partial class _Test : Node
         await CheckDocks(6);
         Character.Bonuses.Remove("bomber_count"); ship.SetClass(ship.Class); ship = Me;
         ship.Velocity = Vector2.Zero;
-        Check(Math.Abs(ship.Stats["control_range"] - 1400) < 0.01 && Math.Abs(ship.Stats["strike_range"] - 2800) < 0.01,
-              "fighter control range 1400 (doubled); bomber strike range 2800 (2x)");
+        Check(Math.Abs(ship.Stats["control_range"] - 1080) < 0.01 && Math.Abs(ship.Stats["strike_range"] - 2160) < 0.01,
+              "fighter control range 1080 (1.5x the battleship's guns); bomber strike range 2160 (2x)");
         var spr = Nodes<Sprite2D>(ship).First();
         Check(spr.Texture.ResourcePath.EndsWith("carrier_player.png") && Math.Abs(spr.Texture.GetHeight() * spr.Scale.Y - 170f) < 0.5f,
               "carrier flies the new symmetrical sprite at 170 u");
@@ -726,6 +755,24 @@ public partial class _Test : Node
         Check(allHome && topSeen > 90f && Bombers().All(w => w.RearmLeft > 0 || w.Armed),
               $"with the carrier at full speed ({topSeen:0} u/s), the bombers still dock and re-arm");
         ship.Velocity = Vector2.Zero; await Wait(15.0);
+        // the balance's reference: the carrier's MEASURED output (19.07 DPS over 90 s when set); re-measured
+        // here over 40 s -- lumpier (bomber strikes land in lumps), so within 25% -- to catch it drifting
+        {
+            var md = H.GetNode<TargetDummy>("TargetDummy1");
+            Click(Scr(md.Position)); await Wait(0.1);
+            await Wait(TargetDummy.IdleReset + 0.2); md.ResetMeter();
+            Key(global::Godot.Key.Space); await Wait(0.05); Key(global::Godot.Key.F); await Wait(0.05);
+            for (int i = 0; i < 60 * 40; i++)
+            {
+                ship.Position = md.Position + new Vector2(0, 520); ship.Velocity = Vector2.Zero;
+                if (i % 30 == 0 && ship.BombersReady == (int)ship.Stats["bomber_count"] && ship.StrikeTarget == null) Key(global::Godot.Key.F);
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            }
+            double carrierDps = md.Total / 40.0;
+            GD.Print($"  carrier measured: {carrierDps:0.00} DPS over 40 s (reference 19.07)");
+            Check(Math.Abs(carrierDps / 19.07 - 1) < 0.25, $"the carrier still delivers about the measured 19.07 DPS the balance rests on ({carrierDps:0.00})");
+            Key(global::Godot.Key.R); await Wait(12.0);                       // recall the wing for what follows
+        }
 
         // No tracking, tested on single torpedoes so bombers cannot re-aim: moving
         // the target during a whole strike is not a fair test, because a bomber still

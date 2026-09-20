@@ -196,6 +196,12 @@ public partial class Hub : Node2D
         };
         // Torpedoes: the host's copy deals damage; guests get the launch and fly a
         // cosmetic copy (the run is straight and steady, so it lands in the same place).
+        Combat.OnShell = (from, dir, speed, range, dmg, source) =>
+        {
+            AddChild(new Shell { Position = from, Dir = dir, Speed = speed, Range = range, Damage = dmg, Source = source });
+            Sfx.Cannon(from);
+            if (Net.IsHost && Net.IsOnline) Rpc(nameof(NetShell), from, dir, speed, range);
+        };
         Combat.OnTorpedo = (from, dir, speed, range, dmg, target, turn, heavy, hostile, source, hitSource, size) =>
         {
             int id = hostile ? Combat.NextMissileId() : 0;       // hostile missiles can be shot down
@@ -1010,6 +1016,13 @@ public partial class Hub : Node2D
             }
             GetViewport().SetInputAsHandled();
         }
+    }
+
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void NetShell(Vector2 from, Vector2 dir, float speed, float range)
+    {
+        AddChild(new Shell { Position = from, Dir = dir, Speed = speed, Range = range, Cosmetic = true });
+        Sfx.Cannon(from);
     }
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]

@@ -65,7 +65,9 @@ public class ShipStats
         if (bs)
         {
             Add("Main guns", "main_count",    "Barrels",            4, "", 0);
-            Add("Main guns", "main_damage",   "Damage per shot",    1.5, "", 2);
+            // 5.9 a shell: the battleship's total (main + missiles, ~23.9 DPS) is 1.25x the carrier's
+            // MEASURED sustained output (19.07 DPS: fighters and bomber strikes on a dummy, 90 s)
+            Add("Main guns", "main_damage",   "Damage per shot",    5.9, "", 2);
             Add("Main guns", "main_interval", "Reload (per barrel)",1.0, "s", 2, inverse: true);
             Add("Main guns", "main_range",    "Range",              720, "u", 0);
             Add("Main guns", "main_turn",     "Turret turn rate",   Mathf.Tau / 4f, "rad/s", 2);
@@ -102,7 +104,7 @@ public class ShipStats
             Add("Fighters", "fighter_burst",    "Firing before rest", 15, "s", 0);
             Add("Fighters", "fighter_rest",     "Rest, docked inside", 3, "s", 0, inverse: true);
             Add("Fighters", "fighter_turn",     "Turn rate",        3.5, "rad/s", 1);
-            Add("Fighters", "control_range",    "Control range",    1400, "u", 0);
+            Add("Fighters", "control_range",    "Control range",    1080, "u", 0);   // 1.5x the battleship's guns (720)
 
             // An active ability. Torpedoes run straight and steady: no tracking, so a
             // moving target can step out of the way.

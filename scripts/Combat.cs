@@ -72,6 +72,10 @@ public static class Combat
     // hostile = fired BY an enemy, so it seeks and hits player ships, not hostiles.
     // source: the player ship that fired it (host only), credited with combat on a hit.
     public static System.Action<Vector2, Vector2, float, float, double, int, float, bool, bool, PlayerShip, string, float> OnTorpedo;
+    // a battleship's shell (the host's does the damage; guests fly a cosmetic copy)
+    public static System.Action<Vector2, Vector2, float, float, double, PlayerShip> OnShell;
+    public static void FireShell(Vector2 from, Vector2 dir, float speed, float range, double damage, PlayerShip source)
+        => OnShell?.Invoke(from, dir.Normalized(), speed, range, damage, source);
     public static void LaunchTorpedo(Vector2 from, Vector2 dir, float speed, float range, double damage,
                                      int targetId = 0, float turnRate = 0f, bool heavy = false, bool hostile = false,
                                      PlayerShip source = null, string hitSource = null, float size = 1f)
