@@ -766,6 +766,16 @@ public partial class _Test : Node
             await Wait(SessionMenu.PressGap);
             Check(!sm.Locked && !Nodes<Button>(sm).First(b => b.Name == "Host").Disabled, "and are back after 1 s");
             Check(Net.I.NetworkIdle, "and offline stays silent");
+            // review: a router answer for a session that is already over must never be kept --
+            // its port mapping is closed at once (it used to be stored, leaking the forward)
+            var nf = BindingFlags.NonPublic | BindingFlags.Instance;
+            int genNow = (int)typeof(Net).GetField("_hostGen", nf).GetValue(Net.I);
+            int closed0 = Net.I.StaleMappingsClosed;
+            typeof(Net).GetMethod("RouterResult", nf).Invoke(Net.I, new object[] { genNow - 1, 27015, "203.0.113.9", "", new Upnp() });
+            Check(typeof(Net).GetField("_upnp", nf).GetValue(Net.I) == null && Net.I.StaleMappingsClosed == closed0 + 1,
+                  "a router answer for a finished session is not kept, and its port mapping is closed");
+            Check(Net.IsTailnet("100.100.1.2") && !Net.IsTailnet("100.63.0.1") && !Net.IsTailnet("192.168.1.2"),
+                  "Tailscale addresses (100.64.0.0/10) are recognised for friends on a tailnet");
         }
 
         // ── pilot progression: EXP, levels, points, flat upgrades ──

@@ -49,7 +49,9 @@ public partial class SessionMenu : CanvasLayer
         // the address friends should type, one click to the clipboard
         _copy = Btn("COPY ADDRESS", () =>
         {
-            var a = Net.I?.Reachability is Net.Reach.Internet or Net.Reach.Manual ? Net.I.InternetAddress : Net.I?.LanAddress;
+            var a = Net.I?.Reachability is Net.Reach.Internet or Net.Reach.Manual ? Net.I.InternetAddress
+                  : !string.IsNullOrEmpty(Net.I?.TailnetAddress) ? Net.I.TailnetAddress      // friends on the tailnet
+                  : Net.I?.LanAddress;
             if (!string.IsNullOrEmpty(a)) DisplayServer.ClipboardSet(a);
         });
         _copy.Name = "CopyAddress";

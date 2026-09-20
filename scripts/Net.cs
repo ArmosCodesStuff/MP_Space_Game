@@ -9,8 +9,9 @@ using System.Collections.Generic;
 //
 // THE RULE, in one line: the HOST owns the world, each PLAYER owns their ship.
 //
-//   host authority   : resource ticks, enemy spawns and AI, loot rolls, refining,
-//                      hauler dispatch and payouts, anything a client could cheat
+//   host authority   : the economy (gathering, the hauler, sales, upgrades), raiders,
+//                      the boss and its attacks, damage, missions and rewards --
+//                      anything a client could cheat
 //   client authority : its own ship's thrust and heading, and nothing else
 //
 // A client never tells the host "I now have 500 ore". It tells the host "I am
@@ -100,11 +101,12 @@ public partial class Net : Node
     }
 
     // ── internet hosting ────────────────────────────────────────────────────
-    // Hosting starts at once for your own network. Meanwhile, on a background thread,
-    // the game asks your router (UPnP) to forward the port to this PC and reads back
-    // your public address, so friends in other cities or countries can join. When the
-    // router will not (UPnP off), or your provider shares one public address among
-    // many homes (carrier-grade NAT), the status says so and what to do instead.
+    // Hosting starts at once for your own network. Meanwhile a background thread asks
+    // your router (UPnP) to forward the port to this PC, and a web request asks a public
+    // "what is my IP" service what the internet sees; the two answers together decide
+    // what friends elsewhere need (see Describe). The background thread writes NOTHING:
+    // it hands its result back to the main thread, which keeps it only for the current
+    // session -- a mapping made for a session that has already ended is closed at once.
     public enum Reach { None, Checking, Internet, Manual, LanOnly }
     public Reach Reachability { get; private set; } = Reach.None;
     public string InternetAddress { get; private set; } = "";
@@ -113,7 +115,7 @@ public partial class Net : Node
 
     private void OpenRouterPort(int port, int gen)
     {
-        string ext = "", why = "";
+        string ext = "", why = ""; Upnp mapped = null;
         try
         {
             var u = new Upnp();
@@ -121,11 +123,11 @@ public partial class Net : Node
             var gw = u.GetGateway();
             if (r != (int)Upnp.UpnpResult.Success || gw == null || !gw.IsValidGateway()) why = "no-upnp";
             else if (u.AddPortMapping(port, port, "Warships", "UDP", 0) != (int)Upnp.UpnpResult.Success) why = "refused";
-            else { ext = u.QueryExternalAddress(); _upnp = u; }
+            else { ext = u.QueryExternalAddress(); mapped = u; }
         }
         catch (Exception e) { why = e.Message; }
         _upnpBusy = false;
-        Callable.From(() => RouterResult(gen, port, ext, why)).CallDeferred();
+        Callable.From(() => RouterResult(gen, port, ext, why, mapped)).CallDeferred();
     }
 
     // ── what friends elsewhere need: decided from the router's report AND the public address ──
@@ -200,18 +202,33 @@ public partial class Net : Node
         return p.Length == 4 && p.All(x => int.TryParse(x, out int v) && v >= 0 && v <= 255);
     }
 
-    private void RouterResult(int gen, int port, string ext, string why)
+    public int StaleMappingsClosed { get; private set; }            // for the record (and the smoke test)
+    private void RouterResult(int gen, int port, string ext, string why, Upnp mapped)
     {
-        if (gen != _hostGen) return;
+        if (gen != _hostGen)
+        {   // that session is over: never keep its handle -- close the port it opened
+            if (mapped != null) { StaleMappingsClosed++; System.Threading.Tasks.Task.Run(() => mapped.DeletePortMapping(port, "UDP")); }
+            return;
+        }
         _routerExt = ext; _routerWhy = why; _routerDone = true;
-        if (ext.Length > 0) _mappedPort = port;
+        if (mapped != null) { _upnp = mapped; _mappedPort = port; }
         TryDecide(gen);
     }
+
+    // Tailscale's addresses (100.64.0.0/10): friends on the same tailnet can join on these.
+    public static bool IsTailnet(string ip)
+    {
+        var p = ip.Split('.');
+        return p.Length == 4 && int.TryParse(p[0], out int a) && int.TryParse(p[1], out int b) && a == 100 && b >= 64 && b <= 127;
+    }
+    public string TailnetAddress { get; private set; } = "";
 
     private void TryDecide(int gen)
     {
         if (gen != _hostGen || !IsHost || !IsOnline || !(_routerDone && _publicDone)) return;   // the session changed, or one answer is still out
         var d = Describe(_routerExt, _routerExt.Length > 0, _publicIp, _hostPort, LanAddress);
+        // on a tailnet, friends on it can join even when the internet cannot reach you
+        if (d.reach == Reach.LanOnly && TailnetAddress.Length > 0) d.message += $" Friends on your Tailscale network join {TailnetAddress}.";
         Reachable(d.reach, d.address, d.message);
     }
 
@@ -239,6 +256,8 @@ public partial class Net : Node
         _isHost = true; _localId = 1;
         Players.Clear(); Players[1] = new PlayerInfo { Id = 1 };
         LanAddress = LocalLan(port); Reachability = Reach.Checking; InternetAddress = "";
+        var tn = IP.GetLocalAddresses().FirstOrDefault(IsTailnet);
+        TailnetAddress = tn != null ? $"{tn}:{port}" : "";
         Say($"Hosting on your network ({LanAddress}). Asking your router to open port {port}, and the internet for your public address...");
         SessionChanged?.Invoke();
         int gen = ++_hostGen; _hostPort = port;
@@ -278,7 +297,7 @@ public partial class Net : Node
         }
         _upnp = null; _mappedPort = 0; _hostGen++;
         FreeIpReq();                                        // no lookup outlives its session
-        Reachability = Reach.None; InternetAddress = ""; LanAddress = "";
+        Reachability = Reach.None; InternetAddress = ""; LanAddress = ""; TailnetAddress = "";
         // An explicit offline peer rather than null: IsServer() and GetUniqueId() then
         // answer 1 / true offline instead of depending on engine fallback behaviour.
         Multiplayer.MultiplayerPeer = new OfflineMultiplayerPeer();

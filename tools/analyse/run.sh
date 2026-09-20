@@ -5,7 +5,7 @@
 # possible offline. Prints each finding; the last line is the count.
 set -e
 B=/tmp/warships_smoke
-[ -d "$B/obj" ] || { echo "run tools/smoketest/run.sh first (it restores the build)"; exit 2; }
+[ -f "$B/Warships.csproj" ] || { echo "run tools/smoketest/run.sh first (it restores the build)"; exit 2; }
 cp "$(dirname "$0")/analysers.editorconfig" "$B/.editorconfig"
 cd "$B"
 dotnet build --no-restore -v q -nologo -p:EnforceCodeStyleInBuild=true -p:GenerateDocumentationFile=true \
