@@ -89,6 +89,7 @@ public partial class Hub : Node2D
     private BasePanel _base;
     private PilotWindow _pilot;
     private TioWindow _tio;
+    private EquipmentWindow _equip;
     private Sprite2D _tioSprite;
     private Portal _missionPortal;
     private readonly Dictionary<int, PlayerShip> _ships = new();
@@ -155,6 +156,10 @@ public partial class Hub : Node2D
         pilotBtn.Pressed += TogglePilot;
         var pilotWrap = Ui.Wrap(pilotBtn); pilotWrap.Position = new Vector2(356, 48);
         layer.AddChild(pilotWrap);
+        var eqBtn = new Button { Text = "EQUIPMENT (I)", Name = "EquipmentButton", FocusMode = Control.FocusModeEnum.None };
+        eqBtn.Pressed += ToggleEquipment;
+        var eqWrap = Ui.Wrap(eqBtn); eqWrap.Position = new Vector2(446, 48);
+        layer.AddChild(eqWrap);
         // the stats line sits on its own panel so it reads over anything behind it
         var hudPanel = new PanelContainer { Position = new Vector2(10, 8), Name = "HudPanel", MouseFilter = Control.MouseFilterEnum.Ignore };
         hudPanel.AddThemeStyleboxOverride("panel", Ui.PanelStyle(12));
@@ -375,6 +380,7 @@ public partial class Hub : Node2D
         {
             me.SetIdentity(Character.Name, Character.Main, Character.Accent, Character.Class);
             me.SetProgress(Character.Bought);
+            me.SetEquipment(Character.LoadoutFor(Character.Class));
         }
     }
 
@@ -384,13 +390,13 @@ public partial class Hub : Node2D
         // a guest mid-handshake still reports LocalId 1; peers would rightly reject
         // that as impersonating the host, so wait for the real id (OnSessionChanged)
         if (!Net.IsHost && Net.LocalId == 1) return;
-        var args = new Variant[] { Net.LocalId, Character.Name, Character.Main, Character.Accent, (int)Character.Class, Character.Bought, Character.Level };
+        var args = new Variant[] { Net.LocalId, Character.Name, Character.Main, Character.Accent, (int)Character.Class, Character.Bought, Character.Level, Character.LoadoutFor(Character.Class) };
         if (toPeer == 0) Rpc(nameof(NetIdentity), args);
         else             RpcId(toPeer, nameof(NetIdentity), args);
     }
 
     [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetIdentity(int peer, string name, Color main, Color accent, int cls, int[] bought, int level)
+    private void NetIdentity(int peer, string name, Color main, Color accent, int cls, int[] bought, int level, string[] equip)
     {
         // a peer may only describe itself
         if (Multiplayer.GetRemoteSenderId() != peer || Net.I == null) return;
@@ -401,7 +407,7 @@ public partial class Hub : Node2D
         // purchases the claimed level could not have paid for are refused outright
         long spent = 0; foreach (var n in bought ?? System.Array.Empty<int>()) spent += (long)n * (n + 1) / 2;
         if (spent > System.Math.Max(0, level - 1)) bought = new int[Progression.All.Length];
-        if (_ships.TryGetValue(peer, out var s) && IsInstanceValid(s)) { s.SetIdentity(name, main, accent, c); s.SetProgress(bought); }
+        if (_ships.TryGetValue(peer, out var s) && IsInstanceValid(s)) { s.SetIdentity(name, main, accent, c); s.SetProgress(bought); s.SetEquipment(equip); }   // (sanitised)
     }
 
     // ── missions: Threat Intelligence Operations (host-authoritative) ────────
@@ -954,6 +960,7 @@ public partial class Hub : Node2D
             else if (IsInstanceValid(_base)) ToggleBase();
             else if (IsInstanceValid(_pilot)) TogglePilot();
             else if (IsInstanceValid(_tio)) { _tio.QueueFree(); _tio = null; }
+            else if (IsInstanceValid(_equip)) ToggleEquipment();
             else if (Selected != null || Waypoint != null) ClearSelection();
             else ToggleEscMenu();                                   // the menu holds "quit to main menu"
         }
@@ -1004,6 +1011,7 @@ public partial class Hub : Node2D
             else if (kk.Keycode == Key.K) ToggleStats();
             else if (kk.Keycode == Key.B && !InArena) ToggleBase();
             else if (kk.Keycode == Key.L) TogglePilot();
+            else if (kk.Keycode == Key.I) ToggleEquipment();
             else if (kk.Keycode == Key.V) MyShipPublic?.StartWarp();   // warp: a fixed key, not a slot
             else
             {
@@ -1043,6 +1051,7 @@ public partial class Hub : Node2D
     {
         if (Yard == null) return;                                      // the arena: there is no base to open
         if (IsInstanceValid(_base)) { _base.QueueFree(); _base = null; return; }
+        if (IsInstanceValid(_equip)) ToggleEquipment();             // they share a spot
         _base = new BasePanel { Hub = this };
         if (IsInstanceValid(_pilot)) TogglePilot();                // the two share a spot
         _hudLayer.AddChild(_base);
@@ -1050,8 +1059,20 @@ public partial class Hub : Node2D
     public bool CreatorOpen => IsInstanceValid(_creator);
     public bool StatsOpen => IsInstanceValid(_statsWin);
 
+    public void ToggleEquipment()
+    {
+        if (IsInstanceValid(_equip)) { _equip.QueueFree(); _equip = null; return; }
+        if (IsInstanceValid(_base)) ToggleBase();                 // they share a spot
+        if (IsInstanceValid(_pilot)) TogglePilot();
+        if (IsInstanceValid(_tio)) { _tio.QueueFree(); _tio = null; }
+        _equip = new EquipmentWindow { Hub = this };
+        _hudLayer.AddChild(_equip);
+    }
+    public bool EquipmentOpen => IsInstanceValid(_equip);
+
     public void TogglePilot()
     {
+        if (IsInstanceValid(_equip)) ToggleEquipment();
         if (IsInstanceValid(_pilot)) { _pilot.QueueFree(); _pilot = null; return; }
         if (IsInstanceValid(_base)) ToggleBase();                 // the two share a spot
         _pilot = new PilotWindow { Hub = this };

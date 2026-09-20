@@ -194,7 +194,7 @@ public partial class PlayerShip : Node2D, IHittable
 
         // Your own ship carries your bonuses. Other ships use base stats: bonuses
         // are not replicated yet (and nothing grants any yet).
-        Stats = new ShipStats(Class, Mine ? Character.Bonuses : null, Progression.Flats(_bought, Class));
+        Stats = new ShipStats(Class, BonusesNow(), Progression.Flats(_bought, Class));
         MaxHp = Hp = Stats["hull"];
         _mag = (int)Stats["missile_mag"]; _missileReload = _missileRefire = 0;
 
@@ -241,7 +241,31 @@ public partial class PlayerShip : Node2D, IHittable
         if (b.AsSpan().SequenceEqual(_bought)) return;
         _bought = b;
         double lost = MaxHp - Hp;
-        Stats = new ShipStats(Class, Mine ? Character.Bonuses : null, Progression.Flats(_bought, Class));
+        Stats = new ShipStats(Class, BonusesNow(), Progression.Flats(_bought, Class));
+        MaxHp = Stats["hull"];
+        if (Alive) Hp = Math.Max(1, MaxHp - lost);
+    }
+
+    // Equipment: the owner's saved loadout for this class (on the host, what the identity
+    // carried). Its bonuses join the pilot's own; a change refits, keeping damage taken.
+    private string[] _loadout;
+    public string[] Loadout => _loadout ?? Equipment.Default(Class);
+    private IReadOnlyDictionary<string, double> BonusesNow()
+    {
+        if (Mine) _loadout = (string[])Character.LoadoutFor(Class).Clone();   // a COPY: the window edits the saved one in place
+        var eq = Equipment.Bonuses(Class, Loadout);
+        if (!Mine || Character.Bonuses.Count == 0) return eq;
+        var m = new Dictionary<string, double>(Character.Bonuses);
+        foreach (var kv in eq) m[kv.Key] = (m.TryGetValue(kv.Key, out var v) ? v : 0) + kv.Value;
+        return m;
+    }
+    public void SetEquipment(string[] ids)
+    {
+        var l = Equipment.Sanitize(Class, ids);
+        if (_loadout != null && l.AsSpan().SequenceEqual(_loadout)) return;
+        _loadout = l;
+        double lost = MaxHp - Hp;
+        Stats = new ShipStats(Class, BonusesNow(), Progression.Flats(_bought, Class));
         MaxHp = Stats["hull"];
         if (Alive) Hp = Math.Max(1, MaxHp - lost);
     }

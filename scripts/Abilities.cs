@@ -57,7 +57,7 @@ public static class Abilities
     // Fixed hub controls. Binding one of these would break flying or the menus.
     public static readonly HashSet<Key> Reserved = new()
     {
-        Key.W, Key.A, Key.S, Key.D, Key.Tab, Key.Escape, Key.K, Key.B, Key.L, Key.V, Key.Enter, Key.KpEnter,
+        Key.W, Key.A, Key.S, Key.D, Key.Tab, Key.Escape, Key.K, Key.B, Key.L, Key.I, Key.V, Key.Enter, Key.KpEnter,
         Key.Y, Key.Up, Key.Down, Key.Left, Key.Right,        // the free camera
     };
 
@@ -119,7 +119,7 @@ public static class Abilities
     // ability list yet (the seven reserved ones) gets a placeholder.
     public static string ControlsHint(ShipClass c)
     {
-        const string common = "W ahead  ·  S astern  ·  A/D rudder  ·  left-click select  ·  Tab nearest enemy  ·  wheel zoom  ·  Y free camera  ·  K abilities & stats  ·  B base  ·  L pilot  ·  V warp  ·  Esc menu";
+        const string common = "W ahead  ·  S astern  ·  A/D rudder  ·  left-click select  ·  Tab nearest enemy  ·  wheel zoom  ·  Y free camera  ·  K abilities & stats  ·  B base  ·  L pilot  ·  I equipment  ·  V warp  ·  Esc menu";
         if (!ByClass.ContainsKey(c)) return "placeholder";
         return c switch
         {

@@ -27,6 +27,13 @@ public static class Character
     public static readonly int[] Bought = new int[Progression.All.Length];
     // the levels of each boss this pilot has beaten (the +250 first-clear bonus, and unlocking)
     public static readonly Dictionary<string, HashSet<int>> BossCleared = new();
+    // equipment, per class: what is on each ship, and the chips taken off it
+    public static readonly Dictionary<ShipClass, string[]> Loadout = new();
+    public static readonly Dictionary<ShipClass, List<string>> Spares = new();
+    public static string[] LoadoutFor(ShipClass c) =>
+        Loadout.TryGetValue(c, out var l) ? l : Loadout[c] = Equipment.Default(c);
+    public static List<string> SparesFor(ShipClass c) =>
+        Spares.TryGetValue(c, out var l) ? l : Spares[c] = new List<string>();
 
     // One saved character, as the select screen lists it.
     public class Slot
@@ -47,7 +54,7 @@ public static class Character
         Accent = new(1.00f, 0.78f, 0.35f);
         Class = ShipClass.Battleship;
         Bonuses.Clear();
-        Exp = 0; Level = 1; Points = 0; Array.Clear(Bought); BossCleared.Clear();
+        Exp = 0; Level = 1; Points = 0; Array.Clear(Bought); BossCleared.Clear(); Loadout.Clear(); Spares.Clear();
     }
 
     public static void Save()
@@ -63,6 +70,8 @@ public static class Character
         c.SetValue("progress", "exp", Exp); c.SetValue("progress", "level", Level); c.SetValue("progress", "points", Points);
         for (int i = 0; i < Bought.Length; i++) c.SetValue("progress", "bought_" + Progression.All[i].Id, Bought[i]);
         foreach (var kv in BossCleared) c.SetValue("boss_cleared", kv.Key, string.Join(",", kv.Value.OrderBy(x => x)));
+        foreach (var kv in Loadout) c.SetValue("equipment", kv.Key.ToString(), string.Join(",", kv.Value));
+        foreach (var kv in Spares) c.SetValue("spares", kv.Key.ToString(), string.Join(",", kv.Value));
         c.Save(PathOf(Id));
     }
 
@@ -82,6 +91,15 @@ public static class Character
         Exp = (int)c.GetValue("progress", "exp", 0); Level = Math.Max(1, (int)c.GetValue("progress", "level", 1));
         Points = Math.Max(0, (int)c.GetValue("progress", "points", 0));
         for (int i = 0; i < Bought.Length; i++) Bought[i] = Math.Clamp((int)c.GetValue("progress", "bought_" + Progression.All[i].Id, 0), 0, Progression.MaxPerUpgrade);
+        Loadout.Clear(); Spares.Clear();
+        foreach (ShipClass sc in Enum.GetValues(typeof(ShipClass)))
+        {
+            if (c.HasSectionKey("equipment", sc.ToString()))
+                Loadout[sc] = Equipment.Sanitize(sc, ((string)c.GetValue("equipment", sc.ToString(), "")).Split(','));
+            if (c.HasSectionKey("spares", sc.ToString()))
+                Spares[sc] = ((string)c.GetValue("spares", sc.ToString(), "")).Split(',', StringSplitOptions.RemoveEmptyEntries)
+                             .Where(id => Equipment.ById(id)?.Slot == GearSlot.Chip).ToList();
+        }
         BossCleared.Clear();
         if (c.HasSection("boss_cleared"))
             foreach (var k in c.GetSectionKeys("boss_cleared"))

@@ -418,7 +418,7 @@ public partial class _Test : Node
         Check(Count<StatsWindow>() == 1, "K opens the ability & stats window");
         var win = Nodes<StatsWindow>().First();
         var labels = Nodes<Label>(win).Select(l => l.Text).ToList();
-        Check(labels.Any(x => x.Contains("Main guns (4 barrels):  23.60 DPS")) && labels.Any(x => x.Contains("Turning radius")), "stats tab: gun DPS and helm stats");
+        Check(labels.Any(x => x.Contains("Main guns (4 barrels):  29.50 DPS")) && labels.Any(x => x.Contains("Turning radius")), "stats tab: gun DPS and helm stats");
         Check(Nodes<HBoxContainer>(win).Count(r => r.Name.ToString().StartsWith("Key_")) == 11, "keys tab lists the battleship's 5 abilities + 6 open slots");
         Check(Enumerable.Range(1, 6).All(i => Abilities.KeyFor(ShipClass.Battleship, $"open{i}") == global::Godot.Key.Key0 + i)
               && Abilities.For(ShipClass.Carrier).Count(a => a.Open) == 6 && Abilities.For((ShipClass)99).Length == 6,
@@ -504,7 +504,7 @@ public partial class _Test : Node
         float mspd = (m1.GlobalPosition - mp1).Length() * 60f;
         Check(Math.Abs(mspd - ship.Stats["missile_speed"]) < 0.5f && m1.TurnRate == (float)ship.Stats["missile_turn"], $"it is slow: {mspd:0.0} u/s");
         for (int i = 0; i < 900 && d1.Total == 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-        Check(Math.Abs(d1.Total - 5) < 0.01, "it lands: 5 damage");
+        Check(Math.Abs(d1.Total - 6.25) < 0.01, "it lands: 5 damage, x1.25 by the default chips (6.25)");
         Key(global::Godot.Key.F); await Wait(0.1);
         Check(Heavy() == null, "empty magazine: F does nothing");
         Key(global::Godot.Key.R); await Wait(0.1);
@@ -542,7 +542,7 @@ public partial class _Test : Node
             Check(Math.Abs(shSpd - 4 * (float)gs.Stats["missile_speed"]) < 6f && GodotObject.IsInstanceValid(sh1) && sh1.Dir == sd0 && atFire == 0,
                   $"the guns fire shells at 4x the missile's speed ({shSpd:0} u/s), straight, and nothing lands at once");
             for (int i = 0; i < 90 && gd.Total == 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            Check(gd.Total > 0 && Math.Abs(gd.Total % gs.Stats["main_damage"]) < 1e-6 && gs.Stats["main_damage"] == 5.9, $"a shell lands for 5.9 ({gd.Total:0.0})");
+            Check(gd.Total > 0 && Math.Abs(gd.Total % gs.Stats["main_damage"]) < 1e-6 && Math.Abs(gs.Stats["main_damage"] - 7.375) < 1e-9, $"a shell lands for 5.9 x1.25 by the chips = 7.375 ({gd.Total:0.000})");
             // the balance: the battleship's total is 1.25x the carrier's measured 19.07 DPS; the carrier reaches 1.5x as far
             var bsS = new ShipStats(ShipClass.Battleship); var caS = new ShipStats(ShipClass.Carrier);
             double bsTotal = bsS.MainDps + bsS.MissileDps;
@@ -787,8 +787,9 @@ public partial class _Test : Node
                 await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             }
             double carrierDps = md.Total / 40.0;
-            GD.Print($"  carrier measured: {carrierDps:0.00} DPS over 40 s (reference 19.07)");
-            Check(Math.Abs(carrierDps / 19.07 - 1) < 0.25, $"the carrier still delivers about the measured 19.07 DPS the balance rests on ({carrierDps:0.00})");
+            // (the reference was measured unequipped; the five default chips add 25%: 19.07 x 1.25 = 23.84)
+            GD.Print($"  carrier measured: {carrierDps:0.00} DPS over 40 s (reference 23.84 with the chips)");
+            Check(Math.Abs(carrierDps / 23.84 - 1) < 0.25, $"the carrier still delivers about the measured 19.07 DPS (x1.25 with the chips = 23.84) the balance rests on ({carrierDps:0.00})");
             Key(global::Godot.Key.R); await Wait(12.0);                       // recall the wing for what follows
         }
 
@@ -884,6 +885,41 @@ public partial class _Test : Node
                   "Tailscale addresses (100.64.0.0/10) are recognised for friends on a tailnet");
         }
 
+        // ── equipment (I): per-class gear; common defaults and five chips (+5% damage, +5% hull each) ──
+        {
+            Check(Equipment.Default(ShipClass.Carrier)[0] == "cv_fighter_hangars" && Equipment.ById("cv_fighter_hangars").Name == "Mk I Fighter Hangars"
+                  && Equipment.Default(ShipClass.Battleship).Take(5).All(id => Equipment.ById(id).Rarity == Rarity.Common),
+                  "the defaults: common parts in five slots; a carrier's weapon slot holds its Fighter Hangars");
+            var bsE = new ShipStats(ShipClass.Battleship, Equipment.Bonuses(ShipClass.Battleship, Equipment.Default(ShipClass.Battleship)));
+            var cvE = new ShipStats(ShipClass.Carrier, Equipment.Bonuses(ShipClass.Carrier, Equipment.Default(ShipClass.Carrier)));
+            Check(Math.Abs(bsE["hull"] - 375) < 1e-6 && Math.Abs(bsE["main_damage"] - 7.375) < 1e-6 && Math.Abs(cvE["hull"] - 250) < 1e-6
+                  && Math.Abs(cvE["fighter_damage"] - 2.5) < 1e-6 && Math.Abs(cvE["torpedo_damage"] - 18.75) < 1e-6,
+                  "five default chips: +25% damage and hull (battleship 375 hull, 7.375 a shell; carrier 250 hull, fighters 2.5, torpedoes 18.75)");
+            var cls0 = Me.Class;
+            Key(global::Godot.Key.I); await Wait(0.2);
+            var ew = Nodes<EquipmentWindow>().FirstOrDefault();
+            Check(ew != null && Nodes<HBoxContainer>(ew).Count(r => r.Name.ToString().StartsWith("Slot_")) == 5
+                  && Nodes<HBoxContainer>(ew).Count(r => r.Name.ToString().StartsWith("Chip_")) == 5, "I opens the equipment: five parts and five chips");
+            double full = Me.MaxHp;
+            Nodes<Button>(ew).First(b => b.Name == "Unequip").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.2);
+            Check(Math.Abs(Me.MaxHp - full * 1.20 / 1.25) < 1e-6 && Character.SparesFor(cls0).Count == 1, $"a chip off: 5% less hull ({full:0} -> {Me.MaxHp:0}), the chip kept as a spare");
+            var other = cls0 == ShipClass.Battleship ? ShipClass.Carrier : ShipClass.Battleship;
+            Me.SetClass(other); await Wait(0.5);
+            Check(Character.LoadoutFor(other).Skip(5).Count(x => x == "chip_basic") == 5, "the other class keeps its own gear: five chips");
+            Me.SetClass(cls0); await Wait(0.5);
+            Check(Character.LoadoutFor(cls0).Skip(5).Count(x => x == "chip_basic") == 4 && Character.SparesFor(cls0).Count == 1 && Math.Abs(Me.MaxHp - full * 1.20 / 1.25) < 1e-6,
+                  "back on the first class: its gear as it was left (four chips, one spare)");
+            ew = Nodes<EquipmentWindow>().FirstOrDefault();
+            if (ew == null) { Key(global::Godot.Key.I); await Wait(0.2); ew = Nodes<EquipmentWindow>().First(); }
+            Nodes<Button>(ew).First(b => b.Name == "Equip").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.2);
+            Check(Math.Abs(Me.MaxHp - full) < 1e-6 && Character.SparesFor(cls0).Count == 0, "the spare back on: full hull again");
+            Character.Save(); var saved = (string[])Character.LoadoutFor(cls0).Clone();
+            string eqId = Character.Id; Character.Loadout.Clear(); Character.Load(eqId);
+            Check(Character.LoadoutFor(cls0).SequenceEqual(saved), "the gear is saved with the pilot");
+            Key(global::Godot.Key.Escape); await Wait(0.2);
+            Check(Nodes<EquipmentWindow>().Count() == 0, "Esc closes it");
+        }
+
         // ── pilot progression: EXP, levels, points, flat upgrades ──
         {
             Check(Progression.Cost(0) == 1 && Progression.Cost(1) == 2 && Progression.Cost(2) == 3, "upgrade costs 1, 2, 3, ... points");
@@ -909,17 +945,19 @@ public partial class _Test : Node
             var me = Me; double hull0 = me.MaxHp, hp0 = me.Hp;
             Character.Points = 3;
             PBuy("hull").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
-            Check(Character.Bought[1] == 1 && Character.Points == 2 && me.MaxHp == hull0 + 5 && me.Hp == hp0 + 5, "Hull (1 pt): +5 hull on the ship at once");
+            // (points are added BEFORE percentage bonuses: the five default chips' +25% makes +5 into +6.25)
+            Check(Character.Bought[1] == 1 && Character.Points == 2 && Math.Abs(me.MaxHp - (hull0 + 6.25)) < 1e-6 && Math.Abs(me.Hp - (hp0 + 6.25)) < 1e-6,
+                  "Hull (1 pt): +5 hull (x1.25 by the default chips: +6.25) on the ship at once");
             PBuy("hull").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
-            Check(Character.Bought[1] == 2 && Character.Points == 0 && me.MaxHp == hull0 + 10, "Hull again (2 pts): +10 in all");
+            Check(Character.Bought[1] == 2 && Character.Points == 0 && Math.Abs(me.MaxHp - (hull0 + 12.5)) < 1e-6, "Hull again (2 pts): +10 in all (+12.5 with the chips)");
             Check(PBuy("speed").Disabled, "with no points left, BUY is disabled");
             Character.Points = 6;
             PBuy("damage").EmitSignal(BaseButton.SignalName.Pressed); PBuy("speed").EmitSignal(BaseButton.SignalName.Pressed); PBuy("turn").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
-            var baseSheet = new ShipStats(me.Class);
-            Check(Math.Abs(me.Stats[Progression.DamageStat(me.Class)] - baseSheet[Progression.DamageStat(me.Class)] - 1) < 1e-9
+            var baseSheet = new ShipStats(me.Class, Equipment.Bonuses(me.Class, me.Loadout));            // the same gear, no points
+            Check(Math.Abs(me.Stats[Progression.DamageStat(me.Class)] - baseSheet[Progression.DamageStat(me.Class)] - 1.25) < 1e-9
                   && Math.Abs(me.Stats["max_speed"] - baseSheet["max_speed"] - 1) < 1e-9
                   && Math.Abs(me.Stats["turn_rate"] - baseSheet["turn_rate"] - Mathf.DegToRad(1f)) < 1e-6,
-                  "Weapons +1 damage (main weapon), Engines +1 speed, Rudder +1 degree/s");
+                  "Weapons +1 damage (x1.25 by the chips) on the main weapon, Engines +1 speed, Rudder +1 degree/s");
             string cid = Character.Id; int[] saved = (int[])Character.Bought.Clone();
             Character.Save(); System.Array.Clear(Character.Bought); Character.Load(cid);
             Check(Character.Bought.SequenceEqual(saved) && Character.Level == 3, "purchases and level are saved with the character");
@@ -1711,7 +1749,7 @@ public partial class _Test : Node
             int seen = 0;
             for (int i = 0; i < 60; i++) { if (flashes.Count > 0) seen++; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
             Check(seen > 0, $"guest sees the host's hit flashes ({seen} of 60 frames)");
-            Check(mine != null && mine.MaxHp == 200 && mine.Hp == 200, "hull replicated from the host");
+            Check(mine != null && mine.MaxHp == 250 && mine.Hp == 250, "hull replicated from the host (200, +25% from the default chips the host applied)");
             await Wait(12.0);                      // strike done, bombers home and docked
             var gb = Nodes<Wing>().Where(w => w.Carrier == mine && w.IsBomber).ToArray();
             Check(gb.Length == 2 && gb.All(w => w.Docked && w.GlobalPosition.DistanceTo(mine.DockSlot(w).pos) < 8f),
