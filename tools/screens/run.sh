@@ -36,5 +36,7 @@ fi
 pgrep Xvfb >/dev/null || { echo "NO VIRTUAL DISPLAY -- nothing was rendered"; exit 2; }
 # Forward+ needs Vulkan; the compatibility renderer runs on Mesa's software GL
 DISPLAY=:99 timeout 400 "$G" --path . --rendering-driver opengl3 --rendering-method gl_compatibility \
-    --windowed --resolution 1600x900 2>&1 | grep --line-buffered -E "^shot|^LINT|Exception"
+    --windowed --resolution 1600x900 2>&1 | grep --line-buffered -E "^shot|^LINT|Exception|^SWEEP" | tee /tmp/sweep_out.log
+# a sweep cut off part-way (a timeout) must never pass as clean
+grep -q "^SWEEP DONE" /tmp/sweep_out.log || echo "SWEEP INCOMPLETE -- the run was cut off; later frames were not rendered"
 ls /tmp/shots

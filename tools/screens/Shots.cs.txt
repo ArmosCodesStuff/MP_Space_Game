@@ -59,6 +59,9 @@ public partial class _Shots : Node
 
     public override async void _Ready()
     {
+        // 2x game speed: every wait here is game time, so each frame catches the same moment,
+        // sooner -- the sweep has to finish inside the sandbox's 300 s limit
+        Engine.TimeScale = 2.0;
         // two characters, like the user's: a black-hulled carrier and a default battleship
         Character.NewBlank(); Character.Name = "Commander"; Character.Class = ShipClass.Carrier; Character.Main = new Color(0.05f, 0.05f, 0.05f); Character.Save();
         await W(0.05);
@@ -428,6 +431,7 @@ public partial class _Shots : Node
             for (int i = 0; i < 60 * 16 && !N<Telegraph>().Any(t => !t.Line); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             await W(0.9); await Snap("39_arena_shockwave_telegraph");
         }
+        GD.Print("SWEEP DONE");          // the runner fails without it: a cut-off sweep must never pass as clean
         GetTree().Quit();
     }
 }
