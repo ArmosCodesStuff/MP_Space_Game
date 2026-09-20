@@ -19,6 +19,8 @@ public partial class BossBar : Control
     public class Chunk { public double From, To, T; }          // From/To: fractions of max hull
     public readonly List<Chunk> Chunks = new();
     private readonly StyleBox _panel = Ui.PanelStyle(8);        // built once: _Draw runs every frame
+    private readonly StyleBox _track = Ui.Box(Ui.Deep, Ui.Line, 4);
+    private readonly StyleBox _superTrack = Ui.Box(Ui.Deep, Ui.Line, 3);
     private double _lastHp = -1;
 
     // vertical offset: a quick up-and-down, dying away
@@ -60,11 +62,12 @@ public partial class BossBar : Control
         if (!IsInstanceValid(boss)) return;                       // the first draw can come before any boss
         _panel.Draw(GetCanvasItem(), new Rect2(-10, -26, W + 20, H + 34 + SuperPad + SuperH));
         Txt.D(this, ThemeDB.FallbackFont, new Vector2(0, -8), $"{Missions.BossName}  ·  LEVEL {Missions.Level}  ·  {boss.Hp:0} / {boss.MaxHp:0}",
-              HorizontalAlignment.Center, W, 13, new Color(1f, 0.85f, 0.8f));
+              HorizontalAlignment.Center, W, 13, Ui.Text);
         float frac = (float)Math.Clamp(boss.Hp / Math.Max(1, boss.MaxHp), 0, 1);
-        DrawRect(new Rect2(0, 0, W, H), new Color(0.10f, 0.05f, 0.05f, 0.95f));
-        DrawRect(new Rect2(0, 0, W * frac, H), new Color(0.80f, 0.16f, 0.14f));
-        DrawRect(new Rect2(0, 0, W * frac, 3), new Color(1f, 0.45f, 0.4f, 0.6f));            // a shine along the top
+        // The hull stays RED whatever the palette does -- it is the one bar on screen that means
+        // "the thing trying to kill you", and reading it as an accent-blue meter would be a lie.
+        _track.Draw(GetCanvasItem(), new Rect2(0, 0, W, H));
+        DrawRect(new Rect2(1, 1, (W - 2) * frac, H - 2), new Color(0.80f, 0.16f, 0.14f));
         var red = new Color(0.95f, 0.25f, 0.2f);
         foreach (var c in Chunks)
         {
@@ -72,14 +75,12 @@ public partial class BossBar : Control
             float x0 = (float)(c.From * W), x1 = (float)(c.To * W);
             DrawRect(new Rect2(x0, Offset(c.T), Math.Max(1f, x1 - x0), H), col);
         }
-        DrawRect(new Rect2(0, 0, W, H), new Color(0.9f, 0.5f, 0.45f, 0.7f), false, 1.5f);
 
         // the super-move wind-up: skinny, directly under, filling towards the next one
         float y = H + SuperPad, sf = (float)Math.Clamp(boss.SuperFill, 0, 1);
-        DrawRect(new Rect2(0, y, W, SuperH), new Color(0.06f, 0.06f, 0.10f, 0.95f));
-        // it warms towards white as it tops out, so a full bar reads at a glance mid-fight
-        var warm = new Color(0.55f, 0.65f, 1f).Lerp(new Color(1f, 0.95f, 0.85f), sf * sf);
-        DrawRect(new Rect2(0, y, W * sf, SuperH), warm);
-        DrawRect(new Rect2(0, y, W, SuperH), new Color(0.6f, 0.7f, 1f, 0.5f), false, 1f);
+        _superTrack.Draw(GetCanvasItem(), new Rect2(0, y, W, SuperH));
+        // it warms from the accent towards white as it tops out, so a full bar reads at a glance
+        var warm = Ui.Accent.Lerp(new Color(1f, 0.95f, 0.85f), sf * sf);
+        DrawRect(new Rect2(1, y + 1, (W - 2) * sf, SuperH - 2), warm);
     }
 }

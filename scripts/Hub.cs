@@ -1162,6 +1162,7 @@ public partial class Portal : Node2D
 public partial class HullHud : Control
 {
     private readonly StyleBox _panel = Ui.PanelStyle();   // built once: _Draw runs every frame
+    private readonly StyleBox _track = Ui.Box(Ui.Deep, Ui.Line, 5);
     public Hub Hub;
     private const float W = 440, H = 22;
 
@@ -1180,19 +1181,31 @@ public partial class HullHud : Control
         if (s == null) return;
         _panel.Draw(GetCanvasItem(), new Rect2(-8, -6, W + 16, H + 12));   // its panel
         float frac = (float)Mathf.Clamp(s.Hp / Mathf.Max(1, s.MaxHp), 0, 1);
-        var fill = frac > 0.35f ? new Color(0.35f, 0.85f, 0.45f) : new Color(1f, 0.35f, 0.3f);
-        DrawRect(new Rect2(0, 0, W, H), new Color(0.08f, 0.09f, 0.12f, 0.9f));
-        DrawRect(new Rect2(0, 0, W * frac, H), fill);
-        DrawRect(new Rect2(0, 0, W, H), new Color(0.6f, 0.7f, 0.85f, 0.6f), false, 1.5f);
+        // Your own hull keeps its green-to-red reading -- it is the one number you glance at while
+        // being shot, and a palette accent would say nothing about how close you are to dying. The
+        // TRACK comes from the palette so the bar still belongs to the rest of the HUD.
+        var fill = frac > 0.35f ? Ui.Good : Ui.Bad;
+        _track.Draw(GetCanvasItem(), new Rect2(0, 0, W, H));
+        DrawRect(new Rect2(1, 1, (W - 2) * frac, H - 2), fill);
         Txt.D(this, ThemeDB.FallbackFont, new Vector2(0, H - 5), s.Alive ? $"HULL  {s.Hp:0} / {s.MaxHp:0}"
                   : s.CanReboard ? "SHIP READY  —  press F to re-board"
                   : $"SHIP IN STASIS  {(int)s.StasisLeft / 60}:{(int)s.StasisLeft % 60:00}  —  flying the escape pod",
-              HorizontalAlignment.Center, W, 15, Colors.White);
-        // the hull's warp: ready, charging, or cooling down
+              HorizontalAlignment.Center, W, 15, frac > 0.35f ? Ui.Deep : Colors.White);
+        // The warp readout sits ON the hull bar, so its colour has to depend on what is UNDER it.
+        // Drawn in the palette's green it vanished completely on a full hull -- green on green --
+        // and the same would happen to a red-tinted state on a nearly-empty one. Above the fill it
+        // takes the state colour; on the fill it goes dark, which reads on green and on red alike.
+        // The words carry the state either way. The UI lint cannot catch this: it measures
+        // position and width, not contrast.
         if (s.Alive)
+        {
+            bool onFill = frac > (W - 150f) / W;
+            var warp = onFill ? Ui.Deep
+                     : s.Warping ? Ui.Accent : s.WarpCooldownLeft > 0 ? Ui.Dim : Ui.Good;
             Txt.D(this, ThemeDB.FallbackFont, new Vector2(W - 150, H - 5),
                   s.Warping ? $"WARPING  {s.WarpWarmupLeft:0.0} s" : s.WarpCooldownLeft > 0 ? $"WARP  {s.WarpCooldownLeft:0} s" : "WARP  READY",
-                  HorizontalAlignment.Right, 144, 12, s.Warping ? new Color(0.7f, 0.9f, 1f) : s.WarpCooldownLeft > 0 ? new Color(0.75f, 0.78f, 0.85f) : new Color(0.55f, 1f, 0.65f));
+                  HorizontalAlignment.Right, 144, 12, warp);
+        }
     }
 }
 

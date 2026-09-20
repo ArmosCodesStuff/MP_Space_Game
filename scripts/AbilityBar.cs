@@ -6,7 +6,13 @@ using Godot;
 // Keys follow the current bindings, so a remap in the K window shows here at once.
 public partial class AbilityBar : Control
 {
-    private readonly StyleBox _panel = Ui.PanelStyle();   // built once: _Draw runs every frame
+    // Built once: _Draw runs every frame, and a StyleBoxFlat per slot per frame would be 8 or 9
+    // allocations 60 times a second for boxes that never change.
+    private readonly StyleBox _panel = Ui.PanelStyle();
+    private readonly StyleBox _open = Ui.Box(Ui.Deep, Ui.Line);
+    private readonly StyleBox _slot = Ui.Box(Ui.Card, Ui.Line, Ui.CardCorner, 2);
+    private readonly StyleBox _lit  = Ui.Box(Ui.Deep.Lerp(Ui.Good, 0.18f), Ui.Good, Ui.CardCorner, 2);
+    private readonly StyleBox _bad  = Ui.Box(Ui.Deep.Lerp(Ui.Bad, 0.22f), Ui.Bad, Ui.CardCorner, 2);
     public Hub Hub;
     public const float SlotW = 118, SlotH = 64, Gap = 8, GroupGap = 22;   // extra space before the open slots
 
@@ -89,24 +95,22 @@ public partial class AbilityBar : Control
             string key0 = Abilities.KeyName(Abilities.KeyFor(s.Class, ab.Id));
             if (ab.Open)
             {   // an open hotkey: a quiet empty slot with its key
-                DrawRect(r, new Color(0.06f, 0.07f, 0.09f, 0.75f));
-                DrawRect(r, new Color(0.35f, 0.4f, 0.5f, 0.45f), false, 1f);
-                Txt.D(this, font, r.Position + new Vector2(6, 16), key0, HorizontalAlignment.Left, 0, 13, new Color(1f, 0.85f, 0.4f, 0.6f));
+                _open.Draw(GetCanvasItem(), r);
+                Txt.D(this, font, r.Position + new Vector2(8, 16), key0, HorizontalAlignment.Left, 0, 13, Ui.Warn with { A = 0.55f });
                 continue;
             }
             var st = StateOf(s, ab.Id, Hub.Selected);
-            DrawRect(r, st.Fail ? new Color(0.32f, 0.08f, 0.08f, 0.95f) : st.Lit ? new Color(0.16f, 0.30f, 0.22f, 0.95f) : new Color(0.08f, 0.09f, 0.12f, 0.92f));
+            (st.Fail ? _bad : st.Lit ? _lit : _slot).Draw(GetCanvasItem(), r);
             if (st.Busy > 0)   // recharge sweep: a dark band shrinking from the top
                 DrawRect(new Rect2(r.Position, new Vector2(SlotW, SlotH * Mathf.Clamp(st.Busy, 0, 1))), new Color(0, 0, 0, 0.55f));
-            DrawRect(r, st.Fail ? new Color(1f, 0.35f, 0.3f) : st.Lit ? new Color(0.45f, 1f, 0.6f) : new Color(0.45f, 0.55f, 0.7f, 0.7f), false, 1.5f);
 
             string key = Abilities.KeyName(Abilities.KeyFor(s.Class, ab.Id));
-            Txt.D(this, font, r.Position + new Vector2(6, 16), key, HorizontalAlignment.Left, 0, 13, new Color(1f, 0.85f, 0.4f));
+            Txt.D(this, font, r.Position + new Vector2(8, 16), key, HorizontalAlignment.Left, 0, 13, Ui.Warn);
             if (ab.Kind == AbilityKind.Hold)
-                Txt.D(this, font, r.Position + new Vector2(0, 16), "hold", HorizontalAlignment.Right, SlotW - 6, 11, new Color(1, 1, 1, 0.45f));
-            Txt.D(this, font, r.Position + new Vector2(0, 38), ab.Short, HorizontalAlignment.Center, SlotW, 16, Colors.White);
+                Txt.D(this, font, r.Position + new Vector2(0, 16), "hold", HorizontalAlignment.Right, SlotW - 8, 11, Ui.Dim);
+            Txt.D(this, font, r.Position + new Vector2(0, 38), ab.Short, HorizontalAlignment.Center, SlotW, 16, Ui.Text);
             Txt.D(this, font, r.Position + new Vector2(0, 56), st.Line, HorizontalAlignment.Center, SlotW, 11,
-                  st.Fail ? new Color(1f, 0.55f, 0.5f) : new Color(0.8f, 0.9f, 1f, 0.85f));
+                  st.Fail ? Ui.Bad : st.Lit ? Ui.Good : Ui.Dim);
         }
     }
 }

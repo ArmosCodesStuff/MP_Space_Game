@@ -17,10 +17,12 @@ public static class HealthBar
         float frac = max > 0 ? (float)(cur / max) : 0f;
         frac = Mathf.Clamp(frac, 0f, 1f);
 
-        ci.DrawRect(new Rect2(barTopLeft, new Vector2(w, h)), new Color(0.10f, 0.10f, 0.13f, 0.92f));
+        // Plain rects, not a StyleBox: these are a few pixels tall and drawn once per ship per
+        // frame, and a rounded corner on a 5 px bar is mush. Only the colours come from the palette.
+        ci.DrawRect(new Rect2(barTopLeft, new Vector2(w, h)), Ui.Deep with { A = 0.92f });
         if (frac > 0f)
             ci.DrawRect(new Rect2(barTopLeft, new Vector2(w * frac, h)), fill);
-        ci.DrawRect(new Rect2(barTopLeft, new Vector2(w, h)), new Color(0f, 0f, 0f, 0.55f), false, 1f);
+        ci.DrawRect(new Rect2(barTopLeft, new Vector2(w, h)), Ui.Line, false, 1f);
 
         if (font != null)
         {
@@ -30,7 +32,7 @@ public static class HealthBar
             float boxW = 64f * k;
             var boxPos = new Vector2(barTopLeft.X - boxW - 6f * k, barTopLeft.Y + h);
             Txt.D(ci, font, boxPos, shown.ToString(), HorizontalAlignment.Right, boxW,
-                          Mathf.Max(6, Mathf.RoundToInt(fontSize * k)), new Color(0.88f, 0.93f, 1f));
+                          Mathf.Max(6, Mathf.RoundToInt(fontSize * k)), Ui.Text);
         }
     }
 }

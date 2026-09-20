@@ -1,9 +1,9 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-20 17:29 at git commit ea7a5f2: typecheck clean, dotnet build 0 warnings,
+// Taken 2026-09-20 17:40 at git commit eb41bbf: typecheck clean, dotnet build 0 warnings,
 //   0 analyser findings, 0 unused members; smoke test 3/3 runs at 435 checks on Windows
 //   (437 in a sandbox with no router and no internet); 67-frame UI sweep complete, 0 lint.
-// 67 files, 11833 lines. Code only: sprites, sounds and docs are in the zip.
+// 67 files, 11853 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -17,12 +17,12 @@
 //   MainMenu.tscn                                    6 lines   sha256 8a8dbe40f248
 //   verify.ps1                                      98 lines   sha256 841061643871
 //   scripts/Abilities.cs                           141 lines   sha256 ecefda83d48b
-//   scripts/AbilityBar.cs                          112 lines   sha256 4a1331fe370c
+//   scripts/AbilityBar.cs                          116 lines   sha256 b1c0a50dd20b
 //   scripts/Autopilot.cs                            40 lines   sha256 807538219f53
 //   scripts/BaseDefense.cs                          55 lines   sha256 1d8daa0fbd67
 //   scripts/BasePanel.cs                           132 lines   sha256 486b1d45088e
 //   scripts/Boss.cs                                300 lines   sha256 4029a62f29a0
-//   scripts/BossBar.cs                              85 lines   sha256 679ea3b792b9
+//   scripts/BossBar.cs                              86 lines   sha256 fdc16204cf1d
 //   scripts/Character.cs                           220 lines   sha256 9221d9084893
 //   scripts/CharacterCreator.cs                    218 lines   sha256 d1c4d4f7012f
 //   scripts/CharacterSelect.cs                     172 lines   sha256 567a093f3c12
@@ -35,8 +35,8 @@
 //   scripts/Explosion.cs                            18 lines   sha256 12209b0c72ce
 //   scripts/Gatherer.cs                            254 lines   sha256 135bd767de29
 //   scripts/Hauler.cs                              317 lines   sha256 b13773f083c7
-//   scripts/HealthBar.cs                            36 lines   sha256 97c42a282205
-//   scripts/Hub.cs                                1255 lines   sha256 45d5f50cf4c4
+//   scripts/HealthBar.cs                            38 lines   sha256 c6b272c9453c
+//   scripts/Hub.cs                                1268 lines   sha256 b857d1f9ce6a
 //   scripts/MainMenu.cs                            245 lines   sha256 643c73acedc5
 //   scripts/Missions.cs                             38 lines   sha256 48a2f11b25a4
 //   scripts/Music.cs                                78 lines   sha256 021dfc1c83d5
@@ -435,7 +435,7 @@ public static class Abilities
 
 //==============================================================================
 // FILE: scripts/AbilityBar.cs
-// 112 lines   sha256 4a1331fe370c
+// 116 lines   sha256 b1c0a50dd20b
 //==============================================================================
 using Godot;
 
@@ -445,7 +445,13 @@ using Godot;
 // Keys follow the current bindings, so a remap in the K window shows here at once.
 public partial class AbilityBar : Control
 {
-    private readonly StyleBox _panel = Ui.PanelStyle();   // built once: _Draw runs every frame
+    // Built once: _Draw runs every frame, and a StyleBoxFlat per slot per frame would be 8 or 9
+    // allocations 60 times a second for boxes that never change.
+    private readonly StyleBox _panel = Ui.PanelStyle();
+    private readonly StyleBox _open = Ui.Box(Ui.Deep, Ui.Line);
+    private readonly StyleBox _slot = Ui.Box(Ui.Card, Ui.Line, Ui.CardCorner, 2);
+    private readonly StyleBox _lit  = Ui.Box(Ui.Deep.Lerp(Ui.Good, 0.18f), Ui.Good, Ui.CardCorner, 2);
+    private readonly StyleBox _bad  = Ui.Box(Ui.Deep.Lerp(Ui.Bad, 0.22f), Ui.Bad, Ui.CardCorner, 2);
     public Hub Hub;
     public const float SlotW = 118, SlotH = 64, Gap = 8, GroupGap = 22;   // extra space before the open slots
 
@@ -528,24 +534,22 @@ public partial class AbilityBar : Control
             string key0 = Abilities.KeyName(Abilities.KeyFor(s.Class, ab.Id));
             if (ab.Open)
             {   // an open hotkey: a quiet empty slot with its key
-                DrawRect(r, new Color(0.06f, 0.07f, 0.09f, 0.75f));
-                DrawRect(r, new Color(0.35f, 0.4f, 0.5f, 0.45f), false, 1f);
-                Txt.D(this, font, r.Position + new Vector2(6, 16), key0, HorizontalAlignment.Left, 0, 13, new Color(1f, 0.85f, 0.4f, 0.6f));
+                _open.Draw(GetCanvasItem(), r);
+                Txt.D(this, font, r.Position + new Vector2(8, 16), key0, HorizontalAlignment.Left, 0, 13, Ui.Warn with { A = 0.55f });
                 continue;
             }
             var st = StateOf(s, ab.Id, Hub.Selected);
-            DrawRect(r, st.Fail ? new Color(0.32f, 0.08f, 0.08f, 0.95f) : st.Lit ? new Color(0.16f, 0.30f, 0.22f, 0.95f) : new Color(0.08f, 0.09f, 0.12f, 0.92f));
+            (st.Fail ? _bad : st.Lit ? _lit : _slot).Draw(GetCanvasItem(), r);
             if (st.Busy > 0)   // recharge sweep: a dark band shrinking from the top
                 DrawRect(new Rect2(r.Position, new Vector2(SlotW, SlotH * Mathf.Clamp(st.Busy, 0, 1))), new Color(0, 0, 0, 0.55f));
-            DrawRect(r, st.Fail ? new Color(1f, 0.35f, 0.3f) : st.Lit ? new Color(0.45f, 1f, 0.6f) : new Color(0.45f, 0.55f, 0.7f, 0.7f), false, 1.5f);
 
             string key = Abilities.KeyName(Abilities.KeyFor(s.Class, ab.Id));
-            Txt.D(this, font, r.Position + new Vector2(6, 16), key, HorizontalAlignment.Left, 0, 13, new Color(1f, 0.85f, 0.4f));
+            Txt.D(this, font, r.Position + new Vector2(8, 16), key, HorizontalAlignment.Left, 0, 13, Ui.Warn);
             if (ab.Kind == AbilityKind.Hold)
-                Txt.D(this, font, r.Position + new Vector2(0, 16), "hold", HorizontalAlignment.Right, SlotW - 6, 11, new Color(1, 1, 1, 0.45f));
-            Txt.D(this, font, r.Position + new Vector2(0, 38), ab.Short, HorizontalAlignment.Center, SlotW, 16, Colors.White);
+                Txt.D(this, font, r.Position + new Vector2(0, 16), "hold", HorizontalAlignment.Right, SlotW - 8, 11, Ui.Dim);
+            Txt.D(this, font, r.Position + new Vector2(0, 38), ab.Short, HorizontalAlignment.Center, SlotW, 16, Ui.Text);
             Txt.D(this, font, r.Position + new Vector2(0, 56), st.Line, HorizontalAlignment.Center, SlotW, 11,
-                  st.Fail ? new Color(1f, 0.55f, 0.5f) : new Color(0.8f, 0.9f, 1f, 0.85f));
+                  st.Fail ? Ui.Bad : st.Lit ? Ui.Good : Ui.Dim);
         }
     }
 }
@@ -1099,7 +1103,7 @@ public partial class Boss : Node2D, IHittable
 
 //==============================================================================
 // FILE: scripts/BossBar.cs
-// 85 lines   sha256 679ea3b792b9
+// 86 lines   sha256 fdc16204cf1d
 //==============================================================================
 using Godot;
 using System;
@@ -1122,6 +1126,8 @@ public partial class BossBar : Control
     public class Chunk { public double From, To, T; }          // From/To: fractions of max hull
     public readonly List<Chunk> Chunks = new();
     private readonly StyleBox _panel = Ui.PanelStyle(8);        // built once: _Draw runs every frame
+    private readonly StyleBox _track = Ui.Box(Ui.Deep, Ui.Line, 4);
+    private readonly StyleBox _superTrack = Ui.Box(Ui.Deep, Ui.Line, 3);
     private double _lastHp = -1;
 
     // vertical offset: a quick up-and-down, dying away
@@ -1163,11 +1169,12 @@ public partial class BossBar : Control
         if (!IsInstanceValid(boss)) return;                       // the first draw can come before any boss
         _panel.Draw(GetCanvasItem(), new Rect2(-10, -26, W + 20, H + 34 + SuperPad + SuperH));
         Txt.D(this, ThemeDB.FallbackFont, new Vector2(0, -8), $"{Missions.BossName}  ·  LEVEL {Missions.Level}  ·  {boss.Hp:0} / {boss.MaxHp:0}",
-              HorizontalAlignment.Center, W, 13, new Color(1f, 0.85f, 0.8f));
+              HorizontalAlignment.Center, W, 13, Ui.Text);
         float frac = (float)Math.Clamp(boss.Hp / Math.Max(1, boss.MaxHp), 0, 1);
-        DrawRect(new Rect2(0, 0, W, H), new Color(0.10f, 0.05f, 0.05f, 0.95f));
-        DrawRect(new Rect2(0, 0, W * frac, H), new Color(0.80f, 0.16f, 0.14f));
-        DrawRect(new Rect2(0, 0, W * frac, 3), new Color(1f, 0.45f, 0.4f, 0.6f));            // a shine along the top
+        // The hull stays RED whatever the palette does -- it is the one bar on screen that means
+        // "the thing trying to kill you", and reading it as an accent-blue meter would be a lie.
+        _track.Draw(GetCanvasItem(), new Rect2(0, 0, W, H));
+        DrawRect(new Rect2(1, 1, (W - 2) * frac, H - 2), new Color(0.80f, 0.16f, 0.14f));
         var red = new Color(0.95f, 0.25f, 0.2f);
         foreach (var c in Chunks)
         {
@@ -1175,15 +1182,13 @@ public partial class BossBar : Control
             float x0 = (float)(c.From * W), x1 = (float)(c.To * W);
             DrawRect(new Rect2(x0, Offset(c.T), Math.Max(1f, x1 - x0), H), col);
         }
-        DrawRect(new Rect2(0, 0, W, H), new Color(0.9f, 0.5f, 0.45f, 0.7f), false, 1.5f);
 
         // the super-move wind-up: skinny, directly under, filling towards the next one
         float y = H + SuperPad, sf = (float)Math.Clamp(boss.SuperFill, 0, 1);
-        DrawRect(new Rect2(0, y, W, SuperH), new Color(0.06f, 0.06f, 0.10f, 0.95f));
-        // it warms towards white as it tops out, so a full bar reads at a glance mid-fight
-        var warm = new Color(0.55f, 0.65f, 1f).Lerp(new Color(1f, 0.95f, 0.85f), sf * sf);
-        DrawRect(new Rect2(0, y, W * sf, SuperH), warm);
-        DrawRect(new Rect2(0, y, W, SuperH), new Color(0.6f, 0.7f, 1f, 0.5f), false, 1f);
+        _superTrack.Draw(GetCanvasItem(), new Rect2(0, y, W, SuperH));
+        // it warms from the accent towards white as it tops out, so a full bar reads at a glance
+        var warm = Ui.Accent.Lerp(new Color(1f, 0.95f, 0.85f), sf * sf);
+        DrawRect(new Rect2(1, y + 1, (W - 2) * sf, SuperH - 2), warm);
     }
 }
 
@@ -2892,7 +2897,7 @@ public partial class HaulerHud : Control
 
 //==============================================================================
 // FILE: scripts/HealthBar.cs
-// 36 lines   sha256 97c42a282205
+// 38 lines   sha256 c6b272c9453c
 //==============================================================================
 using Godot;
 
@@ -2913,10 +2918,12 @@ public static class HealthBar
         float frac = max > 0 ? (float)(cur / max) : 0f;
         frac = Mathf.Clamp(frac, 0f, 1f);
 
-        ci.DrawRect(new Rect2(barTopLeft, new Vector2(w, h)), new Color(0.10f, 0.10f, 0.13f, 0.92f));
+        // Plain rects, not a StyleBox: these are a few pixels tall and drawn once per ship per
+        // frame, and a rounded corner on a 5 px bar is mush. Only the colours come from the palette.
+        ci.DrawRect(new Rect2(barTopLeft, new Vector2(w, h)), Ui.Deep with { A = 0.92f });
         if (frac > 0f)
             ci.DrawRect(new Rect2(barTopLeft, new Vector2(w * frac, h)), fill);
-        ci.DrawRect(new Rect2(barTopLeft, new Vector2(w, h)), new Color(0f, 0f, 0f, 0.55f), false, 1f);
+        ci.DrawRect(new Rect2(barTopLeft, new Vector2(w, h)), Ui.Line, false, 1f);
 
         if (font != null)
         {
@@ -2926,14 +2933,14 @@ public static class HealthBar
             float boxW = 64f * k;
             var boxPos = new Vector2(barTopLeft.X - boxW - 6f * k, barTopLeft.Y + h);
             Txt.D(ci, font, boxPos, shown.ToString(), HorizontalAlignment.Right, boxW,
-                          Mathf.Max(6, Mathf.RoundToInt(fontSize * k)), new Color(0.88f, 0.93f, 1f));
+                          Mathf.Max(6, Mathf.RoundToInt(fontSize * k)), Ui.Text);
         }
     }
 }
 
 //==============================================================================
 // FILE: scripts/Hub.cs
-// 1255 lines   sha256 45d5f50cf4c4
+// 1268 lines   sha256 b857d1f9ce6a
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -4099,6 +4106,7 @@ public partial class Portal : Node2D
 public partial class HullHud : Control
 {
     private readonly StyleBox _panel = Ui.PanelStyle();   // built once: _Draw runs every frame
+    private readonly StyleBox _track = Ui.Box(Ui.Deep, Ui.Line, 5);
     public Hub Hub;
     private const float W = 440, H = 22;
 
@@ -4117,19 +4125,31 @@ public partial class HullHud : Control
         if (s == null) return;
         _panel.Draw(GetCanvasItem(), new Rect2(-8, -6, W + 16, H + 12));   // its panel
         float frac = (float)Mathf.Clamp(s.Hp / Mathf.Max(1, s.MaxHp), 0, 1);
-        var fill = frac > 0.35f ? new Color(0.35f, 0.85f, 0.45f) : new Color(1f, 0.35f, 0.3f);
-        DrawRect(new Rect2(0, 0, W, H), new Color(0.08f, 0.09f, 0.12f, 0.9f));
-        DrawRect(new Rect2(0, 0, W * frac, H), fill);
-        DrawRect(new Rect2(0, 0, W, H), new Color(0.6f, 0.7f, 0.85f, 0.6f), false, 1.5f);
+        // Your own hull keeps its green-to-red reading -- it is the one number you glance at while
+        // being shot, and a palette accent would say nothing about how close you are to dying. The
+        // TRACK comes from the palette so the bar still belongs to the rest of the HUD.
+        var fill = frac > 0.35f ? Ui.Good : Ui.Bad;
+        _track.Draw(GetCanvasItem(), new Rect2(0, 0, W, H));
+        DrawRect(new Rect2(1, 1, (W - 2) * frac, H - 2), fill);
         Txt.D(this, ThemeDB.FallbackFont, new Vector2(0, H - 5), s.Alive ? $"HULL  {s.Hp:0} / {s.MaxHp:0}"
                   : s.CanReboard ? "SHIP READY  —  press F to re-board"
                   : $"SHIP IN STASIS  {(int)s.StasisLeft / 60}:{(int)s.StasisLeft % 60:00}  —  flying the escape pod",
-              HorizontalAlignment.Center, W, 15, Colors.White);
-        // the hull's warp: ready, charging, or cooling down
+              HorizontalAlignment.Center, W, 15, frac > 0.35f ? Ui.Deep : Colors.White);
+        // The warp readout sits ON the hull bar, so its colour has to depend on what is UNDER it.
+        // Drawn in the palette's green it vanished completely on a full hull -- green on green --
+        // and the same would happen to a red-tinted state on a nearly-empty one. Above the fill it
+        // takes the state colour; on the fill it goes dark, which reads on green and on red alike.
+        // The words carry the state either way. The UI lint cannot catch this: it measures
+        // position and width, not contrast.
         if (s.Alive)
+        {
+            bool onFill = frac > (W - 150f) / W;
+            var warp = onFill ? Ui.Deep
+                     : s.Warping ? Ui.Accent : s.WarpCooldownLeft > 0 ? Ui.Dim : Ui.Good;
             Txt.D(this, ThemeDB.FallbackFont, new Vector2(W - 150, H - 5),
                   s.Warping ? $"WARPING  {s.WarpWarmupLeft:0.0} s" : s.WarpCooldownLeft > 0 ? $"WARP  {s.WarpCooldownLeft:0} s" : "WARP  READY",
-                  HorizontalAlignment.Right, 144, 12, s.Warping ? new Color(0.7f, 0.9f, 1f) : s.WarpCooldownLeft > 0 ? new Color(0.75f, 0.78f, 0.85f) : new Color(0.55f, 1f, 0.65f));
+                  HorizontalAlignment.Right, 144, 12, warp);
+        }
     }
 }
 
