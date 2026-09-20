@@ -987,21 +987,24 @@ public partial class _Test : Node
             me.Position = keepPos; me.Velocity = Vector2.Zero; me.TakeDamage(-(me.MaxHp - me.Hp));   // hand over at full hull
         }
 
-        // ── raiders (6b): the heavy -- waits astern, a predicted missile, afterburns in on a pinned target ──
+        // ── raiders (6b): the heavy -- waits at the map's edge; a predicted missile; boosts at 700% on a pinned target ──
         {
             var hm = Me; var keepH = hm.Position;
-            hm.Position = new Vector2(4000, -2500); hm.Velocity = Vector2.Zero; hm.Rotation = 0f; await Wait(0.3);
-            var hv = H.SpawnRaider(hm.Position + new Vector2(0, 900), RaiderKind.Heavy);
+            hm.Position = Hub.BasePos + new Vector2(2000, 0); hm.Velocity = Vector2.Zero; hm.Rotation = 0f; await Wait(0.3);
+            var hv = H.SpawnRaider(Hub.BasePos + new Vector2(2600, 500), RaiderKind.Heavy);
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(hv.Heavy && Math.Abs(hv.Length - 4 * Raider.LightLength) < 1e-3 && Math.Abs(Raider.HeavyDps - 2 * Raider.RaiderDps) < 1e-9 && Raider.RaiderDps == 1,
-                  "a heavy raider: four times a light's size, twice the raider damage (2 DPS)");
+                  "a heavy raider: four times a light's length, twice the raider damage (2 DPS)");
             double HvLaser() => hm.DamageBySource.Where(kv => kv.Key == $"raider:{hv.NetId}").Sum(kv => kv.Value);
             double HvMissile() => hm.DamageBySource.Where(kv => kv.Key == $"heavy:{hv.NetId}:missile").Sum(kv => kv.Value);
-            await Wait(6.0);                                                   // 450 u at 100 u/s, easing in
-            var sternDir = -Vector2.Up.Rotated(hm.Rotation);
-            float offAstern = Mathf.RadToDeg(Mathf.Abs(sternDir.AngleTo(hv.Position - hm.Position))), waitOut = hv.Position.DistanceTo(hm.Position);
-            Check(offAstern < 20 && Math.Abs(waitOut - Raider.WaitOut) < 40 && HvLaser() == 0,
-                  $"its target unpinned, it waits astern ({offAstern:0} deg off, {waitOut:0} u out) and holds its laser");
+            var edge = Raider.EdgeSpot(hm.Position);
+            for (int i = 0; i < 60 * 12 && hv.Position.DistanceTo(edge) > 8f; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await Wait(0.5);
+            float hvFacing = Mathf.RadToDeg(Mathf.Abs(Mathf.AngleDifference(hv.Rotation, (hm.Position - hv.Position).Angle() + Mathf.Pi / 2f)));
+            Check(hv.Position.DistanceTo(edge) < 10f && Math.Abs(edge.DistanceTo(Hub.BasePos) - Hub.RaidEdge) < 1f && hvFacing < 15f && HvLaser() == 0,
+                  $"its target unpinned, it waits at the map's edge nearest it ({hv.Position.DistanceTo(Hub.BasePos):0} u from the base), facing it, laser silent");
+            // the missile: within 500 u of the heavy, at where the target will be in 7 s
+            hm.Position = edge + (Hub.BasePos - edge).Normalized() * 420f; hm.Velocity = Vector2.Zero;
             for (int i = 0; i < 60 * 14 && H.BlastsPending == 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             var blastRing = Nodes<Telegraph>().FirstOrDefault(t => !t.Line && Math.Abs(t.Radius - Raider.BlastRadius) < 0.1f);
             Check(H.BlastsPending == 1 && blastRing != null && blastRing.A.DistanceTo(hm.Position) < 6f && Math.Abs(blastRing.Duration - 7) < 1e-6,
@@ -1011,16 +1014,23 @@ public partial class _Test : Node
             Check(Math.Abs(HvMissile() - mm0 - Raider.MissileDamage) < 1e-6, $"staying on the circle, the blast lands ({HvMissile() - mm0:0})");
             typeof(Raider).GetField("_missileCd", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(hv, 0.0);
             for (int i = 0; i < 60 && H.BlastsPending == 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            hm.Position += new Vector2(300, 0); hm.Velocity = Vector2.Zero;                        // off the circle
+            hm.Position += new Vector2(0, 300); hm.Velocity = Vector2.Zero;                         // off the circle
             double mm1 = HvMissile();
             for (int i = 0; i < 60 * 9 && H.BlastsPending > 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(H.BlastsPending == 0 && HvMissile() == mm1, "moving off the circle dodges it");
+            // pinned: it boosts at 700% until 300 u away, then closes at cruise and fires 2 DPS
+            hm.Position = Hub.BasePos + new Vector2(1900, 0); hm.Velocity = Vector2.Zero; hm.Rotation = 0f;
             var lights = new[] { H.SpawnRaider(hm.Position + new Vector2(0, -250)), H.SpawnRaider(hm.Position + new Vector2(250, 0)), H.SpawnRaider(hm.Position + new Vector2(-250, 0)) };
             for (int i = 0; i < 60 * 8 && !hm.Pinned; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            await Wait(0.15); var hp1 = hv.Position; await Wait(0.2);
+            await Wait(0.1); var hp1 = hv.Position; await Wait(0.2);
             float burn = (hv.Position - hp1).Length() / 0.2f;
-            Check(hm.Pinned && burn > 250f, $"its target pinned, it afterburns in ({burn:0} u/s)");
-            for (int i = 0; i < 60 * 4 && !hv.Latched; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(hm.Pinned && Math.Abs(burn - Raider.Cruise * Raider.HeavyBoostMult) < 60f, $"its target pinned, it boosts at 700% ({burn:0} u/s)");
+            for (int i = 0; i < 60 * 6 && hv.Position.DistanceTo(hm.Position) > Raider.HeavyBoostStop - 20f; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            var hp2 = hv.Position; await Wait(0.2);
+            float slow = (hv.Position - hp2).Length() / 0.2f;
+            // (over the ground: cruise plus the pinned target's own forced thrust, ~20 u/s)
+            Check(slow <= Raider.Cruise + 0.2f * (float)hm.Stats["max_speed"] + 5f, $"inside 300 u it closes at cruise ({slow:0} u/s over the ground)");
+            for (int i = 0; i < 60 * 8 && !hv.Latched; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             double hl0 = HvLaser(); await Wait(3.0);
             double hdps = (HvLaser() - hl0) / 3.0;
             Check(hv.Latched && Raider.Gap(hv.Position, hm) <= Raider.HeavyReach && Math.Abs(hdps - 2) < 0.4,

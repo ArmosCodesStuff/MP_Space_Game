@@ -13,10 +13,10 @@ using System.Linq;
 //   kept to 20% of its top speed, thrusting forward, unable to turn -- a soft lock.
 //   It fires a 1 DPS laser (the raider damage "x").
 //
-//   HEAVY: the battleship cut in half -- 4x a light's size, one turret. It hangs back
-//   BEHIND its target (the approach is from the rear), facing it, 450 u out, until the
-//   target is pinned; then it afterburns in to 135 u off the hull and fires a short,
-//   hard laser: 2x the raider damage. Within 500 u it also fires a fat missile at where
+//   HEAVY: a snub-nosed gunship -- 4x a light's length, one turret. It waits at the MAP'S
+//   EDGE nearest its target, facing it, until the target is pinned; then it boosts at 700%
+//   until 300 u away, and closes at cruise to 135 u off the hull, astern, where it fires a
+//   short, hard laser: 2x the raider damage. Within 500 u it also fires a fat missile at where
 //   the target WILL be in 7 s (its speed carried forward): a red circle marks the spot
 //   for all 7 s, and the blast lands there -- move off the line and it misses.
 //
@@ -50,11 +50,13 @@ public partial class Raider : Node2D, IHittable
     public const double RaiderDps = 1.0;               // x -- a light's laser; a heavy's is 2x
     public const double HeavyDps = 2 * RaiderDps;
     public const double HeavyShotEvery = 1.0;
-    public const float Afterburn = 300f;               // a heavy closing on a pinned target
-    public const float HeavyReach = 150f, HeavyHold = 0.9f * HeavyReach, WaitOut = 450f;
+    public const float HeavyBoostMult = 7f;            // 700%: a heavy closing on a pinned target...
+    public const float HeavyBoostStop = 300f;          // ...until this close, then at cruise
+    public const float HeavyReach = 150f, HeavyHold = 0.9f * HeavyReach;
     public const float MissileRange = 500f, BlastRadius = 90f;
     public const double MissileFlight = 7.0, MissileEvery = 12.0, MissileDamage = 30;
     public const float PerimeterR = 1800f, Detect = 2000f, PatrolSpeed = 100f;
+    public const float MaxStep = 50f;                  // more than this in one frame is a jump (a warp), not motion
     public int Patrol;                                 // 0: on its own
     private float _orbit;                              // patrols: its angle round the perimeter
     public const double ShotEvery = 1.0;
@@ -97,8 +99,10 @@ public partial class Raider : Node2D, IHittable
         {   // the battleship's front turret on its mount (62.4 px down the 150 px half-hull), dark as the hull
             _sprite.Modulate = new Color(0.62f, 0.40f, 0.40f);
             var tt = GD.Load<Texture2D>("res://turret_bs_main.png");
-            _turret = new Sprite2D { Texture = tt, Position = new Vector2(0, (62.4f - 75f) * Length / 150f),
-                                     Scale = Vector2.One * (Length / 150f) * 0.8f, Modulate = new Color(0.62f, 0.40f, 0.40f), ZIndex = 1 };
+            // the turret mount: row 40.3 of the 100 px snub-nosed hull
+            float px = Length / tex.GetHeight();
+            _turret = new Sprite2D { Texture = tt, Position = new Vector2(0, (40.3f - tex.GetHeight() / 2f) * px),
+                                     Scale = Vector2.One * px * 0.62f, Modulate = new Color(0.62f, 0.40f, 0.40f), ZIndex = 1 };
             AddChild(_turret);
         }
         ZIndex = 5;
@@ -173,7 +177,10 @@ public partial class Raider : Node2D, IHittable
         if (!Alive) return;
         if (!Up(Target)) { Target = Choose(); Latched = false; _boostUsed = false; }
         if (Target == null) { Speed = 0; if (Patrol != 0) Circle(delta); QueueRedraw(); return; }
-        _targetVel = dt > 0 ? (Target.Position - _lastTargetPos) / dt : Vector2.Zero; _lastTargetPos = Target.Position;
+        // its target's velocity, from frame to frame -- except a JUMP (a warp; over 50 u in one frame,
+        // 3000 u/s, nothing flies that fast), which would send the predicted missile miles off
+        var moved = Target.Position - _lastTargetPos;
+        _targetVel = dt > 0 && moved.Length() < MaxStep ? moved / dt : Vector2.Zero; _lastTargetPos = Target.Position;
         if (Heavy) { TickHeavy(delta); QueueRedraw(); return; }
 
         // my post around the target: ahead, left or right by its heading, 90 u out
@@ -237,15 +244,17 @@ public partial class Raider : Node2D, IHittable
 
     static bool PinnedNow(Node2D t) => t switch { PlayerShip p => p.Pinned, Gatherer g => g.Pinned, Hauler h => h.Pinned, _ => false };
 
-    // the heavy: wait astern until the target is pinned, then afterburn in; missiles within 500 u
+    // the heavy: wait at the map's edge until the target is pinned, then boost in; missiles within 500 u
+    public static Vector2 EdgeSpot(Vector2 target) =>
+        Hub.BasePos + ((target - Hub.BasePos).LengthSquared() > 1f ? (target - Hub.BasePos).Normalized() : Vector2.Right) * Hub.RaidEdge;
     private void TickHeavy(double delta)
     {
         float dt = (float)delta;
         var astern = -Vector2.Up.Rotated(Target.Rotation);                    // it comes in from the rear
         bool pinned = PinnedNow(Target);
         var dest = pinned ? Target.Position + astern * (Extent(Target, astern) + HeavyHold)
-                          : Target.Position + astern * WaitOut;
-        float top = pinned ? Afterburn : Cruise;
+                          : EdgeSpot(Target.Position);                        // patient, at the map's edge nearest it
+        float top = pinned && Position.DistanceTo(Target.Position) > HeavyBoostStop ? Cruise * HeavyBoostMult : Cruise;
         float d = Position.DistanceTo(dest);
         Speed = Mathf.Min(top, d * 6f);
         Position = Position.MoveToward(dest, Speed * dt);
