@@ -39,7 +39,7 @@ history pick the work up from it alone. Update it in the same change as the code
 **State as of 2026-09-18: version 0.3.0 plus Unreleased (see it for everything since: docking arms
 and the unload queue, the fleet and hauler pods, the idle economy, base menu, bunker-buster missile,
 painted turrets, docking bombers and more).** Typecheck clean against the real `GodotSharp.dll`,
-`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 402 checks across
+`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 404 checks across
 a single-player run and a host with two guests. Unlike earlier releases, this one was also **looked at**:
 `tools/screens/run.sh` renders the select screen, the creator, a fresh spawn under the base, both
 classes in the hub, the K window, a bomber strike, and turret close-ups on a virtual display; layout
@@ -180,6 +180,27 @@ reachable, which is fine: both harnesses build from the `nupkgs` folder that shi
 ---
 
 ## Unreleased
+
+### Chunk D: turning in place
+
+**Checked:** smoke test **three runs in a row, 404 checks each, 0 compiler warnings, 0 analyser
+findings, 0 unused members**; screenshot sweep complete, 0 lint (no visual change). A 20°/s pivot, put in
+on purpose in a copy, fails both pivot checks.
+
+#### Changed
+
+- **Capital ships pivot in place** at or below **5% of top speed**: the rudder turns the hull on the spot
+  at **10°/s** (easing in, like the rudder), and **nothing moves it sideways** — no strafing. Above 5% the
+  naval turning circle is unchanged; a pinned ship still cannot turn at all. The autopilot uses the same
+  helm, so it pivots too.
+- (Noted for the player: just above 5% the turning circle is slower than the pivot — about 3°/s at 6% —
+  as specified; the two could be blended across 5–10% if that ever feels odd.)
+
+#### Changed (tests)
+
+- "Dead in the water: A/D neither pivot nor strafe" became "A/D pivot slowly and never strafe".
+
+### Earlier in Unreleased
 
 ### Chunk C: balance, and the battleship's shells
 
