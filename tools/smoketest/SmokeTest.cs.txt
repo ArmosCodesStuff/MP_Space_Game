@@ -269,7 +269,7 @@ public partial class _Test : Node
             ShowTab(panel, Economy.ById(id).Tab);                  // an upgrade lives on its own tab
             return Nodes<Button>(Nodes<HBoxContainer>(panel).First(r => r.Name == "Up_" + id)).First(b => b.Name == "Buy");
         }
-        Check(Nodes<HBoxContainer>(panel).Count(r => r.Name.ToString().StartsWith("Up_")) == 4, "MINERS tab: four upgrades");
+        Check(Nodes<HBoxContainer>(panel).Count(r => r.Name.ToString().StartsWith("Up_")) == 5, "MINERS tab: five upgrades (count, hold, engines, beam, hull)");
         Buy("miner_hold").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
         Buy("miner_hold").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
         Check(Y.Level("miner_hold") == 2 && Y.Credits == 775 && Math.Abs(miner.Hold - 120) < 1e-9, "+10%: 100 then 125 (x1.25); hold 120");
@@ -830,6 +830,17 @@ public partial class _Test : Node
             Check(mn.State == Gatherer.St.Destroyed && mn.WaitingForCredits, "short of the rebuild cost, it waits");
             Yd.Credits = cost + 500; await Wait(0.2);
             Check(mn.State != Gatherer.St.Destroyed && mn.Hull == 120 && mn.Visible && Math.Abs(Yd.Credits - 500) < 1e-6, "paid for: rebuilt at the base at full hull, exactly 10% charged");
+            // the hull upgrades: +10% a level, 125 cr to start (25% above the other +10% rows), x1.25 a level
+            var mh = Economy.ById("miner_hull"); var sh2 = Economy.ById("salvager_hull");
+            Check(mh != null && sh2 != null && mh.Tab == "MINERS" && sh2.Tab == "SALVAGERS"
+                  && Economy.Cost(mh, 0) == 125 && Economy.Cost(mh, 1) == 156 && Economy.Cost(sh2, 0) == 125,
+                  "Miner hull and Salvager hull: 125 cr to start, x1.25 a level (156 next)");
+            var fullM = Yd.Gatherers.First(g => g.Kind == GatherKind.Miner && g.State != Gatherer.St.Destroyed);
+            fullM.Hull = fullM.MaxHull; Yd.Credits = 100000;
+            Yd.TryBuy("miner_hull"); await Wait(0.05);
+            Check(fullM.MaxHull == 132 && fullM.Hull == 132 && sv.MaxHull == 120, "one level: a miner's hull 132 (+10%, kept full); salvagers still 120");
+            Yd.TryBuy("salvager_hull"); await Wait(0.05);
+            Check(sv.MaxHull == 132, "and the salvagers' own upgrade: 132");
             double hcost = Yd.RebuildCost("HAULER");
             Yd.Hauler.ResetToPad(); Yd.Hauler.TakeDamage(150); await Wait(0.05);
             Check(Yd.Hauler.State == Hauler.St.Destroyed && Yd.Hauler.WarpedOut && Math.Abs(Yd.Hauler.RebuildIn - 30) < 0.2, "the hauler, destroyed: gone for 30 s");

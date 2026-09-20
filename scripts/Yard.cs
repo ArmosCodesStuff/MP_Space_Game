@@ -156,6 +156,10 @@ public partial class Yard : Node2D
         if (Economy.Maxed(u, lv) || Credits < cost) return false;
         Credits -= cost; _levels[id] = lv + 1;
         _invested[u.Tab] = Invested(u.Tab) + cost;                // what a rebuild in this category is 10% of
+        if (id is "miner_hull" or "salvager_hull")                   // the living ships of that kind gain it at once
+            foreach (var g in Gatherers)
+                if (g.State != Gatherer.St.Destroyed && (g.Kind == GatherKind.Miner) == (id == "miner_hull"))
+                    g.Hull += Economy.UtilityHull * Economy.PercentEffect;
         SyncFleet();
         return true;
     }

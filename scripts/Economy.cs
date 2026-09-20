@@ -57,10 +57,12 @@ public static class Economy
         new() { Id = "miner_hold",      Tab = "MINERS",    Kind = Kind.Percent, Name = "Miner hold",       BaseValue = BaseHold,       Unit = "ore",       BaseCost = 100, Blurb = "+10% hull space" },
         new() { Id = "miner_speed",     Tab = "MINERS",    Kind = Kind.Percent, Name = "Miner engines",    BaseValue = BaseShipSpeed,  Unit = "u/s",       BaseCost = 100, Blurb = "+10% speed" },
         new() { Id = "mine_rate",       Tab = "MINERS",    Kind = Kind.Percent, Name = "Mining beam",      BaseValue = BaseGatherRate, Unit = "ore/s",     BaseCost = 100, Blurb = "+10% mining speed" },
+        new() { Id = "miner_hull",      Tab = "MINERS",    Kind = Kind.Percent, Name = "Miner hull",       BaseValue = UtilityHull,    Unit = "hull",      BaseCost = 125, Blurb = "+10% hull (25% dearer to start)" },
         new() { Id = "salvager_count",  Tab = "SALVAGERS", Kind = Kind.Count,   Name = "Salvagers",        BaseValue = 1,              Unit = "",          BaseCost = 400, Max = 4, Blurb = "+1 salvager (up to 5)" },
         new() { Id = "salvager_hold",   Tab = "SALVAGERS", Kind = Kind.Percent, Name = "Salvager hold",    BaseValue = BaseHold,       Unit = "salvage",   BaseCost = 100, Blurb = "+10% hull space" },
         new() { Id = "salvager_speed",  Tab = "SALVAGERS", Kind = Kind.Percent, Name = "Salvager engines", BaseValue = BaseShipSpeed,  Unit = "u/s",       BaseCost = 100, Blurb = "+10% speed" },
         new() { Id = "salvage_rate",    Tab = "SALVAGERS", Kind = Kind.Percent, Name = "Salvage beam",     BaseValue = BaseGatherRate, Unit = "salvage/s", BaseCost = 100, Blurb = "+10% salvage speed" },
+        new() { Id = "salvager_hull",   Tab = "SALVAGERS", Kind = Kind.Percent, Name = "Salvager hull",    BaseValue = UtilityHull,    Unit = "hull",      BaseCost = 125, Blurb = "+10% hull (25% dearer to start)" },
         new() { Id = "hauler_pods",     Tab = "HAULER",    Kind = Kind.Count,   Name = "Cargo pods",       BaseValue = 1,              Unit = "",          BaseCost = 500, Max = MaxPods - 1, Blurb = "+1 pod (up to 6)" },
         new() { Id = "pod_size",        Tab = "HAULER",    Kind = Kind.Percent, Name = "Pod size",         BaseValue = BasePodSize,    Unit = "per pod",   BaseCost = 150, Blurb = "+10% per pod" },
     };

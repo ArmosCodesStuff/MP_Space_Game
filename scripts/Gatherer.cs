@@ -28,7 +28,7 @@ public partial class Gatherer : Node2D
     public double Cargo;
     // hull, and being rebuilt (host-owned; guests get hull and state)
     public double Hull = Economy.UtilityHull;
-    public double MaxHull => Economy.UtilityHull;
+    public double MaxHull => Yard.Value(Kind == GatherKind.Miner ? "miner_hull" : "salvager_hull");   // 120, +10% a level
     public double RebuildIn;
     public bool WaitingForCredits;
     public string Category => Kind == GatherKind.Miner ? "MINERS" : "SALVAGERS";
