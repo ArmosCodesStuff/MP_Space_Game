@@ -638,6 +638,17 @@ Each of these compiled clean and was wrong at runtime. The smoke test covers all
   / `-cnotmatch`. A case-blind `FAIL` also matches every run's own `fails=0` summary line, which
   turned a clean 417-pass run into "11 problems". A ported check that counts things must be
   re-validated against the count the original produced.
+- **`ConfigFile.Save` writes in place, so a concurrent reader sees a torn file.**
+  `Character.Save` (`scripts/Character.cs:75`) saves straight over the live path; `Character.Load`
+  (`:81`) and the enumeration (`:126`) read it. Two instances sharing one `user://` — the smoke
+  test's six peers, or the documented "Run Multiple Instances" way of testing multiplayer — race,
+  and the reader gets `ConfigFile parse error … Unterminated string`. Seen on 1 WSL run in 3, on the
+  same file and line in two peers at once. Transient, but it makes a character fail to load or
+  vanish from the list for one read. The fix is a temp file plus a rename; not done yet.
+- **A flaky result may be a real bug wearing a costume.** The extra errors above looked at first
+  like environment noise, were not reproducible on demand, and the evidence was lost because the WSL
+  VM shuts down between commands and takes `/tmp` with it. Copy logs out of `/tmp` in the *same*
+  command that produced them, then run enough times to catch it.
 - **Git for Windows sets `core.autocrlf=true` in its SYSTEM config.** Left alone, the next
   `git checkout` / `stash` / `reset --hard` / fresh clone rewrites every text file to CRLF — which
   changes every hash in `MANIFEST.sha256` (the integrity check this project opens with would report
@@ -676,6 +687,18 @@ reachability resolves to something else and the assertion fails by construction.
 therefore a 417/417 bar, not 419/419**, until those two checks learn to branch on the environment.
 Do not "fix" them by relaxing the assertion: what they verify — that a player with no route out is
 told so, and offered the port-forward and Tailscale routes — is real behaviour worth keeping.
+
+**WSL does not get you back to 419.** It was set up expecting it would — the sandbox's conditions
+looked reproducible — and it reports exactly the same 417 with the same two failures. WSL2 has
+internet and sits behind its own NAT, so `LanOnly` does not hold there either. Only a machine with
+no router *and* no internet reaches 419. WSL is still worth having (it runs the `.sh` scripts
+unmodified, and typecheck and xref are clean there), but it is not a 419 oracle.
+*Rule: an environment assumption is worth testing before it is relied on. This one was wrong.*
+
+**Use Ubuntu 24.04 for the WSL distro, not the default.** `wsl --install -d Ubuntu` now gives 26.04,
+whose archive carries no .NET 8 at all — only `dotnet-sdk-10.0` — and this project targets `net8.0`.
+24.04 carries `dotnet-sdk-8.0` and installs to `/usr/lib/dotnet`, which is exactly where
+`typecheck.sh` looks for it.
 
 ## Screenshots
 

@@ -53,6 +53,12 @@ Forward+ renderer. So "how it looks on the developer's own GPU" is no longer unc
 swept states. What remains unconfirmed is how it feels in a hand-played session — nothing here
 replaces someone actually flying it.
 
+**One real bug was found doing that, and is not fixed:** `Character.Save()` writes over the live
+`.cfg` non-atomically, so a second instance sharing the same `user://` can read a half-written
+character (`ConfigFile parse error … Unterminated string`). It reproduces about 1 run in 3 under
+WSL and reaches the developer's own "Run Multiple Instances" multiplayer testing. See Unreleased →
+Known broken. Deciding whether to fix it now is the first open question below.
+
 ### What the game is right now
 
 A Godot 4.7.2 C# game where your ship is your character. From the main menu you pick or create a
@@ -164,6 +170,12 @@ reachable, which is fine: both harnesses build from the `nupkgs` folder that shi
 
 ### Open questions — built as a guess, awaiting confirmation
 
+- **Should `Character.Save()` become atomic?** It writes over the live `.cfg`, so a second instance
+  sharing one `user://` can read it half-written (Unreleased → Known broken; ~1 WSL run in 3). The
+  fix is small — save to `<path>.tmp`, then `DirAccess.RenameAbsolute` over the real one — and it
+  would also stop the smoke test's intermittent extra errors. **Not done**, because it is game code
+  and the nearest thing to a standing rule here is to ask first. Default if nobody says otherwise:
+  fix it, since a corrupt character read is worse than the cost of the change.
 - **"Range of standard fighters +100%"** was applied to their **control range** (700 → 1400: how far
   from the carrier they will fight), not their weapon range (300), because the bomber rule speaks of
   the fighters' *max* range. Weapon range is one number in `Stats.cs` if that was meant.
@@ -211,6 +223,11 @@ Frames looked at. No game code changed.
   WSL: `typecheck\typecheck.ps1`, `tools\analyse\run.ps1`, `tools\smoketest\run.ps1`,
   `tools\screens\run.ps1`. `tools/analyse/xref.py` already ran under Windows `python` unchanged.
   The originals are untouched and remain the Linux path.
+- **A WSL Ubuntu 24.04 distro** provisioned to match the sandbox (dotnet-sdk-8.0 from the archive at
+  `/usr/lib/dotnet`, Xvfb, Mesa, and the Linux mono engine at `/opt/godot`), so the original `.sh`
+  scripts run unmodified. Verified there: typecheck `0 errors.`, xref `UNUSED ANYWHERE: 0`, smoke
+  **417 pass, 6/6 runs**. Note **24.04, not the default**: WSL now installs Ubuntu 26.04, which ships
+  no .NET 8 at all — only `dotnet-sdk-10.0` — and the project targets `net8.0`.
 - The runners take the plain `Godot_v4.7.2-stable_mono_win64.exe` and **swap themselves to the
   `_console.exe`** beside it, refusing to run if it is absent: the GUI binary writes nothing to
   stdout, so a headless run's every check would be invisible.
@@ -222,11 +239,25 @@ Frames looked at. No game code changed.
 
 #### Known broken
 
-- **Two of the 419 smoke checks cannot pass on Windows** — `no UPnP router…` and `no router or
-  internet here…`. Both hard-require `Net.Reach.LanOnly`, i.e. the sandbox's absence of a router and
-  of internet; on a real network reachability resolves otherwise and they fail by construction. They
-  are not regressions and the behaviour they cover is real. **The Windows bar is 417, the Linux bar is
-  419.** Making them branch on the environment is not done.
+- **Two of the 419 smoke checks cannot pass on any machine with a router and internet** — `no UPnP
+  router…` and `no router or internet here…`. Both hard-require `Net.Reach.LanOnly`, i.e. the
+  sandbox's absence of a router and of internet; on a real network reachability resolves otherwise
+  and they fail by construction. They are not regressions and the behaviour they cover is real.
+  **417 is the bar on Windows *and* under WSL**; only the sandbox itself reaches 419. Making them
+  branch on the environment is not done.
+- **`Character.Save()` is not atomic, and a second instance can read a half-written file.**
+  `scripts/Character.cs:75` does `c.Save(PathOf(Id))` straight over the live path, and
+  `Character.Load` (`:81`) and the character enumeration (`:126`) read that same path. Caught under
+  WSL on 1 run in 3 — the arena host and arena guest both reported
+  `ERROR: ConfigFile parse error at user://characters/<id>.cfg:34: Unterminated string`, the same
+  file at the same line, at the same moment. **This is a real bug, not a harness artifact.** The
+  smoke test shares one `user://` across all six peers, but so does the developer's own documented
+  way of testing multiplayer — *"Run two instances (Godot's Debug → Run Multiple Instances)"* — and
+  both instances then share `%APPDATA%\Godot\app_userdata\Warships\`. Effect is transient (the
+  writer finishes and the file is valid again), but a reader at the wrong moment sees a corrupt
+  character: `Load` returns false, or the character list silently skips an entry. **Not fixed** —
+  the fix is to write to a temp path and rename, which is a game-code change and its own decision.
+  It did not appear in 3 Windows runs, but it is a race, so that is not evidence of absence.
 
 #### Changed
 
