@@ -113,8 +113,11 @@ public static class Character
             if (c.HasSectionKey("equipment", sc.ToString()))
                 Loadout[sc] = Equipment.Sanitize(sc, ((string)c.GetValue("equipment", sc.ToString(), "")).Split(','));
             if (c.HasSectionKey("spares", sc.ToString()))
+                // `gid`, not `id`: `id` here is the CHARACTER's id, the parameter this method was
+                // called with. Shadowing it with a gear id made the line read as if it were
+                // filtering on the character.
                 Spares[sc] = ((string)c.GetValue("spares", sc.ToString(), "")).Split(',', StringSplitOptions.RemoveEmptyEntries)
-                             .Where(id => Equipment.ById(id)?.Slot == GearSlot.Chip).ToList();
+                             .Where(gid => Equipment.ById(gid)?.Slot == GearSlot.Chip).ToList();
         }
         BossCleared.Clear();
         if (c.HasSection("boss_cleared"))

@@ -250,6 +250,10 @@ public partial class Hub : Node2D
             Net.I.SessionChanged -= OnSessionChanged;
         }
         Combat.Clear();
+        // A static pointing at a freed node is worse than a null one: it still reads non-null, so
+        // `Hub.I?.` sails straight through and calls into a dead object. Guarded on `== this`
+        // because a scene change can build the next Hub before this one is out of the tree.
+        if (I == this) I = null;
         ControlsLocked = false;
         if (Music.I != null) Music.I.Target = Music.Mood.Ambient;
     }
@@ -308,11 +312,17 @@ public partial class Hub : Node2D
     // Static: it must outlive the host's own scene reloads.
     private static readonly Dictionary<int, SectorKind> _peerSector = new();
     public static SectorKind? PeerSector(int id) => _peerSector.TryGetValue(id, out var s) ? s : null;
-    public void RpcHome(Node node, StringName method, params Variant[] args)
+    // Send only to the peers that are IN a given sector. A peer still loading that world has no
+    // such node yet, and Godot logs "Node not found ... Invalid packet received" for every stray
+    // packet -- it is not fatal, but it is noise that hides real errors, and that peer misses the
+    // state anyway. The yard has needed this since the first arena run; the BOSS needs the same,
+    // because the host starts broadcasting its state before every guest has built the arena.
+    public void RpcToSector(SectorKind k, Node node, StringName method, params Variant[] args)
     {
         foreach (var id in Multiplayer.GetPeers())
-            if (_peerSector.TryGetValue(id, out var s) && s == SectorKind.Home) node.RpcId(id, method, args);
+            if (_peerSector.TryGetValue(id, out var s) && s == k) node.RpcId(id, method, args);
     }
+    public void RpcHome(Node node, StringName method, params Variant[] args) => RpcToSector(SectorKind.Home, node, method, args);
     [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
     private void NetMySector(int s) { if (Net.IsHost) _peerSector[Multiplayer.GetRemoteSenderId()] = (SectorKind)s; }
     private void ReportSector() { if (Net.IsOnline && !Net.IsHost) RpcId(1, nameof(NetMySector), (int)Sector); }
@@ -401,7 +411,10 @@ public partial class Hub : Node2D
         // a peer may only describe itself
         if (Multiplayer.GetRemoteSenderId() != peer || Net.I == null) return;
         if (!Net.I.Players.TryGetValue(peer, out var p)) Net.I.Players[peer] = p = new Net.PlayerInfo { Id = peer };
-        if (name.Length > 24) name = name[..24];
+        // Everything else off this wire is sanitised (bought is null-guarded below, equip inside
+        // Equipment.Sanitize); the name was not. A null here threw on .Length, and a null that got
+        // past became a null Pilot in every label that draws it.
+        name = string.IsNullOrEmpty(name) ? "Commander" : name.Length > 24 ? name[..24] : name;
         var c = System.Enum.IsDefined(typeof(ShipClass), cls) ? (ShipClass)cls : ShipClass.Battleship;
         p.Name = name; p.Main = main; p.Accent = accent; p.Class = c; p.HasIdentity = true;
         // purchases the claimed level could not have paid for are refused outright
@@ -498,6 +511,11 @@ public partial class Hub : Node2D
 
     private void TickArena(double delta)
     {
+        // `Yard` here is the TYPE, not this Hub's Yard property -- which is null in the arena,
+        // because the arena skips BuildWorld. C# binds the name to the class when the member is
+        // static, so every `Yard.<static>` call in this file is safe (see also AddGuestShare and
+        // AddHostShare, both reached from the arena). Make any of them an instance member and
+        // these lines start throwing. See DESIGN.md -> Traps.
         Yard.TripClock += delta;                              // what the base is missing, in game time
         if (!Net.IsHost) return;
         // the whole party in stasis at once: the mission fails, everyone goes home
@@ -868,8 +886,12 @@ public partial class Hub : Node2D
         var me = MyShip;
         if (me != null)
         {
-            // weapon and ability state lives on the ability bar; this line is who and where
-            _help.Text = Abilities.ControlsHint(me.Class);
+            // weapon and ability state lives on the ability bar; this line is who and where.
+            // Built every frame so a class change or a rebind shows at once, but only ASSIGNED
+            // when it actually differs: setting Text re-shapes the label's glyphs, and this
+            // string changes on a refit or a rebind, not sixty times a second.
+            var hint = Abilities.ControlsHint(me.Class);
+            if (_help.Text != hint) _help.Text = hint;
             ship = $"    |    {Character.Name}  {(me.Class == ShipClass.Battleship ? "BATTLESHIP" : "CARRIER")}"
                  + $"  {Mathf.Abs(me.SpeedAhead):0} u/s{(me.SpeedAhead < -1 ? " astern" : "")}";
             ship += Selected != null ? "    target: " + (Selected is TargetDummy td ? $"TARGET DUMMY {td.Number}" : $"#{Selected.NetId}")
@@ -1044,7 +1066,10 @@ public partial class Hub : Node2D
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
     private void NetDummy(int number, double last, double avg, double total)
     {
-        if (number >= 1 && number <= _dummies.Count) _dummies[number - 1].SetReadout(last, avg, total);
+        // BY NUMBER, not by position. The dummies are numbered 1, 3, 4, 5 (2's spot holds the two
+        // practice fighters), so `_dummies[number - 1]` sent 3's readout to 4, 4's to 5, and
+        // dropped 5's entirely because 5 > Count. Guests saw the wrong numbers on the wrong hulls.
+        foreach (var d in _dummies) if (d.Number == number) { d.SetReadout(last, avg, total); return; }
     }
 
     private void ToggleBase()

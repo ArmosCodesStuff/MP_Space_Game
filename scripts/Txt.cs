@@ -5,7 +5,8 @@ using Godot;
 // These helpers measure the string first and place it by its real width, so nothing is ever cut.
 public static class Txt
 {
-    // Set by Zone each frame from the camera zoom. World-space labels multiply their font size by
+    // Set by Hub each frame from the camera zoom (the class was called Zone once; the name outlived
+    // it here by a rename). World-space labels multiply their font size by
     // this so they stay a constant size on screen instead of being magnified into a blur.
     public static float UiScale = 1f;
     public static int Size(int basePx) => Mathf.Max(6, Mathf.RoundToInt(basePx * UiScale));

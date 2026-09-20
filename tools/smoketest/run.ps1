@@ -33,7 +33,17 @@ if (-not (Test-Path $nupkgs)) { Write-Host "no nupkgs folder at $nupkgs"; exit 2
 $src = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $W = Join-Path $env:TEMP 'warships_smoke'
 
-if (Test-Path $W) { Remove-Item $W -Recurse -Force }
+# One fixed scratch folder, so two runs cannot overlap -- the second would delete the first's
+# files mid-run. Say so plainly: the bare failure is a Remove-Item error on a .err file, which
+# reads like a broken harness rather than "something else is already running".
+if (Test-Path $W) {
+  try { Remove-Item $W -Recurse -Force -ErrorAction Stop }
+  catch {
+    Write-Host "CANNOT CLEAR $W -- another smoke run is probably still going."
+    Write-Host "These runs share one scratch folder and must be run one at a time."
+    exit 2
+  }
+}
 New-Item -ItemType Directory -Path $W -Force | Out-Null
 # /.godot, bin and obj are build output; copying them just makes the import stale.
 robocopy $src $W /E /XD .godot .git bin obj /NFL /NDL /NJH /NJS /NP | Out-Null

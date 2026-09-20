@@ -220,10 +220,17 @@ public partial class Raider : Node2D, IHittable
             return;                                   // the boost is not spent while it sits here
         }
 
-        // my post around the target: ahead, left or right by its heading, 90 u out. An escort
+        // My post around the target: ahead, left or right by its heading, 90 u out. An escort
         // keeps the side it was launched on instead of taking a slot, so the pair always flanks.
-        var mates = Hub.Raiders.Where(r => r.Alive && !r.IsEscort && r.Target == Target).OrderBy(r => r.NetId).ToList();
-        int slot = Mathf.Max(0, mates.IndexOf(this)) % Posts.Length;
+        //
+        // The slot is my rank by NetId among the raiders sharing this target -- counted, not
+        // sorted. This ran as Where + OrderBy + ToList + IndexOf EVERY FRAME FOR EVERY LIGHT, so
+        // a raid of two patrols did six list allocations and six sorts over the whole raider list
+        // per frame. Counting lower NetIds gives the identical index with no allocation at all.
+        int slot = 0;
+        foreach (var r in Hub.Raiders)
+            if (r != this && r.Alive && !r.IsEscort && r.Target == Target && r.NetId < NetId) slot++;
+        slot %= Posts.Length;
         var postDir = Vector2.Up.Rotated(Target.Rotation + (IsEscort ? _escortPost : Posts[slot]));
         var post = Target.Position + postDir * (Extent(Target, postDir) + Hold);
         float toTarget = Position.DistanceTo(Target.Position);

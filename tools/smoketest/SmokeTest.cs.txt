@@ -41,6 +41,8 @@ public partial class _Test : Node
     {
         string role = OS.GetCmdlineUserArgs().FirstOrDefault() ?? "solo";
         await Wait(0.3);
+        try { if (role == "solo") await QuitResetsSector(); }
+        catch (Exception ex) { Check(false, $"sector reset test threw: {ex.GetType().Name}: {ex.Message}"); GD.Print(ex.StackTrace); }
         try { if (role == "solo") await Select(); }
         catch (Exception ex) { Check(false, $"select screen test threw: {ex.GetType().Name}: {ex.Message}"); GD.Print(ex.StackTrace); }
         GetTree().ChangeSceneToFile("res://Hub.tscn");
@@ -54,6 +56,28 @@ public partial class _Test : Node
         // 0.2 s of game time can pass in milliseconds, before the mixer has cycled
         Music.I?.Silence(); await Wait(0.1); OS.DelayMsec(200); await Wait(0.1);
         GetTree().Quit(fails);
+    }
+
+    // Hub.Sector is static and only Hub.GoTo ever sets it, so quitting to the main menu FROM THE
+    // ARENA used to leave it on Arena: the next session skipped BuildWorld and dropped the pilot
+    // into an arena with no base, no economy and a boss. The menu now ends the trip, whichever
+    // route reached it.
+    async Task QuitResetsSector()
+    {
+        Hub.Sector = Hub.SectorKind.Arena;
+        Yard.TripClock = 123; Yard.TripCredits = 456;      // as a quit from the arena would leave them
+        Music.CombatZone = true;                            // and so would this
+        GetTree().ChangeSceneToFile("res://MainMenu.tscn");
+        await Wait(0.4);
+        Check(Hub.Sector == Hub.SectorKind.Home,
+              $"reaching the main menu ends the trip: the next session starts at home, not in the arena ({Hub.Sector})");
+        // Yard._Ready APPLIES the trip snapshot, so leaving one behind overwrote the next
+        // session's economy with it -- a previous character's, even.
+        Check(Yard.TripClock == 0 && Yard.TripCredits == 0,
+              $"the trip snapshot is dropped too, so a fresh session is not paid an abandoned one ({Yard.TripClock:0}, {Yard.TripCredits:0})");
+        // Hub sets CombatZone on the way in; nothing cleared it on the way out, so quitting from
+        // the arena left the combat track playing over the menu.
+        Check(!Music.CombatZone, "the combat zone flag is dropped too: the menu is not scored as a fight");
     }
 
     // ── character select ─────────────────────────────────────────────────────
@@ -86,6 +110,15 @@ public partial class _Test : Node
         Character.Save(); await Wait(0.05);
         Check(!FileAccess.FileExists(tmpPath),
               "Save() goes through a temp file and renames it away, leaving none behind");
+        // user://settings.cfg is written the same way and for the same reason: two instances share
+        // one user://, so a rebind saved by one used to leave the other reading a torn file and
+        // silently falling back to defaults.
+        var setTmp = Settings.Path + ".tmp";
+        using (var strayCfg = FileAccess.Open(setTmp, FileAccess.ModeFlags.Write))
+            strayCfg.StoreString("[audio]\nvolume_idx=");
+        Settings.Save(); await Wait(0.05);
+        Check(!FileAccess.FileExists(setTmp),
+              "Settings.Save() goes through a temp file too, and leaves none behind");
 
         // new character: cancel writes nothing
         Nodes<Button>(sel).First(b => b.Text == "NEW CHARACTER").EmitSignal(BaseButton.SignalName.Pressed);
@@ -638,6 +671,30 @@ public partial class _Test : Node
         Check(!ship.PdActive, "Q does nothing while recharging");
         double mid = Nodes<TargetDummy>().Sum(d => d.Total); await Wait(2.0);
         Check(Nodes<TargetDummy>().Sum(d => d.Total) == mid, "no PD fire while recharging");
+        // A readout goes to the dummy with that NUMBER, not that position. The dummies are 1, 3,
+        // 4 and 5 (2's spot holds the two practice fighters), so indexing the list by number-1
+        // sent 3's figures to 4, 4's to 5, and dropped 5's entirely because 5 > Count: guests
+        // read the wrong numbers off the wrong hulls.
+        var dummy5 = Nodes<TargetDummy>().First(x => x.Number == 5);
+        var dummy4 = Nodes<TargetDummy>().First(x => x.Number == 4);
+        double l5 = dummy5.LastSecond, a5 = dummy5.Average10, t5 = dummy5.Total;
+        double l4 = dummy4.LastSecond, a4 = dummy4.Average10, t4 = dummy4.Total;
+        Priv(H, "NetDummy", 5, 7.0, 8.0, 9.0);
+        double got5 = dummy5.Total, got4 = dummy4.Total;                   // read BEFORE restoring
+        bool routed = Math.Abs(got5 - 9.0) < 1e-9 && Math.Abs(got4 - t4) < 1e-9;
+        dummy5.SetReadout(l5, a5, t5); dummy4.SetReadout(l4, a4, t4);      // put them back
+        Check(routed, $"a dummy's readout reaches the dummy with that NUMBER, not that position (5 got {got5:0.#} of 9, 4 sat at {got4:0.#})");
+        // Combat.Clear drops the hooks the world installed on its way out. OnShell was left
+        // behind: a lambda holding the Hub, so the next shot called into a freed node, and a Hub
+        // that could never be collected once you were back at the menu. Snapshot and restore --
+        // this all happens inside one frame, so nothing ever sees the cleared state.
+        var keepHostiles = Combat.Hostiles.ToList(); var keepPlayers = Combat.Players.ToList();
+        var keepFlash = Combat.OnFlash; var keepShell = Combat.OnShell; var keepTorp = Combat.OnTorpedo;
+        Combat.Clear();
+        bool hooksDropped = Combat.OnFlash == null && Combat.OnShell == null && Combat.OnTorpedo == null;
+        Combat.Hostiles.AddRange(keepHostiles); Combat.Players.AddRange(keepPlayers);
+        Combat.OnFlash = keepFlash; Combat.OnShell = keepShell; Combat.OnTorpedo = keepTorp;
+        Check(hooksDropped, "Combat.Clear drops every hook the world installed, OnShell included");
 
         // ── carrier ──
         await SetClass(ShipClass.Carrier); ship = Me;

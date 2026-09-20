@@ -299,7 +299,7 @@ public partial class HaulerHud : Control
         Visible = h.State == Hauler.St.Loading && onScreen && !underMenu;
         if (!Visible) return;
         _go.Disabled = !h.CanDispatch;
-        _go.Text = h.CanDispatch ? $"DISPATCH  ({h.FullPods}/{Yard.Pods} pods full)" : $"LOADING  {h.Cargo:0}/{Yard.PodSize:0}";
+        Ui.SetText(_go, h.CanDispatch ? $"DISPATCH  ({h.FullPods}/{Yard.Pods} pods full)" : $"LOADING  {h.Cargo:0}/{Yard.PodSize:0}");
         QueueRedraw();
     }
 

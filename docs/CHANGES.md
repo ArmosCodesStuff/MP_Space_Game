@@ -47,7 +47,7 @@ faults have been fixed from those frames more than once.
 
 **As of 2026-09-20 the whole harness also runs natively on the developer's Windows machine** (see
 Unreleased → *The harnesses run on Windows*): typecheck 0 errors, build 0 warnings, analysers 0
-findings, xref 0 unused, smoke **426 pass / 6 of 6 runs** (the 2 short of 428 assert the sandbox's
+findings, xref 0 unused, smoke **432 pass / 6 of 6 runs** (the 2 short of 434 assert the sandbox's
 missing router and internet), sweep **67 frames, 0 lint** on the real GPU with the project's own
 Forward+ renderer. So "how it looks on the developer's own GPU" is no longer unconfirmed for the
 swept states. What remains unconfirmed is how it feels in a hand-played session — nothing here
@@ -130,7 +130,7 @@ developer's own machine with no WSL — see `docs/README.md` for the exact comma
 2. **Smoke test:** `sh tools/smoketest/run.sh <path to Godot_v4.7.2-stable_mono_linux.x86_64>`
    → must end `SMOKE TEST PASSED`. Real engine, headless, solo at a fixed 60 fps plus a host and a
    guest over localhost, in its own `user://`. Add checks to `tools/smoketest/SmokeTest.cs.txt`.
-   Windows: `tools\smoketest\run.ps1 <godot win64 exe>`, and the bar there is **426 pass, 6/6 runs**,
+   Windows: `tools\smoketest\run.ps1 <godot win64 exe>`, and the bar there is **432 pass, 6/6 runs**,
    not `SMOKE TEST PASSED` — two checks assert the sandbox's lack of a router and internet and
    cannot pass on a real network. See DESIGN.md → Smoke test before touching them.
 3. **Look at it:** `sh tools/screens/run.sh <same binary>` → frames in `/tmp/shots/`. Do this for
@@ -202,6 +202,58 @@ reachable, which is fine: both harnesses build from the `nupkgs` folder that shi
 ---
 
 ## Unreleased
+
+### Review pass 3 complete: all 46 scripts read line by line
+
+**Checked:** typecheck 0 errors; build 0 warnings; analysers 0 findings; xref 0 unused; smoke
+**432 pass, 6/6 runs, three in a row**; sweep 67 frames, 0 lint. Six new checks, each with a mutant
+that makes it fail.
+
+**Seven scripts were missing from `REVIEW.md`'s own list** — `Equipment`, `EquipmentWindow`,
+`Explosion`, `HealthBar`, `Plume`, `Shell` and `Txt` — so a pass that ticked every row would still
+have skipped them. They are listed now, and one of them (`Shell`) held a real finding.
+
+#### Fixed
+
+- **Quitting to the main menu from the arena left the next session in the arena.** `Hub.Sector` is
+  static and only `GoTo` ever set it, so the Esc menu's QUIT TO MAIN MENU carried it out of the
+  session: the next run skipped `BuildWorld` and started in an arena with **no base, no economy and
+  a boss**. The menu now ends the trip, whichever route reached it.
+- **Guests read the dummies' DPS off the wrong hulls.** The dummies are numbered 1, 3, 4 and 5 (2's
+  spot holds the two practice fighters), but the readout was routed by list position: 3's figures
+  landed on 4, 4's on 5, and **5's were dropped silently**. Routed by number now.
+- **`Combat.Clear()` kept a freed Hub alive.** It dropped `OnFlash` and `OnTorpedo` but not
+  `OnShell`, so a static delegate went on holding the old Hub — calling `AddChild` and `Rpc` on a
+  dead node, and never collectable once you were back at the menu.
+- **`Settings.Save()` could be read half-written**, exactly as `Character.Save()` could: two
+  instances share one `user://`, so a rebind saved by one left the other with a parse error and it
+  silently fell back to defaults for the session. Temp file plus rename, same as characters.
+- **Hardening, no reachable trigger found:** `Hub.NetIdentity` now sanitises `name` (it already
+  sanitised `bought` and `equip`; a null threw on `.Length`); `Gatherer`'s docking and unloading
+  states self-heal instead of indexing `Yard.Arms[-1]`; `Progression.Flats` skips a null stat key.
+- **Two per-frame text re-shapes removed.** `Hub`'s controls hint and `SessionMenu`'s reveal button
+  reassigned `Text` sixty times a second with strings that change on a refit or a rebind. Setting
+  `Text` re-shapes the glyphs, and these are MSDF fonts.
+- **`PlayerShip` aged its signal lights inside `_Draw`.** Drawing is not guaranteed — an off-screen
+  canvas item is culled — so a ship that drifted out of view kept its lights lit for ever. Aged in
+  `_Process` now, the way `Torpedo` has always aged its smoke.
+- **The boss broadcast its state to peers who were not in the arena.** Godot addresses RPCs by node
+  path, so a guest still building the arena got packets for a `Hub/Boss` it did not have:
+  `Node not found`, `Invalid packet received`, and it missed the state anyway. This is the failure
+  `RpcHome` was written for, on the other side of the same door. Both now go through the new
+  `Hub.RpcToSector`. Surfaced by raising the boss to 30 Hz while locked, which made the window
+  three times easier to hit.
+- **Nine per-frame `.Text` assignments across six files**, consolidated behind `Ui.SetText` rather
+  than four copies of the same guard. `BasePanel` alone rewrote about thirteen a frame.
+- **Two hot-path allocations removed.** `Raider` ran `Where`+`OrderBy`+`ToList`+`IndexOf` over every
+  raider, per light, per frame, to find its post slot; `Turret.Acquire` ran `Combat.Near` plus a
+  LINQ chain plus a `ToList` **every frame for every PD turret** whenever nothing was in range,
+  because a null target never satisfies the re-acquire guard. Both are single allocation-free
+  passes now, with identical selection rules.
+- **`ShipPreview` called `GD.Load` inside `_Draw`** — seven ResourceLoader lookups a frame for a
+  live battleship preview. Cached.
+
+Full detail, including what was found and deliberately *not* changed, is in `REVIEW.md`.
 
 ### The death beam: escorts first, and an honest tell
 
@@ -302,11 +354,11 @@ Frames looked at. No game code changed.
 
 #### Known broken
 
-- **Two of the 428 smoke checks cannot pass on any machine with a router and internet** — `no UPnP
+- **Two of the 434 smoke checks cannot pass on any machine with a router and internet** — `no UPnP
   router…` and `no router or internet here…`. Both hard-require `Net.Reach.LanOnly`, i.e. the
   sandbox's absence of a router and of internet; on a real network reachability resolves otherwise
   and they fail by construction. They are not regressions and the behaviour they cover is real.
-  **426 is the bar on Windows *and* under WSL**; only the sandbox itself reaches 428. Making them
+  **432 is the bar on Windows *and* under WSL**; only the sandbox itself reaches 434. Making them
   branch on the environment is not done.
 *(The non-atomic character save that was listed here is now fixed — see Fixed, below.)*
 

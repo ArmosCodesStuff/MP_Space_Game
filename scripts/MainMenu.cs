@@ -30,6 +30,17 @@ public partial class MainMenu : Node2D
     {
         Ui.Install(GetTree());                                  // the game-wide look
         Settings.Load(); Settings.ApplyVolume();
+        // Reaching the menu ends whatever trip was in progress. Hub.Sector is static and is only
+        // ever set by Hub.GoTo, so quitting to the menu FROM THE ARENA used to leave it there:
+        // the next session skipped BuildWorld entirely and dropped the pilot into an arena with
+        // no base, no economy and a boss. Resetting here covers every route back, not just the
+        // Esc menu's quit button.
+        Hub.Sector = Hub.SectorKind.Home;
+        Yard.EndSession();      // and the trip snapshot / parked base, for the same reason
+        // Hub sets this on the way in and nothing cleared it on the way out, so quitting from the
+        // arena left the combat track playing over the menu until a new Hub was built.
+        Music.CombatZone = false;
+        if (Music.I != null) Music.I.Target = Music.Mood.Ambient;
         var vs = GetViewport().GetVisibleRect().Size;
         var centre = vs * 0.5f + new Vector2(0, 60);
         // nebula backdrop: a few large tinted patches

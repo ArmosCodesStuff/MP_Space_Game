@@ -85,33 +85,34 @@ public partial class BasePanel : PanelContainer
     public override void _Process(double delta)
     {
         if (_armed > 0) _armed -= delta;
-        _credits.Text = $"Credits: {Y.Credits:0}";
+        Ui.SetText(_credits, $"Credits: {Y.Credits:0}");
         if (IsInstanceValid(_fleet) && _tab != "REFIT")
         {
             string lost = _tab == "HAULER"
                 ? (Y.Hauler != null && Y.Hauler.State == Hauler.St.Destroyed ? Rebuilding("Hauler", Y.Hauler.RebuildIn, Y.Hauler.WaitingForCredits, _tab) : "")
                 : string.Join("", Y.Gatherers.Where(g => g.Category == _tab && g.State == Gatherer.St.Destroyed)
                                             .Select(g => Rebuilding($"{(g.Kind == GatherKind.Miner ? "Miner" : "Salvager")} {g.Index + 1}", g.RebuildIn, g.WaitingForCredits, _tab)));
-            _fleet.Text = $"Invested so far: {Y.Invested(_tab):0} cr  ·  a rebuild costs {Y.RebuildCost(_tab):0} cr (10%)" + lost;
+            Ui.SetText(_fleet, $"Invested so far: {Y.Invested(_tab):0} cr  ·  a rebuild costs {Y.RebuildCost(_tab):0} cr (10%)" + lost);
         }
         foreach (var (id, (info, buy)) in _rows)
         {
             var u = Economy.ById(id); int lv = Y.Level(id);
             bool max = Economy.Maxed(u, lv);
             string now = $"{Economy.Value(u, lv):0.#}", next = max ? "MAX" : $"{Economy.Value(u, lv + 1):0.#}";
-            info.Text = $"{u.Name}  ·  Lv {lv}\n{now} → {next} {u.Unit}   ({u.Blurb})";
+            Ui.SetText(info, $"{u.Name}  ·  Lv {lv}\n{now} → {next} {u.Unit}   ({u.Blurb})");
             double cost = Economy.Cost(u, lv);
-            buy.Text = max ? "MAX" : $"BUY  {cost:0} cr";
+            Ui.SetText(buy, max ? "MAX" : $"BUY  {cost:0} cr");
             buy.Disabled = max || Y.Credits < cost;
         }
         if (_reset != null)
         {
             var (o, s, c) = Y.ResetCost();
-            _resetCost.Text = $"Cost now: {o:0} ore, {s:0} salvage, {c:0} credits";
-            _reset.Text = _armed > 0 ? "CLICK AGAIN TO PAY AND RESET" : "RESET";
+            Ui.SetText(_resetCost, $"Cost now: {o:0} ore, {s:0} salvage, {c:0} credits");
+            Ui.SetText(_reset, _armed > 0 ? "CLICK AGAIN TO PAY AND RESET" : "RESET");
             _reset.Disabled = Hub.CreatorOpen;
         }
     }
+
 
     string Rebuilding(string who, double inS, bool waiting, string tab) =>
         waiting ? $"\n  {who} lost: rebuild waiting for {Y.RebuildCost(tab):0} cr" : $"\n  {who} lost: rebuilt in {inS:0} s";

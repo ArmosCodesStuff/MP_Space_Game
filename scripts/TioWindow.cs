@@ -44,23 +44,23 @@ public partial class TioWindow : PanelContainer
         if (Hub == null) return;
         int top = Missions.Unlocked(Missions.Current.Id);
         int lv = Missions.Level, party = System.Math.Max(1, Hub.PartySize);
-        _tier.Text = $"LEVEL {lv}  ·  ×{Missions.S(lv):0.00}" + (lv == top ? "  (newest)" : "");
+        Ui.SetText(_tier, $"LEVEL {lv}  ·  ×{Missions.S(lv):0.00}" + (lv == top ? "  (newest)" : ""));
         _down.Disabled = !Net.IsHost || lv <= 1 || Hub.Mission != Hub.MissionState.Idle;
         _up.Disabled = !Net.IsHost || lv >= top || Hub.Mission != Hub.MissionState.Idle;
         bool first = !(Character.BossCleared.TryGetValue(Missions.Current.Id, out var cl) && cl.Contains(lv));
-        _bounty.Text = $"BOUNTY  ·  {Missions.BossName}  ·  party of {party}\n"
+        Ui.SetText(_bounty, $"BOUNTY  ·  {Missions.BossName}  ·  party of {party}\n"
                      + $"You: {Missions.KillExpFor(lv, Character.Level)} EXP for the kill (your level {Character.Level})"
                      + (first ? $" + {Missions.FirstClearExp} first clear" : "") + $" + {Missions.CompletionExp} completing, "
-                     + $"{Missions.BountyEach(lv, party):0} credits each.";
-        _party.Text = string.Join("\n", Hub.PartyIds.OrderBy(i => i).Select(i => $"  {Hub.PilotName(i)}   {(Hub.IsReady(i) ? "READY" : "not ready")}"));
+                     + $"{Missions.BountyEach(lv, party):0} credits each.");
+        Ui.SetText(_party, string.Join("\n", Hub.PartyIds.OrderBy(i => i).Select(i => $"  {Hub.PilotName(i)}   {(Hub.IsReady(i) ? "READY" : "not ready")}")));
         bool mine = Hub.IsReady(Net.LocalId);
-        _ready.Text = mine ? "READY  ✓" : "READY";
+        Ui.SetText(_ready, mine ? "READY  ✓" : "READY");
         int waiting = Hub.PartyIds.Count(i => !Hub.IsReady(i));
-        _status.Text = Hub.Mission switch
+        Ui.SetText(_status, Hub.Mission switch
         {
             Hub.MissionState.Opening    => $"Opening the portal…  {Hub.MissionT:0.0} / {Hub.PortalOpenTime:0} s",
             Hub.MissionState.PortalOpen => "The portal is open: the party goes through when every ship is at it.",
             _ => waiting > 0 ? $"Waiting for {waiting} pilot(s) to press READY. READY flies you to the portal." : "Everyone is ready.",
-        };
+        });
     }
 }

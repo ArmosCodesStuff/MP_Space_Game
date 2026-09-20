@@ -643,6 +643,14 @@ Each of these compiled clean and was wrong at runtime. The smoke test covers all
   repaired half afterwards to guarantee it.
 - **Timers round up to the next frame.** At a fixed 60 fps a 0.25 s wait is 16 frames; a speed
   measured over it read 256 for 240. Measure over an exact frame count.
+- **A property named after its own type hides which one you are calling.** `Hub.Yard` is a property
+  of type `Yard`, and it is **null in the arena** (the arena skips `BuildWorld`). Yet `TickArena`
+  does `Yard.TripClock += delta`, and the boss-kill path does `Yard.AddHostShare(...)` — both in
+  the arena, both apparently dereferencing that null. They are safe only because C# binds the name
+  to the *class* when the member is static, and all three members are. The day one of them becomes
+  an instance member, three lines start throwing every frame and none of them look wrong.
+  *Rule: when a property shares its type's name, say which you meant in a comment, and think twice
+  before making one of that type's statics an instance member.*
 - **Don't reuse Godot member names.** `Wing.Ready` hid the `Ready` signal and `StatsWindow.Name()`
   hid `Node.Name`; both compiled with only a warning. Treat build warnings as errors to read.
 - **A real display reads the real pointer.** Injected mouse-motion events move the aim headless, but
@@ -687,6 +695,20 @@ Each of these compiled clean and was wrong at runtime. The smoke test covers all
   650 u standoff the boss would not have closed anyway, so the assertion tested nothing but the
   flag. Arrange the conditions under which the behaviour would actually differ, or the check is
   decoration. Sibling of the constant-comparison lesson above.
+- **A node-addressed RPC to a peer in another sector is an engine error.** Godot routes RPCs by
+  node path, so a packet for `Hub/Boss` reaching a peer that has not finished building the arena
+  logs `Node not found` / `Invalid packet received`. The yard hit this first and `RpcHome` was the
+  answer; the BOSS had the same hole in reverse, broadcasting its state and telegraphs to everyone
+  while a guest was still loading. Both now go through `Hub.RpcToSector`. *Rule: anything that
+  exists in only one sector sends to that sector's peers, never to all of them.* Raising the boss
+  to 30 Hz while locked made the window three times easier to hit, which is how it surfaced.
+- **Two smoke runs cannot overlap: they share one scratch folder.** Both runners copy the project
+  to a fixed path (`/tmp/warships_smoke`, `%TEMP%\warships_smoke`), so starting a second run
+  deletes the first's files underneath it. The victim then prints a wall of
+  `ERROR: Cannot open file 'res://scripts/Raider.cs'` and
+  `Failed to instantiate an autoload` — which reads exactly like a broken project, not like a
+  clobbered temp folder, and it cost a full verification run to work out. `run.ps1` now refuses to
+  start with a plain message when it cannot clear the folder. *Run them one at a time.*
 - **A flaky result may be a real bug wearing a costume.** The extra errors above looked at first
   like environment noise, were not reproducible on demand, and the evidence was lost because the WSL
   VM shuts down between commands and takes `/tmp` with it. Copy logs out of `/tmp` in the *same*
@@ -717,7 +739,7 @@ coin flip, so watch across frames; and order checks so none runs after the other
 the session.
 
 `tools/smoketest/run.ps1` is the same harness for Windows, driving the win64 mono build. It runs the
-whole suite: **426 pass, 6/6 runs finished**, against the 428 the sandbox reports. The two that
+whole suite: **432 pass, 6/6 runs finished**, against the 434 the sandbox reports. The two that
 cannot pass here are not regressions — they assert the *sandbox's* network, and say so in their own
 comments (`// no router in the sandbox`, `// no router, no internet in the sandbox`):
 
@@ -726,14 +748,14 @@ comments (`// no router in the sandbox`, `// no router, no internet in the sandb
 
 Both hard-require `Net.Reach.LanOnly`. On a real machine behind a real router with real internet,
 reachability resolves to something else and the assertion fails by construction. **Windows is
-therefore a 426/426 bar, not 428/428**, until those two checks learn to branch on the environment.
+therefore a 432/432 bar, not 434/434**, until those two checks learn to branch on the environment.
 Do not "fix" them by relaxing the assertion: what they verify — that a player with no route out is
 told so, and offered the port-forward and Tailscale routes — is real behaviour worth keeping.
 
 **WSL does not get you back to the sandbox's number.** It was set up expecting it would — those
 conditions looked reproducible — and it reports exactly the same count as Windows, with the same two
 failures. WSL2 has internet and sits behind its own NAT, so `LanOnly` does not hold there either.
-Only a machine with no router *and* no internet reaches the full 428. WSL is still worth having (it
+Only a machine with no router *and* no internet reaches the full 434. WSL is still worth having (it
 runs the `.sh` scripts unmodified, and typecheck and xref are clean there), but it is not an oracle
 for those two checks.
 *Rule: an environment assumption is worth testing before it is relied on. This one was wrong.*

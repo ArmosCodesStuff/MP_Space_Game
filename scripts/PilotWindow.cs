@@ -38,16 +38,16 @@ public partial class PilotWindow : PanelContainer
     public override void _Process(double delta)
     {
         int need = Progression.ExpToNext;
-        _head.Text = $"PILOT  ·  {Character.Name}  ·  LEVEL {Character.Level}";
-        _exp.Text = $"EXP {Character.Exp} / {need} to level {Character.Level + 1}";
+        Ui.SetText(_head, $"PILOT  ·  {Character.Name}  ·  LEVEL {Character.Level}");
+        Ui.SetText(_exp, $"EXP {Character.Exp} / {need} to level {Character.Level + 1}");
         _bar.Value = (double)Character.Exp / need;
-        _points.Text = $"Points to spend: {Character.Points}";
+        Ui.SetText(_points, $"Points to spend: {Character.Points}");
         for (int i = 0; i < Progression.All.Length; i++)
         {
             var u = Progression.All[i]; int n = Character.Bought[i], cost = Progression.Cost(n);
             double per = u.Id == "turn" ? 1 : u.Per;                    // shown in degrees
-            _info[i].Text = $"{u.Name}  ·  Lv {n}   (+{per * n:0.#} {u.Unit} so far; next +{per:0.#})";
-            _buy[i].Text = $"BUY  {cost} pt";
+            Ui.SetText(_info[i], $"{u.Name}  ·  Lv {n}   (+{per * n:0.#} {u.Unit} so far; next +{per:0.#})");
+            Ui.SetText(_buy[i], $"BUY  {cost} pt");
             _buy[i].Disabled = Character.Points < cost || n >= Progression.MaxPerUpgrade;
         }
     }

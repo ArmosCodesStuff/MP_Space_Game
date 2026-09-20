@@ -100,6 +100,22 @@ public partial class Yard : Node2D
     // the host's share, earned in the arena (where there is no yard): paid on the way home
     public static void AddHostShare(double credits) => TripCredits += credits;
 
+    // Reaching the main menu ends the session. These statics outlive the scene ON PURPOSE -- a
+    // sector change and a visit both tear the Yard down and rebuild it -- but nothing cleared them
+    // when the SESSION ended, and `Yard._Ready` applies them unconditionally. So quitting from the
+    // arena left `_trip` behind and the next session's economy was overwritten by that snapshot,
+    // and quitting while visiting left `_parked` set so the next session restored the base from
+    // the one before. Across characters too: the yard is not saved per character, or at all.
+    public static void EndSession()
+    {
+        _trip = null;
+        TripCredits = TripClock = TripStartCredits = 0;
+        LastAway = LastAwayOre = LastAwaySalvage = 0;
+        _parked = false;
+        _ownOre = _ownSalvage = _ownCredits = 0;
+        _ownLevels.Clear(); _ownInvested.Clear();
+    }
+
     public void SaveForTrip()
     {
         _trip = new Trip(Ore, Salvage, Credits, new Dictionary<string, int>(_levels), new Dictionary<string, double>(_invested),

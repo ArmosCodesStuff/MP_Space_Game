@@ -83,8 +83,15 @@ public partial class SessionMenu : CanvasLayer
             bool shown = Net.I != null && Net.IsHost && Net.IsOnline && Net.I.Reachability is (Net.Reach.Internet or Net.Reach.Manual);
             _reveal.Visible = shown;
             if (!shown) _revealed = false;
-            _reveal.Text = _revealed ? $"Friends elsewhere join: {Net.I?.InternetAddress}   (click to hide)"
-                                     : "Friends elsewhere join: \u2022\u2022\u2022.\u2022\u2022\u2022.\u2022\u2022\u2022.\u2022\u2022\u2022   (click to reveal)";
+            // Only when it is on screen, and only when it actually changed: setting Text re-shapes
+            // the label's glyphs, and these are MSDF. This ran every frame for a string that
+            // changes about twice a session.
+            if (shown)
+            {
+                string want = _revealed ? $"Friends elsewhere join: {Net.I?.InternetAddress}   (click to hide)"
+                                        : "Friends elsewhere join: \u2022\u2022\u2022.\u2022\u2022\u2022.\u2022\u2022\u2022.\u2022\u2022\u2022   (click to reveal)";
+                if (_reveal.Text != want) _reveal.Text = want;
+            }
         }
     }
     private void OnPeers(int _) => Refresh();

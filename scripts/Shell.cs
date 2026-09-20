@@ -26,7 +26,12 @@ public partial class Shell : Node2D
             for (int i = 1; i <= n; i++)
             {
                 var p = from.Lerp(Position, (float)i / n);
-                var hit = Combat.Hostiles.FirstOrDefault(h => h != null && h.Alive && h is not Torpedo && h.Covers(p, 3f));
+                // A plain loop, not FirstOrDefault: the lambda captures `p`, so it allocated a
+                // closure for every sweep step of every shell in flight, and a battleship puts
+                // four in the air at once. Same result -- the first match in list order.
+                IHittable hit = null;
+                foreach (var h in Combat.Hostiles)
+                    if (h != null && h.Alive && h is not Torpedo && h.Covers(p, 3f)) { hit = h; break; }
                 if (hit == null) continue;
                 hit.TakeDamage(Damage);
                 Source?.NoteCombat();

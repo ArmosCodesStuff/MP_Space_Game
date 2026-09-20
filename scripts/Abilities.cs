@@ -64,8 +64,13 @@ public static class Abilities
     // Six open hotkeys after every class's own abilities -- every class, including
     // ones not built yet -- ready for abilities and items to come. They bind and
     // remap like any ability; pressing one does nothing until it is assigned.
+    // NOTE for whoever fills these in: every class's array holds the SAME six AbilityDef
+    // instances, because `For` concatenates this one array onto each class's own. That is fine
+    // while an AbilityDef is read-only data. The moment an open slot carries something per class
+    // -- an assigned item from the inventory, say -- writing to it would write it for every class
+    // at once. Give each class its own copies then.
     public const int OpenSlots = 6;
-    private static readonly AbilityDef[] Open = System.Linq.Enumerable.Range(1, OpenSlots).Select(i => new AbilityDef {
+    private static readonly AbilityDef[] Open = Enumerable.Range(1, OpenSlots).Select(i => new AbilityDef {
         Id = $"open{i}", Name = $"Open slot {i}", Short = "", Open = true, Default = Key.Key0 + i,
         Blurb = "Unassigned — for abilities and items to come." }).ToArray();
     private static readonly Dictionary<ShipClass, AbilityDef[]> _full = new();
@@ -117,14 +122,19 @@ public static class Abilities
 
     // The controls line along the bottom of the hub, per class. A class without an
     // ability list yet (the seven reserved ones) gets a placeholder.
+    private const string CommonHint = "W ahead  ·  S astern  ·  A/D rudder  ·  left-click select  ·  Tab nearest enemy  ·  wheel zoom  ·  Y free camera  ·  K abilities & stats  ·  B base  ·  L pilot  ·  I equipment  ·  V warp  ·  Esc menu";
+    // Built once. The Hub asks for this EVERY FRAME to see whether the line changed, and the
+    // concatenation allocated a new string each time for text that only moves on a refit.
+    private static readonly string BattleshipHint = "BATTLESHIP  ·  mouse aims the main guns  ·  " + CommonHint;
+    private static readonly string CarrierHint    = "CARRIER  ·  " + CommonHint;
+
     public static string ControlsHint(ShipClass c)
     {
-        const string common = "W ahead  ·  S astern  ·  A/D rudder  ·  left-click select  ·  Tab nearest enemy  ·  wheel zoom  ·  Y free camera  ·  K abilities & stats  ·  B base  ·  L pilot  ·  I equipment  ·  V warp  ·  Esc menu";
         if (!ByClass.ContainsKey(c)) return "placeholder";
         return c switch
         {
-            ShipClass.Battleship => "BATTLESHIP  ·  mouse aims the main guns  ·  " + common,
-            ShipClass.Carrier    => "CARRIER  ·  " + common,
+            ShipClass.Battleship => BattleshipHint,
+            ShipClass.Carrier    => CarrierHint,
             _ => "placeholder",
         };
     }

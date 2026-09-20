@@ -493,6 +493,14 @@ public partial class PlayerShip : Node2D, IHittable
             _wings[i].Tick(delta);
         }
         if (WingTarget != null && !WingTarget.Alive) WingTarget = null;
+        // Age the signal lights HERE, not in _Draw. Drawing is not guaranteed to happen -- a
+        // canvas item off screen is culled -- so a ship that drifted out of view kept its lights
+        // lit for ever. Torpedo ages its smoke in _Process for the same reason; _Draw only draws.
+        for (int i = _signals.Count - 1; i >= 0; i--)
+        {
+            var (p, t) = _signals[i]; t -= delta;
+            if (t <= 0) _signals.RemoveAt(i); else _signals[i] = (p, t);
+        }
 
         if (Net.Sim && Net.IsOnline)
         {
@@ -753,12 +761,8 @@ public partial class PlayerShip : Node2D, IHittable
         if (Alive)
             Plume.Draw(this, new Vector2(0, MyArt.Length * 0.5f), Vector2.Down, MyArt.Length, Accent,
                        0.25f + 0.75f * Mathf.Abs(SpeedAhead) / (float)Stats["max_speed"], Thrusting || Mathf.Abs(SpeedAhead) > 2f);
-        for (int i = _signals.Count - 1; i >= 0; i--)
+        foreach (var (p, t) in _signals)
         {
-            var (p, t) = _signals[i];
-            t -= GetProcessDeltaTime();
-            if (t <= 0) { _signals.RemoveAt(i); continue; }
-            _signals[i] = (p, t);
             bool yellow = (int)(t * 7) % 2 == 0;                           // flashing
             var c = yellow ? new Color(1f, 0.9f, 0.35f) : new Color(1f, 0.55f, 0.15f);
             float k = (float)(t / SignalTime);

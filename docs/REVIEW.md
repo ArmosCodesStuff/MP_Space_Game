@@ -55,7 +55,7 @@ every declared type, counted against both game scripts and both test harnesses:
 Conclusion: the cull asked for in passes 1 and 2 is still done. There is no accumulated dead code
 to remove. What remains is pass 3.
 
-## Pass 3 — line by line (to do, in this order)
+## Pass 3 — line by line: DONE, 46 of 46 files
 
 **Multiplayer authority sweep (across all files, ahead of the line-by-line):** every `[Rpc]` in the
 code base read and checked against its authority.
@@ -77,44 +77,126 @@ code base read and checked against its authority.
 | # | File | Lines | Why this position | Reviewed |
 |---|---|---|---|---|
 | 1 | `scripts/Net.cs` | 315 | networking, authority, threads | ☑ (3 findings, fixed) |
-| 2 | `scripts/SessionMenu.cs` | 118 | networking, authority, threads | ☐ |
-| 3 | `scripts/Hub.cs` | 1175 | the world, input, sessions, sectors, raids, missions | ☐ |
-| 4 | `scripts/PlayerShip.cs` | 746 | combat, authority, replication | ☐ |
-| 5 | `scripts/Raider.cs` | 278 | combat, authority, replication | ☐ |
-| 6 | `scripts/Boss.cs` | 185 | combat, authority, replication | ☐ |
-| 7 | `scripts/Yard.cs` | 418 | economy, saves, rewards | ☐ |
-| 8 | `scripts/Gatherer.cs` | 249 | economy, saves, rewards | ☐ |
-| 9 | `scripts/Hauler.cs` | 316 | economy, saves, rewards | ☐ |
-| 10 | `scripts/Combat.cs` | 81 | combat, authority, replication | ☐ |
-| 11 | `scripts/Torpedo.cs` | 154 | combat, authority, replication | ☐ |
-| 12 | `scripts/ShipClasses.cs` | 492 | combat, authority, replication | ☐ |
-| 13 | `scripts/BaseDefense.cs` | 55 | combat, authority, replication | ☐ |
-| 14 | `scripts/Missions.cs` | 38 | economy, saves, rewards | ☐ |
-| 15 | `scripts/Progression.cs` | 86 | economy, saves, rewards | ☐ |
-| 16 | `scripts/Character.cs` | 175 | economy, saves, rewards | ☐ |
-| 17 | `scripts/MainMenu.cs` | 224 | UI and the rest | ☐ |
-| 18 | `scripts/CharacterCreator.cs` | 211 | UI and the rest | ☐ |
-| 19 | `scripts/StatsWindow.cs` | 198 | UI and the rest | ☐ |
-| 20 | `scripts/CharacterSelect.cs` | 171 | UI and the rest | ☐ |
-| 21 | `scripts/Stats.cs` | 159 | UI and the rest | ☐ |
-| 22 | `scripts/Abilities.cs` | 131 | UI and the rest | ☐ |
-| 23 | `scripts/Radar.cs` | 129 | UI and the rest | ☐ |
-| 24 | `scripts/BasePanel.cs` | 118 | UI and the rest | ☐ |
-| 25 | `scripts/TargetDummy.cs` | 117 | UI and the rest | ☐ |
-| 26 | `scripts/AbilityBar.cs` | 112 | UI and the rest | ☐ |
-| 27 | `scripts/Ui.cs` | 99 | UI and the rest | ☐ |
-| 28 | `scripts/Economy.cs` | 79 | UI and the rest | ☐ |
-| 29 | `scripts/Music.cs` | 78 | UI and the rest | ☐ |
-| 30 | `scripts/BossBar.cs` | 74 | UI and the rest | ☐ |
-| 31 | `scripts/Shield.cs` | 71 | UI and the rest | ☐ |
-| 32 | `scripts/TioWindow.cs` | 66 | UI and the rest | ☐ |
-| 33 | `scripts/Sfx.cs` | 65 | UI and the rest | ☐ |
-| 34 | `scripts/EscMenu.cs` | 59 | UI and the rest | ☐ |
-| 35 | `scripts/Settings.cs` | 58 | UI and the rest | ☐ |
-| 36 | `scripts/PilotWindow.cs` | 54 | UI and the rest | ☐ |
-| 37 | `scripts/EscapePod.cs` | 50 | UI and the rest | ☐ |
-| 38 | `scripts/Telegraph.cs` | 47 | UI and the rest | ☐ |
-| 39 | `scripts/Autopilot.cs` | 40 | UI and the rest | ☐ |
+| 2 | `scripts/SessionMenu.cs` | 118 | networking, authority, threads | ☑ (1 fixed) |
+| 3 | `scripts/Hub.cs` | 1175 | the world, input, sessions, sectors, raids, missions | ☑ (3 fixed, 1 trap recorded) |
+| 4 | `scripts/PlayerShip.cs` | 746 | combat, authority, replication | ☑ (1 fixed) |
+| 5 | `scripts/Raider.cs` | 278 | combat, authority, replication | ☑ (1 fixed) |
+| 6 | `scripts/Boss.cs` | 185 | combat, authority, replication | ☑ (1 fixed) |
+| 7 | `scripts/Yard.cs` | 418 | economy, saves, rewards | ☑ (1 fixed, 1 note) |
+| 8 | `scripts/Gatherer.cs` | 249 | economy, saves, rewards | ☑ (1 fixed) |
+| 9 | `scripts/Hauler.cs` | 316 | economy, saves, rewards | ☑ (clean) |
+| 10 | `scripts/Combat.cs` | 81 | combat, authority, replication | ☑ (1 fixed) |
+| 11 | `scripts/Torpedo.cs` | 154 | combat, authority, replication | ☑ (clean) |
+| 12 | `scripts/ShipClasses.cs` | 492 | combat, authority, replication | ☑ (2 fixed) |
+| 13 | `scripts/BaseDefense.cs` | 55 | combat, authority, replication | ☑ (clean) |
+| 14 | `scripts/Missions.cs` | 38 | economy, saves, rewards | ☑ (clean) |
+| 15 | `scripts/Progression.cs` | 86 | economy, saves, rewards | ☑ (1 fixed) |
+| 16 | `scripts/Character.cs` | 175 | economy, saves, rewards | ☑ (1 clarity fix) |
+| 17 | `scripts/MainMenu.cs` | 224 | UI and the rest | ☑ (1 fixed) |
+| 18 | `scripts/CharacterCreator.cs` | 211 | UI and the rest | ☑ (1 fixed) |
+| 19 | `scripts/StatsWindow.cs` | 198 | UI and the rest | ☑ (clean) |
+| 20 | `scripts/CharacterSelect.cs` | 171 | UI and the rest | ☑ (clean) |
+| 21 | `scripts/Stats.cs` | 159 | UI and the rest | ☑ (clean) |
+| 22 | `scripts/Abilities.cs` | 131 | UI and the rest | ☑ (1 fixed, 1 note) |
+| 23 | `scripts/Radar.cs` | 129 | UI and the rest | ☑ (clean) |
+| 24 | `scripts/BasePanel.cs` | 118 | UI and the rest | ☑ (1 fixed) |
+| 25 | `scripts/TargetDummy.cs` | 117 | UI and the rest | ☑ (clean) |
+| 26 | `scripts/AbilityBar.cs` | 112 | UI and the rest | ☑ (clean) |
+| 27 | `scripts/Ui.cs` | 99 | UI and the rest | ☑ (SetText added) |
+| 28 | `scripts/Economy.cs` | 79 | UI and the rest | ☑ (clean) |
+| 29 | `scripts/Music.cs` | 78 | UI and the rest | ☑ (1 fixed via MainMenu) |
+| 30 | `scripts/BossBar.cs` | 74 | UI and the rest | ☑ (clean) |
+| 31 | `scripts/Shield.cs` | 71 | UI and the rest | ☑ (clean) |
+| 32 | `scripts/TioWindow.cs` | 66 | UI and the rest | ☑ (1 fixed) |
+| 33 | `scripts/Sfx.cs` | 65 | UI and the rest | ☑ (clean; 1 note) |
+| 34 | `scripts/EscMenu.cs` | 59 | UI and the rest | ☑ (clean; its caller held the bug) |
+| 35 | `scripts/Settings.cs` | 58 | UI and the rest | ☑ (1 fixed) |
+| 36 | `scripts/PilotWindow.cs` | 54 | UI and the rest | ☑ (1 fixed) |
+| 37 | `scripts/EscapePod.cs` | 50 | UI and the rest | ☑ (clean) |
+| 38 | `scripts/Telegraph.cs` | 47 | UI and the rest | ☑ (clean) |
+| 39 | `scripts/Autopilot.cs` | 40 | UI and the rest | ☑ (clean; 1 note) |
+| 40 | `scripts/Equipment.cs` | 78 | economy, saves, rewards | ☑ (clean) |
+| 41 | `scripts/EquipmentWindow.cs` | 74 | UI and the rest | ☑ (clean) |
+| 42 | `scripts/Shell.cs` | 48 | combat, authority, replication | ☑ (1 fixed) |
+| 43 | `scripts/HealthBar.cs` | 37 | UI and the rest | ☑ (clean) |
+| 44 | `scripts/Txt.cs` | 32 | UI and the rest | ☑ (1 stale comment fixed) |
+| 45 | `scripts/Plume.cs` | 26 | UI and the rest | ☑ (clean) |
+| 46 | `scripts/Explosion.cs` | 19 | UI and the rest | ☑ (clean) |
+
+**Seven of those rows were missing from this table** until now — `Equipment`, `EquipmentWindow`,
+`Explosion`, `HealthBar`, `Plume`, `Shell` and `Txt` were never listed, so a pass that ticked every
+row would still have skipped them. The table is now every file in `scripts/`. One of the seven
+held a real finding (`Shell`), which is the argument for listing them.
+
+### Pass 3 findings — all 46 files
+
+**The largest single finding is a CATEGORY, not a bug.** `Hub.Sector` was one of five statics that
+legitimately outlive the *scene* — sector changes and visits rebuild the world — but that nothing
+cleared when the *session* ended. Two of them are not dormant: `Yard._Ready` applies them. So:
+
+| static | what the next session got |
+|---|---|
+| `Hub.Sector` | an arena with no base and no economy |
+| `Yard._trip` | its ore, salvage, credits, levels and investment **overwritten** by an abandoned trip |
+| `Yard._parked` / `_own*` | the base from the session before |
+| `Music.CombatZone` | the combat track over the main menu |
+| `Hub.I` | a non-null handle to a freed node |
+
+Not per character, either — the yard is not saved at all, so this leaked **across characters**.
+Four are fixed by one "end the session" block in `MainMenu._Ready`, which catches every route to
+the menu rather than the one button that exposed it. *Scene-scoped and session-scoped had been the
+same thing, and the menu was the missing boundary.*
+
+### The earlier batch, in detail
+
+**Fixed, with a check and a mutant to prove the check can fail:**
+
+1. **Quitting to the menu from the arena stranded the next session there.** `Hub.Sector` is static and
+   only `Hub.GoTo` sets it; `EscMenu`'s QUIT TO MAIN MENU changed scene without touching it, so the
+   next session skipped `BuildWorld` and started in an arena with no base, no economy and a boss.
+   Reset in `MainMenu._Ready`, so every route back is covered, not just that button.
+2. **Guests read dummy readouts off the wrong hulls.** The dummies are numbered 1, 3, 4, 5 (2's spot
+   holds the practice fighters) but `NetDummy` indexed `_dummies[number - 1]`: 3's figures went to 4,
+   4's to 5, and 5's were dropped because `5 > Count`. Routed by `Number` now.
+3. **`Combat.Clear()` leaked the Hub.** It dropped `OnFlash` and `OnTorpedo` but not `OnShell` — a
+   static delegate holding a freed Hub, calling `AddChild` and `Rpc` on it, and permanent once you
+   were back at the menu. The trap DESIGN.md already warns about, in a place nothing had looked.
+4. **`Settings.Save()` was not atomic**, exactly as `Character.Save()` was not: two instances share
+   one `user://`, so a rebind saved by one left the other reading a torn file and silently falling
+   back to defaults. Temp file plus rename, same as characters.
+
+**Fixed, no check (no reachable trigger found — hardening, not a repair):**
+
+5. `Hub.NetIdentity` sanitises `bought` and `equip` but not `name`: a null threw on `.Length`, and a
+   null that got past became a null `Pilot` in every label drawing it.
+6. `Gatherer` indexed `Yard.Arms[Yard.ArmOf(this)]` while docking and unloading. `ArmOf` returns -1
+   when the ship holds no arm and `UnloadSpot` does not bounds-check, so -1 would throw. No path to
+   it was found — `SyncFleet` and `Release` are careful — but the states now self-heal instead.
+7. `Progression.Flats` used `StatFor(...)` as a dictionary key, and `StatFor` falls through to null
+   for an unknown id. All four ids are covered today; a fifth upgrade would have put a null key in.
+
+**Fixed, performance:**
+
+8. `Hub._help.Text` and `SessionMenu._reveal.Text` were reassigned **every frame** with strings that
+   change on a refit or a rebind. Setting `Text` re-shapes the label's glyphs and these are MSDF
+   fonts. Assigned only when they differ now.
+9. `PlayerShip` aged its signal lights **inside `_Draw`**. Drawing is not guaranteed — a canvas item
+   off screen is culled — so a ship that drifted out of view kept its lights lit for ever. Aged in
+   `_Process` now, the way `Torpedo` ages its smoke.
+
+**Recorded, not changed:**
+
+- `Hub.Yard` is a property named after its own type and is **null in the arena**, yet `TickArena` and
+  the boss-kill path both appear to dereference it. Safe only because C# binds the name to the class
+  for static members and all three happen to be static. See DESIGN.md → Traps.
+- `PlayerShip._lastHitBy` is keyed by damage source, and raider sources are `raider:{NetId}` — one
+  new key per raider, never removed. Bounded by session length and tiny (a few hundred small
+  entries over hours), so left alone; noted so it is not rediscovered as a leak.
+- `Autopilot.Fighter` brakes with `Mathf.Sqrt(2f * maxSpeed * dist)` where the dimensionally correct
+  form is `2 * accel * dist` (as `Gatherer.FlyTo` uses). It is a heuristic for a class that does not
+  exist yet and its own checks pin the current behaviour; changing it is a balance decision.
+- A remote `EscapePod` never calls `QueueRedraw`, so its plume is drawn once and never animates.
+  Its velocity is not replicated, so there is nothing to animate from. Cosmetic, deliberate-looking.
 
 Then the tools: `tools/smoketest/SmokeTest.cs.txt`, `tools/screens/Shots.cs.txt`, the run scripts.
 **In the smoke test, look especially for checks that compare with the code's own constants** (found in

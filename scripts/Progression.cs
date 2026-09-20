@@ -42,7 +42,13 @@ public static class Progression
     {
         var d = new System.Collections.Generic.Dictionary<string, double>();
         for (int i = 0; i < All.Length && i < (bought?.Length ?? 0); i++)
-            if (bought[i] > 0) d[StatFor(All[i].Id, c)] = bought[i] * All[i].Per;
+        {
+            // StatFor falls through to null for an id it does not know. Every id in All is
+            // covered today, but adding a fifth upgrade and forgetting the switch would put a
+            // null key in here -- an ArgumentNullException a long way from the cause.
+            var stat = StatFor(All[i].Id, c);
+            if (stat != null && bought[i] > 0) d[stat] = bought[i] * All[i].Per;
+        }
         return d;
     }
 

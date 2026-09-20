@@ -134,16 +134,28 @@ public partial class Turret : Node2D
     // nearest one no sibling turret has claimed (if all are claimed, the nearest regardless).
     public static bool PdTargets(IHittable h) => h is Torpedo || (h is Raider r && !r.Heavy) || (h is TargetDummy d && d.Fighter);
     public static int PdPriority(IHittable h) => h is Torpedo ? 0 : h.HitRadius < 20f ? 1 : 2;
+    // Same rule as before -- best by (priority, then distance), preferring one no sibling turret
+    // has claimed, falling back to the best claimed one -- but in a single pass with no
+    // allocation. This used to be Combat.Near (which allocates and sorts) plus a LINQ chain and
+    // another ToList, and line 111 calls it EVERY FRAME FOR EVERY PD TURRET while point defence
+    // is active with nothing in range, because a null Target never satisfies the guard.
     private IHittable Acquire(Vector2 from)
     {
-        var inRange = Combat.Near(from, Range).Where(PdTargets).OrderBy(h => PdPriority(h)).ThenBy(h => from.DistanceTo(h.Position)).ToList();
-        foreach (var h in inRange)
+        IHittable bestFree = null, bestAny = null;
+        int freePri = 0, anyPri = 0; float freeDist = 0, anyDist = 0;
+        foreach (var h in Combat.Hostiles)
         {
+            if (h == null || !h.Alive || !PdTargets(h)) continue;
+            float d = from.DistanceTo(h.Position);
+            if (d > Range) continue;
+            int p = PdPriority(h);
+            if (bestAny == null || p < anyPri || (p == anyPri && d < anyDist)) { bestAny = h; anyPri = p; anyDist = d; }
             bool claimed = false;
             foreach (var t in Ship.PdTurrets) if (t != this && t.Target == h) { claimed = true; break; }
-            if (!claimed) return h;
+            if (claimed) continue;
+            if (bestFree == null || p < freePri || (p == freePri && d < freeDist)) { bestFree = h; freePri = p; freeDist = d; }
         }
-        return inRange.Count > 0 ? inRange[0] : null;
+        return bestFree ?? bestAny;
     }
 
     // One main-gun shot, along the barrel as it points RIGHT NOW. Host only.
@@ -184,10 +196,11 @@ public partial class Turret : Node2D
 
     public override void _Draw()
     {
-        var lit = Online ? Ship.Accent : new Color(0.35f, 0.35f, 0.40f);
         // PD shows the ship's cycle, just outside its ring, in the accent colour:
-        // the firing window running down, or the recharge
+        // the firing window running down, or the recharge. Main guns draw nothing here,
+        // so leave before doing any of the work -- this runs per turret, per frame.
         if (!PointDefense) return;
+        var lit = Online ? Ship.Accent : new Color(0.35f, 0.35f, 0.40f);
         float frac = Ship.PdActive ? Ship.PdActiveFrac : Ship.PdRechargeFrac;
         if (frac <= 0) return;
         float r = Art.PdRing + 1.6f;
@@ -219,7 +232,10 @@ public partial class Wing : Node2D
     public int Ammo;
     public Vector2 Velocity;
 
-    public const float FighterLength = 17f, BomberLength = 28.125f;   // bomber: snout-nosed, 25% smaller   // halved / three-quarters in this release
+    // The bomber is the LARGER airframe (28.125 to the fighter's 17), so the two read apart at a
+    // glance. The old note here said "25% smaller", which had not been true since they were
+    // resized and contradicted Init's own comment a hundred lines below.
+    public const float FighterLength = 17f, BomberLength = 28.125f;
     private Sprite2D _sprite;
     private double _cd;
 

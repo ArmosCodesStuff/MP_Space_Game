@@ -11,7 +11,6 @@ public static class Combat
     // Registered by whatever world is live (hub, hostile system, someone else's world).
     public static readonly List<IHittable> Hostiles = new();
 
-
     // Player ships, as targets for ENEMY fire only (a hostile dummy's missile). Ships
     // register themselves; an escape pod is in no list, so nothing can touch it.
     public static readonly List<IHittable> Players = new();
@@ -81,5 +80,8 @@ public static class Combat
                                      PlayerShip source = null, string hitSource = null, float size = 1f)
         => OnTorpedo?.Invoke(from, dir.Normalized(), speed, range, damage, targetId, turnRate, heavy, hostile, source, hitSource, size);
 
-    public static void Clear() { Hostiles.Clear(); Players.Clear(); OnFlash = null; OnTorpedo = null; }
+    // Dropped by the world on its way out. EVERY hook set by that world must go: each one is a
+    // lambda holding the Hub, so one left behind is a freed node the next shot calls into, and a
+    // Hub that can never be collected once you are back at the menu. OnShell was missed here.
+    public static void Clear() { Hostiles.Clear(); Players.Clear(); OnFlash = null; OnShell = null; OnTorpedo = null; }
 }

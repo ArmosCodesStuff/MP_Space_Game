@@ -146,13 +146,18 @@ public partial class Gatherer : Node2D
             case St.Docking:
             {
                 int arm = Yard.ArmOf(this);
+                // No arm means it lost the one it was flying to. UnloadSpot indexes Arms with no
+                // bounds check, so -1 here would throw; ask again instead, and queue if none is free.
+                if (arm < 0) { State = Yard.RequestArm(this) >= 0 ? St.Docking : St.Queued; break; }
                 if (FlyTo(Yard.UnloadSpot(arm), dt)) State = St.Unloading;
                 break;
             }
             case St.Unloading:
             {
-                var a = Yard.Arms[Yard.ArmOf(this)];
-                Position = Position.Lerp(Yard.UnloadSpot(Yard.ArmOf(this)), Mathf.Clamp(8f * dt, 0f, 1f));
+                int arm = Yard.ArmOf(this);
+                if (arm < 0) { State = St.Outbound; break; }        // arm taken away mid-unload: go back out
+                var a = Yard.Arms[arm];
+                Position = Position.Lerp(Yard.UnloadSpot(arm), Mathf.Clamp(8f * dt, 0f, 1f));
                 Rotation = Mathf.LerpAngle(Rotation, (-a.Open).Angle() + Mathf.Pi / 2f, Mathf.Clamp(6f * dt, 0f, 1f));
                 double amt = Math.Min(Cargo, Economy.UnloadRate * dt);
                 Cargo -= amt; Yard.Deposit(Kind, amt);

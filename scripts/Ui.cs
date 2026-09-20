@@ -96,4 +96,11 @@ public static class Ui
 
     // Once per launch (idempotent): the whole window takes the theme.
     public static void Install(SceneTree tree) { if (tree.Root.Theme != Theme) tree.Root.Theme = Theme; }
+
+    // Set a control's text only when it actually CHANGED. Assigning Text re-shapes the control's
+    // glyphs, and these are MSDF fonts; several HUD panels rewrite theirs every frame for strings
+    // that move about once a second (a credits tick, a countdown, a level). Build the string as
+    // before -- it is the assignment that costs, not the interpolation.
+    public static void SetText(Label l, string t) { if (l.Text != t) l.Text = t; }
+    public static void SetText(Button b, string t) { if (b.Text != t) b.Text = t; }
 }

@@ -1,9 +1,9 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-20 03:52 at git commit d0f234a: typecheck clean, dotnet build 0 warnings,
-//   0 analyser findings, 0 unused members; smoke test 3/3 runs at 426 checks on Windows
-//   (428 in a sandbox with no router and no internet); 67-frame UI sweep complete, 0 lint.
-// 64 files, 11079 lines. Code only: sprites, sounds and docs are in the zip.
+// Taken 2026-09-20 05:11 at git commit 94f952c: typecheck clean, dotnet build 0 warnings,
+//   0 analyser findings, 0 unused members; smoke test 3/3 runs at 432 checks on Windows
+//   (434 in a sandbox with no router and no internet); 67-frame UI sweep complete, 0 lint.
+// 64 files, 11300 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -15,52 +15,52 @@
 //   CharacterSelect.tscn                            12 lines   sha256 bde251d0afb9
 //   Hub.tscn                                        10 lines   sha256 3a99e0df7b39
 //   MainMenu.tscn                                    6 lines   sha256 8a8dbe40f248
-//   scripts/Abilities.cs                           131 lines   sha256 b07393912232
+//   scripts/Abilities.cs                           141 lines   sha256 46221cf7d4d5
 //   scripts/AbilityBar.cs                          112 lines   sha256 4a1331fe370c
 //   scripts/Autopilot.cs                            40 lines   sha256 807538219f53
 //   scripts/BaseDefense.cs                          55 lines   sha256 1d8daa0fbd67
-//   scripts/BasePanel.cs                           118 lines   sha256 1b56ed68d885
-//   scripts/Boss.cs                                276 lines   sha256 db1c34eee686
+//   scripts/BasePanel.cs                           119 lines   sha256 9115697ad5aa
+//   scripts/Boss.cs                                285 lines   sha256 4e7b41497b57
 //   scripts/BossBar.cs                              85 lines   sha256 679ea3b792b9
-//   scripts/Character.cs                           209 lines   sha256 3279a20e9a12
-//   scripts/CharacterCreator.cs                    211 lines   sha256 136099a8d1c7
+//   scripts/Character.cs                           212 lines   sha256 5b22661c31e9
+//   scripts/CharacterCreator.cs                    218 lines   sha256 d1c4d4f7012f
 //   scripts/CharacterSelect.cs                     171 lines   sha256 dc2bfeccc820
-//   scripts/Combat.cs                               85 lines   sha256 96277c4efc6f
+//   scripts/Combat.cs                               87 lines   sha256 298c5236a5b5
 //   scripts/Economy.cs                              81 lines   sha256 ceb194520ae4
 //   scripts/Equipment.cs                            77 lines   sha256 5a5307ab79c9
 //   scripts/EquipmentWindow.cs                      73 lines   sha256 9fe0b9b6496d
 //   scripts/EscapePod.cs                            50 lines   sha256 324c55cb503b
 //   scripts/EscMenu.cs                              59 lines   sha256 999b01e6cd29
 //   scripts/Explosion.cs                            18 lines   sha256 12209b0c72ce
-//   scripts/Gatherer.cs                            249 lines   sha256 7369949eeff9
-//   scripts/Hauler.cs                              316 lines   sha256 b471204daf64
+//   scripts/Gatherer.cs                            254 lines   sha256 135bd767de29
+//   scripts/Hauler.cs                              316 lines   sha256 1c5d874fcbd6
 //   scripts/HealthBar.cs                            36 lines   sha256 97c42a282205
-//   scripts/Hub.cs                                1230 lines   sha256 e6a13adefade
-//   scripts/MainMenu.cs                            224 lines   sha256 39dbc31417c6
+//   scripts/Hub.cs                                1255 lines   sha256 2e4591b5538d
+//   scripts/MainMenu.cs                            235 lines   sha256 92fdcfb22a4b
 //   scripts/Missions.cs                             38 lines   sha256 35ba5cda832e
 //   scripts/Music.cs                                78 lines   sha256 19cdf8e2b59c
 //   scripts/Net.cs                                 334 lines   sha256 b93e2a57999c
-//   scripts/PilotWindow.cs                          54 lines   sha256 9164aa7d0c8d
-//   scripts/PlayerShip.cs                          779 lines   sha256 5620217ed418
+//   scripts/PilotWindow.cs                          54 lines   sha256 2e678154e65f
+//   scripts/PlayerShip.cs                          783 lines   sha256 13a00ed2889e
 //   scripts/Plume.cs                                25 lines   sha256 cdbeb9b8fc58
-//   scripts/Progression.cs                          86 lines   sha256 c9a5dc290c4d
+//   scripts/Progression.cs                          92 lines   sha256 c0c144383d1f
 //   scripts/Radar.cs                               129 lines   sha256 189719fcc94f
-//   scripts/Raider.cs                              337 lines   sha256 6ce1e35e69c8
-//   scripts/SessionMenu.cs                         120 lines   sha256 ecdca865f3ee
-//   scripts/Settings.cs                             58 lines   sha256 80100257eda5
+//   scripts/Raider.cs                              344 lines   sha256 1b82ca608a76
+//   scripts/SessionMenu.cs                         127 lines   sha256 7546fd7d3c03
+//   scripts/Settings.cs                             70 lines   sha256 e6be0b7529a5
 //   scripts/Sfx.cs                                  69 lines   sha256 c5ce9c91a433
-//   scripts/Shell.cs                                47 lines   sha256 1b8121bc103b
+//   scripts/Shell.cs                                52 lines   sha256 5c161c9fff3b
 //   scripts/Shield.cs                               71 lines   sha256 99c7fa4a2a8e
-//   scripts/ShipClasses.cs                         514 lines   sha256 fbb084a25bdd
+//   scripts/ShipClasses.cs                         530 lines   sha256 df6e1e4249fd
 //   scripts/Stats.cs                               161 lines   sha256 bad238605cb0
 //   scripts/StatsWindow.cs                         198 lines   sha256 8b5c9f76adc7
 //   scripts/TargetDummy.cs                         132 lines   sha256 93fe3de91ba6
 //   scripts/Telegraph.cs                            47 lines   sha256 89f6af49c4d7
-//   scripts/TioWindow.cs                            66 lines   sha256 47e02c18f7fb
+//   scripts/TioWindow.cs                            66 lines   sha256 1afef5008016
 //   scripts/Torpedo.cs                             156 lines   sha256 a12daff14996
-//   scripts/Txt.cs                                  31 lines   sha256 0b56559599f8
-//   scripts/Ui.cs                                   99 lines   sha256 0a376702a4e8
-//   scripts/Yard.cs                                422 lines   sha256 d68b914f025b
+//   scripts/Txt.cs                                  32 lines   sha256 8823251c9a4f
+//   scripts/Ui.cs                                  106 lines   sha256 9f61e923ace3
+//   scripts/Yard.cs                                438 lines   sha256 2b78c328b814
 //   typecheck/GodotStub.cs                         192 lines   sha256 2c5c2967bf5c
 //   typecheck/typecheck.ps1                         68 lines   sha256 e513a9f7f554
 //   typecheck/typecheck.sh                          57 lines   sha256 e68277c09f34
@@ -71,9 +71,9 @@
 //   tools/screens/run.ps1                          109 lines   sha256 096b1445e5d7
 //   tools/screens/run.sh                            42 lines   sha256 73a5b3c63476
 //   tools/screens/Shots.cs.txt                     457 lines   sha256 8355cd3b6808
-//   tools/smoketest/run.ps1                        136 lines   sha256 35cc2f8b8daf
+//   tools/smoketest/run.ps1                        146 lines   sha256 778e72a12df0
 //   tools/smoketest/run.sh                          57 lines   sha256 568b677787fd
-//   tools/smoketest/SmokeTest.cs.txt              1835 lines   sha256 9dd729707224
+//   tools/smoketest/SmokeTest.cs.txt              1892 lines   sha256 5482e69d458a
 //==============================================================================
 
 //==============================================================================
@@ -183,7 +183,7 @@ script = ExtResource("1_menu")
 
 //==============================================================================
 // FILE: scripts/Abilities.cs
-// 131 lines   sha256 b07393912232
+// 141 lines   sha256 46221cf7d4d5
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -251,8 +251,13 @@ public static class Abilities
     // Six open hotkeys after every class's own abilities -- every class, including
     // ones not built yet -- ready for abilities and items to come. They bind and
     // remap like any ability; pressing one does nothing until it is assigned.
+    // NOTE for whoever fills these in: every class's array holds the SAME six AbilityDef
+    // instances, because `For` concatenates this one array onto each class's own. That is fine
+    // while an AbilityDef is read-only data. The moment an open slot carries something per class
+    // -- an assigned item from the inventory, say -- writing to it would write it for every class
+    // at once. Give each class its own copies then.
     public const int OpenSlots = 6;
-    private static readonly AbilityDef[] Open = System.Linq.Enumerable.Range(1, OpenSlots).Select(i => new AbilityDef {
+    private static readonly AbilityDef[] Open = Enumerable.Range(1, OpenSlots).Select(i => new AbilityDef {
         Id = $"open{i}", Name = $"Open slot {i}", Short = "", Open = true, Default = Key.Key0 + i,
         Blurb = "Unassigned — for abilities and items to come." }).ToArray();
     private static readonly Dictionary<ShipClass, AbilityDef[]> _full = new();
@@ -304,14 +309,19 @@ public static class Abilities
 
     // The controls line along the bottom of the hub, per class. A class without an
     // ability list yet (the seven reserved ones) gets a placeholder.
+    private const string CommonHint = "W ahead  ·  S astern  ·  A/D rudder  ·  left-click select  ·  Tab nearest enemy  ·  wheel zoom  ·  Y free camera  ·  K abilities & stats  ·  B base  ·  L pilot  ·  I equipment  ·  V warp  ·  Esc menu";
+    // Built once. The Hub asks for this EVERY FRAME to see whether the line changed, and the
+    // concatenation allocated a new string each time for text that only moves on a refit.
+    private static readonly string BattleshipHint = "BATTLESHIP  ·  mouse aims the main guns  ·  " + CommonHint;
+    private static readonly string CarrierHint    = "CARRIER  ·  " + CommonHint;
+
     public static string ControlsHint(ShipClass c)
     {
-        const string common = "W ahead  ·  S astern  ·  A/D rudder  ·  left-click select  ·  Tab nearest enemy  ·  wheel zoom  ·  Y free camera  ·  K abilities & stats  ·  B base  ·  L pilot  ·  I equipment  ·  V warp  ·  Esc menu";
         if (!ByClass.ContainsKey(c)) return "placeholder";
         return c switch
         {
-            ShipClass.Battleship => "BATTLESHIP  ·  mouse aims the main guns  ·  " + common,
-            ShipClass.Carrier    => "CARRIER  ·  " + common,
+            ShipClass.Battleship => BattleshipHint,
+            ShipClass.Carrier    => CarrierHint,
             _ => "placeholder",
         };
     }
@@ -541,7 +551,7 @@ public partial class BaseDefense : Node2D
 
 //==============================================================================
 // FILE: scripts/BasePanel.cs
-// 118 lines   sha256 1b56ed68d885
+// 119 lines   sha256 9115697ad5aa
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -630,33 +640,34 @@ public partial class BasePanel : PanelContainer
     public override void _Process(double delta)
     {
         if (_armed > 0) _armed -= delta;
-        _credits.Text = $"Credits: {Y.Credits:0}";
+        Ui.SetText(_credits, $"Credits: {Y.Credits:0}");
         if (IsInstanceValid(_fleet) && _tab != "REFIT")
         {
             string lost = _tab == "HAULER"
                 ? (Y.Hauler != null && Y.Hauler.State == Hauler.St.Destroyed ? Rebuilding("Hauler", Y.Hauler.RebuildIn, Y.Hauler.WaitingForCredits, _tab) : "")
                 : string.Join("", Y.Gatherers.Where(g => g.Category == _tab && g.State == Gatherer.St.Destroyed)
                                             .Select(g => Rebuilding($"{(g.Kind == GatherKind.Miner ? "Miner" : "Salvager")} {g.Index + 1}", g.RebuildIn, g.WaitingForCredits, _tab)));
-            _fleet.Text = $"Invested so far: {Y.Invested(_tab):0} cr  ·  a rebuild costs {Y.RebuildCost(_tab):0} cr (10%)" + lost;
+            Ui.SetText(_fleet, $"Invested so far: {Y.Invested(_tab):0} cr  ·  a rebuild costs {Y.RebuildCost(_tab):0} cr (10%)" + lost);
         }
         foreach (var (id, (info, buy)) in _rows)
         {
             var u = Economy.ById(id); int lv = Y.Level(id);
             bool max = Economy.Maxed(u, lv);
             string now = $"{Economy.Value(u, lv):0.#}", next = max ? "MAX" : $"{Economy.Value(u, lv + 1):0.#}";
-            info.Text = $"{u.Name}  ·  Lv {lv}\n{now} → {next} {u.Unit}   ({u.Blurb})";
+            Ui.SetText(info, $"{u.Name}  ·  Lv {lv}\n{now} → {next} {u.Unit}   ({u.Blurb})");
             double cost = Economy.Cost(u, lv);
-            buy.Text = max ? "MAX" : $"BUY  {cost:0} cr";
+            Ui.SetText(buy, max ? "MAX" : $"BUY  {cost:0} cr");
             buy.Disabled = max || Y.Credits < cost;
         }
         if (_reset != null)
         {
             var (o, s, c) = Y.ResetCost();
-            _resetCost.Text = $"Cost now: {o:0} ore, {s:0} salvage, {c:0} credits";
-            _reset.Text = _armed > 0 ? "CLICK AGAIN TO PAY AND RESET" : "RESET";
+            Ui.SetText(_resetCost, $"Cost now: {o:0} ore, {s:0} salvage, {c:0} credits");
+            Ui.SetText(_reset, _armed > 0 ? "CLICK AGAIN TO PAY AND RESET" : "RESET");
             _reset.Disabled = Hub.CreatorOpen;
         }
     }
+
 
     string Rebuilding(string who, double inS, bool waiting, string tab) =>
         waiting ? $"\n  {who} lost: rebuild waiting for {Y.RebuildCost(tab):0} cr" : $"\n  {who} lost: rebuilt in {inS:0} s";
@@ -664,7 +675,7 @@ public partial class BasePanel : PanelContainer
 
 //==============================================================================
 // FILE: scripts/Boss.cs
-// 276 lines   sha256 db1c34eee686
+// 285 lines   sha256 4e7b41497b57
 //==============================================================================
 using Godot;
 using System.Linq;
@@ -825,7 +836,15 @@ public partial class Boss : Node2D, IHittable
         // more often than 10 Hz. Turning at 0.3 rad/s, 100 ms between figures is ~1.7 degrees,
         // which at the beam's 10000 u reach puts the far end ~300 u off against a beam 70 u wide.
         // 30 Hz while locked, and guests stop smoothing it (see _netLocked), closes that.
-        if (_send <= 0 && Net.IsOnline) { _send = Locked ? 1.0 / 30 : 0.1; Rpc(nameof(NetState), Position, Rotation, Hp, Locked); }
+        // To the peers actually IN the arena. Broadcasting to everyone meant a guest still loading
+        // the arena scene got packets for a Hub/Boss it did not have yet -- "Node not found",
+        // "Invalid packet received" -- and at 30 Hz while locked there are three times as many
+        // chances to land in that window.
+        if (_send <= 0 && Net.IsOnline)
+        {
+            _send = Locked ? 1.0 / 30 : 0.1;
+            Hub?.RpcToSector(Hub.SectorKind.Arena, this, nameof(NetState), Position, Rotation, Hp, Locked);
+        }
     }
 
     private void Tick(System.Collections.Generic.List<PlayerShip> pilots, double delta)
@@ -929,7 +948,8 @@ public partial class Boss : Node2D, IHittable
     private void Tele(bool line, Vector2 a, Vector2 b, float size, double time, bool onHull = false)
     {
         ShowTelegraph(line, a, b, size, time, onHull);
-        if (Net.IsOnline) Rpc(nameof(NetTelegraph), line, a, b, size, time, onHull);
+        // arena peers only, for the same reason as NetState above
+        if (Net.IsOnline) Hub?.RpcToSector(Hub.SectorKind.Arena, this, nameof(NetTelegraph), line, a, b, size, time, onHull);
     }
     private void ShowTelegraph(bool line, Vector2 a, Vector2 b, float size, double time, bool onHull) =>
         (onHull ? (Node)this : GetParent()).AddChild(new Telegraph { Line = line, A = a, B = b, Width = size, Radius = size, Duration = time });
@@ -1035,7 +1055,7 @@ public partial class BossBar : Control
 
 //==============================================================================
 // FILE: scripts/Character.cs
-// 209 lines   sha256 3279a20e9a12
+// 212 lines   sha256 5b22661c31e9
 //==============================================================================
 using Godot;
 using System;
@@ -1152,8 +1172,11 @@ public static class Character
             if (c.HasSectionKey("equipment", sc.ToString()))
                 Loadout[sc] = Equipment.Sanitize(sc, ((string)c.GetValue("equipment", sc.ToString(), "")).Split(','));
             if (c.HasSectionKey("spares", sc.ToString()))
+                // `gid`, not `id`: `id` here is the CHARACTER's id, the parameter this method was
+                // called with. Shadowing it with a gear id made the line read as if it were
+                // filtering on the character.
                 Spares[sc] = ((string)c.GetValue("spares", sc.ToString(), "")).Split(',', StringSplitOptions.RemoveEmptyEntries)
-                             .Where(id => Equipment.ById(id)?.Slot == GearSlot.Chip).ToList();
+                             .Where(gid => Equipment.ById(gid)?.Slot == GearSlot.Chip).ToList();
         }
         BossCleared.Clear();
         if (c.HasSection("boss_cleared"))
@@ -1249,7 +1272,7 @@ public static class Classes
 
 //==============================================================================
 // FILE: scripts/CharacterCreator.cs
-// 211 lines   sha256 136099a8d1c7
+// 218 lines   sha256 d1c4d4f7012f
 //==============================================================================
 using Godot;
 
@@ -1424,12 +1447,19 @@ public partial class ShipPreview : Control
 
     public override void _Process(double delta) { if (Live) QueueRedraw(); }
 
+    // GD.Load goes through ResourceLoader every call. A LIVE preview redraws every frame and
+    // loaded the hull plus one texture per turret each time -- seven lookups a frame for a
+    // battleship. They never change, so hold them: bounded by the handful of art paths there are.
+    private static readonly System.Collections.Generic.Dictionary<string, Texture2D> _texCache = new();
+    private static Texture2D Tex(string path) =>
+        _texCache.TryGetValue(path, out var t) ? t : _texCache[path] = GD.Load<Texture2D>(path);
+
     public override void _Draw()
     {
         if (Live) { Main = Character.Main; Accent = Character.Accent; Class = Character.Class; }
         DrawRect(new Rect2(Vector2.Zero, Size), new Color(0.05f, 0.07f, 0.12f));
         if (!PlayerShip.Art.TryGetValue(Class, out var art)) return;
-        var tex = GD.Load<Texture2D>(art.Texture);
+        var tex = Tex(art.Texture);
 
         // In a wide box (the select screen's rows) the ship lies nose-right so it can
         // be drawn large; in a tall box (the creator) it stands nose-up.
@@ -1451,7 +1481,7 @@ public partial class ShipPreview : Control
         void Mount(Vector2 off, bool pd)
         {   // the cut-out turret sprites the game turns, as painted: aft turrets face aft
             var p = c + off * k;
-            var tt = GD.Load<Texture2D>(pd ? art.PdTurret : art.MainTurret);
+            var tt = Tex(pd ? art.PdTurret : art.MainTurret);
             var sz = tt.GetSize() * art.TurretTexScale * k;
             DrawSetTransformMatrix(shipXf * new Transform2D(!pd && off.Y > 0 ? Mathf.Pi : 0f, p));
             DrawTextureRect(tt, new Rect2(-sz * 0.5f, sz), false, Main);
@@ -1641,7 +1671,7 @@ public partial class CharacterSelect : Control
 
 //==============================================================================
 // FILE: scripts/Combat.cs
-// 85 lines   sha256 96277c4efc6f
+// 87 lines   sha256 298c5236a5b5
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -1655,7 +1685,6 @@ public static class Combat
 {
     // Registered by whatever world is live (hub, hostile system, someone else's world).
     public static readonly List<IHittable> Hostiles = new();
-
 
     // Player ships, as targets for ENEMY fire only (a hostile dummy's missile). Ships
     // register themselves; an escape pod is in no list, so nothing can touch it.
@@ -1726,7 +1755,10 @@ public static class Combat
                                      PlayerShip source = null, string hitSource = null, float size = 1f)
         => OnTorpedo?.Invoke(from, dir.Normalized(), speed, range, damage, targetId, turnRate, heavy, hostile, source, hitSource, size);
 
-    public static void Clear() { Hostiles.Clear(); Players.Clear(); OnFlash = null; OnTorpedo = null; }
+    // Dropped by the world on its way out. EVERY hook set by that world must go: each one is a
+    // lambda holding the Hub, so one left behind is a freed node the next shot calls into, and a
+    // Hub that can never be collected once you are back at the menu. OnShell was missed here.
+    public static void Clear() { Hostiles.Clear(); Players.Clear(); OnFlash = null; OnShell = null; OnTorpedo = null; }
 }
 
 //==============================================================================
@@ -2119,7 +2151,7 @@ public partial class Explosion : Node2D
 
 //==============================================================================
 // FILE: scripts/Gatherer.cs
-// 249 lines   sha256 7369949eeff9
+// 254 lines   sha256 135bd767de29
 //==============================================================================
 using Godot;
 using System;
@@ -2269,13 +2301,18 @@ public partial class Gatherer : Node2D
             case St.Docking:
             {
                 int arm = Yard.ArmOf(this);
+                // No arm means it lost the one it was flying to. UnloadSpot indexes Arms with no
+                // bounds check, so -1 here would throw; ask again instead, and queue if none is free.
+                if (arm < 0) { State = Yard.RequestArm(this) >= 0 ? St.Docking : St.Queued; break; }
                 if (FlyTo(Yard.UnloadSpot(arm), dt)) State = St.Unloading;
                 break;
             }
             case St.Unloading:
             {
-                var a = Yard.Arms[Yard.ArmOf(this)];
-                Position = Position.Lerp(Yard.UnloadSpot(Yard.ArmOf(this)), Mathf.Clamp(8f * dt, 0f, 1f));
+                int arm = Yard.ArmOf(this);
+                if (arm < 0) { State = St.Outbound; break; }        // arm taken away mid-unload: go back out
+                var a = Yard.Arms[arm];
+                Position = Position.Lerp(Yard.UnloadSpot(arm), Mathf.Clamp(8f * dt, 0f, 1f));
                 Rotation = Mathf.LerpAngle(Rotation, (-a.Open).Angle() + Mathf.Pi / 2f, Mathf.Clamp(6f * dt, 0f, 1f));
                 double amt = Math.Min(Cargo, Economy.UnloadRate * dt);
                 Cargo -= amt; Yard.Deposit(Kind, amt);
@@ -2373,7 +2410,7 @@ public partial class Gatherer : Node2D
 
 //==============================================================================
 // FILE: scripts/Hauler.cs
-// 316 lines   sha256 b471204daf64
+// 316 lines   sha256 1c5d874fcbd6
 //==============================================================================
 using Godot;
 using System;
@@ -2676,7 +2713,7 @@ public partial class HaulerHud : Control
         Visible = h.State == Hauler.St.Loading && onScreen && !underMenu;
         if (!Visible) return;
         _go.Disabled = !h.CanDispatch;
-        _go.Text = h.CanDispatch ? $"DISPATCH  ({h.FullPods}/{Yard.Pods} pods full)" : $"LOADING  {h.Cargo:0}/{Yard.PodSize:0}";
+        Ui.SetText(_go, h.CanDispatch ? $"DISPATCH  ({h.FullPods}/{Yard.Pods} pods full)" : $"LOADING  {h.Cargo:0}/{Yard.PodSize:0}");
         QueueRedraw();
     }
 
@@ -2735,7 +2772,7 @@ public static class HealthBar
 
 //==============================================================================
 // FILE: scripts/Hub.cs
-// 1230 lines   sha256 e6a13adefade
+// 1255 lines   sha256 2e4591b5538d
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -2989,6 +3026,10 @@ public partial class Hub : Node2D
             Net.I.SessionChanged -= OnSessionChanged;
         }
         Combat.Clear();
+        // A static pointing at a freed node is worse than a null one: it still reads non-null, so
+        // `Hub.I?.` sails straight through and calls into a dead object. Guarded on `== this`
+        // because a scene change can build the next Hub before this one is out of the tree.
+        if (I == this) I = null;
         ControlsLocked = false;
         if (Music.I != null) Music.I.Target = Music.Mood.Ambient;
     }
@@ -3047,11 +3088,17 @@ public partial class Hub : Node2D
     // Static: it must outlive the host's own scene reloads.
     private static readonly Dictionary<int, SectorKind> _peerSector = new();
     public static SectorKind? PeerSector(int id) => _peerSector.TryGetValue(id, out var s) ? s : null;
-    public void RpcHome(Node node, StringName method, params Variant[] args)
+    // Send only to the peers that are IN a given sector. A peer still loading that world has no
+    // such node yet, and Godot logs "Node not found ... Invalid packet received" for every stray
+    // packet -- it is not fatal, but it is noise that hides real errors, and that peer misses the
+    // state anyway. The yard has needed this since the first arena run; the BOSS needs the same,
+    // because the host starts broadcasting its state before every guest has built the arena.
+    public void RpcToSector(SectorKind k, Node node, StringName method, params Variant[] args)
     {
         foreach (var id in Multiplayer.GetPeers())
-            if (_peerSector.TryGetValue(id, out var s) && s == SectorKind.Home) node.RpcId(id, method, args);
+            if (_peerSector.TryGetValue(id, out var s) && s == k) node.RpcId(id, method, args);
     }
+    public void RpcHome(Node node, StringName method, params Variant[] args) => RpcToSector(SectorKind.Home, node, method, args);
     [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
     private void NetMySector(int s) { if (Net.IsHost) _peerSector[Multiplayer.GetRemoteSenderId()] = (SectorKind)s; }
     private void ReportSector() { if (Net.IsOnline && !Net.IsHost) RpcId(1, nameof(NetMySector), (int)Sector); }
@@ -3140,7 +3187,10 @@ public partial class Hub : Node2D
         // a peer may only describe itself
         if (Multiplayer.GetRemoteSenderId() != peer || Net.I == null) return;
         if (!Net.I.Players.TryGetValue(peer, out var p)) Net.I.Players[peer] = p = new Net.PlayerInfo { Id = peer };
-        if (name.Length > 24) name = name[..24];
+        // Everything else off this wire is sanitised (bought is null-guarded below, equip inside
+        // Equipment.Sanitize); the name was not. A null here threw on .Length, and a null that got
+        // past became a null Pilot in every label that draws it.
+        name = string.IsNullOrEmpty(name) ? "Commander" : name.Length > 24 ? name[..24] : name;
         var c = System.Enum.IsDefined(typeof(ShipClass), cls) ? (ShipClass)cls : ShipClass.Battleship;
         p.Name = name; p.Main = main; p.Accent = accent; p.Class = c; p.HasIdentity = true;
         // purchases the claimed level could not have paid for are refused outright
@@ -3237,6 +3287,11 @@ public partial class Hub : Node2D
 
     private void TickArena(double delta)
     {
+        // `Yard` here is the TYPE, not this Hub's Yard property -- which is null in the arena,
+        // because the arena skips BuildWorld. C# binds the name to the class when the member is
+        // static, so every `Yard.<static>` call in this file is safe (see also AddGuestShare and
+        // AddHostShare, both reached from the arena). Make any of them an instance member and
+        // these lines start throwing. See DESIGN.md -> Traps.
         Yard.TripClock += delta;                              // what the base is missing, in game time
         if (!Net.IsHost) return;
         // the whole party in stasis at once: the mission fails, everyone goes home
@@ -3607,8 +3662,12 @@ public partial class Hub : Node2D
         var me = MyShip;
         if (me != null)
         {
-            // weapon and ability state lives on the ability bar; this line is who and where
-            _help.Text = Abilities.ControlsHint(me.Class);
+            // weapon and ability state lives on the ability bar; this line is who and where.
+            // Built every frame so a class change or a rebind shows at once, but only ASSIGNED
+            // when it actually differs: setting Text re-shapes the label's glyphs, and this
+            // string changes on a refit or a rebind, not sixty times a second.
+            var hint = Abilities.ControlsHint(me.Class);
+            if (_help.Text != hint) _help.Text = hint;
             ship = $"    |    {Character.Name}  {(me.Class == ShipClass.Battleship ? "BATTLESHIP" : "CARRIER")}"
                  + $"  {Mathf.Abs(me.SpeedAhead):0} u/s{(me.SpeedAhead < -1 ? " astern" : "")}";
             ship += Selected != null ? "    target: " + (Selected is TargetDummy td ? $"TARGET DUMMY {td.Number}" : $"#{Selected.NetId}")
@@ -3783,7 +3842,10 @@ public partial class Hub : Node2D
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
     private void NetDummy(int number, double last, double avg, double total)
     {
-        if (number >= 1 && number <= _dummies.Count) _dummies[number - 1].SetReadout(last, avg, total);
+        // BY NUMBER, not by position. The dummies are numbered 1, 3, 4, 5 (2's spot holds the two
+        // practice fighters), so `_dummies[number - 1]` sent 3's readout to 4, 4's to 5, and
+        // dropped 5's entirely because 5 > Count. Guests saw the wrong numbers on the wrong hulls.
+        foreach (var d in _dummies) if (d.Number == number) { d.SetReadout(last, avg, total); return; }
     }
 
     private void ToggleBase()
@@ -3970,7 +4032,7 @@ public partial class HeavyMissileVisual : Node2D
 
 //==============================================================================
 // FILE: scripts/MainMenu.cs
-// 224 lines   sha256 39dbc31417c6
+// 235 lines   sha256 92fdcfb22a4b
 //==============================================================================
 using Godot;
 using System;
@@ -4004,6 +4066,17 @@ public partial class MainMenu : Node2D
     {
         Ui.Install(GetTree());                                  // the game-wide look
         Settings.Load(); Settings.ApplyVolume();
+        // Reaching the menu ends whatever trip was in progress. Hub.Sector is static and is only
+        // ever set by Hub.GoTo, so quitting to the menu FROM THE ARENA used to leave it there:
+        // the next session skipped BuildWorld entirely and dropped the pilot into an arena with
+        // no base, no economy and a boss. Resetting here covers every route back, not just the
+        // Esc menu's quit button.
+        Hub.Sector = Hub.SectorKind.Home;
+        Yard.EndSession();      // and the trip snapshot / parked base, for the same reason
+        // Hub sets this on the way in and nothing cleared it on the way out, so quitting from the
+        // arena left the combat track playing over the menu until a new Hub was built.
+        Music.CombatZone = false;
+        if (Music.I != null) Music.I.Target = Music.Mood.Ambient;
         var vs = GetViewport().GetVisibleRect().Size;
         var centre = vs * 0.5f + new Vector2(0, 60);
         // nebula backdrop: a few large tinted patches
@@ -4664,7 +4737,7 @@ public partial class Net : Node
 
 //==============================================================================
 // FILE: scripts/PilotWindow.cs
-// 54 lines   sha256 9164aa7d0c8d
+// 54 lines   sha256 2e678154e65f
 //==============================================================================
 using Godot;
 
@@ -4706,16 +4779,16 @@ public partial class PilotWindow : PanelContainer
     public override void _Process(double delta)
     {
         int need = Progression.ExpToNext;
-        _head.Text = $"PILOT  ·  {Character.Name}  ·  LEVEL {Character.Level}";
-        _exp.Text = $"EXP {Character.Exp} / {need} to level {Character.Level + 1}";
+        Ui.SetText(_head, $"PILOT  ·  {Character.Name}  ·  LEVEL {Character.Level}");
+        Ui.SetText(_exp, $"EXP {Character.Exp} / {need} to level {Character.Level + 1}");
         _bar.Value = (double)Character.Exp / need;
-        _points.Text = $"Points to spend: {Character.Points}";
+        Ui.SetText(_points, $"Points to spend: {Character.Points}");
         for (int i = 0; i < Progression.All.Length; i++)
         {
             var u = Progression.All[i]; int n = Character.Bought[i], cost = Progression.Cost(n);
             double per = u.Id == "turn" ? 1 : u.Per;                    // shown in degrees
-            _info[i].Text = $"{u.Name}  ·  Lv {n}   (+{per * n:0.#} {u.Unit} so far; next +{per:0.#})";
-            _buy[i].Text = $"BUY  {cost} pt";
+            Ui.SetText(_info[i], $"{u.Name}  ·  Lv {n}   (+{per * n:0.#} {u.Unit} so far; next +{per:0.#})");
+            Ui.SetText(_buy[i], $"BUY  {cost} pt");
             _buy[i].Disabled = Character.Points < cost || n >= Progression.MaxPerUpgrade;
         }
     }
@@ -4723,7 +4796,7 @@ public partial class PilotWindow : PanelContainer
 
 //==============================================================================
 // FILE: scripts/PlayerShip.cs
-// 779 lines   sha256 5620217ed418
+// 783 lines   sha256 13a00ed2889e
 //==============================================================================
 using Godot;
 using System;
@@ -5220,6 +5293,14 @@ public partial class PlayerShip : Node2D, IHittable
             _wings[i].Tick(delta);
         }
         if (WingTarget != null && !WingTarget.Alive) WingTarget = null;
+        // Age the signal lights HERE, not in _Draw. Drawing is not guaranteed to happen -- a
+        // canvas item off screen is culled -- so a ship that drifted out of view kept its lights
+        // lit for ever. Torpedo ages its smoke in _Process for the same reason; _Draw only draws.
+        for (int i = _signals.Count - 1; i >= 0; i--)
+        {
+            var (p, t) = _signals[i]; t -= delta;
+            if (t <= 0) _signals.RemoveAt(i); else _signals[i] = (p, t);
+        }
 
         if (Net.Sim && Net.IsOnline)
         {
@@ -5480,12 +5561,8 @@ public partial class PlayerShip : Node2D, IHittable
         if (Alive)
             Plume.Draw(this, new Vector2(0, MyArt.Length * 0.5f), Vector2.Down, MyArt.Length, Accent,
                        0.25f + 0.75f * Mathf.Abs(SpeedAhead) / (float)Stats["max_speed"], Thrusting || Mathf.Abs(SpeedAhead) > 2f);
-        for (int i = _signals.Count - 1; i >= 0; i--)
+        foreach (var (p, t) in _signals)
         {
-            var (p, t) = _signals[i];
-            t -= GetProcessDeltaTime();
-            if (t <= 0) { _signals.RemoveAt(i); continue; }
-            _signals[i] = (p, t);
             bool yellow = (int)(t * 7) % 2 == 0;                           // flashing
             var c = yellow ? new Color(1f, 0.9f, 0.35f) : new Color(1f, 0.55f, 0.15f);
             float k = (float)(t / SignalTime);
@@ -5537,7 +5614,7 @@ public static class Plume
 
 //==============================================================================
 // FILE: scripts/Progression.cs
-// 86 lines   sha256 c9a5dc290c4d
+// 92 lines   sha256 c0c144383d1f
 //==============================================================================
 using Godot;
 using System;
@@ -5583,7 +5660,13 @@ public static class Progression
     {
         var d = new System.Collections.Generic.Dictionary<string, double>();
         for (int i = 0; i < All.Length && i < (bought?.Length ?? 0); i++)
-            if (bought[i] > 0) d[StatFor(All[i].Id, c)] = bought[i] * All[i].Per;
+        {
+            // StatFor falls through to null for an id it does not know. Every id in All is
+            // covered today, but adding a fifth upgrade and forgetting the switch would put a
+            // null key in here -- an ArgumentNullException a long way from the cause.
+            var stat = StatFor(All[i].Id, c);
+            if (stat != null && bought[i] > 0) d[stat] = bought[i] * All[i].Per;
+        }
         return d;
     }
 
@@ -5762,7 +5845,7 @@ public partial class Radar : Control
 
 //==============================================================================
 // FILE: scripts/Raider.cs
-// 337 lines   sha256 6ce1e35e69c8
+// 344 lines   sha256 1b82ca608a76
 //==============================================================================
 using Godot;
 using System.Linq;
@@ -5986,10 +6069,17 @@ public partial class Raider : Node2D, IHittable
             return;                                   // the boost is not spent while it sits here
         }
 
-        // my post around the target: ahead, left or right by its heading, 90 u out. An escort
+        // My post around the target: ahead, left or right by its heading, 90 u out. An escort
         // keeps the side it was launched on instead of taking a slot, so the pair always flanks.
-        var mates = Hub.Raiders.Where(r => r.Alive && !r.IsEscort && r.Target == Target).OrderBy(r => r.NetId).ToList();
-        int slot = Mathf.Max(0, mates.IndexOf(this)) % Posts.Length;
+        //
+        // The slot is my rank by NetId among the raiders sharing this target -- counted, not
+        // sorted. This ran as Where + OrderBy + ToList + IndexOf EVERY FRAME FOR EVERY LIGHT, so
+        // a raid of two patrols did six list allocations and six sorts over the whole raider list
+        // per frame. Counting lower NetIds gives the identical index with no allocation at all.
+        int slot = 0;
+        foreach (var r in Hub.Raiders)
+            if (r != this && r.Alive && !r.IsEscort && r.Target == Target && r.NetId < NetId) slot++;
+        slot %= Posts.Length;
         var postDir = Vector2.Up.Rotated(Target.Rotation + (IsEscort ? _escortPost : Posts[slot]));
         var post = Target.Position + postDir * (Extent(Target, postDir) + Hold);
         float toTarget = Position.DistanceTo(Target.Position);
@@ -6104,7 +6194,7 @@ public partial class Raider : Node2D, IHittable
 
 //==============================================================================
 // FILE: scripts/SessionMenu.cs
-// 120 lines   sha256 ecdca865f3ee
+// 127 lines   sha256 7546fd7d3c03
 //==============================================================================
 using Godot;
 
@@ -6191,8 +6281,15 @@ public partial class SessionMenu : CanvasLayer
             bool shown = Net.I != null && Net.IsHost && Net.IsOnline && Net.I.Reachability is (Net.Reach.Internet or Net.Reach.Manual);
             _reveal.Visible = shown;
             if (!shown) _revealed = false;
-            _reveal.Text = _revealed ? $"Friends elsewhere join: {Net.I?.InternetAddress}   (click to hide)"
-                                     : "Friends elsewhere join: \u2022\u2022\u2022.\u2022\u2022\u2022.\u2022\u2022\u2022.\u2022\u2022\u2022   (click to reveal)";
+            // Only when it is on screen, and only when it actually changed: setting Text re-shapes
+            // the label's glyphs, and these are MSDF. This ran every frame for a string that
+            // changes about twice a session.
+            if (shown)
+            {
+                string want = _revealed ? $"Friends elsewhere join: {Net.I?.InternetAddress}   (click to hide)"
+                                        : "Friends elsewhere join: \u2022\u2022\u2022.\u2022\u2022\u2022.\u2022\u2022\u2022.\u2022\u2022\u2022   (click to reveal)";
+                if (_reveal.Text != want) _reveal.Text = want;
+            }
         }
     }
     private void OnPeers(int _) => Refresh();
@@ -6229,7 +6326,7 @@ public partial class SessionMenu : CanvasLayer
 
 //==============================================================================
 // FILE: scripts/Settings.cs
-// 58 lines   sha256 80100257eda5
+// 70 lines   sha256 e6be0b7529a5
 //==============================================================================
 using Godot;
 
@@ -6269,7 +6366,19 @@ public static class Settings
         c.SetValue("audio", "music_on", MusicOn);
         c.SetValue("ui", "radar_size", RadarSize);
         foreach (var kv in Keys) c.SetValue("keys", kv.Key, kv.Value);
-        c.Save(Path);
+        // Temp file, then rename -- the same reason Character.Save does it. ConfigFile.Save
+        // truncates and rewrites in place, and two instances share one user:// (the documented
+        // "Run Multiple Instances" way of testing multiplayer). A rebind saved by one while the
+        // other was loading left the reader with a parse error, and it silently fell back to
+        // defaults for the whole session.
+        var tmp = Path + ".tmp";                 // not ".cfg": never mistaken for the real file
+        if (c.Save(tmp) != Error.Ok) return;
+        if (DirAccess.RenameAbsolute(ProjectSettings.GlobalizePath(tmp),
+                                     ProjectSettings.GlobalizePath(Path)) != Error.Ok)
+        {
+            c.Save(Path);                        // losing the settings outright is worse
+            DirAccess.RemoveAbsolute(ProjectSettings.GlobalizePath(tmp));
+        }
     }
 
     public static void Load()
@@ -6366,7 +6475,7 @@ public static class Sfx
 
 //==============================================================================
 // FILE: scripts/Shell.cs
-// 47 lines   sha256 1b8121bc103b
+// 52 lines   sha256 5c161c9fff3b
 //==============================================================================
 using Godot;
 using System.Linq;
@@ -6396,7 +6505,12 @@ public partial class Shell : Node2D
             for (int i = 1; i <= n; i++)
             {
                 var p = from.Lerp(Position, (float)i / n);
-                var hit = Combat.Hostiles.FirstOrDefault(h => h != null && h.Alive && h is not Torpedo && h.Covers(p, 3f));
+                // A plain loop, not FirstOrDefault: the lambda captures `p`, so it allocated a
+                // closure for every sweep step of every shell in flight, and a battleship puts
+                // four in the air at once. Same result -- the first match in list order.
+                IHittable hit = null;
+                foreach (var h in Combat.Hostiles)
+                    if (h != null && h.Alive && h is not Torpedo && h.Covers(p, 3f)) { hit = h; break; }
                 if (hit == null) continue;
                 hit.TakeDamage(Damage);
                 Source?.NoteCombat();
@@ -6494,7 +6608,7 @@ public partial class ShieldFlash : Node2D
 
 //==============================================================================
 // FILE: scripts/ShipClasses.cs
-// 514 lines   sha256 fbb084a25bdd
+// 530 lines   sha256 df6e1e4249fd
 //==============================================================================
 using System.Linq;
 using Godot;
@@ -6632,16 +6746,28 @@ public partial class Turret : Node2D
     // nearest one no sibling turret has claimed (if all are claimed, the nearest regardless).
     public static bool PdTargets(IHittable h) => h is Torpedo || (h is Raider r && !r.Heavy) || (h is TargetDummy d && d.Fighter);
     public static int PdPriority(IHittable h) => h is Torpedo ? 0 : h.HitRadius < 20f ? 1 : 2;
+    // Same rule as before -- best by (priority, then distance), preferring one no sibling turret
+    // has claimed, falling back to the best claimed one -- but in a single pass with no
+    // allocation. This used to be Combat.Near (which allocates and sorts) plus a LINQ chain and
+    // another ToList, and line 111 calls it EVERY FRAME FOR EVERY PD TURRET while point defence
+    // is active with nothing in range, because a null Target never satisfies the guard.
     private IHittable Acquire(Vector2 from)
     {
-        var inRange = Combat.Near(from, Range).Where(PdTargets).OrderBy(h => PdPriority(h)).ThenBy(h => from.DistanceTo(h.Position)).ToList();
-        foreach (var h in inRange)
+        IHittable bestFree = null, bestAny = null;
+        int freePri = 0, anyPri = 0; float freeDist = 0, anyDist = 0;
+        foreach (var h in Combat.Hostiles)
         {
+            if (h == null || !h.Alive || !PdTargets(h)) continue;
+            float d = from.DistanceTo(h.Position);
+            if (d > Range) continue;
+            int p = PdPriority(h);
+            if (bestAny == null || p < anyPri || (p == anyPri && d < anyDist)) { bestAny = h; anyPri = p; anyDist = d; }
             bool claimed = false;
             foreach (var t in Ship.PdTurrets) if (t != this && t.Target == h) { claimed = true; break; }
-            if (!claimed) return h;
+            if (claimed) continue;
+            if (bestFree == null || p < freePri || (p == freePri && d < freeDist)) { bestFree = h; freePri = p; freeDist = d; }
         }
-        return inRange.Count > 0 ? inRange[0] : null;
+        return bestFree ?? bestAny;
     }
 
     // One main-gun shot, along the barrel as it points RIGHT NOW. Host only.
@@ -6682,10 +6808,11 @@ public partial class Turret : Node2D
 
     public override void _Draw()
     {
-        var lit = Online ? Ship.Accent : new Color(0.35f, 0.35f, 0.40f);
         // PD shows the ship's cycle, just outside its ring, in the accent colour:
-        // the firing window running down, or the recharge
+        // the firing window running down, or the recharge. Main guns draw nothing here,
+        // so leave before doing any of the work -- this runs per turret, per frame.
         if (!PointDefense) return;
+        var lit = Online ? Ship.Accent : new Color(0.35f, 0.35f, 0.40f);
         float frac = Ship.PdActive ? Ship.PdActiveFrac : Ship.PdRechargeFrac;
         if (frac <= 0) return;
         float r = Art.PdRing + 1.6f;
@@ -6717,7 +6844,10 @@ public partial class Wing : Node2D
     public int Ammo;
     public Vector2 Velocity;
 
-    public const float FighterLength = 17f, BomberLength = 28.125f;   // bomber: snout-nosed, 25% smaller   // halved / three-quarters in this release
+    // The bomber is the LARGER airframe (28.125 to the fighter's 17), so the two read apart at a
+    // glance. The old note here said "25% smaller", which had not been true since they were
+    // resized and contradicted Init's own comment a hundred lines below.
+    public const float FighterLength = 17f, BomberLength = 28.125f;
     private Sprite2D _sprite;
     private double _cd;
 
@@ -7571,7 +7701,7 @@ public partial class Telegraph : Node2D
 
 //==============================================================================
 // FILE: scripts/TioWindow.cs
-// 66 lines   sha256 47e02c18f7fb
+// 66 lines   sha256 1afef5008016
 //==============================================================================
 using Godot;
 using System.Linq;
@@ -7619,24 +7749,24 @@ public partial class TioWindow : PanelContainer
         if (Hub == null) return;
         int top = Missions.Unlocked(Missions.Current.Id);
         int lv = Missions.Level, party = System.Math.Max(1, Hub.PartySize);
-        _tier.Text = $"LEVEL {lv}  ·  ×{Missions.S(lv):0.00}" + (lv == top ? "  (newest)" : "");
+        Ui.SetText(_tier, $"LEVEL {lv}  ·  ×{Missions.S(lv):0.00}" + (lv == top ? "  (newest)" : ""));
         _down.Disabled = !Net.IsHost || lv <= 1 || Hub.Mission != Hub.MissionState.Idle;
         _up.Disabled = !Net.IsHost || lv >= top || Hub.Mission != Hub.MissionState.Idle;
         bool first = !(Character.BossCleared.TryGetValue(Missions.Current.Id, out var cl) && cl.Contains(lv));
-        _bounty.Text = $"BOUNTY  ·  {Missions.BossName}  ·  party of {party}\n"
+        Ui.SetText(_bounty, $"BOUNTY  ·  {Missions.BossName}  ·  party of {party}\n"
                      + $"You: {Missions.KillExpFor(lv, Character.Level)} EXP for the kill (your level {Character.Level})"
                      + (first ? $" + {Missions.FirstClearExp} first clear" : "") + $" + {Missions.CompletionExp} completing, "
-                     + $"{Missions.BountyEach(lv, party):0} credits each.";
-        _party.Text = string.Join("\n", Hub.PartyIds.OrderBy(i => i).Select(i => $"  {Hub.PilotName(i)}   {(Hub.IsReady(i) ? "READY" : "not ready")}"));
+                     + $"{Missions.BountyEach(lv, party):0} credits each.");
+        Ui.SetText(_party, string.Join("\n", Hub.PartyIds.OrderBy(i => i).Select(i => $"  {Hub.PilotName(i)}   {(Hub.IsReady(i) ? "READY" : "not ready")}")));
         bool mine = Hub.IsReady(Net.LocalId);
-        _ready.Text = mine ? "READY  ✓" : "READY";
+        Ui.SetText(_ready, mine ? "READY  ✓" : "READY");
         int waiting = Hub.PartyIds.Count(i => !Hub.IsReady(i));
-        _status.Text = Hub.Mission switch
+        Ui.SetText(_status, Hub.Mission switch
         {
             Hub.MissionState.Opening    => $"Opening the portal…  {Hub.MissionT:0.0} / {Hub.PortalOpenTime:0} s",
             Hub.MissionState.PortalOpen => "The portal is open: the party goes through when every ship is at it.",
             _ => waiting > 0 ? $"Waiting for {waiting} pilot(s) to press READY. READY flies you to the portal." : "Everyone is ready.",
-        };
+        });
     }
 }
 
@@ -7803,7 +7933,7 @@ public partial class Torpedo : Node2D, IHittable
 
 //==============================================================================
 // FILE: scripts/Txt.cs
-// 31 lines   sha256 0b56559599f8
+// 32 lines   sha256 8823251c9a4f
 //==============================================================================
 using Godot;
 
@@ -7812,7 +7942,8 @@ using Godot;
 // These helpers measure the string first and place it by its real width, so nothing is ever cut.
 public static class Txt
 {
-    // Set by Zone each frame from the camera zoom. World-space labels multiply their font size by
+    // Set by Hub each frame from the camera zoom (the class was called Zone once; the name outlived
+    // it here by a rename). World-space labels multiply their font size by
     // this so they stay a constant size on screen instead of being magnified into a blur.
     public static float UiScale = 1f;
     public static int Size(int basePx) => Mathf.Max(6, Mathf.RoundToInt(basePx * UiScale));
@@ -7839,7 +7970,7 @@ public static class Txt
 
 //==============================================================================
 // FILE: scripts/Ui.cs
-// 99 lines   sha256 0a376702a4e8
+// 106 lines   sha256 9f61e923ace3
 //==============================================================================
 using Godot;
 
@@ -7939,11 +8070,18 @@ public static class Ui
 
     // Once per launch (idempotent): the whole window takes the theme.
     public static void Install(SceneTree tree) { if (tree.Root.Theme != Theme) tree.Root.Theme = Theme; }
+
+    // Set a control's text only when it actually CHANGED. Assigning Text re-shapes the control's
+    // glyphs, and these are MSDF fonts; several HUD panels rewrite theirs every frame for strings
+    // that move about once a second (a credits tick, a countdown, a level). Build the string as
+    // before -- it is the assignment that costs, not the interpolation.
+    public static void SetText(Label l, string t) { if (l.Text != t) l.Text = t; }
+    public static void SetText(Button b, string t) { if (b.Text != t) b.Text = t; }
 }
 
 //==============================================================================
 // FILE: scripts/Yard.cs
-// 422 lines   sha256 d68b914f025b
+// 438 lines   sha256 2b78c328b814
 //==============================================================================
 using Godot;
 using System;
@@ -8046,6 +8184,22 @@ public partial class Yard : Node2D
     public static void AddGuestShare(double credits) => _ownCredits += credits;
     // the host's share, earned in the arena (where there is no yard): paid on the way home
     public static void AddHostShare(double credits) => TripCredits += credits;
+
+    // Reaching the main menu ends the session. These statics outlive the scene ON PURPOSE -- a
+    // sector change and a visit both tear the Yard down and rebuild it -- but nothing cleared them
+    // when the SESSION ended, and `Yard._Ready` applies them unconditionally. So quitting from the
+    // arena left `_trip` behind and the next session's economy was overwritten by that snapshot,
+    // and quitting while visiting left `_parked` set so the next session restored the base from
+    // the one before. Across characters too: the yard is not saved per character, or at all.
+    public static void EndSession()
+    {
+        _trip = null;
+        TripCredits = TripClock = TripStartCredits = 0;
+        LastAway = LastAwayOre = LastAwaySalvage = 0;
+        _parked = false;
+        _ownOre = _ownSalvage = _ownCredits = 0;
+        _ownLevels.Clear(); _ownInvested.Clear();
+    }
 
     public void SaveForTrip()
     {
@@ -9434,7 +9588,7 @@ public partial class _Shots : Node
 
 //==============================================================================
 // FILE: tools/smoketest/run.ps1
-// 136 lines   sha256 35cc2f8b8daf
+// 146 lines   sha256 778e72a12df0
 //==============================================================================
 # Windows port of run.sh -- headless runtime check: boots the REAL engine, drives real
 # input, and runs a host and TWO guests (three players) against each other over localhost.
@@ -9471,7 +9625,17 @@ if (-not (Test-Path $nupkgs)) { Write-Host "no nupkgs folder at $nupkgs"; exit 2
 $src = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $W = Join-Path $env:TEMP 'warships_smoke'
 
-if (Test-Path $W) { Remove-Item $W -Recurse -Force }
+# One fixed scratch folder, so two runs cannot overlap -- the second would delete the first's
+# files mid-run. Say so plainly: the bare failure is a Remove-Item error on a .err file, which
+# reads like a broken harness rather than "something else is already running".
+if (Test-Path $W) {
+  try { Remove-Item $W -Recurse -Force -ErrorAction Stop }
+  catch {
+    Write-Host "CANNOT CLEAR $W -- another smoke run is probably still going."
+    Write-Host "These runs share one scratch folder and must be run one at a time."
+    exit 2
+  }
+}
 New-Item -ItemType Directory -Path $W -Force | Out-Null
 # /.godot, bin and obj are build output; copying them just makes the import stale.
 robocopy $src $W /E /XD .godot .git bin obj /NFL /NDL /NJH /NJS /NP | Out-Null
@@ -9637,7 +9801,7 @@ echo "SMOKE TEST PASSED"
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 1835 lines   sha256 9dd729707224
+// 1892 lines   sha256 5482e69d458a
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -9682,6 +9846,8 @@ public partial class _Test : Node
     {
         string role = OS.GetCmdlineUserArgs().FirstOrDefault() ?? "solo";
         await Wait(0.3);
+        try { if (role == "solo") await QuitResetsSector(); }
+        catch (Exception ex) { Check(false, $"sector reset test threw: {ex.GetType().Name}: {ex.Message}"); GD.Print(ex.StackTrace); }
         try { if (role == "solo") await Select(); }
         catch (Exception ex) { Check(false, $"select screen test threw: {ex.GetType().Name}: {ex.Message}"); GD.Print(ex.StackTrace); }
         GetTree().ChangeSceneToFile("res://Hub.tscn");
@@ -9695,6 +9861,28 @@ public partial class _Test : Node
         // 0.2 s of game time can pass in milliseconds, before the mixer has cycled
         Music.I?.Silence(); await Wait(0.1); OS.DelayMsec(200); await Wait(0.1);
         GetTree().Quit(fails);
+    }
+
+    // Hub.Sector is static and only Hub.GoTo ever sets it, so quitting to the main menu FROM THE
+    // ARENA used to leave it on Arena: the next session skipped BuildWorld and dropped the pilot
+    // into an arena with no base, no economy and a boss. The menu now ends the trip, whichever
+    // route reached it.
+    async Task QuitResetsSector()
+    {
+        Hub.Sector = Hub.SectorKind.Arena;
+        Yard.TripClock = 123; Yard.TripCredits = 456;      // as a quit from the arena would leave them
+        Music.CombatZone = true;                            // and so would this
+        GetTree().ChangeSceneToFile("res://MainMenu.tscn");
+        await Wait(0.4);
+        Check(Hub.Sector == Hub.SectorKind.Home,
+              $"reaching the main menu ends the trip: the next session starts at home, not in the arena ({Hub.Sector})");
+        // Yard._Ready APPLIES the trip snapshot, so leaving one behind overwrote the next
+        // session's economy with it -- a previous character's, even.
+        Check(Yard.TripClock == 0 && Yard.TripCredits == 0,
+              $"the trip snapshot is dropped too, so a fresh session is not paid an abandoned one ({Yard.TripClock:0}, {Yard.TripCredits:0})");
+        // Hub sets CombatZone on the way in; nothing cleared it on the way out, so quitting from
+        // the arena left the combat track playing over the menu.
+        Check(!Music.CombatZone, "the combat zone flag is dropped too: the menu is not scored as a fight");
     }
 
     // ── character select ─────────────────────────────────────────────────────
@@ -9727,6 +9915,15 @@ public partial class _Test : Node
         Character.Save(); await Wait(0.05);
         Check(!FileAccess.FileExists(tmpPath),
               "Save() goes through a temp file and renames it away, leaving none behind");
+        // user://settings.cfg is written the same way and for the same reason: two instances share
+        // one user://, so a rebind saved by one used to leave the other reading a torn file and
+        // silently falling back to defaults.
+        var setTmp = Settings.Path + ".tmp";
+        using (var strayCfg = FileAccess.Open(setTmp, FileAccess.ModeFlags.Write))
+            strayCfg.StoreString("[audio]\nvolume_idx=");
+        Settings.Save(); await Wait(0.05);
+        Check(!FileAccess.FileExists(setTmp),
+              "Settings.Save() goes through a temp file too, and leaves none behind");
 
         // new character: cancel writes nothing
         Nodes<Button>(sel).First(b => b.Text == "NEW CHARACTER").EmitSignal(BaseButton.SignalName.Pressed);
@@ -10279,6 +10476,30 @@ public partial class _Test : Node
         Check(!ship.PdActive, "Q does nothing while recharging");
         double mid = Nodes<TargetDummy>().Sum(d => d.Total); await Wait(2.0);
         Check(Nodes<TargetDummy>().Sum(d => d.Total) == mid, "no PD fire while recharging");
+        // A readout goes to the dummy with that NUMBER, not that position. The dummies are 1, 3,
+        // 4 and 5 (2's spot holds the two practice fighters), so indexing the list by number-1
+        // sent 3's figures to 4, 4's to 5, and dropped 5's entirely because 5 > Count: guests
+        // read the wrong numbers off the wrong hulls.
+        var dummy5 = Nodes<TargetDummy>().First(x => x.Number == 5);
+        var dummy4 = Nodes<TargetDummy>().First(x => x.Number == 4);
+        double l5 = dummy5.LastSecond, a5 = dummy5.Average10, t5 = dummy5.Total;
+        double l4 = dummy4.LastSecond, a4 = dummy4.Average10, t4 = dummy4.Total;
+        Priv(H, "NetDummy", 5, 7.0, 8.0, 9.0);
+        double got5 = dummy5.Total, got4 = dummy4.Total;                   // read BEFORE restoring
+        bool routed = Math.Abs(got5 - 9.0) < 1e-9 && Math.Abs(got4 - t4) < 1e-9;
+        dummy5.SetReadout(l5, a5, t5); dummy4.SetReadout(l4, a4, t4);      // put them back
+        Check(routed, $"a dummy's readout reaches the dummy with that NUMBER, not that position (5 got {got5:0.#} of 9, 4 sat at {got4:0.#})");
+        // Combat.Clear drops the hooks the world installed on its way out. OnShell was left
+        // behind: a lambda holding the Hub, so the next shot called into a freed node, and a Hub
+        // that could never be collected once you were back at the menu. Snapshot and restore --
+        // this all happens inside one frame, so nothing ever sees the cleared state.
+        var keepHostiles = Combat.Hostiles.ToList(); var keepPlayers = Combat.Players.ToList();
+        var keepFlash = Combat.OnFlash; var keepShell = Combat.OnShell; var keepTorp = Combat.OnTorpedo;
+        Combat.Clear();
+        bool hooksDropped = Combat.OnFlash == null && Combat.OnShell == null && Combat.OnTorpedo == null;
+        Combat.Hostiles.AddRange(keepHostiles); Combat.Players.AddRange(keepPlayers);
+        Combat.OnFlash = keepFlash; Combat.OnShell = keepShell; Combat.OnTorpedo = keepTorp;
+        Check(hooksDropped, "Combat.Clear drops every hook the world installed, OnShell included");
 
         // ── carrier ──
         await SetClass(ShipClass.Carrier); ship = Me;

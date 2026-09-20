@@ -157,7 +157,15 @@ public partial class Boss : Node2D, IHittable
         // more often than 10 Hz. Turning at 0.3 rad/s, 100 ms between figures is ~1.7 degrees,
         // which at the beam's 10000 u reach puts the far end ~300 u off against a beam 70 u wide.
         // 30 Hz while locked, and guests stop smoothing it (see _netLocked), closes that.
-        if (_send <= 0 && Net.IsOnline) { _send = Locked ? 1.0 / 30 : 0.1; Rpc(nameof(NetState), Position, Rotation, Hp, Locked); }
+        // To the peers actually IN the arena. Broadcasting to everyone meant a guest still loading
+        // the arena scene got packets for a Hub/Boss it did not have yet -- "Node not found",
+        // "Invalid packet received" -- and at 30 Hz while locked there are three times as many
+        // chances to land in that window.
+        if (_send <= 0 && Net.IsOnline)
+        {
+            _send = Locked ? 1.0 / 30 : 0.1;
+            Hub?.RpcToSector(Hub.SectorKind.Arena, this, nameof(NetState), Position, Rotation, Hp, Locked);
+        }
     }
 
     private void Tick(System.Collections.Generic.List<PlayerShip> pilots, double delta)
@@ -261,7 +269,8 @@ public partial class Boss : Node2D, IHittable
     private void Tele(bool line, Vector2 a, Vector2 b, float size, double time, bool onHull = false)
     {
         ShowTelegraph(line, a, b, size, time, onHull);
-        if (Net.IsOnline) Rpc(nameof(NetTelegraph), line, a, b, size, time, onHull);
+        // arena peers only, for the same reason as NetState above
+        if (Net.IsOnline) Hub?.RpcToSector(Hub.SectorKind.Arena, this, nameof(NetTelegraph), line, a, b, size, time, onHull);
     }
     private void ShowTelegraph(bool line, Vector2 a, Vector2 b, float size, double time, bool onHull) =>
         (onHull ? (Node)this : GetParent()).AddChild(new Telegraph { Line = line, A = a, B = b, Width = size, Radius = size, Duration = time });
