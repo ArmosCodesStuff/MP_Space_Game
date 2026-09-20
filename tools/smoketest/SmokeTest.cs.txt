@@ -110,6 +110,12 @@ public partial class _Test : Node
         Character.Save(); await Wait(0.05);
         Check(!FileAccess.FileExists(tmpPath),
               "Save() goes through a temp file and renames it away, leaving none behind");
+        // ...and it really RENAMED rather than falling back to writing over the live file. Both
+        // paths leave the same thing on disk, so the check above passes either way; only this one
+        // can tell. Windows' rename() refuses an existing destination -- Godot works around that,
+        // but if it ever stopped, every save would quietly take the unsafe path.
+        Check(Character.LastSaveRenamed,
+              "the save was committed by the rename, not by the fallback that writes over the live file");
         // user://settings.cfg is written the same way and for the same reason: two instances share
         // one user://, so a rebind saved by one used to leave the other reading a torn file and
         // silently falling back to defaults.
@@ -117,8 +123,8 @@ public partial class _Test : Node
         using (var strayCfg = FileAccess.Open(setTmp, FileAccess.ModeFlags.Write))
             strayCfg.StoreString("[audio]\nvolume_idx=");
         Settings.Save(); await Wait(0.05);
-        Check(!FileAccess.FileExists(setTmp),
-              "Settings.Save() goes through a temp file too, and leaves none behind");
+        Check(!FileAccess.FileExists(setTmp) && Settings.LastSaveRenamed,
+              "Settings.Save() goes through a temp file too, and commits it by the rename");
 
         // new character: cancel writes nothing
         Nodes<Button>(sel).First(b => b.Text == "NEW CHARACTER").EmitSignal(BaseButton.SignalName.Pressed);

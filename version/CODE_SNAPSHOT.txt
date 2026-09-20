@@ -1,9 +1,9 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-20 05:29 at git commit 7763cbe: typecheck clean, dotnet build 0 warnings,
+// Taken 2026-09-20 06:18 at git commit e384246: typecheck clean, dotnet build 0 warnings,
 //   0 analyser findings, 0 unused members; smoke test 3/3 runs at 432 checks on Windows
 //   (434 in a sandbox with no router and no internet); 67-frame UI sweep complete, 0 lint.
-// 64 files, 11300 lines. Code only: sprites, sounds and docs are in the zip.
+// 64 files, 11320 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -22,7 +22,7 @@
 //   scripts/BasePanel.cs                           119 lines   sha256 9115697ad5aa
 //   scripts/Boss.cs                                285 lines   sha256 6747d73030b2
 //   scripts/BossBar.cs                              85 lines   sha256 679ea3b792b9
-//   scripts/Character.cs                           212 lines   sha256 6a03b50ec0a1
+//   scripts/Character.cs                           220 lines   sha256 9221d9084893
 //   scripts/CharacterCreator.cs                    218 lines   sha256 d1c4d4f7012f
 //   scripts/CharacterSelect.cs                     171 lines   sha256 dc2bfeccc820
 //   scripts/Combat.cs                               87 lines   sha256 298c5236a5b5
@@ -47,7 +47,7 @@
 //   scripts/Radar.cs                               129 lines   sha256 16957ada0551
 //   scripts/Raider.cs                              344 lines   sha256 59f2c06071b3
 //   scripts/SessionMenu.cs                         127 lines   sha256 7546fd7d3c03
-//   scripts/Settings.cs                             70 lines   sha256 e6be0b7529a5
+//   scripts/Settings.cs                             76 lines   sha256 83795f91a86c
 //   scripts/Sfx.cs                                  69 lines   sha256 ceecc82717f6
 //   scripts/Shell.cs                                52 lines   sha256 5c161c9fff3b
 //   scripts/Shield.cs                               71 lines   sha256 99c7fa4a2a8e
@@ -73,7 +73,7 @@
 //   tools/screens/Shots.cs.txt                     457 lines   sha256 8355cd3b6808
 //   tools/smoketest/run.ps1                        146 lines   sha256 778e72a12df0
 //   tools/smoketest/run.sh                          57 lines   sha256 568b677787fd
-//   tools/smoketest/SmokeTest.cs.txt              1892 lines   sha256 5482e69d458a
+//   tools/smoketest/SmokeTest.cs.txt              1898 lines   sha256 9c09a4d47f4c
 //==============================================================================
 
 //==============================================================================
@@ -1055,7 +1055,7 @@ public partial class BossBar : Control
 
 //==============================================================================
 // FILE: scripts/Character.cs
-// 212 lines   sha256 6a03b50ec0a1
+// 220 lines   sha256 9221d9084893
 //==============================================================================
 using Godot;
 using System;
@@ -1141,14 +1141,22 @@ public static class Character
         // After the rename the live path only ever holds a complete file.
         var tmp = PathOf(Id) + ".tmp";      // not ".cfg", so List() skips it if one is left
         if (c.Save(tmp) != Error.Ok) return;
-        if (DirAccess.RenameAbsolute(ProjectSettings.GlobalizePath(tmp),
-                                     ProjectSettings.GlobalizePath(PathOf(Id))) != Error.Ok)
+        LastSaveRenamed = DirAccess.RenameAbsolute(ProjectSettings.GlobalizePath(tmp),
+                                                   ProjectSettings.GlobalizePath(PathOf(Id))) == Error.Ok;
+        if (!LastSaveRenamed)
         {
             // Losing the save outright is worse than the race it was avoiding.
             c.Save(PathOf(Id));
             DirAccess.RemoveAbsolute(ProjectSettings.GlobalizePath(tmp));
         }
     }
+
+    // Did the last Save go through the rename, or fall back to writing over the live file?
+    // Both paths end with the right contents on disk and no temp file left, so a check that
+    // only looks at the files CANNOT TELL THEM APART -- and the rename is the whole point.
+    // Windows' rename() refuses an existing destination, so if Godot ever stopped working
+    // around that, every save would quietly take the unsafe path and nothing would say so.
+    public static bool LastSaveRenamed { get; private set; }
 
     public static bool Load(string id)
     {
@@ -6326,7 +6334,7 @@ public partial class SessionMenu : CanvasLayer
 
 //==============================================================================
 // FILE: scripts/Settings.cs
-// 70 lines   sha256 e6be0b7529a5
+// 76 lines   sha256 83795f91a86c
 //==============================================================================
 using Godot;
 
@@ -6373,13 +6381,19 @@ public static class Settings
         // defaults for the whole session.
         var tmp = Path + ".tmp";                 // not ".cfg": never mistaken for the real file
         if (c.Save(tmp) != Error.Ok) return;
-        if (DirAccess.RenameAbsolute(ProjectSettings.GlobalizePath(tmp),
-                                     ProjectSettings.GlobalizePath(Path)) != Error.Ok)
+        LastSaveRenamed = DirAccess.RenameAbsolute(ProjectSettings.GlobalizePath(tmp),
+                                                   ProjectSettings.GlobalizePath(Path)) == Error.Ok;
+        if (!LastSaveRenamed)
         {
             c.Save(Path);                        // losing the settings outright is worse
             DirAccess.RemoveAbsolute(ProjectSettings.GlobalizePath(tmp));
         }
     }
+
+    // As on Character.Save: both paths leave the same thing on disk, so only this says which
+    // one ran. Without it a check can confirm the temp file is gone and still be looking at the
+    // unsafe write it was meant to rule out.
+    public static bool LastSaveRenamed { get; private set; }
 
     public static void Load()
     {
@@ -9801,7 +9815,7 @@ echo "SMOKE TEST PASSED"
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 1892 lines   sha256 5482e69d458a
+// 1898 lines   sha256 9c09a4d47f4c
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -9915,6 +9929,12 @@ public partial class _Test : Node
         Character.Save(); await Wait(0.05);
         Check(!FileAccess.FileExists(tmpPath),
               "Save() goes through a temp file and renames it away, leaving none behind");
+        // ...and it really RENAMED rather than falling back to writing over the live file. Both
+        // paths leave the same thing on disk, so the check above passes either way; only this one
+        // can tell. Windows' rename() refuses an existing destination -- Godot works around that,
+        // but if it ever stopped, every save would quietly take the unsafe path.
+        Check(Character.LastSaveRenamed,
+              "the save was committed by the rename, not by the fallback that writes over the live file");
         // user://settings.cfg is written the same way and for the same reason: two instances share
         // one user://, so a rebind saved by one used to leave the other reading a torn file and
         // silently falling back to defaults.
@@ -9922,8 +9942,8 @@ public partial class _Test : Node
         using (var strayCfg = FileAccess.Open(setTmp, FileAccess.ModeFlags.Write))
             strayCfg.StoreString("[audio]\nvolume_idx=");
         Settings.Save(); await Wait(0.05);
-        Check(!FileAccess.FileExists(setTmp),
-              "Settings.Save() goes through a temp file too, and leaves none behind");
+        Check(!FileAccess.FileExists(setTmp) && Settings.LastSaveRenamed,
+              "Settings.Save() goes through a temp file too, and commits it by the rename");
 
         // new character: cancel writes nothing
         Nodes<Button>(sel).First(b => b.Text == "NEW CHARACTER").EmitSignal(BaseButton.SignalName.Pressed);

@@ -695,6 +695,19 @@ Each of these compiled clean and was wrong at runtime. The smoke test covers all
   650 u standoff the boss would not have closed anyway, so the assertion tested nothing but the
   flag. Arrange the conditions under which the behaviour would actually differ, or the check is
   decoration. Sibling of the constant-comparison lesson above.
+- **A fallback that tidies up after itself makes the check blind.** `Character.Save` writes a temp
+  file and renames it over the live one; if the rename fails it falls back to writing straight over
+  the live file — and deletes the temp. So both paths end with the right contents on disk and no
+  temp left, and the check "Save goes through a temp file and leaves none behind" **passes either
+  way**. It could not distinguish the fix from the bug. Proved with a mutant that breaks only the
+  rename: the file-based check still passed while every save took the unsafe path. `Save` now
+  records which path it took (`LastSaveRenamed`) and the check reads that.
+  *Rule: when a failure path cleans up like the success path, the files on disk cannot tell you
+  which ran — the code has to say so.*
+  (Verified separately, by asking the engine: `DirAccess.rename_absolute` over an EXISTING
+  destination returns OK on Windows in 4.7.2 and replaces the contents. Worth knowing because the
+  Windows CRT's `rename()` refuses an existing destination; Godot works around it. If that ever
+  changed, every save would quietly take the fallback, and now something would say so.)
 - **A node-addressed RPC to a peer in another sector is an engine error.** Godot routes RPCs by
   node path, so a packet for `Hub/Boss` reaching a peer that has not finished building the arena
   logs `Node not found` / `Invalid packet received`. The yard hit this first and `RpcHome` was the
@@ -739,7 +752,7 @@ coin flip, so watch across frames; and order checks so none runs after the other
 the session.
 
 `tools/smoketest/run.ps1` is the same harness for Windows, driving the win64 mono build. It runs the
-whole suite: **432 pass, 6/6 runs finished**, against the 434 the sandbox reports. The two that
+whole suite: **433 pass, 6/6 runs finished**, against the 435 the sandbox reports. The two that
 cannot pass here are not regressions — they assert the *sandbox's* network, and say so in their own
 comments (`// no router in the sandbox`, `// no router, no internet in the sandbox`):
 
@@ -748,14 +761,14 @@ comments (`// no router in the sandbox`, `// no router, no internet in the sandb
 
 Both hard-require `Net.Reach.LanOnly`. On a real machine behind a real router with real internet,
 reachability resolves to something else and the assertion fails by construction. **Windows is
-therefore a 432/432 bar, not 434/434**, until those two checks learn to branch on the environment.
+therefore a 433/433 bar, not 435/435**, until those two checks learn to branch on the environment.
 Do not "fix" them by relaxing the assertion: what they verify — that a player with no route out is
 told so, and offered the port-forward and Tailscale routes — is real behaviour worth keeping.
 
 **WSL does not get you back to the sandbox's number.** It was set up expecting it would — those
 conditions looked reproducible — and it reports exactly the same count as Windows, with the same two
 failures. WSL2 has internet and sits behind its own NAT, so `LanOnly` does not hold there either.
-Only a machine with no router *and* no internet reaches the full 434. WSL is still worth having (it
+Only a machine with no router *and* no internet reaches the full 435. WSL is still worth having (it
 runs the `.sh` scripts unmodified, and typecheck and xref are clean there), but it is not an oracle
 for those two checks.
 *Rule: an environment assumption is worth testing before it is relied on. This one was wrong.*

@@ -43,13 +43,19 @@ public static class Settings
         // defaults for the whole session.
         var tmp = Path + ".tmp";                 // not ".cfg": never mistaken for the real file
         if (c.Save(tmp) != Error.Ok) return;
-        if (DirAccess.RenameAbsolute(ProjectSettings.GlobalizePath(tmp),
-                                     ProjectSettings.GlobalizePath(Path)) != Error.Ok)
+        LastSaveRenamed = DirAccess.RenameAbsolute(ProjectSettings.GlobalizePath(tmp),
+                                                   ProjectSettings.GlobalizePath(Path)) == Error.Ok;
+        if (!LastSaveRenamed)
         {
             c.Save(Path);                        // losing the settings outright is worse
             DirAccess.RemoveAbsolute(ProjectSettings.GlobalizePath(tmp));
         }
     }
+
+    // As on Character.Save: both paths leave the same thing on disk, so only this says which
+    // one ran. Without it a check can confirm the temp file is gone and still be looking at the
+    // unsafe write it was meant to rule out.
+    public static bool LastSaveRenamed { get; private set; }
 
     public static void Load()
     {

@@ -47,7 +47,7 @@ faults have been fixed from those frames more than once.
 
 **As of 2026-09-20 the whole harness also runs natively on the developer's Windows machine** (see
 Unreleased → *The harnesses run on Windows*): typecheck 0 errors, build 0 warnings, analysers 0
-findings, xref 0 unused, smoke **432 pass / 6 of 6 runs** (the 2 short of 434 assert the sandbox's
+findings, xref 0 unused, smoke **433 pass / 6 of 6 runs** (the 2 short of 435 assert the sandbox's
 missing router and internet), sweep **67 frames, 0 lint** on the real GPU with the project's own
 Forward+ renderer. So "how it looks on the developer's own GPU" is no longer unconfirmed for the
 swept states. What remains unconfirmed is how it feels in a hand-played session — nothing here
@@ -130,7 +130,7 @@ developer's own machine with no WSL — see `docs/README.md` for the exact comma
 2. **Smoke test:** `sh tools/smoketest/run.sh <path to Godot_v4.7.2-stable_mono_linux.x86_64>`
    → must end `SMOKE TEST PASSED`. Real engine, headless, solo at a fixed 60 fps plus a host and a
    guest over localhost, in its own `user://`. Add checks to `tools/smoketest/SmokeTest.cs.txt`.
-   Windows: `tools\smoketest\run.ps1 <godot win64 exe>`, and the bar there is **432 pass, 6/6 runs**,
+   Windows: `tools\smoketest\run.ps1 <godot win64 exe>`, and the bar there is **433 pass, 6/6 runs**,
    not `SMOKE TEST PASSED` — two checks assert the sandbox's lack of a router and internet and
    cannot pass on a real network. See DESIGN.md → Smoke test before touching them.
 3. **Look at it:** `sh tools/screens/run.sh <same binary>` → frames in `/tmp/shots/`. Do this for
@@ -202,6 +202,27 @@ reachable, which is fine: both harnesses build from the `nupkgs` folder that shi
 ---
 
 ## Unreleased
+
+### The atomic-save checks could not fail
+
+**Checked:** typecheck 0 errors; build 0 warnings; analysers 0 findings; xref 0 unused; smoke
+**433 pass, 6/6 runs, three in a row**; sweep 67 frames, 0 lint.
+
+`Character.Save` and `Settings.Save` write a temp file and rename it over the live one. If the
+rename fails they fall back to writing straight over the live file — **and delete the temp**. So
+both paths leave identical state on disk, and the checks that looked at the files
+("goes through a temp file and leaves none behind") **passed either way**. They could not tell the
+fix from the bug they were written for.
+
+Proved with a mutant that breaks only the rename: the file-based check still reported PASS while
+every save took the unsafe path. Both saves now record which path they took (`LastSaveRenamed`)
+and the checks read that; the same mutant now fails them.
+
+Also verified, by asking the engine rather than assuming: `DirAccess.rename_absolute` over an
+**existing** destination returns OK on Windows in 4.7.2 and replaces the contents. That mattered
+because the Windows CRT's `rename()` refuses an existing destination — had Godot not worked around
+it, the fix would have been inert on Windows since the day it was written, and nothing would have
+said so.
 
 ### Review pass 3 complete: all 46 scripts read line by line
 
@@ -361,11 +382,11 @@ Frames looked at. No game code changed.
 
 #### Known broken
 
-- **Two of the 434 smoke checks cannot pass on any machine with a router and internet** — `no UPnP
+- **Two of the 435 smoke checks cannot pass on any machine with a router and internet** — `no UPnP
   router…` and `no router or internet here…`. Both hard-require `Net.Reach.LanOnly`, i.e. the
   sandbox's absence of a router and of internet; on a real network reachability resolves otherwise
   and they fail by construction. They are not regressions and the behaviour they cover is real.
-  **432 is the bar on Windows *and* under WSL**; only the sandbox itself reaches 434. Making them
+  **433 is the bar on Windows *and* under WSL**; only the sandbox itself reaches 435. Making them
   branch on the environment is not done.
 *(The non-atomic character save that was listed here is now fixed — see Fixed, below.)*
 

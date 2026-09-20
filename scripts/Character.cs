@@ -82,14 +82,22 @@ public static class Character
         // After the rename the live path only ever holds a complete file.
         var tmp = PathOf(Id) + ".tmp";      // not ".cfg", so List() skips it if one is left
         if (c.Save(tmp) != Error.Ok) return;
-        if (DirAccess.RenameAbsolute(ProjectSettings.GlobalizePath(tmp),
-                                     ProjectSettings.GlobalizePath(PathOf(Id))) != Error.Ok)
+        LastSaveRenamed = DirAccess.RenameAbsolute(ProjectSettings.GlobalizePath(tmp),
+                                                   ProjectSettings.GlobalizePath(PathOf(Id))) == Error.Ok;
+        if (!LastSaveRenamed)
         {
             // Losing the save outright is worse than the race it was avoiding.
             c.Save(PathOf(Id));
             DirAccess.RemoveAbsolute(ProjectSettings.GlobalizePath(tmp));
         }
     }
+
+    // Did the last Save go through the rename, or fall back to writing over the live file?
+    // Both paths end with the right contents on disk and no temp file left, so a check that
+    // only looks at the files CANNOT TELL THEM APART -- and the rename is the whole point.
+    // Windows' rename() refuses an existing destination, so if Godot ever stopped working
+    // around that, every save would quietly take the unsafe path and nothing would say so.
+    public static bool LastSaveRenamed { get; private set; }
 
     public static bool Load(string id)
     {
