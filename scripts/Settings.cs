@@ -15,12 +15,22 @@ public static class Settings
     public static int RadarSize = 1;                 // 0 small, 1 medium, 2 large
     public static float Volume => VolumeSteps[Mathf.Clamp(VolumeIdx, 0, VolumeSteps.Length - 1)];
 
+    // AN AUTOMATED RUN IS NOT A GAME SESSION. The smoke test launches six real Godot windows
+    // and the sweep one more, all playing combat audio on the developer's machine at whatever
+    // the saved setting happens to be, with nobody listening. The harnesses set this and every
+    // ApplyVolume after it -- including the ones the menus trigger -- honours it. It is a
+    // RUNTIME override, not a setting: Save() never writes it, so it cannot leak into the
+    // player's settings.cfg.
+    public static float? TestVolume;
+    public static float EffectiveVolume => TestVolume ?? Volume;
+
     public static void ApplyVolume()
     {
         int bus = AudioServer.GetBusIndex("Master");
         if (bus < 0) return;
-        AudioServer.SetBusMute(bus, Volume <= 0.001f);
-        AudioServer.SetBusVolumeDb(bus, Mathf.LinearToDb(Mathf.Max(Volume, 0.0001f)));
+        float v = EffectiveVolume;
+        AudioServer.SetBusMute(bus, v <= 0.001f);
+        AudioServer.SetBusVolumeDb(bus, Mathf.LinearToDb(Mathf.Max(v, 0.0001f)));
     }
 
     // Ability key bindings, "Class.abilityId" -> Key. Only changed keys are stored;

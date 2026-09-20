@@ -62,6 +62,7 @@ public partial class _Shots : Node
         // 2x game speed: every wait here is game time, so each frame catches the same moment,
         // sooner -- the sweep has to finish inside the sandbox's 300 s limit
         Engine.TimeScale = 2.0;
+        Settings.TestVolume = 0.05f; Settings.ApplyVolume();   // a real window on a real machine
         // two characters, like the user's: a black-hulled carrier and a default battleship
         Character.NewBlank(); Character.Name = "Commander"; Character.Class = ShipClass.Carrier; Character.Main = new Color(0.05f, 0.05f, 0.05f); Character.Save();
         await W(0.05);

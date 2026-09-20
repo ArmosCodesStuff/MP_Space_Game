@@ -40,6 +40,7 @@ public partial class _Test : Node
     public override async void _Ready()
     {
         string role = OS.GetCmdlineUserArgs().FirstOrDefault() ?? "solo";
+        Settings.TestVolume = 0.05f; Settings.ApplyVolume();   // six windows, nobody listening
         await Wait(0.3);
         try { if (role == "solo") await QuitResetsSector(); }
         catch (Exception ex) { Check(false, $"sector reset test threw: {ex.GetType().Name}: {ex.Message}"); GD.Print(ex.StackTrace); }
@@ -1637,6 +1638,14 @@ public partial class _Test : Node
             Nodes<Button>(menu).First(b => b.Text == "MEDIUM").EmitSignal(BaseButton.SignalName.Pressed);
             Nodes<Button>(menu).First(b => b.Text == "50%").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.1);
             Check(Mathf.IsEqualApprox(Settings.MusicVolume, 0.5f), "music volume set from the menu");
+            // ...and the harness cap SURVIVES the menu re-applying the volume. Checked here, after
+            // a menu has just written the audio settings, rather than at startup where nothing has
+            // had a chance to overwrite it. 5% as a literal, never Settings.TestVolume: a check
+            // that reads the value it is testing cannot catch the value being wrong.
+            int mbus = AudioServer.GetBusIndex("Master");
+            float lin = mbus < 0 ? -1f : (float)Mathf.DbToLinear(AudioServer.GetBusVolumeDb(mbus));
+            Check(mbus >= 0 && !AudioServer.IsBusMute(mbus) && Mathf.Abs(lin - 0.05f) < 0.001f && Settings.Volume > 0.05f,
+                  $"the harness runs at 5% master volume whatever the settings say ({lin * 100:0.0}%, setting {Settings.Volume * 100:0}%)");
             Key(global::Godot.Key.Escape); await Wait(0.1);
             Check(!H.EscMenuOpen, "Esc closes the menu");
         }

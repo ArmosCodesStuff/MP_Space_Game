@@ -1,9 +1,9 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-20 17:00 at git commit 7a9b56a: typecheck clean, dotnet build 0 warnings,
+// Taken 2026-09-20 17:07 at git commit 08fad8b: typecheck clean, dotnet build 0 warnings,
 //   0 analyser findings, 0 unused members; smoke test 3/3 runs at 435 checks on Windows
 //   (437 in a sandbox with no router and no internet); 67-frame UI sweep complete, 0 lint.
-// 67 files, 11759 lines. Code only: sprites, sounds and docs are in the zip.
+// 67 files, 11779 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -48,7 +48,7 @@
 //   scripts/Radar.cs                               129 lines   sha256 16957ada0551
 //   scripts/Raider.cs                              344 lines   sha256 59f2c06071b3
 //   scripts/SessionMenu.cs                         127 lines   sha256 7546fd7d3c03
-//   scripts/Settings.cs                             76 lines   sha256 83795f91a86c
+//   scripts/Settings.cs                             86 lines   sha256 f1bd8946c74e
 //   scripts/Sfx.cs                                  69 lines   sha256 ceecc82717f6
 //   scripts/Shell.cs                                52 lines   sha256 5c161c9fff3b
 //   scripts/Shield.cs                               71 lines   sha256 99c7fa4a2a8e
@@ -72,10 +72,10 @@
 //   tools/find-godot.ps1                            53 lines   sha256 fabe4c75faae
 //   tools/screens/run.ps1                          114 lines   sha256 0ca925a64867
 //   tools/screens/run.sh                            42 lines   sha256 73a5b3c63476
-//   tools/screens/Shots.cs.txt                     457 lines   sha256 8355cd3b6808
+//   tools/screens/Shots.cs.txt                     458 lines   sha256 43a79314bd60
 //   tools/smoketest/run.ps1                        151 lines   sha256 4eed3fc767ae
 //   tools/smoketest/run.sh                          57 lines   sha256 568b677787fd
-//   tools/smoketest/SmokeTest.cs.txt              1937 lines   sha256 217303aa7e0b
+//   tools/smoketest/SmokeTest.cs.txt              1946 lines   sha256 b7e4cfa5ea5d
 //   tools/snapshot.ps1                              95 lines   sha256 d6d85575ba26
 //==============================================================================
 
@@ -6470,7 +6470,7 @@ public partial class SessionMenu : CanvasLayer
 
 //==============================================================================
 // FILE: scripts/Settings.cs
-// 76 lines   sha256 83795f91a86c
+// 86 lines   sha256 f1bd8946c74e
 //==============================================================================
 using Godot;
 
@@ -6489,12 +6489,22 @@ public static class Settings
     public static int RadarSize = 1;                 // 0 small, 1 medium, 2 large
     public static float Volume => VolumeSteps[Mathf.Clamp(VolumeIdx, 0, VolumeSteps.Length - 1)];
 
+    // AN AUTOMATED RUN IS NOT A GAME SESSION. The smoke test launches six real Godot windows
+    // and the sweep one more, all playing combat audio on the developer's machine at whatever
+    // the saved setting happens to be, with nobody listening. The harnesses set this and every
+    // ApplyVolume after it -- including the ones the menus trigger -- honours it. It is a
+    // RUNTIME override, not a setting: Save() never writes it, so it cannot leak into the
+    // player's settings.cfg.
+    public static float? TestVolume;
+    public static float EffectiveVolume => TestVolume ?? Volume;
+
     public static void ApplyVolume()
     {
         int bus = AudioServer.GetBusIndex("Master");
         if (bus < 0) return;
-        AudioServer.SetBusMute(bus, Volume <= 0.001f);
-        AudioServer.SetBusVolumeDb(bus, Mathf.LinearToDb(Mathf.Max(Volume, 0.0001f)));
+        float v = EffectiveVolume;
+        AudioServer.SetBusMute(bus, v <= 0.001f);
+        AudioServer.SetBusVolumeDb(bus, Mathf.LinearToDb(Mathf.Max(v, 0.0001f)));
     }
 
     // Ability key bindings, "Class.abilityId" -> Key. Only changed keys are stored;
@@ -9453,7 +9463,7 @@ ls /tmp/shots
 
 //==============================================================================
 // FILE: tools/screens/Shots.cs.txt
-// 457 lines   sha256 8355cd3b6808
+// 458 lines   sha256 43a79314bd60
 //==============================================================================
 // Screenshot driver. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Shots.cs, registers it as an autoload, and runs the real
@@ -9519,6 +9529,7 @@ public partial class _Shots : Node
         // 2x game speed: every wait here is game time, so each frame catches the same moment,
         // sooner -- the sweep has to finish inside the sandbox's 300 s limit
         Engine.TimeScale = 2.0;
+        Settings.TestVolume = 0.05f; Settings.ApplyVolume();   // a real window on a real machine
         // two characters, like the user's: a black-hulled carrier and a default battleship
         Character.NewBlank(); Character.Name = "Commander"; Character.Class = ShipClass.Carrier; Character.Main = new Color(0.05f, 0.05f, 0.05f); Character.Save();
         await W(0.05);
@@ -10133,7 +10144,7 @@ echo "SMOKE TEST PASSED"
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 1937 lines   sha256 217303aa7e0b
+// 1946 lines   sha256 b7e4cfa5ea5d
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -10177,6 +10188,7 @@ public partial class _Test : Node
     public override async void _Ready()
     {
         string role = OS.GetCmdlineUserArgs().FirstOrDefault() ?? "solo";
+        Settings.TestVolume = 0.05f; Settings.ApplyVolume();   // six windows, nobody listening
         await Wait(0.3);
         try { if (role == "solo") await QuitResetsSector(); }
         catch (Exception ex) { Check(false, $"sector reset test threw: {ex.GetType().Name}: {ex.Message}"); GD.Print(ex.StackTrace); }
@@ -11774,6 +11786,14 @@ public partial class _Test : Node
             Nodes<Button>(menu).First(b => b.Text == "MEDIUM").EmitSignal(BaseButton.SignalName.Pressed);
             Nodes<Button>(menu).First(b => b.Text == "50%").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.1);
             Check(Mathf.IsEqualApprox(Settings.MusicVolume, 0.5f), "music volume set from the menu");
+            // ...and the harness cap SURVIVES the menu re-applying the volume. Checked here, after
+            // a menu has just written the audio settings, rather than at startup where nothing has
+            // had a chance to overwrite it. 5% as a literal, never Settings.TestVolume: a check
+            // that reads the value it is testing cannot catch the value being wrong.
+            int mbus = AudioServer.GetBusIndex("Master");
+            float lin = mbus < 0 ? -1f : (float)Mathf.DbToLinear(AudioServer.GetBusVolumeDb(mbus));
+            Check(mbus >= 0 && !AudioServer.IsBusMute(mbus) && Mathf.Abs(lin - 0.05f) < 0.001f && Settings.Volume > 0.05f,
+                  $"the harness runs at 5% master volume whatever the settings say ({lin * 100:0.0}%, setting {Settings.Volume * 100:0}%)");
             Key(global::Godot.Key.Escape); await Wait(0.1);
             Check(!H.EscMenuOpen, "Esc closes the menu");
         }
