@@ -273,7 +273,16 @@ Frames looked at. No game code changed.
   failures), `CODE_SNAPSHOT.txt` would break the same way, and every `tools/**/*.sh` would become
   `bad interpreter: /bin/sh^M` in WSL. Caught before any checkout, so nothing was damaged.
 - `version/MANIFEST.sha256` regenerated: **124 entries, all verifying** (118 before, plus `CLAUDE.md`,
-  `.gitattributes` and the four `.ps1` ports). `CODE_SNAPSHOT.txt` is unchanged — no game code moved.
+  `.gitattributes` and the four `.ps1` ports).
+- `version/CODE_SNAPSHOT.txt` regenerated: **63 files, 10714 lines** (was 59 / 10363). It was left
+  stale for one commit on the reasoning that no *game* code had moved — but `project.godot` is in the
+  snapshot and had been adopted from the editor, so the snapshot recorded 43 lines / `076b8ff5db99`
+  against an actual 42 / `aaa06503a405`. The four `.ps1` ports are now in it too, beside the `.sh`
+  files it already carried. **Verified by splitting it back** exactly as its own header describes and
+  comparing all 63 against disk: every one identical.
+- **Known gap, pre-existing:** `typecheck/GodotStub.cs` has never been in `CODE_SNAPSHOT.txt`, though
+  it is tracked code and is what the typecheck falls back on without `GodotSharp.dll`. Not added here
+  — that changes the baseline's scope beyond this change — but "all code" is not currently true.
 
 ### Earlier in Unreleased
 

@@ -595,6 +595,14 @@ Each of these compiled clean and was wrong at runtime. The smoke test covers all
   the Esc menu); automation should open and close things directly.
 - **The version/ folder is the baseline**: `CODE_SNAPSHOT.txt` (all code, split back to verify) and
   `MANIFEST.sha256` (every tracked file). The next session starts with `sha256sum -c` against it.
+- **"No game code changed" does not mean the snapshot is current.** `CODE_SNAPSHOT.txt` carries
+  `project.godot`, the `.tscn` files, the csproj and the harness scripts as well as `scripts/*.cs`.
+  Adopting the editor's `project.godot` changed the snapshot's contents while touching no `.cs` at
+  all, and it shipped stale for a commit on exactly that reasoning. *Rule: regenerate it whenever any
+  file it lists changes, and split it back to prove the result — a baseline that cannot be split back
+  is worse than none, because it still looks authoritative.*
+- **`typecheck/GodotStub.cs` is not in `CODE_SNAPSHOT.txt`** and never has been, despite being
+  tracked code and the typecheck's fallback. "All code" is aspirational until that is fixed.
 - **Sandboxes restart.** Twice a run was lost to a container restart (uptime reset, processes gone,
   files kept). If a background run goes quiet, check `uptime` before suspecting the code.
 - **Background processes die when the command that started them ends** (in this sandbox). A
