@@ -220,7 +220,7 @@ Recorded here so every chunk builds from the written word, not from memory.
   6. **(DONE) +250 EXP for a first kill** of a boss (per boss or per boss level: to be agreed).
   7. **(DONE) Raids after a failed mission are scaled like its boss**: a level-n wave is 1.1^n, like a level-n
      boss. Boss "levels" replace tiers (numbering from 0 or 1: to be agreed).
-  8. **Last: a full code review** — every variable, line, function and reference — with a task list
+  8. **(IN PROGRESS — see docs/REVIEW.md) Last: a full code review** — every variable, line, function and reference — with a task list
      worked recursively until the code is clean.
 - **Chunk 7 — raids (DONE)**: on a failed mission the boss sends patrols in **from the perimeter of the base
   map** against the miners, salvagers, hauler and players.

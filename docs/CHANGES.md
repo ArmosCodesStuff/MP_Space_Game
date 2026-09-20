@@ -39,7 +39,7 @@ history pick the work up from it alone. Update it in the same change as the code
 **State as of 2026-09-18: version 0.3.0 plus Unreleased (see it for everything since: docking arms
 and the unload queue, the fleet and hauler pods, the idle economy, base menu, bunker-buster missile,
 painted turrets, docking bombers and more).** Typecheck clean against the real `GodotSharp.dll`,
-`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 389 checks across
+`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 391 checks across
 a single-player run and a host with two guests. Unlike earlier releases, this one was also **looked at**:
 `tools/screens/run.sh` renders the select screen, the creator, a fresh spawn under the base, both
 classes in the hub, the K window, a bomber strike, and turret close-ups on a virtual display; layout
@@ -180,6 +180,39 @@ reachable, which is fine: both harnesses build from the `nupkgs` folder that shi
 ---
 
 ## Unreleased
+
+### Code review — passes 1 and 2 done; pass 3 begun (`Net.cs` reviewed)
+
+**Checked:** smoke test **three runs in a row, 391 checks each, 0 compiler warnings**; analysers
+**0 findings**; cross-reference **0 unused members**; screenshot sweep **65 frames, complete, 0 lint**;
+the race fix proven by putting the old code back in a copy (caught). The full task list and its
+progress live in `docs/REVIEW.md`.
+
+#### Added
+
+- **`tools/analyse/`**: `run.sh` runs the .NET code analysers over the game scripts (unused members,
+  unread fields, unused assignments and parameters, needless usings, unreachable code); `xref.py` lists
+  public members nothing uses, or only the tests use.
+- **`docs/REVIEW.md`**: the method, both automated passes' results, a findings log, and the
+  line-by-line checklist of every script, riskiest first — ticked only when reviewed and fixed.
+
+#### Fixed
+
+- **A thread race leaked a router port-forward** (`Net.cs`): the UPnP thread stored its handle itself,
+  so a session that ended while the router was answering left UDP 27015 forwarded to this PC. The
+  thread now writes nothing; a stale session's mapping is closed at once.
+- **Tailscale was advised but unusable**: a network-only host on a tailnet now shows and copies its
+  Tailscale address (100.64.0.0/10) — the status already told friends to use Tailscale.
+- **Dead or redundant code removed**: `Combat.NearestHostile`, `Hub.PilotOpen`, `Hub.RaidLevel`, an
+  unused local, `ExpToNext`'s ignored parameter, a duplicated bounty branch.
+- **Comments describing old behaviour** rewritten (`Net.cs`).
+
+#### Open (for the player)
+
+- `Hub.BeginPlacement` — the "left-click to place" mode — is used by no game feature, only its test.
+  Keep it dormant for later, or remove it?
+
+### Earlier in Unreleased
 
 ### Step 3: levels, per-pilot EXP, party scaling — adopted from an interrupted run
 

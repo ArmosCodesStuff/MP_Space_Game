@@ -43,7 +43,7 @@ ticked only when it has been read line by line and everything found in it is fix
 
 | # | File | Lines | Why this position | Reviewed |
 |---|---|---|---|---|
-| 1 | `scripts/Net.cs` | 315 | networking, authority, threads | ☐ |
+| 1 | `scripts/Net.cs` | 315 | networking, authority, threads | ☑ (3 findings, fixed) |
 | 2 | `scripts/SessionMenu.cs` | 118 | networking, authority, threads | ☐ |
 | 3 | `scripts/Hub.cs` | 1175 | the world, input, sessions, sectors, raids, missions | ☐ |
 | 4 | `scripts/PlayerShip.cs` | 746 | combat, authority, replication | ☐ |
@@ -87,4 +87,22 @@ Then the tools: `tools/smoketest/SmokeTest.cs.txt`, `tools/screens/Shots.cs.txt`
 
 ## Findings log (pass 3)
 
-(none yet)
+### `Net.cs` — reviewed; 3 findings, all fixed and covered
+
+1. **A thread race that leaked a router port-forward.** The UPnP thread wrote `_upnp` itself. If the
+   session ended while the router was still answering (discovery takes 2 s+), `Shutdown` cleared it and
+   the thread then set it back to the old session's handle; that session's result was ignored, so the
+   mapping was never deleted — the router kept forwarding UDP 27015 to this PC after the session.
+   **Fix:** the thread writes nothing; the main thread keeps a result only for the current session and
+   **closes a stale session's mapping at once** (`StaleMappingsClosed`). Check added; the old code put
+   back in a copy fails it.
+2. **Tailscale was advised but unusable**: the status recommends Tailscale, yet the address code skipped
+   the Tailscale range (100.64.0.0/10), so a friend on the tailnet was shown a 192.168 address that does
+   not work there. **Fix:** a network-only host on a tailnet shows its Tailscale address, and COPY copies
+   it (`Net.IsTailnet`, `TailnetAddress`). Check added (the range test; a real tailnet is not available
+   here).
+3. **Comments describing old behaviour**: the header listed "loot rolls, refining" (neither exists), and
+   the hosting comment said the public address came from the router. **Rewritten.**
+
+Also noted, not changed: `Join` parses "address:port" by the last colon, so a bare IPv6 address would
+be misread — IPv4 is all the game hosts on; to revisit only if IPv6 is wanted.
