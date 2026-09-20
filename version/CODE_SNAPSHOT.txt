@@ -1,8 +1,8 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-20 03:17 at git commit 75055f4: typecheck clean, smoke test 3/3 passes
-//   (397 checks, 0 compiler warnings, 0 analyser findings), 65-frame UI sweep complete, 0 lint.
-// 56 files, 9872 lines. Code only: sprites, sounds and docs are in the zip.
+// Taken 2026-09-20 03:45 at git commit 6435f19: typecheck clean, smoke test 3/3 passes
+//   (402 checks, 0 compiler warnings, 0 analyser findings), 66-frame UI sweep complete, 0 lint.
+// 57 files, 10007 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -24,7 +24,7 @@
 //   scripts/Character.cs                           175 lines   sha256 27d1b45e6c39
 //   scripts/CharacterCreator.cs                    211 lines   sha256 136099a8d1c7
 //   scripts/CharacterSelect.cs                     171 lines   sha256 dc2bfeccc820
-//   scripts/Combat.cs                               81 lines   sha256 78dd05ef3d94
+//   scripts/Combat.cs                               85 lines   sha256 96277c4efc6f
 //   scripts/Economy.cs                              79 lines   sha256 441cc5b6c922
 //   scripts/EscMenu.cs                              59 lines   sha256 999b01e6cd29
 //   scripts/EscapePod.cs                            50 lines   sha256 324c55cb503b
@@ -32,7 +32,7 @@
 //   scripts/Gatherer.cs                            249 lines   sha256 f64121c0c5f7
 //   scripts/Hauler.cs                              316 lines   sha256 b471204daf64
 //   scripts/HealthBar.cs                            36 lines   sha256 97c42a282205
-//   scripts/Hub.cs                                1197 lines   sha256 e9257fc39822
+//   scripts/Hub.cs                                1210 lines   sha256 964b28ff9280
 //   scripts/MainMenu.cs                            224 lines   sha256 39dbc31417c6
 //   scripts/Missions.cs                             38 lines   sha256 35ba5cda832e
 //   scripts/Music.cs                                78 lines   sha256 19cdf8e2b59c
@@ -45,10 +45,11 @@
 //   scripts/Raider.cs                              288 lines   sha256 669fda8aafe0
 //   scripts/SessionMenu.cs                         120 lines   sha256 ecdca865f3ee
 //   scripts/Settings.cs                             58 lines   sha256 80100257eda5
-//   scripts/Sfx.cs                                  65 lines   sha256 4a51ee11de9a
+//   scripts/Sfx.cs                                  69 lines   sha256 c5ce9c91a433
+//   scripts/Shell.cs                                47 lines   sha256 1b8121bc103b
 //   scripts/Shield.cs                               71 lines   sha256 99c7fa4a2a8e
-//   scripts/ShipClasses.cs                         509 lines   sha256 0b56a0779739
-//   scripts/Stats.cs                               159 lines   sha256 003a2581b786
+//   scripts/ShipClasses.cs                         514 lines   sha256 fbb084a25bdd
+//   scripts/Stats.cs                               161 lines   sha256 bad238605cb0
 //   scripts/StatsWindow.cs                         198 lines   sha256 8b5c9f76adc7
 //   scripts/TargetDummy.cs                         132 lines   sha256 93fe3de91ba6
 //   scripts/Telegraph.cs                            47 lines   sha256 89f6af49c4d7
@@ -61,9 +62,9 @@
 //   tools/analyse/analysers.editorconfig            15 lines   sha256 45fdb7258163
 //   tools/analyse/run.sh                            16 lines   sha256 e6f2cd50f0c4
 //   tools/analyse/xref.py                           19 lines   sha256 9359eb94c161
-//   tools/screens/Shots.cs.txt                     437 lines   sha256 bb52f9c6f5e0
+//   tools/screens/Shots.cs.txt                     450 lines   sha256 cd9e7454f69d
 //   tools/screens/run.sh                            42 lines   sha256 73a5b3c63476
-//   tools/smoketest/SmokeTest.cs.txt              1640 lines   sha256 7e5de52a98d2
+//   tools/smoketest/SmokeTest.cs.txt              1687 lines   sha256 93f4671f97a4
 //   tools/smoketest/run.sh                          57 lines   sha256 568b677787fd
 //==============================================================================
 
@@ -1517,7 +1518,7 @@ public partial class CharacterSelect : Control
 
 //==============================================================================
 // FILE: scripts/Combat.cs
-// 81 lines   sha256 78dd05ef3d94
+// 85 lines   sha256 96277c4efc6f
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -1593,6 +1594,10 @@ public static class Combat
     // hostile = fired BY an enemy, so it seeks and hits player ships, not hostiles.
     // source: the player ship that fired it (host only), credited with combat on a hit.
     public static System.Action<Vector2, Vector2, float, float, double, int, float, bool, bool, PlayerShip, string, float> OnTorpedo;
+    // a battleship's shell (the host's does the damage; guests fly a cosmetic copy)
+    public static System.Action<Vector2, Vector2, float, float, double, PlayerShip> OnShell;
+    public static void FireShell(Vector2 from, Vector2 dir, float speed, float range, double damage, PlayerShip source)
+        => OnShell?.Invoke(from, dir.Normalized(), speed, range, damage, source);
     public static void LaunchTorpedo(Vector2 from, Vector2 dir, float speed, float range, double damage,
                                      int targetId = 0, float turnRate = 0f, bool heavy = false, bool hostile = false,
                                      PlayerShip source = null, string hitSource = null, float size = 1f)
@@ -2445,7 +2450,7 @@ public static class HealthBar
 
 //==============================================================================
 // FILE: scripts/Hub.cs
-// 1197 lines   sha256 e9257fc39822
+// 1210 lines   sha256 964b28ff9280
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -2645,6 +2650,12 @@ public partial class Hub : Node2D
         };
         // Torpedoes: the host's copy deals damage; guests get the launch and fly a
         // cosmetic copy (the run is straight and steady, so it lands in the same place).
+        Combat.OnShell = (from, dir, speed, range, dmg, source) =>
+        {
+            AddChild(new Shell { Position = from, Dir = dir, Speed = speed, Range = range, Damage = dmg, Source = source });
+            Sfx.Cannon(from);
+            if (Net.IsHost && Net.IsOnline) Rpc(nameof(NetShell), from, dir, speed, range);
+        };
         Combat.OnTorpedo = (from, dir, speed, range, dmg, target, turn, heavy, hostile, source, hitSource, size) =>
         {
             int id = hostile ? Combat.NextMissileId() : 0;       // hostile missiles can be shot down
@@ -3459,6 +3470,13 @@ public partial class Hub : Node2D
             }
             GetViewport().SetInputAsHandled();
         }
+    }
+
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void NetShell(Vector2 from, Vector2 dir, float speed, float range)
+    {
+        AddChild(new Shell { Position = from, Dir = dir, Speed = speed, Range = range, Cosmetic = true });
+        Sfx.Cannon(from);
     }
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
@@ -5887,7 +5905,7 @@ public static class Settings
 
 //==============================================================================
 // FILE: scripts/Sfx.cs
-// 65 lines   sha256 4a51ee11de9a
+// 69 lines   sha256 c5ce9c91a433
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -5907,7 +5925,8 @@ public static class Sfx
     static readonly string[] Names = { "laser_light", "laser_boss", "laser_hit", "missile_whoosh", "impact_thunk" };
     static readonly Dictionary<string, AudioStream> _streams = new();
     static readonly Dictionary<string, double> _last = new();
-    static readonly Dictionary<string, double> _gap = new() { ["laser_light"] = 0.04, ["laser_boss"] = 0.08, ["laser_hit"] = 0.03, ["missile_whoosh"] = 0.05, ["impact_thunk"] = 0.05 };
+    static readonly Dictionary<string, string> _alias = new() { ["cannon"] = "impact_thunk" };   // a sound played its own way
+    static readonly Dictionary<string, double> _gap = new() { ["cannon"] = 0.05, ["laser_light"] = 0.04, ["laser_boss"] = 0.08, ["laser_hit"] = 0.03, ["missile_whoosh"] = 0.05, ["impact_thunk"] = 0.05 };
     public static readonly Dictionary<string, int> Played = new();            // for the smoke test
     static Node _pool; static int _next;
     const int Voices = 16;
@@ -5929,6 +5948,8 @@ public static class Sfx
     }
     public static void Missile(Vector2 at) => Play("missile_whoosh", at, -8f, 1f);
     public static void Impact(Vector2 at) => Play("impact_thunk", at, -2f, 1f);
+    // a battleship gun: the thunk, higher and quieter -- a cannon's report, not a laser's buzz
+    public static void Cannon(Vector2 at) => Play("cannon", at, -9f, 1.7f);
 
     static void Play(string name, Vector2 at, float trimDb, float pitch)
     {
@@ -5947,12 +5968,65 @@ public static class Sfx
             tree.Root.CallDeferred(Node.MethodName.AddChild, _pool);
             for (int i = 0; i < Voices; i++) _pool.AddChild(new AudioStreamPlayer());
             foreach (var s in Names) _streams[s] = GD.Load<AudioStream>($"res://sfx/{s}.wav");
+            foreach (var kv in _alias) _streams[kv.Key] = _streams[kv.Value];
         }
         var p = _pool.GetChild<AudioStreamPlayer>(_next); _next = (_next + 1) % Voices;
         p.Stream = _streams[name]; p.VolumeDb = db + trimDb; p.PitchScale = pitch;
         if (p.IsInsideTree()) p.Play(); else p.CallDeferred(AudioStreamPlayer.MethodName.Play);
     }
     static bool IsInstanceValid(Node n) => n != null && GodotObject.IsInstanceValid(n);
+}
+
+//==============================================================================
+// FILE: scripts/Shell.cs
+// 47 lines   sha256 1b8121bc103b
+//==============================================================================
+using Godot;
+using System.Linq;
+
+// A BATTLESHIP SHELL: the main guns' round. It flies straight -- no tracking -- at 4x the
+// ship's missile speed, as far as the guns' range, and hits the first hostile it touches
+// (never a missile: that is point defence's job). The host's shell does the damage; guests
+// fly a cosmetic copy. Its path is swept in short steps each frame, so it cannot pass
+// through a small target between frames.
+public partial class Shell : Node2D
+{
+    public const float SpeedMult = 4f;         // x the ship's missile speed
+    public Vector2 Dir; public float Speed, Range; public double Damage;
+    public bool Cosmetic; public PlayerShip Source;
+    private float _flown;
+
+    public override void _Ready() { ZIndex = 6; Rotation = Dir.Angle() + Mathf.Pi / 2f; }
+
+    public override void _Process(double delta)
+    {
+        float step = Speed * (float)delta;
+        var from = Position;
+        Position += Dir * step; _flown += step;
+        if (!Cosmetic && Net.Sim)
+        {
+            int n = Mathf.Max(1, Mathf.CeilToInt(step / 6f));
+            for (int i = 1; i <= n; i++)
+            {
+                var p = from.Lerp(Position, (float)i / n);
+                var hit = Combat.Hostiles.FirstOrDefault(h => h != null && h.Alive && h is not Torpedo && h.Covers(p, 3f));
+                if (hit == null) continue;
+                hit.TakeDamage(Damage);
+                Source?.NoteCombat();
+                Sfx.Impact(p);
+                QueueFree(); return;
+            }
+        }
+        if (_flown >= Range) QueueFree();
+        QueueRedraw();
+    }
+
+    public override void _Draw()
+    {   // a bright slug with a short glow behind it
+        DrawLine(new Vector2(0, 4f), new Vector2(0, 22f), new Color(1f, 0.75f, 0.35f, 0.35f), 3f);
+        DrawRect(new Rect2(-1.8f, -5f, 3.6f, 9f), new Color(1f, 0.92f, 0.7f));
+        DrawColoredPolygon(new[] { new Vector2(-1.8f, -5f), new Vector2(0, -8f), new Vector2(1.8f, -5f) }, new Color(1f, 0.85f, 0.5f));
+    }
 }
 
 //==============================================================================
@@ -6033,7 +6107,7 @@ public partial class ShieldFlash : Node2D
 
 //==============================================================================
 // FILE: scripts/ShipClasses.cs
-// 509 lines   sha256 0b56a0779739
+// 514 lines   sha256 fbb084a25bdd
 //==============================================================================
 using System.Linq;
 using Godot;
@@ -6189,6 +6263,11 @@ public partial class Turret : Node2D
         if (!Net.Sim) return;
         var dir = Vector2.Right.Rotated(GlobalRotation);
         var from = GlobalPosition + dir * BarrelLength;
+        if (!PointDefense)
+        {   // the main guns fire SHELLS: straight, 4x the missile's speed, as far as their range
+            Combat.FireShell(from, dir, (float)S["missile_speed"] * Shell.SpeedMult, Range, ShotDamage, Ship);
+            return;
+        }
         var hit = Combat.RayHit(from, dir, Range, out var end);
         hit?.TakeDamage(ShotDamage);
         if (hit != null) Ship.NoteCombat();
@@ -6547,7 +6626,7 @@ public partial class Wing : Node2D
 
 //==============================================================================
 // FILE: scripts/Stats.cs
-// 159 lines   sha256 003a2581b786
+// 161 lines   sha256 bad238605cb0
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -6616,7 +6695,9 @@ public class ShipStats
         if (bs)
         {
             Add("Main guns", "main_count",    "Barrels",            4, "", 0);
-            Add("Main guns", "main_damage",   "Damage per shot",    1.5, "", 2);
+            // 5.9 a shell: the battleship's total (main + missiles, ~23.9 DPS) is 1.25x the carrier's
+            // MEASURED sustained output (19.07 DPS: fighters and bomber strikes on a dummy, 90 s)
+            Add("Main guns", "main_damage",   "Damage per shot",    5.9, "", 2);
             Add("Main guns", "main_interval", "Reload (per barrel)",1.0, "s", 2, inverse: true);
             Add("Main guns", "main_range",    "Range",              720, "u", 0);
             Add("Main guns", "main_turn",     "Turret turn rate",   Mathf.Tau / 4f, "rad/s", 2);
@@ -6653,7 +6734,7 @@ public class ShipStats
             Add("Fighters", "fighter_burst",    "Firing before rest", 15, "s", 0);
             Add("Fighters", "fighter_rest",     "Rest, docked inside", 3, "s", 0, inverse: true);
             Add("Fighters", "fighter_turn",     "Turn rate",        3.5, "rad/s", 1);
-            Add("Fighters", "control_range",    "Control range",    1400, "u", 0);
+            Add("Fighters", "control_range",    "Control range",    1080, "u", 0);   // 1.5x the battleship's guns (720)
 
             // An active ability. Torpedoes run straight and steady: no tracking, so a
             // moving target can step out of the way.
@@ -8025,7 +8106,7 @@ print('USED ONLY BY TESTS:', len(test_only)); [print('  ' + x) for x in sorted(t
 
 //==============================================================================
 // FILE: tools/screens/Shots.cs.txt
-// 437 lines   sha256 bb52f9c6f5e0
+// 450 lines   sha256 cd9e7454f69d
 //==============================================================================
 // Screenshot driver. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Shots.cs, registers it as an autoload, and runs the real
@@ -8323,6 +8404,19 @@ public partial class _Shots : Node
             await Snap("44_layout_overview");
             zp.SetValue(H, z0); os.Visible = true;
         }
+        // battleship shells in flight toward a dummy
+        {
+            var gs2 = H.GetNode<PlayerShip>("Ship_1"); var gd2 = H.GetNode<TargetDummy>("TargetDummy1");
+            gs2.Position = gd2.Position + new Vector2(0, 560); gs2.Velocity = Vector2.Zero; gs2.Rotation = 0f;
+            var zp = typeof(Hub).GetProperty("ZoomLevel"); float z0 = (float)zp.GetValue(H); zp.SetValue(H, 1.1f);
+            gs2.AimPoint = gd2.Position; await W(1.4);
+            // fire the main turrets directly (as the game does when the trigger is held), twice
+            var mains = gs2.FindChildren("*", "", true, false).OfType<Turret>().Where(x => !x.PointDefense).ToList();
+            foreach (var m in mains) m.Shoot(); await W(0.25);
+            foreach (var m in mains) m.Shoot(); await W(0.3);
+            await Snap("54_shells_in_flight");
+            zp.SetValue(H, z0); await W(1.5);
+        }
         // the player's missile, close up: the camera rides a stand-in over it
         {
             var ms = H.GetNode<PlayerShip>("Ship_1"); var md = H.GetNode<TargetDummy>("TargetDummy1");
@@ -8514,7 +8608,7 @@ ls /tmp/shots
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 1640 lines   sha256 7e5de52a98d2
+// 1687 lines   sha256 93f4671f97a4
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -8918,7 +9012,7 @@ public partial class _Test : Node
         Check(Count<StatsWindow>() == 1, "K opens the ability & stats window");
         var win = Nodes<StatsWindow>().First();
         var labels = Nodes<Label>(win).Select(l => l.Text).ToList();
-        Check(labels.Any(x => x.Contains("Main guns (4 barrels):  6.00 DPS")) && labels.Any(x => x.Contains("Turning radius")), "stats tab: gun DPS and helm stats");
+        Check(labels.Any(x => x.Contains("Main guns (4 barrels):  23.60 DPS")) && labels.Any(x => x.Contains("Turning radius")), "stats tab: gun DPS and helm stats");
         Check(Nodes<HBoxContainer>(win).Count(r => r.Name.ToString().StartsWith("Key_")) == 11, "keys tab lists the battleship's 5 abilities + 6 open slots");
         Check(Enumerable.Range(1, 6).All(i => Abilities.KeyFor(ShipClass.Battleship, $"open{i}") == global::Godot.Key.Key0 + i)
               && Abilities.For(ShipClass.Carrier).Count(a => a.Open) == 6 && Abilities.For((ShipClass)99).Length == 6,
@@ -8962,14 +9056,16 @@ public partial class _Test : Node
         Check(dummy.Total == 0, "no fire without Space");
 
         ship.Staggered = false; dummy.ResetMeter();
-        KeyDown(global::Godot.Key.Space); await Wait(20.0); KeyUp(global::Godot.Key.Space);
+        // shells take ~1 s to arrive: wait for the last ones before reading the total
+        KeyDown(global::Godot.Key.Space); await Wait(20.0); KeyUp(global::Godot.Key.Space); await Wait(1.5);
         double salvo = dummy.Total; await Wait(1.2);
         ship.Staggered = true; dummy.ResetMeter();
-        KeyDown(global::Godot.Key.Space); await Wait(20.0); KeyUp(global::Godot.Key.Space);
+        KeyDown(global::Godot.Key.Space); await Wait(20.0); KeyUp(global::Godot.Key.Space); await Wait(1.5);
         double stag = dummy.Total;
         GD.Print($"  salvo {salvo:0.0} dmg / 20s;  staggered {stag:0.0} / 20s;  sheet {ship.Stats.MainDps:0.000} DPS");
-        Check(Math.Abs(salvo - 120) <= 6.01, "salvo delivers the sheet's 6.0 DPS (±1 salvo)");
-        Check(Math.Abs(stag - 120) <= 1.51, "staggered delivers the sheet's 6.0 DPS (±1 shot)");
+        double want20 = ship.Stats.MainDps * 20, oneShot = ship.Stats["main_damage"];
+        Check(Math.Abs(salvo - want20) <= 4 * oneShot + 0.01, $"salvo delivers the sheet's {ship.Stats.MainDps:0.0} DPS (±1 salvo)");
+        Check(Math.Abs(stag - want20) <= oneShot + 0.01, $"staggered delivers the sheet's {ship.Stats.MainDps:0.0} DPS (±1 shot)");
         bool before = ship.Staggered; Key(global::Godot.Key.G); await Wait(0.05);
         Check(ship.Staggered != before, "G toggles salvo / staggered");
 
@@ -9021,6 +9117,33 @@ public partial class _Test : Node
         Check(turned > 0.05 && turned <= ship.Stats["missile_turn"] + 0.01, "it steers toward the target, but no faster than 0.35 rad/s");
         await Wait(6.0); d1.Position = dhome;
         Key(global::Godot.Key.R); await Wait(16.2);                  // leave it loaded for what follows
+
+        // ── the main guns fire SHELLS: straight, 4x the missile's speed, damage on arrival ──
+        {
+            var gs = Me; var gd = H.GetNode<TargetDummy>("TargetDummy1");
+            var gKeep = gs.Position; gs.Position = gd.Position + new Vector2(0, 520); gs.Velocity = Vector2.Zero; gs.Rotation = 0f; await Wait(0.6);
+            AimWorld(gd.Position); await Wait(1.2);                                   // turrets swing onto it
+            await Wait(TargetDummy.IdleReset + 0.2); gd.ResetMeter();
+            Input.ParseInputEvent(new InputEventKey { Keycode = global::Godot.Key.Space, PhysicalKeycode = global::Godot.Key.Space, Pressed = true });
+            Shell sh1 = null;
+            for (int i = 0; i < 90 && sh1 == null; i++) { AimWorld(gd.Position); sh1 = Nodes<Shell>().FirstOrDefault(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            Input.ParseInputEvent(new InputEventKey { Keycode = global::Godot.Key.Space, PhysicalKeycode = global::Godot.Key.Space, Pressed = false });
+            double atFire = gd.Total;
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            var sp0 = sh1.Position; var sd0 = sh1.Dir;
+            for (int i = 0; i < 10; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            float shSpd = GodotObject.IsInstanceValid(sh1) ? (sh1.Position - sp0).Length() / (10f / 60f) : 0f;
+            Check(Math.Abs(shSpd - 4 * (float)gs.Stats["missile_speed"]) < 6f && GodotObject.IsInstanceValid(sh1) && sh1.Dir == sd0 && atFire == 0,
+                  $"the guns fire shells at 4x the missile's speed ({shSpd:0} u/s), straight, and nothing lands at once");
+            for (int i = 0; i < 90 && gd.Total == 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(gd.Total > 0 && Math.Abs(gd.Total % gs.Stats["main_damage"]) < 1e-6 && gs.Stats["main_damage"] == 5.9, $"a shell lands for 5.9 ({gd.Total:0.0})");
+            // the balance: the battleship's total is 1.25x the carrier's measured 19.07 DPS; the carrier reaches 1.5x as far
+            var bsS = new ShipStats(ShipClass.Battleship); var caS = new ShipStats(ShipClass.Carrier);
+            double bsTotal = bsS.MainDps + bsS.MissileDps;
+            Check(Math.Abs(bsTotal / 19.07 - 1.25) < 0.02, $"the battleship's damage ({bsTotal:0.00} DPS) is 1.25x the carrier's measured 19.07");
+            Check(Math.Abs(caS["control_range"] - 1.5 * bsS["main_range"]) < 1e-6, "the carrier reaches 1.5x as far as the battleship's guns (1080 u)");
+            gs.Position = gKeep; gs.Velocity = Vector2.Zero; await Wait(0.5);
+        }
 
         // ── warp (V): every capital ship; a hull cooldown, not a slot ──
         {
@@ -9115,8 +9238,8 @@ public partial class _Test : Node
         await CheckDocks(6);
         Character.Bonuses.Remove("bomber_count"); ship.SetClass(ship.Class); ship = Me;
         ship.Velocity = Vector2.Zero;
-        Check(Math.Abs(ship.Stats["control_range"] - 1400) < 0.01 && Math.Abs(ship.Stats["strike_range"] - 2800) < 0.01,
-              "fighter control range 1400 (doubled); bomber strike range 2800 (2x)");
+        Check(Math.Abs(ship.Stats["control_range"] - 1080) < 0.01 && Math.Abs(ship.Stats["strike_range"] - 2160) < 0.01,
+              "fighter control range 1080 (1.5x the battleship's guns); bomber strike range 2160 (2x)");
         var spr = Nodes<Sprite2D>(ship).First();
         Check(spr.Texture.ResourcePath.EndsWith("carrier_player.png") && Math.Abs(spr.Texture.GetHeight() * spr.Scale.Y - 170f) < 0.5f,
               "carrier flies the new symmetrical sprite at 170 u");
@@ -9244,6 +9367,24 @@ public partial class _Test : Node
         Check(allHome && topSeen > 90f && Bombers().All(w => w.RearmLeft > 0 || w.Armed),
               $"with the carrier at full speed ({topSeen:0} u/s), the bombers still dock and re-arm");
         ship.Velocity = Vector2.Zero; await Wait(15.0);
+        // the balance's reference: the carrier's MEASURED output (19.07 DPS over 90 s when set); re-measured
+        // here over 40 s -- lumpier (bomber strikes land in lumps), so within 25% -- to catch it drifting
+        {
+            var md = H.GetNode<TargetDummy>("TargetDummy1");
+            Click(Scr(md.Position)); await Wait(0.1);
+            await Wait(TargetDummy.IdleReset + 0.2); md.ResetMeter();
+            Key(global::Godot.Key.Space); await Wait(0.05); Key(global::Godot.Key.F); await Wait(0.05);
+            for (int i = 0; i < 60 * 40; i++)
+            {
+                ship.Position = md.Position + new Vector2(0, 520); ship.Velocity = Vector2.Zero;
+                if (i % 30 == 0 && ship.BombersReady == (int)ship.Stats["bomber_count"] && ship.StrikeTarget == null) Key(global::Godot.Key.F);
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            }
+            double carrierDps = md.Total / 40.0;
+            GD.Print($"  carrier measured: {carrierDps:0.00} DPS over 40 s (reference 19.07)");
+            Check(Math.Abs(carrierDps / 19.07 - 1) < 0.25, $"the carrier still delivers about the measured 19.07 DPS the balance rests on ({carrierDps:0.00})");
+            Key(global::Godot.Key.R); await Wait(12.0);                       // recall the wing for what follows
+        }
 
         // No tracking, tested on single torpedoes so bombers cannot re-aim: moving
         // the target during a whole strike is not a fair test, because a bomber still
