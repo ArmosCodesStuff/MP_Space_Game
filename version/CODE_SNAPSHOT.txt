@@ -1,8 +1,8 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-20 03:45 at git commit 6435f19: typecheck clean, smoke test 3/3 passes
-//   (402 checks, 0 compiler warnings, 0 analyser findings), 66-frame UI sweep complete, 0 lint.
-// 57 files, 10007 lines. Code only: sprites, sounds and docs are in the zip.
+// Taken 2026-09-20 04:00 at git commit c56001a: typecheck clean, smoke test 3/3 passes
+//   (404 checks, 0 compiler warnings, 0 analyser findings), UI sweep complete, 0 lint.
+// 57 files, 10034 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -38,7 +38,7 @@
 //   scripts/Music.cs                                78 lines   sha256 19cdf8e2b59c
 //   scripts/Net.cs                                 334 lines   sha256 b93e2a57999c
 //   scripts/PilotWindow.cs                          54 lines   sha256 9164aa7d0c8d
-//   scripts/PlayerShip.cs                          746 lines   sha256 02cd1c15341d
+//   scripts/PlayerShip.cs                          755 lines   sha256 d1cfb5aad16c
 //   scripts/Plume.cs                                25 lines   sha256 cdbeb9b8fc58
 //   scripts/Progression.cs                          86 lines   sha256 c9a5dc290c4d
 //   scripts/Radar.cs                               129 lines   sha256 189719fcc94f
@@ -64,7 +64,7 @@
 //   tools/analyse/xref.py                           19 lines   sha256 9359eb94c161
 //   tools/screens/Shots.cs.txt                     450 lines   sha256 cd9e7454f69d
 //   tools/screens/run.sh                            42 lines   sha256 73a5b3c63476
-//   tools/smoketest/SmokeTest.cs.txt              1687 lines   sha256 93f4671f97a4
+//   tools/smoketest/SmokeTest.cs.txt              1705 lines   sha256 e9078c915f60
 //   tools/smoketest/run.sh                          57 lines   sha256 568b677787fd
 //==============================================================================
 
@@ -4418,7 +4418,7 @@ public partial class PilotWindow : PanelContainer
 
 //==============================================================================
 // FILE: scripts/PlayerShip.cs
-// 746 lines   sha256 02cd1c15341d
+// 755 lines   sha256 d1cfb5aad16c
 //==============================================================================
 using Godot;
 using System;
@@ -5030,11 +5030,18 @@ public partial class PlayerShip : Node2D, IHittable
         across *= Mathf.Exp(-(float)Stats["keel"] * dt);
 
         // turning circle: yaw rate = speed / radius, capped by the rudder; astern the
-        // rudder reverses, as it does on a real ship
-        float cap = Mathf.Min(Mathf.Abs(along) / (float)Stats["turn_radius"], (float)Stats["turn_rate"]);
-        float want = rudder * cap * Mathf.Sign(along == 0 ? 1 : along);
-        _yawRate = Mathf.MoveToward(_yawRate, want, 2.5f * dt);     // the rudder takes a moment to bite
-        if (Mathf.Abs(along) < 0.5f || Pinned) _yawRate = 0f;                // pinned: it cannot turn
+        // rudder reverses, as it does on a real ship. At or below 5% of top speed the
+        // rudder PIVOTS the hull slowly on the spot instead, like a tank -- the heading
+        // turns, nothing moves the hull sideways (no strafing). Pinned: no turning at all.
+        if (!Pinned && Mathf.Abs(along) <= PivotBelow * (float)Stats["max_speed"])
+            _yawRate = Mathf.MoveToward(_yawRate, rudder * PivotRate, 2.5f * dt);
+        else
+        {
+            float cap = Mathf.Min(Mathf.Abs(along) / (float)Stats["turn_radius"], (float)Stats["turn_rate"]);
+            float want = rudder * cap * Mathf.Sign(along == 0 ? 1 : along);
+            _yawRate = Mathf.MoveToward(_yawRate, want, 2.5f * dt);     // the rudder takes a moment to bite
+            if (Pinned) _yawRate = 0f;                                  // pinned: it cannot turn
+        }
         Rotation += _yawRate * dt;
 
         fwd = Vector2.Up.Rotated(Rotation); side = new Vector2(-fwd.Y, fwd.X);
@@ -5043,6 +5050,8 @@ public partial class PlayerShip : Node2D, IHittable
     }
 
     public float SpeedAhead => Velocity.Dot(Vector2.Up.Rotated(Rotation));
+    public const float PivotBelow = 0.05f;                     // the pivot works at <= 5% of top speed
+    public static readonly float PivotRate = Mathf.DegToRad(10f);   // slowly: 10 degrees a second
 
     // ── everyone else follows it ─────────────────────────────────────────────
     private void RemoteFollow(float dt)
@@ -8608,7 +8617,7 @@ ls /tmp/shots
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 1687 lines   sha256 93f4671f97a4
+// 1705 lines   sha256 e9078c915f60
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -8987,9 +8996,12 @@ public partial class _Test : Node
         // ── naval helm ──
         await Park(new Vector2(-1200, 1400));
         var p0 = ship.Position; float r0 = ship.Rotation;
-        KeyDown(global::Godot.Key.A); await Wait(1.5); KeyUp(global::Godot.Key.A);
-        KeyDown(global::Godot.Key.D); await Wait(1.5); KeyUp(global::Godot.Key.D);
-        Check(Mathf.Abs(ship.Rotation - r0) < 0.001f && ship.Position.DistanceTo(p0) < 0.5f, "dead in the water: A/D neither pivot nor strafe");
+        // dead in the water: A/D PIVOT the hull slowly (10 deg/s) -- and never strafe
+        KeyDown(global::Godot.Key.A); await Wait(1.5); KeyUp(global::Godot.Key.A); await Wait(0.2);
+        float portTurn = Mathf.RadToDeg(Mathf.AngleDifference(r0, ship.Rotation));
+        KeyDown(global::Godot.Key.D); await Wait(1.5); KeyUp(global::Godot.Key.D); await Wait(0.2);
+        Check(portTurn < -12f && portTurn > -18f && Mathf.Abs(Mathf.AngleDifference(r0, ship.Rotation)) < Mathf.DegToRad(2f) && ship.Position.DistanceTo(p0) < 0.5f,
+              $"dead in the water: A/D pivot the hull slowly ({portTurn:0.0} deg, then back) and never strafe");
         KeyDown(global::Godot.Key.W); await Wait(4.0);
         var fwd = Vector2.Up.Rotated(ship.Rotation);
         Check(ship.SpeedAhead > 0.95 * ship.Stats["max_speed"] && (ship.Position - p0).Normalized().Dot(fwd) > 0.999f, $"W drives ahead along the keel ({ship.SpeedAhead:0} u/s)");
@@ -9006,6 +9018,21 @@ public partial class _Test : Node
         KeyUp(global::Godot.Key.D); KeyUp(global::Godot.Key.W);
         KeyDown(global::Godot.Key.S); await Wait(8.0); KeyUp(global::Godot.Key.S);
         Check(ship.SpeedAhead < -10 && ship.SpeedAhead >= -ship.Stats["reverse_speed"] - 0.5, $"S drives astern, capped ({ship.SpeedAhead:0} u/s)");
+        // turning in place: at rest (<= 5% of top speed) the rudder pivots the hull, 10 deg/s, no strafing
+        {
+            ship.Velocity = Vector2.Zero; await Wait(0.5);
+            var pp0 = ship.Position; float pr0 = ship.Rotation;
+            KeyDown(global::Godot.Key.D); await Wait(2.0); KeyUp(global::Godot.Key.D);
+            float pivoted = Mathf.RadToDeg(Mathf.AngleDifference(pr0, ship.Rotation));
+            Check(Math.Abs(pivoted - 20f) < 3f && ship.Position.DistanceTo(pp0) < 1f && ship.Velocity.Length() < 0.5f,
+                  $"at rest, D pivots the hull on the spot at 10 deg/s ({pivoted:0.0} deg in 2 s), without sliding");
+            ship.Velocity = Vector2.Up.Rotated(ship.Rotation) * (float)ship.Stats["max_speed"] * 0.6f;   // well above 5%
+            float pr1 = ship.Rotation;
+            KeyDown(global::Godot.Key.D); await Wait(1.0); KeyUp(global::Godot.Key.D);
+            float underWay = Mathf.RadToDeg(Mathf.AngleDifference(pr1, ship.Rotation));
+            Check(underWay > 15f, $"under way it turns by the rudder as before, far faster ({underWay:0} deg in 1 s)");
+            ship.Velocity = Vector2.Zero; await Wait(0.5);
+        }
 
         // ── the K window: tabs, stats, rebinding ──
         Key(global::Godot.Key.K); await Wait(0.1);
