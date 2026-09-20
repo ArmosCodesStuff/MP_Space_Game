@@ -16,16 +16,16 @@ public partial class EscMenu : CanvasLayer
         var col = new VBoxContainer { CustomMinimumSize = new Vector2(340, 0) };
         col.AddThemeConstantOverride("separation", 10);
         centre.AddChild(Ui.Wrap(col, 16));
-        var title = new Label { Text = "MENU", HorizontalAlignment = HorizontalAlignment.Center };
-        title.AddThemeFontSizeOverride("font_size", 22);
+        var title = Ui.Lbl("MENU", Ui.Title, Ui.Accent);
+        title.HorizontalAlignment = HorizontalAlignment.Center;
         col.AddChild(title);
 
-        col.AddChild(new Label { Text = "Radar size" });
+        col.AddChild(Ui.Heading("Radar size"));
         col.AddChild(Choice(new[] { "SMALL", "MEDIUM", "LARGE" }, () => Settings.RadarSize, i => Settings.RadarSize = i, "Radar"));
         var music = new Button { Name = "MusicToggle", FocusMode = Control.FocusModeEnum.None, Text = Settings.MusicOn ? "MUSIC: ON" : "MUSIC: OFF" };
         music.Pressed += () => { Settings.MusicOn = !Settings.MusicOn; Settings.Save(); music.Text = Settings.MusicOn ? "MUSIC: ON" : "MUSIC: OFF"; };
         col.AddChild(music);
-        col.AddChild(new Label { Text = "Music volume" });
+        col.AddChild(Ui.Heading("Music volume"));
         var steps = new[] { 0f, 0.25f, 0.5f, 0.75f, 1f };
         col.AddChild(Choice(new[] { "0%", "25%", "50%", "75%", "100%" },
                             () => System.Array.FindIndex(steps, v => Mathf.IsEqualApprox(v, Settings.MusicVolume)),
@@ -37,7 +37,9 @@ public partial class EscMenu : CanvasLayer
         var quit = new Button { Text = "QUIT TO MAIN MENU", Name = "Quit", FocusMode = Control.FocusModeEnum.None, CustomMinimumSize = new Vector2(0, 38) };
         quit.Pressed += () => { Net.I?.GoOffline(); GetTree().ChangeSceneToFile("res://MainMenu.tscn"); };
         col.AddChild(quit);
-        col.AddChild(new Label { Text = "Esc closes.", Modulate = new Color(1, 1, 1, 0.5f), HorizontalAlignment = HorizontalAlignment.Center });
+        var foot = Ui.Lbl("Esc closes.", Ui.Small, Ui.Dim);
+        foot.HorizontalAlignment = HorizontalAlignment.Center;
+        col.AddChild(foot);
     }
 
     // a row of toggle buttons, one pressed; choosing saves the setting

@@ -1,9 +1,9 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-20 17:07 at git commit 08fad8b: typecheck clean, dotnet build 0 warnings,
+// Taken 2026-09-20 17:29 at git commit ea7a5f2: typecheck clean, dotnet build 0 warnings,
 //   0 analyser findings, 0 unused members; smoke test 3/3 runs at 435 checks on Windows
 //   (437 in a sandbox with no router and no internet); 67-frame UI sweep complete, 0 lint.
-// 67 files, 11779 lines. Code only: sprites, sounds and docs are in the zip.
+// 67 files, 11833 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -29,26 +29,26 @@
 //   scripts/Combat.cs                               87 lines   sha256 298c5236a5b5
 //   scripts/Economy.cs                              81 lines   sha256 c9aa43070257
 //   scripts/Equipment.cs                            77 lines   sha256 5a5307ab79c9
-//   scripts/EquipmentWindow.cs                      73 lines   sha256 7584f912029d
+//   scripts/EquipmentWindow.cs                      88 lines   sha256 92c1cfb01858
 //   scripts/EscapePod.cs                            50 lines   sha256 324c55cb503b
-//   scripts/EscMenu.cs                              59 lines   sha256 999b01e6cd29
+//   scripts/EscMenu.cs                              61 lines   sha256 a53ae47dfd33
 //   scripts/Explosion.cs                            18 lines   sha256 12209b0c72ce
 //   scripts/Gatherer.cs                            254 lines   sha256 135bd767de29
 //   scripts/Hauler.cs                              317 lines   sha256 b13773f083c7
 //   scripts/HealthBar.cs                            36 lines   sha256 97c42a282205
 //   scripts/Hub.cs                                1255 lines   sha256 45d5f50cf4c4
-//   scripts/MainMenu.cs                            235 lines   sha256 92fdcfb22a4b
+//   scripts/MainMenu.cs                            245 lines   sha256 643c73acedc5
 //   scripts/Missions.cs                             38 lines   sha256 48a2f11b25a4
 //   scripts/Music.cs                                78 lines   sha256 021dfc1c83d5
 //   scripts/Net.cs                                 334 lines   sha256 040f19a1471f
-//   scripts/PilotWindow.cs                          54 lines   sha256 39228852e443
+//   scripts/PilotWindow.cs                          60 lines   sha256 61a44a8346a0
 //   scripts/PlayerShip.cs                          783 lines   sha256 010d0e857cfe
 //   scripts/Plume.cs                                25 lines   sha256 cdbeb9b8fc58
 //   scripts/Progression.cs                          92 lines   sha256 de28f5e72175
 //   scripts/Radar.cs                               129 lines   sha256 16957ada0551
 //   scripts/Raider.cs                              344 lines   sha256 59f2c06071b3
-//   scripts/SessionMenu.cs                         127 lines   sha256 7546fd7d3c03
-//   scripts/Settings.cs                             86 lines   sha256 f1bd8946c74e
+//   scripts/SessionMenu.cs                         129 lines   sha256 857bef39fbc5
+//   scripts/Settings.cs                             91 lines   sha256 891f361df958
 //   scripts/Sfx.cs                                  69 lines   sha256 ceecc82717f6
 //   scripts/Shell.cs                                52 lines   sha256 5c161c9fff3b
 //   scripts/Shield.cs                               71 lines   sha256 99c7fa4a2a8e
@@ -57,10 +57,10 @@
 //   scripts/StatsWindow.cs                         198 lines   sha256 b5dbad43db73
 //   scripts/TargetDummy.cs                         132 lines   sha256 ae97ee1a9083
 //   scripts/Telegraph.cs                            47 lines   sha256 89f6af49c4d7
-//   scripts/TioWindow.cs                            66 lines   sha256 6885ade8b24f
+//   scripts/TioWindow.cs                            72 lines   sha256 68ef20459b1a
 //   scripts/Torpedo.cs                             156 lines   sha256 a12daff14996
 //   scripts/Txt.cs                                  32 lines   sha256 8823251c9a4f
-//   scripts/Ui.cs                                  208 lines   sha256 34f4db4e962f
+//   scripts/Ui.cs                                  206 lines   sha256 898265df5453
 //   scripts/Yard.cs                                438 lines   sha256 e3a40eb72b5d
 //   typecheck/GodotStub.cs                         192 lines   sha256 2c5c2967bf5c
 //   typecheck/typecheck.ps1                         80 lines   sha256 94631684caab
@@ -75,7 +75,7 @@
 //   tools/screens/Shots.cs.txt                     458 lines   sha256 43a79314bd60
 //   tools/smoketest/run.ps1                        151 lines   sha256 4eed3fc767ae
 //   tools/smoketest/run.sh                          57 lines   sha256 568b677787fd
-//   tools/smoketest/SmokeTest.cs.txt              1946 lines   sha256 b7e4cfa5ea5d
+//   tools/smoketest/SmokeTest.cs.txt              1956 lines   sha256 800fc34e158b
 //   tools/snapshot.ps1                              95 lines   sha256 d6d85575ba26
 //==============================================================================
 
@@ -2074,7 +2074,7 @@ public static class Equipment
 
 //==============================================================================
 // FILE: scripts/EquipmentWindow.cs
-// 73 lines   sha256 7584f912029d
+// 88 lines   sha256 92c1cfb01858
 //==============================================================================
 using Godot;
 
@@ -2087,9 +2087,9 @@ public partial class EquipmentWindow : PanelContainer
     private VBoxContainer _col;
     private static Color RarityColor(Rarity r) => r switch
     {
-        Rarity.Uncommon => new Color(0.45f, 0.9f, 0.45f), Rarity.Rare => new Color(0.4f, 0.65f, 1f),
-        Rarity.Epic => new Color(0.75f, 0.45f, 1f), Rarity.Legendary => new Color(1f, 0.65f, 0.25f),
-        _ => new Color(0.84f, 0.86f, 0.9f),
+        Rarity.Uncommon => Ui.Good, Rarity.Rare => Ui.Accent,
+        Rarity.Epic => new Color(0.75f, 0.45f, 1f), Rarity.Legendary => Ui.Warn,
+        _ => Ui.Text,
     };
 
     public override void _Ready()
@@ -2097,7 +2097,7 @@ public partial class EquipmentWindow : PanelContainer
         Name = "EquipmentWindow";
         Position = new Vector2(360, 92);
         Ui.Panelise(this);
-        _col = new VBoxContainer(); _col.AddThemeConstantOverride("separation", 5); AddChild(_col);
+        _col = new VBoxContainer(); _col.AddThemeConstantOverride("separation", 10); AddChild(_col);
         Rebuild();
     }
 
@@ -2105,45 +2105,60 @@ public partial class EquipmentWindow : PanelContainer
     {
         foreach (var c in _col.GetChildren()) { _col.RemoveChild(c); c.QueueFree(); }
         var cls = Character.Class; var l = Character.LoadoutFor(cls); var spares = Character.SparesFor(cls);
-        var head = new Label { Text = $"EQUIPMENT  ·  {cls.ToString().ToUpper()}" }; head.AddThemeFontSizeOverride("font_size", 20); _col.AddChild(head);
-        _col.AddChild(new Label { Text = "Parts change no looks, only numbers. Each class keeps its own gear.", Modulate = new Color(1, 1, 1, 0.6f) });
+        var title = new VBoxContainer(); title.AddThemeConstantOverride("separation", 2);
+        title.AddChild(Ui.Lbl($"EQUIPMENT  ·  {cls.ToString().ToUpper()}", Ui.Title, Ui.Accent));
+        title.AddChild(Ui.Lbl("Parts change no looks, only numbers. Each class keeps its own gear.", Ui.Small, Ui.Dim));
+        _col.AddChild(title);
+        _col.AddChild(Ui.Heading("Core parts"));
         for (int k = 0; k < Equipment.CoreSlots; k++)
         {
             var it = Equipment.ById(l[k]);
-            var row = new HBoxContainer { Name = $"Slot_{Equipment.Core[k]}" }; row.AddThemeConstantOverride("separation", 10);
-            row.AddChild(new Label { Text = Equipment.Core[k].ToString().ToUpper(), CustomMinimumSize = new Vector2(90, 0), Modulate = new Color(0.55f, 0.8f, 1f) });
-            row.AddChild(new Label { Name = "Item", Text = it?.Name ?? "—", CustomMinimumSize = new Vector2(210, 0), Modulate = it != null ? RarityColor(it.Rarity) : Colors.Gray });
-            row.AddChild(new Label { Text = it?.Blurb ?? "", Modulate = new Color(1, 1, 1, 0.55f) });
-            _col.AddChild(row);
+            var row = new HBoxContainer { Name = $"Slot_{Equipment.Core[k]}" }; row.AddThemeConstantOverride("separation", 12);
+            var slotName = Ui.Lbl(Equipment.Core[k].ToString().ToUpper(), Ui.Small, Ui.Dim);
+            slotName.CustomMinimumSize = new Vector2(90, 0); slotName.VerticalAlignment = VerticalAlignment.Center;
+            row.AddChild(slotName);
+            var item = Ui.Lbl(it?.Name ?? "—", Ui.Body, it != null ? RarityColor(it.Rarity) : Ui.Dim);
+            item.Name = "Item"; item.CustomMinimumSize = new Vector2(210, 0); item.VerticalAlignment = VerticalAlignment.Center;
+            row.AddChild(item);
+            var blurb = Ui.Lbl(it?.Blurb ?? "", Ui.Small, Ui.Dim);
+            blurb.VerticalAlignment = VerticalAlignment.Center;
+            row.AddChild(blurb);
+            _col.AddChild(Ui.CardWrap(row));
         }
-        _col.AddChild(new Label { Text = "CHIPS", Modulate = new Color(0.55f, 0.8f, 1f) });
+        _col.AddChild(Ui.Heading("Chips"));
         for (int k = 0; k < Equipment.ChipSlots; k++)
         {
             int slot = Equipment.CoreSlots + k; var it = Equipment.ById(l[slot]);
-            var row = new HBoxContainer { Name = $"Chip_{k}" }; row.AddThemeConstantOverride("separation", 10);
-            row.AddChild(new Label { Text = it != null ? $"{it.Name}   ({it.Blurb})" : "(empty)", CustomMinimumSize = new Vector2(360, 0),
-                                     Modulate = it != null ? RarityColor(it.Rarity) : new Color(1, 1, 1, 0.4f) });
+            var row = new HBoxContainer { Name = $"Chip_{k}" }; row.AddThemeConstantOverride("separation", 12);
+            var chip = Ui.Lbl(it != null ? $"{it.Name}   ({it.Blurb})" : "(empty)", Ui.Body,
+                              it != null ? RarityColor(it.Rarity) : Ui.Dim with { A = 0.7f });
+            chip.CustomMinimumSize = new Vector2(360, 0); chip.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            chip.VerticalAlignment = VerticalAlignment.Center;
+            row.AddChild(chip);
             if (it != null)
             {
-                var off = new Button { Name = "Unequip", Text = "UNEQUIP", FocusMode = FocusModeEnum.None };
+                var off = new Button { Name = "Unequip", Text = "UNEQUIP", FocusMode = FocusModeEnum.None, SizeFlagsVertical = SizeFlags.ShrinkCenter };
                 off.Pressed += () => { spares.Add(l[slot]); l[slot] = ""; Changed(); };
                 row.AddChild(off);
             }
-            _col.AddChild(row);
+            _col.AddChild(Ui.CardWrap(row));
         }
-        _col.AddChild(new Label { Text = spares.Count > 0 ? "SPARE CHIPS" : "SPARE CHIPS  (none)", Modulate = new Color(0.55f, 0.8f, 1f) });
+        _col.AddChild(Ui.Heading(spares.Count > 0 ? "Spare chips" : "Spare chips  (none)"));
         for (int j = 0; j < spares.Count; j++)
         {
             int idx = j; var it = Equipment.ById(spares[j]);
-            var row = new HBoxContainer { Name = $"Spare_{j}" }; row.AddThemeConstantOverride("separation", 10);
-            row.AddChild(new Label { Text = $"{it?.Name}   ({it?.Blurb})", CustomMinimumSize = new Vector2(360, 0), Modulate = RarityColor(it?.Rarity ?? Rarity.Common) });
+            var row = new HBoxContainer { Name = $"Spare_{j}" }; row.AddThemeConstantOverride("separation", 12);
+            var sp = Ui.Lbl($"{it?.Name}   ({it?.Blurb})", Ui.Body, RarityColor(it?.Rarity ?? Rarity.Common));
+            sp.CustomMinimumSize = new Vector2(360, 0); sp.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            sp.VerticalAlignment = VerticalAlignment.Center;
+            row.AddChild(sp);
             int free = System.Array.FindIndex(l, Equipment.CoreSlots, Equipment.ChipSlots, s => string.IsNullOrEmpty(s));
-            var on = new Button { Name = "Equip", Text = "EQUIP", FocusMode = FocusModeEnum.None, Disabled = free < 0 };
+            var on = new Button { Name = "Equip", Text = "EQUIP", FocusMode = FocusModeEnum.None, Disabled = free < 0, SizeFlagsVertical = SizeFlags.ShrinkCenter };
             on.Pressed += () => { int f = System.Array.FindIndex(l, Equipment.CoreSlots, Equipment.ChipSlots, s => string.IsNullOrEmpty(s));
                                   if (f < 0) return; l[f] = spares[idx]; spares.RemoveAt(idx); Changed(); };
-            row.AddChild(on); _col.AddChild(row);
+            row.AddChild(on); _col.AddChild(Ui.CardWrap(row));
         }
-        _col.AddChild(new Label { Text = "I or Esc closes.", Modulate = new Color(1, 1, 1, 0.45f) });
+        _col.AddChild(Ui.Lbl("I or Esc closes.", Ui.Small, Ui.Dim));
     }
 
     // saved at once; the ship refits, and the host is told (it applies equipment too)
@@ -2207,7 +2222,7 @@ public partial class EscapePod : Node2D
 
 //==============================================================================
 // FILE: scripts/EscMenu.cs
-// 59 lines   sha256 999b01e6cd29
+// 61 lines   sha256 a53ae47dfd33
 //==============================================================================
 using Godot;
 
@@ -2227,16 +2242,16 @@ public partial class EscMenu : CanvasLayer
         var col = new VBoxContainer { CustomMinimumSize = new Vector2(340, 0) };
         col.AddThemeConstantOverride("separation", 10);
         centre.AddChild(Ui.Wrap(col, 16));
-        var title = new Label { Text = "MENU", HorizontalAlignment = HorizontalAlignment.Center };
-        title.AddThemeFontSizeOverride("font_size", 22);
+        var title = Ui.Lbl("MENU", Ui.Title, Ui.Accent);
+        title.HorizontalAlignment = HorizontalAlignment.Center;
         col.AddChild(title);
 
-        col.AddChild(new Label { Text = "Radar size" });
+        col.AddChild(Ui.Heading("Radar size"));
         col.AddChild(Choice(new[] { "SMALL", "MEDIUM", "LARGE" }, () => Settings.RadarSize, i => Settings.RadarSize = i, "Radar"));
         var music = new Button { Name = "MusicToggle", FocusMode = Control.FocusModeEnum.None, Text = Settings.MusicOn ? "MUSIC: ON" : "MUSIC: OFF" };
         music.Pressed += () => { Settings.MusicOn = !Settings.MusicOn; Settings.Save(); music.Text = Settings.MusicOn ? "MUSIC: ON" : "MUSIC: OFF"; };
         col.AddChild(music);
-        col.AddChild(new Label { Text = "Music volume" });
+        col.AddChild(Ui.Heading("Music volume"));
         var steps = new[] { 0f, 0.25f, 0.5f, 0.75f, 1f };
         col.AddChild(Choice(new[] { "0%", "25%", "50%", "75%", "100%" },
                             () => System.Array.FindIndex(steps, v => Mathf.IsEqualApprox(v, Settings.MusicVolume)),
@@ -2248,7 +2263,9 @@ public partial class EscMenu : CanvasLayer
         var quit = new Button { Text = "QUIT TO MAIN MENU", Name = "Quit", FocusMode = Control.FocusModeEnum.None, CustomMinimumSize = new Vector2(0, 38) };
         quit.Pressed += () => { Net.I?.GoOffline(); GetTree().ChangeSceneToFile("res://MainMenu.tscn"); };
         col.AddChild(quit);
-        col.AddChild(new Label { Text = "Esc closes.", Modulate = new Color(1, 1, 1, 0.5f), HorizontalAlignment = HorizontalAlignment.Center });
+        var foot = Ui.Lbl("Esc closes.", Ui.Small, Ui.Dim);
+        foot.HorizontalAlignment = HorizontalAlignment.Center;
+        col.AddChild(foot);
     }
 
     // a row of toggle buttons, one pressed; choosing saves the setting
@@ -4176,7 +4193,7 @@ public partial class HeavyMissileVisual : Node2D
 
 //==============================================================================
 // FILE: scripts/MainMenu.cs
-// 235 lines   sha256 92fdcfb22a4b
+// 245 lines   sha256 643c73acedc5
 //==============================================================================
 using Godot;
 using System;
@@ -4222,7 +4239,11 @@ public partial class MainMenu : Node2D
         Music.CombatZone = false;
         if (Music.I != null) Music.I.Target = Music.Mood.Ambient;
         var vs = GetViewport().GetVisibleRect().Size;
-        var centre = vs * 0.5f + new Vector2(0, 60);
+        // The diorama sits in the BAND BETWEEN the title and the menu panel, not in the middle of
+        // the screen. Moving the title to the top freed the top third but left the capital ship
+        // centred -- directly behind the panel, which hid the thing the scene is about. Three
+        // bands down the screen: title, fight, menu.
+        var centre = new Vector2(vs.X * 0.5f, vs.Y * 0.36f);
         // nebula backdrop: a few large tinted patches
         var neb = GD.Load<Texture2D>("res://nebula.png");
         Color[] tints = { new(0.45f, 0.30f, 0.75f), new(0.25f, 0.45f, 0.80f), new(0.85f, 0.55f, 0.30f), new(0.30f, 0.75f, 0.85f) };
@@ -4253,27 +4274,33 @@ public partial class MainMenu : Node2D
         // ── UI ──
         var ui = new CanvasLayer { Layer = 10 }; AddChild(ui);
         var box = new VBoxContainer(); box.SetAnchorsPreset(Control.LayoutPreset.FullRect); box.AddThemeConstantOverride("separation", 10); ui.AddChild(box);
-        var title = new Label { Text = "WARSHIPS", HorizontalAlignment = HorizontalAlignment.Center };
-        title.AddThemeFontSizeOverride("font_size", 64); title.AddThemeColorOverride("font_color", new Color(0.85f, 0.93f, 1f));
+        var title = Ui.Lbl("WARSHIPS", Ui.Display, Ui.Text);
+        title.HorizontalAlignment = HorizontalAlignment.Center;
+
+        // THE TITLE BELONGS TO THE TOP OF THE SCREEN, NOT TO THE MENU. It used to be stacked with
+        // the panel and the pair centred together, which put it straight across the capital ship
+        // holding station in the middle of the diorama -- the word and the hull competed and both
+        // lost. Pinned near the top edge it frames the scene instead of sitting in it, and the
+        // panel is free to centre in what is left.
+        box.AddChild(new Control { CustomMinimumSize = new Vector2(0, vs.Y * 0.06f) });
+        box.AddChild(title);
         
-        var spacer = new Control { CustomMinimumSize = new Vector2(0, vs.Y * 0.36f) }; box.AddChild(spacer);
-        // the title sits with the menu panel, centred together, not pinned to the top edge
         var centre2 = new CenterContainer { SizeFlagsVertical = Control.SizeFlags.ExpandFill }; box.AddChild(centre2);
-        var stack = new VBoxContainer(); stack.AddThemeConstantOverride("separation", 24); centre2.AddChild(stack);
-        stack.AddChild(title);
-        var col = new VBoxContainer { CustomMinimumSize = new Vector2(360, 0) }; col.AddThemeConstantOverride("separation", 8); stack.AddChild(Ui.Wrap(col, 16));
+        var col = new VBoxContainer { CustomMinimumSize = new Vector2(360, 0) }; col.AddThemeConstantOverride("separation", 10); centre2.AddChild(Ui.Wrap(col, 18));
         // Warships has no save file yet -- only characters and settings -- so the
         // Continue / New Game pair carried over from Space Fleet Idle could never enable
         // Continue. One entry point until there is world state worth continuing.
         var launch = Big("PLAY"); launch.Pressed += () => GetTree().ChangeSceneToFile("res://CharacterSelect.tscn"); col.AddChild(launch);
-        col.AddChild(new Label { Text = "Volume", HorizontalAlignment = HorizontalAlignment.Center });
+        col.AddChild(Ui.Heading("Volume"));
         var vol = new HBoxContainer(); vol.AddThemeConstantOverride("separation", 4); col.AddChild(vol);
         for (int i = 0; i < Settings.VolumeSteps.Length; i++) { int idx = i; var b = new Button { Text = $"{Settings.VolumeSteps[i] * 100:F0}%", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill }; b.Pressed += () => { Settings.VolumeIdx = idx; Settings.ApplyVolume(); Settings.Save(); _info.Text = $"Volume {Settings.Volume * 100:F0}%"; }; vol.AddChild(b); }
         var quit = Big("QUIT"); quit.Pressed += () => QuitSoon(); col.AddChild(quit);
-        _info = new Label { HorizontalAlignment = HorizontalAlignment.Center, Text = $"Volume {Settings.Volume * 100:F0}%" }; _info.AddThemeFontSizeOverride("font_size", 12); col.AddChild(_info);
-        var ver = new Label { Text = "Warships  early build", HorizontalAlignment = HorizontalAlignment.Center }; ver.AddThemeFontSizeOverride("font_size", 11); ver.AddThemeColorOverride("font_color", new Color(0.5f, 0.55f, 0.65f)); col.AddChild(ver);
+        _info = Ui.Lbl($"Volume {Settings.Volume * 100:F0}%", Ui.Small, Ui.Dim);
+        _info.HorizontalAlignment = HorizontalAlignment.Center; col.AddChild(_info);
+        var ver = Ui.Lbl("Warships  early build", Ui.Small, Ui.Dim with { A = 0.7f });
+        ver.HorizontalAlignment = HorizontalAlignment.Center; col.AddChild(ver);
     }
-    private static Button Big(string text) { var b = new Button { Text = text }; b.AddThemeFontSizeOverride("font_size", 20); b.CustomMinimumSize = new Vector2(0, 44); return b; }
+    private static Button Big(string text) { var b = new Button { Text = text }; b.AddThemeFontSizeOverride("font_size", Ui.Head); b.CustomMinimumSize = new Vector2(0, 46); return b; }
 
     // The offset has to be PERPENDICULAR to the approach, not just some point on a ring: a straight
     // line through a ring point can still clip the hull, and aiming in a box around the centre sent
@@ -4881,7 +4908,7 @@ public partial class Net : Node
 
 //==============================================================================
 // FILE: scripts/PilotWindow.cs
-// 54 lines   sha256 39228852e443
+// 60 lines   sha256 61a44a8346a0
 //==============================================================================
 using Godot;
 
@@ -4901,23 +4928,29 @@ public partial class PilotWindow : PanelContainer
         Name = "PilotWindow";
         Position = new Vector2(360, 92);
         Ui.Panelise(this);
-        var col = new VBoxContainer(); col.AddThemeConstantOverride("separation", 6); AddChild(col);
-        _head = new Label(); _head.AddThemeFontSizeOverride("font_size", 20); col.AddChild(_head);
-        _exp = new Label(); col.AddChild(_exp);
-        _bar = new ProgressBar { CustomMinimumSize = new Vector2(440, 10), ShowPercentage = false, MaxValue = 1 }; col.AddChild(_bar);
-        _points = new Label(); col.AddChild(_points);
-        col.AddChild(new Label { Text = "EXP from boss kills: 200 x the boss's level / yours, +250 the first time you beat a level, +100 for completing. Every pilot earns their own.",
-                                 AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(440, 0), Modulate = new Color(1, 1, 1, 0.6f) });
+        var col = new VBoxContainer(); col.AddThemeConstantOverride("separation", 12); AddChild(col);
+        _head = Ui.Lbl("", Ui.Title, Ui.Accent); col.AddChild(_head);
+        // Level, bar and points are one block: they are the same number said three ways.
+        var lvl = new VBoxContainer(); lvl.AddThemeConstantOverride("separation", 6);
+        _exp = Ui.Lbl("", Ui.Body); lvl.AddChild(_exp);
+        _bar = new ProgressBar { CustomMinimumSize = new Vector2(440, 8), ShowPercentage = false, MaxValue = 1 }; lvl.AddChild(_bar);
+        _points = Ui.Lbl("", Ui.Body, Ui.Accent); lvl.AddChild(_points);
+        col.AddChild(Ui.CardWrap(lvl));
+        col.AddChild(Ui.Heading("Upgrades"));
         for (int i = 0; i < Progression.All.Length; i++)
         {
             int k = i;
-            var row = new HBoxContainer { Name = "Pilot_" + Progression.All[i].Id }; row.AddThemeConstantOverride("separation", 10);
-            _info[i] = new Label { CustomMinimumSize = new Vector2(300, 0), SizeFlagsHorizontal = SizeFlags.ExpandFill };
-            _buy[i] = new Button { Name = "Buy", FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(130, 32), SizeFlagsVertical = SizeFlags.ShrinkCenter };
+            var row = new HBoxContainer { Name = "Pilot_" + Progression.All[i].Id }; row.AddThemeConstantOverride("separation", 12);
+            _info[i] = new Label { CustomMinimumSize = new Vector2(300, 0), SizeFlagsHorizontal = SizeFlags.ExpandFill, VerticalAlignment = VerticalAlignment.Center };
+            _buy[i] = new Button { Name = "Buy", FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(134, 34), SizeFlagsVertical = SizeFlags.ShrinkCenter };
             _buy[i].Pressed += () => { if (Progression.TryBuy(Progression.All[k].Id)) Hub.PilotChanged(); };
-            row.AddChild(_info[i]); row.AddChild(_buy[i]); col.AddChild(row);
+            row.AddChild(_info[i]); row.AddChild(_buy[i]); col.AddChild(Ui.CardWrap(row));
         }
-        col.AddChild(new Label { Text = "L or Esc closes.", Modulate = new Color(1, 1, 1, 0.45f) });
+        var note = Ui.Lbl("EXP from boss kills: 200 x the boss's level / yours, +250 the first time you beat a level, +100 for completing. Every pilot earns their own.",
+                          Ui.Small, Ui.Dim);
+        note.AutowrapMode = TextServer.AutowrapMode.WordSmart; note.CustomMinimumSize = new Vector2(440, 0);
+        col.AddChild(note);
+        col.AddChild(Ui.Lbl("L or Esc closes.", Ui.Small, Ui.Dim));
     }
 
     public override void _Process(double delta)
@@ -4926,7 +4959,7 @@ public partial class PilotWindow : PanelContainer
         Ui.SetText(_head, $"PILOT  ·  {Character.Name}  ·  LEVEL {Character.Level}");
         Ui.SetText(_exp, $"EXP {Character.Exp} / {need} to level {Character.Level + 1}");
         _bar.Value = (double)Character.Exp / need;
-        Ui.SetText(_points, $"Points to spend: {Character.Points}");
+        Ui.SetText(_points, $"{Character.Points} point(s) to spend");
         for (int i = 0; i < Progression.All.Length; i++)
         {
             var u = Progression.All[i]; int n = Character.Bought[i], cost = Progression.Cost(n);
@@ -6338,7 +6371,7 @@ public partial class Raider : Node2D, IHittable
 
 //==============================================================================
 // FILE: scripts/SessionMenu.cs
-// 127 lines   sha256 7546fd7d3c03
+// 129 lines   sha256 857bef39fbc5
 //==============================================================================
 using Godot;
 
@@ -6357,7 +6390,7 @@ public partial class SessionMenu : CanvasLayer
     public override void _Ready()
     {
         var root = new VBoxContainer();
-        root.AddThemeConstantOverride("separation", 4);
+        root.AddThemeConstantOverride("separation", 8);
         var panel = Ui.Wrap(root);                   // on a panel, like every HUD element
         panel.Position = new Vector2(10, 48);
         panel.MouseFilter = Control.MouseFilterEnum.Pass;
@@ -6369,6 +6402,7 @@ public partial class SessionMenu : CanvasLayer
         root.AddChild(_toggle);
 
         _options = new VBoxContainer { Name = "NetOptions", Visible = false };
+        _options.AddThemeConstantOverride("separation", 8);
         root.AddChild(_options);
 
         _addr = new LineEdit { PlaceholderText = "host IP, or IP:port", CustomMinimumSize = new Vector2(300, 0) };
@@ -6385,8 +6419,9 @@ public partial class SessionMenu : CanvasLayer
         _offBtn = Btn("PLAY OFFLINE", () => Limited(() => Net.I?.GoOffline())); _offBtn.Name = "Offline";
         _options.AddChild(_hostBtn); _options.AddChild(_joinBtn); _options.AddChild(_offBtn);
 
-        _status = new Label { Text = Net.I?.LastStatus ?? "", AutowrapMode = TextServer.AutowrapMode.WordSmart,
-                              CustomMinimumSize = new Vector2(320, 0) };
+        _status = Ui.Lbl(Net.I?.LastStatus ?? "", Ui.Small, Ui.Dim);
+        _status.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        _status.CustomMinimumSize = new Vector2(320, 0);
         _options.AddChild(_status);
         // the address friends should type, one click to the clipboard
         _copy = Btn("COPY ADDRESS", () =>
@@ -6470,7 +6505,7 @@ public partial class SessionMenu : CanvasLayer
 
 //==============================================================================
 // FILE: scripts/Settings.cs
-// 86 lines   sha256 f1bd8946c74e
+// 91 lines   sha256 891f361df958
 //==============================================================================
 using Godot;
 
@@ -6484,7 +6519,12 @@ public static class Settings
 
     public static readonly float[] VolumeSteps = { 0f, 0.25f, 0.5f, 0.75f, 1f };
     public static int VolumeIdx = 3;
-    public static float MusicVolume = 0.6f;          // 0..1, a share of the master volume
+    // 0..1, a share of the master volume. It MUST be one of the five steps the Esc menu offers,
+    // because that row finds the live one by matching the value: at the old default of 0.6 nothing
+    // matched, so the menu opened with no step lit and read as broken. 0.75 rather than 0.5 keeps
+    // the smoke check that clicks 50% meaningful -- a default equal to the value a check sets is a
+    // check that cannot fail.
+    public static float MusicVolume = 0.75f;
     public static bool MusicOn = true;               // on by default; the Esc menu toggles it
     public static int RadarSize = 1;                 // 0 small, 1 medium, 2 large
     public static float Volume => VolumeSteps[Mathf.Clamp(VolumeIdx, 0, VolumeSteps.Length - 1)];
@@ -7861,7 +7901,7 @@ public partial class Telegraph : Node2D
 
 //==============================================================================
 // FILE: scripts/TioWindow.cs
-// 66 lines   sha256 6885ade8b24f
+// 72 lines   sha256 68ef20459b1a
 //==============================================================================
 using Godot;
 using System.Linq;
@@ -7883,25 +7923,31 @@ public partial class TioWindow : PanelContainer
         Name = "TioWindow";
         Position = new Vector2(360, 92);
         Ui.Panelise(this);
-        var col = new VBoxContainer(); col.AddThemeConstantOverride("separation", 6); AddChild(col);
-        var head = new Label { Text = "WARP TO TARGET" }; head.AddThemeFontSizeOverride("font_size", 20); col.AddChild(head);
-        col.AddChild(new Label { Text = "Threat Intelligence Operations", Modulate = new Color(1, 1, 1, 0.6f) });
-        _bounty = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(440, 0) };
-        col.AddChild(_bounty);
+        var col = new VBoxContainer(); col.AddThemeConstantOverride("separation", 12); AddChild(col);
+        var title = new VBoxContainer(); title.AddThemeConstantOverride("separation", 2);
+        title.AddChild(Ui.Lbl("WARP TO TARGET", Ui.Title, Ui.Accent));
+        title.AddChild(Ui.Lbl("Threat Intelligence Operations", Ui.Small, Ui.Dim));
+        col.AddChild(title);
+        col.AddChild(Ui.Heading("Bounty"));
+        _bounty = Ui.Lbl("", Ui.Body);
+        _bounty.AutowrapMode = TextServer.AutowrapMode.WordSmart; _bounty.CustomMinimumSize = new Vector2(440, 0);
+        col.AddChild(Ui.CardWrap(_bounty));
+        col.AddChild(Ui.Heading("Difficulty"));
         var diff = new HBoxContainer { Name = "Difficulty" }; diff.AddThemeConstantOverride("separation", 8); col.AddChild(diff);
-        diff.AddChild(new Label { Text = "DIFFICULTY", Modulate = new Color(0.55f, 0.8f, 1f) });
         _down = new Button { Name = "LevelDown", Text = "◀", FocusMode = FocusModeEnum.None }; _down.Pressed += () => Hub.SelectLevel(Missions.Level - 1);
-        _tier = new Label { CustomMinimumSize = new Vector2(230, 0), HorizontalAlignment = HorizontalAlignment.Center };
+        _tier = Ui.Lbl("", Ui.Body); _tier.CustomMinimumSize = new Vector2(230, 0);
+        _tier.HorizontalAlignment = HorizontalAlignment.Center; _tier.VerticalAlignment = VerticalAlignment.Center;
+        _tier.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         _up = new Button { Name = "LevelUp", Text = "▶", FocusMode = FocusModeEnum.None }; _up.Pressed += () => Hub.SelectLevel(Missions.Level + 1);
         diff.AddChild(_down); diff.AddChild(_tier); diff.AddChild(_up);
-        col.AddChild(new Label { Text = "PARTY  (everyone in the session)", Modulate = new Color(0.55f, 0.8f, 1f) });
-        _party = new Label(); col.AddChild(_party);
+        col.AddChild(Ui.Heading("Party  -  everyone in the session"));
+        _party = Ui.Lbl("", Ui.Body); col.AddChild(Ui.CardWrap(_party));
         var row = new HBoxContainer(); row.AddThemeConstantOverride("separation", 10); col.AddChild(row);
-        _ready = new Button { Name = "Ready", FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(215, 36) };
+        _ready = new Button { Name = "Ready", FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(215, 38) };
         _ready.Pressed += () => Hub.SetMyReady(!Hub.IsReady(Net.LocalId));
         row.AddChild(_ready);
-        _status = new Label(); col.AddChild(_status);
-        col.AddChild(new Label { Text = "Esc closes.", Modulate = new Color(1, 1, 1, 0.45f) });
+        _status = Ui.Lbl("", Ui.Small, Ui.Dim); col.AddChild(_status);
+        col.AddChild(Ui.Lbl("Esc closes.", Ui.Small, Ui.Dim));
     }
 
     public override void _Process(double delta)
@@ -8130,7 +8176,7 @@ public static class Txt
 
 //==============================================================================
 // FILE: scripts/Ui.cs
-// 208 lines   sha256 34f4db4e962f
+// 206 lines   sha256 898265df5453
 //==============================================================================
 using Godot;
 
@@ -8170,11 +8216,9 @@ public static class Ui
     public const int PanelCorner = 10, CardCorner = 7;
 
     // ---------------------------------------------------------------- type scale
-    // Four sizes, and every screen picks from them. The old code set sizes ad hoc -- 11, 12,
+    // Five sizes, and every screen picks from them. The old code set sizes ad hoc -- 11, 12,
     // 13, 14, 15, 16, 20, 22, 34, 64 -- so no two headings on different screens matched.
-    // (A Display size for the title screen belongs here too, but an unused constant fails the
-    // cross-reference, so it arrives with the screen that uses it.)
-    public const int Title = 22, Head = 17, Body = 14, Small = 12;
+    public const int Display = 56, Title = 22, Head = 17, Body = 14, Small = 12;
 
     // ---------------------------------------------------------------- building blocks
 
@@ -10144,7 +10188,7 @@ echo "SMOKE TEST PASSED"
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 1946 lines   sha256 b7e4cfa5ea5d
+// 1956 lines   sha256 800fc34e158b
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -11786,6 +11830,16 @@ public partial class _Test : Node
             Nodes<Button>(menu).First(b => b.Text == "MEDIUM").EmitSignal(BaseButton.SignalName.Pressed);
             Nodes<Button>(menu).First(b => b.Text == "50%").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.1);
             Check(Mathf.IsEqualApprox(Settings.MusicVolume, 0.5f), "music volume set from the menu");
+            // ...and the row LIGHTS the live step. The default used to be 0.6, which is not one of
+            // the five the menu offers, so the match that picks the lit button found nothing and
+            // the row opened with none of them pressed. Both rows are checked: a settings row where
+            // nothing is selected looks broken whichever row it is.
+            foreach (var g in new[] { "Radar", "Music" })
+            {
+                var opts = Nodes<Button>(Nodes<HBoxContainer>(menu).First(r => r.Name == g)).ToList();
+                Check(opts.Count > 1 && opts.Count(b => b.ButtonPressed) == 1,
+                      $"the {g} row shows exactly one live choice ({opts.Count(b => b.ButtonPressed)} of {opts.Count} lit)");
+            }
             // ...and the harness cap SURVIVES the menu re-applying the volume. Checked here, after
             // a menu has just written the audio settings, rather than at startup where nothing has
             // had a chance to overwrite it. 5% as a literal, never Settings.TestVolume: a check

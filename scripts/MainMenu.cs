@@ -42,7 +42,11 @@ public partial class MainMenu : Node2D
         Music.CombatZone = false;
         if (Music.I != null) Music.I.Target = Music.Mood.Ambient;
         var vs = GetViewport().GetVisibleRect().Size;
-        var centre = vs * 0.5f + new Vector2(0, 60);
+        // The diorama sits in the BAND BETWEEN the title and the menu panel, not in the middle of
+        // the screen. Moving the title to the top freed the top third but left the capital ship
+        // centred -- directly behind the panel, which hid the thing the scene is about. Three
+        // bands down the screen: title, fight, menu.
+        var centre = new Vector2(vs.X * 0.5f, vs.Y * 0.36f);
         // nebula backdrop: a few large tinted patches
         var neb = GD.Load<Texture2D>("res://nebula.png");
         Color[] tints = { new(0.45f, 0.30f, 0.75f), new(0.25f, 0.45f, 0.80f), new(0.85f, 0.55f, 0.30f), new(0.30f, 0.75f, 0.85f) };
@@ -73,27 +77,33 @@ public partial class MainMenu : Node2D
         // ── UI ──
         var ui = new CanvasLayer { Layer = 10 }; AddChild(ui);
         var box = new VBoxContainer(); box.SetAnchorsPreset(Control.LayoutPreset.FullRect); box.AddThemeConstantOverride("separation", 10); ui.AddChild(box);
-        var title = new Label { Text = "WARSHIPS", HorizontalAlignment = HorizontalAlignment.Center };
-        title.AddThemeFontSizeOverride("font_size", 64); title.AddThemeColorOverride("font_color", new Color(0.85f, 0.93f, 1f));
+        var title = Ui.Lbl("WARSHIPS", Ui.Display, Ui.Text);
+        title.HorizontalAlignment = HorizontalAlignment.Center;
+
+        // THE TITLE BELONGS TO THE TOP OF THE SCREEN, NOT TO THE MENU. It used to be stacked with
+        // the panel and the pair centred together, which put it straight across the capital ship
+        // holding station in the middle of the diorama -- the word and the hull competed and both
+        // lost. Pinned near the top edge it frames the scene instead of sitting in it, and the
+        // panel is free to centre in what is left.
+        box.AddChild(new Control { CustomMinimumSize = new Vector2(0, vs.Y * 0.06f) });
+        box.AddChild(title);
         
-        var spacer = new Control { CustomMinimumSize = new Vector2(0, vs.Y * 0.36f) }; box.AddChild(spacer);
-        // the title sits with the menu panel, centred together, not pinned to the top edge
         var centre2 = new CenterContainer { SizeFlagsVertical = Control.SizeFlags.ExpandFill }; box.AddChild(centre2);
-        var stack = new VBoxContainer(); stack.AddThemeConstantOverride("separation", 24); centre2.AddChild(stack);
-        stack.AddChild(title);
-        var col = new VBoxContainer { CustomMinimumSize = new Vector2(360, 0) }; col.AddThemeConstantOverride("separation", 8); stack.AddChild(Ui.Wrap(col, 16));
+        var col = new VBoxContainer { CustomMinimumSize = new Vector2(360, 0) }; col.AddThemeConstantOverride("separation", 10); centre2.AddChild(Ui.Wrap(col, 18));
         // Warships has no save file yet -- only characters and settings -- so the
         // Continue / New Game pair carried over from Space Fleet Idle could never enable
         // Continue. One entry point until there is world state worth continuing.
         var launch = Big("PLAY"); launch.Pressed += () => GetTree().ChangeSceneToFile("res://CharacterSelect.tscn"); col.AddChild(launch);
-        col.AddChild(new Label { Text = "Volume", HorizontalAlignment = HorizontalAlignment.Center });
+        col.AddChild(Ui.Heading("Volume"));
         var vol = new HBoxContainer(); vol.AddThemeConstantOverride("separation", 4); col.AddChild(vol);
         for (int i = 0; i < Settings.VolumeSteps.Length; i++) { int idx = i; var b = new Button { Text = $"{Settings.VolumeSteps[i] * 100:F0}%", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill }; b.Pressed += () => { Settings.VolumeIdx = idx; Settings.ApplyVolume(); Settings.Save(); _info.Text = $"Volume {Settings.Volume * 100:F0}%"; }; vol.AddChild(b); }
         var quit = Big("QUIT"); quit.Pressed += () => QuitSoon(); col.AddChild(quit);
-        _info = new Label { HorizontalAlignment = HorizontalAlignment.Center, Text = $"Volume {Settings.Volume * 100:F0}%" }; _info.AddThemeFontSizeOverride("font_size", 12); col.AddChild(_info);
-        var ver = new Label { Text = "Warships  early build", HorizontalAlignment = HorizontalAlignment.Center }; ver.AddThemeFontSizeOverride("font_size", 11); ver.AddThemeColorOverride("font_color", new Color(0.5f, 0.55f, 0.65f)); col.AddChild(ver);
+        _info = Ui.Lbl($"Volume {Settings.Volume * 100:F0}%", Ui.Small, Ui.Dim);
+        _info.HorizontalAlignment = HorizontalAlignment.Center; col.AddChild(_info);
+        var ver = Ui.Lbl("Warships  early build", Ui.Small, Ui.Dim with { A = 0.7f });
+        ver.HorizontalAlignment = HorizontalAlignment.Center; col.AddChild(ver);
     }
-    private static Button Big(string text) { var b = new Button { Text = text }; b.AddThemeFontSizeOverride("font_size", 20); b.CustomMinimumSize = new Vector2(0, 44); return b; }
+    private static Button Big(string text) { var b = new Button { Text = text }; b.AddThemeFontSizeOverride("font_size", Ui.Head); b.CustomMinimumSize = new Vector2(0, 46); return b; }
 
     // The offset has to be PERPENDICULAR to the approach, not just some point on a ring: a straight
     // line through a ring point can still clip the hull, and aiming in a box around the centre sent

@@ -1638,6 +1638,16 @@ public partial class _Test : Node
             Nodes<Button>(menu).First(b => b.Text == "MEDIUM").EmitSignal(BaseButton.SignalName.Pressed);
             Nodes<Button>(menu).First(b => b.Text == "50%").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.1);
             Check(Mathf.IsEqualApprox(Settings.MusicVolume, 0.5f), "music volume set from the menu");
+            // ...and the row LIGHTS the live step. The default used to be 0.6, which is not one of
+            // the five the menu offers, so the match that picks the lit button found nothing and
+            // the row opened with none of them pressed. Both rows are checked: a settings row where
+            // nothing is selected looks broken whichever row it is.
+            foreach (var g in new[] { "Radar", "Music" })
+            {
+                var opts = Nodes<Button>(Nodes<HBoxContainer>(menu).First(r => r.Name == g)).ToList();
+                Check(opts.Count > 1 && opts.Count(b => b.ButtonPressed) == 1,
+                      $"the {g} row shows exactly one live choice ({opts.Count(b => b.ButtonPressed)} of {opts.Count} lit)");
+            }
             // ...and the harness cap SURVIVES the menu re-applying the volume. Checked here, after
             // a menu has just written the audio settings, rather than at startup where nothing has
             // had a chance to overwrite it. 5% as a literal, never Settings.TestVolume: a check

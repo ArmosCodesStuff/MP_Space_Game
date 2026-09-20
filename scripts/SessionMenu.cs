@@ -15,7 +15,7 @@ public partial class SessionMenu : CanvasLayer
     public override void _Ready()
     {
         var root = new VBoxContainer();
-        root.AddThemeConstantOverride("separation", 4);
+        root.AddThemeConstantOverride("separation", 8);
         var panel = Ui.Wrap(root);                   // on a panel, like every HUD element
         panel.Position = new Vector2(10, 48);
         panel.MouseFilter = Control.MouseFilterEnum.Pass;
@@ -27,6 +27,7 @@ public partial class SessionMenu : CanvasLayer
         root.AddChild(_toggle);
 
         _options = new VBoxContainer { Name = "NetOptions", Visible = false };
+        _options.AddThemeConstantOverride("separation", 8);
         root.AddChild(_options);
 
         _addr = new LineEdit { PlaceholderText = "host IP, or IP:port", CustomMinimumSize = new Vector2(300, 0) };
@@ -43,8 +44,9 @@ public partial class SessionMenu : CanvasLayer
         _offBtn = Btn("PLAY OFFLINE", () => Limited(() => Net.I?.GoOffline())); _offBtn.Name = "Offline";
         _options.AddChild(_hostBtn); _options.AddChild(_joinBtn); _options.AddChild(_offBtn);
 
-        _status = new Label { Text = Net.I?.LastStatus ?? "", AutowrapMode = TextServer.AutowrapMode.WordSmart,
-                              CustomMinimumSize = new Vector2(320, 0) };
+        _status = Ui.Lbl(Net.I?.LastStatus ?? "", Ui.Small, Ui.Dim);
+        _status.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        _status.CustomMinimumSize = new Vector2(320, 0);
         _options.AddChild(_status);
         // the address friends should type, one click to the clipboard
         _copy = Btn("COPY ADDRESS", () =>

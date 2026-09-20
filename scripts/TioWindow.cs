@@ -18,25 +18,31 @@ public partial class TioWindow : PanelContainer
         Name = "TioWindow";
         Position = new Vector2(360, 92);
         Ui.Panelise(this);
-        var col = new VBoxContainer(); col.AddThemeConstantOverride("separation", 6); AddChild(col);
-        var head = new Label { Text = "WARP TO TARGET" }; head.AddThemeFontSizeOverride("font_size", 20); col.AddChild(head);
-        col.AddChild(new Label { Text = "Threat Intelligence Operations", Modulate = new Color(1, 1, 1, 0.6f) });
-        _bounty = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(440, 0) };
-        col.AddChild(_bounty);
+        var col = new VBoxContainer(); col.AddThemeConstantOverride("separation", 12); AddChild(col);
+        var title = new VBoxContainer(); title.AddThemeConstantOverride("separation", 2);
+        title.AddChild(Ui.Lbl("WARP TO TARGET", Ui.Title, Ui.Accent));
+        title.AddChild(Ui.Lbl("Threat Intelligence Operations", Ui.Small, Ui.Dim));
+        col.AddChild(title);
+        col.AddChild(Ui.Heading("Bounty"));
+        _bounty = Ui.Lbl("", Ui.Body);
+        _bounty.AutowrapMode = TextServer.AutowrapMode.WordSmart; _bounty.CustomMinimumSize = new Vector2(440, 0);
+        col.AddChild(Ui.CardWrap(_bounty));
+        col.AddChild(Ui.Heading("Difficulty"));
         var diff = new HBoxContainer { Name = "Difficulty" }; diff.AddThemeConstantOverride("separation", 8); col.AddChild(diff);
-        diff.AddChild(new Label { Text = "DIFFICULTY", Modulate = new Color(0.55f, 0.8f, 1f) });
         _down = new Button { Name = "LevelDown", Text = "◀", FocusMode = FocusModeEnum.None }; _down.Pressed += () => Hub.SelectLevel(Missions.Level - 1);
-        _tier = new Label { CustomMinimumSize = new Vector2(230, 0), HorizontalAlignment = HorizontalAlignment.Center };
+        _tier = Ui.Lbl("", Ui.Body); _tier.CustomMinimumSize = new Vector2(230, 0);
+        _tier.HorizontalAlignment = HorizontalAlignment.Center; _tier.VerticalAlignment = VerticalAlignment.Center;
+        _tier.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         _up = new Button { Name = "LevelUp", Text = "▶", FocusMode = FocusModeEnum.None }; _up.Pressed += () => Hub.SelectLevel(Missions.Level + 1);
         diff.AddChild(_down); diff.AddChild(_tier); diff.AddChild(_up);
-        col.AddChild(new Label { Text = "PARTY  (everyone in the session)", Modulate = new Color(0.55f, 0.8f, 1f) });
-        _party = new Label(); col.AddChild(_party);
+        col.AddChild(Ui.Heading("Party  -  everyone in the session"));
+        _party = Ui.Lbl("", Ui.Body); col.AddChild(Ui.CardWrap(_party));
         var row = new HBoxContainer(); row.AddThemeConstantOverride("separation", 10); col.AddChild(row);
-        _ready = new Button { Name = "Ready", FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(215, 36) };
+        _ready = new Button { Name = "Ready", FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(215, 38) };
         _ready.Pressed += () => Hub.SetMyReady(!Hub.IsReady(Net.LocalId));
         row.AddChild(_ready);
-        _status = new Label(); col.AddChild(_status);
-        col.AddChild(new Label { Text = "Esc closes.", Modulate = new Color(1, 1, 1, 0.45f) });
+        _status = Ui.Lbl("", Ui.Small, Ui.Dim); col.AddChild(_status);
+        col.AddChild(Ui.Lbl("Esc closes.", Ui.Small, Ui.Dim));
     }
 
     public override void _Process(double delta)

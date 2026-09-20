@@ -36,11 +36,9 @@ public static class Ui
     public const int PanelCorner = 10, CardCorner = 7;
 
     // ---------------------------------------------------------------- type scale
-    // Four sizes, and every screen picks from them. The old code set sizes ad hoc -- 11, 12,
+    // Five sizes, and every screen picks from them. The old code set sizes ad hoc -- 11, 12,
     // 13, 14, 15, 16, 20, 22, 34, 64 -- so no two headings on different screens matched.
-    // (A Display size for the title screen belongs here too, but an unused constant fails the
-    // cross-reference, so it arrives with the screen that uses it.)
-    public const int Title = 22, Head = 17, Body = 14, Small = 12;
+    public const int Display = 56, Title = 22, Head = 17, Body = 14, Small = 12;
 
     // ---------------------------------------------------------------- building blocks
 

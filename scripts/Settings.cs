@@ -10,7 +10,12 @@ public static class Settings
 
     public static readonly float[] VolumeSteps = { 0f, 0.25f, 0.5f, 0.75f, 1f };
     public static int VolumeIdx = 3;
-    public static float MusicVolume = 0.6f;          // 0..1, a share of the master volume
+    // 0..1, a share of the master volume. It MUST be one of the five steps the Esc menu offers,
+    // because that row finds the live one by matching the value: at the old default of 0.6 nothing
+    // matched, so the menu opened with no step lit and read as broken. 0.75 rather than 0.5 keeps
+    // the smoke check that clicks 50% meaningful -- a default equal to the value a check sets is a
+    // check that cannot fail.
+    public static float MusicVolume = 0.75f;
     public static bool MusicOn = true;               // on by default; the Esc menu toggles it
     public static int RadarSize = 1;                 // 0 small, 1 medium, 2 large
     public static float Volume => VolumeSteps[Mathf.Clamp(VolumeIdx, 0, VolumeSteps.Length - 1)];
