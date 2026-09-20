@@ -206,10 +206,13 @@ public partial class Hub : Node2D
         if (InArena) BuildArena();                   // registered as a target AFTER Combat.Clear
         else if (PendingRaidLevel > 0 && Net.IsHost) { _raidLevel = PendingRaidLevel; _raidIn = RaidDelay; }
         PendingRaidLevel = 0;
-        for (int i = 0; i < (InArena ? 0 : DummyPos.Length); i++)       // the dummies live at home
+        // the dummies live at home: 1 (plain), 3 (armed), and where 2 stood, two PRACTICE
+        // FIGHTERS (4 and 5) -- light-fighter targets for point defence to train on
+        var targets = new (int n, Vector2 at, bool fighter)[] { (1, DummyPos[0], false), (3, DummyPos[2], false),
+                                                                (4, DummyPos[1] + new Vector2(-38, -22), true), (5, DummyPos[1] + new Vector2(38, 22), true) };
+        foreach (var (n, at, fighter) in InArena ? System.Array.Empty<(int, Vector2, bool)>() : targets)
         {
-            int n = i + 1;
-            var d = new TargetDummy { Name = $"TargetDummy{n}", Number = n, Armed = n == 3, Position = DummyPos[i], ZIndex = 3 };
+            var d = new TargetDummy { Name = fighter ? $"PracticeFighter{n - 3}" : $"TargetDummy{n}", Number = n, Armed = n == 3, Fighter = fighter, Position = at, ZIndex = 3 };
             AddChild(d); _dummies.Add(d);
             Combat.Hostiles.Add(d);
             d.Published = (last, avg, total) => { if (Net.IsOnline) Rpc(nameof(NetDummy), n, last, avg, total); };

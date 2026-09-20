@@ -17,7 +17,7 @@ public static class Missions
     public class BossType { public string Id, Name; public double Hull; }
     public static readonly BossType[] Bosses =
     {
-        new() { Id = "silver_lancer", Name = "SILVER LANCER", Hull = 1200 },
+        new() { Id = "silver_lancer", Name = "SILVER LANCER", Hull = 600 },
     };
     public static BossType Current => Bosses[0];
     public static string BossName => Current.Name;

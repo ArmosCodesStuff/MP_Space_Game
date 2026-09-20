@@ -423,9 +423,12 @@ public partial class _Test : Node
 
         // ── dummies ──
         var d1 = H.GetNode<TargetDummy>("TargetDummy1");
-        var d2 = H.GetNode<TargetDummy>("TargetDummy2");
+        var d2 = H.GetNode<TargetDummy>("PracticeFighter1");            // where dummy 2 stood: two practice fighters
+        var pf2 = H.GetNode<TargetDummy>("PracticeFighter2");
         var d3 = H.GetNode<TargetDummy>("TargetDummy3");
-        Check(Count<TargetDummy>() == 3 && new[] { d1.NetId, d2.NetId, d3.NetId }.Distinct().Count() == 3, "three dummies with distinct ids");
+        Check(Count<TargetDummy>() == 4 && new[] { d1.NetId, d2.NetId, pf2.NetId, d3.NetId }.Distinct().Count() == 4
+              && d2.Fighter && pf2.Fighter && d2.HitRadius < 20f && !d1.Fighter && !d3.Fighter,
+              "two dummies and two practice light fighters (small craft), all with distinct ids");
 
         // ── battleship main guns: cursor aim, hold Space, salvo == staggered ──
         var dummy = d1;
@@ -503,7 +506,7 @@ public partial class _Test : Node
 
         // ── warp (V): every capital ship; a hull cooldown, not a slot ──
         {
-            var me = Me; var warpHome = me.Position; var d2w = H.GetNode<TargetDummy>("TargetDummy2");
+            var me = Me; var warpHome = me.Position; var d2w = H.GetNode<TargetDummy>("TargetDummy3");
             void Ready() { typeof(PlayerShip).GetField("_warpCd", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(me, 0.0); me.Velocity = Vector2.Zero; me.Rotation = 0f; }
             void Deselect() => typeof(Hub).GetField("_selected", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(H, null);
             Check(Abilities.For(me.Class).All(a => a.Id != "warp"), "warp takes no slot on the ability bar");
@@ -600,9 +603,13 @@ public partial class _Test : Node
         Check(spr.Texture.ResourcePath.EndsWith("carrier_player.png") && Math.Abs(spr.Texture.GetHeight() * spr.Scale.Y - 170f) < 0.5f,
               "carrier flies the new symmetrical sprite at 170 u");
         await Park(new Vector2(780, 700), 0);
+        var pdLight = H.SpawnRaider(new Vector2(700, 860));            // a third light target (the practice fighters are two)
         Key(global::Godot.Key.Q); await Wait(2.0);
         var cpds = ship.PdTurrets;
-        Check(cpds.Select(x => x.Target).Where(x => x != null).Distinct().Count() == 3, "carrier PD: three turrets on three different dummies");
+        var pdts = cpds.Select(x => x.Target).Where(x => x != null).ToList();
+        Check(pdts.Distinct().Count() == 3 && pdts.All(t => t is Raider || (t is TargetDummy td && td.Fighter)),
+              "carrier PD: three turrets on three different LIGHT targets -- never a plain dummy");
+        if (GodotObject.IsInstanceValid(pdLight)) pdLight.TakeDamage(9999);
 
         // clicks select only; Space attacks; R recalls
         await Park(d1.Position + new Vector2(-300, 300));
@@ -696,6 +703,23 @@ public partial class _Test : Node
               $"bomber slot shows the return / rearm ({AbilityBar.StateOf(ship, "bombers", H.Selected).Line})");
         await Wait(15.0);
         Check(ship.BombersReady == 2 && Bombers().All(w => w.Docked), "bombers return to their docks, rearm, and are ready again");
+        // the docking fix: bombers dock and re-arm even while the carrier TURNS hard (a turning
+        // carrier swings their slots sideways; they used to hover beside them, never docking)
+        Key(global::Godot.Key.F); await Wait(0.05);
+        for (int i = 0; i < 60 * 20 && !Bombers().All(w => w.Ammo <= 0 || !w.Docked); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        Input.ParseInputEvent(new InputEventKey { Keycode = global::Godot.Key.W, PhysicalKeycode = global::Godot.Key.W, Pressed = true });
+        Input.ParseInputEvent(new InputEventKey { Keycode = global::Godot.Key.D, PhysicalKeycode = global::Godot.Key.D, Pressed = true });
+        float yaw0 = ship.Rotation; bool allHome = false;
+        for (int i = 0; i < 60 * 15 && !allHome; i++)
+        {
+            allHome = Bombers().All(w => w.Docked);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        }
+        float carrierTurned = Mathf.Abs(Mathf.AngleDifference(yaw0, ship.Rotation));
+        Input.ParseInputEvent(new InputEventKey { Keycode = global::Godot.Key.W, PhysicalKeycode = global::Godot.Key.W, Pressed = false });
+        Input.ParseInputEvent(new InputEventKey { Keycode = global::Godot.Key.D, PhysicalKeycode = global::Godot.Key.D, Pressed = false });
+        Check(allHome && Bombers().All(w => w.RearmLeft > 0 || w.Armed), $"with the carrier turning hard, the bombers still dock and re-arm (it turned {Mathf.RadToDeg(carrierTurned):0} deg meanwhile)");
+        ship.Velocity = Vector2.Zero; await Wait(15.0);
 
         // No tracking, tested on single torpedoes so bombers cannot re-aim: moving
         // the target during a whole strike is not a fair test, because a bomber still
@@ -720,21 +744,21 @@ public partial class _Test : Node
             var Yd = H.Yard;
             var mn = Yd.Gatherers.First(g => g.Kind == GatherKind.Miner);
             var sv = Yd.Gatherers.First(g => g.Kind == GatherKind.Salvager);
-            Check(mn.MaxHull == 60 && sv.MaxHull == 60 && Yd.Hauler.MaxHull == 150, "miners and salvagers have 60 hull, the hauler 150");
+            Check(mn.MaxHull == 120 && sv.MaxHull == 120 && Yd.Hauler.MaxHull == 150, "miners and salvagers have 120 hull, the hauler 150");
             Yd.Credits = 100000; double inv0 = Yd.Invested("MINERS"); int lv0 = Yd.Level("miner_hold");
             double price = Economy.Cost(Economy.ById("miner_hold"), lv0);
             Check(Yd.TryBuy("miner_hold") && Math.Abs(Yd.Invested("MINERS") - inv0 - price) < 1e-6, $"buying an upgrade adds its price to its category's investment (+{price:0})");
             double cost = Yd.RebuildCost("MINERS");
             Check(cost > 0 && Math.Abs(cost - Math.Round(Yd.Invested("MINERS") * 0.10)) < 1e-6, $"a rebuild costs 10% of it ({cost:0} of {Yd.Invested("MINERS"):0})");
-            mn.TakeDamage(59);
-            Check(mn.State != Gatherer.St.Destroyed && Math.Abs(mn.Hull - 1) < 1e-6, "59 damage leaves a miner at 1 hull");
+            mn.TakeDamage(119);
+            Check(mn.State != Gatherer.St.Destroyed && Math.Abs(mn.Hull - 1) < 1e-6, "119 damage leaves a miner at 1 hull");
             mn.TakeDamage(5); await Wait(0.05);
             Check(mn.State == Gatherer.St.Destroyed && !mn.Visible && mn.Cargo == 0 && Math.Abs(mn.RebuildIn - 30) < 0.2 && Yd.ArmOf(mn) < 0 && Yd.QueueIndex(mn) < 0,
                   "destroyed: gone, its cargo lost, its arm and queue place given up, rebuilt in 30 s");
             Yd.Credits = cost - 1; mn.RebuildIn = 0.1; await Wait(0.3);
             Check(mn.State == Gatherer.St.Destroyed && mn.WaitingForCredits, "short of the rebuild cost, it waits");
             Yd.Credits = cost + 500; await Wait(0.2);
-            Check(mn.State != Gatherer.St.Destroyed && mn.Hull == 60 && mn.Visible && Math.Abs(Yd.Credits - 500) < 1e-6, "paid for: rebuilt at the base at full hull, exactly 10% charged");
+            Check(mn.State != Gatherer.St.Destroyed && mn.Hull == 120 && mn.Visible && Math.Abs(Yd.Credits - 500) < 1e-6, "paid for: rebuilt at the base at full hull, exactly 10% charged");
             double hcost = Yd.RebuildCost("HAULER");
             Yd.Hauler.ResetToPad(); Yd.Hauler.TakeDamage(150); await Wait(0.05);
             Check(Yd.Hauler.State == Hauler.St.Destroyed && Yd.Hauler.WarpedOut && Math.Abs(Yd.Hauler.RebuildIn - 30) < 0.2, "the hauler, destroyed: gone for 30 s");
@@ -831,9 +855,9 @@ public partial class _Test : Node
             Check(Math.Abs(hp0 - me.Hp - 5) < 0.2, "the same source lands only once inside 0.35 s");
             me.Hit(5, me.Position + Vector2.Up * 100, "test:b");
             Check(Math.Abs(hp0 - me.Hp - 10) < 0.3, "a different source lands at once");
-            await Wait(0.4); double hp1 = me.Hp;
+            await Wait(0.55); double hp1 = me.Hp;
             me.Hit(5, me.Position + Vector2.Up * 100, "test:a");
-            Check(hp1 - me.Hp > 4.5, "after 0.35 s the first source lands again");
+            Check(hp1 - me.Hp > 4.5, "after 0.52 s the first source lands again");
             Check(PlayerShip.CombatHold == 12, "out of combat means 12 s without dealing or taking damage");
             me.TakeDamage(me.Hp - me.MaxHp * 0.5); me.NoteCombat(); double h0 = me.Hp;
             await Wait(1.0);
@@ -1140,7 +1164,7 @@ public partial class _Test : Node
             Check(Music.CombatZone, "the arena counts as combat for the music");
             Me.Position = boss.Position + new Vector2(0, 500); Me.Velocity = Vector2.Zero; Me.Rotation = 0;
             Key(global::Godot.Key.Q); await Wait(0.1);                           // point defence up
-            Check(Math.Abs(boss.MaxHp - 1200) < 1e-6 && Math.Abs(Boss.GunDamage / Boss.GunEvery - 3) < 1e-9, "the boss: 1200 hull at tier 0; its guns 3 DPS");
+            Check(Math.Abs(boss.MaxHp - 600) < 1e-6 && Math.Abs(Boss.GunDamage / Boss.GunEvery - 3) < 1e-9, "the boss: 600 hull at level 1 (solo); its guns 3 DPS");
             // stand in the beam on purpose with a thick hull (test only), and watch the rhythm
             // the boss's health bar: a chunk per hit, bouncing, whitening, fading; bursts merge
             var bar = Nodes<BossBar>().First();
@@ -1210,7 +1234,9 @@ public partial class _Test : Node
                   "the rhythm: the charge 15 s after the beam, a trident half-way between");
             Check(trident == 3 && Math.Abs(Mathf.RadToDeg(spread) - 50) < 3, "a trident: three double-size missiles, the outer two 25 degrees off the middle");
             double beamDmg = me2.DamageBySource.TryGetValue("boss:beam", out var bd) ? bd : 0, chargeDmg = me2.DamageBySource.TryGetValue("boss:charge", out var cd) ? cd : 0;
-            Check(Math.Abs(beamDmg - 200) < 1e-6, $"the beam, live 1 s and checked every 0.51 s, lands twice: 2 x 100 ({beamDmg:0})");
+            // live 3 s, checked every 0.25 s for 50 -- one source lands at most once per 0.52 s, and
+            // ticks fall on frames, so two ticks are sometimes 0.533 s apart: 5 to 7 hits of 50
+            Check(beamDmg >= 200 && beamDmg <= 350 && Math.Abs(beamDmg % 50) < 1e-6, $"the beam, live 3 s at 50 a tick, through the 0.52 s guard: {beamDmg / 50:0} hits ({beamDmg:0})");
             Check(Math.Abs(chargeDmg - 40) < 1e-6, $"the charge rams for 40 ({chargeDmg:0})");
             Check(Music.I == null || Math.Abs(Boss.TridentSpeed - 135f) < 1e-3, "trident missiles fly at 135 u/s (10% slower)");
             // the kill: shared EXP for it and the mission, the bounty's credits, then home
@@ -1231,8 +1257,8 @@ public partial class _Test : Node
                   $"while away the base earned 1/20 of its rate ({Yard.LastAwayOre:0.0} ore for {Yard.LastAway:0} s)");
             // levels: the win cleared level 1; docking at the TIO selects level 2
             Check(Character.BossCleared.TryGetValue("silver_lancer", out var cleared) && cleared.Contains(1), "the win records level 1 as cleared");
-            Check(Math.Abs(Missions.S(2) - 1.1) < 1e-9 && Math.Abs(Missions.S(3) - 1.21) < 1e-9 && Math.Abs(Missions.Current.Hull * Missions.S(2) - 1320) < 1e-6,
-                  "each level is 10% stronger, multiplicatively (level 2: 1320 hull)");
+            Check(Math.Abs(Missions.S(2) - 1.1) < 1e-9 && Math.Abs(Missions.S(3) - 1.21) < 1e-9 && Math.Abs(Missions.Current.Hull * Missions.S(2) - 660) < 1e-6,
+                  "each level is 10% stronger, multiplicatively (level 2: 660 hull)");
             H.OpenTio(); await Wait(0.1);
             var tw2 = Nodes<TioWindow>().First();
             Check(Missions.Level == 2, "docking at the TIO selects the newest unlocked level (2)");

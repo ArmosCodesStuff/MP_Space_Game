@@ -5,8 +5,9 @@ using System.Linq;
 // the host's 10 Hz state and plays its telegraphs from the host's events.
 // One rhythm, 30 s long (all damage x the tier's scale):
 //   GUNS       always: 3.6 every 1.2 s (3 DPS) at the nearest ship within 900 u
-//   DEATH BEAM at 6 s, then every 30 s: a red line for 2 s, then live for 1 s,
-//              checking every 0.51 s: 100 each time it lands on a ship
+//   DEATH BEAM at 6 s, then every 30 s: a red line for 2 s, then live for 3 s,
+//              checking every 0.25 s: 50 each time it lands on a ship (a ship's 0.52 s
+//              invulnerability to one source means a hit about every 0.75 s)
 //   CHARGE     15 s after each beam: a red line for 1.5 s, then a ram along it at
 //              1200 u/s: 40 to any ship in its path
 //   TRIDENT    between them (every 15 s from 13.5 s): 3 guided missiles, 0 and +-25
@@ -35,7 +36,7 @@ public partial class Boss : Node2D, IHittable
     public const double BeamWindup = 2.0, WaveWindup = 1.8;
     public const float BeamLength = 1800f, BeamWidth = 70f, WaveRadius = 340f;
     public const double GunDamage = 3.6, GunEvery = 1.2;                       // 3 DPS
-    public const double BeamEvery = 30, BeamLive = 1.0, BeamTick = 0.51, BeamDamage = 100;
+    public const double BeamEvery = 30, BeamLive = 3.0, BeamTick = 0.25, BeamDamage = 50;
     public const double ChargeWindup = 1.5, ChargeDamage = 40; public const float ChargeSpeed = 1200f, ChargeLength = 900f;
     public const double TridentEvery = 15, TridentDamage = 15; public const float TridentSpread = 25f, TridentSpeed = 135f, TridentRange = 1920f;
     private double _guns = 2.0, _missiles = 13.5, _beam = 6.0, _charge = 21.0, _wave = 10.0, _send;

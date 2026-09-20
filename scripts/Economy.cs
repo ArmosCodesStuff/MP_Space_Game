@@ -29,7 +29,7 @@ public static class Economy
     public const double HaulerAway = 30;         // seconds through the portal
     public const double HaulerCharge = 3;        // seconds of blue aura before the jump
     // ── hull, and rebuilding what is lost ──
-    public const double UtilityHull = 60, HaulerHull = 150;
+    public const double UtilityHull = 120, HaulerHull = 150;
     public const double RebuildDelay = 30;         // seconds after it is destroyed
     public const double RebuildShare = 0.10;       // of everything invested so far in its category
     public const double HaulerLift = 1.5;        // seconds to lift off the pad

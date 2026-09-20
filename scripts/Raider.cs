@@ -49,6 +49,7 @@ public partial class Raider : Node2D, IHittable
     public const double LightHull = 25, HeavyHull = 100;
     public const double RaiderDps = 1.0;               // x -- a light's laser; a heavy's is 2x
     public const double HeavyDps = 2 * RaiderDps;
+    public const double HeavyShotEvery = 1.0;
     public const float Afterburn = 300f;               // a heavy closing on a pinned target
     public const float HeavyReach = 150f, HeavyHold = 0.9f * HeavyReach, WaitOut = 450f;
     public const float MissileRange = 500f, BlastRadius = 90f;
@@ -248,8 +249,8 @@ public partial class Raider : Node2D, IHittable
             _shot -= delta;
             if (_shot <= 0)
             {
-                _shot = 0.5;
-                Strike(Target, HeavyDps * 0.5 * Strength);
+                _shot = HeavyShotEvery;      // 1 s: slower than a target's 0.52 s invulnerability, so no shot is wasted
+                Strike(Target, HeavyDps * HeavyShotEvery * Strength);
                 Combat.Flash(ToGlobal(_turret?.Position ?? Vector2.Zero), Target.Position, new Color(1f, 0.35f, 0.25f));
             }
         }

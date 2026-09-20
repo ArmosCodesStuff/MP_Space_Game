@@ -21,7 +21,11 @@ public partial class TargetDummy : Node2D, IHittable
     public const int FirstNetId = 1000;
     public int Number = 1;
     public int NetId => FirstNetId + Number - 1;
-    public float HitRadius => 46f;
+    // A PRACTICE FIGHTER is a dummy shaped like a light raider: small craft, so point
+    // defence (which shoots only missiles and light fighters) has something to train on.
+    public bool Fighter;
+    public float HitRadius => Fighter ? Raider.LightLength * 0.4f : 46f;
+    private static Texture2D _fighterTex;
     public bool Alive => true;
     Vector2 IHittable.Position => GlobalPosition;
 
@@ -100,6 +104,17 @@ public partial class TargetDummy : Node2D, IHittable
     {
         if (Armed)   // its reach, faintly: stay outside this ring
             DrawArc(Vector2.Zero, ArmedRange, 0, Mathf.Tau, 64, new Color(1f, 0.35f, 0.3f, 0.22f), 1.5f);
+        var f0 = ThemeDB.FallbackFont;
+        if (Fighter)
+        {   // a light raider's shape, 34 u, flashing when hit
+            _fighterTex ??= GD.Load<Texture2D>("res://enemy_light_fighter.png");
+            float h = Raider.LightLength, w = h * _fighterTex.GetWidth() / _fighterTex.GetHeight();
+            DrawTextureRect(_fighterTex, new Rect2(-w / 2f, -h / 2f, w, h), false, _hitFlash > 0 ? new Color(1f, 0.8f, 0.7f) : Colors.White);
+            Txt.Centre(this, f0, new Vector2(0, -h / 2 - 30), "PRACTICE FIGHTER", 13, new Color(1f, 0.7f, 0.6f, 0.9f));
+            Txt.Centre(this, f0, new Vector2(0, -h / 2 - 12), $"{LastSecond:0.00} DPS", 17, Colors.White);
+            Txt.Centre(this, f0, new Vector2(0, h / 2 + 18), $"total {Total:0}", 12, new Color(1, 1, 1, 0.7f));
+            return;
+        }
         // a drawn hulk: an armoured octagon with a bullseye, tinted hostile red
         var hull = new Color(0.45f, 0.18f, 0.16f);
         var pts = new Vector2[8];

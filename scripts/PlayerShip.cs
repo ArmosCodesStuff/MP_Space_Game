@@ -51,8 +51,8 @@ public partial class PlayerShip : Node2D, IHittable
     public const double CombatHold = 12;
     // Regeneration, always: 0.5% of max hull a second in combat, 3% out of it.
     public const double RegenInCombat = 0.005, RegenOutOfCombat = 0.03;
-    // One ongoing source (an ability, a weapon) lands on a ship at most once per 0.35 s.
-    public const double HitGap = 0.35;
+    // One ongoing source (an ability, a weapon, an area) lands on a ship at most once per 0.52 s.
+    public const double HitGap = 0.52;
     private readonly System.Collections.Generic.Dictionary<string, double> _lastHitBy = new();
     public readonly System.Collections.Generic.Dictionary<string, double> DamageBySource = new();   // host: damage taken, by source
     private double _combatT;

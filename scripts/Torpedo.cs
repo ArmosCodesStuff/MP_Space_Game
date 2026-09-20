@@ -135,12 +135,14 @@ public partial class Torpedo : Node2D, IHittable
             {
                 DrawSetTransform(Vector2.Zero, 0f, Vector2.One * Size);
                 DrawRect(new Rect2(-2.2f, -9f, 4.4f, 18f), new Color(0.85f, 0.85f, 0.8f));
+                DrawColoredPolygon(new[] { new Vector2(-2.2f, -9f), new Vector2(0, -13f), new Vector2(2.2f, -9f) }, new Color(0.9f, 0.2f, 0.18f));
                 DrawCircle(new Vector2(0, 9f), 2.4f, new Color(1f, 0.7f, 0.3f));
                 DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
             }
             else
             {
                 DrawRect(new Rect2(-2.2f, -9f, 4.4f, 18f), new Color(0.85f, 0.85f, 0.8f));
+                DrawColoredPolygon(new[] { new Vector2(-2.2f, -9f), new Vector2(0, -13f), new Vector2(2.2f, -9f) }, new Color(0.9f, 0.2f, 0.18f));   // a red tip, on every missile
                 DrawCircle(new Vector2(0, 9f), 2.4f, new Color(1f, 0.7f, 0.3f));
             }
         }

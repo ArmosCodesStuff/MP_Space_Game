@@ -129,13 +129,14 @@ public partial class Turret : Node2D
         QueueRedraw();
     }
 
-    // Point defence shoots MISSILES first, then small craft (fighters), then anything
-    // else; within that, the nearest one no sibling turret has claimed (if all are
-    // claimed, the nearest regardless).
+    // Point defence shoots ONLY missiles and light fighters (light raiders, and the practice
+    // fighters) -- never heavies, bosses or the dummies. Missiles first; within that, the
+    // nearest one no sibling turret has claimed (if all are claimed, the nearest regardless).
+    public static bool PdTargets(IHittable h) => h is Torpedo || (h is Raider r && !r.Heavy) || (h is TargetDummy d && d.Fighter);
     public static int PdPriority(IHittable h) => h is Torpedo ? 0 : h.HitRadius < 20f ? 1 : 2;
     private IHittable Acquire(Vector2 from)
     {
-        var inRange = Combat.Near(from, Range).OrderBy(h => PdPriority(h)).ThenBy(h => from.DistanceTo(h.Position)).ToList();
+        var inRange = Combat.Near(from, Range).Where(PdTargets).OrderBy(h => PdPriority(h)).ThenBy(h => from.DistanceTo(h.Position)).ToList();
         foreach (var h in inRange)
         {
             bool claimed = false;
@@ -240,6 +241,17 @@ public partial class Wing : Node2D
     public float LastOvershoot { get; private set; }   // how far past the target the last pass went
     public double LaunchedAt { get; private set; } = -1; // the carrier's clock when it last left the hangar
     private enum BSt { Docked, Approach, Aim, Launch, Return, Backing }
+    public const float DockSnap = 6f;              // within this of its slot, a backing bomber is home
+    public const double BackingLimit = 2.5;        // and after this long backing in, it is home regardless
+    private Vector2 _lastSlot; private bool _haveSlot;
+    // how its slot is moving now: the carrier's motion AND its turning, measured frame to frame
+    private Vector2 SlotVelocity(Vector2 slot, double delta)
+    {
+        var v = _haveSlot && delta > 0 ? (slot - _lastSlot) / (float)delta : Carrier.Velocity;
+        _lastSlot = slot; _haveSlot = true;
+        return v;
+    }
+    public double BackingFor => _b == BSt.Backing ? _backT : 0;
     public const float CrawlSpeed = 0.25f;     // bombers keep closing at this fraction of top speed while they launch
     public bool Launching => _b == BSt.Launch;
     private BSt _b = BSt.Docked;
@@ -410,25 +422,31 @@ public partial class Wing : Node2D
                     Combat.LaunchTorpedo(Position + dir * BomberLength * 0.45f, dir, (float)S["torpedo_speed"],
                                          (float)S["torpedo_range"], S["torpedo_damage"], source: Carrier);
                 }
-                if (Ammo <= 0) { _b = BSt.Return; Carrier.NoteStrikeDone(); }
+                if (Ammo <= 0) { _b = BSt.Return; _haveSlot = false; Carrier.NoteStrikeDone(); }
                 break;
 
             case BSt.Return:
             {   // to a point just outboard of its own slot...
                 var (slot, rot) = Carrier.DockSlot(this);
+                var slotVel = SlotVelocity(slot, delta);
                 var outward = Vector2.Up.Rotated(rot);
-                FlyToward(slot + outward * 45f, Speed, delta, Carrier.Velocity);
+                FlyToward(slot + outward * 45f, Speed, delta, slotVel);
                 if (Position.DistanceTo(slot + outward * 45f) < 8f) { _b = BSt.Backing; _backT = 0; }
                 break;
             }
             case BSt.Backing:
-            {   // ...then turn nose-out and back in, tail first
+            {   // ...then turn nose-out and back in, tail first. It rides the slot's TRUE motion:
+                // a turning carrier swings the slot sideways as fast as a bomber backs in, and
+                // following only the carrier's own velocity left it hovering and jittering beside
+                // the slot, never docking, never re-arming.
                 var (slot, rot) = Carrier.DockSlot(this);
+                var slotVel = SlotVelocity(slot, delta);
                 _backT += delta;
                 Rotation = Mathf.LerpAngle(Rotation, rot, Mathf.Clamp(6f * (float)delta, 0f, 1f));
-                if (_backT > 0.4) Position = Position.MoveToward(slot, 60f * (float)delta) + Carrier.Velocity * (float)delta;
-                else Position += Carrier.Velocity * (float)delta;
-                if (Position.DistanceTo(slot) < 1.5f) { _b = BSt.Docked; _rearm = S["bomber_rearm"]; SnapToDock(); Carrier.Signal(slot); }
+                Position += slotVel * (float)delta;
+                if (_backT > 0.4) Position = Position.MoveToward(slot, 60f * (float)delta);
+                if (Position.DistanceTo(slot) < DockSnap || _backT > BackingLimit)
+                { _b = BSt.Docked; _rearm = S["bomber_rearm"]; SnapToDock(); Carrier.Signal(slot); }
                 break;
             }
         }

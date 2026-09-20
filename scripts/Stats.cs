@@ -95,7 +95,7 @@ public class ShipStats
         {
             Add("Fighters", "fighter_count",    "Craft",            3, "", 0);
             Add("Fighters", "fighter_hp",       "Hull each",        48, "", 0);
-            Add("Fighters", "fighter_damage",   "Damage per shot",  0.175, "", 3);
+            Add("Fighters", "fighter_damage",   "Damage per shot",  2, "", 1);
             Add("Fighters", "fighter_interval", "Reload",           0.35, "s", 2, inverse: true);
             Add("Fighters", "fighter_range",    "Weapon range",     300, "u", 0);
             Add("Fighters", "fighter_speed",    "Top speed",        352, "u/s", 0);
@@ -108,7 +108,7 @@ public class ShipStats
             // moving target can step out of the way.
             Add("Bombers", "bomber_count",    "Craft",              2, "", 0);
             Add("Bombers", "bomber_hp",       "Hull each",          110, "", 0);
-            Add("Bombers", "torpedo_damage",  "Torpedo damage",     3.0, "", 1);
+            Add("Bombers", "torpedo_damage",  "Torpedo damage",     15, "", 0);
             Add("Bombers", "bomber_ammo",     "Torpedoes per run",  4, "", 0);
             Add("Bombers", "torpedo_interval","Between launches",   0.5, "s", 2, inverse: true);
             Add("Bombers", "torpedo_speed",   "Torpedo speed",      90, "u/s", 0);
