@@ -213,12 +213,12 @@ Recorded here so every chunk builds from the written word, not from memory.
      router's report via UPnP when that works, else only the LAN address.)
   2. **(DONE) Single player stays silent** (already: no socket or lookups offline — to be proven by a test);
      the multiplayer buttons get a **1 s rate limit**.
-  3. **Party size scales the boss and the rewards.** (Formula: to be agreed.)
-  4. **EXP to the next level is always 1000.**
-  5. **EXP by level**: reward = base × enemy level ÷ pilot level (a level-5 enemy for a level-10 pilot:
+  3. **(DONE) Party size scales the boss and the rewards.** (Formula: to be agreed.)
+  4. **(DONE) EXP to the next level is always 1000.**
+  5. **(DONE) EXP by level**: reward = base × enemy level ÷ pilot level (a level-5 enemy for a level-10 pilot:
      half; a level-2 boss for a level-1 pilot: double). Base: 200 at equal level (to be confirmed).
-  6. **+250 EXP for a first kill** of a boss (per boss or per boss level: to be agreed).
-  7. **Raids after a failed mission are scaled like its boss**: a level-n wave is 1.1^n, like a level-n
+  6. **(DONE) +250 EXP for a first kill** of a boss (per boss or per boss level: to be agreed).
+  7. **(DONE) Raids after a failed mission are scaled like its boss**: a level-n wave is 1.1^n, like a level-n
      boss. Boss "levels" replace tiers (numbering from 0 or 1: to be agreed).
   8. **Last: a full code review** — every variable, line, function and reference — with a task list
      worked recursively until the code is clean.

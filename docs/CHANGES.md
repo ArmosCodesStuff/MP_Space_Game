@@ -39,7 +39,7 @@ history pick the work up from it alone. Update it in the same change as the code
 **State as of 2026-09-18: version 0.3.0 plus Unreleased (see it for everything since: docking arms
 and the unload queue, the fleet and hauler pods, the idle economy, base menu, bunker-buster missile,
 painted turrets, docking bombers and more).** Typecheck clean against the real `GodotSharp.dll`,
-`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 383 checks across
+`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 389 checks across
 a single-player run and a host with two guests. Unlike earlier releases, this one was also **looked at**:
 `tools/screens/run.sh` renders the select screen, the creator, a fresh spawn under the base, both
 classes in the hub, the K window, a bomber strike, and turret close-ups on a virtual display; layout
@@ -180,6 +180,38 @@ reachable, which is fine: both harnesses build from the `nupkgs` folder that shi
 ---
 
 ## Unreleased
+
+### Step 3: levels, per-pilot EXP, party scaling — adopted from an interrupted run
+
+**Integrity findings.** An interrupted run (23:52–00:18) built step 3 and a sweep-completeness check,
+committed as three checkpoints, never reported and never `VERIFIED:`. **Reviewed line by line against
+the approved formula, tested, adopted.** Re-verified here: smoke test **three runs in a row, 389 checks
+each, 0 compiler warnings**; my own mutants (1500 EXP a level, an unsplit bounty, an inverted kill ratio)
+all caught; screenshot sweep **65 frames, 0 lint, complete**; the TIO's level row, the boss bar and the
+PILOT window looked at.
+
+#### Changed (adopted — the formula the player approved)
+
+- **Boss levels start at 1**: S(L) = 1.1^(L−1) (level 5 = ×1.4641). Tiers are gone; the TIO selects
+  "LEVEL L". Old saves carry over (tier t beaten → levels 1…t+1 cleared).
+- **Party of P pilots**: boss hull × S(L)(1 + 0.6(P−1)), damage × S(L)(1 + 0.2(P−1)). Raids after a
+  failed level-L mission × S(L), **2 patrols + 1 per extra pilot** (confirmed by the player).
+- **EXP, per pilot, on its own machine**: the kill **round(200 × boss level ÷ pilot level)**, **+250 the
+  first time that pilot clears that level** (a set of cleared levels per boss), **+100 for completing**.
+  **Every level needs 1000 EXP.**
+- **Credits**: **2000 × S(L) × (1 + 0.5(P−1)), split evenly among the P pilots** — the host's share to
+  its base, each guest's to its own base (set aside while it visits). Solo earns the most.
+
+#### Added (adopted)
+
+- **The screenshot sweep must finish**: it ends with `SWEEP DONE`, and a sweep cut off part-way is
+  reported as incomplete — it can never pass as clean again.
+
+#### To tidy in the code review
+
+- The host's bounty share goes to the same place by two branches (`Yard.TripCredits`); one will do.
+
+### Earlier in Unreleased
 
 ### Chunk 8b: a dedicated two-player arena test
 
