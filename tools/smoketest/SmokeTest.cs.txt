@@ -1001,7 +1001,7 @@ public partial class _Test : Node
             for (int i = 0; i < 60 * 12 && hv.Position.DistanceTo(edge) > 8f; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             await Wait(0.5);
             float hvFacing = Mathf.RadToDeg(Mathf.Abs(Mathf.AngleDifference(hv.Rotation, (hm.Position - hv.Position).Angle() + Mathf.Pi / 2f)));
-            Check(hv.Position.DistanceTo(edge) < 10f && Math.Abs(edge.DistanceTo(Hub.BasePos) - Hub.RaidEdge) < 1f && hvFacing < 15f && HvLaser() == 0,
+            Check(hv.Position.DistanceTo(edge) < 10f && Math.Abs(hv.Position.DistanceTo(Hub.BasePos) - 3200f) < 10f && hvFacing < 15f && HvLaser() == 0,
                   $"its target unpinned, it waits at the map's edge nearest it ({hv.Position.DistanceTo(Hub.BasePos):0} u from the base), facing it, laser silent");
             // the missile: within 500 u of the heavy, at where the target will be in 7 s
             hm.Position = edge + (Hub.BasePos - edge).Normalized() * 420f; hm.Velocity = Vector2.Zero;
@@ -1024,12 +1024,13 @@ public partial class _Test : Node
             for (int i = 0; i < 60 * 8 && !hm.Pinned; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             await Wait(0.1); var hp1 = hv.Position; await Wait(0.2);
             float burn = (hv.Position - hp1).Length() / 0.2f;
-            Check(hm.Pinned && Math.Abs(burn - Raider.Cruise * Raider.HeavyBoostMult) < 60f, $"its target pinned, it boosts at 700% ({burn:0} u/s)");
-            for (int i = 0; i < 60 * 6 && hv.Position.DistanceTo(hm.Position) > Raider.HeavyBoostStop - 20f; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            // the spec's numbers as literals: a check that reads the code's own constant cannot catch it being wrong
+            Check(hm.Pinned && Math.Abs(burn - 700f) < 60f, $"its target pinned, it boosts at 700% ({burn:0} u/s)");
+            for (int i = 0; i < 60 * 6 && hv.Position.DistanceTo(hm.Position) > 300f - 20f; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             var hp2 = hv.Position; await Wait(0.2);
             float slow = (hv.Position - hp2).Length() / 0.2f;
             // (over the ground: cruise plus the pinned target's own forced thrust, ~20 u/s)
-            Check(slow <= Raider.Cruise + 0.2f * (float)hm.Stats["max_speed"] + 5f, $"inside 300 u it closes at cruise ({slow:0} u/s over the ground)");
+            Check(slow <= 100f + 0.2f * (float)hm.Stats["max_speed"] + 5f, $"inside 300 u it closes at cruise ({slow:0} u/s over the ground)");
             for (int i = 0; i < 60 * 8 && !hv.Latched; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             double hl0 = HvLaser(); await Wait(3.0);
             double hdps = (HvLaser() - hl0) / 3.0;
