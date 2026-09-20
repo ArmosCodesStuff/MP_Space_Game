@@ -268,6 +268,12 @@ Recorded here so every chunk builds from the written word, not from memory.
 - **A telegraph belongs to its weapon.** The beam and the ram are drawn as **children of the boss**
   in its own frame, and it **holds station** for their wind-ups, so the line shown is the line fired.
   The shockwave stays a world-space circle — it is an effect at a place, not out of the hull.
+- **The title screen flies the real ship, on purpose.** `MainMenu` was written to touch no game
+  classes so that no gameplay change could break it. That is reversed: the menu now builds a real
+  `PlayerShip` in `Demo` mode and real hostiles, because a self-contained menu can show something
+  the game does not do, and a title screen that lies about the ship is worse than a title screen
+  that breaks loudly when the ship changes. The smoke test covers it, so it breaks loudly.
+
 - **The death beam is a trap you can spring or break.** It opens with two escorts, not a red line:
   they shiver at the launch point while coming round onto the pilot, boost in on a triple-length
   plume, flank **port and starboard**, and web. The charge begins when their web *should* have
@@ -578,6 +584,12 @@ where the editor cannot delete it.*
 
 Each of these compiled clean and was wrong at runtime. The smoke test covers all of them.
 
+- **A node can pass every behavioural check and draw nothing.** The title screen's battleship
+  moved, warped, held station and reported its position correctly for several rounds of checks
+  while `PlayerShip.Init()` had never been called, so it had no sprite, no turrets and no stat
+  sheet of its own. Only a sweep frame showed it.
+  *Rule: a check on behaviour is not a check on being drawn. Anything new on screen needs a frame
+  looked at, not just a green test.*
 - **A theme on the root window does not cross a `CanvasLayer`.** Every piece of UI in this game
   hangs off one, so `Ui`'s Button entries reached nothing for the project's whole history and every
   button drew Godot's stock theme. Nothing looked broken, because the stock theme is *also* a dark

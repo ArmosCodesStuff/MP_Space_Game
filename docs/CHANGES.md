@@ -47,7 +47,7 @@ faults have been fixed from those frames more than once.
 
 **As of 2026-09-20 the whole harness also runs natively on the developer's Windows machine** (see
 Unreleased → *The harnesses run on Windows*): typecheck 0 errors, build 0 warnings, analysers 0
-findings, xref 0 unused, smoke **439 pass / 6 of 6 runs** (the 2 short of 441 assert the sandbox's
+findings, xref 0 unused, smoke **447 pass / 6 of 6 runs** (the 2 short of 449 assert the sandbox's
 missing router and internet), sweep **67 frames, 0 lint** on the real GPU with the project's own
 Forward+ renderer. So "how it looks on the developer's own GPU" is no longer unconfirmed for the
 swept states. What remains unconfirmed is how it feels in a hand-played session — nothing here
@@ -307,6 +307,58 @@ have skipped them. They are listed now, and one of them (`Shell`) held a real fi
 
 Full detail, including what was found and deliberately *not* changed, is in `REVIEW.md`.
 
+### The title screen flies the real battleship
+
+**Checked:** typecheck 0 errors; build 0 warnings; analysers 0 findings; xref 0 unused; smoke
+**447 pass, 6/6 runs, three runs in a row**; sweep 67 frames, 0 lint; the menu looked at.
+
+#### Changed
+
+- **The menu ship is a real `PlayerShip`** with `Demo` set: the same turrets, shells, missile,
+  warp and autopilot the game flies. It reads no keyboard and no mouse; the menu is its pilot.
+  What the title screen shows is the battleship, or it is a bug in the battleship.
+- **Heavy fighters and a webifier** join the light fighters, as real `Combat.Hostiles` the ship's
+  own guns acquire. Heavies and the webifier **hold a standoff and circle** rather than making
+  passes, so there is always something in frame; the webifier does not shoot at all — it paints
+  the hull with a tether, the same mechanic the death beam's escorts use.
+- **It dodges an area shot.** One is called every 15 s and lands 8 s later. With **4 s to go** the
+  ship turns its bow away and jumps **500 u** — the warp runs along the keel, so the turn *is* the
+  aim — and the 3 s warm-up puts it clear **a full second before impact**. Then it flies itself
+  back to station. Every number is the ship's own: its turn rate, its warm-up, its autopilot.
+- **The diorama has a camera** (zoom 1.45) and sits in the band between the title and the panel.
+  Zooming the view is the honest way to make ships read at a glance; scaling the sprites would
+  make the title screen show a ship that is not the size of the ship.
+
+#### The self-containment rule is reversed, deliberately
+
+`MainMenu` used to say it touched no game classes so that no gameplay change could break it. The
+cost was that it could show something the game does not do. It is a small **world** now: it
+registers hostiles, wires `Combat.OnFlash` / `OnShell` / `OnTorpedo`, and drops all of it in
+`_ExitTree` — every hook is a lambda holding the node, and one left behind is a freed node the
+next world's shot calls into.
+
+#### New checks
+
+| Check | What it pins |
+|---|---|
+| the title screen flies a REAL battleship | `Demo`, and the class |
+| two missiles on a 5 s reload and a 500 u hop | the retune survives `Init` |
+| heavies, a webifier and light fighters, all real targets | every foe is in `Combat.Hostiles` |
+| pushed 250 u off station it flies itself home | the autopilot, measured from a real displacement |
+| the area shot is called 8 s before it lands | 8.0 s |
+| it starts the jump with four seconds to go | 4.0 s |
+| and is clear a whole second before impact | 1.0 s |
+| the jump actually moved it | 549 u |
+
+#### A ship that passed every check and drew nothing
+
+`PlayerShip.Init()` is what builds a ship — its sprite, its turrets, its stat sheet. The menu
+never called it. The node still moved, warped, held station and reported its position perfectly,
+so **every mechanical check passed on an invisible ship**; only the sweep frame showed the hull
+was missing. *A check on behaviour is not a check on being drawn.* The retune also has to come
+**after** `Init`, because `Init` rebuilds the stat sheet from the class and discards anything set
+before it.
+
 ### A cleaner, more futuristic look, on one palette
 
 **Checked:** typecheck 0 errors; build 0 warnings; analysers 0 findings; xref 0 unused; smoke
@@ -495,6 +547,23 @@ Frames looked at. No game code changed.
   and they fail by construction. They are not regressions and the behaviour they cover is real.
   **433 is the bar on Windows *and* under WSL**; only the sandbox itself reaches 435. Making them
   branch on the environment is not done.
+- **`ERROR: 2 resources still in use at exit`, in the solo smoke run, since the title screen
+  started spawning foes.** It is a SHUTDOWN accounting message, not a live leak: the smoke test's
+  own leak checks pass in the same run (`orphan nodes 0 -> 0`, object count stable across leaving
+  and re-entering the hub), and nothing accumulates while the game is running.
+
+  What is ruled out, by bisection, one run each: it is not the `Combat` hooks (both `_ExitTree`
+  and `NotificationPredelete` are proven to run and clear them), not the foes' `Died` event, not
+  which textures they load (the count is the same with three shared textures as with three of
+  their own), and not a texture handle held in a C# field (moving it onto a `Sprite2D` child
+  changed nothing). Disposing the handle outright is **wrong** and was tried: the textures are
+  shared through `ResourceLoader`'s cache, and disposing one broke **1341** checks.
+
+  It appears only when the menu has foes, which is also the only case where the menu's ship
+  fires. `Sfx`'s voice pool now stops its players and releases their streams on the way out --
+  the same fix `Music` already carries, and correct on its own merits -- but it did not change
+  the count either. Not fixed; not understood past this point; not hiding it in the runner.
+
 *(The non-atomic character save that was listed here is now fixed — see Fixed, below.)*
 
 #### Fixed

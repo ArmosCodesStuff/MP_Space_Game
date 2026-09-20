@@ -34,6 +34,11 @@ public class ShipStats
 
     public double this[string id] => _byId.TryGetValue(id, out var s) ? s.Value : 0;
 
+    // Retune ONE ship's sheet, for a ship that is not a pilot's: the title screen's battleship
+    // fires two missiles on a five second reload rather than the class's. It is the sheet that
+    // changes, not the class, so the ship still reads every other number the real one does.
+    public void SetBase(string id, double v) { if (_byId.TryGetValue(id, out var s)) s.Base = v; }
+
     private void Add(string group, string id, string label, double b, string unit, int dec = 1, bool inverse = false)
     {
         var s = new Stat { Group = group, Id = id, Label = label, Base = b, Unit = unit, Decimals = dec, Inverse = inverse };

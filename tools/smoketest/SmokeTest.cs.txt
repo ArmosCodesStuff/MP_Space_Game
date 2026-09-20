@@ -79,6 +79,64 @@ public partial class _Test : Node
         // Hub sets CombatZone on the way in; nothing cleared it on the way out, so quitting from
         // the arena left the combat track playing over the menu.
         Check(!Music.CombatZone, "the combat zone flag is dropped too: the menu is not scored as a fight");
+        await MenuDiorama();
+    }
+
+    // ── the title screen ──────────────────────────────────────────────────────
+    // The menu used to be sprites and structs, self-contained so no gameplay change could break
+    // it -- and the cost was that it could show something the game does not do. It flies the REAL
+    // battleship now, so these checks are also a check on the battleship.
+    async Task MenuDiorama()
+    {
+        var menu = GetTree().CurrentScene as MainMenu;
+        Check(menu?.DemoShip != null && menu.DemoShip.Demo && menu.DemoShip.Class == ShipClass.Battleship,
+              "the title screen flies a REAL battleship, not a picture of one");
+        if (menu?.DemoShip == null) return;
+        var ship = menu.DemoShip;
+        // The spec's numbers as literals, never the menu's own constants: a check that reads the
+        // constant cannot catch the constant being wrong.
+        Check(Math.Abs(ship.Stats["missile_mag"] - 2) < 1e-9 && Math.Abs(ship.Stats["missile_reload"] - 5) < 1e-9
+              && Mathf.IsEqualApprox(ship.WarpHop, 500f),
+              $"two missiles on a 5 s reload and a 500 u hop ({ship.Stats["missile_mag"]:0} / {ship.Stats["missile_reload"]:0} s / {ship.WarpHop:0} u)");
+        // The ship has to be the SIZE it is in game. The menu had its own zoom for a while and the
+        // battleship was half as big again on the title screen as it is the moment you press PLAY.
+        // Compared with 0.9 as a literal rather than with Hub.DefaultZoom, so this also fails if
+        // the game's zoom is retuned and the menu is left behind.
+        Check(Mathf.IsEqualApprox(menu.CameraZoom, 0.9f) && Mathf.IsEqualApprox(menu.CameraZoom, Hub.DefaultZoom),
+              $"the title screen shows the ship at the game's own zoom ({menu.CameraZoom:0.00})");
+        Check(menu.Foes.Count(f => f.Kind == MenuFoeKind.Heavy) == 2
+              && menu.Foes.Count(f => f.Kind == MenuFoeKind.Web) == 1
+              && menu.Foes.Count(f => f.Kind == MenuFoeKind.Light) == 3
+              && menu.Foes.All(f => Combat.Hostiles.Contains(f)),
+              "heavies, a webifier and light fighters, all of them real targets the ship can shoot");
+        // HOLDING STATION. Pushed well off its mark first: a ship that was never going to move
+        // cannot demonstrate that it comes back, which is the same vacuity trap as the boss lock.
+        ship.Position = menu.Station + new Vector2(200, 150);
+        double drift0 = ship.Position.DistanceTo(menu.Station);
+        await Wait(8.0);
+        double drift1 = ship.Position.DistanceTo(menu.Station);
+        Check(drift0 > 200 && drift1 < 120,
+              $"pushed {drift0:0} u off station it flies itself home ({drift1:0} u)");
+
+        // THE DODGE. An area shot lands in 8 s; it starts the jump with 4 to go and the warp takes
+        // 3, so it is clear ONE SECOND before impact. Each number is checked, not just the last.
+        menu.ForceAreaShot();
+        // Wait for the shot to actually be CALLED. Reading the countdown one frame after asking
+        // for it read -1 (no shot yet) and every measurement below was taken from that -1.
+        for (int i = 0; i < 60 && menu.AreaShotIn < 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        double called = menu.AreaShotIn;
+        double startedAt = -1, landedAt = -1;
+        var before = ship.Position;
+        for (int i = 0; i < 60 * 12 && menu.AreaShotIn > 0; i++)
+        {
+            if (startedAt < 0 && ship.Warping) startedAt = menu.AreaShotIn;
+            if (startedAt >= 0 && landedAt < 0 && !ship.Warping) landedAt = menu.AreaShotIn;
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        }
+        Check(Math.Abs(called - 8) < 0.2, $"the area shot is called 8 s before it lands ({called:0.0} s)");
+        Check(startedAt > 3.0 && startedAt <= 4.05, $"it starts the jump with four seconds to go ({startedAt:0.0} s)");
+        Check(landedAt > 0.6 && landedAt < 1.6, $"and is clear a whole second before impact ({landedAt:0.0} s)");
+        Check(before.DistanceTo(ship.Position) > 300, $"the jump actually moved it ({before.DistanceTo(ship.Position):0} u)");
     }
 
     // ── character select ─────────────────────────────────────────────────────

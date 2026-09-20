@@ -55,7 +55,7 @@ public static class Sfx
         Played[name] = Played.TryGetValue(name, out var n) ? n + 1 : 1;
         if (!IsInstanceValid(_pool))
         {
-            _pool = new Node { Name = "SfxPool" };
+            _pool = new SfxPool { Name = "SfxPool" };
             tree.Root.CallDeferred(Node.MethodName.AddChild, _pool);
             for (int i = 0; i < Voices; i++) _pool.AddChild(new AudioStreamPlayer());
             foreach (var s in Names) _streams[s] = GD.Load<AudioStream>($"res://sfx/{s}.wav");
@@ -66,4 +66,17 @@ public static class Sfx
         if (p.IsInsideTree()) p.Play(); else p.CallDeferred(AudioStreamPlayer.MethodName.Play);
     }
     static bool IsInstanceValid(Node n) => n != null && GodotObject.IsInstanceValid(n);
+}
+
+// The voice pool, which stops and releases its streams on the way out. A voice STILL PLAYING at
+// shutdown holds the stream it is playing, and the engine reports that as "resources still in use
+// at exit" -- Music carries an _ExitTree for exactly this reason and its comment is the record of
+// it. The pool lives on the root and outlives every scene, so nothing else was ever going to do it.
+public partial class SfxPool : Node
+{
+    public override void _ExitTree()
+    {
+        foreach (var c in GetChildren())
+            if (c is AudioStreamPlayer p) { p.Stop(); p.Stream = null; }
+    }
 }

@@ -25,6 +25,11 @@ public partial class PlayerShip : Node2D, IHittable
     public string Pilot = "Commander";
     public Color Main = new(0.55f, 0.72f, 1.00f), Accent = new(1.00f, 0.78f, 0.35f);
 
+    // A DISPLAY SHIP: the title screen's battleship. It is a real PlayerShip -- the same
+    // turrets, shells, missiles and warp -- but nobody is flying it, so it reads no keyboard and
+    // no mouse. Whatever drives it sets AimPoint, Trigger and AutopilotTo itself.
+    public bool Demo;
+
     public ShipClass Class = ShipClass.Battleship;
     public ShipStats Stats = new(ShipClass.Battleship);
     public bool Alive { get; private set; } = true;
@@ -354,6 +359,11 @@ public partial class PlayerShip : Node2D, IHittable
     // owner's, so the owner jumps; everyone else sees the charge and a clean snap.
     public const double WarpWarmup = 3.0, WarpCooldown = 30.0;
     public const float WarpRange = 2000f, WarpCone = Mathf.Pi / 4f, WarpStandoff = 60f;
+    // A display ship jumps its own distance on its own clock (the title screen dodges an area
+    // shot, which wants a short hop and a short wait). Defaulted to the class numbers, so a real
+    // ship is unaffected -- these exist so the menu does not need a second warp implementation.
+    public double WarpEvery = WarpCooldown;
+    public float WarpHop = WarpRange;
     private double _warpLeft = -1, _warpCd, _warpFlash;
     private bool _remoteWarping;
     public bool Warping => _warpLeft >= 0;
@@ -384,11 +394,11 @@ public partial class PlayerShip : Node2D, IHittable
         if (_warpLeft > 0) return;
         // now: the target or waypoint if it lies within 45 degrees of the bow, else straight on
         var bow = Vector2.Up.Rotated(Rotation);
-        var dest = Position + bow * WarpRange;
+        var dest = Position + bow * WarpHop;
         var aim = (GetParent() as Hub)?.WarpAim() ?? (false, Vector2.Zero, 0f);
         if (aim.has && Mathf.Abs(bow.AngleTo(aim.at - Position)) <= WarpCone) dest = WarpArrival(Position, aim.at, aim.radius, MyArt.Length);
         Position = dest; Velocity = Vector2.Zero;
-        _warpLeft = -1; _warpCd = WarpCooldown; _warpFlash = 0.6;
+        _warpLeft = -1; _warpCd = WarpEvery; _warpFlash = 0.6;
     }
 
     // ── pinned: a light raider holding station on this ship (host decides, the owner flies it) ──
@@ -567,7 +577,7 @@ public partial class PlayerShip : Node2D, IHittable
         }
         // Input.IsKeyPressed polls the raw keyboard, so it does not care that a text
         // box has focus. Hub decides when the controls belong to the UI instead.
-        bool locked = Hub.ControlsLocked;
+        bool locked = Hub.ControlsLocked || Demo;
         float throttle = 0f, rudder = 0f;
         if (!locked)
         {
@@ -584,7 +594,7 @@ public partial class PlayerShip : Node2D, IHittable
         Steer(throttle, rudder, dt);
 
         // the main guns aim at the cursor; the hull does not follow it
-        Trigger = false;
+        if (!Demo) Trigger = false;              // a display ship's driver owns the trigger
         if (!locked)
         {
             AimPoint = GetGlobalMousePosition();

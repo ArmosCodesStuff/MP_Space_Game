@@ -12,8 +12,8 @@ If you are a fresh session with no history of this project, read in this order:
 3. This file for the mechanics of working on it.
 
 **You also need the code.** These documents describe the project; they do not replace it. Whoever
-starts the session should attach the project zip (~6 MB with history, 46 scripts; 67 code files,
-11628 lines in `version/CODE_SNAPSHOT.txt`).
+starts the session should attach the project zip (~6 MB with history, 47 scripts; 68 code files,
+12151 lines in `version/CODE_SNAPSHOT.txt`).
 
 | File | For |
 |---|---|
@@ -66,7 +66,7 @@ validated against the numbers the Linux originals produce:
     dotnet build                                                              # 0 Warning(s), 0 Error(s)
     powershell -ExecutionPolicy Bypass -File tools\analyse\run.ps1            # ANALYSERS: 0 findings
     python tools\analyse\xref.py                                              # UNUSED ANYWHERE: 0
-    powershell -ExecutionPolicy Bypass -File tools\smoketest\run.ps1     # 439 pass, 6/6 runs
+    powershell -ExecutionPolicy Bypass -File tools\smoketest\run.ps1     # 447 pass, 6/6 runs
     powershell -ExecutionPolicy Bypass -File tools\screens\run.ps1
     powershell -ExecutionPolicy Bypass -File tools\snapshot.ps1              # rebuild version\CODE_SNAPSHOT.txt
 

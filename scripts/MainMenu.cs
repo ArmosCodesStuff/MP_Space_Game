@@ -1,29 +1,53 @@
 using Godot;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
-// MAIN MENU. A still diorama -- a capital ship with infinite hull holding off pirates among a few
-// asteroids inside a nebula -- under the title, with Launch / volume / quit. Entirely
-// self-contained: it does not touch the game classes, so it can never be broken by a game change.
+// MAIN MENU. A live diorama under the title: the REAL battleship holding station among
+// asteroids in a nebula, fighting off light fighters, heavies and a webifier, with Play,
+// volume and quit below it.
+//
+// IT USES THE GAME CLASSES ON PURPOSE, and that is a reversal of what this file used to say.
+// It was a self-contained pile of sprites and structs so that no gameplay change could break
+// the menu -- but the cost was that the menu could show something the game does not do. The
+// ship here is a real PlayerShip with Demo set: the same turrets, the same shells, the same
+// missile, the same warp. What you see on the title screen is the battleship, or it is a bug in
+// the battleship. The menu is a small WORLD now, so it registers hostiles and wires the Combat
+// hooks -- and drops all of it in _ExitTree, because every hook is a lambda holding this node.
 public partial class MainMenu : Node2D
 {
-    // Pirates make ATTACK RUNS: they fly in, shoot, and carry straight on past, then turn and come
-    // back.
-    private struct Foe { public Vector2 P, V; public float Hp, Rot; public bool Alive; public double Respawn;
-                         public bool Passing; public double Gun; }
+    // The display ship's own tuning. It is not a pilot's ship and it is not balanced against
+    // anything: these are the numbers that make the scene read.
+    private const double MissileEvery = 5.0;          // its two missiles, on a five second reload
+    private const int MissileMag = 2;
+    private const double AoeEvery = 15.0, AoeWarn = 8.0;   // an area shot every 15 s, telegraphed for 8
+    private const float AoeRadius = 260f, WarpHop = 500f;
+    // It starts the jump with 4 s to go and the warp takes 3, so it lands ONE SECOND before the
+    // shot arrives. Dodging by a whole second reads as a dodge; dodging by a frame reads as luck.
+    private const double DodgeAt = 4.0;
+    private const double GunRange = 620, MissileRange = 900;
+    // The diorama gets a camera, for the same reason the hub has one: the ships are drawn at the
+    // size they really are, and at 1:1 a battleship is a smudge on a 2560-wide screen.
+    //
+    // IT IS THE HUB'S ZOOM, not a number of its own. A title screen showing the ship larger than
+    // the game does is a promise the game does not keep -- the first thing you see after PLAY
+    // would be the same hull, smaller. Reading Hub.DefaultZoom rather than copying its value is
+    // what stops the two drifting apart the next time the game's zoom is tuned.
+    private const float Zoom = Hub.DefaultZoom;
+
     private struct Shot { public Vector2 A, B; public double T; public bool Hostile; }
-    private struct Torp { public Vector2 P, To; public float Speed; }
-    // four turret mounts in the ship's local frame (it sits upright, so local == world here)
-    private static readonly Vector2[] Mounts = { new(-16, -14), new(16, -14), new(-13, 12), new(13, 12) };
-    private readonly List<Foe> _foes = new();
     private readonly List<Shot> _shots = new();
-    private Sprite2D _cap = null!; private readonly List<Sprite2D> _rocks = new();
-    private Texture2D _enemyTex = null!;
-    private readonly List<Torp> _torps = new();
-    private double _fire, _t, _torpCd = 3.0; private readonly Random _rng = new(3);
-    private const double FireInterval = 0.18;     // the capital's guns: brisk, so the scene reads as a fight
-    private const double FoeGunInterval = 1.15;   // pirates shoot back (cosmetic: the hull is invulnerable here)
-    private const double TorpInterval = 5.5;      // and a torpedo every few seconds, with a wider burst
+    private readonly List<MenuFoe> _foes = new();
+    private readonly List<Sprite2D> _rocks = new();
+    private PlayerShip _cap = null!;
+    private Vector2 _centre;
+    private float _ring;
+    // The first area shot is deliberately LATE. The establishing view of a title screen should be
+    // the ship on station trading fire, not an empty patch of space it warped out of.
+    private double _t, _missileCd, _aoeCd = 16.0, _aoeLeft = -1;
+    private Vector2 _aoeAt;
+    private bool _dodged;
+    private readonly Random _rng = new(3);
     private Label _info = null!;
 
     public override void _Ready()
@@ -41,19 +65,33 @@ public partial class MainMenu : Node2D
         // arena left the combat track playing over the menu until a new Hub was built.
         Music.CombatZone = false;
         if (Music.I != null) Music.I.Target = Music.Mood.Ambient;
+
+        // The hub clears these on its way out, but a menu reached at boot has never had a hub.
+        Combat.Clear();
+
         var vs = GetViewport().GetVisibleRect().Size;
         // The diorama sits in the BAND BETWEEN the title and the menu panel, not in the middle of
         // the screen. Moving the title to the top freed the top third but left the capital ship
         // centred -- directly behind the panel, which hid the thing the scene is about. Three
         // bands down the screen: title, fight, menu.
-        var centre = new Vector2(vs.X * 0.5f, vs.Y * 0.36f);
+        _centre = new Vector2(vs.X * 0.5f, vs.Y * 0.36f);
+        // Where a KILLED foe comes back from: off the edge of the band, not off the edge of a
+        // 2560-wide screen diagonal.
+        _ring = vs.Y * 0.62f;
+        // Put _centre on the screen where the band wants it: the camera shows the world around its
+        // own position, so it sits BELOW the diorama by the offset the band needs, scaled by zoom.
+        AddChild(new Camera2D { Position = _centre + new Vector2(0, (vs.Y * 0.5f - vs.Y * 0.36f) / Zoom),
+                                Zoom = new Vector2(Zoom, Zoom), Enabled = true });
+        // The hub sets these from its camera each frame; the overlays drawn in world space (a
+        // foe's health bar) read them, and without this they keep whatever the last scene left.
+        HealthBar.UiScale = Txt.UiScale = 1f / Zoom;
         // nebula backdrop: a few large tinted patches
         var neb = GD.Load<Texture2D>("res://nebula.png");
         Color[] tints = { new(0.45f, 0.30f, 0.75f), new(0.25f, 0.45f, 0.80f), new(0.85f, 0.55f, 0.30f), new(0.30f, 0.75f, 0.85f) };
         for (int i = 0; i < 22; i++)
         {
             var sp = new Sprite2D { Texture = neb, ZIndex = -50 };
-            sp.Position = centre + new Vector2((float)(_rng.NextDouble() - 0.5) * vs.X * 1.2f, (float)(_rng.NextDouble() - 0.5) * vs.Y * 1.2f);
+            sp.Position = _centre + new Vector2((float)(_rng.NextDouble() - 0.5) * vs.X * 1.2f, (float)(_rng.NextDouble() - 0.5) * vs.Y * 1.2f);
             float sc = 0.8f + (float)Math.Pow(_rng.NextDouble(), 1.8) * 3.4f; sp.Scale = new Vector2(sc, sc); sp.Rotation = (float)(_rng.NextDouble() * Math.PI * 2);
             var t = tints[i % tints.Length]; sp.Modulate = new Color(t.R, t.G, t.B, sc > 2.6f ? 0.13f : 0.24f);
             AddChild(sp);
@@ -64,15 +102,51 @@ public partial class MainMenu : Node2D
         {
             var r = new Sprite2D { Texture = rockTex, ZIndex = -5 };
             float a = (float)(_rng.NextDouble() * Math.PI * 2), d = 260f + (float)_rng.NextDouble() * 260f;
-            r.Position = centre + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * d;
+            r.Position = _centre + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * d;
             float sc = 0.7f + (float)_rng.NextDouble() * 0.9f; r.Scale = new Vector2(sc, sc); r.Rotation = (float)(_rng.NextDouble() * 6.28);
             AddChild(r); _rocks.Add(r);
         }
-        // the capital, holding station
-        _cap = new Sprite2D { Texture = GD.Load<Texture2D>("res://capital_ship.png"), Position = centre, Scale = new Vector2(0.6f, 0.6f), ZIndex = 5 };
+
+        // ── the capital: a REAL battleship, with nobody at the helm ──
+        _cap = new PlayerShip { Demo = true, Name = PlayerShip.NodeName(Net.LocalId),
+                                Pilot = "Warships", Main = new Color(0.55f, 0.72f, 1.00f), Accent = new Color(1.00f, 0.78f, 0.35f) };
         AddChild(_cap);
-        _enemyTex = GD.Load<Texture2D>("res://enemy_light_tier_2.png");
-        for (int i = 0; i < 5; i++) _foes.Add(NewFoeReal(centre, vs));
+        // Init() is what BUILDS a ship: its sprite, its turrets, its stat sheet. Skip it and the
+        // node still moves, warps and reports its position perfectly well while drawing NOTHING --
+        // which is exactly what happened, and every mechanical check passed on an invisible ship.
+        // A ship is not a ship until Init.
+        _cap.Init(Net.LocalId, _centre);
+        // Retuned AFTER Init, because Init rebuilds the sheet from the class and would discard it.
+        // The magazine was loaded from the class figure a moment ago, so it reaches two on the
+        // first reload rather than starting there -- five seconds, on a title screen.
+        _cap.Stats.SetBase("missile_mag", MissileMag);
+        _cap.Stats.SetBase("missile_reload", MissileEvery);
+        _cap.WarpHop = WarpHop;
+        _cap.WarpEvery = AoeEvery - AoeWarn;      // ready again before the next area shot is called
+
+        // Its turrets, shells and missiles all go through Combat, exactly as in the hub.
+        Combat.OnFlash = (a, b, c, boss) => { _shots.Add(new Shot { A = a, B = b, T = 0.15 }); Sfx.Laser(a, b, boss); };
+        Combat.OnShell = (from, dir, speed, range, dmg, source) =>
+        {
+            AddChild(new Shell { Position = from, Dir = dir, Speed = speed, Range = range, Damage = dmg, Source = source });
+            Sfx.Cannon(from);
+        };
+        Combat.OnTorpedo = (from, dir, speed, range, dmg, target, turn, heavy, hostile, source, hitSource, size) =>
+            AddChild(new Torpedo { Position = from, Dir = dir, Speed = speed, Range = range, Damage = dmg,
+                                   TargetId = target, TurnRate = turn, Heavy = heavy, HostileFire = hostile,
+                                   Source = source, HitSource = hitSource, Size = size });
+
+        // three lights, two heavies and a webifier
+        foreach (var kind in new[] { MenuFoeKind.Light, MenuFoeKind.Light, MenuFoeKind.Light,
+                                     MenuFoeKind.Heavy, MenuFoeKind.Heavy, MenuFoeKind.Web })
+        {
+            var f = new MenuFoe(kind, _rng) { ZIndex = 4, Target = _cap };
+            f.Died += at => _shots.Add(new Shot { A = at, B = at, T = 0.4 });
+            AddChild(f);
+            f.Deploy(_centre);
+            Combat.Hostiles.Add(f);
+            _foes.Add(f);
+        }
 
         // ── UI ──
         var ui = new CanvasLayer { Layer = 10 }; AddChild(ui);
@@ -103,138 +177,117 @@ public partial class MainMenu : Node2D
         var ver = Ui.Lbl("Warships  early build", Ui.Small, Ui.Dim with { A = 0.7f });
         ver.HorizontalAlignment = HorizontalAlignment.Center; col.AddChild(ver);
     }
-    private static Button Big(string text) { var b = new Button { Text = text }; b.AddThemeFontSizeOverride("font_size", Ui.Head); b.CustomMinimumSize = new Vector2(0, 46); return b; }
 
-    // The offset has to be PERPENDICULAR to the approach, not just some point on a ring: a straight
-    // line through a ring point can still clip the hull, and aiming in a box around the centre sent
-    // runs clean through it.
-    private Vector2 RunAim(Vector2 centre, Vector2 from)
-    {
-        var toward = (centre - from).Normalized();
-        if (toward == Vector2.Zero) toward = Vector2.Right;
-        var perp = new Vector2(-toward.Y, toward.X);
-        float off = (130f + (float)_rng.NextDouble() * 130f) * (_rng.NextDouble() < 0.5 ? -1f : 1f);
-        return centre + perp * off;
-    }
-    private Foe NewFoeReal(Vector2 centre, Vector2 vs)
-    {
-        float a = (float)(_rng.NextDouble() * Math.PI * 2);
-        var p = centre + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * (vs.Length() * 0.6f);
-        var aim = RunAim(centre, p);
-        return new Foe { P = p, V = (aim - p).Normalized() * (95f + (float)_rng.NextDouble() * 70f),
-                         Hp = 3, Alive = true, Gun = _rng.NextDouble() * FoeGunInterval };
-    }
+    // ── what the smoke test looks at ──────────────────────────────────────────
+    public PlayerShip DemoShip => _cap;
+    public Vector2 Station => _centre;
+    public IReadOnlyList<MenuFoe> Foes => _foes;
+    public double AreaShotIn => _aoeLeft;                 // seconds to impact, or -1 between shots
+    public float CameraZoom => Zoom;
+    public void ForceAreaShot() { _aoeCd = 0; _aoeLeft = -1; }
+
+    // Every hook above is a lambda holding THIS node, and Combat is static: one left behind is a
+    // freed node the next world's shot calls into. The hub clears them on its way out for the
+    // same reason.
+    public override void _ExitTree() => Combat.Clear();
+
     public override void _Process(double delta)
     {
-        _t += delta; _fire -= delta;
-        var centre = _cap.Position;
-        _cap.Rotation = Mathf.Sin((float)_t * 0.3f) * 0.05f;
+        _t += delta;
         foreach (var r in _rocks) r.Rotation += (float)delta * 0.08f;
-        for (int i = 0; i < _foes.Count; i++)
+
+        foreach (var f in _foes)
         {
-            var f = _foes[i];
-            if (!f.Alive) { f.Respawn -= delta; if (f.Respawn <= 0) f = NewFoeReal(centre, GetViewport().GetVisibleRect().Size); _foes[i] = f; continue; }
-            float d = f.P.DistanceTo(centre);
-            f.P += f.V * (float)delta;
-            if (!f.Passing && d < 250f) f.Passing = true;                 // committed: fly the run through
-            else if (f.Passing && d > 680f)
-            {   // clear of the ship: wheel around and line up another pass
-                var aim = RunAim(centre, f.P);
-                f.V = (aim - f.P).Normalized() * f.V.Length(); f.Passing = false;
-            }
-            // pirates shoot back on the way in. Cosmetic only: the capital has no hull here.
-            f.Gun -= delta;
-            if (f.Gun <= 0 && d < 560f)
-            {
-                f.Gun = FoeGunInterval * (0.7 + _rng.NextDouble() * 0.6);
-                _shots.Add(new Shot { A = f.P, B = centre + new Vector2((float)(_rng.NextDouble() - 0.5) * 34f,
-                                                                        (float)(_rng.NextDouble() - 0.5) * 34f),
-                                      T = 0.13, Hostile = true });
-            }
-            f.Rot = f.V.Angle() + Mathf.Pi / 2f;
-            _foes[i] = f;
+            var shot = f.Tick(delta, _centre, _ring);
+            if (shot is { } s) _shots.Add(new Shot { A = s.from, B = s.to, T = 0.13, Hostile = true });
         }
-        if (_fire <= 0)
-        {
-            _fire = FireInterval;
-            int best = -1; float bd = float.MaxValue;
-            for (int i = 0; i < _foes.Count; i++) if (_foes[i].Alive) { float d = _foes[i].P.DistanceTo(centre); if (d < bd && d < 520f) { bd = d; best = i; } }
-            if (best >= 0)
-            {
-                var f = _foes[best];
-                f.Hp -= 1;
-                // fire from the mount facing the target, not the hull centre
-                Vector2 mount = Mounts[0]; float md = float.MaxValue;
-                foreach (var mo in Mounts) { float dd = (centre + mo).DistanceTo(f.P); if (dd < md) { md = dd; mount = mo; } }
-                _shots.Add(new Shot { A = centre + mount, B = f.P, T = 0.15 });
-                if (f.Hp <= 0) { f.Alive = false; f.Respawn = 1.5 + _rng.NextDouble() * 2; _shots.Add(new Shot { A = f.P, B = f.P, T = 0.4 }); }
-                _foes[best] = f;
-            }
-        }
-        // TORPEDO: one every few seconds at the furthest live pirate, bursting wider than a shell.
-        _torpCd -= delta;
-        if (_torpCd <= 0)
-        {
-            int far = -1; float fd = 0f;
-            for (int i = 0; i < _foes.Count; i++)
-                if (_foes[i].Alive) { float d2 = _foes[i].P.DistanceTo(centre); if (d2 > fd && d2 < 640f) { fd = d2; far = i; } }
-            if (far >= 0)
-            {
-                _torpCd = TorpInterval;
-                _torps.Add(new Torp { P = centre + new Vector2(0, -26), To = _foes[far].P, Speed = 190f });
-            }
-            else _torpCd = 0.6;
-        }
-        for (int i = _torps.Count - 1; i >= 0; i--)
-        {
-            var tp = _torps[i];
-            float step = tp.Speed * (float)delta;
-            if (tp.P.DistanceTo(tp.To) <= step)
-            {
-                _shots.Add(new Shot { A = tp.To, B = tp.To, T = 0.75 });     // the wide burst
-                _torps.RemoveAt(i);
-                for (int k = 0; k < _foes.Count; k++)                        // anything close enough goes with it
-                {
-                    var fk = _foes[k];
-                    if (!fk.Alive || fk.P.DistanceTo(tp.To) > 78f) continue;
-                    fk.Hp = 0; fk.Alive = false; fk.Respawn = 1.5 + _rng.NextDouble() * 2; _foes[k] = fk;
-                }
-                continue;
-            }
-            tp.P = tp.P.MoveToward(tp.To, step); _torps[i] = tp;
-        }
+
+        DriveShip(delta);
+
         for (int i = _shots.Count - 1; i >= 0; i--) { var s = _shots[i]; s.T -= delta; if (s.T <= 0) _shots.RemoveAt(i); else _shots[i] = s; }
         QueueRedraw();
     }
+
+    // Nobody is flying it, so this is the pilot: aim, shoot, dodge, and come home.
+    private void DriveShip(double delta)
+    {
+        if (!IsInstanceValid(_cap)) return;
+        var live = _foes.Where(f => f.Alive).ToList();
+        var near = live.OrderBy(f => f.GlobalPosition.DistanceTo(_cap.Position)).FirstOrDefault();
+
+        // ── the area shot, and the jump out of it ──
+        if (_aoeLeft < 0)
+        {
+            _aoeCd -= delta;
+            if (_aoeCd <= 0) { _aoeCd = AoeEvery; _aoeLeft = AoeWarn; _aoeAt = _cap.Position; _dodged = false;
+                               AddChild(new Telegraph { Position = _aoeAt, Radius = AoeRadius, Duration = AoeWarn }); }
+        }
+        else
+        {
+            _aoeLeft -= delta;
+            if (_aoeLeft <= 0) _aoeLeft = -1;
+            // With DodgeAt to go it turns its bow AWAY from the impact and jumps: the warp goes
+            // along the keel, so the turn is the aim. Both are the ship's own -- its turn rate,
+            // its warm-up -- which is why the numbers here are a scene, not a cheat.
+            else if (_aoeLeft <= DodgeAt && !_dodged)
+            {
+                var away = (_cap.Position - _aoeAt);
+                if (away.LengthSquared() < 1f) away = Vector2.Right;
+                _cap.AutopilotTo = null;
+                TurnTowards(away.Angle() + Mathf.Pi / 2f, delta);
+                if (Mathf.Abs(Mathf.AngleDifference(_cap.Rotation, away.Angle() + Mathf.Pi / 2f)) < 0.25f)
+                    _dodged = _cap.StartWarp();
+            }
+        }
+
+        // ── back to station, or face the fight ──
+        bool dodging = _aoeLeft > 0 && _aoeLeft <= DodgeAt;
+        if (!dodging && !_cap.Warping)
+        {
+            if (_cap.Position.DistanceTo(_centre) > 40f) _cap.AutopilotTo = _centre;
+            else
+            {
+                _cap.AutopilotTo = null;
+                if (near != null) TurnTowards((near.GlobalPosition - _cap.Position).Angle() + Mathf.Pi / 2f, delta);
+            }
+        }
+
+        // ── guns and missiles ──
+        _cap.AimPoint = near?.GlobalPosition ?? _cap.Position + Vector2.Up.Rotated(_cap.Rotation) * 400f;
+        _cap.Trigger = near != null && near.GlobalPosition.DistanceTo(_cap.Position) < GunRange;
+
+        _missileCd -= delta;
+        if (_missileCd <= 0 && near != null && near.GlobalPosition.DistanceTo(_cap.Position) < MissileRange)
+        {
+            _missileCd = 1.0;                       // retried every second; the magazine decides
+            _cap.UseAbility("missile", near.NetId);
+        }
+    }
+
+    // The hull turns at its own rate and no faster. The autopilot does this for a real pilot;
+    // holding station, there is nowhere to go, so the turn is all there is.
+    private void TurnTowards(float want, double delta)
+    {
+        float rate = (float)(_cap.Stats["turn_rate"] * Mathf.Pi / 180.0);
+        if (rate <= 0f) rate = 0.4f;
+        _cap.Rotation += Mathf.Clamp(Mathf.AngleDifference(_cap.Rotation, want), -rate * (float)delta, rate * (float)delta);
+    }
+
     public override void _Draw()
     {
-        foreach (var f in _foes) if (f.Alive) DrawTexture(_enemyTex, f.P, f.Rot, 0.45f);
-        foreach (var mo in Mounts) DrawCircle(_cap.Position + mo, 2.6f, new Color(0.55f, 0.75f, 1f, 0.85f));
-        foreach (var tp in _torps)
-        {
-            DrawCircle(tp.P, 3.4f, new Color(1f, 0.85f, 0.55f));
-            DrawLine(tp.P, tp.P - (tp.To - tp.P).Normalized() * 13f, new Color(1f, 0.6f, 0.25f, 0.75f), 2.4f);
-        }
         foreach (var s in _shots)
         {
             if (s.A == s.B)
-            {   // a burst. The torpedo's lasts longer, so it also draws wider -- that is the tell.
-                bool big = s.T > 0.42;
-                float r = big ? 88f * (float)(1.0 - s.T / 0.75) : 22f * (float)(s.T / 0.4);
-                float a = big ? (float)(s.T / 0.75) * 0.9f : (float)s.T * 2f;
-                DrawCircle(s.A, r, new Color(1f, big ? 0.72f : 0.6f, 0.3f, a));
-                if (big) DrawArc(s.A, r * 1.18f, 0, Mathf.Tau, 40, new Color(1f, 0.85f, 0.5f, a * 0.8f), 2.2f);
+            {
+                float r = 24f * (float)(s.T / 0.4);
+                DrawCircle(s.A, r, new Color(1f, 0.6f, 0.3f, (float)s.T * 2f));
             }
             else DrawLine(s.A, s.B, s.Hostile ? new Color(1f, 0.55f, 0.45f, (float)(s.T / 0.13) * 0.85f)
                                               : new Color(0.6f, 0.9f, 1f, (float)(s.T / 0.15) * 0.9f), 2.5f);
         }
     }
-    private void DrawTexture(Texture2D tex, Vector2 at, float rot, float scale)
-    {
-        DrawSetTransform(at, rot, new Vector2(scale, scale));
-        DrawTexture(tex, -tex.GetSize() * 0.5f);
-        DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
-    }
+
+    private static Button Big(string text) { var b = new Button { Text = text }; b.AddThemeFontSizeOverride("font_size", Ui.Head); b.CustomMinimumSize = new Vector2(0, 46); return b; }
 
     // silence the music first, then quit on the next moment (see Music.Silence)
     private void QuitSoon()
