@@ -1,8 +1,8 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-20 04:47 at git commit 9033208: typecheck clean, smoke test 3/3 passes
-//   (410 checks, 0 compiler warnings, 0 analyser findings), 66-frame UI sweep complete, 0 lint.
-// 57 files, 10103 lines. Code only: sprites, sounds and docs are in the zip.
+// Taken 2026-09-20 05:17 at git commit 83d2632: typecheck clean, smoke test 3/3 passes
+//   (419 checks, 0 compiler warnings, 0 analyser findings), 67-frame UI sweep complete, 0 lint.
+// 59 files, 10363 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -14,31 +14,33 @@
 //   CharacterSelect.tscn                            12 lines   sha256 bde251d0afb9
 //   Hub.tscn                                        10 lines   sha256 3a99e0df7b39
 //   MainMenu.tscn                                    6 lines   sha256 8a8dbe40f248
-//   scripts/Abilities.cs                           131 lines   sha256 f5ca74e381e7
+//   scripts/Abilities.cs                           131 lines   sha256 b07393912232
 //   scripts/AbilityBar.cs                          112 lines   sha256 4a1331fe370c
 //   scripts/Autopilot.cs                            40 lines   sha256 807538219f53
 //   scripts/BaseDefense.cs                          55 lines   sha256 1d8daa0fbd67
 //   scripts/BasePanel.cs                           118 lines   sha256 1b56ed68d885
 //   scripts/Boss.cs                                205 lines   sha256 f99f980993e3
 //   scripts/BossBar.cs                              74 lines   sha256 5758de5d8e72
-//   scripts/Character.cs                           175 lines   sha256 27d1b45e6c39
+//   scripts/Character.cs                           193 lines   sha256 1b690cef4eea
 //   scripts/CharacterCreator.cs                    211 lines   sha256 136099a8d1c7
 //   scripts/CharacterSelect.cs                     171 lines   sha256 dc2bfeccc820
 //   scripts/Combat.cs                               85 lines   sha256 96277c4efc6f
 //   scripts/Economy.cs                              81 lines   sha256 ceb194520ae4
+//   scripts/Equipment.cs                            77 lines   sha256 5a5307ab79c9
+//   scripts/EquipmentWindow.cs                      73 lines   sha256 9fe0b9b6496d
 //   scripts/EscMenu.cs                              59 lines   sha256 999b01e6cd29
 //   scripts/EscapePod.cs                            50 lines   sha256 324c55cb503b
 //   scripts/Explosion.cs                            18 lines   sha256 12209b0c72ce
 //   scripts/Gatherer.cs                            249 lines   sha256 7369949eeff9
 //   scripts/Hauler.cs                              316 lines   sha256 b471204daf64
 //   scripts/HealthBar.cs                            36 lines   sha256 97c42a282205
-//   scripts/Hub.cs                                1210 lines   sha256 964b28ff9280
+//   scripts/Hub.cs                                1230 lines   sha256 e6a13adefade
 //   scripts/MainMenu.cs                            224 lines   sha256 39dbc31417c6
 //   scripts/Missions.cs                             38 lines   sha256 35ba5cda832e
 //   scripts/Music.cs                                78 lines   sha256 19cdf8e2b59c
 //   scripts/Net.cs                                 334 lines   sha256 b93e2a57999c
 //   scripts/PilotWindow.cs                          54 lines   sha256 9164aa7d0c8d
-//   scripts/PlayerShip.cs                          755 lines   sha256 d1cfb5aad16c
+//   scripts/PlayerShip.cs                          779 lines   sha256 5620217ed418
 //   scripts/Plume.cs                                25 lines   sha256 cdbeb9b8fc58
 //   scripts/Progression.cs                          86 lines   sha256 c9a5dc290c4d
 //   scripts/Radar.cs                               129 lines   sha256 189719fcc94f
@@ -62,9 +64,9 @@
 //   tools/analyse/analysers.editorconfig            15 lines   sha256 45fdb7258163
 //   tools/analyse/run.sh                            16 lines   sha256 e6f2cd50f0c4
 //   tools/analyse/xref.py                           19 lines   sha256 9359eb94c161
-//   tools/screens/Shots.cs.txt                     451 lines   sha256 b3da9b6db736
+//   tools/screens/Shots.cs.txt                     457 lines   sha256 8355cd3b6808
 //   tools/screens/run.sh                            42 lines   sha256 73a5b3c63476
-//   tools/smoketest/SmokeTest.cs.txt              1746 lines   sha256 f4457d80e39d
+//   tools/smoketest/SmokeTest.cs.txt              1788 lines   sha256 b2c0ba38893f
 //   tools/smoketest/run.sh                          57 lines   sha256 568b677787fd
 //==============================================================================
 
@@ -176,7 +178,7 @@ script = ExtResource("1_menu")
 
 //==============================================================================
 // FILE: scripts/Abilities.cs
-// 131 lines   sha256 f5ca74e381e7
+// 131 lines   sha256 b07393912232
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -237,7 +239,7 @@ public static class Abilities
     // Fixed hub controls. Binding one of these would break flying or the menus.
     public static readonly HashSet<Key> Reserved = new()
     {
-        Key.W, Key.A, Key.S, Key.D, Key.Tab, Key.Escape, Key.K, Key.B, Key.L, Key.V, Key.Enter, Key.KpEnter,
+        Key.W, Key.A, Key.S, Key.D, Key.Tab, Key.Escape, Key.K, Key.B, Key.L, Key.I, Key.V, Key.Enter, Key.KpEnter,
         Key.Y, Key.Up, Key.Down, Key.Left, Key.Right,        // the free camera
     };
 
@@ -299,7 +301,7 @@ public static class Abilities
     // ability list yet (the seven reserved ones) gets a placeholder.
     public static string ControlsHint(ShipClass c)
     {
-        const string common = "W ahead  ·  S astern  ·  A/D rudder  ·  left-click select  ·  Tab nearest enemy  ·  wheel zoom  ·  Y free camera  ·  K abilities & stats  ·  B base  ·  L pilot  ·  V warp  ·  Esc menu";
+        const string common = "W ahead  ·  S astern  ·  A/D rudder  ·  left-click select  ·  Tab nearest enemy  ·  wheel zoom  ·  Y free camera  ·  K abilities & stats  ·  B base  ·  L pilot  ·  I equipment  ·  V warp  ·  Esc menu";
         if (!ByClass.ContainsKey(c)) return "placeholder";
         return c switch
         {
@@ -946,7 +948,7 @@ public partial class BossBar : Control
 
 //==============================================================================
 // FILE: scripts/Character.cs
-// 175 lines   sha256 27d1b45e6c39
+// 193 lines   sha256 1b690cef4eea
 //==============================================================================
 using Godot;
 using System;
@@ -977,6 +979,13 @@ public static class Character
     public static readonly int[] Bought = new int[Progression.All.Length];
     // the levels of each boss this pilot has beaten (the +250 first-clear bonus, and unlocking)
     public static readonly Dictionary<string, HashSet<int>> BossCleared = new();
+    // equipment, per class: what is on each ship, and the chips taken off it
+    public static readonly Dictionary<ShipClass, string[]> Loadout = new();
+    public static readonly Dictionary<ShipClass, List<string>> Spares = new();
+    public static string[] LoadoutFor(ShipClass c) =>
+        Loadout.TryGetValue(c, out var l) ? l : Loadout[c] = Equipment.Default(c);
+    public static List<string> SparesFor(ShipClass c) =>
+        Spares.TryGetValue(c, out var l) ? l : Spares[c] = new List<string>();
 
     // One saved character, as the select screen lists it.
     public class Slot
@@ -997,7 +1006,7 @@ public static class Character
         Accent = new(1.00f, 0.78f, 0.35f);
         Class = ShipClass.Battleship;
         Bonuses.Clear();
-        Exp = 0; Level = 1; Points = 0; Array.Clear(Bought); BossCleared.Clear();
+        Exp = 0; Level = 1; Points = 0; Array.Clear(Bought); BossCleared.Clear(); Loadout.Clear(); Spares.Clear();
     }
 
     public static void Save()
@@ -1013,6 +1022,8 @@ public static class Character
         c.SetValue("progress", "exp", Exp); c.SetValue("progress", "level", Level); c.SetValue("progress", "points", Points);
         for (int i = 0; i < Bought.Length; i++) c.SetValue("progress", "bought_" + Progression.All[i].Id, Bought[i]);
         foreach (var kv in BossCleared) c.SetValue("boss_cleared", kv.Key, string.Join(",", kv.Value.OrderBy(x => x)));
+        foreach (var kv in Loadout) c.SetValue("equipment", kv.Key.ToString(), string.Join(",", kv.Value));
+        foreach (var kv in Spares) c.SetValue("spares", kv.Key.ToString(), string.Join(",", kv.Value));
         c.Save(PathOf(Id));
     }
 
@@ -1032,6 +1043,15 @@ public static class Character
         Exp = (int)c.GetValue("progress", "exp", 0); Level = Math.Max(1, (int)c.GetValue("progress", "level", 1));
         Points = Math.Max(0, (int)c.GetValue("progress", "points", 0));
         for (int i = 0; i < Bought.Length; i++) Bought[i] = Math.Clamp((int)c.GetValue("progress", "bought_" + Progression.All[i].Id, 0), 0, Progression.MaxPerUpgrade);
+        Loadout.Clear(); Spares.Clear();
+        foreach (ShipClass sc in Enum.GetValues(typeof(ShipClass)))
+        {
+            if (c.HasSectionKey("equipment", sc.ToString()))
+                Loadout[sc] = Equipment.Sanitize(sc, ((string)c.GetValue("equipment", sc.ToString(), "")).Split(','));
+            if (c.HasSectionKey("spares", sc.ToString()))
+                Spares[sc] = ((string)c.GetValue("spares", sc.ToString(), "")).Split(',', StringSplitOptions.RemoveEmptyEntries)
+                             .Where(id => Equipment.ById(id)?.Slot == GearSlot.Chip).ToList();
+        }
         BossCleared.Clear();
         if (c.HasSection("boss_cleared"))
             foreach (var k in c.GetSectionKeys("boss_cleared"))
@@ -1690,6 +1710,166 @@ public static class Economy
         u.Kind == Kind.Count ? u.BaseValue + level : u.BaseValue * (1 + PercentEffect * level);
 
     public static bool Maxed(Upgrade u, int level) => level >= u.Max;
+}
+
+//==============================================================================
+// FILE: scripts/Equipment.cs
+// 77 lines   sha256 5a5307ab79c9
+//==============================================================================
+using System.Collections.Generic;
+using System.Linq;
+
+// EQUIPMENT -- a ship's parts, in slots. The menu (I) shows the gear of the pilot's CURRENT
+// class; each class keeps its own loadout (saved with the character), so gear left on a ship
+// is still on it when the pilot switches back. Parts change no looks, only numbers.
+//   Slots: Weapon, Engines, Shield (the hull points), Hull (the frame and its mods, point
+//   defence among them), Utility -- and five Chips.
+//   The COMMON defaults below reproduce the ship's own numbers; each default chip adds
+//   +5% damage and +5% hull. The host applies a pilot's equipment (it resolves damage and
+//   hull): the loadout travels with the identity, and is checked on arrival.
+public enum GearSlot { Weapon, Engines, Shield, Hull, Utility, Chip }
+public enum Rarity { Common, Uncommon, Rare, Epic, Legendary }
+
+public class ItemDef
+{
+    public string Id, Name, Blurb;
+    public GearSlot Slot;
+    public Rarity Rarity = Rarity.Common;
+    public ShipClass? Class;                 // null: fits any capital ship
+    public double DamagePct, HullPct;        // what it adds, as a share of the ship's own numbers
+}
+
+public static class Equipment
+{
+    public const int CoreSlots = 5, ChipSlots = 5, Slots = CoreSlots + ChipSlots;
+    public static readonly GearSlot[] Core = { GearSlot.Weapon, GearSlot.Engines, GearSlot.Shield, GearSlot.Hull, GearSlot.Utility };
+
+    public static readonly ItemDef[] All =
+    {
+        new() { Id = "bs_main_battery",    Name = "Mk I Main Battery",       Slot = GearSlot.Weapon,  Class = ShipClass.Battleship, Blurb = "the four main turrets" },
+        new() { Id = "cv_fighter_hangars", Name = "Mk I Fighter Hangars",    Slot = GearSlot.Weapon,  Class = ShipClass.Carrier,    Blurb = "the fighter wing" },
+        new() { Id = "std_drive",          Name = "Standard Drive Cluster",  Slot = GearSlot.Engines, Blurb = "the helm: speed and turning" },
+        new() { Id = "basic_deflector",    Name = "Basic Deflector Array",   Slot = GearSlot.Shield,  Blurb = "the ship's hull points" },
+        new() { Id = "reinforced_frame",   Name = "Reinforced Frame",        Slot = GearSlot.Hull,    Blurb = "the frame, and its point defence" },
+        new() { Id = "bs_missile_rack",    Name = "Missile Rack",            Slot = GearSlot.Utility, Class = ShipClass.Battleship, Blurb = "the missile and its magazine" },
+        new() { Id = "cv_bomber_bay",      Name = "Bomber Bay",              Slot = GearSlot.Utility, Class = ShipClass.Carrier,    Blurb = "the bomber wing" },
+        new() { Id = "chip_basic",         Name = "Basic Combat Chip",       Slot = GearSlot.Chip,    DamagePct = 0.05, HullPct = 0.05, Blurb = "+5% damage, +5% hull" },
+    };
+    public static ItemDef ById(string id) => All.FirstOrDefault(i => i.Id == id);
+    static bool Fits(ItemDef i, GearSlot s, ShipClass c) => i != null && i.Slot == s && (i.Class == null || i.Class == c);
+
+    // the loadout: 5 core slots in order, then 5 chips ("" = empty)
+    public static string[] Default(ShipClass c) => new[]
+    {
+        c == ShipClass.Carrier ? "cv_fighter_hangars" : "bs_main_battery", "std_drive", "basic_deflector", "reinforced_frame",
+        c == ShipClass.Carrier ? "cv_bomber_bay" : "bs_missile_rack",
+        "chip_basic", "chip_basic", "chip_basic", "chip_basic", "chip_basic",
+    };
+
+    // a loadout made safe: known items in the right slots for the class; a bad core slot gets
+    // its default, a bad chip slot is emptied (what the host does with a pilot's claim)
+    public static string[] Sanitize(ShipClass c, string[] ids)
+    {
+        var d = Default(c); var o = new string[Slots];
+        for (int k = 0; k < Slots; k++)
+        {
+            string id = ids != null && k < ids.Length ? ids[k] ?? "" : (k < CoreSlots ? d[k] : "");
+            var slot = k < CoreSlots ? Core[k] : GearSlot.Chip;
+            o[k] = Fits(ById(id), slot, c) ? id : (k < CoreSlots ? d[k] : "");
+        }
+        return o;
+    }
+
+    // the stat bonuses a loadout gives, as shares: damage on the class's weapons, and hull
+    public static string[] DamageStats(ShipClass c) => c == ShipClass.Carrier
+        ? new[] { "fighter_damage", "torpedo_damage" } : new[] { "main_damage", "missile_damage" };
+    public static Dictionary<string, double> Bonuses(ShipClass c, string[] loadout)
+    {
+        double dmg = 0, hull = 0;
+        foreach (var i in (loadout ?? new string[0]).Select(ById).Where(i => i != null)) { dmg += i.DamagePct; hull += i.HullPct; }
+        var b = new Dictionary<string, double>();
+        if (dmg != 0) foreach (var s in DamageStats(c)) b[s] = dmg;
+        if (hull != 0) b["hull"] = hull;
+        return b;
+    }
+}
+
+//==============================================================================
+// FILE: scripts/EquipmentWindow.cs
+// 73 lines   sha256 9fe0b9b6496d
+//==============================================================================
+using Godot;
+
+// EQUIPMENT (I): the parts on the pilot's CURRENT ship -- five core slots and five chips --
+// and the chips taken off it. Chips can come off and go back on; the core parts stay put
+// until there is something to swap them for (the inventory, later). Each class keeps its own.
+public partial class EquipmentWindow : PanelContainer
+{
+    public Hub Hub;
+    private VBoxContainer _col;
+    public static Color RarityColor(Rarity r) => r switch
+    {
+        Rarity.Uncommon => new Color(0.45f, 0.9f, 0.45f), Rarity.Rare => new Color(0.4f, 0.65f, 1f),
+        Rarity.Epic => new Color(0.75f, 0.45f, 1f), Rarity.Legendary => new Color(1f, 0.65f, 0.25f),
+        _ => new Color(0.84f, 0.86f, 0.9f),
+    };
+
+    public override void _Ready()
+    {
+        Name = "EquipmentWindow";
+        Position = new Vector2(360, 92);
+        AddThemeStyleboxOverride("panel", Ui.PanelStyle(10, 1f));
+        _col = new VBoxContainer(); _col.AddThemeConstantOverride("separation", 5); AddChild(_col);
+        Rebuild();
+    }
+
+    private void Rebuild()
+    {
+        foreach (var c in _col.GetChildren()) { _col.RemoveChild(c); c.QueueFree(); }
+        var cls = Character.Class; var l = Character.LoadoutFor(cls); var spares = Character.SparesFor(cls);
+        var head = new Label { Text = $"EQUIPMENT  ·  {cls.ToString().ToUpper()}" }; head.AddThemeFontSizeOverride("font_size", 20); _col.AddChild(head);
+        _col.AddChild(new Label { Text = "Parts change no looks, only numbers. Each class keeps its own gear.", Modulate = new Color(1, 1, 1, 0.6f) });
+        for (int k = 0; k < Equipment.CoreSlots; k++)
+        {
+            var it = Equipment.ById(l[k]);
+            var row = new HBoxContainer { Name = $"Slot_{Equipment.Core[k]}" }; row.AddThemeConstantOverride("separation", 10);
+            row.AddChild(new Label { Text = Equipment.Core[k].ToString().ToUpper(), CustomMinimumSize = new Vector2(90, 0), Modulate = new Color(0.55f, 0.8f, 1f) });
+            row.AddChild(new Label { Name = "Item", Text = it?.Name ?? "—", CustomMinimumSize = new Vector2(210, 0), Modulate = it != null ? RarityColor(it.Rarity) : Colors.Gray });
+            row.AddChild(new Label { Text = it?.Blurb ?? "", Modulate = new Color(1, 1, 1, 0.55f) });
+            _col.AddChild(row);
+        }
+        _col.AddChild(new Label { Text = "CHIPS", Modulate = new Color(0.55f, 0.8f, 1f) });
+        for (int k = 0; k < Equipment.ChipSlots; k++)
+        {
+            int slot = Equipment.CoreSlots + k; var it = Equipment.ById(l[slot]);
+            var row = new HBoxContainer { Name = $"Chip_{k}" }; row.AddThemeConstantOverride("separation", 10);
+            row.AddChild(new Label { Text = it != null ? $"{it.Name}   ({it.Blurb})" : "(empty)", CustomMinimumSize = new Vector2(360, 0),
+                                     Modulate = it != null ? RarityColor(it.Rarity) : new Color(1, 1, 1, 0.4f) });
+            if (it != null)
+            {
+                var off = new Button { Name = "Unequip", Text = "UNEQUIP", FocusMode = FocusModeEnum.None };
+                off.Pressed += () => { spares.Add(l[slot]); l[slot] = ""; Changed(); };
+                row.AddChild(off);
+            }
+            _col.AddChild(row);
+        }
+        _col.AddChild(new Label { Text = spares.Count > 0 ? "SPARE CHIPS" : "SPARE CHIPS  (none)", Modulate = new Color(0.55f, 0.8f, 1f) });
+        for (int j = 0; j < spares.Count; j++)
+        {
+            int idx = j; var it = Equipment.ById(spares[j]);
+            var row = new HBoxContainer { Name = $"Spare_{j}" }; row.AddThemeConstantOverride("separation", 10);
+            row.AddChild(new Label { Text = $"{it?.Name}   ({it?.Blurb})", CustomMinimumSize = new Vector2(360, 0), Modulate = RarityColor(it?.Rarity ?? Rarity.Common) });
+            int free = System.Array.FindIndex(l, Equipment.CoreSlots, Equipment.ChipSlots, s => string.IsNullOrEmpty(s));
+            var on = new Button { Name = "Equip", Text = "EQUIP", FocusMode = FocusModeEnum.None, Disabled = free < 0 };
+            on.Pressed += () => { int f = System.Array.FindIndex(l, Equipment.CoreSlots, Equipment.ChipSlots, s => string.IsNullOrEmpty(s));
+                                  if (f < 0) return; l[f] = spares[idx]; spares.RemoveAt(idx); Changed(); };
+            row.AddChild(on); _col.AddChild(row);
+        }
+        _col.AddChild(new Label { Text = "I or Esc closes.", Modulate = new Color(1, 1, 1, 0.45f) });
+    }
+
+    // saved at once; the ship refits, and the host is told (it applies equipment too)
+    private void Changed() { Character.Save(); Hub.PilotChanged(); CallDeferred(nameof(Rebuild)); }
 }
 
 //==============================================================================
@@ -2452,7 +2632,7 @@ public static class HealthBar
 
 //==============================================================================
 // FILE: scripts/Hub.cs
-// 1210 lines   sha256 964b28ff9280
+// 1230 lines   sha256 e6a13adefade
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -2545,6 +2725,7 @@ public partial class Hub : Node2D
     private BasePanel _base;
     private PilotWindow _pilot;
     private TioWindow _tio;
+    private EquipmentWindow _equip;
     private Sprite2D _tioSprite;
     private Portal _missionPortal;
     private readonly Dictionary<int, PlayerShip> _ships = new();
@@ -2611,6 +2792,10 @@ public partial class Hub : Node2D
         pilotBtn.Pressed += TogglePilot;
         var pilotWrap = Ui.Wrap(pilotBtn); pilotWrap.Position = new Vector2(356, 48);
         layer.AddChild(pilotWrap);
+        var eqBtn = new Button { Text = "EQUIPMENT (I)", Name = "EquipmentButton", FocusMode = Control.FocusModeEnum.None };
+        eqBtn.Pressed += ToggleEquipment;
+        var eqWrap = Ui.Wrap(eqBtn); eqWrap.Position = new Vector2(446, 48);
+        layer.AddChild(eqWrap);
         // the stats line sits on its own panel so it reads over anything behind it
         var hudPanel = new PanelContainer { Position = new Vector2(10, 8), Name = "HudPanel", MouseFilter = Control.MouseFilterEnum.Ignore };
         hudPanel.AddThemeStyleboxOverride("panel", Ui.PanelStyle(12));
@@ -2831,6 +3016,7 @@ public partial class Hub : Node2D
         {
             me.SetIdentity(Character.Name, Character.Main, Character.Accent, Character.Class);
             me.SetProgress(Character.Bought);
+            me.SetEquipment(Character.LoadoutFor(Character.Class));
         }
     }
 
@@ -2840,13 +3026,13 @@ public partial class Hub : Node2D
         // a guest mid-handshake still reports LocalId 1; peers would rightly reject
         // that as impersonating the host, so wait for the real id (OnSessionChanged)
         if (!Net.IsHost && Net.LocalId == 1) return;
-        var args = new Variant[] { Net.LocalId, Character.Name, Character.Main, Character.Accent, (int)Character.Class, Character.Bought, Character.Level };
+        var args = new Variant[] { Net.LocalId, Character.Name, Character.Main, Character.Accent, (int)Character.Class, Character.Bought, Character.Level, Character.LoadoutFor(Character.Class) };
         if (toPeer == 0) Rpc(nameof(NetIdentity), args);
         else             RpcId(toPeer, nameof(NetIdentity), args);
     }
 
     [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetIdentity(int peer, string name, Color main, Color accent, int cls, int[] bought, int level)
+    private void NetIdentity(int peer, string name, Color main, Color accent, int cls, int[] bought, int level, string[] equip)
     {
         // a peer may only describe itself
         if (Multiplayer.GetRemoteSenderId() != peer || Net.I == null) return;
@@ -2857,7 +3043,7 @@ public partial class Hub : Node2D
         // purchases the claimed level could not have paid for are refused outright
         long spent = 0; foreach (var n in bought ?? System.Array.Empty<int>()) spent += (long)n * (n + 1) / 2;
         if (spent > System.Math.Max(0, level - 1)) bought = new int[Progression.All.Length];
-        if (_ships.TryGetValue(peer, out var s) && IsInstanceValid(s)) { s.SetIdentity(name, main, accent, c); s.SetProgress(bought); }
+        if (_ships.TryGetValue(peer, out var s) && IsInstanceValid(s)) { s.SetIdentity(name, main, accent, c); s.SetProgress(bought); s.SetEquipment(equip); }   // (sanitised)
     }
 
     // ── missions: Threat Intelligence Operations (host-authoritative) ────────
@@ -3410,6 +3596,7 @@ public partial class Hub : Node2D
             else if (IsInstanceValid(_base)) ToggleBase();
             else if (IsInstanceValid(_pilot)) TogglePilot();
             else if (IsInstanceValid(_tio)) { _tio.QueueFree(); _tio = null; }
+            else if (IsInstanceValid(_equip)) ToggleEquipment();
             else if (Selected != null || Waypoint != null) ClearSelection();
             else ToggleEscMenu();                                   // the menu holds "quit to main menu"
         }
@@ -3460,6 +3647,7 @@ public partial class Hub : Node2D
             else if (kk.Keycode == Key.K) ToggleStats();
             else if (kk.Keycode == Key.B && !InArena) ToggleBase();
             else if (kk.Keycode == Key.L) TogglePilot();
+            else if (kk.Keycode == Key.I) ToggleEquipment();
             else if (kk.Keycode == Key.V) MyShipPublic?.StartWarp();   // warp: a fixed key, not a slot
             else
             {
@@ -3499,6 +3687,7 @@ public partial class Hub : Node2D
     {
         if (Yard == null) return;                                      // the arena: there is no base to open
         if (IsInstanceValid(_base)) { _base.QueueFree(); _base = null; return; }
+        if (IsInstanceValid(_equip)) ToggleEquipment();             // they share a spot
         _base = new BasePanel { Hub = this };
         if (IsInstanceValid(_pilot)) TogglePilot();                // the two share a spot
         _hudLayer.AddChild(_base);
@@ -3506,8 +3695,19 @@ public partial class Hub : Node2D
     public bool CreatorOpen => IsInstanceValid(_creator);
     public bool StatsOpen => IsInstanceValid(_statsWin);
 
+    public void ToggleEquipment()
+    {
+        if (IsInstanceValid(_equip)) { _equip.QueueFree(); _equip = null; return; }
+        if (IsInstanceValid(_base)) ToggleBase();                 // they share a spot
+        if (IsInstanceValid(_pilot)) TogglePilot();
+        if (IsInstanceValid(_tio)) { _tio.QueueFree(); _tio = null; }
+        _equip = new EquipmentWindow { Hub = this };
+        _hudLayer.AddChild(_equip);
+    }
+
     public void TogglePilot()
     {
+        if (IsInstanceValid(_equip)) ToggleEquipment();
         if (IsInstanceValid(_pilot)) { _pilot.QueueFree(); _pilot = null; return; }
         if (IsInstanceValid(_base)) ToggleBase();                 // the two share a spot
         _pilot = new PilotWindow { Hub = this };
@@ -4420,7 +4620,7 @@ public partial class PilotWindow : PanelContainer
 
 //==============================================================================
 // FILE: scripts/PlayerShip.cs
-// 755 lines   sha256 d1cfb5aad16c
+// 779 lines   sha256 5620217ed418
 //==============================================================================
 using Godot;
 using System;
@@ -4618,7 +4818,7 @@ public partial class PlayerShip : Node2D, IHittable
 
         // Your own ship carries your bonuses. Other ships use base stats: bonuses
         // are not replicated yet (and nothing grants any yet).
-        Stats = new ShipStats(Class, Mine ? Character.Bonuses : null, Progression.Flats(_bought, Class));
+        Stats = new ShipStats(Class, BonusesNow(), Progression.Flats(_bought, Class));
         MaxHp = Hp = Stats["hull"];
         _mag = (int)Stats["missile_mag"]; _missileReload = _missileRefire = 0;
 
@@ -4665,7 +4865,31 @@ public partial class PlayerShip : Node2D, IHittable
         if (b.AsSpan().SequenceEqual(_bought)) return;
         _bought = b;
         double lost = MaxHp - Hp;
-        Stats = new ShipStats(Class, Mine ? Character.Bonuses : null, Progression.Flats(_bought, Class));
+        Stats = new ShipStats(Class, BonusesNow(), Progression.Flats(_bought, Class));
+        MaxHp = Stats["hull"];
+        if (Alive) Hp = Math.Max(1, MaxHp - lost);
+    }
+
+    // Equipment: the owner's saved loadout for this class (on the host, what the identity
+    // carried). Its bonuses join the pilot's own; a change refits, keeping damage taken.
+    private string[] _loadout;
+    public string[] Loadout => _loadout ?? Equipment.Default(Class);
+    private IReadOnlyDictionary<string, double> BonusesNow()
+    {
+        if (Mine) _loadout = (string[])Character.LoadoutFor(Class).Clone();   // a COPY: the window edits the saved one in place
+        var eq = Equipment.Bonuses(Class, Loadout);
+        if (!Mine || Character.Bonuses.Count == 0) return eq;
+        var m = new Dictionary<string, double>(Character.Bonuses);
+        foreach (var kv in eq) m[kv.Key] = (m.TryGetValue(kv.Key, out var v) ? v : 0) + kv.Value;
+        return m;
+    }
+    public void SetEquipment(string[] ids)
+    {
+        var l = Equipment.Sanitize(Class, ids);
+        if (_loadout != null && l.AsSpan().SequenceEqual(_loadout)) return;
+        _loadout = l;
+        double lost = MaxHp - Hp;
+        Stats = new ShipStats(Class, BonusesNow(), Progression.Flats(_bought, Class));
         MaxHp = Stats["hull"];
         if (Alive) Hp = Math.Max(1, MaxHp - lost);
     }
@@ -8142,7 +8366,7 @@ print('USED ONLY BY TESTS:', len(test_only)); [print('  ' + x) for x in sorted(t
 
 //==============================================================================
 // FILE: tools/screens/Shots.cs.txt
-// 451 lines   sha256 b3da9b6db736
+// 457 lines   sha256 8355cd3b6808
 //==============================================================================
 // Screenshot driver. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Shots.cs, registers it as an autoload, and runs the real
@@ -8425,6 +8649,12 @@ public partial class _Shots : Node
             foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e9);
             rs2.Position = keepR2; rs2.Velocity = Vector2.Zero; await W(0.3);
         }
+        // the equipment window (I): five parts and five chips, the class's own
+        {
+            H.ToggleEquipment(); await W(0.4);
+            await Snap("55_equipment");
+            H.ToggleEquipment(); await W(0.2);
+        }
         // a waypoint picked on the radar: its ring there, and the HUD naming it
         {
             H.SelectWaypoint("BASE", Hub.BasePos, 260f); await W(0.3);
@@ -8645,7 +8875,7 @@ ls /tmp/shots
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 1746 lines   sha256 f4457d80e39d
+// 1788 lines   sha256 b2c0ba38893f
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -9067,7 +9297,7 @@ public partial class _Test : Node
         Check(Count<StatsWindow>() == 1, "K opens the ability & stats window");
         var win = Nodes<StatsWindow>().First();
         var labels = Nodes<Label>(win).Select(l => l.Text).ToList();
-        Check(labels.Any(x => x.Contains("Main guns (4 barrels):  23.60 DPS")) && labels.Any(x => x.Contains("Turning radius")), "stats tab: gun DPS and helm stats");
+        Check(labels.Any(x => x.Contains("Main guns (4 barrels):  29.50 DPS")) && labels.Any(x => x.Contains("Turning radius")), "stats tab: gun DPS and helm stats");
         Check(Nodes<HBoxContainer>(win).Count(r => r.Name.ToString().StartsWith("Key_")) == 11, "keys tab lists the battleship's 5 abilities + 6 open slots");
         Check(Enumerable.Range(1, 6).All(i => Abilities.KeyFor(ShipClass.Battleship, $"open{i}") == global::Godot.Key.Key0 + i)
               && Abilities.For(ShipClass.Carrier).Count(a => a.Open) == 6 && Abilities.For((ShipClass)99).Length == 6,
@@ -9153,7 +9383,7 @@ public partial class _Test : Node
         float mspd = (m1.GlobalPosition - mp1).Length() * 60f;
         Check(Math.Abs(mspd - ship.Stats["missile_speed"]) < 0.5f && m1.TurnRate == (float)ship.Stats["missile_turn"], $"it is slow: {mspd:0.0} u/s");
         for (int i = 0; i < 900 && d1.Total == 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-        Check(Math.Abs(d1.Total - 5) < 0.01, "it lands: 5 damage");
+        Check(Math.Abs(d1.Total - 6.25) < 0.01, "it lands: 5 damage, x1.25 by the default chips (6.25)");
         Key(global::Godot.Key.F); await Wait(0.1);
         Check(Heavy() == null, "empty magazine: F does nothing");
         Key(global::Godot.Key.R); await Wait(0.1);
@@ -9191,7 +9421,7 @@ public partial class _Test : Node
             Check(Math.Abs(shSpd - 4 * (float)gs.Stats["missile_speed"]) < 6f && GodotObject.IsInstanceValid(sh1) && sh1.Dir == sd0 && atFire == 0,
                   $"the guns fire shells at 4x the missile's speed ({shSpd:0} u/s), straight, and nothing lands at once");
             for (int i = 0; i < 90 && gd.Total == 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            Check(gd.Total > 0 && Math.Abs(gd.Total % gs.Stats["main_damage"]) < 1e-6 && gs.Stats["main_damage"] == 5.9, $"a shell lands for 5.9 ({gd.Total:0.0})");
+            Check(gd.Total > 0 && Math.Abs(gd.Total % gs.Stats["main_damage"]) < 1e-6 && Math.Abs(gs.Stats["main_damage"] - 7.375) < 1e-9, $"a shell lands for 5.9 x1.25 by the chips = 7.375 ({gd.Total:0.000})");
             // the balance: the battleship's total is 1.25x the carrier's measured 19.07 DPS; the carrier reaches 1.5x as far
             var bsS = new ShipStats(ShipClass.Battleship); var caS = new ShipStats(ShipClass.Carrier);
             double bsTotal = bsS.MainDps + bsS.MissileDps;
@@ -9436,8 +9666,9 @@ public partial class _Test : Node
                 await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             }
             double carrierDps = md.Total / 40.0;
-            GD.Print($"  carrier measured: {carrierDps:0.00} DPS over 40 s (reference 19.07)");
-            Check(Math.Abs(carrierDps / 19.07 - 1) < 0.25, $"the carrier still delivers about the measured 19.07 DPS the balance rests on ({carrierDps:0.00})");
+            // (the reference was measured unequipped; the five default chips add 25%: 19.07 x 1.25 = 23.84)
+            GD.Print($"  carrier measured: {carrierDps:0.00} DPS over 40 s (reference 23.84 with the chips)");
+            Check(Math.Abs(carrierDps / 23.84 - 1) < 0.25, $"the carrier still delivers about the measured 19.07 DPS (x1.25 with the chips = 23.84) the balance rests on ({carrierDps:0.00})");
             Key(global::Godot.Key.R); await Wait(12.0);                       // recall the wing for what follows
         }
 
@@ -9533,6 +9764,41 @@ public partial class _Test : Node
                   "Tailscale addresses (100.64.0.0/10) are recognised for friends on a tailnet");
         }
 
+        // ── equipment (I): per-class gear; common defaults and five chips (+5% damage, +5% hull each) ──
+        {
+            Check(Equipment.Default(ShipClass.Carrier)[0] == "cv_fighter_hangars" && Equipment.ById("cv_fighter_hangars").Name == "Mk I Fighter Hangars"
+                  && Equipment.Default(ShipClass.Battleship).Take(5).All(id => Equipment.ById(id).Rarity == Rarity.Common),
+                  "the defaults: common parts in five slots; a carrier's weapon slot holds its Fighter Hangars");
+            var bsE = new ShipStats(ShipClass.Battleship, Equipment.Bonuses(ShipClass.Battleship, Equipment.Default(ShipClass.Battleship)));
+            var cvE = new ShipStats(ShipClass.Carrier, Equipment.Bonuses(ShipClass.Carrier, Equipment.Default(ShipClass.Carrier)));
+            Check(Math.Abs(bsE["hull"] - 375) < 1e-6 && Math.Abs(bsE["main_damage"] - 7.375) < 1e-6 && Math.Abs(cvE["hull"] - 250) < 1e-6
+                  && Math.Abs(cvE["fighter_damage"] - 2.5) < 1e-6 && Math.Abs(cvE["torpedo_damage"] - 18.75) < 1e-6,
+                  "five default chips: +25% damage and hull (battleship 375 hull, 7.375 a shell; carrier 250 hull, fighters 2.5, torpedoes 18.75)");
+            var cls0 = Me.Class;
+            Key(global::Godot.Key.I); await Wait(0.2);
+            var ew = Nodes<EquipmentWindow>().FirstOrDefault();
+            Check(ew != null && Nodes<HBoxContainer>(ew).Count(r => r.Name.ToString().StartsWith("Slot_")) == 5
+                  && Nodes<HBoxContainer>(ew).Count(r => r.Name.ToString().StartsWith("Chip_")) == 5, "I opens the equipment: five parts and five chips");
+            double full = Me.MaxHp;
+            Nodes<Button>(ew).First(b => b.Name == "Unequip").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.2);
+            Check(Math.Abs(Me.MaxHp - full * 1.20 / 1.25) < 1e-6 && Character.SparesFor(cls0).Count == 1, $"a chip off: 5% less hull ({full:0} -> {Me.MaxHp:0}), the chip kept as a spare");
+            var other = cls0 == ShipClass.Battleship ? ShipClass.Carrier : ShipClass.Battleship;
+            Me.SetClass(other); await Wait(0.5);
+            Check(Character.LoadoutFor(other).Skip(5).Count(x => x == "chip_basic") == 5, "the other class keeps its own gear: five chips");
+            Me.SetClass(cls0); await Wait(0.5);
+            Check(Character.LoadoutFor(cls0).Skip(5).Count(x => x == "chip_basic") == 4 && Character.SparesFor(cls0).Count == 1 && Math.Abs(Me.MaxHp - full * 1.20 / 1.25) < 1e-6,
+                  "back on the first class: its gear as it was left (four chips, one spare)");
+            ew = Nodes<EquipmentWindow>().FirstOrDefault();
+            if (ew == null) { Key(global::Godot.Key.I); await Wait(0.2); ew = Nodes<EquipmentWindow>().First(); }
+            Nodes<Button>(ew).First(b => b.Name == "Equip").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.2);
+            Check(Math.Abs(Me.MaxHp - full) < 1e-6 && Character.SparesFor(cls0).Count == 0, "the spare back on: full hull again");
+            Character.Save(); var saved = (string[])Character.LoadoutFor(cls0).Clone();
+            string eqId = Character.Id; Character.Loadout.Clear(); Character.Load(eqId);
+            Check(Character.LoadoutFor(cls0).SequenceEqual(saved), "the gear is saved with the pilot");
+            Key(global::Godot.Key.Escape); await Wait(0.2);
+            Check(Nodes<EquipmentWindow>().Count() == 0, "Esc closes it");
+        }
+
         // ── pilot progression: EXP, levels, points, flat upgrades ──
         {
             Check(Progression.Cost(0) == 1 && Progression.Cost(1) == 2 && Progression.Cost(2) == 3, "upgrade costs 1, 2, 3, ... points");
@@ -9558,17 +9824,19 @@ public partial class _Test : Node
             var me = Me; double hull0 = me.MaxHp, hp0 = me.Hp;
             Character.Points = 3;
             PBuy("hull").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
-            Check(Character.Bought[1] == 1 && Character.Points == 2 && me.MaxHp == hull0 + 5 && me.Hp == hp0 + 5, "Hull (1 pt): +5 hull on the ship at once");
+            // (points are added BEFORE percentage bonuses: the five default chips' +25% makes +5 into +6.25)
+            Check(Character.Bought[1] == 1 && Character.Points == 2 && Math.Abs(me.MaxHp - (hull0 + 6.25)) < 1e-6 && Math.Abs(me.Hp - (hp0 + 6.25)) < 1e-6,
+                  "Hull (1 pt): +5 hull (x1.25 by the default chips: +6.25) on the ship at once");
             PBuy("hull").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
-            Check(Character.Bought[1] == 2 && Character.Points == 0 && me.MaxHp == hull0 + 10, "Hull again (2 pts): +10 in all");
+            Check(Character.Bought[1] == 2 && Character.Points == 0 && Math.Abs(me.MaxHp - (hull0 + 12.5)) < 1e-6, "Hull again (2 pts): +10 in all (+12.5 with the chips)");
             Check(PBuy("speed").Disabled, "with no points left, BUY is disabled");
             Character.Points = 6;
             PBuy("damage").EmitSignal(BaseButton.SignalName.Pressed); PBuy("speed").EmitSignal(BaseButton.SignalName.Pressed); PBuy("turn").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
-            var baseSheet = new ShipStats(me.Class);
-            Check(Math.Abs(me.Stats[Progression.DamageStat(me.Class)] - baseSheet[Progression.DamageStat(me.Class)] - 1) < 1e-9
+            var baseSheet = new ShipStats(me.Class, Equipment.Bonuses(me.Class, me.Loadout));            // the same gear, no points
+            Check(Math.Abs(me.Stats[Progression.DamageStat(me.Class)] - baseSheet[Progression.DamageStat(me.Class)] - 1.25) < 1e-9
                   && Math.Abs(me.Stats["max_speed"] - baseSheet["max_speed"] - 1) < 1e-9
                   && Math.Abs(me.Stats["turn_rate"] - baseSheet["turn_rate"] - Mathf.DegToRad(1f)) < 1e-6,
-                  "Weapons +1 damage (main weapon), Engines +1 speed, Rudder +1 degree/s");
+                  "Weapons +1 damage (x1.25 by the chips) on the main weapon, Engines +1 speed, Rudder +1 degree/s");
             string cid = Character.Id; int[] saved = (int[])Character.Bought.Clone();
             Character.Save(); System.Array.Clear(Character.Bought); Character.Load(cid);
             Check(Character.Bought.SequenceEqual(saved) && Character.Level == 3, "purchases and level are saved with the character");
@@ -10313,6 +10581,9 @@ public partial class _Test : Node
         else
         {
             H.Yard.Ore = 5000;       // "own" hub total, should come back after leaving
+            // a NON-default loadout (two chips off): a host that ignored the guest's gear would fall
+            // back to the default (five chips) and replicate 250 hull instead of 230
+            var gl = Character.LoadoutFor(Character.Class); gl[8] = ""; gl[9] = "";
             await Wait(0.8);
             Net.I.Join("127.0.0.1:27115");
             await Wait(1.2);
@@ -10360,7 +10631,8 @@ public partial class _Test : Node
             int seen = 0;
             for (int i = 0; i < 60; i++) { if (flashes.Count > 0) seen++; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
             Check(seen > 0, $"guest sees the host's hit flashes ({seen} of 60 frames)");
-            Check(mine != null && mine.MaxHp == 200 && mine.Hp == 200, "hull replicated from the host");
+            Check(mine != null && Math.Abs(mine.MaxHp - 230) < 1e-6 && Math.Abs(mine.Hp - 230) < 1e-6,
+                  $"hull replicated from the host, which applied this pilot's own gear (three chips: 200 x 1.15 = 230; {mine?.Hp:0})");
             await Wait(12.0);                      // strike done, bombers home and docked
             var gb = Nodes<Wing>().Where(w => w.Carrier == mine && w.IsBomber).ToArray();
             Check(gb.Length == 2 && gb.All(w => w.Docked && w.GlobalPosition.DistanceTo(mine.DockSlot(w).pos) < 8f),
