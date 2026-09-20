@@ -251,7 +251,6 @@ public partial class Wing : Node2D
         _lastSlot = slot; _haveSlot = true;
         return v;
     }
-    public double BackingFor => _b == BSt.Backing ? _backT : 0;
     public const float CrawlSpeed = 0.25f;     // bombers keep closing at this fraction of top speed while they launch
     public bool Launching => _b == BSt.Launch;
     private BSt _b = BSt.Docked;
