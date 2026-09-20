@@ -608,11 +608,18 @@ public partial class PlayerShip : Node2D, IHittable
         across *= Mathf.Exp(-(float)Stats["keel"] * dt);
 
         // turning circle: yaw rate = speed / radius, capped by the rudder; astern the
-        // rudder reverses, as it does on a real ship
-        float cap = Mathf.Min(Mathf.Abs(along) / (float)Stats["turn_radius"], (float)Stats["turn_rate"]);
-        float want = rudder * cap * Mathf.Sign(along == 0 ? 1 : along);
-        _yawRate = Mathf.MoveToward(_yawRate, want, 2.5f * dt);     // the rudder takes a moment to bite
-        if (Mathf.Abs(along) < 0.5f || Pinned) _yawRate = 0f;                // pinned: it cannot turn
+        // rudder reverses, as it does on a real ship. At or below 5% of top speed the
+        // rudder PIVOTS the hull slowly on the spot instead, like a tank -- the heading
+        // turns, nothing moves the hull sideways (no strafing). Pinned: no turning at all.
+        if (!Pinned && Mathf.Abs(along) <= PivotBelow * (float)Stats["max_speed"])
+            _yawRate = Mathf.MoveToward(_yawRate, rudder * PivotRate, 2.5f * dt);
+        else
+        {
+            float cap = Mathf.Min(Mathf.Abs(along) / (float)Stats["turn_radius"], (float)Stats["turn_rate"]);
+            float want = rudder * cap * Mathf.Sign(along == 0 ? 1 : along);
+            _yawRate = Mathf.MoveToward(_yawRate, want, 2.5f * dt);     // the rudder takes a moment to bite
+            if (Pinned) _yawRate = 0f;                                  // pinned: it cannot turn
+        }
         Rotation += _yawRate * dt;
 
         fwd = Vector2.Up.Rotated(Rotation); side = new Vector2(-fwd.Y, fwd.X);
@@ -621,6 +628,8 @@ public partial class PlayerShip : Node2D, IHittable
     }
 
     public float SpeedAhead => Velocity.Dot(Vector2.Up.Rotated(Rotation));
+    public const float PivotBelow = 0.05f;                     // the pivot works at <= 5% of top speed
+    public static readonly float PivotRate = Mathf.DegToRad(10f);   // slowly: 10 degrees a second
 
     // ── everyone else follows it ─────────────────────────────────────────────
     private void RemoteFollow(float dt)

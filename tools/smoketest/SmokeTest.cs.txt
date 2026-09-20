@@ -375,9 +375,12 @@ public partial class _Test : Node
         // ── naval helm ──
         await Park(new Vector2(-1200, 1400));
         var p0 = ship.Position; float r0 = ship.Rotation;
-        KeyDown(global::Godot.Key.A); await Wait(1.5); KeyUp(global::Godot.Key.A);
-        KeyDown(global::Godot.Key.D); await Wait(1.5); KeyUp(global::Godot.Key.D);
-        Check(Mathf.Abs(ship.Rotation - r0) < 0.001f && ship.Position.DistanceTo(p0) < 0.5f, "dead in the water: A/D neither pivot nor strafe");
+        // dead in the water: A/D PIVOT the hull slowly (10 deg/s) -- and never strafe
+        KeyDown(global::Godot.Key.A); await Wait(1.5); KeyUp(global::Godot.Key.A); await Wait(0.2);
+        float portTurn = Mathf.RadToDeg(Mathf.AngleDifference(r0, ship.Rotation));
+        KeyDown(global::Godot.Key.D); await Wait(1.5); KeyUp(global::Godot.Key.D); await Wait(0.2);
+        Check(portTurn < -12f && portTurn > -18f && Mathf.Abs(Mathf.AngleDifference(r0, ship.Rotation)) < Mathf.DegToRad(2f) && ship.Position.DistanceTo(p0) < 0.5f,
+              $"dead in the water: A/D pivot the hull slowly ({portTurn:0.0} deg, then back) and never strafe");
         KeyDown(global::Godot.Key.W); await Wait(4.0);
         var fwd = Vector2.Up.Rotated(ship.Rotation);
         Check(ship.SpeedAhead > 0.95 * ship.Stats["max_speed"] && (ship.Position - p0).Normalized().Dot(fwd) > 0.999f, $"W drives ahead along the keel ({ship.SpeedAhead:0} u/s)");
@@ -394,6 +397,21 @@ public partial class _Test : Node
         KeyUp(global::Godot.Key.D); KeyUp(global::Godot.Key.W);
         KeyDown(global::Godot.Key.S); await Wait(8.0); KeyUp(global::Godot.Key.S);
         Check(ship.SpeedAhead < -10 && ship.SpeedAhead >= -ship.Stats["reverse_speed"] - 0.5, $"S drives astern, capped ({ship.SpeedAhead:0} u/s)");
+        // turning in place: at rest (<= 5% of top speed) the rudder pivots the hull, 10 deg/s, no strafing
+        {
+            ship.Velocity = Vector2.Zero; await Wait(0.5);
+            var pp0 = ship.Position; float pr0 = ship.Rotation;
+            KeyDown(global::Godot.Key.D); await Wait(2.0); KeyUp(global::Godot.Key.D);
+            float pivoted = Mathf.RadToDeg(Mathf.AngleDifference(pr0, ship.Rotation));
+            Check(Math.Abs(pivoted - 20f) < 3f && ship.Position.DistanceTo(pp0) < 1f && ship.Velocity.Length() < 0.5f,
+                  $"at rest, D pivots the hull on the spot at 10 deg/s ({pivoted:0.0} deg in 2 s), without sliding");
+            ship.Velocity = Vector2.Up.Rotated(ship.Rotation) * (float)ship.Stats["max_speed"] * 0.6f;   // well above 5%
+            float pr1 = ship.Rotation;
+            KeyDown(global::Godot.Key.D); await Wait(1.0); KeyUp(global::Godot.Key.D);
+            float underWay = Mathf.RadToDeg(Mathf.AngleDifference(pr1, ship.Rotation));
+            Check(underWay > 15f, $"under way it turns by the rudder as before, far faster ({underWay:0} deg in 1 s)");
+            ship.Velocity = Vector2.Zero; await Wait(0.5);
+        }
 
         // ── the K window: tabs, stats, rebinding ──
         Key(global::Godot.Key.K); await Wait(0.1);
