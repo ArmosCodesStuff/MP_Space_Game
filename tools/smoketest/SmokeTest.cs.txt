@@ -201,6 +201,20 @@ public partial class _Test : Node
         Key(global::Godot.Key.B); await Wait(0.1);
         var bp = Nodes<BasePanel>().FirstOrDefault();
         Check(bp != null, "B opens the base menu");
+        // THE THEME HAS TO ACTUALLY REACH THE BUTTONS, and for the project's whole history it did
+        // not: a theme set on the root window does not cross a CanvasLayer, every piece of UI here
+        // hangs off one, and so every button in the game drew Godot's stock theme. It went unnoticed
+        // because the stock theme is ALSO a dark rounded rectangle -- it took a deliberately red
+        // stylebox and a pixel count to expose it. Compared with the palette as literals rather than
+        // with Ui.Card, so this fails both when a subtree stops inheriting and when the look changes
+        // by accident. Counting the buttons first: an empty list must not pass as "all themed".
+        var btns = Nodes<Button>().ToList();
+        var unthemed = btns.Where(b => (b.GetThemeStylebox("normal") as StyleBoxFlat) is not StyleBoxFlat sb
+                                       || sb.BgColor != new Color(0.102f, 0.129f, 0.173f)
+                                       || sb.BorderColor != new Color(0.184f, 0.227f, 0.302f)).ToList();
+        Check(btns.Count >= 8 && unthemed.Count == 0,
+              $"all {btns.Count} buttons take the game's theme, not Godot's" +
+              (unthemed.Count > 0 ? $" -- {unthemed.Count} do not: {string.Join(", ", unthemed.Take(5).Select(b => b.GetParent()?.Name + "/" + b.Name))}" : ""));
         ShowTab(bp, "REFIT");
         var reset = Nodes<Button>(bp).First(b => b.Name == "Reset");
         // The docked hauler keeps loading from stock every frame, so amounts are read

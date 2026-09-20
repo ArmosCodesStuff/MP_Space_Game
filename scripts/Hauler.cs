@@ -281,6 +281,7 @@ public partial class HaulerHud : Control
     public override void _Ready()
     {
         Name = "HaulerHud";
+        Ui.Style(this);          // a CanvasLayer child of its own: it inherits nothing
         MouseFilter = MouseFilterEnum.Ignore;
         _go = new Button { Name = "Dispatch", FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(W, 30) };
         _go.Pressed += () => Yard.RequestDispatch();

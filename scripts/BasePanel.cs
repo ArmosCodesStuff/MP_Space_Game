@@ -26,7 +26,7 @@ public partial class BasePanel : PanelContainer
     {
         Name = "BasePanel";
         Position = new Vector2(360, 92);   // clear of the multiplayer panel, even when it is open (it reaches x ~283)
-        AddThemeStyleboxOverride("panel", Ui.PanelStyle(10, 1f));   // fully opaque: the world (a hull bar) showed through as a faint line
+        Ui.Panelise(this);   // fully opaque: the world (a hull bar) showed through as a faint line
         var col = new VBoxContainer { CustomMinimumSize = new Vector2(520, 0) };
         col.AddThemeConstantOverride("separation", 12);
         AddChild(col);

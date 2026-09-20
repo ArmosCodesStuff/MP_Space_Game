@@ -15,7 +15,7 @@ public partial class PilotWindow : PanelContainer
     {
         Name = "PilotWindow";
         Position = new Vector2(360, 92);
-        AddThemeStyleboxOverride("panel", Ui.PanelStyle(10, 1f));
+        Ui.Panelise(this);
         var col = new VBoxContainer(); col.AddThemeConstantOverride("separation", 6); AddChild(col);
         _head = new Label(); _head.AddThemeFontSizeOverride("font_size", 20); col.AddChild(_head);
         _exp = new Label(); col.AddChild(_exp);

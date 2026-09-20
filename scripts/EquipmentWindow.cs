@@ -18,7 +18,7 @@ public partial class EquipmentWindow : PanelContainer
     {
         Name = "EquipmentWindow";
         Position = new Vector2(360, 92);
-        AddThemeStyleboxOverride("panel", Ui.PanelStyle(10, 1f));
+        Ui.Panelise(this);
         _col = new VBoxContainer(); _col.AddThemeConstantOverride("separation", 5); AddChild(_col);
         Rebuild();
     }

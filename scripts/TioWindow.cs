@@ -17,7 +17,7 @@ public partial class TioWindow : PanelContainer
     {
         Name = "TioWindow";
         Position = new Vector2(360, 92);
-        AddThemeStyleboxOverride("panel", Ui.PanelStyle(10, 1f));
+        Ui.Panelise(this);
         var col = new VBoxContainer(); col.AddThemeConstantOverride("separation", 6); AddChild(col);
         var head = new Label { Text = "WARP TO TARGET" }; head.AddThemeFontSizeOverride("font_size", 20); col.AddChild(head);
         col.AddChild(new Label { Text = "Threat Intelligence Operations", Modulate = new Color(1, 1, 1, 0.6f) });

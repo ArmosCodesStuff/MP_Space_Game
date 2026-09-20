@@ -75,18 +75,42 @@ public static class Ui
     // A row inside a panel: the flat card everything else is built out of.
     public static StyleBoxFlat CardStyle(int padX = 12, int padY = 9) => Pad(Box(Card, Line), padX, padY);
 
+    // THE THEME REACHES A CONTROL THROUGH ITS ANCESTORS, AND A CanvasLayer IS NOT ONE.
+    //
+    // Every piece of UI in this game hangs off a CanvasLayer, and a theme set on the root window
+    // does not cross it -- so for the project's whole history the theme's Button entries reached
+    // nothing and every button in the game drew Godot's stock theme. It was invisible because the
+    // stock theme is also a dark rounded rectangle. Proved by setting the themed button fill to
+    // pure red: zero red pixels in any frame, while the theme resource itself still reported the
+    // red. Styling one PanelContainer with this turned every button inside it red at once,
+    // including ones with no theme of their own.
+    //
+    // So: call this on the ROOT CONTROL of each UI subtree -- everything under it inherits. The
+    // smoke test asserts a real button resolves to this theme, so a subtree that misses the call
+    // fails loudly instead of quietly looking like Godot.
+    public static void Style(Control c) => c.Theme = Theme;
+    // A dialog is a Window, not a Control, and breaks the chain the same way a CanvasLayer does.
+    public static void Style(Window w) => w.Theme = Theme;
+
     public static PanelContainer Wrap(Control c, int pad = 6)
     {
-        var p = new PanelContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+        var p = new PanelContainer { MouseFilter = Control.MouseFilterEnum.Ignore, Theme = Theme };
         p.AddThemeStyleboxOverride("panel", PanelStyle(pad));
         p.AddChild(c);
         return p;
     }
 
+    // A window panel: the one panel look plus the theme, so a window never has to remember both.
+    public static void Panelise(PanelContainer p, int pad = 10, float alpha = 1f)
+    {
+        p.Theme = Theme;
+        p.AddThemeStyleboxOverride("panel", PanelStyle(pad, alpha));
+    }
+
     // A row card around any control, for lists of actions and readouts.
     public static PanelContainer CardWrap(Control c, int padX = 12, int padY = 9)
     {
-        var p = new PanelContainer();
+        var p = new PanelContainer { Theme = Theme };
         p.AddThemeStyleboxOverride("panel", CardStyle(padX, padY));
         p.AddChild(c);
         return p;
@@ -171,7 +195,8 @@ public static class Ui
         }
     }
 
-    // Once per launch (idempotent): the whole window takes the theme.
+    // Once per launch (idempotent): the root window takes the theme, which covers any Control that
+    // is NOT under a CanvasLayer. Everything that is needs Style() or Panelise() -- see above.
     public static void Install(SceneTree tree) { if (tree.Root.Theme != Theme) tree.Root.Theme = Theme; }
 
     // Set a control's text only when it actually CHANGED. Assigning Text re-shapes the control's

@@ -55,6 +55,7 @@ public partial class CharacterSelect : Control
         _confirm.Canceled  += () => _pendingDelete = null;
         AddChild(_confirm);
         // the game's panel look, not Godot's default grey
+        Ui.Style(_confirm);
         _confirm.AddThemeStyleboxOverride("panel", Ui.PanelStyle(14, 0.97f));
         // the title bar lives in the border's top expand margin: reserve it, or the title
         // floats over whatever is behind the dialog

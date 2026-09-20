@@ -162,7 +162,7 @@ public partial class Hub : Node2D
         layer.AddChild(eqWrap);
         // the stats line sits on its own panel so it reads over anything behind it
         var hudPanel = new PanelContainer { Position = new Vector2(10, 8), Name = "HudPanel", MouseFilter = Control.MouseFilterEnum.Ignore };
-        hudPanel.AddThemeStyleboxOverride("panel", Ui.PanelStyle(12));
+        Ui.Panelise(hudPanel, 12);
         layer.AddChild(hudPanel);
         _hud = new Label();
         _hud.AddThemeFontSizeOverride("font_size", 16);

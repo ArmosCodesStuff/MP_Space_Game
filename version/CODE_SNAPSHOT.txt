@@ -1,9 +1,9 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-20 16:45 at git commit 00509a9: typecheck clean, dotnet build 0 warnings,
+// Taken 2026-09-20 17:00 at git commit 7a9b56a: typecheck clean, dotnet build 0 warnings,
 //   0 analyser findings, 0 unused members; smoke test 3/3 runs at 435 checks on Windows
 //   (437 in a sandbox with no router and no internet); 67-frame UI sweep complete, 0 lint.
-// 67 files, 11718 lines. Code only: sprites, sounds and docs are in the zip.
+// 67 files, 11759 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -20,28 +20,28 @@
 //   scripts/AbilityBar.cs                          112 lines   sha256 4a1331fe370c
 //   scripts/Autopilot.cs                            40 lines   sha256 807538219f53
 //   scripts/BaseDefense.cs                          55 lines   sha256 1d8daa0fbd67
-//   scripts/BasePanel.cs                           132 lines   sha256 ee22c5e98ca3
+//   scripts/BasePanel.cs                           132 lines   sha256 486b1d45088e
 //   scripts/Boss.cs                                300 lines   sha256 4029a62f29a0
 //   scripts/BossBar.cs                              85 lines   sha256 679ea3b792b9
 //   scripts/Character.cs                           220 lines   sha256 9221d9084893
 //   scripts/CharacterCreator.cs                    218 lines   sha256 d1c4d4f7012f
-//   scripts/CharacterSelect.cs                     171 lines   sha256 dc2bfeccc820
+//   scripts/CharacterSelect.cs                     172 lines   sha256 567a093f3c12
 //   scripts/Combat.cs                               87 lines   sha256 298c5236a5b5
 //   scripts/Economy.cs                              81 lines   sha256 c9aa43070257
 //   scripts/Equipment.cs                            77 lines   sha256 5a5307ab79c9
-//   scripts/EquipmentWindow.cs                      73 lines   sha256 0178e7bceb83
+//   scripts/EquipmentWindow.cs                      73 lines   sha256 7584f912029d
 //   scripts/EscapePod.cs                            50 lines   sha256 324c55cb503b
 //   scripts/EscMenu.cs                              59 lines   sha256 999b01e6cd29
 //   scripts/Explosion.cs                            18 lines   sha256 12209b0c72ce
 //   scripts/Gatherer.cs                            254 lines   sha256 135bd767de29
-//   scripts/Hauler.cs                              316 lines   sha256 cf2e40c1ba7d
+//   scripts/Hauler.cs                              317 lines   sha256 b13773f083c7
 //   scripts/HealthBar.cs                            36 lines   sha256 97c42a282205
-//   scripts/Hub.cs                                1255 lines   sha256 b5f81ed865f3
+//   scripts/Hub.cs                                1255 lines   sha256 45d5f50cf4c4
 //   scripts/MainMenu.cs                            235 lines   sha256 92fdcfb22a4b
 //   scripts/Missions.cs                             38 lines   sha256 48a2f11b25a4
 //   scripts/Music.cs                                78 lines   sha256 021dfc1c83d5
 //   scripts/Net.cs                                 334 lines   sha256 040f19a1471f
-//   scripts/PilotWindow.cs                          54 lines   sha256 2e678154e65f
+//   scripts/PilotWindow.cs                          54 lines   sha256 39228852e443
 //   scripts/PlayerShip.cs                          783 lines   sha256 010d0e857cfe
 //   scripts/Plume.cs                                25 lines   sha256 cdbeb9b8fc58
 //   scripts/Progression.cs                          92 lines   sha256 de28f5e72175
@@ -54,13 +54,13 @@
 //   scripts/Shield.cs                               71 lines   sha256 99c7fa4a2a8e
 //   scripts/ShipClasses.cs                         530 lines   sha256 949a74f65ecf
 //   scripts/Stats.cs                               161 lines   sha256 0a28fa171863
-//   scripts/StatsWindow.cs                         198 lines   sha256 8b5c9f76adc7
+//   scripts/StatsWindow.cs                         198 lines   sha256 b5dbad43db73
 //   scripts/TargetDummy.cs                         132 lines   sha256 ae97ee1a9083
 //   scripts/Telegraph.cs                            47 lines   sha256 89f6af49c4d7
-//   scripts/TioWindow.cs                            66 lines   sha256 1afef5008016
+//   scripts/TioWindow.cs                            66 lines   sha256 6885ade8b24f
 //   scripts/Torpedo.cs                             156 lines   sha256 a12daff14996
 //   scripts/Txt.cs                                  32 lines   sha256 8823251c9a4f
-//   scripts/Ui.cs                                  183 lines   sha256 b9152f12a4e9
+//   scripts/Ui.cs                                  208 lines   sha256 34f4db4e962f
 //   scripts/Yard.cs                                438 lines   sha256 e3a40eb72b5d
 //   typecheck/GodotStub.cs                         192 lines   sha256 2c5c2967bf5c
 //   typecheck/typecheck.ps1                         80 lines   sha256 94631684caab
@@ -75,7 +75,7 @@
 //   tools/screens/Shots.cs.txt                     457 lines   sha256 8355cd3b6808
 //   tools/smoketest/run.ps1                        151 lines   sha256 4eed3fc767ae
 //   tools/smoketest/run.sh                          57 lines   sha256 568b677787fd
-//   tools/smoketest/SmokeTest.cs.txt              1923 lines   sha256 20d385908fdf
+//   tools/smoketest/SmokeTest.cs.txt              1937 lines   sha256 217303aa7e0b
 //   tools/snapshot.ps1                              95 lines   sha256 d6d85575ba26
 //==============================================================================
 
@@ -657,7 +657,7 @@ public partial class BaseDefense : Node2D
 
 //==============================================================================
 // FILE: scripts/BasePanel.cs
-// 132 lines   sha256 ee22c5e98ca3
+// 132 lines   sha256 486b1d45088e
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -687,7 +687,7 @@ public partial class BasePanel : PanelContainer
     {
         Name = "BasePanel";
         Position = new Vector2(360, 92);   // clear of the multiplayer panel, even when it is open (it reaches x ~283)
-        AddThemeStyleboxOverride("panel", Ui.PanelStyle(10, 1f));   // fully opaque: the world (a hull bar) showed through as a faint line
+        Ui.Panelise(this);   // fully opaque: the world (a hull bar) showed through as a faint line
         var col = new VBoxContainer { CustomMinimumSize = new Vector2(520, 0) };
         col.AddThemeConstantOverride("separation", 12);
         AddChild(col);
@@ -1637,7 +1637,7 @@ public partial class ShipPreview : Control
 
 //==============================================================================
 // FILE: scripts/CharacterSelect.cs
-// 171 lines   sha256 dc2bfeccc820
+// 172 lines   sha256 567a093f3c12
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -1696,6 +1696,7 @@ public partial class CharacterSelect : Control
         _confirm.Canceled  += () => _pendingDelete = null;
         AddChild(_confirm);
         // the game's panel look, not Godot's default grey
+        Ui.Style(_confirm);
         _confirm.AddThemeStyleboxOverride("panel", Ui.PanelStyle(14, 0.97f));
         // the title bar lives in the border's top expand margin: reserve it, or the title
         // floats over whatever is behind the dialog
@@ -2073,7 +2074,7 @@ public static class Equipment
 
 //==============================================================================
 // FILE: scripts/EquipmentWindow.cs
-// 73 lines   sha256 0178e7bceb83
+// 73 lines   sha256 7584f912029d
 //==============================================================================
 using Godot;
 
@@ -2095,7 +2096,7 @@ public partial class EquipmentWindow : PanelContainer
     {
         Name = "EquipmentWindow";
         Position = new Vector2(360, 92);
-        AddThemeStyleboxOverride("panel", Ui.PanelStyle(10, 1f));
+        Ui.Panelise(this);
         _col = new VBoxContainer(); _col.AddThemeConstantOverride("separation", 5); AddChild(_col);
         Rebuild();
     }
@@ -2552,7 +2553,7 @@ public partial class Gatherer : Node2D
 
 //==============================================================================
 // FILE: scripts/Hauler.cs
-// 316 lines   sha256 cf2e40c1ba7d
+// 317 lines   sha256 b13773f083c7
 //==============================================================================
 using Godot;
 using System;
@@ -2837,6 +2838,7 @@ public partial class HaulerHud : Control
     public override void _Ready()
     {
         Name = "HaulerHud";
+        Ui.Style(this);          // a CanvasLayer child of its own: it inherits nothing
         MouseFilter = MouseFilterEnum.Ignore;
         _go = new Button { Name = "Dispatch", FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(W, 30) };
         _go.Pressed += () => Yard.RequestDispatch();
@@ -2914,7 +2916,7 @@ public static class HealthBar
 
 //==============================================================================
 // FILE: scripts/Hub.cs
-// 1255 lines   sha256 b5f81ed865f3
+// 1255 lines   sha256 45d5f50cf4c4
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -3080,7 +3082,7 @@ public partial class Hub : Node2D
         layer.AddChild(eqWrap);
         // the stats line sits on its own panel so it reads over anything behind it
         var hudPanel = new PanelContainer { Position = new Vector2(10, 8), Name = "HudPanel", MouseFilter = Control.MouseFilterEnum.Ignore };
-        hudPanel.AddThemeStyleboxOverride("panel", Ui.PanelStyle(12));
+        Ui.Panelise(hudPanel, 12);
         layer.AddChild(hudPanel);
         _hud = new Label();
         _hud.AddThemeFontSizeOverride("font_size", 16);
@@ -4879,7 +4881,7 @@ public partial class Net : Node
 
 //==============================================================================
 // FILE: scripts/PilotWindow.cs
-// 54 lines   sha256 2e678154e65f
+// 54 lines   sha256 39228852e443
 //==============================================================================
 using Godot;
 
@@ -4898,7 +4900,7 @@ public partial class PilotWindow : PanelContainer
     {
         Name = "PilotWindow";
         Position = new Vector2(360, 92);
-        AddThemeStyleboxOverride("panel", Ui.PanelStyle(10, 1f));
+        Ui.Panelise(this);
         var col = new VBoxContainer(); col.AddThemeConstantOverride("separation", 6); AddChild(col);
         _head = new Label(); _head.AddThemeFontSizeOverride("font_size", 20); col.AddChild(_head);
         _exp = new Label(); col.AddChild(_exp);
@@ -7457,7 +7459,7 @@ public class ShipStats
 
 //==============================================================================
 // FILE: scripts/StatsWindow.cs
-// 198 lines   sha256 8b5c9f76adc7
+// 198 lines   sha256 b5dbad43db73
 //==============================================================================
 using Godot;
 
@@ -7481,7 +7483,7 @@ public partial class StatsWindow : CanvasLayer
     {
         Layer = 15;
         var panel = new PanelContainer { Position = new Vector2(1920 - 16 - 560, 60), CustomMinimumSize = new Vector2(560, 0) };
-        panel.AddThemeStyleboxOverride("panel", Ui.PanelStyle(14));      // the one panel look
+        Ui.Panelise(panel, 14);      // the one panel look
         // anchor to the right edge so it stays put at any window size
         panel.AnchorLeft = panel.AnchorRight = 1f;
         panel.OffsetLeft = -16 - 560; panel.OffsetRight = -16; panel.OffsetTop = 60;
@@ -7849,7 +7851,7 @@ public partial class Telegraph : Node2D
 
 //==============================================================================
 // FILE: scripts/TioWindow.cs
-// 66 lines   sha256 1afef5008016
+// 66 lines   sha256 6885ade8b24f
 //==============================================================================
 using Godot;
 using System.Linq;
@@ -7870,7 +7872,7 @@ public partial class TioWindow : PanelContainer
     {
         Name = "TioWindow";
         Position = new Vector2(360, 92);
-        AddThemeStyleboxOverride("panel", Ui.PanelStyle(10, 1f));
+        Ui.Panelise(this);
         var col = new VBoxContainer(); col.AddThemeConstantOverride("separation", 6); AddChild(col);
         var head = new Label { Text = "WARP TO TARGET" }; head.AddThemeFontSizeOverride("font_size", 20); col.AddChild(head);
         col.AddChild(new Label { Text = "Threat Intelligence Operations", Modulate = new Color(1, 1, 1, 0.6f) });
@@ -8118,7 +8120,7 @@ public static class Txt
 
 //==============================================================================
 // FILE: scripts/Ui.cs
-// 183 lines   sha256 b9152f12a4e9
+// 208 lines   sha256 34f4db4e962f
 //==============================================================================
 using Godot;
 
@@ -8197,18 +8199,42 @@ public static class Ui
     // A row inside a panel: the flat card everything else is built out of.
     public static StyleBoxFlat CardStyle(int padX = 12, int padY = 9) => Pad(Box(Card, Line), padX, padY);
 
+    // THE THEME REACHES A CONTROL THROUGH ITS ANCESTORS, AND A CanvasLayer IS NOT ONE.
+    //
+    // Every piece of UI in this game hangs off a CanvasLayer, and a theme set on the root window
+    // does not cross it -- so for the project's whole history the theme's Button entries reached
+    // nothing and every button in the game drew Godot's stock theme. It was invisible because the
+    // stock theme is also a dark rounded rectangle. Proved by setting the themed button fill to
+    // pure red: zero red pixels in any frame, while the theme resource itself still reported the
+    // red. Styling one PanelContainer with this turned every button inside it red at once,
+    // including ones with no theme of their own.
+    //
+    // So: call this on the ROOT CONTROL of each UI subtree -- everything under it inherits. The
+    // smoke test asserts a real button resolves to this theme, so a subtree that misses the call
+    // fails loudly instead of quietly looking like Godot.
+    public static void Style(Control c) => c.Theme = Theme;
+    // A dialog is a Window, not a Control, and breaks the chain the same way a CanvasLayer does.
+    public static void Style(Window w) => w.Theme = Theme;
+
     public static PanelContainer Wrap(Control c, int pad = 6)
     {
-        var p = new PanelContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+        var p = new PanelContainer { MouseFilter = Control.MouseFilterEnum.Ignore, Theme = Theme };
         p.AddThemeStyleboxOverride("panel", PanelStyle(pad));
         p.AddChild(c);
         return p;
     }
 
+    // A window panel: the one panel look plus the theme, so a window never has to remember both.
+    public static void Panelise(PanelContainer p, int pad = 10, float alpha = 1f)
+    {
+        p.Theme = Theme;
+        p.AddThemeStyleboxOverride("panel", PanelStyle(pad, alpha));
+    }
+
     // A row card around any control, for lists of actions and readouts.
     public static PanelContainer CardWrap(Control c, int padX = 12, int padY = 9)
     {
-        var p = new PanelContainer();
+        var p = new PanelContainer { Theme = Theme };
         p.AddThemeStyleboxOverride("panel", CardStyle(padX, padY));
         p.AddChild(c);
         return p;
@@ -8293,7 +8319,8 @@ public static class Ui
         }
     }
 
-    // Once per launch (idempotent): the whole window takes the theme.
+    // Once per launch (idempotent): the root window takes the theme, which covers any Control that
+    // is NOT under a CanvasLayer. Everything that is needs Style() or Panelise() -- see above.
     public static void Install(SceneTree tree) { if (tree.Root.Theme != Theme) tree.Root.Theme = Theme; }
 
     // Set a control's text only when it actually CHANGED. Assigning Text re-shapes the control's
@@ -10106,7 +10133,7 @@ echo "SMOKE TEST PASSED"
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 1923 lines   sha256 20d385908fdf
+// 1937 lines   sha256 217303aa7e0b
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -10311,6 +10338,20 @@ public partial class _Test : Node
         Key(global::Godot.Key.B); await Wait(0.1);
         var bp = Nodes<BasePanel>().FirstOrDefault();
         Check(bp != null, "B opens the base menu");
+        // THE THEME HAS TO ACTUALLY REACH THE BUTTONS, and for the project's whole history it did
+        // not: a theme set on the root window does not cross a CanvasLayer, every piece of UI here
+        // hangs off one, and so every button in the game drew Godot's stock theme. It went unnoticed
+        // because the stock theme is ALSO a dark rounded rectangle -- it took a deliberately red
+        // stylebox and a pixel count to expose it. Compared with the palette as literals rather than
+        // with Ui.Card, so this fails both when a subtree stops inheriting and when the look changes
+        // by accident. Counting the buttons first: an empty list must not pass as "all themed".
+        var btns = Nodes<Button>().ToList();
+        var unthemed = btns.Where(b => (b.GetThemeStylebox("normal") as StyleBoxFlat) is not StyleBoxFlat sb
+                                       || sb.BgColor != new Color(0.102f, 0.129f, 0.173f)
+                                       || sb.BorderColor != new Color(0.184f, 0.227f, 0.302f)).ToList();
+        Check(btns.Count >= 8 && unthemed.Count == 0,
+              $"all {btns.Count} buttons take the game's theme, not Godot's" +
+              (unthemed.Count > 0 ? $" -- {unthemed.Count} do not: {string.Join(", ", unthemed.Take(5).Select(b => b.GetParent()?.Name + "/" + b.Name))}" : ""));
         ShowTab(bp, "REFIT");
         var reset = Nodes<Button>(bp).First(b => b.Name == "Reset");
         // The docked hauler keeps loading from stock every frame, so amounts are read
