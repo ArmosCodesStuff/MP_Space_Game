@@ -1,66 +1,79 @@
 using Godot;
 
-// THE LOOK -- one panel and one button style for every screen.
-// Panels: a vertical gradient (lighter at the top), a bright 1 px top edge like light
-// on a bevel, a crisp border, 3 px corners and a soft drop shadow outside the panel.
-// Built as small generated textures (a flat style cannot shade), cached, and installed
-// as the root window's theme so every Control inherits it.
+// THE LOOK -- one palette, one panel, one button, for every screen.
+//
+// Flat dark surfaces, 10 px corners, a hairline border and one accent blue. Nothing is
+// shaded: the old look drew a vertical gradient with a bright bevel along the top edge,
+// which is why it had to bake little textures and nine-patch them. A flat surface is
+// exactly what StyleBoxFlat does natively -- antialiased corners, a real border, a soft
+// shadow -- so the texture generator and its cache are gone.
+//
+// Three surfaces, in order of lightness, and everything on screen is one of them:
+//   Deep    the inside of a field, or the empty part of a bar -- darker than the panel
+//   Panel   a window, a HUD panel, the thing that floats over the world
+//   Card    a row, a slot, a tab INSIDE a panel -- one step up, so rows read as objects
+//
+// The drawn HUD (ability bar, boss bar, radar, health bars) is not made of Controls and
+// cannot inherit the theme, so it reads the same colours from here and builds its own
+// boxes with Box(). One palette, two rendering paths.
 public static class Ui
 {
-    const int Shadow = 5, Corner = 3;
-    static readonly System.Collections.Generic.Dictionary<string, ImageTexture> _tex = new();
-    static Theme _theme;
+    // ---------------------------------------------------------------- palette
+    public static readonly Color
+        Deep   = new(0.043f, 0.055f, 0.078f),   // #0b0e14
+        Panel  = new(0.071f, 0.094f, 0.137f),   // #121823
+        Card   = new(0.102f, 0.129f, 0.173f),   // #1a212c
+        Line   = new(0.184f, 0.227f, 0.302f),   // #2f3a4d  hairline borders
+        Accent = new(0.302f, 0.639f, 1.000f),   // #4da3ff  headings, the live tab, bar fills
+        Text   = new(0.788f, 0.831f, 0.902f),   // #c9d4e6
+        Dim    = new(0.518f, 0.573f, 0.659f),   // #8492a8  secondary text
+        Good   = new(0.290f, 0.871f, 0.502f),   // #4ade80
+        Warn   = new(0.984f, 0.749f, 0.141f),   // #fbbf24
+        Bad    = new(0.973f, 0.443f, 0.443f);   // #f87171
 
-    // A panel or button face: size N, gradient top->bottom, border, top highlight, optional shadow.
-    static ImageTexture Face(string key, Color top, Color bottom, Color border, Color highlight, bool shadow, float alpha = 1f)
-    {
-        key += alpha.ToString("0.00");
-        if (_tex.TryGetValue(key, out var t)) return t;
-        int pad = shadow ? Shadow : 0, inner = 24, n = inner + 2 * pad;
-        var img = Image.CreateEmpty(n, n, false, Image.Format.Rgba8);
-        for (int y = 0; y < n; y++)
-            for (int x = 0; x < n; x++)
-            {
-                // distance outside the rounded inner rect (0 inside)
-                float dx = Mathf.Max(Mathf.Max(pad + Corner - x, x - (n - 1 - pad - Corner)), 0);
-                float dy = Mathf.Max(Mathf.Max(pad + Corner - y, y - (n - 1 - pad - Corner)), 0);
-                float cornerD = Mathf.Sqrt(dx * dx + dy * dy) - Corner;                  // >0 outside the corner arc
-                bool inRect = x >= pad && x < n - pad && y >= pad && y < n - pad;
-                bool inside = inRect && cornerD <= 0.5f;
-                if (!inside)
-                {
-                    if (!shadow) { img.SetPixel(x, y, new Color(0, 0, 0, 0)); continue; }
-                    float od = Mathf.Max(Mathf.Max(pad - x, x - (n - 1 - pad)), Mathf.Max(pad - y, y - (n - 1 - pad)));
-                    od = Mathf.Max(od, cornerD);
-                    float a = Mathf.Clamp(1f - od / Shadow, 0f, 1f);
-                    img.SetPixel(x, y, new Color(0, 0, 0, 0.45f * a * a * alpha)); continue;
-                }
-                float k = (float)(y - pad) / (inner - 1);
-                var c = top.Lerp(bottom, k);
-                bool edge = x == pad || x == n - 1 - pad || y == pad || y == n - 1 - pad || cornerD > -1f;
-                if (edge) c = border;
-                else if (y == pad + 1) c = highlight;                                      // light on the top bevel
-                img.SetPixel(x, y, new Color(c.R, c.G, c.B, c.A * alpha));
-            }
-        return _tex[key] = ImageTexture.CreateFromImage(img);
-    }
+    // Corner radii. A panel is rounder than the things inside it: a card with its container's
+    // radius looks like it is bulging out of it.
+    public const int PanelCorner = 10, CardCorner = 7;
 
-    static StyleBoxTexture Box(ImageTexture face, bool shadow, float padX, float padY)
+    // ---------------------------------------------------------------- type scale
+    // Four sizes, and every screen picks from them. The old code set sizes ad hoc -- 11, 12,
+    // 13, 14, 15, 16, 20, 22, 34, 64 -- so no two headings on different screens matched.
+    // (A Display size for the title screen belongs here too, but an unused constant fails the
+    // cross-reference, so it arrives with the screen that uses it.)
+    public const int Title = 22, Head = 17, Body = 14, Small = 12;
+
+    // ---------------------------------------------------------------- building blocks
+
+    // The one rounded box. Drawn Controls cache one of these and call Draw() on it; themed
+    // Controls get theirs through the theme below.
+    public static StyleBoxFlat Box(Color bg, Color border, int corner = CardCorner, int borderW = 1)
     {
-        int m = (shadow ? Shadow : 0) + Corner + 2;
-        var s = new StyleBoxTexture { Texture = face };
-        s.TextureMarginLeft = s.TextureMarginRight = s.TextureMarginTop = s.TextureMarginBottom = m;
-        if (shadow) { s.ExpandMarginLeft = s.ExpandMarginRight = s.ExpandMarginTop = s.ExpandMarginBottom = Shadow; }
-        s.ContentMarginLeft = s.ContentMarginRight = padX; s.ContentMarginTop = s.ContentMarginBottom = padY;
+        var s = new StyleBoxFlat { BgColor = bg, BorderColor = border, AntiAliasing = true };
+        s.SetBorderWidthAll(borderW);
+        s.SetCornerRadiusAll(corner);
         return s;
     }
 
-    static readonly Color Border = new(0.36f, 0.47f, 0.63f), Top = new(0.12f, 0.15f, 0.21f), Bottom = new(0.045f, 0.055f, 0.085f),
-                          Shine = new(0.52f, 0.64f, 0.82f);
+    static StyleBoxFlat Pad(StyleBoxFlat s, float x, float y)
+    {
+        s.ContentMarginLeft = s.ContentMarginRight = x;
+        s.ContentMarginTop = s.ContentMarginBottom = y;
+        return s;
+    }
 
-    // Every panel in the game. Opaque by default: menus sit over the world.
-    public static StyleBoxTexture PanelStyle(int pad = 10, float alpha = 1f) =>
-        Box(Face("panel", Top, Bottom, Border, Shine, true, alpha), true, pad, pad * 0.6f);
+    // Every panel in the game. Opaque by default: menus sit over the world, and a hull bar
+    // showing through a menu as a faint line is the reason this is not translucent.
+    public static StyleBoxFlat PanelStyle(int pad = 10, float alpha = 1f)
+    {
+        var s = Pad(Box(new Color(Panel, alpha), new Color(Line, alpha), PanelCorner), pad + 4, pad);
+        s.ShadowColor = new Color(0, 0, 0, 0.55f * alpha);
+        s.ShadowSize = 14;
+        s.ShadowOffset = new Vector2(0, 4);
+        return s;
+    }
+
+    // A row inside a panel: the flat card everything else is built out of.
+    public static StyleBoxFlat CardStyle(int padX = 12, int padY = 9) => Pad(Box(Card, Line), padX, padY);
 
     public static PanelContainer Wrap(Control c, int pad = 6)
     {
@@ -70,26 +83,90 @@ public static class Ui
         return p;
     }
 
-    // The game-wide theme: buttons, text fields and bars in the same shaded style.
+    // A row card around any control, for lists of actions and readouts.
+    public static PanelContainer CardWrap(Control c, int padX = 12, int padY = 9)
+    {
+        var p = new PanelContainer();
+        p.AddThemeStyleboxOverride("panel", CardStyle(padX, padY));
+        p.AddChild(c);
+        return p;
+    }
+
+    // ---------------------------------------------------------------- labels
+
+    public static Label Lbl(string text, int size = Body, Color? col = null)
+    {
+        var l = new Label { Text = text };
+        l.AddThemeFontSizeOverride("font_size", size);
+        if (col.HasValue) l.AddThemeColorOverride("font_color", col.Value);
+        return l;
+    }
+
+    // A section heading: small, upper case, accent, with a hairline rule under it. The rule is
+    // what makes a list of rows read as a section rather than as a pile.
+    public static VBoxContainer Heading(string text)
+    {
+        var v = new VBoxContainer();
+        v.AddThemeConstantOverride("separation", 4);
+        v.AddChild(Lbl(text.ToUpperInvariant(), Small, Accent));
+        var rule = new Panel { CustomMinimumSize = new Vector2(0, 1) };
+        rule.AddThemeStyleboxOverride("panel", new StyleBoxFlat { BgColor = Line });
+        v.AddChild(rule);
+        return v;
+    }
+
+    // A tab in a strip: a toggle button, so the theme's "pressed" box -- accent border, accent
+    // text -- marks the live one without any per-tab colour code at the call site.
+    public static Button Tab(string text, ButtonGroup group, bool on)
+    {
+        var b = new Button { Text = text, Name = "Tab_" + text, ToggleMode = true, ButtonGroup = group,
+                             FocusMode = Control.FocusModeEnum.None, ButtonPressed = on };
+        b.AddThemeFontSizeOverride("font_size", Small);
+        return b;
+    }
+
+    // ---------------------------------------------------------------- the theme
+    static Theme _theme;
     private static Theme Theme
     {
         get
         {
             if (_theme != null) return _theme;
             _theme = new Theme();
-            StyleBox Btn(string k, Color t, Color b, Color border, Color shine) => Box(Face("btn_" + k, t, b, border, shine, false), false, 10, 5);
-            _theme.SetStylebox("normal", "Button", Btn("normal", new Color(0.16f, 0.19f, 0.26f), new Color(0.08f, 0.09f, 0.13f), new Color(0.32f, 0.41f, 0.55f), new Color(0.40f, 0.50f, 0.66f)));
-            _theme.SetStylebox("hover", "Button", Btn("hover", new Color(0.21f, 0.26f, 0.35f), new Color(0.10f, 0.12f, 0.17f), new Color(0.55f, 0.70f, 0.92f), new Color(0.62f, 0.76f, 0.95f)));
-            _theme.SetStylebox("pressed", "Button", Btn("pressed", new Color(0.07f, 0.08f, 0.11f), new Color(0.15f, 0.19f, 0.26f), new Color(0.55f, 0.70f, 0.92f), new Color(0.10f, 0.12f, 0.16f)));
-            _theme.SetStylebox("disabled", "Button", Btn("disabled", new Color(0.09f, 0.10f, 0.12f), new Color(0.06f, 0.065f, 0.08f), new Color(0.20f, 0.23f, 0.28f), new Color(0.13f, 0.15f, 0.18f)));
+
+            // 2 px, not 1. The game renders at 2560x1440 with no UI scaling, and a 1 px border
+            // on a button is a quarter of a millimetre of screen -- it disappeared entirely in the
+            // first sweep, which is how a bright accent outline on the live tab went unnoticed.
+            StyleBoxFlat Btn(Color bg, Color border) => Pad(Box(bg, border, CardCorner, 2), 14, 7);
+            _theme.SetStylebox("normal", "Button", Btn(Card, Line));
+            _theme.SetStylebox("hover", "Button", Btn(Card.Lerp(Accent, 0.10f), Line.Lerp(Accent, 0.45f)));
+            // Toggle buttons use "pressed" for ON, so this is also the live tab in a strip.
+            _theme.SetStylebox("pressed", "Button", Btn(Deep.Lerp(Accent, 0.14f), Accent));
+            _theme.SetStylebox("disabled", "Button", Btn(Panel, Line.Lerp(Panel, 0.5f)));
             _theme.SetStylebox("focus", "Button", new StyleBoxEmpty());
             _theme.SetStylebox("hover_pressed", "Button", _theme.GetStylebox("pressed", "Button"));
-            _theme.SetColor("font_disabled_color", "Button", new Color(0.55f, 0.58f, 0.64f));
-            _theme.SetStylebox("normal", "LineEdit", Btn("edit", new Color(0.04f, 0.05f, 0.08f), new Color(0.07f, 0.08f, 0.11f), new Color(0.30f, 0.38f, 0.50f), new Color(0.05f, 0.06f, 0.09f)));
-            _theme.SetStylebox("focus", "LineEdit", new StyleBoxEmpty());
-            _theme.SetStylebox("background", "ProgressBar", Btn("barbg", new Color(0.04f, 0.05f, 0.07f), new Color(0.07f, 0.08f, 0.10f), new Color(0.26f, 0.32f, 0.42f), new Color(0.05f, 0.06f, 0.08f)));
-            _theme.SetStylebox("fill", "ProgressBar", Btn("barfill", new Color(0.45f, 0.72f, 1f), new Color(0.22f, 0.45f, 0.78f), new Color(0.50f, 0.75f, 1f), new Color(0.75f, 0.9f, 1f)));
+            _theme.SetFontSize("font_size", "Button", Body);
+            _theme.SetColor("font_color", "Button", Text);
+            _theme.SetColor("font_hover_color", "Button", Colors.White);
+            _theme.SetColor("font_pressed_color", "Button", Accent);
+            _theme.SetColor("font_hover_pressed_color", "Button", Accent);
+            _theme.SetColor("font_disabled_color", "Button", Dim with { A = 0.55f });
+
+            _theme.SetFontSize("font_size", "Label", Body);
+            _theme.SetColor("font_color", "Label", Text);
+
+            _theme.SetStylebox("normal", "LineEdit", Pad(Box(Deep, Line), 10, 6));
+            _theme.SetStylebox("focus", "LineEdit", Pad(Box(Deep, Accent), 10, 6));
+            _theme.SetColor("font_color", "LineEdit", Text);
+            _theme.SetColor("caret_color", "LineEdit", Accent);
+            _theme.SetColor("selection_color", "LineEdit", Accent with { A = 0.30f });
+
+            _theme.SetStylebox("background", "ProgressBar", Box(Deep, Line, 4));
+            _theme.SetStylebox("fill", "ProgressBar", Box(Accent, Accent, 4));
+
             _theme.SetStylebox("panel", "PanelContainer", PanelStyle());
+            _theme.SetStylebox("separator", "HSeparator", new StyleBoxLine { Color = Line, Thickness = 1 });
+            _theme.SetStylebox("separator", "VSeparator", new StyleBoxLine { Color = Line, Thickness = 1, Vertical = true });
             return _theme;
         }
     }

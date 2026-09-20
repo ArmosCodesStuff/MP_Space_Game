@@ -27,26 +27,31 @@ public partial class BasePanel : PanelContainer
         Name = "BasePanel";
         Position = new Vector2(360, 92);   // clear of the multiplayer panel, even when it is open (it reaches x ~283)
         AddThemeStyleboxOverride("panel", Ui.PanelStyle(10, 1f));   // fully opaque: the world (a hull bar) showed through as a faint line
-        var col = new VBoxContainer { CustomMinimumSize = new Vector2(500, 0) };
-        col.AddThemeConstantOverride("separation", 6);
+        var col = new VBoxContainer { CustomMinimumSize = new Vector2(520, 0) };
+        col.AddThemeConstantOverride("separation", 12);
         AddChild(col);
-        var head = new Label { Text = "BASE" }; head.AddThemeFontSizeOverride("font_size", 20);
+        // Title line: the name on the left, the one number you spend from on the right.
+        var head = new HBoxContainer();
+        head.AddChild(Ui.Lbl("BASE", Ui.Title, Ui.Accent));
+        _credits = Ui.Lbl("", Ui.Body, Ui.Dim);
+        _credits.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        _credits.HorizontalAlignment = HorizontalAlignment.Right;
+        _credits.VerticalAlignment = VerticalAlignment.Center;
+        head.AddChild(_credits);
         col.AddChild(head);
 
-        var tabs = new HBoxContainer(); tabs.AddThemeConstantOverride("separation", 4);
+        var tabs = new HBoxContainer(); tabs.AddThemeConstantOverride("separation", 6);
         var group = new ButtonGroup();
         foreach (var t in Economy.Tabs.Append("REFIT"))
         {
-            var b = new Button { Text = t, Name = "Tab_" + t, ToggleMode = true, ButtonGroup = group, FocusMode = FocusModeEnum.None,
-                                 ButtonPressed = t == _tab };
+            var b = Ui.Tab(t, group, t == _tab);
             var tab = t; b.Toggled += on => { if (on) ShowTab(tab); };
             tabs.AddChild(b);
         }
         col.AddChild(tabs);
-        _credits = new Label(); col.AddChild(_credits);
-        _body = new VBoxContainer(); _body.AddThemeConstantOverride("separation", 6);
+        _body = new VBoxContainer(); _body.AddThemeConstantOverride("separation", 8);
         col.AddChild(_body);
-        col.AddChild(new Label { Text = "B or Esc closes.", Modulate = new Color(1, 1, 1, 0.45f) });
+        col.AddChild(Ui.Lbl("B or Esc closes.", Ui.Small, Ui.Dim));
         ShowTab(_tab);
     }
 
@@ -56,43 +61,51 @@ public partial class BasePanel : PanelContainer
         foreach (var c in _body.GetChildren()) { _body.RemoveChild(c); c.QueueFree(); }
         if (tab == "REFIT")
         {
-            _body.AddChild(new Label { Text = "Change class, name or colours. Costs 10% of your ore, salvage and credits.",
-                                       AutowrapMode = TextServer.AutowrapMode.WordSmart, Modulate = new Color(1, 1, 1, 0.7f) });
-            _resetCost = new Label(); _body.AddChild(_resetCost);
-            _reset = new Button { Name = "Reset", Text = "RESET", FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(0, 36) };
+            _body.AddChild(Ui.Heading("Refit"));
+            var note = Ui.Lbl("Change class, name or colours. Costs 10% of your ore, salvage and credits.", Ui.Small, Ui.Dim);
+            note.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+            _body.AddChild(note);
+            _resetCost = Ui.Lbl("", Ui.Body, Ui.Warn); _body.AddChild(Ui.CardWrap(_resetCost));
+            _reset = new Button { Name = "Reset", Text = "RESET", FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(0, 38) };
             _reset.Pressed += () => { if (_armed <= 0) _armed = 4.0; else { _armed = 0; Hub.ResetShip(); } };
             _body.AddChild(_reset);
             return;
         }
-        _fleet = new Label { Name = "Fleet", Modulate = new Color(0.8f, 0.88f, 1f) }; _body.AddChild(_fleet);
-        _body.AddChild(new Label { Text = "+10% upgrades cost 1.25× per level.  +1 upgrades cost 2× per level; each row shows its cap.",
-                                   Modulate = new Color(1, 1, 1, 0.55f) });
+        _body.AddChild(Ui.Heading(tab));
+        _fleet = Ui.Lbl("", Ui.Small, Ui.Dim); _fleet.Name = "Fleet";
+        _fleet.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        _body.AddChild(Ui.CardWrap(_fleet));
         foreach (var u in Economy.All.Where(u => u.Tab == tab))
         {
-            var row = new HBoxContainer { Name = "Up_" + u.Id }; row.AddThemeConstantOverride("separation", 10);
-            var info = new Label { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+            // One card per upgrade: name and level on the first line, what the money buys on the
+            // second, the price on the button. The old version was four bare labels a row and read
+            // as a paragraph.
+            var row = new HBoxContainer { Name = "Up_" + u.Id }; row.AddThemeConstantOverride("separation", 12);
+            var info = new Label { SizeFlagsHorizontal = SizeFlags.ExpandFill, VerticalAlignment = VerticalAlignment.Center };
             var id = u.Id;
-            // centred at its own 32 px height rather than stretched to the two-line label
-            var buy = new Button { Name = "Buy", FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(120, 32),
+            // centred at its own 34 px height rather than stretched to the two-line label
+            var buy = new Button { Name = "Buy", FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(128, 34),
                                    SizeFlagsVertical = SizeFlags.ShrinkCenter };
             buy.Pressed += () => Y.BuyUpgrade(id);
             row.AddChild(info); row.AddChild(buy);
-            _body.AddChild(row);
+            _body.AddChild(Ui.CardWrap(row));
             _rows[u.Id] = (info, buy);
         }
+        _body.AddChild(Ui.Lbl("+10% upgrades cost 1.25× per level.  +1 upgrades cost 2× per level; each row shows its cap.",
+                              Ui.Small, Ui.Dim with { A = 0.75f }));
     }
 
     public override void _Process(double delta)
     {
         if (_armed > 0) _armed -= delta;
-        Ui.SetText(_credits, $"Credits: {Y.Credits:0}");
+        Ui.SetText(_credits, $"{Y.Credits:0} cr");
         if (IsInstanceValid(_fleet) && _tab != "REFIT")
         {
             string lost = _tab == "HAULER"
                 ? (Y.Hauler != null && Y.Hauler.State == Hauler.St.Destroyed ? Rebuilding("Hauler", Y.Hauler.RebuildIn, Y.Hauler.WaitingForCredits, _tab) : "")
                 : string.Join("", Y.Gatherers.Where(g => g.Category == _tab && g.State == Gatherer.St.Destroyed)
                                             .Select(g => Rebuilding($"{(g.Kind == GatherKind.Miner ? "Miner" : "Salvager")} {g.Index + 1}", g.RebuildIn, g.WaitingForCredits, _tab)));
-            Ui.SetText(_fleet, $"Invested so far: {Y.Invested(_tab):0} cr  ·  a rebuild costs {Y.RebuildCost(_tab):0} cr (10%)" + lost);
+            Ui.SetText(_fleet, $"Invested {Y.Invested(_tab):0} cr  ·  a rebuild costs {Y.RebuildCost(_tab):0} cr (10%)" + lost);
         }
         foreach (var (id, (info, buy)) in _rows)
         {
