@@ -174,7 +174,7 @@ levels once a second and ship and hauler state ten times a second; a guest's own
 
 - **A (DONE)**: bomber docking; boss 600; fighters 2/shot; torpedoes 15; utility hull 120; guard 0.52 s;
   red missile tips; PD only missiles and light fighters; dummy 2 -> two practice fighters.
-- **B**: the beam charges **6 s**; meanwhile the boss launches **2 light fighters, 45° to port and to
+- **B (DONE; escorts 3 hull)**: the beam charges **6 s**; meanwhile the boss launches **2 light fighters, 45° to port and to
   starboard**, straight at the player, their boost lasting until they reach it (a pin to hold the pilot
   in the beam unless point defence — or, for a fighter pilot, their guns — kills them); live **3 s**,
   **0.25 s ticks, 50** (half the old tick, twice as long); the boss **raider red with a white skull**.

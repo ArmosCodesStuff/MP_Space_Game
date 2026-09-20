@@ -39,7 +39,7 @@ history pick the work up from it alone. Update it in the same change as the code
 **State as of 2026-09-18: version 0.3.0 plus Unreleased (see it for everything since: docking arms
 and the unload queue, the fleet and hauler pods, the idle economy, base menu, bunker-buster missile,
 painted turrets, docking bombers and more).** Typecheck clean against the real `GodotSharp.dll`,
-`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 394 checks across
+`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 397 checks across
 a single-player run and a host with two guests. Unlike earlier releases, this one was also **looked at**:
 `tools/screens/run.sh` renders the select screen, the creator, a fresh spawn under the base, both
 classes in the hub, the K window, a bomber strike, and turret close-ups on a virtual display; layout
@@ -180,6 +180,30 @@ reachable, which is fine: both harnesses build from the `nupkgs` folder that shi
 ---
 
 ## Unreleased
+
+### Chunk B: the beam's escorts, the boss repainted
+
+**Checked:** smoke test **three runs in a row, 397 checks each, 0 compiler warnings, 0 analyser
+findings, 0 unused members**; screenshot sweep **65 frames, complete, 0 lint**; the repainted boss and
+the arena mid-charge (the escorts pinning the carrier) looked at. Mutants (escorts straight ahead; a 3 s
+charge) caught.
+
+#### Changed
+
+- **The death beam charges for 6 s** (was 2), then lives 3 s (0.25 s ticks, 50 a tick — chunk A).
+- **As it charges, the boss launches two light ESCORTS at its target** — one **45° to port**, one **45°
+  to starboard** of its nose — their boost lasting until they reach their posts. They pin the pilot
+  inside the beam **unless point defence kills them first**: they are fragile on purpose, **3 hull**
+  (× the boss's level), so one PD turret (1 DPS) kills one inside the charge. (A default: at 25, point
+  defence could not have saved anyone.)
+- **The boss is raider red with a white skull on its centre** (`boss_raider.png`, baked so the skull
+  stays white; the old art is in `art_unused/`).
+
+#### Fixed
+
+- `BackingFor` — added in chunk A and never used — **removed** (found by the cross-reference scan).
+
+### Earlier in Unreleased
 
 ### Chunk A of the new batch: the bomber docking fix, numbers, point defence, practice fighters
 
