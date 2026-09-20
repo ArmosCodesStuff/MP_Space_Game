@@ -57,6 +57,18 @@ public partial class Raider : Node2D, IHittable
     public const double MissileFlight = 7.0, MissileEvery = 12.0, MissileDamage = 30;
     public const float PerimeterR = 1800f, Detect = 2000f, PatrolSpeed = 100f;
     public const float MaxStep = 50f;                  // more than this in one frame is a jump (a warp), not motion
+    public const float WildSpeed = 400f;               // faster than this is not flying (4x a capital ship)
+    public const float MaxLead = WildSpeed * (float)MissileFlight;   // no sane prediction lands further off
+
+    // Where a heavy's missile aims: the target carried 7 s forward by its velocity -- UNLESS
+    // anything is out of place (a wild speed, a broken number, a spot absurdly far off):
+    // then right at where the target is now.
+    public static Vector2 PredictSpot(Vector2 pos, Vector2 vel)
+    {
+        bool sane = float.IsFinite(vel.X) && float.IsFinite(vel.Y) && vel.Length() <= WildSpeed;
+        var spot = sane ? pos + vel * (float)MissileFlight : pos;
+        return float.IsFinite(spot.X) && float.IsFinite(spot.Y) && spot.DistanceTo(pos) <= MaxLead ? spot : pos;
+    }
     public int Patrol;                                 // 0: on its own
     private float _orbit;                              // patrols: its angle round the perimeter
     public const double ShotEvery = 1.0;
@@ -276,7 +288,7 @@ public partial class Raider : Node2D, IHittable
         if (_missileCd <= 0 && Position.DistanceTo(Target.Position) <= MissileRange)
         {   // at where it WILL be: its velocity carried 7 s forward
             _missileCd = MissileEvery;
-            Hub.HeavyMissile(Position, Target.Position + _targetVel * (float)MissileFlight, NetId, MissileDamage * Strength);
+            Hub.HeavyMissile(Position, PredictSpot(Target.Position, _targetVel), NetId, MissileDamage * Strength);
         }
     }
 
