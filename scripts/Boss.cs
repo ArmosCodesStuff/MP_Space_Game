@@ -33,7 +33,12 @@ public partial class Boss : Node2D, IHittable
         return p.DistanceTo(Position + fwd * t) <= HalfWidth + pad;
     }
 
-    public const double BeamWindup = 2.0, WaveWindup = 1.8;
+    public const double BeamWindup = 6.0, WaveWindup = 1.8;
+    // As the beam charges, the boss launches two light ESCORTS at its target -- one 45 degrees
+    // to port, one to starboard -- boosting all the way in to pin the pilot in the beam. Fragile
+    // on purpose (point defence, 1 DPS a turret, must be able to kill them inside the charge).
+    public const float EscortAngle = 45f;
+    public const double EscortHull = 3;           // 3 s at one PD turret (1 DPS): killable inside the charge
     public const float BeamLength = 1800f, BeamWidth = 70f, WaveRadius = 340f;
     public const double GunDamage = 3.6, GunEvery = 1.2;                       // 3 DPS
     public const double BeamEvery = 30, BeamLive = 3.0, BeamTick = 0.25, BeamDamage = 50;
@@ -44,6 +49,19 @@ public partial class Boss : Node2D, IHittable
     private (Vector2 a, Vector2 b)? _pendingCharge; private double _chargeT; private Vector2? _dashTo;
     public int Volleys { get; private set; }                                   // for the smoke test
     public bool Charging => _dashTo.HasValue;
+    // the beam's escorts: port and starboard of the nose, straight at the pilot
+    public void LaunchEscorts(Node2D target)
+    {
+        if (!Net.Sim || target == null || GetParent() is not Hub hub) return;
+        var nose = Vector2.Up.Rotated(Rotation);
+        foreach (float side in new[] { -EscortAngle, EscortAngle })
+        {
+            var dir = nose.Rotated(Mathf.DegToRad(side));
+            var r = hub.SpawnRaider(Position + dir * (HalfWidth + 60f), RaiderKind.Light, 0, Missions.S(Missions.Level));
+            r?.Escort(target, dir, BeamWindup, EscortHull * Missions.S(Missions.Level));
+        }
+    }
+
     private (Vector2 a, Vector2 b)? _pendingBeam; private double _beamT;
     private Vector2? _pendingWave; private double _waveT;
     private Vector2 _netPos; private float _netRot; private bool _hasNet;
@@ -53,7 +71,7 @@ public partial class Boss : Node2D, IHittable
         int party = System.Math.Max(1, Hub.PartySize);
         HullMult = Missions.HullMult(Missions.Level, party); DamageMult = Missions.DamageMult(Missions.Level, party); Hp = MaxHp;
         Name = "Boss";
-        var tex = GD.Load<Texture2D>("res://boss_silver_lancer.png");
+        var tex = GD.Load<Texture2D>("res://boss_raider.png");     // raider red, a white skull on its centre
         AddChild(new Sprite2D { Texture = tex, Scale = Vector2.One * (Length / tex.GetHeight()) });
         ZIndex = 4;
         Combat.Hostiles.Add(this);
@@ -119,6 +137,7 @@ public partial class Boss : Node2D, IHittable
             var a = nose; var b = a + (t.Position - a).Normalized() * BeamLength;
             _pendingBeam = (a, b); _beamT = BeamWindup;
             Tele(true, a, b, BeamWidth, BeamWindup);
+            LaunchEscorts(t);
         }
         if (_pendingBeam is { } beam && _beamLive < 0 && (_beamT -= delta) <= 0) { _beamLive = BeamLive; _beamTickT = 0; }
         if (_pendingBeam is { } live && _beamLive >= 0)

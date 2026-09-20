@@ -68,6 +68,14 @@ public partial class Raider : Node2D, IHittable
     static readonly float[] Posts = { 0f, -Mathf.Pi / 2f, Mathf.Pi / 2f };               // ahead, left, right
 
     public Node2D Target { get; private set; }
+    // An ESCORT (launched by a boss): its target is set, its boost lasts until it is posted
+    // (or `boostFor` runs out), and it is fragile.
+    public bool IsEscort { get; private set; }
+    public void Escort(Node2D target, Vector2 launchDir, double boostFor, double hull)
+    {
+        Target = target; IsEscort = true; _boostUsed = true; _boostLeft = boostFor; Hp = hull;
+        Rotation = launchDir.Angle() + Mathf.Pi / 2f;
+    }
     public bool Latched { get; private set; }
     public bool Boosting => _boostLeft > 0;
     public float Speed { get; private set; }
@@ -177,6 +185,7 @@ public partial class Raider : Node2D, IHittable
 
         if (!_boostUsed && toTarget <= BoostAt) { _boostUsed = true; _boostLeft = BoostTime; }
         _boostLeft = System.Math.Max(0, _boostLeft - delta);
+        if (IsEscort && Latched) _boostLeft = 0;                          // posted: the long boost is over
         float top = Boosting ? Cruise * BoostMult : Cruise;
         float d = Position.DistanceTo(post);
         Speed = Mathf.Min(top, d * 6f);                                       // ease onto the post

@@ -1218,6 +1218,15 @@ public partial class _Test : Node
             Telegraph beam = null;
             for (int i = 0; i < 60 * 14 && beam == null; i++) { beam = Nodes<Telegraph>().FirstOrDefault(t => t.Line); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
             Check(beam != null && boss.TelegraphsPending > 0, "the death beam is telegraphed: a red line before it fires");
+            // the beam charges 6 s, and launches two fragile escorts at the pilot: 45 degrees to port and starboard
+            var escorts = H.Raiders.Where(r => r.IsEscort).ToList();
+            var bnose = Vector2.Up.Rotated(boss.Rotation);
+            var escAng = escorts.Select(r => Mathf.RadToDeg(bnose.AngleTo(r.Position - boss.Position))).OrderBy(x => x).ToList();
+            Check(Math.Abs(beam.Duration - Boss.BeamWindup) < 1e-6 && Boss.BeamWindup == 6 && escorts.Count == 2
+                  && Math.Abs(escAng[0] + 45) < 12 && Math.Abs(escAng[1] - 45) < 12
+                  && escorts.All(r => r.Target == me2 && r.Boosting && r.Hp > 0 && r.Hp <= Boss.EscortHull * Missions.S(Missions.Level) + 1e-6),   // (point defence may already be on them)
+                  $"the beam charges 6 s; two escorts launch at the pilot, 45 degrees to port and starboard ({string.Join(", ", escAng.Select(x => x.ToString("0")))}), boosting, fragile"
+);
             int down0 = Torpedo.Intercepted;
             for (int i = 0; i < 60 * 10 && Torpedo.Intercepted == down0; i++)
             {
@@ -1225,6 +1234,7 @@ public partial class _Test : Node
                 await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             }
             Check(Torpedo.Intercepted > down0, "point defence shoots the boss's missiles down");
+            Check(!H.Raiders.Any(r => r.IsEscort), "point defence, switched on, kills the beam's escorts");
             var aMissile = Nodes<Torpedo>().FirstOrDefault(t => t.HostileFire);
             Check(Turret.PdPriority(boss) == 2 && (aMissile == null || Turret.PdPriority(aMissile) == 0), "point defence takes missiles before anything else");
             var tiny = new TinyTarget();
@@ -1232,6 +1242,13 @@ public partial class _Test : Node
             Telegraph ring = null;
             for (int i = 0; i < 60 * 18 && ring == null; i++) { ring = Nodes<Telegraph>().FirstOrDefault(t => !t.Line); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
             Check(ring != null && ring.Radius == Boss.WaveRadius, "the shockwave is telegraphed: a red ring before it lands");
+            // without point defence, a pair of escorts reaches the pilot and pins it inside the charge
+            for (int i = 0; i < 60 * 8 && Me.PdActive; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            boss.LaunchEscorts(me2);
+            bool pinnedInTime = false;
+            for (int i = 0; i < (int)(60 * Boss.BeamWindup) && !pinnedInTime; i++) { pinnedInTime = me2.Pinned; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            Check(pinnedInTime, "left alone (no point defence), the escorts pin the pilot before the charge ends");
+            foreach (var r in H.Raiders.Where(r => r.IsEscort).ToList()) r.TakeDamage(999);
             for (int i = 0; i < 60 * 25 && (tCharge < 0 || boss.Charging || tVolley < 0); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             await Wait(1.0);
             GD.Print($"  boss rhythm: beam {tBeam:0.0} s, trident {tVolley:0.0} s, charge {tCharge:0.0} s; trident of {trident}, spread {Mathf.RadToDeg(spread):0} deg");
