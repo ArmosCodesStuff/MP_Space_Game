@@ -47,17 +47,17 @@ faults have been fixed from those frames more than once.
 
 **As of 2026-09-20 the whole harness also runs natively on the developer's Windows machine** (see
 Unreleased → *The harnesses run on Windows*): typecheck 0 errors, build 0 warnings, analysers 0
-findings, xref 0 unused, smoke **417 pass / 6 of 6 runs** (the 2 short of 419 assert the sandbox's
+findings, xref 0 unused, smoke **419 pass / 6 of 6 runs** (the 2 short of 421 assert the sandbox's
 missing router and internet), sweep **67 frames, 0 lint** on the real GPU with the project's own
 Forward+ renderer. So "how it looks on the developer's own GPU" is no longer unconfirmed for the
 swept states. What remains unconfirmed is how it feels in a hand-played session — nothing here
 replaces someone actually flying it.
 
-**One real bug was found doing that, and is not fixed:** `Character.Save()` writes over the live
-`.cfg` non-atomically, so a second instance sharing the same `user://` can read a half-written
-character (`ConfigFile parse error … Unterminated string`). It reproduces about 1 run in 3 under
-WSL and reaches the developer's own "Run Multiple Instances" multiplayer testing. See Unreleased →
-Known broken. Deciding whether to fix it now is the first open question below.
+**One real bug was found doing that, and is fixed:** `Character.Save()` wrote over the live `.cfg`
+non-atomically, so a second instance sharing the same `user://` could read a half-written character
+(`ConfigFile parse error … Unterminated string`) — about 1 run in 3 under WSL, and reachable from
+the developer's own "Run Multiple Instances" multiplayer testing. It now writes a temp file and
+renames it into place. See Unreleased → Fixed.
 
 ### What the game is right now
 
@@ -130,7 +130,7 @@ developer's own machine with no WSL — see `docs/README.md` for the exact comma
 2. **Smoke test:** `sh tools/smoketest/run.sh <path to Godot_v4.7.2-stable_mono_linux.x86_64>`
    → must end `SMOKE TEST PASSED`. Real engine, headless, solo at a fixed 60 fps plus a host and a
    guest over localhost, in its own `user://`. Add checks to `tools/smoketest/SmokeTest.cs.txt`.
-   Windows: `tools\smoketest\run.ps1 <godot win64 exe>`, and the bar there is **417 pass, 6/6 runs**,
+   Windows: `tools\smoketest\run.ps1 <godot win64 exe>`, and the bar there is **419 pass, 6/6 runs**,
    not `SMOKE TEST PASSED` — two checks assert the sandbox's lack of a router and internet and
    cannot pass on a real network. See DESIGN.md → Smoke test before touching them.
 3. **Look at it:** `sh tools/screens/run.sh <same binary>` → frames in `/tmp/shots/`. Do this for
@@ -170,12 +170,6 @@ reachable, which is fine: both harnesses build from the `nupkgs` folder that shi
 
 ### Open questions — built as a guess, awaiting confirmation
 
-- **Should `Character.Save()` become atomic?** It writes over the live `.cfg`, so a second instance
-  sharing one `user://` can read it half-written (Unreleased → Known broken; ~1 WSL run in 3). The
-  fix is small — save to `<path>.tmp`, then `DirAccess.RenameAbsolute` over the real one — and it
-  would also stop the smoke test's intermittent extra errors. **Not done**, because it is game code
-  and the nearest thing to a standing rule here is to ask first. Default if nobody says otherwise:
-  fix it, since a corrupt character read is worse than the cost of the change.
 - **"Range of standard fighters +100%"** was applied to their **control range** (700 → 1400: how far
   from the carrier they will fight), not their weapon range (300), because the bomber rule speaks of
   the fighters' *max* range. Weapon range is one number in `Stats.cs` if that was meant.
@@ -213,7 +207,7 @@ reachable, which is fine: both harnesses build from the `nupkgs` folder that shi
 
 **Checked:** every harness run on Windows against the numbers the sandbox produces — typecheck
 **0 errors** (real `GodotSharp.dll`), `dotnet build` **0 warnings 0 errors**, analysers **0 findings**,
-cross-reference **UNUSED ANYWHERE: 0**, smoke test **three runs in a row, 417 pass and 6/6 runs
+cross-reference **UNUSED ANYWHERE: 0**, smoke test **three runs in a row, 419 pass and 6/6 runs
 finished each time** (identical every run — no flaky check), sweep **67 frames, SWEEP DONE, 0 LINT**.
 Frames looked at. No game code changed.
 
@@ -226,7 +220,7 @@ Frames looked at. No game code changed.
 - **A WSL Ubuntu 24.04 distro** provisioned to match the sandbox (dotnet-sdk-8.0 from the archive at
   `/usr/lib/dotnet`, Xvfb, Mesa, and the Linux mono engine at `/opt/godot`), so the original `.sh`
   scripts run unmodified. Verified there: typecheck `0 errors.`, xref `UNUSED ANYWHERE: 0`, smoke
-  **417 pass, 6/6 runs**. Note **24.04, not the default**: WSL now installs Ubuntu 26.04, which ships
+  **419 pass, 6/6 runs**. Note **24.04, not the default**: WSL now installs Ubuntu 26.04, which ships
   no .NET 8 at all — only `dotnet-sdk-10.0` — and the project targets `net8.0`.
 - The runners take the plain `Godot_v4.7.2-stable_mono_win64.exe` and **swap themselves to the
   `_console.exe`** beside it, refusing to run if it is absent: the GUI binary writes nothing to
@@ -239,25 +233,33 @@ Frames looked at. No game code changed.
 
 #### Known broken
 
-- **Two of the 419 smoke checks cannot pass on any machine with a router and internet** — `no UPnP
+- **Two of the 421 smoke checks cannot pass on any machine with a router and internet** — `no UPnP
   router…` and `no router or internet here…`. Both hard-require `Net.Reach.LanOnly`, i.e. the
   sandbox's absence of a router and of internet; on a real network reachability resolves otherwise
   and they fail by construction. They are not regressions and the behaviour they cover is real.
-  **417 is the bar on Windows *and* under WSL**; only the sandbox itself reaches 419. Making them
+  **419 is the bar on Windows *and* under WSL**; only the sandbox itself reaches 421. Making them
   branch on the environment is not done.
-- **`Character.Save()` is not atomic, and a second instance can read a half-written file.**
-  `scripts/Character.cs:75` does `c.Save(PathOf(Id))` straight over the live path, and
-  `Character.Load` (`:81`) and the character enumeration (`:126`) read that same path. Caught under
-  WSL on 1 run in 3 — the arena host and arena guest both reported
-  `ERROR: ConfigFile parse error at user://characters/<id>.cfg:34: Unterminated string`, the same
-  file at the same line, at the same moment. **This is a real bug, not a harness artifact.** The
-  smoke test shares one `user://` across all six peers, but so does the developer's own documented
-  way of testing multiplayer — *"Run two instances (Godot's Debug → Run Multiple Instances)"* — and
-  both instances then share `%APPDATA%\Godot\app_userdata\Warships\`. Effect is transient (the
-  writer finishes and the file is valid again), but a reader at the wrong moment sees a corrupt
-  character: `Load` returns false, or the character list silently skips an entry. **Not fixed** —
-  the fix is to write to a temp path and rename, which is a game-code change and its own decision.
-  It did not appear in 3 Windows runs, but it is a race, so that is not evidence of absence.
+*(The non-atomic character save that was listed here is now fixed — see Fixed, below.)*
+
+#### Fixed
+
+- **A character save can no longer be read half-written.** `Character.Save()` wrote straight over
+  the live `.cfg` with `c.Save(PathOf(Id))`; `ConfigFile.Save` truncates and rewrites in place, so
+  anything reading that path at that instant got
+  `ERROR: ConfigFile parse error at user://characters/<id>.cfg:34: Unterminated string` — `Load`
+  returning false, or the character silently dropping out of the select screen's list. It now saves
+  to `<id>.cfg.tmp` and renames that over the real file, so the live path only ever holds a complete
+  character. The temp name deliberately does not end in `.cfg`, so a leftover is never listed as a
+  character; if the rename fails it falls back to the direct save rather than lose the character.
+  Found by chasing an intermittent smoke failure (1 run in 3 under WSL: arena host and arena guest
+  hit the same file at the same line at the same moment). **Reachable outside the test** — the
+  developer's own way of testing multiplayer, *"Run two instances (Debug → Run Multiple
+  Instances)"*, shares one `user://` exactly as the six smoke peers do.
+  **Two checks added** (smoke is now **419 on Windows, 421 in a sandbox**): a stray `.tmp` is never
+  listed as a character, and `Save()` consumes the temp file rather than leaving one behind. The
+  second was **proved able to fail**: a mutant restoring the exact old `c.Save(PathOf(Id));` line in
+  a scratch copy fails it and passes with the fix. The first guards `List()`'s `.cfg` filter and
+  passes either way — it is a guard, not a regression detector for this change.
 
 #### Changed
 
@@ -274,15 +276,18 @@ Frames looked at. No game code changed.
   `bad interpreter: /bin/sh^M` in WSL. Caught before any checkout, so nothing was damaged.
 - `version/MANIFEST.sha256` regenerated: **124 entries, all verifying** (118 before, plus `CLAUDE.md`,
   `.gitattributes` and the four `.ps1` ports).
-- `version/CODE_SNAPSHOT.txt` regenerated: **63 files, 10714 lines** (was 59 / 10363). It was left
-  stale for one commit on the reasoning that no *game* code had moved — but `project.godot` is in the
-  snapshot and had been adopted from the editor, so the snapshot recorded 43 lines / `076b8ff5db99`
-  against an actual 42 / `aaa06503a405`. The four `.ps1` ports are now in it too, beside the `.sh`
-  files it already carried. **Verified by splitting it back** exactly as its own header describes and
-  comparing all 63 against disk: every one identical.
-- **Known gap, pre-existing:** `typecheck/GodotStub.cs` has never been in `CODE_SNAPSHOT.txt`, though
-  it is tracked code and is what the typecheck falls back on without `GodotSharp.dll`. Not added here
-  — that changes the baseline's scope beyond this change — but "all code" is not currently true.
+- `version/CODE_SNAPSHOT.txt` regenerated: **64 files, 10936 lines** (was 59 / 10363). It had been
+  left stale for one commit on the reasoning that no *game* code had moved — but `project.godot` is
+  in the snapshot and had been adopted from the editor, so it recorded 43 lines / `076b8ff5db99`
+  against an actual 42 / `aaa06503a405`. Now added: the four `.ps1` ports, beside the `.sh` files it
+  already carried, and **`typecheck/GodotStub.cs`**, which had been missing for the project's whole
+  history despite being tracked code and the typecheck's fallback without `GodotSharp.dll`.
+  **Verified by splitting it back** exactly as its own header describes and comparing all 64 against
+  disk: every one identical, and no tracked code file is missing from it.
+- The snapshot's file list is now **derived** (root files in their fixed order, then `scripts/`,
+  `typecheck/`, `tools/*` each sorted ordinal) rather than inherited from the previous snapshot.
+  Inheriting is how `GodotStub.cs` stayed missing: a file absent from the list was absent from the
+  next list, forever.
 
 ### Earlier in Unreleased
 

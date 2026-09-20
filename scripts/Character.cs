@@ -72,7 +72,23 @@ public static class Character
         foreach (var kv in BossCleared) c.SetValue("boss_cleared", kv.Key, string.Join(",", kv.Value.OrderBy(x => x)));
         foreach (var kv in Loadout) c.SetValue("equipment", kv.Key.ToString(), string.Join(",", kv.Value));
         foreach (var kv in Spares) c.SetValue("spares", kv.Key.ToString(), string.Join(",", kv.Value));
-        c.Save(PathOf(Id));
+
+        // Write a temp file and rename it over the real one, never straight onto it.
+        // ConfigFile.Save truncates and rewrites in place, so anything reading the same
+        // path at that moment sees a half-written file: Load and List both hit
+        // "ConfigFile parse error ... Unterminated string" and the character silently
+        // fails to load or drops out of the list. Two instances share one user:// in the
+        // smoke test and in "Run Multiple Instances", so this is reachable, not theoretical.
+        // After the rename the live path only ever holds a complete file.
+        var tmp = PathOf(Id) + ".tmp";      // not ".cfg", so List() skips it if one is left
+        if (c.Save(tmp) != Error.Ok) return;
+        if (DirAccess.RenameAbsolute(ProjectSettings.GlobalizePath(tmp),
+                                     ProjectSettings.GlobalizePath(PathOf(Id))) != Error.Ok)
+        {
+            // Losing the save outright is worse than the race it was avoiding.
+            c.Save(PathOf(Id));
+            DirAccess.RemoveAbsolute(ProjectSettings.GlobalizePath(tmp));
+        }
     }
 
     public static bool Load(string id)

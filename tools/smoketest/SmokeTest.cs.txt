@@ -73,6 +73,20 @@ public partial class _Test : Node
         Check(slots.Count == 1 && slots[0].Name == "OldTimer", "a saved character is listed");
         Check(Nodes<PanelContainer>(sel).Count(p => p.Name.ToString().StartsWith("Row_")) == 1, "one row shown");
 
+        // Character.Save writes a temp file and renames it over the real one, so a second
+        // instance sharing this user:// can never read a half-written character. Saving
+        // straight onto the live path caused "ConfigFile parse error ... Unterminated
+        // string" on roughly 1 smoke run in 3. Two consequences are observable from here:
+        // a stray .tmp is not a character, and the next save consumes it.
+        var tmpPath = $"{Character.Dir}/{Character.Id}.cfg.tmp";
+        using (var stray = FileAccess.Open(tmpPath, FileAccess.ModeFlags.Write))
+            stray.StoreString("[id]\nname=\"half written");
+        Check(FileAccess.FileExists(tmpPath) && Character.List().Count == 1,
+              "a half-written .tmp is never listed as a character");
+        Character.Save(); await Wait(0.05);
+        Check(!FileAccess.FileExists(tmpPath),
+              "Save() goes through a temp file and renames it away, leaving none behind");
+
         // new character: cancel writes nothing
         Nodes<Button>(sel).First(b => b.Text == "NEW CHARACTER").EmitSignal(BaseButton.SignalName.Pressed);
         await Wait(0.1);

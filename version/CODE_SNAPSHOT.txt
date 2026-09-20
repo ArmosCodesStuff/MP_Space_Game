@@ -1,10 +1,9 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-20 02:36 at git commit 1abd070: typecheck clean, dotnet build 0 warnings,
-//   0 analyser findings, 0 unused members; smoke test 3/3 runs at 417 checks on Windows
-//   and 417 under WSL (419 only in a sandbox with no router and no internet);
-//   67-frame UI sweep complete, 0 lint.
-// 63 files, 10714 lines. Code only: sprites, sounds and docs are in the zip.
+// Taken 2026-09-20 02:47 at git commit 5d802ea: typecheck clean, dotnet build 0 warnings,
+//   0 analyser findings, 0 unused members; smoke test 3/3 runs at 419 checks on Windows
+//   (421 in a sandbox with no router and no internet); 67-frame UI sweep complete, 0 lint.
+// 64 files, 10936 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -23,15 +22,15 @@
 //   scripts/BasePanel.cs                           118 lines   sha256 1b56ed68d885
 //   scripts/Boss.cs                                205 lines   sha256 f99f980993e3
 //   scripts/BossBar.cs                              74 lines   sha256 5758de5d8e72
-//   scripts/Character.cs                           193 lines   sha256 1b690cef4eea
+//   scripts/Character.cs                           209 lines   sha256 3279a20e9a12
 //   scripts/CharacterCreator.cs                    211 lines   sha256 136099a8d1c7
 //   scripts/CharacterSelect.cs                     171 lines   sha256 dc2bfeccc820
 //   scripts/Combat.cs                               85 lines   sha256 96277c4efc6f
 //   scripts/Economy.cs                              81 lines   sha256 ceb194520ae4
 //   scripts/Equipment.cs                            77 lines   sha256 5a5307ab79c9
 //   scripts/EquipmentWindow.cs                      73 lines   sha256 9fe0b9b6496d
-//   scripts/EscMenu.cs                              59 lines   sha256 999b01e6cd29
 //   scripts/EscapePod.cs                            50 lines   sha256 324c55cb503b
+//   scripts/EscMenu.cs                              59 lines   sha256 999b01e6cd29
 //   scripts/Explosion.cs                            18 lines   sha256 12209b0c72ce
 //   scripts/Gatherer.cs                            249 lines   sha256 7369949eeff9
 //   scripts/Hauler.cs                              316 lines   sha256 b471204daf64
@@ -62,18 +61,19 @@
 //   scripts/Txt.cs                                  31 lines   sha256 0b56559599f8
 //   scripts/Ui.cs                                   99 lines   sha256 0a376702a4e8
 //   scripts/Yard.cs                                422 lines   sha256 d68b914f025b
+//   typecheck/GodotStub.cs                         192 lines   sha256 2c5c2967bf5c
 //   typecheck/typecheck.ps1                         68 lines   sha256 e513a9f7f554
 //   typecheck/typecheck.sh                          57 lines   sha256 e68277c09f34
 //   tools/analyse/analysers.editorconfig            15 lines   sha256 45fdb7258163
 //   tools/analyse/run.ps1                           39 lines   sha256 fccca5633aba
 //   tools/analyse/run.sh                            16 lines   sha256 e6f2cd50f0c4
 //   tools/analyse/xref.py                           19 lines   sha256 9359eb94c161
-//   tools/screens/Shots.cs.txt                     457 lines   sha256 8355cd3b6808
 //   tools/screens/run.ps1                          109 lines   sha256 096b1445e5d7
 //   tools/screens/run.sh                            42 lines   sha256 73a5b3c63476
-//   tools/smoketest/SmokeTest.cs.txt              1788 lines   sha256 b2c0ba38893f
+//   tools/screens/Shots.cs.txt                     457 lines   sha256 8355cd3b6808
 //   tools/smoketest/run.ps1                        136 lines   sha256 35cc2f8b8daf
 //   tools/smoketest/run.sh                          57 lines   sha256 568b677787fd
+//   tools/smoketest/SmokeTest.cs.txt              1802 lines   sha256 1f0fc0e4154f
 //==============================================================================
 
 //==============================================================================
@@ -953,7 +953,7 @@ public partial class BossBar : Control
 
 //==============================================================================
 // FILE: scripts/Character.cs
-// 193 lines   sha256 1b690cef4eea
+// 209 lines   sha256 3279a20e9a12
 //==============================================================================
 using Godot;
 using System;
@@ -1029,7 +1029,23 @@ public static class Character
         foreach (var kv in BossCleared) c.SetValue("boss_cleared", kv.Key, string.Join(",", kv.Value.OrderBy(x => x)));
         foreach (var kv in Loadout) c.SetValue("equipment", kv.Key.ToString(), string.Join(",", kv.Value));
         foreach (var kv in Spares) c.SetValue("spares", kv.Key.ToString(), string.Join(",", kv.Value));
-        c.Save(PathOf(Id));
+
+        // Write a temp file and rename it over the real one, never straight onto it.
+        // ConfigFile.Save truncates and rewrites in place, so anything reading the same
+        // path at that moment sees a half-written file: Load and List both hit
+        // "ConfigFile parse error ... Unterminated string" and the character silently
+        // fails to load or drops out of the list. Two instances share one user:// in the
+        // smoke test and in "Run Multiple Instances", so this is reachable, not theoretical.
+        // After the rename the live path only ever holds a complete file.
+        var tmp = PathOf(Id) + ".tmp";      // not ".cfg", so List() skips it if one is left
+        if (c.Save(tmp) != Error.Ok) return;
+        if (DirAccess.RenameAbsolute(ProjectSettings.GlobalizePath(tmp),
+                                     ProjectSettings.GlobalizePath(PathOf(Id))) != Error.Ok)
+        {
+            // Losing the save outright is worse than the race it was avoiding.
+            c.Save(PathOf(Id));
+            DirAccess.RemoveAbsolute(ProjectSettings.GlobalizePath(tmp));
+        }
     }
 
     public static bool Load(string id)
@@ -1878,6 +1894,61 @@ public partial class EquipmentWindow : PanelContainer
 }
 
 //==============================================================================
+// FILE: scripts/EscapePod.cs
+// 50 lines   sha256 324c55cb503b
+//==============================================================================
+using Godot;
+
+// The escape pod a pilot flies while their ship is in stasis. Small (60% of a
+// salvager), quick, and non-interactable: it is in no target list, so nothing can
+// select, shoot or collide with it. Its owner flies it (WASD); everyone else sees
+// the position the owner reports.
+public partial class EscapePod : Node2D
+{
+    public const float Length = 24f, Speed = 95f, Accel = 260f;
+    public bool Local;                  // true on the owner's machine
+    public Color Engine = Colors.White; // the owner's accent: it is a player craft with an engine
+    public Vector2 Velocity;
+    private Vector2 _net; private bool _hasNet;
+
+    public override void _Ready()
+    {
+        var tex = GD.Load<Texture2D>("res://escape_pod.png");
+        AddChild(new Sprite2D { Texture = tex, Scale = Vector2.One * (Length / tex.GetHeight()) });
+        ZIndex = 5;
+    }
+
+    public void SetNet(Vector2 p, float rot) { _net = p; _hasNet = true; Rotation = rot; }
+
+    public override void _Process(double delta)
+    {
+        float dt = (float)delta;
+        if (!Local)
+        {
+            if (_hasNet) Position = Position.Lerp(_net, Mathf.Clamp(12f * dt, 0f, 1f));
+            return;
+        }
+        var dir = Vector2.Zero;
+        if (!Hub.ControlsLocked)
+        {
+            if (Input.IsKeyPressed(Key.W)) dir.Y -= 1;
+            if (Input.IsKeyPressed(Key.S)) dir.Y += 1;
+            if (Input.IsKeyPressed(Key.A)) dir.X -= 1;
+            if (Input.IsKeyPressed(Key.D)) dir.X += 1;
+        }
+        var want = dir == Vector2.Zero ? Vector2.Zero : dir.Normalized() * Speed;
+        Velocity = Velocity.MoveToward(want, Accel * dt);
+        Position += Velocity * dt;
+        QueueRedraw();
+        if (Velocity.LengthSquared() > 25f)
+            Rotation = Mathf.LerpAngle(Rotation, Velocity.Angle() + Mathf.Pi / 2f, Mathf.Clamp(8f * dt, 0f, 1f));
+    }
+
+    public override void _Draw() =>
+        Plume.Draw(this, new Vector2(0, Length * 0.5f), Vector2.Down, Length, Engine, Velocity.Length() / Speed, Velocity.Length() > 2f);
+}
+
+//==============================================================================
 // FILE: scripts/EscMenu.cs
 // 59 lines   sha256 999b01e6cd29
 //==============================================================================
@@ -1939,61 +2010,6 @@ public partial class EscMenu : CanvasLayer
         }
         return row;
     }
-}
-
-//==============================================================================
-// FILE: scripts/EscapePod.cs
-// 50 lines   sha256 324c55cb503b
-//==============================================================================
-using Godot;
-
-// The escape pod a pilot flies while their ship is in stasis. Small (60% of a
-// salvager), quick, and non-interactable: it is in no target list, so nothing can
-// select, shoot or collide with it. Its owner flies it (WASD); everyone else sees
-// the position the owner reports.
-public partial class EscapePod : Node2D
-{
-    public const float Length = 24f, Speed = 95f, Accel = 260f;
-    public bool Local;                  // true on the owner's machine
-    public Color Engine = Colors.White; // the owner's accent: it is a player craft with an engine
-    public Vector2 Velocity;
-    private Vector2 _net; private bool _hasNet;
-
-    public override void _Ready()
-    {
-        var tex = GD.Load<Texture2D>("res://escape_pod.png");
-        AddChild(new Sprite2D { Texture = tex, Scale = Vector2.One * (Length / tex.GetHeight()) });
-        ZIndex = 5;
-    }
-
-    public void SetNet(Vector2 p, float rot) { _net = p; _hasNet = true; Rotation = rot; }
-
-    public override void _Process(double delta)
-    {
-        float dt = (float)delta;
-        if (!Local)
-        {
-            if (_hasNet) Position = Position.Lerp(_net, Mathf.Clamp(12f * dt, 0f, 1f));
-            return;
-        }
-        var dir = Vector2.Zero;
-        if (!Hub.ControlsLocked)
-        {
-            if (Input.IsKeyPressed(Key.W)) dir.Y -= 1;
-            if (Input.IsKeyPressed(Key.S)) dir.Y += 1;
-            if (Input.IsKeyPressed(Key.A)) dir.X -= 1;
-            if (Input.IsKeyPressed(Key.D)) dir.X += 1;
-        }
-        var want = dir == Vector2.Zero ? Vector2.Zero : dir.Normalized() * Speed;
-        Velocity = Velocity.MoveToward(want, Accel * dt);
-        Position += Velocity * dt;
-        QueueRedraw();
-        if (Velocity.LengthSquared() > 25f)
-            Rotation = Mathf.LerpAngle(Rotation, Velocity.Angle() + Mathf.Pi / 2f, Mathf.Clamp(8f * dt, 0f, 1f));
-    }
-
-    public override void _Draw() =>
-        Plume.Draw(this, new Vector2(0, Length * 0.5f), Vector2.Down, Length, Engine, Velocity.Length() / Speed, Velocity.Length() > 2f);
 }
 
 //==============================================================================
@@ -8243,6 +8259,203 @@ public partial class Yard : Node2D
 }
 
 //==============================================================================
+// FILE: typecheck/GodotStub.cs
+// 192 lines   sha256 2c5c2967bf5c
+//==============================================================================
+// FALLBACK ONLY. GodotSharp.dll is present in this folder, so typecheck.sh
+// references the real assembly and ignores this file entirely. It is kept for
+// environments without the dll. Do not trust it over the real thing: it has
+// twice passed code that could not compile in Godot.
+
+// Minimal Godot surface so Roslyn can type-check the game's own logic.
+namespace Godot {
+ public struct Vector2 { public Vector2 Lerp(Vector2 to, float w) => this; public float X,Y; public Vector2(float x,float y){X=x;Y=y;}
+   public float Length()=>0; public float LengthSquared()=>0; public Vector2 Normalized()=>this;
+   public float DistanceTo(Vector2 o)=>0; public float DistanceSquaredTo(Vector2 o)=>0;
+   public float Dot(Vector2 o)=>0; public float Angle()=>0; public Vector2 Rotated(float a)=>this;
+   public Vector2 MoveToward(Vector2 t,float d)=>this;
+   public static Vector2 Zero=>default; public static Vector2 One=>default; public static Vector2 Right=>default; public static Vector2 Left=>default; public static Vector2 Up=>default; public static Vector2 Down=>default; public static Vector2 operator+(Vector2 a,Vector2 b)=>a;
+   public static Vector2 operator-(Vector2 a,Vector2 b)=>a; public static Vector2 operator-(Vector2 a)=>a;
+   public static Vector2 operator*(Vector2 a,float b)=>a; public static Vector2 operator*(float b,Vector2 a)=>a;
+   public static Vector2 operator/(Vector2 a,float b)=>a; public static bool operator==(Vector2 a,Vector2 b)=>true;
+   public static bool operator!=(Vector2 a,Vector2 b)=>false; public override bool Equals(object o)=>true; public override int GetHashCode()=>0; }
+ public struct Vector2I { public int X,Y; public Vector2I(int x,int y){X=x;Y=y;} }
+ public struct Rect2I { public Vector2I Position,Size; }
+ public struct Color { public float R,G,B,A; public Color(float r,float g,float b,float a=1){R=r;G=g;B=b;A=a;}
+   public static Color operator*(Color a,float b)=>a; public Color Lightened(float f)=>this; public Color Darkened(float f)=>this; public Color Lerp(Color c,float f)=>this; }
+ public static class Colors { public static Color White, Red, Green, Blue, Black; }
+ public struct Rect2 { public Vector2 Position,Size; public Rect2(Vector2 p,Vector2 s){Position=p;Size=s;} public Rect2(float x,float y,float w,float h){Position=default;Size=default;} public Rect2 Abs()=>this; public bool HasPoint(Vector2 p)=>true; }
+ public static class Mathf { public static float LerpAngle(float a, float b, float w)=>a; public static float Wrap(float v, float lo, float hi)=>v; public const float Tau=6.28f, Pi=3.14f;
+   public static float Cos(float a)=>0; public static float Sin(float a)=>0; public static float Sqrt(float a)=>0; public static double Sqrt(double a)=>0;
+   public static float Abs(float a)=>0; public static double Abs(double a)=>0; public static int Abs(int a)=>0;
+   public static float Min(float a,float b)=>0; public static double Min(double a,double b)=>0; public static int Min(int a,int b)=>0;
+   public static float Max(float a,float b)=>0; public static double Max(double a,double b)=>0; public static int Max(int a,int b)=>0;
+   public static float Clamp(float v,float a,float b)=>0; public static double Clamp(double v,double a,double b)=>0; public static int Clamp(int v,int a,int b)=>0;
+   public static float Pow(float a,float b)=>0; public static double Pow(double a,double b)=>0;
+   public static float Sign(float a)=>0; public static double Sign(double a)=>0; public static int Sign(int a)=>0;
+   public static int CeilToInt(float a)=>0; public static int CeilToInt(double a)=>0;
+   public static int FloorToInt(float a)=>0; public static int FloorToInt(double a)=>0;
+   public static int RoundToInt(float a)=>0; public static int RoundToInt(double a)=>0;
+   public static float Round(float a)=>0; public static double Round(double a)=>0;
+   public static float DegToRad(float a)=>0; public static double DegToRad(double a)=>0;
+   public static float LinearToDb(float v)=>0; public static float Lerp(float a,float b,float t)=>0; public static double Lerp(double a,double b,double t)=>0;
+   public static float Log(float a)=>0; public static double Log(double a)=>0; public static float Exp(float a)=>0; public static double Exp(double a)=>0; }
+public static class Performance { public enum Monitor { ObjectCount, ObjectNodeCount, ObjectOrphanNodeCount, MemoryStatic } public static double GetMonitor(Monitor m)=>0; }
+ public static class AudioServer { public static int GetBusIndex(string n)=>0; public static void SetBusMute(int i,bool m){} public static void SetBusVolumeDb(int i,float db){} }
+ public static class GD { public static float Randf()=>0; public static uint Randi()=>0; public static void Print(object o){} public static void PushWarning(object o){}
+   public static T Load<T>(string p) where T:class=>null; }
+ public class GodotObject { public ulong GetInstanceId()=>0; public bool IsQueuedForDeletion()=>false; public void QueueFree(){} }
+ public class Node : GodotObject { public Node GetParent()=>this; public MultiplayerApi Multiplayer => new MultiplayerApi();
+   public void SetMultiplayerAuthority(int id, bool recursive = true) { }
+   public int GetMultiplayerAuthority() => 1;
+   public bool IsMultiplayerAuthority() => true;
+   public void Rpc(string method, params object[] args) { }
+   public void RpcId(long peerId, string method, params object[] args) { }
+   public double GetProcessDeltaTime()=>0.016; public string Name; public Node Owner; public void AddChild(Node n){} public void RemoveChild(Node n){}
+   public Godot.Collections.Array<Node> GetChildren()=>null; public int GetChildCount()=>0; public Node GetChild(int i)=>null;
+   public SceneTree GetTree()=>null; public Viewport GetViewport()=>null; public Window GetWindow()=>null; public virtual void _Ready(){} public virtual void _Process(double d){}
+   public virtual void _Input(InputEvent e){} public virtual void _UnhandledInput(InputEvent e){} public void SetProcess(bool b){} }
+ public class CanvasItem : Node { public bool Visible; public Color Modulate; public int ZIndex; public TextureRepeatEnum TextureRepeat; public enum TextureRepeatEnum { Disabled, Enabled } public void QueueRedraw(){}
+   public virtual void _Draw(){} public void DrawCircle(Vector2 p,float r,Color c){} public void DrawArc(Vector2 p,float r,float a,float b,int n,Color c,float w=1){}
+   public void DrawLine(Vector2 a,Vector2 b,Color c,float w=1){} public void DrawRect(Rect2 r,Color c,bool f=true,float w=1){}
+   public void DrawPolygon(Vector2[] p,Color[] c){} public void DrawTexture(Texture2D t,Vector2 p){} public void DrawSetTransform(Vector2 p,float r,Vector2 s){} public void DrawString(Font f,Vector2 p,string s,HorizontalAlignment h,float w,int sz,Color c){}
+   public Vector2 GetGlobalMousePosition()=>default; }
+ public class Node2D : CanvasItem { public Vector2 Position { get; set; } public Vector2 GlobalPosition { get; set; } public Vector2 Scale { get; set; } public float Rotation { get; set; } public Vector2 ToLocal(Vector2 v)=>v; }
+ public class Sprite2D : Node2D { public Texture2D Texture; public bool Centered, RegionEnabled; public Rect2 RegionRect; }
+ public class Area2D : Node2D { public bool Monitoring, Monitorable; }
+ public class CollisionShape2D : Node2D { public Shape2D Shape; }
+ public class Shape2D : Resource {} public class CircleShape2D : Shape2D { public float Radius; }
+ public class Camera2D : Node2D { public Vector2 Zoom; public void MakeCurrent(){} }
+ public class CanvasLayer : Node { public int Layer; public bool Visible; public Vector2 Scale { get; set; } }
+ public class Resource : GodotObject {} public class ImageTexture : Texture2D { public static ImageTexture CreateFromImage(Image i)=>null; }
+ public class Image : Resource { public enum Format { Rgba8 } public static Image CreateEmpty(int w,int h,bool m,Format f)=>null; public void Fill(Color c){} public void SetPixel(int x,int y,Color c){} }
+ public class Texture2D : Resource { public int GetHeight()=>0; public int GetWidth()=>0; public Vector2 GetSize()=>default; } public class Font : Resource {
+    public Vector2 GetStringSize(string t, HorizontalAlignment a=HorizontalAlignment.Left, float w=-1, int size=16)=>default;} public class Theme : Resource {
+   public void SetStylebox(string a,string b,StyleBox s){} public void SetColor(string a,string b,Color c){} public void SetFontSize(string a,string b,int i){} }
+ public class StyleBox : Resource {} public class StyleBoxFlat : StyleBox { public Color BgColor,BorderColor;
+   public int CornerRadiusTopLeft,CornerRadiusTopRight,CornerRadiusBottomLeft,CornerRadiusBottomRight,BorderWidthTop,BorderWidthBottom,BorderWidthLeft,BorderWidthRight,ContentMarginLeft,ContentMarginRight,ContentMarginTop,ContentMarginBottom; }
+ public static class ThemeDB { public static Font FallbackFont; }
+ public class Control : CanvasItem { public virtual void _GuiInput(InputEvent e){} public void AcceptEvent(){} public MouseFilterEnum MouseFilter; public enum MouseFilterEnum { Stop, Pass, Ignore } public Vector2 Position,Size,CustomMinimumSize; public Theme Theme; public SizeFlags SizeFlagsHorizontal;
+   public FocusModeEnum FocusMode; public void SetAnchorsPreset(LayoutPreset p){} public Vector2 GetCombinedMinimumSize()=>default; public void ReleaseFocus(){}
+   public void AddThemeStyleboxOverride(string n,StyleBox s){} public void AddThemeColorOverride(string n,Color c){} public void AddThemeFontSizeOverride(string n,int i){} public void AddThemeConstantOverride(string n,int i){}
+   public StyleBox GetThemeStylebox(string n)=>null;
+   public enum SizeFlags { Fill, Expand, ExpandFill, ShrinkCenter } public enum LayoutPreset { FullRect } public enum FocusModeEnum { None, All } }
+ public class Label : Control { public string Text; public bool ClipText; public TextServer.OverrunBehavior TextOverrunBehavior; public HorizontalAlignment HorizontalAlignment; public TextServer.AutowrapMode AutowrapMode; }
+ public class Button : Control { public string Text; public bool Disabled; public HorizontalAlignment Alignment; public TextServer.AutowrapMode AutowrapMode;
+   public bool ClipText; public TextServer.OverrunBehavior TextOverrunBehavior; public event System.Action Pressed; }
+ public class LineEdit : Control { public string Text, PlaceholderText; public event System.Action<string> TextChanged; }
+ public class BoxContainer : Control {} public class HBoxContainer : BoxContainer {} public class VBoxContainer : BoxContainer {}
+ public class PanelContainer : Control {} public class CenterContainer : Control {}
+ public class ScrollContainer : Control { public ScrollMode HorizontalScrollMode; public enum ScrollMode { Disabled, Auto } }
+ public class ColorRect : Control { public Color Color; }
+ public class HSeparator : Control {}
+ public static class TextServer { public enum AutowrapMode { Off, WordSmart } public enum OverrunBehavior { TrimEllipsis } }
+ public enum HorizontalAlignment { Left, Center, Right }
+ public class SceneTree : GodotObject { public Error ChangeSceneToFile(string p)=>default; public void ReloadCurrentScene(){} public void Quit(){} }
+ public class Viewport : GodotObject { public Vector2 GetMousePosition()=>default; public Rect2 GetVisibleRect()=>default; public void SetInputAsHandled(){} public Control GuiGetFocusOwner()=>null; }
+ public class Window : Viewport { public Vector2I Size, ContentScaleSize, Position; public ModeEnum Mode; public bool Borderless; public ContentScaleModeEnum ContentScaleMode; public ContentScaleAspectEnum ContentScaleAspect; public enum ContentScaleModeEnum { Disabled, CanvasItems, Viewport } public enum ContentScaleAspectEnum { Ignore, Keep, Expand }
+   public enum ModeEnum { Windowed, Fullscreen, ExclusiveFullscreen } }
+ public class InputEvent : Resource { public bool IsAction(string a)=>false; }
+ public class InputEventKey : InputEvent { public Key Keycode, PhysicalKeycode; public bool Pressed, Echo, CtrlPressed, MetaPressed, ShiftPressed, AltPressed; }
+ public class InputEventMouseButton : InputEvent { public MouseButton ButtonIndex; public bool Pressed; public Vector2 Position; }
+ public class InputEventMouseMotion : InputEvent { public Vector2 Position, Relative; }
+ public static class Input { public static bool IsKeyPressed(Key k)=>false; public static bool IsMouseButtonPressed(MouseButton b)=>false; public static Vector2 GetMousePosition()=>default; }
+ public enum Key { Key0, Key1, Key2, Key3, Key4, Key5, Key6, Key7, W,A,S,D,E,H,R,F,G,C,V,Escape,F1,F2,Ctrl,Shift,Alt,Space,Enter,Key8,Key9 } public enum MouseButton { Left,Right,WheelUp,WheelDown }
+ public static class DisplayServer { public static Rect2I ScreenGetUsableRect()=>default; public static int WindowGetCurrentScreen()=>0; public static Rect2I ScreenGetUsableRect(int i)=>default; public static Vector2I ScreenGetSize(int i)=>default; public static Vector2I ScreenGetSize()=>default; }
+ public static class ProjectSettings { public static string GlobalizePath(string p)=>p; }
+ public class FileAccess : GodotObject, System.IDisposable { public enum ModeFlags { Read, Write } public static bool FileExists(string p)=>false;
+   public static FileAccess Open(string p,ModeFlags m)=>null; public static Error GetOpenError()=>default;
+   public string GetAsText()=>""; public void StoreString(string s){} public void Dispose(){} }
+ public static class DirAccess { public static Error RemoveAbsolute(string p)=>default; public static Error RenameAbsolute(string a,string b)=>default; }
+ public enum Error { Ok, Failed }
+ public class AudioStreamPlayer : Node { public AudioStream Stream; public float VolumeDb; public bool Playing; public void Play(){}
+   public AudioStreamGeneratorPlayback GetStreamPlayback()=>null; }
+ public class AudioStream : Resource {} public class AudioStreamGenerator : AudioStream { public float MixRate, BufferLength; }
+ public class AudioStreamGeneratorPlayback : Resource { public int GetFramesAvailable()=>0; public void PushBuffer(Vector2[] b){} }
+ public struct Callable { public static Callable From(System.Action a)=>default; public void CallDeferred(){} }
+ namespace Collections { public class Array<T> : System.Collections.Generic.List<T> {} }
+}
+
+// ── multiplayer surface used by Warships (stub only; the real API lives in Godot) ──
+namespace Godot
+{
+    // Base types the appended stubs derive from. Without these, every class below
+    // becomes an error type -- and Roslyn stops before it ever binds method bodies,
+    // so NOTHING in scripts/ gets checked. That is how a broken stub hides real bugs.
+    public class RefCounted : GodotObject { }
+    public struct Variant
+    {
+        public static implicit operator Variant(int v) => default;
+        public static implicit operator Variant(float v) => default;
+        public static implicit operator Variant(double v) => default;
+        public static implicit operator Variant(bool v) => default;
+        public static implicit operator Variant(string v) => default;
+        public static implicit operator Variant(Color v) => default;
+        public static explicit operator int(Variant v) => 0;
+        public static explicit operator float(Variant v) => 0f;
+        public static explicit operator double(Variant v) => 0;
+        public static explicit operator bool(Variant v) => false;
+        public static explicit operator string(Variant v) => "";
+        public static explicit operator Color(Variant v) => default;
+    }
+
+    public enum MultiplayerPeerConnectionStatus { Disconnected, Connecting, Connected }
+    public partial class MultiplayerPeer : RefCounted
+    {
+        // Real Godot nests this on MultiplayerPeer. The stub previously declared a
+        // top-level MultiplayerPeerTransferMode, which does not exist -- so code using
+        // it typechecked here and failed in the engine. Names must match exactly.
+        public enum TransferModeEnum { Unreliable, UnreliableOrdered, Reliable }
+        public MultiplayerPeerConnectionStatus GetConnectionStatus() => MultiplayerPeerConnectionStatus.Connected;
+        public void Close() { }
+    }
+    public partial class ENetMultiplayerPeer : MultiplayerPeer
+    {
+        public Error CreateServer(int port, int maxClients = 32) => Error.Ok;
+        public Error CreateClient(string address, int port) => Error.Ok;
+    }
+    public partial class MultiplayerApi : RefCounted
+    {
+        public enum RpcMode { Disabled, AnyPeer, Authority }
+        public MultiplayerPeer MultiplayerPeer { get; set; }
+        public int GetUniqueId() => 1;
+        public bool IsServer() => true;
+        public int[] GetPeers() => new int[0];
+        public int GetRemoteSenderId() => 1;
+        public event System.Action<long> PeerConnected;
+        public event System.Action<long> PeerDisconnected;
+        public event System.Action ConnectedToServer;
+        public event System.Action ConnectionFailed;
+        public event System.Action ServerDisconnected;
+    }
+    [System.AttributeUsage(System.AttributeTargets.Method)]
+    public class RpcAttribute : System.Attribute
+    {
+        public RpcAttribute() { }
+        public RpcAttribute(MultiplayerApi.RpcMode mode) { }
+        public MultiplayerApi.RpcMode Mode { get; set; }
+        public bool CallLocal { get; set; }
+        public MultiplayerPeer.TransferModeEnum TransferMode { get; set; }
+    }
+}
+
+namespace Godot
+{
+    public partial class ColorPickerButton : Button
+    {
+        public Color Color { get; set; }
+        public event System.Action<Color> ColorChanged;
+    }
+    public partial class ConfigFile : RefCounted
+    {
+        public void SetValue(string section, string key, Variant value) { }
+        public Variant GetValue(string section, string key, Variant def = default) => def;
+        public Error Save(string path) => Error.Ok;
+        public Error Load(string path) => Error.Ok;
+    }
+}
+
+//==============================================================================
 // FILE: typecheck/typecheck.ps1
 // 68 lines   sha256 e513a9f7f554
 //==============================================================================
@@ -8485,6 +8698,167 @@ for f, s in src.items():
         if g <= 0: (test_only if t else dead).append(f"{os.path.basename(f)}: {n}")
 print('UNUSED ANYWHERE:', len(dead)); [print('  ' + x) for x in sorted(dead)]
 print('USED ONLY BY TESTS:', len(test_only)); [print('  ' + x) for x in sorted(test_only)]
+
+//==============================================================================
+// FILE: tools/screens/run.ps1
+// 109 lines   sha256 096b1445e5d7
+//==============================================================================
+# Windows port of run.sh -- renders real screenshots of the game (select screen, creator,
+# both classes in the hub, the K window, a bomber strike) so layout and art can be LOOKED
+# AT rather than assumed. The smoke test is headless and cannot see.
+#
+#   powershell -ExecutionPolicy Bypass -File tools\screens\run.ps1 <godot mono win64 exe>
+#
+# Differences from the Linux original, all forced by the platform:
+#   * No Xvfb. Windows has a real display, so the whole virtual-display dance -- and the
+#     stale /tmp/.X99-lock trap that came with it -- does not apply.
+#   * Renders on the real GPU with the project's own renderer (Forward+/Vulkan) instead of
+#     Mesa software GL. That is the point of running it here: these frames are what the
+#     developer actually sees. Pass -Compat to force the Linux path (opengl3 /
+#     gl_compatibility) when comparing against a sandbox run.
+#   * Shots.cs.txt hard-codes /tmp/shots/; the copy is rewritten to $env:TEMP\shots.
+#     The original .txt is never modified.
+
+param(
+  [Parameter(Mandatory = $true)][string]$Godot,
+  [switch]$Compat
+)
+
+$ErrorActionPreference = 'Stop'
+
+if (-not (Test-Path $Godot)) { Write-Host "usage: run.ps1 <godot mono win64 exe>"; exit 2 }
+$Godot = (Resolve-Path $Godot).Path
+# The GUI binary prints nothing; swap to the console build beside it.
+if ($Godot -notmatch '_console\.exe$') {
+  $c = $Godot -replace '\.exe$', '_console.exe'
+  if (Test-Path $c) { $Godot = $c }
+  else { Write-Host "NO CONSOLE BINARY beside $Godot -- shot/LINT output would be invisible."; exit 2 }
+}
+
+$nupkgs = Join-Path (Split-Path $Godot) 'GodotSharp\Tools\nupkgs'
+if (-not (Test-Path $nupkgs)) { Write-Host "no nupkgs folder at $nupkgs"; exit 2 }
+$src = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+$W = Join-Path $env:TEMP 'warships_shots'
+$shots = Join-Path $env:TEMP 'shots'
+
+if (Test-Path $W) { Remove-Item $W -Recurse -Force }
+if (Test-Path $shots) { Remove-Item $shots -Recurse -Force }
+New-Item -ItemType Directory -Path $W, $shots -Force | Out-Null
+robocopy $src $W /E /XD .godot .git bin obj /NFL /NDL /NJH /NJS /NP | Out-Null
+
+# Rewrite the one POSIX path in the shot writer. Godot's SavePng takes forward slashes
+# happily on Windows, so only the prefix changes.
+$shotsFwd = $shots -replace '\\', '/'
+$shotSrc = Get-Content (Join-Path $PSScriptRoot 'Shots.cs.txt') -Raw
+if ($shotSrc -notmatch [regex]::Escape('/tmp/shots/')) {
+  Write-Host "Shots.cs.txt no longer writes to /tmp/shots/ -- this port needs updating."; exit 2
+}
+$shotSrc = $shotSrc.Replace('/tmp/shots/', "$shotsFwd/")
+Set-Content (Join-Path $W 'scripts\_Shots.cs') $shotSrc -Encoding UTF8 -NoNewline
+
+$pg = Join-Path $W 'project.godot'
+$t = Get-Content $pg -Raw
+$t = $t -replace '(?m)^Net="\*res://scripts/Net\.cs"', "`$0`n_Shots=`"*res://scripts/_Shots.cs`""
+# its own user:// -- it creates characters
+$t = $t -replace '(?m)^config/name="Warships"', 'config/name="WarshipsShots"'
+Set-Content $pg $t -Encoding UTF8 -NoNewline
+
+$check = Get-Content $pg -Raw
+if ($check -notmatch 'config/name="WarshipsShots"') { Write-Host "could not isolate user data; refusing to run"; exit 2 }
+if ($check -notmatch '_Shots="\*res://scripts/_Shots\.cs"') { Write-Host "could not register the shots autoload; refusing to run"; exit 2 }
+
+$ud = Join-Path $env:APPDATA 'Godot\app_userdata\WarshipsShots'
+if (Test-Path $ud) { Remove-Item $ud -Recurse -Force }
+
+@"
+<?xml version="1.0" encoding="utf-8"?>
+<configuration><packageSources><clear /><add key="godot" value="$nupkgs" /></packageSources></configuration>
+"@ | Set-Content (Join-Path $W 'nuget.config') -Encoding UTF8
+
+Push-Location $W
+try {
+  $buildLog = Join-Path $W 'build.log'
+  & dotnet build -v q -nologo *> $buildLog
+  $buildFailed = ($LASTEXITCODE -ne 0)
+  $errs = Get-Content $buildLog | Select-String -Pattern ' error ' | ForEach-Object { ($_.Line -replace '.*[\\/]scripts[\\/]', '') } | Sort-Object -Unique
+  if ($buildFailed -or $errs) {
+    $errs | Select-Object -First 20 | ForEach-Object { Write-Host $_ }
+    Write-Host "SWEEP FAILED (the build failed)"; exit 1
+  }
+
+  & $Godot --headless --import --path $W *> (Join-Path $W 'import.log')
+
+  $render = @('--path', $W, '--windowed', '--resolution', '1600x900')
+  if ($Compat) { $render += @('--rendering-driver', 'opengl3', '--rendering-method', 'gl_compatibility') }
+
+  $o = Join-Path $W 'sweep.out'; $e = Join-Path $W 'sweep.err'
+  $p = Start-Process -FilePath $Godot -ArgumentList $render -WorkingDirectory $W `
+       -NoNewWindow -PassThru -RedirectStandardOutput $o -RedirectStandardError $e
+  if (-not $p.WaitForExit(400 * 1000)) { try { $p.Kill() } catch {}; $p.WaitForExit(5000) | Out-Null }
+
+  $lines = @()
+  foreach ($stream in @($o, $e)) { if (Test-Path $stream) { $lines += Get-Content $stream -ErrorAction SilentlyContinue } }
+  # -cmatch: grep -E is case-sensitive, PowerShell's -match is not.
+  $keep = $lines | Where-Object { $_ -cmatch '^shot|^LINT|Exception|^SWEEP' }
+  $sweepLog = Join-Path $env:TEMP 'sweep_out.log'
+  Set-Content $sweepLog ($keep -join "`n") -Encoding UTF8
+  $keep | ForEach-Object { Write-Host $_ }
+
+  # a sweep cut off part-way (a timeout) must never pass as clean
+  if (-not ($keep | Where-Object { $_ -cmatch '^SWEEP DONE' })) {
+    Write-Host "SWEEP INCOMPLETE -- the run was cut off; later frames were not rendered"
+  }
+  $lint = @($keep | Where-Object { $_ -cmatch '^LINT' }).Count
+  $frames = @(Get-ChildItem $shots -Filter *.png -ErrorAction SilentlyContinue).Count
+  Write-Host "frames: $frames in $shots  |  LINT: $lint"
+} finally { Pop-Location }
+
+//==============================================================================
+// FILE: tools/screens/run.sh
+// 42 lines   sha256 73a5b3c63476
+//==============================================================================
+#!/bin/sh
+# Renders real screenshots of the game (select screen, creator, both classes in the
+# hub, the K window, a bomber strike) into /tmp/shots/, so layout and art can be
+# LOOKED AT rather than assumed. The smoke test is headless and cannot see.
+#
+#   sh tools/screens/run.sh /path/to/Godot_v4.7.2-stable_mono_linux.x86_64
+#
+# Needs: .NET 8 SDK, and a virtual display with software OpenGL:
+#   apt-get install -y xvfb libgl1-mesa-dri libglx-mesa0 libgl1 libxcursor1 libxinerama1 libxrandr2 libxi6
+set -e
+G="$1"; [ -x "$G" ] || { echo "usage: run.sh <godot mono binary>"; exit 2; }
+NUPKGS="$(dirname "$G")/GodotSharp/Tools/nupkgs"
+SRC="$(cd "$(dirname "$0")/../.." && pwd)"
+W=/tmp/warships_shots
+rm -rf "$W"; mkdir -p "$W" /tmp/shots; cp -r "$SRC"/. "$W"/; rm -rf "$W/.godot" /tmp/shots/*
+cp "$SRC/tools/screens/Shots.cs.txt" "$W/scripts/_Shots.cs"
+sed -i 's#^Net="\*res://scripts/Net.cs"#&\n_Shots="*res://scripts/_Shots.cs"#' "$W/project.godot"
+# its own user:// -- it creates characters
+sed -i 's#^config/name="Warships"#config/name="WarshipsShots"#' "$W/project.godot"
+rm -rf "$HOME/.local/share/godot/app_userdata/WarshipsShots"
+cat > "$W/nuget.config" <<X
+<?xml version="1.0" encoding="utf-8"?>
+<configuration><packageSources><clear /><add key="godot" value="$NUPKGS" /></packageSources></configuration>
+X
+cd "$W"
+dotnet build -v q -nologo | grep -E "error|Error\(s\)"
+timeout 180 "$G" --headless --import --path . >/dev/null 2>&1 || true
+# A restart can leave a stale display lock behind, and then Xvfb will not start and
+# Godot silently draws nothing. Clear it, start the display, and refuse to go on
+# without one.
+if ! pgrep Xvfb >/dev/null; then
+  rm -f /tmp/.X99-lock /tmp/.X11-unix/X99
+  Xvfb :99 -screen 0 1600x900x24 >/dev/null 2>&1 &
+  sleep 1.5
+fi
+pgrep Xvfb >/dev/null || { echo "NO VIRTUAL DISPLAY -- nothing was rendered"; exit 2; }
+# Forward+ needs Vulkan; the compatibility renderer runs on Mesa's software GL
+DISPLAY=:99 timeout 400 "$G" --path . --rendering-driver opengl3 --rendering-method gl_compatibility \
+    --windowed --resolution 1600x900 2>&1 | grep --line-buffered -E "^shot|^LINT|Exception|^SWEEP" | tee /tmp/sweep_out.log
+# a sweep cut off part-way (a timeout) must never pass as clean
+grep -q "^SWEEP DONE" /tmp/sweep_out.log || echo "SWEEP INCOMPLETE -- the run was cut off; later frames were not rendered"
+ls /tmp/shots
 
 //==============================================================================
 // FILE: tools/screens/Shots.cs.txt
@@ -8949,74 +9323,63 @@ public partial class _Shots : Node
 }
 
 //==============================================================================
-// FILE: tools/screens/run.ps1
-// 109 lines   sha256 096b1445e5d7
+// FILE: tools/smoketest/run.ps1
+// 136 lines   sha256 35cc2f8b8daf
 //==============================================================================
-# Windows port of run.sh -- renders real screenshots of the game (select screen, creator,
-# both classes in the hub, the K window, a bomber strike) so layout and art can be LOOKED
-# AT rather than assumed. The smoke test is headless and cannot see.
+# Windows port of run.sh -- headless runtime check: boots the REAL engine, drives real
+# input, and runs a host and TWO guests (three players) against each other over localhost.
+# Catches what a typecheck cannot: null nodes, bad RPC paths, stale peer ids, scene-change
+# ordering.
 #
-#   powershell -ExecutionPolicy Bypass -File tools\screens\run.ps1 <godot mono win64 exe>
+#   powershell -ExecutionPolicy Bypass -File tools\smoketest\run.ps1 <godot mono win64 exe>
 #
 # Differences from the Linux original, all forced by the platform:
-#   * No Xvfb. Windows has a real display, so the whole virtual-display dance -- and the
-#     stale /tmp/.X99-lock trap that came with it -- does not apply.
-#   * Renders on the real GPU with the project's own renderer (Forward+/Vulkan) instead of
-#     Mesa software GL. That is the point of running it here: these frames are what the
-#     developer actually sees. Pass -Compat to force the Linux path (opengl3 /
-#     gl_compatibility) when comparing against a sandbox run.
-#   * Shots.cs.txt hard-codes /tmp/shots/; the copy is rewritten to $env:TEMP\shots.
-#     The original .txt is never modified.
+#   * Uses the _console.exe variant. The plain Godot .exe on Windows is a GUI-subsystem
+#     binary and does not write to stdout, so every check would be invisible.
+#   * user:// is %APPDATA%\Godot\app_userdata\, not ~/.local/share/godot/app_userdata/.
+#   * Output is captured to a file and filtered afterwards rather than piped live through
+#     grep. A killed run keeps whatever it had already written, which is what the
+#     --line-buffered plumbing was protecting.
+# SmokeTest.cs.txt itself needs no changes: it contains no POSIX paths.
 
-param(
-  [Parameter(Mandatory = $true)][string]$Godot,
-  [switch]$Compat
-)
+param([Parameter(Mandatory = $true)][string]$Godot)
 
 $ErrorActionPreference = 'Stop'
 
 if (-not (Test-Path $Godot)) { Write-Host "usage: run.ps1 <godot mono win64 exe>"; exit 2 }
 $Godot = (Resolve-Path $Godot).Path
+
 # The GUI binary prints nothing; swap to the console build beside it.
 if ($Godot -notmatch '_console\.exe$') {
   $c = $Godot -replace '\.exe$', '_console.exe'
   if (Test-Path $c) { $Godot = $c }
-  else { Write-Host "NO CONSOLE BINARY beside $Godot -- shot/LINT output would be invisible."; exit 2 }
+  else { Write-Host "NO CONSOLE BINARY beside $Godot -- headless output would be invisible."; exit 2 }
 }
 
 $nupkgs = Join-Path (Split-Path $Godot) 'GodotSharp\Tools\nupkgs'
 if (-not (Test-Path $nupkgs)) { Write-Host "no nupkgs folder at $nupkgs"; exit 2 }
 $src = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
-$W = Join-Path $env:TEMP 'warships_shots'
-$shots = Join-Path $env:TEMP 'shots'
+$W = Join-Path $env:TEMP 'warships_smoke'
 
 if (Test-Path $W) { Remove-Item $W -Recurse -Force }
-if (Test-Path $shots) { Remove-Item $shots -Recurse -Force }
-New-Item -ItemType Directory -Path $W, $shots -Force | Out-Null
+New-Item -ItemType Directory -Path $W -Force | Out-Null
+# /.godot, bin and obj are build output; copying them just makes the import stale.
 robocopy $src $W /E /XD .godot .git bin obj /NFL /NDL /NJH /NJS /NP | Out-Null
-
-# Rewrite the one POSIX path in the shot writer. Godot's SavePng takes forward slashes
-# happily on Windows, so only the prefix changes.
-$shotsFwd = $shots -replace '\\', '/'
-$shotSrc = Get-Content (Join-Path $PSScriptRoot 'Shots.cs.txt') -Raw
-if ($shotSrc -notmatch [regex]::Escape('/tmp/shots/')) {
-  Write-Host "Shots.cs.txt no longer writes to /tmp/shots/ -- this port needs updating."; exit 2
-}
-$shotSrc = $shotSrc.Replace('/tmp/shots/', "$shotsFwd/")
-Set-Content (Join-Path $W 'scripts\_Shots.cs') $shotSrc -Encoding UTF8 -NoNewline
+Copy-Item (Join-Path $PSScriptRoot 'SmokeTest.cs.txt') (Join-Path $W 'scripts\_Test.cs') -Force
 
 $pg = Join-Path $W 'project.godot'
 $t = Get-Content $pg -Raw
-$t = $t -replace '(?m)^Net="\*res://scripts/Net\.cs"', "`$0`n_Shots=`"*res://scripts/_Shots.cs`""
-# its own user:// -- it creates characters
-$t = $t -replace '(?m)^config/name="Warships"', 'config/name="WarshipsShots"'
+$t = $t -replace '(?m)^Net="\*res://scripts/Net\.cs"', "`$0`n_Test=`"*res://scripts/_Test.cs`""
+# Its own user:// folder: the test creates and DELETES characters, and must never
+# touch real ones. Wiped each run so migration and first-run paths are exercised.
+$t = $t -replace '(?m)^config/name="Warships"', 'config/name="WarshipsSmoke"'
 Set-Content $pg $t -Encoding UTF8 -NoNewline
 
 $check = Get-Content $pg -Raw
-if ($check -notmatch 'config/name="WarshipsShots"') { Write-Host "could not isolate user data; refusing to run"; exit 2 }
-if ($check -notmatch '_Shots="\*res://scripts/_Shots\.cs"') { Write-Host "could not register the shots autoload; refusing to run"; exit 2 }
+if ($check -notmatch 'config/name="WarshipsSmoke"') { Write-Host "could not isolate user data; refusing to run"; exit 2 }
+if ($check -notmatch '_Test="\*res://scripts/_Test\.cs"') { Write-Host "could not register the test autoload; refusing to run"; exit 2 }
 
-$ud = Join-Path $env:APPDATA 'Godot\app_userdata\WarshipsShots'
+$ud = Join-Path $env:APPDATA 'Godot\app_userdata\WarshipsSmoke'
 if (Test-Path $ud) { Remove-Item $ud -Recurse -Force }
 
 @"
@@ -9026,92 +9389,145 @@ if (Test-Path $ud) { Remove-Item $ud -Recurse -Force }
 
 Push-Location $W
 try {
+  # a test that does not compile tests nothing: stop here, loudly
   $buildLog = Join-Path $W 'build.log'
   & dotnet build -v q -nologo *> $buildLog
   $buildFailed = ($LASTEXITCODE -ne 0)
   $errs = Get-Content $buildLog | Select-String -Pattern ' error ' | ForEach-Object { ($_.Line -replace '.*[\\/]scripts[\\/]', '') } | Sort-Object -Unique
   if ($buildFailed -or $errs) {
     $errs | Select-Object -First 20 | ForEach-Object { Write-Host $_ }
-    Write-Host "SWEEP FAILED (the build failed)"; exit 1
+    Write-Host "SMOKE TEST FAILED (the build failed)"; exit 1
+  }
+  Get-Content $buildLog | Select-String -Pattern 'Warning\(s\)|Error\(s\)' | ForEach-Object { Write-Host $_.Line.Trim() }
+
+  # NOTE: PowerShell variable names are case-insensitive, so these cannot be $F/$N --
+  # a `foreach ($f in ...)` elsewhere in this script silently overwrote the filter with
+  # a file path, and the run died parsing it as a regex.
+  $keepRe = 'PASS|FAIL|DONE|Exception|   at |ERROR: [^B]|^  [a-z]'
+  # Expected engine chatter, not failures: allocator notes, and Godot's own report that
+  # no UPnP router exists (the game falls back and says so).
+  $dropRe = 'RID alloc|PagedAlloc|find any UPNPDevices'
+
+  function Start-Run {
+    param([string[]]$GodotArgs, [string]$Tag, [int]$TimeoutSec)
+    $o = Join-Path $W "$Tag.out"; $e = Join-Path $W "$Tag.err"
+    $p = Start-Process -FilePath $Godot -ArgumentList $GodotArgs -WorkingDirectory $W `
+         -NoNewWindow -PassThru -RedirectStandardOutput $o -RedirectStandardError $e
+    [pscustomobject]@{ Proc = $p; Tag = $Tag; Out = $o; Err = $e; Timeout = $TimeoutSec }
+  }
+  function Complete-Run {
+    param($R, [string]$Prefix)
+    if (-not $R.Proc.WaitForExit($R.Timeout * 1000)) {
+      try { $R.Proc.Kill() } catch {}
+      $R.Proc.WaitForExit(5000) | Out-Null
+    }
+    $lines = @()
+    foreach ($stream in @($R.Out, $R.Err)) {
+      if (Test-Path $stream) { $lines += Get-Content $stream -ErrorAction SilentlyContinue }
+    }
+    # -cmatch, not -match: PowerShell matches case-insensitively by default but grep -E
+    # does not, and a case-blind "FAIL" also matches every run's own "fails=0" summary.
+    $keep = $lines | Where-Object { $_ -cmatch $keepRe -and $_ -cnotmatch $dropRe } | ForEach-Object { "$Prefix $_" }
+    $log = Join-Path $W "$($R.Tag).log"
+    Set-Content $log ($keep -join "`n") -Encoding UTF8
+    $keep
   }
 
   & $Godot --headless --import --path $W *> (Join-Path $W 'import.log')
 
-  $render = @('--path', $W, '--windowed', '--resolution', '1600x900')
-  if ($Compat) { $render += @('--rendering-driver', 'opengl3', '--rendering-method', 'gl_compatibility') }
+  $all = @()
+  # fixed 60 fps: identical frame timing every run, so the DPS checks are exact
+  $all += Complete-Run (Start-Run @('--headless','--fixed-fps','60','--path',$W,'--','solo') 'solo' 1200) '[solo] '
 
-  $o = Join-Path $W 'sweep.out'; $e = Join-Path $W 'sweep.err'
-  $p = Start-Process -FilePath $Godot -ArgumentList $render -WorkingDirectory $W `
-       -NoNewWindow -PassThru -RedirectStandardOutput $o -RedirectStandardError $e
-  if (-not $p.WaitForExit(400 * 1000)) { try { $p.Kill() } catch {}; $p.WaitForExit(5000) | Out-Null }
+  $host1 = Start-Run @('--headless','--path',$W,'--','host')   'host'   60
+  Start-Sleep -Milliseconds 500
+  $g2 = Start-Run @('--headless','--path',$W,'--','guest2') 'guest2' 60
+  $g1 = Start-Run @('--headless','--path',$W,'--','guest')  'guest'  60
+  $all += Complete-Run $g1    '[guest] '
+  $all += Complete-Run $host1 '[host]  '
+  $all += Complete-Run $g2    '[third] '
 
-  $lines = @()
-  foreach ($stream in @($o, $e)) { if (Test-Path $stream) { $lines += Get-Content $stream -ErrorAction SilentlyContinue } }
-  # -cmatch: grep -E is case-sensitive, PowerShell's -match is not.
-  $keep = $lines | Where-Object { $_ -cmatch '^shot|^LINT|Exception|^SWEEP' }
-  $sweepLog = Join-Path $env:TEMP 'sweep_out.log'
-  Set-Content $sweepLog ($keep -join "`n") -Encoding UTF8
-  $keep | ForEach-Object { Write-Host $_ }
+  # the dedicated two-player arena run: after the three-player run, on its own port
+  $ah = Start-Run @('--headless','--path',$W,'--','ahost')  'ahost'  60
+  Start-Sleep -Milliseconds 500
+  $ag = Start-Run @('--headless','--path',$W,'--','aguest') 'aguest' 60
+  $all += Complete-Run $ag '[aguest]'
+  $all += Complete-Run $ah '[ahost] '
 
-  # a sweep cut off part-way (a timeout) must never pass as clean
-  if (-not ($keep | Where-Object { $_ -cmatch '^SWEEP DONE' })) {
-    Write-Host "SWEEP INCOMPLETE -- the run was cut off; later frames were not rendered"
+  $all | ForEach-Object { Write-Host $_ }
+  $bad = @($all | Where-Object { $_ -cmatch 'FAIL|Exception|ERROR' }).Count
+  $done = @($all | Where-Object { $_ -cmatch 'DONE' }).Count
+  if ($bad -gt 0 -or $done -ne 6) {
+    Write-Host "SMOKE TEST FAILED ($bad problems, $done/6 runs finished)"; exit 1
   }
-  $lint = @($keep | Where-Object { $_ -cmatch '^LINT' }).Count
-  $frames = @(Get-ChildItem $shots -Filter *.png -ErrorAction SilentlyContinue).Count
-  Write-Host "frames: $frames in $shots  |  LINT: $lint"
+  Write-Host "SMOKE TEST PASSED"
 } finally { Pop-Location }
 
 //==============================================================================
-// FILE: tools/screens/run.sh
-// 42 lines   sha256 73a5b3c63476
+// FILE: tools/smoketest/run.sh
+// 57 lines   sha256 568b677787fd
 //==============================================================================
 #!/bin/sh
-# Renders real screenshots of the game (select screen, creator, both classes in the
-# hub, the K window, a bomber strike) into /tmp/shots/, so layout and art can be
-# LOOKED AT rather than assumed. The smoke test is headless and cannot see.
+# Headless runtime check: boots the REAL engine, drives real input, and runs a host
+# and TWO guests (three players) against each other over localhost. Catches what a typecheck cannot:
+# null nodes, bad RPC paths, stale peer ids, scene-change ordering.
 #
-#   sh tools/screens/run.sh /path/to/Godot_v4.7.2-stable_mono_linux.x86_64
+#   sh tools/smoketest/run.sh /path/to/Godot_v4.7.2-stable_mono_linux.x86_64
 #
-# Needs: .NET 8 SDK, and a virtual display with software OpenGL:
-#   apt-get install -y xvfb libgl1-mesa-dri libglx-mesa0 libgl1 libxcursor1 libxinerama1 libxrandr2 libxi6
+# Needs the .NET 8 SDK. Works offline: the Godot.NET.Sdk packages come from the
+# nupkgs folder that ships beside the editor binary.
 set -e
 G="$1"; [ -x "$G" ] || { echo "usage: run.sh <godot mono binary>"; exit 2; }
 NUPKGS="$(dirname "$G")/GodotSharp/Tools/nupkgs"
 SRC="$(cd "$(dirname "$0")/../.." && pwd)"
-W=/tmp/warships_shots
-rm -rf "$W"; mkdir -p "$W" /tmp/shots; cp -r "$SRC"/. "$W"/; rm -rf "$W/.godot" /tmp/shots/*
-cp "$SRC/tools/screens/Shots.cs.txt" "$W/scripts/_Shots.cs"
-sed -i 's#^Net="\*res://scripts/Net.cs"#&\n_Shots="*res://scripts/_Shots.cs"#' "$W/project.godot"
-# its own user:// -- it creates characters
-sed -i 's#^config/name="Warships"#config/name="WarshipsShots"#' "$W/project.godot"
-rm -rf "$HOME/.local/share/godot/app_userdata/WarshipsShots"
+W=/tmp/warships_smoke
+rm -rf "$W"; mkdir -p "$W"; cp -r "$SRC"/. "$W"/; rm -rf "$W/.godot"
+cp "$SRC/tools/smoketest/SmokeTest.cs.txt" "$W/scripts/_Test.cs"
+sed -i 's#^Net="\*res://scripts/Net.cs"#&\n_Test="*res://scripts/_Test.cs"#' "$W/project.godot"
+# Its own user:// folder: the test creates and DELETES characters, and must never
+# touch real ones. Wiped each run so migration and first-run paths are exercised.
+sed -i 's#^config/name="Warships"#config/name="WarshipsSmoke"#' "$W/project.godot"
+grep -q 'config/name="WarshipsSmoke"' "$W/project.godot" || { echo "could not isolate user data; refusing to run"; exit 2; }
+rm -rf "$HOME/.local/share/godot/app_userdata/WarshipsSmoke"
 cat > "$W/nuget.config" <<X
 <?xml version="1.0" encoding="utf-8"?>
 <configuration><packageSources><clear /><add key="godot" value="$NUPKGS" /></packageSources></configuration>
 X
 cd "$W"
-dotnet build -v q -nologo | grep -E "error|Error\(s\)"
-timeout 180 "$G" --headless --import --path . >/dev/null 2>&1 || true
-# A restart can leave a stale display lock behind, and then Xvfb will not start and
-# Godot silently draws nothing. Clear it, start the display, and refuse to go on
-# without one.
-if ! pgrep Xvfb >/dev/null; then
-  rm -f /tmp/.X99-lock /tmp/.X11-unix/X99
-  Xvfb :99 -screen 0 1600x900x24 >/dev/null 2>&1 &
-  sleep 1.5
+# a test that does not compile tests nothing: stop here, loudly
+if ! dotnet build -v q -nologo > build.log 2>&1 || grep -q " error " build.log; then
+  grep -E " error " build.log | sed 's#.*/scripts/##' | sort -u | head -20
+  echo "SMOKE TEST FAILED (the build failed)"; exit 1
 fi
-pgrep Xvfb >/dev/null || { echo "NO VIRTUAL DISPLAY -- nothing was rendered"; exit 2; }
-# Forward+ needs Vulkan; the compatibility renderer runs on Mesa's software GL
-DISPLAY=:99 timeout 400 "$G" --path . --rendering-driver opengl3 --rendering-method gl_compatibility \
-    --windowed --resolution 1600x900 2>&1 | grep --line-buffered -E "^shot|^LINT|Exception|^SWEEP" | tee /tmp/sweep_out.log
-# a sweep cut off part-way (a timeout) must never pass as clean
-grep -q "^SWEEP DONE" /tmp/sweep_out.log || echo "SWEEP INCOMPLETE -- the run was cut off; later frames were not rendered"
-ls /tmp/shots
+grep -E "Warning\(s\)|Error\(s\)" build.log
+timeout 180 "$G" --headless --import --path . >/dev/null 2>&1 || true
+
+F='PASS|FAIL|DONE|Exception|   at |ERROR: [^B]|^  [a-z]'
+# Expected engine chatter, not failures: allocator notes, and Godot's own report that
+# no UPnP router exists (true in a sandbox; the game falls back and says so).
+N='RID alloc|PagedAlloc|find any UPNPDevices'
+set +e
+# fixed 60 fps: identical frame timing every run, so the DPS checks are exact
+timeout 1200 "$G" --headless --fixed-fps 60 --path . -- solo 2>&1 | grep --line-buffered -E "$F" | grep --line-buffered -vE "$N" | sed -u 's/^/[solo]  /' > solo.log
+(timeout 60 "$G" --headless --path . -- host 2>&1 | grep --line-buffered -E "$F" | grep --line-buffered -vE "$N" | sed -u 's/^/[host]  /' > host.log) &
+sleep 0.5
+(timeout 60 "$G" --headless --path . -- guest2 2>&1 | grep --line-buffered -E "$F" | grep --line-buffered -vE "$N" | sed -u 's/^/[third] /' > guest2.log) &
+timeout 60 "$G" --headless --path . -- guest 2>&1 | grep --line-buffered -E "$F" | grep --line-buffered -vE "$N" | sed -u 's/^/[guest] /' > guest.log
+wait
+# the dedicated two-player arena run: after the three-player run, on its own port
+(timeout 60 "$G" --headless --path . -- ahost 2>&1 | grep --line-buffered -E "$F" | grep --line-buffered -vE "$N" | sed -u 's/^/[ahost] /' > ahost.log) &
+sleep 0.5
+timeout 60 "$G" --headless --path . -- aguest 2>&1 | grep --line-buffered -E "$F" | grep --line-buffered -vE "$N" | sed -u 's/^/[aguest]/' > aguest.log
+wait
+cat solo.log host.log guest.log guest2.log ahost.log aguest.log
+BAD=$(cat solo.log host.log guest.log guest2.log ahost.log aguest.log | grep -cE "FAIL|Exception|ERROR")
+DONE=$(cat solo.log host.log guest.log guest2.log ahost.log aguest.log | grep -c "DONE")
+if [ "$BAD" -gt 0 ] || [ "$DONE" -ne 6 ]; then echo "SMOKE TEST FAILED ($BAD problems, $DONE/6 runs finished)"; exit 1; fi
+echo "SMOKE TEST PASSED"
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 1788 lines   sha256 b2c0ba38893f
+// 1802 lines   sha256 1f0fc0e4154f
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -9187,6 +9603,20 @@ public partial class _Test : Node
         slots = Character.List();
         Check(slots.Count == 1 && slots[0].Name == "OldTimer", "a saved character is listed");
         Check(Nodes<PanelContainer>(sel).Count(p => p.Name.ToString().StartsWith("Row_")) == 1, "one row shown");
+
+        // Character.Save writes a temp file and renames it over the real one, so a second
+        // instance sharing this user:// can never read a half-written character. Saving
+        // straight onto the live path caused "ConfigFile parse error ... Unterminated
+        // string" on roughly 1 smoke run in 3. Two consequences are observable from here:
+        // a stray .tmp is not a character, and the next save consumes it.
+        var tmpPath = $"{Character.Dir}/{Character.Id}.cfg.tmp";
+        using (var stray = FileAccess.Open(tmpPath, FileAccess.ModeFlags.Write))
+            stray.StoreString("[id]\nname=\"half written");
+        Check(FileAccess.FileExists(tmpPath) && Character.List().Count == 1,
+              "a half-written .tmp is never listed as a character");
+        Character.Save(); await Wait(0.05);
+        Check(!FileAccess.FileExists(tmpPath),
+              "Save() goes through a temp file and renames it away, leaving none behind");
 
         // new character: cancel writes nothing
         Nodes<Button>(sel).First(b => b.Text == "NEW CHARACTER").EmitSignal(BaseButton.SignalName.Pressed);
@@ -10901,206 +11331,3 @@ public class TinyTarget : IHittable
     public bool Alive => true;
     public void TakeDamage(double d) { }
 }
-
-//==============================================================================
-// FILE: tools/smoketest/run.ps1
-// 136 lines   sha256 35cc2f8b8daf
-//==============================================================================
-# Windows port of run.sh -- headless runtime check: boots the REAL engine, drives real
-# input, and runs a host and TWO guests (three players) against each other over localhost.
-# Catches what a typecheck cannot: null nodes, bad RPC paths, stale peer ids, scene-change
-# ordering.
-#
-#   powershell -ExecutionPolicy Bypass -File tools\smoketest\run.ps1 <godot mono win64 exe>
-#
-# Differences from the Linux original, all forced by the platform:
-#   * Uses the _console.exe variant. The plain Godot .exe on Windows is a GUI-subsystem
-#     binary and does not write to stdout, so every check would be invisible.
-#   * user:// is %APPDATA%\Godot\app_userdata\, not ~/.local/share/godot/app_userdata/.
-#   * Output is captured to a file and filtered afterwards rather than piped live through
-#     grep. A killed run keeps whatever it had already written, which is what the
-#     --line-buffered plumbing was protecting.
-# SmokeTest.cs.txt itself needs no changes: it contains no POSIX paths.
-
-param([Parameter(Mandatory = $true)][string]$Godot)
-
-$ErrorActionPreference = 'Stop'
-
-if (-not (Test-Path $Godot)) { Write-Host "usage: run.ps1 <godot mono win64 exe>"; exit 2 }
-$Godot = (Resolve-Path $Godot).Path
-
-# The GUI binary prints nothing; swap to the console build beside it.
-if ($Godot -notmatch '_console\.exe$') {
-  $c = $Godot -replace '\.exe$', '_console.exe'
-  if (Test-Path $c) { $Godot = $c }
-  else { Write-Host "NO CONSOLE BINARY beside $Godot -- headless output would be invisible."; exit 2 }
-}
-
-$nupkgs = Join-Path (Split-Path $Godot) 'GodotSharp\Tools\nupkgs'
-if (-not (Test-Path $nupkgs)) { Write-Host "no nupkgs folder at $nupkgs"; exit 2 }
-$src = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
-$W = Join-Path $env:TEMP 'warships_smoke'
-
-if (Test-Path $W) { Remove-Item $W -Recurse -Force }
-New-Item -ItemType Directory -Path $W -Force | Out-Null
-# /.godot, bin and obj are build output; copying them just makes the import stale.
-robocopy $src $W /E /XD .godot .git bin obj /NFL /NDL /NJH /NJS /NP | Out-Null
-Copy-Item (Join-Path $PSScriptRoot 'SmokeTest.cs.txt') (Join-Path $W 'scripts\_Test.cs') -Force
-
-$pg = Join-Path $W 'project.godot'
-$t = Get-Content $pg -Raw
-$t = $t -replace '(?m)^Net="\*res://scripts/Net\.cs"', "`$0`n_Test=`"*res://scripts/_Test.cs`""
-# Its own user:// folder: the test creates and DELETES characters, and must never
-# touch real ones. Wiped each run so migration and first-run paths are exercised.
-$t = $t -replace '(?m)^config/name="Warships"', 'config/name="WarshipsSmoke"'
-Set-Content $pg $t -Encoding UTF8 -NoNewline
-
-$check = Get-Content $pg -Raw
-if ($check -notmatch 'config/name="WarshipsSmoke"') { Write-Host "could not isolate user data; refusing to run"; exit 2 }
-if ($check -notmatch '_Test="\*res://scripts/_Test\.cs"') { Write-Host "could not register the test autoload; refusing to run"; exit 2 }
-
-$ud = Join-Path $env:APPDATA 'Godot\app_userdata\WarshipsSmoke'
-if (Test-Path $ud) { Remove-Item $ud -Recurse -Force }
-
-@"
-<?xml version="1.0" encoding="utf-8"?>
-<configuration><packageSources><clear /><add key="godot" value="$nupkgs" /></packageSources></configuration>
-"@ | Set-Content (Join-Path $W 'nuget.config') -Encoding UTF8
-
-Push-Location $W
-try {
-  # a test that does not compile tests nothing: stop here, loudly
-  $buildLog = Join-Path $W 'build.log'
-  & dotnet build -v q -nologo *> $buildLog
-  $buildFailed = ($LASTEXITCODE -ne 0)
-  $errs = Get-Content $buildLog | Select-String -Pattern ' error ' | ForEach-Object { ($_.Line -replace '.*[\\/]scripts[\\/]', '') } | Sort-Object -Unique
-  if ($buildFailed -or $errs) {
-    $errs | Select-Object -First 20 | ForEach-Object { Write-Host $_ }
-    Write-Host "SMOKE TEST FAILED (the build failed)"; exit 1
-  }
-  Get-Content $buildLog | Select-String -Pattern 'Warning\(s\)|Error\(s\)' | ForEach-Object { Write-Host $_.Line.Trim() }
-
-  # NOTE: PowerShell variable names are case-insensitive, so these cannot be $F/$N --
-  # a `foreach ($f in ...)` elsewhere in this script silently overwrote the filter with
-  # a file path, and the run died parsing it as a regex.
-  $keepRe = 'PASS|FAIL|DONE|Exception|   at |ERROR: [^B]|^  [a-z]'
-  # Expected engine chatter, not failures: allocator notes, and Godot's own report that
-  # no UPnP router exists (the game falls back and says so).
-  $dropRe = 'RID alloc|PagedAlloc|find any UPNPDevices'
-
-  function Start-Run {
-    param([string[]]$GodotArgs, [string]$Tag, [int]$TimeoutSec)
-    $o = Join-Path $W "$Tag.out"; $e = Join-Path $W "$Tag.err"
-    $p = Start-Process -FilePath $Godot -ArgumentList $GodotArgs -WorkingDirectory $W `
-         -NoNewWindow -PassThru -RedirectStandardOutput $o -RedirectStandardError $e
-    [pscustomobject]@{ Proc = $p; Tag = $Tag; Out = $o; Err = $e; Timeout = $TimeoutSec }
-  }
-  function Complete-Run {
-    param($R, [string]$Prefix)
-    if (-not $R.Proc.WaitForExit($R.Timeout * 1000)) {
-      try { $R.Proc.Kill() } catch {}
-      $R.Proc.WaitForExit(5000) | Out-Null
-    }
-    $lines = @()
-    foreach ($stream in @($R.Out, $R.Err)) {
-      if (Test-Path $stream) { $lines += Get-Content $stream -ErrorAction SilentlyContinue }
-    }
-    # -cmatch, not -match: PowerShell matches case-insensitively by default but grep -E
-    # does not, and a case-blind "FAIL" also matches every run's own "fails=0" summary.
-    $keep = $lines | Where-Object { $_ -cmatch $keepRe -and $_ -cnotmatch $dropRe } | ForEach-Object { "$Prefix $_" }
-    $log = Join-Path $W "$($R.Tag).log"
-    Set-Content $log ($keep -join "`n") -Encoding UTF8
-    $keep
-  }
-
-  & $Godot --headless --import --path $W *> (Join-Path $W 'import.log')
-
-  $all = @()
-  # fixed 60 fps: identical frame timing every run, so the DPS checks are exact
-  $all += Complete-Run (Start-Run @('--headless','--fixed-fps','60','--path',$W,'--','solo') 'solo' 1200) '[solo] '
-
-  $host1 = Start-Run @('--headless','--path',$W,'--','host')   'host'   60
-  Start-Sleep -Milliseconds 500
-  $g2 = Start-Run @('--headless','--path',$W,'--','guest2') 'guest2' 60
-  $g1 = Start-Run @('--headless','--path',$W,'--','guest')  'guest'  60
-  $all += Complete-Run $g1    '[guest] '
-  $all += Complete-Run $host1 '[host]  '
-  $all += Complete-Run $g2    '[third] '
-
-  # the dedicated two-player arena run: after the three-player run, on its own port
-  $ah = Start-Run @('--headless','--path',$W,'--','ahost')  'ahost'  60
-  Start-Sleep -Milliseconds 500
-  $ag = Start-Run @('--headless','--path',$W,'--','aguest') 'aguest' 60
-  $all += Complete-Run $ag '[aguest]'
-  $all += Complete-Run $ah '[ahost] '
-
-  $all | ForEach-Object { Write-Host $_ }
-  $bad = @($all | Where-Object { $_ -cmatch 'FAIL|Exception|ERROR' }).Count
-  $done = @($all | Where-Object { $_ -cmatch 'DONE' }).Count
-  if ($bad -gt 0 -or $done -ne 6) {
-    Write-Host "SMOKE TEST FAILED ($bad problems, $done/6 runs finished)"; exit 1
-  }
-  Write-Host "SMOKE TEST PASSED"
-} finally { Pop-Location }
-
-//==============================================================================
-// FILE: tools/smoketest/run.sh
-// 57 lines   sha256 568b677787fd
-//==============================================================================
-#!/bin/sh
-# Headless runtime check: boots the REAL engine, drives real input, and runs a host
-# and TWO guests (three players) against each other over localhost. Catches what a typecheck cannot:
-# null nodes, bad RPC paths, stale peer ids, scene-change ordering.
-#
-#   sh tools/smoketest/run.sh /path/to/Godot_v4.7.2-stable_mono_linux.x86_64
-#
-# Needs the .NET 8 SDK. Works offline: the Godot.NET.Sdk packages come from the
-# nupkgs folder that ships beside the editor binary.
-set -e
-G="$1"; [ -x "$G" ] || { echo "usage: run.sh <godot mono binary>"; exit 2; }
-NUPKGS="$(dirname "$G")/GodotSharp/Tools/nupkgs"
-SRC="$(cd "$(dirname "$0")/../.." && pwd)"
-W=/tmp/warships_smoke
-rm -rf "$W"; mkdir -p "$W"; cp -r "$SRC"/. "$W"/; rm -rf "$W/.godot"
-cp "$SRC/tools/smoketest/SmokeTest.cs.txt" "$W/scripts/_Test.cs"
-sed -i 's#^Net="\*res://scripts/Net.cs"#&\n_Test="*res://scripts/_Test.cs"#' "$W/project.godot"
-# Its own user:// folder: the test creates and DELETES characters, and must never
-# touch real ones. Wiped each run so migration and first-run paths are exercised.
-sed -i 's#^config/name="Warships"#config/name="WarshipsSmoke"#' "$W/project.godot"
-grep -q 'config/name="WarshipsSmoke"' "$W/project.godot" || { echo "could not isolate user data; refusing to run"; exit 2; }
-rm -rf "$HOME/.local/share/godot/app_userdata/WarshipsSmoke"
-cat > "$W/nuget.config" <<X
-<?xml version="1.0" encoding="utf-8"?>
-<configuration><packageSources><clear /><add key="godot" value="$NUPKGS" /></packageSources></configuration>
-X
-cd "$W"
-# a test that does not compile tests nothing: stop here, loudly
-if ! dotnet build -v q -nologo > build.log 2>&1 || grep -q " error " build.log; then
-  grep -E " error " build.log | sed 's#.*/scripts/##' | sort -u | head -20
-  echo "SMOKE TEST FAILED (the build failed)"; exit 1
-fi
-grep -E "Warning\(s\)|Error\(s\)" build.log
-timeout 180 "$G" --headless --import --path . >/dev/null 2>&1 || true
-
-F='PASS|FAIL|DONE|Exception|   at |ERROR: [^B]|^  [a-z]'
-# Expected engine chatter, not failures: allocator notes, and Godot's own report that
-# no UPnP router exists (true in a sandbox; the game falls back and says so).
-N='RID alloc|PagedAlloc|find any UPNPDevices'
-set +e
-# fixed 60 fps: identical frame timing every run, so the DPS checks are exact
-timeout 1200 "$G" --headless --fixed-fps 60 --path . -- solo 2>&1 | grep --line-buffered -E "$F" | grep --line-buffered -vE "$N" | sed -u 's/^/[solo]  /' > solo.log
-(timeout 60 "$G" --headless --path . -- host 2>&1 | grep --line-buffered -E "$F" | grep --line-buffered -vE "$N" | sed -u 's/^/[host]  /' > host.log) &
-sleep 0.5
-(timeout 60 "$G" --headless --path . -- guest2 2>&1 | grep --line-buffered -E "$F" | grep --line-buffered -vE "$N" | sed -u 's/^/[third] /' > guest2.log) &
-timeout 60 "$G" --headless --path . -- guest 2>&1 | grep --line-buffered -E "$F" | grep --line-buffered -vE "$N" | sed -u 's/^/[guest] /' > guest.log
-wait
-# the dedicated two-player arena run: after the three-player run, on its own port
-(timeout 60 "$G" --headless --path . -- ahost 2>&1 | grep --line-buffered -E "$F" | grep --line-buffered -vE "$N" | sed -u 's/^/[ahost] /' > ahost.log) &
-sleep 0.5
-timeout 60 "$G" --headless --path . -- aguest 2>&1 | grep --line-buffered -E "$F" | grep --line-buffered -vE "$N" | sed -u 's/^/[aguest]/' > aguest.log
-wait
-cat solo.log host.log guest.log guest2.log ahost.log aguest.log
-BAD=$(cat solo.log host.log guest.log guest2.log ahost.log aguest.log | grep -cE "FAIL|Exception|ERROR")
-DONE=$(cat solo.log host.log guest.log guest2.log ahost.log aguest.log | grep -c "DONE")
-if [ "$BAD" -gt 0 ] || [ "$DONE" -ne 6 ]; then echo "SMOKE TEST FAILED ($BAD problems, $DONE/6 runs finished)"; exit 1; fi
-echo "SMOKE TEST PASSED"

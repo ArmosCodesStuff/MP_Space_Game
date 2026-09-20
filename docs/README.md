@@ -44,7 +44,7 @@ validated against the numbers the Linux originals produce:
 
 Pass the plain `Godot_v4.7.2-stable_mono_win64.exe`; the runners swap themselves to the
 `_console.exe` beside it, because the GUI binary prints nothing. The smoke test's bar on Windows is
-**417 pass, 6/6 runs** — see DESIGN.md → Smoke test for why two checks cannot pass off a sandbox.
+**419 pass, 6/6 runs** — see DESIGN.md → Smoke test for why two checks cannot pass off a sandbox.
 The sweep's bar is **67 frames, SWEEP DONE, 0 LINT**, into `%TEMP%\shots`.
 
 The Windows analyser does *not* need the smoke test run first: NuGet is reachable here, so it
