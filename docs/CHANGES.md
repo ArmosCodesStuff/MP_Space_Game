@@ -39,7 +39,7 @@ history pick the work up from it alone. Update it in the same change as the code
 **State as of 2026-09-18: version 0.3.0 plus Unreleased (see it for everything since: docking arms
 and the unload queue, the fleet and hauler pods, the idle economy, base menu, bunker-buster missile,
 painted turrets, docking bombers and more).** Typecheck clean against the real `GodotSharp.dll`,
-`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 391 checks across
+`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 394 checks across
 a single-player run and a host with two guests. Unlike earlier releases, this one was also **looked at**:
 `tools/screens/run.sh` renders the select screen, the creator, a fresh spawn under the base, both
 classes in the hub, the K window, a bomber strike, and turret close-ups on a virtual display; layout
@@ -180,6 +180,40 @@ reachable, which is fine: both harnesses build from the `nupkgs` folder that shi
 ---
 
 ## Unreleased
+
+### Chunk A of the new batch: the bomber docking fix, numbers, point defence, practice fighters
+
+**Checked:** smoke test **three runs in a row, 394 checks each, 0 compiler warnings, 0 analyser
+findings**; screenshot sweep **65 frames, complete, 0 lint**; the practice fighters looked at.
+Proven by mutants: **the exact old docking code fails the new full-speed check**; point defence without
+its filter fails; a heavy on 0.5 s shots fails. **Not yet looked at:** the new red tips on the bomber,
+base and boss missiles.
+
+#### Fixed
+
+- **Bombers never docked when the carrier was fast.** Backing in, a bomber moved to its slot and *then*
+  added the carrier's velocity — overshooting by one frame's travel. From about 90 u/s that is more than
+  the 1.5 u it needed, so it jittered beside its slot forever and never re-armed ("sometimes": only at
+  speed). Now it rides the slot's true motion (moving and turning, measured frame to frame), then moves
+  in; within 6 u it is home, and after 2.5 s backing it is home regardless.
+- **Guests mid-transition got engine errors** ("Hub/Yard not found"): the base's messages now go only to
+  guests who have reported they are home (they report whenever their world loads).
+
+#### Changed
+
+- **Boss 600 hull** at level 1 (level and party scaling on top).
+- **Fighters 2 damage per shot** (was 0.175); **torpedoes 15** (was 3).
+- **Miners and salvagers 120 hull** (was 60); the hauler stays 150.
+- **Invulnerability to one ongoing source: 0.52 s** (was 0.35).
+- **Point defence shoots only missiles and light fighters** — never heavies, bosses or dummies.
+- **One dummy became two practice light fighters**, so point defence has something to train on.
+- **Every missile has a small red triangle tip.**
+- **The heavy's laser fires every 1 s for 2** (still 2 DPS): at 0.5 s, half its shots fell inside the
+  new 0.52 s guard.
+- **The death beam: live 3 s, a tick every 0.25 s, 50 a tick** (with the guard, a hit about every
+  0.75 s — 5 to 7 hits). Its 6 s charge and the two fighters it launches come in chunk B.
+
+### Earlier in Unreleased
 
 ### Code review — passes 1 and 2 done; pass 3 begun (`Net.cs` reviewed)
 

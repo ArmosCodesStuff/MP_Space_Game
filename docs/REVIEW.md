@@ -35,8 +35,8 @@ ticked only when it has been read line by line and everything found in it is fix
   `Hub.BlastsPending`, `Hub.EscMenuOpen`, `Hub.TioOpen`, `Net.NetworkIdle`, `PlayerShip.SignalsLit`,
   `Shield.Glow`, `Wing.FighterPhase`, `Wing.Launching`, `Wing.Resting`, `Wing.ShotsThisPass`,
   `Yard.QueueLength`.
-- **Open — for the player:** `Hub.BeginPlacement` (the "left-click to place" mode) is used by no game
-  feature any more, only by its test. Keep it dormant for later building, or remove the mechanism?
+- `Hub.BeginPlacement` (the "left-click to place" mode) is used by no game feature today — **kept, by the
+  player's decision**: a new placement feature will use it.
 - Result: **0 unused members**.
 
 ## Pass 3 — line by line (to do, in this order)

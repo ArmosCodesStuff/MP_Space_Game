@@ -170,6 +170,28 @@ levels once a second and ship and hauler state ten times a second; a guest's own
   such as Tailscale or ZeroTier (everyone joins the VPN; use its addresses). There is no relay
   server or NAT punch-through: that needs infrastructure outside the game.
 
+## The batch after the review began (signed off by the player), in chunks
+
+- **A (DONE)**: bomber docking; boss 600; fighters 2/shot; torpedoes 15; utility hull 120; guard 0.52 s;
+  red missile tips; PD only missiles and light fighters; dummy 2 -> two practice fighters.
+- **B**: the beam charges **6 s**; meanwhile the boss launches **2 light fighters, 45° to port and to
+  starboard**, straight at the player, their boost lasting until they reach it (a pin to hold the pilot
+  in the beam unless point defence — or, for a fighter pilot, their guns — kills them); live **3 s**,
+  **0.25 s ticks, 50** (half the old tick, twice as long); the boss **raider red with a white skull**.
+- **C**: **battleship total DPS = 1.25 × carrier's**; **carrier range = 1.5 × battleship's**; the
+  battleship's main guns fire **shells at 4× the player missile's speed (520 u/s), not tracking**.
+- **D**: capital ships **turn in place at ≤ 5% of top speed**, about 10°/s; no strafing.
+- **E**: heavies **snub-nosed (option b)**; they **wait at the map's edge** nearest their target and,
+  once it is pinned, **boost at 700% until 300 u away**; missile within 500 u.
+- **F**: **Miner hull / Salvager hull** upgrades, +10% a level, **125 cr to start** (25% above the other
+  +10% rows), ×1.25 a level.
+- **G**: the **equipment menu** (I, and a button): Weapon, Engines, Shield (health), Hull (mods), Utility,
+  and **5 chips**; the gear is **locked to the class** (no mode switch); items drive the stats they
+  cover; common defaults reproduce today's numbers; **each default chip: +5% damage and +5% hull**;
+  **gear left on a class stays on it** when the pilot switches class and back. Carriers: "Fighter
+  Hangars" in the weapon slot.
+- Kept: `Hub.BeginPlacement` (the player will reuse the placement mode).
+
 ## The player's specification for the coming chunks (2-8), as given
 
 Recorded here so every chunk builds from the written word, not from memory.
