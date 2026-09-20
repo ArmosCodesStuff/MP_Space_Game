@@ -1,8 +1,8 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-20 00:49 at git commit cc4d723: typecheck clean, smoke test 3/3 passes
-//   (391 checks, 0 compiler warnings, 0 analyser findings), 65-frame UI sweep complete, 0 lint.
-// 56 files, 9735 lines. Code only: sprites, sounds and docs are in the zip.
+// Taken 2026-09-20 02:51 at git commit 1227754: typecheck clean, smoke test 3/3 passes
+//   (394 checks, 0 compiler warnings, 0 analyser findings), 65-frame UI sweep complete, 0 lint.
+// 56 files, 9828 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -19,51 +19,51 @@
 //   scripts/Autopilot.cs                            40 lines   sha256 807538219f53
 //   scripts/BaseDefense.cs                          55 lines   sha256 1d8daa0fbd67
 //   scripts/BasePanel.cs                           118 lines   sha256 1b56ed68d885
-//   scripts/Boss.cs                                185 lines   sha256 7cde1d4a43bc
+//   scripts/Boss.cs                                186 lines   sha256 f74fb606fe8d
 //   scripts/BossBar.cs                              74 lines   sha256 5758de5d8e72
 //   scripts/Character.cs                           175 lines   sha256 27d1b45e6c39
 //   scripts/CharacterCreator.cs                    211 lines   sha256 136099a8d1c7
 //   scripts/CharacterSelect.cs                     171 lines   sha256 dc2bfeccc820
 //   scripts/Combat.cs                               81 lines   sha256 78dd05ef3d94
-//   scripts/Economy.cs                              79 lines   sha256 54c91c058b3f
+//   scripts/Economy.cs                              79 lines   sha256 441cc5b6c922
 //   scripts/EscMenu.cs                              59 lines   sha256 999b01e6cd29
 //   scripts/EscapePod.cs                            50 lines   sha256 324c55cb503b
 //   scripts/Explosion.cs                            18 lines   sha256 12209b0c72ce
 //   scripts/Gatherer.cs                            249 lines   sha256 f64121c0c5f7
 //   scripts/Hauler.cs                              316 lines   sha256 b471204daf64
 //   scripts/HealthBar.cs                            36 lines   sha256 97c42a282205
-//   scripts/Hub.cs                                1175 lines   sha256 3fad745a2445
+//   scripts/Hub.cs                                1197 lines   sha256 e9257fc39822
 //   scripts/MainMenu.cs                            224 lines   sha256 39dbc31417c6
-//   scripts/Missions.cs                             38 lines   sha256 b79f91d3b972
+//   scripts/Missions.cs                             38 lines   sha256 35ba5cda832e
 //   scripts/Music.cs                                78 lines   sha256 19cdf8e2b59c
 //   scripts/Net.cs                                 334 lines   sha256 b93e2a57999c
 //   scripts/PilotWindow.cs                          54 lines   sha256 9164aa7d0c8d
-//   scripts/PlayerShip.cs                          746 lines   sha256 19cfe2adecdd
+//   scripts/PlayerShip.cs                          746 lines   sha256 02cd1c15341d
 //   scripts/Plume.cs                                25 lines   sha256 cdbeb9b8fc58
 //   scripts/Progression.cs                          86 lines   sha256 c9a5dc290c4d
 //   scripts/Radar.cs                               129 lines   sha256 189719fcc94f
-//   scripts/Raider.cs                              278 lines   sha256 d6f5fa831e2c
+//   scripts/Raider.cs                              279 lines   sha256 789f9221058d
 //   scripts/SessionMenu.cs                         120 lines   sha256 ecdca865f3ee
 //   scripts/Settings.cs                             58 lines   sha256 80100257eda5
 //   scripts/Sfx.cs                                  65 lines   sha256 4a51ee11de9a
 //   scripts/Shield.cs                               71 lines   sha256 99c7fa4a2a8e
-//   scripts/ShipClasses.cs                         492 lines   sha256 10726adf655f
-//   scripts/Stats.cs                               159 lines   sha256 d877c0d2eda1
+//   scripts/ShipClasses.cs                         510 lines   sha256 4248e920696f
+//   scripts/Stats.cs                               159 lines   sha256 003a2581b786
 //   scripts/StatsWindow.cs                         198 lines   sha256 8b5c9f76adc7
-//   scripts/TargetDummy.cs                         117 lines   sha256 f7845c23ab57
+//   scripts/TargetDummy.cs                         132 lines   sha256 93fe3de91ba6
 //   scripts/Telegraph.cs                            47 lines   sha256 89f6af49c4d7
 //   scripts/TioWindow.cs                            66 lines   sha256 47e02c18f7fb
-//   scripts/Torpedo.cs                             154 lines   sha256 8bcbf075476e
+//   scripts/Torpedo.cs                             156 lines   sha256 a12daff14996
 //   scripts/Txt.cs                                  31 lines   sha256 0b56559599f8
 //   scripts/Ui.cs                                   99 lines   sha256 0a376702a4e8
-//   scripts/Yard.cs                                418 lines   sha256 b66daac871a4
+//   scripts/Yard.cs                                418 lines   sha256 fdbc98154543
 //   typecheck/typecheck.sh                          57 lines   sha256 e68277c09f34
 //   tools/analyse/analysers.editorconfig            15 lines   sha256 45fdb7258163
 //   tools/analyse/run.sh                            16 lines   sha256 e6f2cd50f0c4
 //   tools/analyse/xref.py                           19 lines   sha256 9359eb94c161
 //   tools/screens/Shots.cs.txt                     437 lines   sha256 bb52f9c6f5e0
 //   tools/screens/run.sh                            42 lines   sha256 73a5b3c63476
-//   tools/smoketest/SmokeTest.cs.txt              1589 lines   sha256 87efcb79ef10
+//   tools/smoketest/SmokeTest.cs.txt              1623 lines   sha256 7b860a49656f
 //   tools/smoketest/run.sh                          57 lines   sha256 568b677787fd
 //==============================================================================
 
@@ -656,7 +656,7 @@ public partial class BasePanel : PanelContainer
 
 //==============================================================================
 // FILE: scripts/Boss.cs
-// 185 lines   sha256 7cde1d4a43bc
+// 186 lines   sha256 f74fb606fe8d
 //==============================================================================
 using Godot;
 using System.Linq;
@@ -665,8 +665,9 @@ using System.Linq;
 // the host's 10 Hz state and plays its telegraphs from the host's events.
 // One rhythm, 30 s long (all damage x the tier's scale):
 //   GUNS       always: 3.6 every 1.2 s (3 DPS) at the nearest ship within 900 u
-//   DEATH BEAM at 6 s, then every 30 s: a red line for 2 s, then live for 1 s,
-//              checking every 0.51 s: 100 each time it lands on a ship
+//   DEATH BEAM at 6 s, then every 30 s: a red line for 2 s, then live for 3 s,
+//              checking every 0.25 s: 50 each time it lands on a ship (a ship's 0.52 s
+//              invulnerability to one source means a hit about every 0.75 s)
 //   CHARGE     15 s after each beam: a red line for 1.5 s, then a ram along it at
 //              1200 u/s: 40 to any ship in its path
 //   TRIDENT    between them (every 15 s from 13.5 s): 3 guided missiles, 0 and +-25
@@ -695,7 +696,7 @@ public partial class Boss : Node2D, IHittable
     public const double BeamWindup = 2.0, WaveWindup = 1.8;
     public const float BeamLength = 1800f, BeamWidth = 70f, WaveRadius = 340f;
     public const double GunDamage = 3.6, GunEvery = 1.2;                       // 3 DPS
-    public const double BeamEvery = 30, BeamLive = 1.0, BeamTick = 0.51, BeamDamage = 100;
+    public const double BeamEvery = 30, BeamLive = 3.0, BeamTick = 0.25, BeamDamage = 50;
     public const double ChargeWindup = 1.5, ChargeDamage = 40; public const float ChargeSpeed = 1200f, ChargeLength = 900f;
     public const double TridentEvery = 15, TridentDamage = 15; public const float TridentSpread = 25f, TridentSpeed = 135f, TridentRange = 1920f;
     private double _guns = 2.0, _missiles = 13.5, _beam = 6.0, _charge = 21.0, _wave = 10.0, _send;
@@ -1583,7 +1584,7 @@ public static class Combat
 
 //==============================================================================
 // FILE: scripts/Economy.cs
-// 79 lines   sha256 54c91c058b3f
+// 79 lines   sha256 441cc5b6c922
 //==============================================================================
 using System;
 
@@ -1616,7 +1617,7 @@ public static class Economy
     public const double HaulerAway = 30;         // seconds through the portal
     public const double HaulerCharge = 3;        // seconds of blue aura before the jump
     // ── hull, and rebuilding what is lost ──
-    public const double UtilityHull = 60, HaulerHull = 150;
+    public const double UtilityHull = 120, HaulerHull = 150;
     public const double RebuildDelay = 30;         // seconds after it is destroyed
     public const double RebuildShare = 0.10;       // of everything invested so far in its category
     public const double HaulerLift = 1.5;        // seconds to lift off the pad
@@ -2425,7 +2426,7 @@ public static class HealthBar
 
 //==============================================================================
 // FILE: scripts/Hub.cs
-// 1175 lines   sha256 3fad745a2445
+// 1197 lines   sha256 e9257fc39822
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -2635,10 +2636,13 @@ public partial class Hub : Node2D
         if (InArena) BuildArena();                   // registered as a target AFTER Combat.Clear
         else if (PendingRaidLevel > 0 && Net.IsHost) { _raidLevel = PendingRaidLevel; _raidIn = RaidDelay; }
         PendingRaidLevel = 0;
-        for (int i = 0; i < (InArena ? 0 : DummyPos.Length); i++)       // the dummies live at home
+        // the dummies live at home: 1 (plain), 3 (armed), and where 2 stood, two PRACTICE
+        // FIGHTERS (4 and 5) -- light-fighter targets for point defence to train on
+        var targets = new (int n, Vector2 at, bool fighter)[] { (1, DummyPos[0], false), (3, DummyPos[2], false),
+                                                                (4, DummyPos[1] + new Vector2(-38, -22), true), (5, DummyPos[1] + new Vector2(38, 22), true) };
+        foreach (var (n, at, fighter) in InArena ? System.Array.Empty<(int, Vector2, bool)>() : targets)
         {
-            int n = i + 1;
-            var d = new TargetDummy { Name = $"TargetDummy{n}", Number = n, Armed = n == 3, Position = DummyPos[i], ZIndex = 3 };
+            var d = new TargetDummy { Name = fighter ? $"PracticeFighter{n - 3}" : $"TargetDummy{n}", Number = n, Armed = n == 3, Fighter = fighter, Position = at, ZIndex = 3 };
             AddChild(d); _dummies.Add(d);
             Combat.Hostiles.Add(d);
             d.Published = (last, avg, total) => { if (Net.IsOnline) Rpc(nameof(NetDummy), n, last, avg, total); };
@@ -2649,6 +2653,7 @@ public partial class Hub : Node2D
             Net.I.PlayerJoined   += OnPlayerJoined;
             Net.I.PlayerLeft     += DespawnFor;
             Net.I.SessionChanged += OnSessionChanged;
+            ReportSector();                                      // this world is loaded: tell the host where we are
         }
         RebuildShips();
     }
@@ -2715,8 +2720,26 @@ public partial class Hub : Node2D
     // join or drop. So on any session change every ship is thrown away and rebuilt
     // from Net.Players. Before this, joining left your offline ship keyed as peer 1:
     // on the guest it became the host's ship, and the guest never got one of its own.
+    // ── which world each guest is in ─────────────────────────────────────────
+    // A guest reports its sector whenever its world loads. Home-only nodes (the yard) send
+    // only to guests at home: in a sector change the peers arrive at different moments, and
+    // a message for a node a peer does not have is an engine error (seen in the arena run).
+    // Static: it must outlive the host's own scene reloads.
+    private static readonly Dictionary<int, SectorKind> _peerSector = new();
+    public static SectorKind? PeerSector(int id) => _peerSector.TryGetValue(id, out var s) ? s : null;
+    public void RpcHome(Node node, StringName method, params Variant[] args)
+    {
+        foreach (var id in Multiplayer.GetPeers())
+            if (_peerSector.TryGetValue(id, out var s) && s == SectorKind.Home) node.RpcId(id, method, args);
+    }
+    [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void NetMySector(int s) { if (Net.IsHost) _peerSector[Multiplayer.GetRemoteSenderId()] = (SectorKind)s; }
+    private void ReportSector() { if (Net.IsOnline && !Net.IsHost) RpcId(1, nameof(NetMySector), (int)Sector); }
+
     private void OnSessionChanged()
     {
+        ReportSector();
+        if (Net.IsHost) foreach (var id in _peerSector.Keys.ToList()) if (!Net.IsOnline || !Multiplayer.GetPeers().Contains(id)) _peerSector.Remove(id);
         // the host gone while the party is in the arena: home, to your own base
         if (InArena && !Net.IsOnline) { GoTo(SectorKind.Home); return; }
         Yard?.OnSessionChanged(!Net.IsHost);    // parks or restores your own yard (home only)
@@ -3834,7 +3857,7 @@ public partial class MainMenu : Node2D
 
 //==============================================================================
 // FILE: scripts/Missions.cs
-// 38 lines   sha256 b79f91d3b972
+// 38 lines   sha256 35ba5cda832e
 //==============================================================================
 using System;
 using System.Linq;
@@ -3855,7 +3878,7 @@ public static class Missions
     public class BossType { public string Id, Name; public double Hull; }
     public static readonly BossType[] Bosses =
     {
-        new() { Id = "silver_lancer", Name = "SILVER LANCER", Hull = 1200 },
+        new() { Id = "silver_lancer", Name = "SILVER LANCER", Hull = 600 },
     };
     public static BossType Current => Bosses[0];
     public static string BossName => Current.Name;
@@ -4358,7 +4381,7 @@ public partial class PilotWindow : PanelContainer
 
 //==============================================================================
 // FILE: scripts/PlayerShip.cs
-// 746 lines   sha256 19cfe2adecdd
+// 746 lines   sha256 02cd1c15341d
 //==============================================================================
 using Godot;
 using System;
@@ -4413,8 +4436,8 @@ public partial class PlayerShip : Node2D, IHittable
     public const double CombatHold = 12;
     // Regeneration, always: 0.5% of max hull a second in combat, 3% out of it.
     public const double RegenInCombat = 0.005, RegenOutOfCombat = 0.03;
-    // One ongoing source (an ability, a weapon) lands on a ship at most once per 0.35 s.
-    public const double HitGap = 0.35;
+    // One ongoing source (an ability, a weapon, an area) lands on a ship at most once per 0.52 s.
+    public const double HitGap = 0.52;
     private readonly System.Collections.Generic.Dictionary<string, double> _lastHitBy = new();
     public readonly System.Collections.Generic.Dictionary<string, double> DamageBySource = new();   // host: damage taken, by source
     private double _combatT;
@@ -5364,7 +5387,7 @@ public partial class Radar : Control
 
 //==============================================================================
 // FILE: scripts/Raider.cs
-// 278 lines   sha256 d6f5fa831e2c
+// 279 lines   sha256 789f9221058d
 //==============================================================================
 using Godot;
 using System.Linq;
@@ -5417,6 +5440,7 @@ public partial class Raider : Node2D, IHittable
     public const double LightHull = 25, HeavyHull = 100;
     public const double RaiderDps = 1.0;               // x -- a light's laser; a heavy's is 2x
     public const double HeavyDps = 2 * RaiderDps;
+    public const double HeavyShotEvery = 1.0;
     public const float Afterburn = 300f;               // a heavy closing on a pinned target
     public const float HeavyReach = 150f, HeavyHold = 0.9f * HeavyReach, WaitOut = 450f;
     public const float MissileRange = 500f, BlastRadius = 90f;
@@ -5616,8 +5640,8 @@ public partial class Raider : Node2D, IHittable
             _shot -= delta;
             if (_shot <= 0)
             {
-                _shot = 0.5;
-                Strike(Target, HeavyDps * 0.5 * Strength);
+                _shot = HeavyShotEvery;      // 1 s: slower than a target's 0.52 s invulnerability, so no shot is wasted
+                Strike(Target, HeavyDps * HeavyShotEvery * Strength);
                 Combat.Flash(ToGlobal(_turret?.Position ?? Vector2.Zero), Target.Position, new Color(1f, 0.35f, 0.25f));
             }
         }
@@ -5981,7 +6005,7 @@ public partial class ShieldFlash : Node2D
 
 //==============================================================================
 // FILE: scripts/ShipClasses.cs
-// 492 lines   sha256 10726adf655f
+// 510 lines   sha256 4248e920696f
 //==============================================================================
 using System.Linq;
 using Godot;
@@ -6114,13 +6138,14 @@ public partial class Turret : Node2D
         QueueRedraw();
     }
 
-    // Point defence shoots MISSILES first, then small craft (fighters), then anything
-    // else; within that, the nearest one no sibling turret has claimed (if all are
-    // claimed, the nearest regardless).
+    // Point defence shoots ONLY missiles and light fighters (light raiders, and the practice
+    // fighters) -- never heavies, bosses or the dummies. Missiles first; within that, the
+    // nearest one no sibling turret has claimed (if all are claimed, the nearest regardless).
+    public static bool PdTargets(IHittable h) => h is Torpedo || (h is Raider r && !r.Heavy) || (h is TargetDummy d && d.Fighter);
     public static int PdPriority(IHittable h) => h is Torpedo ? 0 : h.HitRadius < 20f ? 1 : 2;
     private IHittable Acquire(Vector2 from)
     {
-        var inRange = Combat.Near(from, Range).OrderBy(h => PdPriority(h)).ThenBy(h => from.DistanceTo(h.Position)).ToList();
+        var inRange = Combat.Near(from, Range).Where(PdTargets).OrderBy(h => PdPriority(h)).ThenBy(h => from.DistanceTo(h.Position)).ToList();
         foreach (var h in inRange)
         {
             bool claimed = false;
@@ -6225,6 +6250,17 @@ public partial class Wing : Node2D
     public float LastOvershoot { get; private set; }   // how far past the target the last pass went
     public double LaunchedAt { get; private set; } = -1; // the carrier's clock when it last left the hangar
     private enum BSt { Docked, Approach, Aim, Launch, Return, Backing }
+    public const float DockSnap = 6f;              // within this of its slot, a backing bomber is home
+    public const double BackingLimit = 2.5;        // and after this long backing in, it is home regardless
+    private Vector2 _lastSlot; private bool _haveSlot;
+    // how its slot is moving now: the carrier's motion AND its turning, measured frame to frame
+    private Vector2 SlotVelocity(Vector2 slot, double delta)
+    {
+        var v = _haveSlot && delta > 0 ? (slot - _lastSlot) / (float)delta : Carrier.Velocity;
+        _lastSlot = slot; _haveSlot = true;
+        return v;
+    }
+    public double BackingFor => _b == BSt.Backing ? _backT : 0;
     public const float CrawlSpeed = 0.25f;     // bombers keep closing at this fraction of top speed while they launch
     public bool Launching => _b == BSt.Launch;
     private BSt _b = BSt.Docked;
@@ -6395,25 +6431,31 @@ public partial class Wing : Node2D
                     Combat.LaunchTorpedo(Position + dir * BomberLength * 0.45f, dir, (float)S["torpedo_speed"],
                                          (float)S["torpedo_range"], S["torpedo_damage"], source: Carrier);
                 }
-                if (Ammo <= 0) { _b = BSt.Return; Carrier.NoteStrikeDone(); }
+                if (Ammo <= 0) { _b = BSt.Return; _haveSlot = false; Carrier.NoteStrikeDone(); }
                 break;
 
             case BSt.Return:
             {   // to a point just outboard of its own slot...
                 var (slot, rot) = Carrier.DockSlot(this);
+                var slotVel = SlotVelocity(slot, delta);
                 var outward = Vector2.Up.Rotated(rot);
-                FlyToward(slot + outward * 45f, Speed, delta, Carrier.Velocity);
+                FlyToward(slot + outward * 45f, Speed, delta, slotVel);
                 if (Position.DistanceTo(slot + outward * 45f) < 8f) { _b = BSt.Backing; _backT = 0; }
                 break;
             }
             case BSt.Backing:
-            {   // ...then turn nose-out and back in, tail first
+            {   // ...then turn nose-out and back in, tail first. It rides the slot's TRUE motion:
+                // a turning carrier swings the slot sideways as fast as a bomber backs in, and
+                // following only the carrier's own velocity left it hovering and jittering beside
+                // the slot, never docking, never re-arming.
                 var (slot, rot) = Carrier.DockSlot(this);
+                var slotVel = SlotVelocity(slot, delta);
                 _backT += delta;
                 Rotation = Mathf.LerpAngle(Rotation, rot, Mathf.Clamp(6f * (float)delta, 0f, 1f));
-                if (_backT > 0.4) Position = Position.MoveToward(slot, 60f * (float)delta) + Carrier.Velocity * (float)delta;
-                else Position += Carrier.Velocity * (float)delta;
-                if (Position.DistanceTo(slot) < 1.5f) { _b = BSt.Docked; _rearm = S["bomber_rearm"]; SnapToDock(); Carrier.Signal(slot); }
+                Position += slotVel * (float)delta;
+                if (_backT > 0.4) Position = Position.MoveToward(slot, 60f * (float)delta);
+                if (Position.DistanceTo(slot) < DockSnap || _backT > BackingLimit)
+                { _b = BSt.Docked; _rearm = S["bomber_rearm"]; SnapToDock(); Carrier.Signal(slot); }
                 break;
             }
         }
@@ -6478,7 +6520,7 @@ public partial class Wing : Node2D
 
 //==============================================================================
 // FILE: scripts/Stats.cs
-// 159 lines   sha256 d877c0d2eda1
+// 159 lines   sha256 003a2581b786
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -6577,7 +6619,7 @@ public class ShipStats
         {
             Add("Fighters", "fighter_count",    "Craft",            3, "", 0);
             Add("Fighters", "fighter_hp",       "Hull each",        48, "", 0);
-            Add("Fighters", "fighter_damage",   "Damage per shot",  0.175, "", 3);
+            Add("Fighters", "fighter_damage",   "Damage per shot",  2, "", 1);
             Add("Fighters", "fighter_interval", "Reload",           0.35, "s", 2, inverse: true);
             Add("Fighters", "fighter_range",    "Weapon range",     300, "u", 0);
             Add("Fighters", "fighter_speed",    "Top speed",        352, "u/s", 0);
@@ -6590,7 +6632,7 @@ public class ShipStats
             // moving target can step out of the way.
             Add("Bombers", "bomber_count",    "Craft",              2, "", 0);
             Add("Bombers", "bomber_hp",       "Hull each",          110, "", 0);
-            Add("Bombers", "torpedo_damage",  "Torpedo damage",     3.0, "", 1);
+            Add("Bombers", "torpedo_damage",  "Torpedo damage",     15, "", 0);
             Add("Bombers", "bomber_ammo",     "Torpedoes per run",  4, "", 0);
             Add("Bombers", "torpedo_interval","Between launches",   0.5, "s", 2, inverse: true);
             Add("Bombers", "torpedo_speed",   "Torpedo speed",      90, "u/s", 0);
@@ -6845,7 +6887,7 @@ public partial class StatsWindow : CanvasLayer
 
 //==============================================================================
 // FILE: scripts/TargetDummy.cs
-// 117 lines   sha256 f7845c23ab57
+// 132 lines   sha256 93fe3de91ba6
 //==============================================================================
 using Godot;
 
@@ -6870,7 +6912,11 @@ public partial class TargetDummy : Node2D, IHittable
     public const int FirstNetId = 1000;
     public int Number = 1;
     public int NetId => FirstNetId + Number - 1;
-    public float HitRadius => 46f;
+    // A PRACTICE FIGHTER is a dummy shaped like a light raider: small craft, so point
+    // defence (which shoots only missiles and light fighters) has something to train on.
+    public bool Fighter;
+    public float HitRadius => Fighter ? Raider.LightLength * 0.4f : 46f;
+    private static Texture2D _fighterTex;
     public bool Alive => true;
     Vector2 IHittable.Position => GlobalPosition;
 
@@ -6949,6 +6995,17 @@ public partial class TargetDummy : Node2D, IHittable
     {
         if (Armed)   // its reach, faintly: stay outside this ring
             DrawArc(Vector2.Zero, ArmedRange, 0, Mathf.Tau, 64, new Color(1f, 0.35f, 0.3f, 0.22f), 1.5f);
+        var f0 = ThemeDB.FallbackFont;
+        if (Fighter)
+        {   // a light raider's shape, 34 u, flashing when hit
+            _fighterTex ??= GD.Load<Texture2D>("res://enemy_light_fighter.png");
+            float h = Raider.LightLength, w = h * _fighterTex.GetWidth() / _fighterTex.GetHeight();
+            DrawTextureRect(_fighterTex, new Rect2(-w / 2f, -h / 2f, w, h), false, _hitFlash > 0 ? new Color(1f, 0.8f, 0.7f) : Colors.White);
+            Txt.Centre(this, f0, new Vector2(0, -h / 2 - 30), "PRACTICE FIGHTER", 13, new Color(1f, 0.7f, 0.6f, 0.9f));
+            Txt.Centre(this, f0, new Vector2(0, -h / 2 - 12), $"{LastSecond:0.00} DPS", 17, Colors.White);
+            Txt.Centre(this, f0, new Vector2(0, h / 2 + 18), $"total {Total:0}", 12, new Color(1, 1, 1, 0.7f));
+            return;
+        }
         // a drawn hulk: an armoured octagon with a bullseye, tinted hostile red
         var hull = new Color(0.45f, 0.18f, 0.16f);
         var pts = new Vector2[8];
@@ -7090,7 +7147,7 @@ public partial class TioWindow : PanelContainer
 
 //==============================================================================
 // FILE: scripts/Torpedo.cs
-// 154 lines   sha256 8bcbf075476e
+// 156 lines   sha256 a12daff14996
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -7229,12 +7286,14 @@ public partial class Torpedo : Node2D, IHittable
             {
                 DrawSetTransform(Vector2.Zero, 0f, Vector2.One * Size);
                 DrawRect(new Rect2(-2.2f, -9f, 4.4f, 18f), new Color(0.85f, 0.85f, 0.8f));
+                DrawColoredPolygon(new[] { new Vector2(-2.2f, -9f), new Vector2(0, -13f), new Vector2(2.2f, -9f) }, new Color(0.9f, 0.2f, 0.18f));
                 DrawCircle(new Vector2(0, 9f), 2.4f, new Color(1f, 0.7f, 0.3f));
                 DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
             }
             else
             {
                 DrawRect(new Rect2(-2.2f, -9f, 4.4f, 18f), new Color(0.85f, 0.85f, 0.8f));
+                DrawColoredPolygon(new[] { new Vector2(-2.2f, -9f), new Vector2(0, -13f), new Vector2(2.2f, -9f) }, new Color(0.9f, 0.2f, 0.18f));   // a red tip, on every missile
                 DrawCircle(new Vector2(0, 9f), 2.4f, new Color(1f, 0.7f, 0.3f));
             }
         }
@@ -7389,7 +7448,7 @@ public static class Ui
 
 //==============================================================================
 // FILE: scripts/Yard.cs
-// 418 lines   sha256 b66daac871a4
+// 418 lines   sha256 fdbc98154543
 //==============================================================================
 using Godot;
 using System;
@@ -7667,7 +7726,7 @@ public partial class Yard : Node2D
     public void PortalFlash()
     {
         Hub.Portal.Flash();
-        if (Net.IsHost && Net.IsOnline) Rpc(nameof(NetPortalFlash));
+        if (Net.IsHost && Net.IsOnline) Hub.RpcHome(this, nameof(NetPortalFlash));
     }
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
@@ -7737,7 +7796,7 @@ public partial class Yard : Node2D
         {
             _totalsCd = 1.0;
             var lv = Economy.All.Select(u => Level(u.Id)).ToArray();
-            Rpc(nameof(NetTotals), Ore, Salvage, Credits, lv, Categories.Select(Invested).ToArray());
+            Hub.RpcHome(this, nameof(NetTotals), Ore, Salvage, Credits, lv, Categories.Select(Invested).ToArray());
         }
         _stateCd -= delta;
         if (_stateCd <= 0) { _stateCd = 0.1; SendState(); }
@@ -7762,7 +7821,7 @@ public partial class Yard : Node2D
             (gp[i], gr[i], gs[i], gc[i], gb[i], gh[i]) = (g.Position, g.Rotation, (int)g.State, (float)g.Cargo, g.BeamTo, (float)g.Hull);
         }
         var h = Hauler;
-        Rpc(nameof(NetState), gp, gr, gs, gc, gb, gh, h.Position, h.Rotation, (int)h.State, (float)h.T, (float)h.Cargo, (float)h.LastSale, (float)h.Hull);
+        Hub.RpcHome(this, nameof(NetState), gp, gr, gs, gc, gb, gh, h.Position, h.Rotation, (int)h.State, (float)h.T, (float)h.Cargo, (float)h.LastSale, (float)h.Hull);
     }
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
@@ -8428,7 +8487,7 @@ ls /tmp/shots
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 1589 lines   sha256 87efcb79ef10
+// 1623 lines   sha256 7b860a49656f
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -8855,9 +8914,12 @@ public partial class _Test : Node
 
         // ── dummies ──
         var d1 = H.GetNode<TargetDummy>("TargetDummy1");
-        var d2 = H.GetNode<TargetDummy>("TargetDummy2");
+        var d2 = H.GetNode<TargetDummy>("PracticeFighter1");            // where dummy 2 stood: two practice fighters
+        var pf2 = H.GetNode<TargetDummy>("PracticeFighter2");
         var d3 = H.GetNode<TargetDummy>("TargetDummy3");
-        Check(Count<TargetDummy>() == 3 && new[] { d1.NetId, d2.NetId, d3.NetId }.Distinct().Count() == 3, "three dummies with distinct ids");
+        Check(Count<TargetDummy>() == 4 && new[] { d1.NetId, d2.NetId, pf2.NetId, d3.NetId }.Distinct().Count() == 4
+              && d2.Fighter && pf2.Fighter && d2.HitRadius < 20f && !d1.Fighter && !d3.Fighter,
+              "two dummies and two practice light fighters (small craft), all with distinct ids");
 
         // ── battleship main guns: cursor aim, hold Space, salvo == staggered ──
         var dummy = d1;
@@ -8935,7 +8997,7 @@ public partial class _Test : Node
 
         // ── warp (V): every capital ship; a hull cooldown, not a slot ──
         {
-            var me = Me; var warpHome = me.Position; var d2w = H.GetNode<TargetDummy>("TargetDummy2");
+            var me = Me; var warpHome = me.Position; var d2w = H.GetNode<TargetDummy>("TargetDummy3");
             void Ready() { typeof(PlayerShip).GetField("_warpCd", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(me, 0.0); me.Velocity = Vector2.Zero; me.Rotation = 0f; }
             void Deselect() => typeof(Hub).GetField("_selected", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(H, null);
             Check(Abilities.For(me.Class).All(a => a.Id != "warp"), "warp takes no slot on the ability bar");
@@ -9032,9 +9094,18 @@ public partial class _Test : Node
         Check(spr.Texture.ResourcePath.EndsWith("carrier_player.png") && Math.Abs(spr.Texture.GetHeight() * spr.Scale.Y - 170f) < 0.5f,
               "carrier flies the new symmetrical sprite at 170 u");
         await Park(new Vector2(780, 700), 0);
+        var pdLight = H.SpawnRaider(new Vector2(700, 860));            // a third light target (the practice fighters are two)
         Key(global::Godot.Key.Q); await Wait(2.0);
         var cpds = ship.PdTurrets;
-        Check(cpds.Select(x => x.Target).Where(x => x != null).Distinct().Count() == 3, "carrier PD: three turrets on three different dummies");
+        var pdts = cpds.Select(x => x.Target).Where(x => x != null).ToList();
+        Check(pdts.Distinct().Count() == 3 && pdts.All(t => t is Raider || (t is TargetDummy td && td.Fighter)),
+              "carrier PD: three turrets on three different LIGHT targets -- never a plain dummy");
+        // two light targets for three turrets: the spare must double up on a light one, never a dummy
+        if (GodotObject.IsInstanceValid(pdLight)) pdLight.TakeDamage(9999);
+        await Wait(1.5);
+        var pdts2 = cpds.Select(x => x.Target).Where(x => x != null).ToList();
+        Check(pdts2.Count > 0 && pdts2.All(t => t is Raider || (t is TargetDummy td2 && td2.Fighter)),
+              "with more turrets than light targets, the spare turret still never takes a plain dummy");
 
         // clicks select only; Space attacks; R recalls
         await Park(d1.Position + new Vector2(-300, 300));
@@ -9128,6 +9199,24 @@ public partial class _Test : Node
               $"bomber slot shows the return / rearm ({AbilityBar.StateOf(ship, "bombers", H.Selected).Line})");
         await Wait(15.0);
         Check(ship.BombersReady == 2 && Bombers().All(w => w.Docked), "bombers return to their docks, rearm, and are ready again");
+        // the docking fix: bombers dock and re-arm even while the carrier TURNS hard (a turning
+        // carrier swings their slots sideways; they used to hover beside them, never docking)
+        Key(global::Godot.Key.F); await Wait(0.05);
+        for (int i = 0; i < 60 * 20 && !Bombers().All(w => w.Ammo <= 0 || !w.Docked); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        // FULL SPEED is what trapped them: the old code moved a bomber to its slot and THEN added
+        // the carrier's velocity, overshooting by one frame's travel -- over 1.5 u (the old snap)
+        // from about 90 u/s -- so it jittered beside the slot forever
+        Input.ParseInputEvent(new InputEventKey { Keycode = global::Godot.Key.W, PhysicalKeycode = global::Godot.Key.W, Pressed = true });
+        float yaw0 = ship.Rotation; bool allHome = false; float topSeen = 0;
+        for (int i = 0; i < 60 * 15 && !allHome; i++)
+        {
+            allHome = Bombers().All(w => w.Docked); topSeen = Mathf.Max(topSeen, ship.Velocity.Length());
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        }
+        Input.ParseInputEvent(new InputEventKey { Keycode = global::Godot.Key.W, PhysicalKeycode = global::Godot.Key.W, Pressed = false });
+        Check(allHome && topSeen > 90f && Bombers().All(w => w.RearmLeft > 0 || w.Armed),
+              $"with the carrier at full speed ({topSeen:0} u/s), the bombers still dock and re-arm");
+        ship.Velocity = Vector2.Zero; await Wait(15.0);
 
         // No tracking, tested on single torpedoes so bombers cannot re-aim: moving
         // the target during a whole strike is not a fair test, because a bomber still
@@ -9152,21 +9241,21 @@ public partial class _Test : Node
             var Yd = H.Yard;
             var mn = Yd.Gatherers.First(g => g.Kind == GatherKind.Miner);
             var sv = Yd.Gatherers.First(g => g.Kind == GatherKind.Salvager);
-            Check(mn.MaxHull == 60 && sv.MaxHull == 60 && Yd.Hauler.MaxHull == 150, "miners and salvagers have 60 hull, the hauler 150");
+            Check(mn.MaxHull == 120 && sv.MaxHull == 120 && Yd.Hauler.MaxHull == 150, "miners and salvagers have 120 hull, the hauler 150");
             Yd.Credits = 100000; double inv0 = Yd.Invested("MINERS"); int lv0 = Yd.Level("miner_hold");
             double price = Economy.Cost(Economy.ById("miner_hold"), lv0);
             Check(Yd.TryBuy("miner_hold") && Math.Abs(Yd.Invested("MINERS") - inv0 - price) < 1e-6, $"buying an upgrade adds its price to its category's investment (+{price:0})");
             double cost = Yd.RebuildCost("MINERS");
             Check(cost > 0 && Math.Abs(cost - Math.Round(Yd.Invested("MINERS") * 0.10)) < 1e-6, $"a rebuild costs 10% of it ({cost:0} of {Yd.Invested("MINERS"):0})");
-            mn.TakeDamage(59);
-            Check(mn.State != Gatherer.St.Destroyed && Math.Abs(mn.Hull - 1) < 1e-6, "59 damage leaves a miner at 1 hull");
+            mn.TakeDamage(119);
+            Check(mn.State != Gatherer.St.Destroyed && Math.Abs(mn.Hull - 1) < 1e-6, "119 damage leaves a miner at 1 hull");
             mn.TakeDamage(5); await Wait(0.05);
             Check(mn.State == Gatherer.St.Destroyed && !mn.Visible && mn.Cargo == 0 && Math.Abs(mn.RebuildIn - 30) < 0.2 && Yd.ArmOf(mn) < 0 && Yd.QueueIndex(mn) < 0,
                   "destroyed: gone, its cargo lost, its arm and queue place given up, rebuilt in 30 s");
             Yd.Credits = cost - 1; mn.RebuildIn = 0.1; await Wait(0.3);
             Check(mn.State == Gatherer.St.Destroyed && mn.WaitingForCredits, "short of the rebuild cost, it waits");
             Yd.Credits = cost + 500; await Wait(0.2);
-            Check(mn.State != Gatherer.St.Destroyed && mn.Hull == 60 && mn.Visible && Math.Abs(Yd.Credits - 500) < 1e-6, "paid for: rebuilt at the base at full hull, exactly 10% charged");
+            Check(mn.State != Gatherer.St.Destroyed && mn.Hull == 120 && mn.Visible && Math.Abs(Yd.Credits - 500) < 1e-6, "paid for: rebuilt at the base at full hull, exactly 10% charged");
             double hcost = Yd.RebuildCost("HAULER");
             Yd.Hauler.ResetToPad(); Yd.Hauler.TakeDamage(150); await Wait(0.05);
             Check(Yd.Hauler.State == Hauler.St.Destroyed && Yd.Hauler.WarpedOut && Math.Abs(Yd.Hauler.RebuildIn - 30) < 0.2, "the hauler, destroyed: gone for 30 s");
@@ -9263,9 +9352,9 @@ public partial class _Test : Node
             Check(Math.Abs(hp0 - me.Hp - 5) < 0.2, "the same source lands only once inside 0.35 s");
             me.Hit(5, me.Position + Vector2.Up * 100, "test:b");
             Check(Math.Abs(hp0 - me.Hp - 10) < 0.3, "a different source lands at once");
-            await Wait(0.4); double hp1 = me.Hp;
+            await Wait(0.55); double hp1 = me.Hp;
             me.Hit(5, me.Position + Vector2.Up * 100, "test:a");
-            Check(hp1 - me.Hp > 4.5, "after 0.35 s the first source lands again");
+            Check(hp1 - me.Hp > 4.5, "after 0.52 s the first source lands again");
             Check(PlayerShip.CombatHold == 12, "out of combat means 12 s without dealing or taking damage");
             me.TakeDamage(me.Hp - me.MaxHp * 0.5); me.NoteCombat(); double h0 = me.Hp;
             await Wait(1.0);
@@ -9572,7 +9661,7 @@ public partial class _Test : Node
             Check(Music.CombatZone, "the arena counts as combat for the music");
             Me.Position = boss.Position + new Vector2(0, 500); Me.Velocity = Vector2.Zero; Me.Rotation = 0;
             Key(global::Godot.Key.Q); await Wait(0.1);                           // point defence up
-            Check(Math.Abs(boss.MaxHp - 1200) < 1e-6 && Math.Abs(Boss.GunDamage / Boss.GunEvery - 3) < 1e-9, "the boss: 1200 hull at tier 0; its guns 3 DPS");
+            Check(Math.Abs(boss.MaxHp - 600) < 1e-6 && Math.Abs(Boss.GunDamage / Boss.GunEvery - 3) < 1e-9, "the boss: 600 hull at level 1 (solo); its guns 3 DPS");
             // stand in the beam on purpose with a thick hull (test only), and watch the rhythm
             // the boss's health bar: a chunk per hit, bouncing, whitening, fading; bursts merge
             var bar = Nodes<BossBar>().First();
@@ -9642,7 +9731,9 @@ public partial class _Test : Node
                   "the rhythm: the charge 15 s after the beam, a trident half-way between");
             Check(trident == 3 && Math.Abs(Mathf.RadToDeg(spread) - 50) < 3, "a trident: three double-size missiles, the outer two 25 degrees off the middle");
             double beamDmg = me2.DamageBySource.TryGetValue("boss:beam", out var bd) ? bd : 0, chargeDmg = me2.DamageBySource.TryGetValue("boss:charge", out var cd) ? cd : 0;
-            Check(Math.Abs(beamDmg - 200) < 1e-6, $"the beam, live 1 s and checked every 0.51 s, lands twice: 2 x 100 ({beamDmg:0})");
+            // live 3 s, checked every 0.25 s for 50 -- one source lands at most once per 0.52 s, and
+            // ticks fall on frames, so two ticks are sometimes 0.533 s apart: 5 to 7 hits of 50
+            Check(beamDmg >= 200 && beamDmg <= 350 && Math.Abs(beamDmg % 50) < 1e-6, $"the beam, live 3 s at 50 a tick, through the 0.52 s guard: {beamDmg / 50:0} hits ({beamDmg:0})");
             Check(Math.Abs(chargeDmg - 40) < 1e-6, $"the charge rams for 40 ({chargeDmg:0})");
             Check(Music.I == null || Math.Abs(Boss.TridentSpeed - 135f) < 1e-3, "trident missiles fly at 135 u/s (10% slower)");
             // the kill: shared EXP for it and the mission, the bounty's credits, then home
@@ -9663,8 +9754,8 @@ public partial class _Test : Node
                   $"while away the base earned 1/20 of its rate ({Yard.LastAwayOre:0.0} ore for {Yard.LastAway:0} s)");
             // levels: the win cleared level 1; docking at the TIO selects level 2
             Check(Character.BossCleared.TryGetValue("silver_lancer", out var cleared) && cleared.Contains(1), "the win records level 1 as cleared");
-            Check(Math.Abs(Missions.S(2) - 1.1) < 1e-9 && Math.Abs(Missions.S(3) - 1.21) < 1e-9 && Math.Abs(Missions.Current.Hull * Missions.S(2) - 1320) < 1e-6,
-                  "each level is 10% stronger, multiplicatively (level 2: 1320 hull)");
+            Check(Math.Abs(Missions.S(2) - 1.1) < 1e-9 && Math.Abs(Missions.S(3) - 1.21) < 1e-9 && Math.Abs(Missions.Current.Hull * Missions.S(2) - 660) < 1e-6,
+                  "each level is 10% stronger, multiplicatively (level 2: 660 hull)");
             H.OpenTio(); await Wait(0.1);
             var tw2 = Nodes<TioWindow>().First();
             Check(Missions.Level == 2, "docking at the TIO selects the newest unlocked level (2)");
@@ -9901,6 +9992,8 @@ public partial class _Test : Node
             H.SetMyReady(true); Me.AutopilotTo = null;
             for (int i = 0; i < 600 && !H.AllReady; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(H.AllReady && H.PartyIds.Count() == 3, "both guests' READY reached the host: the party of three is ready");
+            Check(Multiplayer.GetPeers().All(id => Hub.PeerSector(id) == Hub.SectorKind.Home),
+                  "every guest has told the host it is home (the yard talks only to guests at home)");
             H.StartMission();
             Check(Character.Exp == 550, $"the host gets its own EXP for the kill (level 1: 550; exp {Character.Exp})");
             Check(H.Yard.Level("salvage_rate") == 1 && H.Yard.Credits == 900, "a guest's BUY request was honoured by the host");
