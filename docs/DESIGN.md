@@ -183,7 +183,7 @@ levels once a second and ship and hauler state ten times a second; a guest's own
 - **D (DONE)**: capital ships **turn in place at ≤ 5% of top speed**, about 10°/s; no strafing.
 - **E (DONE)**: heavies **snub-nosed (option b)**; they **wait at the map's edge** nearest their target and,
   once it is pinned, **boost at 700% until 300 u away**; missile within 500 u.
-- **F**: **Miner hull / Salvager hull** upgrades, +10% a level, **125 cr to start** (25% above the other
+- **F (DONE)**: **Miner hull / Salvager hull** upgrades, +10% a level, **125 cr to start** (25% above the other
   +10% rows), ×1.25 a level.
 - **G**: the **equipment menu** (I, and a button): Weapon, Engines, Shield (health), Hull (mods), Utility,
   and **5 chips**; the gear is **locked to the class** (no mode switch); items drive the stats they

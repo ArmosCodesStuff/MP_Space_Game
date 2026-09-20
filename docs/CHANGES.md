@@ -39,7 +39,7 @@ history pick the work up from it alone. Update it in the same change as the code
 **State as of 2026-09-18: version 0.3.0 plus Unreleased (see it for everything since: docking arms
 and the unload queue, the fleet and hauler pods, the idle economy, base menu, bunker-buster missile,
 painted turrets, docking bombers and more).** Typecheck clean against the real `GodotSharp.dll`,
-`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 407 checks across
+`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 410 checks across
 a single-player run and a host with two guests. Unlike earlier releases, this one was also **looked at**:
 `tools/screens/run.sh` renders the select screen, the creator, a fresh spawn under the base, both
 classes in the hub, the K window, a bomber strike, and turret close-ups on a virtual display; layout
@@ -180,6 +180,21 @@ reachable, which is fine: both harnesses build from the `nupkgs` folder that shi
 ---
 
 ## Unreleased
+
+### Chunk F: hull upgrades for miners and salvagers
+
+**Checked:** smoke test **three runs in a row, 410 checks each, 0 compiler warnings, 0 analyser
+findings, 0 unused members**; screenshot sweep **66 frames, complete, 0 lint**; the new row looked at in
+the SALVAGERS tab. A 100 cr mutant (the ordinary price) fails the pricing check.
+
+#### Added
+
+- **Miner hull** (MINERS tab) and **Salvager hull** (SALVAGERS tab): **+10% hull a level** (120 → 132 →
+  …), **125 cr to start — 25% above the other +10% rows — and ×1.25 a level** (156, 195, …). Buying a level
+  gives the ships of that kind their new hull at once (a full ship stays full), rebuilds come back at the
+  upgraded hull, and the spend counts toward the category's investment (and so its rebuild price).
+
+### Earlier in Unreleased
 
 ### Chunk E: the heavy fighters
 
