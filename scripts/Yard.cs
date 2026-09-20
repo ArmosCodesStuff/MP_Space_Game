@@ -274,7 +274,7 @@ public partial class Yard : Node2D
     public void PortalFlash()
     {
         Hub.Portal.Flash();
-        if (Net.IsHost && Net.IsOnline) Rpc(nameof(NetPortalFlash));
+        if (Net.IsHost && Net.IsOnline) Hub.RpcHome(this, nameof(NetPortalFlash));
     }
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
@@ -344,7 +344,7 @@ public partial class Yard : Node2D
         {
             _totalsCd = 1.0;
             var lv = Economy.All.Select(u => Level(u.Id)).ToArray();
-            Rpc(nameof(NetTotals), Ore, Salvage, Credits, lv, Categories.Select(Invested).ToArray());
+            Hub.RpcHome(this, nameof(NetTotals), Ore, Salvage, Credits, lv, Categories.Select(Invested).ToArray());
         }
         _stateCd -= delta;
         if (_stateCd <= 0) { _stateCd = 0.1; SendState(); }
@@ -369,7 +369,7 @@ public partial class Yard : Node2D
             (gp[i], gr[i], gs[i], gc[i], gb[i], gh[i]) = (g.Position, g.Rotation, (int)g.State, (float)g.Cargo, g.BeamTo, (float)g.Hull);
         }
         var h = Hauler;
-        Rpc(nameof(NetState), gp, gr, gs, gc, gb, gh, h.Position, h.Rotation, (int)h.State, (float)h.T, (float)h.Cargo, (float)h.LastSale, (float)h.Hull);
+        Hub.RpcHome(this, nameof(NetState), gp, gr, gs, gc, gb, gh, h.Position, h.Rotation, (int)h.State, (float)h.T, (float)h.Cargo, (float)h.LastSale, (float)h.Hull);
     }
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]

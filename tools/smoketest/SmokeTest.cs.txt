@@ -609,7 +609,12 @@ public partial class _Test : Node
         var pdts = cpds.Select(x => x.Target).Where(x => x != null).ToList();
         Check(pdts.Distinct().Count() == 3 && pdts.All(t => t is Raider || (t is TargetDummy td && td.Fighter)),
               "carrier PD: three turrets on three different LIGHT targets -- never a plain dummy");
+        // two light targets for three turrets: the spare must double up on a light one, never a dummy
         if (GodotObject.IsInstanceValid(pdLight)) pdLight.TakeDamage(9999);
+        await Wait(1.5);
+        var pdts2 = cpds.Select(x => x.Target).Where(x => x != null).ToList();
+        Check(pdts2.Count > 0 && pdts2.All(t => t is Raider || (t is TargetDummy td2 && td2.Fighter)),
+              "with more turrets than light targets, the spare turret still never takes a plain dummy");
 
         // clicks select only; Space attacks; R recalls
         await Park(d1.Position + new Vector2(-300, 300));
@@ -707,18 +712,19 @@ public partial class _Test : Node
         // carrier swings their slots sideways; they used to hover beside them, never docking)
         Key(global::Godot.Key.F); await Wait(0.05);
         for (int i = 0; i < 60 * 20 && !Bombers().All(w => w.Ammo <= 0 || !w.Docked); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        // FULL SPEED is what trapped them: the old code moved a bomber to its slot and THEN added
+        // the carrier's velocity, overshooting by one frame's travel -- over 1.5 u (the old snap)
+        // from about 90 u/s -- so it jittered beside the slot forever
         Input.ParseInputEvent(new InputEventKey { Keycode = global::Godot.Key.W, PhysicalKeycode = global::Godot.Key.W, Pressed = true });
-        Input.ParseInputEvent(new InputEventKey { Keycode = global::Godot.Key.D, PhysicalKeycode = global::Godot.Key.D, Pressed = true });
-        float yaw0 = ship.Rotation; bool allHome = false;
+        float yaw0 = ship.Rotation; bool allHome = false; float topSeen = 0;
         for (int i = 0; i < 60 * 15 && !allHome; i++)
         {
-            allHome = Bombers().All(w => w.Docked);
+            allHome = Bombers().All(w => w.Docked); topSeen = Mathf.Max(topSeen, ship.Velocity.Length());
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         }
-        float carrierTurned = Mathf.Abs(Mathf.AngleDifference(yaw0, ship.Rotation));
         Input.ParseInputEvent(new InputEventKey { Keycode = global::Godot.Key.W, PhysicalKeycode = global::Godot.Key.W, Pressed = false });
-        Input.ParseInputEvent(new InputEventKey { Keycode = global::Godot.Key.D, PhysicalKeycode = global::Godot.Key.D, Pressed = false });
-        Check(allHome && Bombers().All(w => w.RearmLeft > 0 || w.Armed), $"with the carrier turning hard, the bombers still dock and re-arm (it turned {Mathf.RadToDeg(carrierTurned):0} deg meanwhile)");
+        Check(allHome && topSeen > 90f && Bombers().All(w => w.RearmLeft > 0 || w.Armed),
+              $"with the carrier at full speed ({topSeen:0} u/s), the bombers still dock and re-arm");
         ship.Velocity = Vector2.Zero; await Wait(15.0);
 
         // No tracking, tested on single torpedoes so bombers cannot re-aim: moving
@@ -1495,6 +1501,8 @@ public partial class _Test : Node
             H.SetMyReady(true); Me.AutopilotTo = null;
             for (int i = 0; i < 600 && !H.AllReady; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(H.AllReady && H.PartyIds.Count() == 3, "both guests' READY reached the host: the party of three is ready");
+            Check(Multiplayer.GetPeers().All(id => Hub.PeerSector(id) == Hub.SectorKind.Home),
+                  "every guest has told the host it is home (the yard talks only to guests at home)");
             H.StartMission();
             Check(Character.Exp == 550, $"the host gets its own EXP for the kill (level 1: 550; exp {Character.Exp})");
             Check(H.Yard.Level("salvage_rate") == 1 && H.Yard.Credits == 900, "a guest's BUY request was honoured by the host");

@@ -223,6 +223,7 @@ public partial class Hub : Node2D
             Net.I.PlayerJoined   += OnPlayerJoined;
             Net.I.PlayerLeft     += DespawnFor;
             Net.I.SessionChanged += OnSessionChanged;
+            ReportSector();                                      // this world is loaded: tell the host where we are
         }
         RebuildShips();
     }
@@ -289,8 +290,26 @@ public partial class Hub : Node2D
     // join or drop. So on any session change every ship is thrown away and rebuilt
     // from Net.Players. Before this, joining left your offline ship keyed as peer 1:
     // on the guest it became the host's ship, and the guest never got one of its own.
+    // ── which world each guest is in ─────────────────────────────────────────
+    // A guest reports its sector whenever its world loads. Home-only nodes (the yard) send
+    // only to guests at home: in a sector change the peers arrive at different moments, and
+    // a message for a node a peer does not have is an engine error (seen in the arena run).
+    // Static: it must outlive the host's own scene reloads.
+    private static readonly Dictionary<int, SectorKind> _peerSector = new();
+    public static SectorKind? PeerSector(int id) => _peerSector.TryGetValue(id, out var s) ? s : null;
+    public void RpcHome(Node node, StringName method, params Variant[] args)
+    {
+        foreach (var id in Multiplayer.GetPeers())
+            if (_peerSector.TryGetValue(id, out var s) && s == SectorKind.Home) node.RpcId(id, method, args);
+    }
+    [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void NetMySector(int s) { if (Net.IsHost) _peerSector[Multiplayer.GetRemoteSenderId()] = (SectorKind)s; }
+    private void ReportSector() { if (Net.IsOnline && !Net.IsHost) RpcId(1, nameof(NetMySector), (int)Sector); }
+
     private void OnSessionChanged()
     {
+        ReportSector();
+        if (Net.IsHost) foreach (var id in _peerSector.Keys.ToList()) if (!Net.IsOnline || !Multiplayer.GetPeers().Contains(id)) _peerSector.Remove(id);
         // the host gone while the party is in the arena: home, to your own base
         if (InArena && !Net.IsOnline) { GoTo(SectorKind.Home); return; }
         Yard?.OnSessionChanged(!Net.IsHost);    // parks or restores your own yard (home only)
