@@ -13,12 +13,12 @@ public partial class TargetDummy : Node2D, IHittable
     // player ship within 150 u, for 50 damage. Host-owned like all combat.
     public bool Armed;
     public const float ArmedRange = 150f, ArmedInterval = 5f;
-    public const double ArmedDamage = 50;
+    private const double ArmedDamage = 50;
     private double _fireCd;
     // Several dummies, each with its own id (1000, 1001, ...) and label number,
     // so target switching can be tested. Ids are assigned by the Hub in order,
     // identically on every peer.
-    public const int FirstNetId = 1000;
+    private const int FirstNetId = 1000;
     public int Number = 1;
     public int NetId => FirstNetId + Number - 1;
     // A PRACTICE FIGHTER is a dummy shaped like a light raider: small craft, so point

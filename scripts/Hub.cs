@@ -32,7 +32,7 @@ public partial class Hub : Node2D
     // lengths): room for a blockade outside the base's 600 u missile cover. Measured to each
     // field's boundary -- the belt's nearest rock edge (sun at y -1794 with 9 rocks on the
     // 520 x 286 ellipse, rocks 15 u), the wreck's visible edge toward the base (340 u out).
-    public const float FieldEdge = 1500f;
+    private const float FieldEdge = 1500f;
     public static readonly Vector2 SunPos    = new(0, -1794);
     public static readonly Vector2 WreckPos  = new(-1840, 60);
     public static readonly Vector2 PortalPos = new(1500, 219);
@@ -43,8 +43,8 @@ public partial class Hub : Node2D
     // three dummies south-east of the base, below the haul lane and far enough apart
     // that a click is never ambiguous
     public static readonly Vector2[] DummyPos = { new(600, 670), new(900, 550), new(900, 850) };
-    public const float BeltR = 520f;          // a short belt, tight around the sun
-    public const int   BeltRocks = 9;
+    private const float BeltR = 520f;          // a short belt, tight around the sun
+    private const int   BeltRocks = 9;
 
     // True while the keyboard and mouse belong to the UI: a text box has focus or the
     // character creator is open. PlayerShip reads this before flying or aiming.
@@ -67,7 +67,7 @@ public partial class Hub : Node2D
     // on empty space clears either.
     public Vector2? Waypoint { get; private set; }
     public string WaypointName { get; private set; } = "";
-    public float WaypointRadius { get; private set; }
+    private float WaypointRadius { get; set; }   // private already: the inner `private set` would be redundant
     public void SelectTarget(IHittable h) { _selected = h; Waypoint = null; }
     public void SelectWaypoint(string name, Vector2 at, float radius) { _selected = null; Waypoint = at; WaypointName = name; WaypointRadius = radius; }
     public void ClearSelection() { _selected = null; Waypoint = null; }
@@ -431,7 +431,7 @@ public partial class Hub : Node2D
     // the mission portal opens off the TIO's top-right corner
     // From constants, not the TIO's sprite: in the arena, or in the frame a scene is being
     // swapped, there is no sprite -- and asking for this crashed (found by the arena run).
-    public const float TioHalfWidth = TioHeight * 630f / 876f / 2f;     // the art is 630 x 876 px
+    private const float TioHalfWidth = TioHeight * 630f / 876f / 2f;     // the art is 630 x 876 px
     public Vector2 MissionPortalPos => TioPos + new Vector2(TioHalfWidth + 110f, -TioHeight / 2f - 70f);
     private readonly Dictionary<int, bool> _ready = new();
     public IEnumerable<int> PartyIds => _ships.Keys;                 // the party is everyone in the session
@@ -470,7 +470,7 @@ public partial class Hub : Node2D
         _ready[who] = ready; BroadcastMission();
     }
 
-    public const float PortalEnterRadius = 190f;
+    private const float PortalEnterRadius = 190f;
 
     // ── moving the party between sectors (host decides; every peer follows) ──
     public void EnterSector(SectorKind k)
@@ -597,11 +597,11 @@ public partial class Hub : Node2D
     // Level L (the failed boss's): raiders at S(L) = 1.1^(L-1), the boss's own scaling.
     // 2 patrols, and 1 more per extra pilot in the session, in from the map's edge 3 s
     // after the party is home (so every guest's world is loaded before they appear).
-    public static int PendingRaidLevel;                        // survives the scene change home
+    private static int PendingRaidLevel;                        // survives the scene change home
     public const float RaidEdge = 3200f;
     public const double RaidDelay = 3.0;
     private double _raidIn = -1; private int _raidLevel;
-    public static double RaidScale(int level) => Missions.S(level);           // S(L) = 1.1^(L-1)
+    private static double RaidScale(int level) => Missions.S(level);           // S(L) = 1.1^(L-1)
 
     private void StartRaid(int level)
     {

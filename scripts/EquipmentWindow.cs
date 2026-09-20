@@ -7,7 +7,7 @@ public partial class EquipmentWindow : PanelContainer
 {
     public Hub Hub;
     private VBoxContainer _col;
-    public static Color RarityColor(Rarity r) => r switch
+    private static Color RarityColor(Rarity r) => r switch
     {
         Rarity.Uncommon => new Color(0.45f, 0.9f, 0.45f), Rarity.Rare => new Color(0.4f, 0.65f, 1f),
         Rarity.Epic => new Color(0.75f, 0.45f, 1f), Rarity.Legendary => new Color(1f, 0.65f, 0.25f),

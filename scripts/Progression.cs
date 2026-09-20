@@ -34,7 +34,7 @@ public static class Progression
     public const int MaxPerUpgrade = 60;       // a sanity cap on what a peer may claim
 
     public static int Cost(int owned) => owned + 1;                        // 1, 2, 3, ...
-    public const int ExpPerLevel = 1000;
+    private const int ExpPerLevel = 1000;
     public static int ExpToNext => ExpPerLevel;                             // always 1000, whatever the level
 
     // Flat stat additions for a set of purchases, on a given hull.

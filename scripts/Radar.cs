@@ -24,7 +24,7 @@ public partial class Radar : Control
 
     // A click on the radar picks the nearest thing within 9 px of the click on its face: an
     // enemy becomes the target; a landmark or another pilot becomes a waypoint to warp to.
-    public const float PickPx = 9f;
+    private const float PickPx = 9f;
     public override void _GuiInput(InputEvent e)
     {
         if (e is not InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } mb) return;

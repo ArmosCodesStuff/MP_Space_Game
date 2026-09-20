@@ -31,7 +31,7 @@ public partial class PlayerShip : Node2D, IHittable
     public Vector2? AutopilotTo;                          // set by READY: the owner's ship flies itself there
 
     // ── as a target: for ENEMY fire only (Combat.Players) ──────────────────
-    public const int NetIdBase = 2000;                  // same on every peer: 2000 + owner
+    private const int NetIdBase = 2000;                  // same on every peer: 2000 + owner
     public int NetId => NetIdBase + OwnerId;
     public float HitRadius => MyArt.HalfWidth;
     // A capsule along the keel: a circle would be far too wide for a long hull.
@@ -52,7 +52,7 @@ public partial class PlayerShip : Node2D, IHittable
     // Regeneration, always: 0.5% of max hull a second in combat, 3% out of it.
     public const double RegenInCombat = 0.005, RegenOutOfCombat = 0.03;
     // One ongoing source (an ability, a weapon, an area) lands on a ship at most once per 0.52 s.
-    public const double HitGap = 0.52;
+    private const double HitGap = 0.52;
     private readonly System.Collections.Generic.Dictionary<string, double> _lastHitBy = new();
     public readonly System.Collections.Generic.Dictionary<string, double> DamageBySource = new();   // host: damage taken, by source
     private double _combatT;
@@ -117,12 +117,12 @@ public partial class PlayerShip : Node2D, IHittable
             PdBarrel = 3.7f, PdRing = 2.9f },
     };
 
-    public const float FighterCameraRange = 2500f;
+    private const float FighterCameraRange = 2500f;
     public ClassArt MyArt => Art[Class];
 
     // ── the owner's intent, replicated at 20 Hz ──────────────────────────────
     public Vector2 AimPoint;               // where the main guns point
-    public bool Thrusting;                 // the owner is on the throttle (plume flicker)
+    private bool Thrusting;                 // the owner is on the throttle (plume flicker)
     public bool Trigger;                   // guns key held (battleship)
     public bool Staggered;                 // fire mode: false = salvo, true = staggered
 
@@ -146,7 +146,7 @@ public partial class PlayerShip : Node2D, IHittable
     public int MissilesLoaded => _mag;
     public double MissileReloadLeft => _missileReload;
     public bool Reloading => _missileReload > 0;
-    public bool CanFireMissile => Class == ShipClass.Battleship && _mag > 0 && !Reloading && _missileRefire <= 0;
+    private bool CanFireMissile => Class == ShipClass.Battleship && _mag > 0 && !Reloading && _missileRefire <= 0;
 
     private readonly List<Turret> _turrets = new();
     private readonly List<Turret> _mains = new();
@@ -359,7 +359,7 @@ public partial class PlayerShip : Node2D, IHittable
     public bool Warping => _warpLeft >= 0;
     public double WarpWarmupLeft => Math.Max(0, _warpLeft);
     public double WarpCooldownLeft => _warpCd;
-    public bool CanWarp => Alive && !Warping && _warpCd <= 0;
+    private bool CanWarp => Alive && !Warping && _warpCd <= 0;
 
     // V starts the charge; WHERE it goes is decided when it jumps, by the heading then --
     // so a pilot can press V and swing onto a target while it charges.
@@ -371,7 +371,7 @@ public partial class PlayerShip : Node2D, IHittable
     }
 
     // where a warp to `target` ends: on the line from here, just short of its hull
-    public static Vector2 WarpArrival(Vector2 from, Vector2 target, float targetRadius, float shipLength) =>
+    private static Vector2 WarpArrival(Vector2 from, Vector2 target, float targetRadius, float shipLength) =>
         target - (target - from).Normalized() * (targetRadius + shipLength * 0.5f + WarpStandoff);
 
     private void TickWarp(float dt)
@@ -660,8 +660,8 @@ public partial class PlayerShip : Node2D, IHittable
     }
 
     public float SpeedAhead => Velocity.Dot(Vector2.Up.Rotated(Rotation));
-    public const float PivotBelow = 0.05f;                     // the pivot works at <= 5% of top speed
-    public static readonly float PivotRate = Mathf.DegToRad(10f);   // slowly: 10 degrees a second
+    private const float PivotBelow = 0.05f;                     // the pivot works at <= 5% of top speed
+    private static readonly float PivotRate = Mathf.DegToRad(10f);   // slowly: 10 degrees a second
 
     // ── everyone else follows it ─────────────────────────────────────────────
     private void RemoteFollow(float dt)
@@ -735,7 +735,7 @@ public partial class PlayerShip : Node2D, IHittable
     // ── signal lights: a faint, flashing yellow/orange wherever a craft lands or
     // takes off -- the hangar for fighters, a slot for bombers ──────────────────
     private readonly System.Collections.Generic.List<(Vector2 local, double t)> _signals = new();
-    public const double SignalTime = 1.2;
+    private const double SignalTime = 1.2;
     public void Signal(Vector2 world) => _signals.Add((ToLocal(world), SignalTime));
     public int SignalsLit => _signals.Count;
 

@@ -37,9 +37,9 @@ public partial class Boss : Node2D, IHittable
     // As the beam charges, the boss launches two light ESCORTS at its target -- one 45 degrees
     // to port, one to starboard -- boosting all the way in to pin the pilot in the beam. Fragile
     // on purpose (point defence, 1 DPS a turret, must be able to kill them inside the charge).
-    public const float EscortAngle = 45f;
+    private const float EscortAngle = 45f;
     public const double EscortHull = 3;           // 3 s at one PD turret (1 DPS): killable inside the charge
-    public const double WebToBeam = 1.0;          // the beam starts charging 1 s after the web should land
+    private const double WebToBeam = 1.0;          // the beam starts charging 1 s after the web should land
     public const float TurnRate = 0.3f;           // its native turn, ponderous (rad/s) -- and all it has while charging
     // The beam reaches right across the arena: once it is charging, distance is no escape --
     // only angle is. Its ACTIVATION is unchanged (the 30 s rhythm, the nearest pilot, the escorts'

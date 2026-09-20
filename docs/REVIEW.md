@@ -48,9 +48,25 @@ every declared type, counted against both game scripts and both test harnesses:
 - **1140 members across 46 scripts. Referenced nowhere: 0. Types named nowhere else: 0.**
 - **16 test-only members**, all read-only observers the checks rely on — the category this file
   already rules intended. (`Boss.BeamCharging` and `BossBar`'s new hooks joined the list.)
-- **112 members are `public` but only ever used inside their own file.** Not dead — over-exposed.
-  Narrowing them is a real tidy-up and a safe one (none are touched by the harnesses), but it is
-  cosmetic and was **not** done: it would touch a third of the code base for no behaviour change.
+- **112 members were `public` but only ever used inside their own file.** Not dead — over-exposed.
+  **Now narrowed: 71 are `private`.** The scan that produced the 112 was per-FILE, which is not the
+  same question: a file holds several types (`Hub.cs` has Hub, Sun, Portal, HullHud, FlashLayer),
+  so "used only in its own file" does not mean "used only in its own type". Re-run per declaring
+  type, against brace spans, and excluding interface members (`IHittable`: `NetId`, `Position`,
+  `HitRadius`, `Alive`, `TakeDamage`, `Covers`, `Selectable` must stay public) and anything either
+  harness touches, it came to 99 real candidates.
+
+  **26 of those were deliberately left public**, for two reasons a blind rewrite would have got
+  wrong: a **nested type** cannot go private while a public member exposes it (`public List<Chunk>
+  Chunks` with a private `Chunk` is CS0053), and a **shared declaration line** —
+  `public const double BeamEvery = 30, BeamLive = 3.0, BeamTick = 0.25, BeamDamage = 50;` — cannot
+  be narrowed when only some of its declarators were cleared.
+
+  Confirmation that the 71 are right: the analysers still report **0 findings**, and IDE0051 flags
+  *unused private members* — so every one of them is genuinely used inside its own type.
+
+  Note that `public` → `internal` would have been worthless here: the game is one assembly, so
+  `internal` and `public` are the same reach. `private` is the only narrowing that says anything.
 
 Conclusion: the cull asked for in passes 1 and 2 is still done. There is no accumulated dead code
 to remove. What remains is pass 3.

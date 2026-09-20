@@ -1,6 +1,6 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-20 05:11 at git commit 94f952c: typecheck clean, dotnet build 0 warnings,
+// Taken 2026-09-20 05:29 at git commit 7763cbe: typecheck clean, dotnet build 0 warnings,
 //   0 analyser findings, 0 unused members; smoke test 3/3 runs at 432 checks on Windows
 //   (434 in a sandbox with no router and no internet); 67-frame UI sweep complete, 0 lint.
 // 64 files, 11300 lines. Code only: sprites, sounds and docs are in the zip.
@@ -15,52 +15,52 @@
 //   CharacterSelect.tscn                            12 lines   sha256 bde251d0afb9
 //   Hub.tscn                                        10 lines   sha256 3a99e0df7b39
 //   MainMenu.tscn                                    6 lines   sha256 8a8dbe40f248
-//   scripts/Abilities.cs                           141 lines   sha256 46221cf7d4d5
+//   scripts/Abilities.cs                           141 lines   sha256 ecefda83d48b
 //   scripts/AbilityBar.cs                          112 lines   sha256 4a1331fe370c
 //   scripts/Autopilot.cs                            40 lines   sha256 807538219f53
 //   scripts/BaseDefense.cs                          55 lines   sha256 1d8daa0fbd67
 //   scripts/BasePanel.cs                           119 lines   sha256 9115697ad5aa
-//   scripts/Boss.cs                                285 lines   sha256 4e7b41497b57
+//   scripts/Boss.cs                                285 lines   sha256 6747d73030b2
 //   scripts/BossBar.cs                              85 lines   sha256 679ea3b792b9
-//   scripts/Character.cs                           212 lines   sha256 5b22661c31e9
+//   scripts/Character.cs                           212 lines   sha256 6a03b50ec0a1
 //   scripts/CharacterCreator.cs                    218 lines   sha256 d1c4d4f7012f
 //   scripts/CharacterSelect.cs                     171 lines   sha256 dc2bfeccc820
 //   scripts/Combat.cs                               87 lines   sha256 298c5236a5b5
-//   scripts/Economy.cs                              81 lines   sha256 ceb194520ae4
+//   scripts/Economy.cs                              81 lines   sha256 c9aa43070257
 //   scripts/Equipment.cs                            77 lines   sha256 5a5307ab79c9
-//   scripts/EquipmentWindow.cs                      73 lines   sha256 9fe0b9b6496d
+//   scripts/EquipmentWindow.cs                      73 lines   sha256 0178e7bceb83
 //   scripts/EscapePod.cs                            50 lines   sha256 324c55cb503b
 //   scripts/EscMenu.cs                              59 lines   sha256 999b01e6cd29
 //   scripts/Explosion.cs                            18 lines   sha256 12209b0c72ce
 //   scripts/Gatherer.cs                            254 lines   sha256 135bd767de29
-//   scripts/Hauler.cs                              316 lines   sha256 1c5d874fcbd6
+//   scripts/Hauler.cs                              316 lines   sha256 cf2e40c1ba7d
 //   scripts/HealthBar.cs                            36 lines   sha256 97c42a282205
-//   scripts/Hub.cs                                1255 lines   sha256 2e4591b5538d
+//   scripts/Hub.cs                                1255 lines   sha256 b5f81ed865f3
 //   scripts/MainMenu.cs                            235 lines   sha256 92fdcfb22a4b
-//   scripts/Missions.cs                             38 lines   sha256 35ba5cda832e
-//   scripts/Music.cs                                78 lines   sha256 19cdf8e2b59c
-//   scripts/Net.cs                                 334 lines   sha256 b93e2a57999c
+//   scripts/Missions.cs                             38 lines   sha256 48a2f11b25a4
+//   scripts/Music.cs                                78 lines   sha256 021dfc1c83d5
+//   scripts/Net.cs                                 334 lines   sha256 040f19a1471f
 //   scripts/PilotWindow.cs                          54 lines   sha256 2e678154e65f
-//   scripts/PlayerShip.cs                          783 lines   sha256 13a00ed2889e
+//   scripts/PlayerShip.cs                          783 lines   sha256 010d0e857cfe
 //   scripts/Plume.cs                                25 lines   sha256 cdbeb9b8fc58
-//   scripts/Progression.cs                          92 lines   sha256 c0c144383d1f
-//   scripts/Radar.cs                               129 lines   sha256 189719fcc94f
-//   scripts/Raider.cs                              344 lines   sha256 1b82ca608a76
+//   scripts/Progression.cs                          92 lines   sha256 de28f5e72175
+//   scripts/Radar.cs                               129 lines   sha256 16957ada0551
+//   scripts/Raider.cs                              344 lines   sha256 59f2c06071b3
 //   scripts/SessionMenu.cs                         127 lines   sha256 7546fd7d3c03
 //   scripts/Settings.cs                             70 lines   sha256 e6be0b7529a5
-//   scripts/Sfx.cs                                  69 lines   sha256 c5ce9c91a433
+//   scripts/Sfx.cs                                  69 lines   sha256 ceecc82717f6
 //   scripts/Shell.cs                                52 lines   sha256 5c161c9fff3b
 //   scripts/Shield.cs                               71 lines   sha256 99c7fa4a2a8e
-//   scripts/ShipClasses.cs                         530 lines   sha256 df6e1e4249fd
-//   scripts/Stats.cs                               161 lines   sha256 bad238605cb0
+//   scripts/ShipClasses.cs                         530 lines   sha256 949a74f65ecf
+//   scripts/Stats.cs                               161 lines   sha256 0a28fa171863
 //   scripts/StatsWindow.cs                         198 lines   sha256 8b5c9f76adc7
-//   scripts/TargetDummy.cs                         132 lines   sha256 93fe3de91ba6
+//   scripts/TargetDummy.cs                         132 lines   sha256 ae97ee1a9083
 //   scripts/Telegraph.cs                            47 lines   sha256 89f6af49c4d7
 //   scripts/TioWindow.cs                            66 lines   sha256 1afef5008016
 //   scripts/Torpedo.cs                             156 lines   sha256 a12daff14996
 //   scripts/Txt.cs                                  32 lines   sha256 8823251c9a4f
-//   scripts/Ui.cs                                  106 lines   sha256 9f61e923ace3
-//   scripts/Yard.cs                                438 lines   sha256 2b78c328b814
+//   scripts/Ui.cs                                  106 lines   sha256 9829507bbff9
+//   scripts/Yard.cs                                438 lines   sha256 e3a40eb72b5d
 //   typecheck/GodotStub.cs                         192 lines   sha256 2c5c2967bf5c
 //   typecheck/typecheck.ps1                         68 lines   sha256 e513a9f7f554
 //   typecheck/typecheck.sh                          57 lines   sha256 e68277c09f34
@@ -183,7 +183,7 @@ script = ExtResource("1_menu")
 
 //==============================================================================
 // FILE: scripts/Abilities.cs
-// 141 lines   sha256 46221cf7d4d5
+// 141 lines   sha256 ecefda83d48b
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -213,7 +213,7 @@ public class AbilityDef
 
 public static class Abilities
 {
-    public static readonly Dictionary<ShipClass, AbilityDef[]> ByClass = new()
+    private static readonly Dictionary<ShipClass, AbilityDef[]> ByClass = new()
     {
         [ShipClass.Battleship] = new[]
         {
@@ -256,7 +256,7 @@ public static class Abilities
     // while an AbilityDef is read-only data. The moment an open slot carries something per class
     // -- an assigned item from the inventory, say -- writing to it would write it for every class
     // at once. Give each class its own copies then.
-    public const int OpenSlots = 6;
+    private const int OpenSlots = 6;
     private static readonly AbilityDef[] Open = Enumerable.Range(1, OpenSlots).Select(i => new AbilityDef {
         Id = $"open{i}", Name = $"Open slot {i}", Short = "", Open = true, Default = Key.Key0 + i,
         Blurb = "Unassigned — for abilities and items to come." }).ToArray();
@@ -675,7 +675,7 @@ public partial class BasePanel : PanelContainer
 
 //==============================================================================
 // FILE: scripts/Boss.cs
-// 285 lines   sha256 4e7b41497b57
+// 285 lines   sha256 6747d73030b2
 //==============================================================================
 using Godot;
 using System.Linq;
@@ -716,9 +716,9 @@ public partial class Boss : Node2D, IHittable
     // As the beam charges, the boss launches two light ESCORTS at its target -- one 45 degrees
     // to port, one to starboard -- boosting all the way in to pin the pilot in the beam. Fragile
     // on purpose (point defence, 1 DPS a turret, must be able to kill them inside the charge).
-    public const float EscortAngle = 45f;
+    private const float EscortAngle = 45f;
     public const double EscortHull = 3;           // 3 s at one PD turret (1 DPS): killable inside the charge
-    public const double WebToBeam = 1.0;          // the beam starts charging 1 s after the web should land
+    private const double WebToBeam = 1.0;          // the beam starts charging 1 s after the web should land
     public const float TurnRate = 0.3f;           // its native turn, ponderous (rad/s) -- and all it has while charging
     // The beam reaches right across the arena: once it is charging, distance is no escape --
     // only angle is. Its ACTIVATION is unchanged (the 30 s rhythm, the nearest pilot, the escorts'
@@ -1055,7 +1055,7 @@ public partial class BossBar : Control
 
 //==============================================================================
 // FILE: scripts/Character.cs
-// 212 lines   sha256 5b22661c31e9
+// 212 lines   sha256 6a03b50ec0a1
 //==============================================================================
 using Godot;
 using System;
@@ -1088,7 +1088,7 @@ public static class Character
     public static readonly Dictionary<string, HashSet<int>> BossCleared = new();
     // equipment, per class: what is on each ship, and the chips taken off it
     public static readonly Dictionary<ShipClass, string[]> Loadout = new();
-    public static readonly Dictionary<ShipClass, List<string>> Spares = new();
+    private static readonly Dictionary<ShipClass, List<string>> Spares = new();
     public static string[] LoadoutFor(ShipClass c) =>
         Loadout.TryGetValue(c, out var l) ? l : Loadout[c] = Equipment.Default(c);
     public static List<string> SparesFor(ShipClass c) =>
@@ -1763,7 +1763,7 @@ public static class Combat
 
 //==============================================================================
 // FILE: scripts/Economy.cs
-// 81 lines   sha256 ceb194520ae4
+// 81 lines   sha256 c9aa43070257
 //==============================================================================
 using System;
 
@@ -1782,14 +1782,14 @@ using System;
 public static class Economy
 {
     // ── miners and salvagers, before upgrades ────────────────────────────────
-    public const double BaseHold = 100;          // units
-    public const double BaseShipSpeed = 110;     // u/s
-    public const double BaseGatherRate = 2;      // units per second while beaming
+    private const double BaseHold = 100;          // units
+    private const double BaseShipSpeed = 110;     // u/s
+    private const double BaseGatherRate = 2;      // units per second while beaming
     public const double UnloadRate = 50;         // units per second into an arm
 
     // ── the hauler ───────────────────────────────────────────────────────────
     public const int    MaxPods = 6;             // the pods painted on its hull
-    public const double BasePodSize = 300;       // units per pod, before upgrades
+    private const double BasePodSize = 300;       // units per pod, before upgrades
     public const double HaulerLoadRate = 25;     // units per second from the stock
     public const double CreditsPerUnit = 1;
     public const double HaulerSpeed = 60;        // u/s -- it moves slowly
@@ -1806,7 +1806,7 @@ public static class Economy
     // ── upgrades ─────────────────────────────────────────────────────────────
     public enum Kind { Percent, Count }
     public const double PercentCostGrowth = 1.25, PercentEffect = 0.10;
-    public const double CountCostGrowth = 2.0;
+    private const double CountCostGrowth = 2.0;
 
     public class Upgrade
     {
@@ -1931,7 +1931,7 @@ public static class Equipment
 
 //==============================================================================
 // FILE: scripts/EquipmentWindow.cs
-// 73 lines   sha256 9fe0b9b6496d
+// 73 lines   sha256 0178e7bceb83
 //==============================================================================
 using Godot;
 
@@ -1942,7 +1942,7 @@ public partial class EquipmentWindow : PanelContainer
 {
     public Hub Hub;
     private VBoxContainer _col;
-    public static Color RarityColor(Rarity r) => r switch
+    private static Color RarityColor(Rarity r) => r switch
     {
         Rarity.Uncommon => new Color(0.45f, 0.9f, 0.45f), Rarity.Rare => new Color(0.4f, 0.65f, 1f),
         Rarity.Epic => new Color(0.75f, 0.45f, 1f), Rarity.Legendary => new Color(1f, 0.65f, 0.25f),
@@ -2410,7 +2410,7 @@ public partial class Gatherer : Node2D
 
 //==============================================================================
 // FILE: scripts/Hauler.cs
-// 316 lines   sha256 1c5d874fcbd6
+// 316 lines   sha256 cf2e40c1ba7d
 //==============================================================================
 using Godot;
 using System;
@@ -2454,7 +2454,7 @@ public partial class Hauler : Node2D
 
     // the six painted pods, in the hull's own frame at flight size (nose up):
     // filled in pairs, front to back, port then starboard
-    public static readonly Vector2[] PodCentre =
+    private static readonly Vector2[] PodCentre =
         { new(-23.6f, -51.6f), new(23.6f, -51.6f), new(-23.6f, -6.0f), new(23.6f, -6.0f), new(-23.6f, 39.5f), new(23.6f, 39.5f) };
     public static readonly Vector2 PodSize = new(21f, 43.4f);
 
@@ -2587,7 +2587,7 @@ public partial class Hauler : Node2D
     }
 
     // 0 on the pad, 1 at flight height
-    public float Altitude => State switch
+    private float Altitude => State switch
     {
         St.Loading => 0f,
         St.Lifting => Ease((float)(T / Economy.HaulerLift)),
@@ -2772,7 +2772,7 @@ public static class HealthBar
 
 //==============================================================================
 // FILE: scripts/Hub.cs
-// 1255 lines   sha256 2e4591b5538d
+// 1255 lines   sha256 b5f81ed865f3
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -2808,7 +2808,7 @@ public partial class Hub : Node2D
     // lengths): room for a blockade outside the base's 600 u missile cover. Measured to each
     // field's boundary -- the belt's nearest rock edge (sun at y -1794 with 9 rocks on the
     // 520 x 286 ellipse, rocks 15 u), the wreck's visible edge toward the base (340 u out).
-    public const float FieldEdge = 1500f;
+    private const float FieldEdge = 1500f;
     public static readonly Vector2 SunPos    = new(0, -1794);
     public static readonly Vector2 WreckPos  = new(-1840, 60);
     public static readonly Vector2 PortalPos = new(1500, 219);
@@ -2819,8 +2819,8 @@ public partial class Hub : Node2D
     // three dummies south-east of the base, below the haul lane and far enough apart
     // that a click is never ambiguous
     public static readonly Vector2[] DummyPos = { new(600, 670), new(900, 550), new(900, 850) };
-    public const float BeltR = 520f;          // a short belt, tight around the sun
-    public const int   BeltRocks = 9;
+    private const float BeltR = 520f;          // a short belt, tight around the sun
+    private const int   BeltRocks = 9;
 
     // True while the keyboard and mouse belong to the UI: a text box has focus or the
     // character creator is open. PlayerShip reads this before flying or aiming.
@@ -2843,7 +2843,7 @@ public partial class Hub : Node2D
     // on empty space clears either.
     public Vector2? Waypoint { get; private set; }
     public string WaypointName { get; private set; } = "";
-    public float WaypointRadius { get; private set; }
+    private float WaypointRadius { get; set; }   // private already: the inner `private set` would be redundant
     public void SelectTarget(IHittable h) { _selected = h; Waypoint = null; }
     public void SelectWaypoint(string name, Vector2 at, float radius) { _selected = null; Waypoint = at; WaypointName = name; WaypointRadius = radius; }
     public void ClearSelection() { _selected = null; Waypoint = null; }
@@ -3207,7 +3207,7 @@ public partial class Hub : Node2D
     // the mission portal opens off the TIO's top-right corner
     // From constants, not the TIO's sprite: in the arena, or in the frame a scene is being
     // swapped, there is no sprite -- and asking for this crashed (found by the arena run).
-    public const float TioHalfWidth = TioHeight * 630f / 876f / 2f;     // the art is 630 x 876 px
+    private const float TioHalfWidth = TioHeight * 630f / 876f / 2f;     // the art is 630 x 876 px
     public Vector2 MissionPortalPos => TioPos + new Vector2(TioHalfWidth + 110f, -TioHeight / 2f - 70f);
     private readonly Dictionary<int, bool> _ready = new();
     public IEnumerable<int> PartyIds => _ships.Keys;                 // the party is everyone in the session
@@ -3246,7 +3246,7 @@ public partial class Hub : Node2D
         _ready[who] = ready; BroadcastMission();
     }
 
-    public const float PortalEnterRadius = 190f;
+    private const float PortalEnterRadius = 190f;
 
     // ── moving the party between sectors (host decides; every peer follows) ──
     public void EnterSector(SectorKind k)
@@ -3373,11 +3373,11 @@ public partial class Hub : Node2D
     // Level L (the failed boss's): raiders at S(L) = 1.1^(L-1), the boss's own scaling.
     // 2 patrols, and 1 more per extra pilot in the session, in from the map's edge 3 s
     // after the party is home (so every guest's world is loaded before they appear).
-    public static int PendingRaidLevel;                        // survives the scene change home
+    private static int PendingRaidLevel;                        // survives the scene change home
     public const float RaidEdge = 3200f;
     public const double RaidDelay = 3.0;
     private double _raidIn = -1; private int _raidLevel;
-    public static double RaidScale(int level) => Missions.S(level);           // S(L) = 1.1^(L-1)
+    private static double RaidScale(int level) => Missions.S(level);           // S(L) = 1.1^(L-1)
 
     private void StartRaid(int level)
     {
@@ -4272,7 +4272,7 @@ public partial class MainMenu : Node2D
 
 //==============================================================================
 // FILE: scripts/Missions.cs
-// 38 lines   sha256 35ba5cda832e
+// 38 lines   sha256 48a2f11b25a4
 //==============================================================================
 using System;
 using System.Linq;
@@ -4298,7 +4298,7 @@ public static class Missions
     public static BossType Current => Bosses[0];
     public static string BossName => Current.Name;
 
-    public const double LevelStep = 1.10;
+    private const double LevelStep = 1.10;
     public static double S(int level) => Math.Pow(LevelStep, Math.Max(1, level) - 1);
     public static int Level = 1;                            // the selected level (the host decides; replicated)
     public static int Beaten(string bossId) => Character.BossCleared.TryGetValue(bossId, out var set) && set.Count > 0 ? set.Max() : 0;
@@ -4306,7 +4306,7 @@ public static class Missions
 
     public static double HullMult(int level, int party) => S(level) * (1 + 0.6 * (Math.Max(1, party) - 1));
     public static double DamageMult(int level, int party) => S(level) * (1 + 0.2 * (Math.Max(1, party) - 1));
-    public const double BountyBase = 2000;
+    private const double BountyBase = 2000;
     public static double BountyEach(int level, int party) => BountyBase * S(level) * (1 + 0.5 * (Math.Max(1, party) - 1)) / Math.Max(1, party);
 
     public const int KillExp = 200, FirstClearExp = 250, CompletionExp = 100;
@@ -4315,7 +4315,7 @@ public static class Missions
 
 //==============================================================================
 // FILE: scripts/Music.cs
-// 78 lines   sha256 19cdf8e2b59c
+// 78 lines   sha256 021dfc1c83d5
 //==============================================================================
 using Godot;
 
@@ -4335,8 +4335,8 @@ public partial class Music : Node
     public enum Mood { Ambient, Alert, Combat }
     public Mood Target = Mood.Ambient;
     public static bool CombatZone;                     // set by an instanced combat system
-    public const float FadePerSecond = 0.7f;           // about 1.5 s for a full cross-fade
-    public const float AmbientTrim = 0.45f;            // the ambient loop is meant to sit far back
+    private const float FadePerSecond = 0.7f;           // about 1.5 s for a full cross-fade
+    private const float AmbientTrim = 0.45f;            // the ambient loop is meant to sit far back
     public const float Master = 0.65f;                 // the whole score, 35% quieter than it started
 
     private AudioStreamPlayer _amb, _cmb;
@@ -4398,7 +4398,7 @@ public partial class Music : Node
 
 //==============================================================================
 // FILE: scripts/Net.cs
-// 334 lines   sha256 b93e2a57999c
+// 334 lines   sha256 040f19a1471f
 //==============================================================================
 using Godot;
 using System.Linq;
@@ -4425,8 +4425,8 @@ using System.Collections.Generic;
 // ─────────────────────────────────────────────────────────────────────────────
 public partial class Net : Node
 {
-    public const int DefaultPort = 27015;
-    public const int MaxPlayers = 8;
+    private const int DefaultPort = 27015;
+    private const int MaxPlayers = 8;
 
     public static Net I { get; private set; }
 
@@ -4493,7 +4493,7 @@ public partial class Net : Node
     // ── session lifecycle ────────────────────────────────────────────────────
 
     // Offline play. Deliberately the same path as hosting: one set of rules.
-    public void StartOffline(string reason = null)
+    private void StartOffline(string reason = null)
     {
         Shutdown();
         _isHost = true; _localId = 1;
@@ -4541,7 +4541,7 @@ public partial class Net : Node
     //              another router or the provider's shared address (carrier-grade NAT) is in
     //              the way -- or nothing could be learned at all
     // The status line never prints the public address: the panel shows it behind a reveal.
-    public const string PublicIpService = "https://api.ipify.org";
+    private const string PublicIpService = "https://api.ipify.org";
     private HttpRequest _ipReq;
     private string _publicIp = "", _routerExt = "", _routerWhy = "";
     private bool _publicDone, _routerDone;
@@ -4598,7 +4598,7 @@ public partial class Net : Node
         if (IsInstanceValid(_ipReq)) { _ipReq.CancelRequest(); _ipReq.QueueFree(); }
         _ipReq = null;
     }
-    public static bool LooksLikeIpv4(string s)
+    private static bool LooksLikeIpv4(string s)
     {
         var p = s.Split('.');
         return p.Length == 4 && p.All(x => int.TryParse(x, out int v) && v >= 0 && v <= 255);
@@ -4796,7 +4796,7 @@ public partial class PilotWindow : PanelContainer
 
 //==============================================================================
 // FILE: scripts/PlayerShip.cs
-// 783 lines   sha256 13a00ed2889e
+// 783 lines   sha256 010d0e857cfe
 //==============================================================================
 using Godot;
 using System;
@@ -4831,7 +4831,7 @@ public partial class PlayerShip : Node2D, IHittable
     public Vector2? AutopilotTo;                          // set by READY: the owner's ship flies itself there
 
     // ── as a target: for ENEMY fire only (Combat.Players) ──────────────────
-    public const int NetIdBase = 2000;                  // same on every peer: 2000 + owner
+    private const int NetIdBase = 2000;                  // same on every peer: 2000 + owner
     public int NetId => NetIdBase + OwnerId;
     public float HitRadius => MyArt.HalfWidth;
     // A capsule along the keel: a circle would be far too wide for a long hull.
@@ -4852,7 +4852,7 @@ public partial class PlayerShip : Node2D, IHittable
     // Regeneration, always: 0.5% of max hull a second in combat, 3% out of it.
     public const double RegenInCombat = 0.005, RegenOutOfCombat = 0.03;
     // One ongoing source (an ability, a weapon, an area) lands on a ship at most once per 0.52 s.
-    public const double HitGap = 0.52;
+    private const double HitGap = 0.52;
     private readonly System.Collections.Generic.Dictionary<string, double> _lastHitBy = new();
     public readonly System.Collections.Generic.Dictionary<string, double> DamageBySource = new();   // host: damage taken, by source
     private double _combatT;
@@ -4917,12 +4917,12 @@ public partial class PlayerShip : Node2D, IHittable
             PdBarrel = 3.7f, PdRing = 2.9f },
     };
 
-    public const float FighterCameraRange = 2500f;
+    private const float FighterCameraRange = 2500f;
     public ClassArt MyArt => Art[Class];
 
     // ── the owner's intent, replicated at 20 Hz ──────────────────────────────
     public Vector2 AimPoint;               // where the main guns point
-    public bool Thrusting;                 // the owner is on the throttle (plume flicker)
+    private bool Thrusting;                 // the owner is on the throttle (plume flicker)
     public bool Trigger;                   // guns key held (battleship)
     public bool Staggered;                 // fire mode: false = salvo, true = staggered
 
@@ -4946,7 +4946,7 @@ public partial class PlayerShip : Node2D, IHittable
     public int MissilesLoaded => _mag;
     public double MissileReloadLeft => _missileReload;
     public bool Reloading => _missileReload > 0;
-    public bool CanFireMissile => Class == ShipClass.Battleship && _mag > 0 && !Reloading && _missileRefire <= 0;
+    private bool CanFireMissile => Class == ShipClass.Battleship && _mag > 0 && !Reloading && _missileRefire <= 0;
 
     private readonly List<Turret> _turrets = new();
     private readonly List<Turret> _mains = new();
@@ -5159,7 +5159,7 @@ public partial class PlayerShip : Node2D, IHittable
     public bool Warping => _warpLeft >= 0;
     public double WarpWarmupLeft => Math.Max(0, _warpLeft);
     public double WarpCooldownLeft => _warpCd;
-    public bool CanWarp => Alive && !Warping && _warpCd <= 0;
+    private bool CanWarp => Alive && !Warping && _warpCd <= 0;
 
     // V starts the charge; WHERE it goes is decided when it jumps, by the heading then --
     // so a pilot can press V and swing onto a target while it charges.
@@ -5171,7 +5171,7 @@ public partial class PlayerShip : Node2D, IHittable
     }
 
     // where a warp to `target` ends: on the line from here, just short of its hull
-    public static Vector2 WarpArrival(Vector2 from, Vector2 target, float targetRadius, float shipLength) =>
+    private static Vector2 WarpArrival(Vector2 from, Vector2 target, float targetRadius, float shipLength) =>
         target - (target - from).Normalized() * (targetRadius + shipLength * 0.5f + WarpStandoff);
 
     private void TickWarp(float dt)
@@ -5460,8 +5460,8 @@ public partial class PlayerShip : Node2D, IHittable
     }
 
     public float SpeedAhead => Velocity.Dot(Vector2.Up.Rotated(Rotation));
-    public const float PivotBelow = 0.05f;                     // the pivot works at <= 5% of top speed
-    public static readonly float PivotRate = Mathf.DegToRad(10f);   // slowly: 10 degrees a second
+    private const float PivotBelow = 0.05f;                     // the pivot works at <= 5% of top speed
+    private static readonly float PivotRate = Mathf.DegToRad(10f);   // slowly: 10 degrees a second
 
     // ── everyone else follows it ─────────────────────────────────────────────
     private void RemoteFollow(float dt)
@@ -5535,7 +5535,7 @@ public partial class PlayerShip : Node2D, IHittable
     // ── signal lights: a faint, flashing yellow/orange wherever a craft lands or
     // takes off -- the hangar for fighters, a slot for bombers ──────────────────
     private readonly System.Collections.Generic.List<(Vector2 local, double t)> _signals = new();
-    public const double SignalTime = 1.2;
+    private const double SignalTime = 1.2;
     public void Signal(Vector2 world) => _signals.Add((ToLocal(world), SignalTime));
     public int SignalsLit => _signals.Count;
 
@@ -5614,7 +5614,7 @@ public static class Plume
 
 //==============================================================================
 // FILE: scripts/Progression.cs
-// 92 lines   sha256 c0c144383d1f
+// 92 lines   sha256 de28f5e72175
 //==============================================================================
 using Godot;
 using System;
@@ -5652,7 +5652,7 @@ public static class Progression
     public const int MaxPerUpgrade = 60;       // a sanity cap on what a peer may claim
 
     public static int Cost(int owned) => owned + 1;                        // 1, 2, 3, ...
-    public const int ExpPerLevel = 1000;
+    private const int ExpPerLevel = 1000;
     public static int ExpToNext => ExpPerLevel;                             // always 1000, whatever the level
 
     // Flat stat additions for a set of purchases, on a given hull.
@@ -5711,7 +5711,7 @@ public static class Progression
 
 //==============================================================================
 // FILE: scripts/Radar.cs
-// 129 lines   sha256 189719fcc94f
+// 129 lines   sha256 16957ada0551
 //==============================================================================
 using Godot;
 
@@ -5739,7 +5739,7 @@ public partial class Radar : Control
 
     // A click on the radar picks the nearest thing within 9 px of the click on its face: an
     // enemy becomes the target; a landmark or another pilot becomes a waypoint to warp to.
-    public const float PickPx = 9f;
+    private const float PickPx = 9f;
     public override void _GuiInput(InputEvent e)
     {
         if (e is not InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } mb) return;
@@ -5845,7 +5845,7 @@ public partial class Radar : Control
 
 //==============================================================================
 // FILE: scripts/Raider.cs
-// 344 lines   sha256 1b82ca608a76
+// 344 lines   sha256 59f2c06071b3
 //==============================================================================
 using Godot;
 using System.Linq;
@@ -5898,16 +5898,16 @@ public partial class Raider : Node2D, IHittable
     public const double LightHull = 25, HeavyHull = 100;
     public const double RaiderDps = 1.0;               // x -- a light's laser; a heavy's is 2x
     public const double HeavyDps = 2 * RaiderDps;
-    public const double HeavyShotEvery = 1.0;
-    public const float HeavyBoostMult = 7f;            // 700%: a heavy closing on a pinned target...
-    public const float HeavyBoostStop = 300f;          // ...until this close, then at cruise
+    private const double HeavyShotEvery = 1.0;
+    private const float HeavyBoostMult = 7f;            // 700%: a heavy closing on a pinned target...
+    private const float HeavyBoostStop = 300f;          // ...until this close, then at cruise
     public const float HeavyReach = 150f, HeavyHold = 0.9f * HeavyReach;
     public const float MissileRange = 500f, BlastRadius = 90f;
     public const double MissileFlight = 7.0, MissileEvery = 12.0, MissileDamage = 30;
     public const float PerimeterR = 1800f, Detect = 2000f, PatrolSpeed = 100f;
-    public const float MaxStep = 50f;                  // more than this in one frame is a jump (a warp), not motion
-    public const float WildSpeed = 400f;               // faster than this is not flying (4x a capital ship)
-    public const float MaxLead = WildSpeed * (float)MissileFlight;   // no sane prediction lands further off
+    private const float MaxStep = 50f;                  // more than this in one frame is a jump (a warp), not motion
+    private const float WildSpeed = 400f;               // faster than this is not flying (4x a capital ship)
+    private const float MaxLead = WildSpeed * (float)MissileFlight;   // no sane prediction lands further off
 
     // Where a heavy's missile aims: the target carried 7 s forward by its velocity -- UNLESS
     // anything is out of place (a wild speed, a broken number, a spot absurdly far off):
@@ -5920,10 +5920,10 @@ public partial class Raider : Node2D, IHittable
     }
     public int Patrol;                                 // 0: on its own
     private float _orbit;                              // patrols: its angle round the perimeter
-    public const double ShotEvery = 1.0;
-    public const float Cruise = 100f;                  // an unupgraded capital ship's pace
-    public const float BoostMult = 5f;                 // 500%
-    public const double BoostTime = 3.0;
+    private const double ShotEvery = 1.0;
+    private const float Cruise = 100f;                  // an unupgraded capital ship's pace
+    private const float BoostMult = 5f;                 // 500%
+    private const double BoostTime = 3.0;
     public const float PinRange = 100f;
     public const float Hold = 0.9f * PinRange;         // posted 90 u out
     public const float PinSpeed = 0.2f;                // a pinned ship: 20% of top speed
@@ -5935,8 +5935,8 @@ public partial class Raider : Node2D, IHittable
     // (or `boostFor` runs out), and it is fragile.
     public bool IsEscort { get; private set; }
     public const double EscortShiver = 1.0;            // hangs at the launch point, shaking, coming round onto the pilot
-    public const float EscortShake = 3f;               // how far the shiver throws it
-    public const float EscortPlume = 3f;               // its boost plume: three times the usual reach
+    private const float EscortShake = 3f;               // how far the shiver throws it
+    private const float EscortPlume = 3f;               // its boost plume: three times the usual reach
     private double _shiver; private Vector2 _shiverHome; private float _escortPost;
     // An ESCORT (launched by a boss): it hangs at the launch point shivering while its nose comes
     // round onto the pilot, then breaks into a long boost and flanks -- one to PORT, one to
@@ -6002,7 +6002,7 @@ public partial class Raider : Node2D, IHittable
     // How far the target's hull reaches from its centre along `dir`: an ellipse with the
     // hull's half-length and half-width. Posts and reach are measured from the HULL, so a
     // raider holds station beside a long ship, never on top of its bow.
-    public static float Extent(Node2D t, Vector2 dir)
+    private static float Extent(Node2D t, Vector2 dir)
     {
         (float len, float wid) = t switch
         {
@@ -6401,7 +6401,7 @@ public static class Settings
 
 //==============================================================================
 // FILE: scripts/Sfx.cs
-// 69 lines   sha256 c5ce9c91a433
+// 69 lines   sha256 ceecc82717f6
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -6416,8 +6416,8 @@ using System.Collections.Generic;
 // a little lower the longer the shot that made it.
 public static class Sfx
 {
-    public const float ListenerHeight = 700f;       // at zoom 1: how far "above" the view the ears are
-    public const float Cull = 5000f;                // past this effective distance: silent
+    private const float ListenerHeight = 700f;       // at zoom 1: how far "above" the view the ears are
+    private const float Cull = 5000f;                // past this effective distance: silent
     static readonly string[] Names = { "laser_light", "laser_boss", "laser_hit", "missile_whoosh", "impact_thunk" };
     static readonly Dictionary<string, AudioStream> _streams = new();
     static readonly Dictionary<string, double> _last = new();
@@ -6608,7 +6608,7 @@ public partial class ShieldFlash : Node2D
 
 //==============================================================================
 // FILE: scripts/ShipClasses.cs
-// 530 lines   sha256 df6e1e4249fd
+// 530 lines   sha256 949a74f65ecf
 //==============================================================================
 using System.Linq;
 using Godot;
@@ -6669,12 +6669,12 @@ public partial class Turret : Node2D
     private double _cd;
     public IHittable Target { get; private set; }
 
-    public bool Online => !PointDefense || Ship.PdActive;
+    private bool Online => !PointDefense || Ship.PdActive;
 
     private ShipStats S => Ship.Stats;
-    public float RotSpeed => (float)(PointDefense ? S["pd_turn"] : S["main_turn"]);
+    private float RotSpeed => (float)(PointDefense ? S["pd_turn"] : S["main_turn"]);
     public float Range    => (float)(PointDefense ? S["pd_range"] : S["main_range"]);
-    public double ShotDamage => PointDefense ? S["pd_damage"] : S["main_damage"];
+    private double ShotDamage => PointDefense ? S["pd_damage"] : S["main_damage"];
     public double Interval   => PointDefense ? S["pd_interval"] : S["main_interval"];
 
     private Sprite2D _sprite;          // the painted turret, cut from the hull art
@@ -6744,7 +6744,7 @@ public partial class Turret : Node2D
     // Point defence shoots ONLY missiles and light fighters (light raiders, and the practice
     // fighters) -- never heavies, bosses or the dummies. Missiles first; within that, the
     // nearest one no sibling turret has claimed (if all are claimed, the nearest regardless).
-    public static bool PdTargets(IHittable h) => h is Torpedo || (h is Raider r && !r.Heavy) || (h is TargetDummy d && d.Fighter);
+    private static bool PdTargets(IHittable h) => h is Torpedo || (h is Raider r && !r.Heavy) || (h is TargetDummy d && d.Fighter);
     public static int PdPriority(IHittable h) => h is Torpedo ? 0 : h.HitRadius < 20f ? 1 : 2;
     // Same rule as before -- best by (priority, then distance), preferring one no sibling turret
     // has claimed, falling back to the best claimed one -- but in a single pass with no
@@ -6874,8 +6874,8 @@ public partial class Wing : Node2D
     public float LastOvershoot { get; private set; }   // how far past the target the last pass went
     public double LaunchedAt { get; private set; } = -1; // the carrier's clock when it last left the hangar
     private enum BSt { Docked, Approach, Aim, Launch, Return, Backing }
-    public const float DockSnap = 6f;              // within this of its slot, a backing bomber is home
-    public const double BackingLimit = 2.5;        // and after this long backing in, it is home regardless
+    private const float DockSnap = 6f;              // within this of its slot, a backing bomber is home
+    private const double BackingLimit = 2.5;        // and after this long backing in, it is home regardless
     private Vector2 _lastSlot; private bool _haveSlot;
     // how its slot is moving now: the carrier's motion AND its turning, measured frame to frame
     private Vector2 SlotVelocity(Vector2 slot, double delta)
@@ -6884,7 +6884,7 @@ public partial class Wing : Node2D
         _lastSlot = slot; _haveSlot = true;
         return v;
     }
-    public const float CrawlSpeed = 0.25f;     // bombers keep closing at this fraction of top speed while they launch
+    private const float CrawlSpeed = 0.25f;     // bombers keep closing at this fraction of top speed while they launch
     public bool Launching => _b == BSt.Launch;
     private BSt _b = BSt.Docked;
     public bool Docked => _b == BSt.Docked;
@@ -7085,7 +7085,7 @@ public partial class Wing : Node2D
     }
 
     // Docked: in its slot on the carrier's flank, nose out, tail to the hull.
-    public void SnapToDock()
+    private void SnapToDock()
     {
         var (p, rot) = Carrier.DockSlot(this);
         Position = p; Rotation = rot; Velocity = Carrier.Velocity;
@@ -7143,7 +7143,7 @@ public partial class Wing : Node2D
 
 //==============================================================================
 // FILE: scripts/Stats.cs
-// 161 lines   sha256 bad238605cb0
+// 161 lines   sha256 0a28fa171863
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -7291,7 +7291,7 @@ public class ShipStats
     public double PdDpsPerTurret   => this["pd_damage"] / this["pd_interval"];
     // PD only fires during its window, so its sustained rate is scaled by the duty fraction.
     public double PdDuty           => this["pd_active"] / (this["pd_active"] + this["pd_reload"]);
-    public double PdDps            => PdDpsPerTurret * this["pd_count"];
+    private double PdDps            => PdDpsPerTurret * this["pd_count"];
     public double PdSustainedDps   => PdDps * PdDuty;
     // A full magazine, fired as fast as it allows, then reloaded: damage per cycle over cycle time.
     public double MissileDps => Class == ShipClass.Battleship
@@ -7512,7 +7512,7 @@ public partial class StatsWindow : CanvasLayer
 
 //==============================================================================
 // FILE: scripts/TargetDummy.cs
-// 132 lines   sha256 93fe3de91ba6
+// 132 lines   sha256 ae97ee1a9083
 //==============================================================================
 using Godot;
 
@@ -7529,12 +7529,12 @@ public partial class TargetDummy : Node2D, IHittable
     // player ship within 150 u, for 50 damage. Host-owned like all combat.
     public bool Armed;
     public const float ArmedRange = 150f, ArmedInterval = 5f;
-    public const double ArmedDamage = 50;
+    private const double ArmedDamage = 50;
     private double _fireCd;
     // Several dummies, each with its own id (1000, 1001, ...) and label number,
     // so target switching can be tested. Ids are assigned by the Hub in order,
     // identically on every peer.
-    public const int FirstNetId = 1000;
+    private const int FirstNetId = 1000;
     public int Number = 1;
     public int NetId => FirstNetId + Number - 1;
     // A PRACTICE FIGHTER is a dummy shaped like a light raider: small craft, so point
@@ -7970,7 +7970,7 @@ public static class Txt
 
 //==============================================================================
 // FILE: scripts/Ui.cs
-// 106 lines   sha256 9f61e923ace3
+// 106 lines   sha256 9829507bbff9
 //==============================================================================
 using Godot;
 
@@ -8045,7 +8045,7 @@ public static class Ui
     }
 
     // The game-wide theme: buttons, text fields and bars in the same shaded style.
-    public static Theme Theme
+    private static Theme Theme
     {
         get
         {
@@ -8081,7 +8081,7 @@ public static class Ui
 
 //==============================================================================
 // FILE: scripts/Yard.cs
-// 438 lines   sha256 2b78c328b814
+// 438 lines   sha256 e3a40eb72b5d
 //==============================================================================
 using Godot;
 using System;
@@ -8169,7 +8169,7 @@ public partial class Yard : Node2D
     public const double AwayShare = 1.0 / 20.0;
     // everything spent on upgrades so far, per category (MINERS, SALVAGERS, HAULER)
     private readonly Dictionary<string, double> _invested = new();
-    public static readonly string[] Categories = { "MINERS", "SALVAGERS", "HAULER" };
+    private static readonly string[] Categories = { "MINERS", "SALVAGERS", "HAULER" };
     public double Invested(string category) => _invested.TryGetValue(category, out var v) ? v : 0;
     public double RebuildCost(string category) => Math.Round(Invested(category) * Economy.RebuildShare);
 
@@ -8268,7 +8268,7 @@ public partial class Yard : Node2D
     // ── the fleet: as many miners and salvagers as the levels say ────────────
     // Built in a fixed order (miners, then salvagers, by number) on every peer, so the
     // host's state arrays line up with each guest's list.
-    public void SyncFleet()
+    private void SyncFleet()
     {
         void Match(GatherKind k, int want)
         {

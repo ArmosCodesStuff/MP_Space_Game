@@ -22,7 +22,7 @@ public static class Missions
     public static BossType Current => Bosses[0];
     public static string BossName => Current.Name;
 
-    public const double LevelStep = 1.10;
+    private const double LevelStep = 1.10;
     public static double S(int level) => Math.Pow(LevelStep, Math.Max(1, level) - 1);
     public static int Level = 1;                            // the selected level (the host decides; replicated)
     public static int Beaten(string bossId) => Character.BossCleared.TryGetValue(bossId, out var set) && set.Count > 0 ? set.Max() : 0;
@@ -30,7 +30,7 @@ public static class Missions
 
     public static double HullMult(int level, int party) => S(level) * (1 + 0.6 * (Math.Max(1, party) - 1));
     public static double DamageMult(int level, int party) => S(level) * (1 + 0.2 * (Math.Max(1, party) - 1));
-    public const double BountyBase = 2000;
+    private const double BountyBase = 2000;
     public static double BountyEach(int level, int party) => BountyBase * S(level) * (1 + 0.5 * (Math.Max(1, party) - 1)) / Math.Max(1, party);
 
     public const int KillExp = 200, FirstClearExp = 250, CompletionExp = 100;

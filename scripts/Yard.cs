@@ -84,7 +84,7 @@ public partial class Yard : Node2D
     public const double AwayShare = 1.0 / 20.0;
     // everything spent on upgrades so far, per category (MINERS, SALVAGERS, HAULER)
     private readonly Dictionary<string, double> _invested = new();
-    public static readonly string[] Categories = { "MINERS", "SALVAGERS", "HAULER" };
+    private static readonly string[] Categories = { "MINERS", "SALVAGERS", "HAULER" };
     public double Invested(string category) => _invested.TryGetValue(category, out var v) ? v : 0;
     public double RebuildCost(string category) => Math.Round(Invested(category) * Economy.RebuildShare);
 
@@ -183,7 +183,7 @@ public partial class Yard : Node2D
     // ── the fleet: as many miners and salvagers as the levels say ────────────
     // Built in a fixed order (miners, then salvagers, by number) on every peer, so the
     // host's state arrays line up with each guest's list.
-    public void SyncFleet()
+    private void SyncFleet()
     {
         void Match(GatherKind k, int want)
         {

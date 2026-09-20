@@ -29,7 +29,7 @@ public static class Character
     public static readonly Dictionary<string, HashSet<int>> BossCleared = new();
     // equipment, per class: what is on each ship, and the chips taken off it
     public static readonly Dictionary<ShipClass, string[]> Loadout = new();
-    public static readonly Dictionary<ShipClass, List<string>> Spares = new();
+    private static readonly Dictionary<ShipClass, List<string>> Spares = new();
     public static string[] LoadoutFor(ShipClass c) =>
         Loadout.TryGetValue(c, out var l) ? l : Loadout[c] = Equipment.Default(c);
     public static List<string> SparesFor(ShipClass c) =>

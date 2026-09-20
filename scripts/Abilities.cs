@@ -26,7 +26,7 @@ public class AbilityDef
 
 public static class Abilities
 {
-    public static readonly Dictionary<ShipClass, AbilityDef[]> ByClass = new()
+    private static readonly Dictionary<ShipClass, AbilityDef[]> ByClass = new()
     {
         [ShipClass.Battleship] = new[]
         {
@@ -69,7 +69,7 @@ public static class Abilities
     // while an AbilityDef is read-only data. The moment an open slot carries something per class
     // -- an assigned item from the inventory, say -- writing to it would write it for every class
     // at once. Give each class its own copies then.
-    public const int OpenSlots = 6;
+    private const int OpenSlots = 6;
     private static readonly AbilityDef[] Open = Enumerable.Range(1, OpenSlots).Select(i => new AbilityDef {
         Id = $"open{i}", Name = $"Open slot {i}", Short = "", Open = true, Default = Key.Key0 + i,
         Blurb = "Unassigned — for abilities and items to come." }).ToArray();

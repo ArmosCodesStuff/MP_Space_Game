@@ -40,7 +40,7 @@ public partial class Hauler : Node2D
 
     // the six painted pods, in the hull's own frame at flight size (nose up):
     // filled in pairs, front to back, port then starboard
-    public static readonly Vector2[] PodCentre =
+    private static readonly Vector2[] PodCentre =
         { new(-23.6f, -51.6f), new(23.6f, -51.6f), new(-23.6f, -6.0f), new(23.6f, -6.0f), new(-23.6f, 39.5f), new(23.6f, 39.5f) };
     public static readonly Vector2 PodSize = new(21f, 43.4f);
 
@@ -173,7 +173,7 @@ public partial class Hauler : Node2D
     }
 
     // 0 on the pad, 1 at flight height
-    public float Altitude => State switch
+    private float Altitude => State switch
     {
         St.Loading => 0f,
         St.Lifting => Ease((float)(T / Economy.HaulerLift)),

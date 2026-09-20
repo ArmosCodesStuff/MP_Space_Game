@@ -144,7 +144,7 @@ public class ShipStats
     public double PdDpsPerTurret   => this["pd_damage"] / this["pd_interval"];
     // PD only fires during its window, so its sustained rate is scaled by the duty fraction.
     public double PdDuty           => this["pd_active"] / (this["pd_active"] + this["pd_reload"]);
-    public double PdDps            => PdDpsPerTurret * this["pd_count"];
+    private double PdDps            => PdDpsPerTurret * this["pd_count"];
     public double PdSustainedDps   => PdDps * PdDuty;
     // A full magazine, fired as fast as it allows, then reloaded: damage per cycle over cycle time.
     public double MissileDps => Class == ShipClass.Battleship

@@ -16,8 +16,8 @@ public partial class Music : Node
     public enum Mood { Ambient, Alert, Combat }
     public Mood Target = Mood.Ambient;
     public static bool CombatZone;                     // set by an instanced combat system
-    public const float FadePerSecond = 0.7f;           // about 1.5 s for a full cross-fade
-    public const float AmbientTrim = 0.45f;            // the ambient loop is meant to sit far back
+    private const float FadePerSecond = 0.7f;           // about 1.5 s for a full cross-fade
+    private const float AmbientTrim = 0.45f;            // the ambient loop is meant to sit far back
     public const float Master = 0.65f;                 // the whole score, 35% quieter than it started
 
     private AudioStreamPlayer _amb, _cmb;

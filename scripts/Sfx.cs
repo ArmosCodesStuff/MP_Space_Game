@@ -11,8 +11,8 @@ using System.Collections.Generic;
 // a little lower the longer the shot that made it.
 public static class Sfx
 {
-    public const float ListenerHeight = 700f;       // at zoom 1: how far "above" the view the ears are
-    public const float Cull = 5000f;                // past this effective distance: silent
+    private const float ListenerHeight = 700f;       // at zoom 1: how far "above" the view the ears are
+    private const float Cull = 5000f;                // past this effective distance: silent
     static readonly string[] Names = { "laser_light", "laser_boss", "laser_hit", "missile_whoosh", "impact_thunk" };
     static readonly Dictionary<string, AudioStream> _streams = new();
     static readonly Dictionary<string, double> _last = new();

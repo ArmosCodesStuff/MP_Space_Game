@@ -23,8 +23,8 @@ using System.Collections.Generic;
 // ─────────────────────────────────────────────────────────────────────────────
 public partial class Net : Node
 {
-    public const int DefaultPort = 27015;
-    public const int MaxPlayers = 8;
+    private const int DefaultPort = 27015;
+    private const int MaxPlayers = 8;
 
     public static Net I { get; private set; }
 
@@ -91,7 +91,7 @@ public partial class Net : Node
     // ── session lifecycle ────────────────────────────────────────────────────
 
     // Offline play. Deliberately the same path as hosting: one set of rules.
-    public void StartOffline(string reason = null)
+    private void StartOffline(string reason = null)
     {
         Shutdown();
         _isHost = true; _localId = 1;
@@ -139,7 +139,7 @@ public partial class Net : Node
     //              another router or the provider's shared address (carrier-grade NAT) is in
     //              the way -- or nothing could be learned at all
     // The status line never prints the public address: the panel shows it behind a reveal.
-    public const string PublicIpService = "https://api.ipify.org";
+    private const string PublicIpService = "https://api.ipify.org";
     private HttpRequest _ipReq;
     private string _publicIp = "", _routerExt = "", _routerWhy = "";
     private bool _publicDone, _routerDone;
@@ -196,7 +196,7 @@ public partial class Net : Node
         if (IsInstanceValid(_ipReq)) { _ipReq.CancelRequest(); _ipReq.QueueFree(); }
         _ipReq = null;
     }
-    public static bool LooksLikeIpv4(string s)
+    private static bool LooksLikeIpv4(string s)
     {
         var p = s.Split('.');
         return p.Length == 4 && p.All(x => int.TryParse(x, out int v) && v >= 0 && v <= 255);

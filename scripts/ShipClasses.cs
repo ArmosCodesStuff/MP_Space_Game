@@ -57,12 +57,12 @@ public partial class Turret : Node2D
     private double _cd;
     public IHittable Target { get; private set; }
 
-    public bool Online => !PointDefense || Ship.PdActive;
+    private bool Online => !PointDefense || Ship.PdActive;
 
     private ShipStats S => Ship.Stats;
-    public float RotSpeed => (float)(PointDefense ? S["pd_turn"] : S["main_turn"]);
+    private float RotSpeed => (float)(PointDefense ? S["pd_turn"] : S["main_turn"]);
     public float Range    => (float)(PointDefense ? S["pd_range"] : S["main_range"]);
-    public double ShotDamage => PointDefense ? S["pd_damage"] : S["main_damage"];
+    private double ShotDamage => PointDefense ? S["pd_damage"] : S["main_damage"];
     public double Interval   => PointDefense ? S["pd_interval"] : S["main_interval"];
 
     private Sprite2D _sprite;          // the painted turret, cut from the hull art
@@ -132,7 +132,7 @@ public partial class Turret : Node2D
     // Point defence shoots ONLY missiles and light fighters (light raiders, and the practice
     // fighters) -- never heavies, bosses or the dummies. Missiles first; within that, the
     // nearest one no sibling turret has claimed (if all are claimed, the nearest regardless).
-    public static bool PdTargets(IHittable h) => h is Torpedo || (h is Raider r && !r.Heavy) || (h is TargetDummy d && d.Fighter);
+    private static bool PdTargets(IHittable h) => h is Torpedo || (h is Raider r && !r.Heavy) || (h is TargetDummy d && d.Fighter);
     public static int PdPriority(IHittable h) => h is Torpedo ? 0 : h.HitRadius < 20f ? 1 : 2;
     // Same rule as before -- best by (priority, then distance), preferring one no sibling turret
     // has claimed, falling back to the best claimed one -- but in a single pass with no
@@ -262,8 +262,8 @@ public partial class Wing : Node2D
     public float LastOvershoot { get; private set; }   // how far past the target the last pass went
     public double LaunchedAt { get; private set; } = -1; // the carrier's clock when it last left the hangar
     private enum BSt { Docked, Approach, Aim, Launch, Return, Backing }
-    public const float DockSnap = 6f;              // within this of its slot, a backing bomber is home
-    public const double BackingLimit = 2.5;        // and after this long backing in, it is home regardless
+    private const float DockSnap = 6f;              // within this of its slot, a backing bomber is home
+    private const double BackingLimit = 2.5;        // and after this long backing in, it is home regardless
     private Vector2 _lastSlot; private bool _haveSlot;
     // how its slot is moving now: the carrier's motion AND its turning, measured frame to frame
     private Vector2 SlotVelocity(Vector2 slot, double delta)
@@ -272,7 +272,7 @@ public partial class Wing : Node2D
         _lastSlot = slot; _haveSlot = true;
         return v;
     }
-    public const float CrawlSpeed = 0.25f;     // bombers keep closing at this fraction of top speed while they launch
+    private const float CrawlSpeed = 0.25f;     // bombers keep closing at this fraction of top speed while they launch
     public bool Launching => _b == BSt.Launch;
     private BSt _b = BSt.Docked;
     public bool Docked => _b == BSt.Docked;
@@ -473,7 +473,7 @@ public partial class Wing : Node2D
     }
 
     // Docked: in its slot on the carrier's flank, nose out, tail to the hull.
-    public void SnapToDock()
+    private void SnapToDock()
     {
         var (p, rot) = Carrier.DockSlot(this);
         Position = p; Rotation = rot; Velocity = Carrier.Velocity;

@@ -49,16 +49,16 @@ public partial class Raider : Node2D, IHittable
     public const double LightHull = 25, HeavyHull = 100;
     public const double RaiderDps = 1.0;               // x -- a light's laser; a heavy's is 2x
     public const double HeavyDps = 2 * RaiderDps;
-    public const double HeavyShotEvery = 1.0;
-    public const float HeavyBoostMult = 7f;            // 700%: a heavy closing on a pinned target...
-    public const float HeavyBoostStop = 300f;          // ...until this close, then at cruise
+    private const double HeavyShotEvery = 1.0;
+    private const float HeavyBoostMult = 7f;            // 700%: a heavy closing on a pinned target...
+    private const float HeavyBoostStop = 300f;          // ...until this close, then at cruise
     public const float HeavyReach = 150f, HeavyHold = 0.9f * HeavyReach;
     public const float MissileRange = 500f, BlastRadius = 90f;
     public const double MissileFlight = 7.0, MissileEvery = 12.0, MissileDamage = 30;
     public const float PerimeterR = 1800f, Detect = 2000f, PatrolSpeed = 100f;
-    public const float MaxStep = 50f;                  // more than this in one frame is a jump (a warp), not motion
-    public const float WildSpeed = 400f;               // faster than this is not flying (4x a capital ship)
-    public const float MaxLead = WildSpeed * (float)MissileFlight;   // no sane prediction lands further off
+    private const float MaxStep = 50f;                  // more than this in one frame is a jump (a warp), not motion
+    private const float WildSpeed = 400f;               // faster than this is not flying (4x a capital ship)
+    private const float MaxLead = WildSpeed * (float)MissileFlight;   // no sane prediction lands further off
 
     // Where a heavy's missile aims: the target carried 7 s forward by its velocity -- UNLESS
     // anything is out of place (a wild speed, a broken number, a spot absurdly far off):
@@ -71,10 +71,10 @@ public partial class Raider : Node2D, IHittable
     }
     public int Patrol;                                 // 0: on its own
     private float _orbit;                              // patrols: its angle round the perimeter
-    public const double ShotEvery = 1.0;
-    public const float Cruise = 100f;                  // an unupgraded capital ship's pace
-    public const float BoostMult = 5f;                 // 500%
-    public const double BoostTime = 3.0;
+    private const double ShotEvery = 1.0;
+    private const float Cruise = 100f;                  // an unupgraded capital ship's pace
+    private const float BoostMult = 5f;                 // 500%
+    private const double BoostTime = 3.0;
     public const float PinRange = 100f;
     public const float Hold = 0.9f * PinRange;         // posted 90 u out
     public const float PinSpeed = 0.2f;                // a pinned ship: 20% of top speed
@@ -86,8 +86,8 @@ public partial class Raider : Node2D, IHittable
     // (or `boostFor` runs out), and it is fragile.
     public bool IsEscort { get; private set; }
     public const double EscortShiver = 1.0;            // hangs at the launch point, shaking, coming round onto the pilot
-    public const float EscortShake = 3f;               // how far the shiver throws it
-    public const float EscortPlume = 3f;               // its boost plume: three times the usual reach
+    private const float EscortShake = 3f;               // how far the shiver throws it
+    private const float EscortPlume = 3f;               // its boost plume: three times the usual reach
     private double _shiver; private Vector2 _shiverHome; private float _escortPost;
     // An ESCORT (launched by a boss): it hangs at the launch point shivering while its nose comes
     // round onto the pilot, then breaks into a long boost and flanks -- one to PORT, one to
@@ -153,7 +153,7 @@ public partial class Raider : Node2D, IHittable
     // How far the target's hull reaches from its centre along `dir`: an ellipse with the
     // hull's half-length and half-width. Posts and reach are measured from the HULL, so a
     // raider holds station beside a long ship, never on top of its bow.
-    public static float Extent(Node2D t, Vector2 dir)
+    private static float Extent(Node2D t, Vector2 dir)
     {
         (float len, float wid) = t switch
         {

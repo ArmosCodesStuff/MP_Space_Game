@@ -209,6 +209,13 @@ reachable, which is fine: both harnesses build from the `nupkgs` folder that shi
 **432 pass, 6/6 runs, three in a row**; sweep 67 frames, 0 lint. Six new checks, each with a mutant
 that makes it fail.
 
+**71 over-exposed members narrowed from `public` to `private`.** They were public but used only
+inside their own type. Two things a blind rewrite would have broken, and which cost 26 of the 99
+candidates their narrowing: a **nested type** cannot go private while a public member exposes it
+(CS0053), and a **shared declaration line** cannot be narrowed when only some of its declarators
+were cleared. Interface members (`IHittable`) and anything either harness touches were excluded up
+front. `public` → `internal` would have changed nothing: one assembly, same reach.
+
 **Seven scripts were missing from `REVIEW.md`'s own list** — `Equipment`, `EquipmentWindow`,
 `Explosion`, `HealthBar`, `Plume`, `Shell` and `Txt` — so a pass that ticked every row would still
 have skipped them. They are listed now, and one of them (`Shell`) held a real finding.

@@ -15,14 +15,14 @@ using System;
 public static class Economy
 {
     // ── miners and salvagers, before upgrades ────────────────────────────────
-    public const double BaseHold = 100;          // units
-    public const double BaseShipSpeed = 110;     // u/s
-    public const double BaseGatherRate = 2;      // units per second while beaming
+    private const double BaseHold = 100;          // units
+    private const double BaseShipSpeed = 110;     // u/s
+    private const double BaseGatherRate = 2;      // units per second while beaming
     public const double UnloadRate = 50;         // units per second into an arm
 
     // ── the hauler ───────────────────────────────────────────────────────────
     public const int    MaxPods = 6;             // the pods painted on its hull
-    public const double BasePodSize = 300;       // units per pod, before upgrades
+    private const double BasePodSize = 300;       // units per pod, before upgrades
     public const double HaulerLoadRate = 25;     // units per second from the stock
     public const double CreditsPerUnit = 1;
     public const double HaulerSpeed = 60;        // u/s -- it moves slowly
@@ -39,7 +39,7 @@ public static class Economy
     // ── upgrades ─────────────────────────────────────────────────────────────
     public enum Kind { Percent, Count }
     public const double PercentCostGrowth = 1.25, PercentEffect = 0.10;
-    public const double CountCostGrowth = 2.0;
+    private const double CountCostGrowth = 2.0;
 
     public class Upgrade
     {

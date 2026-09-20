@@ -71,7 +71,7 @@ public static class Ui
     }
 
     // The game-wide theme: buttons, text fields and bars in the same shaded style.
-    public static Theme Theme
+    private static Theme Theme
     {
         get
         {
