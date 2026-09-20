@@ -19,53 +19,63 @@ public partial class StatsWindow : CanvasLayer
     public override void _Ready()
     {
         Layer = 15;
-        var panel = new PanelContainer { Position = new Vector2(1920 - 16 - 560, 60), CustomMinimumSize = new Vector2(560, 0) };
-        Ui.Panelise(panel, 14);      // the one panel look
+        // ONE width, not three. The panel was pinned between two offsets 576 apart while its
+        // contents asked for 532 plus padding; the restyle's roomier rows pushed that past 576, the
+        // panel grew past the offset it was pinned to, and it hung off the right edge of the screen.
+        // The sweep's UI lint caught it. Everything below is measured from PanelW so the three
+        // numbers cannot drift apart again.
+        const int PanelW = 600, Gutter = 16, Pad = 14;
+        var panel = new PanelContainer { Position = new Vector2(1920 - Gutter - PanelW, 60), CustomMinimumSize = new Vector2(PanelW, 0) };
+        Ui.Panelise(panel, Pad);      // the one panel look
         // anchor to the right edge so it stays put at any window size
         panel.AnchorLeft = panel.AnchorRight = 1f;
-        panel.OffsetLeft = -16 - 560; panel.OffsetRight = -16; panel.OffsetTop = 60;
+        panel.OffsetLeft = -Gutter - PanelW; panel.OffsetRight = -Gutter; panel.OffsetTop = 60;
         AddChild(panel);
 
-        var scroll = new ScrollContainer { CustomMinimumSize = new Vector2(532, 780),
+        // PanelW less the panel's own content margins (Pad + 4 a side), less the scrollbar gutter.
+        var scroll = new ScrollContainer { CustomMinimumSize = new Vector2(PanelW - 2 * (Pad + 4) - 18, 780),
                                            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
         panel.AddChild(scroll);
         var col = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-        col.AddThemeConstantOverride("separation", 6);
+        col.AddThemeConstantOverride("separation", 12);
         // a right margin, so the scrollbar never sits on the "final" column
         var margin = new MarginContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         margin.AddThemeConstantOverride("margin_right", 18);
         scroll.AddChild(margin);
         margin.AddChild(col);
 
-        _title = new Label(); _title.AddThemeFontSizeOverride("font_size", 20);
+        _title = Ui.Lbl("", Ui.Title, Ui.Accent);
         col.AddChild(_title);
 
         var tabs = new HBoxContainer(); tabs.AddThemeConstantOverride("separation", 6);
         col.AddChild(tabs);
-        var keysTab  = new Button { Text = "ABILITIES & KEYS", FocusMode = Control.FocusModeEnum.None, ToggleMode = true, Name = "KeysTab" };
-        var statsTab = new Button { Text = "STATS", FocusMode = Control.FocusModeEnum.None, ToggleMode = true, Name = "StatsTab" };
-        var group = new ButtonGroup(); keysTab.ButtonGroup = group; statsTab.ButtonGroup = group;
+        var group = new ButtonGroup();
+        var keysTab  = Ui.Tab("ABILITIES & KEYS", group, false); keysTab.Name = "KeysTab";
+        var statsTab = Ui.Tab("STATS", group, false); statsTab.Name = "StatsTab";
         tabs.AddChild(keysTab); tabs.AddChild(statsTab);
 
         // ── keys pane ──
-        _keysPane = new VBoxContainer(); _keysPane.AddThemeConstantOverride("separation", 6);
+        _keysPane = new VBoxContainer(); _keysPane.AddThemeConstantOverride("separation", 10);
         col.AddChild(_keysPane);
         // the message sits above the rows, so it is seen without scrolling
-        _keyMsg = new Label { Text = "", AutowrapMode = TextServer.AutowrapMode.WordSmart, Modulate = new Color(1f, 0.8f, 0.5f) };
+        _keyMsg = Ui.Lbl("", Ui.Body, Ui.Warn);
+        _keyMsg.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         _keysPane.AddChild(_keyMsg);
-        _keyRows = new VBoxContainer(); _keyRows.AddThemeConstantOverride("separation", 6);
+        _keyRows = new VBoxContainer(); _keyRows.AddThemeConstantOverride("separation", 8);
         _keysPane.AddChild(_keyRows);
         var reset = new Button { Text = "RESET TO DEFAULTS", FocusMode = Control.FocusModeEnum.None, Name = "ResetKeys" };
         reset.Pressed += () => { if (IsInstanceValid(Ship)) { Abilities.ResetDefaults(Ship.Class); _keyMsg.Text = "Defaults restored."; RebuildKeys(); } };
         _keysPane.AddChild(reset);
-        _keysPane.AddChild(new Label { Text = "Fixed, not bindable: W A S D (helm), Tab, K, B, Y and the arrow keys (camera), Esc, Enter.",
-                                       AutowrapMode = TextServer.AutowrapMode.WordSmart, Modulate = new Color(1, 1, 1, 0.5f) });
+        var fixedKeys = Ui.Lbl("Fixed, not bindable: W A S D (helm), Tab, K, B, Y and the arrow keys (camera), Esc, Enter.", Ui.Small, Ui.Dim);
+        fixedKeys.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        _keysPane.AddChild(fixedKeys);
 
         // ── stats pane ──
-        _statsPane = new VBoxContainer(); _statsPane.AddThemeConstantOverride("separation", 6);
+        _statsPane = new VBoxContainer(); _statsPane.AddThemeConstantOverride("separation", 10);
         col.AddChild(_statsPane);
-        _statsPane.AddChild(new Label { Text = "Final = base × (1 + bonus). Reload, cooldown and radius bonuses divide instead.",
-                                        AutowrapMode = TextServer.AutowrapMode.WordSmart, Modulate = new Color(1, 1, 1, 0.55f) });
+        var rule = Ui.Lbl("Final = base × (1 + bonus). Reload, cooldown and radius bonuses divide instead.", Ui.Small, Ui.Dim);
+        rule.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        _statsPane.AddChild(rule);
         _derived = new VBoxContainer(); _statsPane.AddChild(_derived);
         _grid = new GridContainer { Columns = 4 };
         _grid.AddThemeConstantOverride("h_separation", 18);
@@ -76,7 +86,7 @@ public partial class StatsWindow : CanvasLayer
         statsTab.Toggled += on => { if (on) ShowPane(keys: false); };
         keysTab.ButtonPressed = true; ShowPane(keys: true);
 
-        col.AddChild(new Label { Text = "K or Esc closes.", Modulate = new Color(1, 1, 1, 0.45f) });
+        col.AddChild(Ui.Lbl("K or Esc closes.", Ui.Small, Ui.Dim));
         Rebuild();
     }
 
@@ -112,28 +122,33 @@ public partial class StatsWindow : CanvasLayer
         if (!IsInstanceValid(Ship)) return;
         foreach (var ab in Abilities.For(Ship.Class))
         {
-            var row = new HBoxContainer { Name = "Key_" + ab.Id }; row.AddThemeConstantOverride("separation", 10);
+            var row = new HBoxContainer { Name = "Key_" + ab.Id }; row.AddThemeConstantOverride("separation", 12);
             var info = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-            var n = new Label { Text = ab.Name + (ab.Kind == AbilityKind.Hold ? "  (hold)" : "") };
-            n.AddThemeFontSizeOverride("font_size", 15);
-            info.AddChild(n);
-            info.AddChild(new Label { Text = ab.Blurb, AutowrapMode = TextServer.AutowrapMode.WordSmart,
-                                      CustomMinimumSize = new Vector2(360, 0), Modulate = new Color(1, 1, 1, 0.6f) });
+            info.AddThemeConstantOverride("separation", 2);
+            info.AddChild(Ui.Lbl(ab.Name + (ab.Kind == AbilityKind.Hold ? "  (hold)" : ""), Ui.Body));
+            var blurb = Ui.Lbl(ab.Blurb, Ui.Small, Ui.Dim);
+            blurb.AutowrapMode = TextServer.AutowrapMode.WordSmart; blurb.CustomMinimumSize = new Vector2(360, 0);
+            info.AddChild(blurb);
             row.AddChild(info);
             var id = ab.Id;
+            // The button carries the binding, so a capture in progress has to be unmistakable:
+            // accent, not the same grey as a key that is simply set.
+            bool live = _capturing == id;
             var btn = new Button { Name = "Bind", FocusMode = Control.FocusModeEnum.None, CustomMinimumSize = new Vector2(120, 36),
-                                   Text = _capturing == id ? "press a key…" : Abilities.KeyName(Abilities.KeyFor(Ship.Class, id)) };
+                                   SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
+                                   Text = live ? "press a key…" : Abilities.KeyName(Abilities.KeyFor(Ship.Class, id)) };
+            if (live) btn.AddThemeColorOverride("font_color", Ui.Accent);
             btn.Pressed += () => StartCapture(id);
             row.AddChild(btn);
-            _keyRows.AddChild(row);
+            _keyRows.AddChild(Ui.CardWrap(row));
         }
     }
 
     private static Label Cell(string t, bool head = false, bool right = false, Color? c = null)
     {
-        var l = new Label { Text = t, HorizontalAlignment = right ? HorizontalAlignment.Right : HorizontalAlignment.Left };
-        l.AddThemeFontSizeOverride("font_size", head ? 14 : 13);
-        if (c.HasValue) l.Modulate = c.Value;
+        var l = Ui.Lbl(t, head ? Ui.Body : Ui.Small, head ? Ui.Accent : (Color?)null);
+        l.HorizontalAlignment = right ? HorizontalAlignment.Right : HorizontalAlignment.Left;
+        if (c.HasValue) l.AddThemeColorOverride("font_color", c.Value);
         if (!right) l.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         return l;
     }

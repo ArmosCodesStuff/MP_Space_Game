@@ -1,9 +1,9 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-20 17:40 at git commit eb41bbf: typecheck clean, dotnet build 0 warnings,
+// Taken 2026-09-20 18:07 at git commit f4f32d9: typecheck clean, dotnet build 0 warnings,
 //   0 analyser findings, 0 unused members; smoke test 3/3 runs at 435 checks on Windows
 //   (437 in a sandbox with no router and no internet); 67-frame UI sweep complete, 0 lint.
-// 67 files, 11853 lines. Code only: sprites, sounds and docs are in the zip.
+// 67 files, 11868 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -24,8 +24,8 @@
 //   scripts/Boss.cs                                300 lines   sha256 4029a62f29a0
 //   scripts/BossBar.cs                              86 lines   sha256 fdc16204cf1d
 //   scripts/Character.cs                           220 lines   sha256 9221d9084893
-//   scripts/CharacterCreator.cs                    218 lines   sha256 d1c4d4f7012f
-//   scripts/CharacterSelect.cs                     172 lines   sha256 567a093f3c12
+//   scripts/CharacterCreator.cs                    216 lines   sha256 9550b19e1833
+//   scripts/CharacterSelect.cs                     174 lines   sha256 983adce959d7
 //   scripts/Combat.cs                               87 lines   sha256 298c5236a5b5
 //   scripts/Economy.cs                              81 lines   sha256 c9aa43070257
 //   scripts/Equipment.cs                            77 lines   sha256 5a5307ab79c9
@@ -54,7 +54,7 @@
 //   scripts/Shield.cs                               71 lines   sha256 99c7fa4a2a8e
 //   scripts/ShipClasses.cs                         530 lines   sha256 949a74f65ecf
 //   scripts/Stats.cs                               161 lines   sha256 0a28fa171863
-//   scripts/StatsWindow.cs                         198 lines   sha256 b5dbad43db73
+//   scripts/StatsWindow.cs                         213 lines   sha256 3dd6400641f6
 //   scripts/TargetDummy.cs                         132 lines   sha256 ae97ee1a9083
 //   scripts/Telegraph.cs                            47 lines   sha256 89f6af49c4d7
 //   scripts/TioWindow.cs                            72 lines   sha256 68ef20459b1a
@@ -1419,7 +1419,7 @@ public static class Classes
 
 //==============================================================================
 // FILE: scripts/CharacterCreator.cs
-// 218 lines   sha256 d1c4d4f7012f
+// 216 lines   sha256 9550b19e1833
 //==============================================================================
 using Godot;
 
@@ -1464,20 +1464,20 @@ public partial class CharacterCreator : CanvasLayer
 
         left.AddChild(Head("COMMISSION YOUR SHIP"));
 
-        left.AddChild(new Label { Text = "Name" });
+        left.AddChild(Ui.Heading("Name"));
         _name = new LineEdit { Text = Character.Name, CustomMinimumSize = new Vector2(300, 0) };
         _name.MaxLength = 24;
         _name.TextChanged += t => { Character.Name = t.Trim().Length > 0 ? t.Trim() : "Commander"; };
         _name.TextSubmitted += _ => _name.ReleaseFocus();
         left.AddChild(_name);
 
-        left.AddChild(new Label { Text = "Hull colour" });
+        left.AddChild(Ui.Heading("Hull colour"));
         _main = new ColorPickerButton { Color = Character.Main, CustomMinimumSize = new Vector2(300, 34),
                                         EditAlpha = false, FocusMode = Control.FocusModeEnum.None };
         _main.ColorChanged += c => { Character.Main = c; _preview?.QueueRedraw(); Changed?.Invoke(); };
         left.AddChild(_main);
 
-        left.AddChild(new Label { Text = "Accent colour" });
+        left.AddChild(Ui.Heading("Accent colour"));
         _accent = new ColorPickerButton { Color = Character.Accent, CustomMinimumSize = new Vector2(300, 34),
                                           EditAlpha = false, FocusMode = Control.FocusModeEnum.None };
         _accent.ColorChanged += c => { Character.Accent = c; _preview?.QueueRedraw(); Changed?.Invoke(); };
@@ -1488,7 +1488,7 @@ public partial class CharacterCreator : CanvasLayer
         left.AddChild(_preview);
 
         var go = new Button { Text = IsNew ? "CREATE" : "DONE", CustomMinimumSize = new Vector2(300, 44), FocusMode = Control.FocusModeEnum.None };
-        go.AddThemeFontSizeOverride("font_size", 20);
+        go.AddThemeFontSizeOverride("font_size", Ui.Head);
         go.Pressed += Close;
         left.AddChild(go);
 
@@ -1498,8 +1498,7 @@ public partial class CharacterCreator : CanvasLayer
             cancel.Pressed += Cancel;
             left.AddChild(cancel);
         }
-        left.AddChild(new Label { Text = IsNew ? "Esc cancels." : "Esc also closes this panel.",
-                                  Modulate = new Color(1, 1, 1, 0.55f) });
+        left.AddChild(Ui.Lbl(IsNew ? "Esc cancels." : "Esc also closes this panel.", Ui.Small, Ui.Dim));
 
         // ── right: class selector, three to a page ───────────────────────────
         var right = new VBoxContainer(); right.AddThemeConstantOverride("separation", 10);
@@ -1542,12 +1541,7 @@ public partial class CharacterCreator : CanvasLayer
         QueueFree();
     }
 
-    private static Label Head(string t)
-    {
-        var l = new Label { Text = t };
-        l.AddThemeFontSizeOverride("font_size", 22);
-        return l;
-    }
+    private static Label Head(string t) => Ui.Lbl(t, Ui.Title, Ui.Accent);
 
     private void Turn(int d)
     {
@@ -1573,8 +1567,12 @@ public partial class CharacterCreator : CanvasLayer
                 Text = e.Ready
                     ? $"{e.Name}{(Character.Class == e.Id && e.Ready ? "     [ SELECTED ]" : "")}\n{e.Blurb}"
                     : $"{e.Name}     — not yet flyable\n{e.Blurb}",
+                Alignment = HorizontalAlignment.Left,
             };
-            card.AddThemeFontSizeOverride("font_size", 13);
+            card.AddThemeFontSizeOverride("font_size", Ui.Small);
+            // A class you cannot fly yet reads as unavailable through the theme's disabled box,
+            // not through a colour mixed here.
+            if (Character.Class == e.Id && e.Ready) card.AddThemeColorOverride("font_color", Ui.Accent);
             var captured = e;
             card.Pressed += () => { Character.Class = captured.Id; if (!IsNew) Character.Save(); Rebuild(); _preview?.QueueRedraw(); Changed?.Invoke(); };
             _cards.AddChild(card);
@@ -1642,7 +1640,7 @@ public partial class ShipPreview : Control
 
 //==============================================================================
 // FILE: scripts/CharacterSelect.cs
-// 172 lines   sha256 567a093f3c12
+// 174 lines   sha256 983adce959d7
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -1661,7 +1659,7 @@ public partial class CharacterSelect : Control
     public override void _Ready()
     {
         Ui.Install(GetTree());                                  // the game-wide look
-        var bg = new ColorRect { Color = new Color(0.02f, 0.03f, 0.06f) };
+        var bg = new ColorRect { Color = Ui.Deep };
         bg.SetAnchorsPreset(LayoutPreset.FullRect);
         bg.MouseFilter = MouseFilterEnum.Ignore;
         AddChild(bg);
@@ -1674,8 +1672,8 @@ public partial class CharacterSelect : Control
         col.AddThemeConstantOverride("separation", 14);
         centre.AddChild(col);
 
-        var title = new Label { Text = "SELECT YOUR SHIP", HorizontalAlignment = HorizontalAlignment.Center };
-        title.AddThemeFontSizeOverride("font_size", 34);
+        var title = Ui.Lbl("SELECT YOUR SHIP", Ui.Display, Ui.Text);
+        title.HorizontalAlignment = HorizontalAlignment.Center;
         col.AddChild(title);
 
         var scroll = new ScrollContainer { CustomMinimumSize = new Vector2(760, 520),
@@ -1685,14 +1683,14 @@ public partial class CharacterSelect : Control
         _rows.AddThemeConstantOverride("separation", 8);
         scroll.AddChild(_rows);
 
-        _empty = new Label { Text = "No characters yet. Make one to start.",
-                             HorizontalAlignment = HorizontalAlignment.Center, Modulate = new Color(1, 1, 1, 0.6f) };
+        _empty = Ui.Lbl("No characters yet. Make one to start.", Ui.Body, Ui.Dim);
+        _empty.HorizontalAlignment = HorizontalAlignment.Center;
         col.AddChild(_empty);
 
         var bar = new HBoxContainer(); bar.AddThemeConstantOverride("separation", 10);
         col.AddChild(bar);
-        bar.AddChild(Btn("NEW CHARACTER", OpenNew, 20, true));
-        bar.AddChild(Btn("BACK", Back, 20, true));
+        bar.AddChild(Btn("NEW CHARACTER", OpenNew, Ui.Head, true));
+        bar.AddChild(Btn("BACK", Back, Ui.Head, true));
 
         // The delete confirmation. A real modal: nothing else responds until it closes.
         _confirm = new ConfirmationDialog { Title = "Delete character", OkButtonText = "DELETE",
@@ -1712,9 +1710,9 @@ public partial class CharacterSelect : Control
         Refresh();
     }
 
-    private static Button Btn(string text, System.Action onPress, int size = 15, bool grow = false)
+    private static Button Btn(string text, System.Action onPress, int size = Ui.Body, bool grow = false)
     {
-        var b = new Button { Text = text, FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(0, size >= 20 ? 44 : 34) };
+        var b = new Button { Text = text, FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(0, size >= Ui.Head ? 46 : 34) };
         b.AddThemeFontSizeOverride("font_size", size);
         if (grow) b.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         b.Pressed += onPress;
@@ -1732,7 +1730,10 @@ public partial class CharacterSelect : Control
 
     private Control Row(Character.Slot s)
     {
+        // A character is a CARD, like every other row in the game: the list used to be
+        // PanelContainers taking the window panel style, so each row looked like its own window.
         var panel = new PanelContainer { Name = "Row_" + s.Id };
+        panel.AddThemeStyleboxOverride("panel", Ui.CardStyle(14, 12));
         var row = new HBoxContainer(); row.AddThemeConstantOverride("separation", 14);
         panel.AddChild(row);
 
@@ -1740,10 +1741,9 @@ public partial class CharacterSelect : Control
                                        CustomMinimumSize = new Vector2(200, 88) });
 
         var info = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, Alignment = BoxContainer.AlignmentMode.Center };
-        var name = new Label { Text = s.Name }; name.AddThemeFontSizeOverride("font_size", 22);
-        info.AddChild(name);
-        info.AddChild(new Label { Text = s.Class == ShipClass.Battleship ? "BATTLESHIP" : "CARRIER",
-                                  Modulate = new Color(1, 1, 1, 0.7f) });
+        info.AddThemeConstantOverride("separation", 4);
+        info.AddChild(Ui.Lbl(s.Name, Ui.Title, Ui.Text));
+        info.AddChild(Ui.Lbl(s.Class == ShipClass.Battleship ? "BATTLESHIP" : "CARRIER", Ui.Small, Ui.Accent));
         var swatches = new HBoxContainer(); swatches.AddThemeConstantOverride("separation", 6);
         swatches.AddChild(Swatch(s.Main, "hull"));
         swatches.AddChild(Swatch(s.Accent, "accent"));
@@ -1754,7 +1754,7 @@ public partial class CharacterSelect : Control
         buttons.AddThemeConstantOverride("separation", 6);
         var play = Btn("PLAY", () => Play(s.Id)); play.Name = "Play";
         var del  = Btn("DELETE", () => AskDelete(s)); del.Name = "Delete";
-        del.AddThemeColorOverride("font_color", new Color(1f, 0.55f, 0.5f));
+        del.AddThemeColorOverride("font_color", Ui.Bad);
         buttons.AddChild(play); buttons.AddChild(del);
         row.AddChild(buttons);
         return panel;
@@ -1764,7 +1764,7 @@ public partial class CharacterSelect : Control
     {
         var h = new HBoxContainer(); h.AddThemeConstantOverride("separation", 4);
         h.AddChild(new ColorRect { Color = c, CustomMinimumSize = new Vector2(22, 14) });
-        h.AddChild(new Label { Text = label, Modulate = new Color(1, 1, 1, 0.55f) });
+        h.AddChild(Ui.Lbl(label, Ui.Small, Ui.Dim));
         return h;
     }
 
@@ -7529,7 +7529,7 @@ public class ShipStats
 
 //==============================================================================
 // FILE: scripts/StatsWindow.cs
-// 198 lines   sha256 b5dbad43db73
+// 213 lines   sha256 3dd6400641f6
 //==============================================================================
 using Godot;
 
@@ -7552,53 +7552,63 @@ public partial class StatsWindow : CanvasLayer
     public override void _Ready()
     {
         Layer = 15;
-        var panel = new PanelContainer { Position = new Vector2(1920 - 16 - 560, 60), CustomMinimumSize = new Vector2(560, 0) };
-        Ui.Panelise(panel, 14);      // the one panel look
+        // ONE width, not three. The panel was pinned between two offsets 576 apart while its
+        // contents asked for 532 plus padding; the restyle's roomier rows pushed that past 576, the
+        // panel grew past the offset it was pinned to, and it hung off the right edge of the screen.
+        // The sweep's UI lint caught it. Everything below is measured from PanelW so the three
+        // numbers cannot drift apart again.
+        const int PanelW = 600, Gutter = 16, Pad = 14;
+        var panel = new PanelContainer { Position = new Vector2(1920 - Gutter - PanelW, 60), CustomMinimumSize = new Vector2(PanelW, 0) };
+        Ui.Panelise(panel, Pad);      // the one panel look
         // anchor to the right edge so it stays put at any window size
         panel.AnchorLeft = panel.AnchorRight = 1f;
-        panel.OffsetLeft = -16 - 560; panel.OffsetRight = -16; panel.OffsetTop = 60;
+        panel.OffsetLeft = -Gutter - PanelW; panel.OffsetRight = -Gutter; panel.OffsetTop = 60;
         AddChild(panel);
 
-        var scroll = new ScrollContainer { CustomMinimumSize = new Vector2(532, 780),
+        // PanelW less the panel's own content margins (Pad + 4 a side), less the scrollbar gutter.
+        var scroll = new ScrollContainer { CustomMinimumSize = new Vector2(PanelW - 2 * (Pad + 4) - 18, 780),
                                            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
         panel.AddChild(scroll);
         var col = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-        col.AddThemeConstantOverride("separation", 6);
+        col.AddThemeConstantOverride("separation", 12);
         // a right margin, so the scrollbar never sits on the "final" column
         var margin = new MarginContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         margin.AddThemeConstantOverride("margin_right", 18);
         scroll.AddChild(margin);
         margin.AddChild(col);
 
-        _title = new Label(); _title.AddThemeFontSizeOverride("font_size", 20);
+        _title = Ui.Lbl("", Ui.Title, Ui.Accent);
         col.AddChild(_title);
 
         var tabs = new HBoxContainer(); tabs.AddThemeConstantOverride("separation", 6);
         col.AddChild(tabs);
-        var keysTab  = new Button { Text = "ABILITIES & KEYS", FocusMode = Control.FocusModeEnum.None, ToggleMode = true, Name = "KeysTab" };
-        var statsTab = new Button { Text = "STATS", FocusMode = Control.FocusModeEnum.None, ToggleMode = true, Name = "StatsTab" };
-        var group = new ButtonGroup(); keysTab.ButtonGroup = group; statsTab.ButtonGroup = group;
+        var group = new ButtonGroup();
+        var keysTab  = Ui.Tab("ABILITIES & KEYS", group, false); keysTab.Name = "KeysTab";
+        var statsTab = Ui.Tab("STATS", group, false); statsTab.Name = "StatsTab";
         tabs.AddChild(keysTab); tabs.AddChild(statsTab);
 
         // ── keys pane ──
-        _keysPane = new VBoxContainer(); _keysPane.AddThemeConstantOverride("separation", 6);
+        _keysPane = new VBoxContainer(); _keysPane.AddThemeConstantOverride("separation", 10);
         col.AddChild(_keysPane);
         // the message sits above the rows, so it is seen without scrolling
-        _keyMsg = new Label { Text = "", AutowrapMode = TextServer.AutowrapMode.WordSmart, Modulate = new Color(1f, 0.8f, 0.5f) };
+        _keyMsg = Ui.Lbl("", Ui.Body, Ui.Warn);
+        _keyMsg.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         _keysPane.AddChild(_keyMsg);
-        _keyRows = new VBoxContainer(); _keyRows.AddThemeConstantOverride("separation", 6);
+        _keyRows = new VBoxContainer(); _keyRows.AddThemeConstantOverride("separation", 8);
         _keysPane.AddChild(_keyRows);
         var reset = new Button { Text = "RESET TO DEFAULTS", FocusMode = Control.FocusModeEnum.None, Name = "ResetKeys" };
         reset.Pressed += () => { if (IsInstanceValid(Ship)) { Abilities.ResetDefaults(Ship.Class); _keyMsg.Text = "Defaults restored."; RebuildKeys(); } };
         _keysPane.AddChild(reset);
-        _keysPane.AddChild(new Label { Text = "Fixed, not bindable: W A S D (helm), Tab, K, B, Y and the arrow keys (camera), Esc, Enter.",
-                                       AutowrapMode = TextServer.AutowrapMode.WordSmart, Modulate = new Color(1, 1, 1, 0.5f) });
+        var fixedKeys = Ui.Lbl("Fixed, not bindable: W A S D (helm), Tab, K, B, Y and the arrow keys (camera), Esc, Enter.", Ui.Small, Ui.Dim);
+        fixedKeys.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        _keysPane.AddChild(fixedKeys);
 
         // ── stats pane ──
-        _statsPane = new VBoxContainer(); _statsPane.AddThemeConstantOverride("separation", 6);
+        _statsPane = new VBoxContainer(); _statsPane.AddThemeConstantOverride("separation", 10);
         col.AddChild(_statsPane);
-        _statsPane.AddChild(new Label { Text = "Final = base × (1 + bonus). Reload, cooldown and radius bonuses divide instead.",
-                                        AutowrapMode = TextServer.AutowrapMode.WordSmart, Modulate = new Color(1, 1, 1, 0.55f) });
+        var rule = Ui.Lbl("Final = base × (1 + bonus). Reload, cooldown and radius bonuses divide instead.", Ui.Small, Ui.Dim);
+        rule.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        _statsPane.AddChild(rule);
         _derived = new VBoxContainer(); _statsPane.AddChild(_derived);
         _grid = new GridContainer { Columns = 4 };
         _grid.AddThemeConstantOverride("h_separation", 18);
@@ -7609,7 +7619,7 @@ public partial class StatsWindow : CanvasLayer
         statsTab.Toggled += on => { if (on) ShowPane(keys: false); };
         keysTab.ButtonPressed = true; ShowPane(keys: true);
 
-        col.AddChild(new Label { Text = "K or Esc closes.", Modulate = new Color(1, 1, 1, 0.45f) });
+        col.AddChild(Ui.Lbl("K or Esc closes.", Ui.Small, Ui.Dim));
         Rebuild();
     }
 
@@ -7645,28 +7655,33 @@ public partial class StatsWindow : CanvasLayer
         if (!IsInstanceValid(Ship)) return;
         foreach (var ab in Abilities.For(Ship.Class))
         {
-            var row = new HBoxContainer { Name = "Key_" + ab.Id }; row.AddThemeConstantOverride("separation", 10);
+            var row = new HBoxContainer { Name = "Key_" + ab.Id }; row.AddThemeConstantOverride("separation", 12);
             var info = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-            var n = new Label { Text = ab.Name + (ab.Kind == AbilityKind.Hold ? "  (hold)" : "") };
-            n.AddThemeFontSizeOverride("font_size", 15);
-            info.AddChild(n);
-            info.AddChild(new Label { Text = ab.Blurb, AutowrapMode = TextServer.AutowrapMode.WordSmart,
-                                      CustomMinimumSize = new Vector2(360, 0), Modulate = new Color(1, 1, 1, 0.6f) });
+            info.AddThemeConstantOverride("separation", 2);
+            info.AddChild(Ui.Lbl(ab.Name + (ab.Kind == AbilityKind.Hold ? "  (hold)" : ""), Ui.Body));
+            var blurb = Ui.Lbl(ab.Blurb, Ui.Small, Ui.Dim);
+            blurb.AutowrapMode = TextServer.AutowrapMode.WordSmart; blurb.CustomMinimumSize = new Vector2(360, 0);
+            info.AddChild(blurb);
             row.AddChild(info);
             var id = ab.Id;
+            // The button carries the binding, so a capture in progress has to be unmistakable:
+            // accent, not the same grey as a key that is simply set.
+            bool live = _capturing == id;
             var btn = new Button { Name = "Bind", FocusMode = Control.FocusModeEnum.None, CustomMinimumSize = new Vector2(120, 36),
-                                   Text = _capturing == id ? "press a key…" : Abilities.KeyName(Abilities.KeyFor(Ship.Class, id)) };
+                                   SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
+                                   Text = live ? "press a key…" : Abilities.KeyName(Abilities.KeyFor(Ship.Class, id)) };
+            if (live) btn.AddThemeColorOverride("font_color", Ui.Accent);
             btn.Pressed += () => StartCapture(id);
             row.AddChild(btn);
-            _keyRows.AddChild(row);
+            _keyRows.AddChild(Ui.CardWrap(row));
         }
     }
 
     private static Label Cell(string t, bool head = false, bool right = false, Color? c = null)
     {
-        var l = new Label { Text = t, HorizontalAlignment = right ? HorizontalAlignment.Right : HorizontalAlignment.Left };
-        l.AddThemeFontSizeOverride("font_size", head ? 14 : 13);
-        if (c.HasValue) l.Modulate = c.Value;
+        var l = Ui.Lbl(t, head ? Ui.Body : Ui.Small, head ? Ui.Accent : (Color?)null);
+        l.HorizontalAlignment = right ? HorizontalAlignment.Right : HorizontalAlignment.Left;
+        if (c.HasValue) l.AddThemeColorOverride("font_color", c.Value);
         if (!right) l.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         return l;
     }

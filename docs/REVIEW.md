@@ -220,6 +220,23 @@ chunk E: such a check cannot catch the constant being wrong — compare with the
 
 ## Findings log (pass 3)
 
+### The restyle pass over every UI script — 3 findings, all fixed and covered
+
+Reading every screen to put it on one palette found three bugs that had nothing to do with colour:
+
+1. **The theme never reached a single button** (`Ui.cs`). A theme on the root window does not cross
+   a `CanvasLayer`, and all UI here hangs off one. Every button in the game had been drawing
+   Godot's stock theme. **Fix:** `Ui.Style` / `Ui.Panelise` at each subtree root. Check added; the
+   old code in a copy fails it with 4 tabs unthemed.
+2. **`HaulerHud` inherited from nobody** (`Hauler.cs`). Found by the new check, not by reading.
+3. **The Esc menu's music row opened with nothing lit** (`Settings.cs`): the default was not one of
+   the five values the row offers. Check added, on both rows; the old default fails it.
+
+Also fixed while there: the stats window grew past the offsets it was pinned between and hung off
+the right edge of the screen, and the warp readout was drawn in the same colour as the bar beneath
+it. Neither is catchable by the UI lint, which measures position and width but not contrast.
+
+
 ### `Net.cs` — reviewed; 3 findings, all fixed and covered
 
 1. **A thread race that leaked a router port-forward.** The UPnP thread wrote `_upnp` itself. If the

@@ -578,6 +578,27 @@ where the editor cannot delete it.*
 
 Each of these compiled clean and was wrong at runtime. The smoke test covers all of them.
 
+- **A theme on the root window does not cross a `CanvasLayer`.** Every piece of UI in this game
+  hangs off one, so `Ui`'s Button entries reached nothing for the project's whole history and every
+  button drew Godot's stock theme. Nothing looked broken, because the stock theme is *also* a dark
+  rounded rectangle. The fix is `Ui.Style` / `Ui.Panelise` at the root Control of each UI subtree —
+  descendants inherit from an **ancestor Control**, just not from the window. A dialog is a
+  `Window` and breaks the chain the same way.
+  *Rule: when a theme appears not to apply, do not reason about it — set the colour to something
+  impossible and count the pixels. "The theme resource has the entry" and "the control draws it"
+  are different claims, and only the second one matters.*
+- **The UI lint measures position and width, not contrast.** A label drawn in the same colour as
+  the bar underneath it disappears completely and the sweep still passes with 0 lint. Only looking
+  at the frames catches it.
+  *Rule: any text drawn ON a filled bar must choose its colour from what is under it.*
+- **A Control pinned between two offsets narrower than its contents grows past them.** The stats
+  window was pinned 576 apart while asking for 578, so it hung off the right edge of the screen.
+  Derive every such width from one constant rather than repeating the number.
+- **A default that is not one of the offered choices shows as no choice at all.** `MusicVolume`
+  defaulted to 0.6 and the Esc menu offers 0/0.25/0.5/0.75/1, so the row opened with nothing lit.
+  *Rule: a setting presented as a row of choices must default to one of them — and not to the one a
+  check sets, or the check cannot fail.*
+
 - **Name networked nodes before adding them.** RPCs resolve by node path, and Godot's generated
   names (`@Node2D@23`) differ between peers. Ships are `Ship_<peer id>`. Free a node's name
   (`RemoveChild`) before spawning its replacement, or the new one is silently renamed.

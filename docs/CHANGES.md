@@ -47,7 +47,7 @@ faults have been fixed from those frames more than once.
 
 **As of 2026-09-20 the whole harness also runs natively on the developer's Windows machine** (see
 Unreleased → *The harnesses run on Windows*): typecheck 0 errors, build 0 warnings, analysers 0
-findings, xref 0 unused, smoke **435 pass / 6 of 6 runs** (the 2 short of 437 assert the sandbox's
+findings, xref 0 unused, smoke **439 pass / 6 of 6 runs** (the 2 short of 441 assert the sandbox's
 missing router and internet), sweep **67 frames, 0 lint** on the real GPU with the project's own
 Forward+ renderer. So "how it looks on the developer's own GPU" is no longer unconfirmed for the
 swept states. What remains unconfirmed is how it feels in a hand-played session — nothing here
@@ -306,6 +306,80 @@ have skipped them. They are listed now, and one of them (`Shell`) held a real fi
   live battleship preview. Cached.
 
 Full detail, including what was found and deliberately *not* changed, is in `REVIEW.md`.
+
+### A cleaner, more futuristic look, on one palette
+
+**Checked:** typecheck 0 errors; build 0 warnings; analysers 0 findings; xref 0 unused; smoke
+**439 pass, 6/6 runs, three runs in a row**; sweep 67 frames, 0 lint; every restyled screen looked
+at. Three mutants, one at a time.
+
+#### Added
+
+- **One palette and one type scale, in `Ui.cs`.** Three stacked surfaces — `Deep`, `Panel`, `Card`
+  — plus `Line`, `Accent`, `Text`, `Dim`, `Good`, `Warn`, `Bad`, and five sizes (56/22/17/14/12).
+  The old code set font sizes ad hoc — 11, 12, 13, 14, 15, 16, 20, 22, 34, 64 — so no two headings
+  on different screens matched, and secondary text was white at some opacity rather than a colour.
+- **Flat surfaces, 10 px corners, hairline borders, a soft shadow.** Nothing is shaded any more, so
+  `StyleBoxFlat` does it natively: the texture generator that baked nine-patch images to fake a
+  gradient and a lit top bevel is **gone**, along with its cache and its signed-distance corner
+  maths.
+- **Reusable blocks**: `Ui.Heading` (small caps, accent, with a rule under it), `Ui.CardWrap` (a
+  row that reads as an object on the panel), `Ui.Tab` (a toggle whose live state is the theme's
+  accent box), `Ui.Lbl`, `Ui.Panelise`, `Ui.Style`.
+- **The drawn HUD reads the same palette.** The ability bar, hull bar, boss bar and health bars are
+  not Controls and cannot inherit a theme, so they build their own boxes with `Ui.Box()` from the
+  same colours. One palette, two rendering paths. Their boxes are built once: `_Draw` runs every
+  frame.
+
+#### Changed
+
+- **The title belongs to the top of the screen, not to the menu.** WARSHIPS was stacked with the
+  menu panel and the pair centred together, which put the word across the capital ship. It is
+  pinned near the top now — and the diorama moved up with it, because a centred panel then landed
+  on the ship instead. Three bands: title, fight, menu.
+- **Your hull bar and the boss's keep their own colours.** They are the two bars that mean *how
+  close is something to dying*; an accent-blue health bar would be a lie about what it measures.
+  Only their tracks come from the palette.
+- **The stats window derives its width from one constant.** It was pinned between two offsets 576
+  apart while its contents asked for more, so the panel grew past the offset and hung off the right
+  edge of the screen.
+
+#### Three bugs the restyle exposed, all older than it
+
+- **The theme never reached a single button.** A theme set on the root window does not cross a
+  `CanvasLayer`, and every piece of UI here hangs off one — so for the project's whole history
+  `Ui`'s Button entries reached nothing and every button drew Godot's stock theme. It hid in plain
+  sight because the stock theme is also a dark rounded rectangle; the one visible symptom, a
+  `font_disabled_color` that did nothing, was never chased. Found by setting the themed fill to
+  pure red and counting pixels: **zero** in any frame, while the theme itself still reported the
+  red. See *Traps* in `DESIGN.md`.
+- **The Esc menu's music row opened with nothing selected.** It finds the live step by matching
+  `Settings.MusicVolume` against the five the menu offers, and the default was `0.6` — not one of
+  them. Now `0.75`, and `0.75` rather than `0.5` on purpose: a default equal to the value a check
+  sets is a check that cannot fail.
+- **`HaulerHud` was styled by nobody.** The new check found it, not the audit.
+
+#### New checks
+
+| Check | Mutant that had to break it |
+|---|---|
+| all 19 buttons take the game's theme, not Godot's | `Panelise` sets the panel box but not the theme *(the real old code)* — 4 tabs unthemed |
+| the Radar and Music rows show exactly one live choice | the old `MusicVolume = 0.6` — *0 of 5 lit* |
+| the harness runs at 5% master volume whatever the settings say | no cap *(the real old code)* — *75.0%* |
+
+#### A regression caught in the frames, not by a check
+
+Moving the warp readout to the palette drew it green on a full green hull bar and **WARP READY
+vanished**. It now takes its colour from what is under it. *The UI lint could never have caught
+this: it measures position and width, not contrast.* This is the argument for looking at the
+frames rather than trusting a clean lint.
+
+### The test harnesses run at 5% master volume
+
+An automated run is not a game session: one smoke test launches six real Godot windows and the
+sweep one more, all playing combat audio with nobody listening. `Settings.TestVolume` is a runtime
+override — `Save()` never writes it, so it cannot leak into the player's `settings.cfg`, and every
+later `ApplyVolume()` honours it, including the ones the menus trigger.
 
 ### The death beam: escorts first, and an honest tell
 

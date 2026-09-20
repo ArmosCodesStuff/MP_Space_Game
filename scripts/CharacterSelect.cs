@@ -15,7 +15,7 @@ public partial class CharacterSelect : Control
     public override void _Ready()
     {
         Ui.Install(GetTree());                                  // the game-wide look
-        var bg = new ColorRect { Color = new Color(0.02f, 0.03f, 0.06f) };
+        var bg = new ColorRect { Color = Ui.Deep };
         bg.SetAnchorsPreset(LayoutPreset.FullRect);
         bg.MouseFilter = MouseFilterEnum.Ignore;
         AddChild(bg);
@@ -28,8 +28,8 @@ public partial class CharacterSelect : Control
         col.AddThemeConstantOverride("separation", 14);
         centre.AddChild(col);
 
-        var title = new Label { Text = "SELECT YOUR SHIP", HorizontalAlignment = HorizontalAlignment.Center };
-        title.AddThemeFontSizeOverride("font_size", 34);
+        var title = Ui.Lbl("SELECT YOUR SHIP", Ui.Display, Ui.Text);
+        title.HorizontalAlignment = HorizontalAlignment.Center;
         col.AddChild(title);
 
         var scroll = new ScrollContainer { CustomMinimumSize = new Vector2(760, 520),
@@ -39,14 +39,14 @@ public partial class CharacterSelect : Control
         _rows.AddThemeConstantOverride("separation", 8);
         scroll.AddChild(_rows);
 
-        _empty = new Label { Text = "No characters yet. Make one to start.",
-                             HorizontalAlignment = HorizontalAlignment.Center, Modulate = new Color(1, 1, 1, 0.6f) };
+        _empty = Ui.Lbl("No characters yet. Make one to start.", Ui.Body, Ui.Dim);
+        _empty.HorizontalAlignment = HorizontalAlignment.Center;
         col.AddChild(_empty);
 
         var bar = new HBoxContainer(); bar.AddThemeConstantOverride("separation", 10);
         col.AddChild(bar);
-        bar.AddChild(Btn("NEW CHARACTER", OpenNew, 20, true));
-        bar.AddChild(Btn("BACK", Back, 20, true));
+        bar.AddChild(Btn("NEW CHARACTER", OpenNew, Ui.Head, true));
+        bar.AddChild(Btn("BACK", Back, Ui.Head, true));
 
         // The delete confirmation. A real modal: nothing else responds until it closes.
         _confirm = new ConfirmationDialog { Title = "Delete character", OkButtonText = "DELETE",
@@ -66,9 +66,9 @@ public partial class CharacterSelect : Control
         Refresh();
     }
 
-    private static Button Btn(string text, System.Action onPress, int size = 15, bool grow = false)
+    private static Button Btn(string text, System.Action onPress, int size = Ui.Body, bool grow = false)
     {
-        var b = new Button { Text = text, FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(0, size >= 20 ? 44 : 34) };
+        var b = new Button { Text = text, FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(0, size >= Ui.Head ? 46 : 34) };
         b.AddThemeFontSizeOverride("font_size", size);
         if (grow) b.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         b.Pressed += onPress;
@@ -86,7 +86,10 @@ public partial class CharacterSelect : Control
 
     private Control Row(Character.Slot s)
     {
+        // A character is a CARD, like every other row in the game: the list used to be
+        // PanelContainers taking the window panel style, so each row looked like its own window.
         var panel = new PanelContainer { Name = "Row_" + s.Id };
+        panel.AddThemeStyleboxOverride("panel", Ui.CardStyle(14, 12));
         var row = new HBoxContainer(); row.AddThemeConstantOverride("separation", 14);
         panel.AddChild(row);
 
@@ -94,10 +97,9 @@ public partial class CharacterSelect : Control
                                        CustomMinimumSize = new Vector2(200, 88) });
 
         var info = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, Alignment = BoxContainer.AlignmentMode.Center };
-        var name = new Label { Text = s.Name }; name.AddThemeFontSizeOverride("font_size", 22);
-        info.AddChild(name);
-        info.AddChild(new Label { Text = s.Class == ShipClass.Battleship ? "BATTLESHIP" : "CARRIER",
-                                  Modulate = new Color(1, 1, 1, 0.7f) });
+        info.AddThemeConstantOverride("separation", 4);
+        info.AddChild(Ui.Lbl(s.Name, Ui.Title, Ui.Text));
+        info.AddChild(Ui.Lbl(s.Class == ShipClass.Battleship ? "BATTLESHIP" : "CARRIER", Ui.Small, Ui.Accent));
         var swatches = new HBoxContainer(); swatches.AddThemeConstantOverride("separation", 6);
         swatches.AddChild(Swatch(s.Main, "hull"));
         swatches.AddChild(Swatch(s.Accent, "accent"));
@@ -108,7 +110,7 @@ public partial class CharacterSelect : Control
         buttons.AddThemeConstantOverride("separation", 6);
         var play = Btn("PLAY", () => Play(s.Id)); play.Name = "Play";
         var del  = Btn("DELETE", () => AskDelete(s)); del.Name = "Delete";
-        del.AddThemeColorOverride("font_color", new Color(1f, 0.55f, 0.5f));
+        del.AddThemeColorOverride("font_color", Ui.Bad);
         buttons.AddChild(play); buttons.AddChild(del);
         row.AddChild(buttons);
         return panel;
@@ -118,7 +120,7 @@ public partial class CharacterSelect : Control
     {
         var h = new HBoxContainer(); h.AddThemeConstantOverride("separation", 4);
         h.AddChild(new ColorRect { Color = c, CustomMinimumSize = new Vector2(22, 14) });
-        h.AddChild(new Label { Text = label, Modulate = new Color(1, 1, 1, 0.55f) });
+        h.AddChild(Ui.Lbl(label, Ui.Small, Ui.Dim));
         return h;
     }
 

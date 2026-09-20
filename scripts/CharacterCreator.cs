@@ -41,20 +41,20 @@ public partial class CharacterCreator : CanvasLayer
 
         left.AddChild(Head("COMMISSION YOUR SHIP"));
 
-        left.AddChild(new Label { Text = "Name" });
+        left.AddChild(Ui.Heading("Name"));
         _name = new LineEdit { Text = Character.Name, CustomMinimumSize = new Vector2(300, 0) };
         _name.MaxLength = 24;
         _name.TextChanged += t => { Character.Name = t.Trim().Length > 0 ? t.Trim() : "Commander"; };
         _name.TextSubmitted += _ => _name.ReleaseFocus();
         left.AddChild(_name);
 
-        left.AddChild(new Label { Text = "Hull colour" });
+        left.AddChild(Ui.Heading("Hull colour"));
         _main = new ColorPickerButton { Color = Character.Main, CustomMinimumSize = new Vector2(300, 34),
                                         EditAlpha = false, FocusMode = Control.FocusModeEnum.None };
         _main.ColorChanged += c => { Character.Main = c; _preview?.QueueRedraw(); Changed?.Invoke(); };
         left.AddChild(_main);
 
-        left.AddChild(new Label { Text = "Accent colour" });
+        left.AddChild(Ui.Heading("Accent colour"));
         _accent = new ColorPickerButton { Color = Character.Accent, CustomMinimumSize = new Vector2(300, 34),
                                           EditAlpha = false, FocusMode = Control.FocusModeEnum.None };
         _accent.ColorChanged += c => { Character.Accent = c; _preview?.QueueRedraw(); Changed?.Invoke(); };
@@ -65,7 +65,7 @@ public partial class CharacterCreator : CanvasLayer
         left.AddChild(_preview);
 
         var go = new Button { Text = IsNew ? "CREATE" : "DONE", CustomMinimumSize = new Vector2(300, 44), FocusMode = Control.FocusModeEnum.None };
-        go.AddThemeFontSizeOverride("font_size", 20);
+        go.AddThemeFontSizeOverride("font_size", Ui.Head);
         go.Pressed += Close;
         left.AddChild(go);
 
@@ -75,8 +75,7 @@ public partial class CharacterCreator : CanvasLayer
             cancel.Pressed += Cancel;
             left.AddChild(cancel);
         }
-        left.AddChild(new Label { Text = IsNew ? "Esc cancels." : "Esc also closes this panel.",
-                                  Modulate = new Color(1, 1, 1, 0.55f) });
+        left.AddChild(Ui.Lbl(IsNew ? "Esc cancels." : "Esc also closes this panel.", Ui.Small, Ui.Dim));
 
         // ── right: class selector, three to a page ───────────────────────────
         var right = new VBoxContainer(); right.AddThemeConstantOverride("separation", 10);
@@ -119,12 +118,7 @@ public partial class CharacterCreator : CanvasLayer
         QueueFree();
     }
 
-    private static Label Head(string t)
-    {
-        var l = new Label { Text = t };
-        l.AddThemeFontSizeOverride("font_size", 22);
-        return l;
-    }
+    private static Label Head(string t) => Ui.Lbl(t, Ui.Title, Ui.Accent);
 
     private void Turn(int d)
     {
@@ -150,8 +144,12 @@ public partial class CharacterCreator : CanvasLayer
                 Text = e.Ready
                     ? $"{e.Name}{(Character.Class == e.Id && e.Ready ? "     [ SELECTED ]" : "")}\n{e.Blurb}"
                     : $"{e.Name}     — not yet flyable\n{e.Blurb}",
+                Alignment = HorizontalAlignment.Left,
             };
-            card.AddThemeFontSizeOverride("font_size", 13);
+            card.AddThemeFontSizeOverride("font_size", Ui.Small);
+            // A class you cannot fly yet reads as unavailable through the theme's disabled box,
+            // not through a colour mixed here.
+            if (Character.Class == e.Id && e.Ready) card.AddThemeColorOverride("font_color", Ui.Accent);
             var captured = e;
             card.Pressed += () => { Character.Class = captured.Id; if (!IsNew) Character.Save(); Rebuild(); _preview?.QueueRedraw(); Changed?.Invoke(); };
             _cards.AddChild(card);
