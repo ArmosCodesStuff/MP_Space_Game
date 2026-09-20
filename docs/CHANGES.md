@@ -201,8 +201,9 @@ reachable, which is fine: both harnesses build from the `nupkgs` folder that shi
 
 **Checked:** every harness run on Windows against the numbers the sandbox produces — typecheck
 **0 errors** (real `GodotSharp.dll`), `dotnet build` **0 warnings 0 errors**, analysers **0 findings**,
-cross-reference **UNUSED ANYWHERE: 0**, smoke test **417 pass, 6/6 runs finished**, sweep **67 frames,
-SWEEP DONE, 0 LINT**. Frames looked at. No game code changed.
+cross-reference **UNUSED ANYWHERE: 0**, smoke test **three runs in a row, 417 pass and 6/6 runs
+finished each time** (identical every run — no flaky check), sweep **67 frames, SWEEP DONE, 0 LINT**.
+Frames looked at. No game code changed.
 
 #### Added
 
@@ -235,6 +236,13 @@ SWEEP DONE, 0 LINT**. Frames looked at. No game code changed.
   unchanged; the two comments' reasoning now lives in `DESIGN.md`, where the editor cannot delete it.
 - `.gitignore` now covers `*.import` and `*.uid` — Godot import output, regenerated on the first open
   after extracting. Checked first that no `.tscn` references a generated `uid://`.
+- **`.gitattributes` pins `* -text`**, and `core.autocrlf` is `false` for this repo. Git for Windows
+  sets `core.autocrlf=true` system-wide, so the next checkout would have rewritten every text file to
+  CRLF: every hash in `MANIFEST.sha256` would change (the integrity check would report ~100 false
+  failures), `CODE_SNAPSHOT.txt` would break the same way, and every `tools/**/*.sh` would become
+  `bad interpreter: /bin/sh^M` in WSL. Caught before any checkout, so nothing was damaged.
+- `version/MANIFEST.sha256` regenerated: **124 entries, all verifying** (118 before, plus `CLAUDE.md`,
+  `.gitattributes` and the four `.ps1` ports). `CODE_SNAPSHOT.txt` is unchanged — no game code moved.
 
 ### Earlier in Unreleased
 

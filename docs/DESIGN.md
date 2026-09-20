@@ -638,6 +638,13 @@ Each of these compiled clean and was wrong at runtime. The smoke test covers all
   / `-cnotmatch`. A case-blind `FAIL` also matches every run's own `fails=0` summary line, which
   turned a clean 417-pass run into "11 problems". A ported check that counts things must be
   re-validated against the count the original produced.
+- **Git for Windows sets `core.autocrlf=true` in its SYSTEM config.** Left alone, the next
+  `git checkout` / `stash` / `reset --hard` / fresh clone rewrites every text file to CRLF — which
+  changes every hash in `MANIFEST.sha256` (the integrity check this project opens with would report
+  ~100 failures that are not real changes), breaks `CODE_SNAPSHOT.txt` the same way, and turns every
+  `tools/**/*.sh` into `bad interpreter: /bin/sh^M` in WSL. A `.gitattributes` pinning `* -text`
+  now disables conversion repo-wide; do not remove it. Caught before any checkout happened, so no
+  damage was done — but `git add` warning "LF will be replaced by CRLF" is the only notice you get.
 - **The plain `Godot_...win64.exe` writes nothing to stdout.** It is a GUI-subsystem binary, so
   every `GD.Print` from a headless run vanishes and the harness sees an empty log. Use the
   `_console.exe` beside it; both Windows runners swap to it automatically and refuse to run if it

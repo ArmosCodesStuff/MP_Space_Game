@@ -1,0 +1,18 @@
+# Byte-for-byte checkouts on every platform. Do not remove.
+#
+# Git for Windows sets core.autocrlf=true in its SYSTEM config, so a fresh clone or any
+# `git checkout` / `git stash` / `git reset --hard` would rewrite every text file to CRLF.
+# That breaks three things this project depends on:
+#
+#   1. version/MANIFEST.sha256 -- the integrity check every session starts with. Changing
+#      the line endings changes every text file's hash, so the check would report ~100
+#      failures that are not real changes.
+#   2. version/CODE_SNAPSHOT.txt -- same problem, split back and compared.
+#   3. tools/**/*.sh -- a shell script with CRLF fails in WSL and in the sandbox with
+#      "bad interpreter: /bin/sh^M", which reads as a broken script rather than a broken
+#      checkout.
+#
+# `-text` disables end-of-line conversion entirely: what was committed is what lands on
+# disk, on Windows and Linux alike. This repo round-trips between the two, so that is the
+# only setting under which the hashes mean anything.
+* -text
