@@ -1,8 +1,8 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-20 04:34 at git commit 5e7be99: typecheck clean, smoke test 3/3 passes
-//   (407 checks, 0 compiler warnings, 0 analyser findings), 66-frame UI sweep complete, 0 lint.
-// 57 files, 10086 lines. Code only: sprites, sounds and docs are in the zip.
+// Taken 2026-09-20 04:47 at git commit 9033208: typecheck clean, smoke test 3/3 passes
+//   (410 checks, 0 compiler warnings, 0 analyser findings), 66-frame UI sweep complete, 0 lint.
+// 57 files, 10103 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -25,11 +25,11 @@
 //   scripts/CharacterCreator.cs                    211 lines   sha256 136099a8d1c7
 //   scripts/CharacterSelect.cs                     171 lines   sha256 dc2bfeccc820
 //   scripts/Combat.cs                               85 lines   sha256 96277c4efc6f
-//   scripts/Economy.cs                              79 lines   sha256 441cc5b6c922
+//   scripts/Economy.cs                              81 lines   sha256 ceb194520ae4
 //   scripts/EscMenu.cs                              59 lines   sha256 999b01e6cd29
 //   scripts/EscapePod.cs                            50 lines   sha256 324c55cb503b
 //   scripts/Explosion.cs                            18 lines   sha256 12209b0c72ce
-//   scripts/Gatherer.cs                            249 lines   sha256 f64121c0c5f7
+//   scripts/Gatherer.cs                            249 lines   sha256 7369949eeff9
 //   scripts/Hauler.cs                              316 lines   sha256 b471204daf64
 //   scripts/HealthBar.cs                            36 lines   sha256 97c42a282205
 //   scripts/Hub.cs                                1210 lines   sha256 964b28ff9280
@@ -57,14 +57,14 @@
 //   scripts/Torpedo.cs                             156 lines   sha256 a12daff14996
 //   scripts/Txt.cs                                  31 lines   sha256 0b56559599f8
 //   scripts/Ui.cs                                   99 lines   sha256 0a376702a4e8
-//   scripts/Yard.cs                                418 lines   sha256 fdbc98154543
+//   scripts/Yard.cs                                422 lines   sha256 d68b914f025b
 //   typecheck/typecheck.sh                          57 lines   sha256 e68277c09f34
 //   tools/analyse/analysers.editorconfig            15 lines   sha256 45fdb7258163
 //   tools/analyse/run.sh                            16 lines   sha256 e6f2cd50f0c4
 //   tools/analyse/xref.py                           19 lines   sha256 9359eb94c161
 //   tools/screens/Shots.cs.txt                     451 lines   sha256 b3da9b6db736
 //   tools/screens/run.sh                            42 lines   sha256 73a5b3c63476
-//   tools/smoketest/SmokeTest.cs.txt              1735 lines   sha256 655f2b50695f
+//   tools/smoketest/SmokeTest.cs.txt              1746 lines   sha256 f4457d80e39d
 //   tools/smoketest/run.sh                          57 lines   sha256 568b677787fd
 //==============================================================================
 
@@ -1608,7 +1608,7 @@ public static class Combat
 
 //==============================================================================
 // FILE: scripts/Economy.cs
-// 79 lines   sha256 441cc5b6c922
+// 81 lines   sha256 ceb194520ae4
 //==============================================================================
 using System;
 
@@ -1669,10 +1669,12 @@ public static class Economy
         new() { Id = "miner_hold",      Tab = "MINERS",    Kind = Kind.Percent, Name = "Miner hold",       BaseValue = BaseHold,       Unit = "ore",       BaseCost = 100, Blurb = "+10% hull space" },
         new() { Id = "miner_speed",     Tab = "MINERS",    Kind = Kind.Percent, Name = "Miner engines",    BaseValue = BaseShipSpeed,  Unit = "u/s",       BaseCost = 100, Blurb = "+10% speed" },
         new() { Id = "mine_rate",       Tab = "MINERS",    Kind = Kind.Percent, Name = "Mining beam",      BaseValue = BaseGatherRate, Unit = "ore/s",     BaseCost = 100, Blurb = "+10% mining speed" },
+        new() { Id = "miner_hull",      Tab = "MINERS",    Kind = Kind.Percent, Name = "Miner hull",       BaseValue = UtilityHull,    Unit = "hull",      BaseCost = 125, Blurb = "+10% hull (25% dearer to start)" },
         new() { Id = "salvager_count",  Tab = "SALVAGERS", Kind = Kind.Count,   Name = "Salvagers",        BaseValue = 1,              Unit = "",          BaseCost = 400, Max = 4, Blurb = "+1 salvager (up to 5)" },
         new() { Id = "salvager_hold",   Tab = "SALVAGERS", Kind = Kind.Percent, Name = "Salvager hold",    BaseValue = BaseHold,       Unit = "salvage",   BaseCost = 100, Blurb = "+10% hull space" },
         new() { Id = "salvager_speed",  Tab = "SALVAGERS", Kind = Kind.Percent, Name = "Salvager engines", BaseValue = BaseShipSpeed,  Unit = "u/s",       BaseCost = 100, Blurb = "+10% speed" },
         new() { Id = "salvage_rate",    Tab = "SALVAGERS", Kind = Kind.Percent, Name = "Salvage beam",     BaseValue = BaseGatherRate, Unit = "salvage/s", BaseCost = 100, Blurb = "+10% salvage speed" },
+        new() { Id = "salvager_hull",   Tab = "SALVAGERS", Kind = Kind.Percent, Name = "Salvager hull",    BaseValue = UtilityHull,    Unit = "hull",      BaseCost = 125, Blurb = "+10% hull (25% dearer to start)" },
         new() { Id = "hauler_pods",     Tab = "HAULER",    Kind = Kind.Count,   Name = "Cargo pods",       BaseValue = 1,              Unit = "",          BaseCost = 500, Max = MaxPods - 1, Blurb = "+1 pod (up to 6)" },
         new() { Id = "pod_size",        Tab = "HAULER",    Kind = Kind.Percent, Name = "Pod size",         BaseValue = BasePodSize,    Unit = "per pod",   BaseCost = 150, Blurb = "+10% per pod" },
     };
@@ -1834,7 +1836,7 @@ public partial class Explosion : Node2D
 
 //==============================================================================
 // FILE: scripts/Gatherer.cs
-// 249 lines   sha256 f64121c0c5f7
+// 249 lines   sha256 7369949eeff9
 //==============================================================================
 using Godot;
 using System;
@@ -1866,7 +1868,7 @@ public partial class Gatherer : Node2D
     public double Cargo;
     // hull, and being rebuilt (host-owned; guests get hull and state)
     public double Hull = Economy.UtilityHull;
-    public double MaxHull => Economy.UtilityHull;
+    public double MaxHull => Yard.Value(Kind == GatherKind.Miner ? "miner_hull" : "salvager_hull");   // 120, +10% a level
     public double RebuildIn;
     public bool WaitingForCredits;
     public string Category => Kind == GatherKind.Miner ? "MINERS" : "SALVAGERS";
@@ -7586,7 +7588,7 @@ public static class Ui
 
 //==============================================================================
 // FILE: scripts/Yard.cs
-// 418 lines   sha256 fdbc98154543
+// 422 lines   sha256 d68b914f025b
 //==============================================================================
 using Godot;
 using System;
@@ -7746,6 +7748,10 @@ public partial class Yard : Node2D
         if (Economy.Maxed(u, lv) || Credits < cost) return false;
         Credits -= cost; _levels[id] = lv + 1;
         _invested[u.Tab] = Invested(u.Tab) + cost;                // what a rebuild in this category is 10% of
+        if (id is "miner_hull" or "salvager_hull")                   // the living ships of that kind gain it at once
+            foreach (var g in Gatherers)
+                if (g.State != Gatherer.St.Destroyed && (g.Kind == GatherKind.Miner) == (id == "miner_hull"))
+                    g.Hull += Economy.UtilityHull * Economy.PercentEffect;
         SyncFleet();
         return true;
     }
@@ -8639,7 +8645,7 @@ ls /tmp/shots
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 1735 lines   sha256 655f2b50695f
+// 1746 lines   sha256 f4457d80e39d
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -8912,7 +8918,7 @@ public partial class _Test : Node
             ShowTab(panel, Economy.ById(id).Tab);                  // an upgrade lives on its own tab
             return Nodes<Button>(Nodes<HBoxContainer>(panel).First(r => r.Name == "Up_" + id)).First(b => b.Name == "Buy");
         }
-        Check(Nodes<HBoxContainer>(panel).Count(r => r.Name.ToString().StartsWith("Up_")) == 4, "MINERS tab: four upgrades");
+        Check(Nodes<HBoxContainer>(panel).Count(r => r.Name.ToString().StartsWith("Up_")) == 5, "MINERS tab: five upgrades (count, hold, engines, beam, hull)");
         Buy("miner_hold").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
         Buy("miner_hold").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
         Check(Y.Level("miner_hold") == 2 && Y.Credits == 775 && Math.Abs(miner.Hold - 120) < 1e-9, "+10%: 100 then 125 (x1.25); hold 120");
@@ -9473,6 +9479,17 @@ public partial class _Test : Node
             Check(mn.State == Gatherer.St.Destroyed && mn.WaitingForCredits, "short of the rebuild cost, it waits");
             Yd.Credits = cost + 500; await Wait(0.2);
             Check(mn.State != Gatherer.St.Destroyed && mn.Hull == 120 && mn.Visible && Math.Abs(Yd.Credits - 500) < 1e-6, "paid for: rebuilt at the base at full hull, exactly 10% charged");
+            // the hull upgrades: +10% a level, 125 cr to start (25% above the other +10% rows), x1.25 a level
+            var mh = Economy.ById("miner_hull"); var sh2 = Economy.ById("salvager_hull");
+            Check(mh != null && sh2 != null && mh.Tab == "MINERS" && sh2.Tab == "SALVAGERS"
+                  && Economy.Cost(mh, 0) == 125 && Economy.Cost(mh, 1) == 156 && Economy.Cost(sh2, 0) == 125,
+                  "Miner hull and Salvager hull: 125 cr to start, x1.25 a level (156 next)");
+            var fullM = Yd.Gatherers.First(g => g.Kind == GatherKind.Miner && g.State != Gatherer.St.Destroyed);
+            fullM.Hull = fullM.MaxHull; Yd.Credits = 100000;
+            Yd.TryBuy("miner_hull"); await Wait(0.05);
+            Check(fullM.MaxHull == 132 && fullM.Hull == 132 && sv.MaxHull == 120, "one level: a miner's hull 132 (+10%, kept full); salvagers still 120");
+            Yd.TryBuy("salvager_hull"); await Wait(0.05);
+            Check(sv.MaxHull == 132, "and the salvagers' own upgrade: 132");
             double hcost = Yd.RebuildCost("HAULER");
             Yd.Hauler.ResetToPad(); Yd.Hauler.TakeDamage(150); await Wait(0.05);
             Check(Yd.Hauler.State == Hauler.St.Destroyed && Yd.Hauler.WarpedOut && Math.Abs(Yd.Hauler.RebuildIn - 30) < 0.2, "the hauler, destroyed: gone for 30 s");
