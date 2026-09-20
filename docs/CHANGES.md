@@ -39,7 +39,7 @@ history pick the work up from it alone. Update it in the same change as the code
 **State as of 2026-09-18: version 0.3.0 plus Unreleased (see it for everything since: docking arms
 and the unload queue, the fleet and hauler pods, the idle economy, base menu, bunker-buster missile,
 painted turrets, docking bombers and more).** Typecheck clean against the real `GodotSharp.dll`,
-`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 404 checks across
+`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 407 checks across
 a single-player run and a host with two guests. Unlike earlier releases, this one was also **looked at**:
 `tools/screens/run.sh` renders the select screen, the creator, a fresh spawn under the base, both
 classes in the hub, the K window, a bomber strike, and turret close-ups on a virtual display; layout
@@ -180,6 +180,35 @@ reachable, which is fine: both harnesses build from the `nupkgs` folder that shi
 ---
 
 ## Unreleased
+
+### Chunk E: the heavy fighters
+
+**Checked:** smoke test **three runs in a row, 407 checks each, 0 compiler warnings, 0 analyser
+findings, 0 unused members**; screenshot sweep **66 frames, complete, 0 lint**; the new heavy looked at in
+the game (waiting at the map's edge, facing the ship, its missile flying at the red circle). Mutants —
+each alone: waiting near the target; a 300% boost; no jump filter; blind aiming — all caught.
+
+#### Changed
+
+- **The heavy's look: a snub-nosed gunship** (the player's option b) — short and wide, a blunt wedge prow
+  welded to the hull, angular cheek plates, twin swept tail fins; its one turret on the join. The old
+  art is in `art_unused/enemy_heavy_hull_v1.png`.
+- **Heavies wait at the map's edge** (3200 u from the base) at the point nearest their target, facing
+  it. **Once the target is pinned they boost at 700% until 300 u away**, then close at cruise to their
+  post (135 u off the hull, astern) and fire 2 DPS. The missile still fires within 500 u. (The old
+  "450 u astern" wait and the 300 u/s afterburner are gone.)
+- **The missile never aims at nonsense**: its lead (the target's velocity × 7 s) ignores a JUMP — a warp
+  moved a ship thousands of units in one frame, and the missile aimed miles off — and, at the player's
+  request, **anything out of place (a speed over 400 u/s, a broken number, a lead over 2800 u) aims it
+  at where the target is now**.
+
+#### Fixed (tests)
+
+- **A check that could not fail**: the boost check compared the speed with the code's own constant, so a
+  300% mutant passed it. The heavy's checks now compare with the spec's literals (700 u/s, 300 u,
+  3200 u). Older checks may share this flaw — it is on the review list.
+
+### Earlier in Unreleased
 
 ### Chunk D: turning in place
 

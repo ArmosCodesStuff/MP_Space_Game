@@ -181,7 +181,7 @@ levels once a second and ship and hauler state ten times a second; a guest's own
 - **C (DONE — carrier measured 19.07 DPS; guns 5.9 a shell; control 1080 u)**: **battleship total DPS = 1.25 × carrier's**; **carrier range = 1.5 × battleship's**; the
   battleship's main guns fire **shells at 4× the player missile's speed (520 u/s), not tracking**.
 - **D (DONE)**: capital ships **turn in place at ≤ 5% of top speed**, about 10°/s; no strafing.
-- **E**: heavies **snub-nosed (option b)**; they **wait at the map's edge** nearest their target and,
+- **E (DONE)**: heavies **snub-nosed (option b)**; they **wait at the map's edge** nearest their target and,
   once it is pinned, **boost at 700% until 300 u away**; missile within 500 u.
 - **F**: **Miner hull / Salvager hull** upgrades, +10% a level, **125 cr to start** (25% above the other
   +10% rows), ×1.25 a level.

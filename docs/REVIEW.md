@@ -84,6 +84,8 @@ ticked only when it has been read line by line and everything found in it is fix
 | 39 | `scripts/Autopilot.cs` | 40 | UI and the rest | ☐ |
 
 Then the tools: `tools/smoketest/SmokeTest.cs.txt`, `tools/screens/Shots.cs.txt`, the run scripts.
+**In the smoke test, look especially for checks that compare with the code's own constants** (found in
+chunk E: such a check cannot catch the constant being wrong — compare with the spec's number instead).
 
 ## Findings log (pass 3)
 
