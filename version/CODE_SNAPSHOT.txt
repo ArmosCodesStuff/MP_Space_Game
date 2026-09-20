@@ -1,8 +1,8 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-20 00:33 at git commit de9ae8c: typecheck clean, smoke test 3/3 passes
-//   (389 checks, 0 compiler warnings), 65-frame UI sweep complete, 0 findings.
-// 53 files, 9669 lines. Code only: sprites, sounds and docs are in the zip.
+// Taken 2026-09-20 00:49 at git commit cc4d723: typecheck clean, smoke test 3/3 passes
+//   (391 checks, 0 compiler warnings, 0 analyser findings), 65-frame UI sweep complete, 0 lint.
+// 56 files, 9735 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -24,7 +24,7 @@
 //   scripts/Character.cs                           175 lines   sha256 27d1b45e6c39
 //   scripts/CharacterCreator.cs                    211 lines   sha256 136099a8d1c7
 //   scripts/CharacterSelect.cs                     171 lines   sha256 dc2bfeccc820
-//   scripts/Combat.cs                               92 lines   sha256 0a5dd1c784a2
+//   scripts/Combat.cs                               81 lines   sha256 78dd05ef3d94
 //   scripts/Economy.cs                              79 lines   sha256 54c91c058b3f
 //   scripts/EscMenu.cs                              59 lines   sha256 999b01e6cd29
 //   scripts/EscapePod.cs                            50 lines   sha256 324c55cb503b
@@ -32,18 +32,18 @@
 //   scripts/Gatherer.cs                            249 lines   sha256 f64121c0c5f7
 //   scripts/Hauler.cs                              316 lines   sha256 b471204daf64
 //   scripts/HealthBar.cs                            36 lines   sha256 97c42a282205
-//   scripts/Hub.cs                                1179 lines   sha256 0ac20e39a728
+//   scripts/Hub.cs                                1175 lines   sha256 3fad745a2445
 //   scripts/MainMenu.cs                            224 lines   sha256 39dbc31417c6
 //   scripts/Missions.cs                             38 lines   sha256 b79f91d3b972
 //   scripts/Music.cs                                78 lines   sha256 19cdf8e2b59c
-//   scripts/Net.cs                                 315 lines   sha256 5e33bf91c007
-//   scripts/PilotWindow.cs                          54 lines   sha256 f71fe796a23c
+//   scripts/Net.cs                                 334 lines   sha256 b93e2a57999c
+//   scripts/PilotWindow.cs                          54 lines   sha256 9164aa7d0c8d
 //   scripts/PlayerShip.cs                          746 lines   sha256 19cfe2adecdd
 //   scripts/Plume.cs                                25 lines   sha256 cdbeb9b8fc58
-//   scripts/Progression.cs                          86 lines   sha256 0088b0fe5338
+//   scripts/Progression.cs                          86 lines   sha256 c9a5dc290c4d
 //   scripts/Radar.cs                               129 lines   sha256 189719fcc94f
 //   scripts/Raider.cs                              278 lines   sha256 d6f5fa831e2c
-//   scripts/SessionMenu.cs                         118 lines   sha256 1a8a8f39d03b
+//   scripts/SessionMenu.cs                         120 lines   sha256 ecdca865f3ee
 //   scripts/Settings.cs                             58 lines   sha256 80100257eda5
 //   scripts/Sfx.cs                                  65 lines   sha256 4a51ee11de9a
 //   scripts/Shield.cs                               71 lines   sha256 99c7fa4a2a8e
@@ -58,9 +58,12 @@
 //   scripts/Ui.cs                                   99 lines   sha256 0a376702a4e8
 //   scripts/Yard.cs                                418 lines   sha256 b66daac871a4
 //   typecheck/typecheck.sh                          57 lines   sha256 e68277c09f34
+//   tools/analyse/analysers.editorconfig            15 lines   sha256 45fdb7258163
+//   tools/analyse/run.sh                            16 lines   sha256 e6f2cd50f0c4
+//   tools/analyse/xref.py                           19 lines   sha256 9359eb94c161
 //   tools/screens/Shots.cs.txt                     437 lines   sha256 bb52f9c6f5e0
 //   tools/screens/run.sh                            42 lines   sha256 73a5b3c63476
-//   tools/smoketest/SmokeTest.cs.txt              1579 lines   sha256 09752c7eb14d
+//   tools/smoketest/SmokeTest.cs.txt              1589 lines   sha256 87efcb79ef10
 //   tools/smoketest/run.sh                          57 lines   sha256 568b677787fd
 //==============================================================================
 
@@ -1494,7 +1497,7 @@ public partial class CharacterSelect : Control
 
 //==============================================================================
 // FILE: scripts/Combat.cs
-// 92 lines   sha256 0a5dd1c784a2
+// 81 lines   sha256 78dd05ef3d94
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -1509,17 +1512,6 @@ public static class Combat
     // Registered by whatever world is live (hub, hostile system, someone else's world).
     public static readonly List<IHittable> Hostiles = new();
 
-    public static IHittable NearestHostile(Vector2 from, float range)
-    {
-        IHittable best = null; float bd = range;
-        foreach (var h in Hostiles)
-        {
-            if (h == null || !h.Alive || !h.Selectable) continue;      // never "nearest enemy" a missile
-            float d = from.DistanceTo(h.Position);
-            if (d < bd) { bd = d; best = h; }
-        }
-        return best;
-    }
 
     // Player ships, as targets for ENEMY fire only (a hostile dummy's missile). Ships
     // register themselves; an escape pod is in no list, so nothing can touch it.
@@ -2433,7 +2425,7 @@ public static class HealthBar
 
 //==============================================================================
 // FILE: scripts/Hub.cs
-// 1179 lines   sha256 0ac20e39a728
+// 1175 lines   sha256 3fad745a2445
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -2986,7 +2978,6 @@ public partial class Hub : Node2D
     public const float RaidEdge = 3200f;
     public const double RaidDelay = 3.0;
     private double _raidIn = -1; private int _raidLevel;
-    public int RaidLevel => _raidLevel;
     public static double RaidScale(int level) => Missions.S(level);           // S(L) = 1.1^(L-1)
 
     private void StartRaid(int level)
@@ -3128,8 +3119,7 @@ public partial class Hub : Node2D
         if (!Net.IsHost) return;
         int party = System.Math.Max(1, PartySize);
         Progression.AwardBossKill(level);
-        if (Yard != null) Yard.TripCredits += Missions.BountyEach(level, party);
-        else Yard.AddHostShare(Missions.BountyEach(level, party));
+        Yard.AddHostShare(Missions.BountyEach(level, party));             // the host's share, paid at home
         if (Net.IsOnline) Rpc(nameof(NetBossKill), level, party);
     }
 
@@ -3298,7 +3288,6 @@ public partial class Hub : Node2D
         // Hull bars on every ship, and other players' names. Drawn here rather than on
         // the ship so they stay upright while it turns.
         var font = ThemeDB.FallbackFont;
-        float k = Txt.UiScale;
         foreach (var s in _ships.Values)
         {
             if (!IsInstanceValid(s) || !s.IsVisibleInTree()) continue;   // hidden ships show nothing
@@ -3462,7 +3451,6 @@ public partial class Hub : Node2D
         _pilot = new PilotWindow { Hub = this };
         _hudLayer.AddChild(_pilot);
     }
-    public bool PilotOpen => IsInstanceValid(_pilot);
 
     // A purchase: refit the ship now, and tell the host (it resolves hull and damage).
     public void PilotChanged() { ApplyLocalIdentity(); SendIdentity(); }
@@ -3972,7 +3960,7 @@ public partial class Music : Node
 
 //==============================================================================
 // FILE: scripts/Net.cs
-// 315 lines   sha256 5e33bf91c007
+// 334 lines   sha256 b93e2a57999c
 //==============================================================================
 using Godot;
 using System.Linq;
@@ -3985,8 +3973,9 @@ using System.Collections.Generic;
 //
 // THE RULE, in one line: the HOST owns the world, each PLAYER owns their ship.
 //
-//   host authority   : resource ticks, enemy spawns and AI, loot rolls, refining,
-//                      hauler dispatch and payouts, anything a client could cheat
+//   host authority   : the economy (gathering, the hauler, sales, upgrades), raiders,
+//                      the boss and its attacks, damage, missions and rewards --
+//                      anything a client could cheat
 //   client authority : its own ship's thrust and heading, and nothing else
 //
 // A client never tells the host "I now have 500 ore". It tells the host "I am
@@ -4076,11 +4065,12 @@ public partial class Net : Node
     }
 
     // ── internet hosting ────────────────────────────────────────────────────
-    // Hosting starts at once for your own network. Meanwhile, on a background thread,
-    // the game asks your router (UPnP) to forward the port to this PC and reads back
-    // your public address, so friends in other cities or countries can join. When the
-    // router will not (UPnP off), or your provider shares one public address among
-    // many homes (carrier-grade NAT), the status says so and what to do instead.
+    // Hosting starts at once for your own network. Meanwhile a background thread asks
+    // your router (UPnP) to forward the port to this PC, and a web request asks a public
+    // "what is my IP" service what the internet sees; the two answers together decide
+    // what friends elsewhere need (see Describe). The background thread writes NOTHING:
+    // it hands its result back to the main thread, which keeps it only for the current
+    // session -- a mapping made for a session that has already ended is closed at once.
     public enum Reach { None, Checking, Internet, Manual, LanOnly }
     public Reach Reachability { get; private set; } = Reach.None;
     public string InternetAddress { get; private set; } = "";
@@ -4089,7 +4079,7 @@ public partial class Net : Node
 
     private void OpenRouterPort(int port, int gen)
     {
-        string ext = "", why = "";
+        string ext = "", why = ""; Upnp mapped = null;
         try
         {
             var u = new Upnp();
@@ -4097,11 +4087,11 @@ public partial class Net : Node
             var gw = u.GetGateway();
             if (r != (int)Upnp.UpnpResult.Success || gw == null || !gw.IsValidGateway()) why = "no-upnp";
             else if (u.AddPortMapping(port, port, "Warships", "UDP", 0) != (int)Upnp.UpnpResult.Success) why = "refused";
-            else { ext = u.QueryExternalAddress(); _upnp = u; }
+            else { ext = u.QueryExternalAddress(); mapped = u; }
         }
         catch (Exception e) { why = e.Message; }
         _upnpBusy = false;
-        Callable.From(() => RouterResult(gen, port, ext, why)).CallDeferred();
+        Callable.From(() => RouterResult(gen, port, ext, why, mapped)).CallDeferred();
     }
 
     // ── what friends elsewhere need: decided from the router's report AND the public address ──
@@ -4176,18 +4166,33 @@ public partial class Net : Node
         return p.Length == 4 && p.All(x => int.TryParse(x, out int v) && v >= 0 && v <= 255);
     }
 
-    private void RouterResult(int gen, int port, string ext, string why)
+    public int StaleMappingsClosed { get; private set; }            // for the record (and the smoke test)
+    private void RouterResult(int gen, int port, string ext, string why, Upnp mapped)
     {
-        if (gen != _hostGen) return;
+        if (gen != _hostGen)
+        {   // that session is over: never keep its handle -- close the port it opened
+            if (mapped != null) { StaleMappingsClosed++; System.Threading.Tasks.Task.Run(() => mapped.DeletePortMapping(port, "UDP")); }
+            return;
+        }
         _routerExt = ext; _routerWhy = why; _routerDone = true;
-        if (ext.Length > 0) _mappedPort = port;
+        if (mapped != null) { _upnp = mapped; _mappedPort = port; }
         TryDecide(gen);
     }
+
+    // Tailscale's addresses (100.64.0.0/10): friends on the same tailnet can join on these.
+    public static bool IsTailnet(string ip)
+    {
+        var p = ip.Split('.');
+        return p.Length == 4 && int.TryParse(p[0], out int a) && int.TryParse(p[1], out int b) && a == 100 && b >= 64 && b <= 127;
+    }
+    public string TailnetAddress { get; private set; } = "";
 
     private void TryDecide(int gen)
     {
         if (gen != _hostGen || !IsHost || !IsOnline || !(_routerDone && _publicDone)) return;   // the session changed, or one answer is still out
         var d = Describe(_routerExt, _routerExt.Length > 0, _publicIp, _hostPort, LanAddress);
+        // on a tailnet, friends on it can join even when the internet cannot reach you
+        if (d.reach == Reach.LanOnly && TailnetAddress.Length > 0) d.message += $" Friends on your Tailscale network join {TailnetAddress}.";
         Reachable(d.reach, d.address, d.message);
     }
 
@@ -4215,6 +4220,8 @@ public partial class Net : Node
         _isHost = true; _localId = 1;
         Players.Clear(); Players[1] = new PlayerInfo { Id = 1 };
         LanAddress = LocalLan(port); Reachability = Reach.Checking; InternetAddress = "";
+        var tn = IP.GetLocalAddresses().FirstOrDefault(IsTailnet);
+        TailnetAddress = tn != null ? $"{tn}:{port}" : "";
         Say($"Hosting on your network ({LanAddress}). Asking your router to open port {port}, and the internet for your public address...");
         SessionChanged?.Invoke();
         int gen = ++_hostGen; _hostPort = port;
@@ -4254,7 +4261,7 @@ public partial class Net : Node
         }
         _upnp = null; _mappedPort = 0; _hostGen++;
         FreeIpReq();                                        // no lookup outlives its session
-        Reachability = Reach.None; InternetAddress = ""; LanAddress = "";
+        Reachability = Reach.None; InternetAddress = ""; LanAddress = ""; TailnetAddress = "";
         // An explicit offline peer rather than null: IsServer() and GetUniqueId() then
         // answer 1 / true offline instead of depending on engine fallback behaviour.
         Multiplayer.MultiplayerPeer = new OfflineMultiplayerPeer();
@@ -4292,7 +4299,7 @@ public partial class Net : Node
 
 //==============================================================================
 // FILE: scripts/PilotWindow.cs
-// 54 lines   sha256 f71fe796a23c
+// 54 lines   sha256 9164aa7d0c8d
 //==============================================================================
 using Godot;
 
@@ -4333,7 +4340,7 @@ public partial class PilotWindow : PanelContainer
 
     public override void _Process(double delta)
     {
-        int need = Progression.ExpToNext(Character.Level);
+        int need = Progression.ExpToNext;
         _head.Text = $"PILOT  ·  {Character.Name}  ·  LEVEL {Character.Level}";
         _exp.Text = $"EXP {Character.Exp} / {need} to level {Character.Level + 1}";
         _bar.Value = (double)Character.Exp / need;
@@ -5132,7 +5139,7 @@ public static class Plume
 
 //==============================================================================
 // FILE: scripts/Progression.cs
-// 86 lines   sha256 0088b0fe5338
+// 86 lines   sha256 c9a5dc290c4d
 //==============================================================================
 using Godot;
 using System;
@@ -5171,7 +5178,7 @@ public static class Progression
 
     public static int Cost(int owned) => owned + 1;                        // 1, 2, 3, ...
     public const int ExpPerLevel = 1000;
-    public static int ExpToNext(int level) => ExpPerLevel;                  // always 1000
+    public static int ExpToNext => ExpPerLevel;                             // always 1000, whatever the level
 
     // Flat stat additions for a set of purchases, on a given hull.
     public static System.Collections.Generic.Dictionary<string, double> Flats(int[] bought, ShipClass c)
@@ -5188,9 +5195,9 @@ public static class Progression
         if (amount <= 0) return 0;
         int gained = 0;
         Character.Exp += amount;
-        while (Character.Exp >= ExpToNext(Character.Level))
+        while (Character.Exp >= ExpToNext)
         {
-            Character.Exp -= ExpToNext(Character.Level);
+            Character.Exp -= ExpToNext;
             Character.Level++; Character.Points++; gained++;
         }
         Character.Save();
@@ -5640,7 +5647,7 @@ public partial class Raider : Node2D, IHittable
 
 //==============================================================================
 // FILE: scripts/SessionMenu.cs
-// 118 lines   sha256 1a8a8f39d03b
+// 120 lines   sha256 ecdca865f3ee
 //==============================================================================
 using Godot;
 
@@ -5693,7 +5700,9 @@ public partial class SessionMenu : CanvasLayer
         // the address friends should type, one click to the clipboard
         _copy = Btn("COPY ADDRESS", () =>
         {
-            var a = Net.I?.Reachability is Net.Reach.Internet or Net.Reach.Manual ? Net.I.InternetAddress : Net.I?.LanAddress;
+            var a = Net.I?.Reachability is Net.Reach.Internet or Net.Reach.Manual ? Net.I.InternetAddress
+                  : !string.IsNullOrEmpty(Net.I?.TailnetAddress) ? Net.I.TailnetAddress      // friends on the tailnet
+                  : Net.I?.LanAddress;
             if (!string.IsNullOrEmpty(a)) DisplayServer.ClipboardSet(a);
         });
         _copy.Name = "CopyAddress";
@@ -7864,6 +7873,71 @@ fi
 echo "0 errors." >&2
 
 //==============================================================================
+// FILE: tools/analyse/analysers.editorconfig
+// 15 lines   sha256 45fdb7258163
+//==============================================================================
+root = true
+[*.cs]
+dotnet_diagnostic.IDE0051.severity = warning
+dotnet_diagnostic.IDE0052.severity = warning
+dotnet_diagnostic.IDE0059.severity = warning
+dotnet_diagnostic.IDE0060.severity = warning
+dotnet_diagnostic.IDE0005.severity = warning
+dotnet_diagnostic.IDE0035.severity = warning
+dotnet_diagnostic.IDE0044.severity = warning
+dotnet_diagnostic.CS0162.severity = warning
+dotnet_diagnostic.CS0168.severity = warning
+dotnet_diagnostic.CS0219.severity = warning
+dotnet_diagnostic.CS0414.severity = warning
+dotnet_diagnostic.CS0649.severity = warning
+dotnet_diagnostic.CA1822.severity = none
+
+//==============================================================================
+// FILE: tools/analyse/run.sh
+// 16 lines   sha256 e6f2cd50f0c4
+//==============================================================================
+#!/bin/sh
+# Code analysers over the game scripts (unused private members, unread fields, unused
+# assignments and parameters, needless usings, unreachable code). Needs the smoke test's
+# restored build folder (run tools/smoketest/run.sh once first): package restore is not
+# possible offline. Prints each finding; the last line is the count.
+set -e
+B=/tmp/warships_smoke
+[ -f "$B/Warships.csproj" ] || { echo "run tools/smoketest/run.sh first (it restores the build)"; exit 2; }
+cp "$(dirname "$0")/analysers.editorconfig" "$B/.editorconfig"
+cd "$B"
+dotnet build --no-restore -v q -nologo -p:EnforceCodeStyleInBuild=true -p:GenerateDocumentationFile=true \
+  -p:NoWarn=CS1591%3BCS1573%3BCS1587 > analyse.log 2>&1 || true
+rm -f "$B/.editorconfig"
+grep -E "warning (IDE|CS)[0-9]+" analyse.log | grep -v "_Test.cs" | sed 's#.*/scripts/##; s/ \[.*//' | sort -u > findings.txt || true
+cat findings.txt
+echo "ANALYSERS: $(wc -l < findings.txt) findings"
+
+//==============================================================================
+// FILE: tools/analyse/xref.py
+// 19 lines   sha256 9359eb94c161
+//==============================================================================
+# Cross-reference scan: public members of the game scripts that nothing uses, and those
+# only the tests use (read-only observers are fine; anything else is a question).
+import re, glob, os
+root = os.path.join(os.path.dirname(__file__), '..', '..')
+src = {f: open(f, encoding='utf-8').read() for f in glob.glob(os.path.join(root, 'scripts', '*.cs'))}
+tests = ''.join(open(os.path.join(root, 'tools', p), encoding='utf-8').read() for p in ('smoketest/SmokeTest.cs.txt', 'screens/Shots.cs.txt'))
+decl = re.compile(r'^\s*public\s+(?:static\s+|readonly\s+|const\s+|override\s+|virtual\s+|partial\s+|event\s+|new\s+)*([\w<>\[\],.?() ]+?)\s+(\w+)\s*(\(|=>|=|;|\{)', re.M)
+skip = {'_Ready', '_Process', '_Draw', '_Input', '_UnhandledInput', '_GuiInput', '_ExitTree', '_EnterTree', '_PhysicsProcess', 'Position', 'Rotation', 'Visible', 'Name'}
+game = '\n'.join(src.values())
+dead, test_only = [], []
+for f, s in src.items():
+    for m in decl.finditer(s):
+        n = m.group(2)
+        if n in skip: continue
+        g = len(re.findall(r'\b' + re.escape(n) + r'\b', game)) - 1
+        t = len(re.findall(r'\b' + re.escape(n) + r'\b', tests))
+        if g <= 0: (test_only if t else dead).append(f"{os.path.basename(f)}: {n}")
+print('UNUSED ANYWHERE:', len(dead)); [print('  ' + x) for x in sorted(dead)]
+print('USED ONLY BY TESTS:', len(test_only)); [print('  ' + x) for x in sorted(test_only)]
+
+//==============================================================================
 // FILE: tools/screens/Shots.cs.txt
 // 437 lines   sha256 bb52f9c6f5e0
 //==============================================================================
@@ -8354,7 +8428,7 @@ ls /tmp/shots
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 1579 lines   sha256 09752c7eb14d
+// 1589 lines   sha256 87efcb79ef10
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -9124,12 +9198,22 @@ public partial class _Test : Node
             await Wait(SessionMenu.PressGap);
             Check(!sm.Locked && !Nodes<Button>(sm).First(b => b.Name == "Host").Disabled, "and are back after 1 s");
             Check(Net.I.NetworkIdle, "and offline stays silent");
+            // review: a router answer for a session that is already over must never be kept --
+            // its port mapping is closed at once (it used to be stored, leaking the forward)
+            var nf = BindingFlags.NonPublic | BindingFlags.Instance;
+            int genNow = (int)typeof(Net).GetField("_hostGen", nf).GetValue(Net.I);
+            int closed0 = Net.I.StaleMappingsClosed;
+            typeof(Net).GetMethod("RouterResult", nf).Invoke(Net.I, new object[] { genNow - 1, 27015, "203.0.113.9", "", new Upnp() });
+            Check(typeof(Net).GetField("_upnp", nf).GetValue(Net.I) == null && Net.I.StaleMappingsClosed == closed0 + 1,
+                  "a router answer for a finished session is not kept, and its port mapping is closed");
+            Check(Net.IsTailnet("100.100.1.2") && !Net.IsTailnet("100.63.0.1") && !Net.IsTailnet("192.168.1.2"),
+                  "Tailscale addresses (100.64.0.0/10) are recognised for friends on a tailnet");
         }
 
         // ── pilot progression: EXP, levels, points, flat upgrades ──
         {
             Check(Progression.Cost(0) == 1 && Progression.Cost(1) == 2 && Progression.Cost(2) == 3, "upgrade costs 1, 2, 3, ... points");
-            Check(Progression.ExpToNext(1) == 1000 && Progression.ExpToNext(7) == 1000, "every level needs 1000 EXP");
+            Check(Progression.ExpToNext == 1000 && Progression.ExpToNext == 1000, "every level needs 1000 EXP");
             Character.Exp = 0; Character.Level = 1; Character.BossCleared.Clear(); Character.Points = 0; System.Array.Clear(Character.Bought);
             int up = Progression.AddExp(2600);
             Check(up == 2 && Character.Level == 3 && Character.Exp == 600 && Character.Points == 2, "2600 EXP from level 1: level 3, 600 over, 2 points");
