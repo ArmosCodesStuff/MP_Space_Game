@@ -1,8 +1,8 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-19 23:41 at git commit b9957af: typecheck clean, smoke test 3/3 passes
-//   (383 checks, 0 compiler warnings), 62-frame UI sweep 0 findings.
-// 53 files, 9598 lines. Code only: sprites, sounds and docs are in the zip.
+// Taken 2026-09-20 00:33 at git commit de9ae8c: typecheck clean, smoke test 3/3 passes
+//   (389 checks, 0 compiler warnings), 65-frame UI sweep complete, 0 findings.
+// 53 files, 9669 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -19,9 +19,9 @@
 //   scripts/Autopilot.cs                            40 lines   sha256 807538219f53
 //   scripts/BaseDefense.cs                          55 lines   sha256 1d8daa0fbd67
 //   scripts/BasePanel.cs                           118 lines   sha256 1b56ed68d885
-//   scripts/Boss.cs                                184 lines   sha256 ca5ba20f715f
-//   scripts/BossBar.cs                              74 lines   sha256 2f4eb7ef7796
-//   scripts/Character.cs                           168 lines   sha256 266190f479e4
+//   scripts/Boss.cs                                185 lines   sha256 7cde1d4a43bc
+//   scripts/BossBar.cs                              74 lines   sha256 5758de5d8e72
+//   scripts/Character.cs                           175 lines   sha256 27d1b45e6c39
 //   scripts/CharacterCreator.cs                    211 lines   sha256 136099a8d1c7
 //   scripts/CharacterSelect.cs                     171 lines   sha256 dc2bfeccc820
 //   scripts/Combat.cs                               92 lines   sha256 0a5dd1c784a2
@@ -32,15 +32,15 @@
 //   scripts/Gatherer.cs                            249 lines   sha256 f64121c0c5f7
 //   scripts/Hauler.cs                              316 lines   sha256 b471204daf64
 //   scripts/HealthBar.cs                            36 lines   sha256 97c42a282205
-//   scripts/Hub.cs                                1171 lines   sha256 82795d567d52
+//   scripts/Hub.cs                                1179 lines   sha256 0ac20e39a728
 //   scripts/MainMenu.cs                            224 lines   sha256 39dbc31417c6
-//   scripts/Missions.cs                             26 lines   sha256 6870c2208143
+//   scripts/Missions.cs                             38 lines   sha256 b79f91d3b972
 //   scripts/Music.cs                                78 lines   sha256 19cdf8e2b59c
 //   scripts/Net.cs                                 315 lines   sha256 5e33bf91c007
-//   scripts/PilotWindow.cs                          54 lines   sha256 d7c6f1a8a09f
+//   scripts/PilotWindow.cs                          54 lines   sha256 f71fe796a23c
 //   scripts/PlayerShip.cs                          746 lines   sha256 19cfe2adecdd
 //   scripts/Plume.cs                                25 lines   sha256 cdbeb9b8fc58
-//   scripts/Progression.cs                          73 lines   sha256 d3b0cd99118f
+//   scripts/Progression.cs                          86 lines   sha256 0088b0fe5338
 //   scripts/Radar.cs                               129 lines   sha256 189719fcc94f
 //   scripts/Raider.cs                              278 lines   sha256 d6f5fa831e2c
 //   scripts/SessionMenu.cs                         118 lines   sha256 1a8a8f39d03b
@@ -52,15 +52,15 @@
 //   scripts/StatsWindow.cs                         198 lines   sha256 8b5c9f76adc7
 //   scripts/TargetDummy.cs                         117 lines   sha256 f7845c23ab57
 //   scripts/Telegraph.cs                            47 lines   sha256 89f6af49c4d7
-//   scripts/TioWindow.cs                            61 lines   sha256 189754fab72b
+//   scripts/TioWindow.cs                            66 lines   sha256 47e02c18f7fb
 //   scripts/Torpedo.cs                             154 lines   sha256 8bcbf075476e
 //   scripts/Txt.cs                                  31 lines   sha256 0b56559599f8
 //   scripts/Ui.cs                                   99 lines   sha256 0a376702a4e8
-//   scripts/Yard.cs                                414 lines   sha256 e22f4c9c64df
+//   scripts/Yard.cs                                418 lines   sha256 b66daac871a4
 //   typecheck/typecheck.sh                          57 lines   sha256 e68277c09f34
-//   tools/screens/Shots.cs.txt                     433 lines   sha256 f7b91abe5ced
-//   tools/screens/run.sh                            40 lines   sha256 a47174d56c6a
-//   tools/smoketest/SmokeTest.cs.txt              1564 lines   sha256 eb3297f4cd47
+//   tools/screens/Shots.cs.txt                     437 lines   sha256 bb52f9c6f5e0
+//   tools/screens/run.sh                            42 lines   sha256 73a5b3c63476
+//   tools/smoketest/SmokeTest.cs.txt              1579 lines   sha256 09752c7eb14d
 //   tools/smoketest/run.sh                          57 lines   sha256 568b677787fd
 //==============================================================================
 
@@ -653,7 +653,7 @@ public partial class BasePanel : PanelContainer
 
 //==============================================================================
 // FILE: scripts/Boss.cs
-// 184 lines   sha256 ca5ba20f715f
+// 185 lines   sha256 7cde1d4a43bc
 //==============================================================================
 using Godot;
 using System.Linq;
@@ -673,9 +673,9 @@ using System.Linq;
 public partial class Boss : Node2D, IHittable
 {
     public Hub Hub;
-    // hull and every attack scale with the selected tier (Missions.Scale)
-    public double Strength = 1;          // S(L): hull and damage (was "Scale", which hid Node2D.Scale)
-    public double MaxHp => Missions.Current.Hull * Strength;
+    // hull and damage by level and party: S(L)(1 + 0.6(P-1)) and S(L)(1 + 0.2(P-1))
+    public double HullMult = 1, DamageMult = 1;
+    public double MaxHp => Missions.Current.Hull * HullMult;
     public const float Length = 360f, HalfWidth = 70f;
     public const int Id = 3000;
     public double Hp;
@@ -706,7 +706,8 @@ public partial class Boss : Node2D, IHittable
 
     public override void _Ready()
     {
-        Strength = Missions.Scale(Missions.Tier); Hp = MaxHp;
+        int party = System.Math.Max(1, Hub.PartySize);
+        HullMult = Missions.HullMult(Missions.Level, party); DamageMult = Missions.DamageMult(Missions.Level, party); Hp = MaxHp;
         Name = "Boss";
         var tex = GD.Load<Texture2D>("res://boss_silver_lancer.png");
         AddChild(new Sprite2D { Texture = tex, Scale = Vector2.One * (Length / tex.GetHeight()) });
@@ -752,7 +753,7 @@ public partial class Boss : Node2D, IHittable
         var nose = ToGlobal(new Vector2(0, -Length * 0.5f));
         PlayerShip Nearest(float within) => pilots.Where(p => p.Position.DistanceTo(Position) <= within).OrderBy(p => p.Position.DistanceTo(Position)).FirstOrDefault();
         _guns -= delta;
-        if (_guns <= 0) { _guns = GunEvery; var t = Nearest(900f); if (t != null) { t.Hit(GunDamage * Strength, Position, "boss:guns"); Combat.Flash(nose, t.Position, new Color(1f, 0.5f, 0.35f), boss: true); } }
+        if (_guns <= 0) { _guns = GunEvery; var t = Nearest(900f); if (t != null) { t.Hit(GunDamage * DamageMult, Position, "boss:guns"); Combat.Flash(nose, t.Position, new Color(1f, 0.5f, 0.35f), boss: true); } }
         _missiles -= delta;
         if (_missiles <= 0)
         {   // a trident at the nearest ship: straight at it and 25 degrees either side
@@ -762,7 +763,7 @@ public partial class Boss : Node2D, IHittable
             foreach (float deg in new[] { -TridentSpread, 0f, TridentSpread })
             {
                 var dir = aim.Rotated(Mathf.DegToRad(deg));
-                Combat.LaunchTorpedo(nose + dir * 14f, dir, TridentSpeed, TridentRange, TridentDamage * Strength, t.NetId, 1.4f,
+                Combat.LaunchTorpedo(nose + dir * 14f, dir, TridentSpeed, TridentRange, TridentDamage * DamageMult, t.NetId, 1.4f,
                                      heavy: false, hostile: true, hitSource: "boss:missiles", size: 2f);
             }
         }
@@ -783,7 +784,7 @@ public partial class Boss : Node2D, IHittable
             {
                 _beamTickT = BeamTick;
                 foreach (var p in pilots)
-                    if (DistToSegment(p.Position, live.a, live.b) <= BeamWidth / 2f + p.HitRadius) p.Hit(BeamDamage * Strength, Position, "boss:beam");
+                    if (DistToSegment(p.Position, live.a, live.b) <= BeamWidth / 2f + p.HitRadius) p.Hit(BeamDamage * DamageMult, Position, "boss:beam");
             }
             if ((_beamLive -= delta) < 0) _pendingBeam = null;
         }
@@ -800,7 +801,7 @@ public partial class Boss : Node2D, IHittable
         if (_dashTo is { } to)
         {
             Position = Position.MoveToward(to, ChargeSpeed * (float)delta);
-            foreach (var p in pilots) if (Covers(p.Position, p.HitRadius)) p.Hit(ChargeDamage * Strength, Position, "boss:charge");
+            foreach (var p in pilots) if (Covers(p.Position, p.HitRadius)) p.Hit(ChargeDamage * DamageMult, Position, "boss:charge");
             if (Position.DistanceTo(to) < 1f) _dashTo = null;
         }
         _wave -= delta;
@@ -811,7 +812,7 @@ public partial class Boss : Node2D, IHittable
         }
         if (_pendingWave is { } c && (_waveT -= delta) <= 0)
         {
-            foreach (var p in pilots) if (p.Position.DistanceTo(c) <= WaveRadius + p.HitRadius) p.Hit(45 * Strength, c, "boss:wave");
+            foreach (var p in pilots) if (p.Position.DistanceTo(c) <= WaveRadius + p.HitRadius) p.Hit(45 * DamageMult, c, "boss:wave");
             _pendingWave = null;
         }
     }
@@ -842,7 +843,7 @@ public partial class Boss : Node2D, IHittable
 
 //==============================================================================
 // FILE: scripts/BossBar.cs
-// 74 lines   sha256 2f4eb7ef7796
+// 74 lines   sha256 5758de5d8e72
 //==============================================================================
 using Godot;
 using System;
@@ -902,7 +903,7 @@ public partial class BossBar : Control
         var boss = Hub?.Boss;
         if (!IsInstanceValid(boss)) return;                       // the first draw can come before any boss
         _panel.Draw(GetCanvasItem(), new Rect2(-10, -26, W + 20, H + 34));
-        Txt.D(this, ThemeDB.FallbackFont, new Vector2(0, -8), $"{Missions.BossName}  ·  TIER {Missions.Tier}  ·  {boss.Hp:0} / {boss.MaxHp:0}",
+        Txt.D(this, ThemeDB.FallbackFont, new Vector2(0, -8), $"{Missions.BossName}  ·  LEVEL {Missions.Level}  ·  {boss.Hp:0} / {boss.MaxHp:0}",
               HorizontalAlignment.Center, W, 13, new Color(1f, 0.85f, 0.8f));
         float frac = (float)Math.Clamp(boss.Hp / Math.Max(1, boss.MaxHp), 0, 1);
         DrawRect(new Rect2(0, 0, W, H), new Color(0.10f, 0.05f, 0.05f, 0.95f));
@@ -921,10 +922,11 @@ public partial class BossBar : Control
 
 //==============================================================================
 // FILE: scripts/Character.cs
-// 168 lines   sha256 266190f479e4
+// 175 lines   sha256 27d1b45e6c39
 //==============================================================================
 using Godot;
 using System;
+using System.Linq;
 using System.Collections.Generic;
 
 // Who you are. Your ship is your character, so this travels with you between
@@ -949,8 +951,8 @@ public static class Character
     // pilot progression (see Progression)
     public static int Exp, Level = 1, Points;
     public static readonly int[] Bought = new int[Progression.All.Length];
-    // the highest tier of each boss this pilot has beaten (absent = none yet)
-    public static readonly Dictionary<string, int> BossBeaten = new();
+    // the levels of each boss this pilot has beaten (the +250 first-clear bonus, and unlocking)
+    public static readonly Dictionary<string, HashSet<int>> BossCleared = new();
 
     // One saved character, as the select screen lists it.
     public class Slot
@@ -971,7 +973,7 @@ public static class Character
         Accent = new(1.00f, 0.78f, 0.35f);
         Class = ShipClass.Battleship;
         Bonuses.Clear();
-        Exp = 0; Level = 1; Points = 0; Array.Clear(Bought); BossBeaten.Clear();
+        Exp = 0; Level = 1; Points = 0; Array.Clear(Bought); BossCleared.Clear();
     }
 
     public static void Save()
@@ -986,7 +988,7 @@ public static class Character
         foreach (var kv in Bonuses) c.SetValue("bonus", kv.Key, kv.Value);
         c.SetValue("progress", "exp", Exp); c.SetValue("progress", "level", Level); c.SetValue("progress", "points", Points);
         for (int i = 0; i < Bought.Length; i++) c.SetValue("progress", "bought_" + Progression.All[i].Id, Bought[i]);
-        foreach (var kv in BossBeaten) c.SetValue("bosses", kv.Key, kv.Value);
+        foreach (var kv in BossCleared) c.SetValue("boss_cleared", kv.Key, string.Join(",", kv.Value.OrderBy(x => x)));
         c.Save(PathOf(Id));
     }
 
@@ -1006,8 +1008,14 @@ public static class Character
         Exp = (int)c.GetValue("progress", "exp", 0); Level = Math.Max(1, (int)c.GetValue("progress", "level", 1));
         Points = Math.Max(0, (int)c.GetValue("progress", "points", 0));
         for (int i = 0; i < Bought.Length; i++) Bought[i] = Math.Clamp((int)c.GetValue("progress", "bought_" + Progression.All[i].Id, 0), 0, Progression.MaxPerUpgrade);
-        BossBeaten.Clear();
-        if (c.HasSection("bosses")) foreach (var k in c.GetSectionKeys("bosses")) BossBeaten[k] = (int)c.GetValue("bosses", k, -1);
+        BossCleared.Clear();
+        if (c.HasSection("boss_cleared"))
+            foreach (var k in c.GetSectionKeys("boss_cleared"))
+                BossCleared[k] = ((string)c.GetValue("boss_cleared", k, "")).Split(',', StringSplitOptions.RemoveEmptyEntries)
+                                 .Select(x => int.TryParse(x, out var n) ? n : 0).Where(n => n >= 1).ToHashSet();
+        else if (c.HasSection("bosses"))   // an old save: tiers from 0 -- tier t beaten means levels 1..t+1
+            foreach (var k in c.GetSectionKeys("bosses"))
+                BossCleared[k] = Enumerable.Range(1, Math.Max(0, (int)c.GetValue("bosses", k, -1) + 1)).ToHashSet();
         return true;
     }
 
@@ -2425,7 +2433,7 @@ public static class HealthBar
 
 //==============================================================================
 // FILE: scripts/Hub.cs
-// 1171 lines   sha256 82795d567d52
+// 1179 lines   sha256 0ac20e39a728
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -2827,7 +2835,7 @@ public partial class Hub : Node2D
         if (IsInstanceValid(_tio)) return;
         if (Net.IsHost && Mission == MissionState.Idle)
         {   // docking at the TIO selects the newest unlocked tier
-            Missions.Tier = Missions.Unlocked(Missions.Current.Id);
+            Missions.Level = Missions.Unlocked(Missions.Current.Id);
             BroadcastMission();
         }
         if (IsInstanceValid(_base)) ToggleBase();
@@ -2882,11 +2890,9 @@ public partial class Hub : Node2D
     {
         if (!Net.IsHost || MissionWon) return;
         MissionWon = true;
-        // this tier is beaten: the next unlocks, and is selected when the TIO is next opened
-        var id = Missions.Current.Id;
-        if (!Character.BossBeaten.TryGetValue(id, out var best) || Missions.Tier > best) { Character.BossBeaten[id] = Missions.Tier; Character.Save(); }
-        AwardPartyExp(Missions.BossExp + Missions.MissionExp);
-        Yard.TripCredits += Missions.BossCredits;
+        // every pilot gets its own EXP (its level, its first clears) and its share of the bounty;
+        // the host's own record (and so the next level unlocking) updates in its own award
+        AnnounceBossKill(Missions.Level);
         _arenaEndT = 4.0;
         if (Net.IsOnline) Rpc(nameof(NetWon));
     }
@@ -2902,7 +2908,7 @@ public partial class Hub : Node2D
         if (_arenaEndT >= 0 && (_arenaEndT -= delta) <= 0)
         {
             _arenaEndT = -1;
-            if (!MissionWon) PendingRaidLevel = Missions.Tier + 1;     // failed: the boss sends its raiders after you
+            if (!MissionWon) PendingRaidLevel = Missions.Level;        // failed: the boss sends its raiders after you
             EnterSector(SectorKind.Home);
         }
     }
@@ -2915,11 +2921,11 @@ public partial class Hub : Node2D
         foreach (var t in GetChildren().OfType<Torpedo>()) if (t.NetId == id) t.Intercept();
     }
 
-    // host: pick a tier between 0 and the newest unlocked
-    public void SelectTier(int tier)
+    // host: pick a level between 1 and the newest unlocked
+    public void SelectLevel(int level)
     {
         if (!Net.IsHost || Mission != MissionState.Idle) return;
-        Missions.Tier = System.Math.Clamp(tier, 0, Missions.Unlocked(Missions.Current.Id));
+        Missions.Level = System.Math.Clamp(level, 1, Missions.Unlocked(Missions.Current.Id));
         BroadcastMission();
     }
 
@@ -2962,12 +2968,12 @@ public partial class Hub : Node2D
     {
         if (!Net.IsOnline) return;
         var ids = _ready.Keys.ToArray(); var rs = ids.Select(i => _ready[i] ? 1 : 0).ToArray();   // RPCs carry int[], not bool[]
-        Rpc(nameof(NetMission), (int)Mission, MissionT, ids, rs, Missions.Tier);
+        Rpc(nameof(NetMission), (int)Mission, MissionT, ids, rs, Missions.Level);
     }
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetMission(int state, double t, int[] ids, int[] ready, int tier)
+    private void NetMission(int state, double t, int[] ids, int[] ready, int level)
     {
-        Missions.Tier = tier;
+        Missions.Level = level;
         Mission = (MissionState)state; MissionT = t;
         _ready.Clear(); for (int i = 0; i < ids.Length && i < ready.Length; i++) _ready[ids[i]] = ready[i] != 0;
     }
@@ -2981,7 +2987,7 @@ public partial class Hub : Node2D
     public const double RaidDelay = 3.0;
     private double _raidIn = -1; private int _raidLevel;
     public int RaidLevel => _raidLevel;
-    public static double RaidScale(int level) => Missions.Scale(level - 1);   // S(L) = 1.1^(L-1)
+    public static double RaidScale(int level) => Missions.S(level);           // S(L) = 1.1^(L-1)
 
     private void StartRaid(int level)
     {
@@ -3107,15 +3113,25 @@ public partial class Hub : Node2D
         }
     }
 
-    // ── shared EXP: the host awards it; every pilot in the session gets it ─────
-    public void AwardPartyExp(int amount)
+    // ── a boss kill, as each guest receives it: its own EXP, its own share of the bounty ──
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void NetBossKill(int level, int party)
+    {
+        Progression.AwardBossKill(level);
+        Yard.AddGuestShare(Missions.BountyEach(level, party));              // to its own base, set aside while it visits
+    }
+    public int PartySize => _ships.Count;
+
+    // host: a level-L boss is down -- every pilot's own EXP and its share of the bounty
+    public void AnnounceBossKill(int level)
     {
         if (!Net.IsHost) return;
-        Progression.AddExp(amount);
-        if (Net.IsOnline) Rpc(nameof(NetExp), amount);
+        int party = System.Math.Max(1, PartySize);
+        Progression.AwardBossKill(level);
+        if (Yard != null) Yard.TripCredits += Missions.BountyEach(level, party);
+        else Yard.AddHostShare(Missions.BountyEach(level, party));
+        if (Net.IsOnline) Rpc(nameof(NetBossKill), level, party);
     }
-    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetExp(int amount) => Progression.AddExp(amount);
 
     // ── character creator ────────────────────────────────────────────────────
     // One instance, owned here; REFIT opens it and it cannot stack.
@@ -3268,7 +3284,7 @@ public partial class Hub : Node2D
             if (Placing) ship += $"    PLACING {_placingLabel}: left-click to confirm, right-click / Esc to cancel";
         }
         string place = Yard == null
-            ? $"ARENA  ·  {Missions.BossName} (TIER {Missions.Tier})  {(IsInstanceValid(Boss) ? Boss.Hp : 0):0} / {(IsInstanceValid(Boss) ? Boss.MaxHp : 0):0}" + (MissionWon ? "  ·  DEFEATED" : "")
+            ? $"ARENA  ·  {Missions.BossName} (LEVEL {Missions.Level})  {(IsInstanceValid(Boss) ? Boss.Hp : 0):0} / {(IsInstanceValid(Boss) ? Boss.MaxHp : 0):0}" + (MissionWon ? "  ·  DEFEATED" : "")
             : $"ORE {Yard.Ore:0}    SALVAGE {Yard.Salvage:0}    CREDITS {Yard.Credits:0}"
               + $"    HAULER {Yard.Hauler.Cargo:0}/{Yard.Capacity:0} {Yard.Hauler.State.ToString().ToUpper()}";
         _hud.Text = place + ship
@@ -3830,15 +3846,22 @@ public partial class MainMenu : Node2D
 
 //==============================================================================
 // FILE: scripts/Missions.cs
-// 26 lines   sha256 6870c2208143
+// 38 lines   sha256 b79f91d3b972
 //==============================================================================
 using System;
+using System.Linq;
 
-// Bounty missions from Threat Intelligence Operations: bosses, difficulty tiers, rewards.
-//   Bosses are data (more types slot in here). Each boss has TIERS: tier n is
-//   1.1^n times as strong (hull and every attack). Beating a tier unlocks the next,
-//   and the TIO selects the newest unlocked tier whenever the host opens it.
-//   The host picks; the tier travels to the guests with the mission state.
+// Bounty missions from Threat Intelligence Operations: bosses, LEVELS, and rewards.
+//   Bosses are data (more types slot in here). LEVELS start at 1 (the base boss):
+//     S(L) = 1.1^(L-1)   -- a level-5 boss is 1.1^4 = 1.46x.
+//   A PARTY of P pilots: the boss's hull x S(L)(1 + 0.6(P-1)), its damage x S(L)(1 + 0.2(P-1)).
+//   A failed level-L mission's raids are S(L) too.
+//   Beating a level unlocks the next; the TIO selects the newest when the host opens it.
+//   REWARDS, per pilot, each computed on the pilot's own machine:
+//     the kill   round(200 x boss level / pilot level)  (a level-5 boss for a level-10 pilot: 100)
+//     +250       the first time that pilot beats that level
+//     +100       for completing the mission
+//     credits    2000 x S(L) x (1 + 0.5(P-1)), split evenly among the P pilots (solo earns the most)
 public static class Missions
 {
     public class BossType { public string Id, Name; public double Hull; }
@@ -3849,14 +3872,19 @@ public static class Missions
     public static BossType Current => Bosses[0];
     public static string BossName => Current.Name;
 
-    public const double TierStep = 1.10;                   // each tier 10% stronger, multiplicatively
-    public static double Scale(int tier) => Math.Pow(TierStep, tier);
-    public static int Tier;                                // the selected tier (host decides)
-    public static int Unlocked(string bossId) => Character.BossBeaten.TryGetValue(bossId, out var t) ? t + 1 : 0;
+    public const double LevelStep = 1.10;
+    public static double S(int level) => Math.Pow(LevelStep, Math.Max(1, level) - 1);
+    public static int Level = 1;                            // the selected level (the host decides; replicated)
+    public static int Beaten(string bossId) => Character.BossCleared.TryGetValue(bossId, out var set) && set.Count > 0 ? set.Max() : 0;
+    public static int Unlocked(string bossId) => Beaten(bossId) + 1;
 
-    public const int BossExp = 300;          // each pilot, for the kill (shared)
-    public const int MissionExp = 100;       // each pilot, for completing the mission (shared)
-    public const int BossCredits = 2000;
+    public static double HullMult(int level, int party) => S(level) * (1 + 0.6 * (Math.Max(1, party) - 1));
+    public static double DamageMult(int level, int party) => S(level) * (1 + 0.2 * (Math.Max(1, party) - 1));
+    public const double BountyBase = 2000;
+    public static double BountyEach(int level, int party) => BountyBase * S(level) * (1 + 0.5 * (Math.Max(1, party) - 1)) / Math.Max(1, party);
+
+    public const int KillExp = 200, FirstClearExp = 250, CompletionExp = 100;
+    public static int KillExpFor(int bossLevel, int pilotLevel) => (int)Math.Round(KillExp * (double)bossLevel / Math.Max(1, pilotLevel));
 }
 
 //==============================================================================
@@ -4264,11 +4292,11 @@ public partial class Net : Node
 
 //==============================================================================
 // FILE: scripts/PilotWindow.cs
-// 54 lines   sha256 d7c6f1a8a09f
+// 54 lines   sha256 f71fe796a23c
 //==============================================================================
 using Godot;
 
-// PILOT (L): level, EXP, points, and the four upgrades they buy. Each row's BUY costs
+// PILOT (L): level, EXP (1000 a level), points, and the four upgrades they buy. Each row's BUY costs
 // one more point than its last purchase (1, 2, 3, ...). Purchases save at once and
 // refit the ship; the host is told with the pilot's identity.
 public partial class PilotWindow : PanelContainer
@@ -4289,7 +4317,7 @@ public partial class PilotWindow : PanelContainer
         _exp = new Label(); col.AddChild(_exp);
         _bar = new ProgressBar { CustomMinimumSize = new Vector2(440, 10), ShowPercentage = false, MaxValue = 1 }; col.AddChild(_bar);
         _points = new Label(); col.AddChild(_points);
-        col.AddChild(new Label { Text = "EXP: completing missions and killing bosses, shared by everyone in the session.",
+        col.AddChild(new Label { Text = "EXP from boss kills: 200 x the boss's level / yours, +250 the first time you beat a level, +100 for completing. Every pilot earns their own.",
                                  AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(440, 0), Modulate = new Color(1, 1, 1, 0.6f) });
         for (int i = 0; i < Progression.All.Length; i++)
         {
@@ -5104,7 +5132,7 @@ public static class Plume
 
 //==============================================================================
 // FILE: scripts/Progression.cs
-// 73 lines   sha256 d3b0cd99118f
+// 86 lines   sha256 0088b0fe5338
 //==============================================================================
 using Godot;
 using System;
@@ -5112,9 +5140,9 @@ using System;
 // ─────────────────────────────────────────────────────────────────────────────
 // PILOT PROGRESSION -- EXP, levels, and the points they buy.
 //
-//   EXP comes from completing missions and killing bosses, and is SHARED: the host
-//   awards it to everyone in the session (Hub.AwardPartyExp).
-//   Each level needs 100 x 1.5^(level-1) EXP and pays 1 point.
+//   EXP comes from boss kills: the host announces the kill and its level, and every
+//   pilot computes its own share (Missions: the kill by level, +250 first clear, +100).
+//   Every level needs 1000 EXP and pays 1 point.
 //   Points buy flat upgrades; each upgrade's next level costs one more point than
 //   the last (1, 2, 3, ...).
 //
@@ -5142,7 +5170,8 @@ public static class Progression
     public const int MaxPerUpgrade = 60;       // a sanity cap on what a peer may claim
 
     public static int Cost(int owned) => owned + 1;                        // 1, 2, 3, ...
-    public static int ExpToNext(int level) => (int)Math.Round(100 * Math.Pow(1.5, level - 1));
+    public const int ExpPerLevel = 1000;
+    public static int ExpToNext(int level) => ExpPerLevel;                  // always 1000
 
     // Flat stat additions for a set of purchases, on a given hull.
     public static System.Collections.Generic.Dictionary<string, double> Flats(int[] bought, ShipClass c)
@@ -5166,6 +5195,18 @@ public static class Progression
         }
         Character.Save();
         return gained;
+    }
+
+    // A boss beaten at `level`: this pilot's own EXP -- the kill by its own level, the first
+    // clear of that level, completing the mission -- and the record. Returns the EXP given.
+    public static int AwardBossKill(int level)
+    {
+        var id = Missions.Current.Id;
+        if (!Character.BossCleared.TryGetValue(id, out var set)) Character.BossCleared[id] = set = new System.Collections.Generic.HashSet<int>();
+        bool first = set.Add(level);
+        int exp = Missions.KillExpFor(level, Character.Level) + (first ? Missions.FirstClearExp : 0) + Missions.CompletionExp;
+        AddExp(exp);                                                         // (saves)
+        return exp;
     }
 
     public static bool TryBuy(string id)
@@ -6969,7 +7010,7 @@ public partial class Telegraph : Node2D
 
 //==============================================================================
 // FILE: scripts/TioWindow.cs
-// 61 lines   sha256 189754fab72b
+// 66 lines   sha256 47e02c18f7fb
 //==============================================================================
 using Godot;
 using System.Linq;
@@ -6984,7 +7025,7 @@ public partial class TioWindow : PanelContainer
     public Hub Hub;
     private Label _party, _status;
     private Button _ready, _down, _up;
-    private Label _tier;
+    private Label _tier, _bounty;
 
     public override void _Ready()
     {
@@ -6994,14 +7035,13 @@ public partial class TioWindow : PanelContainer
         var col = new VBoxContainer(); col.AddThemeConstantOverride("separation", 6); AddChild(col);
         var head = new Label { Text = "WARP TO TARGET" }; head.AddThemeFontSizeOverride("font_size", 20); col.AddChild(head);
         col.AddChild(new Label { Text = "Threat Intelligence Operations", Modulate = new Color(1, 1, 1, 0.6f) });
-        var bounty = new Label { Text = $"BOUNTY  ·  {Missions.BossName}\nReward: {Missions.BossExp} EXP each for the kill, {Missions.MissionExp} EXP each for completing it, {Missions.BossCredits} credits.",
-                                 AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(440, 0) };
-        col.AddChild(bounty);
+        _bounty = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(440, 0) };
+        col.AddChild(_bounty);
         var diff = new HBoxContainer { Name = "Difficulty" }; diff.AddThemeConstantOverride("separation", 8); col.AddChild(diff);
         diff.AddChild(new Label { Text = "DIFFICULTY", Modulate = new Color(0.55f, 0.8f, 1f) });
-        _down = new Button { Name = "TierDown", Text = "◀", FocusMode = FocusModeEnum.None }; _down.Pressed += () => Hub.SelectTier(Missions.Tier - 1);
+        _down = new Button { Name = "LevelDown", Text = "◀", FocusMode = FocusModeEnum.None }; _down.Pressed += () => Hub.SelectLevel(Missions.Level - 1);
         _tier = new Label { CustomMinimumSize = new Vector2(230, 0), HorizontalAlignment = HorizontalAlignment.Center };
-        _up = new Button { Name = "TierUp", Text = "▶", FocusMode = FocusModeEnum.None }; _up.Pressed += () => Hub.SelectTier(Missions.Tier + 1);
+        _up = new Button { Name = "LevelUp", Text = "▶", FocusMode = FocusModeEnum.None }; _up.Pressed += () => Hub.SelectLevel(Missions.Level + 1);
         diff.AddChild(_down); diff.AddChild(_tier); diff.AddChild(_up);
         col.AddChild(new Label { Text = "PARTY  (everyone in the session)", Modulate = new Color(0.55f, 0.8f, 1f) });
         _party = new Label(); col.AddChild(_party);
@@ -7017,9 +7057,15 @@ public partial class TioWindow : PanelContainer
     {
         if (Hub == null) return;
         int top = Missions.Unlocked(Missions.Current.Id);
-        _tier.Text = $"TIER {Missions.Tier}  ·  ×{Missions.Scale(Missions.Tier):0.00}" + (Missions.Tier == top ? "  (newest)" : "");
-        _down.Disabled = !Net.IsHost || Missions.Tier <= 0 || Hub.Mission != Hub.MissionState.Idle;
-        _up.Disabled = !Net.IsHost || Missions.Tier >= top || Hub.Mission != Hub.MissionState.Idle;
+        int lv = Missions.Level, party = System.Math.Max(1, Hub.PartySize);
+        _tier.Text = $"LEVEL {lv}  ·  ×{Missions.S(lv):0.00}" + (lv == top ? "  (newest)" : "");
+        _down.Disabled = !Net.IsHost || lv <= 1 || Hub.Mission != Hub.MissionState.Idle;
+        _up.Disabled = !Net.IsHost || lv >= top || Hub.Mission != Hub.MissionState.Idle;
+        bool first = !(Character.BossCleared.TryGetValue(Missions.Current.Id, out var cl) && cl.Contains(lv));
+        _bounty.Text = $"BOUNTY  ·  {Missions.BossName}  ·  party of {party}\n"
+                     + $"You: {Missions.KillExpFor(lv, Character.Level)} EXP for the kill (your level {Character.Level})"
+                     + (first ? $" + {Missions.FirstClearExp} first clear" : "") + $" + {Missions.CompletionExp} completing, "
+                     + $"{Missions.BountyEach(lv, party):0} credits each.";
         _party.Text = string.Join("\n", Hub.PartyIds.OrderBy(i => i).Select(i => $"  {Hub.PilotName(i)}   {(Hub.IsReady(i) ? "READY" : "not ready")}"));
         bool mine = Hub.IsReady(Net.LocalId);
         _ready.Text = mine ? "READY  ✓" : "READY";
@@ -7334,7 +7380,7 @@ public static class Ui
 
 //==============================================================================
 // FILE: scripts/Yard.cs
-// 414 lines   sha256 e22f4c9c64df
+// 418 lines   sha256 b66daac871a4
 //==============================================================================
 using Godot;
 using System;
@@ -7433,6 +7479,10 @@ public partial class Yard : Node2D
     public static double TripCredits;                 // earned while away (a bounty), paid on return
     public static double LastAway, LastAwayOre, LastAwaySalvage;   // what the last return credited
     public static double TripStartCredits;            // the credits set aside when the last trip began
+    // a guest's share of a bounty goes to its OWN base, set aside while it visits
+    public static void AddGuestShare(double credits) => _ownCredits += credits;
+    // the host's share, earned in the arena (where there is no yard): paid on the way home
+    public static void AddHostShare(double credits) => TripCredits += credits;
 
     public void SaveForTrip()
     {
@@ -7815,7 +7865,7 @@ echo "0 errors." >&2
 
 //==============================================================================
 // FILE: tools/screens/Shots.cs.txt
-// 433 lines   sha256 f7b91abe5ced
+// 437 lines   sha256 bb52f9c6f5e0
 //==============================================================================
 // Screenshot driver. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Shots.cs, registers it as an autoload, and runs the real
@@ -7878,6 +7928,9 @@ public partial class _Shots : Node
 
     public override async void _Ready()
     {
+        // 2x game speed: every wait here is game time, so each frame catches the same moment,
+        // sooner -- the sweep has to finish inside the sandbox's 300 s limit
+        Engine.TimeScale = 2.0;
         // two characters, like the user's: a black-hulled carrier and a default battleship
         Character.NewBlank(); Character.Name = "Commander"; Character.Class = ShipClass.Carrier; Character.Main = new Color(0.05f, 0.05f, 0.05f); Character.Save();
         await W(0.05);
@@ -8247,13 +8300,14 @@ public partial class _Shots : Node
             for (int i = 0; i < 60 * 16 && !N<Telegraph>().Any(t => !t.Line); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             await W(0.9); await Snap("39_arena_shockwave_telegraph");
         }
+        GD.Print("SWEEP DONE");          // the runner fails without it: a cut-off sweep must never pass as clean
         GetTree().Quit();
     }
 }
 
 //==============================================================================
 // FILE: tools/screens/run.sh
-// 40 lines   sha256 a47174d56c6a
+// 42 lines   sha256 73a5b3c63476
 //==============================================================================
 #!/bin/sh
 # Renders real screenshots of the game (select screen, creator, both classes in the
@@ -8293,12 +8347,14 @@ fi
 pgrep Xvfb >/dev/null || { echo "NO VIRTUAL DISPLAY -- nothing was rendered"; exit 2; }
 # Forward+ needs Vulkan; the compatibility renderer runs on Mesa's software GL
 DISPLAY=:99 timeout 400 "$G" --path . --rendering-driver opengl3 --rendering-method gl_compatibility \
-    --windowed --resolution 1600x900 2>&1 | grep --line-buffered -E "^shot|^LINT|Exception"
+    --windowed --resolution 1600x900 2>&1 | grep --line-buffered -E "^shot|^LINT|Exception|^SWEEP" | tee /tmp/sweep_out.log
+# a sweep cut off part-way (a timeout) must never pass as clean
+grep -q "^SWEEP DONE" /tmp/sweep_out.log || echo "SWEEP INCOMPLETE -- the run was cut off; later frames were not rendered"
 ls /tmp/shots
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 1564 lines   sha256 eb3297f4cd47
+// 1579 lines   sha256 09752c7eb14d
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -9073,10 +9129,20 @@ public partial class _Test : Node
         // ── pilot progression: EXP, levels, points, flat upgrades ──
         {
             Check(Progression.Cost(0) == 1 && Progression.Cost(1) == 2 && Progression.Cost(2) == 3, "upgrade costs 1, 2, 3, ... points");
-            Check(Progression.ExpToNext(1) == 100 && Progression.ExpToNext(2) == 150, "levels need 100 x 1.5^(level-1) EXP");
-            Character.Exp = 0; Character.Level = 1; Character.Points = 0; System.Array.Clear(Character.Bought);
-            int up = Progression.AddExp(260);
-            Check(up == 2 && Character.Level == 3 && Character.Exp == 10 && Character.Points == 2, "260 EXP from level 1: level 3, 10 over, 2 points");
+            Check(Progression.ExpToNext(1) == 1000 && Progression.ExpToNext(7) == 1000, "every level needs 1000 EXP");
+            Character.Exp = 0; Character.Level = 1; Character.BossCleared.Clear(); Character.Points = 0; System.Array.Clear(Character.Bought);
+            int up = Progression.AddExp(2600);
+            Check(up == 2 && Character.Level == 3 && Character.Exp == 600 && Character.Points == 2, "2600 EXP from level 1: level 3, 600 over, 2 points");
+            // the approved formula, in literal numbers (so the checks can fail)
+            Check(Math.Abs(Missions.S(1) - 1) < 1e-12 && Math.Abs(Missions.S(5) - 1.4641) < 1e-9, "boss levels start at 1: S(L) = 1.1^(L-1) (level 5: x1.4641)");
+            Check(Math.Abs(Missions.HullMult(1, 3) - 2.2) < 1e-9 && Math.Abs(Missions.DamageMult(1, 3) - 1.4) < 1e-9, "a party of 3: boss hull x2.2, damage x1.4");
+            Check(Missions.KillExpFor(5, 10) == 100 && Missions.KillExpFor(2, 1) == 400 && Missions.KillExpFor(1, 1) == 200, "kill EXP 200 x boss level / pilot level (5 vs 10: 100; 2 vs 1: 400)");
+            Check(Math.Abs(Missions.BountyEach(1, 1) - 2000) < 1e-9 && Math.Abs(Missions.BountyEach(1, 2) - 1500) < 1e-9 && Math.Abs(Missions.BountyEach(1, 3) - 4000.0 / 3) < 1e-9,
+                  "the bounty, +50% per extra pilot, split: 2000 solo, 1500 each for two, 1333 each for three");
+            Character.BossCleared.Clear(); Character.Exp = 0; Character.Level = 1;
+            int k1 = Progression.AwardBossKill(1), k2 = Progression.AwardBossKill(1);
+            Check(k1 == 550 && k2 == 300, $"a level-1 boss: 200 + 250 first clear + 100 = 550; again: 300 ({k1}, {k2})");
+            Character.BossCleared.Clear(); Character.Exp = 0; Character.Level = 3;
             Check(!Nodes<BossBar>().First().Visible, "outside the arena there is no boss bar");
             Key(global::Godot.Key.L); await Wait(0.1);
             var pw = Nodes<PilotWindow>().FirstOrDefault();
@@ -9496,9 +9562,9 @@ public partial class _Test : Node
             Check(Math.Abs(chargeDmg - 40) < 1e-6, $"the charge rams for 40 ({chargeDmg:0})");
             Check(Music.I == null || Math.Abs(Boss.TridentSpeed - 135f) < 1e-3, "trident missiles fly at 135 u/s (10% slower)");
             // the kill: shared EXP for it and the mission, the bounty's credits, then home
-            Character.Exp = 0; Character.Level = 1; Character.Points = 0;
+            Character.Exp = 0; Character.Level = 1; Character.BossCleared.Clear(); Character.Points = 0; Character.BossCleared.Clear();
             boss.TakeDamage(boss.Hp + 1); await Wait(0.2);
-            Check(H.MissionWon && Character.Level == 3 && Character.Exp == 150, "the kill pays 300 + 100 EXP (level 1 -> 3, 150 over)");
+            Check(H.MissionWon && Character.Level == 1 && Character.Exp == 550, $"the kill of a level-1 boss pays a level-1 pilot 200 + 250 first clear + 100 = 550 (exp {Character.Exp})");
             for (int i = 0; i < 60 * 8 && Hub.InArena; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             await Wait(1.0);
             Check(!Hub.InArena && H.Yard != null, "home again after the win");
@@ -9511,22 +9577,22 @@ public partial class _Test : Node
             double want = H.Yard.FleetRate(GatherKind.Miner) * Yard.LastAway / 20.0;
             Check(Yard.LastAway > 1 && Yard.LastAwayOre > 0 && Math.Abs(Yard.LastAwayOre - want) < 1e-6,
                   $"while away the base earned 1/20 of its rate ({Yard.LastAwayOre:0.0} ore for {Yard.LastAway:0} s)");
-            // difficulty: the win unlocked tier 1, and docking at the TIO selects it
-            Check(Character.BossBeaten.TryGetValue("silver_lancer", out var beat) && beat == 0, "the win records tier 0 as beaten");
-            Check(Math.Abs(Missions.Scale(1) - 1.1) < 1e-9 && Math.Abs(Missions.Scale(2) - 1.21) < 1e-9
-                  && Math.Abs(Missions.Current.Hull * Missions.Scale(1) - 1320) < 1e-6, "each tier is 10% stronger, multiplicatively (tier 1: 1320 hull)");
+            // levels: the win cleared level 1; docking at the TIO selects level 2
+            Check(Character.BossCleared.TryGetValue("silver_lancer", out var cleared) && cleared.Contains(1), "the win records level 1 as cleared");
+            Check(Math.Abs(Missions.S(2) - 1.1) < 1e-9 && Math.Abs(Missions.S(3) - 1.21) < 1e-9 && Math.Abs(Missions.Current.Hull * Missions.S(2) - 1320) < 1e-6,
+                  "each level is 10% stronger, multiplicatively (level 2: 1320 hull)");
             H.OpenTio(); await Wait(0.1);
             var tw2 = Nodes<TioWindow>().First();
-            Check(Missions.Tier == 1, "docking at the TIO selects the newest unlocked tier (1)");
-            Check(Nodes<Button>(tw2).First(b => b.Name == "TierUp").Disabled, "no tier beyond the newest unlocked");
-            Nodes<Button>(tw2).First(b => b.Name == "TierDown").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
-            Check(Missions.Tier == 0, "the host can pick an easier, beaten tier");
-            Nodes<Button>(tw2).First(b => b.Name == "TierUp").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
-            Check(Missions.Tier == 1, "and back up to the newest");
+            Check(Missions.Level == 2, "docking at the TIO selects the newest unlocked level (2)");
+            Check(Nodes<Button>(tw2).First(b => b.Name == "LevelUp").Disabled, "no level beyond the newest unlocked");
+            Nodes<Button>(tw2).First(b => b.Name == "LevelDown").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
+            Check(Missions.Level == 1, "the host can pick an easier, cleared level");
+            Nodes<Button>(tw2).First(b => b.Name == "LevelUp").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
+            Check(Missions.Level == 2, "and back up to the newest");
             Key(global::Godot.Key.Escape); await Wait(0.1);
             // a wipe: every ship in stasis at once -> the mission fails, home with nothing
             H.EnterSector(Hub.SectorKind.Arena); await Wait(1.5);
-            int exp1 = Character.Exp; int failLevel = Missions.Tier + 1;
+            int exp1 = Character.Exp; int failLevel = Missions.Level;
             Me.TakeDamage(Me.Hp + 1);
             for (int i = 0; i < 60 * 8 && Hub.InArena; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             await Wait(1.0);
@@ -9556,7 +9622,7 @@ public partial class _Test : Node
             }
             Check(fp.DistanceTo(goal) < 80f, $"the fighter-class autopilot reaches its point ({fp.DistanceTo(goal):0} u off)");
             Check(Settings.MusicOn, "music is on by default");
-            Character.Exp = 0; Character.Level = 1; Character.Points = 0; Character.Save();
+            Character.Exp = 0; Character.Level = 1; Character.BossCleared.Clear(); Character.Points = 0; Character.Save();
             Me.Position = Hub.BasePos + new Vector2(0, 330); Me.Velocity = Vector2.Zero; await Wait(1.5);
             Click(Scr(Hub.BasePos)); await Wait(0.1);
             Check(Nodes<BasePanel>().Any(), "left-click on the base station opens the BASE menu");
@@ -9694,6 +9760,7 @@ public partial class _Test : Node
         {
             Character.Name = "Arena Guest";
             H.Yard.Credits = 12345;                               // its own base, before it visits
+            Character.Exp = 0; Character.Level = 1; Character.BossCleared.Clear();
             await Wait(0.8);
             Net.I.Join($"127.0.0.1:{Port}");
             for (int i = 0; i < 60 * 10 && !(Net.IsOnline && Net.LocalId != 1); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
@@ -9701,11 +9768,13 @@ public partial class _Test : Node
             await ToArena("arena guest", 1);
             for (int i = 0; i < 60 * 15 && Hub.InArena; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(!Hub.InArena && Net.IsOnline, "arena guest: home with the host after the win");
+            Check(Character.Exp == 550, $"arena guest: its own EXP for the kill (550; exp {Character.Exp})");
             await ToArena("arena guest", 2);
             for (int i = 0; i < 60 * 20 && (Hub.InArena || Net.IsOnline); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             await Wait(1.0);
-            Check(!Hub.InArena && !Net.IsOnline && H.Yard != null && Math.Abs(H.Yard.Credits - 12345) < 1e-6,
-                  $"arena guest: the host gone mid-arena, it lands home offline with its own base ({H.Yard?.Credits:0} credits)");
+            double want = 12345 + Missions.BountyEach(1, 2);        // its own base + its share of the first bounty
+            Check(!Hub.InArena && !Net.IsOnline && H.Yard != null && Math.Abs(H.Yard.Credits - want) < 1e-6,
+                  $"arena guest: the host gone mid-arena, home offline with its own base and its bounty share ({H.Yard?.Credits:0} of {want:0})");
         }
     }
 
@@ -9718,7 +9787,7 @@ public partial class _Test : Node
             H.GetNode<PlayerShip>("Ship_1").Position = new Vector2(-900, 900);   // out of the way
             Net.I.Host(27115);
             H.Yard.Credits = 1000;                     // for the guest's purchase request
-            Character.Exp = 0; Character.Level = 1;
+            Character.Exp = 0; Character.Level = 1; Character.BossCleared.Clear();
             Check(Net.I.Reachability == Net.Reach.Checking && Net.I.LanAddress.EndsWith(":27115"), "hosting starts at once; the router is asked in the background");
             await Wait(9.0);
             // no router in the sandbox: it must say so, and how to get friends in anyway
@@ -9740,7 +9809,8 @@ public partial class _Test : Node
             Check(rev.Text.Contains("203.0.113.7:27015"), "click: it shows the public address and port");
             rev.EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
             Check(!rev.Text.Contains("203.0.113.7"), "click again: hidden");
-            H.AwardPartyExp(40);                  // shared: every pilot in the session gets it
+            Character.BossCleared.Clear();
+            H.AnnounceBossKill(1);                // every pilot: its own EXP by its own level
             H.SpawnRaider(new Vector2(-3500, 3500));   // far off: the guests must see it
             H.SpawnRaider(new Vector2(-3700, 3700), RaiderKind.Heavy);
             Check(!H.AllReady, "the host cannot warp until every pilot is ready");
@@ -9748,7 +9818,7 @@ public partial class _Test : Node
             for (int i = 0; i < 600 && !H.AllReady; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(H.AllReady && H.PartyIds.Count() == 3, "both guests' READY reached the host: the party of three is ready");
             H.StartMission();
-            Check(Character.Exp == 40, "the host gets its own share of the EXP");
+            Check(Character.Exp == 550, $"the host gets its own EXP for the kill (level 1: 550; exp {Character.Exp})");
             Check(H.Yard.Level("salvage_rate") == 1 && H.Yard.Credits == 900, "a guest's BUY request was honoured by the host");
             var g = ships.FirstOrDefault(s => s.Pilot == "Guesty");
             Check(g != null && g.Name == PlayerShip.NodeName(g.OwnerId), "guest ship named by its id");
@@ -9813,8 +9883,8 @@ public partial class _Test : Node
             var host = Nodes<PlayerShip>().FirstOrDefault(s => s.OwnerId == 1);
             Check(Nodes<PlayerShip>().Count() == 3 && Nodes<PlayerShip>().Any(s => s.Pilot == "Third"), "guest sees the other guest too (3 ships)");
             Check(H.Yard.Level("salvage_rate") == 1, "the upgrade the host granted reached the guest");
-            for (int i = 0; i < 480 && Character.Exp != 40; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            Check(Character.Exp == 40, $"the host's EXP award reached this guest (exp {Character.Exp})");
+            for (int i = 0; i < 480 && Character.Exp != 550; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(Character.Exp == 550, $"the host's kill reached this guest, which took its own 550 (exp {Character.Exp})");
             for (int i = 0; i < 60 * 6 && H.Raiders.Count == 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             for (int i = 0; i < 60 * 3 && !H.Raiders.Any(r => r.Heavy); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(H.Raiders.Count >= 2 && Combat.Hostiles.OfType<Raider>().Any() && H.Raiders.Any(r => r.Heavy),
@@ -9845,7 +9915,8 @@ public partial class _Test : Node
             // ships' cargo, and credits from a sale -- is at least the 5000 it had, and
             // nowhere near the host's few hundred.
             double own = H.Yard.Ore + H.Yard.Salvage + H.Yard.Hauler.Cargo + H.Yard.Gatherers.Sum(x => x.Cargo) + H.Yard.Credits;
-            Check(own >= 5000 - 1e-6 && own < 5400, $"guest's own totals restored, nothing lost ({own:0.00} held)");
+            double share = Missions.BountyEach(1, 3);                // the host's announced kill, a party of three
+            Check(own - share >= 5000 - 1e-6 && own - share < 5400, $"guest's own totals restored, nothing lost, plus its bounty share ({own:0.00} held, {share:0.00} of it the share)");
             Check(H.Yard.Level("salvage_rate") == 0, "guest's own upgrade levels restored (the host's level 1 stays in the host's world)");
             Check(H.Yard.Hauler.Cargo <= H.Yard.Capacity && H.Yard.Gatherers.All(x => x.Cargo == 0 || x.State == Gatherer.St.Working),
                   "economy ships restart docked and empty in your own world");
