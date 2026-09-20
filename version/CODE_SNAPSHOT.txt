@@ -1,8 +1,8 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-20 04:00 at git commit c56001a: typecheck clean, smoke test 3/3 passes
-//   (404 checks, 0 compiler warnings, 0 analyser findings), UI sweep complete, 0 lint.
-// 57 files, 10034 lines. Code only: sprites, sounds and docs are in the zip.
+// Taken 2026-09-20 04:34 at git commit 5e7be99: typecheck clean, smoke test 3/3 passes
+//   (407 checks, 0 compiler warnings, 0 analyser findings), 66-frame UI sweep complete, 0 lint.
+// 57 files, 10086 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -42,7 +42,7 @@
 //   scripts/Plume.cs                                25 lines   sha256 cdbeb9b8fc58
 //   scripts/Progression.cs                          86 lines   sha256 c9a5dc290c4d
 //   scripts/Radar.cs                               129 lines   sha256 189719fcc94f
-//   scripts/Raider.cs                              288 lines   sha256 669fda8aafe0
+//   scripts/Raider.cs                              309 lines   sha256 f6f9139ee094
 //   scripts/SessionMenu.cs                         120 lines   sha256 ecdca865f3ee
 //   scripts/Settings.cs                             58 lines   sha256 80100257eda5
 //   scripts/Sfx.cs                                  69 lines   sha256 c5ce9c91a433
@@ -62,9 +62,9 @@
 //   tools/analyse/analysers.editorconfig            15 lines   sha256 45fdb7258163
 //   tools/analyse/run.sh                            16 lines   sha256 e6f2cd50f0c4
 //   tools/analyse/xref.py                           19 lines   sha256 9359eb94c161
-//   tools/screens/Shots.cs.txt                     450 lines   sha256 cd9e7454f69d
+//   tools/screens/Shots.cs.txt                     451 lines   sha256 b3da9b6db736
 //   tools/screens/run.sh                            42 lines   sha256 73a5b3c63476
-//   tools/smoketest/SmokeTest.cs.txt              1705 lines   sha256 e9078c915f60
+//   tools/smoketest/SmokeTest.cs.txt              1735 lines   sha256 655f2b50695f
 //   tools/smoketest/run.sh                          57 lines   sha256 568b677787fd
 //==============================================================================
 
@@ -5433,7 +5433,7 @@ public partial class Radar : Control
 
 //==============================================================================
 // FILE: scripts/Raider.cs
-// 288 lines   sha256 669fda8aafe0
+// 309 lines   sha256 f6f9139ee094
 //==============================================================================
 using Godot;
 using System.Linq;
@@ -5450,10 +5450,10 @@ using System.Linq;
 //   kept to 20% of its top speed, thrusting forward, unable to turn -- a soft lock.
 //   It fires a 1 DPS laser (the raider damage "x").
 //
-//   HEAVY: the battleship cut in half -- 4x a light's size, one turret. It hangs back
-//   BEHIND its target (the approach is from the rear), facing it, 450 u out, until the
-//   target is pinned; then it afterburns in to 135 u off the hull and fires a short,
-//   hard laser: 2x the raider damage. Within 500 u it also fires a fat missile at where
+//   HEAVY: a snub-nosed gunship -- 4x a light's length, one turret. It waits at the MAP'S
+//   EDGE nearest its target, facing it, until the target is pinned; then it boosts at 700%
+//   until 300 u away, and closes at cruise to 135 u off the hull, astern, where it fires a
+//   short, hard laser: 2x the raider damage. Within 500 u it also fires a fat missile at where
 //   the target WILL be in 7 s (its speed carried forward): a red circle marks the spot
 //   for all 7 s, and the blast lands there -- move off the line and it misses.
 //
@@ -5487,11 +5487,25 @@ public partial class Raider : Node2D, IHittable
     public const double RaiderDps = 1.0;               // x -- a light's laser; a heavy's is 2x
     public const double HeavyDps = 2 * RaiderDps;
     public const double HeavyShotEvery = 1.0;
-    public const float Afterburn = 300f;               // a heavy closing on a pinned target
-    public const float HeavyReach = 150f, HeavyHold = 0.9f * HeavyReach, WaitOut = 450f;
+    public const float HeavyBoostMult = 7f;            // 700%: a heavy closing on a pinned target...
+    public const float HeavyBoostStop = 300f;          // ...until this close, then at cruise
+    public const float HeavyReach = 150f, HeavyHold = 0.9f * HeavyReach;
     public const float MissileRange = 500f, BlastRadius = 90f;
     public const double MissileFlight = 7.0, MissileEvery = 12.0, MissileDamage = 30;
     public const float PerimeterR = 1800f, Detect = 2000f, PatrolSpeed = 100f;
+    public const float MaxStep = 50f;                  // more than this in one frame is a jump (a warp), not motion
+    public const float WildSpeed = 400f;               // faster than this is not flying (4x a capital ship)
+    public const float MaxLead = WildSpeed * (float)MissileFlight;   // no sane prediction lands further off
+
+    // Where a heavy's missile aims: the target carried 7 s forward by its velocity -- UNLESS
+    // anything is out of place (a wild speed, a broken number, a spot absurdly far off):
+    // then right at where the target is now.
+    public static Vector2 PredictSpot(Vector2 pos, Vector2 vel)
+    {
+        bool sane = float.IsFinite(vel.X) && float.IsFinite(vel.Y) && vel.Length() <= WildSpeed;
+        var spot = sane ? pos + vel * (float)MissileFlight : pos;
+        return float.IsFinite(spot.X) && float.IsFinite(spot.Y) && spot.DistanceTo(pos) <= MaxLead ? spot : pos;
+    }
     public int Patrol;                                 // 0: on its own
     private float _orbit;                              // patrols: its angle round the perimeter
     public const double ShotEvery = 1.0;
@@ -5534,8 +5548,10 @@ public partial class Raider : Node2D, IHittable
         {   // the battleship's front turret on its mount (62.4 px down the 150 px half-hull), dark as the hull
             _sprite.Modulate = new Color(0.62f, 0.40f, 0.40f);
             var tt = GD.Load<Texture2D>("res://turret_bs_main.png");
-            _turret = new Sprite2D { Texture = tt, Position = new Vector2(0, (62.4f - 75f) * Length / 150f),
-                                     Scale = Vector2.One * (Length / 150f) * 0.8f, Modulate = new Color(0.62f, 0.40f, 0.40f), ZIndex = 1 };
+            // the turret mount: row 40.3 of the 100 px snub-nosed hull
+            float px = Length / tex.GetHeight();
+            _turret = new Sprite2D { Texture = tt, Position = new Vector2(0, (40.3f - tex.GetHeight() / 2f) * px),
+                                     Scale = Vector2.One * px * 0.62f, Modulate = new Color(0.62f, 0.40f, 0.40f), ZIndex = 1 };
             AddChild(_turret);
         }
         ZIndex = 5;
@@ -5610,7 +5626,10 @@ public partial class Raider : Node2D, IHittable
         if (!Alive) return;
         if (!Up(Target)) { Target = Choose(); Latched = false; _boostUsed = false; }
         if (Target == null) { Speed = 0; if (Patrol != 0) Circle(delta); QueueRedraw(); return; }
-        _targetVel = dt > 0 ? (Target.Position - _lastTargetPos) / dt : Vector2.Zero; _lastTargetPos = Target.Position;
+        // its target's velocity, from frame to frame -- except a JUMP (a warp; over 50 u in one frame,
+        // 3000 u/s, nothing flies that fast), which would send the predicted missile miles off
+        var moved = Target.Position - _lastTargetPos;
+        _targetVel = dt > 0 && moved.Length() < MaxStep ? moved / dt : Vector2.Zero; _lastTargetPos = Target.Position;
         if (Heavy) { TickHeavy(delta); QueueRedraw(); return; }
 
         // my post around the target: ahead, left or right by its heading, 90 u out
@@ -5674,15 +5693,17 @@ public partial class Raider : Node2D, IHittable
 
     static bool PinnedNow(Node2D t) => t switch { PlayerShip p => p.Pinned, Gatherer g => g.Pinned, Hauler h => h.Pinned, _ => false };
 
-    // the heavy: wait astern until the target is pinned, then afterburn in; missiles within 500 u
+    // the heavy: wait at the map's edge until the target is pinned, then boost in; missiles within 500 u
+    public static Vector2 EdgeSpot(Vector2 target) =>
+        Hub.BasePos + ((target - Hub.BasePos).LengthSquared() > 1f ? (target - Hub.BasePos).Normalized() : Vector2.Right) * Hub.RaidEdge;
     private void TickHeavy(double delta)
     {
         float dt = (float)delta;
         var astern = -Vector2.Up.Rotated(Target.Rotation);                    // it comes in from the rear
         bool pinned = PinnedNow(Target);
         var dest = pinned ? Target.Position + astern * (Extent(Target, astern) + HeavyHold)
-                          : Target.Position + astern * WaitOut;
-        float top = pinned ? Afterburn : Cruise;
+                          : EdgeSpot(Target.Position);                        // patient, at the map's edge nearest it
+        float top = pinned && Position.DistanceTo(Target.Position) > HeavyBoostStop ? Cruise * HeavyBoostMult : Cruise;
         float d = Position.DistanceTo(dest);
         Speed = Mathf.Min(top, d * 6f);
         Position = Position.MoveToward(dest, Speed * dt);
@@ -5704,7 +5725,7 @@ public partial class Raider : Node2D, IHittable
         if (_missileCd <= 0 && Position.DistanceTo(Target.Position) <= MissileRange)
         {   // at where it WILL be: its velocity carried 7 s forward
             _missileCd = MissileEvery;
-            Hub.HeavyMissile(Position, Target.Position + _targetVel * (float)MissileFlight, NetId, MissileDamage * Strength);
+            Hub.HeavyMissile(Position, PredictSpot(Target.Position, _targetVel), NetId, MissileDamage * Strength);
         }
     }
 
@@ -8115,7 +8136,7 @@ print('USED ONLY BY TESTS:', len(test_only)); [print('  ' + x) for x in sorted(t
 
 //==============================================================================
 // FILE: tools/screens/Shots.cs.txt
-// 450 lines   sha256 cd9e7454f69d
+// 451 lines   sha256 b3da9b6db736
 //==============================================================================
 // Screenshot driver. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Shots.cs, registers it as an autoload, and runs the real
@@ -8353,9 +8374,10 @@ public partial class _Shots : Node
         // a heavy raider waiting astern, its missile flying at the ship's predicted spot (the red circle)
         {
             var hs2 = H.GetNode<PlayerShip>("Ship_1"); var keepH2 = hs2.Position;
-            // facing east, so "astern" is west: the heavy waits beside the HUD, not under it
-            hs2.Position = new Vector2(4000, -2500); hs2.Velocity = Vector2.Zero; hs2.Rotation = Mathf.Pi / 2f; await W(0.3);
-            var hv = H.SpawnRaider(hs2.Position + new Vector2(-600, 0), RaiderKind.Heavy);
+            // the heavy waits at the map's edge nearest the ship (3200 u out, east of the base);
+            // the ship 400 u inside it, so the heavy's missile is in range
+            hs2.Position = Hub.BasePos + new Vector2(2800, 0); hs2.Velocity = Vector2.Zero; hs2.Rotation = 0f; await W(0.3);
+            var hv = H.SpawnRaider(Hub.BasePos + new Vector2(3200, 60), RaiderKind.Heavy);
             var zp = typeof(Hub).GetProperty("ZoomLevel"); float z0 = (float)zp.GetValue(H); zp.SetValue(H, 0.85f);   // ship and heavy both in view
             await W(4.5); await Snap("49_heavy_waiting_missile");
             if (GodotObject.IsInstanceValid(hv)) hv.TakeDamage(9999);
@@ -8617,7 +8639,7 @@ ls /tmp/shots
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 1705 lines   sha256 e9078c915f60
+// 1735 lines   sha256 655f2b50695f
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -9608,21 +9630,24 @@ public partial class _Test : Node
             me.Position = keepPos; me.Velocity = Vector2.Zero; me.TakeDamage(-(me.MaxHp - me.Hp));   // hand over at full hull
         }
 
-        // ── raiders (6b): the heavy -- waits astern, a predicted missile, afterburns in on a pinned target ──
+        // ── raiders (6b): the heavy -- waits at the map's edge; a predicted missile; boosts at 700% on a pinned target ──
         {
             var hm = Me; var keepH = hm.Position;
-            hm.Position = new Vector2(4000, -2500); hm.Velocity = Vector2.Zero; hm.Rotation = 0f; await Wait(0.3);
-            var hv = H.SpawnRaider(hm.Position + new Vector2(0, 900), RaiderKind.Heavy);
+            hm.Position = Hub.BasePos + new Vector2(2000, 0); hm.Velocity = Vector2.Zero; hm.Rotation = 0f; await Wait(0.3);
+            var hv = H.SpawnRaider(Hub.BasePos + new Vector2(2600, 500), RaiderKind.Heavy);
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(hv.Heavy && Math.Abs(hv.Length - 4 * Raider.LightLength) < 1e-3 && Math.Abs(Raider.HeavyDps - 2 * Raider.RaiderDps) < 1e-9 && Raider.RaiderDps == 1,
-                  "a heavy raider: four times a light's size, twice the raider damage (2 DPS)");
+                  "a heavy raider: four times a light's length, twice the raider damage (2 DPS)");
             double HvLaser() => hm.DamageBySource.Where(kv => kv.Key == $"raider:{hv.NetId}").Sum(kv => kv.Value);
             double HvMissile() => hm.DamageBySource.Where(kv => kv.Key == $"heavy:{hv.NetId}:missile").Sum(kv => kv.Value);
-            await Wait(6.0);                                                   // 450 u at 100 u/s, easing in
-            var sternDir = -Vector2.Up.Rotated(hm.Rotation);
-            float offAstern = Mathf.RadToDeg(Mathf.Abs(sternDir.AngleTo(hv.Position - hm.Position))), waitOut = hv.Position.DistanceTo(hm.Position);
-            Check(offAstern < 20 && Math.Abs(waitOut - Raider.WaitOut) < 40 && HvLaser() == 0,
-                  $"its target unpinned, it waits astern ({offAstern:0} deg off, {waitOut:0} u out) and holds its laser");
+            var edge = Raider.EdgeSpot(hm.Position);
+            for (int i = 0; i < 60 * 12 && hv.Position.DistanceTo(edge) > 8f; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await Wait(0.5);
+            float hvFacing = Mathf.RadToDeg(Mathf.Abs(Mathf.AngleDifference(hv.Rotation, (hm.Position - hv.Position).Angle() + Mathf.Pi / 2f)));
+            Check(hv.Position.DistanceTo(edge) < 10f && Math.Abs(hv.Position.DistanceTo(Hub.BasePos) - 3200f) < 10f && hvFacing < 15f && HvLaser() == 0,
+                  $"its target unpinned, it waits at the map's edge nearest it ({hv.Position.DistanceTo(Hub.BasePos):0} u from the base), facing it, laser silent");
+            // the missile: within 500 u of the heavy, at where the target will be in 7 s
+            hm.Position = edge + (Hub.BasePos - edge).Normalized() * 420f; hm.Velocity = Vector2.Zero;
             for (int i = 0; i < 60 * 14 && H.BlastsPending == 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             var blastRing = Nodes<Telegraph>().FirstOrDefault(t => !t.Line && Math.Abs(t.Radius - Raider.BlastRadius) < 0.1f);
             Check(H.BlastsPending == 1 && blastRing != null && blastRing.A.DistanceTo(hm.Position) < 6f && Math.Abs(blastRing.Duration - 7) < 1e-6,
@@ -9632,16 +9657,43 @@ public partial class _Test : Node
             Check(Math.Abs(HvMissile() - mm0 - Raider.MissileDamage) < 1e-6, $"staying on the circle, the blast lands ({HvMissile() - mm0:0})");
             typeof(Raider).GetField("_missileCd", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(hv, 0.0);
             for (int i = 0; i < 60 && H.BlastsPending == 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            hm.Position += new Vector2(300, 0); hm.Velocity = Vector2.Zero;                        // off the circle
+            hm.Position += new Vector2(0, 300); hm.Velocity = Vector2.Zero;                         // off the circle
             double mm1 = HvMissile();
             for (int i = 0; i < 60 * 9 && H.BlastsPending > 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(H.BlastsPending == 0 && HvMissile() == mm1, "moving off the circle dodges it");
+            // anything out of place -- a wild speed, a broken number -- and it aims right at the target
+            var pz = new Vector2(100, 200);
+            Check(Raider.PredictSpot(pz, new Vector2(10, 0)) == pz + new Vector2(70, 0) && Raider.PredictSpot(pz, new Vector2(5000, 0)) == pz
+                  && Raider.PredictSpot(pz, new Vector2(float.NaN, 0)) == pz && Raider.PredictSpot(pz, new Vector2(float.PositiveInfinity, 1)) == pz,
+                  "the missile leads a sane speed 7 s; a wild speed, NaN or infinity: it aims at where the target is");
+            // live: 2700 u/s in 45 u steps (wild, yet under the 50 u jump filter) -- the circle must sit on the ship
+            hm.Position = edge + (Hub.BasePos - edge).Normalized() * 400f; hm.Velocity = Vector2.Zero;
+            typeof(Raider).GetField("_missileCd", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(hv, 0.12);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            int rings0 = Nodes<Telegraph>().Count(t => !t.Line);
+            Vector2 atFire = hm.Position;
+            for (int i = 0; i < 20 && Nodes<Telegraph>().Count(t => !t.Line) == rings0; i++)
+            {
+                atFire = hm.Position; hm.Position += new Vector2(0, 45);
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            }
+            var wildRing = Nodes<Telegraph>().LastOrDefault(t => !t.Line && Math.Abs(t.Radius - Raider.BlastRadius) < 0.1f);
+            Check(wildRing != null && wildRing.A.DistanceTo(atFire) < 100f,
+                  $"a target moving at a wild 2700 u/s: the circle sits on it, not 7 s ahead ({(wildRing == null ? -1 : wildRing.A.DistanceTo(atFire)):0} u off)");
+            // pinned: it boosts at 700% until 300 u away, then closes at cruise and fires 2 DPS
+            hm.Position = Hub.BasePos + new Vector2(1900, 0); hm.Velocity = Vector2.Zero; hm.Rotation = 0f;
             var lights = new[] { H.SpawnRaider(hm.Position + new Vector2(0, -250)), H.SpawnRaider(hm.Position + new Vector2(250, 0)), H.SpawnRaider(hm.Position + new Vector2(-250, 0)) };
             for (int i = 0; i < 60 * 8 && !hm.Pinned; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            await Wait(0.15); var hp1 = hv.Position; await Wait(0.2);
+            await Wait(0.1); var hp1 = hv.Position; await Wait(0.2);
             float burn = (hv.Position - hp1).Length() / 0.2f;
-            Check(hm.Pinned && burn > 250f, $"its target pinned, it afterburns in ({burn:0} u/s)");
-            for (int i = 0; i < 60 * 4 && !hv.Latched; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            // the spec's numbers as literals: a check that reads the code's own constant cannot catch it being wrong
+            Check(hm.Pinned && Math.Abs(burn - 700f) < 60f, $"its target pinned, it boosts at 700% ({burn:0} u/s)");
+            for (int i = 0; i < 60 * 6 && hv.Position.DistanceTo(hm.Position) > 300f - 20f; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            var hp2 = hv.Position; await Wait(0.2);
+            float slow = (hv.Position - hp2).Length() / 0.2f;
+            // (over the ground: cruise plus the pinned target's own forced thrust, ~20 u/s)
+            Check(slow <= 100f + 0.2f * (float)hm.Stats["max_speed"] + 5f, $"inside 300 u it closes at cruise ({slow:0} u/s over the ground)");
+            for (int i = 0; i < 60 * 8 && !hv.Latched; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             double hl0 = HvLaser(); await Wait(3.0);
             double hdps = (HvLaser() - hl0) / 3.0;
             Check(hv.Latched && Raider.Gap(hv.Position, hm) <= Raider.HeavyReach && Math.Abs(hdps - 2) < 0.4,
