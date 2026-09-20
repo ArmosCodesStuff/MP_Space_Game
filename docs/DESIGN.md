@@ -178,7 +178,7 @@ levels once a second and ship and hauler state ten times a second; a guest's own
   starboard**, straight at the player, their boost lasting until they reach it (a pin to hold the pilot
   in the beam unless point defence — or, for a fighter pilot, their guns — kills them); live **3 s**,
   **0.25 s ticks, 50** (half the old tick, twice as long); the boss **raider red with a white skull**.
-- **C**: **battleship total DPS = 1.25 × carrier's**; **carrier range = 1.5 × battleship's**; the
+- **C (DONE — carrier measured 19.07 DPS; guns 5.9 a shell; control 1080 u)**: **battleship total DPS = 1.25 × carrier's**; **carrier range = 1.5 × battleship's**; the
   battleship's main guns fire **shells at 4× the player missile's speed (520 u/s), not tracking**.
 - **D**: capital ships **turn in place at ≤ 5% of top speed**, about 10°/s; no strafing.
 - **E**: heavies **snub-nosed (option b)**; they **wait at the map's edge** nearest their target and,

@@ -39,7 +39,7 @@ history pick the work up from it alone. Update it in the same change as the code
 **State as of 2026-09-18: version 0.3.0 plus Unreleased (see it for everything since: docking arms
 and the unload queue, the fleet and hauler pods, the idle economy, base menu, bunker-buster missile,
 painted turrets, docking bombers and more).** Typecheck clean against the real `GodotSharp.dll`,
-`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 397 checks across
+`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 402 checks across
 a single-player run and a host with two guests. Unlike earlier releases, this one was also **looked at**:
 `tools/screens/run.sh` renders the select screen, the creator, a fresh spawn under the base, both
 classes in the hub, the K window, a bomber strike, and turret close-ups on a virtual display; layout
@@ -180,6 +180,33 @@ reachable, which is fine: both harnesses build from the `nupkgs` folder that shi
 ---
 
 ## Unreleased
+
+### Chunk C: balance, and the battleship's shells
+
+**Checked:** smoke test **three runs in a row, 402 checks each, 0 compiler warnings, 0 analyser
+findings, 0 unused members**; screenshot sweep **66 frames, complete, 0 lint**; shells in flight looked
+at. Mutants (shells at 2x, the old 1.5 gun damage, the old 1400 range) all caught.
+
+#### Changed
+
+- **The battleship's main guns fire shells**: straight — no tracking — at **4× its missile's speed
+  (520 u/s)**, as far as the guns reach (720 u); the first hostile a shell touches takes the hit (never a
+  missile — that is point defence's work). A cannon's report instead of the laser buzz. Point defence
+  stays instant.
+- **Balance, from a measurement**: the carrier's sustained output (fighters and bomber strikes on a
+  dummy from 520 u, bombers re-sent as they re-arm) **measured 19.07 DPS over 90 s**. The battleship's
+  total (main guns + missiles; point defence excluded — it cannot hit bosses) is set to 1.25× that:
+  **5.9 a shell** (was 1.5), **23.9 DPS in all**. The carrier's **control range is 1080 u** — 1.5× the
+  battleship's 720 u guns — and its bomber strike range stays twice that (2160 u).
+- A **drift guard** re-measures the carrier over 40 s every run (19.20 this time): if later changes move
+  it more than 25% from the reference, the suite says so.
+
+#### Changed (tests)
+
+- The salvo/staggered DPS checks wait for shells still in flight before reading the dummy, and compare
+  with the sheet's own figure (staggered: exactly 472.0 in 20 s).
+
+### Earlier in Unreleased
 
 ### Chunk B: the beam's escorts, the boss repainted
 
