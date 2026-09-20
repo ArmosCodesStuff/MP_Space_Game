@@ -1702,6 +1702,9 @@ public partial class _Test : Node
         else
         {
             H.Yard.Ore = 5000;       // "own" hub total, should come back after leaving
+            // a NON-default loadout (two chips off): a host that ignored the guest's gear would fall
+            // back to the default (five chips) and replicate 250 hull instead of 230
+            var gl = Character.LoadoutFor(Character.Class); gl[8] = ""; gl[9] = "";
             await Wait(0.8);
             Net.I.Join("127.0.0.1:27115");
             await Wait(1.2);
@@ -1749,7 +1752,8 @@ public partial class _Test : Node
             int seen = 0;
             for (int i = 0; i < 60; i++) { if (flashes.Count > 0) seen++; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
             Check(seen > 0, $"guest sees the host's hit flashes ({seen} of 60 frames)");
-            Check(mine != null && mine.MaxHp == 250 && mine.Hp == 250, "hull replicated from the host (200, +25% from the default chips the host applied)");
+            Check(mine != null && Math.Abs(mine.MaxHp - 230) < 1e-6 && Math.Abs(mine.Hp - 230) < 1e-6,
+                  $"hull replicated from the host, which applied this pilot's own gear (three chips: 200 x 1.15 = 230; {mine?.Hp:0})");
             await Wait(12.0);                      // strike done, bombers home and docked
             var gb = Nodes<Wing>().Where(w => w.Carrier == mine && w.IsBomber).ToArray();
             Check(gb.Length == 2 && gb.All(w => w.Docked && w.GlobalPosition.DistanceTo(mine.DockSlot(w).pos) < 8f),
