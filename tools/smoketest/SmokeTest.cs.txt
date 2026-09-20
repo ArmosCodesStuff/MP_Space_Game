@@ -771,7 +771,7 @@ public partial class _Test : Node
         // ── pilot progression: EXP, levels, points, flat upgrades ──
         {
             Check(Progression.Cost(0) == 1 && Progression.Cost(1) == 2 && Progression.Cost(2) == 3, "upgrade costs 1, 2, 3, ... points");
-            Check(Progression.ExpToNext(1) == 1000 && Progression.ExpToNext(7) == 1000, "every level needs 1000 EXP");
+            Check(Progression.ExpToNext == 1000 && Progression.ExpToNext == 1000, "every level needs 1000 EXP");
             Character.Exp = 0; Character.Level = 1; Character.BossCleared.Clear(); Character.Points = 0; System.Array.Clear(Character.Bought);
             int up = Progression.AddExp(2600);
             Check(up == 2 && Character.Level == 3 && Character.Exp == 600 && Character.Points == 2, "2600 EXP from level 1: level 3, 600 over, 2 points");

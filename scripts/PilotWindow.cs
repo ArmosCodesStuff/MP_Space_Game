@@ -37,7 +37,7 @@ public partial class PilotWindow : PanelContainer
 
     public override void _Process(double delta)
     {
-        int need = Progression.ExpToNext(Character.Level);
+        int need = Progression.ExpToNext;
         _head.Text = $"PILOT  ·  {Character.Name}  ·  LEVEL {Character.Level}";
         _exp.Text = $"EXP {Character.Exp} / {need} to level {Character.Level + 1}";
         _bar.Value = (double)Character.Exp / need;

@@ -549,7 +549,6 @@ public partial class Hub : Node2D
     public const float RaidEdge = 3200f;
     public const double RaidDelay = 3.0;
     private double _raidIn = -1; private int _raidLevel;
-    public int RaidLevel => _raidLevel;
     public static double RaidScale(int level) => Missions.S(level);           // S(L) = 1.1^(L-1)
 
     private void StartRaid(int level)
@@ -691,8 +690,7 @@ public partial class Hub : Node2D
         if (!Net.IsHost) return;
         int party = System.Math.Max(1, PartySize);
         Progression.AwardBossKill(level);
-        if (Yard != null) Yard.TripCredits += Missions.BountyEach(level, party);
-        else Yard.AddHostShare(Missions.BountyEach(level, party));
+        Yard.AddHostShare(Missions.BountyEach(level, party));             // the host's share, paid at home
         if (Net.IsOnline) Rpc(nameof(NetBossKill), level, party);
     }
 
@@ -861,7 +859,6 @@ public partial class Hub : Node2D
         // Hull bars on every ship, and other players' names. Drawn here rather than on
         // the ship so they stay upright while it turns.
         var font = ThemeDB.FallbackFont;
-        float k = Txt.UiScale;
         foreach (var s in _ships.Values)
         {
             if (!IsInstanceValid(s) || !s.IsVisibleInTree()) continue;   // hidden ships show nothing
@@ -1025,7 +1022,6 @@ public partial class Hub : Node2D
         _pilot = new PilotWindow { Hub = this };
         _hudLayer.AddChild(_pilot);
     }
-    public bool PilotOpen => IsInstanceValid(_pilot);
 
     // A purchase: refit the ship now, and tell the host (it resolves hull and damage).
     public void PilotChanged() { ApplyLocalIdentity(); SendIdentity(); }

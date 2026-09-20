@@ -11,17 +11,6 @@ public static class Combat
     // Registered by whatever world is live (hub, hostile system, someone else's world).
     public static readonly List<IHittable> Hostiles = new();
 
-    public static IHittable NearestHostile(Vector2 from, float range)
-    {
-        IHittable best = null; float bd = range;
-        foreach (var h in Hostiles)
-        {
-            if (h == null || !h.Alive || !h.Selectable) continue;      // never "nearest enemy" a missile
-            float d = from.DistanceTo(h.Position);
-            if (d < bd) { bd = d; best = h; }
-        }
-        return best;
-    }
 
     // Player ships, as targets for ENEMY fire only (a hostile dummy's missile). Ships
     // register themselves; an escape pod is in no list, so nothing can touch it.

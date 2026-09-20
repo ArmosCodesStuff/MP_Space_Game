@@ -35,7 +35,7 @@ public static class Progression
 
     public static int Cost(int owned) => owned + 1;                        // 1, 2, 3, ...
     public const int ExpPerLevel = 1000;
-    public static int ExpToNext(int level) => ExpPerLevel;                  // always 1000
+    public static int ExpToNext => ExpPerLevel;                             // always 1000, whatever the level
 
     // Flat stat additions for a set of purchases, on a given hull.
     public static System.Collections.Generic.Dictionary<string, double> Flats(int[] bought, ShipClass c)
@@ -52,9 +52,9 @@ public static class Progression
         if (amount <= 0) return 0;
         int gained = 0;
         Character.Exp += amount;
-        while (Character.Exp >= ExpToNext(Character.Level))
+        while (Character.Exp >= ExpToNext)
         {
-            Character.Exp -= ExpToNext(Character.Level);
+            Character.Exp -= ExpToNext;
             Character.Level++; Character.Points++; gained++;
         }
         Character.Save();
