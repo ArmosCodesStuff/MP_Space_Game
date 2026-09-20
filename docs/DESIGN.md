@@ -185,7 +185,7 @@ levels once a second and ship and hauler state ten times a second; a guest's own
   once it is pinned, **boost at 700% until 300 u away**; missile within 500 u.
 - **F (DONE)**: **Miner hull / Salvager hull** upgrades, +10% a level, **125 cr to start** (25% above the other
   +10% rows), ×1.25 a level.
-- **G**: the **equipment menu** (I, and a button): Weapon, Engines, Shield (health), Hull (mods), Utility,
+- **G (DONE)**: the **equipment menu** (I, and a button): Weapon, Engines, Shield (health), Hull (mods), Utility,
   and **5 chips**; the gear is **locked to the class** (no mode switch); items drive the stats they
   cover; common defaults reproduce today's numbers; **each default chip: +5% damage and +5% hull**;
   **gear left on a class stays on it** when the pilot switches class and back. Carriers: "Fighter
@@ -228,6 +228,7 @@ Recorded here so every chunk builds from the written word, not from memory.
   600 u, ~120 u/s, one every 5 s. **Chunk 4's distance is decided: 1500 u** to each field's edge.
 - **Chunk 6 is split**: 6a light fighters and the pin (DONE); 6b heavy fighters and the predicted-impact
   missile (DONE); 6c patrols (3 light + 1 heavy) (DONE). Art for both is staged in `art_unused/`.
+- **Open question: pilot points are amplified by percentage gear (a Hull point = +6.25 with the chips) — keep, or make points exact?**
 - **The player's next batch, as given (after chunks 7 and 8 unless reordered):**
   1. **(DONE) Internet address**: the host's panel shows the address a friend in another city needs — the
      public IP (asked of a public "what is my IP" service, compared with the router's own report to

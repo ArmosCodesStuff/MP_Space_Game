@@ -39,7 +39,7 @@ history pick the work up from it alone. Update it in the same change as the code
 **State as of 2026-09-18: version 0.3.0 plus Unreleased (see it for everything since: docking arms
 and the unload queue, the fleet and hauler pods, the idle economy, base menu, bunker-buster missile,
 painted turrets, docking bombers and more).** Typecheck clean against the real `GodotSharp.dll`,
-`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 410 checks across
+`dotnet build` clean (0 warnings), and the smoke test passes three runs in a row: 419 checks across
 a single-player run and a host with two guests. Unlike earlier releases, this one was also **looked at**:
 `tools/screens/run.sh` renders the select screen, the creator, a fresh spawn under the base, both
 classes in the hub, the K window, a bomber strike, and turret close-ups on a virtual display; layout
@@ -180,6 +180,41 @@ reachable, which is fine: both harnesses build from the `nupkgs` folder that shi
 ---
 
 ## Unreleased
+
+### Chunk G: the equipment menu
+
+**Checked:** smoke test **three runs in a row, 419 checks each, 0 compiler warnings, 0 analyser
+findings, 0 unused members**; screenshot sweep **67 frames, complete, 0 lint**; the window looked at.
+Mutants caught: the loadout aliased (a chip off changed nothing); a host ignoring a guest's gear (caught
+only once the test guest flew a non-default loadout — with the default, a broken host looked identical).
+
+#### Added
+
+- **EQUIPMENT (I, or its button beside PILOT)**: the gear on the pilot's **current** ship — **Weapon,
+  Engines, Shield (the hull points), Hull (the frame, and its point defence), Utility** — and **five
+  chips**. Locked to the class: **each class keeps its own gear**, saved with the character, so what is
+  left on a ship is still there when the pilot switches back. Parts change no looks, only numbers.
+- **Common defaults**: battleship — Mk I Main Battery, Standard Drive Cluster, Basic Deflector Array,
+  Reinforced Frame, Missile Rack; carrier — **Mk I Fighter Hangars** (weapon) and a Bomber Bay (utility).
+  They reproduce the ship's own numbers. **Five Basic Combat Chips, each +5% damage and +5% hull**: **+25%
+  in all** (battleship 375 hull, 7.375 a shell; carrier 250 hull, fighters 2.5, torpedoes 18.75).
+- **Chips come off and go back on** (a spare list); the core parts stay put until the inventory gives
+  them something to swap with.
+- **The host applies each pilot's gear** (it resolves damage and hull): the loadout travels with the
+  identity and is sanitised on arrival (known items, the right slots, at most five chips).
+
+#### Fixed (found while building)
+
+- The ship kept a reference to the saved loadout, so a chip taken off in the window changed nothing — it
+  keeps a copy now. `Hub.EquipmentOpen` (never used) removed.
+
+#### Changed (tests)
+
+- Checks with literal numbers now state them with the chips (a shell 7.375, a missile 6.25, the K window
+  29.50 DPS, the carrier reference 19.07 × 1.25 = 23.84). **Pilot points are added before percentage
+  bonuses** (as designed), so a Hull point shows +6.25 with the chips — a question for the player.
+
+### Earlier in Unreleased
 
 ### Chunk F: hull upgrades for miners and salvagers
 
