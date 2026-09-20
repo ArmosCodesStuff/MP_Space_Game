@@ -1068,7 +1068,6 @@ public partial class Hub : Node2D
         _equip = new EquipmentWindow { Hub = this };
         _hudLayer.AddChild(_equip);
     }
-    public bool EquipmentOpen => IsInstanceValid(_equip);
 
     public void TogglePilot()
     {
