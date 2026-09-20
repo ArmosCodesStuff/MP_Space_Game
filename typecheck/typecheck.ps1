@@ -30,6 +30,18 @@ $refs = Get-ChildItem "$refDir\*.dll" | ForEach-Object { "-r:$($_.FullName)" }
 $outDll = Join-Path $env:TEMP 'typecheck.dll'
 if (Test-Path $outDll) { Remove-Item $outDll -Force }
 
+# GodotSharp.dll is gitignored -- a build dependency, not game content -- so every fresh clone or
+# unzipped copy arrives without it and silently drops to the hand-written stub, which is the weak
+# check this harness exists to avoid. It is already on any machine that has built the project, in
+# the NuGet cache. Fetch it rather than quietly checking against the stub.
+if (-not (Test-Path 'GodotSharp.dll')) {
+    $cached = Join-Path $env:USERPROFILE '.nuget\packages\godotsharp\4.7.2\lib\net8.0\GodotSharp.dll'
+    if (Test-Path $cached) {
+        Copy-Item $cached 'GodotSharp.dll'
+        Write-Host "fetched GodotSharp.dll from the NuGet cache (it is gitignored on purpose)"
+    }
+}
+
 $haveReal = Test-Path 'GodotSharp.dll'
 if ($haveReal) {
   $extra = @('-r:GodotSharp.dll')

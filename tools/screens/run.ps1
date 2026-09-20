@@ -15,13 +15,18 @@
 #     The original .txt is never modified.
 
 param(
-  [Parameter(Mandatory = $true)][string]$Godot,
+  [string]$Godot,
   [switch]$Compat
 )
 
 $ErrorActionPreference = 'Stop'
 
-if (-not (Test-Path $Godot)) { Write-Host "usage: run.ps1 <godot mono win64 exe>"; exit 2 }
+# -Godot is optional now: find-godot.ps1 resolves it from an explicit path, WARSHIPS_GODOT,
+# local.config.ps1, or a search of the usual places.
+if (-not $Godot -or -not (Test-Path $Godot)) {
+  $Godot = & (Join-Path $PSScriptRoot '..\find-godot.ps1') -Godot $Godot
+  if ($LASTEXITCODE -ne 0 -or -not $Godot) { exit 2 }
+}
 $Godot = (Resolve-Path $Godot).Path
 # The GUI binary prints nothing; swap to the console build beside it.
 if ($Godot -notmatch '_console\.exe$') {

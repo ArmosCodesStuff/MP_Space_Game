@@ -203,6 +203,30 @@ reachable, which is fine: both harnesses build from the `nupkgs` folder that shi
 
 ## Unreleased
 
+### The project sets itself up now
+
+**`powershell -ExecutionPolicy Bypass -File verify.ps1`** runs the whole bar — typecheck, build,
+analysers, cross-reference, smoke test **×3**, screenshot sweep, integrity — and prints one
+verdict. `-Quick` stops after the static checks. Nothing is passed in.
+
+Two things used to need a human, and both were the kind that fail quietly:
+
+- **`typecheck/GodotSharp.dll`** is gitignored on purpose (a build dependency, not game content),
+  so every fresh clone or unzipped copy arrived without it and the typecheck **silently dropped to
+  the hand-written stub** — the weak check the harness exists to avoid, reporting "0 errors" all
+  the while. `typecheck.ps1` now copies it from the NuGet cache when it is missing, and says so.
+- **The Godot binary path** had to be typed into every harness call. `tools\find-godot.ps1`
+  resolves it: an explicit `-Godot`, else `$env:WARSHIPS_GODOT`, else a gitignored
+  `local.config.ps1` at the repo root, else a search of the usual places. `-Godot` is optional on
+  both runners now.
+
+`verify.ps1` reports the two sandbox-only network checks separately from real failures, so a clean
+run on a real machine reads as clean rather than as two mysterious breakages.
+
+Why this was worth doing rather than leaving in a handover note: the machine-specific knowledge
+lived in a session's memory, which is keyed to the folder path. Move or re-extract the project and
+it is gone. In the repo it travels with the code.
+
 ### The atomic-save checks could not fail
 
 **Checked:** typecheck 0 errors; build 0 warnings; analysers 0 findings; xref 0 unused; smoke

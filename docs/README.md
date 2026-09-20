@@ -32,6 +32,32 @@ starts the session should attach the project zip (~6 MB with history, 35 scripts
 
 ## Checking your work
 
+**On Windows, one command does everything:**
+
+    powershell -ExecutionPolicy Bypass -File verify.ps1
+
+typecheck → build → analysers → cross-reference → smoke test **×3** → screenshot sweep →
+integrity, then one verdict. `-Quick` stops after the static checks (about a minute).
+
+Nothing has to be passed in, and that is the point — the two things that used to need a human are
+handled:
+
+- **`typecheck/GodotSharp.dll`** is gitignored (a build dependency, not game content), so every
+  fresh clone or unzipped copy arrives without it and the typecheck quietly drops to the weak
+  hand-written stub. `typecheck.ps1` now **copies it from the NuGet cache** when it is missing and
+  says so.
+- **The Godot binary** is found by `tools\find-godot.ps1`: an explicit `-Godot`, else
+  `$env:WARSHIPS_GODOT`, else `local.config.ps1` at the repo root, else a search of the usual
+  places. To pin it and skip the search, create `local.config.ps1` (gitignored — it is about this
+  computer, not the game):
+
+      $Godot = 'C:\path\to\Godot_v4.7.2-stable_mono_win64.exe'
+
+`verify.ps1` knows the two network checks assert a sandbox with no router and no internet, and
+reports them separately from real failures rather than letting them read as breakage.
+
+### The individual checks
+
 **On Windows**, every harness has a PowerShell port that needs no WSL. They are the same checks,
 validated against the numbers the Linux originals produce:
 
@@ -39,13 +65,19 @@ validated against the numbers the Linux originals produce:
     dotnet build                                                              # 0 Warning(s), 0 Error(s)
     powershell -ExecutionPolicy Bypass -File tools\analyse\run.ps1            # ANALYSERS: 0 findings
     python tools\analyse\xref.py                                              # UNUSED ANYWHERE: 0
-    powershell -ExecutionPolicy Bypass -File tools\smoketest\run.ps1 <godot win64 exe>
-    powershell -ExecutionPolicy Bypass -File tools\screens\run.ps1  <godot win64 exe>
+    powershell -ExecutionPolicy Bypass -File tools\smoketest\run.ps1
+    powershell -ExecutionPolicy Bypass -File tools\screens\run.ps1
 
-Pass the plain `Godot_v4.7.2-stable_mono_win64.exe`; the runners swap themselves to the
-`_console.exe` beside it, because the GUI binary prints nothing. The smoke test's bar on Windows is
-**433 pass, 6/6 runs** — see DESIGN.md → Smoke test for why two checks cannot pass off a sandbox.
-The sweep's bar is **67 frames, SWEEP DONE, 0 LINT**, into `%TEMP%\shots`.
+`-Godot <path>` is optional on both runners; without it they resolve the engine themselves. If you
+do pass one, pass the plain `Godot_v4.7.2-stable_mono_win64.exe` -- they swap themselves to the
+`_console.exe` beside it, because the GUI binary prints nothing.
+
+**Run them one at a time.** Both copy the project to a single fixed scratch folder, so a second
+run deletes the first's files mid-flight; `run.ps1` refuses to start rather than fail obscurely.
+
+The smoke test's bar on Windows is **433 pass, 6/6 runs** — see DESIGN.md → Smoke test for why two
+checks cannot pass off a sandbox. The sweep's bar is **67 frames, SWEEP DONE, 0 LINT**, into
+`%TEMP%\shots`.
 
 The Windows analyser does *not* need the smoke test run first: NuGet is reachable here, so it
 restores and builds in place rather than reusing the smoke test's offline build folder.
@@ -60,6 +92,8 @@ says *hand-written stub*, the DLL is missing — ask for it:
     C:\Users\<you>\.nuget\packages\godotsharp\4.7.2\lib\net8.0\GodotSharp.dll
 
 Drop it in `typecheck/`. It is gitignored on purpose: a build dependency, not game content.
+(The Windows `typecheck.ps1` fetches it from that cache by itself; only the Linux `typecheck.sh`
+still needs it handed over, because a sandbox has no such cache.)
 
 It exits **2** if no .NET 8 SDK is installed (`apt-get install dotnet-sdk-8.0` from the Ubuntu
 archive works in a sandbox). Treat anything but "0 errors." as a failure.
