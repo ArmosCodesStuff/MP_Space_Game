@@ -1,5 +1,4 @@
 using Godot;
-using System.Linq;
 
 // A BATTLESHIP SHELL: the main guns' round. It flies straight -- no tracking -- at 4x the
 // ship's missile speed, as far as the guns' range, and hits the first hostile it touches
@@ -13,7 +12,8 @@ public partial class Shell : Node2D
     public bool Cosmetic; public PlayerShip Source;
     private float _flown;
 
-    public override void _Ready() { ZIndex = 6; Rotation = Dir.Angle() + Mathf.Pi / 2f; }
+    // every shell, the host's and a guest's copy alike, is heard: a cannon's report where it leaves
+    public override void _Ready() { ZIndex = 6; Rotation = Dir.Angle() + Mathf.Pi / 2f; Sfx.Cannon(Position); }
 
     public override void _Process(double delta)
     {

@@ -124,12 +124,39 @@ public static class Ui
         return l;
     }
 
+    // A column or a row with its spacing -- the two lines every box in the UI was built with.
+    public static VBoxContainer VBox(int separation, string name = null) => Spaced(new VBoxContainer(), separation, name);
+    public static HBoxContainer HBox(int separation, string name = null) => Spaced(new HBoxContainer(), separation, name);
+    private static T Spaced<T>(T box, int separation, string name) where T : BoxContainer
+    {
+        box.AddThemeConstantOverride("separation", separation);
+        if (name != null) box.Name = name;
+        return box;
+    }
+
+    // A button that never keeps keyboard focus: one that kept it would be pressed again by Space or
+    // Enter mid-flight. `size` sets the font, and a big button's height with it.
+    public static Button Btn(string text, System.Action onPress, string name = null, int size = 0)
+    {
+        var b = new Button { Text = text, FocusMode = Control.FocusModeEnum.None };
+        if (name != null) b.Name = name;
+        if (size > 0) { b.AddThemeFontSizeOverride("font_size", size); b.CustomMinimumSize = new Vector2(0, size >= Head ? 46 : 34); }
+        if (onPress != null) b.Pressed += onPress;
+        return b;
+    }
+
+    // Empty a container now: out of the tree at once (so a rebuilt list never lays out beside
+    // the one it replaces for a frame), freed at the end of the frame.
+    public static void Clear(Node n)
+    {
+        foreach (var c in n.GetChildren()) { n.RemoveChild(c); c.QueueFree(); }
+    }
+
     // A section heading: small, upper case, accent, with a hairline rule under it. The rule is
     // what makes a list of rows read as a section rather than as a pile.
     public static VBoxContainer Heading(string text)
     {
-        var v = new VBoxContainer();
-        v.AddThemeConstantOverride("separation", 4);
+        var v = VBox(4);
         v.AddChild(Lbl(text.ToUpperInvariant(), Small, Accent));
         var rule = new Panel { CustomMinimumSize = new Vector2(0, 1) };
         rule.AddThemeStyleboxOverride("panel", new StyleBoxFlat { BgColor = Line });

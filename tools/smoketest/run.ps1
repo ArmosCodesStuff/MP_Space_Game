@@ -101,7 +101,7 @@ try {
   $keepRe = 'PASS|FAIL|DONE|Exception|   at |ERROR: [^B]|^  [a-z]|Fatal error'
   # Expected engine chatter, not failures: allocator notes, and Godot's own report that
   # no UPnP router exists (the game falls back and says so).
-  $dropRe = 'RID alloc|PagedAlloc|find any UPNPDevices'
+  $dropRe = 'RID alloc|PagedAlloc'
 
   function Start-Run {
     param([string[]]$GodotArgs, [string]$Tag, [int]$TimeoutSec)
@@ -166,6 +166,10 @@ try {
                  -NoNewWindow -PassThru -RedirectStandardOutput (Join-Path $W "wan$port.out") -RedirectStandardError (Join-Path $W "wan$port.err")
     }
     $gx = @('wan')
+    # Godot's own note that it dropped a packet which overtook the handshake's last (lost, resent)
+    # one. Expected on a lossy path, and answered in the game: a joining guest repeats its
+    # introduction (Hub.OnSessionChanged), so what was dropped arrives again.
+    $dropRe += '|SYS_COMMAND_AUTH'
     Start-Sleep -Milliseconds 300
   }
 

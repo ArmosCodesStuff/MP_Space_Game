@@ -20,7 +20,6 @@ public static class Missions
         new() { Id = "silver_lancer", Name = "SILVER LANCER", Hull = 600 },
     };
     public static BossType Current => Bosses[0];
-    public static string BossName => Current.Name;
 
     private const double LevelStep = 1.10;
     public static double S(int level) => Math.Pow(LevelStep, Math.Max(1, level) - 1);

@@ -5,7 +5,9 @@ using System.Linq;
 // the host's 10 Hz state and plays its telegraphs from the host's events.
 // One rhythm, 30 s long (all damage x the tier's scale):
 //   GUNS       always: 3.6 every 1.2 s (3 DPS) at the nearest ship within 900 u
-//   DEATH BEAM at 6 s, then every 30 s: a red line for 2 s, then live for 3 s,
+//   DEATH BEAM every 30 s: it opens with two escorts sent to web the nearest pilot; when their
+//              web should land, a red line down the nose for 6 s (it tracks the pilot until the
+//              web holds, then holds its aim), then live for 3 s along the line it drew,
 //              checking every 0.25 s: 50 each time it lands on a ship (a ship's 0.52 s
 //              invulnerability to one source means a hit about every 0.75 s)
 //   CHARGE     15 s after each beam: a red line for 1.5 s, then a ram along it at
@@ -26,12 +28,7 @@ public partial class Boss : Node2D, IHittable
     public bool Alive => Hp > 0;
     public int NetId => Id;
     public float HitRadius => HalfWidth;
-    public bool Covers(Vector2 p, float pad)      // a capsule along its keel, like a player ship
-    {
-        var fwd = Vector2.Up.Rotated(Rotation); float half = Length * 0.5f - HalfWidth;
-        float t = Mathf.Clamp((p - Position).Dot(fwd), -half, half);
-        return p.DistanceTo(Position + fwd * t) <= HalfWidth + pad;
-    }
+    public bool Covers(Vector2 p, float pad) => Combat.KeelCovers(this, Length, HalfWidth, p, pad);
 
     public const double BeamWindup = 6.0, WaveWindup = 1.8;
     // As the beam charges, the boss launches two light ESCORTS at its target -- one 45 degrees
@@ -54,12 +51,12 @@ public partial class Boss : Node2D, IHittable
     private (Vector2 a, Vector2 b)? _pendingCharge; private double _chargeT; private Vector2? _dashTo;
     public int Volleys { get; private set; }                                   // for the smoke test
     public bool Charging => _dashTo.HasValue;
-    public bool BeamCharging => _beamCharging;
+    public bool BeamCharging { get; private set; }
     // Frozen: a super move is winding up, or the beam is burning. It holds station so the red
     // line it drew is the line it actually fires down -- the tell used to drift off the hull while
     // it kept closing -- and the live beam used to swing after the pilot for its three seconds,
     // an unseen line sweeping the arena (the telegraph had already gone).
-    public bool Locked => _beamCharging || _beamLive >= 0 || _pendingCharge != null || _dashTo.HasValue;
+    public bool Locked => BeamCharging || _beamLive >= 0 || _pendingCharge != null || _dashTo.HasValue;
     // Where the beam goes RIGHT NOW: straight out of the nose. The telegraph is a child of the
     // boss drawn down the same axis, so the drawing and the hit are the same line by construction.
     public (Vector2 a, Vector2 b) BeamSegment()
@@ -72,14 +69,14 @@ public partial class Boss : Node2D, IHittable
     // shooting them down does not cancel the beam, it only means facing it free to move.
     public double LaunchEscorts(Node2D target)
     {
-        if (!Net.Sim || target == null || GetParent() is not Hub hub) return Raider.EscortShiver;
+        if (!Net.Sim || target == null || Hub == null) return Raider.EscortShiver;
         var nose = Vector2.Up.Rotated(Rotation);
         double eta = 0; bool port = true;
         foreach (float side in new[] { -EscortAngle, EscortAngle })
         {
             var dir = nose.Rotated(Mathf.DegToRad(side));
             var at = Position + dir * (HalfWidth + 60f);
-            var r = hub.SpawnRaider(at, RaiderKind.Light, 0, Missions.S(Missions.Level));
+            var r = Hub.SpawnRaider(at, RaiderKind.Light, 0, Missions.S(Missions.Level));
             // the one launched to port flanks to port, the other to starboard
             r?.Escort(target, dir, BeamWindup, EscortHull * Missions.S(Missions.Level), port ? -Mathf.Pi / 2f : Mathf.Pi / 2f);
             eta = System.Math.Max(eta, Raider.WebEta(at.DistanceTo(target.Position)));
@@ -88,11 +85,10 @@ public partial class Boss : Node2D, IHittable
         return eta;
     }
 
-    private double _beamT; private bool _beamCharging;
+    private double _beamT;
     // Set the first frame the target is webbed: the boss stops turning and the aim is final.
     // Cleared when a beam starts, never carried from the last one.
-    private bool _beamAimLocked;
-    public bool BeamAimLocked => _beamAimLocked;
+    public bool BeamAimLocked { get; private set; }
     private double _beamArm = -1;                 // >= 0: escorts away, counting down to the charge
     private PlayerShip _beamTarget;
     private Vector2? _pendingWave; private double _waveT;
@@ -111,15 +107,14 @@ public partial class Boss : Node2D, IHittable
     {
         get { double gap = Net.Sim ? _superGap : _netSuperGap; return gap <= 0 ? 0 : System.Math.Clamp(1 - NextSuperIn / gap, 0, 1); }
     }
-    private Vector2 _netPos; private float _netRot; private bool _hasNet; private bool _netLocked;
+    private NetPose _net; private bool _netLocked;
 
     public override void _Ready()
     {
         int party = System.Math.Max(1, Hub.PartySize);
         HullMult = Missions.HullMult(Missions.Level, party); DamageMult = Missions.DamageMult(Missions.Level, party); Hp = MaxHp;
         Name = "Boss";
-        var tex = GD.Load<Texture2D>("res://boss_raider.png");     // raider red, a white skull on its centre
-        AddChild(new Sprite2D { Texture = tex, Scale = Vector2.One * (Length / tex.GetHeight()) });
+        AddChild(Sprites.Fit("res://boss_raider.png", Length));     // raider red, a white skull on its centre
         ZIndex = 4;
         Combat.Hostiles.Add(this);
     }
@@ -139,7 +134,7 @@ public partial class Boss : Node2D, IHittable
         float dt = (float)delta;
         if (!Net.Sim)
         {
-            if (_hasNet)
+            if (_net.Has)
             {
                 if (_netLocked)
                 {   // Locked, the hull IS the telegraph, and smoothing it is no longer cosmetic:
@@ -147,9 +142,9 @@ public partial class Boss : Node2D, IHittable
                     // at the beam's 10000 u reach, against a beam 70 u wide. A guest would watch
                     // the hit land far outside the line it was shown. Take the host's figures flat;
                     // the boss is standing still and turning slowly, so there is nothing to smooth.
-                    Position = _netPos; Rotation = _netRot;
+                    Position = _net.Pos; Rotation = _net.Rot;
                 }
-                else { Position = Position.Lerp(_netPos, Mathf.Clamp(10f * dt, 0f, 1f)); Rotation = Mathf.LerpAngle(Rotation, _netRot, Mathf.Clamp(10f * dt, 0f, 1f)); }
+                else _net.Follow(this, dt);
                 if (_netNextSuper > 0) _netNextSuper = System.Math.Max(0, _netNextSuper - delta);
             }
             return;
@@ -163,7 +158,7 @@ public partial class Boss : Node2D, IHittable
             {
                 var centre = pilots.Aggregate(Vector2.Zero, (s, p) => s + p.Position) / pilots.Count;
                 float want = (centre - Position).Angle() + Mathf.Pi / 2f;
-                Rotation += Mathf.Clamp(Mathf.AngleDifference(Rotation, want), -TurnRate * dt, TurnRate * dt);
+                Rotation = Mathf.RotateToward(Rotation, want, TurnRate * dt);
                 float d = Position.DistanceTo(centre);
                 if (d > 650f) Position += (centre - Position).Normalized() * 30f * dt;
             }
@@ -189,14 +184,14 @@ public partial class Boss : Node2D, IHittable
     private void Tick(System.Collections.Generic.List<PlayerShip> pilots, double delta)
     {
         var nose = ToGlobal(new Vector2(0, -Length * 0.5f));
-        PlayerShip Nearest(float within) => pilots.Where(p => p.Position.DistanceTo(Position) <= within).OrderBy(p => p.Position.DistanceTo(Position)).FirstOrDefault();
+        PlayerShip Nearest(float within = float.MaxValue) => Combat.Nearest(pilots, Position, p => p.Position, within);
         _guns -= delta;
         if (_guns <= 0) { _guns = GunEvery; var t = Nearest(900f); if (t != null) { t.Hit(GunDamage * DamageMult, Position, "boss:guns"); Combat.Flash(nose, t.Position, new Color(1f, 0.5f, 0.35f), ShotSound.Boss); } }
         _missiles -= delta;
         if (_missiles <= 0)
         {   // a trident at the nearest ship: straight at it and 25 degrees either side
             _missiles = TridentEvery; Volleys++;
-            var t = pilots.OrderBy(p => p.Position.DistanceTo(Position)).First();
+            var t = Nearest();
             var aim = (t.Position - nose).Normalized();
             foreach (float deg in new[] { -TridentSpread, 0f, TridentSpread })
             {
@@ -206,21 +201,21 @@ public partial class Boss : Node2D, IHittable
             }
         }
         _beam -= delta;
-        if (_beam <= 0 && _beamArm < 0 && !_beamCharging && _beamLive < 0)
+        if (_beam <= 0 && _beamArm < 0 && !BeamCharging && _beamLive < 0)
         {   // the death beam OPENS WITH ITS ESCORTS. The charge follows when their web should
             // land -- an estimate made now, not a wait on them actually arriving, so killing
             // them still ends in a beam: one the pilot is free to fly out of.
             _beam = BeamEvery; _superGap = System.Math.Min(_beam, _charge);
-            _beamTarget = pilots.OrderBy(p => p.Position.DistanceTo(Position)).First();
+            _beamTarget = Combat.Nearest(pilots, Position, p => p.Position);
             _beamArm = LaunchEscorts(_beamTarget) + WebToBeam;
         }
         if (_beamArm >= 0 && (_beamArm -= delta) <= 0)
         {   // locked down now; the telegraph rides the hull, so the line cannot lie
-            _beamArm = -1; _beamCharging = true; _beamT = BeamWindup; _beamAimLocked = false;
+            _beamArm = -1; BeamCharging = true; _beamT = BeamWindup; BeamAimLocked = false;
             if (!IsInstanceValid(_beamTarget) || !_beamTarget.Alive) _beamTarget = pilots.FirstOrDefault();
             Tele(true, new Vector2(0, -Length * 0.5f), new Vector2(0, -Length * 0.5f - BeamLength), BeamWidth, BeamWindup, onHull: true, hold: BeamLive);
         }
-        if (_beamCharging)
+        if (BeamCharging)
         {   // Held still, tracking with nothing but its own ponderous turn: a quick pilot who is
             // not webbed can still get outside the arc before it fires.
             //
@@ -230,16 +225,16 @@ public partial class Boss : Node2D, IHittable
             // the beam chasing something that cannot dodge, which reads as the game cheating in
             // its own favour; locking reads as the trap closing. It also means the pilot's last
             // chance is BEFORE the web lands, not after.
-            if (!_beamAimLocked && IsInstanceValid(_beamTarget) && _beamTarget.Alive)
+            if (!BeamAimLocked && IsInstanceValid(_beamTarget) && _beamTarget.Alive)
             {
-                if (_beamTarget.Pinned) _beamAimLocked = true;
+                if (_beamTarget.Pinned) BeamAimLocked = true;
                 else
                 {
                     float aim = (_beamTarget.Position - Position).Angle() + Mathf.Pi / 2f;
-                    Rotation += Mathf.Clamp(Mathf.AngleDifference(Rotation, aim), -TurnRate * (float)delta, TurnRate * (float)delta);
+                    Rotation = Mathf.RotateToward(Rotation, aim, TurnRate * (float)delta);
                 }
             }
-            if ((_beamT -= delta) <= 0) { _beamCharging = false; _beamLive = BeamLive; _beamTickT = 0; }
+            if ((_beamT -= delta) <= 0) { BeamCharging = false; _beamLive = BeamLive; _beamTickT = 0; }
         }
         if (_beamLive >= 0)
         {   // live: a check every 0.25 s, down the nose as it points at this instant
@@ -254,11 +249,11 @@ public partial class Boss : Node2D, IHittable
             _beamLive -= delta;
         }
         _charge -= delta;
-        if (_charge <= 0 && _pendingCharge == null && !_dashTo.HasValue && !_beamCharging)
+        if (_charge <= 0 && _pendingCharge == null && !_dashTo.HasValue && !BeamCharging)
         {   // the ram: come round onto the pilot, then hold dead still for the wind-up so the
             // line drawn is the line rammed down
             _charge = BeamEvery; _superGap = System.Math.Min(_beam, _charge);
-            var t = pilots.OrderBy(p => p.Position.DistanceTo(Position)).First();
+            var t = Combat.Nearest(pilots, Position, p => p.Position);
             Rotation = (t.Position - Position).Angle() + Mathf.Pi / 2f;
             var a = Position; var bb = a + Vector2.Up.Rotated(Rotation) * ChargeLength;
             _pendingCharge = (a, bb); _chargeT = ChargeWindup;
@@ -314,9 +309,9 @@ public partial class Boss : Node2D, IHittable
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
     private void NetState(Vector2 p, float rot, double hp, bool locked, double nextSuper, double superGap)
     {
-        _netPos = p; _netRot = rot; _hasNet = true; Hp = hp; _netLocked = locked;
+        _net.Set(p, rot); Hp = hp; _netLocked = locked;
         _netNextSuper = nextSuper; _netSuperGap = superGap;
     }
 
-    public int TelegraphsPending => (_beamCharging ? 1 : 0) + (_pendingWave != null ? 1 : 0);
+    public int TelegraphsPending => (BeamCharging ? 1 : 0) + (_pendingWave != null ? 1 : 0);
 }

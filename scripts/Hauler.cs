@@ -18,20 +18,18 @@ using System;
 //   AWAY       warps out; 30 s later its cargo is sold for credits
 //   ARRIVING   warps back in facing the base, its pods flashing empty
 //   RETURNING  slides slowly west to above its pad
-//   TURNING    swings 180 degrees to face the portal
-//   LANDING    shrinks back onto the pad, then loads again
+//   LANDING    shrinks back onto the pad, swinging round to face the portal, then loads again
+//   DESTROYED  lost to a raid: gone, and rebuilt on its pad 30 s later (UtilityShip)
 //
 // Six pods are painted on its hull; it starts with one working and the HAULER tab
 // adds more (up to six) and makes each bigger.
 // ─────────────────────────────────────────────────────────────────────────────
-public partial class Hauler : Node2D
+public partial class Hauler : UtilityShip
 {
     public enum St { Loading, Lifting, Departing, Charging, Away, Arriving, Returning, Landing, Destroyed }
 
-    public Yard Yard;
     public St State = St.Loading;
     public double T;                         // seconds in the current state
-    public double Cargo;
     public double LastSale;                  // credits paid on the last return
     public const float Length = 200f;
     public const float East = Mathf.Pi / 2f, West = -Mathf.Pi / 2f;
@@ -65,30 +63,24 @@ public partial class Hauler : Node2D
 
     public void ResetToPad() { Go(St.Loading); Cargo = 0; _speed = 0; _hasNet = false; Position = Hub.HaulerPad; Rotation = East; Hull = MaxHull; RebuildIn = 0; WaitingForCredits = false; }
 
-    // hull, and being rebuilt (host-owned; guests get hull and state). Out of reach while away.
-    public double Hull = Economy.HaulerHull;
-    public double MaxHull => Economy.HaulerHull;
-    public double RebuildIn;
-    public bool WaitingForCredits;
-    private double _pinT;
-    public bool Pinned => _pinT > 0;
-    public void PinFor(double s) { if (Net.Sim) _pinT = System.Math.Max(_pinT, s); }
-    public void TakeDamage(double d)
-    {
-        if (!Net.Sim || State is St.Destroyed or St.Away) return;
-        Hull -= d;
-        if (Hull > 0) return;
-        Hull = 0; Cargo = 0; _speed = 0; Go(St.Destroyed); Effects();          // gone at once
-        RebuildIn = Economy.RebuildDelay; WaitingForCredits = false;
-        GetParent().AddChild(new Explosion { Position = Position, Radius = 70f });
-    }
+    // out of reach while away (through the portal)
+    public override double MaxHull => Economy.HaulerHull;
+    public override string Category => "HAULER";
+    public override string Label => "Hauler";
+    public override bool InReach => State is not (St.Destroyed or St.Away);
+    public override bool Lost => State == St.Destroyed;
+    public override (float halfLength, float halfWidth) Extent => (Length * 0.5f * VisualScale, Length * 0.12f * VisualScale);
+    protected override float LostBlast => 70f;
+    protected override float RebuiltBlast => 60f;
+    protected override void OnLost() { _speed = 0; Go(St.Destroyed); Effects(); }   // gone at once
 
-    public void SetNet(Vector2 p, float rot, int state, float t, float cargo, float sale, float hull)
+    public void SetNet(Vector2 p, float rot, int state, float t, float cargo, float sale, float hull, float rebuild)
     {
-        Hull = hull;
+        bool wasLost = Lost;
         (_netPos, _netRot, _hasNet) = (p, rot, true);
         if ((St)state != State || Math.Abs(T - t) > 0.5) T = t;
         (State, Cargo, LastSale) = ((St)state, cargo, sale);
+        FromHost(hull, rebuild, wasLost);
     }
 
     // The button's request. Only while loading, and only with at least one full pod.
@@ -101,10 +93,14 @@ public partial class Hauler : Node2D
         float dt = (float)delta;
         T += delta;
         if (Net.Sim) Simulate(dt);
-        else if (_hasNet)
+        else
         {
-            Position = new Vector2(Mathf.Lerp(Position.X, _netPos.X, Mathf.Clamp(10f * dt, 0f, 1f)), _netPos.Y);
-            Rotation = Mathf.LerpAngle(Rotation, _netRot, Mathf.Clamp(10f * dt, 0f, 1f));
+            GuestClock(dt);
+            if (_hasNet)
+            {
+                Position = new Vector2(Mathf.Lerp(Position.X, _netPos.X, Mathf.Clamp(10f * dt, 0f, 1f)), _netPos.Y);
+                Rotation = Mathf.LerpAngle(Rotation, _netRot, Mathf.Clamp(10f * dt, 0f, 1f));
+            }
         }
         Effects();
         QueueRedraw(); _overlay.QueueRedraw();
@@ -112,7 +108,7 @@ public partial class Hauler : Node2D
 
     private void Simulate(float dt)
     {
-        _pinT = System.Math.Max(0, _pinT - dt);
+        PinT = Math.Max(0, PinT - dt);
         switch (State)
         {
             case St.Loading:
@@ -138,21 +134,13 @@ public partial class Hauler : Node2D
                 Rotation = West;
                 if (Slide(Hub.HaulerPad.X, dt)) Go(St.Landing);   // over the pad: descend, turning as it goes
                 break;
-            case St.Destroyed:
-            {   // rebuilt on its pad 30 s later, for 10% of what the hauler's upgrades have cost
-                RebuildIn = System.Math.Max(0, RebuildIn - dt);
-                if (RebuildIn > 0) break;
-                double cost = Yard.RebuildCost("HAULER");
-                if (Yard.Credits < cost) { WaitingForCredits = true; break; }
-                Yard.Credits -= cost;
-                ResetToPad();
-                GetParent().AddChild(new Explosion { Position = Position, Radius = 60f, Tint = new Color(0.5f, 0.8f, 1f) });
+            case St.Destroyed:              // rebuilt on its pad 30 s later, for 10% of what the hauler's upgrades have cost
+                if (TickRebuild(dt)) { ResetToPad(); Burst(rebuilt: true); }
                 break;
-            }
             case St.Landing:
             {   // down onto the pad, swinging from west to east on the way: it arrives facing the portal
                 float k = Mathf.Clamp((float)(T / Economy.HaulerLand), 0f, 1f);
-                Rotation = West + Mathf.Pi * k * k * (3f - 2f * k);
+                Rotation = West + Mathf.Pi * Mathf.SmoothStep(0f, 1f, k);
                 if (k >= 1f) { Rotation = East; Go(St.Loading); }
                 break;
             }
@@ -176,11 +164,10 @@ public partial class Hauler : Node2D
     private float Altitude => State switch
     {
         St.Loading => 0f,
-        St.Lifting => Ease((float)(T / Economy.HaulerLift)),
-        St.Landing => 1f - Ease((float)(T / Economy.HaulerLand)),
+        St.Lifting => Mathf.SmoothStep(0f, 1f, (float)(T / Economy.HaulerLift)),
+        St.Landing => 1f - Mathf.SmoothStep(0f, 1f, (float)(T / Economy.HaulerLand)),
         _ => 1f,
     };
-    private static float Ease(float k) { k = Mathf.Clamp(k, 0f, 1f); return k * k * (3f - 2f * k); }
     public float VisualScale => Mathf.Lerp(Economy.HaulerLandedScale, 1f, Altitude);
 
     // Shake, warp, and the landing size all live on the sprite, so the node itself

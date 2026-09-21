@@ -46,7 +46,7 @@ public static class Abilities
             new AbilityDef { Id = "attack",  Name = "Fighters: attack", Short = "ATTACK", Default = Key.Space,
                              Blurb = "Sends the fighters at the selected target while it is within control range." },
             new AbilityDef { Id = "recall",  Name = "Fighters: recall", Short = "RECALL", Default = Key.R,
-                             Blurb = "Calls the fighters back to orbit the carrier." },
+                             Blurb = "Calls the fighters home: they dock inside the carrier." },
             new AbilityDef { Id = "bombers", Name = "Bomber strike",    Short = "BOMB",   Default = Key.F,
                              Blurb = "Bombers run at the target and launch torpedoes straight ahead. No tracking." },
             new AbilityDef { Id = "pd",      Name = "Point defence",    Short = "PD",     Default = Key.Q,
@@ -130,7 +130,6 @@ public static class Abilities
 
     public static string ControlsHint(ShipClass c)
     {
-        if (!ByClass.ContainsKey(c)) return "placeholder";
         return c switch
         {
             ShipClass.Battleship => BattleshipHint,

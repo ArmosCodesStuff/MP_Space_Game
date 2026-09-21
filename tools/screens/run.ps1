@@ -41,8 +41,22 @@ $src = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $W = Join-Path $env:TEMP 'warships_shots'
 $shots = Join-Path $env:TEMP 'shots'
 
-if (Test-Path $W) { Remove-Item $W -Recurse -Force }
-if (Test-Path $shots) { Remove-Item $shots -Recurse -Force }
+# One fixed scratch folder each, so two sweeps cannot overlap. A file handle can outlive the
+# process that held it by a moment (the last run's engine, a build server), so a failed clear is
+# retried for a few seconds before it is reported -- as a SWEEP line, so verify.ps1 shows it
+# instead of a bare Remove-Item error it filters out.
+foreach ($dir in @($W, $shots)) {
+  for ($try = 1; Test-Path $dir; $try++) {
+    try { Remove-Item $dir -Recurse -Force -ErrorAction Stop }
+    catch {
+      if ($try -ge 10) {
+        Write-Host "SWEEP FAILED (cannot clear $dir -- another sweep is probably still going: $($_.Exception.Message))"
+        exit 2
+      }
+      Start-Sleep -Milliseconds 500
+    }
+  }
+}
 New-Item -ItemType Directory -Path $W, $shots -Force | Out-Null
 robocopy $src $W /E /XD .godot .git bin obj /NFL /NDL /NJH /NJS /NP | Out-Null
 

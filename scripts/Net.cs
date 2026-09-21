@@ -582,3 +582,45 @@ public partial class Net : Node
         return IsHost && I != null && I.Players.ContainsKey(who);
     }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// A HOST-OWNED THING AS A GUEST SEES IT: the host's 10 Hz reports of where it is, eased between.
+// One follower for the raiders, the carrier wing, the fleet and the boss, where each carried its
+// own copy of the same three fields and the same two lines.
+//
+// It also carries the thing forward along its last measured velocity -- for at most a quarter of
+// a second, so a thing that stopped, or a connection that did, never runs off. Over the internet
+// a guest used to draw every raider where it had been a round trip and a smoothing lag ago
+// (~250 ms), and aimed at that: its shots went where the target no longer was.
+// ─────────────────────────────────────────────────────────────────────────────
+public struct NetPose
+{
+    public Vector2 Pos;
+    public float Rot;
+    public bool Has;
+    private Vector2 _vel;
+    private double _age;
+    private const float Ahead = 0.25f, MaxSpeed = 1500f;
+
+    public void Set(Vector2 p, float rot)
+    {
+        // Measured between reports, and smoothed: one late or early packet is not a new course. A
+        // jump (a warp, a respawn) is not a velocity at all.
+        if (Has && _age > 0.02)
+        {
+            var v = (p - Pos) / (float)_age;
+            _vel = v.Length() > MaxSpeed ? Vector2.Zero : _vel.Lerp(v, 0.5f);
+        }
+        (Pos, Rot, Has, _age) = (p, rot, true, 0);
+    }
+
+    public void Follow(Node2D n, float dt, float rate = 10f)
+    {
+        if (!Has) return;
+        _age += dt;
+        var ahead = Pos + _vel * Mathf.Min((float)_age, Ahead);
+        float k = Mathf.Clamp(rate * dt, 0f, 1f);
+        n.Position = n.Position.Lerp(ahead, k);
+        n.Rotation = Mathf.LerpAngle(n.Rotation, Rot, k);
+    }
+}

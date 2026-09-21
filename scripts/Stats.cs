@@ -8,9 +8,9 @@ using System.Collections.Generic;
 // here, and the stats window (K) prints this same sheet. So the window cannot
 // disagree with the game; if a number changes, it changes for both.
 //
-// Each stat is Base x (1 + Bonus). Bonuses are fractions keyed by stat id
-// (0.10 = +10%), stored on the character. Nothing grants bonuses yet, so they all
-// read +0% until a skill or upgrade system exists to fill them.
+// Each stat is Base x (1 + Bonus) + Flat. Bonuses are fractions keyed by stat id (0.10 = +10%):
+// equipment's (Equipment.Bonuses) and the character's own. Flats are the pilot's purchases
+// (Progression.Flats).
 //
 // Interval stats (time between shots) are the exception: a rate-of-fire bonus
 // DIVIDES them, so +100% RoF halves the interval and doubles the DPS.
@@ -77,7 +77,7 @@ public class ShipStats
             Add("Main guns", "main_range",    "Range",              720, "u", 0);
             Add("Main guns", "main_turn",     "Turret turn rate",   Mathf.Tau / 4f, "rad/s", 2);
 
-            // A magazine, reloaded by hand (R): 2 missiles, then a 16 s reload.
+            // A magazine, reloaded by hand (R): one missile, then a 16 s reload.
             Add("Missile", "missile_damage",   "Damage",            5.0, "", 1);
             Add("Missile", "missile_mag",      "Magazine",          1, "", 0);
             Add("Missile", "missile_refire",   "Between shots",     0.6, "s", 1, inverse: true);
@@ -101,7 +101,7 @@ public class ShipStats
         if (!bs)
         {
             Add("Fighters", "fighter_count",    "Craft",            3, "", 0);
-            Add("Fighters", "fighter_hp",       "Hull each",        48, "", 0);
+
             Add("Fighters", "fighter_damage",   "Damage per shot",  2, "", 1);
             Add("Fighters", "fighter_interval", "Reload",           0.35, "s", 2, inverse: true);
             Add("Fighters", "fighter_range",    "Weapon range",     300, "u", 0);
@@ -114,7 +114,7 @@ public class ShipStats
             // An active ability. Torpedoes run straight and steady: no tracking, so a
             // moving target can step out of the way.
             Add("Bombers", "bomber_count",    "Craft",              2, "", 0);
-            Add("Bombers", "bomber_hp",       "Hull each",          110, "", 0);
+
             Add("Bombers", "torpedo_damage",  "Torpedo damage",     15, "", 0);
             Add("Bombers", "bomber_ammo",     "Torpedoes per run",  4, "", 0);
             Add("Bombers", "torpedo_interval","Between launches",   0.5, "s", 2, inverse: true);

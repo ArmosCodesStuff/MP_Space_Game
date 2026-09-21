@@ -5,8 +5,9 @@ using System;
 // ─────────────────────────────────────────────────────────────────────────────
 // SHIP CLASSES — the first two of an intended nine.
 //
-//   BATTLESHIP : main guns aimed with the cursor and fired with Space, plus PD
-//   CARRIER    : fighters and bombers sent at the selected target with Space, plus PD
+//   BATTLESHIP : main guns aimed with the cursor, a guided missile, plus PD
+//   CARRIER    : fighters sent at the selected target, a bomber strike of its own, plus PD
+//   (the keys are the player's: see Abilities)
 //
 // Ported from Space Fleet Idle's capital ship, cut down to the initial layer.
 // Deliberately NOT carried over yet: siege mode, cloak, phase, ambush volleys,
@@ -36,6 +37,18 @@ public interface IHittable
     bool Covers(Vector2 p, float pad) => p.DistanceTo(Position) <= HitRadius + pad;
     // Missiles can be shot down, but they are never SELECTED (click or Tab).
     bool Selectable => true;
+}
+
+// WHAT A RAIDER GOES AFTER: a player's ship, or a ship of a base's fleet (UtilityShip). One
+// contract where six type switches -- in Raider and in Hub -- had to agree on alive-ness, hull
+// shape, damage and the pin, and a new kind of target meant finding all six.
+public interface IRaidTarget
+{
+    bool InReach { get; }                                    // there, and alive, to be attacked
+    bool Pinned { get; }
+    void PinFor(double s);
+    void Hit(double d, Vector2 from, string source);
+    (float halfLength, float halfWidth) Extent { get; }      // the hull's ellipse, for holding station beside it
 }
 
 // ── Turret ───────────────────────────────────────────────────────────────────
@@ -141,7 +154,7 @@ public partial class Turret : Node2D
     // Same rule as before -- best by (priority, then distance), preferring one no sibling turret
     // has claimed, falling back to the best claimed one -- but in a single pass with no
     // allocation. This used to be Combat.Near (which allocates and sorts) plus a LINQ chain and
-    // another ToList, and line 111 calls it EVERY FRAME FOR EVERY PD TURRET while point defence
+    // another ToList, and Tick calls it EVERY FRAME FOR EVERY PD TURRET while point defence
     // is active with nothing in range, because a null Target never satisfies the guard.
     private IHittable Acquire(Vector2 from)
     {
@@ -162,21 +175,14 @@ public partial class Turret : Node2D
         return bestFree ?? bestAny;
     }
 
-    // One main-gun shot, along the barrel as it points RIGHT NOW. Host only.
+    // One main-gun shot, along the barrel as it points RIGHT NOW: a SHELL, straight, 4x the
+    // missile's speed, as far as its range. Host only. (Point defence never comes here: it fires
+    // from Tick, at what it has acquired.)
     public void Shoot()
     {
         if (!Net.Sim) return;
         var dir = Vector2.Right.Rotated(GlobalRotation);
-        var from = GlobalPosition + dir * BarrelLength;
-        if (!PointDefense)
-        {   // the main guns fire SHELLS: straight, 4x the missile's speed, as far as their range
-            Combat.FireShell(from, dir, (float)S["missile_speed"] * Shell.SpeedMult, Range, ShotDamage, Ship);
-            return;
-        }
-        var hit = Combat.RayHit(from, dir, Range, out var end);
-        hit?.TakeDamage(ShotDamage);
-        if (hit != null) Ship.NoteCombat();
-        Combat.Flash(from, end, new Color(1f, 0.85f, 0.5f));
+        Combat.FireShell(GlobalPosition + dir * BarrelLength, dir, (float)S["missile_speed"] * Shell.SpeedMult, Range, ShotDamage, Ship);
     }
 
     // _angle is a WORLD angle, so it is applied as GlobalRotation; as a local
@@ -231,14 +237,10 @@ public partial class Wing : Node2D
 {
     public PlayerShip Carrier;
     public WingKind Kind;
-    public double Hp, MaxHp;
-    public bool Alive = true;
     public int Ammo;
     public Vector2 Velocity;
 
-    // The bomber is the LARGER airframe (28.125 to the fighter's 17), so the two read apart at a
-    // glance. The old note here said "25% smaller", which had not been true since they were
-    // resized and contradicted Init's own comment a hundred lines below.
+    // The bomber is the LARGER airframe (28.125 to the fighter's 17), so the two read apart at a glance.
     public const float FighterLength = 17f, BomberLength = 28.125f;
     private Sprite2D _sprite;
     private double _cd;
@@ -285,7 +287,7 @@ public partial class Wing : Node2D
     private double _rearm, _backT;
 
     // Where the host says this craft is. Guests steer toward it.
-    private Vector2 _netPos; private float _netRot; private bool _hasNet;
+    private NetPose _net;
 
     private ShipStats S => Carrier.Stats;
     private bool F => Kind == WingKind.Fighter;
@@ -296,23 +298,20 @@ public partial class Wing : Node2D
     public void Init(PlayerShip carrier, WingKind kind, Vector2 at)
     {
         Carrier = carrier; Kind = kind; Position = at;
-        MaxHp = Hp = F ? S["fighter_hp"] : S["bomber_hp"];
         Ammo = (int)S["bomber_ammo"];
         // Fighter and bomber have their own airframes, and the bomber is the larger of
         // the two (FighterLength, BomberLength) so they read apart at a glance.
-        var tex = GD.Load<Texture2D>(F ? "res://wing_fighter.png" : "res://wing_bomber.png");
-        float len = F ? FighterLength : BomberLength;
-        _sprite = new Sprite2D { Texture = tex, Scale = Vector2.One * (len / tex.GetHeight()) };
+        _sprite = Sprites.Fit(F ? "res://wing_fighter.png" : "res://wing_bomber.png", F ? FighterLength : BomberLength);
         AddChild(_sprite);
         ZIndex = 4;
     }
 
-    public void SetNet(Vector2 p, float rot) { _netPos = p; _netRot = rot; _hasNet = true; }
+    public void SetNet(Vector2 p, float rot) => _net.Set(p, rot);
 
+    // (A wing is only ever ticked by its carrier, and the carrier frees its wings on its way out.
+    // A carrier in stasis keeps its wing.)
     public void Tick(double delta)
     {
-        if (!Alive) return;
-        if (!IsInstanceValid(Carrier)) { Alive = false; QueueFree(); return; }   // a carrier in stasis keeps its wing
         Visible = Carrier.IsVisibleInTree() && !Inside;   // docked fighters are inside the hull
         QueueRedraw();                                     // the engine plume
 
@@ -321,11 +320,7 @@ public partial class Wing : Node2D
             // bomber the host reports docked, which is locked to its slot here exactly,
             // rather than trailing a moving carrier by a packet's worth of lag
             if (!F && _b == BSt.Docked) { SnapToDock(); return; }
-            if (_hasNet)
-            {
-                Position = Position.Lerp(_netPos, Mathf.Clamp(10f * (float)delta, 0f, 1f));
-                Rotation = Mathf.LerpAngle(Rotation, _netRot, Mathf.Clamp(10f * (float)delta, 0f, 1f));
-            }
+            if (_net.Has) _net.Follow(this, (float)delta);
             else if (!F) SnapToDock();
             return;
         }
@@ -517,12 +512,6 @@ public partial class Wing : Node2D
         Rotation = Mathf.LerpAngle(Rotation, want, Mathf.Clamp(9f * (float)delta, 0f, 1f));
     }
 
-    public void TakeDamage(double d)
-    {
-        if (!Net.Sim) return;
-        Hp -= d;
-        if (Hp <= 0) { Alive = false; QueueFree(); }
-    }
 
     public override void _Draw()
     {

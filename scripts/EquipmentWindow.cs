@@ -19,15 +19,15 @@ public partial class EquipmentWindow : PanelContainer
         Name = "EquipmentWindow";
         Position = new Vector2(360, 92);
         Ui.Panelise(this);
-        _col = new VBoxContainer(); _col.AddThemeConstantOverride("separation", 10); AddChild(_col);
+        _col = Ui.VBox(10); AddChild(_col);
         Rebuild();
     }
 
     private void Rebuild()
     {
-        foreach (var c in _col.GetChildren()) { _col.RemoveChild(c); c.QueueFree(); }
+        Ui.Clear(_col);
         var cls = Character.Class; var l = Character.LoadoutFor(cls); var spares = Character.SparesFor(cls);
-        var title = new VBoxContainer(); title.AddThemeConstantOverride("separation", 2);
+        var title = Ui.VBox(2);
         title.AddChild(Ui.Lbl($"EQUIPMENT  ·  {Classes.NameOf(cls)}", Ui.Title, Ui.Accent));
         title.AddChild(Ui.Lbl("Parts change no looks, only numbers. Each class keeps its own gear.", Ui.Small, Ui.Dim));
         _col.AddChild(title);

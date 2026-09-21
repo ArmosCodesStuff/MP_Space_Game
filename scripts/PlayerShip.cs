@@ -17,7 +17,7 @@ using System.Linq;
 //     reports hull, ability state and wing positions back;
 //   everyone else interpolates.
 // ─────────────────────────────────────────────────────────────────────────────
-public partial class PlayerShip : Node2D, IHittable
+public partial class PlayerShip : Node2D, IHittable, IRaidTarget
 {
     public int OwnerId = 1;
 
@@ -40,14 +40,9 @@ public partial class PlayerShip : Node2D, IHittable
     private const int NetIdBase = 2000;                  // same on every peer: 2000 + owner
     public int NetId => NetIdBase + OwnerId;
     public float HitRadius => MyArt.HalfWidth;
-    // A capsule along the keel: a circle would be far too wide for a long hull.
-    public bool Covers(Vector2 p, float pad)
-    {
-        var fwd = Vector2.Up.Rotated(Rotation);
-        float half = Mathf.Max(0f, MyArt.Length * 0.5f - MyArt.HalfWidth);
-        float t = Mathf.Clamp((p - Position).Dot(fwd), -half, half);
-        return p.DistanceTo(Position + fwd * t) <= MyArt.HalfWidth + pad;
-    }
+    public bool Covers(Vector2 p, float pad) => Combat.KeelCovers(this, MyArt.Length, MyArt.HalfWidth, p, pad);
+    bool IRaidTarget.InReach => Alive;
+    (float halfLength, float halfWidth) IRaidTarget.Extent => (MyArt.Length * 0.5f, MyArt.HalfWidth);
 
     // ── death: stasis, and the escape pod ───────────────────────────────────
     public const double StasisTime = 120, ReboardHull = 0.33;
@@ -81,14 +76,13 @@ public partial class PlayerShip : Node2D, IHittable
         public string Texture;
         public float Length;          // nose to tail, world units
         public float HalfWidth = 20f; // half the hull's beam: the collider and the shield
-        // How far the free camera (Y) may wander from the ship. Capital ships 5000;
-        // a fighter-class ship, when there is one, gets FighterCameraRange.
+        // How far the free camera (Y) may wander from the ship: 5000 for a capital ship.
         public float CameraRange = 5000f;
         public Vector2[] Mains = Array.Empty<Vector2>(), Pds = Array.Empty<Vector2>();
 
         // The turrets are the ones painted on the ship: cut out of the hull art into
         // their own sprites (barrels up, pivot at the ring centre), with the hull
-        // repaired underneath, so they can turn. Null = draw the simple fallback.
+        // repaired underneath, so they can turn.
         public string MainTurret, PdTurret;
         public float TurretTexScale = 1f;   // world units per turret-texture pixel
         public float MainBarrel = 24f, PdBarrel = 15f, PdRing = 4.5f;   // world units
@@ -123,7 +117,6 @@ public partial class PlayerShip : Node2D, IHittable
             PdBarrel = 3.7f, PdRing = 2.9f },
     };
 
-    private const float FighterCameraRange = 2500f;
     public ClassArt MyArt => Art[Class];
 
     // ── the owner's intent, replicated at 20 Hz ──────────────────────────────
@@ -198,8 +191,8 @@ public partial class PlayerShip : Node2D, IHittable
         WingTarget = StrikeTarget = null; _strikesOut = 0;
         _pdLeft = _pdRecharge = 0;
 
-        // Your own ship carries your bonuses. Other ships use base stats: bonuses
-        // are not replicated yet (and nothing grants any yet).
+        // Every ship carries its pilot's gear and purchases (they come with the identity); your
+        // own adds Character.Bonuses.
         Stats = new ShipStats(Class, BonusesNow(), Progression.Flats(_bought, Class));
         MaxHp = Hp = Stats["hull"];
         _mag = (int)Stats["missile_mag"]; _missileReload = _missileRefire = 0;
@@ -246,6 +239,12 @@ public partial class PlayerShip : Node2D, IHittable
         for (int i = 0; i < b.Length && i < (bought?.Length ?? 0); i++) b[i] = Math.Clamp(bought[i], 0, Progression.MaxPerUpgrade);
         if (b.AsSpan().SequenceEqual(_bought)) return;
         _bought = b;
+        Restat();
+    }
+
+    // A refit that keeps the damage taken: the sheet rebuilt from class, gear and purchases.
+    private void Restat()
+    {
         double lost = MaxHp - Hp;
         Stats = new ShipStats(Class, BonusesNow(), Progression.Flats(_bought, Class));
         MaxHp = Stats["hull"];
@@ -270,10 +269,7 @@ public partial class PlayerShip : Node2D, IHittable
         var l = Equipment.Sanitize(Class, ids);
         if (_loadout != null && l.AsSpan().SequenceEqual(_loadout)) return;
         _loadout = l;
-        double lost = MaxHp - Hp;
-        Stats = new ShipStats(Class, BonusesNow(), Progression.Flats(_bought, Class));
-        MaxHp = Stats["hull"];
-        if (Alive) Hp = Math.Max(1, MaxHp - lost);
+        Restat();
     }
 
     public void SetIdentity(string pilot, Color main, Color accent, ShipClass cls)
@@ -291,7 +287,7 @@ public partial class PlayerShip : Node2D, IHittable
     public (Vector2 pos, float rot) DockSlot(Wing w)
     {
         int i = 0, n = 0;
-        foreach (var x in _wings) { if (!x.IsBomber || !x.Alive) continue; if (x == w) i = n; n++; }
+        foreach (var x in _wings) { if (!x.IsBomber) continue; if (x == w) i = n; n++; }
         bool port = i % 2 == 0;
         int onSide = port ? (n + 1) / 2 : n / 2, j = i / 2;
         var art = MyArt;
@@ -300,8 +296,8 @@ public partial class PlayerShip : Node2D, IHittable
         return (ToGlobal(local), Rotation + (port ? -Mathf.Pi / 2f : Mathf.Pi / 2f));
     }
 
-    public int WingCount(WingKind k) { int n = 0; foreach (var w in _wings) if (w.Alive && w.Kind == k) n++; return n; }
-    public int BombersReady { get { int n = 0; foreach (var w in _wings) if (w.Alive && w.Kind == WingKind.Bomber && w.Armed) n++; return n; } }
+    public int WingCount(WingKind k) { int n = 0; foreach (var w in _wings) if (w.Kind == k) n++; return n; }
+    public int BombersReady { get { int n = 0; foreach (var w in _wings) if (w.Kind == WingKind.Bomber && w.Armed) n++; return n; } }
     public double BomberRearmLeft { get { double m = 0; foreach (var w in _wings) if (w.Kind == WingKind.Bomber) m = Math.Max(m, w.RearmLeft); return m; } }
 
     // ── abilities ────────────────────────────────────────────────────────────
@@ -502,7 +498,7 @@ public partial class PlayerShip : Node2D, IHittable
         foreach (var t in _turrets) t.Tick(delta);
         for (int i = _wings.Count - 1; i >= 0; i--)
         {
-            if (!IsInstanceValid(_wings[i]) || !_wings[i].Alive) { _wings.RemoveAt(i); continue; }
+            if (!IsInstanceValid(_wings[i])) { _wings.RemoveAt(i); continue; }
             _wings[i].Tick(delta);
         }
         if (WingTarget != null && !WingTarget.Alive) WingTarget = null;
@@ -628,13 +624,13 @@ public partial class PlayerShip : Node2D, IHittable
         foreach (var t in _turrets) t.Visible = Alive;
     }
 
-    // Public so the smoke test can drive the helm exactly. Velocity is split into
+    // The helm. Velocity is split into
     // the component along the keel and the component across it. Thrust only ever
     // adds along the keel; water drag slows both; the keel kills sideways drift
     // quickly, so the ship goes where it points. The rudder turns at speed/radius
     // -- a turning circle -- capped by the rudder limit, and does nothing dead in
     // the water.
-    public void Steer(float throttle, float rudder, float dt)
+    private void Steer(float throttle, float rudder, float dt)
     {
         var fwd = Vector2.Up.Rotated(Rotation);           // nose direction
         var side = new Vector2(-fwd.Y, fwd.X);

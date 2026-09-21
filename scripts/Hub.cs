@@ -19,12 +19,12 @@ public partial class Hub : Node2D
 {
     // ── the hub's layout ─────────────────────────────────────────────────────
     public static readonly Vector2 BasePos = Vector2.Zero;
-    // The base: base_station.png, 1024 x 1024 (its centre is the station's centre),
+    // The base: base_station.png, 874 x 874 (its centre is the station's centre),
     // drawn at 0.6. Its bottom pad was enlarged to 140 x 84 u and is the hauler's
     // landing pad. The haul lane is the pad's centre line; the portal sits on it, so
     // the hauler's every move is flat.
     public const float BaseScale = 0.6f;
-    public static readonly Vector2 HaulerPad = new(0f, 219f);     // the enlarged bottom pad's centre: base_station.png row 877, (877 - 512) x 0.6
+    public static readonly Vector2 HaulerPad = new(0f, 219f);     // the enlarged bottom pad's centre: base_station.png row 802, (802 - 437) x 0.6
     public static float LaneY => HaulerPad.Y;
     public const float BaseBottom = 260f;                     // the pad's lower edge
     public static readonly Vector2 StemFoot = new(0f, 175f);  // where the pad hangs from the station
@@ -32,12 +32,11 @@ public partial class Hub : Node2D
     // lengths): room for a blockade outside the base's 600 u missile cover. Measured to each
     // field's boundary -- the belt's nearest rock edge (sun at y -1794 with 9 rocks on the
     // 520 x 286 ellipse, rocks 15 u), the wreck's visible edge toward the base (340 u out).
-    private const float FieldEdge = 1500f;
     public static readonly Vector2 SunPos    = new(0, -1794);
     public static readonly Vector2 WreckPos  = new(-1840, 60);
     public static readonly Vector2 PortalPos = new(1500, 219);
     // Threat Intelligence Operations: south-west of the base, clear of the wreck, the
-    // salvage routes, the haul lane and the dummies. (Bounty missions come next.)
+    // salvage routes, the haul lane and the dummies.
     public static readonly Vector2 TioPos = new(-650, 640);
     public const float TioHeight = 260f;   // on the lane through that pad
     // three dummies south-east of the base, below the haul lane and far enough apart
@@ -86,10 +85,6 @@ public partial class Hub : Node2D
         _esc = new EscMenu { Hub = this }; AddChild(_esc);
     }
     public System.Collections.Generic.IEnumerable<PlayerShip> Ships => _ships.Values;
-    private BasePanel _base;
-    private PilotWindow _pilot;
-    private TioWindow _tio;
-    private EquipmentWindow _equip;
     private Sprite2D _tioSprite;
     private Portal _missionPortal;
     private readonly Dictionary<int, PlayerShip> _ships = new();
@@ -154,19 +149,15 @@ public partial class Hub : Node2D
 
         var layer = new CanvasLayer(); AddChild(layer);
         _hudLayer = layer;
-        var baseBtn = new Button { Text = "BASE (B)", Name = "BaseButton", FocusMode = Control.FocusModeEnum.None };
-        baseBtn.Pressed += ToggleBase;
-        var baseWrap = Ui.Wrap(baseBtn); baseWrap.Position = new Vector2(256, 48);
-        baseWrap.Visible = !InArena;                                   // no base out there
-        layer.AddChild(baseWrap);
-        var pilotBtn = new Button { Text = "PILOT (L)", Name = "PilotButton", FocusMode = Control.FocusModeEnum.None };
-        pilotBtn.Pressed += TogglePilot;
-        var pilotWrap = Ui.Wrap(pilotBtn); pilotWrap.Position = new Vector2(356, 48);
-        layer.AddChild(pilotWrap);
-        var eqBtn = new Button { Text = "EQUIPMENT (I)", Name = "EquipmentButton", FocusMode = Control.FocusModeEnum.None };
-        eqBtn.Pressed += ToggleEquipment;
-        var eqWrap = Ui.Wrap(eqBtn); eqWrap.Position = new Vector2(446, 48);
-        layer.AddChild(eqWrap);
+        Control HudButton(string text, string name, System.Action press, float x)
+        {
+            var wrap = Ui.Wrap(Ui.Btn(text, press, name)); wrap.Position = new Vector2(x, 48);
+            layer.AddChild(wrap);
+            return wrap;
+        }
+        HudButton("BASE (B)", "BaseButton", ToggleBase, 256).Visible = !InArena;   // no base out there
+        HudButton("PILOT (L)", "PilotButton", TogglePilot, 356);
+        HudButton("EQUIPMENT (I)", "EquipmentButton", ToggleEquipment, 446);
         // the stats line sits on its own panel so it reads over anything behind it
         var hudPanel = new PanelContainer { Position = new Vector2(10, 8), Name = "HudPanel", MouseFilter = Control.MouseFilterEnum.Ignore };
         Ui.Panelise(hudPanel, 12);
@@ -201,22 +192,14 @@ public partial class Hub : Node2D
         Combat.OnFlash = (a, b, c, snd) =>
         {
             AddFlash(a, b, c, snd);
-            if (Net.IsHost && Net.IsOnline) Rpc(nameof(NetFlash), a, b, c, (int)snd);
+            ToWorld(nameof(NetFlash), a, b, c, (int)snd);
         };
-        // Torpedoes: the host's copy deals damage; guests get the launch and fly a
-        // cosmetic copy (the run is straight and steady, so it lands in the same place).
-        Combat.OnShell = (from, dir, speed, range, dmg, source) =>
-        {
-            AddChild(new Shell { Position = from, Dir = dir, Speed = speed, Range = range, Damage = dmg, Source = source });
-            Sfx.Cannon(from);
-            if (Net.IsHost && Net.IsOnline) Rpc(nameof(NetShell), from, dir, speed, range);
-        };
-        Combat.OnTorpedo = (from, dir, speed, range, dmg, target, turn, heavy, hostile, source, hitSource, size) =>
-        {
-            int id = hostile ? Combat.NextMissileId() : 0;       // hostile missiles can be shot down
-            SpawnTorpedo(from, dir, speed, range, dmg, false, target, turn, heavy, hostile, source, id, hitSource, size);
-            if (Net.IsHost && Net.IsOnline) Rpc(nameof(NetTorpedo), from, dir, speed, range, target, turn, heavy, hostile, id, size);
-        };
+        // Shells and torpedoes are born in this world; the host's copy deals damage, and guests
+        // get the launch and fly a cosmetic copy (the run is straight and steady, so it lands in
+        // the same place).
+        Combat.World = this;
+        Combat.ShellFired = s => ToWorld(nameof(NetShell), s.Position, s.Dir, s.Speed, s.Range);
+        Combat.TorpedoFired = t => ToWorld(nameof(NetTorpedo), t.Position, t.Dir, t.Speed, t.Range, t.TargetId, t.TurnRate, t.Heavy, t.HostileFire, t.NetId, t.Size);
 
         // THE SHIPS BEFORE THE BOSS. The boss sizes itself to the party in its _Ready, and it used
         // to be built first, count zero ships, and come out a solo boss for every party.
@@ -234,7 +217,7 @@ public partial class Hub : Node2D
             var d = new TargetDummy { Name = fighter ? $"PracticeFighter{n - 3}" : $"TargetDummy{n}", Number = n, Armed = n == 3, Fighter = fighter, Position = at, ZIndex = 3 };
             AddChild(d); _dummies.Add(d);
             Combat.Hostiles.Add(d);
-            d.Published = (last, avg, total) => { if (Net.IsOnline) Rpc(nameof(NetDummy), n, last, avg, total); };
+            d.Published = (last, avg, total) => ToWorld(nameof(NetDummy), n, last, avg, total);
         }
 
         if (Net.I != null)
@@ -285,15 +268,15 @@ public partial class Hub : Node2D
             AddChild(r); _rocks.Add(r);
         }
 
-        // the wreck: its edge FieldEdge from the base, like the belt's
+        // the wreck: its edge 1500 u from the base, like the belt's
         AddChild(new Sprite2D { Texture = GD.Load<Texture2D>("res://behemoth_wreck.png"),
                                 Position = WreckPos, Scale = new Vector2(0.34f, 0.34f), ZIndex = 1 });
 
         AddChild(new Sprite2D { Texture = GD.Load<Texture2D>("res://base_station.png"), Name = "Base",
                                 Position = BasePos, Scale = new Vector2(BaseScale, BaseScale), ZIndex = 2 });
-        AddChild(new BaseDefense { Hub = this });                 // the base's own laser and missiles
-        var tioTex = GD.Load<Texture2D>("res://tio_building.png");
-        var tio = new Sprite2D { Texture = tioTex, Name = "TIO", Position = TioPos, Scale = Vector2.One * (TioHeight / tioTex.GetHeight()), ZIndex = 2 };
+        AddChild(new BaseDefense());                               // the base's own laser and missiles
+        var tio = Sprites.Fit("res://tio_building.png", TioHeight);
+        tio.Name = "TIO"; tio.Position = TioPos; tio.ZIndex = 2;
         AddChild(tio);
         _tioSprite = tio;
         AddChild(new MissionBar { Hub = this, ZIndex = 6 });
@@ -330,6 +313,12 @@ public partial class Hub : Node2D
             if (_peerSector.TryGetValue(id, out var s) && s == k) node.RpcId(id, method, args);
     }
     public void RpcHome(Node node, StringName method, params Variant[] args) => RpcToSector(SectorKind.Home, node, method, args);
+    // A WORLD EVENT -- a flash, a shell, a raider, a readout -- to the peers in THIS world only. The
+    // hub is the same node in both sectors, so sent to everyone it reached a guest still in (or
+    // loading) the other one and landed in the wrong world: a home raid's raiders spawned in a
+    // guest's arena. Host only. Session-wide news (identity, sector moves, the kill's EXP, the
+    // mission) still goes to everyone.
+    private void ToWorld(StringName method, params Variant[] args) { if (Net.IsHost && Net.IsOnline) RpcToSector(Sector, this, method, args); }
     // A guest's report is also the moment to bring it up to date. Much of the world is sent only
     // when it CHANGES -- the mission, which raiders exist, a win -- so a friend who joined late,
     // or whose world had not finished loading, never heard of any of it: raiders attacked it from
@@ -363,7 +352,19 @@ public partial class Hub : Node2D
         RebuildShips();
         // a guest that just connected introduces itself; the host and existing
         // guests introduce themselves to it from OnPlayerJoined
-        if (Net.IsOnline && !Net.IsHost) SendIdentity();
+        if (Net.IsOnline && !Net.IsHost)
+        {
+            SendIdentity();
+            // ...and says it all twice more. Over the internet its first words can reach the host
+            // before the host has finished letting it in -- a lost handshake packet is resent AFTER
+            // the words that followed it -- and the host throws away what arrives too early: then it
+            // never knew this guest's world, and never sent it anything for it. Both are safe to repeat.
+            foreach (double later in new[] { 1.0, 3.0 })
+                GetTree().CreateTimer(later).Timeout += () =>
+                {
+                    if (IsInstanceValid(this) && Net.IsOnline && !Net.IsHost) { ReportSector(); SendIdentity(); }
+                };
+        }
     }
 
     private void RebuildShips()
@@ -474,20 +475,17 @@ public partial class Hub : Node2D
     public bool IsReady(int id) => _ready.TryGetValue(id, out var r) && r;
     public bool AllReady => _ships.Count > 0 && _ships.Keys.All(IsReady);
     public string PilotName(int id) => _ships.TryGetValue(id, out var s) && IsInstanceValid(s) ? s.Pilot : $"pilot {id}";
-    public bool TioOpen => IsInstanceValid(_tio);
+    public bool TioOpen => SideIs<TioWindow>();
 
     public void OpenTio()
     {
-        if (IsInstanceValid(_tio)) return;
+        if (SideIs<TioWindow>()) return;
         if (Net.IsHost && Mission == MissionState.Idle)
         {   // docking at the TIO selects the newest unlocked tier
             Missions.Level = Missions.Unlocked(Missions.Current.Id);
             BroadcastMission();
         }
-        if (IsInstanceValid(_base)) ToggleBase();
-        if (IsInstanceValid(_pilot)) TogglePilot();
-        _tio = new TioWindow { Hub = this };
-        _hudLayer.AddChild(_tio);
+        ToggleSide(() => new TioWindow { Hub = this });
     }
 
     public void SetMyReady(bool ready)
@@ -538,7 +536,7 @@ public partial class Hub : Node2D
         // the host's own record (and so the next level unlocking) updates in its own award
         AnnounceBossKill(Missions.Level);
         _arenaEndT = 4.0;
-        if (Net.IsOnline) Rpc(nameof(NetWon));
+        ToWorld(nameof(NetWon));
     }
     // Guests see the boss at zero too: its last hull report went out before the killing blow, so
     // for the four seconds before home it stood there at a sliver, still selectable.
@@ -568,9 +566,16 @@ public partial class Hub : Node2D
         }
     }
 
+    // THE COSMETIC CHANNEL. Every reliable RPC shares one ordered ENet channel by default, so on
+    // the internet one lost packet holds up everything queued behind it until it is resent --
+    // and a firing battleship sends a shell every quarter second. Shells, torpedoes and the
+    // missiles shot down (which must stay in order with their torpedoes) go on their own channel,
+    // so a lost one no longer delays a telegraph, a raider's arrival or the economy's report.
+    private const int Cosmetic = 1;
+
     // host: a missile was shot down; every guest bursts its copy
-    public void MissileDown(int id) { if (Net.IsHost && Net.IsOnline) Rpc(nameof(NetMissileDown), id); }
-    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    public void MissileDown(int id) => ToWorld(nameof(NetMissileDown), id);
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable, TransferChannel = Cosmetic)]
     private void NetMissileDown(int id)
     {
         foreach (var t in GetChildren().OfType<Torpedo>()) if (t.NetId == id) t.Intercept();
@@ -644,7 +649,7 @@ public partial class Hub : Node2D
     public const float RaidEdge = 3200f;
     public const double RaidDelay = 3.0;
     private double _raidIn = -1; private int _raidLevel;
-    private static double RaidScale(int level) => Missions.S(level);           // S(L) = 1.1^(L-1)
+
 
     private void StartRaid(int level)
     {
@@ -652,7 +657,7 @@ public partial class Hub : Node2D
         for (int i = 0; i < patrols; i++)
         {
             float a = Mathf.Tau * i / patrols + 0.4f;
-            SpawnPatrol(BasePos + Vector2.Right.Rotated(a) * RaidEdge, RaidScale(level));
+            SpawnPatrol(BasePos + Vector2.Right.Rotated(a) * RaidEdge, Missions.S(level));   // S(L) = 1.1^(L-1)
         }
     }
 
@@ -670,10 +675,9 @@ public partial class Hub : Node2D
     // what a raider may go after: player ships, and the utility ships at home
     public IEnumerable<Node2D> RaiderTargets()
     {
-        foreach (var s in _ships.Values) if (IsInstanceValid(s) && s.Alive) yield return s;
+        foreach (var s in _ships.Values) if (Raider.Up(s)) yield return s;
         if (Yard == null) yield break;
-        foreach (var g in Yard.Gatherers) if (g.State != Gatherer.St.Destroyed) yield return g;
-        if (Yard.Hauler != null && Yard.Hauler.State is not (Hauler.St.Destroyed or Hauler.St.Away)) yield return Yard.Hauler;
+        foreach (var u in Yard.Fleet) if (Raider.Up(u)) yield return u;
     }
 
     // A patrol: 3 lights and 1 heavy, spawned together at `at` on the perimeter.
@@ -691,7 +695,7 @@ public partial class Hub : Node2D
     {
         if (!Net.IsHost) return null;
         var r = AddRaider(++_raiderIds, at, kind, patrol, scale);
-        if (Net.IsOnline) Rpc(nameof(NetRaiderSpawn), r.NetId, at, (int)kind, scale);
+        ToWorld(nameof(NetRaiderSpawn), r.NetId, at, (int)kind, scale);
         return r;
     }
     // Idempotent: a late joiner is sent every raider that exists, and one of them may already
@@ -711,7 +715,7 @@ public partial class Hub : Node2D
     public void RaiderDown(Raider r)
     {
         DropRaider(r, burst: true);
-        if (Net.IsHost && Net.IsOnline) Rpc(nameof(NetRaiderGone), r.NetId);
+        ToWorld(nameof(NetRaiderGone), r.NetId);
     }
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
     private void NetRaiderGone(int id)
@@ -735,7 +739,7 @@ public partial class Hub : Node2D
         if (!Net.IsHost) return;
         _blasts.Add((at, Raider.MissileFlight, raiderId, damage));
         ShowHeavyMissile(from, at);
-        if (Net.IsOnline) Rpc(nameof(NetHeavyMissile), from, at);
+        ToWorld(nameof(NetHeavyMissile), from, at);
     }
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
     private void NetHeavyMissile(Vector2 from, Vector2 at) => ShowHeavyMissile(from, at, Net.Arriving(Raider.MissileFlight));
@@ -752,13 +756,7 @@ public partial class Hub : Node2D
             if (b.left > 0) { _blasts[i] = b; continue; }
             _blasts.RemoveAt(i);
             foreach (var t in RaiderTargets().ToList())
-                if (Raider.Gap(b.at, t) <= Raider.BlastRadius)
-                    switch (t)
-                    {
-                        case PlayerShip p: p.Hit(b.damage, b.at, $"heavy:{b.from}:missile"); break;
-                        case Gatherer g: g.TakeDamage(b.damage); break;
-                        case Hauler h: h.TakeDamage(b.damage); break;
-                    }
+                if (Raider.Gap(b.at, t) <= Raider.BlastRadius) (t as IRaidTarget)?.Hit(b.damage, b.at, $"heavy:{b.from}:missile");
         }
     }
 
@@ -772,7 +770,7 @@ public partial class Hub : Node2D
         if (!Net.IsHost || !Net.IsOnline || Raiders.Count == 0) return;
         _raiderSend -= delta; if (_raiderSend > 0) return; _raiderSend = 0.1;
         foreach (var part in Raiders.Chunk(RaidersPerPacket))
-            Rpc(nameof(NetRaiders), part.Select(r => r.NetId).ToArray(), part.Select(r => r.Position).ToArray(),
+            ToWorld(nameof(NetRaiders), part.Select(r => r.NetId).ToArray(), part.Select(r => r.Position).ToArray(),
                 part.Select(r => r.Rotation).ToArray(), part.Select(r => (float)r.Hp).ToArray(),
                 part.Select(r => r.TetherTo ?? new Vector2(float.NaN, float.NaN)).ToArray(),
                 part.Select(r => r.NetFlags).ToArray());
@@ -851,17 +849,9 @@ public partial class Hub : Node2D
     public void SetZoom(float z) => ZoomLevel = Mathf.Clamp(z, DefaultZoom / ZoomOutMax, DefaultZoom * ZoomInMax);
     public void ToggleFreeCamera() => FreeCamera = !FreeCamera;
 
-    public PlayerShip MyShipPublic => MyShip;
-    private void SpawnTorpedo(Vector2 from, Vector2 dir, float speed, float range, double dmg, bool cosmetic,
-                              int target = 0, float turn = 0f, bool heavy = false, bool hostile = false, PlayerShip source = null, int id = 0,
-                              string hitSource = null, float size = 1f)
-    {
-        AddChild(new Torpedo { Position = from, Dir = dir, Speed = speed, Range = range, Damage = dmg, Cosmetic = cosmetic,
-                               TargetId = target, TurnRate = turn, Heavy = heavy, HostileFire = hostile, Source = source, NetId = id,
-                               HitSource = hitSource, Size = size });
-    }
 
-    private PlayerShip MyShip => _ships.TryGetValue(Net.LocalId, out var s) && IsInstanceValid(s) ? s : null;
+
+    public PlayerShip MyShip => _ships.TryGetValue(Net.LocalId, out var s) && IsInstanceValid(s) ? s : null;
 
     private void ToggleStats()
     {
@@ -873,13 +863,12 @@ public partial class Hub : Node2D
 
     // Tab: ALWAYS the live hostile nearest your ship, at any range. No cycling --
     // pressing it again re-picks the nearest, so it never lands on a far target.
-    // Switch to anything else with a left-click.
+    // Switch to anything else with a left-click. Never a missile (Combat.Pickable): in the
+    // arena the boss's trident was often nearer than the boss, and Tab took a missile.
     private void SelectNearest()
     {
         var me = MyShip;
-        if (me == null) return;
-        var all = Combat.Near(me.Position, float.MaxValue);
-        _selected = all.Count > 0 ? all[0] : null;
+        if (me != null) _selected = Combat.Nearest(Combat.Hostiles, me.Position, h => h.Position, ok: Combat.Pickable);
     }
 
     // Left-click in the world: the hostile under the cursor (its hit circle, plus a
@@ -888,17 +877,12 @@ public partial class Hub : Node2D
     // true if the click landed on something (a hostile to select, or a building)
     private bool SelectAt(Vector2 world)
     {
-        IHittable best = null; float bd = float.MaxValue;
-        foreach (var h in Combat.Hostiles)
-        {
-            if (h == null || !h.Alive) continue;
-            float d = world.DistanceTo(h.Position);
-            if (d <= h.HitRadius + 16f && d < bd) { bd = d; best = h; }
-        }
+        var best = Combat.Nearest(Combat.Hostiles, world, h => h.Position,
+                                  ok: h => Combat.Pickable(h) && world.DistanceTo(h.Position) <= h.HitRadius + 16f);
         if (best != null) { SelectTarget(best); return true; }
         // buildings: a left-click on one opens its menu
         if (IsInstanceValid(_tioSprite) && _tioSprite.GetRect().HasPoint(_tioSprite.ToLocal(world))) { OpenTio(); return true; }
-        if (!InArena && world.DistanceTo(BasePos) < 200f) { if (!IsInstanceValid(_base)) ToggleBase(); return true; }
+        if (!InArena && world.DistanceTo(BasePos) < 200f) { if (!SideIs<BasePanel>()) ToggleBase(); return true; }
         return false;
     }
 
@@ -916,22 +900,16 @@ public partial class Hub : Node2D
         if (Net.IsHost) TickRaid(delta);
         if (Net.IsHost) TickBlasts(delta);
         TickMission(delta);
+        var me = MyShip;
         if (Music.I != null)
-        {
-            var own = MyShip;
-            Music.I.Target = own != null && own.InCombat ? Music.Mood.Combat
+            Music.I.Target = me != null && me.InCombat ? Music.Mood.Combat
                            : Selected != null ? Music.Mood.Alert : Music.Mood.Ambient;
-        }
         ControlsLocked = IsInstanceValid(_creator) || IsInstanceValid(_esc) || GetViewport().GuiGetFocusOwner() is LineEdit
                          || (IsInstanceValid(_statsWin) && _statsWin.Capturing);
         // bars and labels keep a constant on-screen size whatever the zoom
-        HealthBar.UiScale = Txt.UiScale = 1f / _cam.Zoom.X;
+        Txt.UiScale = 1f / _cam.Zoom.X;
         if (_selected != null && !_selected.Alive) _selected = null;
-
-        // ONLY the host produces. A client that ticked its own copy would drift
-        // from the host's within seconds and then argue about it.
-        if (_ships.TryGetValue(Net.LocalId, out var mine) && IsInstanceValid(mine))
-            MoveCamera(mine, (float)delta);
+        if (me != null) MoveCamera(me, (float)delta);
 
         for (int i = _flashes.Count - 1; i >= 0; i--)
         {
@@ -942,15 +920,12 @@ public partial class Hub : Node2D
         QueueRedraw();
 
         string ship = "";
-        var me = MyShip;
         if (me != null)
         {
             // weapon and ability state lives on the ability bar; this line is who and where.
             // Built every frame so a class change or a rebind shows at once, but only ASSIGNED
-            // when it actually differs: setting Text re-shapes the label's glyphs, and this
-            // string changes on a refit or a rebind, not sixty times a second.
-            var hint = Abilities.ControlsHint(me.Class);
-            if (_help.Text != hint) _help.Text = hint;
+            // when it actually differs (Ui.SetText): setting Text re-shapes the label's glyphs.
+            Ui.SetText(_help, Abilities.ControlsHint(me.Class));
             ship = $"    |    {Character.Name}  {Classes.NameOf(me.Class)}"
                  + $"  {Mathf.Abs(me.SpeedAhead):0} u/s{(me.SpeedAhead < -1 ? " astern" : "")}";
             ship += Selected != null ? "    target: " + (Selected is TargetDummy td ? $"TARGET DUMMY {td.Number}" : $"#{Selected.NetId}")
@@ -960,12 +935,13 @@ public partial class Hub : Node2D
             if (Placing) ship += $"    PLACING {_placingLabel}: left-click to confirm, right-click / Esc to cancel";
         }
         string place = Yard == null
-            ? $"ARENA  ·  {Missions.BossName} (LEVEL {Missions.Level})  {(IsInstanceValid(Boss) ? Boss.Hp : 0):0} / {(IsInstanceValid(Boss) ? Boss.MaxHp : 0):0}" + (MissionWon ? "  ·  DEFEATED" : "")
+            ? $"ARENA  ·  {Missions.Current.Name} (LEVEL {Missions.Level})  {(IsInstanceValid(Boss) ? Boss.Hp : 0):0} / {(IsInstanceValid(Boss) ? Boss.MaxHp : 0):0}" + (MissionWon ? "  ·  DEFEATED" : "")
             : $"ORE {Yard.Ore:0}    SALVAGE {Yard.Salvage:0}    CREDITS {Yard.Credits:0}"
               + $"    HAULER {Yard.Hauler.Cargo:0}/{Yard.Capacity:0} {Yard.Hauler.State.ToString().ToUpperInvariant()}";
-        _hud.Text = place + ship
-                  + (Net.IsOnline ? (Net.IsHost ? $"        HOSTING ({_ships.Count})" : $"        GUEST ({_ships.Count})") : "        OFFLINE")
-                  + (FreeCamera ? "        FREE CAMERA (Y)" : "");
+        Ui.SetText(_hud, place + ship
+                  + (Net.IsOnline ? (Net.IsHost ? $"        HOSTING ({_ships.Count})" : $"        GUEST ({_ships.Count})")
+                     : Net.I != null && Net.I.Connecting ? "        CONNECTING" : "        OFFLINE")
+                  + (FreeCamera ? "        FREE CAMERA (Y)" : ""));
     }
 
     public override void _Draw()
@@ -982,10 +958,10 @@ public partial class Hub : Node2D
             if (s.Mine) continue;
             DrawSetTransform(s.Position, 0f, Vector2.One);
             // above the hull whatever the class: half its length plus a margin, unscaled
-            // by zoom (HealthBar scales positions by UiScale, so divide it back out)
+            // by zoom (HealthBar scales positions by Txt.UiScale, so divide it back out)
             float above = (s.MyArt.Length * 0.5f + 16f) / Txt.UiScale;
             HealthBar.Draw(this, new Vector2(-40, -above), 80, 6, s.Hp, s.MaxHp,
-                           s.Hp / Mathf.Max(1, s.MaxHp) > 0.35 ? new Color(0.4f, 0.9f, 0.5f) : new Color(1f, 0.4f, 0.3f), null);
+                           s.Hp / Mathf.Max(1, s.MaxHp) > 0.35 ? new Color(0.4f, 0.9f, 0.5f) : new Color(1f, 0.4f, 0.3f));
             DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
             Txt.Centre(this, font, s.Position + new Vector2(0, -(s.MyArt.Length * 0.5f + 28f)), s.Pilot, Txt.Size(16), new Color(0.75f, 0.9f, 1f, 0.85f));
         }
@@ -1038,10 +1014,7 @@ public partial class Hub : Node2D
             else if (Placing) CancelPlacement();
             else if (IsInstanceValid(_creator)) _creator.Close();
             else if (IsInstanceValid(_statsWin)) ToggleStats();
-            else if (IsInstanceValid(_base)) ToggleBase();
-            else if (IsInstanceValid(_pilot)) TogglePilot();
-            else if (IsInstanceValid(_tio)) { _tio.QueueFree(); _tio = null; }
-            else if (IsInstanceValid(_equip)) ToggleEquipment();
+            else if (IsInstanceValid(_side)) CloseSide();
             else if (Selected != null || Waypoint != null) ClearSelection();
             else ToggleEscMenu();                                   // the menu holds "quit to main menu"
         }
@@ -1093,7 +1066,7 @@ public partial class Hub : Node2D
             else if (kk.Keycode == Key.B && !InArena) ToggleBase();
             else if (kk.Keycode == Key.L) TogglePilot();
             else if (kk.Keycode == Key.I) ToggleEquipment();
-            else if (kk.Keycode == Key.V) MyShipPublic?.StartWarp();   // warp: a fixed key, not a slot
+            else if (kk.Keycode == Key.V) mine.StartWarp();            // warp: a fixed key, not a slot
             else
             {
                 // in stasis the only order is F: re-board once the ship is ready
@@ -1107,23 +1080,22 @@ public partial class Hub : Node2D
         }
     }
 
-    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetShell(Vector2 from, Vector2 dir, float speed, float range)
-    {
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable, TransferChannel = Cosmetic)]
+    private void NetShell(Vector2 from, Vector2 dir, float speed, float range) =>
         AddChild(new Shell { Position = from, Dir = dir, Speed = speed, Range = range, Cosmetic = true });
-        Sfx.Cannon(from);
-    }
 
-    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetTorpedo(Vector2 from, Vector2 dir, float speed, float range, int target, float turn, bool heavy, bool hostile, int id, float size)
-        => SpawnTorpedo(from, dir, speed, range, 0, true, target, turn, heavy, hostile, null, id, null, size);
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable, TransferChannel = Cosmetic)]
+    private void NetTorpedo(Vector2 from, Vector2 dir, float speed, float range, int target, float turn, bool heavy, bool hostile, int id, float size) =>
+        AddChild(new Torpedo { Position = from, Dir = dir, Speed = speed, Range = range, Cosmetic = true, TargetId = target, TurnRate = turn,
+                               Heavy = heavy, HostileFire = hostile, NetId = id, Size = size });
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
     private void NetFlash(Vector2 a, Vector2 b, Color c, int snd)
         => AddFlash(a, b, c, System.Enum.IsDefined(typeof(ShotSound), snd) ? (ShotSound)snd : ShotSound.Light);
-    private void AddFlash(Vector2 a, Vector2 b, Color c, ShotSound snd) { _flashes.Add((a, b, c, 0.10)); Sfx.Laser(a, b, snd); }
+    public const double FlashLife = 0.10;                            // a laser shot's flash, seconds
+    private void AddFlash(Vector2 a, Vector2 b, Color c, ShotSound snd) { _flashes.Add((a, b, c, FlashLife)); Sfx.Laser(a, b, snd); }
 
-    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
     private void NetDummy(int number, double last, double avg, double total)
     {
         // BY NUMBER, not by position. The dummies are numbered 1, 3, 4, 5 (2's spot holds the two
@@ -1132,36 +1104,24 @@ public partial class Hub : Node2D
         foreach (var d in _dummies) if (d.Number == number) { d.SetReadout(last, avg, total); return; }
     }
 
-    private void ToggleBase()
+    // THE SIDE WINDOW. BASE, PILOT, EQUIPMENT and the TIO all sit in one spot, so at most one is
+    // open: opening one closes whichever held the spot, and asking for the one that is open
+    // closes it. Four fields with four hand-written "close the others" lists used to disagree --
+    // the TIO opened over BASE or PILOT drew one window on top of another.
+    private Control _side;
+    private bool SideIs<T>() where T : Control => _side is T && IsInstanceValid(_side);
+    private void CloseSide() { if (IsInstanceValid(_side)) _side.QueueFree(); _side = null; }
+    private void ToggleSide<T>(System.Func<T> make) where T : Control
     {
-        if (Yard == null) return;                                      // the arena: there is no base to open
-        if (IsInstanceValid(_base)) { _base.QueueFree(); _base = null; return; }
-        if (IsInstanceValid(_equip)) ToggleEquipment();             // they share a spot
-        _base = new BasePanel { Hub = this };
-        if (IsInstanceValid(_pilot)) TogglePilot();                // the two share a spot
-        _hudLayer.AddChild(_base);
+        bool open = SideIs<T>();
+        CloseSide();
+        if (!open) { _side = make(); _hudLayer.AddChild(_side); }
     }
+    private void ToggleBase() { if (Yard != null) ToggleSide(() => new BasePanel { Hub = this }); }   // the arena: no base to open
+    public void ToggleEquipment() => ToggleSide(() => new EquipmentWindow { Hub = this });
+    public void TogglePilot() => ToggleSide(() => new PilotWindow { Hub = this });
     public bool CreatorOpen => IsInstanceValid(_creator);
     public bool StatsOpen => IsInstanceValid(_statsWin);
-
-    public void ToggleEquipment()
-    {
-        if (IsInstanceValid(_equip)) { _equip.QueueFree(); _equip = null; return; }
-        if (IsInstanceValid(_base)) ToggleBase();                 // they share a spot
-        if (IsInstanceValid(_pilot)) TogglePilot();
-        if (IsInstanceValid(_tio)) { _tio.QueueFree(); _tio = null; }
-        _equip = new EquipmentWindow { Hub = this };
-        _hudLayer.AddChild(_equip);
-    }
-
-    public void TogglePilot()
-    {
-        if (IsInstanceValid(_equip)) ToggleEquipment();
-        if (IsInstanceValid(_pilot)) { _pilot.QueueFree(); _pilot = null; return; }
-        if (IsInstanceValid(_base)) ToggleBase();                 // the two share a spot
-        _pilot = new PilotWindow { Hub = this };
-        _hudLayer.AddChild(_pilot);
-    }
 
     // A purchase: refit the ship now, and tell the host (it resolves hull and damage).
     public void PilotChanged() { ApplyLocalIdentity(); SendIdentity(); }
@@ -1171,7 +1131,7 @@ public partial class Hub : Node2D
     {
         if (IsInstanceValid(_creator) || Yard == null) return;       // REFIT is at the base
         Yard.ChargeReset();
-        if (IsInstanceValid(_base)) ToggleBase();
+        if (SideIs<BasePanel>()) CloseSide();
         OpenCreator();
     }
 }
@@ -1237,7 +1197,7 @@ public partial class HullHud : Control
 
     public override void _Draw()
     {
-        var s = Hub?.MyShipPublic;
+        var s = Hub?.MyShip;
         if (s == null) return;
         _panel.Draw(GetCanvasItem(), new Rect2(-8, -6, W + 16, H + 12));   // its panel
         float frac = (float)Mathf.Clamp(s.Hp / Mathf.Max(1, s.MaxHp), 0, 1);
@@ -1277,7 +1237,7 @@ public partial class FlashLayer : Node2D
     public override void _Draw()
     {
         foreach (var f in Hub.Flashes)
-            DrawLine(f.a, f.b, new Color(f.c.R, f.c.G, f.c.B, (float)(f.t / 0.10) * 0.9f), 2f);
+            DrawLine(f.a, f.b, new Color(f.c.R, f.c.G, f.c.B, (float)(f.t / Hub.FlashLife) * 0.9f), 2f);
     }
 }
 

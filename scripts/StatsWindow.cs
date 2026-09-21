@@ -47,7 +47,7 @@ public partial class StatsWindow : CanvasLayer
         _title = Ui.Lbl("", Ui.Title, Ui.Accent);
         col.AddChild(_title);
 
-        var tabs = new HBoxContainer(); tabs.AddThemeConstantOverride("separation", 6);
+        var tabs = Ui.HBox(6);
         col.AddChild(tabs);
         var group = new ButtonGroup();
         var keysTab  = Ui.Tab("ABILITIES & KEYS", group, false); keysTab.Name = "KeysTab";
@@ -55,13 +55,13 @@ public partial class StatsWindow : CanvasLayer
         tabs.AddChild(keysTab); tabs.AddChild(statsTab);
 
         // ── keys pane ──
-        _keysPane = new VBoxContainer(); _keysPane.AddThemeConstantOverride("separation", 10);
+        _keysPane = Ui.VBox(10);
         col.AddChild(_keysPane);
         // the message sits above the rows, so it is seen without scrolling
         _keyMsg = Ui.Lbl("", Ui.Body, Ui.Warn);
         _keyMsg.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         _keysPane.AddChild(_keyMsg);
-        _keyRows = new VBoxContainer(); _keyRows.AddThemeConstantOverride("separation", 8);
+        _keyRows = Ui.VBox(8);
         _keysPane.AddChild(_keyRows);
         var reset = new Button { Text = "RESET TO DEFAULTS", FocusMode = Control.FocusModeEnum.None, Name = "ResetKeys" };
         reset.Pressed += () => { if (IsInstanceValid(Ship)) { Abilities.ResetDefaults(Ship.Class); _keyMsg.Text = "Defaults restored."; RebuildKeys(); } };
@@ -71,7 +71,7 @@ public partial class StatsWindow : CanvasLayer
         _keysPane.AddChild(fixedKeys);
 
         // ── stats pane ──
-        _statsPane = new VBoxContainer(); _statsPane.AddThemeConstantOverride("separation", 10);
+        _statsPane = Ui.VBox(10);
         col.AddChild(_statsPane);
         var rule = Ui.Lbl("Final = base × (1 + bonus). Reload, cooldown and radius bonuses divide instead.", Ui.Small, Ui.Dim);
         rule.AutowrapMode = TextServer.AutowrapMode.WordSmart;
@@ -118,11 +118,11 @@ public partial class StatsWindow : CanvasLayer
 
     private void RebuildKeys()
     {
-        foreach (var c in _keyRows.GetChildren()) { _keyRows.RemoveChild(c); c.QueueFree(); }
+        Ui.Clear(_keyRows);
         if (!IsInstanceValid(Ship)) return;
         foreach (var ab in Abilities.For(Ship.Class))
         {
-            var row = new HBoxContainer { Name = "Key_" + ab.Id }; row.AddThemeConstantOverride("separation", 12);
+            var row = Ui.HBox(12, "Key_" + ab.Id);
             var info = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
             info.AddThemeConstantOverride("separation", 2);
             info.AddChild(Ui.Lbl(ab.Name + (ab.Kind == AbilityKind.Hold ? "  (hold)" : ""), Ui.Body));
@@ -160,8 +160,8 @@ public partial class StatsWindow : CanvasLayer
         var s = Ship.Stats; _shown = s;
         _title.Text = $"{Ship.Pilot} — {Classes.NameOf(s.Class)}";
 
-        foreach (var c in _derived.GetChildren()) { _derived.RemoveChild(c); c.QueueFree(); }
-        foreach (var c in _grid.GetChildren())    { _grid.RemoveChild(c); c.QueueFree(); }
+        Ui.Clear(_derived);
+        Ui.Clear(_grid);
 
         // ── damage per entity, and totals ──
         var acc = new Color(1f, 0.85f, 0.5f);

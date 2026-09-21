@@ -15,8 +15,10 @@ public partial class SessionMenu : CanvasLayer
 
     public override void _Ready()
     {
-        var root = new VBoxContainer();
-        root.AddThemeConstantOverride("separation", 8);
+        // Above the HUD's buttons: opened, this panel reaches over BASE and PILOT, which drew on top
+        // of it and took the clicks meant for it.
+        Layer = 2;
+        var root = Ui.VBox(8);
         var panel = Ui.Wrap(root);                   // on a panel, like every HUD element
         panel.Position = new Vector2(10, 48);
         panel.MouseFilter = Control.MouseFilterEnum.Pass;
@@ -27,8 +29,8 @@ public partial class SessionMenu : CanvasLayer
         _toggle.Toggled += on => { _options.Visible = on; if (!on) _addr.ReleaseFocus(); Refresh(); };
         root.AddChild(_toggle);
 
-        _options = new VBoxContainer { Name = "NetOptions", Visible = false };
-        _options.AddThemeConstantOverride("separation", 8);
+        _options = Ui.VBox(8, "NetOptions");
+        _options.Visible = false;
         root.AddChild(_options);
 
         _addr = new LineEdit { PlaceholderText = "host IP, or IP:port", CustomMinimumSize = new Vector2(300, 0) };
@@ -41,9 +43,9 @@ public partial class SessionMenu : CanvasLayer
         // would press it again mid-flight.
         // one press a second: starting or stopping a session is not free, and nothing
         // should be able to hammer it
-        _hostBtn = Btn("HOST THIS WORLD", () => Limited(() => Net.I?.Host())); _hostBtn.Name = "Host";
-        _joinBtn = Btn("JOIN", () => Limited(DoJoin)); _joinBtn.Name = "Join";
-        _offBtn = Btn("PLAY OFFLINE", () => Limited(() => Net.I?.GoOffline())); _offBtn.Name = "Offline";
+        _hostBtn = Ui.Btn("HOST THIS WORLD", () => Limited(() => Net.I?.Host()), "Host");
+        _joinBtn = Ui.Btn("JOIN", () => Limited(DoJoin), "Join");
+        _offBtn = Ui.Btn("PLAY OFFLINE", () => Limited(() => Net.I?.GoOffline()), "Offline");
         _options.AddChild(_hostBtn); _options.AddChild(_joinBtn); _options.AddChild(_offBtn);
         _sessionBtns = new[] { _hostBtn, _joinBtn, _offBtn };
 
@@ -53,7 +55,7 @@ public partial class SessionMenu : CanvasLayer
         _options.AddChild(_status);
         // the address friends should type, one click to the clipboard: the internet one if there
         // is one, else a virtual network's, else IPv6, else the local network's
-        _copy = Btn("COPY ADDRESS", () =>
+        _copy = Ui.Btn("COPY ADDRESS", () =>
         {
             var n = Net.I;
             if (n == null) return;
@@ -64,7 +66,7 @@ public partial class SessionMenu : CanvasLayer
         _copy.Name = "CopyAddress";
         _options.AddChild(_copy);
         // the address friends in other cities need -- hidden until clicked
-        _reveal = Btn("", () => { _revealed = !_revealed; Refresh(); });
+        _reveal = Ui.Btn("", () => { _revealed = !_revealed; Refresh(); });
         _reveal.Name = "RevealAddress";
         _options.AddChild(_reveal);
         if (Net.I != null) { Net.I.Status += OnStatus; Net.I.SessionChanged += Refresh; Net.I.PlayerJoined += OnPeers; Net.I.PlayerLeft += OnPeers; }
@@ -125,11 +127,5 @@ public partial class SessionMenu : CanvasLayer
         if (Locked) return;
         _lockedUntil = _now + PressGap;
         a();
-    }
-    private static Button Btn(string text, System.Action onPress)
-    {
-        var b = new Button { Text = text, FocusMode = Control.FocusModeEnum.None };
-        b.Pressed += onPress;
-        return b;
     }
 }

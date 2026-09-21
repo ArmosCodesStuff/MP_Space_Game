@@ -34,7 +34,6 @@ public partial class MenuFoe : Node2D, IHittable
     private readonly Random _rng;
 
     public int NetId { get; } = IdBase + (++_next);
-    public new Vector2 Position { get => base.Position; set => base.Position = value; }
     public float HitRadius { get; private set; }
     public bool Alive { get; private set; } = true;
     public bool Webbing { get; private set; }     // drawing its tether this frame
@@ -60,9 +59,7 @@ public partial class MenuFoe : Node2D, IHittable
 
     public override void _Ready()
     {
-        var tex = GD.Load<Texture2D>(_art);
-        float k = _length / tex.GetHeight();          // exactly how Raider and PlayerShip do it
-        _sprite = new Sprite2D { Texture = tex, Scale = new Vector2(k, k) };
+        _sprite = Sprites.Fit(_art, _length);          // exactly how Raider and PlayerShip do it
         // The heavy wears the raiders' red, from Raider's own constant: untinted it drew in the
         // art's bare grey and read as a neutral hull rather than as something shooting at you.
         if (Kind == MenuFoeKind.Heavy) _sprite.Modulate = Raider.HeavyTint;
@@ -183,7 +180,7 @@ public partial class MenuFoe : Node2D, IHittable
         }
         if (!Alive) return;
         if (_hp < _maxHp)
-            HealthBar.Draw(this, new Vector2(-22, -HitRadius - 14), 44, 4, _hp, _maxHp, Ui.Bad, null);
+            HealthBar.Draw(this, new Vector2(-22, -HitRadius - 14), 44, 4, _hp, _maxHp, Ui.Bad);
     }
 
     public override void _Process(double delta)

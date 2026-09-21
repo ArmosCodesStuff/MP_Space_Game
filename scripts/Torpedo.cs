@@ -38,7 +38,7 @@ public partial class Torpedo : Node2D, IHittable
     // resolves the hit and tells every guest to burst its copy (by NetId).
     public int NetId { get; set; }
     public float HitRadius => 8f * Size;
-    public string HitSource;          // the damage source's name (a player lands one hit per source per 0.35 s)
+    public string HitSource;          // the damage source's name (a player takes one hit per source per 0.52 s)
     public float Size = 1f;           // a boss's missiles are twice the size
     public bool Alive => !_spent;
     public bool Selectable => false;
@@ -131,19 +131,13 @@ public partial class Torpedo : Node2D, IHittable
                 DrawColoredPolygon(new[] { new Vector2(3.2f, 6f), new Vector2(7f, 13f), new Vector2(3.2f, 12f) }, dark);
                 DrawCircle(new Vector2(0, 13.5f), 2.8f, new Color(1f, 0.75f, 0.35f));
             }
-            else if (Size != 1f)
-            {
+            else
+            {   // a missile, drawn at its size (a boss's are twice as big), a red tip on every one
                 DrawSetTransform(Vector2.Zero, 0f, Vector2.One * Size);
                 DrawRect(new Rect2(-2.2f, -9f, 4.4f, 18f), new Color(0.85f, 0.85f, 0.8f));
                 DrawColoredPolygon(new[] { new Vector2(-2.2f, -9f), new Vector2(0, -13f), new Vector2(2.2f, -9f) }, new Color(0.9f, 0.2f, 0.18f));
                 DrawCircle(new Vector2(0, 9f), 2.4f, new Color(1f, 0.7f, 0.3f));
                 DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
-            }
-            else
-            {
-                DrawRect(new Rect2(-2.2f, -9f, 4.4f, 18f), new Color(0.85f, 0.85f, 0.8f));
-                DrawColoredPolygon(new[] { new Vector2(-2.2f, -9f), new Vector2(0, -13f), new Vector2(2.2f, -9f) }, new Color(0.9f, 0.2f, 0.18f));   // a red tip, on every missile
-                DrawCircle(new Vector2(0, 9f), 2.4f, new Color(1f, 0.7f, 0.3f));
             }
         }
         else if (_burst < 0.5)

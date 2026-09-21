@@ -61,7 +61,7 @@ public partial class BossBar : Control
         var boss = Hub?.Boss;
         if (!IsInstanceValid(boss)) return;                       // the first draw can come before any boss
         _panel.Draw(GetCanvasItem(), new Rect2(-10, -26, W + 20, H + 34 + SuperPad + SuperH));
-        Txt.D(this, ThemeDB.FallbackFont, new Vector2(0, -8), $"{Missions.BossName}  ·  LEVEL {Missions.Level}  ·  {boss.Hp:0} / {boss.MaxHp:0}",
+        Txt.D(this, ThemeDB.FallbackFont, new Vector2(0, -8), $"{Missions.Current.Name}  ·  LEVEL {Missions.Level}  ·  {boss.Hp:0} / {boss.MaxHp:0}",
               HorizontalAlignment.Center, W, 13, Ui.Text);
         float frac = (float)Math.Clamp(boss.Hp / Math.Max(1, boss.MaxHp), 0, 1);
         // The hull stays RED whatever the palette does -- it is the one bar on screen that means

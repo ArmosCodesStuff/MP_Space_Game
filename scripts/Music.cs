@@ -4,9 +4,8 @@ using Godot;
 //   Ambient : nothing selected                   ambient full, combat silent
 //   Alert   : an enemy is selected               ambient 35%, combat 20%
 //   Combat  : you dealt or took damage in the
-//             last 8 s, or you are in a combat
-//             zone (CombatZone: for the instanced
-//             systems to come)                   ambient silent, combat 100%
+//             last 12 s, or you are in the arena
+//             (CombatZone)                        ambient silent, combat 100%
 // Every level is a share of the player's music volume (Settings.MusicVolume), which
 // is itself under the master volume. The hub sets the mood each frame; any other
 // scene falls back to Ambient. Purely local.
@@ -15,7 +14,7 @@ public partial class Music : Node
     public static Music I { get; private set; }
     public enum Mood { Ambient, Alert, Combat }
     public Mood Target = Mood.Ambient;
-    public static bool CombatZone;                     // set by an instanced combat system
+    public static bool CombatZone;                     // the arena sets it (Hub), the menu clears it
     private const float FadePerSecond = 0.7f;           // about 1.5 s for a full cross-fade
     private const float AmbientTrim = 0.45f;            // the ambient loop is meant to sit far back
     public const float Master = 0.65f;                 // the whole score, 35% quieter than it started

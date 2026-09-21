@@ -218,6 +218,34 @@ Then the tools: `tools/smoketest/SmokeTest.cs.txt`, `tools/screens/Shots.cs.txt`
 **In the smoke test, look especially for checks that compare with the code's own constants** (found in
 chunk E: such a check cannot catch the constant being wrong — compare with the spec's number instead).
 
+## Pass 4 — the whole game mapped, seven readers at once: DONE, 51 of 51 files (2026-09-21)
+
+Every script read again line by line by seven independent reviewers -- one per subsystem (hub,
+player, enemies and combat, economy and save, UI, assets and audio and plumbing) and one on the
+whole of internet play -- each returning spawn sites, duplications, old code, simplifications, bugs
+and resources, file:line with evidence. The mechanical half is now a tool: `tools/map.py` writes
+`version/MAP.md` (every member and who uses it, every RPC and who sends it, every spawn site, every
+event hookup and whether it is undone, every asset and who loads it).
+
+- **Fixed** (each with a check that fails on the old code): 25 bugs, 11 of them multiplayer -- see
+  CHANGES.md, the 2026-09-21 section. The ones a player would have met first: the boss always sized
+  for one; guests' gear lost after any trip to the arena; late joiners never told of the raid already
+  on; a raider's web never holding a guest; the live death beam undrawn and sweeping.
+- **Consolidated**: projectile spawning (`Combat.World`), nearest-searches (`Combat.Nearest`), the
+  hull capsule, raid targets (`IRaidTarget`, `UtilityShip`), sprite sizing (`Sprites.Fit`), side
+  windows, identity, character defaults and file reading, atomic writes, the UI's box/button/clear.
+- **Rejected on purpose**: a generic "master spawner" for every entity. Of everything the hub makes,
+  only raiders have a replicated spawn -> stream -> despawn life, and they have one; the world props,
+  dummies, boss, fleet and ships are built the same way on every peer from replicated state, so a
+  generic spawner would have one client and save nothing. The projectile spawner is the one that
+  paid for itself. A shared base class for Raider, Boss, TargetDummy, MenuFoe and Torpedo, likewise:
+  they share a Hub field and a two-line registration, not behaviour.
+- **Left, and why** (all low): `_lastHitBy` and `DamageBySource` grow by one entry per raider met in
+  a session (bytes; the second is the tests' bookkeeping); a guest's cosmetic shell does not stop at
+  its target (the host's does); a guest's carrier bomber slot does not show STRIKING; guest-side
+  ability timers can read READY for up to one packet at the end of a window; the join/leave refit of
+  lost fleet ships is free. Each is in the pass's findings with its location.
+
 ## Findings log (pass 3)
 
 ### The restyle pass over every UI script — 3 findings, all fixed and covered

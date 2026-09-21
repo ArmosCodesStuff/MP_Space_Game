@@ -40,7 +40,7 @@ public partial class BasePanel : PanelContainer
         head.AddChild(_credits);
         col.AddChild(head);
 
-        var tabs = new HBoxContainer(); tabs.AddThemeConstantOverride("separation", 6);
+        var tabs = Ui.HBox(6);
         var group = new ButtonGroup();
         foreach (var t in Economy.Tabs.Append("REFIT"))
         {
@@ -49,7 +49,7 @@ public partial class BasePanel : PanelContainer
             tabs.AddChild(b);
         }
         col.AddChild(tabs);
-        _body = new VBoxContainer(); _body.AddThemeConstantOverride("separation", 8);
+        _body = Ui.VBox(8);
         col.AddChild(_body);
         col.AddChild(Ui.Lbl("B or Esc closes.", Ui.Small, Ui.Dim));
         ShowTab(_tab);
@@ -58,7 +58,7 @@ public partial class BasePanel : PanelContainer
     public void ShowTab(string tab)
     {
         _tab = tab; _rows.Clear(); _reset = null;
-        foreach (var c in _body.GetChildren()) { _body.RemoveChild(c); c.QueueFree(); }
+        Ui.Clear(_body);
         if (tab == "REFIT")
         {
             _body.AddChild(Ui.Heading("Refit"));
@@ -80,7 +80,7 @@ public partial class BasePanel : PanelContainer
             // One card per upgrade: name and level on the first line, what the money buys on the
             // second, the price on the button. The old version was four bare labels a row and read
             // as a paragraph.
-            var row = new HBoxContainer { Name = "Up_" + u.Id }; row.AddThemeConstantOverride("separation", 12);
+            var row = Ui.HBox(12, "Up_" + u.Id);
             var info = new Label { SizeFlagsHorizontal = SizeFlags.ExpandFill, VerticalAlignment = VerticalAlignment.Center };
             var id = u.Id;
             // centred at its own 34 px height rather than stretched to the two-line label
@@ -101,10 +101,8 @@ public partial class BasePanel : PanelContainer
         Ui.SetText(_credits, $"{Y.Credits:0} cr");
         if (IsInstanceValid(_fleet) && _tab != "REFIT")
         {
-            string lost = _tab == "HAULER"
-                ? (Y.Hauler != null && Y.Hauler.State == Hauler.St.Destroyed ? Rebuilding("Hauler", Y.Hauler.RebuildIn, Y.Hauler.WaitingForCredits, _tab) : "")
-                : string.Join("", Y.Gatherers.Where(g => g.Category == _tab && g.State == Gatherer.St.Destroyed)
-                                            .Select(g => Rebuilding($"{(g.Kind == GatherKind.Miner ? "Miner" : "Salvager")} {g.Index + 1}", g.RebuildIn, g.WaitingForCredits, _tab)));
+            string lost = string.Join("", Y.Fleet.Where(s => s.Category == _tab && s.Lost)
+                                                .Select(s => Rebuilding(s.Label, s.RebuildIn, s.WaitingForCredits, _tab)));
             Ui.SetText(_fleet, $"Invested {Y.Invested(_tab):0} cr  ·  a rebuild costs {Y.RebuildCost(_tab):0} cr (10%)" + lost);
         }
         foreach (var (id, (info, buy)) in _rows)

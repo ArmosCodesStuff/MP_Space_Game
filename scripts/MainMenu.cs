@@ -91,7 +91,7 @@ public partial class MainMenu : Node2D
                                 Zoom = new Vector2(Zoom, Zoom), Enabled = true });
         // The hub sets these from its camera each frame; the overlays drawn in world space (a
         // foe's health bar) read them, and without this they keep whatever the last scene left.
-        HealthBar.UiScale = Txt.UiScale = 1f / Zoom;
+        Txt.UiScale = 1f / Zoom;
         // nebula backdrop: a few large tinted patches
         var neb = GD.Load<Texture2D>("res://nebula.png");
         Color[] tints = { new(0.45f, 0.30f, 0.75f), new(0.25f, 0.45f, 0.80f), new(0.85f, 0.55f, 0.30f), new(0.30f, 0.75f, 0.85f) };
@@ -133,15 +133,7 @@ public partial class MainMenu : Node2D
 
         // Its turrets, shells and missiles all go through Combat, exactly as in the hub.
         Combat.OnFlash = (a, b, c, snd) => { _shots.Add(new Shot { A = a, B = b, T = 0.15 }); Sfx.Laser(a, b, snd); };
-        Combat.OnShell = (from, dir, speed, range, dmg, source) =>
-        {
-            AddChild(new Shell { Position = from, Dir = dir, Speed = speed, Range = range, Damage = dmg, Source = source });
-            Sfx.Cannon(from);
-        };
-        Combat.OnTorpedo = (from, dir, speed, range, dmg, target, turn, heavy, hostile, source, hitSource, size) =>
-            AddChild(new Torpedo { Position = from, Dir = dir, Speed = speed, Range = range, Damage = dmg,
-                                   TargetId = target, TurnRate = turn, Heavy = heavy, HostileFire = hostile,
-                                   Source = source, HitSource = hitSource, Size = size });
+        Combat.World = this;
 
         // three lights, two heavies and a webifier
         foreach (var kind in new[] { MenuFoeKind.Light, MenuFoeKind.Light, MenuFoeKind.Light,
@@ -174,11 +166,11 @@ public partial class MainMenu : Node2D
         // Warships has no save file yet -- only characters and settings -- so the
         // Continue / New Game pair carried over from Space Fleet Idle could never enable
         // Continue. One entry point until there is world state worth continuing.
-        var launch = Big("PLAY"); launch.Pressed += () => GetTree().ChangeSceneToFile("res://CharacterSelect.tscn"); col.AddChild(launch);
+        col.AddChild(Ui.Btn("PLAY", () => GetTree().ChangeSceneToFile("res://CharacterSelect.tscn"), size: Ui.Head));
         col.AddChild(Ui.Heading("Volume"));
-        var vol = new HBoxContainer(); vol.AddThemeConstantOverride("separation", 4); col.AddChild(vol);
+        var vol = Ui.HBox(4); col.AddChild(vol);
         for (int i = 0; i < Settings.VolumeSteps.Length; i++) { int idx = i; var b = new Button { Text = $"{Settings.VolumeSteps[i] * 100:F0}%", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill }; b.Pressed += () => { Settings.VolumeIdx = idx; Settings.ApplyVolume(); Settings.Save(); _info.Text = $"Volume {Settings.Volume * 100:F0}%"; }; vol.AddChild(b); }
-        var quit = Big("QUIT"); quit.Pressed += () => Game.Quit(); col.AddChild(quit);
+        col.AddChild(Ui.Btn("QUIT", () => Game.Quit(), size: Ui.Head));
         _info = Ui.Lbl($"Volume {Settings.Volume * 100:F0}%", Ui.Small, Ui.Dim);
         _info.HorizontalAlignment = HorizontalAlignment.Center; col.AddChild(_info);
         var ver = Ui.Lbl("Warships  early build", Ui.Small, Ui.Dim with { A = 0.7f });
@@ -220,7 +212,7 @@ public partial class MainMenu : Node2D
     {
         if (!IsInstanceValid(_cap)) return;
         var live = _foes.Where(f => f.Alive).ToList();
-        var near = live.OrderBy(f => f.GlobalPosition.DistanceTo(_cap.Position)).FirstOrDefault();
+        var near = Combat.Nearest(live, _cap.Position, f => f.GlobalPosition);
 
         // ── the area shot, and the jump out of it ──
         if (_aoeLeft < 0)
@@ -294,6 +286,5 @@ public partial class MainMenu : Node2D
         }
     }
 
-    private static Button Big(string text) { var b = new Button { Text = text }; b.AddThemeFontSizeOverride("font_size", Ui.Head); b.CustomMinimumSize = new Vector2(0, 46); return b; }
 
 }

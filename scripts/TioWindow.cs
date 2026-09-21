@@ -18,8 +18,8 @@ public partial class TioWindow : PanelContainer
         Name = "TioWindow";
         Position = new Vector2(360, 92);
         Ui.Panelise(this);
-        var col = new VBoxContainer(); col.AddThemeConstantOverride("separation", 12); AddChild(col);
-        var title = new VBoxContainer(); title.AddThemeConstantOverride("separation", 2);
+        var col = Ui.VBox(12); AddChild(col);
+        var title = Ui.VBox(2);
         title.AddChild(Ui.Lbl("WARP TO TARGET", Ui.Title, Ui.Accent));
         title.AddChild(Ui.Lbl("Threat Intelligence Operations", Ui.Small, Ui.Dim));
         col.AddChild(title);
@@ -28,7 +28,7 @@ public partial class TioWindow : PanelContainer
         _bounty.AutowrapMode = TextServer.AutowrapMode.WordSmart; _bounty.CustomMinimumSize = new Vector2(440, 0);
         col.AddChild(Ui.CardWrap(_bounty));
         col.AddChild(Ui.Heading("Difficulty"));
-        var diff = new HBoxContainer { Name = "Difficulty" }; diff.AddThemeConstantOverride("separation", 8); col.AddChild(diff);
+        var diff = Ui.HBox(8, "Difficulty"); col.AddChild(diff);
         _down = new Button { Name = "LevelDown", Text = "◀", FocusMode = FocusModeEnum.None }; _down.Pressed += () => Hub.SelectLevel(Missions.Level - 1);
         _tier = Ui.Lbl("", Ui.Body); _tier.CustomMinimumSize = new Vector2(230, 0);
         _tier.HorizontalAlignment = HorizontalAlignment.Center; _tier.VerticalAlignment = VerticalAlignment.Center;
@@ -37,7 +37,7 @@ public partial class TioWindow : PanelContainer
         diff.AddChild(_down); diff.AddChild(_tier); diff.AddChild(_up);
         col.AddChild(Ui.Heading("Party  -  everyone in the session"));
         _party = Ui.Lbl("", Ui.Body); col.AddChild(Ui.CardWrap(_party));
-        var row = new HBoxContainer(); row.AddThemeConstantOverride("separation", 10); col.AddChild(row);
+        var row = Ui.HBox(10); col.AddChild(row);
         _ready = new Button { Name = "Ready", FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(215, 38) };
         _ready.Pressed += () => Hub.SetMyReady(!Hub.IsReady(Net.LocalId));
         row.AddChild(_ready);
@@ -54,7 +54,7 @@ public partial class TioWindow : PanelContainer
         _down.Disabled = !Net.IsHost || lv <= 1 || Hub.Mission != Hub.MissionState.Idle;
         _up.Disabled = !Net.IsHost || lv >= top || Hub.Mission != Hub.MissionState.Idle;
         bool first = !(Character.BossCleared.TryGetValue(Missions.Current.Id, out var cl) && cl.Contains(lv));
-        Ui.SetText(_bounty, $"BOUNTY  ·  {Missions.BossName}  ·  party of {party}\n"
+        Ui.SetText(_bounty, $"BOUNTY  ·  {Missions.Current.Name}  ·  party of {party}\n"
                      + $"You: {Missions.KillExpFor(lv, Character.Level)} EXP for the kill (your level {Character.Level})"
                      + (first ? $" + {Missions.FirstClearExp} first clear" : "") + $" + {Missions.CompletionExp} completing, "
                      + $"{Missions.BountyEach(lv, party):0} credits each.");

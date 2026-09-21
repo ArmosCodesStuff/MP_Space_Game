@@ -36,7 +36,7 @@ public partial class CharacterCreator : CanvasLayer
         centre.AddChild(root);
 
         // ── left: identity ───────────────────────────────────────────────────
-        var left = new VBoxContainer(); left.AddThemeConstantOverride("separation", 10);
+        var left = Ui.VBox(10);
         root.AddChild(Ui.Wrap(left, 14));
 
         left.AddChild(Head("COMMISSION YOUR SHIP"));
@@ -78,12 +78,12 @@ public partial class CharacterCreator : CanvasLayer
         left.AddChild(Ui.Lbl(IsNew ? "Esc cancels." : "Esc also closes this panel.", Ui.Small, Ui.Dim));
 
         // ── right: class selector, three to a page ───────────────────────────
-        var right = new VBoxContainer(); right.AddThemeConstantOverride("separation", 10);
+        var right = Ui.VBox(10);
         root.AddChild(Ui.Wrap(right, 14));
 
         right.AddChild(Head("CHOOSE A CLASS"));
 
-        var nav = new HBoxContainer(); nav.AddThemeConstantOverride("separation", 8);
+        var nav = Ui.HBox(8);
         var prev = new Button { Text = "<", FocusMode = Control.FocusModeEnum.None }; prev.Pressed += () => Turn(-1); nav.AddChild(prev);
         _pageLabel = new Label { CustomMinimumSize = new Vector2(120, 0),
                                  HorizontalAlignment = HorizontalAlignment.Center };
@@ -91,7 +91,7 @@ public partial class CharacterCreator : CanvasLayer
         var next = new Button { Text = ">", FocusMode = Control.FocusModeEnum.None }; next.Pressed += () => Turn(1); nav.AddChild(next);
         right.AddChild(nav);
 
-        _cards = new VBoxContainer(); _cards.AddThemeConstantOverride("separation", 8);
+        _cards = Ui.VBox(8);
         right.AddChild(_cards);
 
         Rebuild();
@@ -128,7 +128,7 @@ public partial class CharacterCreator : CanvasLayer
 
     private void Rebuild()
     {
-        foreach (var c in _cards.GetChildren()) c.QueueFree();
+        Ui.Clear(_cards);
         _pageLabel.Text = $"page {_page + 1} / {Classes.Pages}";
 
         for (int i = 0; i < Classes.PerPage; i++)
@@ -171,9 +171,9 @@ public partial class ShipPreview : Control
 
     // GD.Load goes through ResourceLoader every call. A LIVE preview redraws every frame and
     // loaded the hull plus one texture per turret each time -- seven lookups a frame for a
-    // battleship. They never change, so hold them: bounded by the handful of art paths there are.
-    private static readonly System.Collections.Generic.Dictionary<string, Texture2D> _texCache = new();
-    private static Texture2D Tex(string path) =>
+    // battleship. They never change, so hold them -- for this preview's life, not the process's.
+    private readonly System.Collections.Generic.Dictionary<string, Texture2D> _texCache = new();
+    private Texture2D Tex(string path) =>
         _texCache.TryGetValue(path, out var t) ? t : _texCache[path] = GD.Load<Texture2D>(path);
 
     public override void _Draw()

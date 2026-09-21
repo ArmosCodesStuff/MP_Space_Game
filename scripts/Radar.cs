@@ -29,17 +29,12 @@ public partial class Radar : Control
     {
         if (e is not InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } mb) return;
         AcceptEvent();
-        var me = Hub?.MyShipPublic; if (me == null) return;
+        var me = Hub?.MyShip; if (me == null) return;
         float r = Size.X * 0.5f; var c = new Vector2(r, r); float k = (r - 6f) / Range;
         if (mb.Position.DistanceTo(c) > r) return;
         var world = me.ViewPosition + (mb.Position - c) / k;
         float tol = PickPx / k;
-        IHittable best = null; float bd = tol;
-        foreach (var h in Combat.Hostiles)
-        {
-            if (h == null || !h.Alive || !h.Selectable) continue;
-            float d = world.DistanceTo(h.Position); if (d <= bd) { bd = d; best = h; }
-        }
+        var best = Combat.Nearest(Combat.Hostiles, world, h => h.Position, tol, Combat.Pickable);
         if (best != null) { Hub.SelectTarget(best); return; }
         var marks = new System.Collections.Generic.List<(string name, Vector2 at, float radius)>();
         if (!Hub.InArena)
@@ -66,7 +61,7 @@ public partial class Radar : Control
 
     public override void _Draw()
     {
-        var me = Hub?.MyShipPublic;
+        var me = Hub?.MyShip;
         if (me == null) return;
         float r = Size.X * 0.5f;
         var c = new Vector2(r, r);
@@ -82,13 +77,17 @@ public partial class Radar : Control
         DrawLine(c + new Vector2(0, -r + 3f), c + new Vector2(0, -r + 9f), new Color(0.6f, 0.8f, 1f, 0.8f), 1.5f);   // north
 
         foreach (var rock in Hub.Rocks) { var p = P(rock.Position); if (Inside(p)) DrawCircle(p, 1.2f, new Color(0.55f, 0.45f, 0.35f, 0.8f)); }
-        { var p = P(Hub.WreckPos); if (Inside(p)) DrawCircle(p, 4f, new Color(0.5f, 0.35f, 0.25f, 0.9f)); }
-        if (Hub.Boss != null && IsInstanceValid(Hub.Boss)) { var p = P(Hub.Boss.Position); if (Inside(p)) DrawCircle(p, 6f, new Color(1f, 0.3f, 0.25f)); }   // the boss
-        if (!Hub.InArena) { var p = P(Hub.TioPos); if (Inside(p)) DrawRect(new Rect2(p - new Vector2(3, 4), new Vector2(6, 8)), new Color(0.6f, 0.64f, 0.7f)); }   // the TIO
-        if (!Hub.InArena) { var p = P(Hub.BasePos); if (Inside(p)) DrawRect(new Rect2(p - new Vector2(4, 4), new Vector2(8, 8)), new Color(0.75f, 0.78f, 0.8f)); }
-        { var p = P(Hub.PortalPos); if (Inside(p)) DrawArc(p, 5f, 0, Mathf.Tau, 16, new Color(0.4f, 0.8f, 1f), 1.5f); }
-        if (Hub.Yard != null) foreach (var g in Hub.Yard.Gatherers) { var p = P(g.Position); if (Inside(p)) DrawCircle(p, 1.8f, Plume.Utility); }
-        if (Hub.Yard?.Hauler != null && Hub.Yard.Hauler.Visible) { var p = P(Hub.Yard.Hauler.Position); if (Inside(p)) DrawRect(new Rect2(p - new Vector2(3, 1.5f), new Vector2(6, 3)), Plume.Utility); }
+        if (IsInstanceValid(Hub.Boss)) { var p = P(Hub.Boss.Position); if (Inside(p)) DrawCircle(p, 6f, new Color(1f, 0.3f, 0.25f)); }   // the boss
+        if (!Hub.InArena)
+        {   // home's landmarks: the arena has none of them, and drew a wreck and a portal where nothing is
+            { var p = P(Hub.WreckPos); if (Inside(p)) DrawCircle(p, 4f, new Color(0.5f, 0.35f, 0.25f, 0.9f)); }
+            { var p = P(Hub.TioPos); if (Inside(p)) DrawRect(new Rect2(p - new Vector2(3, 4), new Vector2(6, 8)), new Color(0.6f, 0.64f, 0.7f)); }   // the TIO
+            { var p = P(Hub.BasePos); if (Inside(p)) DrawRect(new Rect2(p - new Vector2(4, 4), new Vector2(8, 8)), new Color(0.75f, 0.78f, 0.8f)); }
+            { var p = P(Hub.PortalPos); if (Inside(p)) DrawArc(p, 5f, 0, Mathf.Tau, 16, new Color(0.4f, 0.8f, 1f), 1.5f); }
+        }
+        // the fleet that is out there: a lost ship, or the hauler through the portal, has no dot
+        if (Hub.Yard != null) foreach (var g in Hub.Yard.Gatherers) { var p = P(g.Position); if (g.InReach && Inside(p)) DrawCircle(p, 1.8f, Plume.Utility); }
+        if (Hub.Yard?.Hauler is { InReach: true } hl) { var p = P(hl.Position); if (Inside(p)) DrawRect(new Rect2(p - new Vector2(3, 1.5f), new Vector2(6, 3)), Plume.Utility); }
         foreach (var h in Combat.Hostiles)
         {
             if (h == null || !h.Alive) continue;

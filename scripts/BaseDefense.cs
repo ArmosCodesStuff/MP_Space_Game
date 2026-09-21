@@ -9,7 +9,6 @@ using System.Linq;
 //            speed), at the nearest raider within 600 u
 public partial class BaseDefense : Node2D
 {
-    public Hub Hub;
     public const float LaserRange = 300f, MissileRange = 600f, MissileSpeed = 120f;
     public const double LaserDps = 5, LaserTick = 0.5, MissileDamage = 25, MissileEvery = 5;
     public double LaserDealt { get; private set; }          // for the record (and the smoke test)
@@ -27,17 +26,15 @@ public partial class BaseDefense : Node2D
         ZIndex = 4;
     }
 
-    private Raider Nearest(float within) => Combat.Hostiles.OfType<Raider>()
-        .Where(r => r.Alive && r.Position.DistanceTo(Hub.BasePos) <= within)
-        .OrderBy(r => r.Position.DistanceTo(Hub.BasePos)).FirstOrDefault();
-
     public override void _Process(double delta)
     {
-        var aim = Nearest(MissileRange);
+        // The nearest raider in missile range; the laser takes it too if it is also in laser range
+        // (the nearest within 600 u is within 300 u exactly when any raider is).
+        var aim = Combat.Nearest(Combat.Hostiles.OfType<Raider>(), Hub.BasePos, r => r.Position, MissileRange, r => r.Alive);
         if (aim != null) _turret.GlobalRotation = (aim.Position - GlobalPosition).Angle() + Mathf.Pi / 2f;
         if (!Net.Sim) return;                                   // guests: the turret tracks; the host fires
         _laser -= delta; _missile -= delta;
-        var close = Nearest(LaserRange);
+        var close = aim != null && aim.Position.DistanceTo(Hub.BasePos) <= LaserRange ? aim : null;
         if (close != null && _laser <= 0)
         {
             _laser = LaserTick;

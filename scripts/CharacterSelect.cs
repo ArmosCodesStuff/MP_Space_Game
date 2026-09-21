@@ -43,10 +43,13 @@ public partial class CharacterSelect : Control
         _empty.HorizontalAlignment = HorizontalAlignment.Center;
         col.AddChild(_empty);
 
-        var bar = new HBoxContainer(); bar.AddThemeConstantOverride("separation", 10);
+        var bar = Ui.HBox(10);
         col.AddChild(bar);
-        bar.AddChild(Btn("NEW CHARACTER", OpenNew, Ui.Head, true));
-        bar.AddChild(Btn("BACK", Back, Ui.Head, true));
+        foreach (var b in new[] { Ui.Btn("NEW CHARACTER", OpenNew, size: Ui.Head), Ui.Btn("BACK", Back, size: Ui.Head) })
+        {
+            b.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            bar.AddChild(b);
+        }
 
         // The delete confirmation. A real modal: nothing else responds until it closes.
         _confirm = new ConfirmationDialog { Title = "Delete character", OkButtonText = "DELETE",
@@ -66,19 +69,11 @@ public partial class CharacterSelect : Control
         Refresh();
     }
 
-    private static Button Btn(string text, System.Action onPress, int size = Ui.Body, bool grow = false)
-    {
-        var b = new Button { Text = text, FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(0, size >= Ui.Head ? 46 : 34) };
-        b.AddThemeFontSizeOverride("font_size", size);
-        if (grow) b.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        b.Pressed += onPress;
-        return b;
-    }
 
     // Rebuilt from disk every time, so the list is always what is actually saved.
     private void Refresh()
     {
-        foreach (var c in _rows.GetChildren()) { _rows.RemoveChild(c); c.QueueFree(); }
+        Ui.Clear(_rows);
         List<Character.Slot> all = Character.List();
         _empty.Visible = all.Count == 0;
         foreach (var slot in all) _rows.AddChild(Row(slot));
@@ -90,7 +85,7 @@ public partial class CharacterSelect : Control
         // PanelContainers taking the window panel style, so each row looked like its own window.
         var panel = new PanelContainer { Name = "Row_" + s.Id };
         panel.AddThemeStyleboxOverride("panel", Ui.CardStyle(14, 12));
-        var row = new HBoxContainer(); row.AddThemeConstantOverride("separation", 14);
+        var row = Ui.HBox(14);
         panel.AddChild(row);
 
         var art = new ShipPreview { Main = s.Main, Accent = s.Accent, Class = s.Class,
@@ -114,7 +109,7 @@ public partial class CharacterSelect : Control
             note.CustomMinimumSize = new Vector2(300, 0);
             info.AddChild(note);
         }
-        var swatches = new HBoxContainer(); swatches.AddThemeConstantOverride("separation", 6);
+        var swatches = Ui.HBox(6);
         swatches.AddChild(Swatch(s.Main, "hull"));
         swatches.AddChild(Swatch(s.Accent, "accent"));
         info.AddChild(swatches);
@@ -122,9 +117,9 @@ public partial class CharacterSelect : Control
 
         var buttons = new VBoxContainer { Alignment = BoxContainer.AlignmentMode.Center, CustomMinimumSize = new Vector2(140, 0) };
         buttons.AddThemeConstantOverride("separation", 6);
-        var play = Btn("PLAY", () => Play(s.Id)); play.Name = "Play";
+        var play = Ui.Btn("PLAY", () => Play(s.Id), "Play", Ui.Body);
         play.Disabled = !s.Playable;
-        var del  = Btn("DELETE", () => AskDelete(s)); del.Name = "Delete";
+        var del  = Ui.Btn("DELETE", () => AskDelete(s), "Delete", Ui.Body);
         del.AddThemeColorOverride("font_color", Ui.Bad);
         buttons.AddChild(play); buttons.AddChild(del);
         row.AddChild(buttons);
@@ -133,7 +128,7 @@ public partial class CharacterSelect : Control
 
     private static Control Swatch(Color c, string label)
     {
-        var h = new HBoxContainer(); h.AddThemeConstantOverride("separation", 4);
+        var h = Ui.HBox(4);
         h.AddChild(new ColorRect { Color = c, CustomMinimumSize = new Vector2(22, 14) });
         h.AddChild(Ui.Lbl(label, Ui.Small, Ui.Dim));
         return h;

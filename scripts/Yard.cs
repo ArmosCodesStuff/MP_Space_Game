@@ -73,7 +73,7 @@ public partial class Yard : Node2D
     {
         // a pilot coming home offline (the host left, or the mission ended) gets back
         // the base it set aside
-        if (_parked && !Net.IsOnline) CallDeferred(nameof(RestoreOwn));
+        if (_parked && !Net.IsOnline) CallDeferred(nameof(OnSessionChanged), false);
         ZIndex = 3;                                        // above the base
         Hauler = new Hauler { Yard = this, Name = "Hauler" };
         AddChild(Hauler);
@@ -139,7 +139,7 @@ public partial class Yard : Node2D
     public const double AwayShare = 1.0 / 20.0;
     // everything spent on upgrades so far, per category (MINERS, SALVAGERS, HAULER)
     private readonly Dictionary<string, double> _invested = new();
-    private static readonly string[] Categories = { "MINERS", "SALVAGERS", "HAULER" };
+
     public double Invested(string category) => _invested.TryGetValue(category, out var v) ? v : 0;
     public double RebuildCost(string category) => Math.Round(Invested(category) * Economy.RebuildShare);
 
@@ -148,7 +148,7 @@ public partial class Yard : Node2D
     public static double TripClock;                   // game seconds in the arena (Hub counts them)
     private static Trip _trip;
     public static double TripCredits;                 // earned while away (a bounty), paid on return
-    public static double LastAway, LastAwayOre, LastAwaySalvage;   // what the last return credited
+    public static double LastAway, LastAwayOre;                    // what the last return credited
     public static double TripStartCredits;            // the credits set aside when the last trip began
     // A bounty share. On disk AT ONCE (the caller saves next): quitting in the four seconds
     // between the kill and home used to keep the EXP and lose the credits. The live base still
@@ -162,12 +162,12 @@ public partial class Yard : Node2D
     // when the SESSION ended, and `Yard._Ready` applies them unconditionally. So quitting from the
     // arena left `_trip` behind and the next session's economy was overwritten by that snapshot,
     // and quitting while visiting left `_parked` set so the next session restored the base from
-    // the one before. Across characters too: the yard is not saved per character, or at all.
+    // the one before -- another character's, even.
     public static void EndSession()
     {
         _trip = null;
         TripCredits = TripClock = TripStartCredits = 0;
-        LastAway = LastAwayOre = LastAwaySalvage = 0;
+        LastAway = LastAwayOre = 0;
         _parked = false;
         _ownOre = _ownSalvage = _ownCredits = 0;
         _ownLevels.Clear(); _ownInvested.Clear();
@@ -185,8 +185,8 @@ public partial class Yard : Node2D
         if (_trip == null) return;
         var t = _trip; _trip = null;
         LastAway = TripClock;
-        LastAwayOre = t.OrePerSec * LastAway * AwayShare; LastAwaySalvage = t.SalvagePerSec * LastAway * AwayShare;
-        Ore = t.Ore + LastAwayOre; Salvage = t.Salvage + LastAwaySalvage;
+        LastAwayOre = t.OrePerSec * LastAway * AwayShare;
+        Ore = t.Ore + LastAwayOre; Salvage = t.Salvage + t.SalvagePerSec * LastAway * AwayShare;
         Credits = t.Credits + TripCredits; TripCredits = 0;
         _levels.Clear(); foreach (var kv in t.Levels) _levels[kv.Key] = kv.Value;
         _invested.Clear(); foreach (var kv in t.Invested) _invested[kv.Key] = kv.Value;
@@ -271,12 +271,14 @@ public partial class Yard : Node2D
     // behemoth_wreck.png at its 0.34 scale (the outline is ragged, so no single radius
     // works: most approaches meet solid hull ~96 u from the centre, one not until 343).
     private static readonly float[] WreckEdge = { 96f, 96f, 101f, 95f, 343f, 112f };
+    private List<Vector2> _rocksNearFirst;
     public (Vector2 spot, Vector2 target) WorkSpot(Gatherer g)
     {
         if (g.Kind == GatherKind.Miner)
         {
-            var rocks = Hub.Rocks.OrderBy(r => r.Position.DistanceTo(Hub.BasePos)).ToList();
-            var rock = rocks.Count > 0 ? rocks[g.Index % rocks.Count].Position : Hub.SunPos;
+            // the belt's rocks, nearest the base first: sorted once, not every frame for every miner
+            var rocks = _rocksNearFirst ??= Hub.Rocks.OrderBy(r => r.Position.DistanceTo(Hub.BasePos)).Select(r => r.Position).ToList();
+            var rock = rocks.Count > 0 ? rocks[g.Index % rocks.Count] : Hub.SunPos;
             return (rock + (Hub.BasePos - rock).Normalized() * 70f, rock);
         }
         var d = (Hub.BasePos - Hub.WreckPos).Normalized().Rotated(WreckSpread[g.Index % WreckSpread.Length]);
@@ -432,7 +434,7 @@ public partial class Yard : Node2D
         {
             _totalsCd = 1.0;
             var lv = Economy.All.Select(u => Level(u.Id)).ToArray();
-            Hub.RpcHome(this, nameof(NetTotals), Ore, Salvage, Credits, lv, Categories.Select(Invested).ToArray());
+            Hub.RpcHome(this, nameof(NetTotals), Ore, Salvage, Credits, lv, Economy.Tabs.Select(Invested).ToArray());
         }
         _stateCd -= delta;
         if (_stateCd <= 0) { _stateCd = 0.1; SendState(); }
@@ -441,7 +443,7 @@ public partial class Yard : Node2D
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
     private void NetTotals(double ore, double salvage, double credits, int[] levels, double[] invested)
     {
-        for (int i = 0; i < Math.Min(invested.Length, Categories.Length); i++) _invested[Categories[i]] = invested[i];
+        for (int i = 0; i < Math.Min(invested.Length, Economy.Tabs.Length); i++) _invested[Economy.Tabs[i]] = invested[i];
         (Ore, Salvage, Credits) = (ore, salvage, credits);
         for (int i = 0; i < Math.Min(levels.Length, Economy.All.Length); i++) _levels[Economy.All[i].Id] = levels[i];
         SyncFleet();
@@ -450,32 +452,36 @@ public partial class Yard : Node2D
     private void SendState()
     {
         int n = Gatherers.Count;
-        var gp = new Vector2[n]; var gr = new float[n]; var gs = new int[n]; var gc = new float[n]; var gb = new Vector2[n]; var gh = new float[n];
+        var gp = new Vector2[n]; var gr = new float[n]; var gs = new int[n]; var gc = new float[n]; var gb = new Vector2[n]; var gh = new float[n]; var gw = new float[n];
         for (int i = 0; i < n; i++)
         {
             var g = Gatherers[i];
-            (gp[i], gr[i], gs[i], gc[i], gb[i], gh[i]) = (g.Position, g.Rotation, (int)g.State, (float)g.Cargo, g.BeamTo, (float)g.Hull);
+            (gp[i], gr[i], gs[i], gc[i], gb[i], gh[i], gw[i]) = (g.Position, g.Rotation, (int)g.State, (float)g.Cargo, g.BeamTo, (float)g.Hull, g.NetRebuild);
         }
         var h = Hauler;
-        Hub.RpcHome(this, nameof(NetState), gp, gr, gs, gc, gb, gh, h.Position, h.Rotation, (int)h.State, (float)h.T, (float)h.Cargo, (float)h.LastSale, (float)h.Hull);
+        Hub.RpcHome(this, nameof(NetState), gp, gr, gs, gc, gb, gh, gw, h.Position, h.Rotation, (int)h.State, (float)h.T, (float)h.Cargo, (float)h.LastSale, (float)h.Hull, h.NetRebuild);
     }
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
-    private void NetState(Vector2[] gp, float[] gr, int[] gs, float[] gc, Vector2[] gb, float[] gh,
-                          Vector2 hp, float hr, int hs, float ht, float hc, float sale, float hh)
+    private void NetState(Vector2[] gp, float[] gr, int[] gs, float[] gc, Vector2[] gb, float[] gh, float[] gw,
+                          Vector2 hp, float hr, int hs, float ht, float hc, float sale, float hh, float hw)
     {
         // the fleet follows the levels (1 s); until they agree, skip the ships this once
-        if (gp.Length == Gatherers.Count)
-            for (int i = 0; i < gp.Length; i++) Gatherers[i].SetNet(gp[i], gr[i], gs[i], gc[i], gb[i], gh[i]);
-        Hauler.SetNet(hp, hr, hs, ht, hc, sale, hh);
+        int n = Math.Min(gp.Length, Math.Min(gr.Length, Math.Min(gs.Length, Math.Min(gc.Length, Math.Min(gb.Length, Math.Min(gh.Length, gw.Length))))));
+        if (n == Gatherers.Count)
+            for (int i = 0; i < n; i++) Gatherers[i].SetNet(gp[i], gr[i], gs[i], gc[i], gb[i], gh[i], gw[i]);
+        Hauler.SetNet(hp, hr, hs, ht, hc, sale, hh, hw);
     }
+
+    // The whole fleet, for whatever treats a miner, a salvager and the hauler alike.
+    public IEnumerable<UtilityShip> Fleet => Gatherers.Cast<UtilityShip>().Append(Hauler);
 
     // ── the hologram docking bars: two bars across each arm's open face ──────
     public override void _Draw()
     {
         // a damaged ship shows its hull: a small bar under it, green to red
-        foreach (var g in Gatherers) HullBar(g.Position + new Vector2(-15, 26), 30, g.Hull, g.MaxHull, g.Visible);
-        if (Hauler != null) HullBar(Hauler.Position + new Vector2(-40, 50), 80, Hauler.Hull, Hauler.MaxHull, Hauler.State is not (Hauler.St.Destroyed or Hauler.St.Away));
+        foreach (var g in Gatherers) HullBar(g.Position + new Vector2(-15, 26), 30, g.Hull, g.MaxHull, g.InReach);
+        if (Hauler != null) HullBar(Hauler.Position + new Vector2(-40, 50), 80, Hauler.Hull, Hauler.MaxHull, Hauler.InReach);
         for (int i = 0; i < Arms.Length; i++)
         {
             var a = Arms[i];
@@ -494,7 +500,6 @@ public partial class Yard : Node2D
         }
     }
 
-    private void RestoreOwn() => OnSessionChanged(false);
 
     private void HullBar(Vector2 world, float w, double hull, double max, bool shown)
     {

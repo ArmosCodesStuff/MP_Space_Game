@@ -17,8 +17,8 @@
 #   (none)   the bar: static + three full smoke runs + the sweep + integrity.  ~12 min
 #            Run before every VERIFIED commit, and only that verdict counts as verified.
 #
-#   -Update  regenerate version\CODE_SNAPSHOT.txt and version\MANIFEST.sha256 first, in that
-#            order, so the integrity step checks the change rather than the last one.
+#   -Update  regenerate version\MAP.md, version\CODE_SNAPSHOT.txt and version\MANIFEST.sha256
+#            first, in that order, so the integrity step checks the change rather than the last one.
 #   -Godot   an explicit engine path, if the search picks the wrong one
 param([switch]$Quick, [switch]$Fast, [switch]$Update, [string]$Godot)
 
@@ -92,15 +92,19 @@ if (-not $Quick) {
     Step 'screenshot sweep' {
         $o = & powershell -NoProfile -ExecutionPolicy Bypass -File 'tools\screens\run.ps1' -Godot $engine 2>&1
         $o | Where-Object { $_ -cmatch '^SWEEP|^frames' } | ForEach-Object { Write-Host "  $_" }
-        ($o -join "`n") -match 'SWEEP DONE' -and ($o -join "`n") -match 'LINT: 0'
+        $ok = ($o -join "`n") -match 'SWEEP DONE' -and ($o -join "`n") -match 'LINT: 0'
+        # a failure that printed no SWEEP line (a stopped script) would otherwise be silent
+        if (-not $ok) { $o | Select-Object -Last 8 | ForEach-Object { Write-Host "    $_" } }
+        $ok
     }
 }
 
 if ($Update) {
-    Step 'snapshot + manifest' {
+    Step 'map + snapshot + manifest' {
+        $m = & python 'tools\map.py' 2>&1
         $a = & powershell -NoProfile -ExecutionPolicy Bypass -File 'tools\snapshot.ps1' 2>&1
         $b = & powershell -NoProfile -ExecutionPolicy Bypass -File 'tools\manifest.ps1' 2>&1
-        ($a + $b) | ForEach-Object { Write-Host "  $_" }
+        ($m + $a + $b) | ForEach-Object { Write-Host "  $_" }
         ($b -join "`n") -match ', 0 not verifying'
     }
 }

@@ -14,8 +14,7 @@ public partial class EscapePod : Node2D
 
     public override void _Ready()
     {
-        var tex = GD.Load<Texture2D>("res://escape_pod.png");
-        AddChild(new Sprite2D { Texture = tex, Scale = Vector2.One * (Length / tex.GetHeight()) });
+        AddChild(Sprites.Fit("res://escape_pod.png", Length));
         ZIndex = 5;
     }
 

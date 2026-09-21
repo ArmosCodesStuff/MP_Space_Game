@@ -17,48 +17,27 @@ using System.Collections.Generic;
 // ─────────────────────────────────────────────────────────────────────────────
 public enum GatherKind { Miner, Salvager }
 
-public partial class Gatherer : Node2D
+public partial class Gatherer : UtilityShip
 {
     public enum St { Outbound, Working, Queued, Docking, Unloading, Destroyed }
 
-    public Yard Yard;
     public GatherKind Kind;
     public int Index;                        // which miner (or salvager): 0, 1, 2 ...
     public St State = St.Outbound;
-    public double Cargo;
-    // hull, and being rebuilt (host-owned; guests get hull and state). Full when it comes off the
-    // pad, upgrades included (_Ready): it used to start at the base 120 whatever the hull level,
-    // and a fleet with a paid-for hull upgrade flew under a damage bar for good.
-    public double Hull;
-    public double MaxHull => Yard.Value(Kind == GatherKind.Miner ? "miner_hull" : "salvager_hull");   // 120, +10% a level
-    public double RebuildIn;
-    public bool WaitingForCredits;
-    public string Category => Kind == GatherKind.Miner ? "MINERS" : "SALVAGERS";
-    private double _pinT;
-    public bool Pinned => _pinT > 0;
-    public void PinFor(double s) { if (Net.Sim) _pinT = System.Math.Max(_pinT, s); }
-
-    public void TakeDamage(double d)
+    // Hull: full when it comes off the pad, upgrades included (_Ready). It used to start at the
+    // base 120 whatever the hull level, and a fleet with a paid-for upgrade flew under a damage bar.
+    public override double MaxHull => Yard.Value(Kind == GatherKind.Miner ? "miner_hull" : "salvager_hull");   // 120, +10% a level
+    public override string Category => Kind == GatherKind.Miner ? "MINERS" : "SALVAGERS";
+    public override string Label => $"{(Kind == GatherKind.Miner ? "Miner" : "Salvager")} {Index + 1}";
+    public override bool InReach => State != St.Destroyed;
+    public override bool Lost => State == St.Destroyed;
+    public override (float halfLength, float halfWidth) Extent => (20f, 12f);
+    protected override float LostBlast => 30f;
+    protected override float RebuiltBlast => 26f;
+    protected override void OnLost()
     {
-        if (!Net.Sim || State == St.Destroyed) return;
-        Hull -= d;
-        if (Hull > 0) return;
         Yard.Release(this);                          // its arm or its place in the queue goes to the next
-        State = St.Destroyed; Hull = 0; Cargo = 0; Velocity = Vector2.Zero; Visible = false;   // gone at once
-        RebuildIn = Economy.RebuildDelay; WaitingForCredits = false;
-        GetParent().AddChild(new Explosion { Position = Position, Radius = 30f });
-    }
-
-    // 30 s after it was lost it is rebuilt at the base, for 10% of its category's investment
-    private void TickRebuild(float dt)
-    {
-        RebuildIn = System.Math.Max(0, RebuildIn - dt);
-        if (RebuildIn > 0) return;
-        double cost = Yard.RebuildCost(Category);
-        if (Yard.Credits < cost) { WaitingForCredits = true; return; }
-        Yard.Credits -= cost; WaitingForCredits = false;
-        Hull = MaxHull; State = St.Outbound; Position = Hub.BasePos; Velocity = Vector2.Zero;
-        GetParent().AddChild(new Explosion { Position = Position, Radius = 26f, Tint = new Color(0.5f, 0.8f, 1f) });
+        State = St.Destroyed; Velocity = Vector2.Zero; Visible = false;   // gone at once
     }
     public Vector2 Velocity;
     public Vector2 BeamTo;                   // world point the beam works (host-chosen)
@@ -66,7 +45,7 @@ public partial class Gatherer : Node2D
     private const float Accel = 220f;
 
     private Sprite2D _sprite;
-    private Vector2 _netPos; private float _netRot; private bool _hasNet;
+    private NetPose _net;
     private readonly RandomNumberGenerator _rng = new();
     private double _crackle, _t;
     private readonly List<Vector2[]> _bolts = new();
@@ -80,21 +59,21 @@ public partial class Gatherer : Node2D
     public override void _Ready()
     {
         Hull = MaxHull;
-        var tex = GD.Load<Texture2D>(M ? "res://miner.png" : "res://salvager.png");
-        _sprite = new Sprite2D { Texture = tex, Scale = Vector2.One * (Length / tex.GetHeight()) };
+        _sprite = Sprites.Fit(M ? "res://miner.png" : "res://salvager.png", Length);
         AddChild(_sprite);
         ZIndex = 1;
     }
 
-    public void SetNet(Vector2 p, float rot, int state, float cargo, Vector2 beam, float hull)
+    public void SetNet(Vector2 p, float rot, int state, float cargo, Vector2 beam, float hull, float rebuild)
     {
-        Hull = hull;
-        (_netPos, _netRot, _hasNet) = (p, rot, true);
+        bool wasLost = Lost;
+        _net.Set(p, rot);
         (State, Cargo, BeamTo) = ((St)state, cargo, beam);
+        FromHost(hull, rebuild, wasLost);
     }
 
     // back to work, empty (a session change)
-    public void ResetToWork() { State = St.Outbound; Cargo = 0; Velocity = Vector2.Zero; _hasNet = false; Hull = MaxHull; RebuildIn = 0; WaitingForCredits = false; }
+    public void ResetToWork() { State = St.Outbound; Cargo = 0; Velocity = Vector2.Zero; _net = default; Hull = MaxHull; RebuildIn = 0; WaitingForCredits = false; }
 
     public override void _Process(double delta)
     {
@@ -102,10 +81,10 @@ public partial class Gatherer : Node2D
         _t += delta;
         Visible = State != St.Destroyed;         // a lost ship is gone until it is rebuilt
         if (Net.Sim) Simulate(dt);
-        else if (_hasNet)
+        else
         {
-            Position = Position.Lerp(_netPos, Mathf.Clamp(10f * dt, 0f, 1f));
-            Rotation = Mathf.LerpAngle(Rotation, _netRot, Mathf.Clamp(10f * dt, 0f, 1f));
+            GuestClock(dt);
+            _net.Follow(this, dt);
         }
         if (!M && Beaming)
         {
@@ -117,10 +96,14 @@ public partial class Gatherer : Node2D
 
     private void Simulate(float dt)
     {
-        if (State == St.Destroyed) { TickRebuild(dt); return; }
-        if (_pinT > 0)
+        if (State == St.Destroyed)
+        {   // 30 s after it was lost it is rebuilt at the base, for 10% of its category's investment
+            if (TickRebuild(dt)) { Hull = MaxHull; State = St.Outbound; Position = Hub.BasePos; Velocity = Vector2.Zero; Burst(rebuilt: true); }
+            return;
+        }
+        if (PinT > 0)
         {   // pinned by a raider: thrusting forward at 20% of its speed, unable to turn
-            _pinT -= dt;
+            PinT -= dt;
             Velocity = Vector2.Up.Rotated(Rotation) * (float)Speed * Raider.PinSpeed;
             Position += Velocity * dt;
             return;
@@ -242,7 +225,7 @@ public partial class Gatherer : Node2D
             for (int k = 0; k < 4; k++)
             {
                 float f = (float)((_t * 1.6 + k / 4.0) % 1.0);
-                DrawRect(new Rect2(new Vector2(-2f, -Length * 0.45f - f * 26f) - new Vector2(0, 0), new Vector2(4f, 4f)), new Color(col.R, col.G, col.B, 1f - f));
+                DrawRect(new Rect2(new Vector2(-2f, -Length * 0.45f - f * 26f), new Vector2(4f, 4f)), new Color(col.R, col.G, col.B, 1f - f));
             }
         }
 

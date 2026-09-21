@@ -13,11 +13,11 @@ public static class Sfx
 {
     private const float ListenerHeight = 700f;       // at zoom 1: how far "above" the view the ears are
     private const float Cull = 5000f;                // past this effective distance: silent
-    static readonly string[] Names = { "laser_light", "laser_fighter", "laser_boss", "laser_hit",
-                                      "missile_whoosh", "impact_thunk", "cannon" };
     static readonly Dictionary<string, AudioStream> _streams = new();
     static readonly Dictionary<string, double> _last = new();
 
+    // Every sound there is (sfx/<name>.wav), and the least time between two of it: a wing firing
+    // is not a wall of noise.
     static readonly Dictionary<string, double> _gap = new() { ["cannon"] = 0.05, ["laser_light"] = 0.04, ["laser_fighter"] = 0.04, ["laser_boss"] = 0.08, ["laser_hit"] = 0.03, ["missile_whoosh"] = 0.05, ["impact_thunk"] = 0.05 };
     public static readonly Dictionary<string, int> Played = new();            // for the smoke test
     static Node _pool; static int _next;
@@ -66,7 +66,7 @@ public static class Sfx
             _pool = new SfxPool { Name = "SfxPool" };
             tree.Root.CallDeferred(Node.MethodName.AddChild, _pool);
             for (int i = 0; i < Voices; i++) _pool.AddChild(new AudioStreamPlayer());
-            foreach (var s in Names) _streams[s] = GD.Load<AudioStream>($"res://sfx/{s}.wav");
+            foreach (var s in _gap.Keys) _streams[s] = GD.Load<AudioStream>($"res://sfx/{s}.wav");
         }
         var p = _pool.GetChild<AudioStreamPlayer>(_next); _next = (_next + 1) % Voices;
         p.Stream = _streams[name]; p.VolumeDb = db + trimDb; p.PitchScale = pitch;

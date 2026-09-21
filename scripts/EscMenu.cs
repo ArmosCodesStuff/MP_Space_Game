@@ -48,7 +48,7 @@ public partial class EscMenu : CanvasLayer
     // a row of toggle buttons, one pressed; choosing saves the setting
     private static Control Choice(string[] labels, System.Func<int> current, System.Action<int> set, string name)
     {
-        var row = new HBoxContainer { Name = name }; row.AddThemeConstantOverride("separation", 6);
+        var row = Ui.HBox(6, name);
         var group = new ButtonGroup();
         for (int i = 0; i < labels.Length; i++)
         {

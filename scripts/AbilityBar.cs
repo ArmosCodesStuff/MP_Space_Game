@@ -59,7 +59,7 @@ public partial class AbilityBar : Control
                 else if (s.Position.DistanceTo(selected.Position) > S["control_range"]) st.Line = "OUT OF RANGE";
                 break;
             case "recall":
-                st.Line = s.WingTarget != null ? "READY" : "IN ORBIT"; break;
+                st.Line = s.WingTarget != null ? "READY" : "HOME"; break;
             case "bombers":
             {
                 int total = s.WingCount(WingKind.Bomber), ready = s.BombersReady;
@@ -78,7 +78,7 @@ public partial class AbilityBar : Control
 
     public override void _Draw()
     {
-        var s = Hub?.MyShipPublic;
+        var s = Hub?.MyShip;
         if (s == null) return;
         var list = Abilities.For(s.Class);
         bool hasOwn = list.Length > 0 && !list[0].Open;
@@ -104,8 +104,7 @@ public partial class AbilityBar : Control
             if (st.Busy > 0)   // recharge sweep: a dark band shrinking from the top
                 DrawRect(new Rect2(r.Position, new Vector2(SlotW, SlotH * Mathf.Clamp(st.Busy, 0, 1))), new Color(0, 0, 0, 0.55f));
 
-            string key = Abilities.KeyName(Abilities.KeyFor(s.Class, ab.Id));
-            Txt.D(this, font, r.Position + new Vector2(8, 16), key, HorizontalAlignment.Left, 0, 13, Ui.Warn);
+            Txt.D(this, font, r.Position + new Vector2(8, 16), key0, HorizontalAlignment.Left, 0, 13, Ui.Warn);
             if (ab.Kind == AbilityKind.Hold)
                 Txt.D(this, font, r.Position + new Vector2(0, 16), "hold", HorizontalAlignment.Right, SlotW - 8, 11, Ui.Dim);
             Txt.D(this, font, r.Position + new Vector2(0, 38), ab.Short, HorizontalAlignment.Center, SlotW, 16, Ui.Text);

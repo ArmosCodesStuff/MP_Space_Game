@@ -16,10 +16,10 @@ public partial class PilotWindow : PanelContainer
         Name = "PilotWindow";
         Position = new Vector2(360, 92);
         Ui.Panelise(this);
-        var col = new VBoxContainer(); col.AddThemeConstantOverride("separation", 12); AddChild(col);
+        var col = Ui.VBox(12); AddChild(col);
         _head = Ui.Lbl("", Ui.Title, Ui.Accent); col.AddChild(_head);
         // Level, bar and points are one block: they are the same number said three ways.
-        var lvl = new VBoxContainer(); lvl.AddThemeConstantOverride("separation", 6);
+        var lvl = Ui.VBox(6);
         _exp = Ui.Lbl("", Ui.Body); lvl.AddChild(_exp);
         _bar = new ProgressBar { CustomMinimumSize = new Vector2(440, 8), ShowPercentage = false, MaxValue = 1 }; lvl.AddChild(_bar);
         _points = Ui.Lbl("", Ui.Body, Ui.Accent); lvl.AddChild(_points);
@@ -28,7 +28,7 @@ public partial class PilotWindow : PanelContainer
         for (int i = 0; i < Progression.All.Length; i++)
         {
             int k = i;
-            var row = new HBoxContainer { Name = "Pilot_" + Progression.All[i].Id }; row.AddThemeConstantOverride("separation", 12);
+            var row = Ui.HBox(12, "Pilot_" + Progression.All[i].Id);
             _info[i] = new Label { CustomMinimumSize = new Vector2(300, 0), SizeFlagsHorizontal = SizeFlags.ExpandFill, VerticalAlignment = VerticalAlignment.Center };
             _buy[i] = new Button { Name = "Buy", FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(134, 34), SizeFlagsVertical = SizeFlags.ShrinkCenter };
             _buy[i].Pressed += () => { if (Progression.TryBuy(Progression.All[k].Id)) Hub.PilotChanged(); };

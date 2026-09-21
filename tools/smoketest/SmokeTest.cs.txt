@@ -1067,12 +1067,12 @@ public partial class _Test : Node
         // that could never be collected once you were back at the menu. Snapshot and restore --
         // this all happens inside one frame, so nothing ever sees the cleared state.
         var keepHostiles = Combat.Hostiles.ToList(); var keepPlayers = Combat.Players.ToList();
-        var keepFlash = Combat.OnFlash; var keepShell = Combat.OnShell; var keepTorp = Combat.OnTorpedo;
+        var keepFlash = Combat.OnFlash; var keepWorld = Combat.World; var keepShell = Combat.ShellFired; var keepTorp = Combat.TorpedoFired;
         Combat.Clear();
-        bool hooksDropped = Combat.OnFlash == null && Combat.OnShell == null && Combat.OnTorpedo == null;
+        bool hooksDropped = Combat.OnFlash == null && Combat.World == null && Combat.ShellFired == null && Combat.TorpedoFired == null;
         Combat.Hostiles.AddRange(keepHostiles); Combat.Players.AddRange(keepPlayers);
-        Combat.OnFlash = keepFlash; Combat.OnShell = keepShell; Combat.OnTorpedo = keepTorp;
-        Check(hooksDropped, "Combat.Clear drops every hook the world installed, OnShell included");
+        Combat.OnFlash = keepFlash; Combat.World = keepWorld; Combat.ShellFired = keepShell; Combat.TorpedoFired = keepTorp;
+        Check(hooksDropped, "Combat.Clear lets go of the world and every hook it installed");
 
         // ── carrier ──
         await SetClass(ShipClass.Carrier); ship = Me;
@@ -1397,6 +1397,17 @@ public partial class _Test : Node
             Check(ghost.Position.DistanceTo(at0) < 60f, $"its packets stopped, another player's ship coasts half a second, not on and on ({ghost.Position.DistanceTo(at0):0} u in 2 s)");
             Check(!ghost.Trigger, "and a trigger it was holding lets go");
             ghost.QueueFree();
+
+            // A host-owned thing on a guest's screen (NetPose) is carried forward along its measured
+            // velocity -- a quarter second at most -- instead of stopping dead at the last report,
+            // where it was a round trip ago. 10 u in 0.1 s is 100 u/s, smoothed to 50 on a first
+            // measurement: a second later it stands 50 x 0.25 = 12.5 u past the report, and no further.
+            var pose = new NetPose(); var probe = new Node2D();
+            pose.Set(Vector2.Zero, 0f); pose.Follow(probe, 0.1f);
+            pose.Set(new Vector2(10, 0), 0f);
+            for (int i = 0; i < 60; i++) pose.Follow(probe, 1f / 60);
+            Check(probe.Position.X > 21f && probe.Position.X < 22.6f, $"a raider on a guest's screen runs a quarter second ahead of its last report, no more (x {probe.Position.X:0.0} of 22.5)");
+            probe.Free();
         }
 
         // ── equipment (I): per-class gear; common defaults and five chips (+5% damage, +5% hull each) ──
@@ -1539,13 +1550,22 @@ public partial class _Test : Node
             foreach (var r in new[] { r1, r2, r3 }) r.TakeDamage(999);
             await Wait(0.5);
             Check(H.Raiders.Count == 0 && !Combat.Hostiles.OfType<Raider>().Any() && !me.Pinned, "shot down, they are gone -- and the pin lets go");
-            var mnr = H.Yard.Gatherers.First(g => g.Kind == GatherKind.Miner && g.State != Gatherer.St.Destroyed);
+            // A miner OUT IN THE BELT, beyond the base's own guns (600 u): one caught docking had its
+            // raider shot down by them before it could latch. Where the fleet is at this point depends
+            // on how long the router scenarios above took in real time, so it is waited for.
+            Gatherer mnr = null;
+            for (int i = 0; i < 60 * 40 && mnr == null; i++)
+            {
+                mnr = H.Yard.Gatherers.FirstOrDefault(g => g.Kind == GatherKind.Miner && g.State == Gatherer.St.Working && g.Position.DistanceTo(Hub.BasePos) > 900);
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            }
+            mnr ??= H.Yard.Gatherers.First(g => g.Kind == GatherKind.Miner);
             var r4 = H.SpawnRaider(mnr.Position + new Vector2(120, 0));
             for (int i = 0; i < 60 * 8 && !r4.Latched; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             float mr0 = mnr.Rotation; var mp0 = mnr.Position; await Wait(0.5);
             float rmspd = (mnr.Position - mp0).Length() / 0.5f;
             Check(r4.Target == mnr && mnr.Pinned && Math.Abs(rmspd - (float)mnr.Speed * 0.2f) < 3f && Math.Abs(Mathf.AngleDifference(mr0, mnr.Rotation)) < 0.01f,
-                  $"a miner is pinned the same way: forward at 20%, no turning ({rmspd:0} u/s)");
+                  $"a miner is pinned the same way: forward at 20%, no turning ({rmspd:0} u/s of {mnr.Speed:0}; target {(r4.Target as Node)?.Name}, pinned {mnr.Pinned}, turned {Mathf.AngleDifference(mr0, mnr.Rotation):0.000})");
             r4.TakeDamage(999); await Wait(0.3);
             me.Position = keepPos; me.Velocity = Vector2.Zero; me.TakeDamage(-(me.MaxHp - me.Hp));   // hand over at full hull
         }
@@ -2053,6 +2073,13 @@ public partial class _Test : Node
             Check(Missions.Level == 1, "the host can pick an easier, cleared level");
             Nodes<Button>(tw2).First(b => b.Name == "LevelUp").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
             Check(Missions.Level == 2, "and back up to the newest");
+            // ONE SIDE WINDOW AT A TIME: they share a spot. B over the open TIO used to leave both up,
+            // one drawn over the other; now it takes the spot, and B again gives it back empty.
+            Key(global::Godot.Key.B); await Wait(0.1);
+            Check(Count<TioWindow>() == 0 && Count<BasePanel>() == 1, $"B with the TIO open: the base takes the spot ({Count<TioWindow>()} TIO, {Count<BasePanel>()} base)");
+            Key(global::Godot.Key.B); await Wait(0.1);
+            Check(Count<BasePanel>() == 0 && Count<TioWindow>() == 0, "and B again closes it");
+            H.OpenTio(); await Wait(0.1);
             Key(global::Godot.Key.Escape); await Wait(0.1);
             // a wipe: every ship in stasis at once -> the mission fails, home with nothing
             H.EnterSector(Hub.SectorKind.Arena); await Wait(1.5);
@@ -2397,6 +2424,8 @@ public partial class _Test : Node
             if (GodotObject.IsInstanceValid(early)) H.RaiderDown(early);
             // pinned by the HOST, the way a raider's web does it: the guest must feel it (it checks)
             ships.FirstOrDefault(s => s.Pilot == "Guesty")?.PinFor(3.0);
+            // and a salvager lost, the way a raid takes one: the guest must see its rebuild run
+            H.Yard.Gatherers.FirstOrDefault(x => x.Kind == GatherKind.Salvager)?.TakeDamage(1e6);
             // hosting here (no router, no internet): both answers come back empty -> network only
             for (int i = 0; i < 60 * 9 && Net.I.Reachability == Net.Reach.Checking; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             var smh = Nodes<SessionMenu>().First(); var rev = Nodes<Button>(smh).First(b => b.Name == "RevealAddress");
@@ -2537,6 +2566,9 @@ public partial class _Test : Node
                   $"hull replicated from the host, which applied this pilot's own gear (three chips: 200 x 1.15 = 230; {mine?.Hp:0})");
             await Wait(12.0);                      // strike done, bombers home and docked
             Check(pinWatch.Seen, "a guest's own ship is pinned when the host pins it (a raider's web works on guests too)");
+            var lostSv = H.Yard.Gatherers.FirstOrDefault(x => x.Kind == GatherKind.Salvager);
+            Check(lostSv != null && lostSv.Lost && lostSv.RebuildIn > 5 && lostSv.RebuildIn < 29,
+                  $"a salvager the host lost is lost here too, its 30 s rebuild counting down -- not stuck at 0 s ({lostSv?.RebuildIn:0.0} s)");
             var gb = Nodes<Wing>().Where(w => w.Carrier == mine && w.IsBomber).ToArray();
             Check(gb.Length == 2 && gb.All(w => w.Docked && w.GlobalPosition.DistanceTo(mine.DockSlot(w).pos) < 8f),
                   "guest sees its bombers docked on the carrier (state and position from the host)");

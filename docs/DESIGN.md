@@ -156,19 +156,44 @@ levels once a second and ship and hauler state ten times a second; a guest's own
 
 - **Camera**: wheel zoom between `DefaultZoom / ZoomOutMax` (33% further out) and `× ZoomInMax`
   (1.5). **Y** frees it; arrows or the screen edge pan it, tethered to `ClassArt.CameraRange`
-  (5000; `PlayerShip.FighterCameraRange` 2500 for fighter-class ships). All in `Hub.MoveCamera`.
+  (5000 for a capital ship). All in `Hub.MoveCamera`.
 - **Radar** (`Radar.cs`): local only, draws what this machine knows; size is `Settings.RadarSize`.
 - **Esc menu** (`EscMenu.cs`): the last Esc layer. Multiplayer cannot pause, so it locks the helm.
 - **Music** (`Music.cs`, an autoload): both loops always play; their levels cross-fade by mood,
   which the hub sets each frame from the selection and `PlayerShip.InCombat` (host-tracked: dealing
-  or taking damage within 8 s). `Music.CombatZone` forces combat for instanced systems. Silence it
-  a moment before quitting (real time), or the mixer still holds the loops at exit.
-- **Internet play** (`Net.cs`): ENet over UDP 27015 with a direct connection, so the host must be
-  reachable. HOST tries UPnP on a background thread and reports one of: reachable from the
-  internet (public address shown and copyable); router refused / no UPnP; carrier-grade NAT
-  (100.64.0.0/10), which no home setting can fix. The fallbacks are a manual port forward, or a VPN
-  such as Tailscale or ZeroTier (everyone joins the VPN; use its addresses). There is no relay
-  server or NAT punch-through: that needs infrastructure outside the game.
+  or taking damage within 12 s). `Music.CombatZone` forces combat in the arena.
+- **Leaving** (`Game.Quit`): the ONE way out -- the window's close button, the menu's QUIT and the
+  harnesses. It pauses the world, closes the session (saved; router ports closed again), stops every
+  sound, and waits in REAL time for the mixer to let go (150 ms) and for router jobs (up to 10 s,
+  window minimised). A bare `Quit()` left sounds playing ("resources still in use at exit") and could
+  crash inside a router thread.
+- **Internet play** (`Net.cs`, `Router.cs`): ENet over UDP 27015, a direct connection, so the host
+  must be reachable. HOST starts LAN hosting at once; a background job (`Router.Open`) then tries to
+  open the port: UPnP asked directly (our own .NET client), then NAT-PMP / PCP at the gateway, then
+  Godot's UPnP as a last resort. If the router that opened it is behind ANOTHER router (its internet
+  side is private -- your router behind the provider's modem, the developer's own network), the one
+  in front is asked too, directly (a multicast search does not cross a router). What the player is
+  told (`Net.Describe`), from the routers' report and a public "what is my IP" lookup:
+  INTERNET (every hop opened), MANUAL (one step by hand: the exact forward left -- to the inner
+  router's internet side when the outer one is silent -- or "turn the VPN off" when this PC's traffic
+  leaves by a VPN), LAN ONLY (carrier-grade NAT, or nothing learned). Whatever the routers did,
+  virtual networks friends can share (Tailscale, ZeroTier, Radmin VPN, Hamachi, found by adapter
+  NAME) and this PC's IPv6 address are offered too -- IPv6 has no NAT, the one way in left behind
+  carrier-grade NAT. There is no relay server or NAT punch-through: that needs infrastructure.
+- **The handshake** is Godot's authentication step (`SceneMultiplayer.AuthCallback`), BEFORE a peer
+  counts as connected: each side sends `Net.Protocol`, a fingerprint of the build (every RPC's
+  signature, every constant and fixed value, the save version) and refuses a mismatch on its own
+  screen. Nothing is spawned, sent or relayed for an unverified peer. `Game.Version` is the SAVE
+  format; the fingerprint is the SESSION format.
+- **Joining** keeps your own world running until a host answers (`Net.Connecting`), looks names up
+  off the main thread, and reads IPv6 / `[v6]:port` / pasted URLs. A late joiner is caught up when it
+  reports its world (`Hub.NetMySector`: mission, raiders, a win; a guest in the wrong world is brought
+  into the host's). A dropped friend is let go in ~10 s; the session saves on every leaving route.
+- **Latency.** Host-owned things are followed with `NetPose` (eased, and carried forward along their
+  measured velocity for at most 0.25 s). A guest's telegraphs are shortened by its round trip
+  (`Net.Arriving`) so they end when the guest's own position is judged. Cosmetic reliable traffic
+  (shells, torpedoes) rides its own ENet channel so a lost one does not hold up the rest; raider
+  updates go in packets of 24, under the internet's ~1.2 KB.
 
 ## The batch after the review began (signed off by the player), in chunks
 
@@ -582,6 +607,24 @@ where the editor cannot delete it.*
 
 ## Traps that have already cost time
 
+- **A sound still playing at exit is a "resource still in use".** The mixer releases a stopped
+  playback only on its next cycles; stop everything, then wait in REAL time (`Game.Quit`). It was
+  first blamed on `GD.Load`'s cache -- which does not hold resources alive -- and chased for days.
+- **Godot's `Upnp` refuses a router whose internet side is private** (double NAT) and returns an
+  empty device list for a router that answered on a search target it did not ask for. `Router.cs`
+  talks UPnP itself; Godot's is the last resort.
+- **Windows will not send from a LAN address to a loopback one** (WSAEADDRNOTAVAIL). Only the
+  network-wide search is bound to the LAN adapter; a search to one address binds to any.
+- **A player still connecting is not a guest yet** (`IsHost` stays true until a host answers). Code
+  that must know which end of a handshake it is on asks `Net.Connecting`, never `IsHost`.
+- **Godot drops packets that overtake the last handshake packet** ("SYS_COMMAND_AUTH" in the log) --
+  on a lossy path a resent handshake packet arrives after the guest's first words. The guest says its
+  introduction twice more (`Hub.OnSessionChanged`); everything in it is safe to repeat.
+- **ENet's round-trip estimate starts at 500 ms** and settles over the first reliable packets:
+  `Net.Arriving` never shortens a warning below 40% of it.
+- **`ENetMultiplayerPeer.GetPeer(id)` only knows the peers this process is connected to.** A guest
+  hears of the other guests through the host; asking for them is an engine error.
+
 Each of these compiled clean and was wrong at runtime. The smoke test covers all of them.
 
 - **`GD.Load` caches; `Dispose()` does not evict.** A resource loaded with `GD.Load` lives in
@@ -817,27 +860,18 @@ Two lessons from building it: a check that samples short-lived state once (a 0.1
 coin flip, so watch across frames; and order checks so none runs after the other process has ended
 the session.
 
-`tools/smoketest/run.ps1` is the same harness for Windows, driving the win64 mono build. It runs the
-whole suite: **433 pass, 6/6 runs finished**, against the 435 the sandbox reports. The two that
-cannot pass here are not regressions — they assert the *sandbox's* network, and say so in their own
-comments (`// no router in the sandbox`, `// no router, no internet in the sandbox`):
+`tools/smoketest/run.ps1` is the same harness for Windows, driving the win64 mono build.
 
-- `no UPnP router: LAN hosting stands, and the status explains the fix`
-- `no router or internet here: network only, nothing to reveal`
-
-Both hard-require `Net.Reach.LanOnly`. On a real machine behind a real router with real internet,
-reachability resolves to something else and the assertion fails by construction. **Windows is
-therefore a 433/433 bar, not 435/435**, until those two checks learn to branch on the environment.
-Do not "fix" them by relaxing the assertion: what they verify — that a player with no route out is
-told so, and offered the port-forward and Tailscale routes — is real behaviour worth keeping.
-
-**WSL does not get you back to the sandbox's number.** It was set up expecting it would — those
-conditions looked reproducible — and it reports exactly the same count as Windows, with the same two
-failures. WSL2 has internet and sits behind its own NAT, so `LanOnly` does not hold there either.
-Only a machine with no router *and* no internet reaches the full 435. WSL is still worth having (it
-runs the `.sh` scripts unmodified, and typecheck and xref are clean there), but it is not an oracle
-for those two checks.
-*Rule: an environment assumption is worth testing before it is relied on. This one was wrong.*
+**The harness builds its own network.** Every role starts with `Router.Fake = (1, 1)` and a public-IP
+service that refuses: no router, no internet, on every machine alike -- the old "two environmental
+failures" off the sandbox are gone, and a test run can never open a port on the real router (the
+game maps ports itself now). The plug-and-play scenarios point `Router.Fake` at
+`tools/smoketest/fakeigd.py`: two fake routers on 127.0.0.1 and 127.0.4.1 answering UPnP, NAT-PMP and
+PCP, in eleven networks (one router, two routers, the front one silent, a refusal, carrier-grade NAT,
+a VPN, NAT-PMP with a reassigned port, PCP, none...). `run.ps1 -Wan` runs the multiplayer half
+through `tools/smoketest/wan.py`, a relay of 90 ms each way, ±25 ms, 2% loss (`WARSHIPS_WAN="ms,jitter,loss"`
+for another day). The runner fails a run whose process crashed (a negative exit code) -- a crash at
+exit used to cut off the engine's leak report, so the one crashed run was the one that "passed".
 
 **Use Ubuntu 24.04 for the WSL distro, not the default.** `wsl --install -d Ubuntu` now gives 26.04,
 whose archive carries no .NET 8 at all — only `dotnet-sdk-10.0` — and this project targets `net8.0`.

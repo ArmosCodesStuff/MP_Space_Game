@@ -73,8 +73,8 @@ handled:
 
       $Godot = 'C:\path\to\Godot_v4.7.2-stable_mono_win64.exe'
 
-`verify.ps1` knows the two network checks assert a sandbox with no router and no internet, and
-reports them separately from real failures rather than letting them read as breakage.
+The smoke test builds its own network (no router, no internet, or fake routers), so every check
+means the same on every machine -- there are no "environmental" failures to discount.
 
 ### The individual checks
 
@@ -85,7 +85,7 @@ validated against the numbers the Linux originals produce:
     dotnet build                                                              # 0 Warning(s), 0 Error(s)
     powershell -ExecutionPolicy Bypass -File tools\analyse\run.ps1            # ANALYSERS: 0 findings
     python tools\analyse\xref.py                                              # UNUSED ANYWHERE: 0
-    powershell -ExecutionPolicy Bypass -File tools\smoketest\run.ps1     # 474 pass, 6/6 runs
+    powershell -ExecutionPolicy Bypass -File tools\smoketest\run.ps1     # every check, 6/6 runs
     powershell -ExecutionPolicy Bypass -File tools\screens\run.ps1
     powershell -ExecutionPolicy Bypass -File tools\snapshot.ps1              # rebuild version\CODE_SNAPSHOT.txt
 
@@ -96,9 +96,9 @@ do pass one, pass the plain `Godot_v4.7.2-stable_mono_win64.exe` -- they swap th
 **Run them one at a time.** Both copy the project to a single fixed scratch folder, so a second
 run deletes the first's files mid-flight; `run.ps1` refuses to start rather than fail obscurely.
 
-The smoke test's bar on Windows is **433 pass, 6/6 runs** — see DESIGN.md → Smoke test for why two
-checks cannot pass off a sandbox. The sweep's bar is **67 frames, SWEEP DONE, 0 LINT**, into
-`%TEMP%\shots`.
+The smoke test's bar is **every check passing, 6/6 runs** (the count is in the last VERIFIED commit;
+`-Wan` runs the multiplayer half over a simulated internet). The sweep's bar is **SWEEP DONE, 0
+LINT**, into `%TEMP%\shots`.
 
 The Windows analyser does *not* need the smoke test run first: NuGet is reachable here, so it
 restores and builds in place rather than reusing the smoke test's offline build folder.

@@ -114,24 +114,21 @@ public partial class Raider : Node2D, IHittable
     private Vector2 _lastTargetPos; private Vector2 _targetVel;
     private Sprite2D _turret;
     private bool _boostUsed;
-    private Vector2 _netPos; private float _netRot; private bool _hasNet;
+    private NetPose _net;
     private Vector2? _tether;                          // guests: where the web goes
     private Sprite2D _sprite;
 
     public override void _Ready()
     {
         Hp = MaxHull;
-        var tex = GD.Load<Texture2D>(Heavy ? "res://enemy_heavy_hull.png" : "res://enemy_light_fighter.png");
-        _sprite = new Sprite2D { Texture = tex, Scale = Vector2.One * (Length / tex.GetHeight()) };
+        _sprite = Sprites.Fit(Heavy ? "res://enemy_heavy_hull.png" : "res://enemy_light_fighter.png", Length);
         AddChild(_sprite);
         if (Heavy)
-        {   // the battleship's front turret on its mount (62.4 px down the 150 px half-hull), dark as the hull
+        {   // the battleship's front turret on its mount, dark as the hull: row 40.3 of the 100 px snub-nosed hull
             _sprite.Modulate = HeavyTint;
-            var tt = GD.Load<Texture2D>("res://turret_bs_main.png");
-            // the turret mount: row 40.3 of the 100 px snub-nosed hull
-            float px = Length / tex.GetHeight();
-            _turret = new Sprite2D { Texture = tt, Position = new Vector2(0, (40.3f - tex.GetHeight() / 2f) * px),
-                                     Scale = Vector2.One * px * 0.62f, Modulate = new Color(0.62f, 0.40f, 0.40f), ZIndex = 1 };
+            float px = _sprite.Scale.X, rows = _sprite.Texture.GetHeight();
+            _turret = new Sprite2D { Texture = GD.Load<Texture2D>("res://turret_bs_main.png"), Position = new Vector2(0, (40.3f - rows / 2f) * px),
+                                     Scale = Vector2.One * px * 0.62f, Modulate = HeavyTint, ZIndex = 1 };
             AddChild(_turret);
         }
         ZIndex = 5;
@@ -146,60 +143,28 @@ public partial class Raider : Node2D, IHittable
         if (Hp <= 0) Hub.RaiderDown(this);
     }
 
-    // ── what it can go after ──
-    static bool Up(Node2D t) => GodotObject.IsInstanceValid(t) && t switch
-    {
-        PlayerShip p => p.Alive,
-        Gatherer g => g.State != Gatherer.St.Destroyed,
-        Hauler h => h.State is not (Hauler.St.Destroyed or Hauler.St.Away),
-        _ => false,
-    };
+    // ── what it can go after: an IRaidTarget in reach ──
+    public static bool Up(Node2D t) => GodotObject.IsInstanceValid(t) && t is IRaidTarget r && r.InReach;
     // How far the target's hull reaches from its centre along `dir`: an ellipse with the
     // hull's half-length and half-width. Posts and reach are measured from the HULL, so a
     // raider holds station beside a long ship, never on top of its bow.
     private static float Extent(Node2D t, Vector2 dir)
     {
-        (float len, float wid) = t switch
-        {
-            PlayerShip p => (PlayerShip.Art[p.Class].Length * 0.5f, PlayerShip.Art[p.Class].HalfWidth),
-            Hauler h => (Hauler.Length * 0.5f * h.VisualScale, Hauler.Length * 0.12f * h.VisualScale),
-            _ => (20f, 12f),
-        };
+        var (len, wid) = t is IRaidTarget r ? r.Extent : (20f, 12f);
         var fwd = Vector2.Up.Rotated(t.Rotation); var side = new Vector2(-fwd.Y, fwd.X);
         float a = dir.Dot(fwd), b = dir.Dot(side);
         return 1f / Mathf.Sqrt(a * a / (len * len) + b * b / (wid * wid));
     }
     public static float Gap(Vector2 from, Node2D t) =>
         from.DistanceTo(t.Position) - Extent(t, (from - t.Position).Normalized());
-    void Strike(Node2D t, double d)
-    {
-        switch (t)
-        {
-            case PlayerShip p: p.Hit(d, Position, $"raider:{NetId}"); break;
-            case Gatherer g: g.TakeDamage(d); break;
-            case Hauler h: h.TakeDamage(d); break;
-        }
-    }
-    static void Pin(Node2D t)
-    {
-        switch (t)
-        {
-            case PlayerShip p: p.PinFor(0.25); break;
-            case Gatherer g: g.PinFor(0.25); break;
-            case Hauler h: h.PinFor(0.25); break;
-        }
-    }
+    void Strike(Node2D t, double d) => (t as IRaidTarget)?.Hit(d, Position, $"raider:{NetId}");
 
     public override void _Process(double delta)
     {
         float dt = (float)delta;
         if (!Net.Sim)
         {
-            if (_hasNet)
-            {
-                Position = Position.Lerp(_netPos, Mathf.Clamp(10f * dt, 0f, 1f));
-                Rotation = Mathf.LerpAngle(Rotation, _netRot, Mathf.Clamp(10f * dt, 0f, 1f));
-            }
+            _net.Follow(this, dt);
             QueueRedraw();
             return;
         }
@@ -253,7 +218,7 @@ public partial class Raider : Node2D, IHittable
 
         if (Latched)
         {
-            Pin(Target);
+            (Target as IRaidTarget)?.PinFor(0.25);
             _shot -= delta;
             if (_shot <= 0)
             {
@@ -269,13 +234,11 @@ public partial class Raider : Node2D, IHittable
     // 2000 u of the patrol -- and a patrol's heavy takes whatever its lights have taken
     private Node2D Choose()
     {
-        var all = Hub.RaiderTargets().ToList();
-        if (Patrol == 0) return all.OrderBy(t => t.Position.DistanceTo(Position)).FirstOrDefault();
-        var mates = Hub.Raiders.Where(r => r.Patrol == Patrol && r.Alive && r != this).ToList();
-        if (Heavy) return mates.Where(r => !r.Heavy && Up(r.Target)).Select(r => r.Target).FirstOrDefault();
-        var near = all.Where(t => t.Position.DistanceTo(Position) <= Detect).OrderBy(t => t.Position.DistanceTo(Position)).FirstOrDefault();
-        if (near != null) return near;
-        return mates.Where(r => !r.Heavy && Up(r.Target)).Select(r => r.Target).FirstOrDefault();   // a mate spotted one
+        if (Patrol == 0) return Combat.Nearest(Hub.RaiderTargets(), Position, t => t.Position);
+        if (!Heavy && Combat.Nearest(Hub.RaiderTargets(), Position, t => t.Position, Detect) is { } near) return near;
+        foreach (var r in Hub.Raiders)                                           // a mate spotted one
+            if (r != this && r.Patrol == Patrol && r.Alive && !r.Heavy && Up(r.Target)) return r.Target;
+        return null;
     }
 
     // a patrol with nothing to do circles the perimeter round the base, together
@@ -291,7 +254,6 @@ public partial class Raider : Node2D, IHittable
         Speed = PatrolSpeed;
     }
 
-    static bool PinnedNow(Node2D t) => t switch { PlayerShip p => p.Pinned, Gatherer g => g.Pinned, Hauler h => h.Pinned, _ => false };
 
     // the heavy: wait at the map's edge until the target is pinned, then boost in; missiles within 500 u
     public static Vector2 EdgeSpot(Vector2 target) =>
@@ -300,7 +262,7 @@ public partial class Raider : Node2D, IHittable
     {
         float dt = (float)delta;
         var astern = -Vector2.Up.Rotated(Target.Rotation);                    // it comes in from the rear
-        bool pinned = PinnedNow(Target);
+        bool pinned = Target is IRaidTarget { Pinned: true };
         var dest = pinned ? Target.Position + astern * (Extent(Target, astern) + HeavyHold)
                           : EdgeSpot(Target.Position);                        // patient, at the map's edge nearest it
         float top = pinned && Position.DistanceTo(Target.Position) > HeavyBoostStop ? Cruise * HeavyBoostMult : Cruise;
@@ -338,7 +300,7 @@ public partial class Raider : Node2D, IHittable
     private int _netFlags;
     public void SetNet(Vector2 p, float rot, double hp, Vector2? tether, int flags)
     {
-        _netPos = p; _netRot = rot; _hasNet = true; Hp = hp; _tether = tether; _netFlags = flags;
+        _net.Set(p, rot); Hp = hp; _tether = tether; _netFlags = flags;
     }
     public Vector2? TetherTo => Net.Sim ? (Latched && Up(Target) ? Target.Position : null) : _tether;
 
