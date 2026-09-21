@@ -46,7 +46,7 @@ batch made where the owner's answers left a gap are under Open questions -- chec
 
 **Verification** is one command, `verify.ps1` (see `CLAUDE.md` §6 and `docs/README.md`): typecheck
 against the real `GodotSharp.dll`, `dotnet build` with 0 warnings, analysers 0 findings, xref 0
-unused, the smoke test three full runs in a row (**673 pass, 6 of 6 runs** each: solo, a host with
+unused, the smoke test three full runs in a row (**672 pass, 6 of 6 runs** each: solo, a host with
 two guests, and a two-player arena; `tools\smoketest\run.ps1 -Wan` repeats the multiplayer runs
 with every guest joining through a simulated internet -- 90 ms each way, jitter, 2% loss), and the
 screenshot sweep (**76 frames, 0 lint**) on the developer's own GPU with the project's Forward+
@@ -324,7 +324,7 @@ check was proved against a mutant reproducing the old code; see Tests below.
   (`PeerDisconnectNow`) -- not by `DisconnectPeer`, a polite hang-up during which, over a slow link,
   the host went on sending into a peer ENet had already emptied ("max channels: 0").
 
-**Tests**: smoke **673 pass, 6/6 runs**, three runs in a row, and clean over the simulated internet
+**Tests**: smoke **672 pass, 6/6 runs**, three runs in a row, and clean over the simulated internet
 (`-Wan`); sweep **76 frames, 0 lint**, the new and changed frames looked at (the equipment window with
 a full hold, K with gear, a Wide Bay's five bombers, the escort mid-route, a lost run, the hint card,
 the arena's crates after a kill, the base's HAULER tab, the TIO's parts line, the Esc menu's switch).
