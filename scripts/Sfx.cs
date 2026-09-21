@@ -66,6 +66,26 @@ public static class Sfx
         if (p.IsInsideTree()) p.Play(); else p.CallDeferred(AudioStreamPlayer.MethodName.Play);
     }
     static bool IsInstanceValid(Node n) => n != null && GodotObject.IsInstanceValid(n);
+
+    // Let the sounds go. _streams is STATIC and holds a handle to every wav for the life of the
+    // process, so at shutdown the engine reports them as "resources still in use at exit" -- the
+    // same message Music carries an _ExitTree to avoid, and the same fix. Distinct instances only:
+    // "cannon" is an alias for impact_thunk and they are one object, so disposing per key would
+    // dispose it twice.
+    //
+    // Safe to call at any time, not only at exit: Play() rebuilds the pool and reloads the
+    // streams whenever the pool is gone, so the next sound after a release simply pays for the
+    // load again.
+    public static void Release()
+    {
+        if (IsInstanceValid(_pool))
+            foreach (var c in _pool.GetChildren())
+                if (c is AudioStreamPlayer p) { p.Stop(); p.Stream = null; }
+        foreach (var s in new System.Collections.Generic.HashSet<AudioStream>(_streams.Values)) s?.Dispose();
+        _streams.Clear();
+        _last.Clear();
+        _pool = null; _next = 0;
+    }
 }
 
 // The voice pool, which stops and releases its streams on the way out. A voice STILL PLAYING at
@@ -74,9 +94,5 @@ public static class Sfx
 // it. The pool lives on the root and outlives every scene, so nothing else was ever going to do it.
 public partial class SfxPool : Node
 {
-    public override void _ExitTree()
-    {
-        foreach (var c in GetChildren())
-            if (c is AudioStreamPlayer p) { p.Stop(); p.Stream = null; }
-    }
+    public override void _ExitTree() => Sfx.Release();
 }

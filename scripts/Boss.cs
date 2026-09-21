@@ -97,8 +97,18 @@ public partial class Boss : Node2D, IHittable
     // The skinny bar under the health bar: how far along the wait for the next SUPER MOVE --
     // the ram, or the death beam's escorts going out. Both are 15 s apart once the fight settles.
     private double _superGap = 6.0;
-    public double NextSuperIn => System.Math.Max(0, System.Math.Min(_beam, _charge));
-    public double SuperFill => _superGap <= 0 ? 0 : System.Math.Clamp(1 - NextSuperIn / _superGap, 0, 1);
+    // HOST-ONLY TIMERS, SO GUESTS ARE TOLD. _beam and _charge only ever tick under Net.Sim, so on
+    // a guest they sit at their starting values for the whole fight and the bar under the boss's
+    // hull reads zero from the first shot to the last. It is drawn state, so it goes on the wire.
+    // Between packets a guest runs the clock down itself: the bar has to move smoothly at 10 Hz,
+    // and a countdown corrected thirty times a second cannot drift anywhere.
+    private double _netNextSuper = -1, _netSuperGap;
+    public double NextSuperIn => Net.Sim ? System.Math.Max(0, System.Math.Min(_beam, _charge))
+                                         : System.Math.Max(0, _netNextSuper);
+    public double SuperFill
+    {
+        get { double gap = Net.Sim ? _superGap : _netSuperGap; return gap <= 0 ? 0 : System.Math.Clamp(1 - NextSuperIn / gap, 0, 1); }
+    }
     private Vector2 _netPos; private float _netRot; private bool _hasNet; private bool _netLocked;
 
     public override void _Ready()
@@ -138,6 +148,7 @@ public partial class Boss : Node2D, IHittable
                     Position = _netPos; Rotation = _netRot;
                 }
                 else { Position = Position.Lerp(_netPos, Mathf.Clamp(10f * dt, 0f, 1f)); Rotation = Mathf.LerpAngle(Rotation, _netRot, Mathf.Clamp(10f * dt, 0f, 1f)); }
+                if (_netNextSuper > 0) _netNextSuper = System.Math.Max(0, _netNextSuper - delta);
             }
             return;
         }
@@ -168,7 +179,8 @@ public partial class Boss : Node2D, IHittable
         if (_send <= 0 && Net.IsOnline)
         {
             _send = Locked ? 1.0 / 30 : 0.1;
-            Hub?.RpcToSector(Hub.SectorKind.Arena, this, nameof(NetState), Position, Rotation, Hp, Locked);
+            Hub?.RpcToSector(Hub.SectorKind.Arena, this, nameof(NetState), Position, Rotation, Hp, Locked,
+                             NextSuperIn, _superGap);
         }
     }
 
@@ -294,7 +306,11 @@ public partial class Boss : Node2D, IHittable
     private void NetTelegraph(bool line, Vector2 a, Vector2 b, float size, double time, bool onHull) => ShowTelegraph(line, a, b, size, time, onHull);
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
-    private void NetState(Vector2 p, float rot, double hp, bool locked) { _netPos = p; _netRot = rot; _hasNet = true; Hp = hp; _netLocked = locked; }
+    private void NetState(Vector2 p, float rot, double hp, bool locked, double nextSuper, double superGap)
+    {
+        _netPos = p; _netRot = rot; _hasNet = true; Hp = hp; _netLocked = locked;
+        _netNextSuper = nextSuper; _netSuperGap = superGap;
+    }
 
     public int TelegraphsPending => (_beamCharging ? 1 : 0) + (_pendingWave != null ? 1 : 0);
 }

@@ -98,13 +98,13 @@ public partial class Raider : Node2D, IHittable
         Rotation = launchDir.Angle() + Mathf.Pi / 2f;
         _shiver = EscortShiver; _shiverHome = Position; _escortPost = post;
     }
-    public bool Shivering => _shiver > 0;
+    public bool Shivering => Net.Sim ? _shiver > 0 : (_netFlags & FlagShiver) != 0;
     // Roughly when an escort launched now would have its web on the target: the shiver, then the
     // run in at boost speed. A PREDICTION, not a promise -- the pilot may shoot it down first,
     // and the boss commits to its beam on this estimate either way.
     public static double WebEta(float distance) => EscortShiver + distance / (Cruise * BoostMult);
     public bool Latched { get; private set; }
-    public bool Boosting => _boostLeft > 0;
+    public bool Boosting => Net.Sim ? _boostLeft > 0 : (_netFlags & FlagBoost) != 0;
     public float Speed { get; private set; }
     private double _boostLeft, _shot, _missileCd = 2.0;
     private Vector2 _lastTargetPos; private Vector2 _targetVel;
@@ -325,7 +325,17 @@ public partial class Raider : Node2D, IHittable
         }
     }
 
-    public void SetNet(Vector2 p, float rot, double hp, Vector2? tether) { _netPos = p; _netRot = rot; _hasNet = true; Hp = hp; _tether = tether; }
+    // Boosting and Shivering are read by _Draw and were host-only, so a guest drew neither the
+    // escorts' triple-length plume nor any raider's boost plume -- the plume was single-player.
+    // Two bits on the same packet that already carries position; a whole array for two booleans
+    // would cost more than the state it replicates.
+    public const int FlagBoost = 1, FlagShiver = 2;
+    public int NetFlags => (Boosting ? FlagBoost : 0) | (Shivering ? FlagShiver : 0);
+    private int _netFlags;
+    public void SetNet(Vector2 p, float rot, double hp, Vector2? tether, int flags)
+    {
+        _netPos = p; _netRot = rot; _hasNet = true; Hp = hp; _tether = tether; _netFlags = flags;
+    }
     public Vector2? TetherTo => Net.Sim ? (Latched && Up(Target) ? Target.Position : null) : _tether;
 
     public override void _Draw()

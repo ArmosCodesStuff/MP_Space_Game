@@ -61,6 +61,13 @@ public partial class MainMenu : Node2D
         // Esc menu's quit button.
         Hub.Sector = Hub.SectorKind.Home;
         Yard.EndSession();      // and the trip snapshot / parked base, for the same reason
+        // ...AND THE NETWORK SESSION. Every other session-scoped thing was reset here with the
+        // argument that covering every route back matters more than covering the Esc menu's quit
+        // button; the session itself was not, because the menu used to be sprites and structs and
+        // had nothing to say on the wire. It builds a real PlayerShip now, with a multiplayer
+        // authority and an RPC path no peer has, so a session surviving into the menu means the
+        // title screen starts talking to a world that is not there.
+        Net.I?.GoOffline();
         // Hub sets this on the way in and nothing cleared it on the way out, so quitting from the
         // arena left the combat track playing over the menu until a new Hub was built.
         Music.CombatZone = false;

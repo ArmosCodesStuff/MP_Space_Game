@@ -47,7 +47,7 @@ faults have been fixed from those frames more than once.
 
 **As of 2026-09-20 the whole harness also runs natively on the developer's Windows machine** (see
 Unreleased → *The harnesses run on Windows*): typecheck 0 errors, build 0 warnings, analysers 0
-findings, xref 0 unused, smoke **447 pass / 6 of 6 runs** (the 2 short of 449 assert the sandbox's
+findings, xref 0 unused, smoke **454 pass / 6 of 6 runs** (the 2 short of 456 assert the sandbox's
 missing router and internet), sweep **67 frames, 0 lint** on the real GPU with the project's own
 Forward+ renderer. So "how it looks on the developer's own GPU" is no longer unconfirmed for the
 swept states. What remains unconfirmed is how it feels in a hand-played session — nothing here
@@ -307,6 +307,55 @@ have skipped them. They are listed now, and one of them (`Shell`) held a real fi
 
 Full detail, including what was found and deliberately *not* changed, is in `REVIEW.md`.
 
+### A multiplayer pass: three things a guest was not being told
+
+**Checked:** typecheck 0 errors; build 0 warnings; analysers 0 findings; xref 0 unused; smoke
+**454 pass, 6/6 runs**; sweep 67 frames, 0 lint. Three mutants, one at a time, each reproducing
+the real old code.
+
+Every `AnyPeer` RPC in the build was re-read first, and all four that carry identity validate their
+sender correctly (`NetIdentity` refuses a peer describing anyone but itself, `RequestReady` keys off
+the sender, `PlayerShip.NetState` refuses anyone but the owner, `NetHostState` refuses anyone but
+the host). No authority hole was found. What was found was the other half of the rule — **every
+visible state reaches guests** — and three pieces of it did not.
+
+#### Fixed
+
+- **The boss's super-move bar sat at zero on a guest, for the whole fight.** `_beam` and `_charge`
+  only tick under `Net.Sim`, so on a guest they never moved and `SuperFill` was always 0. The
+  countdown now rides the packet that already carries the boss's position, and a guest runs the
+  clock down itself between packets so the bar moves smoothly at 10 Hz — a figure corrected thirty
+  times a second cannot drift.
+- **The escorts' triple-length boost plume was single-player.** `Boosting` and `Shivering` are read
+  by `_Draw` and were host-only, so a guest drew neither that plume nor any raider's boost plume.
+  They ride the raider packet as two bits.
+- **Reaching the main menu did not end the network session.** Every other session-scoped thing is
+  reset there — `Hub.Sector`, the trip snapshot, the combat-music flag — each with the argument
+  that covering every route back matters more than covering the Esc menu's quit button. The session
+  itself was not, because the menu used to be sprites and structs with nothing to say on the wire.
+  It builds a real `PlayerShip` now, so a session surviving into it means the title screen sending
+  state on an RPC path no peer has. The mutant showed the rest of the damage: two later checks saw
+  a live socket in what is supposed to be single player.
+
+#### New checks
+
+| Check | Mutant that had to break it |
+|---|---|
+| the boss's super-move bar runs on a guest | the countdown never leaves the host — *0.0 → 0.0 s, fill 0.00 → 0.00* |
+| a shivering escort says so on the wire, and the bits change when it goes | host-only `Boosting`/`Shivering`, empty `NetFlags` — *(0,0)* |
+| reaching the main menu ends the session too | the menu leaves the session running — *and two later checks fail with it* |
+
+The guest-side bar is sampled only once a figure has **arrived**: before the first packet the
+countdown reads 0, and a first sample of 0 cannot tell "it went down" from "it never started".
+
+#### A leak found and released
+
+`Sfx`'s stream cache is static and held every `.wav` for the life of the process, so the engine
+reported them as `resources still in use at exit` — the same message `Music` already carries an
+`_ExitTree` to avoid. `Sfx.Release()` stops the voices and disposes the streams; `Play()` rebuilds
+the pool and reloads on demand, so it is safe at any time. Confirmed in isolation: five resources
+at exit became four.
+
 ### The title screen flies the real battleship
 
 **Checked:** typecheck 0 errors; build 0 warnings; analysers 0 findings; xref 0 unused; smoke
@@ -547,22 +596,20 @@ Frames looked at. No game code changed.
   and they fail by construction. They are not regressions and the behaviour they cover is real.
   **433 is the bar on Windows *and* under WSL**; only the sandbox itself reaches 435. Making them
   branch on the environment is not done.
-- **`ERROR: 2 resources still in use at exit`, in the solo smoke run, since the title screen
-  started spawning foes.** It is a SHUTDOWN accounting message, not a live leak: the smoke test's
-  own leak checks pass in the same run (`orphan nodes 0 -> 0`, object count stable across leaving
-  and re-entering the hub), and nothing accumulates while the game is running.
+- **`ERROR: 2 resources still in use at exit`, in the solo smoke run.** Now identified rather than
+  mysterious: they are `music_ambient.ogg` and `music_combat.ogg` (with their `OggPacketSequence`
+  sub-resources). Reproduced in isolation by running the menu alone under `--verbose --quit-after`,
+  which lists them by name — the smoke runner's own output only ever gives the count.
 
-  What is ruled out, by bisection, one run each: it is not the `Combat` hooks (both `_ExitTree`
-  and `NotificationPredelete` are proven to run and clear them), not the foes' `Died` event, not
-  which textures they load (the count is the same with three shared textures as with three of
-  their own), and not a texture handle held in a C# field (moving it onto a `Sprite2D` child
-  changed nothing). Disposing the handle outright is **wrong** and was tried: the textures are
-  shared through `ResourceLoader`'s cache, and disposing one broke **1341** checks.
+  It is a SHUTDOWN accounting message, not a live leak: the smoke test's own leak checks pass in
+  the same run (`orphan nodes 0 -> 0`, object count stable across leaving and re-entering the hub).
 
-  It appears only when the menu has foes, which is also the only case where the menu's ship
-  fires. `Sfx`'s voice pool now stops its players and releases their streams on the way out --
-  the same fix `Music` already carries, and correct on its own merits -- but it did not change
-  the count either. Not fixed; not understood past this point; not hiding it in the runner.
+  `Music._ExitTree` already stops the players, nulls their streams and disposes both handles, which
+  is the fix that worked for this message before. It is not enough here. Disposing the packet
+  sequence as well **made it worse** and was reverted: the count went back UP to five, because the
+  extra disposal breaks the teardown chain and `SfxPool._ExitTree` then never runs at all.
+
+  The related `Sfx` leak found alongside it IS fixed — see *A multiplayer pass* above.
 
 *(The non-atomic character save that was listed here is now fixed — see Fixed, below.)*
 

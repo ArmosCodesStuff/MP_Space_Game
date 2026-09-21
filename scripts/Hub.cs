@@ -715,15 +715,16 @@ public partial class Hub : Node2D
         _raiderSend -= delta; if (_raiderSend > 0) return; _raiderSend = 0.1;
         Rpc(nameof(NetRaiders), Raiders.Select(r => r.NetId).ToArray(), Raiders.Select(r => r.Position).ToArray(),
             Raiders.Select(r => r.Rotation).ToArray(), Raiders.Select(r => r.Hp).ToArray(),
-            Raiders.Select(r => r.TetherTo ?? new Vector2(float.NaN, float.NaN)).ToArray());
+            Raiders.Select(r => r.TetherTo ?? new Vector2(float.NaN, float.NaN)).ToArray(),
+            Raiders.Select(r => r.NetFlags).ToArray());
     }
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
-    private void NetRaiders(int[] ids, Vector2[] pos, float[] rot, double[] hp, Vector2[] tether)
+    private void NetRaiders(int[] ids, Vector2[] pos, float[] rot, double[] hp, Vector2[] tether, int[] flags)
     {
         for (int i = 0; i < ids.Length; i++)
         {
             var r = Raiders.FirstOrDefault(x => x.NetId == ids[i]);
-            r?.SetNet(pos[i], rot[i], hp[i], float.IsNaN(tether[i].X) ? null : tether[i]);
+            r?.SetNet(pos[i], rot[i], hp[i], float.IsNaN(tether[i].X) ? null : tether[i], flags[i]);
         }
     }
 

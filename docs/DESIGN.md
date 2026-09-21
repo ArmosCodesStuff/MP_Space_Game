@@ -584,6 +584,13 @@ where the editor cannot delete it.*
 
 Each of these compiled clean and was wrong at runtime. The smoke test covers all of them.
 
+- **Host-only state read by drawing code is a guest bug that nothing reports.** `Boss._beam` and
+  `_charge` only tick under `Net.Sim`, and `Raider.Boosting` / `Shivering` are host-only fields;
+  all four are read by code that draws. On a guest the boss's super-move bar sat at zero for the
+  whole fight and the escorts' triple-length plume never appeared, and neither showed up as an
+  error anywhere.
+  *Rule: when you add something DRAWN from a value, ask which peers have that value. The solo run
+  is the host, so it can never tell you.*
 - **A node can pass every behavioural check and draw nothing.** The title screen's battleship
   moved, warped, held station and reported its position correctly for several rounds of checks
   while `PlayerShip.Init()` had never been called, so it had no sprite, no turrets and no stat

@@ -1,9 +1,9 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-20 20:03 at git commit 16fa71b: typecheck clean, dotnet build 0 warnings,
+// Taken 2026-09-20 20:35 at git commit 269be63: typecheck clean, dotnet build 0 warnings,
 //   0 analyser findings, 0 unused members; smoke test 3/3 runs at 435 checks on Windows
 //   (437 in a sandbox with no router and no internet); 67-frame UI sweep complete, 0 lint.
-// 69 files, 12279 lines. Code only: sprites, sounds and docs are in the zip.
+// 69 files, 12386 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -21,7 +21,7 @@
 //   scripts/Autopilot.cs                            40 lines   sha256 807538219f53
 //   scripts/BaseDefense.cs                          55 lines   sha256 1d8daa0fbd67
 //   scripts/BasePanel.cs                           132 lines   sha256 486b1d45088e
-//   scripts/Boss.cs                                300 lines   sha256 4029a62f29a0
+//   scripts/Boss.cs                                316 lines   sha256 88ae7aba4708
 //   scripts/BossBar.cs                              86 lines   sha256 fdc16204cf1d
 //   scripts/Character.cs                           220 lines   sha256 9221d9084893
 //   scripts/CharacterCreator.cs                    216 lines   sha256 9550b19e1833
@@ -36,8 +36,8 @@
 //   scripts/Gatherer.cs                            254 lines   sha256 135bd767de29
 //   scripts/Hauler.cs                              317 lines   sha256 b13773f083c7
 //   scripts/HealthBar.cs                            38 lines   sha256 c6b272c9453c
-//   scripts/Hub.cs                                1268 lines   sha256 b857d1f9ce6a
-//   scripts/MainMenu.cs                            298 lines   sha256 bda41c860b6a
+//   scripts/Hub.cs                                1269 lines   sha256 6e59e9425498
+//   scripts/MainMenu.cs                            305 lines   sha256 ec7d04adcf12
 //   scripts/MenuFoe.cs                             192 lines   sha256 16c12213ddc6
 //   scripts/Missions.cs                             38 lines   sha256 48a2f11b25a4
 //   scripts/Music.cs                                78 lines   sha256 021dfc1c83d5
@@ -47,10 +47,10 @@
 //   scripts/Plume.cs                                25 lines   sha256 cdbeb9b8fc58
 //   scripts/Progression.cs                          92 lines   sha256 de28f5e72175
 //   scripts/Radar.cs                               129 lines   sha256 16957ada0551
-//   scripts/Raider.cs                              344 lines   sha256 59f2c06071b3
+//   scripts/Raider.cs                              354 lines   sha256 1c83f7409808
 //   scripts/SessionMenu.cs                         129 lines   sha256 857bef39fbc5
 //   scripts/Settings.cs                             91 lines   sha256 891f361df958
-//   scripts/Sfx.cs                                  82 lines   sha256 1ba161a0ed9f
+//   scripts/Sfx.cs                                  98 lines   sha256 87c3b8b8ebcf
 //   scripts/Shell.cs                                52 lines   sha256 5c161c9fff3b
 //   scripts/Shield.cs                               71 lines   sha256 99c7fa4a2a8e
 //   scripts/ShipClasses.cs                         530 lines   sha256 949a74f65ecf
@@ -77,7 +77,7 @@
 //   tools/screens/Shots.cs.txt                     458 lines   sha256 43a79314bd60
 //   tools/smoketest/run.ps1                        161 lines   sha256 d5c27af2b535
 //   tools/smoketest/run.sh                          57 lines   sha256 568b677787fd
-//   tools/smoketest/SmokeTest.cs.txt              2014 lines   sha256 6bfc2f6a0310
+//   tools/smoketest/SmokeTest.cs.txt              2071 lines   sha256 cc33c368faae
 //   tools/snapshot.ps1                              95 lines   sha256 d6d85575ba26
 //==============================================================================
 
@@ -828,7 +828,7 @@ public partial class BasePanel : PanelContainer
 
 //==============================================================================
 // FILE: scripts/Boss.cs
-// 300 lines   sha256 4029a62f29a0
+// 316 lines   sha256 88ae7aba4708
 //==============================================================================
 using Godot;
 using System.Linq;
@@ -929,8 +929,18 @@ public partial class Boss : Node2D, IHittable
     // The skinny bar under the health bar: how far along the wait for the next SUPER MOVE --
     // the ram, or the death beam's escorts going out. Both are 15 s apart once the fight settles.
     private double _superGap = 6.0;
-    public double NextSuperIn => System.Math.Max(0, System.Math.Min(_beam, _charge));
-    public double SuperFill => _superGap <= 0 ? 0 : System.Math.Clamp(1 - NextSuperIn / _superGap, 0, 1);
+    // HOST-ONLY TIMERS, SO GUESTS ARE TOLD. _beam and _charge only ever tick under Net.Sim, so on
+    // a guest they sit at their starting values for the whole fight and the bar under the boss's
+    // hull reads zero from the first shot to the last. It is drawn state, so it goes on the wire.
+    // Between packets a guest runs the clock down itself: the bar has to move smoothly at 10 Hz,
+    // and a countdown corrected thirty times a second cannot drift anywhere.
+    private double _netNextSuper = -1, _netSuperGap;
+    public double NextSuperIn => Net.Sim ? System.Math.Max(0, System.Math.Min(_beam, _charge))
+                                         : System.Math.Max(0, _netNextSuper);
+    public double SuperFill
+    {
+        get { double gap = Net.Sim ? _superGap : _netSuperGap; return gap <= 0 ? 0 : System.Math.Clamp(1 - NextSuperIn / gap, 0, 1); }
+    }
     private Vector2 _netPos; private float _netRot; private bool _hasNet; private bool _netLocked;
 
     public override void _Ready()
@@ -970,6 +980,7 @@ public partial class Boss : Node2D, IHittable
                     Position = _netPos; Rotation = _netRot;
                 }
                 else { Position = Position.Lerp(_netPos, Mathf.Clamp(10f * dt, 0f, 1f)); Rotation = Mathf.LerpAngle(Rotation, _netRot, Mathf.Clamp(10f * dt, 0f, 1f)); }
+                if (_netNextSuper > 0) _netNextSuper = System.Math.Max(0, _netNextSuper - delta);
             }
             return;
         }
@@ -1000,7 +1011,8 @@ public partial class Boss : Node2D, IHittable
         if (_send <= 0 && Net.IsOnline)
         {
             _send = Locked ? 1.0 / 30 : 0.1;
-            Hub?.RpcToSector(Hub.SectorKind.Arena, this, nameof(NetState), Position, Rotation, Hp, Locked);
+            Hub?.RpcToSector(Hub.SectorKind.Arena, this, nameof(NetState), Position, Rotation, Hp, Locked,
+                             NextSuperIn, _superGap);
         }
     }
 
@@ -1126,7 +1138,11 @@ public partial class Boss : Node2D, IHittable
     private void NetTelegraph(bool line, Vector2 a, Vector2 b, float size, double time, bool onHull) => ShowTelegraph(line, a, b, size, time, onHull);
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
-    private void NetState(Vector2 p, float rot, double hp, bool locked) { _netPos = p; _netRot = rot; _hasNet = true; Hp = hp; _netLocked = locked; }
+    private void NetState(Vector2 p, float rot, double hp, bool locked, double nextSuper, double superGap)
+    {
+        _netPos = p; _netRot = rot; _hasNet = true; Hp = hp; _netLocked = locked;
+        _netNextSuper = nextSuper; _netSuperGap = superGap;
+    }
 
     public int TelegraphsPending => (_beamCharging ? 1 : 0) + (_pendingWave != null ? 1 : 0);
 }
@@ -2970,7 +2986,7 @@ public static class HealthBar
 
 //==============================================================================
 // FILE: scripts/Hub.cs
-// 1268 lines   sha256 b857d1f9ce6a
+// 1269 lines   sha256 6e59e9425498
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -3689,15 +3705,16 @@ public partial class Hub : Node2D
         _raiderSend -= delta; if (_raiderSend > 0) return; _raiderSend = 0.1;
         Rpc(nameof(NetRaiders), Raiders.Select(r => r.NetId).ToArray(), Raiders.Select(r => r.Position).ToArray(),
             Raiders.Select(r => r.Rotation).ToArray(), Raiders.Select(r => r.Hp).ToArray(),
-            Raiders.Select(r => r.TetherTo ?? new Vector2(float.NaN, float.NaN)).ToArray());
+            Raiders.Select(r => r.TetherTo ?? new Vector2(float.NaN, float.NaN)).ToArray(),
+            Raiders.Select(r => r.NetFlags).ToArray());
     }
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
-    private void NetRaiders(int[] ids, Vector2[] pos, float[] rot, double[] hp, Vector2[] tether)
+    private void NetRaiders(int[] ids, Vector2[] pos, float[] rot, double[] hp, Vector2[] tether, int[] flags)
     {
         for (int i = 0; i < ids.Length; i++)
         {
             var r = Raiders.FirstOrDefault(x => x.NetId == ids[i]);
-            r?.SetNet(pos[i], rot[i], hp[i], float.IsNaN(tether[i].X) ? null : tether[i]);
+            r?.SetNet(pos[i], rot[i], hp[i], float.IsNaN(tether[i].X) ? null : tether[i], flags[i]);
         }
     }
 
@@ -4243,7 +4260,7 @@ public partial class HeavyMissileVisual : Node2D
 
 //==============================================================================
 // FILE: scripts/MainMenu.cs
-// 298 lines   sha256 bda41c860b6a
+// 305 lines   sha256 ec7d04adcf12
 //==============================================================================
 using Godot;
 using System;
@@ -4308,6 +4325,13 @@ public partial class MainMenu : Node2D
         // Esc menu's quit button.
         Hub.Sector = Hub.SectorKind.Home;
         Yard.EndSession();      // and the trip snapshot / parked base, for the same reason
+        // ...AND THE NETWORK SESSION. Every other session-scoped thing was reset here with the
+        // argument that covering every route back matters more than covering the Esc menu's quit
+        // button; the session itself was not, because the menu used to be sprites and structs and
+        // had nothing to say on the wire. It builds a real PlayerShip now, with a multiplayer
+        // authority and an RPC path no peer has, so a session surviving into the menu means the
+        // title screen starts talking to a world that is not there.
+        Net.I?.GoOffline();
         // Hub sets this on the way in and nothing cleared it on the way out, so quitting from the
         // arena left the combat track playing over the menu until a new Hub was built.
         Music.CombatZone = false;
@@ -6332,7 +6356,7 @@ public partial class Radar : Control
 
 //==============================================================================
 // FILE: scripts/Raider.cs
-// 344 lines   sha256 59f2c06071b3
+// 354 lines   sha256 1c83f7409808
 //==============================================================================
 using Godot;
 using System.Linq;
@@ -6434,13 +6458,13 @@ public partial class Raider : Node2D, IHittable
         Rotation = launchDir.Angle() + Mathf.Pi / 2f;
         _shiver = EscortShiver; _shiverHome = Position; _escortPost = post;
     }
-    public bool Shivering => _shiver > 0;
+    public bool Shivering => Net.Sim ? _shiver > 0 : (_netFlags & FlagShiver) != 0;
     // Roughly when an escort launched now would have its web on the target: the shiver, then the
     // run in at boost speed. A PREDICTION, not a promise -- the pilot may shoot it down first,
     // and the boss commits to its beam on this estimate either way.
     public static double WebEta(float distance) => EscortShiver + distance / (Cruise * BoostMult);
     public bool Latched { get; private set; }
-    public bool Boosting => _boostLeft > 0;
+    public bool Boosting => Net.Sim ? _boostLeft > 0 : (_netFlags & FlagBoost) != 0;
     public float Speed { get; private set; }
     private double _boostLeft, _shot, _missileCd = 2.0;
     private Vector2 _lastTargetPos; private Vector2 _targetVel;
@@ -6661,7 +6685,17 @@ public partial class Raider : Node2D, IHittable
         }
     }
 
-    public void SetNet(Vector2 p, float rot, double hp, Vector2? tether) { _netPos = p; _netRot = rot; _hasNet = true; Hp = hp; _tether = tether; }
+    // Boosting and Shivering are read by _Draw and were host-only, so a guest drew neither the
+    // escorts' triple-length plume nor any raider's boost plume -- the plume was single-player.
+    // Two bits on the same packet that already carries position; a whole array for two booleans
+    // would cost more than the state it replicates.
+    public const int FlagBoost = 1, FlagShiver = 2;
+    public int NetFlags => (Boosting ? FlagBoost : 0) | (Shivering ? FlagShiver : 0);
+    private int _netFlags;
+    public void SetNet(Vector2 p, float rot, double hp, Vector2? tether, int flags)
+    {
+        _netPos = p; _netRot = rot; _hasNet = true; Hp = hp; _tether = tether; _netFlags = flags;
+    }
     public Vector2? TetherTo => Net.Sim ? (Latched && Up(Target) ? Target.Position : null) : _tether;
 
     public override void _Draw()
@@ -6911,7 +6945,7 @@ public static class Settings
 
 //==============================================================================
 // FILE: scripts/Sfx.cs
-// 82 lines   sha256 1ba161a0ed9f
+// 98 lines   sha256 87c3b8b8ebcf
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -6981,6 +7015,26 @@ public static class Sfx
         if (p.IsInsideTree()) p.Play(); else p.CallDeferred(AudioStreamPlayer.MethodName.Play);
     }
     static bool IsInstanceValid(Node n) => n != null && GodotObject.IsInstanceValid(n);
+
+    // Let the sounds go. _streams is STATIC and holds a handle to every wav for the life of the
+    // process, so at shutdown the engine reports them as "resources still in use at exit" -- the
+    // same message Music carries an _ExitTree to avoid, and the same fix. Distinct instances only:
+    // "cannon" is an alias for impact_thunk and they are one object, so disposing per key would
+    // dispose it twice.
+    //
+    // Safe to call at any time, not only at exit: Play() rebuilds the pool and reloads the
+    // streams whenever the pool is gone, so the next sound after a release simply pays for the
+    // load again.
+    public static void Release()
+    {
+        if (IsInstanceValid(_pool))
+            foreach (var c in _pool.GetChildren())
+                if (c is AudioStreamPlayer p) { p.Stop(); p.Stream = null; }
+        foreach (var s in new System.Collections.Generic.HashSet<AudioStream>(_streams.Values)) s?.Dispose();
+        _streams.Clear();
+        _last.Clear();
+        _pool = null; _next = 0;
+    }
 }
 
 // The voice pool, which stops and releases its streams on the way out. A voice STILL PLAYING at
@@ -6989,11 +7043,7 @@ public static class Sfx
 // it. The pool lives on the root and outlives every scene, so nothing else was ever going to do it.
 public partial class SfxPool : Node
 {
-    public override void _ExitTree()
-    {
-        foreach (var c in GetChildren())
-            if (c is AudioStreamPlayer p) { p.Stop(); p.Stream = null; }
-    }
+    public override void _ExitTree() => Sfx.Release();
 }
 
 //==============================================================================
@@ -10588,7 +10638,7 @@ echo "SMOKE TEST PASSED"
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 2014 lines   sha256 6bfc2f6a0310
+// 2071 lines   sha256 cc33c368faae
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -10671,6 +10721,16 @@ public partial class _Test : Node
         // Hub sets CombatZone on the way in; nothing cleared it on the way out, so quitting from
         // the arena left the combat track playing over the menu.
         Check(!Music.CombatZone, "the combat zone flag is dropped too: the menu is not scored as a fight");
+        // AND THE SESSION. Hosted first, so this is not a check that passes because nothing was
+        // ever online -- it is the difference between a session that ends and one that does not.
+        // The menu builds a real PlayerShip now; a session surviving into it means the title
+        // screen sends state on an RPC path no peer has.
+        Net.I.Host(27123);
+        for (int i = 0; i < 60 && !Net.IsOnline; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        bool wasOnline = Net.IsOnline;
+        GetTree().ChangeSceneToFile("res://MainMenu.tscn");
+        await Wait(0.4);
+        Check(wasOnline && !Net.IsOnline, $"reaching the main menu ends the session too (was online: {wasOnline})");
         await MenuDiorama();
     }
 
@@ -12113,6 +12173,22 @@ public partial class _Test : Node
                   && escorts.All(r => r.Target == me2 && r.Hp > 0 && r.Hp <= Boss.EscortHull * Missions.S(Missions.Level) + 1e-6),
                   $"two escorts launch at the pilot, 45 degrees to port and starboard ({string.Join(", ", escAng.Select(x => x.ToString("0")))}), fragile");
             Check(escorts.All(r => r.Shivering), "the escorts shiver at the launch point before the run in");
+        // ON THE WIRE. Boosting and Shivering are read by _Draw, and both were host-only: a guest
+        // drew neither the escorts' triple-length plume nor any raider's boost plume. They ride
+        // the raider packet as two bits now. Bit values as literals, not Raider.FlagShiver -- a
+        // check that reads the constant cannot catch the constant changing under it.
+        //
+        // An escort is boost-ARMED while it shivers (the boost is not spent sitting still), so
+        // both bits are set here and only the shiver bit clears when it goes. Asserting the pair
+        // BEFORE and AFTER is what makes this a check on the bits rather than on one snapshot:
+        // a NetFlags stuck at any constant value fails one half or the other.
+        var shiverFlags = escorts.Select(r => r.NetFlags).ToList();
+        Check(escorts.All(r => (r.NetFlags & 2) != 0),
+              $"a shivering escort says so on the wire ({string.Join(",", shiverFlags)})");
+        for (int i = 0; i < 60 * 4 && escorts.Any(r => r.Shivering); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        var runFlags = escorts.Where(r => r.Alive).Select(r => r.NetFlags).ToList();
+        Check(runFlags.Count > 0 && runFlags.All(f => (f & 2) == 0) && runFlags.Any(f => (f & 1) != 0),
+              $"and once it goes, the shiver bit clears and the boost bit stands ({string.Join(",", runFlags)})");
             Check(Nodes<Telegraph>().All(t => !t.Line), "no beam line yet: the escorts go first, the charge follows their web");
             // the bar under the boss's hull resets as a super commits and counts the 15 s to the next
             Check(boss.SuperFill < 0.15 && Math.Abs(boss.NextSuperIn - 15) < 1.5,
@@ -12409,7 +12485,10 @@ public partial class _Test : Node
             Check(Net.I.Players.Count == 2, "arena host: the guest joined");
             await Wait(1.0);
             await ToArena("arena host", 1);
-            await Wait(1.5);
+            // Long enough for the guest to watch the super-move bar move, and no longer: this
+            // scenario has a second arena visit after it, and a stay stretched to fit a whole beam
+            // cycle pushed that off the end of every wait that follows.
+            await Wait(4.0);
             H.Boss.TakeDamage(H.Boss.Hp + 1);
             for (int i = 0; i < 60 * 10 && Hub.InArena; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(!Hub.InArena && Net.IsOnline, "arena host: the boss down, home -- still hosting");
@@ -12429,7 +12508,8 @@ public partial class _Test : Node
             for (int i = 0; i < 60 * 10 && !(Net.IsOnline && Net.LocalId != 1); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(Net.IsOnline && Net.LocalId != 1, "arena guest: joined");
             await ToArena("arena guest", 1);
-            for (int i = 0; i < 60 * 15 && Hub.InArena; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await GuestSeesTheFight();
+            for (int i = 0; i < 60 * 18 && Hub.InArena; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(!Hub.InArena && Net.IsOnline, "arena guest: home with the host after the win");
             Check(Character.Exp == 550, $"arena guest: its own EXP for the kill (550; exp {Character.Exp})");
             await ToArena("arena guest", 2);
@@ -12439,6 +12519,33 @@ public partial class _Test : Node
             Check(!Hub.InArena && !Net.IsOnline && H.Yard != null && Math.Abs(H.Yard.Credits - want) < 1e-6,
                   $"arena guest: the host gone mid-arena, home offline with its own base and its bounty share ({H.Yard?.Credits:0} of {want:0})");
         }
+    }
+
+    // WHAT A GUEST IS SHOWN. Both of these were host-only state read by drawing code, so on a
+    // guest they were simply wrong -- and nothing said so, because the solo run is the host.
+    async Task GuestSeesTheFight()
+    {
+        Boss boss = null;
+        for (int i = 0; i < 60 * 2 && boss == null; i++)
+        {   // InArena goes true before the boss node exists on this peer
+            boss = H?.Boss;
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        }
+        Check(boss != null && !Net.Sim, "arena guest: the boss is here, and this peer is not the host");
+        if (boss == null) return;
+
+        // THE SUPER-MOVE BAR. _beam and _charge only tick under Net.Sim, so a guest's bar sat at
+        // zero for the whole fight. Watched over time rather than sampled once: the failure was a
+        // value that never moved, and a single reading cannot tell a stopped clock from a slow one.
+        // Sampled only once a figure has actually ARRIVED. Before the first packet a guest's
+        // countdown is -1, which reads as 0 s left, and a first sample of 0 makes "it went down"
+        // impossible to tell from "it has not started".
+        for (int i = 0; i < 60 * 3 && boss.NextSuperIn <= 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        double firstFill = boss.SuperFill, firstLeft = boss.NextSuperIn;
+        Check(firstLeft > 0, $"arena guest: the host's super-move countdown arrives at all ({firstLeft:0.0} s)");
+        await Wait(1.5);
+        Check(boss.NextSuperIn > 0 && boss.NextSuperIn < firstLeft - 0.5 && boss.SuperFill > firstFill,
+              $"arena guest: the boss's super-move bar runs ({firstLeft:0.0} -> {boss.NextSuperIn:0.0} s, fill {firstFill:0.00} -> {boss.SuperFill:0.00})");
     }
 
     async Task Mp(string role)
