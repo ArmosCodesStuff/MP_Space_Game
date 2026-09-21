@@ -1179,53 +1179,73 @@ public partial class Portal : Node2D
 }
 
 // The player's hull, big and always on screen: a bar along the bottom centre.
+//
+// Its two readouts sit ON the bar, so every letter must read against whatever is under IT: dark on
+// the fill (dark reads on green and on red alike), light on the empty track. Choosing one colour
+// per string cannot do that -- the fill's edge runs through the middle of the text at most hull
+// values, and the part past it went dark on dark ("WARP R", half a HULL number). So the bar is two
+// layers drawing the same words: this node draws the track and the LIGHT copy; _fill, a child
+// clipped to the filled width, draws the fill and the DARK copy over it. The UI lint cannot catch
+// this kind of fault: it measures position and width, not contrast.
 public partial class HullHud : Control
 {
     private readonly StyleBox _panel = Ui.PanelStyle();   // built once: _Draw runs every frame
     private readonly StyleBox _track = Ui.Box(Ui.Deep, Ui.Line, 5);
     public Hub Hub;
     private const float W = 440, H = 22;
+    private Control _fill;
+    private float _frac;
 
     public override void _Ready()
     {
         AnchorLeft = AnchorRight = 0.5f; AnchorTop = AnchorBottom = 1f;
         OffsetLeft = -W / 2; OffsetRight = W / 2; OffsetTop = -150; OffsetBottom = -150 + H;
         MouseFilter = MouseFilterEnum.Ignore;
+        _fill = new Control { Name = "Fill", ClipContents = true, MouseFilter = MouseFilterEnum.Ignore };
+        _fill.Draw += () => DrawFill(_fill);
+        AddChild(_fill);
     }
 
-    public override void _Process(double delta) => QueueRedraw();
+    public override void _Process(double delta)
+    {
+        var s = Hub?.MyShip;
+        _frac = s == null ? 0 : (float)Mathf.Clamp(s.Hp / Mathf.Max(1, s.MaxHp), 0, 1);
+        _fill.Visible = s != null;
+        _fill.Size = new Vector2(1 + (W - 2) * _frac, H);
+        QueueRedraw(); _fill.QueueRedraw();
+    }
 
     public override void _Draw()
     {
-        var s = Hub?.MyShip;
-        if (s == null) return;
+        if (Hub?.MyShip == null) return;
         _panel.Draw(GetCanvasItem(), new Rect2(-8, -6, W + 16, H + 12));   // its panel
-        float frac = (float)Mathf.Clamp(s.Hp / Mathf.Max(1, s.MaxHp), 0, 1);
-        // Your own hull keeps its green-to-red reading -- it is the one number you glance at while
-        // being shot, and a palette accent would say nothing about how close you are to dying. The
-        // TRACK comes from the palette so the bar still belongs to the rest of the HUD.
-        var fill = frac > 0.35f ? Ui.Good : Ui.Bad;
         _track.Draw(GetCanvasItem(), new Rect2(0, 0, W, H));
-        DrawRect(new Rect2(1, 1, (W - 2) * frac, H - 2), fill);
-        Txt.D(this, ThemeDB.FallbackFont, new Vector2(0, H - 5), s.Alive ? $"HULL  {s.Hp:0} / {s.MaxHp:0}"
+        Readouts(this, onFill: false);
+    }
+
+    // Your own hull keeps its green-to-red reading -- it is the one number you glance at while
+    // being shot, and a palette accent would say nothing about how close you are to dying. The
+    // TRACK comes from the palette so the bar still belongs to the rest of the HUD.
+    private void DrawFill(Control c)
+    {
+        if (Hub?.MyShip == null) return;
+        c.DrawRect(new Rect2(1, 1, (W - 2) * _frac, H - 2), _frac > 0.35f ? Ui.Good : Ui.Bad);
+        Readouts(c, onFill: true);
+    }
+
+    private void Readouts(CanvasItem c, bool onFill)
+    {
+        var s = Hub.MyShip;
+        Txt.D(c, ThemeDB.FallbackFont, new Vector2(0, H - 5), s.Alive ? $"HULL  {s.Hp:0} / {s.MaxHp:0}"
                   : s.CanReboard ? "SHIP READY  —  press F to re-board"
                   : $"SHIP IN STASIS  {(int)s.StasisLeft / 60}:{(int)s.StasisLeft % 60:00}  —  flying the escape pod",
-              HorizontalAlignment.Center, W, 15, frac > 0.35f ? Ui.Deep : Colors.White);
-        // The warp readout sits ON the hull bar, so its colour has to depend on what is UNDER it.
-        // Drawn in the palette's green it vanished completely on a full hull -- green on green --
-        // and the same would happen to a red-tinted state on a nearly-empty one. Above the fill it
-        // takes the state colour; on the fill it goes dark, which reads on green and on red alike.
-        // The words carry the state either way. The UI lint cannot catch this: it measures
-        // position and width, not contrast.
-        if (s.Alive)
-        {
-            bool onFill = frac > (W - 150f) / W;
-            var warp = onFill ? Ui.Deep
-                     : s.Warping ? Ui.Accent : s.WarpCooldownLeft > 0 ? Ui.Dim : Ui.Good;
-            Txt.D(this, ThemeDB.FallbackFont, new Vector2(W - 150, H - 5),
-                  s.Warping ? $"WARPING  {s.WarpWarmupLeft:0.0} s" : s.WarpCooldownLeft > 0 ? $"WARP  {s.WarpCooldownLeft:0} s" : "WARP  READY",
-                  HorizontalAlignment.Right, 144, 12, warp);
-        }
+              HorizontalAlignment.Center, W, 15, onFill && _frac > 0.35f ? Ui.Deep : Colors.White);
+        if (!s.Alive) return;
+        // off the fill the warp readout takes its state's colour; on it, dark like the hull's
+        var warp = onFill ? Ui.Deep : s.Warping ? Ui.Accent : s.WarpCooldownLeft > 0 ? Ui.Dim : Ui.Good;
+        Txt.D(c, ThemeDB.FallbackFont, new Vector2(W - 150, H - 5),
+              s.Warping ? $"WARPING  {s.WarpWarmupLeft:0.0} s" : s.WarpCooldownLeft > 0 ? $"WARP  {s.WarpCooldownLeft:0} s" : "WARP  READY",
+              HorizontalAlignment.Right, 144, 12, warp);
     }
 }
 

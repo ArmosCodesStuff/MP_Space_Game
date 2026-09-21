@@ -289,6 +289,16 @@ public partial class _Shots : Node
             await Snap("55_equipment");
             H.ToggleEquipment(); await W(0.2);
         }
+        // the hull bar with its fill's edge running through both readouts: every letter must read
+        // (dark on the fill, light past it) -- "HULL 180 / 375" and "WARP READY" split mid-word
+        {
+            var hs = H.GetNode<PlayerShip>("Ship_1"); double hp0 = hs.Hp;
+            hs.Hp = hs.MaxHp * 0.48; await W(0.2);
+            await Snap("56_hull_bar_split");
+            hs.Hp = hs.MaxHp * 0.9; await W(0.2);
+            await Snap("56b_hull_bar_split_warp");
+            hs.Hp = hp0; await W(0.1);
+        }
         // a waypoint picked on the radar: its ring there, and the HUD naming it
         {
             H.SelectWaypoint("BASE", Hub.BasePos, 260f); await W(0.3);
