@@ -203,6 +203,25 @@ reachable, which is fine: both harnesses build from the `nupkgs` folder that shi
 
 ## Unreleased
 
+### Every smoke role gets its own character
+
+**Checked:** typecheck 0; build 0 warnings; analysers 0; xref 0 unused; smoke **474 pass, 6/6 runs**.
+
+**The "guest base save bug" was not a game bug.** All six smoke processes share ONE `user://` --
+`run.ps1` wipes it once for the whole set -- and only the solo role ever made a character. The host
+and the guests therefore converged on the SAME file, last writer wins. The check that read "the
+guest's file" was reading the host's: it held `name="Arena Host"` and that host's credits, which is
+where the 1500 came from. Reading the file the run left behind is what settled it.
+
+Every non-solo role now makes its own character before entering the hub, and the arena guest's base
+check is a real assertion again -- it passes, naming the file's owner as well as the figure:
+`arena guest: its own base reached its OWN file (Arena Guest, 13845 of 13845)`. So base persistence
+across a session was correct all along; nothing could prove it while two peers shared one file.
+
+It also exposed a test that depended on inherited state: the three-player guest edited
+`LoadoutFor(Character.Class)` before setting its class, so with a fresh character the two chips came
+off a hull that pilot never flies. Class first, then gear.
+
 ### The project sets itself up now
 
 **`powershell -ExecutionPolicy Bypass -File verify.ps1`** runs the whole bar — typecheck, build,
@@ -689,18 +708,6 @@ Frames looked at. No game code changed.
   and they fail by construction. They are not regressions and the behaviour they cover is real.
   **433 is the bar on Windows *and* under WSL**; only the sandbox itself reaches 435. Making them
   branch on the environment is not done.
-- **A guest's own base reaches disk with only its bounty share, not its base.** In memory the
-  arena guest ends a visit with 13845 — its own 12345 plus a 1500 bounty, and the check on that
-  passes. The FILE ends with 1500. `_ownCredits` reads as though the base was parked while the
-  live Yard still held nothing, so the 12345 never reached the parked copy that gets written.
-  It appeared when the build handshake landed, which only adds one RPC at connect — so the
-  suspicion is ordering (when `OnSessionChanged` parks relative to when the credits are set),
-  not the handshake itself. The arena run PRINTS both numbers rather than asserting, because a
-  permanently red check trains people to skip the whole run. Not fixed, not understood.
-
-  What is covered: a session ending with no scene change writes this peer's character — checked
-  in the solo run, and a mutant makes it fail with a stale figure.
-
 - **`ERROR: 2 resources still in use at exit`, in the solo smoke run.** Now identified rather than
   mysterious: they are `music_ambient.ogg` and `music_combat.ogg` (with their `OggPacketSequence`
   sub-resources). Reproduced in isolation by running the menu alone under `--verbose --quit-after`,
