@@ -31,6 +31,25 @@ starts the session should attach the project zip (~6 MB with history, 48 scripts
 - All game code is in `scripts/`. Nothing else compiles — the csproj excludes `tools/` and
   `typecheck/`.
 
+## Playing it
+
+    powershell -ExecutionPolicy Bypass -File play.ps1          one window
+    powershell -ExecutionPolicy Bypass -File play.ps1 -Two     two windows, for multiplayer
+    powershell -ExecutionPolicy Bypass -File play.ps1 -Editor  open it in the Godot editor
+
+**There is no standalone build.** A Godot .NET project needs the engine to run it: `play.ps1`
+finds the engine (same resolver the harnesses use), compiles the C#, and launches the project.
+Anyone you send the folder to needs **Godot 4.7.2 .NET (mono)** too, and the **same zip** — the
+build handshake refuses a peer on a different build, deliberately.
+
+`-Two` gives you a host and a joiner on one machine. They share one `user://`, so **give each
+window its own character before hosting**: two peers writing one character file is the collision
+that made a day of save bugs look real.
+
+To make a real `.exe`: open the editor, install the export templates it offers, then
+*Project → Export → Windows Desktop*. Not scripted here — nothing in this repo has been exported
+or tested that way yet.
+
 ## Checking your work
 
 **On Windows, one command does everything:**
