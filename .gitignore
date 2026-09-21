@@ -1,0 +1,19 @@
+# local build dependency, not game content
+*.tmp
+*.user
+.godot/
+bin/
+obj/
+typecheck/GodotSharp.dll
+typecheck/GodotSharpEditor.dll
+
+# Per-machine paths (where Godot lives). Gitignored on purpose: it is about this computer,
+# not about the game. tools/find-godot.ps1 reads it; see docs/README.md.
+local.config.ps1
+
+# Godot import output, regenerated on the first open after extracting. The project is
+# developed in a sandbox with no editor, so these never existed here until it was opened
+# on Windows. Checked before ignoring: no .tscn references a generated uid:// (the one
+# uid in MainMenu.tscn is hand-written), so nothing breaks when they are regenerated.
+*.import
+*.uid
