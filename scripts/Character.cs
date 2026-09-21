@@ -13,6 +13,11 @@ public static class Character
 {
     public const string Dir = "user://characters";
 
+    // The build that wrote this character. A file from another build is not loaded -- see Game.
+    // A character in memory always carries the CURRENT version: it is stamped on save, and a file
+    // that does not match is never loaded, so the two can never disagree.
+    public static int Version = Game.Version;
+
     public static string Id = "";           // file stem; empty = nothing loaded
     public static string Name = "Commander";
     public static Color Main   = new(0.55f, 0.72f, 1.00f);   // hull
@@ -41,6 +46,8 @@ public static class Character
         public string Id, Name;
         public Color Main, Accent;
         public ShipClass Class;
+        public int Version;                       // the build that wrote it
+        public bool Playable => Version == Game.Version;
     }
 
     private static string PathOf(string id) => $"{Dir}/{id}.cfg";
@@ -49,6 +56,7 @@ public static class Character
     public static void NewBlank()
     {
         Id = DateTime.UtcNow.ToString("yyyyMMddHHmmssfff");
+        Version = Game.Version;
         Name = "Commander";
         Main = new(0.55f, 0.72f, 1.00f);
         Accent = new(1.00f, 0.78f, 0.35f);
@@ -62,6 +70,7 @@ public static class Character
         if (string.IsNullOrEmpty(Id)) return;
         DirAccess.MakeDirRecursiveAbsolute(Dir);
         var c = new ConfigFile();
+        c.SetValue("id", "version", Game.Version);      // the build that wrote it, always THIS one
         c.SetValue("id", "name", Name);
         c.SetValue("id", "main", Main);
         c.SetValue("id", "accent", Accent);
@@ -103,7 +112,16 @@ public static class Character
     {
         var c = new ConfigFile();
         if (c.Load(PathOf(id)) != Error.Ok) return false;
+        // A file from another build is REFUSED here, not repaired. Load() is the only way a
+        // character reaches memory, so this is the one place that has to hold: the select screen
+        // greys the row, but a guest joining, a smoke test, or a future entry point all come
+        // through here. A character that predates versioning reads 0 and is refused too.
+        if ((int)c.GetValue("id", "version", 0) != Game.Version) return false;
+        // Only NOW: a refused load must leave nothing behind, and Id is what Save() writes to.
+        // Set before the check, a refused character would still be the one the next save
+        // overwrites.
         Id      = id;
+        Version = Game.Version;
         Name    = (string)c.GetValue("id", "name", "Commander");
         Main    = (Color)c.GetValue("id", "main", new Color(0.55f, 0.72f, 1.00f));
         Accent  = (Color)c.GetValue("id", "accent", new Color(1.00f, 0.78f, 0.35f));
@@ -154,6 +172,7 @@ public static class Character
             int cls = (int)c.GetValue("id", "class", 0);
             list.Add(new Slot {
                 Id = f[..^4],
+                Version = (int)c.GetValue("id", "version", 0),
                 Name = (string)c.GetValue("id", "name", "Commander"),
                 Main = (Color)c.GetValue("id", "main", new Color(0.55f, 0.72f, 1.00f)),
                 Accent = (Color)c.GetValue("id", "accent", new Color(1.00f, 0.78f, 0.35f)),

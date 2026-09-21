@@ -1,9 +1,9 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-20 20:35 at git commit 269be63: typecheck clean, dotnet build 0 warnings,
+// Taken 2026-09-20 20:41 at git commit cb17a27: typecheck clean, dotnet build 0 warnings,
 //   0 analyser findings, 0 unused members; smoke test 3/3 runs at 435 checks on Windows
 //   (437 in a sandbox with no router and no internet); 67-frame UI sweep complete, 0 lint.
-// 69 files, 12386 lines. Code only: sprites, sounds and docs are in the zip.
+// 70 files, 12533 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -23,9 +23,9 @@
 //   scripts/BasePanel.cs                           132 lines   sha256 486b1d45088e
 //   scripts/Boss.cs                                316 lines   sha256 88ae7aba4708
 //   scripts/BossBar.cs                              86 lines   sha256 fdc16204cf1d
-//   scripts/Character.cs                           220 lines   sha256 9221d9084893
+//   scripts/Character.cs                           239 lines   sha256 76f29b3e4d23
 //   scripts/CharacterCreator.cs                    216 lines   sha256 9550b19e1833
-//   scripts/CharacterSelect.cs                     174 lines   sha256 983adce959d7
+//   scripts/CharacterSelect.cs                     189 lines   sha256 a3e2e219cd03
 //   scripts/Combat.cs                               87 lines   sha256 298c5236a5b5
 //   scripts/Economy.cs                              81 lines   sha256 c9aa43070257
 //   scripts/Equipment.cs                            77 lines   sha256 5a5307ab79c9
@@ -33,6 +33,7 @@
 //   scripts/EscapePod.cs                            50 lines   sha256 324c55cb503b
 //   scripts/EscMenu.cs                              61 lines   sha256 a53ae47dfd33
 //   scripts/Explosion.cs                            18 lines   sha256 12209b0c72ce
+//   scripts/Game.cs                                 19 lines   sha256 15cfbe5f5765
 //   scripts/Gatherer.cs                            254 lines   sha256 135bd767de29
 //   scripts/Hauler.cs                              317 lines   sha256 b13773f083c7
 //   scripts/HealthBar.cs                            38 lines   sha256 c6b272c9453c
@@ -77,7 +78,7 @@
 //   tools/screens/Shots.cs.txt                     458 lines   sha256 43a79314bd60
 //   tools/smoketest/run.ps1                        161 lines   sha256 d5c27af2b535
 //   tools/smoketest/run.sh                          57 lines   sha256 568b677787fd
-//   tools/smoketest/SmokeTest.cs.txt              2071 lines   sha256 cc33c368faae
+//   tools/smoketest/SmokeTest.cs.txt              2165 lines   sha256 cd471c547f76
 //   tools/snapshot.ps1                              95 lines   sha256 d6d85575ba26
 //==============================================================================
 
@@ -1240,7 +1241,7 @@ public partial class BossBar : Control
 
 //==============================================================================
 // FILE: scripts/Character.cs
-// 220 lines   sha256 9221d9084893
+// 239 lines   sha256 76f29b3e4d23
 //==============================================================================
 using Godot;
 using System;
@@ -1256,6 +1257,11 @@ using System.Collections.Generic;
 public static class Character
 {
     public const string Dir = "user://characters";
+
+    // The build that wrote this character. A file from another build is not loaded -- see Game.
+    // A character in memory always carries the CURRENT version: it is stamped on save, and a file
+    // that does not match is never loaded, so the two can never disagree.
+    public static int Version = Game.Version;
 
     public static string Id = "";           // file stem; empty = nothing loaded
     public static string Name = "Commander";
@@ -1285,6 +1291,8 @@ public static class Character
         public string Id, Name;
         public Color Main, Accent;
         public ShipClass Class;
+        public int Version;                       // the build that wrote it
+        public bool Playable => Version == Game.Version;
     }
 
     private static string PathOf(string id) => $"{Dir}/{id}.cfg";
@@ -1293,6 +1301,7 @@ public static class Character
     public static void NewBlank()
     {
         Id = DateTime.UtcNow.ToString("yyyyMMddHHmmssfff");
+        Version = Game.Version;
         Name = "Commander";
         Main = new(0.55f, 0.72f, 1.00f);
         Accent = new(1.00f, 0.78f, 0.35f);
@@ -1306,6 +1315,7 @@ public static class Character
         if (string.IsNullOrEmpty(Id)) return;
         DirAccess.MakeDirRecursiveAbsolute(Dir);
         var c = new ConfigFile();
+        c.SetValue("id", "version", Game.Version);      // the build that wrote it, always THIS one
         c.SetValue("id", "name", Name);
         c.SetValue("id", "main", Main);
         c.SetValue("id", "accent", Accent);
@@ -1347,7 +1357,16 @@ public static class Character
     {
         var c = new ConfigFile();
         if (c.Load(PathOf(id)) != Error.Ok) return false;
+        // A file from another build is REFUSED here, not repaired. Load() is the only way a
+        // character reaches memory, so this is the one place that has to hold: the select screen
+        // greys the row, but a guest joining, a smoke test, or a future entry point all come
+        // through here. A character that predates versioning reads 0 and is refused too.
+        if ((int)c.GetValue("id", "version", 0) != Game.Version) return false;
+        // Only NOW: a refused load must leave nothing behind, and Id is what Save() writes to.
+        // Set before the check, a refused character would still be the one the next save
+        // overwrites.
         Id      = id;
+        Version = Game.Version;
         Name    = (string)c.GetValue("id", "name", "Commander");
         Main    = (Color)c.GetValue("id", "main", new Color(0.55f, 0.72f, 1.00f));
         Accent  = (Color)c.GetValue("id", "accent", new Color(1.00f, 0.78f, 0.35f));
@@ -1398,6 +1417,7 @@ public static class Character
             int cls = (int)c.GetValue("id", "class", 0);
             list.Add(new Slot {
                 Id = f[..^4],
+                Version = (int)c.GetValue("id", "version", 0),
                 Name = (string)c.GetValue("id", "name", "Commander"),
                 Main = (Color)c.GetValue("id", "main", new Color(0.55f, 0.72f, 1.00f)),
                 Accent = (Color)c.GetValue("id", "accent", new Color(1.00f, 0.78f, 0.35f)),
@@ -1686,7 +1706,7 @@ public partial class ShipPreview : Control
 
 //==============================================================================
 // FILE: scripts/CharacterSelect.cs
-// 174 lines   sha256 983adce959d7
+// 189 lines   sha256 a3e2e219cd03
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -1783,13 +1803,27 @@ public partial class CharacterSelect : Control
         var row = new HBoxContainer(); row.AddThemeConstantOverride("separation", 14);
         panel.AddChild(row);
 
-        row.AddChild(new ShipPreview { Main = s.Main, Accent = s.Accent, Class = s.Class,
-                                       CustomMinimumSize = new Vector2(200, 88) });
+        var art = new ShipPreview { Main = s.Main, Accent = s.Accent, Class = s.Class,
+                                    CustomMinimumSize = new Vector2(200, 88) };
+        if (!s.Playable) art.Modulate = new Color(1, 1, 1, 0.35f);   // greyed with the rest of the row
+        row.AddChild(art);
 
         var info = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, Alignment = BoxContainer.AlignmentMode.Center };
         info.AddThemeConstantOverride("separation", 4);
-        info.AddChild(Ui.Lbl(s.Name, Ui.Title, Ui.Text));
-        info.AddChild(Ui.Lbl(s.Class == ShipClass.Battleship ? "BATTLESHIP" : "CARRIER", Ui.Small, Ui.Accent));
+        info.AddChild(Ui.Lbl(s.Name, Ui.Title, s.Playable ? Ui.Text : Ui.Dim));
+        info.AddChild(Ui.Lbl(s.Class == ShipClass.Battleship ? "BATTLESHIP" : "CARRIER", Ui.Small,
+                             s.Playable ? Ui.Accent : Ui.Dim));
+        // A character written by another build cannot be loaded, and the row says why rather than
+        // failing when PLAY is pressed. Deleting it is still allowed: it is the player's character
+        // and the only thing they can currently do with it.
+        if (!s.Playable)
+        {
+            var note = Ui.Lbl(Game.IncompatibleNote, Ui.Small, Ui.Warn);
+            note.Name = "Incompatible";
+            note.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+            note.CustomMinimumSize = new Vector2(300, 0);
+            info.AddChild(note);
+        }
         var swatches = new HBoxContainer(); swatches.AddThemeConstantOverride("separation", 6);
         swatches.AddChild(Swatch(s.Main, "hull"));
         swatches.AddChild(Swatch(s.Accent, "accent"));
@@ -1799,6 +1833,7 @@ public partial class CharacterSelect : Control
         var buttons = new VBoxContainer { Alignment = BoxContainer.AlignmentMode.Center, CustomMinimumSize = new Vector2(140, 0) };
         buttons.AddThemeConstantOverride("separation", 6);
         var play = Btn("PLAY", () => Play(s.Id)); play.Name = "Play";
+        play.Disabled = !s.Playable;
         var del  = Btn("DELETE", () => AskDelete(s)); del.Name = "Delete";
         del.AddThemeColorOverride("font_color", Ui.Bad);
         buttons.AddChild(play); buttons.AddChild(del);
@@ -2358,6 +2393,30 @@ public partial class Explosion : Node2D
         DrawCircle(Vector2.Zero, Radius * (0.4f + 0.8f * k), new Color(Tint.R, Tint.G, Tint.B, 0.55f * (1 - k)));
         DrawArc(Vector2.Zero, Radius * (0.6f + 1.2f * k), 0, Mathf.Tau, 32, new Color(1f, 0.9f, 0.7f, 0.8f * (1 - k)), 2f);
     }
+}
+
+//==============================================================================
+// FILE: scripts/Game.cs
+// 19 lines   sha256 15cfbe5f5765
+//==============================================================================
+// THE BUILD'S IDENTITY. One number, bumped by one for each release that goes out as a zip.
+//
+// A character file records the version it was written by. When that does not match, the select
+// screen greys the character out rather than loading it: a save written before a mechanic existed
+// has no sensible value for it, and guessing one quietly is how a character ends up half in the
+// old world and half in the new. The message says so, and says the door is not closed.
+//
+// WHEN TO BUMP IT: whenever a release changes what a character file MEANS -- a new persisted
+// field, a changed unit, a renamed id, a rebalanced cost that invalidates what was bought. Not
+// for a visual change, a fix, or anything a save cannot notice.
+public static class Game
+{
+    public const int Version = 1;
+
+    // Shown when a character cannot be loaded because it predates this build. Kept here, beside
+    // the number that causes it, rather than in the screen that happens to draw it.
+    public const string IncompatibleNote =
+        "May be possible to import in the future, for now, a new character is required";
 }
 
 //==============================================================================
@@ -10638,7 +10697,7 @@ echo "SMOKE TEST PASSED"
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 2071 lines   sha256 cc33c368faae
+// 2165 lines   sha256 cd471c547f76
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -10687,6 +10746,8 @@ public partial class _Test : Node
         try { if (role == "solo") await QuitResetsSector(); }
         catch (Exception ex) { Check(false, $"sector reset test threw: {ex.GetType().Name}: {ex.Message}"); GD.Print(ex.StackTrace); }
         try { if (role == "solo") await Select(); }
+        catch (Exception ex) { Check(false, $"select test threw: {ex.GetType().Name}: {ex.Message}"); GD.Print(ex.StackTrace); }
+        try { if (role == "solo") await SaveCoverage(); }
         catch (Exception ex) { Check(false, $"select screen test threw: {ex.GetType().Name}: {ex.Message}"); GD.Print(ex.StackTrace); }
         GetTree().ChangeSceneToFile("res://Hub.tscn");
         await Wait(0.4);
@@ -10732,6 +10793,93 @@ public partial class _Test : Node
         await Wait(0.4);
         Check(wasOnline && !Net.IsOnline, $"reaching the main menu ends the session too (was online: {wasOnline})");
         await MenuDiorama();
+    }
+
+    // Everything Character holds, as one string, ENUMERATED BY REFLECTION. A list written out
+    // here by hand would be a list that stops being true the first time someone adds a field.
+    static string Describe(object v) => v switch
+    {
+        null => "null",
+        string str => str,
+        System.Collections.IDictionary d => "{" + string.Join(",", d.Keys.Cast<object>()
+            .OrderBy(k => k.ToString(), StringComparer.Ordinal).Select(k => k + ":" + Describe(d[k]))) + "}",
+        // An array's ORDER is part of its value (Bought is indexed by upgrade); a set's is not.
+        Array arr => "[" + string.Join(",", arr.Cast<object>().Select(Describe)) + "]",
+        System.Collections.IEnumerable e => "[" + string.Join(",", e.Cast<object>()
+            .Select(Describe).OrderBy(x => x, StringComparer.Ordinal)) + "]",
+        _ => Convert.ToString(v, System.Globalization.CultureInfo.InvariantCulture),
+    };
+
+    static string DumpCharacter() => string.Join(";", typeof(Character)
+        .GetFields(BindingFlags.Public | BindingFlags.Static)
+        .OrderBy(f => f.Name, StringComparer.Ordinal)
+        .Select(f => f.Name + "=" + Describe(f.GetValue(null))));
+
+    // ── the save carries everything the character IS, and only this build can read it ────────
+    async Task SaveCoverage()
+    {
+        // Every class is touched first: Load() fills the loadout and spares for ALL of them, so a
+        // character that had only ever used one would differ after a round trip for that reason
+        // alone and say nothing about saving.
+        Character.NewBlank();
+        foreach (ShipClass sc in Enum.GetValues(typeof(ShipClass))) { Character.LoadoutFor(sc); Character.SparesFor(sc); }
+        Character.Name = "Roundtrip"; Character.Class = ShipClass.Carrier;
+        Character.Main = new Color(0.11f, 0.22f, 0.33f); Character.Accent = new Color(0.44f, 0.55f, 0.66f);
+        Character.Exp = 777; Character.Level = 5; Character.Points = 3;
+        for (int i = 0; i < Character.Bought.Length; i++) Character.Bought[i] = i % (Progression.MaxPerUpgrade + 1);
+        Character.BossCleared["ironhold"] = new System.Collections.Generic.HashSet<int> { 1, 3 };
+        Character.SparesFor(ShipClass.Carrier).Add(Equipment.All.First(e => e.Slot == GearSlot.Chip).Id);
+        Character.Bonuses["hull"] = 0.25;
+        string id = Character.Id;
+        Character.Save(); await Wait(0.05);
+        string before = DumpCharacter();
+        Character.NewBlank();                                  // wipe it out of memory entirely
+        bool loaded = Character.Load(id);
+        string after = DumpCharacter();
+        // A FIELD ADDED TO Character AND NOT TO Save() FAILS HERE, on the day it is added. That is
+        // what "the tests adapt to what changed" has to mean to be worth anything: not a promise
+        // to remember, a check that notices.
+        Check(loaded && before == after,
+              loaded ? (before == after ? "everything a character holds survives a save and a load"
+                                        : $"a character field is not being saved -- before {before}  |  after {after}")
+                     : "everything a character holds survives a save and a load (the load failed)");
+
+        // ── the build stamp ──
+        Check(Character.List().First(x => x.Id == id).Version == 1 && Game.Version == 1,
+              $"a character records the build that wrote it (version {Character.List().First(x => x.Id == id).Version}, game {Game.Version})");
+
+        // A character from ANOTHER build: written by hand on disk, because the only other way to
+        // make one is to be another build.
+        var cfg = new ConfigFile();
+        Check(cfg.Load($"{Character.Dir}/{id}.cfg") == Error.Ok, "the saved character reads back as a config file");
+        cfg.SetValue("id", "version", Game.Version + 1);
+        cfg.SetValue("id", "name", "FromAnotherBuild");
+        string alienId = "alien";
+        cfg.Save($"{Character.Dir}/{alienId}.cfg");
+        await Wait(0.05);
+        var alien = Character.List().FirstOrDefault(x => x.Id == alienId);
+        Check(alien != null && !alien.Playable && alien.Name == "FromAnotherBuild",
+              "a character from another build is listed, and marked unplayable");
+        string keptId = Character.Id;
+        Check(!Character.Load(alienId) && Character.Id == keptId,
+              $"loading it is refused, and it does not become the character the next save overwrites ({Character.Id})");
+
+        // ...and the select screen greys it out and says why, rather than failing on PLAY.
+        GetTree().ChangeSceneToFile("res://CharacterSelect.tscn"); await Wait(0.3);
+        var sel = GetTree().CurrentScene as CharacterSelect;
+        var row = Nodes<PanelContainer>(sel).FirstOrDefault(p => p.Name == "Row_" + alienId);
+        var play = row == null ? null : Nodes<Button>(row).FirstOrDefault(b => b.Name == "Play");
+        var note = row == null ? null : Nodes<Label>(row).FirstOrDefault(l => l.Name == "Incompatible");
+        Check(row != null && play != null && play.Disabled && note != null && note.Text == Game.IncompatibleNote,
+              $"the row is greyed out, PLAY is dead, and it says why ({note?.Text})");
+        // The playable one beside it is still playable: this greys the character that cannot be
+        // read, not the screen.
+        var mineRow = Nodes<PanelContainer>(sel).FirstOrDefault(p => p.Name == "Row_" + id);
+        var minePlay = mineRow == null ? null : Nodes<Button>(mineRow).FirstOrDefault(b => b.Name == "Play");
+        Check(minePlay != null && !minePlay.Disabled, "the character from THIS build is still playable");
+
+        Character.Delete(alienId); Character.Delete(id);
+        await Wait(0.05);
     }
 
     // ── the title screen ──────────────────────────────────────────────────────
@@ -10798,6 +10946,11 @@ public partial class _Test : Node
         await Wait(0.3);
         var sel = GetTree().CurrentScene as CharacterSelect;
         Check(sel != null, "select screen loads");
+        // EVERY RUN STARTS WITH NOBODY. run.ps1 deletes the whole user:// folder first, so this
+        // has always been true -- but nothing said so, and a run that quietly reused yesterday's
+        // character would look like a passing run with an unexplained failure in it somewhere.
+        // Asserted here, before anything creates one.
+        Check(Character.List().Count == 0, $"this run starts with no saved characters ({Character.List().Count})");
         var slots = Character.List();
         // start with one saved character, made the way a player would
         Character.NewBlank(); Character.Name = "OldTimer"; Character.Class = ShipClass.Carrier; Character.Save();

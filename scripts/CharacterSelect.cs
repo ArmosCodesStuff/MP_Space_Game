@@ -93,13 +93,27 @@ public partial class CharacterSelect : Control
         var row = new HBoxContainer(); row.AddThemeConstantOverride("separation", 14);
         panel.AddChild(row);
 
-        row.AddChild(new ShipPreview { Main = s.Main, Accent = s.Accent, Class = s.Class,
-                                       CustomMinimumSize = new Vector2(200, 88) });
+        var art = new ShipPreview { Main = s.Main, Accent = s.Accent, Class = s.Class,
+                                    CustomMinimumSize = new Vector2(200, 88) };
+        if (!s.Playable) art.Modulate = new Color(1, 1, 1, 0.35f);   // greyed with the rest of the row
+        row.AddChild(art);
 
         var info = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, Alignment = BoxContainer.AlignmentMode.Center };
         info.AddThemeConstantOverride("separation", 4);
-        info.AddChild(Ui.Lbl(s.Name, Ui.Title, Ui.Text));
-        info.AddChild(Ui.Lbl(s.Class == ShipClass.Battleship ? "BATTLESHIP" : "CARRIER", Ui.Small, Ui.Accent));
+        info.AddChild(Ui.Lbl(s.Name, Ui.Title, s.Playable ? Ui.Text : Ui.Dim));
+        info.AddChild(Ui.Lbl(s.Class == ShipClass.Battleship ? "BATTLESHIP" : "CARRIER", Ui.Small,
+                             s.Playable ? Ui.Accent : Ui.Dim));
+        // A character written by another build cannot be loaded, and the row says why rather than
+        // failing when PLAY is pressed. Deleting it is still allowed: it is the player's character
+        // and the only thing they can currently do with it.
+        if (!s.Playable)
+        {
+            var note = Ui.Lbl(Game.IncompatibleNote, Ui.Small, Ui.Warn);
+            note.Name = "Incompatible";
+            note.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+            note.CustomMinimumSize = new Vector2(300, 0);
+            info.AddChild(note);
+        }
         var swatches = new HBoxContainer(); swatches.AddThemeConstantOverride("separation", 6);
         swatches.AddChild(Swatch(s.Main, "hull"));
         swatches.AddChild(Swatch(s.Accent, "accent"));
@@ -109,6 +123,7 @@ public partial class CharacterSelect : Control
         var buttons = new VBoxContainer { Alignment = BoxContainer.AlignmentMode.Center, CustomMinimumSize = new Vector2(140, 0) };
         buttons.AddThemeConstantOverride("separation", 6);
         var play = Btn("PLAY", () => Play(s.Id)); play.Name = "Play";
+        play.Disabled = !s.Playable;
         var del  = Btn("DELETE", () => AskDelete(s)); del.Name = "Delete";
         del.AddThemeColorOverride("font_color", Ui.Bad);
         buttons.AddChild(play); buttons.AddChild(del);

@@ -45,6 +45,8 @@ public partial class _Test : Node
         try { if (role == "solo") await QuitResetsSector(); }
         catch (Exception ex) { Check(false, $"sector reset test threw: {ex.GetType().Name}: {ex.Message}"); GD.Print(ex.StackTrace); }
         try { if (role == "solo") await Select(); }
+        catch (Exception ex) { Check(false, $"select test threw: {ex.GetType().Name}: {ex.Message}"); GD.Print(ex.StackTrace); }
+        try { if (role == "solo") await SaveCoverage(); }
         catch (Exception ex) { Check(false, $"select screen test threw: {ex.GetType().Name}: {ex.Message}"); GD.Print(ex.StackTrace); }
         GetTree().ChangeSceneToFile("res://Hub.tscn");
         await Wait(0.4);
@@ -90,6 +92,93 @@ public partial class _Test : Node
         await Wait(0.4);
         Check(wasOnline && !Net.IsOnline, $"reaching the main menu ends the session too (was online: {wasOnline})");
         await MenuDiorama();
+    }
+
+    // Everything Character holds, as one string, ENUMERATED BY REFLECTION. A list written out
+    // here by hand would be a list that stops being true the first time someone adds a field.
+    static string Describe(object v) => v switch
+    {
+        null => "null",
+        string str => str,
+        System.Collections.IDictionary d => "{" + string.Join(",", d.Keys.Cast<object>()
+            .OrderBy(k => k.ToString(), StringComparer.Ordinal).Select(k => k + ":" + Describe(d[k]))) + "}",
+        // An array's ORDER is part of its value (Bought is indexed by upgrade); a set's is not.
+        Array arr => "[" + string.Join(",", arr.Cast<object>().Select(Describe)) + "]",
+        System.Collections.IEnumerable e => "[" + string.Join(",", e.Cast<object>()
+            .Select(Describe).OrderBy(x => x, StringComparer.Ordinal)) + "]",
+        _ => Convert.ToString(v, System.Globalization.CultureInfo.InvariantCulture),
+    };
+
+    static string DumpCharacter() => string.Join(";", typeof(Character)
+        .GetFields(BindingFlags.Public | BindingFlags.Static)
+        .OrderBy(f => f.Name, StringComparer.Ordinal)
+        .Select(f => f.Name + "=" + Describe(f.GetValue(null))));
+
+    // ── the save carries everything the character IS, and only this build can read it ────────
+    async Task SaveCoverage()
+    {
+        // Every class is touched first: Load() fills the loadout and spares for ALL of them, so a
+        // character that had only ever used one would differ after a round trip for that reason
+        // alone and say nothing about saving.
+        Character.NewBlank();
+        foreach (ShipClass sc in Enum.GetValues(typeof(ShipClass))) { Character.LoadoutFor(sc); Character.SparesFor(sc); }
+        Character.Name = "Roundtrip"; Character.Class = ShipClass.Carrier;
+        Character.Main = new Color(0.11f, 0.22f, 0.33f); Character.Accent = new Color(0.44f, 0.55f, 0.66f);
+        Character.Exp = 777; Character.Level = 5; Character.Points = 3;
+        for (int i = 0; i < Character.Bought.Length; i++) Character.Bought[i] = i % (Progression.MaxPerUpgrade + 1);
+        Character.BossCleared["ironhold"] = new System.Collections.Generic.HashSet<int> { 1, 3 };
+        Character.SparesFor(ShipClass.Carrier).Add(Equipment.All.First(e => e.Slot == GearSlot.Chip).Id);
+        Character.Bonuses["hull"] = 0.25;
+        string id = Character.Id;
+        Character.Save(); await Wait(0.05);
+        string before = DumpCharacter();
+        Character.NewBlank();                                  // wipe it out of memory entirely
+        bool loaded = Character.Load(id);
+        string after = DumpCharacter();
+        // A FIELD ADDED TO Character AND NOT TO Save() FAILS HERE, on the day it is added. That is
+        // what "the tests adapt to what changed" has to mean to be worth anything: not a promise
+        // to remember, a check that notices.
+        Check(loaded && before == after,
+              loaded ? (before == after ? "everything a character holds survives a save and a load"
+                                        : $"a character field is not being saved -- before {before}  |  after {after}")
+                     : "everything a character holds survives a save and a load (the load failed)");
+
+        // ── the build stamp ──
+        Check(Character.List().First(x => x.Id == id).Version == 1 && Game.Version == 1,
+              $"a character records the build that wrote it (version {Character.List().First(x => x.Id == id).Version}, game {Game.Version})");
+
+        // A character from ANOTHER build: written by hand on disk, because the only other way to
+        // make one is to be another build.
+        var cfg = new ConfigFile();
+        Check(cfg.Load($"{Character.Dir}/{id}.cfg") == Error.Ok, "the saved character reads back as a config file");
+        cfg.SetValue("id", "version", Game.Version + 1);
+        cfg.SetValue("id", "name", "FromAnotherBuild");
+        string alienId = "alien";
+        cfg.Save($"{Character.Dir}/{alienId}.cfg");
+        await Wait(0.05);
+        var alien = Character.List().FirstOrDefault(x => x.Id == alienId);
+        Check(alien != null && !alien.Playable && alien.Name == "FromAnotherBuild",
+              "a character from another build is listed, and marked unplayable");
+        string keptId = Character.Id;
+        Check(!Character.Load(alienId) && Character.Id == keptId,
+              $"loading it is refused, and it does not become the character the next save overwrites ({Character.Id})");
+
+        // ...and the select screen greys it out and says why, rather than failing on PLAY.
+        GetTree().ChangeSceneToFile("res://CharacterSelect.tscn"); await Wait(0.3);
+        var sel = GetTree().CurrentScene as CharacterSelect;
+        var row = Nodes<PanelContainer>(sel).FirstOrDefault(p => p.Name == "Row_" + alienId);
+        var play = row == null ? null : Nodes<Button>(row).FirstOrDefault(b => b.Name == "Play");
+        var note = row == null ? null : Nodes<Label>(row).FirstOrDefault(l => l.Name == "Incompatible");
+        Check(row != null && play != null && play.Disabled && note != null && note.Text == Game.IncompatibleNote,
+              $"the row is greyed out, PLAY is dead, and it says why ({note?.Text})");
+        // The playable one beside it is still playable: this greys the character that cannot be
+        // read, not the screen.
+        var mineRow = Nodes<PanelContainer>(sel).FirstOrDefault(p => p.Name == "Row_" + id);
+        var minePlay = mineRow == null ? null : Nodes<Button>(mineRow).FirstOrDefault(b => b.Name == "Play");
+        Check(minePlay != null && !minePlay.Disabled, "the character from THIS build is still playable");
+
+        Character.Delete(alienId); Character.Delete(id);
+        await Wait(0.05);
     }
 
     // ── the title screen ──────────────────────────────────────────────────────
@@ -156,6 +245,11 @@ public partial class _Test : Node
         await Wait(0.3);
         var sel = GetTree().CurrentScene as CharacterSelect;
         Check(sel != null, "select screen loads");
+        // EVERY RUN STARTS WITH NOBODY. run.ps1 deletes the whole user:// folder first, so this
+        // has always been true -- but nothing said so, and a run that quietly reused yesterday's
+        // character would look like a passing run with an unexplained failure in it somewhere.
+        // Asserted here, before anything creates one.
+        Check(Character.List().Count == 0, $"this run starts with no saved characters ({Character.List().Count})");
         var slots = Character.List();
         // start with one saved character, made the way a player would
         Character.NewBlank(); Character.Name = "OldTimer"; Character.Class = ShipClass.Carrier; Character.Save();
