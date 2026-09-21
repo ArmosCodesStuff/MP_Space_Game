@@ -191,9 +191,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
         WingTarget = StrikeTarget = null; _strikesOut = 0;
         _pdLeft = _pdRecharge = 0;
 
-        // Every ship carries its pilot's gear and purchases (they come with the identity); your
-        // own adds Character.Bonuses.
-        Stats = new ShipStats(Class, BonusesNow(), Progression.Flats(_bought, Class));
+        Stats = BuildSheet();
         MaxHp = Hp = Stats["hull"];
         _mag = (int)Stats["missile_mag"]; _missileReload = _missileRefire = 0;
 
@@ -207,11 +205,36 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
 
         for (int i = 0; i < Math.Min((int)Stats["main_count"], art.Mains.Length); i++) AddTurret(art.Mains[i], false);
         for (int i = 0; i < Math.Min((int)Stats["pd_count"], art.Pds.Length); i++) AddTurret(art.Pds[i], true);
-        if (Class == ShipClass.Carrier)
-        {
-            for (int i = 0; i < (int)Stats["fighter_count"]; i++) AddWing(WingKind.Fighter);
-            for (int i = 0; i < (int)Stats["bomber_count"]; i++) AddWing(WingKind.Bomber);
-        }
+        FitWings();
+    }
+
+    // THE ONE SHEET: class, gear and purchases. Every ship carries its pilot's gear and purchases
+    // (they come with the identity); your own adds Character.Bonuses. The title screen's ship
+    // (Demo) flies the kit, whatever the pilot has fitted.
+    private ShipStats BuildSheet()
+    {
+        if (Mine && !Demo) _loadout = (string[])Character.LoadoutFor(Class).Clone();   // a COPY: the window edits the saved one in place
+        var pct = Equipment.Bonuses(Class, Loadout);
+        if (Mine && !Demo) pct = ShipStats.Sum(pct, Character.Bonuses);
+        return new ShipStats(Class, pct, ShipStats.Sum(Progression.Flats(_bought, Class), Equipment.Adds(Class, Loadout)));
+    }
+
+    // THE WING, brought to the sheet's counts: gear adds fighters or takes bombers away, and may be
+    // changed mid-flight. Fighters first, then bombers -- the order the host's wing report is read
+    // in, so every peer's list lines up with the host's. A craft removed is freed where it is; a
+    // change in the bombers calls off a strike in progress; a smaller magazine or bomb load never
+    // holds more than it has room for. (A battleship's sheet has no wing: both counts read 0.)
+    private void FitWings()
+    {
+        int wantF = (int)Stats["fighter_count"], wantB = (int)Stats["bomber_count"], hadB = WingCount(WingKind.Bomber);
+        while (WingCount(WingKind.Fighter) < wantF && AddWing(WingKind.Fighter, WingCount(WingKind.Fighter))) { }
+        while (WingCount(WingKind.Fighter) > wantF) RemoveWing(WingKind.Fighter);
+        while (WingCount(WingKind.Bomber) < wantB && AddWing(WingKind.Bomber, _wings.Count)) { }
+        while (WingCount(WingKind.Bomber) > wantB) RemoveWing(WingKind.Bomber);
+        if (WingCount(WingKind.Bomber) != hadB) { StrikeTarget = null; _strikesOut = 0; }
+        if (!Net.Sim) return;
+        _mag = Math.Min(_mag, (int)Stats["missile_mag"]);
+        foreach (var w in _wings) if (w.IsBomber) w.Ammo = Math.Min(w.Ammo, (int)Stats["bomber_ammo"]);
     }
 
     private void AddTurret(Vector2 offset, bool pd)
@@ -220,17 +243,25 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
         _turrets.Add(t); if (pd) PdTurrets.Add(t); else _mains.Add(t);
     }
 
-    private void AddWing(WingKind k)
+    private bool AddWing(WingKind k, int at)
     {
-        var w = new Wing(); GetParent().AddChild(w);
+        if (GetParent() is not { } world) return false;
+        var w = new Wing(); world.AddChild(w);
         w.Init(this, k, Position + new Vector2(GD.Randf() * 120 - 60, GD.Randf() * 120 - 60));
-        _wings.Add(w);
+        _wings.Insert(at, w);
+        return true;
+    }
+    private void RemoveWing(WingKind k)
+    {
+        int i = _wings.FindLastIndex(x => x.Kind == k);
+        var w = _wings[i]; _wings.RemoveAt(i);
+        if (IsInstanceValid(w)) w.QueueFree();
     }
 
     public void SetClass(ShipClass c) { Class = c; FitClass(); }
 
     // The pilot's purchased upgrades (Progression). The host needs them too: it resolves
-    // hull and damage. Changing them refits the stats, keeping the damage taken so far.
+    // hull and damage. Changing them refits the ship (Restat).
     private int[] _bought = new int[Progression.All.Length];
     public int[] Bought => _bought;
     public void SetProgress(int[] bought)
@@ -242,28 +273,22 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
         Restat();
     }
 
-    // A refit that keeps the damage taken: the sheet rebuilt from class, gear and purchases.
+    // A REFIT: the sheet rebuilt from class, gear and purchases, and the wing brought to it. The
+    // hull keeps its FRACTION: keeping the damage taken instead let a pilot heal by swapping a big
+    // shield part on and off (10 of 615 became 316 of 375).
     private void Restat()
     {
-        double lost = MaxHp - Hp;
-        Stats = new ShipStats(Class, BonusesNow(), Progression.Flats(_bought, Class));
+        double frac = MaxHp > 0 ? Hp / MaxHp : 1;
+        Stats = BuildSheet();
         MaxHp = Stats["hull"];
-        if (Alive) Hp = Math.Max(1, MaxHp - lost);
+        if (Alive) Hp = Math.Max(1, frac * MaxHp);
+        FitWings();
     }
 
     // Equipment: the owner's saved loadout for this class (on the host, what the identity
-    // carried). Its bonuses join the pilot's own; a change refits, keeping damage taken.
+    // carried). A change refits.
     private string[] _loadout;
     public string[] Loadout => _loadout ?? Equipment.Default(Class);
-    private IReadOnlyDictionary<string, double> BonusesNow()
-    {
-        if (Mine) _loadout = (string[])Character.LoadoutFor(Class).Clone();   // a COPY: the window edits the saved one in place
-        var eq = Equipment.Bonuses(Class, Loadout);
-        if (!Mine || Character.Bonuses.Count == 0) return eq;
-        var m = new Dictionary<string, double>(Character.Bonuses);
-        foreach (var kv in eq) m[kv.Key] = (m.TryGetValue(kv.Key, out var v) ? v : 0) + kv.Value;
-        return m;
-    }
     public void SetEquipment(string[] ids)
     {
         var l = Equipment.Sanitize(Class, ids);

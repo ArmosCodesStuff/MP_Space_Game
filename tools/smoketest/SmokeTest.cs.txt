@@ -4,6 +4,7 @@
 // Stored as .txt so neither Godot nor the typecheck ever compiles it in place.
 using Godot;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
@@ -32,6 +33,12 @@ public partial class _Test : Node
         ulong until = Time.GetTicksMsec() + (ulong)(seconds * 1000);
         while (!done() && Time.GetTicksMsec() < until) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         return done();
+    }
+    // One value from a character's file as it is on disk (the loaded character's by default).
+    static Variant OnDisk(string section, string key, Variant def, string id = null)
+    {
+        var c = new ConfigFile();
+        return c.Load($"{Character.Dir}/{id ?? Character.Id}.cfg") == Error.Ok ? c.GetValue(section, key, def) : def;
     }
     static string Fake(string path)
     {
@@ -151,12 +158,15 @@ public partial class _Test : Node
         // guest's file" was reading the host's: it held name="Arena Host" and that host's credits.
         // Solo is excluded on purpose: it asserts it starts with no saved characters, and it makes
         // and deletes its own along the way.
-        if (role != "solo") { Character.NewBlank(); Character.Name = role; Character.Save(); }
+        // Ids get the role too: an id is a millisecond stamp, guest and guest2 start together, and the
+        // host holds a dropped pilot's place by that id.
+        if (role != "solo") { Character.NewBlank(); Character.Id += "-" + role; Character.Name = role; Character.Save(); }
         // A SAVED BASE HAS TO SURVIVE ENTERING THE HUB. Hub._Ready builds the Yard, and the Yard
         // reads Character.Base* in its _Ready -- so if the character is loaded AFTER that, the base
         // comes up zero and the Yard's first-frame autosave writes the zeros back over the file.
         // Set here, asserted below, for every role.
-        Character.NewBlank(); Character.Name = role + " Base"; Character.BaseCredits = 7777;
+        Character.NewBlank(); if (role != "solo") Character.Id += "-" + role;
+        Character.Name = role + " Base"; Character.BaseCredits = 7777;
         Character.BaseOre = 55; Character.Save();
         string baseId = Character.Id;
         GetTree().ChangeSceneToFile("res://Hub.tscn");
@@ -174,6 +184,7 @@ public partial class _Test : Node
         // simply stopped, nothing called Quit, and the run idled to its time limit.
         try { if (role == "solo") await Solo(); else if (role is "ahost" or "aguest") await ArenaMp(role); else await Mp(role); }
         catch (Exception ex) { Check(false, $"test threw: {ex.GetType().Name}: {ex.Message}"); GD.Print(ex.StackTrace); }
+        GD.Print($"  elapsed {Time.GetTicksMsec() / 1000.0:0.0} s");     // for sizing the runners' time limits
         GD.Print($"DONE {role} fails={fails}");
         // THE GAME'S OWN WAY OUT, not a bare Quit: what it waits for (sounds, router jobs) is
         // exactly what the runner then checks for -- "resources still in use at exit" and a crash.
@@ -207,10 +218,15 @@ public partial class _Test : Node
         Net.I.Host(27123);
         for (int i = 0; i < 60 && !Net.IsOnline; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         bool wasOnline = Net.IsOnline;
+        // The pilot's own battleship has a Salvo Rack III fitted (a 5-missile magazine on the title
+        // ship's numbers): the title screen must fly the kit regardless.
+        var rack = Character.LoadoutFor(ShipClass.Battleship)[4];
+        Character.LoadoutFor(ShipClass.Battleship)[4] = "bs_salvo_3";
         GetTree().ChangeSceneToFile("res://MainMenu.tscn");
         await Wait(0.4);
         Check(wasOnline && !Net.IsOnline, $"reaching the main menu ends the session too (was online: {wasOnline})");
         await MenuDiorama();
+        Character.LoadoutFor(ShipClass.Battleship)[4] = rack;
     }
 
     // The loudest sample in a wav, 0..1. Reads the asset itself: a check on a level that reads a
@@ -250,8 +266,9 @@ public partial class _Test : Node
         _ => Convert.ToString(v, System.Globalization.CultureInfo.InvariantCulture),
     };
 
-    // NonPublic too: Spares is private static readonly, so a public-only sweep never saw it at
-    // all -- neither the dump nor the inventory. Persisted state does not have to be public.
+    // NonPublic too: a private static field is state as much as a public one (the batched save's
+    // countdown is), and a public-only sweep would never see it. Persisted state does not have to be
+    // public.
     const BindingFlags CharFields = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static;
 
     static string DumpCharacter() => string.Join(";", typeof(Character)
@@ -262,11 +279,11 @@ public partial class _Test : Node
     // ── the save carries everything the character IS, and only this build can read it ────────
     async Task SaveCoverage()
     {
-        // Every class is touched first: Load() fills the loadout and spares for ALL of them, so a
-        // character that had only ever used one would differ after a round trip for that reason
-        // alone and say nothing about saving.
+        // Every class is touched first: Load() fills the loadout for ALL of them, so a character that
+        // had only ever used one would differ after a round trip for that reason alone and say
+        // nothing about saving.
         Character.NewBlank();
-        foreach (ShipClass sc in Enum.GetValues(typeof(ShipClass))) { Character.LoadoutFor(sc); Character.SparesFor(sc); }
+        foreach (ShipClass sc in Enum.GetValues(typeof(ShipClass))) Character.LoadoutFor(sc);
         Character.Name = "Roundtrip"; Character.Class = ShipClass.Carrier;
         Character.Main = new Color(0.11f, 0.22f, 0.33f); Character.Accent = new Color(0.44f, 0.55f, 0.66f);
         Character.Exp = 777; Character.Level = 5; Character.Points = 3;
@@ -275,7 +292,9 @@ public partial class _Test : Node
         Character.BaseOre = 123.5; Character.BaseSalvage = 67.25; Character.BaseCredits = 4321;
         Character.BaseLevels[Economy.All[0].Id] = 3;
         Character.BaseInvested[Economy.All[0].Tab] = 900;
-        Character.SparesFor(ShipClass.Carrier).Add(Equipment.All.First(e => e.Slot == GearSlot.Chip).Id);
+        Character.GearHold["chip_basic"] = 2; Character.GearHold["std_drive"] = 1; Character.GearHold["cv_elite_3"] = 1;
+        Character.Unclaimed.AddRange(new[] { "cv_elite_3", "sh_bulwark_2" });
+        Character.HintsSeen.Add("flight"); Character.HintsSeen.Add("raid"); Character.HintsOff = true;
         Character.Bonuses["hull"] = 0.25;
         string id = Character.Id;
         Character.Save(); await Wait(0.05);
@@ -299,19 +318,56 @@ public partial class _Test : Node
         // economy fields were added, not saved, and the round trip passed.
         var exercised = new[] { "Accent", "BaseCredits", "BaseInvested", "BaseLevels", "BaseOre",
                                 "BaseSalvage", "BossCleared", "Bonuses", "Bought", "Class", "Exp",
-                                "Id", "Level", "Loadout", "Main", "Name", "Points", "Spares" };
+                                "GearHold", "HintsOff", "HintsSeen", "Id", "Level", "Loadout", "Main",
+                                "Name", "Points", "Unclaimed" };
         // Not state a character carries: a path, and the compiler's backing field for a property
         // that reports how the LAST save went. Named explicitly rather than filtered by a pattern,
         // so a real field that happens to look like one cannot slip through.
-        var notPersisted = new[] { "Dir", "<LastSaveRenamed>k__BackingField" };
+        var notPersisted = new[] { "Dir", "<LastSaveRenamed>k__BackingField", "SaveDelay", "_saveIn" };
         var present = typeof(Character).GetFields(CharFields)
                                        .Select(f => f.Name).OrderBy(n => n, StringComparer.Ordinal).ToArray();
         var accounted = exercised.Concat(notPersisted).OrderBy(n => n, StringComparer.Ordinal).ToArray();
         Check(present.SequenceEqual(accounted),
               $"every field of Character is accounted for by this test (new: {string.Join(",", present.Except(accounted))}; gone: {string.Join(",", accounted.Except(present))})");
 
+        // ── the format-2 fields, read from a file on the player's disk: sanitised, never trusted ──
+        {
+            var bad = new ConfigFile();
+            bad.SetValue("id", "version", 2); bad.SetValue("id", "name", "Tampered");
+            bad.SetValue("gear_hold", "std_drive", 2); bad.SetValue("gear_hold", "chip_basic", -3);
+            bad.SetValue("gear_hold", "basic_deflector", 0); bad.SetValue("gear_hold", "no_such_part", 1);
+            bad.SetValue("loot", "unclaimed", "chip_basic,no_such_part,cv_elite_3");
+            bad.SetValue("hints", "seen", "flight,no_such_hint"); bad.SetValue("hints", "off", true);
+            bad.SetValue("base_levels", "miner_count", 99);
+            bad.Save($"{Character.Dir}/tampered.cfg");
+            bool tl = Character.Load("tampered");
+            Check(tl && Character.GearHold.Count == 1 && Character.GearHold.GetValueOrDefault("std_drive") == 2,
+                  $"the hold keeps known parts with counts above zero ({string.Join(",", Character.GearHold.Select(kv => kv.Key + "=" + kv.Value))})");
+            Check(tl && Character.Unclaimed.SequenceEqual(new[] { "cv_elite_3" }),
+                  $"unclaimed loot keeps only real drops -- no kit, no unknown ids ({string.Join(",", Character.Unclaimed)})");
+            Check(tl && Character.HintsSeen.SetEquals(new[] { "flight" }) && Character.HintsOff,
+                  $"hints: unknown ids dropped, the off switch kept ({string.Join(",", Character.HintsSeen)}, off {Character.HintsOff})");
+            Check(tl && Character.BaseLevels.GetValueOrDefault("miner_count") == 4,
+                  $"a base upgrade level is held to its cap: 99 miners' levels read as 4 (up to 5 miners) ({Character.BaseLevels.GetValueOrDefault("miner_count")})");
+            // a pilot with all of it in memory, then a file that has none of it
+            var bare = new ConfigFile(); bare.SetValue("id", "version", 2); bare.SetValue("id", "name", "Bare");
+            bare.Save($"{Character.Dir}/bare.cfg");
+            Character.Unclaimed.Add("cv_elite_3"); Character.HintsSeen.Add("raid");
+            bool bl = Character.Load("bare");
+            Check(bl && Character.GearHold.Count == 0 && Character.Unclaimed.Count == 0 && Character.HintsSeen.Count == 0 && !Character.HintsOff,
+                  "a file without the hold, loot and hints loads them empty, not as the last pilot's");
+            // NewBlank leaves nothing of the pilot before it
+            Character.NewBlank(); string fresh = DumpCharacter(); string freshId = Character.Id;
+            Character.GearHold["std_drive"] = 1; Character.Unclaimed.Add("cv_elite_3"); Character.HintsSeen.Add("flight"); Character.HintsOff = true;
+            Character.NewBlank();
+            Check(DumpCharacter().Replace(Character.Id, "") == fresh.Replace(freshId, ""),
+                  "a new pilot starts with an empty hold, no loot, no hints seen and hints on");
+            Character.Delete("tampered"); Character.Delete("bare");
+            Check(Character.Load(id), "(back to the round-trip pilot)");
+        }
+
         // ── the build stamp ──
-        Check(Character.List().First(x => x.Id == id).Version == 1 && Game.Version == 1,
+        Check(Character.List().First(x => x.Id == id).Version == 2 && Game.Version == 2,
               $"a character records the build that wrote it (version {Character.List().First(x => x.Id == id).Version}, game {Game.Version})");
 
         // A character from ANOTHER build: written by hand on disk, because the only other way to
@@ -329,6 +385,16 @@ public partial class _Test : Node
         string keptId = Character.Id;
         Check(!Character.Load(alienId) && Character.Id == keptId,
               $"loading it is refused, and it does not become the character the next save overwrites ({Character.Id})");
+        // THE LAST RELEASE'S CHARACTERS: save format 1, written the way that build wrote them (its
+        // per-class spares and all). Format 2 changed what a file means -- the gear hold, loot, the
+        // tutorial -- so, by the owner's rule, they are listed greyed out and refused, not repaired.
+        var v1 = new ConfigFile();
+        v1.SetValue("id", "version", 1); v1.SetValue("id", "name", "FromLastBuild"); v1.SetValue("id", "class", 1);
+        v1.SetValue("spares", "Carrier", "chip_basic");
+        v1.Save($"{Character.Dir}/v1old.cfg"); await Wait(0.05);
+        var v1slot = Character.List().FirstOrDefault(x => x.Id == "v1old");
+        Check(v1slot != null && v1slot.Version == 1 && !v1slot.Playable && !Character.Load("v1old") && Character.Id == keptId,
+              $"a character from the last release (save format 1) is listed, marked unplayable and refused (format {v1slot?.Version})");
 
         // ...and the select screen greys it out and says why, rather than failing on PLAY.
         GetTree().ChangeSceneToFile("res://CharacterSelect.tscn"); await Wait(0.3);
@@ -338,6 +404,11 @@ public partial class _Test : Node
         var note = row == null ? null : Nodes<Label>(row).FirstOrDefault(l => l.Name == "Incompatible");
         Check(row != null && play != null && play.Disabled && note != null && note.Text == Game.IncompatibleNote,
               $"the row is greyed out, PLAY is dead, and it says why ({note?.Text})");
+        var v1row = Nodes<PanelContainer>(sel).FirstOrDefault(p => p.Name == "Row_v1old");
+        var v1play = v1row == null ? null : Nodes<Button>(v1row).FirstOrDefault(b => b.Name == "Play");
+        var v1note = v1row == null ? null : Nodes<Label>(v1row).FirstOrDefault(l => l.Name == "Incompatible");
+        Check(v1play != null && v1play.Disabled && v1note?.Text == Game.IncompatibleNote,
+              "...and so is the last release's character");
         // The playable one beside it is still playable: this greys the character that cannot be
         // read, not the screen.
         var mineRow = Nodes<PanelContainer>(sel).FirstOrDefault(p => p.Name == "Row_" + id);
@@ -356,7 +427,52 @@ public partial class _Test : Node
               $"a direct entry skips the oldest file (another build's) for the first PLAYABLE one, and makes no new one ({Character.Id}, {Character.List().Count} of {listed.Count} files)");
         Character.Delete("0alien");
 
-        Character.Delete(alienId); Character.Delete(id);
+        // ── THE BATCHED SAVE: written 2-3 s after the LAST call (the owner's loot rule), each call
+        //    restarting the wait; at once on leaving or switching pilot; never a file of its own ──
+        {
+            Character.Load(id);
+            int Disk(string part, string who = null) => (int)OnDisk("gear_hold", part, 0, who);
+            int r0 = Disk("reinforced_frame");
+            Character.Stow("reinforced_frame"); Character.SaveSoon();
+            await Wait(1.9); int at19 = Disk("reinforced_frame");
+            await Wait(1.2); int at31 = Disk("reinforced_frame");
+            Check(at19 == r0 && at31 == r0 + 1,
+                  $"a batched save is written 2-3 s after the call, not at once ({r0}: {at19} at 1.9 s, {at31} at 3.1 s)");
+            Character.Stow("reinforced_frame"); Character.SaveSoon();
+            await Wait(1.9);
+            Character.Stow("reinforced_frame"); Character.SaveSoon();
+            await Wait(1.9); int at38 = Disk("reinforced_frame");
+            await Wait(1.2); int at50 = Disk("reinforced_frame");
+            Check(at38 == r0 + 1 && at50 == r0 + 3,
+                  $"every call restarts the wait: two pickups 1.9 s apart are one write, after the second ({at38} at 3.8 s, {at50} at 5.0 s)");
+            Character.Stow("reinforced_frame"); Character.SaveSoon();
+            Net.I.GoOffline(); await Wait(0.1);
+            Check(Disk("reinforced_frame") == r0 + 4, $"leaving writes a waiting save at once, even with no session ({Disk("reinforced_frame")})");
+            Character.NewBlank(); Character.Name = "SaveSoonB"; Character.Save(); string bId = Character.Id;
+            Character.Load(id);
+            int sd0 = Disk("std_drive");
+            Character.Stow("std_drive"); Character.SaveSoon();
+            Character.Load(bId);
+            Check(Disk("std_drive", id) == sd0 + 1, $"loading another pilot writes the waiting save to the pilot it belongs to, at once ({sd0} -> {Disk("std_drive", id)})");
+            Character.NewBlank(); string ghost = Character.Id;
+            Character.Stow("std_drive"); Character.SaveSoon(); await Wait(3.1);
+            Check(!FileAccess.FileExists($"{Character.Dir}/{ghost}.cfg"), "a batched save never makes a file for a pilot not yet saved");
+            Character.Delete(bId); Character.Load(id);
+        }
+
+        // ── THE HANDSHAKE SEES THE TABLES: a gear, price or stat number that differs between two
+        //    builds must refuse the session like any other difference ──
+        {
+            var parts = new System.Collections.Generic.List<string>();
+            typeof(Net).GetMethod("Fingerprint", BindingFlags.NonPublic | BindingFlags.Static, null, new[] { typeof(System.Collections.Generic.List<string>) }, null)
+                       .Invoke(null, new object[] { parts });
+            bool sheet = parts.Contains("sheet Battleship.hull=300") && parts.Contains("sheet Carrier.fighter_speed=352");
+            bool gear = parts.Any(p => p.StartsWith("Equipment.All=") && p.Contains("Id=cv_elite_3") && p.Contains("fighter_speed:2"));
+            bool prices = parts.Any(p => p.StartsWith("Economy.All=") && p.Contains("Id=miner_count") && p.Contains("BaseCost=400"));
+            Check(sheet && gear && prices, $"the build fingerprint covers the stat sheets, the gear table and the prices (sheet {sheet}, gear {gear}, prices {prices})");
+        }
+
+        Character.Delete(alienId); Character.Delete("v1old"); Character.Delete(id);
         await Wait(0.05);
     }
 
@@ -523,6 +639,13 @@ public partial class _Test : Node
     // MY ship on every peer: "Ship_1" is only right offline and on the host (id 1);
     // on a guest it is the HOST's ship.
     PlayerShip Me => Nodes<PlayerShip>().FirstOrDefault(x => x.Mine);
+    // Over a point: the ship -- or, in stasis, its escape pod
+    void FlyOver(Vector2 at)
+    {
+        var s = Me; if (s == null) return;
+        if (s.Alive) { s.Position = at; s.Velocity = Vector2.Zero; return; }
+        if (typeof(PlayerShip).GetField("_pod", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(s) is EscapePod p) { p.Position = at; p.Velocity = Vector2.Zero; }
+    }
     // class changes go through the creator path now (there are no class hotkeys)
     async Task SetClass(ShipClass c) { Character.Class = c; Priv(H, "ApplyLocalIdentity"); await Wait(0.1); }
     System.Collections.Generic.List<(Vector2 p, float age)> Smoke(Torpedo t) =>
@@ -751,8 +874,11 @@ public partial class _Test : Node
         await Wait(8.0);
         GD.Print($"  hauler: {hauler.State} cargo {hauler.Cargo:0} / pod {Y.PodSize:0} x {Y.Pods}; stock {Y.Ore:0}+{Y.Salvage:0}");
         Check(hauler.State == Hauler.St.Loading && !hauler.CanDispatch, "150 of 300 in the first pod: cannot dispatch");
-        hauler.Dispatch(); await Wait(0.05);
-        Check(hauler.State == Hauler.St.Loading, "dispatch refused until a pod is full");
+        hauler.Dispatch(escorted: false); await Wait(0.05);
+        bool plainRefused = hauler.State == Hauler.St.Loading;
+        hauler.Dispatch(escorted: true); await Wait(0.05);
+        Check(plainRefused && hauler.State == Hauler.St.Loading, "dispatch refused until a pod is full, alone or escorted");
+        Hauler.PretendRoll = 0f;                    // the dice with this run: the lost run has checks of its own
         Y.Ore += 200; await Wait(10.0);
         var hud = Nodes<HaulerHud>().First(); var go = Nodes<Button>(hud).First(b => b.Name == "Dispatch");
         Check(hauler.State == Hauler.St.Loading && hauler.CanDispatch && hauler.FullPods == 1 && !go.Disabled,
@@ -788,9 +914,125 @@ public partial class _Test : Node
         await Wait(Economy.HaulerLand / 2 + 0.2);
         Check(hauler.State == Hauler.St.Loading && Math.Abs(hauler.VisualScale - Economy.HaulerLandedScale) < 1e-4
               && Mathf.Abs(Mathf.AngleDifference(hauler.Rotation, Hauler.East)) < 0.01f, "lands facing the portal, and loads");
+        // AUTO-SELL: completely full, it waits for DISPATCH -- until the level-3 boss is beaten and
+        // the 4462 cr upgrade bought; then it goes by itself
         Y.Ore = 700; Y.Salvage = 0;
+        for (int i = 0; i < 3000 && hauler.Cargo < Y.Capacity - 1e-6; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        await Wait(2.0);
+        Check(hauler.State == Hauler.St.Loading && Math.Abs(hauler.Cargo - 600) < 1e-6, $"completely full (600), it waits while AUTO-SELL is locked ({hauler.State}, {hauler.Cargo:0})");
+        Check(Math.Abs(Economy.Cost(Economy.ById("hauler_autosell"), 0) - 4462) < 1e-9,
+              $"AUTO-SELL costs 4462 cr: 3x the average level-5 salvager upgrade ({Economy.Cost(Economy.ById("hauler_autosell"), 0):0})");
+        var ev = Economy.ById("hauler_evasion");
+        Check(ev != null && Economy.Value(ev, 0) == 60 && Economy.Value(ev, 1) == 67 && Economy.Value(ev, 5) == 95 && Economy.Maxed(ev, 5)
+              && new[] { 0, 1, 2, 3, 4 }.Select(l => Economy.Cost(ev, l)).SequenceEqual(new double[] { 400, 800, 1600, 3200, 6400 }),
+              "EVASION: a lone run is 60% safe, +7% a level to 95% at its 5-level cap (400, 800, 1600, 3200, 6400 cr)");
+        Character.BossCleared["silver_lancer"] = new System.Collections.Generic.HashSet<int> { 1, 2 };
+        Character.BossCleared["ironhold"] = new System.Collections.Generic.HashSet<int> { 9 };     // a boss this build does not know counts for nothing
+        Check(Missions.HighestBeaten == 2, $"the highest boss beaten is of the bosses this build knows ({Missions.HighestBeaten})");
+        Y.Credits = 100000;
+        Key(global::Godot.Key.B); await Wait(0.1);
+        Nodes<Button>(Nodes<BasePanel>().First()).First(b => b.Name == "Tab_HAULER").ButtonPressed = true; await Wait(0.1);
+        var asRow = Nodes<HBoxContainer>(Nodes<BasePanel>().First()).FirstOrDefault(r => r.Name == "Up_hauler_autosell");
+        var asBuy = asRow == null ? null : Nodes<Button>(asRow).First(b => b.Name == "Buy");
+        bool lockedUi = asBuy != null && asBuy.Disabled && asBuy.Text.Contains("LOCKED");
+        bool asRefused = !Y.TryBuy("hauler_autosell");
+        Character.BossCleared["silver_lancer"].Add(3);
+        await Wait(0.1);
+        bool open = asBuy != null && !asBuy.Disabled;
+        bool bought = Y.TryBuy("hauler_autosell");
+        Check(lockedUi && asRefused && open && bought && Y.Level("hauler_autosell") == 1 && Math.Abs(Y.Credits - (100000 - 4462)) < 1e-6,
+              $"AUTO-SELL reads LOCKED and is refused until the level-3 boss is beaten; then it is bought for 4462 cr (ui {lockedUi}, refused {asRefused}, open {open}, {Y.Credits:0} cr)");
+        Key(global::Godot.Key.B); await Wait(0.1);
         for (int i = 0; i < 3000 && hauler.State == Hauler.St.Loading; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-        Check(hauler.State == Hauler.St.Lifting && hauler.Cargo == Y.Capacity, "completely full: it leaves by itself");
+        Check(hauler.State == Hauler.St.Lifting && Math.Abs(hauler.Cargo - 600) < 1e-6 && !hauler.Escorted, "AUTO-SELL bought: completely full, it leaves by itself, alone");
+        ((System.Collections.Generic.Dictionary<string, int>)typeof(Yard).GetField("_levels", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(Y)).Remove("hauler_autosell");
+        Character.BossCleared.Clear();
+
+        // ── a LONE RUN against the dice: EVASION's chance, or the cargo is lost past the portal ──
+        async Task FastRun()
+        {   // lift, cruise, charge and sell in a moment: the states are what is being checked
+            for (int i = 0; i < 900 && hauler.State is not (Hauler.St.Arriving or Hauler.St.Destroyed); i++)
+            {
+                if (hauler.State == Hauler.St.Lifting) hauler.T = Economy.HaulerLift;
+                if (hauler.State == Hauler.St.Departing && hauler.Position.X < Hub.PortalPos.X - 5) hauler.Position = new Vector2(Hub.PortalPos.X - 1, Hub.LaneY);
+                if (hauler.State == Hauler.St.Charging) hauler.T = Economy.HaulerCharge;
+                if (hauler.State == Hauler.St.Away) hauler.T = Economy.HaulerAway;
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            }
+        }
+        hauler.ResetToPad(); hauler.Cargo = 350; Hauler.PretendRoll = 0.65f;          // Evasion 0: 60% safe, and the dice read 0.65
+        double lc0 = Y.Credits;
+        hauler.Dispatch(escorted: false); await FastRun();
+        Check(hauler.RunLost && hauler.LastSale == 0 && Y.Credits == lc0 && hauler.Cargo == 0,
+              $"a lone run the dice go against (0.65 against 60% safe): the cargo is lost past the portal, nothing paid ({hauler.LastSale:0} cr)");
+        ((System.Collections.Generic.Dictionary<string, int>)typeof(Yard).GetField("_levels", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(Y))["hauler_evasion"] = 1;
+        hauler.ResetToPad(); hauler.Cargo = 350;
+        double lc1 = Y.Credits;
+        hauler.Dispatch(escorted: false); await FastRun();
+        Check(!hauler.RunLost && Math.Abs(Y.Credits - lc1 - 350) < 1e-6,
+              $"one level of EVASION (67%) gets the same dice through: 350 sold for 350 ({Y.Credits - lc1:0})");
+        ((System.Collections.Generic.Dictionary<string, int>)typeof(Yard).GetField("_levels", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(Y)).Remove("hauler_evasion");
+        Hauler.PretendRoll = null;
+
+        // ── THE ESCORT: the long way round, waves of hunters after the hauler, x5 at the portal ──
+        hauler.ResetToPad(); hauler.Cargo = 300; Y.Ore = 0; Y.Salvage = 0;
+        await Wait(0.2);
+        var hh = Nodes<HaulerHud>().FirstOrDefault(); var escBtn = hh == null ? null : Nodes<Button>(hh).FirstOrDefault(b => b.Name == "Escort");
+        Check(escBtn != null && escBtn.Visible, "the base owner's hauler offers ESCORT beside DISPATCH");
+        Y.RequestDispatch(escorted: true);
+        await Wait(Economy.HaulerLift + 3.0);
+        var toFirst = Hub.EscortRoute[0] - hauler.Position;
+        float heading = Mathf.RadToDeg(Mathf.Abs(Mathf.AngleDifference(hauler.Rotation, toFirst.Angle() + Mathf.Pi / 2f)));
+        Check(hauler.State == Hauler.St.Escorting && hauler.Escorted && hauler.Position.Y > Hub.LaneY + 100 && heading < 10,
+              $"ESCORT leaves the lane for the long route, nose on its heading ({hauler.State}, y {hauler.Position.Y:0}, {heading:0.0} deg off)");
+        // the first wave: 1 patrol for a pilot alone -- and it goes for the hauler, not the nearer ship
+        int huntR0 = H.Raiders.Count;
+        var hunterEdge = Raider.EdgeSpot(hauler.Position);
+        Me.Position = hauler.Position + (hunterEdge - hauler.Position) * 0.35f; Me.Velocity = Vector2.Zero;
+        for (int i = 0; i < 600 && H.Raiders.Count == huntR0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        await Wait(0.5);
+        var hunters = H.Raiders.Where(r => r.Quarry == hauler).ToList();
+        bool meNearer = hunters.Count > 0 && hunters.All(r => r.Position.DistanceTo(Me.Position) < r.Position.DistanceTo(hauler.Position));
+        Check(H.Raiders.Count - huntR0 == 4 && hunters.Count == 4 && hunters.All(r => r.Target == hauler) && meNearer,
+              $"5 s in, a wave of 4 hunts the hauler -- not the ship that is nearer to them ({H.Raiders.Count - huntR0} spawned, {hunters.Count(r => r.Target == hauler)} on it)");
+        Me.Position = Hub.BasePos + new Vector2(-2600, 1800); Me.Velocity = Vector2.Zero;
+        hauler.T = Economy.EscortFirstWave + Economy.EscortWaveEvery - 0.1;
+        await Wait(0.5);
+        Check(H.Raiders.Count(r => r.Quarry == hauler) == 8, $"the next wave 20 s later: 8 hunters ({H.Raiders.Count(r => r.Quarry == hauler)})");
+        // near the end of the route: it charges at the portal, and the hunters withdraw at the jump
+        typeof(Hauler).GetField("_leg", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(hauler, Hub.EscortRoute.Length - 1);
+        hauler.Position = Hub.PortalPos + new Vector2(0, 20);
+        for (int i = 0; i < 120 && hauler.State == Hauler.St.Escorting; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        Check(hauler.State == Hauler.St.Charging && hauler.Position.DistanceTo(Hub.PortalPos) < 0.6f, $"the route ends in the portal: it charges there ({hauler.State})");
+        int booms0 = Nodes<Explosion>().Count();
+        double ec0 = Y.Credits;
+        hauler.T = Economy.HaulerCharge; await Wait(0.1);
+        Check(hauler.State == Hauler.St.Away && H.Raiders.Count(r => r.Quarry == hauler) == 0 && Nodes<Explosion>().Count() <= booms0,
+              $"through the portal: the hunters withdraw, none shot down ({H.Raiders.Count(r => r.Quarry == hauler)} left)");
+        double atJump = hauler.Cargo;                  // 300, and whatever a delivery added before it lifted
+        hauler.T = Economy.HaulerAway; await Wait(0.1);
+        Check(atJump >= 300 && Math.Abs(Y.Credits - ec0 - 5 * atJump) < 1e-6 && Math.Abs(hauler.LastSale - 5 * atJump) < 1e-6,
+              $"an escort pays 5x: {atJump:0} sold for {Y.Credits - ec0:0}");
+        // lost on an escort: the cargo goes, the hunters leave, and the usual rebuild starts
+        hauler.ResetToPad(); hauler.Cargo = 300;
+        Y.RequestDispatch(escorted: true); hauler.T = Economy.HaulerLift; await Wait(0.1);
+        hauler.T = Economy.EscortFirstWave; await Wait(0.3);
+        int huntersOut = H.Raiders.Count(r => r.Quarry == hauler);
+        double dc0 = Y.Credits;
+        hauler.TakeDamage(1000); await Wait(0.1);
+        Check(huntersOut == 4 && hauler.State == Hauler.St.Destroyed && hauler.Cargo == 0 && Y.Credits == dc0 && !hauler.Escorted
+              && Math.Abs(hauler.RebuildIn - 30) < 0.2 && H.Raiders.Count(r => r.Quarry == hauler) == 0,
+              $"destroyed on the escort: the cargo is gone, the hunters leave, a rebuild in 30 s ({huntersOut} hunters, {hauler.RebuildIn:0.0} s)");
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e9);
+        hauler.ResetToPad();
+        // A SAVE COUNTS THE LOADS: with AUTO-SELL locked a full hauler waiting on its pad is the
+        // usual state, and a quit used to throw its load away
+        hauler.Cargo = 300;
+        double loaded = Y.Ore + Y.Salvage + hauler.Cargo + Y.Gatherers.Sum(g => g.Cargo);
+        Y.SaveBase();
+        double onFile = (double)OnDisk("base", "ore", -1.0) + (double)OnDisk("base", "salvage", -1.0);
+        Check(Math.Abs(onFile - loaded) < 1e-6 && hauler.Cargo == 300, $"a save counts what the hauler and the fleet are carrying, as if home ({onFile:0} of {loaded:0})");
+        hauler.ResetToPad();
 
         var t = Nodes<Turret>(ship).First();
         ship.Rotation = 1.3f; await Wait(0.05);
@@ -953,6 +1195,8 @@ public partial class _Test : Node
         {
             var gs = Me; var gd = H.GetNode<TargetDummy>("TargetDummy1");
             var gKeep = gs.Position; gs.Position = gd.Position + new Vector2(0, 520); gs.Velocity = Vector2.Zero; gs.Rotation = 0f; await Wait(0.6);
+            // a Seeker Rack III on: the missiles fly 40% faster (182 u/s) -- the guns must not
+            Character.LoadoutFor(ShipClass.Battleship)[4] = "bs_seeker_3"; H.PilotChanged();
             AimWorld(gd.Position); await Wait(1.2);                                   // turrets swing onto it
             await Wait(TargetDummy.IdleReset + 0.2); gd.ResetMeter();
             Input.ParseInputEvent(new InputEventKey { Keycode = global::Godot.Key.Space, PhysicalKeycode = global::Godot.Key.Space, Pressed = true });
@@ -964,8 +1208,9 @@ public partial class _Test : Node
             var sp0 = sh1.Position; var sd0 = sh1.Dir;
             for (int i = 0; i < 10; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             float shSpd = GodotObject.IsInstanceValid(sh1) ? (sh1.Position - sp0).Length() / (10f / 60f) : 0f;
-            Check(Math.Abs(shSpd - 4 * (float)gs.Stats["missile_speed"]) < 6f && GodotObject.IsInstanceValid(sh1) && sh1.Dir == sd0 && atFire == 0,
-                  $"the guns fire shells at 4x the missile's speed ({shSpd:0} u/s), straight, and nothing lands at once");
+            Check(Math.Abs(shSpd - 520) < 6f && Math.Abs(gs.Stats["missile_speed"] - 182) < 1e-6 && GodotObject.IsInstanceValid(sh1) && sh1.Dir == sd0 && atFire == 0,
+                  $"the guns fire shells at 520 u/s whatever missile rack is on (seeker: missiles {gs.Stats["missile_speed"]:0}), straight, and nothing lands at once ({shSpd:0} u/s)");
+            Character.LoadoutFor(ShipClass.Battleship)[4] = "bs_missile_rack"; H.PilotChanged();
             for (int i = 0; i < 90 && gd.Total == 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(gd.Total > 0 && Math.Abs(gd.Total % gs.Stats["main_damage"]) < 1e-6 && Math.Abs(gs.Stats["main_damage"] - 7.375) < 1e-9, $"a shell lands for 5.9 x1.25 by the chips = 7.375 ({gd.Total:0.000})");
             // the balance: the battleship's total is 1.25x the carrier's measured 19.07 DPS; the carrier reaches 1.5x as far
@@ -1074,6 +1319,32 @@ public partial class _Test : Node
         Combat.OnFlash = keepFlash; Combat.World = keepWorld; Combat.ShellFired = keepShell; Combat.TorpedoFired = keepTorp;
         Check(hooksDropped, "Combat.Clear lets go of the world and every hook it installed");
 
+        // ── A REFIT, on the battleship: the magazine never holds more than it has room for, and the
+        //    hull keeps its fraction (keeping the damage taken let a pilot heal by swapping parts) ──
+        {
+            var bl = Character.LoadoutFor(ShipClass.Battleship); var blKeep = (string[])bl.Clone();
+            for (int k = Equipment.CoreSlots; k < Equipment.Slots; k++) bl[k] = "";
+            bl[4] = "bs_salvo_3"; H.PilotChanged(); ship = Me;
+            Check(Math.Abs(ship.Stats["missile_mag"] - 4) < 1e-9 && Math.Abs(ship.Stats["missile_reload"] - 64.0 / 3) < 1e-6 && Math.Abs(ship.Stats["missile_damage"] - 4.0) < 1e-9,
+                  $"Salvo Rack III: 4 missiles a magazine, a 21.3 s reload, 4.0 a missile ({ship.Stats["missile_mag"]}, {ship.Stats["missile_reload"]:0.000}, {ship.Stats["missile_damage"]})");
+            typeof(PlayerShip).GetField("_mag", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(ship, 4);
+            bl[4] = "bs_missile_rack"; H.PilotChanged();
+            Check(ship.MissilesLoaded == 1, $"back to the kit rack: a 1-missile magazine holds 1, not the 4 loaded before ({ship.MissilesLoaded})");
+            for (int k = 0; k < Equipment.Slots; k++) bl[k] = blKeep[k];
+            H.PilotChanged();
+            double max0 = ship.MaxHp;
+            ship.Hp = 75;
+            bl[2] = "sh_bulwark_3"; H.PilotChanged();
+            double bulMax = ship.MaxHp, bulHp = ship.Hp;
+            bl[2] = "sh_glass_3"; H.PilotChanged();
+            double glMax = ship.MaxHp, glHp = ship.Hp;
+            bl[2] = "basic_deflector"; H.PilotChanged();
+            Check(Math.Abs(max0 - 375) < 1e-6 && Math.Abs(bulMax - 615) < 1e-6 && Math.Abs(bulHp - 123) < 1e-6 && Math.Abs(glMax - 300) < 1e-6
+                  && Math.Abs(glHp - 60) < 1e-6 && Math.Abs(ship.MaxHp - 375) < 1e-6 && Math.Abs(ship.Hp - 75) < 1e-6,
+                  $"a refit keeps the hull's fraction: 75/375, Bulwark III {bulHp:0}/{bulMax:0}, Glass III {glHp:0}/{glMax:0}, back {ship.Hp:0}/{ship.MaxHp:0} -- no heal by swapping");
+            ship.Hp = ship.MaxHp;
+        }
+
         // ── carrier ──
         await SetClass(ShipClass.Carrier); ship = Me;
         Check(ship.PdTurrets.Count == 3, "carrier has three PD turrets, one per painted dome");
@@ -1092,6 +1363,53 @@ public partial class _Test : Node
         Character.Bonuses["bomber_count"] = 2.0; ship.SetClass(ship.Class); ship = Me;   // 2 x (1 + 2) = 6
         await CheckDocks(6);
         Character.Bonuses.Remove("bomber_count"); ship.SetClass(ship.Class); ship = Me;
+        // ── GEAR THROUGH THE SHIP'S OWN REFIT: the owner's hangars, the wing rebuilt to match, and
+        //    nothing left behind when craft are taken away ──
+        {
+            var cl = Character.LoadoutFor(ShipClass.Carrier); var clKeep = (string[])cl.Clone();
+            for (int k = Equipment.CoreSlots; k < Equipment.Slots; k++) cl[k] = "";
+            async Task Hangar(string part) { cl[0] = part; H.PilotChanged(); await Wait(0.1); ship = Me; }
+            bool Near(double a, double b) => Math.Abs(a - b) < 1e-6;
+            int Craft() => Nodes<Wing>().Count(w => w.Carrier == ship);
+            await Hangar("cv_elite_3");
+            bool elite = Near(ship.Stats["fighter_count"], 2) && Near(ship.Stats["fighter_speed"], 1056) && Near(ship.Stats["fighter_damage"], 6) && Near(ship.Stats["fighter_turn"], 5.25);
+            await Hangar("cv_swarm_3");
+            bool swarm = Near(ship.Stats["fighter_count"], 9) && Near(ship.Stats["fighter_speed"], 274.56) && Near(ship.Stats["fighter_damage"], 1.56);
+            int swarmCraft = Craft();
+            await Hangar("cv_line_3");
+            bool line = Near(ship.Stats["fighter_count"], 4) && Near(ship.Stats["fighter_damage"], 2.8) && Near(ship.Stats["fighter_speed"], 422.4);
+            Check(elite && swarm && line, $"the owner's hangars on the carrier itself: Elite III, Swarm III, Line III (elite {elite}, swarm {swarm}, line {line})");
+            // a swarm launched, then Elite fitted mid-flight: the extra fighters are freed where they fly
+            await Hangar("cv_swarm_3");
+            await Park(d3.Position + new Vector2(0, 520), 0);
+            H.SelectTarget(d3); Key(global::Godot.Key.Space);
+            for (int i = 0; i < 180 && Nodes<Wing>().Count(w => w.Carrier == ship && w.Kind == WingKind.Fighter && !w.Inside) < 2; i++)
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            int out0 = Nodes<Wing>().Count(w => w.Carrier == ship && w.Kind == WingKind.Fighter && !w.Inside);
+            await Hangar("cv_elite_3");
+            int eliteCraft = Craft();
+            await Hangar("cv_fighter_hangars");
+            var wingOrder = (List<Wing>)typeof(PlayerShip).GetField("_wings", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(ship);
+            int firstBomber = wingOrder.FindIndex(w => w.IsBomber);
+            bool fightersFirst = firstBomber < 0 || wingOrder.Skip(firstBomber).All(w => w.IsBomber);
+            Check(swarmCraft == 11 && out0 >= 2 && eliteCraft == 4 && Craft() == 5 && ship.WingCount(WingKind.Fighter) == 3 && fightersFirst,
+                  $"the wing follows the hangar: 9 + 2 craft, then Elite with fighters out -- 2 + 2, the rest freed -- then the kit's 3 + 2; fighters listed first ({swarmCraft}, {out0} out, {eliteCraft}, {Craft()})");
+            Key(global::Godot.Key.R); await Wait(0.2);
+            // bombers through gear: the docks re-split, and a strike counted on the old bombers is
+            // called off (set up as one in flight, so the old code -- which never touched it -- differs)
+            typeof(PlayerShip).GetProperty("StrikeTarget").SetValue(ship, d3);
+            typeof(PlayerShip).GetField("_strikesOut", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(ship, 2);
+            cl[4] = "cv_widebay_3"; H.PilotChanged(); ship = Me;
+            bool strikeOff = ship.StrikeTarget == null;
+            await CheckDocks(5);
+            cl[4] = "cv_heavybay_1"; H.PilotChanged(); ship = Me;
+            await CheckDocks(1);
+            cl[4] = "cv_bomber_bay"; H.PilotChanged(); ship = Me;
+            await CheckDocks(2);
+            Check(strikeOff, "a change in the bombers calls off a strike counted on the old ones");
+            for (int k = 0; k < Equipment.Slots; k++) cl[k] = clKeep[k];
+            H.PilotChanged(); ship = Me;
+        }
         ship.Velocity = Vector2.Zero;
         Check(Math.Abs(ship.Stats["control_range"] - 1080) < 0.01 && Math.Abs(ship.Stats["strike_range"] - 2160) < 0.01,
               "fighter control range 1080 (1.5x the battleship's guns); bomber strike range 2160 (2x)");
@@ -1410,6 +1728,110 @@ public partial class _Test : Node
             probe.Free();
         }
 
+        // ── the stat sheet's arithmetic: gear leans hard, so a stack of downsides must shrink a
+        //    number, never zero it, turn it negative or divide by zero ──
+        {
+            var rate = new Stat { Base = 1, Bonus = -1, Inverse = true };
+            var dmg = new Stat { Base = 10, Bonus = -1.5 };
+            Check(Math.Abs(rate.Value - 10) < 1e-9 && Math.Abs(dmg.Value - 1) < 1e-9,
+                  $"the stat multiplier never falls below 0.1: -100% rate on a 1 s interval is 10 s, -150% on 10 damage is 1 ({rate.Value}, {dmg.Value})");
+            var sum = ShipStats.Sum(new System.Collections.Generic.Dictionary<string, double> { ["a"] = 1 },
+                                    new System.Collections.Generic.Dictionary<string, double> { ["a"] = 2, ["b"] = 3 });
+            var one = ShipStats.Sum(null, new System.Collections.Generic.Dictionary<string, double> { ["b"] = 1 });
+            Check(sum.Count == 2 && sum["a"] == 3 && sum["b"] == 3 && one.Count == 1 && one["b"] == 1,
+                  "ShipStats.Sum adds shares key by key ({a:1} + {a:2, b:3} = {a:3, b:3})");
+        }
+
+        // ── THE GEAR TABLES: 12 parts per slot type, 4 specialisations x 3 rarities ──
+        {
+            Check(Enum.GetNames(typeof(Rarity)).SequenceEqual(new[] { "Common", "Rare", "Epic" }), "three rarities: Common, Rare, Epic");
+            var drops = Equipment.Drops.ToList();
+            var bsC = ShipClass.Battleship; var cvC = ShipClass.Carrier;
+            (GearSlot s, ShipClass? c)[] kinds = { (GearSlot.Weapon, bsC), (GearSlot.Weapon, cvC), (GearSlot.Utility, bsC), (GearSlot.Utility, cvC),
+                                                   (GearSlot.Engines, null), (GearSlot.Shield, null), (GearSlot.Hull, null), (GearSlot.Chip, null) };
+            bool twelve = kinds.All(k => drops.Count(i => i.Slot == k.s && i.Class == k.c) == 12
+                                    && new[] { Rarity.Common, Rarity.Rare, Rarity.Epic }.All(r => drops.Count(i => i.Slot == k.s && i.Class == k.c && i.Rarity == r) == 4));
+            var kit = Equipment.All.Where(i => i.Kit).ToList();
+            Check(drops.Count == 96 && twelve && kit.Count == 8 && kit.All(i => i.Rarity == Rarity.Common)
+                  && kit.Select(i => i.Id).OrderBy(x => x, StringComparer.Ordinal).SequenceEqual(new[] { "basic_deflector", "bs_main_battery", "bs_missile_rack",
+                     "chip_basic", "cv_bomber_bay", "cv_fighter_hangars", "reinforced_frame", "std_drive" }),
+                  $"the gear: 96 drops, 12 for each slot type with 4 at each rarity, and the 8-part kit, all Common ({drops.Count} drops)");
+            // a sheet with only the named parts on the kit, chips off
+            ShipStats Sheet(ShipClass c, string part)
+            {
+                var l = Equipment.Default(c); for (int k = Equipment.CoreSlots; k < Equipment.Slots; k++) l[k] = "";
+                var it = Equipment.ById(part);
+                if (it.Slot == GearSlot.Chip) l[Equipment.CoreSlots] = part; else l[Array.IndexOf(Equipment.Core, it.Slot)] = part;
+                return new ShipStats(c, Equipment.Bonuses(c, l), Equipment.Adds(c, l));
+            }
+            bool Near(double a, double b) => Math.Abs(a - b) < 1e-6;
+            var elite = Sheet(cvC, "cv_elite_3"); var swarm = Sheet(cvC, "cv_swarm_3"); var line = Sheet(cvC, "cv_line_3");
+            Check(Near(elite["fighter_count"], 2) && Near(elite["fighter_speed"], 1056) && Near(elite["fighter_damage"], 6) && Near(elite["fighter_turn"], 5.25),
+                  $"Elite Hangars III, the owner's example: 2 fighters, +200% speed and damage, +50% turning ({elite["fighter_count"]}, {elite["fighter_speed"]}, {elite["fighter_damage"]}, {elite["fighter_turn"]})");
+            Check(Near(swarm["fighter_count"], 9) && Near(swarm["fighter_speed"], 274.56) && Near(swarm["fighter_damage"], 1.56),
+                  $"Swarm Hangars III, the owner's example: 9 fighters, 22% slower and weaker ({swarm["fighter_count"]}, {swarm["fighter_speed"]}, {swarm["fighter_damage"]})");
+            Check(Near(line["fighter_count"], 4) && Near(line["fighter_damage"], 2.8) && Near(line["fighter_speed"], 422.4),
+                  $"Line Hangars III, between them: 4 fighters, +40% damage, +20% speed ({line["fighter_count"]}, {line["fighter_damage"]}, {line["fighter_speed"]})");
+            // THE WORST CASE: the most negative share any fitting part gives each stat, in every core
+            // slot at once and five times over in the chips, must leave the number above zero
+            bool allPositive = true;
+            double Worst(ShipClass c, string stat)
+            {
+                double w = 0;
+                foreach (var slot in Equipment.Core)
+                    w += Math.Min(0, Equipment.All.Where(i => Equipment.Fits(i, slot, c)).Select(i => i.Pct.GetValueOrDefault(stat)).DefaultIfEmpty(0).Min());
+                return w + Equipment.ChipSlots * Math.Min(0, Equipment.All.Where(i => i.Slot == GearSlot.Chip).Select(i => i.Pct.GetValueOrDefault(stat)).DefaultIfEmpty(0).Min());
+            }
+            foreach (var c in new[] { bsC, cvC }) foreach (var st in new ShipStats(c).All) if (Worst(c, st.Id) <= -1) allPositive = false;
+            Check(allPositive && Near(Worst(cvC, "fighter_damage"), -0.47) && Near(Worst(bsC, "main_damage"), -0.55) && Near(Worst(bsC, "hull"), -0.50) && Near(Worst(cvC, "hull"), -0.50),
+                  $"no stack of gear takes a number to zero: worst fighter damage -47% (1.06), shell -55% (2.655), hull -50% (150 / 100) ({Worst(cvC, "fighter_damage"):0.00}, {Worst(bsC, "main_damage"):0.00}, {Worst(bsC, "hull"):0.00})");
+            // every stat a part names is real on a class it fits, and none touches the turret counts
+            string[] addable = { "fighter_count", "bomber_count", "missile_mag", "bomber_ammo" };
+            var unknown = Equipment.All.SelectMany(i => i.Pct.Keys.Concat(i.Add.Keys).Where(k =>
+                              !(i.Class is ShipClass only ? new[] { only } : new[] { bsC, cvC }).Any(c => new ShipStats(c).All.Any(s => s.Id == k)))
+                              .Select(k => i.Id + ":" + k)).ToList();
+            bool noCounts = Equipment.All.All(i => !i.Pct.Keys.Concat(i.Add.Keys).Any(k => k is "main_count" or "pd_count" or "strike_range"));
+            bool addsOk = Equipment.All.All(i => i.Add.Keys.All(addable.Contains));
+            Check(unknown.Count == 0 && noCounts && addsOk,
+                  $"every stat a part names exists on a class it fits; no part changes a turret count; whole additions only to wings and magazines ({string.Join(",", unknown)})");
+            // a part for the other class changes nothing, even named in the loadout
+            var wrong = Equipment.Default(bsC); wrong[0] = "cv_elite_3";
+            var kitB = Equipment.Bonuses(bsC, Equipment.Default(bsC)); var wrongB = Equipment.Bonuses(bsC, wrong);
+            Check(wrongB.Count == kitB.Count && wrongB.All(kv => kitB.TryGetValue(kv.Key, out var v) && Math.Abs(v - kv.Value) < 1e-12) && Equipment.Adds(bsC, wrong).Count == 0,
+                  "a carrier's hangar named on a battleship changes nothing on it: the sheet is the kit's");
+            var words = Equipment.Describe(Equipment.ById("chip_basic"), cvC).ToList();
+            Check(words.Any(w => w.StartsWith("Fighters")) && words.Any(w => w.StartsWith("Hull")) && !words.Any(w => w.StartsWith("Main guns")),
+                  $"a part's effects are named for the ship it is on ({string.Join(" | ", words)})");
+        }
+
+        // ── LOOT's rules: crates by boss level, rarity unlocking every 5 levels, 70% own class ──
+        {
+            Check(new[] { 1, 5, 6, 10, 11, 20 }.Select(Loot.CratesFor).SequenceEqual(new[] { 2, 2, 3, 3, 4, 4 }),
+                  "crates per pilot: 2, then 3 from boss level 6, 4 from level 11");
+            (int c, int r, int e) Bands(int level)
+            {
+                var rng = new Random(12345); int c = 0, r = 0, e = 0;
+                for (int i = 0; i < 1000; i++)
+                    foreach (var id in Loot.RollParty(new[] { (1, ShipClass.Battleship) }, level, rng)[1])
+                        switch (Equipment.ById(id).Rarity) { case Rarity.Common: c++; break; case Rarity.Rare: r++; break; default: e++; break; }
+                return (c, r, e);
+            }
+            var b5 = Bands(5); var b6 = Bands(6); var b11 = Bands(11);
+            double Share(int n, (int c, int r, int e) b) => n / (double)(b.c + b.r + b.e);
+            Check(b5.r == 0 && b5.e == 0 && Math.Abs(Share(b6.r, b6) - 0.30) < 0.03 && b6.e == 0
+                  && Math.Abs(Share(b11.c, b11) - 0.55) < 0.03 && Math.Abs(Share(b11.r, b11) - 0.30) < 0.03 && Math.Abs(Share(b11.e, b11) - 0.15) < 0.03,
+                  $"rarity unlocks every 5 boss levels: L5 all Common; L6 30% Rare; L11 55 / 30 / 15 ({Share(b6.r, b6):0.00}; {Share(b11.c, b11):0.00} / {Share(b11.r, b11):0.00} / {Share(b11.e, b11):0.00})");
+            var prng = new Random(777); int n7 = 0, bsOnly7 = 0, cvOnly7 = 0, kit = 0;
+            for (int i = 0; i < 2000; i++)
+            {
+                var roll = Loot.RollParty(new[] { (1, ShipClass.Battleship), (7, ShipClass.Carrier) }, 1, prng);
+                foreach (var id in roll[1].Concat(roll[7])) if (Equipment.ById(id).Kit) kit++;
+                foreach (var id in roll[7]) { n7++; var it = Equipment.ById(id); if (it.Class == ShipClass.Battleship) bsOnly7++; if (it.Class == ShipClass.Carrier) cvOnly7++; }
+            }
+            Check(kit == 0 && Math.Abs(bsOnly7 / (double)n7 - 0.075) < 0.02 && Math.Abs(cvOnly7 / (double)n7 - 0.308) < 0.03,
+                  $"each pilot's own roll: 70% its own class or general, 30% anything -- a carrier pilot gets battleship parts 7.5%, carrier parts 31% ({bsOnly7 / (double)n7:0.000}, {cvOnly7 / (double)n7:0.000})");
+        }
+
         // ── equipment (I): per-class gear; common defaults and five chips (+5% damage, +5% hull each) ──
         {
             Check(Equipment.Default(ShipClass.Carrier)[0] == "cv_fighter_hangars" && Equipment.ById("cv_fighter_hangars").Name == "Mk I Fighter Hangars"
@@ -1427,22 +1849,75 @@ public partial class _Test : Node
                   && Nodes<HBoxContainer>(ew).Count(r => r.Name.ToString().StartsWith("Chip_")) == 5, "I opens the equipment: five parts and five chips");
             double full = Me.MaxHp;
             Nodes<Button>(ew).First(b => b.Name == "Unequip").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.2);
-            Check(Math.Abs(Me.MaxHp - full * 1.20 / 1.25) < 1e-6 && Character.SparesFor(cls0).Count == 1, $"a chip off: 5% less hull ({full:0} -> {Me.MaxHp:0}), the chip kept as a spare");
+            Check(Math.Abs(Me.MaxHp - full * 1.20 / 1.25) < 1e-6 && Character.GearHold.GetValueOrDefault("chip_basic") == 1, $"a chip off: 5% less hull ({full:0} -> {Me.MaxHp:0}), the chip in the hold");
             var other = cls0 == ShipClass.Battleship ? ShipClass.Carrier : ShipClass.Battleship;
             Me.SetClass(other); await Wait(0.5);
             Check(Character.LoadoutFor(other).Skip(5).Count(x => x == "chip_basic") == 5, "the other class keeps its own gear: five chips");
             Me.SetClass(cls0); await Wait(0.5);
-            Check(Character.LoadoutFor(cls0).Skip(5).Count(x => x == "chip_basic") == 4 && Character.SparesFor(cls0).Count == 1 && Math.Abs(Me.MaxHp - full * 1.20 / 1.25) < 1e-6,
-                  "back on the first class: its gear as it was left (four chips, one spare)");
+            Check(Character.LoadoutFor(cls0).Skip(5).Count(x => x == "chip_basic") == 4 && Character.GearHold.GetValueOrDefault("chip_basic") == 1 && Math.Abs(Me.MaxHp - full * 1.20 / 1.25) < 1e-6,
+                  "back on the first class: its gear as it was left (four chips, one in the hold)");
             ew = Nodes<EquipmentWindow>().FirstOrDefault();
             if (ew == null) { Key(global::Godot.Key.I); await Wait(0.2); ew = Nodes<EquipmentWindow>().First(); }
             Nodes<Button>(ew).First(b => b.Name == "Equip").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.2);
-            Check(Math.Abs(Me.MaxHp - full) < 1e-6 && Character.SparesFor(cls0).Count == 0, "the spare back on: full hull again");
+            Check(Math.Abs(Me.MaxHp - full) < 1e-6 && Character.GearHold.GetValueOrDefault("chip_basic") == 0, "the chip back on from the hold: full hull again");
+            // THE HOLD IS THE PILOT'S: a chip taken off one class goes on the other. The pilot really
+            // changes class (Character.Class, as the refit does), and the window is opened afresh.
+            Nodes<Button>(ew).First(b => b.Name == "Unequip").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.2);
+            Key(global::Godot.Key.I); await Wait(0.1);
+            await SetClass(other);
+            Character.LoadoutFor(other)[Equipment.Slots - 1] = "";
+            Key(global::Godot.Key.I); await Wait(0.2);
+            var ew2 = Nodes<EquipmentWindow>().FirstOrDefault();
+            var holdRow = ew2 == null ? null : Nodes<HBoxContainer>(ew2).FirstOrDefault(r => r.Name == "Hold_chip_basic");
+            holdRow?.GetChildren().OfType<Button>().FirstOrDefault(b => b.Name == "Equip")?.EmitSignal(BaseButton.SignalName.Pressed);
+            await Wait(0.2);
+            Check(Character.LoadoutFor(other).Skip(Equipment.CoreSlots).Count(x => x == "chip_basic") == 5 && Character.GearHold.GetValueOrDefault("chip_basic") == 0,
+                  $"the hold is the pilot's: a chip taken off the {cls0} goes on the {other} ({Character.LoadoutFor(other).Skip(Equipment.CoreSlots).Count(x => x == "chip_basic")} chips)");
+            Key(global::Godot.Key.I); await Wait(0.1);
+            await SetClass(cls0);
+            Character.LoadoutFor(cls0)[Array.IndexOf(Character.LoadoutFor(cls0), "", Equipment.CoreSlots)] = "chip_basic";
+            H.PilotChanged(); Key(global::Godot.Key.I); await Wait(0.2);
+            ew = Nodes<EquipmentWindow>().First();
             Character.Save(); var saved = (string[])Character.LoadoutFor(cls0).Clone();
             string eqId = Character.Id; Character.Loadout.Clear(); Character.Load(eqId);
             Check(Character.LoadoutFor(cls0).SequenceEqual(saved), "the gear is saved with the pilot");
             Key(global::Godot.Key.Escape); await Wait(0.2);
             Check(Nodes<EquipmentWindow>().Count() == 0, "Esc closes it");
+
+            // A DROP IN THE HOLD: a core part fits its slot and the part it replaces goes into the
+            // hold; a part for the other class is listed but cannot be fitted here
+            await SetClass(ShipClass.Carrier);
+            Character.GearHold["cv_line_1"] = 1; Character.GearHold["bs_rapid_1"] = 1;
+            Key(global::Godot.Key.I); await Wait(0.2);
+            var ew3 = Nodes<EquipmentWindow>().First();
+            var otherRow = Nodes<HBoxContainer>(ew3).FirstOrDefault(r => r.Name == "Hold_bs_rapid_1");
+            Check(otherRow != null && !Nodes<Button>(otherRow).Any(), "a battleship part in the carrier's hold is listed, with nothing to fit it by");
+            var lineRow = Nodes<HBoxContainer>(ew3).FirstOrDefault(r => r.Name == "Hold_cv_line_1");
+            lineRow?.GetChildren().OfType<Button>().FirstOrDefault(b => b.Name == "Fit")?.EmitSignal(BaseButton.SignalName.Pressed);
+            await Wait(0.2);
+            Check(Character.LoadoutFor(ShipClass.Carrier)[0] == "cv_line_1" && Character.GearHold.GetValueOrDefault("cv_fighter_hangars") == 1
+                  && !Character.GearHold.ContainsKey("cv_line_1") && Me.WingCount(WingKind.Fighter) == 4,
+                  $"a hangar from the hold fits the weapon slot, the kit's goes into the hold, and the carrier flies 4 fighters ({Me.WingCount(WingKind.Fighter)})");
+            // THE K WINDOW shows what gear adds: a Swarm III's six extra fighters, and its downside in red
+            Character.LoadoutFor(ShipClass.Carrier)[0] = "cv_swarm_3"; H.PilotChanged();
+            Key(global::Godot.Key.I); await Wait(0.1);
+            Key(global::Godot.Key.K); await Wait(0.2);
+            var kw = Nodes<StatsWindow>().First(); kw.ShowPane(false); await Wait(0.2);
+            var grid = (GridContainer)typeof(StatsWindow).GetField("_grid", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(kw);
+            var cells = grid.GetChildren().OfType<Label>().ToList();
+            int fh = cells.FindIndex(c => c.Text == "FIGHTERS");
+            int craftRow = fh < 0 ? -1 : cells.FindIndex(fh, c => c.Text == "  Craft");
+            int speed = fh < 0 ? -1 : cells.FindIndex(fh, c => c.Text == "  Top speed");
+            var bonusCell = speed < 0 ? null : cells[speed + 3];
+            bool redDown = bonusCell != null && bonusCell.Text == "−22%" && bonusCell.GetThemeColor("font_color") == Ui.Bad;
+            bool added = craftRow >= 0 && cells[craftRow + 1].Text == "3" && cells[craftRow + 2].Text == "+6" && cells[craftRow + 4].Text == "9";
+            bool rule = Nodes<Label>(kw).Any(l => l.Text.Contains("(base + added)"));
+            Check(grid.Columns == 5 && added && redDown && rule,
+                  $"K shows base, added, bonus and final: Swarm III's craft 3 +6 = 9, its top speed -22% in red (added {added}, red {redDown}, rule {rule})");
+            Key(global::Godot.Key.K); await Wait(0.1);
+            var cl0 = Character.LoadoutFor(ShipClass.Carrier); cl0[0] = "cv_fighter_hangars";
+            Character.GearHold.Remove("cv_fighter_hangars"); Character.GearHold.Remove("bs_rapid_1");
+            H.PilotChanged(); await SetClass(cls0);
         }
 
         // ── pilot progression: EXP, levels, points, flat upgrades ──
@@ -1467,7 +1942,7 @@ public partial class _Test : Node
             var pw = Nodes<PilotWindow>().FirstOrDefault();
             Check(pw != null, "L opens the PILOT window");
             Button PBuy(string id) => Nodes<Button>(Nodes<HBoxContainer>(pw).First(r => r.Name == "Pilot_" + id)).First(b => b.Name == "Buy");
-            var me = Me; double hull0 = me.MaxHp, hp0 = me.Hp;
+            var me = Me; me.Hp = me.MaxHp; double hull0 = me.MaxHp, hp0 = me.Hp;
             Character.Points = 3;
             PBuy("hull").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
             // (points are added BEFORE percentage bonuses: the five default chips' +25% makes +5 into +6.25)
@@ -1838,11 +2313,21 @@ public partial class _Test : Node
             // save on the way out (the 30 s autosave is held off). That save used to write nothing --
             // the sector had already become the arena -- and a quit out there lost the difference.
             typeof(Yard).GetField("_saveCd", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(H.Yard, 1e9);
+            // ...and a hauler with a load waiting on its pad: the trip must take it home, not lose it
+            H.Yard.Hauler.ResetToPad(); H.Yard.Hauler.Cargo = 300;
+            double heldAtLeaving = 0;
             for (int i = 0; i < 60 * 45 && !Hub.InArena; i++)
             {
-                if (H?.Yard != null && GodotObject.IsInstanceValid(H.Yard)) H.Yard.Credits = 424242;
+                if (H?.Yard != null && GodotObject.IsInstanceValid(H.Yard))
+                {
+                    H.Yard.Credits = 424242;
+                    heldAtLeaving = H.Yard.Ore + H.Yard.Salvage + H.Yard.Hauler.Cargo + H.Yard.Gatherers.Sum(g => g.Cargo);
+                }
                 await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             }
+            var tripRec = typeof(Yard).GetField("_trip", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
+            double tripStock = tripRec == null ? -1 : (double)tripRec.GetType().GetProperty("Ore").GetValue(tripRec) + (double)tripRec.GetType().GetProperty("Salvage").GetValue(tripRec);
+            Check(Math.Abs(tripStock - heldAtLeaving) < 1.0, $"leaving for the arena, the loads come home first: the base set aside holds the hauler's 300 too ({tripStock:0} of {heldAtLeaving:0})");
             await Wait(1.0);
             Check(Hub.InArena, $"the capital-ship autopilot flew {d0:0} u to the portal and the party went through");
             var leftWith = new ConfigFile(); leftWith.Load($"{Character.Dir}/{Character.Id}.cfg");
@@ -2044,14 +2529,60 @@ public partial class _Test : Node
             Check(Music.I == null || Math.Abs(Boss.TridentSpeed - 135f) < 1e-3, "trident missiles fly at 135 u/s (10% slower)");
             // the kill: shared EXP for it and the mission, the bounty's credits, then home
             Character.Exp = 0; Character.Level = 1; Character.BossCleared.Clear(); Character.Points = 0; Character.BossCleared.Clear();
+            // clear of where the crates will fall, with the boss's escorts out (they must die with it)
+            Me.Position = boss.Position + new Vector2(0, 1500); Me.Velocity = Vector2.Zero;
+            boss.LaunchEscorts(Me); await Wait(0.1);
+            int escortsOut = H.Raiders.Count;
+            int HoldOnDisk() { var c = new ConfigFile(); if (c.Load($"{Character.Dir}/{Character.Id}.cfg") != Error.Ok || !c.HasSection("gear_hold")) return 0;
+                               return c.GetSectionKeys("gear_hold").Sum(k => (int)c.GetValue("gear_hold", k, 0)); }
+            int UnclaimedOnDisk() => ((string)OnDisk("loot", "unclaimed", "")).Split(',', StringSplitOptions.RemoveEmptyEntries).Length;
+            int hold0 = Character.GearHold.Values.Sum(), disk0 = HoldOnDisk();
+            var bossAt = boss.Position;
             boss.TakeDamage(boss.Hp + 1); await Wait(0.2);
+            var dropped = H.Crates.ToList();
+            Check(dropped.Count == 2 && Character.Unclaimed.Count == 2 && UnclaimedOnDisk() == 2
+                  && dropped.All(c => c.Position.DistanceTo(bossAt) < 300 && Equipment.ById(c.Item) is { Kit: false, Rarity: Rarity.Common }),
+                  $"a level-1 boss drops this pilot 2 Common crates where it died, on disk at once ({dropped.Count} crates, {UnclaimedOnDisk()} on disk)");
+            Check(escortsOut >= 2 && H.Raiders.Count == 0, $"the boss's escorts die with it ({escortsOut} out, {H.Raiders.Count} left)");
+            Check(Math.Abs(H.HomeIn - 19.8) < 0.05, $"a 20 s victory window to collect in ({H.HomeIn:0.00} s left)");
+            Priv(H, "ReceiveLoot", new[] { "no_such_part", "fr_flak_1" }, bossAt + new Vector2(0, 400));
+            Check(H.Crates.Count == 3, $"a drop off the wire keeps only real parts (one of two: {H.Crates.Count - 2})");
+            Priv(H, "ReceiveLoot", new[] { "chip_target_1" }, bossAt + new Vector2(400, 0));
+            // FLY OVER A CRATE: in the hold at once; on disk 2.5 s after the LAST pickup
+            var crA = H.Crates[0]; var crB = H.Crates[1];
+            Me.Position = crA.Position; Me.Velocity = Vector2.Zero;
+            for (int i = 0; i < 30 && GodotObject.IsInstanceValid(crA); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            bool tookA = !GodotObject.IsInstanceValid(crA) && Character.GearHold.Values.Sum() == hold0 + 1;
+            await Wait(1.5);
+            Me.Position = crB.Position; Me.Velocity = Vector2.Zero;
+            for (int i = 0; i < 30 && GodotObject.IsInstanceValid(crB); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await Wait(1.5); int diskMid = HoldOnDisk();
+            await Wait(1.3); int diskAfter = HoldOnDisk();
+            Check(tookA && diskMid == disk0 && diskAfter == disk0 + 2 && UnclaimedOnDisk() == 2,
+                  $"flying over a crate takes it into the hold at once; the file follows 2.5 s after the LAST pickup ({disk0}: {diskMid} 1.5 s after the second, {diskAfter} at 2.8 s)");
+            // IN STASIS, THE POD COLLECTS: near is not enough -- it has to fly over the crate
+            var crC = H.Crates[0]; var cAt = crC.Position;
+            Me.TakeDamage(Me.Hp + 1); await Wait(0.3);
+            var pod = (EscapePod)typeof(PlayerShip).GetField("_pod", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(Me);
+            Me.Position = cAt + new Vector2(0, 900);
+            pod.Position = cAt + new Vector2(60, 0); pod.Velocity = Vector2.Zero; await Wait(1.0);
+            bool stillThere = GodotObject.IsInstanceValid(crC) && crC.Position == cAt;
+            pod.Position = cAt; pod.Velocity = Vector2.Zero;
+            for (int i = 0; i < 30 && GodotObject.IsInstanceValid(crC); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(!Me.Alive && stillThere && !GodotObject.IsInstanceValid(crC),
+                  $"a pilot in stasis collects with its escape pod: 60 u off leaves the crate where it lies, flying over it takes it");
+            Check(Hub.InArena, "five seconds and more after the kill, the party is still in the arena");
+            var crD = H.Crates[0];
             Check(H.MissionWon && Character.Level == 1 && Character.Exp == 550, $"the kill of a level-1 boss pays a level-1 pilot 200 + 250 first clear + 100 = 550 (exp {Character.Exp})");
             var onKill = new ConfigFile(); onKill.Load($"{Character.Dir}/{Character.Id}.cfg");
             Check(Math.Abs((double)onKill.GetValue("base", "credits", -1.0) - (424242 + 2000)) < 1e-6,
                   $"the bounty is on disk at the kill, not on the trip home: a quit out there kept the EXP and lost the credits ({(double)onKill.GetValue("base", "credits", -1.0):0})");
-            for (int i = 0; i < 60 * 8 && Hub.InArena; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            for (int i = 0; i < 60 * 25 && Hub.InArena; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             await Wait(1.0);
             Check(!Hub.InArena && H.Yard != null, "home again after the win");
+            // the crate left lying came home too -- into the hold -- and its node stayed behind
+            Check(!GodotObject.IsInstanceValid(crD) && Count<LootCrate>() == 0 && Character.Unclaimed.Count == 0 && Character.GearHold.Values.Sum() == hold0 + 4,
+                  $"the crate left behind comes home in the hold, its node gone with the arena ({Character.GearHold.Values.Sum() - hold0} of 4 parts)");
             await Wait(Hub.RaidDelay + 0.5);
             Check(H.Raiders.Count == 0, "a won mission brings no raid");
             // exactly the credits set aside at departure + the 2000 bounty (a hauler sale before
@@ -2180,12 +2711,16 @@ public partial class _Test : Node
         Key(global::Godot.Key.Escape); await Wait(0.1);
         Check(Count<StatsWindow>() == 0 && H != null, "Esc closes the K window first");
         H.GetType().GetField("_selected", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(H, null);
+        // a part dropped and not flown over when the pilot quits (as in a victory window)
+        Character.Unclaimed.Add("drv_surge_2"); Character.Save(); int surge0 = Character.GearHold.GetValueOrDefault("drv_surge_2");
         Key(global::Godot.Key.Escape); await Wait(0.1);
         Nodes<Button>(Nodes<EscMenu>().First()).First(b => b.Name == "Quit").EmitSignal(BaseButton.SignalName.Pressed);
         await Wait(0.3);
         Check(GetTree().CurrentScene is MainMenu, "QUIT TO MAIN MENU returns to the main menu");
         GetTree().ChangeSceneToFile("res://Hub.tscn"); await Wait(0.4);
         Check(H != null && Count<PlayerShip>() == 1, "hub re-enters cleanly");
+        Check(Character.GearHold.GetValueOrDefault("drv_surge_2") == surge0 + 1 && Character.Unclaimed.Count == 0,
+              "a part not flown over before a quit is in the hold the next time the pilot enters a world");
 
         // ── sound: the music 35% quieter; effects by the camera's distance and zoom ──
         Check(Math.Abs(Music.Master - 0.65f) < 1e-6, "the music plays 35% quieter than it started");
@@ -2305,14 +2840,26 @@ public partial class _Test : Node
             Check(Math.Abs(H.Boss.HullMult - 1.6) < 1e-9 && Math.Abs(H.Boss.DamageMult - 1.2) < 1e-9,
                   $"arena host: a party of two faces a boss scaled for two (hull x1.6, damage x1.2; x{H.Boss.HullMult:0.00}, x{H.Boss.DamageMult:0.00})");
             var gship = H.Ships.FirstOrDefault(s => !s.Mine);
-            Check(gship != null && Math.Abs(gship.MaxHp - 345) < 1e-6, $"arena host: the guest's own gear came into the arena with it (345 hull; {gship?.MaxHp:0})");
+            Check(gship != null && Math.Abs(gship.MaxHp - 345) < 1e-6 && Math.Abs(gship.Stats["missile_mag"] - 4) < 1e-9,
+                  $"arena host: the guest's own gear came into the arena with it (345 hull, a Salvo Rack III's 4 missiles; {gship?.MaxHp:0}, {gship?.Stats["missile_mag"]:0})");
             // Long enough for the guest to watch the super-move bar move, and no longer: this
             // scenario has a second arena visit after it, and a stay stretched to fit a whole beam
             // cycle pushed that off the end of every wait that follows.
             await Wait(4.0);
+            // the host in stasis at the moment of the kill: a pilot shot down in the fight still
+            // helped win it, and gets its own crates -- only its own
+            int ahHold0 = Character.GearHold.Values.Sum();
+            Me.TakeDamage(Me.Hp + 1);
             H.Boss.TakeDamage(H.Boss.Hp + 1);
-            for (int i = 0; i < 60 * 10 && Hub.InArena; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await Wait(0.3);
+            var ahCrates = H.Crates.ToList();
+            Check(!Me.Alive && ahCrates.Count == 2 && Count<LootCrate>() == 2 && Character.Unclaimed.Count == 2,
+                  $"arena host: in stasis at the kill, still its own 2 crates, and none of the guest's ({ahCrates.Count} here, {Count<LootCrate>()} nodes)");
+            await RealTime(() => !Hub.InArena, 30);
+            await RealTime(() => H != null && H.Yard != null && H.IsNodeReady(), 5);   // the home world is built a frame after the sector changes
             Check(!Hub.InArena && Net.IsOnline, "arena host: the boss down, home -- still hosting");
+            Check(Character.GearHold.Values.Sum() == ahHold0 + 2 && Character.Unclaimed.Count == 0 && ahCrates.All(c => !GodotObject.IsInstanceValid(c)),
+                  "arena host: the crates it never reached came home in its hold; their nodes did not");
             await Wait(2.0);
             await ToArena("arena host", 2);
             await Wait(1.5);
@@ -2327,8 +2874,10 @@ public partial class _Test : Node
             // survives the move into the arena.
             Character.Class = ShipClass.Battleship;
             var agl = Character.LoadoutFor(ShipClass.Battleship); agl[8] = ""; agl[9] = "";
+            agl[4] = "bs_salvo_3";                      // and a dropped rack: a 4-missile magazine
             H.Yard.Credits = 12345;                               // its own base, before it visits
-            Character.Exp = 0; Character.Level = 1; Character.BossCleared.Clear();
+            // Level 2 against the level-1 boss: its OWN share is 100 for the kill (the host's is 200)
+            Character.Exp = 0; Character.Level = 2; Character.BossCleared.Clear();
             await Wait(0.8);
             Net.I.Join(HostAt(Port));
             for (int i = 0; i < 60 * 10 && !(Net.IsOnline && Net.LocalId != 1); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
@@ -2337,12 +2886,32 @@ public partial class _Test : Node
             await GuestSeesTheFight();
             if (Wan) Check(Net.Arriving(1.5) < 1.45 && Net.Arriving(1.5) >= 0.6,
                            $"over the internet, a 1.5 s warning is shown a round trip short, so it ends when this pilot is judged ({Net.Arriving(1.5):0.00} s)");
-            for (int i = 0; i < 60 * 10 && !H.MissionWon; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            int agHold0 = Character.GearHold.Values.Sum();
+            await RealTime(() => H.MissionWon, 15);
+            double homeIn = H.HomeIn;
             Check(H.MissionWon && GodotObject.IsInstanceValid(H.Boss) && H.Boss.Hp == 0,
                   $"arena guest: the boss the host killed reads zero here too ({(GodotObject.IsInstanceValid(H.Boss) ? H.Boss.Hp : -1):0})");
-            for (int i = 0; i < 60 * 18 && Hub.InArena; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(homeIn > 14 && homeIn <= 20, $"arena guest: the victory countdown reached it ({homeIn:0.0} s to home)");
+            await RealTime(() => H.Crates.Count == 2, 5);
+            var agCrates = H.Crates.ToList();
+            Check(agCrates.Count == 2 && Count<LootCrate>() == 2 && ((string)OnDisk("loot", "unclaimed", "")).Split(',', StringSplitOptions.RemoveEmptyEntries).Length == 2,
+                  $"arena guest: its own 2 crates, and on its own file at once ({agCrates.Count} crates)");
+            FlyOver(agCrates[0].Position);
+            await RealTime(() => !GodotObject.IsInstanceValid(agCrates[0]), 1);
+            Check(!GodotObject.IsInstanceValid(agCrates[0]) && Character.GearHold.Values.Sum() == agHold0 + 1 && H.Crates.Count == 1,
+                  "arena guest: flying over its own crate takes it -- no host involved");
+            FlyOver(agCrates[1].Position + new Vector2(0, 1500));      // and well clear of the other: that one is left behind
+            await Wait(6.0);
+            Check(Hub.InArena, "arena guest: still in the arena 6 s after the kill");
+            await RealTime(() => !Hub.InArena, 30);
+            // the sector changes at once, the world a frame later: wait for the home world to be built
+            await RealTime(() => H != null && H.Yard != null && H.IsNodeReady(), 5);
             Check(!Hub.InArena && Net.IsOnline, "arena guest: home with the host after the win");
-            Check(Character.Exp == 550, $"arena guest: its own EXP for the kill (550; exp {Character.Exp})");
+            Check(Character.Exp == 450, $"arena guest: its OWN EXP for the kill -- 100 at level 2, +250 first clear, +100 (450; exp {Character.Exp})");
+            var agFile = new ConfigFile(); agFile.Load($"{Character.Dir}/{Character.Id}.cfg");
+            int agDisk = agFile.HasSection("gear_hold") ? agFile.GetSectionKeys("gear_hold").Sum(k => (int)agFile.GetValue("gear_hold", k, 0)) : 0;
+            Check(agDisk == agHold0 + 2 && (string)agFile.GetValue("id", "name", "") == "Arena Guest",
+                  $"arena guest: both parts reached its OWN file's hold -- the one it took, and the one it left ({agDisk - agHold0} of 2; in memory {Character.GearHold.Values.Sum() - agHold0}, unclaimed {Character.Unclaimed.Count})");
             await ToArena("arena guest", 2);
             for (int i = 0; i < 60 * 20 && (Hub.InArena || Net.IsOnline); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             await Wait(1.0);
@@ -2411,11 +2980,11 @@ public partial class _Test : Node
                   $"no UPnP router: LAN hosting stands, and the status explains the fix");
             Check(Router.IsShared("100.72.1.5") && Router.IsShared("192.168.1.20") && !Router.IsShared("81.2.3.4"),
                   "carrier-grade and private addresses are recognised as unreachable from outside");
-            // THE BUILD HANDSHAKE. The save format is versioned (1, as a literal: a check that reads
+            // THE BUILD HANDSHAKE. The save format is versioned (2, as a literal: a check that reads
             // the number it tests cannot catch the number being wrong); a SESSION is matched on the
             // build's fingerprint. The refusal is proved on a real connection by the third player,
             // who first knocks as another build: exactly one refusal here, and no ship for it.
-            Check(Game.Version == 1 && Net.Accepts(Net.Protocol) && !Net.Accepts(Net.Protocol ^ 1),
+            Check(Game.Version == 2 && Net.Accepts(Net.Protocol) && !Net.Accepts(Net.Protocol ^ 1),
                   $"a session admits this build and refuses any other (save format {Game.Version}, build {Net.Protocol:x8})");
             Check(refusals == 1, $"the host refused the one peer that knocked as another build ({refusals})");
             var ships = Nodes<PlayerShip>().ToList();
@@ -2439,6 +3008,8 @@ public partial class _Test : Node
             Check(!rev.Text.Contains("203.0.113.7"), "click again: hidden");
             Character.BossCleared.Clear();
             H.AnnounceBossKill(1);                // every pilot: its own EXP by its own level
+            // ...and the base owner's record is the level-3 boss: AUTO-SELL opens on THIS base for everyone
+            Character.BossCleared["silver_lancer"] = new System.Collections.Generic.HashSet<int> { 1, 2, 3 };
             H.SpawnRaider(new Vector2(-3500, 3500));   // far off: the guests must see it
             H.SpawnRaider(new Vector2(-3700, 3700), RaiderKind.Heavy);
             Check(!H.AllReady, "the host cannot warp until every pilot is ready");
@@ -2453,12 +3024,20 @@ public partial class _Test : Node
             var g = ships.FirstOrDefault(s => s.Pilot == "Guesty");
             Check(g != null && g.Name == PlayerShip.NodeName(g.OwnerId), "guest ship named by its id");
             Check(g != null && g.Pilot == "Guesty" && g.Class == ShipClass.Carrier && g.Main == new Color(1, 0, 0), $"guest identity reached host ({g?.Pilot}/{g?.Class}/{g?.Main})");
+            Check(g != null && g.Loadout[0] == "cv_swarm_3" && g.WingCount(WingKind.Fighter) == 9 && g.WingCount(WingKind.Bomber) == 2,
+                  $"the guest's dropped hangar reached the host: its carrier flies 9 fighters and 2 bombers here ({g?.WingCount(WingKind.Fighter)} / {g?.WingCount(WingKind.Bomber)})");
             var dummy = H.GetNode<TargetDummy>("TargetDummy1");
             Check(g != null && g.WingTarget == dummy, "guest's Space order reached the host");
             Check(dummy.Total > 5, $"guest's wing hit the dummy on the host ({dummy.Total:0.0})");
             Check(g != null && g.PdActive, "guest's PD activation reached the host");
             Check(Nodes<Torpedo>().Any(x => !x.Cosmetic) || dummy.Total > 12, "guest's bomber strike launched real torpedoes on the host");
-            // stay up while the guest watches its bombers come home and dock (it checks ~22 s in)
+            // stay up while the guest watches its bombers come home and dock (it checks ~22 s in), and
+            // send the hauler on an escort half way through for it to see
+            GetTree().CreateTimer(6.0).Timeout += () =>
+            {
+                if (H?.Yard == null) return;
+                H.Yard.Hauler.ResetToPad(); H.Yard.Hauler.Cargo = 300; H.Yard.RequestDispatch(escorted: true);
+            };
             await Wait(15.0);
             Net.I.GoOffline();   // drop the guest
             await Wait(2.0);
@@ -2489,6 +3068,9 @@ public partial class _Test : Node
             Check(all.Count == 3 && all.Any(s => s.Pilot == "HostPilot") && all.Any(s => s.Pilot == "Guesty"),
                   $"third player sees the host and the other guest ({string.Join(", ", all.Select(s => s.Pilot))})");
             Check(all.Count(s => s.Mine) == 1 && all.First(s => s.Mine).OwnerId == Net.LocalId, "third player flies its own ship");
+            var guesty = all.FirstOrDefault(s => s.Pilot == "Guesty");
+            Check(guesty != null && guesty.WingCount(WingKind.Fighter) == 9 && guesty.WingCount(WingKind.Bomber) == 2,
+                  $"...and the other guest's carrier with ITS gear: 9 fighters, 2 bombers ({guesty?.WingCount(WingKind.Fighter)} / {guesty?.WingCount(WingKind.Bomber)})");
             await Wait(22.0);
             Check(!Net.IsOnline, "third player dropped to offline when the host left");
         }
@@ -2503,6 +3085,7 @@ public partial class _Test : Node
             // came off a hull this pilot never flies and the carrier still had five.
             Character.Class = ShipClass.Carrier;
             var gl = Character.LoadoutFor(Character.Class); gl[8] = ""; gl[9] = "";
+            gl[0] = "cv_swarm_3";                       // a boss drop: nine fighters, which only this pilot knows it has
             await Wait(0.8);
             // Everything this pilot holds as it leaves for the host's world -- the ore above, AND the
             // 7777 credits every role's base now starts with. This check used to assume the ore was
@@ -2545,6 +3128,12 @@ public partial class _Test : Node
             Check(H.Yard.Level("salvage_rate") == 1, "the upgrade the host granted reached the guest");
             for (int i = 0; i < 480 && Character.Exp != 550; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(Character.Exp == 550, $"the host's kill reached this guest, which took its own 550 (exp {Character.Exp})");
+            await RealTime(() => H.Yard.OwnerBoss == 3, 3);
+            Check(H.Yard.OwnerBoss == 3 && Missions.HighestBeaten == 1,
+                  $"AUTO-SELL here is judged by the base owner's boss record (3), not this guest's (1) ({H.Yard.OwnerBoss}, {Missions.HighestBeaten})");
+            var ghud = Nodes<HaulerHud>().FirstOrDefault();
+            Check(ghud != null && Nodes<Button>(ghud).Any(b => b.Name == "Escort") && Nodes<Button>(ghud).Any(b => b.Name == "Dispatch") && Nodes<Button>(ghud).All(b => !b.Visible),
+                  "a guest sees the host's hauler load, but DISPATCH and ESCORT are the base owner's alone");
             for (int i = 0; i < 60 * 6 && H.Raiders.Count == 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             for (int i = 0; i < 60 * 3 && !H.Raiders.Any(r => r.Heavy); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(H.Raiders.Count >= 2 && Combat.Hostiles.OfType<Raider>().Any() && H.Raiders.Any(r => r.Heavy),
@@ -2574,6 +3163,9 @@ public partial class _Test : Node
                   "guest sees its bombers docked on the carrier (state and position from the host)");
             Check(H.GetNodeOrNull("MissionPortal") != null && H.Mission == Hub.MissionState.PortalOpen,
                   "the host's mission portal opened here too (the party was ready)");
+            await RealTime(() => H.Yard.Hauler.Escorted && H.Yard.Hauler.State == Hauler.St.Escorting && H.Yard.Hauler.Position.Y > Hub.LaneY + 50, 6);
+            Check(H.Yard.Hauler.Escorted && H.Yard.Hauler.State == Hauler.St.Escorting && H.Yard.Hauler.Position.Y > Hub.LaneY + 50,
+                  $"a guest sees the host's hauler on an escort, off its lane ({H.Yard.Hauler.State}, y {H.Yard.Hauler.Position.Y:0})");
             await Wait(6.0);                       // the host closes the session ~24.5 s in
             Check(!Net.IsOnline && Net.LocalId == 1, "guest fell back offline when host left");
             // Back to its OWN world, with nothing lost: everything held -- stock, the

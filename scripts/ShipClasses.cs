@@ -175,14 +175,14 @@ public partial class Turret : Node2D
         return bestFree ?? bestAny;
     }
 
-    // One main-gun shot, along the barrel as it points RIGHT NOW: a SHELL, straight, 4x the
-    // missile's speed, as far as its range. Host only. (Point defence never comes here: it fires
+    // One main-gun shot, along the barrel as it points RIGHT NOW: a SHELL, straight, at the guns'
+    // own shell speed, as far as their range. Host only. (Point defence never comes here: it fires
     // from Tick, at what it has acquired.)
     public void Shoot()
     {
         if (!Net.Sim) return;
         var dir = Vector2.Right.Rotated(GlobalRotation);
-        Combat.FireShell(GlobalPosition + dir * BarrelLength, dir, (float)S["missile_speed"] * Shell.SpeedMult, Range, ShotDamage, Ship);
+        Combat.FireShell(GlobalPosition + dir * BarrelLength, dir, (float)S["shell_speed"], Range, ShotDamage, Ship);
     }
 
     // _angle is a WORLD angle, so it is applied as GlobalRotation; as a local

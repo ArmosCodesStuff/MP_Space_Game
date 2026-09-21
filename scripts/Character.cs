@@ -37,6 +37,9 @@ public static class Character
     public static readonly int[] Bought = new int[Progression.All.Length];
     // the levels of each boss this pilot has beaten (the +250 first-clear bonus, and unlocking)
     public static readonly Dictionary<string, HashSet<int>> BossCleared = new();
+    // THE TUTORIAL: the hints this pilot has been shown (Hints.All ids), and its off switch (Esc menu)
+    public static readonly HashSet<string> HintsSeen = new();
+    public static bool HintsOff;
 
     // THE BASE. It belongs to the pilot, not to the session: each character has its own, and a
     // guest visiting someone else's sets its own aside rather than sharing theirs. Yard owns the
@@ -44,13 +47,23 @@ public static class Character
     public static double BaseOre, BaseSalvage, BaseCredits;
     public static readonly Dictionary<string, int> BaseLevels = new();
     public static readonly Dictionary<string, double> BaseInvested = new();
-    // equipment, per class: what is on each ship, and the chips taken off it
+    // equipment, per class: what is on each ship. The hold is the pilot's: every part owned and not
+    // fitted, for any class -- a part taken off goes into it, a part fitted comes out of it. Counts,
+    // by part id. (GearHold, not Hold: Hold is already a member of four other types.)
     public static readonly Dictionary<ShipClass, string[]> Loadout = new();
-    private static readonly Dictionary<ShipClass, List<string>> Spares = new();
     public static string[] LoadoutFor(ShipClass c) =>
         Loadout.TryGetValue(c, out var l) ? l : Loadout[c] = Equipment.Default(c);
-    public static List<string> SparesFor(ShipClass c) =>
-        Spares.TryGetValue(c, out var l) ? l : Spares[c] = new List<string>();
+    public static readonly Dictionary<string, int> GearHold = new();
+    public static void Stow(string id) { if (Equipment.ById(id) != null) GearHold[id] = GearHold.GetValueOrDefault(id) + 1; }
+    public static bool Unstow(string id)
+    {
+        if (id == null || !GearHold.TryGetValue(id, out var n) || n <= 0) return false;
+        if (n == 1) GearHold.Remove(id); else GearHold[id] = n - 1;
+        return true;
+    }
+    // LOOT a boss dropped for this pilot and not yet flown over. On disk from the moment of the kill,
+    // so a quit, a crash or a lost host costs nothing: the next world this pilot enters claims them.
+    public static readonly List<string> Unclaimed = new();
 
     // One saved character, as the select screen lists it.
     public class Slot
@@ -67,15 +80,38 @@ public static class Character
     // A fresh, unsaved character with its own id. Nothing touches disk until Save().
     public static void NewBlank()
     {
+        SaveIfPending();                                   // the pilot being replaced keeps what it had
         Id = DateTime.UtcNow.ToString("yyyyMMddHHmmssfff");
         (Name, Main, Accent, Class) = (Defaults.Name, Defaults.Main, Defaults.Accent, ShipClass.Battleship);
         Bonuses.Clear();
-        Exp = 0; Level = 1; Points = 0; Array.Clear(Bought); BossCleared.Clear(); Loadout.Clear(); Spares.Clear();
+        Exp = 0; Level = 1; Points = 0; Array.Clear(Bought); BossCleared.Clear(); Loadout.Clear(); GearHold.Clear(); Unclaimed.Clear();
+        HintsSeen.Clear(); HintsOff = false;
         BaseOre = BaseSalvage = BaseCredits = 0; BaseLevels.Clear(); BaseInvested.Clear();
     }
 
+    // THE BATCHED SAVE, for things that come in runs -- loot picked up crate after crate. Each call
+    // (re)starts a 2.5 s wait and the file is written once, when the calls stop; any Save() in the
+    // meantime makes it unnecessary. The wait counts GAME time, pumped by the Net autoload, which
+    // outlives every scene; leaving a session, quitting or loading another pilot writes a pending
+    // save at once (Net.Close, Load, NewBlank). It never makes a file: a pilot not yet saved is not
+    // written by a pickup.
+    private const double SaveDelay = 2.5;
+    private static double _saveIn;
+    public static void SaveSoon()
+    {
+        if (string.IsNullOrEmpty(Id) || !FileAccess.FileExists(PathOf(Id))) return;
+        _saveIn = SaveDelay;
+    }
+    public static void TickSave(double delta)
+    {
+        if (_saveIn <= 0) return;
+        if ((_saveIn -= delta) <= 0) Save();
+    }
+    public static void SaveIfPending() { if (_saveIn > 0) Save(); }
+
     public static void Save()
     {
+        _saveIn = 0;                                       // whatever was waiting is in this one
         if (string.IsNullOrEmpty(Id)) return;
         DirAccess.MakeDirRecursiveAbsolute(Dir);
         var c = new ConfigFile();
@@ -92,7 +128,10 @@ public static class Character
         foreach (var kv in BaseLevels) c.SetValue("base_levels", kv.Key, kv.Value);
         foreach (var kv in BaseInvested) c.SetValue("base_invested", kv.Key, kv.Value);
         foreach (var kv in Loadout) c.SetValue("equipment", kv.Key.ToString(), string.Join(",", kv.Value));
-        foreach (var kv in Spares) c.SetValue("spares", kv.Key.ToString(), string.Join(",", kv.Value));
+        foreach (var kv in GearHold.Where(kv => kv.Value > 0).OrderBy(kv => kv.Key, StringComparer.Ordinal)) c.SetValue("gear_hold", kv.Key, kv.Value);
+        c.SetValue("loot", "unclaimed", string.Join(",", Unclaimed));
+        c.SetValue("hints", "seen", string.Join(",", HintsSeen.OrderBy(x => x, StringComparer.Ordinal)));
+        c.SetValue("hints", "off", HintsOff);
 
         if (WriteAtomically(c, PathOf(Id)) is bool renamed) LastSaveRenamed = renamed;
     }
@@ -125,6 +164,7 @@ public static class Character
 
     public static bool Load(string id)
     {
+        SaveIfPending();                                   // the pilot being replaced keeps what it had
         var c = new ConfigFile();
         if (c.Load(PathOf(id)) != Error.Ok) return false;
         // A file from another build is REFUSED here, not repaired -- by the same rule the select
@@ -140,9 +180,10 @@ public static class Character
         Bonuses.Clear();
         if (c.HasSection("bonus"))
             foreach (var k in c.GetSectionKeys("bonus")) Bonuses[k] = (double)c.GetValue("bonus", k, 0.0);
-        // The base. Negative stock is refused outright and an unknown upgrade id is dropped: this
-        // is a file on the player's disk, and a level for an upgrade that no longer exists would
-        // be spent money nothing can show.
+        // The base. Negative stock is refused outright, an unknown upgrade id is dropped and a level
+        // is held to its upgrade's cap: this is a file on the player's disk, and a level for an
+        // upgrade that no longer exists, or more levels than it has, would be spent money nothing
+        // can show.
         BaseOre = Math.Max(0, (double)c.GetValue("base", "ore", 0.0));
         BaseSalvage = Math.Max(0, (double)c.GetValue("base", "salvage", 0.0));
         BaseCredits = Math.Max(0, (double)c.GetValue("base", "credits", 0.0));
@@ -151,7 +192,7 @@ public static class Character
             foreach (var k in c.GetSectionKeys("base_levels"))
             {
                 var up = Economy.ById(k);
-                if (up != null) BaseLevels[k] = Math.Max(0, (int)c.GetValue("base_levels", k, 0));
+                if (up != null) BaseLevels[k] = Math.Clamp((int)c.GetValue("base_levels", k, 0), 0, up.Max);
             }
         BaseInvested.Clear();
         if (c.HasSection("base_invested"))
@@ -160,18 +201,23 @@ public static class Character
         Exp = (int)c.GetValue("progress", "exp", 0); Level = Math.Max(1, (int)c.GetValue("progress", "level", 1));
         Points = Math.Max(0, (int)c.GetValue("progress", "points", 0));
         for (int i = 0; i < Bought.Length; i++) Bought[i] = Math.Clamp((int)c.GetValue("progress", "bought_" + Progression.All[i].Id, 0), 0, Progression.MaxPerUpgrade);
-        Loadout.Clear(); Spares.Clear();
+        Loadout.Clear();
         foreach (ShipClass sc in Enum.GetValues(typeof(ShipClass)))
-        {
             if (c.HasSectionKey("equipment", sc.ToString()))
                 Loadout[sc] = Equipment.Sanitize(sc, ((string)c.GetValue("equipment", sc.ToString(), "")).Split(','));
-            if (c.HasSectionKey("spares", sc.ToString()))
-                // `gid`, not `id`: `id` here is the CHARACTER's id, the parameter this method was
-                // called with. Shadowing it with a gear id made the line read as if it were
-                // filtering on the character.
-                Spares[sc] = ((string)c.GetValue("spares", sc.ToString(), "")).Split(',', StringSplitOptions.RemoveEmptyEntries)
-                             .Where(gid => Equipment.ById(gid)?.Slot == GearSlot.Chip).ToList();
-        }
+        // The hold, loot and hints: parts and hints this build knows, and counts above zero.
+        // (`gid`, not `id`: `id` is the CHARACTER's id, the parameter this method was called with.)
+        GearHold.Clear();
+        if (c.HasSection("gear_hold"))
+            foreach (var gid in c.GetSectionKeys("gear_hold"))
+                if (Equipment.ById(gid) != null && (int)c.GetValue("gear_hold", gid, 0) is var n && n > 0) GearHold[gid] = n;
+        Unclaimed.Clear();
+        Unclaimed.AddRange(((string)c.GetValue("loot", "unclaimed", "")).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                           .Where(gid => Equipment.ById(gid) is { Kit: false }));
+        HintsSeen.Clear();
+        foreach (var h in ((string)c.GetValue("hints", "seen", "")).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            if (Hints.All.ContainsKey(h)) HintsSeen.Add(h);
+        HintsOff = (bool)c.GetValue("hints", "off", false);
         BossCleared.Clear();
         if (c.HasSection("boss_cleared"))
             foreach (var k in c.GetSectionKeys("boss_cleared"))
@@ -215,7 +261,7 @@ public static class Character
     {
         if (string.IsNullOrEmpty(id)) return false;
         var err = DirAccess.RemoveAbsolute(ProjectSettings.GlobalizePath(PathOf(id)));
-        if (id == Id) Id = "";
+        if (id == Id) { Id = ""; _saveIn = 0; }
         return err == Error.Ok;
     }
 
@@ -249,7 +295,7 @@ public static class Classes
         new() { Id = ShipClass.Battleship, Name = "BATTLESHIP", Ready = true,
                 Blurb = "300 hull. Four cursor-aimed main guns, two point-defence turrets, a missile magazine." },
         new() { Id = ShipClass.Carrier, Name = "CARRIER", Ready = true,
-                Blurb = "200 hull. Three point-defence turrets, four fighters, two torpedo bombers." },
+                Blurb = "200 hull. Three point-defence turrets, three fighters, two torpedo bombers." },
         new() { Id = ShipClass.Battleship, Name = "MONITOR", Ready = false,
                 Blurb = "Reserved." },
         // page 2 — strike

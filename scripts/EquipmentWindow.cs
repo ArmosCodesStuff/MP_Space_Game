@@ -1,86 +1,119 @@
 using Godot;
+using System.Linq;
 
-// EQUIPMENT (I): the parts on the pilot's CURRENT ship -- five core slots and five chips --
-// and the chips taken off it. Chips can come off and go back on; the core parts stay put
-// until there is something to swap them for (the inventory, later). Each class keeps its own.
+// EQUIPMENT (I): the parts on the pilot's CURRENT ship -- five core slots and five chips -- beside
+// the HOLD: every part this pilot owns and has not fitted, for either class (bosses drop them; see
+// Loot). FIT puts a part from the hold on the ship and the part it replaces goes into the hold;
+// UNEQUIP takes a chip off into the hold. A core slot is never empty. Each class keeps its own
+// loadout; the hold is the pilot's. Only this pilot sees any of it: gear is per pilot, like the
+// loot it comes from.
 public partial class EquipmentWindow : PanelContainer
 {
     public Hub Hub;
-    private VBoxContainer _col;
-    private static Color RarityColor(Rarity r) => r switch
-    {
-        Rarity.Uncommon => Ui.Good, Rarity.Rare => Ui.Accent,
-        Rarity.Epic => new Color(0.75f, 0.45f, 1f), Rarity.Legendary => Ui.Warn,
-        _ => Ui.Text,
-    };
+    private VBoxContainer _ship, _hold;
+    private const float ShipW = 500, HoldW = 400, HoldH = 560;
 
     public override void _Ready()
     {
         Name = "EquipmentWindow";
         Position = new Vector2(360, 92);
         Ui.Panelise(this);
-        _col = Ui.VBox(10); AddChild(_col);
+        var col = Ui.VBox(10); AddChild(col);
+        var title = Ui.VBox(2);
+        title.AddChild(Ui.Lbl("EQUIPMENT", Ui.Title, Ui.Accent));
+        title.AddChild(Ui.Lbl("Bosses drop parts that lean hard one way. Each class keeps its own; the hold is yours.", Ui.Small, Ui.Dim));
+        col.AddChild(title);
+        var cols = Ui.HBox(16); col.AddChild(cols);
+        _ship = Ui.VBox(8, "Ship"); _ship.CustomMinimumSize = new Vector2(ShipW, 0); cols.AddChild(_ship);
+        var scroll = new ScrollContainer { Name = "HoldScroll", CustomMinimumSize = new Vector2(HoldW, HoldH),
+                                           HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
+        _hold = Ui.VBox(6, "Hold"); _hold.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        scroll.AddChild(_hold); cols.AddChild(scroll);
+        col.AddChild(Ui.Lbl("I or Esc closes.", Ui.Small, Ui.Dim));
         Rebuild();
     }
 
     private void Rebuild()
     {
-        Ui.Clear(_col);
-        var cls = Character.Class; var l = Character.LoadoutFor(cls); var spares = Character.SparesFor(cls);
-        var title = Ui.VBox(2);
-        title.AddChild(Ui.Lbl($"EQUIPMENT  ·  {Classes.NameOf(cls)}", Ui.Title, Ui.Accent));
-        title.AddChild(Ui.Lbl("Parts change no looks, only numbers. Each class keeps its own gear.", Ui.Small, Ui.Dim));
-        _col.AddChild(title);
-        _col.AddChild(Ui.Heading("Core parts"));
+        Ui.Clear(_ship); Ui.Clear(_hold);
+        var cls = Character.Class; var l = Character.LoadoutFor(cls);
+        _ship.AddChild(Ui.Heading($"{Classes.NameOf(cls)}  ·  core parts"));
         for (int k = 0; k < Equipment.CoreSlots; k++)
-        {
-            var it = Equipment.ById(l[k]);
-            var row = new HBoxContainer { Name = $"Slot_{Equipment.Core[k]}" }; row.AddThemeConstantOverride("separation", 12);
-            var slotName = Ui.Lbl(Equipment.Core[k].ToString().ToUpperInvariant(), Ui.Small, Ui.Dim);
-            slotName.CustomMinimumSize = new Vector2(90, 0); slotName.VerticalAlignment = VerticalAlignment.Center;
-            row.AddChild(slotName);
-            var item = Ui.Lbl(it?.Name ?? "—", Ui.Body, it != null ? RarityColor(it.Rarity) : Ui.Dim);
-            item.Name = "Item"; item.CustomMinimumSize = new Vector2(210, 0); item.VerticalAlignment = VerticalAlignment.Center;
-            row.AddChild(item);
-            var blurb = Ui.Lbl(it?.Blurb ?? "", Ui.Small, Ui.Dim);
-            blurb.VerticalAlignment = VerticalAlignment.Center;
-            row.AddChild(blurb);
-            _col.AddChild(Ui.CardWrap(row));
-        }
-        _col.AddChild(Ui.Heading("Chips"));
+            _ship.AddChild(Ui.CardWrap(PartRow($"Slot_{Equipment.Core[k]}", Equipment.Core[k].ToString().ToUpperInvariant(), l[k], cls, null)));
+        _ship.AddChild(Ui.Heading("Chips"));
         for (int k = 0; k < Equipment.ChipSlots; k++)
         {
-            int slot = Equipment.CoreSlots + k; var it = Equipment.ById(l[slot]);
-            var row = new HBoxContainer { Name = $"Chip_{k}" }; row.AddThemeConstantOverride("separation", 12);
-            var chip = Ui.Lbl(it != null ? $"{it.Name}   ({it.Blurb})" : "(empty)", Ui.Body,
-                              it != null ? RarityColor(it.Rarity) : Ui.Dim with { A = 0.7f });
-            chip.CustomMinimumSize = new Vector2(360, 0); chip.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-            chip.VerticalAlignment = VerticalAlignment.Center;
-            row.AddChild(chip);
-            if (it != null)
-            {
-                var off = new Button { Name = "Unequip", Text = "UNEQUIP", FocusMode = FocusModeEnum.None, SizeFlagsVertical = SizeFlags.ShrinkCenter };
-                off.Pressed += () => { spares.Add(l[slot]); l[slot] = ""; Changed(); };
-                row.AddChild(off);
-            }
-            _col.AddChild(Ui.CardWrap(row));
+            int slot = Equipment.CoreSlots + k;
+            var off = string.IsNullOrEmpty(l[slot]) ? null
+                    : Ui.Btn("UNEQUIP", () => { Character.Stow(l[slot]); l[slot] = ""; Changed(); }, "Unequip");
+            _ship.AddChild(Ui.CardWrap(PartRow($"Chip_{k}", $"CHIP {k + 1}", l[slot], cls, off)));
         }
-        _col.AddChild(Ui.Heading(spares.Count > 0 ? "Spare chips" : "Spare chips  (none)"));
-        for (int j = 0; j < spares.Count; j++)
+
+        // THE HOLD: this class's parts first, in slot order, rarest first; then the other class's,
+        // named but not fittable here.
+        int total = Character.GearHold.Values.Sum();
+        _hold.AddChild(Ui.Heading(total > 0 ? $"Hold  ·  {total} part{(total == 1 ? "" : "s")}" : "Hold  ·  empty"));
+        var owned = Character.GearHold.Where(kv => kv.Value > 0).Select(kv => (it: Equipment.ById(kv.Key), n: kv.Value))
+                             .Where(x => x.it != null)
+                             .OrderBy(x => x.it.Class != null && x.it.Class != cls)
+                             .ThenBy(x => x.it.Slot).ThenByDescending(x => x.it.Rarity).ThenBy(x => x.it.Name).ToList();
+        if (owned.Count == 0) _hold.AddChild(Ui.Lbl("Parts a boss drops for you land here.", Ui.Small, Ui.Dim));
+        foreach (var (it, n) in owned)
         {
-            int idx = j; var it = Equipment.ById(spares[j]);
-            var row = new HBoxContainer { Name = $"Spare_{j}" }; row.AddThemeConstantOverride("separation", 12);
-            var sp = Ui.Lbl($"{it?.Name}   ({it?.Blurb})", Ui.Body, RarityColor(it?.Rarity ?? Rarity.Common));
-            sp.CustomMinimumSize = new Vector2(360, 0); sp.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-            sp.VerticalAlignment = VerticalAlignment.Center;
-            row.AddChild(sp);
-            int free = System.Array.FindIndex(l, Equipment.CoreSlots, Equipment.ChipSlots, s => string.IsNullOrEmpty(s));
-            var on = new Button { Name = "Equip", Text = "EQUIP", FocusMode = FocusModeEnum.None, Disabled = free < 0, SizeFlagsVertical = SizeFlags.ShrinkCenter };
-            on.Pressed += () => { int f = System.Array.FindIndex(l, Equipment.CoreSlots, Equipment.ChipSlots, s => string.IsNullOrEmpty(s));
-                                  if (f < 0) return; l[f] = spares[idx]; spares.RemoveAt(idx); Changed(); };
-            row.AddChild(on); _col.AddChild(Ui.CardWrap(row));
+            string id = it.Id;
+            Button fit = null;
+            if (it.Class == null || it.Class == cls)
+            {
+                int free = System.Array.FindIndex(l, Equipment.CoreSlots, Equipment.ChipSlots, string.IsNullOrEmpty);
+                fit = it.Slot == GearSlot.Chip
+                    ? Ui.Btn("EQUIP", () => FitChip(id), "Equip")
+                    : Ui.Btn("FIT", () => FitCore(id), "Fit");
+                fit.Disabled = it.Slot == GearSlot.Chip && free < 0;
+            }
+            string what = it.Class != null && it.Class != cls ? $"{it.Slot.ToString().ToUpperInvariant()}  ·  {Classes.NameOf(it.Class.Value)} part"
+                                                              : it.Slot.ToString().ToUpperInvariant();
+            _hold.AddChild(Ui.CardWrap(PartRow($"Hold_{id}", what + (n > 1 ? $"  ·  x{n}" : ""), id, it.Class ?? cls, fit, HoldW - 40)));
         }
-        _col.AddChild(Ui.Lbl("I or Esc closes.", Ui.Small, Ui.Dim));
+    }
+
+    // One part: its slot, its name in its rarity's colour, and what it does on this class, in words.
+    private static HBoxContainer PartRow(string name, string slot, string id, ShipClass cls, Button action, float width = ShipW - 40)
+    {
+        var it = Equipment.ById(id);
+        var row = Ui.HBox(10, name);
+        var text = Ui.VBox(1); text.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        text.AddChild(Ui.Lbl(slot, Ui.Small, Ui.Dim));
+        var item = Ui.Lbl(it?.Name ?? "(empty)", Ui.Body, it != null ? Ui.RarityColor(it.Rarity) : Ui.Dim);
+        item.Name = "Item"; text.AddChild(item);
+        if (it != null)
+        {
+            var effects = Equipment.Describe(it, cls).ToList();
+            var what = Ui.Lbl(effects.Count > 0 ? string.Join("   ", effects) : it.Blurb, Ui.Small, Ui.Dim);
+            what.Name = "Effects"; what.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+            what.CustomMinimumSize = new Vector2(width - (action != null ? 110 : 0), 0);
+            text.AddChild(what);
+        }
+        row.AddChild(text);
+        if (action != null) { action.SizeFlagsVertical = SizeFlags.ShrinkCenter; action.CustomMinimumSize = new Vector2(96, 0); row.AddChild(action); }
+        return row;
+    }
+
+    // A core part from the hold onto its slot; the part it replaces goes into the hold.
+    private void FitCore(string id)
+    {
+        var it = Equipment.ById(id); var cls = Character.Class; var l = Character.LoadoutFor(cls);
+        int k = System.Array.IndexOf(Equipment.Core, it?.Slot ?? GearSlot.Chip);
+        if (k < 0 || !Equipment.Fits(it, Equipment.Core[k], cls) || !Character.Unstow(id)) return;
+        Character.Stow(l[k]); l[k] = id; Changed();
+    }
+
+    // A chip from the hold into the first empty chip slot.
+    private void FitChip(string id)
+    {
+        var l = Character.LoadoutFor(Character.Class);
+        int free = System.Array.FindIndex(l, Equipment.CoreSlots, Equipment.ChipSlots, string.IsNullOrEmpty);
+        if (free < 0 || Equipment.ById(id)?.Slot != GearSlot.Chip || !Character.Unstow(id)) return;
+        l[free] = id; Changed();
     }
 
     // saved at once; the ship refits, and the host is told (it applies equipment too)

@@ -99,6 +99,9 @@ public partial class Net : Node
         GetTree().AutoAcceptQuit = false;
     }
 
+    // The batched save's clock: this node outlives every scene.
+    public override void _Process(double delta) => Character.TickSave(delta);
+
     public override void _Notification(int what)
     {
         if (what == NotificationWMCloseRequest) Game.Quit();
@@ -111,8 +114,9 @@ public partial class Net : Node
     // packets call the neighbouring method, and every balance number it shows is a quiet lie.
     //
     // So the handshake compares a FINGERPRINT of the build, not a number anyone has to remember
-    // to bump: every RPC's name, arguments and delivery, and every constant and fixed value in
-    // the game's types (stats, prices, timings). The same zip on two machines agrees; a changed
+    // to bump: every RPC's name, arguments and delivery, every constant and fixed value in the
+    // game's types (prices, timings), every table of them (gear parts, upgrades, bosses), and
+    // every class's stat sheet. The same zip on two machines agrees; a changed
     // number or message on either side does not. It runs in Godot's authentication step, BEFORE
     // the peer counts as connected: nothing is spawned for it, sent to it or relayed about it
     // until both sides have seen the other's fingerprint -- and each side refuses on its own, so
@@ -159,21 +163,38 @@ public partial class Net : Node
                 if ((f.IsLiteral || f.IsInitOnly) && Plain(f.FieldType))
                     parts.Add($"{t.Name}.{f.Name}={Show(f.GetValue(null))}");
         }
+        // THE SHEETS: each class's base numbers are written in ShipStats' constructor, not a field.
+        foreach (ShipClass c in Enum.GetValues(typeof(ShipClass)))
+            foreach (var s in new ShipStats(c).All) parts.Add($"sheet {c}.{s.Id}={Show(s.Base)}{(s.Inverse ? " inverse" : "")}");
         uint h = 2166136261;                              // FNV-1a: stable across processes, unlike GetHashCode
         foreach (char c in string.Join("\n", parts)) { h ^= c; h *= 16777619; }
         return (int)h;
     }
     // Values whose text is the same on every machine: numbers, words, colours and vectors, and
-    // records and collections of them. Not engine objects, not anything a player's run has changed.
+    // records, tables and arrays of them. Not engine objects, and not the game's live collections
+    // (a list or dictionary field is what a run fills in -- the key bindings, the character).
     private static bool Plain(Type t) =>
         t.IsPrimitive || t.IsEnum || t == typeof(string) || t == typeof(decimal) || t == typeof(Color) || t == typeof(Vector2)
         || (t.IsArray && Plain(t.GetElementType()))
-        || (t.GetMethod("<Clone>$") != null && !typeof(GodotObject).IsAssignableFrom(t));
-    private static string Show(object v) => v switch
+        || (t.GetMethod("<Clone>$") != null && !typeof(GodotObject).IsAssignableFrom(t))
+        || Table(t);
+    // A TABLE ROW: one of the game's own data classes (a gear part, an upgrade, a boss type). Held in
+    // a readonly field it is as fixed as a constant -- but a class, so it has no text of its own:
+    // its public fields are written out, dictionaries sorted by key.
+    private static bool Table(Type t) =>
+        t.IsClass && t != typeof(string) && t.Assembly == typeof(Net).Assembly
+        && !typeof(GodotObject).IsAssignableFrom(t) && t.GetConstructor(Type.EmptyTypes) != null;
+    private static string Show(object v) => Show(v, 0);
+    private static string Show(object v, int depth) => v switch
     {
         null => "null",
         IFormattable f => f.ToString(null, System.Globalization.CultureInfo.InvariantCulture),
-        Array a => "[" + string.Join(",", a.Cast<object>().Select(Show)) + "]",
+        GodotObject g => g.GetType().Name,
+        Array a => "[" + string.Join(",", a.Cast<object>().Select(x => Show(x, depth))) + "]",
+        System.Collections.IDictionary d => "{" + string.Join(",", d.Keys.Cast<object>()
+            .Select(k => Show(k, depth) + ":" + Show(d[k], depth)).OrderBy(x => x, StringComparer.Ordinal)) + "}",
+        _ when depth < 4 && Table(v.GetType()) => v.GetType().Name + "{" + string.Join(",", v.GetType()
+            .GetFields(BindingFlags.Public | BindingFlags.Instance).OrderBy(f => f.Name).Select(f => f.Name + "=" + Show(f.GetValue(v), depth + 1))) + "}",
         _ => v.ToString(),
     };
 
@@ -201,12 +222,14 @@ public partial class Net : Node
     }
 
     // The session ends; nothing else. Game.Quit calls this alone -- there is no world to fall
-    // back to -- and GoOffline calls it first. It saves only when there WAS a session to leave:
-    // this also runs at boot and after a failed Host()/Join(), and saving there once wrote a
-    // freshly built default base over a good file.
+    // back to -- and GoOffline calls it first. It saves the world only when there WAS a session to
+    // leave: this also runs at boot and after a failed Host()/Join(), and saving the world there
+    // once wrote a freshly built default base over a good file. A batched save still waiting
+    // (Character.SaveSoon) is written every time -- it holds only the pilot's own statics.
     public void Close()
     {
         if (_inSession) SaveLocalCharacter();
+        Character.SaveIfPending();
         _inSession = false;
         _joinGen++;                                        // a lookup still in flight connects to nothing
         Shutdown();

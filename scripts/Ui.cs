@@ -29,7 +29,10 @@ public static class Ui
         Dim    = new(0.518f, 0.573f, 0.659f),   // #8492a8  secondary text
         Good   = new(0.290f, 0.871f, 0.502f),   // #4ade80
         Warn   = new(0.984f, 0.749f, 0.141f),   // #fbbf24
-        Bad    = new(0.973f, 0.443f, 0.443f);   // #f87171
+        Bad    = new(0.973f, 0.443f, 0.443f),   // #f87171
+        Epic   = new(0.749f, 0.451f, 1.000f);   // #bf73ff  the rarest gear
+    // A part's name is drawn in its rarity's colour, everywhere it is named.
+    public static Color RarityColor(Rarity r) => r switch { Rarity.Rare => Accent, Rarity.Epic => Epic, _ => Text };
 
     // Corner radii. A panel is rounder than the things inside it: a card with its container's
     // radius looks like it is bulging out of it.

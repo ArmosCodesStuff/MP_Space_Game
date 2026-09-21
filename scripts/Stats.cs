@@ -8,21 +8,32 @@ using System.Collections.Generic;
 // here, and the stats window (K) prints this same sheet. So the window cannot
 // disagree with the game; if a number changes, it changes for both.
 //
-// Each stat is Base x (1 + Bonus) + Flat. Bonuses are fractions keyed by stat id (0.10 = +10%):
-// equipment's (Equipment.Bonuses) and the character's own. Flats are the pilot's purchases
-// (Progression.Flats).
-//
-// Interval stats (time between shots) are the exception: a rate-of-fire bonus
-// DIVIDES them, so +100% RoF halves the interval and doubles the DPS.
+// Each stat is (Base + Flat) x (1 + Bonus).
+//   Flat  -- whole additions: the pilot's purchases (Progression.Flats) and gear's (Equipment.Adds:
+//            one fighter fewer, two more missiles in the magazine).
+//   Bonus -- shares keyed by stat id (0.10 = +10%): gear's (Equipment.Bonuses) and the character's
+//            own (Character.Bonuses), summed (ShipStats.Sum).
+// Interval stats (time between shots) are the exception: a rate-of-fire bonus DIVIDES them, so
+// +100% RoF halves the interval and doubles the DPS. Either way the multiplier never falls below
+// 0.1: gear leans hard, and a stack of downsides must shrink a number, never zero it, turn it
+// negative or divide by zero.
 // ─────────────────────────────────────────────────────────────────────────────
 public class Stat
 {
     public string Id, Label, Unit, Group;
-    public double Base, Bonus, Flat;   // Flat: pilot upgrades, added before the bonus
+    public double Base, Bonus, Flat;   // Flat: purchases and gear's whole additions, added before the bonus
     public bool Inverse;           // an interval: bonus divides instead of multiplies
     public int Decimals = 1;
 
-    public double Value => Inverse ? (Base + Flat) / (1.0 + Bonus) : (Base + Flat) * (1.0 + Bonus);
+    private const double MinScale = 0.1;
+    public double Value
+    {
+        get
+        {
+            double k = System.Math.Max(MinScale, 1.0 + Bonus);
+            return Inverse ? (Base + Flat) / k : (Base + Flat) * k;
+        }
+    }
     public string Fmt(double v) => v.ToString("F" + Decimals) + (Unit.Length > 0 ? " " + Unit : "");
 }
 
@@ -33,6 +44,15 @@ public class ShipStats
     private readonly Dictionary<string, Stat> _byId = new();
 
     public double this[string id] => _byId.TryGetValue(id, out var s) ? s.Value : 0;
+
+    // Two sets of shares or additions, added key by key (either may be null).
+    public static Dictionary<string, double> Sum(IReadOnlyDictionary<string, double> a, IReadOnlyDictionary<string, double> b)
+    {
+        var d = new Dictionary<string, double>();
+        foreach (var src in new[] { a, b })
+            if (src != null) foreach (var kv in src) d[kv.Key] = d.GetValueOrDefault(kv.Key) + kv.Value;
+        return d;
+    }
 
     // Retune ONE ship's sheet, for a ship that is not a pilot's: the title screen's battleship
     // fires two missiles on a five second reload rather than the class's. It is the sheet that
@@ -76,6 +96,7 @@ public class ShipStats
             Add("Main guns", "main_interval", "Reload (per barrel)",1.0, "s", 2, inverse: true);
             Add("Main guns", "main_range",    "Range",              720, "u", 0);
             Add("Main guns", "main_turn",     "Turret turn rate",   Mathf.Tau / 4f, "rad/s", 2);
+            Add("Main guns", "shell_speed",   "Shell speed",        520, "u/s", 0);
 
             // A magazine, reloaded by hand (R): one missile, then a 16 s reload.
             Add("Missile", "missile_damage",   "Damage",            5.0, "", 1);

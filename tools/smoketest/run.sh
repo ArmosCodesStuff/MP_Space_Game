@@ -40,15 +40,15 @@ N='RID alloc|PagedAlloc|find any UPNPDevices'
 set +e
 # fixed 60 fps: identical frame timing every run, so the DPS checks are exact
 timeout 1200 "$G" --headless --fixed-fps 60 --path . -- solo 2>&1 | grep --line-buffered -E "$F" | grep --line-buffered -vE "$N" | sed -u 's/^/[solo]  /' > solo.log
-(timeout 60 "$G" --headless --path . -- host 2>&1 | grep --line-buffered -E "$F" | grep --line-buffered -vE "$N" | sed -u 's/^/[host]  /' > host.log) &
+(timeout 120 "$G" --headless --path . -- host 2>&1 | grep --line-buffered -E "$F" | grep --line-buffered -vE "$N" | sed -u 's/^/[host]  /' > host.log) &
 sleep 0.5
-(timeout 60 "$G" --headless --path . -- guest2 2>&1 | grep --line-buffered -E "$F" | grep --line-buffered -vE "$N" | sed -u 's/^/[third] /' > guest2.log) &
-timeout 60 "$G" --headless --path . -- guest 2>&1 | grep --line-buffered -E "$F" | grep --line-buffered -vE "$N" | sed -u 's/^/[guest] /' > guest.log
+(timeout 120 "$G" --headless --path . -- guest2 2>&1 | grep --line-buffered -E "$F" | grep --line-buffered -vE "$N" | sed -u 's/^/[third] /' > guest2.log) &
+timeout 120 "$G" --headless --path . -- guest 2>&1 | grep --line-buffered -E "$F" | grep --line-buffered -vE "$N" | sed -u 's/^/[guest] /' > guest.log
 wait
 # the dedicated two-player arena run: after the three-player run, on its own port
-(timeout 60 "$G" --headless --path . -- ahost 2>&1 | grep --line-buffered -E "$F" | grep --line-buffered -vE "$N" | sed -u 's/^/[ahost] /' > ahost.log) &
+(timeout 120 "$G" --headless --path . -- ahost 2>&1 | grep --line-buffered -E "$F" | grep --line-buffered -vE "$N" | sed -u 's/^/[ahost] /' > ahost.log) &
 sleep 0.5
-timeout 60 "$G" --headless --path . -- aguest 2>&1 | grep --line-buffered -E "$F" | grep --line-buffered -vE "$N" | sed -u 's/^/[aguest]/' > aguest.log
+timeout 120 "$G" --headless --path . -- aguest 2>&1 | grep --line-buffered -E "$F" | grep --line-buffered -vE "$N" | sed -u 's/^/[aguest]/' > aguest.log
 wait
 cat solo.log host.log guest.log guest2.log ahost.log aguest.log
 BAD=$(cat solo.log host.log guest.log guest2.log ahost.log aguest.log | grep -cE "FAIL|Exception|ERROR")

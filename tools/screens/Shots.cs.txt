@@ -96,6 +96,17 @@ public partial class _Shots : Node
         Key(global::Godot.Key.K); await W(0.4); await Snap("5_k_keys");
         N<StatsWindow>().First().ShowPane(false); await W(0.2); await Snap("6_k_stats");
         Key(global::Godot.Key.K); await W(0.2);
+        // the same window on a carrier flying boss drops: fighters added, downsides in red
+        {
+            var cl = Character.LoadoutFor(ShipClass.Carrier); var keep = (string[])cl.Clone();
+            cl[0] = "cv_swarm_3"; cl[4] = "cv_widebay_3";
+            Character.Class = ShipClass.Carrier; P(H, "ApplyLocalIdentity"); await W(0.3);
+            Key(global::Godot.Key.K); await W(0.4);
+            N<StatsWindow>().First().ShowPane(false); await W(0.2); await Snap("6b_k_stats_gear");
+            Key(global::Godot.Key.K); await W(0.2);
+            for (int k = 0; k < keep.Length; k++) cl[k] = keep[k];
+            Character.Class = ShipClass.Battleship; P(H, "ApplyLocalIdentity"); await W(0.3);
+        }
 
         Character.Class = ShipClass.Carrier; P(H, "ApplyLocalIdentity"); await W(0.2);
         me = H.GetNode<PlayerShip>("Ship_1");
@@ -155,8 +166,9 @@ public partial class _Shots : Node
             await Snap("16_arms_and_queue");
             H.GetNode<PlayerShip>("Ship_1").Visible = true; GetViewport().GetCamera2D().Zoom = new Vector2(0.9f, 0.9f);
 
-            // off it goes: charging at the portal
-            Y.RequestDispatch();
+            // off it goes: charging at the portal (the dice fixed: these frames show a run that gets through)
+            Hauler.PretendRoll = 0f;
+            Y.RequestDispatch(escorted: false);
             for (int i = 0; i < 9000 && Y.Hauler.State != Hauler.St.Charging; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             GetViewport().GetCamera2D().Zoom = new Vector2(1.3f, 1.3f);
             ship.Position = Hub.PortalPos + new Vector2(-150, 260); ship.Velocity = Vector2.Zero; await W(1.6);
@@ -289,6 +301,19 @@ public partial class _Shots : Node
             await Snap("55_equipment");
             H.ToggleEquipment(); await W(0.2);
         }
+        // ...and with boss drops: an Epic shield fitted (its name in the Epic colour, its effects in
+        // words), and a hold of both classes' parts, some of them doubled
+        {
+            var bl = Character.LoadoutFor(Character.Class); var keep = (string[])bl.Clone();
+            bl[2] = "sh_glass_3"; bl[6] = "chip_combat_2";
+            foreach (var id in new[] { "bs_heavy_2", "bs_seeker_3", "drv_racing_1", "sh_bulwark_3", "fr_flak_1", "chip_target_1", "chip_target_1", "cv_elite_3", "cv_widebay_2" })
+                Character.Stow(id);
+            P(H, "ApplyLocalIdentity"); H.ToggleEquipment(); await W(0.4);
+            await Snap("58_equipment_hold");
+            H.ToggleEquipment(); await W(0.2);
+            for (int k = 0; k < keep.Length; k++) bl[k] = keep[k];
+            Character.GearHold.Clear(); P(H, "ApplyLocalIdentity"); await W(0.2);
+        }
         // the hull bar with its fill's edge running through both readouts: every letter must read
         // (dark on the fill, light past it) -- "HULL 180 / 375" and "WARP READY" split mid-word
         {
@@ -357,6 +382,14 @@ public partial class _Shots : Node
             GetViewport().GetCamera2D().Zoom = new Vector2(3.2f, 3.2f);
         }
         await Close(ShipClass.Carrier, "10_carrier_closeup");
+        // a Wide Bay III: five bombers docked, three to port and two to starboard
+        {
+            var cl = Character.LoadoutFor(ShipClass.Carrier); var keep = (string[])cl.Clone();
+            cl[4] = "cv_widebay_3";
+            await Close(ShipClass.Carrier, "10b_carrier_gear_docked");
+            for (int k = 0; k < keep.Length; k++) cl[k] = keep[k];
+            P(H, "ApplyLocalIdentity"); await W(0.2);
+        }
 
         // ── QA: every remaining feature and UI state, one frame each ─────────────
         {
@@ -437,7 +470,8 @@ public partial class _Shots : Node
             var h = Y.Hauler; h.ResetToPad(); Y.Ore = 5000; Y.Salvage = 5000;
             for (int i = 0; i < 1200 && !h.CanDispatch; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             await Frame(Hub.HaulerPad + new Vector2(0, -20), 2.0f);
-            h.Dispatch(); await W(0.7); await Snap("28_hauler_lifting");
+            Hauler.PretendRoll = 0f;
+            h.Dispatch(escorted: false); await W(0.7); await Snap("28_hauler_lifting");
             for (int i = 0; i < 600 && h.State != Hauler.St.Departing; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             h.Position = new Vector2(700, Hub.LaneY); await Frame(h.Position, 1.2f); await Snap("28b_hauler_departing");
             h.Position = new Vector2(Hub.PortalPos.X - 3, Hub.LaneY);
@@ -450,6 +484,30 @@ public partial class _Shots : Node
             for (int i = 0; i < 600 && h.State != Hauler.St.Landing; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             await Frame(Hub.HaulerPad + new Vector2(0, -20), 2.0f); await Snap("28d_hauler_landing");
             await W(0.5); await Snap("28e_hauler_turning_while_landing");      // about half way down, half way round
+            // a lone run the dice went against: back empty, CARGO LOST rising off the hull
+            h.ResetToPad(); h.Cargo = 400; Hauler.PretendRoll = 0.99f;
+            h.Dispatch(escorted: false);
+            for (int i = 0; i < 1800 && h.State != Hauler.St.Arriving; i++)
+            {
+                if (h.State == Hauler.St.Lifting) h.T = Economy.HaulerLift;
+                if (h.State == Hauler.St.Departing && h.Position.X < Hub.PortalPos.X - 5) h.Position = new Vector2(Hub.PortalPos.X - 1, Hub.LaneY);
+                if (h.State == Hauler.St.Charging) h.T = Economy.HaulerCharge;
+                if (h.State == Hauler.St.Away) h.T = Economy.HaulerAway;
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            }
+            await Frame(Hub.PortalPos, 1.2f); await W(0.3); await Snap("59b_hauler_cargo_lost");
+            // an ESCORT mid-route: off the lane, its way ahead drawn, a wave closing on it
+            Hauler.PretendRoll = null;
+            h.ResetToPad(); h.Cargo = 300;
+            Y.RequestDispatch(escorted: true); h.T = Economy.HaulerLift;
+            for (int i = 0; i < 600 && h.State != Hauler.St.Escorting; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            typeof(Hauler).GetField("_leg", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(h, 1);
+            h.Position = new Vector2(150, 1400); h.T = Economy.EscortFirstWave - 0.1;
+            await W(1.0);
+            foreach (var r in hub.Raiders) r.Position = h.Position + (r.Position - h.Position).Normalized() * 700f;
+            await Frame(h.Position + new Vector2(150, 50), 0.55f); await Snap("59_hauler_escort");
+            foreach (var r in hub.Raiders.ToList()) r.TakeDamage(1e9);
+            h.ResetToPad(); await W(0.3);
             Me().Visible = true;
         }
         // the arena, last: the trip replaces the hub scene, so nothing may follow it that
@@ -464,6 +522,17 @@ public partial class _Shots : Node
             if (GodotObject.IsInstanceValid(H.Boss)) { H.Boss.TakeDamage(90); await W(0.09); await Snap("42_boss_bar_chunk"); }
             for (int i = 0; i < 60 * 16 && !N<Telegraph>().Any(t => !t.Line); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             await W(0.9); await Snap("39_arena_shockwave_telegraph");
+            // the kill: this pilot's crates on a ring where the boss died, the victory window on the
+            // boss bar, the crates on the radar; one taken so the count reads 1 of 2
+            if (GodotObject.IsInstanceValid(H.Boss))
+            {
+                var at = H.Boss.Position;
+                H.Boss.TakeDamage(H.Boss.Hp + 1); await W(0.6);
+                if (H.Crates.Count > 0) { ash.Position = H.Crates[0].Position; ash.Velocity = Vector2.Zero; await W(0.3); }
+                ash.Position = at + new Vector2(0, 420); ash.Velocity = Vector2.Zero;
+                GetViewport().GetCamera2D().Zoom = new Vector2(0.8f, 0.8f); await W(1.0);
+                await Snap("62_arena_loot");
+            }
         }
         GD.Print("SWEEP DONE");          // the runner fails without it: a cut-off sweep must never pass as clean
         Game.Quit();                     // the game's own way out, as a player leaves

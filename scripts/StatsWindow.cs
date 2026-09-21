@@ -5,7 +5,8 @@ using Godot;
 //                      key, press a new one. A clash swaps the two; reserved keys are
 //                      refused. Saved to this machine's settings.
 //   STATS            : the ship's live ShipStats -- the same object the turrets, wings
-//                      and helm read -- as base, bonus and final, with derived DPS.
+//                      and helm read -- as base, added (purchases and gear's whole
+//                      additions), bonus (a downside in red) and final, with derived DPS.
 public partial class StatsWindow : CanvasLayer
 {
     public PlayerShip Ship;
@@ -73,11 +74,11 @@ public partial class StatsWindow : CanvasLayer
         // ── stats pane ──
         _statsPane = Ui.VBox(10);
         col.AddChild(_statsPane);
-        var rule = Ui.Lbl("Final = base × (1 + bonus). Reload, cooldown and radius bonuses divide instead.", Ui.Small, Ui.Dim);
+        var rule = Ui.Lbl("Final = (base + added) × (1 + bonus). Reload, cooldown and radius bonuses divide instead.", Ui.Small, Ui.Dim);
         rule.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         _statsPane.AddChild(rule);
         _derived = new VBoxContainer(); _statsPane.AddChild(_derived);
-        _grid = new GridContainer { Columns = 4 };
+        _grid = new GridContainer { Columns = 5 };
         _grid.AddThemeConstantOverride("h_separation", 18);
         _grid.AddThemeConstantOverride("v_separation", 2);
         _statsPane.AddChild(_grid);
@@ -191,7 +192,7 @@ public partial class StatsWindow : CanvasLayer
         _derived.AddChild(Cell($"SUSTAINED TOTAL:  {total:0.00} DPS" + (s.Class == ShipClass.Carrier ? "  (+ fighter runs, + bomber strikes)" : ""), true, false, acc));
         _derived.AddChild(new Control { CustomMinimumSize = new Vector2(0, 8) });
 
-        // ── every stat: base / bonus / final ──
+        // ── every stat: base / added / bonus / final ──
         string group = null;
         foreach (var st in s.All)
         {
@@ -200,13 +201,16 @@ public partial class StatsWindow : CanvasLayer
                 group = st.Group;
                 _grid.AddChild(Cell(group.ToUpperInvariant(), true, false, new Color(0.5f, 0.78f, 1f)));
                 _grid.AddChild(Cell("base", true, true, new Color(1, 1, 1, 0.5f)));
+                _grid.AddChild(Cell("added", true, true, new Color(1, 1, 1, 0.5f)));
                 _grid.AddChild(Cell("bonus", true, true, new Color(1, 1, 1, 0.5f)));
                 _grid.AddChild(Cell("final", true, true, new Color(1, 1, 1, 0.5f)));
             }
             _grid.AddChild(Cell("  " + st.Label));
             _grid.AddChild(Cell(st.Fmt(st.Base), false, true, new Color(1, 1, 1, 0.6f)));
-            _grid.AddChild(Cell($"{(st.Bonus >= 0 ? "+" : "")}{st.Bonus * 100:0}%", false, true,
-                                st.Bonus != 0 ? new Color(0.5f, 1f, 0.6f) : new Color(1, 1, 1, 0.4f)));
+            _grid.AddChild(Cell(st.Flat != 0 ? (st.Flat > 0 ? "+" : "−") + st.Fmt(System.Math.Abs(st.Flat)) : "", false, true, new Color(1, 1, 1, 0.6f)));
+            // a downside reads as one: red, not the green every non-zero bonus used to get
+            _grid.AddChild(Cell($"{(st.Bonus >= 0 ? "+" : "−")}{System.Math.Abs(st.Bonus) * 100:0}%", false, true,
+                                st.Bonus > 0 ? Ui.Good : st.Bonus < 0 ? Ui.Bad : new Color(1, 1, 1, 0.4f)));
             _grid.AddChild(Cell(st.Fmt(st.Value), false, true));
         }
     }

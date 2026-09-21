@@ -94,7 +94,14 @@ public partial class Yard : Node2D
     // (Not "and the sector is home": a Yard only exists at home, and leaving for the arena sets the
     // sector BEFORE this Yard's own exit -- where that clause made the one save on the way out
     // write nothing.)
-    private bool IsMyOwnBase => Net.Sim && !_parked;
+    public bool IsMyOwnBase => Net.Sim && !_parked;
+
+    // THE BASE OWNER'S BOSS RECORD: what a gated upgrade asks for. The host is the owner of the
+    // base everyone is standing in; a guest is told it with the totals.
+    private int _ownerBoss;
+    public int OwnerBoss => Net.IsHost ? Missions.HighestBeaten : _ownerBoss;
+    public bool AutoSell => Level("hauler_autosell") >= 1;
+    public double RunSafe => Value("hauler_evasion") / 100.0;       // a lone run's chance of getting through
 
     public void StoreToCharacter()
     {
@@ -111,7 +118,7 @@ public partial class Yard : Node2D
             return;
         }
         if (!IsMyOwnBase) return;
-        Character.BaseOre = Ore; Character.BaseSalvage = Salvage; Character.BaseCredits = Credits;
+        (Character.BaseOre, Character.BaseSalvage, Character.BaseCredits) = Banked();
         Character.BaseLevels.Clear();   foreach (var kv in _levels)   Character.BaseLevels[kv.Key] = kv.Value;
         Character.BaseInvested.Clear(); foreach (var kv in _invested) Character.BaseInvested[kv.Key] = kv.Value;
     }
@@ -175,6 +182,7 @@ public partial class Yard : Node2D
 
     public void SaveForTrip()
     {
+        Bank();                                                   // the loads come home first: nothing flies off with the party
         _trip = new Trip(Ore, Salvage, Credits, new Dictionary<string, int>(_levels), new Dictionary<string, double>(_invested),
                          FleetRate(GatherKind.Miner), FleetRate(GatherKind.Salvager));
         TripCredits = 0; TripClock = 0; TripStartCredits = Credits;
@@ -227,7 +235,7 @@ public partial class Yard : Node2D
         if (u == null || !Net.Sim) return false;
         int lv = Level(id);
         double cost = Economy.Cost(u, lv);
-        if (Economy.Maxed(u, lv) || Credits < cost) return false;
+        if (Economy.Maxed(u, lv) || Credits < cost || OwnerBoss < u.NeedsBoss) return false;
         Credits -= cost; _levels[id] = lv + 1;
         _invested[u.Tab] = Invested(u.Tab) + cost;                // what a rebuild in this category is 10% of
         SaveBase();                                               // a purchase is deliberate: keep it now
@@ -347,14 +355,9 @@ public partial class Yard : Node2D
     public double PodSize => Value("pod_size");
     public double Capacity => Pods * PodSize;
 
-    public void RequestDispatch()
-    {
-        if (Net.IsHost) Hauler.Dispatch();
-        else Net.AskHost(this, nameof(RequestDispatchRpc));
-    }
-
-    [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void RequestDispatchRpc() { if (Net.FromPlayer(this, out _)) Hauler.Dispatch(); }
+    // DISPATCH and ESCORT are the base owner's alone: a lone run can lose the load, and an escort
+    // is a mission for the pilot whose hauler it is. A guest has no path to either.
+    public void RequestDispatch(bool escorted) { if (IsMyOwnBase) Hauler.Dispatch(escorted); }
 
     public void PortalFlash()
     {
@@ -399,14 +402,26 @@ public partial class Yard : Node2D
         SyncFleet();
     }
 
-    // Before parking: gatherer cargo returns to stock; the hauler's returns too if it
-    // is still home, or is paid if it is already through the portal.
+    // THE STOCK AS IF EVERY LOAD WERE HOME: gatherer cargo back to ore and salvage; the hauler's
+    // back to stock too if it is still here (an escort included), or paid its outcome if it is
+    // already through the portal. Parking, a trip and a save all count the loads this way: with
+    // AUTO-SELL locked, a full hauler waiting on its pad is the usual state, and a trip or a quit
+    // used to throw its load away.
+    private (double ore, double salvage, double credits) Banked()
+    {
+        double ore = Ore, salvage = Salvage, credits = Credits;
+        foreach (var g in Gatherers) { if (g.Kind == GatherKind.Miner) ore += g.Cargo; else salvage += g.Cargo; }
+        if (Hauler.Cargo > 0)
+        {
+            if (Hauler.State == Hauler.St.Away) credits += Hauler.Payout;
+            else { ore += Hauler.Cargo / 2; salvage += Hauler.Cargo / 2; }
+        }
+        return (ore, salvage, credits);
+    }
     private void Bank()
     {
-        foreach (var g in Gatherers) { Deposit(g.Kind, g.Cargo); g.Cargo = 0; }
-        if (Hauler.Cargo <= 0) return;
-        if (Hauler.State == Hauler.St.Away) Credits += Hauler.Cargo * Economy.CreditsPerUnit;
-        else { Ore += Hauler.Cargo / 2; Salvage += Hauler.Cargo / 2; }
+        (Ore, Salvage, Credits) = Banked();
+        foreach (var g in Gatherers) g.Cargo = 0;
         Hauler.Cargo = 0;
     }
 
@@ -434,15 +449,16 @@ public partial class Yard : Node2D
         {
             _totalsCd = 1.0;
             var lv = Economy.All.Select(u => Level(u.Id)).ToArray();
-            Hub.RpcHome(this, nameof(NetTotals), Ore, Salvage, Credits, lv, Economy.Tabs.Select(Invested).ToArray());
+            Hub.RpcHome(this, nameof(NetTotals), Ore, Salvage, Credits, lv, Economy.Tabs.Select(Invested).ToArray(), Missions.HighestBeaten);
         }
         _stateCd -= delta;
         if (_stateCd <= 0) { _stateCd = 0.1; SendState(); }
     }
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetTotals(double ore, double salvage, double credits, int[] levels, double[] invested)
+    private void NetTotals(double ore, double salvage, double credits, int[] levels, double[] invested, int ownerBoss)
     {
+        _ownerBoss = ownerBoss;
         for (int i = 0; i < Math.Min(invested.Length, Economy.Tabs.Length); i++) _invested[Economy.Tabs[i]] = invested[i];
         (Ore, Salvage, Credits) = (ore, salvage, credits);
         for (int i = 0; i < Math.Min(levels.Length, Economy.All.Length); i++) _levels[Economy.All[i].Id] = levels[i];
@@ -459,18 +475,18 @@ public partial class Yard : Node2D
             (gp[i], gr[i], gs[i], gc[i], gb[i], gh[i], gw[i]) = (g.Position, g.Rotation, (int)g.State, (float)g.Cargo, g.BeamTo, (float)g.Hull, g.NetRebuild);
         }
         var h = Hauler;
-        Hub.RpcHome(this, nameof(NetState), gp, gr, gs, gc, gb, gh, gw, h.Position, h.Rotation, (int)h.State, (float)h.T, (float)h.Cargo, (float)h.LastSale, (float)h.Hull, h.NetRebuild);
+        Hub.RpcHome(this, nameof(NetState), gp, gr, gs, gc, gb, gh, gw, h.Position, h.Rotation, (int)h.State, (float)h.T, (float)h.Cargo, (float)h.LastSale, (float)h.Hull, h.NetRebuild, h.NetFlags);
     }
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
     private void NetState(Vector2[] gp, float[] gr, int[] gs, float[] gc, Vector2[] gb, float[] gh, float[] gw,
-                          Vector2 hp, float hr, int hs, float ht, float hc, float sale, float hh, float hw)
+                          Vector2 hp, float hr, int hs, float ht, float hc, float sale, float hh, float hw, int hf)
     {
         // the fleet follows the levels (1 s); until they agree, skip the ships this once
         int n = Math.Min(gp.Length, Math.Min(gr.Length, Math.Min(gs.Length, Math.Min(gc.Length, Math.Min(gb.Length, Math.Min(gh.Length, gw.Length))))));
         if (n == Gatherers.Count)
             for (int i = 0; i < n; i++) Gatherers[i].SetNet(gp[i], gr[i], gs[i], gc[i], gb[i], gh[i], gw[i]);
-        Hauler.SetNet(hp, hr, hs, ht, hc, sale, hh, hw);
+        Hauler.SetNet(hp, hr, hs, ht, hc, sale, hh, hw, hf);
     }
 
     // The whole fleet, for whatever treats a miner, a salvager and the hauler alike.
@@ -482,6 +498,13 @@ public partial class Yard : Node2D
         // a damaged ship shows its hull: a small bar under it, green to red
         foreach (var g in Gatherers) HullBar(g.Position + new Vector2(-15, 26), 30, g.Hull, g.MaxHull, g.InReach);
         if (Hauler != null) HullBar(Hauler.Position + new Vector2(-40, 50), 80, Hauler.Hull, Hauler.MaxHull, Hauler.InReach);
+        // an escort's route, ahead of it: the way it will fly, on every peer
+        if (Hauler is { State: Hauler.St.Escorting } eh)
+        {
+            var pts = new List<Vector2> { ToLocal(eh.Position) };
+            pts.AddRange(Hub.EscortRoute.Skip(eh.Leg).Select(ToLocal));
+            DrawPolyline(pts.ToArray(), new Color(0.45f, 0.8f, 1f, 0.35f), 2f);
+        }
         for (int i = 0; i < Arms.Length; i++)
         {
             var a = Arms[i];

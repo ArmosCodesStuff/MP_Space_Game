@@ -4,9 +4,11 @@ using System.Linq;
 
 // The BASE menu (B, or the BASE button), in tabs:
 //   MINERS, SALVAGERS, HAULER : their upgrades. A row shows the level, the number it
-//     changes (now -> next), and the price. +10% upgrades cost 1.25x per level; +1
-//     upgrades (another ship, another pod) cost 2x per level and stop at MAX (5
-//     bought). BUY greys out until affordable. A guest's BUY is a request.
+//     changes (now -> next), and the price. +10% upgrades cost 1.25x per level; step
+//     upgrades (another ship, another pod, +7% EVASION) cost 2x per level and stop at
+//     MAX; a switch (AUTO-SELL) reads OFF / ON. BUY greys out until affordable, and
+//     reads LOCKED until the base owner has beaten the boss a row asks for. A guest's
+//     BUY is a request.
 //   REFIT : the only way to change class, name or colours. RESET costs 10% of your
 //     ore, salvage and credits, and asks for a second click before it pays.
 public partial class BasePanel : PanelContainer
@@ -91,7 +93,7 @@ public partial class BasePanel : PanelContainer
             _body.AddChild(Ui.CardWrap(row));
             _rows[u.Id] = (info, buy);
         }
-        _body.AddChild(Ui.Lbl("+10% upgrades cost 1.25× per level.  +1 upgrades cost 2× per level; each row shows its cap.",
+        _body.AddChild(Ui.Lbl("+10% upgrades cost 1.25× per level.  Step upgrades cost 2× per level; each row shows its cap.",
                               Ui.Small, Ui.Dim with { A = 0.75f }));
     }
 
@@ -108,12 +110,17 @@ public partial class BasePanel : PanelContainer
         foreach (var (id, (info, buy)) in _rows)
         {
             var u = Economy.ById(id); int lv = Y.Level(id);
-            bool max = Economy.Maxed(u, lv);
-            string now = $"{Economy.Value(u, lv):0.#}", next = max ? "MAX" : $"{Economy.Value(u, lv + 1):0.#}";
-            Ui.SetText(info, $"{u.Name}  ·  Lv {lv}\n{now} → {next} {u.Unit}   ({u.Blurb})");
+            bool max = Economy.Maxed(u, lv), locked = Y.OwnerBoss < u.NeedsBoss, sw = u.Kind == Economy.Kind.Unlock;
+            string gate = locked ? $"  -- beat the level-{u.NeedsBoss} boss first" : "";
+            if (sw) Ui.SetText(info, $"{u.Name}  ·  {(lv >= 1 ? "ON" : "OFF → ON")}\n({u.Blurb}){gate}");
+            else
+            {
+                string now = $"{Economy.Value(u, lv):0.#}", next = max ? "MAX" : $"{Economy.Value(u, lv + 1):0.#}";
+                Ui.SetText(info, $"{u.Name}  ·  Lv {lv}\n{now} → {next} {u.Unit}   ({u.Blurb}){gate}");
+            }
             double cost = Economy.Cost(u, lv);
-            Ui.SetText(buy, max ? "MAX" : $"BUY  {cost:0} cr");
-            buy.Disabled = max || Y.Credits < cost;
+            Ui.SetText(buy, max ? (sw ? "ON" : "MAX") : locked ? "LOCKED" : $"BUY  {cost:0} cr");
+            buy.Disabled = max || locked || Y.Credits < cost;
         }
         if (_reset != null)
         {

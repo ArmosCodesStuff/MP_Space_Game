@@ -1,13 +1,13 @@
 using Godot;
 
-// A BATTLESHIP SHELL: the main guns' round. It flies straight -- no tracking -- at 4x the
-// ship's missile speed, as far as the guns' range, and hits the first hostile it touches
+// A BATTLESHIP SHELL: the main guns' round. It flies straight -- no tracking -- at the guns'
+// shell speed (520 u/s; its own stat, so a missile rack cannot change the guns), as far as the
+// guns' range, and hits the first hostile it touches
 // (never a missile: that is point defence's job). The host's shell does the damage; guests
 // fly a cosmetic copy. Its path is swept in short steps each frame, so it cannot pass
 // through a small target between frames.
 public partial class Shell : Node2D
 {
-    public const float SpeedMult = 4f;         // x the ship's missile speed
     public Vector2 Dir; public float Speed, Range; public double Damage;
     public bool Cosmetic; public PlayerShip Source;
     private float _flown;

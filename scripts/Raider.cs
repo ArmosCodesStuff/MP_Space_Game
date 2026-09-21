@@ -20,7 +20,8 @@ using System.Linq;
 //   the target WILL be in 7 s (its speed carried forward): a red circle marks the spot
 //   for all 7 s, and the blast lands there -- move off the line and it misses.
 //
-// Targets: the nearest player ship, miner, salvager or hauler.
+// Targets: the nearest player ship, miner, salvager or hauler -- except a HUNTER, sent after
+// one quarry (the hauler on an escort), which goes for its quarry while it is there.
 //
 // PATROLS: 3 lights and 1 heavy circle a perimeter round the base (1800 u out) together.
 // When a target comes within 2000 u of the patrol, its lights break off to tackle it, and
@@ -86,6 +87,7 @@ public partial class Raider : Node2D, IHittable
     static readonly float[] Posts = { 0f, -Mathf.Pi / 2f, Mathf.Pi / 2f };               // ahead, left, right
 
     public Node2D Target { get; private set; }
+    public Node2D Quarry;                         // a hunter's: set by the host at the spawn
     // An ESCORT (launched by a boss): its target is set, its boost lasts until it is posted
     // (or `boostFor` runs out), and it is fragile.
     public bool IsEscort { get; private set; }
@@ -234,6 +236,7 @@ public partial class Raider : Node2D, IHittable
     // 2000 u of the patrol -- and a patrol's heavy takes whatever its lights have taken
     private Node2D Choose()
     {
+        if (Up(Quarry)) return Quarry;
         if (Patrol == 0) return Combat.Nearest(Hub.RaiderTargets(), Position, t => t.Position);
         if (!Heavy && Combat.Nearest(Hub.RaiderTargets(), Position, t => t.Position, Detect) is { } near) return near;
         foreach (var r in Hub.Raiders)                                           // a mate spotted one

@@ -12,7 +12,7 @@ using Godot;
 // for a visual change, a fix, or anything a save cannot notice.
 public static class Game
 {
-    public const int Version = 1;
+    public const int Version = 2;
 
     // Shown when a character cannot be loaded because it predates this build. Kept here, beside
     // the number that causes it, rather than in the screen that happens to draw it.
@@ -21,7 +21,8 @@ public static class Game
 
     // THE ONE WAY OUT. The window's close button, the menu's QUIT and the smoke test all come
     // through here, because a bare Quit() cuts off three things that need a moment to finish:
-    //   * the session -- saved, the socket closed, and the router ports we opened closed again.
+    //   * the session -- saved (a batched save still waiting too), the socket closed, and the
+    //     router ports we opened closed again.
     //     A mapping is made with no lease, so one left behind stays on the router for good, and
     //     closing it is a call to the router that takes a moment. (A router job still running at
     //     exit used to CRASH the process -- 0xC0000005 inside Godot's Upnp, host then quit within

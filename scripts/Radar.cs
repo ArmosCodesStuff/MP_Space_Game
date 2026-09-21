@@ -78,6 +78,8 @@ public partial class Radar : Control
 
         foreach (var rock in Hub.Rocks) { var p = P(rock.Position); if (Inside(p)) DrawCircle(p, 1.2f, new Color(0.55f, 0.45f, 0.35f, 0.8f)); }
         if (IsInstanceValid(Hub.Boss)) { var p = P(Hub.Boss.Position); if (Inside(p)) DrawCircle(p, 6f, new Color(1f, 0.3f, 0.25f)); }   // the boss
+        foreach (var cr in Hub.Crates)                                     // this pilot's crates: only its own exist here
+            if (IsInstanceValid(cr)) { var p = P(cr.Position); if (Inside(p)) DrawRect(new Rect2(p - new Vector2(2, 2), new Vector2(4, 4)), Ui.RarityColor(Equipment.ById(cr.Item)?.Rarity ?? Rarity.Common)); }
         if (!Hub.InArena)
         {   // home's landmarks: the arena has none of them, and drew a wreck and a portal where nothing is
             { var p = P(Hub.WreckPos); if (Inside(p)) DrawCircle(p, 4f, new Color(0.5f, 0.35f, 0.25f, 0.9f)); }

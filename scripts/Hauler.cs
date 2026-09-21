@@ -5,17 +5,22 @@ using System;
 // HAULER — carries the yard's stock out through the portal for sale.
 //
 // Home is the base's bottom pad. The portal sits on the same horizontal line, so
-// every move between them is perfectly flat. It lands SMALLER (65%) than it flies:
+// every move between them is perfectly flat -- except an escort's. It lands SMALLER (65%) than it flies:
 // shrinking onto the pad, with its shadow tucking in underneath, reads as settling
 // down out of the sky; growing again reads as lifting off.
 //
-//   LOADING    landed, facing the portal, filling its pods from the stock. Its
-//              floating DISPATCH button works once one pod is full; completely
-//              full, it goes by itself.
+//   LOADING    landed, facing the portal, filling its pods from the stock. Once one
+//              pod is full the base owner may send it: DISPATCH (alone) or ESCORT.
+//              Completely full, it goes alone by itself -- only with AUTO-SELL (the
+//              level-3 boss beaten, and 4462 cr).
 //   LIFTING    grows to flight size
-//   DEPARTING  slides slowly east to the portal
+//   DEPARTING  a lone run: slides slowly east to the portal
+//   ESCORTING  an escort: flies the long way (Hub.EscortRoute) while waves of raiders
+//              hunt it; it must reach the portal alive
 //   CHARGING   shakes inside a building blue aura
-//   AWAY       warps out; 30 s later its cargo is sold for credits
+//   AWAY       warps out; 30 s later its cargo is sold. A lone run gets through with the
+//              EVASION chance, or the cargo is lost and it comes back empty; an escort
+//              is paid 5x.
 //   ARRIVING   warps back in facing the base, its pods flashing empty
 //   RETURNING  slides slowly west to above its pad
 //   LANDING    shrinks back onto the pad, swinging round to face the portal, then loads again
@@ -26,9 +31,18 @@ using System;
 // ─────────────────────────────────────────────────────────────────────────────
 public partial class Hauler : UtilityShip
 {
-    public enum St { Loading, Lifting, Departing, Charging, Away, Arriving, Returning, Landing, Destroyed }
+    public enum St { Loading, Lifting, Departing, Escorting, Charging, Away, Arriving, Returning, Landing, Destroyed }
 
     public St State = St.Loading;
+    public bool Escorted { get; private set; }   // this run is an escort
+    public bool RunLost { get; private set; }    // a lone run the dice went against: its cargo is gone
+    public static float? PretendRoll;            // the smoke test's way to fix the dice (like Net.PretendProtocol)
+    public const int FlagEscorted = 1, FlagLost = 2;
+    public int NetFlags => (Escorted ? FlagEscorted : 0) | (RunLost ? FlagLost : 0);
+    // What this load sells for at the portal: x5 on an escort, nothing if a lone run was lost.
+    public double Payout => Cargo * Economy.CreditsPerUnit * (Escorted ? Economy.EscortPay : RunLost ? 0 : 1);
+    private int _leg, _waves;                    // an escort: the route point it is flying to, the waves sent
+    public int Leg => _leg;
     public double T;                         // seconds in the current state
     public double LastSale;                  // credits paid on the last return
     public const float Length = 200f;
@@ -61,7 +75,7 @@ public partial class Hauler : UtilityShip
         ResetToPad();
     }
 
-    public void ResetToPad() { Go(St.Loading); Cargo = 0; _speed = 0; _hasNet = false; Position = Hub.HaulerPad; Rotation = East; Hull = MaxHull; RebuildIn = 0; WaitingForCredits = false; }
+    public void ResetToPad() { EndEscort(); RunLost = false; Go(St.Loading); Cargo = 0; _speed = 0; _hasNet = false; Position = Hub.HaulerPad; Rotation = East; Hull = MaxHull; RebuildIn = 0; WaitingForCredits = false; }
 
     // out of reach while away (through the portal)
     public override double MaxHull => Economy.HaulerHull;
@@ -72,19 +86,33 @@ public partial class Hauler : UtilityShip
     public override (float halfLength, float halfWidth) Extent => (Length * 0.5f * VisualScale, Length * 0.12f * VisualScale);
     protected override float LostBlast => 70f;
     protected override float RebuiltBlast => 60f;
-    protected override void OnLost() { _speed = 0; Go(St.Destroyed); Effects(); }   // gone at once
+    protected override void OnLost() { _speed = 0; EndEscort(); Go(St.Destroyed); Effects(); }   // gone at once, its hunters with it
 
-    public void SetNet(Vector2 p, float rot, int state, float t, float cargo, float sale, float hull, float rebuild)
+    public void SetNet(Vector2 p, float rot, int state, float t, float cargo, float sale, float hull, float rebuild, int flags)
     {
         bool wasLost = Lost;
         (_netPos, _netRot, _hasNet) = (p, rot, true);
+        (Escorted, RunLost) = ((flags & FlagEscorted) != 0, (flags & FlagLost) != 0);
         if ((St)state != State || Math.Abs(T - t) > 0.5) T = t;
         (State, Cargo, LastSale) = ((St)state, cargo, sale);
         FromHost(hull, rebuild, wasLost);
     }
 
-    // The button's request. Only while loading, and only with at least one full pod.
-    public void Dispatch() { if (Net.Sim && CanDispatch) Go(St.Lifting); }
+    // Sent on its way: alone, or on an escort. Only while loading, only with at least one full pod,
+    // and only by the base's owner (Yard.RequestDispatch).
+    public void Dispatch(bool escorted)
+    {
+        if (!Net.Sim || !CanDispatch || !Yard.IsMyOwnBase) return;
+        Escorted = escorted; RunLost = false; _leg = 0; _waves = 0;
+        Go(St.Lifting);
+    }
+
+    // An escort over -- at the portal, lost, or the hauler reset: its hunters withdraw.
+    private void EndEscort()
+    {
+        if (Escorted && Net.IsHost && Yard?.Hub != null) Yard.Hub.CallOff(this);
+        Escorted = false; _leg = 0; _waves = 0;
+    }
 
     private void Go(St s) { State = s; T = 0; }
 
@@ -97,9 +125,10 @@ public partial class Hauler : UtilityShip
         {
             GuestClock(dt);
             if (_hasNet)
-            {
-                Position = new Vector2(Mathf.Lerp(Position.X, _netPos.X, Mathf.Clamp(10f * dt, 0f, 1f)), _netPos.Y);
-                Rotation = Mathf.LerpAngle(Rotation, _netRot, Mathf.Clamp(10f * dt, 0f, 1f));
+            {   // on its lane only x moves (the lane is exact); an escort flies free
+                float k = Mathf.Clamp(10f * dt, 0f, 1f);
+                Position = State == St.Escorting ? Position.Lerp(_netPos, k) : new Vector2(Mathf.Lerp(Position.X, _netPos.X, k), _netPos.Y);
+                Rotation = Mathf.LerpAngle(Rotation, _netRot, k);
             }
         }
         Effects();
@@ -114,17 +143,27 @@ public partial class Hauler : UtilityShip
             case St.Loading:
                 Position = Hub.HaulerPad; Rotation = East;
                 Cargo += Yard.TakeStock(Math.Min(Economy.HaulerLoadRate * dt, Yard.Capacity - Cargo));
-                if (Cargo >= Yard.Capacity - 1e-6) Go(St.Lifting);          // full: it goes by itself
+                if (Yard.AutoSell && Cargo >= Yard.Capacity - 1e-6) Dispatch(escorted: false);   // full: it goes alone by itself
                 break;
-            case St.Lifting:  if (T >= Economy.HaulerLift) Go(St.Departing); break;
+            case St.Lifting:  if (T >= Economy.HaulerLift) Go(Escorted ? St.Escorting : St.Departing); break;
             case St.Departing: if (Slide(Hub.PortalPos.X, dt)) Go(St.Charging); break;
+            case St.Escorting:
+                if (_waves < Economy.EscortWaves && T >= Economy.EscortFirstWave + _waves * Economy.EscortWaveEvery)
+                    Yard.Hub.HuntWave(this, _waves++);
+                if (Fly(Hub.EscortRoute[_leg], _leg == Hub.EscortRoute.Length - 1, dt) && ++_leg == Hub.EscortRoute.Length) Go(St.Charging);
+                break;
             case St.Charging:
-                if (T >= Economy.HaulerCharge) { Go(St.Away); Yard.PortalFlash(); }
+                if (T >= Economy.HaulerCharge)
+                {   // THE JUMP. An escort has made it: its hunters withdraw. A lone run rolls against EVASION.
+                    if (Escorted) Yard.Hub.CallOff(this);
+                    else RunLost = (PretendRoll ?? _rng.Randf()) >= Yard.RunSafe;
+                    Go(St.Away); Yard.PortalFlash();
+                }
                 break;
             case St.Away:
                 if (T >= Economy.HaulerAway)
                 {
-                    LastSale = Cargo * Economy.CreditsPerUnit;
+                    LastSale = Payout;
                     Yard.Credits += LastSale; Cargo = 0;
                     Rotation = West; Go(St.Arriving); Yard.PortalFlash();
                 }
@@ -141,11 +180,27 @@ public partial class Hauler : UtilityShip
             {   // down onto the pad, swinging from west to east on the way: it arrives facing the portal
                 float k = Mathf.Clamp((float)(T / Economy.HaulerLand), 0f, 1f);
                 Rotation = West + Mathf.Pi * Mathf.SmoothStep(0f, 1f, k);
-                if (k >= 1f) { Rotation = East; Go(St.Loading); }
+                if (k >= 1f) { Rotation = East; Escorted = RunLost = false; Go(St.Loading); }
                 break;
             }
         }
-        Position = new Vector2(Position.X, Hub.LaneY);                 // the lane: every move is flat
+        if (State != St.Escorting) Position = new Vector2(Position.X, Hub.LaneY);   // the lane: every move is flat but an escort's
+    }
+
+    // An escort's leg: toward `to` at the hauler's speed (20% of it while pinned), easing in only at
+    // the last point, the nose turning onto the heading at 2 rad/s (not while pinned, like any
+    // utility ship). True when it arrives.
+    private bool Fly(Vector2 to, bool last, float dt)
+    {
+        var d = to - Position; float dist = d.Length();
+        float top = (float)Economy.HaulerSpeed * (Pinned ? Raider.PinSpeed : 1f);
+        float want = last ? Mathf.Min(top, Mathf.Sqrt(2f * Accel * dist)) : top;
+        _speed = Mathf.MoveToward(_speed, want, Accel * dt);
+        if (Pinned) _speed = Mathf.Min(_speed, top);
+        if (!Pinned && dist > 1f) Rotation = Mathf.RotateToward(Rotation, d.Angle() + Mathf.Pi / 2f, 2f * dt);
+        if (dist < 0.5f || _speed * dt >= dist) { Position = to; if (last) _speed = 0; return true; }
+        Position += d / dist * _speed * dt;
+        return false;
     }
 
     // along x only, easing in and out, never faster than the hauler's speed
@@ -194,7 +249,7 @@ public partial class Hauler : UtilityShip
     {
         if (WarpedOut) return;
         // three light-yellow plumes at its three nozzles (x = -17.7, 0, +17.7 u at full size)
-        float vs = VisualScale, thr = State is St.Departing or St.Returning ? 1f : 0.2f;
+        float vs = VisualScale, thr = State is St.Departing or St.Escorting or St.Returning ? 1f : 0.2f;
         foreach (float nx in new[] { -17.7f, 0f, 17.7f })
             Plume.Draw(this, new Vector2(nx, Length * 0.5f) * vs, Vector2.Down, Length * 0.45f * vs, Plume.Utility, thr, thr > 0.5f);
         var tex = _sprite.Texture;
@@ -247,32 +302,37 @@ public partial class Hauler : UtilityShip
             }
         }
         if (State == St.Arriving || (State == St.Returning && T < 1.0))
-        {   // the sale, rising off the hull
-            float age = (float)(State == St.Arriving ? T : 2.0 + T);
+        {   // the sale, rising off the hull -- x5 for an escort; nothing, and why, for a lost run
+            float age = (float)(State == St.Arriving ? T : 2.0 + T), a = Mathf.Clamp(1.6f - age * 0.5f, 0f, 1f);
             _overlay.DrawSetTransform(inv * (GlobalPosition + new Vector2(0, -60f - 14f * age)), -GlobalRotation, Vector2.One);
-            Txt.Centre(_overlay, ThemeDB.FallbackFont, Vector2.Zero, $"+{LastSale:0} cr", 20, new Color(1f, 0.9f, 0.5f, Mathf.Clamp(1.6f - age * 0.5f, 0f, 1f)));
+            if (RunLost) Txt.Centre(_overlay, ThemeDB.FallbackFont, Vector2.Zero, "CARGO LOST", 20, Ui.Bad with { A = a });
+            else Txt.Centre(_overlay, ThemeDB.FallbackFont, Vector2.Zero, $"+{LastSale:0} cr" + (Escorted ? "  ×5" : ""), 20, new Color(1f, 0.9f, 0.5f, a));
             _overlay.DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
         }
     }
 }
 
-// The hauler's floating control, riding above it while it loads: DISPATCH, and a
-// bar of the load with a tick between pods. Greyed out until one pod is full.
+// The hauler's floating control, riding above it while it loads: DISPATCH (alone, with the
+// EVASION chance) and ESCORT (x5), and a bar of the load with a tick between pods. The buttons
+// are the base owner's; a guest sees the load. Greyed out until one pod is full.
 public partial class HaulerHud : Control
 {
     public Hub Hub;
     private Yard Yard => Hub.Yard;
-    private Button _go;
-    private const float W = 190f;
+    private Button _go, _escort;
+    private const float W = 260f, GoW = 160f;
 
     public override void _Ready()
     {
         Name = "HaulerHud";
         Ui.Style(this);          // a CanvasLayer child of its own: it inherits nothing
         MouseFilter = MouseFilterEnum.Ignore;
-        _go = new Button { Name = "Dispatch", FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(W, 30) };
-        _go.Pressed += () => Yard.RequestDispatch();
-        AddChild(_go);
+        _go = new Button { Name = "Dispatch", FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(GoW, 30) };
+        _go.Pressed += () => Yard.RequestDispatch(escorted: false);
+        _escort = new Button { Name = "Escort", FocusMode = FocusModeEnum.None, Text = "ESCORT  ×5", Position = new Vector2(GoW + 4, 0),
+                               CustomMinimumSize = new Vector2(W - GoW - 4, 30) };
+        _escort.Pressed += () => Yard.RequestDispatch(escorted: true);
+        AddChild(_go); AddChild(_escort);
     }
 
     public override void _Process(double delta)
@@ -284,10 +344,11 @@ public partial class HaulerHud : Control
         // stray sliver.
         bool onScreen = GetViewportRect().Encloses(new Rect2(Position, new Vector2(W, 46)));
         bool underMenu = GetParent()?.GetNodeOrNull("BasePanel") != null;
+        _go.Visible = _escort.Visible = Yard.IsMyOwnBase;
         Visible = h.State == Hauler.St.Loading && onScreen && !underMenu;
         if (!Visible) return;
-        _go.Disabled = !h.CanDispatch;
-        Ui.SetText(_go, h.CanDispatch ? $"DISPATCH  ({h.FullPods}/{Yard.Pods} pods full)" : $"LOADING  {h.Cargo:0}/{Yard.PodSize:0}");
+        _go.Disabled = _escort.Disabled = !h.CanDispatch;
+        Ui.SetText(_go, h.CanDispatch ? $"DISPATCH  {Yard.RunSafe * 100:0}% safe" : $"LOADING  {h.Cargo:0}/{Yard.PodSize:0}");
         QueueRedraw();
     }
 

@@ -22,7 +22,7 @@ public partial class Hub : Node2D
     // The base: base_station.png, 874 x 874 (its centre is the station's centre),
     // drawn at 0.6. Its bottom pad was enlarged to 140 x 84 u and is the hauler's
     // landing pad. The haul lane is the pad's centre line; the portal sits on it, so
-    // the hauler's every move is flat.
+    // the hauler's every move is flat -- except an escort's (EscortRoute).
     public const float BaseScale = 0.6f;
     public static readonly Vector2 HaulerPad = new(0f, 219f);     // the enlarged bottom pad's centre: base_station.png row 802, (802 - 437) x 0.6
     public static float LaneY => HaulerPad.Y;
@@ -35,6 +35,9 @@ public partial class Hub : Node2D
     public static readonly Vector2 SunPos    = new(0, -1794);
     public static readonly Vector2 WreckPos  = new(-1840, 60);
     public static readonly Vector2 PortalPos = new(1500, 219);
+    // AN ESCORT's long way to the portal: south round the TIO, east, then up to the jump (~4400 u).
+    // Written after PortalPos, which it ends on: static fields start in the order they are written.
+    public static readonly Vector2[] EscortRoute = { new(-300, 1100), new(600, 1700), new(1900, 1100), PortalPos };
     // Threat Intelligence Operations: south-west of the base, clear of the wreck, the
     // salvage routes, the haul lane and the dummies.
     public static readonly Vector2 TioPos = new(-650, 640);
@@ -77,6 +80,16 @@ public partial class Hub : Node2D
     public Boss Boss { get; private set; }
     private double _arenaEndT = -1;                         // counts down to going home
     public bool MissionWon { get; private set; }
+    // THE VICTORY WINDOW: after a kill the party stays long enough to fly over its crates. Guests
+    // are told how long is left (NetWon), so their boss bar can count it down too.
+    public const double VictoryWindow = 20.0;
+    private double _netHomeIn = -1;
+    public double HomeIn => Net.IsHost ? _arenaEndT : _netHomeIn;
+    // This pilot's own crates, in this world (nobody else's are ever here).
+    private readonly List<LootCrate> _crates = new();
+    public IReadOnlyList<LootCrate> Crates => _crates;
+    public int CratesDropped { get; private set; }
+    public void CrateTaken(LootCrate c) => _crates.Remove(c);
     private EscMenu _esc;
     public bool EscMenuOpen => IsInstanceValid(_esc);
     public void ToggleEscMenu()
@@ -139,6 +152,9 @@ public partial class Hub : Node2D
         // wrote those zeros back over the character file EnsureLoaded had just read. Silent base
         // loss, every time a hub was entered without the select screen.
         Character.EnsureLoaded();
+        // Every way into a world passes here, so this is where drops not flown over reach the hold:
+        // the arena left behind, a quit in the victory window, a host lost before home.
+        Loot.ClaimAll();
         Music.CombatZone = InArena;
         if (!InArena) BuildWorld();                  // the arena's boss comes after Combat.Clear, below
         // Hit flashes get their own layer ABOVE the hulls (ships sit at z 4) and below the
@@ -332,7 +348,7 @@ public partial class Hub : Node2D
         if ((SectorKind)s != Sector) { RpcId(who, nameof(NetSector), (int)Sector); return; }
         RpcId(who, nameof(NetMission), MissionArgs());
         foreach (var r in Raiders) RpcId(who, nameof(NetRaiderSpawn), r.NetId, r.Position, (int)r.Kind, r.Strength);
-        if (MissionWon) RpcId(who, nameof(NetWon));
+        if (MissionWon) RpcId(who, nameof(NetWon), _arenaEndT);
     }
     private void ReportSector() { if (!Net.IsHost) Net.AskHost(this, nameof(NetMySector), (int)Sector); }
 
@@ -527,24 +543,59 @@ public partial class Hub : Node2D
         AddChild(Boss);
     }
 
-    // host: the boss is dead -- shared EXP for the kill and the mission, credits home
+    // host: the boss is dead. Its escorts and raiders die with it -- the victory window is for
+    // collecting, not for being shot at. Every pilot gets its own EXP (its level, its first clears)
+    // and its share of the bounty, then its own crates; then the party has VictoryWindow seconds
+    // before home.
     public void BossDefeated()
     {
         if (!Net.IsHost || MissionWon) return;
         MissionWon = true;
-        // every pilot gets its own EXP (its level, its first clears) and its share of the bounty;
-        // the host's own record (and so the next level unlocking) updates in its own award
+        foreach (var r in Raiders.ToList()) RaiderDown(r);
         AnnounceBossKill(Missions.Level);
-        _arenaEndT = 4.0;
-        ToWorld(nameof(NetWon));
+        DropLoot(Missions.Level, IsInstanceValid(Boss) ? Boss.Position : Vector2.Zero);
+        _arenaEndT = VictoryWindow;
+        ToWorld(nameof(NetWon), VictoryWindow);
     }
-    // Guests see the boss at zero too: its last hull report went out before the killing blow, so
-    // for the four seconds before home it stood there at a sliver, still selectable.
+    // Guests see the boss at zero too (its last hull report went out before the killing blow), and
+    // how long is left before home.
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetWon()
+    private void NetWon(double homeIn)
     {
         MissionWon = true;
+        _netHomeIn = homeIn;
         if (IsInstanceValid(Boss)) Boss.Hp = 0;
+    }
+
+    // host: each pilot's drops, to that pilot alone. Every ship in the party at the kill, in stasis
+    // or not -- a pilot shot down in the fight still helped win it. Sent to the peer directly, not
+    // to the arena: a pilot whose world had not finished loading still gets its parts.
+    private void DropLoot(int level, Vector2 at)
+    {
+        var pilots = _ships.Where(kv => IsInstanceValid(kv.Value)).Select(kv => (kv.Key, kv.Value.Class));
+        foreach (var (peer, drops) in Loot.RollParty(pilots, level))
+        {
+            if (peer == Net.LocalId) ReceiveLoot(drops, at);
+            else RpcId(peer, nameof(NetLoot), drops, at);
+        }
+    }
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void NetLoot(string[] items, Vector2 at) => ReceiveLoot(items, at);
+
+    // This pilot's drops: on its own file at once (like the bounty), then as crates to fly over
+    // on a ring round where the boss died. Not in the arena any more: straight into the hold.
+    private void ReceiveLoot(string[] items, Vector2 at)
+    {
+        items = Loot.Sanitize(items, Loot.CratesFor(Missions.Level));
+        Character.Unclaimed.AddRange(items);
+        Character.Save();
+        if (!InArena) { Loot.ClaimAll(); return; }
+        for (int i = 0; i < items.Length; i++)
+        {
+            var c = new LootCrate { Name = $"Crate_{CratesDropped}", Hub = this, Item = items[i],
+                                    Position = at + Vector2.Right.Rotated(Mathf.Tau * i / items.Length + 0.3f) * Loot.Ring };
+            AddChild(c); _crates.Add(c); CratesDropped++;
+        }
     }
 
     private void TickArena(double delta)
@@ -555,6 +606,7 @@ public partial class Hub : Node2D
         // AddHostShare, both reached from the arena). Make any of them an instance member and
         // these lines start throwing. See DESIGN.md -> Traps.
         Yard.TripClock += delta;                              // what the base is missing, in game time
+        if (_netHomeIn > 0) _netHomeIn = System.Math.Max(0, _netHomeIn - delta);
         if (!Net.IsHost) return;
         // the whole party in stasis at once: the mission fails, everyone goes home
         if (!MissionWon && _arenaEndT < 0 && _ships.Count > 0 && _ships.Values.All(s => IsInstanceValid(s) && !s.Alive)) _arenaEndT = 3.0;
@@ -680,15 +732,40 @@ public partial class Hub : Node2D
         foreach (var u in Yard.Fleet) if (Raider.Up(u)) yield return u;
     }
 
-    // A patrol: 3 lights and 1 heavy, spawned together at `at` on the perimeter.
+    // A patrol: 3 lights and 1 heavy, spawned together at `at` on the perimeter -- hunters of
+    // `quarry`, if one is given.
     private int _patrols;
-    public int SpawnPatrol(Vector2 at, double scale = 1)
+    public int SpawnPatrol(Vector2 at, double scale = 1, Node2D quarry = null)
     {
         if (!Net.IsHost) return 0;
         int id = ++_patrols;
-        SpawnRaider(at + new Vector2(-40, 0), RaiderKind.Light, id, scale); SpawnRaider(at, RaiderKind.Light, id, scale);
-        SpawnRaider(at + new Vector2(40, 0), RaiderKind.Light, id, scale); SpawnRaider(at + new Vector2(0, 90), RaiderKind.Heavy, id, scale);
+        foreach (var (off, kind) in new[] { (new Vector2(-40, 0), RaiderKind.Light), (Vector2.Zero, RaiderKind.Light),
+                                            (new Vector2(40, 0), RaiderKind.Light), (new Vector2(0, 90), RaiderKind.Heavy) })
+            SpawnRaider(at + off, kind, id, scale).Quarry = quarry;
         return id;
+    }
+
+    // AN ESCORT'S HUNTERS: a wave sent after one quarry, in from the map's edge beside it -- one
+    // patrol, and one more per extra pilot, at the strength of the base owner's highest boss.
+    // Alternate waves come round from alternate sides.
+    public void HuntWave(Node2D quarry, int wave)
+    {
+        if (!Net.IsHost) return;
+        int patrols = 1 + System.Math.Max(0, _ships.Count - 1);
+        var edge = Raider.EdgeSpot(quarry.Position) - BasePos;
+        for (int i = 0; i < patrols; i++)
+            SpawnPatrol(BasePos + edge.Rotated((wave % 2 == 0 ? 1 : -1) * 0.35f * (i + 1)), Missions.S(System.Math.Max(1, Missions.HighestBeaten)), quarry);
+    }
+    // The hunt is over (the quarry reached the portal, or was lost): its hunters withdraw -- gone,
+    // not shot down.
+    public void CallOff(Node2D quarry)
+    {
+        if (!Net.IsHost) return;
+        foreach (var r in Raiders.Where(r => r.Quarry == quarry).ToList())
+        {
+            DropRaider(r, burst: false);
+            ToWorld(nameof(NetRaiderGone), r.NetId, false);
+        }
     }
 
     public Raider SpawnRaider(Vector2 at, RaiderKind kind = RaiderKind.Light, int patrol = 0, double scale = 1)
@@ -715,12 +792,12 @@ public partial class Hub : Node2D
     public void RaiderDown(Raider r)
     {
         DropRaider(r, burst: true);
-        ToWorld(nameof(NetRaiderGone), r.NetId);
+        ToWorld(nameof(NetRaiderGone), r.NetId, true);
     }
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetRaiderGone(int id)
+    private void NetRaiderGone(int id, bool burst)
     {
-        if (Raiders.FirstOrDefault(x => x.NetId == id) is { } r) DropRaider(r, burst: true);
+        if (Raiders.FirstOrDefault(x => x.NetId == id) is { } r) DropRaider(r, burst);
     }
     // Also let go of it as the selection: on a guest a raider's hull never reads zero (the host
     // removes it before its last hull reaches anyone), so a selected one stayed "alive" and freed.

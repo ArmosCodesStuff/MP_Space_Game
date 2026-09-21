@@ -12,6 +12,7 @@ using System.Linq;
 //     +250       the first time that pilot beats that level
 //     +100       for completing the mission
 //     credits    2000 x S(L) x (1 + 0.5(P-1)), split evenly among the P pilots (solo earns the most)
+//     parts      Loot.CratesFor(L) crates of gear, rolled by the host for each pilot (see Loot)
 public static class Missions
 {
     public class BossType { public string Id, Name; public double Hull; }
@@ -26,6 +27,8 @@ public static class Missions
     public static int Level = 1;                            // the selected level (the host decides; replicated)
     public static int Beaten(string bossId) => Character.BossCleared.TryGetValue(bossId, out var set) && set.Count > 0 ? set.Max() : 0;
     public static int Unlocked(string bossId) => Beaten(bossId) + 1;
+    // the highest level beaten of ANY boss this build knows (an id in the file it does not know counts for nothing)
+    public static int HighestBeaten => Bosses.Max(b => Beaten(b.Id));
 
     public static double HullMult(int level, int party) => S(level) * (1 + 0.6 * (Math.Max(1, party) - 1));
     public static double DamageMult(int level, int party) => S(level) * (1 + 0.2 * (Math.Max(1, party) - 1));

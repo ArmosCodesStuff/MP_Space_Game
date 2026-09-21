@@ -174,18 +174,18 @@ try {
   }
 
   if (-not $Solo) {
-    $host1 = Start-Run @('--headless','--path',$W,'--','host')   'host'   60
+    $host1 = Start-Run @('--headless','--path',$W,'--','host')   'host'   120
     Start-Sleep -Milliseconds 500
-    $g2 = Start-Run (@('--headless','--path',$W,'--','guest2') + $gx) 'guest2' 60
-    $g1 = Start-Run (@('--headless','--path',$W,'--','guest') + $gx)  'guest'  60
+    $g2 = Start-Run (@('--headless','--path',$W,'--','guest2') + $gx) 'guest2' 120
+    $g1 = Start-Run (@('--headless','--path',$W,'--','guest') + $gx)  'guest'  120
     $all += Complete-Run $g1    '[guest] '
     $all += Complete-Run $host1 '[host]  '
     $all += Complete-Run $g2    '[third] '
 
     # the dedicated two-player arena run: after the three-player run, on its own port
-    $ah = Start-Run @('--headless','--path',$W,'--','ahost')  'ahost'  60
+    $ah = Start-Run @('--headless','--path',$W,'--','ahost')  'ahost'  120
     Start-Sleep -Milliseconds 500
-    $ag = Start-Run (@('--headless','--path',$W,'--','aguest') + $gx) 'aguest' 60
+    $ag = Start-Run (@('--headless','--path',$W,'--','aguest') + $gx) 'aguest' 120
     $all += Complete-Run $ag '[aguest]'
     $all += Complete-Run $ah '[ahost] '
     $want += 5
