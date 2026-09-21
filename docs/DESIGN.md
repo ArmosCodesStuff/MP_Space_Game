@@ -584,6 +584,12 @@ where the editor cannot delete it.*
 
 Each of these compiled clean and was wrong at runtime. The smoke test covers all of them.
 
+- **A round-trip check only covers the fields it SETS.** Enumerating by reflection at the compare
+  step feels thorough and is not: a field left at its default is identical before and after whether
+  it is saved or not. The base economy fields were added to `Character`, not saved, and the check
+  passed. The thing that notices is an INVENTORY -- every field against a declared list -- so a new
+  field fails until someone accounts for it. Sweep non-public statics too: `Spares` is private.
+  *Rule: "reflection" is not the same as "covered". Ask what makes the check go red.*
 - **A check on an asset must read the asset.** A loudness check that reads a constant in the code
   passes whatever the file contains, and one that reads `GD.Load<AudioStreamWav>` measures what the
   IMPORTER made of the file, not the file: the first version of the sound-level checks reported a

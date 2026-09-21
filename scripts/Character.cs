@@ -32,6 +32,13 @@ public static class Character
     public static readonly int[] Bought = new int[Progression.All.Length];
     // the levels of each boss this pilot has beaten (the +250 first-clear bonus, and unlocking)
     public static readonly Dictionary<string, HashSet<int>> BossCleared = new();
+
+    // THE BASE. It belongs to the pilot, not to the session: each character has its own, and a
+    // guest visiting someone else's sets its own aside rather than sharing theirs. Yard owns the
+    // live numbers and writes them here; this is the copy that reaches disk.
+    public static double BaseOre, BaseSalvage, BaseCredits;
+    public static readonly Dictionary<string, int> BaseLevels = new();
+    public static readonly Dictionary<string, double> BaseInvested = new();
     // equipment, per class: what is on each ship, and the chips taken off it
     public static readonly Dictionary<ShipClass, string[]> Loadout = new();
     private static readonly Dictionary<ShipClass, List<string>> Spares = new();
@@ -63,6 +70,7 @@ public static class Character
         Class = ShipClass.Battleship;
         Bonuses.Clear();
         Exp = 0; Level = 1; Points = 0; Array.Clear(Bought); BossCleared.Clear(); Loadout.Clear(); Spares.Clear();
+        BaseOre = BaseSalvage = BaseCredits = 0; BaseLevels.Clear(); BaseInvested.Clear();
     }
 
     public static void Save()
@@ -79,6 +87,9 @@ public static class Character
         c.SetValue("progress", "exp", Exp); c.SetValue("progress", "level", Level); c.SetValue("progress", "points", Points);
         for (int i = 0; i < Bought.Length; i++) c.SetValue("progress", "bought_" + Progression.All[i].Id, Bought[i]);
         foreach (var kv in BossCleared) c.SetValue("boss_cleared", kv.Key, string.Join(",", kv.Value.OrderBy(x => x)));
+        c.SetValue("base", "ore", BaseOre); c.SetValue("base", "salvage", BaseSalvage); c.SetValue("base", "credits", BaseCredits);
+        foreach (var kv in BaseLevels) c.SetValue("base_levels", kv.Key, kv.Value);
+        foreach (var kv in BaseInvested) c.SetValue("base_invested", kv.Key, kv.Value);
         foreach (var kv in Loadout) c.SetValue("equipment", kv.Key.ToString(), string.Join(",", kv.Value));
         foreach (var kv in Spares) c.SetValue("spares", kv.Key.ToString(), string.Join(",", kv.Value));
 
@@ -130,6 +141,23 @@ public static class Character
         Bonuses.Clear();
         if (c.HasSection("bonus"))
             foreach (var k in c.GetSectionKeys("bonus")) Bonuses[k] = (double)c.GetValue("bonus", k, 0.0);
+        // The base. Negative stock is refused outright and an unknown upgrade id is dropped: this
+        // is a file on the player's disk, and a level for an upgrade that no longer exists would
+        // be spent money nothing can show.
+        BaseOre = Math.Max(0, (double)c.GetValue("base", "ore", 0.0));
+        BaseSalvage = Math.Max(0, (double)c.GetValue("base", "salvage", 0.0));
+        BaseCredits = Math.Max(0, (double)c.GetValue("base", "credits", 0.0));
+        BaseLevels.Clear();
+        if (c.HasSection("base_levels"))
+            foreach (var k in c.GetSectionKeys("base_levels"))
+            {
+                var up = Economy.ById(k);
+                if (up != null) BaseLevels[k] = Math.Max(0, (int)c.GetValue("base_levels", k, 0));
+            }
+        BaseInvested.Clear();
+        if (c.HasSection("base_invested"))
+            foreach (var k in c.GetSectionKeys("base_invested"))
+                BaseInvested[k] = Math.Max(0, (double)c.GetValue("base_invested", k, 0.0));
         Exp = (int)c.GetValue("progress", "exp", 0); Level = Math.Max(1, (int)c.GetValue("progress", "level", 1));
         Points = Math.Max(0, (int)c.GetValue("progress", "points", 0));
         for (int i = 0; i < Bought.Length; i++) Bought[i] = Math.Clamp((int)c.GetValue("progress", "bought_" + Progression.All[i].Id, 0), 0, Progression.MaxPerUpgrade);

@@ -37,7 +37,11 @@ public partial class Yard : Node2D
     private static readonly Dictionary<string, int> _ownLevels = new();
     private static readonly Dictionary<string, double> _ownInvested = new();
     private static bool _parked;
-    private double _totalsCd, _stateCd, _t;
+    private double _totalsCd, _stateCd, _t, _saveCd;
+    // How often the base is written to disk while it ticks over. Mining income arrives every
+    // second and a save a second would be absurd; a minute of an idle economy is a small thing
+    // to lose to a power cut, and every DELIBERATE change -- a purchase, leaving -- saves at once.
+    private const double AutoSaveEvery = 30;
 
     // ── the service arms ─────────────────────────────────────────────────────
     // Pad centres measured from base_station.png (pixels from its centre x 0.6).
@@ -73,9 +77,55 @@ public partial class Yard : Node2D
         ZIndex = 3;                                        // above the base
         Hauler = new Hauler { Yard = this, Name = "Hauler" };
         AddChild(Hauler);
+        // THREE WAYS A BASE ARRIVES, and only one of them is the save file. A trip snapshot wins
+        // (the party is coming home from the arena and the base never went anywhere); a parked
+        // base wins next (a guest getting its own back); otherwise this is the pilot arriving in
+        // their own world, and the file is what they left behind.
+        if (_trip == null && !_parked) LoadFromCharacter();
         SyncFleet();
         ReturnFromTrip();
     }
+
+    // ── the base on disk ─────────────────────────────────────────────────────
+    // Only when this Yard really is MINE. A guest standing in someone else's base sees their ore
+    // and their upgrades; writing those to its own character would hand it a base it never built.
+    private bool IsMyOwnBase => Net.Sim && !_parked && Hub.Sector == Hub.SectorKind.Home;
+
+    public void StoreToCharacter()
+    {
+        if (_parked)
+        {
+            // A GUEST STANDING IN SOMEONE ELSE'S BASE still has one of its own, set aside in the
+            // _own fields. Leaving from here -- the host drops, the window closes, the session
+            // ends -- has to write THAT, not the base it happens to be looking at. Writing the
+            // visible one would hand the guest a base it never built; writing nothing would lose
+            // the one it did.
+            Character.BaseOre = _ownOre; Character.BaseSalvage = _ownSalvage; Character.BaseCredits = _ownCredits;
+            Character.BaseLevels.Clear();   foreach (var kv in _ownLevels)   Character.BaseLevels[kv.Key] = kv.Value;
+            Character.BaseInvested.Clear(); foreach (var kv in _ownInvested) Character.BaseInvested[kv.Key] = kv.Value;
+            return;
+        }
+        if (!IsMyOwnBase) return;
+        Character.BaseOre = Ore; Character.BaseSalvage = Salvage; Character.BaseCredits = Credits;
+        Character.BaseLevels.Clear();   foreach (var kv in _levels)   Character.BaseLevels[kv.Key] = kv.Value;
+        Character.BaseInvested.Clear(); foreach (var kv in _invested) Character.BaseInvested[kv.Key] = kv.Value;
+    }
+
+    public void SaveBase()
+    {
+        StoreToCharacter();
+        if (_parked || IsMyOwnBase) Character.Save();
+    }
+
+    private void LoadFromCharacter()
+    {
+        Ore = Character.BaseOre; Salvage = Character.BaseSalvage; Credits = Character.BaseCredits;
+        _levels.Clear();   foreach (var kv in Character.BaseLevels)   _levels[kv.Key] = kv.Value;
+        _invested.Clear(); foreach (var kv in Character.BaseInvested) _invested[kv.Key] = kv.Value;
+    }
+
+    // Leaving for any reason -- the menu, a scene change, the window closing -- writes the base.
+    public override void _ExitTree() => SaveBase();
 
     // ── away on a mission ────────────────────────────────────────────────────
     // The base is not simulated while the party is in the arena. It is saved on the
@@ -172,6 +222,7 @@ public partial class Yard : Node2D
         if (Economy.Maxed(u, lv) || Credits < cost) return false;
         Credits -= cost; _levels[id] = lv + 1;
         _invested[u.Tab] = Invested(u.Tab) + cost;                // what a rebuild in this category is 10% of
+        SaveBase();                                               // a purchase is deliberate: keep it now
         if (id is "miner_hull" or "salvager_hull")                   // the living ships of that kind gain it at once
             foreach (var g in Gatherers)
                 if (g.State != Gatherer.St.Destroyed && (g.Kind == GatherKind.Miner) == (id == "miner_hull"))
@@ -358,6 +409,11 @@ public partial class Yard : Node2D
     {
         _t += delta;
         QueueRedraw();
+        // The autosave runs BEFORE the online-only return below: an offline pilot is exactly the
+        // one whose base only exists in their own file, and skipping them would have saved the
+        // base for every player except the single-player one.
+        _saveCd -= delta;
+        if (_saveCd <= 0) { _saveCd = AutoSaveEvery; SaveBase(); }
         if (!Net.Sim || !Net.IsOnline) return;
         _totalsCd -= delta;
         if (_totalsCd <= 0)

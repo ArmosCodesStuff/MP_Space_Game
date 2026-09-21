@@ -66,7 +66,7 @@ validated against the numbers the Linux originals produce:
     dotnet build                                                              # 0 Warning(s), 0 Error(s)
     powershell -ExecutionPolicy Bypass -File tools\analyse\run.ps1            # ANALYSERS: 0 findings
     python tools\analyse\xref.py                                              # UNUSED ANYWHERE: 0
-    powershell -ExecutionPolicy Bypass -File tools\smoketest\run.ps1     # 468 pass, 6/6 runs
+    powershell -ExecutionPolicy Bypass -File tools\smoketest\run.ps1     # 473 pass, 6/6 runs
     powershell -ExecutionPolicy Bypass -File tools\screens\run.ps1
     powershell -ExecutionPolicy Bypass -File tools\snapshot.ps1              # rebuild version\CODE_SNAPSHOT.txt
 

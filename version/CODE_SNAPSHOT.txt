@@ -1,9 +1,9 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-20 21:06 at git commit c3c11ce: typecheck clean, dotnet build 0 warnings,
+// Taken 2026-09-20 21:38 at git commit 250d69b: typecheck clean, dotnet build 0 warnings,
 //   0 analyser findings, 0 unused members; smoke test 3/3 runs at 435 checks on Windows
 //   (437 in a sandbox with no router and no internet); 67-frame UI sweep complete, 0 lint.
-// 71 files, 12649 lines. Code only: sprites, sounds and docs are in the zip.
+// 71 files, 12816 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -23,7 +23,7 @@
 //   scripts/BasePanel.cs                           132 lines   sha256 486b1d45088e
 //   scripts/Boss.cs                                316 lines   sha256 6105830f74e9
 //   scripts/BossBar.cs                              86 lines   sha256 fdc16204cf1d
-//   scripts/Character.cs                           239 lines   sha256 76f29b3e4d23
+//   scripts/Character.cs                           267 lines   sha256 86afa93ee478
 //   scripts/CharacterCreator.cs                    216 lines   sha256 9550b19e1833
 //   scripts/CharacterSelect.cs                     189 lines   sha256 a3e2e219cd03
 //   scripts/Combat.cs                               90 lines   sha256 02a09601a35c
@@ -42,7 +42,7 @@
 //   scripts/MenuFoe.cs                             201 lines   sha256 8467526631c4
 //   scripts/Missions.cs                             38 lines   sha256 48a2f11b25a4
 //   scripts/Music.cs                                78 lines   sha256 021dfc1c83d5
-//   scripts/Net.cs                                 334 lines   sha256 040f19a1471f
+//   scripts/Net.cs                                 351 lines   sha256 9d319ede5e3b
 //   scripts/PilotWindow.cs                          60 lines   sha256 61a44a8346a0
 //   scripts/PlayerShip.cs                          793 lines   sha256 53e613d8cd3d
 //   scripts/Plume.cs                                25 lines   sha256 cdbeb9b8fc58
@@ -63,7 +63,7 @@
 //   scripts/Torpedo.cs                             156 lines   sha256 a12daff14996
 //   scripts/Txt.cs                                  32 lines   sha256 8823251c9a4f
 //   scripts/Ui.cs                                  206 lines   sha256 898265df5453
-//   scripts/Yard.cs                                438 lines   sha256 e3a40eb72b5d
+//   scripts/Yard.cs                                494 lines   sha256 20125a02784c
 //   typecheck/GodotStub.cs                         192 lines   sha256 2c5c2967bf5c
 //   typecheck/typecheck.ps1                         80 lines   sha256 94631684caab
 //   typecheck/typecheck.sh                          57 lines   sha256 e68277c09f34
@@ -79,7 +79,7 @@
 //   tools/screens/Shots.cs.txt                     458 lines   sha256 43a79314bd60
 //   tools/smoketest/run.ps1                        161 lines   sha256 d5c27af2b535
 //   tools/smoketest/run.sh                          57 lines   sha256 568b677787fd
-//   tools/smoketest/SmokeTest.cs.txt              2215 lines   sha256 60d76e69d772
+//   tools/smoketest/SmokeTest.cs.txt              2281 lines   sha256 94ffb7c77cbc
 //   tools/snapshot.ps1                              95 lines   sha256 d6d85575ba26
 //==============================================================================
 
@@ -1242,7 +1242,7 @@ public partial class BossBar : Control
 
 //==============================================================================
 // FILE: scripts/Character.cs
-// 239 lines   sha256 76f29b3e4d23
+// 267 lines   sha256 86afa93ee478
 //==============================================================================
 using Godot;
 using System;
@@ -1278,6 +1278,13 @@ public static class Character
     public static readonly int[] Bought = new int[Progression.All.Length];
     // the levels of each boss this pilot has beaten (the +250 first-clear bonus, and unlocking)
     public static readonly Dictionary<string, HashSet<int>> BossCleared = new();
+
+    // THE BASE. It belongs to the pilot, not to the session: each character has its own, and a
+    // guest visiting someone else's sets its own aside rather than sharing theirs. Yard owns the
+    // live numbers and writes them here; this is the copy that reaches disk.
+    public static double BaseOre, BaseSalvage, BaseCredits;
+    public static readonly Dictionary<string, int> BaseLevels = new();
+    public static readonly Dictionary<string, double> BaseInvested = new();
     // equipment, per class: what is on each ship, and the chips taken off it
     public static readonly Dictionary<ShipClass, string[]> Loadout = new();
     private static readonly Dictionary<ShipClass, List<string>> Spares = new();
@@ -1309,6 +1316,7 @@ public static class Character
         Class = ShipClass.Battleship;
         Bonuses.Clear();
         Exp = 0; Level = 1; Points = 0; Array.Clear(Bought); BossCleared.Clear(); Loadout.Clear(); Spares.Clear();
+        BaseOre = BaseSalvage = BaseCredits = 0; BaseLevels.Clear(); BaseInvested.Clear();
     }
 
     public static void Save()
@@ -1325,6 +1333,9 @@ public static class Character
         c.SetValue("progress", "exp", Exp); c.SetValue("progress", "level", Level); c.SetValue("progress", "points", Points);
         for (int i = 0; i < Bought.Length; i++) c.SetValue("progress", "bought_" + Progression.All[i].Id, Bought[i]);
         foreach (var kv in BossCleared) c.SetValue("boss_cleared", kv.Key, string.Join(",", kv.Value.OrderBy(x => x)));
+        c.SetValue("base", "ore", BaseOre); c.SetValue("base", "salvage", BaseSalvage); c.SetValue("base", "credits", BaseCredits);
+        foreach (var kv in BaseLevels) c.SetValue("base_levels", kv.Key, kv.Value);
+        foreach (var kv in BaseInvested) c.SetValue("base_invested", kv.Key, kv.Value);
         foreach (var kv in Loadout) c.SetValue("equipment", kv.Key.ToString(), string.Join(",", kv.Value));
         foreach (var kv in Spares) c.SetValue("spares", kv.Key.ToString(), string.Join(",", kv.Value));
 
@@ -1376,6 +1387,23 @@ public static class Character
         Bonuses.Clear();
         if (c.HasSection("bonus"))
             foreach (var k in c.GetSectionKeys("bonus")) Bonuses[k] = (double)c.GetValue("bonus", k, 0.0);
+        // The base. Negative stock is refused outright and an unknown upgrade id is dropped: this
+        // is a file on the player's disk, and a level for an upgrade that no longer exists would
+        // be spent money nothing can show.
+        BaseOre = Math.Max(0, (double)c.GetValue("base", "ore", 0.0));
+        BaseSalvage = Math.Max(0, (double)c.GetValue("base", "salvage", 0.0));
+        BaseCredits = Math.Max(0, (double)c.GetValue("base", "credits", 0.0));
+        BaseLevels.Clear();
+        if (c.HasSection("base_levels"))
+            foreach (var k in c.GetSectionKeys("base_levels"))
+            {
+                var up = Economy.ById(k);
+                if (up != null) BaseLevels[k] = Math.Max(0, (int)c.GetValue("base_levels", k, 0));
+            }
+        BaseInvested.Clear();
+        if (c.HasSection("base_invested"))
+            foreach (var k in c.GetSectionKeys("base_invested"))
+                BaseInvested[k] = Math.Max(0, (double)c.GetValue("base_invested", k, 0.0));
         Exp = (int)c.GetValue("progress", "exp", 0); Level = Math.Max(1, (int)c.GetValue("progress", "level", 1));
         Points = Math.Max(0, (int)c.GetValue("progress", "points", 0));
         for (int i = 0; i < Bought.Length; i++) Bought[i] = Math.Clamp((int)c.GetValue("progress", "bought_" + Progression.All[i].Id, 0), 0, Progression.MaxPerUpgrade);
@@ -4965,7 +4993,7 @@ public partial class Music : Node
 
 //==============================================================================
 // FILE: scripts/Net.cs
-// 334 lines   sha256 040f19a1471f
+// 351 lines   sha256 9d319ede5e3b
 //==============================================================================
 using Godot;
 using System.Linq;
@@ -5062,6 +5090,12 @@ public partial class Net : Node
     // Offline play. Deliberately the same path as hosting: one set of rules.
     private void StartOffline(string reason = null)
     {
+        // WHOEVER IS LEAVING, WHATEVER THE REASON. Quitting the lobby, the host closing the
+        // session, a connection that failed -- they all land here, and each of them is a peer
+        // whose character stops being in a session. A scene change saves on its way out, but a
+        // session can end without one: press PLAY OFFLINE and nothing moves but the socket.
+        // Saving here is cheap and it is the only point every one of those routes passes through.
+        SaveLocalCharacter();
         Shutdown();
         _isHost = true; _localId = 1;
         Players.Clear(); Players[1] = new PlayerInfo { Id = 1 };
@@ -5255,6 +5289,17 @@ public partial class Net : Node
     }
 
     public void GoOffline() { StartOffline(); }
+
+    // The live Yard writes the base into Character first: a base is part of a character, and this
+    // is the moment the character stops being in a session. Nothing here touches another peer's
+    // character -- their file is on their machine, and this runs on every peer for its own.
+    private void SaveLocalCharacter()
+    {
+        if (string.IsNullOrEmpty(Character.Id)) return;          // nothing loaded yet: boot, or the menu
+        var yard = (Engine.GetMainLoop() as SceneTree)?.Root?.FindChild("Yard", true, false) as Yard;
+        if (yard != null && GodotObject.IsInstanceValid(yard)) yard.SaveBase();
+        else Character.Save();
+    }
 
     private void Shutdown()
     {
@@ -8862,7 +8907,7 @@ public static class Ui
 
 //==============================================================================
 // FILE: scripts/Yard.cs
-// 438 lines   sha256 e3a40eb72b5d
+// 494 lines   sha256 20125a02784c
 //==============================================================================
 using Godot;
 using System;
@@ -8903,7 +8948,11 @@ public partial class Yard : Node2D
     private static readonly Dictionary<string, int> _ownLevels = new();
     private static readonly Dictionary<string, double> _ownInvested = new();
     private static bool _parked;
-    private double _totalsCd, _stateCd, _t;
+    private double _totalsCd, _stateCd, _t, _saveCd;
+    // How often the base is written to disk while it ticks over. Mining income arrives every
+    // second and a save a second would be absurd; a minute of an idle economy is a small thing
+    // to lose to a power cut, and every DELIBERATE change -- a purchase, leaving -- saves at once.
+    private const double AutoSaveEvery = 30;
 
     // ── the service arms ─────────────────────────────────────────────────────
     // Pad centres measured from base_station.png (pixels from its centre x 0.6).
@@ -8939,9 +8988,55 @@ public partial class Yard : Node2D
         ZIndex = 3;                                        // above the base
         Hauler = new Hauler { Yard = this, Name = "Hauler" };
         AddChild(Hauler);
+        // THREE WAYS A BASE ARRIVES, and only one of them is the save file. A trip snapshot wins
+        // (the party is coming home from the arena and the base never went anywhere); a parked
+        // base wins next (a guest getting its own back); otherwise this is the pilot arriving in
+        // their own world, and the file is what they left behind.
+        if (_trip == null && !_parked) LoadFromCharacter();
         SyncFleet();
         ReturnFromTrip();
     }
+
+    // ── the base on disk ─────────────────────────────────────────────────────
+    // Only when this Yard really is MINE. A guest standing in someone else's base sees their ore
+    // and their upgrades; writing those to its own character would hand it a base it never built.
+    private bool IsMyOwnBase => Net.Sim && !_parked && Hub.Sector == Hub.SectorKind.Home;
+
+    public void StoreToCharacter()
+    {
+        if (_parked)
+        {
+            // A GUEST STANDING IN SOMEONE ELSE'S BASE still has one of its own, set aside in the
+            // _own fields. Leaving from here -- the host drops, the window closes, the session
+            // ends -- has to write THAT, not the base it happens to be looking at. Writing the
+            // visible one would hand the guest a base it never built; writing nothing would lose
+            // the one it did.
+            Character.BaseOre = _ownOre; Character.BaseSalvage = _ownSalvage; Character.BaseCredits = _ownCredits;
+            Character.BaseLevels.Clear();   foreach (var kv in _ownLevels)   Character.BaseLevels[kv.Key] = kv.Value;
+            Character.BaseInvested.Clear(); foreach (var kv in _ownInvested) Character.BaseInvested[kv.Key] = kv.Value;
+            return;
+        }
+        if (!IsMyOwnBase) return;
+        Character.BaseOre = Ore; Character.BaseSalvage = Salvage; Character.BaseCredits = Credits;
+        Character.BaseLevels.Clear();   foreach (var kv in _levels)   Character.BaseLevels[kv.Key] = kv.Value;
+        Character.BaseInvested.Clear(); foreach (var kv in _invested) Character.BaseInvested[kv.Key] = kv.Value;
+    }
+
+    public void SaveBase()
+    {
+        StoreToCharacter();
+        if (_parked || IsMyOwnBase) Character.Save();
+    }
+
+    private void LoadFromCharacter()
+    {
+        Ore = Character.BaseOre; Salvage = Character.BaseSalvage; Credits = Character.BaseCredits;
+        _levels.Clear();   foreach (var kv in Character.BaseLevels)   _levels[kv.Key] = kv.Value;
+        _invested.Clear(); foreach (var kv in Character.BaseInvested) _invested[kv.Key] = kv.Value;
+    }
+
+    // Leaving for any reason -- the menu, a scene change, the window closing -- writes the base.
+    public override void _ExitTree() => SaveBase();
 
     // ── away on a mission ────────────────────────────────────────────────────
     // The base is not simulated while the party is in the arena. It is saved on the
@@ -9038,6 +9133,7 @@ public partial class Yard : Node2D
         if (Economy.Maxed(u, lv) || Credits < cost) return false;
         Credits -= cost; _levels[id] = lv + 1;
         _invested[u.Tab] = Invested(u.Tab) + cost;                // what a rebuild in this category is 10% of
+        SaveBase();                                               // a purchase is deliberate: keep it now
         if (id is "miner_hull" or "salvager_hull")                   // the living ships of that kind gain it at once
             foreach (var g in Gatherers)
                 if (g.State != Gatherer.St.Destroyed && (g.Kind == GatherKind.Miner) == (id == "miner_hull"))
@@ -9224,6 +9320,11 @@ public partial class Yard : Node2D
     {
         _t += delta;
         QueueRedraw();
+        // The autosave runs BEFORE the online-only return below: an offline pilot is exactly the
+        // one whose base only exists in their own file, and skipping them would have saved the
+        // base for every player except the single-player one.
+        _saveCd -= delta;
+        if (_saveCd <= 0) { _saveCd = AutoSaveEvery; SaveBase(); }
         if (!Net.Sim || !Net.IsOnline) return;
         _totalsCd -= delta;
         if (_totalsCd <= 0)
@@ -10769,7 +10870,7 @@ echo "SMOKE TEST PASSED"
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 2215 lines   sha256 60d76e69d772
+// 2281 lines   sha256 94ffb7c77cbc
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -10904,8 +11005,12 @@ public partial class _Test : Node
         _ => Convert.ToString(v, System.Globalization.CultureInfo.InvariantCulture),
     };
 
+    // NonPublic too: Spares is private static readonly, so a public-only sweep never saw it at
+    // all -- neither the dump nor the inventory. Persisted state does not have to be public.
+    const BindingFlags CharFields = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static;
+
     static string DumpCharacter() => string.Join(";", typeof(Character)
-        .GetFields(BindingFlags.Public | BindingFlags.Static)
+        .GetFields(CharFields)
         .OrderBy(f => f.Name, StringComparer.Ordinal)
         .Select(f => f.Name + "=" + Describe(f.GetValue(null))));
 
@@ -10922,6 +11027,9 @@ public partial class _Test : Node
         Character.Exp = 777; Character.Level = 5; Character.Points = 3;
         for (int i = 0; i < Character.Bought.Length; i++) Character.Bought[i] = i % (Progression.MaxPerUpgrade + 1);
         Character.BossCleared["ironhold"] = new System.Collections.Generic.HashSet<int> { 1, 3 };
+        Character.BaseOre = 123.5; Character.BaseSalvage = 67.25; Character.BaseCredits = 4321;
+        Character.BaseLevels[Economy.All[0].Id] = 3;
+        Character.BaseInvested[Economy.All[0].Tab] = 900;
         Character.SparesFor(ShipClass.Carrier).Add(Equipment.All.First(e => e.Slot == GearSlot.Chip).Id);
         Character.Bonuses["hull"] = 0.25;
         string id = Character.Id;
@@ -10937,6 +11045,25 @@ public partial class _Test : Node
               loaded ? (before == after ? "everything a character holds survives a save and a load"
                                         : $"a character field is not being saved -- before {before}  |  after {after}")
                      : "everything a character holds survives a save and a load (the load failed)");
+
+        // THE ROUND TRIP ONLY COVERS WHAT IT SETS, and reflection over the dump does not change
+        // that: a field left at its default is identical before and after whether it is saved or
+        // not. This is the part that actually notices -- every public static field of Character,
+        // against the list this test exercises. Add a field and this goes red until it is either
+        // set above or named here as deliberately not persisted. Found the hard way: the base
+        // economy fields were added, not saved, and the round trip passed.
+        var exercised = new[] { "Accent", "BaseCredits", "BaseInvested", "BaseLevels", "BaseOre",
+                                "BaseSalvage", "BossCleared", "Bonuses", "Bought", "Class", "Exp",
+                                "Id", "Level", "Loadout", "Main", "Name", "Points", "Spares", "Version" };
+        // Not state a character carries: a path, and the compiler's backing field for a property
+        // that reports how the LAST save went. Named explicitly rather than filtered by a pattern,
+        // so a real field that happens to look like one cannot slip through.
+        var notPersisted = new[] { "Dir", "<LastSaveRenamed>k__BackingField" };
+        var present = typeof(Character).GetFields(CharFields)
+                                       .Select(f => f.Name).OrderBy(n => n, StringComparer.Ordinal).ToArray();
+        var accounted = exercised.Concat(notPersisted).OrderBy(n => n, StringComparer.Ordinal).ToArray();
+        Check(present.SequenceEqual(accounted),
+              $"every field of Character is accounted for by this test (new: {string.Join(",", present.Except(accounted))}; gone: {string.Join(",", accounted.Except(present))})");
 
         // ── the build stamp ──
         Check(Character.List().First(x => x.Id == id).Version == 1 && Game.Version == 1,
@@ -11316,6 +11443,16 @@ public partial class _Test : Node
         for (int i = 0; i < 5; i++) { Buy("miner_count").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.02); }   // one press too many
         Check(Y.Level("miner_count") == 4 && Math.Abs(c0 - Y.Credits - 6000) < 1e-6, "+1 miner x4: 400, 800, 1600, 3200 (the fifth press refused)");
         Check(Buy("miner_count").Disabled && Buy("miner_count").Text == "MAX" && !Y.TryBuy("miner_count"), "capped at 5 miners: MAX");
+        // THE BASE IS PART OF THE CHARACTER NOW. Read back off DISK, not out of memory: the
+        // claim is that a purchase survives the session, and memory would say yes either way.
+        // A purchase saves at once -- the autosave is for income ticking over, not for this.
+        var onDisk = new ConfigFile();
+        Check(onDisk.Load($"{Character.Dir}/{Character.Id}.cfg") == Error.Ok, "the character file is on disk after a purchase");
+        Check((int)onDisk.GetValue("base_levels", "miner_count", 0) == 4
+              && Math.Abs((double)onDisk.GetValue("base", "credits", -1.0) - Y.Credits) < 1e-6
+              && Math.Abs((double)onDisk.GetValue("base_invested", "MINERS", -1.0) - Y.Invested("MINERS")) < 1e-6,
+              $"a base purchase reaches the character file at once (4 miners, {Y.Credits:0} cr, {Y.Invested("MINERS"):0} invested)");
+
         panel.ShowTab("SALVAGERS"); await Wait(0.05);
         for (int i = 0; i < 4; i++) { Buy("salvager_count").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.02); }
         await Wait(0.1);
@@ -12727,6 +12864,28 @@ public partial class _Test : Node
         GD.Print($"  leak check: orphan nodes {orphA:0} -> {orphB:0}; objects {objA:0} -> {objB:0} (after collection)");
         Check(orphB <= orphA, "no orphan nodes accumulate across leaving and re-entering the hub");
         Check(objB <= objA + 20, "no objects accumulate across leaving and re-entering the hub");
+
+        // ── LAST, because it ends a session and that resets the fleet ────────────────────
+        // A session can end without anything else moving. Quitting to the menu changes scene and
+        // Yard._ExitTree writes on the way out; pressing PLAY OFFLINE, or a host closing the lobby
+        // while everyone stands at home, changes nothing but the socket -- and nothing wrote the
+        // character on that route, with the autosave up to thirty seconds away.
+        //
+        // Hosted first so there is a session to leave, and the figure is changed WHILE in it, so a
+        // stale file cannot pass: the value on disk has to be the one from inside the session.
+        // Placed at the very end on purpose -- going offline re-parks the base and resets the
+        // ships, which quietly broke four later checks when this sat in the middle of the run.
+        var yard = H.Yard;
+        Net.I.Host(27124);
+        for (int i = 0; i < 60 && !Net.IsOnline; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        bool hosted = Net.IsOnline;
+        yard.Credits = 4242;
+        Net.I.GoOffline();
+        await Wait(0.15);
+        var afterLeaving = new ConfigFile();
+        afterLeaving.Load($"{Character.Dir}/{Character.Id}.cfg");
+        Check(hosted && Math.Abs((double)afterLeaving.GetValue("base", "credits", -1.0) - 4242) < 1e-6,
+              $"leaving a session writes this peer's character, with no scene change to do it for them ({(double)afterLeaving.GetValue("base", "credits", -1.0):0})");
     }
 
     // ── multiplayer ──────────────────────────────────────────────────────────
@@ -12793,6 +12952,14 @@ public partial class _Test : Node
             double want = 12345 + Missions.BountyEach(1, 2);        // its own base + its share of the first bounty
             Check(!Hub.InArena && !Net.IsOnline && H.Yard != null && Math.Abs(H.Yard.Credits - want) < 1e-6,
                   $"arena guest: the host gone mid-arena, home offline with its own base and its bounty share ({H.Yard?.Credits:0} of {want:0})");
+            // ...AND IT IS ON DISK, its OWN base rather than the host's base it was standing in.
+            // Note what this does NOT prove: going home is a scene change, and Yard._ExitTree
+            // writes on the way out regardless. The route with no scene change -- a session ending
+            // while nobody moves -- is checked in the solo run, where it can be made to fail.
+            var guestFile = new ConfigFile();
+            Check(guestFile.Load($"{Character.Dir}/{Character.Id}.cfg") == Error.Ok
+                  && Math.Abs((double)guestFile.GetValue("base", "credits", -1.0) - want) < 1e-6,
+                  $"arena guest: leaving the session wrote its own base to its own file ({(double)guestFile.GetValue("base", "credits", -1.0):0} of {want:0})");
         }
     }
 

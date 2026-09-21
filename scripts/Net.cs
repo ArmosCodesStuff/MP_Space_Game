@@ -93,6 +93,12 @@ public partial class Net : Node
     // Offline play. Deliberately the same path as hosting: one set of rules.
     private void StartOffline(string reason = null)
     {
+        // WHOEVER IS LEAVING, WHATEVER THE REASON. Quitting the lobby, the host closing the
+        // session, a connection that failed -- they all land here, and each of them is a peer
+        // whose character stops being in a session. A scene change saves on its way out, but a
+        // session can end without one: press PLAY OFFLINE and nothing moves but the socket.
+        // Saving here is cheap and it is the only point every one of those routes passes through.
+        SaveLocalCharacter();
         Shutdown();
         _isHost = true; _localId = 1;
         Players.Clear(); Players[1] = new PlayerInfo { Id = 1 };
@@ -286,6 +292,17 @@ public partial class Net : Node
     }
 
     public void GoOffline() { StartOffline(); }
+
+    // The live Yard writes the base into Character first: a base is part of a character, and this
+    // is the moment the character stops being in a session. Nothing here touches another peer's
+    // character -- their file is on their machine, and this runs on every peer for its own.
+    private void SaveLocalCharacter()
+    {
+        if (string.IsNullOrEmpty(Character.Id)) return;          // nothing loaded yet: boot, or the menu
+        var yard = (Engine.GetMainLoop() as SceneTree)?.Root?.FindChild("Yard", true, false) as Yard;
+        if (yard != null && GodotObject.IsInstanceValid(yard)) yard.SaveBase();
+        else Character.Save();
+    }
 
     private void Shutdown()
     {

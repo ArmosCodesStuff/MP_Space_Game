@@ -47,7 +47,7 @@ faults have been fixed from those frames more than once.
 
 **As of 2026-09-20 the whole harness also runs natively on the developer's Windows machine** (see
 Unreleased → *The harnesses run on Windows*): typecheck 0 errors, build 0 warnings, analysers 0
-findings, xref 0 unused, smoke **468 pass / 6 of 6 runs** (the 2 short of 470 assert the sandbox's
+findings, xref 0 unused, smoke **473 pass / 6 of 6 runs** (the 2 short of 475 assert the sandbox's
 missing router and internet), sweep **67 frames, 0 lint** on the real GPU with the project's own
 Forward+ renderer. So "how it looks on the developer's own GPU" is no longer unconfirmed for the
 swept states. What remains unconfirmed is how it feels in a hand-played session — nothing here
@@ -306,6 +306,42 @@ have skipped them. They are listed now, and one of them (`Shell`) held a real fi
   live battleship preview. Cached.
 
 Full detail, including what was found and deliberately *not* changed, is in `REVIEW.md`.
+
+### The base is part of the character, and leaving writes it
+
+**Checked:** typecheck 0 errors; build 0 warnings; analysers 0 findings; xref 0 unused; smoke
+**473 pass, 6/6 runs**; sweep 67 frames, 0 lint. Three mutants, one at a time.
+
+#### Added
+
+- **The base economy persists.** Credits, ore, salvage, every upgrade level and every category's
+  invested total live on the character now, so a pilot comes back to the base they built. Before
+  this, only the pilot and the machine's settings were written anywhere.
+- **Three ways a base arrives, and only one is the file.** A trip snapshot wins (the party is
+  coming home from the arena and the base never went anywhere); a parked base wins next (a guest
+  getting its own back); otherwise the pilot is arriving in their own world and the file is what
+  they left behind.
+- **A guest's own base is the parked one.** A guest standing in someone else's base still has one
+  of its own, set aside. Writing the visible one would hand it a base it never built; writing
+  nothing would lose the one it did.
+- **Leaving a session writes that peer's character**, wherever it happens: PLAY OFFLINE, the host
+  closing the lobby, a connection that failed. They all pass through `StartOffline`, and a session
+  can end with nothing else moving — no scene change to save on its way out, and the autosave up
+  to 30 s away.
+- Deliberate changes save at once (a purchase, leaving); income ticking over autosaves every 30 s.
+
+#### Two checks that were not checking
+
+- **The reflection round trip only covered what it SET.** A field left at its default reads the
+  same before and after whether it is saved or not — so the base fields were added, not saved, and
+  it passed. There is now a **field inventory**: every static field of `Character`, public and
+  private, against the list this test exercises. Add a field and it goes red until it is either
+  set by the round trip or named as deliberately not persisted. *This is the part that notices.*
+- It also swept public fields only, so `Spares` — `private static readonly` — was never covered
+  at all, by either check.
+- **The first "a guest that leaves saves its base" check was vacuous.** Going home is a scene
+  change, and `Yard._ExitTree` writes on the way out whatever `Net` does; the mutant passed. The
+  real check ends a session with nothing else moving, and the mutant fails it with a stale figure.
 
 ### Sound levels live in the sound, and a save knows which build wrote it
 
