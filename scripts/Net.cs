@@ -1,7 +1,8 @@
 using Godot;
-using System.Linq;
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // NET — the authority model, and the one thing in this project that must be
@@ -28,7 +29,8 @@ public partial class Net : Node
 
     public static Net I { get; private set; }
 
-    // Single player runs as a host with nobody connected, so IsHost is true offline.
+    // Single player runs as a host with nobody connected, so IsHost is true offline -- and while
+    // a join is still connecting: until a host has actually answered, this is still your world.
     public static bool IsHost => I == null || I._isHost;
     // Connected, not merely "a peer object exists": while a join is still handshaking
     // there is nobody to send to, and an RPC then is an engine error.
@@ -39,19 +41,26 @@ public partial class Net : Node
     private bool _isHost = true;
     private int _localId = 1;
     private MultiplayerPeer _peer;
+    // From a session starting (hosting, or a host letting us in) until it ends. What "there was a
+    // session to leave" means -- IsOnline cannot say it: by the time the multiplayer layer reports
+    // a host gone or a connection failed, the peer already reads Disconnected, so the leaving
+    // routes that mattered most were the ones that never saved.
+    private bool _inSession;
+    // JOIN pressed, no host has answered yet (the address is looked up, then connected to).
+    public bool Connecting { get; private set; }
 
     // Everyone in the session, host included. Keyed by peer id.
     public readonly Dictionary<int, PlayerInfo> Players = new();
     // Identity is the one piece of player state that is not host-owned: each owner
     // announces its own, and everyone stores it here so a ship spawned later still
-    // gets the right name, colours and class.
+    // gets the right name, colours, class, pilot upgrades and gear.
     public class PlayerInfo
     {
-        public int Id;
-        public string Name = "Commander";
-        public Color Main = new(0.55f, 0.72f, 1.00f);
-        public Color Accent = new(1.00f, 0.78f, 0.35f);
+        public string Name = Character.Defaults.Name;
+        public Color Main = Character.Defaults.Main, Accent = Character.Defaults.Accent;
         public ShipClass Class = ShipClass.Battleship;
+        public int[] Bought = Array.Empty<int>();
+        public string[] Equip = Array.Empty<string>();
         public bool HasIdentity;
     }
 
@@ -70,206 +79,257 @@ public partial class Net : Node
     public override void _Ready()
     {
         I = this;
+        var sm = (SceneMultiplayer)Multiplayer;
+        // THE HANDSHAKE, before a peer counts as connected at all (see Protocol).
+        sm.AuthCallback = Callable.From<long, byte[]>(OnAuth);
+        sm.AuthTimeout = 10;                               // an internet round trip, with room to spare
+        sm.PeerAuthenticating += id => sm.SendAuth((int)id, BitConverter.GetBytes(PretendProtocol ?? Protocol));
         Multiplayer.PeerConnected    += id => OnPeer((int)id, true);
         Multiplayer.PeerDisconnected += id => OnPeer((int)id, false);
         Multiplayer.ConnectedToServer += OnConnected;
         // A failed or dropped connection falls back to offline. Without this a guest
         // sat forever with IsHost false: the hub stopped producing and nothing said why.
-        Multiplayer.ConnectionFailed   += () => StartOffline("Could not reach that host. Playing offline.");
-        Multiplayer.ServerDisconnected += () => StartOffline("Host closed the session. Playing offline.");
-        StartOffline();
+        Multiplayer.ConnectionFailed   += () => GoOffline($"Could not reach {_joinTarget}. Check the address; if the host plays from home, "
+                                                         + "their MULTIPLAYER panel says what their router still needs. Playing offline.");
+        Multiplayer.ServerDisconnected += () => GoOffline("Host closed the session. Playing offline.");
+        GoOffline();
+        // The close button goes through Game.Quit like every other way out. This is the one node
+        // that always exists, and what it owns -- the socket and the router ports -- is what a
+        // closed window must not strand.
+        GetTree().AutoAcceptQuit = false;
+    }
+
+    public override void _Notification(int what)
+    {
+        if (what == NotificationWMCloseRequest) Game.Quit();
     }
 
     // ── the build handshake ──────────────────────────────────────────────────
-    // WE VERSION SAVE FILES BUT NOT SESSIONS, and a session is where two builds can actually
-    // disagree. A guest on an older build has different balance numbers, different stats, and
-    // possibly different RPC signatures; it joins, it plays, and every number it sees is a
-    // quiet lie. The host decides -- it owns the world, so it owns who is in it.
+    // WE VERSION SAVE FILES, AND SESSIONS HAVE TO MATCH TOO -- more exactly, because two builds
+    // can disagree in ways a save never sees. Godot addresses a node's RPCs by their place in a
+    // sorted list, so a build that adds or renames one shifts every later one: an older guest's
+    // packets call the neighbouring method, and every balance number it shows is a quiet lie.
     //
-    // KEEP THIS SIGNATURE STABLE. It is the one RPC that has to work between builds that
-    // disagree about everything else; change its arguments and the handshake itself becomes the
-    // thing that cannot be negotiated.
-    public static bool Accepts(int build) => build == Game.Version;
+    // So the handshake compares a FINGERPRINT of the build, not a number anyone has to remember
+    // to bump: every RPC's name, arguments and delivery, and every constant and fixed value in
+    // the game's types (stats, prices, timings). The same zip on two machines agrees; a changed
+    // number or message on either side does not. It runs in Godot's authentication step, BEFORE
+    // the peer counts as connected: nothing is spawned for it, sent to it or relayed about it
+    // until both sides have seen the other's fingerprint -- and each side refuses on its own, so
+    // the refused player learns why without any message having to survive a disconnect.
+    public static readonly int Protocol = Fingerprint();
+    public static bool Accepts(int protocol) => protocol == Protocol;
+    // The smoke test's way to be a different build, to prove the refusal on a real connection.
+    public static int? PretendProtocol;
 
-    [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetHello(int build)
+    private void OnAuth(long id, byte[] data)
     {
-        if (!IsHost) return;
-        int who = Multiplayer.GetRemoteSenderId();
-        if (Accepts(build)) return;
-        Say($"Refused player {who}: build {build}, this is build {Game.Version}.");
-        RpcId(who, nameof(NetRefused), Game.Version);
-        // Deferred: disconnecting inside the handler for a packet from that same peer is asking
-        // the multiplayer layer to tear down what it is currently reading.
-        CallDeferred(nameof(Drop), who);
+        int theirs = data.Length == 4 ? BitConverter.ToInt32(data) : -1;
+        var sm = (SceneMultiplayer)Multiplayer;
+        if (Accepts(theirs) && PretendProtocol == null) { sm.CompleteAuth((int)id); return; }
+        // NOT IsHost: a player still connecting keeps the host role over its own world until a
+        // host has let it in -- which is exactly the moment this runs.
+        if (!Connecting)
+        {
+            Say($"Refused a player on a different build of the game (theirs {theirs:x8}, this one {Protocol:x8}).");
+            (_peer as ENetMultiplayerPeer)?.GetPeer((int)id)?.PeerDisconnectLater();
+        }
+        else GoOffline($"That host is on a different build of the game (theirs {theirs:x8}, yours {PretendProtocol ?? Protocol:x8}): "
+                     + "you both need the same zip. Playing offline.");
     }
 
-    private void Drop(int who) => Multiplayer.MultiplayerPeer?.DisconnectPeer(who);
-
-    [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetRefused(int hostBuild)
+    private static int Fingerprint()
     {
-        if (Multiplayer.GetRemoteSenderId() != 1) return;          // only the host refuses anyone
-        StartOffline($"That host is running build {hostBuild}; this is build {Game.Version}. Playing offline.");
+        // Invariant culture throughout: a record prints its numbers in the machine's own culture,
+        // and a German PC and an English one must not disagree about "1,5" and "1.5".
+        var culture = System.Globalization.CultureInfo.CurrentCulture;
+        System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
+        try { return Fingerprint(new List<string> { $"save {Game.Version}" }); }
+        finally { System.Globalization.CultureInfo.CurrentCulture = culture; }
     }
+    private static int Fingerprint(List<string> parts)
+    {
+        foreach (var t in typeof(Net).Assembly.GetTypes().Where(t => t.Namespace == null && !t.Name.StartsWith("_")).OrderBy(t => t.FullName))
+        {
+            const BindingFlags all = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance | BindingFlags.DeclaredOnly;
+            foreach (var m in t.GetMethods(all).OrderBy(m => m.Name))
+                if (m.GetCustomAttribute<RpcAttribute>() is { } a)
+                    parts.Add($"{t.Name}.{m.Name}({string.Join(",", m.GetParameters().Select(p => p.ParameterType.Name))}) {a.Mode} {a.TransferMode} {a.TransferChannel}");
+            foreach (var f in t.GetFields(all & ~BindingFlags.Instance).OrderBy(f => f.Name))
+                if ((f.IsLiteral || f.IsInitOnly) && Plain(f.FieldType))
+                    parts.Add($"{t.Name}.{f.Name}={Show(f.GetValue(null))}");
+        }
+        uint h = 2166136261;                              // FNV-1a: stable across processes, unlike GetHashCode
+        foreach (char c in string.Join("\n", parts)) { h ^= c; h *= 16777619; }
+        return (int)h;
+    }
+    // Values whose text is the same on every machine: numbers, words, colours and vectors, and
+    // records and collections of them. Not engine objects, not anything a player's run has changed.
+    private static bool Plain(Type t) =>
+        t.IsPrimitive || t.IsEnum || t == typeof(string) || t == typeof(decimal) || t == typeof(Color) || t == typeof(Vector2)
+        || (t.IsArray && Plain(t.GetElementType()))
+        || (t.GetMethod("<Clone>$") != null && !typeof(GodotObject).IsAssignableFrom(t));
+    private static string Show(object v) => v switch
+    {
+        null => "null",
+        IFormattable f => f.ToString(null, System.Globalization.CultureInfo.InvariantCulture),
+        Array a => "[" + string.Join(",", a.Cast<object>().Select(Show)) + "]",
+        _ => v.ToString(),
+    };
 
     private void OnConnected()
     {
         _localId = Multiplayer.GetUniqueId();
-        // Before anything else this peer says: if the builds disagree, nothing after it means
-        // what either side thinks it means.
-        RpcId(1, nameof(NetHello), Game.Version);
-        Players.TryAdd(_localId, new PlayerInfo { Id = _localId });
+        _isHost = false; Connecting = false; _inSession = true;
+        Players.TryAdd(_localId, new PlayerInfo());
         Say($"Connected as player {_localId}.");
         SessionChanged?.Invoke();
     }
 
     // ── session lifecycle ────────────────────────────────────────────────────
 
-    // Offline play. Deliberately the same path as hosting: one set of rules.
-    private void StartOffline(string reason = null)
+    // Offline play. Deliberately the same path as hosting: one set of rules. Whoever is leaving,
+    // whatever the reason -- PLAY OFFLINE, the host closing the session, a connection that failed
+    // or was refused -- lands here.
+    public void GoOffline(string reason = null)
     {
-        // WHOEVER IS LEAVING, WHATEVER THE REASON. Quitting the lobby, the host closing the
-        // session, a connection that failed -- they all land here, and each of them is a peer
-        // whose character stops being in a session. A scene change saves on its way out, but a
-        // session can end without one: press PLAY OFFLINE and nothing moves but the socket.
-        // Saving here is cheap and it is the only point every one of those routes passes through.
-        //
-        // ONLY WHEN THERE WAS A SESSION TO LEAVE. StartOffline also runs at boot and on a failed
-        // Host()/Join(), where nothing has left anything -- and saving there wrote a freshly
-        // built default base over a good file. Found by a check that had been passing.
-        if (IsOnline) SaveLocalCharacter();
-        Shutdown();
-        _isHost = true; _localId = 1;
-        Players.Clear(); Players[1] = new PlayerInfo { Id = 1 };
+        Close();
+        _isHost = true; _localId = 1; Connecting = false;
+        Players[1] = new PlayerInfo();
         Say(reason ?? "Offline session.");
         SessionChanged?.Invoke();
     }
 
+    // The session ends; nothing else. Game.Quit calls this alone -- there is no world to fall
+    // back to -- and GoOffline calls it first. It saves only when there WAS a session to leave:
+    // this also runs at boot and after a failed Host()/Join(), and saving there once wrote a
+    // freshly built default base over a good file.
+    public void Close()
+    {
+        if (_inSession) SaveLocalCharacter();
+        _inSession = false;
+        _joinGen++;                                        // a lookup still in flight connects to nothing
+        Shutdown();
+    }
+
     // ── internet hosting ────────────────────────────────────────────────────
-    // Hosting starts at once for your own network. Meanwhile a background thread asks
-    // your router (UPnP) to forward the port to this PC, and a web request asks a public
-    // "what is my IP" service what the internet sees; the two answers together decide
-    // what friends elsewhere need (see Describe). The background thread writes NOTHING:
-    // it hands its result back to the main thread, which keeps it only for the current
-    // session -- a mapping made for a session that has already ended is closed at once.
+    // Hosting starts at once for your own network. Meanwhile a background thread asks your
+    // routers to forward the port to this PC (Router: UPnP, NAT-PMP, PCP, and the router in front
+    // of yours if there is one), and a web request asks a public "what is my IP" service what the
+    // internet sees; the answers together decide what friends elsewhere need (see Describe). The
+    // background thread writes NOTHING: it hands its report back to the main thread, which keeps
+    // it only for the current session -- ports opened for a session that has ended are closed.
     public enum Reach { None, Checking, Internet, Manual, LanOnly }
     public Reach Reachability { get; private set; } = Reach.None;
     public string InternetAddress { get; private set; } = "";
     public string LanAddress { get; private set; } = "";
-    private Upnp _upnp; private int _mappedPort, _hostGen;
+    // For friends on a virtual network with you (Tailscale, ZeroTier, Radmin VPN, Hamachi), and
+    // for friends with IPv6 -- the one way in left when carrier-grade NAT closes every IPv4 door.
+    public List<(string name, string address)> OverlayAddresses { get; private set; } = new();
+    public string Ipv6Address { get; private set; } = "";
+    private List<Router.Hop> _hops = new();
+    private int _hostGen;
 
-    private void OpenRouterPort(int port, int gen, string lanIp)
+    // Every call to a router runs on a background thread (a router can take seconds), and every
+    // one is counted: NetworkIdle, and Game.Quit's wait, mean "none still running". The count is
+    // kept on the main thread only -- the job hands its decrement back through the same queue as
+    // its result, so the result (which may start the job that closes its ports) always lands
+    // first, and "none running" can never be seen between the two.
+    private int _routerJobs;
+    private void RouterJob(Action job)
     {
-        string ext = "", why = ""; Upnp mapped = null;
-        try
+        _routerJobs++;
+        System.Threading.Tasks.Task.Run(() =>
         {
-            Upnp u = null; UpnpDevice gw = null; int r = -1;
-            // THREE PASSES. SSDP discovery is one unacknowledged multicast datagram per attempt --
-            // one frame lost on Wi-Fi and the answer is "your router has no UPnP" for the whole
-            // session. Cheap to repeat, and it happens on a background thread while LAN hosting is
-            // already up, so nobody waits for it.
-            for (int attempt = 0; attempt < 3 && (gw == null || !gw.IsValidGateway()); attempt++)
-            {
-                u = new Upnp();
-                // PIN THE INTERFACE. Left to itself the search leaves on whichever adapter Windows
-                // thinks is best, and this machine has WSL -- plus, on many machines, Hyper-V or
-                // Tailscale. The router never hears a search sent down a virtual adapter.
-                if (lanIp.Length > 0) u.DiscoverMulticastIf = lanIp;
-                // NO DEVICE FILTER. Godot keeps only replies whose search target CONTAINS this
-                // string, while the underlying search tries several targets in turn and stops at
-                // the first that answers -- and only the first of those contains
-                // "InternetGatewayDevice". A router that answers on any of the others produced a
-                // SUCCESS with an empty device list, so GetGateway() came back null and a working
-                // router was reported as having no UPnP at all. IsValidGateway() below is the real
-                // test and is unaffected by widening this.
-                //
-                // Under 3 s on purpose: the search advertises its own wait in the request, and
-                // Windows only admits unicast replies to a multicast request for about that long.
-                // A longer timeout makes Windows worse, not better.
-                r = u.Discover(2500, 2, "");
-                if (r != (int)Upnp.UpnpResult.Success) continue;
-                gw = u.GetGateway();                       // only after the result: it logs an engine error on an empty list
-            }
-            if (r != (int)Upnp.UpnpResult.Success || gw == null || !gw.IsValidGateway()) why = "no router answered";
-            else
-            {
-                int m = u.AddPortMapping(port, port, "Warships", "UDP", 0);
-                // A permanent lease is what we want -- nothing has to renew it -- but plenty of
-                // routers only accept a bounded one, and a stale mapping from a session that was
-                // killed rather than closed looks like a conflict. Try the finite lease, then
-                // clear our own old mapping and try once more.
-                if (m != (int)Upnp.UpnpResult.Success) m = u.AddPortMapping(port, port, "Warships", "UDP", 7200);
-                if (m != (int)Upnp.UpnpResult.Success)
-                {
-                    u.DeletePortMapping(port, "UDP");
-                    m = u.AddPortMapping(port, port, "Warships", "UDP", 0);
-                }
-                if (m != (int)Upnp.UpnpResult.Success) why = $"the router refused ({(Upnp.UpnpResult)m})";
-                else { ext = u.QueryExternalAddress(); mapped = u; }
-            }
-        }
-        catch (Exception e) { why = e.Message; }
-        _upnpBusy = false;
-        Callable.From(() => RouterResult(gen, port, ext, why, mapped)).CallDeferred();
+            try { job(); }
+            finally { if (!Game.ShuttingDown) Callable.From(() => _routerJobs--).CallDeferred(); }
+        });
     }
 
-    // ── what friends elsewhere need: decided from the router's report AND the public address ──
-    // The router (UPnP) says whether it opened the port and what it thinks its outside address
-    // is; a public "what is my IP" service says what the internet actually sees. Together:
-    //   INTERNET   the router opened the port and IS the edge: friends join <public>:<port>
-    //   MANUAL     the router would not open it (UPnP off): forward UDP <port>, then <public>:<port>
-    //   LAN ONLY   the router's outside address is private or differs from the public one --
-    //              another router or the provider's shared address (carrier-grade NAT) is in
-    //              the way -- or nothing could be learned at all
+    // ── what friends elsewhere need: decided from the routers' report AND the public address ──
+    //   INTERNET   every router on the way opened the port: friends join <public>:<port>
+    //   MANUAL     a router would not open it -- ours (UPnP off), or the one in front of ours (two
+    //              routers, the second silent) -- or this PC's traffic leaves by a VPN: one step
+    //              by hand, then <public>:<port>
+    //   LAN ONLY   carrier-grade NAT, or nothing could be learned at all
     // The status line never prints the public address: the panel shows it behind a reveal.
-    private const string PublicIpService = "https://api.ipify.org";
+    //
+    // Where the public address comes from. The smoke test points it somewhere that cannot answer,
+    // so that "no internet" is a scenario it sets up rather than a fact about the machine.
+    public static string PublicIpService = "https://api.ipify.org";
     private HttpRequest _ipReq;
-    private string _publicIp = "", _routerExt = "", _routerWhy = "";
-    // Whether AddPortMapping SUCCEEDED -- not whether the router happened to tell us its outside
-    // address. Describe used to infer one from the other, so a router that opened the port but
-    // answered nothing to QueryExternalAddress was reported as having refused, and the player was
-    // sent to forward a port that was already forwarded.
-    private bool _routerMapped;
-    private bool _publicDone, _routerDone;
-    private volatile bool _upnpBusy;
+    private string _publicIp = "";
+    private Router.Report _report;
+    private bool _publicDone;
     private int _hostPort;
     // single player (and between sessions): no socket, no lookup, no router job
-    public bool NetworkIdle => _peer == null && _ipReq == null && !_upnpBusy;
+    public bool NetworkIdle => _peer == null && _ipReq == null && _routerJobs == 0;
 
-    public static (Reach reach, string address, string message) Describe(string routerExt, bool mapped, string publicIp, int port, string lan, string why = "")
+    private const string Firewall = " If friends still cannot get in, allow Warships (Godot) through the Windows firewall, for private AND public networks.";
+
+    // `routerExt`: what the router that opened the port says its internet side is ("" if it would
+    // not say, or nothing opened). `why`: why nothing opened. `front`: ours opened, but sits behind
+    // a router that did not -- this is our router's internet side, where that one has to forward.
+    public static (Reach reach, string address, string message) Describe(string routerExt, bool mapped, string publicIp, int port, string lan,
+                                                                         string why = "", string front = "")
     {
-        bool pub = publicIp.Length > 0;
-        // The port IS open; the router just would not say what its outside address is. Without
-        // this the run falls through to the manual-forwarding text below -- telling the player to
-        // do by hand the thing that already worked.
-        if (mapped && routerExt.Length == 0 && pub && !IsSharedAddress(publicIp))
-            return (Reach.Internet, $"{publicIp}:{port}",
-                    "Hosting for the internet: your router opened the port. It would not say what its outside address is, "
-                  + "so this is the address the internet sees. Friends anywhere can join it (click to reveal, or copy it).");
-        // Carrier-grade NAT, found on the PUBLIC address rather than the router's. Forwarding
-        // cannot work behind it at all, so do not send anyone to their router settings.
-        if (!mapped && pub && IsSharedAddress(publicIp))
+        bool pub = IsPublic(publicIp);
+        string pc = lan.Split(':')[0];
+        if (mapped)
+        {
+            // TWO ROUTERS, the second silent. One forward there finishes the path, and the game
+            // opens its own router every session after that -- so this names the exact address,
+            // which nobody would guess (it is not this PC's).
+            if (front.Length > 0 && pub)
+                return (Reach.Manual, $"{publicIp}:{port}",
+                        $"Hosting. Your router opened port {port}, but it sits behind a second router (usually your internet provider's modem) "
+                      + $"that did not answer. Once, in THAT router's settings: forward UDP {port} to {front} -- or put {front} in its DMZ, or "
+                      + "switch it to bridge mode. After that, friends anywhere join the address below, every time." + Firewall);
+            // The port IS open; the router just would not say what its outside address is.
+            if (routerExt.Length == 0 && pub)
+                return (Reach.Internet, $"{publicIp}:{port}",
+                        "Hosting for the internet: your router opened the port. Friends anywhere join the address below (click to reveal, or copy it)." + Firewall);
+            if (IsPublic(routerExt) && (!pub || publicIp == routerExt))
+                return (Reach.Internet, $"{routerExt}:{port}",
+                        "Hosting for the internet: friends anywhere join the address below (click to reveal, or copy it)." + Firewall);
+            // The router opened a public address, but the internet sees this PC somewhere else:
+            // its traffic leaves by another route -- almost always a VPN.
+            if (IsPublic(routerExt) && pub)
+                return (Reach.Manual, $"{routerExt}:{port}",
+                        "Hosting. Your router opened the port, but this PC's internet traffic goes out another way -- usually a VPN. Friends can try "
+                      + "the address below; if they cannot get in, turn the VPN off (or exclude Warships from it) while you host.");
             return (Reach.LanOnly, lan,
-                    $"Hosting for your network ({lan}). Your provider puts you behind a shared address (carrier-grade NAT), "
-                  + "so no amount of port forwarding will let friends reach you directly. Use Tailscale or ZeroTier, or let a friend host.");
-        if (mapped && routerExt.Length > 0 && !IsSharedAddress(routerExt) && (!pub || publicIp == routerExt))
-            return (Reach.Internet, $"{routerExt}:{port}",
-                    "Hosting for the internet: friends anywhere can join. Their address is below (click to reveal, or copy it).");
-        if (mapped && (IsSharedAddress(routerExt) || (pub && publicIp != routerExt)))
+                    $"Hosting for your network ({lan}). Your router opened the port, but your provider puts you behind a shared address "
+                  + "(carrier-grade NAT), so friends elsewhere cannot reach you directly. Use a virtual network (Tailscale, ZeroTier, Radmin VPN), "
+                  + "or let a friend host.");
+        }
+        // Nothing opened. What the router said about its internet side still tells us which fix works.
+        if (Router.IsCarrierGrade(routerExt))
             return (Reach.LanOnly, lan,
-                    $"Hosting for your network ({lan}). Your router opened the port, but it is not the last step to the internet: "
-                  + "another router, or your provider's shared address (carrier-grade NAT), sits in between, so friends elsewhere "
-                  + "cannot reach you directly. Use Tailscale or ZeroTier, or let a friend host.");
+                    $"Hosting for your network ({lan}). Your provider puts you behind a shared address (carrier-grade NAT), so no amount of port "
+                  + "forwarding lets friends reach you directly. Use a virtual network (Tailscale, ZeroTier, Radmin VPN), or let a friend host.");
+        if (pub && Router.IsShared(routerExt))
+            return (Reach.Manual, $"{publicIp}:{port}",
+                    $"Hosting. Your router did not open port {port}" + (why.Length > 0 ? $" -- {why}" : "") + ", and it sits behind a second router. "
+                  + $"Forward UDP {port} to this PC ({pc}) in your router, and in the router in front of it forward UDP {port} to {routerExt}; "
+                  + "then friends elsewhere join the address below." + Firewall);
         if (pub)
             return (Reach.Manual, $"{publicIp}:{port}",
                     $"Hosting. Your router did not open port {port}" + (why.Length > 0 ? $" -- {why}" : "") + ". "
-                  + $"Forward UDP {port} to this PC ({lan.Split(':')[0]}) in your router's settings (turn UPnP on there and it will "
-                  + "do this by itself next time), then friends elsewhere join with the address below. Windows may also ask to allow "
-                  + "Warships through the firewall the first time -- say yes for private AND public networks.");
+                  + $"Forward UDP {port} to this PC ({pc}) in your router's settings (turn UPnP on there and it will "
+                  + "do this by itself next time), then friends elsewhere join the address below." + Firewall);
         return (Reach.LanOnly, lan,
                 $"Hosting for your network ({lan}). Neither your router nor the internet could be asked for your public address. "
-              + $"For friends elsewhere, forward UDP {port} to this PC, or use Tailscale or ZeroTier.");
+              + $"For friends elsewhere, forward UDP {port} to this PC, or use a virtual network (Tailscale, ZeroTier, Radmin VPN).");
+    }
+
+    // A real internet address: IPv4, and none of the ranges that cannot be reached from outside
+    // (private, carrier-grade, loopback, link-local, "this network", multicast and reserved).
+    public static bool IsPublic(string ip)
+    {
+        if (!Router.IsIpv4(ip) || Router.IsShared(ip)) return false;
+        var o = ip.Split('.').Select(int.Parse).ToArray();
+        return o[0] != 0 && !(o[0] == 169 && o[1] == 254) && !(o[0] == 192 && o[1] == 0 && o[2] == 0) && o[0] < 224;
     }
 
     // What the panel shows. (Public so a test can show the reveal without a real router.)
@@ -287,7 +347,7 @@ public partial class Net : Node
         _ipReq.RequestCompleted += (result, code, headers, body) =>
         {
             string ip = result == (long)HttpRequest.Result.Success && code == 200 ? System.Text.Encoding.UTF8.GetString(body).Trim() : "";
-            _publicIp = LooksLikeIpv4(ip) ? ip : "";
+            _publicIp = Router.IsIpv4(ip) ? ip : "";
             _publicDone = true;
             Callable.From(FreeIpReq).CallDeferred();
             TryDecide(gen);
@@ -300,98 +360,140 @@ public partial class Net : Node
         if (IsInstanceValid(_ipReq)) { _ipReq.CancelRequest(); _ipReq.QueueFree(); }
         _ipReq = null;
     }
-    private static bool LooksLikeIpv4(string s)
-    {
-        var p = s.Split('.');
-        return p.Length == 4 && p.All(x => int.TryParse(x, out int v) && v >= 0 && v <= 255);
-    }
 
     public int StaleMappingsClosed { get; private set; }            // for the record (and the smoke test)
-    private void RouterResult(int gen, int port, string ext, string why, Upnp mapped)
+    private void RouterResult(int gen, Router.Report report)
     {
         if (gen != _hostGen)
-        {   // that session is over: never keep its handle -- close the port it opened
-            if (mapped != null) { StaleMappingsClosed++; System.Threading.Tasks.Task.Run(() => mapped.DeletePortMapping(port, "UDP")); }
+        {   // that session is over: never keep its ports -- close them
+            if (report.Opened.Count > 0) { StaleMappingsClosed++; RouterJob(() => Router.Close(report.Opened)); }
             return;
         }
-        _routerExt = ext; _routerWhy = why; _routerDone = true;
-        _routerMapped = mapped != null;
-        if (mapped != null) { _upnp = mapped; _mappedPort = port; }
+        _report = report;
+        _hops = report.Opened;
         TryDecide(gen);
     }
 
-    // Tailscale's addresses (100.64.0.0/10): friends on the same tailnet can join on these.
-    public static bool IsTailnet(string ip)
-    {
-        var p = ip.Split('.');
-        return p.Length == 4 && int.TryParse(p[0], out int a) && int.TryParse(p[1], out int b) && a == 100 && b >= 64 && b <= 127;
-    }
-    public string TailnetAddress { get; private set; } = "";
-
     private void TryDecide(int gen)
     {
-        if (gen != _hostGen || !IsHost || !IsOnline || !(_routerDone && _publicDone)) return;   // the session changed, or one answer is still out
-        var d = Describe(_routerExt, _routerMapped, _publicIp, _hostPort, LanAddress, _routerWhy);
-        // on a tailnet, friends on it can join even when the internet cannot reach you
-        if (d.reach == Reach.LanOnly && TailnetAddress.Length > 0) d.message += $" Friends on your Tailscale network join {TailnetAddress}.";
+        if (gen != _hostGen || !IsHost || !IsOnline || _report == null || !_publicDone) return;   // the session changed, or one answer is still out
+        var r = _report;
+        bool mapped = r.Opened.Count > 0;
+        var d = Describe(r.Ext, mapped, _publicIp, mapped ? r.ExtPort : _hostPort, LanAddress, r.Why, r.Front);
+        // Whatever the routers did: friends on a virtual network with you can always join on it,
+        // and friends with IPv6 may get in where IPv4 cannot.
+        if (d.reach != Reach.Internet)
+        {
+            foreach (var (name, address) in OverlayAddresses) d.message += $" Friends on your {name} network join {address}.";
+            if (Ipv6Address.Length > 0) d.message += " Friends with IPv6 internet can also try your IPv6 address (in the panel).";
+        }
         Reachable(d.reach, d.address, d.message);
-    }
-
-    // Private and carrier-grade (100.64.0.0/10) addresses cannot be reached from outside.
-    public static bool IsSharedAddress(string ip)
-    {
-        var p = ip.Split('.');
-        if (p.Length != 4 || !int.TryParse(p[0], out int a) || !int.TryParse(p[1], out int b)) return false;
-        return a == 10 || (a == 172 && b >= 16 && b <= 31) || (a == 192 && b == 168) || (a == 100 && b >= 64 && b <= 127) || a == 127;
-    }
-
-    private static string LocalLan(int port)
-    {
-        foreach (var a in IP.GetLocalAddresses())
-            if (a.Contains('.') && IsSharedAddress(a) && !a.StartsWith("127.") && !a.StartsWith("100.")) return $"{a}:{port}";
-        return $"127.0.0.1:{port}";
     }
 
     public bool Host(int port = DefaultPort)
     {
-        Shutdown();
+        Close();                                           // a session in progress ends properly: saved, guests told
         var p = new ENetMultiplayerPeer();
-        if (p.CreateServer(port, MaxPlayers) != Error.Ok) { Say($"Could not open port {port}."); StartOffline(); return false; }
+        if (p.CreateServer(port, MaxPlayers) != Error.Ok)
+        {
+            GoOffline($"Could not open port {port}: another program, or another copy of Warships, is using it. Playing offline.");
+            return false;
+        }
         _peer = p; Multiplayer.MultiplayerPeer = p;
-        _isHost = true; _localId = 1;
-        Players.Clear(); Players[1] = new PlayerInfo { Id = 1 };
-        LanAddress = LocalLan(port); Reachability = Reach.Checking; InternetAddress = "";
-        var tn = IP.GetLocalAddresses().FirstOrDefault(IsTailnet);
-        TailnetAddress = tn != null ? $"{tn}:{port}" : "";
+        _isHost = true; _localId = 1; Connecting = false; _inSession = true;
+        Players.Clear(); Players[1] = new PlayerInfo();
+        var lan = Router.Lan();
+        LanAddress = $"{lan.Ip}:{port}"; Reachability = Reach.Checking; InternetAddress = "";
+        OverlayAddresses = Router.Overlays().Select(o => (o.name, $"{o.ip}:{port}")).ToList();
+        Ipv6Address = Router.GlobalIpv6() is { Length: > 0 } v6 ? $"[{v6}]:{port}" : "";
         Say($"Hosting on your network ({LanAddress}). Asking your router to open port {port}, and the internet for your public address...");
         SessionChanged?.Invoke();
         int gen = ++_hostGen; _hostPort = port;
-        _publicIp = _routerExt = _routerWhy = ""; _publicDone = _routerDone = false; _routerMapped = false;
-        _upnpBusy = true;
-        string lanIp = LanAddress.Split(':')[0];
-        System.Threading.Tasks.Task.Run(() => OpenRouterPort(port, gen, lanIp));
+        _publicIp = ""; _publicDone = false; _report = null;
+        RouterJob(() =>
+        {
+            Router.Report rep;
+            try { rep = Router.Open(port, lan); }
+            catch (Exception e) { rep = new Router.Report { Why = e.Message, ExtPort = port }; }
+            // The session may have ended while the routers were asked: close what this opened in
+            // this same job, so no moment exists where nothing runs and a port is still open.
+            if (gen != System.Threading.Volatile.Read(ref _hostGen) || Game.ShuttingDown) { Router.Close(rep.Opened); return; }
+            Callable.From(() => RouterResult(gen, rep)).CallDeferred();
+        });
         AskPublicIp(gen);
         return true;
     }
 
-    // Accepts "address" or "address:port".
-    public bool Join(string address, int port = DefaultPort)
+    // ── joining ──────────────────────────────────────────────────────────────
+    // What a player pastes: "1.2.3.4", "1.2.3.4:27015", "host.example.com:27015", an IPv6 address
+    // bare or as [2001:db8::1]:27015, with stray spaces or a scheme in front. null if it is not
+    // an address at all (or names an impossible port).
+    public static (string host, int port)? ParseAddress(string text, int defaultPort = DefaultPort)
     {
-        address = address.Trim();
-        int colon = address.LastIndexOf(':');
-        if (colon > 0 && int.TryParse(address[(colon + 1)..], out int p2)) { port = p2; address = address[..colon]; }
-        if (address.Length == 0) { Say("Enter a host address first."); return false; }
+        var s = (text ?? "").Trim();
+        int scheme = s.IndexOf("://", StringComparison.Ordinal);
+        if (scheme >= 0) s = s[(scheme + 3)..];
+        s = s.TrimEnd('/').Replace(" ", "");
+        string host = s, portText = "";
+        if (s.StartsWith("["))                                     // [v6] or [v6]:port
+        {
+            int close = s.IndexOf(']');
+            if (close < 0) return null;
+            host = s[1..close];
+            if (close + 1 < s.Length) { if (s[close + 1] != ':') return null; portText = s[(close + 2)..]; }
+        }
+        else if (s.Count(c => c == ':') == 1)                      // host:port (more than one colon is a bare IPv6 address)
+        {
+            int colon = s.IndexOf(':');
+            host = s[..colon]; portText = s[(colon + 1)..];
+        }
+        int port = defaultPort;
+        if (portText.Length > 0 && !(int.TryParse(portText, out port) && port is > 0 and < 65536)) return null;
+        return host.Length == 0 ? null : (host, port);
+    }
 
-        Shutdown();
-        var p = new ENetMultiplayerPeer();
-        if (p.CreateClient(address, port) != Error.Ok) { StartOffline($"Could not reach {address}:{port}. Playing offline."); return false; }
-        _peer = p; Multiplayer.MultiplayerPeer = p;
-        _isHost = false;
-        Say($"Connecting to {address}:{port} ...");
+    private int _joinGen;
+    private string _joinTarget = "";
+    public bool Join(string address)
+    {
+        if (ParseAddress(address) is not var (host, port))
+        {
+            Say(string.IsNullOrWhiteSpace(address) ? "Enter a host address first." : $"\"{address.Trim()}\" is not an address. Type the host's IP, or IP:port.");
+            return false;
+        }
+        bool had = _inSession;
+        Close();                                           // hosting or in a session: that ends first, properly
+        Players[1] = new PlayerInfo();
+        Connecting = true;
+        _joinTarget = port == DefaultPort ? host : $"{host}:{port}";
+        int gen = ++_joinGen;
+        Say($"Connecting to {_joinTarget} ...");
+        if (had) SessionChanged?.Invoke();                 // the guests that were here are gone: rebuild without them
+        // A NAME is looked up off the main thread: a slow or failing lookup used to freeze the game.
+        if (System.Net.IPAddress.TryParse(host, out _)) { ConnectTo(gen, host, port); return true; }
+        System.Threading.Tasks.Task.Run(() =>
+        {
+            string ip = "";
+            try { ip = System.Net.Dns.GetHostAddresses(host).FirstOrDefault(a => a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)?.ToString() ?? ""; }
+            catch (Exception) { /* no such name: reported below */ }
+            if (!Game.ShuttingDown) Callable.From(() => ConnectTo(gen, ip, port)).CallDeferred();
+        });
         return true;
     }
 
-    public void GoOffline() { StartOffline(); }
+    private void ConnectTo(int gen, string ip, int port)
+    {
+        if (gen != _joinGen) return;                       // cancelled, or superseded by another JOIN
+        var p = new ENetMultiplayerPeer();
+        if (ip.Length == 0 || p.CreateClient(ip, port) != Error.Ok)
+        {
+            GoOffline($"Could not find {_joinTarget}. Check the address. Playing offline.");
+            return;
+        }
+        // An unreachable host is given up on in about 12 s, not ENet's 30.
+        foreach (var server in p.Host.GetPeers()) server.SetTimeout(32, 4000, 12000);
+        _peer = p; Multiplayer.MultiplayerPeer = p;
+    }
 
     // The live Yard writes the base into Character first: a base is part of a character, and this
     // is the moment the character stops being in a session. Nothing here touches another peer's
@@ -407,14 +509,14 @@ public partial class Net : Node
     private void Shutdown()
     {
         if (_peer != null) { _peer.Close(); _peer = null; }
-        if (_upnp != null && _mappedPort != 0)
-        {   // close the router port we opened (in the background: routers can be slow)
-            var u = _upnp; int mp = _mappedPort;
-            System.Threading.Tasks.Task.Run(() => u.DeletePortMapping(mp, "UDP"));
+        if (_hops.Count > 0)
+        {   // close the router ports we opened (in the background: routers can be slow)
+            var hops = _hops;
+            RouterJob(() => Router.Close(hops));
         }
-        _upnp = null; _mappedPort = 0; _hostGen++;
+        _hops = new(); _hostGen++;
         FreeIpReq();                                        // no lookup outlives its session
-        Reachability = Reach.None; InternetAddress = ""; LanAddress = ""; TailnetAddress = "";
+        Reachability = Reach.None; InternetAddress = ""; LanAddress = ""; Ipv6Address = ""; OverlayAddresses = new();
         // An explicit offline peer rather than null: IsServer() and GetUniqueId() then
         // answer 1 / true offline instead of depending on engine fallback behaviour.
         Multiplayer.MultiplayerPeer = new OfflineMultiplayerPeer();
@@ -425,8 +527,13 @@ public partial class Net : Node
     {
         if (joined)
         {
+            // A friend whose connection dies without a goodbye (their PC sleeps, their Wi-Fi
+            // drops) is let go in about 10 s instead of ENet's 30, which left a ghost ship
+            // drifting through everyone's world. The host's to set: only it holds a real
+            // connection to each guest (a guest hears of the others through the host).
+            if (_isHost) (_peer as ENetMultiplayerPeer)?.GetPeer(id)?.SetTimeout(32, 4000, 10000);
             // TryAdd: their identity may have arrived a moment before the join event.
-            Players.TryAdd(id, new PlayerInfo { Id = id });
+            Players.TryAdd(id, new PlayerInfo());
             Say($"Player {id} joined.");
             PlayerJoined?.Invoke(id);
         }
@@ -448,4 +555,30 @@ public partial class Net : Node
 
     // True when this node is the local player's own ship.
     public static bool OwnedByMe(Node n) => n != null && n.GetMultiplayerAuthority() == LocalId;
+
+    // A WARNING, as a guest should show it. The host judges a dodgeable hit at the end of the
+    // warning against the last position the guest reported -- which left the guest a one-way trip
+    // earlier -- and the warning itself arrived a one-way trip late. So the guest must be clear a
+    // full round trip before the end the host sent: this is that end. Never below 40% of the
+    // warning, whatever the connection. The host (and single player) sees it as sent.
+    public static double Arriving(double warning)
+    {
+        if (IsHost || I?._peer is not ENetMultiplayerPeer e || e.GetPeer(1) is not { } host) return warning;
+        double rtt = host.GetStatistic(ENetPacketPeer.PeerStatistic.RoundTripTime) / 1000.0;
+        return System.Math.Max(warning * 0.4, warning - rtt);
+    }
+
+    // A guest's request to the host: the one way a guest asks for anything. Offline, or still
+    // connecting, there is no host to ask -- and an RPC then is an engine error.
+    public static void AskHost(Node node, StringName method, params Variant[] args)
+    {
+        if (IsOnline) node.RpcId(1, method, args);
+    }
+    // On the host, in a request handler: the sender, if it is a player in this session. A request
+    // from anyone else -- a peer still handshaking, or one already gone -- is ignored.
+    public static bool FromPlayer(Node node, out int who)
+    {
+        who = node.Multiplayer.GetRemoteSenderId();
+        return IsHost && I != null && I.Players.ContainsKey(who);
+    }
 }

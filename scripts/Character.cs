@@ -13,15 +13,20 @@ public static class Character
 {
     public const string Dir = "user://characters";
 
-    // The build that wrote this character. A file from another build is not loaded -- see Game.
-    // A character in memory always carries the CURRENT version: it is stamped on save, and a file
-    // that does not match is never loaded, so the two can never disagree.
-    public static int Version = Game.Version;
+    // A new pilot, and whatever a file or a packet leaves out. One place: these were written out
+    // nine times across six files. Nested, so the smoke test's inventory of what a character SAVES
+    // does not mistake them for fields.
+    public static class Defaults
+    {
+        public const string Name = "Commander";
+        public static readonly Color Main = new(0.55f, 0.72f, 1.00f);     // hull
+        public static readonly Color Accent = new(1.00f, 0.78f, 0.35f);   // turrets, engines, trim
+    }
 
     public static string Id = "";           // file stem; empty = nothing loaded
-    public static string Name = "Commander";
-    public static Color Main   = new(0.55f, 0.72f, 1.00f);   // hull
-    public static Color Accent = new(1.00f, 0.78f, 0.35f);   // turrets, engines, trim
+    public static string Name = Defaults.Name;
+    public static Color Main   = Defaults.Main;
+    public static Color Accent = Defaults.Accent;
     public static ShipClass Class = ShipClass.Battleship;
 
     // Stat bonuses as fractions keyed by stat id (see ShipStats). Saved with the
@@ -63,11 +68,7 @@ public static class Character
     public static void NewBlank()
     {
         Id = DateTime.UtcNow.ToString("yyyyMMddHHmmssfff");
-        Version = Game.Version;
-        Name = "Commander";
-        Main = new(0.55f, 0.72f, 1.00f);
-        Accent = new(1.00f, 0.78f, 0.35f);
-        Class = ShipClass.Battleship;
+        (Name, Main, Accent, Class) = (Defaults.Name, Defaults.Main, Defaults.Accent, ShipClass.Battleship);
         Bonuses.Clear();
         Exp = 0; Level = 1; Points = 0; Array.Clear(Bought); BossCleared.Clear(); Loadout.Clear(); Spares.Clear();
         BaseOre = BaseSalvage = BaseCredits = 0; BaseLevels.Clear(); BaseInvested.Clear();
@@ -93,23 +94,26 @@ public static class Character
         foreach (var kv in Loadout) c.SetValue("equipment", kv.Key.ToString(), string.Join(",", kv.Value));
         foreach (var kv in Spares) c.SetValue("spares", kv.Key.ToString(), string.Join(",", kv.Value));
 
-        // Write a temp file and rename it over the real one, never straight onto it.
-        // ConfigFile.Save truncates and rewrites in place, so anything reading the same
-        // path at that moment sees a half-written file: Load and List both hit
-        // "ConfigFile parse error ... Unterminated string" and the character silently
-        // fails to load or drops out of the list. Two instances share one user:// in the
-        // smoke test and in "Run Multiple Instances", so this is reachable, not theoretical.
-        // After the rename the live path only ever holds a complete file.
-        var tmp = PathOf(Id) + ".tmp";      // not ".cfg", so List() skips it if one is left
-        if (c.Save(tmp) != Error.Ok) return;
-        LastSaveRenamed = DirAccess.RenameAbsolute(ProjectSettings.GlobalizePath(tmp),
-                                                   ProjectSettings.GlobalizePath(PathOf(Id))) == Error.Ok;
-        if (!LastSaveRenamed)
-        {
-            // Losing the save outright is worse than the race it was avoiding.
-            c.Save(PathOf(Id));
-            DirAccess.RemoveAbsolute(ProjectSettings.GlobalizePath(tmp));
-        }
+        if (WriteAtomically(c, PathOf(Id)) is bool renamed) LastSaveRenamed = renamed;
+    }
+
+    // Write a temp file and rename it over the real one, never straight onto it. ConfigFile.Save
+    // truncates and rewrites in place, so anything reading the same path at that moment sees a
+    // half-written file: Load and List both hit "ConfigFile parse error ... Unterminated string"
+    // and the character silently fails to load or drops out of the list. Two instances share one
+    // user:// in the smoke test and in "Run Multiple Instances", so this is reachable, not
+    // theoretical. After the rename the live path only ever holds a complete file. The temp is
+    // not ".cfg", so List() skips it if one is ever left. Settings saves the same way.
+    // null: nothing could be written; otherwise whether the rename -- the safe path -- ran.
+    internal static bool? WriteAtomically(ConfigFile c, string path)
+    {
+        var tmp = path + ".tmp";
+        if (c.Save(tmp) != Error.Ok) return null;
+        if (DirAccess.RenameAbsolute(ProjectSettings.GlobalizePath(tmp), ProjectSettings.GlobalizePath(path)) == Error.Ok) return true;
+        // Losing the save outright is worse than the race it was avoiding.
+        c.Save(path);
+        DirAccess.RemoveAbsolute(ProjectSettings.GlobalizePath(tmp));
+        return false;
     }
 
     // Did the last Save go through the rename, or fall back to writing over the live file?
@@ -123,21 +127,16 @@ public static class Character
     {
         var c = new ConfigFile();
         if (c.Load(PathOf(id)) != Error.Ok) return false;
-        // A file from another build is REFUSED here, not repaired. Load() is the only way a
-        // character reaches memory, so this is the one place that has to hold: the select screen
-        // greys the row, but a guest joining, a smoke test, or a future entry point all come
-        // through here. A character that predates versioning reads 0 and is refused too.
-        if ((int)c.GetValue("id", "version", 0) != Game.Version) return false;
+        // A file from another build is REFUSED here, not repaired -- by the same rule the select
+        // screen greys a row with (Slot.Playable). Load() is the only way a character reaches
+        // memory, so this is the one place that has to hold: a guest joining, a smoke test, or a
+        // future entry point all come through here. A file from before versioning reads 0.
+        var s = ReadSlot(c, id);
+        if (!s.Playable) return false;
         // Only NOW: a refused load must leave nothing behind, and Id is what Save() writes to.
         // Set before the check, a refused character would still be the one the next save
         // overwrites.
-        Id      = id;
-        Version = Game.Version;
-        Name    = (string)c.GetValue("id", "name", "Commander");
-        Main    = (Color)c.GetValue("id", "main", new Color(0.55f, 0.72f, 1.00f));
-        Accent  = (Color)c.GetValue("id", "accent", new Color(1.00f, 0.78f, 0.35f));
-        int cls = (int)c.GetValue("id", "class", 0);
-        Class   = Enum.IsDefined(typeof(ShipClass), cls) ? (ShipClass)cls : ShipClass.Battleship;
+        (Id, Name, Main, Accent, Class) = (id, s.Name, s.Main, s.Accent, s.Class);
         Bonuses.Clear();
         if (c.HasSection("bonus"))
             foreach (var k in c.GetSectionKeys("bonus")) Bonuses[k] = (double)c.GetValue("bonus", k, 0.0);
@@ -178,11 +177,19 @@ public static class Character
             foreach (var k in c.GetSectionKeys("boss_cleared"))
                 BossCleared[k] = ((string)c.GetValue("boss_cleared", k, "")).Split(',', StringSplitOptions.RemoveEmptyEntries)
                                  .Select(x => int.TryParse(x, out var n) ? n : 0).Where(n => n >= 1).ToHashSet();
-        else if (c.HasSection("bosses"))   // an old save: tiers from 0 -- tier t beaten means levels 1..t+1
-            foreach (var k in c.GetSectionKeys("bosses"))
-                BossCleared[k] = Enumerable.Range(1, Math.Max(0, (int)c.GetValue("bosses", k, -1) + 1)).ToHashSet();
         return true;
     }
+
+    // The [id] section: what the select screen lists, and what Load checks before anything else.
+    private static Slot ReadSlot(ConfigFile c, string id) => new()
+    {
+        Id = id,
+        Version = (int)c.GetValue("id", "version", 0),
+        Name = (string)c.GetValue("id", "name", Defaults.Name),
+        Main = (Color)c.GetValue("id", "main", Defaults.Main),
+        Accent = (Color)c.GetValue("id", "accent", Defaults.Accent),
+        Class = Classes.Sanitize((int)c.GetValue("id", "class", 0)),
+    };
 
     // Every saved character, oldest first (ids are creation timestamps).
     public static List<Slot> List()
@@ -197,15 +204,7 @@ public static class Character
             if (!f.EndsWith(".cfg")) continue;
             var c = new ConfigFile();
             if (c.Load($"{Dir}/{f}") != Error.Ok) continue;
-            int cls = (int)c.GetValue("id", "class", 0);
-            list.Add(new Slot {
-                Id = f[..^4],
-                Version = (int)c.GetValue("id", "version", 0),
-                Name = (string)c.GetValue("id", "name", "Commander"),
-                Main = (Color)c.GetValue("id", "main", new Color(0.55f, 0.72f, 1.00f)),
-                Accent = (Color)c.GetValue("id", "accent", new Color(1.00f, 0.78f, 0.35f)),
-                Class = Enum.IsDefined(typeof(ShipClass), cls) ? (ShipClass)cls : ShipClass.Battleship,
-            });
+            list.Add(ReadSlot(c, f[..^4]));
         }
         return list;
     }
@@ -225,8 +224,9 @@ public static class Character
     public static void EnsureLoaded()
     {
         if (!string.IsNullOrEmpty(Id) && FileAccess.FileExists(PathOf(Id))) return;
-        var all = List();
-        if (all.Count > 0 && Load(all[0].Id)) return;
+        // The first one that CAN load: taking the oldest, even when it is from another build,
+        // made a new character on every direct entry while a playable one sat further down.
+        if (List().FirstOrDefault(s => s.Playable) is { } s && Load(s.Id)) return;
         NewBlank(); Save();
     }
 }
@@ -264,4 +264,9 @@ public static class Classes
 
     public const int PerPage = 3;
     public static int Pages => (All.Length + PerPage - 1) / PerPage;
+
+    // A class number from a file or a packet: one the game has, or the Battleship.
+    public static ShipClass Sanitize(int cls) => Enum.IsDefined(typeof(ShipClass), cls) ? (ShipClass)cls : ShipClass.Battleship;
+    // Its name as the screens print it ("BATTLESHIP"), from the one table that holds it.
+    public static string NameOf(ShipClass c) => All.First(e => e.Id == c).Name;
 }

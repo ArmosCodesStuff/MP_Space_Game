@@ -37,7 +37,7 @@ public partial class Music : Node
     // "resources still in use at exit".
     public override void _ExitTree()
     {
-        foreach (var p in new[] { _amb, _cmb }) if (IsInstanceValid(p)) { p.Stop(); p.Stream = null; }
+        Silence();
         _ambS?.Dispose(); _cmbS?.Dispose(); _ambS = _cmbS = null;
         if (I == this) I = null;
     }
@@ -72,9 +72,7 @@ public partial class Music : Node
         _cmb.VolumeDb = Db(CombatLevel * vol * Master);
     }
 
-    // Stop both loops. Call this a moment BEFORE quitting: the mixer lets go of its
-    // playbacks on its next cycle, and quitting in the same frame left them "still in
-    // use at exit".
+    // Stop both loops -- Game.Quit, which then gives the mixer the moment it needs to let go.
     public void Silence()
     {
         foreach (var p in new[] { _amb, _cmb }) if (IsInstanceValid(p)) { p.Stop(); p.Stream = null; }

@@ -55,9 +55,11 @@ public partial class Boss : Node2D, IHittable
     public int Volleys { get; private set; }                                   // for the smoke test
     public bool Charging => _dashTo.HasValue;
     public bool BeamCharging => _beamCharging;
-    // Frozen: a super move is winding up. It holds station so the red line it drew is the line
-    // it actually fires down -- the tell used to drift off the hull while it kept closing.
-    public bool Locked => _beamCharging || _pendingCharge != null || _dashTo.HasValue;
+    // Frozen: a super move is winding up, or the beam is burning. It holds station so the red
+    // line it drew is the line it actually fires down -- the tell used to drift off the hull while
+    // it kept closing -- and the live beam used to swing after the pilot for its three seconds,
+    // an unseen line sweeping the arena (the telegraph had already gone).
+    public bool Locked => _beamCharging || _beamLive >= 0 || _pendingCharge != null || _dashTo.HasValue;
     // Where the beam goes RIGHT NOW: straight out of the nose. The telegraph is a child of the
     // boss drawn down the same axis, so the drawing and the hit are the same line by construction.
     public (Vector2 a, Vector2 b) BeamSegment()
@@ -216,7 +218,7 @@ public partial class Boss : Node2D, IHittable
         {   // locked down now; the telegraph rides the hull, so the line cannot lie
             _beamArm = -1; _beamCharging = true; _beamT = BeamWindup; _beamAimLocked = false;
             if (!IsInstanceValid(_beamTarget) || !_beamTarget.Alive) _beamTarget = pilots.FirstOrDefault();
-            Tele(true, new Vector2(0, -Length * 0.5f), new Vector2(0, -Length * 0.5f - BeamLength), BeamWidth, BeamWindup, onHull: true);
+            Tele(true, new Vector2(0, -Length * 0.5f), new Vector2(0, -Length * 0.5f - BeamLength), BeamWidth, BeamWindup, onHull: true, hold: BeamLive);
         }
         if (_beamCharging)
         {   // Held still, tracking with nothing but its own ponderous turn: a quick pilot who is
@@ -293,17 +295,21 @@ public partial class Boss : Node2D, IHittable
     // warning swings with the hull instead of being pinned to the spot the boss stood on when it
     // drew it. Guests already lerp the boss's rotation from NetState, so their copy tracks too --
     // no per-frame line updates over the wire.
-    private void Tele(bool line, Vector2 a, Vector2 b, float size, double time, bool onHull = false)
+    private void Tele(bool line, Vector2 a, Vector2 b, float size, double time, bool onHull = false, double hold = 0)
     {
-        ShowTelegraph(line, a, b, size, time, onHull);
+        ShowTelegraph(line, a, b, size, time, onHull, hold);
         // arena peers only, for the same reason as NetState above
-        if (Net.IsOnline) Hub?.RpcToSector(Hub.SectorKind.Arena, this, nameof(NetTelegraph), line, a, b, size, time, onHull);
+        if (Net.IsOnline) Hub?.RpcToSector(Hub.SectorKind.Arena, this, nameof(NetTelegraph), line, a, b, size, time, onHull, hold);
     }
-    private void ShowTelegraph(bool line, Vector2 a, Vector2 b, float size, double time, bool onHull) =>
-        (onHull ? (Node)this : GetParent()).AddChild(new Telegraph { Line = line, A = a, B = b, Width = size, Radius = size, Duration = time });
+    private void ShowTelegraph(bool line, Vector2 a, Vector2 b, float size, double time, bool onHull, double hold) =>
+        (onHull ? (Node)this : GetParent()).AddChild(new Telegraph { Line = line, A = a, B = b, Width = size, Radius = size, Duration = time, Hold = hold });
 
+    // A guest's warning ends when ITS position is judged, not when the host's clock says (see
+    // Net.Arriving): on the internet the two were a round trip apart, and a pilot who cleared the
+    // red on their own screen was hit "outside" it.
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetTelegraph(bool line, Vector2 a, Vector2 b, float size, double time, bool onHull) => ShowTelegraph(line, a, b, size, time, onHull);
+    private void NetTelegraph(bool line, Vector2 a, Vector2 b, float size, double time, bool onHull, double hold) =>
+        ShowTelegraph(line, a, b, size, Net.Arriving(time), onHull, hold);
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
     private void NetState(Vector2 p, float rot, double hp, bool locked, double nextSuper, double superGap)

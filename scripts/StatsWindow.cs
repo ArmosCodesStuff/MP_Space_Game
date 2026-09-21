@@ -158,7 +158,7 @@ public partial class StatsWindow : CanvasLayer
         if (!IsInstanceValid(Ship)) return;
         RebuildKeys();
         var s = Ship.Stats; _shown = s;
-        _title.Text = $"{Ship.Pilot} — {(s.Class == ShipClass.Battleship ? "BATTLESHIP" : "CARRIER")}";
+        _title.Text = $"{Ship.Pilot} — {Classes.NameOf(s.Class)}";
 
         foreach (var c in _derived.GetChildren()) { _derived.RemoveChild(c); c.QueueFree(); }
         foreach (var c in _grid.GetChildren())    { _grid.RemoveChild(c); c.QueueFree(); }
@@ -198,7 +198,7 @@ public partial class StatsWindow : CanvasLayer
             if (st.Group != group)
             {
                 group = st.Group;
-                _grid.AddChild(Cell(group.ToUpper(), true, false, new Color(0.5f, 0.78f, 1f)));
+                _grid.AddChild(Cell(group.ToUpperInvariant(), true, false, new Color(0.5f, 0.78f, 1f)));
                 _grid.AddChild(Cell("base", true, true, new Color(1, 1, 1, 0.5f)));
                 _grid.AddChild(Cell("bonus", true, true, new Color(1, 1, 1, 0.5f)));
                 _grid.AddChild(Cell("final", true, true, new Color(1, 1, 1, 0.5f)));

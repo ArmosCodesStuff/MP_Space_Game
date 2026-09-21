@@ -1,6 +1,7 @@
 using Godot;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PLAYER SHIP — you ARE this.
@@ -22,8 +23,8 @@ public partial class PlayerShip : Node2D, IHittable
 
     // Identity as announced by the owner. Every ship carries its OWN copy -- reading
     // the static Character here would paint every ship in the local player's colours.
-    public string Pilot = "Commander";
-    public Color Main = new(0.55f, 0.72f, 1.00f), Accent = new(1.00f, 0.78f, 0.35f);
+    public string Pilot = Character.Defaults.Name;
+    public Color Main = Character.Defaults.Main, Accent = Character.Defaults.Accent;
 
     // A DISPLAY SHIP: the title screen's battleship. It is a real PlayerShip -- the same
     // turrets, shells, missiles and warp -- but nobody is flying it, so it reads no keyboard and
@@ -166,7 +167,7 @@ public partial class PlayerShip : Node2D, IHittable
 
     // What remote peers steer toward between updates.
     private Vector2 _netPos, _netVel;
-    private float _netRot;
+    private float _netRot, _netAge;
     private double _sendCd, _hostSendCd;
     private const double SendInterval = 0.05;    // owner -> all, 20 Hz
     private const double HostInterval = 0.10;    // host -> all, 10 Hz
@@ -321,14 +322,13 @@ public partial class PlayerShip : Node2D, IHittable
             if (why != null) { Fail(id, why); return; }
         }
         if (Net.Sim) DoAbility(id, targetId);
-        else RpcId(1, nameof(RequestAbility), id, targetId);
+        else Net.AskHost(this, nameof(RequestAbility), id, targetId);
     }
 
     [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
     private void RequestAbility(string id, int targetId)
     {
-        if (!Net.IsHost || Multiplayer.GetRemoteSenderId() != OwnerId) return;
-        DoAbility(id, targetId);
+        if (Net.FromPlayer(this, out int who) && who == OwnerId) DoAbility(id, targetId);
     }
 
     private void DoAbility(string id, int targetId)
@@ -386,7 +386,6 @@ public partial class PlayerShip : Node2D, IHittable
 
     private void TickWarp(float dt)
     {
-        _warpFlash = Math.Max(0, _warpFlash - dt);
         if (_warpCd > 0) _warpCd = Math.Max(0, _warpCd - dt);
         if (!Warping) return;
         if (!Alive) { _warpLeft = -1; return; }
@@ -487,13 +486,17 @@ public partial class PlayerShip : Node2D, IHittable
         if (!Alive) _stasis = Math.Max(0, _stasis - delta);   // the host's clock rules; guests re-sync each packet
         if (_combatT > 0) _combatT = Math.Max(0, _combatT - delta);
         if (Alive && Hp < MaxHp) Hp = Math.Min(MaxHp, Hp + MaxHp * (InCombat ? RegenInCombat : RegenOutOfCombat) * delta);
-        _pinT = Math.Max(0, _pinT - delta); Pinned = _pinT > 0;
+        // The HOST decides pinned. A guest used to count its own (never-set) timer down here and
+        // overwrite the host's flag every frame, so a raider's web never held a guest at all.
+        if (Net.Sim) { _pinT = Math.Max(0, _pinT - delta); Pinned = _pinT > 0; }
+        // the landing flash fades on every peer: it used to fade only on the owner's, and a
+        // remote ship's warp left it lit for good
+        _warpFlash = Math.Max(0, _warpFlash - dt);
         UpdatePod();
         if (Mine) { TickWarp(dt); LocalFlight(dt); }
         else      RemoteFollow(dt);
 
-        if (Net.Sim) TickAbilities(delta);
-        else         TickAbilitiesCosmetic(delta);
+        TickAbilities(delta);
 
         if (Net.Sim) FireControl(delta);
         foreach (var t in _turrets) t.Tick(delta);
@@ -520,26 +523,20 @@ public partial class PlayerShip : Node2D, IHittable
         QueueRedraw();
     }
 
+    // Every peer counts the timers down, so a guest's bars move smoothly between host packets
+    // (the next packet corrects any drift). Only the host ACTS when one runs out: the recharge
+    // that follows a PD window, and the magazine refilled by a reload.
     private void TickAbilities(double delta)
     {
-        if (_pdLeft > 0) { _pdLeft -= delta; if (_pdLeft <= 0) { _pdLeft = 0; _pdRecharge = Stats["pd_reload"]; } }
+        if (_pdLeft > 0) { _pdLeft -= delta; if (_pdLeft <= 0) { _pdLeft = 0; if (Net.Sim) _pdRecharge = Stats["pd_reload"]; } }
         else if (_pdRecharge > 0) _pdRecharge = Math.Max(0, _pdRecharge - delta);
 
         if (_missileRefire > 0) _missileRefire = Math.Max(0, _missileRefire - delta);
         if (_missileReload > 0)
         {
             _missileReload -= delta;
-            if (_missileReload <= 0) { _missileReload = 0; _mag = (int)Stats["missile_mag"]; }
+            if (_missileReload <= 0) { _missileReload = 0; if (Net.Sim) _mag = (int)Stats["missile_mag"]; }
         }
-    }
-
-    // Between host packets a guest counts its timers down itself so the bar moves
-    // smoothly; the next packet corrects any drift.
-    private void TickAbilitiesCosmetic(double delta)
-    {
-        if (_pdLeft > 0) _pdLeft = Math.Max(0, _pdLeft - delta);
-        else if (_pdRecharge > 0) _pdRecharge = Math.Max(0, _pdRecharge - delta);
-        if (_missileReload > 0) _missileReload = Math.Max(0, _missileReload - delta);
     }
 
     // ── main guns: salvo or staggered ────────────────────────────────────────
@@ -676,9 +673,17 @@ public partial class PlayerShip : Node2D, IHittable
     // ── everyone else follows it ─────────────────────────────────────────────
     private void RemoteFollow(float dt)
     {
-        // Dead reckoning: carry the last known velocity forward so a remote ship
-        // keeps moving smoothly between the 20 Hz updates instead of stuttering.
-        _netPos += _netVel * dt;
+        // Dead reckoning: carry the last known velocity forward so a remote ship keeps moving
+        // smoothly between the 20 Hz updates instead of stuttering -- for half a second, no more.
+        // A friend whose connection dies sends no goodbye; carried forward for ever, their ship
+        // flew off in a straight line until the timeout, and a held trigger kept firing on the
+        // host the whole way.
+        _netAge += dt;
+        if (_netAge < 0.5f) _netPos += _netVel * dt;
+        if (_netAge > 1f) Trigger = false;
+        // Its real velocity, not zero: the engine plume reads it, and so does the launch of a
+        // guest carrier's fighters on the host.
+        Velocity = _netAge < 0.5f ? _netVel : Vector2.Zero;
         // a warp is a jump, not a glide: snap across it (and flash where it lands)
         if (Position.DistanceTo(_netPos) > 600f) { Position = _netPos; _warpFlash = 0.6; }
         else Position = Position.Lerp(_netPos, Mathf.Clamp(12f * dt, 0f, 1f));
@@ -690,8 +695,12 @@ public partial class PlayerShip : Node2D, IHittable
                           float podX, float podY, float podRot, bool warping)
     {
         // Only the ship's own owner may move it. Without this check any peer could
-        // shove anyone else's ship around, which is the classic authority hole.
+        // shove anyone else's ship around, which is the classic authority hole. And no
+        // impossible numbers: a NaN position fails every distance test, so the ship could not
+        // be hit, and a far-off one would drag the host's whole world with it.
         if (Multiplayer.GetRemoteSenderId() != OwnerId) return;
+        if (!new[] { px, py, vx, vy, rot, ax, ay, podX, podY, podRot }.All(float.IsFinite)) return;
+        _netAge = 0f;
         _netPos = new Vector2(px, py);
         _netVel = new Vector2(vx, vy);
         _netRot = rot;

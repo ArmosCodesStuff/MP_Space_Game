@@ -82,14 +82,19 @@ public partial class Yard : Node2D
         // base wins next (a guest getting its own back); otherwise this is the pilot arriving in
         // their own world, and the file is what they left behind.
         if (_trip == null && !_parked) LoadFromCharacter();
-        SyncFleet();
+        // The trip's levels BEFORE the fleet is built: the other way round, the first ships came
+        // off the pad at level 0 of everything.
         ReturnFromTrip();
+        SyncFleet();
     }
 
     // ── the base on disk ─────────────────────────────────────────────────────
     // Only when this Yard really is MINE. A guest standing in someone else's base sees their ore
     // and their upgrades; writing those to its own character would hand it a base it never built.
-    private bool IsMyOwnBase => Net.Sim && !_parked && Hub.Sector == Hub.SectorKind.Home;
+    // (Not "and the sector is home": a Yard only exists at home, and leaving for the arena sets the
+    // sector BEFORE this Yard's own exit -- where that clause made the one save on the way out
+    // write nothing.)
+    private bool IsMyOwnBase => Net.Sim && !_parked;
 
     public void StoreToCharacter()
     {
@@ -145,10 +150,12 @@ public partial class Yard : Node2D
     public static double TripCredits;                 // earned while away (a bounty), paid on return
     public static double LastAway, LastAwayOre, LastAwaySalvage;   // what the last return credited
     public static double TripStartCredits;            // the credits set aside when the last trip began
-    // a guest's share of a bounty goes to its OWN base, set aside while it visits
-    public static void AddGuestShare(double credits) => _ownCredits += credits;
-    // the host's share, earned in the arena (where there is no yard): paid on the way home
-    public static void AddHostShare(double credits) => TripCredits += credits;
+    // A bounty share. On disk AT ONCE (the caller saves next): quitting in the four seconds
+    // between the kill and home used to keep the EXP and lose the credits. The live base still
+    // gets it on the way home -- a guest's into its own, set-aside base; the host's with the
+    // trip -- and the next save writes that live figure over this one, so nothing is counted twice.
+    public static void AddGuestShare(double credits) { _ownCredits += credits; Character.BaseCredits += credits; }
+    public static void AddHostShare(double credits) { TripCredits += credits; Character.BaseCredits += credits; }
 
     // Reaching the main menu ends the session. These statics outlive the scene ON PURPOSE -- a
     // sector change and a visit both tear the Yard down and rebuild it -- but nothing cleared them
@@ -207,11 +214,12 @@ public partial class Yard : Node2D
     public void BuyUpgrade(string id)
     {
         if (Net.IsHost) TryBuy(id);
-        else RpcId(1, nameof(RequestBuy), id);
+        else Net.AskHost(this, nameof(RequestBuy), id);
     }
 
+    // A player in the session, not just any peer: this spends the HOST's credits.
     [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void RequestBuy(string id) { if (Net.IsHost) TryBuy(id); }
+    private void RequestBuy(string id) { if (Net.FromPlayer(this, out _)) TryBuy(id); }
 
     public bool TryBuy(string id)
     {
@@ -223,6 +231,10 @@ public partial class Yard : Node2D
         Credits -= cost; _levels[id] = lv + 1;
         _invested[u.Tab] = Invested(u.Tab) + cost;                // what a rebuild in this category is 10% of
         SaveBase();                                               // a purchase is deliberate: keep it now
+        // Tell the guests NOW, not at the next 1 s report: a guest's BUY button only changes when
+        // the new level arrives, and over the internet a second click inside that second bought
+        // the NEXT level too.
+        _totalsCd = 0;
         if (id is "miner_hull" or "salvager_hull")                   // the living ships of that kind gain it at once
             foreach (var g in Gatherers)
                 if (g.State != Gatherer.St.Destroyed && (g.Kind == GatherKind.Miner) == (id == "miner_hull"))
@@ -336,11 +348,11 @@ public partial class Yard : Node2D
     public void RequestDispatch()
     {
         if (Net.IsHost) Hauler.Dispatch();
-        else RpcId(1, nameof(RequestDispatchRpc));
+        else Net.AskHost(this, nameof(RequestDispatchRpc));
     }
 
     [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void RequestDispatchRpc() { if (Net.IsHost) Hauler.Dispatch(); }
+    private void RequestDispatchRpc() { if (Net.FromPlayer(this, out _)) Hauler.Dispatch(); }
 
     public void PortalFlash()
     {

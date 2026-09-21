@@ -262,8 +262,11 @@ public partial class _Shots : Node
         }
         // hosting: the address friends in other cities need, hidden until clicked, then shown
         {
+            // never the real router: the game maps ports itself now, and a sweep must not open one
+            Router.Fake = (1, 1); Net.PublicIpService = "http://127.0.0.1:1/";
             Net.I.Host(); await W(0.5);
-            Net.I.Reachable(Net.Reach.Manual, "203.0.113.7:27015", "Hosting. Your router would not open port 27015 by itself (UPnP is off or unsupported): forward UDP 27015 to this PC in your router's settings, then friends elsewhere join with the address below.");
+            var d = Net.Describe("", false, "203.0.113.7", 27015, "192.168.1.5:27015", "no router answered");   // the game's own words
+            Net.I.Reachable(d.reach, d.address, d.message);
             var sm = H.GetTree().Root.FindChild("SessionMenu", true, false) as SessionMenu;
             await W(0.3); await Snap("51_address_hidden");
             var rv = sm?.FindChild("RevealAddress", true, false) as Button;
@@ -453,6 +456,6 @@ public partial class _Shots : Node
             await W(0.9); await Snap("39_arena_shockwave_telegraph");
         }
         GD.Print("SWEEP DONE");          // the runner fails without it: a cut-off sweep must never pass as clean
-        GetTree().Quit();
+        Game.Quit();                     // the game's own way out, as a player leaves
     }
 }

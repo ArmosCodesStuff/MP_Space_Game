@@ -116,7 +116,7 @@ public partial class MainMenu : Node2D
 
         // ── the capital: a REAL battleship, with nobody at the helm ──
         _cap = new PlayerShip { Demo = true, Name = PlayerShip.NodeName(Net.LocalId),
-                                Pilot = "Warships", Main = new Color(0.55f, 0.72f, 1.00f), Accent = new Color(1.00f, 0.78f, 0.35f) };
+                                Pilot = "Warships", Main = Character.Defaults.Main, Accent = Character.Defaults.Accent };
         AddChild(_cap);
         // Init() is what BUILDS a ship: its sprite, its turrets, its stat sheet. Skip it and the
         // node still moves, warps and reports its position perfectly well while drawing NOTHING --
@@ -178,7 +178,7 @@ public partial class MainMenu : Node2D
         col.AddChild(Ui.Heading("Volume"));
         var vol = new HBoxContainer(); vol.AddThemeConstantOverride("separation", 4); col.AddChild(vol);
         for (int i = 0; i < Settings.VolumeSteps.Length; i++) { int idx = i; var b = new Button { Text = $"{Settings.VolumeSteps[i] * 100:F0}%", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill }; b.Pressed += () => { Settings.VolumeIdx = idx; Settings.ApplyVolume(); Settings.Save(); _info.Text = $"Volume {Settings.Volume * 100:F0}%"; }; vol.AddChild(b); }
-        var quit = Big("QUIT"); quit.Pressed += () => QuitSoon(); col.AddChild(quit);
+        var quit = Big("QUIT"); quit.Pressed += () => Game.Quit(); col.AddChild(quit);
         _info = Ui.Lbl($"Volume {Settings.Volume * 100:F0}%", Ui.Small, Ui.Dim);
         _info.HorizontalAlignment = HorizontalAlignment.Center; col.AddChild(_info);
         var ver = Ui.Lbl("Warships  early build", Ui.Small, Ui.Dim with { A = 0.7f });
@@ -296,10 +296,4 @@ public partial class MainMenu : Node2D
 
     private static Button Big(string text) { var b = new Button { Text = text }; b.AddThemeFontSizeOverride("font_size", Ui.Head); b.CustomMinimumSize = new Vector2(0, 46); return b; }
 
-    // silence the music first, then quit on the next moment (see Music.Silence)
-    private void QuitSoon()
-    {
-        Music.I?.Silence();
-        GetTree().CreateTimer(0.15).Timeout += () => { OS.DelayMsec(50); GetTree().Quit(); };
-    }
 }

@@ -5,7 +5,7 @@ root = os.path.join(os.path.dirname(__file__), '..', '..')
 src = {f: open(f, encoding='utf-8').read() for f in glob.glob(os.path.join(root, 'scripts', '*.cs'))}
 tests = ''.join(open(os.path.join(root, 'tools', p), encoding='utf-8').read() for p in ('smoketest/SmokeTest.cs.txt', 'screens/Shots.cs.txt'))
 decl = re.compile(r'^\s*public\s+(?:static\s+|readonly\s+|const\s+|override\s+|virtual\s+|partial\s+|event\s+|new\s+)*([\w<>\[\],.?() ]+?)\s+(\w+)\s*(\(|=>|=|;|\{)', re.M)
-skip = {'_Ready', '_Process', '_Draw', '_Input', '_UnhandledInput', '_GuiInput', '_ExitTree', '_EnterTree', '_PhysicsProcess', 'Position', 'Rotation', 'Visible', 'Name'}
+skip = {'_Ready', '_Process', '_Draw', '_Input', '_UnhandledInput', '_GuiInput', '_ExitTree', '_EnterTree', '_PhysicsProcess', '_Notification', 'Position', 'Rotation', 'Visible', 'Name'}
 game = '\n'.join(src.values())
 dead, test_only = [], []
 for f, s in src.items():

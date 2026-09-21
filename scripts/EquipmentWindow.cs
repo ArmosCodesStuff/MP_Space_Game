@@ -28,7 +28,7 @@ public partial class EquipmentWindow : PanelContainer
         foreach (var c in _col.GetChildren()) { _col.RemoveChild(c); c.QueueFree(); }
         var cls = Character.Class; var l = Character.LoadoutFor(cls); var spares = Character.SparesFor(cls);
         var title = new VBoxContainer(); title.AddThemeConstantOverride("separation", 2);
-        title.AddChild(Ui.Lbl($"EQUIPMENT  ·  {cls.ToString().ToUpper()}", Ui.Title, Ui.Accent));
+        title.AddChild(Ui.Lbl($"EQUIPMENT  ·  {Classes.NameOf(cls)}", Ui.Title, Ui.Accent));
         title.AddChild(Ui.Lbl("Parts change no looks, only numbers. Each class keeps its own gear.", Ui.Small, Ui.Dim));
         _col.AddChild(title);
         _col.AddChild(Ui.Heading("Core parts"));
@@ -36,7 +36,7 @@ public partial class EquipmentWindow : PanelContainer
         {
             var it = Equipment.ById(l[k]);
             var row = new HBoxContainer { Name = $"Slot_{Equipment.Core[k]}" }; row.AddThemeConstantOverride("separation", 12);
-            var slotName = Ui.Lbl(Equipment.Core[k].ToString().ToUpper(), Ui.Small, Ui.Dim);
+            var slotName = Ui.Lbl(Equipment.Core[k].ToString().ToUpperInvariant(), Ui.Small, Ui.Dim);
             slotName.CustomMinimumSize = new Vector2(90, 0); slotName.VerticalAlignment = VerticalAlignment.Center;
             row.AddChild(slotName);
             var item = Ui.Lbl(it?.Name ?? "—", Ui.Body, it != null ? RarityColor(it.Rarity) : Ui.Dim);

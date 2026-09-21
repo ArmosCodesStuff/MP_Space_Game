@@ -26,8 +26,10 @@ public partial class Gatherer : Node2D
     public int Index;                        // which miner (or salvager): 0, 1, 2 ...
     public St State = St.Outbound;
     public double Cargo;
-    // hull, and being rebuilt (host-owned; guests get hull and state)
-    public double Hull = Economy.UtilityHull;
+    // hull, and being rebuilt (host-owned; guests get hull and state). Full when it comes off the
+    // pad, upgrades included (_Ready): it used to start at the base 120 whatever the hull level,
+    // and a fleet with a paid-for hull upgrade flew under a damage bar for good.
+    public double Hull;
     public double MaxHull => Yard.Value(Kind == GatherKind.Miner ? "miner_hull" : "salvager_hull");   // 120, +10% a level
     public double RebuildIn;
     public bool WaitingForCredits;
@@ -77,6 +79,7 @@ public partial class Gatherer : Node2D
 
     public override void _Ready()
     {
+        Hull = MaxHull;
         var tex = GD.Load<Texture2D>(M ? "res://miner.png" : "res://salvager.png");
         _sprite = new Sprite2D { Texture = tex, Scale = Vector2.One * (Length / tex.GetHeight()) };
         AddChild(_sprite);

@@ -51,20 +51,11 @@ public static class Settings
         c.SetValue("audio", "music_on", MusicOn);
         c.SetValue("ui", "radar_size", RadarSize);
         foreach (var kv in Keys) c.SetValue("keys", kv.Key, kv.Value);
-        // Temp file, then rename -- the same reason Character.Save does it. ConfigFile.Save
-        // truncates and rewrites in place, and two instances share one user:// (the documented
-        // "Run Multiple Instances" way of testing multiplayer). A rebind saved by one while the
-        // other was loading left the reader with a parse error, and it silently fell back to
+        // Temp file, then rename (Character.WriteAtomically). Two instances share one user:// (the
+        // documented "Run Multiple Instances" way of testing multiplayer), and a rebind saved by one
+        // while the other was loading left the reader with a parse error: it silently fell back to
         // defaults for the whole session.
-        var tmp = Path + ".tmp";                 // not ".cfg": never mistaken for the real file
-        if (c.Save(tmp) != Error.Ok) return;
-        LastSaveRenamed = DirAccess.RenameAbsolute(ProjectSettings.GlobalizePath(tmp),
-                                                   ProjectSettings.GlobalizePath(Path)) == Error.Ok;
-        if (!LastSaveRenamed)
-        {
-            c.Save(Path);                        // losing the settings outright is worse
-            DirAccess.RemoveAbsolute(ProjectSettings.GlobalizePath(tmp));
-        }
+        if (Character.WriteAtomically(c, Path) is bool renamed) LastSaveRenamed = renamed;
     }
 
     // As on Character.Save: both paths leave the same thing on disk, so only this says which

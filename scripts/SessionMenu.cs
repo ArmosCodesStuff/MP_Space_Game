@@ -1,4 +1,5 @@
 using Godot;
+using System.Linq;
 
 // Host, join, or play offline -- folded behind one button so it does not take up
 // the screen. The button always shows where you stand (offline, hosting, guest)
@@ -31,8 +32,9 @@ public partial class SessionMenu : CanvasLayer
         root.AddChild(_options);
 
         _addr = new LineEdit { PlaceholderText = "host IP, or IP:port", CustomMinimumSize = new Vector2(300, 0) };
-        // Enter joins, and either way the box lets go of the keyboard so the helm works again.
-        _addr.TextSubmitted += t => { _addr.ReleaseFocus(); DoJoin(); };
+        // Enter joins -- under the same one-press-a-second limit as the button -- and either way
+        // the box lets go of the keyboard so the helm works again.
+        _addr.TextSubmitted += t => { _addr.ReleaseFocus(); Limited(DoJoin); };
         _options.AddChild(_addr);
 
         // FocusMode None: a clicked button must not keep keyboard focus, or Space/Enter
@@ -43,18 +45,21 @@ public partial class SessionMenu : CanvasLayer
         _joinBtn = Btn("JOIN", () => Limited(DoJoin)); _joinBtn.Name = "Join";
         _offBtn = Btn("PLAY OFFLINE", () => Limited(() => Net.I?.GoOffline())); _offBtn.Name = "Offline";
         _options.AddChild(_hostBtn); _options.AddChild(_joinBtn); _options.AddChild(_offBtn);
+        _sessionBtns = new[] { _hostBtn, _joinBtn, _offBtn };
 
         _status = Ui.Lbl(Net.I?.LastStatus ?? "", Ui.Small, Ui.Dim);
         _status.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         _status.CustomMinimumSize = new Vector2(320, 0);
         _options.AddChild(_status);
-        // the address friends should type, one click to the clipboard
+        // the address friends should type, one click to the clipboard: the internet one if there
+        // is one, else a virtual network's, else IPv6, else the local network's
         _copy = Btn("COPY ADDRESS", () =>
         {
-            var a = Net.I?.Reachability is Net.Reach.Internet or Net.Reach.Manual ? Net.I.InternetAddress
-                  : !string.IsNullOrEmpty(Net.I?.TailnetAddress) ? Net.I.TailnetAddress      // friends on the tailnet
-                  : Net.I?.LanAddress;
-            if (!string.IsNullOrEmpty(a)) DisplayServer.ClipboardSet(a);
+            var n = Net.I;
+            if (n == null) return;
+            var a = new[] { n.InternetAddress, n.OverlayAddresses.Select(o => o.address).FirstOrDefault(), n.Ipv6Address, n.LanAddress }
+                    .FirstOrDefault(x => !string.IsNullOrEmpty(x));
+            if (a != null) DisplayServer.ClipboardSet(a);
         });
         _copy.Name = "CopyAddress";
         _options.AddChild(_copy);
@@ -78,22 +83,22 @@ public partial class SessionMenu : CanvasLayer
     {
         _now += delta;
         bool locked = Locked;                                   // the 1 s rate limit, shown on the buttons
-        foreach (var btn in new[] { _hostBtn, _joinBtn, _offBtn }) if (btn != null) btn.Disabled = locked;
-        if (_copy != null) _copy.Visible = Net.I != null && Net.IsHost && Net.IsOnline && Net.I.Reachability != Net.Reach.Checking;
-        if (_reveal != null)
+        foreach (var btn in _sessionBtns) btn.Disabled = locked;
+        // HOST while hosting would drop every guest to start the same session again
+        _hostBtn.Disabled |= Net.IsHost && Net.IsOnline;
+        var n = Net.I;
+        bool hosting = n != null && Net.IsHost && Net.IsOnline;
+        _copy.Visible = hosting && n.Reachability != Net.Reach.Checking;
+        // The addresses friends elsewhere need, hidden until clicked: the internet one, and this
+        // PC's IPv6 one when it has one. Ui.SetText: only when changed -- MSDF glyphs re-shape.
+        bool shown = hosting && n.Reachability != Net.Reach.Checking && (n.InternetAddress.Length > 0 || n.Ipv6Address.Length > 0);
+        _reveal.Visible = shown;
+        if (!shown) _revealed = false;
+        else
         {
-            bool shown = Net.I != null && Net.IsHost && Net.IsOnline && Net.I.Reachability is (Net.Reach.Internet or Net.Reach.Manual);
-            _reveal.Visible = shown;
-            if (!shown) _revealed = false;
-            // Only when it is on screen, and only when it actually changed: setting Text re-shapes
-            // the label's glyphs, and these are MSDF. This ran every frame for a string that
-            // changes about twice a session.
-            if (shown)
-            {
-                string want = _revealed ? $"Friends elsewhere join: {Net.I?.InternetAddress}   (click to hide)"
-                                        : "Friends elsewhere join: \u2022\u2022\u2022.\u2022\u2022\u2022.\u2022\u2022\u2022.\u2022\u2022\u2022   (click to reveal)";
-                if (_reveal.Text != want) _reveal.Text = want;
-            }
+            string both = string.Join("   ·   IPv6 ", new[] { n.InternetAddress, n.Ipv6Address }.Where(a => a.Length > 0));
+            Ui.SetText(_reveal, _revealed ? $"Friends elsewhere join: {both}   (click to hide)"
+                                          : "Friends elsewhere join: \u2022\u2022\u2022.\u2022\u2022\u2022.\u2022\u2022\u2022.\u2022\u2022\u2022   (click to reveal)");
         }
     }
     private void OnPeers(int _) => Refresh();
@@ -102,7 +107,7 @@ public partial class SessionMenu : CanvasLayer
     private void Refresh()
     {
         if (_toggle == null) return;
-        string where = !Net.IsOnline ? (Net.I != null && !Net.IsHost ? "connecting…" : "offline")
+        string where = !Net.IsOnline ? (Net.I != null && Net.I.Connecting ? "connecting…" : "offline")
                      : Net.IsHost ? $"hosting · {Net.I.Players.Count}" : $"guest · {Net.I.Players.Count}";
         _toggle.Text = $"{(_toggle.ButtonPressed ? "▾" : "▸")}  MULTIPLAYER  ({where})";
     }
@@ -110,6 +115,7 @@ public partial class SessionMenu : CanvasLayer
     private void DoJoin() => Net.I?.Join(_addr.Text);
 
     private Button _hostBtn, _joinBtn, _offBtn, _reveal;
+    private Button[] _sessionBtns;
     private bool _revealed;
     public const double PressGap = 1.0;
     private double _now, _lockedUntil;                          // game time: in play, the same as real time

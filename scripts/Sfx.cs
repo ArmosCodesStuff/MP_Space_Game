@@ -21,6 +21,7 @@ public static class Sfx
     static readonly Dictionary<string, double> _gap = new() { ["cannon"] = 0.05, ["laser_light"] = 0.04, ["laser_fighter"] = 0.04, ["laser_boss"] = 0.08, ["laser_hit"] = 0.03, ["missile_whoosh"] = 0.05, ["impact_thunk"] = 0.05 };
     public static readonly Dictionary<string, int> Played = new();            // for the smoke test
     static Node _pool; static int _next;
+    static bool _closed;                             // quitting: see Close
     const int Voices = 16;
 
     // decibels for a sound `dist` from the view's centre, at camera zoom `zoom`
@@ -53,7 +54,7 @@ public static class Sfx
     {
         var tree = Engine.GetMainLoop() as SceneTree;
         var cam = tree?.Root.GetViewport().GetCamera2D();
-        if (cam == null) return;
+        if (cam == null || _closed) return;
         double now = Time.GetTicksMsec() / 1000.0;
         if (_last.TryGetValue(name, out var t) && now - t < _gap[name]) return;     // a wing firing is not a wall of noise
         float db = VolumeAt(cam.GetScreenCenterPosition().DistanceTo(at), cam.Zoom.X);
@@ -73,32 +74,24 @@ public static class Sfx
     }
     static bool IsInstanceValid(Node n) => n != null && GodotObject.IsInstanceValid(n);
 
-    // Let the sounds go. _streams is STATIC and holds a handle to every wav for the life of the
-    // process, so at shutdown the engine reports them as "resources still in use at exit" -- the
-    // same message Music carries an _ExitTree to avoid, and the same fix. Distinct instances only:
-    // "cannon" is an alias for impact_thunk and they are one object, so disposing per key would
-    // dispose it twice.
-    //
-    // Safe to call at any time, not only at exit: Play() rebuilds the pool and reloads the
-    // streams whenever the pool is gone, so the next sound after a release simply pays for the
-    // load again.
-    public static void Release()
+    // Quitting: stop every voice, let go of every stream, and play nothing more. A stopped voice's
+    // playback is released by the mixer on its next cycles, which is why Game.Quit waits a moment
+    // after this. _streams is STATIC, so without this it held a handle to every wav for the life
+    // of the process. Also the pool's own way out, for an exit that skipped Game.Quit.
+    public static void Close()
     {
+        _closed = true;
         if (IsInstanceValid(_pool))
             foreach (var c in _pool.GetChildren())
                 if (c is AudioStreamPlayer p) { p.Stop(); p.Stream = null; }
-        foreach (var s in new System.Collections.Generic.HashSet<AudioStream>(_streams.Values)) s?.Dispose();
+        foreach (var s in _streams.Values) s.Dispose();
         _streams.Clear();
-        _last.Clear();
-        _pool = null; _next = 0;
+        _pool = null;
     }
 }
 
-// The voice pool, which stops and releases its streams on the way out. A voice STILL PLAYING at
-// shutdown holds the stream it is playing, and the engine reports that as "resources still in use
-// at exit" -- Music carries an _ExitTree for exactly this reason and its comment is the record of
-// it. The pool lives on the root and outlives every scene, so nothing else was ever going to do it.
+// The voice pool. It lives on the root and outlives every scene, so its exit is the process's.
 public partial class SfxPool : Node
 {
-    public override void _ExitTree() => Sfx.Release();
+    public override void _ExitTree() => Sfx.Close();
 }

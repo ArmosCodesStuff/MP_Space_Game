@@ -101,7 +101,7 @@ public partial class CharacterSelect : Control
         var info = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, Alignment = BoxContainer.AlignmentMode.Center };
         info.AddThemeConstantOverride("separation", 4);
         info.AddChild(Ui.Lbl(s.Name, Ui.Title, s.Playable ? Ui.Text : Ui.Dim));
-        info.AddChild(Ui.Lbl(s.Class == ShipClass.Battleship ? "BATTLESHIP" : "CARRIER", Ui.Small,
+        info.AddChild(Ui.Lbl(Classes.NameOf(s.Class), Ui.Small,
                              s.Playable ? Ui.Accent : Ui.Dim));
         // A character written by another build cannot be loaded, and the row says why rather than
         // failing when PLAY is pressed. Deleting it is still allowed: it is the player's character

@@ -17,7 +17,12 @@
 # -Solo runs ONLY the single-player scenario: one engine instead of six, for the loop while a
 # change is being built. It is a PARTIAL run and says so in every line it prints, because the one
 # thing it cannot cover is the thing this harness exists for -- host and guests disagreeing.
-param([string]$Godot, [switch]$Solo)
+# -Wan runs ONLY the multiplayer scenarios, with every guest joining through tools\smoketest\wan.py:
+# an internet path of 90 ms each way, +/- 25 ms of jitter and 2% of datagrams lost -- a friend in
+# another part of the country on an ordinary connection, rather than a second process on the same
+# machine. The checks are the same ones; what changes is everything they depend on arriving late,
+# out of order, or twice.
+param([string]$Godot, [switch]$Solo, [switch]$Wan)
 
 $ErrorActionPreference = 'Stop'
 
@@ -93,7 +98,7 @@ try {
   # NOTE: PowerShell variable names are case-insensitive, so these cannot be $F/$N --
   # a `foreach ($f in ...)` elsewhere in this script silently overwrote the filter with
   # a file path, and the run died parsing it as a regex.
-  $keepRe = 'PASS|FAIL|DONE|Exception|   at |ERROR: [^B]|^  [a-z]'
+  $keepRe = 'PASS|FAIL|DONE|Exception|   at |ERROR: [^B]|^  [a-z]|Fatal error'
   # Expected engine chatter, not failures: allocator notes, and Godot's own report that
   # no UPnP router exists (the game falls back and says so).
   $dropRe = 'RID alloc|PagedAlloc|find any UPNPDevices'
@@ -103,13 +108,16 @@ try {
     $o = Join-Path $W "$Tag.out"; $e = Join-Path $W "$Tag.err"
     $p = Start-Process -FilePath $Godot -ArgumentList $GodotArgs -WorkingDirectory $W `
          -NoNewWindow -PassThru -RedirectStandardOutput $o -RedirectStandardError $e
+    $null = $p.Handle      # without touching Handle now, .NET reports no ExitCode after the exit
     [pscustomobject]@{ Proc = $p; Tag = $Tag; Out = $o; Err = $e; Timeout = $TimeoutSec }
   }
   function Complete-Run {
     param($R, [string]$Prefix)
+    $killed = $false
     if (-not $R.Proc.WaitForExit($R.Timeout * 1000)) {
       try { $R.Proc.Kill() } catch {}
       $R.Proc.WaitForExit(5000) | Out-Null
+      $killed = $true
     }
     $lines = @()
     foreach ($stream in @($R.Out, $R.Err)) {
@@ -117,7 +125,12 @@ try {
     }
     # -cmatch, not -match: PowerShell matches case-insensitively by default but grep -E
     # does not, and a case-blind "FAIL" also matches every run's own "fails=0" summary.
-    $keep = $lines | Where-Object { $_ -cmatch $keepRe -and $_ -cnotmatch $dropRe } | ForEach-Object { "$Prefix $_" }
+    $keep = @($lines | Where-Object { $_ -cmatch $keepRe -and $_ -cnotmatch $dropRe } | ForEach-Object { "$Prefix $_" })
+    # A CRASH IS A FAILURE. The test quits with its failure count, so any other exit code means
+    # the process did not get to decide how it ended. This was invisible: a crash at exit also
+    # cut off the engine's leak report, so the one run that crashed was the one that "passed".
+    $code = $R.Proc.ExitCode
+    if (-not $killed -and $code -lt 0) { $keep += "$Prefix FAIL: the process crashed (exit code 0x{0:X8})" -f $code }
     $log = Join-Path $W "$($R.Tag).log"
     Set-Content $log ($keep -join "`n") -Encoding UTF8
     $keep
@@ -126,15 +139,41 @@ try {
   & $Godot --headless --import --path $W *> (Join-Path $W 'import.log')
 
   $all = @()
-  # fixed 60 fps: identical frame timing every run, so the DPS checks are exact
-  $all += Complete-Run (Start-Run @('--headless','--fixed-fps','60','--path',$W,'--','solo') 'solo' 1200) '[solo] '
+  $want = 0
+  if (-not $Wan) {
+    # Two fake routers for the plug-and-play scenarios: the run never searches the real network,
+    # and never opens a port on the real router (see NoRouterNoInternet in the test).
+    $fake = Start-Process -FilePath python -ArgumentList @((Join-Path $PSScriptRoot 'fakeigd.py'), 19000, 19080, 19351, 1300) `
+            -NoNewWindow -PassThru -RedirectStandardOutput (Join-Path $W 'fakeigd.out') -RedirectStandardError (Join-Path $W 'fakeigd.err')
+    Start-Sleep -Milliseconds 500
+    # fixed 60 fps: identical frame timing every run, so the DPS checks are exact
+    $all += Complete-Run (Start-Run @('--headless','--fixed-fps','60','--path',$W,'--','solo') 'solo' 1200) '[solo] '
+    if (-not $fake.HasExited) { try { $fake.Kill() } catch {} }
+    $want = 1
+  }
 
-  $want = 1
+  # The internet, for -Wan: one relay per session port, each 1000 above the port it fronts. The
+  # guests are told "wan" and join the relay instead of the host.
+  $relays = @()
+  $gx = @()
+  if ($Wan) {
+    $wanPy = Join-Path $PSScriptRoot 'wan.py'
+    # one-way ms, jitter ms, loss %: WARSHIPS_WAN="150,40,5" for a worse day
+    $path = if ($env:WARSHIPS_WAN) { $env:WARSHIPS_WAN -split ',' } else { @(90, 25, 2) }
+    Write-Host ("internet: {0} ms each way, +/- {1} ms, {2}% lost" -f $path[0], $path[1], $path[2])
+    foreach ($port in 27115, 27125) {
+      $relays += Start-Process -FilePath python -ArgumentList (@($wanPy, ($port + 1000), $port) + $path + 200) `
+                 -NoNewWindow -PassThru -RedirectStandardOutput (Join-Path $W "wan$port.out") -RedirectStandardError (Join-Path $W "wan$port.err")
+    }
+    $gx = @('wan')
+    Start-Sleep -Milliseconds 300
+  }
+
   if (-not $Solo) {
     $host1 = Start-Run @('--headless','--path',$W,'--','host')   'host'   60
     Start-Sleep -Milliseconds 500
-    $g2 = Start-Run @('--headless','--path',$W,'--','guest2') 'guest2' 60
-    $g1 = Start-Run @('--headless','--path',$W,'--','guest')  'guest'  60
+    $g2 = Start-Run (@('--headless','--path',$W,'--','guest2') + $gx) 'guest2' 60
+    $g1 = Start-Run (@('--headless','--path',$W,'--','guest') + $gx)  'guest'  60
     $all += Complete-Run $g1    '[guest] '
     $all += Complete-Run $host1 '[host]  '
     $all += Complete-Run $g2    '[third] '
@@ -142,10 +181,15 @@ try {
     # the dedicated two-player arena run: after the three-player run, on its own port
     $ah = Start-Run @('--headless','--path',$W,'--','ahost')  'ahost'  60
     Start-Sleep -Milliseconds 500
-    $ag = Start-Run @('--headless','--path',$W,'--','aguest') 'aguest' 60
+    $ag = Start-Run (@('--headless','--path',$W,'--','aguest') + $gx) 'aguest' 60
     $all += Complete-Run $ag '[aguest]'
     $all += Complete-Run $ah '[ahost] '
-    $want = 6
+    $want += 5
+  }
+  foreach ($r in $relays) { if (-not $r.HasExited) { try { $r.Kill() } catch {} } }
+  foreach ($port in 27115, 27125) {
+    $f = Join-Path $W "wan$port.out"
+    if ($Wan -and (Test-Path $f)) { Get-Content $f | ForEach-Object { Write-Host "  $_" } }
   }
 
   $all | ForEach-Object { Write-Host $_ }
@@ -153,7 +197,7 @@ try {
   $done = @($all | Where-Object { $_ -cmatch 'DONE' }).Count
   # "SOLO ONLY" in the verdict, always. A partial run that prints the same words as a full one is
   # a partial run that will be mistaken for the bar.
-  $what = if ($Solo) { 'SMOKE TEST (SOLO ONLY)' } else { 'SMOKE TEST' }
+  $what = if ($Solo) { 'SMOKE TEST (SOLO ONLY)' } elseif ($Wan) { 'SMOKE TEST (MULTIPLAYER OVER A SIMULATED INTERNET)' } else { 'SMOKE TEST' }
   if ($bad -gt 0 -or $done -ne $want) {
     Write-Host "$what FAILED ($bad problems, $done/$want runs finished)"; exit 1
   }

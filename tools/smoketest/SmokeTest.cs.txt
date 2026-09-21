@@ -13,6 +13,102 @@ public partial class _Test : Node
     int fails = 0;
     void Check(bool ok, string what) { GD.Print((ok ? "PASS " : "FAIL ") + what); if (!ok) fails++; }
     async Task Wait(double s) => await ToSignal(GetTree().CreateTimer(s), "timeout");
+    // A HERMETIC NETWORK. Every host in this harness used to search the real network for a router
+    // and ask a real web service for the public address, so two checks passed in the sandbox the
+    // harness was born in and failed on every real machine -- and now that the game maps ports
+    // itself, a test run would have opened ports on the real router. Instead: searches go to a
+    // loopback port nobody answers, and the public address to a URL that refuses. A scenario that
+    // wants routers points them at tools/smoketest/fakeigd.py (see RouterScenarios).
+    const int FakeSsdp = 19000, FakeHttp = 19080, FakePmp = 19351;
+    static void NoRouterNoInternet()
+    {
+        Router.Fake = (1, 1);
+        Net.PublicIpService = "http://127.0.0.1:1/";
+    }
+    // Waits in REAL time: the router work runs on its own thread, and at a fixed frame rate a
+    // frame-counted wait can end before a single datagram has had time to come back.
+    async Task<bool> RealTime(Func<bool> done, double seconds)
+    {
+        ulong until = Time.GetTicksMsec() + (ulong)(seconds * 1000);
+        while (!done() && Time.GetTicksMsec() < until) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        return done();
+    }
+    static string Fake(string path)
+    {
+        using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(3) };
+        try { return http.GetStringAsync($"http://127.0.0.1:{FakeHttp}{path}").GetAwaiter().GetResult(); }
+        catch (Exception e) { return "fake routers unreachable: " + e.Message; }
+    }
+
+    // PLUG AND PLAY, network by network. Each is a home network a player really has; the second
+    // and third are the one this game's own author has (a TP-Link behind the provider's modem), on
+    // which Godot's Upnp reported "no router answered" about a router that had answered.
+    async Task RouterScenarios()
+    {
+        Router.Fake = (FakeSsdp, FakePmp); Net.PublicIpService = $"http://127.0.0.1:{FakeHttp}/ip";
+        async Task<(Net.Reach reach, string addr, string status, string lan, string log)> Hosting(string scenario, int port)
+        {
+            Fake($"/scenario/{scenario}");
+            Net.I.Host(port);
+            string lan = Net.I.LanAddress.Split(':')[0];
+            await RealTime(() => Net.I.Reachability != Net.Reach.Checking, 20);
+            var (reach, addr, status) = (Net.I.Reachability, Net.I.InternetAddress, Net.I.LastStatus);
+            Net.I.GoOffline();
+            await RealTime(() => Net.I.NetworkIdle, 10);           // the ports it opened are closed again
+            return (reach, addr, status, lan, Fake("/log"));
+        }
+
+        var one = await Hosting("single", 27131);
+        Check(one.reach == Net.Reach.Internet && one.addr == "203.0.113.7:27131"
+              && one.log.Contains($"inner add 27131 {one.lan}") && one.log.Contains("inner delete 27131"),
+              $"one router with UPnP: it opens the port to this PC, friends join the public address, and leaving closes it ({one.reach}; {one.log.Replace('\n', '|')})");
+
+        var two = await Hosting("double", 27132);
+        Check(two.reach == Net.Reach.Internet && two.addr == "203.0.113.7:27132"
+              && two.log.Contains($"inner add 27132 {two.lan}") && two.log.Contains("front add 27132 127.0.4.40")
+              && two.log.Contains("inner delete 27132") && two.log.Contains("front delete 27132"),
+              $"two routers, both with UPnP: each opens its hop -- the front one to the inner one's internet side -- and both close ({two.reach}; {two.log.Replace('\n', '|')})");
+
+        var quiet = await Hosting("double-quiet", 27133);
+        Check(quiet.reach == Net.Reach.Manual && quiet.addr == "203.0.113.7:27133"
+              && quiet.status.Contains("forward UDP 27133 to 127.0.4.40") && quiet.log.Contains($"inner add 27133 {quiet.lan}"),
+              $"two routers, the front one silent: ours is opened, and the player is told the ONE forward left, to the address it needs ({quiet.reach})");
+
+        var refused = await Hosting("refuse", 27134);
+        Check(refused.reach == Net.Reach.Manual && refused.status.Contains("ConflictInMappingEntry") && !refused.log.Contains("add"),
+              $"a router that refuses: the player is told what it said ({refused.reach})");
+
+        var none = await Hosting("none", 27135);
+        Check(none.reach == Net.Reach.Manual && none.status.Contains("no router answered"),
+              $"no UPnP at all: forward the port by hand, and the address to give out ({none.reach})");
+
+        // The routers that speak NAT-PMP or PCP instead (Apple's, and many without UPnP). This one
+        // hands out a DIFFERENT outside port than the one asked for, as NAT-PMP may: friends must
+        // be given the port it chose, not ours.
+        var pmp = await Hosting("pmp", 27136);
+        Check(pmp.reach == Net.Reach.Internet && pmp.addr == "203.0.113.7:28136" && pmp.log.Contains("inner pmp add 27136") && pmp.log.Contains("inner pmp delete 27136"),
+              $"a NAT-PMP router: opened, friends given the port IT chose, closed on leaving ({pmp.reach} {pmp.addr}; {pmp.log.Replace('\n', '|')})");
+        var pcp = await Hosting("pcp", 27137);
+        Check(pcp.reach == Net.Reach.Internet && pcp.addr == "203.0.113.7:27137" && pcp.log.Contains("inner pcp add 27137") && pcp.log.Contains("inner pcp delete 27137"),
+              $"a PCP router (it answers NAT-PMP with 'unsupported version'): spoken to in PCP, opened and closed ({pcp.reach}; {pcp.log.Replace('\n', '|')})");
+
+        // Carrier-grade NAT: the router opens the port on an internet side the provider shares. No
+        // router in front is asked (it is the provider's), and nobody is sent to forward anything.
+        var cg = await Hosting("cgnat", 27138);
+        Check(cg.reach == Net.Reach.LanOnly && !cg.status.Contains("forward UDP") && cg.status.Contains("carrier-grade") && !cg.log.Contains("front"),
+              $"carrier-grade NAT: no forwarding advice that cannot work, and a virtual network suggested ({cg.reach})");
+        // A VPN on the host PC: the router opened its public address, but the internet sees the VPN's.
+        var vpn = await Hosting("vpn", 27139);
+        Check(vpn.reach == Net.Reach.Manual && vpn.addr == "198.51.100.9:27139" && vpn.status.Contains("VPN"),
+              $"a VPN on this PC: the router's address to try, and the VPN named as the thing to turn off ({vpn.reach} {vpn.addr})");
+
+        NoRouterNoInternet();
+    }
+
+    // Where a guest finds the host. Under run.ps1 -Wan the guest is told "wan" and goes through
+    // tools/smoketest/wan.py, a relay 1000 ports up that delays, jitters and drops like the internet.
+    static bool Wan => OS.GetCmdlineUserArgs().Contains("wan");
+    static string HostAt(int port) => $"127.0.0.1:{(Wan ? port + 1000 : port)}";
     Hub H => GetTree().CurrentScene as Hub;
     int Count<T>() where T : Node => Nodes<T>().Count();
     System.Collections.Generic.IEnumerable<T> Nodes<T>(Node n = null) where T : Node
@@ -41,6 +137,7 @@ public partial class _Test : Node
     {
         string role = OS.GetCmdlineUserArgs().FirstOrDefault() ?? "solo";
         Settings.TestVolume = 0.05f; Settings.ApplyVolume();   // six windows, nobody listening
+        NoRouterNoInternet();
         await Wait(0.3);
         try { if (role == "solo") await QuitResetsSector(); }
         catch (Exception ex) { Check(false, $"sector reset test threw: {ex.GetType().Name}: {ex.Message}"); GD.Print(ex.StackTrace); }
@@ -78,10 +175,9 @@ public partial class _Test : Node
         try { if (role == "solo") await Solo(); else if (role is "ahost" or "aguest") await ArenaMp(role); else await Mp(role); }
         catch (Exception ex) { Check(false, $"test threw: {ex.GetType().Name}: {ex.Message}"); GD.Print(ex.StackTrace); }
         GD.Print($"DONE {role} fails={fails}");
-        // let the mixer release the loops first -- in REAL time: at a fixed frame rate
-        // 0.2 s of game time can pass in milliseconds, before the mixer has cycled
-        Music.I?.Silence(); await Wait(0.1); OS.DelayMsec(200); await Wait(0.1);
-        GetTree().Quit(fails);
+        // THE GAME'S OWN WAY OUT, not a bare Quit: what it waits for (sounds, router jobs) is
+        // exactly what the runner then checks for -- "resources still in use at exit" and a crash.
+        Game.Quit(fails);
     }
 
     // Hub.Sector is static and only Hub.GoTo ever sets it, so quitting to the main menu FROM THE
@@ -203,7 +299,7 @@ public partial class _Test : Node
         // economy fields were added, not saved, and the round trip passed.
         var exercised = new[] { "Accent", "BaseCredits", "BaseInvested", "BaseLevels", "BaseOre",
                                 "BaseSalvage", "BossCleared", "Bonuses", "Bought", "Class", "Exp",
-                                "Id", "Level", "Loadout", "Main", "Name", "Points", "Spares", "Version" };
+                                "Id", "Level", "Loadout", "Main", "Name", "Points", "Spares" };
         // Not state a character carries: a path, and the compiler's backing field for a property
         // that reports how the LAST save went. Named explicitly rather than filtered by a pattern,
         // so a real field that happens to look like one cannot slip through.
@@ -247,6 +343,18 @@ public partial class _Test : Node
         var mineRow = Nodes<PanelContainer>(sel).FirstOrDefault(p => p.Name == "Row_" + id);
         var minePlay = mineRow == null ? null : Nodes<Button>(mineRow).FirstOrDefault(b => b.Name == "Play");
         Check(minePlay != null && !minePlay.Disabled, "the character from THIS build is still playable");
+
+        // A DIRECT ENTRY (the editor's F6, the smoke test) with the OLDEST file from another build:
+        // it takes the first character that can load. Taking the oldest regardless made a new
+        // "Commander" on every direct entry while a playable one sat further down the list.
+        cfg.Save($"{Character.Dir}/0alien.cfg");                  // "0" sorts before any timestamp id
+        var listed = Character.List();
+        string oldest = listed[0].Id, firstPlayable = listed.First(x => x.Id != "0alien" && x.Id != alienId).Id;
+        Character.Id = "";
+        Character.EnsureLoaded();
+        Check(oldest == "0alien" && Character.Id == firstPlayable && Character.List().Count == listed.Count,
+              $"a direct entry skips the oldest file (another build's) for the first PLAYABLE one, and makes no new one ({Character.Id}, {Character.List().Count} of {listed.Count} files)");
+        Character.Delete("0alien");
 
         Character.Delete(alienId); Character.Delete(id);
         await Wait(0.05);
@@ -1183,6 +1291,13 @@ public partial class _Test : Node
             Check(fullM.MaxHull == 132 && fullM.Hull == 132 && sv.MaxHull == 120, "one level: a miner's hull 132 (+10%, kept full); salvagers still 120");
             Yd.TryBuy("salvager_hull"); await Wait(0.05);
             Check(sv.MaxHull == 132, "and the salvagers' own upgrade: 132");
+            // A ship that comes off the pad AFTER an upgrade -- a new hub, the trip home, one more
+            // bought -- comes at the upgraded hull. It used to start at the base 120 whatever the
+            // level, and fly under a damage bar for good.
+            var fresh = new Gatherer { Yard = Yd, Kind = GatherKind.Miner, Index = 9, Name = "FreshMiner" };
+            Yd.AddChild(fresh); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(Math.Abs(fresh.Hull - 132) < 1e-6, $"a miner built after the upgrade comes off the pad at 132 hull ({fresh.Hull:0})");
+            Yd.RemoveChild(fresh); fresh.QueueFree();
             double hcost = Yd.RebuildCost("HAULER");
             Yd.Hauler.ResetToPad(); Yd.Hauler.TakeDamage(150); await Wait(0.05);
             Check(Yd.Hauler.State == Hauler.St.Destroyed && Yd.Hauler.WarpedOut && Math.Abs(Yd.Hauler.RebuildIn - 30) < 0.2, "the hauler, destroyed: gone for 30 s");
@@ -1196,12 +1311,26 @@ public partial class _Test : Node
             Check(Net.I.NetworkIdle, "single player: no socket, no web lookup, no router job running");
             var inet = Net.Describe("203.0.113.7", true, "203.0.113.7", 27015, "192.168.1.5:27015");
             var shared = Net.Describe("100.72.1.9", true, "", 27015, "192.168.1.5:27015");
-            var dbl = Net.Describe("198.51.100.4", true, "203.0.113.7", 27015, "192.168.1.5:27015");
+            var vpn = Net.Describe("198.51.100.4", true, "203.0.113.7", 27015, "192.168.1.5:27015");
             var manual = Net.Describe("", false, "203.0.113.7", 27015, "192.168.1.5:27015");
             var none = Net.Describe("", false, "", 27015, "192.168.1.5:27015");
             Check(inet.reach == Net.Reach.Internet && inet.address == "203.0.113.7:27015", "router opened the port and is the internet's edge: friends join public:port");
-            Check(shared.reach == Net.Reach.LanOnly && dbl.reach == Net.Reach.LanOnly,
-                  "a private router address, or one that differs from the public address: another NAT is in the way, network only");
+            Check(shared.reach == Net.Reach.LanOnly, "the router opened a port on a carrier-grade address: network only");
+            Check(vpn.reach == Net.Reach.Manual && vpn.address == "198.51.100.4:27015" && vpn.message.Contains("VPN"),
+                  $"the router's public address is not the one the internet sees: a VPN on this PC, named, with the router's address to try ({vpn.reach})");
+            // Nothing opened, and the router's internet side is private: TWO forwards, both named.
+            var twoHand = Net.Describe("192.168.4.40", false, "203.0.113.7", 27015, "192.168.1.5:27015", "the router refused (ActionFailed)");
+            Check(twoHand.reach == Net.Reach.Manual && twoHand.message.Contains("to this PC (192.168.1.5)") && twoHand.message.Contains("UDP 27015 to 192.168.4.40"),
+                  "two routers, neither opened: both forwards, each to its own address");
+            Check(Net.IsPublic("81.2.3.4") && !Net.IsPublic("100.72.1.5") && !Net.IsPublic("0.0.0.0") && !Net.IsPublic("169.254.3.4")
+                  && !Net.IsPublic("192.0.0.8") && !Net.IsPublic("192.168.4.40") && !Net.IsPublic("::1"),
+                  "only a real internet address counts as public (a router reporting 0.0.0.0 is not an address to give friends)");
+            // What a player pastes into JOIN.
+            Check(Net.ParseAddress("1.2.3.4") == ("1.2.3.4", 27015) && Net.ParseAddress(" 1.2.3.4 : 27020 ") == ("1.2.3.4", 27020)
+                  && Net.ParseAddress("http://1.2.3.4:27020/") == ("1.2.3.4", 27020) && Net.ParseAddress("[2001:db8::1]:27020") == ("2001:db8::1", 27020)
+                  && Net.ParseAddress("2001:db8::1") == ("2001:db8::1", 27015) && Net.ParseAddress("game.example.com") == ("game.example.com", 27015)
+                  && Net.ParseAddress("1.2.3.4:99999") == null && Net.ParseAddress("1.2.3.4:abc") == null && Net.ParseAddress("   ") == null,
+                  "JOIN reads an address however it is pasted: a port or none, IPv6 bare or in brackets, a name, spaces, a scheme; and refuses an impossible port");
             Check(manual.reach == Net.Reach.Manual && manual.address == "203.0.113.7:27015" && manual.message.Contains("UDP 27015"),
                   "the router will not open it: the public address, and how to forward the port");
 
@@ -1213,14 +1342,15 @@ public partial class _Test : Node
             var opened = Net.Describe("", true, "203.0.113.7", 27015, "192.168.1.5:27015", "");
             Check(opened.reach == Net.Reach.Internet && opened.address == "203.0.113.7:27015",
                   $"port open but the router will not name its address: still hosting for the internet ({opened.reach})");
-            var cgnat = Net.Describe("", false, "100.72.1.5", 27015, "192.168.1.5:27015", "no router answered");
+            var cgnat = Net.Describe("100.72.1.5", false, "203.0.113.7", 27015, "192.168.1.5:27015", "the router refused (ActionFailed)");
             Check(cgnat.reach == Net.Reach.LanOnly && !cgnat.message.Contains("UDP 27015"),
                   $"behind carrier-grade NAT: not sent to forward a port that cannot work ({cgnat.reach})");
             var refused = Net.Describe("", false, "203.0.113.7", 27015, "192.168.1.5:27015", "the router refused (ActionFailed)");
             Check(refused.reach == Net.Reach.Manual && refused.message.Contains("ActionFailed") && refused.message.Contains("firewall"),
                   "a refusal says WHAT the router said, and mentions the firewall");
             Check(none.reach == Net.Reach.LanOnly, "nothing learned: network only");
-            Check(new[] { inet, shared, dbl, manual, none }.All(d => !d.message.Contains("203.0.113.7")), "no status line ever prints the public address");
+            Check(new[] { inet, shared, vpn, manual, none, twoHand, cgnat }.All(d => !d.message.Contains("203.0.113.7") && !d.message.Contains("198.51.100.4")),
+                  "no status line ever prints the public address");
             var sm = Nodes<SessionMenu>().First();
             var off = Nodes<Button>(sm).First(b => b.Name == "Offline");
             off.EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.1);
@@ -1234,11 +1364,39 @@ public partial class _Test : Node
             var nf = BindingFlags.NonPublic | BindingFlags.Instance;
             int genNow = (int)typeof(Net).GetField("_hostGen", nf).GetValue(Net.I);
             int closed0 = Net.I.StaleMappingsClosed;
-            typeof(Net).GetMethod("RouterResult", nf).Invoke(Net.I, new object[] { genNow - 1, 27015, "203.0.113.9", "", new Upnp() });
-            Check(typeof(Net).GetField("_upnp", nf).GetValue(Net.I) == null && Net.I.StaleMappingsClosed == closed0 + 1,
-                  "a router answer for a finished session is not kept, and its port mapping is closed");
-            Check(Net.IsTailnet("100.100.1.2") && !Net.IsTailnet("100.63.0.1") && !Net.IsTailnet("192.168.1.2"),
-                  "Tailscale addresses (100.64.0.0/10) are recognised for friends on a tailnet");
+            bool staleClosed = false;
+            var stale = new Router.Report();
+            stale.Opened.Add(new Router.Hop("UPnP", "test", 27015, () => staleClosed = true));
+            typeof(Net).GetMethod("RouterResult", nf).Invoke(Net.I, new object[] { genNow - 1, stale });
+            await RealTime(() => staleClosed && Net.I.NetworkIdle, 5);
+            Check(((System.Collections.ICollection)typeof(Net).GetField("_hops", nf).GetValue(Net.I)).Count == 0 && Net.I.StaleMappingsClosed == closed0 + 1 && staleClosed,
+                  "a router answer for a finished session is not kept, and the port it opened is closed");
+            Check(Router.IsCarrierGrade("100.100.1.2") && !Router.IsCarrierGrade("100.63.0.1") && !Router.IsCarrierGrade("192.168.1.2"),
+                  "carrier-grade / Tailscale addresses (100.64.0.0/10) are recognised");
+            await RouterScenarios();
+
+            // ANOTHER PLAYER'S SHIP, as this peer draws it: owned by peer 2, so it only follows what
+            // it is told. Three things went wrong over the internet. A warp's landing flash never
+            // faded here (it only ever faded on the owner's own screen). With its packets stopped --
+            // a friend's connection dying without a goodbye -- it coasted on in a straight line until
+            // the timeout. And a held trigger went on firing all that time. A carrier, so the held
+            // trigger fires nothing while it is tested.
+            var ghost = new PlayerShip { Name = "Ghost" };
+            H.AddChild(ghost);
+            ghost.Init(2, Hub.BasePos + new Vector2(2600, 2600));
+            ghost.SetIdentity("Ghost", Colors.Gray, Colors.Gray, ShipClass.Carrier);
+            var sf = BindingFlags.NonPublic | BindingFlags.Instance;
+            typeof(PlayerShip).GetField("_netPos", sf).SetValue(ghost, ghost.Position + new Vector2(900, 0));   // a warp's jump away
+            typeof(PlayerShip).GetField("_netVel", sf).SetValue(ghost, new Vector2(100, 0));
+            ghost.Trigger = true;
+            await Wait(0.1);
+            double Flash() => (double)typeof(PlayerShip).GetField("_warpFlash", sf).GetValue(ghost);
+            double flash0 = Flash(); var at0 = ghost.Position;
+            await Wait(2.0);
+            Check(!ghost.Mine && flash0 > 0 && Flash() == 0, $"another player's warp: the flash where it lands, and then it fades ({flash0:0.00} -> {Flash():0.00})");
+            Check(ghost.Position.DistanceTo(at0) < 60f, $"its packets stopped, another player's ship coasts half a second, not on and on ({ghost.Position.DistanceTo(at0):0} u in 2 s)");
+            Check(!ghost.Trigger, "and a trigger it was holding lets go");
+            ghost.QueueFree();
         }
 
         // ── equipment (I): per-class gear; common defaults and five chips (+5% damage, +5% hull each) ──
@@ -1656,9 +1814,20 @@ public partial class _Test : Node
             Check(H.Mission == Hub.MissionState.PortalOpen && mp != null && mp.Position.X > Hub.TioPos.X + halfW && mp.Position.Y < Hub.TioPos.Y - Hub.TioHeight / 2f,
                   "after 3 s the portal opens off the TIO's top-right corner");
             float d0 = Me.Position.DistanceTo(H.MissionPortalPos);
-            for (int i = 0; i < 60 * 45 && !Hub.InArena; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            // The base as it LEAVES, marked: the only thing that can put this figure on disk is the
+            // save on the way out (the 30 s autosave is held off). That save used to write nothing --
+            // the sector had already become the arena -- and a quit out there lost the difference.
+            typeof(Yard).GetField("_saveCd", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(H.Yard, 1e9);
+            for (int i = 0; i < 60 * 45 && !Hub.InArena; i++)
+            {
+                if (H?.Yard != null && GodotObject.IsInstanceValid(H.Yard)) H.Yard.Credits = 424242;
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            }
             await Wait(1.0);
             Check(Hub.InArena, $"the capital-ship autopilot flew {d0:0} u to the portal and the party went through");
+            var leftWith = new ConfigFile(); leftWith.Load($"{Character.Dir}/{Character.Id}.cfg");
+            Check(Math.Abs((double)leftWith.GetValue("base", "credits", -1.0) - 424242) < 1e-6,
+                  $"leaving for the arena writes the base to disk on the way out ({(double)leftWith.GetValue("base", "credits", -1.0):0} of 424242)");
             var boss = H.Boss;
             Check(boss != null && boss.Alive && H.Yard == null && !Nodes<TargetDummy>().Any() && Combat.Hostiles.Contains(boss),
                   "the arena: the Silver Lancer, and no base or dummies");
@@ -1694,11 +1863,26 @@ public partial class _Test : Node
             Check(bar.Chunks.Count == 1, $"a burst of small hits, frame after frame, shares one chunk ({bar.Chunks.Count})");
             var me2 = Me; me2.MaxHp = 5000; me2.TakeDamage(-(5000 - me2.Hp));
             double tBeam = -1, tCharge = -1, tVolley = -1, arenaT = 0; int trident = 0; float spread = 0;
+            // THE LIVE BEAM, 3 s: it must hold the line it drew, and that line must still be drawn.
+            // The boss used to turn after the pilot the whole time, with the telegraph already gone
+            // -- an invisible line sweeping the arena. 2.2 s in, the pilot is moved clear to the
+            // side (after five 50-hull ticks, which the damage check below counts on): a boss that
+            // turns would now swing after it.
+            var beamLiveF = typeof(Boss).GetField("_beamLive", BindingFlags.NonPublic | BindingFlags.Instance);
+            double liveT = 0; float liveRot0 = 0, liveTurn = 0; bool liveDrawn = false, sidestep = false;
             async void Watch()
             {
                 while (Hub.InArena && GodotObject.IsInstanceValid(boss))
                 {
                     arenaT += 1.0 / 60;
+                    if ((double)beamLiveF.GetValue(boss) >= 0)
+                    {
+                        if (liveT == 0) liveRot0 = boss.Rotation;
+                        liveT += 1.0 / 60;
+                        liveTurn = Math.Max(liveTurn, Mathf.Abs(Mathf.AngleDifference(liveRot0, boss.Rotation)));
+                        if (liveT > 2.0 && Nodes<Telegraph>(boss).Any(x => x.Line)) liveDrawn = true;
+                        if (liveT > 2.2 && !sidestep) { sidestep = true; me2.Position += Vector2.Right.Rotated(boss.Rotation) * 400f; }
+                    }
                     // The beam's place in the rhythm is where it COMMITS -- its escorts going out.
                     // Its red line comes later by the escorts' predicted web plus a second, so
                     // timing the rhythm off the telegraph would measure that delay, not the rhythm.
@@ -1835,11 +2019,16 @@ public partial class _Test : Node
             // ticks fall on frames, so two ticks are sometimes 0.533 s apart: 5 to 7 hits of 50
             Check(beamDmg >= 200 && beamDmg <= 350 && Math.Abs(beamDmg % 50) < 1e-6, $"the beam, live 3 s at 50 a tick, through the 0.52 s guard: {beamDmg / 50:0} hits ({beamDmg:0})");
             Check(Math.Abs(chargeDmg - 40) < 1e-6, $"the charge rams for 40 ({chargeDmg:0})");
+            Check(sidestep && liveTurn < 0.01f, $"the live beam holds the line it drew, with the pilot gone from it (turned {Mathf.RadToDeg(liveTurn):0.00} deg)");
+            Check(liveDrawn, "and the line is still drawn 2 s into its 3 s burn");
             Check(Music.I == null || Math.Abs(Boss.TridentSpeed - 135f) < 1e-3, "trident missiles fly at 135 u/s (10% slower)");
             // the kill: shared EXP for it and the mission, the bounty's credits, then home
             Character.Exp = 0; Character.Level = 1; Character.BossCleared.Clear(); Character.Points = 0; Character.BossCleared.Clear();
             boss.TakeDamage(boss.Hp + 1); await Wait(0.2);
             Check(H.MissionWon && Character.Level == 1 && Character.Exp == 550, $"the kill of a level-1 boss pays a level-1 pilot 200 + 250 first clear + 100 = 550 (exp {Character.Exp})");
+            var onKill = new ConfigFile(); onKill.Load($"{Character.Dir}/{Character.Id}.cfg");
+            Check(Math.Abs((double)onKill.GetValue("base", "credits", -1.0) - (424242 + 2000)) < 1e-6,
+                  $"the bounty is on disk at the kill, not on the trip home: a quit out there kept the EXP and lost the credits ({(double)onKill.GetValue("base", "credits", -1.0):0})");
             for (int i = 0; i < 60 * 8 && Hub.InArena; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             await Wait(1.0);
             Check(!Hub.InArena && H.Yard != null, "home again after the win");
@@ -2083,6 +2272,13 @@ public partial class _Test : Node
             Check(Net.I.Players.Count == 2, "arena host: the guest joined");
             await Wait(1.0);
             await ToArena("arena host", 1);
+            // Built after a scene change, so from what is REMEMBERED of each pilot, not a fresh
+            // announcement. It used to be only names and colours: every boss a solo boss (it counted
+            // the ships before there were any), and every guest at default gear.
+            Check(Math.Abs(H.Boss.HullMult - 1.6) < 1e-9 && Math.Abs(H.Boss.DamageMult - 1.2) < 1e-9,
+                  $"arena host: a party of two faces a boss scaled for two (hull x1.6, damage x1.2; x{H.Boss.HullMult:0.00}, x{H.Boss.DamageMult:0.00})");
+            var gship = H.Ships.FirstOrDefault(s => !s.Mine);
+            Check(gship != null && Math.Abs(gship.MaxHp - 345) < 1e-6, $"arena host: the guest's own gear came into the arena with it (345 hull; {gship?.MaxHp:0})");
             // Long enough for the guest to watch the super-move bar move, and no longer: this
             // scenario has a second arena visit after it, and a stay stretched to fit a whole beam
             // cycle pushed that off the end of every wait that follows.
@@ -2099,14 +2295,24 @@ public partial class _Test : Node
         else
         {
             Character.Name = "Arena Guest";
+            // Gear the host can only know from this pilot's announcement: two chips off a battleship
+            // (three left: 300 x 1.15 = 345 hull, not the default five's 375). The host checks it
+            // survives the move into the arena.
+            Character.Class = ShipClass.Battleship;
+            var agl = Character.LoadoutFor(ShipClass.Battleship); agl[8] = ""; agl[9] = "";
             H.Yard.Credits = 12345;                               // its own base, before it visits
             Character.Exp = 0; Character.Level = 1; Character.BossCleared.Clear();
             await Wait(0.8);
-            Net.I.Join($"127.0.0.1:{Port}");
+            Net.I.Join(HostAt(Port));
             for (int i = 0; i < 60 * 10 && !(Net.IsOnline && Net.LocalId != 1); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(Net.IsOnline && Net.LocalId != 1, "arena guest: joined");
             await ToArena("arena guest", 1);
             await GuestSeesTheFight();
+            if (Wan) Check(Net.Arriving(1.5) < 1.45 && Net.Arriving(1.5) >= 0.6,
+                           $"over the internet, a 1.5 s warning is shown a round trip short, so it ends when this pilot is judged ({Net.Arriving(1.5):0.00} s)");
+            for (int i = 0; i < 60 * 10 && !H.MissionWon; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(H.MissionWon && GodotObject.IsInstanceValid(H.Boss) && H.Boss.Hp == 0,
+                  $"arena guest: the boss the host killed reads zero here too ({(GodotObject.IsInstanceValid(H.Boss) ? H.Boss.Hp : -1):0})");
             for (int i = 0; i < 60 * 18 && Hub.InArena; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(!Hub.InArena && Net.IsOnline, "arena guest: home with the host after the win");
             Check(Character.Exp == 550, $"arena guest: its own EXP for the kill (550; exp {Character.Exp})");
@@ -2162,27 +2368,36 @@ public partial class _Test : Node
         {
             Character.Name = "HostPilot"; Character.Class = ShipClass.Battleship; Priv(H, "ApplyLocalIdentity"); Priv(H, "SendIdentity", 0);
             H.GetNode<PlayerShip>("Ship_1").Position = new Vector2(-900, 900);   // out of the way
+            int refusals = 0;
+            Net.I.Status += s => { if (s.StartsWith("Refused")) refusals++; };
             Net.I.Host(27115);
+            // A raider that exists BEFORE either guest joins: they can only learn of it from the
+            // catch-up a joining guest is sent (Hub.NetMySector). Far out, and gone at 9 s.
+            var early = H.SpawnRaider(new Vector2(-6000, -6000));
             H.Yard.Credits = 1000;                     // for the guest's purchase request
             Character.Exp = 0; Character.Level = 1; Character.BossCleared.Clear();
             Check(Net.I.Reachability == Net.Reach.Checking && Net.I.LanAddress.EndsWith(":27115"), "hosting starts at once; the router is asked in the background");
             await Wait(9.0);
-            // no router in the sandbox: it must say so, and how to get friends in anyway
+            // this harness's network has no router and no internet (NoRouterNoInternet): it must
+            // say so, and how to get friends in anyway
             Check(Net.I.Reachability == Net.Reach.LanOnly && Net.I.LastStatus.Contains("forward UDP 27115") && Net.I.LastStatus.Contains("Tailscale"),
                   $"no UPnP router: LAN hosting stands, and the status explains the fix");
-            Check(Net.IsSharedAddress("100.72.1.5") && Net.IsSharedAddress("192.168.1.20") && !Net.IsSharedAddress("81.2.3.4"),
+            Check(Router.IsShared("100.72.1.5") && Router.IsShared("192.168.1.20") && !Router.IsShared("81.2.3.4"),
                   "carrier-grade and private addresses are recognised as unreachable from outside");
-            // THE BUILD HANDSHAKE. We version save files; a SESSION is where two builds actually
-            // get to disagree, and a guest on an older build would join and read every number
-            // wrong. 1 as a literal, never Game.Version: a check that reads the number it is
-            // testing cannot catch the number being wrong. The three ships below are the other
-            // half of it -- the handshake has to admit real peers, not just refuse fake ones.
-            Check(Net.Accepts(1) && Game.Version == 1 && !Net.Accepts(0) && !Net.Accepts(2),
-                  $"a session admits this build and refuses any other (build {Game.Version})");
+            // THE BUILD HANDSHAKE. The save format is versioned (1, as a literal: a check that reads
+            // the number it tests cannot catch the number being wrong); a SESSION is matched on the
+            // build's fingerprint. The refusal is proved on a real connection by the third player,
+            // who first knocks as another build: exactly one refusal here, and no ship for it.
+            Check(Game.Version == 1 && Net.Accepts(Net.Protocol) && !Net.Accepts(Net.Protocol ^ 1),
+                  $"a session admits this build and refuses any other (save format {Game.Version}, build {Net.Protocol:x8})");
+            Check(refusals == 1, $"the host refused the one peer that knocked as another build ({refusals})");
             var ships = Nodes<PlayerShip>().ToList();
             Check(ships.Count == 3, $"host sees 3 ships: itself and two guests ({ships.Count})");
             Check(ships.Any(s => s.Pilot == "Third"), "the second guest's identity reached the host");
-            // hosting here (no router, no internet in the sandbox): both answers come back empty -> network only
+            if (GodotObject.IsInstanceValid(early)) H.RaiderDown(early);
+            // pinned by the HOST, the way a raider's web does it: the guest must feel it (it checks)
+            ships.FirstOrDefault(s => s.Pilot == "Guesty")?.PinFor(3.0);
+            // hosting here (no router, no internet): both answers come back empty -> network only
             for (int i = 0; i < 60 * 9 && Net.I.Reachability == Net.Reach.Checking; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             var smh = Nodes<SessionMenu>().First(); var rev = Nodes<Button>(smh).First(b => b.Name == "RevealAddress");
             Check(Net.I.Reachability == Net.Reach.LanOnly && !rev.Visible, $"no router or internet here: network only, nothing to reveal ({Net.I.Reachability})");
@@ -2224,7 +2439,17 @@ public partial class _Test : Node
         else if (role == "guest2")
         {   // a third player: joins, sees everyone, leaves with the session
             await Wait(1.6);
-            Net.I.Join("127.0.0.1:27115");
+            // FIRST, AS ANOTHER BUILD. It must be refused -- and learn why, on its own screen, which
+            // the old handshake never managed: its refusal went out in the same breath as the
+            // disconnect, and the disconnect threw it away.
+            Net.PretendProtocol = Net.Protocol ^ 1;
+            Net.I.Join(HostAt(27115));
+            await RealTime(() => !Net.I.Connecting, 8);
+            Check(!Net.IsOnline && Net.I.LastStatus.Contains("different build"),
+                  $"a player on another build is refused, and told why ({Net.I.LastStatus})");
+            Net.PretendProtocol = null;
+            await Wait(0.3);
+            Net.I.Join(HostAt(27115));
             await Wait(1.2);
             Character.Name = "Third"; Character.Class = ShipClass.Battleship;
             Priv(H, "ApplyLocalIdentity"); Priv(H, "SendIdentity", 0);
@@ -2250,13 +2475,25 @@ public partial class _Test : Node
             Character.Class = ShipClass.Carrier;
             var gl = Character.LoadoutFor(Character.Class); gl[8] = ""; gl[9] = "";
             await Wait(0.8);
-            Net.I.Join("127.0.0.1:27115");
+            // Everything this pilot holds as it leaves for the host's world -- the ore above, AND the
+            // 7777 credits every role's base now starts with. This check used to assume the ore was
+            // all of it, and failed from the day each role got a base of its own.
+            double Held() => H.Yard.Ore + H.Yard.Salvage + H.Yard.Hauler.Cargo + H.Yard.Gatherers.Sum(x => x.Cargo) + H.Yard.Credits;
+            double held0 = Held();
+            Net.I.Join(HostAt(27115));
             await Wait(1.2);
             Character.Name = "Guesty"; Character.Main = new Color(1, 0, 0); Character.Class = ShipClass.Carrier;
             Priv(H, "ApplyLocalIdentity"); Priv(H, "SendIdentity", 0);
             var mine = Nodes<PlayerShip>().FirstOrDefault(s => s.Mine);
             Check(mine != null && mine.OwnerId == Net.LocalId && Net.LocalId != 1, $"guest owns its own ship (id {Net.LocalId})");
             Check(Nodes<PlayerShip>().Count() >= 2, $"guest sees the host ({Nodes<PlayerShip>().Count()} ships)");
+            for (int i = 0; i < 60 * 3 && !H.Raiders.Any(r => r.Position.DistanceTo(new Vector2(-6000, -6000)) < 2500); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(H.Raiders.Any(r => r.Position.DistanceTo(new Vector2(-6000, -6000)) < 2500),
+                  "a raider that existed before this guest joined reached it (the catch-up a joining guest is sent)");
+            // Watched at the END of every frame: the ship overwrote the host's pinned flag in its own
+            // frame, so a check made at any earlier point would have seen the flag and passed.
+            var pinWatch = new LateSampler { Probe = () => mine != null && GodotObject.IsInstanceValid(mine) && mine.Pinned };
+            AddChild(pinWatch);
             H.Yard.BuyUpgrade("salvage_rate");            // a request: the host decides
             H.SetMyReady(true);                           // READY for the bounty
             Nodes<PlayerShip>().First(x => x.Mine).AutopilotTo = null;   // stay put: the scene must not change mid-test
@@ -2299,6 +2536,7 @@ public partial class _Test : Node
             Check(mine != null && Math.Abs(mine.MaxHp - 230) < 1e-6 && Math.Abs(mine.Hp - 230) < 1e-6,
                   $"hull replicated from the host, which applied this pilot's own gear (three chips: 200 x 1.15 = 230; {mine?.Hp:0})");
             await Wait(12.0);                      // strike done, bombers home and docked
+            Check(pinWatch.Seen, "a guest's own ship is pinned when the host pins it (a raider's web works on guests too)");
             var gb = Nodes<Wing>().Where(w => w.Carrier == mine && w.IsBomber).ToArray();
             Check(gb.Length == 2 && gb.All(w => w.Docked && w.GlobalPosition.DistanceTo(mine.DockSlot(w).pos) < 8f),
                   "guest sees its bombers docked on the carrier (state and position from the host)");
@@ -2309,9 +2547,10 @@ public partial class _Test : Node
             // Back to its OWN world, with nothing lost: everything held -- stock, the
             // ships' cargo, and credits from a sale -- is at least the 5000 it had, and
             // nowhere near the host's few hundred.
-            double own = H.Yard.Ore + H.Yard.Salvage + H.Yard.Hauler.Cargo + H.Yard.Gatherers.Sum(x => x.Cargo) + H.Yard.Credits;
+            double own = Held();
             double share = Missions.BountyEach(1, 3);                // the host's announced kill, a party of three
-            Check(own - share >= 5000 - 1e-6 && own - share < 5400, $"guest's own totals restored, nothing lost, plus its bounty share ({own:0.00} held, {share:0.00} of it the share)");
+            Check(own - share >= held0 - 1e-6 && own - share < held0 + 400,
+                  $"guest's own totals restored, nothing lost, plus its bounty share ({own:0.00} held, {share:0.00} of it the share, {held0:0.00} on leaving)");
             Check(H.Yard.Level("salvage_rate") == 0, "guest's own upgrade levels restored (the host's level 1 stays in the host's world)");
             Check(H.Yard.Hauler.Cargo <= H.Yard.Capacity && H.Yard.Gatherers.All(x => x.Cargo == 0 || x.State == Gatherer.St.Working),
                   "economy ships restart docked and empty in your own world");
@@ -2319,6 +2558,16 @@ public partial class _Test : Node
             Check(ships.Count == 1 && ships[0].Mine && ships[0].Name == "Ship_1", "guest rebuilt to its own single ship");
         }
     }
+}
+
+// Samples at the END of a frame, after every other node's _Process -- the one place a value that
+// something overwrites every frame can be seen as it really stands.
+public partial class LateSampler : Node
+{
+    public System.Func<bool> Probe;
+    public bool Seen;
+    public override void _Ready() => ProcessPriority = int.MaxValue;
+    public override void _Process(double delta) { if (Probe?.Invoke() == true) Seen = true; }
 }
 
 // A fighter-sized stand-in, only for the PD priority check.

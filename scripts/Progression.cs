@@ -34,6 +34,19 @@ public static class Progression
     public const int MaxPerUpgrade = 60;       // a sanity cap on what a peer may claim
 
     public static int Cost(int owned) => owned + 1;                        // 1, 2, 3, ...
+    // Whether a pilot of `level` could have paid for `bought`: a point a level after the first,
+    // Cost(k) for the k-th of each. The host holds every pilot's announcement to it -- by this
+    // rule, not a formula copied beside it that a change to Cost would silently leave behind.
+    public static bool Affordable(int[] bought, int level)
+    {
+        long spent = 0;
+        foreach (var n in bought ?? System.Array.Empty<int>())
+        {
+            if (n > MaxPerUpgrade) return false;
+            for (int k = 0; k < n; k++) spent += Cost(k);
+        }
+        return spent <= System.Math.Max(0, level - 1);
+    }
     private const int ExpPerLevel = 1000;
     public static int ExpToNext => ExpPerLevel;                             // always 1000, whatever the level
 

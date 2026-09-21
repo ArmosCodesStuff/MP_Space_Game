@@ -44,7 +44,7 @@ public partial class CharacterCreator : CanvasLayer
         left.AddChild(Ui.Heading("Name"));
         _name = new LineEdit { Text = Character.Name, CustomMinimumSize = new Vector2(300, 0) };
         _name.MaxLength = 24;
-        _name.TextChanged += t => { Character.Name = t.Trim().Length > 0 ? t.Trim() : "Commander"; };
+        _name.TextChanged += t => { Character.Name = t.Trim().Length > 0 ? t.Trim() : Character.Defaults.Name; };
         _name.TextSubmitted += _ => _name.ReleaseFocus();
         left.AddChild(_name);
 

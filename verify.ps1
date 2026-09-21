@@ -79,15 +79,12 @@ if (-not $Quick) {
             # Not the runner's own verdict line: "SMOKE TEST FAILED (2 problems...)" contains
             # FAIL and would be counted as a problem on top of the problems it is reporting.
             $bad  = @($o | Where-Object { $_ -cmatch 'FAIL|Exception|ERROR' -and $_ -notmatch 'SMOKE TEST' })
-            # The two network checks assert the sandbox's lack of a router and internet and
-            # cannot pass on a real machine. See DESIGN.md -> Smoke test. Everything else must.
-            $env  = @($bad | Where-Object { $_ -match 'no UPnP router|no router or internet here' }).Count
-            $real = $bad.Count - $env
+            # No exceptions for "environmental" failures any more: the test builds its own network
+            # (no router, no internet, or fake routers), so every check means the same everywhere.
             $want = if ($Fast) { 1 } else { 6 }
-            Write-Host ("  run {0}: {1} pass, {2}/{3} runs, {4} real problem(s){5}" -f $i, $pass, $done, $want, $real,
-                        $(if ($env) { " (+$env environmental, expected off a sandbox)" } else { '' }))
-            $bad | Where-Object { $_ -notmatch 'no UPnP router|no router or internet here' } | ForEach-Object { Write-Host "    $_" }
-            if ($real -ne 0 -or $done -ne $want) { $allOk = $false }
+            Write-Host ("  run {0}: {1} pass, {2}/{3} runs, {4} problem(s)" -f $i, $pass, $done, $want, $bad.Count)
+            $bad | ForEach-Object { Write-Host "    $_" }
+            if ($bad.Count -ne 0 -or $done -ne $want) { $allOk = $false }
         }
         $allOk
     }

@@ -35,7 +35,10 @@ public partial class EscMenu : CanvasLayer
         resume.Pressed += () => Hub.ToggleEscMenu();
         col.AddChild(resume);
         var quit = new Button { Text = "QUIT TO MAIN MENU", Name = "Quit", FocusMode = Control.FocusModeEnum.None, CustomMinimumSize = new Vector2(0, 38) };
-        quit.Pressed += () => { Net.I?.GoOffline(); GetTree().ChangeSceneToFile("res://MainMenu.tscn"); };
+        // The session ends on arrival: MainMenu._Ready goes offline for every route back to it.
+        // Going offline HERE, first, ran while the arena was still loaded -- the hub answered by
+        // sending the party home, and that scene change replaced the menu's.
+        quit.Pressed += () => GetTree().ChangeSceneToFile("res://MainMenu.tscn");
         col.AddChild(quit);
         var foot = Ui.Lbl("Esc closes.", Ui.Small, Ui.Dim);
         foot.HorizontalAlignment = HorizontalAlignment.Center;
