@@ -34,7 +34,9 @@ public static class Economy
     public const double HaulerAway = 30;         // seconds through the portal
     public const double HaulerCharge = 3;        // seconds of blue aura before the jump
     // AUTO-SELL: 3x the average level-5 cost across the salvager rows, estimated ONCE and fixed
-    // (the owner's rule): (6400 + 244 + 244 + 244 + 305) / 5 = 1487.4, x3 = 4462.2.
+    // (the owner's rule): (6400 + 244 + 244 + 244 + 305) / 5 = 1487.4, x3 = 4462.2. A THEORETICAL
+    // level 5, as the owner put it: the salvager count stops at 4 purchases, so its 6400 is the
+    // price the formula would ask, not one a player can pay.
     public const double AutoSellCost = 4462;
     public const int AutoSellBoss = 3;            // ...and only once the level-3 boss is beaten
     // THE ESCORT: 5x the income; 4 waves of hunters, the first 5 s in, then every 20 s
@@ -60,8 +62,9 @@ public static class Economy
         public Kind Kind;
         public double BaseCost, BaseValue;
         public double Step = 1;                      // what a level of a Count row adds
-        public int Max = int.MaxValue;               // most levels that can be bought (+1 upgrades)
+        public int Max = int.MaxValue;               // most levels that can be bought (step upgrades and switches)
         public int NeedsBoss;                        // the base owner's highest boss level before it can be bought
+        public bool OwnerOnly;                       // the base owner's alone to buy: a guest's request is refused
     }
 
     public static readonly string[] Tabs = { "MINERS", "SALVAGERS", "HAULER" };
@@ -82,7 +85,7 @@ public static class Economy
         new() { Id = "pod_size",        Tab = "HAULER",    Kind = Kind.Percent, Name = "Pod size",         BaseValue = BasePodSize,    Unit = "per pod",   BaseCost = 150, Blurb = "+10% per pod" },
         // (at the END: a guest is sent the levels in this order)
         new() { Id = "hauler_evasion",  Tab = "HAULER",    Kind = Kind.Count,   Name = "Evasion",          BaseValue = 60, Step = 7,   Unit = "% safe",    BaseCost = 400, Max = 5, Blurb = "+7% chance a lone run gets through (up to 95%)" },
-        new() { Id = "hauler_autosell", Tab = "HAULER",    Kind = Kind.Unlock,  Name = "Auto-sell",        BaseValue = 0,              Unit = "",          BaseCost = AutoSellCost, Max = 1, NeedsBoss = AutoSellBoss, Blurb = "completely full, it goes by itself" },
+        new() { Id = "hauler_autosell", Tab = "HAULER",    Kind = Kind.Unlock,  Name = "Auto-sell",        BaseValue = 0,              Unit = "",          BaseCost = AutoSellCost, Max = 1, NeedsBoss = AutoSellBoss, OwnerOnly = true, Blurb = "completely full, it goes by itself" },
     };
 
     public static Upgrade ById(string id) { foreach (var u in All) if (u.Id == id) return u; return null; }

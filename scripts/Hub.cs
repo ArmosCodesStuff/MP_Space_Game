@@ -56,6 +56,7 @@ public partial class Hub : Node2D
     public IReadOnlyList<Node2D> Rocks => _rocks;
     public Portal Portal { get; private set; }
     public Yard Yard { get; private set; }                    // the idle economy (home only)
+    public Hints Hints { get; private set; }                  // the tutorial's corner card (every world)
 
     // ── sectors: HOME (the base) and the ARENA (a bounty). One scene, built either
     // way; the host moves every peer between them together (EnterSector). ──────
@@ -145,6 +146,8 @@ public partial class Hub : Node2D
         sky.AddChild(stars);
 
         I = this;
+        _world = ++_worldSerial;
+        if (Net.IsHost) RefreshAway();               // places held from the world before this one
         // BEFORE BuildWorld, NOT AFTER. Normally the select screen has loaded a character; this
         // covers running the hub directly (editor F6, the smoke test). It used to sit fifty lines
         // below, and BuildWorld builds the Yard, whose _Ready reads Character.Base* -- so the base
@@ -200,6 +203,7 @@ public partial class Hub : Node2D
         layer.AddChild(new Radar { Hub = this });
         layer.AddChild(new AbilityBar { Hub = this });
         if (!InArena) layer.AddChild(new HaulerHud { Hub = this });
+        Hints = new Hints { Hub = this }; AddChild(Hints);
 
         Settings.EnsureLoaded();       // ability key bindings
         Combat.Clear();
@@ -239,10 +243,11 @@ public partial class Hub : Node2D
         if (Net.I != null)
         {
             Net.I.PlayerJoined   += OnPlayerJoined;
-            Net.I.PlayerLeft     += DespawnFor;
+            Net.I.PlayerLeft     += OnPlayerLeft;
             Net.I.SessionChanged += OnSessionChanged;
             ReportSector();                                      // this world is loaded: tell the host where we are
         }
+        Hints.Meet("flight");
     }
 
     // Net is an autoload and outlives this scene. Every handler added in _Ready comes
@@ -252,7 +257,7 @@ public partial class Hub : Node2D
         if (Net.I != null)
         {
             Net.I.PlayerJoined   -= OnPlayerJoined;
-            Net.I.PlayerLeft     -= DespawnFor;
+            Net.I.PlayerLeft     -= OnPlayerLeft;
             Net.I.SessionChanged -= OnSessionChanged;
         }
         Combat.Clear();
@@ -318,6 +323,34 @@ public partial class Hub : Node2D
     // Static: it must outlive the host's own scene reloads.
     private static readonly Dictionary<int, SectorKind> _peerSector = new();
     public static SectorKind? PeerSector(int id) => _peerSector.TryGetValue(id, out var s) ? s : null;
+    // A session over (offline, a guest now, the main menu): which world each guest was in, and the
+    // places held for dropped pilots, go with it.
+    // ── A SHIP'S STATE, BY WAY OF THE HUB ─────────────────────────────────────
+    // The unreliable updates for a ship are sent to the hub, which is at the same path on every
+    // peer, and not to the ship's node, which is not: a pilot's first updates can overtake Godot's
+    // (reliable) word that it joined, and reached another guest with no ship for it yet -- "Node
+    // not found" in that guest's log (seen over a lossy link). The hub hands each to its ship, or
+    // drops it. The owner's report goes to the SENDER'S ship only: nobody moves another's.
+    private PlayerShip ShipOf(int peer) => _ships.TryGetValue(peer, out var s) && IsInstanceValid(s) ? s : null;
+    public void SendShipState(float px, float py, float vx, float vy, float rot, float ax, float ay, bool trigger, bool staggered,
+                              float podX, float podY, float podRot, bool warping) =>
+        Rpc(nameof(NetShipState), px, py, vx, vy, rot, ax, ay, trigger, staggered, podX, podY, podRot, warping);
+    [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
+    private void NetShipState(float px, float py, float vx, float vy, float rot, float ax, float ay, bool trigger, bool staggered,
+                              float podX, float podY, float podRot, bool warping) =>
+        ShipOf(Multiplayer.GetRemoteSenderId())?.ApplyState(px, py, vx, vy, rot, ax, ay, trigger, staggered, podX, podY, podRot, warping);
+    public void SendHostState(int owner, double hp, double maxHp, bool alive, double stasis, bool pinned, double combat, double pdLeft, double pdRecharge,
+                              int mag, double reload, int wingTarget, Vector2[] wingPos, float[] wingRot, int[] wingState, float[] wingRearm) =>
+        Rpc(nameof(NetHostState), owner, hp, maxHp, alive, stasis, pinned, combat, pdLeft, pdRecharge, mag, reload, wingTarget, wingPos, wingRot, wingState, wingRearm);
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
+    private void NetHostState(int owner, double hp, double maxHp, bool alive, double stasis, bool pinned, double combat, double pdLeft, double pdRecharge,
+                              int mag, double reload, int wingTarget, Vector2[] wingPos, float[] wingRot, int[] wingState, float[] wingRearm) =>
+        ShipOf(owner)?.ApplyHostState(hp, maxHp, alive, stasis, pinned, combat, pdLeft, pdRecharge, mag, reload, wingTarget, wingPos, wingRot, wingState, wingRearm);
+    public void SendShield(int owner, float side) => Rpc(nameof(NetShield), owner, side);
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
+    private void NetShield(int owner, float side) => ShipOf(owner)?.ApplyShield(side);
+
+    public static void EndSession() { _peerSector.Clear(); _held.Clear(); _recentKills.Clear(); }
     // Send only to the peers that are IN a given sector. A peer still loading that world has no
     // such node yet, and Godot logs "Node not found ... Invalid packet received" for every stray
     // packet -- it is not fatal, but it is noise that hides real errors, and that peer misses the
@@ -349,6 +382,7 @@ public partial class Hub : Node2D
         RpcId(who, nameof(NetMission), MissionArgs());
         foreach (var r in Raiders) RpcId(who, nameof(NetRaiderSpawn), r.NetId, r.Position, (int)r.Kind, r.Strength);
         if (MissionWon) RpcId(who, nameof(NetWon), _arenaEndT);
+        if (_placeFor.Remove(who, out var place)) RpcId(who, nameof(NetPlace), place.at, place.rot);
     }
     private void ReportSector() { if (!Net.IsHost) Net.AskHost(this, nameof(NetMySector), (int)Sector); }
 
@@ -359,9 +393,15 @@ public partial class Hub : Node2D
         // would sit frozen (nothing simulates them any more); leaving a host, its copies would come
         // alive in your own world and attack your base. Either way they go.
         if (_guestBefore || !Net.IsHost) foreach (var r in Raiders.ToList()) DropRaider(r, burst: false);
+        bool wasGuest = _guestBefore;
         _guestBefore = !Net.IsHost;
         ReportSector();
-        if (Net.IsHost) foreach (var id in _peerSector.Keys.ToList()) if (!Net.IsOnline || !Multiplayer.GetPeers().Contains(id)) _peerSector.Remove(id);
+        // The session over (or now another's): who is held, who is READY and -- for a guest that was
+        // one -- the mission all belonged to it. Kept, a held pilot kept a solo world's portal shut,
+        // and a guest found the host's portal still open in its own world. (The host's LEVEL stays
+        // until this pilot docks at the TIO, which picks its own again: READY is pressed there.)
+        if (!(Net.IsHost && Net.IsOnline)) { EndSession(); _away.Clear(); _ready.Clear(); }
+        if (wasGuest && Net.IsHost) { Mission = MissionState.Idle; MissionT = 0; }
         // the host gone while the party is in the arena: home, to your own base
         if (InArena && !Net.IsOnline) { GoTo(SectorKind.Home); return; }
         Yard?.OnSessionChanged(!Net.IsHost);    // parks or restores your own yard (home only)
@@ -410,6 +450,84 @@ public partial class Hub : Node2D
         s.Init(peerId, BasePos + new Vector2(0, BaseBottom + 140f + 60 * _ships.Count));   // clear of the pad even at 224 u
         _ships[peerId] = s;
         ApplyIdentity(s);
+        TryRestoreHold(peerId);                // its identity may have arrived before its ship
+    }
+
+    // ── A DROPPED PILOT'S PLACE (host) ───────────────────────────────────────
+    // A guest whose connection drops -- no goodbye -- keeps its place for 90 s: its party slot and
+    // READY, and, in the same world, its hull, stasis and where it was. It is known by its
+    // CHARACTER id (a peer id changes on a reconnect). The boss is scaled by the ships present, and
+    // a kill while it is away is owed to it: its EXP, its bounty share and its crates arrive when it
+    // does. A pilot that leaves on purpose gives its place up. (The id is the guest's own claim, as
+    // its name and gear are: the host has no other way to know a returning player.)
+    public const double HoldFor = 90;
+    private sealed class Held
+    {
+        public int OldPeer, World; public string Name = ""; public ShipClass Class; public ulong Until;
+        public Vector2 Pos; public float Rot; public double Hp, Stasis; public bool Alive = true;
+        public readonly List<Kill> Owed = new();
+    }
+    private static readonly Dictionary<string, Held> _held = new();
+    private static int _worldSerial;
+    private int _world;                                         // this world, of all the host has built
+    private readonly Dictionary<int, string> _away = new();     // the held pilots, by their old peer id: the party's absent members
+    private readonly Dictionary<int, (Vector2 at, float rot)> _placeFor = new();
+
+    private void OnPlayerLeft(int peer, Net.PlayerInfo info, bool onPurpose)
+    {
+        if (Net.IsHost && Net.IsOnline && info.CharacterId.Length > 0)
+        {
+            var back = Net.I.Players.FirstOrDefault(kv => kv.Key != peer && kv.Value.CharacterId == info.CharacterId).Key;
+            var h = onPurpose ? null : HoldOf(peer, info);
+            // a kill in the moments before the host noticed the drop: owed too (paid once, by serial)
+            if (h != null) h.Owed.AddRange(_recentKills.Where(k => k.World == _world && k.Present.Contains(peer) && Time.GetTicksMsec() - k.When <= OwedWindowMs));
+            if (h != null && back != 0) RestoreHeld(h, back);    // it is already back under a new id
+            else if (h != null) _held[info.CharacterId] = h;
+            else _ready.Remove(peer);
+        }
+        _peerSector.Remove(peer);
+        if (Net.IsHost) { RefreshAway(); BroadcastMission(); }
+        DespawnFor(peer);
+    }
+    private Held HoldOf(int peer, Net.PlayerInfo info)
+    {
+        var h = new Held { OldPeer = peer, World = _world, Name = info.Name, Class = info.Class,
+                           Until = Time.GetTicksMsec() + (ulong)(HoldFor * 1000) };
+        if (_ships.TryGetValue(peer, out var s) && IsInstanceValid(s))
+            (h.Pos, h.Rot, h.Hp, h.Alive, h.Stasis) = (s.Position, s.Rotation, s.Hp, s.Alive, s.StasisLeft);
+        return h;
+    }
+    private void TryRestoreHold(int peer)
+    {
+        if (!Net.IsHost || !Net.I.Players.TryGetValue(peer, out var p) || p.CharacterId.Length == 0) return;
+        if (!_held.Remove(p.CharacterId, out var h) || !_ships.ContainsKey(peer)) { if (h != null) _held[p.CharacterId] = h; return; }
+        RestoreHeld(h, peer);
+        RefreshAway(); BroadcastMission();
+    }
+    private void RestoreHeld(Held h, int peer)
+    {
+        if (_ready.Remove(h.OldPeer, out var r)) _ready[peer] = r;
+        if (h.World == _world && _ships.TryGetValue(peer, out var s) && IsInstanceValid(s))
+        {
+            s.Restore(h.Hp, h.Alive, h.Stasis);
+            if (PeerSector(peer) == Sector) RpcId(peer, nameof(NetPlace), h.Pos, h.Rot); else _placeFor[peer] = (h.Pos, h.Rot);
+        }
+        foreach (var k in h.Owed) PayKill(k, h.OldPeer, peer);          // what it missed (a kill it did get is not paid again)
+    }
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void NetPlace(Vector2 at, float rot) { if (MyShip is { } me) me.Place(at, rot); }
+    private void ExpireHolds()
+    {
+        ulong now = Time.GetTicksMsec();
+        var gone = _held.Where(kv => kv.Value.Until <= now).Select(kv => kv.Key).ToList();
+        if (gone.Count == 0) return;
+        foreach (var id in gone) { _ready.Remove(_held[id].OldPeer); _held.Remove(id); }
+        RefreshAway(); BroadcastMission();
+    }
+    private void RefreshAway()
+    {
+        _away.Clear();
+        foreach (var h in _held.Values) _away[h.OldPeer] = h.Name;
     }
 
     private void DespawnFor(int peerId)
@@ -454,13 +572,13 @@ public partial class Hub : Node2D
         // a guest mid-handshake still reports LocalId 1; peers would rightly reject
         // that as impersonating the host, so wait for the real id (OnSessionChanged)
         if (!Net.IsHost && Net.LocalId == 1) return;
-        var args = new Variant[] { Net.LocalId, Character.Name, Character.Main, Character.Accent, (int)Character.Class, Character.Bought, Character.Level, Character.LoadoutFor(Character.Class) };
+        var args = new Variant[] { Net.LocalId, Character.Name, Character.Main, Character.Accent, (int)Character.Class, Character.Bought, Character.Level, Character.LoadoutFor(Character.Class), Character.Id };
         if (toPeer == 0) Rpc(nameof(NetIdentity), args);
         else             RpcId(toPeer, nameof(NetIdentity), args);
     }
 
     [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetIdentity(int peer, string name, Color main, Color accent, int cls, int[] bought, int level, string[] equip)
+    private void NetIdentity(int peer, string name, Color main, Color accent, int cls, int[] bought, int level, string[] equip, string characterId)
     {
         // a peer may only describe itself
         if (Multiplayer.GetRemoteSenderId() != peer || Net.I == null) return;
@@ -471,9 +589,12 @@ public partial class Hub : Node2D
         name = string.IsNullOrEmpty(name) ? Character.Defaults.Name : name.Length > 24 ? name[..24] : name;
         // purchases the claimed level could not have paid for are refused outright
         if (!Progression.Affordable(bought, level)) bought = new int[Progression.All.Length];
-        (p.Name, p.Main, p.Accent, p.Class, p.Bought, p.Equip, p.HasIdentity) =
-            (name, main, accent, Classes.Sanitize(cls), bought, equip ?? System.Array.Empty<string>(), true);
+        characterId ??= "";
+        if (characterId.Length > 64) characterId = "";
+        (p.Name, p.Main, p.Accent, p.Class, p.Bought, p.Equip, p.CharacterId, p.HasIdentity) =
+            (name, main, accent, Classes.Sanitize(cls), bought, equip ?? System.Array.Empty<string>(), characterId, true);
         if (_ships.TryGetValue(peer, out var s) && IsInstanceValid(s)) ApplyIdentity(s);
+        TryRestoreHold(peer);
     }
 
     // ── missions: Threat Intelligence Operations (host-authoritative) ────────
@@ -487,15 +608,19 @@ public partial class Hub : Node2D
     private const float TioHalfWidth = TioHeight * 630f / 876f / 2f;     // the art is 630 x 876 px
     public Vector2 MissionPortalPos => TioPos + new Vector2(TioHalfWidth + 110f, -TioHeight / 2f - 70f);
     private readonly Dictionary<int, bool> _ready = new();
-    public IEnumerable<int> PartyIds => _ships.Keys;                 // the party is everyone in the session
+    // the party is everyone in the session, and every pilot whose place is held (reconnecting):
+    // one who was not READY keeps the portal shut until it is back, or its place lapses
+    public IEnumerable<int> PartyIds => _ships.Keys.Concat(_away.Keys);
     public bool IsReady(int id) => _ready.TryGetValue(id, out var r) && r;
-    public bool AllReady => _ships.Count > 0 && _ships.Keys.All(IsReady);
-    public string PilotName(int id) => _ships.TryGetValue(id, out var s) && IsInstanceValid(s) ? s.Pilot : $"pilot {id}";
+    public bool AllReady => _ships.Count > 0 && PartyIds.All(IsReady);
+    public string PilotName(int id) => _ships.TryGetValue(id, out var s) && IsInstanceValid(s) ? s.Pilot
+                                     : _away.TryGetValue(id, out var n) ? $"{n} (reconnecting)" : $"pilot {id}";
     public bool TioOpen => SideIs<TioWindow>();
 
     public void OpenTio()
     {
         if (SideIs<TioWindow>()) return;
+        Hints.Meet("tio");
         if (Net.IsHost && Mission == MissionState.Idle)
         {   // docking at the TIO selects the newest unlocked tier
             Missions.Level = Missions.Unlocked(Missions.Current.Id);
@@ -552,8 +677,7 @@ public partial class Hub : Node2D
         if (!Net.IsHost || MissionWon) return;
         MissionWon = true;
         foreach (var r in Raiders.ToList()) RaiderDown(r);
-        AnnounceBossKill(Missions.Level);
-        DropLoot(Missions.Level, IsInstanceValid(Boss) ? Boss.Position : Vector2.Zero);
+        AnnounceBossKill(Missions.Level, IsInstanceValid(Boss) ? Boss.Position : Vector2.Zero);
         _arenaEndT = VictoryWindow;
         ToWorld(nameof(NetWon), VictoryWindow);
     }
@@ -567,26 +691,12 @@ public partial class Hub : Node2D
         if (IsInstanceValid(Boss)) Boss.Hp = 0;
     }
 
-    // host: each pilot's drops, to that pilot alone. Every ship in the party at the kill, in stasis
-    // or not -- a pilot shot down in the fight still helped win it. Sent to the peer directly, not
-    // to the arena: a pilot whose world had not finished loading still gets its parts.
-    private void DropLoot(int level, Vector2 at)
-    {
-        var pilots = _ships.Where(kv => IsInstanceValid(kv.Value)).Select(kv => (kv.Key, kv.Value.Class));
-        foreach (var (peer, drops) in Loot.RollParty(pilots, level))
-        {
-            if (peer == Net.LocalId) ReceiveLoot(drops, at);
-            else RpcId(peer, nameof(NetLoot), drops, at);
-        }
-    }
-    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetLoot(string[] items, Vector2 at) => ReceiveLoot(items, at);
-
     // This pilot's drops: on its own file at once (like the bounty), then as crates to fly over
     // on a ring round where the boss died. Not in the arena any more: straight into the hold.
-    private void ReceiveLoot(string[] items, Vector2 at)
+    private void ReceiveLoot(string[] items, Vector2 at, int level)
     {
-        items = Loot.Sanitize(items, Loot.CratesFor(Missions.Level));
+        items = Loot.Sanitize(items, Loot.CratesFor(level));
+        if (items.Length > 0) Hints.Meet(InArena ? "loot" : "equipment");   // at home the parts go straight into the hold
         Character.Unclaimed.AddRange(items);
         Character.Save();
         if (!InArena) { Loot.ClaimAll(); return; }
@@ -683,14 +793,15 @@ public partial class Hub : Node2D
     private Variant[] MissionArgs()
     {
         var ids = _ready.Keys.ToArray(); var rs = ids.Select(i => _ready[i] ? 1 : 0).ToArray();   // RPCs carry int[], not bool[]
-        return new Variant[] { (int)Mission, MissionT, ids, rs, Missions.Level };
+        return new Variant[] { (int)Mission, MissionT, ids, rs, Missions.Level, _away.Keys.ToArray(), _away.Values.ToArray() };
     }
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetMission(int state, double t, int[] ids, int[] ready, int level)
+    private void NetMission(int state, double t, int[] ids, int[] ready, int level, int[] away, string[] awayNames)
     {
         Missions.Level = level;
         Mission = (MissionState)state; MissionT = t;
         _ready.Clear(); for (int i = 0; i < ids.Length && i < ready.Length; i++) _ready[ids[i]] = ready[i] != 0;
+        _away.Clear(); for (int i = 0; i < away.Length && i < awayNames.Length; i++) _away[away[i]] = awayNames[i] ?? "";
     }
 
     // ── raids: a failed mission brings the boss's raiders to your base ─────────
@@ -866,23 +977,59 @@ public partial class Hub : Node2D
         }
     }
 
-    // ── a boss kill, as each guest receives it: its own EXP, its own share of the bounty ──
-    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetBossKill(int level, int party)
+    // ── A BOSS KILL, ONCE FOR EACH PILOT ──────────────────────────────────────
+    // Every kill has a serial, unique to the host that announced it: a pilot is paid for a serial
+    // once, however the payment reaches it -- at the kill, or owed when it comes back from a drop.
+    // The host keeps the kills of the last 12 s, because a pilot whose connection died just before
+    // one is still in the party when it happens (the host notices a dead link only seconds later),
+    // and would otherwise never be paid. The serials a pilot has been paid are on its file
+    // (Character.PaidKills), so not even a restart in between pays one twice.
+    private sealed class Kill
     {
+        public long Serial; public int Level, Party, World; public Vector2 At; public ulong When;
+        public Dictionary<int, string[]> Drops; public HashSet<int> Present;
+    }
+    private static long _killSerial = System.DateTime.UtcNow.Ticks;
+    private static readonly List<Kill> _recentKills = new();
+    private const ulong OwedWindowMs = 12000;
+
+    // a boss kill, as each guest receives it: its share of the bounty, its own parts, its own EXP
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void NetKill(int level, int party, long serial, string[] drops, Vector2 at)
+    {
+        if (!Character.PayOnce(serial)) return;
         Yard.AddGuestShare(Missions.BountyEach(level, party));              // to its own base, set aside while it visits
-        Progression.AwardBossKill(level);                                   // (which saves: the share with it)
+        ReceiveLoot(drops, at, level);
+        Progression.AwardBossKill(level);                                   // (which saves: the share and the serial with it)
     }
     public int PartySize => _ships.Count;
 
-    // host: a level-L boss is down -- every pilot's own EXP and its share of the bounty
-    public void AnnounceBossKill(int level)
+    // host: a level-L boss is down. Every pilot credited with it -- the ships here, in stasis or not
+    // (a pilot shot down still helped win it), and any whose place is held in this world -- gets its
+    // own EXP, its share of the bounty (split among all of them) and its own crates, each sent to
+    // that pilot alone: a pilot whose world is still loading still gets them, and nobody sees
+    // another's. The held are owed theirs until they are back.
+    public void AnnounceBossKill(int level, Vector2 at)
     {
         if (!Net.IsHost) return;
-        int party = System.Math.Max(1, PartySize);
-        Yard.AddHostShare(Missions.BountyEach(level, party));             // the host's share, paid at home
-        Progression.AwardBossKill(level);                                 // (which saves: the share with it)
-        if (Net.IsOnline) Rpc(nameof(NetBossKill), level, party);
+        var held = _held.Values.Where(h => h.World == _world).ToList();
+        var here = _ships.Where(kv => IsInstanceValid(kv.Value)).Select(kv => (kv.Key, kv.Value.Class));
+        var k = new Kill { Serial = ++_killSerial, Level = level, Party = System.Math.Max(1, PartySize + held.Count), World = _world, At = at,
+                           When = Time.GetTicksMsec(), Present = _ships.Keys.ToHashSet(),
+                           Drops = Loot.RollParty(here.Concat(held.Select(h => (h.OldPeer, h.Class))), level) };
+        _recentKills.RemoveAll(x => k.When - x.When > OwedWindowMs);
+        _recentKills.Add(k);
+        foreach (var h in held) h.Owed.Add(k);
+        Character.PayOnce(k.Serial);
+        Yard.AddHostShare(Missions.BountyEach(k.Level, k.Party));        // the host's own share, paid at home
+        ReceiveLoot(k.Drops.GetValueOrDefault(Net.LocalId, System.Array.Empty<string>()), at, k.Level);
+        Progression.AwardBossKill(k.Level);                              // (which saves: the share and the parts with it)
+        foreach (var peer in k.Present.Where(p => p != Net.LocalId)) PayKill(k, peer, peer);
+    }
+    // one pilot's share of a kill: `key` is who it was at the kill, `peer` who it is now
+    private void PayKill(Kill k, int key, int peer)
+    {
+        RpcId(peer, nameof(NetKill), k.Level, k.Party, k.Serial, k.Drops.GetValueOrDefault(key, System.Array.Empty<string>()), k.At);
     }
 
     // ── character creator ────────────────────────────────────────────────────
@@ -938,6 +1085,20 @@ public partial class Hub : Node2D
         AddChild(_statsWin);
     }
 
+    // THE TUTORIAL'S TRIGGERS: the first time this pilot meets each system. Read from what every
+    // peer has -- its own ship, the world it sees -- so a guest meets them as a host does.
+    private void MeetHints(PlayerShip me)
+    {
+        if (Hints.Wants("base") && Yard != null && me.Position.DistanceTo(BasePos) < Hints.BaseMeet) Hints.Meet("base");
+        if (Hints.Wants("tio") && Yard != null && me.Position.DistanceTo(TioPos) < Hints.TioMeet) Hints.Meet("tio");
+        if (Hints.Wants("target") && Combat.Nearest(Combat.Hostiles, me.Position, h => h.Position, Hints.TargetMeet, Combat.Pickable) != null) Hints.Meet("target");
+        if (Hints.Wants("abilities") && Selected != null) Hints.Meet("abilities");
+        if (Hints.Wants("raid") && Yard != null && Raiders.Count > 0) Hints.Meet("raid");
+        if (Hints.Wants("stasis") && !me.Alive) Hints.Meet("stasis");
+        if (Hints.Wants("boss") && InArena && IsInstanceValid(Boss)) Hints.Meet("boss");
+        if (Hints.Wants("warp") && WarpAim() is { has: true } aim && aim.at.DistanceTo(me.Position) > Hints.WarpMeet) Hints.Meet("warp");
+    }
+
     // Tab: ALWAYS the live hostile nearest your ship, at any range. No cycling --
     // pressing it again re-picks the nearest, so it never lands on a far target.
     // Switch to anything else with a left-click. Never a missile (Combat.Pickable): in the
@@ -974,6 +1135,7 @@ public partial class Hub : Node2D
     public override void _Process(double delta)
     {
         SendRaiders(delta);
+        if (Net.IsHost && _held.Count > 0) ExpireHolds();
         if (Net.IsHost) TickRaid(delta);
         if (Net.IsHost) TickBlasts(delta);
         TickMission(delta);
@@ -987,6 +1149,7 @@ public partial class Hub : Node2D
         Txt.UiScale = 1f / _cam.Zoom.X;
         if (_selected != null && !_selected.Alive) _selected = null;
         if (me != null) MoveCamera(me, (float)delta);
+        if (me != null) MeetHints(me);
 
         for (int i = _flashes.Count - 1; i >= 0; i--)
         {
@@ -1017,7 +1180,10 @@ public partial class Hub : Node2D
               + $"    HAULER {Yard.Hauler.Cargo:0}/{Yard.Capacity:0} {Yard.Hauler.State.ToString().ToUpperInvariant()}";
         Ui.SetText(_hud, place + ship
                   + (Net.IsOnline ? (Net.IsHost ? $"        HOSTING ({_ships.Count})" : $"        GUEST ({_ships.Count})")
-                     : Net.I != null && Net.I.Connecting ? "        CONNECTING" : "        OFFLINE")
+                     : Net.I == null ? "        OFFLINE"
+                     : Net.I.Reconnecting ? $"        RECONNECTING ({System.Math.Max(1, Net.I.Attempt)} of {Net.RetryAt.Length})"
+                     : Net.I.CanReconnect ? "        HOST LOST: RECONNECT (MULTIPLAYER)"
+                     : Net.I.Connecting ? "        CONNECTING" : "        OFFLINE")
                   + (FreeCamera ? "        FREE CAMERA (Y)" : ""));
     }
 

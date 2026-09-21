@@ -37,8 +37,10 @@ public partial class Hauler : UtilityShip
     public bool Escorted { get; private set; }   // this run is an escort
     public bool RunLost { get; private set; }    // a lone run the dice went against: its cargo is gone
     public static float? PretendRoll;            // the smoke test's way to fix the dice (like Net.PretendProtocol)
-    public const int FlagEscorted = 1, FlagLost = 2;
-    public int NetFlags => (Escorted ? FlagEscorted : 0) | (RunLost ? FlagLost : 0);
+    // Sent to guests with every state report: the two switches, and above them the escort's leg
+    // (where the route line starts).
+    public const int FlagEscorted = 1, FlagLost = 2, LegShift = 2;
+    public int NetFlags => (Escorted ? FlagEscorted : 0) | (RunLost ? FlagLost : 0) | (_leg << LegShift);
     // What this load sells for at the portal: x5 on an escort, nothing if a lone run was lost.
     public double Payout => Cargo * Economy.CreditsPerUnit * (Escorted ? Economy.EscortPay : RunLost ? 0 : 1);
     private int _leg, _waves;                    // an escort: the route point it is flying to, the waves sent
@@ -92,7 +94,7 @@ public partial class Hauler : UtilityShip
     {
         bool wasLost = Lost;
         (_netPos, _netRot, _hasNet) = (p, rot, true);
-        (Escorted, RunLost) = ((flags & FlagEscorted) != 0, (flags & FlagLost) != 0);
+        (Escorted, RunLost, _leg) = ((flags & FlagEscorted) != 0, (flags & FlagLost) != 0, flags >> LegShift);
         if ((St)state != State || Math.Abs(T - t) > 0.5) T = t;
         (State, Cargo, LastSale) = ((St)state, cargo, sale);
         FromHost(hull, rebuild, wasLost);
@@ -348,6 +350,7 @@ public partial class HaulerHud : Control
         Visible = h.State == Hauler.St.Loading && onScreen && !underMenu;
         if (!Visible) return;
         _go.Disabled = _escort.Disabled = !h.CanDispatch;
+        if (h.CanDispatch && Yard.IsMyOwnBase) Hub.Hints.Meet("hauler");
         Ui.SetText(_go, h.CanDispatch ? $"DISPATCH  {Yard.RunSafe * 100:0}% safe" : $"LOADING  {h.Cargo:0}/{Yard.PodSize:0}");
         QueueRedraw();
     }

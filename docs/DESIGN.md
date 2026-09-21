@@ -76,8 +76,10 @@ Reused as-is or lightly adapted — these were built and validated:
 
 1. **Hybrid control.** You fly your own ship directly (WASD, nose follows the mouse) and order a
    fleet around it RTS-style. Input, camera and combat are built for both.
-2. **The sell run is a choice at dispatch.** Send a hauler with an escort and travel with it for
-   full value, or send it alone in non-interactive mode for a reduced payout.
+2. **The sell run is a choice at dispatch.** ESCORT: fly with the hauler the long way round while
+   raider waves hunt it, for **5x** the pay if it reaches the portal. DISPATCH: send it alone, and it
+   gets through with the EVASION upgrade's chance -- or its cargo is lost past the portal. (The
+   owner's 2026-09-21 answer; it replaced "alone for a reduced payout".)
 3. **Real multiplayer, now**, peer-to-peer over ENet — one peer hosts, the rest join. Not architected-for-later.
 
 ## The authority model
@@ -142,12 +144,20 @@ levels once a second and ship and hauler state ten times a second; a guest's own
   It has **six cargo pods** painted on its hull; it starts with **one working pod of 300**, and the
   HAULER tab adds pods (up to 6: 500, 1000, 2000, …) and pod size (+10%). Docked, it loads from the
   stock (the larger pile first) with a stream of motes, each pod lighting as it fills. A **floating
-  DISPATCH button with a per-pod progress bar** sends it once **at least one pod is full**; with
-  **every pod full it leaves by itself**. Then: lift off, slow flat run east, blue aura, warp out,
-  30 s away, warp back (its sale paid, 1 credit per unit), drift back, turn 180°, settle.
+  control with a per-pod progress bar** -- **DISPATCH** (alone, showing its chance) and **ESCORT
+  x5**, the base owner's only -- sends it once **at least one pod is full**. With **every pod full it
+  leaves by itself only with AUTO-SELL**: a one-off 4462 cr upgrade (3x the average level-5 salvager
+  upgrade, estimated once and fixed) that needs the base owner to have beaten the level-3 boss.
+  A lone run: lift off, slow flat run east, blue aura, warp out, 30 s away (it gets through with the
+  **EVASION** chance, 60% +7% a level to 95%; if not, its cargo is lost), warp back (the sale paid,
+  1 credit per unit, or CARGO LOST), drift back, turn 180°, settle. An escort flies `Hub.EscortRoute`
+  instead, the only move off the lane, while waves of raiders sent after it (their `Quarry`) hunt
+  it; at the jump they withdraw and the sale pays 5x. **Nothing is ever lost to a trip or a save**:
+  the Yard counts what the fleet and the hauler carry as home (`Yard.Banked`).
 - **Upgrades** cost credits, in tabs **MINERS, SALVAGERS, HAULER** (plus **REFIT**) in the BASE
-  menu (B). +10% upgrades cost 1.25× the last level; +1 upgrades cost 2× the last and stop at their
-  cap (the button reads MAX). A guest's BUY and DISPATCH are requests the host checks.
+  menu (B). +10% upgrades cost 1.25× the last level; step upgrades cost 2× the last and stop at their
+  cap (the button reads MAX); a switch reads OFF / ON, and LOCKED until the base owner has beaten the
+  boss it asks for. A guest's BUY is a request the host checks; DISPATCH and ESCORT have no guest path.
 - **REFIT**'s RESET is the only way into the ship menu (class, name, colours): 10% of ore, salvage
   and credits — the world's for its host, a guest's own parked totals for a guest — on a second
   click.
@@ -204,7 +214,8 @@ levels once a second and ship and hauler state ten times a second; a guest's own
   in the beam unless point defence — or, for a fighter pilot, their guns — kills them); live **3 s**,
   **0.25 s ticks, 50** (half the old tick, twice as long); the boss **raider red with a white skull**.
 - **C (DONE — carrier measured 19.07 DPS; guns 5.9 a shell; control 1080 u)**: **battleship total DPS = 1.25 × carrier's**; **carrier range = 1.5 × battleship's**; the
-  battleship's main guns fire **shells at 4× the player missile's speed (520 u/s), not tracking**.
+  battleship's main guns fire **shells at 520 u/s** (their own stat since gear came: a missile rack
+  must not change the guns), **not tracking**.
 - **D (DONE)**: capital ships **turn in place at ≤ 5% of top speed**, about 10°/s; no strafing.
 - **E (DONE)**: heavies **snub-nosed (option b)**; they **wait at the map's edge** nearest their target and,
   once it is pinned, **boost at 700% until 300 u away**; missile within 500 u.
@@ -508,28 +519,65 @@ piece of player state that is **not** host-owned — it is identity, not a resou
 - Edited in the hub with **C**; every close saves. A new character can be cancelled; an edit cannot,
   because edits apply as you make them.
 - The class selector runs three pages of three
+- **Save format 2** (`Game.Version`): the file also carries the pilot's **hold** (every part owned and
+  not fitted, for either class), **unclaimed loot** (dropped at a kill, not yet flown over), and the
+  **hints** seen with the tutorial's off switch. A file from another format is greyed out, never
+  repaired. Things that come in runs (loot pickups, hints) save through `Character.SaveSoon`: 2.5 s
+  after the last call, written at once on leaving or switching pilot.
+
+## Gear, loot, the tutorial and reconnection (the owner's batch of 2026-09-21)
+
+- **A part leans hard one way.** Four specialisations per slot type at three rarities: the upside
+  grows with rarity (x1 / x1.5 / x2), the downside does not, so a rarer copy is strictly better but
+  never free. The owner's carrier examples are literals in the tests (Elite III, Swarm III). No part
+  touches a turret count: the turrets are painted on the hull, and a part cannot add a painted dome.
+- **The multiplier floor (0.1)** is there because gear stacks: the worst sum of downsides on any stat
+  is -55%, but a file on the player's disk can carry any bonus.
+- **The hull keeps its fraction across a refit.** Keeping the damage taken let a pilot swap Bulwark
+  III on at 10 hull and come out at 316.
+- **Gear is per pilot and trusted like purchases**: the host sanitises a claimed loadout (known parts,
+  right slot, right class) but cannot see a guest's hold -- the same trust as `Bought`, and a rarity
+  check by level is unsound (a low pilot can be carried to a high boss).
+- **Loot never goes to waste.** Drops are on the pilot's file at the kill and claimed on the next
+  world entry: a quit, a crash or a lost host costs nothing. Crates are local nodes with no network:
+  only their pilot's machine has them. The host rolls; a guest cannot choose what it gets.
+- **A goodbye is what tells a closed session from a dropped one.** ENet reports both the same way.
+  The goodbye must actually leave, so the peer is disconnected gently and pumped for up to a second.
+- **A place is held by character id**, not peer id (it changes on a reconnect). The id is the
+  guest's own claim, as its name and gear are: there is nothing else to know a returning player by.
+- **A failed attempt changes nothing.** Going offline raises `SessionChanged` only if a session was
+  there to leave; otherwise a failed JOIN rebuilt the pilot's own ship at the spawn.
+- **Hints read only state every peer has** (its own ship, the world it sees), so a guest meets a raid
+  from the raiders it is sent and no hint needs the network.
+- **A kill is paid once, by its serial.** The host notices a dead link seconds after it happens, so a
+  pilot can be counted in a kill it never heard of. The host keeps the last 12 s of kills and owes each
+  to a pilot dropped just after; a pilot pays itself for a serial once, however it arrives (at the kill,
+  or owed on its return). The bounty is split among everyone credited with the kill -- the ships there
+  and the places held -- so a held pilot's share is not the others' windfall. The serials paid are on
+  the pilot's FILE: in memory, a game killed hard after a kill and restarted inside the hold was paid
+  that kill again -- a loot dupe anyone could do on purpose. So a kill is one message (EXP, share and
+  parts): two could be paid apart.
+- **Every connection attempt has a deadline of its own**: 12 s for a JOIN, 5 s for a try to get back
+  in (automatic or RECONNECT). ENet's own timeout is not one -- see Traps.
+- **A session's end takes its party with it.** Who is held, who is READY and -- for a pilot that was a
+  guest -- the mission: the host's portal stayed open in a guest's own world, and a held pilot kept a
+  solo world's portal shut for good.
 
 ## Built so far
 
+`version/MAP.md` maps every script, member, RPC, spawn site, event hookup and asset, with who uses
+each (`python tools/map.py`). The files to start from:
+
 | File | What it is |
 |---|---|
-| `Net.cs` | session lifecycle (host / join / offline), peer tracking, `Net.Sim` authority guard |
-| `PlayerShip.cs` | naval helm, per-class art and mounts, ability dispatch, PD/missile state, salvo/staggered fire, replication |
-| `Abilities.cs` | each class's abilities, default keys, remapping (swap on clash), the controls line |
-| `AbilityBar.cs` | the bottom-centre bar: key, name, live state, recharge sweep |
-| `Torpedo.cs` | unguided torpedo with smoke trail; host copy damages, guest copy is cosmetic |
-| `Hub.cs` | the hub world and its host-owned resource tick, plus `Sun` and `Portal` |
-| `ShipClasses.cs` | `Turret` (cursor-aimed mains, claim-aware PD), `Wing` (fighter; bomber strike cycle), `ShipClass`, `IHittable` |
-| `Stats.cs` | `ShipStats`: every combat and flight number, base / bonus / final, derived DPS |
-| `StatsWindow.cs` | the K window: Abilities & keys tab (remapping), Stats tab |
-| `Combat.cs` | host-side target lookup by range, id and ray; hit flashes; torpedo launch hook |
-| `TargetDummy.cs` | the hub's DPS meter |
-| `Character.cs` | character slots on disk (list, load, save, delete, migrate); the nine-class table |
-| `CharacterCreator.cs` | creator UI (new or edit), the 3-page class selector, `ShipPreview` (real sprite, real mounts) |
-| `CharacterSelect.cs` | the select screen and delete confirmation |
-| `SessionMenu.cs` | host / join / offline UI |
-| `Settings.cs` | machine-local settings: volume and ability key bindings |
-| carried over | `Txt` and `HealthBar` (in use), `Ui`, `Econ`, `Sound` (unused), the menu diorama, the sprites |
+| `Hub.cs` | the world: layout, sectors (home / arena), ships, raids, missions, loot drops, held places, the HUD |
+| `Net.cs` / `Router.cs` | sessions, the build handshake, the goodbye and reconnection; opening the port on any router |
+| `PlayerShip.cs` / `ShipClasses.cs` | the ship (helm, abilities, refit, wing) / turrets and wings |
+| `Stats.cs` / `Equipment.cs` | every number a ship flies with / the 96 drop parts and the kit |
+| `Loot.cs` / `Hints.cs` | drops and crates / the tutorial's corner card |
+| `Yard.cs` / `Economy.cs` / `Hauler.cs` / `Gatherer.cs` | the idle economy: the base, its numbers, the hauler's runs, miners and salvagers |
+| `Character.cs` / `Game.cs` | the pilot on disk (save format 2, the batched save) / the build's number and the way out |
+| `Boss.cs` / `Raider.cs` / `Missions.cs` | the arena's boss, raiders and hunters, levels and rewards |
 
 ## A note on the typecheck harness
 
@@ -606,6 +654,24 @@ removed lines equal the engine defaults first — ask the engine — and keep th
 where the editor cannot delete it.*
 
 ## Traps that have already cost time
+
+- **`Hub.InArena` changes before the new world exists.** `GoTo` sets the sector at once and swaps the
+  scene at the end of the frame, so code waiting for "home" that reads the new world must wait for
+  it to be built (`H.Yard != null && H.IsNodeReady()`). A check read a guest's file in between and
+  saw loot the new world had not yet claimed.
+- **Static fields start in the order they are written.** `Equipment.All = Build().ToArray()` reads
+  `Scale`, `Suffix`, `Ranges` and `None`; declared below it, they are null when it runs.
+- **A const named like a Godot method hides it.** `Hints.Show` hid `CanvasLayer.Show()` (warning
+  CS0108): named constants in a node class need names Godot does not use.
+- **A mutant is caught when the CHECK fails, not when its success text appears.** A check that
+  prints a different message on failure ("a character field is not being saved") does not contain
+  the success text; match on something both messages share, or on the failure text.
+- **A run of mutants must read one version of the code.** The mutant runner copies the repo per run;
+  edits made meanwhile change what later runs test. Freeze a snapshot (`%TEMP%\warships_frozen`)
+  and run the series against it.
+- **Two mutants on one check prove neither.** Group mutants into runs so each check has at most one
+  mutant that can make it fail -- and remember a mutant can break a check it does not target (a save
+  that drops the hold makes every save-timing check fail too).
 
 - **A sound still playing at exit is a "resource still in use".** The mixer releases a stopped
   playback only on its next cycles; stop everything, then wait in REAL time (`Game.Quit`). It was
@@ -842,6 +908,21 @@ Each of these compiled clean and was wrong at runtime. The smoke test covers all
   `tools/**/*.sh` into `bad interpreter: /bin/sh^M` in WSL. A `.gitattributes` pinning `* -text`
   now disables conversion repo-wide; do not remove it. Caught before any checkout happened, so no
   damage was done — but `git add` warning "LF will be replaced by CRLF" is the only notice you get.
+- **An unreliable RPC to a node the receiver may not have yet races Godot's own news.** Godot tells
+  the other guests that a pilot joined on the reliable channel; that pilot's ship updates ride the
+  unreliable one, so over a lossy link the first ones arrived at a guest with no ship for them yet:
+  "Node not found ... Invalid packet received". A node that exists on every peer (the hub) takes
+  them and drops what it cannot place. The same goes for anything new that talks unreliably at once.
+- **`DisconnectPeer` is a polite hang-up, and ENet empties the peer at once.** Godot keeps listing
+  the peer until the other side answers, and everything sent meanwhile fails ("max channels: 0") --
+  unseen on one machine, a round trip of errors on a real link. The game never hangs up on one
+  peer in session; the tests simulate a drop with `PeerDisconnectNow`, which is what a drop is.
+- **ENet's timeout is late, and a pre-handshake drop is not a "failure".** ENet looks at a peer's
+  timeout only when a resend falls due, and its resends double (0.5, 1.5, 3.5, 7.5, 15.5 s): a JOIN
+  set to give up in 12 s gave up after 15, a retry set to 5 after 7.5 -- which made three retries
+  take 24.5 s. `Net._Process` holds the real deadline. And Godot raises `connection_failed` only for a
+  link that never came up: one that came up and dropped before the host let the pilot in is
+  `server_disconnected`, the same as a session lost -- so `OnHostGone` checks `Connecting` first.
 - **The plain `Godot_...win64.exe` writes nothing to stdout.** It is a GUI-subsystem binary, so
   every `GD.Print` from a headless run vanishes and the harness sees an empty log. Use the
   `_console.exe` beside it; both Windows runners swap to it automatically and refuse to run if it
@@ -904,8 +985,7 @@ weaker one — but frames from the two platforms are not pixel-comparable.
 
 ## Next
 
-- Fleet ships you order around your own ship (the RTS half of the hybrid)
-- Wormhole transit into an instanced hostile system
-- Combat, loot drops, and dropping a haul at the refinery
-- Refining loot into trade goods; hauler dispatch with the escort/alone choice
-- Ship-as-character persistence, so your ship travels between worlds
+- A real two-home session (everything multiplayer is proved on one machine and through a simulated
+  internet only).
+- Balance with the new gear in play; `Hub.BeginPlacement` for the first non-instant ability;
+  wormhole transit into an instanced system; the RTS half of hybrid control.

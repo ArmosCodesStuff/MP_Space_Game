@@ -132,6 +132,7 @@ public partial class Boss : Node2D, IHittable
     public override void _Process(double delta)
     {
         float dt = (float)delta;
+        if (!Alive && _telegraphs.Count > 0) ClearTelegraphs();
         if (!Net.Sim)
         {
             if (_net.Has)
@@ -177,7 +178,7 @@ public partial class Boss : Node2D, IHittable
         {
             _send = Locked ? 1.0 / 30 : 0.1;
             Hub?.RpcToSector(Hub.SectorKind.Arena, this, nameof(NetState), Position, Rotation, Hp, Locked,
-                             NextSuperIn, _superGap);
+                             NextSuperIn, _superGap, HullMult);
         }
     }
 
@@ -296,8 +297,22 @@ public partial class Boss : Node2D, IHittable
         // arena peers only, for the same reason as NetState above
         if (Net.IsOnline) Hub?.RpcToSector(Hub.SectorKind.Arena, this, nameof(NetTelegraph), line, a, b, size, time, onHull, hold);
     }
-    private void ShowTelegraph(bool line, Vector2 a, Vector2 b, float size, double time, bool onHull, double hold) =>
-        (onHull ? (Node)this : GetParent()).AddChild(new Telegraph { Line = line, A = a, B = b, Width = size, Radius = size, Duration = time, Hold = hold });
+    private void ShowTelegraph(bool line, Vector2 a, Vector2 b, float size, double time, bool onHull, double hold)
+    {
+        var t = new Telegraph { Line = line, A = a, B = b, Width = size, Radius = size, Duration = time, Hold = hold };
+        (onHull ? (Node)this : GetParent()).AddChild(t);
+        _telegraphs.RemoveAll(x => !IsInstanceValid(x));
+        _telegraphs.Add(t);
+    }
+    // A boss that is down threatens nothing, and the victory window leaves it on screen for 20 s:
+    // a beam half wound up went on charging, then "fired", over a DEFEATED boss. Its warnings go
+    // with it, on every peer (a guest's copy dies by the host's figure).
+    private readonly System.Collections.Generic.List<Telegraph> _telegraphs = new();
+    private void ClearTelegraphs()
+    {
+        foreach (var t in _telegraphs) if (IsInstanceValid(t)) t.QueueFree();
+        _telegraphs.Clear();
+    }
 
     // A guest's warning ends when ITS position is judged, not when the host's clock says (see
     // Net.Arriving): on the internet the two were a round trip apart, and a pilot who cleared the
@@ -307,9 +322,11 @@ public partial class Boss : Node2D, IHittable
         ShowTelegraph(line, a, b, size, Net.Arriving(time), onHull, hold);
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
-    private void NetState(Vector2 p, float rot, double hp, bool locked, double nextSuper, double superGap)
+    private void NetState(Vector2 p, float rot, double hp, bool locked, double nextSuper, double superGap, double hullMult)
     {
-        _net.Set(p, rot); Hp = hp; _netLocked = locked;
+        // the host's scale too: a guest built its boss for the party it saw, and one that rejoined
+        // mid-fight saw a different party
+        _net.Set(p, rot); Hp = hp; _netLocked = locked; HullMult = hullMult;
         _netNextSuper = nextSuper; _netSuperGap = superGap;
     }
 

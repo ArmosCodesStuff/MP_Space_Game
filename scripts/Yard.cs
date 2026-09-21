@@ -157,8 +157,8 @@ public partial class Yard : Node2D
     public static double TripCredits;                 // earned while away (a bounty), paid on return
     public static double LastAway, LastAwayOre;                    // what the last return credited
     public static double TripStartCredits;            // the credits set aside when the last trip began
-    // A bounty share. On disk AT ONCE (the caller saves next): quitting in the four seconds
-    // between the kill and home used to keep the EXP and lose the credits. The live base still
+    // A bounty share. On disk AT ONCE (the caller saves next): quitting between the kill and home
+    // (the victory window) used to keep the EXP and lose the credits. The live base still
     // gets it on the way home -- a guest's into its own, set-aside base; the host's with the
     // trip -- and the next save writes that live figure over this one, so nothing is counted twice.
     public static void AddGuestShare(double credits) { _ownCredits += credits; Character.BaseCredits += credits; }
@@ -227,7 +227,7 @@ public partial class Yard : Node2D
 
     // A player in the session, not just any peer: this spends the HOST's credits.
     [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void RequestBuy(string id) { if (Net.FromPlayer(this, out _)) TryBuy(id); }
+    private void RequestBuy(string id) { if (Net.FromPlayer(this, out _) && Economy.ById(id) is { OwnerOnly: false }) TryBuy(id); }
 
     public bool TryBuy(string id)
     {

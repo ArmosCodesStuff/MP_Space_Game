@@ -64,6 +64,18 @@ public static class Character
     // LOOT a boss dropped for this pilot and not yet flown over. On disk from the moment of the kill,
     // so a quit, a crash or a lost host costs nothing: the next world this pilot enters claims them.
     public static readonly List<string> Unclaimed = new();
+    // THE KILLS THIS PILOT HAS BEEN PAID FOR, by the host's serial (the last 32). A kill can reach a
+    // pilot twice -- at the kill and again as owed after a drop -- and on its file, not in memory, it
+    // is paid once even when the game was restarted in between.
+    public static readonly List<long> PaidKills = new();
+    private const int PaidKept = 32;
+    public static bool PayOnce(long serial)
+    {
+        if (PaidKills.Contains(serial)) return false;
+        PaidKills.Add(serial);
+        if (PaidKills.Count > PaidKept) PaidKills.RemoveRange(0, PaidKills.Count - PaidKept);
+        return true;
+    }
 
     // One saved character, as the select screen lists it.
     public class Slot
@@ -84,7 +96,7 @@ public static class Character
         Id = DateTime.UtcNow.ToString("yyyyMMddHHmmssfff");
         (Name, Main, Accent, Class) = (Defaults.Name, Defaults.Main, Defaults.Accent, ShipClass.Battleship);
         Bonuses.Clear();
-        Exp = 0; Level = 1; Points = 0; Array.Clear(Bought); BossCleared.Clear(); Loadout.Clear(); GearHold.Clear(); Unclaimed.Clear();
+        Exp = 0; Level = 1; Points = 0; Array.Clear(Bought); BossCleared.Clear(); Loadout.Clear(); GearHold.Clear(); Unclaimed.Clear(); PaidKills.Clear();
         HintsSeen.Clear(); HintsOff = false;
         BaseOre = BaseSalvage = BaseCredits = 0; BaseLevels.Clear(); BaseInvested.Clear();
     }
@@ -130,6 +142,7 @@ public static class Character
         foreach (var kv in Loadout) c.SetValue("equipment", kv.Key.ToString(), string.Join(",", kv.Value));
         foreach (var kv in GearHold.Where(kv => kv.Value > 0).OrderBy(kv => kv.Key, StringComparer.Ordinal)) c.SetValue("gear_hold", kv.Key, kv.Value);
         c.SetValue("loot", "unclaimed", string.Join(",", Unclaimed));
+        c.SetValue("loot", "paid", string.Join(",", PaidKills));
         c.SetValue("hints", "seen", string.Join(",", HintsSeen.OrderBy(x => x, StringComparer.Ordinal)));
         c.SetValue("hints", "off", HintsOff);
 
@@ -214,6 +227,9 @@ public static class Character
         Unclaimed.Clear();
         Unclaimed.AddRange(((string)c.GetValue("loot", "unclaimed", "")).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                            .Where(gid => Equipment.ById(gid) is { Kit: false }));
+        PaidKills.Clear();
+        foreach (var t in ((string)c.GetValue("loot", "paid", "")).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            if (long.TryParse(t, out var serial)) PayOnce(serial);
         HintsSeen.Clear();
         foreach (var h in ((string)c.GetValue("hints", "seen", "")).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             if (Hints.All.ContainsKey(h)) HintsSeen.Add(h);

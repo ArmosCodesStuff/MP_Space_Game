@@ -97,6 +97,7 @@ public partial class LootCrate : Node2D
         if (!over) return;
         Loot.Take(Item);
         Hub.CrateTaken(this);
+        Hub.Hints.Meet("equipment");
         QueueFree();
     }
 

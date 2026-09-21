@@ -8,7 +8,8 @@ using System.Linq;
 //
 // It handles like a naval ship: thrust only along the keel (W ahead, S astern),
 // the rudder (A/D) turns it on a radius that needs way on to work, and sideways
-// drift bleeds off as if the hull were in water. No strafing, no pivoting.
+// drift bleeds off as if the hull were in water. No strafing; almost stopped, the rudder
+// pivots the hull slowly on the spot.
 //
 // Networking split, following Net's rule:
 //   the OWNER reads input: it moves the ship, and reports where it aims and
@@ -205,7 +206,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
 
         for (int i = 0; i < Math.Min((int)Stats["main_count"], art.Mains.Length); i++) AddTurret(art.Mains[i], false);
         for (int i = 0; i < Math.Min((int)Stats["pd_count"], art.Pds.Length); i++) AddTurret(art.Pds[i], true);
-        FitWings();
+        FitWings(fresh: true);
     }
 
     // THE ONE SHEET: class, gear and purchases. Every ship carries its pilot's gear and purchases
@@ -223,13 +224,14 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
     // changed mid-flight. Fighters first, then bombers -- the order the host's wing report is read
     // in, so every peer's list lines up with the host's. A craft removed is freed where it is; a
     // change in the bombers calls off a strike in progress; a smaller magazine or bomb load never
-    // holds more than it has room for. (A battleship's sheet has no wing: both counts read 0.)
-    private void FitWings()
+    // holds more than it has room for. A bomber added to a wing in service arrives rearming, not
+    // armed (fresh: the whole wing being built). (A battleship's sheet has no wing: both counts read 0.)
+    private void FitWings(bool fresh)
     {
         int wantF = (int)Stats["fighter_count"], wantB = (int)Stats["bomber_count"], hadB = WingCount(WingKind.Bomber);
         while (WingCount(WingKind.Fighter) < wantF && AddWing(WingKind.Fighter, WingCount(WingKind.Fighter))) { }
         while (WingCount(WingKind.Fighter) > wantF) RemoveWing(WingKind.Fighter);
-        while (WingCount(WingKind.Bomber) < wantB && AddWing(WingKind.Bomber, _wings.Count)) { }
+        while (WingCount(WingKind.Bomber) < wantB && AddWing(WingKind.Bomber, _wings.Count)) if (!fresh) _wings[^1].StartRearm();
         while (WingCount(WingKind.Bomber) > wantB) RemoveWing(WingKind.Bomber);
         if (WingCount(WingKind.Bomber) != hadB) { StrikeTarget = null; _strikesOut = 0; }
         if (!Net.Sim) return;
@@ -282,7 +284,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
         Stats = BuildSheet();
         MaxHp = Stats["hull"];
         if (Alive) Hp = Math.Max(1, frac * MaxHp);
-        FitWings();
+        FitWings(fresh: false);
     }
 
     // Equipment: the owner's saved loadout for this class (on the host, what the identity
@@ -332,7 +334,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
     // missile at target 1000", never "I did 5 damage".
     public void UseAbility(string id, int targetId)
     {
-        // the fire mode is the owner's own intent (it rides in NetState), not a host order
+        // the fire mode is the owner's own intent (it rides in its state report), not a host order
         if (id == "firemode") { Staggered = !Staggered; return; }
         // The missile needs a selected target within range. Checked here, on the owner's
         // machine, so the slot can say why at once; the host checks again.
@@ -481,13 +483,25 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
         var v = (from - Position).Rotated(-Rotation);
         float side = Mathf.Atan2(v.X, -v.Y);            // 0 = ahead, clockwise
         _shield?.Flash(side);
-        if (Net.IsOnline) Rpc(nameof(NetShield), side);
+        if (Net.IsOnline) (GetParent() as Hub)?.SendShield(OwnerId, side);
         NoteCombat();                                   // taking damage is combat
         TakeDamage(d);
     }
 
-    [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
-    private void NetShield(float side) { if (Multiplayer.GetRemoteSenderId() == 1) _shield?.Flash(side); }
+    public void ApplyShield(float side) => _shield?.Flash(side);
+
+    // A RETURNING PILOT's ship, put back as it was (Hub's held places). Place: on the owner, where
+    // it was left. Restore: on the host, its hull -- or its stasis, with the time it had left.
+    public void Place(Vector2 at, float rot)
+    {
+        Position = at; Rotation = rot; Velocity = Vector2.Zero; _yawRate = 0; AutopilotTo = null;
+    }
+    public void Restore(double hp, bool alive, double stasis)
+    {
+        if (!Net.Sim) return;
+        if (alive) Hp = Math.Clamp(hp, 1, MaxHp);
+        else { Die(); _stasis = stasis; }
+    }
 
     // Into stasis where it lies; the pilot takes to the escape pod.
     private void Die()
@@ -629,7 +643,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
         _sendCd = SendInterval;
         var pod = IsInstanceValid(_pod) ? _pod.Position : Position;
         float podRot = IsInstanceValid(_pod) ? _pod.Rotation : 0f;
-        Rpc(nameof(NetState), Position.X, Position.Y, Velocity.X, Velocity.Y, Rotation,
+        (GetParent() as Hub)?.SendShipState(Position.X, Position.Y, Velocity.X, Velocity.Y, Rotation,
             AimPoint.X, AimPoint.Y, Trigger, Staggered, pod.X, pod.Y, podRot, Warping);
     }
 
@@ -711,15 +725,12 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
         Rotation = Mathf.LerpAngle(Rotation, _netRot, Mathf.Clamp(12f * dt, 0f, 1f));
     }
 
-    [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
-    private void NetState(float px, float py, float vx, float vy, float rot, float ax, float ay, bool trigger, bool staggered,
-                          float podX, float podY, float podRot, bool warping)
+    // The owner's report (Hub.NetShipState hands it only to the SENDER'S own ship: nobody can
+    // move another's). No impossible numbers: a NaN position fails every distance test, so the
+    // ship could not be hit, and a far-off one would drag the host's whole world with it.
+    public void ApplyState(float px, float py, float vx, float vy, float rot, float ax, float ay, bool trigger, bool staggered,
+                           float podX, float podY, float podRot, bool warping)
     {
-        // Only the ship's own owner may move it. Without this check any peer could
-        // shove anyone else's ship around, which is the classic authority hole. And no
-        // impossible numbers: a NaN position fails every distance test, so the ship could not
-        // be hit, and a far-off one would drag the host's whole world with it.
-        if (Multiplayer.GetRemoteSenderId() != OwnerId) return;
         if (!new[] { px, py, vx, vy, rot, ax, ay, podX, podY, podRot }.All(float.IsFinite)) return;
         _netAge = 0f;
         _netPos = new Vector2(px, py);
@@ -742,15 +753,14 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
             pos[i] = _wings[i].Position; rot[i] = _wings[i].Rotation;
             st[i] = _wings[i].StateCode; rearm[i] = (float)_wings[i].RearmLeft;
         }
-        Rpc(nameof(NetHostState), Hp, MaxHp, Alive, _stasis, Pinned, _combatT, _pdLeft, _pdRecharge, _mag, _missileReload,
+        (GetParent() as Hub)?.SendHostState(OwnerId, Hp, MaxHp, Alive, _stasis, Pinned, _combatT, _pdLeft, _pdRecharge, _mag, _missileReload,
             WingTarget?.NetId ?? 0, pos, rot, st, rearm);
     }
 
-    [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
-    private void NetHostState(double hp, double maxHp, bool alive, double stasis, bool pinned, double combat, double pdLeft, double pdRecharge, int mag, double reload,
-                              int wingTarget, Vector2[] wingPos, float[] wingRot, int[] wingState, float[] wingRearm)
+    // the host's report (Hub.NetHostState: only the host speaks for combat state)
+    public void ApplyHostState(double hp, double maxHp, bool alive, double stasis, bool pinned, double combat, double pdLeft, double pdRecharge, int mag, double reload,
+                               int wingTarget, Vector2[] wingPos, float[] wingRot, int[] wingState, float[] wingRearm)
     {
-        if (Multiplayer.GetRemoteSenderId() != 1) return;   // only the host speaks for combat state
         Hp = hp; MaxHp = maxHp; Alive = alive; _stasis = stasis; Pinned = pinned; _combatT = combat;
         _pdLeft = pdLeft; _pdRecharge = pdRecharge; _mag = mag; _missileReload = reload;
         WingTarget = wingTarget != 0 ? Combat.ById(wingTarget) : null;

@@ -11,7 +11,9 @@ public partial class EquipmentWindow : PanelContainer
 {
     public Hub Hub;
     private VBoxContainer _ship, _hold;
-    private const float ShipW = 500, HoldW = 400, HoldH = 560;
+    // Both columns scroll, at a height that ends the window above the hull bar (930 px down a
+    // 1080 screen): a ship's ten parts, each with what it does, run to about 970 px on their own.
+    private const float ShipW = 500, HoldW = 400, ColH = 700;
 
     public override void _Ready()
     {
@@ -24,8 +26,11 @@ public partial class EquipmentWindow : PanelContainer
         title.AddChild(Ui.Lbl("Bosses drop parts that lean hard one way. Each class keeps its own; the hold is yours.", Ui.Small, Ui.Dim));
         col.AddChild(title);
         var cols = Ui.HBox(16); col.AddChild(cols);
-        _ship = Ui.VBox(8, "Ship"); _ship.CustomMinimumSize = new Vector2(ShipW, 0); cols.AddChild(_ship);
-        var scroll = new ScrollContainer { Name = "HoldScroll", CustomMinimumSize = new Vector2(HoldW, HoldH),
+        var shipScroll = new ScrollContainer { Name = "ShipScroll", CustomMinimumSize = new Vector2(ShipW + 14, ColH),
+                                               HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
+        _ship = Ui.VBox(8, "Ship"); _ship.CustomMinimumSize = new Vector2(ShipW, 0);
+        shipScroll.AddChild(_ship); cols.AddChild(shipScroll);
+        var scroll = new ScrollContainer { Name = "HoldScroll", CustomMinimumSize = new Vector2(HoldW, ColH),
                                            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
         _hold = Ui.VBox(6, "Hold"); _hold.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         scroll.AddChild(_hold); cols.AddChild(scroll);

@@ -19,6 +19,35 @@ ticked only when it has been read line by line and everything found in it is fix
 4. Every finding is fixed at the source, covered by a check where it can be, and the whole suite runs
    again. Findings found while fixing go back on the list (recursively).
 
+## Pass 5 — the owner's whole batch, reviewed again (done)
+
+The whole batch, with the first review's fixes and the reconnection and tutorial work, read again by
+the same three lenses, each finding attacked by a refuter. Fixed at the source, each with a check
+proved by a mutant: a kill in the seconds before the host noticed a drop was never paid, one owed and
+received was paid twice, and one could be paid again after a restart (kill serials, the last 12 s kept,
+the serials paid saved with the pilot, one message per kill); a guest that fell back offline kept the
+host's open portal; a host that went offline with a place held kept its solo portal shut; a link lost
+mid-handshake started the retries; a JOIN gave up at ~15.5 s, not 12 (ENet's timeout runs late: every
+attempt has a hard deadline now); a pilot not yet let in tried to say goodbye; the folded MULTIPLAYER
+label went stale; guests read "dropped" for a pilot that left; guests met the hauler hint; parts at home
+met LOOT, not EQUIPMENT; the TIO counted a reconnecting pilot as not pressing READY; two stale
+comments. Thirteen checks were added or tightened (see `CHANGES.md`), and the tests' `Unmeet` now
+clears a card on screen too: while one shows, `Met()` is true whatever the trigger does. Looking at
+the sweep and a `-Wan` run then found three more, fixed the same way: the equipment window ran off the
+screen, a dead boss kept drawing its beam, and a ship's unreliable updates could reach a guest before
+it knew the ship (they go by way of the hub now).
+
+## Pass 4 — the owner's batch of 2026-09-21: adversarial review (done)
+
+The gear, loot and hauler checkpoint (`2469a08..0f5a0f0`) was read by three independent reviewers --
+multiplayer authority and lifetime; correctness against the owner's spec and the save; whether each
+new check can really fail -- and every finding was then attacked by a separate refuter reading the
+code. 18 survived, 7 were refuted. Fixed: the escort's leg never reached guests; AUTO-SELL was
+buyable by a guest; a refit re-armed bombers; two stale comments; nine weak or fragile checks. Kept,
+by the owner's wording: AUTO-SELL's price uses the "theoretical" level-5 salvager cost (6400, a
+purchase the count row does not allow) -- now said in the comment. Every fix has a check, each proved
+by a mutant.
+
 ## Pass 1 — analysers: done
 
 - `Hub.cs:864` an assigned, never-read `k` — **removed**.

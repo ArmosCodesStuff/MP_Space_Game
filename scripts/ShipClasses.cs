@@ -283,6 +283,9 @@ public partial class Wing : Node2D
     private BSt _b = BSt.Docked;
     public bool Docked => _b == BSt.Docked;
     public bool Armed => _b == BSt.Docked && _rearm <= 0 && Ammo > 0;
+    // A bomber that joins a wing already in service (a refit) arrives empty and rearms like one
+    // just home: swapping a bay on and off must not reload a wing that has fired.
+    public void StartRearm() { Ammo = 0; _rearm = S["bomber_rearm"]; }
     public double RearmLeft => _b == BSt.Docked ? Math.Max(0, _rearm) : 0;
     private double _rearm, _backT;
 

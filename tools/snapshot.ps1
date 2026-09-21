@@ -61,9 +61,8 @@ function W($s) { [void]$out.Append($s); [void]$out.Append("`n") }
 
 W $D
 W '// WARSHIPS -- code snapshot (master copy)'
-W "// Taken $stamp at git commit ${commit}: typecheck clean, dotnet build 0 warnings,"
-W '//   0 analyser findings, 0 unused members; smoke test 3/3 runs at 435 checks on Windows'
-W '//   (437 in a sandbox with no router and no internet); 67-frame UI sweep complete, 0 lint.'
+W "// Taken $stamp, on top of git commit ${commit}. How it was verified is in the message of the"
+W '//   commit that carries this file: one starting VERIFIED: is a green verify.ps1 -Update.'
 W "// $($final.Count) files, $total lines. Code only: sprites, sounds and docs are in the zip."
 W '//'
 W '// Each file starts with a divider and a "// FILE: <path>" line. To split it back into'

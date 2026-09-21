@@ -61,11 +61,12 @@ public partial class Net : Node
         public ShipClass Class = ShipClass.Battleship;
         public int[] Bought = Array.Empty<int>();
         public string[] Equip = Array.Empty<string>();
+        public string CharacterId = "";                   // the pilot's stable identity: a peer id changes on a reconnect
         public bool HasIdentity;
     }
 
     public event Action<int> PlayerJoined;
-    public event Action<int> PlayerLeft;
+    public event Action<int, PlayerInfo, bool> PlayerLeft;          // peer, who it was, whether it said goodbye
     public event Action<string> Status;
 
     // Fired whenever LocalId or the host/guest role changes: offline, hosting,
@@ -79,6 +80,9 @@ public partial class Net : Node
     public override void _Ready()
     {
         I = this;
+        // The batched save, the goodbye's last second and the reconnect clock all run here, and
+        // Game.Quit pauses the tree while it waits for exactly those.
+        ProcessMode = ProcessModeEnum.Always;
         var sm = (SceneMultiplayer)Multiplayer;
         // THE HANDSHAKE, before a peer counts as connected at all (see Protocol).
         sm.AuthCallback = Callable.From<long, byte[]>(OnAuth);
@@ -87,11 +91,10 @@ public partial class Net : Node
         Multiplayer.PeerConnected    += id => OnPeer((int)id, true);
         Multiplayer.PeerDisconnected += id => OnPeer((int)id, false);
         Multiplayer.ConnectedToServer += OnConnected;
-        // A failed or dropped connection falls back to offline. Without this a guest
-        // sat forever with IsHost false: the hub stopped producing and nothing said why.
-        Multiplayer.ConnectionFailed   += () => GoOffline($"Could not reach {_joinTarget}. Check the address; if the host plays from home, "
-                                                         + "their MULTIPLAYER panel says what their router still needs. Playing offline.");
-        Multiplayer.ServerDisconnected += () => GoOffline("Host closed the session. Playing offline.");
+        // A failed or dropped connection falls back to offline -- and a DROP is retried (OnHostGone).
+        // Without this a guest sat forever with IsHost false: the hub stopped and nothing said why.
+        Multiplayer.ConnectionFailed   += () => Failed(CouldNotReach);
+        Multiplayer.ServerDisconnected += OnHostGone;
         GoOffline();
         // The close button goes through Game.Quit like every other way out. This is the one node
         // that always exists, and what it owns -- the socket and the router ports -- is what a
@@ -99,8 +102,20 @@ public partial class Net : Node
         GetTree().AutoAcceptQuit = false;
     }
 
-    // The batched save's clock: this node outlives every scene.
-    public override void _Process(double delta) => Character.TickSave(delta);
+    // This node outlives every scene: the batched save's clock, the goodbye's last second, and the
+    // reconnect attempts.
+    public override void _Process(double delta)
+    {
+        Character.TickSave(delta);
+        PumpLetGo();
+        // Every attempt has a hard deadline. ENet looks at its own timeout only when a resend falls
+        // due, and its resends double: a JOIN set to give up in 12 s gave up after 15, a retry
+        // set to 5 after 7.5.
+        if (Connecting && Time.GetTicksMsec() - _attemptAt > (ulong)(BackIn ? RetryTimeoutMs : JoinTimeoutMs)) { Failed(CouldNotReach); return; }
+        if (_dropClock < 0 || GetTree().Paused) return;
+        _dropClock += delta;
+        if (!Connecting && Attempt < RetryAt.Length && _dropClock >= RetryAt[Attempt]) { Attempt++; Connect(LastHost, retry: true); }
+    }
 
     public override void _Notification(int what)
     {
@@ -202,6 +217,9 @@ public partial class Net : Node
     {
         _localId = Multiplayer.GetUniqueId();
         _isHost = false; Connecting = false; _inSession = true;
+        // the host that let us in is the one to come back to; an unreachable one is given up on in 12 s
+        LastHost = _joinAddress; _dropClock = -1; Attempt = 0; CanReconnect = false; _rejoin = false; _hostSaidBye = false;
+        (_peer as ENetMultiplayerPeer)?.GetPeer(1)?.SetTimeout(32, 4000, 12000);
         Players.TryAdd(_localId, new PlayerInfo());
         Say($"Connected as player {_localId}.");
         SessionChanged?.Invoke();
@@ -209,16 +227,107 @@ public partial class Net : Node
 
     // ── session lifecycle ────────────────────────────────────────────────────
 
-    // Offline play. Deliberately the same path as hosting: one set of rules. Whoever is leaving,
-    // whatever the reason -- PLAY OFFLINE, the host closing the session, a connection that failed
-    // or was refused -- lands here.
-    public void GoOffline(string reason = null)
+    // Offline play. Deliberately the same path as hosting: one set of rules. Leaving on purpose --
+    // PLAY OFFLINE, the host closing the session, a refused build -- or giving up on a connection
+    // lands here, and ends any reconnecting.
+    public void GoOffline(string reason = null) { StopReconnecting(); Offline(reason); }
+
+    // Back to offline. The world is told only if something changed: a failed attempt to join (or
+    // to get back in) from offline changed nothing, and rebuilding for it swapped the pilot's own
+    // ship for a fresh one.
+    private void Offline(string reason)
     {
+        bool changed = _inSession || !_isHost || _localId != 1 || Players.Keys.Any(k => k != 1);
         Close();
         _isHost = true; _localId = 1; Connecting = false;
         Players[1] = new PlayerInfo();
         Say(reason ?? "Offline session.");
-        SessionChanged?.Invoke();
+        if (changed) SessionChanged?.Invoke();
+    }
+
+    // ── the goodbye ─────────────────────────────────────────────────────────
+    // ENet reports a host that closed and a host that vanished the same way, and a guest that
+    // quit the same way as one whose Wi-Fi dropped. So whoever leaves on purpose says so first:
+    // a guest told goodbye does not try to get back in, and a host told goodbye does not hold the
+    // pilot's place. The goodbye must actually leave: the peer is let go gently -- ENet sends what
+    // is queued, then disconnects -- and pumped for up to a second.
+    [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void NetBye()
+    {
+        int from = Multiplayer.GetRemoteSenderId();
+        if (!_isHost && from == 1) _hostSaidBye = true;
+        else if (_isHost && Players.ContainsKey(from)) _leaving.Add(from);
+    }
+    public static bool SkipGoodbye;                        // the smoke test's host that vanishes (a crash, a pulled cable)
+    private bool _hostSaidBye;
+    private readonly HashSet<int> _leaving = new();
+    private bool _peerGone;                                  // the other end is already gone: nobody to say goodbye to
+    private bool SayGoodbye()
+    {
+        if (!_inSession || Connecting || !IsOnline || SkipGoodbye || _peerGone) return false;
+        if (_isHost) Rpc(nameof(NetBye)); else RpcId(1, nameof(NetBye));
+        return true;
+    }
+    private ENetMultiplayerPeer _letGo;
+    private ulong _letGoUntil;
+    private const ulong LetGoMs = 1000;
+    private void PumpLetGo()
+    {
+        if (_letGo == null) return;
+        if (_letGo.GetConnectionStatus() == MultiplayerPeer.ConnectionStatus.Disconnected) { _letGo = null; return; }   // already let go
+        bool busy = _letGo.Host != null && _letGo.Host.GetPeers().Any(p => p.GetState() != ENetPacketPeer.PeerState.Disconnected);
+        if (!busy || Time.GetTicksMsec() >= _letGoUntil) EndLetGo(); else _letGo.Poll();
+    }
+    private void EndLetGo() { if (_letGo == null) return; _letGo.Close(); _letGo = null; }
+
+    // ── reconnecting ────────────────────────────────────────────────────────
+    // A guest whose host drops without a goodbye goes offline -- its own world keeps running --
+    // and tries the same host again 3 times over about 20 s. Then RECONNECT, one more try on the
+    // button. The host holds the pilot's place meanwhile (Hub: 90 s).
+    public static readonly double[] RetryAt = { 2.0, 8.0, 14.0 };   // seconds after the drop
+    private const int RetryTimeoutMs = 5000, JoinTimeoutMs = 12000;
+    private bool BackIn => _retrying || _rejoin;           // a try to get back in to the host just lost, not a JOIN
+    private string CouldNotReach => $"Could not reach {_joinTarget}. Check the address; if the host plays from home, "
+                                  + "their MULTIPLAYER panel says what their router still needs. Playing offline.";
+    public string LastHost { get; private set; } = "";
+    private string _joinAddress = "";
+    public int Attempt { get; private set; }
+    private double _dropClock = -1;
+    public bool Reconnecting => _dropClock >= 0;
+    public bool CanReconnect { get; private set; }
+    private bool _retrying, _rejoin;
+    private ulong _attemptAt;
+
+    private void OnHostGone()
+    {
+        _peerGone = true;
+        // Still in the handshake (Godot reports a link that came up and then went as "disconnected",
+        // not "failed"): an attempt that did not happen, not a session lost.
+        if (Connecting) { Failed($"Could not get in to {_joinTarget}: it let the connection go before the handshake finished. Playing offline."); return; }
+        if (_hostSaidBye) { GoOffline("Host closed the session. Playing offline."); return; }
+        StopReconnecting();
+        Offline($"Lost the connection to {_joinTarget}. Trying to get back in, {RetryAt.Length} times in the next 20 s. Your own world keeps running.");
+        if (LastHost.Length > 0) _dropClock = 0;
+    }
+
+    // A connection that did not happen: a retry that failed, the RECONNECT button's try, or a JOIN.
+    private void Failed(string reason)
+    {
+        if (_rejoin) { _rejoin = false; Offline($"Could not get back in to {LastHost}. RECONNECT to try again."); CanReconnect = true; return; }
+        if (!Reconnecting) { GoOffline(reason); return; }
+        Offline($"Lost the connection to {LastHost}: attempt {Attempt} of {RetryAt.Length} failed.");
+        if (Attempt < RetryAt.Length) return;
+        _dropClock = -1; CanReconnect = true;
+        Say($"Could not get back in to {LastHost}. RECONNECT to try again.");
+    }
+
+    private void StopReconnecting() { _dropClock = -1; Attempt = 0; CanReconnect = false; _rejoin = false; }
+
+    public void Reconnect()
+    {
+        if (!CanReconnect) return;
+        CanReconnect = false; _rejoin = true;
+        Connect(LastHost, retry: false);
     }
 
     // The session ends; nothing else. Game.Quit calls this alone -- there is no world to fall
@@ -230,9 +339,10 @@ public partial class Net : Node
     {
         if (_inSession) SaveLocalCharacter();
         Character.SaveIfPending();
+        bool bye = SayGoodbye();
         _inSession = false;
         _joinGen++;                                        // a lookup still in flight connects to nothing
-        Shutdown();
+        Shutdown(bye);
     }
 
     // ── internet hosting ────────────────────────────────────────────────────
@@ -286,7 +396,7 @@ public partial class Net : Node
     private bool _publicDone;
     private int _hostPort;
     // single player (and between sessions): no socket, no lookup, no router job
-    public bool NetworkIdle => _peer == null && _ipReq == null && _routerJobs == 0;
+    public bool NetworkIdle => _peer == null && _ipReq == null && _routerJobs == 0 && _letGo == null;
 
     private const string Firewall = " If friends still cannot get in, allow Warships (Godot) through the Windows firewall, for private AND public networks.";
 
@@ -415,7 +525,9 @@ public partial class Net : Node
 
     public bool Host(int port = DefaultPort)
     {
+        StopReconnecting();
         Close();                                           // a session in progress ends properly: saved, guests told
+        EndLetGo();                                        // ...and its socket let go now: this port is about to be bound again
         var p = new ENetMultiplayerPeer();
         if (p.CreateServer(port, MaxPlayers) != Error.Ok)
         {
@@ -477,7 +589,9 @@ public partial class Net : Node
 
     private int _joinGen;
     private string _joinTarget = "";
-    public bool Join(string address)
+    public bool Join(string address) { StopReconnecting(); return Connect(address, retry: false); }
+
+    private bool Connect(string address, bool retry)
     {
         if (ParseAddress(address) is not var (host, port))
         {
@@ -488,9 +602,10 @@ public partial class Net : Node
         Close();                                           // hosting or in a session: that ends first, properly
         Players[1] = new PlayerInfo();
         Connecting = true;
+        _joinAddress = address; _retrying = retry; _attemptAt = Time.GetTicksMsec();
         _joinTarget = port == DefaultPort ? host : $"{host}:{port}";
         int gen = ++_joinGen;
-        Say($"Connecting to {_joinTarget} ...");
+        Say(retry ? $"Getting back in to {_joinTarget} ... (attempt {Attempt} of {RetryAt.Length})" : $"Connecting to {_joinTarget} ...");
         if (had) SessionChanged?.Invoke();                 // the guests that were here are gone: rebuild without them
         // A NAME is looked up off the main thread: a slow or failing lookup used to freeze the game.
         if (System.Net.IPAddress.TryParse(host, out _)) { ConnectTo(gen, host, port); return true; }
@@ -510,11 +625,11 @@ public partial class Net : Node
         var p = new ENetMultiplayerPeer();
         if (ip.Length == 0 || p.CreateClient(ip, port) != Error.Ok)
         {
-            GoOffline($"Could not find {_joinTarget}. Check the address. Playing offline.");
+            Failed($"Could not find {_joinTarget}. Check the address. Playing offline.");
             return;
         }
-        // An unreachable host is given up on in about 12 s, not ENet's 30.
-        foreach (var server in p.Host.GetPeers()) server.SetTimeout(32, 4000, 12000);
+        // ENet's own timeout as well, so it never keeps its default 30 s (the deadline is _Process's)
+        foreach (var server in p.Host.GetPeers()) server.SetTimeout(32, BackIn ? 2000 : 4000, BackIn ? RetryTimeoutMs : JoinTimeoutMs);
         _peer = p; Multiplayer.MultiplayerPeer = p;
     }
 
@@ -529,9 +644,19 @@ public partial class Net : Node
         else Character.Save();
     }
 
-    private void Shutdown()
+    private void Shutdown(bool bye)
     {
-        if (_peer != null) { _peer.Close(); _peer = null; }
+        EndLetGo();
+        if (_peer != null)
+        {
+            if (bye && _peer is ENetMultiplayerPeer e && e.Host != null)
+            {   // let the goodbye out (see NetBye)
+                foreach (var p in e.Host.GetPeers()) if (p.GetState() == ENetPacketPeer.PeerState.Connected) p.PeerDisconnectLater();
+                _letGo = e; _letGoUntil = Time.GetTicksMsec() + LetGoMs;
+            }
+            else _peer.Close();
+            _peer = null;
+        }
         if (_hops.Count > 0)
         {   // close the router ports we opened (in the background: routers can be slow)
             var hops = _hops;
@@ -544,6 +669,7 @@ public partial class Net : Node
         // answer 1 / true offline instead of depending on engine fallback behaviour.
         Multiplayer.MultiplayerPeer = new OfflineMultiplayerPeer();
         Players.Clear();
+        _hostSaidBye = false; _leaving.Clear(); _peerGone = false;
     }
 
     private void OnPeer(int id, bool joined)
@@ -562,9 +688,10 @@ public partial class Net : Node
         }
         else
         {
-            Players.Remove(id);
-            Say($"Player {id} left.");
-            PlayerLeft?.Invoke(id);
+            Players.Remove(id, out var info);
+            bool onPurpose = _leaving.Remove(id);
+            Say(onPurpose || !_isHost ? $"Player {id} left." : $"Player {id} dropped.");   // only the host hears goodbyes
+            PlayerLeft?.Invoke(id, info ?? new PlayerInfo(), onPurpose);
         }
     }
 

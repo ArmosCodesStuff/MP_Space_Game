@@ -110,8 +110,9 @@ public partial class BasePanel : PanelContainer
         foreach (var (id, (info, buy)) in _rows)
         {
             var u = Economy.ById(id); int lv = Y.Level(id);
-            bool max = Economy.Maxed(u, lv), locked = Y.OwnerBoss < u.NeedsBoss, sw = u.Kind == Economy.Kind.Unlock;
-            string gate = locked ? $"  -- beat the level-{u.NeedsBoss} boss first" : "";
+            bool max = Economy.Maxed(u, lv), sw = u.Kind == Economy.Kind.Unlock;
+            bool notMine = u.OwnerOnly && !Y.IsMyOwnBase, locked = notMine || Y.OwnerBoss < u.NeedsBoss;
+            string gate = notMine ? "  -- the base owner's to buy" : locked ? $"  -- beat the level-{u.NeedsBoss} boss first" : "";
             if (sw) Ui.SetText(info, $"{u.Name}  ·  {(lv >= 1 ? "ON" : "OFF → ON")}\n({u.Blurb}){gate}");
             else
             {

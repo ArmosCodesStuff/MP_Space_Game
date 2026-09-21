@@ -1,7 +1,8 @@
 using Godot;
 
-// The in-game menu (Esc, once there is nothing else to close): radar size, music
-// volume, and the way out. Settings save at once. The game keeps running behind
+// The in-game menu (Esc, once there is nothing else to close): radar size, music on/off and
+// volume, the tutorial's hints on/off, and the way out. Settings save at once; the hints switch
+// is the pilot's (each character remembers its own), and saves with it. The game keeps running behind
 // it -- this is a multiplayer world, it cannot pause -- but the helm is locked.
 public partial class EscMenu : CanvasLayer
 {
@@ -30,6 +31,9 @@ public partial class EscMenu : CanvasLayer
         col.AddChild(Choice(new[] { "0%", "25%", "50%", "75%", "100%" },
                             () => System.Array.FindIndex(steps, v => Mathf.IsEqualApprox(v, Settings.MusicVolume)),
                             i => Settings.MusicVolume = steps[i], "Music"));
+        var hints = new Button { Name = "HintsToggle", FocusMode = Control.FocusModeEnum.None, Text = Character.HintsOff ? "HINTS: OFF" : "HINTS: ON" };
+        hints.Pressed += () => { Character.HintsOff = !Character.HintsOff; Character.Save(); hints.Text = Character.HintsOff ? "HINTS: OFF" : "HINTS: ON"; };
+        col.AddChild(hints);
 
         var resume = new Button { Text = "RESUME", Name = "Resume", FocusMode = Control.FocusModeEnum.None, CustomMinimumSize = new Vector2(0, 38) };
         resume.Pressed += () => Hub.ToggleEscMenu();

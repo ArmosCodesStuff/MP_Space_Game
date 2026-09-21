@@ -2,7 +2,7 @@ using Godot;
 using System.Linq;
 
 // WARP TO TARGET -- the Threat Intelligence Operations window (left-click the TIO).
-// A bounty, and the party (everyone in the session) with each pilot's READY. READY
+// A bounty, and the party (everyone in the session, and anyone reconnecting) with each pilot's READY. READY
 // flies your ship to where the portal opens; once EVERY pilot is ready the portal
 // opens (a 3 s bar at the TIO's top right), and once every ship is at it, the party
 // goes through together.
@@ -62,12 +62,14 @@ public partial class TioWindow : PanelContainer
         Ui.SetText(_party, string.Join("\n", Hub.PartyIds.OrderBy(i => i).Select(i => $"  {Hub.PilotName(i)}   {(Hub.IsReady(i) ? "READY" : "not ready")}")));
         bool mine = Hub.IsReady(Net.LocalId);
         Ui.SetText(_ready, mine ? "READY  ✓" : "READY");
-        int waiting = Hub.PartyIds.Count(i => !Hub.IsReady(i));
+        int away = Hub.PartyIds.Count(i => !Hub.IsReady(i) && Hub.PilotName(i).EndsWith("(reconnecting)"));
+        int waiting = Hub.PartyIds.Count(i => !Hub.IsReady(i)) - away;
         Ui.SetText(_status, Hub.Mission switch
         {
             Hub.MissionState.Opening    => $"Opening the portal…  {Hub.MissionT:0.0} / {Hub.PortalOpenTime:0} s",
             Hub.MissionState.PortalOpen => "The portal is open: the party goes through when every ship is at it.",
-            _ => waiting > 0 ? $"Waiting for {waiting} pilot(s) to press READY. READY flies you to the portal." : "Everyone is ready.",
+            _ => waiting > 0 ? $"Waiting for {waiting} pilot(s) to press READY. READY flies you to the portal."
+               : away > 0 ? $"Waiting for {away} pilot(s) to reconnect (their places are held 90 s)." : "Everyone is ready.",
         });
     }
 }

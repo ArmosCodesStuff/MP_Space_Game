@@ -26,8 +26,13 @@ public partial class SessionMenu : CanvasLayer
 
         _toggle = new Button { Name = "NetToggle", FocusMode = Control.FocusModeEnum.None, ToggleMode = true,
                                Alignment = HorizontalAlignment.Left, CustomMinimumSize = new Vector2(220, 0) };
-        _toggle.Toggled += on => { _options.Visible = on; if (!on) _addr.ReleaseFocus(); Refresh(); };
+        _toggle.Toggled += on => { _options.Visible = on; if (!on) _addr.ReleaseFocus(); else Hub.I?.Hints?.Meet("multiplayer"); Refresh(); };
         root.AddChild(_toggle);
+        // After three failed attempts to get back to a lost host: one more, on the button. Right under
+        // the folded panel's title, so it is there without opening anything.
+        _reconnect = Ui.Btn("RECONNECT", () => Limited(() => Net.I?.Reconnect()), "Reconnect");
+        _reconnect.Visible = false;
+        root.AddChild(_reconnect);
 
         _options = Ui.VBox(8, "NetOptions");
         _options.Visible = false;
@@ -47,7 +52,7 @@ public partial class SessionMenu : CanvasLayer
         _joinBtn = Ui.Btn("JOIN", () => Limited(DoJoin), "Join");
         _offBtn = Ui.Btn("PLAY OFFLINE", () => Limited(() => Net.I?.GoOffline()), "Offline");
         _options.AddChild(_hostBtn); _options.AddChild(_joinBtn); _options.AddChild(_offBtn);
-        _sessionBtns = new[] { _hostBtn, _joinBtn, _offBtn };
+        _sessionBtns = new[] { _hostBtn, _joinBtn, _offBtn, _reconnect };
 
         _status = Ui.Lbl(Net.I?.LastStatus ?? "", Ui.Small, Ui.Dim);
         _status.AutowrapMode = TextServer.AutowrapMode.WordSmart;
@@ -69,7 +74,7 @@ public partial class SessionMenu : CanvasLayer
         _reveal = Ui.Btn("", () => { _revealed = !_revealed; Refresh(); });
         _reveal.Name = "RevealAddress";
         _options.AddChild(_reveal);
-        if (Net.I != null) { Net.I.Status += OnStatus; Net.I.SessionChanged += Refresh; Net.I.PlayerJoined += OnPeers; Net.I.PlayerLeft += OnPeers; }
+        if (Net.I != null) { Net.I.Status += OnStatus; Net.I.SessionChanged += Refresh; Net.I.PlayerJoined += OnPeers; Net.I.PlayerLeft += OnLeft; }
         Refresh();
     }
 
@@ -77,7 +82,7 @@ public partial class SessionMenu : CanvasLayer
     // line is written to a freed Label.
     public override void _ExitTree()
     {
-        if (Net.I != null) { Net.I.Status -= OnStatus; Net.I.SessionChanged -= Refresh; Net.I.PlayerJoined -= OnPeers; Net.I.PlayerLeft -= OnPeers; }
+        if (Net.I != null) { Net.I.Status -= OnStatus; Net.I.SessionChanged -= Refresh; Net.I.PlayerJoined -= OnPeers; Net.I.PlayerLeft -= OnLeft; }
     }
 
     private void OnStatus(string s) { _status.Text = s; Refresh(); }
@@ -89,6 +94,8 @@ public partial class SessionMenu : CanvasLayer
         // HOST while hosting would drop every guest to start the same session again
         _hostBtn.Disabled |= Net.IsHost && Net.IsOnline;
         var n = Net.I;
+        _reconnect.Visible = n != null && n.CanReconnect;
+        Refresh();
         bool hosting = n != null && Net.IsHost && Net.IsOnline;
         _copy.Visible = hosting && n.Reachability != Net.Reach.Checking;
         // The addresses friends elsewhere need, hidden until clicked: the internet one, and this
@@ -104,19 +111,22 @@ public partial class SessionMenu : CanvasLayer
         }
     }
     private void OnPeers(int _) => Refresh();
+    private void OnLeft(int _, Net.PlayerInfo __, bool ___) => Refresh();
 
     // The folded button's label: what it is, and where you stand.
     private void Refresh()
     {
         if (_toggle == null) return;
-        string where = !Net.IsOnline ? (Net.I != null && Net.I.Connecting ? "connecting…" : "offline")
+        var n = Net.I;
+        string where = !Net.IsOnline ? (n == null ? "offline" : n.Reconnecting ? $"reconnecting · {System.Math.Max(1, n.Attempt)} of {Net.RetryAt.Length}"
+                                      : n.CanReconnect ? "host lost" : n.Connecting ? "connecting…" : "offline")
                      : Net.IsHost ? $"hosting · {Net.I.Players.Count}" : $"guest · {Net.I.Players.Count}";
-        _toggle.Text = $"{(_toggle.ButtonPressed ? "▾" : "▸")}  MULTIPLAYER  ({where})";
+        Ui.SetText(_toggle, $"{(_toggle.ButtonPressed ? "▾" : "▸")}  MULTIPLAYER  ({where})");
     }
 
     private void DoJoin() => Net.I?.Join(_addr.Text);
 
-    private Button _hostBtn, _joinBtn, _offBtn, _reveal;
+    private Button _hostBtn, _joinBtn, _offBtn, _reveal, _reconnect;
     private Button[] _sessionBtns;
     private bool _revealed;
     public const double PressGap = 1.0;
