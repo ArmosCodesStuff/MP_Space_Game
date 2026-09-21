@@ -584,6 +584,13 @@ where the editor cannot delete it.*
 
 Each of these compiled clean and was wrong at runtime. The smoke test covers all of them.
 
+- **`GD.Load` caches; `Dispose()` does not evict.** A resource loaded with `GD.Load` lives in
+  `ResourceLoader`'s cache for the life of the process, so disposing your handle releases nothing
+  and the engine reports it as `resources still in use at exit`. `Music` carried an `_ExitTree` that
+  stopped the players, nulled the streams and disposed both handles -- it ran, and it did not help.
+  `ResourceLoader.Load(path, "", CacheMode.Ignore)` gives sole ownership, and then the dispose works.
+  Do NOT dispose a resource the cache is sharing: it broke the teardown chain and the count went up.
+  *Find them by name with `--headless --verbose --quit-after`; the smoke runner only gives a count.*
 - **A round-trip check only covers the fields it SETS.** Enumerating by reflection at the compare
   step feels thorough and is not: a field left at its default is identical before and after whether
   it is saved or not. The base economy fields were added to `Character`, not saved, and the check

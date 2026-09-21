@@ -55,8 +55,24 @@ public partial class _Test : Node
         // Solo is excluded on purpose: it asserts it starts with no saved characters, and it makes
         // and deletes its own along the way.
         if (role != "solo") { Character.NewBlank(); Character.Name = role; Character.Save(); }
+        // A SAVED BASE HAS TO SURVIVE ENTERING THE HUB. Hub._Ready builds the Yard, and the Yard
+        // reads Character.Base* in its _Ready -- so if the character is loaded AFTER that, the base
+        // comes up zero and the Yard's first-frame autosave writes the zeros back over the file.
+        // Set here, asserted below, for every role.
+        Character.NewBlank(); Character.Name = role + " Base"; Character.BaseCredits = 7777;
+        Character.BaseOre = 55; Character.Save();
+        string baseId = Character.Id;
         GetTree().ChangeSceneToFile("res://Hub.tscn");
         await Wait(0.4);
+        // Credits, not ore: ore is live stock and the hauler starts loading from it within the
+        // first half second, so an exact ore figure here is a check on the clock. Credits only
+        // move when something is bought.
+        Check(H?.Yard != null && Math.Abs(H.Yard.Credits - 7777) < 1e-6 && H.Yard.Ore > 0,
+              $"a saved base survives entering the hub ({H?.Yard?.Credits:0} cr, {H?.Yard?.Ore:0} ore of 55)");
+        var stillThere = new ConfigFile();
+        stillThere.Load($"{Character.Dir}/{baseId}.cfg");
+        Check(Math.Abs((double)stillThere.GetValue("base", "credits", -1.0) - 7777) < 1e-6,
+              $"...and the hub did not write zeros back over it ({(double)stillThere.GetValue("base", "credits", -1.0):0})");
         // An exception must end the run as a failure. Without this the async test
         // simply stopped, nothing called Quit, and the run idled to its time limit.
         try { if (role == "solo") await Solo(); else if (role is "ahost" or "aguest") await ArenaMp(role); else await Mp(role); }

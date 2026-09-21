@@ -63,6 +63,9 @@ public partial class MenuFoe : Node2D, IHittable
         var tex = GD.Load<Texture2D>(_art);
         float k = _length / tex.GetHeight();          // exactly how Raider and PlayerShip do it
         _sprite = new Sprite2D { Texture = tex, Scale = new Vector2(k, k) };
+        // The heavy wears the raiders' red, from Raider's own constant: untinted it drew in the
+        // art's bare grey and read as a neutral hull rather than as something shooting at you.
+        if (Kind == MenuFoeKind.Heavy) _sprite.Modulate = Raider.HeavyTint;
         AddChild(_sprite);
     }
 

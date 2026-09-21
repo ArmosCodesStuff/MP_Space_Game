@@ -137,6 +137,13 @@ public partial class Hub : Node2D
         sky.AddChild(stars);
 
         I = this;
+        // BEFORE BuildWorld, NOT AFTER. Normally the select screen has loaded a character; this
+        // covers running the hub directly (editor F6, the smoke test). It used to sit fifty lines
+        // below, and BuildWorld builds the Yard, whose _Ready reads Character.Base* -- so the base
+        // was loaded from statics that were still zero, and the Yard's first-frame autosave then
+        // wrote those zeros back over the character file EnsureLoaded had just read. Silent base
+        // loss, every time a hub was entered without the select screen.
+        Character.EnsureLoaded();
         Music.CombatZone = InArena;
         if (!InArena) BuildWorld();                  // the arena's boss comes after Combat.Clear, below
         // Hit flashes get their own layer ABOVE the hulls (ships sit at z 4) and below the
@@ -187,9 +194,6 @@ public partial class Hub : Node2D
         layer.AddChild(new AbilityBar { Hub = this });
         if (!InArena) layer.AddChild(new HaulerHud { Hub = this });
 
-        // Normally the select screen has loaded a character; this covers running the
-        // hub directly (editor F6, smoke test).
-        Character.EnsureLoaded();
         Settings.EnsureLoaded();       // ability key bindings
         Combat.Clear();
         // Flashes are made on the host, where the shots happen. Guests are sent them,

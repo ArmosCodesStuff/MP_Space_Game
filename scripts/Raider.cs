@@ -44,6 +44,10 @@ public partial class Raider : Node2D, IHittable
     public float HitRadius => Length * (Heavy ? 0.3f : 0.4f);
     public bool Selectable => true;
 
+    // The heavy's hull, in raider red. Shared with the title screen's heavies so the enemy you see
+    // on the menu is the colour of the enemy you meet.
+    public static readonly Color HeavyTint = new(0.62f, 0.40f, 0.40f);
+
     public const float LightLength = 34f;              // twice a carrier fighter
     public const float HeavyLength = 4f * LightLength; // 136 u
     public const double LightHull = 25, HeavyHull = 100;
@@ -122,7 +126,7 @@ public partial class Raider : Node2D, IHittable
         AddChild(_sprite);
         if (Heavy)
         {   // the battleship's front turret on its mount (62.4 px down the 150 px half-hull), dark as the hull
-            _sprite.Modulate = new Color(0.62f, 0.40f, 0.40f);
+            _sprite.Modulate = HeavyTint;
             var tt = GD.Load<Texture2D>("res://turret_bs_main.png");
             // the turret mount: row 40.3 of the 100 px snub-nosed hull
             float px = Length / tex.GetHeight();

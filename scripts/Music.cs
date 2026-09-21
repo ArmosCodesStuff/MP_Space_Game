@@ -44,7 +44,13 @@ public partial class Music : Node
 
     private (AudioStreamPlayer, AudioStreamOggVorbis) Loop(string path)
     {
-        var s = GD.Load<AudioStreamOggVorbis>(path);
+        // CacheMode.Ignore, not GD.Load. GD.Load puts the stream in ResourceLoader's cache, which
+        // holds it for the life of the process -- disposing our handle in _ExitTree then releases
+        // nothing, and the engine reports both oggs as "resources still in use at exit". Nothing
+        // else in the build wants these two files, so there is no sharing to lose by owning them
+        // outright. It also means the Loop flag below is set on OUR copy rather than on a cached
+        // resource every other loader would then see mutated.
+        var s = (AudioStreamOggVorbis)ResourceLoader.Load(path, "", ResourceLoader.CacheMode.Ignore);
         s.Loop = true;                                 // both files are built to loop seamlessly
         var p = new AudioStreamPlayer { Stream = s, VolumeDb = -80f };
         AddChild(p); p.Play();

@@ -1,9 +1,9 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-20 22:10 at git commit cc5243d: typecheck clean, dotnet build 0 warnings,
+// Taken 2026-09-20 22:45 at git commit 8636e45: typecheck clean, dotnet build 0 warnings,
 //   0 analyser findings, 0 unused members; smoke test 3/3 runs at 435 checks on Windows
 //   (437 in a sandbox with no router and no internet); 67-frame UI sweep complete, 0 lint.
-// 71 files, 12881 lines. Code only: sprites, sounds and docs are in the zip.
+// 71 files, 12914 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -37,18 +37,18 @@
 //   scripts/Gatherer.cs                            254 lines   sha256 135bd767de29
 //   scripts/Hauler.cs                              317 lines   sha256 b13773f083c7
 //   scripts/HealthBar.cs                            38 lines   sha256 c6b272c9453c
-//   scripts/Hub.cs                                1274 lines   sha256 be802786a2d5
+//   scripts/Hub.cs                                1278 lines   sha256 356382078a52
 //   scripts/MainMenu.cs                            305 lines   sha256 b2e0624b2acc
-//   scripts/MenuFoe.cs                             201 lines   sha256 8467526631c4
+//   scripts/MenuFoe.cs                             204 lines   sha256 f700f14be4e1
 //   scripts/Missions.cs                             38 lines   sha256 48a2f11b25a4
-//   scripts/Music.cs                                78 lines   sha256 021dfc1c83d5
+//   scripts/Music.cs                                84 lines   sha256 d25f055e0087
 //   scripts/Net.cs                                 391 lines   sha256 32ed9e4b5167
 //   scripts/PilotWindow.cs                          60 lines   sha256 61a44a8346a0
 //   scripts/PlayerShip.cs                          793 lines   sha256 53e613d8cd3d
 //   scripts/Plume.cs                                25 lines   sha256 cdbeb9b8fc58
 //   scripts/Progression.cs                          92 lines   sha256 de28f5e72175
 //   scripts/Radar.cs                               129 lines   sha256 16957ada0551
-//   scripts/Raider.cs                              354 lines   sha256 1c83f7409808
+//   scripts/Raider.cs                              358 lines   sha256 222fe4a6d00d
 //   scripts/SessionMenu.cs                         129 lines   sha256 857bef39fbc5
 //   scripts/Settings.cs                             91 lines   sha256 891f361df958
 //   scripts/Sfx.cs                                 104 lines   sha256 b58601febeb0
@@ -79,7 +79,7 @@
 //   tools/screens/Shots.cs.txt                     458 lines   sha256 43a79314bd60
 //   tools/smoketest/run.ps1                        161 lines   sha256 d5c27af2b535
 //   tools/smoketest/run.sh                          57 lines   sha256 568b677787fd
-//   tools/smoketest/SmokeTest.cs.txt              2301 lines   sha256 4c7078fbfb17
+//   tools/smoketest/SmokeTest.cs.txt              2317 lines   sha256 570d3d1e48e3
 //   tools/snapshot.ps1                              95 lines   sha256 d6d85575ba26
 //==============================================================================
 
@@ -3077,7 +3077,7 @@ public static class HealthBar
 
 //==============================================================================
 // FILE: scripts/Hub.cs
-// 1274 lines   sha256 be802786a2d5
+// 1278 lines   sha256 356382078a52
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -3218,6 +3218,13 @@ public partial class Hub : Node2D
         sky.AddChild(stars);
 
         I = this;
+        // BEFORE BuildWorld, NOT AFTER. Normally the select screen has loaded a character; this
+        // covers running the hub directly (editor F6, the smoke test). It used to sit fifty lines
+        // below, and BuildWorld builds the Yard, whose _Ready reads Character.Base* -- so the base
+        // was loaded from statics that were still zero, and the Yard's first-frame autosave then
+        // wrote those zeros back over the character file EnsureLoaded had just read. Silent base
+        // loss, every time a hub was entered without the select screen.
+        Character.EnsureLoaded();
         Music.CombatZone = InArena;
         if (!InArena) BuildWorld();                  // the arena's boss comes after Combat.Clear, below
         // Hit flashes get their own layer ABOVE the hulls (ships sit at z 4) and below the
@@ -3268,9 +3275,6 @@ public partial class Hub : Node2D
         layer.AddChild(new AbilityBar { Hub = this });
         if (!InArena) layer.AddChild(new HaulerHud { Hub = this });
 
-        // Normally the select screen has loaded a character; this covers running the
-        // hub directly (editor F6, smoke test).
-        Character.EnsureLoaded();
         Settings.EnsureLoaded();       // ability key bindings
         Combat.Clear();
         // Flashes are made on the host, where the shots happen. Guests are sent them,
@@ -4666,7 +4670,7 @@ public partial class MainMenu : Node2D
 
 //==============================================================================
 // FILE: scripts/MenuFoe.cs
-// 201 lines   sha256 8467526631c4
+// 204 lines   sha256 f700f14be4e1
 //==============================================================================
 using Godot;
 using System;
@@ -4733,6 +4737,9 @@ public partial class MenuFoe : Node2D, IHittable
         var tex = GD.Load<Texture2D>(_art);
         float k = _length / tex.GetHeight();          // exactly how Raider and PlayerShip do it
         _sprite = new Sprite2D { Texture = tex, Scale = new Vector2(k, k) };
+        // The heavy wears the raiders' red, from Raider's own constant: untinted it drew in the
+        // art's bare grey and read as a neutral hull rather than as something shooting at you.
+        if (Kind == MenuFoeKind.Heavy) _sprite.Modulate = Raider.HeavyTint;
         AddChild(_sprite);
     }
 
@@ -4915,7 +4922,7 @@ public static class Missions
 
 //==============================================================================
 // FILE: scripts/Music.cs
-// 78 lines   sha256 021dfc1c83d5
+// 84 lines   sha256 d25f055e0087
 //==============================================================================
 using Godot;
 
@@ -4963,7 +4970,13 @@ public partial class Music : Node
 
     private (AudioStreamPlayer, AudioStreamOggVorbis) Loop(string path)
     {
-        var s = GD.Load<AudioStreamOggVorbis>(path);
+        // CacheMode.Ignore, not GD.Load. GD.Load puts the stream in ResourceLoader's cache, which
+        // holds it for the life of the process -- disposing our handle in _ExitTree then releases
+        // nothing, and the engine reports both oggs as "resources still in use at exit". Nothing
+        // else in the build wants these two files, so there is no sharing to lose by owning them
+        // outright. It also means the Loop flag below is set on OUR copy rather than on a cached
+        // resource every other loader would then see mutated.
+        var s = (AudioStreamOggVorbis)ResourceLoader.Load(path, "", ResourceLoader.CacheMode.Ignore);
         s.Loop = true;                                 // both files are built to loop seamlessly
         var p = new AudioStreamPlayer { Stream = s, VolumeDb = -80f };
         AddChild(p); p.Play();
@@ -6518,7 +6531,7 @@ public partial class Radar : Control
 
 //==============================================================================
 // FILE: scripts/Raider.cs
-// 354 lines   sha256 1c83f7409808
+// 358 lines   sha256 222fe4a6d00d
 //==============================================================================
 using Godot;
 using System.Linq;
@@ -6565,6 +6578,10 @@ public partial class Raider : Node2D, IHittable
     public double MaxHull => (Heavy ? HeavyHull : LightHull) * Strength;
     public float HitRadius => Length * (Heavy ? 0.3f : 0.4f);
     public bool Selectable => true;
+
+    // The heavy's hull, in raider red. Shared with the title screen's heavies so the enemy you see
+    // on the menu is the colour of the enemy you meet.
+    public static readonly Color HeavyTint = new(0.62f, 0.40f, 0.40f);
 
     public const float LightLength = 34f;              // twice a carrier fighter
     public const float HeavyLength = 4f * LightLength; // 136 u
@@ -6644,7 +6661,7 @@ public partial class Raider : Node2D, IHittable
         AddChild(_sprite);
         if (Heavy)
         {   // the battleship's front turret on its mount (62.4 px down the 150 px half-hull), dark as the hull
-            _sprite.Modulate = new Color(0.62f, 0.40f, 0.40f);
+            _sprite.Modulate = HeavyTint;
             var tt = GD.Load<Texture2D>("res://turret_bs_main.png");
             // the turret mount: row 40.3 of the 100 px snub-nosed hull
             float px = Length / tex.GetHeight();
@@ -10915,7 +10932,7 @@ echo "SMOKE TEST PASSED"
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 2301 lines   sha256 4c7078fbfb17
+// 2317 lines   sha256 570d3d1e48e3
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -10974,8 +10991,24 @@ public partial class _Test : Node
         // Solo is excluded on purpose: it asserts it starts with no saved characters, and it makes
         // and deletes its own along the way.
         if (role != "solo") { Character.NewBlank(); Character.Name = role; Character.Save(); }
+        // A SAVED BASE HAS TO SURVIVE ENTERING THE HUB. Hub._Ready builds the Yard, and the Yard
+        // reads Character.Base* in its _Ready -- so if the character is loaded AFTER that, the base
+        // comes up zero and the Yard's first-frame autosave writes the zeros back over the file.
+        // Set here, asserted below, for every role.
+        Character.NewBlank(); Character.Name = role + " Base"; Character.BaseCredits = 7777;
+        Character.BaseOre = 55; Character.Save();
+        string baseId = Character.Id;
         GetTree().ChangeSceneToFile("res://Hub.tscn");
         await Wait(0.4);
+        // Credits, not ore: ore is live stock and the hauler starts loading from it within the
+        // first half second, so an exact ore figure here is a check on the clock. Credits only
+        // move when something is bought.
+        Check(H?.Yard != null && Math.Abs(H.Yard.Credits - 7777) < 1e-6 && H.Yard.Ore > 0,
+              $"a saved base survives entering the hub ({H?.Yard?.Credits:0} cr, {H?.Yard?.Ore:0} ore of 55)");
+        var stillThere = new ConfigFile();
+        stillThere.Load($"{Character.Dir}/{baseId}.cfg");
+        Check(Math.Abs((double)stillThere.GetValue("base", "credits", -1.0) - 7777) < 1e-6,
+              $"...and the hub did not write zeros back over it ({(double)stillThere.GetValue("base", "credits", -1.0):0})");
         // An exception must end the run as a failure. Without this the async test
         // simply stopped, nothing called Quit, and the run idled to its time limit.
         try { if (role == "solo") await Solo(); else if (role is "ahost" or "aguest") await ArenaMp(role); else await Mp(role); }

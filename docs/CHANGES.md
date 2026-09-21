@@ -203,6 +203,33 @@ reachable, which is fine: both harnesses build from the `nupkgs` folder that shi
 
 ## Unreleased
 
+### The title screen's heavies wear the raiders' red
+
+They drew in the art's bare grey, which read as a neutral hull rather than as something shooting at
+you. The tint is `Raider.HeavyTint` -- the raiders' own constant, promoted from a literal inside
+`Raider` so the enemy on the menu is the colour of the enemy you meet, and stays that way.
+
+### The last two leaked resources: GD.Load caches, Dispose does not evict
+
+**Checked:** the isolated repro that named them now reports **none**.
+
+`Music` loads its two ogg streams with `GD.Load`, which puts them in `ResourceLoader`'s cache --
+and that cache holds them for the life of the process. `Music._ExitTree` stops the players, nulls
+their streams and disposes both handles; it RUNS (proved with a print, exactly once) and it released
+nothing, because the cache still had them. The engine reported both as `resources still in use at
+exit` for the whole session.
+
+They load with `ResourceLoader.CacheMode.Ignore` now. Nothing else in the build wants those two
+files, so there is no sharing to lose by owning them outright -- and it also means the `Loop` flag
+is set on our own copy rather than on a cached resource every other loader would see mutated.
+
+*The earlier attempt -- disposing the ogg's `PacketSequence` as well -- made it WORSE, five instead
+of four, because that disposal broke the teardown chain so `SfxPool._ExitTree` never ran at all.
+The lesson is in DESIGN.md: a `Dispose` on a shared cached resource is not a release.*
+
+What found it: running the menu alone under `--headless --verbose --quit-after`, which prints the
+leaked resources BY NAME. The smoke runner only ever gives a count, and a count cannot be chased.
+
 ### Every smoke role gets its own character
 
 **Checked:** typecheck 0; build 0 warnings; analysers 0; xref 0 unused; smoke **474 pass, 6/6 runs**.
@@ -708,22 +735,6 @@ Frames looked at. No game code changed.
   and they fail by construction. They are not regressions and the behaviour they cover is real.
   **433 is the bar on Windows *and* under WSL**; only the sandbox itself reaches 435. Making them
   branch on the environment is not done.
-- **`ERROR: 2 resources still in use at exit`, in the solo smoke run.** Now identified rather than
-  mysterious: they are `music_ambient.ogg` and `music_combat.ogg` (with their `OggPacketSequence`
-  sub-resources). Reproduced in isolation by running the menu alone under `--verbose --quit-after`,
-  which lists them by name — the smoke runner's own output only ever gives the count.
-
-  It is a SHUTDOWN accounting message, not a live leak: the smoke test's own leak checks pass in
-  the same run (`orphan nodes 0 -> 0`, object count stable across leaving and re-entering the hub).
-
-  `Music._ExitTree` already stops the players, nulls their streams and disposes both handles, which
-  is the fix that worked for this message before. **It runs — proved with a print, exactly once —
-  and it is still not enough**: the two streams are held by something past the handle Music owns. Disposing the packet
-  sequence as well **made it worse** and was reverted: the count went back UP to five, because the
-  extra disposal breaks the teardown chain and `SfxPool._ExitTree` then never runs at all.
-
-  The related `Sfx` leak found alongside it IS fixed — see *A multiplayer pass* above.
-
 *(The non-atomic character save that was listed here is now fixed — see Fixed, below.)*
 
 #### Fixed
