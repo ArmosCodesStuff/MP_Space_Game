@@ -1,0 +1,458 @@
+// Screenshot driver. NOT game code: run.sh copies the project to a scratch folder,
+// drops this in as scripts/_Shots.cs, registers it as an autoload, and runs the real
+// renderer on a virtual display. Frames land in /tmp/shots/. Stored as .txt so
+// nothing compiles it in place. Note: on a real display Godot reads the real
+// pointer, so parsed mouse-motion events do not move the aim here.
+using Godot;
+using System.Linq;
+using System.Reflection;
+using System.Threading.Tasks;
+public partial class _Shots : Node
+{
+    async Task W(double s) => await ToSignal(GetTree().CreateTimer(s), "timeout");
+    async Task Snap(string name) { await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
+        GetViewport().GetTexture().GetImage().SavePng($"/tmp/shots/{name}.png"); GD.Print("shot " + name); Lint(name); }
+
+    // ── UI lint: run on every frame ──────────────────────────────────────────
+    // off-screen   : a visible control not fully inside its viewport (scroll contents exempt)
+    // clipped      : a label or button whose text is wider than the box it is drawn in
+    // overlap      : two top-level HUD blocks (direct children of a CanvasLayer) overlapping
+    static bool UnderScroll(Node n) { for (var p = n.GetParent(); p != null; p = p.GetParent()) if (p is ScrollContainer) return true; return false; }
+    static float TextW(Control c, string text)
+    {
+        var f = c.GetThemeFont("font"); int fs = c.GetThemeFontSize("font_size");
+        float w = 0; foreach (var line in text.Split('\n')) w = Mathf.Max(w, f.GetStringSize(line, HorizontalAlignment.Left, -1, fs).X);
+        return w;
+    }
+    void Lint(string frame)
+    {
+        var tops = new System.Collections.Generic.List<Control>();
+        foreach (var c in N<Control>())
+        {
+            if (!c.IsVisibleInTree()) continue;
+            var r = c.GetGlobalRect(); var vp = c.GetViewportRect();
+            if (r.Size.X < 1 || r.Size.Y < 1) continue;
+            string id = $"{c.GetType().Name} '{c.Name}'" + (c is Label l0 && l0.Text.Length > 0 ? $" \"{l0.Text.Split('\n')[0][..Mathf.Min(28, l0.Text.Split('\n')[0].Length)]}\"" : c is Button b0 && b0.Text.Length > 0 ? $" [{b0.Text[..Mathf.Min(24, b0.Text.Length)]}]" : "");
+            if (!UnderScroll(c) && !(r.Position.X >= vp.Position.X - 1 && r.Position.Y >= vp.Position.Y - 1 && r.End.X <= vp.End.X + 1 && r.End.Y <= vp.End.Y + 1))
+                GD.Print($"LINT {frame}: off-screen {id} at {r.Position.Round()} size {r.Size.Round()}");
+            if (c is Label lb && lb.AutowrapMode == TextServer.AutowrapMode.Off && !lb.ClipText && lb.Text.Length > 0 && TextW(lb, lb.Text) > r.Size.X + 2)
+                GD.Print($"LINT {frame}: clipped {id} needs {TextW(lb, lb.Text):0} px, has {r.Size.X:0}");
+            if (c is Button bt && bt.Text.Length > 0 && !bt.ClipText && TextW(bt, bt.Text) + 8 > r.Size.X + 2)
+                GD.Print($"LINT {frame}: clipped {id} needs {TextW(bt, bt.Text) + 8:0} px, has {r.Size.X:0}");
+            if (c.GetParent() is CanvasLayer && !(c is ColorRect) && c.MouseFilter != Control.MouseFilterEnum.Ignore || c is HullHud || c is AbilityBar || c is BasePanel)
+                if (c.GetParent() is CanvasLayer) tops.Add(c);
+        }
+        for (int i = 0; i < tops.Count; i++)
+            for (int j = i + 1; j < tops.Count; j++)
+            {
+                var a = tops[i].GetGlobalRect(); var b = tops[j].GetGlobalRect();
+                var x = a.Intersection(b);
+                if (x.Size.X > 4 && x.Size.Y > 4 && tops[i].GetViewport() == tops[j].GetViewport())
+                    GD.Print($"LINT {frame}: overlap {tops[i].GetType().Name} '{tops[i].Name}' / {tops[j].GetType().Name} '{tops[j].Name}' ({x.Size.X:0}x{x.Size.Y:0})");
+            }
+    }
+    Hub H => GetTree().CurrentScene as Hub;
+    System.Collections.Generic.IEnumerable<T> N<T>(Node n = null) where T : Node { n ??= GetTree().Root;
+        foreach (var c in n.GetChildren()) { if (c is T t) yield return t; foreach (var x in N<T>(c)) yield return x; } }
+    void Key(Key k) { Input.ParseInputEvent(new InputEventKey { Keycode = k, PhysicalKeycode = k, Pressed = true }); Input.ParseInputEvent(new InputEventKey { Keycode = k, PhysicalKeycode = k, Pressed = false }); }
+    object P(object o, string m, params object[] a) => o.GetType().GetMethod(m, BindingFlags.NonPublic | BindingFlags.Instance).Invoke(o, a);
+
+    public override async void _Ready()
+    {
+        // 2x game speed: every wait here is game time, so each frame catches the same moment,
+        // sooner -- the sweep has to finish inside the sandbox's 300 s limit
+        Engine.TimeScale = 2.0;
+        Settings.TestVolume = 0.05f; Settings.ApplyVolume();   // a real window on a real machine
+        // two characters, like the user's: a black-hulled carrier and a default battleship
+        Character.NewBlank(); Character.Name = "Commander"; Character.Class = ShipClass.Carrier; Character.Main = new Color(0.05f, 0.05f, 0.05f); Character.Save();
+        await W(0.05);
+        Character.NewBlank(); Character.Name = "Ironside"; Character.Class = ShipClass.Battleship; Character.Save();
+        await W(0.5);
+        await W(0.6); await Snap("0_main_menu");
+        GetTree().ChangeSceneToFile("res://CharacterSelect.tscn"); await W(0.8); await Snap("1_select");
+        N<Button>().First(b => b.Name == "Delete").EmitSignal(BaseButton.SignalName.Pressed); await W(0.4);
+        await Snap("1b_delete_confirm");
+        N<ConfirmationDialog>().First().GetCancelButton().EmitSignal(BaseButton.SignalName.Pressed); await W(0.2);
+        N<Button>().First(b => b.Text == "NEW CHARACTER").EmitSignal(BaseButton.SignalName.Pressed); await W(0.5);
+        await Snap("2_creator_battleship");
+        N<Button>().First(b => b.Text.StartsWith("CARRIER")).EmitSignal(BaseButton.SignalName.Pressed); await W(0.3);
+        await Snap("3_creator_carrier");
+        N<Button>().First(b => b.Text == ">").EmitSignal(BaseButton.SignalName.Pressed); await W(0.3);
+        await Snap("3c_creator_page2");
+        N<CharacterCreator>().First().Cancel(); await W(0.2);
+
+        Character.Load(Character.List().First(s => s.Name == "Ironside").Id);
+        GetTree().ChangeSceneToFile("res://Hub.tscn"); await W(0.8);
+        await W(1.5); await Snap("3b_spawn_under_base");      // the base and a fresh spawn
+        var me = H.GetNode<PlayerShip>("Ship_1");
+        me.Position = new Vector2(620, 780); me.Rotation = -0.4f;
+        await W(2.5);
+        H.GetType().GetField("_selected", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(H, H.GetNode<TargetDummy>("TargetDummy1"));
+        Input.ParseInputEvent(new InputEventMouseMotion { Position = GetViewport().GetFinalTransform() * (GetViewport().GetCanvasTransform() * new Vector2(600, 420)) });
+        Key(global::Godot.Key.Q); await W(2.0);
+        Input.ParseInputEvent(new InputEventKey { Keycode = global::Godot.Key.Space, PhysicalKeycode = global::Godot.Key.Space, Pressed = true });
+        await W(2.3); await Snap("4_hub_battleship");
+        Input.ParseInputEvent(new InputEventKey { Keycode = global::Godot.Key.Space, PhysicalKeycode = global::Godot.Key.Space, Pressed = false });
+        Key(global::Godot.Key.K); await W(0.4); await Snap("5_k_keys");
+        N<StatsWindow>().First().ShowPane(false); await W(0.2); await Snap("6_k_stats");
+        Key(global::Godot.Key.K); await W(0.2);
+
+        Character.Class = ShipClass.Carrier; P(H, "ApplyLocalIdentity"); await W(0.2);
+        me = H.GetNode<PlayerShip>("Ship_1");
+        me.Position = new Vector2(420, 760); me.Rotation = 0.3f;
+        await W(2.0);
+        Key(global::Godot.Key.Q); Key(global::Godot.Key.Space); Key(global::Godot.Key.F);
+        await W(4.2); await Snap("7_hub_carrier_strike");
+        await W(1.0); await Snap("8_hub_carrier_strike_later");
+        // close-ups: zoom in, lock the controls (a focused text box) so the mouse stops
+        // steering the aim, and train every turret on a point off the starboard bow
+        async Task Close(ShipClass c, string name)
+        {
+            Character.Class = c; P(H, "ApplyLocalIdentity"); await W(0.2);
+            var s = H.GetNode<PlayerShip>("Ship_1");
+            s.Position = new Vector2(-900, 1100); s.Rotation = 0; s.Velocity = Vector2.Zero;
+            N<Button>().First(b => b.Name == "NetToggle").ButtonPressed = true;
+            N<LineEdit>().First().GrabFocus();
+            GetViewport().GetCamera2D().Zoom = new Vector2(3.2f, 3.2f);
+            s.AimPoint = s.Position + new Vector2(400, -300);
+            Key(global::Godot.Key.Q);
+            await W(4.0); await Snap(name);
+        }
+        // the idle economy: base menu, beams and cargo bars, arms and the queue, the hauler
+        {
+            GetViewport().GetCamera2D().Zoom = new Vector2(0.9f, 0.9f);
+            var hub = H; var Y = hub.Yard; Y.Credits = 460; Y.Ore = 200; Y.Salvage = 150;
+            Key(global::Godot.Key.B); await W(0.4); await Snap("11_base_menu"); Key(global::Godot.Key.B); await W(0.2);
+            var ship = hub.GetNode<PlayerShip>("Ship_1");
+            var miner = Y.Gatherers.First(g => g.Kind == GatherKind.Miner);
+            var salv = Y.Gatherers.First(g => g.Kind == GatherKind.Salvager);
+            GetViewport().GetCamera2D().Zoom = new Vector2(2.2f, 2.2f);
+            for (int i = 0; i < 6000 && !salv.Beaming; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await W(6.0);                                            // part-full, so the cargo bar shows
+            ship.Position = salv.Position + new Vector2(-40, 90); ship.Velocity = Vector2.Zero; await W(1.2);
+            await Snap("13_salvager_beam");
+            for (int i = 0; i < 6000 && !miner.Beaming; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            ship.Position = miner.Position + new Vector2(90, 60); ship.Velocity = Vector2.Zero; await W(1.2);
+            await Snap("12_miner_beam");
+
+            // the hauler landed with one pod full: pods and the floating DISPATCH button
+            Y.Credits = 40000;
+            Y.TryBuy("hauler_pods"); Y.TryBuy("hauler_pods");
+            Y.Hauler.Cargo = 0; Y.Ore = 420; Y.Salvage = 0;
+            GetViewport().GetCamera2D().Zoom = new Vector2(1.8f, 1.8f);
+            ship.Position = Hub.HaulerPad + new Vector2(0, 260); ship.Rotation = 0; ship.Velocity = Vector2.Zero;
+            await W(17.5); { var sh = H.GetNode<PlayerShip>("Ship_1"); sh.Visible = false; sh.Velocity = Vector2.Zero; sh.Position = Hub.HaulerPad + new Vector2(0, -30); GetViewport().GetCamera2D().Zoom = new Vector2(2.4f, 2.4f); await W(1.6); }
+            await Snap("15_hauler_landed_dispatch");
+            H.GetNode<PlayerShip>("Ship_1").Visible = true; GetViewport().GetCamera2D().Zoom = new Vector2(0.9f, 0.9f);
+
+            // a full fleet, all home at once: five arms busy, the rest in line
+            for (int i = 0; i < 5; i++) { Y.TryBuy("miner_count"); Y.TryBuy("salvager_count"); }
+            await W(0.2);
+            foreach (var g in Y.Gatherers) { g.State = Gatherer.St.Working; g.Cargo = g.Hold; }
+            GetViewport().GetCamera2D().Zoom = new Vector2(1.25f, 1.25f);
+            ship.Position = Hub.BasePos + new Vector2(0, 470); ship.Velocity = Vector2.Zero;
+            await W(5.0); { var sh = H.GetNode<PlayerShip>("Ship_1"); sh.Visible = false; sh.Velocity = Vector2.Zero; sh.Position = Hub.BasePos + new Vector2(40, -60); GetViewport().GetCamera2D().Zoom = new Vector2(1.25f, 1.25f); await W(1.6); }
+            await Snap("16_arms_and_queue");
+            H.GetNode<PlayerShip>("Ship_1").Visible = true; GetViewport().GetCamera2D().Zoom = new Vector2(0.9f, 0.9f);
+
+            // off it goes: charging at the portal
+            Y.RequestDispatch();
+            for (int i = 0; i < 9000 && Y.Hauler.State != Hauler.St.Charging; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            GetViewport().GetCamera2D().Zoom = new Vector2(1.3f, 1.3f);
+            ship.Position = Hub.PortalPos + new Vector2(-150, 260); ship.Velocity = Vector2.Zero; await W(1.6);
+            await Snap("14_hauler_charging");
+            GetViewport().GetCamera2D().Zoom = new Vector2(0.9f, 0.9f);
+        }
+        // the PILOT window; the TIO's WARP TO TARGET; the opening bar; the mission portal
+        {
+            var hub = H; var pship = hub.GetNode<PlayerShip>("Ship_1");
+            Character.Points = 4;
+            hub.TogglePilot(); await W(0.4); await Snap("34_pilot_window"); hub.TogglePilot(); await W(0.2);
+            // outside the portal's entry radius, or the party would go through mid-sweep
+            pship.Position = Hub.TioPos + new Vector2(240, 180); pship.Velocity = Vector2.Zero;
+            GetViewport().GetCamera2D().Zoom = new Vector2(1.1f, 1.1f); await W(1.6);
+            hub.OpenTio(); await W(0.4); await Snap("35_tio_warp_to_target");
+            hub.SetMyReady(true); pship.AutopilotTo = null;              // READY, but stay for the pictures
+            await W(1.6); await Snap("36_mission_opening_bar");
+            await W(2.0); await Snap("37_mission_portal_open");
+            var tw = hub.GetTree().Root.FindChild("TioWindow", true, false); if (tw != null) tw.QueueFree();
+            GetViewport().GetCamera2D().Zoom = new Vector2(0.9f, 0.9f); await W(0.3);
+        }
+        // the Esc menu, and the free camera zoomed right out (its view boxed on the radar)
+        {
+            var hub = H;
+            // open and close it directly: Esc peels layers (a selected target goes first),
+            // so key presses here depend on whatever the frames before left open
+            if (!hub.EscMenuOpen) hub.ToggleEscMenu();
+            await W(0.4); await Snap("32_esc_menu");
+            if (hub.EscMenuOpen) hub.ToggleEscMenu();
+            await W(0.2);
+            hub.SetZoom(Hub.DefaultZoom / Hub.ZoomOutMax); hub.ToggleFreeCamera();
+            Input.ParseInputEvent(new InputEventKey { Keycode = global::Godot.Key.Right, PhysicalKeycode = global::Godot.Key.Right, Pressed = true });
+            await W(1.2);
+            Input.ParseInputEvent(new InputEventKey { Keycode = global::Godot.Key.Right, PhysicalKeycode = global::Godot.Key.Right, Pressed = false });
+            await W(0.6); await Snap("33_free_camera_zoomed_out");
+            hub.ToggleFreeCamera(); hub.SetZoom(Hub.DefaultZoom); await W(1.5);
+        }
+        await Close(ShipClass.Battleship, "9_battleship_closeup");
+        // warp: the charge building, then the flash where it lands (and the hull bar's WARP readout)
+        {
+            var ws = H.GetNode<PlayerShip>("Ship_1");
+            typeof(PlayerShip).GetField("_warpCd", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).SetValue(ws, 0.0);
+            ws.Velocity = Vector2.Zero; ws.StartWarp();
+            await W(2.2); await Snap("40_warp_charging");
+            await W(0.95); await Snap("41_warp_arrival");      // the camera cuts to the ship on a jump
+        }
+        // hull: a damaged miner's bar; a lost salvager in the base menu, waiting to be rebuilt
+        {
+            var yd = H.Yard; var hs = H.GetNode<PlayerShip>("Ship_1");
+            var dm = yd.Gatherers.First(g => g.Kind == GatherKind.Miner);
+            var lost = yd.Gatherers.First(g => g.Kind == GatherKind.Salvager);
+            dm.TakeDamage(27); lost.TakeDamage(999);
+            hs.Position = dm.Position + new Vector2(60, 90); hs.Velocity = Vector2.Zero;
+            var zp = typeof(Hub).GetProperty("ZoomLevel"); float z0 = (float)zp.GetValue(H); zp.SetValue(H, 1.6f);
+            await W(1.2);
+            var bp = new BasePanel { Hub = H }; H.GetChildren().OfType<CanvasLayer>().First(l => l.GetChildren().Any(c => c is HullHud)).AddChild(bp);
+            await W(0.2); bp.ShowTab("SALVAGERS"); await W(0.3);
+            await Snap("45_hull_and_rebuild");
+            bp.QueueFree();
+            // and the damaged miner itself, close: the camera rides a hidden stand-in over it
+            hs.Visible = false; zp.SetValue(H, 3f);
+            for (int i = 0; i < 30; i++) { hs.Position = dm.Position; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            await Snap("46_damaged_miner");
+            hs.Visible = true; zp.SetValue(H, z0); await W(0.2);
+        }
+        // light raiders posted round the ship: ahead, left and right, webbed to it
+        {
+            var rs = H.GetNode<PlayerShip>("Ship_1"); var keepR = rs.Position;
+            rs.Position = new Vector2(4000, 2500); rs.Velocity = Vector2.Zero; rs.Rotation = 0f; await W(0.3);
+            var raid = new[] { H.SpawnRaider(rs.Position + new Vector2(0, -260)), H.SpawnRaider(rs.Position + new Vector2(260, 0)), H.SpawnRaider(rs.Position + new Vector2(-260, 0)) };
+            var zp = typeof(Hub).GetProperty("ZoomLevel"); float z0 = (float)zp.GetValue(H); zp.SetValue(H, 2.2f);
+            await W(3.0); await Snap("48_raiders_pinning");
+            foreach (var r in raid) if (GodotObject.IsInstanceValid(r)) r.TakeDamage(999);
+            zp.SetValue(H, z0); rs.Position = keepR; rs.Velocity = Vector2.Zero; await W(0.3);
+        }
+        // a heavy raider waiting astern, its missile flying at the ship's predicted spot (the red circle)
+        {
+            var hs2 = H.GetNode<PlayerShip>("Ship_1"); var keepH2 = hs2.Position;
+            // the heavy waits at the map's edge nearest the ship (3200 u out, east of the base);
+            // the ship 400 u inside it, so the heavy's missile is in range
+            hs2.Position = Hub.BasePos + new Vector2(2800, 0); hs2.Velocity = Vector2.Zero; hs2.Rotation = 0f; await W(0.3);
+            var hv = H.SpawnRaider(Hub.BasePos + new Vector2(3200, 60), RaiderKind.Heavy);
+            var zp = typeof(Hub).GetProperty("ZoomLevel"); float z0 = (float)zp.GetValue(H); zp.SetValue(H, 0.85f);   // ship and heavy both in view
+            await W(4.5); await Snap("49_heavy_waiting_missile");
+            if (GodotObject.IsInstanceValid(hv)) hv.TakeDamage(9999);
+            zp.SetValue(H, z0); hs2.Position = keepH2; hs2.Velocity = Vector2.Zero; await W(0.3);
+        }
+        // the base's own weapons: its turret burning a raider inside 300 u
+        {
+            var bs3 = H.GetNode<PlayerShip>("Ship_1"); var keepB = bs3.Position;
+            bs3.Position = Hub.BasePos + new Vector2(380, 120); bs3.Visible = false; bs3.Velocity = Vector2.Zero; await W(0.8);   // the camera over the station
+            var rz = H.SpawnRaider(Hub.BasePos + new Vector2(0, 280)); rz.Hp = 5000;
+            var zp = typeof(Hub).GetProperty("ZoomLevel"); float z0 = (float)zp.GetValue(H); zp.SetValue(H, 1.0f);
+            var bdn = H.GetNode<BaseDefense>("BaseDefense"); double seen = bdn.LaserDealt;
+            for (int i = 0; i < 180; i++)
+            {   // hold it in reach, and snap on the frame a laser shot lands (its flash lasts 0.1 s)
+                rz.Position = Hub.BasePos + new Vector2(140, 250);
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                if (i > 60 && bdn.LaserDealt > seen + 5) break;
+            }
+            await Snap("50_base_defence"); bs3.Visible = true;
+            rz.TakeDamage(99999); zp.SetValue(H, z0); bs3.Position = keepB; bs3.Velocity = Vector2.Zero; await W(0.3);
+        }
+        // hosting: the address friends in other cities need, hidden until clicked, then shown
+        {
+            Net.I.Host(); await W(0.5);
+            Net.I.Reachable(Net.Reach.Manual, "203.0.113.7:27015", "Hosting. Your router would not open port 27015 by itself (UPnP is off or unsupported): forward UDP 27015 to this PC in your router's settings, then friends elsewhere join with the address below.");
+            var sm = H.GetTree().Root.FindChild("SessionMenu", true, false) as SessionMenu;
+            await W(0.3); await Snap("51_address_hidden");
+            var rv = sm?.FindChild("RevealAddress", true, false) as Button;
+            rv?.EmitSignal(BaseButton.SignalName.Pressed); await W(0.2); await Snap("52_address_revealed");
+            rv?.EmitSignal(BaseButton.SignalName.Pressed);
+            Net.I.GoOffline(); await W(0.5);
+        }
+        // a raid: two patrols in from the map's edge, and the HUD's count
+        {
+            var rs2 = H.GetNode<PlayerShip>("Ship_1"); var keepR2 = rs2.Position;
+            rs2.Position = Hub.BasePos + new Vector2(0, 2600); rs2.Velocity = Vector2.Zero; rs2.Rotation = 0f; await W(0.5);
+            H.SpawnPatrol(rs2.Position + new Vector2(-500, 350), 1.1); H.SpawnPatrol(rs2.Position + new Vector2(500, 350), 1.1);
+            await W(1.0); await Snap("53_raid_incoming");
+            foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e9);
+            rs2.Position = keepR2; rs2.Velocity = Vector2.Zero; await W(0.3);
+        }
+        // the equipment window (I): five parts and five chips, the class's own
+        {
+            H.ToggleEquipment(); await W(0.4);
+            await Snap("55_equipment");
+            H.ToggleEquipment(); await W(0.2);
+        }
+        // a waypoint picked on the radar: its ring there, and the HUD naming it
+        {
+            H.SelectWaypoint("BASE", Hub.BasePos, 260f); await W(0.3);
+            await Snap("47_radar_waypoint");
+            H.ClearSelection(); await W(0.1);
+        }
+        // the whole yard from above: the base, the belt and the wreck at 1500 u
+        {
+            var os = H.GetNode<PlayerShip>("Ship_1"); os.Visible = false; os.Position = Hub.BasePos + new Vector2(-600, -500); os.Velocity = Vector2.Zero;
+            // the hub sets the camera's zoom from its own ZoomLevel every frame: set that instead
+            var zp = typeof(Hub).GetProperty("ZoomLevel"); float z0 = (float)zp.GetValue(H);
+            zp.SetValue(H, 0.26f);
+            for (int i = 0; i < 40; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await Snap("44_layout_overview");
+            zp.SetValue(H, z0); os.Visible = true;
+        }
+        // battleship shells in flight toward a dummy
+        {
+            var gs2 = H.GetNode<PlayerShip>("Ship_1"); var gd2 = H.GetNode<TargetDummy>("TargetDummy1");
+            gs2.Position = gd2.Position + new Vector2(0, 560); gs2.Velocity = Vector2.Zero; gs2.Rotation = 0f;
+            var zp = typeof(Hub).GetProperty("ZoomLevel"); float z0 = (float)zp.GetValue(H); zp.SetValue(H, 1.1f);
+            gs2.AimPoint = gd2.Position; await W(1.4);
+            // fire the main turrets directly (as the game does when the trigger is held), twice
+            var mains = gs2.FindChildren("*", "", true, false).OfType<Turret>().Where(x => !x.PointDefense).ToList();
+            foreach (var m in mains) m.Shoot(); await W(0.25);
+            foreach (var m in mains) m.Shoot(); await W(0.3);
+            await Snap("54_shells_in_flight");
+            zp.SetValue(H, z0); await W(1.5);
+        }
+        // the player's missile, close up: the camera rides a stand-in over it
+        {
+            var ms = H.GetNode<PlayerShip>("Ship_1"); var md = H.GetNode<TargetDummy>("TargetDummy1");
+            ms.Position = md.Position + new Vector2(0, 700); ms.Velocity = Vector2.Zero; ms.Rotation = 0f; await W(0.8);
+            typeof(Hub).GetField("_selected", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).SetValue(H, md);
+            ms.UseAbility("missile", md.NetId); await W(0.5);
+            var mt = H.GetChildren().OfType<Torpedo>().FirstOrDefault(x => x.Heavy);
+            if (mt != null)
+            {
+                ms.Visible = false; GetViewport().GetCamera2D().Zoom = new Vector2(5f, 5f);
+                for (int i = 0; i < 20; i++) { ms.Position = mt.GlobalPosition; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+                await Snap("43_missile_closeup");
+                ms.Visible = true; GetViewport().GetCamera2D().Zoom = new Vector2(0.9f, 0.9f);
+            }
+        }
+        // a shield hit on each of the four sides, then stasis with the escape pod out
+        {
+            var sh = H.GetNode<PlayerShip>("Ship_1");
+            foreach (var dir in new[] { Vector2.Up, Vector2.Right, Vector2.Down, Vector2.Left })
+                sh.Hit(1, sh.Position + dir.Rotated(sh.Rotation) * 300f);
+            await W(0.08); await Snap("30_shield_hit_all_sides");
+            sh.TakeDamage(sh.Hp + 1); await W(1.5);
+            GetViewport().GetCamera2D().Zoom = new Vector2(1.6f, 1.6f);
+            await W(1.0); await Snap("31_stasis_and_pod");
+            typeof(PlayerShip).GetField("_stasis", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).SetValue(sh, 0.0);
+            sh.UseAbility("reboard", 0); await W(0.3);
+            GetViewport().GetCamera2D().Zoom = new Vector2(3.2f, 3.2f);
+        }
+        await Close(ShipClass.Carrier, "10_carrier_closeup");
+
+        // ── QA: every remaining feature and UI state, one frame each ─────────────
+        {
+            var hub = H; var Y = hub.Yard; var cam = GetViewport().GetCamera2D();
+            var sel = hub.GetType().GetField("_selected", BindingFlags.NonPublic | BindingFlags.Instance);
+            var d1 = hub.GetNode<TargetDummy>("TargetDummy1");
+            PlayerShip Me() => hub.GetNode<PlayerShip>("Ship_1");
+            async Task Frame(Vector2 at, float zoom, bool hideShip = true)
+            {
+                var sh = Me(); sh.Visible = !hideShip; sh.Velocity = Vector2.Zero; sh.Position = at;
+                cam.Zoom = new Vector2(zoom, zoom); await W(1.2);
+            }
+            async Task Class(ShipClass c) { Character.Class = c; P(hub, "ApplyLocalIdentity"); await W(0.3); }
+            N<LineEdit>().FirstOrDefault()?.ReleaseFocus();
+            await Frame(hub.GetNode<PlayerShip>("Ship_1").Position, 0.9f, false);
+
+            // multiplayer panel, opened
+            // a toggle-mode button: set its state (a raw "pressed" signal does not flip it)
+            var tog = N<Button>().First(b => b.Text.Contains("MULTIPLAYER"));
+            tog.ButtonPressed = true; await W(0.3); await Snap("19_multiplayer_open");
+            tog.ButtonPressed = false; await W(0.2);
+
+            // base menu: each tab, and RESET armed
+            Y.Credits = 26000; Y.Ore = 900; Y.Salvage = 700;
+            Key(global::Godot.Key.B); await W(0.3);
+            var bp = N<BasePanel>().First();
+            foreach (var tab in new[] { "MINERS", "SALVAGERS", "HAULER", "REFIT" })
+            {
+                var tb = N<Button>(bp).First(b => b.Name == "Tab_" + tab);
+                tb.ButtonPressed = true; await W(0.25); await Snap("20_base_" + tab.ToLower());
+            }
+            N<Button>(bp).First(b => b.Name == "Reset").EmitSignal(BaseButton.SignalName.Pressed); await W(0.2);
+            await Snap("20_base_refit_armed");
+            Key(global::Godot.Key.B); await W(0.3);
+
+            // K window: waiting for a key, then a reserved key refused
+            await Class(ShipClass.Battleship);
+            Key(global::Godot.Key.K); await W(0.3);
+            var kw = N<StatsWindow>().First(); kw.ShowPane(true); kw.StartCapture("missile"); await W(0.2);
+            await Snap("21_k_capture");
+            Key(global::Godot.Key.W); await W(0.2); await Snap("21b_k_reserved_refused");
+            Key(global::Godot.Key.K); await W(0.2);
+
+            // battleship: missile in flight and landing; the bar with an empty magazine, PD, reload
+            sel.SetValue(hub, d1);
+            await Frame(d1.Position + new Vector2(-120, 520), 1.3f, false);
+            Key(global::Godot.Key.F); await W(1.4); await Snap("22_missile_in_flight");
+            var launchSpot = Me().Position;
+            await Frame(d1.Position + new Vector2(0, 110), 1.3f);          // watch the target, not the launcher
+            double t0 = d1.Total;
+            for (int i = 0; i < 900 && d1.Total == t0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await W(0.08); await Snap("22b_missile_impact");
+            await Frame(launchSpot, 1.3f, false);
+            await W(0.7); Key(global::Godot.Key.F); await W(0.3); Key(global::Godot.Key.Q); await W(0.4);
+            await Snap("23_bar_battleship_empty_pd");
+            Key(global::Godot.Key.R); await W(3.0); await Snap("23b_bar_reloading");
+            hub.BeginPlacement("TEST", _ => { });
+            Input.WarpMouse(GetViewport().GetFinalTransform() * (GetViewport().GetCanvasTransform() * (Me().Position + new Vector2(160, -120))));
+            await W(0.3); await Snap("24_placement_ring");
+            Key(global::Godot.Key.Escape); await W(0.2);
+
+            // carrier: out of range, torpedoes while closing, fighters resting over the carrier
+            await Class(ShipClass.Carrier);
+            await Frame(new Vector2(-2600, 2000), 0.9f, false);
+            sel.SetValue(hub, d1); await W(0.3); await Snap("25_bar_out_of_range");
+            await Frame(d1.Position + new Vector2(-560, 360), 1.0f, false);
+            Key(global::Godot.Key.F);
+            for (int i = 0; i < 1500 && !N<Torpedo>().Any(); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await W(0.5); await Snap("26_torpedoes_launching");
+            Key(global::Godot.Key.Space);
+            // Resting also covers the flight home; wait for one actually sitting on the carrier
+            var restF = typeof(Wing).GetField("_rest", BindingFlags.NonPublic | BindingFlags.Instance);
+            for (int i = 0; i < 3000 && !N<Wing>().Any(w => (double)restF.GetValue(w) > 0.5); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            cam.Zoom = new Vector2(2.2f, 2.2f); await W(0.6); await Snap("27_fighters_resting");
+            cam.Zoom = new Vector2(0.9f, 0.9f);
+
+            // the hauler, stage by stage (long waits skipped by moving it along)
+            var h = Y.Hauler; h.ResetToPad(); Y.Ore = 5000; Y.Salvage = 5000;
+            for (int i = 0; i < 1200 && !h.CanDispatch; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await Frame(Hub.HaulerPad + new Vector2(0, -20), 2.0f);
+            h.Dispatch(); await W(0.7); await Snap("28_hauler_lifting");
+            for (int i = 0; i < 600 && h.State != Hauler.St.Departing; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            h.Position = new Vector2(700, Hub.LaneY); await Frame(h.Position, 1.2f); await Snap("28b_hauler_departing");
+            h.Position = new Vector2(Hub.PortalPos.X - 3, Hub.LaneY);
+            for (int i = 0; i < 1200 && h.State != Hauler.St.Away; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await Frame(Hub.PortalPos, 1.2f); h.T = Economy.HaulerAway - 0.3;
+            for (int i = 0; i < 600 && h.State != Hauler.St.Arriving; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await W(0.25); await Snap("28c_hauler_arriving");
+            for (int i = 0; i < 600 && h.State != Hauler.St.Returning; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            h.Position = new Vector2(Hub.HaulerPad.X + 3, Hub.LaneY);
+            for (int i = 0; i < 600 && h.State != Hauler.St.Landing; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await Frame(Hub.HaulerPad + new Vector2(0, -20), 2.0f); await Snap("28d_hauler_landing");
+            await W(0.5); await Snap("28e_hauler_turning_while_landing");      // about half way down, half way round
+            Me().Visible = true;
+        }
+        // the arena, last: the trip replaces the hub scene, so nothing may follow it that
+        // holds an old reference. The boss, its death-beam telegraph, its shockwave telegraph.
+        {
+            H.EnterSector(Hub.SectorKind.Arena); await W(1.5);
+            var boss = H.Boss; var ash = H.GetNode<PlayerShip>("Ship_1");
+            ash.Position = boss.Position + new Vector2(120, 560); ash.Velocity = Vector2.Zero; ash.Rotation = 0f;
+            GetViewport().GetCamera2D().Zoom = new Vector2(0.62f, 0.62f); await W(1.5);
+            for (int i = 0; i < 60 * 14 && !N<Telegraph>().Any(t => t.Line); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await W(1.0); await Snap("38_arena_beam_telegraph");
+            if (GodotObject.IsInstanceValid(H.Boss)) { H.Boss.TakeDamage(90); await W(0.09); await Snap("42_boss_bar_chunk"); }
+            for (int i = 0; i < 60 * 16 && !N<Telegraph>().Any(t => !t.Line); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await W(0.9); await Snap("39_arena_shockwave_telegraph");
+        }
+        GD.Print("SWEEP DONE");          // the runner fails without it: a cut-off sweep must never pass as clean
+        GetTree().Quit();
+    }
+}
