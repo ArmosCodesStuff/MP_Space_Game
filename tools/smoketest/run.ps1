@@ -14,7 +14,10 @@
 #     --line-buffered plumbing was protecting.
 # SmokeTest.cs.txt itself needs no changes: it contains no POSIX paths.
 
-param([string]$Godot)
+# -Solo runs ONLY the single-player scenario: one engine instead of six, for the loop while a
+# change is being built. It is a PARTIAL run and says so in every line it prints, because the one
+# thing it cannot cover is the thing this harness exists for -- host and guests disagreeing.
+param([string]$Godot, [switch]$Solo)
 
 $ErrorActionPreference = 'Stop'
 
@@ -126,26 +129,33 @@ try {
   # fixed 60 fps: identical frame timing every run, so the DPS checks are exact
   $all += Complete-Run (Start-Run @('--headless','--fixed-fps','60','--path',$W,'--','solo') 'solo' 1200) '[solo] '
 
-  $host1 = Start-Run @('--headless','--path',$W,'--','host')   'host'   60
-  Start-Sleep -Milliseconds 500
-  $g2 = Start-Run @('--headless','--path',$W,'--','guest2') 'guest2' 60
-  $g1 = Start-Run @('--headless','--path',$W,'--','guest')  'guest'  60
-  $all += Complete-Run $g1    '[guest] '
-  $all += Complete-Run $host1 '[host]  '
-  $all += Complete-Run $g2    '[third] '
+  $want = 1
+  if (-not $Solo) {
+    $host1 = Start-Run @('--headless','--path',$W,'--','host')   'host'   60
+    Start-Sleep -Milliseconds 500
+    $g2 = Start-Run @('--headless','--path',$W,'--','guest2') 'guest2' 60
+    $g1 = Start-Run @('--headless','--path',$W,'--','guest')  'guest'  60
+    $all += Complete-Run $g1    '[guest] '
+    $all += Complete-Run $host1 '[host]  '
+    $all += Complete-Run $g2    '[third] '
 
-  # the dedicated two-player arena run: after the three-player run, on its own port
-  $ah = Start-Run @('--headless','--path',$W,'--','ahost')  'ahost'  60
-  Start-Sleep -Milliseconds 500
-  $ag = Start-Run @('--headless','--path',$W,'--','aguest') 'aguest' 60
-  $all += Complete-Run $ag '[aguest]'
-  $all += Complete-Run $ah '[ahost] '
+    # the dedicated two-player arena run: after the three-player run, on its own port
+    $ah = Start-Run @('--headless','--path',$W,'--','ahost')  'ahost'  60
+    Start-Sleep -Milliseconds 500
+    $ag = Start-Run @('--headless','--path',$W,'--','aguest') 'aguest' 60
+    $all += Complete-Run $ag '[aguest]'
+    $all += Complete-Run $ah '[ahost] '
+    $want = 6
+  }
 
   $all | ForEach-Object { Write-Host $_ }
   $bad = @($all | Where-Object { $_ -cmatch 'FAIL|Exception|ERROR' }).Count
   $done = @($all | Where-Object { $_ -cmatch 'DONE' }).Count
-  if ($bad -gt 0 -or $done -ne 6) {
-    Write-Host "SMOKE TEST FAILED ($bad problems, $done/6 runs finished)"; exit 1
+  # "SOLO ONLY" in the verdict, always. A partial run that prints the same words as a full one is
+  # a partial run that will be mistaken for the bar.
+  $what = if ($Solo) { 'SMOKE TEST (SOLO ONLY)' } else { 'SMOKE TEST' }
+  if ($bad -gt 0 -or $done -ne $want) {
+    Write-Host "$what FAILED ($bad problems, $done/$want runs finished)"; exit 1
   }
-  Write-Host "SMOKE TEST PASSED"
+  Write-Host "$what PASSED"
 } finally { Pop-Location }

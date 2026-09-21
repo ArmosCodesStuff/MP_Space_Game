@@ -7,9 +7,20 @@
 # then prints a single verdict. Nothing needs to be passed in: the Godot binary is resolved by
 # tools\find-godot.ps1 and GodotSharp.dll is fetched from the NuGet cache if it is missing.
 #
-#   -Quick   skip the three smoke runs and the sweep (static checks only, about a minute)
+# THREE GEARS. Use the smallest one that can see the change you just made:
+#
+#   -Quick   static only: typecheck, build, analysers, cross-reference.   ~1 min
+#            Enough for a refactor, a rename, a comment, a doc edit.
+#   -Fast    static + ONE solo smoke run + the sweep.                     ~3 min
+#            The loop while a change is being built. One engine, not six: it cannot see a
+#            host and a guest disagreeing, so it is never the last word.
+#   (none)   the bar: static + three full smoke runs + the sweep + integrity.  ~12 min
+#            Run before every VERIFIED commit, and only that verdict counts as verified.
+#
+#   -Update  regenerate version\CODE_SNAPSHOT.txt and version\MANIFEST.sha256 first, in that
+#            order, so the integrity step checks the change rather than the last one.
 #   -Godot   an explicit engine path, if the search picks the wrong one
-param([switch]$Quick, [string]$Godot)
+param([switch]$Quick, [switch]$Fast, [switch]$Update, [string]$Godot)
 
 $ErrorActionPreference = 'Continue'
 Set-Location $PSScriptRoot
@@ -52,23 +63,31 @@ if (-not $Quick) {
     $engine = & 'tools\find-godot.ps1' -Godot $Godot
     if ($LASTEXITCODE -ne 0) { Write-Host "cannot run the engine checks without Godot"; exit 2 }
 
-    Step 'smoke test x3' {
+    # One solo run in -Fast, three full runs otherwise. The protocol asks for three in a row
+    # because one run has hidden a flaky check before.
+    $runs = if ($Fast) { 1 } else { 3 }
+    # Built as one explicit list. Splatting an array into `& powershell -File ...` is where the
+    # first attempt went wrong: -File takes positional strings and the switch arrived as a value.
+    $smokeArgs = @('-NoProfile','-ExecutionPolicy','Bypass','-File','tools\\smoketest\\run.ps1')
+    if ($Fast) { $smokeArgs += '-Solo' }
+    Step $(if ($Fast) { 'smoke test (solo only)' } else { 'smoke test x3' }) {
         $allOk = $true
-        foreach ($i in 1..3) {
-            $o = & powershell -NoProfile -ExecutionPolicy Bypass -File 'tools\smoketest\run.ps1' -Godot $engine 2>&1
+        foreach ($i in 1..$runs) {
+            $o = & powershell @smokeArgs -Godot $engine 2>&1
             $pass = @($o | Where-Object { $_ -cmatch 'PASS ' }).Count
             $done = @($o | Where-Object { $_ -cmatch 'DONE' }).Count
             # Not the runner's own verdict line: "SMOKE TEST FAILED (2 problems...)" contains
             # FAIL and would be counted as a problem on top of the problems it is reporting.
-            $bad  = @($o | Where-Object { $_ -cmatch 'FAIL|Exception|ERROR' -and $_ -notmatch 'SMOKE TEST (FAILED|PASSED)' })
+            $bad  = @($o | Where-Object { $_ -cmatch 'FAIL|Exception|ERROR' -and $_ -notmatch 'SMOKE TEST' })
             # The two network checks assert the sandbox's lack of a router and internet and
             # cannot pass on a real machine. See DESIGN.md -> Smoke test. Everything else must.
             $env  = @($bad | Where-Object { $_ -match 'no UPnP router|no router or internet here' }).Count
             $real = $bad.Count - $env
-            Write-Host ("  run {0}: {1} pass, {2}/6 runs, {3} real problem(s){4}" -f $i, $pass, $done, $real,
+            $want = if ($Fast) { 1 } else { 6 }
+            Write-Host ("  run {0}: {1} pass, {2}/{3} runs, {4} real problem(s){5}" -f $i, $pass, $done, $want, $real,
                         $(if ($env) { " (+$env environmental, expected off a sandbox)" } else { '' }))
             $bad | Where-Object { $_ -notmatch 'no UPnP router|no router or internet here' } | ForEach-Object { Write-Host "    $_" }
-            if ($real -ne 0 -or $done -ne 6) { $allOk = $false }
+            if ($real -ne 0 -or $done -ne $want) { $allOk = $false }
         }
         $allOk
     }
@@ -77,6 +96,15 @@ if (-not $Quick) {
         $o = & powershell -NoProfile -ExecutionPolicy Bypass -File 'tools\screens\run.ps1' -Godot $engine 2>&1
         $o | Where-Object { $_ -cmatch '^SWEEP|^frames' } | ForEach-Object { Write-Host "  $_" }
         ($o -join "`n") -match 'SWEEP DONE' -and ($o -join "`n") -match 'LINT: 0'
+    }
+}
+
+if ($Update) {
+    Step 'snapshot + manifest' {
+        $a = & powershell -NoProfile -ExecutionPolicy Bypass -File 'tools\snapshot.ps1' 2>&1
+        $b = & powershell -NoProfile -ExecutionPolicy Bypass -File 'tools\manifest.ps1' 2>&1
+        ($a + $b) | ForEach-Object { Write-Host "  $_" }
+        ($b -join "`n") -match ', 0 not verifying'
     }
 }
 

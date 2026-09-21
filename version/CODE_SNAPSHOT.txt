@@ -1,9 +1,9 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-20 19:42 at git commit ab6710d: typecheck clean, dotnet build 0 warnings,
+// Taken 2026-09-20 20:03 at git commit 16fa71b: typecheck clean, dotnet build 0 warnings,
 //   0 analyser findings, 0 unused members; smoke test 3/3 runs at 435 checks on Windows
 //   (437 in a sandbox with no router and no internet); 67-frame UI sweep complete, 0 lint.
-// 68 files, 12199 lines. Code only: sprites, sounds and docs are in the zip.
+// 69 files, 12279 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -15,7 +15,7 @@
 //   CharacterSelect.tscn                            12 lines   sha256 bde251d0afb9
 //   Hub.tscn                                        10 lines   sha256 3a99e0df7b39
 //   MainMenu.tscn                                    6 lines   sha256 8a8dbe40f248
-//   verify.ps1                                      98 lines   sha256 841061643871
+//   verify.ps1                                     126 lines   sha256 3aa7442a0c91
 //   scripts/Abilities.cs                           141 lines   sha256 ecefda83d48b
 //   scripts/AbilityBar.cs                          116 lines   sha256 b1c0a50dd20b
 //   scripts/Autopilot.cs                            40 lines   sha256 807538219f53
@@ -71,10 +71,11 @@
 //   tools/analyse/run.sh                            16 lines   sha256 e6f2cd50f0c4
 //   tools/analyse/xref.py                           19 lines   sha256 9359eb94c161
 //   tools/find-godot.ps1                            53 lines   sha256 fabe4c75faae
+//   tools/manifest.ps1                              42 lines   sha256 2bd8e7cbf24b
 //   tools/screens/run.ps1                          114 lines   sha256 0ca925a64867
 //   tools/screens/run.sh                            42 lines   sha256 73a5b3c63476
 //   tools/screens/Shots.cs.txt                     458 lines   sha256 43a79314bd60
-//   tools/smoketest/run.ps1                        151 lines   sha256 4eed3fc767ae
+//   tools/smoketest/run.ps1                        161 lines   sha256 d5c27af2b535
 //   tools/smoketest/run.sh                          57 lines   sha256 568b677787fd
 //   tools/smoketest/SmokeTest.cs.txt              2014 lines   sha256 6bfc2f6a0310
 //   tools/snapshot.ps1                              95 lines   sha256 d6d85575ba26
@@ -187,7 +188,7 @@ script = ExtResource("1_menu")
 
 //==============================================================================
 // FILE: verify.ps1
-// 98 lines   sha256 841061643871
+// 126 lines   sha256 3aa7442a0c91
 //==============================================================================
 # The whole bar, in one command:
 #
@@ -198,9 +199,20 @@ script = ExtResource("1_menu")
 # then prints a single verdict. Nothing needs to be passed in: the Godot binary is resolved by
 # tools\find-godot.ps1 and GodotSharp.dll is fetched from the NuGet cache if it is missing.
 #
-#   -Quick   skip the three smoke runs and the sweep (static checks only, about a minute)
+# THREE GEARS. Use the smallest one that can see the change you just made:
+#
+#   -Quick   static only: typecheck, build, analysers, cross-reference.   ~1 min
+#            Enough for a refactor, a rename, a comment, a doc edit.
+#   -Fast    static + ONE solo smoke run + the sweep.                     ~3 min
+#            The loop while a change is being built. One engine, not six: it cannot see a
+#            host and a guest disagreeing, so it is never the last word.
+#   (none)   the bar: static + three full smoke runs + the sweep + integrity.  ~12 min
+#            Run before every VERIFIED commit, and only that verdict counts as verified.
+#
+#   -Update  regenerate version\CODE_SNAPSHOT.txt and version\MANIFEST.sha256 first, in that
+#            order, so the integrity step checks the change rather than the last one.
 #   -Godot   an explicit engine path, if the search picks the wrong one
-param([switch]$Quick, [string]$Godot)
+param([switch]$Quick, [switch]$Fast, [switch]$Update, [string]$Godot)
 
 $ErrorActionPreference = 'Continue'
 Set-Location $PSScriptRoot
@@ -243,23 +255,31 @@ if (-not $Quick) {
     $engine = & 'tools\find-godot.ps1' -Godot $Godot
     if ($LASTEXITCODE -ne 0) { Write-Host "cannot run the engine checks without Godot"; exit 2 }
 
-    Step 'smoke test x3' {
+    # One solo run in -Fast, three full runs otherwise. The protocol asks for three in a row
+    # because one run has hidden a flaky check before.
+    $runs = if ($Fast) { 1 } else { 3 }
+    # Built as one explicit list. Splatting an array into `& powershell -File ...` is where the
+    # first attempt went wrong: -File takes positional strings and the switch arrived as a value.
+    $smokeArgs = @('-NoProfile','-ExecutionPolicy','Bypass','-File','tools\\smoketest\\run.ps1')
+    if ($Fast) { $smokeArgs += '-Solo' }
+    Step $(if ($Fast) { 'smoke test (solo only)' } else { 'smoke test x3' }) {
         $allOk = $true
-        foreach ($i in 1..3) {
-            $o = & powershell -NoProfile -ExecutionPolicy Bypass -File 'tools\smoketest\run.ps1' -Godot $engine 2>&1
+        foreach ($i in 1..$runs) {
+            $o = & powershell @smokeArgs -Godot $engine 2>&1
             $pass = @($o | Where-Object { $_ -cmatch 'PASS ' }).Count
             $done = @($o | Where-Object { $_ -cmatch 'DONE' }).Count
             # Not the runner's own verdict line: "SMOKE TEST FAILED (2 problems...)" contains
             # FAIL and would be counted as a problem on top of the problems it is reporting.
-            $bad  = @($o | Where-Object { $_ -cmatch 'FAIL|Exception|ERROR' -and $_ -notmatch 'SMOKE TEST (FAILED|PASSED)' })
+            $bad  = @($o | Where-Object { $_ -cmatch 'FAIL|Exception|ERROR' -and $_ -notmatch 'SMOKE TEST' })
             # The two network checks assert the sandbox's lack of a router and internet and
             # cannot pass on a real machine. See DESIGN.md -> Smoke test. Everything else must.
             $env  = @($bad | Where-Object { $_ -match 'no UPnP router|no router or internet here' }).Count
             $real = $bad.Count - $env
-            Write-Host ("  run {0}: {1} pass, {2}/6 runs, {3} real problem(s){4}" -f $i, $pass, $done, $real,
+            $want = if ($Fast) { 1 } else { 6 }
+            Write-Host ("  run {0}: {1} pass, {2}/{3} runs, {4} real problem(s){5}" -f $i, $pass, $done, $want, $real,
                         $(if ($env) { " (+$env environmental, expected off a sandbox)" } else { '' }))
             $bad | Where-Object { $_ -notmatch 'no UPnP router|no router or internet here' } | ForEach-Object { Write-Host "    $_" }
-            if ($real -ne 0 -or $done -ne 6) { $allOk = $false }
+            if ($real -ne 0 -or $done -ne $want) { $allOk = $false }
         }
         $allOk
     }
@@ -268,6 +288,15 @@ if (-not $Quick) {
         $o = & powershell -NoProfile -ExecutionPolicy Bypass -File 'tools\screens\run.ps1' -Godot $engine 2>&1
         $o | Where-Object { $_ -cmatch '^SWEEP|^frames' } | ForEach-Object { Write-Host "  $_" }
         ($o -join "`n") -match 'SWEEP DONE' -and ($o -join "`n") -match 'LINT: 0'
+    }
+}
+
+if ($Update) {
+    Step 'snapshot + manifest' {
+        $a = & powershell -NoProfile -ExecutionPolicy Bypass -File 'tools\snapshot.ps1' 2>&1
+        $b = & powershell -NoProfile -ExecutionPolicy Bypass -File 'tools\manifest.ps1' 2>&1
+        ($a + $b) | ForEach-Object { Write-Host "  $_" }
+        ($b -join "`n") -match ', 0 not verifying'
     }
 }
 
@@ -9654,6 +9683,53 @@ Write-Host "    `$Godot = 'C:\path\to\Godot_v4.7.2-stable_mono_win64.exe'"
 exit 2
 
 //==============================================================================
+// FILE: tools/manifest.ps1
+// 42 lines   sha256 2bd8e7cbf24b
+//==============================================================================
+# Regenerate version/MANIFEST.sha256 -- one SHA-256 per tracked file, everything except
+# version/ itself (the snapshot and this manifest are OUTPUTS, and hashing a file into itself
+# cannot work).
+#
+#     powershell -ExecutionPolicy Bypass -File tools\manifest.ps1
+#
+# RUN IT LAST, after the final edit of a change, and after tools\snapshot.ps1. A manifest
+# generated before a later doc edit fails its own integrity check in the next session, which
+# has happened, and reads as tampering rather than as a stale file.
+#
+# It lists untracked files too, so a brand-new file is covered on the commit that adds it
+# rather than the one after -- the same reason snapshot.ps1 does.
+#
+# Hashes come from Get-FileHash rather than the shell's sha256sum: the Git for Windows build
+# has no -T, and a 128-path command line is close enough to the limit that it is not worth
+# finding out where the limit is. The FORMAT is sha256sum's -- lower-case hash, two spaces,
+# forward slashes -- because `sha256sum -c` is what checks it, here and on Linux.
+$ErrorActionPreference = 'Stop'
+Set-Location (Join-Path $PSScriptRoot '..')
+$env:Path += ';C:\Program Files\Git\cmd'
+
+$files = @(& git ls-files --cached --others --exclude-standard) |
+         Where-Object { $_ -and $_ -notlike 'version/*' } |
+         Sort-Object -Unique
+
+$lines = foreach ($f in $files) {
+    $win = $f -replace '/', '\'
+    if (-not (Test-Path $win)) { throw "listed but missing: $f" }
+    '{0}  {1}' -f (Get-FileHash $win -Algorithm SHA256).Hash.ToLower(), $f
+}
+# No BOM and LF endings: a BOM makes the first line unparseable to sha256sum -c.
+[System.IO.File]::WriteAllText((Join-Path (Get-Location) 'version\MANIFEST.sha256'),
+                               (($lines -join "`n") + "`n"),
+                               (New-Object System.Text.UTF8Encoding $false))
+
+$sha = 'C:\Program Files\Git\usr\bin\sha256sum.exe'
+if (-not (Test-Path $sha)) { Write-Host ("manifest: {0} files written; sha256sum not found, not verified" -f $files.Count); exit 0 }
+$check = & $sha -c 'version\MANIFEST.sha256'
+$bad = @($check | Where-Object { $_ -notmatch ': OK$' })
+Write-Host ("manifest: {0} files, {1} not verifying" -f $files.Count, $bad.Count)
+$bad | ForEach-Object { Write-Host "  $_" }
+if ($bad.Count -ne 0) { exit 1 }
+
+//==============================================================================
 // FILE: tools/screens/run.ps1
 // 114 lines   sha256 0ca925a64867
 //==============================================================================
@@ -10284,7 +10360,7 @@ public partial class _Shots : Node
 
 //==============================================================================
 // FILE: tools/smoketest/run.ps1
-// 151 lines   sha256 4eed3fc767ae
+// 161 lines   sha256 d5c27af2b535
 //==============================================================================
 # Windows port of run.sh -- headless runtime check: boots the REAL engine, drives real
 # input, and runs a host and TWO guests (three players) against each other over localhost.
@@ -10302,7 +10378,10 @@ public partial class _Shots : Node
 #     --line-buffered plumbing was protecting.
 # SmokeTest.cs.txt itself needs no changes: it contains no POSIX paths.
 
-param([string]$Godot)
+# -Solo runs ONLY the single-player scenario: one engine instead of six, for the loop while a
+# change is being built. It is a PARTIAL run and says so in every line it prints, because the one
+# thing it cannot cover is the thing this harness exists for -- host and guests disagreeing.
+param([string]$Godot, [switch]$Solo)
 
 $ErrorActionPreference = 'Stop'
 
@@ -10414,28 +10493,35 @@ try {
   # fixed 60 fps: identical frame timing every run, so the DPS checks are exact
   $all += Complete-Run (Start-Run @('--headless','--fixed-fps','60','--path',$W,'--','solo') 'solo' 1200) '[solo] '
 
-  $host1 = Start-Run @('--headless','--path',$W,'--','host')   'host'   60
-  Start-Sleep -Milliseconds 500
-  $g2 = Start-Run @('--headless','--path',$W,'--','guest2') 'guest2' 60
-  $g1 = Start-Run @('--headless','--path',$W,'--','guest')  'guest'  60
-  $all += Complete-Run $g1    '[guest] '
-  $all += Complete-Run $host1 '[host]  '
-  $all += Complete-Run $g2    '[third] '
+  $want = 1
+  if (-not $Solo) {
+    $host1 = Start-Run @('--headless','--path',$W,'--','host')   'host'   60
+    Start-Sleep -Milliseconds 500
+    $g2 = Start-Run @('--headless','--path',$W,'--','guest2') 'guest2' 60
+    $g1 = Start-Run @('--headless','--path',$W,'--','guest')  'guest'  60
+    $all += Complete-Run $g1    '[guest] '
+    $all += Complete-Run $host1 '[host]  '
+    $all += Complete-Run $g2    '[third] '
 
-  # the dedicated two-player arena run: after the three-player run, on its own port
-  $ah = Start-Run @('--headless','--path',$W,'--','ahost')  'ahost'  60
-  Start-Sleep -Milliseconds 500
-  $ag = Start-Run @('--headless','--path',$W,'--','aguest') 'aguest' 60
-  $all += Complete-Run $ag '[aguest]'
-  $all += Complete-Run $ah '[ahost] '
+    # the dedicated two-player arena run: after the three-player run, on its own port
+    $ah = Start-Run @('--headless','--path',$W,'--','ahost')  'ahost'  60
+    Start-Sleep -Milliseconds 500
+    $ag = Start-Run @('--headless','--path',$W,'--','aguest') 'aguest' 60
+    $all += Complete-Run $ag '[aguest]'
+    $all += Complete-Run $ah '[ahost] '
+    $want = 6
+  }
 
   $all | ForEach-Object { Write-Host $_ }
   $bad = @($all | Where-Object { $_ -cmatch 'FAIL|Exception|ERROR' }).Count
   $done = @($all | Where-Object { $_ -cmatch 'DONE' }).Count
-  if ($bad -gt 0 -or $done -ne 6) {
-    Write-Host "SMOKE TEST FAILED ($bad problems, $done/6 runs finished)"; exit 1
+  # "SOLO ONLY" in the verdict, always. A partial run that prints the same words as a full one is
+  # a partial run that will be mistaken for the bar.
+  $what = if ($Solo) { 'SMOKE TEST (SOLO ONLY)' } else { 'SMOKE TEST' }
+  if ($bad -gt 0 -or $done -ne $want) {
+    Write-Host "$what FAILED ($bad problems, $done/$want runs finished)"; exit 1
   }
-  Write-Host "SMOKE TEST PASSED"
+  Write-Host "$what PASSED"
 } finally { Pop-Location }
 
 //==============================================================================
