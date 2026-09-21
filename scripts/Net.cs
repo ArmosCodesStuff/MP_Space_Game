@@ -80,9 +80,45 @@ public partial class Net : Node
         StartOffline();
     }
 
+    // ── the build handshake ──────────────────────────────────────────────────
+    // WE VERSION SAVE FILES BUT NOT SESSIONS, and a session is where two builds can actually
+    // disagree. A guest on an older build has different balance numbers, different stats, and
+    // possibly different RPC signatures; it joins, it plays, and every number it sees is a
+    // quiet lie. The host decides -- it owns the world, so it owns who is in it.
+    //
+    // KEEP THIS SIGNATURE STABLE. It is the one RPC that has to work between builds that
+    // disagree about everything else; change its arguments and the handshake itself becomes the
+    // thing that cannot be negotiated.
+    public static bool Accepts(int build) => build == Game.Version;
+
+    [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void NetHello(int build)
+    {
+        if (!IsHost) return;
+        int who = Multiplayer.GetRemoteSenderId();
+        if (Accepts(build)) return;
+        Say($"Refused player {who}: build {build}, this is build {Game.Version}.");
+        RpcId(who, nameof(NetRefused), Game.Version);
+        // Deferred: disconnecting inside the handler for a packet from that same peer is asking
+        // the multiplayer layer to tear down what it is currently reading.
+        CallDeferred(nameof(Drop), who);
+    }
+
+    private void Drop(int who) => Multiplayer.MultiplayerPeer?.DisconnectPeer(who);
+
+    [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void NetRefused(int hostBuild)
+    {
+        if (Multiplayer.GetRemoteSenderId() != 1) return;          // only the host refuses anyone
+        StartOffline($"That host is running build {hostBuild}; this is build {Game.Version}. Playing offline.");
+    }
+
     private void OnConnected()
     {
         _localId = Multiplayer.GetUniqueId();
+        // Before anything else this peer says: if the builds disagree, nothing after it means
+        // what either side thinks it means.
+        RpcId(1, nameof(NetHello), Game.Version);
         Players.TryAdd(_localId, new PlayerInfo { Id = _localId });
         Say($"Connected as player {_localId}.");
         SessionChanged?.Invoke();
@@ -98,7 +134,11 @@ public partial class Net : Node
         // whose character stops being in a session. A scene change saves on its way out, but a
         // session can end without one: press PLAY OFFLINE and nothing moves but the socket.
         // Saving here is cheap and it is the only point every one of those routes passes through.
-        SaveLocalCharacter();
+        //
+        // ONLY WHEN THERE WAS A SESSION TO LEAVE. StartOffline also runs at boot and on a failed
+        // Host()/Join(), where nothing has left anything -- and saving there wrote a freshly
+        // built default base over a good file. Found by a check that had been passing.
+        if (IsOnline) SaveLocalCharacter();
         Shutdown();
         _isHost = true; _localId = 1;
         Players.Clear(); Players[1] = new PlayerInfo { Id = 1 };

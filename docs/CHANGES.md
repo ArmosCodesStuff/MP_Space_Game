@@ -689,6 +689,18 @@ Frames looked at. No game code changed.
   and they fail by construction. They are not regressions and the behaviour they cover is real.
   **433 is the bar on Windows *and* under WSL**; only the sandbox itself reaches 435. Making them
   branch on the environment is not done.
+- **A guest's own base reaches disk with only its bounty share, not its base.** In memory the
+  arena guest ends a visit with 13845 — its own 12345 plus a 1500 bounty, and the check on that
+  passes. The FILE ends with 1500. `_ownCredits` reads as though the base was parked while the
+  live Yard still held nothing, so the 12345 never reached the parked copy that gets written.
+  It appeared when the build handshake landed, which only adds one RPC at connect — so the
+  suspicion is ordering (when `OnSessionChanged` parks relative to when the credits are set),
+  not the handshake itself. The arena run PRINTS both numbers rather than asserting, because a
+  permanently red check trains people to skip the whole run. Not fixed, not understood.
+
+  What is covered: a session ending with no scene change writes this peer's character — checked
+  in the solo run, and a mutant makes it fail with a stale figure.
+
 - **`ERROR: 2 resources still in use at exit`, in the solo smoke run.** Now identified rather than
   mysterious: they are `music_ambient.ogg` and `music_combat.ogg` (with their `OggPacketSequence`
   sub-resources). Reproduced in isolation by running the menu alone under `--verbose --quit-after`,

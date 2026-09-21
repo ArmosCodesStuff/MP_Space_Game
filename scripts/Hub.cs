@@ -721,7 +721,11 @@ public partial class Hub : Node2D
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
     private void NetRaiders(int[] ids, Vector2[] pos, float[] rot, double[] hp, Vector2[] tether, int[] flags)
     {
-        for (int i = 0; i < ids.Length; i++)
+        // Shortest array wins. NetHostState already guards its wing arrays this way; this one
+        // indexed five arrays off the length of the first, so one short packet was an exception
+        // on a guest rather than a frame of stale raiders.
+        int n = Mathf.Min(ids.Length, Mathf.Min(pos.Length, Mathf.Min(rot.Length, Mathf.Min(hp.Length, Mathf.Min(tether.Length, flags.Length)))));
+        for (int i = 0; i < n; i++)
         {
             var r = Raiders.FirstOrDefault(x => x.NetId == ids[i]);
             r?.SetNet(pos[i], rot[i], hp[i], float.IsNaN(tether[i].X) ? null : tether[i], flags[i]);
@@ -1061,7 +1065,8 @@ public partial class Hub : Node2D
         => SpawnTorpedo(from, dir, speed, range, 0, true, target, turn, heavy, hostile, null, id, null, size);
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
-    private void NetFlash(Vector2 a, Vector2 b, Color c, int snd) => AddFlash(a, b, c, (ShotSound)snd);
+    private void NetFlash(Vector2 a, Vector2 b, Color c, int snd)
+        => AddFlash(a, b, c, System.Enum.IsDefined(typeof(ShotSound), snd) ? (ShotSound)snd : ShotSound.Light);
     private void AddFlash(Vector2 a, Vector2 b, Color c, ShotSound snd) { _flashes.Add((a, b, c, 0.10)); Sfx.Laser(a, b, snd); }
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
