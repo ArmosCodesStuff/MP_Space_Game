@@ -203,6 +203,36 @@ reachable, which is fine: both harnesses build from the `nupkgs` folder that shi
 
 ## Unreleased
 
+### Plug and play: the router was opening the port and the game said it had not
+
+**Checked:** typecheck 0; build 0 warnings; analysers 0; xref 0 unused; solo smoke 419 pass.
+Mutant: removing the new branch puts the old wrong answer back.
+
+Four separate faults, any one of which produces "your router did not open the port":
+
+- **The device filter excluded working routers.** `Discover(2000, 2, "InternetGatewayDevice")`
+  keeps only replies whose search target *contains* that string, while the search underneath tries
+  several targets in turn and stops at the first that answers -- and only the first of those
+  contains it. A router answering on any of the others returned SUCCESS with an empty device list,
+  so `GetGateway()` came back null. The filter is gone; `IsValidGateway()` was always the real test.
+- **The search went out of the wrong adapter.** Nothing pinned the interface, so Windows chose --
+  and this machine has WSL, and many have Hyper-V or Tailscale. `DiscoverMulticastIf` is set to the
+  LAN address now.
+- **One lost packet was permanent.** Discovery is a single unacknowledged multicast datagram. Three
+  passes now, on the background thread, so LAN hosting still comes up instantly.
+- **The status inferred the mapping from the wrong thing.** `Describe` was handed
+  `mapped: _routerExt.Length > 0` -- whether the router named its outside address, not whether the
+  port was opened. A router that opened the port and answered nothing to `QueryExternalAddress` was
+  reported as refusing, **and the player was told to forward a port that was already forwarded**.
+  The real `AddPortMapping` result is carried through now.
+
+Also: a refused mapping retries with a finite lease and then after clearing our own stale one (a
+session killed rather than closed leaves a permanent lease behind); the status says what the router
+actually answered instead of a fixed sentence; carrier-grade NAT is detected on the *public*
+address, so those players are no longer sent to forward a port that cannot work; and the firewall
+is named, because a perfect mapping still yields a dead port if the first-run prompt was refused.
+
+
 ### The title screen's heavies wear the raiders' red
 
 They drew in the art's bare grey, which read as a neutral hull rather than as something shooting at

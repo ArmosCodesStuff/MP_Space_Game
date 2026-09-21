@@ -159,17 +159,55 @@ public partial class Net : Node
     public string LanAddress { get; private set; } = "";
     private Upnp _upnp; private int _mappedPort, _hostGen;
 
-    private void OpenRouterPort(int port, int gen)
+    private void OpenRouterPort(int port, int gen, string lanIp)
     {
         string ext = "", why = ""; Upnp mapped = null;
         try
         {
-            var u = new Upnp();
-            int r = u.Discover(2000, 2, "InternetGatewayDevice");
-            var gw = u.GetGateway();
-            if (r != (int)Upnp.UpnpResult.Success || gw == null || !gw.IsValidGateway()) why = "no-upnp";
-            else if (u.AddPortMapping(port, port, "Warships", "UDP", 0) != (int)Upnp.UpnpResult.Success) why = "refused";
-            else { ext = u.QueryExternalAddress(); mapped = u; }
+            Upnp u = null; UpnpDevice gw = null; int r = -1;
+            // THREE PASSES. SSDP discovery is one unacknowledged multicast datagram per attempt --
+            // one frame lost on Wi-Fi and the answer is "your router has no UPnP" for the whole
+            // session. Cheap to repeat, and it happens on a background thread while LAN hosting is
+            // already up, so nobody waits for it.
+            for (int attempt = 0; attempt < 3 && (gw == null || !gw.IsValidGateway()); attempt++)
+            {
+                u = new Upnp();
+                // PIN THE INTERFACE. Left to itself the search leaves on whichever adapter Windows
+                // thinks is best, and this machine has WSL -- plus, on many machines, Hyper-V or
+                // Tailscale. The router never hears a search sent down a virtual adapter.
+                if (lanIp.Length > 0) u.DiscoverMulticastIf = lanIp;
+                // NO DEVICE FILTER. Godot keeps only replies whose search target CONTAINS this
+                // string, while the underlying search tries several targets in turn and stops at
+                // the first that answers -- and only the first of those contains
+                // "InternetGatewayDevice". A router that answers on any of the others produced a
+                // SUCCESS with an empty device list, so GetGateway() came back null and a working
+                // router was reported as having no UPnP at all. IsValidGateway() below is the real
+                // test and is unaffected by widening this.
+                //
+                // Under 3 s on purpose: the search advertises its own wait in the request, and
+                // Windows only admits unicast replies to a multicast request for about that long.
+                // A longer timeout makes Windows worse, not better.
+                r = u.Discover(2500, 2, "");
+                if (r != (int)Upnp.UpnpResult.Success) continue;
+                gw = u.GetGateway();                       // only after the result: it logs an engine error on an empty list
+            }
+            if (r != (int)Upnp.UpnpResult.Success || gw == null || !gw.IsValidGateway()) why = "no router answered";
+            else
+            {
+                int m = u.AddPortMapping(port, port, "Warships", "UDP", 0);
+                // A permanent lease is what we want -- nothing has to renew it -- but plenty of
+                // routers only accept a bounded one, and a stale mapping from a session that was
+                // killed rather than closed looks like a conflict. Try the finite lease, then
+                // clear our own old mapping and try once more.
+                if (m != (int)Upnp.UpnpResult.Success) m = u.AddPortMapping(port, port, "Warships", "UDP", 7200);
+                if (m != (int)Upnp.UpnpResult.Success)
+                {
+                    u.DeletePortMapping(port, "UDP");
+                    m = u.AddPortMapping(port, port, "Warships", "UDP", 0);
+                }
+                if (m != (int)Upnp.UpnpResult.Success) why = $"the router refused ({(Upnp.UpnpResult)m})";
+                else { ext = u.QueryExternalAddress(); mapped = u; }
+            }
         }
         catch (Exception e) { why = e.Message; }
         _upnpBusy = false;
@@ -188,15 +226,33 @@ public partial class Net : Node
     private const string PublicIpService = "https://api.ipify.org";
     private HttpRequest _ipReq;
     private string _publicIp = "", _routerExt = "", _routerWhy = "";
+    // Whether AddPortMapping SUCCEEDED -- not whether the router happened to tell us its outside
+    // address. Describe used to infer one from the other, so a router that opened the port but
+    // answered nothing to QueryExternalAddress was reported as having refused, and the player was
+    // sent to forward a port that was already forwarded.
+    private bool _routerMapped;
     private bool _publicDone, _routerDone;
     private volatile bool _upnpBusy;
     private int _hostPort;
     // single player (and between sessions): no socket, no lookup, no router job
     public bool NetworkIdle => _peer == null && _ipReq == null && !_upnpBusy;
 
-    public static (Reach reach, string address, string message) Describe(string routerExt, bool mapped, string publicIp, int port, string lan)
+    public static (Reach reach, string address, string message) Describe(string routerExt, bool mapped, string publicIp, int port, string lan, string why = "")
     {
         bool pub = publicIp.Length > 0;
+        // The port IS open; the router just would not say what its outside address is. Without
+        // this the run falls through to the manual-forwarding text below -- telling the player to
+        // do by hand the thing that already worked.
+        if (mapped && routerExt.Length == 0 && pub && !IsSharedAddress(publicIp))
+            return (Reach.Internet, $"{publicIp}:{port}",
+                    "Hosting for the internet: your router opened the port. It would not say what its outside address is, "
+                  + "so this is the address the internet sees. Friends anywhere can join it (click to reveal, or copy it).");
+        // Carrier-grade NAT, found on the PUBLIC address rather than the router's. Forwarding
+        // cannot work behind it at all, so do not send anyone to their router settings.
+        if (!mapped && pub && IsSharedAddress(publicIp))
+            return (Reach.LanOnly, lan,
+                    $"Hosting for your network ({lan}). Your provider puts you behind a shared address (carrier-grade NAT), "
+                  + "so no amount of port forwarding will let friends reach you directly. Use Tailscale or ZeroTier, or let a friend host.");
         if (mapped && routerExt.Length > 0 && !IsSharedAddress(routerExt) && (!pub || publicIp == routerExt))
             return (Reach.Internet, $"{routerExt}:{port}",
                     "Hosting for the internet: friends anywhere can join. Their address is below (click to reveal, or copy it).");
@@ -207,8 +263,10 @@ public partial class Net : Node
                   + "cannot reach you directly. Use Tailscale or ZeroTier, or let a friend host.");
         if (pub)
             return (Reach.Manual, $"{publicIp}:{port}",
-                    $"Hosting. Your router would not open port {port} by itself (UPnP is off or unsupported): forward UDP {port} "
-                  + $"to this PC ({lan.Split(':')[0]}) in your router's settings, then friends elsewhere join with the address below.");
+                    $"Hosting. Your router did not open port {port}" + (why.Length > 0 ? $" -- {why}" : "") + ". "
+                  + $"Forward UDP {port} to this PC ({lan.Split(':')[0]}) in your router's settings (turn UPnP on there and it will "
+                  + "do this by itself next time), then friends elsewhere join with the address below. Windows may also ask to allow "
+                  + "Warships through the firewall the first time -- say yes for private AND public networks.");
         return (Reach.LanOnly, lan,
                 $"Hosting for your network ({lan}). Neither your router nor the internet could be asked for your public address. "
               + $"For friends elsewhere, forward UDP {port} to this PC, or use Tailscale or ZeroTier.");
@@ -257,6 +315,7 @@ public partial class Net : Node
             return;
         }
         _routerExt = ext; _routerWhy = why; _routerDone = true;
+        _routerMapped = mapped != null;
         if (mapped != null) { _upnp = mapped; _mappedPort = port; }
         TryDecide(gen);
     }
@@ -272,7 +331,7 @@ public partial class Net : Node
     private void TryDecide(int gen)
     {
         if (gen != _hostGen || !IsHost || !IsOnline || !(_routerDone && _publicDone)) return;   // the session changed, or one answer is still out
-        var d = Describe(_routerExt, _routerExt.Length > 0, _publicIp, _hostPort, LanAddress);
+        var d = Describe(_routerExt, _routerMapped, _publicIp, _hostPort, LanAddress, _routerWhy);
         // on a tailnet, friends on it can join even when the internet cannot reach you
         if (d.reach == Reach.LanOnly && TailnetAddress.Length > 0) d.message += $" Friends on your Tailscale network join {TailnetAddress}.";
         Reachable(d.reach, d.address, d.message);
@@ -307,9 +366,10 @@ public partial class Net : Node
         Say($"Hosting on your network ({LanAddress}). Asking your router to open port {port}, and the internet for your public address...");
         SessionChanged?.Invoke();
         int gen = ++_hostGen; _hostPort = port;
-        _publicIp = _routerExt = _routerWhy = ""; _publicDone = _routerDone = false;
+        _publicIp = _routerExt = _routerWhy = ""; _publicDone = _routerDone = false; _routerMapped = false;
         _upnpBusy = true;
-        System.Threading.Tasks.Task.Run(() => OpenRouterPort(port, gen));
+        string lanIp = LanAddress.Split(':')[0];
+        System.Threading.Tasks.Task.Run(() => OpenRouterPort(port, gen, lanIp));
         AskPublicIp(gen);
         return true;
     }

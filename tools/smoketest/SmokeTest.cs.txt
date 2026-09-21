@@ -1202,8 +1202,23 @@ public partial class _Test : Node
             Check(inet.reach == Net.Reach.Internet && inet.address == "203.0.113.7:27015", "router opened the port and is the internet's edge: friends join public:port");
             Check(shared.reach == Net.Reach.LanOnly && dbl.reach == Net.Reach.LanOnly,
                   "a private router address, or one that differs from the public address: another NAT is in the way, network only");
-            Check(manual.reach == Net.Reach.Manual && manual.address == "203.0.113.7:27015" && manual.message.Contains("forward UDP 27015"),
+            Check(manual.reach == Net.Reach.Manual && manual.address == "203.0.113.7:27015" && manual.message.Contains("UDP 27015"),
                   "the router will not open it: the public address, and how to forward the port");
+
+            // The branches that were WRONG answers until now, beside the ones that were right.
+            // The first is what a player saw when their router HAD opened the port: Describe was
+            // handed "mapped" inferred from whether the router named its outside address, so a
+            // router that opened the port and said nothing else was reported as refusing, and the
+            // player was sent to forward a port that was already forwarded.
+            var opened = Net.Describe("", true, "203.0.113.7", 27015, "192.168.1.5:27015", "");
+            Check(opened.reach == Net.Reach.Internet && opened.address == "203.0.113.7:27015",
+                  $"port open but the router will not name its address: still hosting for the internet ({opened.reach})");
+            var cgnat = Net.Describe("", false, "100.72.1.5", 27015, "192.168.1.5:27015", "no router answered");
+            Check(cgnat.reach == Net.Reach.LanOnly && !cgnat.message.Contains("UDP 27015"),
+                  $"behind carrier-grade NAT: not sent to forward a port that cannot work ({cgnat.reach})");
+            var refused = Net.Describe("", false, "203.0.113.7", 27015, "192.168.1.5:27015", "the router refused (ActionFailed)");
+            Check(refused.reach == Net.Reach.Manual && refused.message.Contains("ActionFailed") && refused.message.Contains("firewall"),
+                  "a refusal says WHAT the router said, and mentions the firewall");
             Check(none.reach == Net.Reach.LanOnly, "nothing learned: network only");
             Check(new[] { inet, shared, dbl, manual, none }.All(d => !d.message.Contains("203.0.113.7")), "no status line ever prints the public address");
             var sm = Nodes<SessionMenu>().First();
