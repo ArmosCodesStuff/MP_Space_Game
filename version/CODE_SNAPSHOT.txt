@@ -1,9 +1,9 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-20 20:41 at git commit cb17a27: typecheck clean, dotnet build 0 warnings,
+// Taken 2026-09-20 21:06 at git commit c3c11ce: typecheck clean, dotnet build 0 warnings,
 //   0 analyser findings, 0 unused members; smoke test 3/3 runs at 435 checks on Windows
 //   (437 in a sandbox with no router and no internet); 67-frame UI sweep complete, 0 lint.
-// 70 files, 12533 lines. Code only: sprites, sounds and docs are in the zip.
+// 71 files, 12649 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -21,12 +21,12 @@
 //   scripts/Autopilot.cs                            40 lines   sha256 807538219f53
 //   scripts/BaseDefense.cs                          55 lines   sha256 1d8daa0fbd67
 //   scripts/BasePanel.cs                           132 lines   sha256 486b1d45088e
-//   scripts/Boss.cs                                316 lines   sha256 88ae7aba4708
+//   scripts/Boss.cs                                316 lines   sha256 6105830f74e9
 //   scripts/BossBar.cs                              86 lines   sha256 fdc16204cf1d
 //   scripts/Character.cs                           239 lines   sha256 76f29b3e4d23
 //   scripts/CharacterCreator.cs                    216 lines   sha256 9550b19e1833
 //   scripts/CharacterSelect.cs                     189 lines   sha256 a3e2e219cd03
-//   scripts/Combat.cs                               87 lines   sha256 298c5236a5b5
+//   scripts/Combat.cs                               90 lines   sha256 02a09601a35c
 //   scripts/Economy.cs                              81 lines   sha256 c9aa43070257
 //   scripts/Equipment.cs                            77 lines   sha256 5a5307ab79c9
 //   scripts/EquipmentWindow.cs                      88 lines   sha256 92c1cfb01858
@@ -37,9 +37,9 @@
 //   scripts/Gatherer.cs                            254 lines   sha256 135bd767de29
 //   scripts/Hauler.cs                              317 lines   sha256 b13773f083c7
 //   scripts/HealthBar.cs                            38 lines   sha256 c6b272c9453c
-//   scripts/Hub.cs                                1269 lines   sha256 6e59e9425498
-//   scripts/MainMenu.cs                            305 lines   sha256 ec7d04adcf12
-//   scripts/MenuFoe.cs                             192 lines   sha256 16c12213ddc6
+//   scripts/Hub.cs                                1269 lines   sha256 cd75ef747848
+//   scripts/MainMenu.cs                            305 lines   sha256 b2e0624b2acc
+//   scripts/MenuFoe.cs                             201 lines   sha256 8467526631c4
 //   scripts/Missions.cs                             38 lines   sha256 48a2f11b25a4
 //   scripts/Music.cs                                78 lines   sha256 021dfc1c83d5
 //   scripts/Net.cs                                 334 lines   sha256 040f19a1471f
@@ -51,10 +51,10 @@
 //   scripts/Raider.cs                              354 lines   sha256 1c83f7409808
 //   scripts/SessionMenu.cs                         129 lines   sha256 857bef39fbc5
 //   scripts/Settings.cs                             91 lines   sha256 891f361df958
-//   scripts/Sfx.cs                                  98 lines   sha256 87c3b8b8ebcf
+//   scripts/Sfx.cs                                 104 lines   sha256 b58601febeb0
 //   scripts/Shell.cs                                52 lines   sha256 5c161c9fff3b
 //   scripts/Shield.cs                               71 lines   sha256 99c7fa4a2a8e
-//   scripts/ShipClasses.cs                         530 lines   sha256 949a74f65ecf
+//   scripts/ShipClasses.cs                         534 lines   sha256 25512c095aa0
 //   scripts/Stats.cs                               166 lines   sha256 08454f6009ad
 //   scripts/StatsWindow.cs                         213 lines   sha256 3dd6400641f6
 //   scripts/TargetDummy.cs                         132 lines   sha256 ae97ee1a9083
@@ -72,13 +72,14 @@
 //   tools/analyse/run.sh                            16 lines   sha256 e6f2cd50f0c4
 //   tools/analyse/xref.py                           19 lines   sha256 9359eb94c161
 //   tools/find-godot.ps1                            53 lines   sha256 fabe4c75faae
+//   tools/gain.ps1                                  44 lines   sha256 41f4d8f93189
 //   tools/manifest.ps1                              42 lines   sha256 2bd8e7cbf24b
 //   tools/screens/run.ps1                          114 lines   sha256 0ca925a64867
 //   tools/screens/run.sh                            42 lines   sha256 73a5b3c63476
 //   tools/screens/Shots.cs.txt                     458 lines   sha256 43a79314bd60
 //   tools/smoketest/run.ps1                        161 lines   sha256 d5c27af2b535
 //   tools/smoketest/run.sh                          57 lines   sha256 568b677787fd
-//   tools/smoketest/SmokeTest.cs.txt              2165 lines   sha256 cd471c547f76
+//   tools/smoketest/SmokeTest.cs.txt              2215 lines   sha256 60d76e69d772
 //   tools/snapshot.ps1                              95 lines   sha256 d6d85575ba26
 //==============================================================================
 
@@ -829,7 +830,7 @@ public partial class BasePanel : PanelContainer
 
 //==============================================================================
 // FILE: scripts/Boss.cs
-// 316 lines   sha256 88ae7aba4708
+// 316 lines   sha256 6105830f74e9
 //==============================================================================
 using Godot;
 using System.Linq;
@@ -1022,7 +1023,7 @@ public partial class Boss : Node2D, IHittable
         var nose = ToGlobal(new Vector2(0, -Length * 0.5f));
         PlayerShip Nearest(float within) => pilots.Where(p => p.Position.DistanceTo(Position) <= within).OrderBy(p => p.Position.DistanceTo(Position)).FirstOrDefault();
         _guns -= delta;
-        if (_guns <= 0) { _guns = GunEvery; var t = Nearest(900f); if (t != null) { t.Hit(GunDamage * DamageMult, Position, "boss:guns"); Combat.Flash(nose, t.Position, new Color(1f, 0.5f, 0.35f), boss: true); } }
+        if (_guns <= 0) { _guns = GunEvery; var t = Nearest(900f); if (t != null) { t.Hit(GunDamage * DamageMult, Position, "boss:guns"); Combat.Flash(nose, t.Position, new Color(1f, 0.5f, 0.35f), ShotSound.Boss); } }
         _missiles -= delta;
         if (_missiles <= 0)
         {   // a trident at the nearest ship: straight at it and 25 degrees either side
@@ -1900,7 +1901,7 @@ public partial class CharacterSelect : Control
 
 //==============================================================================
 // FILE: scripts/Combat.cs
-// 87 lines   sha256 298c5236a5b5
+// 90 lines   sha256 02a09601a35c
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -1965,9 +1966,12 @@ public static class Combat
     }
 
     // Set by the live world so combat can draw without knowing what world it is in.
-    // A laser shot's flash (and its sound). `boss`: a boss's weapon -- its deeper buzz.
-    public static System.Action<Vector2, Vector2, Color, bool> OnFlash;
-    public static void Flash(Vector2 a, Vector2 b, Color c, bool boss = false) => OnFlash?.Invoke(a, b, c, boss);
+    // A laser shot's flash, and its sound. The KIND is what fired it, not a boss/not-boss
+    // boolean: a carrier's fighters want their own report, quieter than a capital ship's, and
+    // "make the fighters quieter" has to be answerable somewhere other than at every call site.
+    public static System.Action<Vector2, Vector2, Color, ShotSound> OnFlash;
+    public static void Flash(Vector2 a, Vector2 b, Color c, ShotSound snd = ShotSound.Light)
+        => OnFlash?.Invoke(a, b, c, snd);
 
     // Set by the live world: launches a projectile there (and, on a host, tells
     // guests). Unguided torpedoes pass targetId 0; the missile passes its target and
@@ -3045,7 +3049,7 @@ public static class HealthBar
 
 //==============================================================================
 // FILE: scripts/Hub.cs
-// 1269 lines   sha256 6e59e9425498
+// 1269 lines   sha256 cd75ef747848
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -3243,10 +3247,10 @@ public partial class Hub : Node2D
         Combat.Clear();
         // Flashes are made on the host, where the shots happen. Guests are sent them,
         // or a guest firing at the dummy would see nothing at all.
-        Combat.OnFlash = (a, b, c, boss) =>
+        Combat.OnFlash = (a, b, c, snd) =>
         {
-            AddFlash(a, b, c, boss);
-            if (Net.IsHost && Net.IsOnline) Rpc(nameof(NetFlash), a, b, c, boss);
+            AddFlash(a, b, c, snd);
+            if (Net.IsHost && Net.IsOnline) Rpc(nameof(NetFlash), a, b, c, (int)snd);
         };
         // Torpedoes: the host's copy deals damage; guests get the launch and fly a
         // cosmetic copy (the run is straight and steady, so it lands in the same place).
@@ -4110,8 +4114,8 @@ public partial class Hub : Node2D
         => SpawnTorpedo(from, dir, speed, range, 0, true, target, turn, heavy, hostile, null, id, null, size);
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
-    private void NetFlash(Vector2 a, Vector2 b, Color c, bool boss) => AddFlash(a, b, c, boss);
-    private void AddFlash(Vector2 a, Vector2 b, Color c, bool boss) { _flashes.Add((a, b, c, 0.10)); Sfx.Laser(a, b, boss); }
+    private void NetFlash(Vector2 a, Vector2 b, Color c, int snd) => AddFlash(a, b, c, (ShotSound)snd);
+    private void AddFlash(Vector2 a, Vector2 b, Color c, ShotSound snd) { _flashes.Add((a, b, c, 0.10)); Sfx.Laser(a, b, snd); }
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
     private void NetDummy(int number, double last, double avg, double total)
@@ -4319,7 +4323,7 @@ public partial class HeavyMissileVisual : Node2D
 
 //==============================================================================
 // FILE: scripts/MainMenu.cs
-// 305 lines   sha256 ec7d04adcf12
+// 305 lines   sha256 b2e0624b2acc
 //==============================================================================
 using Godot;
 using System;
@@ -4455,7 +4459,7 @@ public partial class MainMenu : Node2D
         _cap.WarpEvery = AoeEvery - AoeWarn;      // ready again before the next area shot is called
 
         // Its turrets, shells and missiles all go through Combat, exactly as in the hub.
-        Combat.OnFlash = (a, b, c, boss) => { _shots.Add(new Shot { A = a, B = b, T = 0.15 }); Sfx.Laser(a, b, boss); };
+        Combat.OnFlash = (a, b, c, snd) => { _shots.Add(new Shot { A = a, B = b, T = 0.15 }); Sfx.Laser(a, b, snd); };
         Combat.OnShell = (from, dir, speed, range, dmg, source) =>
         {
             AddChild(new Shell { Position = from, Dir = dir, Speed = speed, Range = range, Damage = dmg, Source = source });
@@ -4629,7 +4633,7 @@ public partial class MainMenu : Node2D
 
 //==============================================================================
 // FILE: scripts/MenuFoe.cs
-// 192 lines   sha256 16c12213ddc6
+// 201 lines   sha256 8467526631c4
 //==============================================================================
 using Godot;
 using System;
@@ -4663,7 +4667,7 @@ public partial class MenuFoe : Node2D, IHittable
     // texture and releases it with the node, which is also how everything else here draws.
     private Sprite2D _sprite;
     private readonly string _art;
-    private readonly float _scale;
+    private readonly float _length;          // the size it IS, in world units -- not a scale factor
     private readonly Random _rng;
 
     public int NetId { get; } = IdBase + (++_next);
@@ -4675,18 +4679,27 @@ public partial class MenuFoe : Node2D, IHittable
     public MenuFoe(MenuFoeKind kind, Random rng)
     {
         Kind = kind; _rng = rng;
-        (string art, double hp, float sc, float r) = kind switch
+        // A WORLD LENGTH, NOT A SCALE FACTOR. Every other ship in the build declares how big it
+        // is and derives the scale from the art (PlayerShip.FitClass, Raider); only these carried
+        // hand-picked multipliers -- 0.55, 0.40, 0.42 -- which say nothing about how big the thing
+        // is and stop being right the moment the art is recut.
+        //
+        // The lengths are the REAL raiders' lengths, so the title screen shows the enemies at the
+        // size you meet them at, for the same reason it shows the ship at the game's own zoom.
+        (string art, double hp, float len, float radius) = kind switch
         {
-            MenuFoeKind.Heavy => ("res://enemy_heavy_hull.png", 26.0, 0.55f, 26f),
-            MenuFoeKind.Web   => ("res://enemy_light_tier_2.png", 10.0, 0.40f, 16f),
-            _                 => ("res://enemy_light_fighter.png", 6.0, 0.42f, 15f),
+            MenuFoeKind.Heavy => ("res://enemy_heavy_hull.png",   26.0, Raider.HeavyLength, Raider.HeavyLength * 0.3f),
+            MenuFoeKind.Web   => ("res://enemy_light_tier_2.png", 10.0, Raider.LightLength, Raider.LightLength * 0.4f),
+            _                 => ("res://enemy_light_fighter.png", 6.0, Raider.LightLength, Raider.LightLength * 0.4f),
         };
-        _art = art; _maxHp = _hp = hp; _scale = sc; HitRadius = r;
+        _art = art; _maxHp = _hp = hp; _length = len; HitRadius = radius;
     }
 
     public override void _Ready()
     {
-        _sprite = new Sprite2D { Texture = GD.Load<Texture2D>(_art), Scale = new Vector2(_scale, _scale) };
+        var tex = GD.Load<Texture2D>(_art);
+        float k = _length / tex.GetHeight();          // exactly how Raider and PlayerShip do it
+        _sprite = new Sprite2D { Texture = tex, Scale = new Vector2(k, k) };
         AddChild(_sprite);
     }
 
@@ -7004,7 +7017,7 @@ public static class Settings
 
 //==============================================================================
 // FILE: scripts/Sfx.cs
-// 98 lines   sha256 87c3b8b8ebcf
+// 104 lines   sha256 b58601febeb0
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -7021,11 +7034,12 @@ public static class Sfx
 {
     private const float ListenerHeight = 700f;       // at zoom 1: how far "above" the view the ears are
     private const float Cull = 5000f;                // past this effective distance: silent
-    static readonly string[] Names = { "laser_light", "laser_boss", "laser_hit", "missile_whoosh", "impact_thunk" };
+    static readonly string[] Names = { "laser_light", "laser_fighter", "laser_boss", "laser_hit",
+                                      "missile_whoosh", "impact_thunk", "cannon" };
     static readonly Dictionary<string, AudioStream> _streams = new();
     static readonly Dictionary<string, double> _last = new();
-    static readonly Dictionary<string, string> _alias = new() { ["cannon"] = "impact_thunk" };   // a sound played its own way
-    static readonly Dictionary<string, double> _gap = new() { ["cannon"] = 0.05, ["laser_light"] = 0.04, ["laser_boss"] = 0.08, ["laser_hit"] = 0.03, ["missile_whoosh"] = 0.05, ["impact_thunk"] = 0.05 };
+
+    static readonly Dictionary<string, double> _gap = new() { ["cannon"] = 0.05, ["laser_light"] = 0.04, ["laser_fighter"] = 0.04, ["laser_boss"] = 0.08, ["laser_hit"] = 0.03, ["missile_whoosh"] = 0.05, ["impact_thunk"] = 0.05 };
     public static readonly Dictionary<string, int> Played = new();            // for the smoke test
     static Node _pool; static int _next;
     const int Voices = 16;
@@ -7039,16 +7053,22 @@ public static class Sfx
         return -20f * Mathf.Log(eff / ListenerHeight) / Mathf.Log(10f);
     }
 
-    public static void Laser(Vector2 from, Vector2 to, bool boss)
+    // EVERY TRIM HERE IS ZERO, and that is the point: each file is stored at the level it is
+    // meant to be heard at (tools/gain.ps1 rewrote them), so a sound's loudness is a property of
+    // the sound and not of whoever happens to play it. The one exception is the hit, which fades
+    // with the length of the shot that made it -- that is a function of the shot, not a level.
+    public static void Laser(Vector2 from, Vector2 to, ShotSound snd)
     {
-        Play(boss ? "laser_boss" : "laser_light", from, boss ? 0f : -6f, boss ? 0.9f : 1.0f);
+        Play(snd switch { ShotSound.Boss => "laser_boss", ShotSound.Fighter => "laser_fighter", _ => "laser_light" },
+             from, 0f, snd == ShotSound.Boss ? 0.9f : 1.0f);
         float shot = from.DistanceTo(to);
-        Play("laser_hit", to, -4f - 3f * shot / 1000f, 1.0f - 0.12f * Mathf.Clamp(shot / 1000f, 0f, 1f));
+        Play("laser_hit", to, -3f * shot / 1000f, 1.0f - 0.12f * Mathf.Clamp(shot / 1000f, 0f, 1f));
     }
-    public static void Missile(Vector2 at) => Play("missile_whoosh", at, -8f, 1f);
-    public static void Impact(Vector2 at) => Play("impact_thunk", at, -2f, 1f);
-    // a battleship gun: the thunk, higher and quieter -- a cannon's report, not a laser's buzz
-    public static void Cannon(Vector2 at) => Play("cannon", at, -9f, 1.7f);
+    public static void Missile(Vector2 at) => Play("missile_whoosh", at, 0f, 1f);
+    public static void Impact(Vector2 at) => Play("impact_thunk", at, 0f, 1f);
+    // a battleship gun: the thunk, higher -- a cannon's report, not a laser's buzz. Its own file
+    // now rather than the impact played quietly, so the impact can be tuned without moving it.
+    public static void Cannon(Vector2 at) => Play("cannon", at, 0f, 1.7f);
 
     static void Play(string name, Vector2 at, float trimDb, float pitch)
     {
@@ -7067,7 +7087,6 @@ public static class Sfx
             tree.Root.CallDeferred(Node.MethodName.AddChild, _pool);
             for (int i = 0; i < Voices; i++) _pool.AddChild(new AudioStreamPlayer());
             foreach (var s in Names) _streams[s] = GD.Load<AudioStream>($"res://sfx/{s}.wav");
-            foreach (var kv in _alias) _streams[kv.Key] = _streams[kv.Value];
         }
         var p = _pool.GetChild<AudioStreamPlayer>(_next); _next = (_next + 1) % Voices;
         p.Stream = _streams[name]; p.VolumeDb = db + trimDb; p.PitchScale = pitch;
@@ -7240,7 +7259,7 @@ public partial class ShieldFlash : Node2D
 
 //==============================================================================
 // FILE: scripts/ShipClasses.cs
-// 530 lines   sha256 949a74f65ecf
+// 534 lines   sha256 25512c095aa0
 //==============================================================================
 using System.Linq;
 using Godot;
@@ -7262,6 +7281,10 @@ using System;
 // whether it is pulling the trigger -- never what the shot hits.
 // ─────────────────────────────────────────────────────────────────────────────
 public enum ShipClass { Battleship, Carrier }
+
+// What fired a laser, which decides which report is played. Not a volume: the level lives in
+// the file (see tools/gain.ps1), so a new kind of shot is a new sound rather than a new offset.
+public enum ShotSound { Light, Fighter, Boss }
 
 public interface IHittable
 {
@@ -7607,7 +7630,7 @@ public partial class Wing : Node2D
                 {
                     _cd += S["fighter_interval"]; _shots++;
                     t.TakeDamage(S["fighter_damage"]); Carrier.NoteCombat();
-                    Combat.Flash(Position, t.Position, new Color(0.7f, 0.95f, 1f));
+                    Combat.Flash(Position, t.Position, new Color(0.7f, 0.95f, 1f), ShotSound.Fighter);
                 }
                 if (_shots >= BurstShots) _f = FSt.Overshoot;
                 break;
@@ -9792,6 +9815,55 @@ Write-Host "    `$Godot = 'C:\path\to\Godot_v4.7.2-stable_mono_win64.exe'"
 exit 2
 
 //==============================================================================
+// FILE: tools/gain.ps1
+// 44 lines   sha256 41f4d8f93189
+//==============================================================================
+# Rewrite a PCM WAV at a new level.
+#
+#     powershell -ExecutionPolicy Bypass -File tools\gain.ps1 -In sfx\x.wav -Out sfx\y.wav -Factor 0.5
+#
+# WHY A FILE AND NOT A NUMBER IN THE CODE: a sound's level belongs to the sound. Scattered
+# volume_db offsets at call sites mean the same asset is four different loudnesses depending on
+# who plays it, and "make the fighters quieter" turns into a hunt. Every sfx file here is stored
+# at the level it is meant to be heard at, and Sfx plays it at 0 dB.
+#
+# Factor is LINEAR amplitude, not decibels: 0.65 is "35% quieter" as a person means it. Only
+# reductions are expected, so no clipping check is needed -- but samples are clamped anyway,
+# because a factor above 1 that wrapped round would sound like destruction rather than like a
+# mistake.
+param([Parameter(Mandatory)][string]$In, [Parameter(Mandatory)][string]$Out, [Parameter(Mandatory)][double]$Factor)
+
+$ErrorActionPreference = 'Stop'
+Set-Location (Join-Path $PSScriptRoot '..')
+
+$b = [System.IO.File]::ReadAllBytes($In)
+if ([System.Text.Encoding]::ASCII.GetString($b, 0, 4) -ne 'RIFF' -or
+    [System.Text.Encoding]::ASCII.GetString($b, 8, 4) -ne 'WAVE') { throw "$In is not a RIFF/WAVE file" }
+
+# Walk the chunks rather than assuming the data starts at 44: a file with a LIST or fact chunk
+# would otherwise have its header scaled as if it were audio.
+$fmt = -1; $bits = 0; $dataAt = -1; $dataLen = 0; $p = 12
+while ($p + 8 -le $b.Length) {
+    $id = [System.Text.Encoding]::ASCII.GetString($b, $p, 4)
+    $len = [BitConverter]::ToUInt32($b, $p + 4)
+    if ($id -eq 'fmt ') { $fmt = [BitConverter]::ToUInt16($b, $p + 8); $bits = [BitConverter]::ToUInt16($b, $p + 22) }
+    elseif ($id -eq 'data') { $dataAt = $p + 8; $dataLen = [int][Math]::Min($len, $b.Length - $dataAt) }
+    $p += 8 + $len + ($len % 2)      # chunks are word-aligned
+}
+if ($fmt -ne 1 -or $bits -ne 16) { throw "$In is not 16-bit PCM (format $fmt, $bits bits)" }
+if ($dataAt -lt 0) { throw "$In has no data chunk" }
+
+for ($i = $dataAt; $i -lt $dataAt + $dataLen - 1; $i += 2) {
+    $v = [int][BitConverter]::ToInt16($b, $i)
+    $v = [int][Math]::Round($v * $Factor)
+    if ($v -gt 32767) { $v = 32767 } elseif ($v -lt -32768) { $v = -32768 }
+    $s = [BitConverter]::GetBytes([int16]$v)
+    $b[$i] = $s[0]; $b[$i + 1] = $s[1]
+}
+[System.IO.File]::WriteAllBytes((Join-Path (Get-Location) $Out), $b)
+Write-Host ("{0} -> {1}  x{2:0.0000}  ({3} samples)" -f $In, $Out, $Factor, [int]($dataLen / 2))
+
+//==============================================================================
 // FILE: tools/manifest.ps1
 // 42 lines   sha256 2bd8e7cbf24b
 //==============================================================================
@@ -10697,7 +10769,7 @@ echo "SMOKE TEST PASSED"
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 2165 lines   sha256 cd471c547f76
+// 2215 lines   sha256 60d76e69d772
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -10793,6 +10865,28 @@ public partial class _Test : Node
         await Wait(0.4);
         Check(wasOnline && !Net.IsOnline, $"reaching the main menu ends the session too (was online: {wasOnline})");
         await MenuDiorama();
+    }
+
+    // The loudest sample in a wav, 0..1. Reads the asset itself: a check on a level that reads a
+    // number in the code would pass whatever the file contains.
+    static double Peak(string path)
+    {
+        // THE FILE, not GD.Load. An imported AudioStreamWav is what Godot made of the asset --
+        // the importer can trim, loop or resample it -- so measuring that answers a question
+        // about the importer. The claim here is about the asset as shipped, so read the bytes.
+        var d = FileAccess.GetFileAsBytes(path);
+        if (d == null || d.Length < 45) return 0;
+        int max = 0;
+        for (int i = 44; i + 1 < d.Length; i += 2)     // 44: past a canonical PCM WAV header
+        {
+            // Sign-extended and negated by hand: Math.Abs picks its short overload here, and
+            // Math.Abs(short.MinValue) throws rather than returning 32768.
+            int v = d[i] | (d[i + 1] << 8);
+            if (v > 32767) v -= 65536;
+            if (v < 0) v = -v;
+            if (v > max) max = v;
+        }
+        return max / 32768.0;
     }
 
     // Everything Character holds, as one string, ENUMERATED BY REFLECTION. A list written out
@@ -10904,6 +10998,12 @@ public partial class _Test : Node
         // the game's zoom is retuned and the menu is left behind.
         Check(Mathf.IsEqualApprox(menu.CameraZoom, 0.9f) && Mathf.IsEqualApprox(menu.CameraZoom, Hub.DefaultZoom),
               $"the title screen shows the ship at the game's own zoom ({menu.CameraZoom:0.00})");
+        // ...and the ENEMIES are the size they are in the game too, for the same reason. Compared
+        // against the raiders' own lengths: the claim is equality WITH THE GAME, not a magnitude,
+        // so the game's number is exactly the right thing to compare with.
+        Check(menu.Foes.Where(f => f.Kind == MenuFoeKind.Heavy).All(f => Mathf.IsEqualApprox(f.HitRadius, Raider.HeavyLength * 0.3f))
+              && menu.Foes.Where(f => f.Kind != MenuFoeKind.Heavy).All(f => Mathf.IsEqualApprox(f.HitRadius, Raider.LightLength * 0.4f)),
+              "the title screen's enemies are the size the game's raiders are");
         Check(menu.Foes.Count(f => f.Kind == MenuFoeKind.Heavy) == 2
               && menu.Foes.Count(f => f.Kind == MenuFoeKind.Web) == 1
               && menu.Foes.Count(f => f.Kind == MenuFoeKind.Light) == 3
@@ -12575,13 +12675,35 @@ public partial class _Test : Node
         Check(Math.Abs(Sfx.VolumeAt(0, 1)) < 1e-4 && Sfx.VolumeAt(1000, 1) < Sfx.VolumeAt(0, 1) - 3
               && Sfx.VolumeAt(0, 0.5f) < Sfx.VolumeAt(0, 1) - 3 && float.IsNegativeInfinity(Sfx.VolumeAt(6000, 1)),
               "effects: 0 dB at the view's centre, quieter with distance and when zoomed out, silent far away");
-        Check(new[] { "laser_light", "laser_boss", "laser_hit", "missile_whoosh", "impact_thunk" }.All(n => GD.Load<AudioStream>($"res://sfx/{n}.wav") != null),
-              "all five effects load");
+        Check(new[] { "laser_light", "laser_fighter", "laser_boss", "laser_hit", "missile_whoosh", "impact_thunk", "cannon" }
+                  .All(n => GD.Load<AudioStream>($"res://sfx/{n}.wav") != null),
+              "all seven effects load");
         int P(string n) => Sfx.Played.TryGetValue(n, out var v) ? v : 0;
-        GD.Print($"  sounds played: light laser {P("laser_light")}, boss laser {P("laser_boss")}, hit {P("laser_hit")}, whoosh {P("missile_whoosh")}, thunk {P("impact_thunk")}");
+        GD.Print($"  sounds played: light laser {P("laser_light")}, fighter {P("laser_fighter")}, boss laser {P("laser_boss")}, hit {P("laser_hit")}, whoosh {P("missile_whoosh")}, thunk {P("impact_thunk")}, cannon {P("cannon")}");
         Check(P("laser_light") > 0 && P("laser_hit") > 0, "lasers buzz where they fire and crackle where they hit");
         Check(P("laser_boss") > 0, "the boss's lasers have their own, deeper buzz");
         Check(P("missile_whoosh") > 0 && P("impact_thunk") > 0, "missiles and torpedoes whoosh at launch and thunk when they hit");
+        Check(P("laser_fighter") > 0, "a carrier's fighters have their own report, not the capital ship's");
+        Check(P("cannon") > 0, "the battleship's guns have their own file, not the impact played quietly");
+
+        // ── THE LEVEL IS IN THE FILE, and these read the files to prove it ──────────────
+        // Every trim in Sfx is 0 now: a sound's loudness is a property of the sound, not of
+        // whoever plays it. That only means anything if the files actually carry those levels,
+        // so this measures them. Ratios as literals -- 0.65 is "35% quieter" as a person means
+        // it -- never as Sfx constants, which no longer exist to read.
+        Check(Math.Abs(Peak("res://sfx/laser_fighter.wav") / Peak("res://sfx/laser_light.wav") - 0.65) < 0.02,
+              $"a carrier fighter's report is 35% quieter than a capital ship's, IN THE FILE ({Peak("res://sfx/laser_fighter.wav") / Peak("res://sfx/laser_light.wav"):0.000})");
+        // The bomber's launch whoosh, 35% quieter than it used to be heard. The old file is in
+        // retired/, and what is compared is the LEVEL IT PLAYS AT: the old file times its old
+        // -8 dB trim, which is what the ear was actually getting.
+        double oldWhoosh = Peak("res://retired/sfx/missile_whoosh.wav") * Math.Pow(10, -8 / 20.0);
+        Check(Math.Abs(Peak("res://sfx/missile_whoosh.wav") / oldWhoosh - 0.65) < 0.02,
+              $"a missile launch is 35% quieter than it was heard before ({Peak("res://sfx/missile_whoosh.wav") / oldWhoosh:0.000})");
+        // ...and the impact is NOT, because it was already right. Same level as before, to the
+        // sample: the old file at its old -2 dB trim.
+        double oldThunk = Peak("res://retired/sfx/impact_thunk.wav") * Math.Pow(10, -2 / 20.0);
+        Check(Math.Abs(Peak("res://sfx/impact_thunk.wav") / oldThunk - 1.0) < 0.02,
+              $"the impact is exactly as loud as it was, because it was already right ({Peak("res://sfx/impact_thunk.wav") / oldThunk:0.000})");
 
         // leaks: leaving and re-entering the hub must not grow the orphan-node or object
         // counts (the first cycle warms caches; compare the next two against it)

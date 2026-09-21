@@ -132,7 +132,7 @@ public partial class MainMenu : Node2D
         _cap.WarpEvery = AoeEvery - AoeWarn;      // ready again before the next area shot is called
 
         // Its turrets, shells and missiles all go through Combat, exactly as in the hub.
-        Combat.OnFlash = (a, b, c, boss) => { _shots.Add(new Shot { A = a, B = b, T = 0.15 }); Sfx.Laser(a, b, boss); };
+        Combat.OnFlash = (a, b, c, snd) => { _shots.Add(new Shot { A = a, B = b, T = 0.15 }); Sfx.Laser(a, b, snd); };
         Combat.OnShell = (from, dir, speed, range, dmg, source) =>
         {
             AddChild(new Shell { Position = from, Dir = dir, Speed = speed, Range = range, Damage = dmg, Source = source });

@@ -584,6 +584,11 @@ where the editor cannot delete it.*
 
 Each of these compiled clean and was wrong at runtime. The smoke test covers all of them.
 
+- **A check on an asset must read the asset.** A loudness check that reads a constant in the code
+  passes whatever the file contains, and one that reads `GD.Load<AudioStreamWav>` measures what the
+  IMPORTER made of the file, not the file: the first version of the sound-level checks reported a
+  ratio of 1.000 for two files that differ by 35%. `FileAccess.GetFileAsBytes` reads what shipped.
+  *Rule: the same goes for sprite sizes. Measure the thing the player gets.*
 - **Host-only state read by drawing code is a guest bug that nothing reports.** `Boss._beam` and
   `_charge` only tick under `Net.Sim`, and `Raider.Boosting` / `Shivering` are host-only fields;
   all four are read by code that draws. On a guest the boss's super-move bar sat at zero for the

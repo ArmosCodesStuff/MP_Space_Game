@@ -94,6 +94,28 @@ public partial class _Test : Node
         await MenuDiorama();
     }
 
+    // The loudest sample in a wav, 0..1. Reads the asset itself: a check on a level that reads a
+    // number in the code would pass whatever the file contains.
+    static double Peak(string path)
+    {
+        // THE FILE, not GD.Load. An imported AudioStreamWav is what Godot made of the asset --
+        // the importer can trim, loop or resample it -- so measuring that answers a question
+        // about the importer. The claim here is about the asset as shipped, so read the bytes.
+        var d = FileAccess.GetFileAsBytes(path);
+        if (d == null || d.Length < 45) return 0;
+        int max = 0;
+        for (int i = 44; i + 1 < d.Length; i += 2)     // 44: past a canonical PCM WAV header
+        {
+            // Sign-extended and negated by hand: Math.Abs picks its short overload here, and
+            // Math.Abs(short.MinValue) throws rather than returning 32768.
+            int v = d[i] | (d[i + 1] << 8);
+            if (v > 32767) v -= 65536;
+            if (v < 0) v = -v;
+            if (v > max) max = v;
+        }
+        return max / 32768.0;
+    }
+
     // Everything Character holds, as one string, ENUMERATED BY REFLECTION. A list written out
     // here by hand would be a list that stops being true the first time someone adds a field.
     static string Describe(object v) => v switch
@@ -203,6 +225,12 @@ public partial class _Test : Node
         // the game's zoom is retuned and the menu is left behind.
         Check(Mathf.IsEqualApprox(menu.CameraZoom, 0.9f) && Mathf.IsEqualApprox(menu.CameraZoom, Hub.DefaultZoom),
               $"the title screen shows the ship at the game's own zoom ({menu.CameraZoom:0.00})");
+        // ...and the ENEMIES are the size they are in the game too, for the same reason. Compared
+        // against the raiders' own lengths: the claim is equality WITH THE GAME, not a magnitude,
+        // so the game's number is exactly the right thing to compare with.
+        Check(menu.Foes.Where(f => f.Kind == MenuFoeKind.Heavy).All(f => Mathf.IsEqualApprox(f.HitRadius, Raider.HeavyLength * 0.3f))
+              && menu.Foes.Where(f => f.Kind != MenuFoeKind.Heavy).All(f => Mathf.IsEqualApprox(f.HitRadius, Raider.LightLength * 0.4f)),
+              "the title screen's enemies are the size the game's raiders are");
         Check(menu.Foes.Count(f => f.Kind == MenuFoeKind.Heavy) == 2
               && menu.Foes.Count(f => f.Kind == MenuFoeKind.Web) == 1
               && menu.Foes.Count(f => f.Kind == MenuFoeKind.Light) == 3
@@ -1874,13 +1902,35 @@ public partial class _Test : Node
         Check(Math.Abs(Sfx.VolumeAt(0, 1)) < 1e-4 && Sfx.VolumeAt(1000, 1) < Sfx.VolumeAt(0, 1) - 3
               && Sfx.VolumeAt(0, 0.5f) < Sfx.VolumeAt(0, 1) - 3 && float.IsNegativeInfinity(Sfx.VolumeAt(6000, 1)),
               "effects: 0 dB at the view's centre, quieter with distance and when zoomed out, silent far away");
-        Check(new[] { "laser_light", "laser_boss", "laser_hit", "missile_whoosh", "impact_thunk" }.All(n => GD.Load<AudioStream>($"res://sfx/{n}.wav") != null),
-              "all five effects load");
+        Check(new[] { "laser_light", "laser_fighter", "laser_boss", "laser_hit", "missile_whoosh", "impact_thunk", "cannon" }
+                  .All(n => GD.Load<AudioStream>($"res://sfx/{n}.wav") != null),
+              "all seven effects load");
         int P(string n) => Sfx.Played.TryGetValue(n, out var v) ? v : 0;
-        GD.Print($"  sounds played: light laser {P("laser_light")}, boss laser {P("laser_boss")}, hit {P("laser_hit")}, whoosh {P("missile_whoosh")}, thunk {P("impact_thunk")}");
+        GD.Print($"  sounds played: light laser {P("laser_light")}, fighter {P("laser_fighter")}, boss laser {P("laser_boss")}, hit {P("laser_hit")}, whoosh {P("missile_whoosh")}, thunk {P("impact_thunk")}, cannon {P("cannon")}");
         Check(P("laser_light") > 0 && P("laser_hit") > 0, "lasers buzz where they fire and crackle where they hit");
         Check(P("laser_boss") > 0, "the boss's lasers have their own, deeper buzz");
         Check(P("missile_whoosh") > 0 && P("impact_thunk") > 0, "missiles and torpedoes whoosh at launch and thunk when they hit");
+        Check(P("laser_fighter") > 0, "a carrier's fighters have their own report, not the capital ship's");
+        Check(P("cannon") > 0, "the battleship's guns have their own file, not the impact played quietly");
+
+        // ── THE LEVEL IS IN THE FILE, and these read the files to prove it ──────────────
+        // Every trim in Sfx is 0 now: a sound's loudness is a property of the sound, not of
+        // whoever plays it. That only means anything if the files actually carry those levels,
+        // so this measures them. Ratios as literals -- 0.65 is "35% quieter" as a person means
+        // it -- never as Sfx constants, which no longer exist to read.
+        Check(Math.Abs(Peak("res://sfx/laser_fighter.wav") / Peak("res://sfx/laser_light.wav") - 0.65) < 0.02,
+              $"a carrier fighter's report is 35% quieter than a capital ship's, IN THE FILE ({Peak("res://sfx/laser_fighter.wav") / Peak("res://sfx/laser_light.wav"):0.000})");
+        // The bomber's launch whoosh, 35% quieter than it used to be heard. The old file is in
+        // retired/, and what is compared is the LEVEL IT PLAYS AT: the old file times its old
+        // -8 dB trim, which is what the ear was actually getting.
+        double oldWhoosh = Peak("res://retired/sfx/missile_whoosh.wav") * Math.Pow(10, -8 / 20.0);
+        Check(Math.Abs(Peak("res://sfx/missile_whoosh.wav") / oldWhoosh - 0.65) < 0.02,
+              $"a missile launch is 35% quieter than it was heard before ({Peak("res://sfx/missile_whoosh.wav") / oldWhoosh:0.000})");
+        // ...and the impact is NOT, because it was already right. Same level as before, to the
+        // sample: the old file at its old -2 dB trim.
+        double oldThunk = Peak("res://retired/sfx/impact_thunk.wav") * Math.Pow(10, -2 / 20.0);
+        Check(Math.Abs(Peak("res://sfx/impact_thunk.wav") / oldThunk - 1.0) < 0.02,
+              $"the impact is exactly as loud as it was, because it was already right ({Peak("res://sfx/impact_thunk.wav") / oldThunk:0.000})");
 
         // leaks: leaving and re-entering the hub must not grow the orphan-node or object
         // counts (the first cycle warms caches; compare the next two against it)

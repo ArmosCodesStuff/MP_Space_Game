@@ -19,6 +19,10 @@ using System;
 // ─────────────────────────────────────────────────────────────────────────────
 public enum ShipClass { Battleship, Carrier }
 
+// What fired a laser, which decides which report is played. Not a volume: the level lives in
+// the file (see tools/gain.ps1), so a new kind of shot is a new sound rather than a new offset.
+public enum ShotSound { Light, Fighter, Boss }
+
 public interface IHittable
 {
     // Same on every peer, so a guest can name a target to the host ("attack 1000").
@@ -363,7 +367,7 @@ public partial class Wing : Node2D
                 {
                     _cd += S["fighter_interval"]; _shots++;
                     t.TakeDamage(S["fighter_damage"]); Carrier.NoteCombat();
-                    Combat.Flash(Position, t.Position, new Color(0.7f, 0.95f, 1f));
+                    Combat.Flash(Position, t.Position, new Color(0.7f, 0.95f, 1f), ShotSound.Fighter);
                 }
                 if (_shots >= BurstShots) _f = FSt.Overshoot;
                 break;

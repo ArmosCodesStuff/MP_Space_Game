@@ -47,7 +47,7 @@ faults have been fixed from those frames more than once.
 
 **As of 2026-09-20 the whole harness also runs natively on the developer's Windows machine** (see
 Unreleased → *The harnesses run on Windows*): typecheck 0 errors, build 0 warnings, analysers 0
-findings, xref 0 unused, smoke **454 pass / 6 of 6 runs** (the 2 short of 456 assert the sandbox's
+findings, xref 0 unused, smoke **468 pass / 6 of 6 runs** (the 2 short of 470 assert the sandbox's
 missing router and internet), sweep **67 frames, 0 lint** on the real GPU with the project's own
 Forward+ renderer. So "how it looks on the developer's own GPU" is no longer unconfirmed for the
 swept states. What remains unconfirmed is how it feels in a hand-played session — nothing here
@@ -306,6 +306,63 @@ have skipped them. They are listed now, and one of them (`Shell`) held a real fi
   live battleship preview. Cached.
 
 Full detail, including what was found and deliberately *not* changed, is in `REVIEW.md`.
+
+### Sound levels live in the sound, and a save knows which build wrote it
+
+**Checked:** typecheck 0 errors; build 0 warnings; analysers 0 findings; xref 0 unused; smoke
+**468 pass, 6/6 runs, three runs in a row, identical every run**; sweep 67 frames, 0 lint.
+
+#### Changed — audio
+
+- **Every effect is stored at the level it is meant to be heard at**, and `Sfx` plays it at 0 dB.
+  The trims that used to sit at the call sites (`-6`, `-8`, `-2`, `-9`) are baked into the files by
+  `tools/gain.ps1`, so a sound's loudness is a property of the sound rather than of whoever happens
+  to play it. The one exception is the hit, which still fades with the length of the shot that made
+  it — that is a function of the shot, not a level.
+- **A carrier's fighters have their own report, 35% quieter** than a capital ship's
+  (`laser_fighter.wav`). `Combat.Flash` carries a `ShotSound` now instead of a boss/not-boss
+  boolean, because "make the fighters quieter" had to be answerable somewhere other than at every
+  call site.
+- **A missile launch is 35% quieter** (`missile_whoosh.wav`). **The impact is untouched** — it was
+  already right, and its file is re-cut at exactly the level it used to play at.
+- **The battleship's gun has its own file** (`cannon.wav`) instead of being the impact played
+  quietly at a higher pitch, so the impact can be tuned without moving the gun with it.
+- Originals are in `retired/sfx/`, which carries a `.gdignore` so the build does not import them.
+
+#### Changed — sizes
+
+- **`MenuFoe` declares a world length and derives its scale from the art**, exactly as
+  `PlayerShip.FitClass` and `Raider` do. It was the only place left carrying hand-picked
+  multipliers — 0.55, 0.40, 0.42 — which say nothing about how big a thing is and stop being right
+  the moment the art is recut. The lengths are the real raiders' lengths, so the title screen shows
+  the enemies at the size you meet them at.
+
+#### Added — the build stamp
+
+- **`Game.Version`**, one number, bumped by one per release that goes out as a zip. A character
+  file records the build that wrote it; loading one from another build is refused **in
+  `Character.Load`**, not in the screen, because `Load` is the only way a character reaches memory.
+  The select screen greys the row, disables PLAY and shows `Game.IncompatibleNote`.
+
+#### New checks
+
+| Check | What it pins |
+|---|---|
+| a carrier fighter's report is 35% quieter, IN THE FILE | 0.650, measured from the asset's own bytes |
+| a missile launch is 35% quieter than it was heard before | 0.650, against the retired file at its old trim |
+| the impact is exactly as loud as it was | 1.000 |
+| a carrier's fighters have their own report | the routing, not the file |
+| the battleship's guns have their own file | as above |
+| the title screen's enemies are the size the game's raiders are | equality with `Raider`'s lengths |
+| everything a character holds survives a save and a load | **enumerated by reflection** |
+| a character from another build is listed, and marked unplayable | the gate |
+| this run starts with no saved characters | the harness's fresh slate, asserted |
+
+**The level checks read the asset, not the code.** A check on loudness that reads a number in the
+code would pass whatever the file contains. They also do not use `GD.Load`: an imported
+`AudioStreamWav` is what Godot made of the asset, so measuring it answers a question about the
+importer. The first version did exactly that and reported a ratio of 1.000 for two files that
+differ by 35%.
 
 ### A multiplayer pass: three things a guest was not being told
 
@@ -605,7 +662,8 @@ Frames looked at. No game code changed.
   the same run (`orphan nodes 0 -> 0`, object count stable across leaving and re-entering the hub).
 
   `Music._ExitTree` already stops the players, nulls their streams and disposes both handles, which
-  is the fix that worked for this message before. It is not enough here. Disposing the packet
+  is the fix that worked for this message before. **It runs — proved with a print, exactly once —
+  and it is still not enough**: the two streams are held by something past the handle Music owns. Disposing the packet
   sequence as well **made it worse** and was reverted: the count went back UP to five, because the
   extra disposal breaks the teardown chain and `SfxPool._ExitTree` then never runs at all.
 

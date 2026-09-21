@@ -30,7 +30,7 @@ public partial class MenuFoe : Node2D, IHittable
     // texture and releases it with the node, which is also how everything else here draws.
     private Sprite2D _sprite;
     private readonly string _art;
-    private readonly float _scale;
+    private readonly float _length;          // the size it IS, in world units -- not a scale factor
     private readonly Random _rng;
 
     public int NetId { get; } = IdBase + (++_next);
@@ -42,18 +42,27 @@ public partial class MenuFoe : Node2D, IHittable
     public MenuFoe(MenuFoeKind kind, Random rng)
     {
         Kind = kind; _rng = rng;
-        (string art, double hp, float sc, float r) = kind switch
+        // A WORLD LENGTH, NOT A SCALE FACTOR. Every other ship in the build declares how big it
+        // is and derives the scale from the art (PlayerShip.FitClass, Raider); only these carried
+        // hand-picked multipliers -- 0.55, 0.40, 0.42 -- which say nothing about how big the thing
+        // is and stop being right the moment the art is recut.
+        //
+        // The lengths are the REAL raiders' lengths, so the title screen shows the enemies at the
+        // size you meet them at, for the same reason it shows the ship at the game's own zoom.
+        (string art, double hp, float len, float radius) = kind switch
         {
-            MenuFoeKind.Heavy => ("res://enemy_heavy_hull.png", 26.0, 0.55f, 26f),
-            MenuFoeKind.Web   => ("res://enemy_light_tier_2.png", 10.0, 0.40f, 16f),
-            _                 => ("res://enemy_light_fighter.png", 6.0, 0.42f, 15f),
+            MenuFoeKind.Heavy => ("res://enemy_heavy_hull.png",   26.0, Raider.HeavyLength, Raider.HeavyLength * 0.3f),
+            MenuFoeKind.Web   => ("res://enemy_light_tier_2.png", 10.0, Raider.LightLength, Raider.LightLength * 0.4f),
+            _                 => ("res://enemy_light_fighter.png", 6.0, Raider.LightLength, Raider.LightLength * 0.4f),
         };
-        _art = art; _maxHp = _hp = hp; _scale = sc; HitRadius = r;
+        _art = art; _maxHp = _hp = hp; _length = len; HitRadius = radius;
     }
 
     public override void _Ready()
     {
-        _sprite = new Sprite2D { Texture = GD.Load<Texture2D>(_art), Scale = new Vector2(_scale, _scale) };
+        var tex = GD.Load<Texture2D>(_art);
+        float k = _length / tex.GetHeight();          // exactly how Raider and PlayerShip do it
+        _sprite = new Sprite2D { Texture = tex, Scale = new Vector2(k, k) };
         AddChild(_sprite);
     }
 

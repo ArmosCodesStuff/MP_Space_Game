@@ -61,9 +61,12 @@ public static class Combat
     }
 
     // Set by the live world so combat can draw without knowing what world it is in.
-    // A laser shot's flash (and its sound). `boss`: a boss's weapon -- its deeper buzz.
-    public static System.Action<Vector2, Vector2, Color, bool> OnFlash;
-    public static void Flash(Vector2 a, Vector2 b, Color c, bool boss = false) => OnFlash?.Invoke(a, b, c, boss);
+    // A laser shot's flash, and its sound. The KIND is what fired it, not a boss/not-boss
+    // boolean: a carrier's fighters want their own report, quieter than a capital ship's, and
+    // "make the fighters quieter" has to be answerable somewhere other than at every call site.
+    public static System.Action<Vector2, Vector2, Color, ShotSound> OnFlash;
+    public static void Flash(Vector2 a, Vector2 b, Color c, ShotSound snd = ShotSound.Light)
+        => OnFlash?.Invoke(a, b, c, snd);
 
     // Set by the live world: launches a projectile there (and, on a host, tells
     // guests). Unguided torpedoes pass targetId 0; the missile passes its target and

@@ -194,10 +194,10 @@ public partial class Hub : Node2D
         Combat.Clear();
         // Flashes are made on the host, where the shots happen. Guests are sent them,
         // or a guest firing at the dummy would see nothing at all.
-        Combat.OnFlash = (a, b, c, boss) =>
+        Combat.OnFlash = (a, b, c, snd) =>
         {
-            AddFlash(a, b, c, boss);
-            if (Net.IsHost && Net.IsOnline) Rpc(nameof(NetFlash), a, b, c, boss);
+            AddFlash(a, b, c, snd);
+            if (Net.IsHost && Net.IsOnline) Rpc(nameof(NetFlash), a, b, c, (int)snd);
         };
         // Torpedoes: the host's copy deals damage; guests get the launch and fly a
         // cosmetic copy (the run is straight and steady, so it lands in the same place).
@@ -1061,8 +1061,8 @@ public partial class Hub : Node2D
         => SpawnTorpedo(from, dir, speed, range, 0, true, target, turn, heavy, hostile, null, id, null, size);
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
-    private void NetFlash(Vector2 a, Vector2 b, Color c, bool boss) => AddFlash(a, b, c, boss);
-    private void AddFlash(Vector2 a, Vector2 b, Color c, bool boss) { _flashes.Add((a, b, c, 0.10)); Sfx.Laser(a, b, boss); }
+    private void NetFlash(Vector2 a, Vector2 b, Color c, int snd) => AddFlash(a, b, c, (ShotSound)snd);
+    private void AddFlash(Vector2 a, Vector2 b, Color c, ShotSound snd) { _flashes.Add((a, b, c, 0.10)); Sfx.Laser(a, b, snd); }
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
     private void NetDummy(int number, double last, double avg, double total)
