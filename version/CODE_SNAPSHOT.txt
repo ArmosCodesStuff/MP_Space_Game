@@ -1,6 +1,6 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-22 03:13, on top of git commit b001804. How it was verified is in the message of the
+// Taken 2026-09-22 03:25, on top of git commit 93980a4. How it was verified is in the message of the
 //   commit that carries this file: one starting VERIFIED: is a green verify.ps1 -Update.
 // 83 files, 17698 lines. Code only: sprites, sounds and docs are in the zip.
 //
