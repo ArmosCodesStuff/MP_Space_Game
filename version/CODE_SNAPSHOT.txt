@@ -1,8 +1,8 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-22 03:57, on top of git commit fd71efd. How it was verified is in the message of the
+// Taken 2026-09-22 05:24, on top of git commit 28ac6f0. How it was verified is in the message of the
 //   commit that carries this file: one starting VERIFIED: is a green verify.ps1 -Update.
-// 87 files, 18209 lines. Code only: sprites, sounds and docs are in the zip.
+// 89 files, 19481 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -19,16 +19,17 @@
 //   scripts/Abilities.cs                           153 lines   sha256 bfb051b61efb
 //   scripts/AbilityBar.cs                          121 lines   sha256 ee6c123602dd
 //   scripts/Autopilot.cs                            40 lines   sha256 807538219f53
-//   scripts/BaseDefense.cs                          52 lines   sha256 8103ce48a948
+//   scripts/BaseDefense.cs                          52 lines   sha256 75835892e42e
 //   scripts/BasePanel.cs                           138 lines   sha256 eda74bdf3a37
 //   scripts/Beam.cs                                 17 lines   sha256 0891bde6e0cc
-//   scripts/Boss.cs                                179 lines   sha256 430ff1a1c225
+//   scripts/Boss.cs                                214 lines   sha256 eb5023eb3d1d
 //   scripts/BossBar.cs                              90 lines   sha256 ee7d33abf543
-//   scripts/Character.cs                           352 lines   sha256 3c553b35e32e
-//   scripts/CharacterCreator.cs                    216 lines   sha256 9645b6faeabb
+//   scripts/Character.cs                           356 lines   sha256 f0c0bed7bbf5
+//   scripts/CharacterCreator.cs                    215 lines   sha256 727f961a54e8
 //   scripts/CharacterSelect.cs                     184 lines   sha256 241e2389c734
 //   scripts/Combat.cs                              118 lines   sha256 1471dd2955f3
-//   scripts/Drake.cs                               132 lines   sha256 0aa17ade1195
+//   scripts/DamageNumbers.cs                        83 lines   sha256 20747f8cd3bd
+//   scripts/Drake.cs                               144 lines   sha256 e71736573dae
 //   scripts/Economy.cs                             108 lines   sha256 27cf2a0a32ae
 //   scripts/Equipment.cs                           274 lines   sha256 0eab67468e18
 //   scripts/EquipmentWindow.cs                     126 lines   sha256 88af43fe3901
@@ -36,44 +37,44 @@
 //   scripts/EscMenu.cs                              68 lines   sha256 a6334f984666
 //   scripts/Explosion.cs                            18 lines   sha256 12209b0c72ce
 //   scripts/Game.cs                                 60 lines   sha256 9d93b07815b8
-//   scripts/Gatherer.cs                            235 lines   sha256 36eb2e82c0f3
-//   scripts/Hauler.cs                              404 lines   sha256 bfd5b098f8c9
+//   scripts/Gatherer.cs                            236 lines   sha256 40ed5b6326f2
+//   scripts/Hauler.cs                              405 lines   sha256 eea8a75f06a2
 //   scripts/HealthBar.cs                            23 lines   sha256 fafaf0102ffb
 //   scripts/Hints.cs                                98 lines   sha256 1b018c88396f
-//   scripts/Hub.cs                                1624 lines   sha256 bed737c3f8aa
-//   scripts/Lancer.cs                              192 lines   sha256 ba11ba0a1c7b
+//   scripts/Hub.cs                                1672 lines   sha256 3229054cc43e
+//   scripts/Lancer.cs                              194 lines   sha256 fe66d5bf6349
 //   scripts/Loot.cs                                118 lines   sha256 f8a5de98fe1f
 //   scripts/MainMenu.cs                            287 lines   sha256 eab17b5a70c3
-//   scripts/MenuFoe.cs                             201 lines   sha256 0bda2aa62d3d
-//   scripts/Missions.cs                             50 lines   sha256 e9f04b0bd61b
+//   scripts/MenuFoe.cs                             201 lines   sha256 706a9ee039ba
+//   scripts/Missions.cs                             50 lines   sha256 2d0007b08c4b
 //   scripts/Music.cs                                81 lines   sha256 d77805e7d7ae
-//   scripts/Net.cs                                 781 lines   sha256 f27e079491a2
+//   scripts/Net.cs                                 781 lines   sha256 89afe425d9cb
 //   scripts/PilotWindow.cs                          60 lines   sha256 4e05487ebecd
-//   scripts/PlayerShip.cs                          904 lines   sha256 513affc33cf7
+//   scripts/PlayerShip.cs                          925 lines   sha256 6bed8545da31
 //   scripts/Plume.cs                                25 lines   sha256 cdbeb9b8fc58
-//   scripts/Progression.cs                         107 lines   sha256 46fedcf6757c
+//   scripts/Progression.cs                         107 lines   sha256 15d2e3b0a6ce
 //   scripts/Radar.cs                               137 lines   sha256 607acccd21dd
-//   scripts/Raider.cs                              327 lines   sha256 37ca058131cc
+//   scripts/Raider.cs                              336 lines   sha256 fc837fec1ed6
 //   scripts/ReturnButton.cs                         27 lines   sha256 e36ddbb19a08
 //   scripts/Router.cs                              429 lines   sha256 294cec245abf
 //   scripts/SessionMenu.cs                         141 lines   sha256 777687907142
 //   scripts/Settings.cs                             87 lines   sha256 4dd23a4a672f
-//   scripts/Sfx.cs                                  97 lines   sha256 9efb916881e5
-//   scripts/Shell.cs                                52 lines   sha256 559e4382e95d
+//   scripts/Sfx.cs                                 105 lines   sha256 879dc5464b7a
+//   scripts/Shell.cs                                53 lines   sha256 04ce88f1ee24
 //   scripts/Shield.cs                               71 lines   sha256 99c7fa4a2a8e
-//   scripts/ShipClasses.cs                         539 lines   sha256 3f5d43431318
-//   scripts/Slug.cs                                 96 lines   sha256 8aee6a288f6c
+//   scripts/ShipClasses.cs                         625 lines   sha256 f0e69f4bc274
+//   scripts/Slug.cs                                 97 lines   sha256 4f87ca854335
 //   scripts/Sprites.cs                              13 lines   sha256 f2374b1d9777
 //   scripts/Stats.cs                               205 lines   sha256 76dcca49d3f1
 //   scripts/StatsWindow.cs                         225 lines   sha256 843e3831c247
-//   scripts/TargetDummy.cs                         133 lines   sha256 2a50d73cee42
-//   scripts/Telegraph.cs                            48 lines   sha256 058f5a0b7057
-//   scripts/ThrownRock.cs                           96 lines   sha256 3995bc17619e
+//   scripts/TargetDummy.cs                         145 lines   sha256 a545cd280b67
+//   scripts/Telegraph.cs                            55 lines   sha256 f456ac50c42c
+//   scripts/ThrownRock.cs                           98 lines   sha256 416b29fe403e
 //   scripts/TioWindow.cs                            75 lines   sha256 5da271b76838
-//   scripts/Torpedo.cs                             149 lines   sha256 78f268798b9b
+//   scripts/Torpedo.cs                             150 lines   sha256 13b0c68aca8d
 //   scripts/Txt.cs                                  32 lines   sha256 8823251c9a4f
 //   scripts/Ui.cs                                  236 lines   sha256 e6d274f5a4cd
-//   scripts/UtilityShip.cs                          74 lines   sha256 c0d1895994ce
+//   scripts/UtilityShip.cs                          78 lines   sha256 c578be51ba5f
 //   scripts/Yard.cs                                534 lines   sha256 09ca20f88ed4
 //   typecheck/GodotStub.cs                         192 lines   sha256 2c5c2967bf5c
 //   typecheck/typecheck.ps1                         80 lines   sha256 94631684caab
@@ -84,16 +85,17 @@
 //   tools/analyse/xref.py                           19 lines   sha256 5406a5e81bde
 //   tools/find-godot.ps1                            53 lines   sha256 fabe4c75faae
 //   tools/gain.ps1                                  44 lines   sha256 41f4d8f93189
-//   tools/make_destroyer.ps1                        77 lines   sha256 89bc0fcf58e2
+//   tools/make_ships.ps1                           618 lines   sha256 6c482030b6ed
+//   tools/make_sounds.py                           232 lines   sha256 85eba97b8ac6
 //   tools/manifest.ps1                              42 lines   sha256 2bd8e7cbf24b
 //   tools/map.py                                   232 lines   sha256 01a23fceab11
 //   tools/screens/run.ps1                          128 lines   sha256 9e8d569b0b94
 //   tools/screens/run.sh                            42 lines   sha256 73a5b3c63476
-//   tools/screens/Shots.cs.txt                     594 lines   sha256 97296df2212e
+//   tools/screens/Shots.cs.txt                     607 lines   sha256 535e0fac0c3f
 //   tools/smoketest/fakeigd.py                     155 lines   sha256 b980d4fa4ad4
 //   tools/smoketest/run.ps1                        209 lines   sha256 54069e6faaff
 //   tools/smoketest/run.sh                          57 lines   sha256 9ac9cbdf9115
-//   tools/smoketest/SmokeTest.cs.txt              4227 lines   sha256 1db1c0875d14
+//   tools/smoketest/SmokeTest.cs.txt              4376 lines   sha256 16f239cfb999
 //   tools/smoketest/wan.py                          61 lines   sha256 97db24aa3f91
 //   tools/snapshot.ps1                              94 lines   sha256 3ca9bfe56185
 //==============================================================================
@@ -732,7 +734,7 @@ public static class Autopilot
 
 //==============================================================================
 // FILE: scripts/BaseDefense.cs
-// 52 lines   sha256 8103ce48a948
+// 52 lines   sha256 75835892e42e
 //==============================================================================
 using Godot;
 using System.Linq;
@@ -756,7 +758,7 @@ public partial class BaseDefense : Node2D
     {
         Name = "BaseDefense";
         Position = Hub.BasePos + new Vector2(0, -60);          // on the station's upper deck
-        var tt = GD.Load<Texture2D>("res://turret_bs_main.png");
+        var tt = GD.Load<Texture2D>("res://turret_main.png");
         _turret = new Sprite2D { Texture = tt, Scale = Vector2.One * 0.75f, Modulate = new Color(0.78f, 0.82f, 0.9f) };
         AddChild(_turret);
         ZIndex = 4;
@@ -954,7 +956,7 @@ public static class Beam
 
 //==============================================================================
 // FILE: scripts/Boss.cs
-// 179 lines   sha256 430ff1a1c225
+// 214 lines   sha256 eb5023eb3d1d
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -1010,6 +1012,7 @@ public abstract partial class Boss : Node2D, IHittable
     }
     private NetPose _net; private bool _netLocked;
     private double _send;
+    private HullWatch _hullWatch;
 
     public override void _Ready()
     {
@@ -1028,12 +1031,16 @@ public abstract partial class Boss : Node2D, IHittable
         Hp = System.Math.Max(0, Hp - d);
         if (Hp <= 0) Hub.BossDefeated();
     }
+    // the host's word that it is down: a peer that never had its figures (one that arrived after the
+    // win) shows nothing for it
+    public void Downed() { if (!_net.Has) _hullWatch = default; Hp = 0; }
 
     private IEnumerable<PlayerShip> Pilots => Combat.Players.OfType<PlayerShip>().Where(p => p.Alive);
 
     public override void _Process(double delta)
     {
         float dt = (float)delta;
+        _hullWatch.Tick(this, Hp, taken: false);
         if (!Alive && _telegraphs.Count > 0) ClearTelegraphs();
         if (!Net.Sim)
         {
@@ -1096,15 +1103,18 @@ public abstract partial class Boss : Node2D, IHittable
     // warning swings with the hull instead of being pinned to the spot the boss stood on when it
     // drew it. Guests already follow the boss's pose from NetState, so their copy tracks too --
     // no per-frame line updates over the wire.
-    protected void Tele(bool line, Vector2 a, Vector2 b, float size, double time, bool onHull = false, double hold = 0)
+    // cue / strike: the move's sounds, as the warning goes up and as it lands (Telegraph)
+    protected void Tele(bool line, Vector2 a, Vector2 b, float size, double time, bool onHull = false, double hold = 0,
+                        string cue = null, string strike = null)
     {
-        ShowTelegraph(line, a, b, size, time, onHull, hold);
+        ShowTelegraph(line, a, b, size, time, onHull, hold, cue, strike);
         // arena peers only, for the same reason as NetState above
-        if (Net.IsOnline) Hub?.RpcToSector(Hub.SectorKind.Arena, this, nameof(NetTelegraph), line, a, b, size, time, onHull, hold);
+        if (Net.IsOnline) Hub?.RpcToSector(Hub.SectorKind.Arena, this, nameof(NetTelegraph), line, a, b, size, time, onHull, hold, cue ?? "", strike ?? "");
     }
-    private void ShowTelegraph(bool line, Vector2 a, Vector2 b, float size, double time, bool onHull, double hold)
+    private void ShowTelegraph(bool line, Vector2 a, Vector2 b, float size, double time, bool onHull, double hold, string cue, string strike)
     {
-        var t = new Telegraph { Line = line, A = a, B = b, Width = size, Radius = size, Duration = time, Hold = hold };
+        var t = new Telegraph { Line = line, A = a, B = b, Width = size, Radius = size, Duration = time, Hold = hold,
+                                Cue = string.IsNullOrEmpty(cue) ? null : cue, Strike = string.IsNullOrEmpty(strike) ? null : strike };
         (onHull ? (Node)this : GetParent()).AddChild(t);
         _telegraphs.RemoveAll(x => !IsInstanceValid(x));
         _telegraphs.Add(t);
@@ -1123,12 +1133,39 @@ public abstract partial class Boss : Node2D, IHittable
     // Net.Arriving): on the internet the two were a round trip apart, and a pilot who cleared the
     // red on their own screen was hit "outside" it.
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetTelegraph(bool line, Vector2 a, Vector2 b, float size, double time, bool onHull, double hold) =>
-        ShowTelegraph(line, a, b, size, Net.Arriving(time), onHull, hold);
+    private void NetTelegraph(bool line, Vector2 a, Vector2 b, float size, double time, bool onHull, double hold, string cue, string strike) =>
+        ShowTelegraph(line, a, b, size, Net.Arriving(time), onHull, hold, cue, strike);
+
+    // host: a special move's sound, here and on every guest in the arena -- for a move with no
+    // warning to carry it (Tele's cue and strike)
+    protected void Sound(string name, Vector2 at)
+    {
+        Sfx.Special(name, at);
+        if (Net.IsOnline) Hub?.RpcToSector(Hub.SectorKind.Arena, this, nameof(NetSound), name, at);
+    }
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
+    private void NetSound(string name, Vector2 at) => Sfx.Special(name, at);
+
+    // A PILOT ARRIVING MID-FIGHT -- a rejoin, a slow load -- missed every warning already up (and the
+    // Drake's rock, if one is thrown): each is sent once, as it starts, to the peers in the arena
+    // then. The host sends such a peer what is up now, as it stands (Hub.NetMySector). A warning's
+    // opening sound is not replayed; its landing sound still plays.
+    public virtual void CatchUp(int peer)
+    {
+        foreach (var t in _telegraphs)
+        {
+            if (!IsInstanceValid(t)) continue;
+            double left = t.Duration - t.Elapsed, hold = t.Hold;
+            if (left < 0) { hold += left; left = 0; }
+            if (left <= 0 && hold <= 0) continue;                  // landed: only its flash is left
+            RpcId(peer, nameof(NetTelegraph), t.Line, t.A, t.B, t.Width, left, t.GetParent() == this, hold, "", left > 0 ? t.Strike ?? "" : "");
+        }
+    }
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
     private void NetState(Vector2 p, float rot, double hp, bool locked, double nextSuper, double superGap, double hullMult)
     {
+        if (!_net.Has) _hullWatch = default;       // the host's first figure is where this peer starts counting
         // the host's scale too: a guest built its boss for the party it saw, and one that rejoined
         // mid-fight saw a different party
         _net.Set(p, rot); Hp = hp; _netLocked = locked; HullMult = hullMult;
@@ -1233,7 +1270,7 @@ public partial class BossBar : Control
 
 //==============================================================================
 // FILE: scripts/Character.cs
-// 352 lines   sha256 3c553b35e32e
+// 356 lines   sha256 f0c0bed7bbf5
 //==============================================================================
 using Godot;
 using System;
@@ -1256,8 +1293,8 @@ public static class Character
     public static class Defaults
     {
         public const string Name = "Commander";
-        public static readonly Color Main = new(0.55f, 0.72f, 1.00f);     // hull
-        public static readonly Color Accent = new(1.00f, 0.78f, 0.35f);   // turrets, engines, trim
+        public static readonly Color Main = new(0.30f, 0.50f, 0.95f);     // hull: blue
+        public static readonly Color Accent = new(1.00f, 0.78f, 0.35f);   // turrets, engines, trim: gold
     }
 
     public static string Id = "";           // file stem; empty = nothing loaded
@@ -1491,12 +1528,16 @@ public static class Character
     }
 
     // The [id] section: what the select screen lists, and what Load checks before anything else.
+    // A pilot still in the first default hull colour -- a pale blue that left the line-art hulls
+    // near white -- never chose it, only inherited it: they are given the default as it is now.
+    private static Color SavedHull(Color c) => c.IsEqualApprox(new Color(0.55f, 0.72f, 1.00f)) ? Defaults.Main : c;
+
     private static Slot ReadSlot(ConfigFile c, string id) => new()
     {
         Id = id,
         Version = (int)c.GetValue("id", "version", 0),
         Name = (string)c.GetValue("id", "name", Defaults.Name),
-        Main = (Color)c.GetValue("id", "main", Defaults.Main),
+        Main = SavedHull((Color)c.GetValue("id", "main", Defaults.Main)),
         Accent = (Color)c.GetValue("id", "accent", Defaults.Accent),
         Class = Classes.Sanitize((int)c.GetValue("id", "class", 0)),
     };
@@ -1590,7 +1631,7 @@ public static class Classes
 
 //==============================================================================
 // FILE: scripts/CharacterCreator.cs
-// 216 lines   sha256 9645b6faeabb
+// 215 lines   sha256 727f961a54e8
 //==============================================================================
 using Godot;
 
@@ -1752,8 +1793,8 @@ public partial class CharacterCreator : CanvasLayer
 }
 
 // The ship as it will look in game: the class's real sprite, tinted with the hull
-// colour exactly as PlayerShip tints it, with accent-coloured turrets on the real
-// mounts (PlayerShip.Art). Live reads the current character every redraw; otherwise
+// colour exactly as PlayerShip tints it, with its turrets in the accent colour on the
+// real mounts (PlayerShip.Art). Live reads the current character every redraw; otherwise
 // it draws the fixed values it was given (the select screen shows one per row).
 public partial class ShipPreview : Control
 {
@@ -1792,15 +1833,14 @@ public partial class ShipPreview : Control
         Plume.Draw(this, c + new Vector2(0, drawSize.Y * 0.5f), Vector2.Down, drawSize.Y, Accent, 0.8f, false);
         DrawTextureRect(tex, new Rect2(c - drawSize * 0.5f, drawSize), false, Main);
 
-        // turrets: the same cut-out sprites the game turns, pointing forward, in the
-        // hull colour; the drawn fallback only for a class without turret art
+        // turrets: the same sprites the game turns, in the accent colour as Turret draws them
         void Mount(Vector2 off, bool pd)
-        {   // the cut-out turret sprites the game turns, as painted: aft turrets face aft
+        {   // at rest: forward turrets face forward, aft turrets aft
             var p = c + off * k;
             var tt = Tex(pd ? art.PdTurret : art.MainTurret);
             var sz = tt.GetSize() * art.TurretTexScale * k;
             DrawSetTransformMatrix(shipXf * new Transform2D(!pd && off.Y > 0 ? Mathf.Pi : 0f, p));
-            DrawTextureRect(tt, new Rect2(-sz * 0.5f, sz), false, Main);
+            DrawTextureRect(tt, new Rect2(-sz * 0.5f, sz), false, Accent);
             DrawSetTransformMatrix(shipXf);
         }
         foreach (var m in art.Mains) Mount(m, false);
@@ -2122,8 +2162,96 @@ public static class Combat
 }
 
 //==============================================================================
+// FILE: scripts/DamageNumbers.cs
+// 83 lines   sha256 20747f8cd3bd
+//==============================================================================
+using Godot;
+using System.Collections.Generic;
+
+// DAMAGE NUMBERS: small figures where damage lands, floating up and fading -- pale gold for damage
+// dealt (to raiders, bosses, the dummies), red for damage taken (by the players' ships and the base's
+// utility ships). Every peer shows what IT sees, from hulls it already has: each damageable thing
+// watches its own hull (HullWatch) -- its own hit on the host, the host's figures on a guest -- so no
+// message is sent for them. A figure stands at the IMPACT POINT where one is known (NoteImpact: where
+// a shell or a torpedo struck, the side of a ship a hit came from), else round the thing's centre.
+// Hits on one thing in quick succession add into one figure rather than stacking a column of them.
+// One per world (the Hub's), freed with it.
+public partial class DamageNumbers : Node2D
+{
+    public const double Life = 1.2, Fade = 0.6;     // seconds on screen, the last `Fade` of them fading
+    public const float Rise = 26f;                  // how far a figure floats up over its life (world units)
+    public const double Merge = 0.3;                // a hit on the same thing within this of its figure adds to it
+    private const float Jitter = 10f;               // round the thing's centre, so a stream of figures never stacks exactly
+    private const float ImpactJitter = 4f;          // round a known impact point
+    private const double ImpactFresh = 0.3;         // an impact point is the next figure's if it is this recent
+
+    public class Figure { public ulong Who; public Vector2 At; public double Amount, Age; public bool Taken; }
+    private readonly List<Figure> _figures = new();
+    public IReadOnlyList<Figure> Figures => _figures;
+    private readonly Dictionary<ulong, (Vector2 at, double t)> _impacts = new();
+    private double _clock;
+    private static DamageNumbers _live;
+    public static DamageNumbers Live => GodotObject.IsInstanceValid(_live) && _live.IsInsideTree() ? _live : null;
+
+    public override void _EnterTree() { _live = this; ZIndex = 9; ZAsRelative = false; }
+    public override void _ExitTree() { if (_live == this) _live = null; }
+
+    public static void Show(Node2D who, double amount, bool taken)
+    {
+        var l = Live;
+        if (l == null || amount <= 1e-6 || !GodotObject.IsInstanceValid(who)) return;
+        ulong id = who.GetInstanceId();
+        foreach (var f in l._figures)
+            if (f.Who == id && f.Taken == taken && f.Age < Merge) { f.Amount += amount; return; }
+        bool struck = l._impacts.Remove(id, out var hit) && l._clock - hit.t <= ImpactFresh;
+        l._figures.Add(new Figure { Who = id, Amount = amount, Taken = taken,
+                                    At = (struck ? hit.at : who.GlobalPosition) + new Vector2(GD.Randf() * 2f - 1f, GD.Randf() * 2f - 1f) * (struck ? ImpactJitter : Jitter) });
+    }
+
+    // where `who` was just struck: its next figure stands there
+    public static void NoteImpact(Node2D who, Vector2 at)
+    {
+        var l = Live;
+        if (l != null && GodotObject.IsInstanceValid(who)) l._impacts[who.GetInstanceId()] = (at, l._clock);
+    }
+
+    public override void _Process(double delta)
+    {
+        _clock += delta;
+        for (int i = _figures.Count - 1; i >= 0; i--)
+            if ((_figures[i].Age += delta) >= Life) _figures.RemoveAt(i);
+        if (_impacts.Count > 0)
+            foreach (var id in new List<ulong>(_impacts.Keys)) if (_clock - _impacts[id].t > ImpactFresh) _impacts.Remove(id);
+        QueueRedraw();
+    }
+
+    public override void _Draw()
+    {
+        var font = ThemeDB.FallbackFont; int size = Txt.Size(11);
+        foreach (var f in _figures)
+        {
+            float a = f.Age < Life - Fade ? 1f : (float)((Life - f.Age) / Fade);
+            var col = f.Taken ? new Color(1f, 0.42f, 0.32f, a) : new Color(1f, 0.9f, 0.55f, a);
+            Txt.Centre(this, font, f.At + new Vector2(0, -Rise * (float)(f.Age / Life)), f.Amount < 10 ? f.Amount.ToString("0.#") : f.Amount.ToString("0"), size, col);
+        }
+    }
+}
+
+// One thing's hull, watched from frame to frame: what it lost since the last look is shown
+// (DamageNumbers). A rise -- a repair, a rebuild, a refit -- only moves the mark.
+public struct HullWatch
+{
+    private double _last; private bool _seen;
+    public void Tick(Node2D who, double hull, bool taken)
+    {
+        if (_seen && hull < _last - 1e-6) DamageNumbers.Show(who, _last - hull, taken);
+        _last = hull; _seen = true;
+    }
+}
+
+//==============================================================================
 // FILE: scripts/Drake.cs
-// 132 lines   sha256 0aa17ade1195
+// 144 lines   sha256 e71736573dae
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -2208,7 +2336,7 @@ public partial class Drake : Boss
             _shotTarget = Nearest();
             _warpTo = _shotTarget.Position + (Position - _shotTarget.Position).Normalized() * WarpStandoff;
             _warpT = WarpWarning;
-            Tele(false, _warpTo, Vector2.Zero, HalfWidth * 1.3f, WarpWarning);
+            Tele(false, _warpTo, Vector2.Zero, HalfWidth * 1.3f, WarpWarning, strike: "drake_warp");
         }
         if (_warpT >= 0 && (_warpT -= delta) <= 0)
         {   // it lands, facing the pilot, and the fan is drawn from its nose -- fixed from here on
@@ -2218,7 +2346,7 @@ public partial class Drake : Boss
             if (_shotTarget != null) Rotation = (_shotTarget.Position - Position).Angle() + Mathf.Pi / 2f;
             _fanAim = Rotation - Mathf.Pi / 2f;
             foreach (float a in FanAngles(_fanAim))
-                Tele(true, Nose, Nose + Vector2.Right.Rotated(a) * ScrapRange, ScrapRadius * 2f + 10f, FanWindup);
+                Tele(true, Nose, Nose + Vector2.Right.Rotated(a) * ScrapRange, ScrapRadius * 2f + 10f, FanWindup, strike: "drake_scrap");
             _fanT = FanWindup;
         }
         if (_fanT >= 0 && (_fanT -= delta) <= 0)
@@ -2242,7 +2370,7 @@ public partial class Drake : Boss
             var from = Position + side * (HalfWidth + RockRadius + 40f);
             var to = from + (t.Position - from).Normalized() * ThrowLength;
             int variant = Throws % 2;
-            Tele(true, from, to, RockRadius * 2f, ThrowWindup, hold: ThrowFlight);
+            Tele(true, from, to, RockRadius * 2f, ThrowWindup, hold: ThrowFlight, cue: "drake_tractor", strike: "drake_throw");
             _rock = new ThrownRock { Boss = this, From = from, To = to, Hold = ThrowWindup, Flight = ThrowFlight,
                                      Damage = RockDamage * DamageMult, Radius = RockRadius, Variant = variant };
             GetParent().AddChild(_rock);
@@ -2251,11 +2379,23 @@ public partial class Drake : Boss
     }
 
     // A guest's rock: the same one, from the same event -- its hold shortened by the trip here, never
-    // its flight (see ThrownRock).
+    // its flight (see ThrownRock). A catch-up sends what is left of the hold: less than nothing once
+    // the rock is in flight, which starts it that far along its lane -- and a round trip further, as
+    // a warning here ends a round trip early. It replaces any rock shown.
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetRock(Vector2 from, Vector2 to, double hold, double flight, float radius, int variant) =>
-        GetParent().AddChild(_rock = new ThrownRock { Boss = this, From = from, To = to, Hold = Net.Arriving(hold), Flight = flight,
+    private void NetRock(Vector2 from, Vector2 to, double hold, double flight, float radius, int variant)
+    {
+        if (IsInstanceValid(_rock)) _rock.QueueFree();
+        GetParent().AddChild(_rock = new ThrownRock { Boss = this, From = from, To = to, Hold = hold > 0 ? Net.Arriving(hold) : hold - Net.RoundTrip, Flight = flight,
                                                       Radius = radius, Variant = variant, Cosmetic = true });
+    }
+
+    // a peer arriving mid-throw is sent the rock as it stands, as well as the lane (Boss.CatchUp)
+    public override void CatchUp(int peer)
+    {
+        base.CatchUp(peer);
+        if (Rock is { Done: false } r) RpcId(peer, nameof(NetRock), r.From, r.To, r.Hold - r.Elapsed, r.Flight, r.Radius, r.Variant);
+    }
 }
 
 //==============================================================================
@@ -2998,7 +3138,7 @@ public static class Game
 
 //==============================================================================
 // FILE: scripts/Gatherer.cs
-// 235 lines   sha256 36eb2e82c0f3
+// 236 lines   sha256 40ed5b6326f2
 //==============================================================================
 using Godot;
 using System;
@@ -3081,6 +3221,7 @@ public partial class Gatherer : UtilityShip
     {
         float dt = (float)delta;
         _t += delta;
+        WatchHull();
         Visible = State != St.Destroyed;         // a lost ship is gone until it is rebuilt
         if (Net.Sim) Simulate(dt);
         else
@@ -3238,7 +3379,7 @@ public partial class Gatherer : UtilityShip
 
 //==============================================================================
 // FILE: scripts/Hauler.cs
-// 404 lines   sha256 bfd5b098f8c9
+// 405 lines   sha256 eea8a75f06a2
 //==============================================================================
 using Godot;
 using System;
@@ -3377,6 +3518,7 @@ public partial class Hauler : UtilityShip
     {
         float dt = (float)delta;
         T += delta;
+        WatchHull();
         if (Net.Sim) Simulate(dt);
         else
         {
@@ -3778,7 +3920,7 @@ public partial class Hints : CanvasLayer
 
 //==============================================================================
 // FILE: scripts/Hub.cs
-// 1624 lines   sha256 bed737c3f8aa
+// 1672 lines   sha256 3229054cc43e
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -3964,6 +4106,7 @@ public partial class Hub : Node2D
         // turret sprites, so a shot is seen leaving a turret on top of the ship -- drawn at
         // the world's own level they started underneath it.
         AddChild(new FlashLayer { Hub = this, ZIndex = 8, ZAsRelative = false });
+        AddChild(new DamageNumbers { Name = "DamageNumbers" });
         _cam = new Camera2D { Zoom = new Vector2(DefaultZoom, DefaultZoom) }; AddChild(_cam); _cam.MakeCurrent();
 
         var layer = new CanvasLayer(); AddChild(layer);
@@ -4194,6 +4337,7 @@ public partial class Hub : Node2D
         if ((SectorKind)s != Sector) { RpcId(who, nameof(NetSector), (int)Sector, Missions.Level); return; }
         RpcId(who, nameof(NetMission), MissionArgs());
         foreach (var r in Raiders) RpcId(who, nameof(NetRaiderSpawn), r.NetId, r.Position, (int)r.Kind, r.Strength, r.HullShare);
+        if (Sector == SectorKind.Arena && IsInstanceValid(Boss) && Boss.Alive) Boss.CatchUp(who);   // the warnings (and a rock) up now
         if (MissionWon) { RpcId(who, nameof(NetWon), _ships.Count); RpcId(who, nameof(NetReturnCount), ReturnReady, ReturnTotal); }
         if (_placeFor.Remove(who, out var place)) RpcId(who, nameof(NetPlace), place.at, place.rot);
     }
@@ -4406,6 +4550,7 @@ public partial class Hub : Node2D
         if (characterId.Length > 64) characterId = "";
         (p.Name, p.Main, p.Accent, p.Class, p.Bought, p.Equip, p.CharacterId, p.HasIdentity) =
             (name, main, accent, Classes.Sanitize(cls), bought, equip ?? System.Array.Empty<string>(), characterId, true);
+        p.Level = System.Math.Clamp(level, 1, 100);             // a claim: bounded before it weighs on an escort's threat
         if (_ships.TryGetValue(peer, out var s) && IsInstanceValid(s)) ApplyIdentity(s);
         TryRestoreHold(peer);
     }
@@ -4530,7 +4675,7 @@ public partial class Hub : Node2D
     {
         MissionWon = true;
         _returnTotal = total; _returnReady = 0; _iReturned = false;
-        if (IsInstanceValid(Boss)) Boss.Hp = 0;
+        if (IsInstanceValid(Boss)) Boss.Downed();
     }
 
     // This pilot's drops: on its own file at once (like the bounty), then as crates to fly over
@@ -4684,32 +4829,75 @@ public partial class Hub : Node2D
         foreach (var u in Yard.Fleet) if (Raider.Up(u)) yield return u;
     }
 
-    // A patrol: 3 lights and (unless `heavy` is false) 1 heavy, spawned together at `at` on the
-    // perimeter -- hunters of `quarry`, if one is given, built with `hullShare` of their hull.
+    // A patrol: `lights` light fighters (3, unless an escort's threat adds more) and (unless `heavy`
+    // is false) 1 heavy, spawned together at `at` on the perimeter -- hunters of `quarry`, if one is
+    // given, built with `hullShare` of their hull, at `agility` of their speed and turning.
     private int _patrols;
-    public int SpawnPatrol(Vector2 at, double scale = 1, Node2D quarry = null, bool heavy = true, double hullShare = 1)
+    public int SpawnPatrol(Vector2 at, double scale = 1, Node2D quarry = null, bool heavy = true, double hullShare = 1, int lights = 3, double agility = 1)
     {
         if (!Net.IsHost) return 0;
         int id = ++_patrols;
-        var crew = new List<(Vector2 off, RaiderKind kind)> { (new Vector2(-40, 0), RaiderKind.Light), (Vector2.Zero, RaiderKind.Light), (new Vector2(40, 0), RaiderKind.Light) };
+        var crew = new List<(Vector2 off, RaiderKind kind)>();
+        for (int i = 0; i < lights; i++) crew.Add((new Vector2((i - (lights - 1) / 2f) * 40f, 0), RaiderKind.Light));
         if (heavy) crew.Add((new Vector2(0, 90), RaiderKind.Heavy));
-        foreach (var (off, kind) in crew) SpawnRaider(at + off, kind, id, scale, hullShare).Quarry = quarry;
+        foreach (var (off, kind) in crew)
+        {
+            var r = SpawnRaider(at + off, kind, id, scale, hullShare);
+            r.Quarry = quarry; r.Agility = agility;
+        }
         return id;
     }
 
     // AN ESCORT'S HUNTERS: a wave sent after one quarry, in from the map's edge beside it -- one
-    // patrol, and one more per extra pilot, at the strength of the base owner's highest boss and
-    // at HALF their hull. The first wave is light fighters only; every other wave after it brings
-    // a heavy too (the second, the fourth, ...). Alternate waves come round from alternate sides.
+    // patrol, and one more per extra pilot, at HALF their hull. The first wave is light fighters
+    // only; every other wave after it brings a heavy too (the second, the fourth, ...). Alternate
+    // waves come round from alternate sides. How hard each wave is, is the escort's THREAT.
     public const double HunterHull = 0.5;
     public void HuntWave(Node2D quarry, int wave)
     {
         if (!Net.IsHost) return;
+        var (level, toughness) = PartyStanding();
+        double t = EscortThreat(quarry is Hauler h ? h.Payout : 0, level, toughness, Missions.HighestBeaten, wave);
         int patrols = 1 + System.Math.Max(0, _ships.Count - 1);
         var edge = Raider.EdgeSpot(quarry.Position) - BasePos;
         for (int i = 0; i < patrols; i++)
-            SpawnPatrol(BasePos + edge.Rotated((wave % 2 == 0 ? 1 : -1) * 0.35f * (i + 1)), Missions.S(System.Math.Max(1, Missions.HighestBeaten)), quarry,
-                        heavy: wave % 2 == 1, hullShare: HunterHull);
+            SpawnPatrol(BasePos + edge.Rotated((wave % 2 == 0 ? 1 : -1) * 0.35f * (i + 1)), ThreatStrength(t), quarry,
+                        heavy: wave % 2 == 1, hullShare: HunterHull, lights: ThreatLights(t), agility: ThreatAgility(t));
+    }
+
+    // AN ESCORT'S THREAT, as a mission level: a quarter each from
+    //   the load    1, and a level for every 1000 cr the cargo will fetch escorted (Hauler.Payout)
+    //   the party   half its pilots' mean level, half its ships' toughness -- 1, and a level for each
+    //               10% step its hull stands over its class's own (purchases and gear)
+    //   the boss    the highest the base owner has beaten (1 before any)
+    //   the route   how far along the escort the wave comes: 1 at the first, +0.5 a wave
+    // A fresh base's first wave with a light load is about 1.4. The threat makes the hunters' hull and
+    // damage (the missions' 10% a level), their numbers (a light more a patrol every 3 levels, 3 more
+    // at most) and, very slightly, their speed and turning (1% a level, 10% at most).
+    public const double CreditsPerThreat = 1000, ThreatPerWave = 0.5;
+    public static double EscortThreat(double loadCredits, double partyLevel, double partyToughness, int highestBoss, int wave) =>
+        0.25 * ((1 + System.Math.Max(0, loadCredits) / CreditsPerThreat)
+              + (0.5 * partyLevel + 0.5 * partyToughness)
+              + System.Math.Max(1, highestBoss)
+              + (1 + ThreatPerWave * System.Math.Max(0, wave)));
+    public static double ThreatStrength(double threat) => System.Math.Pow(Missions.LevelStep, System.Math.Max(0, threat - 1));
+    public static int ThreatLights(double threat) => 3 + System.Math.Min(3, (int)System.Math.Floor(System.Math.Max(0, threat - 1) / 3));
+    public static double ThreatAgility(double threat) => 1 + System.Math.Min(0.1, 0.01 * System.Math.Max(0, threat - 1));
+
+    // the party, for an escort's threat: each pilot's level (the host's from its character, a
+    // guest's as its identity claimed it, bounded) and its ship's toughness (EscortThreat)
+    private (double level, double toughness) PartyStanding()
+    {
+        double level = 0, toughness = 0; int n = 0;
+        foreach (var s in _ships.Values)
+        {
+            if (!IsInstanceValid(s)) continue;
+            level += s.Mine ? Character.Level : Net.I != null && Net.I.Players.TryGetValue(s.OwnerId, out var p) ? p.Level : 1;
+            double own = new ShipStats(s.Class)["hull"];
+            toughness += 1 + System.Math.Log(System.Math.Max(1, own > 0 ? s.MaxHp / own : 1)) / System.Math.Log(Missions.LevelStep);
+            n++;
+        }
+        return n == 0 ? (1, 1) : (level / n, toughness / n);
     }
     // The hunt is over (the quarry reached the portal, or was lost): its hunters withdraw -- gone,
     // not shot down.
@@ -4719,7 +4907,7 @@ public partial class Hub : Node2D
         foreach (var r in Raiders.Where(r => r.Quarry == quarry).ToList())
         {
             DropRaider(r, burst: false);
-            ToWorld(nameof(NetRaiderGone), r.NetId, false);
+            ToWorld(nameof(NetRaiderGone), r.NetId, false, (float)r.Hp);
         }
     }
 
@@ -4747,12 +4935,14 @@ public partial class Hub : Node2D
     public void RaiderDown(Raider r)
     {
         DropRaider(r, burst: true);
-        ToWorld(nameof(NetRaiderGone), r.NetId, true);
+        ToWorld(nameof(NetRaiderGone), r.NetId, true, (float)System.Math.Max(0, r.Hp));
     }
+    // (with its last hull: the host removes a raider before that hull reaches anyone, and a guest
+    // shows the blow that finished it from this)
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetRaiderGone(int id, bool burst)
+    private void NetRaiderGone(int id, bool burst, float hp)
     {
-        if (Raiders.FirstOrDefault(x => x.NetId == id) is { } r) DropRaider(r, burst);
+        if (Raiders.FirstOrDefault(x => x.NetId == id) is { } r) { r.Hp = hp; DropRaider(r, burst); }
     }
     // Also let go of it as the selection and as every ship's target: on a guest a raider's hull
     // never reads zero (the host removes it before its last hull reaches anyone), and a withdrawn
@@ -5407,7 +5597,7 @@ public partial class HeavyMissileVisual : Node2D
 
 //==============================================================================
 // FILE: scripts/Lancer.cs
-// 192 lines   sha256 ba11ba0a1c7b
+// 194 lines   sha256 fe66d5bf6349
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -5522,6 +5712,7 @@ public partial class Lancer : Boss
             _missiles = TridentEvery; Volleys++;
             var t = Nearest();
             var aim = (t.Position - nose).Normalized();
+            Sound("boss_trident", nose);
             foreach (float deg in new[] { -TridentSpread, 0f, TridentSpread })
             {
                 var dir = aim.Rotated(Mathf.DegToRad(deg));
@@ -5553,7 +5744,8 @@ public partial class Lancer : Boss
                 ChargeCause = pinned ? "pinned" : _beamArm >= _beamOverdue ? "overdue" : "escorts down";
                 ArmedFor = _beamArm;
                 _beamArm = -1; BeamCharging = true; _beamT = BeamWindup;
-                Tele(true, new Vector2(0, -Length * 0.5f), new Vector2(0, -Length * 0.5f - BeamLength), BeamWidth, BeamWindup, onHull: true, hold: BeamLive);
+                Tele(true, new Vector2(0, -Length * 0.5f), new Vector2(0, -Length * 0.5f - BeamLength), BeamWidth, BeamWindup, onHull: true, hold: BeamLive,
+                     cue: "boss_beam_charge", strike: "boss_beam");
             }
         }
         if (BeamCharging && (_beamT -= delta) <= 0) { BeamCharging = false; _beamLive = BeamLive; _beamTickT = 0; }
@@ -5579,7 +5771,7 @@ public partial class Lancer : Boss
             Rotation = (t.Position - Position).Angle() + Mathf.Pi / 2f;
             var a = Position; var bb = a + Vector2.Up.Rotated(Rotation) * ChargeLength;
             _pendingCharge = (a, bb); _chargeT = ChargeWindup;
-            Tele(true, Vector2.Zero, new Vector2(0, -ChargeLength), HalfWidth * 2f, ChargeWindup, onHull: true);
+            Tele(true, Vector2.Zero, new Vector2(0, -ChargeLength), HalfWidth * 2f, ChargeWindup, onHull: true, strike: "boss_ram");
         }
         if (_pendingCharge is { } ch && (_chargeT -= delta) <= 0) { _dashTo = ch.b; _pendingCharge = null; }
         if (_dashTo is { } to)
@@ -5592,7 +5784,7 @@ public partial class Lancer : Boss
         if (_wave <= 0 && _pendingWave == null && _pendingCharge == null && !_dashTo.HasValue)
         {   // (not while it rams: the ring is centred on the boss, and it would ram out of its own ring)
             _wave = 17.0; _pendingWave = Position; _waveT = WaveWindup;
-            Tele(false, Position, Vector2.Zero, WaveRadius, WaveWindup);
+            Tele(false, Position, Vector2.Zero, WaveRadius, WaveWindup, strike: "boss_shockwave");
         }
         if (_pendingWave is { } c && (_waveT -= delta) <= 0)
         {
@@ -6019,7 +6211,7 @@ public partial class MainMenu : Node2D
 
 //==============================================================================
 // FILE: scripts/MenuFoe.cs
-// 201 lines   sha256 0bda2aa62d3d
+// 201 lines   sha256 706a9ee039ba
 //==============================================================================
 using Godot;
 using System;
@@ -6083,9 +6275,9 @@ public partial class MenuFoe : Node2D, IHittable
     public override void _Ready()
     {
         _sprite = Sprites.Fit(_art, _length);          // exactly how Raider and PlayerShip do it
-        // The heavy wears the raiders' red, from Raider's own constant: untinted it drew in the
-        // art's bare grey and read as a neutral hull rather than as something shooting at you.
-        if (Kind == MenuFoeKind.Heavy) _sprite.Modulate = Raider.HeavyTint;
+        // The raiders wear their red, from Raider's own constants: untinted they drew in the art's
+        // bare grey and read as neutral hulls rather than as something shooting at you.
+        if (Kind != MenuFoeKind.Web) _sprite.Modulate = Kind == MenuFoeKind.Heavy ? Raider.HeavyTint : Raider.LightTint;
         AddChild(_sprite);
     }
 
@@ -6225,7 +6417,7 @@ public partial class MenuFoe : Node2D, IHittable
 
 //==============================================================================
 // FILE: scripts/Missions.cs
-// 50 lines   sha256 e9f04b0bd61b
+// 50 lines   sha256 2d0007b08c4b
 //==============================================================================
 using System;
 using System.Collections.Generic;
@@ -6258,7 +6450,7 @@ public static class Missions
     // The boss of a level: every peer works it out from the replicated level alone.
     public static BossType ForLevel(int level) => Bosses[(Math.Max(1, level) - 1) % Bosses.Length];
 
-    private const double LevelStep = 1.10;
+    public const double LevelStep = 1.10;
     public static double S(int level) => Math.Pow(LevelStep, Math.Max(1, level) - 1);
     public static int Level = 1;                            // the selected level (the host decides; replicated)
     // The levels this pilot has cleared, of every boss this build knows (an id in the file it does
@@ -6366,7 +6558,7 @@ public partial class Music : Node
 
 //==============================================================================
 // FILE: scripts/Net.cs
-// 781 lines   sha256 f27e079491a2
+// 781 lines   sha256 89afe425d9cb
 //==============================================================================
 using Godot;
 using System;
@@ -6432,6 +6624,7 @@ public partial class Net : Node
         public int[] Bought = Array.Empty<int>();
         public string[] Equip = Array.Empty<string>();
         public string CharacterId = "";                   // the pilot's stable identity: a peer id changes on a reconnect
+        public int Level = 1;                              // the pilot's level, as claimed (an escort's threat)
         public bool HasIdentity;
     }
 
@@ -7081,12 +7274,11 @@ public partial class Net : Node
     // earlier -- and the warning itself arrived a one-way trip late. So the guest must be clear a
     // full round trip before the end the host sent: this is that end. Never below 40% of the
     // warning, whatever the connection. The host (and single player) sees it as sent.
-    public static double Arriving(double warning)
-    {
-        if (IsHost || I?._peer is not ENetMultiplayerPeer e || e.GetPeer(1) is not { } host) return warning;
-        double rtt = host.GetStatistic(ENetPacketPeer.PeerStatistic.RoundTripTime) / 1000.0;
-        return System.Math.Max(warning * 0.4, warning - rtt);
-    }
+    public static double Arriving(double warning) => System.Math.Max(warning * 0.4, warning - RoundTrip);
+    // a guest's round trip to the host, in seconds (0 on the host and offline)
+    public static double RoundTrip =>
+        IsHost || I?._peer is not ENetMultiplayerPeer e || e.GetPeer(1) is not { } host
+            ? 0 : host.GetStatistic(ENetPacketPeer.PeerStatistic.RoundTripTime) / 1000.0;
 
     // A guest's request to the host: the one way a guest asks for anything. Offline, or still
     // connecting, there is no host to ask -- and an RPC then is an engine error.
@@ -7217,7 +7409,7 @@ public partial class PilotWindow : PanelContainer
 
 //==============================================================================
 // FILE: scripts/PlayerShip.cs
-// 904 lines   sha256 513affc33cf7
+// 925 lines   sha256 6bed8545da31
 //==============================================================================
 using Godot;
 using System;
@@ -7302,51 +7494,50 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
         public float CameraRange = 5000f;
         public Vector2[] Mains = Array.Empty<Vector2>(), Pds = Array.Empty<Vector2>();
 
-        // The turrets are the ones painted on the ship: cut out of the hull art into
-        // their own sprites (barrels up, pivot at the ring centre), with the hull
-        // repaired underneath, so they can turn.
-        public string MainTurret, PdTurret;
+        // The turrets are their own sprites (barrels up, pivot at the sheet's centre), so they
+        // can turn: one main turret and one point-defence turret for every class, each class
+        // mounting them at its own size (tools/make_ships.ps1 draws both).
+        public string MainTurret = "res://turret_main.png", PdTurret = "res://turret_pd.png";
         public float TurretTexScale = 1f;   // world units per turret-texture pixel
         public float MainBarrel = 24f, PdBarrel = 15f, PdRing = 4.5f;   // world units
 
-        // Bomber docks along the flanks: x out from the keel, the centre of each row,
-        // and the spacing between craft in a row (world units).
-        public float DockX = 36f, DockY = 5f, DockSpacing = 52f;
+        // The carrier's deck. Bombers park in BAYS on the white either side of the runway: x out
+        // from the keel, the centre of each row, the spacing along it. They lift off at the
+        // runway's bow end, RunwayBow ahead of the centre, and land on its centre (world units).
+        public float BayX, BayY, BaySpacing, RunwayBow;
     }
 
+    // Every hull is the owner's line art (tools/make_ships.ps1: symmetrical, grey, tinted here with
+    // the hull colour), and every mount below is measured from it: the tool prints them. The
+    // turrets at the battleship's scale are 12 u across the housing (TurretTexScale 1/5.5), with
+    // the muzzles 12.2 u from the pivot; point defence 6 u across, the muzzle 5.5 u out.
     public static readonly Dictionary<ShipClass, ClassArt> Art = new()
     {
-        // Battleship, 224 u (texture 300 px: 0.7467 u/px). Its four painted double-barrel
-        // turrets on the centreline are the four main guns (one gun per turret); the
-        // two small sponson turrets are point defence. Offsets measured from the art.
-        // (texture 300 px at 224 u = 0.7467 u/px; every offset and size below is the
-        // art's measured pixel position times that)
+        // Battleship, 224 u and slender: 23 u across the hull (pods and fins outboard of it). Its
+        // four main turrets stand where the art's four painted turrets did, on the spine; its two
+        // point-defence turrets are on the stern quarters.
         [ShipClass.Battleship] = new ClassArt {
-            Texture = "res://battleship_hull.png", Length = 224f, HalfWidth = 40f,
-            Mains = new Vector2[] { new(0.41f, -65.41f), new(0.38f, -36.81f), new(0.59f, 48.76f), new(0.38f, 76.23f) },
-            Pds   = new Vector2[] { new(-33.25f, 0.45f), new(34.97f, 0.45f) },
-            MainTurret = "res://turret_bs_main.png", PdTurret = "res://turret_bs_pd.png", TurretTexScale = 0.7467f,
-            MainBarrel = 20.9f, PdBarrel = 9.8f, PdRing = 5.0f },
-        // Carrier, 170 u (full art 1668 px: 0.1019 u/px). Its three painted domes are
-        // its point-defence turrets.
+            Texture = "res://battleship_hull.png", Length = 224f, HalfWidth = 13f,
+            Mains = new Vector2[] { new(0f, -55.43f), new(0f, -4.42f), new(0f, 43.41f), new(0f, 72.26f) },
+            Pds   = new Vector2[] { new(-6.3f, 92.83f), new(6.3f, 92.83f) },
+            TurretTexScale = 1f / 5.5f, MainBarrel = 12.2f, PdBarrel = 5.5f, PdRing = 3f },
+        // Carrier, 170 u: the runway down its centre, 17.4 u wide, with the white deck either side
+        // of it (8.8 to 21.6 u out) where the bombers park, three sponsons outboard on each flank.
+        // Point defence on the two middle sponsons and on the stern block (the bow is where a
+        // bomber lifting off passes), at 1.15x the battleship's.
         [ShipClass.Carrier] = new ClassArt {
-            Texture = "res://carrier_player.png", Length = 170f, HalfWidth = 24.5f,
-            // bombers back in, tail to the hull: half the hull's beam (24.5) plus half a
-            // 28.1 u bomber, spaced by a bomber's ~28 u span
-            DockX = 39.5f, DockY = 5f, DockSpacing = 30f,
-            Pds = new Vector2[] { new(-5.78f, 8.04f), new(5.78f, 8.04f), new(0f, 18.76f) },
-            PdTurret = "res://turret_carrier.png", TurretTexScale = 0.2013f,
-            PdBarrel = 3.7f, PdRing = 2.9f },
-        // Destroyer, 201.6 u: the battleship's hull at 75% of its beam and 90% of its length, on a
-        // 270 px canvas (the battleship's 0.7467 u/px). Only the bow and stern turrets are kept;
-        // missile pods are painted where the inner two stood. Every mount is the battleship's,
-        // scaled the same way (x by 0.75, y by 0.9), and the turrets at 0.9 of its size.
+            Texture = "res://carrier_player.png", Length = 170f, HalfWidth = 24f,
+            BayX = 15f, BayY = 5f, BaySpacing = 28f, RunwayBow = 66f,
+            Pds = new Vector2[] { new(-27.73f, -17.8f), new(27.73f, -17.8f), new(0f, 80.3f) },
+            TurretTexScale = 1.15f / 5.5f, PdBarrel = 6.3f, PdRing = 3.45f },
+        // Destroyer, 130 u -- the smallest of the three -- and 33 u across the hull. Its two main
+        // turrets on the fore spine and the central plate, its point defence on the stern
+        // quarters; the turrets at 0.8x the battleship's.
         [ShipClass.Destroyer] = new ClassArt {
-            Texture = "res://destroyer_hull.png", Length = 201.6f, HalfWidth = 30f,
-            Mains = new Vector2[] { new(0.31f, -58.87f), new(0.29f, 68.61f) },
-            Pds   = new Vector2[] { new(-24.94f, 0.41f), new(26.23f, 0.41f) },
-            MainTurret = "res://turret_bs_main.png", PdTurret = "res://turret_bs_pd.png", TurretTexScale = 0.672f,
-            MainBarrel = 18.8f, PdBarrel = 8.8f, PdRing = 4.5f },
+            Texture = "res://destroyer_hull.png", Length = 130f, HalfWidth = 17f,
+            Mains = new Vector2[] { new(0f, -34.85f), new(0f, 15.01f) },
+            Pds   = new Vector2[] { new(-8.14f, 41.47f), new(8.14f, 41.47f) },
+            TurretTexScale = 0.8f / 5.5f, MainBarrel = 9.8f, PdBarrel = 4.4f, PdRing = 2.4f },
     };
 
     public ClassArt MyArt => Art[Class];
@@ -7437,6 +7628,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
 
         Stats = BuildSheet();
         MaxHp = Hp = Stats["hull"];
+        _hullWatch = default;                      // a new hull, not damage
         _mag = (int)Stats["missile_mag"]; _missileReload = _missileRefire = 0;
         _bsWindup = _bsGap = _bsCooldown = 0; _bsVolleys = 0;
 
@@ -7528,6 +7720,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
         Stats = BuildSheet();
         MaxHp = Stats["hull"];
         if (Alive) Hp = Math.Max(1, frac * MaxHp);
+        _hullWatch = default;                      // a refit, not damage
         FitWings(fresh: false);
     }
 
@@ -7552,19 +7745,17 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
         foreach (var t in _turrets) t.Recolor();
     }
 
-    // Where bomber `w` docks: bombers alternate port, starboard, port... so the two
-    // flanks always split them evenly (6 bombers -> 3 and 3; an odd one goes to port),
-    // and each row is centred on the hull. Returns the world position and heading.
-    public (Vector2 pos, float rot) DockSlot(Wing w)
+    // Bomber `w`'s bay on the deck, in the carrier's frame: bombers alternate port, starboard,
+    // port... so the two sides of the runway always split them evenly (6 bombers -> 3 and 3; an
+    // odd one goes to port), and each row is centred on BayY. A parked bomber faces the bow.
+    public Vector2 Bay(Wing w)
     {
         int i = 0, n = 0;
         foreach (var x in _wings) { if (!x.IsBomber) continue; if (x == w) i = n; n++; }
         bool port = i % 2 == 0;
         int onSide = port ? (n + 1) / 2 : n / 2, j = i / 2;
         var art = MyArt;
-        var local = new Vector2(port ? -art.DockX : art.DockX, art.DockY + (j - (onSide - 1) / 2f) * art.DockSpacing);
-        // nose out, tail to the hull: backed into the slot
-        return (ToGlobal(local), Rotation + (port ? -Mathf.Pi / 2f : Mathf.Pi / 2f));
+        return new Vector2(port ? -art.BayX : art.BayX, art.BayY + (j - (onSide - 1) / 2f) * art.BaySpacing);
     }
 
     public int WingCount(WingKind k) { int n = 0; foreach (var w in _wings) if (w.Kind == k) n++; return n; }
@@ -7616,7 +7807,10 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
                 // within the strike range (twice the fighters' control range) only
                 if (Classes.Wing(Class) && t != null && StrikeTarget == null && _strikesOut <= 0 && BombersReady > 0
                     && Position.DistanceTo(t.Position) <= Stats["strike_range"])
-                { StrikeTarget = t; _strikesOut = BombersReady; }
+                {   // the bombers armed now are the strike: each is called, and answers once
+                    StrikeTarget = t; _strikesOut = 0;
+                    foreach (var w in _wings) if (w.IsBomber && w.Armed) { w.Call(); _strikesOut++; }
+                }
                 break;
         }
     }
@@ -7683,12 +7877,14 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
     public void Fail(string id, string msg) => _fails[id] = (msg, _clock + FailShow);
     public string FailNote(string id) => _fails.TryGetValue(id, out var f) && _clock < f.until ? f.msg : null;
 
-    // Fighters leave the hangar one at a time, at least Wing.LaunchInterval apart.
-    private double _nextLaunch;
-    public bool TakeLaunchSlot()
+    // Craft leave the carrier one at a time, at least Wing.LaunchInterval apart: fighters out of
+    // the hangar, bombers off the deck, each kind on its own clock.
+    private double _nextFighter, _nextBomber;
+    public bool TakeLaunchSlot(WingKind k)
     {
-        if (_clock < _nextLaunch) return false;
-        _nextLaunch = _clock + Wing.LaunchInterval;
+        ref double next = ref (k == WingKind.Fighter ? ref _nextFighter : ref _nextBomber);
+        if (_clock < next) return false;
+        next = _clock + Wing.LaunchInterval;
         return true;
     }
 
@@ -7752,12 +7948,20 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
         var v = (from - Position).Rotated(-Rotation);
         float side = Mathf.Atan2(v.X, -v.Y);            // 0 = ahead, clockwise
         _shield?.Flash(side);
+        // where it struck: the hull's edge toward the hit, off the keel's nearest point
+        var keel = new Vector2(0, Mathf.Clamp(v.Y, -MyArt.Length * 0.5f, MyArt.Length * 0.5f));
+        DamageNumbers.NoteImpact(this, ToGlobal(keel + (v - keel).LimitLength(MyArt.HalfWidth)));
         if (Net.IsOnline) (GetParent() as Hub)?.SendShield(OwnerId, side);
         NoteCombat();                                   // taking damage is combat
         TakeDamage(d);
     }
 
-    public void ApplyShield(float side) => _shield?.Flash(side);
+    // a guest's word of a hit on this ship: the side it came from, which is where it struck
+    public void ApplyShield(float side)
+    {
+        _shield?.Flash(side);
+        DamageNumbers.NoteImpact(this, ToGlobal(new Vector2(Mathf.Sin(side) * MyArt.HalfWidth, -Mathf.Cos(side) * MyArt.Length * 0.5f)));
+    }
 
     // A RETURNING PILOT's ship, put back as it was (Hub's held places). Place: on the owner, where
     // it was left. Restore: on the host, its hull -- or its stasis, with the time it had left.
@@ -7770,6 +7974,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
         if (!Net.Sim) return;
         if (alive) Hp = Math.Clamp(hp, 1, MaxHp);
         else { Die(); _stasis = stasis; }
+        _hullWatch = default;                      // a pilot put back as it was, not damage
     }
 
     // Into stasis where it lies; the pilot takes to the escape pod.
@@ -7783,10 +7988,15 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
     public bool Mine => Net.OwnedByMe(this);
 
     // ── frame ────────────────────────────────────────────────────────────────
+    // Damage taken, shown where it lands (DamageNumbers). The host watches its own hull; a guest the
+    // host's figures as they arrive (ApplyHostState) -- never the hull it regenerates between them.
+    private HullWatch _hullWatch;
+    private double _hostMax = -1;                  // the last hull size the host reported (a refit changes it)
     public override void _Process(double delta)
     {
         float dt = (float)delta;
         _clock += delta;
+        if (Net.Sim) _hullWatch.Tick(this, Alive ? Hp : 0, taken: true);
         if (!Alive) _stasis = Math.Max(0, _stasis - delta);   // the host's clock rules; guests re-sync each packet
         if (_combatT > 0) _combatT = Math.Max(0, _combatT - delta);
         if (Alive && Hp < MaxHp) Hp = Math.Min(MaxHp, Hp + MaxHp * (InCombat ? RegenInCombat : RegenOutOfCombat) * delta);
@@ -8052,6 +8262,9 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
                                double bsWindup, int bsVolleys, double bsCooldown,
                                int wingTarget, Vector2[] wingPos, float[] wingRot, int[] wingState, float[] wingRearm)
     {
+        if (System.Math.Abs(maxHp - _hostMax) > 1e-9) _hullWatch = default;    // the first report, or a refit: not damage
+        _hostMax = maxHp;
+        _hullWatch.Tick(this, alive ? hp : 0, taken: true);
         Hp = hp; MaxHp = maxHp; Alive = alive; _stasis = stasis; Pinned = pinned; _combatT = combat;
         _pdLeft = pdLeft; _pdRecharge = pdRecharge; _mag = mag; _missileReload = reload;
         _bsWindup = bsWindup; _bsVolleys = bsVolleys; _bsCooldown = bsCooldown;
@@ -8075,7 +8288,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
     }
 
     // ── signal lights: a faint, flashing yellow/orange wherever a craft lands or
-    // takes off -- the hangar for fighters, a slot for bombers ──────────────────
+    // takes off -- the hangar for fighters, the runway or a bay for bombers ───────
     private readonly System.Collections.Generic.List<(Vector2 local, double t)> _signals = new();
     private const double SignalTime = 1.2;
     public void Signal(Vector2 world) => _signals.Add((ToLocal(world), SignalTime));
@@ -8156,7 +8369,7 @@ public static class Plume
 
 //==============================================================================
 // FILE: scripts/Progression.cs
-// 107 lines   sha256 46fedcf6757c
+// 107 lines   sha256 15d2e3b0a6ce
 //==============================================================================
 using Godot;
 using System;
@@ -8236,7 +8449,7 @@ public static class Progression
             Character.Exp -= ExpToNext;
             Character.Level++; Character.Points++; gained++;
         }
-        if (gained > 0) Hub.I?.Hints?.Meet("pilot");
+        if (gained > 0) { Hub.I?.Hints?.Meet("pilot"); Hub.I?.PilotChanged(); }   // the new level goes out with the identity
         Character.Save();
         return gained;
     }
@@ -8410,7 +8623,7 @@ public partial class Radar : Control
 
 //==============================================================================
 // FILE: scripts/Raider.cs
-// 327 lines   sha256 37ca058131cc
+// 336 lines   sha256 fc837fec1ed6
 //==============================================================================
 using Godot;
 using System.Linq;
@@ -8458,13 +8671,19 @@ public partial class Raider : Node2D, IHittable
     // The share of that hull it is built with: an escort's hunters come at half (Hub.HunterHull).
     // Not Strength, which scales its damage too. Set before it enters the tree (_Ready reads it).
     public double HullShare = 1;
+    // Speed and turning, x: an escort's hunters fly a very little quicker the harder the escort
+    // (Hub.ThreatAgility). The host flies every raider; guests follow where it says.
+    public double Agility = 1;
+    private HullWatch _hullWatch;
     public double MaxHull => (Heavy ? HeavyHull : LightHull) * Strength * HullShare;
     public float HitRadius => Length * (Heavy ? 0.3f : 0.4f);
     public bool Selectable => true;
 
-    // The heavy's hull, in raider red. Shared with the title screen's heavies so the enemy you see
-    // on the menu is the colour of the enemy you meet.
+    // The raiders' art is grey line art: these give it raider red, the heavy darker than the light.
+    // Shared with the title screen's raiders so the enemy you see on the menu is the colour of the
+    // enemy you meet.
     public static readonly Color HeavyTint = new(0.62f, 0.40f, 0.40f);
+    public static readonly Color LightTint = new(0.90f, 0.38f, 0.33f);
 
     public const float LightLength = 34f;              // twice a carrier fighter
     public const float HeavyLength = 4f * LightLength; // 136 u
@@ -8542,19 +8761,20 @@ public partial class Raider : Node2D, IHittable
     {
         Hp = MaxHull;
         _sprite = Sprites.Fit(Heavy ? "res://enemy_heavy_hull.png" : "res://enemy_light_fighter.png", Length);
+        _sprite.Modulate = Heavy ? HeavyTint : LightTint;
         AddChild(_sprite);
         if (Heavy)
-        {   // the battleship's front turret on its mount, dark as the hull: row 40.3 of the 100 px snub-nosed hull
-            _sprite.Modulate = HeavyTint;
-            float px = _sprite.Scale.X, rows = _sprite.Texture.GetHeight();
-            _turret = new Sprite2D { Texture = GD.Load<Texture2D>("res://turret_bs_main.png"), Position = new Vector2(0, (40.3f - rows / 2f) * px),
-                                     Scale = Vector2.One * px * 0.62f, Modulate = HeavyTint, ZIndex = 1 };
+        {   // the main turret on its spine behind the canopy, 19.5 u aft of centre (tools/make_ships.ps1),
+            // 13 u across the housing, dark as the hull
+            _turret = new Sprite2D { Texture = GD.Load<Texture2D>("res://turret_main.png"), Position = new Vector2(0, 19.5f),
+                                     Scale = Vector2.One * (13f / 66f), Modulate = HeavyTint, ZIndex = 1 };
             AddChild(_turret);
         }
         ZIndex = 5;
         Combat.Hostiles.Add(this);
     }
-    public override void _ExitTree() => Combat.Hostiles.Remove(this);
+    // (the blow that finishes it is shown as it goes: it leaves before its next frame)
+    public override void _ExitTree() { _hullWatch.Tick(this, System.Math.Max(0, Hp), taken: false); Combat.Hostiles.Remove(this); }
 
     public void TakeDamage(double d)
     {
@@ -8582,6 +8802,7 @@ public partial class Raider : Node2D, IHittable
     public override void _Process(double delta)
     {
         float dt = (float)delta;
+        _hullWatch.Tick(this, System.Math.Max(0, Hp), taken: false);
         if (!Net.Sim)
         {
             _net.Follow(this, dt);
@@ -8627,14 +8848,14 @@ public partial class Raider : Node2D, IHittable
         if (!_boostUsed && toTarget <= BoostAt) { _boostUsed = true; _boostLeft = BoostTime; }
         _boostLeft = System.Math.Max(0, _boostLeft - delta);
         if (IsEscort && Latched) _boostLeft = 0;                          // posted: the long boost is over
-        float top = Boosting ? Cruise * BoostMult : Cruise;
+        float top = (Boosting ? Cruise * BoostMult : Cruise) * (float)Agility;
         float d = Position.DistanceTo(post);
         Speed = Mathf.Min(top, d * 6f);                                       // ease onto the post
         // once posted it keeps station however the target moves
         Position = Position.MoveToward(post, (Latched ? Mathf.Max(top, d * 12f) : Speed) * dt);
         Latched = Position.DistanceTo(post) < 12f && Gap(Position, Target) <= PinRange;
         var face = (Target.Position - Position).Angle() + Mathf.Pi / 2f;
-        Rotation = Mathf.LerpAngle(Rotation, face, Mathf.Clamp(8f * dt, 0f, 1f));
+        Rotation = Mathf.LerpAngle(Rotation, face, Mathf.Clamp(8f * (float)Agility * dt, 0f, 1f));
 
         if (Latched)
         {
@@ -8686,12 +8907,12 @@ public partial class Raider : Node2D, IHittable
         bool pinned = Target is IRaidTarget { Pinned: true };
         var dest = pinned ? Target.Position + astern * (Extent(Target, astern) + HeavyHold)
                           : EdgeSpot(Target.Position);                        // patient, at the map's edge nearest it
-        float top = pinned && Position.DistanceTo(Target.Position) > HeavyBoostStop ? Cruise * HeavyBoostMult : Cruise;
+        float top = (pinned && Position.DistanceTo(Target.Position) > HeavyBoostStop ? Cruise * HeavyBoostMult : Cruise) * (float)Agility;
         float d = Position.DistanceTo(dest);
         Speed = Mathf.Min(top, d * 6f);
         Position = Position.MoveToward(dest, Speed * dt);
         var face = (Target.Position - Position).Angle() + Mathf.Pi / 2f;
-        Rotation = Mathf.LerpAngle(Rotation, face, Mathf.Clamp(4f * dt, 0f, 1f));
+        Rotation = Mathf.LerpAngle(Rotation, face, Mathf.Clamp(4f * (float)Agility * dt, 0f, 1f));
         if (_turret != null) _turret.GlobalRotation = face;                  // its one turret tracks the target
         Latched = pinned && Gap(Position, Target) <= HeavyReach;
         if (Latched)
@@ -8721,6 +8942,7 @@ public partial class Raider : Node2D, IHittable
     private int _netFlags;
     public void SetNet(Vector2 p, float rot, double hp, Vector2? tether, int flags)
     {
+        if (!_net.Has) _hullWatch = default;       // the host's first figure is where this peer starts counting
         _net.Set(p, rot); Hp = hp; _tether = tether; _netFlags = flags;
     }
     public Vector2? TetherTo => Net.Sim ? (Latched && Up(Target) ? Target.Position : null) : _tether;
@@ -9446,7 +9668,7 @@ public static class Settings
 
 //==============================================================================
 // FILE: scripts/Sfx.cs
-// 97 lines   sha256 9efb916881e5
+// 105 lines   sha256 879dc5464b7a
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -9456,6 +9678,9 @@ using System.Collections.Generic;
 //     deep grinding one for a boss) and a crackle where it hits.
 //   Self-propelled projectiles (missiles, torpedoes): a soft whoosh at launch, and a
 //     low thunk with a soft reverb tail when they hit.
+//   Every boss special move has its own sound (Special; tools/make_sounds.py makes them): the
+//     Lancer's beam charging and its growl firing, its ram, shockwave and trident; the Drake's
+//     gun, warp, scrap blast, tractor, throw and the rock breaking.
 // Loudness follows the CAMERA: the distance from the view's centre to the sound, and
 // the zoom (zoomed out, the listener is further away). A laser hit is also softer and
 // a little lower the longer the shot that made it.
@@ -9468,7 +9693,9 @@ public static class Sfx
 
     // Every sound there is (sfx/<name>.wav), and the least time between two of it: a wing firing
     // is not a wall of noise.
-    static readonly Dictionary<string, double> _gap = new() { ["cannon"] = 0.05, ["laser_light"] = 0.04, ["laser_fighter"] = 0.04, ["laser_boss"] = 0.08, ["laser_hit"] = 0.03, ["missile_whoosh"] = 0.05, ["impact_thunk"] = 0.05 };
+    static readonly Dictionary<string, double> _gap = new() { ["cannon"] = 0.05, ["laser_light"] = 0.04, ["laser_fighter"] = 0.04, ["laser_boss"] = 0.08, ["laser_hit"] = 0.03, ["missile_whoosh"] = 0.05, ["impact_thunk"] = 0.05,
+        ["boss_beam_charge"] = 0.5, ["boss_beam"] = 0.5, ["boss_ram"] = 0.5, ["boss_shockwave"] = 0.5, ["boss_trident"] = 0.3,
+        ["drake_gun"] = 0.2, ["drake_warp"] = 0.5, ["drake_scrap"] = 0.3, ["drake_tractor"] = 0.5, ["drake_throw"] = 0.5, ["drake_rock"] = 0.3 };
     public static readonly Dictionary<string, int> Played = new();            // for the smoke test
     static Node _pool; static int _next;
     static bool _closed;                             // quitting: see Close
@@ -9495,6 +9722,9 @@ public static class Sfx
         Play("laser_hit", to, -3f * shot / 1000f, 1.0f - 0.12f * Mathf.Clamp(shot / 1000f, 0f, 1f));
     }
     public static void Missile(Vector2 at) => Play("missile_whoosh", at, 0f, 1f);
+    // a boss's special move, by its file's name. A name that is none of them plays nothing: it may
+    // have come over the wire.
+    public static void Special(string name, Vector2 at) { if (name != null && _gap.ContainsKey(name)) Play(name, at, 0f, 1f); }
     public static void Impact(Vector2 at) => Play("impact_thunk", at, 0f, 1f);
     // a battleship gun: the thunk, higher -- a cannon's report, not a laser's buzz. Its own file
     // now rather than the impact played quietly, so the impact can be tuned without moving it.
@@ -9548,7 +9778,7 @@ public partial class SfxPool : Node
 
 //==============================================================================
 // FILE: scripts/Shell.cs
-// 52 lines   sha256 559e4382e95d
+// 53 lines   sha256 04ce88f1ee24
 //==============================================================================
 using Godot;
 
@@ -9585,6 +9815,7 @@ public partial class Shell : Node2D
                 foreach (var h in Combat.Hostiles)
                     if (h != null && h.Alive && h is not Torpedo && h.Covers(p, 3f)) { hit = h; break; }
                 if (hit == null) continue;
+                if (hit is Node2D struck) DamageNumbers.NoteImpact(struck, p);
                 hit.TakeDamage(Damage);
                 Source?.NoteCombat();
                 Sfx.Impact(p);
@@ -9681,7 +9912,7 @@ public partial class ShieldFlash : Node2D
 
 //==============================================================================
 // FILE: scripts/ShipClasses.cs
-// 539 lines   sha256 3f5d43431318
+// 625 lines   sha256 f0e69f4bc274
 //==============================================================================
 using System.Linq;
 using Godot;
@@ -9774,7 +10005,7 @@ public partial class Turret : Node2D
     private double ShotDamage => PointDefense ? S["pd_damage"] : S["main_damage"];
     public double Interval   => PointDefense ? S["pd_interval"] : S["main_interval"];
 
-    private Sprite2D _sprite;          // the painted turret, cut from the hull art
+    private Sprite2D _sprite;          // the turret's own sprite (ClassArt.MainTurret / PdTurret)
     private PlayerShip.ClassArt Art => Ship.MyArt;
     private float BarrelLength => PointDefense ? Art.PdBarrel : Art.MainBarrel;
 
@@ -9891,10 +10122,10 @@ public partial class Turret : Node2D
         return diff;
     }
 
-    // The painted turret takes the hull colour, as it had when it was part of the hull.
+    // The turret takes the pilot's accent (turrets, engines, trim) over the hull colour.
     public void Recolor()
     {
-        if (_sprite != null) _sprite.Modulate = Ship.Main;
+        if (_sprite != null) _sprite.Modulate = Ship.Accent;
         QueueRedraw();
     }
 
@@ -9919,12 +10150,16 @@ public partial class Turret : Node2D
 //            like aircraft -- steady speed, limited turn rate: 3 shots, through the
 //            target by 1.2x its diameter, turn, repeat. After 15 s engaged they dock
 //            and rest 3 s. Recall brings them home.
-//   BOMBERS  are an active ability. They wait DOCKED on the carrier's flanks, half to
-//            port and half to starboard, rearming there. On the order they fly at the
-//            target, turn to face it at launch distance, and launch torpedoes straight
-//            ahead -- the torpedoes do not track -- then return to their own slot.
-//            A target beyond the strike range (twice the fighters' control range) is
-//            refused, and a strike whose target goes beyond it is called off.
+//   BOMBERS  are an active ability. They wait PARKED on the carrier's deck, in bays either
+//            side of the runway -- small, the deck being far below, as the hauler's pad is --
+//            half to port and half to starboard, rearming there. On the order they take off
+//            one at a time, LaunchInterval apart (the fighters' cadence): each rolls onto the
+//            runway and up it to the bow, growing to flight size as it lifts, as the hauler
+//            does. They fly at the target, turn to face it at launch distance, and launch
+//            torpedoes straight ahead -- the torpedoes do not track -- then come home over the
+//            carrier's centre, settle onto the runway there, shrinking back to deck size, and
+//            taxi to their bay. A target beyond the strike range (twice the fighters' control
+//            range) is refused, and a strike whose target goes beyond it is called off.
 public enum WingKind { Fighter, Bomber }
 
 public partial class Wing : Node2D
@@ -9963,28 +10198,46 @@ public partial class Wing : Node2D
     public string FighterPhase => _f.ToString();
     public int ShotsThisPass => _shots;
     public float LastOvershoot { get; private set; }   // how far past the target the last pass went
-    public double LaunchedAt { get; private set; } = -1; // the carrier's clock when it last left the hangar
-    private enum BSt { Docked, Approach, Aim, Launch, Return, Backing }
-    private const float DockSnap = 6f;              // within this of its slot, a backing bomber is home
-    private const double BackingLimit = 2.5;        // and after this long backing in, it is home regardless
-    private Vector2 _lastSlot; private bool _haveSlot;
-    // how its slot is moving now: the carrier's motion AND its turning, measured frame to frame
-    private Vector2 SlotVelocity(Vector2 slot, double delta)
+    // the carrier's clock when it last took off: a fighter out of the hangar, a bomber off the deck
+    public double LaunchedAt { get; private set; } = -1;
+
+    // ── bombers: the deck ─────────────────────────────────────────────────────
+    // On the deck a bomber is drawn at LandedScale -- far below, as the hauler on its pad -- and
+    // grows to full size as it lifts, on the hauler's curve (Altitude). Every deck move runs in the
+    // carrier's frame on its own clock, so a moving or turning carrier carries it exactly, and a
+    // landing always ends: it is timed, not steered.
+    public const float LandedScale = 0.4f;          // parked, 11.1 u across: inside the 12.8 u of white beside the runway
+    public const double LiftTime = 1.2, LandTime = 1.0, TaxiTime = 0.6;
+    private const double RollOut = 0.25;            // the share of a lift spent rolling out onto the runway
+    private const float TouchRadius = 10f;          // over the carrier's centre within this, a bomber sets down
+    private enum BSt { Docked, Lifting, Approach, Aim, Launch, Return, Landing, Taxiing }
+    private BSt _b = BSt.Docked;
+    private double _deckT;                          // seconds into the deck move under way
+    private Vector2 _touch; private float _touchRot; // where it set down, in the carrier's frame, and its heading then
+    private bool _called;                           // counted into a strike when it was ordered, waiting on the deck for its turn
+    public void Call() => _called = true;
+    private bool OnDeck => _b is BSt.Docked or BSt.Lifting or BSt.Landing or BSt.Taxiing;
+    // 0 on the deck, 1 at flight height (the hauler's SmoothStep)
+    private float Altitude => _b switch
     {
-        var v = _haveSlot && delta > 0 ? (slot - _lastSlot) / (float)delta : Carrier.Velocity;
-        _lastSlot = slot; _haveSlot = true;
-        return v;
-    }
+        BSt.Docked or BSt.Taxiing => 0f,
+        BSt.Lifting => Mathf.SmoothStep(0f, 1f, (float)((_deckT / LiftTime - RollOut) / (1 - RollOut))),
+        BSt.Landing => 1f - Mathf.SmoothStep(0f, 1f, (float)(_deckT / LandTime)),
+        _ => 1f,
+    };
+    public float VisualScale => F ? 1f : Mathf.Lerp(LandedScale, 1f, Altitude);
+    public string BomberPhase => _b.ToString();
+    private void Go(BSt s) { _b = s; _deckT = 0; }
+
     private const float CrawlSpeed = 0.25f;     // bombers keep closing at this fraction of top speed while they launch
     public bool Launching => _b == BSt.Launch;
-    private BSt _b = BSt.Docked;
     public bool Docked => _b == BSt.Docked;
     public bool Armed => _b == BSt.Docked && _rearm <= 0 && Ammo > 0;
     // A bomber that joins a wing already in service (a refit) arrives empty and rearms like one
     // just home: swapping a bay on and off must not reload a wing that has fired.
     public void StartRearm() { Ammo = 0; _rearm = S["bomber_rearm"]; }
     public double RearmLeft => _b == BSt.Docked ? Math.Max(0, _rearm) : 0;
-    private double _rearm, _backT;
+    private double _rearm;
 
     // Where the host says this craft is. Guests steer toward it.
     private NetPose _net;
@@ -10002,9 +10255,11 @@ public partial class Wing : Node2D
         // Fighter and bomber have their own airframes, and the bomber is the larger of
         // the two (FighterLength, BomberLength) so they read apart at a glance.
         _sprite = Sprites.Fit(F ? "res://wing_fighter.png" : "res://wing_bomber.png", F ? FighterLength : BomberLength);
+        _fit = _sprite.Scale;
         AddChild(_sprite);
         ZIndex = 4;
     }
+    private Vector2 _fit;                       // the sprite's scale at flight size
 
     public void SetNet(Vector2 p, float rot) => _net.Set(p, rot);
 
@@ -10013,15 +10268,16 @@ public partial class Wing : Node2D
     public void Tick(double delta)
     {
         Visible = Carrier.IsVisibleInTree() && !Inside;   // docked fighters are inside the hull
-        QueueRedraw();                                     // the engine plume
+        QueueRedraw();                                     // the engine plume; a bomber's shadow on the deck
+        if (!F) { _deckT += delta; _sprite.Scale = _fit * VisualScale; }
 
         if (!Net.Sim)
-        {   // the host flies the wing; a guest follows where it says it is -- except a
-            // bomber the host reports docked, which is locked to its slot here exactly,
-            // rather than trailing a moving carrier by a packet's worth of lag
-            if (!F && _b == BSt.Docked) { SnapToDock(); return; }
+        {   // the host flies the wing; a guest follows where it says it is -- except a bomber
+            // on the deck (parked, lifting, landing, taxiing), placed here exactly in the
+            // carrier's frame on its own clock, rather than trailing a moving carrier by a
+            // packet's worth of lag
+            if (!F && (OnDeck || !_net.Has)) { DeckPose(delta); return; }
             if (_net.Has) _net.Follow(this, (float)delta);
-            else if (!F) SnapToDock();
             return;
         }
 
@@ -10044,7 +10300,7 @@ public partial class Wing : Node2D
             case FSt.Docked:
                 Position = Carrier.Position; Velocity = Carrier.Velocity; _heading = Carrier.Rotation - Mathf.Pi / 2f;
                 if (_rest > 0) { _rest -= delta; break; }
-                if (engage && Carrier.TakeLaunchSlot()) { _f = FSt.Launch; _launchT = 0; _engaged = 0; LaunchedAt = Carrier.Clock; Carrier.Signal(Carrier.Position); }
+                if (engage && Carrier.TakeLaunchSlot(WingKind.Fighter)) { _f = FSt.Launch; _launchT = 0; _engaged = 0; LaunchedAt = Carrier.Clock; Carrier.Signal(Carrier.Position); }
                 break;
             case FSt.Launch:                       // out along the carrier's heading, clear of the hull
                 _launchT += delta; Fly(dt);
@@ -10110,9 +10366,27 @@ public partial class Wing : Node2D
         switch (_b)
         {
             case BSt.Docked:
-                SnapToDock();
+                DeckPose(delta);
                 if (_rearm > 0) { _rearm -= delta; if (_rearm <= 0) Ammo = (int)S["bomber_ammo"]; }
-                if (live && Armed) { _b = BSt.Approach; Velocity = Carrier.Velocity; Carrier.Signal(Position); }
+                if (_called && live)
+                {   // in the strike it was counted into: it takes off when the deck gives it its turn
+                    if (Carrier.TakeLaunchSlot(WingKind.Bomber))
+                    { _called = false; Go(BSt.Lifting); LaunchedAt = Carrier.Clock; Carrier.Signal(Position); }
+                }
+                // called off before its turn came: it answers for itself, once, as a bomber out does
+                else if (_called) { _called = false; Carrier.NoteStrikeDone(); }
+                break;
+
+            case BSt.Lifting:
+                DeckPose(delta);
+                if (_deckT >= LiftTime)
+                {   // off the bow with the speed its run up the runway ended at, in the carrier's frame
+                    // (the pace of the run's u-squared at its end) -- a frame's jump of the carrier, a
+                    // warp or a snap, is not a speed
+                    float run = 2f * (Carrier.Bay(this).Y + Carrier.MyArt.RunwayBow) / (float)(LiftTime * (1 - RollOut));
+                    Velocity = Carrier.Velocity + Vector2.Up.Rotated(Carrier.Rotation) * run;
+                    _b = BSt.Approach;
+                }
                 break;
 
             case BSt.Approach:
@@ -10142,59 +10416,93 @@ public partial class Wing : Node2D
                     Combat.LaunchTorpedo(Position + dir * BomberLength * 0.45f, dir, (float)S["torpedo_speed"],
                                          (float)S["torpedo_range"], S["torpedo_damage"], source: Carrier);
                 }
-                if (Ammo <= 0) { _b = BSt.Return; _haveSlot = false; Carrier.NoteStrikeDone(); }
+                if (Ammo <= 0) { _b = BSt.Return; Carrier.NoteStrikeDone(); }
                 break;
 
-            case BSt.Return:
-            {   // to a point just outboard of its own slot...
-                var (slot, rot) = Carrier.DockSlot(this);
-                var slotVel = SlotVelocity(slot, delta);
-                var outward = Vector2.Up.Rotated(rot);
-                FlyToward(slot + outward * 45f, Speed, delta, slotVel);
-                if (Position.DistanceTo(slot + outward * 45f) < 8f) { _b = BSt.Backing; _backT = 0; }
+            case BSt.Return:                           // home: over the carrier's centre, moving with it
+                FlyToward(Carrier.Position, Speed, delta, Carrier.Velocity);
+                if (Position.DistanceTo(Carrier.Position) < TouchRadius)
+                {
+                    _touch = Carrier.ToLocal(Position); _touchRot = Mathf.AngleDifference(Carrier.Rotation, Rotation);
+                    Go(BSt.Landing); Carrier.Signal(Position);
+                }
                 break;
-            }
-            case BSt.Backing:
-            {   // ...then turn nose-out and back in, tail first. It rides the slot's TRUE motion:
-                // a turning carrier swings the slot sideways as fast as a bomber backs in, and
-                // following only the carrier's own velocity left it hovering and jittering beside
-                // the slot, never docking, never re-arming.
-                var (slot, rot) = Carrier.DockSlot(this);
-                var slotVel = SlotVelocity(slot, delta);
-                _backT += delta;
-                Rotation = Mathf.LerpAngle(Rotation, rot, Mathf.Clamp(6f * (float)delta, 0f, 1f));
-                Position += slotVel * (float)delta;
-                if (_backT > 0.4) Position = Position.MoveToward(slot, 60f * (float)delta);
-                if (Position.DistanceTo(slot) < DockSnap || _backT > BackingLimit)
-                { _b = BSt.Docked; _rearm = S["bomber_rearm"]; SnapToDock(); Carrier.Signal(slot); }
+
+            case BSt.Landing:
+                DeckPose(delta);
+                if (_deckT >= LandTime) Go(BSt.Taxiing);
                 break;
-            }
+
+            case BSt.Taxiing:
+                DeckPose(delta);
+                if (_deckT >= TaxiTime) { Go(BSt.Docked); _rearm = S["bomber_rearm"]; Carrier.Signal(Position); }
+                break;
         }
     }
 
-    // Docked: in its slot on the carrier's flank, nose out, tail to the hull.
-    private void SnapToDock()
+    // Where a bomber on the deck is, from the carrier and its own clock: parked in its bay, facing
+    // the bow; LIFTING, rolling out onto the runway beside its bay, then up it to the bow end,
+    // gathering speed; LANDING, from where it came over the centre down onto it, turning to face
+    // the bow; TAXIING, from the centre to its bay.
+    private void DeckPose(double delta)
     {
-        var (p, rot) = Carrier.DockSlot(this);
-        Position = p; Rotation = rot; Velocity = Carrier.Velocity;
+        var bay = Carrier.Bay(this);
+        var local = bay; float turn = 0f;
+        switch (_b)
+        {
+            case BSt.Lifting:
+            {
+                float k = (float)(_deckT / LiftTime), roll = (float)RollOut;
+                var onRunway = new Vector2(0f, bay.Y);
+                if (k < roll) local = bay.Lerp(onRunway, Mathf.SmoothStep(0f, 1f, k / roll));
+                else
+                {
+                    float u = Mathf.Clamp((k - roll) / (1f - roll), 0f, 1f);
+                    local = onRunway.Lerp(new Vector2(0f, -Carrier.MyArt.RunwayBow), u * u);
+                }
+                break;
+            }
+            case BSt.Landing:
+            {
+                float k = Mathf.SmoothStep(0f, 1f, (float)(_deckT / LandTime));
+                local = _touch.Lerp(Vector2.Zero, k); turn = Mathf.LerpAngle(_touchRot, 0f, k);
+                break;
+            }
+            case BSt.Taxiing:
+                local = Vector2.Zero.Lerp(bay, Mathf.SmoothStep(0f, 1f, (float)(_deckT / TaxiTime)));
+                break;
+        }
+        var at = Carrier.ToGlobal(local);
+        Velocity = delta > 0 ? (at - Position) / (float)delta : Carrier.Velocity;
+        Position = at; Rotation = Carrier.Rotation + turn;
     }
 
-    // Replicated so a guest shows the same state: its ability bar, docked fighters
-    // hidden inside, and the signal light when anything lands or takes off.
+    // Replicated so a guest shows the same state: its ability bar, docked fighters hidden inside,
+    // a bomber's deck moves, and the signal light when anything lands or takes off.
     public int StateCode => F ? 100 + (int)_f : (int)_b;
     public void SetNetState(int code, double rearm)
     {
         if (Net.Sim) return;
-        bool wasDocked = F ? _f == FSt.Docked : _b == BSt.Docked;
-        if (code >= 100) _f = (FSt)(code - 100); else { _b = (BSt)code; _rearm = rearm; }
-        bool docked = F ? _f == FSt.Docked : _b == BSt.Docked;
-        if (docked != wasDocked) Carrier.Signal(docked && !F ? Carrier.DockSlot(this).pos : Position);
+        if (code >= 100)
+        {
+            bool wasDocked = _f == FSt.Docked;
+            _f = (FSt)(code - 100);
+            if ((_f == FSt.Docked) != wasDocked) Carrier.Signal(Position);
+            return;
+        }
+        _rearm = rearm;
+        var b = (BSt)code;
+        if (b == _b) return;
+        // a deck move runs on this peer's own clock from here; a landing from where this peer shows it
+        if (b == BSt.Landing) { _touch = Carrier.ToLocal(Position); _touchRot = Mathf.AngleDifference(Carrier.Rotation, Rotation); }
+        Go(b);
+        if (b is BSt.Lifting or BSt.Landing or BSt.Docked) Carrier.Signal(Position);
     }
     public bool IsBomber => Kind == WingKind.Bomber;
 
     // Accelerate toward a point, easing off to arrive rather than overshoot.
-    // `carry` is the velocity of whatever the craft is homing on (the carrier, when
-    // docking), so it arrives moving WITH it rather than stopping dead beside it.
+    // `carry` is the velocity of whatever the craft is homing on (the carrier's centre, coming
+    // home to land), so it arrives moving WITH it rather than stopping dead over it.
     private void FlyToward(Vector2 to, float spd, double delta, Vector2 carry = default)
     {
         var d = to - Position;
@@ -10216,8 +10524,17 @@ public partial class Wing : Node2D
 
     public override void _Draw()
     {
-        if (Inside || (!F && _b == BSt.Docked)) return;          // engines off when docked
-        float len = F ? FighterLength : BomberLength;
+        if (Inside) return;                                      // a fighter in the hangar
+        float len = (F ? FighterLength : BomberLength) * VisualScale;
+        if (!F && OnDeck)
+        {   // its shadow on the deck, tucked in when parked, further out and fainter the higher it
+            // rises (the hauler's): screen down-right, in the bomber's own frame
+            float alt = Altitude;
+            var size = _sprite.Texture.GetSize() * _sprite.Scale;
+            var drop = (new Vector2(3f, 5f) * (0.15f + alt)).Rotated(-Rotation);
+            DrawTextureRect(_sprite.Texture, new Rect2(drop - size / 2, size), false, new Color(0, 0, 0, (0.45f - 0.15f * alt) * (1f - alt)));
+            if (_b is BSt.Docked or BSt.Taxiing) return;       // engines off on the deck
+        }
         Plume.Draw(this, new Vector2(0, len * 0.5f), Vector2.Down, len, Carrier.Accent,
                    Velocity.Length() / Mathf.Max(1f, Speed), Velocity.Length() > 2f);
     }
@@ -10225,7 +10542,7 @@ public partial class Wing : Node2D
 
 //==============================================================================
 // FILE: scripts/Slug.cs
-// 96 lines   sha256 8aee6a288f6c
+// 97 lines   sha256 4f87ca854335
 //==============================================================================
 using Godot;
 using System.Linq;
@@ -10259,6 +10576,7 @@ public partial class Slug : Node2D
     public override void _Ready()
     {
         ZIndex = 6; Rotation = Dir.Angle() + Mathf.Pi / 2f;
+        if (Look == Kind.Shell) Sfx.Special("drake_gun", Position);            // the Drake's main gun, on every peer
         _flown = Mathf.Min(Speed * Lead, Range); Position += Dir * _flown;
     }
 
@@ -10784,7 +11102,7 @@ public partial class StatsWindow : CanvasLayer
 
 //==============================================================================
 // FILE: scripts/TargetDummy.cs
-// 133 lines   sha256 2a50d73cee42
+// 145 lines   sha256 a545cd280b67
 //==============================================================================
 using Godot;
 
@@ -10851,10 +11169,13 @@ public partial class TargetDummy : Node2D, IHittable
     public void ResetMeter()
     {
         LastSecond = Average10 = Total = _window = 0; _histN = _histI = 0; _clock = 0;
+        _hullWatch.Tick(this, 0, taken: false);    // a meter restarted, not a repair: the next hit shows in full
     }
 
+    private HullWatch _hullWatch;                  // what it takes, shown where it lands (its running total, as a falling "hull")
     public override void _Process(double delta)
     {
+        _hullWatch.Tick(this, -Total, taken: false);
         _hitFlash = Mathf.Max(0, _hitFlash - delta);
         if (_fighter != null) _fighter.Modulate = _hitFlash > 0 ? new Color(1f, 0.8f, 0.7f) : Colors.White;
         if (Armed && Net.Sim)
@@ -10890,7 +11211,16 @@ public partial class TargetDummy : Node2D, IHittable
         QueueRedraw();
     }
 
-    public void SetReadout(double last, double avg, double total) { LastSecond = last; Average10 = avg; Total = total; }
+    // a guest's copy of the host's meter, once a second: its first figures are where this peer starts
+    // counting, and a meter the host restarted (its sums restart together) counts from zero
+    private bool _readSeen;
+    public void SetReadout(double last, double avg, double total)
+    {
+        if (!_readSeen) _hullWatch = default;
+        else if (total < Total || (total > 0 && total == last)) _hullWatch.Tick(this, 0, taken: false);
+        _readSeen = true;
+        LastSecond = last; Average10 = avg; Total = total;
+    }
 
     public override void _Draw()
     {
@@ -10922,7 +11252,7 @@ public partial class TargetDummy : Node2D, IHittable
 
 //==============================================================================
 // FILE: scripts/Telegraph.cs
-// 48 lines   sha256 058f5a0b7057
+// 55 lines   sha256 f456ac50c42c
 //==============================================================================
 using Godot;
 
@@ -10930,21 +11260,28 @@ using Godot;
 // so pilots can get out. A LINE (a beam: from, to, width) or a CIRCLE (centre,
 // radius). It fills as the moment approaches, then flashes when the attack lands --
 // and stays lit for as long as the attack itself lasts (Hold: the death beam burns for
-// 3 s) -- then frees itself. Pure visuals: the host resolves the hit when the time is up.
+// 3 s) -- then frees itself. Pure visuals: the host resolves the hit when the time is up. It
+// carries the attack's sounds too, so every peer that draws it hears them in step with it.
 public partial class Telegraph : Node2D
 {
     public bool Line;
     public Vector2 A, B;           // line: from and to (world); circle: A is the centre
     public float Width, Radius;
     public double Duration, Hold;
+    // Cue plays as the warning goes up, Strike as the attack lands (Sfx.Special; either may be null)
+    public string Cue, Strike;
     private double _t;
+    public double Elapsed => _t;
     private const double Flash = 0.35;
 
     public override void _Ready() { ZIndex = 7; ZAsRelative = false; }
 
     public override void _Process(double delta)
     {
+        if (_t == 0 && Cue != null) Sfx.Special(Cue, ToGlobal(A));
+        bool winding = _t < Duration;
         _t += delta;
+        if (winding && _t >= Duration && Strike != null) Sfx.Special(Strike, ToGlobal(A));
         if (_t > Duration + Hold + Flash) QueueFree();
         QueueRedraw();
     }
@@ -10975,7 +11312,7 @@ public partial class Telegraph : Node2D
 
 //==============================================================================
 // FILE: scripts/ThrownRock.cs
-// 96 lines   sha256 3995bc17619e
+// 98 lines   sha256 416b29fe403e
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -10985,8 +11322,9 @@ using System.Collections.Generic;
 // flown goes as the cube of the time) -- striking every ship in its path once, and breaking apart at
 // the lane's end. Its whole path is fixed when the throw starts (from, to, hold, flight), so every peer
 // flies the same rock from one event and no positions are streamed; a guest shortens only the HOLD
-// (Net.Arriving), never the flight, so the rock it draws is where the host's hit lands. A rock whose
-// boss is down threatens nothing: it goes with it.
+// (Net.Arriving), never the flight, so the rock it draws is where the host's hit lands. A Hold below
+// zero (a peer that arrived mid-flight, Drake.CatchUp) starts it that far into its flight. A rock
+// whose boss is down threatens nothing: it goes with it.
 public partial class ThrownRock : Node2D
 {
     public Boss Boss;
@@ -11001,6 +11339,7 @@ public partial class ThrownRock : Node2D
     private readonly HashSet<PlayerShip> _struck = new();
     private Sprite2D _sprite;
     public bool Thrown => _t >= Hold;
+    public double Elapsed => _t;
     public bool Done => _broken >= 0;
     // the share of the lane flown `s` seconds into a flight of `flight`: the cube -- slow, then very fast
     public static float Flown(double s, double flight) => (float)System.Math.Pow(System.Math.Clamp(s / flight, 0, 1), 3);
@@ -11045,7 +11384,7 @@ public partial class ThrownRock : Node2D
             _last = Position;
             if (f >= 1f)
             {   // the lane's end: it breaks apart
-                _broken = 0; _sprite.Visible = false; Sfx.Impact(Position);
+                _broken = 0; _sprite.Visible = false; Sfx.Special("drake_rock", Position);
                 GetParent().AddChild(new Explosion { Position = Position, Radius = Radius * 1.2f });
             }
         }
@@ -11156,7 +11495,7 @@ public partial class TioWindow : PanelContainer
 
 //==============================================================================
 // FILE: scripts/Torpedo.cs
-// 149 lines   sha256 78f268798b9b
+// 150 lines   sha256 13b0c68aca8d
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -11246,6 +11585,7 @@ public partial class Torpedo : Node2D, IHittable
             foreach (var h in HostileFire ? Combat.Players : Combat.Hostiles)
             {
                 if (h == null || !h.Alive || !h.Covers(GlobalPosition, 4f)) continue;
+                if (h is Node2D struck) DamageNumbers.NoteImpact(struck, GlobalPosition);   // on every peer that sees it strike
                 if (!Cosmetic && Net.Sim)
                 {   // a player ship is told where the hit came from, for its shield
                     if (h is PlayerShip ps) ps.Hit(Damage, GlobalPosition - Dir * 10f, HitSource); else h.TakeDamage(Damage);
@@ -11588,7 +11928,7 @@ public static class Ui
 
 //==============================================================================
 // FILE: scripts/UtilityShip.cs
-// 74 lines   sha256 c0d1895994ce
+// 78 lines   sha256 c578be51ba5f
 //==============================================================================
 using Godot;
 using System;
@@ -11606,6 +11946,9 @@ public abstract partial class UtilityShip : Node2D, IRaidTarget
 {
     public Yard Yard;
     public double Cargo, Hull, RebuildIn;
+    private HullWatch _hullWatch; private bool _hostSeen;
+    // damage taken, shown where it lands (DamageNumbers): each kind calls it every frame
+    protected void WatchHull() => _hullWatch.Tick(this, Hull, taken: true);
     public bool WaitingForCredits;
     protected double PinT;
     public bool Pinned => PinT > 0;
@@ -11655,6 +11998,7 @@ public abstract partial class UtilityShip : Node2D, IRaidTarget
     // before this report's state was applied.
     protected void FromHost(float hull, float rebuild, bool wasLost)
     {
+        if (!_hostSeen) { _hullWatch = default; _hostSeen = true; }   // the host's first figure is where this peer starts counting
         Hull = hull; WaitingForCredits = rebuild < 0; RebuildIn = Math.Max(0, rebuild);
         if (wasLost != Lost) Burst(rebuilt: wasLost);
     }
@@ -12765,86 +13109,864 @@ for ($i = $dataAt; $i -lt $dataAt + $dataLen - 1; $i += 2) {
 Write-Host ("{0} -> {1}  x{2:0.0000}  ({3} samples)" -f $In, $Out, $Factor, [int]($dataLen / 2))
 
 //==============================================================================
-// FILE: tools/make_destroyer.ps1
-// 77 lines   sha256 89bc0fcf58e2
+// FILE: tools/make_ships.ps1
+// 618 lines   sha256 6c482030b6ed
 //==============================================================================
-# The destroyer's hull: the battleship's, 75% as wide and 90% as long, on a 270 px square
-# canvas (so 0.7467 u/px at 201.6 u, the battleship's own scale), with missile pods painted
-# where the battleship's two inner turrets stood and along the sponsons.
-# Run: powershell -ExecutionPolicy Bypass -File tools\make_destroyer.ps1 [-Preview <png>]
-param([string]$Out = '', [string]$Preview = '')
+# THE SHIPS' ART, made from the owner's line drawings in art_source\ (kept out of the game by its
+# .gdignore). Each drawing is turned nose-up, made exactly symmetrical -- the half on one side of the
+# line it is most nearly symmetrical about, reflected -- redrawn at twice its final size, sharpened,
+# cut out of its paper and brought down to size: grey on transparent, for the game to tint (the
+# hull colour on a hull, the accent on a turret, the raider tints on a raider).
+#
+#   carrier_player.png   the carrier                 art_source\carrier.png
+#   battleship_hull.png  the battleship, its four painted turrets painted over (the moving turrets
+#                        sit where they stood)       art_source\battleship.png
+#   destroyer_hull.png   the destroyer               art_source\destroyer.png
+#   turret_main.png      the main turret, barrels up, pivot at the sheet's centre (every class's,
+#                        and the heavy raider's)     art_source\turret.png
+#   turret_pd.png        the point-defence turret: the main turret's look, round and single-
+#                        barrelled -- drawn here, at the main turret's scale
+#   enemy_heavy_hull.png the heavy raider            art_source\heavy_fighter.png
+#   enemy_light_fighter.png  the light raider        art_source\light_fighter.png
+#
+# It prints every mount it placed, in world units, for PlayerShip.Art and Raider.
+# Run: powershell -ExecutionPolicy Bypass -File tools\make_ships.ps1 [-Preview <png>]
+param([string]$Preview = '')
+$ErrorActionPreference = 'Stop'
 $Root = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
-if (-not $Out) { $Out = Join-Path $Root 'destroyer_hull.png' }
+$Src = Join-Path $Root 'art_source'
 Add-Type -AssemblyName System.Drawing
-$src = [System.Drawing.Bitmap]::FromFile((Join-Path $Root 'battleship_hull.png'))
-$N = 270
-$bmp = New-Object System.Drawing.Bitmap $N, $N, ([System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
-$g = [System.Drawing.Graphics]::FromImage($bmp)
-$g.Clear([System.Drawing.Color]::Transparent)
-$g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
-$g.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
-$g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
-$W = 300 * 0.75; $H = 300 * 0.9
-$dst = New-Object System.Drawing.RectangleF ((($N - $W) / 2), 0, $W, $H)
-$attr = New-Object System.Drawing.Imaging.ImageAttributes
-$attr.SetWrapMode([System.Drawing.Drawing2D.WrapMode]::TileFlipXY)   # no dark fringe at the edges
-$g.DrawImage($src, [System.Drawing.Rectangle]::Round($dst), 0, 0, 300, 300, [System.Drawing.GraphicsUnit]::Pixel, $attr)
+Add-Type -ReferencedAssemblies System.Drawing -TypeDefinition @'
+using System;
+using System.Collections.Generic;
+using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
+using System.Runtime.InteropServices;
 
-function C([string]$hex, [int]$a = 255) { [System.Drawing.Color]::FromArgb($a, [Convert]::ToInt32($hex.Substring(0,2),16), [Convert]::ToInt32($hex.Substring(2,2),16), [Convert]::ToInt32($hex.Substring(4,2),16)) }
-$rim = C '2a3b57'; $wall = C '4e668b'; $lid = C '6f89b0'; $hi = C '9fb6d8'; $hatch = C '1c2739'
+// A drawing being worked: lightness (0 ink .. 1 paper) and coverage per pixel, and the points
+// placed on it (continuous pixel coordinates: pixel i spans i..i+1), carried through every step.
+public class Sheet
+{
+    public int W, H;
+    public float[] L, A;
+    public List<PointF> Marks = new List<PointF>();
 
-# one pod: a dark rim, a raised lid with a lit edge, the hatch in the middle
-function Pod([float]$cx, [float]$cy, [float]$r) {
-    $g.FillEllipse((New-Object System.Drawing.SolidBrush $rim), $cx - $r, $cy - $r, 2 * $r, 2 * $r)
-    $ri = $r * 0.78
-    $g.FillEllipse((New-Object System.Drawing.SolidBrush $wall), $cx - $ri, $cy - $ri, 2 * $ri, 2 * $ri)
-    $rl = $r * 0.62
-    $g.FillEllipse((New-Object System.Drawing.SolidBrush $lid), $cx - $rl, $cy - $rl, 2 * $rl, 2 * $rl)
-    $pen = New-Object System.Drawing.Pen $hi, ([Math]::Max(0.8, $r * 0.18))
-    $g.DrawArc($pen, $cx - $rl, $cy - $rl, 2 * $rl, 2 * $rl, 190, 110)
-    $rh = $r * 0.26
-    $g.FillEllipse((New-Object System.Drawing.SolidBrush $hatch), $cx - $rh, $cy - $rh, 2 * $rh, 2 * $rh)
-}
-# a bank of pods on a dark plate
-function Bank([float]$cx, [float]$cy, [int]$cols, [int]$rows, [float]$r, [float]$gap) {
-    $w = $cols * 2 * $r + ($cols - 1) * $gap; $h = $rows * 2 * $r + ($rows - 1) * $gap
-    $plate = New-Object System.Drawing.SolidBrush (C '33476a')
-    $g.FillRectangle($plate, $cx - $w / 2 - 2, $cy - $h / 2 - 2, $w + 4, $h + 4)
-    for ($i = 0; $i -lt $cols; $i++) { for ($j = 0; $j -lt $rows; $j++) {
-        Pod ($cx - $w / 2 + $r + $i * (2 * $r + $gap)) ($cy - $h / 2 + $r + $j * (2 * $r + $gap)) $r
-    } }
-}
-$cx = $N / 2
-Bank $cx (100.7 * 0.9) 2 2 5.2 2.0     # where the battleship's second turret stood
-Bank $cx (215.3 * 0.9) 2 2 5.2 2.0     # and its third
-Bank $cx (100.7 * 0.9 + 22) 2 1 4.2 2.0
-Bank $cx (215.3 * 0.9 - 22) 2 1 4.2 2.0
-foreach ($side in -1, 1) {             # the sponsons: a pod fore and aft of each point-defence turret
-    Pod ($cx + $side * 36) (150.6 * 0.9 - 22) 4.0
-    Pod ($cx + $side * 36) (150.6 * 0.9 + 22) 4.0
-}
-$g.Dispose(); $src.Dispose()
-$bmp.Save($Out, [System.Drawing.Imaging.ImageFormat]::Png)
-if ($Preview) {
-    # 3x, on a dark field, tinted like the default pilot, with the turrets overlaid, to judge it
-    $p = New-Object System.Drawing.Bitmap ($N * 3), ($N * 3)
-    $pg = [System.Drawing.Graphics]::FromImage($p)
-    $pg.Clear((C '0b0f18'))
-    $pg.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::NearestNeighbor
-    $pg.DrawImage($bmp, 0, 0, $N * 3, $N * 3)
-    $tm = [System.Drawing.Bitmap]::FromFile((Join-Path $Root 'turret_bs_main.png'))
-    $tp = [System.Drawing.Bitmap]::FromFile((Join-Path $Root 'turret_bs_pd.png'))
-    $k = 0.9
-    foreach ($m in @(@(0.41, -65.41, $tm), @(0.38, 76.23, $tm), @(-33.25, 0.45, $tp), @(34.97, 0.45, $tp))) {
-        $x = $m[0] * 0.75 / 0.7467; $y = $m[1] * 0.9 / 0.7467; $t = $m[2]
-        if ($t -eq $tp) { $x = $m[0] * 0.75 / 0.7467 }
-        $w = $t.Width * $k * 3; $h = $t.Height * $k * 3
-        $pg.DrawImage($t, [float](($cx + $x) * 3 - $w / 2), [float](($N / 2 + $y) * 3 - $h / 2), [float]$w, [float]$h)
+    public Sheet(int w, int h, bool clear)
+    {
+        W = w; H = h; L = new float[w * h]; A = new float[w * h];
+        for (int i = 0; i < L.Length; i++) { L[i] = clear ? 0f : 1f; A[i] = clear ? 0f : 1f; }
     }
-    $pg.Dispose(); $p.Save($Preview, [System.Drawing.Imaging.ImageFormat]::Png); $p.Dispose(); $tm.Dispose(); $tp.Dispose()
+
+    static byte[] Bytes(Bitmap b, out int stride)
+    {
+        var d = b.LockBits(new Rectangle(0, 0, b.Width, b.Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+        stride = d.Stride;
+        var px = new byte[d.Stride * b.Height];
+        Marshal.Copy(d.Scan0, px, 0, px.Length);
+        b.UnlockBits(d);
+        return px;
+    }
+
+    // a drawing on paper: its lightness over white, all of it covered
+    public static Sheet Paper(Bitmap b)
+    {
+        int st; var px = Bytes(b, out st);
+        var s = new Sheet(b.Width, b.Height, false);
+        for (int y = 0; y < s.H; y++)
+            for (int x = 0; x < s.W; x++)
+            {
+                int o = y * st + x * 4; float a = px[o + 3] / 255f;
+                float l = (0.114f * px[o] + 0.587f * px[o + 1] + 0.299f * px[o + 2]) / 255f;
+                s.L[y * s.W + x] = l * a + 1f - a;
+            }
+        return s;
+    }
+
+    // a drawing with its own transparency
+    public static Sheet Cut(Bitmap b)
+    {
+        int st; var px = Bytes(b, out st);
+        var s = new Sheet(b.Width, b.Height, true);
+        for (int y = 0; y < s.H; y++)
+            for (int x = 0; x < s.W; x++)
+            {
+                int o = y * st + x * 4;
+                s.L[y * s.W + x] = (0.114f * px[o] + 0.587f * px[o + 1] + 0.299f * px[o + 2]) / 255f;
+                s.A[y * s.W + x] = px[o + 3] / 255f;
+            }
+        return s;
+    }
+
+    static float C01(float v) { return v < 0f ? 0f : v > 1f ? 1f : v; }
+
+    public Bitmap ToBitmap()
+    {
+        var b = new Bitmap(W, H, PixelFormat.Format32bppArgb);
+        var d = b.LockBits(new Rectangle(0, 0, W, H), ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
+        var px = new byte[d.Stride * H];
+        for (int y = 0; y < H; y++)
+            for (int x = 0; x < W; x++)
+            {
+                int i = y * W + x, o = y * d.Stride + x * 4;
+                byte g = (byte)Math.Round(C01(L[i]) * 255f);
+                px[o] = g; px[o + 1] = g; px[o + 2] = g; px[o + 3] = (byte)Math.Round(C01(A[i]) * 255f);
+            }
+        Marshal.Copy(px, 0, d.Scan0, px.Length);
+        b.UnlockBits(d);
+        return b;
+    }
+
+    public void Save(string path) { using (var b = ToBitmap()) b.Save(path, ImageFormat.Png); }
+
+    public void Mark(float x, float y) { Marks.Add(new PointF(x, y)); }
+
+    // turned a quarter anticlockwise: the right-hand edge becomes the top
+    public Sheet TurnLeft()
+    {
+        var o = new Sheet(H, W, false);
+        for (int y = 0; y < H; y++)
+            for (int x = 0; x < W; x++)
+            {
+                int j = (W - 1 - x) * o.W + y;
+                o.L[j] = L[y * W + x]; o.A[j] = A[y * W + x];
+            }
+        foreach (var p in Marks) o.Marks.Add(new PointF(p.Y, W - p.X));
+        return o;
+    }
+
+    // back to bare paper
+    public void Blank(int x0, int y0, int x1, int y1)
+    {
+        for (int y = Math.Max(0, y0); y <= Math.Min(H - 1, y1); y++)
+            for (int x = Math.Max(0, x0); x <= Math.Min(W - 1, x1); x++) L[y * W + x] = 1f;
+    }
+
+    // painted over, x0..x1 by y0..y1, with the columns of a clean stretch from cleanX on, repeated
+    // every `period`: for a band whose lines all run along it (a hull's spine)
+    public void PatchColumns(int x0, int y0, int x1, int y1, int cleanX, int period)
+    {
+        for (int x = x0; x <= x1; x++)
+        {
+            int sx = cleanX + (x - x0) % period;
+            for (int y = y0; y <= y1; y++) L[y * W + x] = L[y * W + sx];
+        }
+    }
+
+    // the vertical line (continuous x, in half pixels) the ink is most nearly mirror-symmetric
+    // about: ink with no ink opposite it -- or off the sheet opposite it -- is the mismatch
+    public float FindAxis()
+    {
+        double best = double.MaxValue; float axis = W / 2f;
+        for (int c2 = (int)(W * 0.8); c2 <= (int)(W * 1.2); c2++)
+        {
+            double err = 0;
+            for (int y = 0; y < H; y++)
+            {
+                int row = y * W;
+                for (int x = 0; x < W; x++)
+                {
+                    int m = c2 - 1 - x;
+                    float a = 1f - L[row + x], b = m >= 0 && m < W ? 1f - L[row + m] : 0f;
+                    err += Math.Abs(a - b);
+                }
+            }
+            if (err < best) { best = err; axis = c2 / 2f; }
+        }
+        return axis;
+    }
+
+    // redrawn at w by h (high-quality bicubic); the drawing must still be on its paper
+    public Sheet Resize(int w, int h)
+    {
+        using (var src = ToBitmap())
+        using (var dst = new Bitmap(w, h, PixelFormat.Format32bppArgb))
+        using (var g = Graphics.FromImage(dst))
+        using (var at = new ImageAttributes())
+        {
+            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+            at.SetWrapMode(WrapMode.TileFlipXY);
+            g.DrawImage(src, new Rectangle(0, 0, w, h), 0, 0, W, H, GraphicsUnit.Pixel, at);
+            var o = Paper(dst);
+            float sx = (float)w / W, sy = (float)h / H;
+            foreach (var p in Marks) o.Marks.Add(new PointF(p.X * sx, p.Y * sy));
+            return o;
+        }
+    }
+
+    float At(float[] f, float fill, int x, int y) { return x < 0 || x >= W || y < 0 || y >= H ? fill : f[y * W + x]; }
+    float Sample(float[] f, float fill, float fx, int y)
+    {
+        int x0 = (int)Math.Floor(fx); float t = fx - x0;
+        return (1 - t) * At(f, fill, x0, y) + t * At(f, fill, x0 + 1, y);
+    }
+
+    // exactly symmetrical: the kept half reflected across `axis` (continuous x), on a sheet of even
+    // width whose centre line is the axis (what lay beyond the old sheet is transparent)
+    public Sheet Mirror(float axis, bool keepLeft)
+    {
+        int half = (int)Math.Ceiling(Math.Max(axis, W - axis));
+        var o = new Sheet(2 * half, H, false);
+        for (int y = 0; y < H; y++)
+            for (int x = 0; x < o.W; x++)
+            {
+                float d = Math.Abs(x + 0.5f - half);
+                float sx = (keepLeft ? axis - d : axis + d) - 0.5f;
+                o.L[y * o.W + x] = Sample(L, 1f, sx, y);
+                o.A[y * o.W + x] = Sample(A, 0f, sx, y);
+            }
+        foreach (var p in Marks) o.Marks.Add(new PointF(p.X - axis + half, p.Y));
+        return o;
+    }
+
+    static float[] Blur(float[] src, int w, int h, float sigma)
+    {
+        int r = Math.Max(1, (int)Math.Ceiling(sigma * 3));
+        var k = new float[2 * r + 1]; float sum = 0;
+        for (int i = -r; i <= r; i++) { k[i + r] = (float)Math.Exp(-i * i / (2 * sigma * sigma)); sum += k[i + r]; }
+        for (int i = 0; i < k.Length; i++) k[i] /= sum;
+        var t = new float[src.Length]; var o = new float[src.Length];
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+            {
+                float v = 0;
+                for (int i = -r; i <= r; i++) v += k[i + r] * src[y * w + Math.Min(w - 1, Math.Max(0, x + i))];
+                t[y * w + x] = v;
+            }
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+            {
+                float v = 0;
+                for (int i = -r; i <= r; i++) v += k[i + r] * t[Math.Min(h - 1, Math.Max(0, y + i)) * w + x];
+                o[y * w + x] = v;
+            }
+        return o;
+    }
+
+    // an unsharp mask: the blur of the enlargement taken back out of it
+    public void Sharpen(float sigma, float amount)
+    {
+        var b = Blur(L, W, H, sigma);
+        for (int i = 0; i < L.Length; i++) L[i] += amount * (L[i] - b[i]);
+    }
+
+    // ink below `black` solid, paper above `white` clean, the greys between stretched
+    public void Levels(float black, float white)
+    {
+        for (int i = 0; i < L.Length; i++) L[i] = C01((L[i] - black) / (white - black));
+    }
+
+    static bool[] Dilate(bool[] m, int w, int h, int r)
+    {
+        var t = new bool[m.Length]; var o = new bool[m.Length];
+        var pre = new int[Math.Max(w, h) + 1];
+        for (int y = 0; y < h; y++)
+        {
+            for (int x = 0; x < w; x++) pre[x + 1] = pre[x] + (m[y * w + x] ? 1 : 0);
+            for (int x = 0; x < w; x++) t[y * w + x] = pre[Math.Min(w, x + r + 1)] - pre[Math.Max(0, x - r)] > 0;
+        }
+        for (int x = 0; x < w; x++)
+        {
+            for (int y = 0; y < h; y++) pre[y + 1] = pre[y] + (t[y * w + x] ? 1 : 0);
+            for (int y = 0; y < h; y++) o[y * w + x] = pre[Math.Min(h, y + r + 1)] - pre[Math.Max(0, y - r)] > 0;
+        }
+        return o;
+    }
+
+    // THE PAPER CUT AWAY. A flood runs in from the sheet's edge over light pixels, but never within
+    // `seal` px of ink, so a gap in an outline cannot let it into the hull; then Unmix; then Specks.
+    public void CutOut(float paper, int seal, int band, float minIsland)
+    {
+        int n = W * H;
+        var ink = new bool[n];
+        for (int i = 0; i < n; i++) ink[i] = L[i] < paper;
+        var near = Dilate(ink, W, H, seal);
+        var q = new Queue<int>();
+        var bg = new bool[n];
+        for (int x = 0; x < W; x++) { Seed(bg, near, q, x, 0); Seed(bg, near, q, x, H - 1); }
+        for (int y = 0; y < H; y++) { Seed(bg, near, q, 0, y); Seed(bg, near, q, W - 1, y); }
+        while (q.Count > 0)
+        {
+            int i = q.Dequeue(), x = i % W, y = i / W;
+            if (x > 0) Seed(bg, near, q, x - 1, y);
+            if (x < W - 1) Seed(bg, near, q, x + 1, y);
+            if (y > 0) Seed(bg, near, q, x, y - 1);
+            if (y < H - 1) Seed(bg, near, q, x, y + 1);
+        }
+        for (int i = 0; i < n; i++) if (bg[i]) A[i] = 0f;
+        Unmix(band);
+        Specks(minIsland);
+    }
+    void Seed(bool[] bg, bool[] near, Queue<int> q, int x, int y)
+    {
+        int i = y * W + x;
+        if (bg[i] || near[i]) return;
+        bg[i] = true; q.Enqueue(i);
+    }
+
+    // The light edge between the transparent and the solid ink, up to `band` px deep, un-mixed from
+    // the white it was drawn on: black, at 1 - lightness. The outline then reads clean on any
+    // background, and a sliver of paper left inside a cut is gone.
+    public void Unmix(int band)
+    {
+        int n = W * H;
+        var dist = new int[n];
+        var q = new Queue<int>();
+        for (int i = 0; i < n; i++) { dist[i] = A[i] <= 0f ? 0 : -1; if (dist[i] == 0) q.Enqueue(i); }
+        while (q.Count > 0)
+        {
+            int i = q.Dequeue(), x = i % W, y = i / W, d = dist[i];
+            if (d >= band) continue;
+            int[] nb = { x > 0 ? i - 1 : -1, x < W - 1 ? i + 1 : -1, y > 0 ? i - W : -1, y < H - 1 ? i + W : -1 };
+            foreach (int j in nb)
+            {
+                if (j < 0 || dist[j] >= 0 || L[j] < 0.5f) continue;
+                dist[j] = d + 1; q.Enqueue(j);
+            }
+        }
+        for (int i = 0; i < n; i++)
+        {
+            if (A[i] <= 0f) { L[i] = 0f; continue; }
+            if (dist[i] > 0) { A[i] = Math.Min(A[i], C01(1f - L[i])); L[i] = 0f; }
+        }
+    }
+
+    // specks: every island of cover smaller than `minIsland` of the sheet goes
+    public void Specks(float minIsland)
+    {
+        int n = W * H; var lab = new int[n]; var sizes = new List<int> { 0 };
+        var q = new Queue<int>();
+        for (int s = 0; s < n; s++)
+        {
+            if (lab[s] != 0 || A[s] < 0.05f) continue;
+            int id = sizes.Count, count = 0; lab[s] = id; q.Enqueue(s);
+            while (q.Count > 0)
+            {
+                int i = q.Dequeue(), x = i % W, y = i / W; count++;
+                int[] nb = { x > 0 ? i - 1 : -1, x < W - 1 ? i + 1 : -1, y > 0 ? i - W : -1, y < H - 1 ? i + W : -1 };
+                foreach (int j in nb) if (j >= 0 && lab[j] == 0 && A[j] >= 0.05f) { lab[j] = id; q.Enqueue(j); }
+            }
+            sizes.Add(count);
+        }
+        for (int i = 0; i < n; i++) if (lab[i] != 0 && sizes[lab[i]] < minIsland * n) A[i] = 0f;
+    }
+
+    // everything outside `shape` transparent (drawn anti-aliased): for art lifted out of a busier
+    // drawing, where a flood from the edge would stop at every line of the background
+    public void MaskTo(GraphicsPath shape)
+    {
+        using (var m = new Bitmap(W, H, PixelFormat.Format32bppArgb))
+        using (var g = Graphics.FromImage(m))
+        {
+            g.Clear(Color.Transparent);
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+            g.FillPath(Brushes.White, shape);
+            int st; var px = Bytes(m, out st);
+            for (int y = 0; y < H; y++)
+                for (int x = 0; x < W; x++) A[y * W + x] *= px[y * st + x * 4 + 3] / 255f;
+        }
+    }
+
+    // cropped to the drawing plus `pad`, the centre line kept in the middle
+    public Sheet Trim(int pad)
+    {
+        int x0 = W, x1 = -1, y0 = H, y1 = -1;
+        for (int y = 0; y < H; y++)
+            for (int x = 0; x < W; x++)
+                if (A[y * W + x] > 0.02f) { x0 = Math.Min(x0, x); x1 = Math.Max(x1, x); y0 = Math.Min(y0, y); y1 = Math.Max(y1, y); }
+        int m = Math.Min(x0, W - 1 - x1);
+        return Crop(m - pad, y0 - pad, W - m + pad, y1 + 1 + pad);
+    }
+
+    // padded so the continuous point p is the sheet's centre (to the nearest pixel)
+    public Sheet CentreOn(PointF p)
+    {
+        int cx = (int)Math.Round(p.X), cy = (int)Math.Round(p.Y);
+        int hw = Math.Max(cx, W - cx), hh = Math.Max(cy, H - cy);
+        return Crop(cx - hw, cy - hh, cx + hw, cy + hh);
+    }
+
+    // the window x0..x1, y0..y1 (end exclusive; beyond the sheet is transparent), grown to even sides
+    public Sheet Crop(int x0, int y0, int x1, int y1)
+    {
+        if ((x1 - x0) % 2 != 0) x1++;
+        if ((y1 - y0) % 2 != 0) y1++;
+        var o = new Sheet(x1 - x0, y1 - y0, true);
+        for (int y = 0; y < o.H; y++)
+            for (int x = 0; x < o.W; x++)
+            {
+                int sx = x + x0, sy = y + y0;
+                if (sx < 0 || sy < 0 || sx >= W || sy >= H) continue;
+                o.L[y * o.W + x] = L[sy * W + sx]; o.A[y * o.W + x] = A[sy * W + sx];
+            }
+        foreach (var p in Marks) o.Marks.Add(new PointF(p.X - x0, p.Y - y0));
+        return o;
+    }
+
+    // half the size, each pixel the average of four (weighted by their cover, so no fringe)
+    public Sheet Half()
+    {
+        var o = new Sheet(W / 2, H / 2, true);
+        for (int y = 0; y < o.H; y++)
+            for (int x = 0; x < o.W; x++)
+            {
+                float sa = 0, sl = 0;
+                for (int j = 0; j < 2; j++)
+                    for (int i = 0; i < 2; i++) { int k = (2 * y + j) * W + 2 * x + i; sa += A[k]; sl += A[k] * L[k]; }
+                o.A[y * o.W + x] = sa / 4f; o.L[y * o.W + x] = sa > 1e-6f ? sl / sa : 0f;
+            }
+        foreach (var p in Marks) o.Marks.Add(new PointF(p.X / 2f, p.Y / 2f));
+        return o;
+    }
+
+    // THE WHOLE TREATMENT for a hull on paper: nose-up (turned a quarter anticlockwise when it lies
+    // nose-right), symmetric, worked at twice `finalH` tall, sharpened (by the enlargement's own
+    // blur), levelled, cut out, trimmed, halved.
+    public static Sheet Hull(Sheet s, bool turn, int finalH, bool keepLeft) { return Hull(s, turn, finalH, keepLeft, 0.9f, 0.16f, 0.9f); }
+    // (a small drawing, enlarged a long way, takes a harder sharpening and a lower black point,
+    // which thins its lines back towards the drawing's)
+    public static Sheet Hull(Sheet s, bool turn, int finalH, bool keepLeft, float sharpen, float black, float white)
+    {
+        if (turn) s = s.TurnLeft();
+        float axis = s.FindAxis();
+        int w = (int)Math.Round(s.W * 2.0 * finalH / s.H), h = 2 * finalH;
+        float kx = (float)w / s.W, k = (float)h / s.H;
+        s = s.Resize(w, h).Mirror(axis * kx, keepLeft);
+        s.Sharpen(0.6f * k, sharpen);
+        s.Levels(black, white);
+        s.CutOut(0.8f, Math.Max(1, (int)Math.Round(k)), (int)Math.Round(k) + 2, 0.0004f);
+        return s.Trim(4).Half();
+    }
+
+    // THE POINT-DEFENCE TURRET, drawn at working size: the main turret's look -- white plate, black
+    // outline, a grey turntable -- but round, with one barrel. r the housing's radius, reach the
+    // pivot to the muzzle, line the outline's width (all working px); the pivot is the centre.
+    public static Sheet DrawPd(float r, float reach, float line)
+    {
+        int half = (int)Math.Ceiling(Math.Max(r, reach) + 2 * line + 2);
+        using (var b = new Bitmap(2 * half, 2 * half, PixelFormat.Format32bppArgb))
+        using (var g = Graphics.FromImage(b))
+        using (var ink = new Pen(Color.Black, line))
+        using (var fine = new Pen(Color.Black, line * 0.6f))
+        using (var plate = new SolidBrush(Color.White))
+        using (var table = new SolidBrush(Color.FromArgb(255, 178, 178, 178)))
+        using (var black = new SolidBrush(Color.Black))
+        {
+            g.Clear(Color.Transparent);
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+            ink.LineJoin = LineJoin.Round;
+            float c = half;
+            // the housing, its turntable and hatch, and six bolts round the rim
+            g.FillEllipse(plate, c - r, c - r, 2 * r, 2 * r); g.DrawEllipse(ink, c - r, c - r, 2 * r, 2 * r);
+            float rt = r * 0.66f;
+            g.FillEllipse(table, c - rt, c - rt, 2 * rt, 2 * rt); g.DrawEllipse(fine, c - rt, c - rt, 2 * rt, 2 * rt);
+            float rh = r * 0.27f;
+            g.FillEllipse(plate, c - rh, c - rh + r * 0.12f, 2 * rh, 2 * rh); g.DrawEllipse(fine, c - rh, c - rh + r * 0.12f, 2 * rh, 2 * rh);
+            for (int k = 0; k < 6; k++)
+            {
+                double a = (k * 60 + 30) * Math.PI / 180; float bx = c + (float)Math.Cos(a) * r * 0.83f, by = c + (float)Math.Sin(a) * r * 0.83f, br = line * 0.5f;
+                g.FillEllipse(black, bx - br, by - br, 2 * br, 2 * br);
+            }
+            // the barrel, over the housing: a tube from the turntable to a banded muzzle, and the
+            // mantlet where it leaves the plate
+            float bw = r * 0.34f;
+            var tube = new RectangleF(c - bw / 2, c - reach, bw, reach - rt * 0.4f);
+            g.FillRectangle(plate, tube); g.DrawRectangle(ink, tube.X, tube.Y, tube.Width, tube.Height);
+            var muzzle = new RectangleF(c - bw * 0.72f, c - reach, bw * 1.44f, r * 0.34f);
+            g.FillRectangle(plate, muzzle); g.DrawRectangle(ink, muzzle.X, muzzle.Y, muzzle.Width, muzzle.Height);
+            var mantlet = new RectangleF(c - bw * 0.95f, c - r * 1.1f, bw * 1.9f, r * 0.5f);
+            g.FillRectangle(plate, mantlet); g.DrawRectangle(ink, mantlet.X, mantlet.Y, mantlet.Width, mantlet.Height);
+            var s = Cut(b);
+            s.Mark(c, c); s.Mark(c, c - reach);
+            return s;
+        }
+    }
+
+    // a copy multiplied by a colour, as the game's Modulate draws it (for the preview)
+    public Bitmap Tinted(Color c)
+    {
+        var b = ToBitmap();
+        var d = b.LockBits(new Rectangle(0, 0, W, H), ImageLockMode.ReadWrite, PixelFormat.Format32bppArgb);
+        var px = new byte[d.Stride * H];
+        Marshal.Copy(d.Scan0, px, 0, px.Length);
+        for (int i = 0; i < px.Length; i += 4) { px[i] = (byte)(px[i] * c.B / 255); px[i + 1] = (byte)(px[i + 1] * c.G / 255); px[i + 2] = (byte)(px[i + 2] * c.R / 255); }
+        Marshal.Copy(px, 0, d.Scan0, px.Length);
+        b.UnlockBits(d);
+        return b;
+    }
 }
-$bmp.Dispose()
-"wrote $Out"
+'@
+
+function Load([string]$name) { $b = New-Object System.Drawing.Bitmap (Join-Path $Src $name); try { [Sheet]::Paper($b) } finally { $b.Dispose() } }
+# a mark's offset from the sheet's centre in world units, for a sheet `length` u tall
+function U($s, [int]$i, [double]$length) {
+    $k = $length / $s.H; $p = $s.Marks[$i]
+    '({0:0.00}, {1:0.00})' -f (($p.X - $s.W / 2) * $k), (($p.Y - $s.H / 2) * $k)
+}
+function Out-Sheet($s, [string]$name) { $s.Save((Join-Path $Root $name)); "{0,-24} {1} x {2}" -f $name, $s.W, $s.H }
+
+# ── the carrier, 170 u: nose up already ──
+$c = Load 'carrier.png'
+$c.Mark(124, 301.5)          # 0  the centre of the runway, where bombers land
+$c.Mark(71, 301.5)           # 1  the port deck, beside the runway: the bays' line
+$c.Mark(97, 301.5)           # 2  the runway's port edge
+$c.Mark(124, 60)             # 3  the runway's bow end, where a bomber lifts off
+$c.Mark(22, 238)             # 4  the middle port sponson: a point-defence turret
+$c.Mark(121, 588)            # 5  the stern block: the third point-defence turret (clear of the bow,
+                             #    where a bomber lifting off passes over)
+$c.Mark(44, 301.5)           # 6  the hull's port side (the sponsons are outboard of it)
+$c = [Sheet]::Hull($c, $false, 680, $true)
+Out-Sheet $c 'carrier_player.png'
+0..6 | ForEach-Object { "  carrier mark $_ : $(U $c $_ 170)" }
+
+# ── the battleship, 224 u: drawn nose-right ──
+$b = Load 'battleship.png'
+$b.Blank(255, 0, 318, 14); $b.Blank(705, 292, 780, 307)          # two pieces of the next drawing on the sheet
+foreach ($t in @(@(200, 310), @(383, 512), @(684, 800), @(1008, 1120))) { $b.PatchColumns($t[0], 114, $t[1], 190, 1215, 117) }
+foreach ($m in @(1055, 735, 435, 254)) { $b.Mark($m, 152) }        # 0-3 the main turrets, bow to stern
+$b.Mark(125, 112)                                                   # 4  point defence, on the stern's port quarter
+$b.Mark(700, 80)                                                    # 5  the hull's port side, amidships
+$b = [Sheet]::Hull($b, $true, 896, $true)
+Out-Sheet $b 'battleship_hull.png'
+0..5 | ForEach-Object { "  battleship mark $_ : $(U $b $_ 224)" }
+
+# ── the destroyer, 130 u: drawn nose-right ──
+$d = Load 'destroyer.png'
+$d.Mark(195, 48.5); $d.Mark(97, 48.5)                               # 0-1 main turrets: the fore spine, the central plate
+$d.Mark(45, 33)                                                     # 2  point defence, aft to port
+$d.Mark(130, 16)                                                    # 3  the hull's port side
+$d = [Sheet]::Hull($d, $true, 520, $true)
+Out-Sheet $d 'destroyer_hull.png'
+0..3 | ForEach-Object { "  destroyer mark $_ : $(U $d $_ 130)" }
+
+# ── the raiders ──
+$h = Load 'heavy_fighter.png'
+$h.Mark(67.5, 120)                                                  # 0  the heavy's turret, behind the canopy
+$h = [Sheet]::Hull($h, $false, 476, $true, 1.6, 0.05, 0.8)
+Out-Sheet $h 'enemy_heavy_hull.png'
+"  heavy turret: {0}" -f (U $h 0 136)
+$l = [Sheet]::Hull((Load 'light_fighter.png'), $false, 204, $true, 1.4, 0.08, 0.82)
+Out-Sheet $l 'enemy_light_fighter.png'
+
+# ── the main turret: lifted out of its drawing (a flood would stop at the hull lines behind it),
+#    barrels up, the housing's centre the pivot. 12 u across the housing at the battleship's
+#    turret scale (5.5 px/u): the housing is 133 px of the drawing, worked at 132. ──
+$t = (Load 'turret.png').TurnLeft()
+$t.Mark(81, 147.5); $t.Mark(81, 12)                                 # 0 the pivot, 1 the muzzles
+$axis = $t.FindAxis()
+$k = 132.0 / 133.0
+$t = $t.Resize([int][Math]::Round($t.W * $k), [int][Math]::Round($t.H * $k))
+$shape = New-Object System.Drawing.Drawing2D.GraphicsPath
+function S([double]$v) { [float]($v * $k) }
+# the housing, its corners cut; the two barrels
+$shape.AddPolygon([System.Drawing.PointF[]]@(
+    (New-Object System.Drawing.PointF (S 31), (S 79)), (New-Object System.Drawing.PointF (S 131), (S 79)),
+    (New-Object System.Drawing.PointF (S 150), (S 98)), (New-Object System.Drawing.PointF (S 150), (S 198)),
+    (New-Object System.Drawing.PointF (S 131), (S 217)), (New-Object System.Drawing.PointF (S 31), (S 217)),
+    (New-Object System.Drawing.PointF (S 12), (S 198)), (New-Object System.Drawing.PointF (S 12), (S 98))))
+$shape.AddRectangle((New-Object System.Drawing.RectangleF (S 46.5), (S 10), (S 19), (S 72)))
+$shape.AddRectangle((New-Object System.Drawing.RectangleF (S 94.5), (S 10), (S 19), (S 72)))
+$t.MaskTo($shape)
+$t = $t.Mirror($axis * $k, $true)
+$t.Sharpen(0.6, 0.6); $t.Levels(0.16, 0.9); $t.Unmix(3)
+$t = $t.CentreOn($t.Marks[0]).Half()
+Out-Sheet $t 'turret_main.png'
+$tk = 1 / 5.5
+"  main turret: housing 12 u at {0:0.0000} u/px; pivot to muzzle {1:0.00} u" -f $tk, (($t.Marks[0].Y - $t.Marks[1].Y) * $tk)
+
+# ── the point-defence turret, at the same scale: a 6 u housing, the muzzle 5.5 u out ──
+$p = [Sheet]::DrawPd(3.0 * 11, 5.5 * 11, 3.6).Half()
+Out-Sheet $p 'turret_pd.png'
+"  pd turret: ring {0:0.00} u; pivot to muzzle {1:0.00} u" -f 3.0, (($p.Marks[0].Y - $p.Marks[1].Y) * $tk)
+
+if ($Preview) {
+    # every hull at 3 px/u on a dark field, in the default hull colour, the turrets in the accent
+    # on the marks, the carrier with five bombers parked, a 10 u grid to measure by
+    $ppu = 3.0
+    $main = [System.Drawing.Color]::FromArgb(255, 77, 128, 242); $acc = [System.Drawing.Color]::FromArgb(255, 255, 199, 89)
+    $bg = [System.Drawing.Color]::FromArgb(255, 11, 15, 24)
+    $ships = @(@($c, 170.0), @($b, 224.0), @($d, 130.0), @($h, 136.0), @($l, 34.0))
+    $Wp = 60; foreach ($s in $ships) { $Wp += [int]($s[0].W * $s[1] / $s[0].H * $ppu) + 60 }
+    $Hp = [int](224 * $ppu) + 80
+    $out = New-Object System.Drawing.Bitmap $Wp, $Hp
+    $g = [System.Drawing.Graphics]::FromImage($out)
+    $g.Clear($bg); $g.InterpolationMode = 'HighQualityBicubic'; $g.SmoothingMode = 'AntiAlias'; $g.PixelOffsetMode = 'HighQuality'
+    $grid = New-Object System.Drawing.Pen ([System.Drawing.Color]::FromArgb(40, 120, 160, 255)), 1
+    for ($x = 0; $x -lt $Wp; $x += 30) { $g.DrawLine($grid, $x, 0, $x, $Hp) }
+    for ($y = 0; $y -lt $Hp; $y += 30) { $g.DrawLine($grid, 0, $y, $Wp, $y) }
+    $tm = $t.Tinted($acc); $tp = $p.Tinted($acc)
+    $bomber = New-Object System.Drawing.Bitmap (Join-Path $Root 'wing_bomber.png')
+    function Place($bmp, [double]$cx, [double]$cy, [double]$w, [double]$h, [double]$deg) {
+        $st = $g.Save(); $g.TranslateTransform([float]$cx, [float]$cy); $g.RotateTransform([float]$deg)
+        $g.DrawImage($bmp, [float](-$w / 2), [float](-$h / 2), [float]$w, [float]$h); $g.Restore($st)
+    }
+    $x0 = 60; $cy = $Hp / 2
+    foreach ($s in $ships) {
+        $sh = $s[0]; $len = $s[1]; $w = $sh.W * $len / $sh.H * $ppu; $hh = $len * $ppu; $cx = $x0 + $w / 2
+        $tint = if ($sh -eq $h) { [System.Drawing.Color]::FromArgb(255, 158, 102, 102) } elseif ($sh -eq $l) { [System.Drawing.Color]::FromArgb(255, 230, 96, 84) } else { $main }
+        $hb = $sh.Tinted($tint); Place $hb $cx $cy $w $hh 0; $hb.Dispose()
+        $u = $len / $sh.H * $ppu
+        function At($i) { @(($cx + ($sh.Marks[$i].X - $sh.W / 2) * $u), ($cy + ($sh.Marks[$i].Y - $sh.H / 2) * $u)) }
+        $tw = $t.W * $tk * $ppu; $th = $t.H * $tk * $ppu; $pw = $p.W * $tk * $ppu
+        if ($sh -eq $b) { 0..3 | ForEach-Object { $q = At $_; Place $tm $q[0] $q[1] $tw $th ($(if ($_ -eq 3) { 180 } else { 0 })) }
+                          $q = At 4; Place $tp $q[0] $q[1] $pw $pw 0; Place $tp (2 * $cx - $q[0]) $q[1] $pw $pw 0 }
+        if ($sh -eq $d) { 0..1 | ForEach-Object { $q = At $_; Place $tm $q[0] $q[1] ($tw * 0.8) ($th * 0.8) 0 }
+                          $q = At 2; Place $tp $q[0] $q[1] ($pw * 0.8) ($pw * 0.8) 0; Place $tp (2 * $cx - $q[0]) $q[1] ($pw * 0.8) ($pw * 0.8) 0 }
+        if ($sh -eq $c) {
+            $q = At 4; Place $tp $q[0] $q[1] ($pw * 1.15) ($pw * 1.15) 0; Place $tp (2 * $cx - $q[0]) $q[1] ($pw * 1.15) ($pw * 1.15) 0
+            $q = At 5; Place $tp $q[0] $q[1] ($pw * 1.15) ($pw * 1.15) 0
+            $bay = At 1; $bl = 28.125 * 0.4 * $ppu
+            foreach ($row in -1, 0, 1) { foreach ($sd in -1, 1) { if ($row -eq 1 -and $sd -eq 1) { continue }
+                $bx = if ($sd -lt 0) { $bay[0] } else { 2 * $cx - $bay[0] }
+                Place $bomber $bx ($bay[1] + $row * 28 * $ppu) ($bl * $bomber.Width / $bomber.Height) $bl 0 } }
+            $q = At 3; Place $bomber $q[0] $q[1] (28.125 * $ppu * $bomber.Width / $bomber.Height) (28.125 * $ppu) 0
+        }
+        $x0 += $w + 60
+    }
+    $bomber.Dispose(); $tm.Dispose(); $tp.Dispose(); $g.Dispose()
+    $out.Save($Preview); $out.Dispose()
+    "preview: $Preview"
+}
+
+//==============================================================================
+// FILE: tools/make_sounds.py
+// 232 lines   sha256 85eba97b8ac6
+//==============================================================================
+# THE BOSSES' SOUNDS: one for every special move, synthesised here (no samples, nothing to license),
+# written to sfx\<name>.wav at the level each is meant to be heard at (Sfx plays every file at 0 dB).
+# Deterministic: the same file every run. Mono, 16-bit, 44.1 kHz, like every other effect.
+#
+#   boss_beam_charge  the Lancer's death beam charging: a deep hum and a whine climbing through it
+#   boss_beam         the beam firing: a low growling buzz, a sawtooth pair on a wobble, driven hard
+#   boss_ram          the ram: an engine's roar surging up
+#   boss_shockwave    the shockwave landing: a deep falling boom
+#   boss_trident      the trident volley: three heavy launches and their whoosh
+#   drake_gun         the Drake's main gun: a deep cannon whump with a metal ring
+#   drake_warp        its warp: a falling zap and a thud
+#   drake_scrap       the scrap shotgun: a blast and a spray of clanking metal
+#   drake_tractor     the tractor taking the rock: a pulsing hum
+#   drake_throw       the throw: a heavy rising whoosh
+#   drake_rock        the rock breaking apart: a crunch over a low boom
+#
+# Run: python tools\make_sounds.py
+import math, os, random, struct, wave
+
+SR = 44100
+ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'sfx')
+
+
+def samples(seconds):
+    return [i / SR for i in range(int(seconds * SR))]
+
+
+def lowpass(xs, cutoff):
+    """one pole; `cutoff` a number or a function of the sample index"""
+    out, y = [], 0.0
+    for i, x in enumerate(xs):
+        fc = cutoff(i) if callable(cutoff) else cutoff
+        a = 1 - math.exp(-2 * math.pi * fc / SR)
+        y += a * (x - y)
+        out.append(y)
+    return out
+
+
+def highpass(xs, cutoff):
+    lo = lowpass(xs, cutoff)
+    return [x - l for x, l in zip(xs, lo)]
+
+
+def saw(phase):
+    return 2 * (phase - math.floor(phase + 0.5))
+
+
+def noise(n, rng):
+    return [rng.uniform(-1, 1) for _ in range(n)]
+
+
+def swept(ts, f0, f1, curve=1.0):
+    """a phase accumulator for a frequency moving from f0 to f1 over the clip (curve > 1: late)"""
+    ph, out, T = 0.0, [], ts[-1] if ts else 1
+    for t in ts:
+        f = f0 + (f1 - f0) * (t / T) ** curve
+        ph += f / SR
+        out.append(ph)
+    return out
+
+
+def env(ts, attack, release):
+    T = ts[-1] if ts else 1
+    return [min(1.0, t / attack if attack > 0 else 1.0) * min(1.0, (T - t) / release if release > 0 else 1.0) for t in ts]
+
+
+def mix(*tracks):
+    n = max(len(t) for t in tracks)
+    return [sum(t[i] for t in tracks if i < len(t)) for i in range(n)]
+
+
+def write(name, xs, peak):
+    m = max(abs(x) for x in xs) or 1.0
+    data = b''.join(struct.pack('<h', int(round(max(-1.0, min(1.0, x / m * peak)) * 32767))) for x in xs)
+    with wave.open(os.path.join(ROOT, name + '.wav'), 'wb') as w:
+        w.setnchannels(1); w.setsampwidth(2); w.setframerate(SR); w.writeframes(data)
+    print(f'{name:18s} {len(xs) / SR:.2f} s, peak {peak}')
+
+
+def beam_charge(rng):
+    ts = samples(2.2)
+    hum_ph = swept(ts, 42, 58)
+    whine_ph = swept(ts, 260, 980, 1.6)
+    hum = lowpass([saw(p) for p in hum_ph], 500)
+    out = []
+    for i, t in enumerate(ts):
+        k = t / ts[-1]
+        trem = 0.75 + 0.25 * math.sin(2 * math.pi * (4 + 14 * k) * t)       # quickening as it builds
+        out.append(0.7 * hum[i] * (0.4 + 0.6 * k) + 0.35 * math.sin(2 * math.pi * whine_ph[i]) * k * k * trem)
+    return [x * e for x, e in zip(out, env(ts, 0.3, 0.08))]
+
+
+def beam(rng):
+    # THE GROWL: two sawtooths a fifth apart on a slow wobble and a fast rattle, a sub under them,
+    # driven into saturation and darkened -- a low buzz that sounds like it does a lot of damage
+    ts = samples(1.9)
+    ph1 = ph2 = 0.0
+    raw = []
+    for t in ts:
+        f = 56 * (1 + 0.07 * math.sin(2 * math.pi * 6.5 * t) + 0.02 * math.sin(2 * math.pi * 1.3 * t))
+        ph1 += f / SR; ph2 += 1.5 * f / SR
+        rattle = 0.7 + 0.3 * math.sin(2 * math.pi * 23 * t)
+        x = (saw(ph1) + 0.6 * saw(ph2)) * rattle + 0.8 * math.sin(2 * math.pi * 28 * t)
+        raw.append(math.tanh(2.6 * x))
+    crackle = highpass(noise(len(ts), rng), 1800)
+    crackle = [c * (0.15 if rng.random() < 0.08 else 0.03) for c in crackle]
+    out = mix(lowpass(raw, 1100), crackle)
+    return [x * e for x, e in zip(out, env(ts, 0.03, 0.55))]
+
+
+def ram(rng):
+    ts = samples(1.3)
+    n = len(ts)
+    roar = lowpass(noise(n, rng), lambda i: 180 + 1600 * min(1.0, i / (0.55 * n)))
+    eng = lowpass([saw(p) for p in swept(ts, 38, 72, 0.7)], 400)
+    out = mix([0.9 * r for r in roar], [0.6 * e for e in eng])
+    return [math.tanh(1.5 * x) * e for x, e in zip(out, env(ts, 0.18, 0.5))]
+
+
+def shockwave(rng):
+    ts = samples(1.7)
+    ph = swept(ts, 75, 26, 0.5)
+    boom = [math.sin(2 * math.pi * p) * math.exp(-t * 2.2) for p, t in zip(ph, ts)]
+    burst = lowpass([x * math.exp(-t * 6) for x, t in zip(noise(len(ts), rng), ts)], 700)
+    out = mix(boom, [1.4 * b for b in burst])
+    return [math.tanh(1.8 * x) for x in out]
+
+
+def trident(rng):
+    ts = samples(1.0)
+    out = [0.0] * len(ts)
+    for k, start in enumerate((0.0, 0.11, 0.22)):
+        for i, t in enumerate(ts):
+            u = t - start
+            if u < 0: continue
+            f = 130 - 60 * min(1.0, u / 0.12)
+            out[i] += math.sin(2 * math.pi * f * u) * math.exp(-u * 16) * (1 - 0.1 * k)
+    whoosh = lowpass(highpass(noise(len(ts), rng), 300), 2200)
+    whoosh = [w * 0.35 * math.sin(math.pi * min(1.0, t / 0.9)) for w, t in zip(whoosh, ts)]
+    return mix(out, whoosh)
+
+
+def gun(rng):
+    ts = samples(0.8)
+    ph = swept(ts, 95, 40, 0.4)
+    whump = [math.sin(2 * math.pi * p) * math.exp(-t * 9) for p, t in zip(ph, ts)]
+    attack = lowpass([x * math.exp(-t * 40) for x, t in zip(noise(len(ts), rng), ts)], 2500)
+    ring = [0.18 * math.sin(2 * math.pi * 330 * t) * math.exp(-t * 6) for t in ts]
+    return [math.tanh(1.6 * x) for x in mix(whump, [0.9 * a for a in attack], ring)]
+
+
+def warp(rng):
+    ts = samples(0.95)
+    ph = swept(ts, 1300, 110, 0.35)
+    zap = [(0.6 * math.sin(2 * math.pi * p) + 0.4 * saw(p)) * (1 - t / 0.95) for p, t in zip(ph, ts)]
+    sizzle = [x * 0.25 * math.exp(-t * 4) for x, t in zip(highpass(noise(len(ts), rng), 3000), ts)]
+    thud = [0.0] * len(ts)
+    for i, t in enumerate(ts):
+        u = t - 0.62
+        if u >= 0: thud[i] = math.sin(2 * math.pi * 55 * u) * math.exp(-u * 12)
+    out = mix(lowpass(zap, 4000), sizzle, thud)
+    return [x * e for x, e in zip(out, env(ts, 0.01, 0.1))]
+
+
+def scrap(rng):
+    ts = samples(1.1)
+    blast = lowpass(highpass([x * math.exp(-t * 11) for x, t in zip(noise(len(ts), rng), ts)], 250), 3200)
+    clank = [0.0] * len(ts)
+    for _ in range(26):                                   # the spray: short pings of scrap metal
+        start, f, d = rng.uniform(0.02, 0.5), rng.uniform(600, 2600), rng.uniform(25, 60)
+        a = rng.uniform(0.12, 0.3)
+        for i in range(int(start * SR), min(len(ts), int((start + 0.18) * SR))):
+            u = ts[i] - start
+            clank[i] += a * math.sin(2 * math.pi * f * u) * math.exp(-u * d)
+    thump = [math.sin(2 * math.pi * 60 * t) * math.exp(-t * 14) for t in ts]
+    return [math.tanh(1.4 * x) for x in mix([1.3 * b for b in blast], clank, thump)]
+
+
+def tractor(rng):
+    ts = samples(2.0)
+    out = []
+    for t in ts:
+        pulse = 0.6 + 0.4 * math.sin(2 * math.pi * 6 * t)
+        x = (math.sin(2 * math.pi * 110 * t) + 0.6 * math.sin(2 * math.pi * 165 * t)) * pulse \
+            + 0.12 * math.sin(2 * math.pi * 880 * t + 3 * math.sin(2 * math.pi * 0.7 * t))
+        out.append(x)
+    return [x * e for x, e in zip(out, env(ts, 0.35, 0.6))]
+
+
+def throw(rng):
+    ts = samples(1.25)
+    n = len(ts)
+    def cut(i):
+        k = i / n
+        return 250 + 2800 * (k / 0.45 if k < 0.45 else max(0.0, 1 - (k - 0.45) / 0.55))
+    whoosh = lowpass(noise(n, rng), cut)
+    rumble = lowpass([saw(p) for p in swept(ts, 45, 30)], 200)
+    out = mix([1.4 * w for w in whoosh], [0.5 * r for r in rumble])
+    return [x * e for x, e in zip(out, env(ts, 0.25, 0.45))]
+
+
+def rock(rng):
+    ts = samples(1.3)
+    crunch = [0.0] * len(ts)
+    src = noise(len(ts), rng)
+    for start in (0.0, 0.06, 0.13, 0.22, 0.34):              # the rock coming apart in pieces
+        a = rng.uniform(0.6, 1.0)
+        for i in range(int(start * SR), len(ts)):
+            u = ts[i] - start
+            crunch[i] += a * src[i] * math.exp(-u * 18)
+    crunch = lowpass(crunch, 1500)
+    boom = [math.sin(2 * math.pi * 52 * t) * math.exp(-t * 3.5) for t in ts]
+    return [math.tanh(1.5 * x) for x in mix([1.6 * c for c in crunch], boom)]
+
+
+SOUNDS = [
+    ('boss_beam_charge', beam_charge, 0.55),
+    ('boss_beam', beam, 0.85),
+    ('boss_ram', ram, 0.75),
+    ('boss_shockwave', shockwave, 0.9),
+    ('boss_trident', trident, 0.7),
+    ('drake_gun', gun, 0.6),
+    ('drake_warp', warp, 0.6),
+    ('drake_scrap', scrap, 0.85),
+    ('drake_tractor', tractor, 0.45),
+    ('drake_throw', throw, 0.75),
+    ('drake_rock', rock, 0.9),
+]
+
+if __name__ == '__main__':
+    for i, (name, make, peak) in enumerate(SOUNDS):
+        write(name, make(random.Random(1000 + i)), peak)
 
 //==============================================================================
 // FILE: tools/manifest.ps1
@@ -13312,7 +14434,7 @@ ls /tmp/shots
 
 //==============================================================================
 // FILE: tools/screens/Shots.cs.txt
-// 594 lines   sha256 97296df2212e
+// 607 lines   sha256 535e0fac0c3f
 //==============================================================================
 // Screenshot driver. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Shots.cs, registers it as an autoload, and runs the real
@@ -13715,13 +14837,26 @@ public partial class _Shots : Node
             GetViewport().GetCamera2D().Zoom = new Vector2(3.2f, 3.2f);
         }
         await Close(ShipClass.Carrier, "10_carrier_closeup");
-        // a Wide Bay III: five bombers docked, three to port and two to starboard
+        // a Wide Bay III: five bombers parked on the deck, three to port of the runway and two to starboard
         {
             var cl = Character.LoadoutFor(ShipClass.Carrier); var keep = (string[])cl.Clone();
             cl[4] = "cv_widebay_3";
             await Close(ShipClass.Carrier, "10b_carrier_gear_docked");
             for (int k = 0; k < keep.Length; k++) cl[k] = keep[k];
             P(H, "ApplyLocalIdentity"); await W(0.2);
+        }
+        // the deck under way: one bomber lifting off up the runway, growing as it rises; the other
+        // settling onto the carrier's centre, shrinking back to deck size
+        {
+            var s = H.GetNode<PlayerShip>("Ship_1");
+            var bw = N<Wing>().Where(w => w.Carrier == s && w.IsBomber).ToArray();
+            var nf = BindingFlags.NonPublic | BindingFlags.Instance;
+            var bf = typeof(Wing).GetField("_b", nf); var tf = typeof(Wing).GetField("_deckT", nf);
+            bf.SetValue(bw[0], System.Enum.Parse(bf.FieldType, "Lifting")); tf.SetValue(bw[0], 0.0);
+            await W(0.75); await Snap("10c_carrier_bomber_lifting");
+            typeof(Wing).GetField("_touch", nf).SetValue(bw[1], new Vector2(0f, 6f));
+            bf.SetValue(bw[1], System.Enum.Parse(bf.FieldType, "Landing")); tf.SetValue(bw[1], 0.0);
+            await W(0.45); await Snap("10d_carrier_bomber_landing");
         }
 
         // ── QA: every remaining feature and UI state, one frame each ─────────────
@@ -14347,7 +15482,7 @@ echo "SMOKE TEST PASSED"
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 4227 lines   sha256 1db1c0875d14
+// 4376 lines   sha256 16f239cfb999
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -14691,6 +15826,16 @@ public partial class _Test : Node
         var accounted = exercised.Concat(notPersisted).OrderBy(n => n, StringComparer.Ordinal).ToArray();
         Check(present.SequenceEqual(accounted),
               $"every field of Character is accounted for by this test (new: {string.Join(",", present.Except(accounted))}; gone: {string.Join(",", accounted.Except(present))})");
+
+        // THE DEFAULT COLOURS: a blue hull and a gold accent -- the line-art hulls are white until
+        // tinted. A pilot still in the first default, a pale blue that left them near white, never
+        // chose it: it loads in the blue, and a colour a pilot did choose (the accent here) stays.
+        Check(Character.Defaults.Main.IsEqualApprox(new Color(0.30f, 0.50f, 0.95f)) && Character.Defaults.Accent.IsEqualApprox(new Color(1.00f, 0.78f, 0.35f)),
+              "a new pilot flies a blue hull (0.30, 0.50, 0.95) with a gold accent (1.00, 0.78, 0.35)");
+        Character.Main = new Color(0.55f, 0.72f, 1.00f); Character.Save(); await Wait(0.05);
+        Character.NewBlank(); Character.Load(id);
+        Check(Character.Main.IsEqualApprox(new Color(0.30f, 0.50f, 0.95f)) && Character.Accent.IsEqualApprox(new Color(0.44f, 0.55f, 0.66f)),
+              $"a pilot saved in the first default's pale blue loads in the blue default; the accent it chose stays ({Character.Main})");
 
         // ── the format-2 fields, read from a file on the player's disk: sanitised, never trusted ──
         {
@@ -15247,15 +16392,39 @@ public partial class _Test : Node
         Check(Abilities.ControlsHint((ShipClass)99) == "placeholder", "an undefined class shows 'placeholder'");
         ship = Me;
 
-        // the painted turrets are the moving ones: every turret is a cut-out sprite
+        // the owner's line-art hull, its painted turrets painted over: the moving turrets stand where
+        // they stood, on the spine, and point defence on the stern
         var hullSpr = ship.GetChildren().OfType<Sprite2D>().First();
-        Check(hullSpr.Texture.ResourcePath.EndsWith("battleship_hull.png") && Math.Abs(hullSpr.Texture.GetHeight() * hullSpr.Scale.Y - 224f) < 0.5f,
-              "battleship is 224 u (40% larger) on the repaired hull (turrets cut out)");
+        Check(hullSpr.Texture.ResourcePath.EndsWith("battleship_hull.png") && Math.Abs(hullSpr.Texture.GetHeight() * hullSpr.Scale.Y - 224f) < 0.5f
+              && Math.Abs(ship.MyArt.HalfWidth - 13f) < 1e-6,
+              "battleship is 224 u on the owner's line-art hull, 13 u half-beam");
         var tsprites = Nodes<Turret>(ship).Select(x => x.GetChildren().OfType<Sprite2D>().FirstOrDefault()).ToList();
         Check(tsprites.Count == 6 && tsprites.All(x => x != null)
-              && tsprites.Count(x => x.Texture.ResourcePath.EndsWith("turret_bs_main.png")) == 4
-              && tsprites.Count(x => x.Texture.ResourcePath.EndsWith("turret_bs_pd.png")) == 2,
-              "four main + two PD turrets drawn from the ship's own painted turrets");
+              && tsprites.Count(x => x.Texture.ResourcePath.EndsWith("turret_main.png")) == 4
+              && tsprites.Count(x => x.Texture.ResourcePath.EndsWith("turret_pd.png")) == 2
+              && Nodes<Turret>(ship).All(x => x.PointDefense ? x.Offset.Y > 90f : Mathf.Abs(x.Offset.X) < 1e-6f),
+              "four main turrets on the spine and two point-defence turrets on the stern, in the owner's turret art");
+        // DAMAGE NUMBERS: small figures where damage lands -- gold for damage dealt, red for damage
+        // taken -- floating up and gone after a second or so; hits in quick succession add into one
+        {
+            var dn = H.GetNodeOrNull<DamageNumbers>("DamageNumbers");
+            var dum = H.GetNode<TargetDummy>("TargetDummy1");
+            dum.TakeDamage(5); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            dum.TakeDamage(2.5); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            ship.Hit(4, ship.Position + new Vector2(60, 0), "test");
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            var dealt = dn?.Figures.Where(f => f.Who == dum.GetInstanceId()).ToList();
+            var taken = dn?.Figures.Where(f => f.Who == ship.GetInstanceId()).ToList();
+            Check(dealt?.Count == 1 && Math.Abs(dealt[0].Amount - 7.5) < 1e-6 && !dealt[0].Taken && dealt[0].At.DistanceTo(dum.Position) < 15f,
+                  $"damage dealt shows as one gold figure where it landed: 5 and 2.5 a frame apart read 7.5 ({dealt?.Count} figure(s), {dealt?.FirstOrDefault()?.Amount:0.##})");
+            Check(taken?.Count == 1 && Math.Abs(taken[0].Amount - 4) < 0.1 && taken[0].Taken,
+                  $"damage taken shows red on the ship that took it ({taken?.FirstOrDefault()?.Amount:0.##})");
+            await Wait(1.3);
+            Check(dn != null && dn.Figures.All(f => f.Who != dum.GetInstanceId() && f.Who != ship.GetInstanceId()), "the figures fade out after a second or so");
+            ship.Hp = ship.MaxHp;
+        }
+        Check(tsprites.All(x => x.Modulate == ship.Accent) && hullSpr.Modulate == ship.Main && ship.Accent != ship.Main,
+              "the turrets wear the pilot's accent colour, the hull its hull colour");
         // the fields: each one's nearest edge 1500 u from the base -- room for a blockade
         {
             var rocks = H.GetChildren().OfType<Sprite2D>().Where(x => x.Texture != null && x.Texture.ResourcePath.Contains("asteroid_")).ToList();
@@ -15552,6 +16721,21 @@ public partial class _Test : Node
               $"5 s in, a wave of 3 hunts the hauler -- not the ship that is nearer to them ({H.Raiders.Count - huntR0} spawned at {firstWaveAt:0.00} s, {hunters.Count(r => r.Target == hauler)} on it)");
         Check(hunters.All(r => !r.Heavy && Math.Abs(r.MaxHull - 0.5 * 25 * r.Strength) < 1e-9 && Math.Abs(r.Hp - r.MaxHull) < 1e-9),
               $"the first wave is light fighters only, at half hull ({string.Join(", ", hunters.Select(r => $"{(r.Heavy ? "heavy" : "light")} {r.Hp:0.0}"))})");
+        // THE ESCORT'S THREAT sets each wave: a quarter each from the load (a level per 1000 cr it will
+        // fetch escorted), the party (half its mean level, half its ships' toughness -- a level per 10%
+        // of hull over its class's own), the highest boss, and the route (half a level a wave)
+        Check(Math.Abs(Hub.EscortThreat(0, 1, 1, 0, 0) - 1.0) < 1e-9 && Math.Abs(Hub.EscortThreat(4000, 5, 3, 5, 8) - 4.75) < 1e-9,
+              "an escort's threat: 1 for a fresh base's first wave; 4.75 for 4000 cr aboard, a level-5 party of toughness 3, the level-5 boss beaten, the ninth wave");
+        Check(Math.Abs(Hub.ThreatStrength(4.75) - Math.Pow(1.1, 3.75)) < 1e-9 && Hub.ThreatLights(1.0) == 3 && Hub.ThreatLights(4.75) == 4 && Hub.ThreatLights(40) == 6
+              && Math.Abs(Hub.ThreatAgility(4.75) - 1.0375) < 1e-9 && Math.Abs(Hub.ThreatAgility(40) - 1.1) < 1e-9,
+              "...which sets the hunters' hull and damage (+10% a level), their numbers (a light more every 3 levels, 3 more at most) and, very slightly, their speed and turning (1% a level, 10% at most)");
+        {
+            double ownHull = new ShipStats(Me.Class)["hull"];
+            double tough = 1 + Math.Log(Math.Max(1, Me.MaxHp / ownHull)) / Math.Log(1.1);
+            double threat = 0.25 * ((1 + 300 * 5 / 1000.0) + (0.5 * Character.Level + 0.5 * tough) + Math.Max(1, Missions.HighestBeaten) + 1);
+            Check(hunters.All(r => Math.Abs(r.Strength - Math.Pow(1.1, threat - 1)) < 1e-9 && Math.Abs(r.Agility - (1 + Math.Min(0.1, 0.01 * (threat - 1)))) < 1e-9),
+                  $"the first wave carries THIS escort's threat: 300 units at x5 aboard, this pilot (level {Character.Level}), the highest boss, the first wave ({threat:0.000}; x{hunters.FirstOrDefault()?.Strength:0.000})");
+        }
         Me.Position = Hub.BasePos + new Vector2(-2600, 1800); Me.Velocity = Vector2.Zero;
         hauler.T = 24.9;
         await Wait(0.05); int before25 = H.Raiders.Count(r => r.Quarry == hauler);
@@ -15976,14 +17160,15 @@ public partial class _Test : Node
             ship.Hp = ship.MaxHp;
         }
 
-        // ── THE DESTROYER: the battleship's hull, narrower and shorter; two main guns, missile bursts, the fastest ──
+        // ── THE DESTROYER: the owner's hull, the smallest of the three; two main guns, missile bursts, the fastest ──
         await SetClass(ShipClass.Destroyer); ship = Me;
         {
             var dspr = ship.GetChildren().OfType<Sprite2D>().First();
             var dts = Nodes<Turret>(ship).ToList();
-            Check(ship.Class == ShipClass.Destroyer && dspr.Texture.ResourcePath.EndsWith("destroyer_hull.png") && Math.Abs(dspr.Texture.GetHeight() * dspr.Scale.Y - 201.6f) < 0.5f
-                  && Math.Abs(PlayerShip.Art[ShipClass.Destroyer].HalfWidth - 30f) < 1e-6 && dts.Count(t => !t.PointDefense) == 2 && dts.Count(t => t.PointDefense) == 2,
-                  "the destroyer: its own hull at 201.6 u (90% of the battleship's 224) and 30 u half-beam (75% of 40); two main turrets, two PD");
+            Check(ship.Class == ShipClass.Destroyer && dspr.Texture.ResourcePath.EndsWith("destroyer_hull.png") && Math.Abs(dspr.Texture.GetHeight() * dspr.Scale.Y - 130f) < 0.5f
+                  && Math.Abs(PlayerShip.Art[ShipClass.Destroyer].HalfWidth - 17f) < 1e-6 && dts.Count(t => !t.PointDefense) == 2 && dts.Count(t => t.PointDefense) == 2
+                  && PlayerShip.Art[ShipClass.Carrier].Length == 170f && PlayerShip.Art[ShipClass.Battleship].Length == 224f,
+                  "the destroyer: its own hull at 130 u, smaller than the carrier's 170 and the battleship's 224, 17 u half-beam; two main turrets, two PD");
             Check(help.Text.StartsWith("DESTROYER") && help.Text.Contains("mouse aims the main guns"), "controls line is destroyer-specific");
             Check(Abilities.For(ShipClass.Destroyer).Where(a => !a.Open).Select(a => a.Id).SequenceEqual(new[] { "guns", "firemode", "missile", "reload", "pd" })
                   && Abilities.KeyFor(ShipClass.Destroyer, "missile") == global::Godot.Key.F && Abilities.KeyFor(ShipClass.Destroyer, "reload") == global::Godot.Key.R,
@@ -16097,21 +17282,21 @@ public partial class _Test : Node
 
         // ── carrier ──
         await SetClass(ShipClass.Carrier); ship = Me;
-        Check(ship.PdTurrets.Count == 3, "carrier has three PD turrets, one per painted dome");
+        Check(ship.PdTurrets.Count == 3, "carrier has three PD turrets");
 
-        // bombers dock on the flanks, half each side, and stay put as the carrier moves
+        // bombers park in bays on the deck, half each side of the runway, and stay put as the carrier moves
         Wing[] Bombers() => Nodes<Wing>().Where(w => w.Carrier == ship && w.IsBomber).ToArray();
-        async Task CheckDocks(int n)
+        async Task CheckBays(int n)
         {
             await Wait(0.3);
             var bs = Bombers();
             int port = bs.Count(w => ship.ToLocal(w.GlobalPosition).X < 0), stbd = bs.Count(w => ship.ToLocal(w.GlobalPosition).X > 0);
-            Check(bs.Length == n && bs.All(w => w.Docked && w.GlobalPosition.DistanceTo(ship.DockSlot(w).pos) < 0.5f) && port == n / 2 + n % 2 && stbd == n / 2,
-                  $"{n} bombers docked: {port} port, {stbd} starboard");
+            Check(bs.Length == n && bs.All(w => w.Docked && w.GlobalPosition.DistanceTo(ship.ToGlobal(ship.Bay(w))) < 0.5f) && port == n / 2 + n % 2 && stbd == n / 2,
+                  $"{n} bombers parked in their bays: {port} port, {stbd} starboard");
         }
-        await CheckDocks(2);
+        await CheckBays(2);
         Character.Bonuses["bomber_count"] = 2.0; ship.SetClass(ship.Class); ship = Me;   // 2 x (1 + 2) = 6
-        await CheckDocks(6);
+        await CheckBays(6);
         Character.Bonuses.Remove("bomber_count"); ship.SetClass(ship.Class); ship = Me;
         // ── GEAR THROUGH THE SHIP'S OWN REFIT: the owner's hangars, the wing rebuilt to match, and
         //    nothing left behind when craft are taken away ──
@@ -16145,7 +17330,7 @@ public partial class _Test : Node
             Check(swarmCraft == 11 && out0 >= 2 && eliteCraft == 4 && Craft() == 5 && ship.WingCount(WingKind.Fighter) == 3 && fightersFirst,
                   $"the wing follows the hangar: 9 + 2 craft, then Elite with fighters out -- 2 + 2, the rest freed -- then the kit's 3 + 2; fighters listed first ({swarmCraft}, {out0} out, {eliteCraft}, {Craft()})");
             Key(global::Godot.Key.R); await Wait(0.2);
-            // bombers through gear: the docks re-split, and a strike counted on the old bombers is
+            // bombers through gear: the bays re-split, and a strike counted on the old bombers is
             // called off (set up as one in flight, so the old code -- which never touched it -- differs)
             typeof(PlayerShip).GetProperty("StrikeTarget").SetValue(ship, d3);
             typeof(PlayerShip).GetField("_strikesOut", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(ship, 2);
@@ -16153,11 +17338,11 @@ public partial class _Test : Node
             cl[4] = "cv_widebay_3"; H.PilotChanged(); ship = Me;
             int armedAfter = ship.BombersReady;
             bool strikeOff = ship.StrikeTarget == null;
-            await CheckDocks(5);
+            await CheckBays(5);
             cl[4] = "cv_heavybay_1"; H.PilotChanged(); ship = Me;
-            await CheckDocks(1);
+            await CheckBays(1);
             cl[4] = "cv_bomber_bay"; H.PilotChanged(); ship = Me;
-            await CheckDocks(2);
+            await CheckBays(2);
             Check(strikeOff, "a change in the bombers calls off a strike counted on the old ones");
             Check(armed0 == 2 && armedAfter == 2, $"a bay fitted in service adds bombers that arrive rearming, not armed: still 2 ready of 5 ({armed0} -> {armedAfter})");
             for (int k = 0; k < Equipment.Slots; k++) cl[k] = clKeep[k];
@@ -16168,7 +17353,7 @@ public partial class _Test : Node
               "fighter control range 1080 (1.5x the battleship's guns); bomber strike range 2160 (2x)");
         var spr = Nodes<Sprite2D>(ship).First();
         Check(spr.Texture.ResourcePath.EndsWith("carrier_player.png") && Math.Abs(spr.Texture.GetHeight() * spr.Scale.Y - 170f) < 0.5f,
-              "carrier flies the new symmetrical sprite at 170 u");
+              "carrier flies the owner's line-art sprite at 170 u");
         await Park(new Vector2(780, 700), 0);
         var pdLight = H.SpawnRaider(new Vector2(700, 860));            // a third light target (the practice fighters are two)
         Key(global::Godot.Key.Q); await Wait(2.0);
@@ -16191,12 +17376,15 @@ public partial class _Test : Node
         Check(ship.WingTarget == null && ship.StrikeTarget == null, "carrier: clicks never order an attack");
         Check(Nodes<Wing>().Where(w => w.Carrier == ship && w.Kind == WingKind.Fighter).All(w => w.Inside && !w.Visible),
               "idle fighters wait docked inside the carrier, out of sight");
+        // parked SMALL, as far below as the deck is: 40% of 28.125 u, facing the bow, the whole of it
+        // (11.1 u across) on the white between the runway's edge (8.7 u out) and the hull's (21.7 u)
         foreach (var bw in Nodes<Wing>().Where(w => w.Carrier == ship && w.IsBomber && w.Docked))
         {
-            bool port = ship.ToLocal(bw.Position).X < 0;
-            float want = ship.Rotation + (port ? -Mathf.Pi / 2f : Mathf.Pi / 2f);
-            Check(Mathf.Abs(Mathf.AngleDifference(bw.Rotation, want)) < 0.05f && Mathf.Abs(ship.ToLocal(bw.Position).X) > PlayerShip.Art[ShipClass.Carrier].HalfWidth + Wing.BomberLength * 0.4f,
-                  $"docked bomber faces out from the {(port ? "port" : "starboard")} side, tail to the hull");
+            var lp = ship.ToLocal(bw.Position); var bsp = Nodes<Sprite2D>(bw).First();
+            float half = bsp.Texture.GetWidth() * bsp.Scale.X * 0.5f;
+            Check(Mathf.Abs(Mathf.AngleDifference(bw.Rotation, ship.Rotation)) < 0.01f && Math.Abs(bsp.Texture.GetHeight() * bsp.Scale.Y - 28.125f * 0.4f) < 0.05f
+                  && Mathf.Abs(lp.X) - half > 8.7f && Mathf.Abs(lp.X) + half < 21.7f,
+                  $"a parked bomber sits at 40% on the white deck beside the runway, facing the bow ({Mathf.Abs(lp.X) - half:0.0} to {Mathf.Abs(lp.X) + half:0.0} u out)");
         }
         int sig0 = ship.SignalsLit;
         Key(global::Godot.Key.Space); await Wait(0.05);
@@ -16309,6 +17497,26 @@ public partial class _Test : Node
         ship.Position = near1; ship.Velocity = Vector2.Zero; await Wait(0.5);
         Key(global::Godot.Key.F); await Wait(0.05);
         Check(ship.StrikeTarget == d1, "F sends the bombers at the target");
+        // THEY TAKE OFF IN TURN, at the fighters' cadence: each rolls out onto the runway and up it to
+        // the bow, growing from deck size to flight size -- lifting off, as the hauler does
+        {
+            var bws = Bombers();
+            float liftMin = 9f, liftMax = 0f, bowY = 0f;
+            for (int fr = 0; fr < 600 && bws.Any(w => w.LaunchedAt < 0 || w.BomberPhase == "Lifting"); fr++)
+            {
+                foreach (var w in bws.Where(w => w.BomberPhase == "Lifting"))
+                {
+                    liftMin = Mathf.Min(liftMin, w.VisualScale); liftMax = Mathf.Max(liftMax, w.VisualScale);
+                    bowY = Mathf.Min(bowY, ship.ToLocal(w.Position).Y);
+                }
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            }
+            var lorder = bws.Select(w => w.LaunchedAt).Where(t => t >= 0).OrderBy(t => t).ToList();
+            double lgap = 99; for (int g = 1; g < lorder.Count; g++) lgap = Math.Min(lgap, lorder[g] - lorder[g - 1]);
+            Check(lorder.Count == 2 && lgap >= 0.83 - 1e-9, $"the bombers take off one at a time, at least 0.83 s apart, as the fighters launch ({lgap:0.000} s)");
+            Check(liftMin < 0.41f && liftMax > 0.99f && bowY < -60f,
+                  $"a bomber lifts off the deck: from 40% to full size, up the runway to its bow end ({liftMin:0.00} to {liftMax:0.00}; {-bowY:0} u ahead)");
+        }
         Wing crawl = null;
         for (int i = 0; i < 2400 && crawl == null; i++) { crawl = Nodes<Wing>().FirstOrDefault(w => w.Carrier == ship && w.Launching); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
         Check(crawl != null && crawl.Velocity.Length() > 5f && crawl.Velocity.Dot(d1.Position - crawl.Position) > 0,
@@ -16326,29 +17534,44 @@ public partial class _Test : Node
         float spd = (first.GlobalPosition - q0).Length() / (30f / 60f);
         Check(first.Dir == dir0 && Math.Abs(spd - ship.Stats["torpedo_speed"]) < 2, $"torpedo runs straight at a steady {spd:0} u/s (no tracking)");
         Check(Smoke(first).Count > 3, "torpedo leaves a smoke trail");
-        await Wait(4.0);
+        // the landings begin inside the next 4 s: the deck is watched from here
+        float landFar = 0f, landMin = 9f, landMax = 0f, taxiTurn = 0f; bool sawTaxi = false;
+        void SampleDeck()
+        {
+            foreach (var w in Bombers())
+            {
+                if (w.BomberPhase == "Landing")
+                { landFar = Mathf.Max(landFar, ship.ToLocal(w.Position).Length()); landMin = Mathf.Min(landMin, w.VisualScale); landMax = Mathf.Max(landMax, w.VisualScale); }
+                if (w.BomberPhase == "Taxiing") { sawTaxi = true; taxiTurn = Mathf.Max(taxiTurn, Mathf.Abs(Mathf.AngleDifference(w.Rotation, ship.Rotation))); }
+            }
+        }
+        for (int fr = 0; fr < 240; fr++) { SampleDeck(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
         Check(d1.Total > 0 && Math.Abs(d1.Total % ship.Stats["torpedo_damage"]) < 0.01, $"torpedoes hit for 3 each ({d1.Total:0})");
         Check(AbilityBar.StateOf(ship, "bombers", H.Selected).Line.StartsWith("REARM") || AbilityBar.StateOf(ship, "bombers", H.Selected).Line == "RETURNING",
               $"bomber slot shows the return / rearm ({AbilityBar.StateOf(ship, "bombers", H.Selected).Line})");
-        await Wait(15.0);
-        Check(ship.BombersReady == 2 && Bombers().All(w => w.Docked), "bombers return to their docks, rearm, and are ready again");
-        // the docking fix: bombers dock and re-arm even while the carrier TURNS hard (a turning
-        // carrier swings their slots sideways; they used to hover beside them, never docking)
+        // HOME: each comes in over the carrier's centre and settles onto the runway there, shrinking
+        // back to deck size and turning to face the bow, then taxis to its bay
+        {
+            for (int fr = 0; fr < 60 * 15; fr++) { SampleDeck(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            Check(landMax > 0.95f && landMin < 0.45f && landFar <= 10.01f,
+                  $"bombers land on the carrier's centre: set down within 10 u of it, shrinking from full size to deck size ({landFar:0.0} u; {landMax:0.00} to {landMin:0.00})");
+            Check(sawTaxi && taxiTurn < 0.01f, "then taxi from the centre to their bays, facing the bow");
+        }
+        Check(ship.BombersReady == 2 && Bombers().All(w => w.Docked), "bombers return to their bays, rearm, and are ready again");
+        // bombers land and re-arm even with the carrier at full speed: they must catch its centre,
+        // and the landing and the taxi then run in its frame, on a clock
         Key(global::Godot.Key.F); await Wait(0.05);
         for (int i = 0; i < 60 * 20 && !Bombers().All(w => w.Ammo <= 0 || !w.Docked); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-        // FULL SPEED is what trapped them: the old code moved a bomber to its slot and THEN added
-        // the carrier's velocity, overshooting by one frame's travel -- over 1.5 u (the old snap)
-        // from about 90 u/s -- so it jittered beside the slot forever
         Input.ParseInputEvent(new InputEventKey { Keycode = global::Godot.Key.W, PhysicalKeycode = global::Godot.Key.W, Pressed = true });
         float yaw0 = ship.Rotation; bool allHome = false; float topSeen = 0;
-        for (int i = 0; i < 60 * 15 && !allHome; i++)
+        for (int i = 0; i < 60 * 20 && !allHome; i++)
         {
             allHome = Bombers().All(w => w.Docked); topSeen = Mathf.Max(topSeen, ship.Velocity.Length());
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         }
         Input.ParseInputEvent(new InputEventKey { Keycode = global::Godot.Key.W, PhysicalKeycode = global::Godot.Key.W, Pressed = false });
         Check(allHome && topSeen > 90f && Bombers().All(w => w.RearmLeft > 0 || w.Armed),
-              $"with the carrier at full speed ({topSeen:0} u/s), the bombers still dock and re-arm");
+              $"with the carrier at full speed ({topSeen:0} u/s), the bombers still land, park and re-arm");
         ship.Velocity = Vector2.Zero; await Wait(15.0);
         // the balance's reference: the carrier's MEASURED output (19.07 DPS over 90 s when set); re-measured
         // here over 40 s -- lumpier (bomber strikes land in lumps), so within 25% -- to catch it drifting
@@ -17505,8 +18728,8 @@ public partial class _Test : Node
             int hold0 = Character.GearHold.Values.Sum(), disk0 = HoldOnDisk();
             var bossAt = boss.Position;
             // killed mid-wind-up, a beam on its hull and a ring on the ground: its warnings go with it
-            Priv(boss, "Tele", true, new Vector2(0, -100), new Vector2(0, -3000), 70f, 10.0, true, 0.0);
-            Priv(boss, "Tele", false, boss.Position + new Vector2(0, 600), Vector2.Zero, 300f, 10.0, false, 0.0);
+            Priv(boss, "Tele", true, new Vector2(0, -100), new Vector2(0, -3000), 70f, 10.0, true, 0.0, null, null);
+            Priv(boss, "Tele", false, boss.Position + new Vector2(0, 600), Vector2.Zero, 300f, 10.0, false, 0.0, null, null);
             var warnings = Nodes<Telegraph>().Where(t => t.Duration == 10.0).ToList();
             boss.TakeDamage(boss.Hp + 1); await Wait(0.2);
             Check(warnings.Count == 2 && warnings.All(t => !GodotObject.IsInstanceValid(t)),
@@ -17684,6 +18907,15 @@ public partial class _Test : Node
                     Check(Math.Abs(half - 0.125) < 0.04 && broke && Math.Abs(laneLen - 1800) < 1 && Math.Abs(rockDmg - 275) < 1e-6,
                           $"thrown: half the flight covers an eighth of the 1800 u lane ({half:0.000}), it strikes the pilot for 275 ({rockDmg:0}), and breaks apart at the end ({broke})");
                 }
+            }
+            // EVERY BOSS SPECIAL HAS ITS OWN SOUND, heard as it happens: the Lancer's beam (its charge, and
+            // the growl as it fires), ram, shockwave and trident, fought above; the Drake's gun, warp, scrap
+            // blast, tractor, throw and the rock breaking, here
+            {
+                var bossSounds = new[] { "boss_beam_charge", "boss_beam", "boss_ram", "boss_shockwave", "boss_trident",
+                                         "drake_gun", "drake_warp", "drake_scrap", "drake_tractor", "drake_throw", "drake_rock" };
+                var unheard = bossSounds.Where(n => GD.Load<AudioStream>($"res://sfx/{n}.wav") == null || Sfx.Played.GetValueOrDefault(n) == 0).ToList();
+                Check(unheard.Count == 0, $"every boss special has its own sound, and each was heard in its fight (unheard: {string.Join(", ", unheard)})");
             }
             int exp1 = Character.Exp; int failLevel = Missions.Level;
             Me.TakeDamage(Me.Hp + 1);
@@ -18070,6 +19302,16 @@ public partial class _Test : Node
             double seenMult = 0;
             await RealTime(() => { if (H?.Boss != null && GodotObject.IsInstanceValid(H.Boss)) seenMult = H.Boss.HullMult; return Math.Abs(seenMult - 2.2) < 1e-9; }, 5);
             Check(Math.Abs(seenMult - 2.2) < 1e-9, $"arena guest: its boss is the host's boss, scaled as the host scaled it (x2.2; x{seenMult:0.00})");
+            // A PEER ARRIVING MID-THROW is sent the rock and its lane as they stand (Boss.CatchUp, from
+            // the host's catch-up for a peer that reports its world, as a rejoining or slow-loading guest
+            // does) -- asked for here by reporting again, a second into the throw's 7.5 s warning by the
+            // rock's own clock, well before the host drops this peer
+            await RealTime(() => Nodes<ThrownRock>().Any(r => r.Cosmetic && !r.Done && r.Elapsed >= 1.0), 4);
+            typeof(Hub).GetMethod("ReportSector", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(H, null);
+            await RealTime(() => Nodes<ThrownRock>().Any(r => r.Cosmetic && !r.Done && !r.IsQueuedForDeletion() && r.Hold < 6.9), 3);
+            var lateRocks = Nodes<ThrownRock>().Where(r => r.Cosmetic && !r.Done && !r.IsQueuedForDeletion()).ToList();
+            Check(lateRocks.Count == 1 && lateRocks[0].Hold < 6.9 && Nodes<Telegraph>().Any(t => t.Line && Math.Abs(t.Width - 180f) < 0.1f && t.Duration < 6.9),
+                  $"arena guest: a peer arriving mid-throw is sent the rock and its lane as they stand -- one rock, with what was left of its warning ({lateRocks.FirstOrDefault()?.Hold:0.00} s)");
             await RealTime(() => drakeWatch.Seen, 4);
             Check(sawDrake && sawShell && sawRock,
                   $"arena guest: mission 2 is the Drake Bastion here too, and its slow shells and its thrown rock reach this guest (Drake {sawDrake}, shell {sawShell}, rock {sawRock})");
@@ -18466,6 +19708,43 @@ public partial class _Test : Node
             await Wait(1.5);
             Key(global::Godot.Key.Tab); await Wait(0.05);
             Check(H.Selected == dummy, "guest: Tab selects the nearest dummy");
+            // its own bombers on its deck, watched every frame: each lift-off and landing placed HERE, in
+            // its carrier's frame on its own deck clock -- exactly where that clock puts it (1.2 s, the
+            // first quarter rolling out to the runway, then up it to 66 u ahead; landing in 1 s onto the
+            // centre) -- not trailing the host's reports; on the runway and on the centre at deck size
+            float gLift = 9f, gLand = 9f, gOff = 0f; bool gBow = false;
+            var fDeckT = typeof(Wing).GetField("_deckT", BindingFlags.NonPublic | BindingFlags.Instance);
+            var fTouch = typeof(Wing).GetField("_touch", BindingFlags.NonPublic | BindingFlags.Instance);
+            var deckWatch = new LateSampler { Probe = () =>
+            {
+                if (mine == null || !GodotObject.IsInstanceValid(mine)) return false;
+                foreach (var w in Nodes<Wing>().Where(w => w.Carrier == mine && w.IsBomber))
+                {
+                    var lp = mine.ToLocal(w.Position); var sp = Nodes<Sprite2D>(w).First();
+                    float drawn = sp.Scale.Y * sp.Texture.GetHeight() / 28.125f;
+                    double dt = (double)fDeckT.GetValue(w); var bay = mine.Bay(w);
+                    if (w.BomberPhase == "Lifting")
+                    {
+                        float k = (float)(dt / 1.2), u = Mathf.Clamp((k - 0.25f) / 0.75f, 0f, 1f);
+                        var want = k < 0.25f ? bay.Lerp(new Vector2(0f, bay.Y), Mathf.SmoothStep(0f, 1f, k / 0.25f))
+                                             : new Vector2(0f, bay.Y).Lerp(new Vector2(0f, -66f), u * u);
+                        gOff = Mathf.Max(gOff, lp.DistanceTo(want));
+                        if (Mathf.Abs(lp.X) < 0.01f) gLift = Mathf.Min(gLift, drawn);
+                        if (Mathf.Abs(lp.X) < 0.01f && lp.Y < -40f) gBow = true;
+                    }
+                    if (w.BomberPhase == "Landing")
+                    {
+                        var want = ((Vector2)fTouch.GetValue(w)).Lerp(Vector2.Zero, Mathf.SmoothStep(0f, 1f, (float)(dt / 1.0)));
+                        gOff = Mathf.Max(gOff, lp.DistanceTo(want));
+                        if (lp.Length() < 0.5f) gLand = Mathf.Min(gLand, drawn);
+                    }
+                }
+                return true;
+            } };
+            AddChild(deckWatch);
+            // the hits the host resolves show here as damage numbers too, from the figures it sends
+            var numberWatch = new LateSampler { Probe = () => DamageNumbers.Live?.Figures.Any(f => !f.Taken && f.Who == dummy.GetInstanceId()) == true };
+            AddChild(numberWatch);
             Key(global::Godot.Key.Space);          // fighters attack
             Key(global::Godot.Key.F);              // bomber strike
             await Wait(1.0);
@@ -18518,8 +19797,13 @@ public partial class _Test : Node
             Check(lostSv != null && lostSv.Lost && lostSv.RebuildIn > 5 && lostSv.RebuildIn < 29,
                   $"a salvager the host lost is lost here too, its 30 s rebuild counting down -- not stuck at 0 s ({lostSv?.RebuildIn:0.0} s)");
             var gb = Nodes<Wing>().Where(w => w.Carrier == mine && w.IsBomber).ToArray();
-            Check(gb.Length == 2 && gb.All(w => w.Docked && w.GlobalPosition.DistanceTo(mine.DockSlot(w).pos) < 8f),
-                  "guest sees its bombers docked on the carrier (state and position from the host)");
+            Check(gb.Length == 2 && gb.All(w => w.Docked && w.GlobalPosition.DistanceTo(mine.ToGlobal(mine.Bay(w))) < 0.5f),
+                  "guest sees its bombers parked in their bays on the carrier's deck (the state from the host, placed in its carrier's frame)");
+            Check(gLift < 0.42f && gBow && gLand < 0.42f && gOff < 0.05f,
+                  $"guest places its own bombers' deck moves on its own clock, in its carrier's frame: on the runway at deck size, up to the bow, down on the centre at deck size ({gLift:0.00}, {gLand:0.00}; {gOff:0.000} u from the deck clock's pose)");
+            deckWatch.QueueFree();
+            Check(numberWatch.Seen, "guest sees damage numbers where the hits the host resolves land (from the dummy's replicated figures)");
+            numberWatch.QueueFree();
             Check(H.GetNodeOrNull("MissionPortal") != null && H.Mission == Hub.MissionState.PortalOpen,
                   "the host's mission portal opened here too (the party was ready)");
             // AUTO-SELL is the base owner's to buy: this guest's request changes nothing

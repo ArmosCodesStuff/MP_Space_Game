@@ -59,10 +59,10 @@ answers left a gap are under Open questions -- check those first.
 
 **Verification** is one command, `verify.ps1` (see `CLAUDE.md` §6 and `docs/README.md`): typecheck
 against the real `GodotSharp.dll`, `dotnet build` with 0 warnings, analysers 0 findings, xref 0
-unused, the smoke test three full runs in a row (**@@PASS3@@ pass, 6 of 6 runs** each: solo, a host with
+unused, the smoke test three full runs in a row (**751 pass, 6 of 6 runs** each: solo, a host with
 two guests, and a two-player arena; `tools\smoketest\run.ps1 -Wan` repeats the multiplayer runs
 with every guest joining through a simulated internet -- 90 ms each way, jitter, 2% loss), and the
-screenshot sweep (**@@FRAMES@@ frames, 0 lint**) on the developer's own GPU with the project's Forward+
+screenshot sweep (**86 frames, 0 lint**) on the developer's own GPU with the project's Forward+
 renderer. The smoke test builds its own network (fake routers, no internet), so every check means
 the same on every machine -- there are no "environmental" failures to discount.
 What none of it replaces: someone actually flying it, and a real session between two homes.
@@ -349,7 +349,7 @@ From the 2026-09-21 batch (each is a constant or one rule to change):
   `turret_bs_pd.png` and `turret_carrier.png` (retired); the bombers' backing into flank slots
   (`PlayerShip.DockSlot`, `ClassArt.DockX/DockY/DockSpacing`, the Backing state).
 
-**Tests**: smoke **@@PASS@@**. New checks: the default colours, and a pale-default pilot loading in the
+**Tests**: smoke **751 pass, 6 of 6 runs, three runs in a row (734 before), 0 problems; UNUSED ANYWHERE 0; ALL CHECKS PASSED first time**. New checks: the default colours, and a pale-default pilot loading in the
 blue; the battleship's hull and turret art, the turrets on the spine and the stern, in the accent; the
 destroyer at 130 u, smaller than the other two; parked bombers at 40% on the white deck, facing the bow;
 take-offs at least 0.83 s apart, from 40% to full size, up to the runway's bow end; landings on the
@@ -357,7 +357,7 @@ centre (within 10 u), full size to deck size, then the taxi to the bay; and a gu
 bombers lift off and land at deck size in its own carrier's frame; the escort's threat (its formula as
 literals, and the first wave carrying this escort's); every boss special's sound heard in its fight; a
 guest reporting mid-throw sent one rock with what was left of its warning, and its lane; damage numbers
-dealt, taken, merged and faded, and on a guest. Sweep: **@@FRAMES@@ frames**, two new --
+dealt, taken, merged and faded, and on a guest. Sweep: **86 frames**, two new --
 a bomber lifting off (10c) and one landing (10d). As the owner asked for this session, **one test run at
 the end and no mutant runs**: the new checks were seen to pass, not seen to fail against the old code.
 Reviewed before the run (REVIEW.md, pass 10).
