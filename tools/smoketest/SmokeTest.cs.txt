@@ -3036,7 +3036,10 @@ public partial class _Test : Node
 
             // ── FREIGHTER: three turrets out, one collected, and a bubble that soaks 400 ──
             await SetClass(ShipClass.FreightHauler);
-            var fr = Me; var yonder = VaryNear(Hub.BasePos + new Vector2(1400, 900), 600f);
+            // EMPTY SPACE to work in: the practice fighters at (900, 550) are small craft, so a
+            // deployed turret would lock onto one and never kill it, and the belt, the wreck and the
+            // portal all have traffic. South-east and far out is clear of every one of them.
+            var fr = Me; var yonder = VaryNear(Hub.BasePos + new Vector2(2600, 2400), 500f);
             fr.Position = yonder; fr.Velocity = Vector2.Zero; await Wait(0.2);
             for (int i = 0; i < 4; i++)
             {
@@ -3127,7 +3130,7 @@ public partial class _Test : Node
             await SetClass(ShipClass.HeavyWarrior);
             var wr = Me; wr.Position = yonder; wr.Velocity = Vector2.Zero; await Wait(0.2);
             var e1 = H.SpawnRaider(VaryNear(yonder, 200f)); e1.Hp = 500;        // inside the EMP's 260 u
-            var e2 = H.SpawnRaider(VaryNear(yonder, 1100f) + Vector2.Right.Rotated(VaryAngle()) * 700f); e2.Hp = 500;   // well outside it
+            var e2 = H.SpawnRaider(yonder + Vector2.Right.Rotated(VaryAngle()) * Vary(800f, 1200f)); e2.Hp = 500;   // well outside its 260 u
             var e2Home = e2.Position;
             await Wait(0.1);
             double top0 = wr.Stats["max_speed"];
@@ -3139,7 +3142,7 @@ public partial class _Test : Node
             double e10 = e1.Hp, e20 = e2.Hp;
             for (int i = 0; i < 60 * 4 && e1.Hp == e10; i++) { e2.Position = e2Home; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
             Check(Math.Abs(e10 - e1.Hp - 60) < 0.01 && e1.Statuses.Has(Status.Disabled) && e2.Hp == e20,
-                  $"and it ends in an EMP: 60 to what is within 260 u and it is held; nothing at 900 u ({e10 - e1.Hp:0})");
+                  $"and it ends in an EMP: 60 to what is within 260 u ({e1.Position.DistanceTo(wr.Position):0} u) and it is held; nothing at {e2.Position.DistanceTo(wr.Position):0} u ({e10 - e1.Hp:0})");
             e1.TakeDamage(99999); e2.TakeDamage(99999); await Wait(0.2);
 
             // ── WARDEN: point defence with no window, and six hunters on six targets ──
