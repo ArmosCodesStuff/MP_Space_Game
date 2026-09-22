@@ -125,12 +125,13 @@ public partial class Drake : Boss
 
     // A guest's rock: the same one, from the same event -- its hold shortened by the trip here, never
     // its flight (see ThrownRock). A catch-up sends what is left of the hold: less than nothing once
-    // the rock is in flight, which starts it that far along its lane. It replaces any rock shown.
+    // the rock is in flight, which starts it that far along its lane -- and a round trip further, as
+    // a warning here ends a round trip early. It replaces any rock shown.
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
     private void NetRock(Vector2 from, Vector2 to, double hold, double flight, float radius, int variant)
     {
         if (IsInstanceValid(_rock)) _rock.QueueFree();
-        GetParent().AddChild(_rock = new ThrownRock { Boss = this, From = from, To = to, Hold = hold > 0 ? Net.Arriving(hold) : hold, Flight = flight,
+        GetParent().AddChild(_rock = new ThrownRock { Boss = this, From = from, To = to, Hold = hold > 0 ? Net.Arriving(hold) : hold - Net.RoundTrip, Flight = flight,
                                                       Radius = radius, Variant = variant, Cosmetic = true });
     }
 

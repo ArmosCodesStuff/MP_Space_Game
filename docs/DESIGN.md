@@ -767,6 +767,9 @@ where the editor cannot delete it.*
   go out as they start, to the peers in the arena then; a guest that arrived later (a rejoin, a slow load)
   never heard of them and was hit by a rock it could not see. `Boss.CatchUp` sends what is up now to a
   peer as it reports its world -- anything new sent once needs the same thought.
+- **A guest's hull watch starts from the host's first figure**, never from the hull it built itself --
+  or the difference (a boss already hurt, an escort built at 3 x hull) shows as a hit. A guest's own
+  ship is watched only through the host's reports, never the hull it regenerates between them.
 - **Damage numbers read hulls, not hits.** Each damageable thing watches its own hull from frame to frame
   (`HullWatch`), so a guest shows them from the figures it is already sent, with no message per hit. A
   hull that falls for a reason other than damage -- a refit to a smaller hull -- resets the watch, or it

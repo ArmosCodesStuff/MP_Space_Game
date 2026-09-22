@@ -14,7 +14,7 @@ public abstract partial class UtilityShip : Node2D, IRaidTarget
 {
     public Yard Yard;
     public double Cargo, Hull, RebuildIn;
-    private HullWatch _hullWatch;
+    private HullWatch _hullWatch; private bool _hostSeen;
     // damage taken, shown where it lands (DamageNumbers): each kind calls it every frame
     protected void WatchHull() => _hullWatch.Tick(this, Hull, taken: true);
     public bool WaitingForCredits;
@@ -66,6 +66,7 @@ public abstract partial class UtilityShip : Node2D, IRaidTarget
     // before this report's state was applied.
     protected void FromHost(float hull, float rebuild, bool wasLost)
     {
+        if (!_hostSeen) { _hullWatch = default; _hostSeen = true; }   // the host's first figure is where this peer starts counting
         Hull = hull; WaitingForCredits = rebuild < 0; RebuildIn = Math.Max(0, rebuild);
         if (wasLost != Lost) Burst(rebuilt: wasLost);
     }

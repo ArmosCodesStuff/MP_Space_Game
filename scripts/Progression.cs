@@ -76,7 +76,7 @@ public static class Progression
             Character.Exp -= ExpToNext;
             Character.Level++; Character.Points++; gained++;
         }
-        if (gained > 0) Hub.I?.Hints?.Meet("pilot");
+        if (gained > 0) { Hub.I?.Hints?.Meet("pilot"); Hub.I?.PilotChanged(); }   // the new level goes out with the identity
         Character.Save();
         return gained;
     }

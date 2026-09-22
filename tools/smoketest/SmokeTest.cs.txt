@@ -3242,8 +3242,8 @@ public partial class _Test : Node
             int hold0 = Character.GearHold.Values.Sum(), disk0 = HoldOnDisk();
             var bossAt = boss.Position;
             // killed mid-wind-up, a beam on its hull and a ring on the ground: its warnings go with it
-            Priv(boss, "Tele", true, new Vector2(0, -100), new Vector2(0, -3000), 70f, 10.0, true, 0.0);
-            Priv(boss, "Tele", false, boss.Position + new Vector2(0, 600), Vector2.Zero, 300f, 10.0, false, 0.0);
+            Priv(boss, "Tele", true, new Vector2(0, -100), new Vector2(0, -3000), 70f, 10.0, true, 0.0, null, null);
+            Priv(boss, "Tele", false, boss.Position + new Vector2(0, 600), Vector2.Zero, 300f, 10.0, false, 0.0, null, null);
             var warnings = Nodes<Telegraph>().Where(t => t.Duration == 10.0).ToList();
             boss.TakeDamage(boss.Hp + 1); await Wait(0.2);
             Check(warnings.Count == 2 && warnings.All(t => !GodotObject.IsInstanceValid(t)),
@@ -3816,19 +3816,20 @@ public partial class _Test : Node
             double seenMult = 0;
             await RealTime(() => { if (H?.Boss != null && GodotObject.IsInstanceValid(H.Boss)) seenMult = H.Boss.HullMult; return Math.Abs(seenMult - 2.2) < 1e-9; }, 5);
             Check(Math.Abs(seenMult - 2.2) < 1e-9, $"arena guest: its boss is the host's boss, scaled as the host scaled it (x2.2; x{seenMult:0.00})");
-            await RealTime(() => drakeWatch.Seen, 4);
-            Check(sawDrake && sawShell && sawRock,
-                  $"arena guest: mission 2 is the Drake Bastion here too, and its slow shells and its thrown rock reach this guest (Drake {sawDrake}, shell {sawShell}, rock {sawRock})");
-            drakeWatch.QueueFree();
             // A PEER ARRIVING MID-THROW is sent the rock and its lane as they stand (Boss.CatchUp, from
             // the host's catch-up for a peer that reports its world, as a rejoining or slow-loading guest
-            // does) -- asked for here by reporting again, a second into the throw's 7.5 s warning
-            await Wait(1.0);
+            // does) -- asked for here by reporting again, a second into the throw's 7.5 s warning by the
+            // rock's own clock, well before the host drops this peer
+            await RealTime(() => Nodes<ThrownRock>().Any(r => r.Cosmetic && !r.Done && r.Elapsed >= 1.0), 4);
             typeof(Hub).GetMethod("ReportSector", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(H, null);
             await RealTime(() => Nodes<ThrownRock>().Any(r => r.Cosmetic && !r.Done && !r.IsQueuedForDeletion() && r.Hold < 6.9), 3);
             var lateRocks = Nodes<ThrownRock>().Where(r => r.Cosmetic && !r.Done && !r.IsQueuedForDeletion()).ToList();
             Check(lateRocks.Count == 1 && lateRocks[0].Hold < 6.9 && Nodes<Telegraph>().Any(t => t.Line && Math.Abs(t.Width - 180f) < 0.1f && t.Duration < 6.9),
                   $"arena guest: a peer arriving mid-throw is sent the rock and its lane as they stand -- one rock, with what was left of its warning ({lateRocks.FirstOrDefault()?.Hold:0.00} s)");
+            await RealTime(() => drakeWatch.Seen, 4);
+            Check(sawDrake && sawShell && sawRock,
+                  $"arena guest: mission 2 is the Drake Bastion here too, and its slow shells and its thrown rock reach this guest (Drake {sawDrake}, shell {sawShell}, rock {sawRock})");
+            drakeWatch.QueueFree();
             // DROPPED MID-ARENA: to its own world at once, then back in -- into the arena
             await RealTime(() => !Net.IsOnline, Wan ? 20 : 10);
             await RealTime(() => !Hub.InArena, 2);
@@ -4256,7 +4257,7 @@ public partial class _Test : Node
             } };
             AddChild(deckWatch);
             // the hits the host resolves show here as damage numbers too, from the figures it sends
-            var numberWatch = new LateSampler { Probe = () => DamageNumbers.Live?.Figures.Any(f => !f.Taken) == true };
+            var numberWatch = new LateSampler { Probe = () => DamageNumbers.Live?.Figures.Any(f => !f.Taken && f.Who == dummy.GetInstanceId()) == true };
             AddChild(numberWatch);
             Key(global::Godot.Key.Space);          // fighters attack
             Key(global::Godot.Key.F);              // bomber strike

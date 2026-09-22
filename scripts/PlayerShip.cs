@@ -535,12 +535,20 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
         var v = (from - Position).Rotated(-Rotation);
         float side = Mathf.Atan2(v.X, -v.Y);            // 0 = ahead, clockwise
         _shield?.Flash(side);
+        // where it struck: the hull's edge toward the hit, off the keel's nearest point
+        var keel = new Vector2(0, Mathf.Clamp(v.Y, -MyArt.Length * 0.5f, MyArt.Length * 0.5f));
+        DamageNumbers.NoteImpact(this, ToGlobal(keel + (v - keel).LimitLength(MyArt.HalfWidth)));
         if (Net.IsOnline) (GetParent() as Hub)?.SendShield(OwnerId, side);
         NoteCombat();                                   // taking damage is combat
         TakeDamage(d);
     }
 
-    public void ApplyShield(float side) => _shield?.Flash(side);
+    // a guest's word of a hit on this ship: the side it came from, which is where it struck
+    public void ApplyShield(float side)
+    {
+        _shield?.Flash(side);
+        DamageNumbers.NoteImpact(this, ToGlobal(new Vector2(Mathf.Sin(side) * MyArt.HalfWidth, -Mathf.Cos(side) * MyArt.Length * 0.5f)));
+    }
 
     // A RETURNING PILOT's ship, put back as it was (Hub's held places). Place: on the owner, where
     // it was left. Restore: on the host, its hull -- or its stasis, with the time it had left.
@@ -553,6 +561,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
         if (!Net.Sim) return;
         if (alive) Hp = Math.Clamp(hp, 1, MaxHp);
         else { Die(); _stasis = stasis; }
+        _hullWatch = default;                      // a pilot put back as it was, not damage
     }
 
     // Into stasis where it lies; the pilot takes to the escape pod.
@@ -566,12 +575,15 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
     public bool Mine => Net.OwnedByMe(this);
 
     // ── frame ────────────────────────────────────────────────────────────────
-    private HullWatch _hullWatch;                  // damage taken, shown where it lands (DamageNumbers)
+    // Damage taken, shown where it lands (DamageNumbers). The host watches its own hull; a guest the
+    // host's figures as they arrive (ApplyHostState) -- never the hull it regenerates between them.
+    private HullWatch _hullWatch;
+    private double _hostMax = -1;                  // the last hull size the host reported (a refit changes it)
     public override void _Process(double delta)
     {
         float dt = (float)delta;
         _clock += delta;
-        _hullWatch.Tick(this, Alive ? Hp : 0, taken: true);
+        if (Net.Sim) _hullWatch.Tick(this, Alive ? Hp : 0, taken: true);
         if (!Alive) _stasis = Math.Max(0, _stasis - delta);   // the host's clock rules; guests re-sync each packet
         if (_combatT > 0) _combatT = Math.Max(0, _combatT - delta);
         if (Alive && Hp < MaxHp) Hp = Math.Min(MaxHp, Hp + MaxHp * (InCombat ? RegenInCombat : RegenOutOfCombat) * delta);
@@ -837,6 +849,9 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
                                double bsWindup, int bsVolleys, double bsCooldown,
                                int wingTarget, Vector2[] wingPos, float[] wingRot, int[] wingState, float[] wingRearm)
     {
+        if (System.Math.Abs(maxHp - _hostMax) > 1e-9) _hullWatch = default;    // the first report, or a refit: not damage
+        _hostMax = maxHp;
+        _hullWatch.Tick(this, alive ? hp : 0, taken: true);
         Hp = hp; MaxHp = maxHp; Alive = alive; _stasis = stasis; Pinned = pinned; _combatT = combat;
         _pdLeft = pdLeft; _pdRecharge = pdRecharge; _mag = mag; _missileReload = reload;
         _bsWindup = bsWindup; _bsVolleys = bsVolleys; _bsCooldown = bsCooldown;

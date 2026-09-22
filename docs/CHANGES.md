@@ -341,8 +341,10 @@ From the 2026-09-21 batch (each is a constant or one rule to change):
   or mid-flight (`Boss.CatchUp`, from the host's catch-up for a peer reporting its world): a guest that
   rejoined during a throw saw no rock and no lane, yet could be hit. The Lancer's beam had the same gap.
 - **Damage numbers**: small figures where damage lands, floating up and fading after a second -- gold for
-  damage dealt, red for damage taken. Every peer shows what it sees from the hulls it already has (each
-  thing watches its own, `HullWatch`), so nothing more is sent; quick hits on one thing add into one figure.
+  damage dealt, red for damage taken -- at the impact point where one is known (a shell's, a torpedo's,
+  the side a ship was hit from), else round the thing's centre. Every peer shows what it sees from the
+  hulls it already has (each thing watches its own, `HullWatch`; a guest from the host's figures), so
+  nothing more is sent; quick hits on one thing add into one figure.
 - Removed: `tools/make_destroyer.ps1` (the destroyer is the owner's drawing now); `turret_bs_main.png`,
   `turret_bs_pd.png` and `turret_carrier.png` (retired); the bombers' backing into flank slots
   (`PlayerShip.DockSlot`, `ClassArt.DockX/DockY/DockSpacing`, the Backing state).
@@ -687,6 +689,9 @@ caught).
 
 #### Known broken
 
+- **A guest can show one false red figure when a pilot's held hull is restored** on a rejoin: the host's
+  report cannot tell a restore from a hit (the host itself shows nothing). A hull "epoch" in the report
+  would fix it.
 - Not yet done: a session between two homes (see Next up), and flying for balance -- the new gear, the
   broadside and the destroyer, and an escort's twelve uncapped waves.
 

@@ -71,6 +71,9 @@ public abstract partial class Boss : Node2D, IHittable
         Hp = System.Math.Max(0, Hp - d);
         if (Hp <= 0) Hub.BossDefeated();
     }
+    // the host's word that it is down: a peer that never had its figures (one that arrived after the
+    // win) shows nothing for it
+    public void Downed() { if (!_net.Has) _hullWatch = default; Hp = 0; }
 
     private IEnumerable<PlayerShip> Pilots => Combat.Players.OfType<PlayerShip>().Where(p => p.Alive);
 
@@ -202,6 +205,7 @@ public abstract partial class Boss : Node2D, IHittable
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
     private void NetState(Vector2 p, float rot, double hp, bool locked, double nextSuper, double superGap, double hullMult)
     {
+        if (!_net.Has) _hullWatch = default;       // the host's first figure is where this peer starts counting
         // the host's scale too: a guest built its boss for the party it saw, and one that rejoined
         // mid-fight saw a different party
         _net.Set(p, rot); Hp = hp; _netLocked = locked; HullMult = hullMult;

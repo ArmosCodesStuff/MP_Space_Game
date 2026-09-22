@@ -315,6 +315,7 @@ public partial class Raider : Node2D, IHittable
     private int _netFlags;
     public void SetNet(Vector2 p, float rot, double hp, Vector2? tether, int flags)
     {
+        if (!_net.Has) _hullWatch = default;       // the host's first figure is where this peer starts counting
         _net.Set(p, rot); Hp = hp; _tether = tether; _netFlags = flags;
     }
     public Vector2? TetherTo => Net.Sim ? (Latched && Up(Target) ? Target.Position : null) : _tether;

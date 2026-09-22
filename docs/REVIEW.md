@@ -38,7 +38,22 @@ tests for the later four features), a refuter each. First review: 6 confirmed, 2
 - Old wording (`FlyToward` "when docking", the tests' "docks").
 Refuted: stale guest plumes in flight (older than this batch, cosmetic), docs still naming removed
 members (read from HEAD, not the working tree).
-@@REVIEW2@@
+Second review (the escort's threat, boss sounds, the catch-up, damage numbers): 12 confirmed, 1
+refuted. Fixed:
+- **Two reflective `Tele` calls in the smoke test passed the old 7 arguments to the new 9**: the solo run
+  would have thrown there and skipped everything after it, the Drake's block included.
+- **False damage numbers on guests**: every guest-side hull watch started from the hull the guest built
+  itself, so the host's first figure (a boss already hurt, a Lancer escort at its 3 x hull, a restored
+  ship) read as a hit. Each now starts from the host's first figure; a guest's ship is watched only
+  through the host's reports (never its own regeneration between them), and a refit, a restore or a
+  dummy's restarted meter is not damage.
+- **Figures stood at the thing's centre**, not where it was struck: they stand at the impact point where
+  one is known (a shell's, a torpedo's, the side a ship was hit from).
+- **A guest never saw the blow that finished a raider**: its last hull goes with its removal.
+- **A rock caught up mid-flight trailed the host's by a trip**: it starts a round trip further on.
+- **The host's copy of a guest's level went stale** after a level-up: the new level is re-announced.
+- The guest's mid-throw report is timed by the rock's own clock, well clear of the host dropping it.
+Refuted: a second catch-up duplicating warnings (no path reports twice in one world but the test's).
 
 ## Pass 9 — slice 3b: the Drake Bastion (done)
 

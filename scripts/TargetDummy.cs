@@ -63,6 +63,7 @@ public partial class TargetDummy : Node2D, IHittable
     public void ResetMeter()
     {
         LastSecond = Average10 = Total = _window = 0; _histN = _histI = 0; _clock = 0;
+        _hullWatch.Tick(this, 0, taken: false);    // a meter restarted, not a repair: the next hit shows in full
     }
 
     private HullWatch _hullWatch;                  // what it takes, shown where it lands (its running total, as a falling "hull")
@@ -104,7 +105,16 @@ public partial class TargetDummy : Node2D, IHittable
         QueueRedraw();
     }
 
-    public void SetReadout(double last, double avg, double total) { LastSecond = last; Average10 = avg; Total = total; }
+    // a guest's copy of the host's meter, once a second: its first figures are where this peer starts
+    // counting, and a meter the host restarted (its sums restart together) counts from zero
+    private bool _readSeen;
+    public void SetReadout(double last, double avg, double total)
+    {
+        if (!_readSeen) _hullWatch = default;
+        else if (total < Total || (total > 0 && total == last)) _hullWatch.Tick(this, 0, taken: false);
+        _readSeen = true;
+        LastSecond = last; Average10 = avg; Total = total;
+    }
 
     public override void _Draw()
     {

@@ -33,6 +33,7 @@ public partial class Shell : Node2D
                 foreach (var h in Combat.Hostiles)
                     if (h != null && h.Alive && h is not Torpedo && h.Covers(p, 3f)) { hit = h; break; }
                 if (hit == null) continue;
+                if (hit is Node2D struck) DamageNumbers.NoteImpact(struck, p);
                 hit.TakeDamage(Damage);
                 Source?.NoteCombat();
                 Sfx.Impact(p);

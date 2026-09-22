@@ -751,7 +751,7 @@ public partial class Hub : Node2D
     {
         MissionWon = true;
         _returnTotal = total; _returnReady = 0; _iReturned = false;
-        if (IsInstanceValid(Boss)) Boss.Hp = 0;
+        if (IsInstanceValid(Boss)) Boss.Downed();
     }
 
     // This pilot's drops: on its own file at once (like the bounty), then as crates to fly over
@@ -983,7 +983,7 @@ public partial class Hub : Node2D
         foreach (var r in Raiders.Where(r => r.Quarry == quarry).ToList())
         {
             DropRaider(r, burst: false);
-            ToWorld(nameof(NetRaiderGone), r.NetId, false);
+            ToWorld(nameof(NetRaiderGone), r.NetId, false, (float)r.Hp);
         }
     }
 
@@ -1011,12 +1011,14 @@ public partial class Hub : Node2D
     public void RaiderDown(Raider r)
     {
         DropRaider(r, burst: true);
-        ToWorld(nameof(NetRaiderGone), r.NetId, true);
+        ToWorld(nameof(NetRaiderGone), r.NetId, true, (float)System.Math.Max(0, r.Hp));
     }
+    // (with its last hull: the host removes a raider before that hull reaches anyone, and a guest
+    // shows the blow that finished it from this)
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetRaiderGone(int id, bool burst)
+    private void NetRaiderGone(int id, bool burst, float hp)
     {
-        if (Raiders.FirstOrDefault(x => x.NetId == id) is { } r) DropRaider(r, burst);
+        if (Raiders.FirstOrDefault(x => x.NetId == id) is { } r) { r.Hp = hp; DropRaider(r, burst); }
     }
     // Also let go of it as the selection and as every ship's target: on a guest a raider's hull
     // never reads zero (the host removes it before its last hull reaches anyone), and a withdrawn

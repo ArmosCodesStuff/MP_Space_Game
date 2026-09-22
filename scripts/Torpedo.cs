@@ -86,6 +86,7 @@ public partial class Torpedo : Node2D, IHittable
             foreach (var h in HostileFire ? Combat.Players : Combat.Hostiles)
             {
                 if (h == null || !h.Alive || !h.Covers(GlobalPosition, 4f)) continue;
+                if (h is Node2D struck) DamageNumbers.NoteImpact(struck, GlobalPosition);   // on every peer that sees it strike
                 if (!Cosmetic && Net.Sim)
                 {   // a player ship is told where the hit came from, for its shield
                     if (h is PlayerShip ps) ps.Hit(Damage, GlobalPosition - Dir * 10f, HitSource); else h.TakeDamage(Damage);

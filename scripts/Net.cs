@@ -712,12 +712,11 @@ public partial class Net : Node
     // earlier -- and the warning itself arrived a one-way trip late. So the guest must be clear a
     // full round trip before the end the host sent: this is that end. Never below 40% of the
     // warning, whatever the connection. The host (and single player) sees it as sent.
-    public static double Arriving(double warning)
-    {
-        if (IsHost || I?._peer is not ENetMultiplayerPeer e || e.GetPeer(1) is not { } host) return warning;
-        double rtt = host.GetStatistic(ENetPacketPeer.PeerStatistic.RoundTripTime) / 1000.0;
-        return System.Math.Max(warning * 0.4, warning - rtt);
-    }
+    public static double Arriving(double warning) => System.Math.Max(warning * 0.4, warning - RoundTrip);
+    // a guest's round trip to the host, in seconds (0 on the host and offline)
+    public static double RoundTrip =>
+        IsHost || I?._peer is not ENetMultiplayerPeer e || e.GetPeer(1) is not { } host
+            ? 0 : host.GetStatistic(ENetPacketPeer.PeerStatistic.RoundTripTime) / 1000.0;
 
     // A guest's request to the host: the one way a guest asks for anything. Offline, or still
     // connecting, there is no host to ask -- and an RPC then is an engine error.
