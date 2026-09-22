@@ -414,7 +414,7 @@ public partial class Hub : Node2D
         _peerSector[who] = (SectorKind)s;
         if ((SectorKind)s != Sector) { RpcId(who, nameof(NetSector), (int)Sector, Missions.Level); return; }
         RpcId(who, nameof(NetMission), MissionArgs());
-        foreach (var r in Raiders) RpcId(who, nameof(NetRaiderSpawn), r.NetId, r.Position, (int)r.Kind, r.Strength, r.HullShare);
+        foreach (var r in Raiders) RpcId(who, nameof(NetRaiderSpawn), r.NetId, r.Position, r.Kind, r.Strength, r.HullShare);
         foreach (var t in Deployed) RpcId(who, nameof(NetDeploy), t.NetId, t.OwnerId, t.Position, (float)t.Hp);
         if (Sector == SectorKind.Arena && IsInstanceValid(Boss) && Boss.Alive) Boss.CatchUp(who);   // the warnings (and a rock) up now
         if (MissionWon) { RpcId(who, nameof(NetWon), _ships.Count); RpcId(who, nameof(NetReturnCount), ReturnReady, ReturnTotal); }
@@ -923,9 +923,14 @@ public partial class Hub : Node2D
     {
         if (!Net.IsHost) return 0;
         int id = ++_patrols;
-        var crew = new List<(Vector2 off, RaiderKind kind)>();
-        for (int i = 0; i < lights; i++) crew.Add((new Vector2((i - (lights - 1) / 2f) * 40f, 0), RaiderKind.Light));
-        if (heavy) crew.Add((new Vector2(0, 90), RaiderKind.Heavy));
+        // WHICH enemies come: one kind of each way per wave, drawn from the table, so every row
+        // added to Enemies.All joins the rotation without a line here.
+        var pinners = Enemies.OfWay(EnemyWay.Pin); var standers = Enemies.OfWay(EnemyWay.Standoff);
+        int pinKind = pinners[_waveRoll % pinners.Length], standKind = standers[_waveRoll % standers.Length];
+        _waveRoll++;
+        var crew = new List<(Vector2 off, int kind)>();
+        for (int i = 0; i < lights; i++) crew.Add((new Vector2((i - (lights - 1) / 2f) * 40f, 0), pinKind));
+        if (heavy) crew.Add((new Vector2(0, 90), standKind));
         foreach (var (off, kind) in crew)
         {
             var r = SpawnRaider(at + off, kind, id, scale, hullShare);
@@ -1037,11 +1042,12 @@ public partial class Hub : Node2D
         Deployed.Remove(t); t.QueueFree();
     }
 
-    public Raider SpawnRaider(Vector2 at, RaiderKind kind = RaiderKind.Light, int patrol = 0, double scale = 1, double hullShare = 1)
+    private int _waveRoll;                    // which row of Enemies.All the next wave draws
+    public Raider SpawnRaider(Vector2 at, int kind = Enemies.Webifier, int patrol = 0, double scale = 1, double hullShare = 1)
     {
         if (!Net.IsHost) return null;
         var r = AddRaider(NetIds.Next(NetIds.Enemy), at, kind, patrol, scale, hullShare);
-        ToWorld(nameof(NetRaiderSpawn), r.NetId, at, (int)kind, scale, hullShare);
+        ToWorld(nameof(NetRaiderSpawn), r.NetId, at, kind, scale, hullShare);
         return r;
     }
     // Idempotent: a late joiner is sent every raider that exists, and one of them may already
@@ -1049,9 +1055,9 @@ public partial class Hub : Node2D
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
     private void NetRaiderSpawn(int id, Vector2 at, int kind, double scale, double hullShare)
     {
-        if (Raiders.All(x => x.NetId != id)) AddRaider(id, at, (RaiderKind)kind, 0, scale, hullShare);
+        if (Raiders.All(x => x.NetId != id)) AddRaider(id, at, kind, 0, scale, hullShare);
     }
-    private Raider AddRaider(int id, Vector2 at, RaiderKind kind, int patrol, double scale, double hullShare)
+    private Raider AddRaider(int id, Vector2 at, int kind, int patrol, double scale, double hullShare)
     {
         var r = new Raider { Hub = this, Kind = kind, Patrol = patrol, Strength = scale, HullShare = hullShare, NetId = id, Position = at, Name = $"Raider_{id}" };
         Raiders.Add(r); AddChild(r);

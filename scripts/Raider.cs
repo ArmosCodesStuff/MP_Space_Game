@@ -28,23 +28,23 @@ using System.Linq;
 // its heavy takes the SAME target and waits astern for the pin. (A raider on its own,
 // in no patrol, simply goes for the nearest target.)
 // ─────────────────────────────────────────────────────────────────────────────
-public enum RaiderKind { Light, Heavy }
-
 public partial class Raider : Node2D, IHittable, ITagged, IStatused
 {
     public Hub Hub;
-    public RaiderKind Kind = RaiderKind.Light;
+    // WHICH enemy this is: a row of Enemies.All. The index is what goes on the wire.
+    public int Kind = Enemies.Webifier;
+    public EnemyDef Def => Enemies.Of(Kind);
     public int NetId { get; set; }
     public double Hp;
     public bool Alive => Hp > 0;
-    public bool Heavy => Kind == RaiderKind.Heavy;
-    public Tag Tags => Heavy ? Tag.Heavy : Tag.Light;
+    public bool Heavy => Def.Way == EnemyWay.Standoff;
+    public Tag Tags => Def.Tag;
     // what is being done to it: a warrior's EMP holds it still (Statuses). Host-decided; a guest
     // sees it stop because the host stops sending it anywhere.
     private StatusSet _status;
     public StatusSet Statuses => _status;
     public void ApplyStatus(Status st, double seconds) { if (Net.Sim) _status.Apply(st, seconds); }
-    public float Length => Heavy ? HeavyLength : LightLength;
+    public float Length => Def.Length;
     // a raid's raiders are as strong as the boss that was failed: S(L) = 1.1^(L-1)
     public double Strength = 1;          // S(L) (was "Scale", which hid Node2D.Scale)
     // The share of that hull it is built with: an escort's hunters come at half (Hub.HunterHull).
@@ -54,25 +54,20 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
     // (Hub.ThreatAgility). The host flies every raider; guests follow where it says.
     public double Agility = 1;
     private HullWatch _hullWatch;
-    public double MaxHull => (Heavy ? HeavyHull : LightHull) * Strength * HullShare;
-    public float HitRadius => Length * (Heavy ? 0.3f : 0.4f);
+    public double MaxHull => Def.Hull * Strength * HullShare;
+    public float HitRadius => Length * Def.HitShare;
     public bool Selectable => true;
 
-    // The raiders' art is grey line art: these give it raider red, the heavy darker than the light.
-    // Shared with the title screen's raiders so the enemy you see on the menu is the colour of the
-    // enemy you meet.
-    public static readonly Color HeavyTint = new(0.62f, 0.40f, 0.40f);
-    public static readonly Color LightTint = new(0.90f, 0.38f, 0.33f);
-
-    public const float LightLength = 34f;              // twice a carrier fighter
-    public const float HeavyLength = 4f * LightLength; // 136 u
-    public const double LightHull = 25, HeavyHull = 100;
-    public const double RaiderDps = 1.0;               // x -- a light's laser; a heavy's is 2x
-    public const double HeavyDps = 2 * RaiderDps;
-    private const double HeavyShotEvery = 1.0;
-    private const float HeavyBoostMult = 7f;            // 700%: a heavy closing on a pinned target...
-    private const float HeavyBoostStop = 300f;          // ...until this close, then at cruise
-    public const float HeavyReach = 150f, HeavyHold = 0.9f * HeavyReach;
+    // The two the rest of the game names by hand -- the plain webifier and the plain gunship.
+    // Every figure comes from their rows (Enemies.All), so there is one place a number lives.
+    public static Color HeavyTint => Enemies.HeavyTint;
+    public static Color LightTint => Enemies.LightTint;
+    public static float LightLength => Enemies.Of(Enemies.Webifier).Length;      // twice a carrier fighter
+    public static float HeavyLength => Enemies.Of(Enemies.Gunship).Length;
+    public static double RaiderDps => Enemies.Of(Enemies.Webifier).Dps;          // x -- the game's damage unit
+    public static double HeavyDps => Enemies.Of(Enemies.Gunship).Dps;
+    public static float HeavyReach => Enemies.Of(Enemies.Gunship).Reach;
+    private const float HeavyBoostStop = 300f;          // boosting in, until this close, then at cruise
     public const float MissileRange = 500f, BlastRadius = 90f;
     public const double MissileFlight = 7.0, MissileEvery = 12.0, MissileDamage = 30;
     public const float PerimeterR = 1800f, Detect = 2000f, PatrolSpeed = 100f;
@@ -91,13 +86,14 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
     }
     public int Patrol;                                 // 0: on its own
     private float _orbit;                              // patrols: its angle round the perimeter
-    private const double ShotEvery = 1.0;
-    private const float Cruise = 100f;                  // under every capital ship's top speed (104 to 130)
-    private const float BoostMult = 5f;                 // 500%
-    private const double BoostTime = 3.0;
-    public const float PinRange = 100f;
-    public const float Hold = 0.9f * PinRange;         // posted 90 u out
-    public static float BoostAt => Cruise * BoostMult * (float)BoostTime + PinRange;   // 1600 u
+    public static float PinRange => Enemies.Of(Enemies.Webifier).Reach;
+    // How far out a raider of THIS kind lights its boost: far enough that the burn ends at its
+    // post rather than on top of the target.
+    private float BoostAtMine => Def.Cruise * Def.BoostMult * (float)Def.BoostTime + Def.Reach;
+    public static float BoostAt                        // the webifier's: 1600 u
+    {
+        get { var d = Enemies.Of(Enemies.Webifier); return d.Cruise * d.BoostMult * (float)d.BoostTime + d.Reach; }
+    }
     static readonly float[] Posts = { 0f, -Mathf.Pi / 2f, Mathf.Pi / 2f };               // ahead, left, right
 
     public Node2D Target { get; private set; }
@@ -123,7 +119,11 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
     // run in at boost speed. A PREDICTION, not a promise -- the pilot may shoot it down first. The
     // Lancer charges on the actual pin; this is only its floor when every escort is shot down, and
     // (plus a second, at most 5 s) its deadline when they neither pin nor die.
-    public static double WebEta(float distance) => EscortShiver + distance / (Cruise * BoostMult);
+    public static double WebEta(float distance)
+    {
+        var d = Enemies.Of(Enemies.Webifier);
+        return EscortShiver + distance / (d.Cruise * d.BoostMult);
+    }
     public bool Latched { get; private set; }
     public bool Boosting => Net.Sim ? _boostLeft > 0 : (_netFlags & FlagBoost) != 0;
     public float Speed { get; private set; }
@@ -138,14 +138,15 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
     public override void _Ready()
     {
         Hp = MaxHull;
-        _sprite = Sprites.Fit(Heavy ? "res://enemy_heavy_hull.png" : "res://enemy_light_fighter.png", Length);
-        _sprite.Modulate = Heavy ? HeavyTint : LightTint;
+        _sprite = Sprites.Fit(Def.Texture, Length);
+        _sprite.Modulate = Def.Tint;
         AddChild(_sprite);
-        if (Heavy)
-        {   // the main turret on its spine behind the canopy, 19.5 u aft of centre (tools/make_ships.ps1),
-            // 13 u across the housing, dark as the hull
-            _turret = new Sprite2D { Texture = GD.Load<Texture2D>("res://turret_main.png"), Position = new Vector2(0, 19.5f),
-                                     Scale = Vector2.One * (13f / 66f), Modulate = HeavyTint, ZIndex = 1 };
+        if (Def.Turret)
+        {   // the main turret on its spine behind the canopy, an eighth of its length aft of
+            // centre, 13 u across the housing on a gunship and to scale on anything bigger
+            float k = Length / Enemies.Of(Enemies.Gunship).Length;
+            _turret = new Sprite2D { Texture = GD.Load<Texture2D>("res://turret_main.png"), Position = new Vector2(0, 19.5f * k),
+                                     Scale = Vector2.One * (13f / 66f * k), Modulate = Def.Tint, ZIndex = 1 };
             AddChild(_turret);
         }
         ZIndex = 5;
@@ -223,18 +224,18 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
             if (r != this && r.Alive && !r.IsEscort && r.Target == Target && r.NetId < NetId) slot++;
         slot %= Posts.Length;
         var postDir = Vector2.Up.Rotated(Target.Rotation + (IsEscort ? _escortPost : Posts[slot]));
-        var post = Target.Position + postDir * (Extent(Target, postDir) + Hold);
+        var post = Target.Position + postDir * (Extent(Target, postDir) + Def.Hold);
         float toTarget = Position.DistanceTo(Target.Position);
 
-        if (!_boostUsed && toTarget <= BoostAt) { _boostUsed = true; _boostLeft = BoostTime; }
+        if (!_boostUsed && toTarget <= BoostAtMine) { _boostUsed = true; _boostLeft = Def.BoostTime; }
         _boostLeft = System.Math.Max(0, _boostLeft - delta);
         if (IsEscort && Latched) _boostLeft = 0;                          // posted: the long boost is over
-        float top = (Boosting ? Cruise * BoostMult : Cruise) * (float)Agility;
+        float top = (Boosting ? Def.Cruise * Def.BoostMult : Def.Cruise) * (float)Agility;
         float d = Position.DistanceTo(post);
         Speed = Mathf.Min(top, d * 6f);                                       // ease onto the post
         // once posted it keeps station however the target moves
         Position = Position.MoveToward(post, (Latched ? Mathf.Max(top, d * 12f) : Speed) * dt);
-        Latched = Position.DistanceTo(post) < 12f && Gap(Position, Target) <= PinRange;
+        Latched = Position.DistanceTo(post) < 12f && Gap(Position, Target) <= Def.Reach;
         var face = Aim.Face(Position, Target.Position);
         Rotation = Mathf.LerpAngle(Rotation, face, Mathf.Clamp(8f * (float)Agility * dt, 0f, 1f));
 
@@ -244,8 +245,8 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
             _shot -= delta;
             if (_shot <= 0)
             {
-                _shot = ShotEvery;
-                Strike(Target, RaiderDps * ShotEvery * Strength);
+                _shot = Def.ShotEvery;
+                Strike(Target, Def.Dps * Def.ShotEvery * Strength);
                 Combat.Flash(Position, Target.Position, new Color(1f, 0.3f, 0.25f));
             }
         }
@@ -286,28 +287,28 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
         float dt = (float)delta;
         var astern = -Vector2.Up.Rotated(Target.Rotation);                    // it comes in from the rear
         bool pinned = Target is IStatused st && st.Statuses.Has(Status.Pinned);
-        var dest = pinned ? Target.Position + astern * (Extent(Target, astern) + HeavyHold)
+        var dest = pinned ? Target.Position + astern * (Extent(Target, astern) + Def.Hold)
                           : EdgeSpot(Target.Position);                        // patient, at the map's edge nearest it
-        float top = (pinned && Position.DistanceTo(Target.Position) > HeavyBoostStop ? Cruise * HeavyBoostMult : Cruise) * (float)Agility;
+        float top = (pinned && Position.DistanceTo(Target.Position) > HeavyBoostStop ? Def.Cruise * Def.BoostMult : Def.Cruise) * (float)Agility;
         float d = Position.DistanceTo(dest);
         Speed = Mathf.Min(top, d * 6f);
         Position = Position.MoveToward(dest, Speed * dt);
         var face = Aim.Face(Position, Target.Position);
         Rotation = Mathf.LerpAngle(Rotation, face, Mathf.Clamp(4f * (float)Agility * dt, 0f, 1f));
         if (_turret != null) _turret.GlobalRotation = face;                  // its one turret tracks the target
-        Latched = pinned && Gap(Position, Target) <= HeavyReach;
+        Latched = pinned && Gap(Position, Target) <= Def.Reach;
         if (Latched)
         {
             _shot -= delta;
             if (_shot <= 0)
             {
-                _shot = HeavyShotEvery;      // 1 s: slower than a target's 0.52 s invulnerability, so no shot is wasted
-                Strike(Target, HeavyDps * HeavyShotEvery * Strength);
+                _shot = Def.ShotEvery;       // 1 s: slower than a target's 0.52 s invulnerability, so no shot is wasted
+                Strike(Target, Def.Dps * Def.ShotEvery * Strength);
                 Combat.Flash(ToGlobal(_turret?.Position ?? Vector2.Zero), Target.Position, new Color(1f, 0.35f, 0.25f));
             }
         }
         _missileCd -= delta;
-        if (_missileCd <= 0 && Position.DistanceTo(Target.Position) <= MissileRange)
+        if (Def.Missiles && _missileCd <= 0 && Position.DistanceTo(Target.Position) <= MissileRange)
         {   // at where it WILL be: its velocity carried 7 s forward
             _missileCd = MissileEvery;
             Hub.HeavyMissile(Position, PredictSpot(Target.Position, _targetVel), NetId, MissileDamage * Strength);
@@ -338,7 +339,7 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
         float plume = Heavy ? Length * 0.5f : Length;
         // an escort's run-in is unmistakable: it goes on the boost with a plume three times over
         if (Boosting && IsEscort && !Shivering) Plume.Draw(this, new Vector2(0, Length * 0.5f), Vector2.Down, plume * EscortPlume, new Color(1f, 0.35f, 0.25f), 1f, true);
-        else if (Boosting || (Heavy && Speed > Cruise + 1f)) Plume.Draw(this, new Vector2(0, Length * 0.5f), Vector2.Down, plume * 1.6f, new Color(1f, 0.35f, 0.25f), 1f, true);
+        else if (Boosting || (Heavy && Speed > Def.Cruise + 1f)) Plume.Draw(this, new Vector2(0, Length * 0.5f), Vector2.Down, plume * 1.6f, new Color(1f, 0.35f, 0.25f), 1f, true);
         else Plume.Draw(this, new Vector2(0, Length * 0.5f), Vector2.Down, plume, new Color(1f, 0.35f, 0.25f), 0.5f, Speed > 1f);
     }
 }

@@ -1282,7 +1282,7 @@ public partial class _Test : Node
         await Wait(0.2);
         var wave2 = H.Raiders.Where(r => r.Quarry == hauler).ToList();
         var heavy2 = wave2.FirstOrDefault(r => r.Heavy);
-        Check(before25 == 3 && wave2.Count == 7 && wave2.Count(r => r.Heavy) == 1 && heavy2 != null && Math.Abs(heavy2.MaxHull - 0.5 * 100 * heavy2.Strength) < 1e-9,
+        Check(before25 == 3 && wave2.Count == 7 && wave2.Count(r => r.Heavy) == 1 && heavy2 != null && Math.Abs(heavy2.MaxHull - 0.5 * Enemies.Of(heavy2.Kind).Hull * heavy2.Strength) < 1e-9,
               $"the next wave 20 s later, at 25 s, brings a heavy (at half hull): 3 hunters just before, 7 after ({before25}, {wave2.Count}, {wave2.Count(r => r.Heavy)} heavy)");
         hauler.T = 44.9; await Wait(0.2);
         Check(H.Raiders.Count(r => r.Quarry == hauler) == 10 && H.Raiders.Count(r => r.Quarry == hauler && r.Heavy) == 1,
@@ -2729,7 +2729,7 @@ public partial class _Test : Node
         {
             var hm = Me; var keepH = hm.Position;
             hm.Position = Hub.BasePos + new Vector2(2000, 0); hm.Velocity = Vector2.Zero; hm.Rotation = 0f; await Wait(0.3);
-            var hv = H.SpawnRaider(Hub.BasePos + new Vector2(2600, 500), RaiderKind.Heavy);
+            var hv = H.SpawnRaider(Hub.BasePos + new Vector2(2600, 500), Enemies.Gunship);
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(hv.Heavy && Math.Abs(hv.Length - 4 * Raider.LightLength) < 1e-3 && Math.Abs(Raider.HeavyDps - 2 * Raider.RaiderDps) < 1e-9 && Raider.RaiderDps == 1,
                   "a heavy raider: four times a light's length, twice the raider damage (2 DPS)");
@@ -2965,6 +2965,35 @@ public partial class _Test : Node
             Check(!H.FreeCamera && H.CameraPosition.DistanceTo(sh.ViewPosition) < 30f && Mathf.IsEqualApprox(H.ZoomLevel, kept),
                   "Y again returns to the ship, keeping the zoom");
             H.SetZoom(Hub.DefaultZoom);
+        }
+
+        // ── THE ENEMY TABLE: six rows, and every figure in them ──────────────────
+        // (Behaviour checks elsewhere read Enemies.Of(kind); these are the literals behind them.)
+        {
+            EnemyDef E(int k) => Enemies.Of(k);
+            Check(Enemies.All.Length == 6
+                  && E(Enemies.Webifier).Hull == 25 && E(Enemies.Webifier).Dps == 1.0 && E(Enemies.Webifier).Reach == 100f
+                  && E(Enemies.Gunship).Hull == 100 && E(Enemies.Gunship).Dps == 2.0 && E(Enemies.Gunship).Reach == 150f,
+                  "the two the game is balanced on: a webifier of 25 hull and 1 x damage inside 100 u, a gunship of 100 and 2 x inside 150");
+            Check(E(Enemies.Talon).Hull == 18 && E(Enemies.Talon).Dps == 1.4 && E(Enemies.Talon).Cruise == 130f
+                  && E(Enemies.Pod).Hull == 60 && E(Enemies.Pod).Dps == 0.7 && E(Enemies.Pod).Cruise == 78f
+                  && E(Enemies.Cross).Hull == 130 && E(Enemies.Cross).Dps == 2.6 && !E(Enemies.Cross).Missiles
+                  && E(Enemies.Lancerkin).Hull == 150 && E(Enemies.Lancerkin).Reach == 260f && E(Enemies.Lancerkin).Missiles,
+                  "and the owner's four: a talon (18 hull, 1.4 x, 130 u/s), a pod (60, 0.7, 78), a cross (130, 2.6, no missiles), a lancerkin (150, standing 260 u off, with them)");
+            Check(Enemies.OfWay(EnemyWay.Pin).Length == 3 && Enemies.OfWay(EnemyWay.Standoff).Length == 3
+                  && Enemies.All.All(e => e.Texture != null && e.Texture.StartsWith("res://")),
+                  "three that pin and three that stand off, each with its own hull drawn");
+            // a wave draws from the table, so the kinds rotate rather than being written in
+            var p1 = H.SpawnPatrol(Hub.BasePos + new Vector2(0, -3400));
+            var p2 = H.SpawnPatrol(Hub.BasePos + new Vector2(0, -3600));
+            await Wait(0.1);
+            var w1 = H.Raiders.Where(r => r.Patrol == p1).ToList();
+            var w2 = H.Raiders.Where(r => r.Patrol == p2).ToList();
+            Check(w1.Count > 0 && w2.Count > 0 && w1.Select(r => r.Kind).Distinct().Count() == 2
+                  && w1.Select(r => r.Kind).First() != w2.Select(r => r.Kind).First(),
+                  $"one patrol of each way, and the next wave draws different kinds ({string.Join(",", w1.Select(r => Enemies.Of(r.Kind).Name).Distinct())} then {string.Join(",", w2.Select(r => Enemies.Of(r.Kind).Name).Distinct())})");
+            foreach (var r in H.Raiders.Where(r => r.Patrol == p1 || r.Patrol == p2).ToList()) r.TakeDamage(99999);
+            await Wait(0.3);
         }
 
         // ── THE NINE NEW CLASSES ────────────────────────────────────────────────
@@ -3666,7 +3695,7 @@ public partial class _Test : Node
             Check(raid.Count == 8 && raid.Count(r => r.Heavy) == 2 && raid.Select(r => r.Patrol).Distinct().Count() == 2,
                   "a failed mission: the boss sends 2 patrols (3 lights and a heavy each)");
             Check(raid.All(r => Math.Abs(r.Position.DistanceTo(Hub.BasePos) - Hub.RaidEdge) < 110f), "in from the edge of the base's map (3200 u out)");
-            Check(raid.All(r => Math.Abs(r.Strength - sL) < 1e-9 && Math.Abs(r.MaxHull - (r.Heavy ? 100 : 25) * sL) < 1e-6),
+            Check(raid.All(r => Math.Abs(r.Strength - sL) < 1e-9 && Math.Abs(r.MaxHull - Enemies.Of(r.Kind).Hull * sL) < 1e-6),
                   $"at the failed boss's level: hull and damage x{sL:0.00} (1.1^(L-1), L = {failLevel})");
             foreach (var r in raid) r.TakeDamage(1e9);
             await Wait(0.3);
@@ -4213,7 +4242,7 @@ public partial class _Test : Node
             // ...and the base owner's record is the level-3 boss: AUTO-SELL opens on THIS base for everyone
             Character.BossCleared["silver_lancer"] = new System.Collections.Generic.HashSet<int> { 1, 2, 3 };
             H.SpawnRaider(new Vector2(-3500, 3500));   // far off: the guests must see it
-            H.SpawnRaider(new Vector2(-3700, 3700), RaiderKind.Heavy);
+            H.SpawnRaider(new Vector2(-3700, 3700), Enemies.Gunship);
             Check(!H.AllReady, "the host cannot warp until every pilot is ready");
             H.SetMyReady(true); Me.AutopilotTo = null;
             for (int i = 0; i < 600 && !H.AllReady; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);

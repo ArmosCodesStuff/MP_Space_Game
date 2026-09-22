@@ -253,7 +253,7 @@ public partial class _Shots : Node
             // the heavy waits at the map's edge nearest the ship (3200 u out, east of the base);
             // the ship 400 u inside it, so the heavy's missile is in range
             hs2.Position = Hub.BasePos + new Vector2(2800, 0); hs2.Velocity = Vector2.Zero; hs2.Rotation = 0f; await W(0.3);
-            var hv = H.SpawnRaider(Hub.BasePos + new Vector2(3200, 60), RaiderKind.Heavy);
+            var hv = H.SpawnRaider(Hub.BasePos + new Vector2(3200, 60), Enemies.Gunship);
             var zp = typeof(Hub).GetProperty("ZoomLevel"); float z0 = (float)zp.GetValue(H); zp.SetValue(H, 0.85f);   // ship and heavy both in view
             await W(4.5); await Snap("49_heavy_waiting_missile");
             if (GodotObject.IsInstanceValid(hv)) hv.TakeDamage(9999);

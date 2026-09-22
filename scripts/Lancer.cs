@@ -89,7 +89,7 @@ public partial class Lancer : Boss
         {
             var dir = nose.Rotated(Mathf.DegToRad(side));
             var at = Position + dir * (HalfWidth + 60f);
-            var r = Hub.SpawnRaider(at, RaiderKind.Light, 0, Missions.S(Missions.Level));
+            var r = Hub.SpawnRaider(at, Enemies.Webifier, 0, Missions.S(Missions.Level));
             // the one launched to port flanks to port, the other to starboard
             r?.Escort(target, dir, BeamWindup, EscortHull * Missions.S(Missions.Level), port ? -Mathf.Pi / 2f : Mathf.Pi / 2f);
             if (r != null) _escorts.Add(r);
