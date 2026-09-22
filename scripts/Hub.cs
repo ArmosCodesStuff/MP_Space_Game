@@ -27,6 +27,8 @@ public partial class Hub : Node2D
     public static readonly Vector2 HaulerPad = new(0f, 219f);     // the enlarged bottom pad's centre: base_station.png row 802, (802 - 437) x 0.6
     public static float LaneY => HaulerPad.Y;
     public const float BaseBottom = 260f;                     // the pad's lower edge
+    // a new ship's centre below the pad: half the longest class and a margin, so any class spawns clear
+    private static readonly float SpawnClear = PlayerShip.Art.Values.Max(a => a.Length) * 0.5f + 30f;
     public static readonly Vector2 StemFoot = new(0f, 175f);  // where the pad hangs from the station
     // Both fields' nearest edges sit 1500 u from the base's centre (about 6.7 battleship
     // lengths): room for a blockade outside the base's 600 u missile cover. Measured to each
@@ -480,7 +482,7 @@ public partial class Hub : Node2D
         var s = new PlayerShip { Name = PlayerShip.NodeName(peerId) };
         AddChild(s);
         // spawn clear of the base: its half-height (180 u) plus a ship's half-length and a gap
-        s.Init(peerId, BasePos + new Vector2(0, BaseBottom + 140f + 60 * _ships.Count));   // clear of the pad even at 224 u
+        s.Init(peerId, BasePos + new Vector2(0, BaseBottom + SpawnClear + 60 * _ships.Count));
         _ships[peerId] = s;
         ApplyIdentity(s);
         TryRestoreHold(peerId);                // its identity may have arrived before its ship

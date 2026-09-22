@@ -17,7 +17,7 @@
 #
 # It prints every mount it placed, in world units, for PlayerShip.Art and Raider.
 # Run: powershell -ExecutionPolicy Bypass -File tools\make_ships.ps1 [-Preview <png>]
-param([string]$Preview = '')
+param([string]$Preview = '', [double]$BattleshipTurrets = 2.0, [double]$DestroyerTurrets = 1.4, [double]$CarrierTurrets = 2.0125)
 $ErrorActionPreference = 'Stop'
 $Root = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $Src = Join-Path $Root 'art_source'
@@ -410,14 +410,15 @@ public class Sheet
     // THE WHOLE TREATMENT for a hull on paper: nose-up (turned a quarter anticlockwise when it lies
     // nose-right), symmetric, worked at twice `finalH` tall, sharpened (by the enlargement's own
     // blur), levelled, cut out, trimmed, halved.
-    public static Sheet Hull(Sheet s, bool turn, int finalH, bool keepLeft) { return Hull(s, turn, finalH, keepLeft, 0.9f, 0.16f, 0.9f); }
+    public static Sheet Hull(Sheet s, bool turn, int finalH, bool keepLeft) { return Hull(s, turn, finalH, keepLeft, 0.9f, 0.16f, 0.9f, 1f); }
+    public static Sheet Hull(Sheet s, bool turn, int finalH, bool keepLeft, float widen) { return Hull(s, turn, finalH, keepLeft, 0.9f, 0.16f, 0.9f, widen); }
     // (a small drawing, enlarged a long way, takes a harder sharpening and a lower black point,
-    // which thins its lines back towards the drawing's)
-    public static Sheet Hull(Sheet s, bool turn, int finalH, bool keepLeft, float sharpen, float black, float white)
+    // which thins its lines back towards the drawing's; `widen` stretches it across, the length kept)
+    public static Sheet Hull(Sheet s, bool turn, int finalH, bool keepLeft, float sharpen, float black, float white, float widen)
     {
         if (turn) s = s.TurnLeft();
         float axis = s.FindAxis();
-        int w = (int)Math.Round(s.W * 2.0 * finalH / s.H), h = 2 * finalH;
+        int w = (int)Math.Round(s.W * 2.0 * finalH / s.H * widen), h = 2 * finalH;
         float kx = (float)w / s.W, k = (float)h / s.H;
         s = s.Resize(w, h).Mirror(axis * kx, keepLeft);
         s.Sharpen(0.6f * k, sharpen);
@@ -494,7 +495,7 @@ function U($s, [int]$i, [double]$length) {
 }
 function Out-Sheet($s, [string]$name) { $s.Save((Join-Path $Root $name)); "{0,-24} {1} x {2}" -f $name, $s.W, $s.H }
 
-# ── the carrier, 170 u: nose up already ──
+# ── the carrier, 297.5 u (the owner's 170 u, 75% larger): nose up already ──
 $c = Load 'carrier.png'
 $c.Mark(124, 301.5)          # 0  the centre of the runway, where bombers land
 $c.Mark(71, 301.5)           # 1  the port deck, beside the runway: the bays' line
@@ -504,37 +505,37 @@ $c.Mark(22, 238)             # 4  the middle port sponson: a point-defence turre
 $c.Mark(121, 588)            # 5  the stern block: the third point-defence turret (clear of the bow,
                              #    where a bomber lifting off passes over)
 $c.Mark(44, 301.5)           # 6  the hull's port side (the sponsons are outboard of it)
-$c = [Sheet]::Hull($c, $false, 680, $true)
+$c = [Sheet]::Hull($c, $false, 1190, $true)
 Out-Sheet $c 'carrier_player.png'
-0..6 | ForEach-Object { "  carrier mark $_ : $(U $c $_ 170)" }
+0..6 | ForEach-Object { "  carrier mark $_ : $(U $c $_ 297.5)" }
 
-# ── the battleship, 224 u: drawn nose-right ──
+# ── the battleship, 302.4 u: drawn nose-right, then twice as wide and 35% larger (the owner's) ──
 $b = Load 'battleship.png'
 $b.Blank(255, 0, 318, 14); $b.Blank(705, 292, 780, 307)          # two pieces of the next drawing on the sheet
 foreach ($t in @(@(200, 310), @(383, 512), @(684, 800), @(1008, 1120))) { $b.PatchColumns($t[0], 114, $t[1], 190, 1215, 117) }
 foreach ($m in @(1055, 735, 435, 254)) { $b.Mark($m, 152) }        # 0-3 the main turrets, bow to stern
 $b.Mark(125, 112)                                                   # 4  point defence, on the stern's port quarter
 $b.Mark(700, 80)                                                    # 5  the hull's port side, amidships
-$b = [Sheet]::Hull($b, $true, 896, $true)
+$b = [Sheet]::Hull($b, $true, 1210, $true, 2)
 Out-Sheet $b 'battleship_hull.png'
-0..5 | ForEach-Object { "  battleship mark $_ : $(U $b $_ 224)" }
+0..5 | ForEach-Object { "  battleship mark $_ : $(U $b $_ 302.4)" }
 
-# ── the destroyer, 130 u: drawn nose-right ──
+# ── the destroyer, 227.5 u (130 u, 75% larger), still the smallest: drawn nose-right ──
 $d = Load 'destroyer.png'
 $d.Mark(195, 48.5); $d.Mark(97, 48.5)                               # 0-1 main turrets: the fore spine, the central plate
 $d.Mark(45, 33)                                                     # 2  point defence, aft to port
 $d.Mark(130, 16)                                                    # 3  the hull's port side
-$d = [Sheet]::Hull($d, $true, 520, $true)
+$d = [Sheet]::Hull($d, $true, 910, $true)
 Out-Sheet $d 'destroyer_hull.png'
-0..3 | ForEach-Object { "  destroyer mark $_ : $(U $d $_ 130)" }
+0..3 | ForEach-Object { "  destroyer mark $_ : $(U $d $_ 227.5)" }
 
 # ── the raiders ──
 $h = Load 'heavy_fighter.png'
 $h.Mark(67.5, 120)                                                  # 0  the heavy's turret, behind the canopy
-$h = [Sheet]::Hull($h, $false, 476, $true, 1.6, 0.05, 0.8)
+$h = [Sheet]::Hull($h, $false, 476, $true, 1.6, 0.05, 0.8, 1)
 Out-Sheet $h 'enemy_heavy_hull.png'
 "  heavy turret: {0}" -f (U $h 0 136)
-$l = [Sheet]::Hull((Load 'light_fighter.png'), $false, 204, $true, 1.4, 0.08, 0.82)
+$l = [Sheet]::Hull((Load 'light_fighter.png'), $false, 204, $true, 1.4, 0.08, 0.82, 1)
 Out-Sheet $l 'enemy_light_fighter.png'
 
 # ── the main turret: lifted out of its drawing (a flood would stop at the hull lines behind it),
@@ -571,12 +572,13 @@ Out-Sheet $p 'turret_pd.png'
 if ($Preview) {
     # every hull at 3 px/u on a dark field, in the default hull colour, the turrets in the accent
     # on the marks, the carrier with five bombers parked, a 10 u grid to measure by
-    $ppu = 3.0
-    $main = [System.Drawing.Color]::FromArgb(255, 77, 128, 242); $acc = [System.Drawing.Color]::FromArgb(255, 255, 199, 89)
+    $ppu = 2.0
+    $main = [System.Drawing.Color]::FromArgb(255, 153, 153, 153); $acc = [System.Drawing.Color]::FromArgb(255, 255, 255, 255)
     $bg = [System.Drawing.Color]::FromArgb(255, 11, 15, 24)
-    $ships = @(@($c, 170.0), @($b, 224.0), @($d, 130.0), @($h, 136.0), @($l, 34.0))
+    $ships = @(@($c, 297.5), @($b, 302.4), @($d, 227.5), @($h, 136.0), @($l, 34.0))
+    $bsT = $BattleshipTurrets; $ddT = $DestroyerTurrets; $cvT = $CarrierTurrets     # each class's turret scale, x the battleship's first
     $Wp = 60; foreach ($s in $ships) { $Wp += [int]($s[0].W * $s[1] / $s[0].H * $ppu) + 60 }
-    $Hp = [int](224 * $ppu) + 80
+    $Hp = [int](302.4 * $ppu) + 80
     $out = New-Object System.Drawing.Bitmap $Wp, $Hp
     $g = [System.Drawing.Graphics]::FromImage($out)
     $g.Clear($bg); $g.InterpolationMode = 'HighQualityBicubic'; $g.SmoothingMode = 'AntiAlias'; $g.PixelOffsetMode = 'HighQuality'
@@ -597,17 +599,17 @@ if ($Preview) {
         $u = $len / $sh.H * $ppu
         function At($i) { @(($cx + ($sh.Marks[$i].X - $sh.W / 2) * $u), ($cy + ($sh.Marks[$i].Y - $sh.H / 2) * $u)) }
         $tw = $t.W * $tk * $ppu; $th = $t.H * $tk * $ppu; $pw = $p.W * $tk * $ppu
-        if ($sh -eq $b) { 0..3 | ForEach-Object { $q = At $_; Place $tm $q[0] $q[1] $tw $th ($(if ($_ -eq 3) { 180 } else { 0 })) }
-                          $q = At 4; Place $tp $q[0] $q[1] $pw $pw 0; Place $tp (2 * $cx - $q[0]) $q[1] $pw $pw 0 }
-        if ($sh -eq $d) { 0..1 | ForEach-Object { $q = At $_; Place $tm $q[0] $q[1] ($tw * 0.8) ($th * 0.8) 0 }
-                          $q = At 2; Place $tp $q[0] $q[1] ($pw * 0.8) ($pw * 0.8) 0; Place $tp (2 * $cx - $q[0]) $q[1] ($pw * 0.8) ($pw * 0.8) 0 }
+        if ($sh -eq $b) { 0..3 | ForEach-Object { $q = At $_; Place $tm $q[0] $q[1] ($tw * $bsT) ($th * $bsT) ($(if ($_ -eq 3) { 180 } else { 0 })) }
+                          $q = At 4; Place $tp $q[0] $q[1] ($pw * $bsT) ($pw * $bsT) 0; Place $tp (2 * $cx - $q[0]) $q[1] ($pw * $bsT) ($pw * $bsT) 0 }
+        if ($sh -eq $d) { 0..1 | ForEach-Object { $q = At $_; Place $tm $q[0] $q[1] ($tw * $ddT) ($th * $ddT) 0 }
+                          $q = At 2; Place $tp $q[0] $q[1] ($pw * $ddT) ($pw * $ddT) 0; Place $tp (2 * $cx - $q[0]) $q[1] ($pw * $ddT) ($pw * $ddT) 0 }
         if ($sh -eq $c) {
-            $q = At 4; Place $tp $q[0] $q[1] ($pw * 1.15) ($pw * 1.15) 0; Place $tp (2 * $cx - $q[0]) $q[1] ($pw * 1.15) ($pw * 1.15) 0
-            $q = At 5; Place $tp $q[0] $q[1] ($pw * 1.15) ($pw * 1.15) 0
-            $bay = At 1; $bl = 28.125 * 0.4 * $ppu
+            $q = At 4; Place $tp $q[0] $q[1] ($pw * $cvT) ($pw * $cvT) 0; Place $tp (2 * $cx - $q[0]) $q[1] ($pw * $cvT) ($pw * $cvT) 0
+            $q = At 5; Place $tp $q[0] $q[1] ($pw * $cvT) ($pw * $cvT) 0
+            $bay = At 1; $bl = 28.125 * 0.65 * $ppu
             foreach ($row in -1, 0, 1) { foreach ($sd in -1, 1) { if ($row -eq 1 -and $sd -eq 1) { continue }
                 $bx = if ($sd -lt 0) { $bay[0] } else { 2 * $cx - $bay[0] }
-                Place $bomber $bx ($bay[1] + $row * 28 * $ppu) ($bl * $bomber.Width / $bomber.Height) $bl 0 } }
+                Place $bomber $bx ($bay[1] + $row * 49 * $ppu) ($bl * $bomber.Width / $bomber.Height) $bl 0 } }
             $q = At 3; Place $bomber $q[0] $q[1] (28.125 * $ppu * $bomber.Width / $bomber.Height) (28.125 * $ppu) 0
         }
         $x0 += $w + 60

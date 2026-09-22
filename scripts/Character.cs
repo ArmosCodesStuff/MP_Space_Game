@@ -19,8 +19,8 @@ public static class Character
     public static class Defaults
     {
         public const string Name = "Commander";
-        public static readonly Color Main = new(0.30f, 0.50f, 0.95f);     // hull: blue
-        public static readonly Color Accent = new(1.00f, 0.78f, 0.35f);   // turrets, engines, trim: gold
+        public static readonly Color Main = new(0.60f, 0.60f, 0.60f);     // hull: grey
+        public static readonly Color Accent = new(1.00f, 1.00f, 1.00f);   // turrets, engines, trim: white
     }
 
     public static string Id = "";           // file stem; empty = nothing loaded
@@ -253,18 +253,21 @@ public static class Character
         return true;
     }
 
-    // The [id] section: what the select screen lists, and what Load checks before anything else.
-    // A pilot still in the first default hull colour -- a pale blue that left the line-art hulls
-    // near white -- never chose it, only inherited it: they are given the default as it is now.
-    private static Color SavedHull(Color c) => c.IsEqualApprox(new Color(0.55f, 0.72f, 1.00f)) ? Defaults.Main : c;
+    // A pilot still in an earlier default -- the pale blue hull that left the line-art hulls near
+    // white, the blue that followed it, the gold accent -- never chose it, only inherited it: they
+    // are given the default as it is now.
+    private static Color SavedHull(Color c) =>
+        c.IsEqualApprox(new Color(0.55f, 0.72f, 1.00f)) || c.IsEqualApprox(new Color(0.30f, 0.50f, 0.95f)) ? Defaults.Main : c;
+    private static Color SavedAccent(Color c) => c.IsEqualApprox(new Color(1.00f, 0.78f, 0.35f)) ? Defaults.Accent : c;
 
+    // The [id] section: what the select screen lists, and what Load checks before anything else.
     private static Slot ReadSlot(ConfigFile c, string id) => new()
     {
         Id = id,
         Version = (int)c.GetValue("id", "version", 0),
         Name = (string)c.GetValue("id", "name", Defaults.Name),
         Main = SavedHull((Color)c.GetValue("id", "main", Defaults.Main)),
-        Accent = (Color)c.GetValue("id", "accent", Defaults.Accent),
+        Accent = SavedAccent((Color)c.GetValue("id", "accent", Defaults.Accent)),
         Class = Classes.Sanitize((int)c.GetValue("id", "class", 0)),
     };
 

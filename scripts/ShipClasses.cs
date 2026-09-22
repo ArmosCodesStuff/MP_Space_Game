@@ -290,8 +290,8 @@ public partial class Wing : Node2D
     // grows to full size as it lifts, on the hauler's curve (Altitude). Every deck move runs in the
     // carrier's frame on its own clock, so a moving or turning carrier carries it exactly, and a
     // landing always ends: it is timed, not steered.
-    public const float LandedScale = 0.4f;          // parked, 11.1 u across: inside the 12.8 u of white beside the runway
-    public const double LiftTime = 1.2, LandTime = 1.0, TaxiTime = 0.6;
+    public const float LandedScale = 0.65f;         // the hauler's own: parked, 18 u across, inside the 22.4 u of white beside the runway
+    public const double LiftTime = 1.6, LandTime = 1.0, TaxiTime = 0.6;   // (the lift's run up 124 u of runway ends at about its top speed)
     private const double RollOut = 0.25;            // the share of a lift spent rolling out onto the runway
     private const float TouchRadius = 10f;          // over the carrier's centre within this, a bomber sets down
     private enum BSt { Docked, Lifting, Approach, Aim, Launch, Return, Landing, Taxiing }

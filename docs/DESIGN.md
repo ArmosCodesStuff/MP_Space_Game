@@ -396,9 +396,9 @@ Recorded here so every chunk builds from the written word, not from memory.
   hull are host state, replicated with the rest.
 - **Hull colour** is the hull. **Accent colour** is the turrets, engines and lighting: turrets,
   plumes on the player's ship and everything it launches, shields, PD arcs. Utility ships' engines
-  are always light yellow (`Plume.Utility`). Missiles keep their smoke. The defaults are a **blue
-  hull (0.30, 0.50, 0.95) and a gold accent**: the hulls are grey line art, white until tinted, so a
-  pale default reads as a white ship.
+  are always light yellow (`Plume.Utility`). Missiles keep their smoke. The defaults are a **grey
+  hull (0.6, 0.6, 0.6) and a white accent**, the owner's; the hulls are grey line art that the hull
+  colour multiplies.
 - **Fighters** fly strafing runs: 3 shots, through the target by 1.2× its diameter, turn, repeat;
   they live inside the carrier when docked. **Bombers** park small on its deck, facing the bow.
 
@@ -411,9 +411,9 @@ chosen in the creator only** — there are no class hotkeys (the developer remov
 
 | | Hull | Length | Top speed | Main guns | Its F | PD turrets | Wing | Sprite |
 |---|---|---|---|---|---|---|---|---|
-| **Battleship** | 300 | 224 u | 104 u/s | 4, 5.9 a shell | broadside | 2 (slow, τ/3) | — | `battleship_hull.png` |
-| **Carrier** | 200 | 170 u | 116.48 u/s | — | bomber strike | 3 (fast, τ/1.2) | 3 fighters + 2 bombers | `carrier_player.png` |
-| **Destroyer** | 250 | 130 u | 130 u/s | 2, 5.9 a shell | missile burst | 2 (slow, τ/3) | — | `destroyer_hull.png` |
+| **Battleship** | 300 | 302.4 u | 104 u/s | 4, 5.9 a shell | broadside | 2 (slow, τ/3) | — | `battleship_hull.png` |
+| **Carrier** | 200 | 297.5 u | 116.48 u/s | — | bomber strike | 3 (fast, τ/1.2) | 3 fighters + 2 bombers | `carrier_player.png` |
+| **Destroyer** | 250 | 227.5 u | 130 u/s | 2, 5.9 a shell | missile burst | 2 (slow, τ/3) | — | `destroyer_hull.png` |
 
 **Damage**: main gun 5.9 a shell, one a second per barrel · PD 0.5 every 0.5 s per turret · fighter 2
 every 0.35 s · torpedo 15 · missile 5 (three to a burst). Every number lives in **`ShipStats`**
@@ -428,9 +428,10 @@ each group of rows only for the classes that carry it (a row a class lacks reads
 figure is one `V(battleship, carrier, destroyer)`. A fourth class is a line in each of those, not a hunt
 for two-way tests.
 
-**Sizes follow the owner's drawings.** The battleship keeps its 224 u and is slender (13 u half-beam
-to the carrier's 24); the destroyer is 130 u, the smallest of the three as the owner asked, and
-chunkier (17 u). The hit capsule is the drawn hull, so a slender ship is a slender target.
+**Sizes are the owner's.** The battleship is its drawing twice as wide, then 35% larger: 302.4 u and a
+35.1 u half-beam. The carrier (297.5 u) and the destroyer (227.5 u) are their drawings 75% larger, the
+destroyer still the smallest. The hit capsule is the drawn hull. New ships spawn half the longest
+class below the pad (`Hub.SpawnClear`), so any class starts clear of the base.
 
 ### The helm: capital ships handle like naval ships
 
@@ -502,12 +503,12 @@ fire mode onto F never finds two abilities on it, and its `reload`, which is gon
   while it is within the 1080 u control range. They fly in bursts: after **15 s of firing** a
   fighter returns to the **carrier's centre for a 3 s rest**, then rejoins. **R** recalls them.
 - **Bombers park on the carrier's deck**, in bays on the white either side of the runway, drawn at
-  **40%** (the deck is far below, as the hauler's pad is), alternating port and starboard so the sides
+  **65%** (the deck is far below, as the hauler's pad is; the hauler's own landed size), alternating port and starboard so the sides
   always split evenly (6 → 3 + 3), and rearm there (6 s). **Bomber strike** sends them at the target if
   it is within the **strike range, defined as twice the fighters' control range** (2160 u; it takes the
   same bonus). They **take off one at a time, 0.83 s apart** -- the fighters' cadence, on the deck's own
   clock (`PlayerShip.TakeLaunchSlot(kind)`) -- each rolling onto the runway and up it to the bow end,
-  **growing to full size as it lifts** (1.2 s, the hauler's SmoothStep). Bombers are 28.1 u. At launch
+  **growing to full size as it lifts** (1.6 s, the hauler's SmoothStep). Bombers are 28.1 u. At launch
   distance (**283.5 u**: close, because the torpedoes do not track) each swings its nose onto the target
   and launches 4 torpedoes straight ahead **while still closing slowly** (never quite stopped), then
   comes home **over the carrier's centre, settles onto the runway there** (1 s, shrinking back to deck

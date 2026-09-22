@@ -95,36 +95,37 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
     }
 
     // Every hull is the owner's line art (tools/make_ships.ps1: symmetrical, grey, tinted here with
-    // the hull colour), and every mount below is measured from it: the tool prints them. The
-    // turrets at the battleship's scale are 12 u across the housing (TurretTexScale 1/5.5), with
-    // the muzzles 12.2 u from the pivot; point defence 6 u across, the muzzle 5.5 u out.
+    // the hull colour), and every mount below is measured from it: the tool prints them. A turret at
+    // TurretTexScale 1/5.5 is 12 u across the housing, the muzzles 12.2 u from the pivot; point
+    // defence 6 u across, the muzzle 5.5 u out. Each class mounts them at its own multiple of that.
     public static readonly Dictionary<ShipClass, ClassArt> Art = new()
     {
-        // Battleship, 224 u and slender: 23 u across the hull (pods and fins outboard of it). Its
-        // four main turrets stand where the art's four painted turrets did, on the spine; its two
-        // point-defence turrets are on the stern quarters.
+        // Battleship, 302.4 u: the drawing made twice as wide, then 35% larger (the owner's), so 62 u
+        // across the hull (pods and fins outboard of it). Its four main turrets stand where the
+        // drawing's four painted turrets did, on the spine, at 2x -- the drawing's own turret-to-hull
+        // proportion on the doubled beam; its two point-defence turrets are on the stern quarters.
         [ShipClass.Battleship] = new ClassArt {
-            Texture = "res://battleship_hull.png", Length = 224f, HalfWidth = 13f,
-            Mains = new Vector2[] { new(0f, -55.43f), new(0f, -4.42f), new(0f, 43.41f), new(0f, 72.26f) },
-            Pds   = new Vector2[] { new(-6.3f, 92.83f), new(6.3f, 92.83f) },
-            TurretTexScale = 1f / 5.5f, MainBarrel = 12.2f, PdBarrel = 5.5f, PdRing = 3f },
-        // Carrier, 170 u: the runway down its centre, 17.4 u wide, with the white deck either side
-        // of it (8.8 to 21.6 u out) where the bombers park, three sponsons outboard on each flank.
-        // Point defence on the two middle sponsons and on the stern block (the bow is where a
-        // bomber lifting off passes), at 1.15x the battleship's.
+            Texture = "res://battleship_hull.png", Length = 302.4f, HalfWidth = 35.1f,
+            Mains = new Vector2[] { new(0f, -74.95f), new(0f, -6.01f), new(0f, 58.62f), new(0f, 97.61f) },
+            Pds   = new Vector2[] { new(-17.02f, 125.4f), new(17.02f, 125.4f) },
+            TurretTexScale = 2f / 5.5f, MainBarrel = 24.4f, PdBarrel = 11f, PdRing = 6f },
+        // Carrier, 297.5 u (the drawing at 170 u, 75% larger): the runway down its centre, 30.4 u
+        // wide, with the white deck either side of it (15.4 to 37.8 u out) where the bombers park,
+        // three sponsons outboard on each flank. Point defence on the two middle sponsons and on the
+        // stern block (the bow is where a bomber lifting off passes), at 2.01x.
         [ShipClass.Carrier] = new ClassArt {
-            Texture = "res://carrier_player.png", Length = 170f, HalfWidth = 24f,
-            BayX = 15f, BayY = 5f, BaySpacing = 28f, RunwayBow = 66f,
-            Pds = new Vector2[] { new(-27.73f, -17.8f), new(27.73f, -17.8f), new(0f, 80.3f) },
-            TurretTexScale = 1.15f / 5.5f, PdBarrel = 6.3f, PdRing = 3.45f },
-        // Destroyer, 130 u -- the smallest of the three -- and 33 u across the hull. Its two main
-        // turrets on the fore spine and the central plate, its point defence on the stern
-        // quarters; the turrets at 0.8x the battleship's.
+            Texture = "res://carrier_player.png", Length = 297.5f, HalfWidth = 42f,
+            BayX = 26.25f, BayY = 8.75f, BaySpacing = 49f, RunwayBow = 115.5f,
+            Pds = new Vector2[] { new(-48.69f, -31.22f), new(48.69f, -31.22f), new(0f, 140.88f) },
+            TurretTexScale = 2.0125f / 5.5f, PdBarrel = 11.03f, PdRing = 6.04f },
+        // Destroyer, 227.5 u (the drawing at 130 u, 75% larger) -- still the smallest of the three --
+        // and 58 u across the hull. Its two main turrets on the fore spine and the central plate, its
+        // point defence on the stern quarters; the turrets at 1.4x.
         [ShipClass.Destroyer] = new ClassArt {
-            Texture = "res://destroyer_hull.png", Length = 130f, HalfWidth = 17f,
-            Mains = new Vector2[] { new(0f, -34.85f), new(0f, 15.01f) },
-            Pds   = new Vector2[] { new(-8.14f, 41.47f), new(8.14f, 41.47f) },
-            TurretTexScale = 0.8f / 5.5f, MainBarrel = 9.8f, PdBarrel = 4.4f, PdRing = 2.4f },
+            Texture = "res://destroyer_hull.png", Length = 227.5f, HalfWidth = 29.75f,
+            Mains = new Vector2[] { new(0f, -61.15f), new(0f, 26.43f) },
+            Pds   = new Vector2[] { new(-14.3f, 72.9f), new(14.3f, 72.9f) },
+            TurretTexScale = 1.4f / 5.5f, MainBarrel = 17.15f, PdBarrel = 7.7f, PdRing = 4.2f },
     };
 
     public ClassArt MyArt => Art[Class];
