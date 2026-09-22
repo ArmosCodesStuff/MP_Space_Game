@@ -42,27 +42,52 @@ Anything in the tree you did not write: report it in one line, then ADOPT or REV
   tool first. Scratch files go in the scratchpad, never in the repo.
 - Commit a checkpoint per slice. Only a green full run earns `VERIFIED:`.
 
-## 4 · Test once, at the end
+## 4 · The ladder — always the cheapest rung that can SEE the problem
 
-- Development, then planning-complete, then code, then **one** run. If a run fails, fix and re-run
-  only what the fix can affect (§5), not the whole bar.
-- Never run two engine harnesses at once.
-- Prove numbers with **literals from the request**, never with the code's own constants.
+Every check in this project sits on a rung. **Run the lowest rung that can see the thing you
+changed. Never run a higher rung to prove something a lower rung proves.**
+
+| # | Rung | Cost | What it can SEE | What it is BLIND to |
+|---|---|---|---|---|
+| 0 | Read the code, and the log you already have | free | anything you can reason about | nothing it was not given |
+| 1 | `typecheck\typecheck.ps1` | ~20 s | every rename, signature, missing caller — in `scripts/` **and in the harness** (`SmokeTest.cs.txt`, `Shots.cs.txt`) | behaviour, numbers, reflection by string |
+| 2 | `verify.ps1 -Quick` | ~1 min | rung 1 + 0 warnings, 0 analyser findings, `UNUSED ANYWHERE: 0` | behaviour, numbers, anything drawn |
+| 3 | `tools\smoketest\run.ps1 -Solo` | ~1.5 min | the whole single-player narrative: behaviour, every number, ability state, UI state | a host and a guest disagreeing |
+| 4 | `tools\screens\run.ps1` | ~1.5 min | what is DRAWN: 97 frames, `LINT: 0` for off-screen, clipped and overlapping | behaviour |
+| 5 | `tools\smoketest\run.ps1` (all six) | ~4 min | authority, replication, the protocol: host + two guests + the two-player arena | nothing the game does; it is the last word on correctness |
+| 6 | `verify.ps1 -Update` | ~13 min | **the bar**: rungs 1-5, ×3 runs, + map, snapshot, manifest, integrity | nothing — it is the release gate, not a debugging tool |
+
+**Choosing a rung.** A rename or a signature: 1. A number, a behaviour, an ability, an economy
+row: 3. Anything visual: 4. Anything that crosses peers — an RPC, a field on the wire, a
+host-decided state a guest must see: 5. Anything else: the lowest rung on this list that names it.
+
+**Escalating.** Go up ONE rung, and only for one of two reasons:
+
+1. **The rung is blind to it.** Authority is invisible below 5; a layout is invisible below 4. Do
+   not run a rung that cannot see the problem "to check" — that is a wasted run, and its green
+   verdict is worse than nothing.
+2. **The same rung has failed to resolve it twice.** Two attempts at a rung without the answer
+   means the rung is the wrong instrument, not that you need more of it.
+
+**Coming back down is mandatory.** When rung 5 or 6 fails, read WHICH role and WHICH check failed,
+then drop to the lowest rung that covers that check, fix it there, and re-prove it there. A check
+that failed in the solo role is re-proved by rung 3 in 1.5 minutes — never by re-running the bar.
+
+**Rung 6 runs ONCE, at the end of a batch**, and its output is a verdict, not a debugging tool. If
+it fails: read, drop, fix, re-prove low, then run it once more. Two bars in a row for the same
+fix means the ladder was skipped.
+
+**Standing rules on the engine rungs (3-6):**
+
+- Never start an engine rung while a compile rung is red. Green `-Quick` first, always.
+- Never run two engine harnesses at once (they share one scratch folder; the second wipes the first).
+- Prove numbers with **literals from the request**, never with the code's own constants. Where a
+  behaviour check must read a table, prove that table against literals in one place and let the
+  behaviour check read the row.
 - Mutants only for authority, save-format and removed-path invariants, and only when a check's
   wiring is in doubt. Otherwise seeing a new check pass once is enough.
-
-### Selective verification
-
-```
-verify.ps1 -Quick                 # typecheck (scripts AND harness), build, analysers, xref  ~1 min
-verify.ps1 -Fast                  # + ONE solo smoke run + the screenshot sweep              ~3 min
-verify.ps1 -Update                # everything + map, snapshot, manifest        (release bar)
-```
-**There is no `-Scope`.** The smoke test is one narrative per role — a character is made, a base
-is bought up, a mission is flown, the world is replaced by the arena — so a section cannot be
-skipped without changing the state the next one runs in. `-Fast` is the cheap gear: the whole solo
-narrative, which is most of the checks, and it cannot see a host and a guest disagreeing.
-`-Update` is for the end of a batch or a release only.
+- A flaky check is a broken check. Fix its geometry at rung 3 until it passes three runs with
+  different seeds; never re-run a higher rung hoping for a different draw.
 
 ### Varied, not repeated
 
