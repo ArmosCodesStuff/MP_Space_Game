@@ -25,7 +25,11 @@
 # -Seed <n> repeats a run's VARIED GEOMETRY exactly: every check that places something at an
 # arbitrary spot or angle draws it from the seed the run prints at the top of its log (SEED n).
 # Without it each run picks its own, so a check tied to one placement fails on the run that moves it.
-param([string]$Godot, [switch]$Solo, [switch]$Wan, [string]$Seed)
+# -Fly is not a check run: it is a PILOT. One engine, every class taken out in clear space --
+# flown, fired, its whole bar pressed with a target selected, and stood in front of a wave -- and
+# what it measured printed as FLY and ISSUE lines. For "what is actually wrong with this class",
+# which assertions cannot answer because they only know what we thought to ask.
+param([string]$Godot, [switch]$Solo, [switch]$Wan, [switch]$Fly, [string]$Seed)
 
 $ErrorActionPreference = 'Stop'
 
@@ -102,7 +106,7 @@ try {
   # a `foreach ($f in ...)` elsewhere in this script silently overwrote the filter with
   # a file path, and the run died parsing it as a regex.
   # SEED is kept: a failure must come back with the number that reproduces its geometry (-Seed n).
-  $keepRe = 'PASS|FAIL|DONE|SEED |Exception|   at |ERROR: [^B]|^  [a-z]|Fatal error'
+  $keepRe = 'PASS|FAIL|DONE|SEED |FLY|ISSUE|Exception|   at |ERROR: [^B]|^  [a-z]|Fatal error'
   # Expected engine chatter, not failures: allocator notes, and Godot's own report that
   # no UPnP router exists (the game falls back and says so).
   $dropRe = 'RID alloc|PagedAlloc'
@@ -147,7 +151,12 @@ try {
 
   $all = @()
   $want = 0
-  if (-not $Wan) {
+  if ($Fly) {
+    # the pilot: one engine, no fake routers, no peers
+    $all += Complete-Run (Start-Run (@('--headless','--fixed-fps','60','--path',$W,'--','fly') + $seedArg) 'fly' 1800) '[fly] '
+    $want = 1
+  }
+  elseif (-not $Wan) {
     # Two fake routers for the plug-and-play scenarios: the run never searches the real network,
     # and never opens a port on the real router (see NoRouterNoInternet in the test).
     $fake = Start-Process -FilePath python -ArgumentList @((Join-Path $PSScriptRoot 'fakeigd.py'), 19000, 19080, 19351, 1300) `
@@ -180,7 +189,7 @@ try {
     Start-Sleep -Milliseconds 300
   }
 
-  if (-not $Solo) {
+  if (-not $Solo -and -not $Fly) {
     $host1 = Start-Run (@('--headless','--path',$W,'--','host') + $seedArg)   'host'   120
     Start-Sleep -Milliseconds 500
     $g2 = Start-Run (@('--headless','--path',$W,'--','guest2') + $gx + $seedArg) 'guest2' 120

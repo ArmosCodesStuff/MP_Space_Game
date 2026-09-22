@@ -212,7 +212,7 @@ public partial class _Test : Node
               $"...and the hub did not write zeros back over it ({(double)stillThere.GetValue("base", "credits", -1.0):0})");
         // An exception must end the run as a failure. Without this the async test
         // simply stopped, nothing called Quit, and the run idled to its time limit.
-        try { if (role == "solo") await Solo(); else if (role is "ahost" or "aguest") await ArenaMp(role); else await Mp(role); }
+        try { if (role == "solo") await Solo(); else if (role == "fly") await Fly(); else if (role is "ahost" or "aguest") await ArenaMp(role); else await Mp(role); }
         catch (Exception ex) { Check(false, $"test threw: {ex.GetType().Name}: {ex.Message}"); GD.Print(ex.StackTrace); }
         GD.Print($"  elapsed {Time.GetTicksMsec() / 1000.0:0.0} s");     // for sizing the runners' time limits
         GD.Print($"DONE {role} fails={fails}");
@@ -752,6 +752,143 @@ public partial class _Test : Node
     {
         var tb = Nodes<Button>(panel).First(b => b.Name == "Tab_" + tab);
         if (!tb.ButtonPressed) tb.ButtonPressed = true;      // fires Toggled -> the tab is built
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────────────────
+    // FLY — not a check: a PILOT. It takes every class out in clear space, flies it, shoots with
+    // it, presses everything on its bar with a target selected, and stands it in front of a wave.
+    // Nothing here asserts a known answer: it MEASURES, and says so. The checks prove what we
+    // thought to ask; this is for what we did not.
+    //
+    //   FLY   a measurement
+    //   ISSUE a measurement that does not match what the class's own sheet promises
+    //
+    // `tools\smoketest\run.ps1 -Fly`. The three flyable classes of the line go first as a control:
+    // an ISSUE against one of them is the instrument, not the class.
+    // ─────────────────────────────────────────────────────────────────────────────────────────
+    private int _issues;
+    private readonly System.Collections.Generic.List<string> _table = new();
+    void Note(string s) => GD.Print("FLY   " + s);
+    void Issue(string s) { _issues++; GD.Print("ISSUE " + s); }
+
+    // everything about a ship an ability could plausibly move, in one line
+    string Snap(PlayerShip s, string id)
+    {
+        ref var sl = ref s.Sl(id);
+        return $"L{sl.Left:0.00} C{sl.Cool:0.00} O{sl.Own:0.0} N{sl.N} st{s.Statuses.Bits} "
+             + $"w{(s.WingTarget?.NetId ?? 0)} k{(s.StrikeTarget?.NetId ?? 0)} d{s.TurretsOut} "
+             + $"m{(s.Staggered ? 1 : 0)} hp{s.Hp:0}";
+    }
+
+    async Task Fly()
+    {
+        var spot = Hub.BasePos + new Vector2(2600, 2400);          // clear of the belt, the wreck, the dummies and the lane
+        Note($"twelve classes, one at a time, in clear space at {spot}");
+        foreach (var cd in Classes.All.Where(c => c.Ready).ToList())
+        {
+            try { await FlyOne(cd, spot); }
+            catch (Exception ex) { Issue($"{cd.Name}: flying it threw {ex.GetType().Name}: {ex.Message}"); GD.Print(ex.StackTrace); }
+        }
+        GD.Print("FLY   ── the table ─────────────────────────────────────────────");
+        GD.Print("FLY   class        top u/s (sheet)   180 deg   main DPS (sheet)   12 s under a wave");
+        foreach (var row in _table) GD.Print("FLY   " + row);
+        GD.Print($"FLY DONE issues={_issues}");
+    }
+
+    async Task FlyOne(ClassDef cd, Vector2 spot)
+    {
+        await SetClass(cd.Id);
+        await Wait(0.3);
+        var s = Me;
+        if (s == null) { Issue($"{cd.Name}: no ship after the refit"); return; }
+        var S = s.Stats;
+        GD.Print($"FLY   ── {cd.Name} ({S["hull"]:0} hull) ─────────────────────────────");
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+        await Wait(0.3);
+
+        // ── THE HELM: does it reach its own top speed, and how long to come about? ──
+        s.Position = spot; s.Velocity = Vector2.Zero; s.Rotation = 0f; await Wait(0.3);
+        double top = 0;
+        KeyDown(global::Godot.Key.W);
+        for (int i = 0; i < 60 * 6; i++) { top = Math.Max(top, s.SpeedAhead); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+        double want = S["max_speed"];
+        Note($"{cd.Name}: top speed {top:0} u/s, its sheet says {want:0}");
+        if (top < want * 0.95) Issue($"{cd.Name}: never reaches its own top speed ({top:0} of {want:0} u/s)");
+
+        // 180 degrees, at speed, on the rudder
+        float last = s.Rotation; double acc = 0, turnT = -1, c0 = s.Clock;
+        KeyDown(global::Godot.Key.A);
+        for (int i = 0; i < 60 * 10 && turnT < 0; i++)
+        {
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            acc += Math.Abs(Mathf.AngleDifference(last, s.Rotation)); last = s.Rotation;
+            if (acc >= Math.PI) turnT = s.Clock - c0;
+        }
+        KeyUp(global::Godot.Key.A); KeyUp(global::Godot.Key.W);
+        if (turnT < 0) Issue($"{cd.Name}: cannot turn 180 degrees in 10 s on full rudder at speed");
+        else Note($"{cd.Name}: 180 degrees in {turnT:0.0} s at {s.SpeedAhead:0} u/s");
+
+        // ── THE GUNS: a hull that cannot die, held at half their range, six seconds on the trigger ──
+        double dps = 0;
+        if (S["main_count"] >= 1)
+        {
+            s.Position = spot; s.Velocity = Vector2.Zero; s.Rotation = 0f; await Wait(0.4);
+            var at = spot + new Vector2(0, -(float)S["main_range"] * 0.5f);
+            var mark = H.SpawnRaider(at, Enemies.Gunship); mark.Hp = 1e9;
+            AimWorld(at); await Wait(0.6);
+            double hp0 = mark.Hp, g0 = s.Clock;
+            KeyDown(global::Godot.Key.Space);
+            for (int i = 0; i < 60 * 6; i++)
+            {
+                mark.Position = at; s.Position = spot; s.Velocity = Vector2.Zero; AimWorld(at);
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            }
+            KeyUp(global::Godot.Key.Space);
+            for (int i = 0; i < 60; i++) { mark.Position = at; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }   // the last shells land
+            double secs = s.Clock - g0, dealt = hp0 - mark.Hp;
+            dps = secs > 0 ? dealt / secs : 0;
+            Note($"{cd.Name}: main guns landed {dealt:0} in {secs:0.0} s = {dps:0.0} DPS at {at.DistanceTo(spot):0} u, its sheet says {S.MainDps:0.0}");
+            if (S.MainDps > 0 && dps < S.MainDps * 0.5)
+                Issue($"{cd.Name}: its main guns land less than half what its sheet promises ({dps:0.0} of {S.MainDps:0.0} DPS) at half their range");
+            mark.TakeDamage(1e12); await Wait(0.2);
+        }
+
+        // ── THE BAR: press everything on it, with a target selected and enemies about ──
+        s.Position = spot; s.Velocity = Vector2.Zero; s.Rotation = 0f;
+        for (int i = 0; i < 3; i++) { var r = H.SpawnRaider(spot + Vector2.Right.Rotated(i * 2.1f) * 300f); r.Hp = 6000; }
+        await Wait(0.6);
+        Key(global::Godot.Key.Tab); await Wait(0.3);
+        if (H.Selected == null) Issue($"{cd.Name}: Tab picked nothing with three raiders 300 u out");
+        foreach (var ab in Abilities.For(cd.Id).Where(a => !a.Open && a.Id != "guns").ToList())
+        {
+            string before = Snap(s, ab.Id);
+            s.UseAbility(ab.Id, H.Selected?.NetId ?? 0);
+            await Wait(0.4);
+            string after = Snap(s, ab.Id);
+            string why = s.FailNote(ab.Id);
+            if (why != null) Note($"{cd.Name}: {ab.Short} refused -- {why}");
+            else if (before == after) Issue($"{cd.Name}: {ab.Short} did nothing and gave no reason ({after})");
+            else Note($"{cd.Name}: {ab.Short} -> {after}");
+        }
+
+        // ── TWELVE SECONDS UNDER A WAVE: three webifiers and a gunship, nothing pressed ──
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+        await Wait(0.3);
+        s.Position = spot; s.Velocity = Vector2.Zero; s.Rotation = 0f;
+        s.Restore(s.MaxHp, true, 0);                                   // full hull, whatever the bar just did to it
+        await Wait(0.3);
+        for (int i = 0; i < 3; i++) H.SpawnRaider(spot + Vector2.Right.Rotated(i * 2.1f) * 320f);
+        H.SpawnRaider(spot + new Vector2(0, 760), Enemies.Gunship);
+        double hull0 = s.Hp;
+        for (int i = 0; i < 60 * 12; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        double lost = hull0 - s.Hp;
+        Note($"{cd.Name}: 12 s under three webifiers and a gunship -- lost {lost:0} of {s.MaxHp:0} hull, {(s.Alive ? "alive" : "DEAD")}");
+        if (lost <= 0) Issue($"{cd.Name}: a whole wave on it for 12 s took nothing off its hull -- nothing could reach it");
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+        await Wait(0.3);
+        if (!s.Alive) { s.Restore(s.MaxHp, true, 0); await Wait(0.4); }
+
+        _table.Add($"{cd.Name,-12} {top,7:0} ({want:0})      {(turnT < 0 ? "  --  " : $"{turnT,5:0.0}s")}   {dps,7:0.0} ({S.MainDps:0.0})     {lost,5:0} of {s.MaxHp:0}{(s.Alive ? "" : "  DEAD")}");
     }
 
     async Task Solo()
