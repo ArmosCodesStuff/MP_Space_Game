@@ -144,11 +144,12 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
 
     // Fighters out on an attack whose target is gone take the nearest other hostile to where they are,
     // within control range of the carrier, and the whole wing with them; with none left, they go home.
+    // Never a practice dummy: it cannot die, so the wing would strafe it for ever (the pilot may pick one).
     public IHittable FighterTarget(Vector2 from)
     {
         if (!_attacking || !Net.Sim || WingTarget is { Alive: true }) return WingTarget;
         WingTarget = Combat.Nearest(Combat.Hostiles, from, h => h.Position, float.MaxValue,
-                                    h => h is not Torpedo && h.Alive && Position.DistanceTo(h.Position) <= Stats["control_range"]);
+                                    h => h is not Torpedo and not TargetDummy && h.Alive && Position.DistanceTo(h.Position) <= Stats["control_range"]);
         _attacking = WingTarget != null;
         return WingTarget;
     }
