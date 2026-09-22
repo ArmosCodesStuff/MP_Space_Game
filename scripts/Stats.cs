@@ -93,13 +93,14 @@ public class ShipStats
         if (Classes.Guns(cls))
         {   // cursor-aimed turrets: the battleship's four, the destroyer's two
             Add("Main guns", "main_count",    "Barrels",            V(4, 0, 2), "", 0);
-            // 5.9 a shell: the battleship's four guns alone are 23.6 DPS, 1.24x the carrier's MEASURED
-            // sustained output (19.07 DPS: fighters and bombers on a dummy, 90 s); the broadside is on top
-            Add("Main guns", "main_damage",   "Damage per shot",    5.9, "", 2);
-            Add("Main guns", "main_interval", "Reload (per barrel)",1.0, "s", 2, inverse: true);
-            Add("Main guns", "main_range",    "Range",              720, "u", 0);
+            // THE 50 DPS PASS: every class averages about 50. The battleship is the steady one, from range:
+            // 4 x 17.9 every 2 s (its rate halved) is 35.8, and its broadside 14.3 more; the destroyer's
+            // guns are the smaller half of a bursty 50 (2 x 7.5 a second, 15).
+            Add("Main guns", "main_damage",   "Damage per shot",    V(17.9, 0, 7.5), "", 2);
+            Add("Main guns", "main_interval", "Reload (per barrel)",V(2.0, 0, 1.0), "s", 2, inverse: true);
+            Add("Main guns", "main_range",    "Range",              V(1000, 0, 720), "u", 0);
             Add("Main guns", "main_turn",     "Turret turn rate",   Mathf.Tau / 4f, "rad/s", 2);
-            Add("Main guns", "shell_speed",   "Shell speed",        520, "u/s", 0);
+            Add("Main guns", "shell_speed",   "Shell speed",        V(650, 0, 520), "u/s", 0);
         }
         if (Classes.Broadside(cls))
         {   // F: the turrets swing onto the cursor through the wind-up, then every main gun fires,
@@ -108,17 +109,18 @@ public class ShipStats
             Add("Broadside", "broadside_mult",     "Shell damage (x main)",   1.0, "x", 2);
             Add("Broadside", "broadside_windup",   "Wind-up (turrets aim)",   0.5, "s", 2, inverse: true);
             Add("Broadside", "broadside_gap",      "Between volleys",         0.25, "s", 2, inverse: true);
-            Add("Broadside", "broadside_cooldown", "Cooldown after",          10, "s", 1, inverse: true);
+            Add("Broadside", "broadside_cooldown", "Cooldown after",          14, "s", 1, inverse: true);   // 12 shells a 15 s cycle: 14.3 DPS
         }
         if (Classes.Missiles(cls))
         {   // F: a guided BURST of three, one at the target and two launched wide that curve in onto
             // it (PlayerShip.FireMissile). A magazine of bursts, reloaded by hand (R).
-            Add("Missile", "missile_damage",   "Damage (each)",     5.0, "", 1);
-            Add("Missile", "missile_mag",      "Magazine (bursts)", 2, "", 0);
-            Add("Missile", "missile_refire",   "Between bursts",    0.6, "s", 1, inverse: true);
-            Add("Missile", "missile_reload",   "Reload (R)",        16.0, "s", 1, inverse: true);
+            // the destroyer's burst: 3 bursts of 3 at 38, 0.4 s apart, then 9 s to reload -- 342 in 9.8 s, 34.9 DPS
+            Add("Missile", "missile_damage",   "Damage (each)",     38.0, "", 1);
+            Add("Missile", "missile_mag",      "Magazine (bursts)", 3, "", 0);
+            Add("Missile", "missile_refire",   "Between bursts",    0.4, "s", 1, inverse: true);
+            Add("Missile", "missile_reload",   "Reload (R)",        9.0, "s", 1, inverse: true);
             Add("Missile", "missile_range",    "Range",             900, "u", 0);
-            Add("Missile", "missile_speed",    "Speed",             160, "u/s", 0);
+            Add("Missile", "missile_speed",    "Speed",             200, "u/s", 0);
             Add("Missile", "missile_turn",     "Guidance (turn)",   1.5, "rad/s", 2);
         }
 
@@ -136,26 +138,26 @@ public class ShipStats
         {
             Add("Fighters", "fighter_count",    "Craft",            3, "", 0);
 
-            Add("Fighters", "fighter_damage",   "Damage per shot",  2, "", 1);
+            Add("Fighters", "fighter_damage",   "Damage per shot",  2.5, "", 1);   // 3 x 2.5 / 0.35 s, ~70% of the time: 15 DPS
             Add("Fighters", "fighter_interval", "Reload",           0.35, "s", 2, inverse: true);
             Add("Fighters", "fighter_range",    "Weapon range",     300, "u", 0);
             Add("Fighters", "fighter_speed",    "Top speed",        352, "u/s", 0);
             Add("Fighters", "fighter_burst",    "Firing before rest", 15, "s", 0);
             Add("Fighters", "fighter_rest",     "Rest, docked inside", 3, "s", 0, inverse: true);
             Add("Fighters", "fighter_turn",     "Turn rate",        3.5, "rad/s", 1);
-            Add("Fighters", "control_range",    "Control range",    1080, "u", 0);   // 1.5x the battleship's guns (720)
+            Add("Fighters", "control_range",    "Control range",    1080, "u", 0);
 
-            // An active ability. Torpedoes run straight and steady: no tracking, so a moving
-            // target can step out of the way -- which is why the bombers close to 283.5 u before
-            // they launch, and the torpedoes run at 112.5 u/s.
+            // An active ability, and the carrier's long-range burst. Torpedoes run straight and steady:
+            // no tracking, so from 1900 u (about twice the others' reach) a moving target often steps out
+            // of the way. 8 torpedoes of 120 a ~14 s strike, half of them landing: about 34 DPS.
             Add("Bombers", "bomber_count",    "Craft",              2, "", 0);
 
-            Add("Bombers", "torpedo_damage",  "Torpedo damage",     15, "", 0);
+            Add("Bombers", "torpedo_damage",  "Torpedo damage",     120, "", 0);
             Add("Bombers", "bomber_ammo",     "Torpedoes per run",  4, "", 0);
             Add("Bombers", "torpedo_interval","Between launches",   0.5, "s", 2, inverse: true);
-            Add("Bombers", "torpedo_speed",   "Torpedo speed",      112.5, "u/s", 1);
-            Add("Bombers", "torpedo_range",   "Torpedo run",        1215, "u", 0);
-            Add("Bombers", "launch_range",    "Launch distance",    283.5, "u", 1);
+            Add("Bombers", "torpedo_speed",   "Torpedo speed",      300, "u/s", 1);
+            Add("Bombers", "torpedo_range",   "Torpedo run",        2600, "u", 0);
+            Add("Bombers", "launch_range",    "Launch distance",    1900, "u", 1);
             Add("Bombers", "bomber_rearm",    "Rearm on the carrier", 6, "s", 1, inverse: true);
             Add("Bombers", "bomber_speed",    "Top speed",          190, "u/s", 0);
             Add("Bombers", "bomber_accel",    "Acceleration",       500, "u/s²", 0);
