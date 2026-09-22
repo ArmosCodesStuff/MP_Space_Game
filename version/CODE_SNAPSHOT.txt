@@ -1,8 +1,8 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-21 14:14, on top of git commit 764bc28. How it was verified is in the message of the
+// Taken 2026-09-21 22:10, on top of git commit 0110473. How it was verified is in the message of the
 //   commit that carries this file: one starting VERIFIED: is a green verify.ps1 -Update.
-// 80 files, 16778 lines. Code only: sprites, sounds and docs are in the zip.
+// 81 files, 16846 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -22,7 +22,7 @@
 //   scripts/BaseDefense.cs                          52 lines   sha256 e19852153b1b
 //   scripts/BasePanel.cs                           138 lines   sha256 eda74bdf3a37
 //   scripts/Boss.cs                                334 lines   sha256 350097d90bdf
-//   scripts/BossBar.cs                              89 lines   sha256 94ba504474f6
+//   scripts/BossBar.cs                              89 lines   sha256 e4e024529f16
 //   scripts/Character.cs                           334 lines   sha256 f29a391727ee
 //   scripts/CharacterCreator.cs                    216 lines   sha256 9645b6faeabb
 //   scripts/CharacterSelect.cs                     184 lines   sha256 d13531a24c9e
@@ -38,7 +38,7 @@
 //   scripts/Hauler.cs                              368 lines   sha256 32d864919bf7
 //   scripts/HealthBar.cs                            23 lines   sha256 fafaf0102ffb
 //   scripts/Hints.cs                                98 lines   sha256 96cc9bb327dd
-//   scripts/Hub.cs                                1551 lines   sha256 09da4ee4f19a
+//   scripts/Hub.cs                                1579 lines   sha256 640431d62bbd
 //   scripts/Loot.cs                                118 lines   sha256 f8a5de98fe1f
 //   scripts/MainMenu.cs                            291 lines   sha256 76ff14c4fb7d
 //   scripts/MenuFoe.cs                             201 lines   sha256 5297a5e7ba82
@@ -51,6 +51,7 @@
 //   scripts/Progression.cs                         106 lines   sha256 aabb07443837
 //   scripts/Radar.cs                               130 lines   sha256 9a8dcad4c7ae
 //   scripts/Raider.cs                              323 lines   sha256 eba82c91689c
+//   scripts/ReturnButton.cs                         27 lines   sha256 e36ddbb19a08
 //   scripts/Router.cs                              429 lines   sha256 294cec245abf
 //   scripts/SessionMenu.cs                         141 lines   sha256 777687907142
 //   scripts/Settings.cs                             82 lines   sha256 b2e0d3f12854
@@ -82,11 +83,11 @@
 //   tools/map.py                                   232 lines   sha256 01a23fceab11
 //   tools/screens/run.ps1                          128 lines   sha256 9e8d569b0b94
 //   tools/screens/run.sh                            42 lines   sha256 73a5b3c63476
-//   tools/screens/Shots.cs.txt                     549 lines   sha256 493224753b48
+//   tools/screens/Shots.cs.txt                     549 lines   sha256 a64a879774a8
 //   tools/smoketest/fakeigd.py                     155 lines   sha256 b980d4fa4ad4
 //   tools/smoketest/run.ps1                        209 lines   sha256 54069e6faaff
 //   tools/smoketest/run.sh                          57 lines   sha256 9ac9cbdf9115
-//   tools/smoketest/SmokeTest.cs.txt              3662 lines   sha256 de8116dc1981
+//   tools/smoketest/SmokeTest.cs.txt              3675 lines   sha256 4f6d161bcf44
 //   tools/smoketest/wan.py                          61 lines   sha256 97db24aa3f91
 //   tools/snapshot.ps1                              94 lines   sha256 3ca9bfe56185
 //==============================================================================
@@ -1245,7 +1246,7 @@ public partial class Boss : Node2D, IHittable
 
 //==============================================================================
 // FILE: scripts/BossBar.cs
-// 89 lines   sha256 94ba504474f6
+// 89 lines   sha256 e4e024529f16
 //==============================================================================
 using Godot;
 using System;
@@ -1310,9 +1311,9 @@ public partial class BossBar : Control
         var boss = Hub?.Boss;
         if (!IsInstanceValid(boss)) return;                       // the first draw can come before any boss
         _panel.Draw(GetCanvasItem(), new Rect2(-10, -26, W + 20, H + 34 + SuperPad + SuperH));
-        // after the kill: the victory window -- your parts collected of those dropped, and home in
+        // after the kill: your parts collected of those dropped, and how many pilots are ready to go home
         string title = Hub.MissionWon
-            ? $"{Missions.Current.Name}  ·  DEFEATED  ·  PARTS {Hub.CratesDropped - Hub.Crates.Count} / {Hub.CratesDropped}  ·  HOME IN {Math.Ceiling(Math.Max(0, Hub.HomeIn)):0} s"
+            ? $"{Missions.Current.Name}  ·  DEFEATED  ·  PARTS {Hub.CratesDropped - Hub.Crates.Count} / {Hub.CratesDropped}  ·  {Hub.ReturnReady} / {Hub.ReturnTotal} READY TO RETURN"
             : $"{Missions.Current.Name}  ·  LEVEL {Missions.Level}  ·  {boss.Hp:0} / {boss.MaxHp:0}";
         Txt.D(this, ThemeDB.FallbackFont, new Vector2(0, -8), title, HorizontalAlignment.Center, W, 13, Hub.MissionWon ? Ui.Good : Ui.Text);
         float frac = (float)Math.Clamp(boss.Hp / Math.Max(1, boss.MaxHp), 0, 1);
@@ -3638,7 +3639,7 @@ public partial class Hints : CanvasLayer
 
 //==============================================================================
 // FILE: scripts/Hub.cs
-// 1551 lines   sha256 09da4ee4f19a
+// 1579 lines   sha256 640431d62bbd
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -3721,13 +3722,17 @@ public partial class Hub : Node2D
         _selected != null && _selected.Alive ? (true, _selected.Position, _selected.HitRadius)
         : Waypoint is { } w ? (true, w, WaypointRadius) : (false, Vector2.Zero, 0f);
     public Boss Boss { get; private set; }
-    private double _arenaEndT = -1;                         // counts down to going home
+    private double _arenaEndT = -1;                         // the FAILURE clock only: a wiped party home in 3 s
     public bool MissionWon { get; private set; }
-    // THE VICTORY WINDOW: after a kill the party stays long enough to fly over its crates. Guests
-    // are told how long is left (NetWon), so their boss bar can count it down too.
-    public const double VictoryWindow = 20.0;
-    private double _netHomeIn = -1;
-    public double HomeIn => Net.IsHost ? _arenaEndT : _netHomeIn;
+    // AFTER A WIN there is no clock. Each pilot presses RETURN when it has finished collecting, and
+    // the whole party warps home once every pilot PRESENT has (a held place does not block it). Kept
+    // apart from the launch READY so a launch-ready is never mistaken for a return-ready.
+    private readonly HashSet<int> _returning = new();
+    private bool _iReturned;                                // this peer's own press, guest side
+    private int _returnReady, _returnTotal;                 // the host's tally, for a guest's button
+    public bool IReturned => Net.IsHost ? _returning.Contains(Net.LocalId) : _iReturned;
+    public int ReturnReady => Net.IsHost ? _returning.Count(_ships.ContainsKey) : _returnReady;
+    public int ReturnTotal => Net.IsHost ? _ships.Count : _returnTotal;
     // This pilot's own crates, in this world (nobody else's are ever here).
     private readonly List<LootCrate> _crates = new();
     public IReadOnlyList<LootCrate> Crates => _crates;
@@ -3842,6 +3847,7 @@ public partial class Hub : Node2D
 
         layer.AddChild(new HullHud { Hub = this });
         layer.AddChild(new BossBar { Hub = this });                 // shows itself in the arena
+        layer.AddChild(new ReturnButton { Hub = this });            // RETURN TO BASE, after a win only
         layer.AddChild(new Radar { Hub = this });
         layer.AddChild(new AbilityBar { Hub = this });
         if (!InArena) layer.AddChild(new HaulerHud { Hub = this });
@@ -4023,7 +4029,7 @@ public partial class Hub : Node2D
         if ((SectorKind)s != Sector) { RpcId(who, nameof(NetSector), (int)Sector); return; }
         RpcId(who, nameof(NetMission), MissionArgs());
         foreach (var r in Raiders) RpcId(who, nameof(NetRaiderSpawn), r.NetId, r.Position, (int)r.Kind, r.Strength);
-        if (MissionWon) RpcId(who, nameof(NetWon), _arenaEndT);
+        if (MissionWon) { RpcId(who, nameof(NetWon), _ships.Count); RpcId(who, nameof(NetReturnCount), ReturnReady, ReturnTotal); }
         if (_placeFor.Remove(who, out var place)) RpcId(who, nameof(NetPlace), place.at, place.rot);
     }
     private void ReportSector() { if (!Net.IsHost) Net.AskHost(this, nameof(NetMySector), (int)Sector); }
@@ -4285,6 +4291,31 @@ public partial class Hub : Node2D
         _ready[who] = ready; BroadcastMission();
     }
 
+    // ── RETURN from a won arena. Each pilot toggles its own; the host takes the whole party home
+    // once every pilot present has pressed it. A stasis pilot may press it too (it is a HUD button,
+    // not a ship order). Mirrors SetMyReady above.
+    public void SetMyReturn(bool on)
+    {
+        if (!MissionWon) return;
+        if (Net.IsHost) { if (on) _returning.Add(Net.LocalId); else _returning.Remove(Net.LocalId); AfterReturn(); }
+        else { _iReturned = on; Net.AskHost(this, nameof(RequestReturn), on); }
+    }
+    [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void RequestReturn(bool on)
+    {
+        if (!Net.FromPlayer(this, out int who) || !_ships.ContainsKey(who) || !MissionWon) return;
+        if (on) _returning.Add(who); else _returning.Remove(who);
+        AfterReturn();
+    }
+    // host: tell the arena how many are ready, and take everyone home once every present pilot is
+    private void AfterReturn()
+    {
+        ToWorld(nameof(NetReturnCount), ReturnReady, ReturnTotal);
+        if (_ships.Count > 0 && _ships.Keys.All(_returning.Contains)) EnterSector(SectorKind.Home);
+    }
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void NetReturnCount(int ready, int total) { _returnReady = ready; _returnTotal = total; }
+
     private const float PortalEnterRadius = 190f;
 
     // ── moving the party between sectors (host decides; every peer follows) ──
@@ -4310,26 +4341,25 @@ public partial class Hub : Node2D
         AddChild(Boss);
     }
 
-    // host: the boss is dead. Its escorts and raiders die with it -- the victory window is for
-    // collecting, not for being shot at. Every pilot gets its own EXP (its level, its first clears)
-    // and its share of the bounty, then its own crates; then the party has VictoryWindow seconds
-    // before home.
+    // host: the boss is dead. Its escorts and raiders die with it -- collecting is not fighting. Every
+    // pilot gets its own EXP (its level, its first clears) and its share of the bounty, then its own
+    // crates. Nothing sends anyone home on a clock: each pilot presses RETURN when it is done.
     public void BossDefeated()
     {
         if (!Net.IsHost || MissionWon) return;
         MissionWon = true;
         foreach (var r in Raiders.ToList()) RaiderDown(r);
         AnnounceBossKill(Missions.Level, IsInstanceValid(Boss) ? Boss.Position : Vector2.Zero);
-        _arenaEndT = VictoryWindow;
-        ToWorld(nameof(NetWon), VictoryWindow);
+        _returning.Clear();
+        ToWorld(nameof(NetWon), _ships.Count);               // the party may now RETURN; how many must
     }
     // Guests see the boss at zero too (its last hull report went out before the killing blow), and
-    // how long is left before home.
+    // learn how many pilots the RETURN needs.
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetWon(double homeIn)
+    private void NetWon(int total)
     {
         MissionWon = true;
-        _netHomeIn = homeIn;
+        _returnTotal = total; _returnReady = 0; _iReturned = false;
         if (IsInstanceValid(Boss)) Boss.Hp = 0;
     }
 
@@ -4358,7 +4388,6 @@ public partial class Hub : Node2D
         // AddHostShare, both reached from the arena). Make any of them an instance member and
         // these lines start throwing. See DESIGN.md -> Traps.
         Yard.TripClock += delta;                              // what the base is missing, in game time
-        if (_netHomeIn > 0) _netHomeIn = System.Math.Max(0, _netHomeIn - delta);
         if (!Net.IsHost) return;
         // the whole party in stasis at once: the mission fails, everyone goes home
         if (!MissionWon && _arenaEndT < 0 && _ships.Count > 0 && _ships.Values.All(s => IsInstanceValid(s) && !s.Alive)) _arenaEndT = 3.0;
@@ -8233,6 +8262,38 @@ public partial class Raider : Node2D, IHittable
         if (Boosting && IsEscort && !Shivering) Plume.Draw(this, new Vector2(0, Length * 0.5f), Vector2.Down, plume * EscortPlume, new Color(1f, 0.35f, 0.25f), 1f, true);
         else if (Boosting || (Heavy && Speed > Cruise + 1f)) Plume.Draw(this, new Vector2(0, Length * 0.5f), Vector2.Down, plume * 1.6f, new Color(1f, 0.35f, 0.25f), 1f, true);
         else Plume.Draw(this, new Vector2(0, Length * 0.5f), Vector2.Down, plume, new Color(1f, 0.35f, 0.25f), 0.5f, Speed > 1f);
+    }
+}
+
+//==============================================================================
+// FILE: scripts/ReturnButton.cs
+// 27 lines   sha256 e36ddbb19a08
+//==============================================================================
+using Godot;
+
+// RETURN TO BASE -- in the arena, after a win only. Each pilot presses it when it has finished
+// collecting its crates; the whole party warps home once every pilot present has (Hub: no clock,
+// a held place does not block it). Hidden until the boss is dead, so it can never end a mission
+// that is still on. On the arena HUD layer, so a click never falls through to the world.
+public partial class ReturnButton : Button
+{
+    public Hub Hub;
+
+    public override void _Ready()
+    {
+        Name = "ReturnButton";
+        FocusMode = FocusModeEnum.None;
+        AnchorLeft = AnchorRight = 0.5f;
+        OffsetLeft = -120; OffsetRight = 120; OffsetTop = 176; OffsetBottom = 210;
+        Ui.Style(this);                        // a CanvasLayer breaks theme inheritance -- see Ui
+        Pressed += () => Hub?.SetMyReturn(!Hub.IReturned);
+        Visible = false;
+    }
+
+    public override void _Process(double delta)
+    {
+        Visible = Hub != null && Hub.InArena && Hub.MissionWon;
+        if (Visible) Ui.SetText(this, Hub.IReturned ? $"READY  ·  WAITING  {Hub.ReturnReady} / {Hub.ReturnTotal}" : "RETURN TO BASE");
     }
 }
 
@@ -12449,7 +12510,7 @@ ls /tmp/shots
 
 //==============================================================================
 // FILE: tools/screens/Shots.cs.txt
-// 549 lines   sha256 493224753b48
+// 549 lines   sha256 a64a879774a8
 //==============================================================================
 // Screenshot driver. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Shots.cs, registers it as an autoload, and runs the real
@@ -12984,8 +13045,8 @@ public partial class _Shots : Node
             if (GodotObject.IsInstanceValid(H.Boss)) { H.Boss.TakeDamage(90); await W(0.09); await Snap("42_boss_bar_chunk"); }
             for (int i = 0; i < 60 * 16 && !N<Telegraph>().Any(t => !t.Line); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             await W(0.9); await Snap("39_arena_shockwave_telegraph");
-            // the kill: this pilot's crates on a ring where the boss died, the victory window on the
-            // boss bar, the crates on the radar; one taken so the count reads 1 of 2
+            // the kill: this pilot's crates on a ring where the boss died, the RETURN button and the
+            // ready tally on the boss bar, the crates on the radar; one taken so the count reads 1 of 2
             if (GodotObject.IsInstanceValid(H.Boss))
             {
                 var at = H.Boss.Position;
@@ -13439,7 +13500,7 @@ echo "SMOKE TEST PASSED"
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 3662 lines   sha256 de8116dc1981
+// 3675 lines   sha256 4f6d161bcf44
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -16225,7 +16286,10 @@ public partial class _Test : Node
                   && dropped.All(c => c.Position.DistanceTo(bossAt) < 300 && Equipment.ById(c.Item) is { Kit: false, Rarity: Rarity.Common }),
                   $"a level-1 boss drops this pilot 2 Common crates where it died, on disk at once ({dropped.Count} crates, {UnclaimedOnDisk()} on disk)");
             Check(escortsOut >= 2 && H.Raiders.Count == 0, $"the boss's escorts die with it ({escortsOut} out, {H.Raiders.Count} left)");
-            Check(Math.Abs(H.HomeIn - 19.8) < 0.05, $"a 20 s victory window to collect in ({H.HomeIn:0.00} s left)");
+            // NO CLOCK any more: the failure timer is not armed on a win, and a RETURN button appears
+            double solEndT = (double)typeof(Hub).GetField("_arenaEndT", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(H);
+            Check(solEndT < 0 && H.MissionWon && !H.IReturned && H.ReturnTotal == 1 && Nodes<ReturnButton>().Any(),
+                  $"after the kill: a RETURN button and no clock sending you home (_arenaEndT {solEndT:0.0}, ready {H.ReturnReady}/{H.ReturnTotal})");
             Priv(H, "ReceiveLoot", new[] { "no_such_part", "chip_basic", "fr_flak_1", "fr_flak_2", "fr_flak_3" }, bossAt + new Vector2(0, 400), 1);
             Check(H.Crates.Count == 4 && H.Crates.Skip(2).Select(c => c.Item).SequenceEqual(new[] { "fr_flak_1", "fr_flak_2" }),
                   $"a drop off the wire: no unknown part, no kit, and no more than a boss gives -- 2 at level 1 ({string.Join(",", H.Crates.Skip(2).Select(c => c.Item))})");
@@ -16262,9 +16326,11 @@ public partial class _Test : Node
             var onKill = new ConfigFile(); onKill.Load($"{Character.Dir}/{Character.Id}.cfg");
             Check(Math.Abs((double)onKill.GetValue("base", "credits", -1.0) - (424242 + 2000)) < 1e-6,
                   $"the bounty is on disk at the kill, not on the trip home: a quit out there kept the EXP and lost the credits ({(double)onKill.GetValue("base", "credits", -1.0):0})");
-            for (int i = 0; i < 60 * 25 && Hub.InArena; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            // no clock: RETURN takes you home; solo, the one present pilot is enough
+            H.SetMyReturn(true);
+            for (int i = 0; i < 60 * 3 && Hub.InArena; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             await Wait(1.0);
-            Check(!Hub.InArena && H.Yard != null, "home again after the win");
+            Check(!Hub.InArena && H.Yard != null, "pressing RETURN takes the pilot home (solo: no one else to wait for)");
             // the crate left lying came home too -- into the hold -- and its node stayed behind
             Check(!GodotObject.IsInstanceValid(crD) && Count<LootCrate>() == 0 && Character.Unclaimed.Count == 0 && Character.GearHold.Values.Sum() == hold0 + 4,
                   $"the crate left behind comes home in the hold, its node gone with the arena ({Character.GearHold.Values.Sum() - hold0} of 4 parts)");
@@ -16552,9 +16618,16 @@ public partial class _Test : Node
             var ahCrates = H.Crates.ToList();
             Check(!Me.Alive && ahCrates.Count == 2 && Count<LootCrate>() == 2 && Character.Unclaimed.Count == 2,
                   $"arena host: in stasis at the kill, still its own 2 crates, and none of the guest's ({ahCrates.Count} here, {Count<LootCrate>()} nodes)");
+            // NO CLOCK: the party goes home only once EVERY present pilot presses RETURN. The guest
+            // presses first (it collects, then readies); one pilot ready is not enough on its own.
+            await RealTime(() => H.ReturnReady == 1, Wan ? 22 : 15);
+            await Wait(1.0);
+            Check(Hub.InArena && H.ReturnReady == 1 && H.ReturnTotal == 2,
+                  $"arena host: one pilot's RETURN is not enough -- the party waits ({H.ReturnReady} of {H.ReturnTotal})");
+            H.SetMyReturn(true);                                  // now both (a stasis pilot readies too); home together
             await RealTime(() => !Hub.InArena, 30);
             await RealTime(() => H != null && H.Yard != null && H.IsNodeReady(), 5);   // the home world is built a frame after the sector changes
-            Check(!Hub.InArena && Net.IsOnline, "arena host: the boss down, home -- still hosting");
+            Check(!Hub.InArena && Net.IsOnline, "arena host: the boss down, both pilots home -- still hosting");
             Check(Character.GearHold.Values.Sum() == ahHold0 + 2 && Character.Unclaimed.Count == 0 && ahCrates.All(c => !GodotObject.IsInstanceValid(c)),
                   "arena host: the crates it never reached came home in its hold; their nodes did not");
             await Wait(2.0);
@@ -16576,7 +16649,7 @@ public partial class _Test : Node
             H.Boss.TakeDamage(H.Boss.Hp + 1);
             var owedA = arenaHeld.Values.Cast<object>().Select(x => (System.Collections.IList)x.GetType().GetField("Owed").GetValue(x)).FirstOrDefault();
             Check(H.MissionWon && owedA?.Count == 1, $"arena host: the boss killed while the guest is away -- the kill is owed to it ({owedA?.Count})");
-            typeof(Hub).GetField("_arenaEndT", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(H, 60.0);   // the arena stays for its return
+            // (no need to prop the arena open any more: with no victory clock it stays until a RETURN)
             await RealTime(() => H.Ships.FirstOrDefault(s => !s.Mine) is { } back && Hub.PeerSector(back.OwnerId) == Hub.SectorKind.Arena
                                  && back.Position.DistanceTo(new Vector2(900, 300)) < 50, Wan ? 25 : 15);
             var ag2 = H.Ships.FirstOrDefault(s => !s.Mine);
@@ -16609,10 +16682,10 @@ public partial class _Test : Node
                            $"over the internet, a 1.5 s warning is shown a round trip short, so it ends when this pilot is judged ({Net.Arriving(1.5):0.00} s)");
             int agHold0 = Character.GearHold.Values.Sum();
             await RealTime(() => H.MissionWon, 15);
-            double homeIn = H.HomeIn;
             Check(H.MissionWon && GodotObject.IsInstanceValid(H.Boss) && H.Boss.Hp == 0,
                   $"arena guest: the boss the host killed reads zero here too ({(GodotObject.IsInstanceValid(H.Boss) ? H.Boss.Hp : -1):0})");
-            Check(homeIn > 14 && homeIn <= 20, $"arena guest: the victory countdown reached it ({homeIn:0.0} s to home)");
+            Check(H.MissionWon && !H.IReturned && H.ReturnTotal == 2 && Nodes<ReturnButton>().Any(),
+                  $"arena guest: after the win a RETURN button, no countdown ({H.ReturnReady} of {H.ReturnTotal} ready)");
             await RealTime(() => H.Crates.Count == 2, 5);
             var agCrates = H.Crates.ToList();
             Check(agCrates.Count == 2 && Count<LootCrate>() == 2 && ((string)OnDisk("loot", "unclaimed", "")).Split(',', StringSplitOptions.RemoveEmptyEntries).Length == 2,
@@ -16625,7 +16698,8 @@ public partial class _Test : Node
             Check(Met("equipment"), "arena guest: EQUIPMENT is met with the first part taken");
             FlyOver(agCrates[1].Position + new Vector2(0, 1500));      // and well clear of the other: that one is left behind
             await Wait(6.0);
-            Check(Hub.InArena, "arena guest: still in the arena 6 s after the kill");
+            Check(Hub.InArena, "arena guest: still in the arena 6 s after the kill -- no clock");
+            H.SetMyReturn(true);                                  // done collecting; the host readies once it sees this
             await RealTime(() => !Hub.InArena, 30);
             // the sector changes at once, the world a frame later: wait for the home world to be built
             await RealTime(() => H != null && H.Yard != null && H.IsNodeReady(), 5);

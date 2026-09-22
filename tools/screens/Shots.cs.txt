@@ -531,8 +531,8 @@ public partial class _Shots : Node
             if (GodotObject.IsInstanceValid(H.Boss)) { H.Boss.TakeDamage(90); await W(0.09); await Snap("42_boss_bar_chunk"); }
             for (int i = 0; i < 60 * 16 && !N<Telegraph>().Any(t => !t.Line); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             await W(0.9); await Snap("39_arena_shockwave_telegraph");
-            // the kill: this pilot's crates on a ring where the boss died, the victory window on the
-            // boss bar, the crates on the radar; one taken so the count reads 1 of 2
+            // the kill: this pilot's crates on a ring where the boss died, the RETURN button and the
+            // ready tally on the boss bar, the crates on the radar; one taken so the count reads 1 of 2
             if (GodotObject.IsInstanceValid(H.Boss))
             {
                 var at = H.Boss.Position;

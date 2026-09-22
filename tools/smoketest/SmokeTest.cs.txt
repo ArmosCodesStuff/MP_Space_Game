@@ -2782,7 +2782,10 @@ public partial class _Test : Node
                   && dropped.All(c => c.Position.DistanceTo(bossAt) < 300 && Equipment.ById(c.Item) is { Kit: false, Rarity: Rarity.Common }),
                   $"a level-1 boss drops this pilot 2 Common crates where it died, on disk at once ({dropped.Count} crates, {UnclaimedOnDisk()} on disk)");
             Check(escortsOut >= 2 && H.Raiders.Count == 0, $"the boss's escorts die with it ({escortsOut} out, {H.Raiders.Count} left)");
-            Check(Math.Abs(H.HomeIn - 19.8) < 0.05, $"a 20 s victory window to collect in ({H.HomeIn:0.00} s left)");
+            // NO CLOCK any more: the failure timer is not armed on a win, and a RETURN button appears
+            double solEndT = (double)typeof(Hub).GetField("_arenaEndT", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(H);
+            Check(solEndT < 0 && H.MissionWon && !H.IReturned && H.ReturnTotal == 1 && Nodes<ReturnButton>().Any(),
+                  $"after the kill: a RETURN button and no clock sending you home (_arenaEndT {solEndT:0.0}, ready {H.ReturnReady}/{H.ReturnTotal})");
             Priv(H, "ReceiveLoot", new[] { "no_such_part", "chip_basic", "fr_flak_1", "fr_flak_2", "fr_flak_3" }, bossAt + new Vector2(0, 400), 1);
             Check(H.Crates.Count == 4 && H.Crates.Skip(2).Select(c => c.Item).SequenceEqual(new[] { "fr_flak_1", "fr_flak_2" }),
                   $"a drop off the wire: no unknown part, no kit, and no more than a boss gives -- 2 at level 1 ({string.Join(",", H.Crates.Skip(2).Select(c => c.Item))})");
@@ -2819,9 +2822,11 @@ public partial class _Test : Node
             var onKill = new ConfigFile(); onKill.Load($"{Character.Dir}/{Character.Id}.cfg");
             Check(Math.Abs((double)onKill.GetValue("base", "credits", -1.0) - (424242 + 2000)) < 1e-6,
                   $"the bounty is on disk at the kill, not on the trip home: a quit out there kept the EXP and lost the credits ({(double)onKill.GetValue("base", "credits", -1.0):0})");
-            for (int i = 0; i < 60 * 25 && Hub.InArena; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            // no clock: RETURN takes you home; solo, the one present pilot is enough
+            H.SetMyReturn(true);
+            for (int i = 0; i < 60 * 3 && Hub.InArena; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             await Wait(1.0);
-            Check(!Hub.InArena && H.Yard != null, "home again after the win");
+            Check(!Hub.InArena && H.Yard != null, "pressing RETURN takes the pilot home (solo: no one else to wait for)");
             // the crate left lying came home too -- into the hold -- and its node stayed behind
             Check(!GodotObject.IsInstanceValid(crD) && Count<LootCrate>() == 0 && Character.Unclaimed.Count == 0 && Character.GearHold.Values.Sum() == hold0 + 4,
                   $"the crate left behind comes home in the hold, its node gone with the arena ({Character.GearHold.Values.Sum() - hold0} of 4 parts)");
@@ -3109,9 +3114,16 @@ public partial class _Test : Node
             var ahCrates = H.Crates.ToList();
             Check(!Me.Alive && ahCrates.Count == 2 && Count<LootCrate>() == 2 && Character.Unclaimed.Count == 2,
                   $"arena host: in stasis at the kill, still its own 2 crates, and none of the guest's ({ahCrates.Count} here, {Count<LootCrate>()} nodes)");
+            // NO CLOCK: the party goes home only once EVERY present pilot presses RETURN. The guest
+            // presses first (it collects, then readies); one pilot ready is not enough on its own.
+            await RealTime(() => H.ReturnReady == 1, Wan ? 22 : 15);
+            await Wait(1.0);
+            Check(Hub.InArena && H.ReturnReady == 1 && H.ReturnTotal == 2,
+                  $"arena host: one pilot's RETURN is not enough -- the party waits ({H.ReturnReady} of {H.ReturnTotal})");
+            H.SetMyReturn(true);                                  // now both (a stasis pilot readies too); home together
             await RealTime(() => !Hub.InArena, 30);
             await RealTime(() => H != null && H.Yard != null && H.IsNodeReady(), 5);   // the home world is built a frame after the sector changes
-            Check(!Hub.InArena && Net.IsOnline, "arena host: the boss down, home -- still hosting");
+            Check(!Hub.InArena && Net.IsOnline, "arena host: the boss down, both pilots home -- still hosting");
             Check(Character.GearHold.Values.Sum() == ahHold0 + 2 && Character.Unclaimed.Count == 0 && ahCrates.All(c => !GodotObject.IsInstanceValid(c)),
                   "arena host: the crates it never reached came home in its hold; their nodes did not");
             await Wait(2.0);
@@ -3133,7 +3145,7 @@ public partial class _Test : Node
             H.Boss.TakeDamage(H.Boss.Hp + 1);
             var owedA = arenaHeld.Values.Cast<object>().Select(x => (System.Collections.IList)x.GetType().GetField("Owed").GetValue(x)).FirstOrDefault();
             Check(H.MissionWon && owedA?.Count == 1, $"arena host: the boss killed while the guest is away -- the kill is owed to it ({owedA?.Count})");
-            typeof(Hub).GetField("_arenaEndT", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(H, 60.0);   // the arena stays for its return
+            // (no need to prop the arena open any more: with no victory clock it stays until a RETURN)
             await RealTime(() => H.Ships.FirstOrDefault(s => !s.Mine) is { } back && Hub.PeerSector(back.OwnerId) == Hub.SectorKind.Arena
                                  && back.Position.DistanceTo(new Vector2(900, 300)) < 50, Wan ? 25 : 15);
             var ag2 = H.Ships.FirstOrDefault(s => !s.Mine);
@@ -3166,10 +3178,10 @@ public partial class _Test : Node
                            $"over the internet, a 1.5 s warning is shown a round trip short, so it ends when this pilot is judged ({Net.Arriving(1.5):0.00} s)");
             int agHold0 = Character.GearHold.Values.Sum();
             await RealTime(() => H.MissionWon, 15);
-            double homeIn = H.HomeIn;
             Check(H.MissionWon && GodotObject.IsInstanceValid(H.Boss) && H.Boss.Hp == 0,
                   $"arena guest: the boss the host killed reads zero here too ({(GodotObject.IsInstanceValid(H.Boss) ? H.Boss.Hp : -1):0})");
-            Check(homeIn > 14 && homeIn <= 20, $"arena guest: the victory countdown reached it ({homeIn:0.0} s to home)");
+            Check(H.MissionWon && !H.IReturned && H.ReturnTotal == 2 && Nodes<ReturnButton>().Any(),
+                  $"arena guest: after the win a RETURN button, no countdown ({H.ReturnReady} of {H.ReturnTotal} ready)");
             await RealTime(() => H.Crates.Count == 2, 5);
             var agCrates = H.Crates.ToList();
             Check(agCrates.Count == 2 && Count<LootCrate>() == 2 && ((string)OnDisk("loot", "unclaimed", "")).Split(',', StringSplitOptions.RemoveEmptyEntries).Length == 2,
@@ -3182,7 +3194,8 @@ public partial class _Test : Node
             Check(Met("equipment"), "arena guest: EQUIPMENT is met with the first part taken");
             FlyOver(agCrates[1].Position + new Vector2(0, 1500));      // and well clear of the other: that one is left behind
             await Wait(6.0);
-            Check(Hub.InArena, "arena guest: still in the arena 6 s after the kill");
+            Check(Hub.InArena, "arena guest: still in the arena 6 s after the kill -- no clock");
+            H.SetMyReturn(true);                                  // done collecting; the host readies once it sees this
             await RealTime(() => !Hub.InArena, 30);
             // the sector changes at once, the world a frame later: wait for the home world to be built
             await RealTime(() => H != null && H.Yard != null && H.IsNodeReady(), 5);

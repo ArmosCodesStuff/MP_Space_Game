@@ -61,9 +61,9 @@ public partial class BossBar : Control
         var boss = Hub?.Boss;
         if (!IsInstanceValid(boss)) return;                       // the first draw can come before any boss
         _panel.Draw(GetCanvasItem(), new Rect2(-10, -26, W + 20, H + 34 + SuperPad + SuperH));
-        // after the kill: the victory window -- your parts collected of those dropped, and home in
+        // after the kill: your parts collected of those dropped, and how many pilots are ready to go home
         string title = Hub.MissionWon
-            ? $"{Missions.Current.Name}  ·  DEFEATED  ·  PARTS {Hub.CratesDropped - Hub.Crates.Count} / {Hub.CratesDropped}  ·  HOME IN {Math.Ceiling(Math.Max(0, Hub.HomeIn)):0} s"
+            ? $"{Missions.Current.Name}  ·  DEFEATED  ·  PARTS {Hub.CratesDropped - Hub.Crates.Count} / {Hub.CratesDropped}  ·  {Hub.ReturnReady} / {Hub.ReturnTotal} READY TO RETURN"
             : $"{Missions.Current.Name}  ·  LEVEL {Missions.Level}  ·  {boss.Hp:0} / {boss.MaxHp:0}";
         Txt.D(this, ThemeDB.FallbackFont, new Vector2(0, -8), title, HorizontalAlignment.Center, W, 13, Hub.MissionWon ? Ui.Good : Ui.Text);
         float frac = (float)Math.Clamp(boss.Hp / Math.Max(1, boss.MaxHp), 0, 1);

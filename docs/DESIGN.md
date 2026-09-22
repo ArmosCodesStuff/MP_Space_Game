@@ -549,6 +549,12 @@ piece of player state that is **not** host-owned — it is identity, not a resou
   there to leave; otherwise a failed JOIN rebuilt the pilot's own ship at the spawn.
 - **Hints read only state every peer has** (its own ship, the world it sees), so a guest meets a raid
   from the raiders it is sent and no hint needs the network.
+- **You leave a won arena by pressing RETURN, not on a clock**; the party warps home once every
+  present pilot has. It is a ready-up, not an independent exit, because the host runs ONE world at a
+  time (Home and Arena are two scenes it swaps between with `ChangeSceneToFile`, and the shared base
+  is torn down for the trip -- `SaveForTrip`). So there is no base for a single pilot to return to
+  while the others fight on; the whole party moves together, as it always has. The button only shows
+  on a win; a wiped party (all in stasis, cannot press anything) still auto-returns after 3 s.
 - **A kill is paid once, by its serial.** The host notices a dead link seconds after it happens, so a
   pilot can be counted in a kill it never heard of. The host keeps the last 12 s of kills and owes each
   to a pilot dropped just after; a pilot pays itself for a serial once, however it arrives (at the kill,

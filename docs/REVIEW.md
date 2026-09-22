@@ -32,7 +32,14 @@ attempt has a hard deadline now); a pilot not yet let in tried to say goodbye; t
 label went stale; guests read "dropped" for a pilot that left; guests met the hauler hint; parts at home
 met LOOT, not EQUIPMENT; the TIO counted a reconnecting pilot as not pressing READY; two stale
 comments. Thirteen checks were added or tightened (see `CHANGES.md`), and the tests' `Unmeet` now
-clears a card on screen too: while one shows, `Met()` is true whatever the trigger does. Looking at
+clears a card on screen too: while one shows, `Met()` is true whatever the trigger does.
+
+## Pass 6 — RETURN button (2026-09-21)
+
+The 20 s victory clock became a per-pilot RETURN button (ready-up, party home when all present have).
+Authority checks proved by mutants: the "everyone must be ready" gate weakened to "any one" (caught by
+the host+guest "one is not enough" check), and the clock put back (caught by the solo "no clock armed"
+check). Failure path unchanged. Full smoke 672, 6/6. Looking at
 the sweep and a `-Wan` run then found three more, fixed the same way: the equipment window ran off the
 screen, a dead boss kept drawing its beam, and a ship's unreliable updates could reach a guest before
 it knew the ship (they go by way of the hub now).

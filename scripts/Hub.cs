@@ -79,13 +79,17 @@ public partial class Hub : Node2D
         _selected != null && _selected.Alive ? (true, _selected.Position, _selected.HitRadius)
         : Waypoint is { } w ? (true, w, WaypointRadius) : (false, Vector2.Zero, 0f);
     public Boss Boss { get; private set; }
-    private double _arenaEndT = -1;                         // counts down to going home
+    private double _arenaEndT = -1;                         // the FAILURE clock only: a wiped party home in 3 s
     public bool MissionWon { get; private set; }
-    // THE VICTORY WINDOW: after a kill the party stays long enough to fly over its crates. Guests
-    // are told how long is left (NetWon), so their boss bar can count it down too.
-    public const double VictoryWindow = 20.0;
-    private double _netHomeIn = -1;
-    public double HomeIn => Net.IsHost ? _arenaEndT : _netHomeIn;
+    // AFTER A WIN there is no clock. Each pilot presses RETURN when it has finished collecting, and
+    // the whole party warps home once every pilot PRESENT has (a held place does not block it). Kept
+    // apart from the launch READY so a launch-ready is never mistaken for a return-ready.
+    private readonly HashSet<int> _returning = new();
+    private bool _iReturned;                                // this peer's own press, guest side
+    private int _returnReady, _returnTotal;                 // the host's tally, for a guest's button
+    public bool IReturned => Net.IsHost ? _returning.Contains(Net.LocalId) : _iReturned;
+    public int ReturnReady => Net.IsHost ? _returning.Count(_ships.ContainsKey) : _returnReady;
+    public int ReturnTotal => Net.IsHost ? _ships.Count : _returnTotal;
     // This pilot's own crates, in this world (nobody else's are ever here).
     private readonly List<LootCrate> _crates = new();
     public IReadOnlyList<LootCrate> Crates => _crates;
@@ -200,6 +204,7 @@ public partial class Hub : Node2D
 
         layer.AddChild(new HullHud { Hub = this });
         layer.AddChild(new BossBar { Hub = this });                 // shows itself in the arena
+        layer.AddChild(new ReturnButton { Hub = this });            // RETURN TO BASE, after a win only
         layer.AddChild(new Radar { Hub = this });
         layer.AddChild(new AbilityBar { Hub = this });
         if (!InArena) layer.AddChild(new HaulerHud { Hub = this });
@@ -381,7 +386,7 @@ public partial class Hub : Node2D
         if ((SectorKind)s != Sector) { RpcId(who, nameof(NetSector), (int)Sector); return; }
         RpcId(who, nameof(NetMission), MissionArgs());
         foreach (var r in Raiders) RpcId(who, nameof(NetRaiderSpawn), r.NetId, r.Position, (int)r.Kind, r.Strength);
-        if (MissionWon) RpcId(who, nameof(NetWon), _arenaEndT);
+        if (MissionWon) { RpcId(who, nameof(NetWon), _ships.Count); RpcId(who, nameof(NetReturnCount), ReturnReady, ReturnTotal); }
         if (_placeFor.Remove(who, out var place)) RpcId(who, nameof(NetPlace), place.at, place.rot);
     }
     private void ReportSector() { if (!Net.IsHost) Net.AskHost(this, nameof(NetMySector), (int)Sector); }
@@ -643,6 +648,31 @@ public partial class Hub : Node2D
         _ready[who] = ready; BroadcastMission();
     }
 
+    // ── RETURN from a won arena. Each pilot toggles its own; the host takes the whole party home
+    // once every pilot present has pressed it. A stasis pilot may press it too (it is a HUD button,
+    // not a ship order). Mirrors SetMyReady above.
+    public void SetMyReturn(bool on)
+    {
+        if (!MissionWon) return;
+        if (Net.IsHost) { if (on) _returning.Add(Net.LocalId); else _returning.Remove(Net.LocalId); AfterReturn(); }
+        else { _iReturned = on; Net.AskHost(this, nameof(RequestReturn), on); }
+    }
+    [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void RequestReturn(bool on)
+    {
+        if (!Net.FromPlayer(this, out int who) || !_ships.ContainsKey(who) || !MissionWon) return;
+        if (on) _returning.Add(who); else _returning.Remove(who);
+        AfterReturn();
+    }
+    // host: tell the arena how many are ready, and take everyone home once every present pilot is
+    private void AfterReturn()
+    {
+        ToWorld(nameof(NetReturnCount), ReturnReady, ReturnTotal);
+        if (_ships.Count > 0 && _ships.Keys.All(_returning.Contains)) EnterSector(SectorKind.Home);
+    }
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void NetReturnCount(int ready, int total) { _returnReady = ready; _returnTotal = total; }
+
     private const float PortalEnterRadius = 190f;
 
     // ── moving the party between sectors (host decides; every peer follows) ──
@@ -668,26 +698,25 @@ public partial class Hub : Node2D
         AddChild(Boss);
     }
 
-    // host: the boss is dead. Its escorts and raiders die with it -- the victory window is for
-    // collecting, not for being shot at. Every pilot gets its own EXP (its level, its first clears)
-    // and its share of the bounty, then its own crates; then the party has VictoryWindow seconds
-    // before home.
+    // host: the boss is dead. Its escorts and raiders die with it -- collecting is not fighting. Every
+    // pilot gets its own EXP (its level, its first clears) and its share of the bounty, then its own
+    // crates. Nothing sends anyone home on a clock: each pilot presses RETURN when it is done.
     public void BossDefeated()
     {
         if (!Net.IsHost || MissionWon) return;
         MissionWon = true;
         foreach (var r in Raiders.ToList()) RaiderDown(r);
         AnnounceBossKill(Missions.Level, IsInstanceValid(Boss) ? Boss.Position : Vector2.Zero);
-        _arenaEndT = VictoryWindow;
-        ToWorld(nameof(NetWon), VictoryWindow);
+        _returning.Clear();
+        ToWorld(nameof(NetWon), _ships.Count);               // the party may now RETURN; how many must
     }
     // Guests see the boss at zero too (its last hull report went out before the killing blow), and
-    // how long is left before home.
+    // learn how many pilots the RETURN needs.
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetWon(double homeIn)
+    private void NetWon(int total)
     {
         MissionWon = true;
-        _netHomeIn = homeIn;
+        _returnTotal = total; _returnReady = 0; _iReturned = false;
         if (IsInstanceValid(Boss)) Boss.Hp = 0;
     }
 
@@ -716,7 +745,6 @@ public partial class Hub : Node2D
         // AddHostShare, both reached from the arena). Make any of them an instance member and
         // these lines start throwing. See DESIGN.md -> Traps.
         Yard.TripClock += delta;                              // what the base is missing, in game time
-        if (_netHomeIn > 0) _netHomeIn = System.Math.Max(0, _netHomeIn - delta);
         if (!Net.IsHost) return;
         // the whole party in stasis at once: the mission fails, everyone goes home
         if (!MissionWon && _arenaEndT < 0 && _ships.Count > 0 && _ships.Values.All(s => IsInstanceValid(s) && !s.Alive)) _arenaEndT = 3.0;
