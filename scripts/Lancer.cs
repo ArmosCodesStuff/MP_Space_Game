@@ -132,7 +132,7 @@ public partial class Lancer : Boss
             _beamArm += delta;
             if (!IsInstanceValid(_beamTarget) || !_beamTarget.Alive) _beamTarget = pilots.FirstOrDefault();
             if (_beamTarget != null)
-                Rotation = Mathf.RotateToward(Rotation, (_beamTarget.Position - Position).Angle() + Mathf.Pi / 2f, TurnRate * (float)delta);
+                Rotation = Mathf.RotateToward(Rotation, Aim.Face(Position, _beamTarget.Position), TurnRate * (float)delta);
             // A pin counts once this cycle's escorts have left the launch point: a pilot still held by
             // the LAST beam's escorts (they never expire) would otherwise skip this whole phase.
             bool pinned = _beamArm >= Raider.EscortShiver && _beamTarget != null && _beamTarget.Pinned;
@@ -156,7 +156,7 @@ public partial class Lancer : Boss
                 _beamTickT = BeamTick;
                 var (la, lb) = BeamSegment();
                 foreach (var p in pilots)
-                    if (DistToSegment(p.Position, la, lb) <= BeamWidth / 2f + p.HitRadius) p.Hit(BeamDamage * DamageMult, Position, "boss:beam");
+                    if (Combat.DistToSegment(p.Position, la, lb) <= BeamWidth / 2f + p.HitRadius) p.Hit(BeamDamage * DamageMult, Position, "boss:beam");
             }
             _beamLive -= delta;
         }
@@ -167,8 +167,8 @@ public partial class Lancer : Boss
             // hold the boss still): it waits for them to end.
             _charge = BeamEvery; SuperGap = System.Math.Min(_beam, _charge);
             var t = Combat.Nearest(pilots, Position, p => p.Position);
-            Rotation = (t.Position - Position).Angle() + Mathf.Pi / 2f;
-            var a = Position; var bb = a + Vector2.Up.Rotated(Rotation) * ChargeLength;
+            Rotation = Aim.Face(Position, t.Position);
+            var a = Position; var bb = Aim.Nose(this, ChargeLength);
             _pendingCharge = (a, bb); _chargeT = ChargeWindup;
             Tele(true, Vector2.Zero, new Vector2(0, -ChargeLength), HalfWidth * 2f, ChargeWindup, onHull: true, strike: "boss_ram");
         }

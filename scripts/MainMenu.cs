@@ -230,8 +230,8 @@ public partial class MainMenu : Node2D
                 var away = (_cap.Position - _aoeAt);
                 if (away.LengthSquared() < 1f) away = Vector2.Right;
                 _cap.AutopilotTo = null;
-                TurnTowards(away.Angle() + Mathf.Pi / 2f, delta);
-                if (Mathf.Abs(Mathf.AngleDifference(_cap.Rotation, away.Angle() + Mathf.Pi / 2f)) < 0.25f)
+                TurnTowards(Aim.Along(away), delta);
+                if (Mathf.Abs(Mathf.AngleDifference(_cap.Rotation, Aim.Along(away))) < 0.25f)
                     _dodged = _cap.StartWarp();
             }
         }
@@ -244,12 +244,12 @@ public partial class MainMenu : Node2D
             else
             {
                 _cap.AutopilotTo = null;
-                if (near != null) TurnTowards((near.GlobalPosition - _cap.Position).Angle() + Mathf.Pi / 2f, delta);
+                if (near != null) TurnTowards(Aim.Face(_cap.Position, near.GlobalPosition), delta);
             }
         }
 
         // ── guns and the broadside ──
-        _cap.AimPoint = near?.GlobalPosition ?? _cap.Position + Vector2.Up.Rotated(_cap.Rotation) * 400f;
+        _cap.AimPoint = near?.GlobalPosition ?? Aim.Nose(_cap, 400f);
         _cap.Trigger = near != null && near.GlobalPosition.DistanceTo(_cap.Position) < GunRange;
 
         _broadsideCd -= delta;

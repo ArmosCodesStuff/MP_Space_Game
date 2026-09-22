@@ -18,7 +18,7 @@ using System.Linq;
 //     reports hull, ability state and wing positions back;
 //   everyone else interpolates.
 // ─────────────────────────────────────────────────────────────────────────────
-public partial class PlayerShip : Node2D, IHittable, IRaidTarget
+public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged
 {
     public int OwnerId = 1;
 
@@ -38,8 +38,8 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
     public Vector2? AutopilotTo;                          // set by READY: the owner's ship flies itself there
 
     // ── as a target: for ENEMY fire only (Combat.Players) ──────────────────
-    private const int NetIdBase = 2000;                  // same on every peer: 2000 + owner
-    public int NetId => NetIdBase + OwnerId;
+    public int NetId => NetIds.In(NetIds.Player, OwnerId);   // same on every peer: the pilot's seat
+    public Tag Tags => Tag.Player;
     public float HitRadius => MyArt.HalfWidth;
     public bool Covers(Vector2 p, float pad) => Combat.KeelCovers(this, MyArt.Length, MyArt.HalfWidth, p, pad);
     bool IRaidTarget.InReach => Alive;
@@ -148,8 +148,8 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
     public IHittable FighterTarget(Vector2 from)
     {
         if (!_attacking || !Net.Sim || WingTarget is { Alive: true }) return WingTarget;
-        WingTarget = Combat.Nearest(Combat.Hostiles, from, h => h.Position, float.MaxValue,
-                                    h => h is not Torpedo and not TargetDummy && h.Alive && Position.DistanceTo(h.Position) <= Stats["control_range"]);
+        WingTarget = Targeting.Nearest(Combat.Hostiles, from, Targeting.WingPrey, float.MaxValue,
+                                       h => Position.DistanceTo(h.Position) <= Stats["control_range"]);
         _attacking = WingTarget != null;
         return WingTarget;
     }
@@ -466,11 +466,13 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
         _warpLeft = -1; _warpCd = WarpEvery; _warpFlash = 0.6;
     }
 
-    // ── pinned: a light raider holding station on this ship (host decides, the owner flies it) ──
-    // Held to 20% of top speed, thrusting forward, unable to turn -- a soft lock.
-    private double _pinT;
-    public bool Pinned { get; private set; }
-    public void PinFor(double s) { if (Net.Sim) { _pinT = Math.Max(_pinT, s); Pinned = true; } }
+    // ── what is being done to it (Statuses): a raider's web today, and whatever a class's
+    // ability puts on it next. The HOST decides; a guest is sent the bits and shows them.
+    // Pinned holds the ship to StatusSet.PinSpeed of top speed, thrusting, unable to turn.
+    private StatusSet _status;
+    public StatusSet Statuses => _status;
+    public void ApplyStatus(Status s, double seconds) { if (Net.Sim) _status.Apply(s, seconds); }
+    public bool Pinned => _status.Has(Status.Pinned);
 
     // A refused ability: its slot shows the reason, in red, for a moment.
     public const double FailShow = 1.5;
@@ -531,33 +533,47 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
                                  Stats["missile_damage"], t.NetId, turn, heavy: true, source: this);
     }
 
-    public void TakeDamage(double d)
+    // ── THE ONE DOOR DAMAGE COMES THROUGH ───────────────────────────────
+    // A shell, a beam, a ram, a missile's blast, an area tick: all of it ends here, so the
+    // per-source gap, the tally, the guards a status puts in the way and the death are written
+    // once. A class's defence (hardening, evasion, a bubble) belongs in Guarded, never in the
+    // weapon that fired.
+    //   `from` is where it came from, when the hit knows: that hit lights the shield on that
+    // side, draws its number at the hull's edge there, and counts as combat. A hit with no
+    // origin (a guest's word, a hull correction) only moves the hull, as it always has.
+    public void Incoming(double d, string source = null, Vector2? from = null)
     {
         if (!Net.Sim || !Alive) return;       // only the host resolves damage
+        if (source != null)
+        {   // one ongoing source lands on this ship at most once per HitGap
+            if (_lastHitBy.TryGetValue(source, out var at) && _clock - at < HitGap) return;
+            _lastHitBy[source] = _clock;
+        }
+        d = Guarded(d);
+        if (d <= 0) return;
+        if (from is { } at2)
+        {
+            DamageBySource[source ?? "?"] = (DamageBySource.TryGetValue(source ?? "?", out var sum) ? sum : 0) + d;
+            var v = (at2 - Position).Rotated(-Rotation);
+            float side = Mathf.Atan2(v.X, -v.Y);            // 0 = ahead, clockwise
+            _shield?.Flash(side);
+            // where it struck: the hull's edge toward the hit, off the keel's nearest point
+            var keel = new Vector2(0, Mathf.Clamp(v.Y, -MyArt.Length * 0.5f, MyArt.Length * 0.5f));
+            DamageNumbers.NoteImpact(this, ToGlobal(keel + (v - keel).LimitLength(MyArt.HalfWidth)));
+            if (Net.IsOnline) (GetParent() as Hub)?.SendShield(OwnerId, side);
+            NoteCombat();                                   // taking damage is combat
+        }
         Hp -= d;
         if (Hp <= 0) Die();
     }
 
+    // What the statuses on this ship let through. Nothing stands in the way yet: the classes
+    // that harden, evade or hold a bubble put their share here, and no weapon learns of them.
+    private double Guarded(double d) => d;
+
+    public void TakeDamage(double d) => Incoming(d);
     // A hit that knows where it came from: damage, and the shield lights that side.
-    public void Hit(double d, Vector2 from, string source = null)
-    {
-        if (!Net.Sim || !Alive) return;
-        if (source != null)
-        {
-            if (_lastHitBy.TryGetValue(source, out var at) && _clock - at < HitGap) return;
-            _lastHitBy[source] = _clock;
-        }
-        DamageBySource[source ?? "?"] = (DamageBySource.TryGetValue(source ?? "?", out var sum) ? sum : 0) + d;
-        var v = (from - Position).Rotated(-Rotation);
-        float side = Mathf.Atan2(v.X, -v.Y);            // 0 = ahead, clockwise
-        _shield?.Flash(side);
-        // where it struck: the hull's edge toward the hit, off the keel's nearest point
-        var keel = new Vector2(0, Mathf.Clamp(v.Y, -MyArt.Length * 0.5f, MyArt.Length * 0.5f));
-        DamageNumbers.NoteImpact(this, ToGlobal(keel + (v - keel).LimitLength(MyArt.HalfWidth)));
-        if (Net.IsOnline) (GetParent() as Hub)?.SendShield(OwnerId, side);
-        NoteCombat();                                   // taking damage is combat
-        TakeDamage(d);
-    }
+    public void Hit(double d, Vector2 from, string source = null) => Incoming(d, source, from);
 
     // a guest's word of a hit on this ship: the side it came from, which is where it struck
     public void ApplyShield(float side)
@@ -605,7 +621,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
         if (Alive && Hp < MaxHp) Hp = Math.Min(MaxHp, Hp + MaxHp * (InCombat ? RegenInCombat : RegenOutOfCombat) * delta);
         // The HOST decides pinned. A guest used to count its own (never-set) timer down here and
         // overwrite the host's flag every frame, so a raider's web never held a guest at all.
-        if (Net.Sim) { _pinT = Math.Max(0, _pinT - delta); Pinned = _pinT > 0; }
+        if (Net.Sim) _status.Tick(delta);
         // the landing flash fades on every peer: it used to fade only on the owner's, and a
         // remote ship's warp left it lit for good
         _warpFlash = Math.Max(0, _warpFlash - dt);
@@ -781,7 +797,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
         if (throttle > 0) along += (float)Stats["thrust"] * throttle * dt;
         else if (throttle < 0) along += (float)Stats["reverse_thrust"] * throttle * dt;
         along -= along * Mathf.Clamp((float)Stats["water_drag"] * dt, 0f, 1f);
-        along = Mathf.Clamp(along, -(float)Stats["reverse_speed"], (float)Stats["max_speed"] * (Pinned ? Raider.PinSpeed : 1f));
+        along = Mathf.Clamp(along, -(float)Stats["reverse_speed"], (float)Stats["max_speed"] * (Pinned ? StatusSet.PinSpeed : 1f));
         across *= Mathf.Exp(-(float)Stats["keel"] * dt);
 
         // turning circle: yaw rate = speed / radius, capped by the rudder; astern the
@@ -856,19 +872,19 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
             pos[i] = _wings[i].Position; rot[i] = _wings[i].Rotation;
             st[i] = _wings[i].StateCode; rearm[i] = (float)_wings[i].RearmLeft;
         }
-        (GetParent() as Hub)?.SendHostState(OwnerId, Hp, MaxHp, Alive, _stasis, Pinned, _combatT, _pdLeft, _pdRecharge, _mag, _missileReload,
+        (GetParent() as Hub)?.SendHostState(OwnerId, Hp, MaxHp, Alive, _stasis, _status.Bits, _combatT, _pdLeft, _pdRecharge, _mag, _missileReload,
             _bsWindup, _bsVolleys, _bsCooldown, WingTarget?.NetId ?? 0, pos, rot, st, rearm);
     }
 
     // the host's report (Hub.NetHostState: only the host speaks for combat state)
-    public void ApplyHostState(double hp, double maxHp, bool alive, double stasis, bool pinned, double combat, double pdLeft, double pdRecharge, int mag, double reload,
+    public void ApplyHostState(double hp, double maxHp, bool alive, double stasis, int statusBits, double combat, double pdLeft, double pdRecharge, int mag, double reload,
                                double bsWindup, int bsVolleys, double bsCooldown,
                                int wingTarget, Vector2[] wingPos, float[] wingRot, int[] wingState, float[] wingRearm)
     {
         if (System.Math.Abs(maxHp - _hostMax) > 1e-9) _hullWatch = default;    // the first report, or a refit: not damage
         _hostMax = maxHp;
         _hullWatch.Tick(this, alive ? hp : 0, taken: true);
-        Hp = hp; MaxHp = maxHp; Alive = alive; _stasis = stasis; Pinned = pinned; _combatT = combat;
+        Hp = hp; MaxHp = maxHp; Alive = alive; _stasis = stasis; _status.FromBits(statusBits); _combatT = combat;
         _pdLeft = pdLeft; _pdRecharge = pdRecharge; _mag = mag; _missileReload = reload;
         _bsWindup = bsWindup; _bsVolleys = bsVolleys; _bsCooldown = bsCooldown;
         WingTarget = wingTarget != 0 ? Combat.ById(wingTarget) : null;

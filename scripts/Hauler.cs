@@ -157,7 +157,7 @@ public partial class Hauler : UtilityShip
 
     private void Simulate(float dt)
     {
-        PinT = Math.Max(0, PinT - dt);
+        TickStatus(dt);
         switch (State)
         {
             case St.Loading:
@@ -221,10 +221,10 @@ public partial class Hauler : UtilityShip
     private bool Fly(Vector2 to, float dt)
     {
         var d = to - Position; float dist = d.Length();
-        float top = (float)Yard.Value("hauler_speed") * (Pinned ? Raider.PinSpeed : 1f);
-        _speed = Mathf.MoveToward(_speed, Mathf.Min(top, Mathf.Sqrt(2f * Accel * dist)), Accel * dt);
+        float top = (float)Yard.Value("hauler_speed") * (Pinned ? StatusSet.PinSpeed : 1f);
+        _speed = Motion.ArriveSpeed(_speed, dist, top, Accel, dt);
         if (Pinned) _speed = Mathf.Min(_speed, top);
-        if (!Pinned && dist > 1f) Rotation = Mathf.RotateToward(Rotation, d.Angle() + Mathf.Pi / 2f, 2f * dt);
+        if (!Pinned && dist > 1f) Rotation = Mathf.RotateToward(Rotation, Aim.Along(d), 2f * dt);
         if (dist < 0.5f || _speed * dt >= dist) { Position = to; _speed = 0; return true; }
         Position += d / dist * _speed * dt;
         return false;
@@ -234,8 +234,8 @@ public partial class Hauler : UtilityShip
     private bool Slide(float toX, float dt)
     {
         float d = toX - Position.X, dist = Mathf.Abs(d);
-        float top = (float)Yard.Value("hauler_speed") * (Pinned ? Raider.PinSpeed : 1f);    // pinned: 20% along its lane
-        _speed = Mathf.MoveToward(_speed, Mathf.Min(top, Mathf.Sqrt(2f * Accel * dist)), Accel * dt);
+        float top = (float)Yard.Value("hauler_speed") * (Pinned ? StatusSet.PinSpeed : 1f);    // pinned: 20% along its lane
+        _speed = Motion.ArriveSpeed(_speed, dist, top, Accel, dt);
         if (Pinned) _speed = Mathf.Min(_speed, top);
         Position += new Vector2(Mathf.Sign(d) * Mathf.Min(_speed * dt, dist), 0);
         if (dist >= 0.5f) return false;

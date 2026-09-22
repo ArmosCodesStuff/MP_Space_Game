@@ -16,9 +16,8 @@ public static class Combat
     public static readonly List<IHittable> Players = new();
     public static IHittable PlayerById(int id) => Live(Players, id);
 
-    // Interceptable missiles get ids the host hands out and sends with the launch.
-    private static int _nextMissile = 10000;
-    public static int NextMissileId() => ++_nextMissile;
+    // Interceptable missiles get ids the host hands out and sends with the launch (NetIds).
+    public static int NextMissileId() => NetIds.Next(NetIds.Missile);
 
     public static IHittable ById(int id) => Live(Hostiles, id);
     private static IHittable Live(List<IHittable> l, int id)
@@ -55,6 +54,13 @@ public static class Combat
         float half = Mathf.Max(0f, length * 0.5f - halfWidth);
         float t = Mathf.Clamp((p - n.Position).Dot(fwd), -half, half);
         return p.DistanceTo(n.Position + fwd * t) <= halfWidth + pad;
+    }
+
+    // How far `p` lies off the segment a-b: a beam's reach, a lane's width, a sweep's step.
+    public static float DistToSegment(Vector2 p, Vector2 a, Vector2 b)
+    {
+        var ab = b - a; float t = Mathf.Clamp((p - a).Dot(ab) / ab.LengthSquared(), 0f, 1f);
+        return p.DistanceTo(a + ab * t);
     }
 
     // Set by the live world so combat can draw without knowing what world it is in.
@@ -114,5 +120,6 @@ public static class Combat
     // Dropped by the world on its way out. EVERY hook set by that world must go: each one is a
     // lambda holding the Hub, so one left behind is a freed node the next shot calls into, and a
     // Hub that can never be collected once you are back at the menu.
-    public static void Clear() { Hostiles.Clear(); Players.Clear(); OnFlash = null; World = null; ShellFired = null; TorpedoFired = null; SlugFired = null; }
+    // A world ends: its lists, its hooks (each a lambda holding that world) and its ids.
+    public static void Clear() { Hostiles.Clear(); Players.Clear(); OnFlash = null; World = null; ShellFired = null; TorpedoFired = null; SlugFired = null; NetIds.Reset(); }
 }

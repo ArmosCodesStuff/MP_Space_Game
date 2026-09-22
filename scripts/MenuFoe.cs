@@ -12,12 +12,13 @@ using System;
 //          the mechanic the death beam's escorts use, shown on the title screen before you meet it
 public enum MenuFoeKind { Light, Heavy, Web }
 
-public partial class MenuFoe : Node2D, IHittable
+public partial class MenuFoe : Node2D, IHittable, ITagged
 {
     // One id space of its own: the menu is a world, but not the hub's world.
-    private const int IdBase = 30000;
+    private const int IdBase = NetIds.Menu;
     private static int _next;
 
+    public Tag Tags => Tag.Light;
     public MenuFoeKind Kind;
     public Vector2 Velocity;
     public Vector2 Home;                 // the capital it is attacking
@@ -149,7 +150,7 @@ public partial class MenuFoe : Node2D, IHittable
             }
         }
         GlobalPosition += Velocity * (float)delta;
-        Rotation = Velocity.Angle() + Mathf.Pi / 2f;
+        Rotation = Aim.Along(Velocity);
 
         // The webifier does not shoot: it TETHERS, continuously, whenever it is in range. That is
         // what makes it read as a different threat from the ones firing tracers.

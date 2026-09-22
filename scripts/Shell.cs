@@ -13,7 +13,7 @@ public partial class Shell : Node2D
     private float _flown;
 
     // every shell, the host's and a guest's copy alike, is heard: a cannon's report where it leaves
-    public override void _Ready() { ZIndex = 6; Rotation = Dir.Angle() + Mathf.Pi / 2f; Sfx.Cannon(Position); }
+    public override void _Ready() { ZIndex = 6; Rotation = Aim.Along(Dir); Sfx.Cannon(Position); }
 
     public override void _Process(double delta)
     {

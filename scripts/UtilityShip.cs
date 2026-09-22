@@ -10,17 +10,21 @@ using System;
 // what used to happen only on the host: the burst when one is lost and when it comes back, and the
 // rebuild counting down (the BASE menu read "rebuilt in 0 s" for the whole thirty).
 // ─────────────────────────────────────────────────────────────────────────────
-public abstract partial class UtilityShip : Node2D, IRaidTarget
+public abstract partial class UtilityShip : Node2D, IRaidTarget, ITagged
 {
+    public Tag Tags => Tag.Fleet;
     public Yard Yard;
     public double Cargo, Hull, RebuildIn;
     private HullWatch _hullWatch; private bool _hostSeen;
     // damage taken, shown where it lands (DamageNumbers): each kind calls it every frame
     protected void WatchHull() => _hullWatch.Tick(this, Hull, taken: true);
     public bool WaitingForCredits;
-    protected double PinT;
-    public bool Pinned => PinT > 0;
-    public void PinFor(double s) { if (Net.Sim) PinT = Math.Max(PinT, s); }
+    // what is being done to it (Statuses): a raider's web today, the host's to decide
+    private StatusSet _status;
+    public StatusSet Statuses => _status;
+    public void ApplyStatus(Status s, double seconds) { if (Net.Sim) _status.Apply(s, seconds); }
+    public bool Pinned => _status.Has(Status.Pinned);
+    protected void TickStatus(float dt) { if (Net.Sim) _status.Tick(dt); }
 
     public abstract double MaxHull { get; }
     public abstract string Category { get; }        // the BASE tab its upgrades (and its rebuild price) are under

@@ -41,7 +41,7 @@ public partial class EscapePod : Node2D
         Position += Velocity * dt;
         QueueRedraw();
         if (Velocity.LengthSquared() > 25f)
-            Rotation = Mathf.LerpAngle(Rotation, Velocity.Angle() + Mathf.Pi / 2f, Mathf.Clamp(8f * dt, 0f, 1f));
+            Rotation = Mathf.LerpAngle(Rotation, Aim.Along(Velocity), Mathf.Clamp(8f * dt, 0f, 1f));
     }
 
     public override void _Draw() =>

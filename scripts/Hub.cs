@@ -369,16 +369,16 @@ public partial class Hub : Node2D
     private void NetShipState(float px, float py, float vx, float vy, float rot, float ax, float ay, bool trigger, bool staggered,
                               float podX, float podY, float podRot, bool warping) =>
         ShipOf(Net.SenderOf(this))?.ApplyState(px, py, vx, vy, rot, ax, ay, trigger, staggered, podX, podY, podRot, warping);
-    public void SendHostState(int owner, double hp, double maxHp, bool alive, double stasis, bool pinned, double combat, double pdLeft, double pdRecharge,
+    public void SendHostState(int owner, double hp, double maxHp, bool alive, double stasis, int statusBits, double combat, double pdLeft, double pdRecharge,
                               int mag, double reload, double bsWindup, int bsVolleys, double bsCooldown,
                               int wingTarget, Vector2[] wingPos, float[] wingRot, int[] wingState, float[] wingRearm) =>
-        Rpc(nameof(NetHostState), owner, hp, maxHp, alive, stasis, pinned, combat, pdLeft, pdRecharge, mag, reload, bsWindup, bsVolleys, bsCooldown,
+        Rpc(nameof(NetHostState), owner, hp, maxHp, alive, stasis, statusBits, combat, pdLeft, pdRecharge, mag, reload, bsWindup, bsVolleys, bsCooldown,
             wingTarget, wingPos, wingRot, wingState, wingRearm);
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
-    private void NetHostState(int owner, double hp, double maxHp, bool alive, double stasis, bool pinned, double combat, double pdLeft, double pdRecharge,
+    private void NetHostState(int owner, double hp, double maxHp, bool alive, double stasis, int statusBits, double combat, double pdLeft, double pdRecharge,
                               int mag, double reload, double bsWindup, int bsVolleys, double bsCooldown,
                               int wingTarget, Vector2[] wingPos, float[] wingRot, int[] wingState, float[] wingRearm) =>
-        ShipOf(owner)?.ApplyHostState(hp, maxHp, alive, stasis, pinned, combat, pdLeft, pdRecharge, mag, reload, bsWindup, bsVolleys, bsCooldown,
+        ShipOf(owner)?.ApplyHostState(hp, maxHp, alive, stasis, statusBits, combat, pdLeft, pdRecharge, mag, reload, bsWindup, bsVolleys, bsCooldown,
                                       wingTarget, wingPos, wingRot, wingState, wingRearm);
     public void SendShield(int owner, float side) => Rpc(nameof(NetShield), owner, side);
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
@@ -898,7 +898,6 @@ public partial class Hub : Node2D
 
     // ── raiders (enemy fighters): host-simulated, replicated ──────────────────
     public readonly List<Raider> Raiders = new();
-    private int _raiderIds = 5000;
     private double _raiderSend;
 
     // what a raider may go after: player ships, and the utility ships at home
@@ -994,7 +993,7 @@ public partial class Hub : Node2D
     public Raider SpawnRaider(Vector2 at, RaiderKind kind = RaiderKind.Light, int patrol = 0, double scale = 1, double hullShare = 1)
     {
         if (!Net.IsHost) return null;
-        var r = AddRaider(++_raiderIds, at, kind, patrol, scale, hullShare);
+        var r = AddRaider(NetIds.Next(NetIds.Enemy), at, kind, patrol, scale, hullShare);
         ToWorld(nameof(NetRaiderSpawn), r.NetId, at, (int)kind, scale, hullShare);
         return r;
     }
@@ -1658,7 +1657,7 @@ public partial class HeavyMissileVisual : Node2D
 {
     public Vector2 From, To; public double Flight;
     private double _t;
-    public override void _Ready() { Position = From; Rotation = (To - From).Angle() + Mathf.Pi / 2f; ZIndex = 6; }
+    public override void _Ready() { Position = From; Rotation = Aim.Face(From, To); ZIndex = 6; }
     public override void _Process(double delta)
     {
         _t += delta;

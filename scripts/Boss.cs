@@ -12,7 +12,7 @@ using System.Linq;
 // LOCKED: a super move is winding up or firing. The boss then neither closes nor turns except as
 // that move itself decides -- the red line it drew is the line it fires down -- and a guest takes
 // its pose flat rather than easing it (see _netLocked).
-public abstract partial class Boss : Node2D, IHittable
+public abstract partial class Boss : Node2D, IHittable, ITagged
 {
     public Hub Hub;
     public Missions.BossType Type;              // which boss: its name and its base hull
@@ -22,7 +22,8 @@ public abstract partial class Boss : Node2D, IHittable
     public abstract float Length { get; }
     public abstract float HalfWidth { get; }
     protected abstract string Sprite { get; }
-    public const int Id = 3000;
+    public const int Id = NetIds.Boss;
+    public Tag Tags => Tag.Boss;
     public double Hp;
     public bool Alive => Hp > 0;
     public int NetId => Id;
@@ -75,7 +76,7 @@ public abstract partial class Boss : Node2D, IHittable
     // win) shows nothing for it
     public void Downed() { if (!_net.Has) _hullWatch = default; Hp = 0; }
 
-    private IEnumerable<PlayerShip> Pilots => Combat.Players.OfType<PlayerShip>().Where(p => p.Alive);
+    private IEnumerable<PlayerShip> Pilots => Targeting.All(Combat.Players, Targeting.Attackable).OfType<PlayerShip>();
 
     public override void _Process(double delta)
     {
@@ -127,15 +128,9 @@ public abstract partial class Boss : Node2D, IHittable
     private void Approach(List<PlayerShip> pilots, float dt)
     {
         var centre = pilots.Aggregate(Vector2.Zero, (s, p) => s + p.Position) / pilots.Count;
-        float want = (centre - Position).Angle() + Mathf.Pi / 2f;
+        float want = Aim.Face(Position, centre);
         Rotation = Mathf.RotateToward(Rotation, want, TurnRate * dt);
         if (Position.DistanceTo(centre) > 650f) Position += (centre - Position).Normalized() * 30f * dt;
-    }
-
-    public static float DistToSegment(Vector2 p, Vector2 a, Vector2 b)
-    {
-        var ab = b - a; float t = Mathf.Clamp((p - a).Dot(ab) / ab.LengthSquared(), 0f, 1f);
-        return p.DistanceTo(a + ab * t);
     }
 
     // host: show a telegraph here and on every guest.

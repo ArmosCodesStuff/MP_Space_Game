@@ -33,7 +33,7 @@ public static class Autopilot
         float off = Mathf.AngleDifference(heading, to.Angle());
         float turn = Mathf.Clamp(off / 0.25f, -1f, 1f);
         if (dist <= stopRadius) return (turn, 0f);
-        float want = Mathf.Min(maxSpeed, Mathf.Sqrt(2f * maxSpeed * dist));
+        float want = Motion.Arrive(maxSpeed, dist, maxSpeed);
         float thrust = Mathf.Abs(off) < 0.6f && vel.Length() < want ? 1f : 0f;
         return (turn, thrust);
     }

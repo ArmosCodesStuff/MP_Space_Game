@@ -30,7 +30,7 @@ using System.Linq;
 // ─────────────────────────────────────────────────────────────────────────────
 public enum RaiderKind { Light, Heavy }
 
-public partial class Raider : Node2D, IHittable
+public partial class Raider : Node2D, IHittable, ITagged
 {
     public Hub Hub;
     public RaiderKind Kind = RaiderKind.Light;
@@ -38,6 +38,7 @@ public partial class Raider : Node2D, IHittable
     public double Hp;
     public bool Alive => Hp > 0;
     public bool Heavy => Kind == RaiderKind.Heavy;
+    public Tag Tags => Heavy ? Tag.Heavy : Tag.Light;
     public float Length => Heavy ? HeavyLength : LightLength;
     // a raid's raiders are as strong as the boss that was failed: S(L) = 1.1^(L-1)
     public double Strength = 1;          // S(L) (was "Scale", which hid Node2D.Scale)
@@ -91,7 +92,6 @@ public partial class Raider : Node2D, IHittable
     private const double BoostTime = 3.0;
     public const float PinRange = 100f;
     public const float Hold = 0.9f * PinRange;         // posted 90 u out
-    public const float PinSpeed = 0.2f;                // a pinned ship: 20% of top speed
     public static float BoostAt => Cruise * BoostMult * (float)BoostTime + PinRange;   // 1600 u
     static readonly float[] Posts = { 0f, -Mathf.Pi / 2f, Mathf.Pi / 2f };               // ahead, left, right
 
@@ -110,7 +110,7 @@ public partial class Raider : Node2D, IHittable
     public void Escort(Node2D target, Vector2 launchDir, double boostFor, double hull, float post)
     {
         Target = target; IsEscort = true; _boostUsed = true; _boostLeft = boostFor; Hp = hull;
-        Rotation = launchDir.Angle() + Mathf.Pi / 2f;
+        Rotation = Aim.Along(launchDir);
         _shiver = EscortShiver; _shiverHome = Position; _escortPost = post;
     }
     public bool Shivering => Net.Sim ? _shiver > 0 : (_netFlags & FlagShiver) != 0;
@@ -157,7 +157,8 @@ public partial class Raider : Node2D, IHittable
     }
 
     // ── what it can go after: an IRaidTarget in reach ──
-    public static bool Up(Node2D t) => GodotObject.IsInstanceValid(t) && t is IRaidTarget r && r.InReach;
+    public static bool Up(Node2D t) =>
+        GodotObject.IsInstanceValid(t) && t is IRaidTarget r && r.InReach && !Targeting.Hidden(r);
     // How far the target's hull reaches from its centre along `dir`: an ellipse with the
     // hull's half-length and half-width. Posts and reach are measured from the HULL, so a
     // raider holds station beside a long ship, never on top of its bow.
@@ -196,7 +197,7 @@ public partial class Raider : Node2D, IHittable
             _shiver -= delta;
             float ms = Time.GetTicksMsec();
             Position = _shiverHome + new Vector2(Mathf.Sin(ms * 0.061f), Mathf.Cos(ms * 0.083f)) * EscortShake;
-            var onto = (Target.Position - Position).Angle() + Mathf.Pi / 2f;
+            var onto = Aim.Face(Position, Target.Position);
             Rotation = Mathf.LerpAngle(Rotation, onto, Mathf.Clamp(6f * dt, 0f, 1f));
             Speed = 0;
             QueueRedraw();
@@ -227,12 +228,12 @@ public partial class Raider : Node2D, IHittable
         // once posted it keeps station however the target moves
         Position = Position.MoveToward(post, (Latched ? Mathf.Max(top, d * 12f) : Speed) * dt);
         Latched = Position.DistanceTo(post) < 12f && Gap(Position, Target) <= PinRange;
-        var face = (Target.Position - Position).Angle() + Mathf.Pi / 2f;
+        var face = Aim.Face(Position, Target.Position);
         Rotation = Mathf.LerpAngle(Rotation, face, Mathf.Clamp(8f * (float)Agility * dt, 0f, 1f));
 
         if (Latched)
         {
-            (Target as IRaidTarget)?.PinFor(0.25);
+            (Target as IRaidTarget)?.ApplyStatus(Status.Pinned, 0.25);
             _shot -= delta;
             if (_shot <= 0)
             {
@@ -265,7 +266,7 @@ public partial class Raider : Node2D, IHittable
         var spot = Hub.BasePos + Vector2.Right.Rotated(_orbit) * PerimeterR;
         var step = spot - Position;
         Position = Position.MoveToward(spot, PatrolSpeed * 1.5f * dt);     // catches its moving spot, at a believable pace
-        if (step.Length() > 1f) Rotation = Mathf.LerpAngle(Rotation, step.Angle() + Mathf.Pi / 2f, Mathf.Clamp(4f * dt, 0f, 1f));
+        if (step.Length() > 1f) Rotation = Mathf.LerpAngle(Rotation, Aim.Along(step), Mathf.Clamp(4f * dt, 0f, 1f));
         Speed = PatrolSpeed;
     }
 
@@ -277,14 +278,14 @@ public partial class Raider : Node2D, IHittable
     {
         float dt = (float)delta;
         var astern = -Vector2.Up.Rotated(Target.Rotation);                    // it comes in from the rear
-        bool pinned = Target is IRaidTarget { Pinned: true };
+        bool pinned = Target is IStatused st && st.Statuses.Has(Status.Pinned);
         var dest = pinned ? Target.Position + astern * (Extent(Target, astern) + HeavyHold)
                           : EdgeSpot(Target.Position);                        // patient, at the map's edge nearest it
         float top = (pinned && Position.DistanceTo(Target.Position) > HeavyBoostStop ? Cruise * HeavyBoostMult : Cruise) * (float)Agility;
         float d = Position.DistanceTo(dest);
         Speed = Mathf.Min(top, d * 6f);
         Position = Position.MoveToward(dest, Speed * dt);
-        var face = (Target.Position - Position).Angle() + Mathf.Pi / 2f;
+        var face = Aim.Face(Position, Target.Position);
         Rotation = Mathf.LerpAngle(Rotation, face, Mathf.Clamp(4f * (float)Agility * dt, 0f, 1f));
         if (_turret != null) _turret.GlobalRotation = face;                  // its one turret tracks the target
         Latched = pinned && Gap(Position, Target) <= HeavyReach;

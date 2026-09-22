@@ -8,7 +8,7 @@ using Godot;
 // fairly. After 5 s without a hit, the next hit starts a fresh count.
 //
 // Host-owned like all combat: the host counts, and sends the readout to guests.
-public partial class TargetDummy : Node2D, IHittable
+public partial class TargetDummy : Node2D, IHittable, ITagged
 {
     // An ARMED dummy fights back: every 5 s it fires a guided missile at the nearest
     // player ship within 150 u, for 50 damage. Host-owned like all combat.
@@ -19,12 +19,13 @@ public partial class TargetDummy : Node2D, IHittable
     // Several dummies, each with its own id (1000, 1001, ...) and label number,
     // so target switching can be tested. Ids are assigned by the Hub in order,
     // identically on every peer.
-    private const int FirstNetId = 1000;
+    private const int FirstNetId = NetIds.Dummy;
     public int Number = 1;
     public int NetId => FirstNetId + Number - 1;
     // A PRACTICE FIGHTER is a dummy shaped like a light raider: small craft, so point
     // defence (which shoots only missiles and light fighters) has something to train on.
     public bool Fighter;
+    public Tag Tags => Tag.Dummy | (Fighter ? Tag.Light : Tag.None);
     public float HitRadius => Fighter ? Raider.LightLength * 0.4f : 46f;
     // A child sprite, not a texture held in a static and drawn by hand: that one lived for the
     // whole process, past this dummy and every hub after it.
@@ -77,7 +78,7 @@ public partial class TargetDummy : Node2D, IHittable
             _fireCd = System.Math.Max(0, _fireCd - delta);
             if (_fireCd <= 0)
             {
-                var best = Combat.Nearest(Combat.Players, GlobalPosition, p => p.Position, ArmedRange, p => p.Alive);
+                var best = Targeting.Nearest(Combat.Players, GlobalPosition, Targeting.Attackable, ArmedRange);
                 if (best != null)
                 {
                     var dir = (best.Position - GlobalPosition).Normalized();

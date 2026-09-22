@@ -13,8 +13,9 @@ using System.Collections.Generic;
 // toward its target at no more than TurnRate), and it may be HEAVY -- the destroyer's
 // burst: a bigger body, darker smoke and a bigger blast. Guests run the same guidance on
 // the same positions, so their cosmetic copy follows the host's.
-public partial class Torpedo : Node2D, IHittable
+public partial class Torpedo : Node2D, IHittable, ITagged
 {
+    public Tag Tags => Tag.Missile;
     public Vector2 Dir;
     public float Speed, Range;
     public double Damage;
@@ -54,7 +55,7 @@ public partial class Torpedo : Node2D, IHittable
     public override void _Ready()
     {
         Sfx.Missile(GlobalPosition);                        // self-propelled: a soft whoosh at launch
-        ZIndex = 6; Rotation = Dir.Angle() + Mathf.Pi / 2f;
+        ZIndex = 6; Rotation = Aim.Along(Dir);
         if (HostileFire && NetId != 0) Combat.Hostiles.Add(this);
     }
     public override void _ExitTree() => Combat.Hostiles.Remove(this);
@@ -76,7 +77,7 @@ public partial class Torpedo : Node2D, IHittable
                 float want = (tgt.Position - GlobalPosition).Angle(), have = Dir.Angle();
                 float turn = Mathf.Clamp(Mathf.AngleDifference(have, want), -TurnRate * dt, TurnRate * dt);
                 Dir = Dir.Rotated(turn);
-                Rotation = Dir.Angle() + Mathf.Pi / 2f;
+                Rotation = Aim.Along(Dir);
             }
             float step = Speed * dt;
             GlobalPosition += Dir * step; _flown += step;

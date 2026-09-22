@@ -43,11 +43,9 @@ public interface IHittable
 // WHAT A RAIDER GOES AFTER: a player's ship, or a ship of a base's fleet (UtilityShip). One
 // contract where six type switches -- in Raider and in Hub -- had to agree on alive-ness, hull
 // shape, damage and the pin, and a new kind of target meant finding all six.
-public interface IRaidTarget
+public interface IRaidTarget : IStatused
 {
     bool InReach { get; }                                    // there, and alive, to be attacked
-    bool Pinned { get; }
-    void PinFor(double s);
     void Hit(double d, Vector2 from, string source);
     (float halfLength, float halfWidth) Extent { get; }      // the hull's ellipse, for holding station beside it
 }
@@ -158,8 +156,7 @@ public partial class Turret : Node2D
     // Point defence shoots ONLY missiles and light fighters (light raiders, and the practice
     // fighters) -- never heavies, bosses or the dummies. Missiles first; within that, the
     // nearest one no sibling turret has claimed (if all are claimed, the nearest regardless).
-    private static bool PdTargets(IHittable h) => h is Torpedo || (h is Raider r && !r.Heavy) || (h is TargetDummy d && d.Fighter);
-    public static int PdPriority(IHittable h) => h is Torpedo ? 0 : h.HitRadius < 20f ? 1 : 2;
+    public static int PdPriority(IHittable h) => TagExt.Is(h, Tag.Missile) ? 0 : TagExt.Is(h, Tag.Light | Tag.Fighter) ? 1 : 2;
     // Same rule as before -- best by (priority, then distance), preferring one no sibling turret
     // has claimed, falling back to the best claimed one -- but in a single pass with no
     // allocation. This used to be Combat.Near (which allocates and sorts) plus a LINQ chain and
@@ -171,7 +168,7 @@ public partial class Turret : Node2D
         int freePri = 0, anyPri = 0; float freeDist = 0, anyDist = 0;
         foreach (var h in Combat.Hostiles)
         {
-            if (h == null || !h.Alive || !PdTargets(h)) continue;
+            if (!Targeting.PointDefence.Allows(h)) continue;
             float d = from.DistanceTo(h.Position);
             if (d > Range) continue;
             int p = PdPriority(h);
@@ -592,8 +589,8 @@ public partial class Wing : Node2D
         var d = to - Position;
         float dist = d.Length();
         // the fastest speed from which this craft can still stop in `dist`
-        float arrive = Mathf.Sqrt(2f * Accel * dist);
-        var want = carry + (dist > 1f ? d / dist * Mathf.Min(spd, arrive) : Vector2.Zero);
+        float arrive = Motion.Arrive(spd, dist, Accel);
+        var want = carry + (dist > 1f ? d / dist * arrive : Vector2.Zero);
         Velocity = Velocity.MoveToward(want, Accel * (float)delta);
         Position += Velocity * (float)delta;
         if (Velocity.LengthSquared() > 100f) FaceToward(Position + Velocity, delta);
@@ -601,7 +598,7 @@ public partial class Wing : Node2D
 
     private void FaceToward(Vector2 to, double delta)
     {
-        float want = (to - Position).Angle() + Mathf.Pi / 2f;
+        float want = Aim.Face(Position, to);
         Rotation = Mathf.LerpAngle(Rotation, want, Mathf.Clamp(9f * (float)delta, 0f, 1f));
     }
 

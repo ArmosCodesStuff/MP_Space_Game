@@ -102,10 +102,10 @@ public partial class Gatherer : UtilityShip
             if (TickRebuild(dt)) { Hull = MaxHull; State = St.Outbound; Position = Hub.BasePos; Velocity = Vector2.Zero; Burst(rebuilt: true); }
             return;
         }
-        if (PinT > 0)
+        if (Pinned)
         {   // pinned by a raider: thrusting forward at 20% of its speed, unable to turn
-            PinT -= dt;
-            Velocity = Vector2.Up.Rotated(Rotation) * (float)Speed * Raider.PinSpeed;
+            TickStatus(dt);
+            Velocity = Vector2.Up.Rotated(Rotation) * (float)Speed * StatusSet.PinSpeed;
             Position += Velocity * dt;
             return;
         }
@@ -145,7 +145,7 @@ public partial class Gatherer : UtilityShip
                 if (arm < 0) { State = St.Outbound; break; }        // arm taken away mid-unload: go back out
                 var a = Yard.Arms[arm];
                 Position = Position.Lerp(Yard.UnloadSpot(arm), Mathf.Clamp(8f * dt, 0f, 1f));
-                Rotation = Mathf.LerpAngle(Rotation, (-a.Open).Angle() + Mathf.Pi / 2f, Mathf.Clamp(6f * dt, 0f, 1f));
+                Rotation = Mathf.LerpAngle(Rotation, Aim.Along(-a.Open), Mathf.Clamp(6f * dt, 0f, 1f));
                 double amt = Math.Min(Cargo, Economy.UnloadRate * dt);
                 Cargo -= amt; Yard.Deposit(Kind, amt);
                 if (Cargo <= 1e-6) { Cargo = 0; Yard.Release(this); State = St.Outbound; }
@@ -158,7 +158,7 @@ public partial class Gatherer : UtilityShip
     private bool FlyTo(Vector2 to, float dt)
     {
         var d = to - Position; float dist = d.Length();
-        float spd = Mathf.Min((float)Speed, Mathf.Sqrt(2f * Accel * dist));
+        float spd = Motion.Arrive((float)Speed, dist, Accel);
         Velocity = Velocity.MoveToward(dist > 1f ? d / dist * spd : Vector2.Zero, Accel * dt);
         Position += Velocity * dt;
         if (Velocity.LengthSquared() > 25f) Face(Position + Velocity, dt);
@@ -168,7 +168,7 @@ public partial class Gatherer : UtilityShip
     private void Brake(float dt) { Velocity = Velocity.MoveToward(Vector2.Zero, Accel * dt); Position += Velocity * dt; }
 
     private void Face(Vector2 at, float dt) =>
-        Rotation = Mathf.LerpAngle(Rotation, (at - Position).Angle() + Mathf.Pi / 2f, Mathf.Clamp(6f * dt, 0f, 1f));
+        Rotation = Mathf.LerpAngle(Rotation, Aim.Face(Position, at), Mathf.Clamp(6f * dt, 0f, 1f));
 
     private Vector2 Nose() => ToGlobal(new Vector2(0, -Length * 0.45f));
 

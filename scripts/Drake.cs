@@ -88,7 +88,7 @@ public partial class Drake : Boss
             _warpT = -1;
             Position = _warpTo;
             if (!IsInstanceValid(_shotTarget) || !_shotTarget.Alive) _shotTarget = Nearest();
-            if (_shotTarget != null) Rotation = (_shotTarget.Position - Position).Angle() + Mathf.Pi / 2f;
+            if (_shotTarget != null) Rotation = Aim.Face(Position, _shotTarget.Position);
             _fanAim = Rotation - Mathf.Pi / 2f;
             foreach (float a in FanAngles(_fanAim))
                 Tele(true, Nose, Nose + Vector2.Right.Rotated(a) * ScrapRange, ScrapRadius * 2f + 10f, FanWindup, strike: "drake_scrap");

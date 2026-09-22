@@ -30,8 +30,8 @@ public partial class BaseDefense : Node2D
     {
         // The nearest raider in missile range; the laser takes it too if it is also in laser range
         // (the nearest within 600 u is within 300 u exactly when any raider is).
-        var aim = Combat.Nearest(Combat.Hostiles.OfType<Raider>(), Hub.BasePos, r => r.Position, MissileRange, r => r.Alive);
-        if (aim != null) _turret.GlobalRotation = (aim.Position - GlobalPosition).Angle() + Mathf.Pi / 2f;
+        var aim = Targeting.Nearest(Combat.Hostiles, Hub.BasePos, Targeting.Craft, MissileRange);
+        if (aim != null) _turret.GlobalRotation = Aim.Face(GlobalPosition, aim.Position);
         if (!Net.Sim) return;                                   // guests: the turret tracks; the host fires
         _laser -= delta; _missile -= delta;
         var close = aim != null && aim.Position.DistanceTo(Hub.BasePos) <= LaserRange ? aim : null;
