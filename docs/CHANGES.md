@@ -357,10 +357,13 @@ caught).
 
 #### Known broken
 
-- **The RETURN button's two-pilot check flaked once in three full runs** (`verify.ps1 -Update`: runs 1
-  and 3 clean, run 2 three problems; the standalone full run and both mutants passed). Cause not yet
-  confirmed -- most likely the arena host's 15 s wait for the guest's RETURN press is too tight. So this
-  change is a checkpoint, not VERIFIED: widen that wait, then get three clean runs.
+- **One intermittent `NullReferenceException` on the arena host** (`verify.ps1 -Update`: runs 1 and 3
+  clean; in run 2 every one of the 673 checks passed, but the host logged the exception once, from an
+  engine callback -- the runner kept only its top frames). Not reproduced since, cause not found. It is
+  NOT the host's wait for the guest's RETURN press (that check passed); the wait was widened anyway.
+  Leading suspect: the one frame after RETURN flips `Hub.Sector` to Home while the arena scene is still
+  up (the swap is deferred), when arena nodes run their home branches. So the RETURN button is a
+  checkpoint, not VERIFIED: find it (keep the full `.out` of a failing run), then three clean runs.
 - Not yet done: a session between two homes (see Next up), and flying the new gear for balance.
 
 ### Plug and play for any network, a real build handshake, and a full audit (2026-09-21)

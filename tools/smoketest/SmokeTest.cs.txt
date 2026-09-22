@@ -3117,7 +3117,7 @@ public partial class _Test : Node
             // NO CLOCK: the party goes home only once EVERY present pilot presses RETURN. The guest
             // presses first (it collects, then readies); one pilot ready is not enough on its own.
             // (generously: the guest presses only after its own checks of the fight and its crates,
-            // which can run past the kill -- a 15 s wait here flaked one run in three)
+            // which can run past the kill)
             await RealTime(() => H.ReturnReady == 1, Wan ? 60 : 45);
             await Wait(1.0);
             Check(Hub.InArena && H.ReturnReady == 1 && H.ReturnTotal == 2,
