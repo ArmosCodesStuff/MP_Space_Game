@@ -126,6 +126,11 @@ public partial class CharacterCreator : CanvasLayer
         Rebuild();
     }
 
+    // What a ship of this class would come out of the yard with, for this pilot.
+    private static double ClassHull(ShipClass c) =>
+        new ShipStats(c, Equipment.Bonuses(c, Character.LoadoutFor(c)),
+                      Equipment.Adds(c, Character.LoadoutFor(c)))["hull"];
+
     private void Rebuild()
     {
         Ui.Clear(_cards);
@@ -141,8 +146,13 @@ public partial class CharacterCreator : CanvasLayer
                 CustomMinimumSize = new Vector2(460, 92),
                 Disabled = !e.Ready,
                 FocusMode = Control.FocusModeEnum.None,
+                // THE HULL IT WILL ACTUALLY HAVE, from the same sheet the ship fights with and the
+                // K window prints -- this pilot's parts fitted, the starting kit included. The
+                // blurbs used to hand-write it ("300 hull"), which is the bare class row: every
+                // real pilot flies 25% more than that from its five basic chips, so the card
+                // disagreed with the ship from its first flight.
                 Text = e.Ready
-                    ? $"{e.Name}{(Character.Class == e.Id && e.Ready ? "     [ SELECTED ]" : "")}\n{e.Blurb}"
+                    ? $"{e.Name}  ·  {ClassHull(e.Id):0} hull{(Character.Class == e.Id ? "     [ SELECTED ]" : "")}\n{e.Blurb}"
                     : $"{e.Name}     — not yet flyable\n{e.Blurb}",
                 Alignment = HorizontalAlignment.Left,
             };

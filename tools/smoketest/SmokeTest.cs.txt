@@ -1033,6 +1033,20 @@ public partial class _Test : Node
         Check(Count<BasePanel>() == 0, "the base menu steps aside for it");
         Key(global::Godot.Key.B); await Wait(0.1);
         Check(Count<BasePanel>() == 0, "B does nothing while the ship menu owns the screen");
+        // THE CARD SAYS WHAT THE SHIP WILL HAVE. Its hull used to be hand-written into each
+        // class's blurb ("300 hull"), which is the bare class row -- every real pilot flies 25%
+        // more than that from the five basic chips in the starting kit, so the card disagreed
+        // with the ship from its first flight. It reads the same sheet the ship fights with now.
+        {
+            var cards = Nodes<Button>(Nodes<CharacterCreator>().First()).Where(b2 => b2.Text.Contains(" hull")).ToList();
+            double bsHull = new ShipStats(ShipClass.Battleship,
+                                          Equipment.Bonuses(ShipClass.Battleship, Character.LoadoutFor(ShipClass.Battleship)),
+                                          Equipment.Adds(ShipClass.Battleship, Character.LoadoutFor(ShipClass.Battleship)))["hull"];
+            var bsCard = cards.FirstOrDefault(b2 => b2.Text.StartsWith("BATTLESHIP"));
+            Check(cards.Count == 3 && bsCard != null && Math.Abs(bsHull - 375) < 1e-9
+                  && bsCard.Text.Contains($"{bsHull:0} hull") && !Classes.All.Any(c2 => c2.Blurb.Contains(" hull.")),
+                  $"a class card prints the hull the ship will actually have -- the sheet's, with the starting kit in it ({bsHull:0} on the battleship's card, and no class blurb writes one any more)");
+        }
         foreach (var c in Nodes<CharacterCreator>()) c.Close();
         await Wait(0.1);
 
@@ -3285,8 +3299,19 @@ public partial class _Test : Node
             // ── WARDEN: point defence with no window, and six hunters on six targets ──
             await SetClass(ShipClass.HeavyWarden);
             var wd = Me; wd.Position = yonder; wd.Velocity = Vector2.Zero; await Wait(0.2);
-            Check(wd.PdOnline && !wd.PdActive && wd.PdRing == 0f && Math.Abs(wd.Spec(true).Damage - 0.25) < 1e-9,
-                  "the warden's point defence is on with nothing pressed, at half a warship's damage");
+            Check(wd.PdOnline && !wd.PdActive && wd.PdRing == 0f && Math.Abs(wd.Spec(true).Damage - 5.0) < 1e-9
+                  && Math.Abs(wd.Stats["pd_interval"] - 0.5) < 1e-9 && Math.Abs(wd.Stats.PdDuty - 1) < 1e-9,
+                  $"the warden's point defence is on with nothing pressed -- 5 a shot every 0.5 s, on all of the time ({wd.Stats.PdSustainedDps:0.0} DPS sustained)");
+            // and it KILLS: one light raider inside its 420 u, nothing else firing, dead in seconds.
+            // (At the 0.25 a shot it was first written with, this took 50 s and the class's whole
+            // reason for existing did nothing a pilot could see.)
+            {
+                var pdMark = H.SpawnRaider(VaryNear(wd.Position, 380f));       // inside 420 u, any bearing
+                double pdStart = wd.Clock;
+                for (int i = 0; i < 60 * 8 && pdMark.Alive; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                Check(!pdMark.Alive && wd.Clock - pdStart < 6,
+                      $"...and it kills a light raider on its own in {wd.Clock - pdStart:0.0} s, with nothing pressed");
+            }
             var marks = new List<Raider>();
             for (int i = 0; i < 4; i++) { var m = H.SpawnRaider(yonder + new Vector2(300 + 60 * i, -200 + 90 * i)); m.Hp = 3000; marks.Add(m); }
             await Wait(0.2);
@@ -3341,6 +3366,12 @@ public partial class _Test : Node
                   "and the moment it goes dark the raider lets go of it");
             await Wait(5.2);
             Check(!wt.Statuses.Has(Status.Untargetable), "five seconds later it is visible again");
+            // AND THE HUNT COMES BACK. A raider re-decides only when its target stops being valid,
+            // so the miner it took while the wraith was dark stayed valid for ever: one press of
+            // stealth used to hand the whole wave to the base's fleet permanently.
+            for (int i = 0; i < 60 * 3 && hunter.Target != wt; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(hunter.Target == wt,
+                  $"...and the raider takes the wraith back the moment it can see it again (now after {(hunter.Target == wt ? "it" : Raider.Up(hunter.Target) ? "something else" : "nothing")})");
             hunter.TakeDamage(99999); await Wait(0.2);
             await SetClass(ShipClass.Battleship);
         }

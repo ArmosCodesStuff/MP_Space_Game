@@ -195,7 +195,9 @@ public partial class StatsWindow : CanvasLayer
                                  + $"{s.TorpedoesPerRun * s["torpedo_damage"]:0.0} damage if all hit (unguided)", false, false, acc));
         }
         D("Per PD turret (while firing)", s.PdDpsPerTurret);
-        D($"PD sustained, if re-activated as soon as it recharges ({s.PdDuty * 100:0}% duty)", s.PdSustainedDps);
+        D(s.Def.Has(Fit.AlwaysPd) ? "PD sustained (it never switches off)"
+                                  : $"PD sustained, if re-activated as soon as it recharges ({s.PdDuty * 100:0}% duty)",
+          s.PdSustainedDps);
         double total = s.MainDps + s.MissileDps + s.BroadsideDps + s.PdSustainedDps;
         _derived.AddChild(Cell($"SUSTAINED TOTAL:  {total:0.00} DPS" + (s.Def.Has(Fit.Wing) ? "  (+ fighter runs, + bomber strikes)" : ""), true, false, acc));
         _derived.AddChild(new Control { CustomMinimumSize = new Vector2(0, 8) });

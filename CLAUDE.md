@@ -37,6 +37,31 @@ Anything in the tree you did not write: report it in one line, then ADOPT or REV
 - **Generalise, never special-case.** A new boss, class, enemy, ability or upgrade must be a row of
   data plus parameters, not a new `if`. If a request forces a special case, the system is wrong:
   fix the system.
+- **BUILD EVERY NEW SYSTEM GLOBALLY, AND SAY WHERE IT LIVES.** Anything new — a class, an enemy,
+  an ability, a weapon, a status, an effect, a screen, an upgrade — is built so that the NEXT one
+  is a row, not a copy. Five requirements, all of them:
+  1. **A table of rows.** The thing's numbers, art and text live in data (`Classes.All`,
+     `Enemies.All`, `Ab.*`, `Economy.All`, `Missions`), never in the code that uses them.
+  2. **A named public contract.** A small interface or struct anything else can implement or read
+     (`ITurretHost`, `ITagged`, `IStatused`, `IRaidTarget`, `TurretSpec`, `StatRow`). If only one
+     class can ever use what you wrote, it is not a system yet.
+  3. **One file that owns it, named for the thing** — `Ships.cs`, `Enemies.cs`, `Abilities.cs`,
+     `Turrets.cs`, `Statuses.cs`, `Targeting.cs`, `Ids.cs`, `Aim.cs` — with a header saying what it
+     replaced and what a new row must fill in.
+  4. **Reached by id or tag, never by type.** `Tag`, a row index, an ability id, a stat id. A
+     `is Raider` / `is Torpedo` / `HitRadius < 20f` in new code is a bug in the design, not a shortcut.
+  5. **The generic path is the ONLY path.** Delete the specific one in the same edit. Two ways to
+     do a thing is how the next instance picks the wrong one.
+- **Extend a table before inventing one.** These already exist — add to them:
+  `Classes.All` (a class) · `Ab.*` + `ClassDef.Abilities` (an ability) · `ClassDef.Rows` (a stat
+  only one class has) · `Enemies.All` (an enemy) · `Economy.All` (an upgrade) · `Missions` (a boss
+  level) · `Equipment` (a part) · `Tag` (a kind of thing) · `Status` (a thing done to something) ·
+  `NetIds` (an id space) · `TargetFilter` (who may be shot) · `TurretSpec`/`ITurretHost` (a gun and
+  what carries it) · `Aim`/`Motion` (pointing and arriving) · `PlayerShip.Slot` (per-ability state,
+  which is also how it reaches the wire) · `PlayerShip.Incoming`/`Guarded` (all damage, and every
+  defence against it) · `PlayerShip.NoteDealt` (all damage this ship deals).
+- **Before writing the second of anything, make the first one a row.** The second boss, the second
+  freighter, the second always-on gun: that is the moment the table is cheap and the copy is not.
 - Delete what a change replaces in the same edit. `UNUSED ANYWHERE: 0` is enforced.
 - No new tool script unless the same job will recur or it cannot be done inline; extend an existing
   tool first. Scratch files go in the scratchpad, never in the repo.

@@ -194,7 +194,11 @@ public class ShipStats
     public double MainDps          => MainDpsPerBarrel * this["main_count"];
     public double PdDpsPerTurret   => Def.Has(Fit.Pd) ? this["pd_damage"] / this["pd_interval"] : 0;
     // PD only fires during its window, so its sustained rate is scaled by the duty fraction.
-    public double PdDuty           => Def.Has(Fit.Pd) ? this["pd_active"] / (this["pd_active"] + this["pd_reload"]) : 0;
+    // A window's share of the time. A mount that never switches off (Fit.AlwaysPd) has no
+    // window and no recharge: its duty is the whole of it.
+    public double PdDuty           => !Def.Has(Fit.Pd) ? 0
+                                    : Def.Has(Fit.AlwaysPd) ? 1
+                                    : this["pd_active"] / (this["pd_active"] + this["pd_reload"]);
     private double PdDps            => PdDpsPerTurret * this["pd_count"];
     public double PdSustainedDps   => PdDps * PdDuty;
     // A full magazine of bursts, fired as fast as it allows, then reloaded: damage per cycle over cycle time.

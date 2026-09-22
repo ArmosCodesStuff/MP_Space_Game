@@ -97,6 +97,12 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
     static readonly float[] Posts = { 0f, -Mathf.Pi / 2f, Mathf.Pi / 2f };               // ahead, left, right
 
     public Node2D Target { get; private set; }
+    // WHAT WENT DARK ON IT. A raider re-decides only when its target stops being valid, so a ship
+    // that turned invisible for five seconds used to hand it a miner 3000 u away FOR EVER: the new
+    // target stayed valid, nothing ever looked back, and one press of stealth sent the whole wave
+    // at the base's fleet permanently. It keeps what it lost and takes it back the moment it can
+    // see it again -- five seconds of losing you, not a handover.
+    private Node2D _dark;
     public Node2D Quarry;                         // a hunter's: set by the host at the spawn
     // An ESCORT (launched by a boss): its target is set, its boost lasts until it is posted
     // (or `boostFor` runs out), and it is fragile.
@@ -192,7 +198,17 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
         if (!Alive) return;
         _status.Tick(delta);
         if (_status.Has(Status.Disabled)) { Speed = 0; QueueRedraw(); return; }   // stunned: it sits there
-        if (!Up(Target)) { Target = Choose(); Latched = false; _boostUsed = false; }
+        if (_dark != null && !GodotObject.IsInstanceValid(_dark)) _dark = null;
+        if (!Up(Target))
+        {
+            if (Target != null && GodotObject.IsInstanceValid(Target) && Targeting.Hidden(Target)) _dark = Target;
+            Target = Choose(); Latched = false; _boostUsed = false;
+        }
+        else if (_dark != null && !ReferenceEquals(_dark, Target) && Up(_dark))
+        {   // it is back: so is the hunt, from wherever this took it
+            Target = _dark; Latched = false; _boostUsed = false;
+        }
+        if (ReferenceEquals(_dark, Target)) _dark = null;
         if (Target == null) { Speed = 0; if (Patrol != 0) Circle(delta); QueueRedraw(); return; }
         // its target's velocity, from frame to frame -- except a JUMP (a warp; over 50 u in one frame,
         // 3000 u/s, nothing flies that fast), which would send the predicted missile miles off
