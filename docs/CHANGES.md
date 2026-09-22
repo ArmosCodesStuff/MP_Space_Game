@@ -319,7 +319,7 @@ From the 2026-09-21 batch (each is a constant or one rule to change):
 - **New ships spawn clear of the base whatever the class**: half the longest class and a margin below
   the pad (a 302 u battleship at the old spot overlapped it).
 
-**Tests**: smoke **752 pass, 6 of 6 runs, three runs in a row; the sweep 86 frames, LINT 0 on a re-run (the full run's sweep was cut off once by a null reference, not reproduced)**. Changed checks: every size above as literals (302.4, 35.1; 297.5; 227.5,
+**Tests**: smoke **752 pass, 6 of 6 runs, three runs in a row; sweep 86 frames, LINT 0; ALL CHECKS PASSED**. Changed checks: every size above as literals (302.4, 35.1; 297.5; 227.5,
 29.75), the bombers' 65% and the new deck band, the lift up to 115.5 u ahead over 1.6 s (also the guest's
 deck-clock pose), grey and white, and a pilot in the blue and gold loading in grey and white.
 

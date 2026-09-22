@@ -1,8 +1,8 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-22 05:54, on top of git commit f011896. How it was verified is in the message of the
+// Taken 2026-09-22 06:21, on top of git commit e22094d. How it was verified is in the message of the
 //   commit that carries this file: one starting VERIFIED: is a green verify.ps1 -Update.
-// 89 files, 19498 lines. Code only: sprites, sounds and docs are in the zip.
+// 89 files, 19500 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -25,7 +25,7 @@
 //   scripts/Boss.cs                                214 lines   sha256 eb5023eb3d1d
 //   scripts/BossBar.cs                              90 lines   sha256 ee7d33abf543
 //   scripts/Character.cs                           359 lines   sha256 6f14196229d5
-//   scripts/CharacterCreator.cs                    215 lines   sha256 727f961a54e8
+//   scripts/CharacterCreator.cs                    215 lines   sha256 7ebf711119c9
 //   scripts/CharacterSelect.cs                     184 lines   sha256 241e2389c734
 //   scripts/Combat.cs                              118 lines   sha256 1471dd2955f3
 //   scripts/DamageNumbers.cs                        83 lines   sha256 20747f8cd3bd
@@ -50,7 +50,7 @@
 //   scripts/Music.cs                                81 lines   sha256 d77805e7d7ae
 //   scripts/Net.cs                                 781 lines   sha256 89afe425d9cb
 //   scripts/PilotWindow.cs                          60 lines   sha256 4e05487ebecd
-//   scripts/PlayerShip.cs                          926 lines   sha256 ab0668550101
+//   scripts/PlayerShip.cs                          928 lines   sha256 e39f36b622b7
 //   scripts/Plume.cs                                25 lines   sha256 cdbeb9b8fc58
 //   scripts/Progression.cs                         107 lines   sha256 15d2e3b0a6ce
 //   scripts/Radar.cs                               137 lines   sha256 607acccd21dd
@@ -62,7 +62,7 @@
 //   scripts/Sfx.cs                                 105 lines   sha256 879dc5464b7a
 //   scripts/Shell.cs                                53 lines   sha256 04ce88f1ee24
 //   scripts/Shield.cs                               71 lines   sha256 99c7fa4a2a8e
-//   scripts/ShipClasses.cs                         625 lines   sha256 4d1fd09ccab4
+//   scripts/ShipClasses.cs                         625 lines   sha256 b5fd9a06ae2d
 //   scripts/Slug.cs                                 97 lines   sha256 4f87ca854335
 //   scripts/Sprites.cs                              13 lines   sha256 f2374b1d9777
 //   scripts/Stats.cs                               205 lines   sha256 76dcca49d3f1
@@ -85,7 +85,7 @@
 //   tools/analyse/xref.py                           19 lines   sha256 5406a5e81bde
 //   tools/find-godot.ps1                            53 lines   sha256 fabe4c75faae
 //   tools/gain.ps1                                  44 lines   sha256 41f4d8f93189
-//   tools/make_ships.ps1                           620 lines   sha256 5c71226cc853
+//   tools/make_ships.ps1                           620 lines   sha256 3541b0dd9954
 //   tools/make_sounds.py                           232 lines   sha256 85eba97b8ac6
 //   tools/manifest.ps1                              42 lines   sha256 2bd8e7cbf24b
 //   tools/map.py                                   232 lines   sha256 01a23fceab11
@@ -95,7 +95,7 @@
 //   tools/smoketest/fakeigd.py                     155 lines   sha256 b980d4fa4ad4
 //   tools/smoketest/run.ps1                        209 lines   sha256 54069e6faaff
 //   tools/smoketest/run.sh                          57 lines   sha256 9ac9cbdf9115
-//   tools/smoketest/SmokeTest.cs.txt              4385 lines   sha256 bdbc6837f11c
+//   tools/smoketest/SmokeTest.cs.txt              4385 lines   sha256 959486f96f0b
 //   tools/smoketest/wan.py                          61 lines   sha256 97db24aa3f91
 //   tools/snapshot.ps1                              94 lines   sha256 3ca9bfe56185
 //==============================================================================
@@ -1634,7 +1634,7 @@ public static class Classes
 
 //==============================================================================
 // FILE: scripts/CharacterCreator.cs
-// 215 lines   sha256 727f961a54e8
+// 215 lines   sha256 7ebf711119c9
 //==============================================================================
 using Godot;
 
@@ -1833,7 +1833,7 @@ public partial class ShipPreview : Control
         var c = Vector2.Zero;
         var drawSize = worldSize * k;
         // the accent lights the engines: a plume at the stern shows the choice
-        Plume.Draw(this, c + new Vector2(0, drawSize.Y * 0.5f), Vector2.Down, drawSize.Y, Accent, 0.8f, false);
+        Plume.Draw(this, c + new Vector2(0, drawSize.Y * 0.5f - art.EngineInset * k), Vector2.Down, drawSize.Y, Accent, 0.8f, false);
         DrawTextureRect(tex, new Rect2(c - drawSize * 0.5f, drawSize), false, Main);
 
         // turrets: the same sprites the game turns, in the accent colour as Turret draws them
@@ -7414,7 +7414,7 @@ public partial class PilotWindow : PanelContainer
 
 //==============================================================================
 // FILE: scripts/PlayerShip.cs
-// 926 lines   sha256 ab0668550101
+// 928 lines   sha256 e39f36b622b7
 //==============================================================================
 using Godot;
 using System;
@@ -7510,6 +7510,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
         // from the keel, the centre of each row, the spacing along it. They lift off at the
         // runway's bow end, RunwayBow ahead of the centre, and land on its centre (world units).
         public float BayX, BayY, BaySpacing, RunwayBow;
+        public float EngineInset;          // the engine's plume this far in from the stern (world units)
     }
 
     // Every hull is the owner's line art (tools/make_ships.ps1: symmetrical, grey, tinted here with
@@ -7518,32 +7519,33 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
     // defence 6 u across, the muzzle 5.5 u out. Each class mounts them at its own multiple of that.
     public static readonly Dictionary<ShipClass, ClassArt> Art = new()
     {
-        // Battleship, 302.4 u: the drawing made twice as wide, then 35% larger (the owner's), so 62 u
-        // across the hull (pods and fins outboard of it). Its four main turrets stand where the
-        // drawing's four painted turrets did, on the spine, at 2x -- the drawing's own turret-to-hull
-        // proportion on the doubled beam; its two point-defence turrets are on the stern quarters.
+        // Battleship, 378 u -- by far the largest: the drawing made twice as wide, then 35% and 25%
+        // larger (the owner's), so 77 u across the hull (pods and fins outboard of it). Its four main
+        // turrets stand where the drawing's four painted turrets did, on the spine, at 2.5x -- the
+        // drawing's own turret-to-hull proportion; its two point-defence turrets on the stern quarters.
         [ShipClass.Battleship] = new ClassArt {
-            Texture = "res://battleship_hull.png", Length = 302.4f, HalfWidth = 35.1f,
-            Mains = new Vector2[] { new(0f, -74.95f), new(0f, -6.01f), new(0f, 58.62f), new(0f, 97.61f) },
-            Pds   = new Vector2[] { new(-17.02f, 125.4f), new(17.02f, 125.4f) },
-            TurretTexScale = 2f / 5.5f, MainBarrel = 24.4f, PdBarrel = 11f, PdRing = 6f },
-        // Carrier, 297.5 u (the drawing at 170 u, 75% larger): the runway down its centre, 30.4 u
-        // wide, with the white deck either side of it (15.4 to 37.8 u out) where the bombers park,
-        // three sponsons outboard on each flank. Point defence on the two middle sponsons and on the
-        // stern block (the bow is where a bomber lifting off passes), at 2.01x.
+            Texture = "res://battleship_hull.png", Length = 378f, HalfWidth = 43.875f,
+            Mains = new Vector2[] { new(0f, -93.85f), new(0f, -7.56f), new(0f, 73.34f), new(0f, 122.15f) },
+            Pds   = new Vector2[] { new(-21.3f, 156.93f), new(21.3f, 156.93f) },
+            TurretTexScale = 2.5f / 5.5f, MainBarrel = 30.5f, PdBarrel = 13.75f, PdRing = 7.5f },
+        // Carrier, 283.5 u, 25% smaller than the battleship: the runway down its centre, 29 u wide,
+        // with the white deck either side of it (14.7 to 36 u out) where the bombers park, three
+        // sponsons outboard on each flank. Point defence on the two middle sponsons and on the stern
+        // block (the bow is where a bomber lifting off passes), at 1.92x. Its engine sits 8 u in
+        // from the stern block's end.
         [ShipClass.Carrier] = new ClassArt {
-            Texture = "res://carrier_player.png", Length = 297.5f, HalfWidth = 42f,
-            BayX = 26.25f, BayY = 8.75f, BaySpacing = 49f, RunwayBow = 115.5f,
-            Pds = new Vector2[] { new(-48.69f, -31.22f), new(48.69f, -31.22f), new(0f, 140.88f) },
-            TurretTexScale = 2.0125f / 5.5f, PdBarrel = 11.03f, PdRing = 6.04f },
-        // Destroyer, 227.5 u (the drawing at 130 u, 75% larger) -- still the smallest of the three --
-        // and 58 u across the hull. Its two main turrets on the fore spine and the central plate, its
-        // point defence on the stern quarters; the turrets at 1.4x.
+            Texture = "res://carrier_player.png", Length = 283.5f, HalfWidth = 40.02f,
+            BayX = 25.01f, BayY = 8.34f, BaySpacing = 46.69f, RunwayBow = 110.06f, EngineInset = 8f,
+            Pds = new Vector2[] { new(-46.39f, -29.75f), new(46.39f, -29.75f), new(0f, 134.22f) },
+            TurretTexScale = 1.9178f / 5.5f, PdBarrel = 10.51f, PdRing = 5.76f },
+        // Destroyer, 212.625 u, 25% smaller than the carrier -- the smallest of the three -- and 55 u
+        // across the hull. Its two main turrets on the fore spine and the central plate, its point
+        // defence on the stern quarters; the turrets at 1.31x.
         [ShipClass.Destroyer] = new ClassArt {
-            Texture = "res://destroyer_hull.png", Length = 227.5f, HalfWidth = 29.75f,
-            Mains = new Vector2[] { new(0f, -61.15f), new(0f, 26.43f) },
-            Pds   = new Vector2[] { new(-14.3f, 72.9f), new(14.3f, 72.9f) },
-            TurretTexScale = 1.4f / 5.5f, MainBarrel = 17.15f, PdBarrel = 7.7f, PdRing = 4.2f },
+            Texture = "res://destroyer_hull.png", Length = 212.625f, HalfWidth = 27.8f,
+            Mains = new Vector2[] { new(0f, -57.31f), new(0f, 24.66f) },
+            Pds   = new Vector2[] { new(-13.39f, 68.16f), new(13.39f, 68.16f) },
+            TurretTexScale = 1.3085f / 5.5f, MainBarrel = 16.03f, PdBarrel = 7.2f, PdRing = 3.93f },
     };
 
     public ClassArt MyArt => Art[Class];
@@ -8320,7 +8322,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
         }
         // engine plumes at the stern, in the accent colour
         if (Alive)
-            Plume.Draw(this, new Vector2(0, MyArt.Length * 0.5f), Vector2.Down, MyArt.Length, Accent,
+            Plume.Draw(this, new Vector2(0, MyArt.Length * 0.5f - MyArt.EngineInset), Vector2.Down, MyArt.Length, Accent,
                        0.25f + 0.75f * Mathf.Abs(SpeedAhead) / (float)Stats["max_speed"], Thrusting || Mathf.Abs(SpeedAhead) > 2f);
         foreach (var (p, t) in _signals)
         {
@@ -9918,7 +9920,7 @@ public partial class ShieldFlash : Node2D
 
 //==============================================================================
 // FILE: scripts/ShipClasses.cs
-// 625 lines   sha256 4d1fd09ccab4
+// 625 lines   sha256 b5fd9a06ae2d
 //==============================================================================
 using System.Linq;
 using Godot;
@@ -10212,8 +10214,8 @@ public partial class Wing : Node2D
     // grows to full size as it lifts, on the hauler's curve (Altitude). Every deck move runs in the
     // carrier's frame on its own clock, so a moving or turning carrier carries it exactly, and a
     // landing always ends: it is timed, not steered.
-    public const float LandedScale = 0.65f;         // the hauler's own: parked, 18 u across, inside the 22.4 u of white beside the runway
-    public const double LiftTime = 1.6, LandTime = 1.0, TaxiTime = 0.6;   // (the lift's run up 124 u of runway ends at about its top speed)
+    public const float LandedScale = 0.65f;         // the hauler's own: parked, 18 u across, inside the 21.3 u of white beside the runway
+    public const double LiftTime = 1.6, LandTime = 1.0, TaxiTime = 0.6;   // (the lift's run up 118 u of runway ends at about its top speed)
     private const double RollOut = 0.25;            // the share of a lift spent rolling out onto the runway
     private const float TouchRadius = 10f;          // over the carrier's centre within this, a bomber sets down
     private enum BSt { Docked, Lifting, Approach, Aim, Launch, Return, Landing, Taxiing }
@@ -13116,7 +13118,7 @@ Write-Host ("{0} -> {1}  x{2:0.0000}  ({3} samples)" -f $In, $Out, $Factor, [int
 
 //==============================================================================
 // FILE: tools/make_ships.ps1
-// 620 lines   sha256 5c71226cc853
+// 620 lines   sha256 3541b0dd9954
 //==============================================================================
 # THE SHIPS' ART, made from the owner's line drawings in art_source\ (kept out of the game by its
 # .gdignore). Each drawing is turned nose-up, made exactly symmetrical -- the half on one side of the
@@ -13137,7 +13139,7 @@ Write-Host ("{0} -> {1}  x{2:0.0000}  ({3} samples)" -f $In, $Out, $Factor, [int
 #
 # It prints every mount it placed, in world units, for PlayerShip.Art and Raider.
 # Run: powershell -ExecutionPolicy Bypass -File tools\make_ships.ps1 [-Preview <png>]
-param([string]$Preview = '', [double]$BattleshipTurrets = 2.0, [double]$DestroyerTurrets = 1.4, [double]$CarrierTurrets = 2.0125)
+param([string]$Preview = '', [double]$BattleshipTurrets = 2.5, [double]$DestroyerTurrets = 1.3085, [double]$CarrierTurrets = 1.9178)
 $ErrorActionPreference = 'Stop'
 $Root = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $Src = Join-Path $Root 'art_source'
@@ -13615,7 +13617,7 @@ function U($s, [int]$i, [double]$length) {
 }
 function Out-Sheet($s, [string]$name) { $s.Save((Join-Path $Root $name)); "{0,-24} {1} x {2}" -f $name, $s.W, $s.H }
 
-# ── the carrier, 297.5 u (the owner's 170 u, 75% larger): nose up already ──
+# ── the carrier, 283.5 u (25% smaller than the battleship): nose up already ──
 $c = Load 'carrier.png'
 $c.Mark(124, 301.5)          # 0  the centre of the runway, where bombers land
 $c.Mark(71, 301.5)           # 1  the port deck, beside the runway: the bays' line
@@ -13625,29 +13627,29 @@ $c.Mark(22, 238)             # 4  the middle port sponson: a point-defence turre
 $c.Mark(121, 588)            # 5  the stern block: the third point-defence turret (clear of the bow,
                              #    where a bomber lifting off passes over)
 $c.Mark(44, 301.5)           # 6  the hull's port side (the sponsons are outboard of it)
-$c = [Sheet]::Hull($c, $false, 1190, $true)
+$c = [Sheet]::Hull($c, $false, 1134, $true)
 Out-Sheet $c 'carrier_player.png'
-0..6 | ForEach-Object { "  carrier mark $_ : $(U $c $_ 297.5)" }
+0..6 | ForEach-Object { "  carrier mark $_ : $(U $c $_ 283.5)" }
 
-# ── the battleship, 302.4 u: drawn nose-right, then twice as wide and 35% larger (the owner's) ──
+# ── the battleship, 378 u: drawn nose-right, twice as wide, then 35% and 25% larger (the owner's) ──
 $b = Load 'battleship.png'
 $b.Blank(255, 0, 318, 14); $b.Blank(705, 292, 780, 307)          # two pieces of the next drawing on the sheet
 foreach ($t in @(@(200, 310), @(383, 512), @(684, 800), @(1008, 1120))) { $b.PatchColumns($t[0], 114, $t[1], 190, 1215, 117) }
 foreach ($m in @(1055, 735, 435, 254)) { $b.Mark($m, 152) }        # 0-3 the main turrets, bow to stern
 $b.Mark(125, 112)                                                   # 4  point defence, on the stern's port quarter
 $b.Mark(700, 80)                                                    # 5  the hull's port side, amidships
-$b = [Sheet]::Hull($b, $true, 1210, $true, 2)
+$b = [Sheet]::Hull($b, $true, 1512, $true, 2)
 Out-Sheet $b 'battleship_hull.png'
-0..5 | ForEach-Object { "  battleship mark $_ : $(U $b $_ 302.4)" }
+0..5 | ForEach-Object { "  battleship mark $_ : $(U $b $_ 378)" }
 
-# ── the destroyer, 227.5 u (130 u, 75% larger), still the smallest: drawn nose-right ──
+# ── the destroyer, 212.625 u (25% smaller than the carrier): drawn nose-right ──
 $d = Load 'destroyer.png'
 $d.Mark(195, 48.5); $d.Mark(97, 48.5)                               # 0-1 main turrets: the fore spine, the central plate
 $d.Mark(45, 33)                                                     # 2  point defence, aft to port
 $d.Mark(130, 16)                                                    # 3  the hull's port side
-$d = [Sheet]::Hull($d, $true, 910, $true)
+$d = [Sheet]::Hull($d, $true, 850, $true)
 Out-Sheet $d 'destroyer_hull.png'
-0..3 | ForEach-Object { "  destroyer mark $_ : $(U $d $_ 227.5)" }
+0..3 | ForEach-Object { "  destroyer mark $_ : $(U $d $_ 212.625)" }
 
 # ── the raiders ──
 $h = Load 'heavy_fighter.png'
@@ -13695,10 +13697,10 @@ if ($Preview) {
     $ppu = 2.0
     $main = [System.Drawing.Color]::FromArgb(255, 153, 153, 153); $acc = [System.Drawing.Color]::FromArgb(255, 255, 255, 255)
     $bg = [System.Drawing.Color]::FromArgb(255, 11, 15, 24)
-    $ships = @(@($c, 297.5), @($b, 302.4), @($d, 227.5), @($h, 136.0), @($l, 34.0))
+    $ships = @(@($c, 283.5), @($b, 378.0), @($d, 212.625), @($h, 136.0), @($l, 34.0))
     $bsT = $BattleshipTurrets; $ddT = $DestroyerTurrets; $cvT = $CarrierTurrets     # each class's turret scale, x the battleship's first
     $Wp = 60; foreach ($s in $ships) { $Wp += [int]($s[0].W * $s[1] / $s[0].H * $ppu) + 60 }
-    $Hp = [int](302.4 * $ppu) + 80
+    $Hp = [int](378 * $ppu) + 80
     $out = New-Object System.Drawing.Bitmap $Wp, $Hp
     $g = [System.Drawing.Graphics]::FromImage($out)
     $g.Clear($bg); $g.InterpolationMode = 'HighQualityBicubic'; $g.SmoothingMode = 'AntiAlias'; $g.PixelOffsetMode = 'HighQuality'
@@ -13729,7 +13731,7 @@ if ($Preview) {
             $bay = At 1; $bl = 28.125 * 0.65 * $ppu
             foreach ($row in -1, 0, 1) { foreach ($sd in -1, 1) { if ($row -eq 1 -and $sd -eq 1) { continue }
                 $bx = if ($sd -lt 0) { $bay[0] } else { 2 * $cx - $bay[0] }
-                Place $bomber $bx ($bay[1] + $row * 49 * $ppu) ($bl * $bomber.Width / $bomber.Height) $bl 0 } }
+                Place $bomber $bx ($bay[1] + $row * 46.69 * $ppu) ($bl * $bomber.Width / $bomber.Height) $bl 0 } }
             $q = At 3; Place $bomber $q[0] $q[1] (28.125 * $ppu * $bomber.Width / $bomber.Height) (28.125 * $ppu) 0
         }
         $x0 += $w + 60
@@ -15490,7 +15492,7 @@ echo "SMOKE TEST PASSED"
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 4385 lines   sha256 bdbc6837f11c
+// 4385 lines   sha256 959486f96f0b
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -16407,14 +16409,14 @@ public partial class _Test : Node
         // the owner's line-art hull, its painted turrets painted over: the moving turrets stand where
         // they stood, on the spine, and point defence on the stern
         var hullSpr = ship.GetChildren().OfType<Sprite2D>().First();
-        Check(hullSpr.Texture.ResourcePath.EndsWith("battleship_hull.png") && Math.Abs(hullSpr.Texture.GetHeight() * hullSpr.Scale.Y - 302.4f) < 0.5f
-              && Math.Abs(ship.MyArt.HalfWidth - 35.1f) < 1e-4,
-              "battleship is the owner's line-art hull made twice as wide, then 35% larger: 302.4 u (224 x 1.35), a 35.1 u half-beam (13 x 2 x 1.35)");
+        Check(hullSpr.Texture.ResourcePath.EndsWith("battleship_hull.png") && Math.Abs(hullSpr.Texture.GetHeight() * hullSpr.Scale.Y - 378f) < 0.5f
+              && Math.Abs(ship.MyArt.HalfWidth - 43.875f) < 1e-4,
+              "battleship is the owner's line-art hull made twice as wide, then 35% and 25% larger: 378 u (224 x 1.35 x 1.25), a 43.875 u half-beam");
         var tsprites = Nodes<Turret>(ship).Select(x => x.GetChildren().OfType<Sprite2D>().FirstOrDefault()).ToList();
         Check(tsprites.Count == 6 && tsprites.All(x => x != null)
               && tsprites.Count(x => x.Texture.ResourcePath.EndsWith("turret_main.png")) == 4
               && tsprites.Count(x => x.Texture.ResourcePath.EndsWith("turret_pd.png")) == 2
-              && Nodes<Turret>(ship).All(x => x.PointDefense ? x.Offset.Y > 120f : Mathf.Abs(x.Offset.X) < 1e-6f),
+              && Nodes<Turret>(ship).All(x => x.PointDefense ? x.Offset.Y > 150f : Mathf.Abs(x.Offset.X) < 1e-6f),
               "four main turrets on the spine and two point-defence turrets on the stern, in the owner's turret art");
         // DAMAGE NUMBERS: small figures where damage lands -- gold for damage dealt, red for damage
         // taken -- floating up and gone after a second or so; hits in quick succession add into one
@@ -17177,10 +17179,10 @@ public partial class _Test : Node
         {
             var dspr = ship.GetChildren().OfType<Sprite2D>().First();
             var dts = Nodes<Turret>(ship).ToList();
-            Check(ship.Class == ShipClass.Destroyer && dspr.Texture.ResourcePath.EndsWith("destroyer_hull.png") && Math.Abs(dspr.Texture.GetHeight() * dspr.Scale.Y - 227.5f) < 0.5f
-                  && Math.Abs(PlayerShip.Art[ShipClass.Destroyer].HalfWidth - 29.75f) < 1e-4 && dts.Count(t => !t.PointDefense) == 2 && dts.Count(t => t.PointDefense) == 2
-                  && Math.Abs(PlayerShip.Art[ShipClass.Carrier].Length - 297.5f) < 1e-4 && Math.Abs(PlayerShip.Art[ShipClass.Battleship].Length - 302.4f) < 1e-4,
-                  "the destroyer: its own hull 75% larger, 227.5 u (130 x 1.75), still smaller than the carrier's 297.5 (170 x 1.75) and the battleship's 302.4, a 29.75 u half-beam; two main turrets, two PD");
+            Check(ship.Class == ShipClass.Destroyer && dspr.Texture.ResourcePath.EndsWith("destroyer_hull.png") && Math.Abs(dspr.Texture.GetHeight() * dspr.Scale.Y - 212.625f) < 0.5f
+                  && Math.Abs(PlayerShip.Art[ShipClass.Destroyer].HalfWidth - 27.8f) < 1e-4 && dts.Count(t => !t.PointDefense) == 2 && dts.Count(t => t.PointDefense) == 2
+                  && Math.Abs(PlayerShip.Art[ShipClass.Carrier].Length - 283.5f) < 1e-4 && Math.Abs(PlayerShip.Art[ShipClass.Battleship].Length - 378f) < 1e-4,
+                  "the destroyer 25% smaller than the carrier (212.625 u), the carrier 25% smaller than the battleship (283.5 of 378); a 27.8 u half-beam; two main turrets, two PD");
             Check(help.Text.StartsWith("DESTROYER") && help.Text.Contains("mouse aims the main guns"), "controls line is destroyer-specific");
             Check(Abilities.For(ShipClass.Destroyer).Where(a => !a.Open).Select(a => a.Id).SequenceEqual(new[] { "guns", "firemode", "missile", "reload", "pd" })
                   && Abilities.KeyFor(ShipClass.Destroyer, "missile") == global::Godot.Key.F && Abilities.KeyFor(ShipClass.Destroyer, "reload") == global::Godot.Key.R,
@@ -17364,8 +17366,8 @@ public partial class _Test : Node
         Check(Math.Abs(ship.Stats["control_range"] - 1080) < 0.01 && Math.Abs(ship.Stats["strike_range"] - 2160) < 0.01,
               "fighter control range 1080 (1.5x the battleship's guns); bomber strike range 2160 (2x)");
         var spr = Nodes<Sprite2D>(ship).First();
-        Check(spr.Texture.ResourcePath.EndsWith("carrier_player.png") && Math.Abs(spr.Texture.GetHeight() * spr.Scale.Y - 297.5f) < 0.5f,
-              "carrier flies the owner's line-art sprite 75% larger: 297.5 u (170 x 1.75)");
+        Check(spr.Texture.ResourcePath.EndsWith("carrier_player.png") && Math.Abs(spr.Texture.GetHeight() * spr.Scale.Y - 283.5f) < 0.5f,
+              "carrier flies the owner's line-art sprite at 283.5 u, 25% smaller than the battleship");
         await Park(new Vector2(780, 700), 0);
         var pdLight = H.SpawnRaider(new Vector2(700, 860));            // a third light target (the practice fighters are two)
         Key(global::Godot.Key.Q); await Wait(2.0);
@@ -17396,7 +17398,7 @@ public partial class _Test : Node
             var lp = ship.ToLocal(bw.Position); var bsp = Nodes<Sprite2D>(bw).First();
             float half = bsp.Texture.GetWidth() * bsp.Scale.X * 0.5f;
             Check(Mathf.Abs(Mathf.AngleDifference(bw.Rotation, ship.Rotation)) < 0.01f && Math.Abs(bsp.Texture.GetHeight() * bsp.Scale.Y - 28.125f * 0.65f) < 0.05f
-                  && Mathf.Abs(lp.X) - half > 15.2f && Mathf.Abs(lp.X) + half < 37.9f,
+                  && Mathf.Abs(lp.X) - half > 14.7f && Mathf.Abs(lp.X) + half < 36f,
                   $"a parked bomber sits at 65% on the white deck beside the runway, facing the bow ({Mathf.Abs(lp.X) - half:0.0} to {Mathf.Abs(lp.X) + half:0.0} u out)");
         }
         int sig0 = ship.SignalsLit;
@@ -17527,8 +17529,8 @@ public partial class _Test : Node
             var lorder = bws.Select(w => w.LaunchedAt).Where(t => t >= 0).OrderBy(t => t).ToList();
             double lgap = 99; for (int g = 1; g < lorder.Count; g++) lgap = Math.Min(lgap, lorder[g] - lorder[g - 1]);
             Check(lorder.Count == 2 && lgap >= 0.83 - 1e-9, $"the bombers take off one at a time, at least 0.83 s apart, as the fighters launch ({lgap:0.000} s)");
-            Check(liftMin < 0.66f && liftMax > 0.99f && bowY < -110f,
-                  $"a bomber lifts off the deck: from 65% to full size, up the runway to its bow end, 115.5 u ahead ({liftMin:0.00} to {liftMax:0.00}; {-bowY:0} u ahead)");
+            Check(liftMin < 0.66f && liftMax > 0.99f && bowY < -104f,
+                  $"a bomber lifts off the deck: from 65% to full size, up the runway to its bow end, 110 u ahead ({liftMin:0.00} to {liftMax:0.00}; {-bowY:0} u ahead)");
         }
         Wing crawl = null;
         for (int i = 0; i < 2400 && crawl == null; i++) { crawl = Nodes<Wing>().FirstOrDefault(w => w.Carrier == ship && w.Launching); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
@@ -19744,7 +19746,7 @@ public partial class _Test : Node
                     {
                         float k = (float)(dt / 1.6), u = Mathf.Clamp((k - 0.25f) / 0.75f, 0f, 1f);
                         var want = k < 0.25f ? bay.Lerp(new Vector2(0f, bay.Y), Mathf.SmoothStep(0f, 1f, k / 0.25f))
-                                             : new Vector2(0f, bay.Y).Lerp(new Vector2(0f, -115.5f), u * u);
+                                             : new Vector2(0f, bay.Y).Lerp(new Vector2(0f, -110.06f), u * u);
                         gOff = Mathf.Max(gOff, lp.DistanceTo(want));
                         if (Mathf.Abs(lp.X) < 0.01f) gLift = Mathf.Min(gLift, drawn);
                         if (Mathf.Abs(lp.X) < 0.01f && lp.Y < -40f) gBow = true;
