@@ -72,65 +72,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged
     // ── art: sprite, size, and where the turrets sit ─────────────────────────
     // Shared with the character preview, so the preview shows the real hull with
     // turrets on the real mounts. Offsets are in world units, nose up (-y).
-    public class ClassArt
-    {
-        public string Texture;
-        public float Length;          // nose to tail, world units
-        public float HalfWidth = 20f; // half the hull's beam: the collider and the shield
-        // How far the free camera (Y) may wander from the ship: 5000 for a capital ship.
-        public float CameraRange = 5000f;
-        public Vector2[] Mains = Array.Empty<Vector2>(), Pds = Array.Empty<Vector2>();
-
-        // The turrets are their own sprites (barrels up, pivot at the sheet's centre), so they
-        // can turn: one main turret and one point-defence turret for every class, each class
-        // mounting them at its own size (tools/make_ships.ps1 draws both).
-        public string MainTurret = "res://turret_main.png", PdTurret = "res://turret_pd.png";
-        public float TurretTexScale = 1f;   // world units per turret-texture pixel
-        public float MainBarrel = 24f, PdBarrel = 15f, PdRing = 4.5f;   // world units
-
-        // The carrier's deck. Bombers park in BAYS on the white either side of the runway: x out
-        // from the keel, the centre of each row, the spacing along it. They lift off at the
-        // runway's bow end, RunwayBow ahead of the centre, and land on its centre (world units).
-        public float BayX, BayY, BaySpacing, RunwayBow;
-        public float EngineInset;          // the engine's plume this far in from the stern (world units)
-    }
-
-    // Every hull is the owner's line art (tools/make_ships.ps1: symmetrical, grey, tinted here with
-    // the hull colour), and every mount below is measured from it: the tool prints them. A turret at
-    // TurretTexScale 1/5.5 is 12 u across the housing, the muzzles 12.2 u from the pivot; point
-    // defence 6 u across, the muzzle 5.5 u out. Each class mounts them at its own multiple of that.
-    public static readonly Dictionary<ShipClass, ClassArt> Art = new()
-    {
-        // Battleship, 378 u -- by far the largest: the drawing made twice as wide, then 35% and 25%
-        // larger (the owner's), so 77 u across the hull (pods and fins outboard of it). Its four main
-        // turrets stand where the drawing's four painted turrets did, on the spine, at 2.5x -- the
-        // drawing's own turret-to-hull proportion; its two point-defence turrets on the stern quarters.
-        [ShipClass.Battleship] = new ClassArt {
-            Texture = "res://battleship_hull.png", Length = 378f, HalfWidth = 43.875f,
-            Mains = new Vector2[] { new(0f, -93.85f), new(0f, -7.56f), new(0f, 73.34f), new(0f, 122.15f) },
-            Pds   = new Vector2[] { new(-21.3f, 156.93f), new(21.3f, 156.93f) },
-            TurretTexScale = 2.5f / 5.5f, MainBarrel = 30.5f, PdBarrel = 13.75f, PdRing = 7.5f },
-        // Carrier, 283.5 u, 25% smaller than the battleship: the runway down its centre, 29 u wide,
-        // with the white deck either side of it (14.7 to 36 u out) where the bombers park, three
-        // sponsons outboard on each flank. Point defence on the two middle sponsons and on the stern
-        // block (the bow is where a bomber lifting off passes), at 1.92x. Its engine sits 8 u in
-        // from the stern block's end.
-        [ShipClass.Carrier] = new ClassArt {
-            Texture = "res://carrier_player.png", Length = 283.5f, HalfWidth = 40.02f,
-            BayX = 25.01f, BayY = 8.34f, BaySpacing = 46.69f, RunwayBow = 110.06f, EngineInset = 8f,
-            Pds = new Vector2[] { new(-46.39f, -29.75f), new(46.39f, -29.75f), new(0f, 134.22f) },
-            TurretTexScale = 1.9178f / 5.5f, PdBarrel = 10.51f, PdRing = 5.76f },
-        // Destroyer, 212.625 u, 25% smaller than the carrier -- the smallest of the three -- and 55 u
-        // across the hull. Its two main turrets on the fore spine and the central plate, its point
-        // defence on the stern quarters; the turrets at 1.31x.
-        [ShipClass.Destroyer] = new ClassArt {
-            Texture = "res://destroyer_hull.png", Length = 212.625f, HalfWidth = 27.8f,
-            Mains = new Vector2[] { new(0f, -57.31f), new(0f, 24.66f) },
-            Pds   = new Vector2[] { new(-13.39f, 68.16f), new(13.39f, 68.16f) },
-            TurretTexScale = 1.3085f / 5.5f, MainBarrel = 16.03f, PdBarrel = 7.2f, PdRing = 3.93f },
-    };
-
-    public ClassArt MyArt => Art[Class];
+    public ClassArt MyArt => Classes.Art(Class);
 
     // ── the owner's intent, replicated at 20 Hz ──────────────────────────────
     public Vector2 AimPoint;               // where the main guns point
@@ -171,7 +113,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged
     public int MissilesLoaded => _mag;
     public double MissileReloadLeft => _missileReload;
     public bool Reloading => _missileReload > 0;
-    private bool CanFireMissile => Classes.Missiles(Class) && _mag > 0 && !Reloading && _missileRefire <= 0;
+    private bool CanFireMissile => Stats.Def.Has(Fit.Missiles) && _mag > 0 && !Reloading && _missileRefire <= 0;
 
     // The broadside (battleship): a wind-up while the turrets swing onto the cursor, then every main
     // gun fires, volley after volley, then the cooldown. The host acts on it; every peer counts the
@@ -183,7 +125,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged
     public double BroadsideCooldownLeft => _bsCooldown;
     // wound up or firing: the main turrets swing fast enough to reach the cursor within the wind-up
     public bool BroadsideTracking => _bsWindup > 0 || _bsVolleys > 0;
-    private bool BroadsideReady => Classes.Broadside(Class) && Alive && !BroadsideTracking && _bsCooldown <= 0;
+    private bool BroadsideReady => Stats.Def.Has(Fit.Broadside) && Alive && !BroadsideTracking && _bsCooldown <= 0;
 
     private readonly List<Turret> _turrets = new();
     private readonly List<Turret> _mains = new();
@@ -377,7 +319,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged
         if (id == "firemode") { Staggered = !Staggered; return; }
         // The missile needs a selected target within range. Checked here, on the owner's
         // machine, so the slot can say why at once; the host checks again.
-        if (id == "missile" && Classes.Missiles(Class))
+        if (id == "missile" && Stats.Def.Has(Fit.Missiles))
         {
             var t = targetId != 0 ? Combat.ById(targetId) : null;
             string why = t == null ? "NO TARGET" : Position.DistanceTo(t.Position) > Stats["missile_range"] ? "OUT OF RANGE" : null;
@@ -401,14 +343,14 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged
             case "reboard": if (CanReboard) { Alive = true; Hp = MaxHp * ReboardHull; _stasis = 0; } break;
             case "pd":      if (PdReady) _pdLeft = Stats["pd_active"]; break;
             case "missile": FireMissile(t); break;
-            case "reload":  if (Classes.Missiles(Class) && !Reloading && _mag < (int)Stats["missile_mag"])
+            case "reload":  if (Stats.Def.Has(Fit.Missiles) && !Reloading && _mag < (int)Stats["missile_mag"])
                                 _missileReload = Stats["missile_reload"]; break;
             case "broadside": if (BroadsideReady) _bsWindup = Stats["broadside_windup"]; break;
-            case "attack":  if (Classes.Wing(Class) && t != null) { WingTarget = t; _attacking = true; } break;
+            case "attack":  if (Stats.Def.Has(Fit.Wing) && t != null) { WingTarget = t; _attacking = true; } break;
             case "recall":  WingTarget = null; _attacking = false; break;
             case "bombers":
                 // within the strike range (twice the fighters' control range) only
-                if (Classes.Wing(Class) && t != null && StrikeTarget == null && _strikesOut <= 0 && BombersReady > 0
+                if (Stats.Def.Has(Fit.Wing) && t != null && StrikeTarget == null && _strikesOut <= 0 && BombersReady > 0
                     && Position.DistanceTo(t.Position) <= Stats["strike_range"])
                 {   // the bombers armed now are the strike: each is called, and answers once
                     StrikeTarget = t; _strikesOut = 0;
@@ -703,7 +645,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged
     // per salvo's one, so it would fall behind (measured: 4.50 vs 6.00 DPS).
     private void FireControl(double delta)
     {
-        if (!Classes.Guns(Class) || _mains.Count == 0) return;
+        if (!Stats.Def.Has(Fit.Guns) || _mains.Count == 0) return;
         if (!Trigger) { _gunCd = Math.Max(0, _gunCd - delta); return; }   // keep reloading while idle
 
         double interval = Stats["main_interval"];
@@ -749,7 +691,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged
         if (!locked)
         {
             AimPoint = GetGlobalMousePosition();
-            Trigger = Classes.Guns(Class) && Input.IsKeyPressed(Abilities.KeyFor(Class, "guns"));
+            Trigger = Stats.Def.Has(Fit.Guns) && Input.IsKeyPressed(Abilities.KeyFor(Class, "guns"));
         }
 
         SendState(dt);

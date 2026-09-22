@@ -18,7 +18,7 @@ public static class Progression
     public class Upgrade { public string Id, Name, Unit; public double Per; }
 
     // The damage upgrade lands on each hull's main weapon: its gun shells, or its torpedoes.
-    public static string DamageStat(ShipClass c) => Classes.Wing(c) ? "torpedo_damage" : "main_damage";
+    public static string DamageStat(ShipClass c) => Classes.Has(c, Fit.Wing) ? "torpedo_damage" : "main_damage";
     public static string StatFor(string id, ShipClass c) => id switch
     {
         "turn" => "turn_rate", "hull" => "hull", "speed" => "max_speed", "damage" => DamageStat(c), _ => null

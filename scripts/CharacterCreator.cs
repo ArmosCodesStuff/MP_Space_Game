@@ -159,7 +159,7 @@ public partial class CharacterCreator : CanvasLayer
 
 // The ship as it will look in game: the class's real sprite, tinted with the hull
 // colour exactly as PlayerShip tints it, with its turrets in the accent colour on the
-// real mounts (PlayerShip.Art). Live reads the current character every redraw; otherwise
+// real mounts (ClassDef.Art). Live reads the current character every redraw; otherwise
 // it draws the fixed values it was given (the select screen shows one per row).
 public partial class ShipPreview : Control
 {
@@ -180,7 +180,8 @@ public partial class ShipPreview : Control
     {
         if (Live) { Main = Character.Main; Accent = Character.Accent; Class = Character.Class; }
         DrawRect(new Rect2(Vector2.Zero, Size), new Color(0.05f, 0.07f, 0.12f));
-        if (!PlayerShip.Art.TryGetValue(Class, out var art)) return;
+        var art = Classes.Art(Class);
+        if (art.Texture == null) return;                       // a class with no hull drawn yet
         var tex = Tex(art.Texture);
 
         // In a wide box (the select screen's rows) the ship lies nose-right so it can

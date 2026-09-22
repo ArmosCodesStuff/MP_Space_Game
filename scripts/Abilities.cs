@@ -26,45 +26,6 @@ public class AbilityDef
 
 public static class Abilities
 {
-    private static readonly Dictionary<ShipClass, AbilityDef[]> ByClass = new()
-    {
-        [ShipClass.Battleship] = new[]
-        {
-            new AbilityDef { Id = "guns",     Name = "Main guns",     Short = "GUNS",   Kind = AbilityKind.Hold, Default = Key.Space,
-                             Blurb = "Hold to fire. The barrels aim at the cursor and swing slowly." },
-            new AbilityDef { Id = "firemode", Name = "Fire mode",     Short = "MODE",   Default = Key.G,
-                             Blurb = "Salvo (all barrels at once) or staggered (one at a time). Same rate." },
-            new AbilityDef { Id = "broadside", Name = "Broadside",    Short = "BROADSIDE", Default = Key.F,
-                             Blurb = "The turrets swing onto the cursor, then every main gun fires three volleys. The ship steers throughout." },
-            new AbilityDef { Id = "pd",       Name = "Point defence", Short = "PD",     Default = Key.Q,
-                             Blurb = "Opens a firing window; each turret picks and tracks its own target. Recharges after." },
-        },
-        [ShipClass.Destroyer] = new[]
-        {
-            new AbilityDef { Id = "guns",     Name = "Main guns",     Short = "GUNS",   Kind = AbilityKind.Hold, Default = Key.Space,
-                             Blurb = "Hold to fire. The barrels aim at the cursor and swing slowly." },
-            new AbilityDef { Id = "firemode", Name = "Fire mode",     Short = "MODE",   Default = Key.G,
-                             Blurb = "Salvo (both barrels at once) or staggered (one at a time). Same rate." },
-            new AbilityDef { Id = "missile",  Name = "Missile burst", Short = "MSL",    Default = Key.F,
-                             Blurb = "Three guided missiles: one at the target, two launched wide that curve in. Needs a selected target in range. Uses the magazine." },
-            new AbilityDef { Id = "reload",   Name = "Reload missiles", Short = "RELOAD", Default = Key.R,
-                             Blurb = "Refills the missile magazine. Nothing fires while it runs." },
-            new AbilityDef { Id = "pd",       Name = "Point defence", Short = "PD",     Default = Key.Q,
-                             Blurb = "Opens a firing window; each turret picks and tracks its own target. Recharges after." },
-        },
-        [ShipClass.Carrier] = new[]
-        {
-            new AbilityDef { Id = "attack",  Name = "Fighters: attack", Short = "ATTACK", Default = Key.Space,
-                             Blurb = "Sends the fighters at the selected target while it is within control range." },
-            new AbilityDef { Id = "recall",  Name = "Fighters: recall", Short = "RECALL", Default = Key.R,
-                             Blurb = "Calls the fighters home: they dock inside the carrier." },
-            new AbilityDef { Id = "bombers", Name = "Bomber strike",    Short = "BOMB",   Default = Key.F,
-                             Blurb = "Bombers run at the target and launch torpedoes straight ahead. No tracking." },
-            new AbilityDef { Id = "pd",      Name = "Point defence",    Short = "PD",     Default = Key.Q,
-                             Blurb = "Opens a firing window; each turret picks and tracks its own target. Recharges after." },
-        },
-    };
-
     // Fixed hub controls. Binding one of these would break flying or the menus.
     public static readonly HashSet<Key> Reserved = new()
     {
@@ -89,8 +50,7 @@ public static class Abilities
     public static AbilityDef[] For(ShipClass c)
     {
         if (_full.TryGetValue(c, out var f)) return f;
-        var own = ByClass.TryGetValue(c, out var a) ? a : System.Array.Empty<AbilityDef>();
-        return _full[c] = own.Concat(Open).ToArray();
+        return _full[c] = Classes.Of(c).Abilities.Concat(Open).ToArray();
     }
 
     private static string SettingKey(ShipClass c, string id) => $"{c}.{id}";
@@ -131,23 +91,17 @@ public static class Abilities
 
     public static string KeyName(Key k) => k == Key.None ? "—" : OS.GetKeycodeString(k);
 
-    // The controls line along the bottom of the hub, per class. A class without an
-    // ability list yet (the seven reserved ones) gets a placeholder.
+    // The controls line along the bottom of the hub: the class's own part (ClassDef.Hint) and
+    // the fixed controls every class shares. Built ONCE per class -- the Hub asks for this every
+    // frame to see whether the line changed, and concatenating it allocated a string each time
+    // for text that only moves on a refit.
     private const string CommonHint = "W ahead  ·  S astern  ·  A/D rudder  ·  left-click select  ·  Tab nearest enemy  ·  wheel zoom  ·  Y free camera  ·  K abilities & stats  ·  B base  ·  L pilot  ·  I equipment  ·  V warp  ·  Esc menu";
-    // Built once. The Hub asks for this EVERY FRAME to see whether the line changed, and the
-    // concatenation allocated a new string each time for text that only moves on a refit.
-    private static readonly string BattleshipHint = "BATTLESHIP  ·  mouse aims the main guns  ·  " + CommonHint;
-    private static readonly string CarrierHint    = "CARRIER  ·  " + CommonHint;
-    private static readonly string DestroyerHint  = "DESTROYER  ·  mouse aims the main guns  ·  " + CommonHint;
+    private static readonly Dictionary<ShipClass, string> _hints = new();
 
     public static string ControlsHint(ShipClass c)
     {
-        return c switch
-        {
-            ShipClass.Battleship => BattleshipHint,
-            ShipClass.Carrier    => CarrierHint,
-            ShipClass.Destroyer  => DestroyerHint,
-            _ => "placeholder",
-        };
+        if (_hints.TryGetValue(c, out var h)) return h;
+        string own = Classes.Of(c).Hint;
+        return _hints[c] = own.Length > 0 ? own + "  ·  " + CommonHint : CommonHint;
     }
 }

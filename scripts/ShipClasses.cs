@@ -19,8 +19,6 @@ using System;
 // renders what it is told. The owner decides only its heading, where it aims, and
 // whether it is pulling the trigger -- never what the shot hits.
 // ─────────────────────────────────────────────────────────────────────────────
-public enum ShipClass { Battleship, Carrier, Destroyer }
-
 // What fired a laser, which decides which report is played. Not a volume: the level lives in
 // the file (see tools/gain.ps1), so a new kind of shot is a new sound rather than a new offset.
 public enum ShotSound { Light, Fighter, Boss }
@@ -88,7 +86,7 @@ public partial class Turret : Node2D
     public double Interval   => PointDefense ? S["pd_interval"] : S["main_interval"];
 
     private Sprite2D _sprite;          // the turret's own sprite (ClassArt.MainTurret / PdTurret)
-    private PlayerShip.ClassArt Art => Ship.MyArt;
+    private ClassArt Art => Ship.MyArt;
     private float BarrelLength => PointDefense ? Art.PdBarrel : Art.MainBarrel;
 
     public void Setup(PlayerShip ship, Vector2 offset, bool pd)

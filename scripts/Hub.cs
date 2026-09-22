@@ -28,7 +28,7 @@ public partial class Hub : Node2D
     public static float LaneY => HaulerPad.Y;
     public const float BaseBottom = 260f;                     // the pad's lower edge
     // a new ship's centre below the pad: half the longest class and a margin, so any class spawns clear
-    private static readonly float SpawnClear = PlayerShip.Art.Values.Max(a => a.Length) * 0.5f + 30f;
+    private static readonly float SpawnClear = Classes.All.Max(c => c.Art.Length) * 0.5f + 30f;
     public static readonly Vector2 StemFoot = new(0f, 175f);  // where the pad hangs from the station
     // Both fields' nearest edges sit 1500 u from the base's centre (about 6.7 battleship
     // lengths): room for a blockade outside the base's 600 u missile cover. Measured to each

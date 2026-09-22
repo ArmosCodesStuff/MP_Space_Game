@@ -989,7 +989,7 @@ public partial class _Test : Node
         Check(Math.Abs(Wing.BomberLength - 37.5f * 0.75f) < 1e-4, "bombers are 25% smaller (28.1 u)");
         var baseSpr = H.GetNode<Sprite2D>("Base");
         Check(baseSpr.Texture.ResourcePath.EndsWith("base_station.png") && Math.Abs(baseSpr.Scale.X - Hub.BaseScale) < 0.001f, "the base is the new station sprite");
-        Check(ship.Position.Y - PlayerShip.Art[ship.Class].Length / 2 > Hub.BaseBottom, "a new ship spawns clear of the base");
+        Check(ship.Position.Y - Classes.Art(ship.Class).Length / 2 > Hub.BaseBottom, "a new ship spawns clear of the base");
 
 
         // ── the idle economy: layout ──
@@ -1580,7 +1580,7 @@ public partial class _Test : Node
             Ready(); me.Position = d2w.Position + new Vector2(0, 1400); await Wait(0.3);
             Click(Scr(d2w.Position)); await Wait(0.05);
             Key(global::Godot.Key.V); await Wait(PlayerShip.WarpWarmup + 0.2);
-            float want = d2w.HitRadius + PlayerShip.Art[me.Class].Length * 0.5f + PlayerShip.WarpStandoff;
+            float want = d2w.HitRadius + Classes.Art(me.Class).Length * 0.5f + PlayerShip.WarpStandoff;
             Check(Math.Abs(me.Position.DistanceTo(d2w.Position) - want) < 20f, $"a target ahead: it warps to just short of it ({me.Position.DistanceTo(d2w.Position):0} u, wanted {want:0})");
             // a target behind: outside the cone, so straight ahead instead
             Ready(); me.Position = d2w.Position + new Vector2(0, -900); var s3 = me.Position; await Wait(0.2);
@@ -1615,7 +1615,7 @@ public partial class _Test : Node
             Click(OnRadar(Hub.BasePos)); await Wait(0.05);
             me.Position = Hub.BasePos + new Vector2(0, 1500); me.Rotation = 0f; await Wait(0.2);    // the base dead ahead
             Key(global::Godot.Key.V); await Wait(PlayerShip.WarpWarmup + 0.2);
-            float wantB = 260f + PlayerShip.Art[me.Class].Length * 0.5f + PlayerShip.WarpStandoff;
+            float wantB = 260f + Classes.Art(me.Class).Length * 0.5f + PlayerShip.WarpStandoff;
             Check(Math.Abs(me.Position.DistanceTo(Hub.BasePos) - wantB) < 20f, $"a warp to the waypoint lands just short of the base ({me.Position.DistanceTo(Hub.BasePos):0} u)");
             H.ClearSelection();
             Ready(); me.Position = warpHome;
@@ -1686,8 +1686,8 @@ public partial class _Test : Node
             var dspr = ship.GetChildren().OfType<Sprite2D>().First();
             var dts = Nodes<Turret>(ship).ToList();
             Check(ship.Class == ShipClass.Destroyer && dspr.Texture.ResourcePath.EndsWith("destroyer_hull.png") && Math.Abs(dspr.Texture.GetHeight() * dspr.Scale.Y - 212.625f) < 0.5f
-                  && Math.Abs(PlayerShip.Art[ShipClass.Destroyer].HalfWidth - 27.8f) < 1e-4 && dts.Count(t => !t.PointDefense) == 2 && dts.Count(t => t.PointDefense) == 2
-                  && Math.Abs(PlayerShip.Art[ShipClass.Carrier].Length - 283.5f) < 1e-4 && Math.Abs(PlayerShip.Art[ShipClass.Battleship].Length - 378f) < 1e-4,
+                  && Math.Abs(Classes.Art(ShipClass.Destroyer).HalfWidth - 27.8f) < 1e-4 && dts.Count(t => !t.PointDefense) == 2 && dts.Count(t => t.PointDefense) == 2
+                  && Math.Abs(Classes.Art(ShipClass.Carrier).Length - 283.5f) < 1e-4 && Math.Abs(Classes.Art(ShipClass.Battleship).Length - 378f) < 1e-4,
                   "the destroyer 25% smaller than the carrier (212.625 u), the carrier 25% smaller than the battleship (283.5 of 378); a 27.8 u half-beam; two main turrets, two PD");
             Check(help.Text.StartsWith("DESTROYER") && help.Text.Contains("mouse aims the main guns"), "controls line is destroyer-specific");
             Check(Abilities.For(ShipClass.Destroyer).Where(a => !a.Open).Select(a => a.Id).SequenceEqual(new[] { "guns", "firemode", "missile", "reload", "pd" })
@@ -1739,7 +1739,7 @@ public partial class _Test : Node
             Key(global::Godot.Key.F);
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             var burst = Burst();
-            var toTarget = (d1.Position - ship.ToGlobal(new Vector2(0, -PlayerShip.Art[ShipClass.Destroyer].Length * 0.5f))).Angle();
+            var toTarget = (d1.Position - ship.ToGlobal(new Vector2(0, -Classes.Art(ShipClass.Destroyer).Length * 0.5f))).Angle();
             var offs = burst.Select(m => Mathf.RadToDeg(Mathf.AngleDifference(toTarget, m.Dir.Angle()))).OrderBy(a => a).ToList();
             GD.Print($"  burst: {burst.Count} missiles at {string.Join(", ", offs.Select(a => a.ToString("0.0")))} degrees off the line to the target");
             Check(burst.Count == 3 && burst.All(m => m.TargetId == d1.NetId && m.TurnRate == 1.5f) && ship.MissilesLoaded == 2 && d1.Total == 0
@@ -1789,7 +1789,7 @@ public partial class _Test : Node
 
             // CLOSE IN, the fan narrows so the outer two can still come round: at 70 degrees on a
             // ~107 u turning circle they would circle a target 150 u off the nose until their run ended
-            ship.Position = d1.Position + new Vector2(0, 150f + PlayerShip.Art[ShipClass.Destroyer].Length * 0.5f);
+            ship.Position = d1.Position + new Vector2(0, 150f + Classes.Art(ShipClass.Destroyer).Length * 0.5f);
             ship.Velocity = Vector2.Zero; ship.Rotation = 0f;
             await Wait(TargetDummy.IdleReset + 0.2); d1.ResetMeter();
             Key(global::Godot.Key.F);
@@ -2854,8 +2854,8 @@ public partial class _Test : Node
             sh.Position = d3x.Position + new Vector2(0, -1200); await Wait(6.0);
             double taken1 = sh.DamageBySource.Values.Sum(); await Wait(6.0);        // (hull regenerates: count damage instead)
             Check(sh.DamageBySource.Values.Sum() == taken1, "outside 150 u it holds fire");
-            Check(sh.Covers(sh.Position + Vector2.Up.Rotated(sh.Rotation) * (PlayerShip.Art[sh.Class].Length * 0.45f), 0f)
-                  && !sh.Covers(sh.Position + Vector2.Right.Rotated(sh.Rotation) * (PlayerShip.Art[sh.Class].HalfWidth + 12f), 0f),
+            Check(sh.Covers(sh.Position + Vector2.Up.Rotated(sh.Rotation) * (Classes.Art(sh.Class).Length * 0.45f), 0f)
+                  && !sh.Covers(sh.Position + Vector2.Right.Rotated(sh.Rotation) * (Classes.Art(sh.Class).HalfWidth + 12f), 0f),
                   "the collider is a capsule: the bow is inside, a point just off the beam is not");
             // death
             sh.TakeDamage(sh.Hp + 1); await Wait(0.2);

@@ -39,7 +39,13 @@ public class Stat
 
 public class ShipStats
 {
+    // The carrier's pace: every one of its helm figures is a fraction of its own top speed, so it
+    // gets under way on its own clock. Named here because the class's row (Ships.cs) is written
+    // in terms of it.
+    public const double CarrierTop = 116.48;
+
     public readonly ShipClass Class;
+    public readonly ClassDef Def;
     public readonly List<Stat> All = new();
     private readonly Dictionary<string, Stat> _byId = new();
 
@@ -59,50 +65,48 @@ public class ShipStats
     // changes, not the class, so the ship still reads every other number the real one does.
     public void SetBase(string id, double v) { if (_byId.TryGetValue(id, out var s)) s.Base = v; }
 
+    // A row of the sheet. `b` is the DEFAULT: the class's own row overrides it by id
+    // (ClassDef.Nums), so a class states only what is different about it.
     private void Add(string group, string id, string label, double b, string unit, int dec = 1, bool inverse = false)
     {
-        var s = new Stat { Group = group, Id = id, Label = label, Base = b, Unit = unit, Decimals = dec, Inverse = inverse };
+        var s = new Stat { Group = group, Id = id, Label = label, Unit = unit, Decimals = dec, Inverse = inverse,
+                           Base = Def.Nums.TryGetValue(id, out double own) ? own : b };
         All.Add(s); _byId[id] = s;
     }
 
     public ShipStats(ShipClass cls, IReadOnlyDictionary<string, double> bonuses = null, IReadOnlyDictionary<string, double> flats = null)
     {
-        Class = cls;
-        // one figure per class, in the order Battleship, Carrier, Destroyer
-        double V(double bs, double cv, double dd) => cls switch { ShipClass.Carrier => cv, ShipClass.Destroyer => dd, _ => bs };
+        Class = cls; Def = Classes.Of(cls);
 
-        Add("Hull",   "hull",          "Hull points",        V(300, 200, 250), "", 0);
+        Add("Hull",   "hull",          "Hull points",        300, "", 0);
 
-        // Capital ships handle like naval ships: thrust only along the keel, sideways
-        // drift bleeds off fast, and they turn on a radius -- no strafing; almost stopped,
-        // the rudder pivots the hull slowly. The battleship sets the pace: the carrier is 12%
-        // faster (116.48 u/s) and the destroyer, the fastest capital ship, 25% (130). The
-        // destroyer's accelerations and astern speed are the battleship's x1.25; the carrier's are
-        // its own top speed's fractions (a half, 5/24 and a third) -- so each class gets under way
-        // on its own clock whatever its pace.
-        const double cv = 116.48;
-        Add("Helm", "thrust",         "Ahead acceleration",  V(56, cv / 2, 70), "u/s²", 0);
-        Add("Helm", "reverse_thrust", "Astern acceleration", V(24, cv * 5 / 24, 30), "u/s²", 0);
-        Add("Helm", "max_speed",      "Top speed ahead",     V(104, cv, 130), "u/s", 0);
-        Add("Helm", "reverse_speed",  "Top speed astern",    V(36, cv / 3, 45), "u/s", 0);
-        Add("Helm", "turn_radius",    "Turning radius",      V(107, 127, 107), "u", 0, inverse: true);
-        Add("Helm", "turn_rate",      "Rudder limit",        V(1.08, 0.9, 1.08), "rad/s", 2);
+        // Capital ships handle like naval ships: thrust only along the keel, sideways drift
+        // bleeds off fast, and they turn on a radius -- no strafing; almost stopped, the rudder
+        // pivots the hull slowly. The battleship sets the pace and is the default below: the
+        // carrier is 12% faster (116.48 u/s) and the destroyer, the fastest capital ship, 25%
+        // (130). Each class's own figures are in its row (Ships.cs).
+        Add("Helm", "thrust",         "Ahead acceleration",  56, "u/s²", 0);
+        Add("Helm", "reverse_thrust", "Astern acceleration", 24, "u/s²", 0);
+        Add("Helm", "max_speed",      "Top speed ahead",     104, "u/s", 0);
+        Add("Helm", "reverse_speed",  "Top speed astern",    36, "u/s", 0);
+        Add("Helm", "turn_radius",    "Turning radius",      107, "u", 0, inverse: true);
+        Add("Helm", "turn_rate",      "Rudder limit",        1.08, "rad/s", 2);
         Add("Helm", "water_drag",     "Drag",                0.35, "/s", 2);
         Add("Helm", "keel",           "Keel grip (drift loss)", 4.0, "/s", 1);
 
-        if (Classes.Guns(cls))
+        if (Def.Has(Fit.Guns))
         {   // cursor-aimed turrets: the battleship's four, the destroyer's two
-            Add("Main guns", "main_count",    "Barrels",            V(4, 0, 2), "", 0);
+            Add("Main guns", "main_count",    "Barrels",            4, "", 0);
             // THE 50 DPS PASS: every class averages about 50. The battleship is the steady one, from range:
             // 4 x 17.9 every 2 s (its rate halved) is 35.8, and its broadside 14.3 more; the destroyer's
             // guns are the smaller half of a bursty 50 (2 x 7.5 a second, 15).
-            Add("Main guns", "main_damage",   "Damage per shot",    V(17.9, 0, 7.5), "", 2);
-            Add("Main guns", "main_interval", "Reload (per barrel)",V(2.0, 0, 1.0), "s", 2, inverse: true);
-            Add("Main guns", "main_range",    "Range",              V(1000, 0, 720), "u", 0);
+            Add("Main guns", "main_damage",   "Damage per shot",    17.9, "", 2);
+            Add("Main guns", "main_interval", "Reload (per barrel)",2.0, "s", 2, inverse: true);
+            Add("Main guns", "main_range",    "Range",              1000, "u", 0);
             Add("Main guns", "main_turn",     "Turret turn rate",   Mathf.Tau / 4f, "rad/s", 2);
-            Add("Main guns", "shell_speed",   "Shell speed",        V(650, 0, 520), "u/s", 0);
+            Add("Main guns", "shell_speed",   "Shell speed",        650, "u/s", 0);
         }
-        if (Classes.Broadside(cls))
+        if (Def.Has(Fit.Broadside))
         {   // F: the turrets swing onto the cursor through the wind-up, then every main gun fires,
             // volley after volley. Its shells are main-gun shells, at this multiple of their damage.
             Add("Broadside", "broadside_volleys",  "Volleys",                 3, "", 0);
@@ -111,7 +115,7 @@ public class ShipStats
             Add("Broadside", "broadside_gap",      "Between volleys",         0.25, "s", 2, inverse: true);
             Add("Broadside", "broadside_cooldown", "Cooldown after",          14, "s", 1, inverse: true);   // 12 shells a 15 s cycle: 14.3 DPS
         }
-        if (Classes.Missiles(cls))
+        if (Def.Has(Fit.Missiles))
         {   // F: a guided BURST of three, one at the target and two launched wide that curve in onto
             // it (PlayerShip.FireMissile). A magazine of bursts, reloaded by hand (R).
             // the destroyer's burst: 3 bursts of 3 at 49, 0.4 s apart, then 9 s to reload -- 441 in 9.8 s, 45 DPS
@@ -124,17 +128,19 @@ public class ShipStats
             Add("Missile", "missile_turn",     "Guidance (turn)",   1.5, "rad/s", 2);
         }
 
-        // An active ability: activating opens the firing window; the reload runs after
-        // it closes. Battleship and destroyer mounts are heavier and swing slower than the carrier's.
-        Add("Point defence", "pd_count",    "Turrets",           V(2, 3, 2), "", 0);
-        Add("Point defence", "pd_damage",   "Damage per shot",   0.5, "", 2);
-        Add("Point defence", "pd_interval", "Reload",            0.5, "s", 2, inverse: true);
-        Add("Point defence", "pd_range",    "Range",             460, "u", 0);
-        Add("Point defence", "pd_turn",     "Turret turn rate",  V(Mathf.Tau / 3f, Mathf.Tau / 1.2f, Mathf.Tau / 3f), "rad/s", 2);
-        Add("Point defence", "pd_active",   "Firing window",     15, "s", 0);
-        Add("Point defence", "pd_reload",   "Recharge after",    15, "s", 0, inverse: true);
+        if (Def.Has(Fit.Pd))
+        {   // An active ability: activating opens the firing window; the reload runs after
+            // it closes. Battleship and destroyer mounts are heavier and swing slower than the carrier's.
+            Add("Point defence", "pd_count",    "Turrets",           2, "", 0);
+            Add("Point defence", "pd_damage",   "Damage per shot",   0.5, "", 2);
+            Add("Point defence", "pd_interval", "Reload",            0.5, "s", 2, inverse: true);
+            Add("Point defence", "pd_range",    "Range",             460, "u", 0);
+            Add("Point defence", "pd_turn",     "Turret turn rate",  Mathf.Tau / 3f, "rad/s", 2);
+            Add("Point defence", "pd_active",   "Firing window",     15, "s", 0);
+            Add("Point defence", "pd_reload",   "Recharge after",    15, "s", 0, inverse: true);
+        }
 
-        if (Classes.Wing(cls))
+        if (Def.Has(Fit.Wing))
         {
             Add("Fighters", "fighter_count",    "Craft",            3, "", 0);
 
@@ -172,7 +178,7 @@ public class ShipStats
 
         // Bombers reach twice as far as the fighters are controlled: defined FROM the
         // control range, and it takes the same bonus, so the two can never drift apart.
-        if (Classes.Wing(cls))
+        if (Def.Has(Fit.Wing))
         {
             var cr = _byId["control_range"];
             Add("Bombers", "strike_range", "Strike range (2× control)", 2 * cr.Base, "u", 0);
@@ -181,23 +187,23 @@ public class ShipStats
     }
 
     // ── derived figures: computed from the stats above, never stored ─────────
-    public double MainDpsPerBarrel => Classes.Guns(Class) ? this["main_damage"] / this["main_interval"] : 0;
+    public double MainDpsPerBarrel => Def.Has(Fit.Guns) ? this["main_damage"] / this["main_interval"] : 0;
     public double MainDps          => MainDpsPerBarrel * this["main_count"];
-    public double PdDpsPerTurret   => this["pd_damage"] / this["pd_interval"];
+    public double PdDpsPerTurret   => Def.Has(Fit.Pd) ? this["pd_damage"] / this["pd_interval"] : 0;
     // PD only fires during its window, so its sustained rate is scaled by the duty fraction.
-    public double PdDuty           => this["pd_active"] / (this["pd_active"] + this["pd_reload"]);
+    public double PdDuty           => Def.Has(Fit.Pd) ? this["pd_active"] / (this["pd_active"] + this["pd_reload"]) : 0;
     private double PdDps            => PdDpsPerTurret * this["pd_count"];
     public double PdSustainedDps   => PdDps * PdDuty;
     // A full magazine of bursts, fired as fast as it allows, then reloaded: damage per cycle over cycle time.
-    public double MissileDps => Classes.Missiles(Class)
+    public double MissileDps => Def.Has(Fit.Missiles)
         ? this["missile_mag"] * PlayerShip.BurstSides.Length * this["missile_damage"]
           / (this["missile_reload"] + (this["missile_mag"] - 1) * this["missile_refire"])
         : 0;
     // One broadside's shells, and its whole cycle: the wind-up, the volleys, then the cooldown.
     public double BroadsideDamage => this["broadside_volleys"] * this["main_count"] * this["main_damage"] * this["broadside_mult"];
     public double BroadsideCycle  => this["broadside_windup"] + (this["broadside_volleys"] - 1) * this["broadside_gap"] + this["broadside_cooldown"];
-    public double BroadsideDps    => Classes.Broadside(Class) && BroadsideCycle > 0 ? BroadsideDamage / BroadsideCycle : 0;
-    public double FighterDpsEach   => Classes.Wing(Class) ? this["fighter_damage"] / this["fighter_interval"] : 0;
+    public double BroadsideDps    => Def.Has(Fit.Broadside) && BroadsideCycle > 0 ? BroadsideDamage / BroadsideCycle : 0;
+    public double FighterDpsEach   => Def.Has(Fit.Wing) ? this["fighter_damage"] / this["fighter_interval"] : 0;
     public double FighterDps       => FighterDpsEach * this["fighter_count"];
     public double TorpedoesPerRun  => this["bomber_ammo"] * this["bomber_count"];
 
