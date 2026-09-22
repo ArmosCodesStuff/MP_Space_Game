@@ -4384,8 +4384,8 @@ public partial class _Test : Node
                     cdBack = me3.BroadsideCooldownLeft;
                     await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                 }
-                Check(!ownStart && sawWindup && sawShells && cdBack > 8.5 && cdBack <= 10,
-                      $"third player: its broadside is the host's -- not started here ({ownStart}), then the wind-up or volleys, the shells and a 10 s cooldown reach it ({sawWindup}, {sawShells}, {cdBack:0.0} s)");
+                Check(!ownStart && sawWindup && sawShells && cdBack > 13 && cdBack <= 14,
+                      $"third player: its broadside is the host's -- not started here ({ownStart}), then the wind-up or volleys, the shells and the 14 s cooldown reach it ({sawWindup}, {sawShells}, {cdBack:0.0} s)");
                 await Wait(Math.Max(0.1, 3.0 - (me3.Clock - bsClock0)));   // the rest of the 6 s, in game seconds
             }
 
