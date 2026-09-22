@@ -265,12 +265,12 @@ Recorded here so every chunk builds from the written word, not from memory.
   rebuilt at the base after 30 s for **10% of all money invested so far in that category's upgrades**
   (a running total per category: miner, salvager, hauler).
 - **Chunk 6 — enemy fighters.** A variable **raider damage x**: **light fighters 1 DPS** (x), **heavy
-  fighters 2x**. **Light fighters** (the black-and-red sprite, **2× a carrier fighter's size**) are
+  fighters 2x**. **Light fighters** (the owner's small fighter, in raider red, **2× a carrier fighter's size**) are
   **webifiers**: within **100 u** they **pin** a target — it is held to **20% of max speed with forced
   thrust and cannot turn** (a soft crowd control). They cruise **as slow as an unupgraded capital ship**
   but **boost to 500% for ~3 s** once about **1200 u** out (the distance ~3 s of boost covers, plus
   100 u), landing **near** the target, not on it, in **formation: ahead, left and right**. **Heavy
-  fighters** (the battleship cut in half, skinnier, the **front turret only**, **~4× a light fighter's
+  fighters** (the owner's crescent-winged fighter, **one turret** on its spine, **~4× a light fighter's
   size**) hang back **behind the target**, facing it, choosing an angle of approach, until it is
   tackled; then they close to their short, high-DPS lasers. Heavies also fire a **fat missile (at least
   the player missile's size) within 500 u, 7 s to impact, at the target's predicted position**, with a
@@ -394,11 +394,13 @@ Recorded here so every chunk builds from the written word, not from memory.
 - **Death**: 0 hull puts the ship into a 2-minute **stasis** where it lies; the owner flies an
   **escape pod**; afterwards **F** re-boards at 33% hull (a request the host decides). Stasis and
   hull are host state, replicated with the rest.
-- **Hull colour** is the ship and its turrets. **Accent colour** is engines and lighting only:
+- **Hull colour** is the hull. **Accent colour** is the turrets, engines and lighting: turrets,
   plumes on the player's ship and everything it launches, shields, PD arcs. Utility ships' engines
-  are always light yellow (`Plume.Utility`). Missiles keep their smoke.
+  are always light yellow (`Plume.Utility`). Missiles keep their smoke. The defaults are a **blue
+  hull (0.30, 0.50, 0.95) and a gold accent**: the hulls are grey line art, white until tinted, so a
+  pale default reads as a white ship.
 - **Fighters** fly strafing runs: 3 shots, through the target by 1.2× its diameter, turn, repeat;
-  they live inside the carrier when docked. **Bombers** back into slots, nose out.
+  they live inside the carrier when docked. **Bombers** park small on its deck, facing the bow.
 
 ## Ship classes
 
@@ -411,7 +413,7 @@ chosen in the creator only** — there are no class hotkeys (the developer remov
 |---|---|---|---|---|---|---|---|---|
 | **Battleship** | 300 | 224 u | 104 u/s | 4, 5.9 a shell | broadside | 2 (slow, τ/3) | — | `battleship_hull.png` |
 | **Carrier** | 200 | 170 u | 116.48 u/s | — | bomber strike | 3 (fast, τ/1.2) | 3 fighters + 2 bombers | `carrier_player.png` |
-| **Destroyer** | 250 | 201.6 u | 130 u/s | 2, 5.9 a shell | missile burst | 2 (slow, τ/3) | — | `destroyer_hull.png` |
+| **Destroyer** | 250 | 130 u | 130 u/s | 2, 5.9 a shell | missile burst | 2 (slow, τ/3) | — | `destroyer_hull.png` |
 
 **Damage**: main gun 5.9 a shell, one a second per barrel · PD 0.5 every 0.5 s per turret · fighter 2
 every 0.35 s · torpedo 15 · missile 5 (three to a burst). Every number lives in **`ShipStats`**
@@ -426,11 +428,9 @@ each group of rows only for the classes that carry it (a row a class lacks reads
 figure is one `V(battleship, carrier, destroyer)`. A fourth class is a line in each of those, not a hunt
 for two-way tests.
 
-**The destroyer's art is generated**, not drawn: `tools/make_destroyer.ps1` squeezes the battleship's
-repaired hull to 75% of its beam and 90% of its length on a 270 px canvas (the battleship's own
-0.7467 u/px), keeps the bow and stern turret mounts, and paints missile-pod banks where the inner two
-stood and on the sponsons, in the hull's own blue-greys so the pilot's colour tints them like the rest.
-Every mount is the battleship's scaled the same way; the turrets are drawn at 0.9 of the battleship's.
+**Sizes follow the owner's drawings.** The battleship keeps its 224 u and is slender (13 u half-beam
+to the carrier's 24); the destroyer is 130 u, the smallest of the three as the owner asked, and
+chunkier (17 u). The hit capsule is the drawn hull, so a slender ship is a slender target.
 
 ### The helm: capital ships handle like naval ships
 
@@ -501,15 +501,27 @@ fire mode onto F never finds two abilities on it, and its `reload`, which is gon
 - **Fighters** (17 u) hold orbit until **attack** sends them at the selected target; they fight
   while it is within the 1080 u control range. They fly in bursts: after **15 s of firing** a
   fighter returns to the **carrier's centre for a 3 s rest**, then rejoins. **R** recalls them.
-- **Bombers wait docked** on the carrier's flanks, alternating port and starboard so the sides always
-  split evenly (6 → 3 + 3), and rearm there (6 s). **Bomber strike** sends them at the target if it
-  is within the **strike range, defined as twice the fighters' control range** (2160 u; it takes the
-  same bonus). Bombers are 28.1 u. At launch distance (**283.5 u**: close, because the torpedoes do not
-  track) each swings its nose onto the target and launches 4 torpedoes straight ahead **while still
-  closing slowly** (never quite stopped), then flies back to its own dock. Torpedoes run at
-  **112.5 u/s** out to **1215 u**. A strike whose target goes out of range
-  is called off. `PlayerShip.DockSlot` computes the slots; `ClassArt.DockX/DockY/DockSpacing` place
-  them (wingtips just meeting the engine pods).
+- **Bombers park on the carrier's deck**, in bays on the white either side of the runway, drawn at
+  **40%** (the deck is far below, as the hauler's pad is), alternating port and starboard so the sides
+  always split evenly (6 → 3 + 3), and rearm there (6 s). **Bomber strike** sends them at the target if
+  it is within the **strike range, defined as twice the fighters' control range** (2160 u; it takes the
+  same bonus). They **take off one at a time, 0.83 s apart** -- the fighters' cadence, on the deck's own
+  clock (`PlayerShip.TakeLaunchSlot(kind)`) -- each rolling onto the runway and up it to the bow end,
+  **growing to full size as it lifts** (1.2 s, the hauler's SmoothStep). Bombers are 28.1 u. At launch
+  distance (**283.5 u**: close, because the torpedoes do not track) each swings its nose onto the target
+  and launches 4 torpedoes straight ahead **while still closing slowly** (never quite stopped), then
+  comes home **over the carrier's centre, settles onto the runway there** (1 s, shrinking back to deck
+  size, turning to face the bow) and **taxis to its bay** (0.6 s). Torpedoes run at **112.5 u/s** out to
+  **1215 u**. A strike whose target goes out of range is called off -- and a bomber still waiting on the
+  deck for its turn answers for itself, so the strike ends. `PlayerShip.Bay` places the bays
+  (`ClassArt.BayX/BayY/BaySpacing`), `ClassArt.RunwayBow` the end of the take-off.
+- **An escort's hunters scale with its THREAT** (`Hub.EscortThreat`): a mission level made a quarter each
+  from the load, the party (level and toughness), the highest boss and the route, which sets their hull
+  and damage, their numbers and -- very slightly, 1% a level to 10% -- their speed and turning.
+- **A deck move is timed, not steered.** Lifting, landing and taxiing run in the carrier's frame on
+  the bomber's own clock: a moving, turning carrier carries it exactly and the move always ends. Only
+  the flight home is steered, to a point (the carrier's centre) that does not swing as the carrier
+  turns. A guest places the deck moves itself from the state the host sends, on its own clock.
 - **Six open hotkeys** (1–6 by default) follow every class's own abilities, for every class. They
   bind and remap like any ability and do nothing until something is assigned.
   **Torpedoes do not track**: straight line, steady 240 u/s, smoke trail, burst on the first hostile
@@ -556,8 +568,26 @@ reporting damage per second. The meter restarts itself on the first hit after 5 
 
 ### Art
 
-- **Carrier** (`carrier_player.png`) is the developer's grey capital-ship drawing, mirrored
-  left-onto-right to be exactly symmetrical. Its three painted domes are its three PD turrets.
+- **Every ship is the owner's line art**, made by `tools/make_ships.ps1` from the drawings in
+  `art_source/` (a `.gdignore` keeps Godot out): turned nose-up, made **exactly symmetrical** (the half
+  on one side of the line the drawing is most nearly symmetrical about, reflected), redrawn at twice its
+  final size, sharpened by its own enlargement's blur, cut out of its paper (a flood from the sheet's
+  edge that never comes within a pixel or two of ink, so a gap in an outline cannot let it into the
+  hull, then the light edge un-mixed from the white it was drawn on) and halved. Grey on transparent:
+  the hull colour tints a hull, the accent a turret, `Raider.HeavyTint`/`LightTint` a raider. It
+  prints every mount in world units; `PlayerShip.Art` and `Raider` carry them. The sprites it replaced
+  are in `retired/` (also ignored).
+- **Carrier**: the runway down the centre, the bays on the white either side of it, three sponsons a
+  flank; point defence on the two middle sponsons and the stern block (the bow is where bombers lift
+  off). **Battleship**: its four painted turrets are painted over from a clean stretch of its spine
+  (the spine's lines all run along it), and the four moving main turrets stand where they stood; point
+  defence on the stern quarters. **Destroyer**: main turrets on the fore spine and the central plate,
+  point defence on the stern quarters, the turrets at 0.8x. **Heavy raider**: the crescent-winged
+  fighter, its one turret on the spine behind the canopy; **light raider**: the small fighter.
+- **Turrets**: the owner's twin-barrelled turret is every main turret (`turret_main.png`, lifted out
+  of its drawing by an outline, barrels up, the housing's centre the pivot); point defence is a
+  smaller, round, single-barrelled turret in the same style, drawn by the tool (`turret_pd.png`). Each
+  class mounts them at its own scale (`ClassArt.TurretTexScale`).
 - **Fighter** (`wing_fighter.png`) is the developer's black-and-purple fighter recoloured white:
   brightness remapped so shading keeps its direction, the outer outline kept dark against space, and
   the purple (the saturated pixels) taken to neutral with a faint cool cast on the canopy.
@@ -567,19 +597,10 @@ reporting damage per second. The meter restarts itself on the first hit after 5 
   at −100. Client-side only.
 - **Bomber** (`wing_bomber.png`): the developer's small airframe, doubled in resolution, wings swept
   forward by a smooth warp (the tail booms stretch to follow), radiation trefoil on the nose.
-- **The turrets are the painted ones, cut out.** Each painted turret was measured (ring centre from
-  its dark pixels, barrels by where the pixels differ from the hull beside them), copied into its
-  own sprite stored barrels-up with its pivot on the ring centre, and removed from the hull. The hull
-  underneath was repaired **row by row**, blending between the clean pixels either side: the hulls'
-  details run lengthwise and their bands run across, so a horizontal blend continues both, where
-  OpenCV's inpainting smeared X-shaped marks. Blend only from opaque pixels, or a turret at the hull's
-  edge pulls in black. Identical painted turrets share the cleanest one's cut-out. Battleship: 4
-  double-barrel mains (one gun each) + 2 sponson PD. Carrier: 3 domes, all PD.
-- **Mount offsets are measured, not placed by eye**: pixel-index centre → `(i + 0.5 − size/2) ×
-  world-per-pixel`. They live in `PlayerShip.Art` with each turret's texture scale, barrel length
-  (where shots start) and ring radius (where the PD arc sits).
-- **Hull colour multiplies the sprite** (`Modulate`), turrets included. A black hull colour gives a
-  black ship.
+- **Mount offsets are measured, not placed by eye**: the tool carries each mount through every step
+  and prints it as `(pixel − size/2) × world-per-pixel`. They live in `PlayerShip.Art` with each
+  turret's texture scale, barrel length (where shots start) and ring radius (where the PD arc sits).
+- **The colours multiply the sprites** (`Modulate`): a black hull colour gives a black ship.
 - `PlayerShip.Art` holds each class's texture, length, turret scale and mounts. The creator and the
   select screen draw from it, so the preview is the real ship with turrets on the real mounts.
 
@@ -611,7 +632,7 @@ piece of player state that is **not** host-owned — it is identity, not a resou
 - **A part leans hard one way.** Four specialisations per slot type at three rarities: the upside
   grows with rarity (x1 / x1.5 / x2), the downside does not, so a rarer copy is strictly better but
   never free. The owner's carrier examples are literals in the tests (Elite III, Swarm III). No part
-  touches a turret count: the turrets are painted on the hull, and a part cannot add a painted dome.
+  touches a turret count: the mounts are fixed on the drawing, and a part cannot add one.
 - **The multiplier floor (0.1)** is there because gear stacks: the worst sum of downsides on any stat
   is -55%, but a file on the player's disk can carry any bonus.
 - **The hull keeps its fraction across a refit.** Keeping the damage taken let a pilot swap Bulwark
@@ -741,6 +762,25 @@ removed lines equal the engine defaults first — ask the engine — and keep th
 where the editor cannot delete it.*
 
 ## Traps that have already cost time
+
+- **An event sent once reaches only the peers there to hear it.** A boss's warnings and the Drake's rock
+  go out as they start, to the peers in the arena then; a guest that arrived later (a rejoin, a slow load)
+  never heard of them and was hit by a rock it could not see. `Boss.CatchUp` sends what is up now to a
+  peer as it reports its world -- anything new sent once needs the same thought.
+- **Damage numbers read hulls, not hits.** Each damageable thing watches its own hull from frame to frame
+  (`HullWatch`), so a guest shows them from the figures it is already sent, with no message per hit. A
+  hull that falls for a reason other than damage -- a refit to a smaller hull -- resets the watch, or it
+  shows as damage taken.
+
+- **Line art is white until it is tinted.** The ships are grey drawings that the hull colour
+  multiplies, so the old pale-blue default drew them near white; the default is a real blue, and a
+  pilot still in the pale one loads in it (`Character.SavedHull`). Raiders need their tints for the
+  same reason: untinted, an enemy reads as a neutral hull.
+- **Symmetry and alpha are decided at twice the final size, and only halved at the end.** Halving
+  weights each pixel by its cover, so a cut-out edge never picks up the paper's white or a black
+  fringe; and the tool's mirror samples what lay beyond the old sheet as TRANSPARENT -- sampling it
+  as opaque paper put hairlines down both edges of the turret, where the reflected half reached past
+  the drawing.
 
 - **`Hub.InArena` changes before the new world exists.** `GoTo` sets the sector at once and swaps the
   scene at the end of the frame, so code waiting for "home" that reads the new world must wait for

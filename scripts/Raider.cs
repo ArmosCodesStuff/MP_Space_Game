@@ -44,13 +44,19 @@ public partial class Raider : Node2D, IHittable
     // The share of that hull it is built with: an escort's hunters come at half (Hub.HunterHull).
     // Not Strength, which scales its damage too. Set before it enters the tree (_Ready reads it).
     public double HullShare = 1;
+    // Speed and turning, x: an escort's hunters fly a very little quicker the harder the escort
+    // (Hub.ThreatAgility). The host flies every raider; guests follow where it says.
+    public double Agility = 1;
+    private HullWatch _hullWatch;
     public double MaxHull => (Heavy ? HeavyHull : LightHull) * Strength * HullShare;
     public float HitRadius => Length * (Heavy ? 0.3f : 0.4f);
     public bool Selectable => true;
 
-    // The heavy's hull, in raider red. Shared with the title screen's heavies so the enemy you see
-    // on the menu is the colour of the enemy you meet.
+    // The raiders' art is grey line art: these give it raider red, the heavy darker than the light.
+    // Shared with the title screen's raiders so the enemy you see on the menu is the colour of the
+    // enemy you meet.
     public static readonly Color HeavyTint = new(0.62f, 0.40f, 0.40f);
+    public static readonly Color LightTint = new(0.90f, 0.38f, 0.33f);
 
     public const float LightLength = 34f;              // twice a carrier fighter
     public const float HeavyLength = 4f * LightLength; // 136 u
@@ -128,19 +134,20 @@ public partial class Raider : Node2D, IHittable
     {
         Hp = MaxHull;
         _sprite = Sprites.Fit(Heavy ? "res://enemy_heavy_hull.png" : "res://enemy_light_fighter.png", Length);
+        _sprite.Modulate = Heavy ? HeavyTint : LightTint;
         AddChild(_sprite);
         if (Heavy)
-        {   // the battleship's front turret on its mount, dark as the hull: row 40.3 of the 100 px snub-nosed hull
-            _sprite.Modulate = HeavyTint;
-            float px = _sprite.Scale.X, rows = _sprite.Texture.GetHeight();
-            _turret = new Sprite2D { Texture = GD.Load<Texture2D>("res://turret_bs_main.png"), Position = new Vector2(0, (40.3f - rows / 2f) * px),
-                                     Scale = Vector2.One * px * 0.62f, Modulate = HeavyTint, ZIndex = 1 };
+        {   // the main turret on its spine behind the canopy, 19.5 u aft of centre (tools/make_ships.ps1),
+            // 13 u across the housing, dark as the hull
+            _turret = new Sprite2D { Texture = GD.Load<Texture2D>("res://turret_main.png"), Position = new Vector2(0, 19.5f),
+                                     Scale = Vector2.One * (13f / 66f), Modulate = HeavyTint, ZIndex = 1 };
             AddChild(_turret);
         }
         ZIndex = 5;
         Combat.Hostiles.Add(this);
     }
-    public override void _ExitTree() => Combat.Hostiles.Remove(this);
+    // (the blow that finishes it is shown as it goes: it leaves before its next frame)
+    public override void _ExitTree() { _hullWatch.Tick(this, System.Math.Max(0, Hp), taken: false); Combat.Hostiles.Remove(this); }
 
     public void TakeDamage(double d)
     {
@@ -168,6 +175,7 @@ public partial class Raider : Node2D, IHittable
     public override void _Process(double delta)
     {
         float dt = (float)delta;
+        _hullWatch.Tick(this, System.Math.Max(0, Hp), taken: false);
         if (!Net.Sim)
         {
             _net.Follow(this, dt);
@@ -213,14 +221,14 @@ public partial class Raider : Node2D, IHittable
         if (!_boostUsed && toTarget <= BoostAt) { _boostUsed = true; _boostLeft = BoostTime; }
         _boostLeft = System.Math.Max(0, _boostLeft - delta);
         if (IsEscort && Latched) _boostLeft = 0;                          // posted: the long boost is over
-        float top = Boosting ? Cruise * BoostMult : Cruise;
+        float top = (Boosting ? Cruise * BoostMult : Cruise) * (float)Agility;
         float d = Position.DistanceTo(post);
         Speed = Mathf.Min(top, d * 6f);                                       // ease onto the post
         // once posted it keeps station however the target moves
         Position = Position.MoveToward(post, (Latched ? Mathf.Max(top, d * 12f) : Speed) * dt);
         Latched = Position.DistanceTo(post) < 12f && Gap(Position, Target) <= PinRange;
         var face = (Target.Position - Position).Angle() + Mathf.Pi / 2f;
-        Rotation = Mathf.LerpAngle(Rotation, face, Mathf.Clamp(8f * dt, 0f, 1f));
+        Rotation = Mathf.LerpAngle(Rotation, face, Mathf.Clamp(8f * (float)Agility * dt, 0f, 1f));
 
         if (Latched)
         {
@@ -272,12 +280,12 @@ public partial class Raider : Node2D, IHittable
         bool pinned = Target is IRaidTarget { Pinned: true };
         var dest = pinned ? Target.Position + astern * (Extent(Target, astern) + HeavyHold)
                           : EdgeSpot(Target.Position);                        // patient, at the map's edge nearest it
-        float top = pinned && Position.DistanceTo(Target.Position) > HeavyBoostStop ? Cruise * HeavyBoostMult : Cruise;
+        float top = (pinned && Position.DistanceTo(Target.Position) > HeavyBoostStop ? Cruise * HeavyBoostMult : Cruise) * (float)Agility;
         float d = Position.DistanceTo(dest);
         Speed = Mathf.Min(top, d * 6f);
         Position = Position.MoveToward(dest, Speed * dt);
         var face = (Target.Position - Position).Angle() + Mathf.Pi / 2f;
-        Rotation = Mathf.LerpAngle(Rotation, face, Mathf.Clamp(4f * dt, 0f, 1f));
+        Rotation = Mathf.LerpAngle(Rotation, face, Mathf.Clamp(4f * (float)Agility * dt, 0f, 1f));
         if (_turret != null) _turret.GlobalRotation = face;                  // its one turret tracks the target
         Latched = pinned && Gap(Position, Target) <= HeavyReach;
         if (Latched)

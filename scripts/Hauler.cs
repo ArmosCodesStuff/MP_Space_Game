@@ -135,6 +135,7 @@ public partial class Hauler : UtilityShip
     {
         float dt = (float)delta;
         T += delta;
+        WatchHull();
         if (Net.Sim) Simulate(dt);
         else
         {

@@ -20,7 +20,7 @@ public partial class BaseDefense : Node2D
     {
         Name = "BaseDefense";
         Position = Hub.BasePos + new Vector2(0, -60);          // on the station's upper deck
-        var tt = GD.Load<Texture2D>("res://turret_bs_main.png");
+        var tt = GD.Load<Texture2D>("res://turret_main.png");
         _turret = new Sprite2D { Texture = tt, Scale = Vector2.One * 0.75f, Modulate = new Color(0.78f, 0.82f, 0.9f) };
         AddChild(_turret);
         ZIndex = 4;

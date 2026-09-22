@@ -19,6 +19,27 @@ ticked only when it has been read line by line and everything found in it is fix
 4. Every finding is fixed at the source, covered by a check where it can be, and the whole suite runs
    again. Findings found while fixing go back on the list (recursively).
 
+## Pass 10 — the line art, the carrier's deck, the escort's threat, boss sounds, damage numbers (done)
+
+Read-only, before the batch's one test run (the owner asked for a single run and no mutants): two
+reviews of three and two lenses (compile, deck logic and authority, will-the-run-pass; then code and
+tests for the later four features), a refuter each. First review: 6 confirmed, 2 refuted. Fixed:
+- **The new landing check could not pass**: it began watching after both bombers had started landing
+  (the first 0.175 s of a landing is where it reads full size). The deck is watched from the moment
+  the torpedoes are away.
+- **A strike's bombers were decided each frame**: one called off while it waited its turn could join
+  again and answer twice, ending the strike under a bomber still out. The strike's bombers are counted
+  and called once, when it is ordered (`Wing.Call`).
+- **A carrier's warp on a bomber's last lift frame flung it at ~120 000 u/s** (its flight speed was a
+  frame's difference in world space): it leaves the bow at its run's own speed, in the carrier's frame.
+- **The deck shadow popped** on at a landing and off at a take-off: it fades as the bomber rises.
+- **The guest's deck check was blind** to a guest trailing the host's reports: it now compares every
+  frame with the pose the guest's own deck clock gives, to a twentieth of a unit.
+- Old wording (`FlyToward` "when docking", the tests' "docks").
+Refuted: stale guest plumes in flight (older than this batch, cosmetic), docs still naming removed
+members (read from HEAD, not the working tree).
+@@REVIEW2@@
+
 ## Pass 9 — slice 3b: the Drake Bastion (done)
 
 Four lenses (the Drake's logic, the new projectiles, wiring and replacement, the tests), a refuter

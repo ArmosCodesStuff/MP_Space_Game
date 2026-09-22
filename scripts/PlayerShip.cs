@@ -81,51 +81,50 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
         public float CameraRange = 5000f;
         public Vector2[] Mains = Array.Empty<Vector2>(), Pds = Array.Empty<Vector2>();
 
-        // The turrets are the ones painted on the ship: cut out of the hull art into
-        // their own sprites (barrels up, pivot at the ring centre), with the hull
-        // repaired underneath, so they can turn.
-        public string MainTurret, PdTurret;
+        // The turrets are their own sprites (barrels up, pivot at the sheet's centre), so they
+        // can turn: one main turret and one point-defence turret for every class, each class
+        // mounting them at its own size (tools/make_ships.ps1 draws both).
+        public string MainTurret = "res://turret_main.png", PdTurret = "res://turret_pd.png";
         public float TurretTexScale = 1f;   // world units per turret-texture pixel
         public float MainBarrel = 24f, PdBarrel = 15f, PdRing = 4.5f;   // world units
 
-        // Bomber docks along the flanks: x out from the keel, the centre of each row,
-        // and the spacing between craft in a row (world units).
-        public float DockX = 36f, DockY = 5f, DockSpacing = 52f;
+        // The carrier's deck. Bombers park in BAYS on the white either side of the runway: x out
+        // from the keel, the centre of each row, the spacing along it. They lift off at the
+        // runway's bow end, RunwayBow ahead of the centre, and land on its centre (world units).
+        public float BayX, BayY, BaySpacing, RunwayBow;
     }
 
+    // Every hull is the owner's line art (tools/make_ships.ps1: symmetrical, grey, tinted here with
+    // the hull colour), and every mount below is measured from it: the tool prints them. The
+    // turrets at the battleship's scale are 12 u across the housing (TurretTexScale 1/5.5), with
+    // the muzzles 12.2 u from the pivot; point defence 6 u across, the muzzle 5.5 u out.
     public static readonly Dictionary<ShipClass, ClassArt> Art = new()
     {
-        // Battleship, 224 u (texture 300 px: 0.7467 u/px). Its four painted double-barrel
-        // turrets on the centreline are the four main guns (one gun per turret); the
-        // two small sponson turrets are point defence. Offsets measured from the art.
-        // (texture 300 px at 224 u = 0.7467 u/px; every offset and size below is the
-        // art's measured pixel position times that)
+        // Battleship, 224 u and slender: 23 u across the hull (pods and fins outboard of it). Its
+        // four main turrets stand where the art's four painted turrets did, on the spine; its two
+        // point-defence turrets are on the stern quarters.
         [ShipClass.Battleship] = new ClassArt {
-            Texture = "res://battleship_hull.png", Length = 224f, HalfWidth = 40f,
-            Mains = new Vector2[] { new(0.41f, -65.41f), new(0.38f, -36.81f), new(0.59f, 48.76f), new(0.38f, 76.23f) },
-            Pds   = new Vector2[] { new(-33.25f, 0.45f), new(34.97f, 0.45f) },
-            MainTurret = "res://turret_bs_main.png", PdTurret = "res://turret_bs_pd.png", TurretTexScale = 0.7467f,
-            MainBarrel = 20.9f, PdBarrel = 9.8f, PdRing = 5.0f },
-        // Carrier, 170 u (full art 1668 px: 0.1019 u/px). Its three painted domes are
-        // its point-defence turrets.
+            Texture = "res://battleship_hull.png", Length = 224f, HalfWidth = 13f,
+            Mains = new Vector2[] { new(0f, -55.43f), new(0f, -4.42f), new(0f, 43.41f), new(0f, 72.26f) },
+            Pds   = new Vector2[] { new(-6.3f, 92.83f), new(6.3f, 92.83f) },
+            TurretTexScale = 1f / 5.5f, MainBarrel = 12.2f, PdBarrel = 5.5f, PdRing = 3f },
+        // Carrier, 170 u: the runway down its centre, 17.4 u wide, with the white deck either side
+        // of it (8.8 to 21.6 u out) where the bombers park, three sponsons outboard on each flank.
+        // Point defence on the two middle sponsons and on the stern block (the bow is where a
+        // bomber lifting off passes), at 1.15x the battleship's.
         [ShipClass.Carrier] = new ClassArt {
-            Texture = "res://carrier_player.png", Length = 170f, HalfWidth = 24.5f,
-            // bombers back in, tail to the hull: half the hull's beam (24.5) plus half a
-            // 28.1 u bomber, spaced by a bomber's ~28 u span
-            DockX = 39.5f, DockY = 5f, DockSpacing = 30f,
-            Pds = new Vector2[] { new(-5.78f, 8.04f), new(5.78f, 8.04f), new(0f, 18.76f) },
-            PdTurret = "res://turret_carrier.png", TurretTexScale = 0.2013f,
-            PdBarrel = 3.7f, PdRing = 2.9f },
-        // Destroyer, 201.6 u: the battleship's hull at 75% of its beam and 90% of its length, on a
-        // 270 px canvas (the battleship's 0.7467 u/px). Only the bow and stern turrets are kept;
-        // missile pods are painted where the inner two stood. Every mount is the battleship's,
-        // scaled the same way (x by 0.75, y by 0.9), and the turrets at 0.9 of its size.
+            Texture = "res://carrier_player.png", Length = 170f, HalfWidth = 24f,
+            BayX = 15f, BayY = 5f, BaySpacing = 28f, RunwayBow = 66f,
+            Pds = new Vector2[] { new(-27.73f, -17.8f), new(27.73f, -17.8f), new(0f, 80.3f) },
+            TurretTexScale = 1.15f / 5.5f, PdBarrel = 6.3f, PdRing = 3.45f },
+        // Destroyer, 130 u -- the smallest of the three -- and 33 u across the hull. Its two main
+        // turrets on the fore spine and the central plate, its point defence on the stern
+        // quarters; the turrets at 0.8x the battleship's.
         [ShipClass.Destroyer] = new ClassArt {
-            Texture = "res://destroyer_hull.png", Length = 201.6f, HalfWidth = 30f,
-            Mains = new Vector2[] { new(0.31f, -58.87f), new(0.29f, 68.61f) },
-            Pds   = new Vector2[] { new(-24.94f, 0.41f), new(26.23f, 0.41f) },
-            MainTurret = "res://turret_bs_main.png", PdTurret = "res://turret_bs_pd.png", TurretTexScale = 0.672f,
-            MainBarrel = 18.8f, PdBarrel = 8.8f, PdRing = 4.5f },
+            Texture = "res://destroyer_hull.png", Length = 130f, HalfWidth = 17f,
+            Mains = new Vector2[] { new(0f, -34.85f), new(0f, 15.01f) },
+            Pds   = new Vector2[] { new(-8.14f, 41.47f), new(8.14f, 41.47f) },
+            TurretTexScale = 0.8f / 5.5f, MainBarrel = 9.8f, PdBarrel = 4.4f, PdRing = 2.4f },
     };
 
     public ClassArt MyArt => Art[Class];
@@ -216,6 +215,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
 
         Stats = BuildSheet();
         MaxHp = Hp = Stats["hull"];
+        _hullWatch = default;                      // a new hull, not damage
         _mag = (int)Stats["missile_mag"]; _missileReload = _missileRefire = 0;
         _bsWindup = _bsGap = _bsCooldown = 0; _bsVolleys = 0;
 
@@ -307,6 +307,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
         Stats = BuildSheet();
         MaxHp = Stats["hull"];
         if (Alive) Hp = Math.Max(1, frac * MaxHp);
+        _hullWatch = default;                      // a refit, not damage
         FitWings(fresh: false);
     }
 
@@ -331,19 +332,17 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
         foreach (var t in _turrets) t.Recolor();
     }
 
-    // Where bomber `w` docks: bombers alternate port, starboard, port... so the two
-    // flanks always split them evenly (6 bombers -> 3 and 3; an odd one goes to port),
-    // and each row is centred on the hull. Returns the world position and heading.
-    public (Vector2 pos, float rot) DockSlot(Wing w)
+    // Bomber `w`'s bay on the deck, in the carrier's frame: bombers alternate port, starboard,
+    // port... so the two sides of the runway always split them evenly (6 bombers -> 3 and 3; an
+    // odd one goes to port), and each row is centred on BayY. A parked bomber faces the bow.
+    public Vector2 Bay(Wing w)
     {
         int i = 0, n = 0;
         foreach (var x in _wings) { if (!x.IsBomber) continue; if (x == w) i = n; n++; }
         bool port = i % 2 == 0;
         int onSide = port ? (n + 1) / 2 : n / 2, j = i / 2;
         var art = MyArt;
-        var local = new Vector2(port ? -art.DockX : art.DockX, art.DockY + (j - (onSide - 1) / 2f) * art.DockSpacing);
-        // nose out, tail to the hull: backed into the slot
-        return (ToGlobal(local), Rotation + (port ? -Mathf.Pi / 2f : Mathf.Pi / 2f));
+        return new Vector2(port ? -art.BayX : art.BayX, art.BayY + (j - (onSide - 1) / 2f) * art.BaySpacing);
     }
 
     public int WingCount(WingKind k) { int n = 0; foreach (var w in _wings) if (w.Kind == k) n++; return n; }
@@ -395,7 +394,10 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
                 // within the strike range (twice the fighters' control range) only
                 if (Classes.Wing(Class) && t != null && StrikeTarget == null && _strikesOut <= 0 && BombersReady > 0
                     && Position.DistanceTo(t.Position) <= Stats["strike_range"])
-                { StrikeTarget = t; _strikesOut = BombersReady; }
+                {   // the bombers armed now are the strike: each is called, and answers once
+                    StrikeTarget = t; _strikesOut = 0;
+                    foreach (var w in _wings) if (w.IsBomber && w.Armed) { w.Call(); _strikesOut++; }
+                }
                 break;
         }
     }
@@ -462,12 +464,14 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
     public void Fail(string id, string msg) => _fails[id] = (msg, _clock + FailShow);
     public string FailNote(string id) => _fails.TryGetValue(id, out var f) && _clock < f.until ? f.msg : null;
 
-    // Fighters leave the hangar one at a time, at least Wing.LaunchInterval apart.
-    private double _nextLaunch;
-    public bool TakeLaunchSlot()
+    // Craft leave the carrier one at a time, at least Wing.LaunchInterval apart: fighters out of
+    // the hangar, bombers off the deck, each kind on its own clock.
+    private double _nextFighter, _nextBomber;
+    public bool TakeLaunchSlot(WingKind k)
     {
-        if (_clock < _nextLaunch) return false;
-        _nextLaunch = _clock + Wing.LaunchInterval;
+        ref double next = ref (k == WingKind.Fighter ? ref _nextFighter : ref _nextBomber);
+        if (_clock < next) return false;
+        next = _clock + Wing.LaunchInterval;
         return true;
     }
 
@@ -562,10 +566,12 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
     public bool Mine => Net.OwnedByMe(this);
 
     // ── frame ────────────────────────────────────────────────────────────────
+    private HullWatch _hullWatch;                  // damage taken, shown where it lands (DamageNumbers)
     public override void _Process(double delta)
     {
         float dt = (float)delta;
         _clock += delta;
+        _hullWatch.Tick(this, Alive ? Hp : 0, taken: true);
         if (!Alive) _stasis = Math.Max(0, _stasis - delta);   // the host's clock rules; guests re-sync each packet
         if (_combatT > 0) _combatT = Math.Max(0, _combatT - delta);
         if (Alive && Hp < MaxHp) Hp = Math.Min(MaxHp, Hp + MaxHp * (InCombat ? RegenInCombat : RegenOutOfCombat) * delta);
@@ -854,7 +860,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
     }
 
     // ── signal lights: a faint, flashing yellow/orange wherever a craft lands or
-    // takes off -- the hangar for fighters, a slot for bombers ──────────────────
+    // takes off -- the hangar for fighters, the runway or a bay for bombers ───────
     private readonly System.Collections.Generic.List<(Vector2 local, double t)> _signals = new();
     private const double SignalTime = 1.2;
     public void Signal(Vector2 world) => _signals.Add((ToLocal(world), SignalTime));

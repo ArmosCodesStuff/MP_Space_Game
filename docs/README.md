@@ -88,7 +88,8 @@ validated against the numbers the Linux originals produce:
     powershell -ExecutionPolicy Bypass -File tools\smoketest\run.ps1     # every check, 6/6 runs
     powershell -ExecutionPolicy Bypass -File tools\screens\run.ps1
     powershell -ExecutionPolicy Bypass -File tools\snapshot.ps1              # rebuild version\CODE_SNAPSHOT.txt
-    powershell -ExecutionPolicy Bypass -File tools\make_destroyer.ps1        # regenerate destroyer_hull.png from the battleship's hull
+    powershell -ExecutionPolicy Bypass -File tools\make_ships.ps1            # regenerate every ship and turret sprite from art_source\ (-Preview <png>)
+    python tools\make_sounds.py                                              # regenerate the bosses' special-move sounds in sfx\
 
 `-Godot <path>` is optional on both runners; without it they resolve the engine themselves. If you
 do pass one, pass the plain `Godot_v4.7.2-stable_mono_win64.exe` -- they swap themselves to the

@@ -62,6 +62,7 @@ public partial class Net : Node
         public int[] Bought = Array.Empty<int>();
         public string[] Equip = Array.Empty<string>();
         public string CharacterId = "";                   // the pilot's stable identity: a peer id changes on a reconnect
+        public int Level = 1;                              // the pilot's level, as claimed (an escort's threat)
         public bool HasIdentity;
     }
 

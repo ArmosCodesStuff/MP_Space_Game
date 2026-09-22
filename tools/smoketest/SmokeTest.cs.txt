@@ -341,6 +341,16 @@ public partial class _Test : Node
         Check(present.SequenceEqual(accounted),
               $"every field of Character is accounted for by this test (new: {string.Join(",", present.Except(accounted))}; gone: {string.Join(",", accounted.Except(present))})");
 
+        // THE DEFAULT COLOURS: a blue hull and a gold accent -- the line-art hulls are white until
+        // tinted. A pilot still in the first default, a pale blue that left them near white, never
+        // chose it: it loads in the blue, and a colour a pilot did choose (the accent here) stays.
+        Check(Character.Defaults.Main.IsEqualApprox(new Color(0.30f, 0.50f, 0.95f)) && Character.Defaults.Accent.IsEqualApprox(new Color(1.00f, 0.78f, 0.35f)),
+              "a new pilot flies a blue hull (0.30, 0.50, 0.95) with a gold accent (1.00, 0.78, 0.35)");
+        Character.Main = new Color(0.55f, 0.72f, 1.00f); Character.Save(); await Wait(0.05);
+        Character.NewBlank(); Character.Load(id);
+        Check(Character.Main.IsEqualApprox(new Color(0.30f, 0.50f, 0.95f)) && Character.Accent.IsEqualApprox(new Color(0.44f, 0.55f, 0.66f)),
+              $"a pilot saved in the first default's pale blue loads in the blue default; the accent it chose stays ({Character.Main})");
+
         // ── the format-2 fields, read from a file on the player's disk: sanitised, never trusted ──
         {
             var bad = new ConfigFile();
@@ -896,15 +906,39 @@ public partial class _Test : Node
         Check(Abilities.ControlsHint((ShipClass)99) == "placeholder", "an undefined class shows 'placeholder'");
         ship = Me;
 
-        // the painted turrets are the moving ones: every turret is a cut-out sprite
+        // the owner's line-art hull, its painted turrets painted over: the moving turrets stand where
+        // they stood, on the spine, and point defence on the stern
         var hullSpr = ship.GetChildren().OfType<Sprite2D>().First();
-        Check(hullSpr.Texture.ResourcePath.EndsWith("battleship_hull.png") && Math.Abs(hullSpr.Texture.GetHeight() * hullSpr.Scale.Y - 224f) < 0.5f,
-              "battleship is 224 u (40% larger) on the repaired hull (turrets cut out)");
+        Check(hullSpr.Texture.ResourcePath.EndsWith("battleship_hull.png") && Math.Abs(hullSpr.Texture.GetHeight() * hullSpr.Scale.Y - 224f) < 0.5f
+              && Math.Abs(ship.MyArt.HalfWidth - 13f) < 1e-6,
+              "battleship is 224 u on the owner's line-art hull, 13 u half-beam");
         var tsprites = Nodes<Turret>(ship).Select(x => x.GetChildren().OfType<Sprite2D>().FirstOrDefault()).ToList();
         Check(tsprites.Count == 6 && tsprites.All(x => x != null)
-              && tsprites.Count(x => x.Texture.ResourcePath.EndsWith("turret_bs_main.png")) == 4
-              && tsprites.Count(x => x.Texture.ResourcePath.EndsWith("turret_bs_pd.png")) == 2,
-              "four main + two PD turrets drawn from the ship's own painted turrets");
+              && tsprites.Count(x => x.Texture.ResourcePath.EndsWith("turret_main.png")) == 4
+              && tsprites.Count(x => x.Texture.ResourcePath.EndsWith("turret_pd.png")) == 2
+              && Nodes<Turret>(ship).All(x => x.PointDefense ? x.Offset.Y > 90f : Mathf.Abs(x.Offset.X) < 1e-6f),
+              "four main turrets on the spine and two point-defence turrets on the stern, in the owner's turret art");
+        // DAMAGE NUMBERS: small figures where damage lands -- gold for damage dealt, red for damage
+        // taken -- floating up and gone after a second or so; hits in quick succession add into one
+        {
+            var dn = H.GetNodeOrNull<DamageNumbers>("DamageNumbers");
+            var dum = H.GetNode<TargetDummy>("TargetDummy1");
+            dum.TakeDamage(5); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            dum.TakeDamage(2.5); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            ship.Hit(4, ship.Position + new Vector2(60, 0), "test");
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            var dealt = dn?.Figures.Where(f => f.Who == dum.GetInstanceId()).ToList();
+            var taken = dn?.Figures.Where(f => f.Who == ship.GetInstanceId()).ToList();
+            Check(dealt?.Count == 1 && Math.Abs(dealt[0].Amount - 7.5) < 1e-6 && !dealt[0].Taken && dealt[0].At.DistanceTo(dum.Position) < 15f,
+                  $"damage dealt shows as one gold figure where it landed: 5 and 2.5 a frame apart read 7.5 ({dealt?.Count} figure(s), {dealt?.FirstOrDefault()?.Amount:0.##})");
+            Check(taken?.Count == 1 && Math.Abs(taken[0].Amount - 4) < 0.1 && taken[0].Taken,
+                  $"damage taken shows red on the ship that took it ({taken?.FirstOrDefault()?.Amount:0.##})");
+            await Wait(1.3);
+            Check(dn != null && dn.Figures.All(f => f.Who != dum.GetInstanceId() && f.Who != ship.GetInstanceId()), "the figures fade out after a second or so");
+            ship.Hp = ship.MaxHp;
+        }
+        Check(tsprites.All(x => x.Modulate == ship.Accent) && hullSpr.Modulate == ship.Main && ship.Accent != ship.Main,
+              "the turrets wear the pilot's accent colour, the hull its hull colour");
         // the fields: each one's nearest edge 1500 u from the base -- room for a blockade
         {
             var rocks = H.GetChildren().OfType<Sprite2D>().Where(x => x.Texture != null && x.Texture.ResourcePath.Contains("asteroid_")).ToList();
@@ -1201,6 +1235,21 @@ public partial class _Test : Node
               $"5 s in, a wave of 3 hunts the hauler -- not the ship that is nearer to them ({H.Raiders.Count - huntR0} spawned at {firstWaveAt:0.00} s, {hunters.Count(r => r.Target == hauler)} on it)");
         Check(hunters.All(r => !r.Heavy && Math.Abs(r.MaxHull - 0.5 * 25 * r.Strength) < 1e-9 && Math.Abs(r.Hp - r.MaxHull) < 1e-9),
               $"the first wave is light fighters only, at half hull ({string.Join(", ", hunters.Select(r => $"{(r.Heavy ? "heavy" : "light")} {r.Hp:0.0}"))})");
+        // THE ESCORT'S THREAT sets each wave: a quarter each from the load (a level per 1000 cr it will
+        // fetch escorted), the party (half its mean level, half its ships' toughness -- a level per 10%
+        // of hull over its class's own), the highest boss, and the route (half a level a wave)
+        Check(Math.Abs(Hub.EscortThreat(0, 1, 1, 0, 0) - 1.0) < 1e-9 && Math.Abs(Hub.EscortThreat(4000, 5, 3, 5, 8) - 4.75) < 1e-9,
+              "an escort's threat: 1 for a fresh base's first wave; 4.75 for 4000 cr aboard, a level-5 party of toughness 3, the level-5 boss beaten, the ninth wave");
+        Check(Math.Abs(Hub.ThreatStrength(4.75) - Math.Pow(1.1, 3.75)) < 1e-9 && Hub.ThreatLights(1.0) == 3 && Hub.ThreatLights(4.75) == 4 && Hub.ThreatLights(40) == 6
+              && Math.Abs(Hub.ThreatAgility(4.75) - 1.0375) < 1e-9 && Math.Abs(Hub.ThreatAgility(40) - 1.1) < 1e-9,
+              "...which sets the hunters' hull and damage (+10% a level), their numbers (a light more every 3 levels, 3 more at most) and, very slightly, their speed and turning (1% a level, 10% at most)");
+        {
+            double ownHull = new ShipStats(Me.Class)["hull"];
+            double tough = 1 + Math.Log(Math.Max(1, Me.MaxHp / ownHull)) / Math.Log(1.1);
+            double threat = 0.25 * ((1 + 300 * 5 / 1000.0) + (0.5 * Character.Level + 0.5 * tough) + Math.Max(1, Missions.HighestBeaten) + 1);
+            Check(hunters.All(r => Math.Abs(r.Strength - Math.Pow(1.1, threat - 1)) < 1e-9 && Math.Abs(r.Agility - (1 + Math.Min(0.1, 0.01 * (threat - 1)))) < 1e-9),
+                  $"the first wave carries THIS escort's threat: 300 units at x5 aboard, this pilot (level {Character.Level}), the highest boss, the first wave ({threat:0.000}; x{hunters.FirstOrDefault()?.Strength:0.000})");
+        }
         Me.Position = Hub.BasePos + new Vector2(-2600, 1800); Me.Velocity = Vector2.Zero;
         hauler.T = 24.9;
         await Wait(0.05); int before25 = H.Raiders.Count(r => r.Quarry == hauler);
@@ -1625,14 +1674,15 @@ public partial class _Test : Node
             ship.Hp = ship.MaxHp;
         }
 
-        // ── THE DESTROYER: the battleship's hull, narrower and shorter; two main guns, missile bursts, the fastest ──
+        // ── THE DESTROYER: the owner's hull, the smallest of the three; two main guns, missile bursts, the fastest ──
         await SetClass(ShipClass.Destroyer); ship = Me;
         {
             var dspr = ship.GetChildren().OfType<Sprite2D>().First();
             var dts = Nodes<Turret>(ship).ToList();
-            Check(ship.Class == ShipClass.Destroyer && dspr.Texture.ResourcePath.EndsWith("destroyer_hull.png") && Math.Abs(dspr.Texture.GetHeight() * dspr.Scale.Y - 201.6f) < 0.5f
-                  && Math.Abs(PlayerShip.Art[ShipClass.Destroyer].HalfWidth - 30f) < 1e-6 && dts.Count(t => !t.PointDefense) == 2 && dts.Count(t => t.PointDefense) == 2,
-                  "the destroyer: its own hull at 201.6 u (90% of the battleship's 224) and 30 u half-beam (75% of 40); two main turrets, two PD");
+            Check(ship.Class == ShipClass.Destroyer && dspr.Texture.ResourcePath.EndsWith("destroyer_hull.png") && Math.Abs(dspr.Texture.GetHeight() * dspr.Scale.Y - 130f) < 0.5f
+                  && Math.Abs(PlayerShip.Art[ShipClass.Destroyer].HalfWidth - 17f) < 1e-6 && dts.Count(t => !t.PointDefense) == 2 && dts.Count(t => t.PointDefense) == 2
+                  && PlayerShip.Art[ShipClass.Carrier].Length == 170f && PlayerShip.Art[ShipClass.Battleship].Length == 224f,
+                  "the destroyer: its own hull at 130 u, smaller than the carrier's 170 and the battleship's 224, 17 u half-beam; two main turrets, two PD");
             Check(help.Text.StartsWith("DESTROYER") && help.Text.Contains("mouse aims the main guns"), "controls line is destroyer-specific");
             Check(Abilities.For(ShipClass.Destroyer).Where(a => !a.Open).Select(a => a.Id).SequenceEqual(new[] { "guns", "firemode", "missile", "reload", "pd" })
                   && Abilities.KeyFor(ShipClass.Destroyer, "missile") == global::Godot.Key.F && Abilities.KeyFor(ShipClass.Destroyer, "reload") == global::Godot.Key.R,
@@ -1746,21 +1796,21 @@ public partial class _Test : Node
 
         // ── carrier ──
         await SetClass(ShipClass.Carrier); ship = Me;
-        Check(ship.PdTurrets.Count == 3, "carrier has three PD turrets, one per painted dome");
+        Check(ship.PdTurrets.Count == 3, "carrier has three PD turrets");
 
-        // bombers dock on the flanks, half each side, and stay put as the carrier moves
+        // bombers park in bays on the deck, half each side of the runway, and stay put as the carrier moves
         Wing[] Bombers() => Nodes<Wing>().Where(w => w.Carrier == ship && w.IsBomber).ToArray();
-        async Task CheckDocks(int n)
+        async Task CheckBays(int n)
         {
             await Wait(0.3);
             var bs = Bombers();
             int port = bs.Count(w => ship.ToLocal(w.GlobalPosition).X < 0), stbd = bs.Count(w => ship.ToLocal(w.GlobalPosition).X > 0);
-            Check(bs.Length == n && bs.All(w => w.Docked && w.GlobalPosition.DistanceTo(ship.DockSlot(w).pos) < 0.5f) && port == n / 2 + n % 2 && stbd == n / 2,
-                  $"{n} bombers docked: {port} port, {stbd} starboard");
+            Check(bs.Length == n && bs.All(w => w.Docked && w.GlobalPosition.DistanceTo(ship.ToGlobal(ship.Bay(w))) < 0.5f) && port == n / 2 + n % 2 && stbd == n / 2,
+                  $"{n} bombers parked in their bays: {port} port, {stbd} starboard");
         }
-        await CheckDocks(2);
+        await CheckBays(2);
         Character.Bonuses["bomber_count"] = 2.0; ship.SetClass(ship.Class); ship = Me;   // 2 x (1 + 2) = 6
-        await CheckDocks(6);
+        await CheckBays(6);
         Character.Bonuses.Remove("bomber_count"); ship.SetClass(ship.Class); ship = Me;
         // ── GEAR THROUGH THE SHIP'S OWN REFIT: the owner's hangars, the wing rebuilt to match, and
         //    nothing left behind when craft are taken away ──
@@ -1794,7 +1844,7 @@ public partial class _Test : Node
             Check(swarmCraft == 11 && out0 >= 2 && eliteCraft == 4 && Craft() == 5 && ship.WingCount(WingKind.Fighter) == 3 && fightersFirst,
                   $"the wing follows the hangar: 9 + 2 craft, then Elite with fighters out -- 2 + 2, the rest freed -- then the kit's 3 + 2; fighters listed first ({swarmCraft}, {out0} out, {eliteCraft}, {Craft()})");
             Key(global::Godot.Key.R); await Wait(0.2);
-            // bombers through gear: the docks re-split, and a strike counted on the old bombers is
+            // bombers through gear: the bays re-split, and a strike counted on the old bombers is
             // called off (set up as one in flight, so the old code -- which never touched it -- differs)
             typeof(PlayerShip).GetProperty("StrikeTarget").SetValue(ship, d3);
             typeof(PlayerShip).GetField("_strikesOut", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(ship, 2);
@@ -1802,11 +1852,11 @@ public partial class _Test : Node
             cl[4] = "cv_widebay_3"; H.PilotChanged(); ship = Me;
             int armedAfter = ship.BombersReady;
             bool strikeOff = ship.StrikeTarget == null;
-            await CheckDocks(5);
+            await CheckBays(5);
             cl[4] = "cv_heavybay_1"; H.PilotChanged(); ship = Me;
-            await CheckDocks(1);
+            await CheckBays(1);
             cl[4] = "cv_bomber_bay"; H.PilotChanged(); ship = Me;
-            await CheckDocks(2);
+            await CheckBays(2);
             Check(strikeOff, "a change in the bombers calls off a strike counted on the old ones");
             Check(armed0 == 2 && armedAfter == 2, $"a bay fitted in service adds bombers that arrive rearming, not armed: still 2 ready of 5 ({armed0} -> {armedAfter})");
             for (int k = 0; k < Equipment.Slots; k++) cl[k] = clKeep[k];
@@ -1817,7 +1867,7 @@ public partial class _Test : Node
               "fighter control range 1080 (1.5x the battleship's guns); bomber strike range 2160 (2x)");
         var spr = Nodes<Sprite2D>(ship).First();
         Check(spr.Texture.ResourcePath.EndsWith("carrier_player.png") && Math.Abs(spr.Texture.GetHeight() * spr.Scale.Y - 170f) < 0.5f,
-              "carrier flies the new symmetrical sprite at 170 u");
+              "carrier flies the owner's line-art sprite at 170 u");
         await Park(new Vector2(780, 700), 0);
         var pdLight = H.SpawnRaider(new Vector2(700, 860));            // a third light target (the practice fighters are two)
         Key(global::Godot.Key.Q); await Wait(2.0);
@@ -1840,12 +1890,15 @@ public partial class _Test : Node
         Check(ship.WingTarget == null && ship.StrikeTarget == null, "carrier: clicks never order an attack");
         Check(Nodes<Wing>().Where(w => w.Carrier == ship && w.Kind == WingKind.Fighter).All(w => w.Inside && !w.Visible),
               "idle fighters wait docked inside the carrier, out of sight");
+        // parked SMALL, as far below as the deck is: 40% of 28.125 u, facing the bow, the whole of it
+        // (11.1 u across) on the white between the runway's edge (8.7 u out) and the hull's (21.7 u)
         foreach (var bw in Nodes<Wing>().Where(w => w.Carrier == ship && w.IsBomber && w.Docked))
         {
-            bool port = ship.ToLocal(bw.Position).X < 0;
-            float want = ship.Rotation + (port ? -Mathf.Pi / 2f : Mathf.Pi / 2f);
-            Check(Mathf.Abs(Mathf.AngleDifference(bw.Rotation, want)) < 0.05f && Mathf.Abs(ship.ToLocal(bw.Position).X) > PlayerShip.Art[ShipClass.Carrier].HalfWidth + Wing.BomberLength * 0.4f,
-                  $"docked bomber faces out from the {(port ? "port" : "starboard")} side, tail to the hull");
+            var lp = ship.ToLocal(bw.Position); var bsp = Nodes<Sprite2D>(bw).First();
+            float half = bsp.Texture.GetWidth() * bsp.Scale.X * 0.5f;
+            Check(Mathf.Abs(Mathf.AngleDifference(bw.Rotation, ship.Rotation)) < 0.01f && Math.Abs(bsp.Texture.GetHeight() * bsp.Scale.Y - 28.125f * 0.4f) < 0.05f
+                  && Mathf.Abs(lp.X) - half > 8.7f && Mathf.Abs(lp.X) + half < 21.7f,
+                  $"a parked bomber sits at 40% on the white deck beside the runway, facing the bow ({Mathf.Abs(lp.X) - half:0.0} to {Mathf.Abs(lp.X) + half:0.0} u out)");
         }
         int sig0 = ship.SignalsLit;
         Key(global::Godot.Key.Space); await Wait(0.05);
@@ -1958,6 +2011,26 @@ public partial class _Test : Node
         ship.Position = near1; ship.Velocity = Vector2.Zero; await Wait(0.5);
         Key(global::Godot.Key.F); await Wait(0.05);
         Check(ship.StrikeTarget == d1, "F sends the bombers at the target");
+        // THEY TAKE OFF IN TURN, at the fighters' cadence: each rolls out onto the runway and up it to
+        // the bow, growing from deck size to flight size -- lifting off, as the hauler does
+        {
+            var bws = Bombers();
+            float liftMin = 9f, liftMax = 0f, bowY = 0f;
+            for (int fr = 0; fr < 600 && bws.Any(w => w.LaunchedAt < 0 || w.BomberPhase == "Lifting"); fr++)
+            {
+                foreach (var w in bws.Where(w => w.BomberPhase == "Lifting"))
+                {
+                    liftMin = Mathf.Min(liftMin, w.VisualScale); liftMax = Mathf.Max(liftMax, w.VisualScale);
+                    bowY = Mathf.Min(bowY, ship.ToLocal(w.Position).Y);
+                }
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            }
+            var lorder = bws.Select(w => w.LaunchedAt).Where(t => t >= 0).OrderBy(t => t).ToList();
+            double lgap = 99; for (int g = 1; g < lorder.Count; g++) lgap = Math.Min(lgap, lorder[g] - lorder[g - 1]);
+            Check(lorder.Count == 2 && lgap >= 0.83 - 1e-9, $"the bombers take off one at a time, at least 0.83 s apart, as the fighters launch ({lgap:0.000} s)");
+            Check(liftMin < 0.41f && liftMax > 0.99f && bowY < -60f,
+                  $"a bomber lifts off the deck: from 40% to full size, up the runway to its bow end ({liftMin:0.00} to {liftMax:0.00}; {-bowY:0} u ahead)");
+        }
         Wing crawl = null;
         for (int i = 0; i < 2400 && crawl == null; i++) { crawl = Nodes<Wing>().FirstOrDefault(w => w.Carrier == ship && w.Launching); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
         Check(crawl != null && crawl.Velocity.Length() > 5f && crawl.Velocity.Dot(d1.Position - crawl.Position) > 0,
@@ -1975,29 +2048,44 @@ public partial class _Test : Node
         float spd = (first.GlobalPosition - q0).Length() / (30f / 60f);
         Check(first.Dir == dir0 && Math.Abs(spd - ship.Stats["torpedo_speed"]) < 2, $"torpedo runs straight at a steady {spd:0} u/s (no tracking)");
         Check(Smoke(first).Count > 3, "torpedo leaves a smoke trail");
-        await Wait(4.0);
+        // the landings begin inside the next 4 s: the deck is watched from here
+        float landFar = 0f, landMin = 9f, landMax = 0f, taxiTurn = 0f; bool sawTaxi = false;
+        void SampleDeck()
+        {
+            foreach (var w in Bombers())
+            {
+                if (w.BomberPhase == "Landing")
+                { landFar = Mathf.Max(landFar, ship.ToLocal(w.Position).Length()); landMin = Mathf.Min(landMin, w.VisualScale); landMax = Mathf.Max(landMax, w.VisualScale); }
+                if (w.BomberPhase == "Taxiing") { sawTaxi = true; taxiTurn = Mathf.Max(taxiTurn, Mathf.Abs(Mathf.AngleDifference(w.Rotation, ship.Rotation))); }
+            }
+        }
+        for (int fr = 0; fr < 240; fr++) { SampleDeck(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
         Check(d1.Total > 0 && Math.Abs(d1.Total % ship.Stats["torpedo_damage"]) < 0.01, $"torpedoes hit for 3 each ({d1.Total:0})");
         Check(AbilityBar.StateOf(ship, "bombers", H.Selected).Line.StartsWith("REARM") || AbilityBar.StateOf(ship, "bombers", H.Selected).Line == "RETURNING",
               $"bomber slot shows the return / rearm ({AbilityBar.StateOf(ship, "bombers", H.Selected).Line})");
-        await Wait(15.0);
-        Check(ship.BombersReady == 2 && Bombers().All(w => w.Docked), "bombers return to their docks, rearm, and are ready again");
-        // the docking fix: bombers dock and re-arm even while the carrier TURNS hard (a turning
-        // carrier swings their slots sideways; they used to hover beside them, never docking)
+        // HOME: each comes in over the carrier's centre and settles onto the runway there, shrinking
+        // back to deck size and turning to face the bow, then taxis to its bay
+        {
+            for (int fr = 0; fr < 60 * 15; fr++) { SampleDeck(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            Check(landMax > 0.95f && landMin < 0.45f && landFar <= 10.01f,
+                  $"bombers land on the carrier's centre: set down within 10 u of it, shrinking from full size to deck size ({landFar:0.0} u; {landMax:0.00} to {landMin:0.00})");
+            Check(sawTaxi && taxiTurn < 0.01f, "then taxi from the centre to their bays, facing the bow");
+        }
+        Check(ship.BombersReady == 2 && Bombers().All(w => w.Docked), "bombers return to their bays, rearm, and are ready again");
+        // bombers land and re-arm even with the carrier at full speed: they must catch its centre,
+        // and the landing and the taxi then run in its frame, on a clock
         Key(global::Godot.Key.F); await Wait(0.05);
         for (int i = 0; i < 60 * 20 && !Bombers().All(w => w.Ammo <= 0 || !w.Docked); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-        // FULL SPEED is what trapped them: the old code moved a bomber to its slot and THEN added
-        // the carrier's velocity, overshooting by one frame's travel -- over 1.5 u (the old snap)
-        // from about 90 u/s -- so it jittered beside the slot forever
         Input.ParseInputEvent(new InputEventKey { Keycode = global::Godot.Key.W, PhysicalKeycode = global::Godot.Key.W, Pressed = true });
         float yaw0 = ship.Rotation; bool allHome = false; float topSeen = 0;
-        for (int i = 0; i < 60 * 15 && !allHome; i++)
+        for (int i = 0; i < 60 * 20 && !allHome; i++)
         {
             allHome = Bombers().All(w => w.Docked); topSeen = Mathf.Max(topSeen, ship.Velocity.Length());
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         }
         Input.ParseInputEvent(new InputEventKey { Keycode = global::Godot.Key.W, PhysicalKeycode = global::Godot.Key.W, Pressed = false });
         Check(allHome && topSeen > 90f && Bombers().All(w => w.RearmLeft > 0 || w.Armed),
-              $"with the carrier at full speed ({topSeen:0} u/s), the bombers still dock and re-arm");
+              $"with the carrier at full speed ({topSeen:0} u/s), the bombers still land, park and re-arm");
         ship.Velocity = Vector2.Zero; await Wait(15.0);
         // the balance's reference: the carrier's MEASURED output (19.07 DPS over 90 s when set); re-measured
         // here over 40 s -- lumpier (bomber strikes land in lumps), so within 25% -- to catch it drifting
@@ -3334,6 +3422,15 @@ public partial class _Test : Node
                           $"thrown: half the flight covers an eighth of the 1800 u lane ({half:0.000}), it strikes the pilot for 275 ({rockDmg:0}), and breaks apart at the end ({broke})");
                 }
             }
+            // EVERY BOSS SPECIAL HAS ITS OWN SOUND, heard as it happens: the Lancer's beam (its charge, and
+            // the growl as it fires), ram, shockwave and trident, fought above; the Drake's gun, warp, scrap
+            // blast, tractor, throw and the rock breaking, here
+            {
+                var bossSounds = new[] { "boss_beam_charge", "boss_beam", "boss_ram", "boss_shockwave", "boss_trident",
+                                         "drake_gun", "drake_warp", "drake_scrap", "drake_tractor", "drake_throw", "drake_rock" };
+                var unheard = bossSounds.Where(n => GD.Load<AudioStream>($"res://sfx/{n}.wav") == null || Sfx.Played.GetValueOrDefault(n) == 0).ToList();
+                Check(unheard.Count == 0, $"every boss special has its own sound, and each was heard in its fight (unheard: {string.Join(", ", unheard)})");
+            }
             int exp1 = Character.Exp; int failLevel = Missions.Level;
             Me.TakeDamage(Me.Hp + 1);
             for (int i = 0; i < 60 * 8 && Hub.InArena; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
@@ -3723,6 +3820,15 @@ public partial class _Test : Node
             Check(sawDrake && sawShell && sawRock,
                   $"arena guest: mission 2 is the Drake Bastion here too, and its slow shells and its thrown rock reach this guest (Drake {sawDrake}, shell {sawShell}, rock {sawRock})");
             drakeWatch.QueueFree();
+            // A PEER ARRIVING MID-THROW is sent the rock and its lane as they stand (Boss.CatchUp, from
+            // the host's catch-up for a peer that reports its world, as a rejoining or slow-loading guest
+            // does) -- asked for here by reporting again, a second into the throw's 7.5 s warning
+            await Wait(1.0);
+            typeof(Hub).GetMethod("ReportSector", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(H, null);
+            await RealTime(() => Nodes<ThrownRock>().Any(r => r.Cosmetic && !r.Done && !r.IsQueuedForDeletion() && r.Hold < 6.9), 3);
+            var lateRocks = Nodes<ThrownRock>().Where(r => r.Cosmetic && !r.Done && !r.IsQueuedForDeletion()).ToList();
+            Check(lateRocks.Count == 1 && lateRocks[0].Hold < 6.9 && Nodes<Telegraph>().Any(t => t.Line && Math.Abs(t.Width - 180f) < 0.1f && t.Duration < 6.9),
+                  $"arena guest: a peer arriving mid-throw is sent the rock and its lane as they stand -- one rock, with what was left of its warning ({lateRocks.FirstOrDefault()?.Hold:0.00} s)");
             // DROPPED MID-ARENA: to its own world at once, then back in -- into the arena
             await RealTime(() => !Net.IsOnline, Wan ? 20 : 10);
             await RealTime(() => !Hub.InArena, 2);
@@ -4115,6 +4221,43 @@ public partial class _Test : Node
             await Wait(1.5);
             Key(global::Godot.Key.Tab); await Wait(0.05);
             Check(H.Selected == dummy, "guest: Tab selects the nearest dummy");
+            // its own bombers on its deck, watched every frame: each lift-off and landing placed HERE, in
+            // its carrier's frame on its own deck clock -- exactly where that clock puts it (1.2 s, the
+            // first quarter rolling out to the runway, then up it to 66 u ahead; landing in 1 s onto the
+            // centre) -- not trailing the host's reports; on the runway and on the centre at deck size
+            float gLift = 9f, gLand = 9f, gOff = 0f; bool gBow = false;
+            var fDeckT = typeof(Wing).GetField("_deckT", BindingFlags.NonPublic | BindingFlags.Instance);
+            var fTouch = typeof(Wing).GetField("_touch", BindingFlags.NonPublic | BindingFlags.Instance);
+            var deckWatch = new LateSampler { Probe = () =>
+            {
+                if (mine == null || !GodotObject.IsInstanceValid(mine)) return false;
+                foreach (var w in Nodes<Wing>().Where(w => w.Carrier == mine && w.IsBomber))
+                {
+                    var lp = mine.ToLocal(w.Position); var sp = Nodes<Sprite2D>(w).First();
+                    float drawn = sp.Scale.Y * sp.Texture.GetHeight() / 28.125f;
+                    double dt = (double)fDeckT.GetValue(w); var bay = mine.Bay(w);
+                    if (w.BomberPhase == "Lifting")
+                    {
+                        float k = (float)(dt / 1.2), u = Mathf.Clamp((k - 0.25f) / 0.75f, 0f, 1f);
+                        var want = k < 0.25f ? bay.Lerp(new Vector2(0f, bay.Y), Mathf.SmoothStep(0f, 1f, k / 0.25f))
+                                             : new Vector2(0f, bay.Y).Lerp(new Vector2(0f, -66f), u * u);
+                        gOff = Mathf.Max(gOff, lp.DistanceTo(want));
+                        if (Mathf.Abs(lp.X) < 0.01f) gLift = Mathf.Min(gLift, drawn);
+                        if (Mathf.Abs(lp.X) < 0.01f && lp.Y < -40f) gBow = true;
+                    }
+                    if (w.BomberPhase == "Landing")
+                    {
+                        var want = ((Vector2)fTouch.GetValue(w)).Lerp(Vector2.Zero, Mathf.SmoothStep(0f, 1f, (float)(dt / 1.0)));
+                        gOff = Mathf.Max(gOff, lp.DistanceTo(want));
+                        if (lp.Length() < 0.5f) gLand = Mathf.Min(gLand, drawn);
+                    }
+                }
+                return true;
+            } };
+            AddChild(deckWatch);
+            // the hits the host resolves show here as damage numbers too, from the figures it sends
+            var numberWatch = new LateSampler { Probe = () => DamageNumbers.Live?.Figures.Any(f => !f.Taken) == true };
+            AddChild(numberWatch);
             Key(global::Godot.Key.Space);          // fighters attack
             Key(global::Godot.Key.F);              // bomber strike
             await Wait(1.0);
@@ -4167,8 +4310,13 @@ public partial class _Test : Node
             Check(lostSv != null && lostSv.Lost && lostSv.RebuildIn > 5 && lostSv.RebuildIn < 29,
                   $"a salvager the host lost is lost here too, its 30 s rebuild counting down -- not stuck at 0 s ({lostSv?.RebuildIn:0.0} s)");
             var gb = Nodes<Wing>().Where(w => w.Carrier == mine && w.IsBomber).ToArray();
-            Check(gb.Length == 2 && gb.All(w => w.Docked && w.GlobalPosition.DistanceTo(mine.DockSlot(w).pos) < 8f),
-                  "guest sees its bombers docked on the carrier (state and position from the host)");
+            Check(gb.Length == 2 && gb.All(w => w.Docked && w.GlobalPosition.DistanceTo(mine.ToGlobal(mine.Bay(w))) < 0.5f),
+                  "guest sees its bombers parked in their bays on the carrier's deck (the state from the host, placed in its carrier's frame)");
+            Check(gLift < 0.42f && gBow && gLand < 0.42f && gOff < 0.05f,
+                  $"guest places its own bombers' deck moves on its own clock, in its carrier's frame: on the runway at deck size, up to the bow, down on the centre at deck size ({gLift:0.00}, {gLand:0.00}; {gOff:0.000} u from the deck clock's pose)");
+            deckWatch.QueueFree();
+            Check(numberWatch.Seen, "guest sees damage numbers where the hits the host resolves land (from the dummy's replicated figures)");
+            numberWatch.QueueFree();
             Check(H.GetNodeOrNull("MissionPortal") != null && H.Mission == Hub.MissionState.PortalOpen,
                   "the host's mission portal opened here too (the party was ready)");
             // AUTO-SELL is the base owner's to buy: this guest's request changes nothing

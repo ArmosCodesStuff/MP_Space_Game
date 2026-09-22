@@ -89,7 +89,7 @@ public partial class Turret : Node2D
     private double ShotDamage => PointDefense ? S["pd_damage"] : S["main_damage"];
     public double Interval   => PointDefense ? S["pd_interval"] : S["main_interval"];
 
-    private Sprite2D _sprite;          // the painted turret, cut from the hull art
+    private Sprite2D _sprite;          // the turret's own sprite (ClassArt.MainTurret / PdTurret)
     private PlayerShip.ClassArt Art => Ship.MyArt;
     private float BarrelLength => PointDefense ? Art.PdBarrel : Art.MainBarrel;
 
@@ -206,10 +206,10 @@ public partial class Turret : Node2D
         return diff;
     }
 
-    // The painted turret takes the hull colour, as it had when it was part of the hull.
+    // The turret takes the pilot's accent (turrets, engines, trim) over the hull colour.
     public void Recolor()
     {
-        if (_sprite != null) _sprite.Modulate = Ship.Main;
+        if (_sprite != null) _sprite.Modulate = Ship.Accent;
         QueueRedraw();
     }
 
@@ -234,12 +234,16 @@ public partial class Turret : Node2D
 //            like aircraft -- steady speed, limited turn rate: 3 shots, through the
 //            target by 1.2x its diameter, turn, repeat. After 15 s engaged they dock
 //            and rest 3 s. Recall brings them home.
-//   BOMBERS  are an active ability. They wait DOCKED on the carrier's flanks, half to
-//            port and half to starboard, rearming there. On the order they fly at the
-//            target, turn to face it at launch distance, and launch torpedoes straight
-//            ahead -- the torpedoes do not track -- then return to their own slot.
-//            A target beyond the strike range (twice the fighters' control range) is
-//            refused, and a strike whose target goes beyond it is called off.
+//   BOMBERS  are an active ability. They wait PARKED on the carrier's deck, in bays either
+//            side of the runway -- small, the deck being far below, as the hauler's pad is --
+//            half to port and half to starboard, rearming there. On the order they take off
+//            one at a time, LaunchInterval apart (the fighters' cadence): each rolls onto the
+//            runway and up it to the bow, growing to flight size as it lifts, as the hauler
+//            does. They fly at the target, turn to face it at launch distance, and launch
+//            torpedoes straight ahead -- the torpedoes do not track -- then come home over the
+//            carrier's centre, settle onto the runway there, shrinking back to deck size, and
+//            taxi to their bay. A target beyond the strike range (twice the fighters' control
+//            range) is refused, and a strike whose target goes beyond it is called off.
 public enum WingKind { Fighter, Bomber }
 
 public partial class Wing : Node2D
@@ -278,28 +282,46 @@ public partial class Wing : Node2D
     public string FighterPhase => _f.ToString();
     public int ShotsThisPass => _shots;
     public float LastOvershoot { get; private set; }   // how far past the target the last pass went
-    public double LaunchedAt { get; private set; } = -1; // the carrier's clock when it last left the hangar
-    private enum BSt { Docked, Approach, Aim, Launch, Return, Backing }
-    private const float DockSnap = 6f;              // within this of its slot, a backing bomber is home
-    private const double BackingLimit = 2.5;        // and after this long backing in, it is home regardless
-    private Vector2 _lastSlot; private bool _haveSlot;
-    // how its slot is moving now: the carrier's motion AND its turning, measured frame to frame
-    private Vector2 SlotVelocity(Vector2 slot, double delta)
+    // the carrier's clock when it last took off: a fighter out of the hangar, a bomber off the deck
+    public double LaunchedAt { get; private set; } = -1;
+
+    // ── bombers: the deck ─────────────────────────────────────────────────────
+    // On the deck a bomber is drawn at LandedScale -- far below, as the hauler on its pad -- and
+    // grows to full size as it lifts, on the hauler's curve (Altitude). Every deck move runs in the
+    // carrier's frame on its own clock, so a moving or turning carrier carries it exactly, and a
+    // landing always ends: it is timed, not steered.
+    public const float LandedScale = 0.4f;          // parked, 11.1 u across: inside the 12.8 u of white beside the runway
+    public const double LiftTime = 1.2, LandTime = 1.0, TaxiTime = 0.6;
+    private const double RollOut = 0.25;            // the share of a lift spent rolling out onto the runway
+    private const float TouchRadius = 10f;          // over the carrier's centre within this, a bomber sets down
+    private enum BSt { Docked, Lifting, Approach, Aim, Launch, Return, Landing, Taxiing }
+    private BSt _b = BSt.Docked;
+    private double _deckT;                          // seconds into the deck move under way
+    private Vector2 _touch; private float _touchRot; // where it set down, in the carrier's frame, and its heading then
+    private bool _called;                           // counted into a strike when it was ordered, waiting on the deck for its turn
+    public void Call() => _called = true;
+    private bool OnDeck => _b is BSt.Docked or BSt.Lifting or BSt.Landing or BSt.Taxiing;
+    // 0 on the deck, 1 at flight height (the hauler's SmoothStep)
+    private float Altitude => _b switch
     {
-        var v = _haveSlot && delta > 0 ? (slot - _lastSlot) / (float)delta : Carrier.Velocity;
-        _lastSlot = slot; _haveSlot = true;
-        return v;
-    }
+        BSt.Docked or BSt.Taxiing => 0f,
+        BSt.Lifting => Mathf.SmoothStep(0f, 1f, (float)((_deckT / LiftTime - RollOut) / (1 - RollOut))),
+        BSt.Landing => 1f - Mathf.SmoothStep(0f, 1f, (float)(_deckT / LandTime)),
+        _ => 1f,
+    };
+    public float VisualScale => F ? 1f : Mathf.Lerp(LandedScale, 1f, Altitude);
+    public string BomberPhase => _b.ToString();
+    private void Go(BSt s) { _b = s; _deckT = 0; }
+
     private const float CrawlSpeed = 0.25f;     // bombers keep closing at this fraction of top speed while they launch
     public bool Launching => _b == BSt.Launch;
-    private BSt _b = BSt.Docked;
     public bool Docked => _b == BSt.Docked;
     public bool Armed => _b == BSt.Docked && _rearm <= 0 && Ammo > 0;
     // A bomber that joins a wing already in service (a refit) arrives empty and rearms like one
     // just home: swapping a bay on and off must not reload a wing that has fired.
     public void StartRearm() { Ammo = 0; _rearm = S["bomber_rearm"]; }
     public double RearmLeft => _b == BSt.Docked ? Math.Max(0, _rearm) : 0;
-    private double _rearm, _backT;
+    private double _rearm;
 
     // Where the host says this craft is. Guests steer toward it.
     private NetPose _net;
@@ -317,9 +339,11 @@ public partial class Wing : Node2D
         // Fighter and bomber have their own airframes, and the bomber is the larger of
         // the two (FighterLength, BomberLength) so they read apart at a glance.
         _sprite = Sprites.Fit(F ? "res://wing_fighter.png" : "res://wing_bomber.png", F ? FighterLength : BomberLength);
+        _fit = _sprite.Scale;
         AddChild(_sprite);
         ZIndex = 4;
     }
+    private Vector2 _fit;                       // the sprite's scale at flight size
 
     public void SetNet(Vector2 p, float rot) => _net.Set(p, rot);
 
@@ -328,15 +352,16 @@ public partial class Wing : Node2D
     public void Tick(double delta)
     {
         Visible = Carrier.IsVisibleInTree() && !Inside;   // docked fighters are inside the hull
-        QueueRedraw();                                     // the engine plume
+        QueueRedraw();                                     // the engine plume; a bomber's shadow on the deck
+        if (!F) { _deckT += delta; _sprite.Scale = _fit * VisualScale; }
 
         if (!Net.Sim)
-        {   // the host flies the wing; a guest follows where it says it is -- except a
-            // bomber the host reports docked, which is locked to its slot here exactly,
-            // rather than trailing a moving carrier by a packet's worth of lag
-            if (!F && _b == BSt.Docked) { SnapToDock(); return; }
+        {   // the host flies the wing; a guest follows where it says it is -- except a bomber
+            // on the deck (parked, lifting, landing, taxiing), placed here exactly in the
+            // carrier's frame on its own clock, rather than trailing a moving carrier by a
+            // packet's worth of lag
+            if (!F && (OnDeck || !_net.Has)) { DeckPose(delta); return; }
             if (_net.Has) _net.Follow(this, (float)delta);
-            else if (!F) SnapToDock();
             return;
         }
 
@@ -359,7 +384,7 @@ public partial class Wing : Node2D
             case FSt.Docked:
                 Position = Carrier.Position; Velocity = Carrier.Velocity; _heading = Carrier.Rotation - Mathf.Pi / 2f;
                 if (_rest > 0) { _rest -= delta; break; }
-                if (engage && Carrier.TakeLaunchSlot()) { _f = FSt.Launch; _launchT = 0; _engaged = 0; LaunchedAt = Carrier.Clock; Carrier.Signal(Carrier.Position); }
+                if (engage && Carrier.TakeLaunchSlot(WingKind.Fighter)) { _f = FSt.Launch; _launchT = 0; _engaged = 0; LaunchedAt = Carrier.Clock; Carrier.Signal(Carrier.Position); }
                 break;
             case FSt.Launch:                       // out along the carrier's heading, clear of the hull
                 _launchT += delta; Fly(dt);
@@ -425,9 +450,27 @@ public partial class Wing : Node2D
         switch (_b)
         {
             case BSt.Docked:
-                SnapToDock();
+                DeckPose(delta);
                 if (_rearm > 0) { _rearm -= delta; if (_rearm <= 0) Ammo = (int)S["bomber_ammo"]; }
-                if (live && Armed) { _b = BSt.Approach; Velocity = Carrier.Velocity; Carrier.Signal(Position); }
+                if (_called && live)
+                {   // in the strike it was counted into: it takes off when the deck gives it its turn
+                    if (Carrier.TakeLaunchSlot(WingKind.Bomber))
+                    { _called = false; Go(BSt.Lifting); LaunchedAt = Carrier.Clock; Carrier.Signal(Position); }
+                }
+                // called off before its turn came: it answers for itself, once, as a bomber out does
+                else if (_called) { _called = false; Carrier.NoteStrikeDone(); }
+                break;
+
+            case BSt.Lifting:
+                DeckPose(delta);
+                if (_deckT >= LiftTime)
+                {   // off the bow with the speed its run up the runway ended at, in the carrier's frame
+                    // (the pace of the run's u-squared at its end) -- a frame's jump of the carrier, a
+                    // warp or a snap, is not a speed
+                    float run = 2f * (Carrier.Bay(this).Y + Carrier.MyArt.RunwayBow) / (float)(LiftTime * (1 - RollOut));
+                    Velocity = Carrier.Velocity + Vector2.Up.Rotated(Carrier.Rotation) * run;
+                    _b = BSt.Approach;
+                }
                 break;
 
             case BSt.Approach:
@@ -457,59 +500,93 @@ public partial class Wing : Node2D
                     Combat.LaunchTorpedo(Position + dir * BomberLength * 0.45f, dir, (float)S["torpedo_speed"],
                                          (float)S["torpedo_range"], S["torpedo_damage"], source: Carrier);
                 }
-                if (Ammo <= 0) { _b = BSt.Return; _haveSlot = false; Carrier.NoteStrikeDone(); }
+                if (Ammo <= 0) { _b = BSt.Return; Carrier.NoteStrikeDone(); }
                 break;
 
-            case BSt.Return:
-            {   // to a point just outboard of its own slot...
-                var (slot, rot) = Carrier.DockSlot(this);
-                var slotVel = SlotVelocity(slot, delta);
-                var outward = Vector2.Up.Rotated(rot);
-                FlyToward(slot + outward * 45f, Speed, delta, slotVel);
-                if (Position.DistanceTo(slot + outward * 45f) < 8f) { _b = BSt.Backing; _backT = 0; }
+            case BSt.Return:                           // home: over the carrier's centre, moving with it
+                FlyToward(Carrier.Position, Speed, delta, Carrier.Velocity);
+                if (Position.DistanceTo(Carrier.Position) < TouchRadius)
+                {
+                    _touch = Carrier.ToLocal(Position); _touchRot = Mathf.AngleDifference(Carrier.Rotation, Rotation);
+                    Go(BSt.Landing); Carrier.Signal(Position);
+                }
                 break;
-            }
-            case BSt.Backing:
-            {   // ...then turn nose-out and back in, tail first. It rides the slot's TRUE motion:
-                // a turning carrier swings the slot sideways as fast as a bomber backs in, and
-                // following only the carrier's own velocity left it hovering and jittering beside
-                // the slot, never docking, never re-arming.
-                var (slot, rot) = Carrier.DockSlot(this);
-                var slotVel = SlotVelocity(slot, delta);
-                _backT += delta;
-                Rotation = Mathf.LerpAngle(Rotation, rot, Mathf.Clamp(6f * (float)delta, 0f, 1f));
-                Position += slotVel * (float)delta;
-                if (_backT > 0.4) Position = Position.MoveToward(slot, 60f * (float)delta);
-                if (Position.DistanceTo(slot) < DockSnap || _backT > BackingLimit)
-                { _b = BSt.Docked; _rearm = S["bomber_rearm"]; SnapToDock(); Carrier.Signal(slot); }
+
+            case BSt.Landing:
+                DeckPose(delta);
+                if (_deckT >= LandTime) Go(BSt.Taxiing);
                 break;
-            }
+
+            case BSt.Taxiing:
+                DeckPose(delta);
+                if (_deckT >= TaxiTime) { Go(BSt.Docked); _rearm = S["bomber_rearm"]; Carrier.Signal(Position); }
+                break;
         }
     }
 
-    // Docked: in its slot on the carrier's flank, nose out, tail to the hull.
-    private void SnapToDock()
+    // Where a bomber on the deck is, from the carrier and its own clock: parked in its bay, facing
+    // the bow; LIFTING, rolling out onto the runway beside its bay, then up it to the bow end,
+    // gathering speed; LANDING, from where it came over the centre down onto it, turning to face
+    // the bow; TAXIING, from the centre to its bay.
+    private void DeckPose(double delta)
     {
-        var (p, rot) = Carrier.DockSlot(this);
-        Position = p; Rotation = rot; Velocity = Carrier.Velocity;
+        var bay = Carrier.Bay(this);
+        var local = bay; float turn = 0f;
+        switch (_b)
+        {
+            case BSt.Lifting:
+            {
+                float k = (float)(_deckT / LiftTime), roll = (float)RollOut;
+                var onRunway = new Vector2(0f, bay.Y);
+                if (k < roll) local = bay.Lerp(onRunway, Mathf.SmoothStep(0f, 1f, k / roll));
+                else
+                {
+                    float u = Mathf.Clamp((k - roll) / (1f - roll), 0f, 1f);
+                    local = onRunway.Lerp(new Vector2(0f, -Carrier.MyArt.RunwayBow), u * u);
+                }
+                break;
+            }
+            case BSt.Landing:
+            {
+                float k = Mathf.SmoothStep(0f, 1f, (float)(_deckT / LandTime));
+                local = _touch.Lerp(Vector2.Zero, k); turn = Mathf.LerpAngle(_touchRot, 0f, k);
+                break;
+            }
+            case BSt.Taxiing:
+                local = Vector2.Zero.Lerp(bay, Mathf.SmoothStep(0f, 1f, (float)(_deckT / TaxiTime)));
+                break;
+        }
+        var at = Carrier.ToGlobal(local);
+        Velocity = delta > 0 ? (at - Position) / (float)delta : Carrier.Velocity;
+        Position = at; Rotation = Carrier.Rotation + turn;
     }
 
-    // Replicated so a guest shows the same state: its ability bar, docked fighters
-    // hidden inside, and the signal light when anything lands or takes off.
+    // Replicated so a guest shows the same state: its ability bar, docked fighters hidden inside,
+    // a bomber's deck moves, and the signal light when anything lands or takes off.
     public int StateCode => F ? 100 + (int)_f : (int)_b;
     public void SetNetState(int code, double rearm)
     {
         if (Net.Sim) return;
-        bool wasDocked = F ? _f == FSt.Docked : _b == BSt.Docked;
-        if (code >= 100) _f = (FSt)(code - 100); else { _b = (BSt)code; _rearm = rearm; }
-        bool docked = F ? _f == FSt.Docked : _b == BSt.Docked;
-        if (docked != wasDocked) Carrier.Signal(docked && !F ? Carrier.DockSlot(this).pos : Position);
+        if (code >= 100)
+        {
+            bool wasDocked = _f == FSt.Docked;
+            _f = (FSt)(code - 100);
+            if ((_f == FSt.Docked) != wasDocked) Carrier.Signal(Position);
+            return;
+        }
+        _rearm = rearm;
+        var b = (BSt)code;
+        if (b == _b) return;
+        // a deck move runs on this peer's own clock from here; a landing from where this peer shows it
+        if (b == BSt.Landing) { _touch = Carrier.ToLocal(Position); _touchRot = Mathf.AngleDifference(Carrier.Rotation, Rotation); }
+        Go(b);
+        if (b is BSt.Lifting or BSt.Landing or BSt.Docked) Carrier.Signal(Position);
     }
     public bool IsBomber => Kind == WingKind.Bomber;
 
     // Accelerate toward a point, easing off to arrive rather than overshoot.
-    // `carry` is the velocity of whatever the craft is homing on (the carrier, when
-    // docking), so it arrives moving WITH it rather than stopping dead beside it.
+    // `carry` is the velocity of whatever the craft is homing on (the carrier's centre, coming
+    // home to land), so it arrives moving WITH it rather than stopping dead over it.
     private void FlyToward(Vector2 to, float spd, double delta, Vector2 carry = default)
     {
         var d = to - Position;
@@ -531,8 +608,17 @@ public partial class Wing : Node2D
 
     public override void _Draw()
     {
-        if (Inside || (!F && _b == BSt.Docked)) return;          // engines off when docked
-        float len = F ? FighterLength : BomberLength;
+        if (Inside) return;                                      // a fighter in the hangar
+        float len = (F ? FighterLength : BomberLength) * VisualScale;
+        if (!F && OnDeck)
+        {   // its shadow on the deck, tucked in when parked, further out and fainter the higher it
+            // rises (the hauler's): screen down-right, in the bomber's own frame
+            float alt = Altitude;
+            var size = _sprite.Texture.GetSize() * _sprite.Scale;
+            var drop = (new Vector2(3f, 5f) * (0.15f + alt)).Rotated(-Rotation);
+            DrawTextureRect(_sprite.Texture, new Rect2(drop - size / 2, size), false, new Color(0, 0, 0, (0.45f - 0.15f * alt) * (1f - alt)));
+            if (_b is BSt.Docked or BSt.Taxiing) return;       // engines off on the deck
+        }
         Plume.Draw(this, new Vector2(0, len * 0.5f), Vector2.Down, len, Carrier.Accent,
                    Velocity.Length() / Mathf.Max(1f, Speed), Velocity.Length() > 2f);
     }

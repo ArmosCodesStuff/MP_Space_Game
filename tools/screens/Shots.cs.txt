@@ -399,13 +399,26 @@ public partial class _Shots : Node
             GetViewport().GetCamera2D().Zoom = new Vector2(3.2f, 3.2f);
         }
         await Close(ShipClass.Carrier, "10_carrier_closeup");
-        // a Wide Bay III: five bombers docked, three to port and two to starboard
+        // a Wide Bay III: five bombers parked on the deck, three to port of the runway and two to starboard
         {
             var cl = Character.LoadoutFor(ShipClass.Carrier); var keep = (string[])cl.Clone();
             cl[4] = "cv_widebay_3";
             await Close(ShipClass.Carrier, "10b_carrier_gear_docked");
             for (int k = 0; k < keep.Length; k++) cl[k] = keep[k];
             P(H, "ApplyLocalIdentity"); await W(0.2);
+        }
+        // the deck under way: one bomber lifting off up the runway, growing as it rises; the other
+        // settling onto the carrier's centre, shrinking back to deck size
+        {
+            var s = H.GetNode<PlayerShip>("Ship_1");
+            var bw = N<Wing>().Where(w => w.Carrier == s && w.IsBomber).ToArray();
+            var nf = BindingFlags.NonPublic | BindingFlags.Instance;
+            var bf = typeof(Wing).GetField("_b", nf); var tf = typeof(Wing).GetField("_deckT", nf);
+            bf.SetValue(bw[0], System.Enum.Parse(bf.FieldType, "Lifting")); tf.SetValue(bw[0], 0.0);
+            await W(0.75); await Snap("10c_carrier_bomber_lifting");
+            typeof(Wing).GetField("_touch", nf).SetValue(bw[1], new Vector2(0f, 6f));
+            bf.SetValue(bw[1], System.Enum.Parse(bf.FieldType, "Landing")); tf.SetValue(bw[1], 0.0);
+            await W(0.45); await Snap("10d_carrier_bomber_landing");
         }
 
         // ── QA: every remaining feature and UI state, one frame each ─────────────

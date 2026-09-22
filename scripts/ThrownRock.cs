@@ -6,8 +6,9 @@ using System.Collections.Generic;
 // flown goes as the cube of the time) -- striking every ship in its path once, and breaking apart at
 // the lane's end. Its whole path is fixed when the throw starts (from, to, hold, flight), so every peer
 // flies the same rock from one event and no positions are streamed; a guest shortens only the HOLD
-// (Net.Arriving), never the flight, so the rock it draws is where the host's hit lands. A rock whose
-// boss is down threatens nothing: it goes with it.
+// (Net.Arriving), never the flight, so the rock it draws is where the host's hit lands. A Hold below
+// zero (a peer that arrived mid-flight, Drake.CatchUp) starts it that far into its flight. A rock
+// whose boss is down threatens nothing: it goes with it.
 public partial class ThrownRock : Node2D
 {
     public Boss Boss;
@@ -22,6 +23,7 @@ public partial class ThrownRock : Node2D
     private readonly HashSet<PlayerShip> _struck = new();
     private Sprite2D _sprite;
     public bool Thrown => _t >= Hold;
+    public double Elapsed => _t;
     public bool Done => _broken >= 0;
     // the share of the lane flown `s` seconds into a flight of `flight`: the cube -- slow, then very fast
     public static float Flown(double s, double flight) => (float)System.Math.Pow(System.Math.Clamp(s / flight, 0, 1), 3);
@@ -66,7 +68,7 @@ public partial class ThrownRock : Node2D
             _last = Position;
             if (f >= 1f)
             {   // the lane's end: it breaks apart
-                _broken = 0; _sprite.Visible = false; Sfx.Impact(Position);
+                _broken = 0; _sprite.Visible = false; Sfx.Special("drake_rock", Position);
                 GetParent().AddChild(new Explosion { Position = Position, Radius = Radius * 1.2f });
             }
         }

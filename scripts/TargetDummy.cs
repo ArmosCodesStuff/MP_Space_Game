@@ -65,8 +65,10 @@ public partial class TargetDummy : Node2D, IHittable
         LastSecond = Average10 = Total = _window = 0; _histN = _histI = 0; _clock = 0;
     }
 
+    private HullWatch _hullWatch;                  // what it takes, shown where it lands (its running total, as a falling "hull")
     public override void _Process(double delta)
     {
+        _hullWatch.Tick(this, -Total, taken: false);
         _hitFlash = Mathf.Max(0, _hitFlash - delta);
         if (_fighter != null) _fighter.Modulate = _hitFlash > 0 ? new Color(1f, 0.8f, 0.7f) : Colors.White;
         if (Armed && Net.Sim)

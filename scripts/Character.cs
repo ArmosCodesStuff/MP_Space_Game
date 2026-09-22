@@ -19,8 +19,8 @@ public static class Character
     public static class Defaults
     {
         public const string Name = "Commander";
-        public static readonly Color Main = new(0.55f, 0.72f, 1.00f);     // hull
-        public static readonly Color Accent = new(1.00f, 0.78f, 0.35f);   // turrets, engines, trim
+        public static readonly Color Main = new(0.30f, 0.50f, 0.95f);     // hull: blue
+        public static readonly Color Accent = new(1.00f, 0.78f, 0.35f);   // turrets, engines, trim: gold
     }
 
     public static string Id = "";           // file stem; empty = nothing loaded
@@ -254,12 +254,16 @@ public static class Character
     }
 
     // The [id] section: what the select screen lists, and what Load checks before anything else.
+    // A pilot still in the first default hull colour -- a pale blue that left the line-art hulls
+    // near white -- never chose it, only inherited it: they are given the default as it is now.
+    private static Color SavedHull(Color c) => c.IsEqualApprox(new Color(0.55f, 0.72f, 1.00f)) ? Defaults.Main : c;
+
     private static Slot ReadSlot(ConfigFile c, string id) => new()
     {
         Id = id,
         Version = (int)c.GetValue("id", "version", 0),
         Name = (string)c.GetValue("id", "name", Defaults.Name),
-        Main = (Color)c.GetValue("id", "main", Defaults.Main),
+        Main = SavedHull((Color)c.GetValue("id", "main", Defaults.Main)),
         Accent = (Color)c.GetValue("id", "accent", Defaults.Accent),
         Class = Classes.Sanitize((int)c.GetValue("id", "class", 0)),
     };

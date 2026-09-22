@@ -182,6 +182,7 @@ public partial class Hub : Node2D
         // turret sprites, so a shot is seen leaving a turret on top of the ship -- drawn at
         // the world's own level they started underneath it.
         AddChild(new FlashLayer { Hub = this, ZIndex = 8, ZAsRelative = false });
+        AddChild(new DamageNumbers { Name = "DamageNumbers" });
         _cam = new Camera2D { Zoom = new Vector2(DefaultZoom, DefaultZoom) }; AddChild(_cam); _cam.MakeCurrent();
 
         var layer = new CanvasLayer(); AddChild(layer);
@@ -412,6 +413,7 @@ public partial class Hub : Node2D
         if ((SectorKind)s != Sector) { RpcId(who, nameof(NetSector), (int)Sector, Missions.Level); return; }
         RpcId(who, nameof(NetMission), MissionArgs());
         foreach (var r in Raiders) RpcId(who, nameof(NetRaiderSpawn), r.NetId, r.Position, (int)r.Kind, r.Strength, r.HullShare);
+        if (Sector == SectorKind.Arena && IsInstanceValid(Boss) && Boss.Alive) Boss.CatchUp(who);   // the warnings (and a rock) up now
         if (MissionWon) { RpcId(who, nameof(NetWon), _ships.Count); RpcId(who, nameof(NetReturnCount), ReturnReady, ReturnTotal); }
         if (_placeFor.Remove(who, out var place)) RpcId(who, nameof(NetPlace), place.at, place.rot);
     }
@@ -624,6 +626,7 @@ public partial class Hub : Node2D
         if (characterId.Length > 64) characterId = "";
         (p.Name, p.Main, p.Accent, p.Class, p.Bought, p.Equip, p.CharacterId, p.HasIdentity) =
             (name, main, accent, Classes.Sanitize(cls), bought, equip ?? System.Array.Empty<string>(), characterId, true);
+        p.Level = System.Math.Clamp(level, 1, 100);             // a claim: bounded before it weighs on an escort's threat
         if (_ships.TryGetValue(peer, out var s) && IsInstanceValid(s)) ApplyIdentity(s);
         TryRestoreHold(peer);
     }
@@ -902,32 +905,75 @@ public partial class Hub : Node2D
         foreach (var u in Yard.Fleet) if (Raider.Up(u)) yield return u;
     }
 
-    // A patrol: 3 lights and (unless `heavy` is false) 1 heavy, spawned together at `at` on the
-    // perimeter -- hunters of `quarry`, if one is given, built with `hullShare` of their hull.
+    // A patrol: `lights` light fighters (3, unless an escort's threat adds more) and (unless `heavy`
+    // is false) 1 heavy, spawned together at `at` on the perimeter -- hunters of `quarry`, if one is
+    // given, built with `hullShare` of their hull, at `agility` of their speed and turning.
     private int _patrols;
-    public int SpawnPatrol(Vector2 at, double scale = 1, Node2D quarry = null, bool heavy = true, double hullShare = 1)
+    public int SpawnPatrol(Vector2 at, double scale = 1, Node2D quarry = null, bool heavy = true, double hullShare = 1, int lights = 3, double agility = 1)
     {
         if (!Net.IsHost) return 0;
         int id = ++_patrols;
-        var crew = new List<(Vector2 off, RaiderKind kind)> { (new Vector2(-40, 0), RaiderKind.Light), (Vector2.Zero, RaiderKind.Light), (new Vector2(40, 0), RaiderKind.Light) };
+        var crew = new List<(Vector2 off, RaiderKind kind)>();
+        for (int i = 0; i < lights; i++) crew.Add((new Vector2((i - (lights - 1) / 2f) * 40f, 0), RaiderKind.Light));
         if (heavy) crew.Add((new Vector2(0, 90), RaiderKind.Heavy));
-        foreach (var (off, kind) in crew) SpawnRaider(at + off, kind, id, scale, hullShare).Quarry = quarry;
+        foreach (var (off, kind) in crew)
+        {
+            var r = SpawnRaider(at + off, kind, id, scale, hullShare);
+            r.Quarry = quarry; r.Agility = agility;
+        }
         return id;
     }
 
     // AN ESCORT'S HUNTERS: a wave sent after one quarry, in from the map's edge beside it -- one
-    // patrol, and one more per extra pilot, at the strength of the base owner's highest boss and
-    // at HALF their hull. The first wave is light fighters only; every other wave after it brings
-    // a heavy too (the second, the fourth, ...). Alternate waves come round from alternate sides.
+    // patrol, and one more per extra pilot, at HALF their hull. The first wave is light fighters
+    // only; every other wave after it brings a heavy too (the second, the fourth, ...). Alternate
+    // waves come round from alternate sides. How hard each wave is, is the escort's THREAT.
     public const double HunterHull = 0.5;
     public void HuntWave(Node2D quarry, int wave)
     {
         if (!Net.IsHost) return;
+        var (level, toughness) = PartyStanding();
+        double t = EscortThreat(quarry is Hauler h ? h.Payout : 0, level, toughness, Missions.HighestBeaten, wave);
         int patrols = 1 + System.Math.Max(0, _ships.Count - 1);
         var edge = Raider.EdgeSpot(quarry.Position) - BasePos;
         for (int i = 0; i < patrols; i++)
-            SpawnPatrol(BasePos + edge.Rotated((wave % 2 == 0 ? 1 : -1) * 0.35f * (i + 1)), Missions.S(System.Math.Max(1, Missions.HighestBeaten)), quarry,
-                        heavy: wave % 2 == 1, hullShare: HunterHull);
+            SpawnPatrol(BasePos + edge.Rotated((wave % 2 == 0 ? 1 : -1) * 0.35f * (i + 1)), ThreatStrength(t), quarry,
+                        heavy: wave % 2 == 1, hullShare: HunterHull, lights: ThreatLights(t), agility: ThreatAgility(t));
+    }
+
+    // AN ESCORT'S THREAT, as a mission level: a quarter each from
+    //   the load    1, and a level for every 1000 cr the cargo will fetch escorted (Hauler.Payout)
+    //   the party   half its pilots' mean level, half its ships' toughness -- 1, and a level for each
+    //               10% step its hull stands over its class's own (purchases and gear)
+    //   the boss    the highest the base owner has beaten (1 before any)
+    //   the route   how far along the escort the wave comes: 1 at the first, +0.5 a wave
+    // A fresh base's first wave with a light load is about 1.4. The threat makes the hunters' hull and
+    // damage (the missions' 10% a level), their numbers (a light more a patrol every 3 levels, 3 more
+    // at most) and, very slightly, their speed and turning (1% a level, 10% at most).
+    public const double CreditsPerThreat = 1000, ThreatPerWave = 0.5;
+    public static double EscortThreat(double loadCredits, double partyLevel, double partyToughness, int highestBoss, int wave) =>
+        0.25 * ((1 + System.Math.Max(0, loadCredits) / CreditsPerThreat)
+              + (0.5 * partyLevel + 0.5 * partyToughness)
+              + System.Math.Max(1, highestBoss)
+              + (1 + ThreatPerWave * System.Math.Max(0, wave)));
+    public static double ThreatStrength(double threat) => System.Math.Pow(Missions.LevelStep, System.Math.Max(0, threat - 1));
+    public static int ThreatLights(double threat) => 3 + System.Math.Min(3, (int)System.Math.Floor(System.Math.Max(0, threat - 1) / 3));
+    public static double ThreatAgility(double threat) => 1 + System.Math.Min(0.1, 0.01 * System.Math.Max(0, threat - 1));
+
+    // the party, for an escort's threat: each pilot's level (the host's from its character, a
+    // guest's as its identity claimed it, bounded) and its ship's toughness (EscortThreat)
+    private (double level, double toughness) PartyStanding()
+    {
+        double level = 0, toughness = 0; int n = 0;
+        foreach (var s in _ships.Values)
+        {
+            if (!IsInstanceValid(s)) continue;
+            level += s.Mine ? Character.Level : Net.I != null && Net.I.Players.TryGetValue(s.OwnerId, out var p) ? p.Level : 1;
+            double own = new ShipStats(s.Class)["hull"];
+            toughness += 1 + System.Math.Log(System.Math.Max(1, own > 0 ? s.MaxHp / own : 1)) / System.Math.Log(Missions.LevelStep);
+            n++;
+        }
+        return n == 0 ? (1, 1) : (level / n, toughness / n);
     }
     // The hunt is over (the quarry reached the portal, or was lost): its hunters withdraw -- gone,
     // not shot down.

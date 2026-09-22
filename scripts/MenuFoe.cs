@@ -60,9 +60,9 @@ public partial class MenuFoe : Node2D, IHittable
     public override void _Ready()
     {
         _sprite = Sprites.Fit(_art, _length);          // exactly how Raider and PlayerShip do it
-        // The heavy wears the raiders' red, from Raider's own constant: untinted it drew in the
-        // art's bare grey and read as a neutral hull rather than as something shooting at you.
-        if (Kind == MenuFoeKind.Heavy) _sprite.Modulate = Raider.HeavyTint;
+        // The raiders wear their red, from Raider's own constants: untinted they drew in the art's
+        // bare grey and read as neutral hulls rather than as something shooting at you.
+        if (Kind != MenuFoeKind.Web) _sprite.Modulate = Kind == MenuFoeKind.Heavy ? Raider.HeavyTint : Raider.LightTint;
         AddChild(_sprite);
     }
 

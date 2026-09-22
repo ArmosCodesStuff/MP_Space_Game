@@ -29,7 +29,7 @@ public static class Missions
     // The boss of a level: every peer works it out from the replicated level alone.
     public static BossType ForLevel(int level) => Bosses[(Math.Max(1, level) - 1) % Bosses.Length];
 
-    private const double LevelStep = 1.10;
+    public const double LevelStep = 1.10;
     public static double S(int level) => Math.Pow(LevelStep, Math.Max(1, level) - 1);
     public static int Level = 1;                            // the selected level (the host decides; replicated)
     // The levels this pilot has cleared, of every boss this build knows (an id in the file it does

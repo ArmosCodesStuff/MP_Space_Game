@@ -6,6 +6,9 @@ using System.Collections.Generic;
 //     deep grinding one for a boss) and a crackle where it hits.
 //   Self-propelled projectiles (missiles, torpedoes): a soft whoosh at launch, and a
 //     low thunk with a soft reverb tail when they hit.
+//   Every boss special move has its own sound (Special; tools/make_sounds.py makes them): the
+//     Lancer's beam charging and its growl firing, its ram, shockwave and trident; the Drake's
+//     gun, warp, scrap blast, tractor, throw and the rock breaking.
 // Loudness follows the CAMERA: the distance from the view's centre to the sound, and
 // the zoom (zoomed out, the listener is further away). A laser hit is also softer and
 // a little lower the longer the shot that made it.
@@ -18,7 +21,9 @@ public static class Sfx
 
     // Every sound there is (sfx/<name>.wav), and the least time between two of it: a wing firing
     // is not a wall of noise.
-    static readonly Dictionary<string, double> _gap = new() { ["cannon"] = 0.05, ["laser_light"] = 0.04, ["laser_fighter"] = 0.04, ["laser_boss"] = 0.08, ["laser_hit"] = 0.03, ["missile_whoosh"] = 0.05, ["impact_thunk"] = 0.05 };
+    static readonly Dictionary<string, double> _gap = new() { ["cannon"] = 0.05, ["laser_light"] = 0.04, ["laser_fighter"] = 0.04, ["laser_boss"] = 0.08, ["laser_hit"] = 0.03, ["missile_whoosh"] = 0.05, ["impact_thunk"] = 0.05,
+        ["boss_beam_charge"] = 0.5, ["boss_beam"] = 0.5, ["boss_ram"] = 0.5, ["boss_shockwave"] = 0.5, ["boss_trident"] = 0.3,
+        ["drake_gun"] = 0.2, ["drake_warp"] = 0.5, ["drake_scrap"] = 0.3, ["drake_tractor"] = 0.5, ["drake_throw"] = 0.5, ["drake_rock"] = 0.3 };
     public static readonly Dictionary<string, int> Played = new();            // for the smoke test
     static Node _pool; static int _next;
     static bool _closed;                             // quitting: see Close
@@ -45,6 +50,9 @@ public static class Sfx
         Play("laser_hit", to, -3f * shot / 1000f, 1.0f - 0.12f * Mathf.Clamp(shot / 1000f, 0f, 1f));
     }
     public static void Missile(Vector2 at) => Play("missile_whoosh", at, 0f, 1f);
+    // a boss's special move, by its file's name. A name that is none of them plays nothing: it may
+    // have come over the wire.
+    public static void Special(string name, Vector2 at) { if (name != null && _gap.ContainsKey(name)) Play(name, at, 0f, 1f); }
     public static void Impact(Vector2 at) => Play("impact_thunk", at, 0f, 1f);
     // a battleship gun: the thunk, higher -- a cannon's report, not a laser's buzz. Its own file
     // now rather than the impact played quietly, so the impact can be tuned without moving it.

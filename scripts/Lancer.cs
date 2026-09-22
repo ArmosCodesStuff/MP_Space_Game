@@ -111,6 +111,7 @@ public partial class Lancer : Boss
             _missiles = TridentEvery; Volleys++;
             var t = Nearest();
             var aim = (t.Position - nose).Normalized();
+            Sound("boss_trident", nose);
             foreach (float deg in new[] { -TridentSpread, 0f, TridentSpread })
             {
                 var dir = aim.Rotated(Mathf.DegToRad(deg));
@@ -142,7 +143,8 @@ public partial class Lancer : Boss
                 ChargeCause = pinned ? "pinned" : _beamArm >= _beamOverdue ? "overdue" : "escorts down";
                 ArmedFor = _beamArm;
                 _beamArm = -1; BeamCharging = true; _beamT = BeamWindup;
-                Tele(true, new Vector2(0, -Length * 0.5f), new Vector2(0, -Length * 0.5f - BeamLength), BeamWidth, BeamWindup, onHull: true, hold: BeamLive);
+                Tele(true, new Vector2(0, -Length * 0.5f), new Vector2(0, -Length * 0.5f - BeamLength), BeamWidth, BeamWindup, onHull: true, hold: BeamLive,
+                     cue: "boss_beam_charge", strike: "boss_beam");
             }
         }
         if (BeamCharging && (_beamT -= delta) <= 0) { BeamCharging = false; _beamLive = BeamLive; _beamTickT = 0; }
@@ -168,7 +170,7 @@ public partial class Lancer : Boss
             Rotation = (t.Position - Position).Angle() + Mathf.Pi / 2f;
             var a = Position; var bb = a + Vector2.Up.Rotated(Rotation) * ChargeLength;
             _pendingCharge = (a, bb); _chargeT = ChargeWindup;
-            Tele(true, Vector2.Zero, new Vector2(0, -ChargeLength), HalfWidth * 2f, ChargeWindup, onHull: true);
+            Tele(true, Vector2.Zero, new Vector2(0, -ChargeLength), HalfWidth * 2f, ChargeWindup, onHull: true, strike: "boss_ram");
         }
         if (_pendingCharge is { } ch && (_chargeT -= delta) <= 0) { _dashTo = ch.b; _pendingCharge = null; }
         if (_dashTo is { } to)
@@ -181,7 +183,7 @@ public partial class Lancer : Boss
         if (_wave <= 0 && _pendingWave == null && _pendingCharge == null && !_dashTo.HasValue)
         {   // (not while it rams: the ring is centred on the boss, and it would ram out of its own ring)
             _wave = 17.0; _pendingWave = Position; _waveT = WaveWindup;
-            Tele(false, Position, Vector2.Zero, WaveRadius, WaveWindup);
+            Tele(false, Position, Vector2.Zero, WaveRadius, WaveWindup, strike: "boss_shockwave");
         }
         if (_pendingWave is { } c && (_waveT -= delta) <= 0)
         {

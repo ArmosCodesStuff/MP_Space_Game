@@ -79,6 +79,7 @@ public partial class Gatherer : UtilityShip
     {
         float dt = (float)delta;
         _t += delta;
+        WatchHull();
         Visible = State != St.Destroyed;         // a lost ship is gone until it is rebuilt
         if (Net.Sim) Simulate(dt);
         else

@@ -158,8 +158,8 @@ public partial class CharacterCreator : CanvasLayer
 }
 
 // The ship as it will look in game: the class's real sprite, tinted with the hull
-// colour exactly as PlayerShip tints it, with accent-coloured turrets on the real
-// mounts (PlayerShip.Art). Live reads the current character every redraw; otherwise
+// colour exactly as PlayerShip tints it, with its turrets in the accent colour on the
+// real mounts (PlayerShip.Art). Live reads the current character every redraw; otherwise
 // it draws the fixed values it was given (the select screen shows one per row).
 public partial class ShipPreview : Control
 {
@@ -198,15 +198,14 @@ public partial class ShipPreview : Control
         Plume.Draw(this, c + new Vector2(0, drawSize.Y * 0.5f), Vector2.Down, drawSize.Y, Accent, 0.8f, false);
         DrawTextureRect(tex, new Rect2(c - drawSize * 0.5f, drawSize), false, Main);
 
-        // turrets: the same cut-out sprites the game turns, pointing forward, in the
-        // hull colour; the drawn fallback only for a class without turret art
+        // turrets: the same sprites the game turns, in the accent colour as Turret draws them
         void Mount(Vector2 off, bool pd)
-        {   // the cut-out turret sprites the game turns, as painted: aft turrets face aft
+        {   // at rest: forward turrets face forward, aft turrets aft
             var p = c + off * k;
             var tt = Tex(pd ? art.PdTurret : art.MainTurret);
             var sz = tt.GetSize() * art.TurretTexScale * k;
             DrawSetTransformMatrix(shipXf * new Transform2D(!pd && off.Y > 0 ? Mathf.Pi : 0f, p));
-            DrawTextureRect(tt, new Rect2(-sz * 0.5f, sz), false, Main);
+            DrawTextureRect(tt, new Rect2(-sz * 0.5f, sz), false, Accent);
             DrawSetTransformMatrix(shipXf);
         }
         foreach (var m in art.Mains) Mount(m, false);

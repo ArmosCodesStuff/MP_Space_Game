@@ -30,6 +30,7 @@ public partial class Slug : Node2D
     public override void _Ready()
     {
         ZIndex = 6; Rotation = Dir.Angle() + Mathf.Pi / 2f;
+        if (Look == Kind.Shell) Sfx.Special("drake_gun", Position);            // the Drake's main gun, on every peer
         _flown = Mathf.Min(Speed * Lead, Range); Position += Dir * _flown;
     }
 

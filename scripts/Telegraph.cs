@@ -4,21 +4,28 @@ using Godot;
 // so pilots can get out. A LINE (a beam: from, to, width) or a CIRCLE (centre,
 // radius). It fills as the moment approaches, then flashes when the attack lands --
 // and stays lit for as long as the attack itself lasts (Hold: the death beam burns for
-// 3 s) -- then frees itself. Pure visuals: the host resolves the hit when the time is up.
+// 3 s) -- then frees itself. Pure visuals: the host resolves the hit when the time is up. It
+// carries the attack's sounds too, so every peer that draws it hears them in step with it.
 public partial class Telegraph : Node2D
 {
     public bool Line;
     public Vector2 A, B;           // line: from and to (world); circle: A is the centre
     public float Width, Radius;
     public double Duration, Hold;
+    // Cue plays as the warning goes up, Strike as the attack lands (Sfx.Special; either may be null)
+    public string Cue, Strike;
     private double _t;
+    public double Elapsed => _t;
     private const double Flash = 0.35;
 
     public override void _Ready() { ZIndex = 7; ZAsRelative = false; }
 
     public override void _Process(double delta)
     {
+        if (_t == 0 && Cue != null) Sfx.Special(Cue, ToGlobal(A));
+        bool winding = _t < Duration;
         _t += delta;
+        if (winding && _t >= Duration && Strike != null) Sfx.Special(Strike, ToGlobal(A));
         if (_t > Duration + Hold + Flash) QueueFree();
         QueueRedraw();
     }

@@ -81,7 +81,7 @@ public partial class Drake : Boss
             _shotTarget = Nearest();
             _warpTo = _shotTarget.Position + (Position - _shotTarget.Position).Normalized() * WarpStandoff;
             _warpT = WarpWarning;
-            Tele(false, _warpTo, Vector2.Zero, HalfWidth * 1.3f, WarpWarning);
+            Tele(false, _warpTo, Vector2.Zero, HalfWidth * 1.3f, WarpWarning, strike: "drake_warp");
         }
         if (_warpT >= 0 && (_warpT -= delta) <= 0)
         {   // it lands, facing the pilot, and the fan is drawn from its nose -- fixed from here on
@@ -91,7 +91,7 @@ public partial class Drake : Boss
             if (_shotTarget != null) Rotation = (_shotTarget.Position - Position).Angle() + Mathf.Pi / 2f;
             _fanAim = Rotation - Mathf.Pi / 2f;
             foreach (float a in FanAngles(_fanAim))
-                Tele(true, Nose, Nose + Vector2.Right.Rotated(a) * ScrapRange, ScrapRadius * 2f + 10f, FanWindup);
+                Tele(true, Nose, Nose + Vector2.Right.Rotated(a) * ScrapRange, ScrapRadius * 2f + 10f, FanWindup, strike: "drake_scrap");
             _fanT = FanWindup;
         }
         if (_fanT >= 0 && (_fanT -= delta) <= 0)
@@ -115,7 +115,7 @@ public partial class Drake : Boss
             var from = Position + side * (HalfWidth + RockRadius + 40f);
             var to = from + (t.Position - from).Normalized() * ThrowLength;
             int variant = Throws % 2;
-            Tele(true, from, to, RockRadius * 2f, ThrowWindup, hold: ThrowFlight);
+            Tele(true, from, to, RockRadius * 2f, ThrowWindup, hold: ThrowFlight, cue: "drake_tractor", strike: "drake_throw");
             _rock = new ThrownRock { Boss = this, From = from, To = to, Hold = ThrowWindup, Flight = ThrowFlight,
                                      Damage = RockDamage * DamageMult, Radius = RockRadius, Variant = variant };
             GetParent().AddChild(_rock);
@@ -124,9 +124,20 @@ public partial class Drake : Boss
     }
 
     // A guest's rock: the same one, from the same event -- its hold shortened by the trip here, never
-    // its flight (see ThrownRock).
+    // its flight (see ThrownRock). A catch-up sends what is left of the hold: less than nothing once
+    // the rock is in flight, which starts it that far along its lane. It replaces any rock shown.
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetRock(Vector2 from, Vector2 to, double hold, double flight, float radius, int variant) =>
-        GetParent().AddChild(_rock = new ThrownRock { Boss = this, From = from, To = to, Hold = Net.Arriving(hold), Flight = flight,
+    private void NetRock(Vector2 from, Vector2 to, double hold, double flight, float radius, int variant)
+    {
+        if (IsInstanceValid(_rock)) _rock.QueueFree();
+        GetParent().AddChild(_rock = new ThrownRock { Boss = this, From = from, To = to, Hold = hold > 0 ? Net.Arriving(hold) : hold, Flight = flight,
                                                       Radius = radius, Variant = variant, Cosmetic = true });
+    }
+
+    // a peer arriving mid-throw is sent the rock as it stands, as well as the lane (Boss.CatchUp)
+    public override void CatchUp(int peer)
+    {
+        base.CatchUp(peer);
+        if (Rock is { Done: false } r) RpcId(peer, nameof(NetRock), r.From, r.To, r.Hold - r.Elapsed, r.Flight, r.Radius, r.Variant);
+    }
 }

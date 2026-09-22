@@ -52,6 +52,7 @@ public abstract partial class Boss : Node2D, IHittable
     }
     private NetPose _net; private bool _netLocked;
     private double _send;
+    private HullWatch _hullWatch;
 
     public override void _Ready()
     {
@@ -76,6 +77,7 @@ public abstract partial class Boss : Node2D, IHittable
     public override void _Process(double delta)
     {
         float dt = (float)delta;
+        _hullWatch.Tick(this, Hp, taken: false);
         if (!Alive && _telegraphs.Count > 0) ClearTelegraphs();
         if (!Net.Sim)
         {
@@ -138,15 +140,18 @@ public abstract partial class Boss : Node2D, IHittable
     // warning swings with the hull instead of being pinned to the spot the boss stood on when it
     // drew it. Guests already follow the boss's pose from NetState, so their copy tracks too --
     // no per-frame line updates over the wire.
-    protected void Tele(bool line, Vector2 a, Vector2 b, float size, double time, bool onHull = false, double hold = 0)
+    // cue / strike: the move's sounds, as the warning goes up and as it lands (Telegraph)
+    protected void Tele(bool line, Vector2 a, Vector2 b, float size, double time, bool onHull = false, double hold = 0,
+                        string cue = null, string strike = null)
     {
-        ShowTelegraph(line, a, b, size, time, onHull, hold);
+        ShowTelegraph(line, a, b, size, time, onHull, hold, cue, strike);
         // arena peers only, for the same reason as NetState above
-        if (Net.IsOnline) Hub?.RpcToSector(Hub.SectorKind.Arena, this, nameof(NetTelegraph), line, a, b, size, time, onHull, hold);
+        if (Net.IsOnline) Hub?.RpcToSector(Hub.SectorKind.Arena, this, nameof(NetTelegraph), line, a, b, size, time, onHull, hold, cue ?? "", strike ?? "");
     }
-    private void ShowTelegraph(bool line, Vector2 a, Vector2 b, float size, double time, bool onHull, double hold)
+    private void ShowTelegraph(bool line, Vector2 a, Vector2 b, float size, double time, bool onHull, double hold, string cue, string strike)
     {
-        var t = new Telegraph { Line = line, A = a, B = b, Width = size, Radius = size, Duration = time, Hold = hold };
+        var t = new Telegraph { Line = line, A = a, B = b, Width = size, Radius = size, Duration = time, Hold = hold,
+                                Cue = string.IsNullOrEmpty(cue) ? null : cue, Strike = string.IsNullOrEmpty(strike) ? null : strike };
         (onHull ? (Node)this : GetParent()).AddChild(t);
         _telegraphs.RemoveAll(x => !IsInstanceValid(x));
         _telegraphs.Add(t);
@@ -165,8 +170,34 @@ public abstract partial class Boss : Node2D, IHittable
     // Net.Arriving): on the internet the two were a round trip apart, and a pilot who cleared the
     // red on their own screen was hit "outside" it.
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetTelegraph(bool line, Vector2 a, Vector2 b, float size, double time, bool onHull, double hold) =>
-        ShowTelegraph(line, a, b, size, Net.Arriving(time), onHull, hold);
+    private void NetTelegraph(bool line, Vector2 a, Vector2 b, float size, double time, bool onHull, double hold, string cue, string strike) =>
+        ShowTelegraph(line, a, b, size, Net.Arriving(time), onHull, hold, cue, strike);
+
+    // host: a special move's sound, here and on every guest in the arena -- for a move with no
+    // warning to carry it (Tele's cue and strike)
+    protected void Sound(string name, Vector2 at)
+    {
+        Sfx.Special(name, at);
+        if (Net.IsOnline) Hub?.RpcToSector(Hub.SectorKind.Arena, this, nameof(NetSound), name, at);
+    }
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
+    private void NetSound(string name, Vector2 at) => Sfx.Special(name, at);
+
+    // A PILOT ARRIVING MID-FIGHT -- a rejoin, a slow load -- missed every warning already up (and the
+    // Drake's rock, if one is thrown): each is sent once, as it starts, to the peers in the arena
+    // then. The host sends such a peer what is up now, as it stands (Hub.NetMySector). A warning's
+    // opening sound is not replayed; its landing sound still plays.
+    public virtual void CatchUp(int peer)
+    {
+        foreach (var t in _telegraphs)
+        {
+            if (!IsInstanceValid(t)) continue;
+            double left = t.Duration - t.Elapsed, hold = t.Hold;
+            if (left < 0) { hold += left; left = 0; }
+            if (left <= 0 && hold <= 0) continue;                  // landed: only its flash is left
+            RpcId(peer, nameof(NetTelegraph), t.Line, t.A, t.B, t.Width, left, t.GetParent() == this, hold, "", left > 0 ? t.Strike ?? "" : "");
+        }
+    }
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
     private void NetState(Vector2 p, float rot, double hp, bool locked, double nextSuper, double superGap, double hullMult)

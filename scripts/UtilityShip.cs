@@ -14,6 +14,9 @@ public abstract partial class UtilityShip : Node2D, IRaidTarget
 {
     public Yard Yard;
     public double Cargo, Hull, RebuildIn;
+    private HullWatch _hullWatch;
+    // damage taken, shown where it lands (DamageNumbers): each kind calls it every frame
+    protected void WatchHull() => _hullWatch.Tick(this, Hull, taken: true);
     public bool WaitingForCredits;
     protected double PinT;
     public bool Pinned => PinT > 0;
