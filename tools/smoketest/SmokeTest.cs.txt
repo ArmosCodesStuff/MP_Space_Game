@@ -971,16 +971,16 @@ public partial class _Test : Node
             loose.Free();
             Check(dropped, "a ship report or identity landing on a world already out of the tree is dropped, not thrown");
         }
-        // THE OUTPOSTS: 2000 u out on the diagonals, named for their corners, each with its label
+        // THE OUTPOSTS: 3000 u out on the diagonals, named for their corners, each with its label
         {
-            double c = 2000 / Math.Sqrt(2);      // 1414.2 u east or west, north or south
+            double c = 3000 / Math.Sqrt(2);      // 2121.3 u east or west, north or south
             var want = new[] { ("SE", new Vector2((float)c, (float)c)), ("NE", new Vector2((float)c, (float)-c)), ("NW", new Vector2((float)-c, (float)-c)), ("SW", new Vector2((float)-c, (float)c)) };
             var opLabels = H.GetChildren().OfType<WorldLabel>().ToList();
             bool built = want.All(w => H.GetNodeOrNull<Sprite2D>("Outpost" + w.Item1) is { } o && o.Position.DistanceTo(w.Item2) < 0.5f
                                        && o.Texture.ResourcePath.EndsWith("outpost.png") && Math.Abs(o.Texture.GetHeight() * o.Scale.Y - 170f) < 0.5f
                                        && opLabels.Any(l => l.Text == "OUTPOST " + w.Item1 && l.Position.DistanceTo(w.Item2) < 120f));
             Check(built && Hub.Outposts.Select(o => o.name).SequenceEqual(new[] { "SE", "NE", "NW", "SW" }),
-                  "four outposts 2000 u out on the diagonals (±1414, ±1414), labelled OUTPOST SE / NE / NW / SW");
+                  "four outposts 3000 u out on the diagonals (±2121, ±2121), labelled OUTPOST SE / NE / NW / SW");
         }
         var tioS = H.GetNodeOrNull<Sprite2D>("TIO");
         Check(tioS != null && tioS.Position == Hub.TioPos && Math.Abs(tioS.Texture.GetHeight() * tioS.Scale.Y - Hub.TioHeight) < 0.5f,
@@ -1400,9 +1400,9 @@ public partial class _Test : Node
         Check(Count<StatsWindow>() == 1, "K opens the ability & stats window");
         var win = Nodes<StatsWindow>().First();
         var labels = Nodes<Label>(win).Select(l => l.Text).ToList();
-        Check(labels.Any(x => x.Contains("Main guns (4 barrels):  29.50 DPS")) && labels.Any(x => x.Contains("Turning radius")), "stats tab: gun DPS and helm stats");
-        Check(labels.Any(x => x.Contains("Broadside: 3 volleys × 4 shells") && x.Contains("= 88.5 damage, every 11.0 s")) && !labels.Any(x => x.StartsWith("Missiles")),
-              "stats tab: the broadside, 3 volleys of 4 shells = 88.5 damage every 11 s; no missiles");
+        Check(labels.Any(x => x.Contains("Main guns (4 barrels):  44.75 DPS")) && labels.Any(x => x.Contains("Turning radius")), "stats tab: gun DPS and helm stats");
+        Check(labels.Any(x => x.Contains("Broadside: 3 volleys × 4 shells") && x.Contains("= 268.5 damage, every 15.0 s")) && !labels.Any(x => x.StartsWith("Missiles")),
+              "stats tab: the broadside, 3 volleys of 4 shells = 268.5 damage every 15 s; no missiles");
         Check(Nodes<HBoxContainer>(win).Count(r => r.Name.ToString().StartsWith("Key_")) == 10, "keys tab lists the battleship's 4 abilities + 6 open slots");
         Check(Enumerable.Range(1, 6).All(i => Abilities.KeyFor(ShipClass.Battleship, $"open{i}") == global::Godot.Key.Key0 + i)
               && Abilities.For(ShipClass.Carrier).Count(a => a.Open) == 6 && Abilities.For((ShipClass)99).Length == 6,
@@ -1471,13 +1471,13 @@ public partial class _Test : Node
         Check(ship.Staggered != before, "G toggles salvo / staggered");
 
         // ── THE BROADSIDE (F): the main turrets swing onto the cursor through a 0.5 s wind-up, then
-        //    every main gun fires three volleys 0.25 s apart; a 10 s cooldown; the ship steers throughout ──
+        //    every main gun fires three volleys 0.25 s apart; a 14 s cooldown; the ship steers throughout ──
         Check(Abilities.For(ShipClass.Battleship).Where(a => !a.Open).Select(a => a.Id).SequenceEqual(new[] { "guns", "firemode", "broadside", "pd" })
               && Abilities.KeyFor(ShipClass.Battleship, "broadside") == global::Godot.Key.F,
               "the battleship's bar: guns, fire mode, the BROADSIDE on F, point defence -- no missile, no reload");
         Check(ship.Stats["broadside_volleys"] == 3 && ship.Stats["broadside_mult"] == 1.0 && ship.Stats["broadside_windup"] == 0.5
-              && ship.Stats["broadside_gap"] == 0.25 && ship.Stats["broadside_cooldown"] == 10 && ship.Stats["missile_mag"] == 0,
-              "the broadside: 3 volleys at a shell's own damage, a 0.5 s wind-up, 0.25 s between volleys, a 10 s cooldown");
+              && ship.Stats["broadside_gap"] == 0.25 && ship.Stats["broadside_cooldown"] == 14 && ship.Stats["missile_mag"] == 0,
+              "the broadside: 3 volleys at a shell's own damage, a 0.5 s wind-up, 0.25 s between volleys, a 14 s cooldown");
         {
             // Aimed well AWAY first (south-east, ~135 degrees off the dummy): at their own 90 deg/s the
             // turrets would still be 90 degrees off when a 0.5 s wind-up ends, so only a wind-up that
@@ -1515,9 +1515,9 @@ public partial class _Test : Node
                   $"three volleys of all four guns: the first at the end of the 0.5 s wind-up, then 0.25 s apart ({volleys.Count} volleys)");
             Check(speedAtFire > 10, $"the ship steers throughout: under way through the wind-up ({speedAtFire:0} u/s ahead at the first volley)");
             await Wait(0.6);
-            Check(Math.Abs(d1.Total - 88.5) < 0.01, $"every shell lands: 3 volleys x 4 shells x 7.375 (5.9 x1.25 by the chips) = 88.5 ({d1.Total:0.000})");
-            Check(cdAtLast > 9.9 && cdAtLast <= 10 && AbilityBar.StateOf(ship, "broadside", H.Selected).Busy > 0.8f,
-                  $"the 10 s cooldown starts with the last volley, and the slot shows it ({cdAtLast:0.00} s)");
+            Check(Math.Abs(d1.Total - 268.5) < 0.01, $"every shell lands: 3 volleys x 4 shells x 22.375 (17.9 x1.25 by the chips) = 268.5 ({d1.Total:0.000})");
+            Check(cdAtLast > 13.9 && cdAtLast <= 14 && AbilityBar.StateOf(ship, "broadside", H.Selected).Busy > 0.8f,
+                  $"the 14 s cooldown starts with the last volley, and the slot shows it ({cdAtLast:0.00} s)");
             int shellsBefore = Nodes<Shell>().Count(s => seen.Add(s));
             Key(global::Godot.Key.F); await Wait(0.8);
             Check(ship.BroadsideWindupLeft == 0 && ship.BroadsideVolleysLeft == 0 && Nodes<Shell>().Count(s => seen.Add(s)) == 0,
@@ -1529,7 +1529,7 @@ public partial class _Test : Node
             Check(Nodes<Torpedo>().All(t => t.HostileFire), "a battleship launches no missile of its own");
         }
 
-        // ── the main guns fire SHELLS: straight, at 520 u/s, damage on arrival ──
+        // ── the main guns fire SHELLS: straight, at 650 u/s (the battleship's), damage on arrival ──
         {
             var gs = Me; var gd = H.GetNode<TargetDummy>("TargetDummy1");
             var gKeep = gs.Position; gs.Position = gd.Position + new Vector2(0, 520); gs.Velocity = Vector2.Zero; gs.Rotation = 0f; await Wait(0.6);
@@ -1544,18 +1544,19 @@ public partial class _Test : Node
             var sp0 = sh1.Position; var sd0 = sh1.Dir;
             for (int i = 0; i < 10; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             float shSpd = GodotObject.IsInstanceValid(sh1) ? (sh1.Position - sp0).Length() / (10f / 60f) : 0f;
-            Check(Math.Abs(shSpd - 520) < 6f && GodotObject.IsInstanceValid(sh1) && sh1.Dir == sd0 && atFire == 0,
-                  $"the guns fire shells at 520 u/s, straight, and nothing lands at once ({shSpd:0} u/s)");
+            Check(Math.Abs(shSpd - 650) < 6f && GodotObject.IsInstanceValid(sh1) && sh1.Dir == sd0 && atFire == 0,
+                  $"the guns fire shells at 650 u/s, straight, and nothing lands at once ({shSpd:0} u/s)");
             for (int i = 0; i < 90 && gd.Total == 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            Check(gd.Total > 0 && Math.Abs(gd.Total % gs.Stats["main_damage"]) < 1e-6 && Math.Abs(gs.Stats["main_damage"] - 7.375) < 1e-9, $"a shell lands for 5.9 x1.25 by the chips = 7.375 ({gd.Total:0.000})");
-            // the balance: guns 4 x 5.9 = 23.6 DPS, and a broadside of 3 x 4 x 5.9 = 70.8 every 11 s (the
-            // wind-up, two gaps, the cooldown): 30.04 DPS in all. The carrier reaches 1.5x as far.
+            Check(gd.Total > 0 && Math.Abs(gd.Total % gs.Stats["main_damage"]) < 1e-6 && Math.Abs(gs.Stats["main_damage"] - 22.375) < 1e-9, $"a shell lands for 17.9 x1.25 by the chips = 22.375 ({gd.Total:0.000})");
+            // the balance: guns 4 x 17.9 every 2 s = 35.8 DPS, and a broadside of 3 x 4 x 17.9 = 214.8 every
+            // 15 s (the wind-up, two gaps, the cooldown): 50.12 DPS in all. The carrier reaches 1.5x as far.
             var bsS = new ShipStats(ShipClass.Battleship); var caS = new ShipStats(ShipClass.Carrier);
             double bsTotal = bsS.MainDps + bsS.BroadsideDps + bsS.MissileDps;
-            Check(Math.Abs(bsS.MainDps - 23.6) < 1e-9 && Math.Abs(bsS.BroadsideDamage - 70.8) < 1e-9 && Math.Abs(bsS.BroadsideCycle - 11) < 1e-9
-                  && Math.Abs(bsTotal - 30.036) < 0.001,
-                  $"the battleship: guns 23.6 DPS and a 70.8-damage broadside every 11 s -- 30.04 DPS in all, no missile ({bsTotal:0.000})");
-            Check(Math.Abs(caS["control_range"] - 1.5 * bsS["main_range"]) < 1e-6, "the carrier reaches 1.5x as far as the battleship's guns (1080 u)");
+            Check(Math.Abs(bsS.MainDps - 35.8) < 1e-9 && Math.Abs(bsS.BroadsideDamage - 214.8) < 1e-9 && Math.Abs(bsS.BroadsideCycle - 15) < 1e-9
+                  && Math.Abs(bsTotal - 50.12) < 0.001,
+                  $"the battleship: guns 35.8 DPS and a 214.8-damage broadside every 15 s -- 50.12 DPS in all, no missile ({bsTotal:0.000})");
+            Check(Math.Abs(caS["control_range"] - 1500) < 1e-6 && Math.Abs(bsS["main_range"] - 1000) < 1e-6,
+                  "the carrier's fighters reach 1500 u, 1.5x the battleship's 1000 u guns");
             gs.Position = gKeep; gs.Velocity = Vector2.Zero; await Wait(0.5);
         }
 
@@ -1599,7 +1600,8 @@ public partial class _Test : Node
             var mv = me.Position - s4;
             Check(Math.Abs(mv.X - 2000f) < 40f && Math.Abs(mv.Y) < 40f, $"V pressed facing the target, then turned east: 2000 u east ({mv.X:0}, {mv.Y:0})");
             // the radar: click a marker to select it -- an enemy as the target, a landmark as a waypoint
-            Ready(); me.Position = warpHome + new Vector2(0, 300); me.Rotation = 0f; await Wait(0.6);
+            // beside the base: every landmark it clicks below is within the radar's 3600 u reach from here
+            Ready(); me.Position = Hub.BasePos + new Vector2(0, 300); me.Rotation = 0f; await Wait(0.6);
             var radar = Nodes<Radar>().First(); var rr = radar.GetGlobalRect(); float rad = rr.Size.X / 2f;
             Vector2 OnRadar(Vector2 w) => rr.Position + new Vector2(rad, rad) + (w - me.ViewPosition) * ((rad - 6f) / Radar.Range);
             H.ClearSelection();
@@ -1607,7 +1609,7 @@ public partial class _Test : Node
             Check(H.Selected == d2w, "clicking an enemy on the radar makes it the target");
             Click(OnRadar(Hub.BasePos)); await Wait(0.05);
             Check(H.Selected == null && H.Waypoint == Hub.BasePos && H.WaypointName == "BASE", "clicking the base on the radar makes it a waypoint (and drops the target)");
-            var ne = new Vector2(1414.2f, -1414.2f);
+            var ne = new Vector2(2121.3f, -2121.3f);
             Click(OnRadar(ne)); await Wait(0.05);
             Check(H.WaypointName == "OUTPOST NE" && H.Waypoint is { } wp && wp.DistanceTo(ne) < 1f, $"an outpost is on the radar: clicking it makes OUTPOST NE the waypoint ({H.WaypointName})");
             Click(OnRadar(Hub.BasePos)); await Wait(0.05);
@@ -1700,7 +1702,7 @@ public partial class _Test : Node
                   && N9(cvS0["thrust"], 48 * 116.48 / 96) && N9(cvS0["reverse_thrust"], 20 * 116.48 / 96) && N9(cvS0["reverse_speed"], 32 * 116.48 / 96)
                   && N9(ddS["turn_radius"], 107) && N9(ddS["turn_rate"], 1.08) && N9(cvS0["turn_radius"], 127) && N9(cvS0["turn_rate"], 0.9),
                   "speeds: the destroyer 130 u/s (the battleship's 104 +25%), the carrier 116.48 (+12%); each class's accelerations and astern speed scale with it; turning unchanged");
-            Check(N9(ddS.MainDps, 11.8) && Math.Abs(ddS.MissileDps - 30 / 16.6) < 1e-9 && Math.Abs(ddS.MainDps + ddS.MissileDps - 13.607) < 0.001,
+            Check(N9(ddS.MainDps, 15.0) && Math.Abs(ddS.MissileDps - 441.0 / 9.8) < 1e-9 && Math.Abs(ddS.MainDps + ddS.MissileDps - 60.0) < 0.001,
                   $"the destroyer's damage: guns 11.8 DPS, bursts 2 x 3 x 5 every 16.6 s (1.81) -- 13.61 DPS ({ddS.MainDps + ddS.MissileDps:0.000})");
             // the fastest: flat out for 4 s it is past anything a battleship can reach
             await Park(d1.Position + new Vector2(0, 600), Mathf.Pi);
@@ -1718,20 +1720,20 @@ public partial class _Test : Node
             Check(ddShells == 2, $"Space fires the destroyer's two main guns ({ddShells} shells)");
             await Wait(2.0);
 
-            // ── the missile BURST: a magazine of two bursts; a selected target in range, or it refuses ──
+            // ── the missile BURST: a magazine of three bursts; a selected target in range, or it refuses ──
             System.Collections.Generic.List<Torpedo> Burst() => Nodes<Torpedo>().Where(x => x.Heavy && !x.HostileFire && Smoke(x).Count < 40).ToList();
             string SlotMsg() => AbilityBar.StateOf(ship, "missile", H.Selected) is var st && st.Fail ? st.Line : null;
-            Check(ship.Stats["missile_mag"] == 2 && ship.MissilesLoaded == 2, "the destroyer starts with a magazine of two bursts");
+            Check(ship.Stats["missile_mag"] == 3 && ship.MissilesLoaded == 3, "the destroyer starts with a magazine of three bursts");
             // Esc only if something is selected: with nothing selected, Esc opens the Esc menu
             if (H.Selected != null) { Key(global::Godot.Key.Escape); await Wait(0.05); }
             Key(global::Godot.Key.F); await Wait(0.05);
-            Check(Burst().Count == 0 && ship.MissilesLoaded == 2 && SlotMsg() == "NO TARGET", "no target: nothing fires, and the slot says NO TARGET");
+            Check(Burst().Count == 0 && ship.MissilesLoaded == 3 && SlotMsg() == "NO TARGET", "no target: nothing fires, and the slot says NO TARGET");
             await Wait(PlayerShip.FailShow + 0.1);
             Check(SlotMsg() == null, "the message clears after a moment");
             Click(Scr(d1.Position)); await Wait(0.05);
             var keep = ship.Position; ship.Position = d1.Position + new Vector2(0, (float)ship.Stats["missile_range"] + 150f); ship.Velocity = Vector2.Zero;
             Key(global::Godot.Key.F); await Wait(0.05);
-            Check(Burst().Count == 0 && ship.MissilesLoaded == 2 && SlotMsg() == "OUT OF RANGE", "target out of range: nothing fires, and the slot says OUT OF RANGE");
+            Check(Burst().Count == 0 && ship.MissilesLoaded == 3 && SlotMsg() == "OUT OF RANGE", "target out of range: nothing fires, and the slot says OUT OF RANGE");
             ship.Position = keep; ship.Velocity = Vector2.Zero; await Wait(0.1);
             await Wait(TargetDummy.IdleReset + 0.2); d1.ResetMeter();
             Key(global::Godot.Key.F);
@@ -1740,28 +1742,30 @@ public partial class _Test : Node
             var toTarget = (d1.Position - ship.ToGlobal(new Vector2(0, -PlayerShip.Art[ShipClass.Destroyer].Length * 0.5f))).Angle();
             var offs = burst.Select(m => Mathf.RadToDeg(Mathf.AngleDifference(toTarget, m.Dir.Angle()))).OrderBy(a => a).ToList();
             GD.Print($"  burst: {burst.Count} missiles at {string.Join(", ", offs.Select(a => a.ToString("0.0")))} degrees off the line to the target");
-            Check(burst.Count == 3 && burst.All(m => m.TargetId == d1.NetId && m.TurnRate == 1.5f) && ship.MissilesLoaded == 1 && d1.Total == 0
+            Check(burst.Count == 3 && burst.All(m => m.TargetId == d1.NetId && m.TurnRate == 1.5f) && ship.MissilesLoaded == 2 && d1.Total == 0
                   && Math.Abs(offs[1]) < 3 && offs[0] < -64 && offs[0] > -71 && offs[2] > 64 && offs[2] < 71,
-                  "F launches a burst of three guided missiles: one at the target, two launched 70 degrees either side (magazine 1/2); nothing lands at once");
+                  "F launches a burst of three guided missiles: one at the target, two launched 70 degrees either side (magazine 2/3); nothing lands at once");
             float mspd = 0;
             if (burst.Count > 0)
             {
                 var mp1 = burst[0].GlobalPosition; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                 mspd = GodotObject.IsInstanceValid(burst[0]) ? (burst[0].GlobalPosition - mp1).Length() * 60f : 0;
             }
-            Check(Math.Abs(mspd - 160) < 0.5f, $"they fly at 160 u/s ({mspd:0.0})");
-            for (int i = 0; i < 900 && d1.Total < 18.74; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            Check(Math.Abs(d1.Total - 18.75) < 0.01, $"all three land -- the outer two curve in: 3 x 5 x1.25 by the chips = 18.75 ({d1.Total:0.00})");
-            Key(global::Godot.Key.F); await Wait(0.1);
-            Check(ship.MissilesLoaded == 0 && Burst().Count == 3, "the second burst empties the magazine");
+            Check(Math.Abs(mspd - 200) < 0.5f, $"they fly at 200 u/s ({mspd:0.0})");
+            for (int i = 0; i < 900 && d1.Total < 183.74; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(Math.Abs(d1.Total - 183.75) < 0.01, $"all three land -- the outer two curve in: 3 x 49 x1.25 by the chips = 183.75 ({d1.Total:0.00})");
+            Key(global::Godot.Key.F); await Wait(0.5);        // the 0.4 s between bursts
+            int before3 = Burst().Count;
+            Key(global::Godot.Key.F); await Wait(0.5);
+            Check(ship.MissilesLoaded == 0 && Burst().Count - before3 == 3, $"the third burst empties the magazine ({Burst().Count - before3} new missiles, {ship.MissilesLoaded} left)");
             await Wait(0.7);
             var flying = new System.Collections.Generic.HashSet<Torpedo>(Nodes<Torpedo>());
             Key(global::Godot.Key.F); await Wait(0.1);
             Check(Nodes<Torpedo>().All(flying.Contains), "empty magazine: F does nothing");
             Key(global::Godot.Key.R); await Wait(0.1);
             Check(ship.Reloading && AbilityBar.StateOf(ship, "reload", H.Selected).Busy > 0.9f, "R starts the reload; the bar shows it");
-            await Wait(16.2);
-            Check(!ship.Reloading && ship.MissilesLoaded == 2, "reload refills the magazine (2 bursts) after 16 s");
+            await Wait(9.2);
+            Check(!ship.Reloading && ship.MissilesLoaded == 3, "reload refills the magazine (3 bursts) after 9 s");
             // guided: move the target sideways and watch the middle missile follow, no faster than 1.5 rad/s
             Key(global::Godot.Key.F); await Wait(0.05);
             var midM = Burst().OrderBy(m => Mathf.Abs(Mathf.AngleDifference(toTarget, m.Dir.Angle()))).FirstOrDefault(); var dhome = d1.Position;
@@ -1775,11 +1779,11 @@ public partial class _Test : Node
             var dl = Character.LoadoutFor(ShipClass.Destroyer); var dlKeep = (string[])dl.Clone();
             for (int k = Equipment.CoreSlots; k < Equipment.Slots; k++) dl[k] = "";
             dl[4] = "dd_salvo_3"; H.PilotChanged(); ship = Me;
-            Check(Math.Abs(ship.Stats["missile_mag"] - 5) < 1e-9 && Math.Abs(ship.Stats["missile_reload"] - 64.0 / 3) < 1e-6 && Math.Abs(ship.Stats["missile_damage"] - 4.0) < 1e-9,
-                  $"Salvo Rack III: 5 bursts a magazine, a 21.3 s reload, 4.0 a missile ({ship.Stats["missile_mag"]}, {ship.Stats["missile_reload"]:0.000}, {ship.Stats["missile_damage"]})");
-            typeof(PlayerShip).GetField("_mag", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(ship, 5);
+            Check(Math.Abs(ship.Stats["missile_mag"] - 6) < 1e-9 && Math.Abs(ship.Stats["missile_reload"] - 12.0) < 1e-6 && Math.Abs(ship.Stats["missile_damage"] - 39.2) < 1e-9,
+                  $"Salvo Rack III: 6 bursts a magazine, a 12.0 s reload, 39.2 a missile ({ship.Stats["missile_mag"]}, {ship.Stats["missile_reload"]:0.000}, {ship.Stats["missile_damage"]})");
+            typeof(PlayerShip).GetField("_mag", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(ship, 6);
             dl[4] = "dd_missile_rack"; H.PilotChanged();
-            Check(ship.MissilesLoaded == 2, $"back to the kit rack: a 2-burst magazine holds 2, not the 5 loaded before ({ship.MissilesLoaded})");
+            Check(ship.MissilesLoaded == 3, $"back to the kit rack: a 3-burst magazine holds 3, not the 6 loaded before ({ship.MissilesLoaded})");
             for (int k = 0; k < Equipment.Slots; k++) dl[k] = dlKeep[k];
             H.PilotChanged(); ship = Me;
 
@@ -1792,8 +1796,8 @@ public partial class _Test : Node
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             var close = Burst();
             float closeSplay = close.Count == 3 ? close.Max(m => Mathf.Abs(Mathf.RadToDeg(Mathf.AngleDifference(Vector2.Up.Angle(), m.Dir.Angle())))) : -1;
-            for (int i = 0; i < 60 * 4 && d1.Total < 18.74; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            Check(close.Count == 3 && closeSplay > 20 && closeSplay < 50 && Math.Abs(d1.Total - 18.75) < 0.01,
+            for (int i = 0; i < 60 * 4 && d1.Total < 183.74; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(close.Count == 3 && closeSplay > 20 && closeSplay < 50 && Math.Abs(d1.Total - 183.75) < 0.01,
                   $"a target 150 u off the nose: the outer two launch narrower ({closeSplay:0} degrees) and all three land (18.75; {d1.Total:0.00})");
             await Park(d1.Position + new Vector2(0, 600));
         }
@@ -1825,12 +1829,12 @@ public partial class _Test : Node
             bool Near(double a, double b) => Math.Abs(a - b) < 1e-6;
             int Craft() => Nodes<Wing>().Count(w => w.Carrier == ship);
             await Hangar("cv_elite_3");
-            bool elite = Near(ship.Stats["fighter_count"], 2) && Near(ship.Stats["fighter_speed"], 1056) && Near(ship.Stats["fighter_damage"], 6) && Near(ship.Stats["fighter_turn"], 5.25);
+            bool elite = Near(ship.Stats["fighter_count"], 2) && Near(ship.Stats["fighter_speed"], 1056) && Near(ship.Stats["fighter_damage"], 7.5) && Near(ship.Stats["fighter_turn"], 5.25);
             await Hangar("cv_swarm_3");
-            bool swarm = Near(ship.Stats["fighter_count"], 9) && Near(ship.Stats["fighter_speed"], 274.56) && Near(ship.Stats["fighter_damage"], 1.56);
+            bool swarm = Near(ship.Stats["fighter_count"], 9) && Near(ship.Stats["fighter_speed"], 274.56) && Near(ship.Stats["fighter_damage"], 1.95);
             int swarmCraft = Craft();
             await Hangar("cv_line_3");
-            bool line = Near(ship.Stats["fighter_count"], 4) && Near(ship.Stats["fighter_damage"], 2.8) && Near(ship.Stats["fighter_speed"], 422.4);
+            bool line = Near(ship.Stats["fighter_count"], 4) && Near(ship.Stats["fighter_damage"], 3.5) && Near(ship.Stats["fighter_speed"], 422.4);
             Check(elite && swarm && line, $"the owner's hangars on the carrier itself: Elite III, Swarm III, Line III (elite {elite}, swarm {swarm}, line {line})");
             // a swarm launched, then Elite fitted mid-flight: the extra fighters are freed where they fly
             await Hangar("cv_swarm_3");
@@ -1867,8 +1871,8 @@ public partial class _Test : Node
             H.PilotChanged(); ship = Me;
         }
         ship.Velocity = Vector2.Zero;
-        Check(Math.Abs(ship.Stats["control_range"] - 1080) < 0.01 && Math.Abs(ship.Stats["strike_range"] - 2160) < 0.01,
-              "fighter control range 1080 (1.5x the battleship's guns); bomber strike range 2160 (2x)");
+        Check(Math.Abs(ship.Stats["control_range"] - 1500) < 0.01 && Math.Abs(ship.Stats["strike_range"] - 3000) < 0.01,
+              "fighter control range 1500 (1.5x the battleship's 1000 u guns); bomber strike range 3000 (2x)");
         var spr = Nodes<Sprite2D>(ship).First();
         Check(spr.Texture.ResourcePath.EndsWith("carrier_player.png") && Math.Abs(spr.Texture.GetHeight() * spr.Scale.Y - 283.5f) < 0.5f,
               "carrier flies the owner's line-art sprite at 283.5 u, 25% smaller than the battleship");
@@ -1917,8 +1921,8 @@ public partial class _Test : Node
         Check(fts.Count == 3 && ship.Stats["fighter_count"] == 3, "the carrier starts with 3 fighters");
         Check(order.Count == 3 && minGap >= Wing.LaunchInterval - 1e-9, "fighters launch one at a time, at least 0.83 s apart");
         Check(ship.SignalsLit > sig0 || order.Count == 3, "launching fighters light the hangar signal");
-        Check(ship.Stats["torpedo_speed"] == 112.5 && ship.Stats["launch_range"] == 283.5 && ship.Stats["torpedo_interval"] == 0.5,
-              "torpedoes: 112.5 u/s (25% faster than 90), launched from 283.5 u (half of 567), one every 0.5 s");
+        Check(ship.Stats["torpedo_speed"] == 300 && ship.Stats["launch_range"] == 1900 && ship.Stats["torpedo_interval"] == 0.5,
+              "torpedoes: 300 u/s, launched from 1900 u, one every 0.5 s");
         var fx0 = H.GetChildren().OfType<FlashLayer>().FirstOrDefault();
         Check(fx0 != null && !fx0.ZAsRelative && fx0.ZIndex > ship.ZIndex && fx0.ZIndex < ship.ZIndex + Nodes<Turret>(ship).First().ZIndex,
               "hit flashes draw above the hulls and below the turrets");
@@ -2008,12 +2012,12 @@ public partial class _Test : Node
         await Wait(TargetDummy.IdleReset + 0.5);
         Click(Scr(d1.Position)); await Wait(0.05);
         // beyond the strike range the order is refused
-        var near1 = ship.Position;
-        ship.Position = d1.Position + new Vector2(0, 2900); ship.Velocity = Vector2.Zero; await Wait(0.3);
+        ship.Position = d1.Position + new Vector2(0, 3200); ship.Velocity = Vector2.Zero; await Wait(0.3);
         Key(global::Godot.Key.F); await Wait(0.05);
         Check(ship.StrikeTarget == null && AbilityBar.StateOf(ship, "bombers", H.Selected).Line == "OUT OF RANGE",
               "a target beyond 2x control range: strike refused, slot says OUT OF RANGE");
-        ship.Position = near1; ship.Velocity = Vector2.Zero; await Wait(0.5);
+        // inside the 3000 u strike range, outside the 1900 u launch range: the run in is real
+        ship.Position = d1.Position + new Vector2(0, 2100); ship.Velocity = Vector2.Zero; await Wait(0.5);
         Key(global::Godot.Key.F); await Wait(0.05);
         Check(ship.StrikeTarget == d1, "F sends the bombers at the target");
         // THEY TAKE OFF IN TURN, at the fighters' cadence: each rolls out onto the runway and up it to
@@ -2041,7 +2045,7 @@ public partial class _Test : Node
         Check(crawl != null && crawl.Velocity.Length() > 5f && crawl.Velocity.Dot(d1.Position - crawl.Position) > 0,
               $"bombers keep closing slowly while they launch ({crawl?.Velocity.Length():0} u/s)");
         float launchDist = crawl?.Position.DistanceTo(d1.Position) ?? -1;
-        Check(launchDist > 150 && launchDist <= 284.5, $"the bombers close to 283.5 u before they launch, half the old 567 ({launchDist:0} u)");
+        Check(launchDist > 1850 && launchDist <= 1901, $"the bombers close to 1900 u before they launch ({launchDist:0} u)");
         var fspr = Nodes<Sprite2D>(Nodes<Wing>().First(w => w.Carrier == ship && !w.IsBomber)).First(); var bspr = Nodes<Sprite2D>(crawl).First();
         Check(Math.Abs(fspr.Texture.GetHeight() * fspr.Scale.Y - 17f) < 0.1f && Math.Abs(bspr.Texture.GetHeight() * bspr.Scale.Y - 28.125f) < 0.1f, "fighters 17 u, bombers 28.1 u (snout-nosed, 25% smaller)");
         Torpedo first = null;
@@ -2051,7 +2055,7 @@ public partial class _Test : Node
         var dir0 = first.Dir; var q0 = first.GlobalPosition;
         for (int i = 0; i < 30; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         float spd = (first.GlobalPosition - q0).Length() / (30f / 60f);
-        Check(first.Dir == dir0 && Math.Abs(spd - ship.Stats["torpedo_speed"]) < 2, $"torpedo runs straight at a steady {spd:0} u/s (no tracking)");
+        Check(first.Dir == dir0 && Math.Abs(spd - 300) < 2, $"torpedo runs straight at a steady 300 u/s (no tracking; {spd:0})");
         Check(Smoke(first).Count > 3, "torpedo leaves a smoke trail");
         // the landings begin inside the next 4 s: the deck is watched from here
         float landFar = 0f, landMin = 9f, landMax = 0f, taxiTurn = 0f; bool sawTaxi = false;
@@ -2065,7 +2069,8 @@ public partial class _Test : Node
             }
         }
         for (int fr = 0; fr < 240; fr++) { SampleDeck(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
-        Check(d1.Total > 0 && Math.Abs(d1.Total % ship.Stats["torpedo_damage"]) < 0.01, $"torpedoes hit for 3 each ({d1.Total:0})");
+        Check(d1.Total >= 171.875 && Math.Abs(ship.Stats["torpedo_damage"] - 171.875) < 1e-6,
+              $"a torpedo lands for 171.875 (137.5 x1.25 by the chips), on top of the fighters' hits ({d1.Total:0})");
         Check(AbilityBar.StateOf(ship, "bombers", H.Selected).Line.StartsWith("REARM") || AbilityBar.StateOf(ship, "bombers", H.Selected).Line == "RETURNING",
               $"bomber slot shows the return / rearm ({AbilityBar.StateOf(ship, "bombers", H.Selected).Line})");
         // HOME: each comes in over the carrier's centre and settles onto the runway there, shrinking
@@ -2092,7 +2097,7 @@ public partial class _Test : Node
         Check(allHome && topSeen > 90f && Bombers().All(w => w.RearmLeft > 0 || w.Armed),
               $"with the carrier at full speed ({topSeen:0} u/s), the bombers still land, park and re-arm");
         ship.Velocity = Vector2.Zero; await Wait(15.0);
-        // the balance's reference: the carrier's MEASURED output (19.07 DPS over 90 s when set); re-measured
+        // the balance's reference: what the carrier's sheet says (fighters + a strike's torpedoes); re-measured
         // here over 40 s -- lumpier (bomber strikes land in lumps), so within 25% -- to catch it drifting
         {
             var md = H.GetNode<TargetDummy>("TargetDummy1");
@@ -2106,9 +2111,10 @@ public partial class _Test : Node
                 await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             }
             double carrierDps = md.Total / 40.0;
-            // (the reference was measured unequipped; the five default chips add 25%: 19.07 x 1.25 = 23.84)
-            GD.Print($"  carrier measured: {carrierDps:0.00} DPS over 40 s (reference 23.84 with the chips)");
-            Check(Math.Abs(carrierDps / 23.84 - 1) < 0.25, $"the carrier still delivers about the measured 19.07 DPS (x1.25 with the chips = 23.84) the balance rests on ({carrierDps:0.00})");
+            // (unequipped the sheet gives fighters 3 x 2.5 / 0.35 s and 8 torpedoes of 137.5 a strike; the
+            //  five default chips add 25%, so the expected figure with them is about 117 DPS)
+            GD.Print($"  carrier measured: {carrierDps:0.00} DPS over 40 s (reference 117 with the chips)");
+            Check(Math.Abs(carrierDps / 117.0 - 1) < 0.35, $"the carrier delivers about the 117 DPS its sheet says with the chips ({carrierDps:0.00})");
             Key(global::Godot.Key.R); await Wait(12.0);                       // recall the wing for what follows
         }
 
@@ -2368,25 +2374,25 @@ public partial class _Test : Node
             bool Near(double a, double b) => Math.Abs(a - b) < 1e-6;
             var e1 = Sheet(cvC, "cv_elite_1"); var e2 = Sheet(cvC, "cv_elite_2");
             var h1 = Sheet(bsC, "bs_heavy_1"); var h2 = Sheet(bsC, "bs_heavy_2"); var h3 = Sheet(bsC, "bs_heavy_3");
-            Check(Near(e1["fighter_speed"], 704) && Near(e1["fighter_damage"], 4) && Near(e2["fighter_speed"], 880) && Near(e2["fighter_damage"], 5)
-                  && Near(h1["main_damage"], 10.62) && Near(h2["main_damage"], 12.98) && Near(h3["main_damage"], 15.34)
-                  && new[] { h1, h2, h3 }.All(h => Near(h["main_interval"], 1 / 0.65)),
+            Check(Near(e1["fighter_speed"], 704) && Near(e1["fighter_damage"], 5.0) && Near(e2["fighter_speed"], 880) && Near(e2["fighter_damage"], 6.25)
+                  && Near(h1["main_damage"], 32.22) && Near(h2["main_damage"], 39.38) && Near(h3["main_damage"], 46.54)
+                  && new[] { h1, h2, h3 }.All(h => Near(h["main_interval"], 2 / 0.65)),
                   "a rarer copy leans harder, never costs more: Elite I / II speed 704 / 880; Heavy I / II / III shells 10.62 / 12.98 / 15.34, all reloading in 1.54 s");
             var barrage = Sheet(bsC, "bs_barrage_3"); var snap = Sheet(bsC, "bs_snap_2"); var heavyS = Sheet(bsC, "bs_heavyside_3"); var rapidS = Sheet(bsC, "bs_rapidside_1");
-            Check(Near(barrage["broadside_volleys"], 6) && Near(barrage["broadside_windup"], 0.5 / 0.7) && Near(barrage["broadside_cooldown"], 12.5)
+            Check(Near(barrage["broadside_volleys"], 6) && Near(barrage["broadside_windup"], 0.5 / 0.7) && Near(barrage["broadside_cooldown"], 17.5)
                   && Near(snap["broadside_volleys"], 2) && Near(snap["broadside_windup"], 0.2)
-                  && Near(heavyS["broadside_mult"], 1.8) && Near(heavyS["broadside_cooldown"], 10 / 0.75)
-                  && Near(rapidS["broadside_mult"], 0.75) && Near(rapidS["broadside_cooldown"], 10 / 1.5),
-                  "the broadside's gear: Barrage III 6 volleys (0.71 s wind-up, 12.5 s cooldown); Snap II 2 volleys in a 0.2 s wind-up; Heavy III x1.8 shells (13.3 s); Rapid I back in 6.7 s at x0.75");
+                  && Near(heavyS["broadside_mult"], 1.8) && Near(heavyS["broadside_cooldown"], 14 / 0.75)
+                  && Near(rapidS["broadside_mult"], 0.75) && Near(rapidS["broadside_cooldown"], 14 / 1.5),
+                  "the broadside's gear: Barrage III 6 volleys (0.71 s wind-up, 17.5 s cooldown); Snap II 2 volleys in a 0.2 s wind-up; Heavy III x1.8 shells (18.7 s); Rapid I back in 9.3 s at x0.75");
             var ddHeavy = Sheet(ddC, "dd_heavy_3"); var ddSalvo = Sheet(ddC, "dd_salvo_3");
-            Check(Near(ddHeavy["main_damage"], 15.34) && Near(ddHeavy["main_count"], 2) && Near(ddSalvo["missile_mag"], 5) && Near(ddSalvo["missile_reload"], 64.0 / 3),
-                  "the destroyer's own gear: Heavy Twins III shells 15.34 on its two guns; Salvo Rack III 5 bursts on a 21.3 s reload");
+            Check(Near(ddHeavy["main_damage"], 19.5) && Near(ddHeavy["main_count"], 2) && Near(ddSalvo["missile_mag"], 6) && Near(ddSalvo["missile_reload"], 12.0),
+                  "the destroyer's own gear: Heavy Twins III shells 19.5 on its two guns; Salvo Rack III 6 bursts on a 12.0 s reload");
             var elite = Sheet(cvC, "cv_elite_3"); var swarm = Sheet(cvC, "cv_swarm_3"); var line = Sheet(cvC, "cv_line_3");
-            Check(Near(elite["fighter_count"], 2) && Near(elite["fighter_speed"], 1056) && Near(elite["fighter_damage"], 6) && Near(elite["fighter_turn"], 5.25),
+            Check(Near(elite["fighter_count"], 2) && Near(elite["fighter_speed"], 1056) && Near(elite["fighter_damage"], 7.5) && Near(elite["fighter_turn"], 5.25),
                   $"Elite Hangars III, the owner's example: 2 fighters, +200% speed and damage, +50% turning ({elite["fighter_count"]}, {elite["fighter_speed"]}, {elite["fighter_damage"]}, {elite["fighter_turn"]})");
-            Check(Near(swarm["fighter_count"], 9) && Near(swarm["fighter_speed"], 274.56) && Near(swarm["fighter_damage"], 1.56),
+            Check(Near(swarm["fighter_count"], 9) && Near(swarm["fighter_speed"], 274.56) && Near(swarm["fighter_damage"], 1.95),
                   $"Swarm Hangars III, the owner's example: 9 fighters, 22% slower and weaker ({swarm["fighter_count"]}, {swarm["fighter_speed"]}, {swarm["fighter_damage"]})");
-            Check(Near(line["fighter_count"], 4) && Near(line["fighter_damage"], 2.8) && Near(line["fighter_speed"], 422.4),
+            Check(Near(line["fighter_count"], 4) && Near(line["fighter_damage"], 3.5) && Near(line["fighter_speed"], 422.4),
                   $"Line Hangars III, between them: 4 fighters, +40% damage, +20% speed ({line["fighter_count"]}, {line["fighter_damage"]}, {line["fighter_speed"]})");
             // THE WORST CASE: the most negative share any fitting part gives each stat, in every core
             // slot at once and five times over in the chips, must leave the number above zero
@@ -2400,7 +2406,7 @@ public partial class _Test : Node
             }
             foreach (var c in Enum.GetValues<ShipClass>()) foreach (var st in new ShipStats(c).All) if (Worst(c, st.Id) <= -1) allPositive = false;
             Check(allPositive && Near(Worst(cvC, "fighter_damage"), -0.47) && Near(Worst(bsC, "main_damage"), -0.55) && Near(Worst(bsC, "hull"), -0.50) && Near(Worst(cvC, "hull"), -0.50),
-                  $"no stack of gear takes a number to zero: worst fighter damage -47% (1.06), shell -55% (2.655), hull -50% (150 / 100) ({Worst(cvC, "fighter_damage"):0.00}, {Worst(bsC, "main_damage"):0.00}, {Worst(bsC, "hull"):0.00})");
+                  $"no stack of gear takes a number to zero: worst fighter damage -47% (1.325), shell -55% (8.055), hull -50% (150 / 100) ({Worst(cvC, "fighter_damage"):0.00}, {Worst(bsC, "main_damage"):0.00}, {Worst(bsC, "hull"):0.00})");
             // every stat a part names is real on a class it fits, and none touches the turret counts
             string[] addable = { "fighter_count", "bomber_count", "missile_mag", "bomber_ammo", "broadside_volleys" };
             var unknown = Equipment.All.SelectMany(i => i.Pct.Keys.Concat(i.Add.Keys).Where(k =>
@@ -2466,9 +2472,9 @@ public partial class _Test : Node
                   "the defaults: common parts in five slots; a carrier's weapon slot holds its Fighter Hangars");
             var bsE = new ShipStats(ShipClass.Battleship, Equipment.Bonuses(ShipClass.Battleship, Equipment.Default(ShipClass.Battleship)));
             var cvE = new ShipStats(ShipClass.Carrier, Equipment.Bonuses(ShipClass.Carrier, Equipment.Default(ShipClass.Carrier)));
-            Check(Math.Abs(bsE["hull"] - 375) < 1e-6 && Math.Abs(bsE["main_damage"] - 7.375) < 1e-6 && Math.Abs(cvE["hull"] - 250) < 1e-6
-                  && Math.Abs(cvE["fighter_damage"] - 2.5) < 1e-6 && Math.Abs(cvE["torpedo_damage"] - 18.75) < 1e-6,
-                  "five default chips: +25% damage and hull (battleship 375 hull, 7.375 a shell; carrier 250 hull, fighters 2.5, torpedoes 18.75)");
+            Check(Math.Abs(bsE["hull"] - 375) < 1e-6 && Math.Abs(bsE["main_damage"] - 22.375) < 1e-6 && Math.Abs(cvE["hull"] - 250) < 1e-6
+                  && Math.Abs(cvE["fighter_damage"] - 3.125) < 1e-6 && Math.Abs(cvE["torpedo_damage"] - 171.875) < 1e-6,
+                  "five default chips: +25% damage and hull (battleship 375 hull, 22.375 a shell; carrier 250 hull, fighters 3.125, torpedoes 171.875)");
             var cls0 = Me.Class;
             Key(global::Godot.Key.I); await Wait(0.2);
             var ew = Nodes<EquipmentWindow>().FirstOrDefault();
@@ -2708,10 +2714,10 @@ public partial class _Test : Node
             double HvLaser() => hm.DamageBySource.Where(kv => kv.Key == $"raider:{hv.NetId}").Sum(kv => kv.Value);
             double HvMissile() => hm.DamageBySource.Where(kv => kv.Key == $"heavy:{hv.NetId}:missile").Sum(kv => kv.Value);
             var edge = Raider.EdgeSpot(hm.Position);
-            for (int i = 0; i < 60 * 12 && hv.Position.DistanceTo(edge) > 8f; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            for (int i = 0; i < 60 * 22 && hv.Position.DistanceTo(edge) > 8f; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             await Wait(0.5);
             float hvFacing = Mathf.RadToDeg(Mathf.Abs(Mathf.AngleDifference(hv.Rotation, (hm.Position - hv.Position).Angle() + Mathf.Pi / 2f)));
-            Check(hv.Position.DistanceTo(edge) < 10f && Math.Abs(hv.Position.DistanceTo(Hub.BasePos) - 3200f) < 10f && hvFacing < 15f && HvLaser() == 0,
+            Check(hv.Position.DistanceTo(edge) < 10f && Math.Abs(hv.Position.DistanceTo(Hub.BasePos) - 4200f) < 10f && hvFacing < 15f && HvLaser() == 0,
                   $"its target unpinned, it waits at the map's edge nearest it ({hv.Position.DistanceTo(Hub.BasePos):0} u from the base), facing it, laser silent");
             // the missile: within 500 u of the heavy, at where the target will be in 7 s
             hm.Position = edge + (Hub.BasePos - edge).Normalized() * 420f; hm.Velocity = Vector2.Zero;
@@ -3688,8 +3694,8 @@ public partial class _Test : Node
             Check(Math.Abs(H.Boss.HullMult - 1.6) < 1e-9 && Math.Abs(H.Boss.DamageMult - 1.2) < 1e-9,
                   $"arena host: a party of two faces a boss scaled for two (hull x1.6, damage x1.2; x{H.Boss.HullMult:0.00}, x{H.Boss.DamageMult:0.00})");
             var gship = H.Ships.FirstOrDefault(s => !s.Mine);
-            Check(gship != null && gship.Class == ShipClass.Destroyer && Math.Abs(gship.MaxHp - 287.5) < 1e-6 && Math.Abs(gship.Stats["missile_mag"] - 5) < 1e-9,
-                  $"arena host: the guest's destroyer and its own gear came into the arena with it (287.5 hull, a Salvo Rack III's 5 bursts; {gship?.Class}, {gship?.MaxHp:0.0}, {gship?.Stats["missile_mag"]:0})");
+            Check(gship != null && gship.Class == ShipClass.Destroyer && Math.Abs(gship.MaxHp - 287.5) < 1e-6 && Math.Abs(gship.Stats["missile_mag"] - 6) < 1e-9,
+                  $"arena host: the guest's destroyer and its own gear came into the arena with it (287.5 hull, a Salvo Rack III's 6 bursts; {gship?.Class}, {gship?.MaxHp:0.0}, {gship?.Stats["missile_mag"]:0})");
             // Long enough for the guest to watch the super-move bar move, and no longer: this
             // scenario has a second arena visit after it, and a stay stretched to fit a whole beam
             // cycle pushed that off the end of every wait that follows.
@@ -3765,7 +3771,7 @@ public partial class _Test : Node
             // survives the move into the arena.
             Character.Class = ShipClass.Destroyer;
             var agl = Character.LoadoutFor(ShipClass.Destroyer); agl[8] = ""; agl[9] = "";
-            agl[4] = "dd_salvo_3";                      // and a dropped rack: a magazine of 5 bursts
+            agl[4] = "dd_salvo_3";                      // and a dropped rack: a magazine of 6 bursts
             H.Yard.Credits = 12345;                               // its own base, before it visits
             // Level 2 against the level-1 boss: its OWN share is 100 for the kill (the host's is 200)
             Character.Exp = 0; Character.Level = 2; Character.BossCleared.Clear();

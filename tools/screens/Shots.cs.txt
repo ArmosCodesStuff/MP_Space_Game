@@ -490,9 +490,11 @@ public partial class _Shots : Node
             await Class(ShipClass.Carrier);
             await Frame(new Vector2(-2600, 2000), 0.9f, false);
             sel.SetValue(hub, d1); await W(0.3); await Snap("25_bar_out_of_range");
-            await Frame(d1.Position + new Vector2(-560, 360), 1.0f, false);
             Key(global::Godot.Key.F);
             for (int i = 0; i < 1500 && !N<Torpedo>().Any(); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            // framed on the bomber, not the target: it launches from 1900 u out, far off the dummy's frame
+            var torp = N<Torpedo>().FirstOrDefault();
+            await Frame((torp?.GlobalPosition ?? d1.Position) + new Vector2(-120, 120), 1.0f, false);
             await W(0.5); await Snap("26_torpedoes_launching");
             Key(global::Godot.Key.Space);
             // Resting also covers the flight home; wait for one actually sitting on the carrier

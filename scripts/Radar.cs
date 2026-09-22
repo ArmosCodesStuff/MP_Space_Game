@@ -13,7 +13,7 @@ public partial class Radar : Control
 {
     public Hub Hub;
     public static readonly float[] Sizes = { 160f, 230f, 310f };
-    public const float Range = 3000f;
+    public const float Range = 3600f;        // past the outposts (3000 u), so they sit inside the rim
 
     public override void _Ready()
     {

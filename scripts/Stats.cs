@@ -145,7 +145,7 @@ public class ShipStats
             Add("Fighters", "fighter_burst",    "Firing before rest", 15, "s", 0);
             Add("Fighters", "fighter_rest",     "Rest, docked inside", 3, "s", 0, inverse: true);
             Add("Fighters", "fighter_turn",     "Turn rate",        3.5, "rad/s", 1);
-            Add("Fighters", "control_range",    "Control range",    1080, "u", 0);
+            Add("Fighters", "control_range",    "Control range",    1500, "u", 0);   // 1.5x the battleship's guns (1000)
 
             // An active ability, and the carrier's long-range burst. Torpedoes run straight and steady:
             // no tracking, so from 1900 u (about twice the others' reach) a moving target often steps out

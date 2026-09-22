@@ -873,7 +873,9 @@ public partial class Hub : Node2D
     // 2 patrols, and 1 more per extra pilot in the session, in from the map's edge 3 s
     // after the party is home (so every guest's world is loaded before they appear).
     private static int PendingRaidLevel;                        // survives the scene change home
-    public const float RaidEdge = 3200f;
+    // Where a raid comes in from, and where a heavy waits for its quarry to be pinned: far enough
+    // outside the outposts (3000 u) that the wait is the same 1430 u standoff it was tuned at.
+    public const float RaidEdge = 4200f;
     public const double RaidDelay = 3.0;
     private double _raidIn = -1; private int _raidLevel;
 
