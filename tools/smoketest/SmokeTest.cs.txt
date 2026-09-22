@@ -3116,7 +3116,9 @@ public partial class _Test : Node
                   $"arena host: in stasis at the kill, still its own 2 crates, and none of the guest's ({ahCrates.Count} here, {Count<LootCrate>()} nodes)");
             // NO CLOCK: the party goes home only once EVERY present pilot presses RETURN. The guest
             // presses first (it collects, then readies); one pilot ready is not enough on its own.
-            await RealTime(() => H.ReturnReady == 1, Wan ? 22 : 15);
+            // (generously: the guest presses only after its own checks of the fight and its crates,
+            // which can run past the kill -- a 15 s wait here flaked one run in three)
+            await RealTime(() => H.ReturnReady == 1, Wan ? 60 : 45);
             await Wait(1.0);
             Check(Hub.InArena && H.ReturnReady == 1 && H.ReturnTotal == 2,
                   $"arena host: one pilot's RETURN is not enough -- the party waits ({H.ReturnReady} of {H.ReturnTotal})");

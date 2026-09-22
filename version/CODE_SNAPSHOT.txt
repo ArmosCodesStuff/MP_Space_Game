@@ -1,8 +1,8 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-21 22:10, on top of git commit 0110473. How it was verified is in the message of the
+// Taken 2026-09-21 22:15, on top of git commit 8f7c783. How it was verified is in the message of the
 //   commit that carries this file: one starting VERIFIED: is a green verify.ps1 -Update.
-// 81 files, 16846 lines. Code only: sprites, sounds and docs are in the zip.
+// 81 files, 16848 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -87,7 +87,7 @@
 //   tools/smoketest/fakeigd.py                     155 lines   sha256 b980d4fa4ad4
 //   tools/smoketest/run.ps1                        209 lines   sha256 54069e6faaff
 //   tools/smoketest/run.sh                          57 lines   sha256 9ac9cbdf9115
-//   tools/smoketest/SmokeTest.cs.txt              3675 lines   sha256 4f6d161bcf44
+//   tools/smoketest/SmokeTest.cs.txt              3677 lines   sha256 33a1ee07e42f
 //   tools/smoketest/wan.py                          61 lines   sha256 97db24aa3f91
 //   tools/snapshot.ps1                              94 lines   sha256 3ca9bfe56185
 //==============================================================================
@@ -13500,7 +13500,7 @@ echo "SMOKE TEST PASSED"
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 3675 lines   sha256 4f6d161bcf44
+// 3677 lines   sha256 33a1ee07e42f
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -16620,7 +16620,9 @@ public partial class _Test : Node
                   $"arena host: in stasis at the kill, still its own 2 crates, and none of the guest's ({ahCrates.Count} here, {Count<LootCrate>()} nodes)");
             // NO CLOCK: the party goes home only once EVERY present pilot presses RETURN. The guest
             // presses first (it collects, then readies); one pilot ready is not enough on its own.
-            await RealTime(() => H.ReturnReady == 1, Wan ? 22 : 15);
+            // (generously: the guest presses only after its own checks of the fight and its crates,
+            // which can run past the kill -- a 15 s wait here flaked one run in three)
+            await RealTime(() => H.ReturnReady == 1, Wan ? 60 : 45);
             await Wait(1.0);
             Check(Hub.InArena && H.ReturnReady == 1 && H.ReturnTotal == 2,
                   $"arena host: one pilot's RETURN is not enough -- the party waits ({H.ReturnReady} of {H.ReturnTotal})");
