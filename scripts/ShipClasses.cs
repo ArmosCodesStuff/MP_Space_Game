@@ -372,7 +372,7 @@ public partial class Wing : Node2D
     private void TickFighter(double delta)
     {
         float dt = (float)delta;
-        var t = Carrier.WingTarget;
+        var t = Carrier.FighterTarget(Position);          // a dead target is replaced while they are out
         bool engage = t != null && t.Alive && Carrier.Alive && Carrier.Position.DistanceTo(t.Position) <= S["control_range"];
         if (_f is FSt.Approach or FSt.Burst or FSt.Overshoot or FSt.Turn)
         {

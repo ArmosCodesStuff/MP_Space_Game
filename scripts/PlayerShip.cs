@@ -140,6 +140,18 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
 
     // ── orders and ability state, held on the host ───────────────────────────
     public IHittable WingTarget { get; private set; }      // fighters engage this
+    private bool _attacking;                                  // an attack is on: only a recall (R) ends it
+
+    // Fighters out on an attack whose target is gone take the nearest other hostile to where they are,
+    // within control range of the carrier, and the whole wing with them; with none left, they go home.
+    public IHittable FighterTarget(Vector2 from)
+    {
+        if (!_attacking || !Net.Sim || WingTarget is { Alive: true }) return WingTarget;
+        WingTarget = Combat.Nearest(Combat.Hostiles, from, h => h.Position, float.MaxValue,
+                                    h => h is not Torpedo && h.Alive && Position.DistanceTo(h.Position) <= Stats["control_range"]);
+        _attacking = WingTarget != null;
+        return WingTarget;
+    }
     public IHittable StrikeTarget { get; private set; }    // bombers run at this
     private int _strikesOut;
 
@@ -213,7 +225,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
         foreach (var t in _turrets) t.QueueFree();
         foreach (var w in _wings) w.QueueFree();
         _turrets.Clear(); _mains.Clear(); PdTurrets.Clear(); _wings.Clear();
-        WingTarget = StrikeTarget = null; _strikesOut = 0;
+        WingTarget = StrikeTarget = null; _strikesOut = 0; _attacking = false;
         _pdLeft = _pdRecharge = 0;
 
         Stats = BuildSheet();
@@ -391,8 +403,8 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
             case "reload":  if (Classes.Missiles(Class) && !Reloading && _mag < (int)Stats["missile_mag"])
                                 _missileReload = Stats["missile_reload"]; break;
             case "broadside": if (BroadsideReady) _bsWindup = Stats["broadside_windup"]; break;
-            case "attack":  if (Classes.Wing(Class) && t != null) WingTarget = t; break;
-            case "recall":  WingTarget = null; break;
+            case "attack":  if (Classes.Wing(Class) && t != null) { WingTarget = t; _attacking = true; } break;
+            case "recall":  WingTarget = null; _attacking = false; break;
             case "bombers":
                 // within the strike range (twice the fighters' control range) only
                 if (Classes.Wing(Class) && t != null && StrikeTarget == null && _strikesOut <= 0 && BombersReady > 0
