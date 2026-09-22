@@ -3059,10 +3059,15 @@ public partial class _Test : Node
             Check(fr.TurretsOut == 2 && fr.FailNote("collect") == "NOT OVER ONE", "and from 400 u away it refuses, saying why");
             // a raider walks into one: the turret shoots it, and the raider shoots back
             var tgt = H.Deployed.First();
-            var rr = H.SpawnRaider(VaryNear(tgt.Position, 420f)); rr.Hp = 400;   // inside the turret's 500 u
+            var standAt = VaryNear(tgt.Position, 420f);                          // inside its 500 u, any direction
+            var rr = H.SpawnRaider(standAt); rr.Hp = 400;
             double rh0 = rr.Hp;
-            for (int i = 0; i < 60 * 6 && rr.Hp == rh0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            Check(rr.Hp < rh0, $"a turret left standing shoots what comes near it ({rh0 - rr.Hp:0.0} damage)");
+            // held where it appeared: this is a check on the GUN, not on how long a raider with
+            // business elsewhere happens to stay in reach of it
+            for (int i = 0; i < 60 * 6 && rr.Hp == rh0; i++)
+            { rr.Position = standAt; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            Check(rr.Hp < rh0,
+                  $"a turret left standing shoots what comes near it ({rh0 - rr.Hp:0.0} damage at {standAt.DistanceTo(tgt.Position):0} u, aiming at {(tgt.Aimed == null ? "nothing" : "it")})");
             rr.TakeDamage(99999); await Wait(0.2);
             foreach (var dpl in H.Deployed.ToList()) H.DeployedTaken(dpl);
             await Wait(0.1);

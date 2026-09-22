@@ -66,6 +66,9 @@ public partial class DeployedTurret : Node2D, IRaidTarget, ITagged, ITurretHost
         if (Hp <= 0) (GetParent() as Hub)?.DeployedDown(this);
     }
 
+    // what its gun has picked, for a check's message
+    public IHittable Aimed => _gun?.Target;
+
     public override void _Ready()
     {
         ZIndex = 3;

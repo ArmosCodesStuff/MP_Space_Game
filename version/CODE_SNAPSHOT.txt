@@ -1,8 +1,8 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-22 17:29, on top of git commit 68e22bb. How it was verified is in the message of the
+// Taken 2026-09-22 18:01, on top of git commit 3b60134. How it was verified is in the message of the
 //   commit that carries this file: one starting VERIFIED: is a green verify.ps1 -Update.
-// 99 files, 21464 lines. Code only: sprites, sounds and docs are in the zip.
+// 99 files, 21472 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -30,7 +30,7 @@
 //   scripts/CharacterSelect.cs                     184 lines   sha256 241e2389c734
 //   scripts/Combat.cs                              125 lines   sha256 5592ca99fc3e
 //   scripts/DamageNumbers.cs                        83 lines   sha256 20747f8cd3bd
-//   scripts/Deployed.cs                            100 lines   sha256 211d93ab891e
+//   scripts/Deployed.cs                            103 lines   sha256 ffa277824dbe
 //   scripts/Drake.cs                               147 lines   sha256 35ea4012f32e
 //   scripts/Economy.cs                             119 lines   sha256 1dec71a6ffa8
 //   scripts/Enemies.cs                             106 lines   sha256 b3603fe6ece2
@@ -105,7 +105,7 @@
 //   tools/smoketest/fakeigd.py                     155 lines   sha256 b980d4fa4ad4
 //   tools/smoketest/run.ps1                        216 lines   sha256 94e289017e6d
 //   tools/smoketest/run.sh                          57 lines   sha256 9ac9cbdf9115
-//   tools/smoketest/SmokeTest.cs.txt              4651 lines   sha256 3086b6fc492f
+//   tools/smoketest/SmokeTest.cs.txt              4656 lines   sha256 50285203b8ad
 //   tools/smoketest/wan.py                          61 lines   sha256 97db24aa3f91
 //   tools/snapshot.ps1                              94 lines   sha256 3ca9bfe56185
 //==============================================================================
@@ -2465,7 +2465,7 @@ public struct HullWatch
 
 //==============================================================================
 // FILE: scripts/Deployed.cs
-// 100 lines   sha256 211d93ab891e
+// 103 lines   sha256 ffa277824dbe
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -2534,6 +2534,9 @@ public partial class DeployedTurret : Node2D, IRaidTarget, ITagged, ITurretHost
         Hp -= d;
         if (Hp <= 0) (GetParent() as Hub)?.DeployedDown(this);
     }
+
+    // what its gun has picked, for a check's message
+    public IHittable Aimed => _gun?.Target;
 
     public override void _Ready()
     {
@@ -17250,7 +17253,7 @@ echo "SMOKE TEST PASSED"
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 4651 lines   sha256 3086b6fc492f
+// 4656 lines   sha256 50285203b8ad
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -20313,10 +20316,15 @@ public partial class _Test : Node
             Check(fr.TurretsOut == 2 && fr.FailNote("collect") == "NOT OVER ONE", "and from 400 u away it refuses, saying why");
             // a raider walks into one: the turret shoots it, and the raider shoots back
             var tgt = H.Deployed.First();
-            var rr = H.SpawnRaider(VaryNear(tgt.Position, 420f)); rr.Hp = 400;   // inside the turret's 500 u
+            var standAt = VaryNear(tgt.Position, 420f);                          // inside its 500 u, any direction
+            var rr = H.SpawnRaider(standAt); rr.Hp = 400;
             double rh0 = rr.Hp;
-            for (int i = 0; i < 60 * 6 && rr.Hp == rh0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            Check(rr.Hp < rh0, $"a turret left standing shoots what comes near it ({rh0 - rr.Hp:0.0} damage)");
+            // held where it appeared: this is a check on the GUN, not on how long a raider with
+            // business elsewhere happens to stay in reach of it
+            for (int i = 0; i < 60 * 6 && rr.Hp == rh0; i++)
+            { rr.Position = standAt; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            Check(rr.Hp < rh0,
+                  $"a turret left standing shoots what comes near it ({rh0 - rr.Hp:0.0} damage at {standAt.DistanceTo(tgt.Position):0} u, aiming at {(tgt.Aimed == null ? "nothing" : "it")})");
             rr.TakeDamage(99999); await Wait(0.2);
             foreach (var dpl in H.Deployed.ToList()) H.DeployedTaken(dpl);
             await Wait(0.1);
@@ -21638,8 +21646,8 @@ public partial class _Test : Node
                     cdBack = me3.BroadsideCooldownLeft;
                     await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                 }
-                Check(!ownStart && sawWindup && sawShells && cdBack > 8.5 && cdBack <= 10,
-                      $"third player: its broadside is the host's -- not started here ({ownStart}), then the wind-up or volleys, the shells and a 10 s cooldown reach it ({sawWindup}, {sawShells}, {cdBack:0.0} s)");
+                Check(!ownStart && sawWindup && sawShells && cdBack > 13 && cdBack <= 14,
+                      $"third player: its broadside is the host's -- not started here ({ownStart}), then the wind-up or volleys, the shells and the 14 s cooldown reach it ({sawWindup}, {sawShells}, {cdBack:0.0} s)");
                 await Wait(Math.Max(0.1, 3.0 - (me3.Clock - bsClock0)));   // the rest of the 6 s, in game seconds
             }
 
