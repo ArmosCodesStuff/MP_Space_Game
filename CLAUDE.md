@@ -1,208 +1,102 @@
-# Warships — working rules for Claude Code
+# Warships — how to work on this project
 
-Godot 4.7.2 (.NET / C#) multiplayer space game. The HOST owns the world; each PLAYER owns their
-ship. Single player is a host with no peers. The repo is the only source of truth — never rebuild
-code from memory.
+Godot 4.7.2 (.NET / C#). Host owns the world; each player owns their ship; single player is a host
+with no peers. The repo is the only source of truth. Written for an instance with no memory of it.
 
-**This file assumes you have no memory of this project.** It is written for a fresh instance that
-has just been handed the folder. Follow it in order and you will be where the last session left off.
+**Accuracy outranks speed. Speed outranks everything else.**
 
 ---
 
-## 1 · Start of every session
-
-1. **Check you are in the right folder.** The git root is the folder containing `verify.ps1`,
-   `scripts/` and `.git`. A re-extracted zip nests it one level down (`<wrapper>/Warships/`);
-   opening the wrapper gives a session with no git and none of this. `git log --oneline -1` must
-   print a commit.
-2. Read the **Handoff** at the top of `docs/CHANGES.md`, then `docs/DESIGN.md` (decisions, standing
-   rules, and the traps that have already cost time), `docs/README.md` and `docs/REVIEW.md`.
-3. **Integrity check before touching anything:**
-   `git status` · `git log <last commit starting "VERIFIED:">..HEAD` ·
-   `powershell -ExecutionPolicy Bypass -File verify.ps1 -Quick`
-   Anything you did not report yourself is an UNVERIFIED FINDING: read the diff and decide ADOPT
-   (serves a current request; review and test it), REMOVE (contradicts the direction, duplicates,
-   or broken; revert with git and say why) or ASK. **Report every finding.**
-
----
-
-## 2 · Plan — the whole batch, before any of it
-
-The player usually asks for several things at once. Plan them **together**, then build them
-**in the order given**, unless one depends on another — say so when reordering.
-
-**Keep a session's scope modest.** Most of a session's cost is the build-and-fix loop, and it grows
-with the code a batch touches — every extra feature means more fixes and more mid-flight engine runs
-to catch them. One batch, one end bar (§5) is the right shape; a sprawling batch is not. If the
-player hands a large set, it is fine — often cheaper — to build the first coherent slice, VERIFY and
-commit it, and say plainly what remains for a follow-up, rather than carrying the whole thing through
-one long loop. Match the effort to the change: a one-line tweak does not earn a five-agent workflow.
-
-For each request, before writing anything: what will be observably true; how it will be tested;
-which systems it touches (search the code for every use); what it could break (multiplayer
-authority, UI, balance, saves).
-
-**FOUNDATIONS FIRST.** If a request needs something that does not exist yet — a field, a hook, a
-public accessor, a shared helper, a new node type, a save-file field — **build that first, as its
-own step, before the feature that uses it.** Do not bolt a feature onto a foundation that is not
-ready and repair it afterwards. This is a rule about ORDER, not about scope: the foundation is part
-of the request, not a separate one to ask about.
-
-Ask all clarifying questions **in one batch**, each with the default you will use if unanswered.
-Never ask what the docs already answer.
-
----
-
-## 3 · Build — every request in the batch, then the bar once
-
-The old rule was "one request, then the full bar". That ran ~12 minutes of engine checks for a
-one-line change and ran them again for the next one. Now the full bar runs **once**, at the end (§5).
-
-**Engine runs are the cost.** A smoke run, a sweep, a mutant each spend a minute or more of engine
-time and a chunk of context to read back — that is where a session's tokens and minutes actually go.
-Spend them where they earn it (the rules below say where), and let edits accumulate between them
-rather than running the harness after every keystroke.
-
-**While building each request:**
-
-- Implement it, including its foundations.
-- **Write the checks for it as you go**, in `tools/smoketest/SmokeTest.cs.txt`.
-- **Mutant-prove the checks that guard an invariant** — authority (B), a save-format field, a
-  removed-not-duplicated path (C), a leak (A): a silent regression there is dangerous and easy to
-  miss, so put the real old code back in a scratch copy and watch the check fail. For ordinary
-  behaviour, balance or UI checks, running the new check once and seeing it pass is enough — write a
-  mutant only when you doubt the check is wired up or fear it is blind. This scoping is the biggest
-  single lever on a session's cost; each mutant is a full engine run.
-- **When you do mutant, do it right.** It must reproduce the **real old code**, not an approximation
-  (build the scratch copy from `git ls-files` and copy `typecheck/GodotSharp.dll` in; a sound copy
-  reproduces the baseline pass count exactly, so any other number means the copy is wrong, not the
-  code), and it must be **non-vacuous** — set up the situation so the OLD behaviour would visibly
-  differ (a boss that would not have moved anyway cannot demonstrate a lock; a hull already pointing
-  the right way cannot demonstrate tracking). Batch non-interacting patches into one scratch run;
-  one at a time only when they could interact.
-- **Compare with the spec's numbers as literals**, never with the code's own constants — a check
-  that reads the constant cannot catch the constant being wrong.
-- **Run only what can see the change, and batch edits before each engine run** (the three gears are
-  in §6). A rename or pure refactor: `-Quick`, no engine at all. New behaviour: `-Fast` — but let
-  several edits accumulate first; one engine run for a group beats one run per edit. Something
-  visual: the sweep. **Trust its `LINT: 0` for layout** — off-screen, overlap, clipping: it judges
-  those better and cheaper than an eye. **Read a frame yourself only** when the lint cannot judge it
-  (a genuinely new screen, or a change to art, colour or composition) or when a frame looks off; a
-  full-resolution frame in context is expensive, so do not sweep-and-read every frame by reflex.
-  *A check on behaviour is not a check on being drawn.*
-- Commit a checkpoint per request, so a later failure has somewhere to go back to. A checkpoint
-  message does **not** start with `VERIFIED:`.
-
-**When every request in the batch is done**, run the bar once — §5.
-
----
-
-## 4 · The four standing invariants
-
-Every change is checked against these, and each one has checks behind it.
-
-**A · Lifetime.** Everything instantiated, duplicated or subscribed is released at the end of its
-existence. Nodes freed; handlers on autoloads and static events removed in `_ExitTree`; timers and
-tweens stopped; `Combat`'s hooks dropped by whatever world set them (each is a lambda holding that
-world). The smoke test asserts orphan nodes and object count do not grow across leaving and
-re-entering a world. *A C# `Resource` handle alive at shutdown is reported as `resources still in
-use at exit` — see `Music._ExitTree`, and `Known broken` in `docs/CHANGES.md`.*
-
-**B · Authority.** All world and combat state changes only under `Net.Sim` / `Net.IsHost`. Guests
-request by RPC and the host checks the sender. Every visible state reaches guests. Home-only nodes
-send via `Hub.RpcHome`. The smoke test runs a host with two guests and a two-player arena precisely
-to catch this; a solo run cannot.
-
-**C · Replacement, not accumulation.** When a mechanic changes, the previous code is **removed**,
-not left beside the new path. Search for every caller of what you changed and update them all; a
-field that now means something else is renamed so an unconverted caller fails to compile. No
-comment may describe old behaviour. `verify.ps1` runs a cross-reference that must print
-`UNUSED ANYWHERE: 0` — that catches the dead member, but only **you** catch the old path still
-running.
-
-**D · Correctness.** 0 compiler warnings, 0 analyser findings, 0 unused members.
-
----
-
-## 5 · Finish the batch: verify, record, commit
+## 1 · Session start (≤ 2 tool calls)
 
 ```
-powershell -ExecutionPolicy Bypass -File verify.ps1 -Update
+git -C <repo> log --oneline -3 ; git -C <repo> status --short
 ```
+Read `docs/CHANGES.md` Handoff only. Read `DESIGN.md`/`REVIEW.md` sections only when the task touches
+them (grep, do not read whole files). Do not run verify at session start.
+Anything in the tree you did not write: report it in one line, then ADOPT or REVERT.
 
-`-Update` regenerates `version\MAP.md`, then `version\CODE_SNAPSHOT.txt`, then
-`version\MANIFEST.sha256` **before** the integrity step, in that order, so integrity checks this
-change rather than the last one. It must print `ALL CHECKS PASSED`.
+## 2 · Plan the whole batch before writing code
 
-Then record — in the same change as the code, never after:
+1. List the player's requests **in their order**.
+2. For each: the foundation it needs (field, hook, accessor, node type, save field, data table).
+   **Build every foundation before the feature that uses it**, even if that reorders the work.
+3. One clarifying question batch, each with the default you will use anyway. Then build.
+4. Never ask what the repo answers.
 
-- `docs/CHANGES.md` — the Handoff, plus every change under Unreleased. `Known broken` is mandatory
-  and honest.
-- `docs/DESIGN.md` — durable reasoning, and any new trap.
-- `docs/README.md` — sizes and commands.
-- `docs/REVIEW.md` — review progress.
+## 3 · Build
 
-Then commit with a message starting **`VERIFIED:`** carrying the verdict. That commit is the
-baseline for the next session's integrity check. **Only a green `verify.ps1` earns the word.**
+- Batch edits. No engine run during development, ever. Compile checks (`typecheck.ps1`,
+  `dotnet build`) are free — use them; they are not tests.
+- Write the smoke checks for a feature as you write the feature, in the same edit pass.
+- **Generalise, never special-case.** A new boss, class, enemy, ability or upgrade must be a row of
+  data plus parameters, not a new `if`. If a request forces a special case, the system is wrong:
+  fix the system.
+- Delete what a change replaces in the same edit. `UNUSED ANYWHERE: 0` is enforced.
+- No new tool script unless the same job will recur or it cannot be done inline; extend an existing
+  tool first. Scratch files go in the scratchpad, never in the repo.
+- Commit a checkpoint per slice. Only a green full run earns `VERIFIED:`.
 
----
+## 4 · Test once, at the end
 
-## 6 · Commands
+- Development, then planning-complete, then code, then **one** run. If a run fails, fix and re-run
+  only what the fix can affect (§5), not the whole bar.
+- Never run two engine harnesses at once.
+- Prove numbers with **literals from the request**, never with the code's own constants.
+- Mutants only for authority, save-format and removed-path invariants, and only when a check's
+  wiring is in doubt. Otherwise seeing a new check pass once is enough.
 
-Everything is PowerShell and needs nothing passed in: the Godot binary is found by
-`tools\find-godot.ps1`, and the gitignored `typecheck/GodotSharp.dll` is fetched from the NuGet
-cache when missing.
+### Selective verification
 
-**The three gears — use the smallest one that can see your change:**
-
-```bash
-powershell -ExecutionPolicy Bypass -File verify.ps1 -Quick    # ~1 min   typecheck, build, analysers, xref
-powershell -ExecutionPolicy Bypass -File verify.ps1 -Fast     # ~3 min   + ONE solo smoke run + the sweep
-powershell -ExecutionPolicy Bypass -File verify.ps1 -Update   # ~12 min  + three FULL smoke runs, snapshot, manifest
 ```
-
-`-Fast` runs one engine instead of six. It covers only the solo scenario's checks — but **it cannot see a host
-and a guest disagreeing**, which is what this harness exists for, so it is never the last word.
-Its verdict says `SMOKE TEST (SOLO ONLY)` so it can never be mistaken for the bar.
-
-The individual steps, when you want one on its own:
-
-```bash
-powershell -ExecutionPolicy Bypass -File typecheck\typecheck.ps1        # 0 errors.  (and "REAL GodotSharp.dll")
-dotnet build                                                            # 0 Warning(s), 0 Error(s)
-powershell -ExecutionPolicy Bypass -File tools\analyse\run.ps1          # ANALYSERS: 0 findings
-python tools\analyse\xref.py                                            # UNUSED ANYWHERE: 0
-powershell -ExecutionPolicy Bypass -File tools\smoketest\run.ps1        # the full six-process run
-powershell -ExecutionPolicy Bypass -File tools\smoketest\run.ps1 -Solo  # just the solo scenario
-powershell -ExecutionPolicy Bypass -File tools\smoketest\run.ps1 -Wan   # multiplayer over a simulated internet
-python tools\map.py                                                     # rebuild version\MAP.md
-powershell -ExecutionPolicy Bypass -File tools\screens\run.ps1          # SWEEP DONE, LINT: 0
-powershell -ExecutionPolicy Bypass -File tools\snapshot.ps1             # rebuild version\CODE_SNAPSHOT.txt
-powershell -ExecutionPolicy Bypass -File tools\manifest.ps1             # rebuild version\MANIFEST.sha256
+verify.ps1 -Quick                 # typecheck, build, analysers, xref          ~1 min
+verify.ps1 -Scope <tags>          # the above + only the smoke scenarios those tags cover
+verify.ps1 -Update                # everything + map, snapshot, manifest        (release bar)
 ```
+`-Scope` takes the smoke test's section tags (`ship`, `wing`, `boss`, `raid`, `econ`, `net`, `ui`,
+`art`). Run the tags your diff touches. `-Update` is for the end of a batch or a release only.
 
-Sweep frames land in `%TEMP%\shots`.
+### Varied, not repeated
 
-**Run one engine harness at a time.** The smoke and sweep runners each own a scratch folder under
-`%TEMP%`; a second run deletes the first's files and the victim prints a wall of
-`Cannot open file 'res://scripts/...'` that reads like a broken project. The runners refuse rather
-than failing that way — including against a stray Godot you left in the background.
+Checks must not be tied to one placement. Use `Vary` (SmokeTest) for positions, angles, distances
+and party sizes: it draws from a per-run seed printed in the log, so a run covers a different
+geometry each time while any failure is reproducible with `-Seed <n>`. A check that only holds at one
+spot is a check that hides a bug.
 
-**The smoke test builds its own network** (`NoRouterNoInternet`, fake routers in
-`tools\smoketest\fakeigd.py`): every check means the same on every machine, and a test run never
-touches the real router. A network change gets a scenario there, and a multiplayer change is worth a
-`-Wan` run (90 ms each way, jitter, 2% loss) as well as the plain one.
+## 5 · Standing invariants
 
-**Version and integrity control:** `version/MAP.md` is the map -- every script, member, RPC, spawn
-site, event hookup and asset, and who uses each; `version/CODE_SNAPSHOT.txt` is every code file
-inline, for pasting into a chat without the repo; `version/MANIFEST.sha256` is one SHA-256 per
-tracked file, checked with `sha256sum -c`, for verifying an unzipped copy. All three are
-regenerated by `-Update`, in that order, **after the last edit**.
+- **A · Lifetime.** Everything created, subscribed or hooked is released in `_ExitTree`. Orphan and
+  object counts must not grow across leaving and re-entering a world.
+- **B · Authority.** World and combat state changes only under `Net.Sim` / `Net.IsHost`. Guests
+  request by RPC; the host checks the sender. Every visible state reaches guests.
+- **C · Replacement.** The old path is deleted, not left beside the new one. No comment describes
+  old behaviour.
+- **D · Correctness.** 0 warnings, 0 analyser findings, 0 unused members.
 
----
+## 6 · Replies to the player
 
-## 7 · Reply
+- Default: **≤ 4 lines.** One line per request: what is true now.
+- State failures and unverified work plainly. Never call something verified without a green run.
+- No narration of what you are about to do, no restating their request, no progress commentary
+  unless a run is minutes long (then one line).
+- Numbers and file paths, not adjectives.
 
-Short. For each request: what was done and how it was verified; integrity findings and decisions;
-anything still unverified; open questions. **Never say something is done when it is not**, and
-never call something verified on anything less than a green `verify.ps1`.
+## 7 · Commands
+
+```
+typecheck\typecheck.ps1 · dotnet build · tools\analyse\run.ps1 · python tools\analyse\xref.py
+tools\smoketest\run.ps1 [-Solo|-Wan|-Scope <tags>|-Seed <n>]
+tools\screens\run.ps1            # sweep; trust LINT: 0 for layout, read a frame only for new art
+tools\make_ships.ps1             # ship sprites from art_source\
+tools\finish_ships.ps1           # shade, upscale, detail a sprite
+python tools\make_sounds.py      # boss/ability sounds
+python tools\map.py · tools\snapshot.ps1 · tools\manifest.ps1
+```
+Godot is found by `tools\find-godot.ps1`. `-Update` regenerates map, snapshot and manifest in that
+order before the integrity step.
+
+## 8 · Record (same commit as the code)
+
+`docs/CHANGES.md` Handoff + Unreleased entry + honest `Known broken`; `DESIGN.md` for durable
+reasoning and new traps; `README.md` for sizes and commands; `REVIEW.md` for review passes.
+Keep each entry to what is true now — delete what a change reversed.
