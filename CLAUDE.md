@@ -54,19 +54,23 @@ Anything in the tree you did not write: report it in one line, then ADOPT or REV
 ### Selective verification
 
 ```
-verify.ps1 -Quick                 # typecheck, build, analysers, xref          ~1 min
-verify.ps1 -Scope <tags>          # the above + only the smoke scenarios those tags cover
+verify.ps1 -Quick                 # typecheck (scripts AND harness), build, analysers, xref  ~1 min
+verify.ps1 -Fast                  # + ONE solo smoke run + the screenshot sweep              ~3 min
 verify.ps1 -Update                # everything + map, snapshot, manifest        (release bar)
 ```
-`-Scope` takes the smoke test's section tags (`ship`, `wing`, `boss`, `raid`, `econ`, `net`, `ui`,
-`art`). Run the tags your diff touches. `-Update` is for the end of a batch or a release only.
+**There is no `-Scope`.** The smoke test is one narrative per role — a character is made, a base
+is bought up, a mission is flown, the world is replaced by the arena — so a section cannot be
+skipped without changing the state the next one runs in. `-Fast` is the cheap gear: the whole solo
+narrative, which is most of the checks, and it cannot see a host and a guest disagreeing.
+`-Update` is for the end of a batch or a release only.
 
 ### Varied, not repeated
 
-Checks must not be tied to one placement. Use `Vary` (SmokeTest) for positions, angles, distances
-and party sizes: it draws from a per-run seed printed in the log, so a run covers a different
-geometry each time while any failure is reproducible with `-Seed <n>`. A check that only holds at one
-spot is a check that hides a bug.
+Checks must not be tied to one placement. Use `Vary`, `VaryAngle` and `VaryNear` (SmokeTest) for
+positions, angles and distances: they draw from a per-run seed the run prints as `SEED n`, so each
+run covers different geometry and any failure comes back with `run.ps1 -Seed <n>`, which puts the
+same numbers back. Never vary a figure the check ASSERTS — only where a thing is and which way it
+faces. A check that only holds at one spot is a check that hides a bug.
 
 ## 5 · Standing invariants
 
@@ -90,7 +94,7 @@ spot is a check that hides a bug.
 
 ```
 typecheck\typecheck.ps1 · dotnet build · tools\analyse\run.ps1 · python tools\analyse\xref.py
-tools\smoketest\run.ps1 [-Solo|-Wan|-Scope <tags>|-Seed <n>]
+tools\smoketest\run.ps1 [-Solo|-Wan|-Seed <n>]
 tools\screens\run.ps1            # sweep; trust LINT: 0 for layout, read a frame only for new art
 tools\make_ships.ps1             # ship sprites from art_source\
 tools\finish_ships.ps1           # shade, upscale, detail a sprite

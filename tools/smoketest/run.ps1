@@ -22,7 +22,10 @@
 # another part of the country on an ordinary connection, rather than a second process on the same
 # machine. The checks are the same ones; what changes is everything they depend on arriving late,
 # out of order, or twice.
-param([string]$Godot, [switch]$Solo, [switch]$Wan)
+# -Seed <n> repeats a run's VARIED GEOMETRY exactly: every check that places something at an
+# arbitrary spot or angle draws it from the seed the run prints at the top of its log (SEED n).
+# Without it each run picks its own, so a check tied to one placement fails on the run that moves it.
+param([string]$Godot, [switch]$Solo, [switch]$Wan, [string]$Seed)
 
 $ErrorActionPreference = 'Stop'
 
@@ -98,7 +101,8 @@ try {
   # NOTE: PowerShell variable names are case-insensitive, so these cannot be $F/$N --
   # a `foreach ($f in ...)` elsewhere in this script silently overwrote the filter with
   # a file path, and the run died parsing it as a regex.
-  $keepRe = 'PASS|FAIL|DONE|Exception|   at |ERROR: [^B]|^  [a-z]|Fatal error'
+  # SEED is kept: a failure must come back with the number that reproduces its geometry (-Seed n).
+  $keepRe = 'PASS|FAIL|DONE|SEED |Exception|   at |ERROR: [^B]|^  [a-z]|Fatal error'
   # Expected engine chatter, not failures: allocator notes, and Godot's own report that
   # no UPnP router exists (the game falls back and says so).
   $dropRe = 'RID alloc|PagedAlloc'
@@ -136,6 +140,9 @@ try {
     $keep
   }
 
+  # the seed every role runs with: given, or each engine picks its own and prints it
+  $seedArg = if ($Seed) { @("seed=$Seed") } else { @() }
+
   & $Godot --headless --import --path $W *> (Join-Path $W 'import.log')
 
   $all = @()
@@ -147,7 +154,7 @@ try {
             -NoNewWindow -PassThru -RedirectStandardOutput (Join-Path $W 'fakeigd.out') -RedirectStandardError (Join-Path $W 'fakeigd.err')
     Start-Sleep -Milliseconds 500
     # fixed 60 fps: identical frame timing every run, so the DPS checks are exact
-    $all += Complete-Run (Start-Run @('--headless','--fixed-fps','60','--path',$W,'--','solo') 'solo' 1200) '[solo] '
+    $all += Complete-Run (Start-Run (@('--headless','--fixed-fps','60','--path',$W,'--','solo') + $seedArg) 'solo' 1200) '[solo] '
     if (-not $fake.HasExited) { try { $fake.Kill() } catch {} }
     $want = 1
   }
@@ -174,18 +181,18 @@ try {
   }
 
   if (-not $Solo) {
-    $host1 = Start-Run @('--headless','--path',$W,'--','host')   'host'   120
+    $host1 = Start-Run (@('--headless','--path',$W,'--','host') + $seedArg)   'host'   120
     Start-Sleep -Milliseconds 500
-    $g2 = Start-Run (@('--headless','--path',$W,'--','guest2') + $gx) 'guest2' 120
-    $g1 = Start-Run (@('--headless','--path',$W,'--','guest') + $gx)  'guest'  120
+    $g2 = Start-Run (@('--headless','--path',$W,'--','guest2') + $gx + $seedArg) 'guest2' 120
+    $g1 = Start-Run (@('--headless','--path',$W,'--','guest') + $gx + $seedArg)  'guest'  120
     $all += Complete-Run $g1    '[guest] '
     $all += Complete-Run $host1 '[host]  '
     $all += Complete-Run $g2    '[third] '
 
     # the dedicated two-player arena run: after the three-player run, on its own port
-    $ah = Start-Run @('--headless','--path',$W,'--','ahost')  'ahost'  120
+    $ah = Start-Run (@('--headless','--path',$W,'--','ahost') + $seedArg)  'ahost'  120
     Start-Sleep -Milliseconds 500
-    $ag = Start-Run (@('--headless','--path',$W,'--','aguest') + $gx) 'aguest' 120
+    $ag = Start-Run (@('--headless','--path',$W,'--','aguest') + $gx + $seedArg) 'aguest' 120
     $all += Complete-Run $ag '[aguest]'
     $all += Complete-Run $ah '[ahost] '
     $want += 5

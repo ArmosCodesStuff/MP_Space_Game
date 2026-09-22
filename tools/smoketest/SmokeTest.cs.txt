@@ -148,9 +148,31 @@ public partial class _Test : Node
     void Drop(int peer) => Callable.From(() => (Multiplayer.MultiplayerPeer as ENetMultiplayerPeer)?.GetPeer(peer)?.PeerDisconnectNow()).CallDeferred();
     object Priv(object o, string m, params object[] a) => o.GetType().GetMethod(m, BindingFlags.NonPublic | BindingFlags.Instance).Invoke(o, a);
 
+    // ── VARIED GEOMETRY, REPRODUCIBLE ──────────────────────────────────────
+    // A check tied to one spot is a check that can only find the bug at that spot. Vary draws
+    // from a per-run SEED, printed at the top of the log, so every run covers a different
+    // geometry -- and any failure comes back with `run.ps1 -Seed <n>`, which puts the same
+    // numbers back. It is never used for a figure the check asserts, only for where and which way.
+    private static readonly RandomNumberGenerator Rng = new();
+    public static ulong Seed { get; private set; }
+    static void SeedFrom(string[] args)
+    {
+        foreach (var a in args)
+            if (a.StartsWith("seed=") && ulong.TryParse(a[5..], out ulong n)) { Seed = n; break; }
+        if (Seed == 0) Seed = (ulong)(Time.GetTicksUsec() ^ 0x9E3779B97F4A7C15);
+        Rng.Seed = Seed;
+        GD.Print($"SEED {Seed}");
+    }
+    static float Vary(float lo, float hi) => Rng.RandfRange(lo, hi);
+    static float VaryAngle() => Rng.RandfRange(-Mathf.Pi, Mathf.Pi);
+    // a spot `radius` u around `at`, in any direction
+    static Vector2 VaryNear(Vector2 at, float radius) => at + Vector2.Right.Rotated(VaryAngle()) * Vary(radius * 0.4f, radius);
+
     public override async void _Ready()
     {
-        string role = OS.GetCmdlineUserArgs().FirstOrDefault() ?? "solo";
+        var argv = OS.GetCmdlineUserArgs();
+        string role = argv.FirstOrDefault() ?? "solo";
+        SeedFrom(argv);
         Settings.TestVolume = 0.05f; Settings.ApplyVolume();   // six windows, nobody listening
         NoRouterNoInternet();
         await Wait(0.3);
@@ -3014,13 +3036,13 @@ public partial class _Test : Node
 
             // ── FREIGHTER: three turrets out, one collected, and a bubble that soaks 400 ──
             await SetClass(ShipClass.FreightHauler);
-            var fr = Me; var yonder = Hub.BasePos + new Vector2(1400, 900);
+            var fr = Me; var yonder = VaryNear(Hub.BasePos + new Vector2(1400, 900), 600f);
             fr.Position = yonder; fr.Velocity = Vector2.Zero; await Wait(0.2);
             for (int i = 0; i < 4; i++)
             {
                 fr.Sl("deploy").Cool = 0;
                 fr.UseAbility("deploy", 0);
-                fr.Position += new Vector2(160, 0);
+                fr.Position += Vector2.Right.Rotated(VaryAngle()) * Vary(150f, 240f);
                 await Wait(0.1);
             }
             Check(fr.TurretsOut == 3 && H.Deployed.Count(t => t.OwnerId == fr.OwnerId) == 3,
@@ -3037,7 +3059,7 @@ public partial class _Test : Node
             Check(fr.TurretsOut == 2 && fr.FailNote("collect") == "NOT OVER ONE", "and from 400 u away it refuses, saying why");
             // a raider walks into one: the turret shoots it, and the raider shoots back
             var tgt = H.Deployed.First();
-            var rr = H.SpawnRaider(tgt.Position + new Vector2(260, 0)); rr.Hp = 400;
+            var rr = H.SpawnRaider(VaryNear(tgt.Position, 420f)); rr.Hp = 400;   // inside the turret's 500 u
             double rh0 = rr.Hp;
             for (int i = 0; i < 60 * 6 && rr.Hp == rh0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(rr.Hp < rh0, $"a turret left standing shoots what comes near it ({rh0 - rr.Hp:0.0} damage)");
@@ -3084,7 +3106,8 @@ public partial class _Test : Node
             // ── SNIPER: 3 s locked in place, then 150 down a 2500 u line ──
             await SetClass(ShipClass.HeavySniper);
             var sn = Me; var dTgt = H.GetNode<TargetDummy>("TargetDummy1");
-            sn.Position = dTgt.Position + new Vector2(0, 1400); sn.Velocity = Vector2.Zero; sn.Rotation = 0f; await Wait(0.3);
+            float railAt = Vary(900f, 2200f);                     // anywhere inside its 2500 u reach
+            sn.Position = dTgt.Position + new Vector2(0, railAt); sn.Velocity = Vector2.Zero; sn.Rotation = 0f; await Wait(0.3);
             double dmg0 = dTgt.Total;
             sn.UseAbility("railgun", 0); await Wait(0.2);
             var wasAt = sn.Position;
@@ -3093,13 +3116,13 @@ public partial class _Test : Node
                   $"the railgun charges with the hull locked: W and A move it nowhere ({sn.Position.DistanceTo(wasAt):0.00} u)");
             for (int i = 0; i < 60 * 4 && dTgt.Total == dmg0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(Math.Abs(dTgt.Total - dmg0 - 150) < 0.01 && !sn.Statuses.Has(Status.Disabled),
-                  $"then 150 lands 1400 u away, on the line, and the hull is free again ({dTgt.Total - dmg0:0.0})");
+                  $"then 150 lands {railAt:0} u away, on the line, and the hull is free again ({dTgt.Total - dmg0:0.0})");
 
             // ── WARRIOR: two and a half times its speed, half the damage, then the EMP ──
             await SetClass(ShipClass.HeavyWarrior);
             var wr = Me; wr.Position = yonder; wr.Velocity = Vector2.Zero; await Wait(0.2);
-            var e1 = H.SpawnRaider(yonder + new Vector2(180, 0)); e1.Hp = 500;
-            var e2 = H.SpawnRaider(yonder + new Vector2(900, 0)); e2.Hp = 500;
+            var e1 = H.SpawnRaider(VaryNear(yonder, 200f)); e1.Hp = 500;        // inside the EMP's 260 u
+            var e2 = H.SpawnRaider(VaryNear(yonder, 1100f) + Vector2.Right.Rotated(VaryAngle()) * 700f); e2.Hp = 500;   // well outside it
             var e2Home = e2.Position;
             await Wait(0.1);
             double top0 = wr.Stats["max_speed"];
@@ -3164,7 +3187,7 @@ public partial class _Test : Node
             // ── WRAITH: five seconds nothing hostile can pick it ──
             await SetClass(ShipClass.LightWraith);
             var wt = Me; wt.Position = yonder; wt.Velocity = Vector2.Zero; await Wait(0.2);
-            var hunter = H.SpawnRaider(yonder + new Vector2(260, 0)); hunter.Hp = 4000;
+            var hunter = H.SpawnRaider(VaryNear(yonder, 500f)); hunter.Hp = 4000;
             for (int i = 0; i < 60 * 4 && hunter.Target != wt; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(hunter.Target == wt, "a raider comes for the wraith");
             wt.UseAbility("stealth", 0);
