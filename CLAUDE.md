@@ -28,6 +28,11 @@ Anything in the tree you did not write: report it in one line, then ADOPT or REV
 
 - Batch edits. No engine run during development, ever. Compile checks (`typecheck.ps1`,
   `dotnet build`) are free — use them; they are not tests.
+- **The harness is source.** `tools/smoketest/SmokeTest.cs.txt` and `tools/screens/Shots.cs.txt`
+  are compiled INTO the game by their runners. A rename or a deletion makes them callers you must
+  fix in the same edit. `typecheck.ps1` compiles them with `scripts/`, so it costs a minute;
+  before it did, it cost an engine run three minutes in, after a full copy and import.
+- **Never start an engine run while a compile check is red.** Green `-Quick` first, always.
 - Write the smoke checks for a feature as you write the feature, in the same edit pass.
 - **Generalise, never special-case.** A new boss, class, enemy, ability or upgrade must be a row of
   data plus parameters, not a new `if`. If a request forces a special case, the system is wrong:
@@ -93,7 +98,9 @@ python tools\make_sounds.py      # boss/ability sounds
 python tools\map.py · tools\snapshot.ps1 · tools\manifest.ps1
 ```
 Godot is found by `tools\find-godot.ps1`. `-Update` regenerates map, snapshot and manifest in that
-order before the integrity step.
+order, then checks integrity. **Integrity is asked only in `-Update`**: anywhere else the
+manifest is still the last change's, so it could only ever say FAILED — and a red line in the
+verdict of every mid-session run is how a real failure gets waved through.
 
 ## 8 · Record (same commit as the code)
 

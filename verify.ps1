@@ -109,6 +109,10 @@ if ($Update) {
     }
 }
 
+# Only after -Update, which has just rebuilt the manifest. In -Quick and -Fast the manifest is
+# still the LAST change's, so this could only ever say FAILED -- a red line in every mid-session
+# run, which is how a real failure gets waved through. It is not skipped there, it is not asked.
+if ($Update) {
 Step 'integrity (version/MANIFEST.sha256)' {
     $sha = 'C:\Program Files\Git\usr\bin\sha256sum.exe'
     if (-not (Test-Path $sha)) { Write-Host "  sha256sum not found (Git for Windows); skipped"; return $true }
@@ -117,6 +121,7 @@ Step 'integrity (version/MANIFEST.sha256)' {
     Write-Host ("  {0} files, {1} mismatched" -f @($r | Where-Object { $_ -match ': OK$' }).Count, $bad.Count)
     $bad | ForEach-Object { Write-Host "    $_" }
     $bad.Count -eq 0
+}
 }
 
 Write-Host ""

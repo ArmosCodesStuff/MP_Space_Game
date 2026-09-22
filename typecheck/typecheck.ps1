@@ -28,6 +28,19 @@ if (-not $csc -or -not $refDir -or -not (Test-Path $refDir)) {
 
 $refs = Get-ChildItem "$refDir\*.dll" | ForEach-Object { "-r:$($_.FullName)" }
 $outDll = Join-Path $env:TEMP 'typecheck.dll'
+
+# THE HARNESS IS SOURCE TOO. SmokeTest.cs.txt and Shots.cs.txt are compiled INTO the game by the
+# runners (as scripts/_Test.cs and scripts/_Shots.cs), but `dotnet build` never sees them -- so a
+# rename that missed a call in them used to compile clean here and only fail three minutes into an
+# engine run, after a full copy and import. They are checked with everything else now: a .txt is
+# copied to a .cs beside the temp output and handed to the same compiler.
+$harness = @()
+foreach ($h in @('..\tools\smoketest\SmokeTest.cs.txt', '..\tools\screens\Shots.cs.txt')) {
+  if (-not (Test-Path $h)) { continue }
+  $dst = Join-Path $env:TEMP ('typecheck_' + [IO.Path]::GetFileNameWithoutExtension($h))
+  Copy-Item $h $dst -Force
+  $harness += $dst
+}
 if (Test-Path $outDll) { Remove-Item $outDll -Force }
 
 # GodotSharp.dll is gitignored -- a build dependency, not game content -- so every fresh clone or
@@ -46,11 +59,11 @@ $haveReal = Test-Path 'GodotSharp.dll'
 if ($haveReal) {
   $extra = @('-r:GodotSharp.dll')
   if (Test-Path 'GodotSharpEditor.dll') { $extra += '-r:GodotSharpEditor.dll' }
-  $src = Get-ChildItem '..\scripts\*.cs' | ForEach-Object { $_.FullName }
+  $src = @(Get-ChildItem '..\scripts\*.cs' | ForEach-Object { $_.FullName }) + $harness
   $mode = 'REAL GodotSharp.dll'
 } else {
   $extra = @()
-  $src = @(Get-ChildItem '..\scripts\*.cs' | ForEach-Object { $_.FullName }) + @('GodotStub.cs')
+  $src = @(Get-ChildItem '..\scripts\*.cs' | ForEach-Object { $_.FullName }) + $harness + @('GodotStub.cs')
   $mode = 'hand-written stub (weaker -- drop GodotSharp.dll here to fix)'
 }
 

@@ -3113,7 +3113,7 @@ public partial class _Test : Node
             if (boss.EscortsOut)
             {
                 double predicted = (double)typeof(Lancer).GetField("_beamPredict", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(boss);
-                me2.PinFor(0.3);
+                me2.ApplyStatus(Status.Pinned, 0.3);
                 await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                 Check(boss.BeamCharging && boss.ChargeCause == "pinned" && boss.ArmedFor < predicted - 0.2,
                       $"the charge starts the moment the pilot is pinned, before the web was predicted to land ({boss.ChargeCause} at {boss.ArmedFor:0.00} s, predicted {predicted:0.00} s)");
@@ -3150,7 +3150,7 @@ public partial class _Test : Node
             var (segA, segB) = boss.BeamSegment();
             var farOut = segA + (segB - segA).Normalized() * 5000f;
             Check(Lancer.BeamLength == 10000f && Math.Abs((beam.B - beam.A).Length() - 10000f) < 1f
-                  && Boss.DistToSegment(farOut, segA, segB) < 1f,
+                  && Combat.DistToSegment(farOut, segA, segB) < 1f,
                   $"beam and indicator both reach 10000 u -- a point 5000 u out is inside it, where the old 1800 u fell short (indicator {(beam.B - beam.A).Length():0} u)");
             // HARD LOCKED while it charges -- with the pilot FREE: the old boss froze too once the pilot
             // was pinned, and tracked it otherwise, so only a free pilot tells the two apart. Point
@@ -3981,7 +3981,7 @@ public partial class _Test : Node
             third?.Hit(250, third.Position, "test:reconnect");
             if (GodotObject.IsInstanceValid(early)) H.RaiderDown(early);
             // pinned by the HOST, the way a raider's web does it: the guest must feel it (it checks)
-            ships.FirstOrDefault(s => s.Pilot == "Guesty")?.PinFor(3.0);
+            ships.FirstOrDefault(s => s.Pilot == "Guesty")?.ApplyStatus(Status.Pinned, 3.0);
             // and a salvager lost, the way a raid takes one: the guest must see its rebuild run
             H.Yard.Gatherers.FirstOrDefault(x => x.Kind == GatherKind.Salvager)?.TakeDamage(1e6);
             // hosting here (no router, no internet): both answers come back empty -> network only
