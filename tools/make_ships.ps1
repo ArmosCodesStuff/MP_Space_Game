@@ -17,7 +17,8 @@
 #
 # It prints every mount it placed, in world units, for PlayerShip.Art and Raider.
 # Run: powershell -ExecutionPolicy Bypass -File tools\make_ships.ps1 [-Preview <png>]
-param([string]$Preview = '', [double]$BattleshipTurrets = 2.5, [double]$DestroyerTurrets = 1.3085, [double]$CarrierTurrets = 1.9178)
+param([string]$Preview = '', [double]$BattleshipTurrets = 2.5, [double]$DestroyerTurrets = 1.3085, [double]$CarrierTurrets = 1.9178,
+      [string]$Single = '', [string]$Out = '', [int]$FinalH = 600, [switch]$Turn, [switch]$KeepRight)
 $ErrorActionPreference = 'Stop'
 $Root = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $Src = Join-Path $Root 'art_source'
@@ -494,6 +495,19 @@ function U($s, [int]$i, [double]$length) {
     '({0:0.00}, {1:0.00})' -f (($p.X - $s.W / 2) * $k), (($p.Y - $s.H / 2) * $k)
 }
 function Out-Sheet($s, [string]$name) { $s.Save((Join-Path $Root $name)); "{0,-24} {1} x {2}" -f $name, $s.W, $s.H }
+
+# ONE SPRITE, from any drawing: the same treatment as a hull (nose up, symmetrical, sharpened, cut
+# out), written wherever asked. For art taken from a sheet (tools/... cut) rather than art_source.
+if ($Single) {
+    $b = New-Object System.Drawing.Bitmap $Single
+    $sh = [Sheet]::Paper($b); $b.Dispose()
+    $sh = [Sheet]::Hull($sh, [bool]$Turn, $FinalH, -not $KeepRight, 1.2, 0.12, 0.88, 1)
+    $dest = if ($Out) { $Out } else { [IO.Path]::GetFileName($Single) }
+    if (-not [IO.Path]::IsPathRooted($dest)) { $dest = Join-Path $Root $dest }
+    $sh.Save($dest)
+    "{0,-26} {1} x {2}" -f ([IO.Path]::GetFileName($dest)), $sh.W, $sh.H
+    return
+}
 
 # ── the carrier, 283.5 u (25% smaller than the battleship): nose up already ──
 $c = Load 'carrier.png'
