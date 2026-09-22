@@ -77,30 +77,39 @@ public static class Combat
     // is the one that deals damage; a world with guests to tell hooks ShellFired / TorpedoFired
     // and sends the launch on, and guests fly a cosmetic copy.
     public static Node World;
-    public static System.Action<Shell> ShellFired;
-    public static System.Action<Torpedo> TorpedoFired;
-    public static System.Action<Slug> SlugFired;
+    // One hook for everything that flies: the world sends the launch on to its guests, which fly a
+    // cosmetic copy of their own (the run is deterministic, so it lands where the host's lands).
+    public static System.Action<Shot> ShotFired;
 
-    // a boss's hostile round (the Drake's shells and scrap): straight, dodgeable, and never a point-
-    // defence target (see Slug)
-    public static void FireSlug(Vector2 from, Vector2 dir, float speed, float range, float radius, double damage,
-                                Slug.Kind look, int variant, string hitSource)
+    // THE ONE DOOR EVERYTHING THAT FLIES COMES THROUGH. `kind` is a row of Shots.All -- what it
+    // hits, how it ends, what it looks like; everything else is the weapon's own numbers. The
+    // host's copy deals the damage and the world tells its guests to fly a cosmetic one.
+    public static Shot Fire(int kind, Vector2 from, Vector2 dir, float speed, float range, double damage,
+                            float radius = 0f, int targetId = 0, float turnRate = 0f, PlayerShip source = null,
+                            string hitSource = null, float size = 1f, int variant = 0)
     {
-        if (World == null) return;
-        var s = new Slug { Position = from, Dir = dir.Normalized(), Speed = speed, Range = range, Radius = radius, Damage = damage,
-                           Look = look, Variant = variant, HitSource = hitSource };
+        if (World == null) return null;
+        var s = new Shot { Kind = kind, Position = from, Dir = dir.Normalized(), Speed = speed, Range = range,
+                           Damage = damage, Radius = radius, TargetId = targetId, TurnRate = turnRate,
+                           Source = source, HitSource = hitSource, Size = size, Variant = variant,
+                           NetId = Shots.Of(kind).Interceptable ? NextMissileId() : 0 };
         World.AddChild(s);
-        SlugFired?.Invoke(s);
+        ShotFired?.Invoke(s);
+        return s;
     }
 
-    // a main-gun shell (battleship, destroyer): straight, and it hits the first hostile it touches
+    // a main gun's round: straight, and it hits the first thing that is not a missile
     public static void FireShell(Vector2 from, Vector2 dir, float speed, float range, double damage, PlayerShip source)
-    {
-        if (World == null) return;
-        var s = new Shell { Position = from, Dir = dir.Normalized(), Speed = speed, Range = range, Damage = damage, Source = source };
-        World.AddChild(s);
-        ShellFired?.Invoke(s);
-    }
+        => Fire(Shots.Shell, from, dir, speed, range, damage, source: source);
+
+    // a boss's dodgeable round, and the scrap of the same volley: never a point-defence target,
+    // because a round that is MEANT to be dodged, and that point defence could delete, would never
+    // need dodging
+    public static void FireSlug(Vector2 from, Vector2 dir, float speed, float range, float radius, double damage,
+                                bool scrap, int variant, string hitSource)
+        => Fire(scrap ? Shots.Scrap : Shots.Slug, from, dir, speed, range, damage, radius,
+                hitSource: hitSource, variant: variant);
+
     // Unguided torpedoes pass targetId 0; a missile passes its target and a small turn rate, and
     // heavy for its looks. hostile = fired BY an enemy, so it seeks and hits player ships -- and it
     // gets an id, so point defence can shoot it down on every peer at once. source: the player
@@ -108,18 +117,12 @@ public static class Combat
     public static void LaunchTorpedo(Vector2 from, Vector2 dir, float speed, float range, double damage,
                                      int targetId = 0, float turnRate = 0f, bool heavy = false, bool hostile = false,
                                      PlayerShip source = null, string hitSource = null, float size = 1f)
-    {
-        if (World == null) return;
-        var t = new Torpedo { Position = from, Dir = dir.Normalized(), Speed = speed, Range = range, Damage = damage, TargetId = targetId,
-                              TurnRate = turnRate, Heavy = heavy, HostileFire = hostile, Source = source, HitSource = hitSource, Size = size,
-                              NetId = hostile ? NextMissileId() : 0 };
-        World.AddChild(t);
-        TorpedoFired?.Invoke(t);
-    }
+        => Fire(hostile ? Shots.Seeker : heavy ? Shots.Missile : Shots.Torpedo, from, dir, speed, range, damage,
+                targetId: targetId, turnRate: turnRate, source: source, hitSource: hitSource, size: size);
 
     // Dropped by the world on its way out. EVERY hook set by that world must go: each one is a
     // lambda holding the Hub, so one left behind is a freed node the next shot calls into, and a
     // Hub that can never be collected once you are back at the menu.
     // A world ends: its lists, its hooks (each a lambda holding that world) and its ids.
-    public static void Clear() { Hostiles.Clear(); Players.Clear(); OnFlash = null; World = null; ShellFired = null; TorpedoFired = null; SlugFired = null; Fx.On = null; NetIds.Reset(); }
+    public static void Clear() { Hostiles.Clear(); Players.Clear(); OnFlash = null; World = null; ShotFired = null; Fx.On = null; NetIds.Reset(); }
 }

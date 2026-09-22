@@ -742,8 +742,12 @@ public partial class _Test : Node
     }
     // class changes go through the creator path now (there are no class hotkeys)
     async Task SetClass(ShipClass c) { Character.Class = c; Priv(H, "ApplyLocalIdentity"); await Wait(0.1); }
-    System.Collections.Generic.List<(Vector2 p, float age)> Smoke(Torpedo t) =>
-        (System.Collections.Generic.List<(Vector2 p, float age)>)typeof(Torpedo).GetField("_smoke", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(t);
+    System.Collections.Generic.List<(Vector2 p, float age)> Smoke(Shot t) =>
+        (System.Collections.Generic.List<(Vector2 p, float age)>)typeof(Shot).GetField("_smoke", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(t);
+    // the three projectile classes are one flyer with a row each now (Shots.All)
+    System.Collections.Generic.IEnumerable<Shot> Missiles() => Nodes<Shot>().Where(x => x.IsMissile);
+    System.Collections.Generic.IEnumerable<Shot> Shells() => Nodes<Shot>().Where(x => x.Kind == Shots.Shell);
+    System.Collections.Generic.IEnumerable<Shot> Slugs() => Nodes<Shot>().Where(x => x.Kind == Shots.Slug || x.Kind == Shots.Scrap);
     Vector2 Scr(Vector2 w) => GetViewport().GetCanvasTransform() * w;
     async Task Park(Vector2 at, float rot = 0) { var s = Me; s.Position = at; s.Velocity = Vector2.Zero; s.Rotation = rot; await Wait(2.5); s.Velocity = Vector2.Zero; }
 
@@ -1388,11 +1392,11 @@ public partial class _Test : Node
                   $"three levels of hauler point defence: +5% each, 1.15 a shot ({hauler.Spec(true).Damage:0.000})");
             ((System.Collections.Generic.Dictionary<string, int>)typeof(Yard).GetField("_levels", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(Y)).Remove("hauler_pd_damage");
             // a hostile missile crossing the pad is shot down without anyone opening a window
-            int down0 = Torpedo.Intercepted;
+            int down0 = Shot.Intercepted;
             var mp = hauler.Position + new Vector2(0, -250);
             Combat.LaunchTorpedo(mp, Vector2.Down, 40f, 600f, 5, 0, 0f, heavy: false, hostile: true);
-            for (int i = 0; i < 60 * 8 && Torpedo.Intercepted == down0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            Check(Torpedo.Intercepted > down0, "and it shoots down a missile that comes at it, with nobody flying it");
+            for (int i = 0; i < 60 * 8 && Shot.Intercepted == down0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(Shot.Intercepted > down0, "and it shoots down a missile that comes at it, with nobody flying it");
         }
 
         // bought for real: five levels to 95%, and no sixth
@@ -1682,7 +1686,7 @@ public partial class _Test : Node
             AimWorld(ship.Position + new Vector2(450, 450)); await Wait(2.5);
             float off0 = mainsB.Min(Off);
             await Wait(TargetDummy.IdleReset + 0.2); d1.ResetMeter();
-            var seen = new System.Collections.Generic.HashSet<Shell>(Nodes<Shell>());
+            var seen = new System.Collections.Generic.HashSet<Shot>(Shells());
             var volleys = new System.Collections.Generic.List<(double t, int n)>();
             double bc0 = ship.Clock, cdAtLast = -1, speedAtFire = -1; float offAtFire = -1; string barAiming = null, barFiring = null;
             AimWorld(d1.Position);
@@ -1693,7 +1697,7 @@ public partial class _Test : Node
                 await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                 AimWorld(d1.Position);                                     // the camera follows the ship: keep the cursor on the dummy
                 if (barAiming == null && ship.BroadsideWindupLeft > 0) barAiming = AbilityBar.StateOf(ship, "broadside", H.Selected).Line;
-                int fresh = Nodes<Shell>().Count(s => seen.Add(s));
+                int fresh = Shells().Count(s => seen.Add(s));
                 if (fresh == 0) continue;
                 if (volleys.Count == 0) { offAtFire = mainsB.Max(Off); speedAtFire = ship.SpeedAhead; }
                 volleys.Add((ship.Clock - bc0, fresh));
@@ -1713,15 +1717,15 @@ public partial class _Test : Node
             Check(Math.Abs(d1.Total - 268.5) < 0.01, $"every shell lands: 3 volleys x 4 shells x 22.375 (17.9 x1.25 by the chips) = 268.5 ({d1.Total:0.000})");
             Check(cdAtLast > 13.9 && cdAtLast <= 14 && AbilityBar.StateOf(ship, "broadside", H.Selected).Busy > 0.8f,
                   $"the 14 s cooldown starts with the last volley, and the slot shows it ({cdAtLast:0.00} s)");
-            int shellsBefore = Nodes<Shell>().Count(s => seen.Add(s));
+            int shellsBefore = Shells().Count(s => seen.Add(s));
             Key(global::Godot.Key.F); await Wait(0.8);
-            Check(ship.BroadsideWindupLeft == 0 && ship.BroadsideVolleysLeft == 0 && Nodes<Shell>().Count(s => seen.Add(s)) == 0,
+            Check(ship.BroadsideWindupLeft == 0 && ship.BroadsideVolleysLeft == 0 && Shells().Count(s => seen.Add(s)) == 0,
                   "F during the cooldown does nothing");
             ship.Sl("broadside").Cool = 0.02;                       // the slot by name, not a private field
             await Wait(0.1); Key(global::Godot.Key.F); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(ship.BroadsideWindupLeft > 0.4, $"once the cooldown is over, F winds up again ({ship.BroadsideWindupLeft:0.00} s)");
             await Wait(1.5);
-            Check(Nodes<Torpedo>().All(t => t.HostileFire), "a battleship launches no missile of its own");
+            Check(Missiles().All(t => t.HostileFire), "a battleship launches no missile of its own");
         }
 
         // ── the main guns fire SHELLS: straight, at 650 u/s (the battleship's), damage on arrival ──
@@ -1731,8 +1735,8 @@ public partial class _Test : Node
             AimWorld(gd.Position); await Wait(1.2);                                   // turrets swing onto it
             await Wait(TargetDummy.IdleReset + 0.2); gd.ResetMeter();
             Input.ParseInputEvent(new InputEventKey { Keycode = global::Godot.Key.Space, PhysicalKeycode = global::Godot.Key.Space, Pressed = true });
-            Shell sh1 = null;
-            for (int i = 0; i < 90 && sh1 == null; i++) { AimWorld(gd.Position); sh1 = Nodes<Shell>().FirstOrDefault(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            Shot sh1 = null;
+            for (int i = 0; i < 90 && sh1 == null; i++) { AimWorld(gd.Position); sh1 = Shells().FirstOrDefault(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
             Input.ParseInputEvent(new InputEventKey { Keycode = global::Godot.Key.Space, PhysicalKeycode = global::Godot.Key.Space, Pressed = false });
             double atFire = gd.Total;
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
@@ -1852,16 +1856,14 @@ public partial class _Test : Node
         // this all happens inside one frame, so nothing ever sees the cleared state.
         // The hooks go back through the world's OWN installer (Hub.Hooks), not a list kept here:
         // this check used to restore four of them by hand, so every hook added after it was
-        // written -- SlugFired, and then Fx.On -- was silently dropped for the rest of the run,
+        // written -- the slug hook, and then Fx.On -- was silently dropped for the rest of the run,
         // and the effects raised after this point went up on nobody's screen.
         var keepHostiles = Combat.Hostiles.ToList(); var keepPlayers = Combat.Players.ToList();
         Combat.Clear();
-        bool hooksDropped = Combat.OnFlash == null && Combat.World == null && Combat.ShellFired == null
-                            && Combat.TorpedoFired == null && Combat.SlugFired == null && Fx.On == null;
+        bool hooksDropped = Combat.OnFlash == null && Combat.World == null && Combat.ShotFired == null && Fx.On == null;
         Priv(H, "Hooks");
         Combat.Hostiles.AddRange(keepHostiles); Combat.Players.AddRange(keepPlayers);
-        Check(hooksDropped && Combat.OnFlash != null && Combat.World != null && Combat.ShellFired != null
-              && Combat.TorpedoFired != null && Combat.SlugFired != null && Fx.On != null,
+        Check(hooksDropped && Combat.OnFlash != null && Combat.World != null && Combat.ShotFired != null && Fx.On != null,
               "Combat.Clear lets go of the world and every hook it installed, and the world puts every one of them back");
 
         // ── A REFIT, on the battleship: the hull keeps its fraction (keeping the damage taken let a
@@ -1915,14 +1917,14 @@ public partial class _Test : Node
             ship.Staggered = false;
             // its two guns: Space fires both (salvo)
             AimWorld(d1.Position); await Wait(1.5);
-            var seenD = new System.Collections.Generic.HashSet<Shell>(Nodes<Shell>());
+            var seenD = new System.Collections.Generic.HashSet<Shot>(Shells());
             KeyDown(global::Godot.Key.Space); await Wait(0.15); KeyUp(global::Godot.Key.Space);
-            int ddShells = Nodes<Shell>().Count(s => seenD.Add(s));
+            int ddShells = Shells().Count(s => seenD.Add(s));
             Check(ddShells == 2, $"Space fires the destroyer's two main guns ({ddShells} shells)");
             await Wait(2.0);
 
             // ── the missile BURST: a magazine of three bursts; a selected target in range, or it refuses ──
-            System.Collections.Generic.List<Torpedo> Burst() => Nodes<Torpedo>().Where(x => x.Heavy && !x.HostileFire && Smoke(x).Count < 40).ToList();
+            System.Collections.Generic.List<Shot> Burst() => Missiles().Where(x => x.Heavy && !x.HostileFire && Smoke(x).Count < 40).ToList();
             string SlotMsg() => AbilityBar.StateOf(ship, "missile", H.Selected) is var st && st.Fail ? st.Line : null;
             Check(ship.Stats["missile_mag"] == 3 && ship.MissilesLoaded == 3, "the destroyer starts with a magazine of three bursts");
             // Esc only if something is selected: with nothing selected, Esc opens the Esc menu
@@ -1960,9 +1962,9 @@ public partial class _Test : Node
             Key(global::Godot.Key.F); await Wait(0.5);
             Check(ship.MissilesLoaded == 0 && Burst().Count - before3 == 3, $"the third burst empties the magazine ({Burst().Count - before3} new missiles, {ship.MissilesLoaded} left)");
             await Wait(0.7);
-            var flying = new System.Collections.Generic.HashSet<Torpedo>(Nodes<Torpedo>());
+            var flying = new System.Collections.Generic.HashSet<Shot>(Missiles());
             Key(global::Godot.Key.F); await Wait(0.1);
-            Check(Nodes<Torpedo>().All(flying.Contains), "empty magazine: F does nothing");
+            Check(Missiles().All(flying.Contains), "empty magazine: F does nothing");
             Key(global::Godot.Key.R); await Wait(0.1);
             Check(ship.Reloading && AbilityBar.StateOf(ship, "reload", H.Selected).Busy > 0.9f, "R starts the reload; the bar shows it");
             await Wait(9.2);
@@ -2249,8 +2251,8 @@ public partial class _Test : Node
         Check(launchDist > 1850 && launchDist <= 1901, $"the bombers close to 1900 u before they launch ({launchDist:0} u)");
         var fspr = Nodes<Sprite2D>(Nodes<Wing>().First(w => w.Carrier == ship && !w.IsBomber)).First(); var bspr = Nodes<Sprite2D>(crawl).First();
         Check(Math.Abs(fspr.Texture.GetHeight() * fspr.Scale.Y - 17f) < 0.1f && Math.Abs(bspr.Texture.GetHeight() * bspr.Scale.Y - 28.125f) < 0.1f, "fighters 17 u, bombers 28.1 u (snout-nosed, 25% smaller)");
-        Torpedo first = null;
-        for (int i = 0; i < 1200 && first == null; i++) { first = Nodes<Torpedo>().FirstOrDefault(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+        Shot first = null;
+        for (int i = 0; i < 1200 && first == null; i++) { first = Missiles().FirstOrDefault(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
         Check(first != null, "bombers launch torpedoes");
         // measure over an exact frame count: timers round up to the next frame
         var dir0 = first.Dir; var q0 = first.GlobalPosition;
@@ -3017,11 +3019,11 @@ public partial class _Test : Node
             var spot2 = Hub.BasePos + new Vector2(0, -500);        // north of the base: clear of the hauler pad's own gun
             var rc = H.SpawnRaider(spot2); rc.Hp = 1000;
             int mz = bd.MissilesFired; double lz2 = bd.LaserDealt;
-            Torpedo bm = null;
+            Shot bm = null;
             for (int i = 0; i < 60 * 6 && bm == null; i++)
             {
                 rc.Position = spot2;
-                bm = Nodes<Torpedo>().FirstOrDefault(t => !t.HostileFire && !t.Heavy && t.TargetId == rc.NetId);
+                bm = Missiles().FirstOrDefault(t => !t.HostileFire && !t.Heavy && t.TargetId == rc.NetId);
                 await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             }
             var bp1 = bm?.GlobalPosition ?? Vector2.Zero;
@@ -3260,6 +3262,30 @@ public partial class _Test : Node
             // because that was the only drawing that reached a guest, and the echo's burst was
             // added straight to the host's own tree where nobody else ever saw it.
             {
+                // ── EVERYTHING THAT FLIES IS ONE FLYER WITH A ROW ──
+                // Three classes (Shell, Slug, Torpedo) with one copy each of the same sweep,
+                // lifetime, cosmetic-copy rule and hit. Six rows and one node now, and ONE launch
+                // on the wire where there were three.
+                Check(Shots.All.Length == 6
+                      && !Shots.Of(Shots.Shell).AtPlayers && Shots.Of(Shots.Shell).Sweep == 6f && Shots.Of(Shots.Shell).Burst == 0
+                      && Shots.Of(Shots.Slug).AtPlayers && Shots.Of(Shots.Scrap).AtPlayers
+                      && Shots.Of(Shots.Slug).Burst == 0.25 && Shots.Of(Shots.Scrap).Look == ShotLook.Shard
+                      && Shots.Of(Shots.Missile).Heavy && !Shots.Of(Shots.Torpedo).Heavy
+                      && Shots.Of(Shots.Seeker).Interceptable && !Shots.Of(Shots.Missile).Interceptable
+                      && Shots.All.Count(x => x.Smoke) == 3,
+                      "six kinds of shot, each a row: a shell, a boss's slug and its scrap, a torpedo, a heavy missile, and the seeker point defence exists for");
+                // the sweep the shell and the rock share: a step longer than a hull is how a shot
+                // passes through it between frames
+                {
+                    int seen = 0;
+                    bool struck = Shots.Sweep(Vector2.Zero, new Vector2(60, 0), 6f, _ => { seen++; return false; });
+                    bool stops = Shots.Sweep(Vector2.Zero, new Vector2(60, 0), 6f, _ => true);
+                    int once = 0;
+                    Shots.Sweep(Vector2.Zero, new Vector2(600, 0), 0f, _ => { once++; return false; });
+                    Check(seen == 10 && !struck && stops && once == 1,
+                          $"Shots.Sweep walks a 60 u step in ten 6 u tests, stops at the first touch, and tests only the end point when a row asks for no sweep ({seen}, {once})");
+                }
+
                 Check(Fx.All.Length == 7 && Fx.Of(Fx.Wave).Shape == FxShape.Ring
                       && Fx.Of(Fx.Emp).Shape == FxShape.Spokes && Fx.Of(Fx.Echo).Shape == FxShape.Spokes
                       && Fx.Of(Fx.Rail).Shape == FxShape.Bar && Fx.Of(Fx.Burst).Shape == FxShape.Burst
@@ -3342,9 +3368,9 @@ public partial class _Test : Node
             var marks = new List<Raider>();
             for (int i = 0; i < 4; i++) { var m = H.SpawnRaider(yonder + new Vector2(300 + 60 * i, -200 + 90 * i)); m.Hp = 3000; marks.Add(m); }
             await Wait(0.2);
-            int torp0 = Nodes<Torpedo>().Count();
+            int torp0 = Missiles().Count();
             wd.UseAbility("hunters", 0); await Wait(0.2);
-            var fired = Nodes<Torpedo>().Where(t => !t.HostileFire && t.TargetId != 0).ToList();
+            var fired = Missiles().Where(t => !t.HostileFire && t.TargetId != 0).ToList();
             Check(fired.Count >= 6 - torp0 && fired.Select(t => t.TargetId).Distinct().Count() >= 4,
                   $"six hunter-seekers away, each on a target of its own ({fired.Count} out, {fired.Select(t => t.TargetId).Distinct().Count()} targets)");
             foreach (var m in marks) m.TakeDamage(99999);
@@ -3514,7 +3540,7 @@ public partial class _Test : Node
                     if (tVolley < 0 && boss.Volleys > 0)
                     {
                         tVolley = arenaT;
-                        var big = Nodes<Torpedo>().Where(x => x.HostileFire && x.Size == 2f).ToList();
+                        var big = Missiles().Where(x => x.HostileFire && x.Size == 2f).ToList();
                         trident = big.Count;
                         if (big.Count == 3) spread = big.Max(x => x.Dir.Angle()) - big.Min(x => x.Dir.Angle());
                     }
@@ -3624,15 +3650,15 @@ public partial class _Test : Node
             // beam below has to be the real shot, and the damage check at the end of this scenario is
             // the only thing that proves the locked line still lands.
             boss.Rotation = (me2.Position - boss.Position).Angle() + Mathf.Pi / 2f;
-            int down0 = Torpedo.Intercepted;
-            for (int i = 0; i < 60 * 10 && Torpedo.Intercepted == down0; i++)
+            int down0 = Shot.Intercepted;
+            for (int i = 0; i < 60 * 10 && Shot.Intercepted == down0; i++)
             {
                 if (!Me.PdActive && Me.PdReady) Key(global::Godot.Key.Q);
                 await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             }
-            Check(Torpedo.Intercepted > down0, "point defence shoots the boss's missiles down");
+            Check(Shot.Intercepted > down0, "point defence shoots the boss's missiles down");
             Check(!H.Raiders.Any(r => r.IsEscort), "point defence, switched on, kills the beam's escorts");
-            var aMissile = Nodes<Torpedo>().FirstOrDefault(t => t.HostileFire);
+            var aMissile = Missiles().FirstOrDefault(t => t.HostileFire);
             Check(Turret.PdPriority(boss) == 2 && (aMissile == null || Turret.PdPriority(aMissile) == 0), "point defence takes missiles before anything else");
             var tiny = new TinyTarget();
             Check(Turret.PdPriority(tiny) == 1 && Turret.PdPriority(tiny) < Turret.PdPriority(boss)
@@ -3825,13 +3851,13 @@ public partial class _Test : Node
                     typeof(Drake).GetField("_throw", nf).SetValue(dk, 999.0); typeof(Drake).GetField("_shotgun", nf).SetValue(dk, 999.0);
                     // MAIN GUN: a slow shell every 2.5 s (2.4 DPS at 6 a shell), dodged by moving
                     me3.Position = dk.Position + new Vector2(0, 700); await Wait(0.1);
-                    var shellSeen = new System.Collections.Generic.HashSet<Slug>(Nodes<Slug>());
-                    var shellAt = new System.Collections.Generic.List<double>(); Slug shell = null; double clock = 0;
+                    var shellSeen = new System.Collections.Generic.HashSet<Shot>(Slugs());
+                    var shellAt = new System.Collections.Generic.List<double>(); Shot shell = null; double clock = 0;
                     double gun0 = me3.DamageBySource.GetValueOrDefault("boss:gun");
                     for (int i = 0; i < 60 * 7 && shellAt.Count < 2; i++)
                     {
                         await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); clock += GetProcessDeltaTime();
-                        foreach (var s in Nodes<Slug>().Where(s => s.Look == Slug.Kind.Shell && shellSeen.Add(s))) { shellAt.Add(clock); shell = s; }
+                        foreach (var s in Slugs().Where(s => s.Kind == Shots.Slug && shellSeen.Add(s))) { shellAt.Add(clock); shell = s; }
                     }
                     float sspd = 0;
                     if (shell != null && GodotObject.IsInstanceValid(shell)) { var sp0 = shell.Position; for (int i = 0; i < 10; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); sspd = GodotObject.IsInstanceValid(shell) ? (shell.Position - sp0).Length() / (10f / 60f) : 0; }
@@ -3850,11 +3876,11 @@ public partial class _Test : Node
                     for (int i = 0; i < 60 * 3 && !dk.FanWinding; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                     var landed = dk.Position; float warpOff = landed.DistanceTo(me3.Position);
                     var fan = Nodes<Telegraph>().Where(t => t.Line && Math.Abs(t.Duration - 1.875) < 1e-6).ToList();
-                    var scrapSeen = new System.Collections.Generic.HashSet<Slug>(Nodes<Slug>());
+                    var scrapSeen = new System.Collections.Generic.HashSet<Shot>(Slugs());
                     await Wait(1.0);
                     bool heldStill = dk.Position.DistanceTo(landed) < 0.01f && dk.Locked;
-                    var scrap = new System.Collections.Generic.List<Slug>();
-                    for (int i = 0; i < 60 * 2 && scrap.Count < 7; i++) { scrap.AddRange(Nodes<Slug>().Where(s => s.Look == Slug.Kind.Scrap && scrapSeen.Add(s))); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+                    var scrap = new System.Collections.Generic.List<Shot>();
+                    for (int i = 0; i < 60 * 2 && scrap.Count < 7; i++) { scrap.AddRange(Slugs().Where(s => s.Kind == Shots.Scrap && scrapSeen.Add(s))); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
                     float aimTo = (me3.Position - landed).Angle();
                     var offs = scrap.Select(s => Mathf.RadToDeg(Mathf.AngleDifference(aimTo, s.Dir.Angle()))).OrderBy(a => a).ToList();
                     bool fanned = offs.Count == 7 && offs.Zip(new[] { -30f, -20f, -10f, 0f, 10f, 20f, 30f }, (a, b) => Math.Abs(a - b) < 0.5f).All(x => x);
@@ -4278,7 +4304,7 @@ public partial class _Test : Node
             {
                 if (H == null || !Hub.InArena || !GodotObject.IsInstanceValid(H.Boss)) return false;
                 sawDrake |= H.Boss is Drake { Type.Id: "drake_bastion" };
-                sawShell |= Nodes<Slug>().Any(s => s.Cosmetic && s.Look == Slug.Kind.Shell);
+                sawShell |= Slugs().Any(s => s.Cosmetic && s.Kind == Shots.Slug);
                 sawRock |= Nodes<ThrownRock>().Any(r => r.Cosmetic && r.Hold <= 7.5 && r.From.DistanceTo(H.Boss.Position) < 260f);
                 return sawDrake && sawShell && sawRock;
             } };
@@ -4487,7 +4513,7 @@ public partial class _Test : Node
             Check(g != null && g.WingTarget == dummy, "guest's Space order reached the host");
             Check(dummy.Total > 5, $"guest's wing hit the dummy on the host ({dummy.Total:0.0})");
             Check(g != null && g.PdActive, "guest's PD activation reached the host");
-            Check(Nodes<Torpedo>().Any(x => !x.Cosmetic) || dummy.Total > 12, "guest's bomber strike launched real torpedoes on the host");
+            Check(Missiles().Any(x => !x.Cosmetic) || dummy.Total > 12, "guest's bomber strike launched real torpedoes on the host");
             // stay up while the guest watches its bombers come home and dock (it checks ~22 s in), and
             // send the hauler on an escort half way through for it to see
             ulong w0 = Time.GetTicksMsec();
@@ -4583,7 +4609,7 @@ public partial class _Test : Node
                 for (ulong t0 = Time.GetTicksMsec(); Time.GetTicksMsec() - t0 < 4000 && cdBack <= 0; )
                 {
                     sawWindup |= me3.BroadsideWindupLeft > 0 || me3.BroadsideVolleysLeft > 0;
-                    sawShells |= Nodes<Shell>().Any(s => s.Cosmetic);
+                    sawShells |= Shells().Any(s => s.Cosmetic);
                     cdBack = me3.BroadsideCooldownLeft;
                     await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                 }
@@ -4740,7 +4766,7 @@ public partial class _Test : Node
             Key(global::Godot.Key.Q);              // point defence
             // torpedoes live a couple of seconds; watch for one across the window
             bool sawTorp = false;
-            for (int i = 0; i < 240; i++) { if (Nodes<Torpedo>().Any(x => x.Cosmetic)) sawTorp = true; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            for (int i = 0; i < 240; i++) { if (Missiles().Any(x => x.Cosmetic)) sawTorp = true; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
             Check(mine != null && mine.PdActive, "guest sees its PD window running (replicated)");
             Check(sawTorp, "guest sees cosmetic copies of its torpedoes");
             var host = Nodes<PlayerShip>().FirstOrDefault(s => s.OwnerId == 1);

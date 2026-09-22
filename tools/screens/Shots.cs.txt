@@ -374,7 +374,7 @@ public partial class _Shots : Node
             ms.UseAbility("missile", md.NetId); await W(0.9);
             await Snap("43_missile_burst");
             zp.SetValue(H, z0);
-            var mt = H.GetChildren().OfType<Torpedo>().FirstOrDefault(x => x.Heavy);
+            var mt = H.GetChildren().OfType<Shot>().FirstOrDefault(x => x.Heavy);
             if (mt != null)
             {
                 ms.Visible = false; GetViewport().GetCamera2D().Zoom = new Vector2(5f, 5f);
@@ -491,9 +491,9 @@ public partial class _Shots : Node
             await Frame(new Vector2(-2600, 2000), 0.9f, false);
             sel.SetValue(hub, d1); await W(0.3); await Snap("25_bar_out_of_range");
             Key(global::Godot.Key.F);
-            for (int i = 0; i < 1500 && !N<Torpedo>().Any(); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            for (int i = 0; i < 1500 && !N<Shot>().Any(x => x.IsMissile); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             // framed on the bomber, not the target: it launches from 1900 u out, far off the dummy's frame
-            var torp = N<Torpedo>().FirstOrDefault();
+            var torp = N<Shot>().FirstOrDefault(x => x.IsMissile);
             await Frame((torp?.GlobalPosition ?? d1.Position) + new Vector2(-120, 120), 1.0f, false);
             await W(0.5); await Snap("26_torpedoes_launching");
             Key(global::Godot.Key.Space);

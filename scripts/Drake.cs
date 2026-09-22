@@ -73,7 +73,7 @@ public partial class Drake : Boss
         {
             _gun = GunEvery;
             var t = Nearest(GunReach);
-            if (t != null) Combat.FireSlug(Nose, t.Position - Nose, GunSpeed, GunRange, GunRadius, GunDamage * DamageMult, Slug.Kind.Shell, 0, "boss:gun");
+            if (t != null) Combat.FireSlug(Nose, t.Position - Nose, GunSpeed, GunRange, GunRadius, GunDamage * DamageMult, scrap: false, 0, "boss:gun");
         }
 
         // THE SCRAP SHOTGUN: warp to range, the fan, then the scrap
@@ -102,7 +102,7 @@ public partial class Drake : Boss
             _fanT = -1; int k = 0;
             foreach (float a in FanAngles(_fanAim))
             {
-                Combat.FireSlug(Nose, Vector2.Right.Rotated(a), ScrapSpeed, ScrapRange, ScrapRadius, ScrapDamage * DamageMult, Slug.Kind.Scrap, k, $"boss:scrap:{k}");
+                Combat.FireSlug(Nose, Vector2.Right.Rotated(a), ScrapSpeed, ScrapRange, ScrapRadius, ScrapDamage * DamageMult, scrap: true, k, $"boss:scrap:{k}");
                 k++;
             }
         }

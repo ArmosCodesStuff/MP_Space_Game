@@ -286,9 +286,8 @@ public partial class Hub : Node2D
             ToWorld(nameof(NetFx), id, a, b, r);
         };
         Combat.World = this;
-        Combat.ShellFired = s => ToWorld(nameof(NetShell), s.Position, s.Dir, s.Speed, s.Range);
-        Combat.TorpedoFired = t => ToWorld(nameof(NetTorpedo), t.Position, t.Dir, t.Speed, t.Range, t.TargetId, t.TurnRate, t.Heavy, t.HostileFire, t.NetId, t.Size);
-        Combat.SlugFired = s => ToWorld(nameof(NetSlug), s.Position, s.Dir, s.Speed, s.Range, s.Radius, (int)s.Look, s.Variant);
+        Combat.ShotFired = s => ToWorld(nameof(NetShot), s.Kind, s.Position, s.Dir, s.Speed, s.Range,
+                                        s.Radius, s.TargetId, s.TurnRate, s.NetId, s.Size, s.Variant);
     }
 
     public override void _ExitTree()
@@ -821,7 +820,7 @@ public partial class Hub : Node2D
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable, TransferChannel = Cosmetic)]
     private void NetMissileDown(int id)
     {
-        foreach (var t in GetChildren().OfType<Torpedo>()) if (t.NetId == id) t.Intercept();
+        foreach (var t in GetChildren().OfType<Shot>()) if (t.NetId == id) t.Intercept();
     }
 
     // host: pick a level between 1 and the newest unlocked
@@ -1511,19 +1510,15 @@ public partial class Hub : Node2D
         }
     }
 
+    // ONE LAUNCH ON THE WIRE. There were three of these -- a shell's, a slug's and a torpedo's --
+    // with the same four fields and their own spellings of the rest. A guest builds the same row
+    // (Shots.Of) and flies a cosmetic copy: it draws and bursts, and damages nothing.
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable, TransferChannel = Cosmetic)]
-    private void NetShell(Vector2 from, Vector2 dir, float speed, float range) =>
-        AddChild(new Shell { Position = from, Dir = dir, Speed = speed, Range = range, Cosmetic = true });
-
-    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable, TransferChannel = Cosmetic)]
-    private void NetSlug(Vector2 from, Vector2 dir, float speed, float range, float radius, int look, int variant) =>
-        AddChild(new Slug { Position = from, Dir = dir, Speed = speed, Range = range, Radius = radius, Look = (Slug.Kind)look, Variant = variant, Cosmetic = true,
-                            Lead = (float)(1.0 - Net.Arriving(1.0)) });   // the round trip (see Slug.Lead)
-
-    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable, TransferChannel = Cosmetic)]
-    private void NetTorpedo(Vector2 from, Vector2 dir, float speed, float range, int target, float turn, bool heavy, bool hostile, int id, float size) =>
-        AddChild(new Torpedo { Position = from, Dir = dir, Speed = speed, Range = range, Cosmetic = true, TargetId = target, TurnRate = turn,
-                               Heavy = heavy, HostileFire = hostile, NetId = id, Size = size });
+    private void NetShot(int kind, Vector2 from, Vector2 dir, float speed, float range,
+                         float radius, int target, float turn, int id, float size, int variant) =>
+        AddChild(new Shot { Kind = kind, Position = from, Dir = dir, Speed = speed, Range = range, Cosmetic = true,
+                            Radius = radius, TargetId = target, TurnRate = turn, NetId = id, Size = size, Variant = variant,
+                            Lead = (float)(1.0 - Net.Arriving(1.0)) });   // the round trip (see Shot.Lead)
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
     private void NetFx(int id, Vector2 a, Vector2 b, float r) => AddFx(id, a, b, r);
