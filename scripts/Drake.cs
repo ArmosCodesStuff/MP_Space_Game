@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 // THE DRAKE BASTION -- the bounty boss of the even levels (Missions.ForLevel). A heavy scrapper: no
 // escorts, a lower, steadier pressure than the Lancer, and two specials on the Lancer's own clocks that
-// each hit 25% harder with 25% more warning (ThreatMult), all damage x the level's and party's scale:
+// each hit 25% harder with 25% more warning than the Lancer's, all damage x the level's and party's scale:
 //   MAIN GUN       always: a slow shell (220 u/s) every 2.5 s at the nearest ship within 1100 u,
 //                  6 each (2.4 DPS) -- straight, and dodged by moving
 //   SCRAP SHOTGUN  every 15 s (the trident's cadence), from 17 s: it WARPS to range -- a ring
@@ -27,16 +27,19 @@ public partial class Drake : Boss
     public override float HalfWidth => HullHalfWidth;
     protected override string Sprite => "res://boss_drake.png";
 
-    public const double ThreatMult = 1.25;          // its specials against the Lancer's: damage, and warning
+    // ITS OWN FIGURES. They were written as 1.25 x the Lancer's (a "threat multiple"), which meant
+    // tuning the Lancer silently retuned this boss as well -- and the two are not the same fight.
+    // The multiple is where they CAME from, and is kept here as the note it always was; the numbers
+    // below are the Drake's, and only the Drake's.
     public const double GunDamage = 6, GunEvery = 2.5;                                      // 2.4 DPS
     public const float GunSpeed = 220f, GunRange = 1300f, GunReach = 1100f, GunRadius = 7f;
     public const double ShotgunEvery = 15, WarpWarning = 1.0;
     public const float WarpStandoff = 600f;
     public const int ScrapPieces = 7;
     public const float ScrapStep = 10f, ScrapSpeed = 480f, ScrapRange = 1400f, ScrapRadius = 9f;
-    public const double FanWindup = ThreatMult * Lancer.ChargeWindup, ScrapDamage = ThreatMult * Lancer.TridentDamage;
-    public const double ThrowEvery = 30, ThrowWindup = ThreatMult * Lancer.BeamWindup, ThrowFlight = 1.6;
-    public const double RockDamage = ThreatMult * 4 * Lancer.BeamDamage;
+    public const double FanWindup = 1.875, ScrapDamage = 18.75;      // 1.25 x the Lancer's 1.5 s and 15
+    public const double ThrowEvery = 30, ThrowWindup = 7.5, ThrowFlight = 1.6;   // 1.25 x its 6 s wind-up
+    public const double RockDamage = 250;                            // 1.25 x four of its 50-damage beam ticks
     public const float ThrowLength = 1800f, RockRadius = 90f;
 
     private double _gun = 2.0, _shotgun = 17.0, _throw = 6.0;

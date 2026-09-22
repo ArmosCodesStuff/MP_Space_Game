@@ -180,7 +180,7 @@ public static class Classes
                 Texture = "res://freight_hauler_hull.png", Length = 230f, HalfWidth = 59.74f,
                 Mains = new Vector2[] { new(0.0f, -50.6f) },
                 Pds   = new Vector2[] { new(-32.9f, 64.4f), new(32.9f, 64.4f) },
-                TurretTexScale = 1.4154f / 5.5f, MainBarrel = 17.34f, PdBarrel = 7.79f, PdRing = 4.25f },
+                TurretTexScale = 2.20f / 5.5f, MainBarrel = 27.0f, PdBarrel = 12.1f, PdRing = 6.6f },
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Bubble, Ab.Deploy, Ab.Collect, Ab.Pd } },
         new() { Id = ShipClass.FreightTender, Name = "TENDER", Ready = true, Fit = Fit.Guns | Fit.Pd | Fit.Deploy,
             Blurb = "400 hull. One main gun, two point-defence turrets, three deployable turrets, and an overdrive that doubles the rate of fire of everything it owns for 8 s.",
@@ -208,7 +208,7 @@ public static class Classes
                 Texture = "res://freight_tender_hull.png", Length = 230f, HalfWidth = 57.48f,
                 Mains = new Vector2[] { new(0.0f, -50.6f) },
                 Pds   = new Vector2[] { new(-31.6f, 64.4f), new(31.6f, 64.4f) },
-                TurretTexScale = 1.4154f / 5.5f, MainBarrel = 17.34f, PdBarrel = 7.79f, PdRing = 4.25f },
+                TurretTexScale = 2.20f / 5.5f, MainBarrel = 27.0f, PdBarrel = 12.1f, PdRing = 6.6f },
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Overdrive, Ab.Deploy, Ab.Collect, Ab.Pd } },
         new() { Id = ShipClass.FreightBastion, Name = "BASTION", Ready = true, Fit = Fit.Guns | Fit.Pd | Fit.Deploy,
             Blurb = "400 hull. One main gun, two point-defence turrets, three deployable turrets, and a shockwave that throws everything within 1000 u away -- or holds a boss still for 3 s.",
@@ -237,7 +237,7 @@ public static class Classes
                 Texture = "res://freight_bastion_hull.png", Length = 230f, HalfWidth = 49.34f,
                 Mains = new Vector2[] { new(0.0f, -50.6f) },
                 Pds   = new Vector2[] { new(-27.1f, 64.4f), new(27.1f, 64.4f) },
-                TurretTexScale = 1.4154f / 5.5f, MainBarrel = 17.34f, PdBarrel = 7.79f, PdRing = 4.25f },
+                TurretTexScale = 2.20f / 5.5f, MainBarrel = 27.0f, PdBarrel = 12.1f, PdRing = 6.6f },
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Shockwave, Ab.Deploy, Ab.Collect, Ab.Pd } },
 
         // -- page 3: heavy fighters --------------------------------------------
@@ -260,7 +260,7 @@ public static class Classes
             Art = new ClassArt {
                 Texture = "res://heavy_sniper_hull.png", Length = 120f, HalfWidth = 30.03f,
                 Mains = new Vector2[] { new(0.0f, -24.0f) },
-                TurretTexScale = 0.7385f / 5.5f, MainBarrel = 9.05f, PdBarrel = 4.06f, PdRing = 2.22f },
+                TurretTexScale = 1.18f / 5.5f, MainBarrel = 14.5f, PdBarrel = 6.5f, PdRing = 3.55f },
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Railgun } },
         new() { Id = ShipClass.HeavyWarrior, Name = "WARRIOR", Ready = true, Fit = Fit.Guns,
             Blurb = "140 hull, fast. Two main guns, and a rush: 2.5 s at two and a half times its speed taking half damage, ending in an EMP that stuns everything close.",
@@ -283,7 +283,7 @@ public static class Classes
             Art = new ClassArt {
                 Texture = "res://heavy_warrior_hull.png", Length = 120f, HalfWidth = 31.54f,
                 Mains = new Vector2[] { new(-12.0f, -24.0f), new(12.0f, -24.0f) },
-                TurretTexScale = 0.7385f / 5.5f, MainBarrel = 9.05f, PdBarrel = 4.06f, PdRing = 2.22f },
+                TurretTexScale = 1.18f / 5.5f, MainBarrel = 14.5f, PdBarrel = 6.5f, PdRing = 3.55f },
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Rush } },
         new() { Id = ShipClass.HeavyWarden, Name = "WARDEN", Ready = true, Fit = Fit.Guns | Fit.Pd | Fit.AlwaysPd,
             Blurb = "140 hull, fast. Point defence that never switches off (at half a warship's damage), a modest main gun, and six hunter-seekers that each take a target of their own.",
@@ -307,7 +307,7 @@ public static class Classes
                 Texture = "res://heavy_warden_hull.png", Length = 120f, HalfWidth = 28.68f,
                 Mains = new Vector2[] { new(0.0f, -24.0f) },
                 Pds   = new Vector2[] { new(0.0f, 31.2f) },
-                TurretTexScale = 0.7385f / 5.5f, MainBarrel = 9.05f, PdBarrel = 4.06f, PdRing = 2.22f },
+                TurretTexScale = 1.18f / 5.5f, MainBarrel = 14.5f, PdBarrel = 6.5f, PdRing = 3.55f },
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Hunters } },
 
         // -- page 4: lights -----------------------------------------------------
@@ -330,7 +330,7 @@ public static class Classes
             Art = new ClassArt {
                 Texture = "res://light_dart_hull.png", Length = 70f, HalfWidth = 16.78f,
                 Mains = new Vector2[] { new(0.0f, -10.5f) },
-                TurretTexScale = 0.4308f / 5.5f, MainBarrel = 5.28f, PdBarrel = 2.37f, PdRing = 1.29f },
+                TurretTexScale = 0.65f / 5.5f, MainBarrel = 8.0f, PdBarrel = 3.6f, PdRing = 1.95f },
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Roll } },
         new() { Id = ShipClass.LightEcho, Name = "ECHO", Ready = true, Fit = Fit.Guns,
             Blurb = "90 hull. Its echo remembers every point of damage it deals for 5 s, then detonates the lot where the last shot landed.",
@@ -350,7 +350,7 @@ public static class Classes
             Art = new ClassArt {
                 Texture = "res://light_echo_hull.png", Length = 70f, HalfWidth = 14.68f,
                 Mains = new Vector2[] { new(0.0f, -10.5f) },
-                TurretTexScale = 0.4308f / 5.5f, MainBarrel = 5.28f, PdBarrel = 2.37f, PdRing = 1.29f },
+                TurretTexScale = 0.65f / 5.5f, MainBarrel = 8.0f, PdBarrel = 3.6f, PdRing = 1.95f },
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Echo } },
         new() { Id = ShipClass.LightWraith, Name = "WRAITH", Ready = true, Fit = Fit.Guns,
             Blurb = "90 hull. Five seconds nothing hostile can pick it: whatever was coming for it goes after someone else, or gives up.",
@@ -368,7 +368,7 @@ public static class Classes
             Art = new ClassArt {
                 Texture = "res://light_wraith_hull.png", Length = 70f, HalfWidth = 14.97f,
                 Mains = new Vector2[] { new(0.0f, -10.5f) },
-                TurretTexScale = 0.4308f / 5.5f, MainBarrel = 5.28f, PdBarrel = 2.37f, PdRing = 1.29f },
+                TurretTexScale = 0.65f / 5.5f, MainBarrel = 8.0f, PdBarrel = 3.6f, PdRing = 1.95f },
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Stealth } },
     };
 

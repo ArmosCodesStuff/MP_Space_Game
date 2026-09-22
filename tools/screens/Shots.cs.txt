@@ -547,6 +547,56 @@ public partial class _Shots : Node
             foreach (var r in hub.Raiders.ToList()) r.TakeDamage(1e9);
             h.ResetToPad(); await W(0.3);
             Me().Visible = true;
+
+            // ── THE NINE NEW CLASSES, each in its own colours with its own mounts ──
+            // (One frame each: the hull as the pilot sees it, at a zoom that fills the shot.)
+            var lineup = new (ShipClass c, string name, float zoom)[]
+            {
+                (ShipClass.FreightHauler, "70_freighter", 2.0f), (ShipClass.FreightTender, "71_tender", 2.0f),
+                (ShipClass.FreightBastion, "72_bastion", 2.0f),
+                (ShipClass.HeavySniper, "73_sniper", 3.2f), (ShipClass.HeavyWarrior, "74_warrior", 3.2f),
+                (ShipClass.HeavyWarden, "75_warden", 3.2f),
+                (ShipClass.LightDart, "76_dart", 4.5f), (ShipClass.LightEcho, "77_echo", 4.5f),
+                (ShipClass.LightWraith, "78_wraith", 4.5f),
+            };
+            var yard = Hub.BasePos + new Vector2(1500, -1200);
+            foreach (var (c, name, zoom) in lineup)
+            {
+                await Class(c);
+                await Frame(yard, zoom, hideShip: false);
+                Me().Rotation = 0f; Me().Velocity = Vector2.Zero;
+                await W(0.4); await Snap(name);
+            }
+            // a freighter with its three turrets out, and the bubble up over them
+            await Class(ShipClass.FreightHauler);
+            await Frame(yard, 1.1f, hideShip: false);
+            var fship = Me(); fship.Rotation = 0f;
+            for (int i = 0; i < 3; i++)
+            {
+                fship.Sl("deploy").Cool = 0; fship.UseAbility("deploy", 0);
+                fship.Position = yard + new Vector2(-180 + 180 * i, 120); await W(0.25);
+            }
+            fship.Position = yard; fship.UseAbility("bubble", 0); await W(0.5);
+            await Snap("79_freighter_turrets_and_bubble");
+            foreach (var t in hub.Deployed.ToList()) hub.DeployedTaken(t);
+            await Class(ShipClass.Battleship); await W(0.3);
+
+            // ── THE FOUR NEW ENEMY HULLS, in a row ──
+            var mob = new[] { Enemies.Talon, Enemies.Pod, Enemies.Cross, Enemies.Lancerkin };
+            var line = new System.Collections.Generic.List<Raider>();
+            for (int i = 0; i < mob.Length; i++)
+            {
+                var r = hub.SpawnRaider(yard + new Vector2(-330 + 220 * i, 0), mob[i]);
+                r.Hp = 1e9; line.Add(r);
+            }
+            await W(0.3);
+            foreach (var r in line) { r.Position = yard + new Vector2(-330 + 220 * line.IndexOf(r), 0); r.Rotation = 0f; }
+            await Frame(yard + new Vector2(0, 60), 1.3f);
+            foreach (var r in line) { r.Position = yard + new Vector2(-330 + 220 * line.IndexOf(r), 0); r.Rotation = 0f; }
+            await W(0.2); await Snap("80_new_enemies");
+            foreach (var r in line.ToList()) r.TakeDamage(1e12);
+            await W(0.3);
+            Me().Visible = true;
         }
         // the arena, last: the trip replaces the hub scene, so nothing may follow it that
         // holds an old reference. The boss, its death-beam telegraph, its shockwave telegraph.
