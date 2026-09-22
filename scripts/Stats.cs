@@ -114,8 +114,8 @@ public class ShipStats
         if (Classes.Missiles(cls))
         {   // F: a guided BURST of three, one at the target and two launched wide that curve in onto
             // it (PlayerShip.FireMissile). A magazine of bursts, reloaded by hand (R).
-            // the destroyer's burst: 3 bursts of 3 at 38, 0.4 s apart, then 9 s to reload -- 342 in 9.8 s, 34.9 DPS
-            Add("Missile", "missile_damage",   "Damage (each)",     38.0, "", 1);
+            // the destroyer's burst: 3 bursts of 3 at 49, 0.4 s apart, then 9 s to reload -- 441 in 9.8 s, 45 DPS
+            Add("Missile", "missile_damage",   "Damage (each)",     49.0, "", 1);
             Add("Missile", "missile_mag",      "Magazine (bursts)", 3, "", 0);
             Add("Missile", "missile_refire",   "Between bursts",    0.4, "s", 1, inverse: true);
             Add("Missile", "missile_reload",   "Reload (R)",        9.0, "s", 1, inverse: true);
@@ -149,10 +149,10 @@ public class ShipStats
 
             // An active ability, and the carrier's long-range burst. Torpedoes run straight and steady:
             // no tracking, so from 1900 u (about twice the others' reach) a moving target often steps out
-            // of the way. 8 torpedoes of 120 a ~14 s strike, half of them landing: about 34 DPS.
+            // of the way. 8 torpedoes of 137.5 a ~14 s strike: 78.6 DPS if every one lands, about 39 at half.
             Add("Bombers", "bomber_count",    "Craft",              2, "", 0);
 
-            Add("Bombers", "torpedo_damage",  "Torpedo damage",     120, "", 0);
+            Add("Bombers", "torpedo_damage",  "Torpedo damage",     137.5, "", 0);
             Add("Bombers", "bomber_ammo",     "Torpedoes per run",  4, "", 0);
             Add("Bombers", "torpedo_interval","Between launches",   0.5, "s", 2, inverse: true);
             Add("Bombers", "torpedo_speed",   "Torpedo speed",      300, "u/s", 1);
