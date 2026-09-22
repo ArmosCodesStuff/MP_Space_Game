@@ -315,7 +315,10 @@ fighters on a small target drifting at 12 u/s (every fighter keeps firing, no 4 
 off while the wing and point defence are on it; a guest watching the host's hauler hold at the SW
 outpost and drain. **Mutants** (one scratch run reproducing the baseline): the stop not sent to guests,
 the old four-wave cap, the old `DropRaider`, the old overshoot, and the old unguarded RPC sender -- every one caught, in one scratch run reproducing the baseline's 718 checks (the old overshoot measured at 3 shots a fighter and 10-12 s without one). Sweep: the escort frame
-is now the hauler offloading at the south-east outpost.
+is now the hauler offloading at the south-east outpost. **An old check's race, fixed**: "a miner is pinned the same way"
+failed once in three runs -- the miner it picked was nearly full, left for home at 110 u/s as the
+raider arrived, and a raider cruising at 100 never latched. The check now empties that miner's hold,
+so it keeps working, still, while it is pinned.
 **Review**: the same five-lens adversarial read found 7 (2 refuted): a guest's pods jumping back up at
 the end of each stop, the strike count reset by `Forget`, point defence holding a freed hunter, the
 guest's offload check sampling a moment it could miss, and a hull check lost to floating point. All

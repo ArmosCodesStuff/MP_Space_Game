@@ -2571,6 +2571,10 @@ public partial class _Test : Node
                 await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             }
             mnr ??= H.Yard.Gatherers.First(g => g.Kind == GatherKind.Miner);
+            // an EMPTY hold, so it goes on working (still) through the whole check: one picked nearly
+            // full left for home at its full 110 u/s as the raider arrived, and a raider cruising at
+            // 100 with its boost spent never caught it to latch
+            mnr.Cargo = 0;
             var r4 = H.SpawnRaider(mnr.Position + new Vector2(120, 0));
             for (int i = 0; i < 60 * 8 && !r4.Latched; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             float mr0 = mnr.Rotation; var mp0 = mnr.Position; await Wait(0.5);

@@ -1,8 +1,8 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-22 02:19, on top of git commit 6e089f5. How it was verified is in the message of the
+// Taken 2026-09-22 02:35, on top of git commit c1e6952. How it was verified is in the message of the
 //   commit that carries this file: one starting VERIFIED: is a green verify.ps1 -Update.
-// 82 files, 17566 lines. Code only: sprites, sounds and docs are in the zip.
+// 82 files, 17570 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -88,7 +88,7 @@
 //   tools/smoketest/fakeigd.py                     155 lines   sha256 b980d4fa4ad4
 //   tools/smoketest/run.ps1                        209 lines   sha256 54069e6faaff
 //   tools/smoketest/run.sh                          57 lines   sha256 9ac9cbdf9115
-//   tools/smoketest/SmokeTest.cs.txt              4025 lines   sha256 bd564f341602
+//   tools/smoketest/SmokeTest.cs.txt              4029 lines   sha256 07ab85ff702c
 //   tools/smoketest/wan.py                          61 lines   sha256 97db24aa3f91
 //   tools/snapshot.ps1                              94 lines   sha256 3ca9bfe56185
 //==============================================================================
@@ -13876,7 +13876,7 @@ echo "SMOKE TEST PASSED"
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 4025 lines   sha256 bd564f341602
+// 4029 lines   sha256 07ab85ff702c
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -16451,6 +16451,10 @@ public partial class _Test : Node
                 await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             }
             mnr ??= H.Yard.Gatherers.First(g => g.Kind == GatherKind.Miner);
+            // an EMPTY hold, so it goes on working (still) through the whole check: one picked nearly
+            // full left for home at its full 110 u/s as the raider arrived, and a raider cruising at
+            // 100 with its boost spent never caught it to latch
+            mnr.Cargo = 0;
             var r4 = H.SpawnRaider(mnr.Position + new Vector2(120, 0));
             for (int i = 0; i < 60 * 8 && !r4.Latched; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             float mr0 = mnr.Rotation; var mp0 = mnr.Position; await Wait(0.5);
