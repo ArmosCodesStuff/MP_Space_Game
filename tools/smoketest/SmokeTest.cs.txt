@@ -2835,7 +2835,7 @@ public partial class _Test : Node
             double laser2 = bd.LaserDealt - lz;
             Check(Math.Abs(laser2 - 10) < 2.6, $"a raider inside 300 u: the laser burns it at 5 DPS ({laser2:0.0} in 2 s)");
             rb.TakeDamage(99999); await Wait(0.2);
-            var spot2 = Hub.BasePos + new Vector2(0, 500);
+            var spot2 = Hub.BasePos + new Vector2(0, -500);        // north of the base: clear of the hauler pad's own gun
             var rc = H.SpawnRaider(spot2); rc.Hp = 1000;
             int mz = bd.MissilesFired; double lz2 = bd.LaserDealt;
             Torpedo bm = null;
@@ -2853,7 +2853,7 @@ public partial class _Test : Node
             Check(bm != null && bd.MissilesFired > mz && bd.LaserDealt == lz2 && Math.Abs(bspd - 120f) < 6f && Math.Abs(hpc - rc.Hp - 25) < 1e-6,
                   $"a raider at 500 u: no laser, but a tracking missile at {bspd:0} u/s lands for {hpc - rc.Hp:0}");
             rc.TakeDamage(99999); await Wait(0.2);
-            var spot3 = Hub.BasePos + new Vector2(0, 700);
+            var spot3 = Hub.BasePos + new Vector2(0, -700);
             var rd = H.SpawnRaider(spot3); rd.Hp = 1000;
             int mw = bd.MissilesFired; double lw = bd.LaserDealt;
             for (int i = 0; i < 60 * 6; i++) { rd.Position = spot3; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
@@ -2965,6 +2965,187 @@ public partial class _Test : Node
             Check(!H.FreeCamera && H.CameraPosition.DistanceTo(sh.ViewPosition) < 30f && Mathf.IsEqualApprox(H.ZoomLevel, kept),
                   "Y again returns to the ship, keeping the zoom");
             H.SetZoom(Hub.DefaultZoom);
+        }
+
+        // ── THE NINE NEW CLASSES ────────────────────────────────────────────────
+        // Every class in the table flies, with the hull, mounts and bar its row says; then the
+        // one thing each of the nine is FOR.
+        {
+            foreach (var cd in Classes.All.Where(x => x.Ready).ToList())
+            {
+                await SetClass(cd.Id);
+                var nc = Me; var sheet = nc.Stats;
+                int nMain = Nodes<Turret>(nc).Count(t => !t.PointDefense), nPd = Nodes<Turret>(nc).Count(t => t.PointDefense);
+                Check(nc.Class == cd.Id && Math.Abs(nc.MaxHp - sheet["hull"]) < 1e-6
+                      && nMain == (int)sheet["main_count"] && nPd == (int)sheet["pd_count"]
+                      && Abilities.For(cd.Id).Length == cd.Abilities.Length + 6
+                      && Classes.Art(cd.Id).Texture != null,
+                      $"{cd.Name} flies: {sheet["hull"]:0} hull, {nMain} main and {nPd} PD mounts, {cd.Abilities.Length} abilities and six open slots");
+            }
+
+            // ── FREIGHTER: three turrets out, one collected, and a bubble that soaks 400 ──
+            await SetClass(ShipClass.FreightHauler);
+            var fr = Me; var yonder = Hub.BasePos + new Vector2(1400, 900);
+            fr.Position = yonder; fr.Velocity = Vector2.Zero; await Wait(0.2);
+            for (int i = 0; i < 4; i++)
+            {
+                fr.Sl("deploy").Cool = 0;
+                fr.UseAbility("deploy", 0);
+                fr.Position += new Vector2(160, 0);
+                await Wait(0.1);
+            }
+            Check(fr.TurretsOut == 3 && H.Deployed.Count(t => t.OwnerId == fr.OwnerId) == 3,
+                  $"T drops a turret where you are, and a fourth is refused: three out ({fr.TurretsOut})");
+            var one = H.Deployed.First();
+            Check(Math.Abs(one.Hp - fr.Stats["deploy_hull"]) < 1e-6 && Math.Abs(one.Spec(true).Damage - 6) < 1e-9
+                  && Math.Abs(one.Spec(true).Interval - 0.5) < 1e-9 && Math.Abs(one.Spec(true).Range - 500f) < 1e-3,
+                  $"a dropped turret: 120 hull, 6 a shot every 0.5 s inside 500 u ({one.Hp:0} hull)");
+            fr.Position = one.Position + new Vector2(90, 0); await Wait(0.15);
+            fr.UseAbility("collect", 0); await Wait(0.15);
+            Check(fr.TurretsOut == 2, $"C over one picks it up again ({fr.TurretsOut} left out)");
+            fr.Position = yonder + new Vector2(0, -900); await Wait(0.15);       // clear of all three
+            fr.UseAbility("collect", 0); await Wait(0.15);
+            Check(fr.TurretsOut == 2 && fr.FailNote("collect") == "NOT OVER ONE", "and from 400 u away it refuses, saying why");
+            // a raider walks into one: the turret shoots it, and the raider shoots back
+            var tgt = H.Deployed.First();
+            var rr = H.SpawnRaider(tgt.Position + new Vector2(260, 0)); rr.Hp = 400;
+            double rh0 = rr.Hp;
+            for (int i = 0; i < 60 * 6 && rr.Hp == rh0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(rr.Hp < rh0, $"a turret left standing shoots what comes near it ({rh0 - rr.Hp:0.0} damage)");
+            rr.TakeDamage(99999); await Wait(0.2);
+            foreach (var dpl in H.Deployed.ToList()) H.DeployedTaken(dpl);
+            await Wait(0.1);
+
+            fr.UseAbility("bubble", 0); await Wait(0.1);
+            Check(fr.BubbleUp && Math.Abs(fr.BubbleLeft - 400) < 1e-6 && Math.Abs(fr.BubbleRadius - 260f) < 1e-3,
+                  $"F raises a bubble of 400 over 260 u ({fr.BubbleLeft:0})");
+            double hull0 = fr.Hp;
+            fr.Hit(150, fr.Position + new Vector2(0, -200), "test:bubble1");
+            Check(Math.Abs(fr.Hp - hull0) < 1e-6 && Math.Abs(fr.BubbleLeft - 250) < 1e-6,
+                  $"a 150 blow comes out of the bubble, not the hull ({fr.BubbleLeft:0} left, hull {fr.Hp:0})");
+            fr.Hit(300, fr.Position + new Vector2(0, -200), "test:bubble2");
+            Check(fr.BubbleLeft == 0 && Math.Abs(fr.Hp - (hull0 - 50)) < 1e-6,
+                  $"and when the pool is spent the rest lands on the hull ({fr.Hp:0} of {hull0:0})");
+
+            // ── TENDER: everything it owns fires twice as fast ──
+            await SetClass(ShipClass.FreightTender);
+            var td = Me; td.Position = yonder; td.Velocity = Vector2.Zero; await Wait(0.2);
+            td.Sl("deploy").Cool = 0; td.UseAbility("deploy", 0); await Wait(0.15);
+            var tt = H.Deployed.First();
+            double gun0 = td.Spec(false).Interval, drop0 = tt.Spec(true).Interval;
+            td.UseAbility("overdrive", 0); await Wait(0.1);
+            Check(Math.Abs(td.Spec(false).Interval - gun0 / 2) < 1e-9 && Math.Abs(tt.Spec(true).Interval - drop0 / 2) < 1e-9
+                  && Math.Abs(td.FireRate - 2f) < 1e-6,
+                  $"overdrive halves the reload of its gun AND of every turret it has out ({gun0:0.00} -> {td.Spec(false).Interval:0.00} s)");
+            foreach (var dpl in H.Deployed.ToList()) H.DeployedTaken(dpl);
+
+            // ── BASTION: everything within 1000 u thrown a thousand units clear ──
+            await SetClass(ShipClass.FreightBastion);
+            var bs = Me; bs.Position = yonder; bs.Velocity = Vector2.Zero; await Wait(0.2);
+            var near = H.SpawnRaider(yonder + new Vector2(300, 0)); near.Hp = 2000;
+            var far = H.SpawnRaider(yonder + new Vector2(1600, 0)); far.Hp = 2000;
+            await Wait(0.1);
+            float nd0 = near.Position.DistanceTo(yonder), fd0 = far.Position.DistanceTo(yonder);
+            bs.UseAbility("shockwave", 0); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            float nd1 = near.Position.DistanceTo(yonder), fd1 = far.Position.DistanceTo(yonder);
+            Check(nd1 - nd0 > 950 && nd1 - nd0 < 1050 && Math.Abs(fd1 - fd0) < 60,
+                  $"the shockwave throws what is within 1000 u a thousand units clear, and nothing beyond it ({nd1 - nd0:0} u / {fd1 - fd0:0} u)");
+            near.TakeDamage(99999); far.TakeDamage(99999); await Wait(0.2);
+
+            // ── SNIPER: 3 s locked in place, then 150 down a 2500 u line ──
+            await SetClass(ShipClass.HeavySniper);
+            var sn = Me; var dTgt = H.GetNode<TargetDummy>("TargetDummy1");
+            sn.Position = dTgt.Position + new Vector2(0, 1400); sn.Velocity = Vector2.Zero; sn.Rotation = 0f; await Wait(0.3);
+            double dmg0 = dTgt.Total;
+            sn.UseAbility("railgun", 0); await Wait(0.2);
+            var wasAt = sn.Position;
+            KeyDown(global::Godot.Key.W); KeyDown(global::Godot.Key.A); await Wait(1.0); KeyUp(global::Godot.Key.W); KeyUp(global::Godot.Key.A);
+            Check(sn.Statuses.Has(Status.Disabled) && sn.Position.DistanceTo(wasAt) < 1f,
+                  $"the railgun charges with the hull locked: W and A move it nowhere ({sn.Position.DistanceTo(wasAt):0.00} u)");
+            for (int i = 0; i < 60 * 4 && dTgt.Total == dmg0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(Math.Abs(dTgt.Total - dmg0 - 150) < 0.01 && !sn.Statuses.Has(Status.Disabled),
+                  $"then 150 lands 1400 u away, on the line, and the hull is free again ({dTgt.Total - dmg0:0.0})");
+
+            // ── WARRIOR: two and a half times its speed, half the damage, then the EMP ──
+            await SetClass(ShipClass.HeavyWarrior);
+            var wr = Me; wr.Position = yonder; wr.Velocity = Vector2.Zero; await Wait(0.2);
+            var e1 = H.SpawnRaider(yonder + new Vector2(180, 0)); e1.Hp = 500;
+            var e2 = H.SpawnRaider(yonder + new Vector2(900, 0)); e2.Hp = 500;
+            var e2Home = e2.Position;
+            await Wait(0.1);
+            double top0 = wr.Stats["max_speed"];
+            wr.UseAbility("rush", 0); await Wait(0.1);
+            double wh0 = wr.Hp;
+            wr.Hit(100, wr.Position + new Vector2(0, -200), "test:rush");
+            Check(wr.Statuses.Has(Status.Hardened) && Math.Abs(wh0 - wr.Hp - 50) < 1e-6 && Math.Abs(wr.SpeedMult - 2.5f) < 1e-6,
+                  $"the rush: 2.5x top speed ({top0 * wr.SpeedMult:0} u/s) and a 100 blow lands for {wh0 - wr.Hp:0}");
+            double e10 = e1.Hp, e20 = e2.Hp;
+            for (int i = 0; i < 60 * 4 && e1.Hp == e10; i++) { e2.Position = e2Home; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            Check(Math.Abs(e10 - e1.Hp - 60) < 0.01 && e1.Statuses.Has(Status.Disabled) && e2.Hp == e20,
+                  $"and it ends in an EMP: 60 to what is within 260 u and it is held; nothing at 900 u ({e10 - e1.Hp:0})");
+            e1.TakeDamage(99999); e2.TakeDamage(99999); await Wait(0.2);
+
+            // ── WARDEN: point defence with no window, and six hunters on six targets ──
+            await SetClass(ShipClass.HeavyWarden);
+            var wd = Me; wd.Position = yonder; wd.Velocity = Vector2.Zero; await Wait(0.2);
+            Check(wd.PdOnline && !wd.PdActive && wd.PdRing == 0f && Math.Abs(wd.Spec(true).Damage - 0.25) < 1e-9,
+                  "the warden's point defence is on with nothing pressed, at half a warship's damage");
+            var marks = new List<Raider>();
+            for (int i = 0; i < 4; i++) { var m = H.SpawnRaider(yonder + new Vector2(300 + 60 * i, -200 + 90 * i)); m.Hp = 3000; marks.Add(m); }
+            await Wait(0.2);
+            int torp0 = Nodes<Torpedo>().Count();
+            wd.UseAbility("hunters", 0); await Wait(0.2);
+            var fired = Nodes<Torpedo>().Where(t => !t.HostileFire && t.TargetId != 0).ToList();
+            Check(fired.Count >= 6 - torp0 && fired.Select(t => t.TargetId).Distinct().Count() >= 4,
+                  $"six hunter-seekers away, each on a target of its own ({fired.Count} out, {fired.Select(t => t.TargetId).Distinct().Count()} targets)");
+            foreach (var m in marks) m.TakeDamage(99999);
+            await Wait(0.3);
+
+            // ── DART: untouchable through the roll, then faster and firing quicker ──
+            await SetClass(ShipClass.LightDart);
+            var dt2 = Me; dt2.Position = yonder; dt2.Velocity = Vector2.Zero; await Wait(0.2);
+            double dh0 = dt2.Hp, rof0 = dt2.Spec(false).Interval;
+            dt2.UseAbility("roll", 0); await Wait(0.1);
+            dt2.Hit(80, dt2.Position + new Vector2(0, -200), "test:roll");
+            Check(dt2.Statuses.Has(Status.Evading) && Math.Abs(dt2.Hp - dh0) < 1e-6,
+                  "through the barrel roll nothing touches it at all");
+            await Wait(1.4);
+            Check(!dt2.Statuses.Has(Status.Evading) && Math.Abs(dt2.SpeedMult - 1.6f) < 1e-6
+                  && Math.Abs(dt2.Spec(false).Interval - rof0 / 1.25) < 1e-9,
+                  $"and it comes out of it 60% faster, firing a quarter quicker ({rof0:0.000} -> {dt2.Spec(false).Interval:0.000} s)");
+
+            // ── ECHO: what it deals for five seconds, all at once at the end ──
+            await SetClass(ShipClass.LightEcho);
+            var ec = Me; ec.Position = yonder; ec.Velocity = Vector2.Zero; await Wait(0.2);
+            var mark = H.SpawnRaider(yonder + new Vector2(150, 0)); mark.Hp = 4000;
+            var near2 = H.SpawnRaider(yonder + new Vector2(260, 0)); near2.Hp = 4000;
+            await Wait(0.1);
+            ec.UseAbility("echo", 0); await Wait(0.1);
+            ec.NoteDealt(90, mark.Position);                       // as a shell of its own would
+            Check(Math.Abs(ec.Sl("echo").Own - 90) < 1e-6, $"the echo remembers what it deals ({ec.Sl("echo").Own:0})");
+            double m0 = mark.Hp, n0 = near2.Hp;
+            var markHome = mark.Position; var nearHome = near2.Position;
+            for (int i = 0; i < 60 * 6 && ec.Sl("echo").Left > 0; i++)
+            { mark.Position = markHome; near2.Position = nearHome; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            await Wait(0.1);
+            Check(Math.Abs(m0 - mark.Hp - 90) < 0.01 && Math.Abs(n0 - near2.Hp - 90) < 0.01,
+                  $"and puts all of it down where the last of it landed, on everything within 220 u ({m0 - mark.Hp:0})");
+            mark.TakeDamage(99999); near2.TakeDamage(99999); await Wait(0.2);
+
+            // ── WRAITH: five seconds nothing hostile can pick it ──
+            await SetClass(ShipClass.LightWraith);
+            var wt = Me; wt.Position = yonder; wt.Velocity = Vector2.Zero; await Wait(0.2);
+            var hunter = H.SpawnRaider(yonder + new Vector2(260, 0)); hunter.Hp = 4000;
+            for (int i = 0; i < 60 * 4 && hunter.Target != wt; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(hunter.Target == wt, "a raider comes for the wraith");
+            wt.UseAbility("stealth", 0);
+            for (int i = 0; i < 30 && hunter.Target == wt; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(wt.Statuses.Has(Status.Untargetable) && hunter.Target != wt && Targeting.Hidden(wt),
+                  "and the moment it goes dark the raider lets go of it");
+            await Wait(5.2);
+            Check(!wt.Statuses.Has(Status.Untargetable), "five seconds later it is visible again");
+            hunter.TakeDamage(99999); await Wait(0.2);
+            await SetClass(ShipClass.Battleship);
         }
 
         // ── buildings open menus; READY -> autopilot -> portal -> ARENA -> home ──

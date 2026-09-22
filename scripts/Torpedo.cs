@@ -91,7 +91,7 @@ public partial class Torpedo : Node2D, IHittable, ITagged
                 if (!Cosmetic && Net.Sim)
                 {   // a player ship is told where the hit came from, for its shield
                     if (h is PlayerShip ps) ps.Hit(Damage, GlobalPosition - Dir * 10f, HitSource); else h.TakeDamage(Damage);
-                    if (IsInstanceValid(Source)) Source.NoteCombat();
+                    if (IsInstanceValid(Source)) Source.NoteDealt(Damage, h.Position);
                 }
                 Detonate(); break;
             }

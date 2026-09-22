@@ -172,8 +172,10 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // A turret asks these and nothing else, so the same component sits on a ship, on a freighter's
     // deployed mount, on the hauler and on anything else that grows a gun.
     public Node2D AsNode => this;
-    public bool PdOnline => PdActive;
-    public float PdRing => PdActive ? PdActiveFrac : PdRechargeFrac;
+    // A class whose point defence never switches off (the warden) has no window to open and no
+    // ring to show: it simply fires, at whatever damage its row gives it.
+    public bool PdOnline => Stats.Def.Has(Fit.AlwaysPd) || PdActive;
+    public float PdRing => Stats.Def.Has(Fit.AlwaysPd) ? 0f : PdActive ? PdActiveFrac : PdRechargeFrac;
     public Vector2 AimAt => AimPoint;
     // Through a broadside the main turrets come round onto the cursor from anywhere within the
     // wind-up -- half a turn in its time -- or at their own rate if that is already faster.
