@@ -1,8 +1,8 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-22 01:50, on top of git commit bf64304. How it was verified is in the message of the
+// Taken 2026-09-22 02:19, on top of git commit 6e089f5. How it was verified is in the message of the
 //   commit that carries this file: one starting VERIFIED: is a green verify.ps1 -Update.
-// 82 files, 17319 lines. Code only: sprites, sounds and docs are in the zip.
+// 82 files, 17566 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -27,7 +27,7 @@
 //   scripts/CharacterCreator.cs                    216 lines   sha256 9645b6faeabb
 //   scripts/CharacterSelect.cs                     184 lines   sha256 241e2389c734
 //   scripts/Combat.cs                              105 lines   sha256 838eeac05eb7
-//   scripts/Economy.cs                             107 lines   sha256 a67cf57609b2
+//   scripts/Economy.cs                             108 lines   sha256 27cf2a0a32ae
 //   scripts/Equipment.cs                           274 lines   sha256 0eab67468e18
 //   scripts/EquipmentWindow.cs                     126 lines   sha256 88af43fe3901
 //   scripts/EscapePod.cs                            49 lines   sha256 6e43477ba73a
@@ -35,22 +35,22 @@
 //   scripts/Explosion.cs                            18 lines   sha256 12209b0c72ce
 //   scripts/Game.cs                                 60 lines   sha256 9d93b07815b8
 //   scripts/Gatherer.cs                            240 lines   sha256 225fd22bfd44
-//   scripts/Hauler.cs                              368 lines   sha256 32d864919bf7
+//   scripts/Hauler.cs                              404 lines   sha256 bfd5b098f8c9
 //   scripts/HealthBar.cs                            23 lines   sha256 fafaf0102ffb
-//   scripts/Hints.cs                                98 lines   sha256 96cc9bb327dd
-//   scripts/Hub.cs                                1583 lines   sha256 7c671dba4b22
+//   scripts/Hints.cs                                98 lines   sha256 1b018c88396f
+//   scripts/Hub.cs                                1613 lines   sha256 6ec776ec578d
 //   scripts/Loot.cs                                118 lines   sha256 f8a5de98fe1f
 //   scripts/MainMenu.cs                            287 lines   sha256 eab17b5a70c3
 //   scripts/MenuFoe.cs                             201 lines   sha256 0bda2aa62d3d
 //   scripts/Missions.cs                             40 lines   sha256 ea3445c37716
 //   scripts/Music.cs                                81 lines   sha256 d77805e7d7ae
-//   scripts/Net.cs                                 776 lines   sha256 ba91320b116b
+//   scripts/Net.cs                                 781 lines   sha256 f27e079491a2
 //   scripts/PilotWindow.cs                          60 lines   sha256 4e05487ebecd
-//   scripts/PlayerShip.cs                          895 lines   sha256 7a97a9898c74
+//   scripts/PlayerShip.cs                          904 lines   sha256 513affc33cf7
 //   scripts/Plume.cs                                25 lines   sha256 cdbeb9b8fc58
 //   scripts/Progression.cs                         106 lines   sha256 7887382412c9
-//   scripts/Radar.cs                               130 lines   sha256 9a8dcad4c7ae
-//   scripts/Raider.cs                              323 lines   sha256 16b597a5ae2a
+//   scripts/Radar.cs                               137 lines   sha256 607acccd21dd
+//   scripts/Raider.cs                              326 lines   sha256 0edf819e1c6a
 //   scripts/ReturnButton.cs                         27 lines   sha256 e36ddbb19a08
 //   scripts/Router.cs                              429 lines   sha256 294cec245abf
 //   scripts/SessionMenu.cs                         141 lines   sha256 777687907142
@@ -58,7 +58,7 @@
 //   scripts/Sfx.cs                                  97 lines   sha256 9efb916881e5
 //   scripts/Shell.cs                                52 lines   sha256 559e4382e95d
 //   scripts/Shield.cs                               71 lines   sha256 99c7fa4a2a8e
-//   scripts/ShipClasses.cs                         531 lines   sha256 575d38217a9c
+//   scripts/ShipClasses.cs                         539 lines   sha256 3f5d43431318
 //   scripts/Sprites.cs                              13 lines   sha256 f2374b1d9777
 //   scripts/Stats.cs                               205 lines   sha256 76dcca49d3f1
 //   scripts/StatsWindow.cs                         225 lines   sha256 843e3831c247
@@ -69,7 +69,7 @@
 //   scripts/Txt.cs                                  32 lines   sha256 8823251c9a4f
 //   scripts/Ui.cs                                  236 lines   sha256 e6d274f5a4cd
 //   scripts/UtilityShip.cs                          74 lines   sha256 c0d1895994ce
-//   scripts/Yard.cs                                534 lines   sha256 1cb67bd4f599
+//   scripts/Yard.cs                                534 lines   sha256 09ca20f88ed4
 //   typecheck/GodotStub.cs                         192 lines   sha256 2c5c2967bf5c
 //   typecheck/typecheck.ps1                         80 lines   sha256 94631684caab
 //   typecheck/typecheck.sh                          57 lines   sha256 e68277c09f34
@@ -84,11 +84,11 @@
 //   tools/map.py                                   232 lines   sha256 01a23fceab11
 //   tools/screens/run.ps1                          128 lines   sha256 9e8d569b0b94
 //   tools/screens/run.sh                            42 lines   sha256 73a5b3c63476
-//   tools/screens/Shots.cs.txt                     562 lines   sha256 9d062f889711
+//   tools/screens/Shots.cs.txt                     563 lines   sha256 f7cae387896c
 //   tools/smoketest/fakeigd.py                     155 lines   sha256 b980d4fa4ad4
 //   tools/smoketest/run.ps1                        209 lines   sha256 54069e6faaff
 //   tools/smoketest/run.sh                          57 lines   sha256 9ac9cbdf9115
-//   tools/smoketest/SmokeTest.cs.txt              3878 lines   sha256 a796752240ff
+//   tools/smoketest/SmokeTest.cs.txt              4025 lines   sha256 bd564f341602
 //   tools/smoketest/wan.py                          61 lines   sha256 97db24aa3f91
 //   tools/snapshot.ps1                              94 lines   sha256 3ca9bfe56185
 //==============================================================================
@@ -2237,7 +2237,7 @@ public static class Combat
 
 //==============================================================================
 // FILE: scripts/Economy.cs
-// 107 lines   sha256 a67cf57609b2
+// 108 lines   sha256 27cf2a0a32ae
 //==============================================================================
 using System;
 
@@ -2280,12 +2280,13 @@ public static class Economy
     // price the formula would ask, not one a player can pay.
     public const double AutoSellCost = 4462;
     public const int AutoSellBoss = 3;            // ...and only once the level-3 boss is beaten
-    // THE ESCORT: 5x the income; 4 waves of hunters, the first 5 s in, then every 20 s
+    // THE ESCORT: 5x the income; a wave of hunters 5 s in, then every 20 s for as long as the run
+    // lasts; a 4 s hold at each outpost to offload
     public const double EscortPay = 5;
-    public const int EscortWaves = 4;
     public const double EscortFirstWave = 5, EscortWaveEvery = 20;
+    public const double OutpostStop = 4;
     // ── hull, and rebuilding what is lost ──
-    public const double UtilityHull = 120, HaulerHull = 150;
+    public const double UtilityHull = 120, HaulerHull = 262.5;
     public const double RebuildDelay = 30;         // seconds after it is destroyed
     public const double RebuildShare = 0.10;       // of everything invested so far in its category
     public const double HaulerLift = 1.5;        // seconds to lift off the pad
@@ -3219,7 +3220,7 @@ public partial class Gatherer : UtilityShip
 
 //==============================================================================
 // FILE: scripts/Hauler.cs
-// 368 lines   sha256 32d864919bf7
+// 404 lines   sha256 bfd5b098f8c9
 //==============================================================================
 using Godot;
 using System;
@@ -3238,8 +3239,10 @@ using System;
 //              level-3 boss beaten, and 4462 cr).
 //   LIFTING    grows to flight size
 //   DEPARTING  a lone run: slides slowly east to the portal
-//   ESCORTING  an escort: flies the long way (Hub.EscortRoute) while waves of raiders
-//              hunt it; it must reach the portal alive
+//   ESCORTING  an escort: flies counter-clockwise round the four outposts (Hub.EscortRoute),
+//              holding 4 s beside each to offload a quarter of the load (drawn as the loading
+//              run backwards), then on to the portal, while a wave of raiders hunts it every
+//              20 s; it must reach the portal alive
 //   CHARGING   shakes inside a building blue aura
 //   AWAY       warps out; 30 s later its cargo is sold. A lone run gets through with the
 //              EVASION chance, or the cargo is lost and it comes back empty; an escort
@@ -3261,13 +3264,24 @@ public partial class Hauler : UtilityShip
     public bool RunLost { get; private set; }    // a lone run the dice went against: its cargo is gone
     public static float? PretendRoll;            // the smoke test's way to fix the dice (like Net.PretendProtocol)
     // Sent to guests with every state report: the two switches, and above them the escort's leg
-    // (where the route line starts).
+    // (where the route line starts; while it holds at an outpost, that outpost).
     public const int FlagEscorted = 1, FlagLost = 2, LegShift = 2;
     public int NetFlags => (Escorted ? FlagEscorted : 0) | (RunLost ? FlagLost : 0) | (_leg << LegShift);
     // What this load sells for at the portal: x5 on an escort, nothing if a lone run was lost.
     public double Payout => Cargo * Economy.CreditsPerUnit * (Escorted ? Economy.EscortPay : RunLost ? 0 : 1);
     private int _leg, _waves;                    // an escort: the route point it is flying to, the waves sent
     public int Leg => _leg;
+    // An escort holding at an outpost: seconds of the stop left (guests are sent it, and count it down).
+    private double _stop;
+    public double StopLeft => _stop;
+    // AN ESCORT DELIVERS A QUARTER OF ITS LOAD AT EACH OUTPOST -- drawn, not paid: the pay (x5) is
+    // on the whole load, at the portal, exactly as before, so a lost escort still loses it all and a
+    // save mid-run still counts the cargo aboard. The pods show what is left: the quarters handed
+    // over so far, the one going out now included.
+    public double Delivered => !Escorted ? 0
+        : State == St.Escorting ? Math.Min(_leg, Hub.Outposts.Length) + (_stop > 0 ? 1 - _stop / Economy.OutpostStop : 0)
+        : State is St.Charging or St.Away ? Hub.Outposts.Length : 0;
+    public double ShownCargo => Cargo * (1 - Delivered / Hub.Outposts.Length);
     public double T;                         // seconds in the current state
     public double LastSale;                  // credits paid on the last return
     public const float Length = 200f;
@@ -3313,10 +3327,10 @@ public partial class Hauler : UtilityShip
     protected override float RebuiltBlast => 60f;
     protected override void OnLost() { _speed = 0; EndEscort(); Go(St.Destroyed); Effects(); }   // gone at once, its hunters with it
 
-    public void SetNet(Vector2 p, float rot, int state, float t, float cargo, float sale, float hull, float rebuild, int flags)
+    public void SetNet(Vector2 p, float rot, int state, float t, float cargo, float sale, float hull, float rebuild, int flags, float stop)
     {
         bool wasLost = Lost;
-        (_netPos, _netRot, _hasNet) = (p, rot, true);
+        (_netPos, _netRot, _hasNet, _stop) = (p, rot, true, stop);
         (Escorted, RunLost, _leg) = ((flags & FlagEscorted) != 0, (flags & FlagLost) != 0, flags >> LegShift);
         if ((St)state != State || Math.Abs(T - t) > 0.5) T = t;
         (State, Cargo, LastSale) = ((St)state, cargo, sale);
@@ -3328,7 +3342,7 @@ public partial class Hauler : UtilityShip
     public void Dispatch(bool escorted)
     {
         if (!Net.Sim || !CanDispatch || !Yard.IsMyOwnBase) return;
-        Escorted = escorted; RunLost = false; _leg = 0; _waves = 0;
+        Escorted = escorted; RunLost = false; _leg = 0; _waves = 0; _stop = 0;
         Go(St.Lifting);
     }
 
@@ -3336,7 +3350,7 @@ public partial class Hauler : UtilityShip
     private void EndEscort()
     {
         if (Escorted && Net.IsHost && Yard?.Hub != null) Yard.Hub.CallOff(this);
-        Escorted = false; _leg = 0; _waves = 0;
+        Escorted = false; _leg = 0; _waves = 0; _stop = 0;
     }
 
     private void Go(St s) { State = s; T = 0; }
@@ -3349,6 +3363,10 @@ public partial class Hauler : UtilityShip
         else
         {
             GuestClock(dt);
+            // Counted down between reports, but never to zero here: the host ends the stop and moves
+            // the leg on in the same frame, and a guest that ended it first would show the quarter
+            // just handed over back in the pods until the report with the next leg arrived.
+            if (_stop > 0) _stop = Math.Max(1e-3, _stop - delta);
             if (_hasNet)
             {   // on its lane only x moves (the lane is exact); an escort flies free
                 float k = Mathf.Clamp(10f * dt, 0f, 1f);
@@ -3373,9 +3391,17 @@ public partial class Hauler : UtilityShip
             case St.Lifting:  if (T >= Economy.HaulerLift) Go(Escorted ? St.Escorting : St.Departing); break;
             case St.Departing: if (Slide(Hub.PortalPos.X, dt)) Go(St.Charging); break;
             case St.Escorting:
-                if (_waves < Economy.EscortWaves && T >= Economy.EscortFirstWave + _waves * Economy.EscortWaveEvery)
-                    Yard.Hub.HuntWave(this, _waves++);
-                if (Fly(Hub.EscortRoute[_leg], _leg == Hub.EscortRoute.Length - 1, dt) && ++_leg == Hub.EscortRoute.Length) Go(St.Charging);
+                // the waves run on T, which a stop does not reset: they keep coming while it offloads
+                if (T >= Economy.EscortFirstWave + _waves * Economy.EscortWaveEvery) Yard.Hub.HuntWave(this, _waves++);
+                if (_stop > 0)
+                {   // holding beside an outpost, offloading; then on to the next point
+                    if ((_stop -= dt) <= 0) { _stop = 0; _leg = Math.Min(_leg + 1, Hub.EscortRoute.Length - 1); }
+                }
+                else if (Fly(Hub.EscortRoute[_leg], dt))
+                {
+                    if (_leg == Hub.EscortRoute.Length - 1) Go(St.Charging);    // the portal
+                    else _stop = Economy.OutpostStop;                           // an outpost
+                }
                 break;
             case St.Charging:
                 if (T >= Economy.HaulerCharge)
@@ -3412,18 +3438,17 @@ public partial class Hauler : UtilityShip
         if (State != St.Escorting) Position = new Vector2(Position.X, Hub.LaneY);   // the lane: every move is flat but an escort's
     }
 
-    // An escort's leg: toward `to` at the hauler's speed (20% of it while pinned), easing in only at
-    // the last point, the nose turning onto the heading at 2 rad/s (not while pinned, like any
-    // utility ship). True when it arrives.
-    private bool Fly(Vector2 to, bool last, float dt)
+    // An escort's leg: toward `to` at the hauler's speed (20% of it while pinned), easing in to stop
+    // there (every point of the route is a stop: an outpost, or the portal), the nose turning onto
+    // the heading at 2 rad/s (not while pinned, like any utility ship). True when it arrives.
+    private bool Fly(Vector2 to, float dt)
     {
         var d = to - Position; float dist = d.Length();
         float top = (float)Economy.HaulerSpeed * (Pinned ? Raider.PinSpeed : 1f);
-        float want = last ? Mathf.Min(top, Mathf.Sqrt(2f * Accel * dist)) : top;
-        _speed = Mathf.MoveToward(_speed, want, Accel * dt);
+        _speed = Mathf.MoveToward(_speed, Mathf.Min(top, Mathf.Sqrt(2f * Accel * dist)), Accel * dt);
         if (Pinned) _speed = Mathf.Min(_speed, top);
         if (!Pinned && dist > 1f) Rotation = Mathf.RotateToward(Rotation, d.Angle() + Mathf.Pi / 2f, 2f * dt);
-        if (dist < 0.5f || _speed * dt >= dist) { Position = to; if (last) _speed = 0; return true; }
+        if (dist < 0.5f || _speed * dt >= dist) { Position = to; _speed = 0; return true; }
         Position += d / dist * _speed * dt;
         return false;
     }
@@ -3496,18 +3521,18 @@ public partial class Hauler : UtilityShip
         DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
     }
 
-    // above the hull: the pods, the cargo stream while loading, the sale on return
+    // above the hull: the pods, the cargo stream while loading or offloading, the sale on return
     private void DrawOverlay()
     {
         float s = VisualScale;
-        int pods = Yard.Pods; double podSize = Yard.PodSize;
+        int pods = Yard.Pods; double podSize = Yard.PodSize; double shown = ShownCargo;
         float flash = State == St.Arriving ? Mathf.Max(0f, 1f - (float)(T / 1.2)) : 0f;   // emptying on return
         for (int i = 0; i < Economy.MaxPods; i++)
         {
             var r = new Rect2((PodCentre[i] - PodSize / 2) * s, PodSize * s);
             if (i >= pods) { _overlay.DrawRect(r, new Color(0.03f, 0.04f, 0.06f, 0.62f)); continue; }   // not yet bought
-            float fill = (float)Math.Clamp((Cargo - i * podSize) / podSize, 0, 1);
-            if (fill > 0)   // fills from the rear of the pod forward
+            float fill = (float)Math.Clamp((shown - i * podSize) / podSize, 0, 1);
+            if (fill > 0)   // fills from the rear of the pod forward (and an offload empties it the other way)
                 _overlay.DrawRect(new Rect2(r.Position + new Vector2(0, r.Size.Y * (1 - fill)), new Vector2(r.Size.X, r.Size.Y * fill)),
                                   new Color(0.35f, 0.8f, 1f, fill >= 1 ? 0.5f : 0.35f));
             if (flash > 0) _overlay.DrawRect(r, new Color(1f, 0.95f, 0.7f, 0.55f * flash));
@@ -3519,6 +3544,18 @@ public partial class Hauler : UtilityShip
         {   // crates of stock coming down the stem into the pod being filled
             int into = Math.Min(pods - 1, (int)(Cargo / podSize));
             var from = inv * Hub.StemFoot; var to = PodCentre[into] * s;
+            for (int k = 0; k < 5; k++)
+            {
+                float f = (float)((T * 1.2 + k / 5.0) % 1.0);
+                _overlay.DrawRect(new Rect2(from.Lerp(to, f) - new Vector2(2.5f, 2.5f), new Vector2(5f, 5f)),
+                                  new Color(0.9f, 0.75f, 0.45f, Mathf.Min(1f, 4f * (1f - f))));
+            }
+        }
+        if (State == St.Escorting && _stop > 0 && shown > 0.5)
+        {   // OFFLOADING beside an outpost: the loading run backwards -- crates out of the pod being
+            // emptied (the last one filled), across to the station
+            int outOf = Math.Clamp((int)Math.Ceiling(shown / podSize) - 1, 0, pods - 1);
+            var from = PodCentre[outOf] * s; var to = inv * Hub.Outposts[Math.Min(_leg, Hub.Outposts.Length - 1)].at;
             for (int k = 0; k < 5; k++)
             {
                 float f = (float)((T * 1.2 + k / 5.0) % 1.0);
@@ -3620,7 +3657,7 @@ public static class HealthBar
 
 //==============================================================================
 // FILE: scripts/Hints.cs
-// 98 lines   sha256 96cc9bb327dd
+// 98 lines   sha256 1b018c88396f
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -3646,7 +3683,7 @@ public partial class Hints : CanvasLayer
         ["loot"]        = ("LOOT", "Crates only you can see. Fly over one to take it; any you leave behind come home with you."),
         ["multiplayer"] = ("MULTIPLAYER", "HOST THIS WORLD, then COPY ADDRESS for your friends. To join a friend, type their address, then JOIN."),
         ["raid"]        = ("RAIDERS", "They come for your base after a failed mission, and for your hauler on an escort. The base's guns help; miners, salvagers and the hauler cannot fight back."),
-        ["hauler"]      = ("THE HAULER", "DISPATCH sends it alone: past the portal it may be lost (EVASION, on the HAULER tab, lowers the risk). ESCORT flies it the long way for five times the pay; keep the raiders off it."),
+        ["hauler"]      = ("THE HAULER", "DISPATCH sends it alone: past the portal it may be lost (EVASION, on the HAULER tab, lowers the risk). ESCORT flies it round the four outposts for five times the pay; keep the raiders off it."),
         ["pilot"]       = ("A LEVEL UP", "L spends your points on rudder, hull, engines and weapons. Bosses give EXP; the first clear of each level gives more."),
         ["warp"]        = ("WARP", "V charges for 3 s, then jumps to your target or waypoint if the bow is on it, else 2000 u ahead. 30 s to recharge."),
         ["stasis"]      = ("STASIS", "Your ship is held in stasis, not lost. Fly the escape pod clear; when the ship is ready, F re-boards it."),
@@ -3723,7 +3760,7 @@ public partial class Hints : CanvasLayer
 
 //==============================================================================
 // FILE: scripts/Hub.cs
-// 1583 lines   sha256 7c671dba4b22
+// 1613 lines   sha256 6ec776ec578d
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -3762,9 +3799,23 @@ public partial class Hub : Node2D
     public static readonly Vector2 SunPos    = new(0, -1794);
     public static readonly Vector2 WreckPos  = new(-1840, 60);
     public static readonly Vector2 PortalPos = new(1500, 219);
-    // AN ESCORT's long way to the portal: south round the TIO, east, then up to the jump (~4400 u).
-    // Written after PortalPos, which it ends on: static fields start in the order they are written.
-    public static readonly Vector2[] EscortRoute = { new(-300, 1100), new(600, 1700), new(1900, 1100), PortalPos };
+    // FOUR OUTPOSTS, 2000 u out from the base on the diagonals (y grows south): small permanent
+    // stations the escort delivers to, named for their corner, in the order the escort visits
+    // them -- counter-clockwise from the south-east. Every peer builds them (BuildWorld).
+    public const float OutpostOut = 2000f, OutpostHeight = 170f;
+    public static readonly (string name, Vector2 at)[] Outposts =
+    {
+        ("SE", BasePos + new Vector2(1, 1).Normalized() * OutpostOut), ("NE", BasePos + new Vector2(1, -1).Normalized() * OutpostOut),
+        ("NW", BasePos + new Vector2(-1, -1).Normalized() * OutpostOut), ("SW", BasePos + new Vector2(-1, 1).Normalized() * OutpostOut),
+    };
+    // Where the hauler holds beside an outpost to offload: on its base side, clear of the station --
+    // half the hauler (100 u), arriving nose-first, plus half the station (85 u), plus a gap.
+    public const float OutpostDock = 230f;
+    public static Vector2 DockAt(Vector2 outpost) => outpost + (BasePos - outpost).Normalized() * OutpostDock;
+    // AN ESCORT's long way to the portal: to each outpost in turn, holding at each (Hauler), then to
+    // the jump (~13,000 u). Written after the outposts and PortalPos, which it is made of: static
+    // fields start in the order they are written.
+    public static readonly Vector2[] EscortRoute = Outposts.Select(o => DockAt(o.at)).Append(PortalPos).ToArray();
     // Threat Intelligence Operations: south-west of the base, clear of the wreck, the
     // salvage routes, the haul lane and the dummies.
     public static readonly Vector2 TioPos = new(-650, 640);
@@ -4036,6 +4087,13 @@ public partial class Hub : Node2D
         // its name, drawn in the world like every world label (a UI control here counted
         // as "off-screen" whenever the camera looked elsewhere)
         AddChild(new WorldLabel { Text = "THREAT INTELLIGENCE OPERATIONS", Position = TioPos + new Vector2(0, TioHeight / 2 + 16), ZIndex = 2 });
+        foreach (var (name, at) in Outposts)
+        {   // the outposts: permanent, and nothing to replicate -- every peer builds the same four
+            var o = Sprites.Fit("res://outpost.png", OutpostHeight);
+            o.Name = "Outpost" + name; o.Position = at; o.ZIndex = 2;
+            AddChild(o);
+            AddChild(new WorldLabel { Text = "OUTPOST " + name, Position = at + new Vector2(0, OutpostHeight / 2 + 16), ZIndex = 2 });
+        }
 
         Portal = new Portal { Position = PortalPos, Name = "Portal" };
         AddChild(Portal);
@@ -4070,7 +4128,7 @@ public partial class Hub : Node2D
     [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
     private void NetShipState(float px, float py, float vx, float vy, float rot, float ax, float ay, bool trigger, bool staggered,
                               float podX, float podY, float podRot, bool warping) =>
-        ShipOf(Multiplayer.GetRemoteSenderId())?.ApplyState(px, py, vx, vy, rot, ax, ay, trigger, staggered, podX, podY, podRot, warping);
+        ShipOf(Net.SenderOf(this))?.ApplyState(px, py, vx, vy, rot, ax, ay, trigger, staggered, podX, podY, podRot, warping);
     public void SendHostState(int owner, double hp, double maxHp, bool alive, double stasis, bool pinned, double combat, double pdLeft, double pdRecharge,
                               int mag, double reload, double bsWindup, int bsVolleys, double bsCooldown,
                               int wingTarget, Vector2[] wingPos, float[] wingRot, int[] wingState, float[] wingRearm) =>
@@ -4116,7 +4174,7 @@ public partial class Hub : Node2D
         _peerSector[who] = (SectorKind)s;
         if ((SectorKind)s != Sector) { RpcId(who, nameof(NetSector), (int)Sector); return; }
         RpcId(who, nameof(NetMission), MissionArgs());
-        foreach (var r in Raiders) RpcId(who, nameof(NetRaiderSpawn), r.NetId, r.Position, (int)r.Kind, r.Strength);
+        foreach (var r in Raiders) RpcId(who, nameof(NetRaiderSpawn), r.NetId, r.Position, (int)r.Kind, r.Strength, r.HullShare);
         if (MissionWon) { RpcId(who, nameof(NetWon), _ships.Count); RpcId(who, nameof(NetReturnCount), ReturnReady, ReturnTotal); }
         if (_placeFor.Remove(who, out var place)) RpcId(who, nameof(NetPlace), place.at, place.rot);
     }
@@ -4317,7 +4375,7 @@ public partial class Hub : Node2D
     private void NetIdentity(int peer, string name, Color main, Color accent, int cls, int[] bought, int level, string[] equip, string characterId)
     {
         // a peer may only describe itself
-        if (Multiplayer.GetRemoteSenderId() != peer || Net.I == null) return;
+        if (Net.SenderOf(this) != peer || Net.I == null) return;
         if (!Net.I.Players.TryGetValue(peer, out var p)) Net.I.Players[peer] = p = new Net.PlayerInfo();
         // Everything else off this wire is sanitised (bought is null-guarded below, equip inside
         // Equipment.Sanitize); the name was not. A null here threw on .Length, and a null that got
@@ -4602,29 +4660,32 @@ public partial class Hub : Node2D
         foreach (var u in Yard.Fleet) if (Raider.Up(u)) yield return u;
     }
 
-    // A patrol: 3 lights and 1 heavy, spawned together at `at` on the perimeter -- hunters of
-    // `quarry`, if one is given.
+    // A patrol: 3 lights and (unless `heavy` is false) 1 heavy, spawned together at `at` on the
+    // perimeter -- hunters of `quarry`, if one is given, built with `hullShare` of their hull.
     private int _patrols;
-    public int SpawnPatrol(Vector2 at, double scale = 1, Node2D quarry = null)
+    public int SpawnPatrol(Vector2 at, double scale = 1, Node2D quarry = null, bool heavy = true, double hullShare = 1)
     {
         if (!Net.IsHost) return 0;
         int id = ++_patrols;
-        foreach (var (off, kind) in new[] { (new Vector2(-40, 0), RaiderKind.Light), (Vector2.Zero, RaiderKind.Light),
-                                            (new Vector2(40, 0), RaiderKind.Light), (new Vector2(0, 90), RaiderKind.Heavy) })
-            SpawnRaider(at + off, kind, id, scale).Quarry = quarry;
+        var crew = new List<(Vector2 off, RaiderKind kind)> { (new Vector2(-40, 0), RaiderKind.Light), (Vector2.Zero, RaiderKind.Light), (new Vector2(40, 0), RaiderKind.Light) };
+        if (heavy) crew.Add((new Vector2(0, 90), RaiderKind.Heavy));
+        foreach (var (off, kind) in crew) SpawnRaider(at + off, kind, id, scale, hullShare).Quarry = quarry;
         return id;
     }
 
     // AN ESCORT'S HUNTERS: a wave sent after one quarry, in from the map's edge beside it -- one
-    // patrol, and one more per extra pilot, at the strength of the base owner's highest boss.
-    // Alternate waves come round from alternate sides.
+    // patrol, and one more per extra pilot, at the strength of the base owner's highest boss and
+    // at HALF their hull. The first wave is light fighters only; every other wave after it brings
+    // a heavy too (the second, the fourth, ...). Alternate waves come round from alternate sides.
+    public const double HunterHull = 0.5;
     public void HuntWave(Node2D quarry, int wave)
     {
         if (!Net.IsHost) return;
         int patrols = 1 + System.Math.Max(0, _ships.Count - 1);
         var edge = Raider.EdgeSpot(quarry.Position) - BasePos;
         for (int i = 0; i < patrols; i++)
-            SpawnPatrol(BasePos + edge.Rotated((wave % 2 == 0 ? 1 : -1) * 0.35f * (i + 1)), Missions.S(System.Math.Max(1, Missions.HighestBeaten)), quarry);
+            SpawnPatrol(BasePos + edge.Rotated((wave % 2 == 0 ? 1 : -1) * 0.35f * (i + 1)), Missions.S(System.Math.Max(1, Missions.HighestBeaten)), quarry,
+                        heavy: wave % 2 == 1, hullShare: HunterHull);
     }
     // The hunt is over (the quarry reached the portal, or was lost): its hunters withdraw -- gone,
     // not shot down.
@@ -4638,23 +4699,23 @@ public partial class Hub : Node2D
         }
     }
 
-    public Raider SpawnRaider(Vector2 at, RaiderKind kind = RaiderKind.Light, int patrol = 0, double scale = 1)
+    public Raider SpawnRaider(Vector2 at, RaiderKind kind = RaiderKind.Light, int patrol = 0, double scale = 1, double hullShare = 1)
     {
         if (!Net.IsHost) return null;
-        var r = AddRaider(++_raiderIds, at, kind, patrol, scale);
-        ToWorld(nameof(NetRaiderSpawn), r.NetId, at, (int)kind, scale);
+        var r = AddRaider(++_raiderIds, at, kind, patrol, scale, hullShare);
+        ToWorld(nameof(NetRaiderSpawn), r.NetId, at, (int)kind, scale, hullShare);
         return r;
     }
     // Idempotent: a late joiner is sent every raider that exists, and one of them may already
     // have reached it the ordinary way.
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetRaiderSpawn(int id, Vector2 at, int kind, double scale)
+    private void NetRaiderSpawn(int id, Vector2 at, int kind, double scale, double hullShare)
     {
-        if (Raiders.All(x => x.NetId != id)) AddRaider(id, at, (RaiderKind)kind, 0, scale);
+        if (Raiders.All(x => x.NetId != id)) AddRaider(id, at, (RaiderKind)kind, 0, scale, hullShare);
     }
-    private Raider AddRaider(int id, Vector2 at, RaiderKind kind, int patrol, double scale)
+    private Raider AddRaider(int id, Vector2 at, RaiderKind kind, int patrol, double scale, double hullShare)
     {
-        var r = new Raider { Hub = this, Kind = kind, Patrol = patrol, Strength = scale, NetId = id, Position = at, Name = $"Raider_{id}" };
+        var r = new Raider { Hub = this, Kind = kind, Patrol = patrol, Strength = scale, HullShare = hullShare, NetId = id, Position = at, Name = $"Raider_{id}" };
         Raiders.Add(r); AddChild(r);
         return r;
     }
@@ -4669,12 +4730,18 @@ public partial class Hub : Node2D
     {
         if (Raiders.FirstOrDefault(x => x.NetId == id) is { } r) DropRaider(r, burst);
     }
-    // Also let go of it as the selection: on a guest a raider's hull never reads zero (the host
-    // removes it before its last hull reaches anyone), so a selected one stayed "alive" and freed.
+    // Also let go of it as the selection and as every ship's target: on a guest a raider's hull
+    // never reads zero (the host removes it before its last hull reaches anyone), and a withdrawn
+    // hunter (CallOff) is freed with hull left -- either way it stayed "alive" and freed, and a
+    // carrier's fighters and point defence went on reading it. It leaves the hostiles NOW, not when
+    // the queued free takes it out of the tree at the frame's end: a turret that ticked later in the
+    // same frame acquired it again.
     private void DropRaider(Raider r, bool burst)
     {
         if (burst) AddChild(new Explosion { Position = r.Position, Radius = 28f });
         if (ReferenceEquals(_selected, r)) _selected = null;
+        Combat.Hostiles.Remove(r);
+        foreach (var s in _ships.Values) if (IsInstanceValid(s)) s.Forget(r);
         Raiders.Remove(r); r.QueueFree();
     }
 
@@ -6063,7 +6130,7 @@ public partial class Music : Node
 
 //==============================================================================
 // FILE: scripts/Net.cs
-// 776 lines   sha256 ba91320b116b
+// 781 lines   sha256 f27e079491a2
 //==============================================================================
 using Godot;
 using System;
@@ -6795,9 +6862,14 @@ public partial class Net : Node
     // from anyone else -- a peer still handshaking, or one already gone -- is ignored.
     public static bool FromPlayer(Node node, out int who)
     {
-        who = node.Multiplayer.GetRemoteSenderId();
+        who = SenderOf(node);
         return IsHost && I != null && I.Players.ContainsKey(who);
     }
+    // Who sent the RPC now being run on `node` -- 0 if it is no longer in the tree. A world on its
+    // way out (a scene change, the game quitting) still gets the packets already on the wire, and
+    // out of the tree its Multiplayer is null: a peer's 20 Hz ship report landing in that moment
+    // threw on the arena host after every check had passed.
+    public static int SenderOf(Node node) => node.IsInsideTree() ? node.Multiplayer.GetRemoteSenderId() : 0;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -6909,7 +6981,7 @@ public partial class PilotWindow : PanelContainer
 
 //==============================================================================
 // FILE: scripts/PlayerShip.cs
-// 895 lines   sha256 7a97a9898c74
+// 904 lines   sha256 513affc33cf7
 //==============================================================================
 using Godot;
 using System;
@@ -7306,7 +7378,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
             case "recall":  WingTarget = null; break;
             case "bombers":
                 // within the strike range (twice the fighters' control range) only
-                if (Classes.Wing(Class) && t != null && StrikeTarget == null && BombersReady > 0
+                if (Classes.Wing(Class) && t != null && StrikeTarget == null && _strikesOut <= 0 && BombersReady > 0
                     && Position.DistanceTo(t.Position) <= Stats["strike_range"])
                 { StrikeTarget = t; _strikesOut = BombersReady; }
                 break;
@@ -7385,6 +7457,15 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
     }
 
     public void NoteStrikeDone() { if (--_strikesOut <= 0) StrikeTarget = null; }
+    // A target that has left the world: the wing, the bombers and every turret let go of it. The
+    // strike's count is NOT reset: bombers already out still report back (NoteStrikeDone), and a new
+    // strike waits for all of them, as it did when a dead target stayed the strike's until then.
+    public void Forget(IHittable t)
+    {
+        if (ReferenceEquals(WingTarget, t)) WingTarget = null;
+        if (ReferenceEquals(StrikeTarget, t)) StrikeTarget = null;
+        foreach (var tu in _turrets) tu.Forget(t);
+    }
 
     // A BURST (destroyer): three missiles off the nose, one straight at the target and two launched
     // up to 70 degrees to either side, all guided -- each heading turns toward the target at
@@ -7950,7 +8031,7 @@ public static class Progression
 
 //==============================================================================
 // FILE: scripts/Radar.cs
-// 130 lines   sha256 9a8dcad4c7ae
+// 137 lines   sha256 607acccd21dd
 //==============================================================================
 using Godot;
 
@@ -7996,6 +8077,7 @@ public partial class Radar : Control
             marks.Add(("BASE", Hub.BasePos, 260f)); marks.Add(("THREAT INTELLIGENCE", Hub.TioPos, 140f));
             marks.Add(("PORTAL", Hub.PortalPos, 160f)); marks.Add(("SALVAGE FIELD", Hub.WreckPos, 340f));
             marks.Add(("MINING BELT", Hub.SunPos, 540f));
+            foreach (var (name, at) in Hub.Outposts) marks.Add(("OUTPOST " + name, at, Hub.OutpostHeight * 0.5f));
             if (Hub.Mission == Hub.MissionState.PortalOpen) marks.Add(("MISSION PORTAL", Hub.MissionPortalPos, 160f));
         }
         foreach (var s in Hub.Ships) if (s != me) marks.Add((s.Pilot, s.Position, s.HitRadius));
@@ -8040,6 +8122,12 @@ public partial class Radar : Control
             { var p = P(Hub.TioPos); if (Inside(p)) DrawRect(new Rect2(p - new Vector2(3, 4), new Vector2(6, 8)), new Color(0.6f, 0.64f, 0.7f)); }   // the TIO
             { var p = P(Hub.BasePos); if (Inside(p)) DrawRect(new Rect2(p - new Vector2(4, 4), new Vector2(8, 8)), new Color(0.75f, 0.78f, 0.8f)); }
             { var p = P(Hub.PortalPos); if (Inside(p)) DrawArc(p, 5f, 0, Mathf.Tau, 16, new Color(0.4f, 0.8f, 1f), 1.5f); }
+            foreach (var (_, at) in Hub.Outposts)                                                    // the outposts: small diamonds
+            {
+                var p = P(at);
+                if (Inside(p)) DrawColoredPolygon(new[] { p + new Vector2(0, -4), p + new Vector2(3.5f, 0), p + new Vector2(0, 4), p + new Vector2(-3.5f, 0) },
+                                                  new Color(0.55f, 0.72f, 0.85f));
+            }
         }
         // the fleet that is out there: a lost ship, or the hauler through the portal, has no dot
         if (Hub.Yard != null) foreach (var g in Hub.Yard.Gatherers) { var p = P(g.Position); if (g.InReach && Inside(p)) DrawCircle(p, 1.8f, Plume.Utility); }
@@ -8085,7 +8173,7 @@ public partial class Radar : Control
 
 //==============================================================================
 // FILE: scripts/Raider.cs
-// 323 lines   sha256 16b597a5ae2a
+// 326 lines   sha256 0edf819e1c6a
 //==============================================================================
 using Godot;
 using System.Linq;
@@ -8130,7 +8218,10 @@ public partial class Raider : Node2D, IHittable
     public float Length => Heavy ? HeavyLength : LightLength;
     // a raid's raiders are as strong as the boss that was failed: S(L) = 1.1^(L-1)
     public double Strength = 1;          // S(L) (was "Scale", which hid Node2D.Scale)
-    public double MaxHull => (Heavy ? HeavyHull : LightHull) * Strength;
+    // The share of that hull it is built with: an escort's hunters come at half (Hub.HunterHull).
+    // Not Strength, which scales its damage too. Set before it enters the tree (_Ready reads it).
+    public double HullShare = 1;
+    public double MaxHull => (Heavy ? HeavyHull : LightHull) * Strength * HullShare;
     public float HitRadius => Length * (Heavy ? 0.3f : 0.4f);
     public bool Selectable => true;
 
@@ -9352,7 +9443,7 @@ public partial class ShieldFlash : Node2D
 
 //==============================================================================
 // FILE: scripts/ShipClasses.cs
-// 531 lines   sha256 575d38217a9c
+// 539 lines   sha256 3f5d43431318
 //==============================================================================
 using System.Linq;
 using Godot;
@@ -9432,6 +9523,8 @@ public partial class Turret : Node2D
     public IHittable Target { get; private set; }
 
     private bool Online => !PointDefense || Ship.PdActive;
+    // a target that has left the world (Hub.DropRaider, through PlayerShip.Forget)
+    public void Forget(IHittable t) { if (ReferenceEquals(Target, t)) Target = null; }
 
     private ShipStats S => Ship.Stats;
     // Through a broadside the main turrets swing fast enough to come round from anywhere onto the
@@ -9499,10 +9592,12 @@ public partial class Turret : Node2D
         _cd -= delta;
         if (!canFire) { if (_cd < 0) _cd = 0; }
         else for (int n = 0; _cd <= 0 && n < 8; n++)
-        {
+        {   // the target held for the shot: a shot that kills it drops it from this turret (Hub.DropRaider)
+            var tgt = Target;
+            if (tgt == null) break;
             _cd += Interval;
-            Target.TakeDamage(ShotDamage); Ship.NoteCombat();
-            Combat.Flash(wp + Vector2.Right.Rotated(GlobalRotation) * BarrelLength, Target.Position, new Color(0.7f, 0.95f, 1f));
+            tgt.TakeDamage(ShotDamage); Ship.NoteCombat();
+            Combat.Flash(wp + Vector2.Right.Rotated(GlobalRotation) * BarrelLength, tgt.Position, new Color(0.7f, 0.95f, 1f));
         }
         QueueRedraw();
     }
@@ -9608,10 +9703,13 @@ public partial class Wing : Node2D
 
     // ── fighters: strafing runs ──────────────────────────────────────────────
     // Each pass: 3 shots, straight THROUGH the target until 1.2x its diameter past
-    // it, then turn for the next. They fly like aircraft -- steady speed, limited
-    // turn rate -- so the pass and the turn are real. After 15 s engaged they fly
-    // home and dock INSIDE the carrier for a 3 s rest; with nothing to fight they
-    // stay inside.
+    // it -- and at least one of the fighter's own turning circles past it -- then turn
+    // for the next. They fly like aircraft -- steady speed, limited turn rate -- so the
+    // pass and the turn are real, and a target left INSIDE the turning circle can never
+    // be brought onto the nose: the fighter only flies laps round it. A small, slow
+    // target (a light raider riding a pinned hauler) ended up there after every pass,
+    // and was never fired on again. After 15 s engaged they fly home and dock INSIDE
+    // the carrier for a 3 s rest; with nothing to fight they stay inside.
     public const int BurstShots = 3;
     // HARD LIMIT: fighters leave the hangar at least this far apart. Deliberately a constant,
     // not a stat: no upgrade or rate-of-fire bonus may ever change it.
@@ -9734,7 +9832,7 @@ public partial class Wing : Node2D
             {
                 Fly(dt);
                 float beyond = (Position - t.Position).Dot(Vector2.Right.Rotated(_heading));
-                if (beyond >= Overshoot * 2f * t.HitRadius) { LastOvershoot = beyond; _f = FSt.Turn; }
+                if (beyond >= Mathf.Max(Overshoot * 2f * t.HitRadius, TurnDiameter)) { LastOvershoot = beyond; _f = FSt.Turn; }
                 break;
             }
             case FSt.Turn:                         // come round for the next pass
@@ -9754,6 +9852,7 @@ public partial class Wing : Node2D
     }
 
     private float TurnRate => (float)S["fighter_turn"];
+    public float TurnDiameter => 2f * Speed / TurnRate;
     private float OffAngle(Vector2 p) => Mathf.Abs(Mathf.AngleDifference(_heading, (p - Position).Angle()));
     private void SteerTo(Vector2 p, float dt)
     {
@@ -11128,7 +11227,7 @@ public abstract partial class UtilityShip : Node2D, IRaidTarget
 
 //==============================================================================
 // FILE: scripts/Yard.cs
-// 534 lines   sha256 1cb67bd4f599
+// 534 lines   sha256 09ca20f88ed4
 //==============================================================================
 using Godot;
 using System;
@@ -11607,18 +11706,18 @@ public partial class Yard : Node2D
             (gp[i], gr[i], gs[i], gc[i], gb[i], gh[i], gw[i]) = (g.Position, g.Rotation, (int)g.State, (float)g.Cargo, g.BeamTo, (float)g.Hull, g.NetRebuild);
         }
         var h = Hauler;
-        Hub.RpcHome(this, nameof(NetState), gp, gr, gs, gc, gb, gh, gw, h.Position, h.Rotation, (int)h.State, (float)h.T, (float)h.Cargo, (float)h.LastSale, (float)h.Hull, h.NetRebuild, h.NetFlags);
+        Hub.RpcHome(this, nameof(NetState), gp, gr, gs, gc, gb, gh, gw, h.Position, h.Rotation, (int)h.State, (float)h.T, (float)h.Cargo, (float)h.LastSale, (float)h.Hull, h.NetRebuild, h.NetFlags, (float)h.StopLeft);
     }
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
     private void NetState(Vector2[] gp, float[] gr, int[] gs, float[] gc, Vector2[] gb, float[] gh, float[] gw,
-                          Vector2 hp, float hr, int hs, float ht, float hc, float sale, float hh, float hw, int hf)
+                          Vector2 hp, float hr, int hs, float ht, float hc, float sale, float hh, float hw, int hf, float hstop)
     {
         // the fleet follows the levels (1 s); until they agree, skip the ships this once
         int n = Math.Min(gp.Length, Math.Min(gr.Length, Math.Min(gs.Length, Math.Min(gc.Length, Math.Min(gb.Length, Math.Min(gh.Length, gw.Length))))));
         if (n == Gatherers.Count)
             for (int i = 0; i < n; i++) Gatherers[i].SetNet(gp[i], gr[i], gs[i], gc[i], gb[i], gh[i], gw[i]);
-        Hauler.SetNet(hp, hr, hs, ht, hc, sale, hh, hw, hf);
+        Hauler.SetNet(hp, hr, hs, ht, hc, sale, hh, hw, hf, hstop);
     }
 
     // The whole fleet, for whatever treats a miner, a salvager and the hauler alike.
@@ -12773,7 +12872,7 @@ ls /tmp/shots
 
 //==============================================================================
 // FILE: tools/screens/Shots.cs.txt
-// 562 lines   sha256 9d062f889711
+// 563 lines   sha256 f7cae387896c
 //==============================================================================
 // Screenshot driver. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Shots.cs, registers it as an autoload, and runs the real
@@ -13295,16 +13394,17 @@ public partial class _Shots : Node
                 await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             }
             await Frame(Hub.PortalPos, 1.2f); await W(0.3); await Snap("59b_hauler_cargo_lost");
-            // an ESCORT mid-route: off the lane, its way ahead drawn, a wave closing on it
+            // an ESCORT at its first outpost: holding beside it, offloading (crates out of the pods,
+            // across to the station), its way ahead drawn, a wave closing on it
             Hauler.PretendRoll = null;
             h.ResetToPad(); h.Cargo = 300;
             Y.RequestDispatch(escorted: true); h.T = Economy.HaulerLift;
             for (int i = 0; i < 600 && h.State != Hauler.St.Escorting; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            typeof(Hauler).GetField("_leg", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(h, 1);
-            h.Position = new Vector2(150, 1400); h.T = Economy.EscortFirstWave - 0.1;
-            await W(1.0);
+            h.Position = Hub.EscortRoute[0] + new Vector2(-10, -10); h.T = Economy.EscortFirstWave - 0.1;
+            for (int i = 0; i < 300 && h.StopLeft <= 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await W(0.9);
             foreach (var r in hub.Raiders) r.Position = h.Position + (r.Position - h.Position).Normalized() * 700f;
-            await Frame(h.Position + new Vector2(150, 50), 0.55f); await Snap("59_hauler_escort");
+            await Frame(h.Position + new Vector2(60, 40), 0.9f); await Snap("59_hauler_escort_offloading");
             foreach (var r in hub.Raiders.ToList()) r.TakeDamage(1e9);
             h.ResetToPad(); await W(0.3);
             Me().Visible = true;
@@ -13776,7 +13876,7 @@ echo "SMOKE TEST PASSED"
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 3878 lines   sha256 a796752240ff
+// 4025 lines   sha256 bd564f341602
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -14695,6 +14795,35 @@ public partial class _Test : Node
             Check(rocks.Count == 9 && Math.Abs(beltEdge - 1500) < 8 && Math.Abs(wreckEdge - 1500) < 8,
                   "the mining belt's and the wreck's nearest edges are both 1500 u from the base");
         }
+        // A PACKET FOR A WORLD ON ITS WAY OUT: a peer's ship report (20 Hz) or identity can land on a Hub
+        // that has left the tree (a scene change, the game quitting), where Multiplayer is null. It must
+        // be dropped, not thrown: it threw on the arena host after every check had passed.
+        {
+            var loose = new Hub();
+            bool dropped = true;
+            try
+            {
+                typeof(Hub).GetMethod("NetShipState", BindingFlags.NonPublic | BindingFlags.Instance)
+                           .Invoke(loose, new object[] { 0f, 0f, 0f, 0f, 0f, 0f, 0f, false, false, 0f, 0f, 0f, false });
+                typeof(Hub).GetMethod("NetIdentity", BindingFlags.NonPublic | BindingFlags.Instance)
+                           .Invoke(loose, new object[] { 5, "X", Colors.White, Colors.White, 0, new int[0], 1, new string[0], "x" });
+                dropped &= !Net.FromPlayer(loose, out int who) && who == 0;
+            }
+            catch (Exception) { dropped = false; }
+            loose.Free();
+            Check(dropped, "a ship report or identity landing on a world already out of the tree is dropped, not thrown");
+        }
+        // THE OUTPOSTS: 2000 u out on the diagonals, named for their corners, each with its label
+        {
+            double c = 2000 / Math.Sqrt(2);      // 1414.2 u east or west, north or south
+            var want = new[] { ("SE", new Vector2((float)c, (float)c)), ("NE", new Vector2((float)c, (float)-c)), ("NW", new Vector2((float)-c, (float)-c)), ("SW", new Vector2((float)-c, (float)c)) };
+            var opLabels = H.GetChildren().OfType<WorldLabel>().ToList();
+            bool built = want.All(w => H.GetNodeOrNull<Sprite2D>("Outpost" + w.Item1) is { } o && o.Position.DistanceTo(w.Item2) < 0.5f
+                                       && o.Texture.ResourcePath.EndsWith("outpost.png") && Math.Abs(o.Texture.GetHeight() * o.Scale.Y - 170f) < 0.5f
+                                       && opLabels.Any(l => l.Text == "OUTPOST " + w.Item1 && l.Position.DistanceTo(w.Item2) < 120f));
+            Check(built && Hub.Outposts.Select(o => o.name).SequenceEqual(new[] { "SE", "NE", "NW", "SW" }),
+                  "four outposts 2000 u out on the diagonals (±1414, ±1414), labelled OUTPOST SE / NE / NW / SW");
+        }
         var tioS = H.GetNodeOrNull<Sprite2D>("TIO");
         Check(tioS != null && tioS.Position == Hub.TioPos && Math.Abs(tioS.Texture.GetHeight() * tioS.Scale.Y - Hub.TioHeight) < 0.5f,
               "the Threat Intelligence Operations building stands south-west of the base");
@@ -14926,11 +15055,19 @@ public partial class _Test : Node
         var hh = Nodes<HaulerHud>().FirstOrDefault(); var escBtn = hh == null ? null : Nodes<Button>(hh).FirstOrDefault(b => b.Name == "Escort");
         Check(escBtn != null && escBtn.Visible, "the base owner's hauler offers ESCORT beside DISPATCH");
         Y.RequestDispatch(escorted: true);
+        // THE ROUTE, in the spec's terms: the four outposts counter-clockwise from the south-east --
+        // held beside, on the base's side -- then the portal
+        var corners = new[] { new Vector2(1414.2f, 1414.2f), new Vector2(1414.2f, -1414.2f), new Vector2(-1414.2f, -1414.2f), new Vector2(-1414.2f, 1414.2f) };
+        bool routeOk = Hub.EscortRoute.Length == 5 && Hub.EscortRoute[4] == new Vector2(1500, 219)
+                       && Enumerable.Range(0, 4).All(i => Hub.EscortRoute[i].DistanceTo(corners[i]) < 250f && Hub.EscortRoute[i].Length() < corners[i].Length()
+                                                          && Hub.EscortRoute[i].DistanceTo(corners[i]) > 100f + 85f);
+        Check(routeOk, $"the escort's route: SE, NE, NW, SW -- beside each outpost -- then the portal ({string.Join(" ", Hub.EscortRoute.Select(p => $"({p.X:0},{p.Y:0})"))})");
         for (int i = 0; i < 60 * 12 && hauler.Position.DistanceTo(Hub.HaulerPad) < 150; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         var toFirst = Hub.EscortRoute[0] - hauler.Position;
         float heading = Mathf.RadToDeg(Mathf.Abs(Mathf.AngleDifference(hauler.Rotation, toFirst.Angle() + Mathf.Pi / 2f)));
-        Check(hauler.State == Hauler.St.Escorting && hauler.Escorted && hauler.Leg == 0 && hauler.Position.Y > Hub.LaneY + 100 && heading < 10,
-              $"ESCORT leaves the lane for the long route, nose on its heading ({hauler.State}, y {hauler.Position.Y:0}, {heading:0.0} deg off)");
+        var went = (hauler.Position - Hub.HaulerPad).Normalized();
+        Check(hauler.State == Hauler.St.Escorting && hauler.Escorted && hauler.Leg == 0 && went.X > 0.6f && went.Y > 0.5f && heading < 10,
+              $"ESCORT leaves the lane south-east, for the first outpost, nose on its heading ({hauler.State}, going ({went.X:0.00}, {went.Y:0.00}), {heading:0.0} deg off)");
         // the first wave: 1 patrol for a pilot alone -- and it goes for the hauler, not the nearer ship
         int huntR0 = H.Raiders.Count;
         var hunterEdge = Raider.EdgeSpot(hauler.Position);
@@ -14940,13 +15077,46 @@ public partial class _Test : Node
         await Wait(0.5);
         var hunters = H.Raiders.Where(r => r.Quarry == hauler).ToList();
         bool meNearer = hunters.Count > 0 && hunters.All(r => r.Position.DistanceTo(Me.Position) < r.Position.DistanceTo(hauler.Position));
-        Check(H.Raiders.Count - huntR0 == 4 && hunters.Count == 4 && hunters.All(r => r.Target == hauler) && meNearer && Math.Abs(firstWaveAt - 5.0) < 0.05,
-              $"5 s in, a wave of 4 hunts the hauler -- not the ship that is nearer to them ({H.Raiders.Count - huntR0} spawned at {firstWaveAt:0.00} s, {hunters.Count(r => r.Target == hauler)} on it)");
+        Check(H.Raiders.Count - huntR0 == 3 && hunters.Count == 3 && hunters.All(r => r.Target == hauler) && meNearer && Math.Abs(firstWaveAt - 5.0) < 0.05,
+              $"5 s in, a wave of 3 hunts the hauler -- not the ship that is nearer to them ({H.Raiders.Count - huntR0} spawned at {firstWaveAt:0.00} s, {hunters.Count(r => r.Target == hauler)} on it)");
+        Check(hunters.All(r => !r.Heavy && Math.Abs(r.MaxHull - 0.5 * 25 * r.Strength) < 1e-9 && Math.Abs(r.Hp - r.MaxHull) < 1e-9),
+              $"the first wave is light fighters only, at half hull ({string.Join(", ", hunters.Select(r => $"{(r.Heavy ? "heavy" : "light")} {r.Hp:0.0}"))})");
         Me.Position = Hub.BasePos + new Vector2(-2600, 1800); Me.Velocity = Vector2.Zero;
         hauler.T = 24.9;
         await Wait(0.05); int before25 = H.Raiders.Count(r => r.Quarry == hauler);
         await Wait(0.2);
-        Check(before25 == 4 && H.Raiders.Count(r => r.Quarry == hauler) == 8, $"the next wave 20 s later, at 25 s: 4 hunters just before, 8 after ({before25}, {H.Raiders.Count(r => r.Quarry == hauler)})");
+        var wave2 = H.Raiders.Where(r => r.Quarry == hauler).ToList();
+        var heavy2 = wave2.FirstOrDefault(r => r.Heavy);
+        Check(before25 == 3 && wave2.Count == 7 && wave2.Count(r => r.Heavy) == 1 && heavy2 != null && Math.Abs(heavy2.MaxHull - 0.5 * 100 * heavy2.Strength) < 1e-9,
+              $"the next wave 20 s later, at 25 s, brings a heavy (at half hull): 3 hunters just before, 7 after ({before25}, {wave2.Count}, {wave2.Count(r => r.Heavy)} heavy)");
+        hauler.T = 44.9; await Wait(0.2);
+        Check(H.Raiders.Count(r => r.Quarry == hauler) == 10 && H.Raiders.Count(r => r.Quarry == hauler && r.Heavy) == 1,
+              $"...and the third, at 45 s, is light fighters only again ({H.Raiders.Count(r => r.Quarry == hauler)} hunters)");
+
+        // AT THE FIRST OUTPOST: it eases in beside it and holds 4 s, offloading a quarter of the load --
+        // the pods drain, the cargo (and so the pay) untouched, the waves still coming -- then flies on
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e9);                     // a latched hunter pins it: clear them
+        await Wait(0.4);
+        hauler.Position = Hub.EscortRoute[0] + new Vector2(-30, -30);
+        for (int i = 0; i < 60 * 6 && hauler.StopLeft <= 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        var docked = hauler.Position; double stop0 = hauler.StopLeft, shown0 = hauler.ShownCargo, tStop0 = hauler.T, cargo0 = hauler.Cargo;
+        await Wait(2.0);
+        double shownMid = hauler.ShownCargo, tMid = hauler.T;
+        bool held = hauler.Position.DistanceTo(docked) < 0.01f && hauler.State == Hauler.St.Escorting && hauler.Leg == 0;
+        for (int i = 0; i < 60 * 4 && hauler.Leg == 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        double shownAfter = hauler.ShownCargo;
+        await Wait(1.0);
+        Check(stop0 > 3.9 && stop0 <= 4.0 && docked.DistanceTo(Hub.EscortRoute[0]) < 0.6f && held && tMid - tStop0 > 1.9,
+              $"at the south-east outpost it holds beside it for 4 s -- its clock, and the waves, running on ({stop0:0.00} s, {docked.DistanceTo(Hub.EscortRoute[0]):0.0} u off)");
+        Check(Math.Abs(shown0 - 300) < 8 && Math.Abs(shownMid - 262.5) < 8 && Math.Abs(shownAfter - 225) < 1 && hauler.Cargo == cargo0,
+              $"offloading: the pods drain a quarter of the load, 300 -> 262 -> 225 shown, the cargo aboard untouched ({shown0:0}, {shownMid:0}, {shownAfter:0}; {hauler.Cargo:0})");
+        Check(hauler.Leg == 1 && hauler.Position.DistanceTo(docked) > 5f && (hauler.Position - docked).Dot(Hub.EscortRoute[1] - docked) > 0,
+              $"then on to the north-east outpost (leg {hauler.Leg}, {hauler.Position.DistanceTo(docked):0} u on)");
+        // FOR THE WHOLE ROUTE: the twelfth wave, far past the four there used to be, still comes on time
+        typeof(Hauler).GetField("_waves", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(hauler, 11);
+        int preLate = H.Raiders.Count(r => r.Quarry == hauler);
+        hauler.T = 224.9; await Wait(0.2);
+        Check(H.Raiders.Count(r => r.Quarry == hauler) - preLate == 4, $"waves keep coming for the whole route: the twelfth, at 225 s ({H.Raiders.Count(r => r.Quarry == hauler) - preLate} more)");
         // near the end of the route: it charges at the portal, and the hunters withdraw at the jump
         typeof(Hauler).GetField("_leg", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(hauler, Hub.EscortRoute.Length - 1);
         hauler.Position = Hub.PortalPos + new Vector2(0, 20);
@@ -14968,7 +15138,7 @@ public partial class _Test : Node
         int huntersOut = H.Raiders.Count(r => r.Quarry == hauler);
         double dc0 = Y.Credits;
         hauler.TakeDamage(1000); await Wait(0.1);
-        Check(huntersOut == 4 && hauler.State == Hauler.St.Destroyed && hauler.Cargo == 0 && Y.Credits == dc0 && !hauler.Escorted
+        Check(huntersOut == 3 && hauler.State == Hauler.St.Destroyed && hauler.Cargo == 0 && Y.Credits == dc0 && !hauler.Escorted
               && Math.Abs(hauler.RebuildIn - 30) < 0.2 && H.Raiders.Count(r => r.Quarry == hauler) == 0,
               $"destroyed on the escort: the cargo is gone, the hunters leave, a rebuild in 30 s ({huntersOut} hunters, {hauler.RebuildIn:0.0} s)");
         foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e9);
@@ -15264,6 +15434,10 @@ public partial class _Test : Node
             Check(H.Selected == d2w, "clicking an enemy on the radar makes it the target");
             Click(OnRadar(Hub.BasePos)); await Wait(0.05);
             Check(H.Selected == null && H.Waypoint == Hub.BasePos && H.WaypointName == "BASE", "clicking the base on the radar makes it a waypoint (and drops the target)");
+            var ne = new Vector2(1414.2f, -1414.2f);
+            Click(OnRadar(ne)); await Wait(0.05);
+            Check(H.WaypointName == "OUTPOST NE" && H.Waypoint is { } wp && wp.DistanceTo(ne) < 1f, $"an outpost is on the radar: clicking it makes OUTPOST NE the waypoint ({H.WaypointName})");
+            Click(OnRadar(Hub.BasePos)); await Wait(0.05);
             me.Position = Hub.BasePos + new Vector2(0, 1500); me.Rotation = 0f; await Wait(0.2);    // the base dead ahead
             Key(global::Godot.Key.V); await Wait(PlayerShip.WarpWarmup + 0.2);
             float wantB = 260f + PlayerShip.Art[me.Class].Length * 0.5f + PlayerShip.WarpStandoff;
@@ -15578,12 +15752,12 @@ public partial class _Test : Node
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             string ph = fx.FighterPhase;
             if (lastPhase == "Burst" && ph == "Overshoot") { passes++; three &= fx.ShotsThisPass == Wing.BurstShots; }
-            if (lastPhase == "Overshoot" && ph == "Turn") { through &= fx.LastOvershoot >= Wing.Overshoot * 2f * d3.HitRadius - 0.5f; worst = Mathf.Min(worst, fx.LastOvershoot); }
+            if (lastPhase == "Overshoot" && ph == "Turn") { through &= fx.LastOvershoot >= Math.Max(1.2 * 2 * d3.HitRadius, 2 * 352 / 3.5) - 0.5; worst = Mathf.Min(worst, fx.LastOvershoot); }
             lastPhase = ph;
         }
-        GD.Print($"  fighter: {passes} passes in 13 s; shortest overshoot {worst:0} u (needs {Wing.Overshoot * 2f * d3.HitRadius:0})");
+        GD.Print($"  fighter: {passes} passes in 13 s; shortest overshoot {worst:0} u (needs {Math.Max(1.2 * 2 * d3.HitRadius, 2 * 352 / 3.5):0}: 1.2 diameters, and the fighter's own 201 u turning circle)");
         Check(passes >= 2 && three, $"fighters strafe: every pass fires exactly 3 shots ({passes} passes)");
-        Check(through, "each pass carries on through the target by at least 1.2x its diameter, then turns");
+        Check(through, "each pass carries on through the target by at least 1.2x its diameter -- and a turning circle -- then turns");
         var fighters = Nodes<Wing>().Where(w => w.Carrier == ship && !w.IsBomber).ToList();
         for (int i = 0; i < 1200 && !fighters.All(f => f.Resting); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         Check(fighters.All(f => f.Resting), "after 15 s of firing, every fighter heads home to rest");
@@ -15597,6 +15771,60 @@ public partial class _Test : Node
         Check(ship.WingTarget == null, "R recalls the fighters");
         await Wait(3.0); d3.ResetMeter(); await Wait(1.0);
         Check(d3.Total == 0, "recalled fighters stop firing");
+
+        // A SMALL, SLOW TARGET -- the owner's report: fighters flew through an escort's light raiders
+        // without firing. A practice light fighter drifting sideways at 12 u/s, a light riding a pinned
+        // hauler's pace: a pass that ended 1.2 diameters past it left it inside the fighters' ~100 u
+        // turning radius, and they flew laps round it, never firing again until they went home. Every
+        // fighter must keep coming back for passes.
+        {
+            var pf = d2; var pfHome = pf.Position;
+            await Park(pf.Position + new Vector2(0, 500), 0);
+            var wing = Nodes<Wing>().Where(w => w.Carrier == ship && !w.IsBomber).ToList();
+            for (int i = 0; i < 60 * 25 && !wing.All(f => f.Inside && !f.Resting); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Click(Scr(pf.Position)); await Wait(0.05);
+            Key(global::Godot.Key.Space); await Wait(0.05);
+            bool onIt = ship.WingTarget == pf;
+            var shots = wing.ToDictionary(f => f, f => new System.Collections.Generic.List<double>());
+            var prev = wing.ToDictionary(f => f, f => f.ShotsThisPass);
+            double clock = 0;
+            for (int i = 0; i < 780; i++)
+            {
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                double step = GetProcessDeltaTime(); clock += step;
+                pf.Position += new Vector2(12f, 0) * (float)step;
+                foreach (var f in wing)
+                {
+                    if (f.ShotsThisPass > prev[f]) shots[f].Add(clock);
+                    prev[f] = f.ShotsThisPass;
+                }
+            }
+            double Gap(System.Collections.Generic.List<double> t) =>
+                t.Count == 0 ? 99 : Math.Max(t.Zip(t.Skip(1), (a, b) => b - a).DefaultIfEmpty(0).Max(), clock - t[^1]);
+            var fired = wing.Where(f => shots[f].Count > 0).ToList();
+            GD.Print($"  a light drifting at 12 u/s: {string.Join("; ", wing.Select(f => $"{shots[f].Count} shots, longest gap {Gap(shots[f]):0.0} s"))}");
+            Check(onIt && fired.Count == wing.Count && fired.All(f => shots[f].Count >= 9 && Gap(shots[f]) < 4.0),
+                  $"fighters on a small target drifting at 12 u/s keep making passes: every one fires again and again, no gap of 4 s ({string.Join(", ", wing.Select(f => $"{shots[f].Count}/{Gap(shots[f]):0.0}s"))})");
+            Key(global::Godot.Key.R); await Wait(0.05);
+            pf.Position = pfHome;
+            // AND A TARGET THAT LEAVES: a hunter withdrawn when its escort ends is freed with hull left,
+            // so it reads "alive" -- the wing must let go of it, not go on reading a freed node
+            var gone = H.SpawnRaider(ship.Position + new Vector2(400, 0));
+            gone.Quarry = H.Yard.Hauler;
+            await Wait(0.1);
+            Click(Scr(gone.Position)); await Wait(0.05);
+            Key(global::Godot.Key.Space); await Wait(0.3);
+            bool attacked = ship.WingTarget == gone;
+            // point defence on it too: a turret holding it must let go as well
+            typeof(PlayerShip).GetField("_pdLeft", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(ship, 15.0);
+            for (int i = 0; i < 90 && !ship.PdTurrets.Any(tu => tu.Target == gone); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            bool pdOn = ship.PdTurrets.Any(tu => tu.Target == gone);
+            H.CallOff(H.Yard.Hauler); await Wait(0.5);
+            Check(attacked && pdOn && ship.WingTarget == null && ship.PdTurrets.All(tu => tu.Target != gone),
+                  $"a hunter called off while the fighters and point defence are on it: both let go of it ({attacked}, {pdOn}, {ship.WingTarget != null})");
+            typeof(PlayerShip).GetField("_pdLeft", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(ship, 0.0);
+            Key(global::Godot.Key.R); await Wait(TargetDummy.IdleReset + 0.5);
+        }
 
         // ── bombers: an active ability; straight, steady torpedoes with smoke ──
         await Wait(TargetDummy.IdleReset + 0.5);
@@ -15694,7 +15922,7 @@ public partial class _Test : Node
             var Yd = H.Yard;
             var mn = Yd.Gatherers.First(g => g.Kind == GatherKind.Miner);
             var sv = Yd.Gatherers.First(g => g.Kind == GatherKind.Salvager);
-            Check(mn.MaxHull == 120 && sv.MaxHull == 120 && Yd.Hauler.MaxHull == 150, "miners and salvagers have 120 hull, the hauler 150");
+            Check(mn.MaxHull == 120 && sv.MaxHull == 120 && Yd.Hauler.MaxHull == 262.5, "miners and salvagers have 120 hull, the hauler 262.5 (150 +75%)");
             Yd.Credits = 100000; double inv0 = Yd.Invested("MINERS"); int lv0 = Yd.Level("miner_hold");
             double price = Economy.Cost(Economy.ById("miner_hold"), lv0);
             Check(Yd.TryBuy("miner_hold") && Math.Abs(Yd.Invested("MINERS") - inv0 - price) < 1e-6, $"buying an upgrade adds its price to its category's investment (+{price:0})");
@@ -15728,10 +15956,12 @@ public partial class _Test : Node
             Check(Math.Abs(fresh.Hull - 132) < 1e-6, $"a miner built after the upgrade comes off the pad at 132 hull ({fresh.Hull:0})");
             Yd.RemoveChild(fresh); fresh.QueueFree();
             double hcost = Yd.RebuildCost("HAULER");
-            Yd.Hauler.ResetToPad(); Yd.Hauler.TakeDamage(150); await Wait(0.05);
+            Yd.Hauler.ResetToPad(); Yd.Hauler.TakeDamage(262.4); await Wait(0.05);
+            Check(Yd.Hauler.State == Hauler.St.Loading && Math.Abs(Yd.Hauler.Hull - 0.1) < 1e-6, $"262.4 damage leaves the hauler standing ({Yd.Hauler.Hull:0.0} hull)");
+            Yd.Hauler.TakeDamage(0.2); await Wait(0.05);
             Check(Yd.Hauler.State == Hauler.St.Destroyed && Yd.Hauler.WarpedOut && Math.Abs(Yd.Hauler.RebuildIn - 30) < 0.2, "the hauler, destroyed: gone for 30 s");
             Yd.Hauler.RebuildIn = 0.1; Yd.Credits = hcost + 100; await Wait(0.3);
-            Check(Yd.Hauler.State == Hauler.St.Loading && Yd.Hauler.Hull == 150 && Math.Abs(Yd.Credits - 100) < 1e-6,
+            Check(Yd.Hauler.State == Hauler.St.Loading && Yd.Hauler.Hull == 262.5 && Math.Abs(Yd.Credits - 100) < 1e-6,
                   $"rebuilt on its pad for 10% of the hauler's investment ({hcost:0} cr)");
         }
 
@@ -17364,10 +17594,13 @@ public partial class _Test : Node
                 if (H?.Yard == null) return;
                 H.Yard.Hauler.ResetToPad(); H.Yard.Hauler.Cargo = 300; H.Yard.RequestDispatch(escorted: true);
             };
-            // two seconds into the escort, on to its third leg: the guest must draw the route from there
+            // two seconds into the escort, on to its fourth leg and just short of the south-west outpost:
+            // the guest must see it hold there and offload
             GetTree().CreateTimer(8.0).Timeout += () =>
             {
-                if (H?.Yard?.Hauler is { Escorted: true } eh) typeof(Hauler).GetField("_leg", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(eh, 2);
+                if (H?.Yard?.Hauler is not { Escorted: true } eh) return;
+                typeof(Hauler).GetField("_leg", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(eh, 3);
+                eh.Position = Hub.EscortRoute[3] + new Vector2(15, -15);
             };
             await Wait(2.0);
             // A DROP: Third's connection cut by the engine, no goodbye -- what a Wi-Fi drop looks like
@@ -17537,6 +17770,17 @@ public partial class _Test : Node
             // frame, so a check made at any earlier point would have seen the flag and passed.
             var pinWatch = new LateSampler { Probe = () => mine != null && GodotObject.IsInstanceValid(mine) && mine.Pinned };
             var dispatchWatch = new LateSampler { Probe = () => H?.Yard?.Hauler is { CanDispatch: true } };
+            // the host's escort holding at an outpost, watched every frame from here on: when it comes
+            // is the host's timetable, not this guest's
+            int stopLeg = -1; double stopMax = 0, shownMin = 9, shownMax = -1;
+            var stopWatch = new LateSampler { Probe = () =>
+            {
+                if (H?.Yard?.Hauler is not { Escorted: true, State: Hauler.St.Escorting } sh || sh.StopLeft <= 0 || sh.Cargo <= 0) return false;
+                stopLeg = sh.Leg; stopMax = Math.Max(stopMax, sh.StopLeft);
+                shownMin = Math.Min(shownMin, sh.ShownCargo / sh.Cargo); shownMax = Math.Max(shownMax, sh.ShownCargo / sh.Cargo);
+                return true;
+            } };
+            AddChild(stopWatch);
             AddChild(dispatchWatch);
             var heldWatch = new LateSampler { Probe = () => H != null && H.PartyIds.Any(i => H.PilotName(i).Contains("Third") && H.PilotName(i).Contains("reconnecting")) };
             AddChild(heldWatch);
@@ -17610,9 +17854,12 @@ public partial class _Test : Node
             H.Yard.BuyUpgrade("hauler_autosell"); await Wait(1.5);
             Check(H.Yard.Level("hauler_autosell") == 0 && hostCredits >= 4462 && Math.Abs(H.Yard.Credits - hostCredits) < 1e-6,
                   $"a guest cannot buy AUTO-SELL on the host's base: it is the owner's (level {H.Yard.Level("hauler_autosell")}, {hostCredits:0} -> {H.Yard.Credits:0} cr)");
-            await RealTime(() => H.Yard.Hauler.Escorted && H.Yard.Hauler.State == Hauler.St.Escorting && H.Yard.Hauler.Position.Y > Hub.LaneY + 50 && H.Yard.Hauler.Leg == 2, 6);
-            Check(H.Yard.Hauler.Escorted && H.Yard.Hauler.State == Hauler.St.Escorting && H.Yard.Hauler.Position.Y > Hub.LaneY + 50 && H.Yard.Hauler.Leg == 2,
-                  $"a guest sees the host's hauler on an escort, off its lane, on the leg it is flying ({H.Yard.Hauler.State}, y {H.Yard.Hauler.Position.Y:0}, leg {H.Yard.Hauler.Leg})");
+            // the host put its hauler at the south-west outpost (the last quarter aboard): this guest saw
+            // it hold there and the pods drain -- never more than that quarter shown
+            await RealTime(() => stopWatch.Seen && shownMin < 0.15, 12);
+            Check(stopWatch.Seen && stopLeg == 3 && stopMax > 3 && stopMax <= 4 && shownMin < 0.15 && shownMax <= 0.26
+                  && Nodes<Sprite2D>().Count(s => s.Name.ToString().StartsWith("Outpost")) == 4,
+                  $"a guest sees the host's hauler hold at the south-west outpost and offload -- its outposts built here too (leg {stopLeg}, {stopMax:0.0} s, shown {shownMax:0.00} -> {shownMin:0.00} of the load)");
             Check(dispatchWatch.Seen && !Met("hauler"), "the hauler hint is the base owner's: a guest watching the host's loaded hauler is not shown buttons it cannot press");
             bool portalWasOpen = H.Mission == Hub.MissionState.PortalOpen;
             await Wait(6.0);                       // the host closes the session ~24.5 s in

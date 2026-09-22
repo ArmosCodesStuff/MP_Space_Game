@@ -728,9 +728,14 @@ public partial class Net : Node
     // from anyone else -- a peer still handshaking, or one already gone -- is ignored.
     public static bool FromPlayer(Node node, out int who)
     {
-        who = node.Multiplayer.GetRemoteSenderId();
+        who = SenderOf(node);
         return IsHost && I != null && I.Players.ContainsKey(who);
     }
+    // Who sent the RPC now being run on `node` -- 0 if it is no longer in the tree. A world on its
+    // way out (a scene change, the game quitting) still gets the packets already on the wire, and
+    // out of the tree its Multiplayer is null: a peer's 20 Hz ship report landing in that moment
+    // threw on the arena host after every check had passed.
+    public static int SenderOf(Node node) => node.IsInsideTree() ? node.Multiplayer.GetRemoteSenderId() : 0;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

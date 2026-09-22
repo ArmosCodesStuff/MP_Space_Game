@@ -19,6 +19,26 @@ ticked only when it has been read line by line and everything found in it is fix
 4. Every finding is fixed at the source, covered by a check where it can be, and the whole suite runs
    again. Findings found while fixing go back on the list (recursively).
 
+## Pass 7 — slice 2 of the second batch: the outposts and the escort (done)
+
+The slice-2 diff read by the same five lenses (the hauler's state machine, waves and hull, the world
+and the radar, the fighter fix, the tests), each finding attacked by a refuter, then a critic: 7
+confirmed, 2 refuted. Fixed, each with a check where one could see it:
+- **A guest's pods jumped back up a quarter at the end of every stop**: its own countdown ended the
+  stop before the host's report moved the leg on. A guest's count now stops just short of zero; only
+  the host ends a stop.
+- **`Forget` reset the strike count**, so a new strike could be ordered while the old bombers were
+  still out, and their late reports cancelled it. The count is left to the bombers; a new strike waits
+  for all of them.
+- **Point defence kept a withdrawn hunter** (the same "freed with hull left" trap): `Forget` clears
+  every turret's target too, checked with the wing and point defence both on a hunter that is called off.
+- **The guest's offload check sampled one moment the stop could already be over**: it now watches every
+  frame from earlier on.
+- **A hull check split 262.5 as 262.4 + 0.1**, which floating point leaves alive by 2e-14.
+- (The critic's other finding, CHANGES.md not yet updated, was the end-of-batch docs.)
+Refuted: the last leg running through the dummies (it passes 58-96 u from them, which nothing minds) and
+the stop check killing every raider (the old check did the same).
+
 ## Pass 6 — slice 1 of the second batch: the broadside and the destroyer (done)
 
 The whole slice-1 diff read by five lenses at once -- multiplayer authority, replacement (nothing of

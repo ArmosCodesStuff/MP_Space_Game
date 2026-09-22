@@ -393,7 +393,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
             case "recall":  WingTarget = null; break;
             case "bombers":
                 // within the strike range (twice the fighters' control range) only
-                if (Classes.Wing(Class) && t != null && StrikeTarget == null && BombersReady > 0
+                if (Classes.Wing(Class) && t != null && StrikeTarget == null && _strikesOut <= 0 && BombersReady > 0
                     && Position.DistanceTo(t.Position) <= Stats["strike_range"])
                 { StrikeTarget = t; _strikesOut = BombersReady; }
                 break;
@@ -472,6 +472,15 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
     }
 
     public void NoteStrikeDone() { if (--_strikesOut <= 0) StrikeTarget = null; }
+    // A target that has left the world: the wing, the bombers and every turret let go of it. The
+    // strike's count is NOT reset: bombers already out still report back (NoteStrikeDone), and a new
+    // strike waits for all of them, as it did when a dead target stayed the strike's until then.
+    public void Forget(IHittable t)
+    {
+        if (ReferenceEquals(WingTarget, t)) WingTarget = null;
+        if (ReferenceEquals(StrikeTarget, t)) StrikeTarget = null;
+        foreach (var tu in _turrets) tu.Forget(t);
+    }
 
     // A BURST (destroyer): three missiles off the nose, one straight at the target and two launched
     // up to 70 degrees to either side, all guided -- each heading turns toward the target at

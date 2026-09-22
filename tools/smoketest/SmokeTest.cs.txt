@@ -915,6 +915,35 @@ public partial class _Test : Node
             Check(rocks.Count == 9 && Math.Abs(beltEdge - 1500) < 8 && Math.Abs(wreckEdge - 1500) < 8,
                   "the mining belt's and the wreck's nearest edges are both 1500 u from the base");
         }
+        // A PACKET FOR A WORLD ON ITS WAY OUT: a peer's ship report (20 Hz) or identity can land on a Hub
+        // that has left the tree (a scene change, the game quitting), where Multiplayer is null. It must
+        // be dropped, not thrown: it threw on the arena host after every check had passed.
+        {
+            var loose = new Hub();
+            bool dropped = true;
+            try
+            {
+                typeof(Hub).GetMethod("NetShipState", BindingFlags.NonPublic | BindingFlags.Instance)
+                           .Invoke(loose, new object[] { 0f, 0f, 0f, 0f, 0f, 0f, 0f, false, false, 0f, 0f, 0f, false });
+                typeof(Hub).GetMethod("NetIdentity", BindingFlags.NonPublic | BindingFlags.Instance)
+                           .Invoke(loose, new object[] { 5, "X", Colors.White, Colors.White, 0, new int[0], 1, new string[0], "x" });
+                dropped &= !Net.FromPlayer(loose, out int who) && who == 0;
+            }
+            catch (Exception) { dropped = false; }
+            loose.Free();
+            Check(dropped, "a ship report or identity landing on a world already out of the tree is dropped, not thrown");
+        }
+        // THE OUTPOSTS: 2000 u out on the diagonals, named for their corners, each with its label
+        {
+            double c = 2000 / Math.Sqrt(2);      // 1414.2 u east or west, north or south
+            var want = new[] { ("SE", new Vector2((float)c, (float)c)), ("NE", new Vector2((float)c, (float)-c)), ("NW", new Vector2((float)-c, (float)-c)), ("SW", new Vector2((float)-c, (float)c)) };
+            var opLabels = H.GetChildren().OfType<WorldLabel>().ToList();
+            bool built = want.All(w => H.GetNodeOrNull<Sprite2D>("Outpost" + w.Item1) is { } o && o.Position.DistanceTo(w.Item2) < 0.5f
+                                       && o.Texture.ResourcePath.EndsWith("outpost.png") && Math.Abs(o.Texture.GetHeight() * o.Scale.Y - 170f) < 0.5f
+                                       && opLabels.Any(l => l.Text == "OUTPOST " + w.Item1 && l.Position.DistanceTo(w.Item2) < 120f));
+            Check(built && Hub.Outposts.Select(o => o.name).SequenceEqual(new[] { "SE", "NE", "NW", "SW" }),
+                  "four outposts 2000 u out on the diagonals (±1414, ±1414), labelled OUTPOST SE / NE / NW / SW");
+        }
         var tioS = H.GetNodeOrNull<Sprite2D>("TIO");
         Check(tioS != null && tioS.Position == Hub.TioPos && Math.Abs(tioS.Texture.GetHeight() * tioS.Scale.Y - Hub.TioHeight) < 0.5f,
               "the Threat Intelligence Operations building stands south-west of the base");
@@ -1146,11 +1175,19 @@ public partial class _Test : Node
         var hh = Nodes<HaulerHud>().FirstOrDefault(); var escBtn = hh == null ? null : Nodes<Button>(hh).FirstOrDefault(b => b.Name == "Escort");
         Check(escBtn != null && escBtn.Visible, "the base owner's hauler offers ESCORT beside DISPATCH");
         Y.RequestDispatch(escorted: true);
+        // THE ROUTE, in the spec's terms: the four outposts counter-clockwise from the south-east --
+        // held beside, on the base's side -- then the portal
+        var corners = new[] { new Vector2(1414.2f, 1414.2f), new Vector2(1414.2f, -1414.2f), new Vector2(-1414.2f, -1414.2f), new Vector2(-1414.2f, 1414.2f) };
+        bool routeOk = Hub.EscortRoute.Length == 5 && Hub.EscortRoute[4] == new Vector2(1500, 219)
+                       && Enumerable.Range(0, 4).All(i => Hub.EscortRoute[i].DistanceTo(corners[i]) < 250f && Hub.EscortRoute[i].Length() < corners[i].Length()
+                                                          && Hub.EscortRoute[i].DistanceTo(corners[i]) > 100f + 85f);
+        Check(routeOk, $"the escort's route: SE, NE, NW, SW -- beside each outpost -- then the portal ({string.Join(" ", Hub.EscortRoute.Select(p => $"({p.X:0},{p.Y:0})"))})");
         for (int i = 0; i < 60 * 12 && hauler.Position.DistanceTo(Hub.HaulerPad) < 150; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         var toFirst = Hub.EscortRoute[0] - hauler.Position;
         float heading = Mathf.RadToDeg(Mathf.Abs(Mathf.AngleDifference(hauler.Rotation, toFirst.Angle() + Mathf.Pi / 2f)));
-        Check(hauler.State == Hauler.St.Escorting && hauler.Escorted && hauler.Leg == 0 && hauler.Position.Y > Hub.LaneY + 100 && heading < 10,
-              $"ESCORT leaves the lane for the long route, nose on its heading ({hauler.State}, y {hauler.Position.Y:0}, {heading:0.0} deg off)");
+        var went = (hauler.Position - Hub.HaulerPad).Normalized();
+        Check(hauler.State == Hauler.St.Escorting && hauler.Escorted && hauler.Leg == 0 && went.X > 0.6f && went.Y > 0.5f && heading < 10,
+              $"ESCORT leaves the lane south-east, for the first outpost, nose on its heading ({hauler.State}, going ({went.X:0.00}, {went.Y:0.00}), {heading:0.0} deg off)");
         // the first wave: 1 patrol for a pilot alone -- and it goes for the hauler, not the nearer ship
         int huntR0 = H.Raiders.Count;
         var hunterEdge = Raider.EdgeSpot(hauler.Position);
@@ -1160,13 +1197,46 @@ public partial class _Test : Node
         await Wait(0.5);
         var hunters = H.Raiders.Where(r => r.Quarry == hauler).ToList();
         bool meNearer = hunters.Count > 0 && hunters.All(r => r.Position.DistanceTo(Me.Position) < r.Position.DistanceTo(hauler.Position));
-        Check(H.Raiders.Count - huntR0 == 4 && hunters.Count == 4 && hunters.All(r => r.Target == hauler) && meNearer && Math.Abs(firstWaveAt - 5.0) < 0.05,
-              $"5 s in, a wave of 4 hunts the hauler -- not the ship that is nearer to them ({H.Raiders.Count - huntR0} spawned at {firstWaveAt:0.00} s, {hunters.Count(r => r.Target == hauler)} on it)");
+        Check(H.Raiders.Count - huntR0 == 3 && hunters.Count == 3 && hunters.All(r => r.Target == hauler) && meNearer && Math.Abs(firstWaveAt - 5.0) < 0.05,
+              $"5 s in, a wave of 3 hunts the hauler -- not the ship that is nearer to them ({H.Raiders.Count - huntR0} spawned at {firstWaveAt:0.00} s, {hunters.Count(r => r.Target == hauler)} on it)");
+        Check(hunters.All(r => !r.Heavy && Math.Abs(r.MaxHull - 0.5 * 25 * r.Strength) < 1e-9 && Math.Abs(r.Hp - r.MaxHull) < 1e-9),
+              $"the first wave is light fighters only, at half hull ({string.Join(", ", hunters.Select(r => $"{(r.Heavy ? "heavy" : "light")} {r.Hp:0.0}"))})");
         Me.Position = Hub.BasePos + new Vector2(-2600, 1800); Me.Velocity = Vector2.Zero;
         hauler.T = 24.9;
         await Wait(0.05); int before25 = H.Raiders.Count(r => r.Quarry == hauler);
         await Wait(0.2);
-        Check(before25 == 4 && H.Raiders.Count(r => r.Quarry == hauler) == 8, $"the next wave 20 s later, at 25 s: 4 hunters just before, 8 after ({before25}, {H.Raiders.Count(r => r.Quarry == hauler)})");
+        var wave2 = H.Raiders.Where(r => r.Quarry == hauler).ToList();
+        var heavy2 = wave2.FirstOrDefault(r => r.Heavy);
+        Check(before25 == 3 && wave2.Count == 7 && wave2.Count(r => r.Heavy) == 1 && heavy2 != null && Math.Abs(heavy2.MaxHull - 0.5 * 100 * heavy2.Strength) < 1e-9,
+              $"the next wave 20 s later, at 25 s, brings a heavy (at half hull): 3 hunters just before, 7 after ({before25}, {wave2.Count}, {wave2.Count(r => r.Heavy)} heavy)");
+        hauler.T = 44.9; await Wait(0.2);
+        Check(H.Raiders.Count(r => r.Quarry == hauler) == 10 && H.Raiders.Count(r => r.Quarry == hauler && r.Heavy) == 1,
+              $"...and the third, at 45 s, is light fighters only again ({H.Raiders.Count(r => r.Quarry == hauler)} hunters)");
+
+        // AT THE FIRST OUTPOST: it eases in beside it and holds 4 s, offloading a quarter of the load --
+        // the pods drain, the cargo (and so the pay) untouched, the waves still coming -- then flies on
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e9);                     // a latched hunter pins it: clear them
+        await Wait(0.4);
+        hauler.Position = Hub.EscortRoute[0] + new Vector2(-30, -30);
+        for (int i = 0; i < 60 * 6 && hauler.StopLeft <= 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        var docked = hauler.Position; double stop0 = hauler.StopLeft, shown0 = hauler.ShownCargo, tStop0 = hauler.T, cargo0 = hauler.Cargo;
+        await Wait(2.0);
+        double shownMid = hauler.ShownCargo, tMid = hauler.T;
+        bool held = hauler.Position.DistanceTo(docked) < 0.01f && hauler.State == Hauler.St.Escorting && hauler.Leg == 0;
+        for (int i = 0; i < 60 * 4 && hauler.Leg == 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        double shownAfter = hauler.ShownCargo;
+        await Wait(1.0);
+        Check(stop0 > 3.9 && stop0 <= 4.0 && docked.DistanceTo(Hub.EscortRoute[0]) < 0.6f && held && tMid - tStop0 > 1.9,
+              $"at the south-east outpost it holds beside it for 4 s -- its clock, and the waves, running on ({stop0:0.00} s, {docked.DistanceTo(Hub.EscortRoute[0]):0.0} u off)");
+        Check(Math.Abs(shown0 - 300) < 8 && Math.Abs(shownMid - 262.5) < 8 && Math.Abs(shownAfter - 225) < 1 && hauler.Cargo == cargo0,
+              $"offloading: the pods drain a quarter of the load, 300 -> 262 -> 225 shown, the cargo aboard untouched ({shown0:0}, {shownMid:0}, {shownAfter:0}; {hauler.Cargo:0})");
+        Check(hauler.Leg == 1 && hauler.Position.DistanceTo(docked) > 5f && (hauler.Position - docked).Dot(Hub.EscortRoute[1] - docked) > 0,
+              $"then on to the north-east outpost (leg {hauler.Leg}, {hauler.Position.DistanceTo(docked):0} u on)");
+        // FOR THE WHOLE ROUTE: the twelfth wave, far past the four there used to be, still comes on time
+        typeof(Hauler).GetField("_waves", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(hauler, 11);
+        int preLate = H.Raiders.Count(r => r.Quarry == hauler);
+        hauler.T = 224.9; await Wait(0.2);
+        Check(H.Raiders.Count(r => r.Quarry == hauler) - preLate == 4, $"waves keep coming for the whole route: the twelfth, at 225 s ({H.Raiders.Count(r => r.Quarry == hauler) - preLate} more)");
         // near the end of the route: it charges at the portal, and the hunters withdraw at the jump
         typeof(Hauler).GetField("_leg", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(hauler, Hub.EscortRoute.Length - 1);
         hauler.Position = Hub.PortalPos + new Vector2(0, 20);
@@ -1188,7 +1258,7 @@ public partial class _Test : Node
         int huntersOut = H.Raiders.Count(r => r.Quarry == hauler);
         double dc0 = Y.Credits;
         hauler.TakeDamage(1000); await Wait(0.1);
-        Check(huntersOut == 4 && hauler.State == Hauler.St.Destroyed && hauler.Cargo == 0 && Y.Credits == dc0 && !hauler.Escorted
+        Check(huntersOut == 3 && hauler.State == Hauler.St.Destroyed && hauler.Cargo == 0 && Y.Credits == dc0 && !hauler.Escorted
               && Math.Abs(hauler.RebuildIn - 30) < 0.2 && H.Raiders.Count(r => r.Quarry == hauler) == 0,
               $"destroyed on the escort: the cargo is gone, the hunters leave, a rebuild in 30 s ({huntersOut} hunters, {hauler.RebuildIn:0.0} s)");
         foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e9);
@@ -1484,6 +1554,10 @@ public partial class _Test : Node
             Check(H.Selected == d2w, "clicking an enemy on the radar makes it the target");
             Click(OnRadar(Hub.BasePos)); await Wait(0.05);
             Check(H.Selected == null && H.Waypoint == Hub.BasePos && H.WaypointName == "BASE", "clicking the base on the radar makes it a waypoint (and drops the target)");
+            var ne = new Vector2(1414.2f, -1414.2f);
+            Click(OnRadar(ne)); await Wait(0.05);
+            Check(H.WaypointName == "OUTPOST NE" && H.Waypoint is { } wp && wp.DistanceTo(ne) < 1f, $"an outpost is on the radar: clicking it makes OUTPOST NE the waypoint ({H.WaypointName})");
+            Click(OnRadar(Hub.BasePos)); await Wait(0.05);
             me.Position = Hub.BasePos + new Vector2(0, 1500); me.Rotation = 0f; await Wait(0.2);    // the base dead ahead
             Key(global::Godot.Key.V); await Wait(PlayerShip.WarpWarmup + 0.2);
             float wantB = 260f + PlayerShip.Art[me.Class].Length * 0.5f + PlayerShip.WarpStandoff;
@@ -1798,12 +1872,12 @@ public partial class _Test : Node
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             string ph = fx.FighterPhase;
             if (lastPhase == "Burst" && ph == "Overshoot") { passes++; three &= fx.ShotsThisPass == Wing.BurstShots; }
-            if (lastPhase == "Overshoot" && ph == "Turn") { through &= fx.LastOvershoot >= Wing.Overshoot * 2f * d3.HitRadius - 0.5f; worst = Mathf.Min(worst, fx.LastOvershoot); }
+            if (lastPhase == "Overshoot" && ph == "Turn") { through &= fx.LastOvershoot >= Math.Max(1.2 * 2 * d3.HitRadius, 2 * 352 / 3.5) - 0.5; worst = Mathf.Min(worst, fx.LastOvershoot); }
             lastPhase = ph;
         }
-        GD.Print($"  fighter: {passes} passes in 13 s; shortest overshoot {worst:0} u (needs {Wing.Overshoot * 2f * d3.HitRadius:0})");
+        GD.Print($"  fighter: {passes} passes in 13 s; shortest overshoot {worst:0} u (needs {Math.Max(1.2 * 2 * d3.HitRadius, 2 * 352 / 3.5):0}: 1.2 diameters, and the fighter's own 201 u turning circle)");
         Check(passes >= 2 && three, $"fighters strafe: every pass fires exactly 3 shots ({passes} passes)");
-        Check(through, "each pass carries on through the target by at least 1.2x its diameter, then turns");
+        Check(through, "each pass carries on through the target by at least 1.2x its diameter -- and a turning circle -- then turns");
         var fighters = Nodes<Wing>().Where(w => w.Carrier == ship && !w.IsBomber).ToList();
         for (int i = 0; i < 1200 && !fighters.All(f => f.Resting); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         Check(fighters.All(f => f.Resting), "after 15 s of firing, every fighter heads home to rest");
@@ -1817,6 +1891,60 @@ public partial class _Test : Node
         Check(ship.WingTarget == null, "R recalls the fighters");
         await Wait(3.0); d3.ResetMeter(); await Wait(1.0);
         Check(d3.Total == 0, "recalled fighters stop firing");
+
+        // A SMALL, SLOW TARGET -- the owner's report: fighters flew through an escort's light raiders
+        // without firing. A practice light fighter drifting sideways at 12 u/s, a light riding a pinned
+        // hauler's pace: a pass that ended 1.2 diameters past it left it inside the fighters' ~100 u
+        // turning radius, and they flew laps round it, never firing again until they went home. Every
+        // fighter must keep coming back for passes.
+        {
+            var pf = d2; var pfHome = pf.Position;
+            await Park(pf.Position + new Vector2(0, 500), 0);
+            var wing = Nodes<Wing>().Where(w => w.Carrier == ship && !w.IsBomber).ToList();
+            for (int i = 0; i < 60 * 25 && !wing.All(f => f.Inside && !f.Resting); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Click(Scr(pf.Position)); await Wait(0.05);
+            Key(global::Godot.Key.Space); await Wait(0.05);
+            bool onIt = ship.WingTarget == pf;
+            var shots = wing.ToDictionary(f => f, f => new System.Collections.Generic.List<double>());
+            var prev = wing.ToDictionary(f => f, f => f.ShotsThisPass);
+            double clock = 0;
+            for (int i = 0; i < 780; i++)
+            {
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                double step = GetProcessDeltaTime(); clock += step;
+                pf.Position += new Vector2(12f, 0) * (float)step;
+                foreach (var f in wing)
+                {
+                    if (f.ShotsThisPass > prev[f]) shots[f].Add(clock);
+                    prev[f] = f.ShotsThisPass;
+                }
+            }
+            double Gap(System.Collections.Generic.List<double> t) =>
+                t.Count == 0 ? 99 : Math.Max(t.Zip(t.Skip(1), (a, b) => b - a).DefaultIfEmpty(0).Max(), clock - t[^1]);
+            var fired = wing.Where(f => shots[f].Count > 0).ToList();
+            GD.Print($"  a light drifting at 12 u/s: {string.Join("; ", wing.Select(f => $"{shots[f].Count} shots, longest gap {Gap(shots[f]):0.0} s"))}");
+            Check(onIt && fired.Count == wing.Count && fired.All(f => shots[f].Count >= 9 && Gap(shots[f]) < 4.0),
+                  $"fighters on a small target drifting at 12 u/s keep making passes: every one fires again and again, no gap of 4 s ({string.Join(", ", wing.Select(f => $"{shots[f].Count}/{Gap(shots[f]):0.0}s"))})");
+            Key(global::Godot.Key.R); await Wait(0.05);
+            pf.Position = pfHome;
+            // AND A TARGET THAT LEAVES: a hunter withdrawn when its escort ends is freed with hull left,
+            // so it reads "alive" -- the wing must let go of it, not go on reading a freed node
+            var gone = H.SpawnRaider(ship.Position + new Vector2(400, 0));
+            gone.Quarry = H.Yard.Hauler;
+            await Wait(0.1);
+            Click(Scr(gone.Position)); await Wait(0.05);
+            Key(global::Godot.Key.Space); await Wait(0.3);
+            bool attacked = ship.WingTarget == gone;
+            // point defence on it too: a turret holding it must let go as well
+            typeof(PlayerShip).GetField("_pdLeft", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(ship, 15.0);
+            for (int i = 0; i < 90 && !ship.PdTurrets.Any(tu => tu.Target == gone); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            bool pdOn = ship.PdTurrets.Any(tu => tu.Target == gone);
+            H.CallOff(H.Yard.Hauler); await Wait(0.5);
+            Check(attacked && pdOn && ship.WingTarget == null && ship.PdTurrets.All(tu => tu.Target != gone),
+                  $"a hunter called off while the fighters and point defence are on it: both let go of it ({attacked}, {pdOn}, {ship.WingTarget != null})");
+            typeof(PlayerShip).GetField("_pdLeft", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(ship, 0.0);
+            Key(global::Godot.Key.R); await Wait(TargetDummy.IdleReset + 0.5);
+        }
 
         // ── bombers: an active ability; straight, steady torpedoes with smoke ──
         await Wait(TargetDummy.IdleReset + 0.5);
@@ -1914,7 +2042,7 @@ public partial class _Test : Node
             var Yd = H.Yard;
             var mn = Yd.Gatherers.First(g => g.Kind == GatherKind.Miner);
             var sv = Yd.Gatherers.First(g => g.Kind == GatherKind.Salvager);
-            Check(mn.MaxHull == 120 && sv.MaxHull == 120 && Yd.Hauler.MaxHull == 150, "miners and salvagers have 120 hull, the hauler 150");
+            Check(mn.MaxHull == 120 && sv.MaxHull == 120 && Yd.Hauler.MaxHull == 262.5, "miners and salvagers have 120 hull, the hauler 262.5 (150 +75%)");
             Yd.Credits = 100000; double inv0 = Yd.Invested("MINERS"); int lv0 = Yd.Level("miner_hold");
             double price = Economy.Cost(Economy.ById("miner_hold"), lv0);
             Check(Yd.TryBuy("miner_hold") && Math.Abs(Yd.Invested("MINERS") - inv0 - price) < 1e-6, $"buying an upgrade adds its price to its category's investment (+{price:0})");
@@ -1948,10 +2076,12 @@ public partial class _Test : Node
             Check(Math.Abs(fresh.Hull - 132) < 1e-6, $"a miner built after the upgrade comes off the pad at 132 hull ({fresh.Hull:0})");
             Yd.RemoveChild(fresh); fresh.QueueFree();
             double hcost = Yd.RebuildCost("HAULER");
-            Yd.Hauler.ResetToPad(); Yd.Hauler.TakeDamage(150); await Wait(0.05);
+            Yd.Hauler.ResetToPad(); Yd.Hauler.TakeDamage(262.4); await Wait(0.05);
+            Check(Yd.Hauler.State == Hauler.St.Loading && Math.Abs(Yd.Hauler.Hull - 0.1) < 1e-6, $"262.4 damage leaves the hauler standing ({Yd.Hauler.Hull:0.0} hull)");
+            Yd.Hauler.TakeDamage(0.2); await Wait(0.05);
             Check(Yd.Hauler.State == Hauler.St.Destroyed && Yd.Hauler.WarpedOut && Math.Abs(Yd.Hauler.RebuildIn - 30) < 0.2, "the hauler, destroyed: gone for 30 s");
             Yd.Hauler.RebuildIn = 0.1; Yd.Credits = hcost + 100; await Wait(0.3);
-            Check(Yd.Hauler.State == Hauler.St.Loading && Yd.Hauler.Hull == 150 && Math.Abs(Yd.Credits - 100) < 1e-6,
+            Check(Yd.Hauler.State == Hauler.St.Loading && Yd.Hauler.Hull == 262.5 && Math.Abs(Yd.Credits - 100) < 1e-6,
                   $"rebuilt on its pad for 10% of the hauler's investment ({hcost:0} cr)");
         }
 
@@ -3584,10 +3714,13 @@ public partial class _Test : Node
                 if (H?.Yard == null) return;
                 H.Yard.Hauler.ResetToPad(); H.Yard.Hauler.Cargo = 300; H.Yard.RequestDispatch(escorted: true);
             };
-            // two seconds into the escort, on to its third leg: the guest must draw the route from there
+            // two seconds into the escort, on to its fourth leg and just short of the south-west outpost:
+            // the guest must see it hold there and offload
             GetTree().CreateTimer(8.0).Timeout += () =>
             {
-                if (H?.Yard?.Hauler is { Escorted: true } eh) typeof(Hauler).GetField("_leg", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(eh, 2);
+                if (H?.Yard?.Hauler is not { Escorted: true } eh) return;
+                typeof(Hauler).GetField("_leg", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(eh, 3);
+                eh.Position = Hub.EscortRoute[3] + new Vector2(15, -15);
             };
             await Wait(2.0);
             // A DROP: Third's connection cut by the engine, no goodbye -- what a Wi-Fi drop looks like
@@ -3757,6 +3890,17 @@ public partial class _Test : Node
             // frame, so a check made at any earlier point would have seen the flag and passed.
             var pinWatch = new LateSampler { Probe = () => mine != null && GodotObject.IsInstanceValid(mine) && mine.Pinned };
             var dispatchWatch = new LateSampler { Probe = () => H?.Yard?.Hauler is { CanDispatch: true } };
+            // the host's escort holding at an outpost, watched every frame from here on: when it comes
+            // is the host's timetable, not this guest's
+            int stopLeg = -1; double stopMax = 0, shownMin = 9, shownMax = -1;
+            var stopWatch = new LateSampler { Probe = () =>
+            {
+                if (H?.Yard?.Hauler is not { Escorted: true, State: Hauler.St.Escorting } sh || sh.StopLeft <= 0 || sh.Cargo <= 0) return false;
+                stopLeg = sh.Leg; stopMax = Math.Max(stopMax, sh.StopLeft);
+                shownMin = Math.Min(shownMin, sh.ShownCargo / sh.Cargo); shownMax = Math.Max(shownMax, sh.ShownCargo / sh.Cargo);
+                return true;
+            } };
+            AddChild(stopWatch);
             AddChild(dispatchWatch);
             var heldWatch = new LateSampler { Probe = () => H != null && H.PartyIds.Any(i => H.PilotName(i).Contains("Third") && H.PilotName(i).Contains("reconnecting")) };
             AddChild(heldWatch);
@@ -3830,9 +3974,12 @@ public partial class _Test : Node
             H.Yard.BuyUpgrade("hauler_autosell"); await Wait(1.5);
             Check(H.Yard.Level("hauler_autosell") == 0 && hostCredits >= 4462 && Math.Abs(H.Yard.Credits - hostCredits) < 1e-6,
                   $"a guest cannot buy AUTO-SELL on the host's base: it is the owner's (level {H.Yard.Level("hauler_autosell")}, {hostCredits:0} -> {H.Yard.Credits:0} cr)");
-            await RealTime(() => H.Yard.Hauler.Escorted && H.Yard.Hauler.State == Hauler.St.Escorting && H.Yard.Hauler.Position.Y > Hub.LaneY + 50 && H.Yard.Hauler.Leg == 2, 6);
-            Check(H.Yard.Hauler.Escorted && H.Yard.Hauler.State == Hauler.St.Escorting && H.Yard.Hauler.Position.Y > Hub.LaneY + 50 && H.Yard.Hauler.Leg == 2,
-                  $"a guest sees the host's hauler on an escort, off its lane, on the leg it is flying ({H.Yard.Hauler.State}, y {H.Yard.Hauler.Position.Y:0}, leg {H.Yard.Hauler.Leg})");
+            // the host put its hauler at the south-west outpost (the last quarter aboard): this guest saw
+            // it hold there and the pods drain -- never more than that quarter shown
+            await RealTime(() => stopWatch.Seen && shownMin < 0.15, 12);
+            Check(stopWatch.Seen && stopLeg == 3 && stopMax > 3 && stopMax <= 4 && shownMin < 0.15 && shownMax <= 0.26
+                  && Nodes<Sprite2D>().Count(s => s.Name.ToString().StartsWith("Outpost")) == 4,
+                  $"a guest sees the host's hauler hold at the south-west outpost and offload -- its outposts built here too (leg {stopLeg}, {stopMax:0.0} s, shown {shownMax:0.00} -> {shownMin:0.00} of the load)");
             Check(dispatchWatch.Seen && !Met("hauler"), "the hauler hint is the base owner's: a guest watching the host's loaded hauler is not shown buttons it cannot press");
             bool portalWasOpen = H.Mission == Hub.MissionState.PortalOpen;
             await Wait(6.0);                       // the host closes the session ~24.5 s in

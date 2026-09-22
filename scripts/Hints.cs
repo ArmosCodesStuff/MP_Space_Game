@@ -22,7 +22,7 @@ public partial class Hints : CanvasLayer
         ["loot"]        = ("LOOT", "Crates only you can see. Fly over one to take it; any you leave behind come home with you."),
         ["multiplayer"] = ("MULTIPLAYER", "HOST THIS WORLD, then COPY ADDRESS for your friends. To join a friend, type their address, then JOIN."),
         ["raid"]        = ("RAIDERS", "They come for your base after a failed mission, and for your hauler on an escort. The base's guns help; miners, salvagers and the hauler cannot fight back."),
-        ["hauler"]      = ("THE HAULER", "DISPATCH sends it alone: past the portal it may be lost (EVASION, on the HAULER tab, lowers the risk). ESCORT flies it the long way for five times the pay; keep the raiders off it."),
+        ["hauler"]      = ("THE HAULER", "DISPATCH sends it alone: past the portal it may be lost (EVASION, on the HAULER tab, lowers the risk). ESCORT flies it round the four outposts for five times the pay; keep the raiders off it."),
         ["pilot"]       = ("A LEVEL UP", "L spends your points on rudder, hull, engines and weapons. Bosses give EXP; the first clear of each level gives more."),
         ["warp"]        = ("WARP", "V charges for 3 s, then jumps to your target or waypoint if the bow is on it, else 2000 u ahead. 30 s to recharge."),
         ["stasis"]      = ("STASIS", "Your ship is held in stasis, not lost. Fly the escape pod clear; when the ship is ready, F re-boards it."),

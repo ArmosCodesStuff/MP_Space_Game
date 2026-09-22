@@ -39,12 +39,13 @@ public static class Economy
     // price the formula would ask, not one a player can pay.
     public const double AutoSellCost = 4462;
     public const int AutoSellBoss = 3;            // ...and only once the level-3 boss is beaten
-    // THE ESCORT: 5x the income; 4 waves of hunters, the first 5 s in, then every 20 s
+    // THE ESCORT: 5x the income; a wave of hunters 5 s in, then every 20 s for as long as the run
+    // lasts; a 4 s hold at each outpost to offload
     public const double EscortPay = 5;
-    public const int EscortWaves = 4;
     public const double EscortFirstWave = 5, EscortWaveEvery = 20;
+    public const double OutpostStop = 4;
     // ── hull, and rebuilding what is lost ──
-    public const double UtilityHull = 120, HaulerHull = 150;
+    public const double UtilityHull = 120, HaulerHull = 262.5;
     public const double RebuildDelay = 30;         // seconds after it is destroyed
     public const double RebuildShare = 0.10;       // of everything invested so far in its category
     public const double HaulerLift = 1.5;        // seconds to lift off the pad

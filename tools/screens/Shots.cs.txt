@@ -518,16 +518,17 @@ public partial class _Shots : Node
                 await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             }
             await Frame(Hub.PortalPos, 1.2f); await W(0.3); await Snap("59b_hauler_cargo_lost");
-            // an ESCORT mid-route: off the lane, its way ahead drawn, a wave closing on it
+            // an ESCORT at its first outpost: holding beside it, offloading (crates out of the pods,
+            // across to the station), its way ahead drawn, a wave closing on it
             Hauler.PretendRoll = null;
             h.ResetToPad(); h.Cargo = 300;
             Y.RequestDispatch(escorted: true); h.T = Economy.HaulerLift;
             for (int i = 0; i < 600 && h.State != Hauler.St.Escorting; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            typeof(Hauler).GetField("_leg", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(h, 1);
-            h.Position = new Vector2(150, 1400); h.T = Economy.EscortFirstWave - 0.1;
-            await W(1.0);
+            h.Position = Hub.EscortRoute[0] + new Vector2(-10, -10); h.T = Economy.EscortFirstWave - 0.1;
+            for (int i = 0; i < 300 && h.StopLeft <= 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await W(0.9);
             foreach (var r in hub.Raiders) r.Position = h.Position + (r.Position - h.Position).Normalized() * 700f;
-            await Frame(h.Position + new Vector2(150, 50), 0.55f); await Snap("59_hauler_escort");
+            await Frame(h.Position + new Vector2(60, 40), 0.9f); await Snap("59_hauler_escort_offloading");
             foreach (var r in hub.Raiders.ToList()) r.TakeDamage(1e9);
             h.ResetToPad(); await W(0.3);
             Me().Visible = true;

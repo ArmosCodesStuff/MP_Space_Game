@@ -42,6 +42,7 @@ public partial class Radar : Control
             marks.Add(("BASE", Hub.BasePos, 260f)); marks.Add(("THREAT INTELLIGENCE", Hub.TioPos, 140f));
             marks.Add(("PORTAL", Hub.PortalPos, 160f)); marks.Add(("SALVAGE FIELD", Hub.WreckPos, 340f));
             marks.Add(("MINING BELT", Hub.SunPos, 540f));
+            foreach (var (name, at) in Hub.Outposts) marks.Add(("OUTPOST " + name, at, Hub.OutpostHeight * 0.5f));
             if (Hub.Mission == Hub.MissionState.PortalOpen) marks.Add(("MISSION PORTAL", Hub.MissionPortalPos, 160f));
         }
         foreach (var s in Hub.Ships) if (s != me) marks.Add((s.Pilot, s.Position, s.HitRadius));
@@ -86,6 +87,12 @@ public partial class Radar : Control
             { var p = P(Hub.TioPos); if (Inside(p)) DrawRect(new Rect2(p - new Vector2(3, 4), new Vector2(6, 8)), new Color(0.6f, 0.64f, 0.7f)); }   // the TIO
             { var p = P(Hub.BasePos); if (Inside(p)) DrawRect(new Rect2(p - new Vector2(4, 4), new Vector2(8, 8)), new Color(0.75f, 0.78f, 0.8f)); }
             { var p = P(Hub.PortalPos); if (Inside(p)) DrawArc(p, 5f, 0, Mathf.Tau, 16, new Color(0.4f, 0.8f, 1f), 1.5f); }
+            foreach (var (_, at) in Hub.Outposts)                                                    // the outposts: small diamonds
+            {
+                var p = P(at);
+                if (Inside(p)) DrawColoredPolygon(new[] { p + new Vector2(0, -4), p + new Vector2(3.5f, 0), p + new Vector2(0, 4), p + new Vector2(-3.5f, 0) },
+                                                  new Color(0.55f, 0.72f, 0.85f));
+            }
         }
         // the fleet that is out there: a lost ship, or the hauler through the portal, has no dot
         if (Hub.Yard != null) foreach (var g in Hub.Yard.Gatherers) { var p = P(g.Position); if (g.InReach && Inside(p)) DrawCircle(p, 1.8f, Plume.Utility); }

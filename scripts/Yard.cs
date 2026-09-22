@@ -475,18 +475,18 @@ public partial class Yard : Node2D
             (gp[i], gr[i], gs[i], gc[i], gb[i], gh[i], gw[i]) = (g.Position, g.Rotation, (int)g.State, (float)g.Cargo, g.BeamTo, (float)g.Hull, g.NetRebuild);
         }
         var h = Hauler;
-        Hub.RpcHome(this, nameof(NetState), gp, gr, gs, gc, gb, gh, gw, h.Position, h.Rotation, (int)h.State, (float)h.T, (float)h.Cargo, (float)h.LastSale, (float)h.Hull, h.NetRebuild, h.NetFlags);
+        Hub.RpcHome(this, nameof(NetState), gp, gr, gs, gc, gb, gh, gw, h.Position, h.Rotation, (int)h.State, (float)h.T, (float)h.Cargo, (float)h.LastSale, (float)h.Hull, h.NetRebuild, h.NetFlags, (float)h.StopLeft);
     }
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
     private void NetState(Vector2[] gp, float[] gr, int[] gs, float[] gc, Vector2[] gb, float[] gh, float[] gw,
-                          Vector2 hp, float hr, int hs, float ht, float hc, float sale, float hh, float hw, int hf)
+                          Vector2 hp, float hr, int hs, float ht, float hc, float sale, float hh, float hw, int hf, float hstop)
     {
         // the fleet follows the levels (1 s); until they agree, skip the ships this once
         int n = Math.Min(gp.Length, Math.Min(gr.Length, Math.Min(gs.Length, Math.Min(gc.Length, Math.Min(gb.Length, Math.Min(gh.Length, gw.Length))))));
         if (n == Gatherers.Count)
             for (int i = 0; i < n; i++) Gatherers[i].SetNet(gp[i], gr[i], gs[i], gc[i], gb[i], gh[i], gw[i]);
-        Hauler.SetNet(hp, hr, hs, ht, hc, sale, hh, hw, hf);
+        Hauler.SetNet(hp, hr, hs, ht, hc, sale, hh, hw, hf, hstop);
     }
 
     // The whole fleet, for whatever treats a miner, a salvager and the hauler alike.

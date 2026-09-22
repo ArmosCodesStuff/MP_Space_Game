@@ -35,9 +35,23 @@ public partial class Hub : Node2D
     public static readonly Vector2 SunPos    = new(0, -1794);
     public static readonly Vector2 WreckPos  = new(-1840, 60);
     public static readonly Vector2 PortalPos = new(1500, 219);
-    // AN ESCORT's long way to the portal: south round the TIO, east, then up to the jump (~4400 u).
-    // Written after PortalPos, which it ends on: static fields start in the order they are written.
-    public static readonly Vector2[] EscortRoute = { new(-300, 1100), new(600, 1700), new(1900, 1100), PortalPos };
+    // FOUR OUTPOSTS, 2000 u out from the base on the diagonals (y grows south): small permanent
+    // stations the escort delivers to, named for their corner, in the order the escort visits
+    // them -- counter-clockwise from the south-east. Every peer builds them (BuildWorld).
+    public const float OutpostOut = 2000f, OutpostHeight = 170f;
+    public static readonly (string name, Vector2 at)[] Outposts =
+    {
+        ("SE", BasePos + new Vector2(1, 1).Normalized() * OutpostOut), ("NE", BasePos + new Vector2(1, -1).Normalized() * OutpostOut),
+        ("NW", BasePos + new Vector2(-1, -1).Normalized() * OutpostOut), ("SW", BasePos + new Vector2(-1, 1).Normalized() * OutpostOut),
+    };
+    // Where the hauler holds beside an outpost to offload: on its base side, clear of the station --
+    // half the hauler (100 u), arriving nose-first, plus half the station (85 u), plus a gap.
+    public const float OutpostDock = 230f;
+    public static Vector2 DockAt(Vector2 outpost) => outpost + (BasePos - outpost).Normalized() * OutpostDock;
+    // AN ESCORT's long way to the portal: to each outpost in turn, holding at each (Hauler), then to
+    // the jump (~13,000 u). Written after the outposts and PortalPos, which it is made of: static
+    // fields start in the order they are written.
+    public static readonly Vector2[] EscortRoute = Outposts.Select(o => DockAt(o.at)).Append(PortalPos).ToArray();
     // Threat Intelligence Operations: south-west of the base, clear of the wreck, the
     // salvage routes, the haul lane and the dummies.
     public static readonly Vector2 TioPos = new(-650, 640);
@@ -309,6 +323,13 @@ public partial class Hub : Node2D
         // its name, drawn in the world like every world label (a UI control here counted
         // as "off-screen" whenever the camera looked elsewhere)
         AddChild(new WorldLabel { Text = "THREAT INTELLIGENCE OPERATIONS", Position = TioPos + new Vector2(0, TioHeight / 2 + 16), ZIndex = 2 });
+        foreach (var (name, at) in Outposts)
+        {   // the outposts: permanent, and nothing to replicate -- every peer builds the same four
+            var o = Sprites.Fit("res://outpost.png", OutpostHeight);
+            o.Name = "Outpost" + name; o.Position = at; o.ZIndex = 2;
+            AddChild(o);
+            AddChild(new WorldLabel { Text = "OUTPOST " + name, Position = at + new Vector2(0, OutpostHeight / 2 + 16), ZIndex = 2 });
+        }
 
         Portal = new Portal { Position = PortalPos, Name = "Portal" };
         AddChild(Portal);
@@ -343,7 +364,7 @@ public partial class Hub : Node2D
     [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
     private void NetShipState(float px, float py, float vx, float vy, float rot, float ax, float ay, bool trigger, bool staggered,
                               float podX, float podY, float podRot, bool warping) =>
-        ShipOf(Multiplayer.GetRemoteSenderId())?.ApplyState(px, py, vx, vy, rot, ax, ay, trigger, staggered, podX, podY, podRot, warping);
+        ShipOf(Net.SenderOf(this))?.ApplyState(px, py, vx, vy, rot, ax, ay, trigger, staggered, podX, podY, podRot, warping);
     public void SendHostState(int owner, double hp, double maxHp, bool alive, double stasis, bool pinned, double combat, double pdLeft, double pdRecharge,
                               int mag, double reload, double bsWindup, int bsVolleys, double bsCooldown,
                               int wingTarget, Vector2[] wingPos, float[] wingRot, int[] wingState, float[] wingRearm) =>
@@ -389,7 +410,7 @@ public partial class Hub : Node2D
         _peerSector[who] = (SectorKind)s;
         if ((SectorKind)s != Sector) { RpcId(who, nameof(NetSector), (int)Sector); return; }
         RpcId(who, nameof(NetMission), MissionArgs());
-        foreach (var r in Raiders) RpcId(who, nameof(NetRaiderSpawn), r.NetId, r.Position, (int)r.Kind, r.Strength);
+        foreach (var r in Raiders) RpcId(who, nameof(NetRaiderSpawn), r.NetId, r.Position, (int)r.Kind, r.Strength, r.HullShare);
         if (MissionWon) { RpcId(who, nameof(NetWon), _ships.Count); RpcId(who, nameof(NetReturnCount), ReturnReady, ReturnTotal); }
         if (_placeFor.Remove(who, out var place)) RpcId(who, nameof(NetPlace), place.at, place.rot);
     }
@@ -590,7 +611,7 @@ public partial class Hub : Node2D
     private void NetIdentity(int peer, string name, Color main, Color accent, int cls, int[] bought, int level, string[] equip, string characterId)
     {
         // a peer may only describe itself
-        if (Multiplayer.GetRemoteSenderId() != peer || Net.I == null) return;
+        if (Net.SenderOf(this) != peer || Net.I == null) return;
         if (!Net.I.Players.TryGetValue(peer, out var p)) Net.I.Players[peer] = p = new Net.PlayerInfo();
         // Everything else off this wire is sanitised (bought is null-guarded below, equip inside
         // Equipment.Sanitize); the name was not. A null here threw on .Length, and a null that got
@@ -875,29 +896,32 @@ public partial class Hub : Node2D
         foreach (var u in Yard.Fleet) if (Raider.Up(u)) yield return u;
     }
 
-    // A patrol: 3 lights and 1 heavy, spawned together at `at` on the perimeter -- hunters of
-    // `quarry`, if one is given.
+    // A patrol: 3 lights and (unless `heavy` is false) 1 heavy, spawned together at `at` on the
+    // perimeter -- hunters of `quarry`, if one is given, built with `hullShare` of their hull.
     private int _patrols;
-    public int SpawnPatrol(Vector2 at, double scale = 1, Node2D quarry = null)
+    public int SpawnPatrol(Vector2 at, double scale = 1, Node2D quarry = null, bool heavy = true, double hullShare = 1)
     {
         if (!Net.IsHost) return 0;
         int id = ++_patrols;
-        foreach (var (off, kind) in new[] { (new Vector2(-40, 0), RaiderKind.Light), (Vector2.Zero, RaiderKind.Light),
-                                            (new Vector2(40, 0), RaiderKind.Light), (new Vector2(0, 90), RaiderKind.Heavy) })
-            SpawnRaider(at + off, kind, id, scale).Quarry = quarry;
+        var crew = new List<(Vector2 off, RaiderKind kind)> { (new Vector2(-40, 0), RaiderKind.Light), (Vector2.Zero, RaiderKind.Light), (new Vector2(40, 0), RaiderKind.Light) };
+        if (heavy) crew.Add((new Vector2(0, 90), RaiderKind.Heavy));
+        foreach (var (off, kind) in crew) SpawnRaider(at + off, kind, id, scale, hullShare).Quarry = quarry;
         return id;
     }
 
     // AN ESCORT'S HUNTERS: a wave sent after one quarry, in from the map's edge beside it -- one
-    // patrol, and one more per extra pilot, at the strength of the base owner's highest boss.
-    // Alternate waves come round from alternate sides.
+    // patrol, and one more per extra pilot, at the strength of the base owner's highest boss and
+    // at HALF their hull. The first wave is light fighters only; every other wave after it brings
+    // a heavy too (the second, the fourth, ...). Alternate waves come round from alternate sides.
+    public const double HunterHull = 0.5;
     public void HuntWave(Node2D quarry, int wave)
     {
         if (!Net.IsHost) return;
         int patrols = 1 + System.Math.Max(0, _ships.Count - 1);
         var edge = Raider.EdgeSpot(quarry.Position) - BasePos;
         for (int i = 0; i < patrols; i++)
-            SpawnPatrol(BasePos + edge.Rotated((wave % 2 == 0 ? 1 : -1) * 0.35f * (i + 1)), Missions.S(System.Math.Max(1, Missions.HighestBeaten)), quarry);
+            SpawnPatrol(BasePos + edge.Rotated((wave % 2 == 0 ? 1 : -1) * 0.35f * (i + 1)), Missions.S(System.Math.Max(1, Missions.HighestBeaten)), quarry,
+                        heavy: wave % 2 == 1, hullShare: HunterHull);
     }
     // The hunt is over (the quarry reached the portal, or was lost): its hunters withdraw -- gone,
     // not shot down.
@@ -911,23 +935,23 @@ public partial class Hub : Node2D
         }
     }
 
-    public Raider SpawnRaider(Vector2 at, RaiderKind kind = RaiderKind.Light, int patrol = 0, double scale = 1)
+    public Raider SpawnRaider(Vector2 at, RaiderKind kind = RaiderKind.Light, int patrol = 0, double scale = 1, double hullShare = 1)
     {
         if (!Net.IsHost) return null;
-        var r = AddRaider(++_raiderIds, at, kind, patrol, scale);
-        ToWorld(nameof(NetRaiderSpawn), r.NetId, at, (int)kind, scale);
+        var r = AddRaider(++_raiderIds, at, kind, patrol, scale, hullShare);
+        ToWorld(nameof(NetRaiderSpawn), r.NetId, at, (int)kind, scale, hullShare);
         return r;
     }
     // Idempotent: a late joiner is sent every raider that exists, and one of them may already
     // have reached it the ordinary way.
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetRaiderSpawn(int id, Vector2 at, int kind, double scale)
+    private void NetRaiderSpawn(int id, Vector2 at, int kind, double scale, double hullShare)
     {
-        if (Raiders.All(x => x.NetId != id)) AddRaider(id, at, (RaiderKind)kind, 0, scale);
+        if (Raiders.All(x => x.NetId != id)) AddRaider(id, at, (RaiderKind)kind, 0, scale, hullShare);
     }
-    private Raider AddRaider(int id, Vector2 at, RaiderKind kind, int patrol, double scale)
+    private Raider AddRaider(int id, Vector2 at, RaiderKind kind, int patrol, double scale, double hullShare)
     {
-        var r = new Raider { Hub = this, Kind = kind, Patrol = patrol, Strength = scale, NetId = id, Position = at, Name = $"Raider_{id}" };
+        var r = new Raider { Hub = this, Kind = kind, Patrol = patrol, Strength = scale, HullShare = hullShare, NetId = id, Position = at, Name = $"Raider_{id}" };
         Raiders.Add(r); AddChild(r);
         return r;
     }
@@ -942,12 +966,18 @@ public partial class Hub : Node2D
     {
         if (Raiders.FirstOrDefault(x => x.NetId == id) is { } r) DropRaider(r, burst);
     }
-    // Also let go of it as the selection: on a guest a raider's hull never reads zero (the host
-    // removes it before its last hull reaches anyone), so a selected one stayed "alive" and freed.
+    // Also let go of it as the selection and as every ship's target: on a guest a raider's hull
+    // never reads zero (the host removes it before its last hull reaches anyone), and a withdrawn
+    // hunter (CallOff) is freed with hull left -- either way it stayed "alive" and freed, and a
+    // carrier's fighters and point defence went on reading it. It leaves the hostiles NOW, not when
+    // the queued free takes it out of the tree at the frame's end: a turret that ticked later in the
+    // same frame acquired it again.
     private void DropRaider(Raider r, bool burst)
     {
         if (burst) AddChild(new Explosion { Position = r.Position, Radius = 28f });
         if (ReferenceEquals(_selected, r)) _selected = null;
+        Combat.Hostiles.Remove(r);
+        foreach (var s in _ships.Values) if (IsInstanceValid(s)) s.Forget(r);
         Raiders.Remove(r); r.QueueFree();
     }
 

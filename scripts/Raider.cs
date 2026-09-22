@@ -41,7 +41,10 @@ public partial class Raider : Node2D, IHittable
     public float Length => Heavy ? HeavyLength : LightLength;
     // a raid's raiders are as strong as the boss that was failed: S(L) = 1.1^(L-1)
     public double Strength = 1;          // S(L) (was "Scale", which hid Node2D.Scale)
-    public double MaxHull => (Heavy ? HeavyHull : LightHull) * Strength;
+    // The share of that hull it is built with: an escort's hunters come at half (Hub.HunterHull).
+    // Not Strength, which scales its damage too. Set before it enters the tree (_Ready reads it).
+    public double HullShare = 1;
+    public double MaxHull => (Heavy ? HeavyHull : LightHull) * Strength * HullShare;
     public float HitRadius => Length * (Heavy ? 0.3f : 0.4f);
     public bool Selectable => true;
 

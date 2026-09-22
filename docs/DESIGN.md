@@ -76,7 +76,7 @@ Reused as-is or lightly adapted — these were built and validated:
 
 1. **Hybrid control.** You fly your own ship directly (WASD, nose follows the mouse) and order a
    fleet around it RTS-style. Input, camera and combat are built for both.
-2. **The sell run is a choice at dispatch.** ESCORT: fly with the hauler the long way round while
+2. **The sell run is a choice at dispatch.** ESCORT: fly with the hauler round the four outposts while
    raider waves hunt it, for **5x** the pay if it reaches the portal. DISPATCH: send it alone, and it
    gets through with the EVASION upgrade's chance -- or its cargo is lost past the portal. (The
    owner's 2026-09-21 answer; it replaced "alone for a reduced payout".)
@@ -151,10 +151,25 @@ levels once a second and ship and hauler state ten times a second; a guest's own
   upgrade, estimated once and fixed) that needs the base owner to have beaten the level-3 boss.
   A lone run: lift off, slow flat run east, blue aura, warp out, 30 s away (it gets through with the
   **EVASION** chance, 60% +7% a level to 95%; if not, its cargo is lost), warp back (the sale paid,
-  1 credit per unit, or CARGO LOST), drift back, turn 180°, settle. An escort flies `Hub.EscortRoute`
-  instead, the only move off the lane, while waves of raiders sent after it (their `Quarry`) hunt
-  it; at the jump they withdraw and the sale pays 5x. **Nothing is ever lost to a trip or a save**:
-  the Yard counts what the fleet and the hauler carry as home (`Yard.Banked`).
+  1 credit per unit, or CARGO LOST), drift back, turn 180°, settle.
+- **An escort** flies `Hub.EscortRoute` instead, the only move off the lane: **counter-clockwise round
+  the four outposts from the south-east** -- SE, NE, NW, SW, then the portal (~13,000 u, about four
+  minutes). It eases in beside each outpost (230 u in, on the base's side, clear of the station) and **holds 4 s offloading
+  a quarter of the load**, drawn as the loading run backwards: the last-filled pod drains while crates
+  stream from it across to the station. **The offload is drawn, not paid**: the cargo aboard, the 5x
+  sale at the portal, a lost escort losing all of it and a save counting it are exactly as they were
+  (`Hauler.Delivered` / `ShownCargo` are display only). The stop lives inside ESCORTING (`_stop`), not
+  a state of its own, because the waves run on the state's clock and the lane-snap, the route line
+  and the guests' easing all key on ESCORTING; guests are sent the stop's time left with the rest of
+  the hauler's state. A raider wave hunts it **every 20 s from 5 s in, for as long as the run lasts**
+  (their `Quarry`): the first wave three light fighters, every other wave after it a heavy as well (one
+  patrol, plus one per extra pilot), all at **half hull** (`Raider.HullShare`, carried by
+  `NetRaiderSpawn`; not `Strength`, which scales their damage too). At the jump they withdraw and the
+  sale pays 5x. The hauler has **262.5 hull**. **Nothing is ever lost to a trip or a save**: the Yard
+  counts what the fleet and the hauler carry as home (`Yard.Banked`).
+- **The outposts** (`Hub.Outposts`, `outpost.png` at 170 u): four small permanent stations 2000 u out on
+  the diagonals, labelled OUTPOST SE / NE / NW / SW, on the radar as small diamonds and pickable there
+  as waypoints. Every peer builds the same four in `BuildWorld`; nothing about them is replicated.
 - **Upgrades** cost credits, in tabs **MINERS, SALVAGERS, HAULER** (plus **REFIT**) in the BASE
   menu (B). +10% upgrades cost 1.25× the last level; step upgrades cost 2× the last and stop at their
   cap (the button reads MAX); a switch reads OFF / ON, and LOCKED until the base owner has beaten the
@@ -525,7 +540,7 @@ reporting damage per second. The meter restarts itself on the first hit after 5 
 - **Fighter** (`wing_fighter.png`) is the developer's black-and-purple fighter recoloured white:
   brightness remapped so shading keeps its direction, the outer outline kept dark against space, and
   the purple (the saturated pixels) taken to neutral with a faint cool cast on the canopy.
-- **Unused art** (18 carried-over sprites nothing references) lives in `art_unused/`, which has a
+- **Unused art** (21 carried-over sprites nothing references) lives in `art_unused/`, which has a
   `.gdignore` so Godot never imports it. Kept deliberately, at the developer's request.
 - **Background** (`stars.png`): 1024 px, seamless (stars near an edge wrap), on a screen-space layer
   at −100. Client-side only.
@@ -710,6 +725,19 @@ where the editor cannot delete it.*
   scene at the end of the frame, so code waiting for "home" that reads the new world must wait for
   it to be built (`H.Yard != null && H.IsNodeReady()`). A check read a guest's file in between and
   saw loot the new world had not yet claimed.
+- **A pursuer with a fixed turn rate cannot reach a target inside its turning circle.** The carrier's
+  fighters strafe by pure pursuit (352 u/s, 3.5 rad/s: a ~100 u radius). A pass that stopped only 1.2
+  target diameters past a light raider (~33 u) left anything drifting slowly inside that circle, and the
+  fighter flew laps round it, never lined up and never fired again until it went home -- the owner's
+  "they fly through them but don't shoot". The overshoot now clears a whole turning diameter too
+  (`Wing.TurnDiameter`). **A stationary target cannot show this**: the strafing check on a still dummy
+  passed throughout; the check that catches it moves a small target at 12 u/s.
+- **A node freed with hull left still reads "alive".** A withdrawn hunter (`Hub.CallOff`) is freed with
+  its hull, so `Alive` stays true and a carrier's fighters went on reading a freed node.
+  `Hub.DropRaider` now takes it off every ship's targets (`PlayerShip.Forget`) -- and out of
+  `Combat.Hostiles` at once: `QueueFree` only takes a node out of the tree at the frame's end, and a
+  point-defence turret that ticked later in the same frame acquired the dropped raider again, then read
+  it freed (an `ObjectDisposedException` a frame later).
 - **The typecheck does not compile the harnesses.** `typecheck.ps1` checks `scripts/*.cs`; the smoke
   test and the sweep (`tools/*/*.cs.txt`) are compiled only inside an engine run, so a typo in a
   check costs a whole run to find. Compile them first: `scripts/*.cs` plus both `.cs.txt` files (as

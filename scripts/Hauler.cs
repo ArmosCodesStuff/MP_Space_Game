@@ -15,8 +15,10 @@ using System;
 //              level-3 boss beaten, and 4462 cr).
 //   LIFTING    grows to flight size
 //   DEPARTING  a lone run: slides slowly east to the portal
-//   ESCORTING  an escort: flies the long way (Hub.EscortRoute) while waves of raiders
-//              hunt it; it must reach the portal alive
+//   ESCORTING  an escort: flies counter-clockwise round the four outposts (Hub.EscortRoute),
+//              holding 4 s beside each to offload a quarter of the load (drawn as the loading
+//              run backwards), then on to the portal, while a wave of raiders hunts it every
+//              20 s; it must reach the portal alive
 //   CHARGING   shakes inside a building blue aura
 //   AWAY       warps out; 30 s later its cargo is sold. A lone run gets through with the
 //              EVASION chance, or the cargo is lost and it comes back empty; an escort
@@ -38,13 +40,24 @@ public partial class Hauler : UtilityShip
     public bool RunLost { get; private set; }    // a lone run the dice went against: its cargo is gone
     public static float? PretendRoll;            // the smoke test's way to fix the dice (like Net.PretendProtocol)
     // Sent to guests with every state report: the two switches, and above them the escort's leg
-    // (where the route line starts).
+    // (where the route line starts; while it holds at an outpost, that outpost).
     public const int FlagEscorted = 1, FlagLost = 2, LegShift = 2;
     public int NetFlags => (Escorted ? FlagEscorted : 0) | (RunLost ? FlagLost : 0) | (_leg << LegShift);
     // What this load sells for at the portal: x5 on an escort, nothing if a lone run was lost.
     public double Payout => Cargo * Economy.CreditsPerUnit * (Escorted ? Economy.EscortPay : RunLost ? 0 : 1);
     private int _leg, _waves;                    // an escort: the route point it is flying to, the waves sent
     public int Leg => _leg;
+    // An escort holding at an outpost: seconds of the stop left (guests are sent it, and count it down).
+    private double _stop;
+    public double StopLeft => _stop;
+    // AN ESCORT DELIVERS A QUARTER OF ITS LOAD AT EACH OUTPOST -- drawn, not paid: the pay (x5) is
+    // on the whole load, at the portal, exactly as before, so a lost escort still loses it all and a
+    // save mid-run still counts the cargo aboard. The pods show what is left: the quarters handed
+    // over so far, the one going out now included.
+    public double Delivered => !Escorted ? 0
+        : State == St.Escorting ? Math.Min(_leg, Hub.Outposts.Length) + (_stop > 0 ? 1 - _stop / Economy.OutpostStop : 0)
+        : State is St.Charging or St.Away ? Hub.Outposts.Length : 0;
+    public double ShownCargo => Cargo * (1 - Delivered / Hub.Outposts.Length);
     public double T;                         // seconds in the current state
     public double LastSale;                  // credits paid on the last return
     public const float Length = 200f;
@@ -90,10 +103,10 @@ public partial class Hauler : UtilityShip
     protected override float RebuiltBlast => 60f;
     protected override void OnLost() { _speed = 0; EndEscort(); Go(St.Destroyed); Effects(); }   // gone at once, its hunters with it
 
-    public void SetNet(Vector2 p, float rot, int state, float t, float cargo, float sale, float hull, float rebuild, int flags)
+    public void SetNet(Vector2 p, float rot, int state, float t, float cargo, float sale, float hull, float rebuild, int flags, float stop)
     {
         bool wasLost = Lost;
-        (_netPos, _netRot, _hasNet) = (p, rot, true);
+        (_netPos, _netRot, _hasNet, _stop) = (p, rot, true, stop);
         (Escorted, RunLost, _leg) = ((flags & FlagEscorted) != 0, (flags & FlagLost) != 0, flags >> LegShift);
         if ((St)state != State || Math.Abs(T - t) > 0.5) T = t;
         (State, Cargo, LastSale) = ((St)state, cargo, sale);
@@ -105,7 +118,7 @@ public partial class Hauler : UtilityShip
     public void Dispatch(bool escorted)
     {
         if (!Net.Sim || !CanDispatch || !Yard.IsMyOwnBase) return;
-        Escorted = escorted; RunLost = false; _leg = 0; _waves = 0;
+        Escorted = escorted; RunLost = false; _leg = 0; _waves = 0; _stop = 0;
         Go(St.Lifting);
     }
 
@@ -113,7 +126,7 @@ public partial class Hauler : UtilityShip
     private void EndEscort()
     {
         if (Escorted && Net.IsHost && Yard?.Hub != null) Yard.Hub.CallOff(this);
-        Escorted = false; _leg = 0; _waves = 0;
+        Escorted = false; _leg = 0; _waves = 0; _stop = 0;
     }
 
     private void Go(St s) { State = s; T = 0; }
@@ -126,6 +139,10 @@ public partial class Hauler : UtilityShip
         else
         {
             GuestClock(dt);
+            // Counted down between reports, but never to zero here: the host ends the stop and moves
+            // the leg on in the same frame, and a guest that ended it first would show the quarter
+            // just handed over back in the pods until the report with the next leg arrived.
+            if (_stop > 0) _stop = Math.Max(1e-3, _stop - delta);
             if (_hasNet)
             {   // on its lane only x moves (the lane is exact); an escort flies free
                 float k = Mathf.Clamp(10f * dt, 0f, 1f);
@@ -150,9 +167,17 @@ public partial class Hauler : UtilityShip
             case St.Lifting:  if (T >= Economy.HaulerLift) Go(Escorted ? St.Escorting : St.Departing); break;
             case St.Departing: if (Slide(Hub.PortalPos.X, dt)) Go(St.Charging); break;
             case St.Escorting:
-                if (_waves < Economy.EscortWaves && T >= Economy.EscortFirstWave + _waves * Economy.EscortWaveEvery)
-                    Yard.Hub.HuntWave(this, _waves++);
-                if (Fly(Hub.EscortRoute[_leg], _leg == Hub.EscortRoute.Length - 1, dt) && ++_leg == Hub.EscortRoute.Length) Go(St.Charging);
+                // the waves run on T, which a stop does not reset: they keep coming while it offloads
+                if (T >= Economy.EscortFirstWave + _waves * Economy.EscortWaveEvery) Yard.Hub.HuntWave(this, _waves++);
+                if (_stop > 0)
+                {   // holding beside an outpost, offloading; then on to the next point
+                    if ((_stop -= dt) <= 0) { _stop = 0; _leg = Math.Min(_leg + 1, Hub.EscortRoute.Length - 1); }
+                }
+                else if (Fly(Hub.EscortRoute[_leg], dt))
+                {
+                    if (_leg == Hub.EscortRoute.Length - 1) Go(St.Charging);    // the portal
+                    else _stop = Economy.OutpostStop;                           // an outpost
+                }
                 break;
             case St.Charging:
                 if (T >= Economy.HaulerCharge)
@@ -189,18 +214,17 @@ public partial class Hauler : UtilityShip
         if (State != St.Escorting) Position = new Vector2(Position.X, Hub.LaneY);   // the lane: every move is flat but an escort's
     }
 
-    // An escort's leg: toward `to` at the hauler's speed (20% of it while pinned), easing in only at
-    // the last point, the nose turning onto the heading at 2 rad/s (not while pinned, like any
-    // utility ship). True when it arrives.
-    private bool Fly(Vector2 to, bool last, float dt)
+    // An escort's leg: toward `to` at the hauler's speed (20% of it while pinned), easing in to stop
+    // there (every point of the route is a stop: an outpost, or the portal), the nose turning onto
+    // the heading at 2 rad/s (not while pinned, like any utility ship). True when it arrives.
+    private bool Fly(Vector2 to, float dt)
     {
         var d = to - Position; float dist = d.Length();
         float top = (float)Economy.HaulerSpeed * (Pinned ? Raider.PinSpeed : 1f);
-        float want = last ? Mathf.Min(top, Mathf.Sqrt(2f * Accel * dist)) : top;
-        _speed = Mathf.MoveToward(_speed, want, Accel * dt);
+        _speed = Mathf.MoveToward(_speed, Mathf.Min(top, Mathf.Sqrt(2f * Accel * dist)), Accel * dt);
         if (Pinned) _speed = Mathf.Min(_speed, top);
         if (!Pinned && dist > 1f) Rotation = Mathf.RotateToward(Rotation, d.Angle() + Mathf.Pi / 2f, 2f * dt);
-        if (dist < 0.5f || _speed * dt >= dist) { Position = to; if (last) _speed = 0; return true; }
+        if (dist < 0.5f || _speed * dt >= dist) { Position = to; _speed = 0; return true; }
         Position += d / dist * _speed * dt;
         return false;
     }
@@ -273,18 +297,18 @@ public partial class Hauler : UtilityShip
         DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
     }
 
-    // above the hull: the pods, the cargo stream while loading, the sale on return
+    // above the hull: the pods, the cargo stream while loading or offloading, the sale on return
     private void DrawOverlay()
     {
         float s = VisualScale;
-        int pods = Yard.Pods; double podSize = Yard.PodSize;
+        int pods = Yard.Pods; double podSize = Yard.PodSize; double shown = ShownCargo;
         float flash = State == St.Arriving ? Mathf.Max(0f, 1f - (float)(T / 1.2)) : 0f;   // emptying on return
         for (int i = 0; i < Economy.MaxPods; i++)
         {
             var r = new Rect2((PodCentre[i] - PodSize / 2) * s, PodSize * s);
             if (i >= pods) { _overlay.DrawRect(r, new Color(0.03f, 0.04f, 0.06f, 0.62f)); continue; }   // not yet bought
-            float fill = (float)Math.Clamp((Cargo - i * podSize) / podSize, 0, 1);
-            if (fill > 0)   // fills from the rear of the pod forward
+            float fill = (float)Math.Clamp((shown - i * podSize) / podSize, 0, 1);
+            if (fill > 0)   // fills from the rear of the pod forward (and an offload empties it the other way)
                 _overlay.DrawRect(new Rect2(r.Position + new Vector2(0, r.Size.Y * (1 - fill)), new Vector2(r.Size.X, r.Size.Y * fill)),
                                   new Color(0.35f, 0.8f, 1f, fill >= 1 ? 0.5f : 0.35f));
             if (flash > 0) _overlay.DrawRect(r, new Color(1f, 0.95f, 0.7f, 0.55f * flash));
@@ -296,6 +320,18 @@ public partial class Hauler : UtilityShip
         {   // crates of stock coming down the stem into the pod being filled
             int into = Math.Min(pods - 1, (int)(Cargo / podSize));
             var from = inv * Hub.StemFoot; var to = PodCentre[into] * s;
+            for (int k = 0; k < 5; k++)
+            {
+                float f = (float)((T * 1.2 + k / 5.0) % 1.0);
+                _overlay.DrawRect(new Rect2(from.Lerp(to, f) - new Vector2(2.5f, 2.5f), new Vector2(5f, 5f)),
+                                  new Color(0.9f, 0.75f, 0.45f, Mathf.Min(1f, 4f * (1f - f))));
+            }
+        }
+        if (State == St.Escorting && _stop > 0 && shown > 0.5)
+        {   // OFFLOADING beside an outpost: the loading run backwards -- crates out of the pod being
+            // emptied (the last one filled), across to the station
+            int outOf = Math.Clamp((int)Math.Ceiling(shown / podSize) - 1, 0, pods - 1);
+            var from = PodCentre[outOf] * s; var to = inv * Hub.Outposts[Math.Min(_leg, Hub.Outposts.Length - 1)].at;
             for (int k = 0; k < 5; k++)
             {
                 float f = (float)((T * 1.2 + k / 5.0) % 1.0);

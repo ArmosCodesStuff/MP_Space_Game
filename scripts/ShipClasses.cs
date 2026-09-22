@@ -76,6 +76,8 @@ public partial class Turret : Node2D
     public IHittable Target { get; private set; }
 
     private bool Online => !PointDefense || Ship.PdActive;
+    // a target that has left the world (Hub.DropRaider, through PlayerShip.Forget)
+    public void Forget(IHittable t) { if (ReferenceEquals(Target, t)) Target = null; }
 
     private ShipStats S => Ship.Stats;
     // Through a broadside the main turrets swing fast enough to come round from anywhere onto the
@@ -143,10 +145,12 @@ public partial class Turret : Node2D
         _cd -= delta;
         if (!canFire) { if (_cd < 0) _cd = 0; }
         else for (int n = 0; _cd <= 0 && n < 8; n++)
-        {
+        {   // the target held for the shot: a shot that kills it drops it from this turret (Hub.DropRaider)
+            var tgt = Target;
+            if (tgt == null) break;
             _cd += Interval;
-            Target.TakeDamage(ShotDamage); Ship.NoteCombat();
-            Combat.Flash(wp + Vector2.Right.Rotated(GlobalRotation) * BarrelLength, Target.Position, new Color(0.7f, 0.95f, 1f));
+            tgt.TakeDamage(ShotDamage); Ship.NoteCombat();
+            Combat.Flash(wp + Vector2.Right.Rotated(GlobalRotation) * BarrelLength, tgt.Position, new Color(0.7f, 0.95f, 1f));
         }
         QueueRedraw();
     }
@@ -252,10 +256,13 @@ public partial class Wing : Node2D
 
     // ── fighters: strafing runs ──────────────────────────────────────────────
     // Each pass: 3 shots, straight THROUGH the target until 1.2x its diameter past
-    // it, then turn for the next. They fly like aircraft -- steady speed, limited
-    // turn rate -- so the pass and the turn are real. After 15 s engaged they fly
-    // home and dock INSIDE the carrier for a 3 s rest; with nothing to fight they
-    // stay inside.
+    // it -- and at least one of the fighter's own turning circles past it -- then turn
+    // for the next. They fly like aircraft -- steady speed, limited turn rate -- so the
+    // pass and the turn are real, and a target left INSIDE the turning circle can never
+    // be brought onto the nose: the fighter only flies laps round it. A small, slow
+    // target (a light raider riding a pinned hauler) ended up there after every pass,
+    // and was never fired on again. After 15 s engaged they fly home and dock INSIDE
+    // the carrier for a 3 s rest; with nothing to fight they stay inside.
     public const int BurstShots = 3;
     // HARD LIMIT: fighters leave the hangar at least this far apart. Deliberately a constant,
     // not a stat: no upgrade or rate-of-fire bonus may ever change it.
@@ -378,7 +385,7 @@ public partial class Wing : Node2D
             {
                 Fly(dt);
                 float beyond = (Position - t.Position).Dot(Vector2.Right.Rotated(_heading));
-                if (beyond >= Overshoot * 2f * t.HitRadius) { LastOvershoot = beyond; _f = FSt.Turn; }
+                if (beyond >= Mathf.Max(Overshoot * 2f * t.HitRadius, TurnDiameter)) { LastOvershoot = beyond; _f = FSt.Turn; }
                 break;
             }
             case FSt.Turn:                         // come round for the next pass
@@ -398,6 +405,7 @@ public partial class Wing : Node2D
     }
 
     private float TurnRate => (float)S["fighter_turn"];
+    public float TurnDiameter => 2f * Speed / TurnRate;
     private float OffAngle(Vector2 p) => Mathf.Abs(Mathf.AngleDifference(_heading, (p - Position).Angle()));
     private void SteerTo(Vector2 p, float dt)
     {
