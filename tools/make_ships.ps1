@@ -17,7 +17,7 @@
 #
 # It prints every mount it placed, in world units, for PlayerShip.Art and Raider.
 # Run: powershell -ExecutionPolicy Bypass -File tools\make_ships.ps1 [-Preview <png>]
-param([string]$Preview = '', [double]$BattleshipTurrets = 2.0, [double]$DestroyerTurrets = 1.4, [double]$CarrierTurrets = 2.0125)
+param([string]$Preview = '', [double]$BattleshipTurrets = 2.5, [double]$DestroyerTurrets = 1.3085, [double]$CarrierTurrets = 1.9178)
 $ErrorActionPreference = 'Stop'
 $Root = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $Src = Join-Path $Root 'art_source'
@@ -495,7 +495,7 @@ function U($s, [int]$i, [double]$length) {
 }
 function Out-Sheet($s, [string]$name) { $s.Save((Join-Path $Root $name)); "{0,-24} {1} x {2}" -f $name, $s.W, $s.H }
 
-# ── the carrier, 297.5 u (the owner's 170 u, 75% larger): nose up already ──
+# ── the carrier, 283.5 u (25% smaller than the battleship): nose up already ──
 $c = Load 'carrier.png'
 $c.Mark(124, 301.5)          # 0  the centre of the runway, where bombers land
 $c.Mark(71, 301.5)           # 1  the port deck, beside the runway: the bays' line
@@ -505,29 +505,29 @@ $c.Mark(22, 238)             # 4  the middle port sponson: a point-defence turre
 $c.Mark(121, 588)            # 5  the stern block: the third point-defence turret (clear of the bow,
                              #    where a bomber lifting off passes over)
 $c.Mark(44, 301.5)           # 6  the hull's port side (the sponsons are outboard of it)
-$c = [Sheet]::Hull($c, $false, 1190, $true)
+$c = [Sheet]::Hull($c, $false, 1134, $true)
 Out-Sheet $c 'carrier_player.png'
-0..6 | ForEach-Object { "  carrier mark $_ : $(U $c $_ 297.5)" }
+0..6 | ForEach-Object { "  carrier mark $_ : $(U $c $_ 283.5)" }
 
-# ── the battleship, 302.4 u: drawn nose-right, then twice as wide and 35% larger (the owner's) ──
+# ── the battleship, 378 u: drawn nose-right, twice as wide, then 35% and 25% larger (the owner's) ──
 $b = Load 'battleship.png'
 $b.Blank(255, 0, 318, 14); $b.Blank(705, 292, 780, 307)          # two pieces of the next drawing on the sheet
 foreach ($t in @(@(200, 310), @(383, 512), @(684, 800), @(1008, 1120))) { $b.PatchColumns($t[0], 114, $t[1], 190, 1215, 117) }
 foreach ($m in @(1055, 735, 435, 254)) { $b.Mark($m, 152) }        # 0-3 the main turrets, bow to stern
 $b.Mark(125, 112)                                                   # 4  point defence, on the stern's port quarter
 $b.Mark(700, 80)                                                    # 5  the hull's port side, amidships
-$b = [Sheet]::Hull($b, $true, 1210, $true, 2)
+$b = [Sheet]::Hull($b, $true, 1512, $true, 2)
 Out-Sheet $b 'battleship_hull.png'
-0..5 | ForEach-Object { "  battleship mark $_ : $(U $b $_ 302.4)" }
+0..5 | ForEach-Object { "  battleship mark $_ : $(U $b $_ 378)" }
 
-# ── the destroyer, 227.5 u (130 u, 75% larger), still the smallest: drawn nose-right ──
+# ── the destroyer, 212.625 u (25% smaller than the carrier): drawn nose-right ──
 $d = Load 'destroyer.png'
 $d.Mark(195, 48.5); $d.Mark(97, 48.5)                               # 0-1 main turrets: the fore spine, the central plate
 $d.Mark(45, 33)                                                     # 2  point defence, aft to port
 $d.Mark(130, 16)                                                    # 3  the hull's port side
-$d = [Sheet]::Hull($d, $true, 910, $true)
+$d = [Sheet]::Hull($d, $true, 850, $true)
 Out-Sheet $d 'destroyer_hull.png'
-0..3 | ForEach-Object { "  destroyer mark $_ : $(U $d $_ 227.5)" }
+0..3 | ForEach-Object { "  destroyer mark $_ : $(U $d $_ 212.625)" }
 
 # ── the raiders ──
 $h = Load 'heavy_fighter.png'
@@ -575,10 +575,10 @@ if ($Preview) {
     $ppu = 2.0
     $main = [System.Drawing.Color]::FromArgb(255, 153, 153, 153); $acc = [System.Drawing.Color]::FromArgb(255, 255, 255, 255)
     $bg = [System.Drawing.Color]::FromArgb(255, 11, 15, 24)
-    $ships = @(@($c, 297.5), @($b, 302.4), @($d, 227.5), @($h, 136.0), @($l, 34.0))
+    $ships = @(@($c, 283.5), @($b, 378.0), @($d, 212.625), @($h, 136.0), @($l, 34.0))
     $bsT = $BattleshipTurrets; $ddT = $DestroyerTurrets; $cvT = $CarrierTurrets     # each class's turret scale, x the battleship's first
     $Wp = 60; foreach ($s in $ships) { $Wp += [int]($s[0].W * $s[1] / $s[0].H * $ppu) + 60 }
-    $Hp = [int](302.4 * $ppu) + 80
+    $Hp = [int](378 * $ppu) + 80
     $out = New-Object System.Drawing.Bitmap $Wp, $Hp
     $g = [System.Drawing.Graphics]::FromImage($out)
     $g.Clear($bg); $g.InterpolationMode = 'HighQualityBicubic'; $g.SmoothingMode = 'AntiAlias'; $g.PixelOffsetMode = 'HighQuality'
@@ -609,7 +609,7 @@ if ($Preview) {
             $bay = At 1; $bl = 28.125 * 0.65 * $ppu
             foreach ($row in -1, 0, 1) { foreach ($sd in -1, 1) { if ($row -eq 1 -and $sd -eq 1) { continue }
                 $bx = if ($sd -lt 0) { $bay[0] } else { 2 * $cx - $bay[0] }
-                Place $bomber $bx ($bay[1] + $row * 49 * $ppu) ($bl * $bomber.Width / $bomber.Height) $bl 0 } }
+                Place $bomber $bx ($bay[1] + $row * 46.69 * $ppu) ($bl * $bomber.Width / $bomber.Height) $bl 0 } }
             $q = At 3; Place $bomber $q[0] $q[1] (28.125 * $ppu * $bomber.Width / $bomber.Height) (28.125 * $ppu) 0
         }
         $x0 += $w + 60

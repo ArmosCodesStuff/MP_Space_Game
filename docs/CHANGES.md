@@ -190,10 +190,12 @@ reachable, which is fine: both harnesses build from the `nupkgs` folder that shi
 ### Open questions — built as a guess, awaiting confirmation
 
 From the line-art batch (the WarShips_Version_L fork):
-- **"75% larger in total" was read as every dimension x1.75** (the carrier 297.5 u, the destroyer 227.5 u),
-  and the battleship's "twice as wide, then 35% larger" as width x2.7 and length x1.35. Its turrets were
-  made 2x, not 1.35x, to keep the drawing's turret-to-hull proportion on the doubled beam. Parked
-  bombers went from 40% to 65% to fill the bigger deck.
+- **"25% larger / smaller" was read as every dimension** (lengths 378, 283.5, 212.6 u). The battleship's
+  turrets are 2.5x, not scaled with the rest alone, to keep the drawing's turret-to-hull proportion on the
+  doubled beam. Parked bombers are 65% to fill the bigger deck.
+- **The sprites are as sharp as the drawings allow**: they are small (250-600 px), so they are enlarged,
+  sharpened and cleaned but not redrawn. A clean-line redraw was tried and made fine detail blotchy.
+  Larger source drawings would make sharper ships.
 - **Turrets wear the accent colour** (white by default), not the hull's -- the accent was already named
   "turrets, engines, trim", and on the line art a turret in the hull colour disappears into it.
 - **Point defence "on the back"** is the stern quarters on the battleship and the destroyer; the carrier's
@@ -302,13 +304,13 @@ From the 2026-09-21 batch (each is a constant or one rule to change):
 
 ### Bigger ships, grey and white (2026-09-22, in the WarShips_Version_L fork)
 
-- **The battleship is its drawing made twice as wide, then 35% larger**: 302.4 u (224 x 1.35) and 62 u
-  across the hull, a 35.1 u half-beam (13 x 2 x 1.35). Its turrets are **2x** -- the drawing's own
-  turret-to-hull proportion on the doubled beam -- rather than 1.35x.
-- **The carrier and the destroyer are 75% larger**, every dimension: the carrier 297.5 u (170 x 1.75), a
-  42 u half-beam; the destroyer 227.5 u (130 x 1.75), a 29.75 u half-beam, still the smallest of the
-  three. Their mounts, the carrier's bays and runway, and their turrets scale with them. The hulls are
-  drawn at 4 px a unit at their new sizes (`tools/make_ships.ps1`).
+- **The battleship is by far the largest**: its drawing twice as wide, then 35% and 25% larger -- 378 u,
+  a 43.875 u half-beam, its turrets 2.5x (the drawing's own turret-to-hull proportion on the doubled
+  beam).
+- **The carrier is 25% smaller than the battleship** (283.5 u, a 40 u half-beam) and **the destroyer 25%
+  smaller than the carrier** (212.6 u, a 27.8 u half-beam). Their mounts, the carrier's bays and runway,
+  and their turrets scale with them. The hulls are drawn at 4 px a unit at their sizes
+  (`tools/make_ships.ps1`). The carrier's engine plume sits 8 u in from its stern (`ClassArt.EngineInset`).
 - **Bombers park at 65% on the bigger deck** (the hauler's own landed size, and what fits the 22.4 u of
   white beside the runway), and lift off over 1.6 s: the run up 124 u of runway ends about at their
   top speed.

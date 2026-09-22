@@ -411,9 +411,9 @@ chosen in the creator only** — there are no class hotkeys (the developer remov
 
 | | Hull | Length | Top speed | Main guns | Its F | PD turrets | Wing | Sprite |
 |---|---|---|---|---|---|---|---|---|
-| **Battleship** | 300 | 302.4 u | 104 u/s | 4, 5.9 a shell | broadside | 2 (slow, τ/3) | — | `battleship_hull.png` |
-| **Carrier** | 200 | 297.5 u | 116.48 u/s | — | bomber strike | 3 (fast, τ/1.2) | 3 fighters + 2 bombers | `carrier_player.png` |
-| **Destroyer** | 250 | 227.5 u | 130 u/s | 2, 5.9 a shell | missile burst | 2 (slow, τ/3) | — | `destroyer_hull.png` |
+| **Battleship** | 300 | 378 u | 104 u/s | 4, 5.9 a shell | broadside | 2 (slow, τ/3) | — | `battleship_hull.png` |
+| **Carrier** | 200 | 283.5 u | 116.48 u/s | — | bomber strike | 3 (fast, τ/1.2) | 3 fighters + 2 bombers | `carrier_player.png` |
+| **Destroyer** | 250 | 212.6 u | 130 u/s | 2, 5.9 a shell | missile burst | 2 (slow, τ/3) | — | `destroyer_hull.png` |
 
 **Damage**: main gun 5.9 a shell, one a second per barrel · PD 0.5 every 0.5 s per turret · fighter 2
 every 0.35 s · torpedo 15 · missile 5 (three to a burst). Every number lives in **`ShipStats`**
@@ -428,9 +428,9 @@ each group of rows only for the classes that carry it (a row a class lacks reads
 figure is one `V(battleship, carrier, destroyer)`. A fourth class is a line in each of those, not a hunt
 for two-way tests.
 
-**Sizes are the owner's.** The battleship is its drawing twice as wide, then 35% larger: 302.4 u and a
-35.1 u half-beam. The carrier (297.5 u) and the destroyer (227.5 u) are their drawings 75% larger, the
-destroyer still the smallest. The hit capsule is the drawn hull. New ships spawn half the longest
+**Sizes are the owner's.** The battleship, by far the largest, is its drawing twice as wide, then 35%
+and 25% larger: 378 u and a 43.875 u half-beam. The carrier is 25% smaller (283.5 u) and the destroyer
+25% smaller again (212.6 u). The hit capsule is the drawn hull. New ships spawn half the longest
 class below the pad (`Hub.SpawnClear`), so any class starts clear of the base.
 
 ### The helm: capital ships handle like naval ships
