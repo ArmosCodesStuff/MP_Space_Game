@@ -223,6 +223,14 @@ From the 2026-09-21 batch (each is a constant or one rule to change):
 
 ## Unreleased
 
+### Exporting a .exe (2026-09-21)
+
+- **`Warships.sln` added** (Godot's own layout: Debug, ExportDebug, ExportRelease). The editor's .NET
+  export refuses a C# project with no `<assembly_name>.sln` beside it -- one "no solution file" error
+  per script -- although the run button works without one. A plain `dotnet build` still works: with a
+  `.sln` and `.csproj` of the same name, MSBuild takes the solution. `export_presets.cfg` (Windows
+  Desktop, to `../Warships.exe`) is committed with it. The exe still needs Godot's export templates.
+
 ### RETURN button replaces the victory clock (2026-09-21)
 
 - **A won arena is left on demand, not on a timer.** After the boss dies a **RETURN TO BASE** button

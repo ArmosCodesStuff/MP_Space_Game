@@ -923,6 +923,9 @@ Each of these compiled clean and was wrong at runtime. The smoke test covers all
   the peer until the other side answers, and everything sent meanwhile fails ("max channels: 0") --
   unseen on one machine, a round trip of errors on a real link. The game never hangs up on one
   peer in session; the tests simulate a drop with `PeerDisconnectNow`, which is what a drop is.
+- **A .NET export needs `Warships.sln`, the run button does not.** Godot's export plugin checks for
+  `<assembly_name>.sln` in the project folder and fails every `.cs` file without it; the editor's own
+  build falls back to the `.csproj`, so nothing else ever notices it is missing.
 - **ENet's timeout is late, and a pre-handshake drop is not a "failure".** ENet looks at a peer's
   timeout only when a resend falls due, and its resends double (0.5, 1.5, 3.5, 7.5, 15.5 s): a JOIN
   set to give up in 12 s gave up after 15, a retry set to 5 after 7.5 -- which made three retries
