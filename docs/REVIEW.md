@@ -440,3 +440,53 @@ it. Neither is catchable by the UI lint, which measures position and width but n
 
 Also noted, not changed: `Join` parses "address:port" by the last colon, so a bare IPv6 address would
 be misread — IPv4 is all the game hosts on; to revisit only if IPv6 is wanted.
+
+
+---
+
+## Pass 10 — the refactor batch (2026-09-22, the WarShips_Version_L fork)
+
+Not a read-through of every file: a rebuild of the parts the twelve classes and six enemies rest
+on. What it removed, and what caught what.
+
+**Removed (invariant C: replacement, not accumulation)**
+
+- `Classes.Guns/Broadside/Missiles/Wing` — four two-way tests, replaced by `Fit` on the class's row.
+- `PlayerShip.Art` — the art table, moved whole into `ClassDef.Art`.
+- `Abilities.ByClass` and the three controls-hint strings — the class's row carries both.
+- Three switches on the ability id (`UseAbility`, `DoAbility`, `AbilityBar.StateOf`) — an
+  `AbilityDef` carries `Press`, `Refuse`, `Show`.
+- Nine named ability fields on `PlayerShip` and **seven named figures on the wire** — four slot
+  arrays.
+- `Turret.Ship` (a turret could only belong to a pilot's ship) — `ITurretHost`.
+- `Raider`'s thirty `Heavy ? a : b` — `EnemyDef`.
+- `IRaidTarget.Pinned/PinFor`, `PlayerShip._pinT`, `UtilityShip.PinT`, `Raider.PinSpeed` —
+  `StatusSet`.
+- Six hardcoded net-id bases and their private counters — `NetIds`.
+- `Boss.DistToSegment` (a boss's helper that a light's beam also wanted) — `Combat.DistToSegment`.
+- Twenty copies of `(to - from).Angle() + PI/2` and five of the arrive-steering square root —
+  `Aim` and `Motion`.
+- The Drake's constants written as `1.25 x Lancer.*` — its own literals.
+
+**What caught what**
+
+- The compile gate caught nothing about the harness until it was taught to compile it: three stale
+  calls (`PinFor`, `Boss.DistToSegment`) passed typecheck, build, analysers and xref, and cost a
+  three-minute engine run. `typecheck.ps1` now compiles `SmokeTest.cs.txt` and `Shots.cs.txt` with
+  `scripts/`. Proved by putting `PinFor` back and watching it name the line.
+- Reflection at a private field is the one breakage that gate still cannot see
+  (`GetField("_bsCooldown")` returned null and threw an NRE mid-run). The harness now uses the
+  public slot accessor instead.
+- Two robustness checks earned their keep: `Abilities.ControlsHint((ShipClass)99)` and
+  `Abilities.For((ShipClass)99)` turned a dictionary lookup into a crash, which is exactly what a
+  save or a packet from another version would have done. `Classes.Of` now degrades to a hull with
+  nothing on it.
+- A behaviour check written against a hit radius (`PdPriority`, "small means under 20 u") had to
+  become a check against a TAG — the tag is the thing being asserted now, and the test's own
+  stand-in target says what it is.
+- Two wave checks read `100` and `25` for enemy hulls. With six enemy rows in rotation they now
+  read the row, and the ROWS are checked against those literals in one place.
+
+**Still to read line by line**: `Hub.cs` (1700 lines) has grown again with the deployed turrets'
+RPCs; `PlayerShip.cs` (1100) carries the nine new abilities' host code. Neither has had a full
+pass since the ability slots landed.

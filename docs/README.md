@@ -12,8 +12,8 @@ If you are a fresh session with no history of this project, read in this order:
 3. This file for the mechanics of working on it.
 
 **You also need the code.** These documents describe the project; they do not replace it. Whoever
-starts the session should attach the project zip (~6 MB, ~27 MB with its git history; 60 scripts;
-89 code files, 19500 lines in `version/CODE_SNAPSHOT.txt`).
+starts the session should attach the project zip (~6 MB, ~27 MB with its git history; 69 scripts,
+13300 lines; every code file inline in `version/CODE_SNAPSHOT.txt`).
 
 | File | For |
 |---|---|
@@ -57,7 +57,13 @@ or tested that way yet.
     powershell -ExecutionPolicy Bypass -File verify.ps1
 
 typecheck → build → analysers → cross-reference → smoke test **×3** → screenshot sweep →
-integrity, then one verdict. `-Quick` stops after the static checks (about a minute).
+integrity, then one verdict. `-Quick` stops after the static checks (about a minute); `-Fast` adds
+ONE solo smoke run and the sweep (about three).
+
+**The typecheck covers the harness too.** `tools/smoketest/SmokeTest.cs.txt` and
+`tools/screens/Shots.cs.txt` are compiled into the game by their runners, so they are source: a
+rename that missed a call in them used to pass every cheap check and fail three minutes into an
+engine run. **Integrity is only asked in `-Update`**, which has just rebuilt the manifest.
 
 Nothing has to be passed in, and that is the point — the two things that used to need a human are
 handled:
@@ -86,6 +92,8 @@ validated against the numbers the Linux originals produce:
     powershell -ExecutionPolicy Bypass -File tools\analyse\run.ps1            # ANALYSERS: 0 findings
     python tools\analyse\xref.py                                              # UNUSED ANYWHERE: 0
     powershell -ExecutionPolicy Bypass -File tools\smoketest\run.ps1     # every check, 6/6 runs
+    powershell -ExecutionPolicy Bypass -File tools\smoketest\run.ps1 -Solo         # the solo narrative alone
+    powershell -ExecutionPolicy Bypass -File tools\smoketest\run.ps1 -Seed 12345   # repeat a run's geometry (it prints SEED n)
     powershell -ExecutionPolicy Bypass -File tools\screens\run.ps1
     powershell -ExecutionPolicy Bypass -File tools\snapshot.ps1              # rebuild version\CODE_SNAPSHOT.txt
     powershell -ExecutionPolicy Bypass -File tools\make_ships.ps1            # regenerate every ship and turret sprite from art_source\ (-Preview <png>)

@@ -404,16 +404,40 @@ Recorded here so every chunk builds from the written word, not from memory.
 
 ## Ship classes
 
-Nine planned, three to a page in the selector, **three flyable** (page 1: battleship, carrier,
-destroyer). The selector, save format and UI are built for nine from the start rather than widened
-later. A class without its own abilities yet shows "placeholder" as its controls line. **Class is
-chosen in the creator only** — there are no class hotkeys (the developer removed 1/2).
+**Twelve, three to a page in the selector, all flyable**: the line (battleship, carrier,
+destroyer), the freighters (freighter, tender, bastion), the heavy fighters (sniper, warrior,
+warden) and the lights (dart, echo, wraith). A number this build has no class for reads as a hull
+with nothing on it and shows "placeholder" as its controls line, so a save or a packet from
+another version cannot crash it. **Class is chosen in the creator only** — there are no class
+hotkeys (the developer removed 1/2).
+
+**A CLASS IS A ROW** (`scripts/Ships.cs`). Its hull and mounts (`ClassArt`), the numbers that
+differ from the sheet's defaults (`Nums`, by stat id), the rows only it has (`Rows` — the
+railgun's charge, the bubble's pool: they join the sheet, so the K window prints them and gear can
+move them), what it is FITTED with (`Fit`), its abilities, its name, blurb and controls line. It
+was spread over five files before: `PlayerShip.Art`, a `V(battleship, carrier, destroyer)` helper
+inside every row of the stat sheet, an `Abilities` dictionary, a `Classes` name table, and four
+two-way tests. Twelve classes written that way is a hunt through five files for each of them, and
+a missed test is a class that silently cannot shoot.
+
+**ADDING A CLASS**: a member appended to `ShipClass` (the number is what a character file holds,
+so never reorder), a row in `Classes.All`, and the abilities it carries — which are themselves
+rows (`Ab.*`). Nothing else in the game is touched.
 
 | | Hull | Length | Top speed | Main guns | Its F | PD turrets | Wing | Sprite |
 |---|---|---|---|---|---|---|---|---|
 | **Battleship** | 300 | 378 u | 104 u/s | 4, 5.9 a shell | broadside | 2 (slow, τ/3) | — | `battleship_hull.png` |
 | **Carrier** | 200 | 283.5 u | 116.48 u/s | — | bomber strike | 3 (fast, τ/1.2) | 3 fighters + 2 bombers | `carrier_player.png` |
 | **Destroyer** | 250 | 212.6 u | 130 u/s | 2, 5.9 a shell | missile burst | 2 (slow, τ/3) | — | `destroyer_hull.png` |
+| **Freighter** | 400 | 230 u | 85 u/s | 1, 12 a shell | bubble (400 soaked) | 2 | 3 deployable turrets | `freight_hauler_hull.png` |
+| **Tender** | 400 | 230 u | 85 u/s | 1, 12 a shell | overdrive (x2 fire) | 2 | 3 deployable turrets | `freight_tender_hull.png` |
+| **Bastion** | 400 | 230 u | 85 u/s | 1, 12 a shell | shockwave (1000 u) | 2 | 3 deployable turrets | `freight_bastion_hull.png` |
+| **Sniper** | 140 | 120 u | 190 u/s | 1, 6 a shell | railgun (150 at 2500 u) | — | — | `heavy_sniper_hull.png` |
+| **Warrior** | 140 | 120 u | 190 u/s | 2, 9 a shell | rush + EMP | — | — | `heavy_warrior_hull.png` |
+| **Warden** | 140 | 120 u | 190 u/s | 1, 12 a shell | 6 hunter-seekers | 1, always on | — | `heavy_warden_hull.png` |
+| **Dart** | 90 | 70 u | 260 u/s | 1, 5 a shell | barrel roll | — | — | `light_dart_hull.png` |
+| **Echo** | 90 | 70 u | 260 u/s | 1, 5 a shell | bullet echo | — | — | `light_echo_hull.png` |
+| **Wraith** | 90 | 70 u | 260 u/s | 1, 5 a shell | stealth (5 s) | — | — | `light_wraith_hull.png` |
 
 **Damage**: main gun 5.9 a shell, one a second per barrel · PD 0.5 every 0.5 s per turret · fighter 2
 every 0.35 s · torpedo 15 · missile 5 (three to a burst). Every number lives in **`ShipStats`**
@@ -421,12 +445,12 @@ every 0.35 s · torpedo 15 · missile 5 (three to a burst). Every number lives i
 cannot drift. Stat = base × (1 + bonus); reload, cooldown and radius bonuses divide. Bonuses are
 saved per character; nothing grants them yet.
 
-**A class is asked what it carries, never "is it the battleship".** `Classes.Guns` (battleship,
-destroyer: cursor-aimed main turrets), `Classes.Broadside` (battleship), `Classes.Missiles`
-(destroyer: a magazine of bursts), `Classes.Wing` (carrier: fighters and bombers). The stat sheet adds
-each group of rows only for the classes that carry it (a row a class lacks reads 0), and every per-class
-figure is one `V(battleship, carrier, destroyer)`. A fourth class is a line in each of those, not a hunt
-for two-way tests.
+**A class is asked what it is FITTED with, never "is it the battleship".** `Fit.Guns`
+(cursor-aimed main turrets), `Fit.Broadside`, `Fit.Missiles` (a magazine of bursts), `Fit.Wing`
+(fighters and bombers), `Fit.Pd`, `Fit.Deploy` (turrets it drops and collects), `Fit.AlwaysPd`
+(point defence with no window). The stat sheet grows each group only for a class that carries it
+(a row a class lacks reads 0), the ship builds the matching hardware from the same flag, and the K
+window prints the matching figures.
 
 **Sizes are the owner's.** The battleship, by far the largest, is its drawing twice as wide, then 35%
 and 25% larger: 378 u and a 43.875 u half-beam. The carrier is 25% smaller (283.5 u) and the destroyer
@@ -1135,8 +1159,9 @@ classes in the hub, the K window and a bomber strike. The smoke test cannot see,
 have caught what it could not: a hull bar drawn over the carrier's nose, and previews too small
 to read.
 
-`tools/screens/run.ps1` is the Windows equivalent: **67 frames, SWEEP DONE, 0 LINT**, matching the
-sandbox. It needs no virtual display, so the whole Xvfb dance — and the stale `/tmp/.X99-lock` trap
+`tools/screens/run.ps1` is the Windows equivalent: **97 frames, SWEEP DONE, 0 LINT** (the last ten
+are the nine new classes, a freighter with its turrets out and its bubble up, and the four new
+enemy hulls in a row), matching the sandbox. It needs no virtual display, so the whole Xvfb dance — and the stale `/tmp/.X99-lock` trap
 — does not apply. It renders on the real GPU with the project's own Forward+/Vulkan renderer rather
 than Mesa software GL, which is the point of running it here: these frames are what the developer
 actually sees. `-Compat` forces the Linux path (`opengl3` / `gl_compatibility`) when comparing runs
@@ -1146,6 +1171,55 @@ side by side. `Shots.cs.txt` hard-codes `/tmp/shots/`; the Windows runner rewrit
 Note that Windows display scaling can enlarge the frames (1600x900 requested, 2560x1440 rendered at
 160%). The lint is geometry-based and still passed at 0, so this reads as a stronger result, not a
 weaker one — but frames from the two platforms are not pixel-comparable.
+
+## The tables the game is made of (2026-09-22)
+
+The rule in `CLAUDE.md` is "generalise, never special-case: a new boss, class, enemy, ability or
+upgrade must be a row of data plus parameters, not a new `if`". These are the tables that rule
+produced, and what each one replaced.
+
+| Table | A row is | It replaced |
+|---|---|---|
+| `Ships.cs` → `Classes.All` | a class: art, mounts, its own numbers and rows, its fit, its abilities | art in `PlayerShip.Art`, numbers in a `V(bs, cv, dd)` helper, abilities in a dictionary, names in a table, four two-way tests |
+| `Abilities.cs` → `Ab.*` | an ability: `Press`, `Refuse`, `Show` | a `case` in `UseAbility`, one in `DoAbility`, one in `AbilityBar.StateOf` — three files |
+| `Enemies.cs` → `Enemies.All` | an enemy: sprite, tint, hull, damage, reach, boost, way | `Heavy ? this : that`, thirty times inside `Raider` |
+| `Turrets.cs` → `ITurretHost` | what a gun is bolted to | a turret that could only belong to a `PlayerShip` |
+| `Tags.cs` | what a thing IS | `h is Torpedo`, `h is Raider r && !r.Heavy`, `HitRadius < 20f` |
+| `Statuses.cs` | what is being DONE to a thing | a bool and a timer per class, per effect |
+| `Ids.cs` | an id space per kind | six hardcoded bases with six private counters |
+
+**What is deliberately NOT a table.** The two ways an enemy fights (PIN and STANDOFF) and the two
+bosses are BEHAVIOUR, and behaviour that differs in kind does not compress into rows without
+inventing a scripting language to hold it. `Boss` already carries everything the bosses share --
+hull and damage scaling, telegraphs, net state, the super bar, a late joiner's catch-up -- so a
+third boss is a subclass with its own moves plus a `Missions` row, and a seventh enemy is a row
+unless it wants a third way to fight.
+
+**Per-ship ability state is four numbers** (`PlayerShip.Slot`: running, cooling, one the ability
+names itself, a count), in the class's own ability order. That is why adding an ability costs no
+field on the ship and no field on the wire: `NetHostState` carries four slot arrays where it used
+to carry seven named figures, and a guest reads them by index.
+
+**One door for damage** (`PlayerShip.Incoming`). The 0.52 s per-source gap, the tally, the shield
+flash, the impact point, the death -- and `Guarded()`, where a dart's evasion, a warrior's
+hardening and a freighter's bubble meet the blow. No weapon in the game knows any of them exist.
+
+## The harness is source (2026-09-22)
+
+`tools/smoketest/SmokeTest.cs.txt` and `tools/screens/Shots.cs.txt` are compiled INTO the game by
+their runners (as `scripts/_Test.cs` and `scripts/_Shots.cs`), but `dotnet build` never sees them.
+A rename that missed a call in them passed typecheck, build, the analysers and the cross-reference,
+and then failed three minutes into an engine run, after a full copy and import, as "the build
+failed". `typecheck.ps1` now compiles both with `scripts/`, so that costs a minute instead.
+
+The one breakage that gate still cannot see is REFLECTION at a private field
+(`GetField("_bsCooldown")`), which is a string. Prefer a public accessor in the harness where one
+exists -- the ability slots are reachable by name (`ship.Sl("broadside").Cool`), which is both
+compiler-checked and good for any ability that ever exists.
+
+`verify.ps1` also stopped asking for integrity outside `-Update`: anywhere else the manifest is by
+definition the LAST change's, so it could only ever say FAILED, and a red line in every mid-session
+verdict is how a real failure gets waved through.
 
 ## Next
 
