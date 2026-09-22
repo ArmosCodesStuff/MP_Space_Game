@@ -408,7 +408,7 @@ public partial class Hub : Node2D
     {
         if (!Net.FromPlayer(this, out int who)) return;
         _peerSector[who] = (SectorKind)s;
-        if ((SectorKind)s != Sector) { RpcId(who, nameof(NetSector), (int)Sector); return; }
+        if ((SectorKind)s != Sector) { RpcId(who, nameof(NetSector), (int)Sector, Missions.Level); return; }
         RpcId(who, nameof(NetMission), MissionArgs());
         foreach (var r in Raiders) RpcId(who, nameof(NetRaiderSpawn), r.NetId, r.Position, (int)r.Kind, r.Strength, r.HullShare);
         if (MissionWon) { RpcId(who, nameof(NetWon), _ships.Count); RpcId(who, nameof(NetReturnCount), ReturnReady, ReturnTotal); }
@@ -653,7 +653,7 @@ public partial class Hub : Node2D
         Hints.Meet("tio");
         if (Net.IsHost && Mission == MissionState.Idle)
         {   // docking at the TIO selects the newest unlocked tier
-            Missions.Level = Missions.Unlocked(Missions.Current.Id);
+            Missions.Level = Missions.Unlocked;
             BroadcastMission();
         }
         ToggleSide(() => new TioWindow { Hub = this });
@@ -705,11 +705,13 @@ public partial class Hub : Node2D
     {
         if (!Net.IsHost) return;
         if (k == SectorKind.Arena) Yard?.SaveForTrip();
-        if (Net.IsOnline) Rpc(nameof(NetSector), (int)k);
+        if (Net.IsOnline) Rpc(nameof(NetSector), (int)k, Missions.Level);
         GoTo(k);
     }
+    // With the level: a world is built from it (the arena's boss is the level's), so a peer must
+    // have it BEFORE the scene changes, not in the mission report that follows.
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetSector(int k) => GoTo((SectorKind)k);
+    private void NetSector(int k, int level) { Missions.Level = System.Math.Max(1, level); GoTo((SectorKind)k); }
     private void GoTo(SectorKind k)
     {
         Sector = k;
@@ -717,9 +719,12 @@ public partial class Hub : Node2D
     }
 
     // ── the arena: the boss, and how it ends ────────────────────────────────
+    // The level's boss (Missions.ForLevel), the same one on every peer.
     private void BuildArena()
     {
-        Boss = new Boss { Hub = this, Position = BasePos + new Vector2(0, -700f), Rotation = Mathf.Pi };
+        var type = Missions.ForLevel(Missions.Level);
+        Boss = type.Make();
+        Boss.Hub = this; Boss.Type = type; Boss.Position = BasePos + new Vector2(0, -700f); Boss.Rotation = Mathf.Pi;
         AddChild(Boss);
     }
 
@@ -800,7 +805,7 @@ public partial class Hub : Node2D
     public void SelectLevel(int level)
     {
         if (!Net.IsHost || Mission != MissionState.Idle) return;
-        Missions.Level = System.Math.Clamp(level, 1, Missions.Unlocked(Missions.Current.Id));
+        Missions.Level = System.Math.Clamp(level, 1, Missions.Unlocked);
         BroadcastMission();
     }
 
@@ -1237,7 +1242,7 @@ public partial class Hub : Node2D
             if (Placing) ship += $"    PLACING {_placingLabel}: left-click to confirm, right-click / Esc to cancel";
         }
         string place = Yard == null
-            ? $"ARENA  ·  {Missions.Current.Name} (LEVEL {Missions.Level})  {(IsInstanceValid(Boss) ? Boss.Hp : 0):0} / {(IsInstanceValid(Boss) ? Boss.MaxHp : 0):0}" + (MissionWon ? "  ·  DEFEATED" : "")
+            ? $"ARENA  ·  {(IsInstanceValid(Boss) ? Boss.Type.Name : "")} (LEVEL {Missions.Level})  {(IsInstanceValid(Boss) ? Boss.Hp : 0):0} / {(IsInstanceValid(Boss) ? Boss.MaxHp : 0):0}" + (MissionWon ? "  ·  DEFEATED" : "")
             : $"ORE {Yard.Ore:0}    SALVAGE {Yard.Salvage:0}    CREDITS {Yard.Credits:0}"
               + $"    HAULER {Yard.Hauler.Cargo:0}/{Yard.Capacity:0} {Yard.Hauler.State.ToString().ToUpperInvariant()}";
         Ui.SetText(_hud, place + ship

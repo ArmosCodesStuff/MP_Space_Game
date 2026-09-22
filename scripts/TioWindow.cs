@@ -48,13 +48,13 @@ public partial class TioWindow : PanelContainer
     public override void _Process(double delta)
     {
         if (Hub == null) return;
-        int top = Missions.Unlocked(Missions.Current.Id);
+        int top = Missions.Unlocked;
         int lv = Missions.Level, party = System.Math.Max(1, Hub.PartySize);
         Ui.SetText(_tier, $"LEVEL {lv}  ·  ×{Missions.S(lv):0.00}" + (lv == top ? "  (newest)" : ""));
         _down.Disabled = !Net.IsHost || lv <= 1 || Hub.Mission != Hub.MissionState.Idle;
         _up.Disabled = !Net.IsHost || lv >= top || Hub.Mission != Hub.MissionState.Idle;
-        bool first = !(Character.BossCleared.TryGetValue(Missions.Current.Id, out var cl) && cl.Contains(lv));
-        Ui.SetText(_bounty, $"BOUNTY  ·  {Missions.Current.Name}  ·  party of {party}\n"
+        bool first = !Missions.Cleared(lv);
+        Ui.SetText(_bounty, $"BOUNTY  ·  {Missions.ForLevel(lv).Name}  ·  party of {party}\n"
                      + $"You: {Missions.KillExpFor(lv, Character.Level)} EXP for the kill (your level {Character.Level})"
                      + (first ? $" + {Missions.FirstClearExp} first clear" : "") + $" + {Missions.CompletionExp} completing, "
                      + $"{Missions.BountyEach(lv, party):0} credits each.\n"

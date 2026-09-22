@@ -1,8 +1,8 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-22 02:46, on top of git commit 4c11b7e. How it was verified is in the message of the
+// Taken 2026-09-22 03:13, on top of git commit b001804. How it was verified is in the message of the
 //   commit that carries this file: one starting VERIFIED: is a green verify.ps1 -Update.
-// 82 files, 17570 lines. Code only: sprites, sounds and docs are in the zip.
+// 83 files, 17698 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -21,8 +21,8 @@
 //   scripts/Autopilot.cs                            40 lines   sha256 807538219f53
 //   scripts/BaseDefense.cs                          52 lines   sha256 8103ce48a948
 //   scripts/BasePanel.cs                           138 lines   sha256 eda74bdf3a37
-//   scripts/Boss.cs                                334 lines   sha256 350097d90bdf
-//   scripts/BossBar.cs                              89 lines   sha256 e4e024529f16
+//   scripts/Boss.cs                                179 lines   sha256 430ff1a1c225
+//   scripts/BossBar.cs                              89 lines   sha256 1ffbf1313f39
 //   scripts/Character.cs                           352 lines   sha256 3c553b35e32e
 //   scripts/CharacterCreator.cs                    216 lines   sha256 9645b6faeabb
 //   scripts/CharacterSelect.cs                     184 lines   sha256 241e2389c734
@@ -38,19 +38,20 @@
 //   scripts/Hauler.cs                              404 lines   sha256 bfd5b098f8c9
 //   scripts/HealthBar.cs                            23 lines   sha256 fafaf0102ffb
 //   scripts/Hints.cs                                98 lines   sha256 1b018c88396f
-//   scripts/Hub.cs                                1613 lines   sha256 6ec776ec578d
+//   scripts/Hub.cs                                1618 lines   sha256 feb16e8e74f7
+//   scripts/Lancer.cs                              192 lines   sha256 186514520a3a
 //   scripts/Loot.cs                                118 lines   sha256 f8a5de98fe1f
 //   scripts/MainMenu.cs                            287 lines   sha256 eab17b5a70c3
 //   scripts/MenuFoe.cs                             201 lines   sha256 0bda2aa62d3d
-//   scripts/Missions.cs                             40 lines   sha256 ea3445c37716
+//   scripts/Missions.cs                             49 lines   sha256 e99e94767fdb
 //   scripts/Music.cs                                81 lines   sha256 d77805e7d7ae
 //   scripts/Net.cs                                 781 lines   sha256 f27e079491a2
 //   scripts/PilotWindow.cs                          60 lines   sha256 4e05487ebecd
 //   scripts/PlayerShip.cs                          904 lines   sha256 513affc33cf7
 //   scripts/Plume.cs                                25 lines   sha256 cdbeb9b8fc58
-//   scripts/Progression.cs                         106 lines   sha256 7887382412c9
+//   scripts/Progression.cs                         107 lines   sha256 46fedcf6757c
 //   scripts/Radar.cs                               137 lines   sha256 607acccd21dd
-//   scripts/Raider.cs                              326 lines   sha256 0edf819e1c6a
+//   scripts/Raider.cs                              327 lines   sha256 37ca058131cc
 //   scripts/ReturnButton.cs                         27 lines   sha256 e36ddbb19a08
 //   scripts/Router.cs                              429 lines   sha256 294cec245abf
 //   scripts/SessionMenu.cs                         141 lines   sha256 777687907142
@@ -64,7 +65,7 @@
 //   scripts/StatsWindow.cs                         225 lines   sha256 843e3831c247
 //   scripts/TargetDummy.cs                         133 lines   sha256 2a50d73cee42
 //   scripts/Telegraph.cs                            48 lines   sha256 058f5a0b7057
-//   scripts/TioWindow.cs                            75 lines   sha256 a1089ae54810
+//   scripts/TioWindow.cs                            75 lines   sha256 5da271b76838
 //   scripts/Torpedo.cs                             149 lines   sha256 78f268798b9b
 //   scripts/Txt.cs                                  32 lines   sha256 8823251c9a4f
 //   scripts/Ui.cs                                  236 lines   sha256 e6d274f5a4cd
@@ -88,7 +89,7 @@
 //   tools/smoketest/fakeigd.py                     155 lines   sha256 b980d4fa4ad4
 //   tools/smoketest/run.ps1                        209 lines   sha256 54069e6faaff
 //   tools/smoketest/run.sh                          57 lines   sha256 9ac9cbdf9115
-//   tools/smoketest/SmokeTest.cs.txt              4029 lines   sha256 07ab85ff702c
+//   tools/smoketest/SmokeTest.cs.txt              4104 lines   sha256 c69aa40acdc0
 //   tools/smoketest/wan.py                          61 lines   sha256 97db24aa3f91
 //   tools/snapshot.ps1                              94 lines   sha256 3ca9bfe56185
 //==============================================================================
@@ -927,33 +928,32 @@ public partial class BasePanel : PanelContainer
 
 //==============================================================================
 // FILE: scripts/Boss.cs
-// 334 lines   sha256 350097d90bdf
+// 179 lines   sha256 430ff1a1c225
 //==============================================================================
 using Godot;
+using System.Collections.Generic;
 using System.Linq;
 
-// THE SILVER LANCER -- the first bounty boss. Host-simulated; every peer draws it from
-// the host's 10 Hz state and plays its telegraphs from the host's events.
-// One rhythm, 30 s long (all damage x the tier's scale):
-//   GUNS       always: 3.6 every 1.2 s (3 DPS) at the nearest ship within 900 u
-//   DEATH BEAM every 30 s: it opens with two escorts sent to web the nearest pilot; when their
-//              web should land, a red line down the nose for 6 s (it tracks the pilot until the
-//              web holds, then holds its aim), then live for 3 s along the line it drew,
-//              checking every 0.25 s: 50 each time it lands on a ship (a ship's 0.52 s
-//              invulnerability to one source means a hit about every 0.75 s)
-//   CHARGE     15 s after each beam: a red line for 1.5 s, then a ram along it at
-//              1200 u/s: 40 to any ship in its path
-//   TRIDENT    between them (every 15 s from 13.5 s): 3 guided missiles, 0 and +-25
-//              degrees, 15 each, twice the size -- INTERCEPTABLE (PD shoots them)
-//   SHOCKWAVE  every 17 s: a red ring for 1.8 s, then 45 within 340 u
-// Slow and heavy: it closes on the party to about 650 u and turns ponderously.
-public partial class Boss : Node2D, IHittable
+// A BOUNTY BOSS -- what every boss is. Its hull and damage, scaled by the level and the party; a
+// hostile the party's weapons find; host-simulated, every peer drawing it from the host's state
+// (10 Hz, 30 Hz while it is Locked) and playing its telegraphs from the host's events; the bar of
+// its next super move. What it DOES is its own class (Lancer, ...): Missions.ForLevel says which
+// boss a level is, and every peer builds that one for the level (Hub.BuildArena), named "Boss" so
+// the host's RPCs find it.
+//
+// LOCKED: a super move is winding up or firing. The boss then neither closes nor turns except as
+// that move itself decides -- the red line it drew is the line it fires down -- and a guest takes
+// its pose flat rather than easing it (see _netLocked).
+public abstract partial class Boss : Node2D, IHittable
 {
     public Hub Hub;
+    public Missions.BossType Type;              // which boss: its name and its base hull
     // hull and damage by level and party: S(L)(1 + 0.6(P-1)) and S(L)(1 + 0.2(P-1))
     public double HullMult = 1, DamageMult = 1;
-    public double MaxHp => Missions.Current.Hull * HullMult;
-    public const float Length = 360f, HalfWidth = 70f;
+    public double MaxHp => Type.Hull * HullMult;
+    public abstract float Length { get; }
+    public abstract float HalfWidth { get; }
+    protected abstract string Sprite { get; }
     public const int Id = 3000;
     public double Hp;
     public bool Alive => Hp > 0;
@@ -961,91 +961,36 @@ public partial class Boss : Node2D, IHittable
     public float HitRadius => HalfWidth;
     public bool Covers(Vector2 p, float pad) => Combat.KeelCovers(this, Length, HalfWidth, p, pad);
 
-    public const double BeamWindup = 6.0, WaveWindup = 1.8;
-    // As the beam charges, the boss launches two light ESCORTS at its target -- one 45 degrees
-    // to port, one to starboard -- boosting all the way in to pin the pilot in the beam. Fragile
-    // on purpose (point defence, 1 DPS a turret, must be able to kill them inside the charge).
-    private const float EscortAngle = 45f;
-    public const double EscortHull = 3;           // 3 s at one PD turret (1 DPS): killable inside the charge
-    private const double WebToBeam = 1.0;          // the beam starts charging 1 s after the web should land
-    public const float TurnRate = 0.3f;           // its native turn, ponderous (rad/s) -- and all it has while charging
-    // The beam reaches right across the arena: once it is charging, distance is no escape --
-    // only angle is. Its ACTIVATION is unchanged (the 30 s rhythm, the nearest pilot, the escorts'
-    // predicted web); this is reach, not trigger.
-    public const float BeamLength = 10000f, BeamWidth = 70f, WaveRadius = 340f;
-    public const double GunDamage = 3.6, GunEvery = 1.2;                       // 3 DPS
-    public const double BeamEvery = 30, BeamLive = 3.0, BeamTick = 0.25, BeamDamage = 50;
-    public const double ChargeWindup = 1.5, ChargeDamage = 40; public const float ChargeSpeed = 1200f, ChargeLength = 900f;
-    public const double TridentEvery = 15, TridentDamage = 15; public const float TridentSpread = 25f, TridentSpeed = 135f, TridentRange = 1920f;
-    private double _guns = 2.0, _missiles = 13.5, _beam = 6.0, _charge = 21.0, _wave = 10.0, _send;
-    private double _beamLive = -1, _beamTickT;
-    private (Vector2 a, Vector2 b)? _pendingCharge; private double _chargeT; private Vector2? _dashTo;
-    public int Volleys { get; private set; }                                   // for the smoke test
-    public bool Charging => _dashTo.HasValue;
-    public bool BeamCharging { get; private set; }
-    // Frozen: a super move is winding up, or the beam is burning. It holds station so the red
-    // line it drew is the line it actually fires down -- the tell used to drift off the hull while
-    // it kept closing -- and the live beam used to swing after the pilot for its three seconds,
-    // an unseen line sweeping the arena (the telegraph had already gone).
-    public bool Locked => BeamCharging || _beamLive >= 0 || _pendingCharge != null || _dashTo.HasValue;
-    // Where the beam goes RIGHT NOW: straight out of the nose. The telegraph is a child of the
-    // boss drawn down the same axis, so the drawing and the hit are the same line by construction.
-    public (Vector2 a, Vector2 b) BeamSegment()
-    {
-        var nose = ToGlobal(new Vector2(0, -Length * 0.5f));
-        return (nose, nose + Vector2.Up.Rotated(Rotation) * BeamLength);
-    }
-    // The beam's escorts: port and starboard of the nose, straight at the pilot. Returns roughly
-    // how long until their web should land -- the boss commits its beam on that estimate, so
-    // shooting them down does not cancel the beam, it only means facing it free to move.
-    public double LaunchEscorts(Node2D target)
-    {
-        if (!Net.Sim || target == null || Hub == null) return Raider.EscortShiver;
-        var nose = Vector2.Up.Rotated(Rotation);
-        double eta = 0; bool port = true;
-        foreach (float side in new[] { -EscortAngle, EscortAngle })
-        {
-            var dir = nose.Rotated(Mathf.DegToRad(side));
-            var at = Position + dir * (HalfWidth + 60f);
-            var r = Hub.SpawnRaider(at, RaiderKind.Light, 0, Missions.S(Missions.Level));
-            // the one launched to port flanks to port, the other to starboard
-            r?.Escort(target, dir, BeamWindup, EscortHull * Missions.S(Missions.Level), port ? -Mathf.Pi / 2f : Mathf.Pi / 2f);
-            eta = System.Math.Max(eta, Raider.WebEta(at.DistanceTo(target.Position)));
-            port = false;
-        }
-        return eta;
-    }
+    public const float TurnRate = 0.3f;           // its native turn, ponderous (rad/s)
+    public abstract bool Locked { get; }
+    public abstract int TelegraphsPending { get; }
+    protected abstract void Tick(List<PlayerShip> pilots, double delta);
 
-    private double _beamT;
-    // Set the first frame the target is webbed: the boss stops turning and the aim is final.
-    // Cleared when a beam starts, never carried from the last one.
-    public bool BeamAimLocked { get; private set; }
-    private double _beamArm = -1;                 // >= 0: escorts away, counting down to the charge
-    private PlayerShip _beamTarget;
-    private Vector2? _pendingWave; private double _waveT;
-    // The skinny bar under the health bar: how far along the wait for the next SUPER MOVE --
-    // the ram, or the death beam's escorts going out. Both are 15 s apart once the fight settles.
-    private double _superGap = 6.0;
-    // HOST-ONLY TIMERS, SO GUESTS ARE TOLD. _beam and _charge only ever tick under Net.Sim, so on
+    // The skinny bar under the health bar: how far along the wait for the next SUPER MOVE. The host
+    // says how long is left (NextSuperHost) and across what gap it counts (SuperGap, reset as each
+    // super commits).
+    protected abstract double NextSuperHost { get; }
+    protected double SuperGap = 6.0;
+    // HOST-ONLY TIMERS, SO GUESTS ARE TOLD. A boss's super timers only ever tick under Net.Sim, so on
     // a guest they sit at their starting values for the whole fight and the bar under the boss's
-    // hull reads zero from the first shot to the last. It is drawn state, so it goes on the wire.
+    // hull read zero from the first shot to the last. It is drawn state, so it goes on the wire.
     // Between packets a guest runs the clock down itself: the bar has to move smoothly at 10 Hz,
     // and a countdown corrected thirty times a second cannot drift anywhere.
     private double _netNextSuper = -1, _netSuperGap;
-    public double NextSuperIn => Net.Sim ? System.Math.Max(0, System.Math.Min(_beam, _charge))
-                                         : System.Math.Max(0, _netNextSuper);
+    public double NextSuperIn => Net.Sim ? System.Math.Max(0, NextSuperHost) : System.Math.Max(0, _netNextSuper);
     public double SuperFill
     {
-        get { double gap = Net.Sim ? _superGap : _netSuperGap; return gap <= 0 ? 0 : System.Math.Clamp(1 - NextSuperIn / gap, 0, 1); }
+        get { double gap = Net.Sim ? SuperGap : _netSuperGap; return gap <= 0 ? 0 : System.Math.Clamp(1 - NextSuperIn / gap, 0, 1); }
     }
     private NetPose _net; private bool _netLocked;
+    private double _send;
 
     public override void _Ready()
     {
         int party = System.Math.Max(1, Hub.PartySize);
         HullMult = Missions.HullMult(Missions.Level, party); DamageMult = Missions.DamageMult(Missions.Level, party); Hp = MaxHp;
         Name = "Boss";
-        AddChild(Sprites.Fit("res://boss_raider.png", Length));     // raider red, a white skull on its centre
+        AddChild(Sprites.Fit(Sprite, Length));
         ZIndex = 4;
         Combat.Hostiles.Add(this);
     }
@@ -1058,7 +1003,7 @@ public partial class Boss : Node2D, IHittable
         if (Hp <= 0) Hub.BossDefeated();
     }
 
-    private System.Collections.Generic.IEnumerable<PlayerShip> Pilots => Combat.Players.OfType<PlayerShip>().Where(p => p.Alive);
+    private IEnumerable<PlayerShip> Pilots => Combat.Players.OfType<PlayerShip>().Where(p => p.Alive);
 
     public override void _Process(double delta)
     {
@@ -1071,9 +1016,10 @@ public partial class Boss : Node2D, IHittable
                 if (_netLocked)
                 {   // Locked, the hull IS the telegraph, and smoothing it is no longer cosmetic:
                     // the lerp lags about 0.1 s, which at 0.3 rad/s is ~1.7 degrees -- some 300 u
-                    // at the beam's 10000 u reach, against a beam 70 u wide. A guest would watch
+                    // at a beam's 10000 u reach, against a beam 70 u wide. A guest would watch
                     // the hit land far outside the line it was shown. Take the host's figures flat;
-                    // the boss is standing still and turning slowly, so there is nothing to smooth.
+                    // the boss is standing still and at most turning slowly (to face its target
+                    // while its escorts are out), so there is nothing to smooth.
                     Position = _net.Pos; Rotation = _net.Rot;
                 }
                 else _net.Follow(this, dt);
@@ -1084,23 +1030,13 @@ public partial class Boss : Node2D, IHittable
         if (!Alive) return;
         var pilots = Pilots.ToList();
         if (pilots.Count > 0)
-        {   // close on the party, ponderously -- unless a super move has it locked down, when it
-            // neither closes nor turns except as that move's own aim decides
-            if (!Locked)
-            {
-                var centre = pilots.Aggregate(Vector2.Zero, (s, p) => s + p.Position) / pilots.Count;
-                float want = (centre - Position).Angle() + Mathf.Pi / 2f;
-                Rotation = Mathf.RotateToward(Rotation, want, TurnRate * dt);
-                float d = Position.DistanceTo(centre);
-                if (d > 650f) Position += (centre - Position).Normalized() * 30f * dt;
-            }
+        {
+            if (!Locked) Approach(pilots, dt);
             Tick(pilots, delta);
         }
         _send -= delta;
         // While a super move winds up the HULL IS THE TELEGRAPH, so a guest needs its angle far
-        // more often than 10 Hz. Turning at 0.3 rad/s, 100 ms between figures is ~1.7 degrees,
-        // which at the beam's 10000 u reach puts the far end ~300 u off against a beam 70 u wide.
-        // 30 Hz while locked, and guests stop smoothing it (see _netLocked), closes that.
+        // more often than 10 Hz: 30 Hz while locked, and guests stop smoothing it (see _netLocked).
         // To the peers actually IN the arena. Broadcasting to everyone meant a guest still loading
         // the arena scene got packets for a Hub/Boss it did not have yet -- "Node not found",
         // "Invalid packet received" -- and at 30 Hz while locked there are three times as many
@@ -1109,106 +1045,18 @@ public partial class Boss : Node2D, IHittable
         {
             _send = Locked ? 1.0 / 30 : 0.1;
             Hub?.RpcToSector(Hub.SectorKind.Arena, this, nameof(NetState), Position, Rotation, Hp, Locked,
-                             NextSuperIn, _superGap, HullMult);
+                             NextSuperIn, SuperGap, HullMult);
         }
     }
 
-    private void Tick(System.Collections.Generic.List<PlayerShip> pilots, double delta)
+    // Unlocked, it closes on the party, ponderously: turning onto the party's centre, and moving in
+    // to about 650 u of it.
+    private void Approach(List<PlayerShip> pilots, float dt)
     {
-        var nose = ToGlobal(new Vector2(0, -Length * 0.5f));
-        PlayerShip Nearest(float within = float.MaxValue) => Combat.Nearest(pilots, Position, p => p.Position, within);
-        _guns -= delta;
-        if (_guns <= 0) { _guns = GunEvery; var t = Nearest(900f); if (t != null) { t.Hit(GunDamage * DamageMult, Position, "boss:guns"); Combat.Flash(nose, t.Position, new Color(1f, 0.5f, 0.35f), ShotSound.Boss); } }
-        _missiles -= delta;
-        if (_missiles <= 0)
-        {   // a trident at the nearest ship: straight at it and 25 degrees either side
-            _missiles = TridentEvery; Volleys++;
-            var t = Nearest();
-            var aim = (t.Position - nose).Normalized();
-            foreach (float deg in new[] { -TridentSpread, 0f, TridentSpread })
-            {
-                var dir = aim.Rotated(Mathf.DegToRad(deg));
-                Combat.LaunchTorpedo(nose + dir * 14f, dir, TridentSpeed, TridentRange, TridentDamage * DamageMult, t.NetId, 1.4f,
-                                     heavy: false, hostile: true, hitSource: "boss:missiles", size: 2f);
-            }
-        }
-        _beam -= delta;
-        if (_beam <= 0 && _beamArm < 0 && !BeamCharging && _beamLive < 0)
-        {   // the death beam OPENS WITH ITS ESCORTS. The charge follows when their web should
-            // land -- an estimate made now, not a wait on them actually arriving, so killing
-            // them still ends in a beam: one the pilot is free to fly out of.
-            _beam = BeamEvery; _superGap = System.Math.Min(_beam, _charge);
-            _beamTarget = Combat.Nearest(pilots, Position, p => p.Position);
-            _beamArm = LaunchEscorts(_beamTarget) + WebToBeam;
-        }
-        if (_beamArm >= 0 && (_beamArm -= delta) <= 0)
-        {   // locked down now; the telegraph rides the hull, so the line cannot lie
-            _beamArm = -1; BeamCharging = true; _beamT = BeamWindup; BeamAimLocked = false;
-            if (!IsInstanceValid(_beamTarget) || !_beamTarget.Alive) _beamTarget = pilots.FirstOrDefault();
-            Tele(true, new Vector2(0, -Length * 0.5f), new Vector2(0, -Length * 0.5f - BeamLength), BeamWidth, BeamWindup, onHull: true, hold: BeamLive);
-        }
-        if (BeamCharging)
-        {   // Held still, tracking with nothing but its own ponderous turn: a quick pilot who is
-            // not webbed can still get outside the arc before it fires.
-            //
-            // ONCE THE WEB IS ON, THE AIM IS FINAL. The escorts exist to stop the pilot, and the
-            // moment they have, the boss stops turning too -- it has what it was waiting for, and
-            // the line it is showing is the line it will fire. Tracking a pinned target would be
-            // the beam chasing something that cannot dodge, which reads as the game cheating in
-            // its own favour; locking reads as the trap closing. It also means the pilot's last
-            // chance is BEFORE the web lands, not after.
-            if (!BeamAimLocked && IsInstanceValid(_beamTarget) && _beamTarget.Alive)
-            {
-                if (_beamTarget.Pinned) BeamAimLocked = true;
-                else
-                {
-                    float aim = (_beamTarget.Position - Position).Angle() + Mathf.Pi / 2f;
-                    Rotation = Mathf.RotateToward(Rotation, aim, TurnRate * (float)delta);
-                }
-            }
-            if ((_beamT -= delta) <= 0) { BeamCharging = false; _beamLive = BeamLive; _beamTickT = 0; }
-        }
-        if (_beamLive >= 0)
-        {   // live: a check every 0.25 s, down the nose as it points at this instant
-            _beamTickT -= delta;
-            if (_beamTickT <= 0)
-            {
-                _beamTickT = BeamTick;
-                var (la, lb) = BeamSegment();
-                foreach (var p in pilots)
-                    if (DistToSegment(p.Position, la, lb) <= BeamWidth / 2f + p.HitRadius) p.Hit(BeamDamage * DamageMult, Position, "boss:beam");
-            }
-            _beamLive -= delta;
-        }
-        _charge -= delta;
-        if (_charge <= 0 && _pendingCharge == null && !_dashTo.HasValue && !BeamCharging)
-        {   // the ram: come round onto the pilot, then hold dead still for the wind-up so the
-            // line drawn is the line rammed down
-            _charge = BeamEvery; _superGap = System.Math.Min(_beam, _charge);
-            var t = Combat.Nearest(pilots, Position, p => p.Position);
-            Rotation = (t.Position - Position).Angle() + Mathf.Pi / 2f;
-            var a = Position; var bb = a + Vector2.Up.Rotated(Rotation) * ChargeLength;
-            _pendingCharge = (a, bb); _chargeT = ChargeWindup;
-            Tele(true, Vector2.Zero, new Vector2(0, -ChargeLength), HalfWidth * 2f, ChargeWindup, onHull: true);
-        }
-        if (_pendingCharge is { } ch && (_chargeT -= delta) <= 0) { _dashTo = ch.b; _pendingCharge = null; }
-        if (_dashTo is { } to)
-        {
-            Position = Position.MoveToward(to, ChargeSpeed * (float)delta);
-            foreach (var p in pilots) if (Covers(p.Position, p.HitRadius)) p.Hit(ChargeDamage * DamageMult, Position, "boss:charge");
-            if (Position.DistanceTo(to) < 1f) _dashTo = null;
-        }
-        _wave -= delta;
-        if (_wave <= 0 && _pendingWave == null)
-        {
-            _wave = 17.0; _pendingWave = Position; _waveT = WaveWindup;
-            Tele(false, Position, Vector2.Zero, WaveRadius, WaveWindup);
-        }
-        if (_pendingWave is { } c && (_waveT -= delta) <= 0)
-        {
-            foreach (var p in pilots) if (p.Position.DistanceTo(c) <= WaveRadius + p.HitRadius) p.Hit(45 * DamageMult, c, "boss:wave");
-            _pendingWave = null;
-        }
+        var centre = pilots.Aggregate(Vector2.Zero, (s, p) => s + p.Position) / pilots.Count;
+        float want = (centre - Position).Angle() + Mathf.Pi / 2f;
+        Rotation = Mathf.RotateToward(Rotation, want, TurnRate * dt);
+        if (Position.DistanceTo(centre) > 650f) Position += (centre - Position).Normalized() * 30f * dt;
     }
 
     public static float DistToSegment(Vector2 p, Vector2 a, Vector2 b)
@@ -1220,9 +1068,9 @@ public partial class Boss : Node2D, IHittable
     // host: show a telegraph here and on every guest.
     // onHull: a and b are in the BOSS'S OWN FRAME and the telegraph is parented to it, so the
     // warning swings with the hull instead of being pinned to the spot the boss stood on when it
-    // drew it. Guests already lerp the boss's rotation from NetState, so their copy tracks too --
+    // drew it. Guests already follow the boss's pose from NetState, so their copy tracks too --
     // no per-frame line updates over the wire.
-    private void Tele(bool line, Vector2 a, Vector2 b, float size, double time, bool onHull = false, double hold = 0)
+    protected void Tele(bool line, Vector2 a, Vector2 b, float size, double time, bool onHull = false, double hold = 0)
     {
         ShowTelegraph(line, a, b, size, time, onHull, hold);
         // arena peers only, for the same reason as NetState above
@@ -1235,10 +1083,10 @@ public partial class Boss : Node2D, IHittable
         _telegraphs.RemoveAll(x => !IsInstanceValid(x));
         _telegraphs.Add(t);
     }
-    // A boss that is down threatens nothing, and the victory window leaves it on screen for 20 s:
-    // a beam half wound up went on charging, then "fired", over a DEFEATED boss. Its warnings go
-    // with it, on every peer (a guest's copy dies by the host's figure).
-    private readonly System.Collections.Generic.List<Telegraph> _telegraphs = new();
+    // A boss that is down threatens nothing, and the party stays with it until every pilot presses
+    // RETURN: a beam half wound up went on charging, then "fired", over a DEFEATED boss. Its warnings
+    // go with it, on every peer (a guest's copy dies by the host's figure).
+    private readonly List<Telegraph> _telegraphs = new();
     private void ClearTelegraphs()
     {
         foreach (var t in _telegraphs) if (IsInstanceValid(t)) t.QueueFree();
@@ -1260,13 +1108,11 @@ public partial class Boss : Node2D, IHittable
         _net.Set(p, rot); Hp = hp; _netLocked = locked; HullMult = hullMult;
         _netNextSuper = nextSuper; _netSuperGap = superGap;
     }
-
-    public int TelegraphsPending => (BeamCharging ? 1 : 0) + (_pendingWave != null ? 1 : 0);
 }
 
 //==============================================================================
 // FILE: scripts/BossBar.cs
-// 89 lines   sha256 e4e024529f16
+// 89 lines   sha256 1ffbf1313f39
 //==============================================================================
 using Godot;
 using System;
@@ -1333,8 +1179,8 @@ public partial class BossBar : Control
         _panel.Draw(GetCanvasItem(), new Rect2(-10, -26, W + 20, H + 34 + SuperPad + SuperH));
         // after the kill: your parts collected of those dropped, and how many pilots are ready to go home
         string title = Hub.MissionWon
-            ? $"{Missions.Current.Name}  ·  DEFEATED  ·  PARTS {Hub.CratesDropped - Hub.Crates.Count} / {Hub.CratesDropped}  ·  {Hub.ReturnReady} / {Hub.ReturnTotal} READY TO RETURN"
-            : $"{Missions.Current.Name}  ·  LEVEL {Missions.Level}  ·  {boss.Hp:0} / {boss.MaxHp:0}";
+            ? $"{boss.Type.Name}  ·  DEFEATED  ·  PARTS {Hub.CratesDropped - Hub.Crates.Count} / {Hub.CratesDropped}  ·  {Hub.ReturnReady} / {Hub.ReturnTotal} READY TO RETURN"
+            : $"{boss.Type.Name}  ·  LEVEL {Missions.Level}  ·  {boss.Hp:0} / {boss.MaxHp:0}";
         Txt.D(this, ThemeDB.FallbackFont, new Vector2(0, -8), title, HorizontalAlignment.Center, W, 13, Hub.MissionWon ? Ui.Good : Ui.Text);
         float frac = (float)Math.Clamp(boss.Hp / Math.Max(1, boss.MaxHp), 0, 1);
         // The hull stays RED whatever the palette does -- it is the one bar on screen that means
@@ -3760,7 +3606,7 @@ public partial class Hints : CanvasLayer
 
 //==============================================================================
 // FILE: scripts/Hub.cs
-// 1613 lines   sha256 6ec776ec578d
+// 1618 lines   sha256 feb16e8e74f7
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -4172,7 +4018,7 @@ public partial class Hub : Node2D
     {
         if (!Net.FromPlayer(this, out int who)) return;
         _peerSector[who] = (SectorKind)s;
-        if ((SectorKind)s != Sector) { RpcId(who, nameof(NetSector), (int)Sector); return; }
+        if ((SectorKind)s != Sector) { RpcId(who, nameof(NetSector), (int)Sector, Missions.Level); return; }
         RpcId(who, nameof(NetMission), MissionArgs());
         foreach (var r in Raiders) RpcId(who, nameof(NetRaiderSpawn), r.NetId, r.Position, (int)r.Kind, r.Strength, r.HullShare);
         if (MissionWon) { RpcId(who, nameof(NetWon), _ships.Count); RpcId(who, nameof(NetReturnCount), ReturnReady, ReturnTotal); }
@@ -4417,7 +4263,7 @@ public partial class Hub : Node2D
         Hints.Meet("tio");
         if (Net.IsHost && Mission == MissionState.Idle)
         {   // docking at the TIO selects the newest unlocked tier
-            Missions.Level = Missions.Unlocked(Missions.Current.Id);
+            Missions.Level = Missions.Unlocked;
             BroadcastMission();
         }
         ToggleSide(() => new TioWindow { Hub = this });
@@ -4469,11 +4315,13 @@ public partial class Hub : Node2D
     {
         if (!Net.IsHost) return;
         if (k == SectorKind.Arena) Yard?.SaveForTrip();
-        if (Net.IsOnline) Rpc(nameof(NetSector), (int)k);
+        if (Net.IsOnline) Rpc(nameof(NetSector), (int)k, Missions.Level);
         GoTo(k);
     }
+    // With the level: a world is built from it (the arena's boss is the level's), so a peer must
+    // have it BEFORE the scene changes, not in the mission report that follows.
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetSector(int k) => GoTo((SectorKind)k);
+    private void NetSector(int k, int level) { Missions.Level = System.Math.Max(1, level); GoTo((SectorKind)k); }
     private void GoTo(SectorKind k)
     {
         Sector = k;
@@ -4481,9 +4329,12 @@ public partial class Hub : Node2D
     }
 
     // ── the arena: the boss, and how it ends ────────────────────────────────
+    // The level's boss (Missions.ForLevel), the same one on every peer.
     private void BuildArena()
     {
-        Boss = new Boss { Hub = this, Position = BasePos + new Vector2(0, -700f), Rotation = Mathf.Pi };
+        var type = Missions.ForLevel(Missions.Level);
+        Boss = type.Make();
+        Boss.Hub = this; Boss.Type = type; Boss.Position = BasePos + new Vector2(0, -700f); Boss.Rotation = Mathf.Pi;
         AddChild(Boss);
     }
 
@@ -4564,7 +4415,7 @@ public partial class Hub : Node2D
     public void SelectLevel(int level)
     {
         if (!Net.IsHost || Mission != MissionState.Idle) return;
-        Missions.Level = System.Math.Clamp(level, 1, Missions.Unlocked(Missions.Current.Id));
+        Missions.Level = System.Math.Clamp(level, 1, Missions.Unlocked);
         BroadcastMission();
     }
 
@@ -5001,7 +4852,7 @@ public partial class Hub : Node2D
             if (Placing) ship += $"    PLACING {_placingLabel}: left-click to confirm, right-click / Esc to cancel";
         }
         string place = Yard == null
-            ? $"ARENA  ·  {Missions.Current.Name} (LEVEL {Missions.Level})  {(IsInstanceValid(Boss) ? Boss.Hp : 0):0} / {(IsInstanceValid(Boss) ? Boss.MaxHp : 0):0}" + (MissionWon ? "  ·  DEFEATED" : "")
+            ? $"ARENA  ·  {(IsInstanceValid(Boss) ? Boss.Type.Name : "")} (LEVEL {Missions.Level})  {(IsInstanceValid(Boss) ? Boss.Hp : 0):0} / {(IsInstanceValid(Boss) ? Boss.MaxHp : 0):0}" + (MissionWon ? "  ·  DEFEATED" : "")
             : $"ORE {Yard.Ore:0}    SALVAGE {Yard.Salvage:0}    CREDITS {Yard.Credits:0}"
               + $"    HAULER {Yard.Hauler.Cargo:0}/{Yard.Capacity:0} {Yard.Hauler.State.ToString().ToUpperInvariant()}";
         Ui.SetText(_hud, place + ship
@@ -5373,6 +5224,203 @@ public partial class HeavyMissileVisual : Node2D
         DrawRect(new Rect2(-5f, -16f, 10f, 34f), body);
         DrawColoredPolygon(new[] { new Vector2(-5f, -16f), new Vector2(0, -25f), new Vector2(5f, -16f) }, new Color(1f, 0.3f, 0.25f));
         DrawCircle(new Vector2(0, 19f), 4.2f, new Color(1f, 0.6f, 0.3f));
+    }
+}
+
+//==============================================================================
+// FILE: scripts/Lancer.cs
+// 192 lines   sha256 186514520a3a
+//==============================================================================
+using Godot;
+using System.Collections.Generic;
+using System.Linq;
+
+// THE SILVER LANCER -- a bounty boss; which levels are its is Missions.ForLevel's to say.
+// One rhythm, 30 s long (all damage x the level's and party's scale):
+//   GUNS       always: 3.6 every 1.2 s (3 DPS) at the nearest ship within 900 u
+//   DEATH BEAM every 30 s, in three steps, the boss holding position through all of them:
+//              ESCORTS OUT: two escorts go for the nearest pilot to web it; the boss turns to
+//                face that pilot -- the only turning the beam allows, and only now.
+//              CHARGE: once the web has actually PINNED the pilot (this cycle's escorts under way;
+//                or, the escorts all down, once their web would have landed; or when they are
+//                overdue), a red line down the nose
+//                for 6 s. From here to the beam's end it is HARD LOCKED: no turn, no move -- the
+//                line shown is the line fired, and the way out is to leave it.
+//              LIVE: 3 s along that line, checking every 0.25 s: 50 each time it lands on a ship
+//                (a ship's 0.52 s invulnerability to one source means a hit about every 0.75 s)
+//   CHARGE     15 s after each beam (never during one): a red line for 1.5 s, then a ram along it
+//              at 1200 u/s: 40 to any ship in its path -- the one special that moves it
+//   TRIDENT    between them (every 15 s from 13.5 s): 3 guided missiles, 0 and +-25
+//              degrees, 15 each, twice the size -- INTERCEPTABLE (PD shoots them)
+//   SHOCKWAVE  every 17 s: a red ring for 1.8 s, held still, then 45 within 340 u
+// Slow and heavy: between its specials it closes on the party to about 650 u and turns ponderously.
+public partial class Lancer : Boss
+{
+    public const float HullLength = 360f, HullHalfWidth = 70f;
+    public override float Length => HullLength;
+    public override float HalfWidth => HullHalfWidth;
+    protected override string Sprite => "res://boss_raider.png";      // raider red, a white skull on its centre
+
+    public const double BeamWindup = 6.0, WaveWindup = 1.8;
+    // As the beam opens, the boss launches two light ESCORTS at its target -- one 45 degrees
+    // to port, one to starboard -- boosting all the way in to pin the pilot in the beam. Fragile
+    // on purpose (point defence, 1 DPS a turret, must be able to kill them inside the charge).
+    private const float EscortAngle = 45f;
+    public const double EscortHull = 3;           // 3 s at one PD turret (1 DPS): killable inside the charge
+    private const double WebToBeam = 1.0;          // with every escort down, the charge waits this long past their predicted web
+    // Escorts that neither pin nor die (a pilot outrunning them) cannot hold the beam off: it
+    // charges this long after they launch at the latest. Under 6 s so the whole beam -- this, the
+    // 6 s charge and 3 s live -- ends inside the 15 s before the ram.
+    private const double BeamArmMax = 5.0;
+    // The beam reaches right across the arena: once it is charging, distance is no escape --
+    // only angle is.
+    public const float BeamLength = 10000f, BeamWidth = 70f, WaveRadius = 340f;
+    public const double GunDamage = 3.6, GunEvery = 1.2;                       // 3 DPS
+    public const double BeamEvery = 30, BeamLive = 3.0, BeamTick = 0.25, BeamDamage = 50;
+    public const double ChargeWindup = 1.5, ChargeDamage = 40; public const float ChargeSpeed = 1200f, ChargeLength = 900f;
+    public const double TridentEvery = 15, TridentDamage = 15; public const float TridentSpread = 25f, TridentSpeed = 135f, TridentRange = 1920f;
+    private double _guns = 2.0, _missiles = 13.5, _beam = 6.0, _charge = 21.0, _wave = 10.0;
+    private double _beamLive = -1, _beamTickT, _beamT;
+    private (Vector2 a, Vector2 b)? _pendingCharge; private double _chargeT; private Vector2? _dashTo;
+    private Vector2? _pendingWave; private double _waveT;
+    public int Volleys { get; private set; }                                   // for the smoke test
+    public bool Charging => _dashTo.HasValue;
+    public bool BeamCharging { get; private set; }
+
+    // The escorts' phase: >= 0 while they are out, counting the seconds since they launched.
+    private double _beamArm = -1, _beamPredict, _beamOverdue;
+    private readonly List<Raider> _escorts = new();
+    private PlayerShip _beamTarget;
+    public bool EscortsOut => _beamArm >= 0;
+    // How the last charge started, and how long after the escorts launched (for the smoke test).
+    public string ChargeCause { get; private set; } = "";
+    public double ArmedFor { get; private set; }
+    private bool BeamBusy => _beamArm >= 0 || BeamCharging || _beamLive >= 0;
+
+    // Frozen: a super move is winding up or firing. The escorts' phase counts: from the moment they
+    // launch the boss holds its position, and turns only as the beam's own aim decides.
+    public override bool Locked => BeamBusy || _pendingCharge != null || _dashTo.HasValue || _pendingWave != null;
+    protected override double NextSuperHost => System.Math.Min(_beam, _charge);
+    public override int TelegraphsPending => (BeamCharging ? 1 : 0) + (_pendingWave != null ? 1 : 0);
+
+    // Where the beam goes RIGHT NOW: straight out of the nose. The telegraph is a child of the
+    // boss drawn down the same axis, so the drawing and the hit are the same line by construction.
+    public (Vector2 a, Vector2 b) BeamSegment()
+    {
+        var nose = ToGlobal(new Vector2(0, -Length * 0.5f));
+        return (nose, nose + Vector2.Up.Rotated(Rotation) * BeamLength);
+    }
+    // The beam's escorts: port and starboard of the nose, straight at the pilot. Returns roughly
+    // how long until their web should land -- the charge's floor if they are all shot down first.
+    public double LaunchEscorts(Node2D target)
+    {
+        if (!Net.Sim || target == null || Hub == null) return Raider.EscortShiver;
+        var nose = Vector2.Up.Rotated(Rotation);
+        double eta = 0; bool port = true;
+        _escorts.Clear();
+        foreach (float side in new[] { -EscortAngle, EscortAngle })
+        {
+            var dir = nose.Rotated(Mathf.DegToRad(side));
+            var at = Position + dir * (HalfWidth + 60f);
+            var r = Hub.SpawnRaider(at, RaiderKind.Light, 0, Missions.S(Missions.Level));
+            // the one launched to port flanks to port, the other to starboard
+            r?.Escort(target, dir, BeamWindup, EscortHull * Missions.S(Missions.Level), port ? -Mathf.Pi / 2f : Mathf.Pi / 2f);
+            if (r != null) _escorts.Add(r);
+            eta = System.Math.Max(eta, Raider.WebEta(at.DistanceTo(target.Position)));
+            port = false;
+        }
+        return eta;
+    }
+
+    protected override void Tick(List<PlayerShip> pilots, double delta)
+    {
+        var nose = ToGlobal(new Vector2(0, -Length * 0.5f));
+        PlayerShip Nearest(float within = float.MaxValue) => Combat.Nearest(pilots, Position, p => p.Position, within);
+        _guns -= delta;
+        if (_guns <= 0) { _guns = GunEvery; var t = Nearest(900f); if (t != null) { t.Hit(GunDamage * DamageMult, Position, "boss:guns"); Combat.Flash(nose, t.Position, new Color(1f, 0.5f, 0.35f), ShotSound.Boss); } }
+        _missiles -= delta;
+        if (_missiles <= 0)
+        {   // a trident at the nearest ship: straight at it and 25 degrees either side
+            _missiles = TridentEvery; Volleys++;
+            var t = Nearest();
+            var aim = (t.Position - nose).Normalized();
+            foreach (float deg in new[] { -TridentSpread, 0f, TridentSpread })
+            {
+                var dir = aim.Rotated(Mathf.DegToRad(deg));
+                Combat.LaunchTorpedo(nose + dir * 14f, dir, TridentSpeed, TridentRange, TridentDamage * DamageMult, t.NetId, 1.4f,
+                                     heavy: false, hostile: true, hitSource: "boss:missiles", size: 2f);
+            }
+        }
+        _beam -= delta;
+        if (_beam <= 0 && !BeamBusy)
+        {   // the death beam OPENS WITH ITS ESCORTS
+            _beam = BeamEvery; SuperGap = System.Math.Min(_beam, _charge);
+            _beamTarget = Combat.Nearest(pilots, Position, p => p.Position);
+            double eta = LaunchEscorts(_beamTarget);
+            _beamArm = 0; _beamPredict = eta + WebToBeam; _beamOverdue = System.Math.Min(_beamPredict + 1.0, BeamArmMax);
+        }
+        if (_beamArm >= 0)
+        {   // ESCORTS OUT: held in place; turning to face the pilot is all it does
+            _beamArm += delta;
+            if (!IsInstanceValid(_beamTarget) || !_beamTarget.Alive) _beamTarget = pilots.FirstOrDefault();
+            if (_beamTarget != null)
+                Rotation = Mathf.RotateToward(Rotation, (_beamTarget.Position - Position).Angle() + Mathf.Pi / 2f, TurnRate * (float)delta);
+            // A pin counts once this cycle's escorts have left the launch point: a pilot still held by
+            // the LAST beam's escorts (they never expire) would otherwise skip this whole phase.
+            bool pinned = _beamArm >= Raider.EscortShiver && _beamTarget != null && _beamTarget.Pinned;
+            bool escortsDown = !_escorts.Any(r => IsInstanceValid(r) && r.Alive);
+            if (pinned || (escortsDown && _beamArm >= _beamPredict) || _beamArm >= _beamOverdue)
+            {   // THE CHARGE, hard locked from here to the beam's end; the telegraph rides the hull,
+                // so the line cannot lie
+                ChargeCause = pinned ? "pinned" : _beamArm >= _beamOverdue ? "overdue" : "escorts down";
+                ArmedFor = _beamArm;
+                _beamArm = -1; BeamCharging = true; _beamT = BeamWindup;
+                Tele(true, new Vector2(0, -Length * 0.5f), new Vector2(0, -Length * 0.5f - BeamLength), BeamWidth, BeamWindup, onHull: true, hold: BeamLive);
+            }
+        }
+        if (BeamCharging && (_beamT -= delta) <= 0) { BeamCharging = false; _beamLive = BeamLive; _beamTickT = 0; }
+        if (_beamLive >= 0)
+        {   // live: a check every 0.25 s, down the nose -- which has not moved since the charge began
+            _beamTickT -= delta;
+            if (_beamTickT <= 0)
+            {
+                _beamTickT = BeamTick;
+                var (la, lb) = BeamSegment();
+                foreach (var p in pilots)
+                    if (DistToSegment(p.Position, la, lb) <= BeamWidth / 2f + p.HitRadius) p.Hit(BeamDamage * DamageMult, Position, "boss:beam");
+            }
+            _beamLive -= delta;
+        }
+        _charge -= delta;
+        if (_charge <= 0 && _pendingCharge == null && !_dashTo.HasValue && !BeamBusy && _pendingWave == null)
+        {   // the ram: come round onto the pilot, then hold dead still for the wind-up so the
+            // line drawn is the line rammed down. Never during a beam or a shockwave's wind-up (which
+            // hold the boss still): it waits for them to end.
+            _charge = BeamEvery; SuperGap = System.Math.Min(_beam, _charge);
+            var t = Combat.Nearest(pilots, Position, p => p.Position);
+            Rotation = (t.Position - Position).Angle() + Mathf.Pi / 2f;
+            var a = Position; var bb = a + Vector2.Up.Rotated(Rotation) * ChargeLength;
+            _pendingCharge = (a, bb); _chargeT = ChargeWindup;
+            Tele(true, Vector2.Zero, new Vector2(0, -ChargeLength), HalfWidth * 2f, ChargeWindup, onHull: true);
+        }
+        if (_pendingCharge is { } ch && (_chargeT -= delta) <= 0) { _dashTo = ch.b; _pendingCharge = null; }
+        if (_dashTo is { } to)
+        {
+            Position = Position.MoveToward(to, ChargeSpeed * (float)delta);
+            foreach (var p in pilots) if (Covers(p.Position, p.HitRadius)) p.Hit(ChargeDamage * DamageMult, Position, "boss:charge");
+            if (Position.DistanceTo(to) < 1f) _dashTo = null;
+        }
+        _wave -= delta;
+        if (_wave <= 0 && _pendingWave == null && _pendingCharge == null && !_dashTo.HasValue)
+        {   // (not while it rams: the ring is centred on the boss, and it would ram out of its own ring)
+            _wave = 17.0; _pendingWave = Position; _waveT = WaveWindup;
+            Tele(false, Position, Vector2.Zero, WaveRadius, WaveWindup);
+        }
+        if (_pendingWave is { } c && (_waveT -= delta) <= 0)
+        {
+            foreach (var p in pilots) if (p.Position.DistanceTo(c) <= WaveRadius + p.HitRadius) p.Hit(45 * DamageMult, c, "boss:wave");
+            _pendingWave = null;
+        }
     }
 }
 
@@ -5999,17 +6047,20 @@ public partial class MenuFoe : Node2D, IHittable
 
 //==============================================================================
 // FILE: scripts/Missions.cs
-// 40 lines   sha256 ea3445c37716
+// 49 lines   sha256 e99e94767fdb
 //==============================================================================
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 // Bounty missions from Threat Intelligence Operations: bosses, LEVELS, and rewards.
-//   Bosses are data (more types slot in here). LEVELS start at 1 (the base boss):
+//   ONE LADDER OF LEVELS, the bosses taking them in turn (ForLevel): level 1 the first boss in
+//   the table, level 2 the next, and round again. LEVELS start at 1:
 //     S(L) = 1.1^(L-1)   -- a level-5 boss is 1.1^4 = 1.46x.
 //   A PARTY of P pilots: the boss's hull x S(L)(1 + 0.6(P-1)), its damage x S(L)(1 + 0.2(P-1)).
 //   A failed level-L mission's raids are S(L) too.
-//   Beating a level unlocks the next; the TIO selects the newest when the host opens it.
+//   Beating a level -- whichever boss held it -- unlocks the next; the TIO selects the newest when
+//   the host opens it. The first-clear bonus is paid once a level, not once a boss.
 //   REWARDS, per pilot, each computed on the pilot's own machine:
 //     the kill   round(200 x boss level / pilot level)  (a level-5 boss for a level-10 pilot: 100)
 //     +250       the first time that pilot beats that level
@@ -6018,20 +6069,26 @@ using System.Linq;
 //     parts      Loot.CratesFor(L) crates of gear, rolled by the host for each pilot (see Loot)
 public static class Missions
 {
-    public class BossType { public string Id, Name; public double Hull; }
+    // A boss: its id (a pilot's clears are recorded under it), its name, its base hull, and how to
+    // build one.
+    public class BossType { public string Id, Name; public double Hull; public Func<Boss> Make; }
     public static readonly BossType[] Bosses =
     {
-        new() { Id = "silver_lancer", Name = "SILVER LANCER", Hull = 600 },
+        new() { Id = "silver_lancer", Name = "SILVER LANCER", Hull = 760, Make = () => new Lancer() },
     };
-    public static BossType Current => Bosses[0];
+    // The boss of a level: every peer works it out from the replicated level alone.
+    public static BossType ForLevel(int level) => Bosses[(Math.Max(1, level) - 1) % Bosses.Length];
 
     private const double LevelStep = 1.10;
     public static double S(int level) => Math.Pow(LevelStep, Math.Max(1, level) - 1);
     public static int Level = 1;                            // the selected level (the host decides; replicated)
-    public static int Beaten(string bossId) => Character.BossCleared.TryGetValue(bossId, out var set) && set.Count > 0 ? set.Max() : 0;
-    public static int Unlocked(string bossId) => Beaten(bossId) + 1;
-    // the highest level beaten of ANY boss this build knows (an id in the file it does not know counts for nothing)
-    public static int HighestBeaten => Bosses.Max(b => Beaten(b.Id));
+    // The levels this pilot has cleared, of every boss this build knows (an id in the file it does
+    // not know counts for nothing): one ladder, whoever held each level.
+    private static IEnumerable<int> ClearedLevels =>
+        Character.BossCleared.Where(kv => Bosses.Any(b => b.Id == kv.Key)).SelectMany(kv => kv.Value);
+    public static bool Cleared(int level) => ClearedLevels.Contains(level);
+    public static int HighestBeaten => ClearedLevels.DefaultIfEmpty(0).Max();
+    public static int Unlocked => HighestBeaten + 1;
 
     public static double HullMult(int level, int party) => S(level) * (1 + 0.6 * (Math.Max(1, party) - 1));
     public static double DamageMult(int level, int party) => S(level) * (1 + 0.2 * (Math.Max(1, party) - 1));
@@ -7920,7 +7977,7 @@ public static class Plume
 
 //==============================================================================
 // FILE: scripts/Progression.cs
-// 106 lines   sha256 7887382412c9
+// 107 lines   sha256 46fedcf6757c
 //==============================================================================
 using Godot;
 using System;
@@ -8008,10 +8065,11 @@ public static class Progression
     // A boss beaten at `level`: this pilot's own EXP -- the kill by its own level, the first
     // clear of that level, completing the mission -- and the record. Returns the EXP given.
     public static int AwardBossKill(int level)
-    {
-        var id = Missions.Current.Id;
+    {   // recorded under the boss that held the level; first by the ladder, whoever held it before
+        var id = Missions.ForLevel(level).Id;
+        bool first = !Missions.Cleared(level);
         if (!Character.BossCleared.TryGetValue(id, out var set)) Character.BossCleared[id] = set = new System.Collections.Generic.HashSet<int>();
-        bool first = set.Add(level);
+        set.Add(level);
         int exp = Missions.KillExpFor(level, Character.Level) + (first ? Missions.FirstClearExp : 0) + Missions.CompletionExp;
         AddExp(exp);                                                         // (saves)
         return exp;
@@ -8173,7 +8231,7 @@ public partial class Radar : Control
 
 //==============================================================================
 // FILE: scripts/Raider.cs
-// 326 lines   sha256 0edf819e1c6a
+// 327 lines   sha256 37ca058131cc
 //==============================================================================
 using Godot;
 using System.Linq;
@@ -8286,8 +8344,9 @@ public partial class Raider : Node2D, IHittable
     }
     public bool Shivering => Net.Sim ? _shiver > 0 : (_netFlags & FlagShiver) != 0;
     // Roughly when an escort launched now would have its web on the target: the shiver, then the
-    // run in at boost speed. A PREDICTION, not a promise -- the pilot may shoot it down first,
-    // and the boss commits to its beam on this estimate either way.
+    // run in at boost speed. A PREDICTION, not a promise -- the pilot may shoot it down first. The
+    // Lancer charges on the actual pin; this is only its floor when every escort is shot down, and
+    // (plus a second, at most 5 s) its deadline when they neither pin nor die.
     public static double WebEta(float distance) => EscortShiver + distance / (Cruise * BoostMult);
     public bool Latched { get; private set; }
     public bool Boosting => Net.Sim ? _boostLeft > 0 : (_netFlags & FlagBoost) != 0;
@@ -10636,7 +10695,7 @@ public partial class Telegraph : Node2D
 
 //==============================================================================
 // FILE: scripts/TioWindow.cs
-// 75 lines   sha256 a1089ae54810
+// 75 lines   sha256 5da271b76838
 //==============================================================================
 using Godot;
 using System.Linq;
@@ -10688,13 +10747,13 @@ public partial class TioWindow : PanelContainer
     public override void _Process(double delta)
     {
         if (Hub == null) return;
-        int top = Missions.Unlocked(Missions.Current.Id);
+        int top = Missions.Unlocked;
         int lv = Missions.Level, party = System.Math.Max(1, Hub.PartySize);
         Ui.SetText(_tier, $"LEVEL {lv}  ·  ×{Missions.S(lv):0.00}" + (lv == top ? "  (newest)" : ""));
         _down.Disabled = !Net.IsHost || lv <= 1 || Hub.Mission != Hub.MissionState.Idle;
         _up.Disabled = !Net.IsHost || lv >= top || Hub.Mission != Hub.MissionState.Idle;
-        bool first = !(Character.BossCleared.TryGetValue(Missions.Current.Id, out var cl) && cl.Contains(lv));
-        Ui.SetText(_bounty, $"BOUNTY  ·  {Missions.Current.Name}  ·  party of {party}\n"
+        bool first = !Missions.Cleared(lv);
+        Ui.SetText(_bounty, $"BOUNTY  ·  {Missions.ForLevel(lv).Name}  ·  party of {party}\n"
                      + $"You: {Missions.KillExpFor(lv, Character.Level)} EXP for the kill (your level {Character.Level})"
                      + (first ? $" + {Missions.FirstClearExp} first clear" : "") + $" + {Missions.CompletionExp} completing, "
                      + $"{Missions.BountyEach(lv, party):0} credits each.\n"
@@ -13876,7 +13935,7 @@ echo "SMOKE TEST PASSED"
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 4029 lines   sha256 07ab85ff702c
+// 4104 lines   sha256 c69aa40acdc0
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -16352,6 +16411,17 @@ public partial class _Test : Node
             Character.BossCleared.Clear(); Character.Exp = 0; Character.Level = 1;
             int k1 = Progression.AwardBossKill(1), k2 = Progression.AwardBossKill(1);
             Check(k1 == 550 && k2 == 300, $"a level-1 boss: 200 + 250 first clear + 100 = 550; again: 300 ({k1}, {k2})");
+            // ONE LADDER: a level counts as cleared whichever known boss held it -- the first-clear bonus is
+            // paid once a level, and the next level opens; a clear under an id this build does not know
+            // counts for nothing
+            Character.BossCleared.Clear(); Character.Exp = 0; Character.Level = 1;
+            Character.BossCleared["ironhold"] = new System.Collections.Generic.HashSet<int> { 1, 2 };
+            bool unknownIgnored = !Missions.Cleared(1) && Missions.HighestBeaten == 0 && Missions.Unlocked == 1;
+            Character.BossCleared["silver_lancer"] = new System.Collections.Generic.HashSet<int> { 1 };
+            int again = Progression.AwardBossKill(1);
+            Check(unknownIgnored && Missions.Cleared(1) && !Missions.Cleared(2) && Missions.Unlocked == 2 && again == 300
+                  && Character.BossCleared["silver_lancer"].SetEquals(new[] { 1 }) && Missions.ForLevel(1).Id == "silver_lancer",
+                  $"one ladder: a level cleared under a known boss counts, and pays no second first-clear bonus ({again}); an unknown boss's clears count for nothing");
             Character.BossCleared.Clear(); Character.Exp = 0; Character.Level = 3;
             Check(!Nodes<BossBar>().First().Visible, "outside the arena there is no boss bar");
             Key(global::Godot.Key.L); await Wait(0.1);
@@ -16753,9 +16823,9 @@ public partial class _Test : Node
             var leftWith = new ConfigFile(); leftWith.Load($"{Character.Dir}/{Character.Id}.cfg");
             Check(Math.Abs((double)leftWith.GetValue("base", "credits", -1.0) - 424242) < 1e-6,
                   $"leaving for the arena writes the base to disk on the way out ({(double)leftWith.GetValue("base", "credits", -1.0):0} of 424242)");
-            var boss = H.Boss;
-            Check(boss != null && boss.Alive && H.Yard == null && !Nodes<TargetDummy>().Any() && Combat.Hostiles.Contains(boss),
-                  "the arena: the Silver Lancer, and no base or dummies");
+            var boss = H.Boss as Lancer;
+            Check(boss != null && boss.Alive && boss.Type.Id == "silver_lancer" && boss.Type.Name == "SILVER LANCER" && H.Yard == null && !Nodes<TargetDummy>().Any() && Combat.Hostiles.Contains(boss),
+                  "the arena at level 1: the Silver Lancer, and no base or dummies");
             Check(Met("boss"), "THE BOSS: met on entering the arena");
             Key(global::Godot.Key.B); await Wait(0.1);
             var bb = Nodes<Button>().FirstOrDefault(b => b.Name == "BaseButton");
@@ -16765,7 +16835,7 @@ public partial class _Test : Node
             Check(Music.CombatZone, "the arena counts as combat for the music");
             Me.Position = boss.Position + new Vector2(0, 500); Me.Velocity = Vector2.Zero; Me.Rotation = 0;
             Key(global::Godot.Key.Q); await Wait(0.1);                           // point defence up
-            Check(Math.Abs(boss.MaxHp - 600) < 1e-6 && Math.Abs(Boss.GunDamage / Boss.GunEvery - 3) < 1e-9, "the boss: 600 hull at level 1 (solo); its guns 3 DPS");
+            Check(Math.Abs(boss.MaxHp - 760) < 1e-6 && Math.Abs(Lancer.GunDamage / Lancer.GunEvery - 3) < 1e-9, "the boss: 760 hull at level 1 (solo); its guns 3 DPS");
             // stand in the beam on purpose with a thick hull (test only), and watch the rhythm
             // the boss's health bar: a chunk per hit, bouncing, whitening, fading; bursts merge
             var bar = Nodes<BossBar>().First();
@@ -16794,7 +16864,7 @@ public partial class _Test : Node
             // -- an invisible line sweeping the arena. 2.2 s in, the pilot is moved clear to the
             // side (after five 50-hull ticks, which the damage check below counts on): a boss that
             // turns would now swing after it.
-            var beamLiveF = typeof(Boss).GetField("_beamLive", BindingFlags.NonPublic | BindingFlags.Instance);
+            var beamLiveF = typeof(Lancer).GetField("_beamLive", BindingFlags.NonPublic | BindingFlags.Instance);
             double liveT = 0; float liveRot0 = 0, liveTurn = 0; bool liveDrawn = false, sidestep = false;
             async void Watch()
             {
@@ -16810,11 +16880,11 @@ public partial class _Test : Node
                         if (liveT > 2.2 && !sidestep) { sidestep = true; me2.Position += Vector2.Right.Rotated(boss.Rotation) * 400f; }
                     }
                     // The beam's place in the rhythm is where it COMMITS -- its escorts going out.
-                    // Its red line comes later by the escorts' predicted web plus a second, so
-                    // timing the rhythm off the telegraph would measure that delay, not the rhythm.
+                    // Its red line comes later, when their web pins the pilot, so timing the rhythm
+                    // off the telegraph would measure that wait, not the rhythm.
                     if (tBeam < 0 && H.Raiders.Any(r => r.IsEscort)) tBeam = arenaT;
                     foreach (var tl in Nodes<Telegraph>().Where(x => x.Line))
-                        if (tCharge < 0 && Math.Abs(tl.Width - Boss.HalfWidth * 2f) < 0.1f) tCharge = arenaT;
+                        if (tCharge < 0 && Math.Abs(tl.Width - Lancer.HullHalfWidth * 2f) < 0.1f) tCharge = arenaT;
                     if (tVolley < 0 && boss.Volleys > 0)
                     {
                         tVolley = arenaT;
@@ -16828,15 +16898,31 @@ public partial class _Test : Node
             Watch();
             // The death beam OPENS WITH ITS ESCORTS, well before any red line: two fragile lights
             // 45 degrees to port and starboard of the nose, shivering on the spot while they come
-            // round onto the pilot. The beam only starts charging once their web should have landed.
+            // round onto the pilot. The beam starts charging once their web has pinned the pilot.
             var escorts = new System.Collections.Generic.List<Raider>();
             for (int i = 0; i < 60 * 20 && escorts.Count < 2; i++) { escorts = H.Raiders.Where(r => r.IsEscort).ToList(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
             var bnose = Vector2.Up.Rotated(boss.Rotation);
             var escAng = escorts.Select(r => Mathf.RadToDeg(bnose.AngleTo(r.Position - boss.Position))).OrderBy(x => x).ToList();
             Check(escorts.Count == 2 && Math.Abs(escAng[0] + 45) < 12 && Math.Abs(escAng[1] - 45) < 12
-                  && escorts.All(r => r.Target == me2 && r.Hp > 0 && r.Hp <= Boss.EscortHull * Missions.S(Missions.Level) + 1e-6),
+                  && escorts.All(r => r.Target == me2 && r.Hp > 0 && r.Hp <= Lancer.EscortHull * Missions.S(Missions.Level) + 1e-6),
                   $"two escorts launch at the pilot, 45 degrees to port and starboard ({string.Join(", ", escAng.Select(x => x.ToString("0")))}), fragile");
             Check(escorts.All(r => r.Shivering), "the escorts shiver at the launch point before the run in");
+            // ESCORTS OUT, THE BOSS ALREADY HOLDS ITS POSITION -- and turns only to face the pilot. Pushed
+            // out past its 650 u standoff (where it would otherwise close at 30 u/s) and twisted 0.6 rad
+            // off the pilot first, so both "it held" and "it turned" are real claims.
+            {
+                var armHome = boss.Position;
+                boss.Position += (boss.Position - me2.Position).Normalized() * 700f;
+                var armAt = boss.Position;
+                boss.Rotation += 0.6f;
+                float Off() => Mathf.Abs(Mathf.AngleDifference(boss.Rotation, (me2.Position - boss.Position).Angle() + Mathf.Pi / 2f));
+                float armOff0 = Off();
+                await Wait(0.35);
+                float armOff1 = Off();
+                Check(boss.EscortsOut && !boss.BeamCharging && boss.Locked && boss.Position.DistanceTo(armAt) < 0.01f && armOff0 - armOff1 > 0.07f,
+                      $"escorts out, the boss holds its position already ({boss.Position.DistanceTo(armAt):0.000} u) and turns only to face the pilot ({armOff0:0.000} -> {armOff1:0.000} rad)");
+                boss.Position = armHome;
+            }
         // ON THE WIRE. Boosting and Shivering are read by _Draw, and both were host-only: a guest
         // drew neither the escorts' triple-length plume nor any raider's boost plume. They ride
         // the raider packet as two bits now. Bit values as literals, not Raider.FlagShiver -- a
@@ -16854,13 +16940,25 @@ public partial class _Test : Node
         Check(runFlags.Count > 0 && runFlags.All(f => (f & 2) == 0) && runFlags.Any(f => (f & 1) != 0),
               $"and once it goes, the shiver bit clears and the boost bit stands ({string.Join(",", runFlags)})");
             Check(Nodes<Telegraph>().All(t => !t.Line), "no beam line yet: the escorts go first, the charge follows their web");
+            // THE CHARGE STARTS ON THE PIN -- not on a guess made at launch. Pinned now, well before the
+            // web was predicted to land, it charges at once (the old boss waited out its estimate).
+            if (boss.EscortsOut)
+            {
+                double predicted = (double)typeof(Lancer).GetField("_beamPredict", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(boss);
+                me2.PinFor(0.3);
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                Check(boss.BeamCharging && boss.ChargeCause == "pinned" && boss.ArmedFor < predicted - 0.2,
+                      $"the charge starts the moment the pilot is pinned, before the web was predicted to land ({boss.ChargeCause} at {boss.ArmedFor:0.00} s, predicted {predicted:0.00} s)");
+            }
+            else Check(boss.BeamCharging && boss.ChargeCause == "pinned",
+                       $"the charge starts the moment the pilot is pinned ({boss.ChargeCause} at {boss.ArmedFor:0.00} s)");
             // the bar under the boss's hull resets as a super commits and counts the 15 s to the next
             Check(boss.SuperFill < 0.15 && Math.Abs(boss.NextSuperIn - 15) < 1.5,
                   $"the super-move bar resets as the beam commits, counting the 15 s to the ram ({boss.NextSuperIn:0.0} s, fill {boss.SuperFill:0.00})");
             Telegraph beam = null;
             for (int i = 0; i < 60 * 14 && beam == null; i++) { beam = Nodes<Telegraph>().FirstOrDefault(t => t.Line); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
             Check(beam != null && boss.TelegraphsPending > 0, "the death beam is telegraphed: a red line before it fires");
-            Check(Math.Abs(beam.Duration - Boss.BeamWindup) < 1e-6 && Boss.BeamWindup == 6, "the beam charges 6 s");
+            Check(Math.Abs(beam.Duration - Lancer.BeamWindup) < 1e-6 && Lancer.BeamWindup == 6, "the beam charges 6 s");
             // the warning is parented to the boss, so it swings with the hull instead of being
             // pinned to the spot the boss stood on: the line drawn IS the line fired
             Check(beam.GetParent() == boss, "the beam's telegraph rides the hull rather than the world");
@@ -16877,39 +16975,28 @@ public partial class _Test : Node
                   $"the boss is locked in place while the beam charges, {standoff:0} u out where it would otherwise close (drifted {boss.Position.DistanceTo(lockAt):0.000} u)");
             boss.Position = bossWasAt;   // put it back: left out there its tridents take so long to
                                          // arrive that the point-defence check below times out
-            // Reach, not trigger: activation is still the 30 s rhythm, the nearest pilot and the
-            // escorts' predicted web -- only how far the thing carries has changed. Compared with
+            // Reach, not trigger: this is how far the beam carries, whatever started its charge (the
+            // 30 s rhythm, the nearest pilot, the escorts' web). Compared with
             // the spec's number as a literal, never with BeamLength itself, and checked on the
             // real segment so the drawn indicator and the hit line are both covered.
             var (segA, segB) = boss.BeamSegment();
             var farOut = segA + (segB - segA).Normalized() * 5000f;
-            Check(Boss.BeamLength == 10000f && Math.Abs((beam.B - beam.A).Length() - 10000f) < 1f
+            Check(Lancer.BeamLength == 10000f && Math.Abs((beam.B - beam.A).Length() - 10000f) < 1f
                   && Boss.DistToSegment(farOut, segA, segB) < 1f,
                   $"beam and indicator both reach 10000 u -- a point 5000 u out is inside it, where the old 1800 u fell short (indicator {(beam.B - beam.A).Length():0} u)");
-            // Tracking, then LOCKED. Twist the hull well off the pilot first, both times: a boss
-            // that is already pointing the right way looks identical whether it is turning or
-            // frozen, and a check that cannot tell them apart proves nothing. 0.3 rad/s over
-            // 0.5 s closes 0.15 rad, so "it moved" and "it did not" are far apart here.
+            // HARD LOCKED while it charges -- with the pilot FREE: the old boss froze too once the pilot
+            // was pinned, and tracked it otherwise, so only a free pilot tells the two apart. Point
+            // defence clears the escorts and the web lets go; then, twisted well off the pilot, the boss
+            // does not turn back. A boss that tracked would close 0.15 rad of the 0.6 in the 0.5 s.
+            for (int i = 0; i < 60 * 4 && (me2.Pinned || H.Raiders.Any(r => r.IsEscort)); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             boss.Rotation += 0.6f;
-            float offBy0 = Mathf.Abs(Mathf.AngleDifference(boss.Rotation, (me2.Position - boss.Position).Angle() + Mathf.Pi / 2f));
-            await Wait(0.5);
-            float offBy1 = Mathf.Abs(Mathf.AngleDifference(boss.Rotation, (me2.Position - boss.Position).Angle() + Mathf.Pi / 2f));
-            Check(boss.BeamCharging && !me2.Pinned && !boss.BeamAimLocked && offBy0 - offBy1 > 0.1f,
-                  $"while the pilot is free the boss keeps turning onto it ({offBy0:0.000} -> {offBy1:0.000} rad off in 0.5 s)");
-            // The web lands and the aim is final: the escorts existed to stop the pilot, and the
-            // moment they have, the boss stops too. The red line it is showing is the line it
-            // fires. The pilot's last chance to leave the arc is BEFORE the web, not after.
-            boss.Rotation += 0.6f;
-            me2.PinFor(2.0);
-            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);   // the frame the lock latches
             float heldAt = boss.Rotation;
             await Wait(0.5);
-            Check(boss.BeamCharging && me2.Pinned && boss.BeamAimLocked
-                  && Mathf.Abs(Mathf.AngleDifference(boss.Rotation, heldAt)) < 1e-4f,
-                  $"once the pilot is webbed the boss stops turning: the aim is final (turned {Mathf.AngleDifference(boss.Rotation, heldAt):0.0000} rad in 0.5 s)");
-            // The two twists were a probe, and the aim is now locked, so put it back on the pilot by
-            // hand: the beam below has to be the real shot, and the damage check at the end of this
-            // scenario is the only thing that proves the locked line still lands.
+            Check(boss.BeamCharging && !me2.Pinned && Mathf.Abs(Mathf.AngleDifference(boss.Rotation, heldAt)) < 1e-4f,
+                  $"hard locked while the beam charges, the pilot free: twisted off it, the boss does not turn back (pinned {me2.Pinned}, turned {Mathf.AngleDifference(boss.Rotation, heldAt):0.0000} rad in 0.5 s)");
+            // The twist was a probe, and the aim is locked, so put it back on the pilot by hand: the
+            // beam below has to be the real shot, and the damage check at the end of this scenario is
+            // the only thing that proves the locked line still lands.
             boss.Rotation = (me2.Position - boss.Position).Angle() + Mathf.Pi / 2f;
             int down0 = Torpedo.Intercepted;
             for (int i = 0; i < 60 * 10 && Torpedo.Intercepted == down0; i++)
@@ -16925,12 +17012,12 @@ public partial class _Test : Node
             Check(Turret.PdPriority(tiny) == 1 && Turret.PdPriority(tiny) < Turret.PdPriority(boss), "then small craft (fighter-sized), then everything else");
             Telegraph ring = null;
             for (int i = 0; i < 60 * 18 && ring == null; i++) { ring = Nodes<Telegraph>().FirstOrDefault(t => !t.Line); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
-            Check(ring != null && ring.Radius == Boss.WaveRadius, "the shockwave is telegraphed: a red ring before it lands");
+            Check(ring != null && ring.Radius == Lancer.WaveRadius, "the shockwave is telegraphed: a red ring before it lands");
             // without point defence, a pair of escorts reaches the pilot and pins it inside the charge
             for (int i = 0; i < 60 * 8 && Me.PdActive; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             boss.LaunchEscorts(me2);
             bool pinnedInTime = false;
-            for (int i = 0; i < (int)(60 * Boss.BeamWindup) && !pinnedInTime; i++) { pinnedInTime = me2.Pinned; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            for (int i = 0; i < (int)(60 * Lancer.BeamWindup) && !pinnedInTime; i++) { pinnedInTime = me2.Pinned; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
             Check(pinnedInTime, "left alone (no point defence), the escorts pin the pilot before the charge ends");
             foreach (var r in H.Raiders.Where(r => r.IsEscort).ToList()) r.TakeDamage(999);
             for (int i = 0; i < 60 * 25 && (tCharge < 0 || boss.Charging || tVolley < 0); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
@@ -16947,7 +17034,43 @@ public partial class _Test : Node
             Check(Math.Abs(chargeDmg - 40) < 1e-6, $"the charge rams for 40 ({chargeDmg:0})");
             Check(sidestep && liveTurn < 0.01f, $"the live beam holds the line it drew, with the pilot gone from it (turned {Mathf.RadToDeg(liveTurn):0.00} deg)");
             Check(liveDrawn, "and the line is still drawn 2 s into its 3 s burn");
-            Check(Music.I == null || Math.Abs(Boss.TridentSpeed - 135f) < 1e-3, "trident missiles fly at 135 u/s (10% slower)");
+            Check(Music.I == null || Math.Abs(Lancer.TridentSpeed - 135f) < 1e-3, "trident missiles fly at 135 u/s (10% slower)");
+            // THE FALLBACKS, each on a beam started by hand. The escorts shot down: the charge still comes,
+            // but not before their web would have landed. Escorts that neither pin nor die (the pilot far
+            // off): they cannot stall it past 5 s. And the ram waits out a beam rather than snapping round
+            // in the middle of one.
+            {
+                var nf = BindingFlags.NonPublic | BindingFlags.Instance;
+                var fBeam = typeof(Lancer).GetField("_beam", nf); var fPredict = typeof(Lancer).GetField("_beamPredict", nf);
+                var fCharge = typeof(Lancer).GetField("_charge", nf); var fPending = typeof(Lancer).GetField("_pendingCharge", nf);
+                bool RamLine() => Nodes<Telegraph>().Any(t => t.Line && Math.Abs(t.Width - Lancer.HullHalfWidth * 2f) < 0.1f) || fPending.GetValue(boss) != null || boss.Charging;
+                for (int i = 0; i < 60 * 12 && (boss.Locked || RamLine()); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                me2.Position = boss.Position + new Vector2(0, 500); me2.Velocity = Vector2.Zero;
+                fBeam.SetValue(boss, 0.01);
+                for (int i = 0; i < 60 * 3 && !boss.EscortsOut; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                double predictD = (double)fPredict.GetValue(boss);
+                foreach (var r in H.Raiders.Where(r => r.IsEscort).ToList()) r.TakeDamage(999);
+                for (int i = 0; i < 60 * 8 && !boss.BeamCharging; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                Check(boss.BeamCharging && boss.ChargeCause == "escorts down" && boss.ArmedFor >= predictD - 0.02 && boss.ArmedFor < predictD + 0.1,
+                      $"the escorts shot down, the beam still charges -- once their web would have landed, not before ({boss.ChargeCause} at {boss.ArmedFor:0.00} s, web due {predictD:0.00} s)");
+                // the ram falls due in the middle of this beam: it waits for the beam to end, then comes
+                fCharge.SetValue(boss, 0.01);
+                bool ramDuringBeam = false;
+                for (int i = 0; i < 60 * 10 && (boss.BeamCharging || (double)typeof(Lancer).GetField("_beamLive", nf).GetValue(boss) >= 0); i++)
+                { ramDuringBeam |= RamLine(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+                bool ramAfter = false;
+                for (int i = 0; i < 60 * 3 && !ramAfter; i++) { ramAfter = RamLine(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+                Check(!ramDuringBeam && ramAfter, $"the ram, due mid-beam, waits for the beam to end and then comes (during: {ramDuringBeam}, after: {ramAfter})");
+                for (int i = 0; i < 60 * 6 && (boss.Locked || RamLine()); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                // the pilot 3000 u off: the escorts need longer than 5 s to reach it
+                me2.Position = boss.Position + new Vector2(0, 3000); me2.Velocity = Vector2.Zero;
+                fBeam.SetValue(boss, 0.01);
+                for (int i = 0; i < 60 * 8 && !boss.BeamCharging; i++) { me2.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+                Check(boss.BeamCharging && boss.ChargeCause == "overdue" && Math.Abs(boss.ArmedFor - 5.0) < 0.05,
+                      $"escorts that neither pin nor die cannot stall it: it charges 5 s after they launch ({boss.ChargeCause} at {boss.ArmedFor:0.00} s)");
+                foreach (var r in H.Raiders.Where(r => r.IsEscort).ToList()) r.TakeDamage(999);
+                me2.Position = boss.Position + new Vector2(0, 500); me2.Velocity = Vector2.Zero;
+            }
             // the kill: shared EXP for it and the mission, the bounty's credits, then home
             Character.Exp = 0; Character.Level = 1; Character.BossCleared.Clear(); Character.Points = 0; Character.BossCleared.Clear();
             // (hints off meanwhile: a card starting mid-way would move the batched save these checks time)
@@ -17033,8 +17156,8 @@ public partial class _Test : Node
                   $"while away the base earned 1/20 of its rate ({Yard.LastAwayOre:0.0} ore for {Yard.LastAway:0} s)");
             // levels: the win cleared level 1; docking at the TIO selects level 2
             Check(Character.BossCleared.TryGetValue("silver_lancer", out var cleared) && cleared.Contains(1), "the win records level 1 as cleared");
-            Check(Math.Abs(Missions.S(2) - 1.1) < 1e-9 && Math.Abs(Missions.S(3) - 1.21) < 1e-9 && Math.Abs(Missions.Current.Hull * Missions.S(2) - 660) < 1e-6,
-                  "each level is 10% stronger, multiplicatively (level 2: 660 hull)");
+            Check(Math.Abs(Missions.S(2) - 1.1) < 1e-9 && Math.Abs(Missions.S(3) - 1.21) < 1e-9 && Math.Abs(Missions.ForLevel(3).Hull * Missions.S(3) - 919.6) < 1e-6,
+                  "each level is 10% stronger, multiplicatively (the level-3 Lancer: 760 x 1.21 = 919.6 hull)");
             H.OpenTio(); await Wait(0.1);
             var tw2 = Nodes<TioWindow>().First();
             Check(Missions.Level == 2, "docking at the TIO selects the newest unlocked level (2)");
@@ -17218,6 +17341,17 @@ public partial class _Test : Node
         GD.Print($"  leak check: orphan nodes {orphA:0} -> {orphB:0}; objects {objA:0} -> {objB:0} (after collection)");
         Check(orphB <= orphA, "no orphan nodes accumulate across leaving and re-entering the hub");
         Check(objB <= objA + 20, "no objects accumulate across leaving and re-entering the hub");
+        // THE LEVEL COMES WITH THE SECTOR: a peer sent into a world is told the level in the same call,
+        // set before the world -- and an arena's boss -- is built from it, rather than left to the
+        // mission report that follows. (Sent home again here, where the hub has just been rebuilt.)
+        {
+            int lv0 = Missions.Level;
+            Priv(H, "NetSector", (int)Hub.SectorKind.Home, 7);
+            int lvSet = Missions.Level;
+            await Wait(1.0);                                   // the home world, rebuilt
+            Missions.Level = lv0;
+            Check(lvSet == 7 && H != null && !Hub.InArena, $"a peer sent into a world is told the level with it, before the world is built ({lvSet})");
+        }
 
         // ── LAST, because it ends a session and that resets the fleet ────────────────────
         // A session can end without anything else moving. Quitting to the menu changes scene and

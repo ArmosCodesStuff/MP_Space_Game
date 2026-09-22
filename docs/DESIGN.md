@@ -315,6 +315,16 @@ Recorded here so every chunk builds from the written word, not from memory.
 - **A scene change**: `Hub.GoTo` reloads the game scene with `Hub.Sector` set; the host tells every
   guest to do the same. Anything that must survive the trip lives outside the scene (static): the
   host's trip record (`Yard._trip`) and a guest's set-aside base (`Yard._own*`).
+- **A boss is a class of its own on a shared base.** `Boss` (abstract) is everything every boss is:
+  hull and damage scaled by level and party, a hostile, host-simulated and drawn on guests from
+  `NetState` (flat while `Locked`), telegraphs, the super-move bar, the approach. Each boss is a
+  subclass with its own weapons and timers (`Lancer`, ...), built from `Missions.BossType.Make`.
+  **One ladder of levels, the bosses taking them in turn** (`Missions.ForLevel`): every peer works out
+  a level's boss from the replicated level alone, and a peer sent into a world is told the level WITH
+  the sector (`NetSector`), because the arena's boss is built from it before any mission report
+  arrives -- a guest brought into an arena late used to build it from its own stale level. A level
+  counts as cleared whichever boss held it (`Missions.Cleared`, `HighestBeaten`, `Unlocked`): the
+  first-clear bonus is once a level, and a pilot's older clears all still count.
 - **Telegraph first**: every high-damage boss attack shows a red zone for its whole wind-up
   (`Telegraph`), then the host resolves the hit.
 - **A telegraph belongs to its weapon.** The beam and the ram are drawn as **children of the boss**
@@ -328,20 +338,21 @@ Recorded here so every chunk builds from the written word, not from memory.
 
 - **The death beam is a trap you can spring or break.** It opens with two escorts, not a red line:
   they shiver at the launch point while coming round onto the pilot, boost in on a triple-length
-  plume, flank **port and starboard**, and web. The charge begins when their web *should* have
-  landed — a **prediction** made at launch (shiver + run-in at boost speed, plus a second), never a
-  wait on them arriving. So killing the escorts cannot cancel the beam; it earns you a beam you can
-  fly out of, because the boss can only track at its own 0.3 rad/s while it charges. That is the
-  whole shape of the mechanic: **beat the lights and the beam becomes dodgeable; ignore them and it
-  cannot miss.**
-- **The web ends the aiming, not just the dodging.** The first frame the pilot is webbed the boss
-  stops turning too, and the red line it is already showing is the line it fires. This is a
-  fairness rule rather than a balance one: a boss that kept tracking a target it had pinned would
-  be chasing something that cannot dodge, and the pilot would watch the line follow them with
-  nothing to do about it — the game visibly playing against its own telegraph. Freezing makes the
-  telegraph a promise, and moves the pilot's last decision to *before* the web lands, where they
-  still have a ship that answers the rudder. The lock resets at the start of every charge, so
-  breaking the web on one cycle never carries into the next.
+  plume, flank **port and starboard**, and web. From the moment they launch **the boss holds its
+  position**, and turns only to face the pilot -- the one turn the beam allows. **The charge begins
+  when the web has actually pinned the pilot** (the owner's call, 2026-09-22: it used to begin on a
+  prediction made at launch, and a pilot running or slipping behind the boss saw it charge before
+  anything had pinned them). Kill the escorts first and it still comes, once their web would have
+  landed -- a beam you can fly out of; and escorts that neither pin nor die cannot stall it past 5 s
+  after launch (`BeamArmMax`: under 6 s, so the beam's whole run ends inside the 15 s before the ram).
+  **Beat the lights and the beam becomes dodgeable; ignore them and it cannot miss.**
+- **From the charge to the beam's end the boss is HARD LOCKED**: no turn, no move. The red line it
+  shows is the line it fires, so the telegraph is a promise, and the pilot's last decision is
+  *before* the charge -- escape the web, or leave the arc -- while they still have a ship that
+  answers the rudder. A boss that tracked while it charged (it once did, at 0.3 rad/s, until the web
+  landed) was the game visibly playing against its own telegraph. The ram waits for a beam to end
+  rather than snapping round during it; the shockwave's wind-up holds still too. Only the ram moves
+  the boss during a special.
 - **Point defence order**: missiles, then small craft, then anything else (`Turret.PdPriority`).
 - **Test harness trap**: three processes on fixed timings do not choreograph scene changes well; the
   multiplayer arena needs its own purpose-built test.
@@ -643,7 +654,7 @@ each (`python tools/map.py`). The files to start from:
 | `Loot.cs` / `Hints.cs` | drops and crates / the tutorial's corner card |
 | `Yard.cs` / `Economy.cs` / `Hauler.cs` / `Gatherer.cs` | the idle economy: the base, its numbers, the hauler's runs, miners and salvagers |
 | `Character.cs` / `Game.cs` | the pilot on disk (save format 2, the batched save) / the build's number and the way out |
-| `Boss.cs` / `Raider.cs` / `Missions.cs` | the arena's boss, raiders and hunters, levels and rewards |
+| `Boss.cs` (the base) / `Lancer.cs` / `Raider.cs` / `Missions.cs` | the arena's boss, raiders and hunters, levels and rewards |
 
 ## A note on the typecheck harness
 
@@ -807,7 +818,7 @@ Each of these compiled clean and was wrong at runtime. The smoke test covers all
   IMPORTER made of the file, not the file: the first version of the sound-level checks reported a
   ratio of 1.000 for two files that differ by 35%. `FileAccess.GetFileAsBytes` reads what shipped.
   *Rule: the same goes for sprite sizes. Measure the thing the player gets.*
-- **Host-only state read by drawing code is a guest bug that nothing reports.** `Boss._beam` and
+- **Host-only state read by drawing code is a guest bug that nothing reports.** `Lancer._beam` and
   `_charge` only tick under `Net.Sim`, and `Raider.Boosting` / `Shivering` are host-only fields;
   all four are read by code that draws. On a guest the boss's super-move bar sat at zero for the
   whole fight and the escorts' triple-length plume never appeared, and neither showed up as an

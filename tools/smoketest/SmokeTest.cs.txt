@@ -2472,6 +2472,17 @@ public partial class _Test : Node
             Character.BossCleared.Clear(); Character.Exp = 0; Character.Level = 1;
             int k1 = Progression.AwardBossKill(1), k2 = Progression.AwardBossKill(1);
             Check(k1 == 550 && k2 == 300, $"a level-1 boss: 200 + 250 first clear + 100 = 550; again: 300 ({k1}, {k2})");
+            // ONE LADDER: a level counts as cleared whichever known boss held it -- the first-clear bonus is
+            // paid once a level, and the next level opens; a clear under an id this build does not know
+            // counts for nothing
+            Character.BossCleared.Clear(); Character.Exp = 0; Character.Level = 1;
+            Character.BossCleared["ironhold"] = new System.Collections.Generic.HashSet<int> { 1, 2 };
+            bool unknownIgnored = !Missions.Cleared(1) && Missions.HighestBeaten == 0 && Missions.Unlocked == 1;
+            Character.BossCleared["silver_lancer"] = new System.Collections.Generic.HashSet<int> { 1 };
+            int again = Progression.AwardBossKill(1);
+            Check(unknownIgnored && Missions.Cleared(1) && !Missions.Cleared(2) && Missions.Unlocked == 2 && again == 300
+                  && Character.BossCleared["silver_lancer"].SetEquals(new[] { 1 }) && Missions.ForLevel(1).Id == "silver_lancer",
+                  $"one ladder: a level cleared under a known boss counts, and pays no second first-clear bonus ({again}); an unknown boss's clears count for nothing");
             Character.BossCleared.Clear(); Character.Exp = 0; Character.Level = 3;
             Check(!Nodes<BossBar>().First().Visible, "outside the arena there is no boss bar");
             Key(global::Godot.Key.L); await Wait(0.1);
@@ -2873,9 +2884,9 @@ public partial class _Test : Node
             var leftWith = new ConfigFile(); leftWith.Load($"{Character.Dir}/{Character.Id}.cfg");
             Check(Math.Abs((double)leftWith.GetValue("base", "credits", -1.0) - 424242) < 1e-6,
                   $"leaving for the arena writes the base to disk on the way out ({(double)leftWith.GetValue("base", "credits", -1.0):0} of 424242)");
-            var boss = H.Boss;
-            Check(boss != null && boss.Alive && H.Yard == null && !Nodes<TargetDummy>().Any() && Combat.Hostiles.Contains(boss),
-                  "the arena: the Silver Lancer, and no base or dummies");
+            var boss = H.Boss as Lancer;
+            Check(boss != null && boss.Alive && boss.Type.Id == "silver_lancer" && boss.Type.Name == "SILVER LANCER" && H.Yard == null && !Nodes<TargetDummy>().Any() && Combat.Hostiles.Contains(boss),
+                  "the arena at level 1: the Silver Lancer, and no base or dummies");
             Check(Met("boss"), "THE BOSS: met on entering the arena");
             Key(global::Godot.Key.B); await Wait(0.1);
             var bb = Nodes<Button>().FirstOrDefault(b => b.Name == "BaseButton");
@@ -2885,7 +2896,7 @@ public partial class _Test : Node
             Check(Music.CombatZone, "the arena counts as combat for the music");
             Me.Position = boss.Position + new Vector2(0, 500); Me.Velocity = Vector2.Zero; Me.Rotation = 0;
             Key(global::Godot.Key.Q); await Wait(0.1);                           // point defence up
-            Check(Math.Abs(boss.MaxHp - 600) < 1e-6 && Math.Abs(Boss.GunDamage / Boss.GunEvery - 3) < 1e-9, "the boss: 600 hull at level 1 (solo); its guns 3 DPS");
+            Check(Math.Abs(boss.MaxHp - 760) < 1e-6 && Math.Abs(Lancer.GunDamage / Lancer.GunEvery - 3) < 1e-9, "the boss: 760 hull at level 1 (solo); its guns 3 DPS");
             // stand in the beam on purpose with a thick hull (test only), and watch the rhythm
             // the boss's health bar: a chunk per hit, bouncing, whitening, fading; bursts merge
             var bar = Nodes<BossBar>().First();
@@ -2914,7 +2925,7 @@ public partial class _Test : Node
             // -- an invisible line sweeping the arena. 2.2 s in, the pilot is moved clear to the
             // side (after five 50-hull ticks, which the damage check below counts on): a boss that
             // turns would now swing after it.
-            var beamLiveF = typeof(Boss).GetField("_beamLive", BindingFlags.NonPublic | BindingFlags.Instance);
+            var beamLiveF = typeof(Lancer).GetField("_beamLive", BindingFlags.NonPublic | BindingFlags.Instance);
             double liveT = 0; float liveRot0 = 0, liveTurn = 0; bool liveDrawn = false, sidestep = false;
             async void Watch()
             {
@@ -2930,11 +2941,11 @@ public partial class _Test : Node
                         if (liveT > 2.2 && !sidestep) { sidestep = true; me2.Position += Vector2.Right.Rotated(boss.Rotation) * 400f; }
                     }
                     // The beam's place in the rhythm is where it COMMITS -- its escorts going out.
-                    // Its red line comes later by the escorts' predicted web plus a second, so
-                    // timing the rhythm off the telegraph would measure that delay, not the rhythm.
+                    // Its red line comes later, when their web pins the pilot, so timing the rhythm
+                    // off the telegraph would measure that wait, not the rhythm.
                     if (tBeam < 0 && H.Raiders.Any(r => r.IsEscort)) tBeam = arenaT;
                     foreach (var tl in Nodes<Telegraph>().Where(x => x.Line))
-                        if (tCharge < 0 && Math.Abs(tl.Width - Boss.HalfWidth * 2f) < 0.1f) tCharge = arenaT;
+                        if (tCharge < 0 && Math.Abs(tl.Width - Lancer.HullHalfWidth * 2f) < 0.1f) tCharge = arenaT;
                     if (tVolley < 0 && boss.Volleys > 0)
                     {
                         tVolley = arenaT;
@@ -2948,15 +2959,31 @@ public partial class _Test : Node
             Watch();
             // The death beam OPENS WITH ITS ESCORTS, well before any red line: two fragile lights
             // 45 degrees to port and starboard of the nose, shivering on the spot while they come
-            // round onto the pilot. The beam only starts charging once their web should have landed.
+            // round onto the pilot. The beam starts charging once their web has pinned the pilot.
             var escorts = new System.Collections.Generic.List<Raider>();
             for (int i = 0; i < 60 * 20 && escorts.Count < 2; i++) { escorts = H.Raiders.Where(r => r.IsEscort).ToList(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
             var bnose = Vector2.Up.Rotated(boss.Rotation);
             var escAng = escorts.Select(r => Mathf.RadToDeg(bnose.AngleTo(r.Position - boss.Position))).OrderBy(x => x).ToList();
             Check(escorts.Count == 2 && Math.Abs(escAng[0] + 45) < 12 && Math.Abs(escAng[1] - 45) < 12
-                  && escorts.All(r => r.Target == me2 && r.Hp > 0 && r.Hp <= Boss.EscortHull * Missions.S(Missions.Level) + 1e-6),
+                  && escorts.All(r => r.Target == me2 && r.Hp > 0 && r.Hp <= Lancer.EscortHull * Missions.S(Missions.Level) + 1e-6),
                   $"two escorts launch at the pilot, 45 degrees to port and starboard ({string.Join(", ", escAng.Select(x => x.ToString("0")))}), fragile");
             Check(escorts.All(r => r.Shivering), "the escorts shiver at the launch point before the run in");
+            // ESCORTS OUT, THE BOSS ALREADY HOLDS ITS POSITION -- and turns only to face the pilot. Pushed
+            // out past its 650 u standoff (where it would otherwise close at 30 u/s) and twisted 0.6 rad
+            // off the pilot first, so both "it held" and "it turned" are real claims.
+            {
+                var armHome = boss.Position;
+                boss.Position += (boss.Position - me2.Position).Normalized() * 700f;
+                var armAt = boss.Position;
+                boss.Rotation += 0.6f;
+                float Off() => Mathf.Abs(Mathf.AngleDifference(boss.Rotation, (me2.Position - boss.Position).Angle() + Mathf.Pi / 2f));
+                float armOff0 = Off();
+                await Wait(0.35);
+                float armOff1 = Off();
+                Check(boss.EscortsOut && !boss.BeamCharging && boss.Locked && boss.Position.DistanceTo(armAt) < 0.01f && armOff0 - armOff1 > 0.07f,
+                      $"escorts out, the boss holds its position already ({boss.Position.DistanceTo(armAt):0.000} u) and turns only to face the pilot ({armOff0:0.000} -> {armOff1:0.000} rad)");
+                boss.Position = armHome;
+            }
         // ON THE WIRE. Boosting and Shivering are read by _Draw, and both were host-only: a guest
         // drew neither the escorts' triple-length plume nor any raider's boost plume. They ride
         // the raider packet as two bits now. Bit values as literals, not Raider.FlagShiver -- a
@@ -2974,13 +3001,25 @@ public partial class _Test : Node
         Check(runFlags.Count > 0 && runFlags.All(f => (f & 2) == 0) && runFlags.Any(f => (f & 1) != 0),
               $"and once it goes, the shiver bit clears and the boost bit stands ({string.Join(",", runFlags)})");
             Check(Nodes<Telegraph>().All(t => !t.Line), "no beam line yet: the escorts go first, the charge follows their web");
+            // THE CHARGE STARTS ON THE PIN -- not on a guess made at launch. Pinned now, well before the
+            // web was predicted to land, it charges at once (the old boss waited out its estimate).
+            if (boss.EscortsOut)
+            {
+                double predicted = (double)typeof(Lancer).GetField("_beamPredict", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(boss);
+                me2.PinFor(0.3);
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                Check(boss.BeamCharging && boss.ChargeCause == "pinned" && boss.ArmedFor < predicted - 0.2,
+                      $"the charge starts the moment the pilot is pinned, before the web was predicted to land ({boss.ChargeCause} at {boss.ArmedFor:0.00} s, predicted {predicted:0.00} s)");
+            }
+            else Check(boss.BeamCharging && boss.ChargeCause == "pinned",
+                       $"the charge starts the moment the pilot is pinned ({boss.ChargeCause} at {boss.ArmedFor:0.00} s)");
             // the bar under the boss's hull resets as a super commits and counts the 15 s to the next
             Check(boss.SuperFill < 0.15 && Math.Abs(boss.NextSuperIn - 15) < 1.5,
                   $"the super-move bar resets as the beam commits, counting the 15 s to the ram ({boss.NextSuperIn:0.0} s, fill {boss.SuperFill:0.00})");
             Telegraph beam = null;
             for (int i = 0; i < 60 * 14 && beam == null; i++) { beam = Nodes<Telegraph>().FirstOrDefault(t => t.Line); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
             Check(beam != null && boss.TelegraphsPending > 0, "the death beam is telegraphed: a red line before it fires");
-            Check(Math.Abs(beam.Duration - Boss.BeamWindup) < 1e-6 && Boss.BeamWindup == 6, "the beam charges 6 s");
+            Check(Math.Abs(beam.Duration - Lancer.BeamWindup) < 1e-6 && Lancer.BeamWindup == 6, "the beam charges 6 s");
             // the warning is parented to the boss, so it swings with the hull instead of being
             // pinned to the spot the boss stood on: the line drawn IS the line fired
             Check(beam.GetParent() == boss, "the beam's telegraph rides the hull rather than the world");
@@ -2997,39 +3036,28 @@ public partial class _Test : Node
                   $"the boss is locked in place while the beam charges, {standoff:0} u out where it would otherwise close (drifted {boss.Position.DistanceTo(lockAt):0.000} u)");
             boss.Position = bossWasAt;   // put it back: left out there its tridents take so long to
                                          // arrive that the point-defence check below times out
-            // Reach, not trigger: activation is still the 30 s rhythm, the nearest pilot and the
-            // escorts' predicted web -- only how far the thing carries has changed. Compared with
+            // Reach, not trigger: this is how far the beam carries, whatever started its charge (the
+            // 30 s rhythm, the nearest pilot, the escorts' web). Compared with
             // the spec's number as a literal, never with BeamLength itself, and checked on the
             // real segment so the drawn indicator and the hit line are both covered.
             var (segA, segB) = boss.BeamSegment();
             var farOut = segA + (segB - segA).Normalized() * 5000f;
-            Check(Boss.BeamLength == 10000f && Math.Abs((beam.B - beam.A).Length() - 10000f) < 1f
+            Check(Lancer.BeamLength == 10000f && Math.Abs((beam.B - beam.A).Length() - 10000f) < 1f
                   && Boss.DistToSegment(farOut, segA, segB) < 1f,
                   $"beam and indicator both reach 10000 u -- a point 5000 u out is inside it, where the old 1800 u fell short (indicator {(beam.B - beam.A).Length():0} u)");
-            // Tracking, then LOCKED. Twist the hull well off the pilot first, both times: a boss
-            // that is already pointing the right way looks identical whether it is turning or
-            // frozen, and a check that cannot tell them apart proves nothing. 0.3 rad/s over
-            // 0.5 s closes 0.15 rad, so "it moved" and "it did not" are far apart here.
+            // HARD LOCKED while it charges -- with the pilot FREE: the old boss froze too once the pilot
+            // was pinned, and tracked it otherwise, so only a free pilot tells the two apart. Point
+            // defence clears the escorts and the web lets go; then, twisted well off the pilot, the boss
+            // does not turn back. A boss that tracked would close 0.15 rad of the 0.6 in the 0.5 s.
+            for (int i = 0; i < 60 * 4 && (me2.Pinned || H.Raiders.Any(r => r.IsEscort)); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             boss.Rotation += 0.6f;
-            float offBy0 = Mathf.Abs(Mathf.AngleDifference(boss.Rotation, (me2.Position - boss.Position).Angle() + Mathf.Pi / 2f));
-            await Wait(0.5);
-            float offBy1 = Mathf.Abs(Mathf.AngleDifference(boss.Rotation, (me2.Position - boss.Position).Angle() + Mathf.Pi / 2f));
-            Check(boss.BeamCharging && !me2.Pinned && !boss.BeamAimLocked && offBy0 - offBy1 > 0.1f,
-                  $"while the pilot is free the boss keeps turning onto it ({offBy0:0.000} -> {offBy1:0.000} rad off in 0.5 s)");
-            // The web lands and the aim is final: the escorts existed to stop the pilot, and the
-            // moment they have, the boss stops too. The red line it is showing is the line it
-            // fires. The pilot's last chance to leave the arc is BEFORE the web, not after.
-            boss.Rotation += 0.6f;
-            me2.PinFor(2.0);
-            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);   // the frame the lock latches
             float heldAt = boss.Rotation;
             await Wait(0.5);
-            Check(boss.BeamCharging && me2.Pinned && boss.BeamAimLocked
-                  && Mathf.Abs(Mathf.AngleDifference(boss.Rotation, heldAt)) < 1e-4f,
-                  $"once the pilot is webbed the boss stops turning: the aim is final (turned {Mathf.AngleDifference(boss.Rotation, heldAt):0.0000} rad in 0.5 s)");
-            // The two twists were a probe, and the aim is now locked, so put it back on the pilot by
-            // hand: the beam below has to be the real shot, and the damage check at the end of this
-            // scenario is the only thing that proves the locked line still lands.
+            Check(boss.BeamCharging && !me2.Pinned && Mathf.Abs(Mathf.AngleDifference(boss.Rotation, heldAt)) < 1e-4f,
+                  $"hard locked while the beam charges, the pilot free: twisted off it, the boss does not turn back (pinned {me2.Pinned}, turned {Mathf.AngleDifference(boss.Rotation, heldAt):0.0000} rad in 0.5 s)");
+            // The twist was a probe, and the aim is locked, so put it back on the pilot by hand: the
+            // beam below has to be the real shot, and the damage check at the end of this scenario is
+            // the only thing that proves the locked line still lands.
             boss.Rotation = (me2.Position - boss.Position).Angle() + Mathf.Pi / 2f;
             int down0 = Torpedo.Intercepted;
             for (int i = 0; i < 60 * 10 && Torpedo.Intercepted == down0; i++)
@@ -3045,12 +3073,12 @@ public partial class _Test : Node
             Check(Turret.PdPriority(tiny) == 1 && Turret.PdPriority(tiny) < Turret.PdPriority(boss), "then small craft (fighter-sized), then everything else");
             Telegraph ring = null;
             for (int i = 0; i < 60 * 18 && ring == null; i++) { ring = Nodes<Telegraph>().FirstOrDefault(t => !t.Line); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
-            Check(ring != null && ring.Radius == Boss.WaveRadius, "the shockwave is telegraphed: a red ring before it lands");
+            Check(ring != null && ring.Radius == Lancer.WaveRadius, "the shockwave is telegraphed: a red ring before it lands");
             // without point defence, a pair of escorts reaches the pilot and pins it inside the charge
             for (int i = 0; i < 60 * 8 && Me.PdActive; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             boss.LaunchEscorts(me2);
             bool pinnedInTime = false;
-            for (int i = 0; i < (int)(60 * Boss.BeamWindup) && !pinnedInTime; i++) { pinnedInTime = me2.Pinned; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            for (int i = 0; i < (int)(60 * Lancer.BeamWindup) && !pinnedInTime; i++) { pinnedInTime = me2.Pinned; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
             Check(pinnedInTime, "left alone (no point defence), the escorts pin the pilot before the charge ends");
             foreach (var r in H.Raiders.Where(r => r.IsEscort).ToList()) r.TakeDamage(999);
             for (int i = 0; i < 60 * 25 && (tCharge < 0 || boss.Charging || tVolley < 0); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
@@ -3067,7 +3095,43 @@ public partial class _Test : Node
             Check(Math.Abs(chargeDmg - 40) < 1e-6, $"the charge rams for 40 ({chargeDmg:0})");
             Check(sidestep && liveTurn < 0.01f, $"the live beam holds the line it drew, with the pilot gone from it (turned {Mathf.RadToDeg(liveTurn):0.00} deg)");
             Check(liveDrawn, "and the line is still drawn 2 s into its 3 s burn");
-            Check(Music.I == null || Math.Abs(Boss.TridentSpeed - 135f) < 1e-3, "trident missiles fly at 135 u/s (10% slower)");
+            Check(Music.I == null || Math.Abs(Lancer.TridentSpeed - 135f) < 1e-3, "trident missiles fly at 135 u/s (10% slower)");
+            // THE FALLBACKS, each on a beam started by hand. The escorts shot down: the charge still comes,
+            // but not before their web would have landed. Escorts that neither pin nor die (the pilot far
+            // off): they cannot stall it past 5 s. And the ram waits out a beam rather than snapping round
+            // in the middle of one.
+            {
+                var nf = BindingFlags.NonPublic | BindingFlags.Instance;
+                var fBeam = typeof(Lancer).GetField("_beam", nf); var fPredict = typeof(Lancer).GetField("_beamPredict", nf);
+                var fCharge = typeof(Lancer).GetField("_charge", nf); var fPending = typeof(Lancer).GetField("_pendingCharge", nf);
+                bool RamLine() => Nodes<Telegraph>().Any(t => t.Line && Math.Abs(t.Width - Lancer.HullHalfWidth * 2f) < 0.1f) || fPending.GetValue(boss) != null || boss.Charging;
+                for (int i = 0; i < 60 * 12 && (boss.Locked || RamLine()); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                me2.Position = boss.Position + new Vector2(0, 500); me2.Velocity = Vector2.Zero;
+                fBeam.SetValue(boss, 0.01);
+                for (int i = 0; i < 60 * 3 && !boss.EscortsOut; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                double predictD = (double)fPredict.GetValue(boss);
+                foreach (var r in H.Raiders.Where(r => r.IsEscort).ToList()) r.TakeDamage(999);
+                for (int i = 0; i < 60 * 8 && !boss.BeamCharging; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                Check(boss.BeamCharging && boss.ChargeCause == "escorts down" && boss.ArmedFor >= predictD - 0.02 && boss.ArmedFor < predictD + 0.1,
+                      $"the escorts shot down, the beam still charges -- once their web would have landed, not before ({boss.ChargeCause} at {boss.ArmedFor:0.00} s, web due {predictD:0.00} s)");
+                // the ram falls due in the middle of this beam: it waits for the beam to end, then comes
+                fCharge.SetValue(boss, 0.01);
+                bool ramDuringBeam = false;
+                for (int i = 0; i < 60 * 10 && (boss.BeamCharging || (double)typeof(Lancer).GetField("_beamLive", nf).GetValue(boss) >= 0); i++)
+                { ramDuringBeam |= RamLine(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+                bool ramAfter = false;
+                for (int i = 0; i < 60 * 3 && !ramAfter; i++) { ramAfter = RamLine(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+                Check(!ramDuringBeam && ramAfter, $"the ram, due mid-beam, waits for the beam to end and then comes (during: {ramDuringBeam}, after: {ramAfter})");
+                for (int i = 0; i < 60 * 6 && (boss.Locked || RamLine()); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                // the pilot 3000 u off: the escorts need longer than 5 s to reach it
+                me2.Position = boss.Position + new Vector2(0, 3000); me2.Velocity = Vector2.Zero;
+                fBeam.SetValue(boss, 0.01);
+                for (int i = 0; i < 60 * 8 && !boss.BeamCharging; i++) { me2.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+                Check(boss.BeamCharging && boss.ChargeCause == "overdue" && Math.Abs(boss.ArmedFor - 5.0) < 0.05,
+                      $"escorts that neither pin nor die cannot stall it: it charges 5 s after they launch ({boss.ChargeCause} at {boss.ArmedFor:0.00} s)");
+                foreach (var r in H.Raiders.Where(r => r.IsEscort).ToList()) r.TakeDamage(999);
+                me2.Position = boss.Position + new Vector2(0, 500); me2.Velocity = Vector2.Zero;
+            }
             // the kill: shared EXP for it and the mission, the bounty's credits, then home
             Character.Exp = 0; Character.Level = 1; Character.BossCleared.Clear(); Character.Points = 0; Character.BossCleared.Clear();
             // (hints off meanwhile: a card starting mid-way would move the batched save these checks time)
@@ -3153,8 +3217,8 @@ public partial class _Test : Node
                   $"while away the base earned 1/20 of its rate ({Yard.LastAwayOre:0.0} ore for {Yard.LastAway:0} s)");
             // levels: the win cleared level 1; docking at the TIO selects level 2
             Check(Character.BossCleared.TryGetValue("silver_lancer", out var cleared) && cleared.Contains(1), "the win records level 1 as cleared");
-            Check(Math.Abs(Missions.S(2) - 1.1) < 1e-9 && Math.Abs(Missions.S(3) - 1.21) < 1e-9 && Math.Abs(Missions.Current.Hull * Missions.S(2) - 660) < 1e-6,
-                  "each level is 10% stronger, multiplicatively (level 2: 660 hull)");
+            Check(Math.Abs(Missions.S(2) - 1.1) < 1e-9 && Math.Abs(Missions.S(3) - 1.21) < 1e-9 && Math.Abs(Missions.ForLevel(3).Hull * Missions.S(3) - 919.6) < 1e-6,
+                  "each level is 10% stronger, multiplicatively (the level-3 Lancer: 760 x 1.21 = 919.6 hull)");
             H.OpenTio(); await Wait(0.1);
             var tw2 = Nodes<TioWindow>().First();
             Check(Missions.Level == 2, "docking at the TIO selects the newest unlocked level (2)");
@@ -3338,6 +3402,17 @@ public partial class _Test : Node
         GD.Print($"  leak check: orphan nodes {orphA:0} -> {orphB:0}; objects {objA:0} -> {objB:0} (after collection)");
         Check(orphB <= orphA, "no orphan nodes accumulate across leaving and re-entering the hub");
         Check(objB <= objA + 20, "no objects accumulate across leaving and re-entering the hub");
+        // THE LEVEL COMES WITH THE SECTOR: a peer sent into a world is told the level in the same call,
+        // set before the world -- and an arena's boss -- is built from it, rather than left to the
+        // mission report that follows. (Sent home again here, where the hub has just been rebuilt.)
+        {
+            int lv0 = Missions.Level;
+            Priv(H, "NetSector", (int)Hub.SectorKind.Home, 7);
+            int lvSet = Missions.Level;
+            await Wait(1.0);                                   // the home world, rebuilt
+            Missions.Level = lv0;
+            Check(lvSet == 7 && H != null && !Hub.InArena, $"a peer sent into a world is told the level with it, before the world is built ({lvSet})");
+        }
 
         // ── LAST, because it ends a session and that resets the fleet ────────────────────
         // A session can end without anything else moving. Quitting to the menu changes scene and

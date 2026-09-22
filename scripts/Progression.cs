@@ -84,10 +84,11 @@ public static class Progression
     // A boss beaten at `level`: this pilot's own EXP -- the kill by its own level, the first
     // clear of that level, completing the mission -- and the record. Returns the EXP given.
     public static int AwardBossKill(int level)
-    {
-        var id = Missions.Current.Id;
+    {   // recorded under the boss that held the level; first by the ladder, whoever held it before
+        var id = Missions.ForLevel(level).Id;
+        bool first = !Missions.Cleared(level);
         if (!Character.BossCleared.TryGetValue(id, out var set)) Character.BossCleared[id] = set = new System.Collections.Generic.HashSet<int>();
-        bool first = set.Add(level);
+        set.Add(level);
         int exp = Missions.KillExpFor(level, Character.Level) + (first ? Missions.FirstClearExp : 0) + Missions.CompletionExp;
         AddExp(exp);                                                         // (saves)
         return exp;

@@ -19,6 +19,31 @@ ticked only when it has been read line by line and everything found in it is fix
 4. Every finding is fixed at the source, covered by a check where it can be, and the whole suite runs
    again. Findings found while fixing go back on the list (recursively).
 
+## Pass 8 — slice 3a: the boss base and the Lancer's beam (done)
+
+Four lenses (the base/subclass split, the Lancer's beam logic, the level ladder and its replication,
+the tests), a refuter each, then a critic: 10 confirmed, 2 refuted, 3 more from the critic. Fixed:
+- **A pilot still pinned by the last beam's escorts started the next charge at once** (escorts never
+  expire, and re-pin every frame): a pin counts only once this cycle's escorts have left the launch
+  point (`Raider.EscortShiver`), so the turn to face the pilot always happens.
+- **The ram could dash inside a shockwave's wind-up**, which holds the boss still: each now waits for
+  the other.
+- **The hard-lock check could not tell the new lock from the old one** -- the old boss froze once the
+  pilot was pinned, and the pilot was still pinned: it now waits for point defence to clear the
+  escorts and the web to let go.
+- **`NetSector`'s level had no check** (with one boss every level builds the same one). A first
+  check -- a guest dropped mid-arena given a stale level, rebuilding at the host's -- passed its
+  mutant too: the host's mission broadcast on the rejoin corrects the level before the sector
+  arrives. The race needs a sector sent before any broadcast, which is narrow. The check now calls
+  `NetSector` directly and reads the level before the world is rebuilt; its mutant is caught.
+- **The fallbacks and the ram guard were unchecked**: beams started by hand check "escorts down" (not
+  before the web was due), "overdue" (5 s), and the ram waiting out a beam.
+- Stale comments (the Lancer "of the odd levels" while it holds every level; a guest's flat pose "on
+  a boss standing still" while it turns with its escorts out; `Raider.WebEta`; two test comments; two
+  in DESIGN.md) and the ladder check's claim, which only a second boss can prove (slice 3b).
+Refuted: the pin check's else-branch (the telegraph and the reset land in the same frame) and a failed
+`as Lancer` cast (only the Lancer exists).
+
 ## Pass 7 — slice 2 of the second batch: the outposts and the escort (done)
 
 The slice-2 diff read by the same five lenses (the hauler's state machine, waves and hull, the world

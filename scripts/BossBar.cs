@@ -63,8 +63,8 @@ public partial class BossBar : Control
         _panel.Draw(GetCanvasItem(), new Rect2(-10, -26, W + 20, H + 34 + SuperPad + SuperH));
         // after the kill: your parts collected of those dropped, and how many pilots are ready to go home
         string title = Hub.MissionWon
-            ? $"{Missions.Current.Name}  ·  DEFEATED  ·  PARTS {Hub.CratesDropped - Hub.Crates.Count} / {Hub.CratesDropped}  ·  {Hub.ReturnReady} / {Hub.ReturnTotal} READY TO RETURN"
-            : $"{Missions.Current.Name}  ·  LEVEL {Missions.Level}  ·  {boss.Hp:0} / {boss.MaxHp:0}";
+            ? $"{boss.Type.Name}  ·  DEFEATED  ·  PARTS {Hub.CratesDropped - Hub.Crates.Count} / {Hub.CratesDropped}  ·  {Hub.ReturnReady} / {Hub.ReturnTotal} READY TO RETURN"
+            : $"{boss.Type.Name}  ·  LEVEL {Missions.Level}  ·  {boss.Hp:0} / {boss.MaxHp:0}";
         Txt.D(this, ThemeDB.FallbackFont, new Vector2(0, -8), title, HorizontalAlignment.Center, W, 13, Hub.MissionWon ? Ui.Good : Ui.Text);
         float frac = (float)Math.Clamp(boss.Hp / Math.Max(1, boss.MaxHp), 0, 1);
         // The hull stays RED whatever the palette does -- it is the one bar on screen that means

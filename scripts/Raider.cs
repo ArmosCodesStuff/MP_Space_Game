@@ -109,8 +109,9 @@ public partial class Raider : Node2D, IHittable
     }
     public bool Shivering => Net.Sim ? _shiver > 0 : (_netFlags & FlagShiver) != 0;
     // Roughly when an escort launched now would have its web on the target: the shiver, then the
-    // run in at boost speed. A PREDICTION, not a promise -- the pilot may shoot it down first,
-    // and the boss commits to its beam on this estimate either way.
+    // run in at boost speed. A PREDICTION, not a promise -- the pilot may shoot it down first. The
+    // Lancer charges on the actual pin; this is only its floor when every escort is shot down, and
+    // (plus a second, at most 5 s) its deadline when they neither pin nor die.
     public static double WebEta(float distance) => EscortShiver + distance / (Cruise * BoostMult);
     public bool Latched { get; private set; }
     public bool Boosting => Net.Sim ? _boostLeft > 0 : (_netFlags & FlagBoost) != 0;
