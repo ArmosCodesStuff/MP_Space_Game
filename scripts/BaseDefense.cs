@@ -5,8 +5,8 @@ using System.Linq;
 // heart. Host-simulated (its shots reach guests like every other shot); it fires only at
 // RAIDERS -- never at the practice dummies. Ranges are from the base's centre.
 //   LASER    5 DPS (2.5 every 0.5 s) at the nearest raider within 300 u
-//   MISSILE  every 5 s, 25 damage, tracking, 120 u/s (1.2x a capital ship's average top
-//            speed), at the nearest raider within 600 u
+//   MISSILE  every 5 s, 25 damage, tracking, 120 u/s (1.2x a raider's 100 u/s cruise), at the
+//            nearest raider within 600 u
 public partial class BaseDefense : Node2D
 {
     public const float LaserRange = 300f, MissileRange = 600f, MissileSpeed = 120f;

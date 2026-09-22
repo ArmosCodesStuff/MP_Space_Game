@@ -169,13 +169,21 @@ public partial class StatsWindow : CanvasLayer
         void D(string label, double v, string unit = "DPS") =>
             _derived.AddChild(Cell($"{label}:  {v:0.00} {unit}", false, false, acc));
         _derived.AddChild(Cell("DAMAGE", true));
-        if (s.Class == ShipClass.Battleship)
+        if (Classes.Guns(s.Class))
         {
             D("Per main barrel", s.MainDpsPerBarrel);
             D($"Main guns ({s["main_count"]:0} barrels)", s.MainDps);
             _derived.AddChild(Cell($"Salvo: {s["main_count"]:0} shots every {s["main_interval"]:0.00} s   ·   "
                                  + $"Staggered: 1 shot every {s.StaggerStep:0.00} s   (same rate)", false, false, acc));
-            D($"Missiles (magazine of {s["missile_mag"]:0}, averaged over a reload)", s.MissileDps);
+            if (Classes.Broadside(s.Class))
+            {
+                _derived.AddChild(Cell($"Broadside: {s["broadside_volleys"]:0} volleys × {s["main_count"]:0} shells × "
+                                     + $"{s["main_damage"] * s["broadside_mult"]:0.00} = {s.BroadsideDamage:0.0} damage, every {s.BroadsideCycle:0.0} s",
+                                       false, false, acc));
+                D("Broadside, averaged over its cycle", s.BroadsideDps);
+            }
+            if (Classes.Missiles(s.Class))
+                D($"Missiles (magazine of {s["missile_mag"]:0} bursts of {PlayerShip.BurstSides.Length}, averaged over a reload)", s.MissileDps);
         }
         else
         {
@@ -188,8 +196,8 @@ public partial class StatsWindow : CanvasLayer
         }
         D("Per PD turret (while firing)", s.PdDpsPerTurret);
         D($"PD sustained, if re-activated as soon as it recharges ({s.PdDuty * 100:0}% duty)", s.PdSustainedDps);
-        double total = s.MainDps + s.MissileDps + s.PdSustainedDps;
-        _derived.AddChild(Cell($"SUSTAINED TOTAL:  {total:0.00} DPS" + (s.Class == ShipClass.Carrier ? "  (+ fighter runs, + bomber strikes)" : ""), true, false, acc));
+        double total = s.MainDps + s.MissileDps + s.BroadsideDps + s.PdSustainedDps;
+        _derived.AddChild(Cell($"SUSTAINED TOTAL:  {total:0.00} DPS" + (Classes.Wing(s.Class) ? "  (+ fighter runs, + bomber strikes)" : ""), true, false, acc));
         _derived.AddChild(new Control { CustomMinimumSize = new Vector2(0, 8) });
 
         // ── every stat: base / added / bonus / final ──

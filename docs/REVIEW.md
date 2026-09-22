@@ -19,6 +19,29 @@ ticked only when it has been read line by line and everything found in it is fix
 4. Every finding is fixed at the source, covered by a check where it can be, and the whole suite runs
    again. Findings found while fixing go back on the list (recursively).
 
+## Pass 6 — slice 1 of the second batch: the broadside and the destroyer (done)
+
+The whole slice-1 diff read by five lenses at once -- multiplayer authority, replacement (nothing of
+the two-class or missile-battleship code left behind), gear and the save migration, gameplay edge
+cases, and the tests themselves -- every finding attacked by a refuter, then a completeness critic
+over what the five missed. 16 confirmed, 2 refuted; all 16 fixed:
+- **The burst's side missiles circled a close target** (a turning circle of ~107 u; inside
+  d < 2r·sin 70°, about 200 u, they orbit until their run ends): the fan now narrows to what the
+  missiles can turn through (`PlayerShip.BurstSplayFor`), checked by a burst at 150 u landing all three.
+- **An old key-bindings file could put fire mode and the broadside both on F** (fire mode moved onto F
+  used to push the missile to G, and the broadside took the default F): `Settings.Load` renames the
+  missile's key to the broadside's and drops the reload's, checked by loading such a file.
+- **A guest's broadside read READY between its own wind-up and the host's report**, its turrets dropping
+  back to their slow swing: every peer now moves on to the volleys at the wind-up's end.
+- The carrier's astern figures were rounded (24.27, 38.83): they are the exact fractions of its top
+  speed, and the check compares with the spec's expression, not the code's literal.
+- Comments still describing the battleship's missile, two classes, or the old figures (Torpedo, Shell,
+  Combat, MenuFoe, PlayerShip, Stats, Equipment, EquipmentWindow, Raider, BaseDefense, the smoke test);
+  `Game.cs`'s rule for bumping the save version (a renamed part is carried forward, not a new format);
+  the sweep stowing a part id that no longer exists.
+Refuted: the title-screen wait (already game time in the tree reviewed) and a fading-missile count
+(the geometry keeps every missile in flight longer than the check's window).
+
 ## Pass 5 — the owner's whole batch, reviewed again (done)
 
 The whole batch, with the first review's fixes and the reconnection and tutorial work, read again by

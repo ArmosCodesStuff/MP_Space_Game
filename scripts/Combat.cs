@@ -74,7 +74,7 @@ public static class Combat
     public static System.Action<Shell> ShellFired;
     public static System.Action<Torpedo> TorpedoFired;
 
-    // a battleship's shell: straight, and it hits the first hostile it touches
+    // a main-gun shell (battleship, destroyer): straight, and it hits the first hostile it touches
     public static void FireShell(Vector2 from, Vector2 dir, float speed, float range, double damage, PlayerShip source)
     {
         if (World == null) return;

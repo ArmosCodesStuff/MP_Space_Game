@@ -7,9 +7,11 @@ using Godot;
 // has no sensible value for it, and guessing one quietly is how a character ends up half in the
 // old world and half in the new. The message says so, and says the door is not closed.
 //
-// WHEN TO BUMP IT: whenever a release changes what a character file MEANS -- a new persisted
-// field, a changed unit, a renamed id, a rebalanced cost that invalidates what was bought. Not
-// for a visual change, a fix, or anything a save cannot notice.
+// WHEN TO BUMP IT: whenever a release changes what a character file MEANS in a way that cannot be
+// carried forward -- a new persisted field with no sensible default, a changed unit, a rebalanced
+// cost that invalidates what was bought. A part that is renamed or moves to another class is
+// carried forward instead (Equipment.Migrated), and needs no bump. Not for a visual change, a fix,
+// or anything a save cannot notice.
 public static class Game
 {
     public const int Version = 2;

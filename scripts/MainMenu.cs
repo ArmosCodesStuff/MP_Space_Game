@@ -11,21 +11,20 @@ using System.Linq;
 // It was a self-contained pile of sprites and structs so that no gameplay change could break
 // the menu -- but the cost was that the menu could show something the game does not do. The
 // ship here is a real PlayerShip with Demo set: the same turrets, the same shells, the same
-// missile, the same warp. What you see on the title screen is the battleship, or it is a bug in
+// broadside, the same warp. What you see on the title screen is the battleship, or it is a bug in
 // the battleship. The menu is a small WORLD now, so it registers hostiles and wires the Combat
 // hooks -- and drops all of it in _ExitTree, because every hook is a lambda holding this node.
 public partial class MainMenu : Node2D
 {
     // The display ship's own tuning. It is not a pilot's ship and it is not balanced against
     // anything: these are the numbers that make the scene read.
-    private const double MissileEvery = 5.0;          // its two missiles, on a five second reload
-    private const int MissileMag = 2;
+    private const double BroadsideEvery = 5.0;        // its broadside, back every five seconds
     private const double AoeEvery = 15.0, AoeWarn = 8.0;   // an area shot every 15 s, telegraphed for 8
     private const float AoeRadius = 260f, WarpHop = 500f;
     // It starts the jump with 4 s to go and the warp takes 3, so it lands ONE SECOND before the
     // shot arrives. Dodging by a whole second reads as a dodge; dodging by a frame reads as luck.
     private const double DodgeAt = 4.0;
-    private const double GunRange = 620, MissileRange = 900;
+    private const double GunRange = 620;
     // The diorama gets a camera, for the same reason the hub has one: the ships are drawn at the
     // size they really are, and at 1:1 a battleship is a smudge on a 2560-wide screen.
     //
@@ -44,7 +43,7 @@ public partial class MainMenu : Node2D
     private float _ring;
     // The first area shot is deliberately LATE. The establishing view of a title screen should be
     // the ship on station trading fire, not an empty patch of space it warped out of.
-    private double _t, _missileCd, _aoeCd = 16.0, _aoeLeft = -1;
+    private double _t, _broadsideCd, _aoeCd = 16.0, _aoeLeft = -1;
     private Vector2 _aoeAt;
     private bool _dodged;
     private readonly Random _rng = new(3);
@@ -125,14 +124,11 @@ public partial class MainMenu : Node2D
         // A ship is not a ship until Init.
         _cap.Init(Net.LocalId, _centre);
         // Retuned AFTER Init, because Init rebuilds the sheet from the class and would discard it.
-        // The magazine was loaded from the class figure a moment ago, so it reaches two on the
-        // first reload rather than starting there -- five seconds, on a title screen.
-        _cap.Stats.SetBase("missile_mag", MissileMag);
-        _cap.Stats.SetBase("missile_reload", MissileEvery);
+        _cap.Stats.SetBase("broadside_cooldown", BroadsideEvery);
         _cap.WarpHop = WarpHop;
         _cap.WarpEvery = AoeEvery - AoeWarn;      // ready again before the next area shot is called
 
-        // Its turrets, shells and missiles all go through Combat, exactly as in the hub.
+        // Its turrets and shells all go through Combat, exactly as in the hub.
         Combat.OnFlash = (a, b, c, snd) => { _shots.Add(new Shot { A = a, B = b, T = 0.15 }); Sfx.Laser(a, b, snd); };
         Combat.World = this;
 
@@ -252,15 +248,15 @@ public partial class MainMenu : Node2D
             }
         }
 
-        // ── guns and missiles ──
+        // ── guns and the broadside ──
         _cap.AimPoint = near?.GlobalPosition ?? _cap.Position + Vector2.Up.Rotated(_cap.Rotation) * 400f;
         _cap.Trigger = near != null && near.GlobalPosition.DistanceTo(_cap.Position) < GunRange;
 
-        _missileCd -= delta;
-        if (_missileCd <= 0 && near != null && near.GlobalPosition.DistanceTo(_cap.Position) < MissileRange)
+        _broadsideCd -= delta;
+        if (_broadsideCd <= 0 && near != null && near.GlobalPosition.DistanceTo(_cap.Position) < GunRange)
         {
-            _missileCd = 1.0;                       // retried every second; the magazine decides
-            _cap.UseAbility("missile", near.NetId);
+            _broadsideCd = 1.0;                     // retried every second; the cooldown decides
+            _cap.UseAbility("broadside", 0);
         }
     }
 

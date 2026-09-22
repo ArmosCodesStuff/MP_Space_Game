@@ -77,7 +77,7 @@ public partial class Raider : Node2D, IHittable
     public int Patrol;                                 // 0: on its own
     private float _orbit;                              // patrols: its angle round the perimeter
     private const double ShotEvery = 1.0;
-    private const float Cruise = 100f;                  // an unupgraded capital ship's pace
+    private const float Cruise = 100f;                  // under every capital ship's top speed (104 to 130)
     private const float BoostMult = 5f;                 // 500%
     private const double BoostTime = 3.0;
     public const float PinRange = 100f;

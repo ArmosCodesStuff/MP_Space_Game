@@ -75,6 +75,11 @@ public static class Settings
         Keys.Clear();
         if (c.HasSection("keys"))
             foreach (var k in c.GetSectionKeys("keys")) Keys[k] = (int)c.GetValue("keys", k, 0);
+        // The battleship's missile was its F ability and the broadside is now: a key a pilot gave
+        // the missile goes to the broadside (so a fire mode moved onto F never shares it), and the
+        // battleship's reload, which is gone, keeps no key.
+        if (Keys.Remove("Battleship.missile", out int missileKey)) Keys.TryAdd("Battleship.broadside", missileKey);
+        Keys.Remove("Battleship.reload");
     }
 
     // For scenes entered without the main menu (the editor's F6, the smoke test).

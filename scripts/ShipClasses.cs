@@ -3,10 +3,11 @@ using Godot;
 using System;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SHIP CLASSES — the first two of an intended nine.
+// SHIP CLASSES — the first three of an intended nine.
 //
-//   BATTLESHIP : main guns aimed with the cursor, a guided missile, plus PD
+//   BATTLESHIP : four main guns aimed with the cursor, a broadside of all of them, plus PD
 //   CARRIER    : fighters sent at the selected target, a bomber strike of its own, plus PD
+//   DESTROYER  : two main guns aimed with the cursor, guided missile bursts, plus PD; the fastest
 //   (the keys are the player's: see Abilities)
 //
 // Ported from Space Fleet Idle's capital ship, cut down to the initial layer.
@@ -18,7 +19,7 @@ using System;
 // renders what it is told. The owner decides only its heading, where it aims, and
 // whether it is pulling the trigger -- never what the shot hits.
 // ─────────────────────────────────────────────────────────────────────────────
-public enum ShipClass { Battleship, Carrier }
+public enum ShipClass { Battleship, Carrier, Destroyer }
 
 // What fired a laser, which decides which report is played. Not a volume: the level lives in
 // the file (see tools/gain.ps1), so a new kind of shot is a new sound rather than a new offset.
@@ -77,7 +78,11 @@ public partial class Turret : Node2D
     private bool Online => !PointDefense || Ship.PdActive;
 
     private ShipStats S => Ship.Stats;
-    private float RotSpeed => (float)(PointDefense ? S["pd_turn"] : S["main_turn"]);
+    // Through a broadside the main turrets swing fast enough to come round from anywhere onto the
+    // cursor within the wind-up (half a turn in its time), or at their own rate if that is faster.
+    private float RotSpeed => (float)(PointDefense ? S["pd_turn"]
+                                    : Ship.BroadsideTracking ? Math.Max(S["main_turn"], Math.PI / Math.Max(0.05, S["broadside_windup"]))
+                                    : S["main_turn"]);
     public float Range    => (float)(PointDefense ? S["pd_range"] : S["main_range"]);
     private double ShotDamage => PointDefense ? S["pd_damage"] : S["main_damage"];
     public double Interval   => PointDefense ? S["pd_interval"] : S["main_interval"];
@@ -176,13 +181,13 @@ public partial class Turret : Node2D
     }
 
     // One main-gun shot, along the barrel as it points RIGHT NOW: a SHELL, straight, at the guns'
-    // own shell speed, as far as their range. Host only. (Point defence never comes here: it fires
-    // from Tick, at what it has acquired.)
-    public void Shoot()
+    // own shell speed, as far as their range, at `mult` times a shell's damage (a broadside's
+    // multiple). Host only. (Point defence never comes here: it fires from Tick, at what it has acquired.)
+    public void Shoot(double mult = 1.0)
     {
         if (!Net.Sim) return;
         var dir = Vector2.Right.Rotated(GlobalRotation);
-        Combat.FireShell(GlobalPosition + dir * BarrelLength, dir, (float)S["shell_speed"], Range, ShotDamage, Ship);
+        Combat.FireShell(GlobalPosition + dir * BarrelLength, dir, (float)S["shell_speed"], Range, ShotDamage * mult, Ship);
     }
 
     // _angle is a WORLD angle, so it is applied as GlobalRotation; as a local

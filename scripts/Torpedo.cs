@@ -9,11 +9,10 @@ using System.Collections.Generic;
 // The host's copy deals the damage. Guests are sent the launch (from, heading) and
 // fly a cosmetic copy of their own: the run is deterministic, so it goes where the
 // host's goes and bursts in the same place, without streaming positions.
-// The battleship's missile is the same projectile with two differences: it is
-// BARELY guided (its heading turns toward its target at no more than TurnRate), and
-// it is HEAVY -- a slow bunker buster with a bigger body, darker smoke and a bigger
-// blast. Guests run the same guidance on the same positions, so their cosmetic
-// copy follows the host's.
+// A MISSILE is the same projectile with two differences: it is GUIDED (its heading turns
+// toward its target at no more than TurnRate), and it may be HEAVY -- the destroyer's
+// burst: a bigger body, darker smoke and a bigger blast. Guests run the same guidance on
+// the same positions, so their cosmetic copy follows the host's.
 public partial class Torpedo : Node2D, IHittable
 {
     public Vector2 Dir;
@@ -22,7 +21,7 @@ public partial class Torpedo : Node2D, IHittable
     public bool Cosmetic;             // a guest's copy: draws and bursts, never damages
     public int TargetId;              // 0 = unguided
     public float TurnRate;            // rad/s the heading may turn toward the target
-    public bool Heavy;                // the bunker buster's look
+    public bool Heavy;                // the destroyer's missile's look
     public bool HostileFire;          // fired by an enemy: seeks and hits player ships
     public PlayerShip Source;         // who fired it (host copy only): a hit counts as their combat
 
@@ -73,7 +72,7 @@ public partial class Torpedo : Node2D, IHittable
         {
             var tgt = TurnRate > 0 && TargetId != 0 ? (HostileFire ? Combat.PlayerById(TargetId) : Combat.ById(TargetId)) : null;
             if (tgt != null)
-            {   // barely guided: the nose creeps toward the target, never snaps
+            {   // guided: the nose turns toward the target at TurnRate, never snaps
                 float want = (tgt.Position - GlobalPosition).Angle(), have = Dir.Angle();
                 float turn = Mathf.Clamp(Mathf.AngleDifference(have, want), -TurnRate * dt, TurnRate * dt);
                 Dir = Dir.Rotated(turn);
@@ -121,7 +120,7 @@ public partial class Torpedo : Node2D, IHittable
         if (!_spent)
         {
             if (Heavy)
-            {   // the bunker buster: long and slim (6.4 x 32.5), a sharp nose, swept fins, a band and a seam
+            {   // the heavy missile: long and slim (6.4 x 32.5), a sharp nose, swept fins, a band and a seam
                 var body = new Color(0.58f, 0.60f, 0.56f); var dark = new Color(0.30f, 0.31f, 0.29f);
                 DrawRect(new Rect2(-3.2f, -12f, 6.4f, 26f), body);
                 DrawColoredPolygon(new[] { new Vector2(-3.2f, -12f), new Vector2(0, -19.5f), new Vector2(3.2f, -12f) }, new Color(0.85f, 0.25f, 0.2f));

@@ -345,12 +345,16 @@ public partial class Hub : Node2D
                               float podX, float podY, float podRot, bool warping) =>
         ShipOf(Multiplayer.GetRemoteSenderId())?.ApplyState(px, py, vx, vy, rot, ax, ay, trigger, staggered, podX, podY, podRot, warping);
     public void SendHostState(int owner, double hp, double maxHp, bool alive, double stasis, bool pinned, double combat, double pdLeft, double pdRecharge,
-                              int mag, double reload, int wingTarget, Vector2[] wingPos, float[] wingRot, int[] wingState, float[] wingRearm) =>
-        Rpc(nameof(NetHostState), owner, hp, maxHp, alive, stasis, pinned, combat, pdLeft, pdRecharge, mag, reload, wingTarget, wingPos, wingRot, wingState, wingRearm);
+                              int mag, double reload, double bsWindup, int bsVolleys, double bsCooldown,
+                              int wingTarget, Vector2[] wingPos, float[] wingRot, int[] wingState, float[] wingRearm) =>
+        Rpc(nameof(NetHostState), owner, hp, maxHp, alive, stasis, pinned, combat, pdLeft, pdRecharge, mag, reload, bsWindup, bsVolleys, bsCooldown,
+            wingTarget, wingPos, wingRot, wingState, wingRearm);
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
     private void NetHostState(int owner, double hp, double maxHp, bool alive, double stasis, bool pinned, double combat, double pdLeft, double pdRecharge,
-                              int mag, double reload, int wingTarget, Vector2[] wingPos, float[] wingRot, int[] wingState, float[] wingRearm) =>
-        ShipOf(owner)?.ApplyHostState(hp, maxHp, alive, stasis, pinned, combat, pdLeft, pdRecharge, mag, reload, wingTarget, wingPos, wingRot, wingState, wingRearm);
+                              int mag, double reload, double bsWindup, int bsVolleys, double bsCooldown,
+                              int wingTarget, Vector2[] wingPos, float[] wingRot, int[] wingState, float[] wingRearm) =>
+        ShipOf(owner)?.ApplyHostState(hp, maxHp, alive, stasis, pinned, combat, pdLeft, pdRecharge, mag, reload, bsWindup, bsVolleys, bsCooldown,
+                                      wingTarget, wingPos, wingRot, wingState, wingRearm);
     public void SendShield(int owner, float side) => Rpc(nameof(NetShield), owner, side);
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
     private void NetShield(int owner, float side) => ShipOf(owner)?.ApplyShield(side);

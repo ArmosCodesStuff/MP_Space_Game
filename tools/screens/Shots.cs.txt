@@ -208,6 +208,7 @@ public partial class _Shots : Node
             await W(0.6); await Snap("33_free_camera_zoomed_out");
             hub.ToggleFreeCamera(); hub.SetZoom(Hub.DefaultZoom); await W(1.5);
         }
+        await Close(ShipClass.Destroyer, "9d_destroyer_closeup");
         await Close(ShipClass.Battleship, "9_battleship_closeup");
         // warp: the charge building, then the flash where it lands (and the hull bar's WARP readout)
         {
@@ -304,11 +305,11 @@ public partial class _Shots : Node
             H.ToggleEquipment(); await W(0.2);
         }
         // ...and with boss drops: an Epic shield fitted (its name in the Epic colour, its effects in
-        // words), and a hold of both classes' parts, some of them doubled
+        // words), and a hold of every class's parts, some of them doubled
         {
             var bl = Character.LoadoutFor(Character.Class); var keep = (string[])bl.Clone();
             bl[2] = "sh_glass_3"; bl[6] = "chip_combat_2";
-            foreach (var id in new[] { "bs_heavy_2", "bs_seeker_3", "drv_racing_1", "sh_bulwark_3", "fr_flak_1", "chip_target_1", "chip_target_1", "cv_elite_3", "cv_widebay_2" })
+            foreach (var id in new[] { "bs_heavy_2", "dd_seeker_3", "bs_barrage_2", "drv_racing_1", "sh_bulwark_3", "fr_flak_1", "chip_target_1", "chip_target_1", "cv_elite_3", "cv_widebay_2" })
                 Character.Stow(id);
             P(H, "ApplyLocalIdentity"); H.ToggleEquipment(); await W(0.4);
             await Snap("58_equipment_hold");
@@ -362,20 +363,27 @@ public partial class _Shots : Node
             await Snap("54_shells_in_flight");
             zp.SetValue(H, z0); await W(1.5);
         }
-        // the player's missile, close up: the camera rides a stand-in over it
+        // the destroyer's missile burst: three off the nose, the outer two launched wide and curving in;
+        // then one missile close up (the camera rides a stand-in over it)
         {
+            Character.Class = ShipClass.Destroyer; P(H, "ApplyLocalIdentity"); await W(0.3);
             var ms = H.GetNode<PlayerShip>("Ship_1"); var md = H.GetNode<TargetDummy>("TargetDummy1");
             ms.Position = md.Position + new Vector2(0, 700); ms.Velocity = Vector2.Zero; ms.Rotation = 0f; await W(0.8);
             typeof(Hub).GetField("_selected", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).SetValue(H, md);
-            ms.UseAbility("missile", md.NetId); await W(0.5);
+            var zp = typeof(Hub).GetProperty("ZoomLevel"); float z0 = (float)zp.GetValue(H); zp.SetValue(H, 1.4f);
+            ms.UseAbility("missile", md.NetId); await W(0.9);
+            await Snap("43_missile_burst");
+            zp.SetValue(H, z0);
             var mt = H.GetChildren().OfType<Torpedo>().FirstOrDefault(x => x.Heavy);
             if (mt != null)
             {
                 ms.Visible = false; GetViewport().GetCamera2D().Zoom = new Vector2(5f, 5f);
                 for (int i = 0; i < 20; i++) { ms.Position = mt.GlobalPosition; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
-                await Snap("43_missile_closeup");
+                await Snap("43b_missile_closeup");
                 ms.Visible = true; GetViewport().GetCamera2D().Zoom = new Vector2(0.9f, 0.9f);
             }
+            await W(3.0);
+            Character.Class = ShipClass.Battleship; P(H, "ApplyLocalIdentity"); await W(0.3);
         }
         // a shield hit on each of the four sides, then stasis with the escape pod out
         {
@@ -437,24 +445,29 @@ public partial class _Shots : Node
             // K window: waiting for a key, then a reserved key refused
             await Class(ShipClass.Battleship);
             Key(global::Godot.Key.K); await W(0.3);
-            var kw = N<StatsWindow>().First(); kw.ShowPane(true); kw.StartCapture("missile"); await W(0.2);
+            var kw = N<StatsWindow>().First(); kw.ShowPane(true); kw.StartCapture("broadside"); await W(0.2);
             await Snap("21_k_capture");
             Key(global::Godot.Key.W); await W(0.2); await Snap("21b_k_reserved_refused");
             Key(global::Godot.Key.K); await W(0.2);
 
-            // battleship: missile in flight and landing; the bar with an empty magazine, PD, reload
+            // battleship: the broadside -- the turrets swinging onto the cursor, then a volley in flight;
+            // the bar with the broadside cooling down and PD on
             sel.SetValue(hub, d1);
             await Frame(d1.Position + new Vector2(-120, 520), 1.3f, false);
-            Key(global::Godot.Key.F); await W(1.4); await Snap("22_missile_in_flight");
-            var launchSpot = Me().Position;
-            await Frame(d1.Position + new Vector2(0, 110), 1.3f);          // watch the target, not the launcher
-            double t0 = d1.Total;
-            for (int i = 0; i < 900 && d1.Total == t0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            await W(0.08); await Snap("22b_missile_impact");
-            await Frame(launchSpot, 1.3f, false);
-            await W(0.7); Key(global::Godot.Key.F); await W(0.3); Key(global::Godot.Key.Q); await W(0.4);
-            await Snap("23_bar_battleship_empty_pd");
-            Key(global::Godot.Key.R); await W(3.0); await Snap("23b_bar_reloading");
+            void Cursor(Vector2 w) => Input.WarpMouse(GetViewport().GetFinalTransform() * (GetViewport().GetCanvasTransform() * w));
+            Cursor(Me().Position + new Vector2(260, 160)); await W(2.5);      // the turrets swung well away first
+            Cursor(d1.Position);
+            Key(global::Godot.Key.F); await W(0.25); await Snap("22_broadside_aiming");
+            await W(0.45); await Snap("22b_broadside_volley");
+            await W(0.8); Key(global::Godot.Key.Q); await W(0.4);
+            await Snap("23_bar_battleship_cooldown_pd");
+            // destroyer: the magazine spent, then reloading
+            await Class(ShipClass.Destroyer);
+            await Frame(d1.Position + new Vector2(-120, 520), 1.3f, false);
+            sel.SetValue(hub, d1);
+            Key(global::Godot.Key.F); await W(0.8); Key(global::Godot.Key.F); await W(0.8);
+            await Snap("23b_bar_destroyer_empty");
+            Key(global::Godot.Key.R); await W(3.0); await Snap("23c_bar_destroyer_reloading");
             hub.BeginPlacement("TEST", _ => { });
             Input.WarpMouse(GetViewport().GetFinalTransform() * (GetViewport().GetCanvasTransform() * (Me().Position + new Vector2(160, -120))));
             await W(0.3); await Snap("24_placement_ring");

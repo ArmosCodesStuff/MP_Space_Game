@@ -2,7 +2,7 @@ using Godot;
 using System.Linq;
 
 // EQUIPMENT (I): the parts on the pilot's CURRENT ship -- five core slots and five chips -- beside
-// the HOLD: every part this pilot owns and has not fitted, for either class (bosses drop them; see
+// the HOLD: every part this pilot owns and has not fitted, for any class (bosses drop them; see
 // Loot). FIT puts a part from the hold on the ship and the part it replaces goes into the hold;
 // UNEQUIP takes a chip off into the hold. A core slot is never empty. Each class keeps its own
 // loadout; the hold is the pilot's. Only this pilot sees any of it: gear is per pilot, like the
@@ -54,7 +54,7 @@ public partial class EquipmentWindow : PanelContainer
             _ship.AddChild(Ui.CardWrap(PartRow($"Chip_{k}", $"CHIP {k + 1}", l[slot], cls, off)));
         }
 
-        // THE HOLD: this class's parts first, in slot order, rarest first; then the other class's,
+        // THE HOLD: this class's parts first, in slot order, rarest first; then other classes' parts,
         // named but not fittable here.
         int total = Character.GearHold.Values.Sum();
         _hold.AddChild(Ui.Heading(total > 0 ? $"Hold  ·  {total} part{(total == 1 ? "" : "s")}" : "Hold  ·  empty"));

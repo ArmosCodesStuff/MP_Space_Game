@@ -101,7 +101,8 @@ receiving end stops any peer shoving another's ship around.
 target NetId)`); the host checks the sender owns that ship before doing anything. The owner's aim
 point, guns key and fire mode ride along with its position at 20 Hz; the host fires the guns from
 them. The host sends back, at 10 Hz per ship: hull, PD window and recharge, missile magazine and
-reload, the fighters' target, and every wing craft's position and state. It also sends hit flashes,
+reload, the broadside's wind-up, volleys left and cooldown, the fighters' target, and every wing
+craft's position and state. It also sends hit flashes,
 the dummies' readouts, and each torpedo launch — guests fly a cosmetic copy of a torpedo, since its
 run is straight and steady.
 
@@ -365,26 +366,44 @@ Recorded here so every chunk builds from the written word, not from memory.
 
 ## Ship classes
 
-Nine planned, three to a page in the selector, **two flyable**. The selector, save format and UI are
-built for nine from the start rather than widened later. A class without its own abilities yet shows
-"placeholder" as its controls line. **Class is chosen in the creator only** — there are no class
-hotkeys (the developer removed 1/2).
+Nine planned, three to a page in the selector, **three flyable** (page 1: battleship, carrier,
+destroyer). The selector, save format and UI are built for nine from the start rather than widened
+later. A class without its own abilities yet shows "placeholder" as its controls line. **Class is
+chosen in the creator only** — there are no class hotkeys (the developer removed 1/2).
 
-| | Hull | Length | Main guns | PD turrets | Wing | Sprite |
-|---|---|---|---|---|---|---|
-| **Battleship** | 300 | 224 u | 4 × 1.5 DPS | 2 (slow, τ/3) | — | `battleship_hull.png` |
-| **Carrier** | 200 | 170 u | — | 3 (fast, τ/1.2) | 4 fighters + 2 bombers | `carrier_player.png` |
+| | Hull | Length | Top speed | Main guns | Its F | PD turrets | Wing | Sprite |
+|---|---|---|---|---|---|---|---|---|
+| **Battleship** | 300 | 224 u | 104 u/s | 4, 5.9 a shell | broadside | 2 (slow, τ/3) | — | `battleship_hull.png` |
+| **Carrier** | 200 | 170 u | 116.48 u/s | — | bomber strike | 3 (fast, τ/1.2) | 3 fighters + 2 bombers | `carrier_player.png` |
+| **Destroyer** | 250 | 201.6 u | 130 u/s | 2, 5.9 a shell | missile burst | 2 (slow, τ/3) | — | `destroyer_hull.png` |
 
-**Damage**: main gun 1.5 per shot per second · PD 1.0 DPS per turret · fighter 0.5 DPS · torpedo 3 ·
-missile 5. Every number lives in **`ShipStats`** (`Stats.cs`); turrets, wings and helm read it and
-the K window prints the same object, so the two cannot drift. Stat = base × (1 + bonus); reload,
-cooldown and radius bonuses divide. Bonuses are saved per character; nothing grants them yet.
+**Damage**: main gun 5.9 a shell, one a second per barrel · PD 0.5 every 0.5 s per turret · fighter 2
+every 0.35 s · torpedo 15 · missile 5 (three to a burst). Every number lives in **`ShipStats`**
+(`Stats.cs`); turrets, wings and helm read it and the K window prints the same object, so the two
+cannot drift. Stat = base × (1 + bonus); reload, cooldown and radius bonuses divide. Bonuses are
+saved per character; nothing grants them yet.
+
+**A class is asked what it carries, never "is it the battleship".** `Classes.Guns` (battleship,
+destroyer: cursor-aimed main turrets), `Classes.Broadside` (battleship), `Classes.Missiles`
+(destroyer: a magazine of bursts), `Classes.Wing` (carrier: fighters and bombers). The stat sheet adds
+each group of rows only for the classes that carry it (a row a class lacks reads 0), and every per-class
+figure is one `V(battleship, carrier, destroyer)`. A fourth class is a line in each of those, not a hunt
+for two-way tests.
+
+**The destroyer's art is generated**, not drawn: `tools/make_destroyer.ps1` squeezes the battleship's
+repaired hull to 75% of its beam and 90% of its length on a 270 px canvas (the battleship's own
+0.7467 u/px), keeps the bow and stern turret mounts, and paints missile-pod banks where the inner two
+stood and on the sponsons, in the hull's own blue-greys so the pilot's colour tints them like the rest.
+Every mount is the battleship's scaled the same way; the turrets are drawn at 0.9 of the battleship's.
 
 ### The helm: capital ships handle like naval ships
 
 The developer's call: *no strafing, a turning radius, move as if in a medium* — and *slow*: speeds
 and accelerations are 40% of their first values, with radii set so the full-speed turn is 20% faster
-than it was (battleship 104 u/s on a 107 u radius, carrier 96 u/s on 127 u). W is ahead, S astern
+than it was. Battleship 104 u/s on a 107 u radius; the **destroyer is the fastest**, 130 u/s (+25%) on
+the same radius, its accelerations and astern speed the battleship's ×1.25; the carrier 116.48 u/s
+(+12% of the battleship) on 127 u, its accelerations and astern speed the same fractions of its top
+speed as ever (a half, 5/24, a third), so each class gets under way on its own clock. W is ahead, S astern
 (weaker), A/D the rudder. Thrust only ever acts along the keel. Velocity is split into along-keel
 and across-keel parts: water drag slows both, and the **keel** kills sideways drift within a fraction
 of a second, so the ship goes where it points. Yaw rate is **speed ÷ turning radius**, capped by the
@@ -401,13 +420,17 @@ remaps them: click the key, press a new one. A key another ability holds is **sw
 duplicated; the fixed keys (W A S D, Tab, K, C, Esc, Enter) are refused. Bindings are per class and
 belong to the machine (`settings.cfg`, section `keys`, only changed keys stored).
 
-| Battleship | default | Carrier | default |
-|---|---|---|---|
-| Main guns (hold) | Space | Fighters: attack | Space |
-| Fire mode (salvo/staggered) | V | Fighters: recall | R |
-| Missile | F | Bomber strike | F |
-| Reload missiles | R | Point defence | Q |
-| Point defence | Q | | |
+| Battleship | default | Destroyer | default | Carrier | default |
+|---|---|---|---|---|---|
+| Main guns (hold) | Space | Main guns (hold) | Space | Fighters: attack | Space |
+| Fire mode (salvo/staggered) | G | Fire mode | G | Fighters: recall | R |
+| Broadside | F | Missile burst | F | Bomber strike | F |
+| Point defence | Q | Reload missiles | R | Point defence | Q |
+| | | Point defence | Q | | |
+
+A binding saved for an ability that has since changed id is carried over when the settings load
+(`Settings.Load`): the battleship's `missile` key becomes its `broadside` key, so a pilot who had moved
+fire mode onto F never finds two abilities on it, and its `reload`, which is gone, keeps none.
 
 - **Main guns** swing toward the cursor at τ/4 and fire, while the key is held, along wherever each
   barrel points — a fast flick fires wide. Reach 720 u. **Salvo** fires every barrel once per reload;
@@ -418,21 +441,37 @@ belong to the machine (`settings.cfg`, section `keys`, only changed keys stored)
   recharge. While active, **each turret picks and tracks its own target** — the nearest in range
   that no sibling turret has claimed, else the nearest — so a group gets spread across. Battleship
   mounts swing slowly (τ/3); the carrier's fast (τ/1.2). 460 u reach, 8° firing cone.
-- **Missiles** come in a magazine of 2 with 0.6 s between shots; **R** reloads it (16 s, nothing
-  fires meanwhile). Each is a **bunker buster**: a heavy round launched off the nose at the target
-  (the selection if in range, else the nearest) at a slow **130 u/s**, and only **barely guided** —
-  its heading turns toward the target at no more than **0.35 rad/s**, so a target that moves early
-  enough gets out from under it. It shares `Torpedo.cs` with the bombers' torpedoes (which have no
-  guidance at all); guests fly a cosmetic copy with the same guidance.
+- **The broadside (battleship, F).** A **0.5 s wind-up** in which every main turret swings onto the
+  cursor — fast enough to come round from anywhere in time (half a turn in the wind-up, or their own
+  τ/4 if that is faster) — then **three volleys of every main gun, 0.25 s apart**, each shell a normal
+  shell, then a **10 s cooldown**. The ship steers throughout; nothing about it touches the helm. The
+  host fires it (`PlayerShip.TickAbilities`, `Turret.Shoot(mult)`), along each barrel as it points —
+  the aim is the owner's cursor as it last reached the host. Guests count the wind-up down themselves
+  and show the volleys from its end until the host's report says how many are left, so the bar and
+  the turrets' fast swing never drop back to READY in between. 3 × 4 × 5.9 = 70.8 damage every 11 s:
+  6.44 DPS on top of the guns' 23.6. Its gear (the battleship's utility slot): Heavy (×1.4 shells,
+  longer cooldown), Rapid (cooldown +50% rate, ×0.75 shells), Barrage (+1/+2/+3 volleys, slower wind-up
+  and cooldown), Snap (a wind-up twice as fast, one volley fewer).
+- **The missile burst (destroyer, F).** A magazine of **2 bursts**, 0.6 s apart; **R** reloads it (16 s,
+  nothing fires meanwhile). A burst is **three guided missiles** off the nose — one straight at the
+  target, two launched **up to 70°** either side that curve in — at 160 u/s, turning 1.5 rad/s, 5 damage
+  each. It needs a selected target in range (900 u); the slot says why when it refuses. **Close in, the
+  fan narrows**: a missile heading θ off a target d away can only come round onto it if d > 2r·sin θ
+  (r = speed ÷ turn, ~107 u); inside that it circles the target until its run ends. So the side angle is
+  the widest that still converges with a 0.8 margin (`PlayerShip.BurstSplayFor`) — the full 70° from
+  about 250 u out on the kit's rack, and it follows the gear (a Buster Rack turns wider). Missiles share
+  `Torpedo.cs` with the bombers' torpedoes (which have no guidance at all); guests fly a cosmetic copy
+  with the same guidance.
 - **Fighters** (17 u) hold orbit until **attack** sends them at the selected target; they fight
-  while it is within the 1400 u control range. They fly in bursts: after **15 s of firing** a
+  while it is within the 1080 u control range. They fly in bursts: after **15 s of firing** a
   fighter returns to the **carrier's centre for a 3 s rest**, then rejoins. **R** recalls them.
 - **Bombers wait docked** on the carrier's flanks, alternating port and starboard so the sides always
   split evenly (6 → 3 + 3), and rearm there (6 s). **Bomber strike** sends them at the target if it
-  is within the **strike range, defined as twice the fighters' control range** (2800 u; it takes the
-  same bonus). Bombers are 37.5 u. At launch distance (**567 u**) each swings its nose onto the target
-  and launches 4 torpedoes straight ahead **while still closing slowly** (never quite stopped),
-  then flies back to its own dock. Torpedoes run at **120 u/s** out to **1215 u**. A strike whose target goes out of range
+  is within the **strike range, defined as twice the fighters' control range** (2160 u; it takes the
+  same bonus). Bombers are 28.1 u. At launch distance (**283.5 u**: close, because the torpedoes do not
+  track) each swings its nose onto the target and launches 4 torpedoes straight ahead **while still
+  closing slowly** (never quite stopped), then flies back to its own dock. Torpedoes run at
+  **112.5 u/s** out to **1215 u**. A strike whose target goes out of range
   is called off. `PlayerShip.DockSlot` computes the slots; `ClassArt.DockX/DockY/DockSpacing` place
   them (wingtips just meeting the engine pods).
 - **Six open hotkeys** (1–6 by default) follow every class's own abilities, for every class. They
@@ -465,14 +504,16 @@ every hostile needs a `NetId` that is the same on every peer (the dummies are 10
 
 ### Balance on paper
 
-| | Sustained DPS, if everything hits | Kills the other in |
+| | Sustained DPS, on the kit without chips, if everything hits | |
 |---|---|---|
-| Battleship | 7.60 (6.0 main + 1.0 PD at 50% duty + 0.60 missiles) | 26.3 s |
-| Carrier | ≈ 3.5 (1.5 PD + ≈0.8 fighters on strafing runs + ≈1.2 torpedoes) | ≈ 86 s |
+| Battleship | 31.0 (23.6 guns + 6.44 broadside + 1.0 PD at 50% duty) | the K window's figures |
+| Destroyer | 14.6 (11.8 guns + 1.81 missile bursts + 1.0 PD) | the fastest, and 250 hull |
+| Carrier | ≈ 20.6 (19.07 **measured**: fighters and bombers on a dummy for 90 s, + 1.5 PD) | reaches 1.5× as far |
 
-⚠ **The battleship wins by about 3.3×**, and more in practice: torpedoes are unguided. Recorded
-rather than quietly patched. Levers, each a one-line change in `Stats.cs`: eight fighters instead of
-four; fighters at 1.0 DPS; two main barrels instead of four; carrier hull at 300.
+⚠ **The broadside puts the battleship at about 1.6× the carrier**, where its guns alone were 1.24×; the
+destroyer trades damage for pace and a burst that cannot be dodged by a turn. Recorded rather than
+quietly patched: the levers are `broadside_cooldown`, `broadside_volleys` and `missile_damage` in
+`Stats.cs`, each one number.
 
 The **three target dummies** in the hub are the test bench: hostile, harmless, unkillable, each
 reporting damage per second. The meter restarts itself on the first hit after 5 s without one.
@@ -520,9 +561,13 @@ piece of player state that is **not** host-owned — it is identity, not a resou
   because edits apply as you make them.
 - The class selector runs three pages of three
 - **Save format 2** (`Game.Version`): the file also carries the pilot's **hold** (every part owned and
-  not fitted, for either class), **unclaimed loot** (dropped at a kill, not yet flown over), and the
+  not fitted, for any class), **unclaimed loot** (dropped at a kill, not yet flown over), and the
   **hints** seen with the tutorial's off switch. A file from another format is greyed out, never
-  repaired. Things that come in runs (loot pickups, hints) save through `Character.SaveSoon`: 2.5 s
+  repaired. **A part that is renamed or changes class is carried forward, not a new format**:
+  `Character.Load` reads every part id through `Equipment.Migrated` (the battleship's missile rack and
+  its four rack lines are the destroyer's now, `bs_*` → `dd_*`), and a fitted part that no longer fits
+  its slot goes into the hold -- on the owner's own file only; the host still sanitises a guest's
+  claimed loadout strictly. Things that come in runs (loot pickups, hints) save through `Character.SaveSoon`: 2.5 s
   after the last call, written at once on leaving or switching pilot.
 
 ## Gear, loot, the tutorial and reconnection (the owner's batch of 2026-09-21)
@@ -665,6 +710,23 @@ where the editor cannot delete it.*
   scene at the end of the frame, so code waiting for "home" that reads the new world must wait for
   it to be built (`H.Yard != null && H.IsNodeReady()`). A check read a guest's file in between and
   saw loot the new world had not yet claimed.
+- **The typecheck does not compile the harnesses.** `typecheck.ps1` checks `scripts/*.cs`; the smoke
+  test and the sweep (`tools/*/*.cs.txt`) are compiled only inside an engine run, so a typo in a
+  check costs a whole run to find. Compile them first: `scripts/*.cs` plus both `.cs.txt` files (as
+  `.cs`) with `csc` against `typecheck/GodotSharp.dll` -- the same command line `typecheck.ps1` builds,
+  seconds rather than minutes. A local declared in a new `{ }` block that reuses a name the method
+  declares elsewhere (CS0136) is the usual catch.
+- **A wall-clock wait is not a game-time wait.** `Wait(s)` is a `SceneTree` timer (game seconds); a
+  loop on `Time.GetTicksMsec()` measures real seconds, and the headless run does not keep the two in
+  step. A check that the title ship flew home in "8 s" failed at 366 u when its wait was rewritten as a
+  real-time loop. Poll inside `CreateTimer(s)` (`while (timer.TimeLeft > 0)`) to watch during a
+  game-time wait.
+- **A class is asked what it carries** (`Classes.Guns` / `Broadside` / `Missiles` / `Wing`), never
+  compared with one class. The two-class code tested `== Battleship` in some thirty places, and a third
+  class quietly took the battleship's branch (or the carrier's `else`) in every one of them.
+- **A renamed id is carried forward, not a new save format.** Bumping `Game.Version` greys out every
+  pilot. A part id that changes goes through `Equipment.Migrated`; a key binding whose ability changed
+  id is renamed in `Settings.Load`. Both have a check that loads a file written the old way.
 - **Static fields start in the order they are written.** `Equipment.All = Build().ToArray()` reads
   `Scale`, `Suffix`, `Ranges` and `None`; declared below it, they are null when it runs.
 - **A const named like a Godot method hides it.** `Hints.Show` hid `CanvasLayer.Show()` (warning

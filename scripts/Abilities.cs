@@ -6,8 +6,8 @@ using System.Linq;
 // ABILITIES — what each class can do, and which key does it.
 //
 // Every class action is an ability with an id, a default key, and a kind:
-//   Press : fires once when the key goes down (missile, recall, activate PD)
-//   Hold  : active while the key is held (the battleship's main guns)
+//   Press : fires once when the key goes down (broadside, missile, recall, activate PD)
+//   Hold  : active while the key is held (the main guns)
 // The ability bar shows them in order; the K window remaps them. Bindings are
 // per class and saved with this MACHINE's settings (Settings), not the character:
 // they are how this keyboard is set up, not who you are.
@@ -34,8 +34,19 @@ public static class Abilities
                              Blurb = "Hold to fire. The barrels aim at the cursor and swing slowly." },
             new AbilityDef { Id = "firemode", Name = "Fire mode",     Short = "MODE",   Default = Key.G,
                              Blurb = "Salvo (all barrels at once) or staggered (one at a time). Same rate." },
-            new AbilityDef { Id = "missile",  Name = "Missile",       Short = "MSL",    Default = Key.F,
-                             Blurb = "A slow bunker buster, barely guided. Needs a selected target in range. Uses the magazine." },
+            new AbilityDef { Id = "broadside", Name = "Broadside",    Short = "BROADSIDE", Default = Key.F,
+                             Blurb = "The turrets swing onto the cursor, then every main gun fires three volleys. The ship steers throughout." },
+            new AbilityDef { Id = "pd",       Name = "Point defence", Short = "PD",     Default = Key.Q,
+                             Blurb = "Opens a firing window; each turret picks and tracks its own target. Recharges after." },
+        },
+        [ShipClass.Destroyer] = new[]
+        {
+            new AbilityDef { Id = "guns",     Name = "Main guns",     Short = "GUNS",   Kind = AbilityKind.Hold, Default = Key.Space,
+                             Blurb = "Hold to fire. The barrels aim at the cursor and swing slowly." },
+            new AbilityDef { Id = "firemode", Name = "Fire mode",     Short = "MODE",   Default = Key.G,
+                             Blurb = "Salvo (both barrels at once) or staggered (one at a time). Same rate." },
+            new AbilityDef { Id = "missile",  Name = "Missile burst", Short = "MSL",    Default = Key.F,
+                             Blurb = "Three guided missiles: one at the target, two launched wide that curve in. Needs a selected target in range. Uses the magazine." },
             new AbilityDef { Id = "reload",   Name = "Reload missiles", Short = "RELOAD", Default = Key.R,
                              Blurb = "Refills the missile magazine. Nothing fires while it runs." },
             new AbilityDef { Id = "pd",       Name = "Point defence", Short = "PD",     Default = Key.Q,
@@ -127,6 +138,7 @@ public static class Abilities
     // concatenation allocated a new string each time for text that only moves on a refit.
     private static readonly string BattleshipHint = "BATTLESHIP  ·  mouse aims the main guns  ·  " + CommonHint;
     private static readonly string CarrierHint    = "CARRIER  ·  " + CommonHint;
+    private static readonly string DestroyerHint  = "DESTROYER  ·  mouse aims the main guns  ·  " + CommonHint;
 
     public static string ControlsHint(ShipClass c)
     {
@@ -134,6 +146,7 @@ public static class Abilities
         {
             ShipClass.Battleship => BattleshipHint,
             ShipClass.Carrier    => CarrierHint,
+            ShipClass.Destroyer  => DestroyerHint,
             _ => "placeholder",
         };
     }

@@ -1,7 +1,7 @@
 using Godot;
 
-// A BATTLESHIP SHELL: the main guns' round. It flies straight -- no tracking -- at the guns'
-// shell speed (520 u/s; its own stat, so a missile rack cannot change the guns), as far as the
+// A MAIN-GUN SHELL (battleship, destroyer): the main guns' round. It flies straight -- no tracking --
+// at the guns' shell speed (520 u/s; its own stat, so no other weapon's gear changes it), as far as the
 // guns' range, and hits the first hostile it touches
 // (never a missile: that is point defence's job). The host's shell does the damage; guests
 // fly a cosmetic copy. Its path is swept in short steps each frame, so it cannot pass

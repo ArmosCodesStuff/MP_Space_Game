@@ -28,7 +28,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
     public Color Main = Character.Defaults.Main, Accent = Character.Defaults.Accent;
 
     // A DISPLAY SHIP: the title screen's battleship. It is a real PlayerShip -- the same
-    // turrets, shells, missiles and warp -- but nobody is flying it, so it reads no keyboard and
+    // turrets, shells, broadside and warp -- but nobody is flying it, so it reads no keyboard and
     // no mouse. Whatever drives it sets AimPoint, Trigger and AutopilotTo itself.
     public bool Demo;
 
@@ -116,6 +116,16 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
             Pds = new Vector2[] { new(-5.78f, 8.04f), new(5.78f, 8.04f), new(0f, 18.76f) },
             PdTurret = "res://turret_carrier.png", TurretTexScale = 0.2013f,
             PdBarrel = 3.7f, PdRing = 2.9f },
+        // Destroyer, 201.6 u: the battleship's hull at 75% of its beam and 90% of its length, on a
+        // 270 px canvas (the battleship's 0.7467 u/px). Only the bow and stern turrets are kept;
+        // missile pods are painted where the inner two stood. Every mount is the battleship's,
+        // scaled the same way (x by 0.75, y by 0.9), and the turrets at 0.9 of its size.
+        [ShipClass.Destroyer] = new ClassArt {
+            Texture = "res://destroyer_hull.png", Length = 201.6f, HalfWidth = 30f,
+            Mains = new Vector2[] { new(0.31f, -58.87f), new(0.29f, 68.61f) },
+            Pds   = new Vector2[] { new(-24.94f, 0.41f), new(26.23f, 0.41f) },
+            MainTurret = "res://turret_bs_main.png", PdTurret = "res://turret_bs_pd.png", TurretTexScale = 0.672f,
+            MainBarrel = 18.8f, PdBarrel = 8.8f, PdRing = 4.5f },
     };
 
     public ClassArt MyArt => Art[Class];
@@ -123,7 +133,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
     // ── the owner's intent, replicated at 20 Hz ──────────────────────────────
     public Vector2 AimPoint;               // where the main guns point
     private bool Thrusting;                 // the owner is on the throttle (plume flicker)
-    public bool Trigger;                   // guns key held (battleship)
+    public bool Trigger;                   // guns key held (battleship, destroyer)
     public bool Staggered;                 // fire mode: false = salvo, true = staggered
 
     // ── orders and ability state, held on the host ───────────────────────────
@@ -140,13 +150,25 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
     public float PdActiveFrac => (float)(_pdLeft / Math.Max(0.001, Stats["pd_active"]));
     public float PdRechargeFrac => (float)(_pdRecharge / Math.Max(0.001, Stats["pd_reload"]));
 
-    // Missiles: a magazine, reloaded by hand.
+    // Missiles (destroyer): a magazine of bursts, reloaded by hand.
     private int _mag;
     private double _missileReload, _missileRefire;
     public int MissilesLoaded => _mag;
     public double MissileReloadLeft => _missileReload;
     public bool Reloading => _missileReload > 0;
-    private bool CanFireMissile => Class == ShipClass.Battleship && _mag > 0 && !Reloading && _missileRefire <= 0;
+    private bool CanFireMissile => Classes.Missiles(Class) && _mag > 0 && !Reloading && _missileRefire <= 0;
+
+    // The broadside (battleship): a wind-up while the turrets swing onto the cursor, then every main
+    // gun fires, volley after volley, then the cooldown. The host acts on it; every peer counts the
+    // timers down between reports, so a guest's bar and turrets move smoothly.
+    private double _bsWindup, _bsGap, _bsCooldown;
+    private int _bsVolleys;
+    public double BroadsideWindupLeft => _bsWindup;
+    public int BroadsideVolleysLeft => _bsVolleys;
+    public double BroadsideCooldownLeft => _bsCooldown;
+    // wound up or firing: the main turrets swing fast enough to reach the cursor within the wind-up
+    public bool BroadsideTracking => _bsWindup > 0 || _bsVolleys > 0;
+    private bool BroadsideReady => Classes.Broadside(Class) && Alive && !BroadsideTracking && _bsCooldown <= 0;
 
     private readonly List<Turret> _turrets = new();
     private readonly List<Turret> _mains = new();
@@ -195,6 +217,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
         Stats = BuildSheet();
         MaxHp = Hp = Stats["hull"];
         _mag = (int)Stats["missile_mag"]; _missileReload = _missileRefire = 0;
+        _bsWindup = _bsGap = _bsCooldown = 0; _bsVolleys = 0;
 
         var art = MyArt;
         var tex = GD.Load<Texture2D>(art.Texture);
@@ -331,14 +354,15 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
     // One entry point for every class action. The owner's key press calls
     // UseAbility; the host acts on it directly, a guest sends it as a request, and
     // the host checks the sender owns this ship first. A client says "I pressed
-    // missile at target 1000", never "I did 5 damage".
+    // missile at target 1000", never "I did 5 damage". The broadside aims at the owner's
+    // cursor, which reaches the host with the rest of its intent (AimPoint), not in the request.
     public void UseAbility(string id, int targetId)
     {
         // the fire mode is the owner's own intent (it rides in its state report), not a host order
         if (id == "firemode") { Staggered = !Staggered; return; }
         // The missile needs a selected target within range. Checked here, on the owner's
         // machine, so the slot can say why at once; the host checks again.
-        if (id == "missile" && Class == ShipClass.Battleship)
+        if (id == "missile" && Classes.Missiles(Class))
         {
             var t = targetId != 0 ? Combat.ById(targetId) : null;
             string why = t == null ? "NO TARGET" : Position.DistanceTo(t.Position) > Stats["missile_range"] ? "OUT OF RANGE" : null;
@@ -362,13 +386,14 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
             case "reboard": if (CanReboard) { Alive = true; Hp = MaxHp * ReboardHull; _stasis = 0; } break;
             case "pd":      if (PdReady) _pdLeft = Stats["pd_active"]; break;
             case "missile": FireMissile(t); break;
-            case "reload":  if (Class == ShipClass.Battleship && !Reloading && _mag < (int)Stats["missile_mag"])
+            case "reload":  if (Classes.Missiles(Class) && !Reloading && _mag < (int)Stats["missile_mag"])
                                 _missileReload = Stats["missile_reload"]; break;
-            case "attack":  if (Class == ShipClass.Carrier && t != null) WingTarget = t; break;
+            case "broadside": if (BroadsideReady) _bsWindup = Stats["broadside_windup"]; break;
+            case "attack":  if (Classes.Wing(Class) && t != null) WingTarget = t; break;
             case "recall":  WingTarget = null; break;
             case "bombers":
                 // within the strike range (twice the fighters' control range) only
-                if (Class == ShipClass.Carrier && t != null && StrikeTarget == null && BombersReady > 0
+                if (Classes.Wing(Class) && t != null && StrikeTarget == null && BombersReady > 0
                     && Position.DistanceTo(t.Position) <= Stats["strike_range"])
                 { StrikeTarget = t; _strikesOut = BombersReady; }
                 break;
@@ -448,10 +473,21 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
 
     public void NoteStrikeDone() { if (--_strikesOut <= 0) StrikeTarget = null; }
 
-    // A bunker buster: launched off the nose toward the target (the selection if in
-    // range, else the nearest hostile), slow, and only barely guided -- its heading
-    // creeps toward the target at missile_turn rad/s, so a target that moves early
-    // enough can get out from under it.
+    // A BURST (destroyer): three missiles off the nose, one straight at the target and two launched
+    // up to 70 degrees to either side, all guided -- each heading turns toward the target at
+    // missile_turn rad/s, so the outer two curve in onto it from the flanks. One burst spends one
+    // of the magazine.
+    //   A missile heading theta off a target d away can only come round onto it if d > 2 r sin(theta),
+    // r being its turning radius (speed / turn); any closer and it circles the target until its run
+    // ends. So close in, the fan narrows to what the missiles can still turn through, with a margin
+    // (BurstSplayFor): the full 70 degrees from about 250 u out on the kit's rack.
+    public static readonly int[] BurstSides = { 0, -1, 1 };
+    public const float BurstSplay = 70f;
+    public static float BurstSplayFor(float d, float speed, float turn)
+    {
+        float reach = 0.8f * d / (2f * speed / Mathf.Max(0.01f, turn));
+        return reach >= Mathf.Sin(Mathf.DegToRad(BurstSplay)) ? BurstSplay : Mathf.RadToDeg(Mathf.Asin(reach));
+    }
     private void FireMissile(IHittable t)
     {
         if (!Net.Sim || !CanFireMissile) return;
@@ -459,8 +495,11 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
         if (t == null || Position.DistanceTo(t.Position) > range) return;   // a target in range, or nothing
         _mag--; _missileRefire = Stats["missile_refire"];
         var nose = ToGlobal(new Vector2(0, -MyArt.Length * 0.5f));
-        Combat.LaunchTorpedo(nose, t.Position - nose, (float)Stats["missile_speed"], range * 1.4f,
-                             Stats["missile_damage"], t.NetId, (float)Stats["missile_turn"], heavy: true, source: this);
+        float speed = (float)Stats["missile_speed"], turn = (float)Stats["missile_turn"];
+        float splay = BurstSplayFor(nose.DistanceTo(t.Position), speed, turn);
+        foreach (int side in BurstSides)
+            Combat.LaunchTorpedo(nose, (t.Position - nose).Rotated(Mathf.DegToRad(side * splay)), speed, range * 1.4f,
+                                 Stats["missile_damage"], t.NetId, turn, heavy: true, source: this);
     }
 
     public void TakeDamage(double d)
@@ -560,7 +599,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
 
     // Every peer counts the timers down, so a guest's bars move smoothly between host packets
     // (the next packet corrects any drift). Only the host ACTS when one runs out: the recharge
-    // that follows a PD window, and the magazine refilled by a reload.
+    // that follows a PD window, the magazine refilled by a reload, and the broadside's volleys.
     private void TickAbilities(double delta)
     {
         if (_pdLeft > 0) { _pdLeft -= delta; if (_pdLeft <= 0) { _pdLeft = 0; if (Net.Sim) _pdRecharge = Stats["pd_reload"]; } }
@@ -572,6 +611,27 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
             _missileReload -= delta;
             if (_missileReload <= 0) { _missileReload = 0; if (Net.Sim) _mag = (int)Stats["missile_mag"]; }
         }
+
+        // The broadside. A ship lost in the middle of one loses the rest of it.
+        if (!Alive) { _bsWindup = 0; _bsVolleys = 0; }
+        if (_bsWindup > 0)
+        {
+            _bsWindup -= delta;
+            // Every peer moves on to the volleys: a guest shows them firing (its bar, its turrets'
+            // fast swing) until the host's next report says how many are left; only the host fires.
+            if (_bsWindup <= 0) { _bsWindup = 0; _bsVolleys = Math.Max(1, (int)Stats["broadside_volleys"]); if (Net.Sim) _bsGap = 0; }
+        }
+        if (_bsVolleys > 0)
+        {   // every main gun, along its barrel as it points now; the gap CARRIES its remainder, as the guns' reload does
+            if (Net.Sim) _bsGap -= delta;
+            for (int n = 0; Net.Sim && _bsGap <= 0 && _bsVolleys > 0 && n < 8; n++)
+            {
+                foreach (var m in _mains) m.Shoot(Stats["broadside_mult"]);
+                _bsGap += Stats["broadside_gap"];
+                if (--_bsVolleys == 0) _bsCooldown = Stats["broadside_cooldown"];
+            }
+        }
+        else if (_bsCooldown > 0) _bsCooldown = Math.Max(0, _bsCooldown - delta);
     }
 
     // ── main guns: salvo or staggered ────────────────────────────────────────
@@ -584,7 +644,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
     // per salvo's one, so it would fall behind (measured: 4.50 vs 6.00 DPS).
     private void FireControl(double delta)
     {
-        if (Class != ShipClass.Battleship || _mains.Count == 0) return;
+        if (!Classes.Guns(Class) || _mains.Count == 0) return;
         if (!Trigger) { _gunCd = Math.Max(0, _gunCd - delta); return; }   // keep reloading while idle
 
         double interval = Stats["main_interval"];
@@ -630,7 +690,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
         if (!locked)
         {
             AimPoint = GetGlobalMousePosition();
-            Trigger = Class == ShipClass.Battleship && Input.IsKeyPressed(Abilities.KeyFor(Class, "guns"));
+            Trigger = Classes.Guns(Class) && Input.IsKeyPressed(Abilities.KeyFor(Class, "guns"));
         }
 
         SendState(dt);
@@ -754,15 +814,17 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
             st[i] = _wings[i].StateCode; rearm[i] = (float)_wings[i].RearmLeft;
         }
         (GetParent() as Hub)?.SendHostState(OwnerId, Hp, MaxHp, Alive, _stasis, Pinned, _combatT, _pdLeft, _pdRecharge, _mag, _missileReload,
-            WingTarget?.NetId ?? 0, pos, rot, st, rearm);
+            _bsWindup, _bsVolleys, _bsCooldown, WingTarget?.NetId ?? 0, pos, rot, st, rearm);
     }
 
     // the host's report (Hub.NetHostState: only the host speaks for combat state)
     public void ApplyHostState(double hp, double maxHp, bool alive, double stasis, bool pinned, double combat, double pdLeft, double pdRecharge, int mag, double reload,
+                               double bsWindup, int bsVolleys, double bsCooldown,
                                int wingTarget, Vector2[] wingPos, float[] wingRot, int[] wingState, float[] wingRearm)
     {
         Hp = hp; MaxHp = maxHp; Alive = alive; _stasis = stasis; Pinned = pinned; _combatT = combat;
         _pdLeft = pdLeft; _pdRecharge = pdRecharge; _mag = mag; _missileReload = reload;
+        _bsWindup = bsWindup; _bsVolleys = bsVolleys; _bsCooldown = bsCooldown;
         WingTarget = wingTarget != 0 ? Combat.ById(wingTarget) : null;
         for (int i = 0; i < Math.Min(_wings.Count, wingPos.Length); i++)
         {

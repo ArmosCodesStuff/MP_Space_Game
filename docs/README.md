@@ -13,7 +13,7 @@ If you are a fresh session with no history of this project, read in this order:
 
 **You also need the code.** These documents describe the project; they do not replace it. Whoever
 starts the session should attach the project zip (~6 MB, ~27 MB with its git history; 54 scripts;
-81 code files, 16846 lines in `version/CODE_SNAPSHOT.txt`).
+82 code files, 17319 lines in `version/CODE_SNAPSHOT.txt`).
 
 | File | For |
 |---|---|
@@ -88,6 +88,7 @@ validated against the numbers the Linux originals produce:
     powershell -ExecutionPolicy Bypass -File tools\smoketest\run.ps1     # every check, 6/6 runs
     powershell -ExecutionPolicy Bypass -File tools\screens\run.ps1
     powershell -ExecutionPolicy Bypass -File tools\snapshot.ps1              # rebuild version\CODE_SNAPSHOT.txt
+    powershell -ExecutionPolicy Bypass -File tools\make_destroyer.ps1        # regenerate destroyer_hull.png from the battleship's hull
 
 `-Godot <path>` is optional on both runners; without it they resolve the engine themselves. If you
 do pass one, pass the plain `Godot_v4.7.2-stable_mono_win64.exe` -- they swap themselves to the

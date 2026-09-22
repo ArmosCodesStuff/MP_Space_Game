@@ -1,8 +1,8 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-21 22:26, on top of git commit c929e73. How it was verified is in the message of the
+// Taken 2026-09-22 01:38, on top of git commit 3d11193. How it was verified is in the message of the
 //   commit that carries this file: one starting VERIFIED: is a green verify.ps1 -Update.
-// 81 files, 16848 lines. Code only: sprites, sounds and docs are in the zip.
+// 82 files, 17319 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -16,56 +16,56 @@
 //   MainMenu.tscn                                    6 lines   sha256 8a8dbe40f248
 //   play.ps1                                        61 lines   sha256 2cdeaf3aab37
 //   verify.ps1                                     127 lines   sha256 7b1ceb7f36b1
-//   scripts/Abilities.cs                           140 lines   sha256 5488e0d66c1e
-//   scripts/AbilityBar.cs                          115 lines   sha256 05b4348eaf69
+//   scripts/Abilities.cs                           153 lines   sha256 bfb051b61efb
+//   scripts/AbilityBar.cs                          121 lines   sha256 ee6c123602dd
 //   scripts/Autopilot.cs                            40 lines   sha256 807538219f53
-//   scripts/BaseDefense.cs                          52 lines   sha256 e19852153b1b
+//   scripts/BaseDefense.cs                          52 lines   sha256 8103ce48a948
 //   scripts/BasePanel.cs                           138 lines   sha256 eda74bdf3a37
 //   scripts/Boss.cs                                334 lines   sha256 350097d90bdf
 //   scripts/BossBar.cs                              89 lines   sha256 e4e024529f16
-//   scripts/Character.cs                           334 lines   sha256 f29a391727ee
+//   scripts/Character.cs                           352 lines   sha256 3c553b35e32e
 //   scripts/CharacterCreator.cs                    216 lines   sha256 9645b6faeabb
-//   scripts/CharacterSelect.cs                     184 lines   sha256 d13531a24c9e
-//   scripts/Combat.cs                              105 lines   sha256 a191b00dca87
+//   scripts/CharacterSelect.cs                     184 lines   sha256 241e2389c734
+//   scripts/Combat.cs                              105 lines   sha256 838eeac05eb7
 //   scripts/Economy.cs                             107 lines   sha256 a67cf57609b2
-//   scripts/Equipment.cs                           230 lines   sha256 b53109044c5d
-//   scripts/EquipmentWindow.cs                     126 lines   sha256 7ce3983bf7b9
+//   scripts/Equipment.cs                           274 lines   sha256 0eab67468e18
+//   scripts/EquipmentWindow.cs                     126 lines   sha256 88af43fe3901
 //   scripts/EscapePod.cs                            49 lines   sha256 6e43477ba73a
 //   scripts/EscMenu.cs                              68 lines   sha256 a6334f984666
 //   scripts/Explosion.cs                            18 lines   sha256 12209b0c72ce
-//   scripts/Game.cs                                 58 lines   sha256 761967aade62
+//   scripts/Game.cs                                 60 lines   sha256 9d93b07815b8
 //   scripts/Gatherer.cs                            240 lines   sha256 225fd22bfd44
 //   scripts/Hauler.cs                              368 lines   sha256 32d864919bf7
 //   scripts/HealthBar.cs                            23 lines   sha256 fafaf0102ffb
 //   scripts/Hints.cs                                98 lines   sha256 96cc9bb327dd
-//   scripts/Hub.cs                                1579 lines   sha256 640431d62bbd
+//   scripts/Hub.cs                                1583 lines   sha256 7c671dba4b22
 //   scripts/Loot.cs                                118 lines   sha256 f8a5de98fe1f
-//   scripts/MainMenu.cs                            291 lines   sha256 76ff14c4fb7d
-//   scripts/MenuFoe.cs                             201 lines   sha256 5297a5e7ba82
+//   scripts/MainMenu.cs                            287 lines   sha256 eab17b5a70c3
+//   scripts/MenuFoe.cs                             201 lines   sha256 0bda2aa62d3d
 //   scripts/Missions.cs                             40 lines   sha256 ea3445c37716
 //   scripts/Music.cs                                81 lines   sha256 d77805e7d7ae
 //   scripts/Net.cs                                 776 lines   sha256 ba91320b116b
 //   scripts/PilotWindow.cs                          60 lines   sha256 4e05487ebecd
-//   scripts/PlayerShip.cs                          833 lines   sha256 6cb8ad912a1c
+//   scripts/PlayerShip.cs                          895 lines   sha256 7a97a9898c74
 //   scripts/Plume.cs                                25 lines   sha256 cdbeb9b8fc58
-//   scripts/Progression.cs                         106 lines   sha256 aabb07443837
+//   scripts/Progression.cs                         106 lines   sha256 7887382412c9
 //   scripts/Radar.cs                               130 lines   sha256 9a8dcad4c7ae
-//   scripts/Raider.cs                              323 lines   sha256 eba82c91689c
+//   scripts/Raider.cs                              323 lines   sha256 16b597a5ae2a
 //   scripts/ReturnButton.cs                         27 lines   sha256 e36ddbb19a08
 //   scripts/Router.cs                              429 lines   sha256 294cec245abf
 //   scripts/SessionMenu.cs                         141 lines   sha256 777687907142
-//   scripts/Settings.cs                             82 lines   sha256 b2e0d3f12854
+//   scripts/Settings.cs                             87 lines   sha256 4dd23a4a672f
 //   scripts/Sfx.cs                                  97 lines   sha256 9efb916881e5
-//   scripts/Shell.cs                                52 lines   sha256 11a8434a127d
+//   scripts/Shell.cs                                52 lines   sha256 559e4382e95d
 //   scripts/Shield.cs                               71 lines   sha256 99c7fa4a2a8e
-//   scripts/ShipClasses.cs                         526 lines   sha256 07f16bb2c0cf
+//   scripts/ShipClasses.cs                         531 lines   sha256 575d38217a9c
 //   scripts/Sprites.cs                              13 lines   sha256 f2374b1d9777
-//   scripts/Stats.cs                               187 lines   sha256 51f26ba03787
-//   scripts/StatsWindow.cs                         217 lines   sha256 8602c6289a1b
+//   scripts/Stats.cs                               205 lines   sha256 76dcca49d3f1
+//   scripts/StatsWindow.cs                         225 lines   sha256 843e3831c247
 //   scripts/TargetDummy.cs                         133 lines   sha256 2a50d73cee42
 //   scripts/Telegraph.cs                            48 lines   sha256 058f5a0b7057
 //   scripts/TioWindow.cs                            75 lines   sha256 a1089ae54810
-//   scripts/Torpedo.cs                             150 lines   sha256 c5118fa8e6ff
+//   scripts/Torpedo.cs                             149 lines   sha256 78f268798b9b
 //   scripts/Txt.cs                                  32 lines   sha256 8823251c9a4f
 //   scripts/Ui.cs                                  236 lines   sha256 e6d274f5a4cd
 //   scripts/UtilityShip.cs                          74 lines   sha256 c0d1895994ce
@@ -79,15 +79,16 @@
 //   tools/analyse/xref.py                           19 lines   sha256 5406a5e81bde
 //   tools/find-godot.ps1                            53 lines   sha256 fabe4c75faae
 //   tools/gain.ps1                                  44 lines   sha256 41f4d8f93189
+//   tools/make_destroyer.ps1                        77 lines   sha256 89bc0fcf58e2
 //   tools/manifest.ps1                              42 lines   sha256 2bd8e7cbf24b
 //   tools/map.py                                   232 lines   sha256 01a23fceab11
 //   tools/screens/run.ps1                          128 lines   sha256 9e8d569b0b94
 //   tools/screens/run.sh                            42 lines   sha256 73a5b3c63476
-//   tools/screens/Shots.cs.txt                     549 lines   sha256 a64a879774a8
+//   tools/screens/Shots.cs.txt                     562 lines   sha256 9d062f889711
 //   tools/smoketest/fakeigd.py                     155 lines   sha256 b980d4fa4ad4
 //   tools/smoketest/run.ps1                        209 lines   sha256 54069e6faaff
 //   tools/smoketest/run.sh                          57 lines   sha256 9ac9cbdf9115
-//   tools/smoketest/SmokeTest.cs.txt              3677 lines   sha256 3ff46230cd85
+//   tools/smoketest/SmokeTest.cs.txt              3878 lines   sha256 a796752240ff
 //   tools/smoketest/wan.py                          61 lines   sha256 97db24aa3f91
 //   tools/snapshot.ps1                              94 lines   sha256 3ca9bfe56185
 //==============================================================================
@@ -397,7 +398,7 @@ Write-Host ("FAILED: {0}" -f ($failed -join ', ')); exit 1
 
 //==============================================================================
 // FILE: scripts/Abilities.cs
-// 140 lines   sha256 5488e0d66c1e
+// 153 lines   sha256 bfb051b61efb
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -407,8 +408,8 @@ using System.Linq;
 // ABILITIES — what each class can do, and which key does it.
 //
 // Every class action is an ability with an id, a default key, and a kind:
-//   Press : fires once when the key goes down (missile, recall, activate PD)
-//   Hold  : active while the key is held (the battleship's main guns)
+//   Press : fires once when the key goes down (broadside, missile, recall, activate PD)
+//   Hold  : active while the key is held (the main guns)
 // The ability bar shows them in order; the K window remaps them. Bindings are
 // per class and saved with this MACHINE's settings (Settings), not the character:
 // they are how this keyboard is set up, not who you are.
@@ -435,8 +436,19 @@ public static class Abilities
                              Blurb = "Hold to fire. The barrels aim at the cursor and swing slowly." },
             new AbilityDef { Id = "firemode", Name = "Fire mode",     Short = "MODE",   Default = Key.G,
                              Blurb = "Salvo (all barrels at once) or staggered (one at a time). Same rate." },
-            new AbilityDef { Id = "missile",  Name = "Missile",       Short = "MSL",    Default = Key.F,
-                             Blurb = "A slow bunker buster, barely guided. Needs a selected target in range. Uses the magazine." },
+            new AbilityDef { Id = "broadside", Name = "Broadside",    Short = "BROADSIDE", Default = Key.F,
+                             Blurb = "The turrets swing onto the cursor, then every main gun fires three volleys. The ship steers throughout." },
+            new AbilityDef { Id = "pd",       Name = "Point defence", Short = "PD",     Default = Key.Q,
+                             Blurb = "Opens a firing window; each turret picks and tracks its own target. Recharges after." },
+        },
+        [ShipClass.Destroyer] = new[]
+        {
+            new AbilityDef { Id = "guns",     Name = "Main guns",     Short = "GUNS",   Kind = AbilityKind.Hold, Default = Key.Space,
+                             Blurb = "Hold to fire. The barrels aim at the cursor and swing slowly." },
+            new AbilityDef { Id = "firemode", Name = "Fire mode",     Short = "MODE",   Default = Key.G,
+                             Blurb = "Salvo (both barrels at once) or staggered (one at a time). Same rate." },
+            new AbilityDef { Id = "missile",  Name = "Missile burst", Short = "MSL",    Default = Key.F,
+                             Blurb = "Three guided missiles: one at the target, two launched wide that curve in. Needs a selected target in range. Uses the magazine." },
             new AbilityDef { Id = "reload",   Name = "Reload missiles", Short = "RELOAD", Default = Key.R,
                              Blurb = "Refills the missile magazine. Nothing fires while it runs." },
             new AbilityDef { Id = "pd",       Name = "Point defence", Short = "PD",     Default = Key.Q,
@@ -528,6 +540,7 @@ public static class Abilities
     // concatenation allocated a new string each time for text that only moves on a refit.
     private static readonly string BattleshipHint = "BATTLESHIP  ·  mouse aims the main guns  ·  " + CommonHint;
     private static readonly string CarrierHint    = "CARRIER  ·  " + CommonHint;
+    private static readonly string DestroyerHint  = "DESTROYER  ·  mouse aims the main guns  ·  " + CommonHint;
 
     public static string ControlsHint(ShipClass c)
     {
@@ -535,6 +548,7 @@ public static class Abilities
         {
             ShipClass.Battleship => BattleshipHint,
             ShipClass.Carrier    => CarrierHint,
+            ShipClass.Destroyer  => DestroyerHint,
             _ => "placeholder",
         };
     }
@@ -542,7 +556,7 @@ public static class Abilities
 
 //==============================================================================
 // FILE: scripts/AbilityBar.cs
-// 115 lines   sha256 05b4348eaf69
+// 121 lines   sha256 ee6c123602dd
 //==============================================================================
 using Godot;
 
@@ -594,6 +608,12 @@ public partial class AbilityBar : Control
             case "reload":
                 if (s.Reloading) { st.Line = $"{s.MissileReloadLeft:0.0}s"; st.Busy = (float)(s.MissileReloadLeft / S["missile_reload"]); }
                 else st.Line = s.MissilesLoaded >= (int)S["missile_mag"] ? "FULL" : "READY";
+                break;
+            case "broadside":
+                if (s.BroadsideWindupLeft > 0) { st.Line = "AIMING"; st.Lit = true; }
+                else if (s.BroadsideVolleysLeft > 0) { st.Line = "FIRING"; st.Lit = true; }
+                else if (s.BroadsideCooldownLeft > 0)
+                { st.Line = $"{s.BroadsideCooldownLeft:0}s"; st.Busy = (float)(s.BroadsideCooldownLeft / S["broadside_cooldown"]); }
                 break;
             case "pd":
                 if (s.PdActive) { st.Line = $"ACTIVE {s.PdLeft:0}s"; st.Lit = true; }
@@ -707,7 +727,7 @@ public static class Autopilot
 
 //==============================================================================
 // FILE: scripts/BaseDefense.cs
-// 52 lines   sha256 e19852153b1b
+// 52 lines   sha256 8103ce48a948
 //==============================================================================
 using Godot;
 using System.Linq;
@@ -716,8 +736,8 @@ using System.Linq;
 // heart. Host-simulated (its shots reach guests like every other shot); it fires only at
 // RAIDERS -- never at the practice dummies. Ranges are from the base's centre.
 //   LASER    5 DPS (2.5 every 0.5 s) at the nearest raider within 300 u
-//   MISSILE  every 5 s, 25 damage, tracking, 120 u/s (1.2x a capital ship's average top
-//            speed), at the nearest raider within 600 u
+//   MISSILE  every 5 s, 25 damage, tracking, 120 u/s (1.2x a raider's 100 u/s cruise), at the
+//            nearest raider within 600 u
 public partial class BaseDefense : Node2D
 {
     public const float LaserRange = 300f, MissileRange = 600f, MissileSpeed = 120f;
@@ -1340,7 +1360,7 @@ public partial class BossBar : Control
 
 //==============================================================================
 // FILE: scripts/Character.cs
-// 334 lines   sha256 f29a391727ee
+// 352 lines   sha256 3c553b35e32e
 //==============================================================================
 using Godot;
 using System;
@@ -1558,19 +1578,30 @@ public static class Character
         Exp = (int)c.GetValue("progress", "exp", 0); Level = Math.Max(1, (int)c.GetValue("progress", "level", 1));
         Points = Math.Max(0, (int)c.GetValue("progress", "points", 0));
         for (int i = 0; i < Bought.Length; i++) Bought[i] = Math.Clamp((int)c.GetValue("progress", "bought_" + Progression.All[i].Id, 0), 0, Progression.MaxPerUpgrade);
+        // Every part id read from the file goes through Equipment.Migrated first (see there). A
+        // dropped part that no longer fits the slot it was fitted in is not lost: it goes into the
+        // hold, and the slot takes the class's own kit.
         Loadout.Clear();
+        var displaced = new List<string>();
         foreach (ShipClass sc in Enum.GetValues(typeof(ShipClass)))
             if (c.HasSectionKey("equipment", sc.ToString()))
-                Loadout[sc] = Equipment.Sanitize(sc, ((string)c.GetValue("equipment", sc.ToString(), "")).Split(','));
+            {
+                var ids = ((string)c.GetValue("equipment", sc.ToString(), "")).Split(',').Select(Equipment.Migrated).ToArray();
+                for (int k = 0; k < ids.Length && k < Equipment.Slots; k++)
+                    if (Equipment.ById(ids[k]) is { Kit: false } part && !Equipment.Fits(part, Equipment.SlotAt(k), sc)) displaced.Add(part.Id);
+                Loadout[sc] = Equipment.Sanitize(sc, ids);
+            }
         // The hold, loot and hints: parts and hints this build knows, and counts above zero.
         // (`gid`, not `id`: `id` is the CHARACTER's id, the parameter this method was called with.)
         GearHold.Clear();
         if (c.HasSection("gear_hold"))
             foreach (var gid in c.GetSectionKeys("gear_hold"))
-                if (Equipment.ById(gid) != null && (int)c.GetValue("gear_hold", gid, 0) is var n && n > 0) GearHold[gid] = n;
+                if (Equipment.Migrated(gid) is var mid && Equipment.ById(mid) != null && (int)c.GetValue("gear_hold", gid, 0) is var n && n > 0)
+                    GearHold[mid] = GearHold.GetValueOrDefault(mid) + n;
+        foreach (var gid in displaced) Stow(gid);
         Unclaimed.Clear();
         Unclaimed.AddRange(((string)c.GetValue("loot", "unclaimed", "")).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                           .Where(gid => Equipment.ById(gid) is { Kit: false }));
+                           .Select(Equipment.Migrated).Where(gid => Equipment.ById(gid) is { Kit: false }));
         PaidKills.Clear();
         foreach (var t in ((string)c.GetValue("loot", "paid", "")).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             if (long.TryParse(t, out var serial)) PayOnce(serial);
@@ -1637,7 +1668,7 @@ public static class Character
     }
 }
 
-// The nine classes, three to a page. Two are flyable; the rest are declared so
+// The nine classes, three to a page. Three are flyable; the rest are declared so
 // the selector, the save format and the UI are all built for nine from the start
 // rather than being widened later.
 public static class Classes
@@ -1653,11 +1684,11 @@ public static class Classes
     {
         // page 1 — line
         new() { Id = ShipClass.Battleship, Name = "BATTLESHIP", Ready = true,
-                Blurb = "300 hull. Four cursor-aimed main guns, two point-defence turrets, a missile magazine." },
+                Blurb = "300 hull. Four cursor-aimed main guns, a broadside of all four, two point-defence turrets." },
         new() { Id = ShipClass.Carrier, Name = "CARRIER", Ready = true,
                 Blurb = "200 hull. Three point-defence turrets, three fighters, two torpedo bombers." },
-        new() { Id = ShipClass.Battleship, Name = "MONITOR", Ready = false,
-                Blurb = "Reserved." },
+        new() { Id = ShipClass.Destroyer, Name = "DESTROYER", Ready = true,
+                Blurb = "250 hull. The fastest. Two cursor-aimed main guns, missile bursts of three, two point-defence turrets." },
         // page 2 — strike
         new() { Id = ShipClass.Battleship, Name = "CORSAIR",    Ready = false, Blurb = "Reserved." },
         new() { Id = ShipClass.Battleship, Name = "INTERDICTOR",Ready = false, Blurb = "Reserved." },
@@ -1675,6 +1706,13 @@ public static class Classes
     public static ShipClass Sanitize(int cls) => Enum.IsDefined(typeof(ShipClass), cls) ? (ShipClass)cls : ShipClass.Battleship;
     // Its name as the screens print it ("BATTLESHIP"), from the one table that holds it.
     public static string NameOf(ShipClass c) => All.First(e => e.Id == c).Name;
+
+    // What each class carries -- asked of the class, never "is it the battleship", so a new class
+    // is one line here rather than a hunt for every two-way test.
+    public static bool Guns(ShipClass c)      => c is ShipClass.Battleship or ShipClass.Destroyer;   // cursor-aimed main turrets
+    public static bool Broadside(ShipClass c) => c == ShipClass.Battleship;
+    public static bool Missiles(ShipClass c)  => c == ShipClass.Destroyer;                           // a magazine of missile bursts
+    public static bool Wing(ShipClass c)      => c == ShipClass.Carrier;                             // fighters and bombers
 }
 
 //==============================================================================
@@ -1900,7 +1938,7 @@ public partial class ShipPreview : Control
 
 //==============================================================================
 // FILE: scripts/CharacterSelect.cs
-// 184 lines   sha256 d13531a24c9e
+// 184 lines   sha256 241e2389c734
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -2047,7 +2085,7 @@ public partial class CharacterSelect : Control
     private void AskDelete(Character.Slot s)
     {
         _pendingDelete = s.Id;
-        _confirm.DialogText = $"Delete {s.Name} ({(s.Class == ShipClass.Battleship ? "Battleship" : "Carrier")})?\n\n"
+        _confirm.DialogText = $"Delete {s.Name} ({Classes.NameOf(s.Class)})?\n\n"
                             + "This removes the character from disk. It cannot be undone.";
         _confirm.PopupCentered(new Vector2I(460, 170));
     }
@@ -2089,7 +2127,7 @@ public partial class CharacterSelect : Control
 
 //==============================================================================
 // FILE: scripts/Combat.cs
-// 105 lines   sha256 a191b00dca87
+// 105 lines   sha256 838eeac05eb7
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -2167,7 +2205,7 @@ public static class Combat
     public static System.Action<Shell> ShellFired;
     public static System.Action<Torpedo> TorpedoFired;
 
-    // a battleship's shell: straight, and it hits the first hostile it touches
+    // a main-gun shell (battleship, destroyer): straight, and it hits the first hostile it touches
     public static void FireShell(Vector2 from, Vector2 dir, float speed, float range, double damage, PlayerShip source)
     {
         if (World == null) return;
@@ -2311,7 +2349,7 @@ public static class Economy
 
 //==============================================================================
 // FILE: scripts/Equipment.cs
-// 230 lines   sha256 b53109044c5d
+// 274 lines   sha256 0eab67468e18
 //==============================================================================
 using System;
 using System.Collections.Generic;
@@ -2331,7 +2369,7 @@ using System.Linq;
 //
 // A part is a set of stat changes: shares (Pct: +0.30 = +30%; on an interval or a radius the
 // share is a RATE and divides, see Stat) and whole additions (Add: one fighter fewer, two more
-// missiles in the magazine). The host applies every pilot's gear (it resolves damage and hull):
+// bursts in the magazine). The host applies every pilot's gear (it resolves damage and hull):
 // the loadout travels with the identity and is sanitised on arrival.
 public enum GearSlot { Weapon, Engines, Shield, Hull, Utility, Chip }
 public enum Rarity { Common, Rare, Epic }
@@ -2361,15 +2399,32 @@ public static class Equipment
     public static ItemDef ById(string id) => id != null && ByIdMap.TryGetValue(id, out var i) ? i : null;
     // what can drop: everything but the kit
     public static IEnumerable<ItemDef> Drops => All.Where(i => !i.Kit);
+
+    // PARTS THAT CHANGED CLASS, by the id a save file from before knows them by. The battleship's
+    // missile rack and its four rack lines are the destroyer's now (the battleship fires a
+    // broadside instead): Character.Load reads every part id through this, so in the hold they
+    // become the destroyer's parts, and fitted to a battleship they no longer fit and go into it.
+    private static readonly string[] RackLines = { "salvo", "buster", "seeker", "loader" };
+    public static string Migrated(string id)
+    {
+        if (id == "bs_missile_rack") return "dd_missile_rack";
+        foreach (var line in RackLines)
+            if (id.StartsWith("bs_" + line + "_", StringComparison.Ordinal)) return "dd_" + id[3..];
+        return id;
+    }
     public static bool Fits(ItemDef i, GearSlot s, ShipClass c) => i != null && i.Slot == s && (i.Class == null || i.Class == c);
     public static GearSlot SlotAt(int k) => k < CoreSlots ? Core[k] : GearSlot.Chip;
 
-    // every weapon's damage on a class
-    public static string[] DamageStats(ShipClass c) => c == ShipClass.Carrier
-        ? new[] { "fighter_damage", "torpedo_damage" } : new[] { "main_damage", "missile_damage" };
-    // every weapon's damage on EITHER class, for a general part
+    // every weapon's damage on a class (the battleship's broadside fires main-gun shells)
+    private static string[] DamageStats(ShipClass c) => c switch
+    {
+        ShipClass.Carrier   => new[] { "fighter_damage", "torpedo_damage" },
+        ShipClass.Destroyer => new[] { "main_damage", "missile_damage" },
+        _                   => new[] { "main_damage" },
+    };
+    // every weapon's damage on ANY class, for a general part
     private static (string, double)[] AllDamage(double p) =>
-        DamageStats(ShipClass.Battleship).Concat(DamageStats(ShipClass.Carrier)).Select(s => (s, p)).ToArray();
+        Enum.GetValues<ShipClass>().SelectMany(DamageStats).Distinct().Select(s => (s, p)).ToArray();
 
     // One specialisation at all three rarities: `up` is the lean (scaled by rarity), `down` its
     // price (not scaled), `add` whole-number changes, one value per rarity.
@@ -2394,17 +2449,19 @@ public static class Equipment
             new() { Id = id, Name = name, Slot = s, Class = c, Kit = true, Blurb = blurb };
         yield return Kit("bs_main_battery", "Mk I Main Battery", GearSlot.Weapon, ShipClass.Battleship, "the four main turrets");
         yield return Kit("cv_fighter_hangars", "Mk I Fighter Hangars", GearSlot.Weapon, ShipClass.Carrier, "the fighter wing");
+        yield return Kit("dd_main_battery", "Mk I Twin Turrets", GearSlot.Weapon, ShipClass.Destroyer, "the two main turrets");
         yield return Kit("std_drive", "Standard Drive Cluster", GearSlot.Engines, null, "the helm: speed and turning");
         yield return Kit("basic_deflector", "Basic Deflector Array", GearSlot.Shield, null, "the ship's hull points");
         yield return Kit("reinforced_frame", "Reinforced Frame", GearSlot.Hull, null, "the frame, and its point defence");
-        yield return Kit("bs_missile_rack", "Missile Rack", GearSlot.Utility, ShipClass.Battleship, "the missile and its magazine");
+        yield return Kit("bs_broadside", "Broadside Battery", GearSlot.Utility, ShipClass.Battleship, "the broadside: every main gun, volley on volley");
         yield return Kit("cv_bomber_bay", "Bomber Bay", GearSlot.Utility, ShipClass.Carrier, "the bomber wing");
+        yield return Kit("dd_missile_rack", "Missile Rack", GearSlot.Utility, ShipClass.Destroyer, "the missile bursts and their magazine");
         var basic = Kit("chip_basic", "Basic Combat Chip", GearSlot.Chip, null, "+5% damage, +5% hull");
         foreach (var (s, p) in AllDamage(0.05)) basic.Pct[s] = p;
         basic.Pct["hull"] = 0.05;
         yield return basic;
 
-        var bs = ShipClass.Battleship; var cv = ShipClass.Carrier;
+        var bs = ShipClass.Battleship; var cv = ShipClass.Carrier; var dd = ShipClass.Destroyer;
         IEnumerable<ItemDef>[] lines =
         {
             // ── battleship main battery ──
@@ -2429,15 +2486,35 @@ public static class Equipment
                  new[] { ("fighter_count", new[] { 1, 1, 1 }) }),
             Line("cv_leash", "Leash Hangars", GearSlot.Weapon, cv, "fighters that fight far from the carrier",
                  new[] { ("control_range", 0.40), ("fighter_range", 0.20) }, new[] { ("fighter_damage", -0.10) }),
-            // ── battleship missile rack ──
-            Line("bs_salvo", "Salvo Rack", GearSlot.Utility, bs, "more missiles a magazine, a slower reload",
+            // ── destroyer main turrets: the battery's four leans, on two guns ──
+            Line("dd_rapid", "Rapid Twins", GearSlot.Weapon, dd, "fires far faster, hits lighter",
+                 new[] { ("main_interval", 0.60) }, new[] { ("main_damage", -0.30) }),
+            Line("dd_heavy", "Heavy Twins", GearSlot.Weapon, dd, "huge shells, slow to reload and to train",
+                 new[] { ("main_damage", 0.80) }, new[] { ("main_interval", -0.35), ("main_turn", -0.30) }),
+            Line("dd_long", "Long Twins", GearSlot.Weapon, dd, "reaches much further, a little lighter",
+                 new[] { ("main_range", 0.40) }, new[] { ("main_damage", -0.15) }),
+            Line("dd_track", "Tracking Twins", GearSlot.Weapon, dd, "turrets that swing fast; shorter reach",
+                 new[] { ("main_turn", 1.00), ("main_damage", 0.10) }, new[] { ("main_range", -0.15) }),
+            // ── battleship broadside ──
+            Line("bs_heavyside", "Heavy Broadside", GearSlot.Utility, bs, "shells that hit far harder; a longer cooldown",
+                 new[] { ("broadside_mult", 0.40) }, new[] { ("broadside_cooldown", -0.25) }),
+            Line("bs_rapidside", "Rapid Broadside", GearSlot.Utility, bs, "back far sooner, lighter shells",
+                 new[] { ("broadside_cooldown", 0.50) }, new[] { ("broadside_mult", -0.25) }),
+            Line("bs_barrage", "Barrage Broadside", GearSlot.Utility, bs, "more volleys; slower to aim and to return",
+                 None, new[] { ("broadside_windup", -0.30), ("broadside_cooldown", -0.20) },
+                 new[] { ("broadside_volleys", new[] { 1, 2, 3 }) }),
+            Line("bs_snap", "Snap Broadside", GearSlot.Utility, bs, "fires almost at once; one volley fewer",
+                 new[] { ("broadside_windup", 1.00) }, null,
+                 new[] { ("broadside_volleys", new[] { -1, -1, -1 }) }),
+            // ── destroyer missile rack ──
+            Line("dd_salvo", "Salvo Rack", GearSlot.Utility, dd, "more bursts a magazine, a slower reload",
                  None, new[] { ("missile_reload", -0.25), ("missile_damage", -0.20) },
                  new[] { ("missile_mag", new[] { 1, 2, 3 }) }),
-            Line("bs_buster", "Buster Rack", GearSlot.Utility, bs, "a devastating missile, slow and clumsy",
+            Line("dd_buster", "Buster Rack", GearSlot.Utility, dd, "devastating missiles, slow and clumsy",
                  new[] { ("missile_damage", 1.00) }, new[] { ("missile_speed", -0.20), ("missile_turn", -0.30) }),
-            Line("bs_seeker", "Seeker Rack", GearSlot.Utility, bs, "missiles that hunt; lighter warheads",
+            Line("dd_seeker", "Seeker Rack", GearSlot.Utility, dd, "missiles that hunt; lighter warheads",
                  new[] { ("missile_turn", 1.00), ("missile_speed", 0.20) }, new[] { ("missile_damage", -0.20) }),
-            Line("bs_loader", "Loader Rack", GearSlot.Utility, bs, "reloads fast, lighter warheads",
+            Line("dd_loader", "Loader Rack", GearSlot.Utility, dd, "reloads fast, lighter warheads",
                  new[] { ("missile_reload", 0.60), ("missile_refire", 0.40) }, new[] { ("missile_damage", -0.25) }),
             // ── carrier bomber bay ──
             Line("cv_heavybay", "Heavy Bay", GearSlot.Utility, cv, "one bomber, torpedoes that break ships",
@@ -2492,12 +2569,17 @@ public static class Equipment
     }
 
     // the loadout: 5 core slots in order, then 5 chips ("" = empty)
-    public static string[] Default(ShipClass c) => new[]
+    public static string[] Default(ShipClass c)
     {
-        c == ShipClass.Carrier ? "cv_fighter_hangars" : "bs_main_battery", "std_drive", "basic_deflector", "reinforced_frame",
-        c == ShipClass.Carrier ? "cv_bomber_bay" : "bs_missile_rack",
-        "chip_basic", "chip_basic", "chip_basic", "chip_basic", "chip_basic",
-    };
+        var (weapon, utility) = c switch
+        {
+            ShipClass.Carrier   => ("cv_fighter_hangars", "cv_bomber_bay"),
+            ShipClass.Destroyer => ("dd_main_battery", "dd_missile_rack"),
+            _                   => ("bs_main_battery", "bs_broadside"),
+        };
+        return new[] { weapon, "std_drive", "basic_deflector", "reinforced_frame", utility,
+                       "chip_basic", "chip_basic", "chip_basic", "chip_basic", "chip_basic" };
+    }
 
     // a loadout made safe: known items in the right slots for the class; a bad core slot gets
     // its default, a bad chip slot is emptied (what the host does with a pilot's claim)
@@ -2513,7 +2595,7 @@ public static class Equipment
     }
 
     // What a loadout does to the sheet, summed per stat over its SANITISED parts, so a part in the
-    // wrong slot or for the other class changes nothing: the shares, and the whole additions.
+    // wrong slot or for another class changes nothing: the shares, and the whole additions.
     public static Dictionary<string, double> Bonuses(ShipClass c, string[] loadout) => Sum(c, loadout, i => i.Pct);
     public static Dictionary<string, double> Adds(ShipClass c, string[] loadout) => Sum(c, loadout, i => i.Add.ToDictionary(kv => kv.Key, kv => (double)kv.Value));
     private static Dictionary<string, double> Sum(ShipClass c, string[] loadout, Func<ItemDef, IReadOnlyDictionary<string, double>> part)
@@ -2546,13 +2628,13 @@ public static class Equipment
 
 //==============================================================================
 // FILE: scripts/EquipmentWindow.cs
-// 126 lines   sha256 7ce3983bf7b9
+// 126 lines   sha256 88af43fe3901
 //==============================================================================
 using Godot;
 using System.Linq;
 
 // EQUIPMENT (I): the parts on the pilot's CURRENT ship -- five core slots and five chips -- beside
-// the HOLD: every part this pilot owns and has not fitted, for either class (bosses drop them; see
+// the HOLD: every part this pilot owns and has not fitted, for any class (bosses drop them; see
 // Loot). FIT puts a part from the hold on the ship and the part it replaces goes into the hold;
 // UNEQUIP takes a chip off into the hold. A core slot is never empty. Each class keeps its own
 // loadout; the hold is the pilot's. Only this pilot sees any of it: gear is per pilot, like the
@@ -2604,7 +2686,7 @@ public partial class EquipmentWindow : PanelContainer
             _ship.AddChild(Ui.CardWrap(PartRow($"Chip_{k}", $"CHIP {k + 1}", l[slot], cls, off)));
         }
 
-        // THE HOLD: this class's parts first, in slot order, rarest first; then the other class's,
+        // THE HOLD: this class's parts first, in slot order, rarest first; then other classes' parts,
         // named but not fittable here.
         int total = Character.GearHold.Values.Sum();
         _hold.AddChild(Ui.Heading(total > 0 ? $"Hold  ·  {total} part{(total == 1 ? "" : "s")}" : "Hold  ·  empty"));
@@ -2827,7 +2909,7 @@ public partial class Explosion : Node2D
 
 //==============================================================================
 // FILE: scripts/Game.cs
-// 58 lines   sha256 761967aade62
+// 60 lines   sha256 9d93b07815b8
 //==============================================================================
 using Godot;
 
@@ -2838,9 +2920,11 @@ using Godot;
 // has no sensible value for it, and guessing one quietly is how a character ends up half in the
 // old world and half in the new. The message says so, and says the door is not closed.
 //
-// WHEN TO BUMP IT: whenever a release changes what a character file MEANS -- a new persisted
-// field, a changed unit, a renamed id, a rebalanced cost that invalidates what was bought. Not
-// for a visual change, a fix, or anything a save cannot notice.
+// WHEN TO BUMP IT: whenever a release changes what a character file MEANS in a way that cannot be
+// carried forward -- a new persisted field with no sensible default, a changed unit, a rebalanced
+// cost that invalidates what was bought. A part that is renamed or moves to another class is
+// carried forward instead (Equipment.Migrated), and needs no bump. Not for a visual change, a fix,
+// or anything a save cannot notice.
 public static class Game
 {
     public const int Version = 2;
@@ -3639,7 +3723,7 @@ public partial class Hints : CanvasLayer
 
 //==============================================================================
 // FILE: scripts/Hub.cs
-// 1579 lines   sha256 640431d62bbd
+// 1583 lines   sha256 7c671dba4b22
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -3988,12 +4072,16 @@ public partial class Hub : Node2D
                               float podX, float podY, float podRot, bool warping) =>
         ShipOf(Multiplayer.GetRemoteSenderId())?.ApplyState(px, py, vx, vy, rot, ax, ay, trigger, staggered, podX, podY, podRot, warping);
     public void SendHostState(int owner, double hp, double maxHp, bool alive, double stasis, bool pinned, double combat, double pdLeft, double pdRecharge,
-                              int mag, double reload, int wingTarget, Vector2[] wingPos, float[] wingRot, int[] wingState, float[] wingRearm) =>
-        Rpc(nameof(NetHostState), owner, hp, maxHp, alive, stasis, pinned, combat, pdLeft, pdRecharge, mag, reload, wingTarget, wingPos, wingRot, wingState, wingRearm);
+                              int mag, double reload, double bsWindup, int bsVolleys, double bsCooldown,
+                              int wingTarget, Vector2[] wingPos, float[] wingRot, int[] wingState, float[] wingRearm) =>
+        Rpc(nameof(NetHostState), owner, hp, maxHp, alive, stasis, pinned, combat, pdLeft, pdRecharge, mag, reload, bsWindup, bsVolleys, bsCooldown,
+            wingTarget, wingPos, wingRot, wingState, wingRearm);
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
     private void NetHostState(int owner, double hp, double maxHp, bool alive, double stasis, bool pinned, double combat, double pdLeft, double pdRecharge,
-                              int mag, double reload, int wingTarget, Vector2[] wingPos, float[] wingRot, int[] wingState, float[] wingRearm) =>
-        ShipOf(owner)?.ApplyHostState(hp, maxHp, alive, stasis, pinned, combat, pdLeft, pdRecharge, mag, reload, wingTarget, wingPos, wingRot, wingState, wingRearm);
+                              int mag, double reload, double bsWindup, int bsVolleys, double bsCooldown,
+                              int wingTarget, Vector2[] wingPos, float[] wingRot, int[] wingState, float[] wingRearm) =>
+        ShipOf(owner)?.ApplyHostState(hp, maxHp, alive, stasis, pinned, combat, pdLeft, pdRecharge, mag, reload, bsWindup, bsVolleys, bsCooldown,
+                                      wingTarget, wingPos, wingRot, wingState, wingRearm);
     public void SendShield(int owner, float side) => Rpc(nameof(NetShield), owner, side);
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
     private void NetShield(int owner, float side) => ShipOf(owner)?.ApplyShield(side);
@@ -5346,7 +5434,7 @@ public partial class LootCrate : Node2D
 
 //==============================================================================
 // FILE: scripts/MainMenu.cs
-// 291 lines   sha256 76ff14c4fb7d
+// 287 lines   sha256 eab17b5a70c3
 //==============================================================================
 using Godot;
 using System;
@@ -5361,21 +5449,20 @@ using System.Linq;
 // It was a self-contained pile of sprites and structs so that no gameplay change could break
 // the menu -- but the cost was that the menu could show something the game does not do. The
 // ship here is a real PlayerShip with Demo set: the same turrets, the same shells, the same
-// missile, the same warp. What you see on the title screen is the battleship, or it is a bug in
+// broadside, the same warp. What you see on the title screen is the battleship, or it is a bug in
 // the battleship. The menu is a small WORLD now, so it registers hostiles and wires the Combat
 // hooks -- and drops all of it in _ExitTree, because every hook is a lambda holding this node.
 public partial class MainMenu : Node2D
 {
     // The display ship's own tuning. It is not a pilot's ship and it is not balanced against
     // anything: these are the numbers that make the scene read.
-    private const double MissileEvery = 5.0;          // its two missiles, on a five second reload
-    private const int MissileMag = 2;
+    private const double BroadsideEvery = 5.0;        // its broadside, back every five seconds
     private const double AoeEvery = 15.0, AoeWarn = 8.0;   // an area shot every 15 s, telegraphed for 8
     private const float AoeRadius = 260f, WarpHop = 500f;
     // It starts the jump with 4 s to go and the warp takes 3, so it lands ONE SECOND before the
     // shot arrives. Dodging by a whole second reads as a dodge; dodging by a frame reads as luck.
     private const double DodgeAt = 4.0;
-    private const double GunRange = 620, MissileRange = 900;
+    private const double GunRange = 620;
     // The diorama gets a camera, for the same reason the hub has one: the ships are drawn at the
     // size they really are, and at 1:1 a battleship is a smudge on a 2560-wide screen.
     //
@@ -5394,7 +5481,7 @@ public partial class MainMenu : Node2D
     private float _ring;
     // The first area shot is deliberately LATE. The establishing view of a title screen should be
     // the ship on station trading fire, not an empty patch of space it warped out of.
-    private double _t, _missileCd, _aoeCd = 16.0, _aoeLeft = -1;
+    private double _t, _broadsideCd, _aoeCd = 16.0, _aoeLeft = -1;
     private Vector2 _aoeAt;
     private bool _dodged;
     private readonly Random _rng = new(3);
@@ -5475,14 +5562,11 @@ public partial class MainMenu : Node2D
         // A ship is not a ship until Init.
         _cap.Init(Net.LocalId, _centre);
         // Retuned AFTER Init, because Init rebuilds the sheet from the class and would discard it.
-        // The magazine was loaded from the class figure a moment ago, so it reaches two on the
-        // first reload rather than starting there -- five seconds, on a title screen.
-        _cap.Stats.SetBase("missile_mag", MissileMag);
-        _cap.Stats.SetBase("missile_reload", MissileEvery);
+        _cap.Stats.SetBase("broadside_cooldown", BroadsideEvery);
         _cap.WarpHop = WarpHop;
         _cap.WarpEvery = AoeEvery - AoeWarn;      // ready again before the next area shot is called
 
-        // Its turrets, shells and missiles all go through Combat, exactly as in the hub.
+        // Its turrets and shells all go through Combat, exactly as in the hub.
         Combat.OnFlash = (a, b, c, snd) => { _shots.Add(new Shot { A = a, B = b, T = 0.15 }); Sfx.Laser(a, b, snd); };
         Combat.World = this;
 
@@ -5602,15 +5686,15 @@ public partial class MainMenu : Node2D
             }
         }
 
-        // ── guns and missiles ──
+        // ── guns and the broadside ──
         _cap.AimPoint = near?.GlobalPosition ?? _cap.Position + Vector2.Up.Rotated(_cap.Rotation) * 400f;
         _cap.Trigger = near != null && near.GlobalPosition.DistanceTo(_cap.Position) < GunRange;
 
-        _missileCd -= delta;
-        if (_missileCd <= 0 && near != null && near.GlobalPosition.DistanceTo(_cap.Position) < MissileRange)
+        _broadsideCd -= delta;
+        if (_broadsideCd <= 0 && near != null && near.GlobalPosition.DistanceTo(_cap.Position) < GunRange)
         {
-            _missileCd = 1.0;                       // retried every second; the magazine decides
-            _cap.UseAbility("missile", near.NetId);
+            _broadsideCd = 1.0;                     // retried every second; the cooldown decides
+            _cap.UseAbility("broadside", 0);
         }
     }
 
@@ -5642,13 +5726,13 @@ public partial class MainMenu : Node2D
 
 //==============================================================================
 // FILE: scripts/MenuFoe.cs
-// 201 lines   sha256 5297a5e7ba82
+// 201 lines   sha256 0bda2aa62d3d
 //==============================================================================
 using Godot;
 using System;
 
 // THE TITLE SCREEN'S PIRATES. Real targets, not decoration: they register in Combat.Hostiles,
-// so the battleship's own turrets, shells and missiles find them through exactly the code that
+// so the battleship's own turrets, shells and broadside find them through exactly the code that
 // fights in the hub. Their own guns are cosmetic -- the display ship has no hull to lose.
 //
 // Three kinds, so the diorama reads as a fight rather than a swarm:
@@ -6825,7 +6909,7 @@ public partial class PilotWindow : PanelContainer
 
 //==============================================================================
 // FILE: scripts/PlayerShip.cs
-// 833 lines   sha256 6cb8ad912a1c
+// 895 lines   sha256 7a97a9898c74
 //==============================================================================
 using Godot;
 using System;
@@ -6857,7 +6941,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
     public Color Main = Character.Defaults.Main, Accent = Character.Defaults.Accent;
 
     // A DISPLAY SHIP: the title screen's battleship. It is a real PlayerShip -- the same
-    // turrets, shells, missiles and warp -- but nobody is flying it, so it reads no keyboard and
+    // turrets, shells, broadside and warp -- but nobody is flying it, so it reads no keyboard and
     // no mouse. Whatever drives it sets AimPoint, Trigger and AutopilotTo itself.
     public bool Demo;
 
@@ -6945,6 +7029,16 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
             Pds = new Vector2[] { new(-5.78f, 8.04f), new(5.78f, 8.04f), new(0f, 18.76f) },
             PdTurret = "res://turret_carrier.png", TurretTexScale = 0.2013f,
             PdBarrel = 3.7f, PdRing = 2.9f },
+        // Destroyer, 201.6 u: the battleship's hull at 75% of its beam and 90% of its length, on a
+        // 270 px canvas (the battleship's 0.7467 u/px). Only the bow and stern turrets are kept;
+        // missile pods are painted where the inner two stood. Every mount is the battleship's,
+        // scaled the same way (x by 0.75, y by 0.9), and the turrets at 0.9 of its size.
+        [ShipClass.Destroyer] = new ClassArt {
+            Texture = "res://destroyer_hull.png", Length = 201.6f, HalfWidth = 30f,
+            Mains = new Vector2[] { new(0.31f, -58.87f), new(0.29f, 68.61f) },
+            Pds   = new Vector2[] { new(-24.94f, 0.41f), new(26.23f, 0.41f) },
+            MainTurret = "res://turret_bs_main.png", PdTurret = "res://turret_bs_pd.png", TurretTexScale = 0.672f,
+            MainBarrel = 18.8f, PdBarrel = 8.8f, PdRing = 4.5f },
     };
 
     public ClassArt MyArt => Art[Class];
@@ -6952,7 +7046,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
     // ── the owner's intent, replicated at 20 Hz ──────────────────────────────
     public Vector2 AimPoint;               // where the main guns point
     private bool Thrusting;                 // the owner is on the throttle (plume flicker)
-    public bool Trigger;                   // guns key held (battleship)
+    public bool Trigger;                   // guns key held (battleship, destroyer)
     public bool Staggered;                 // fire mode: false = salvo, true = staggered
 
     // ── orders and ability state, held on the host ───────────────────────────
@@ -6969,13 +7063,25 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
     public float PdActiveFrac => (float)(_pdLeft / Math.Max(0.001, Stats["pd_active"]));
     public float PdRechargeFrac => (float)(_pdRecharge / Math.Max(0.001, Stats["pd_reload"]));
 
-    // Missiles: a magazine, reloaded by hand.
+    // Missiles (destroyer): a magazine of bursts, reloaded by hand.
     private int _mag;
     private double _missileReload, _missileRefire;
     public int MissilesLoaded => _mag;
     public double MissileReloadLeft => _missileReload;
     public bool Reloading => _missileReload > 0;
-    private bool CanFireMissile => Class == ShipClass.Battleship && _mag > 0 && !Reloading && _missileRefire <= 0;
+    private bool CanFireMissile => Classes.Missiles(Class) && _mag > 0 && !Reloading && _missileRefire <= 0;
+
+    // The broadside (battleship): a wind-up while the turrets swing onto the cursor, then every main
+    // gun fires, volley after volley, then the cooldown. The host acts on it; every peer counts the
+    // timers down between reports, so a guest's bar and turrets move smoothly.
+    private double _bsWindup, _bsGap, _bsCooldown;
+    private int _bsVolleys;
+    public double BroadsideWindupLeft => _bsWindup;
+    public int BroadsideVolleysLeft => _bsVolleys;
+    public double BroadsideCooldownLeft => _bsCooldown;
+    // wound up or firing: the main turrets swing fast enough to reach the cursor within the wind-up
+    public bool BroadsideTracking => _bsWindup > 0 || _bsVolleys > 0;
+    private bool BroadsideReady => Classes.Broadside(Class) && Alive && !BroadsideTracking && _bsCooldown <= 0;
 
     private readonly List<Turret> _turrets = new();
     private readonly List<Turret> _mains = new();
@@ -7024,6 +7130,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
         Stats = BuildSheet();
         MaxHp = Hp = Stats["hull"];
         _mag = (int)Stats["missile_mag"]; _missileReload = _missileRefire = 0;
+        _bsWindup = _bsGap = _bsCooldown = 0; _bsVolleys = 0;
 
         var art = MyArt;
         var tex = GD.Load<Texture2D>(art.Texture);
@@ -7160,14 +7267,15 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
     // One entry point for every class action. The owner's key press calls
     // UseAbility; the host acts on it directly, a guest sends it as a request, and
     // the host checks the sender owns this ship first. A client says "I pressed
-    // missile at target 1000", never "I did 5 damage".
+    // missile at target 1000", never "I did 5 damage". The broadside aims at the owner's
+    // cursor, which reaches the host with the rest of its intent (AimPoint), not in the request.
     public void UseAbility(string id, int targetId)
     {
         // the fire mode is the owner's own intent (it rides in its state report), not a host order
         if (id == "firemode") { Staggered = !Staggered; return; }
         // The missile needs a selected target within range. Checked here, on the owner's
         // machine, so the slot can say why at once; the host checks again.
-        if (id == "missile" && Class == ShipClass.Battleship)
+        if (id == "missile" && Classes.Missiles(Class))
         {
             var t = targetId != 0 ? Combat.ById(targetId) : null;
             string why = t == null ? "NO TARGET" : Position.DistanceTo(t.Position) > Stats["missile_range"] ? "OUT OF RANGE" : null;
@@ -7191,13 +7299,14 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
             case "reboard": if (CanReboard) { Alive = true; Hp = MaxHp * ReboardHull; _stasis = 0; } break;
             case "pd":      if (PdReady) _pdLeft = Stats["pd_active"]; break;
             case "missile": FireMissile(t); break;
-            case "reload":  if (Class == ShipClass.Battleship && !Reloading && _mag < (int)Stats["missile_mag"])
+            case "reload":  if (Classes.Missiles(Class) && !Reloading && _mag < (int)Stats["missile_mag"])
                                 _missileReload = Stats["missile_reload"]; break;
-            case "attack":  if (Class == ShipClass.Carrier && t != null) WingTarget = t; break;
+            case "broadside": if (BroadsideReady) _bsWindup = Stats["broadside_windup"]; break;
+            case "attack":  if (Classes.Wing(Class) && t != null) WingTarget = t; break;
             case "recall":  WingTarget = null; break;
             case "bombers":
                 // within the strike range (twice the fighters' control range) only
-                if (Class == ShipClass.Carrier && t != null && StrikeTarget == null && BombersReady > 0
+                if (Classes.Wing(Class) && t != null && StrikeTarget == null && BombersReady > 0
                     && Position.DistanceTo(t.Position) <= Stats["strike_range"])
                 { StrikeTarget = t; _strikesOut = BombersReady; }
                 break;
@@ -7277,10 +7386,21 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
 
     public void NoteStrikeDone() { if (--_strikesOut <= 0) StrikeTarget = null; }
 
-    // A bunker buster: launched off the nose toward the target (the selection if in
-    // range, else the nearest hostile), slow, and only barely guided -- its heading
-    // creeps toward the target at missile_turn rad/s, so a target that moves early
-    // enough can get out from under it.
+    // A BURST (destroyer): three missiles off the nose, one straight at the target and two launched
+    // up to 70 degrees to either side, all guided -- each heading turns toward the target at
+    // missile_turn rad/s, so the outer two curve in onto it from the flanks. One burst spends one
+    // of the magazine.
+    //   A missile heading theta off a target d away can only come round onto it if d > 2 r sin(theta),
+    // r being its turning radius (speed / turn); any closer and it circles the target until its run
+    // ends. So close in, the fan narrows to what the missiles can still turn through, with a margin
+    // (BurstSplayFor): the full 70 degrees from about 250 u out on the kit's rack.
+    public static readonly int[] BurstSides = { 0, -1, 1 };
+    public const float BurstSplay = 70f;
+    public static float BurstSplayFor(float d, float speed, float turn)
+    {
+        float reach = 0.8f * d / (2f * speed / Mathf.Max(0.01f, turn));
+        return reach >= Mathf.Sin(Mathf.DegToRad(BurstSplay)) ? BurstSplay : Mathf.RadToDeg(Mathf.Asin(reach));
+    }
     private void FireMissile(IHittable t)
     {
         if (!Net.Sim || !CanFireMissile) return;
@@ -7288,8 +7408,11 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
         if (t == null || Position.DistanceTo(t.Position) > range) return;   // a target in range, or nothing
         _mag--; _missileRefire = Stats["missile_refire"];
         var nose = ToGlobal(new Vector2(0, -MyArt.Length * 0.5f));
-        Combat.LaunchTorpedo(nose, t.Position - nose, (float)Stats["missile_speed"], range * 1.4f,
-                             Stats["missile_damage"], t.NetId, (float)Stats["missile_turn"], heavy: true, source: this);
+        float speed = (float)Stats["missile_speed"], turn = (float)Stats["missile_turn"];
+        float splay = BurstSplayFor(nose.DistanceTo(t.Position), speed, turn);
+        foreach (int side in BurstSides)
+            Combat.LaunchTorpedo(nose, (t.Position - nose).Rotated(Mathf.DegToRad(side * splay)), speed, range * 1.4f,
+                                 Stats["missile_damage"], t.NetId, turn, heavy: true, source: this);
     }
 
     public void TakeDamage(double d)
@@ -7389,7 +7512,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
 
     // Every peer counts the timers down, so a guest's bars move smoothly between host packets
     // (the next packet corrects any drift). Only the host ACTS when one runs out: the recharge
-    // that follows a PD window, and the magazine refilled by a reload.
+    // that follows a PD window, the magazine refilled by a reload, and the broadside's volleys.
     private void TickAbilities(double delta)
     {
         if (_pdLeft > 0) { _pdLeft -= delta; if (_pdLeft <= 0) { _pdLeft = 0; if (Net.Sim) _pdRecharge = Stats["pd_reload"]; } }
@@ -7401,6 +7524,27 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
             _missileReload -= delta;
             if (_missileReload <= 0) { _missileReload = 0; if (Net.Sim) _mag = (int)Stats["missile_mag"]; }
         }
+
+        // The broadside. A ship lost in the middle of one loses the rest of it.
+        if (!Alive) { _bsWindup = 0; _bsVolleys = 0; }
+        if (_bsWindup > 0)
+        {
+            _bsWindup -= delta;
+            // Every peer moves on to the volleys: a guest shows them firing (its bar, its turrets'
+            // fast swing) until the host's next report says how many are left; only the host fires.
+            if (_bsWindup <= 0) { _bsWindup = 0; _bsVolleys = Math.Max(1, (int)Stats["broadside_volleys"]); if (Net.Sim) _bsGap = 0; }
+        }
+        if (_bsVolleys > 0)
+        {   // every main gun, along its barrel as it points now; the gap CARRIES its remainder, as the guns' reload does
+            if (Net.Sim) _bsGap -= delta;
+            for (int n = 0; Net.Sim && _bsGap <= 0 && _bsVolleys > 0 && n < 8; n++)
+            {
+                foreach (var m in _mains) m.Shoot(Stats["broadside_mult"]);
+                _bsGap += Stats["broadside_gap"];
+                if (--_bsVolleys == 0) _bsCooldown = Stats["broadside_cooldown"];
+            }
+        }
+        else if (_bsCooldown > 0) _bsCooldown = Math.Max(0, _bsCooldown - delta);
     }
 
     // ── main guns: salvo or staggered ────────────────────────────────────────
@@ -7413,7 +7557,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
     // per salvo's one, so it would fall behind (measured: 4.50 vs 6.00 DPS).
     private void FireControl(double delta)
     {
-        if (Class != ShipClass.Battleship || _mains.Count == 0) return;
+        if (!Classes.Guns(Class) || _mains.Count == 0) return;
         if (!Trigger) { _gunCd = Math.Max(0, _gunCd - delta); return; }   // keep reloading while idle
 
         double interval = Stats["main_interval"];
@@ -7459,7 +7603,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
         if (!locked)
         {
             AimPoint = GetGlobalMousePosition();
-            Trigger = Class == ShipClass.Battleship && Input.IsKeyPressed(Abilities.KeyFor(Class, "guns"));
+            Trigger = Classes.Guns(Class) && Input.IsKeyPressed(Abilities.KeyFor(Class, "guns"));
         }
 
         SendState(dt);
@@ -7583,15 +7727,17 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget
             st[i] = _wings[i].StateCode; rearm[i] = (float)_wings[i].RearmLeft;
         }
         (GetParent() as Hub)?.SendHostState(OwnerId, Hp, MaxHp, Alive, _stasis, Pinned, _combatT, _pdLeft, _pdRecharge, _mag, _missileReload,
-            WingTarget?.NetId ?? 0, pos, rot, st, rearm);
+            _bsWindup, _bsVolleys, _bsCooldown, WingTarget?.NetId ?? 0, pos, rot, st, rearm);
     }
 
     // the host's report (Hub.NetHostState: only the host speaks for combat state)
     public void ApplyHostState(double hp, double maxHp, bool alive, double stasis, bool pinned, double combat, double pdLeft, double pdRecharge, int mag, double reload,
+                               double bsWindup, int bsVolleys, double bsCooldown,
                                int wingTarget, Vector2[] wingPos, float[] wingRot, int[] wingState, float[] wingRearm)
     {
         Hp = hp; MaxHp = maxHp; Alive = alive; _stasis = stasis; Pinned = pinned; _combatT = combat;
         _pdLeft = pdLeft; _pdRecharge = pdRecharge; _mag = mag; _missileReload = reload;
+        _bsWindup = bsWindup; _bsVolleys = bsVolleys; _bsCooldown = bsCooldown;
         WingTarget = wingTarget != 0 ? Combat.ById(wingTarget) : null;
         for (int i = 0; i < Math.Min(_wings.Count, wingPos.Length); i++)
         {
@@ -7693,7 +7839,7 @@ public static class Plume
 
 //==============================================================================
 // FILE: scripts/Progression.cs
-// 106 lines   sha256 aabb07443837
+// 106 lines   sha256 7887382412c9
 //==============================================================================
 using Godot;
 using System;
@@ -7715,7 +7861,7 @@ public static class Progression
     public class Upgrade { public string Id, Name, Unit; public double Per; }
 
     // The damage upgrade lands on each hull's main weapon: its gun shells, or its torpedoes.
-    public static string DamageStat(ShipClass c) => c == ShipClass.Battleship ? "main_damage" : "torpedo_damage";
+    public static string DamageStat(ShipClass c) => Classes.Wing(c) ? "torpedo_damage" : "main_damage";
     public static string StatFor(string id, ShipClass c) => id switch
     {
         "turn" => "turn_rate", "hull" => "hull", "speed" => "max_speed", "damage" => DamageStat(c), _ => null
@@ -7939,7 +8085,7 @@ public partial class Radar : Control
 
 //==============================================================================
 // FILE: scripts/Raider.cs
-// 323 lines   sha256 eba82c91689c
+// 323 lines   sha256 16b597a5ae2a
 //==============================================================================
 using Godot;
 using System.Linq;
@@ -8020,7 +8166,7 @@ public partial class Raider : Node2D, IHittable
     public int Patrol;                                 // 0: on its own
     private float _orbit;                              // patrols: its angle round the perimeter
     private const double ShotEvery = 1.0;
-    private const float Cruise = 100f;                  // an unupgraded capital ship's pace
+    private const float Cruise = 100f;                  // under every capital ship's top speed (104 to 130)
     private const float BoostMult = 5f;                 // 500%
     private const double BoostTime = 3.0;
     public const float PinRange = 100f;
@@ -8879,7 +9025,7 @@ public partial class SessionMenu : CanvasLayer
 
 //==============================================================================
 // FILE: scripts/Settings.cs
-// 82 lines   sha256 b2e0d3f12854
+// 87 lines   sha256 4dd23a4a672f
 //==============================================================================
 using Godot;
 
@@ -8958,6 +9104,11 @@ public static class Settings
         Keys.Clear();
         if (c.HasSection("keys"))
             foreach (var k in c.GetSectionKeys("keys")) Keys[k] = (int)c.GetValue("keys", k, 0);
+        // The battleship's missile was its F ability and the broadside is now: a key a pilot gave
+        // the missile goes to the broadside (so a fire mode moved onto F never shares it), and the
+        // battleship's reload, which is gone, keeps no key.
+        if (Keys.Remove("Battleship.missile", out int missileKey)) Keys.TryAdd("Battleship.broadside", missileKey);
+        Keys.Remove("Battleship.reload");
     }
 
     // For scenes entered without the main menu (the editor's F6, the smoke test).
@@ -9068,12 +9219,12 @@ public partial class SfxPool : Node
 
 //==============================================================================
 // FILE: scripts/Shell.cs
-// 52 lines   sha256 11a8434a127d
+// 52 lines   sha256 559e4382e95d
 //==============================================================================
 using Godot;
 
-// A BATTLESHIP SHELL: the main guns' round. It flies straight -- no tracking -- at the guns'
-// shell speed (520 u/s; its own stat, so a missile rack cannot change the guns), as far as the
+// A MAIN-GUN SHELL (battleship, destroyer): the main guns' round. It flies straight -- no tracking --
+// at the guns' shell speed (520 u/s; its own stat, so no other weapon's gear changes it), as far as the
 // guns' range, and hits the first hostile it touches
 // (never a missile: that is point defence's job). The host's shell does the damage; guests
 // fly a cosmetic copy. Its path is swept in short steps each frame, so it cannot pass
@@ -9201,17 +9352,18 @@ public partial class ShieldFlash : Node2D
 
 //==============================================================================
 // FILE: scripts/ShipClasses.cs
-// 526 lines   sha256 07f16bb2c0cf
+// 531 lines   sha256 575d38217a9c
 //==============================================================================
 using System.Linq;
 using Godot;
 using System;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SHIP CLASSES — the first two of an intended nine.
+// SHIP CLASSES — the first three of an intended nine.
 //
-//   BATTLESHIP : main guns aimed with the cursor, a guided missile, plus PD
+//   BATTLESHIP : four main guns aimed with the cursor, a broadside of all of them, plus PD
 //   CARRIER    : fighters sent at the selected target, a bomber strike of its own, plus PD
+//   DESTROYER  : two main guns aimed with the cursor, guided missile bursts, plus PD; the fastest
 //   (the keys are the player's: see Abilities)
 //
 // Ported from Space Fleet Idle's capital ship, cut down to the initial layer.
@@ -9223,7 +9375,7 @@ using System;
 // renders what it is told. The owner decides only its heading, where it aims, and
 // whether it is pulling the trigger -- never what the shot hits.
 // ─────────────────────────────────────────────────────────────────────────────
-public enum ShipClass { Battleship, Carrier }
+public enum ShipClass { Battleship, Carrier, Destroyer }
 
 // What fired a laser, which decides which report is played. Not a volume: the level lives in
 // the file (see tools/gain.ps1), so a new kind of shot is a new sound rather than a new offset.
@@ -9282,7 +9434,11 @@ public partial class Turret : Node2D
     private bool Online => !PointDefense || Ship.PdActive;
 
     private ShipStats S => Ship.Stats;
-    private float RotSpeed => (float)(PointDefense ? S["pd_turn"] : S["main_turn"]);
+    // Through a broadside the main turrets swing fast enough to come round from anywhere onto the
+    // cursor within the wind-up (half a turn in its time), or at their own rate if that is faster.
+    private float RotSpeed => (float)(PointDefense ? S["pd_turn"]
+                                    : Ship.BroadsideTracking ? Math.Max(S["main_turn"], Math.PI / Math.Max(0.05, S["broadside_windup"]))
+                                    : S["main_turn"]);
     public float Range    => (float)(PointDefense ? S["pd_range"] : S["main_range"]);
     private double ShotDamage => PointDefense ? S["pd_damage"] : S["main_damage"];
     public double Interval   => PointDefense ? S["pd_interval"] : S["main_interval"];
@@ -9381,13 +9537,13 @@ public partial class Turret : Node2D
     }
 
     // One main-gun shot, along the barrel as it points RIGHT NOW: a SHELL, straight, at the guns'
-    // own shell speed, as far as their range. Host only. (Point defence never comes here: it fires
-    // from Tick, at what it has acquired.)
-    public void Shoot()
+    // own shell speed, as far as their range, at `mult` times a shell's damage (a broadside's
+    // multiple). Host only. (Point defence never comes here: it fires from Tick, at what it has acquired.)
+    public void Shoot(double mult = 1.0)
     {
         if (!Net.Sim) return;
         var dir = Vector2.Right.Rotated(GlobalRotation);
-        Combat.FireShell(GlobalPosition + dir * BarrelLength, dir, (float)S["shell_speed"], Range, ShotDamage, Ship);
+        Combat.FireShell(GlobalPosition + dir * BarrelLength, dir, (float)S["shell_speed"], Range, ShotDamage * mult, Ship);
     }
 
     // _angle is a WORLD angle, so it is applied as GlobalRotation; as a local
@@ -9750,7 +9906,7 @@ public static class Sprites
 
 //==============================================================================
 // FILE: scripts/Stats.cs
-// 187 lines   sha256 51f26ba03787
+// 205 lines   sha256 76dcca49d3f1
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -9764,7 +9920,7 @@ using System.Collections.Generic;
 //
 // Each stat is (Base + Flat) x (1 + Bonus).
 //   Flat  -- whole additions: the pilot's purchases (Progression.Flats) and gear's (Equipment.Adds:
-//            one fighter fewer, two more missiles in the magazine).
+//            one fighter fewer, two more bursts in the magazine).
 //   Bonus -- shares keyed by stat id (0.10 = +10%): gear's (Equipment.Bonuses) and the character's
 //            own (Character.Bonuses), summed (ShipStats.Sum).
 // Interval stats (time between shots) are the exception: a rate-of-fire bonus DIVIDES them, so
@@ -9809,7 +9965,7 @@ public class ShipStats
     }
 
     // Retune ONE ship's sheet, for a ship that is not a pilot's: the title screen's battleship
-    // fires two missiles on a five second reload rather than the class's. It is the sheet that
+    // fires its broadside every five seconds rather than the class's ten. It is the sheet that
     // changes, not the class, so the ship still reads every other number the real one does.
     public void SetBase(string id, double v) { if (_byId.TryGetValue(id, out var s)) s.Base = v; }
 
@@ -9822,58 +9978,71 @@ public class ShipStats
     public ShipStats(ShipClass cls, IReadOnlyDictionary<string, double> bonuses = null, IReadOnlyDictionary<string, double> flats = null)
     {
         Class = cls;
-        bool bs = cls == ShipClass.Battleship;
+        // one figure per class, in the order Battleship, Carrier, Destroyer
+        double V(double bs, double cv, double dd) => cls switch { ShipClass.Carrier => cv, ShipClass.Destroyer => dd, _ => bs };
 
-        Add("Hull",   "hull",          "Hull points",        bs ? 300 : 200, "", 0);
+        Add("Hull",   "hull",          "Hull points",        V(300, 200, 250), "", 0);
 
         // Capital ships handle like naval ships: thrust only along the keel, sideways
-        // drift bleeds off fast, and they turn on a radius -- no strafing, no pivoting.
-        // 0.3.x: speeds and accelerations are 40% of 0.3.0's (same time to get under
-        // way, far less top speed); the radius is chosen so that at full speed they
-        // still turn 20% faster than 0.3.0 did (battleship 0.81 -> 0.97 rad/s,
-        // carrier 0.63 -> 0.76), and the rudder limit is up 20% so it never caps that.
-        Add("Helm", "thrust",         "Ahead acceleration",  bs ? 56 : 48, "u/s²", 0);
-        Add("Helm", "reverse_thrust", "Astern acceleration", bs ? 24 : 20, "u/s²", 0);
-        Add("Helm", "max_speed",      "Top speed ahead",     bs ? 104 : 96, "u/s", 0);
-        Add("Helm", "reverse_speed",  "Top speed astern",    bs ? 36 : 32, "u/s", 0);
-        Add("Helm", "turn_radius",    "Turning radius",      bs ? 107 : 127, "u", 0, inverse: true);
-        Add("Helm", "turn_rate",      "Rudder limit",        bs ? 1.08 : 0.9, "rad/s", 2);
+        // drift bleeds off fast, and they turn on a radius -- no strafing; almost stopped,
+        // the rudder pivots the hull slowly. The battleship sets the pace: the carrier is 12%
+        // faster (116.48 u/s) and the destroyer, the fastest capital ship, 25% (130). The
+        // destroyer's accelerations and astern speed are the battleship's x1.25; the carrier's are
+        // its own top speed's fractions (a half, 5/24 and a third) -- so each class gets under way
+        // on its own clock whatever its pace.
+        const double cv = 116.48;
+        Add("Helm", "thrust",         "Ahead acceleration",  V(56, cv / 2, 70), "u/s²", 0);
+        Add("Helm", "reverse_thrust", "Astern acceleration", V(24, cv * 5 / 24, 30), "u/s²", 0);
+        Add("Helm", "max_speed",      "Top speed ahead",     V(104, cv, 130), "u/s", 0);
+        Add("Helm", "reverse_speed",  "Top speed astern",    V(36, cv / 3, 45), "u/s", 0);
+        Add("Helm", "turn_radius",    "Turning radius",      V(107, 127, 107), "u", 0, inverse: true);
+        Add("Helm", "turn_rate",      "Rudder limit",        V(1.08, 0.9, 1.08), "rad/s", 2);
         Add("Helm", "water_drag",     "Drag",                0.35, "/s", 2);
         Add("Helm", "keel",           "Keel grip (drift loss)", 4.0, "/s", 1);
 
-        if (bs)
-        {
-            Add("Main guns", "main_count",    "Barrels",            4, "", 0);
-            // 5.9 a shell: the battleship's total (main + missiles, ~23.9 DPS) is 1.25x the carrier's
-            // MEASURED sustained output (19.07 DPS: fighters and bomber strikes on a dummy, 90 s)
+        if (Classes.Guns(cls))
+        {   // cursor-aimed turrets: the battleship's four, the destroyer's two
+            Add("Main guns", "main_count",    "Barrels",            V(4, 0, 2), "", 0);
+            // 5.9 a shell: the battleship's four guns alone are 23.6 DPS, 1.24x the carrier's MEASURED
+            // sustained output (19.07 DPS: fighters and bombers on a dummy, 90 s); the broadside is on top
             Add("Main guns", "main_damage",   "Damage per shot",    5.9, "", 2);
             Add("Main guns", "main_interval", "Reload (per barrel)",1.0, "s", 2, inverse: true);
             Add("Main guns", "main_range",    "Range",              720, "u", 0);
             Add("Main guns", "main_turn",     "Turret turn rate",   Mathf.Tau / 4f, "rad/s", 2);
             Add("Main guns", "shell_speed",   "Shell speed",        520, "u/s", 0);
-
-            // A magazine, reloaded by hand (R): one missile, then a 16 s reload.
-            Add("Missile", "missile_damage",   "Damage",            5.0, "", 1);
-            Add("Missile", "missile_mag",      "Magazine",          1, "", 0);
-            Add("Missile", "missile_refire",   "Between shots",     0.6, "s", 1, inverse: true);
+        }
+        if (Classes.Broadside(cls))
+        {   // F: the turrets swing onto the cursor through the wind-up, then every main gun fires,
+            // volley after volley. Its shells are main-gun shells, at this multiple of their damage.
+            Add("Broadside", "broadside_volleys",  "Volleys",                 3, "", 0);
+            Add("Broadside", "broadside_mult",     "Shell damage (x main)",   1.0, "x", 2);
+            Add("Broadside", "broadside_windup",   "Wind-up (turrets aim)",   0.5, "s", 2, inverse: true);
+            Add("Broadside", "broadside_gap",      "Between volleys",         0.25, "s", 2, inverse: true);
+            Add("Broadside", "broadside_cooldown", "Cooldown after",          10, "s", 1, inverse: true);
+        }
+        if (Classes.Missiles(cls))
+        {   // F: a guided BURST of three, one at the target and two launched wide that curve in onto
+            // it (PlayerShip.FireMissile). A magazine of bursts, reloaded by hand (R).
+            Add("Missile", "missile_damage",   "Damage (each)",     5.0, "", 1);
+            Add("Missile", "missile_mag",      "Magazine (bursts)", 2, "", 0);
+            Add("Missile", "missile_refire",   "Between bursts",    0.6, "s", 1, inverse: true);
             Add("Missile", "missile_reload",   "Reload (R)",        16.0, "s", 1, inverse: true);
             Add("Missile", "missile_range",    "Range",             900, "u", 0);
-            // a bunker buster: slow, and barely guided
-            Add("Missile", "missile_speed",    "Speed",             130, "u/s", 0);
-            Add("Missile", "missile_turn",     "Guidance (turn)",   0.35, "rad/s", 2);
+            Add("Missile", "missile_speed",    "Speed",             160, "u/s", 0);
+            Add("Missile", "missile_turn",     "Guidance (turn)",   1.5, "rad/s", 2);
         }
 
         // An active ability: activating opens the firing window; the reload runs after
-        // it closes. Battleship mounts are heavier and swing slower than the carrier's.
-        Add("Point defence", "pd_count",    "Turrets",           bs ? 2 : 3, "", 0);
+        // it closes. Battleship and destroyer mounts are heavier and swing slower than the carrier's.
+        Add("Point defence", "pd_count",    "Turrets",           V(2, 3, 2), "", 0);
         Add("Point defence", "pd_damage",   "Damage per shot",   0.5, "", 2);
         Add("Point defence", "pd_interval", "Reload",            0.5, "s", 2, inverse: true);
         Add("Point defence", "pd_range",    "Range",             460, "u", 0);
-        Add("Point defence", "pd_turn",     "Turret turn rate",  bs ? Mathf.Tau / 3f : Mathf.Tau / 1.2f, "rad/s", 2);
+        Add("Point defence", "pd_turn",     "Turret turn rate",  V(Mathf.Tau / 3f, Mathf.Tau / 1.2f, Mathf.Tau / 3f), "rad/s", 2);
         Add("Point defence", "pd_active",   "Firing window",     15, "s", 0);
         Add("Point defence", "pd_reload",   "Recharge after",    15, "s", 0, inverse: true);
 
-        if (!bs)
+        if (Classes.Wing(cls))
         {
             Add("Fighters", "fighter_count",    "Craft",            3, "", 0);
 
@@ -9886,16 +10055,17 @@ public class ShipStats
             Add("Fighters", "fighter_turn",     "Turn rate",        3.5, "rad/s", 1);
             Add("Fighters", "control_range",    "Control range",    1080, "u", 0);   // 1.5x the battleship's guns (720)
 
-            // An active ability. Torpedoes run straight and steady: no tracking, so a
-            // moving target can step out of the way.
+            // An active ability. Torpedoes run straight and steady: no tracking, so a moving
+            // target can step out of the way -- which is why the bombers close to 283.5 u before
+            // they launch, and the torpedoes run at 112.5 u/s.
             Add("Bombers", "bomber_count",    "Craft",              2, "", 0);
 
             Add("Bombers", "torpedo_damage",  "Torpedo damage",     15, "", 0);
             Add("Bombers", "bomber_ammo",     "Torpedoes per run",  4, "", 0);
             Add("Bombers", "torpedo_interval","Between launches",   0.5, "s", 2, inverse: true);
-            Add("Bombers", "torpedo_speed",   "Torpedo speed",      90, "u/s", 0);
+            Add("Bombers", "torpedo_speed",   "Torpedo speed",      112.5, "u/s", 1);
             Add("Bombers", "torpedo_range",   "Torpedo run",        1215, "u", 0);
-            Add("Bombers", "launch_range",    "Launch distance",    567, "u", 0);
+            Add("Bombers", "launch_range",    "Launch distance",    283.5, "u", 1);
             Add("Bombers", "bomber_rearm",    "Rearm on the carrier", 6, "s", 1, inverse: true);
             Add("Bombers", "bomber_speed",    "Top speed",          190, "u/s", 0);
             Add("Bombers", "bomber_accel",    "Acceleration",       500, "u/s²", 0);
@@ -9910,7 +10080,7 @@ public class ShipStats
 
         // Bombers reach twice as far as the fighters are controlled: defined FROM the
         // control range, and it takes the same bonus, so the two can never drift apart.
-        if (!bs)
+        if (Classes.Wing(cls))
         {
             var cr = _byId["control_range"];
             Add("Bombers", "strike_range", "Strike range (2× control)", 2 * cr.Base, "u", 0);
@@ -9919,19 +10089,23 @@ public class ShipStats
     }
 
     // ── derived figures: computed from the stats above, never stored ─────────
-    public double MainDpsPerBarrel => Class == ShipClass.Battleship ? this["main_damage"] / this["main_interval"] : 0;
+    public double MainDpsPerBarrel => Classes.Guns(Class) ? this["main_damage"] / this["main_interval"] : 0;
     public double MainDps          => MainDpsPerBarrel * this["main_count"];
     public double PdDpsPerTurret   => this["pd_damage"] / this["pd_interval"];
     // PD only fires during its window, so its sustained rate is scaled by the duty fraction.
     public double PdDuty           => this["pd_active"] / (this["pd_active"] + this["pd_reload"]);
     private double PdDps            => PdDpsPerTurret * this["pd_count"];
     public double PdSustainedDps   => PdDps * PdDuty;
-    // A full magazine, fired as fast as it allows, then reloaded: damage per cycle over cycle time.
-    public double MissileDps => Class == ShipClass.Battleship
-        ? this["missile_mag"] * this["missile_damage"]
+    // A full magazine of bursts, fired as fast as it allows, then reloaded: damage per cycle over cycle time.
+    public double MissileDps => Classes.Missiles(Class)
+        ? this["missile_mag"] * PlayerShip.BurstSides.Length * this["missile_damage"]
           / (this["missile_reload"] + (this["missile_mag"] - 1) * this["missile_refire"])
         : 0;
-    public double FighterDpsEach   => Class == ShipClass.Carrier ? this["fighter_damage"] / this["fighter_interval"] : 0;
+    // One broadside's shells, and its whole cycle: the wind-up, the volleys, then the cooldown.
+    public double BroadsideDamage => this["broadside_volleys"] * this["main_count"] * this["main_damage"] * this["broadside_mult"];
+    public double BroadsideCycle  => this["broadside_windup"] + (this["broadside_volleys"] - 1) * this["broadside_gap"] + this["broadside_cooldown"];
+    public double BroadsideDps    => Classes.Broadside(Class) && BroadsideCycle > 0 ? BroadsideDamage / BroadsideCycle : 0;
+    public double FighterDpsEach   => Classes.Wing(Class) ? this["fighter_damage"] / this["fighter_interval"] : 0;
     public double FighterDps       => FighterDpsEach * this["fighter_count"];
     public double TorpedoesPerRun  => this["bomber_ammo"] * this["bomber_count"];
 
@@ -9942,7 +10116,7 @@ public class ShipStats
 
 //==============================================================================
 // FILE: scripts/StatsWindow.cs
-// 217 lines   sha256 8602c6289a1b
+// 225 lines   sha256 843e3831c247
 //==============================================================================
 using Godot;
 
@@ -10115,13 +10289,21 @@ public partial class StatsWindow : CanvasLayer
         void D(string label, double v, string unit = "DPS") =>
             _derived.AddChild(Cell($"{label}:  {v:0.00} {unit}", false, false, acc));
         _derived.AddChild(Cell("DAMAGE", true));
-        if (s.Class == ShipClass.Battleship)
+        if (Classes.Guns(s.Class))
         {
             D("Per main barrel", s.MainDpsPerBarrel);
             D($"Main guns ({s["main_count"]:0} barrels)", s.MainDps);
             _derived.AddChild(Cell($"Salvo: {s["main_count"]:0} shots every {s["main_interval"]:0.00} s   ·   "
                                  + $"Staggered: 1 shot every {s.StaggerStep:0.00} s   (same rate)", false, false, acc));
-            D($"Missiles (magazine of {s["missile_mag"]:0}, averaged over a reload)", s.MissileDps);
+            if (Classes.Broadside(s.Class))
+            {
+                _derived.AddChild(Cell($"Broadside: {s["broadside_volleys"]:0} volleys × {s["main_count"]:0} shells × "
+                                     + $"{s["main_damage"] * s["broadside_mult"]:0.00} = {s.BroadsideDamage:0.0} damage, every {s.BroadsideCycle:0.0} s",
+                                       false, false, acc));
+                D("Broadside, averaged over its cycle", s.BroadsideDps);
+            }
+            if (Classes.Missiles(s.Class))
+                D($"Missiles (magazine of {s["missile_mag"]:0} bursts of {PlayerShip.BurstSides.Length}, averaged over a reload)", s.MissileDps);
         }
         else
         {
@@ -10134,8 +10316,8 @@ public partial class StatsWindow : CanvasLayer
         }
         D("Per PD turret (while firing)", s.PdDpsPerTurret);
         D($"PD sustained, if re-activated as soon as it recharges ({s.PdDuty * 100:0}% duty)", s.PdSustainedDps);
-        double total = s.MainDps + s.MissileDps + s.PdSustainedDps;
-        _derived.AddChild(Cell($"SUSTAINED TOTAL:  {total:0.00} DPS" + (s.Class == ShipClass.Carrier ? "  (+ fighter runs, + bomber strikes)" : ""), true, false, acc));
+        double total = s.MainDps + s.MissileDps + s.BroadsideDps + s.PdSustainedDps;
+        _derived.AddChild(Cell($"SUSTAINED TOTAL:  {total:0.00} DPS" + (Classes.Wing(s.Class) ? "  (+ fighter runs, + bomber strikes)" : ""), true, false, acc));
         _derived.AddChild(new Control { CustomMinimumSize = new Vector2(0, 8) });
 
         // ── every stat: base / added / bonus / final ──
@@ -10435,7 +10617,7 @@ public partial class TioWindow : PanelContainer
 
 //==============================================================================
 // FILE: scripts/Torpedo.cs
-// 150 lines   sha256 c5118fa8e6ff
+// 149 lines   sha256 78f268798b9b
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -10448,11 +10630,10 @@ using System.Collections.Generic;
 // The host's copy deals the damage. Guests are sent the launch (from, heading) and
 // fly a cosmetic copy of their own: the run is deterministic, so it goes where the
 // host's goes and bursts in the same place, without streaming positions.
-// The battleship's missile is the same projectile with two differences: it is
-// BARELY guided (its heading turns toward its target at no more than TurnRate), and
-// it is HEAVY -- a slow bunker buster with a bigger body, darker smoke and a bigger
-// blast. Guests run the same guidance on the same positions, so their cosmetic
-// copy follows the host's.
+// A MISSILE is the same projectile with two differences: it is GUIDED (its heading turns
+// toward its target at no more than TurnRate), and it may be HEAVY -- the destroyer's
+// burst: a bigger body, darker smoke and a bigger blast. Guests run the same guidance on
+// the same positions, so their cosmetic copy follows the host's.
 public partial class Torpedo : Node2D, IHittable
 {
     public Vector2 Dir;
@@ -10461,7 +10642,7 @@ public partial class Torpedo : Node2D, IHittable
     public bool Cosmetic;             // a guest's copy: draws and bursts, never damages
     public int TargetId;              // 0 = unguided
     public float TurnRate;            // rad/s the heading may turn toward the target
-    public bool Heavy;                // the bunker buster's look
+    public bool Heavy;                // the destroyer's missile's look
     public bool HostileFire;          // fired by an enemy: seeks and hits player ships
     public PlayerShip Source;         // who fired it (host copy only): a hit counts as their combat
 
@@ -10512,7 +10693,7 @@ public partial class Torpedo : Node2D, IHittable
         {
             var tgt = TurnRate > 0 && TargetId != 0 ? (HostileFire ? Combat.PlayerById(TargetId) : Combat.ById(TargetId)) : null;
             if (tgt != null)
-            {   // barely guided: the nose creeps toward the target, never snaps
+            {   // guided: the nose turns toward the target at TurnRate, never snaps
                 float want = (tgt.Position - GlobalPosition).Angle(), have = Dir.Angle();
                 float turn = Mathf.Clamp(Mathf.AngleDifference(have, want), -TurnRate * dt, TurnRate * dt);
                 Dir = Dir.Rotated(turn);
@@ -10560,7 +10741,7 @@ public partial class Torpedo : Node2D, IHittable
         if (!_spent)
         {
             if (Heavy)
-            {   // the bunker buster: long and slim (6.4 x 32.5), a sharp nose, swept fins, a band and a seam
+            {   // the heavy missile: long and slim (6.4 x 32.5), a sharp nose, swept fins, a band and a seam
                 var body = new Color(0.58f, 0.60f, 0.56f); var dark = new Color(0.30f, 0.31f, 0.29f);
                 DrawRect(new Rect2(-3.2f, -12f, 6.4f, 26f), body);
                 DrawColoredPolygon(new[] { new Vector2(-3.2f, -12f), new Vector2(0, -19.5f), new Vector2(3.2f, -12f) }, new Color(0.85f, 0.25f, 0.2f));
@@ -12045,6 +12226,88 @@ for ($i = $dataAt; $i -lt $dataAt + $dataLen - 1; $i += 2) {
 Write-Host ("{0} -> {1}  x{2:0.0000}  ({3} samples)" -f $In, $Out, $Factor, [int]($dataLen / 2))
 
 //==============================================================================
+// FILE: tools/make_destroyer.ps1
+// 77 lines   sha256 89bc0fcf58e2
+//==============================================================================
+# The destroyer's hull: the battleship's, 75% as wide and 90% as long, on a 270 px square
+# canvas (so 0.7467 u/px at 201.6 u, the battleship's own scale), with missile pods painted
+# where the battleship's two inner turrets stood and along the sponsons.
+# Run: powershell -ExecutionPolicy Bypass -File tools\make_destroyer.ps1 [-Preview <png>]
+param([string]$Out = '', [string]$Preview = '')
+$Root = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+if (-not $Out) { $Out = Join-Path $Root 'destroyer_hull.png' }
+Add-Type -AssemblyName System.Drawing
+$src = [System.Drawing.Bitmap]::FromFile((Join-Path $Root 'battleship_hull.png'))
+$N = 270
+$bmp = New-Object System.Drawing.Bitmap $N, $N, ([System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+$g = [System.Drawing.Graphics]::FromImage($bmp)
+$g.Clear([System.Drawing.Color]::Transparent)
+$g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+$g.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+$g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+$W = 300 * 0.75; $H = 300 * 0.9
+$dst = New-Object System.Drawing.RectangleF ((($N - $W) / 2), 0, $W, $H)
+$attr = New-Object System.Drawing.Imaging.ImageAttributes
+$attr.SetWrapMode([System.Drawing.Drawing2D.WrapMode]::TileFlipXY)   # no dark fringe at the edges
+$g.DrawImage($src, [System.Drawing.Rectangle]::Round($dst), 0, 0, 300, 300, [System.Drawing.GraphicsUnit]::Pixel, $attr)
+
+function C([string]$hex, [int]$a = 255) { [System.Drawing.Color]::FromArgb($a, [Convert]::ToInt32($hex.Substring(0,2),16), [Convert]::ToInt32($hex.Substring(2,2),16), [Convert]::ToInt32($hex.Substring(4,2),16)) }
+$rim = C '2a3b57'; $wall = C '4e668b'; $lid = C '6f89b0'; $hi = C '9fb6d8'; $hatch = C '1c2739'
+
+# one pod: a dark rim, a raised lid with a lit edge, the hatch in the middle
+function Pod([float]$cx, [float]$cy, [float]$r) {
+    $g.FillEllipse((New-Object System.Drawing.SolidBrush $rim), $cx - $r, $cy - $r, 2 * $r, 2 * $r)
+    $ri = $r * 0.78
+    $g.FillEllipse((New-Object System.Drawing.SolidBrush $wall), $cx - $ri, $cy - $ri, 2 * $ri, 2 * $ri)
+    $rl = $r * 0.62
+    $g.FillEllipse((New-Object System.Drawing.SolidBrush $lid), $cx - $rl, $cy - $rl, 2 * $rl, 2 * $rl)
+    $pen = New-Object System.Drawing.Pen $hi, ([Math]::Max(0.8, $r * 0.18))
+    $g.DrawArc($pen, $cx - $rl, $cy - $rl, 2 * $rl, 2 * $rl, 190, 110)
+    $rh = $r * 0.26
+    $g.FillEllipse((New-Object System.Drawing.SolidBrush $hatch), $cx - $rh, $cy - $rh, 2 * $rh, 2 * $rh)
+}
+# a bank of pods on a dark plate
+function Bank([float]$cx, [float]$cy, [int]$cols, [int]$rows, [float]$r, [float]$gap) {
+    $w = $cols * 2 * $r + ($cols - 1) * $gap; $h = $rows * 2 * $r + ($rows - 1) * $gap
+    $plate = New-Object System.Drawing.SolidBrush (C '33476a')
+    $g.FillRectangle($plate, $cx - $w / 2 - 2, $cy - $h / 2 - 2, $w + 4, $h + 4)
+    for ($i = 0; $i -lt $cols; $i++) { for ($j = 0; $j -lt $rows; $j++) {
+        Pod ($cx - $w / 2 + $r + $i * (2 * $r + $gap)) ($cy - $h / 2 + $r + $j * (2 * $r + $gap)) $r
+    } }
+}
+$cx = $N / 2
+Bank $cx (100.7 * 0.9) 2 2 5.2 2.0     # where the battleship's second turret stood
+Bank $cx (215.3 * 0.9) 2 2 5.2 2.0     # and its third
+Bank $cx (100.7 * 0.9 + 22) 2 1 4.2 2.0
+Bank $cx (215.3 * 0.9 - 22) 2 1 4.2 2.0
+foreach ($side in -1, 1) {             # the sponsons: a pod fore and aft of each point-defence turret
+    Pod ($cx + $side * 36) (150.6 * 0.9 - 22) 4.0
+    Pod ($cx + $side * 36) (150.6 * 0.9 + 22) 4.0
+}
+$g.Dispose(); $src.Dispose()
+$bmp.Save($Out, [System.Drawing.Imaging.ImageFormat]::Png)
+if ($Preview) {
+    # 3x, on a dark field, tinted like the default pilot, with the turrets overlaid, to judge it
+    $p = New-Object System.Drawing.Bitmap ($N * 3), ($N * 3)
+    $pg = [System.Drawing.Graphics]::FromImage($p)
+    $pg.Clear((C '0b0f18'))
+    $pg.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::NearestNeighbor
+    $pg.DrawImage($bmp, 0, 0, $N * 3, $N * 3)
+    $tm = [System.Drawing.Bitmap]::FromFile((Join-Path $Root 'turret_bs_main.png'))
+    $tp = [System.Drawing.Bitmap]::FromFile((Join-Path $Root 'turret_bs_pd.png'))
+    $k = 0.9
+    foreach ($m in @(@(0.41, -65.41, $tm), @(0.38, 76.23, $tm), @(-33.25, 0.45, $tp), @(34.97, 0.45, $tp))) {
+        $x = $m[0] * 0.75 / 0.7467; $y = $m[1] * 0.9 / 0.7467; $t = $m[2]
+        if ($t -eq $tp) { $x = $m[0] * 0.75 / 0.7467 }
+        $w = $t.Width * $k * 3; $h = $t.Height * $k * 3
+        $pg.DrawImage($t, [float](($cx + $x) * 3 - $w / 2), [float](($N / 2 + $y) * 3 - $h / 2), [float]$w, [float]$h)
+    }
+    $pg.Dispose(); $p.Save($Preview, [System.Drawing.Imaging.ImageFormat]::Png); $p.Dispose(); $tm.Dispose(); $tp.Dispose()
+}
+$bmp.Dispose()
+"wrote $Out"
+
+//==============================================================================
 // FILE: tools/manifest.ps1
 // 42 lines   sha256 2bd8e7cbf24b
 //==============================================================================
@@ -12510,7 +12773,7 @@ ls /tmp/shots
 
 //==============================================================================
 // FILE: tools/screens/Shots.cs.txt
-// 549 lines   sha256 a64a879774a8
+// 562 lines   sha256 9d062f889711
 //==============================================================================
 // Screenshot driver. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Shots.cs, registers it as an autoload, and runs the real
@@ -12722,6 +12985,7 @@ public partial class _Shots : Node
             await W(0.6); await Snap("33_free_camera_zoomed_out");
             hub.ToggleFreeCamera(); hub.SetZoom(Hub.DefaultZoom); await W(1.5);
         }
+        await Close(ShipClass.Destroyer, "9d_destroyer_closeup");
         await Close(ShipClass.Battleship, "9_battleship_closeup");
         // warp: the charge building, then the flash where it lands (and the hull bar's WARP readout)
         {
@@ -12818,11 +13082,11 @@ public partial class _Shots : Node
             H.ToggleEquipment(); await W(0.2);
         }
         // ...and with boss drops: an Epic shield fitted (its name in the Epic colour, its effects in
-        // words), and a hold of both classes' parts, some of them doubled
+        // words), and a hold of every class's parts, some of them doubled
         {
             var bl = Character.LoadoutFor(Character.Class); var keep = (string[])bl.Clone();
             bl[2] = "sh_glass_3"; bl[6] = "chip_combat_2";
-            foreach (var id in new[] { "bs_heavy_2", "bs_seeker_3", "drv_racing_1", "sh_bulwark_3", "fr_flak_1", "chip_target_1", "chip_target_1", "cv_elite_3", "cv_widebay_2" })
+            foreach (var id in new[] { "bs_heavy_2", "dd_seeker_3", "bs_barrage_2", "drv_racing_1", "sh_bulwark_3", "fr_flak_1", "chip_target_1", "chip_target_1", "cv_elite_3", "cv_widebay_2" })
                 Character.Stow(id);
             P(H, "ApplyLocalIdentity"); H.ToggleEquipment(); await W(0.4);
             await Snap("58_equipment_hold");
@@ -12876,20 +13140,27 @@ public partial class _Shots : Node
             await Snap("54_shells_in_flight");
             zp.SetValue(H, z0); await W(1.5);
         }
-        // the player's missile, close up: the camera rides a stand-in over it
+        // the destroyer's missile burst: three off the nose, the outer two launched wide and curving in;
+        // then one missile close up (the camera rides a stand-in over it)
         {
+            Character.Class = ShipClass.Destroyer; P(H, "ApplyLocalIdentity"); await W(0.3);
             var ms = H.GetNode<PlayerShip>("Ship_1"); var md = H.GetNode<TargetDummy>("TargetDummy1");
             ms.Position = md.Position + new Vector2(0, 700); ms.Velocity = Vector2.Zero; ms.Rotation = 0f; await W(0.8);
             typeof(Hub).GetField("_selected", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).SetValue(H, md);
-            ms.UseAbility("missile", md.NetId); await W(0.5);
+            var zp = typeof(Hub).GetProperty("ZoomLevel"); float z0 = (float)zp.GetValue(H); zp.SetValue(H, 1.4f);
+            ms.UseAbility("missile", md.NetId); await W(0.9);
+            await Snap("43_missile_burst");
+            zp.SetValue(H, z0);
             var mt = H.GetChildren().OfType<Torpedo>().FirstOrDefault(x => x.Heavy);
             if (mt != null)
             {
                 ms.Visible = false; GetViewport().GetCamera2D().Zoom = new Vector2(5f, 5f);
                 for (int i = 0; i < 20; i++) { ms.Position = mt.GlobalPosition; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
-                await Snap("43_missile_closeup");
+                await Snap("43b_missile_closeup");
                 ms.Visible = true; GetViewport().GetCamera2D().Zoom = new Vector2(0.9f, 0.9f);
             }
+            await W(3.0);
+            Character.Class = ShipClass.Battleship; P(H, "ApplyLocalIdentity"); await W(0.3);
         }
         // a shield hit on each of the four sides, then stasis with the escape pod out
         {
@@ -12951,24 +13222,29 @@ public partial class _Shots : Node
             // K window: waiting for a key, then a reserved key refused
             await Class(ShipClass.Battleship);
             Key(global::Godot.Key.K); await W(0.3);
-            var kw = N<StatsWindow>().First(); kw.ShowPane(true); kw.StartCapture("missile"); await W(0.2);
+            var kw = N<StatsWindow>().First(); kw.ShowPane(true); kw.StartCapture("broadside"); await W(0.2);
             await Snap("21_k_capture");
             Key(global::Godot.Key.W); await W(0.2); await Snap("21b_k_reserved_refused");
             Key(global::Godot.Key.K); await W(0.2);
 
-            // battleship: missile in flight and landing; the bar with an empty magazine, PD, reload
+            // battleship: the broadside -- the turrets swinging onto the cursor, then a volley in flight;
+            // the bar with the broadside cooling down and PD on
             sel.SetValue(hub, d1);
             await Frame(d1.Position + new Vector2(-120, 520), 1.3f, false);
-            Key(global::Godot.Key.F); await W(1.4); await Snap("22_missile_in_flight");
-            var launchSpot = Me().Position;
-            await Frame(d1.Position + new Vector2(0, 110), 1.3f);          // watch the target, not the launcher
-            double t0 = d1.Total;
-            for (int i = 0; i < 900 && d1.Total == t0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            await W(0.08); await Snap("22b_missile_impact");
-            await Frame(launchSpot, 1.3f, false);
-            await W(0.7); Key(global::Godot.Key.F); await W(0.3); Key(global::Godot.Key.Q); await W(0.4);
-            await Snap("23_bar_battleship_empty_pd");
-            Key(global::Godot.Key.R); await W(3.0); await Snap("23b_bar_reloading");
+            void Cursor(Vector2 w) => Input.WarpMouse(GetViewport().GetFinalTransform() * (GetViewport().GetCanvasTransform() * w));
+            Cursor(Me().Position + new Vector2(260, 160)); await W(2.5);      // the turrets swung well away first
+            Cursor(d1.Position);
+            Key(global::Godot.Key.F); await W(0.25); await Snap("22_broadside_aiming");
+            await W(0.45); await Snap("22b_broadside_volley");
+            await W(0.8); Key(global::Godot.Key.Q); await W(0.4);
+            await Snap("23_bar_battleship_cooldown_pd");
+            // destroyer: the magazine spent, then reloading
+            await Class(ShipClass.Destroyer);
+            await Frame(d1.Position + new Vector2(-120, 520), 1.3f, false);
+            sel.SetValue(hub, d1);
+            Key(global::Godot.Key.F); await W(0.8); Key(global::Godot.Key.F); await W(0.8);
+            await Snap("23b_bar_destroyer_empty");
+            Key(global::Godot.Key.R); await W(3.0); await Snap("23c_bar_destroyer_reloading");
             hub.BeginPlacement("TEST", _ => { });
             Input.WarpMouse(GetViewport().GetFinalTransform() * (GetViewport().GetCanvasTransform() * (Me().Position + new Vector2(160, -120))));
             await W(0.3); await Snap("24_placement_ring");
@@ -13500,7 +13776,7 @@ echo "SMOKE TEST PASSED"
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 3677 lines   sha256 3ff46230cd85
+// 3878 lines   sha256 a796752240ff
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -13731,10 +14007,10 @@ public partial class _Test : Node
         for (int i = 0; i < 60 && !Net.IsOnline; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         bool wasOnline = Net.IsOnline;
         ((System.Collections.IDictionary)typeof(Hub).GetField("_peerSector", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null))[99] = Hub.SectorKind.Home;
-        // The pilot's own battleship has a Salvo Rack III fitted (a 5-missile magazine on the title
-        // ship's numbers): the title screen must fly the kit regardless.
+        // The pilot's own battleship has a Barrage Broadside III fitted (six volleys): the title
+        // screen must fly the kit regardless.
         var rack = Character.LoadoutFor(ShipClass.Battleship)[4];
-        Character.LoadoutFor(ShipClass.Battleship)[4] = "bs_salvo_3";
+        Character.LoadoutFor(ShipClass.Battleship)[4] = "bs_barrage_3";
         GetTree().ChangeSceneToFile("res://MainMenu.tscn");
         await Wait(0.4);
         Check(wasOnline && !Net.IsOnline, $"reaching the main menu ends the session too (was online: {wasOnline})");
@@ -13885,6 +14161,29 @@ public partial class _Test : Node
             Check(Character.Load(id), "(back to the round-trip pilot)");
         }
 
+        // ── A FILE FROM BEFORE THE DESTROYER: the battleship's missile racks are the destroyer's now ──
+        // Its battleship had a Salvo Rack III fitted; its hold had a Seeker Rack I, the old kit rack and
+        // (by some route) a destroyer Seeker Rack I too; a Buster Rack II waited unclaimed.
+        {
+            var old = new ConfigFile();
+            old.SetValue("id", "version", 2); old.SetValue("id", "name", "Veteran"); old.SetValue("id", "class", 0);
+            old.SetValue("equipment", "Battleship", "bs_heavy_2,std_drive,basic_deflector,reinforced_frame,bs_salvo_3,chip_basic,chip_basic,,,");
+            old.SetValue("gear_hold", "bs_seeker_1", 1); old.SetValue("gear_hold", "bs_missile_rack", 1); old.SetValue("gear_hold", "dd_seeker_1", 1);
+            old.SetValue("loot", "unclaimed", "bs_buster_2,cv_elite_3");
+            old.Save($"{Character.Dir}/veteran.cfg");
+            bool vl = Character.Load("veteran");
+            var vb = Character.LoadoutFor(ShipClass.Battleship);
+            Check(vl && vb[4] == "bs_broadside" && vb[0] == "bs_heavy_2" && vb[5] == "chip_basic" && vb[6] == "chip_basic" && vb[7] == "",
+                  $"an old battleship: its rack's slot now holds the broadside kit, the rest of its gear untouched ({string.Join(",", vb)})");
+            Check(vl && Character.GearHold.GetValueOrDefault("dd_salvo_3") == 1 && Character.GearHold.GetValueOrDefault("dd_seeker_1") == 2
+                  && Character.GearHold.GetValueOrDefault("dd_missile_rack") == 1 && !Character.GearHold.Keys.Any(k => k.StartsWith("bs_")),
+                  $"...the Salvo Rack III it had fitted is in the hold, as the destroyer's; the hold's racks are the destroyer's too, counts merged ({string.Join(",", Character.GearHold.Select(kv => kv.Key + "=" + kv.Value))})");
+            Check(vl && Character.Unclaimed.SequenceEqual(new[] { "dd_buster_2", "cv_elite_3" }),
+                  $"...and unclaimed loot is renamed in place ({string.Join(",", Character.Unclaimed)})");
+            Character.Delete("veteran");
+            Check(Character.Load(id), "(back to the round-trip pilot)");
+        }
+
         // ── the build stamp ──
         Check(Character.List().First(x => x.Id == id).Version == 2 && Game.Version == 2,
               $"a character records the build that wrote it (version {Character.List().First(x => x.Id == id).Version}, game {Game.Version})");
@@ -14008,9 +14307,9 @@ public partial class _Test : Node
         var ship = menu.DemoShip;
         // The spec's numbers as literals, never the menu's own constants: a check that reads the
         // constant cannot catch the constant being wrong.
-        Check(Math.Abs(ship.Stats["missile_mag"] - 2) < 1e-9 && Math.Abs(ship.Stats["missile_reload"] - 5) < 1e-9
-              && Mathf.IsEqualApprox(ship.WarpHop, 500f),
-              $"two missiles on a 5 s reload and a 500 u hop ({ship.Stats["missile_mag"]:0} / {ship.Stats["missile_reload"]:0} s / {ship.WarpHop:0} u)");
+        Check(Math.Abs(ship.Stats["broadside_cooldown"] - 5) < 1e-9 && Math.Abs(ship.Stats["broadside_volleys"] - 3) < 1e-9
+              && ship.Stats["missile_mag"] == 0 && Mathf.IsEqualApprox(ship.WarpHop, 500f),
+              $"the kit's three-volley broadside every 5 s, no missile, and a 500 u hop ({ship.Stats["broadside_volleys"]:0} volleys / {ship.Stats["broadside_cooldown"]:0} s / {ship.WarpHop:0} u)");
         // The ship has to be the SIZE it is in game. The menu had its own zoom for a while and the
         // battleship was half as big again on the title screen as it is the moment you press PLAY.
         // Compared with 0.9 as a literal rather than with Hub.DefaultZoom, so this also fails if
@@ -14032,10 +14331,13 @@ public partial class _Test : Node
         // cannot demonstrate that it comes back, which is the same vacuity trap as the boss lock.
         ship.Position = menu.Station + new Vector2(200, 150);
         double drift0 = ship.Position.DistanceTo(menu.Station);
-        await Wait(8.0);
+        bool sawBroadside = false;
+        var eight = GetTree().CreateTimer(8.0);                      // GAME seconds, as Wait() counts them
+        while (eight.TimeLeft > 0) { sawBroadside |= ship.BroadsideVolleysLeft > 0; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
         double drift1 = ship.Position.DistanceTo(menu.Station);
         Check(drift0 > 200 && drift1 < 120,
               $"pushed {drift0:0} u off station it flies itself home ({drift1:0} u)");
+        Check(sawBroadside, "the title ship fires its broadside at the foes in reach");
 
         // THE DODGE. An area shot lands in 8 s; it starts the jump with 4 to go and the warp takes
         // 3, so it is clear ONE SECOND before impact. Each number is checked, not just the last.
@@ -14756,25 +15058,38 @@ public partial class _Test : Node
         var win = Nodes<StatsWindow>().First();
         var labels = Nodes<Label>(win).Select(l => l.Text).ToList();
         Check(labels.Any(x => x.Contains("Main guns (4 barrels):  29.50 DPS")) && labels.Any(x => x.Contains("Turning radius")), "stats tab: gun DPS and helm stats");
-        Check(Nodes<HBoxContainer>(win).Count(r => r.Name.ToString().StartsWith("Key_")) == 11, "keys tab lists the battleship's 5 abilities + 6 open slots");
+        Check(labels.Any(x => x.Contains("Broadside: 3 volleys × 4 shells") && x.Contains("= 88.5 damage, every 11.0 s")) && !labels.Any(x => x.StartsWith("Missiles")),
+              "stats tab: the broadside, 3 volleys of 4 shells = 88.5 damage every 11 s; no missiles");
+        Check(Nodes<HBoxContainer>(win).Count(r => r.Name.ToString().StartsWith("Key_")) == 10, "keys tab lists the battleship's 4 abilities + 6 open slots");
         Check(Enumerable.Range(1, 6).All(i => Abilities.KeyFor(ShipClass.Battleship, $"open{i}") == global::Godot.Key.Key0 + i)
               && Abilities.For(ShipClass.Carrier).Count(a => a.Open) == 6 && Abilities.For((ShipClass)99).Length == 6,
               "six open hotkeys (1-6) on every class, including undefined ones");
-        win.StartCapture("missile"); Key(global::Godot.Key.H); await Wait(0.05);
-        Check(Abilities.KeyFor(ShipClass.Battleship, "missile") == global::Godot.Key.H && Settings.Keys.ContainsKey("Battleship.missile"), "missile rebound to H and saved");
-        win.StartCapture("missile"); Key(global::Godot.Key.G); await Wait(0.05);
-        Check(Abilities.KeyFor(ShipClass.Battleship, "missile") == global::Godot.Key.G && Abilities.KeyFor(ShipClass.Battleship, "firemode") == global::Godot.Key.H,
+        win.StartCapture("broadside"); Key(global::Godot.Key.H); await Wait(0.05);
+        Check(Abilities.KeyFor(ShipClass.Battleship, "broadside") == global::Godot.Key.H && Settings.Keys.ContainsKey("Battleship.broadside"), "broadside rebound to H and saved");
+        win.StartCapture("broadside"); Key(global::Godot.Key.G); await Wait(0.05);
+        Check(Abilities.KeyFor(ShipClass.Battleship, "broadside") == global::Godot.Key.G && Abilities.KeyFor(ShipClass.Battleship, "firemode") == global::Godot.Key.H,
               "binding a taken key (G, fire mode's) swaps the two");
-        win.StartCapture("missile"); Key(global::Godot.Key.W); await Wait(0.05);
-        Check(Abilities.KeyFor(ShipClass.Battleship, "missile") == global::Godot.Key.G, "a reserved key (W) is refused");
-        win.StartCapture("missile"); Key(global::Godot.Key.V); await Wait(0.05);
-        Check(Abilities.KeyFor(ShipClass.Battleship, "missile") == global::Godot.Key.G, "V is warp, a fixed key: refused too");
+        win.StartCapture("broadside"); Key(global::Godot.Key.W); await Wait(0.05);
+        Check(Abilities.KeyFor(ShipClass.Battleship, "broadside") == global::Godot.Key.G, "a reserved key (W) is refused");
+        win.StartCapture("broadside"); Key(global::Godot.Key.V); await Wait(0.05);
+        Check(Abilities.KeyFor(ShipClass.Battleship, "broadside") == global::Godot.Key.G, "V is warp, a fixed key: refused too");
         win.StartCapture("pd"); Key(global::Godot.Key.Escape); await Wait(0.05);
         Check(Count<StatsWindow>() == 1 && Abilities.KeyFor(ShipClass.Battleship, "pd") == global::Godot.Key.Q, "Esc cancels a capture without closing the window");
         Nodes<Button>(win).First(b => b.Name == "ResetKeys").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
-        Check(Abilities.KeyFor(ShipClass.Battleship, "missile") == global::Godot.Key.F && Abilities.KeyFor(ShipClass.Battleship, "firemode") == global::Godot.Key.G, "reset restores defaults (fire mode on G)");
+        Check(Abilities.KeyFor(ShipClass.Battleship, "broadside") == global::Godot.Key.F && Abilities.KeyFor(ShipClass.Battleship, "firemode") == global::Godot.Key.G, "reset restores defaults (fire mode on G)");
         Key(global::Godot.Key.K); await Wait(0.1);
         Check(Count<StatsWindow>() == 0, "K closes it");
+        // KEYS FROM BEFORE THE BROADSIDE, in this machine's settings file: fire mode moved onto F (so
+        // the missile went to G), and the reload kept on T. The broadside takes the missile's key --
+        // never F beside fire mode -- and the battleship's reload, which is gone, keeps none.
+        Settings.Keys.Clear();
+        Settings.Keys["Battleship.firemode"] = (int)global::Godot.Key.F; Settings.Keys["Battleship.missile"] = (int)global::Godot.Key.G;
+        Settings.Keys["Battleship.reload"] = (int)global::Godot.Key.T;
+        Settings.Save(); Settings.Load();
+        Check(Abilities.KeyFor(ShipClass.Battleship, "broadside") == global::Godot.Key.G && Abilities.KeyFor(ShipClass.Battleship, "firemode") == global::Godot.Key.F
+              && !Settings.Keys.ContainsKey("Battleship.missile") && !Settings.Keys.ContainsKey("Battleship.reload"),
+              $"an old settings file: the missile's key (G) is the broadside's, fire mode keeps F alone, the reload's key is dropped ({Abilities.KeyFor(ShipClass.Battleship, "broadside")})");
+        Settings.Keys.Clear(); Settings.Save();
 
         // ── dummies ──
         var d1 = H.GetNode<TargetDummy>("TargetDummy1");
@@ -14812,61 +15127,69 @@ public partial class _Test : Node
         bool before = ship.Staggered; Key(global::Godot.Key.G); await Wait(0.05);
         Check(ship.Staggered != before, "G toggles salvo / staggered");
 
-        // ── the missile: one in the magazine; a selected target in range, or it refuses ──
-        Torpedo Heavy() => Nodes<Torpedo>().FirstOrDefault(x => x.Heavy && Smoke(x).Count < 40);
-        string SlotMsg() => AbilityBar.StateOf(ship, "missile", H.Selected) is var st && st.Fail ? st.Line : null;
-        Check(ship.Stats["missile_mag"] == 1 && ship.MissilesLoaded == 1, "the battleship starts with one missile");
-        // refused: nothing selected
-        // Esc only if something is selected: with nothing selected, Esc opens the Esc menu
-        if (H.Selected != null) { Key(global::Godot.Key.Escape); await Wait(0.05); }
-        Key(global::Godot.Key.F); await Wait(0.05);
-        Check(Heavy() == null && ship.MissilesLoaded == 1 && SlotMsg() == "NO TARGET", "no target: nothing fires, and the slot says NO TARGET");
-        await Wait(PlayerShip.FailShow + 0.1);
-        Check(SlotMsg() == null, "the message clears after a moment");
-        // refused: a target beyond range
-        Click(Scr(d1.Position)); await Wait(0.05);
-        var keep = ship.Position; ship.Position = d1.Position + new Vector2(0, (float)ship.Stats["missile_range"] + 150f); ship.Velocity = Vector2.Zero;
-        Key(global::Godot.Key.F); await Wait(0.05);
-        Check(Heavy() == null && ship.MissilesLoaded == 1 && SlotMsg() == "OUT OF RANGE", "target out of range: nothing fires, and the slot says OUT OF RANGE");
-        ship.Position = keep; ship.Velocity = Vector2.Zero; await Wait(0.1);
-        // fired: in range
-        await Wait(TargetDummy.IdleReset + 0.2); d1.ResetMeter();
-        Key(global::Godot.Key.F); await Wait(0.05);
-        var m1 = Heavy();
-        Check(ship.MissilesLoaded == 0 && m1 != null && m1.TargetId == d1.NetId && d1.Total == 0,
-              "in range: F launches the missile at the target (magazine 0/1); nothing lands at once");
-        // speed from one frame's step, skipping its first frame (it may not have moved yet)
-        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-        var mp1 = m1.GlobalPosition; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-        float mspd = (m1.GlobalPosition - mp1).Length() * 60f;
-        Check(Math.Abs(mspd - ship.Stats["missile_speed"]) < 0.5f && m1.TurnRate == (float)ship.Stats["missile_turn"], $"it is slow: {mspd:0.0} u/s");
-        for (int i = 0; i < 900 && d1.Total == 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-        Check(Math.Abs(d1.Total - 6.25) < 0.01, "it lands: 5 damage, x1.25 by the default chips (6.25)");
-        Key(global::Godot.Key.F); await Wait(0.1);
-        Check(Heavy() == null, "empty magazine: F does nothing");
-        Key(global::Godot.Key.R); await Wait(0.1);
-        Check(ship.Reloading && AbilityBar.StateOf(ship, "reload", H.Selected).Busy > 0.9f, "R starts the reload; the bar shows it");
-        Key(global::Godot.Key.F); await Wait(0.1);
-        Check(Heavy() == null, "nothing fires while reloading");
-        await Wait(16.2);
-        Check(!ship.Reloading && ship.MissilesLoaded == 1, "reload refills the magazine (1) after 16 s");
-        // barely guided: move the target sideways and watch how fast the nose follows
-        Key(global::Godot.Key.F); await Wait(0.05);
-        var m2 = Heavy(); var dhome = d1.Position;
-        d1.Position = dhome + new Vector2(260, 0);
-        float a0 = m2.Dir.Angle(); await Wait(1.0);
-        float turned = Mathf.Abs(Mathf.AngleDifference(a0, m2.Dir.Angle()));
-        GD.Print($"  missile turned {turned:0.000} rad in 1 s toward a target that moved (limit {ship.Stats["missile_turn"]:0.00})");
-        Check(turned > 0.05 && turned <= ship.Stats["missile_turn"] + 0.01, "it steers toward the target, but no faster than 0.35 rad/s");
-        await Wait(6.0); d1.Position = dhome;
-        Key(global::Godot.Key.R); await Wait(16.2);                  // leave it loaded for what follows
+        // ── THE BROADSIDE (F): the main turrets swing onto the cursor through a 0.5 s wind-up, then
+        //    every main gun fires three volleys 0.25 s apart; a 10 s cooldown; the ship steers throughout ──
+        Check(Abilities.For(ShipClass.Battleship).Where(a => !a.Open).Select(a => a.Id).SequenceEqual(new[] { "guns", "firemode", "broadside", "pd" })
+              && Abilities.KeyFor(ShipClass.Battleship, "broadside") == global::Godot.Key.F,
+              "the battleship's bar: guns, fire mode, the BROADSIDE on F, point defence -- no missile, no reload");
+        Check(ship.Stats["broadside_volleys"] == 3 && ship.Stats["broadside_mult"] == 1.0 && ship.Stats["broadside_windup"] == 0.5
+              && ship.Stats["broadside_gap"] == 0.25 && ship.Stats["broadside_cooldown"] == 10 && ship.Stats["missile_mag"] == 0,
+              "the broadside: 3 volleys at a shell's own damage, a 0.5 s wind-up, 0.25 s between volleys, a 10 s cooldown");
+        {
+            // Aimed well AWAY first (south-east, ~135 degrees off the dummy): at their own 90 deg/s the
+            // turrets would still be 90 degrees off when a 0.5 s wind-up ends, so only a wind-up that
+            // really swings them onto the cursor can put every shell on the dummy.
+            var mainsB = Nodes<Turret>(ship).Where(x => !x.PointDefense).ToList();
+            float Off(Turret t) => Mathf.Abs(Mathf.AngleDifference(t.GlobalRotation, (d1.Position - t.GlobalPosition).Angle()));
+            AimWorld(ship.Position + new Vector2(450, 450)); await Wait(2.5);
+            float off0 = mainsB.Min(Off);
+            await Wait(TargetDummy.IdleReset + 0.2); d1.ResetMeter();
+            var seen = new System.Collections.Generic.HashSet<Shell>(Nodes<Shell>());
+            var volleys = new System.Collections.Generic.List<(double t, int n)>();
+            double bc0 = ship.Clock, cdAtLast = -1, speedAtFire = -1; float offAtFire = -1; string barAiming = null, barFiring = null;
+            AimWorld(d1.Position);
+            Key(global::Godot.Key.F);
+            KeyDown(global::Godot.Key.W);                                  // under way through the wind-up
+            for (int i = 0; i < 60 * 2; i++)
+            {
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                AimWorld(d1.Position);                                     // the camera follows the ship: keep the cursor on the dummy
+                if (barAiming == null && ship.BroadsideWindupLeft > 0) barAiming = AbilityBar.StateOf(ship, "broadside", H.Selected).Line;
+                int fresh = Nodes<Shell>().Count(s => seen.Add(s));
+                if (fresh == 0) continue;
+                if (volleys.Count == 0) { offAtFire = mainsB.Max(Off); speedAtFire = ship.SpeedAhead; }
+                volleys.Add((ship.Clock - bc0, fresh));
+                if (volleys.Count == 1) barFiring = AbilityBar.StateOf(ship, "broadside", H.Selected).Line;
+                if (volleys.Count == 3) cdAtLast = ship.BroadsideCooldownLeft;
+            }
+            KeyUp(global::Godot.Key.W); ship.Velocity = Vector2.Zero;
+            GD.Print($"  broadside: turrets {off0:0.00} rad off at the press, {offAtFire:0.000} at the first volley; volleys at {string.Join(", ", volleys.Select(v => $"{v.t:0.000}s x{v.n}"))}");
+            Check(barAiming == "AIMING" && barFiring == "FIRING", $"the slot reads AIMING through the wind-up, FIRING through the volleys ({barAiming}, {barFiring})");
+            Check(off0 > 2.0 && offAtFire >= 0 && offAtFire < 0.03,
+                  $"the wind-up swings every main turret onto the cursor from ~135 degrees away -- far faster than their own 90 deg/s ({off0:0.00} -> {offAtFire:0.000} rad)");
+            Check(volleys.Count == 3 && volleys.All(v => v.n == 4) && volleys[0].t > 0.45 && volleys[0].t < 0.6
+                  && Math.Abs(volleys[1].t - volleys[0].t - 0.25) < 0.035 && Math.Abs(volleys[2].t - volleys[1].t - 0.25) < 0.035,
+                  $"three volleys of all four guns: the first at the end of the 0.5 s wind-up, then 0.25 s apart ({volleys.Count} volleys)");
+            Check(speedAtFire > 10, $"the ship steers throughout: under way through the wind-up ({speedAtFire:0} u/s ahead at the first volley)");
+            await Wait(0.6);
+            Check(Math.Abs(d1.Total - 88.5) < 0.01, $"every shell lands: 3 volleys x 4 shells x 7.375 (5.9 x1.25 by the chips) = 88.5 ({d1.Total:0.000})");
+            Check(cdAtLast > 9.9 && cdAtLast <= 10 && AbilityBar.StateOf(ship, "broadside", H.Selected).Busy > 0.8f,
+                  $"the 10 s cooldown starts with the last volley, and the slot shows it ({cdAtLast:0.00} s)");
+            int shellsBefore = Nodes<Shell>().Count(s => seen.Add(s));
+            Key(global::Godot.Key.F); await Wait(0.8);
+            Check(ship.BroadsideWindupLeft == 0 && ship.BroadsideVolleysLeft == 0 && Nodes<Shell>().Count(s => seen.Add(s)) == 0,
+                  "F during the cooldown does nothing");
+            typeof(PlayerShip).GetField("_bsCooldown", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(ship, 0.02);
+            await Wait(0.1); Key(global::Godot.Key.F); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(ship.BroadsideWindupLeft > 0.4, $"once the cooldown is over, F winds up again ({ship.BroadsideWindupLeft:0.00} s)");
+            await Wait(1.5);
+            Check(Nodes<Torpedo>().All(t => t.HostileFire), "a battleship launches no missile of its own");
+        }
 
-        // ── the main guns fire SHELLS: straight, 4x the missile's speed, damage on arrival ──
+        // ── the main guns fire SHELLS: straight, at 520 u/s, damage on arrival ──
         {
             var gs = Me; var gd = H.GetNode<TargetDummy>("TargetDummy1");
             var gKeep = gs.Position; gs.Position = gd.Position + new Vector2(0, 520); gs.Velocity = Vector2.Zero; gs.Rotation = 0f; await Wait(0.6);
-            // a Seeker Rack III on: the missiles fly 40% faster (182 u/s) -- the guns must not
-            Character.LoadoutFor(ShipClass.Battleship)[4] = "bs_seeker_3"; H.PilotChanged();
             AimWorld(gd.Position); await Wait(1.2);                                   // turrets swing onto it
             await Wait(TargetDummy.IdleReset + 0.2); gd.ResetMeter();
             Input.ParseInputEvent(new InputEventKey { Keycode = global::Godot.Key.Space, PhysicalKeycode = global::Godot.Key.Space, Pressed = true });
@@ -14878,15 +15201,17 @@ public partial class _Test : Node
             var sp0 = sh1.Position; var sd0 = sh1.Dir;
             for (int i = 0; i < 10; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             float shSpd = GodotObject.IsInstanceValid(sh1) ? (sh1.Position - sp0).Length() / (10f / 60f) : 0f;
-            Check(Math.Abs(shSpd - 520) < 6f && Math.Abs(gs.Stats["missile_speed"] - 182) < 1e-6 && GodotObject.IsInstanceValid(sh1) && sh1.Dir == sd0 && atFire == 0,
-                  $"the guns fire shells at 520 u/s whatever missile rack is on (seeker: missiles {gs.Stats["missile_speed"]:0}), straight, and nothing lands at once ({shSpd:0} u/s)");
-            Character.LoadoutFor(ShipClass.Battleship)[4] = "bs_missile_rack"; H.PilotChanged();
+            Check(Math.Abs(shSpd - 520) < 6f && GodotObject.IsInstanceValid(sh1) && sh1.Dir == sd0 && atFire == 0,
+                  $"the guns fire shells at 520 u/s, straight, and nothing lands at once ({shSpd:0} u/s)");
             for (int i = 0; i < 90 && gd.Total == 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(gd.Total > 0 && Math.Abs(gd.Total % gs.Stats["main_damage"]) < 1e-6 && Math.Abs(gs.Stats["main_damage"] - 7.375) < 1e-9, $"a shell lands for 5.9 x1.25 by the chips = 7.375 ({gd.Total:0.000})");
-            // the balance: the battleship's total is 1.25x the carrier's measured 19.07 DPS; the carrier reaches 1.5x as far
+            // the balance: guns 4 x 5.9 = 23.6 DPS, and a broadside of 3 x 4 x 5.9 = 70.8 every 11 s (the
+            // wind-up, two gaps, the cooldown): 30.04 DPS in all. The carrier reaches 1.5x as far.
             var bsS = new ShipStats(ShipClass.Battleship); var caS = new ShipStats(ShipClass.Carrier);
-            double bsTotal = bsS.MainDps + bsS.MissileDps;
-            Check(Math.Abs(bsTotal / 19.07 - 1.25) < 0.02, $"the battleship's damage ({bsTotal:0.00} DPS) is 1.25x the carrier's measured 19.07");
+            double bsTotal = bsS.MainDps + bsS.BroadsideDps + bsS.MissileDps;
+            Check(Math.Abs(bsS.MainDps - 23.6) < 1e-9 && Math.Abs(bsS.BroadsideDamage - 70.8) < 1e-9 && Math.Abs(bsS.BroadsideCycle - 11) < 1e-9
+                  && Math.Abs(bsTotal - 30.036) < 0.001,
+                  $"the battleship: guns 23.6 DPS and a 70.8-damage broadside every 11 s -- 30.04 DPS in all, no missile ({bsTotal:0.000})");
             Check(Math.Abs(caS["control_range"] - 1.5 * bsS["main_range"]) < 1e-6, "the carrier reaches 1.5x as far as the battleship's guns (1080 u)");
             gs.Position = gKeep; gs.Velocity = Vector2.Zero; await Wait(0.5);
         }
@@ -14989,19 +15314,10 @@ public partial class _Test : Node
         Combat.OnFlash = keepFlash; Combat.World = keepWorld; Combat.ShellFired = keepShell; Combat.TorpedoFired = keepTorp;
         Check(hooksDropped, "Combat.Clear lets go of the world and every hook it installed");
 
-        // ── A REFIT, on the battleship: the magazine never holds more than it has room for, and the
-        //    hull keeps its fraction (keeping the damage taken let a pilot heal by swapping parts) ──
+        // ── A REFIT, on the battleship: the hull keeps its fraction (keeping the damage taken let a
+        //    pilot heal by swapping parts) ──
         {
-            var bl = Character.LoadoutFor(ShipClass.Battleship); var blKeep = (string[])bl.Clone();
-            for (int k = Equipment.CoreSlots; k < Equipment.Slots; k++) bl[k] = "";
-            bl[4] = "bs_salvo_3"; H.PilotChanged(); ship = Me;
-            Check(Math.Abs(ship.Stats["missile_mag"] - 4) < 1e-9 && Math.Abs(ship.Stats["missile_reload"] - 64.0 / 3) < 1e-6 && Math.Abs(ship.Stats["missile_damage"] - 4.0) < 1e-9,
-                  $"Salvo Rack III: 4 missiles a magazine, a 21.3 s reload, 4.0 a missile ({ship.Stats["missile_mag"]}, {ship.Stats["missile_reload"]:0.000}, {ship.Stats["missile_damage"]})");
-            typeof(PlayerShip).GetField("_mag", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(ship, 4);
-            bl[4] = "bs_missile_rack"; H.PilotChanged();
-            Check(ship.MissilesLoaded == 1, $"back to the kit rack: a 1-missile magazine holds 1, not the 4 loaded before ({ship.MissilesLoaded})");
-            for (int k = 0; k < Equipment.Slots; k++) bl[k] = blKeep[k];
-            H.PilotChanged();
+            var bl = Character.LoadoutFor(ShipClass.Battleship);
             double max0 = ship.MaxHp;
             ship.Hp = 75;
             bl[2] = "sh_bulwark_3"; H.PilotChanged();
@@ -15013,6 +15329,125 @@ public partial class _Test : Node
                   && Math.Abs(glHp - 60) < 1e-6 && Math.Abs(ship.MaxHp - 375) < 1e-6 && Math.Abs(ship.Hp - 75) < 1e-6,
                   $"a refit keeps the hull's fraction: 75/375, Bulwark III {bulHp:0}/{bulMax:0}, Glass III {glHp:0}/{glMax:0}, back {ship.Hp:0}/{ship.MaxHp:0} -- no heal by swapping");
             ship.Hp = ship.MaxHp;
+        }
+
+        // ── THE DESTROYER: the battleship's hull, narrower and shorter; two main guns, missile bursts, the fastest ──
+        await SetClass(ShipClass.Destroyer); ship = Me;
+        {
+            var dspr = ship.GetChildren().OfType<Sprite2D>().First();
+            var dts = Nodes<Turret>(ship).ToList();
+            Check(ship.Class == ShipClass.Destroyer && dspr.Texture.ResourcePath.EndsWith("destroyer_hull.png") && Math.Abs(dspr.Texture.GetHeight() * dspr.Scale.Y - 201.6f) < 0.5f
+                  && Math.Abs(PlayerShip.Art[ShipClass.Destroyer].HalfWidth - 30f) < 1e-6 && dts.Count(t => !t.PointDefense) == 2 && dts.Count(t => t.PointDefense) == 2,
+                  "the destroyer: its own hull at 201.6 u (90% of the battleship's 224) and 30 u half-beam (75% of 40); two main turrets, two PD");
+            Check(help.Text.StartsWith("DESTROYER") && help.Text.Contains("mouse aims the main guns"), "controls line is destroyer-specific");
+            Check(Abilities.For(ShipClass.Destroyer).Where(a => !a.Open).Select(a => a.Id).SequenceEqual(new[] { "guns", "firemode", "missile", "reload", "pd" })
+                  && Abilities.KeyFor(ShipClass.Destroyer, "missile") == global::Godot.Key.F && Abilities.KeyFor(ShipClass.Destroyer, "reload") == global::Godot.Key.R,
+                  "the destroyer's bar: guns, fire mode, the missile burst on F, reload on R, point defence");
+            var ddS = new ShipStats(ShipClass.Destroyer); var bsS0 = new ShipStats(ShipClass.Battleship); var cvS0 = new ShipStats(ShipClass.Carrier);
+            bool N9(double a, double b) => Math.Abs(a - b) < 1e-9;
+            Check(N9(ddS["hull"], 250) && N9(ship.MaxHp, 312.5) && N9(ddS["main_count"], 2) && N9(ddS["pd_count"], 2) && ddS["fighter_count"] == 0 && ddS["broadside_volleys"] == 0,
+                  $"250 hull (312.5 with the five chips), two main guns, two PD; no wing, no broadside ({ship.MaxHp:0.0})");
+            Check(N9(bsS0["max_speed"], 104) && N9(ddS["max_speed"], 130) && N9(cvS0["max_speed"], 116.48)
+                  && N9(ddS["thrust"], 70) && N9(ddS["reverse_thrust"], 30) && N9(ddS["reverse_speed"], 45)
+                  && N9(cvS0["thrust"], 48 * 116.48 / 96) && N9(cvS0["reverse_thrust"], 20 * 116.48 / 96) && N9(cvS0["reverse_speed"], 32 * 116.48 / 96)
+                  && N9(ddS["turn_radius"], 107) && N9(ddS["turn_rate"], 1.08) && N9(cvS0["turn_radius"], 127) && N9(cvS0["turn_rate"], 0.9),
+                  "speeds: the destroyer 130 u/s (the battleship's 104 +25%), the carrier 116.48 (+12%); each class's accelerations and astern speed scale with it; turning unchanged");
+            Check(N9(ddS.MainDps, 11.8) && Math.Abs(ddS.MissileDps - 30 / 16.6) < 1e-9 && Math.Abs(ddS.MainDps + ddS.MissileDps - 13.607) < 0.001,
+                  $"the destroyer's damage: guns 11.8 DPS, bursts 2 x 3 x 5 every 16.6 s (1.81) -- 13.61 DPS ({ddS.MainDps + ddS.MissileDps:0.000})");
+            // the fastest: flat out for 4 s it is past anything a battleship can reach
+            await Park(d1.Position + new Vector2(0, 600), Mathf.Pi);
+            KeyDown(global::Godot.Key.W); await Wait(4.0);
+            double ddAhead = ship.SpeedAhead;
+            KeyUp(global::Godot.Key.W); ship.Velocity = Vector2.Zero;
+            Check(ddAhead > 0.95 * 130, $"W drives the destroyer to its 130 u/s -- past a battleship's 104 ({ddAhead:0} u/s)");
+            await Park(d1.Position + new Vector2(0, 600));
+            ship.Staggered = false;
+            // its two guns: Space fires both (salvo)
+            AimWorld(d1.Position); await Wait(1.5);
+            var seenD = new System.Collections.Generic.HashSet<Shell>(Nodes<Shell>());
+            KeyDown(global::Godot.Key.Space); await Wait(0.15); KeyUp(global::Godot.Key.Space);
+            int ddShells = Nodes<Shell>().Count(s => seenD.Add(s));
+            Check(ddShells == 2, $"Space fires the destroyer's two main guns ({ddShells} shells)");
+            await Wait(2.0);
+
+            // ── the missile BURST: a magazine of two bursts; a selected target in range, or it refuses ──
+            System.Collections.Generic.List<Torpedo> Burst() => Nodes<Torpedo>().Where(x => x.Heavy && !x.HostileFire && Smoke(x).Count < 40).ToList();
+            string SlotMsg() => AbilityBar.StateOf(ship, "missile", H.Selected) is var st && st.Fail ? st.Line : null;
+            Check(ship.Stats["missile_mag"] == 2 && ship.MissilesLoaded == 2, "the destroyer starts with a magazine of two bursts");
+            // Esc only if something is selected: with nothing selected, Esc opens the Esc menu
+            if (H.Selected != null) { Key(global::Godot.Key.Escape); await Wait(0.05); }
+            Key(global::Godot.Key.F); await Wait(0.05);
+            Check(Burst().Count == 0 && ship.MissilesLoaded == 2 && SlotMsg() == "NO TARGET", "no target: nothing fires, and the slot says NO TARGET");
+            await Wait(PlayerShip.FailShow + 0.1);
+            Check(SlotMsg() == null, "the message clears after a moment");
+            Click(Scr(d1.Position)); await Wait(0.05);
+            var keep = ship.Position; ship.Position = d1.Position + new Vector2(0, (float)ship.Stats["missile_range"] + 150f); ship.Velocity = Vector2.Zero;
+            Key(global::Godot.Key.F); await Wait(0.05);
+            Check(Burst().Count == 0 && ship.MissilesLoaded == 2 && SlotMsg() == "OUT OF RANGE", "target out of range: nothing fires, and the slot says OUT OF RANGE");
+            ship.Position = keep; ship.Velocity = Vector2.Zero; await Wait(0.1);
+            await Wait(TargetDummy.IdleReset + 0.2); d1.ResetMeter();
+            Key(global::Godot.Key.F);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            var burst = Burst();
+            var toTarget = (d1.Position - ship.ToGlobal(new Vector2(0, -PlayerShip.Art[ShipClass.Destroyer].Length * 0.5f))).Angle();
+            var offs = burst.Select(m => Mathf.RadToDeg(Mathf.AngleDifference(toTarget, m.Dir.Angle()))).OrderBy(a => a).ToList();
+            GD.Print($"  burst: {burst.Count} missiles at {string.Join(", ", offs.Select(a => a.ToString("0.0")))} degrees off the line to the target");
+            Check(burst.Count == 3 && burst.All(m => m.TargetId == d1.NetId && m.TurnRate == 1.5f) && ship.MissilesLoaded == 1 && d1.Total == 0
+                  && Math.Abs(offs[1]) < 3 && offs[0] < -64 && offs[0] > -71 && offs[2] > 64 && offs[2] < 71,
+                  "F launches a burst of three guided missiles: one at the target, two launched 70 degrees either side (magazine 1/2); nothing lands at once");
+            float mspd = 0;
+            if (burst.Count > 0)
+            {
+                var mp1 = burst[0].GlobalPosition; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                mspd = GodotObject.IsInstanceValid(burst[0]) ? (burst[0].GlobalPosition - mp1).Length() * 60f : 0;
+            }
+            Check(Math.Abs(mspd - 160) < 0.5f, $"they fly at 160 u/s ({mspd:0.0})");
+            for (int i = 0; i < 900 && d1.Total < 18.74; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(Math.Abs(d1.Total - 18.75) < 0.01, $"all three land -- the outer two curve in: 3 x 5 x1.25 by the chips = 18.75 ({d1.Total:0.00})");
+            Key(global::Godot.Key.F); await Wait(0.1);
+            Check(ship.MissilesLoaded == 0 && Burst().Count == 3, "the second burst empties the magazine");
+            await Wait(0.7);
+            var flying = new System.Collections.Generic.HashSet<Torpedo>(Nodes<Torpedo>());
+            Key(global::Godot.Key.F); await Wait(0.1);
+            Check(Nodes<Torpedo>().All(flying.Contains), "empty magazine: F does nothing");
+            Key(global::Godot.Key.R); await Wait(0.1);
+            Check(ship.Reloading && AbilityBar.StateOf(ship, "reload", H.Selected).Busy > 0.9f, "R starts the reload; the bar shows it");
+            await Wait(16.2);
+            Check(!ship.Reloading && ship.MissilesLoaded == 2, "reload refills the magazine (2 bursts) after 16 s");
+            // guided: move the target sideways and watch the middle missile follow, no faster than 1.5 rad/s
+            Key(global::Godot.Key.F); await Wait(0.05);
+            var midM = Burst().OrderBy(m => Mathf.Abs(Mathf.AngleDifference(toTarget, m.Dir.Angle()))).FirstOrDefault(); var dhome = d1.Position;
+            d1.Position = dhome + new Vector2(260, 0);
+            float a0 = midM?.Dir.Angle() ?? 0; await Wait(1.0);
+            float turned = midM != null && GodotObject.IsInstanceValid(midM) ? Mathf.Abs(Mathf.AngleDifference(a0, midM.Dir.Angle())) : 0;
+            Check(turned > 0.05 && turned <= 1.51, $"it steers toward the target, no faster than 1.5 rad/s ({turned:0.000} rad in 1 s)");
+            await Wait(6.0); d1.Position = dhome;
+
+            // A REFIT: the magazine never holds more than it has room for
+            var dl = Character.LoadoutFor(ShipClass.Destroyer); var dlKeep = (string[])dl.Clone();
+            for (int k = Equipment.CoreSlots; k < Equipment.Slots; k++) dl[k] = "";
+            dl[4] = "dd_salvo_3"; H.PilotChanged(); ship = Me;
+            Check(Math.Abs(ship.Stats["missile_mag"] - 5) < 1e-9 && Math.Abs(ship.Stats["missile_reload"] - 64.0 / 3) < 1e-6 && Math.Abs(ship.Stats["missile_damage"] - 4.0) < 1e-9,
+                  $"Salvo Rack III: 5 bursts a magazine, a 21.3 s reload, 4.0 a missile ({ship.Stats["missile_mag"]}, {ship.Stats["missile_reload"]:0.000}, {ship.Stats["missile_damage"]})");
+            typeof(PlayerShip).GetField("_mag", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(ship, 5);
+            dl[4] = "dd_missile_rack"; H.PilotChanged();
+            Check(ship.MissilesLoaded == 2, $"back to the kit rack: a 2-burst magazine holds 2, not the 5 loaded before ({ship.MissilesLoaded})");
+            for (int k = 0; k < Equipment.Slots; k++) dl[k] = dlKeep[k];
+            H.PilotChanged(); ship = Me;
+
+            // CLOSE IN, the fan narrows so the outer two can still come round: at 70 degrees on a
+            // ~107 u turning circle they would circle a target 150 u off the nose until their run ended
+            ship.Position = d1.Position + new Vector2(0, 150f + PlayerShip.Art[ShipClass.Destroyer].Length * 0.5f);
+            ship.Velocity = Vector2.Zero; ship.Rotation = 0f;
+            await Wait(TargetDummy.IdleReset + 0.2); d1.ResetMeter();
+            Key(global::Godot.Key.F);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            var close = Burst();
+            float closeSplay = close.Count == 3 ? close.Max(m => Mathf.Abs(Mathf.RadToDeg(Mathf.AngleDifference(Vector2.Up.Angle(), m.Dir.Angle())))) : -1;
+            for (int i = 0; i < 60 * 4 && d1.Total < 18.74; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(close.Count == 3 && closeSplay > 20 && closeSplay < 50 && Math.Abs(d1.Total - 18.75) < 0.01,
+                  $"a target 150 u off the nose: the outer two launch narrower ({closeSplay:0} degrees) and all three land (18.75; {d1.Total:0.00})");
+            await Park(d1.Position + new Vector2(0, 600));
         }
 
         // ── carrier ──
@@ -15130,7 +15565,8 @@ public partial class _Test : Node
         Check(fts.Count == 3 && ship.Stats["fighter_count"] == 3, "the carrier starts with 3 fighters");
         Check(order.Count == 3 && minGap >= Wing.LaunchInterval - 1e-9, "fighters launch one at a time, at least 0.83 s apart");
         Check(ship.SignalsLit > sig0 || order.Count == 3, "launching fighters light the hangar signal");
-        Check(ship.Stats["torpedo_speed"] == 90 && ship.Stats["torpedo_interval"] == 0.5, "torpedoes: 90 u/s (25% slower), one every 0.5 s (70% of the old rate)");
+        Check(ship.Stats["torpedo_speed"] == 112.5 && ship.Stats["launch_range"] == 283.5 && ship.Stats["torpedo_interval"] == 0.5,
+              "torpedoes: 112.5 u/s (25% faster than 90), launched from 283.5 u (half of 567), one every 0.5 s");
         var fx0 = H.GetChildren().OfType<FlashLayer>().FirstOrDefault();
         Check(fx0 != null && !fx0.ZAsRelative && fx0.ZIndex > ship.ZIndex && fx0.ZIndex < ship.ZIndex + Nodes<Turret>(ship).First().ZIndex,
               "hit flashes draw above the hulls and below the turrets");
@@ -15178,6 +15614,8 @@ public partial class _Test : Node
         for (int i = 0; i < 2400 && crawl == null; i++) { crawl = Nodes<Wing>().FirstOrDefault(w => w.Carrier == ship && w.Launching); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
         Check(crawl != null && crawl.Velocity.Length() > 5f && crawl.Velocity.Dot(d1.Position - crawl.Position) > 0,
               $"bombers keep closing slowly while they launch ({crawl?.Velocity.Length():0} u/s)");
+        float launchDist = crawl?.Position.DistanceTo(d1.Position) ?? -1;
+        Check(launchDist > 150 && launchDist <= 284.5, $"the bombers close to 283.5 u before they launch, half the old 567 ({launchDist:0} u)");
         var fspr = Nodes<Sprite2D>(Nodes<Wing>().First(w => w.Carrier == ship && !w.IsBomber)).First(); var bspr = Nodes<Sprite2D>(crawl).First();
         Check(Math.Abs(fspr.Texture.GetHeight() * fspr.Scale.Y - 17f) < 0.1f && Math.Abs(bspr.Texture.GetHeight() * bspr.Scale.Y - 28.125f) < 0.1f, "fighters 17 u, bombers 28.1 u (snout-nosed, 25% smaller)");
         Torpedo first = null;
@@ -15462,16 +15900,20 @@ public partial class _Test : Node
         {
             Check(Enum.GetNames(typeof(Rarity)).SequenceEqual(new[] { "Common", "Rare", "Epic" }), "three rarities: Common, Rare, Epic");
             var drops = Equipment.Drops.ToList();
-            var bsC = ShipClass.Battleship; var cvC = ShipClass.Carrier;
-            (GearSlot s, ShipClass? c)[] kinds = { (GearSlot.Weapon, bsC), (GearSlot.Weapon, cvC), (GearSlot.Utility, bsC), (GearSlot.Utility, cvC),
+            var bsC = ShipClass.Battleship; var cvC = ShipClass.Carrier; var ddC = ShipClass.Destroyer;
+            (GearSlot s, ShipClass? c)[] kinds = { (GearSlot.Weapon, bsC), (GearSlot.Weapon, cvC), (GearSlot.Weapon, ddC),
+                                                   (GearSlot.Utility, bsC), (GearSlot.Utility, cvC), (GearSlot.Utility, ddC),
                                                    (GearSlot.Engines, null), (GearSlot.Shield, null), (GearSlot.Hull, null), (GearSlot.Chip, null) };
             bool twelve = kinds.All(k => drops.Count(i => i.Slot == k.s && i.Class == k.c) == 12
                                     && new[] { Rarity.Common, Rarity.Rare, Rarity.Epic }.All(r => drops.Count(i => i.Slot == k.s && i.Class == k.c && i.Rarity == r) == 4));
             var kit = Equipment.All.Where(i => i.Kit).ToList();
-            Check(drops.Count == 96 && twelve && kit.Count == 8 && kit.All(i => i.Rarity == Rarity.Common)
-                  && kit.Select(i => i.Id).OrderBy(x => x, StringComparer.Ordinal).SequenceEqual(new[] { "basic_deflector", "bs_main_battery", "bs_missile_rack",
-                     "chip_basic", "cv_bomber_bay", "cv_fighter_hangars", "reinforced_frame", "std_drive" }),
-                  $"the gear: 96 drops, 12 for each slot type with 4 at each rarity, and the 8-part kit, all Common ({drops.Count} drops)");
+            Check(drops.Count == 120 && twelve && kit.Count == 10 && kit.All(i => i.Rarity == Rarity.Common)
+                  && kit.Select(i => i.Id).OrderBy(x => x, StringComparer.Ordinal).SequenceEqual(new[] { "basic_deflector", "bs_broadside", "bs_main_battery",
+                     "chip_basic", "cv_bomber_bay", "cv_fighter_hangars", "dd_main_battery", "dd_missile_rack", "reinforced_frame", "std_drive" }),
+                  $"the gear: 120 drops, 12 for each slot type with 4 at each rarity, and the 10-part kit, all Common ({drops.Count} drops)");
+            Check(Equipment.All.Where(i => i.Class == bsC && i.Slot == GearSlot.Utility).All(i => i.Pct.Keys.Concat(i.Add.Keys).All(k => k.StartsWith("broadside_")))
+                  && Equipment.All.Where(i => i.Class != null && i.Pct.Keys.Concat(i.Add.Keys).Any(k => k.StartsWith("missile_"))).All(i => i.Class == ddC),
+                  "every missile part for one class is the destroyer's; the battleship's utility parts are all broadside parts");
             // a sheet with only the named parts on the kit, chips off
             ShipStats Sheet(ShipClass c, string part)
             {
@@ -15487,6 +15929,15 @@ public partial class _Test : Node
                   && Near(h1["main_damage"], 10.62) && Near(h2["main_damage"], 12.98) && Near(h3["main_damage"], 15.34)
                   && new[] { h1, h2, h3 }.All(h => Near(h["main_interval"], 1 / 0.65)),
                   "a rarer copy leans harder, never costs more: Elite I / II speed 704 / 880; Heavy I / II / III shells 10.62 / 12.98 / 15.34, all reloading in 1.54 s");
+            var barrage = Sheet(bsC, "bs_barrage_3"); var snap = Sheet(bsC, "bs_snap_2"); var heavyS = Sheet(bsC, "bs_heavyside_3"); var rapidS = Sheet(bsC, "bs_rapidside_1");
+            Check(Near(barrage["broadside_volleys"], 6) && Near(barrage["broadside_windup"], 0.5 / 0.7) && Near(barrage["broadside_cooldown"], 12.5)
+                  && Near(snap["broadside_volleys"], 2) && Near(snap["broadside_windup"], 0.2)
+                  && Near(heavyS["broadside_mult"], 1.8) && Near(heavyS["broadside_cooldown"], 10 / 0.75)
+                  && Near(rapidS["broadside_mult"], 0.75) && Near(rapidS["broadside_cooldown"], 10 / 1.5),
+                  "the broadside's gear: Barrage III 6 volleys (0.71 s wind-up, 12.5 s cooldown); Snap II 2 volleys in a 0.2 s wind-up; Heavy III x1.8 shells (13.3 s); Rapid I back in 6.7 s at x0.75");
+            var ddHeavy = Sheet(ddC, "dd_heavy_3"); var ddSalvo = Sheet(ddC, "dd_salvo_3");
+            Check(Near(ddHeavy["main_damage"], 15.34) && Near(ddHeavy["main_count"], 2) && Near(ddSalvo["missile_mag"], 5) && Near(ddSalvo["missile_reload"], 64.0 / 3),
+                  "the destroyer's own gear: Heavy Twins III shells 15.34 on its two guns; Salvo Rack III 5 bursts on a 21.3 s reload");
             var elite = Sheet(cvC, "cv_elite_3"); var swarm = Sheet(cvC, "cv_swarm_3"); var line = Sheet(cvC, "cv_line_3");
             Check(Near(elite["fighter_count"], 2) && Near(elite["fighter_speed"], 1056) && Near(elite["fighter_damage"], 6) && Near(elite["fighter_turn"], 5.25),
                   $"Elite Hangars III, the owner's example: 2 fighters, +200% speed and damage, +50% turning ({elite["fighter_count"]}, {elite["fighter_speed"]}, {elite["fighter_damage"]}, {elite["fighter_turn"]})");
@@ -15504,18 +15955,18 @@ public partial class _Test : Node
                     w += Math.Min(0, Equipment.All.Where(i => Equipment.Fits(i, slot, c)).Select(i => i.Pct.GetValueOrDefault(stat)).DefaultIfEmpty(0).Min());
                 return w + Equipment.ChipSlots * Math.Min(0, Equipment.All.Where(i => i.Slot == GearSlot.Chip).Select(i => i.Pct.GetValueOrDefault(stat)).DefaultIfEmpty(0).Min());
             }
-            foreach (var c in new[] { bsC, cvC }) foreach (var st in new ShipStats(c).All) if (Worst(c, st.Id) <= -1) allPositive = false;
+            foreach (var c in Enum.GetValues<ShipClass>()) foreach (var st in new ShipStats(c).All) if (Worst(c, st.Id) <= -1) allPositive = false;
             Check(allPositive && Near(Worst(cvC, "fighter_damage"), -0.47) && Near(Worst(bsC, "main_damage"), -0.55) && Near(Worst(bsC, "hull"), -0.50) && Near(Worst(cvC, "hull"), -0.50),
                   $"no stack of gear takes a number to zero: worst fighter damage -47% (1.06), shell -55% (2.655), hull -50% (150 / 100) ({Worst(cvC, "fighter_damage"):0.00}, {Worst(bsC, "main_damage"):0.00}, {Worst(bsC, "hull"):0.00})");
             // every stat a part names is real on a class it fits, and none touches the turret counts
-            string[] addable = { "fighter_count", "bomber_count", "missile_mag", "bomber_ammo" };
+            string[] addable = { "fighter_count", "bomber_count", "missile_mag", "bomber_ammo", "broadside_volleys" };
             var unknown = Equipment.All.SelectMany(i => i.Pct.Keys.Concat(i.Add.Keys).Where(k =>
-                              !(i.Class is ShipClass only ? new[] { only } : new[] { bsC, cvC }).Any(c => new ShipStats(c).All.Any(s => s.Id == k)))
+                              !(i.Class is ShipClass only ? new[] { only } : Enum.GetValues<ShipClass>()).Any(c => new ShipStats(c).All.Any(s => s.Id == k)))
                               .Select(k => i.Id + ":" + k)).ToList();
             bool noCounts = Equipment.All.All(i => !i.Pct.Keys.Concat(i.Add.Keys).Any(k => k is "main_count" or "pd_count" or "strike_range"));
             bool addsOk = Equipment.All.All(i => i.Add.Keys.All(addable.Contains));
             Check(unknown.Count == 0 && noCounts && addsOk,
-                  $"every stat a part names exists on a class it fits; no part changes a turret count; whole additions only to wings and magazines ({string.Join(",", unknown)})");
+                  $"every stat a part names exists on a class it fits; no part changes a turret count; whole additions only to wings, magazines and volleys ({string.Join(",", unknown)})");
             // a part for the other class changes nothing, even named in the loadout
             var wrong = Equipment.Default(bsC); wrong[0] = "cv_elite_3";
             var kitB = Equipment.Bonuses(bsC, Equipment.Default(bsC)); var wrongB = Equipment.Bonuses(bsC, wrong);
@@ -15558,9 +16009,11 @@ public partial class _Test : Node
                     }
             }
             double Of(int peer, int k) => k / (double)share[peer].n;
-            Check(kit == 0 && Math.Abs(Of(7, share[7].bs) - 0.075) < 0.02 && Math.Abs(Of(7, share[7].cv) - 0.308) < 0.03
-                  && Math.Abs(Of(1, share[1].cv) - 0.075) < 0.02 && Math.Abs(Of(1, share[1].bs) - 0.308) < 0.03,
-                  $"each pilot's own roll: 70% its own class or general, 30% anything -- the other class's parts 7.5%, its own 31% (carrier pilot {Of(7, share[7].bs):0.000} / {Of(7, share[7].cv):0.000}, battleship pilot {Of(1, share[1].cv):0.000} / {Of(1, share[1].bs):0.000})");
+            // own roll (70%): its class's 8 parts of 24; any roll (30%): each class's 8 of 40 -- so its own
+            // class 0.7 x 8/24 + 0.3 x 8/40 = 29.3%, another class's 0.3 x 8/40 = 6%
+            Check(kit == 0 && Math.Abs(Of(7, share[7].bs) - 0.06) < 0.012 && Math.Abs(Of(7, share[7].cv) - 0.2933) < 0.025
+                  && Math.Abs(Of(1, share[1].cv) - 0.06) < 0.012 && Math.Abs(Of(1, share[1].bs) - 0.2933) < 0.025,
+                  $"each pilot's own roll: 70% its own class or general, 30% anything -- another class's parts 6%, its own 29% (carrier pilot {Of(7, share[7].bs):0.000} / {Of(7, share[7].cv):0.000}, battleship pilot {Of(1, share[1].cv):0.000} / {Of(1, share[1].bs):0.000})");
         }
 
         // ── equipment (I): per-class gear; common defaults and five chips (+5% damage, +5% hull each) ──
@@ -16603,8 +17056,8 @@ public partial class _Test : Node
             Check(Math.Abs(H.Boss.HullMult - 1.6) < 1e-9 && Math.Abs(H.Boss.DamageMult - 1.2) < 1e-9,
                   $"arena host: a party of two faces a boss scaled for two (hull x1.6, damage x1.2; x{H.Boss.HullMult:0.00}, x{H.Boss.DamageMult:0.00})");
             var gship = H.Ships.FirstOrDefault(s => !s.Mine);
-            Check(gship != null && Math.Abs(gship.MaxHp - 345) < 1e-6 && Math.Abs(gship.Stats["missile_mag"] - 4) < 1e-9,
-                  $"arena host: the guest's own gear came into the arena with it (345 hull, a Salvo Rack III's 4 missiles; {gship?.MaxHp:0}, {gship?.Stats["missile_mag"]:0})");
+            Check(gship != null && gship.Class == ShipClass.Destroyer && Math.Abs(gship.MaxHp - 287.5) < 1e-6 && Math.Abs(gship.Stats["missile_mag"] - 5) < 1e-9,
+                  $"arena host: the guest's destroyer and its own gear came into the arena with it (287.5 hull, a Salvo Rack III's 5 bursts; {gship?.Class}, {gship?.MaxHp:0.0}, {gship?.Stats["missile_mag"]:0})");
             // Long enough for the guest to watch the super-move bar move, and no longer: this
             // scenario has a second arena visit after it, and a stay stretched to fit a whole beam
             // cycle pushed that off the end of every wait that follows.
@@ -16665,12 +17118,12 @@ public partial class _Test : Node
         else
         {
             Character.Name = "Arena Guest";
-            // Gear the host can only know from this pilot's announcement: two chips off a battleship
-            // (three left: 300 x 1.15 = 345 hull, not the default five's 375). The host checks it
+            // Gear the host can only know from this pilot's announcement: two chips off a destroyer
+            // (three left: 250 x 1.15 = 287.5 hull, not the default five's 312.5). The host checks it
             // survives the move into the arena.
-            Character.Class = ShipClass.Battleship;
-            var agl = Character.LoadoutFor(ShipClass.Battleship); agl[8] = ""; agl[9] = "";
-            agl[4] = "bs_salvo_3";                      // and a dropped rack: a 4-missile magazine
+            Character.Class = ShipClass.Destroyer;
+            var agl = Character.LoadoutFor(ShipClass.Destroyer); agl[8] = ""; agl[9] = "";
+            agl[4] = "dd_salvo_3";                      // and a dropped rack: a magazine of 5 bursts
             H.Yard.Credits = 12345;                               // its own base, before it visits
             // Level 2 against the level-1 boss: its OWN share is 100 for the kill (the host's is 200)
             Character.Exp = 0; Character.Level = 2; Character.BossCleared.Clear();
@@ -16977,7 +17430,31 @@ public partial class _Test : Node
             await Wait(1.2);
             Character.Name = "Third"; Character.Class = ShipClass.Battleship;
             Priv(H, "ApplyLocalIdentity"); Priv(H, "SendIdentity", 0);
-            await Wait(6.0);
+            await Wait(3.0);
+            // A GUEST'S BROADSIDE, inside the 6 s this guest waits after joining (so everything the host
+            // times against it -- the drop above all -- happens when it always did). F is a request: this
+            // pilot never starts its own -- the host does, and
+            // the wind-up, the volleys and the cooldown come back in the host's report, with cosmetic
+            // copies of the shells. Checked one frame after the press: a guest that started its own
+            // would already be winding up; the host's word cannot have come back yet.
+            {
+                var me3 = Me; double bsClock0 = me3.Clock;
+                AimWorld(me3.Position + new Vector2(300, -300)); await Wait(0.1);
+                Key(global::Godot.Key.F); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                bool ownStart = me3.BroadsideTracking || me3.BroadsideCooldownLeft > 0;
+                bool sawWindup = false, sawShells = false; double cdBack = 0;
+                for (ulong t0 = Time.GetTicksMsec(); Time.GetTicksMsec() - t0 < 4000 && cdBack <= 0; )
+                {
+                    sawWindup |= me3.BroadsideWindupLeft > 0 || me3.BroadsideVolleysLeft > 0;
+                    sawShells |= Nodes<Shell>().Any(s => s.Cosmetic);
+                    cdBack = me3.BroadsideCooldownLeft;
+                    await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                }
+                Check(!ownStart && sawWindup && sawShells && cdBack > 8.5 && cdBack <= 10,
+                      $"third player: its broadside is the host's -- not started here ({ownStart}), then the wind-up or volleys, the shells and a 10 s cooldown reach it ({sawWindup}, {sawShells}, {cdBack:0.0} s)");
+                await Wait(Math.Max(0.1, 3.0 - (me3.Clock - bsClock0)));   // the rest of the 6 s, in game seconds
+            }
+
             H.SetMyReady(true);                           // READY for the bounty
             Nodes<PlayerShip>().First(x => x.Mine).AutopilotTo = null;   // stay put: the scene must not change mid-test
             var all = Nodes<PlayerShip>().ToList();

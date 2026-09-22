@@ -143,7 +143,7 @@ public partial class CharacterSelect : Control
     private void AskDelete(Character.Slot s)
     {
         _pendingDelete = s.Id;
-        _confirm.DialogText = $"Delete {s.Name} ({(s.Class == ShipClass.Battleship ? "Battleship" : "Carrier")})?\n\n"
+        _confirm.DialogText = $"Delete {s.Name} ({Classes.NameOf(s.Class)})?\n\n"
                             + "This removes the character from disk. It cannot be undone.";
         _confirm.PopupCentered(new Vector2I(460, 170));
     }

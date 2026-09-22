@@ -214,19 +214,30 @@ public static class Character
         Exp = (int)c.GetValue("progress", "exp", 0); Level = Math.Max(1, (int)c.GetValue("progress", "level", 1));
         Points = Math.Max(0, (int)c.GetValue("progress", "points", 0));
         for (int i = 0; i < Bought.Length; i++) Bought[i] = Math.Clamp((int)c.GetValue("progress", "bought_" + Progression.All[i].Id, 0), 0, Progression.MaxPerUpgrade);
+        // Every part id read from the file goes through Equipment.Migrated first (see there). A
+        // dropped part that no longer fits the slot it was fitted in is not lost: it goes into the
+        // hold, and the slot takes the class's own kit.
         Loadout.Clear();
+        var displaced = new List<string>();
         foreach (ShipClass sc in Enum.GetValues(typeof(ShipClass)))
             if (c.HasSectionKey("equipment", sc.ToString()))
-                Loadout[sc] = Equipment.Sanitize(sc, ((string)c.GetValue("equipment", sc.ToString(), "")).Split(','));
+            {
+                var ids = ((string)c.GetValue("equipment", sc.ToString(), "")).Split(',').Select(Equipment.Migrated).ToArray();
+                for (int k = 0; k < ids.Length && k < Equipment.Slots; k++)
+                    if (Equipment.ById(ids[k]) is { Kit: false } part && !Equipment.Fits(part, Equipment.SlotAt(k), sc)) displaced.Add(part.Id);
+                Loadout[sc] = Equipment.Sanitize(sc, ids);
+            }
         // The hold, loot and hints: parts and hints this build knows, and counts above zero.
         // (`gid`, not `id`: `id` is the CHARACTER's id, the parameter this method was called with.)
         GearHold.Clear();
         if (c.HasSection("gear_hold"))
             foreach (var gid in c.GetSectionKeys("gear_hold"))
-                if (Equipment.ById(gid) != null && (int)c.GetValue("gear_hold", gid, 0) is var n && n > 0) GearHold[gid] = n;
+                if (Equipment.Migrated(gid) is var mid && Equipment.ById(mid) != null && (int)c.GetValue("gear_hold", gid, 0) is var n && n > 0)
+                    GearHold[mid] = GearHold.GetValueOrDefault(mid) + n;
+        foreach (var gid in displaced) Stow(gid);
         Unclaimed.Clear();
         Unclaimed.AddRange(((string)c.GetValue("loot", "unclaimed", "")).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                           .Where(gid => Equipment.ById(gid) is { Kit: false }));
+                           .Select(Equipment.Migrated).Where(gid => Equipment.ById(gid) is { Kit: false }));
         PaidKills.Clear();
         foreach (var t in ((string)c.GetValue("loot", "paid", "")).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             if (long.TryParse(t, out var serial)) PayOnce(serial);
@@ -293,7 +304,7 @@ public static class Character
     }
 }
 
-// The nine classes, three to a page. Two are flyable; the rest are declared so
+// The nine classes, three to a page. Three are flyable; the rest are declared so
 // the selector, the save format and the UI are all built for nine from the start
 // rather than being widened later.
 public static class Classes
@@ -309,11 +320,11 @@ public static class Classes
     {
         // page 1 — line
         new() { Id = ShipClass.Battleship, Name = "BATTLESHIP", Ready = true,
-                Blurb = "300 hull. Four cursor-aimed main guns, two point-defence turrets, a missile magazine." },
+                Blurb = "300 hull. Four cursor-aimed main guns, a broadside of all four, two point-defence turrets." },
         new() { Id = ShipClass.Carrier, Name = "CARRIER", Ready = true,
                 Blurb = "200 hull. Three point-defence turrets, three fighters, two torpedo bombers." },
-        new() { Id = ShipClass.Battleship, Name = "MONITOR", Ready = false,
-                Blurb = "Reserved." },
+        new() { Id = ShipClass.Destroyer, Name = "DESTROYER", Ready = true,
+                Blurb = "250 hull. The fastest. Two cursor-aimed main guns, missile bursts of three, two point-defence turrets." },
         // page 2 — strike
         new() { Id = ShipClass.Battleship, Name = "CORSAIR",    Ready = false, Blurb = "Reserved." },
         new() { Id = ShipClass.Battleship, Name = "INTERDICTOR",Ready = false, Blurb = "Reserved." },
@@ -331,4 +342,11 @@ public static class Classes
     public static ShipClass Sanitize(int cls) => Enum.IsDefined(typeof(ShipClass), cls) ? (ShipClass)cls : ShipClass.Battleship;
     // Its name as the screens print it ("BATTLESHIP"), from the one table that holds it.
     public static string NameOf(ShipClass c) => All.First(e => e.Id == c).Name;
+
+    // What each class carries -- asked of the class, never "is it the battleship", so a new class
+    // is one line here rather than a hunt for every two-way test.
+    public static bool Guns(ShipClass c)      => c is ShipClass.Battleship or ShipClass.Destroyer;   // cursor-aimed main turrets
+    public static bool Broadside(ShipClass c) => c == ShipClass.Battleship;
+    public static bool Missiles(ShipClass c)  => c == ShipClass.Destroyer;                           // a magazine of missile bursts
+    public static bool Wing(ShipClass c)      => c == ShipClass.Carrier;                             // fighters and bombers
 }

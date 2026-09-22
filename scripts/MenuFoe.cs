@@ -2,7 +2,7 @@ using Godot;
 using System;
 
 // THE TITLE SCREEN'S PIRATES. Real targets, not decoration: they register in Combat.Hostiles,
-// so the battleship's own turrets, shells and missiles find them through exactly the code that
+// so the battleship's own turrets, shells and broadside find them through exactly the code that
 // fights in the hub. Their own guns are cosmetic -- the display ship has no hull to lose.
 //
 // Three kinds, so the diorama reads as a fight rather than a swarm:

@@ -49,6 +49,12 @@ public partial class AbilityBar : Control
                 if (s.Reloading) { st.Line = $"{s.MissileReloadLeft:0.0}s"; st.Busy = (float)(s.MissileReloadLeft / S["missile_reload"]); }
                 else st.Line = s.MissilesLoaded >= (int)S["missile_mag"] ? "FULL" : "READY";
                 break;
+            case "broadside":
+                if (s.BroadsideWindupLeft > 0) { st.Line = "AIMING"; st.Lit = true; }
+                else if (s.BroadsideVolleysLeft > 0) { st.Line = "FIRING"; st.Lit = true; }
+                else if (s.BroadsideCooldownLeft > 0)
+                { st.Line = $"{s.BroadsideCooldownLeft:0}s"; st.Busy = (float)(s.BroadsideCooldownLeft / S["broadside_cooldown"]); }
+                break;
             case "pd":
                 if (s.PdActive) { st.Line = $"ACTIVE {s.PdLeft:0}s"; st.Lit = true; }
                 else if (!s.PdReady) { st.Line = $"{s.PdRechargeLeft:0}s"; st.Busy = s.PdRechargeFrac; }
