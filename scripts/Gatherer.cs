@@ -202,14 +202,9 @@ public partial class Gatherer : UtilityShip
         Plume.Draw(this, new Vector2(0, Length * 0.5f), Vector2.Down, Length, Plume.Utility, Velocity.Length() / (float)Speed, Velocity.Length() > 2f);
         var inv = GlobalTransform.AffineInverse();
         if (Beaming && M)
-        {   // one shaft: a steady core with a soft glow that breathes
-            var a = inv * Nose(); var b = inv * BeamTo;
-            float breathe = 1f + 0.15f * Mathf.Sin((float)_t * 11f);
-            DrawLine(a, b, new Color(1f, 0.55f, 0.2f, 0.18f), 9f * breathe);
-            DrawLine(a, b, new Color(1f, 0.7f, 0.35f, 0.45f), 4.5f * breathe);
-            DrawLine(a, b, new Color(1f, 0.95f, 0.85f, 0.95f), 1.6f);
-            DrawCircle(b, 5f * breathe, new Color(1f, 0.8f, 0.5f, 0.6f));
-        }
+            // one shaft: a steady core with a soft glow that breathes
+            Beam.Draw(this, inv * Nose(), inv * BeamTo, _t, new Color(1f, 0.55f, 0.2f, 0.18f), new Color(1f, 0.7f, 0.35f, 0.45f), new Color(1f, 0.95f, 0.85f, 0.95f),
+                      new Color(1f, 0.8f, 0.5f, 0.6f));
         else if (Beaming)
             foreach (var bolt in _bolts)
             {

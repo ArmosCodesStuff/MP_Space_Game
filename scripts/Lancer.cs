@@ -2,7 +2,7 @@ using Godot;
 using System.Collections.Generic;
 using System.Linq;
 
-// THE SILVER LANCER -- a bounty boss; which levels are its is Missions.ForLevel's to say.
+// THE SILVER LANCER -- the bounty boss of the odd levels (Missions.ForLevel).
 // One rhythm, 30 s long (all damage x the level's and party's scale):
 //   GUNS       always: 3.6 every 1.2 s (3 DPS) at the nearest ship within 900 u
 //   DEATH BEAM every 30 s, in three steps, the boss holding position through all of them:

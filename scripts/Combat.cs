@@ -73,6 +73,19 @@ public static class Combat
     public static Node World;
     public static System.Action<Shell> ShellFired;
     public static System.Action<Torpedo> TorpedoFired;
+    public static System.Action<Slug> SlugFired;
+
+    // a boss's hostile round (the Drake's shells and scrap): straight, dodgeable, and never a point-
+    // defence target (see Slug)
+    public static void FireSlug(Vector2 from, Vector2 dir, float speed, float range, float radius, double damage,
+                                Slug.Kind look, int variant, string hitSource)
+    {
+        if (World == null) return;
+        var s = new Slug { Position = from, Dir = dir.Normalized(), Speed = speed, Range = range, Radius = radius, Damage = damage,
+                           Look = look, Variant = variant, HitSource = hitSource };
+        World.AddChild(s);
+        SlugFired?.Invoke(s);
+    }
 
     // a main-gun shell (battleship, destroyer): straight, and it hits the first hostile it touches
     public static void FireShell(Vector2 from, Vector2 dir, float speed, float range, double damage, PlayerShip source)
@@ -101,5 +114,5 @@ public static class Combat
     // Dropped by the world on its way out. EVERY hook set by that world must go: each one is a
     // lambda holding the Hub, so one left behind is a freed node the next shot calls into, and a
     // Hub that can never be collected once you are back at the menu.
-    public static void Clear() { Hostiles.Clear(); Players.Clear(); OnFlash = null; World = null; ShellFired = null; TorpedoFired = null; }
+    public static void Clear() { Hostiles.Clear(); Players.Clear(); OnFlash = null; World = null; ShellFired = null; TorpedoFired = null; SlugFired = null; }
 }

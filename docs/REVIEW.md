@@ -19,6 +19,22 @@ ticked only when it has been read line by line and everything found in it is fix
 4. Every finding is fixed at the source, covered by a check where it can be, and the whole suite runs
    again. Findings found while fixing go back on the list (recursively).
 
+## Pass 9 — slice 3b: the Drake Bastion (done)
+
+Four lenses (the Drake's logic, the new projectiles, wiring and replacement, the tests), a refuter
+each, then a critic: 4 confirmed, 8 refuted, 2 more from the critic. Fixed:
+- **The first throw swallowed the shotgun's slot**: a throw holds the boss 9.1 s from 6 s, past the
+  shotgun's 13.5 s, and every other shotgun then ran straight on from a throw. The shotgun keeps the 15 s
+  cadence from 17 s -- 11 s after each throw starts -- with a check on the two clocks' phase.
+- **A guest's copies of the dodgeable rounds trailed the host's hit test by a round trip**: they now
+  start that far into their flight (`Slug.Lead`), as the game's warnings are shortened by it.
+- **The rock was drawn 20 u wider than its lane and its hit** (fitted by height; the art is wider than
+  tall): fitted by its longer side.
+- A stale comment on the boss bar naming only the Lancer's moves.
+Not fixed, and on Known broken: a guest rejoining mid-throw sees no rock (a boss's events are sent once;
+the Lancer's beam telegraph has the same gap). Refuted: a zero-length warp vector (needs the pilot exactly
+on the boss's centre), slugs outliving the boss, the hull's hit width, and five test races already fixed.
+
 ## Pass 8 — slice 3a: the boss base and the Lancer's beam (done)
 
 Four lenses (the base/subclass split, the Lancer's beam logic, the level ladder and its replication,

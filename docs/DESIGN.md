@@ -353,6 +353,16 @@ Recorded here so every chunk builds from the written word, not from memory.
   landed) was the game visibly playing against its own telegraph. The ram waits for a beam to end
   rather than snapping round during it; the shockwave's wind-up holds still too. Only the ram moves
   the boss during a special.
+- **The Drake Bastion (the even levels) is the Lancer's opposite in feel**: no escorts and no trap, a
+  slow gun that is dodged by moving, and two big specials on the Lancer's own clocks, each 25% harder
+  with 25% more warning than the Lancer's matching one (`Drake.ThreatMult` times a Lancer constant, so
+  retuning the Lancer carries through). The SCRAP SHOTGUN warps it to 600 u of the nearest pilot (a ring
+  shows where, 1 s) and fires a fixed fan -- the same seven lines every time, so it is learned, not
+  rolled. The ASTEROID THROW holds a rock in a tractor beam over a red lane for 7.5 s, then hurls it:
+  its path is fixed at the throw (the distance flown as the cube of the time -- slow, then very fast), so
+  every peer flies the same rock from one event and a guest shortens only the hold. **Its rounds are
+  not missiles**: `Slug` is never in `Combat.Hostiles`, so point defence cannot delete a shot that is
+  meant to be dodged.
 - **Point defence order**: missiles, then small craft, then anything else (`Turret.PdPriority`).
 - **Test harness trap**: three processes on fixed timings do not choreograph scene changes well; the
   multiplayer arena needs its own purpose-built test.

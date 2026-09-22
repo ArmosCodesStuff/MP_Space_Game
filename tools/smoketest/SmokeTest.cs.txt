@@ -1603,7 +1603,7 @@ public partial class _Test : Node
         var keepHostiles = Combat.Hostiles.ToList(); var keepPlayers = Combat.Players.ToList();
         var keepFlash = Combat.OnFlash; var keepWorld = Combat.World; var keepShell = Combat.ShellFired; var keepTorp = Combat.TorpedoFired;
         Combat.Clear();
-        bool hooksDropped = Combat.OnFlash == null && Combat.World == null && Combat.ShellFired == null && Combat.TorpedoFired == null;
+        bool hooksDropped = Combat.OnFlash == null && Combat.World == null && Combat.ShellFired == null && Combat.TorpedoFired == null && Combat.SlugFired == null;
         Combat.Hostiles.AddRange(keepHostiles); Combat.Players.AddRange(keepPlayers);
         Combat.OnFlash = keepFlash; Combat.World = keepWorld; Combat.ShellFired = keepShell; Combat.TorpedoFired = keepTorp;
         Check(hooksDropped, "Combat.Clear lets go of the world and every hook it installed");
@@ -2483,6 +2483,14 @@ public partial class _Test : Node
             Check(unknownIgnored && Missions.Cleared(1) && !Missions.Cleared(2) && Missions.Unlocked == 2 && again == 300
                   && Character.BossCleared["silver_lancer"].SetEquals(new[] { 1 }) && Missions.ForLevel(1).Id == "silver_lancer",
                   $"one ladder: a level cleared under a known boss counts, and pays no second first-clear bonus ({again}); an unknown boss's clears count for nothing");
+            // ...WHICHEVER BOSS HELD IT: the bosses take the levels in turn, and a level cleared under the
+            // other one counts all the same -- recorded under the Drake, level 1 is no first clear for the Lancer
+            Character.BossCleared.Clear(); Character.Exp = 0; Character.Level = 1;
+            Character.BossCleared["drake_bastion"] = new System.Collections.Generic.HashSet<int> { 1 };
+            int crossed = Progression.AwardBossKill(1);
+            Check(Missions.ForLevel(1).Id == "silver_lancer" && Missions.ForLevel(2).Id == "drake_bastion" && Missions.ForLevel(3).Id == "silver_lancer"
+                  && crossed == 300 && Character.BossCleared["silver_lancer"].Contains(1),
+                  $"the bosses take the levels in turn (Lancer, Drake, Lancer), and a level cleared under either is cleared: no second first-clear bonus ({crossed})");
             Character.BossCleared.Clear(); Character.Exp = 0; Character.Level = 3;
             Check(!Nodes<BossBar>().First().Visible, "outside the arena there is no boss bar");
             Key(global::Godot.Key.L); await Wait(0.1);
@@ -3237,6 +3245,95 @@ public partial class _Test : Node
             Key(global::Godot.Key.Escape); await Wait(0.1);
             // a wipe: every ship in stasis at once -> the mission fails, home with nothing
             H.EnterSector(Hub.SectorKind.Arena); await Wait(1.5);
+            // THE DRAKE BASTION: level 2 is its. Checked here, in the arena the wipe below fails.
+            {
+                var dk = H.Boss as Drake;
+                var me3 = Me; me3.MaxHp = 5000; me3.TakeDamage(-(5000 - me3.Hp)); me3.Velocity = Vector2.Zero; me3.Rotation = 0f;
+                var dspr = dk?.GetChildren().OfType<Sprite2D>().FirstOrDefault();
+                Check(dk != null && dk.Type.Id == "drake_bastion" && dk.Type.Name == "DRAKE BASTION" && Math.Abs(dk.MaxHp - 770) < 1e-6
+                      && dspr != null && dspr.Texture.ResourcePath.EndsWith("boss_drake.png") && Math.Abs(dspr.Texture.GetHeight() * dspr.Scale.Y - 420f) < 0.5f,
+                      $"level 2 is the Drake Bastion: 700 hull x1.1 = 770, 420 u long ({dk?.Type.Name}, {dk?.MaxHp:0})");
+                if (dk != null)
+                {
+                    var nf = BindingFlags.NonPublic | BindingFlags.Instance;
+                    // ITS CLOCKS: a throw every 30 s from 6 s, the shotgun every 15 s from 17 s -- 11 s after a
+                    // throw starts, clear of its 9.1 s (7.5 s of warning and 1.6 s of flight), so the two never
+                    // run back to back (at the trident's own 13.5 s it fell inside the first throw)
+                    double gap = (double)typeof(Drake).GetField("_shotgun", nf).GetValue(dk) - (double)typeof(Drake).GetField("_throw", nf).GetValue(dk);
+                    Check(Math.Abs(gap - 11) < 1e-6 && 11 > 7.5 + 1.6 && 30 - 11 - 15 > 0,
+                          $"its specials never run back to back: the shotgun 11 s after each throw starts, clear of the throw's 9.1 s ({gap:0.00} s)");
+                    // its own clocks out of the way: each special below is started by hand, alone
+                    typeof(Drake).GetField("_throw", nf).SetValue(dk, 999.0); typeof(Drake).GetField("_shotgun", nf).SetValue(dk, 999.0);
+                    // MAIN GUN: a slow shell every 2.5 s (2.4 DPS at 6 a shell), dodged by moving
+                    me3.Position = dk.Position + new Vector2(0, 700); await Wait(0.1);
+                    var shellSeen = new System.Collections.Generic.HashSet<Slug>(Nodes<Slug>());
+                    var shellAt = new System.Collections.Generic.List<double>(); Slug shell = null; double clock = 0;
+                    double gun0 = me3.DamageBySource.GetValueOrDefault("boss:gun");
+                    for (int i = 0; i < 60 * 7 && shellAt.Count < 2; i++)
+                    {
+                        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); clock += GetProcessDeltaTime();
+                        foreach (var s in Nodes<Slug>().Where(s => s.Look == Slug.Kind.Shell && shellSeen.Add(s))) { shellAt.Add(clock); shell = s; }
+                    }
+                    float sspd = 0;
+                    if (shell != null && GodotObject.IsInstanceValid(shell)) { var sp0 = shell.Position; for (int i = 0; i < 10; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); sspd = GodotObject.IsInstanceValid(shell) ? (shell.Position - sp0).Length() / (10f / 60f) : 0; }
+                    for (int i = 0; i < 60 * 5 && me3.DamageBySource.GetValueOrDefault("boss:gun") == gun0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                    double gunHit = me3.DamageBySource.GetValueOrDefault("boss:gun") - gun0;
+                    Check(shellAt.Count == 2 && Math.Abs(shellAt[1] - shellAt[0] - 2.5) < 0.05 && Math.Abs(sspd - 220) < 4 && Math.Abs(gunHit - 6.6) < 1e-6,
+                          $"its main gun: a slow shell (220 u/s) every 2.5 s, 6 a hit -- 2.4 DPS before the level's scale (x1.1 here: 6.6) ({sspd:0} u/s, {(shellAt.Count == 2 ? shellAt[1] - shellAt[0] : -1):0.00} s apart, {gunHit:0.00})");
+                    // THE SCRAP SHOTGUN (started by hand): a warpRing where it will land -- 600 u from the pilot --
+                    // then, held still, a fan of seven red lines for 1.875 s (1.25 x the Lancer's 1.5 s), then
+                    // seven pieces of scrap down them: the same fixed fan, 10 degrees apart
+                    for (int i = 0; i < 60 * 12 && dk.Locked; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                    me3.Position = dk.Position + new Vector2(0, 1400); me3.Velocity = Vector2.Zero;
+                    typeof(Drake).GetField("_shotgun", nf).SetValue(dk, 0.01);
+                    Telegraph warpRing = null;
+                    for (int i = 0; i < 60 * 2 && warpRing == null; i++) { warpRing = Nodes<Telegraph>().FirstOrDefault(t => !t.Line); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+                    for (int i = 0; i < 60 * 3 && !dk.FanWinding; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                    var landed = dk.Position; float warpOff = landed.DistanceTo(me3.Position);
+                    var fan = Nodes<Telegraph>().Where(t => t.Line && Math.Abs(t.Duration - 1.875) < 1e-6).ToList();
+                    var scrapSeen = new System.Collections.Generic.HashSet<Slug>(Nodes<Slug>());
+                    await Wait(1.0);
+                    bool heldStill = dk.Position.DistanceTo(landed) < 0.01f && dk.Locked;
+                    var scrap = new System.Collections.Generic.List<Slug>();
+                    for (int i = 0; i < 60 * 2 && scrap.Count < 7; i++) { scrap.AddRange(Nodes<Slug>().Where(s => s.Look == Slug.Kind.Scrap && scrapSeen.Add(s))); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+                    float aimTo = (me3.Position - landed).Angle();
+                    var offs = scrap.Select(s => Mathf.RadToDeg(Mathf.AngleDifference(aimTo, s.Dir.Angle()))).OrderBy(a => a).ToList();
+                    bool fanned = offs.Count == 7 && offs.Zip(new[] { -30f, -20f, -10f, 0f, 10f, 20f, 30f }, (a, b) => Math.Abs(a - b) < 0.5f).All(x => x);
+                    Check(warpRing != null && Math.Abs(warpRing.Duration - 1.0) < 1e-6 && Math.Abs(warpOff - 600) < 5 && fan.Count == 7 && heldStill && fanned,
+                          $"the scrap shotgun: a warp to 600 u off the pilot ({warpOff:0}), a fan of 7 lines for 1.875 s held still, then 7 pieces at -30..+30 in 10s ({string.Join(" ", offs.Select(a => a.ToString("0")))})");
+                    double scrap0 = me3.DamageBySource.Where(kv => kv.Key.StartsWith("boss:scrap:")).Sum(kv => kv.Value);
+                    for (int i = 0; i < 60 * 3; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                    double scrapDmg = me3.DamageBySource.Where(kv => kv.Key.StartsWith("boss:scrap:")).Sum(kv => kv.Value) - scrap0;
+                    Check(Math.Abs(scrapDmg - 20.625) < 1e-6, $"the middle piece strikes the pilot it was aimed at: 15 x1.25 = 18.75, x1.1 = 20.625 ({scrapDmg:0.000})");
+                    // THE ASTEROID THROW (started by hand): a rock beside it in its tractor, a red lane of the
+                    // rock's width for 7.5 s (1.25 x the Lancer's 6 s charge), the boss held still -- then the
+                    // throw: slow, then very fast (the first half of the flight covers an eighth of the lane),
+                    // 250 x1.1 = 275 to a ship in the lane, and the rock breaks apart at the lane's end
+                    for (int i = 0; i < 60 * 6 && dk.Locked; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                    me3.Position = dk.Position + new Vector2(0, 700); me3.Velocity = Vector2.Zero;
+                    await Wait(0.2);
+                    typeof(Drake).GetField("_throw", nf).SetValue(dk, 0.01);
+                    for (int i = 0; i < 60 && dk.Rock == null; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                    var rock = dk.Rock;
+                    var lane = Nodes<Telegraph>().FirstOrDefault(t => t.Line && Math.Abs(t.Width - 180f) < 0.5f);
+                    var drakeAt = dk.Position; var rockAt = rock?.Position ?? Vector2.Zero;
+                    await Wait(3.0);
+                    bool heldRock = rock != null && GodotObject.IsInstanceValid(rock) && rock.Position.DistanceTo(rockAt) < 0.01f && !rock.Thrown
+                                    && dk.Position.DistanceTo(drakeAt) < 0.01f && dk.Locked;
+                    Check(rock != null && lane != null && Math.Abs(lane.Duration - 7.5) < 1e-6 && Math.Abs(lane.Hold - 1.6) < 1e-6
+                          && Math.Abs(rockAt.DistanceTo(drakeAt) - 220) < 1 && heldRock,
+                          $"the throw: a rock beside it in its tractor (220 u off), a lane of its width for 7.5 s, the boss and the rock held still ({rockAt.DistanceTo(drakeAt):0} u, lane {lane?.Duration:0.0} s)");
+                    for (int i = 0; i < 60 * 6 && rock != null && GodotObject.IsInstanceValid(rock) && !rock.Thrown; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                    var lane0 = rock?.From ?? Vector2.Zero; float laneLen = rock == null ? 1 : rock.From.DistanceTo(rock.To);
+                    await Wait(0.8);
+                    double half = rock != null && GodotObject.IsInstanceValid(rock) ? rock.Position.DistanceTo(lane0) / laneLen : -1;
+                    bool broke = false;
+                    for (int i = 0; i < 60 * 3 && rock != null && GodotObject.IsInstanceValid(rock); i++) { broke |= rock.Done; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+                    double rockDmg = me3.DamageBySource.GetValueOrDefault("boss:rock");
+                    Check(Math.Abs(half - 0.125) < 0.04 && broke && Math.Abs(laneLen - 1800) < 1 && Math.Abs(rockDmg - 275) < 1e-6,
+                          $"thrown: half the flight covers an eighth of the 1800 u lane ({half:0.000}), it strikes the pilot for 275 ({rockDmg:0}), and breaks apart at the end ({broke})");
+                }
+            }
             int exp1 = Character.Exp; int failLevel = Missions.Level;
             Me.TakeDamage(Me.Hp + 1);
             for (int i = 0; i < 60 * 8 && Hub.InArena; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
@@ -3515,10 +3612,20 @@ public partial class _Test : Node
             Check(Character.GearHold.Values.Sum() == ahHold0 + 2 && Character.Unclaimed.Count == 0 && ahCrates.All(c => !GodotObject.IsInstanceValid(c)),
                   "arena host: the crates it never reached came home in its hold; their nodes did not");
             await Wait(2.0);
+            H.SelectLevel(2);                                    // mission 2 is the Drake Bastion's level
             await ToArena("arena host", 2);
+            Check(H.Boss is Drake { Type.Id: "drake_bastion" }, $"arena host: mission 2, level 2, is the Drake Bastion ({H.Boss?.Type.Name})");
             H.Boss.DamageMult = 0;                               // nobody is lost while the rest is checked
             H.Boss.HullMult = 2.2;                               // a party-of-3 scale: the guest must show the host's
-            await Wait(1.5);
+            // in its gun's reach, and a rock thrown as soon as the guest is in the arena to be told of it
+            // (a boss's events go to the peers already there), for the guest to see both
+            if (H.Boss is Drake hd)
+            {
+                Me.Position = hd.Position + new Vector2(0, 600); Me.Velocity = Vector2.Zero;
+                await RealTime(() => H.Ships.Any(s => !s.Mine && Hub.PeerSector(s.OwnerId) == Hub.SectorKind.Arena), 6);
+                typeof(Drake).GetField("_throw", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(hd, 0.01);
+            }
+            await Wait(3.5);
             // A GUEST DROPPED MID-ARENA (no goodbye): its place is held, and it comes back into the
             // arena, where it was
             // (only once this host sees the guest where it parked: the place held must be that one)
@@ -3593,6 +3700,17 @@ public partial class _Test : Node
             int agDisk = agFile.HasSection("gear_hold") ? agFile.GetSectionKeys("gear_hold").Sum(k => (int)agFile.GetValue("gear_hold", k, 0)) : 0;
             Check(agDisk == agHold0 + 2 && (string)agFile.GetValue("id", "name", "") == "Arena Guest",
                   $"arena guest: both parts reached its OWN file's hold -- the one it took, and the one it left ({agDisk - agHold0} of 2; in memory {Character.GearHold.Values.Sum() - agHold0}, unclaimed {Character.Unclaimed.Count})");
+            // what this guest is shown of the Drake Bastion, watched from before the arena is built
+            bool sawDrake = false, sawShell = false, sawRock = false;
+            var drakeWatch = new LateSampler { Probe = () =>
+            {
+                if (H == null || !Hub.InArena || !GodotObject.IsInstanceValid(H.Boss)) return false;
+                sawDrake |= H.Boss is Drake { Type.Id: "drake_bastion" };
+                sawShell |= Nodes<Slug>().Any(s => s.Cosmetic && s.Look == Slug.Kind.Shell);
+                sawRock |= Nodes<ThrownRock>().Any(r => r.Cosmetic && r.Hold <= 7.5 && r.From.DistanceTo(H.Boss.Position) < 260f);
+                return sawDrake && sawShell && sawRock;
+            } };
+            AddChild(drakeWatch);
             await ToArena("arena guest", 2);
             int agOldId = Net.LocalId;
             int agHold1 = Character.GearHold.Values.Sum();
@@ -3601,6 +3719,10 @@ public partial class _Test : Node
             double seenMult = 0;
             await RealTime(() => { if (H?.Boss != null && GodotObject.IsInstanceValid(H.Boss)) seenMult = H.Boss.HullMult; return Math.Abs(seenMult - 2.2) < 1e-9; }, 5);
             Check(Math.Abs(seenMult - 2.2) < 1e-9, $"arena guest: its boss is the host's boss, scaled as the host scaled it (x2.2; x{seenMult:0.00})");
+            await RealTime(() => drakeWatch.Seen, 4);
+            Check(sawDrake && sawShell && sawRock,
+                  $"arena guest: mission 2 is the Drake Bastion here too, and its slow shells and its thrown rock reach this guest (Drake {sawDrake}, shell {sawShell}, rock {sawRock})");
+            drakeWatch.QueueFree();
             // DROPPED MID-ARENA: to its own world at once, then back in -- into the arena
             await RealTime(() => !Net.IsOnline, Wan ? 20 : 10);
             await RealTime(() => !Hub.InArena, 2);
@@ -3611,10 +3733,11 @@ public partial class _Test : Node
             Check(Me != null && Me.Position.DistanceTo(new Vector2(900, 300)) < 50,
                   $"arena guest: put back where it was when it dropped ({Me?.Position.DistanceTo(new Vector2(900, 300)):0} u off; at {Me?.Position})");
             // the boss died while it was away: it helped win it, so it is paid on its return -- its EXP
-            // (the level-1 boss again, at level 2: 100, no first clear this time, +100 = 650 on its 450)
-            // and both its parts (straight to the hold if they reach it at home, else as crates)
-            await RealTime(() => Character.Exp == 650 && Character.GearHold.Values.Sum() + Character.Unclaimed.Count == agHold1 + 2, 6);
-            Check(Character.Level == 2 && Character.Exp == 650 && Character.GearHold.Values.Sum() + Character.Unclaimed.Count == agHold1 + 2,
+            // (the level-2 Drake at pilot level 2: 200, +250 its first clear of level 2, +100 = 550 on its
+            // 450: 1000, a level -- level 3 with 0 over) and both its parts (straight to the hold if they
+            // reach it at home, else as crates)
+            await RealTime(() => Character.Level == 3 && Character.GearHold.Values.Sum() + Character.Unclaimed.Count == agHold1 + 2, 6);
+            Check(Character.Level == 3 && Character.Exp == 0 && Character.GearHold.Values.Sum() + Character.Unclaimed.Count == agHold1 + 2,
                   $"arena guest: the kill made while it was away is paid on its return: its EXP and its 2 parts (level {Character.Level}, exp {Character.Exp}; {Character.GearHold.Values.Sum() + Character.Unclaimed.Count - agHold1} parts)");
             await RealTime(() => H.MissionWon && H.Boss != null && GodotObject.IsInstanceValid(H.Boss) && H.Boss.Hp == 0, 5);
             Check(H.MissionWon && H.Boss != null && GodotObject.IsInstanceValid(H.Boss) && H.Boss.Hp == 0, "arena guest: back in an arena already won -- the boss reads zero");
@@ -3636,9 +3759,9 @@ public partial class _Test : Node
                   $"arena guest: a vanished host is tried at 2, 8 and 14 s, 5 s each, then RECONNECT is offered at 19 s ({string.Join(", ", tries.Select(t => t.ToString("0.0")))}; {toButton:0.0} s)");
             Check(homeShip != null && GodotObject.IsInstanceValid(homeShip) && Me == homeShip, "arena guest: the failed tries left its own world and ship alone");
             await Wait(1.0);
-            // its own base, plus its shares of two level-1 kills with two pilots (2000 x 1.5 / 2 = 1500
-            // each) -- the second made while it was away, but split two ways all the same (not 2000)
-            double want = 12345 + 1500 + 1500;
+            // its own base, plus its shares of two kills with two pilots -- level 1, 2000 x 1.5 / 2 = 1500;
+            // level 2, x1.1 = 1650 -- the second made while it was away, but split two ways all the same
+            double want = 12345 + 1500 + 1650;
             Check(!Hub.InArena && !Net.IsOnline && H.Yard != null && Math.Abs(H.Yard.Credits - want) < 1e-6,
                   $"arena guest: the host gone mid-arena, home offline with its own base and its bounty share ({H.Yard?.Credits:0} of {want:0})");
             // ...AND IT IS ON DISK, in THIS peer's own file. It used to read the host's: every
@@ -3651,7 +3774,7 @@ public partial class _Test : Node
                   && Math.Abs((double)guestFile.GetValue("base", "credits", -1.0) - want) < 1e-6,
                   $"arena guest: its own base reached its OWN file ({(string)guestFile.GetValue("id", "name", "?")}, {(double)guestFile.GetValue("base", "credits", -1.0):0} of {want:0})");
             int agDisk2 = guestFile.HasSection("gear_hold") ? guestFile.GetSectionKeys("gear_hold").Sum(k => (int)guestFile.GetValue("gear_hold", k, 0)) : 0;
-            Check(agDisk2 == agHold1 + 2 && (int)guestFile.GetValue("progress", "exp", 0) == 650,
+            Check(agDisk2 == agHold1 + 2 && (int)guestFile.GetValue("progress", "level", 0) == 3 && (int)guestFile.GetValue("progress", "exp", -1) == 0,
                   $"arena guest: the kill paid on its return is on its own file: its EXP, both parts in the hold ({agDisk2 - agHold1} of 2, exp {(int)guestFile.GetValue("progress", "exp", 0)})");
             // PRESSING RECONNECT: a try (5 s: the host was here a moment ago, or it is gone), and when
             // that fails too, the button again

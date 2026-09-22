@@ -239,6 +239,7 @@ public partial class Hub : Node2D
         Combat.World = this;
         Combat.ShellFired = s => ToWorld(nameof(NetShell), s.Position, s.Dir, s.Speed, s.Range);
         Combat.TorpedoFired = t => ToWorld(nameof(NetTorpedo), t.Position, t.Dir, t.Speed, t.Range, t.TargetId, t.TurnRate, t.Heavy, t.HostileFire, t.NetId, t.Size);
+        Combat.SlugFired = s => ToWorld(nameof(NetSlug), s.Position, s.Dir, s.Speed, s.Range, s.Radius, (int)s.Look, s.Variant);
 
         // THE SHIPS BEFORE THE BOSS. The boss sizes itself to the party in its _Ready, and it used
         // to be built first, count zero ships, and come out a solo boss for every party.
@@ -1393,6 +1394,11 @@ public partial class Hub : Node2D
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable, TransferChannel = Cosmetic)]
     private void NetShell(Vector2 from, Vector2 dir, float speed, float range) =>
         AddChild(new Shell { Position = from, Dir = dir, Speed = speed, Range = range, Cosmetic = true });
+
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable, TransferChannel = Cosmetic)]
+    private void NetSlug(Vector2 from, Vector2 dir, float speed, float range, float radius, int look, int variant) =>
+        AddChild(new Slug { Position = from, Dir = dir, Speed = speed, Range = range, Radius = radius, Look = (Slug.Kind)look, Variant = variant, Cosmetic = true,
+                            Lead = (float)(1.0 - Net.Arriving(1.0)) });   // the round trip (see Slug.Lead)
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable, TransferChannel = Cosmetic)]
     private void NetTorpedo(Vector2 from, Vector2 dir, float speed, float range, int target, float turn, bool heavy, bool hostile, int id, float size) =>

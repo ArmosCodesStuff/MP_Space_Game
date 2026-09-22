@@ -12,8 +12,9 @@ public partial class BossBar : Control
 {
     public Hub Hub;
     public const float W = 640, H = 18, Bounce = 6f;
-    // Under it, much skinnier: the wind-up to the boss's next SUPER MOVE -- the ram, or the death
-    // beam's escorts going out. It fills to full exactly as that move commits, then starts again.
+    // Under it, much skinnier: the wind-up to the boss's next SUPER MOVE (Boss.NextSuperIn) -- the
+    // Lancer's ram or death beam, the Drake's shotgun or throw. It fills to full exactly as that move
+    // commits, then starts again.
     public const float SuperH = 5f, SuperPad = 3f;
     public const double Life = 0.8, BounceFor = 0.45, Merge = 0.06, BounceHz = 6.67;
     public class Chunk { public double From, To, T; }          // From/To: fractions of max hull

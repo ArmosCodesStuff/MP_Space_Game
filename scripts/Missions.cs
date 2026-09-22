@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 
 // Bounty missions from Threat Intelligence Operations: bosses, LEVELS, and rewards.
-//   ONE LADDER OF LEVELS, the bosses taking them in turn (ForLevel): level 1 the first boss in
-//   the table, level 2 the next, and round again. LEVELS start at 1:
+//   ONE LADDER OF LEVELS, the bosses taking them in turn (ForLevel): odd levels the Silver Lancer,
+//   even levels the Drake Bastion. LEVELS start at 1:
 //     S(L) = 1.1^(L-1)   -- a level-5 boss is 1.1^4 = 1.46x.
 //   A PARTY of P pilots: the boss's hull x S(L)(1 + 0.6(P-1)), its damage x S(L)(1 + 0.2(P-1)).
 //   A failed level-L mission's raids are S(L) too.
@@ -24,6 +24,7 @@ public static class Missions
     public static readonly BossType[] Bosses =
     {
         new() { Id = "silver_lancer", Name = "SILVER LANCER", Hull = 760, Make = () => new Lancer() },
+        new() { Id = "drake_bastion", Name = "DRAKE BASTION", Hull = 700, Make = () => new Drake() },
     };
     // The boss of a level: every peer works it out from the replicated level alone.
     public static BossType ForLevel(int level) => Bosses[(Math.Max(1, level) - 1) % Bosses.Length];
