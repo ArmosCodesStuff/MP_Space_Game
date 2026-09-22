@@ -31,6 +31,13 @@ has just been handed the folder. Follow it in order and you will be where the la
 The player usually asks for several things at once. Plan them **together**, then build them
 **in the order given**, unless one depends on another — say so when reordering.
 
+**Keep a session's scope modest.** Most of a session's cost is the build-and-fix loop, and it grows
+with the code a batch touches — every extra feature means more fixes and more mid-flight engine runs
+to catch them. One batch, one end bar (§5) is the right shape; a sprawling batch is not. If the
+player hands a large set, it is fine — often cheaper — to build the first coherent slice, VERIFY and
+commit it, and say plainly what remains for a follow-up, rather than carrying the whole thing through
+one long loop. Match the effort to the change: a one-line tweak does not earn a five-agent workflow.
+
 For each request, before writing anything: what will be observably true; how it will be tested;
 which systems it touches (search the code for every use); what it could break (multiplayer
 authority, UI, balance, saves).
@@ -49,25 +56,40 @@ Never ask what the docs already answer.
 ## 3 · Build — every request in the batch, then the bar once
 
 The old rule was "one request, then the full bar". That ran ~12 minutes of engine checks for a
-one-line change and ran them again for the next one. Now:
+one-line change and ran them again for the next one. Now the full bar runs **once**, at the end (§5).
+
+**Engine runs are the cost.** A smoke run, a sweep, a mutant each spend a minute or more of engine
+time and a chunk of context to read back — that is where a session's tokens and minutes actually go.
+Spend them where they earn it (the rules below say where), and let edits accumulate between them
+rather than running the harness after every keystroke.
 
 **While building each request:**
 
 - Implement it, including its foundations.
 - **Write the checks for it as you go**, in `tools/smoketest/SmokeTest.cs.txt`.
-- **Prove each new check can fail**: put a mutant in a scratch copy and run it. One mutant at a
-  time when they could interact. A mutant must reproduce the **real old code**, not an
-  approximation. Build the scratch copy from `git ls-files` and copy `typecheck/GodotSharp.dll`
-  into it; a sound copy reproduces the baseline pass count exactly, so any other number means the
-  copy is wrong, not the code.
-- **Prove the check is not vacuous**: set up the situation so the OLD behaviour would visibly
-  differ. A boss that would not have moved anyway cannot demonstrate a lock; a hull already
-  pointing the right way cannot demonstrate tracking. This has caught a blind check three times.
+- **Mutant-prove the checks that guard an invariant** — authority (B), a save-format field, a
+  removed-not-duplicated path (C), a leak (A): a silent regression there is dangerous and easy to
+  miss, so put the real old code back in a scratch copy and watch the check fail. For ordinary
+  behaviour, balance or UI checks, running the new check once and seeing it pass is enough — write a
+  mutant only when you doubt the check is wired up or fear it is blind. This scoping is the biggest
+  single lever on a session's cost; each mutant is a full engine run.
+- **When you do mutant, do it right.** It must reproduce the **real old code**, not an approximation
+  (build the scratch copy from `git ls-files` and copy `typecheck/GodotSharp.dll` in; a sound copy
+  reproduces the baseline pass count exactly, so any other number means the copy is wrong, not the
+  code), and it must be **non-vacuous** — set up the situation so the OLD behaviour would visibly
+  differ (a boss that would not have moved anyway cannot demonstrate a lock; a hull already pointing
+  the right way cannot demonstrate tracking). Batch non-interacting patches into one scratch run;
+  one at a time only when they could interact.
 - **Compare with the spec's numbers as literals**, never with the code's own constants — a check
   that reads the constant cannot catch the constant being wrong.
-- **Run only what can see the change** (the three gears are in §6). A rename: `-Quick`. New
-  behaviour: `-Fast`. Something visual: the sweep, and **look at the frames yourself** with the
-  Read tool. *A check on behaviour is not a check on being drawn.*
+- **Run only what can see the change, and batch edits before each engine run** (the three gears are
+  in §6). A rename or pure refactor: `-Quick`, no engine at all. New behaviour: `-Fast` — but let
+  several edits accumulate first; one engine run for a group beats one run per edit. Something
+  visual: the sweep. **Trust its `LINT: 0` for layout** — off-screen, overlap, clipping: it judges
+  those better and cheaper than an eye. **Read a frame yourself only** when the lint cannot judge it
+  (a genuinely new screen, or a change to art, colour or composition) or when a frame looks off; a
+  full-resolution frame in context is expensive, so do not sweep-and-read every frame by reflex.
+  *A check on behaviour is not a check on being drawn.*
 - Commit a checkpoint per request, so a later failure has somewhere to go back to. A checkpoint
   message does **not** start with `VERIFIED:`.
 
