@@ -63,6 +63,7 @@ public static class Economy
         public Kind Kind;
         public double BaseCost, BaseValue;
         public double Step = 1;                      // what a level of a Count row adds
+        public double Per = PercentEffect;           // what a level of a Percent row adds (a fraction of the base)
         public int Max = int.MaxValue;               // most levels that can be bought (step upgrades and switches)
         public int NeedsBoss;                        // the base owner's highest boss level before it can be bought
         public bool OwnerOnly;                       // the base owner's alone to buy: a guest's request is refused
@@ -87,6 +88,7 @@ public static class Economy
         // (at the END: a guest is sent the levels in this order)
         new() { Id = "hauler_evasion",  Tab = "HAULER",    Kind = Kind.Count,   Name = "Evasion",          BaseValue = 60, Step = 7,   Unit = "% safe",    BaseCost = 400, Max = 5, Blurb = "+7% chance a lone run gets through (up to 95%)" },
         new() { Id = "hauler_autosell", Tab = "HAULER",    Kind = Kind.Unlock,  Name = "Auto-sell",        BaseValue = 0,              Unit = "",          BaseCost = AutoSellCost, Max = 1, NeedsBoss = AutoSellBoss, OwnerOnly = true, Blurb = "completely full, it goes by itself" },
+        new() { Id = "hauler_speed",    Tab = "HAULER",    Kind = Kind.Percent, Name = "Hauler engines",   BaseValue = HaulerSpeed,    Unit = "u/s",       BaseCost = 150, Per = 0.02, Blurb = "+2% speed per level" },
     };
 
     public static Upgrade ById(string id) { foreach (var u in All) if (u.Id == id) return u; return null; }
@@ -96,12 +98,13 @@ public static class Economy
     public static double Cost(Upgrade u, int level) =>
         Math.Round(u.BaseCost * Math.Pow(u.Kind == Kind.Count ? CountCostGrowth : PercentCostGrowth, level));
 
-    // The number at a level: +10% per level, a step per level, or a switch's 0 / 1.
+    // The number at a level: a Percent row's own share per level (10% unless it says otherwise),
+    // a step per level, or a switch's 0 / 1.
     public static double Value(Upgrade u, int level) => u.Kind switch
     {
         Kind.Count => u.BaseValue + u.Step * level,
         Kind.Unlock => level,
-        _ => u.BaseValue * (1 + PercentEffect * level),
+        _ => u.BaseValue * (1 + u.Per * level),
     };
 
     public static bool Maxed(Upgrade u, int level) => level >= u.Max;

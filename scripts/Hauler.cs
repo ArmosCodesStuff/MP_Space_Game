@@ -221,7 +221,7 @@ public partial class Hauler : UtilityShip
     private bool Fly(Vector2 to, float dt)
     {
         var d = to - Position; float dist = d.Length();
-        float top = (float)Economy.HaulerSpeed * (Pinned ? Raider.PinSpeed : 1f);
+        float top = (float)Yard.Value("hauler_speed") * (Pinned ? Raider.PinSpeed : 1f);
         _speed = Mathf.MoveToward(_speed, Mathf.Min(top, Mathf.Sqrt(2f * Accel * dist)), Accel * dt);
         if (Pinned) _speed = Mathf.Min(_speed, top);
         if (!Pinned && dist > 1f) Rotation = Mathf.RotateToward(Rotation, d.Angle() + Mathf.Pi / 2f, 2f * dt);
@@ -234,7 +234,7 @@ public partial class Hauler : UtilityShip
     private bool Slide(float toX, float dt)
     {
         float d = toX - Position.X, dist = Mathf.Abs(d);
-        float top = (float)Economy.HaulerSpeed * (Pinned ? Raider.PinSpeed : 1f);    // pinned: 20% along its lane
+        float top = (float)Yard.Value("hauler_speed") * (Pinned ? Raider.PinSpeed : 1f);    // pinned: 20% along its lane
         _speed = Mathf.MoveToward(_speed, Mathf.Min(top, Mathf.Sqrt(2f * Accel * dist)), Accel * dt);
         if (Pinned) _speed = Mathf.Min(_speed, top);
         Position += new Vector2(Mathf.Sign(d) * Mathf.Min(_speed * dt, dist), 0);

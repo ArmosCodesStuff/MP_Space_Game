@@ -1215,7 +1215,7 @@ public partial class _Test : Node
         Y.RequestDispatch(escorted: true);
         // THE ROUTE, in the spec's terms: the four outposts counter-clockwise from the south-east --
         // held beside, on the base's side -- then the portal
-        var corners = new[] { new Vector2(1414.2f, 1414.2f), new Vector2(1414.2f, -1414.2f), new Vector2(-1414.2f, -1414.2f), new Vector2(-1414.2f, 1414.2f) };
+        var corners = new[] { new Vector2(2121.3f, 2121.3f), new Vector2(2121.3f, -2121.3f), new Vector2(-2121.3f, -2121.3f), new Vector2(-2121.3f, 2121.3f) };
         bool routeOk = Hub.EscortRoute.Length == 5 && Hub.EscortRoute[4] == new Vector2(1500, 219)
                        && Enumerable.Range(0, 4).All(i => Hub.EscortRoute[i].DistanceTo(corners[i]) < 250f && Hub.EscortRoute[i].Length() < corners[i].Length()
                                                           && Hub.EscortRoute[i].DistanceTo(corners[i]) > 100f + 85f);

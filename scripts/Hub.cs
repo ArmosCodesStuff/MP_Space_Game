@@ -37,10 +37,10 @@ public partial class Hub : Node2D
     public static readonly Vector2 SunPos    = new(0, -1794);
     public static readonly Vector2 WreckPos  = new(-1840, 60);
     public static readonly Vector2 PortalPos = new(1500, 219);
-    // FOUR OUTPOSTS, 2000 u out from the base on the diagonals (y grows south): small permanent
+    // FOUR OUTPOSTS, 3000 u out from the base on the diagonals (1000 further than they were) (y grows south): small permanent
     // stations the escort delivers to, named for their corner, in the order the escort visits
     // them -- counter-clockwise from the south-east. Every peer builds them (BuildWorld).
-    public const float OutpostOut = 2000f, OutpostHeight = 170f;
+    public const float OutpostOut = 3000f, OutpostHeight = 170f;
     public static readonly (string name, Vector2 at)[] Outposts =
     {
         ("SE", BasePos + new Vector2(1, 1).Normalized() * OutpostOut), ("NE", BasePos + new Vector2(1, -1).Normalized() * OutpostOut),
