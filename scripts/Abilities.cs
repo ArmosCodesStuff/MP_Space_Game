@@ -262,6 +262,7 @@ public static class Abilities
     public static string ControlsHint(ShipClass c)
     {
         if (_hints.TryGetValue(c, out var h)) return h;
+        if (!Classes.Known(c)) return _hints[c] = "placeholder";      // not a class this build has
         string own = Classes.Of(c).Hint;
         return _hints[c] = own.Length > 0 ? own + "  ·  " + CommonHint : CommonHint;
     }

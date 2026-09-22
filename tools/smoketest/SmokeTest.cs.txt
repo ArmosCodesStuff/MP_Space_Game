@@ -1522,7 +1522,7 @@ public partial class _Test : Node
             Key(global::Godot.Key.F); await Wait(0.8);
             Check(ship.BroadsideWindupLeft == 0 && ship.BroadsideVolleysLeft == 0 && Nodes<Shell>().Count(s => seen.Add(s)) == 0,
                   "F during the cooldown does nothing");
-            typeof(PlayerShip).GetField("_bsCooldown", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(ship, 0.02);
+            ship.Sl("broadside").Cool = 0.02;                       // the slot by name, not a private field
             await Wait(0.1); Key(global::Godot.Key.F); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(ship.BroadsideWindupLeft > 0.4, $"once the cooldown is over, F winds up again ({ship.BroadsideWindupLeft:0.00} s)");
             await Wait(1.5);
@@ -1781,7 +1781,7 @@ public partial class _Test : Node
             dl[4] = "dd_salvo_3"; H.PilotChanged(); ship = Me;
             Check(Math.Abs(ship.Stats["missile_mag"] - 6) < 1e-9 && Math.Abs(ship.Stats["missile_reload"] - 12.0) < 1e-6 && Math.Abs(ship.Stats["missile_damage"] - 39.2) < 1e-9,
                   $"Salvo Rack III: 6 bursts a magazine, a 12.0 s reload, 39.2 a missile ({ship.Stats["missile_mag"]}, {ship.Stats["missile_reload"]:0.000}, {ship.Stats["missile_damage"]})");
-            typeof(PlayerShip).GetField("_mag", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(ship, 6);
+            ship.Sl("missile").N = 6;
             dl[4] = "dd_missile_rack"; H.PilotChanged();
             Check(ship.MissilesLoaded == 3, $"back to the kit rack: a 3-burst magazine holds 3, not the 6 loaded before ({ship.MissilesLoaded})");
             for (int k = 0; k < Equipment.Slots; k++) dl[k] = dlKeep[k];
@@ -1998,13 +1998,13 @@ public partial class _Test : Node
             Key(global::Godot.Key.Space); await Wait(0.3);
             bool attacked = ship.WingTarget == gone;
             // point defence on it too: a turret holding it must let go as well
-            typeof(PlayerShip).GetField("_pdLeft", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(ship, 15.0);
+            ship.Sl("pd").Left = 15.0;
             for (int i = 0; i < 90 && !ship.PdTurrets.Any(tu => tu.Target == gone); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             bool pdOn = ship.PdTurrets.Any(tu => tu.Target == gone);
             H.CallOff(H.Yard.Hauler); await Wait(0.5);
             Check(attacked && pdOn && ship.WingTarget == null && ship.PdTurrets.All(tu => tu.Target != gone),
                   $"a hunter called off while the fighters and point defence are on it: both let go of it ({attacked}, {pdOn}, {ship.WingTarget != null})");
-            typeof(PlayerShip).GetField("_pdLeft", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(ship, 0.0);
+            ship.Sl("pd").Left = 0.0;
             Key(global::Godot.Key.R); await Wait(TargetDummy.IdleReset + 0.5);
         }
 
@@ -3177,7 +3177,9 @@ public partial class _Test : Node
             var aMissile = Nodes<Torpedo>().FirstOrDefault(t => t.HostileFire);
             Check(Turret.PdPriority(boss) == 2 && (aMissile == null || Turret.PdPriority(aMissile) == 0), "point defence takes missiles before anything else");
             var tiny = new TinyTarget();
-            Check(Turret.PdPriority(tiny) == 1 && Turret.PdPriority(tiny) < Turret.PdPriority(boss), "then small craft (fighter-sized), then everything else");
+            Check(Turret.PdPriority(tiny) == 1 && Turret.PdPriority(tiny) < Turret.PdPriority(boss)
+                  && Targeting.PointDefence.Allows(tiny) && !Targeting.PointDefence.Allows(boss),
+                  "then small craft (by their tag, not their size), then everything else -- and a boss is never a PD target");
             Telegraph ring = null;
             for (int i = 0; i < 60 * 18 && ring == null; i++) { ring = Nodes<Telegraph>().FirstOrDefault(t => !t.Line); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
             Check(ring != null && ring.Radius == Lancer.WaveRadius, "the shockwave is telegraphed: a red ring before it lands");
@@ -4381,11 +4383,14 @@ public partial class LateSampler : Node
 }
 
 // A fighter-sized stand-in, only for the PD priority check.
-public class TinyTarget : IHittable
+// A small craft, for the point-defence priority: it says what it IS (Tag.Light), which is what
+// the rule reads now -- it used to be inferred from a hit radius under 20 u.
+public class TinyTarget : IHittable, ITagged
 {
     public int NetId => 0;
     public Vector2 Position => Vector2.Zero;
     public float HitRadius => 8f;
     public bool Alive => true;
+    public Tag Tags => Tag.Light;
     public void TakeDamage(double d) { }
 }

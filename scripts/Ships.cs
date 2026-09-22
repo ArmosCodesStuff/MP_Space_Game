@@ -155,14 +155,18 @@ public static class Classes
 
     private static readonly Dictionary<ShipClass, ClassDef> ById = All.ToDictionary(c => c.Id);
 
-    public static ClassDef Of(ShipClass c) => ById[c];
-    public static ClassArt Art(ShipClass c) => ById[c].Art;
-    public static bool Has(ShipClass c, Fit f) => ById[c].Has(f);
+    // A number this build has no class for -- a save or a packet from another version. It reads
+    // as a hull with nothing on it rather than throwing: no fit, no abilities, no art.
+    private static readonly ClassDef Missing = new() { Name = "UNKNOWN", Blurb = "" };
+    public static bool Known(ShipClass c) => ById.ContainsKey(c);
+    public static ClassDef Of(ShipClass c) => ById.TryGetValue(c, out var d) ? d : Missing;
+    public static ClassArt Art(ShipClass c) => Of(c).Art;
+    public static bool Has(ShipClass c, Fit f) => Of(c).Has(f);
     // Its name as the screens print it ("BATTLESHIP"), from the one table that holds it.
-    public static string NameOf(ShipClass c) => ById[c].Name;
+    public static string NameOf(ShipClass c) => Of(c).Name;
     // A class number from a file or a packet: one this build can actually fly, or the Battleship.
     public static ShipClass Sanitize(int cls) =>
-        Enum.IsDefined(typeof(ShipClass), cls) && ById[(ShipClass)cls].Ready ? (ShipClass)cls : ShipClass.Battleship;
+        Enum.IsDefined(typeof(ShipClass), cls) && Of((ShipClass)cls).Ready ? (ShipClass)cls : ShipClass.Battleship;
 
     public const int PerPage = 3;
     public static int Pages => (All.Length + PerPage - 1) / PerPage;
