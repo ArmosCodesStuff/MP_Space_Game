@@ -1870,7 +1870,7 @@ public partial class _Test : Node
         Check(Math.Abs(ship.Stats["control_range"] - 1080) < 0.01 && Math.Abs(ship.Stats["strike_range"] - 2160) < 0.01,
               "fighter control range 1080 (1.5x the battleship's guns); bomber strike range 2160 (2x)");
         var spr = Nodes<Sprite2D>(ship).First();
-        Check(spr.Texture.ResourcePath.EndsWith("carrier_player.png") && Math.Abs(spr.Texture.GetHeight() * spr.Scale.Y - 170f) < 0.5f,
+        Check(spr.Texture.ResourcePath.EndsWith("carrier_player.png") && Math.Abs(spr.Texture.GetHeight() * spr.Scale.Y - 297.5f) < 0.5f,
               "carrier flies the owner's line-art sprite 75% larger: 297.5 u (170 x 1.75)");
         await Park(new Vector2(780, 700), 0);
         var pdLight = H.SpawnRaider(new Vector2(700, 860));            // a third light target (the practice fighters are two)
@@ -3394,10 +3394,14 @@ public partial class _Test : Node
                     bool fanned = offs.Count == 7 && offs.Zip(new[] { -30f, -20f, -10f, 0f, 10f, 20f, 30f }, (a, b) => Math.Abs(a - b) < 0.5f).All(x => x);
                     Check(warpRing != null && Math.Abs(warpRing.Duration - 1.0) < 1e-6 && Math.Abs(warpOff - 600) < 5 && fan.Count == 7 && heldStill && fanned,
                           $"the scrap shotgun: a warp to 600 u off the pilot ({warpOff:0}), a fan of 7 lines for 1.875 s held still, then 7 pieces at -30..+30 in 10s ({string.Join(" ", offs.Select(a => a.ToString("0")))})");
-                    double scrap0 = me3.DamageBySource.Where(kv => kv.Key.StartsWith("boss:scrap:")).Sum(kv => kv.Value);
+                    // each piece is its own hit (boss:scrap:0..6, the middle one 3): the middle piece, aimed at the
+                    // pilot, strikes it -- and a hull as broad as the 302 u battleship's takes its neighbours too
+                    double Piece(int k) => me3.DamageBySource.TryGetValue($"boss:scrap:{k}", out var v) ? v : 0;
+                    double mid0 = Piece(3), all0 = Enumerable.Range(0, 7).Sum(Piece);
                     for (int i = 0; i < 60 * 3; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-                    double scrapDmg = me3.DamageBySource.Where(kv => kv.Key.StartsWith("boss:scrap:")).Sum(kv => kv.Value) - scrap0;
-                    Check(Math.Abs(scrapDmg - 20.625) < 1e-6, $"the middle piece strikes the pilot it was aimed at: 15 x1.25 = 18.75, x1.1 = 20.625 ({scrapDmg:0.000})");
+                    double midDmg = Piece(3) - mid0, allDmg = Enumerable.Range(0, 7).Sum(Piece) - all0;
+                    Check(Math.Abs(midDmg - 20.625) < 1e-6 && Math.Abs(allDmg / 20.625 - Math.Round(allDmg / 20.625)) < 1e-6,
+                          $"the middle piece strikes the pilot it was aimed at, each piece its own 15 x1.25 = 18.75, x1.1 = 20.625 ({midDmg:0.000}; {allDmg / 20.625:0} of the 7 struck)");
                     // THE ASTEROID THROW (started by hand): a rock beside it in its tractor, a red lane of the
                     // rock's width for 7.5 s (1.25 x the Lancer's 6 s charge), the boss held still -- then the
                     // throw: slow, then very fast (the first half of the flight covers an eighth of the lane),
