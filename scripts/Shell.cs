@@ -35,7 +35,7 @@ public partial class Shell : Node2D
                 if (hit == null) continue;
                 if (hit is Node2D struck) DamageNumbers.NoteImpact(struck, p);
                 hit.TakeDamage(Damage);
-                Source?.NoteCombat();
+                Source?.NoteDealt(Damage, p);
                 Sfx.Impact(p);
                 QueueFree(); return;
             }

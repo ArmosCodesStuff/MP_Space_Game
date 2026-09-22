@@ -9,7 +9,7 @@ using System.Collections.Generic;
 // cleared with the world (Combat.Clear), or a second session in one process carries the first's.
 public static class NetIds
 {
-    public const int Dummy = 1000, Player = 2000, Boss = 3000, Enemy = 5000, Missile = 10000, Menu = 30000;
+    public const int Dummy = 1000, Player = 2000, Boss = 3000, Enemy = 5000, Missile = 10000, Deployed = 20000, Menu = 30000;
 
     private static readonly Dictionary<int, int> Handed = new();
 

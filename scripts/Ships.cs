@@ -38,6 +38,8 @@ public enum Fit
     Missiles = 4,      // a magazine of guided bursts
     Wing = 8,          // fighters and bombers from a deck
     Pd = 16,           // point-defence turrets
+    Deploy = 32,       // it drops turrets of its own and picks them up again (the freighters)
+    AlwaysPd = 64,     // its point defence never switches off: no window, no recharge (the warden)
 }
 
 // Every hull is the owner's line art (tools/make_ships.ps1: symmetrical, grey, tinted here with
@@ -67,6 +69,15 @@ public class ClassArt
     public float EngineInset;          // the engine's plume this far in from the stern (world units)
 }
 
+// One row of the stat sheet, declared by the class that needs it (ClassDef.Rows).
+public class StatRow
+{
+    public string Group, Id, Label, Unit = "";
+    public double Base;
+    public int Dec = 1;
+    public bool Inverse;                     // an interval: a rate bonus divides it
+}
+
 public class ClassDef
 {
     public ShipClass Id;
@@ -77,6 +88,10 @@ public class ClassDef
     // This class's own numbers, by stat id. Everything it does NOT name it takes from the sheet's
     // default (Stats.cs), so a row here is a difference, never a copy.
     public Dictionary<string, double> Nums = new();
+    // Rows only this class has: the numbers its own abilities are made of. They join the sheet
+    // like any other, so the K window prints them and gear and purchases can move them, without
+    // Stats.cs knowing that this class exists.
+    public StatRow[] Rows = Array.Empty<StatRow>();
     public AbilityDef[] Abilities = Array.Empty<AbilityDef>();
     public string Hint = "";                 // the controls line's own part, before the common one
     public bool Has(Fit f) => (Fit & f) != 0;
@@ -138,19 +153,223 @@ public static class Classes
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Missile, Ab.Reload, Ab.Pd } },
 
         // -- page 2: freight, which carries its own defences -------------------
-        new() { Id = ShipClass.FreightHauler, Name = "FREIGHTER", Blurb = "Reserved." },
-        new() { Id = ShipClass.FreightTender, Name = "TENDER", Blurb = "Reserved." },
-        new() { Id = ShipClass.FreightBastion, Name = "BASTION", Blurb = "Reserved." },
+        new() { Id = ShipClass.FreightHauler, Name = "FREIGHTER", Ready = true, Fit = Fit.Guns | Fit.Pd | Fit.Deploy,
+            Blurb = "400 hull, the toughest. One main gun, two point-defence turrets, three deployable turrets, and a bubble that soaks 400 damage for everything inside it.",
+            Hint = "FREIGHTER  ·  mouse aims the main gun",
+            Nums = new() {
+                ["hull"] = 400,
+                ["thrust"] = 45, ["reverse_thrust"] = 20, ["max_speed"] = 85, ["reverse_speed"] = 30,
+                ["turn_radius"] = 150, ["turn_rate"] = 0.85,
+                ["main_count"] = 1, ["main_damage"] = 12, ["main_interval"] = 1.0, ["main_range"] = 800, ["shell_speed"] = 560,
+                ["pd_count"] = 2,
+            },
+            Rows = new StatRow[] {
+                new() { Group = "Deployed turrets", Id = "deploy_damage",   Label = "Damage per shot",  Base = 6, Dec = 1 },
+                new() { Group = "Deployed turrets", Id = "deploy_interval", Label = "Reload",           Base = 0.5, Unit = "s", Dec = 2, Inverse = true },
+                new() { Group = "Deployed turrets", Id = "deploy_range",    Label = "Range",            Base = 500, Unit = "u", Dec = 0 },
+                new() { Group = "Deployed turrets", Id = "deploy_hull",     Label = "Turret hull",      Base = 120, Dec = 0 },
+                new() { Group = "Deployed turrets", Id = "deploy_max",      Label = "Out at once",      Base = 3, Dec = 0 },
+                new() { Group = "Deployed turrets", Id = "deploy_cooldown", Label = "Between drops",    Base = 6, Unit = "s", Dec = 1, Inverse = true },
+                new() { Group = "Deployed turrets", Id = "collect_range",   Label = "Collect within",   Base = 120, Unit = "u", Dec = 0 },
+                new() { Group = "Bubble", Id = "bubble_pool", Label = "Damage it soaks", Base = 400, Dec = 0 },
+                new() { Group = "Bubble", Id = "bubble_radius", Label = "Radius",        Base = 260, Unit = "u", Dec = 0 },
+                new() { Group = "Bubble", Id = "bubble_time", Label = "Time up",         Base = 8, Unit = "s", Dec = 1 },
+                new() { Group = "Bubble", Id = "bubble_cooldown", Label = "Cooldown",    Base = 25, Unit = "s", Dec = 1, Inverse = true },
+            },
+            Art = new ClassArt {
+                Texture = "res://freight_hauler_hull.png", Length = 230f, HalfWidth = 59.74f,
+                Mains = new Vector2[] { new(0.0f, -50.6f) },
+                Pds   = new Vector2[] { new(-32.9f, 64.4f), new(32.9f, 64.4f) },
+                TurretTexScale = 1.4154f / 5.5f, MainBarrel = 17.34f, PdBarrel = 7.79f, PdRing = 4.25f },
+            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Bubble, Ab.Deploy, Ab.Collect, Ab.Pd } },
+        new() { Id = ShipClass.FreightTender, Name = "TENDER", Ready = true, Fit = Fit.Guns | Fit.Pd | Fit.Deploy,
+            Blurb = "400 hull. One main gun, two point-defence turrets, three deployable turrets, and an overdrive that doubles the rate of fire of everything it owns for 8 s.",
+            Hint = "TENDER  ·  mouse aims the main gun",
+            Nums = new() {
+                ["hull"] = 400,
+                ["thrust"] = 45, ["reverse_thrust"] = 20, ["max_speed"] = 85, ["reverse_speed"] = 30,
+                ["turn_radius"] = 150, ["turn_rate"] = 0.85,
+                ["main_count"] = 1, ["main_damage"] = 12, ["main_interval"] = 1.0, ["main_range"] = 800, ["shell_speed"] = 560,
+                ["pd_count"] = 2,
+            },
+            Rows = new StatRow[] {
+                new() { Group = "Deployed turrets", Id = "deploy_damage",   Label = "Damage per shot",  Base = 6, Dec = 1 },
+                new() { Group = "Deployed turrets", Id = "deploy_interval", Label = "Reload",           Base = 0.5, Unit = "s", Dec = 2, Inverse = true },
+                new() { Group = "Deployed turrets", Id = "deploy_range",    Label = "Range",            Base = 500, Unit = "u", Dec = 0 },
+                new() { Group = "Deployed turrets", Id = "deploy_hull",     Label = "Turret hull",      Base = 120, Dec = 0 },
+                new() { Group = "Deployed turrets", Id = "deploy_max",      Label = "Out at once",      Base = 3, Dec = 0 },
+                new() { Group = "Deployed turrets", Id = "deploy_cooldown", Label = "Between drops",    Base = 6, Unit = "s", Dec = 1, Inverse = true },
+                new() { Group = "Deployed turrets", Id = "collect_range",   Label = "Collect within",   Base = 120, Unit = "u", Dec = 0 },
+                new() { Group = "Overdrive", Id = "overdrive_mult", Label = "Rate of fire", Base = 2, Unit = "x", Dec = 1 },
+                new() { Group = "Overdrive", Id = "overdrive_time", Label = "Time up",      Base = 8, Unit = "s", Dec = 1 },
+                new() { Group = "Overdrive", Id = "overdrive_cooldown", Label = "Cooldown", Base = 24, Unit = "s", Dec = 1, Inverse = true },
+            },
+            Art = new ClassArt {
+                Texture = "res://freight_tender_hull.png", Length = 230f, HalfWidth = 57.48f,
+                Mains = new Vector2[] { new(0.0f, -50.6f) },
+                Pds   = new Vector2[] { new(-31.6f, 64.4f), new(31.6f, 64.4f) },
+                TurretTexScale = 1.4154f / 5.5f, MainBarrel = 17.34f, PdBarrel = 7.79f, PdRing = 4.25f },
+            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Overdrive, Ab.Deploy, Ab.Collect, Ab.Pd } },
+        new() { Id = ShipClass.FreightBastion, Name = "BASTION", Ready = true, Fit = Fit.Guns | Fit.Pd | Fit.Deploy,
+            Blurb = "400 hull. One main gun, two point-defence turrets, three deployable turrets, and a shockwave that throws everything within 1000 u away -- or holds a boss still for 3 s.",
+            Hint = "BASTION  ·  mouse aims the main gun",
+            Nums = new() {
+                ["hull"] = 400,
+                ["thrust"] = 45, ["reverse_thrust"] = 20, ["max_speed"] = 85, ["reverse_speed"] = 30,
+                ["turn_radius"] = 150, ["turn_rate"] = 0.85,
+                ["main_count"] = 1, ["main_damage"] = 12, ["main_interval"] = 1.0, ["main_range"] = 800, ["shell_speed"] = 560,
+                ["pd_count"] = 2,
+            },
+            Rows = new StatRow[] {
+                new() { Group = "Deployed turrets", Id = "deploy_damage",   Label = "Damage per shot",  Base = 6, Dec = 1 },
+                new() { Group = "Deployed turrets", Id = "deploy_interval", Label = "Reload",           Base = 0.5, Unit = "s", Dec = 2, Inverse = true },
+                new() { Group = "Deployed turrets", Id = "deploy_range",    Label = "Range",            Base = 500, Unit = "u", Dec = 0 },
+                new() { Group = "Deployed turrets", Id = "deploy_hull",     Label = "Turret hull",      Base = 120, Dec = 0 },
+                new() { Group = "Deployed turrets", Id = "deploy_max",      Label = "Out at once",      Base = 3, Dec = 0 },
+                new() { Group = "Deployed turrets", Id = "deploy_cooldown", Label = "Between drops",    Base = 6, Unit = "s", Dec = 1, Inverse = true },
+                new() { Group = "Deployed turrets", Id = "collect_range",   Label = "Collect within",   Base = 120, Unit = "u", Dec = 0 },
+                new() { Group = "Shockwave", Id = "wave_range",    Label = "Reach",          Base = 1000, Unit = "u", Dec = 0 },
+                new() { Group = "Shockwave", Id = "wave_push",     Label = "Throws them",    Base = 1000, Unit = "u", Dec = 0 },
+                new() { Group = "Shockwave", Id = "wave_disable",  Label = "Holds a boss",   Base = 3, Unit = "s", Dec = 1 },
+                new() { Group = "Shockwave", Id = "wave_cooldown", Label = "Cooldown",       Base = 30, Unit = "s", Dec = 1, Inverse = true },
+            },
+            Art = new ClassArt {
+                Texture = "res://freight_bastion_hull.png", Length = 230f, HalfWidth = 49.34f,
+                Mains = new Vector2[] { new(0.0f, -50.6f) },
+                Pds   = new Vector2[] { new(-27.1f, 64.4f), new(27.1f, 64.4f) },
+                TurretTexScale = 1.4154f / 5.5f, MainBarrel = 17.34f, PdBarrel = 7.79f, PdRing = 4.25f },
+            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Shockwave, Ab.Deploy, Ab.Collect, Ab.Pd } },
 
         // -- page 3: heavy fighters --------------------------------------------
-        new() { Id = ShipClass.HeavySniper, Name = "SNIPER", Blurb = "Reserved." },
-        new() { Id = ShipClass.HeavyWarrior, Name = "WARRIOR", Blurb = "Reserved." },
-        new() { Id = ShipClass.HeavyWarden, Name = "WARDEN", Blurb = "Reserved." },
+        new() { Id = ShipClass.HeavySniper, Name = "SNIPER", Ready = true, Fit = Fit.Guns,
+            Blurb = "140 hull, fast. A light main gun, and a railgun that charges for 3 s -- it cannot turn or thrust while it does -- then throws 150 damage 2500 u in a straight blue line.",
+            Hint = "SNIPER  ·  mouse aims the main gun",
+            Nums = new() {
+                ["hull"] = 140,
+                ["thrust"] = 130, ["reverse_thrust"] = 60, ["max_speed"] = 190, ["reverse_speed"] = 70,
+                ["turn_radius"] = 55, ["turn_rate"] = 2.2,
+                ["main_count"] = 1, ["main_damage"] = 6, ["main_interval"] = 0.8, ["main_range"] = 900, ["shell_speed"] = 700,
+            },
+            Rows = new StatRow[] {
+                new() { Group = "Railgun", Id = "rail_damage", Label = "Damage",         Base = 150, Dec = 0 },
+                new() { Group = "Railgun", Id = "rail_charge", Label = "Charge (locked)",Base = 3, Unit = "s", Dec = 1, Inverse = true },
+                new() { Group = "Railgun", Id = "rail_range",  Label = "Reach",          Base = 2500, Unit = "u", Dec = 0 },
+                new() { Group = "Railgun", Id = "rail_width",  Label = "Beam width",     Base = 14, Unit = "u", Dec = 0 },
+                new() { Group = "Railgun", Id = "rail_cooldown", Label = "Cooldown",     Base = 1, Unit = "s", Dec = 1, Inverse = true },
+            },
+            Art = new ClassArt {
+                Texture = "res://heavy_sniper_hull.png", Length = 120f, HalfWidth = 30.03f,
+                Mains = new Vector2[] { new(0.0f, -24.0f) },
+                TurretTexScale = 0.7385f / 5.5f, MainBarrel = 9.05f, PdBarrel = 4.06f, PdRing = 2.22f },
+            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Railgun } },
+        new() { Id = ShipClass.HeavyWarrior, Name = "WARRIOR", Ready = true, Fit = Fit.Guns,
+            Blurb = "140 hull, fast. Two main guns, and a rush: 2.5 s at two and a half times its speed taking half damage, ending in an EMP that stuns everything close.",
+            Hint = "WARRIOR  ·  mouse aims the main guns",
+            Nums = new() {
+                ["hull"] = 140,
+                ["thrust"] = 130, ["reverse_thrust"] = 60, ["max_speed"] = 190, ["reverse_speed"] = 70,
+                ["turn_radius"] = 55, ["turn_rate"] = 2.2,
+                ["main_count"] = 2, ["main_damage"] = 9, ["main_interval"] = 0.7, ["main_range"] = 600, ["shell_speed"] = 520,
+            },
+            Rows = new StatRow[] {
+                new() { Group = "Rush", Id = "rush_mult",  Label = "Top speed",        Base = 2.5, Unit = "x", Dec = 1 },
+                new() { Group = "Rush", Id = "rush_time",  Label = "Time up",          Base = 2.5, Unit = "s", Dec = 1 },
+                new() { Group = "Rush", Id = "rush_guard", Label = "Damage taken",     Base = 0.5, Unit = "x", Dec = 2 },
+                new() { Group = "Rush", Id = "emp_damage", Label = "EMP damage",       Base = 60, Dec = 0 },
+                new() { Group = "Rush", Id = "emp_range",  Label = "EMP reach",        Base = 260, Unit = "u", Dec = 0 },
+                new() { Group = "Rush", Id = "emp_stun",   Label = "EMP holds them",   Base = 2, Unit = "s", Dec = 1 },
+                new() { Group = "Rush", Id = "rush_cooldown", Label = "Cooldown",      Base = 18, Unit = "s", Dec = 1, Inverse = true },
+            },
+            Art = new ClassArt {
+                Texture = "res://heavy_warrior_hull.png", Length = 120f, HalfWidth = 31.54f,
+                Mains = new Vector2[] { new(-12.0f, -24.0f), new(12.0f, -24.0f) },
+                TurretTexScale = 0.7385f / 5.5f, MainBarrel = 9.05f, PdBarrel = 4.06f, PdRing = 2.22f },
+            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Rush } },
+        new() { Id = ShipClass.HeavyWarden, Name = "WARDEN", Ready = true, Fit = Fit.Guns | Fit.Pd | Fit.AlwaysPd,
+            Blurb = "140 hull, fast. Point defence that never switches off (at half a warship's damage), a modest main gun, and six hunter-seekers that each take a target of their own.",
+            Hint = "WARDEN  ·  mouse aims the main gun",
+            Nums = new() {
+                ["hull"] = 140,
+                ["thrust"] = 130, ["reverse_thrust"] = 60, ["max_speed"] = 190, ["reverse_speed"] = 70,
+                ["turn_radius"] = 55, ["turn_rate"] = 2.2,
+                ["main_count"] = 1, ["main_damage"] = 12, ["main_interval"] = 0.6, ["main_range"] = 700, ["shell_speed"] = 600,
+                ["pd_count"] = 1, ["pd_damage"] = 0.25, ["pd_range"] = 420,
+            },
+            Rows = new StatRow[] {
+                new() { Group = "Hunters", Id = "hunter_count",  Label = "Missiles",      Base = 6, Dec = 0 },
+                new() { Group = "Hunters", Id = "hunter_damage", Label = "Damage (each)", Base = 45, Dec = 0 },
+                new() { Group = "Hunters", Id = "hunter_speed",  Label = "Speed",         Base = 260, Unit = "u/s", Dec = 0 },
+                new() { Group = "Hunters", Id = "hunter_turn",   Label = "Guidance",      Base = 2.5, Unit = "rad/s", Dec = 2 },
+                new() { Group = "Hunters", Id = "hunter_range",  Label = "Reach",         Base = 1200, Unit = "u", Dec = 0 },
+                new() { Group = "Hunters", Id = "hunter_cooldown", Label = "Cooldown",    Base = 14, Unit = "s", Dec = 1, Inverse = true },
+            },
+            Art = new ClassArt {
+                Texture = "res://heavy_warden_hull.png", Length = 120f, HalfWidth = 28.68f,
+                Mains = new Vector2[] { new(0.0f, -24.0f) },
+                Pds   = new Vector2[] { new(0.0f, 31.2f) },
+                TurretTexScale = 0.7385f / 5.5f, MainBarrel = 9.05f, PdBarrel = 4.06f, PdRing = 2.22f },
+            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Hunters } },
 
         // -- page 4: lights -----------------------------------------------------
-        new() { Id = ShipClass.LightDart, Name = "DART", Blurb = "Reserved." },
-        new() { Id = ShipClass.LightEcho, Name = "ECHO", Blurb = "Reserved." },
-        new() { Id = ShipClass.LightWraith, Name = "WRAITH", Blurb = "Reserved." },
+        new() { Id = ShipClass.LightDart, Name = "DART", Ready = true, Fit = Fit.Guns,
+            Blurb = "90 hull, the fastest thing with a pilot in it. A barrel roll nothing can hit for 1.2 s, and 4 s of 60% more speed and a quarter more rate of fire after it.",
+            Hint = "DART  ·  mouse aims the main gun",
+            Nums = new() {
+                ["hull"] = 90,
+                ["thrust"] = 190, ["reverse_thrust"] = 90, ["max_speed"] = 260, ["reverse_speed"] = 95,
+                ["turn_radius"] = 35, ["turn_rate"] = 3.0,
+                ["main_count"] = 1, ["main_damage"] = 5, ["main_interval"] = 0.35, ["main_range"] = 500, ["shell_speed"] = 620,
+            },
+            Rows = new StatRow[] {
+                new() { Group = "Barrel roll", Id = "roll_time",  Label = "Untouchable",   Base = 1.2, Unit = "s", Dec = 1 },
+                new() { Group = "Barrel roll", Id = "boost_time", Label = "Boost after",   Base = 4, Unit = "s", Dec = 1 },
+                new() { Group = "Barrel roll", Id = "boost_speed",Label = "Top speed",     Base = 1.6, Unit = "x", Dec = 2 },
+                new() { Group = "Barrel roll", Id = "boost_rof",  Label = "Rate of fire",  Base = 1.25, Unit = "x", Dec = 2 },
+                new() { Group = "Barrel roll", Id = "roll_cooldown", Label = "Cooldown",   Base = 12, Unit = "s", Dec = 1, Inverse = true },
+            },
+            Art = new ClassArt {
+                Texture = "res://light_dart_hull.png", Length = 70f, HalfWidth = 16.78f,
+                Mains = new Vector2[] { new(0.0f, -10.5f) },
+                TurretTexScale = 0.4308f / 5.5f, MainBarrel = 5.28f, PdBarrel = 2.37f, PdRing = 1.29f },
+            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Roll } },
+        new() { Id = ShipClass.LightEcho, Name = "ECHO", Ready = true, Fit = Fit.Guns,
+            Blurb = "90 hull. Its echo remembers every point of damage it deals for 5 s, then detonates the lot where the last shot landed.",
+            Hint = "ECHO  ·  mouse aims the main gun",
+            Nums = new() {
+                ["hull"] = 90,
+                ["thrust"] = 190, ["reverse_thrust"] = 90, ["max_speed"] = 260, ["reverse_speed"] = 95,
+                ["turn_radius"] = 35, ["turn_rate"] = 3.0,
+                ["main_count"] = 1, ["main_damage"] = 5, ["main_interval"] = 0.35, ["main_range"] = 500, ["shell_speed"] = 620,
+            },
+            Rows = new StatRow[] {
+                new() { Group = "Echo", Id = "echo_time",   Label = "It remembers for", Base = 5, Unit = "s", Dec = 1 },
+                new() { Group = "Echo", Id = "echo_radius", Label = "Blast radius",     Base = 220, Unit = "u", Dec = 0 },
+                new() { Group = "Echo", Id = "echo_share",  Label = "Of what it dealt", Base = 1, Unit = "x", Dec = 2 },
+                new() { Group = "Echo", Id = "echo_cooldown", Label = "Cooldown",       Base = 15, Unit = "s", Dec = 1, Inverse = true },
+            },
+            Art = new ClassArt {
+                Texture = "res://light_echo_hull.png", Length = 70f, HalfWidth = 14.68f,
+                Mains = new Vector2[] { new(0.0f, -10.5f) },
+                TurretTexScale = 0.4308f / 5.5f, MainBarrel = 5.28f, PdBarrel = 2.37f, PdRing = 1.29f },
+            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Echo } },
+        new() { Id = ShipClass.LightWraith, Name = "WRAITH", Ready = true, Fit = Fit.Guns,
+            Blurb = "90 hull. Five seconds nothing hostile can pick it: whatever was coming for it goes after someone else, or gives up.",
+            Hint = "WRAITH  ·  mouse aims the main gun",
+            Nums = new() {
+                ["hull"] = 90,
+                ["thrust"] = 190, ["reverse_thrust"] = 90, ["max_speed"] = 260, ["reverse_speed"] = 95,
+                ["turn_radius"] = 35, ["turn_rate"] = 3.0,
+                ["main_count"] = 1, ["main_damage"] = 5, ["main_interval"] = 0.35, ["main_range"] = 500, ["shell_speed"] = 620,
+            },
+            Rows = new StatRow[] {
+                new() { Group = "Stealth", Id = "stealth_time", Label = "Unseen for", Base = 5, Unit = "s", Dec = 1 },
+                new() { Group = "Stealth", Id = "stealth_cooldown", Label = "Cooldown", Base = 20, Unit = "s", Dec = 1, Inverse = true },
+            },
+            Art = new ClassArt {
+                Texture = "res://light_wraith_hull.png", Length = 70f, HalfWidth = 14.97f,
+                Mains = new Vector2[] { new(0.0f, -10.5f) },
+                TurretTexScale = 0.4308f / 5.5f, MainBarrel = 5.28f, PdBarrel = 2.37f, PdRing = 1.29f },
+            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Stealth } },
     };
 
     private static readonly Dictionary<ShipClass, ClassDef> ById = All.ToDictionary(c => c.Id);

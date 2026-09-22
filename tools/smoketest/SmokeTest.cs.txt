@@ -1200,6 +1200,28 @@ public partial class _Test : Node
               $"one level of EVASION (67%) gets the same dice through: 350 sold for 350 ({Y.Credits - lc1:0})");
         ((System.Collections.Generic.Dictionary<string, int>)typeof(Yard).GetField("_levels", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(Y)).Remove("hauler_evasion");
         Hauler.PretendRoll = null;
+
+        // ── the hauler's OWN point defence: one mount, always on, bought up 5% a level ──
+        {
+            hauler.ResetToPad();
+            var mounts = Nodes<Turret>(hauler).ToList();
+            Check(mounts.Count == 1 && mounts[0].PointDefense && hauler.PdOnline && hauler.PdRing == 0f,
+                  $"the hauler carries one point-defence mount, always online, with no window to run down ({mounts.Count} mounts)");
+            Check(Math.Abs(hauler.Spec(true).Damage - 1.0) < 1e-9 && Math.Abs(hauler.Spec(true).Interval - 0.5) < 1e-9
+                  && Math.Abs(hauler.Spec(true).Range - 400f) < 1e-3,
+                  $"its gun: 1 damage a shot every 0.5 s inside 400 u ({hauler.Spec(true).Damage:0.00} / {hauler.Spec(true).Interval:0.00} s / {hauler.Spec(true).Range:0} u)");
+            ((System.Collections.Generic.Dictionary<string, int>)typeof(Yard).GetField("_levels", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(Y))["hauler_pd_damage"] = 3;
+            Check(Math.Abs(hauler.Spec(true).Damage - 1.15) < 1e-9,
+                  $"three levels of hauler point defence: +5% each, 1.15 a shot ({hauler.Spec(true).Damage:0.000})");
+            ((System.Collections.Generic.Dictionary<string, int>)typeof(Yard).GetField("_levels", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(Y)).Remove("hauler_pd_damage");
+            // a hostile missile crossing the pad is shot down without anyone opening a window
+            int down0 = Torpedo.Intercepted;
+            var mp = hauler.Position + new Vector2(0, -250);
+            Combat.LaunchTorpedo(mp, Vector2.Down, 40f, 600f, 5, 0, 0f, heavy: false, hostile: true);
+            for (int i = 0; i < 60 * 8 && Torpedo.Intercepted == down0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(Torpedo.Intercepted > down0, "and it shoots down a missile that comes at it, with nobody flying it");
+        }
+
         // bought for real: five levels to 95%, and no sixth
         Y.Credits = 100000;
         bool fiveBought = Enumerable.Range(0, 5).All(_ => Y.TryBuy("hauler_evasion"));

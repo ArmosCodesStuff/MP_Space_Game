@@ -12,7 +12,7 @@ using System.Linq;
 // LOCKED: a super move is winding up or firing. The boss then neither closes nor turns except as
 // that move itself decides -- the red line it drew is the line it fires down -- and a guest takes
 // its pose flat rather than easing it (see _netLocked).
-public abstract partial class Boss : Node2D, IHittable, ITagged
+public abstract partial class Boss : Node2D, IHittable, ITagged, IStatused
 {
     public Hub Hub;
     public Missions.BossType Type;              // which boss: its name and its base hull
@@ -24,6 +24,13 @@ public abstract partial class Boss : Node2D, IHittable, ITagged
     protected abstract string Sprite { get; }
     public const int Id = NetIds.Boss;
     public Tag Tags => Tag.Boss;
+    // A bastion's shockwave cannot throw a boss, so it holds it still instead (Status.Disabled):
+    // it neither moves nor acts while it lasts. The host decides; guests simply stop being told
+    // to move it.
+    private StatusSet _status;
+    public StatusSet Statuses => _status;
+    public void ApplyStatus(Status s, double seconds) { if (Net.Sim) _status.Apply(s, seconds); }
+    public bool Held => _status.Has(Status.Disabled);
     public double Hp;
     public bool Alive => Hp > 0;
     public int NetId => Id;
@@ -102,6 +109,8 @@ public abstract partial class Boss : Node2D, IHittable, ITagged
             return;
         }
         if (!Alive) return;
+        _status.Tick(delta);
+        if (Held) { QueueRedraw(); return; }         // held still: no approach, no ability, no turn
         var pilots = Pilots.ToList();
         if (pilots.Count > 0)
         {

@@ -1,5 +1,6 @@
 using Godot;
 using System;
+using System.Collections.Generic;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HAULER — carries the yard's stock out through the portal for sale.
@@ -31,7 +32,7 @@ using System;
 // Six pods are painted on its hull; it starts with one working and the HAULER tab
 // adds more (up to six) and makes each bigger.
 // ─────────────────────────────────────────────────────────────────────────────
-public partial class Hauler : UtilityShip
+public partial class Hauler : UtilityShip, ITurretHost
 {
     public enum St { Loading, Lifting, Departing, Escorting, Charging, Away, Arriving, Returning, Landing, Destroyed }
 
@@ -73,6 +74,32 @@ public partial class Hauler : UtilityShip
 
     private Sprite2D _sprite;
     private Node2D _overlay;                 // drawn above the hull: pods, cargo motes, the sale
+
+    // ── its own point defence (ITurretHost) ─────────────────────────────────
+    // One mount on the spine, the same component a warship carries -- but nobody flies this, so
+    // there is no firing window: it is online whenever the hauler is out where it can be reached.
+    // Its damage is the yard's to buy (hauler_pd_damage); the rest of the gun is fixed.
+    private Turret _pd;
+    private readonly List<Turret> _pdMounts = new();
+    private static readonly Vector2 PdMount = new(0f, 8f);     // on the spine, just aft of centre
+    public Node2D AsNode => this;
+    public bool PdOnline => InReach && !Lost;
+    public float PdRing => 0f;                       // no window, so no ring to run down
+    public Vector2 AimAt => Position;                // it has no main guns
+    public float FastSwing => 0f;
+    public IReadOnlyList<Turret> Siblings => _pdMounts;
+    public void NoteDealt(double d, Vector2 at) { }  // it keeps no combat clock and no echo
+    public PlayerShip Credit => null;                // its shots are the base's, not a pilot's
+    public TurretSpec Spec(bool pd) => new()
+    {
+        Damage = Yard?.Value("hauler_pd_damage") ?? Economy.HaulerPdDamage,
+        Interval = Economy.HaulerPdInterval,
+        Range = (float)Economy.HaulerPdRange,
+        Turn = (float)Economy.HaulerPdTurn,
+        Texture = "res://turret_pd.png",
+        TexScale = 1.3085f / 5.5f, Barrel = 7.2f, Ring = 3.93f,
+        Tint = new Color(0.78f, 0.82f, 0.9f),
+    };
     private Vector2 _netPos; private float _netRot; private bool _hasNet;
     private readonly RandomNumberGenerator _rng = new();
 
@@ -87,6 +114,10 @@ public partial class Hauler : UtilityShip
         _overlay = new Node2D();
         _overlay.Draw += DrawOverlay;
         AddChild(_overlay);
+        _pd = new Turret();
+        AddChild(_pd);
+        _pd.Setup(this, PdMount, pd: true);
+        _pdMounts.Add(_pd);
         ResetToPad();
     }
 
@@ -136,6 +167,7 @@ public partial class Hauler : UtilityShip
         float dt = (float)delta;
         T += delta;
         WatchHull();
+        _pd.Tick(delta);                     // always on: the host's copy fires, a guest's tracks
         if (Net.Sim) Simulate(dt);
         else
         {
@@ -258,6 +290,10 @@ public partial class Hauler : UtilityShip
     {
         bool gone = State == St.Away && T >= 0.35;
         _sprite.Visible = _overlay.Visible = !gone && State != St.Destroyed;
+        // the mount rides the hull: hidden with it, and shrunk with it on the pad
+        _pd.Visible = _sprite.Visible;
+        _pd.Position = PdMount * VisualScale;
+        _pd.Scale = Vector2.One * VisualScale;
         _sprite.Position = State == St.Charging
             ? new Vector2(_rng.RandfRange(-1f, 1f), _rng.RandfRange(-1f, 1f)) * (0.5f + 2.5f * (float)Math.Min(1, T / Economy.HaulerCharge))
             : Vector2.Zero;

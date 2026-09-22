@@ -169,6 +169,9 @@ public class ShipStats
             Add("Bombers", "bomber_accel",    "Acceleration",       500, "u/s²", 0);
         }
 
+        // The class's OWN rows: whatever its abilities are made of (ClassDef.Rows).
+        foreach (var r in Def.Rows) Add(r.Group, r.Id, r.Label, r.Base, r.Unit, r.Dec, r.Inverse);
+
         if (bonuses != null)
             foreach (var kv in bonuses)
                 if (_byId.TryGetValue(kv.Key, out var s)) s.Bonus = kv.Value;

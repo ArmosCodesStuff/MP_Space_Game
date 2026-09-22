@@ -361,7 +361,7 @@ public partial class Hub : Node2D
     // (reliable) word that it joined, and reached another guest with no ship for it yet -- "Node
     // not found" in that guest's log (seen over a lossy link). The hub hands each to its ship, or
     // drops it. The owner's report goes to the SENDER'S ship only: nobody moves another's.
-    private PlayerShip ShipOf(int peer) => _ships.TryGetValue(peer, out var s) && IsInstanceValid(s) ? s : null;
+    public PlayerShip ShipOf(int peer) => _ships.TryGetValue(peer, out var s) && IsInstanceValid(s) ? s : null;
     public void SendShipState(float px, float py, float vx, float vy, float rot, float ax, float ay, bool trigger, bool staggered,
                               float podX, float podY, float podRot, bool warping) =>
         Rpc(nameof(NetShipState), px, py, vx, vy, rot, ax, ay, trigger, staggered, podX, podY, podRot, warping);
@@ -415,6 +415,7 @@ public partial class Hub : Node2D
         if ((SectorKind)s != Sector) { RpcId(who, nameof(NetSector), (int)Sector, Missions.Level); return; }
         RpcId(who, nameof(NetMission), MissionArgs());
         foreach (var r in Raiders) RpcId(who, nameof(NetRaiderSpawn), r.NetId, r.Position, (int)r.Kind, r.Strength, r.HullShare);
+        foreach (var t in Deployed) RpcId(who, nameof(NetDeploy), t.NetId, t.OwnerId, t.Position, (float)t.Hp);
         if (Sector == SectorKind.Arena && IsInstanceValid(Boss) && Boss.Alive) Boss.CatchUp(who);   // the warnings (and a rock) up now
         if (MissionWon) { RpcId(who, nameof(NetWon), _ships.Count); RpcId(who, nameof(NetReturnCount), ReturnReady, ReturnTotal); }
         if (_placeFor.Remove(who, out var place)) RpcId(who, nameof(NetPlace), place.at, place.rot);
@@ -898,12 +899,18 @@ public partial class Hub : Node2D
 
     // ── raiders (enemy fighters): host-simulated, replicated ──────────────────
     public readonly List<Raider> Raiders = new();
+    // The turrets the freighters have out. Host-owned like the raiders: dropped, told, and
+    // removed the same way, and freed with this world (they are children of it).
+    public readonly List<DeployedTurret> Deployed = new();
     private double _raiderSend;
 
     // what a raider may go after: player ships, and the utility ships at home
     public IEnumerable<Node2D> RaiderTargets()
     {
         foreach (var s in _ships.Values) if (Raider.Up(s)) yield return s;
+        // a turret a freighter left out is the base's too: something to go for, and something
+        // that shoots back
+        foreach (var t in Deployed) if (Raider.Up(t)) yield return t;
         if (Yard == null) yield break;
         foreach (var u in Yard.Fleet) if (Raider.Up(u)) yield return u;
     }
@@ -988,6 +995,46 @@ public partial class Hub : Node2D
             DropRaider(r, burst: false);
             ToWorld(nameof(NetRaiderGone), r.NetId, false, (float)r.Hp);
         }
+    }
+
+    // ── a freighter's turret: dropped, collected, or shot off its base ──────
+    public DeployedTurret Drop(PlayerShip owner, Vector2 at, double hull)
+    {
+        if (!Net.IsHost || owner == null) return null;
+        var t = AddDeployed(NetIds.Next(NetIds.Deployed), owner.OwnerId, at, hull);
+        ToWorld(nameof(NetDeploy), t.NetId, owner.OwnerId, at, (float)hull);
+        return t;
+    }
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void NetDeploy(int id, int owner, Vector2 at, float hull)
+    {
+        if (Deployed.All(x => x.NetId != id)) AddDeployed(id, owner, at, hull);
+    }
+    private DeployedTurret AddDeployed(int id, int owner, Vector2 at, double hull)
+    {
+        var t = new DeployedTurret { NetId = id, OwnerId = owner, Ship = ShipOf(owner), Position = at,
+                                     Hp = hull, MaxHp = hull, Name = $"Deployed_{id}" };
+        Deployed.Add(t); AddChild(t);
+        return t;
+    }
+    // Picked up by its owner, or shot off its base. Both go the same way; only the burst differs.
+    public void DeployedDown(DeployedTurret t) { RemoveDeployed(t, burst: true); }
+    public void DeployedTaken(DeployedTurret t) { RemoveDeployed(t, burst: false); }
+    private void RemoveDeployed(DeployedTurret t, bool burst)
+    {
+        if (!Net.IsHost) return;
+        ToWorld(nameof(NetDeployGone), t.NetId, burst);
+        DropDeployed(t, burst);
+    }
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void NetDeployGone(int id, bool burst)
+    {
+        if (Deployed.FirstOrDefault(x => x.NetId == id) is { } t) DropDeployed(t, burst);
+    }
+    private void DropDeployed(DeployedTurret t, bool burst)
+    {
+        if (burst) AddChild(new Explosion { Position = t.Position, Radius = 22f });
+        Deployed.Remove(t); t.QueueFree();
     }
 
     public Raider SpawnRaider(Vector2 at, RaiderKind kind = RaiderKind.Light, int patrol = 0, double scale = 1, double hullShare = 1)

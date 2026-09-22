@@ -165,6 +165,136 @@ public static class Ab
         },
     };
 
+
+    // ── the freighters ───────────────────────────────────────────────────────
+    public static readonly AbilityDef Deploy = new()
+    {
+        Id = "deploy", Name = "Deploy turret", Short = "DEPLOY", Default = Key.T,
+        Blurb = "Drops a turret where you are. It holds the spot, shooting what comes near, until you collect it (C) or it is destroyed.",
+        Press = (s, _) => s.DeployTurret(),
+        Refuse = (s, _) => s.TurretsOut >= (int)s.Stats["deploy_max"] ? "ALL OUT"
+                         : s.Sl("deploy").Cool > 0 ? "RELOADING" : null,
+        Show = (s, _) =>
+        {
+            int max = (int)s.Stats["deploy_max"];
+            if (s.Sl("deploy").Cool > 0)
+                return new SlotState { Line = $"{s.Sl("deploy").Cool:0.0}s", Busy = (float)(s.Sl("deploy").Cool / s.Stats["deploy_cooldown"]) };
+            return new SlotState { Line = $"{max - s.TurretsOut}/{max}", Lit = s.TurretsOut > 0 };
+        },
+    };
+
+    public static readonly AbilityDef Collect = new()
+    {
+        Id = "collect", Name = "Collect turret", Short = "COLLECT", Default = Key.C,
+        Blurb = "Picks up a turret of yours you are sitting over, ready to drop again.",
+        Press = (s, _) => s.CollectTurret(),
+        Refuse = (s, _) => s.TurretsOut == 0 ? "NONE OUT" : s.NearestOwnTurret() == null ? "NOT OVER ONE" : null,
+        Show = (s, _) => new SlotState { Line = s.TurretsOut == 0 ? "NONE OUT" : s.NearestOwnTurret() != null ? "PICK UP" : "FLY OVER ONE",
+                                         Lit = s.NearestOwnTurret() != null },
+    };
+
+    public static readonly AbilityDef Bubble = new()
+    {
+        Id = "bubble", Name = "Bubble", Short = "BUBBLE", Default = Key.F,
+        Blurb = "A bubble over you and everyone near you: it soaks damage until its pool is spent, or the time is up.",
+        Press = (s, _) => s.RaiseBubble(),
+        Refuse = (s, _) => s.Sl("bubble").Cool > 0 ? "CHARGING" : null,
+        Show = (s, _) => Timed(s, "bubble", "bubble_cooldown", $"UP {s.Sl("bubble").N}"),
+    };
+
+    public static readonly AbilityDef Overdrive = new()
+    {
+        Id = "overdrive", Name = "Overdrive", Short = "OVERDRIVE", Default = Key.F,
+        Blurb = "Everything you own fires twice as fast: your gun, your point defence and every turret you have out.",
+        Press = (s, _) => s.StartOverdrive(),
+        Refuse = (s, _) => s.Sl("overdrive").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => Timed(s, "overdrive", "overdrive_cooldown", "x2"),
+    };
+
+    public static readonly AbilityDef Shockwave = new()
+    {
+        Id = "shockwave", Name = "Shockwave", Short = "WAVE", Default = Key.F,
+        Blurb = "Throws everything within 1000 u away from you -- and what is too big to throw (a boss) is held still instead.",
+        Press = (s, _) => s.Shockwave(),
+        Refuse = (s, _) => s.Sl("shockwave").Cool > 0 ? "CHARGING" : null,
+        Show = (s, _) => Timed(s, "shockwave", "wave_cooldown", "READY"),
+    };
+
+    // ── the heavy fighters ───────────────────────────────────────────────────
+    public static readonly AbilityDef Railgun = new()
+    {
+        Id = "railgun", Name = "Railgun", Short = "RAIL", Default = Key.F,
+        Blurb = "Three seconds charging -- you cannot turn or thrust while it charges -- then a straight blue line, 2500 u, through everything on it.",
+        Press = (s, _) => s.ChargeRail(),
+        Refuse = (s, _) => s.Sl("railgun").Left > 0 ? "CHARGING" : s.Sl("railgun").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => s.Sl("railgun").Left > 0
+            ? new SlotState { Line = $"CHARGE {s.Sl("railgun").Left:0.0}s", Lit = true,
+                              Busy = (float)(s.Sl("railgun").Left / s.Stats["rail_charge"]) }
+            : Timed(s, "railgun", "rail_cooldown", "READY"),
+    };
+
+    public static readonly AbilityDef Rush = new()
+    {
+        Id = "rush", Name = "Rush", Short = "RUSH", Default = Key.F,
+        Blurb = "Two and a half seconds at two and a half times your speed, taking half damage. It ends in an EMP that stuns everything close.",
+        Press = (s, _) => s.StartRush(),
+        Refuse = (s, _) => s.Sl("rush").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => Timed(s, "rush", "rush_cooldown", "RUSHING"),
+    };
+
+    public static readonly AbilityDef Hunters = new()
+    {
+        Id = "hunters", Name = "Hunter-seekers", Short = "HUNTERS", Default = Key.F,
+        Blurb = "Six missiles, each taking a target of its own -- and all six at the nearest one if there is only the one.",
+        Press = (s, _) => s.LaunchHunters(),
+        Refuse = (s, _) => s.Sl("hunters").Cool > 0 ? "RELOADING" : null,
+        Show = (s, _) => Timed(s, "hunters", "hunter_cooldown", "AWAY"),
+    };
+
+    // ── the lights ───────────────────────────────────────────────────────────
+    public static readonly AbilityDef Roll = new()
+    {
+        Id = "roll", Name = "Barrel roll", Short = "ROLL", Default = Key.F,
+        Blurb = "Nothing can hit you for 1.2 s, and you come out of it faster and firing quicker for four.",
+        Press = (s, _) => s.BarrelRoll(),
+        Refuse = (s, _) => s.Sl("roll").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => s.Statuses.Has(Status.Evading)
+            ? new SlotState { Line = "ROLLING", Lit = true }
+            : Timed(s, "roll", "roll_cooldown", "BOOST"),
+    };
+
+    public static readonly AbilityDef Echo = new()
+    {
+        Id = "echo", Name = "Bullet echo", Short = "ECHO", Default = Key.F,
+        Blurb = "For five seconds the echo remembers every point of damage you deal, then detonates all of it where your last shot landed.",
+        Press = (s, _) => s.StartEcho(),
+        Refuse = (s, _) => s.Sl("echo").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => s.Sl("echo").Left > 0
+            ? new SlotState { Line = $"{s.Sl("echo").Own:0} STORED", Lit = true }
+            : Timed(s, "echo", "echo_cooldown", "READY"),
+    };
+
+    public static readonly AbilityDef Stealth = new()
+    {
+        Id = "stealth", Name = "Stealth", Short = "STEALTH", Default = Key.F,
+        Blurb = "Five seconds nothing hostile can pick you: whatever was coming for you goes after someone else, or gives up.",
+        Press = (s, _) => s.GoDark(),
+        Refuse = (s, _) => s.Sl("stealth").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => s.Statuses.Has(Status.Untargetable)
+            ? new SlotState { Line = $"UNSEEN {s.Statuses.Left(Status.Untargetable):0.0}s", Lit = true }
+            : Timed(s, "stealth", "stealth_cooldown", "READY"),
+    };
+
+    // The shape nearly every timed ability shows: running (lit, with its own word), cooling
+    // (a countdown and the sweep), or ready.
+    private static SlotState Timed(PlayerShip s, string id, string coolStat, string up)
+    {
+        ref var sl = ref s.Sl(id);
+        if (sl.Left > 0) return new SlotState { Line = $"{up} {sl.Left:0.0}s", Lit = true };
+        if (sl.Cool > 0) return new SlotState { Line = $"{sl.Cool:0}s", Busy = (float)(sl.Cool / s.Stats[coolStat]) };
+        return new SlotState { Line = "READY" };
+    }
+
     // Not on any bar: the escape pod's F. Every class has it, and it is reached by id.
     public static readonly AbilityDef Reboard = new()
     {

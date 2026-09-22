@@ -18,7 +18,7 @@ using System.Linq;
 //     reports hull, ability state and wing positions back;
 //   everyone else interpolates.
 // ─────────────────────────────────────────────────────────────────────────────
-public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged
+public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurretHost
 {
     public int OwnerId = 1;
 
@@ -98,6 +98,38 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged
     public IHittable StrikeTarget { get; private set; }    // bombers run at this
     private int _strikesOut;
 
+    // ── what this ship's own class brings ────────────────────────────────
+    // The timed abilities of the nine classes: each runs its Left down, and the host does
+    // whatever it does when it reaches zero. Naming them here (rather than a flag per class)
+    // keeps the tick one loop however many classes there are.
+    private static readonly string[] Timed =
+        { "bubble", "overdrive", "shockwave", "railgun", "rush", "hunters", "roll", "echo", "stealth" };
+    private Vector2 _echoAt;                      // where this ship's last shot landed
+
+    // What multiplies its rate of fire right now -- the tender's overdrive, the dart's boost.
+    // Its guns, its point defence and every turret it has out all read it.
+    public float FireRate
+    {
+        get
+        {
+            float k = 1f;
+            if (Sl("overdrive").Left > 0) k *= (float)Stats["overdrive_mult"];
+            if (Sl("roll").Left > 0 && !_status.Has(Status.Evading)) k *= (float)Stats["boost_rof"];
+            return k <= 0 ? 1f : k;
+        }
+    }
+    // ...and its top speed: the warrior's rush, the dart's boost after the roll.
+    public float SpeedMult
+    {
+        get
+        {
+            float k = 1f;
+            if (Sl("rush").Left > 0) k *= (float)Stats["rush_mult"];
+            if (Sl("roll").Left > 0 && !_status.Has(Status.Evading)) k *= (float)Stats["boost_speed"];
+            return k <= 0 ? 1f : k;
+        }
+    }
+
     // ── ABILITY SLOTS ────────────────────────────────────────────────────
     // The state of every ability this class carries, in the class's own order. Each ability
     // counts the same four things: how long it has LEFT running, how long it must COOL before it
@@ -135,6 +167,45 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged
     // wound up or firing: the main turrets swing fast enough to reach the cursor within the wind-up
     public bool BroadsideTracking => BroadsideWindupLeft > 0 || BroadsideVolleysLeft > 0;
     private bool BroadsideReady => Stats.Def.Has(Fit.Broadside) && Alive && !BroadsideTracking && BroadsideCooldownLeft <= 0;
+
+    // ── what this ship's turrets are bolted to (ITurretHost) ─────────────
+    // A turret asks these and nothing else, so the same component sits on a ship, on a freighter's
+    // deployed mount, on the hauler and on anything else that grows a gun.
+    public Node2D AsNode => this;
+    public bool PdOnline => PdActive;
+    public float PdRing => PdActive ? PdActiveFrac : PdRechargeFrac;
+    public Vector2 AimAt => AimPoint;
+    // Through a broadside the main turrets come round onto the cursor from anywhere within the
+    // wind-up -- half a turn in its time -- or at their own rate if that is already faster.
+    public float FastSwing => BroadsideTracking ? (float)(Math.PI / Math.Max(0.05, Stats["broadside_windup"])) : 0f;
+    public IReadOnlyList<Turret> Siblings => PdTurrets;
+    // WHAT THIS SHIP JUST DEALT, and where it landed. Every weapon that knows whose it is comes
+    // through here -- a turret, a shell, a torpedo -- so the echo has one place to listen and
+    // "it is in combat" has one place to be set.
+    public void NoteDealt(double d, Vector2 at)
+    {
+        NoteCombat();
+        ref var echo = ref Sl("echo");
+        if (echo.Left > 0) { echo.Own += d; _echoAt = at; }
+    }
+    public PlayerShip Credit => this;
+
+    public TurretSpec Spec(bool pd)
+    {
+        var art = MyArt;
+        return new TurretSpec {
+            Damage   = pd ? Stats["pd_damage"]   : Stats["main_damage"],
+            Interval = (pd ? Stats["pd_interval"] : Stats["main_interval"]) / FireRate,
+            Range    = (float)(pd ? Stats["pd_range"] : Stats["main_range"]),
+            Turn     = (float)(pd ? Stats["pd_turn"]  : Stats["main_turn"]),
+            ShellSpeed = (float)Stats["shell_speed"],
+            Texture  = pd ? art.PdTurret : art.MainTurret,
+            TexScale = art.TurretTexScale,
+            Barrel   = pd ? art.PdBarrel : art.MainBarrel,
+            Ring     = art.PdRing,
+            Tint     = Accent,
+        };
+    }
 
     private readonly List<Turret> _turrets = new();
     private readonly List<Turret> _mains = new();
@@ -362,6 +433,221 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged
     }
     public void OrderAttack(IHittable t) { if (Stats.Def.Has(Fit.Wing) && t != null) { WingTarget = t; _attacking = true; } }
     public void RecallWing() { WingTarget = null; _attacking = false; }
+    // ── THE FREIGHTERS ──────────────────────────────────────────────────
+    private Hub MyHub => GetParent() as Hub;
+
+    // How many of this pilot's turrets are standing, and the one it is sitting over (C).
+    public int TurretsOut
+    {
+        get
+        {
+            var h = MyHub; if (h == null) return 0;
+            int n = 0; foreach (var t in h.Deployed) if (t.OwnerId == OwnerId) n++;
+            return n;
+        }
+    }
+    public DeployedTurret NearestOwnTurret()
+    {
+        var h = MyHub; if (h == null) return null;
+        DeployedTurret best = null; float bd = (float)Stats["collect_range"];
+        foreach (var t in h.Deployed)
+        {
+            if (t.OwnerId != OwnerId) continue;
+            float d = Position.DistanceTo(t.Position);
+            if (d <= bd) { bd = d; best = t; }
+        }
+        return best;
+    }
+    public void DeployTurret()
+    {
+        if (!Net.Sim || !Alive || !Stats.Def.Has(Fit.Deploy)) return;
+        if (Sl("deploy").Cool > 0 || TurretsOut >= (int)Stats["deploy_max"]) return;
+        MyHub?.Drop(this, Position, Stats["deploy_hull"]);
+        Sl("deploy").Cool = Stats["deploy_cooldown"];
+    }
+    public void CollectTurret()
+    {
+        if (!Net.Sim || !Stats.Def.Has(Fit.Deploy)) return;
+        if (NearestOwnTurret() is { } t) MyHub?.DeployedTaken(t);
+    }
+
+    // The bubble is a POOL IN THE WORLD, not a flag on one hull: it covers whoever is inside it
+    // when a blow lands, and everyone inside spends the same pool.
+    public bool BubbleUp => Sl("bubble").Left > 0 && Sl("bubble").Own > 0;
+    public float BubbleRadius => (float)Stats["bubble_radius"];
+    public double BubbleLeft => Sl("bubble").Own;
+    public void RaiseBubble()
+    {
+        if (!Net.Sim || !Alive || Sl("bubble").Cool > 0) return;
+        ref var b = ref Sl("bubble");
+        b.Left = Stats["bubble_time"]; b.Own = Stats["bubble_pool"]; b.Cool = Stats["bubble_cooldown"];
+        b.N = (int)Stats["bubble_pool"];
+    }
+    private double SpendBubble(double d)
+    {
+        ref var b = ref Sl("bubble");
+        double take = Math.Min(b.Own, d);
+        b.Own -= take; b.N = (int)b.Own;
+        return d - take;
+    }
+    // Every bubble that covers `victim` spends itself on this blow before the hull sees it.
+    private static double ThroughBubbles(PlayerShip victim, double d)
+    {
+        foreach (var h in Combat.Players)
+            if (d > 0 && h is PlayerShip p && p.BubbleUp && victim.Position.DistanceTo(p.Position) <= p.BubbleRadius)
+                d = p.SpendBubble(d);
+        return d;
+    }
+
+    public void StartOverdrive()
+    {
+        if (!Net.Sim || !Alive || Sl("overdrive").Cool > 0) return;
+        ref var o = ref Sl("overdrive");
+        o.Left = Stats["overdrive_time"]; o.Cool = Stats["overdrive_cooldown"];
+    }
+
+    // Everything within reach is thrown clear -- and what is too big to throw (a boss) is held
+    // still instead, which is what the reach is really for.
+    public void Shockwave()
+    {
+        if (!Net.Sim || !Alive || Sl("shockwave").Cool > 0) return;
+        Sl("shockwave").Cool = Stats["wave_cooldown"];
+        float reach = (float)Stats["wave_range"], push = (float)Stats["wave_push"];
+        foreach (var h in new List<IHittable>(Combat.Hostiles))
+        {
+            if (h == null || !h.Alive || h.Position.DistanceTo(Position) > reach) continue;
+            if (TagExt.Is(h, Tag.Boss)) { (h as IStatused)?.ApplyStatus(Status.Disabled, Stats["wave_disable"]); continue; }
+            if (h is Node2D n)
+            {
+                var away = n.Position - Position;
+                n.Position += (away.LengthSquared() > 1f ? away.Normalized() : Vector2.Up) * push;
+            }
+        }
+        // the ring, on every peer: eight spokes out to its reach
+        for (int i = 0; i < 8; i++)
+            Combat.Flash(Position, Position + Vector2.Up.Rotated(Mathf.Tau * i / 8f) * reach, new Color(0.6f, 0.8f, 1f));
+    }
+
+    // ── THE HEAVY FIGHTERS ──────────────────────────────────────────────
+    // The railgun commits: while it charges the ship cannot turn or thrust (Status.Disabled on
+    // itself), and at the end everything on the line takes the whole of it at once.
+    public void ChargeRail()
+    {
+        if (!Net.Sim || !Alive || Sl("railgun").Left > 0 || Sl("railgun").Cool > 0) return;
+        Sl("railgun").Left = Stats["rail_charge"];
+        ApplyStatus(Status.Disabled, Stats["rail_charge"]);
+    }
+    private void FireRail()
+    {
+        var a = Aim.Nose(this, MyArt.Length * 0.5f);
+        var b = a + Vector2.Up.Rotated(Rotation) * (float)Stats["rail_range"];
+        float halfWidth = (float)Stats["rail_width"] * 0.5f;
+        foreach (var h in new List<IHittable>(Combat.Hostiles))
+        {
+            if (h == null || !h.Alive || TagExt.Is(h, Tag.Missile)) continue;
+            if (Combat.DistToSegment(h.Position, a, b) <= halfWidth + h.HitRadius)
+            {
+                h.TakeDamage(Stats["rail_damage"]);
+                NoteDealt(Stats["rail_damage"], h.Position);
+                if (h is Node2D n) DamageNumbers.NoteImpact(n, h.Position);
+            }
+        }
+        Combat.Flash(a, b, new Color(0.45f, 0.7f, 1f), ShotSound.Boss);
+        Sl("railgun").Cool = Stats["rail_cooldown"];
+    }
+
+    public void StartRush()
+    {
+        if (!Net.Sim || !Alive || Sl("rush").Cool > 0) return;
+        ref var r = ref Sl("rush");
+        r.Left = Stats["rush_time"]; r.Cool = Stats["rush_cooldown"];
+        ApplyStatus(Status.Hardened, r.Left);
+    }
+    // The rush ends in an EMP: everything close takes it, and everything small enough is held.
+    private void RushEmp()
+    {
+        float reach = (float)Stats["emp_range"];
+        foreach (var h in new List<IHittable>(Combat.Hostiles))
+        {
+            if (h == null || !h.Alive || h.Position.DistanceTo(Position) > reach) continue;
+            h.TakeDamage(Stats["emp_damage"]);
+            NoteDealt(Stats["emp_damage"], h.Position);
+            if (!TagExt.Is(h, Tag.Boss)) (h as IStatused)?.ApplyStatus(Status.Disabled, Stats["emp_stun"]);
+        }
+        for (int i = 0; i < 6; i++)
+            Combat.Flash(Position, Position + Vector2.Up.Rotated(Mathf.Tau * i / 6f) * reach, new Color(0.7f, 0.9f, 1f));
+    }
+
+    // Six missiles, each on a target of its own while there are targets to go round; what is left
+    // over goes at the nearest one.
+    public void LaunchHunters()
+    {
+        if (!Net.Sim || !Alive || Sl("hunters").Cool > 0) return;
+        Sl("hunters").Cool = Stats["hunter_cooldown"];
+        int n = (int)Stats["hunter_count"];
+        float range = (float)Stats["hunter_range"];
+        var seen = new List<IHittable>();
+        foreach (var h in Targeting.All(Combat.Hostiles, Targeting.WingPrey))
+            if (Position.DistanceTo(h.Position) <= range) seen.Add(h);
+        if (seen.Count == 0) return;
+        var nose = Aim.Nose(this, MyArt.Length * 0.5f);
+        for (int i = 0; i < n; i++)
+        {
+            var t = seen[i % seen.Count];
+            float side = (i % 2 == 0 ? -1 : 1) * (12f + 8f * (i / 2));
+            var dir = (t.Position - nose).Rotated(Mathf.DegToRad(side));
+            Combat.LaunchTorpedo(nose, dir, (float)Stats["hunter_speed"], range * 1.6f, Stats["hunter_damage"],
+                                 t.NetId, (float)Stats["hunter_turn"], heavy: false, hostile: false, source: this);
+        }
+    }
+
+    // ── THE LIGHTS ──────────────────────────────────────────────────────
+    // The roll: nothing can touch it while it turns, and it comes out faster and firing quicker.
+    public void BarrelRoll()
+    {
+        if (!Net.Sim || !Alive || Sl("roll").Cool > 0) return;
+        ref var r = ref Sl("roll");
+        r.Left = Stats["roll_time"] + Stats["boost_time"];      // the roll, then the boost
+        r.Cool = Stats["roll_cooldown"];
+        ApplyStatus(Status.Evading, Stats["roll_time"]);
+    }
+
+    // The echo remembers what this ship dealt (NoteDealt) and puts all of it down at once, where
+    // the last of it landed.
+    public void StartEcho()
+    {
+        if (!Net.Sim || !Alive || Sl("echo").Cool > 0) return;
+        ref var e = ref Sl("echo");
+        e.Left = Stats["echo_time"]; e.Own = 0; e.Cool = Stats["echo_cooldown"];
+        _echoAt = Position;
+    }
+    private void Detonate(double stored)
+    {
+        if (stored <= 0) return;
+        double blast = stored * Stats["echo_share"];
+        float reach = (float)Stats["echo_radius"];
+        foreach (var h in new List<IHittable>(Combat.Hostiles))
+        {
+            if (h == null || !h.Alive || h.Position.DistanceTo(_echoAt) > reach) continue;
+            h.TakeDamage(blast);
+            if (h is Node2D n) DamageNumbers.NoteImpact(n, h.Position);
+        }
+        NoteCombat();
+        MyHub?.AddChild(new Explosion { Position = _echoAt, Radius = reach * 0.5f });
+        for (int i = 0; i < 6; i++)
+            Combat.Flash(_echoAt, _echoAt + Vector2.Up.Rotated(Mathf.Tau * i / 6f) * reach, new Color(1f, 0.8f, 0.45f));
+    }
+
+    public void GoDark()
+    {
+        if (!Net.Sim || !Alive || Sl("stealth").Cool > 0) return;
+        ref var s = ref Sl("stealth");
+        s.Left = Stats["stealth_time"]; s.Cool = Stats["stealth_cooldown"];
+        ApplyStatus(Status.Untargetable, s.Left);
+        // whatever had picked this ship lets go of it at once, rather than at its next thought
+        foreach (var t in new List<Turret>(Siblings)) t.Forget(this);
+    }
+
     public void OrderStrike(IHittable t)
     {
         // within the strike range (twice the fighters' control range) only
@@ -523,7 +809,13 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged
 
     // What the statuses on this ship let through. Nothing stands in the way yet: the classes
     // that harden, evade or hold a bubble put their share here, and no weapon learns of them.
-    private double Guarded(double d) => d;
+    private double Guarded(double d)
+    {
+        if (_status.Has(Status.Evading)) return 0;                       // the dart's roll: it is not there
+        double guard = Stats["rush_guard"];
+        if (_status.Has(Status.Hardened) && guard > 0) d *= guard;       // the warrior's rush: half of it
+        return ThroughBubbles(this, d);                                  // a bubble over it spends first
+    }
 
     public void TakeDamage(double d) => Incoming(d);
     // A hit that knows where it came from: damage, and the shield lights that side.
@@ -633,6 +925,27 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged
                 if (rl.Left <= 0) { rl.Left = 0; if (Net.Sim) Sl("missile").N = (int)Stats["missile_mag"]; }
             }
         }
+
+        // The classes' own timed abilities. Every peer counts them down so a guest's bar moves
+        // smoothly; only the host ACTS when one runs out -- the railgun's shot, the rush's EMP,
+        // the echo's detonation.
+        foreach (var id in Timed)
+        {
+            ref var sl = ref Sl(id);
+            if (sl.Cool > 0) sl.Cool = Math.Max(0, sl.Cool - delta);
+            if (sl.Left <= 0) continue;
+            sl.Left -= delta;
+            if (sl.Left > 0) continue;
+            sl.Left = 0;
+            if (!Net.Sim) continue;
+            switch (id)
+            {
+                case "railgun": FireRail(); break;
+                case "rush":    RushEmp(); break;
+                case "echo":    Detonate(sl.Own); sl.Own = 0; break;
+            }
+        }
+        if (Sl("deploy").Cool > 0) Sl("deploy").Cool = Math.Max(0, Sl("deploy").Cool - delta);
 
         if (Stats.Def.Has(Fit.Broadside))
         {   // The broadside. A ship lost in the middle of one loses the rest of it.
@@ -760,10 +1073,13 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged
         var side = new Vector2(-fwd.Y, fwd.X);
         float along = Velocity.Dot(fwd), across = Velocity.Dot(side);
 
+        // Held: a railgun charging, a shockwave's stun. No thrust, no rudder, whatever is pressed.
+        if (_status.Has(Status.Disabled)) { throttle = 0f; rudder = 0f; }
         if (throttle > 0) along += (float)Stats["thrust"] * throttle * dt;
         else if (throttle < 0) along += (float)Stats["reverse_thrust"] * throttle * dt;
         along -= along * Mathf.Clamp((float)Stats["water_drag"] * dt, 0f, 1f);
-        along = Mathf.Clamp(along, -(float)Stats["reverse_speed"], (float)Stats["max_speed"] * (Pinned ? StatusSet.PinSpeed : 1f));
+        along = Mathf.Clamp(along, -(float)Stats["reverse_speed"],
+                            (float)Stats["max_speed"] * SpeedMult * (Pinned ? StatusSet.PinSpeed : 1f));
         across *= Mathf.Exp(-(float)Stats["keel"] * dt);
 
         // turning circle: yaw rate = speed / radius, capped by the rudder; astern the
@@ -777,7 +1093,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged
             float cap = Mathf.Min(Mathf.Abs(along) / (float)Stats["turn_radius"], (float)Stats["turn_rate"]);
             float want = rudder * cap * Mathf.Sign(along == 0 ? 1 : along);
             _yawRate = Mathf.MoveToward(_yawRate, want, 2.5f * dt);     // the rudder takes a moment to bite
-            if (Pinned) _yawRate = 0f;                                  // pinned: it cannot turn
+            if (Pinned || _status.Has(Status.Disabled)) _yawRate = 0f;  // pinned or held: it cannot turn
         }
         Rotation += _yawRate * dt;
 
@@ -893,6 +1209,15 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged
 
     public override void _Draw()
     {
+        // THE BUBBLE (a freighter's): a ring the size of what it covers, fading as its pool is
+        // spent, so everyone can see how much of it is left and who is inside it.
+        if (BubbleUp)
+        {
+            float left = (float)Mathf.Clamp(BubbleLeft / Math.Max(1, Stats["bubble_pool"]), 0, 1);
+            var c = new Color(0.55f, 0.85f, 1f, 0.15f + 0.35f * left);
+            DrawCircle(Vector2.Zero, BubbleRadius, c with { A = c.A * 0.25f });
+            DrawArc(Vector2.Zero, BubbleRadius, 0, Mathf.Tau, 64, c, 2.5f);
+        }
         // warp: a charge building in the accent colour (lighting), then a flash where it lands
         if (Warping || _remoteWarping)
         {

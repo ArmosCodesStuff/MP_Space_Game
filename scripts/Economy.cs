@@ -48,6 +48,13 @@ public static class Economy
     public const double UtilityHull = 120, HaulerHull = 262.5;
     public const double RebuildDelay = 30;         // seconds after it is destroyed
     public const double RebuildShare = 0.10;       // of everything invested so far in its category
+    // ITS OWN POINT DEFENCE: one turret on the spine, firing whenever the hauler is out there.
+    // It is nobody's ship -- there is no window to open and no ability bar to open it from -- so
+    // the mount is simply always on. The yard buys its damage up (hauler_pd_damage, +5% a level);
+    // everything else about it is fixed. 1 a shot every 0.5 s inside 400 u is 2 DPS, a nuisance to
+    // a missile and a light raider rather than a defence, which is what the escort is for.
+    public const double HaulerPdDamage = 1.0, HaulerPdInterval = 0.5;
+    public const double HaulerPdRange = 400, HaulerPdTurn = System.Math.Tau / 2;
     public const double HaulerLift = 1.5;        // seconds to lift off the pad
     public const double HaulerLand = 3.0;        // seconds to descend onto it, turning 180 degrees on the way
     public const float  HaulerLandedScale = 0.65f;   // 200 u long in flight, 130 u landed
@@ -89,6 +96,7 @@ public static class Economy
         new() { Id = "hauler_evasion",  Tab = "HAULER",    Kind = Kind.Count,   Name = "Evasion",          BaseValue = 60, Step = 7,   Unit = "% safe",    BaseCost = 400, Max = 5, Blurb = "+7% chance a lone run gets through (up to 95%)" },
         new() { Id = "hauler_autosell", Tab = "HAULER",    Kind = Kind.Unlock,  Name = "Auto-sell",        BaseValue = 0,              Unit = "",          BaseCost = AutoSellCost, Max = 1, NeedsBoss = AutoSellBoss, OwnerOnly = true, Blurb = "completely full, it goes by itself" },
         new() { Id = "hauler_speed",    Tab = "HAULER",    Kind = Kind.Percent, Name = "Hauler engines",   BaseValue = HaulerSpeed,    Unit = "u/s",       BaseCost = 150, Per = 0.02, Blurb = "+2% speed per level" },
+        new() { Id = "hauler_pd_damage",Tab = "HAULER",    Kind = Kind.Percent, Name = "Hauler point defence", BaseValue = HaulerPdDamage, Unit = "per shot", BaseCost = 200, Per = 0.05, Blurb = "+5% damage per level" },
     };
 
     public static Upgrade ById(string id) { foreach (var u in All) if (u.Id == id) return u; return null; }

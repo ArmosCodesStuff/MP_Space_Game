@@ -30,7 +30,7 @@ using System.Linq;
 // ─────────────────────────────────────────────────────────────────────────────
 public enum RaiderKind { Light, Heavy }
 
-public partial class Raider : Node2D, IHittable, ITagged
+public partial class Raider : Node2D, IHittable, ITagged, IStatused
 {
     public Hub Hub;
     public RaiderKind Kind = RaiderKind.Light;
@@ -39,6 +39,11 @@ public partial class Raider : Node2D, IHittable, ITagged
     public bool Alive => Hp > 0;
     public bool Heavy => Kind == RaiderKind.Heavy;
     public Tag Tags => Heavy ? Tag.Heavy : Tag.Light;
+    // what is being done to it: a warrior's EMP holds it still (Statuses). Host-decided; a guest
+    // sees it stop because the host stops sending it anywhere.
+    private StatusSet _status;
+    public StatusSet Statuses => _status;
+    public void ApplyStatus(Status st, double seconds) { if (Net.Sim) _status.Apply(st, seconds); }
     public float Length => Heavy ? HeavyLength : LightLength;
     // a raid's raiders are as strong as the boss that was failed: S(L) = 1.1^(L-1)
     public double Strength = 1;          // S(L) (was "Scale", which hid Node2D.Scale)
@@ -184,6 +189,8 @@ public partial class Raider : Node2D, IHittable, ITagged
             return;
         }
         if (!Alive) return;
+        _status.Tick(delta);
+        if (_status.Has(Status.Disabled)) { Speed = 0; QueueRedraw(); return; }   // stunned: it sits there
         if (!Up(Target)) { Target = Choose(); Latched = false; _boostUsed = false; }
         if (Target == null) { Speed = 0; if (Patrol != 0) Circle(delta); QueueRedraw(); return; }
         // its target's velocity, from frame to frame -- except a JUMP (a warp; over 50 u in one frame,
