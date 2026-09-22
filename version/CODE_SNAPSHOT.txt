@@ -1,8 +1,8 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-22 18:36, on top of git commit 425b8f3. How it was verified is in the message of the
+// Taken 2026-09-22 19:39, on top of git commit d1ea99a. How it was verified is in the message of the
 //   commit that carries this file: one starting VERIFIED: is a green verify.ps1 -Update.
-// 99 files, 21475 lines. Code only: sprites, sounds and docs are in the zip.
+// 99 files, 21691 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -26,7 +26,7 @@
 //   scripts/Boss.cs                                218 lines   sha256 8f438edef7eb
 //   scripts/BossBar.cs                              90 lines   sha256 ee7d33abf543
 //   scripts/Character.cs                           312 lines   sha256 edc5f9ba2172
-//   scripts/CharacterCreator.cs                    216 lines   sha256 3bd57b04c491
+//   scripts/CharacterCreator.cs                    226 lines   sha256 be5f79dccf98
 //   scripts/CharacterSelect.cs                     184 lines   sha256 241e2389c734
 //   scripts/Combat.cs                              125 lines   sha256 5592ca99fc3e
 //   scripts/DamageNumbers.cs                        83 lines   sha256 20747f8cd3bd
@@ -58,7 +58,7 @@
 //   scripts/Plume.cs                                25 lines   sha256 cdbeb9b8fc58
 //   scripts/Progression.cs                         107 lines   sha256 d94ab4162045
 //   scripts/Radar.cs                               137 lines   sha256 a9169e79860b
-//   scripts/Raider.cs                              345 lines   sha256 233ab86da800
+//   scripts/Raider.cs                              361 lines   sha256 c047342f8cf4
 //   scripts/ReturnButton.cs                         27 lines   sha256 e36ddbb19a08
 //   scripts/Router.cs                              429 lines   sha256 294cec245abf
 //   scripts/SessionMenu.cs                         141 lines   sha256 777687907142
@@ -67,11 +67,11 @@
 //   scripts/Shell.cs                                53 lines   sha256 b55ab8451f54
 //   scripts/Shield.cs                               71 lines   sha256 99c7fa4a2a8e
 //   scripts/ShipClasses.cs                         445 lines   sha256 b3cc070d57c1
-//   scripts/Ships.cs                               392 lines   sha256 f055688c90e2
+//   scripts/Ships.cs                               399 lines   sha256 f867c4b9f232
 //   scripts/Slug.cs                                 97 lines   sha256 a033d5dde5b4
 //   scripts/Sprites.cs                              13 lines   sha256 f2374b1d9777
-//   scripts/Stats.cs                               216 lines   sha256 5f6575cb29b0
-//   scripts/StatsWindow.cs                         225 lines   sha256 09738e54cbe3
+//   scripts/Stats.cs                               220 lines   sha256 c00971eb343d
+//   scripts/StatsWindow.cs                         227 lines   sha256 0cef18b216f8
 //   scripts/Statuses.cs                             66 lines   sha256 0580b3dab8e1
 //   scripts/Tags.cs                                 34 lines   sha256 9d4d3cd0db76
 //   scripts/TargetDummy.cs                         146 lines   sha256 b0af5279949a
@@ -103,9 +103,9 @@
 //   tools/screens/run.sh                            42 lines   sha256 73a5b3c63476
 //   tools/screens/Shots.cs.txt                     659 lines   sha256 c105183f6344
 //   tools/smoketest/fakeigd.py                     155 lines   sha256 b980d4fa4ad4
-//   tools/smoketest/run.ps1                        216 lines   sha256 94e289017e6d
+//   tools/smoketest/run.ps1                        225 lines   sha256 8aac48df9920
 //   tools/smoketest/run.sh                          57 lines   sha256 9ac9cbdf9115
-//   tools/smoketest/SmokeTest.cs.txt              4659 lines   sha256 70cc882a9a4f
+//   tools/smoketest/SmokeTest.cs.txt              4827 lines   sha256 64aa0d114766
 //   tools/smoketest/wan.py                          61 lines   sha256 97db24aa3f91
 //   tools/snapshot.ps1                              94 lines   sha256 3ca9bfe56185
 //==============================================================================
@@ -1837,7 +1837,7 @@ public static class Character
 
 //==============================================================================
 // FILE: scripts/CharacterCreator.cs
-// 216 lines   sha256 3bd57b04c491
+// 226 lines   sha256 be5f79dccf98
 //==============================================================================
 using Godot;
 
@@ -1967,6 +1967,11 @@ public partial class CharacterCreator : CanvasLayer
         Rebuild();
     }
 
+    // What a ship of this class would come out of the yard with, for this pilot.
+    private static double ClassHull(ShipClass c) =>
+        new ShipStats(c, Equipment.Bonuses(c, Character.LoadoutFor(c)),
+                      Equipment.Adds(c, Character.LoadoutFor(c)))["hull"];
+
     private void Rebuild()
     {
         Ui.Clear(_cards);
@@ -1982,8 +1987,13 @@ public partial class CharacterCreator : CanvasLayer
                 CustomMinimumSize = new Vector2(460, 92),
                 Disabled = !e.Ready,
                 FocusMode = Control.FocusModeEnum.None,
+                // THE HULL IT WILL ACTUALLY HAVE, from the same sheet the ship fights with and the
+                // K window prints -- this pilot's parts fitted, the starting kit included. The
+                // blurbs used to hand-write it ("300 hull"), which is the bare class row: every
+                // real pilot flies 25% more than that from its five basic chips, so the card
+                // disagreed with the ship from its first flight.
                 Text = e.Ready
-                    ? $"{e.Name}{(Character.Class == e.Id && e.Ready ? "     [ SELECTED ]" : "")}\n{e.Blurb}"
+                    ? $"{e.Name}  ·  {ClassHull(e.Id):0} hull{(Character.Class == e.Id ? "     [ SELECTED ]" : "")}\n{e.Blurb}"
                     : $"{e.Name}     — not yet flyable\n{e.Blurb}",
                 Alignment = HorizontalAlignment.Left,
             };
@@ -9533,7 +9543,7 @@ public partial class Radar : Control
 
 //==============================================================================
 // FILE: scripts/Raider.cs
-// 345 lines   sha256 233ab86da800
+// 361 lines   sha256 c047342f8cf4
 //==============================================================================
 using Godot;
 using System.Linq;
@@ -9634,6 +9644,12 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
     static readonly float[] Posts = { 0f, -Mathf.Pi / 2f, Mathf.Pi / 2f };               // ahead, left, right
 
     public Node2D Target { get; private set; }
+    // WHAT WENT DARK ON IT. A raider re-decides only when its target stops being valid, so a ship
+    // that turned invisible for five seconds used to hand it a miner 3000 u away FOR EVER: the new
+    // target stayed valid, nothing ever looked back, and one press of stealth sent the whole wave
+    // at the base's fleet permanently. It keeps what it lost and takes it back the moment it can
+    // see it again -- five seconds of losing you, not a handover.
+    private Node2D _dark;
     public Node2D Quarry;                         // a hunter's: set by the host at the spawn
     // An ESCORT (launched by a boss): its target is set, its boost lasts until it is posted
     // (or `boostFor` runs out), and it is fragile.
@@ -9729,7 +9745,17 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
         if (!Alive) return;
         _status.Tick(delta);
         if (_status.Has(Status.Disabled)) { Speed = 0; QueueRedraw(); return; }   // stunned: it sits there
-        if (!Up(Target)) { Target = Choose(); Latched = false; _boostUsed = false; }
+        if (_dark != null && !GodotObject.IsInstanceValid(_dark)) _dark = null;
+        if (!Up(Target))
+        {
+            if (Target != null && GodotObject.IsInstanceValid(Target) && Targeting.Hidden(Target)) _dark = Target;
+            Target = Choose(); Latched = false; _boostUsed = false;
+        }
+        else if (_dark != null && !ReferenceEquals(_dark, Target) && Up(_dark))
+        {   // it is back: so is the hunt, from wherever this took it
+            Target = _dark; Latched = false; _boostUsed = false;
+        }
+        if (ReferenceEquals(_dark, Target)) _dark = null;
         if (Target == null) { Speed = 0; if (Patrol != 0) Circle(delta); QueueRedraw(); return; }
         // its target's velocity, from frame to frame -- except a JUMP (a warp; over 50 u in one frame,
         // 3000 u/s, nothing flies that fast), which would send the predicted missile miles off
@@ -11281,7 +11307,7 @@ public partial class Wing : Node2D
 
 //==============================================================================
 // FILE: scripts/Ships.cs
-// 392 lines   sha256 f055688c90e2
+// 399 lines   sha256 f867c4b9f232
 //==============================================================================
 using Godot;
 using System;
@@ -11388,7 +11414,7 @@ public static class Classes
     {
         // -- page 1: the line ------------------------------------------------
         new() { Id = ShipClass.Battleship, Name = "BATTLESHIP", Ready = true, Fit = Fit.Guns | Fit.Broadside | Fit.Pd,
-            Blurb = "300 hull. Four cursor-aimed main guns, a broadside of all four, two point-defence turrets.",
+            Blurb = "Four cursor-aimed main guns, a broadside of all four, two point-defence turrets.",
             Hint = "BATTLESHIP  ·  mouse aims the main guns",
             Nums = new() {
                 ["hull"] = 300,
@@ -11405,7 +11431,7 @@ public static class Classes
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Broadside, Ab.Pd } },
 
         new() { Id = ShipClass.Carrier, Name = "CARRIER", Ready = true, Fit = Fit.Wing | Fit.Pd,
-            Blurb = "200 hull. Three point-defence turrets, three fighters, two torpedo bombers.",
+            Blurb = "Three point-defence turrets, three fighters, two torpedo bombers.",
             Hint = "CARRIER",
             Nums = new() {
                 ["hull"] = 200,
@@ -11421,7 +11447,7 @@ public static class Classes
             Abilities = new[] { Ab.Attack, Ab.Recall, Ab.Bombers, Ab.Pd } },
 
         new() { Id = ShipClass.Destroyer, Name = "DESTROYER", Ready = true, Fit = Fit.Guns | Fit.Missiles | Fit.Pd,
-            Blurb = "250 hull. The fastest. Two cursor-aimed main guns, missile bursts of three, two point-defence turrets.",
+            Blurb = "The fastest of the line. Two cursor-aimed main guns, missile bursts of three, two point-defence turrets.",
             Hint = "DESTROYER  ·  mouse aims the main guns",
             Nums = new() {
                 ["hull"] = 250,
@@ -11439,7 +11465,7 @@ public static class Classes
 
         // -- page 2: freight, which carries its own defences -------------------
         new() { Id = ShipClass.FreightHauler, Name = "FREIGHTER", Ready = true, Fit = Fit.Guns | Fit.Pd | Fit.Deploy,
-            Blurb = "400 hull, the toughest. One main gun, two point-defence turrets, three deployable turrets, and a bubble that soaks 400 damage for everything inside it.",
+            Blurb = "The toughest hull there is. One main gun, two point-defence turrets, three deployable turrets, and a bubble that soaks 400 damage for everything inside it.",
             Hint = "FREIGHTER  ·  mouse aims the main gun",
             Nums = new() {
                 ["hull"] = 400,
@@ -11468,7 +11494,7 @@ public static class Classes
                 TurretTexScale = 2.20f / 5.5f, MainBarrel = 27.0f, PdBarrel = 12.1f, PdRing = 6.6f },
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Bubble, Ab.Deploy, Ab.Collect, Ab.Pd } },
         new() { Id = ShipClass.FreightTender, Name = "TENDER", Ready = true, Fit = Fit.Guns | Fit.Pd | Fit.Deploy,
-            Blurb = "400 hull. One main gun, two point-defence turrets, three deployable turrets, and an overdrive that doubles the rate of fire of everything it owns for 8 s.",
+            Blurb = "One main gun, two point-defence turrets, three deployable turrets, and an overdrive that doubles the rate of fire of everything it owns for 8 s.",
             Hint = "TENDER  ·  mouse aims the main gun",
             Nums = new() {
                 ["hull"] = 400,
@@ -11496,7 +11522,7 @@ public static class Classes
                 TurretTexScale = 2.20f / 5.5f, MainBarrel = 27.0f, PdBarrel = 12.1f, PdRing = 6.6f },
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Overdrive, Ab.Deploy, Ab.Collect, Ab.Pd } },
         new() { Id = ShipClass.FreightBastion, Name = "BASTION", Ready = true, Fit = Fit.Guns | Fit.Pd | Fit.Deploy,
-            Blurb = "400 hull. One main gun, two point-defence turrets, three deployable turrets, and a shockwave that throws everything within 1000 u away -- or holds a boss still for 3 s.",
+            Blurb = "One main gun, two point-defence turrets, three deployable turrets, and a shockwave that throws everything within 1000 u away -- or holds a boss still for 3 s.",
             Hint = "BASTION  ·  mouse aims the main gun",
             Nums = new() {
                 ["hull"] = 400,
@@ -11527,7 +11553,7 @@ public static class Classes
 
         // -- page 3: heavy fighters --------------------------------------------
         new() { Id = ShipClass.HeavySniper, Name = "SNIPER", Ready = true, Fit = Fit.Guns,
-            Blurb = "140 hull, fast. A light main gun, and a railgun that charges for 3 s -- it cannot turn or thrust while it does -- then throws 150 damage 2500 u in a straight blue line.",
+            Blurb = "Fast. A light main gun, and a railgun that charges for 3 s -- it cannot turn or thrust while it does -- then throws 150 damage 2500 u in a straight blue line.",
             Hint = "SNIPER  ·  mouse aims the main gun",
             Nums = new() {
                 ["hull"] = 140,
@@ -11548,7 +11574,7 @@ public static class Classes
                 TurretTexScale = 1.18f / 5.5f, MainBarrel = 14.5f, PdBarrel = 6.5f, PdRing = 3.55f },
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Railgun } },
         new() { Id = ShipClass.HeavyWarrior, Name = "WARRIOR", Ready = true, Fit = Fit.Guns,
-            Blurb = "140 hull, fast. Two main guns, and a rush: 2.5 s at two and a half times its speed taking half damage, ending in an EMP that stuns everything close.",
+            Blurb = "Fast. Two main guns, and a rush: 2.5 s at two and a half times its speed taking half damage, ending in an EMP that stuns everything close.",
             Hint = "WARRIOR  ·  mouse aims the main guns",
             Nums = new() {
                 ["hull"] = 140,
@@ -11571,14 +11597,21 @@ public static class Classes
                 TurretTexScale = 1.18f / 5.5f, MainBarrel = 14.5f, PdBarrel = 6.5f, PdRing = 3.55f },
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Rush } },
         new() { Id = ShipClass.HeavyWarden, Name = "WARDEN", Ready = true, Fit = Fit.Guns | Fit.Pd | Fit.AlwaysPd,
-            Blurb = "140 hull, fast. Point defence that never switches off (at half a warship's damage), a modest main gun, and six hunter-seekers that each take a target of their own.",
+            Blurb = "Fast. Point defence that never switches off and kills what comes close, a modest main gun, and six hunter-seekers that each take a target of their own.",
             Hint = "WARDEN  ·  mouse aims the main gun",
             Nums = new() {
                 ["hull"] = 140,
                 ["thrust"] = 130, ["reverse_thrust"] = 60, ["max_speed"] = 190, ["reverse_speed"] = 70,
                 ["turn_radius"] = 55, ["turn_rate"] = 2.2,
                 ["main_count"] = 1, ["main_damage"] = 12, ["main_interval"] = 0.6, ["main_range"] = 700, ["shell_speed"] = 600,
-                ["pd_count"] = 1, ["pd_damage"] = 0.25, ["pd_range"] = 420,
+                // ITS ONE MOUNT IS A GUN, NOT A NUISANCE. "Half efficiency, always on" was first read
+            // as half a warship's damage PER SHOT: 0.25 every 0.5 s is 0.5 DPS, which is 50 seconds
+            // to kill one 25-hull light raider -- the class's whole reason for existing did
+            // nothing a pilot could see. It is half by MOUNTS instead: one mount where a warship
+            // carries two, firing the same 0.5 s cycle, at 5 a shot. 10 DPS, always, with nothing
+            // pressed -- and with its 20 DPS gun and 19.3 from the hunters that is the 50 the
+            // whole game is tuned to.
+            ["pd_count"] = 1, ["pd_damage"] = 5.0, ["pd_range"] = 420,
             },
             Rows = new StatRow[] {
                 new() { Group = "Hunters", Id = "hunter_count",  Label = "Missiles",      Base = 6, Dec = 0 },
@@ -11597,7 +11630,7 @@ public static class Classes
 
         // -- page 4: lights -----------------------------------------------------
         new() { Id = ShipClass.LightDart, Name = "DART", Ready = true, Fit = Fit.Guns,
-            Blurb = "90 hull, the fastest thing with a pilot in it. A barrel roll nothing can hit for 1.2 s, and 4 s of 60% more speed and a quarter more rate of fire after it.",
+            Blurb = "The fastest thing with a pilot in it. A barrel roll nothing can hit for 1.2 s, and 4 s of 60% more speed and a quarter more rate of fire after it.",
             Hint = "DART  ·  mouse aims the main gun",
             Nums = new() {
                 ["hull"] = 90,
@@ -11618,7 +11651,7 @@ public static class Classes
                 TurretTexScale = 0.65f / 5.5f, MainBarrel = 8.0f, PdBarrel = 3.6f, PdRing = 1.95f },
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Roll } },
         new() { Id = ShipClass.LightEcho, Name = "ECHO", Ready = true, Fit = Fit.Guns,
-            Blurb = "90 hull. Its echo remembers every point of damage it deals for 5 s, then detonates the lot where the last shot landed.",
+            Blurb = "Its echo remembers every point of damage it deals for 5 s, then detonates the lot where the last shot landed.",
             Hint = "ECHO  ·  mouse aims the main gun",
             Nums = new() {
                 ["hull"] = 90,
@@ -11638,7 +11671,7 @@ public static class Classes
                 TurretTexScale = 0.65f / 5.5f, MainBarrel = 8.0f, PdBarrel = 3.6f, PdRing = 1.95f },
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Echo } },
         new() { Id = ShipClass.LightWraith, Name = "WRAITH", Ready = true, Fit = Fit.Guns,
-            Blurb = "90 hull. Five seconds nothing hostile can pick it: whatever was coming for it goes after someone else, or gives up.",
+            Blurb = "Five seconds nothing hostile can pick it: whatever was coming for it goes after someone else, or gives up.",
             Hint = "WRAITH  ·  mouse aims the main gun",
             Nums = new() {
                 ["hull"] = 90,
@@ -11798,7 +11831,7 @@ public static class Sprites
 
 //==============================================================================
 // FILE: scripts/Stats.cs
-// 216 lines   sha256 5f6575cb29b0
+// 220 lines   sha256 c00971eb343d
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -11996,7 +12029,11 @@ public class ShipStats
     public double MainDps          => MainDpsPerBarrel * this["main_count"];
     public double PdDpsPerTurret   => Def.Has(Fit.Pd) ? this["pd_damage"] / this["pd_interval"] : 0;
     // PD only fires during its window, so its sustained rate is scaled by the duty fraction.
-    public double PdDuty           => Def.Has(Fit.Pd) ? this["pd_active"] / (this["pd_active"] + this["pd_reload"]) : 0;
+    // A window's share of the time. A mount that never switches off (Fit.AlwaysPd) has no
+    // window and no recharge: its duty is the whole of it.
+    public double PdDuty           => !Def.Has(Fit.Pd) ? 0
+                                    : Def.Has(Fit.AlwaysPd) ? 1
+                                    : this["pd_active"] / (this["pd_active"] + this["pd_reload"]);
     private double PdDps            => PdDpsPerTurret * this["pd_count"];
     public double PdSustainedDps   => PdDps * PdDuty;
     // A full magazine of bursts, fired as fast as it allows, then reloaded: damage per cycle over cycle time.
@@ -12019,7 +12056,7 @@ public class ShipStats
 
 //==============================================================================
 // FILE: scripts/StatsWindow.cs
-// 225 lines   sha256 09738e54cbe3
+// 227 lines   sha256 0cef18b216f8
 //==============================================================================
 using Godot;
 
@@ -12218,7 +12255,9 @@ public partial class StatsWindow : CanvasLayer
                                  + $"{s.TorpedoesPerRun * s["torpedo_damage"]:0.0} damage if all hit (unguided)", false, false, acc));
         }
         D("Per PD turret (while firing)", s.PdDpsPerTurret);
-        D($"PD sustained, if re-activated as soon as it recharges ({s.PdDuty * 100:0}% duty)", s.PdSustainedDps);
+        D(s.Def.Has(Fit.AlwaysPd) ? "PD sustained (it never switches off)"
+                                  : $"PD sustained, if re-activated as soon as it recharges ({s.PdDuty * 100:0}% duty)",
+          s.PdSustainedDps);
         double total = s.MainDps + s.MissileDps + s.BroadsideDps + s.PdSustainedDps;
         _derived.AddChild(Cell($"SUSTAINED TOTAL:  {total:0.00} DPS" + (s.Def.Has(Fit.Wing) ? "  (+ fighter runs, + bomber strikes)" : ""), true, false, acc));
         _derived.AddChild(new Control { CustomMinimumSize = new Vector2(0, 8) });
@@ -16970,7 +17009,7 @@ time.sleep(LIFE)
 
 //==============================================================================
 // FILE: tools/smoketest/run.ps1
-// 216 lines   sha256 94e289017e6d
+// 225 lines   sha256 8aac48df9920
 //==============================================================================
 # Windows port of run.sh -- headless runtime check: boots the REAL engine, drives real
 # input, and runs a host and TWO guests (three players) against each other over localhost.
@@ -16999,7 +17038,11 @@ time.sleep(LIFE)
 # -Seed <n> repeats a run's VARIED GEOMETRY exactly: every check that places something at an
 # arbitrary spot or angle draws it from the seed the run prints at the top of its log (SEED n).
 # Without it each run picks its own, so a check tied to one placement fails on the run that moves it.
-param([string]$Godot, [switch]$Solo, [switch]$Wan, [string]$Seed)
+# -Fly is not a check run: it is a PILOT. One engine, every class taken out in clear space --
+# flown, fired, its whole bar pressed with a target selected, and stood in front of a wave -- and
+# what it measured printed as FLY and ISSUE lines. For "what is actually wrong with this class",
+# which assertions cannot answer because they only know what we thought to ask.
+param([string]$Godot, [switch]$Solo, [switch]$Wan, [switch]$Fly, [string]$Seed)
 
 $ErrorActionPreference = 'Stop'
 
@@ -17076,7 +17119,7 @@ try {
   # a `foreach ($f in ...)` elsewhere in this script silently overwrote the filter with
   # a file path, and the run died parsing it as a regex.
   # SEED is kept: a failure must come back with the number that reproduces its geometry (-Seed n).
-  $keepRe = 'PASS|FAIL|DONE|SEED |Exception|   at |ERROR: [^B]|^  [a-z]|Fatal error'
+  $keepRe = 'PASS|FAIL|DONE|SEED |FLY|ISSUE|Exception|   at |ERROR: [^B]|^  [a-z]|Fatal error'
   # Expected engine chatter, not failures: allocator notes, and Godot's own report that
   # no UPnP router exists (the game falls back and says so).
   $dropRe = 'RID alloc|PagedAlloc'
@@ -17121,7 +17164,12 @@ try {
 
   $all = @()
   $want = 0
-  if (-not $Wan) {
+  if ($Fly) {
+    # the pilot: one engine, no fake routers, no peers
+    $all += Complete-Run (Start-Run (@('--headless','--fixed-fps','60','--path',$W,'--','fly') + $seedArg) 'fly' 1800) '[fly] '
+    $want = 1
+  }
+  elseif (-not $Wan) {
     # Two fake routers for the plug-and-play scenarios: the run never searches the real network,
     # and never opens a port on the real router (see NoRouterNoInternet in the test).
     $fake = Start-Process -FilePath python -ArgumentList @((Join-Path $PSScriptRoot 'fakeigd.py'), 19000, 19080, 19351, 1300) `
@@ -17154,7 +17202,7 @@ try {
     Start-Sleep -Milliseconds 300
   }
 
-  if (-not $Solo) {
+  if (-not $Solo -and -not $Fly) {
     $host1 = Start-Run (@('--headless','--path',$W,'--','host') + $seedArg)   'host'   120
     Start-Sleep -Milliseconds 500
     $g2 = Start-Run (@('--headless','--path',$W,'--','guest2') + $gx + $seedArg) 'guest2' 120
@@ -17253,7 +17301,7 @@ echo "SMOKE TEST PASSED"
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 4659 lines   sha256 70cc882a9a4f
+// 4827 lines   sha256 64aa0d114766
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -17469,7 +17517,7 @@ public partial class _Test : Node
               $"...and the hub did not write zeros back over it ({(double)stillThere.GetValue("base", "credits", -1.0):0})");
         // An exception must end the run as a failure. Without this the async test
         // simply stopped, nothing called Quit, and the run idled to its time limit.
-        try { if (role == "solo") await Solo(); else if (role is "ahost" or "aguest") await ArenaMp(role); else await Mp(role); }
+        try { if (role == "solo") await Solo(); else if (role == "fly") await Fly(); else if (role is "ahost" or "aguest") await ArenaMp(role); else await Mp(role); }
         catch (Exception ex) { Check(false, $"test threw: {ex.GetType().Name}: {ex.Message}"); GD.Print(ex.StackTrace); }
         GD.Print($"  elapsed {Time.GetTicksMsec() / 1000.0:0.0} s");     // for sizing the runners' time limits
         GD.Print($"DONE {role} fails={fails}");
@@ -18011,6 +18059,143 @@ public partial class _Test : Node
         if (!tb.ButtonPressed) tb.ButtonPressed = true;      // fires Toggled -> the tab is built
     }
 
+    // ─────────────────────────────────────────────────────────────────────────────────────────
+    // FLY — not a check: a PILOT. It takes every class out in clear space, flies it, shoots with
+    // it, presses everything on its bar with a target selected, and stands it in front of a wave.
+    // Nothing here asserts a known answer: it MEASURES, and says so. The checks prove what we
+    // thought to ask; this is for what we did not.
+    //
+    //   FLY   a measurement
+    //   ISSUE a measurement that does not match what the class's own sheet promises
+    //
+    // `tools\smoketest\run.ps1 -Fly`. The three flyable classes of the line go first as a control:
+    // an ISSUE against one of them is the instrument, not the class.
+    // ─────────────────────────────────────────────────────────────────────────────────────────
+    private int _issues;
+    private readonly System.Collections.Generic.List<string> _table = new();
+    void Note(string s) => GD.Print("FLY   " + s);
+    void Issue(string s) { _issues++; GD.Print("ISSUE " + s); }
+
+    // everything about a ship an ability could plausibly move, in one line
+    string Snap(PlayerShip s, string id)
+    {
+        ref var sl = ref s.Sl(id);
+        return $"L{sl.Left:0.00} C{sl.Cool:0.00} O{sl.Own:0.0} N{sl.N} st{s.Statuses.Bits} "
+             + $"w{(s.WingTarget?.NetId ?? 0)} k{(s.StrikeTarget?.NetId ?? 0)} d{s.TurretsOut} "
+             + $"m{(s.Staggered ? 1 : 0)} hp{s.Hp:0}";
+    }
+
+    async Task Fly()
+    {
+        var spot = Hub.BasePos + new Vector2(2600, 2400);          // clear of the belt, the wreck, the dummies and the lane
+        Note($"twelve classes, one at a time, in clear space at {spot}");
+        foreach (var cd in Classes.All.Where(c => c.Ready).ToList())
+        {
+            try { await FlyOne(cd, spot); }
+            catch (Exception ex) { Issue($"{cd.Name}: flying it threw {ex.GetType().Name}: {ex.Message}"); GD.Print(ex.StackTrace); }
+        }
+        GD.Print("FLY   ── the table ─────────────────────────────────────────────");
+        GD.Print("FLY   class        top u/s (sheet)   180 deg   main DPS (sheet)   12 s under a wave");
+        foreach (var row in _table) GD.Print("FLY   " + row);
+        GD.Print($"FLY DONE issues={_issues}");
+    }
+
+    async Task FlyOne(ClassDef cd, Vector2 spot)
+    {
+        await SetClass(cd.Id);
+        await Wait(0.3);
+        var s = Me;
+        if (s == null) { Issue($"{cd.Name}: no ship after the refit"); return; }
+        var S = s.Stats;
+        GD.Print($"FLY   ── {cd.Name} ({S["hull"]:0} hull) ─────────────────────────────");
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+        await Wait(0.3);
+
+        // ── THE HELM: does it reach its own top speed, and how long to come about? ──
+        s.Position = spot; s.Velocity = Vector2.Zero; s.Rotation = 0f; await Wait(0.3);
+        double top = 0;
+        KeyDown(global::Godot.Key.W);
+        for (int i = 0; i < 60 * 6; i++) { top = Math.Max(top, s.SpeedAhead); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+        double want = S["max_speed"];
+        Note($"{cd.Name}: top speed {top:0} u/s, its sheet says {want:0}");
+        if (top < want * 0.95) Issue($"{cd.Name}: never reaches its own top speed ({top:0} of {want:0} u/s)");
+
+        // 180 degrees, at speed, on the rudder
+        float last = s.Rotation; double acc = 0, turnT = -1, c0 = s.Clock;
+        KeyDown(global::Godot.Key.A);
+        for (int i = 0; i < 60 * 10 && turnT < 0; i++)
+        {
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            acc += Math.Abs(Mathf.AngleDifference(last, s.Rotation)); last = s.Rotation;
+            if (acc >= Math.PI) turnT = s.Clock - c0;
+        }
+        KeyUp(global::Godot.Key.A); KeyUp(global::Godot.Key.W);
+        if (turnT < 0) Issue($"{cd.Name}: cannot turn 180 degrees in 10 s on full rudder at speed");
+        else Note($"{cd.Name}: 180 degrees in {turnT:0.0} s at {s.SpeedAhead:0} u/s");
+
+        // ── THE GUNS: a hull that cannot die, held at half their range, six seconds on the trigger ──
+        double dps = 0;
+        if (S["main_count"] >= 1)
+        {
+            s.Position = spot; s.Velocity = Vector2.Zero; s.Rotation = 0f; await Wait(0.4);
+            var at = spot + new Vector2(0, -(float)S["main_range"] * 0.5f);
+            var mark = H.SpawnRaider(at, Enemies.Gunship); mark.Hp = 1e9;
+            AimWorld(at); await Wait(0.6);
+            double hp0 = mark.Hp, g0 = s.Clock;
+            KeyDown(global::Godot.Key.Space);
+            for (int i = 0; i < 60 * 6; i++)
+            {
+                mark.Position = at; s.Position = spot; s.Velocity = Vector2.Zero; AimWorld(at);
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            }
+            KeyUp(global::Godot.Key.Space);
+            for (int i = 0; i < 60; i++) { mark.Position = at; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }   // the last shells land
+            double secs = s.Clock - g0, dealt = hp0 - mark.Hp;
+            dps = secs > 0 ? dealt / secs : 0;
+            Note($"{cd.Name}: main guns landed {dealt:0} in {secs:0.0} s = {dps:0.0} DPS at {at.DistanceTo(spot):0} u, its sheet says {S.MainDps:0.0}");
+            if (S.MainDps > 0 && dps < S.MainDps * 0.5)
+                Issue($"{cd.Name}: its main guns land less than half what its sheet promises ({dps:0.0} of {S.MainDps:0.0} DPS) at half their range");
+            mark.TakeDamage(1e12); await Wait(0.2);
+        }
+
+        // ── THE BAR: press everything on it, with a target selected and enemies about ──
+        s.Position = spot; s.Velocity = Vector2.Zero; s.Rotation = 0f;
+        for (int i = 0; i < 3; i++) { var r = H.SpawnRaider(spot + Vector2.Right.Rotated(i * 2.1f) * 300f); r.Hp = 6000; }
+        await Wait(0.6);
+        Key(global::Godot.Key.Tab); await Wait(0.3);
+        if (H.Selected == null) Issue($"{cd.Name}: Tab picked nothing with three raiders 300 u out");
+        foreach (var ab in Abilities.For(cd.Id).Where(a => !a.Open && a.Id != "guns").ToList())
+        {
+            string before = Snap(s, ab.Id);
+            s.UseAbility(ab.Id, H.Selected?.NetId ?? 0);
+            await Wait(0.4);
+            string after = Snap(s, ab.Id);
+            string why = s.FailNote(ab.Id);
+            if (why != null) Note($"{cd.Name}: {ab.Short} refused -- {why}");
+            else if (before == after) Issue($"{cd.Name}: {ab.Short} did nothing and gave no reason ({after})");
+            else Note($"{cd.Name}: {ab.Short} -> {after}");
+        }
+
+        // ── TWELVE SECONDS UNDER A WAVE: three webifiers and a gunship, nothing pressed ──
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+        await Wait(0.3);
+        s.Position = spot; s.Velocity = Vector2.Zero; s.Rotation = 0f;
+        s.Restore(s.MaxHp, true, 0);                                   // full hull, whatever the bar just did to it
+        await Wait(0.3);
+        for (int i = 0; i < 3; i++) H.SpawnRaider(spot + Vector2.Right.Rotated(i * 2.1f) * 320f);
+        H.SpawnRaider(spot + new Vector2(0, 760), Enemies.Gunship);
+        double hull0 = s.Hp;
+        for (int i = 0; i < 60 * 12; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        double lost = hull0 - s.Hp;
+        Note($"{cd.Name}: 12 s under three webifiers and a gunship -- lost {lost:0} of {s.MaxHp:0} hull, {(s.Alive ? "alive" : "DEAD")}");
+        if (lost <= 0) Issue($"{cd.Name}: a whole wave on it for 12 s took nothing off its hull -- nothing could reach it");
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+        await Wait(0.3);
+        if (!s.Alive) { s.Restore(s.MaxHp, true, 0); await Wait(0.4); }
+
+        _table.Add($"{cd.Name,-12} {top,7:0} ({want:0})      {(turnT < 0 ? "  --  " : $"{turnT,5:0.0}s")}   {dps,7:0.0} ({S.MainDps:0.0})     {lost,5:0} of {s.MaxHp:0}{(s.Alive ? "" : "  DEAD")}");
+    }
+
     async Task Solo()
     {
         Check(H != null, "hub loaded");
@@ -18153,6 +18338,20 @@ public partial class _Test : Node
         Check(Count<BasePanel>() == 0, "the base menu steps aside for it");
         Key(global::Godot.Key.B); await Wait(0.1);
         Check(Count<BasePanel>() == 0, "B does nothing while the ship menu owns the screen");
+        // THE CARD SAYS WHAT THE SHIP WILL HAVE. Its hull used to be hand-written into each
+        // class's blurb ("300 hull"), which is the bare class row -- every real pilot flies 25%
+        // more than that from the five basic chips in the starting kit, so the card disagreed
+        // with the ship from its first flight. It reads the same sheet the ship fights with now.
+        {
+            var cards = Nodes<Button>(Nodes<CharacterCreator>().First()).Where(b2 => b2.Text.Contains(" hull")).ToList();
+            double bsHull = new ShipStats(ShipClass.Battleship,
+                                          Equipment.Bonuses(ShipClass.Battleship, Character.LoadoutFor(ShipClass.Battleship)),
+                                          Equipment.Adds(ShipClass.Battleship, Character.LoadoutFor(ShipClass.Battleship)))["hull"];
+            var bsCard = cards.FirstOrDefault(b2 => b2.Text.StartsWith("BATTLESHIP"));
+            Check(cards.Count == 3 && bsCard != null && Math.Abs(bsHull - 375) < 1e-9
+                  && bsCard.Text.Contains($"{bsHull:0} hull") && !Classes.All.Any(c2 => c2.Blurb.Contains(" hull.")),
+                  $"a class card prints the hull the ship will actually have -- the sheet's, with the starting kit in it ({bsHull:0} on the battleship's card, and no class blurb writes one any more)");
+        }
         foreach (var c in Nodes<CharacterCreator>()) c.Close();
         await Wait(0.1);
 
@@ -20405,8 +20604,19 @@ public partial class _Test : Node
             // ── WARDEN: point defence with no window, and six hunters on six targets ──
             await SetClass(ShipClass.HeavyWarden);
             var wd = Me; wd.Position = yonder; wd.Velocity = Vector2.Zero; await Wait(0.2);
-            Check(wd.PdOnline && !wd.PdActive && wd.PdRing == 0f && Math.Abs(wd.Spec(true).Damage - 0.25) < 1e-9,
-                  "the warden's point defence is on with nothing pressed, at half a warship's damage");
+            Check(wd.PdOnline && !wd.PdActive && wd.PdRing == 0f && Math.Abs(wd.Spec(true).Damage - 5.0) < 1e-9
+                  && Math.Abs(wd.Stats["pd_interval"] - 0.5) < 1e-9 && Math.Abs(wd.Stats.PdDuty - 1) < 1e-9,
+                  $"the warden's point defence is on with nothing pressed -- 5 a shot every 0.5 s, on all of the time ({wd.Stats.PdSustainedDps:0.0} DPS sustained)");
+            // and it KILLS: one light raider inside its 420 u, nothing else firing, dead in seconds.
+            // (At the 0.25 a shot it was first written with, this took 50 s and the class's whole
+            // reason for existing did nothing a pilot could see.)
+            {
+                var pdMark = H.SpawnRaider(VaryNear(wd.Position, 380f));       // inside 420 u, any bearing
+                double pdStart = wd.Clock;
+                for (int i = 0; i < 60 * 8 && pdMark.Alive; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                Check(!pdMark.Alive && wd.Clock - pdStart < 6,
+                      $"...and it kills a light raider on its own in {wd.Clock - pdStart:0.0} s, with nothing pressed");
+            }
             var marks = new List<Raider>();
             for (int i = 0; i < 4; i++) { var m = H.SpawnRaider(yonder + new Vector2(300 + 60 * i, -200 + 90 * i)); m.Hp = 3000; marks.Add(m); }
             await Wait(0.2);
@@ -20461,6 +20671,12 @@ public partial class _Test : Node
                   "and the moment it goes dark the raider lets go of it");
             await Wait(5.2);
             Check(!wt.Statuses.Has(Status.Untargetable), "five seconds later it is visible again");
+            // AND THE HUNT COMES BACK. A raider re-decides only when its target stops being valid,
+            // so the miner it took while the wraith was dark stayed valid for ever: one press of
+            // stealth used to hand the whole wave to the base's fleet permanently.
+            for (int i = 0; i < 60 * 3 && hunter.Target != wt; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(hunter.Target == wt,
+                  $"...and the raider takes the wraith back the moment it can see it again (now after {(hunter.Target == wt ? "it" : Raider.Up(hunter.Target) ? "something else" : "nothing")})");
             hunter.TakeDamage(99999); await Wait(0.2);
             await SetClass(ShipClass.Battleship);
         }
