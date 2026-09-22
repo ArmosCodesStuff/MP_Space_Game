@@ -25,61 +25,14 @@ public partial class AbilityBar : Control
 
     public override void _Process(double delta) => QueueRedraw();
 
-    // What a slot says, whether it is lit (active/engaged), and how much of it is
-    // still recharging (0..1).
-    public struct SlotState { public string Line; public bool Lit, Fail; public float Busy; }
-
+    // What a slot says: the ability's own answer (AbilityDef.Show), or the refusal that is
+    // still showing. The bar knows nothing about what any ability does.
     public static SlotState StateOf(PlayerShip s, string id, IHittable selected)
     {
-        var st = new SlotState { Line = "READY" };
         var why = s.FailNote(id);                       // a refused press: say why, briefly
-        if (why != null) { st.Line = why; st.Fail = true; return st; }
-        var S = s.Stats;
-        switch (id)
-        {
-            case "guns":
-                st.Line = s.Staggered ? "STAGGERED" : "SALVO"; st.Lit = s.Trigger; break;
-            case "firemode":
-                st.Line = s.Staggered ? "STAGGERED" : "SALVO"; break;
-            case "missile":
-                st.Line = s.Reloading ? "RELOADING" : s.MissilesLoaded == 0 ? "EMPTY · R" : $"{s.MissilesLoaded}/{S["missile_mag"]:0}";
-                if (s.Reloading) st.Busy = (float)(s.MissileReloadLeft / S["missile_reload"]);
-                break;
-            case "reload":
-                if (s.Reloading) { st.Line = $"{s.MissileReloadLeft:0.0}s"; st.Busy = (float)(s.MissileReloadLeft / S["missile_reload"]); }
-                else st.Line = s.MissilesLoaded >= (int)S["missile_mag"] ? "FULL" : "READY";
-                break;
-            case "broadside":
-                if (s.BroadsideWindupLeft > 0) { st.Line = "AIMING"; st.Lit = true; }
-                else if (s.BroadsideVolleysLeft > 0) { st.Line = "FIRING"; st.Lit = true; }
-                else if (s.BroadsideCooldownLeft > 0)
-                { st.Line = $"{s.BroadsideCooldownLeft:0}s"; st.Busy = (float)(s.BroadsideCooldownLeft / S["broadside_cooldown"]); }
-                break;
-            case "pd":
-                if (s.PdActive) { st.Line = $"ACTIVE {s.PdLeft:0}s"; st.Lit = true; }
-                else if (!s.PdReady) { st.Line = $"{s.PdRechargeLeft:0}s"; st.Busy = s.PdRechargeFrac; }
-                break;
-            case "attack":
-                if (s.WingTarget != null) { st.Line = "ENGAGED"; st.Lit = true; }
-                else if (selected == null) st.Line = "NO TARGET";
-                else if (s.Position.DistanceTo(selected.Position) > S["control_range"]) st.Line = "OUT OF RANGE";
-                break;
-            case "recall":
-                st.Line = s.WingTarget != null ? "READY" : "HOME"; break;
-            case "bombers":
-            {
-                int total = s.WingCount(WingKind.Bomber), ready = s.BombersReady;
-                if (s.StrikeTarget != null) { st.Line = "STRIKING"; st.Lit = true; }
-                else if (ready == total && total > 0)
-                    st.Line = selected == null ? "NO TARGET"
-                            : s.Position.DistanceTo(selected.Position) > S["strike_range"] ? "OUT OF RANGE"
-                            : $"READY {ready}/{total}";
-                else if (s.BomberRearmLeft > 0) { st.Line = $"REARM {s.BomberRearmLeft:0}s"; st.Busy = (float)(s.BomberRearmLeft / S["bomber_rearm"]); }
-                else st.Line = "RETURNING";
-                break;
-            }
-        }
-        return st;
+        if (why != null) return new SlotState { Line = why, Fail = true };
+        var def = Abilities.Find(s.Class, id);
+        return def?.State(s, selected) ?? new SlotState { Line = "READY" };
     }
 
     public override void _Draw()

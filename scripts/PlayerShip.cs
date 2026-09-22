@@ -98,34 +98,43 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged
     public IHittable StrikeTarget { get; private set; }    // bombers run at this
     private int _strikesOut;
 
+    // ── ABILITY SLOTS ────────────────────────────────────────────────────
+    // The state of every ability this class carries, in the class's own order. Each ability
+    // counts the same four things: how long it has LEFT running, how long it must COOL before it
+    // is ready again, one number it names itself (the gap to the next volley, damage stored, a
+    // charge) and a COUNT (bursts in the magazine, volleys still to fire). A new ability adds no
+    // field here and nothing to the wire -- it names its slot and uses the four.
+    //
+    // Slot 0 is the SPARE: an id this class does not carry lands there, so asking a battleship
+    // about its magazine is harmless rather than a crash.
+    public struct Slot { public double Left, Cool, Own; public int N; }
+    private Slot[] _slots = new Slot[1];                 // the spare alone, until the class is fitted
+    private readonly Dictionary<string, int> _slotAt = new();
+    public ref Slot Sl(string id) => ref _slots[_slotAt.TryGetValue(id, out int i) ? i : 0];
+
     // Point defence: an active ability. Active window, then recharge.
-    private double _pdLeft, _pdRecharge;
-    public bool PdActive => _pdLeft > 0;
-    public bool PdReady => _pdLeft <= 0 && _pdRecharge <= 0;
-    public double PdLeft => _pdLeft;
-    public double PdRechargeLeft => _pdRecharge;
-    public float PdActiveFrac => (float)(_pdLeft / Math.Max(0.001, Stats["pd_active"]));
-    public float PdRechargeFrac => (float)(_pdRecharge / Math.Max(0.001, Stats["pd_reload"]));
+    public bool PdActive => Sl("pd").Left > 0;
+    public bool PdReady => Sl("pd").Left <= 0 && Sl("pd").Cool <= 0;
+    public double PdLeft => Sl("pd").Left;
+    public double PdRechargeLeft => Sl("pd").Cool;
+    public float PdActiveFrac => (float)(PdLeft / Math.Max(0.001, Stats["pd_active"]));
+    public float PdRechargeFrac => (float)(PdRechargeLeft / Math.Max(0.001, Stats["pd_reload"]));
 
     // Missiles (destroyer): a magazine of bursts, reloaded by hand.
-    private int _mag;
-    private double _missileReload, _missileRefire;
-    public int MissilesLoaded => _mag;
-    public double MissileReloadLeft => _missileReload;
-    public bool Reloading => _missileReload > 0;
-    private bool CanFireMissile => Stats.Def.Has(Fit.Missiles) && _mag > 0 && !Reloading && _missileRefire <= 0;
+    public int MissilesLoaded => Sl("missile").N;
+    public double MissileReloadLeft => Sl("reload").Left;
+    public bool Reloading => MissileReloadLeft > 0;
+    private bool CanFireMissile => Stats.Def.Has(Fit.Missiles) && MissilesLoaded > 0 && !Reloading && Sl("missile").Cool <= 0;
 
     // The broadside (battleship): a wind-up while the turrets swing onto the cursor, then every main
     // gun fires, volley after volley, then the cooldown. The host acts on it; every peer counts the
     // timers down between reports, so a guest's bar and turrets move smoothly.
-    private double _bsWindup, _bsGap, _bsCooldown;
-    private int _bsVolleys;
-    public double BroadsideWindupLeft => _bsWindup;
-    public int BroadsideVolleysLeft => _bsVolleys;
-    public double BroadsideCooldownLeft => _bsCooldown;
+    public double BroadsideWindupLeft => Sl("broadside").Left;
+    public int BroadsideVolleysLeft => Sl("broadside").N;
+    public double BroadsideCooldownLeft => Sl("broadside").Cool;
     // wound up or firing: the main turrets swing fast enough to reach the cursor within the wind-up
-    public bool BroadsideTracking => _bsWindup > 0 || _bsVolleys > 0;
-    private bool BroadsideReady => Stats.Def.Has(Fit.Broadside) && Alive && !BroadsideTracking && _bsCooldown <= 0;
+    public bool BroadsideTracking => BroadsideWindupLeft > 0 || BroadsideVolleysLeft > 0;
+    private bool BroadsideReady => Stats.Def.Has(Fit.Broadside) && Alive && !BroadsideTracking && BroadsideCooldownLeft <= 0;
 
     private readonly List<Turret> _turrets = new();
     private readonly List<Turret> _mains = new();
@@ -169,13 +178,18 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged
         foreach (var w in _wings) w.QueueFree();
         _turrets.Clear(); _mains.Clear(); PdTurrets.Clear(); _wings.Clear();
         WingTarget = StrikeTarget = null; _strikesOut = 0; _attacking = false;
-        _pdLeft = _pdRecharge = 0;
 
         Stats = BuildSheet();
         MaxHp = Hp = Stats["hull"];
         _hullWatch = default;                      // a new hull, not damage
-        _mag = (int)Stats["missile_mag"]; _missileReload = _missileRefire = 0;
-        _bsWindup = _bsGap = _bsCooldown = 0; _bsVolleys = 0;
+        // The class's slots, fresh: every timer at zero, the magazine full. Index 0 is the spare.
+        var list = Abilities.For(Class);
+        _slots = new Slot[list.Length + 1];
+        _slotAt.Clear();
+        for (int i = 0; i < list.Length; i++) _slotAt[list[i].Id] = i + 1;
+        _netSlotLeft = new float[_slots.Length]; _netSlotCool = new float[_slots.Length];
+        _netSlotOwn = new float[_slots.Length]; _netSlotN = new int[_slots.Length];
+        Sl("missile").N = (int)Stats["missile_mag"];
 
         var art = MyArt;
         var tex = GD.Load<Texture2D>(art.Texture);
@@ -216,7 +230,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged
         while (WingCount(WingKind.Bomber) > wantB) RemoveWing(WingKind.Bomber);
         if (WingCount(WingKind.Bomber) != hadB) { StrikeTarget = null; _strikesOut = 0; }
         if (!Net.Sim) return;
-        _mag = Math.Min(_mag, (int)Stats["missile_mag"]);
+        Sl("missile").N = Math.Min(MissilesLoaded, (int)Stats["missile_mag"]);
         foreach (var w in _wings) if (w.IsBomber) w.Ammo = Math.Min(w.Ammo, (int)Stats["bomber_ammo"]);
     }
 
@@ -315,16 +329,14 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged
     // cursor, which reaches the host with the rest of its intent (AimPoint), not in the request.
     public void UseAbility(string id, int targetId)
     {
-        // the fire mode is the owner's own intent (it rides in its state report), not a host order
-        if (id == "firemode") { Staggered = !Staggered; return; }
-        // The missile needs a selected target within range. Checked here, on the owner's
-        // machine, so the slot can say why at once; the host checks again.
-        if (id == "missile" && Stats.Def.Has(Fit.Missiles))
-        {
-            var t = targetId != 0 ? Combat.ById(targetId) : null;
-            string why = t == null ? "NO TARGET" : Position.DistanceTo(t.Position) > Stats["missile_range"] ? "OUT OF RANGE" : null;
-            if (why != null) { Fail(id, why); return; }
-        }
+        var def = Abilities.Find(Class, id);
+        if (def == null) return;                       // not an ability this class carries
+        // A LOCAL ability is the owner's own intent (the fire mode): it rides in the state report
+        // rather than being asked for.
+        if (def.Local) { def.Press?.Invoke(this, null); return; }
+        // Why it cannot be pressed, decided on the OWNER's machine so the slot says so at once.
+        // The host checks again inside Press: this is a courtesy, never the guard.
+        if (def.Refuse?.Invoke(this, targetId != 0 ? Combat.ById(targetId) : null) is { } why) { Fail(id, why); return; }
         if (Net.Sim) DoAbility(id, targetId);
         else Net.AskHost(this, nameof(RequestAbility), id, targetId);
     }
@@ -335,29 +347,29 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged
         if (Net.FromPlayer(this, out int who) && who == OwnerId) DoAbility(id, targetId);
     }
 
-    private void DoAbility(string id, int targetId)
+    private void DoAbility(string id, int targetId) =>
+        Abilities.Find(Class, id)?.Press?.Invoke(this, targetId != 0 ? Combat.ById(targetId) : null);
+
+    // ── what the abilities do. The catalogue (Abilities.cs) points at these, and each one
+    // guards itself: the press arrives from a guest's keyboard, so the host never trusts it.
+    public void Reboard() { if (CanReboard) { Alive = true; Hp = MaxHp * ReboardHull; _stasis = 0; } }
+    public void StartPd() { if (PdReady) Sl("pd").Left = Stats["pd_active"]; }
+    public void StartBroadside() { if (BroadsideReady) Sl("broadside").Left = Stats["broadside_windup"]; }
+    public void StartReload()
     {
-        var t = targetId != 0 ? Combat.ById(targetId) : null;
-        switch (id)
-        {
-            case "reboard": if (CanReboard) { Alive = true; Hp = MaxHp * ReboardHull; _stasis = 0; } break;
-            case "pd":      if (PdReady) _pdLeft = Stats["pd_active"]; break;
-            case "missile": FireMissile(t); break;
-            case "reload":  if (Stats.Def.Has(Fit.Missiles) && !Reloading && _mag < (int)Stats["missile_mag"])
-                                _missileReload = Stats["missile_reload"]; break;
-            case "broadside": if (BroadsideReady) _bsWindup = Stats["broadside_windup"]; break;
-            case "attack":  if (Stats.Def.Has(Fit.Wing) && t != null) { WingTarget = t; _attacking = true; } break;
-            case "recall":  WingTarget = null; _attacking = false; break;
-            case "bombers":
-                // within the strike range (twice the fighters' control range) only
-                if (Stats.Def.Has(Fit.Wing) && t != null && StrikeTarget == null && _strikesOut <= 0 && BombersReady > 0
-                    && Position.DistanceTo(t.Position) <= Stats["strike_range"])
-                {   // the bombers armed now are the strike: each is called, and answers once
-                    StrikeTarget = t; _strikesOut = 0;
-                    foreach (var w in _wings) if (w.IsBomber && w.Armed) { w.Call(); _strikesOut++; }
-                }
-                break;
-        }
+        if (Stats.Def.Has(Fit.Missiles) && !Reloading && MissilesLoaded < (int)Stats["missile_mag"])
+            Sl("reload").Left = Stats["missile_reload"];
+    }
+    public void OrderAttack(IHittable t) { if (Stats.Def.Has(Fit.Wing) && t != null) { WingTarget = t; _attacking = true; } }
+    public void RecallWing() { WingTarget = null; _attacking = false; }
+    public void OrderStrike(IHittable t)
+    {
+        // within the strike range (twice the fighters' control range) only
+        if (!Stats.Def.Has(Fit.Wing) || t == null || StrikeTarget != null || _strikesOut > 0 || BombersReady <= 0
+            || Position.DistanceTo(t.Position) > Stats["strike_range"]) return;
+        // the bombers armed now are the strike: each is called, and answers once
+        StrikeTarget = t; _strikesOut = 0;
+        foreach (var w in _wings) if (w.IsBomber && w.Armed) { w.Call(); _strikesOut++; }
     }
 
     // ── WARP (V) -- every capital ship ─────────────────────────────────────────
@@ -461,12 +473,12 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged
         float reach = 0.8f * d / (2f * speed / Mathf.Max(0.01f, turn));
         return reach >= Mathf.Sin(Mathf.DegToRad(BurstSplay)) ? BurstSplay : Mathf.RadToDeg(Mathf.Asin(reach));
     }
-    private void FireMissile(IHittable t)
+    public void FireMissile(IHittable t)
     {
         if (!Net.Sim || !CanFireMissile) return;
         float range = (float)Stats["missile_range"];
         if (t == null || Position.DistanceTo(t.Position) > range) return;   // a target in range, or nothing
-        _mag--; _missileRefire = Stats["missile_refire"];
+        Sl("missile").N--; Sl("missile").Cool = Stats["missile_refire"];
         var nose = ToGlobal(new Vector2(0, -MyArt.Length * 0.5f));
         float speed = (float)Stats["missile_speed"], turn = (float)Stats["missile_turn"];
         float splay = BurstSplayFor(nose.DistanceTo(t.Position), speed, turn);
@@ -542,7 +554,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged
     private void Die()
     {
         Hp = 0; Alive = false; _stasis = StasisTime;
-        Velocity = Vector2.Zero; Trigger = false; _pdLeft = 0;
+        Velocity = Vector2.Zero; Trigger = false; Sl("pd").Left = 0;
         WingTarget = null; StrikeTarget = null;
     }
 
@@ -603,36 +615,48 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged
     // that follows a PD window, the magazine refilled by a reload, and the broadside's volleys.
     private void TickAbilities(double delta)
     {
-        if (_pdLeft > 0) { _pdLeft -= delta; if (_pdLeft <= 0) { _pdLeft = 0; if (Net.Sim) _pdRecharge = Stats["pd_reload"]; } }
-        else if (_pdRecharge > 0) _pdRecharge = Math.Max(0, _pdRecharge - delta);
-
-        if (_missileRefire > 0) _missileRefire = Math.Max(0, _missileRefire - delta);
-        if (_missileReload > 0)
+        if (Stats.Def.Has(Fit.Pd))
         {
-            _missileReload -= delta;
-            if (_missileReload <= 0) { _missileReload = 0; if (Net.Sim) _mag = (int)Stats["missile_mag"]; }
+            ref var pd = ref Sl("pd");
+            if (pd.Left > 0) { pd.Left -= delta; if (pd.Left <= 0) { pd.Left = 0; if (Net.Sim) pd.Cool = Stats["pd_reload"]; } }
+            else if (pd.Cool > 0) pd.Cool = Math.Max(0, pd.Cool - delta);
         }
 
-        // The broadside. A ship lost in the middle of one loses the rest of it.
-        if (!Alive) { _bsWindup = 0; _bsVolleys = 0; }
-        if (_bsWindup > 0)
-        {
-            _bsWindup -= delta;
-            // Every peer moves on to the volleys: a guest shows them firing (its bar, its turrets'
-            // fast swing) until the host's next report says how many are left; only the host fires.
-            if (_bsWindup <= 0) { _bsWindup = 0; _bsVolleys = Math.Max(1, (int)Stats["broadside_volleys"]); if (Net.Sim) _bsGap = 0; }
-        }
-        if (_bsVolleys > 0)
-        {   // every main gun, along its barrel as it points now; the gap CARRIES its remainder, as the guns' reload does
-            if (Net.Sim) _bsGap -= delta;
-            for (int n = 0; Net.Sim && _bsGap <= 0 && _bsVolleys > 0 && n < 8; n++)
+        if (Stats.Def.Has(Fit.Missiles))
+        {   // the burst's refire gap, and the reload that refills the magazine
+            ref var msl = ref Sl("missile");
+            if (msl.Cool > 0) msl.Cool = Math.Max(0, msl.Cool - delta);
+            ref var rl = ref Sl("reload");
+            if (rl.Left > 0)
             {
-                foreach (var m in _mains) m.Shoot(Stats["broadside_mult"]);
-                _bsGap += Stats["broadside_gap"];
-                if (--_bsVolleys == 0) _bsCooldown = Stats["broadside_cooldown"];
+                rl.Left -= delta;
+                if (rl.Left <= 0) { rl.Left = 0; if (Net.Sim) Sl("missile").N = (int)Stats["missile_mag"]; }
             }
         }
-        else if (_bsCooldown > 0) _bsCooldown = Math.Max(0, _bsCooldown - delta);
+
+        if (Stats.Def.Has(Fit.Broadside))
+        {   // The broadside. A ship lost in the middle of one loses the rest of it.
+            ref var bs = ref Sl("broadside");
+            if (!Alive) { bs.Left = 0; bs.N = 0; }
+            if (bs.Left > 0)
+            {
+                bs.Left -= delta;
+                // Every peer moves on to the volleys: a guest shows them firing (its bar, its turrets'
+                // fast swing) until the host's next report says how many are left; only the host fires.
+                if (bs.Left <= 0) { bs.Left = 0; bs.N = Math.Max(1, (int)Stats["broadside_volleys"]); if (Net.Sim) bs.Own = 0; }
+            }
+            if (bs.N > 0)
+            {   // every main gun, along its barrel as it points now; the gap CARRIES its remainder, as the guns' reload does
+                if (Net.Sim) bs.Own -= delta;
+                for (int n = 0; Net.Sim && bs.Own <= 0 && bs.N > 0 && n < 8; n++)
+                {
+                    foreach (var m in _mains) m.Shoot(Stats["broadside_mult"]);
+                    bs.Own += Stats["broadside_gap"];
+                    if (--bs.N == 0) bs.Cool = Stats["broadside_cooldown"];
+                }
+            }
+            else if (bs.Cool > 0) bs.Cool = Math.Max(0, bs.Cool - delta);
+        }
     }
 
     // ── main guns: salvo or staggered ────────────────────────────────────────
@@ -805,6 +829,11 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged
     }
 
     // The host's side of the conversation: hull, ability state, and the wing.
+    // Re-used every report: four arrays the size of the class's slots, filled and sent (the wing
+    // arrays beside them are built the same way). Allocating them per packet was 20 Hz of garbage.
+    private float[] _netSlotLeft = System.Array.Empty<float>(), _netSlotCool = System.Array.Empty<float>(), _netSlotOwn = System.Array.Empty<float>();
+    private int[] _netSlotN = System.Array.Empty<int>();
+
     private void SendHostState()
     {
         int n = _wings.Count;
@@ -814,21 +843,28 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged
             pos[i] = _wings[i].Position; rot[i] = _wings[i].Rotation;
             st[i] = _wings[i].StateCode; rearm[i] = (float)_wings[i].RearmLeft;
         }
-        (GetParent() as Hub)?.SendHostState(OwnerId, Hp, MaxHp, Alive, _stasis, _status.Bits, _combatT, _pdLeft, _pdRecharge, _mag, _missileReload,
-            _bsWindup, _bsVolleys, _bsCooldown, WingTarget?.NetId ?? 0, pos, rot, st, rearm);
+        for (int i = 0; i < _slots.Length; i++)
+        {
+            _netSlotLeft[i] = (float)_slots[i].Left; _netSlotCool[i] = (float)_slots[i].Cool;
+            _netSlotOwn[i] = (float)_slots[i].Own;   _netSlotN[i] = _slots[i].N;
+        }
+        (GetParent() as Hub)?.SendHostState(OwnerId, Hp, MaxHp, Alive, _stasis, _status.Bits, _combatT,
+            _netSlotLeft, _netSlotCool, _netSlotOwn, _netSlotN, WingTarget?.NetId ?? 0, pos, rot, st, rearm);
     }
 
     // the host's report (Hub.NetHostState: only the host speaks for combat state)
-    public void ApplyHostState(double hp, double maxHp, bool alive, double stasis, int statusBits, double combat, double pdLeft, double pdRecharge, int mag, double reload,
-                               double bsWindup, int bsVolleys, double bsCooldown,
+    public void ApplyHostState(double hp, double maxHp, bool alive, double stasis, int statusBits, double combat,
+                               float[] slotLeft, float[] slotCool, float[] slotOwn, int[] slotN,
                                int wingTarget, Vector2[] wingPos, float[] wingRot, int[] wingState, float[] wingRearm)
     {
         if (System.Math.Abs(maxHp - _hostMax) > 1e-9) _hullWatch = default;    // the first report, or a refit: not damage
         _hostMax = maxHp;
         _hullWatch.Tick(this, alive ? hp : 0, taken: true);
         Hp = hp; MaxHp = maxHp; Alive = alive; _stasis = stasis; _status.FromBits(statusBits); _combatT = combat;
-        _pdLeft = pdLeft; _pdRecharge = pdRecharge; _mag = mag; _missileReload = reload;
-        _bsWindup = bsWindup; _bsVolleys = bsVolleys; _bsCooldown = bsCooldown;
+        // The slots, by the class's own order. Shortest array wins: a refit mid-packet can leave
+        // the two sides a slot apart for one report.
+        for (int i = 0; i < Math.Min(_slots.Length, slotLeft.Length); i++)
+            _slots[i] = new Slot { Left = slotLeft[i], Cool = slotCool[i], Own = slotOwn[i], N = slotN[i] };
         WingTarget = wingTarget != 0 ? Combat.ById(wingTarget) : null;
         for (int i = 0; i < Math.Min(_wings.Count, wingPos.Length); i++)
         {

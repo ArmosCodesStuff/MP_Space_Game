@@ -102,17 +102,7 @@ public static class Classes
                 Mains = new Vector2[] { new(0f, -93.85f), new(0f, -7.56f), new(0f, 73.34f), new(0f, 122.15f) },
                 Pds   = new Vector2[] { new(-21.3f, 156.93f), new(21.3f, 156.93f) },
                 TurretTexScale = 2.5f / 5.5f, MainBarrel = 30.5f, PdBarrel = 13.75f, PdRing = 7.5f },
-            Abilities = new[]
-            {
-                new AbilityDef { Id = "guns",     Name = "Main guns",     Short = "GUNS",   Kind = AbilityKind.Hold, Default = Key.Space,
-                                 Blurb = "Hold to fire. The barrels aim at the cursor and swing slowly." },
-                new AbilityDef { Id = "firemode", Name = "Fire mode",     Short = "MODE",   Default = Key.G,
-                                 Blurb = "Salvo (all barrels at once) or staggered (one at a time). Same rate." },
-                new AbilityDef { Id = "broadside", Name = "Broadside",    Short = "BROADSIDE", Default = Key.F,
-                                 Blurb = "The turrets swing onto the cursor, then every main gun fires three volleys. The ship steers throughout." },
-                new AbilityDef { Id = "pd",       Name = "Point defence", Short = "PD",     Default = Key.Q,
-                                 Blurb = "Opens a firing window; each turret picks and tracks its own target. Recharges after." },
-            }, },
+            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Broadside, Ab.Pd } },
 
         new() { Id = ShipClass.Carrier, Name = "CARRIER", Ready = true, Fit = Fit.Wing | Fit.Pd,
             Blurb = "200 hull. Three point-defence turrets, three fighters, two torpedo bombers.",
@@ -128,17 +118,7 @@ public static class Classes
                 BayX = 25.01f, BayY = 8.34f, BaySpacing = 46.69f, RunwayBow = 110.06f, EngineInset = 8f,
                 Pds = new Vector2[] { new(-46.39f, -29.75f), new(46.39f, -29.75f), new(0f, 134.22f) },
                 TurretTexScale = 1.9178f / 5.5f, PdBarrel = 10.51f, PdRing = 5.76f },
-            Abilities = new[]
-            {
-                new AbilityDef { Id = "attack",  Name = "Fighters: attack", Short = "ATTACK", Default = Key.Space,
-                                 Blurb = "Sends the fighters at the selected target while it is within control range." },
-                new AbilityDef { Id = "recall",  Name = "Fighters: recall", Short = "RECALL", Default = Key.R,
-                                 Blurb = "Calls the fighters home: they dock inside the carrier." },
-                new AbilityDef { Id = "bombers", Name = "Bomber strike",    Short = "BOMB",   Default = Key.F,
-                                 Blurb = "Bombers run at the target and launch torpedoes straight ahead. No tracking." },
-                new AbilityDef { Id = "pd",      Name = "Point defence",    Short = "PD",     Default = Key.Q,
-                                 Blurb = "Opens a firing window; each turret picks and tracks its own target. Recharges after." },
-            }, },
+            Abilities = new[] { Ab.Attack, Ab.Recall, Ab.Bombers, Ab.Pd } },
 
         new() { Id = ShipClass.Destroyer, Name = "DESTROYER", Ready = true, Fit = Fit.Guns | Fit.Missiles | Fit.Pd,
             Blurb = "250 hull. The fastest. Two cursor-aimed main guns, missile bursts of three, two point-defence turrets.",
@@ -155,19 +135,7 @@ public static class Classes
                 Mains = new Vector2[] { new(0f, -57.31f), new(0f, 24.66f) },
                 Pds   = new Vector2[] { new(-13.39f, 68.16f), new(13.39f, 68.16f) },
                 TurretTexScale = 1.3085f / 5.5f, MainBarrel = 16.03f, PdBarrel = 7.2f, PdRing = 3.93f },
-            Abilities = new[]
-            {
-                new AbilityDef { Id = "guns",     Name = "Main guns",     Short = "GUNS",   Kind = AbilityKind.Hold, Default = Key.Space,
-                                 Blurb = "Hold to fire. The barrels aim at the cursor and swing slowly." },
-                new AbilityDef { Id = "firemode", Name = "Fire mode",     Short = "MODE",   Default = Key.G,
-                                 Blurb = "Salvo (both barrels at once) or staggered (one at a time). Same rate." },
-                new AbilityDef { Id = "missile",  Name = "Missile burst", Short = "MSL",    Default = Key.F,
-                                 Blurb = "Three guided missiles: one at the target, two launched wide that curve in. Needs a selected target in range. Uses the magazine." },
-                new AbilityDef { Id = "reload",   Name = "Reload missiles", Short = "RELOAD", Default = Key.R,
-                                 Blurb = "Refills the missile magazine. Nothing fires while it runs." },
-                new AbilityDef { Id = "pd",       Name = "Point defence", Short = "PD",     Default = Key.Q,
-                                 Blurb = "Opens a firing window; each turret picks and tracks its own target. Recharges after." },
-            }, },
+            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Missile, Ab.Reload, Ab.Pd } },
 
         // -- page 2: freight, which carries its own defences -------------------
         new() { Id = ShipClass.FreightHauler, Name = "FREIGHTER", Blurb = "Reserved." },

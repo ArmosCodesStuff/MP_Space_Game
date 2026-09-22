@@ -369,16 +369,16 @@ public partial class Hub : Node2D
     private void NetShipState(float px, float py, float vx, float vy, float rot, float ax, float ay, bool trigger, bool staggered,
                               float podX, float podY, float podRot, bool warping) =>
         ShipOf(Net.SenderOf(this))?.ApplyState(px, py, vx, vy, rot, ax, ay, trigger, staggered, podX, podY, podRot, warping);
-    public void SendHostState(int owner, double hp, double maxHp, bool alive, double stasis, int statusBits, double combat, double pdLeft, double pdRecharge,
-                              int mag, double reload, double bsWindup, int bsVolleys, double bsCooldown,
+    public void SendHostState(int owner, double hp, double maxHp, bool alive, double stasis, int statusBits, double combat,
+                              float[] slotLeft, float[] slotCool, float[] slotOwn, int[] slotN,
                               int wingTarget, Vector2[] wingPos, float[] wingRot, int[] wingState, float[] wingRearm) =>
-        Rpc(nameof(NetHostState), owner, hp, maxHp, alive, stasis, statusBits, combat, pdLeft, pdRecharge, mag, reload, bsWindup, bsVolleys, bsCooldown,
+        Rpc(nameof(NetHostState), owner, hp, maxHp, alive, stasis, statusBits, combat, slotLeft, slotCool, slotOwn, slotN,
             wingTarget, wingPos, wingRot, wingState, wingRearm);
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
-    private void NetHostState(int owner, double hp, double maxHp, bool alive, double stasis, int statusBits, double combat, double pdLeft, double pdRecharge,
-                              int mag, double reload, double bsWindup, int bsVolleys, double bsCooldown,
+    private void NetHostState(int owner, double hp, double maxHp, bool alive, double stasis, int statusBits, double combat,
+                              float[] slotLeft, float[] slotCool, float[] slotOwn, int[] slotN,
                               int wingTarget, Vector2[] wingPos, float[] wingRot, int[] wingState, float[] wingRearm) =>
-        ShipOf(owner)?.ApplyHostState(hp, maxHp, alive, stasis, statusBits, combat, pdLeft, pdRecharge, mag, reload, bsWindup, bsVolleys, bsCooldown,
+        ShipOf(owner)?.ApplyHostState(hp, maxHp, alive, stasis, statusBits, combat, slotLeft, slotCool, slotOwn, slotN,
                                       wingTarget, wingPos, wingRot, wingState, wingRearm);
     public void SendShield(int owner, float side) => Rpc(nameof(NetShield), owner, side);
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
