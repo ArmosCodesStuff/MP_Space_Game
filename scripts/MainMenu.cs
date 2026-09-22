@@ -130,6 +130,7 @@ public partial class MainMenu : Node2D
 
         // Its turrets and shells all go through Combat, exactly as in the hub.
         Combat.OnFlash = (a, b, c, snd) => { _shots.Add(new Shot { A = a, B = b, T = 0.15 }); Sfx.Laser(a, b, snd); };
+        Fx.On = (id, a, b, r) => AddChild(new FxNode { Id = id, Position = a, To = b, Radius = r });
         Combat.World = this;
 
         // three lights, two heavies and a webifier

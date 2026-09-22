@@ -525,9 +525,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
                 n.Position += (away.LengthSquared() > 1f ? away.Normalized() : Vector2.Up) * push;
             }
         }
-        // the ring, on every peer: eight spokes out to its reach
-        for (int i = 0; i < 8; i++)
-            Combat.Flash(Position, Position + Vector2.Up.Rotated(Mathf.Tau * i / 8f) * reach, new Color(0.6f, 0.8f, 1f));
+        Fx.Raise(Fx.Wave, Position, reach);                 // the ring, on every peer: how far it threw them
     }
 
     // ── THE HEAVY FIGHTERS ──────────────────────────────────────────────
@@ -554,7 +552,8 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
                 if (h is Node2D n) DamageNumbers.NoteImpact(n, h.Position);
             }
         }
-        Combat.Flash(a, b, new Color(0.45f, 0.7f, 1f), ShotSound.Boss);
+        Fx.Line(Fx.Rail, a, b);                             // the line it threw, on every peer
+        Sfx.Laser(a, b, ShotSound.Boss);
         Sl("railgun").Cool = Stats["rail_cooldown"];
     }
 
@@ -576,8 +575,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             NoteDealt(Stats["emp_damage"], h.Position);
             if (!TagExt.Is(h, Tag.Boss)) (h as IStatused)?.ApplyStatus(Status.Disabled, Stats["emp_stun"]);
         }
-        for (int i = 0; i < 6; i++)
-            Combat.Flash(Position, Position + Vector2.Up.Rotated(Mathf.Tau * i / 6f) * reach, new Color(0.7f, 0.9f, 1f));
+        Fx.Raise(Fx.Emp, Position, reach);
     }
 
     // Six missiles, each on a target of its own while there are targets to go round; what is left
@@ -635,9 +633,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             if (h is Node2D n) DamageNumbers.NoteImpact(n, h.Position);
         }
         NoteCombat();
-        MyHub?.AddChild(new Explosion { Position = _echoAt, Radius = reach * 0.5f });
-        for (int i = 0; i < 6; i++)
-            Combat.Flash(_echoAt, _echoAt + Vector2.Up.Rotated(Mathf.Tau * i / 6f) * reach, new Color(1f, 0.8f, 0.45f));
+        Fx.Raise(Fx.Echo, _echoAt, reach);                  // on every peer, where it remembered
     }
 
     public void GoDark()

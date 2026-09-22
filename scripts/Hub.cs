@@ -229,20 +229,7 @@ public partial class Hub : Node2D
 
         Settings.EnsureLoaded();       // ability key bindings
         Combat.Clear();
-        // Flashes are made on the host, where the shots happen. Guests are sent them,
-        // or a guest firing at the dummy would see nothing at all.
-        Combat.OnFlash = (a, b, c, snd) =>
-        {
-            AddFlash(a, b, c, snd);
-            ToWorld(nameof(NetFlash), a, b, c, (int)snd);
-        };
-        // Shells and torpedoes are born in this world; the host's copy deals damage, and guests
-        // get the launch and fly a cosmetic copy (the run is straight and steady, so it lands in
-        // the same place).
-        Combat.World = this;
-        Combat.ShellFired = s => ToWorld(nameof(NetShell), s.Position, s.Dir, s.Speed, s.Range);
-        Combat.TorpedoFired = t => ToWorld(nameof(NetTorpedo), t.Position, t.Dir, t.Speed, t.Range, t.TargetId, t.TurnRate, t.Heavy, t.HostileFire, t.NetId, t.Size);
-        Combat.SlugFired = s => ToWorld(nameof(NetSlug), s.Position, s.Dir, s.Speed, s.Range, s.Radius, (int)s.Look, s.Variant);
+        Hooks();
 
         // THE SHIPS BEFORE THE BOSS. The boss sizes itself to the party in its _Ready, and it used
         // to be built first, count zero ships, and come out a solo boss for every party.
@@ -275,6 +262,35 @@ public partial class Hub : Node2D
 
     // Net is an autoload and outlives this scene. Every handler added in _Ready comes
     // off here, or the next join or status line calls into a freed Hub.
+    // EVERY HOOK THIS WORLD INSTALLS, in one place. Combat.Clear drops them all on the way out
+    // (each is a lambda holding this node), so there has to be exactly one place that puts them
+    // back -- the harness used to restore them by hand from a list it kept, and every hook added
+    // after that list was written was silently lost for the rest of the run.
+    private void Hooks()
+    {
+        // Flashes are made on the host, where the shots happen. Guests are sent them,
+        // or a guest firing at the dummy would see nothing at all.
+        Combat.OnFlash = (a, b, c, snd) =>
+        {
+            AddFlash(a, b, c, snd);
+            ToWorld(nameof(NetFlash), a, b, c, (int)snd);
+        };
+        // Shells and torpedoes are born in this world; the host's copy deals damage, and guests
+        // get the launch and fly a cosmetic copy (the run is straight and steady, so it lands in
+        // the same place).
+        // EFFECTS GO UP EVERYWHERE. The host raises one and every guest gets it, exactly as a
+        // flash does -- an effect added straight to this tree was one only the host ever saw.
+        Fx.On = (id, a, b, r) =>
+        {
+            AddFx(id, a, b, r);
+            ToWorld(nameof(NetFx), id, a, b, r);
+        };
+        Combat.World = this;
+        Combat.ShellFired = s => ToWorld(nameof(NetShell), s.Position, s.Dir, s.Speed, s.Range);
+        Combat.TorpedoFired = t => ToWorld(nameof(NetTorpedo), t.Position, t.Dir, t.Speed, t.Range, t.TargetId, t.TurnRate, t.Heavy, t.HostileFire, t.NetId, t.Size);
+        Combat.SlugFired = s => ToWorld(nameof(NetSlug), s.Position, s.Dir, s.Speed, s.Range, s.Radius, (int)s.Look, s.Variant);
+    }
+
     public override void _ExitTree()
     {
         if (Net.I != null)
@@ -1038,7 +1054,7 @@ public partial class Hub : Node2D
     }
     private void DropDeployed(DeployedTurret t, bool burst)
     {
-        if (burst) AddChild(new Explosion { Position = t.Position, Radius = 22f });
+        if (burst) Fx.Raise(Fx.Burst, t.Position, 22f);
         Deployed.Remove(t); t.QueueFree();
     }
 
@@ -1084,7 +1100,7 @@ public partial class Hub : Node2D
     // same frame acquired it again.
     private void DropRaider(Raider r, bool burst)
     {
-        if (burst) AddChild(new Explosion { Position = r.Position, Radius = 28f });
+        if (burst) Fx.Raise(Fx.Burst, r.Position, 28f);
         if (ReferenceEquals(_selected, r)) _selected = null;
         Combat.Hostiles.Remove(r);
         foreach (var s in _ships.Values) if (IsInstanceValid(s)) s.Forget(r);
@@ -1509,6 +1525,11 @@ public partial class Hub : Node2D
         AddChild(new Torpedo { Position = from, Dir = dir, Speed = speed, Range = range, Cosmetic = true, TargetId = target, TurnRate = turn,
                                Heavy = heavy, HostileFire = hostile, NetId = id, Size = size });
 
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void NetFx(int id, Vector2 a, Vector2 b, float r) => AddFx(id, a, b, r);
+    private void AddFx(int id, Vector2 a, Vector2 b, float r) =>
+        AddChild(new FxNode { Id = id, Position = a, To = b, Radius = r });
+
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
     private void NetFlash(Vector2 a, Vector2 b, Color c, int snd)
         => AddFlash(a, b, c, System.Enum.IsDefined(typeof(ShotSound), snd) ? (ShotSound)snd : ShotSound.Light);
@@ -1715,7 +1736,7 @@ public partial class HeavyMissileVisual : Node2D
     {
         _t += delta;
         Position = From.Lerp(To, (float)System.Math.Min(1, _t / Flight));
-        if (_t >= Flight) { GetParent().AddChild(new Explosion { Position = To, Radius = Raider.BlastRadius * 0.8f }); QueueFree(); }
+        if (_t >= Flight) { Fx.Raise(Fx.Burst, To, Raider.BlastRadius * 0.8f); QueueFree(); }
         QueueRedraw();
     }
     public override void _Draw()

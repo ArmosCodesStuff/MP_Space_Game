@@ -1490,10 +1490,10 @@ public partial class _Test : Node
         hauler.Position = Hub.PortalPos + new Vector2(0, 20);
         for (int i = 0; i < 120 && hauler.State == Hauler.St.Escorting; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         Check(hauler.State == Hauler.St.Charging && hauler.Position.DistanceTo(Hub.PortalPos) < 0.6f, $"the route ends in the portal: it charges there ({hauler.State})");
-        int booms0 = Nodes<Explosion>().Count();
+        int booms0 = Nodes<FxNode>().Count();
         double ec0 = Y.Credits;
         hauler.T = Economy.HaulerCharge; await Wait(0.1);
-        Check(hauler.State == Hauler.St.Away && H.Raiders.Count(r => r.Quarry == hauler) == 0 && Nodes<Explosion>().Count() <= booms0,
+        Check(hauler.State == Hauler.St.Away && H.Raiders.Count(r => r.Quarry == hauler) == 0 && Nodes<FxNode>().Count() <= booms0,
               $"through the portal: the hunters withdraw, none shot down ({H.Raiders.Count(r => r.Quarry == hauler)} left)");
         double atJump = hauler.Cargo;                  // 300, and whatever a delivery added before it lifted
         hauler.T = Economy.HaulerAway; await Wait(0.1);
@@ -1850,13 +1850,19 @@ public partial class _Test : Node
         // behind: a lambda holding the Hub, so the next shot called into a freed node, and a Hub
         // that could never be collected once you were back at the menu. Snapshot and restore --
         // this all happens inside one frame, so nothing ever sees the cleared state.
+        // The hooks go back through the world's OWN installer (Hub.Hooks), not a list kept here:
+        // this check used to restore four of them by hand, so every hook added after it was
+        // written -- SlugFired, and then Fx.On -- was silently dropped for the rest of the run,
+        // and the effects raised after this point went up on nobody's screen.
         var keepHostiles = Combat.Hostiles.ToList(); var keepPlayers = Combat.Players.ToList();
-        var keepFlash = Combat.OnFlash; var keepWorld = Combat.World; var keepShell = Combat.ShellFired; var keepTorp = Combat.TorpedoFired;
         Combat.Clear();
-        bool hooksDropped = Combat.OnFlash == null && Combat.World == null && Combat.ShellFired == null && Combat.TorpedoFired == null && Combat.SlugFired == null;
+        bool hooksDropped = Combat.OnFlash == null && Combat.World == null && Combat.ShellFired == null
+                            && Combat.TorpedoFired == null && Combat.SlugFired == null && Fx.On == null;
+        Priv(H, "Hooks");
         Combat.Hostiles.AddRange(keepHostiles); Combat.Players.AddRange(keepPlayers);
-        Combat.OnFlash = keepFlash; Combat.World = keepWorld; Combat.ShellFired = keepShell; Combat.TorpedoFired = keepTorp;
-        Check(hooksDropped, "Combat.Clear lets go of the world and every hook it installed");
+        Check(hooksDropped && Combat.OnFlash != null && Combat.World != null && Combat.ShellFired != null
+              && Combat.TorpedoFired != null && Combat.SlugFired != null && Fx.On != null,
+              "Combat.Clear lets go of the world and every hook it installed, and the world puts every one of them back");
 
         // ── A REFIT, on the battleship: the hull keeps its fraction (keeping the damage taken let a
         //    pilot heal by swapping parts) ──
@@ -3249,6 +3255,26 @@ public partial class _Test : Node
                   $"overdrive halves the reload of its gun AND of every turret it has out ({gun0:0.00} -> {td.Spec(false).Interval:0.00} s)");
             foreach (var dpl in H.Deployed.ToList()) H.DeployedTaken(dpl);
 
+            // ── EVERY EFFECT IS A ROW, AND EVERY PEER GETS IT ──
+            // The shockwave, the EMP and the echo used to be drawn as spokes of LASER FLASHES,
+            // because that was the only drawing that reached a guest, and the echo's burst was
+            // added straight to the host's own tree where nobody else ever saw it.
+            {
+                Check(Fx.All.Length == 7 && Fx.Of(Fx.Wave).Shape == FxShape.Ring
+                      && Fx.Of(Fx.Emp).Shape == FxShape.Spokes && Fx.Of(Fx.Echo).Shape == FxShape.Spokes
+                      && Fx.Of(Fx.Rail).Shape == FxShape.Bar && Fx.Of(Fx.Burst).Shape == FxShape.Burst
+                      && Fx.Of(Fx.Rebuilt).Tint != Fx.Of(Fx.Lost).Tint,
+                      "seven effects, each a row: a burst, a fleet craft lost and rebuilt, a wave, an EMP, an echo and a railgun's bar");
+                int fxBefore = Nodes<FxNode>().Count();
+                Fx.Raise(Fx.Wave, fr.Position + new Vector2(0, -600), 400f);
+                await Wait(0.1);
+                var raised = Nodes<FxNode>().Where(f => f.Id == Fx.Wave).ToList();
+                Check(raised.Count == 1 && Nodes<FxNode>().Count() == fxBefore + 1 && Math.Abs(raised[0].Radius - 400f) < 1e-3,
+                      $"Fx.Raise puts one up in the live world, at the reach it was given ({raised.Count} up)");
+                await Wait(1.0);
+                Check(!Nodes<FxNode>().Any(f => f.Id == Fx.Wave), "and it takes itself away when its life is up");
+            }
+
             // ── BASTION: everything within 1000 u thrown a thousand units clear ──
             await SetClass(ShipClass.FreightBastion);
             var bs = Me; bs.Position = yonder; bs.Velocity = Vector2.Zero; await Wait(0.2);
@@ -3258,6 +3284,7 @@ public partial class _Test : Node
             float nd0 = near.Position.DistanceTo(yonder), fd0 = far.Position.DistanceTo(yonder);
             bs.UseAbility("shockwave", 0); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             float nd1 = near.Position.DistanceTo(yonder), fd1 = far.Position.DistanceTo(yonder);
+            Check(Nodes<FxNode>().Any(f => f.Id == Fx.Wave), "the shockwave puts its ring up where it went off");
             Check(nd1 - nd0 > 950 && nd1 - nd0 < 1050 && Math.Abs(fd1 - fd0) < 60,
                   $"the shockwave throws what is within 1000 u a thousand units clear, and nothing beyond it ({nd1 - nd0:0} u / {fd1 - fd0:0} u)");
             near.TakeDamage(99999); far.TakeDamage(99999); await Wait(0.2);

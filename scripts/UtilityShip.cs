@@ -60,8 +60,7 @@ public abstract partial class UtilityShip : Node2D, IRaidTarget, ITagged
     }
 
     protected void Burst(bool rebuilt) =>
-        GetParent().AddChild(new Explosion { Position = Position, Radius = rebuilt ? RebuiltBlast : LostBlast,
-                                             Tint = rebuilt ? new Color(0.5f, 0.8f, 1f) : new Color(1f, 0.7f, 0.3f) });
+        Fx.Raise(rebuilt ? Fx.Rebuilt : Fx.Lost, Position, rebuilt ? RebuiltBlast : LostBlast);
 
     // The rebuild as the host reports it: seconds to go, or -1 while it waits for the credits.
     public float NetRebuild => WaitingForCredits ? -1f : (float)RebuildIn;

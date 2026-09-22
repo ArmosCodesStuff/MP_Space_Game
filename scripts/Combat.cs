@@ -121,5 +121,5 @@ public static class Combat
     // lambda holding the Hub, so one left behind is a freed node the next shot calls into, and a
     // Hub that can never be collected once you are back at the menu.
     // A world ends: its lists, its hooks (each a lambda holding that world) and its ids.
-    public static void Clear() { Hostiles.Clear(); Players.Clear(); OnFlash = null; World = null; ShellFired = null; TorpedoFired = null; SlugFired = null; NetIds.Reset(); }
+    public static void Clear() { Hostiles.Clear(); Players.Clear(); OnFlash = null; World = null; ShellFired = null; TorpedoFired = null; SlugFired = null; Fx.On = null; NetIds.Reset(); }
 }
