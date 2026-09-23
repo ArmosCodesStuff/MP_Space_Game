@@ -175,6 +175,20 @@ public static class Character
     // around that, every save would quietly take the unsafe path and nothing would say so.
     public static bool LastSaveRenamed { get; private set; }
 
+    // EVERY DOUBLE THIS FILE TAKES OFF DISK COMES THROUGH HERE: finite, and inside the bounds that
+    // mean something for it. The three stock figures used Math.Max(0, x), which passes NaN and
+    // +Infinity straight through (Math.Max returns NaN when either argument is NaN), and the bonus
+    // sheet had no bound at all -- and a bonus reaches combat through PlayerShip's percentage
+    // sheet, while an endless balance makes every cost affordable for ever and is written straight
+    // back to disk on the next save. A broken number reads as nothing.
+    private const double MaxStock = 1e12;      // the most of a resource a FILE may claim to hold
+    private const double MaxBonus = 10;        // +1000%: a sheet bonus past this is an edited file
+    private static double Num(ConfigFile c, string section, string key, double min, double max)
+    {
+        double v = (double)c.GetValue(section, key, 0.0);
+        return Math.Clamp(double.IsFinite(v) ? v : 0, min, max);
+    }
+
     public static bool Load(string id)
     {
         SaveIfPending();                                   // the pilot being replaced keeps what it had
@@ -192,14 +206,14 @@ public static class Character
         (Id, Name, Main, Accent, Class) = (id, s.Name, s.Main, s.Accent, s.Class);
         Bonuses.Clear();
         if (c.HasSection("bonus"))
-            foreach (var k in c.GetSectionKeys("bonus")) Bonuses[k] = (double)c.GetValue("bonus", k, 0.0);
+            foreach (var k in c.GetSectionKeys("bonus")) Bonuses[k] = Num(c, "bonus", k, -1, MaxBonus);
         // The base. Negative stock is refused outright, an unknown upgrade id is dropped and a level
         // is held to its upgrade's cap: this is a file on the player's disk, and a level for an
         // upgrade that no longer exists, or more levels than it has, would be spent money nothing
         // can show.
-        BaseOre = Math.Max(0, (double)c.GetValue("base", "ore", 0.0));
-        BaseSalvage = Math.Max(0, (double)c.GetValue("base", "salvage", 0.0));
-        BaseCredits = Math.Max(0, (double)c.GetValue("base", "credits", 0.0));
+        BaseOre = Num(c, "base", "ore", 0, MaxStock);
+        BaseSalvage = Num(c, "base", "salvage", 0, MaxStock);
+        BaseCredits = Num(c, "base", "credits", 0, MaxStock);
         BaseLevels.Clear();
         if (c.HasSection("base_levels"))
             foreach (var k in c.GetSectionKeys("base_levels"))
@@ -210,7 +224,7 @@ public static class Character
         BaseInvested.Clear();
         if (c.HasSection("base_invested"))
             foreach (var k in c.GetSectionKeys("base_invested"))
-                BaseInvested[k] = Math.Max(0, (double)c.GetValue("base_invested", k, 0.0));
+                BaseInvested[k] = Num(c, "base_invested", k, 0, MaxStock);
         Exp = (int)c.GetValue("progress", "exp", 0); Level = Math.Max(1, (int)c.GetValue("progress", "level", 1));
         Points = Math.Max(0, (int)c.GetValue("progress", "points", 0));
         for (int i = 0; i < Bought.Length; i++) Bought[i] = Math.Clamp((int)c.GetValue("progress", "bought_" + Progression.All[i].Id, 0), 0, Progression.MaxPerUpgrade);

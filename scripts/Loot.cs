@@ -39,6 +39,7 @@ public static class Loot
         rng ??= Rng;
         var all = Equipment.Drops.ToList();
         var d = new Dictionary<int, string[]>();
+        if (all.Count == 0) return d;          // nothing in the game drops: no crates, not an index into an empty list
         foreach (var (peer, cls) in pilots)
         {
             var drops = new string[CratesFor(level)];
@@ -46,7 +47,14 @@ public static class Loot
             {
                 var rarity = RollRarity(level, rng);
                 bool own = rng.NextDouble() < 0.7;
-                var pool = all.Where(it => it.Rarity == rarity && (!own || Equipment.Fits(it, it.Slot, cls))).ToList();
+                // "the pilot's own class" is a PREFERENCE, not a filter. As a filter the narrowed
+                // pool can come out EMPTY -- a rarity this hull's slots have no part in -- and
+                // rng.Next(0) returns 0, so this indexed an empty list: on the HOST, at the instant
+                // a boss died, after MissionWon was set and before anyone was paid. It falls back
+                // to everything of that rarity, and that to everything that drops at all.
+                var byRarity = all.Where(it => it.Rarity == rarity).ToList();
+                var mine = own ? byRarity.Where(it => Equipment.Fits(it, it.Slot, cls)).ToList() : byRarity;
+                var pool = mine.Count > 0 ? mine : byRarity.Count > 0 ? byRarity : all;
                 drops[i] = pool[rng.Next(pool.Count)].Id;
             }
             d[peer] = drops;

@@ -14,11 +14,37 @@ public enum MenuFoeKind { Light, Heavy, Web }
 
 public partial class MenuFoe : Node2D, IHittable, ITagged
 {
-    // One id space of its own: the menu is a world, but not the hub's world. Minted by NetIds
-    // like every other kind, so Combat.Clear resets it with the world rather than letting the
-    // title screen's ids climb for the life of the process.
+    // WHAT EACH KIND IS: the enemy row it is drawn from (Enemies.All -- its texture, its length,
+    // the share of that length it is hit on, and its TAG), plus the diorama's own figures. Art,
+    // hull, hit radius and tag were a switch in here -- a SECOND enemy table, in which a Heavy
+    // answered Tag.Light, so every point-defence turret on the title screen shot at a gunship,
+    // which is the one thing Tag.Heavy exists to prevent. A new menu foe is a row.
+    //
+    // Art: null wears the enemy row's own texture AND its raider red. The Web is the one row with
+    // art of its own -- enemy_light_tier_2.png, the tier-2 light art no EnemyDef names -- and a
+    // row with its own art wears that art's own colours, which is how the tether ship reads apart
+    // from the fighters making runs past the hull.
+    private struct FoeDef
+    {
+        public int Enemy;                 // the row of Enemies.All it is drawn from
+        public string Art;                // its own texture, or null for the enemy row's
+        public double Hp;                 // the diorama's own: these die and come back every few seconds
+        public float Speed, Standoff;     // how fast it flies, and the range it holds (0: it makes runs)
+        public float Weave;               // how much of its speed goes sideways while it holds
+        public float GunRange;            // its cosmetic gun's reach
+        public double GunEvery;           // ...and the seconds between its shots, before the scatter
+        public bool Tether;               // it webs what it holds instead of shooting it
+    }
+    private static readonly FoeDef[] Defs =
+    {   // indexed by MenuFoeKind: Light, Heavy, Web
+        new() { Enemy = Enemies.Webifier, Hp = 6,  Speed = 118f, Standoff = 0f,   Weave = 0.5f,  GunRange = 560f, GunEvery = 1.15 },
+        new() { Enemy = Enemies.Gunship,  Hp = 26, Speed = 62f,  Standoff = 210f, Weave = 0.5f,  GunRange = 340f, GunEvery = 0.85 },
+        new() { Enemy = Enemies.Webifier, Hp = 10, Speed = 74f,  Standoff = 330f, Weave = 0.75f, GunRange = 560f, GunEvery = 1.15,
+                Art = "res://enemy_light_tier_2.png", Tether = true },
+    };
+    private FoeDef Def => Defs[(int)Kind];
 
-    public Tag Tags => Tag.Light;
+    public Tag Tags => Enemies.Of(Def.Enemy).Tag;
     public MenuFoeKind Kind;
     public Vector2 Velocity;
     public Vector2 Home;                 // the capital it is attacking
@@ -34,6 +60,9 @@ public partial class MenuFoe : Node2D, IHittable, ITagged
     private readonly float _length;          // the size it IS, in world units -- not a scale factor
     private readonly Random _rng;
 
+    // One id space of its own: the menu is a world, but not the hub's world. Minted by NetIds
+    // like every other kind, so Combat.Clear resets it with the world rather than letting the
+    // title screen's ids climb for the life of the process.
     public int NetId { get; } = NetIds.Next(NetIds.Menu);
     public float HitRadius { get; private set; }
     public bool Alive { get; private set; } = true;
@@ -47,23 +76,21 @@ public partial class MenuFoe : Node2D, IHittable, ITagged
         // hand-picked multipliers -- 0.55, 0.40, 0.42 -- which say nothing about how big the thing
         // is and stop being right the moment the art is recut.
         //
-        // The lengths are the REAL raiders' lengths, so the title screen shows the enemies at the
-        // size you meet them at, for the same reason it shows the ship at the game's own zoom.
-        (string art, double hp, float len, float radius) = kind switch
-        {
-            MenuFoeKind.Heavy => ("res://enemy_heavy_hull.png",   26.0, Raider.HeavyLength, Raider.HeavyLength * 0.3f),
-            MenuFoeKind.Web   => ("res://enemy_light_tier_2.png", 10.0, Raider.LightLength, Raider.LightLength * 0.4f),
-            _                 => ("res://enemy_light_fighter.png", 6.0, Raider.LightLength, Raider.LightLength * 0.4f),
-        };
-        _art = art; _maxHp = _hp = hp; _length = len; HitRadius = radius;
+        // The length and the hit share are the REAL raider's, off its row, so the title screen
+        // shows the enemies at the size you meet them at, for the same reason it shows the ship at
+        // the game's own zoom.
+        var e = Enemies.Of(Def.Enemy);
+        _art = Def.Art ?? e.Texture; _maxHp = _hp = Def.Hp;
+        _length = e.Length; HitRadius = e.Length * e.HitShare;
     }
 
     public override void _Ready()
     {
         _sprite = Sprites.Fit(_art, _length);          // exactly how Raider and PlayerShip do it
-        // The raiders wear their red, from Raider's own constants: untinted they drew in the art's
-        // bare grey and read as neutral hulls rather than as something shooting at you.
-        if (Kind != MenuFoeKind.Web) _sprite.Modulate = Kind == MenuFoeKind.Heavy ? Raider.HeavyTint : Raider.LightTint;
+        // The raiders wear their row's red: untinted they drew in the art's bare grey and read as
+        // neutral hulls rather than as something shooting at you. A row with art of its own wears
+        // that art's own colours.
+        if (Def.Art == null) _sprite.Modulate = Enemies.Of(Def.Enemy).Tint;
         AddChild(_sprite);
     }
 
@@ -79,8 +106,8 @@ public partial class MenuFoe : Node2D, IHittable, ITagged
 
     public event Action<Vector2> Died;            // the menu draws the burst
 
-    private float Speed => Kind switch { MenuFoeKind.Heavy => 62f, MenuFoeKind.Web => 74f, _ => 118f };
-    private float Standoff => Kind switch { MenuFoeKind.Heavy => 210f, MenuFoeKind.Web => 330f, _ => 0f };
+    private float Speed => Def.Speed;
+    private float Standoff => Def.Standoff;
 
     // Where a light fighter aims its run: PERPENDICULAR to the approach, so the line misses the
     // hull. A point on a ring around the capital does not: a straight line through one can still
@@ -135,7 +162,7 @@ public partial class MenuFoe : Node2D, IHittable, ITagged
             // in frame. A light fighter that flies past is gone for seconds at a time.
             _weave += delta;
             var inward = (home - GlobalPosition).Normalized();
-            var perp = new Vector2(-inward.Y, inward.X) * (Kind == MenuFoeKind.Web ? 0.75f : 0.5f);
+            var perp = new Vector2(-inward.Y, inward.X) * Def.Weave;
             float pull = Mathf.Clamp((d - Standoff) / 160f, -1f, 1f);
             var want = (inward * pull + perp * Mathf.Sin((float)_weave * 0.5f)).Normalized() * Speed;
             Velocity = Velocity.MoveToward(want, 90f * (float)delta);
@@ -154,15 +181,14 @@ public partial class MenuFoe : Node2D, IHittable, ITagged
 
         // The webifier does not shoot: it TETHERS, continuously, whenever it is in range. That is
         // what makes it read as a different threat from the ones firing tracers.
-        if (Kind == MenuFoeKind.Web)
+        if (Def.Tether)
         {
             Webbing = d < 420f;
             return null;
         }
         _gun -= delta;
-        float range = Kind == MenuFoeKind.Heavy ? 340f : 560f;
-        if (_gun > 0 || d > range) return null;
-        _gun = (Kind == MenuFoeKind.Heavy ? 0.85 : 1.15) * (0.7 + _rng.NextDouble() * 0.6);
+        if (_gun > 0 || d > Def.GunRange) return null;
+        _gun = Def.GunEvery * (0.7 + _rng.NextDouble() * 0.6);
         var scatter = new Vector2((float)(_rng.NextDouble() - 0.5) * 34f, (float)(_rng.NextDouble() - 0.5) * 34f);
         return (GlobalPosition, home + scatter);
     }

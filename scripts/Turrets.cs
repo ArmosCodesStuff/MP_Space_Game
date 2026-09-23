@@ -11,9 +11,9 @@ using System.Collections.Generic;
 // base's gun and a class whose point defence never switches off all wanted the same swing, the
 // same claim-sharing acquisition and the same reload that carries its remainder.
 //
-// A turret now asks its HOST two things: what gun this is (TurretSpec -- numbers and art, read
-// every tick so a bonus applies at once) and whether it may fire. Anything that can answer those
-// can mount one.
+// A turret now asks its HOST two things: what gun this is (TurretSpec -- numbers, art and the row
+// of Shots.All it fires, read every tick so a bonus applies at once) and whether it may fire.
+// Anything that can answer those can mount one.
 //
 //   MAIN GUNS aim where the host says (a pilot's cursor) and fire only when the host tells them
 //             to; the host decides when (salvo or staggered), the turret just shoots along
@@ -29,6 +29,10 @@ public struct TurretSpec
 {
     public double Damage, Interval;      // per shot, and the seconds between shots
     public float Range, Turn;            // its reach, and how fast the barrel swings (rad/s)
+    // WHAT IT FIRES: a row of Shots.All. This struct carried the whole gun EXCEPT the round in it,
+    // and Shoot put a main gun's shell down the barrel whatever was bolted on. Shots.Shell is 0,
+    // so a gun that says nothing fires a shell.
+    public int Kind;
     public float ShellSpeed;             // main guns: the shell's speed
     public string Texture;               // the sprite (barrels up, pivot at the sheet's centre)
     public float TexScale;               // world units per turret-texture pixel
@@ -166,15 +170,18 @@ public partial class Turret : Node2D
         return bestFree ?? bestAny;
     }
 
-    // One main-gun shot, along the barrel as it points RIGHT NOW: a SHELL, straight, at the guns'
-    // own shell speed, as far as their range, at `mult` times a shell's damage (a broadside's
-    // multiple). Host only. (Point defence never comes here: it fires from Tick, at what it has acquired.)
+    // One main-gun shot, along the barrel as it points RIGHT NOW: whatever the gun's row FIRES
+    // (TurretSpec.Kind), straight, at the guns' own shell speed, as far as their range, at `mult`
+    // times its damage (a broadside's multiple). It goes through Combat.Fire, the one door
+    // everything that flies comes through, so a gun that fires something else is a field on the
+    // spec rather than a branch here. Host only. (Point defence never comes here: it fires from
+    // Tick, at what it has acquired.)
     public void Shoot(double mult = 1.0)
     {
         if (!Net.Sim) return;
         var spec = S;
         var dir = Vector2.Right.Rotated(GlobalRotation);
-        Combat.FireShell(GlobalPosition + dir * spec.Barrel, dir, spec.ShellSpeed, spec.Range, spec.Damage * mult, Host.Credit);
+        Combat.Fire(spec.Kind, GlobalPosition + dir * spec.Barrel, dir, spec.ShellSpeed, spec.Range, spec.Damage * mult, source: Host.Credit);
     }
 
     // _angle is a WORLD angle, so it is applied as GlobalRotation; as a local

@@ -356,7 +356,8 @@ public partial class _Test : Node
         // Not state a character carries: a path, and the compiler's backing field for a property
         // that reports how the LAST save went. Named explicitly rather than filtered by a pattern,
         // so a real field that happens to look like one cannot slip through.
-        var notPersisted = new[] { "Dir", "<LastSaveRenamed>k__BackingField", "PaidKept", "SaveDelay", "_saveIn" };
+        var notPersisted = new[] { "Dir", "<LastSaveRenamed>k__BackingField", "PaidKept", "SaveDelay", "_saveIn",
+                                   "MaxBonus", "MaxStock" };   // the bounds a figure off disk is held to, not state
         var present = typeof(Character).GetFields(CharFields)
                                        .Select(f => f.Name).OrderBy(n => n, StringComparer.Ordinal).ToArray();
         var accounted = exercised.Concat(notPersisted).OrderBy(n => n, StringComparer.Ordinal).ToArray();
@@ -3023,7 +3024,7 @@ public partial class _Test : Node
                   "within 500 u it fires at where the target will be; a red circle marks it for 7 s");
             double mm0 = HvMissile();
             for (int i = 0; i < 60 * 9 && H.BlastsPending > 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            Check(Math.Abs(HvMissile() - mm0 - Raider.MissileDamage) < 1e-6, $"staying on the circle, the blast lands ({HvMissile() - mm0:0})");
+            Check(Math.Abs(HvMissile() - mm0 - 30) < 1e-6, $"staying on the circle, the gunship row's 30-damage blast lands ({HvMissile() - mm0:0})");
             typeof(Raider).GetField("_missileCd", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(hv, 0.0);
             for (int i = 0; i < 60 && H.BlastsPending == 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             hm.Position += new Vector2(0, 300); hm.Velocity = Vector2.Zero;                         // off the circle
@@ -3257,6 +3258,24 @@ public partial class _Test : Node
             Check(Enemies.OfWay(EnemyWay.Pin).Length == 3 && Enemies.OfWay(EnemyWay.Standoff).Length == 3
                   && Enemies.All.All(e => e.Texture != null && e.Texture.StartsWith("res://")),
                   "three that pin and three that stand off, each with its own hull drawn");
+            // ── AN ENEMY'S MISSILE IS ITS OWN ROW ──
+            // The figures were Raider consts, so both rows that throw a missile threw the SAME
+            // missile: the Lancerkin, which stands 260 u off against the gunship's 150, fired the
+            // gunship's 500 u missile and could not be given one of its own. Given one here, the
+            // gunship's must not move -- which is the thing a shared const could never manage. The
+            // row is put back before the Check, and no frame runs in between.
+            {
+                var kin = E(Enemies.Lancerkin); var gun = E(Enemies.Gunship);
+                float keepRange = kin.MissileRange; double keepEvery = kin.MissileEvery, keepDamage = kin.MissileDamage;
+                kin.MissileRange = 900f; kin.MissileEvery = 5.0; kin.MissileDamage = 44;
+                bool apart = kin.MissileRange == 900f && kin.MissileEvery == 5.0 && kin.MissileDamage == 44
+                             && gun.MissileRange == 500f && gun.MissileEvery == 12.0 && gun.MissileDamage == 30;
+                kin.MissileRange = keepRange; kin.MissileEvery = keepEvery; kin.MissileDamage = keepDamage;
+                Check(apart && Enemies.All.Count(x => x.Missiles) == 2
+                      && kin.MissileRange == 500f && kin.MissileEvery == 12.0 && kin.MissileDamage == 30 && kin.BlastRadius == 90f
+                      && gun.BlastRadius == 90f && Math.Abs(Raider.MissileFlight - 7) < 1e-9,
+                      $"the missile is each row's own: 30 damage inside 500 u every 12 s in a 90 u blast, 7 s out -- and a lancerkin given 900 u / 5 s / 44 leaves the gunship's 500 u / 12 s / 30 exactly where they were (back at {kin.MissileRange:0} u)");
+            }
             // a wave draws from the table, so the kinds rotate rather than being written in
             var p1 = H.SpawnPatrol(Hub.BasePos + new Vector2(0, -3400));
             var p2 = H.SpawnPatrol(Hub.BasePos + new Vector2(0, -3600));
@@ -3495,6 +3514,42 @@ public partial class _Test : Node
                     Check(!Classes.All.Any(c => c.Blurb.Any(char.IsDigit))
                           && !Classes.All.SelectMany(c => Abilities.For(c.Id)).Any(a => a.Blurb.Any(char.IsDigit)),
                           "no class or ability blurb writes a number: every figure is on the STATS tab, where gear and points move it");
+                    // ── EVERY UPGRADE ROW SAYS WHAT IT MOVES ──
+                    // What a row moved lived in a SECOND private table plus `if (id == "damage")`,
+                    // so a row missing from that table was fully purchasable and moved nothing at
+                    // all. One level of every row, on every flyable class, has to land on the
+                    // sheet -- and the three that name their own stats move them by the figures
+                    // the design asks for: a degree of rudder, 5 hull, 1 u/s.
+                    {
+                        (string stat, double per)[] Moved(string id)
+                            => Progression.StatsFor(Progression.All.First(u => u.Id == id), ShipClass.Battleship).ToArray();
+                        var silent = new List<string>();
+                        int[] oneLevel = new int[Progression.All.Length];
+                        for (int i = 0; i < Progression.All.Length; i++)
+                        {
+                            System.Array.Clear(oneLevel); oneLevel[i] = 1;
+                            foreach (var cd in Classes.All.Where(x => x.Ready))
+                            {
+                                var moved = Progression.Flats(oneLevel, cd.Id);
+                                if (!Progression.StatsFor(Progression.All[i], cd.Id).Any() || moved.Values.All(v => v == 0))
+                                    silent.Add($"{Progression.All[i].Id}/{cd.Id}");
+                            }
+                        }
+                        Check(Progression.All.Length == 4 && silent.Count == 0
+                              && Moved("turn").Length == 1 && Moved("turn")[0].stat == "turn_rate"
+                              && Math.Abs(Moved("turn")[0].per - Mathf.DegToRad(1f)) < 1e-9
+                              && Moved("hull")[0] == ("hull", 5.0) && Moved("speed")[0] == ("max_speed", 1.0),
+                              $"all 4 upgrade rows move at least one stat on each of the {Classes.All.Count(x => x.Ready)} flyable classes -- a degree of rudder, 5 hull, 1 u/s, and the weapons the class itself names ({(silent.Count == 0 ? "none silent" : string.Join(" ", silent))})");
+                    }
+                    // ── WHAT A TARGET IS CALLED, AND WHAT COMING FOR IT IS WORTH ──
+                    // Both were type tests in Hub: `Selected is TargetDummy td` for the HUD's
+                    // target line and `quarry is Hauler h ? h.Payout : 0` to size an escort, so a
+                    // second kind with a name or a load of its own meant a second arm on each.
+                    // They are contracts on IHittable and IRaidTarget now, with the default that
+                    // everything nameless and empty-handed takes.
+                    Check(((IHittable)Me).Label == $"#{Me.NetId}"
+                          && H.Yard.Gatherers.All(g => ((IRaidTarget)g).Payout == 0),
+                          $"a target names itself and says what it is worth: this ship is {((IHittable)Me).Label}, and a miner is worth 0 credits to the raid that comes for it");
                     System.Array.Copy(keepBought, Character.Bought, keepBought.Length);
                 }
 

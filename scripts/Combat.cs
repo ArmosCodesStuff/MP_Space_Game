@@ -98,10 +98,6 @@ public static class Combat
         return s;
     }
 
-    // a main gun's round: straight, and it hits the first thing that is not a missile
-    public static void FireShell(Vector2 from, Vector2 dir, float speed, float range, double damage, PlayerShip source)
-        => Fire(Shots.Shell, from, dir, speed, range, damage, source: source);
-
     // a boss's dodgeable round, and the scrap of the same volley: never a point-defence target,
     // because a round that is MEANT to be dodged, and that point defence could delete, would never
     // need dodging

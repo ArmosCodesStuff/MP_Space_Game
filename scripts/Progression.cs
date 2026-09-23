@@ -16,34 +16,39 @@ using System.Collections.Generic;
 // ─────────────────────────────────────────────────────────────────────────────
 public static class Progression
 {
-    public class Upgrade { public string Id, Name, Unit; public double Per; }
+    // ONE UPGRADE, AND WHAT IT MOVES. What a row changed used to live in a SECOND private table
+    // (id -> stat) plus an `if (id == "damage")` inside StatsFor, so a fifth row here was fully
+    // purchasable and silently moved nothing. The row carried a step and a unit of its own beside
+    // that, which the damage branch ignored and the PILOT window advertised anyway; the window
+    // reads StatsFor now, in the STATS tab's own units, so a row states what it moves and no more.
+    public class Upgrade
+    {
+        public string Id, Name;
+        // The stats ONE level moves, and by how much each, in that stat's own units.
+        public (string stat, double per)[] Moves = Array.Empty<(string, double)>();
+        // Instead of Moves: ask the CLASS what its weapons are (ClassDef.Damage), because they are
+        // a different set on every hull -- a sniper's railgun, a warden's hunters, a warrior's EMP,
+        // a freighter's deployed turrets.
+        public bool Weapons;
+    }
 
-    // WHAT AN UPGRADE MOVES, on a given hull. Everything but Weapons lands on one stat, the same
-    // on every class. WEAPONS asks the CLASS what its weapons are (ClassDef.Damage): it used to
-    // name one stat here -- torpedoes for a carrier, main guns for everything else -- so a
-    // sniper's railgun, a warden's hunters, a warrior's EMP and a freighter's deployed turrets
-    // took nothing at all from a pilot's damage points.
-    private static readonly Dictionary<string, string> Simple = new()
+    // stat id -> what ONE level of `u` adds on class `c`: the row's own list, or the class's weapons
+    public static IEnumerable<(string stat, double per)> StatsFor(Upgrade u, ShipClass c)
     {
-        ["turn"] = "turn_rate", ["hull"] = "hull", ["speed"] = "max_speed",
-    };
-    // stat id -> what ONE level of `id` adds on class `c`
-    public static IEnumerable<(string stat, double per)> StatsFor(string id, ShipClass c, double per)
-    {
-        if (id == "damage")
+        if (u.Weapons)
         {
             foreach (var kv in Classes.Damage(c)) if (kv.Value != 0) yield return (kv.Key, kv.Value);
             yield break;
         }
-        if (Simple.TryGetValue(id, out var one)) yield return (one, per);
+        foreach (var m in u.Moves) if (m.per != 0) yield return m;
     }
 
     public static readonly Upgrade[] All =
     {
-        new() { Id = "turn",   Name = "Rudder",  Per = Mathf.DegToRad(1f), Unit = "°/s" },   // +1 degree per second
-        new() { Id = "hull",   Name = "Hull",    Per = 5,  Unit = "hull" },
-        new() { Id = "speed",  Name = "Engines", Per = 1,  Unit = "u/s" },
-        new() { Id = "damage", Name = "Weapons", Per = 1,  Unit = "damage" },
+        new() { Id = "turn",   Name = "Rudder",  Moves = new[] { ("turn_rate", (double)Mathf.DegToRad(1f)) } },   // +1 degree per second
+        new() { Id = "hull",   Name = "Hull",    Moves = new[] { ("hull", 5.0) } },
+        new() { Id = "speed",  Name = "Engines", Moves = new[] { ("max_speed", 1.0) } },
+        new() { Id = "damage", Name = "Weapons", Weapons = true },
     };
     public const int MaxPerUpgrade = 60;       // a sanity cap on what a peer may claim
     // THE MOST A CLAIM MAY BUY on someone else's host. A pilot's level is its own word and there
@@ -94,11 +99,11 @@ public static class Progression
         var d = new Dictionary<string, double>();
         for (int i = 0; i < All.Length && i < (bought?.Length ?? 0); i++)
         {
-            // StatsFor yields nothing for an id it does not know. Every id in All is covered
-            // today, but adding a fifth upgrade and forgetting it would otherwise put a null key
-            // in here -- an ArgumentNullException a long way from the cause.
+            // A row that declares neither Moves nor Weapons yields nothing and adds nothing: a row
+            // that can be bought and does not exist. A check names one (SmokeTest: every row moves
+            // at least one stat on every flyable class).
             if (bought[i] <= 0) continue;
-            foreach (var (stat, per) in StatsFor(All[i].Id, c, All[i].Per))
+            foreach (var (stat, per) in StatsFor(All[i], c))
                 d[stat] = d.GetValueOrDefault(stat) + bought[i] * per;
         }
         return d;

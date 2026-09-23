@@ -43,6 +43,7 @@ public partial class DeployedTurret : Node2D, IRaidTarget, ITagged, ITurretHost
 
     public TurretSpec Spec(bool pd) => new()
     {
+        Kind     = Shots.Shell,          // what it fires, said out loud: a row of Shots.All
         Damage   = Ship != null ? Ship.Stats["deploy_damage"] : SpareDamage,
         Interval = (Ship != null ? Ship.Stats["deploy_interval"] : SpareInterval) / (Ship != null ? Ship.FireRate : 1),
         Range    = Ship != null ? (float)Ship.Stats["deploy_range"] : SpareRange,

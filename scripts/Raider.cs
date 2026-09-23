@@ -16,9 +16,10 @@ using System.Linq;
 //   HEAVY: a snub-nosed gunship -- 4x a light's length, one turret. It waits at the MAP'S
 //   EDGE nearest its target, facing it, until the target is pinned; then it boosts at 700%
 //   until 300 u away, and closes at cruise to 135 u off the hull, astern, where it fires a
-//   short, hard laser: 2x the raider damage. Within 500 u it also fires a fat missile at where
-//   the target WILL be in 7 s (its speed carried forward): a red circle marks the spot
-//   for all 7 s, and the blast lands there -- move off the line and it misses.
+//   short, hard laser: 2x the raider damage. Within its own row's missile reach (a gunship's
+//   500 u) it also fires a fat missile at where the target WILL be in 7 s (its speed carried
+//   forward): a red circle marks the spot for all 7 s, and the blast lands there -- move off the
+//   line and it misses.
 //
 // Targets: the nearest player ship, miner, salvager or hauler -- except a HUNTER, sent after
 // one quarry (the hauler on an escort), which goes for its quarry while it is there.
@@ -60,16 +61,19 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
 
     // The two the rest of the game names by hand -- the plain webifier and the plain gunship.
     // Every figure comes from their rows (Enemies.All), so there is one place a number lives.
-    public static Color HeavyTint => Enemies.HeavyTint;
-    public static Color LightTint => Enemies.LightTint;
     public static float LightLength => Enemies.Of(Enemies.Webifier).Length;      // twice a carrier fighter
     public static float HeavyLength => Enemies.Of(Enemies.Gunship).Length;
     public static double RaiderDps => Enemies.Of(Enemies.Webifier).Dps;          // x -- the game's damage unit
     public static double HeavyDps => Enemies.Of(Enemies.Gunship).Dps;
     public static float HeavyReach => Enemies.Of(Enemies.Gunship).Reach;
     private const float HeavyBoostStop = 300f;          // boosting in, until this close, then at cruise
-    public const float MissileRange = 500f, BlastRadius = 90f;
-    public const double MissileFlight = 7.0, MissileEvery = 12.0, MissileDamage = 30;
+    // THE MISSILE IS THE ROW'S: EnemyDef.MissileRange / MissileEvery / MissileDamage /
+    // BlastRadius, read through Def. These two are what the rest of the game names by hand -- Hub
+    // draws the telegraph and resolves the blast for every raider alike -- and both are the plain
+    // gunship's figures. The FLIGHT is a const because Hub.ShowHeavyMissile takes it as a default
+    // parameter, which only a compile-time constant can be.
+    public const double MissileFlight = 7.0;
+    public static float BlastRadius => Enemies.Of(Enemies.Gunship).BlastRadius;
     public const float PerimeterR = 1800f, Detect = 2000f, PatrolSpeed = 100f;
     private const float MaxStep = 50f;                  // more than this in one frame is a jump (a warp), not motion
     private const float WildSpeed = 400f;               // faster than this is not flying (4x a capital ship)
@@ -136,6 +140,7 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
     private double _boostLeft, _shot, _missileCd = 2.0;
     private Vector2 _lastTargetPos; private Vector2 _targetVel;
     private Sprite2D _turret;
+    private const float TurretPixels = 66f;            // turret_main.png is 66 px across: the ART's figure, not an enemy's
     private bool _boostUsed;
     private NetPose _net;
     private Vector2? _tether;                          // guests: where the web goes
@@ -148,11 +153,13 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
         _sprite.Modulate = Def.Tint;
         AddChild(_sprite);
         if (Def.Turret)
-        {   // the main turret on its spine behind the canopy, an eighth of its length aft of
-            // centre, 13 u across the housing on a gunship and to scale on anything bigger
-            float k = Length / Enemies.Of(Enemies.Gunship).Length;
-            _turret = new Sprite2D { Texture = GD.Load<Texture2D>("res://turret_main.png"), Position = new Vector2(0, 19.5f * k),
-                                     Scale = Vector2.One * (13f / 66f * k), Modulate = Def.Tint, ZIndex = 1 };
+        {   // the main turret on its spine behind the canopy, mounted where ITS OWN ROW says and
+            // as wide as its row says -- both shares of its length, so a new hull states where its
+            // gun sits instead of being scaled off the gunship's
+            _turret = new Sprite2D { Texture = GD.Load<Texture2D>("res://turret_main.png"),
+                                     Position = new Vector2(0, Length * Def.TurretAft),
+                                     Scale = Vector2.One * (Length * Def.TurretWidth / TurretPixels),
+                                     Modulate = Def.Tint, ZIndex = 1 };
             AddChild(_turret);
         }
         ZIndex = 5;
@@ -324,10 +331,11 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
             }
         }
         _missileCd -= delta;
-        if (Def.Missiles && _missileCd <= 0 && Position.DistanceTo(Target.Position) <= MissileRange)
-        {   // at where it WILL be: its velocity carried 7 s forward
-            _missileCd = MissileEvery;
-            Hub.HeavyMissile(Position, PredictSpot(Target.Position, _targetVel), NetId, MissileDamage * Strength);
+        if (Def.Missiles && _missileCd <= 0 && Position.DistanceTo(Target.Position) <= Def.MissileRange)
+        {   // at where it WILL be: its velocity carried 7 s forward -- from ITS row's reach, on its
+            // row's cadence, for its row's damage
+            _missileCd = Def.MissileEvery;
+            Hub.HeavyMissile(Position, PredictSpot(Target.Position, _targetVel), NetId, Def.MissileDamage * Strength);
         }
     }
 

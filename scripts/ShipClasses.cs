@@ -3,17 +3,20 @@ using Godot;
 using System;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SHIP CLASSES — the first three of an intended nine.
+// WHAT A FIGHT IS SPOKEN THROUGH — the contracts, and the carrier's craft.
 //
-//   BATTLESHIP : four main guns aimed with the cursor, a broadside of all of them, plus PD
-//   CARRIER    : fighters sent at the selected target, a bomber strike of its own, plus PD
-//   DESTROYER  : two main guns aimed with the cursor, guided missile bursts, plus PD; the fastest
-//   (the keys are the player's: see Abilities)
+//   ShotSound      what fired a laser, which decides which report is played
+//   IHittable      anything a shot, a turret or a click can find: the same id, and the same name,
+//                  on every peer
+//   IRaidTarget    anything a raider may come for -- a pilot's ship, a ship of a base's fleet, a
+//                  turret left standing: how it is hit, the hull shape it is held station beside,
+//                  and what coming for it is worth
+//   WingKind/Wing  the carrier's own craft: fighters that strafe, bombers that fly a strike
 //
-// Ported from Space Fleet Idle's capital ship, cut down to the initial layer.
-// Deliberately NOT carried over yet: siege mode, cloak, phase, ambush volleys,
-// burn-rate modifiers, XP doctrines, module points. Those were built on top of
-// this layer and can come back once the nine classes exist.
+// THE CLASSES ARE NOT HERE. A class is a row of Classes.All (Ships.cs), and a pilot's levels and
+// points are Progression + Character + PilotWindow. This header was a census of three classes
+// "of an intended nine" and a list of what the pilot layer did not have yet; a census rots on the
+// next class, so there is none.
 //
 // AUTHORITY: turrets and wings are COMBAT, so the host simulates them. A client
 // renders what it is told. The owner decides only its heading, where it aims, and
@@ -31,6 +34,11 @@ public interface IHittable
     float HitRadius { get; }
     bool Alive { get; }
     void TakeDamage(double d);
+    // WHAT IT IS CALLED wherever a target is named (the HUD's target line): its id, unless the
+    // kind gives itself a name -- a practice dummy is "TARGET DUMMY 3". A type test asked this
+    // (`Selected is TargetDummy td`), so a second kind with a name of its own meant a second arm
+    // on that expression.
+    string Label => $"#{NetId}";
     // Does a projectile at p (with pad for its own size) touch this? A circle by
     // default; a long ship answers with a capsule along its keel.
     bool Covers(Vector2 p, float pad) => p.DistanceTo(Position) <= HitRadius + pad;
@@ -46,6 +54,11 @@ public interface IRaidTarget : IStatused
     bool InReach { get; }                                    // there, and alive, to be attacked
     void Hit(double d, Vector2 from, string source);
     (float halfLength, float halfWidth) Extent { get; }      // the hull's ellipse, for holding station beside it
+    // WHAT COMING FOR IT IS WORTH, in credits: the load a hauler is carrying (Hauler.Payout), and
+    // 0 for everything that carries none -- which is part of how hard an escort's hunters come
+    // (Hub.EscortThreat). That asked `quarry is Hauler h ? h.Payout : 0`, so a second kind of
+    // target worth raiding meant a second arm on the type test.
+    double Payout => 0;
 }
 
 // ── Wing craft ───────────────────────────────────────────────────────────────

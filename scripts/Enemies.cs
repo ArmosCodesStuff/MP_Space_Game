@@ -32,7 +32,21 @@ public class EnemyDef
     public double BoostTime = 3.0;
     public float Reach = 100f;           // how close it fights from; it holds station at 90% of it
     public bool Turret;                  // a turret on its spine that tracks what it shoots
+    // ITS MAIN TURRET, when Turret is set, as shares of its OWN length: the mount aft of centre,
+    // and how wide the housing is. These were the GUNSHIP's 19.5 u and 13 u, scaled inside Raider
+    // by Length / the gunship's length -- so every hull that mounted a turret reached into the
+    // gunship's row by name and none could be given a mount of its own.
+    public float TurretAft = 19.5f / 136f;
+    public float TurretWidth = 13f / 136f;
     public bool Missiles;                // the fat missile, thrown at where the target WILL be
+    // ITS MISSILE, when Missiles is set. These were `Raider` consts, so every row that set
+    // Missiles threw the SAME missile: the Lancerkin, whose whole point is standing 260 u off,
+    // fired the gunship's 500 u missile and could not be given its own. (The 7 s flight is not a
+    // row: Hub takes it as a compile-time default -- see Raider.MissileFlight.)
+    public float MissileRange = 500f;    // it throws one from within this
+    public double MissileEvery = 12.0;   // seconds between them
+    public double MissileDamage = 30;    // what the blast does, before Strength
+    public float BlastRadius = 90f;      // how wide the blast is where it lands
     public Color Tint;
 
     public float Hold => Reach * 0.9f;   // posted just inside its reach, so nothing is lost to drift

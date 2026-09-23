@@ -74,7 +74,7 @@ public partial class PilotWindow : PanelContainer
     private static string Buys(Progression.Upgrade u, int n)
     {
         string s = "";
-        foreach (var (stat, per) in Progression.StatsFor(u.Id, Character.Class, u.Per))
+        foreach (var (stat, per) in Progression.StatsFor(u, Character.Class))
             s += $"\n    {AllStats.Said(stat)}   +{AllStats.Fmt(stat, per * n)} now, +{AllStats.Fmt(stat, per)} next";
         return s.Length > 0 ? s : "\n    nothing on this hull";
     }
