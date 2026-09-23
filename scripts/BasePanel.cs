@@ -93,7 +93,11 @@ public partial class BasePanel : PanelContainer
             _body.AddChild(Ui.CardWrap(row));
             _rows[u.Id] = (info, buy);
         }
-        _body.AddChild(Ui.Lbl("+10% upgrades cost 1.25× per level.  Step upgrades cost 2× per level; each row shows its cap.",
+        // The two cost curves come off the table that owns them (Growth, below), and the line no
+        // longer calls every Percent row "+10%": two HAULER rows are not (+2% engines, +5% point
+        // defence). Each row's own line says its share.
+        _body.AddChild(Ui.Lbl($"Percent upgrades cost {Growth(Economy.Kind.Percent)} per level, each by the share its own line names."
+                            + $"  Step upgrades cost {Growth(Economy.Kind.Count)} per level; each row shows its cap.",
                               Ui.Small, Ui.Dim with { A = 0.75f }));
     }
 
@@ -105,7 +109,7 @@ public partial class BasePanel : PanelContainer
         {
             string lost = string.Join("", Y.Fleet.Where(s => s.Category == _tab && s.Lost)
                                                 .Select(s => Rebuilding(s.Label, s.RebuildIn, s.WaitingForCredits, _tab)));
-            Ui.SetText(_fleet, $"Invested {Y.Invested(_tab):0} cr  ·  a rebuild costs {Y.RebuildCost(_tab):0} cr (10%)" + lost);
+            Ui.SetText(_fleet, $"Invested {Y.Invested(_tab):0} cr  ·  a rebuild costs {Y.RebuildCost(_tab):0} cr ({Economy.RebuildShare * 100:0}%)" + lost);
         }
         foreach (var (id, (info, buy)) in _rows)
         {
@@ -135,4 +139,12 @@ public partial class BasePanel : PanelContainer
 
     string Rebuilding(string who, double inS, bool waiting, string tab) =>
         waiting ? $"\n  {who} lost: rebuild waiting for {Y.RebuildCost(tab):0} cr" : $"\n  {who} lost: rebuilt in {inS:0} s";
+
+    // What a level of this KIND of upgrade costs, as a multiple: the table's own price for one of
+    // them at level 1 over its price at level 0. The footnote used to state both curves as text.
+    static string Growth(Economy.Kind kind)
+    {
+        var u = Economy.All.First(x => x.Kind == kind);
+        return $"{Economy.Cost(u, 1) / Economy.Cost(u, 0):0.##}×";
+    }
 }

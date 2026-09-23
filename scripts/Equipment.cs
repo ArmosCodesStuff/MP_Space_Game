@@ -88,11 +88,17 @@ public static class Equipment
         foreach (var need in i.Needs) if (sheet.Contains(need)) return true;
         return false;
     }
-    // What a part asks of a hull, in words, for the equipment window.
+    // What a part asks of a hull, in words, for the equipment window: the SYSTEMS it moves, ANY ONE
+    // of which is enough (Fits) -- "Fighters", "Hull or Point defence". It printed the raw stat ids
+    // joined by commas ("needs fighter_speed, fighter_damage, fighter_turn, fighter_count"), which
+    // named nothing a player has ever seen and read as a list of demands rather than a choice.
+    // Describe could not help: the only sheet it can read is the CURRENT class's, which by
+    // definition has not got them. AllStats (Stats.cs) holds every class's.
     public static string NeedsSaid(ItemDef i) =>
         KitOwners.TryGetValue(i?.Id ?? "", out var born)
             ? string.Join(" / ", born.Select(Classes.NameOf))
-            : i == null || i.Needs.Length == 0 ? "any hull" : string.Join(", ", i.Needs);
+            : i == null || i.Needs.Length == 0 ? "any hull"
+            : string.Join(" or ", i.Needs.Select(AllStats.Group).Distinct());
     public static GearSlot SlotAt(int k) => k < CoreSlots ? Core[k] : GearSlot.Chip;
 
     // Every weapon's damage on ANY class, for a part that lifts all of them. The list of what

@@ -87,7 +87,12 @@ public partial class EquipmentWindow : PanelContainer
         var it = Equipment.ById(id);
         var row = Ui.HBox(10, name);
         var text = Ui.VBox(1); text.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        text.AddChild(Ui.Lbl(slot, Ui.Small, Ui.Dim));
+        // The slot line wraps like the effects line below it: it carries what a part asks of a
+        // hull, which is a sentence ("WEAPON · needs Main guns"), not a word.
+        var head = Ui.Lbl(slot, Ui.Small, Ui.Dim);
+        head.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        head.CustomMinimumSize = new Vector2(width - (action != null ? 110 : 0), 0);
+        text.AddChild(head);
         var item = Ui.Lbl(it?.Name ?? "(empty)", Ui.Body, it != null ? Ui.RarityColor(it.Rarity) : Ui.Dim);
         item.Name = "Item"; text.AddChild(item);
         if (it != null)

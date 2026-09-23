@@ -1212,6 +1212,17 @@ public partial class _Test : Node
             return Nodes<Button>(Nodes<HBoxContainer>(panel).First(r => r.Name == "Up_" + id)).First(b => b.Name == "Buy");
         }
         Check(Nodes<HBoxContainer>(panel).Count(r => r.Name.ToString().StartsWith("Up_")) == 5, "MINERS tab: five upgrades (count, hold, engines, beam, hull)");
+        // The footnote called every Percent row "+10%", which two HAULER rows are not, and stated
+        // both cost curves as text; the fleet line wrote "(10%)" beside a figure computed from
+        // Economy.RebuildShare.
+        Check(Nodes<Label>(panel).Any(l => l.Text.Contains("Percent upgrades cost 1.25× per level"))
+              && Nodes<Label>(panel).Any(l => l.Text.Contains("Step upgrades cost 2× per level"))
+              && !Nodes<Label>(panel).Any(l => l.Text.Contains("+10% upgrades"))
+              && Economy.ById("hauler_speed").Blurb.Contains("+2%") && Economy.ById("hauler_pd_damage").Blurb.Contains("+5%"),
+              "the footnote reads its two cost curves off Economy.Cost (1.25x a level, 2x for a step) and no longer calls every percent row +10%: the hauler's engines are +2% a level and its point defence +5%");
+        Check(Nodes<Label>(panel).Any(l => l.Text.Contains("a rebuild costs") && l.Text.Contains(" cr (10%)"))
+              && Math.Abs(Economy.RebuildShare - 0.10) < 1e-12,
+              "and the fleet line's share is Economy.RebuildShare printed, not the word 10% typed beside it");
         Buy("miner_hold").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
         Buy("miner_hold").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
         Check(Y.Level("miner_hold") == 2 && Y.Credits == 775 && Math.Abs(miner.Hold - 120) < 1e-9, "+10%: 100 then 125 (x1.25); hold 120");
@@ -1602,9 +1613,14 @@ public partial class _Test : Node
         Check(Count<StatsWindow>() == 1, "K opens the ability & stats window");
         var win = Nodes<StatsWindow>().First();
         var labels = Nodes<Label>(win).Select(l => l.Text).ToList();
-        Check(labels.Any(x => x.Contains("Main guns (4 barrels):  44.75 DPS")) && labels.Any(x => x.Contains("Turning radius")), "stats tab: gun DPS and helm stats");
-        Check(labels.Any(x => x.Contains("Broadside: 3 volleys × 4 shells") && x.Contains("= 268.5 damage, every 15.0 s")) && !labels.Any(x => x.StartsWith("Missiles")),
+        Check(labels.Any(x => x.Contains("Main guns:  44.75 DPS")) && labels.Any(x => x.Contains("4 barrels at 11.19 DPS"))
+              && labels.Any(x => x.Contains("salvo 4 every 2.00 s = staggered 1 every 0.50 s")) && labels.Any(x => x.Contains("Turning radius")),
+              "stats tab: the main guns at 44.75 DPS, 4 barrels of 11.19, and helm stats");
+        Check(labels.Any(x => x.Contains("3 volleys × 4 shells") && x.Contains("= 268.5 damage, every 15.0 s")) && !labels.Any(x => x.StartsWith("Missiles")),
               "stats tab: the broadside, 3 volleys of 4 shells = 268.5 damage every 15 s; no missiles");
+        Check(labels.Any(x => x.Contains("Broadside, averaged over its cycle:  17.90 DPS")) && labels.Any(x => x.Contains("Point defence:  1.00 DPS"))
+              && labels.Any(x => x.Contains("SUSTAINED TOTAL:  63.65 DPS")),
+              "and the total adds up every line it prints: guns 44.75 + broadside 17.90 + point defence 1.00 = 63.65 DPS");
         Check(Nodes<HBoxContainer>(win).Count(r => r.Name.ToString().StartsWith("Key_")) == 10, "keys tab lists the battleship's 4 abilities + 6 open slots");
         Check(Enumerable.Range(1, 6).All(i => Abilities.KeyFor(ShipClass.Battleship, $"open{i}") == global::Godot.Key.Key0 + i)
               && Abilities.For(ShipClass.Carrier).Count(a => a.Open) == 6 && Abilities.For((ShipClass)99).Length == 6,
@@ -2782,6 +2798,15 @@ public partial class _Test : Node
             var ew3 = Nodes<EquipmentWindow>().First();
             var otherRow = Nodes<HBoxContainer>(ew3).FirstOrDefault(r => r.Name == "Hold_bs_rapid_1");
             Check(otherRow != null && !Nodes<Button>(otherRow).Any(), "a battleship part in the carrier's hold is listed, with nothing to fit it by");
+            // ...and it says what it wants in words a player has seen: the SYSTEM, any ONE of them.
+            // It printed the raw stat ids it moves, joined by commas -- "needs fighter_speed,
+            // fighter_damage, fighter_turn, fighter_count" -- which reads as four demands.
+            Check(otherRow != null && Nodes<Label>(otherRow).Any(l => l.Text.Contains("needs Main guns"))
+                  && !Nodes<Label>(otherRow).Any(l => l.Text.Contains("main_interval"))
+                  && Equipment.NeedsSaid(Equipment.ById("cv_elite_1")) == "Fighters"
+                  && Equipment.NeedsSaid(Equipment.ById("sh_balanced_1")) == "Hull or Point defence"
+                  && Equipment.NeedsSaid(Equipment.ById("bs_main_battery")) == "BATTLESHIP",
+                  $"a part that does not fit names the system it wants, any one of them: a Rapid Battery needs Main guns, Elite Hangars need Fighters, a Balanced Array needs Hull or Point defence ({Equipment.NeedsSaid(Equipment.ById("sh_balanced_1"))})");
             var lineRow = Nodes<HBoxContainer>(ew3).FirstOrDefault(r => r.Name == "Hold_cv_line_1");
             lineRow?.GetChildren().OfType<Button>().FirstOrDefault(b => b.Name == "Fit")?.EmitSignal(BaseButton.SignalName.Pressed);
             await Wait(0.2);
@@ -2852,6 +2877,9 @@ public partial class _Test : Node
             Key(global::Godot.Key.L); await Wait(0.1);
             var pw = Nodes<PilotWindow>().FirstOrDefault();
             Check(pw != null, "L opens the PILOT window");
+            Check(pw != null && Nodes<Label>(pw).Any(l => l.Text.Contains("200 x the boss's level") && l.Text.Contains("+250 the first time")
+                                                       && l.Text.Contains("+100 for completing")),
+                  "its EXP note reads the mission table's own 200 / 250 / 100 rather than restating them beside it");
             Button PBuy(string id) => Nodes<Button>(Nodes<HBoxContainer>(pw).First(r => r.Name == "Pilot_" + id)).First(b => b.Name == "Buy");
             var me = Me; me.Hp = me.MaxHp; double hull0 = me.MaxHp, hp0 = me.Hp;
             Character.Points = 3;
@@ -2873,6 +2901,13 @@ public partial class _Test : Node
                   && Math.Abs(me.Stats["max_speed"] - baseSheet["max_speed"] - 1) < 1e-9
                   && Math.Abs(me.Stats["turn_rate"] - baseSheet["turn_rate"] - Mathf.DegToRad(1f)) < 1e-6,
                   $"Weapons +1 (x1.25 by the chips) on every weapon this hull declares ({string.Join(", ", mine.Select(kv => kv.Key))}), Engines +1 speed, Rudder +1 degree/s");
+            // ...and the ROW says so, in the units the STATS tab prints. It showed the row's own
+            // Per, with a `u.Id == "turn"` special case to read out degrees.
+            Label PRow(string id) => Nodes<Label>(Nodes<HBoxContainer>(pw).First(r => r.Name == "Pilot_" + id)).First();
+            Check(PRow("turn").Text.Contains("Rudder limit") && PRow("turn").Text.Contains("+0.02 rad/s next")
+                  && PRow("hull").Text.Contains("Hull points") && PRow("hull").Text.Contains("+5 next")
+                  && PRow("speed").Text.Contains("Top speed ahead") && PRow("speed").Text.Contains("+1 u/s next"),
+                  $"each pilot row names the stat it moves and what one point adds to it, in that stat's own units: 1 deg/s is +0.02 rad/s, +5 hull, +1 u/s ({PRow("turn").Text.Replace('\n', '|')})");
             string cid = Character.Id; int[] saved = (int[])Character.Bought.Clone();
             Character.Save(); System.Array.Clear(Character.Bought); Character.Load(cid);
             Check(Character.Bought.SequenceEqual(saved) && Character.Level == 3, "purchases and level are saved with the character");
@@ -3267,6 +3302,18 @@ public partial class _Test : Node
             }
             Check(fr.TurretsOut == 3 && H.Deployed.Count(t => t.OwnerId == fr.OwnerId) == 3,
                   $"T drops a turret where you are, and a fourth is refused: three out ({fr.TurretsOut})");
+            {   // ONE TICK A FRAME, not two. The deploy cooldown used to be run down by a line of
+                // its own outside the loop that runs the slots down; the loop reaches every row
+                // now, so that line is gone. Two ticks would spend the 6 s between drops in 3.
+                fr.Sl("deploy").Cool = 6.0;
+                double cool0 = fr.Sl("deploy").Cool, clock0 = fr.Clock;
+                await Wait(1.0);
+                double offCool = cool0 - fr.Sl("deploy").Cool, offClock = fr.Clock - clock0;
+                Check(Math.Abs(new ShipStats(ShipClass.FreightHauler)["deploy_cooldown"] - 6) < 1e-9
+                      && Math.Abs(offCool - offClock) < 0.05,
+                      $"the 6 s between drops counts down a second a second, not two ({offCool:0.00} s off it in {offClock:0.00} s of clock)");
+                fr.Sl("deploy").Cool = 0;
+            }
             var one = H.Deployed.First();
             // its gun is its OWNER's sheet, read live -- so the pilot's points and its gear reach
             // every turret it has out. (A bare freighter's 6 a shot is a literal where the table is proved.)
@@ -3419,6 +3466,35 @@ public partial class _Test : Node
                           && Classes.All.Where(c => c.Ready).All(c => c.Damage.Count > 0)
                           && Classes.All.Where(c => c.Ready).All(c => c.Damage.Keys.All(k => new ShipStats(c.Id)[k] > 0)),
                           $"eight weapon stats in the whole game, every flyable class names at least one, and every one it names is a row on its own sheet");
+
+                    // ── AND THE K WINDOW'S DAMAGE BLOCK IS A ROW PER SYSTEM (ClassDef.Weapons) ──
+                    // Its total added four named figures -- main, missile, broadside, point defence
+                    // -- so the sniper read 7.50 DPS beside a railgun worth 37.50, and the two
+                    // point-defence lines were drawn on the five classes that mount none.
+                    var snL = new ShipStats(ShipClass.HeavySniper);
+                    Check(Math.Abs(snL.SustainedDps - 45.0) < 1e-6
+                          && Math.Abs(snL.DamageLines.First(l => l.Label.StartsWith("Railgun")).Dps - 37.5) < 1e-6
+                          && snL.DamageLines.Count() == 2 && !snL.DamageLines.Any(l => l.Label.Contains("Point defence")),
+                          $"the sniper's total counts its railgun: the gun 6/0.8 = 7.5 and the rail 150/(3+1) = 37.5 -- 45 DPS, not 7.50, and no point-defence line on a hull that mounts none ({snL.SustainedDps:0.00})");
+                    Check(Math.Abs(new ShipStats(ShipClass.HeavyWarden).SustainedDps - (12 / 0.6 + 6 * 45 / 14.0 + 5 / 0.5)) < 1e-6
+                          && Math.Abs(new ShipStats(ShipClass.FreightHauler).SustainedDps - 49.0) < 1e-6
+                          && Math.Abs(new ShipStats(ShipClass.HeavyWarrior).SustainedDps - (2 * 9 / 0.7 + 60 / 18.0)) < 1e-6
+                          && Math.Abs(new ShipStats(ShipClass.LightEcho).SustainedDps - (5 / 0.35 + (5 / 0.35) * 5 / 15.0)) < 1e-6,
+                          $"...and every other signature weapon counts too: the warden 20 + 19.29 + 10, the freighter's gun 12 + three dropped turrets 36 + 1 = 49, the warrior's EMP 60 every 18 s, the echo repeating five seconds of its own damage every 15");
+                    Check(Math.Abs(new ShipStats(ShipClass.Carrier).SustainedDps - (3 * (2.5 / 0.35) * (15.0 / 18.0) + 4 * 2 * 137.5 / 27.5 + 3 * 0.5 / 0.5 * 0.5)) < 1e-6
+                          && Math.Abs(new ShipStats(ShipClass.Carrier).DamageLines.First(l => l.Label.StartsWith("Bomber")).Dps - 40.0) < 1e-6,
+                          $"the carrier's torpedoes are in its total at last: 8 x 137.5 = 1100 over a 27.5 s run (20 s out and back, 1.5 s launching, 6 s rearming) = 40 DPS, beside 17.86 from the fighters and 1.5 from the point defence ({new ShipStats(ShipClass.Carrier).SustainedDps:0.00})");
+                    Check(Classes.All.Where(c => c.Ready).All(c => c.Weapons.Length > 0)
+                          && Classes.All.Where(c => c.Ready).All(c => new ShipStats(c.Id).DamageLines.All(l => l.Dps > 0 && l.Sustained)),
+                          "every flyable class declares what it kills with, and every line it declares is a rate above zero");
+
+                    // ── AND NO BLURB WRITES A FIGURE ITS OWN ROWS CARRY ──
+                    // "three volleys", "400 damage", "six hunter-seekers", "1.2 s": all of them are
+                    // live rows that gear and pilot points move, so the first gear family written
+                    // for one of those systems made the words beside it lie.
+                    Check(!Classes.All.Any(c => c.Blurb.Any(char.IsDigit))
+                          && !Classes.All.SelectMany(c => Abilities.For(c.Id)).Any(a => a.Blurb.Any(char.IsDigit)),
+                          "no class or ability blurb writes a number: every figure is on the STATS tab, where gear and points move it");
                     System.Array.Copy(keepBought, Character.Bought, keepBought.Length);
                 }
 
@@ -3478,6 +3554,16 @@ public partial class _Test : Node
             // ── SNIPER: 3 s locked in place, then 150 down a 2500 u line ──
             await SetClass(ShipClass.HeavySniper);
             var sn = Me; var dTgt = H.GetNode<TargetDummy>("TargetDummy1");
+            // One Weapons point on this hull is +1 on the gun AND +7.5 on the railgun. The L window
+            // printed a single "next +1" for the pair, because it read the row's Per and not what
+            // the purchase actually does (Progression.StatsFor).
+            Key(global::Godot.Key.L); await Wait(0.15);
+            var spw = Nodes<PilotWindow>().FirstOrDefault();
+            var sRow = spw == null ? null : Nodes<Label>(Nodes<HBoxContainer>(spw).First(r => r.Name == "Pilot_damage")).First();
+            Check(sRow != null && sRow.Text.Contains("Damage per shot") && sRow.Text.Contains("+1 next")
+                  && sRow.Text.Contains("Railgun · Damage") && sRow.Text.Contains("+7.5 next"),
+                  $"the sniper's Weapons row prints what a point really buys -- +1 on the main gun and +7.5 on the railgun, not one '+1' for both ({sRow?.Text.Replace('\n', '|')})");
+            Key(global::Godot.Key.L); await Wait(0.1);
             float railAt = Vary(900f, 2200f);                     // anywhere inside its 2500 u reach
             sn.Position = dTgt.Position + new Vector2(0, railAt); sn.Velocity = Vector2.Zero; sn.Rotation = 0f; await Wait(0.3);
             double dmg0 = dTgt.Total;
@@ -3550,6 +3636,16 @@ public partial class _Test : Node
             Check(!dt2.Statuses.Has(Status.Evading) && Math.Abs(dt2.SpeedMult - 1.6f) < 1e-6
                   && Math.Abs(dt2.Spec(false).Interval - rof0 / 1.25) < 1e-9,
                   $"and it comes out of it 60% faster, firing a quarter quicker ({rof0:0.000} -> {dt2.Spec(false).Interval:0.000} s)");
+            {   // ...and BOTH multipliers are the rows', not two `if`s naming slot ids by string:
+                // with EVERY one of the dart's slots running at once, the only two stats that
+                // move them are the roll's own -- 1.25x the rate of fire and 1.6x the speed.
+                foreach (var ab in Abilities.For(ShipClass.LightDart)) dt2.Sl(ab.Id).Left = 5.0;
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                Check(!dt2.Statuses.Has(Status.Evading) && Math.Abs(dt2.FireRate - 1.25f) < 1e-6
+                      && Math.Abs(dt2.SpeedMult - 1.6f) < 1e-6,
+                      $"with every one of its slots running, only the roll's own two stats move them ({dt2.FireRate:0.00}x rate, {dt2.SpeedMult:0.00}x speed)");
+                foreach (var ab in Abilities.For(ShipClass.LightDart)) dt2.Sl(ab.Id).Left = 0;
+            }
 
             // ── ECHO: what it deals for five seconds, all at once at the end ──
             await SetClass(ShipClass.LightEcho);
@@ -3588,7 +3684,88 @@ public partial class _Test : Node
             Check(hunter.Target == wt,
                   $"...and the raider takes the wraith back the moment it can see it again (now after {(hunter.Target == wt ? "it" : Raider.Up(hunter.Target) ? "something else" : "nothing")})");
             hunter.TakeDamage(99999); await Wait(0.2);
+
+            // ── EVERY TIMED ROW TICKS, WHATEVER CLASS CARRIES IT ────────────────────
+            // A timed ability was a row everywhere except the tick: PlayerShip kept a string[]
+            // of the nine ids that had timers, so a tenth added as a row compiled, bound, drew
+            // on the bar and its Left never moved, with nothing to say so. Put 5 s of Left and
+            // 5 s of Cool on EVERY slot of every flyable class and watch all of them fall. This
+            // FAILS the moment one row is dropped from the tick again.
+            {
+                var stuck = new List<string>();
+                int rows = 0;
+                foreach (var cd in Classes.All.Where(x => x.Ready).ToList())
+                {
+                    await SetClass(cd.Id);
+                    var tk = Me; tk.Position = yonder; tk.Velocity = Vector2.Zero;
+                    foreach (var ab in Abilities.For(cd.Id)) { tk.Sl(ab.Id).Left = 5.0; tk.Sl(ab.Id).Cool = 5.0; rows++; }
+                    await Wait(0.5);
+                    foreach (var ab in Abilities.For(cd.Id))
+                        if (tk.Sl(ab.Id).Left > 4.7 || tk.Sl(ab.Id).Cool > 4.7) stuck.Add($"{cd.Name}.{ab.Id}");
+                    foreach (var ab in Abilities.For(cd.Id)) { tk.Sl(ab.Id).Left = 0; tk.Sl(ab.Id).Cool = 0; }
+                }
+                Check(stuck.Count == 0 && rows >= 12 * 6,
+                      $"every ability row of every class runs its own timers down: 5 s put on all {rows} of them, none above 4.7 s half a second later ({(stuck.Count == 0 ? "none stuck" : string.Join(", ", stuck))})");
+            }
+
             await SetClass(ShipClass.Battleship);
+
+            {   // ── A STATUS'S SHARE IS A ROW, AND ITS GAP IS SWEPT ─────────────────
+                // Guarded read Stats["rush_guard"] -- a row only the warrior carries -- out of
+                // the one path every class's damage goes through, so Hardened on any other hull
+                // was a status that did nothing at all.
+                var gd = Me; gd.Position = yonder; gd.Velocity = Vector2.Zero; await Wait(0.3);
+                Check(gd.Stats["rush_guard"] == 0, "a battleship's sheet has no rush_guard row of its own at all");
+
+                // The per-source gap kept one entry per attacker that had EVER touched the hull,
+                // for the life of the world. Forty in one frame, and none of them a second later.
+                var lastHitBy = (Dictionary<string, double>)typeof(PlayerShip)
+                    .GetField("_lastHitBy", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(gd);
+                for (int i = 0; i < 40; i++) gd.Hit(1, gd.Position + new Vector2(0, -200), $"test:swept{i}");
+                int keptGap = lastHitBy.Count, tallied = gd.DamageBySource.Count;
+                await Wait(1.2);                                       // well past the 0.52 s gap
+                int swept = 0;
+                for (int i = 0; i < 40; i++) if (!lastHitBy.ContainsKey($"test:swept{i}")) swept++;
+                Check(keptGap >= 40 && swept == 40 && tallied >= 40 && gd.DamageBySource.Count >= 40,
+                      $"forty sources in one frame leave forty entries in the 0.52 s gap and none of them 1.2 s later ({keptGap} held, {swept} of 40 swept), and the tally the HUD reads still has all forty ({gd.DamageBySource.Count})");
+                double gap0 = gd.Hp;
+                gd.Hit(10, gd.Position + new Vector2(0, -200), "test:gap");
+                gd.Hit(10, gd.Position + new Vector2(0, -200), "test:gap");
+                Check(Math.Abs(gap0 - gd.Hp - 10) < 1e-6,
+                      $"...and the gap itself still holds: the same source twice inside 0.52 s lands once, for 10 ({gap0 - gd.Hp:0})");
+
+                // HARDENED on a hull with no row of its own: half of it, which is what Hardened
+                // has always meant. (The warrior's own rush_guard row is 0.5, checked above.)
+                gd.ApplyStatus(Status.Hardened, 0.4); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                double hd0 = gd.Hp;
+                gd.Hit(100, gd.Position + new Vector2(0, -200), "test:hardrow");
+                Check(gd.Statuses.Has(Status.Hardened) && Math.Abs(hd0 - gd.Hp - 50) < 1e-6,
+                      $"a 100 blow on a HARDENED battleship -- a class with no rush_guard row -- lands for 50 ({hd0 - gd.Hp:0})");
+                await Wait(0.6);
+                // and EVADING, the same table's other row, on a hull that cannot roll
+                gd.ApplyStatus(Status.Evading, 0.4); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                double ev0 = gd.Hp;
+                gd.Hit(100, gd.Position + new Vector2(0, -200), "test:evadrow");
+                Check(!gd.Statuses.Has(Status.Hardened) && Math.Abs(gd.Hp - ev0) < 1e-6,
+                      $"and an EVADING one takes none of that 100 at all ({ev0 - gd.Hp:0})");
+                await Wait(0.6);
+            }
+
+            {   // ── FIVE STATUSES ON THE WIRE, AND ALL FIVE COME BACK ───────────────
+                // Shielded was a row nothing set, read or implemented, and it still rode the
+                // wire in StatusSet.Bits. The values that remain ARE the wire format: 1 2 4 8 16.
+                var put = new StatusSet();
+                put.Apply(Status.Pinned, 1); put.Apply(Status.Disabled, 1); put.Apply(Status.Untargetable, 1);
+                put.Apply(Status.Hardened, 1); put.Apply(Status.Evading, 1);
+                int bits = put.Bits;
+                var got = new StatusSet(); got.FromBits(bits);
+                Check(bits == 31 && System.Enum.GetValues(typeof(Status)).Length == 6
+                      && (int)Status.Pinned == 1 && (int)Status.Disabled == 2 && (int)Status.Untargetable == 4
+                      && (int)Status.Hardened == 8 && (int)Status.Evading == 16
+                      && got.Has(Status.Pinned) && got.Has(Status.Disabled) && got.Has(Status.Untargetable)
+                      && got.Has(Status.Hardened) && got.Has(Status.Evading),
+                      $"five statuses and no sixth: 1 2 4 8 16 pack into {bits} and all five come back out of it");
+            }
         }
 
         // ── buildings open menus; READY -> autopilot -> portal -> ARENA -> home ──

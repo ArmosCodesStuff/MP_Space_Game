@@ -164,42 +164,21 @@ public partial class StatsWindow : CanvasLayer
         Ui.Clear(_derived);
         Ui.Clear(_grid);
 
-        // ── damage per entity, and totals ──
+        // ── DAMAGE: one line per damaging system the class declares (ClassDef.Weapons), each with
+        //    how its rate is made up, and the total of the ones the ship can hold.
+        //    This was an `if (Fit.Guns) ... else <the carrier>` over a total of four named figures.
+        //    So a sniper's railgun, a warden's hunters, a warrior's EMP, a freighter's deployed
+        //    turrets, an echo's blast and a carrier's torpedoes were printed nowhere and counted in
+        //    nothing -- a sniper read 7.50 DPS against a 37.50 DPS railgun -- and the two
+        //    point-defence lines were drawn on the five classes that mount none, at 0.00 DPS.
         var acc = new Color(1f, 0.85f, 0.5f);
-        void D(string label, double v, string unit = "DPS") =>
-            _derived.AddChild(Cell($"{label}:  {v:0.00} {unit}", false, false, acc));
         _derived.AddChild(Cell("DAMAGE", true));
-        if (s.Def.Has(Fit.Guns))
+        foreach (var l in s.DamageLines)
         {
-            D("Per main barrel", s.MainDpsPerBarrel);
-            D($"Main guns ({s["main_count"]:0} barrels)", s.MainDps);
-            _derived.AddChild(Cell($"Salvo: {s["main_count"]:0} shots every {s["main_interval"]:0.00} s   ·   "
-                                 + $"Staggered: 1 shot every {s.StaggerStep:0.00} s   (same rate)", false, false, acc));
-            if (s.Def.Has(Fit.Broadside))
-            {
-                _derived.AddChild(Cell($"Broadside: {s["broadside_volleys"]:0} volleys × {s["main_count"]:0} shells × "
-                                     + $"{s["main_damage"] * s["broadside_mult"]:0.00} = {s.BroadsideDamage:0.0} damage, every {s.BroadsideCycle:0.0} s",
-                                       false, false, acc));
-                D("Broadside, averaged over its cycle", s.BroadsideDps);
-            }
-            if (s.Def.Has(Fit.Missiles))
-                D($"Missiles (magazine of {s["missile_mag"]:0} bursts of {PlayerShip.BurstSides.Length}, averaged over a reload)", s.MissileDps);
+            _derived.AddChild(Cell($"{l.Label}:  {l.Dps:0.00} DPS", false, false, acc));
+            if (l.Note.Length > 0) _derived.AddChild(Cell("    " + l.Note, false, false, acc));
         }
-        else
-        {
-            // fighters strafe (3 shots a pass, then turn) and rest, so this is their rate
-            // WHILE firing a burst, not a sustained figure
-            D("Per fighter, while firing a burst", s.FighterDpsEach);
-            D($"Fighters ({s["fighter_count"]:0}), all firing at once", s.FighterDps);
-            _derived.AddChild(Cell($"Bomber strike: {s.TorpedoesPerRun:0} torpedoes × {s["torpedo_damage"]:0.0} = "
-                                 + $"{s.TorpedoesPerRun * s["torpedo_damage"]:0.0} damage if all hit (unguided)", false, false, acc));
-        }
-        D("Per PD turret (while firing)", s.PdDpsPerTurret);
-        D(s.Def.Has(Fit.AlwaysPd) ? "PD sustained (it never switches off)"
-                                  : $"PD sustained, if re-activated as soon as it recharges ({s.PdDuty * 100:0}% duty)",
-          s.PdSustainedDps);
-        double total = s.MainDps + s.MissileDps + s.BroadsideDps + s.PdSustainedDps;
-        _derived.AddChild(Cell($"SUSTAINED TOTAL:  {total:0.00} DPS" + (s.Def.Has(Fit.Wing) ? "  (+ fighter runs, + bomber strikes)" : ""), true, false, acc));
+        _derived.AddChild(Cell($"SUSTAINED TOTAL:  {s.SustainedDps:0.00} DPS", true, false, acc));
         _derived.AddChild(new Control { CustomMinimumSize = new Vector2(0, 8) });
 
         // ── every stat: base / added / bonus / final ──

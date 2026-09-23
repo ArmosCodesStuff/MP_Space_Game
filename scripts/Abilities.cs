@@ -47,6 +47,29 @@ public class AbilityDef
     public Func<PlayerShip, IHittable, string> Refuse;
     public Func<PlayerShip, IHittable, SlotState> Show;
 
+    // WHEN ITS TIME RUNS OUT. PlayerShip's tick runs EVERY row's Cool and Left down by itself,
+    // so a timed ability is a row: it needs no entry in a list of "which ids have timers" and no
+    // case in a switch on the id. It replaced both -- and a tenth timed ability added as a row
+    // used to compile, bind, draw on the bar and never count down, silently.
+    //   Elapsed -- on EVERY peer, the moment Left reaches zero: the phase the bar and the turrets
+    //              must show at once, before the host's next report (the broadside leaving its
+    //              wind-up for its volleys). Nothing that damages or spends belongs here.
+    //   Expire  -- on the HOST alone: what it resolves (the railgun's shot, the rush's EMP, the
+    //              echo's blast, the recharge after a point-defence window, the magazine a reload
+    //              refills). The host gate is the LOOP's, so a new row is safe by default.
+    // Each is handed the ship, and a row that stored a number reads it back from its own slot
+    // (PlayerShip.Sl): the echo detonates Sl("echo").Own, so no number has to be carried here.
+    public Action<PlayerShip> Elapsed, Expire;
+
+    // WHILE IT RUNS, what it multiplies. A row that speeds a ship's guns or its hull up names the
+    // stat id that says by how much; PlayerShip.FireRate and PlayerShip.SpeedMult are the product
+    // of every running row that names one, which replaced two hardcoded `if`s naming slot ids and
+    // stat ids by string in the one place every gun, every point-defence mount and every deployed
+    // turret reads its rate. `While` narrows it to part of a run: the dart's roll buffs nothing
+    // until the untouchable part of it is over.
+    public string RateStat, SpeedStat;
+    public Func<PlayerShip, bool> While;
+
     public SlotState State(PlayerShip s, IHittable selected) =>
         Show != null ? Show(s, selected) : new SlotState { Line = "READY" };
 }
@@ -73,8 +96,12 @@ public static class Ab
     public static readonly AbilityDef Broadside = new()
     {
         Id = "broadside", Name = "Broadside", Short = "BROADSIDE", Default = Key.F,
-        Blurb = "The turrets swing onto the cursor, then every main gun fires three volleys. The ship steers throughout.",
+        Blurb = "The turrets swing onto the cursor, then every main gun fires, volley after volley. The ship steers throughout.",
         Press = (s, _) => s.StartBroadside(),
+        // the wind-up spent: every peer moves on to the volleys (the bar, the turrets' fast
+        // swing) until the host's next report says how many are left; only the host fires them
+        Elapsed = s => s.Sl("broadside").N = Math.Max(1, (int)s.Stats["broadside_volleys"]),
+        Expire = s => s.Sl("broadside").Own = 0,
         Show = (s, _) =>
         {
             if (s.BroadsideWindupLeft > 0) return new SlotState { Line = "AIMING", Lit = true };
@@ -91,6 +118,7 @@ public static class Ab
         Id = "pd", Name = "Point defence", Short = "PD", Default = Key.Q,
         Blurb = "Opens a firing window; each turret picks and tracks its own target. Recharges after.",
         Press = (s, _) => s.StartPd(),
+        Expire = s => s.Sl("pd").Cool = s.Stats["pd_reload"],      // the window closed: the recharge
         Show = (s, _) =>
         {
             if (s.PdActive) return new SlotState { Line = $"ACTIVE {s.PdLeft:0}s", Lit = true };
@@ -121,6 +149,7 @@ public static class Ab
         Id = "reload", Name = "Reload missiles", Short = "RELOAD", Default = Key.R,
         Blurb = "Refills the missile magazine. Nothing fires while it runs.",
         Press = (s, _) => s.StartReload(),
+        Expire = s => s.Sl("missile").N = (int)s.Stats["missile_mag"],   // loaded: the magazine full
         Show = (s, _) => s.Reloading
             ? new SlotState { Line = $"{s.MissileReloadLeft:0.0}s", Busy = (float)(s.MissileReloadLeft / s.Stats["missile_reload"]) }
             : new SlotState { Line = s.MissilesLoaded >= (int)s.Stats["missile_mag"] ? "FULL" : "READY" },
@@ -208,16 +237,17 @@ public static class Ab
     public static readonly AbilityDef Overdrive = new()
     {
         Id = "overdrive", Name = "Overdrive", Short = "OVERDRIVE", Default = Key.F,
-        Blurb = "Everything you own fires twice as fast: your gun, your point defence and every turret you have out.",
+        Blurb = "Everything you own fires faster: your gun, your point defence and every turret you have out.",
         Press = (s, _) => s.StartOverdrive(),
+        RateStat = "overdrive_mult",
         Refuse = (s, _) => s.Sl("overdrive").Cool > 0 ? "COOLING" : null,
-        Show = (s, _) => Timed(s, "overdrive", "overdrive_cooldown", "x2"),
+        Show = (s, _) => Timed(s, "overdrive", "overdrive_cooldown", $"x{s.Stats["overdrive_mult"]:0.#}"),
     };
 
     public static readonly AbilityDef Shockwave = new()
     {
         Id = "shockwave", Name = "Shockwave", Short = "WAVE", Default = Key.F,
-        Blurb = "Throws everything within 1000 u away from you -- and what is too big to throw (a boss) is held still instead.",
+        Blurb = "Throws everything near you away from you -- and what is too big to throw (a boss) is held still instead.",
         Press = (s, _) => s.Shockwave(),
         Refuse = (s, _) => s.Sl("shockwave").Cool > 0 ? "CHARGING" : null,
         Show = (s, _) => Timed(s, "shockwave", "wave_cooldown", "READY"),
@@ -227,8 +257,9 @@ public static class Ab
     public static readonly AbilityDef Railgun = new()
     {
         Id = "railgun", Name = "Railgun", Short = "RAIL", Default = Key.F,
-        Blurb = "Three seconds charging -- you cannot turn or thrust while it charges -- then a straight blue line, 2500 u, through everything on it.",
+        Blurb = "A charge you can neither turn nor thrust through, then a straight blue line through everything on it.",
         Press = (s, _) => s.ChargeRail(),
+        Expire = s => s.FireRail(),
         Refuse = (s, _) => s.Sl("railgun").Left > 0 ? "CHARGING" : s.Sl("railgun").Cool > 0 ? "COOLING" : null,
         Show = (s, _) => s.Sl("railgun").Left > 0
             ? new SlotState { Line = $"CHARGE {s.Sl("railgun").Left:0.0}s", Lit = true,
@@ -239,8 +270,10 @@ public static class Ab
     public static readonly AbilityDef Rush = new()
     {
         Id = "rush", Name = "Rush", Short = "RUSH", Default = Key.F,
-        Blurb = "Two and a half seconds at two and a half times your speed, taking half damage. It ends in an EMP that stuns everything close.",
+        Blurb = "A burst of speed, taking a fraction of the damage while it lasts. It ends in an EMP that stuns everything close.",
         Press = (s, _) => s.StartRush(),
+        Expire = s => s.RushEmp(),
+        SpeedStat = "rush_mult",
         Refuse = (s, _) => s.Sl("rush").Cool > 0 ? "COOLING" : null,
         Show = (s, _) => Timed(s, "rush", "rush_cooldown", "RUSHING"),
     };
@@ -248,7 +281,7 @@ public static class Ab
     public static readonly AbilityDef Hunters = new()
     {
         Id = "hunters", Name = "Hunter-seekers", Short = "HUNTERS", Default = Key.F,
-        Blurb = "Six missiles, each taking a target of its own -- and all six at the nearest one if there is only the one.",
+        Blurb = "A cell of missiles, each taking a target of its own -- and all of them at the nearest if there is only the one.",
         Press = (s, _) => s.LaunchHunters(),
         Refuse = (s, _) => s.Sl("hunters").Cool > 0 ? "RELOADING" : null,
         Show = (s, _) => Timed(s, "hunters", "hunter_cooldown", "AWAY"),
@@ -258,8 +291,10 @@ public static class Ab
     public static readonly AbilityDef Roll = new()
     {
         Id = "roll", Name = "Barrel roll", Short = "ROLL", Default = Key.F,
-        Blurb = "Nothing can hit you for 1.2 s, and you come out of it faster and firing quicker for four.",
+        Blurb = "Nothing can hit you while you roll, and you come out of it faster and firing quicker.",
         Press = (s, _) => s.BarrelRoll(),
+        RateStat = "boost_rof", SpeedStat = "boost_speed",
+        While = s => !s.Statuses.Has(Status.Evading),     // the boost is the part after the roll
         Refuse = (s, _) => s.Sl("roll").Cool > 0 ? "COOLING" : null,
         Show = (s, _) => s.Statuses.Has(Status.Evading)
             ? new SlotState { Line = "ROLLING", Lit = true }
@@ -269,8 +304,9 @@ public static class Ab
     public static readonly AbilityDef Echo = new()
     {
         Id = "echo", Name = "Bullet echo", Short = "ECHO", Default = Key.F,
-        Blurb = "For five seconds the echo remembers every point of damage you deal, then detonates all of it where your last shot landed.",
+        Blurb = "The echo remembers every point of damage you deal, then detonates all of it where your last shot landed.",
         Press = (s, _) => s.StartEcho(),
+        Expire = s => s.Detonate(),
         Refuse = (s, _) => s.Sl("echo").Cool > 0 ? "COOLING" : null,
         Show = (s, _) => s.Sl("echo").Left > 0
             ? new SlotState { Line = $"{s.Sl("echo").Own:0} STORED", Lit = true }
@@ -280,7 +316,7 @@ public static class Ab
     public static readonly AbilityDef Stealth = new()
     {
         Id = "stealth", Name = "Stealth", Short = "STEALTH", Default = Key.F,
-        Blurb = "Five seconds nothing hostile can pick you: whatever was coming for you goes after someone else, or gives up.",
+        Blurb = "While the veil is up nothing hostile can pick you: whatever was coming for you goes after someone else, or gives up.",
         Press = (s, _) => s.GoDark(),
         Refuse = (s, _) => s.Sl("stealth").Cool > 0 ? "COOLING" : null,
         Show = (s, _) => s.Statuses.Has(Status.Untargetable)

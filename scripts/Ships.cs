@@ -104,6 +104,13 @@ public class ClassDef
     // It defaults to EMPTY on purpose: a new class that forgets it is caught by a check, rather
     // than quietly given the battleship's gun.
     public Dictionary<string, double> Damage = new();
+    // WHAT IT KILLS WITH, for the K window's DAMAGE block: the damaging systems it carries, by id
+    // out of the one catalogue (Dps, in Stats.cs). Each one works its own sustained rate out of
+    // this ship's sheet, and the window adds up the ones the ship can hold. The window used to ask
+    // `if (Fit.Guns) ... else` and total four named figures, so the railgun, the hunters, the EMP,
+    // the deployed turrets, the echo and the carrier's torpedoes were printed nowhere and counted
+    // in nothing -- a sniper read 7.50 DPS beside a railgun worth 37.50.
+    public DpsSource[] Weapons = Array.Empty<DpsSource>();
     // Rows only this class has: the numbers its own abilities are made of. They join the sheet
     // like any other, so the K window prints them and gear and purchases can move them, without
     // Stats.cs knowing that this class exists.
@@ -132,6 +139,7 @@ public static class Classes
                 ["pd_count"] = 2,
             },
             Damage = new() { ["main_damage"] = 1 },
+            Weapons = new[] { Dps.Main, Dps.Broadside, Dps.Pd },
             Kit = new KitPart[] {
                 new() { Slot = GearSlot.Weapon, Id = "bs_main_battery", Name = "Mk I Main Battery", Blurb = "the four main turrets" },
                 new() { Slot = GearSlot.Utility, Id = "bs_broadside", Name = "Broadside Battery", Blurb = "the broadside: every main gun, volley on volley" },
@@ -144,7 +152,7 @@ public static class Classes
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Broadside, Ab.Pd } },
 
         new() { Id = ShipClass.Carrier, Name = "CARRIER", Ready = true, Fit = Fit.Wing | Fit.Pd,
-            Blurb = "Three point-defence turrets, three fighters, two torpedo bombers.",
+            Blurb = "No main gun: point-defence turrets, a fighter wing, and torpedo bombers off its deck.",
             Hint = "CARRIER",
             Nums = new() {
                 ["hull"] = 200,
@@ -154,6 +162,7 @@ public static class Classes
             },
                 // the 0: gear reaches the fighters, the pilot's points do not -- as it was
             Damage = new() { ["torpedo_damage"] = 1, ["fighter_damage"] = 0 },
+            Weapons = new[] { Dps.Fighters, Dps.Bombers, Dps.Pd },
             Kit = new KitPart[] {
                 new() { Slot = GearSlot.Weapon, Id = "cv_fighter_hangars", Name = "Mk I Fighter Hangars", Blurb = "the fighter wing" },
                 new() { Slot = GearSlot.Utility, Id = "cv_bomber_bay", Name = "Bomber Bay", Blurb = "the bomber wing" },
@@ -177,6 +186,7 @@ public static class Classes
             },
                 // the 0: gear reaches the missiles, the pilot's points do not -- as it was
             Damage = new() { ["main_damage"] = 1, ["missile_damage"] = 0 },
+            Weapons = new[] { Dps.Main, Dps.Missiles, Dps.Pd },
             Kit = new KitPart[] {
                 new() { Slot = GearSlot.Weapon, Id = "dd_main_battery", Name = "Mk I Twin Turrets", Blurb = "the two main turrets" },
                 new() { Slot = GearSlot.Utility, Id = "dd_missile_rack", Name = "Missile Rack", Blurb = "the missile bursts and their magazine" },
@@ -190,7 +200,7 @@ public static class Classes
 
         // -- page 2: freight, which carries its own defences -------------------
         new() { Id = ShipClass.FreightHauler, Name = "FREIGHTER", Ready = true, Fit = Fit.Guns | Fit.Pd | Fit.Deploy,
-            Blurb = "The toughest hull there is. One main gun, two point-defence turrets, three deployable turrets, and a bubble that soaks 400 damage for everything inside it.",
+            Blurb = "The toughest hull there is. One main gun, two point-defence turrets, three deployable turrets, and a bubble that soaks damage for everything inside it.",
             Hint = "FREIGHTER  ·  mouse aims the main gun",
             Nums = new() {
                 ["hull"] = 400,
@@ -201,6 +211,7 @@ public static class Classes
             },
                 // half a point each: three turrets are out at once, so a level is worth 1.5 across them
             Damage = new() { ["main_damage"] = 1, ["deploy_damage"] = 0.5 },
+            Weapons = new[] { Dps.Main, Dps.Deployed, Dps.Pd },
             Kit = new KitPart[] {
                 new() { Slot = GearSlot.Weapon, Id = "freight_main_gun", Name = "Mk I Cargo Gun", Blurb = "the freighter's single main turret" },
                 new() { Slot = GearSlot.Utility, Id = "freight_bubble", Name = "Bubble Projector", Blurb = "the bubble, and what it soaks" },
@@ -225,7 +236,7 @@ public static class Classes
                 TurretTexScale = 2.20f / 5.5f, MainBarrel = 27.0f, PdBarrel = 12.1f, PdRing = 6.6f },
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Bubble, Ab.Deploy, Ab.Collect, Ab.Pd } },
         new() { Id = ShipClass.FreightTender, Name = "TENDER", Ready = true, Fit = Fit.Guns | Fit.Pd | Fit.Deploy,
-            Blurb = "One main gun, two point-defence turrets, three deployable turrets, and an overdrive that doubles the rate of fire of everything it owns for 8 s.",
+            Blurb = "One main gun, two point-defence turrets, three deployable turrets, and an overdrive that lifts the rate of fire of everything it owns.",
             Hint = "TENDER  ·  mouse aims the main gun",
             Nums = new() {
                 ["hull"] = 400,
@@ -235,6 +246,7 @@ public static class Classes
                 ["pd_count"] = 2,
             },
             Damage = new() { ["main_damage"] = 1, ["deploy_damage"] = 0.5 },
+            Weapons = new[] { Dps.Main, Dps.Deployed, Dps.Pd },
             Kit = new KitPart[] {
                 new() { Slot = GearSlot.Weapon, Id = "freight_main_gun", Name = "Mk I Cargo Gun", Blurb = "the freighter's single main turret" },
                 new() { Slot = GearSlot.Utility, Id = "freight_overdrive", Name = "Overdrive Coils", Blurb = "the overdrive, and how long it holds" },
@@ -258,7 +270,7 @@ public static class Classes
                 TurretTexScale = 2.20f / 5.5f, MainBarrel = 27.0f, PdBarrel = 12.1f, PdRing = 6.6f },
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Overdrive, Ab.Deploy, Ab.Collect, Ab.Pd } },
         new() { Id = ShipClass.FreightBastion, Name = "BASTION", Ready = true, Fit = Fit.Guns | Fit.Pd | Fit.Deploy,
-            Blurb = "One main gun, two point-defence turrets, three deployable turrets, and a shockwave that throws everything within 1000 u away -- or holds a boss still for 3 s.",
+            Blurb = "One main gun, two point-defence turrets, three deployable turrets, and a shockwave that throws everything near it clear -- or holds a boss still.",
             Hint = "BASTION  ·  mouse aims the main gun",
             Nums = new() {
                 ["hull"] = 400,
@@ -268,6 +280,7 @@ public static class Classes
                 ["pd_count"] = 2,
             },
             Damage = new() { ["main_damage"] = 1, ["deploy_damage"] = 0.5 },
+            Weapons = new[] { Dps.Main, Dps.Deployed, Dps.Pd },
             Kit = new KitPart[] {
                 new() { Slot = GearSlot.Weapon, Id = "freight_main_gun", Name = "Mk I Cargo Gun", Blurb = "the freighter's single main turret" },
                 new() { Slot = GearSlot.Utility, Id = "freight_emitter", Name = "Shockwave Emitter", Blurb = "the shockwave's reach and its push" },
@@ -294,7 +307,7 @@ public static class Classes
 
         // -- page 3: heavy fighters --------------------------------------------
         new() { Id = ShipClass.HeavySniper, Name = "SNIPER", Ready = true, Fit = Fit.Guns,
-            Blurb = "Fast. A light main gun, and a railgun that charges for 3 s -- it cannot turn or thrust while it does -- then throws 150 damage 2500 u in a straight blue line.",
+            Blurb = "Fast. A light main gun, and a railgun it can neither turn nor thrust while charging, which then throws a straight blue line through everything on it.",
             Hint = "SNIPER  ·  mouse aims the main gun",
             Nums = new() {
                 ["hull"] = 140,
@@ -304,6 +317,7 @@ public static class Classes
             },
                 // 7.5 = 5% of the railgun's 150, what a level is worth on a battleship's shell
             Damage = new() { ["main_damage"] = 1, ["rail_damage"] = 7.5 },
+            Weapons = new[] { Dps.Main, Dps.Railgun },
             Kit = new KitPart[] {
                 new() { Slot = GearSlot.Weapon, Id = "heavy_main_gun", Name = "Mk I Light Cannon", Blurb = "the single light turret" },
                 new() { Slot = GearSlot.Utility, Id = "heavy_railgun", Name = "Railgun Mount", Blurb = "the railgun's charge and its slug" },
@@ -321,7 +335,7 @@ public static class Classes
                 TurretTexScale = 1.18f / 5.5f, MainBarrel = 14.5f, PdBarrel = 6.5f, PdRing = 3.55f },
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Railgun } },
         new() { Id = ShipClass.HeavyWarrior, Name = "WARRIOR", Ready = true, Fit = Fit.Guns,
-            Blurb = "Fast. Two main guns, and a rush: 2.5 s at two and a half times its speed taking half damage, ending in an EMP that stuns everything close.",
+            Blurb = "Fast. Two main guns, and a rush: a burst of speed at a fraction of the damage taken, ending in an EMP that stuns everything close.",
             Hint = "WARRIOR  ·  mouse aims the main guns",
             Nums = new() {
                 ["hull"] = 140,
@@ -331,6 +345,7 @@ public static class Classes
             },
                 // 3 = 5% of the EMP's 60
             Damage = new() { ["main_damage"] = 1, ["emp_damage"] = 3 },
+            Weapons = new[] { Dps.Main, Dps.Emp },
             Kit = new KitPart[] {
                 new() { Slot = GearSlot.Weapon, Id = "warrior_main_guns", Name = "Mk I Twin Cannons", Blurb = "the two light turrets" },
                 new() { Slot = GearSlot.Utility, Id = "heavy_rush_drive", Name = "Rush Drive", Blurb = "the rush, and the EMP it ends in" },
@@ -350,7 +365,7 @@ public static class Classes
                 TurretTexScale = 1.18f / 5.5f, MainBarrel = 14.5f, PdBarrel = 6.5f, PdRing = 3.55f },
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Rush } },
         new() { Id = ShipClass.HeavyWarden, Name = "WARDEN", Ready = true, Fit = Fit.Guns | Fit.Pd | Fit.AlwaysPd,
-            Blurb = "Fast. Point defence that never switches off and kills what comes close, a modest main gun, and six hunter-seekers that each take a target of their own.",
+            Blurb = "Fast. Point defence that never switches off and kills what comes close, a modest main gun, and hunter-seekers that each take a target of their own.",
             Hint = "WARDEN  ·  mouse aims the main gun",
             Nums = new() {
                 ["hull"] = 140,
@@ -369,6 +384,7 @@ public static class Classes
                 // 2.25 = 5% of a hunter's 45 (pd_damage is left out on purpose: every class has that row,
                 // so naming it here would hand every ship in the game a chip-powered point-defence buff)
             Damage = new() { ["main_damage"] = 1, ["hunter_damage"] = 2.25 },
+            Weapons = new[] { Dps.Main, Dps.Hunters, Dps.Pd },
             Kit = new KitPart[] {
                 new() { Slot = GearSlot.Weapon, Id = "heavy_main_gun", Name = "Mk I Light Cannon", Blurb = "the single light turret" },
                 new() { Slot = GearSlot.Utility, Id = "heavy_hunter_cells", Name = "Hunter Cells", Blurb = "the six hunter-seekers" },
@@ -390,7 +406,7 @@ public static class Classes
 
         // -- page 4: lights -----------------------------------------------------
         new() { Id = ShipClass.LightDart, Name = "DART", Ready = true, Fit = Fit.Guns,
-            Blurb = "The fastest thing with a pilot in it. A barrel roll nothing can hit for 1.2 s, and 4 s of 60% more speed and a quarter more rate of fire after it.",
+            Blurb = "The fastest thing with a pilot in it. A barrel roll nothing can hit, and a burst of speed and rate of fire out of it.",
             Hint = "DART  ·  mouse aims the main gun",
             Nums = new() {
                 ["hull"] = 90,
@@ -399,6 +415,7 @@ public static class Classes
                 ["main_count"] = 1, ["main_damage"] = 5, ["main_interval"] = 0.35, ["main_range"] = 500, ["shell_speed"] = 620,
             },
             Damage = new() { ["main_damage"] = 1 },
+            Weapons = new[] { Dps.Main },
             Kit = new KitPart[] {
                 new() { Slot = GearSlot.Weapon, Id = "light_main_gun", Name = "Mk I Dart Cannon", Blurb = "the light's single turret" },
                 new() { Slot = GearSlot.Utility, Id = "light_roll_thrusters", Name = "Roll Thrusters", Blurb = "the barrel roll, and the boost after it" },
@@ -416,7 +433,7 @@ public static class Classes
                 TurretTexScale = 0.65f / 5.5f, MainBarrel = 8.0f, PdBarrel = 3.6f, PdRing = 1.95f },
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Roll } },
         new() { Id = ShipClass.LightEcho, Name = "ECHO", Ready = true, Fit = Fit.Guns,
-            Blurb = "Its echo remembers every point of damage it deals for 5 s, then detonates the lot where the last shot landed.",
+            Blurb = "Its echo remembers every point of damage it deals, then detonates the lot where the last shot landed.",
             Hint = "ECHO  ·  mouse aims the main gun",
             Nums = new() {
                 ["hull"] = 90,
@@ -427,6 +444,7 @@ public static class Classes
                 // echo_share is NOT a weapon: the blast is a share of damage already dealt, so it
                 // grows with main_damage on its own, and naming it would count the same purchase twice
             Damage = new() { ["main_damage"] = 1 },
+            Weapons = new[] { Dps.Main, Dps.Echo },
             Kit = new KitPart[] {
                 new() { Slot = GearSlot.Weapon, Id = "light_main_gun", Name = "Mk I Dart Cannon", Blurb = "the light's single turret" },
                 new() { Slot = GearSlot.Utility, Id = "light_echo_core", Name = "Echo Core", Blurb = "what the echo remembers, and its blast" },
@@ -443,7 +461,7 @@ public static class Classes
                 TurretTexScale = 0.65f / 5.5f, MainBarrel = 8.0f, PdBarrel = 3.6f, PdRing = 1.95f },
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Echo } },
         new() { Id = ShipClass.LightWraith, Name = "WRAITH", Ready = true, Fit = Fit.Guns,
-            Blurb = "Five seconds nothing hostile can pick it: whatever was coming for it goes after someone else, or gives up.",
+            Blurb = "While its veil is up nothing hostile can pick it: whatever was coming for it goes after someone else, or gives up.",
             Hint = "WRAITH  ·  mouse aims the main gun",
             Nums = new() {
                 ["hull"] = 90,
@@ -452,6 +470,7 @@ public static class Classes
                 ["main_count"] = 1, ["main_damage"] = 5, ["main_interval"] = 0.35, ["main_range"] = 500, ["shell_speed"] = 620,
             },
             Damage = new() { ["main_damage"] = 1 },
+            Weapons = new[] { Dps.Main },
             Kit = new KitPart[] {
                 new() { Slot = GearSlot.Weapon, Id = "light_main_gun", Name = "Mk I Dart Cannon", Blurb = "the light's single turret" },
                 new() { Slot = GearSlot.Utility, Id = "light_stealth_veil", Name = "Stealth Veil", Blurb = "how long nothing can pick it" },

@@ -7,6 +7,11 @@ using System.Collections.Generic;
 //
 // THE HOST DECIDES. A guest counts nothing down: it is sent the bits (PlayerShip's state) and
 // shows them. A status with no time left is simply absent.
+// THESE VALUES ARE THE WIRE FORMAT (StatusSet.Bits). Never renumber one that is here.
+// A sixth status takes 32, and 32 is free: Shielded held it, was declared "a pool absorbs damage
+// before the hull", and was never set, read or implemented by anything -- the only such pool is
+// the freighter's bubble, which is Sl("bubble") and PlayerShip.ThroughBubbles. No packet ever
+// carried it, so deleting it left 1..16 untouched and no gap below them.
 [System.Flags]
 public enum Status
 {
@@ -14,14 +19,36 @@ public enum Status
     Pinned = 1,          // a web: held to PinSpeed of top speed, thrusting, unable to turn
     Disabled = 2,        // knocked out: no moves, no turning, no firing (a boss under a shockwave)
     Untargetable = 4,    // nothing hostile may choose it (stealth)
-    Hardened = 8,        // taking less: the share is the guard's, not the status's
+    Hardened = 8,        // taking less: by StatusSet.Guards' share, not by one class's own stat
     Evading = 16,        // the next hits miss outright
-    Shielded = 32,       // a pool absorbs damage before the hull
+}
+
+// WHAT A STATUS DOES TO A BLOW, as a row. A status that scales damage names the stat id that
+// says by how much on a hull that has such a row, and the share to use on a hull that has not.
+// PlayerShip.Guarded walks this table; it used to read Stats["rush_guard"] -- a row only the
+// HeavyWarrior carries -- out of a path every class goes through, so a second hardening class,
+// a gear part or a boss debuff got a status that did nothing at all (the sheet answers 0 for an
+// id it has not got, and the `> 0` beside it swallowed that).
+// A NEW ROW: the status, the stat id that scales it ("" for none), and that share.
+public struct StatusGuard
+{
+    public Status Status;    // the status that must be on the thing for this row to apply
+    public string Stat;      // the stat id that scales it where the sheet has one; "" for none
+    public double Share;     // what a blow is multiplied by otherwise: 0 stops it, 1 lets it all through
 }
 
 public struct StatusSet
 {
     public const float PinSpeed = 0.2f;        // a pinned ship: 20% of its top speed
+
+    // IN ORDER, and the order is the point: evasion decides whether the blow happened at all
+    // before anything else scales it. Half of it is what Hardened has always meant, and a hull
+    // with a row of its own (the HeavyWarrior's rush_guard) still says how much for itself.
+    public static readonly StatusGuard[] Guards =
+    {
+        new() { Status = Status.Evading,  Stat = "",           Share = 0 },     // the dart's roll: it is not there to be hit
+        new() { Status = Status.Hardened, Stat = "rush_guard", Share = 0.5 },   // the warrior's rush: half of it
+    };
 
     private Dictionary<Status, double> _left;
 

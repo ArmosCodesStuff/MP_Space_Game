@@ -54,8 +54,14 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // Regeneration, always: 0.5% of max hull a second in combat, 3% out of it.
     public const double RegenInCombat = 0.005, RegenOutOfCombat = 0.03;
     // One ongoing source (an ability, a weapon, an area) lands on a ship at most once per 0.52 s.
+    // WHEN each source last landed, and nothing else. An entry older than HitGap can only ever
+    // say "let it through", which is exactly what no entry says, so it is provably dead: SweepHits
+    // throws it away on the same clock the gap is measured against. It used to grow by one entry
+    // per attacker that had EVER touched this hull, for the life of the world. The tally beside
+    // it is not a timer and is NOT swept -- the HUD and the checks read it.
     private const double HitGap = 0.52;
     private readonly System.Collections.Generic.Dictionary<string, double> _lastHitBy = new();
+    private double _sweepAt;                     // the clock time the next sweep of _lastHitBy is due at
     public readonly System.Collections.Generic.Dictionary<string, double> DamageBySource = new();   // host: damage taken, by source
     private double _combatT;
     public bool InCombat => _combatT > 0;
@@ -107,35 +113,27 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     private int _strikesOut;
 
     // ── what this ship's own class brings ────────────────────────────────
-    // The timed abilities of the nine classes: each runs its Left down, and the host does
-    // whatever it does when it reaches zero. Naming them here (rather than a flag per class)
-    // keeps the tick one loop however many classes there are.
-    private static readonly string[] Timed =
-        { "bubble", "overdrive", "shockwave", "railgun", "rush", "hunters", "roll", "echo", "stealth" };
     private Vector2 _echoAt;                      // where this ship's last shot landed
 
-    // What multiplies its rate of fire right now -- the tender's overdrive, the dart's boost.
-    // Its guns, its point defence and every turret it has out all read it.
-    public float FireRate
+    // WHAT MULTIPLIES ITS RATE OF FIRE, and WHAT MULTIPLIES ITS TOP SPEED, right now -- the
+    // tender's overdrive, the warrior's rush, the dart's boost. Every running ability that names
+    // a stat for one of them (AbilityDef.RateStat, AbilityDef.SpeedStat) multiplies it, and the
+    // row knows its own slot, so the third rate buff is a ROW rather than a third `if` naming a
+    // slot id and a stat id by string. FireRate is read by this ship's guns, its point defence
+    // and every turret it has out (Spec, Deployed.Spec).
+    public float FireRate => Multiplied(rate: true);
+    public float SpeedMult => Multiplied(rate: false);
+    private float Multiplied(bool rate)
     {
-        get
+        float k = 1f;
+        foreach (var def in Abilities.For(Class))
         {
-            float k = 1f;
-            if (Sl("overdrive").Left > 0) k *= (float)Stats["overdrive_mult"];
-            if (Sl("roll").Left > 0 && !_status.Has(Status.Evading)) k *= (float)Stats["boost_rof"];
-            return k <= 0 ? 1f : k;
+            string stat = rate ? def.RateStat : def.SpeedStat;
+            if (stat == null || Sl(def.Id).Left <= 0) continue;
+            if (def.While != null && !def.While(this)) continue;
+            k *= (float)Stats[stat];
         }
-    }
-    // ...and its top speed: the warrior's rush, the dart's boost after the roll.
-    public float SpeedMult
-    {
-        get
-        {
-            float k = 1f;
-            if (Sl("rush").Left > 0) k *= (float)Stats["rush_mult"];
-            if (Sl("roll").Left > 0 && !_status.Has(Status.Evading)) k *= (float)Stats["boost_speed"];
-            return k <= 0 ? 1f : k;
-        }
+        return k <= 0 ? 1f : k;      // a sheet with no such row answers 0: unbuffed, never stopped
     }
 
     // ── ABILITY SLOTS ────────────────────────────────────────────────────
@@ -558,7 +556,8 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         Sl("railgun").Left = Stats["rail_charge"];
         ApplyStatus(Status.Disabled, Stats["rail_charge"]);
     }
-    private void FireRail()
+    // The charge is spent (the Railgun row's Expire, on the host).
+    public void FireRail()
     {
         var a = Aim.Nose(this, MyArt.Length * 0.5f);
         var b = a + Vector2.Up.Rotated(Rotation) * (float)Stats["rail_range"];
@@ -585,7 +584,8 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         ApplyStatus(Status.Hardened, r.Left);
     }
     // The rush ends in an EMP: everything close takes it, and everything small enough is held.
-    private void RushEmp()
+    // (The Rush row's Expire, on the host.)
+    public void RushEmp()
     {
         float reach = (float)Stats["emp_range"];
         foreach (var h in new List<IHittable>(Targeting.All(Combat.Hostiles, Targeting.Attackable)))
@@ -641,8 +641,12 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         e.Left = Stats["echo_time"]; e.Own = 0; e.Cool = Stats["echo_cooldown"];
         _echoAt = Position;
     }
-    private void Detonate(double stored)
+    // The echo's time is up (the Echo row's Expire, on the host). What it remembered is its OWN
+    // slot's Own, so the row hands it nothing but the ship and no number travels through the tick.
+    public void Detonate()
     {
+        ref var e = ref Sl("echo");
+        double stored = e.Own; e.Own = 0;
         if (stored <= 0) return;
         double blast = stored * Stats["echo_share"];
         float reach = (float)Stats["echo_radius"];
@@ -825,13 +829,30 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         if (Hp <= 0) Die();
     }
 
-    // What the statuses on this ship let through. Nothing stands in the way yet: the classes
-    // that harden, evade or hold a bubble put their share here, and no weapon learns of them.
+    // Every source whose last blow is older than HitGap: its entry can now only say "allow it",
+    // which is what an absent entry says, so it is dropped. DamageBySource is left alone -- it is
+    // a tally the HUD and the checks read, not a timer.
+    private void SweepHits()
+    {
+        if (_lastHitBy.Count == 0) return;
+        foreach (var k in new List<string>(_lastHitBy.Keys))
+            if (_clock - _lastHitBy[k] >= HitGap) _lastHitBy.Remove(k);
+    }
+
+    // WHAT THE STATUSES ON THIS SHIP LET THROUGH. Each status that changes a blow is a row of
+    // StatusSet.Guards (Statuses.cs), walked in the order written there -- evasion first, because
+    // it decides whether the blow happened at all, then the shares, then the bubbles. The share is
+    // this hull's own stat row where it has one and the status's own default where it has not: it
+    // read Stats["rush_guard"] here, a row only the HeavyWarrior carries, so a hardening arriving
+    // from any second class, a gear part or a boss debuff was a status that did nothing.
     private double Guarded(double d)
     {
-        if (_status.Has(Status.Evading)) return 0;                       // the dart's roll: it is not there
-        double guard = Stats["rush_guard"];
-        if (_status.Has(Status.Hardened) && guard > 0) d *= guard;       // the warrior's rush: half of it
+        foreach (var g in StatusSet.Guards)
+        {
+            if (!_status.Has(g.Status)) continue;
+            d *= !string.IsNullOrEmpty(g.Stat) && Stats[g.Stat] > 0 ? Stats[g.Stat] : g.Share;
+            if (d <= 0) return 0;
+        }
         return ThroughBubbles(this, d);                                  // a bubble over it spends first
     }
 
@@ -879,6 +900,8 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     {
         float dt = (float)delta;
         _clock += delta;
+        // the per-source gap is measured against this clock, so it is swept on this clock
+        if (_clock >= _sweepAt) { _sweepAt = _clock + HitGap; SweepHits(); }
         if (Net.Sim) _hullWatch.Tick(this, Alive ? Hp : 0, taken: true);
         if (!Alive) _stasis = Math.Max(0, _stasis - delta);   // the host's clock rules; guests re-sync each packet
         if (_combatT > 0) _combatT = Math.Max(0, _combatT - delta);
@@ -920,62 +943,38 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         QueueRedraw();
     }
 
-    // Every peer counts the timers down, so a guest's bars move smoothly between host packets
-    // (the next packet corrects any drift). Only the host ACTS when one runs out: the recharge
-    // that follows a PD window, the magazine refilled by a reload, and the broadside's volleys.
+    // EVERY ABILITY THIS CLASS CARRIES, BY ITS OWN ROW. The cooldown runs down, a timer that is
+    // up runs down, and on the frame it reaches zero the ROW says what happens: Elapsed on every
+    // peer (the phase the bar must show at once), Expire on the host alone (what it resolves --
+    // the railgun's shot, the rush's EMP, the echo's blast, the recharge after a point-defence
+    // window, the magazine a reload refills). Every peer counts down so a guest's bars move
+    // smoothly between host packets, and the next packet corrects any drift.
+    //   This replaced a string[] naming the nine ids that had timers and a switch on the id
+    // beside it: a tenth timed ability added as a row compiled, bound, drew on the bar and its
+    // Left never moved, with nothing to say so. It replaced the point-defence window's own block
+    // and the missile reload's too -- both were an expiry written out by hand -- and a second
+    // tick of the freighter's deploy cooldown that this loop's first line already does.
     private void TickAbilities(double delta)
     {
-        if (Stats.Def.Has(Fit.Pd))
+        foreach (var def in Abilities.For(Class))
         {
-            ref var pd = ref Sl("pd");
-            if (pd.Left > 0) { pd.Left -= delta; if (pd.Left <= 0) { pd.Left = 0; if (Net.Sim) pd.Cool = Stats["pd_reload"]; } }
-            else if (pd.Cool > 0) pd.Cool = Math.Max(0, pd.Cool - delta);
-        }
-
-        if (Stats.Def.Has(Fit.Missiles))
-        {   // the burst's refire gap, and the reload that refills the magazine
-            ref var msl = ref Sl("missile");
-            if (msl.Cool > 0) msl.Cool = Math.Max(0, msl.Cool - delta);
-            ref var rl = ref Sl("reload");
-            if (rl.Left > 0)
-            {
-                rl.Left -= delta;
-                if (rl.Left <= 0) { rl.Left = 0; if (Net.Sim) Sl("missile").N = (int)Stats["missile_mag"]; }
-            }
-        }
-
-        // The classes' own timed abilities. Every peer counts them down so a guest's bar moves
-        // smoothly; only the host ACTS when one runs out -- the railgun's shot, the rush's EMP,
-        // the echo's detonation.
-        foreach (var id in Timed)
-        {
-            ref var sl = ref Sl(id);
+            ref var sl = ref Sl(def.Id);
             if (sl.Cool > 0) sl.Cool = Math.Max(0, sl.Cool - delta);
             if (sl.Left <= 0) continue;
             sl.Left -= delta;
             if (sl.Left > 0) continue;
             sl.Left = 0;
-            if (!Net.Sim) continue;
-            switch (id)
-            {
-                case "railgun": FireRail(); break;
-                case "rush":    RushEmp(); break;
-                case "echo":    Detonate(sl.Own); sl.Own = 0; break;
-            }
+            def.Elapsed?.Invoke(this);
+            if (Net.Sim) def.Expire?.Invoke(this);
         }
-        if (Sl("deploy").Cool > 0) Sl("deploy").Cool = Math.Max(0, Sl("deploy").Cool - delta);
 
         if (Stats.Def.Has(Fit.Broadside))
-        {   // The broadside. A ship lost in the middle of one loses the rest of it.
+        {   // THE VOLLEYS: a rhythm, not a timer, so the loop above cannot own them. The wind-up
+            // is the row's Left and the cooldown after is its Cool, both run down up there, and
+            // the row's Elapsed is what moves it from the one to the other on every peer. A ship
+            // lost in the middle of a broadside loses the rest of it.
             ref var bs = ref Sl("broadside");
             if (!Alive) { bs.Left = 0; bs.N = 0; }
-            if (bs.Left > 0)
-            {
-                bs.Left -= delta;
-                // Every peer moves on to the volleys: a guest shows them firing (its bar, its turrets'
-                // fast swing) until the host's next report says how many are left; only the host fires.
-                if (bs.Left <= 0) { bs.Left = 0; bs.N = Math.Max(1, (int)Stats["broadside_volleys"]); if (Net.Sim) bs.Own = 0; }
-            }
             if (bs.N > 0)
             {   // every main gun, along its barrel as it points now; the gap CARRIES its remainder, as the guns' reload does
                 if (Net.Sim) bs.Own -= delta;
@@ -986,7 +985,6 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
                     if (--bs.N == 0) bs.Cool = Stats["broadside_cooldown"];
                 }
             }
-            else if (bs.Cool > 0) bs.Cool = Math.Max(0, bs.Cool - delta);
         }
     }
 

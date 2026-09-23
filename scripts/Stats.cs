@@ -1,4 +1,5 @@
 using Godot;
+using System;
 using System.Collections.Generic;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -35,6 +36,30 @@ public class Stat
         }
     }
     public string Fmt(double v) => v.ToString("F" + Decimals) + (Unit.Length > 0 ? " " + Unit : "");
+}
+
+// A DAMAGING SYSTEM, as a class declares it (ClassDef.Weapons): what the K window calls it, how
+// its rate is worked out from a ship's own sheet, an optional line saying how that rate is made up,
+// and whether it is a burst the ship cannot hold (so no total may add it). It replaced the K
+// window's `if (Fit.Guns) ... else <the carrier>`, which named four figures in its total and so
+// left out the railgun, the hunters, the EMP, the deployed turrets, the echo and the carrier's
+// torpedoes. A new weapon is a row here plus its id in the class rows that carry it.
+public class DpsSource
+{
+    public string Label;
+    public Func<ShipStats, double> Rate;
+    public Func<ShipStats, string> Note;
+    public bool Burst;
+}
+
+// One damaging system's answer for one ship: what to print, and whether the total counts it.
+public readonly struct DpsLine
+{
+    public readonly string Label, Note;
+    public readonly double Dps;
+    public readonly bool Sustained;
+    public DpsLine(string label, double dps, bool sustained, string note)
+    { Label = label; Dps = dps; Sustained = sustained; Note = note; }
 }
 
 public class ShipStats
@@ -212,9 +237,142 @@ public class ShipStats
     public double BroadsideDps    => Def.Has(Fit.Broadside) && BroadsideCycle > 0 ? BroadsideDamage / BroadsideCycle : 0;
     public double FighterDpsEach   => Def.Has(Fit.Wing) ? this["fighter_damage"] / this["fighter_interval"] : 0;
     public double FighterDps       => FighterDpsEach * this["fighter_count"];
+    // Fighters strafe and then dock to rest, so the rate they HOLD is their firing rate over the
+    // share of the time they are out -- the sheet's own two figures, worked out exactly as the
+    // point-defence window's duty is above.
+    public double FighterDuty      => Def.Has(Fit.Wing) && this["fighter_burst"] + this["fighter_rest"] > 0
+                                    ? this["fighter_burst"] / (this["fighter_burst"] + this["fighter_rest"]) : 0;
+    public double FighterSustainedDps => FighterDps * FighterDuty;
     public double TorpedoesPerRun  => this["bomber_ammo"] * this["bomber_count"];
+    // A bomber's whole cycle: out to the launch distance, the torpedoes away one by one, home
+    // again, and the rearm on the deck. The strike was printed as "damage if all hit" and counted
+    // in nothing, so the carrier's heaviest weapon was in no total at all.
+    public double BomberCycle      => Def.Has(Fit.Wing)
+                                    ? 2 * this["launch_range"] / this["bomber_speed"]
+                                      + (this["bomber_ammo"] - 1) * this["torpedo_interval"] + this["bomber_rearm"] : 0;
+    public double TorpedoDps       => BomberCycle > 0 ? TorpedoesPerRun * this["torpedo_damage"] / BomberCycle : 0;
 
     // Staggered fire spaces barrels evenly across one reload, so it matches salvo's
     // rate exactly: N barrels every interval, or one barrel every interval / N.
     public double StaggerStep => this["main_count"] > 0 ? this["main_interval"] / this["main_count"] : 0;
+
+    // WHAT THIS SHIP KILLS WITH: one line per damaging system its class declares (ClassDef.Weapons).
+    public IEnumerable<DpsLine> DamageLines
+    {
+        get { foreach (var w in Def.Weapons) yield return new DpsLine(w.Label, w.Rate(this), !w.Burst, w.Note?.Invoke(this) ?? ""); }
+    }
+    // The rate it can hold forever: every line that is not a burst. The window added MainDps,
+    // MissileDps, BroadsideDps and PdSustainedDps, which is nine of the twelve classes short.
+    public double SustainedDps
+    {
+        get { double t = 0; foreach (var l in DamageLines) if (l.Sustained) t += l.Dps; return t; }
+    }
+}
+
+// THE CATALOGUE OF DAMAGING SYSTEMS. Every one in the game, once; a class's row (Ships.cs) lists
+// the ones it carries, so the three freighters share one entry for their deployed turrets rather
+// than a copy each. A new weapon is a row here and an id in the class rows that carry it -- the K
+// window is not touched, and a thirteenth class prints correctly with no UI edit.
+public static class Dps
+{
+    public static readonly DpsSource Main = new()
+    {
+        Label = "Main guns", Rate = s => s.MainDps,
+        Note = s => $"{s["main_count"]:0} barrels at {s.MainDpsPerBarrel:0.00} DPS  ·  salvo {s["main_count"]:0} every "
+                  + $"{s["main_interval"]:0.00} s = staggered 1 every {s.StaggerStep:0.00} s",
+    };
+
+    public static readonly DpsSource Broadside = new()
+    {
+        Label = "Broadside, averaged over its cycle", Rate = s => s.BroadsideDps,
+        Note = s => $"{s["broadside_volleys"]:0} volleys × {s["main_count"]:0} shells × {s["main_damage"] * s["broadside_mult"]:0.00} "
+                  + $"= {s.BroadsideDamage:0.0} damage, every {s.BroadsideCycle:0.0} s",
+    };
+
+    public static readonly DpsSource Missiles = new()
+    {
+        Label = "Missiles, averaged over a reload", Rate = s => s.MissileDps,
+        Note = s => $"{s["missile_mag"]:0} bursts of {PlayerShip.BurstSides.Length} at {s["missile_damage"]:0.0}, "
+                  + $"reloaded in {s["missile_reload"]:0.0} s",
+    };
+
+    public static readonly DpsSource Pd = new()
+    {
+        Label = "Point defence", Rate = s => s.PdSustainedDps,
+        Note = s => $"{s["pd_count"]:0} turrets at {s.PdDpsPerTurret:0.00} DPS while firing, {s.PdDuty * 100:0}% of the time",
+    };
+
+    public static readonly DpsSource Fighters = new()
+    {
+        Label = "Fighters, averaged over their rest", Rate = s => s.FighterSustainedDps,
+        Note = s => $"{s["fighter_count"]:0} craft at {s.FighterDpsEach:0.00} DPS while firing, {s.FighterDuty * 100:0}% of the time",
+    };
+
+    public static readonly DpsSource Bombers = new()
+    {
+        Label = "Bomber torpedoes, averaged over the run and the rearm", Rate = s => s.TorpedoDps,
+        Note = s => $"{s.TorpedoesPerRun:0} torpedoes × {s["torpedo_damage"]:0.0} = {s.TorpedoesPerRun * s["torpedo_damage"]:0.0} "
+                  + $"every {s.BomberCycle:0.0} s, if every one hits (unguided)",
+    };
+
+    public static readonly DpsSource Deployed = new()
+    {
+        Label = "Deployed turrets, all of them out", Rate = s => s["deploy_damage"] / s["deploy_interval"] * s["deploy_max"],
+        Note = s => $"{s["deploy_max"]:0} turrets at {s["deploy_damage"] / s["deploy_interval"]:0.00} DPS each",
+    };
+
+    public static readonly DpsSource Railgun = new()
+    {
+        Label = "Railgun, averaged over its charge and cooldown",
+        Rate = s => s["rail_damage"] / (s["rail_charge"] + s["rail_cooldown"]),
+        Note = s => $"{s["rail_damage"]:0} damage every {s["rail_charge"] + s["rail_cooldown"]:0.0} s, the charge and the cooldown",
+    };
+
+    public static readonly DpsSource Emp = new()
+    {
+        Label = "Rush EMP, averaged over its cooldown", Rate = s => s["emp_damage"] / s["rush_cooldown"],
+        Note = s => $"{s["emp_damage"]:0} inside {s["emp_range"]:0} u, every {s["rush_cooldown"]:0.0} s",
+    };
+
+    public static readonly DpsSource Hunters = new()
+    {
+        Label = "Hunter-seekers, averaged over their cooldown",
+        Rate = s => s["hunter_count"] * s["hunter_damage"] / s["hunter_cooldown"],
+        Note = s => $"{s["hunter_count"]:0} × {s["hunter_damage"]:0} = {s["hunter_count"] * s["hunter_damage"]:0} "
+                  + $"every {s["hunter_cooldown"]:0.0} s",
+    };
+
+    public static readonly DpsSource Echo = new()
+    {
+        Label = "Echo, averaged over its cooldown",
+        Rate = s => s.MainDps * s["echo_share"] * s["echo_time"] / s["echo_cooldown"],
+        Note = s => $"it repeats {s["echo_share"]:0.00}× what you deal in {s["echo_time"]:0.0} s, every {s["echo_cooldown"]:0.0} s",
+    };
+}
+
+// EVERY STAT IN THE GAME, by id -- the one place that can say what a stat id IS when the ship in
+// hand has not got it. A window could only ever read the CURRENT class's sheet, so the equipment
+// hold printed raw ids ("needs fighter_speed, fighter_damage") at a battleship, and the pilot
+// window had no name for a stat its points moved on another hull. Built once, from every class.
+public static class AllStats
+{
+    // id -> the row that describes it. Whichever class was read first owns the row's Base, so
+    // nothing here hands the row out: only what a stat is CALLED and how it prints.
+    private static readonly Dictionary<string, Stat> Rows = Build();
+    private static Dictionary<string, Stat> Build()
+    {
+        var d = new Dictionary<string, Stat>();
+        foreach (var c in Classes.All)
+            foreach (var s in new ShipStats(c.Id).All) d.TryAdd(s.Id, s);
+        return d;
+    }
+    // The system it belongs to: "Fighters", "Main guns", "Point defence".
+    public static string Group(string id) => Rows.TryGetValue(id, out var s) ? s.Group : id;
+    // The system and the row: "Fighters · Top speed".
+    public static string Said(string id) => Rows.TryGetValue(id, out var s) ? $"{s.Group} · {s.Label}" : id;
+    // A number in that stat's own units: "5", "1 u/s", "0.02 rad/s". It prints as finely as it
+    // needs (0.##) rather than at the stat's own decimals, because what a point ADDS is often finer
+    // than the figure it adds to -- 7.5 on a railgun the sheet prints whole.
+    public static string Fmt(string id, double v) =>
+        v.ToString("0.##") + (Rows.TryGetValue(id, out var s) && s.Unit.Length > 0 ? " " + s.Unit : "");
 }

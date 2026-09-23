@@ -29,12 +29,17 @@ public partial class PilotWindow : PanelContainer
         {
             int k = i;
             var row = Ui.HBox(12, "Pilot_" + Progression.All[i].Id);
-            _info[i] = new Label { CustomMinimumSize = new Vector2(300, 0), SizeFlagsHorizontal = SizeFlags.ExpandFill, VerticalAlignment = VerticalAlignment.Center };
+            _info[i] = new Label { CustomMinimumSize = new Vector2(440, 0), SizeFlagsHorizontal = SizeFlags.ExpandFill,
+                                   VerticalAlignment = VerticalAlignment.Center, AutowrapMode = TextServer.AutowrapMode.WordSmart };
             _buy[i] = new Button { Name = "Buy", FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(134, 34), SizeFlagsVertical = SizeFlags.ShrinkCenter };
             _buy[i].Pressed += () => { if (Progression.TryBuy(Progression.All[k].Id)) Hub.PilotChanged(); };
             row.AddChild(_info[i]); row.AddChild(_buy[i]); col.AddChild(Ui.CardWrap(row));
         }
-        var note = Ui.Lbl("EXP from boss kills: 200 x the boss's level / yours, +250 the first time you beat a level, +100 for completing. Every pilot earns their own.",
+        // The three figures are the mission table's (Missions), read live: they were written out
+        // here as well, and the TIO window reads the same three from the table, so the same numbers
+        // sat in two places with nothing to keep them together.
+        var note = Ui.Lbl($"EXP from boss kills: {Missions.KillExp} x the boss's level / yours, +{Missions.FirstClearExp} the first time you beat a level, "
+                        + $"+{Missions.CompletionExp} for completing. Every pilot earns their own.",
                           Ui.Small, Ui.Dim);
         note.AutowrapMode = TextServer.AutowrapMode.WordSmart; note.CustomMinimumSize = new Vector2(440, 0);
         col.AddChild(note);
@@ -51,10 +56,26 @@ public partial class PilotWindow : PanelContainer
         for (int i = 0; i < Progression.All.Length; i++)
         {
             var u = Progression.All[i]; int n = Character.Bought[i], cost = Progression.Cost(n);
-            double per = u.Id == "turn" ? 1 : u.Per;                    // shown in degrees
-            Ui.SetText(_info[i], $"{u.Name}  ·  Lv {n}   (+{per * n:0.#} {u.Unit} so far; next +{per:0.#})");
+            Ui.SetText(_info[i], $"{u.Name}  ·  Lv {n}" + Buys(u, n));
             Ui.SetText(_buy[i], $"BUY  {cost} pt");
             _buy[i].Disabled = Character.Points < cost || n >= Progression.MaxPerUpgrade;
         }
+    }
+
+    // WHAT THIS ROW HAS BOUGHT ON THIS HULL, and what the next point buys: one line per stat the
+    // purchase really moves, read from the same place the purchase reads (Progression.StatsFor),
+    // named and printed in that stat's own units (AllStats).
+    // It printed the row's own `Per` before, with a `u.Id == "turn"` special case to turn radians
+    // into degrees. On Weapons that was a lie: StatsFor ignores Per there and asks the class
+    // (Classes.Damage), so a sniper's point is +1 on its gun AND +7.5 on its railgun, and a
+    // carrier's fighters take nothing at all -- while the row said "next +1" for all of it.
+    // The unit conversion is gone with the special case: a stat prints in the units the STATS tab
+    // prints it in, so the two windows cannot disagree.
+    private static string Buys(Progression.Upgrade u, int n)
+    {
+        string s = "";
+        foreach (var (stat, per) in Progression.StatsFor(u.Id, Character.Class, u.Per))
+            s += $"\n    {AllStats.Said(stat)}   +{AllStats.Fmt(stat, per * n)} now, +{AllStats.Fmt(stat, per)} next";
+        return s.Length > 0 ? s : "\n    nothing on this hull";
     }
 }
