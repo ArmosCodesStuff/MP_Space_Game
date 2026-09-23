@@ -633,12 +633,19 @@ public partial class _Test : Node
         ship.Position = menu.Station + new Vector2(200, 150);
         double drift0 = ship.Position.DistanceTo(menu.Station);
         bool sawBroadside = false;
-        var eight = GetTree().CreateTimer(6.0);                      // GAME seconds, as Wait() counts them
-        while (eight.TimeLeft > 0 && menu.AreaShotIn < 0)
-        { sawBroadside |= ship.BroadsideVolleysLeft > 0; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
-        double drift1 = ship.Position.DistanceTo(menu.Station);
+        // THE NEAREST IT GETS over a window that spans whole cycles, rather than the distance at
+        // one moment: the diorama dodges every 15 s and each dodge ends in a 500 u jump, so the
+        // reading at any single instant is whatever the scene was doing just then.
+        double drift1 = drift0;
+        var eight = GetTree().CreateTimer(25.0);                     // GAME seconds, as Wait() counts them
+        while (eight.TimeLeft > 0)
+        {
+            sawBroadside |= ship.BroadsideVolleysLeft > 0;
+            drift1 = Math.Min(drift1, ship.Position.DistanceTo(menu.Station));
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        }
         Check(drift0 > 200 && drift1 < drift0 - 120,
-              $"pushed {drift0:0} u off station it flies itself home ({drift0 - drift1:0} u of it closed, {drift1:0} u to go)");
+              $"pushed {drift0:0} u off station it flies itself home between shots ({drift0 - drift1:0} u of it closed, nearest {drift1:0} u)");
         // Its own window: the broadside fires whether or not a shot is pending (the guns are outside
         // the dodge), and the station measurement above stops the moment one is called.
         var broadsideWatch = GetTree().CreateTimer(16.0);
@@ -1567,10 +1574,10 @@ public partial class _Test : Node
         hauler.Position = Hub.PortalPos + new Vector2(0, 20);
         for (int i = 0; i < 120 && hauler.State == Hauler.St.Escorting; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         Check(hauler.State == Hauler.St.Charging && hauler.Position.DistanceTo(Hub.PortalPos) < 0.6f, $"the route ends in the portal: it charges there ({hauler.State})");
-        int booms0 = Nodes<FxNode>().Count();
+        int booms0 = Nodes<FxNode>().Count(f => !f.Warn);
         double ec0 = Y.Credits;
         hauler.T = Economy.HaulerCharge; await Wait(0.1);
-        Check(hauler.State == Hauler.St.Away && H.Raiders.Count(r => r.Quarry == hauler) == 0 && Nodes<FxNode>().Count() <= booms0,
+        Check(hauler.State == Hauler.St.Away && H.Raiders.Count(r => r.Quarry == hauler) == 0 && Nodes<FxNode>().Count(f => !f.Warn) <= booms0,
               $"through the portal: the hunters withdraw, none shot down ({H.Raiders.Count(r => r.Quarry == hauler)} left)");
         double atJump = hauler.Cargo;                  // 300, and whatever a delivery added before it lifted
         hauler.T = Economy.HaulerAway; await Wait(0.1);
@@ -2667,13 +2674,17 @@ public partial class _Test : Node
                 .All(s => new[] { Rarity.Common, Rarity.Rare, Rarity.Epic }
                     .All(r => drops.Count(i => i.Slot == s && i.Rarity == r) * 3 == drops.Count(i => i.Slot == s)));
             var kit = Equipment.All.Where(i => i.Kit).ToList();
-            Check(drops.Count == 138 && famShape && kit.Count == 23 && kit.All(i => i.Rarity == Rarity.Common)
-                  && kit.Count(i => i.Slot == GearSlot.Weapon) == 7 && kit.Count(i => i.Slot == GearSlot.Utility) == 12,
-                  $"the gear: 138 drops, a third of each slot at each rarity, and a 23-part kit -- seven weapon mounts and twelve signature systems across twelve classes, plus the drive, the deflector, the frame and the chip every ship has ({drops.Count} drops, {kit.Count} kit)");
+            Check(drops.Count == 246 && famShape && kit.Count == 23 && kit.All(i => i.Rarity == Rarity.Common)
+                  && kit.Count(i => i.Slot == GearSlot.Weapon) == 7 && kit.Count(i => i.Slot == GearSlot.Utility) == 12
+                  && drops.Count(i => i.Slot == GearSlot.Utility) == 144,
+                  $"the gear: 246 drops, a third of each slot at each rarity, and a 23-part kit -- seven weapon mounts and twelve signature systems across twelve classes, plus the drive, the deflector, the frame and the chip every ship has. The utility slot is 144 of the 246: twelve systems with a family of four, where nine of the twelve had none at all ({drops.Count} drops, {drops.Count(i => i.Slot == GearSlot.Utility)} utility, {kit.Count} kit)");
             Check(Wear(bsC, GearSlot.Weapon) == 24 && Wear(cvC, GearSlot.Weapon) == 12 && Wear(ddC, GearSlot.Weapon) == 24
                   && Wear(ShipClass.FreightHauler, GearSlot.Weapon) == 24 && Wear(ShipClass.LightDart, GearSlot.Weapon) == 24
-                  && Wear(bsC, GearSlot.Utility) == 12 && Wear(cvC, GearSlot.Utility) == 12 && Wear(ddC, GearSlot.Utility) == 12
-                  && Wear(ShipClass.FreightHauler, GearSlot.Utility) == 0
+                  // THE UTILITY SLOT: one family of four per SYSTEM at three rarities, and every
+                  // class has exactly one system, so every class wears exactly twelve -- the
+                  // bubble's, the overdrive's, the shockwave's, the railgun's, the rush's, the
+                  // hunters', the roll's, the echo's and the veil's are the nine that are new.
+                  && Classes.All.Where(c => c.Ready).All(c => Wear(c.Id, GearSlot.Utility) == 12)
                   && new[] { GearSlot.Engines, GearSlot.Shield, GearSlot.Chip }
                         .All(g => Classes.All.Where(c => c.Ready).All(c => Wear(c.Id, g) == 12))
                   // THE HULL SLOT, by what a hull actually is: the four point-defence frames (12
@@ -2684,7 +2695,7 @@ public partial class _Test : Node
                   && Wear(ShipClass.FreightHauler, GearSlot.Hull) == 30 && Wear(ShipClass.LightWraith, GearSlot.Hull) == 12
                   && Classes.All.Where(c => c.Ready).All(c => Wear(c.Id, GearSlot.Hull)
                          == 12 + (c.Has(Fit.Pd) ? 9 : 0) + (c.Has(Fit.Deploy) ? 9 : 0)),
-                  "a hull wears what it has the stats for: 24 weapon parts for anything with main guns -- a freighter and a dart included, which could wear none -- 12 for the carrier's hangars, 12 utility parts each for the three systems that have any (and none yet for the nine new ones), every hull all 12 engines, shields and chips, and a hull slot that says what the hull IS: twelve hull-and-handling frames for everything (the armoured frame among them, which is about the hull as much as the window), nine that are point defence's alone, nine turret cradles where turrets are dropped -- a sniper 12 where it wore 3, a battleship 21, a freighter 30");
+                  "a hull wears what it has the stats for: 24 weapon parts for anything with main guns -- a freighter and a dart included, which could wear none -- 12 for the carrier's hangars, 12 utility parts for every one of the twelve classes, every hull all 12 engines, shields and chips, and a hull slot that says what the hull IS: twelve hull-and-handling frames for everything (the armoured frame among them, which is about the hull as much as the window), nine that are point defence's alone, nine turret cradles where turrets are dropped -- a sniper 12 where it wore 3, a battleship 21, a freighter 30");
             bool OnlyFamily(ItemDef i, string fam) => i.Pct.Keys.Concat(i.Add.Keys).All(k => k.StartsWith(fam));
             Check(Equipment.All.Where(i => !i.Kit && OnlyFamily(i, "broadside_")).All(i => Equipment.Fits(i, i.Slot, bsC) && !Equipment.Fits(i, i.Slot, ddC))
                   && Equipment.All.Where(i => !i.Kit && OnlyFamily(i, "missile_")).All(i => Equipment.Fits(i, i.Slot, ddC) && !Equipment.Fits(i, i.Slot, bsC))
@@ -2693,6 +2704,37 @@ public partial class _Test : Node
                   && Equipment.All.Count(i => !i.Kit && OnlyFamily(i, "missile_")) == 12
                   && Equipment.All.Count(i => !i.Kit && OnlyFamily(i, "fighter_")) == 9,
                   "and a part whose every stat belongs to one system still fits only the hull that has it: twelve broadside parts on the battleship alone, twelve missile parts on the destroyer, nine pure fighter parts on the carrier");
+            // EVERY CLASS, EVERY SLOT -- the Known broken item, as one assertion. Nine of the
+            // twelve could put nothing in the utility slot but the part they were born with:
+            // there was no rolled part in the game that fitted a bubble, an overdrive, a
+            // shockwave, a railgun, a rush, a cell of hunters, a barrel roll, an echo or a veil.
+            var slots = Equipment.Core.Concat(new[] { GearSlot.Chip }).ToArray();
+            var bare = Classes.All.Where(c => c.Ready)
+                              .SelectMany(c => slots.Where(s => Wear(c.Id, s) == 0).Select(s => $"{c.Name}/{s}")).ToList();
+            Check(bare.Count == 0 && slots.Length == 6 && Classes.All.Count(c => c.Ready) == 12
+                  && Classes.All.Where(c => c.Ready).All(c => Wear(c.Id, GearSlot.Utility) == 12),
+                  $"all twelve classes can fit a ROLLED part in every one of the six slots, the utility slot included -- twelve of them each ({bare.Count} empty slots: {string.Join(", ", bare)})");
+            // A KIT PART FITS ONLY THE HULLS BORN WITH IT, by the SAME rule as every other part:
+            // it asks for the signature row of those hulls (ItemDef.Needs). It used to take a
+            // second table (Equipment.KitOwners) and a second branch inside Fits. The sets must
+            // be EQUAL, class by class, not merely overlapping.
+            var carries = Classes.All.Where(c => c.Ready).SelectMany(c => c.Kit.Select(k => (part: k.Id, cls: c.Id)))
+                                 .ToLookup(x => x.part, x => x.cls);
+            var wrongHull = kit.Where(i => carries.Contains(i.Id))
+                               .SelectMany(i => Classes.All.Where(c => c.Ready)
+                                   .Where(c => Equipment.Fits(i, i.Slot, c.Id) != carries[i.Id].Contains(c.Id))
+                                   .Select(c => $"{i.Id}/{c.Name}")).ToList();
+            var anyHull = kit.Where(i => !carries.Contains(i.Id)).ToList();
+            // and what a SAVED loadout does with one that no longer fits: the hull's own, as ever
+            var saved = Equipment.Sanitize(ddC, new[] { "bs_main_battery", "std_drive", "basic_deflector", "reinforced_frame", "dd_missile_rack", "", "", "", "", "" });
+            Check(wrongHull.Count == 0 && carries.Count == 19 && anyHull.Count == 4
+                  && carries["freight_main_gun"].Count() == 3 && carries["light_main_gun"].Count() == 3 && carries["heavy_main_gun"].Count() == 2
+                  && anyHull.All(i => Classes.All.Where(c => c.Ready).All(c => Equipment.Fits(i, i.Slot, c.Id)))
+                  && Equipment.Fits(Equipment.ById("freight_main_gun"), GearSlot.Weapon, ShipClass.FreightTender)
+                  && !Equipment.Fits(Equipment.ById("freight_bubble"), GearSlot.Utility, ShipClass.FreightTender)
+                  && !Equipment.Fits(Equipment.ById("bs_main_battery"), GearSlot.Weapon, ddC)
+                  && saved[0] == "dd_main_battery" && saved[4] == "dd_missile_rack",
+                  $"a kit part fits the hulls born with it and no others: nineteen named by a class row -- one cargo gun on the three freighters, one light cannon on the sniper and the warden, one dart cannon on the three lights -- and the drive, the deflector, the frame and the chip on any hull; a battleship's mount saved on a destroyer comes back as the destroyer's own ({wrongHull.Count} wrong: {string.Join(", ", wrongHull)})");
             // a sheet with only the named parts on the kit, chips off
             ShipStats Sheet(ShipClass c, string part)
             {
@@ -2724,6 +2766,27 @@ public partial class _Test : Node
                   $"Swarm Hangars III, the owner's example: 9 fighters, 22% slower and weaker ({swarm["fighter_count"]}, {swarm["fighter_speed"]}, {swarm["fighter_damage"]})");
             Check(Near(line["fighter_count"], 4) && Near(line["fighter_damage"], 3.5) && Near(line["fighter_speed"], 422.4),
                   $"Line Hangars III, between them: 4 fighters, +40% damage, +20% speed ({line["fighter_count"]}, {line["fighter_damage"]}, {line["fighter_speed"]})");
+            // THE NINE NEW FAMILIES, in their own numbers: the lean scaled by rarity (x1, x1.5, x2),
+            // the price flat, and every stat in a line belonging to that one system -- which is
+            // what keeps a bubble part on the freighter that has a bubble and nowhere else.
+            var bub3 = Sheet(ShipClass.FreightHauler, "bub_deep_3"); var bubS = Sheet(ShipClass.FreightHauler, "bub_snap_2");
+            Check(Near(bub3["bubble_pool"], 800) && Near(bub3["bubble_radius"], 208)
+                  && Near(bubS["bubble_cooldown"], 25 / 1.75) && Near(bubS["bubble_time"], 6) && Near(bubS["bubble_pool"], 340),
+                  $"the bubble's gear: Deep III soaks 800 inside 208 u; Snap II is up again in 14.3 s, 340 over 6.0 s ({bub3["bubble_pool"]:0}, {bub3["bubble_radius"]:0}, {bubS["bubble_cooldown"]:0.0})");
+            var hnt3 = Sheet(ShipClass.HeavyWarden, "hnt_heavy_3"); var hntS = Sheet(ShipClass.HeavyWarden, "hnt_swarm_3");
+            Check(Near(hnt3["hunter_damage"], 99) && Near(hnt3["hunter_count"], 5)
+                  && Near(hntS["hunter_count"], 9) && Near(hntS["hunter_damage"], 33.75),
+                  $"the hunters' gear: Heavy Cells III is 5 missiles at 99; Swarm Cells III is 9 at 33.75 ({hnt3["hunter_count"]:0} x {hnt3["hunter_damage"]:0}, {hntS["hunter_count"]:0} x {hntS["hunter_damage"]:0.00})");
+            var rlg3 = Sheet(ShipClass.HeavySniper, "rlg_quick_3"); var ovr3 = Sheet(ShipClass.FreightTender, "ovr_hard_3");
+            Check(Near(rlg3["rail_charge"], 3 / 2.2) && Near(rlg3["rail_damage"], 112.5)
+                  && Near(ovr3["overdrive_mult"], 3.2) && Near(ovr3["overdrive_time"], 5.6),
+                  $"the railgun's and the overdrive's: Quick Charge III is a 1.36 s charge for a 112.5 slug; Hard Coils III is x3.2 for 5.6 s ({rlg3["rail_charge"]:0.00} s, {ovr3["overdrive_mult"]:0.0}x)");
+            var vel3 = Sheet(ShipClass.LightWraith, "vel_deep_3"); var velA = Sheet(ShipClass.LightWraith, "vel_ambush_2");
+            var bareVeil = new ShipStats(ShipClass.LightWraith);
+            Check(Near(vel3["stealth_time"], 10) && Near(vel3["stealth_cooldown"], 20 / 0.75)
+                  && Near(velA["stealth_rof"], 1.45) && Near(velA["stealth_speed"], 0.85)
+                  && Near(bareVeil["stealth_speed"], 1) && Near(bareVeil["stealth_rof"], 1),
+                  $"the veil's gear, on the two rows the veil gained so it could have a family at all: Deep III is unseen 10.0 s and back in 26.7 s; Ambush II fires at x1.45 and moves at x0.85 while unseen -- and a wraith with no veil part is x1.00 at both, the ship it always was ({vel3["stealth_time"]:0.0} s, {vel3["stealth_cooldown"]:0.0} s, {velA["stealth_rof"]:0.00}x, {bareVeil["stealth_speed"]:0.00}x)");
             // THE WORST CASE: the most negative share any fitting part gives each stat, in every core
             // slot at once and five times over in the chips, must leave the number above zero
             bool allPositive = true;
@@ -2738,7 +2801,7 @@ public partial class _Test : Node
             Check(allPositive && Near(Worst(cvC, "fighter_damage"), -0.47) && Near(Worst(bsC, "main_damage"), -0.55) && Near(Worst(bsC, "hull"), -0.70) && Near(Worst(cvC, "hull"), -0.70),
                   $"no stack of gear takes a number to zero: worst fighter damage -47% (1.325), shell -55% (8.055), hull -70% since the spar frame joined the deepest stack (112.5 / 75) ({Worst(cvC, "fighter_damage"):0.00}, {Worst(bsC, "main_damage"):0.00}, {Worst(bsC, "hull"):0.00})");
             // every stat a part names is real on a class it fits, and none touches the turret counts
-            string[] addable = { "fighter_count", "bomber_count", "missile_mag", "bomber_ammo", "broadside_volleys" };
+            string[] addable = { "fighter_count", "bomber_count", "missile_mag", "bomber_ammo", "broadside_volleys", "hunter_count" };
             var unknown = Equipment.All.SelectMany(i => i.Pct.Keys.Concat(i.Add.Keys).Where(k =>
                               !Enum.GetValues<ShipClass>().Any(c => new ShipStats(c).All.Any(s => s.Id == k)))
                               .Select(k => i.Id + ":" + k)).ToList();
@@ -2889,10 +2952,10 @@ public partial class _Test : Node
             // fighter_damage, fighter_turn, fighter_count" -- which reads as four demands.
             Check(otherRow != null && Nodes<Label>(otherRow).Any(l => l.Text.Contains("needs Main guns"))
                   && !Nodes<Label>(otherRow).Any(l => l.Text.Contains("main_interval"))
-                  && Equipment.NeedsSaid(Equipment.ById("cv_elite_1")) == "Fighters"
+                  && Equipment.NeedsSaid(Equipment.ById("cv_elite_1")) == "CARRIER"
                   && Equipment.NeedsSaid(Equipment.ById("sh_balanced_1")) == "Hull or Point defence"
                   && Equipment.NeedsSaid(Equipment.ById("bs_main_battery")) == "BATTLESHIP",
-                  $"a part that does not fit names the system it wants, any one of them: a Rapid Battery needs Main guns, Elite Hangars need Fighters, a Balanced Array needs Hull or Point defence ({Equipment.NeedsSaid(Equipment.ById("sh_balanced_1"))})");
+                  $"a part that does not fit names the system it wants, any one of them: a Rapid Battery needs Main guns and a Balanced Array Hull or Point defence, while a part only one hull in the game can wear names the HULL instead -- Elite Hangars and the battleship's own battery -- because one name reads better than the system it belongs to ({Equipment.NeedsSaid(Equipment.ById("sh_balanced_1"))}, {Equipment.NeedsSaid(Equipment.ById("bs_main_battery"))})");
             var lineRow = Nodes<HBoxContainer>(ew3).FirstOrDefault(r => r.Name == "Hold_cv_line_1");
             lineRow?.GetChildren().OfType<Button>().FirstOrDefault(b => b.Name == "Fit")?.EmitSignal(BaseButton.SignalName.Pressed);
             await Wait(0.2);
@@ -3129,9 +3192,10 @@ public partial class _Test : Node
             // the missile: within 500 u of the heavy, at where the target will be in 7 s
             hm.Position = edge + (Hub.BasePos - edge).Normalized() * 420f; hm.Velocity = Vector2.Zero;
             for (int i = 0; i < 60 * 14 && H.BlastsPending == 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            var blastRing = Nodes<Telegraph>().FirstOrDefault(t => !t.Line && Math.Abs(t.Radius - Raider.BlastRadius) < 0.1f);
-            Check(H.BlastsPending == 1 && blastRing != null && blastRing.A.DistanceTo(hm.Position) < 6f && Math.Abs(blastRing.Duration - 7) < 1e-6,
-                  "within 500 u it fires at where the target will be; a red circle marks it for 7 s");
+            var blastRing = Nodes<FxNode>().FirstOrDefault(t => t.Id == Fx.WarnZone && Math.Abs(t.Radius - Raider.BlastRadius) < 0.1f);
+            Check(H.BlastsPending == 1 && blastRing != null && blastRing.Position.DistanceTo(hm.Position) < 6f
+                  && Math.Abs(blastRing.Time - 7) < 1e-6 && blastRing.Warn && blastRing.Anchor == Fx.World,
+                  "within 500 u it fires at where the target will be; a red circle -- a warning row of Fx.All, pinned to the ground -- marks it for 7 s");
             double mm0 = HvMissile();
             for (int i = 0; i < 60 * 9 && H.BlastsPending > 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(Math.Abs(HvMissile() - mm0 - 30) < 1e-6, $"staying on the circle, the gunship row's 30-damage blast lands ({HvMissile() - mm0:0})");
@@ -3150,16 +3214,16 @@ public partial class _Test : Node
             hm.Position = edge + (Hub.BasePos - edge).Normalized() * 400f; hm.Velocity = Vector2.Zero;
             typeof(Raider).GetField("_missileCd", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(hv, 0.12);
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            int rings0 = Nodes<Telegraph>().Count(t => !t.Line);
+            int rings0 = Nodes<FxNode>().Count(t => t.Id == Fx.WarnZone);
             Vector2 atFire = hm.Position;
-            for (int i = 0; i < 20 && Nodes<Telegraph>().Count(t => !t.Line) == rings0; i++)
+            for (int i = 0; i < 20 && Nodes<FxNode>().Count(t => t.Id == Fx.WarnZone) == rings0; i++)
             {
                 atFire = hm.Position; hm.Position += new Vector2(0, 45);
                 await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             }
-            var wildRing = Nodes<Telegraph>().LastOrDefault(t => !t.Line && Math.Abs(t.Radius - Raider.BlastRadius) < 0.1f);
-            Check(wildRing != null && wildRing.A.DistanceTo(atFire) < 100f,
-                  $"a target moving at a wild 2700 u/s: the circle sits on it, not 7 s ahead ({(wildRing == null ? -1 : wildRing.A.DistanceTo(atFire)):0} u off)");
+            var wildRing = Nodes<FxNode>().LastOrDefault(t => t.Id == Fx.WarnZone && Math.Abs(t.Radius - Raider.BlastRadius) < 0.1f);
+            Check(wildRing != null && wildRing.Position.DistanceTo(atFire) < 100f,
+                  $"a target moving at a wild 2700 u/s: the circle sits on it, not 7 s ahead ({(wildRing == null ? -1 : wildRing.Position.DistanceTo(atFire)):0} u off)");
             // pinned: it boosts at 700% until 300 u away, then closes at cruise and fires 2 DPS
             hm.Position = Hub.BasePos + new Vector2(1900, 0); hm.Velocity = Vector2.Zero; hm.Rotation = 0f;
             var lights = new[] { H.SpawnRaider(hm.Position + new Vector2(0, -250)), H.SpawnRaider(hm.Position + new Vector2(250, 0)), H.SpawnRaider(hm.Position + new Vector2(-250, 0)) };
@@ -3741,6 +3805,19 @@ public partial class _Test : Node
                       && Shots.Of(Shots.Seeker).Interceptable && !Shots.Of(Shots.Missile).Interceptable
                       && Shots.All.Count(x => x.Smoke) == 3,
                       "six kinds of shot, each a row: a shell, a boss's slug and its scrap, a torpedo, a heavy missile, and the seeker point defence exists for");
+                // AND EVERY EFFECT AND EVERY WARNING IS ONE NODE WITH A ROW. Telegraph was a
+                // second node for the same sentence -- a shape, at a place, for a time, with a
+                // sound -- with a `bool Line` where this has a shape and an RPC of its own beside
+                // the one that already carried effects. Two warning rows, a lane and a zone; how
+                // long, how wide and what it sounds like are the MOVE's and come with the raise,
+                // because one boss move plays its cue with no warning at all.
+                var warnLane = Fx.Of(Fx.WarnLane); var warnZone = Fx.Of(Fx.WarnZone);
+                Check(Fx.All.Length == 9 && warnLane.Warn && warnZone.Warn
+                      && warnLane.Shape == FxShape.Lane && warnZone.Shape == FxShape.Zone
+                      && warnLane.Sound == null && warnZone.Sound == null
+                      && new[] { Fx.Burst, Fx.Lost, Fx.Rebuilt, Fx.Wave, Fx.Emp, Fx.Echo, Fx.Rail }.All(i => !Fx.Of(i).Warn)
+                      && Fx.All.Count(x => x.Warn) == 2 && Fx.World == 0 && Fx.Flash == 0.35,
+                      $"nine rows of Fx.All, seven effects and two warnings: a red lane and a red zone, whose clock and sounds are the raise's ({Fx.All.Length} rows, {Fx.All.Count(x => x.Warn)} warnings)");
                 // the sweep the shell and the rock share: a step longer than a hull is how a shot
                 // passes through it between frames
                 {
@@ -3753,11 +3830,11 @@ public partial class _Test : Node
                           $"Shots.Sweep walks a 60 u step in ten 6 u tests, stops at the first touch, and tests only the end point when a row asks for no sweep ({seen}, {once})");
                 }
 
-                Check(Fx.All.Length == 7 && Fx.Of(Fx.Wave).Shape == FxShape.Ring
+                Check(Fx.All.Length == 9 && Fx.Of(Fx.Wave).Shape == FxShape.Ring
                       && Fx.Of(Fx.Emp).Shape == FxShape.Spokes && Fx.Of(Fx.Echo).Shape == FxShape.Spokes
                       && Fx.Of(Fx.Rail).Shape == FxShape.Bar && Fx.Of(Fx.Burst).Shape == FxShape.Burst
                       && Fx.Of(Fx.Rebuilt).Tint != Fx.Of(Fx.Lost).Tint,
-                      "seven effects, each a row: a burst, a fleet craft lost and rebuilt, a wave, an EMP, an echo and a railgun's bar");
+                      "the effects, each a row: a burst, a fleet craft lost and rebuilt, a wave, an EMP, an echo and a railgun's bar -- and the two warnings a boss draws, which were their own node until they became rows beside them");
                 int fxBefore = Nodes<FxNode>().Count();
                 Fx.Raise(Fx.Wave, fr.Position + new Vector2(0, -600), 400f);
                 await Wait(0.1);
@@ -4191,15 +4268,15 @@ public partial class _Test : Node
                         if (liveT == 0) liveRot0 = boss.Rotation;
                         liveT += 1.0 / 60;
                         liveTurn = Math.Max(liveTurn, Mathf.Abs(Mathf.AngleDifference(liveRot0, boss.Rotation)));
-                        if (liveT > 2.0 && Nodes<Telegraph>(boss).Any(x => x.Line)) liveDrawn = true;
+                        if (liveT > 2.0 && Nodes<FxNode>(boss).Any(x => x.Id == Fx.WarnLane)) liveDrawn = true;
                         if (liveT > 2.2 && !sidestep) { sidestep = true; me2.Position += Vector2.Right.Rotated(boss.Rotation) * 400f; }
                     }
                     // The beam's place in the rhythm is where it COMMITS -- its escorts going out.
                     // Its red line comes later, when their web pins the pilot, so timing the rhythm
                     // off the telegraph would measure that wait, not the rhythm.
                     if (tBeam < 0 && H.Raiders.Any(r => r.IsEscort)) tBeam = arenaT;
-                    foreach (var tl in Nodes<Telegraph>().Where(x => x.Line))
-                        if (tCharge < 0 && Math.Abs(tl.Width - 140f) < 0.1f) tCharge = arenaT;   // the ram's line, 140 u
+                    foreach (var tl in Nodes<FxNode>().Where(x => x.Id == Fx.WarnLane))
+                        if (tCharge < 0 && Math.Abs(tl.Radius - 140f) < 0.1f) tCharge = arenaT;   // the ram's lane, 140 u
                     if (tVolley < 0 && boss.S("trident").Fired > 0)
                     {
                         tVolley = arenaT;
@@ -4254,7 +4331,7 @@ public partial class _Test : Node
         var runFlags = escorts.Where(r => r.Alive).Select(r => r.NetFlags).ToList();
         Check(runFlags.Count > 0 && runFlags.All(f => (f & 2) == 0) && runFlags.Any(f => (f & 1) != 0),
               $"and once it goes, the shiver bit clears and the boost bit stands ({string.Join(",", runFlags)})");
-            Check(Nodes<Telegraph>().All(t => !t.Line), "no beam line yet: the escorts go first, the charge follows their web");
+            Check(!Nodes<FxNode>().Any(t => t.Id == Fx.WarnLane), "no beam line yet: the escorts go first, the charge follows their web");
             // THE CHARGE STARTS ON THE PIN -- not on a guess made at launch. Pinned now, well before the
             // web was predicted to land, it charges at once (the old boss waited out its estimate).
             if (EscortsOut())
@@ -4270,13 +4347,16 @@ public partial class _Test : Node
             // the bar under the boss's hull resets as a super commits and counts the 15 s to the next
             Check(boss.SuperFill < 0.15 && Math.Abs(boss.NextSuperIn - 15) < 1.5,
                   $"the super-move bar resets as the beam commits, counting the 15 s to the ram ({boss.NextSuperIn:0.0} s, fill {boss.SuperFill:0.00})");
-            Telegraph beam = null;
-            for (int i = 0; i < 60 * 14 && beam == null; i++) { beam = Nodes<Telegraph>().FirstOrDefault(t => t.Line); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
-            Check(beam != null && boss.TelegraphsPending > 0, "the death beam is telegraphed: a red line before it fires");
-            Check(Math.Abs(beam.Duration - 6.0) < 1e-6 && BeamSlot().M.Windup == 6, "the beam charges 6 s -- its row's wind-up, drawn for exactly that long");
+            FxNode beam = null;
+            for (int i = 0; i < 60 * 14 && beam == null; i++) { beam = Nodes<FxNode>().FirstOrDefault(t => t.Id == Fx.WarnLane && Math.Abs(t.Radius - 70f) < 0.1f); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            Check(beam != null && boss.WarningsPending > 0 && beam.Warn && BeamSlot().M.Width == 70f,
+                  "the death beam is telegraphed: a red lane 70 u wide -- one warning row of Fx.All -- before it fires");
+            Check(Math.Abs(beam.Time - 6.0) < 1e-6 && BeamSlot().M.Windup == 6 && Math.Abs(beam.Hold - 3.0) < 1e-6 && BeamSlot().M.Live == 3.0,
+                  "the beam charges 6 s -- its row's wind-up, drawn for exactly that long -- and its lane stays lit the 3 s it burns");
             // the warning is parented to the boss, so it swings with the hull instead of being
             // pinned to the spot the boss stood on: the line drawn IS the line fired
-            Check(beam.GetParent() == boss, "the beam's telegraph rides the hull rather than the world");
+            Check(beam.GetParent() == boss && beam.Anchor == boss.NetId,
+                  "the beam's warning rides the hull rather than the world: the raise carries the hull's own id");
             // Push it out past its 650 u standoff BEFORE measuring. Inside that range it would
             // not close anyway, so watching for drift there proves nothing -- a mutant that
             // ignored the lock completely still passed this. Out here it wants to close at
@@ -4296,9 +4376,9 @@ public partial class _Test : Node
             // real segment so the drawn indicator and the hit line are both covered.
             var (segA, segB) = boss.Segment("beam");
             var farOut = segA + (segB - segA).Normalized() * 5000f;
-            Check(BeamSlot().M.Reach == 10000f && Math.Abs((beam.B - beam.A).Length() - 10000f) < 1f
+            Check(BeamSlot().M.Reach == 10000f && Math.Abs((beam.To - beam.Position).Length() - 10000f) < 1f
                   && Combat.DistToSegment(farOut, segA, segB) < 1f,
-                  $"beam and indicator both reach 10000 u -- a point 5000 u out is inside it, where the old 1800 u fell short (indicator {(beam.B - beam.A).Length():0} u)");
+                  $"beam and indicator both reach 10000 u -- a point 5000 u out is inside it, where the old 1800 u fell short (indicator {(beam.To - beam.Position).Length():0} u)");
             // HARD LOCKED while it charges -- with the pilot FREE: the old boss froze too once the pilot
             // was pinned, and tracked it otherwise, so only a free pilot tells the two apart. Point
             // defence clears the escorts and the web lets go; then, twisted well off the pilot, the boss
@@ -4327,9 +4407,10 @@ public partial class _Test : Node
             Check(Turret.PdPriority(tiny) == 1 && Turret.PdPriority(tiny) < Turret.PdPriority(boss)
                   && Targeting.PointDefence.Allows(tiny) && !Targeting.PointDefence.Allows(boss),
                   "then small craft (by their tag, not their size), then everything else -- and a boss is never a PD target");
-            Telegraph ring = null;
-            for (int i = 0; i < 60 * 18 && ring == null; i++) { ring = Nodes<Telegraph>().FirstOrDefault(t => !t.Line); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
-            Check(ring != null && ring.Radius == 340f && boss.S("wave").M.Reach == 340f, "the shockwave is telegraphed: a red ring 340 u across before it lands");
+            FxNode ring = null;
+            for (int i = 0; i < 60 * 18 && ring == null; i++) { ring = Nodes<FxNode>().FirstOrDefault(t => t.Id == Fx.WarnZone); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            Check(ring != null && ring.Radius == 340f && boss.S("wave").M.Reach == 340f && ring.Anchor == Fx.World,
+                  "the shockwave is telegraphed: a red zone 340 u across, on the ground, before it lands");
             // without point defence, a pair of escorts reaches the pilot and pins it inside the charge
             for (int i = 0; i < 60 * 8 && Me.PdActive; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             boss.LaunchEscorts("beam", me2);
@@ -4360,7 +4441,7 @@ public partial class _Test : Node
                 // A MOVE IS ARMED BY ITS ROW'S CLOCK, so each fallback is started by putting that
                 // clock on the point of coming round -- no reflection, and a renamed field can no
                 // longer pass silently.
-                bool RamLine() => Nodes<Telegraph>().Any(t => t.Line && Math.Abs(t.Width - 140f) < 0.1f) || boss.S("ram").At != Boss.Phase.Idle;
+                bool RamLine() => Nodes<FxNode>().Any(t => t.Id == Fx.WarnLane && Math.Abs(t.Radius - 140f) < 0.1f) || boss.S("ram").At != Boss.Phase.Idle;
                 for (int i = 0; i < 60 * 12 && (boss.Locked || RamLine()); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                 me2.Position = boss.Position + new Vector2(0, 500); me2.Velocity = Vector2.Zero;
                 BeamSlot().Due = 0.01;
@@ -4401,13 +4482,17 @@ public partial class _Test : Node
             int UnclaimedOnDisk() => ((string)OnDisk("loot", "unclaimed", "")).Split(',', StringSplitOptions.RemoveEmptyEntries).Length;
             int hold0 = Character.GearHold.Values.Sum(), disk0 = HoldOnDisk();
             var bossAt = boss.Position;
-            // killed mid-wind-up, a beam on its hull and a ring on the ground: its warnings go with it
-            Priv(boss, "Tele", true, new Vector2(0, -100), new Vector2(0, -3000), 70f, 10.0, true, 0.0, null, null);
-            Priv(boss, "Tele", false, boss.Position + new Vector2(0, 600), Vector2.Zero, 300f, 10.0, false, 0.0, null, null);
-            var warnings = Nodes<Telegraph>().Where(t => t.Duration == 10.0).ToList();
+            // killed mid-wind-up, a lane on its hull and a zone on the ground: its warnings go with
+            // it. Raised here rather than by any boss move, because what is being proved is the
+            // WARNING -- the raise's anchor puts the lane on the hull and leaves the zone on the
+            // ground, and a boss that is down clears both (Fx.ClearWarnings).
+            Fx.Warn(new FxRaise { Id = Fx.WarnLane, At = new Vector2(0, -100), To = new Vector2(0, -3000), Size = 70f, Time = 10.0, Anchor = boss.NetId });
+            Fx.Warn(new FxRaise { Id = Fx.WarnZone, At = boss.Position + new Vector2(0, 600), To = boss.Position + new Vector2(0, 600), Size = 300f, Time = 10.0 });
+            var warnings = Nodes<FxNode>().Where(t => t.Warn && t.Time == 10.0).ToList();
+            bool ridesHull = warnings.Count(t => t.GetParent() == boss) == 1 && warnings.Count(t => t.GetParent() == H) == 1;
             boss.TakeDamage(boss.Hp + 1); await Wait(0.2);
-            Check(warnings.Count == 2 && warnings.All(t => !GodotObject.IsInstanceValid(t)),
-                  $"a boss killed mid-wind-up takes its warnings with it: no beam charging over a DEFEATED boss ({warnings.Count(t => GodotObject.IsInstanceValid(t))} of {warnings.Count} left)");
+            Check(warnings.Count == 2 && ridesHull && warnings.All(t => !GodotObject.IsInstanceValid(t)),
+                  $"a warning goes where its raise anchors it -- one on the hull, one on the ground -- and a boss killed mid-wind-up takes both with it: no beam charging over a DEFEATED boss ({warnings.Count(t => GodotObject.IsInstanceValid(t))} of {warnings.Count} left)");
             var dropped = H.Crates.ToList();
             Check(dropped.Count == 2 && Character.Unclaimed.Count == 2 && UnclaimedOnDisk() == 2
                   && dropped.All(c => c.Position.DistanceTo(bossAt) < 300 && Equipment.ById(c.Item) is { Kit: false, Rarity: Rarity.Common }),
@@ -4538,11 +4623,11 @@ public partial class _Test : Node
                     for (int i = 0; i < 60 * 12 && dk.Locked; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                     me3.Position = dk.Position + new Vector2(0, 1400); me3.Velocity = Vector2.Zero;
                     dk.S("shotgun").Due = 0.01;
-                    Telegraph warpRing = null;
-                    for (int i = 0; i < 60 * 2 && warpRing == null; i++) { warpRing = Nodes<Telegraph>().FirstOrDefault(t => !t.Line); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+                    FxNode warpRing = null;
+                    for (int i = 0; i < 60 * 2 && warpRing == null; i++) { warpRing = Nodes<FxNode>().FirstOrDefault(t => t.Id == Fx.WarnZone); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
                     for (int i = 0; i < 60 * 3 && dk.S("shotgun").At != Boss.Phase.Winding; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                     var landed = dk.Position; float warpOff = landed.DistanceTo(me3.Position);
-                    var fan = Nodes<Telegraph>().Where(t => t.Line && Math.Abs(t.Duration - 1.875) < 1e-6).ToList();
+                    var fan = Nodes<FxNode>().Where(t => t.Id == Fx.WarnLane && Math.Abs(t.Time - 1.875) < 1e-6).ToList();
                     var scrapSeen = new System.Collections.Generic.HashSet<Shot>(Slugs());
                     await Wait(1.0);
                     bool heldStill = dk.Position.DistanceTo(landed) < 0.01f && dk.Locked;
@@ -4551,7 +4636,7 @@ public partial class _Test : Node
                     float aimTo = (me3.Position - landed).Angle();
                     var offs = scrap.Select(s => Mathf.RadToDeg(Mathf.AngleDifference(aimTo, s.Dir.Angle()))).OrderBy(a => a).ToList();
                     bool fanned = offs.Count == 7 && offs.Zip(new[] { -30f, -20f, -10f, 0f, 10f, 20f, 30f }, (a, b) => Math.Abs(a - b) < 0.5f).All(x => x);
-                    Check(warpRing != null && Math.Abs(warpRing.Duration - 1.0) < 1e-6 && Math.Abs(warpOff - 600) < 5 && fan.Count == 7 && heldStill && fanned
+                    Check(warpRing != null && Math.Abs(warpRing.Time - 1.0) < 1e-6 && Math.Abs(warpOff - 600) < 5 && fan.Count == 7 && heldStill && fanned
                           && dk.S("shotgun").Fired == 1,
                           $"the scrap shotgun: a warp to 600 u off the pilot ({warpOff:0}), a fan of 7 lines for 1.875 s held still, then 7 pieces at -30..+30 in 10s ({string.Join(" ", offs.Select(a => a.ToString("0")))}), counted once ({dk.S("shotgun").Fired})");
                     // EACH PIECE ITS OWN HIT, by construction rather than by hand. The fan used to
@@ -4577,14 +4662,14 @@ public partial class _Test : Node
                     dk.S("throw").Due = 0.01;
                     for (int i = 0; i < 60 && dk.Rock == null; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                     var rock = dk.Rock;
-                    var lane = Nodes<Telegraph>().FirstOrDefault(t => t.Line && Math.Abs(t.Width - 180f) < 0.5f);
+                    var lane = Nodes<FxNode>().FirstOrDefault(t => t.Id == Fx.WarnLane && Math.Abs(t.Radius - 180f) < 0.5f);
                     var drakeAt = dk.Position; var rockAt = rock?.Position ?? Vector2.Zero;
                     await Wait(3.0);
                     bool heldRock = rock != null && GodotObject.IsInstanceValid(rock) && rock.Position.DistanceTo(rockAt) < 0.01f && !rock.Thrown
                                     && dk.Position.DistanceTo(drakeAt) < 0.01f && dk.Locked;
-                    Check(rock != null && lane != null && Math.Abs(lane.Duration - 7.5) < 1e-6 && Math.Abs(lane.Hold - 1.6) < 1e-6
+                    Check(rock != null && lane != null && Math.Abs(lane.Time - 7.5) < 1e-6 && Math.Abs(lane.Hold - 1.6) < 1e-6
                           && Math.Abs(rockAt.DistanceTo(drakeAt) - 220) < 1 && heldRock && dk.S("throw").Fired == 1,
-                          $"the throw: a rock beside it in its tractor (220 u off), a lane of its width for 7.5 s, the boss and the rock held still ({rockAt.DistanceTo(drakeAt):0} u, lane {lane?.Duration:0.0} s), counted once ({dk.S("throw").Fired})");
+                          $"the throw: a rock beside it in its tractor (220 u off), a lane of its width for 7.5 s, the boss and the rock held still ({rockAt.DistanceTo(drakeAt):0} u, lane {lane?.Time:0.0} s), counted once ({dk.S("throw").Fired})");
                     for (int i = 0; i < 60 * 6 && rock != null && GodotObject.IsInstanceValid(rock) && !rock.Thrown; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                     var lane0 = rock?.From ?? Vector2.Zero; float laneLen = rock == null ? 1 : rock.From.DistanceTo(rock.To);
                     await Wait(0.8);
@@ -5159,7 +5244,8 @@ public partial class _Test : Node
             typeof(Hub).GetMethod("ReportSector", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(H, null);
             await RealTime(() => Nodes<ThrownRock>().Any(r => r.Cosmetic && !r.Done && !r.IsQueuedForDeletion() && r.Hold < 6.9), 3);
             var lateRocks = Nodes<ThrownRock>().Where(r => r.Cosmetic && !r.Done && !r.IsQueuedForDeletion()).ToList();
-            Check(lateRocks.Count == 1 && lateRocks[0].Hold < 6.9 && Nodes<Telegraph>().Any(t => t.Line && Math.Abs(t.Width - 180f) < 0.1f && t.Duration < 6.9),
+            Check(lateRocks.Count == 1 && lateRocks[0].Hold < 6.9
+                  && Nodes<FxNode>().Any(t => t.Id == Fx.WarnLane && Math.Abs(t.Radius - 180f) < 0.1f && t.Time < 6.9 && t.Since > 0),
                   $"arena guest: a peer arriving mid-throw is sent the rock and its lane as they stand -- one rock, with what was left of its warning ({lateRocks.FirstOrDefault()?.Hold:0.00} s)");
             await RealTime(() => drakeWatch.Seen, 4);
             Check(sawDrake && sawShell && sawRock,

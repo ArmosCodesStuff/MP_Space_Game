@@ -317,6 +317,8 @@ public static class Ab
     {
         Id = "stealth", Name = "Stealth", Short = "STEALTH", Default = Key.F,
         Blurb = "While the veil is up nothing hostile can pick you: whatever was coming for you goes after someone else, or gives up.",
+        // what the veil itself is worth, x1.00 each until a part moves one (Ships.cs, the wraith)
+        RateStat = "stealth_rof", SpeedStat = "stealth_speed",
         Press = (s, _) => s.GoDark(),
         Refuse = (s, _) => s.Sl("stealth").Cool > 0 ? "COOLING" : null,
         Show = (s, _) => s.Statuses.Has(Status.Untargetable)

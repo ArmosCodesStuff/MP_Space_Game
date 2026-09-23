@@ -136,7 +136,8 @@ public partial class MainMenu : Node2D
 
         // Its turrets and shells all go through Combat, exactly as in the hub.
         Combat.OnFlash = (a, b, c, snd) => { _shots.Add(new Shot { A = a, B = b, T = 0.15 }); Sfx.Laser(a, b, snd); };
-        Fx.On = (id, a, b, r) => AddChild(new FxNode { Id = id, Position = a, To = b, Radius = r });
+        Fx.On = r => AddChild(new FxNode { Id = r.Id, Position = r.At, To = r.To, Radius = r.Size, Time = r.Time,
+                                           Hold = r.Hold, Since = r.Since, Anchor = r.Anchor, Cue = r.Cue, Strike = r.Strike });
         Combat.World = this;
 
         // three lights, two heavies and a webifier
@@ -223,7 +224,7 @@ public partial class MainMenu : Node2D
         {
             _aoeCd -= delta;
             if (_aoeCd <= 0) { _aoeCd = AoeEvery; _aoeLeft = AoeWarn; _aoeAt = _cap.Position; _dodged = false;
-                               AddChild(new Telegraph { Position = _aoeAt, Radius = AoeRadius, Duration = AoeWarn }); }
+                               Fx.Warn(new FxRaise { Id = Fx.WarnZone, At = _aoeAt, To = _aoeAt, Size = AoeRadius, Time = AoeWarn }); }
         }
         else
         {

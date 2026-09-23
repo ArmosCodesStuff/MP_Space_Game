@@ -349,10 +349,10 @@ public partial class Hub : Node2D
         // the same place).
         // EFFECTS GO UP EVERYWHERE. The host raises one and every guest gets it, exactly as a
         // flash does -- an effect added straight to this tree was one only the host ever saw.
-        Fx.On = (id, a, b, r) =>
+        Fx.On = r =>
         {
-            AddFx(id, a, b, r);
-            ToWorld(nameof(NetFx), id, a, b, r);
+            AddFx(r);
+            ToWorld(nameof(NetFx), r.Id, r.At, r.To, r.Size, r.Time, r.Hold, r.Since, r.Anchor, r.Cue ?? "", r.Strike ?? "");
         };
         Combat.World = this;
         Combat.ShotFired = s => ToWorld(nameof(NetShot), s.Kind, s.Position, s.Dir, s.Speed, s.Range,
@@ -1111,16 +1111,15 @@ public partial class Hub : Node2D
     {
         if (!Net.IsHost) return;
         _blasts.Add((at, Raider.MissileFlight, raiderId, damage));
+        // the circle it marks, as every warning is marked: a row of Fx.All, on every peer
+        Fx.Warn(new FxRaise { Id = Fx.WarnZone, At = at, To = at, Size = Raider.BlastRadius, Time = Raider.MissileFlight });
         ShowHeavyMissile(from, at);
         ToWorld(nameof(NetHeavyMissile), from, at);
     }
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
     private void NetHeavyMissile(Vector2 from, Vector2 at) => ShowHeavyMissile(from, at, Net.Arriving(Raider.MissileFlight));
-    private void ShowHeavyMissile(Vector2 from, Vector2 at, double flight = Raider.MissileFlight)
-    {
-        AddChild(new Telegraph { Line = false, A = at, Radius = Raider.BlastRadius, Duration = flight });
+    private void ShowHeavyMissile(Vector2 from, Vector2 at, double flight = Raider.MissileFlight) =>
         AddChild(new HeavyMissileVisual { From = from, To = at, Flight = flight });
-    }
     private void TickBlasts(double delta)
     {
         for (int i = _blasts.Count - 1; i >= 0; i--)
@@ -1524,9 +1523,24 @@ public partial class Hub : Node2D
                             Lead = (float)(1.0 - Net.Arriving(1.0)) });   // the round trip (see Shot.Lead)
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetFx(int id, Vector2 a, Vector2 b, float r) => AddFx(id, a, b, r);
-    private void AddFx(int id, Vector2 a, Vector2 b, float r) =>
-        AddChild(new FxNode { Id = id, Position = a, To = b, Radius = r });
+    private void NetFx(int id, Vector2 a, Vector2 b, float size, double time, double hold, double since, int anchor, string cue, string strike) =>
+        // A GUEST'S WARNING ENDS WHEN ITS OWN POSITION IS JUDGED, not when the host's clock says
+        // (Net.Arriving): on the internet the two are a round trip apart, and a pilot who cleared
+        // the red on their own screen was hit "outside" it. An effect has no wind-up to shorten.
+        AddFx(new FxRaise { Id = id, At = a, To = b, Size = size, Time = time > 0 ? Net.Arriving(time) : 0,
+                            Hold = hold, Since = since, Anchor = anchor,
+                            Cue = string.IsNullOrEmpty(cue) ? null : cue, Strike = string.IsNullOrEmpty(strike) ? null : strike });
+    private void AddFx(FxRaise r)
+    {
+        // WHAT IT RIDES: the world, or the thing with that NetId -- a boss whose beam must swing
+        // with its hull. Anything the world simulates and gives an id to can carry a warning.
+        var rides = r.Anchor == Fx.World ? this : Combat.ById(r.Anchor) as Node2D;
+        (rides ?? this).AddChild(new FxNode { Id = r.Id, Position = r.At, To = r.To, Radius = r.Size, Time = r.Time,
+                                              Hold = r.Hold, Since = r.Since, Anchor = r.Anchor, Cue = r.Cue, Strike = r.Strike });
+    }
+    // one warning, as it stands, to the one peer that missed it (Boss.CatchUp)
+    public void FxTo(int peer, FxRaise r) =>
+        RpcId(peer, nameof(NetFx), r.Id, r.At, r.To, r.Size, r.Time, r.Hold, r.Since, r.Anchor, r.Cue ?? "", r.Strike ?? "");
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
     private void NetFlash(Vector2 a, Vector2 b, Color c, int snd)

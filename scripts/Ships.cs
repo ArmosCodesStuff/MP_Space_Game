@@ -78,13 +78,6 @@ public class StatRow
     public bool Inverse;                     // an interval: a rate bonus divides it
 }
 
-// THE PARTS A CLASS IS BORN WITH -- its weapon mount and its signature system, named as the
-// ship's own hardware. A kit part changes no numbers (the sheet already IS the ship): it is a
-// label, and its id is what a save file holds. The drive, the deflector, the frame and the chips
-// are every ship's and live in Equipment. Two classes may name the SAME id when the hardware is
-// the same, and a kit part fits only the classes that name it.
-public class KitPart { public GearSlot Slot; public string Id, Name, Blurb; }
-
 public class ClassDef
 {
     public ShipClass Id;
@@ -115,9 +108,15 @@ public class ClassDef
     // like any other, so the K window prints them and gear and purchases can move them, without
     // Stats.cs knowing that this class exists.
     public StatRow[] Rows = Array.Empty<StatRow>();
-    // Its own parts. Everything ELSE it can wear follows from its sheet: a part declares the stat
-    // ids it needs, and this hull has them or it does not (Equipment.Fits).
-    public KitPart[] Kit = Array.Empty<KitPart>();
+    // THE PARTS IT IS BORN WITH -- its weapon mount and its signature system -- as ordinary
+    // ItemDefs (ItemDef.Own, Equipment.cs): the same type a boss drops, so there is one part type
+    // and one fitting rule. A kit part changes no numbers (the sheet already IS the ship): it is
+    // a label, its id is what a save file holds, and it names the SIGNATURE stat of the hulls
+    // born with it, so it fits those and nothing else. More than one class may carry the same
+    // part (the freighters' cargo gun): it is written once, above All. The drive, the deflector,
+    // the frame and the chips are every ship's and live in Equipment. Everything ELSE it can wear
+    // follows from its sheet by that same rule (Equipment.Fits).
+    public ItemDef[] Kit = Array.Empty<ItemDef>();
     public AbilityDef[] Abilities = Array.Empty<AbilityDef>();
     public string Hint = "";                 // the controls line's own part, before the common one
     public bool Has(Fit f) => (Fit & f) != 0;
@@ -125,6 +124,19 @@ public class ClassDef
 
 public static class Classes
 {
+    // THE MOUNTS MORE THAN ONE HULL IS BORN WITH -- one ItemDef each, fitted to every hull that
+    // carries it below. A part fits the hulls whose SIGNATURE row it names (ItemDef.Needs), so a
+    // shared mount names one id per hull: the cargo gun the three freighters' three systems, the
+    // light cannon the sniper's railgun and the warden's hunters, the dart cannon the three
+    // lights'. Written above All because static fields start in the order they are written, and
+    // All is what fits them.
+    private static readonly ItemDef CargoGun = ItemDef.Own(GearSlot.Weapon, "freight_main_gun", "Mk I Cargo Gun",
+        "the freighter's single main turret", "bubble_pool", "overdrive_mult", "wave_range");
+    private static readonly ItemDef HeavyCannon = ItemDef.Own(GearSlot.Weapon, "heavy_main_gun", "Mk I Light Cannon",
+        "the single light turret", "rail_damage", "hunter_count");
+    private static readonly ItemDef LightCannon = ItemDef.Own(GearSlot.Weapon, "light_main_gun", "Mk I Dart Cannon",
+        "the light's single turret", "roll_time", "echo_time", "stealth_time");
+
     public static readonly ClassDef[] All =
     {
         // -- page 1: the line ------------------------------------------------
@@ -140,9 +152,9 @@ public static class Classes
             },
             Damage = new() { ["main_damage"] = 1 },
             Weapons = new[] { Dps.Main, Dps.Broadside, Dps.Pd },
-            Kit = new KitPart[] {
-                new() { Slot = GearSlot.Weapon, Id = "bs_main_battery", Name = "Mk I Main Battery", Blurb = "the four main turrets" },
-                new() { Slot = GearSlot.Utility, Id = "bs_broadside", Name = "Broadside Battery", Blurb = "the broadside: every main gun, volley on volley" },
+            Kit = new[] {
+                ItemDef.Own(GearSlot.Weapon, "bs_main_battery", "Mk I Main Battery", "the four main turrets", "broadside_mult"),
+                ItemDef.Own(GearSlot.Utility, "bs_broadside", "Broadside Battery", "the broadside: every main gun, volley on volley", "broadside_mult"),
             },
             Art = new ClassArt {
                 Texture = "res://battleship_hull.png", Length = 378f, HalfWidth = 43.875f,
@@ -163,9 +175,9 @@ public static class Classes
                 // the 0: gear reaches the fighters, the pilot's points do not -- as it was
             Damage = new() { ["torpedo_damage"] = 1, ["fighter_damage"] = 0 },
             Weapons = new[] { Dps.Fighters, Dps.Bombers, Dps.Pd },
-            Kit = new KitPart[] {
-                new() { Slot = GearSlot.Weapon, Id = "cv_fighter_hangars", Name = "Mk I Fighter Hangars", Blurb = "the fighter wing" },
-                new() { Slot = GearSlot.Utility, Id = "cv_bomber_bay", Name = "Bomber Bay", Blurb = "the bomber wing" },
+            Kit = new[] {
+                ItemDef.Own(GearSlot.Weapon, "cv_fighter_hangars", "Mk I Fighter Hangars", "the fighter wing", "fighter_count"),
+                ItemDef.Own(GearSlot.Utility, "cv_bomber_bay", "Bomber Bay", "the bomber wing", "bomber_count"),
             },
             Art = new ClassArt {
                 Texture = "res://carrier_player.png", Length = 283.5f, HalfWidth = 40.02f,
@@ -187,9 +199,9 @@ public static class Classes
                 // the 0: gear reaches the missiles, the pilot's points do not -- as it was
             Damage = new() { ["main_damage"] = 1, ["missile_damage"] = 0 },
             Weapons = new[] { Dps.Main, Dps.Missiles, Dps.Pd },
-            Kit = new KitPart[] {
-                new() { Slot = GearSlot.Weapon, Id = "dd_main_battery", Name = "Mk I Twin Turrets", Blurb = "the two main turrets" },
-                new() { Slot = GearSlot.Utility, Id = "dd_missile_rack", Name = "Missile Rack", Blurb = "the missile bursts and their magazine" },
+            Kit = new[] {
+                ItemDef.Own(GearSlot.Weapon, "dd_main_battery", "Mk I Twin Turrets", "the two main turrets", "missile_mag"),
+                ItemDef.Own(GearSlot.Utility, "dd_missile_rack", "Missile Rack", "the missile bursts and their magazine", "missile_mag"),
             },
             Art = new ClassArt {
                 Texture = "res://destroyer_hull.png", Length = 212.625f, HalfWidth = 27.8f,
@@ -212,9 +224,9 @@ public static class Classes
                 // half a point each: three turrets are out at once, so a level is worth 1.5 across them
             Damage = new() { ["main_damage"] = 1, ["deploy_damage"] = 0.5 },
             Weapons = new[] { Dps.Main, Dps.Deployed, Dps.Pd },
-            Kit = new KitPart[] {
-                new() { Slot = GearSlot.Weapon, Id = "freight_main_gun", Name = "Mk I Cargo Gun", Blurb = "the freighter's single main turret" },
-                new() { Slot = GearSlot.Utility, Id = "freight_bubble", Name = "Bubble Projector", Blurb = "the bubble, and what it soaks" },
+            Kit = new[] {
+                CargoGun,
+                ItemDef.Own(GearSlot.Utility, "freight_bubble", "Bubble Projector", "the bubble, and what it soaks", "bubble_pool"),
             },
             Rows = new StatRow[] {
                 new() { Group = "Deployed turrets", Id = "deploy_damage",   Label = "Damage per shot",  Base = 6, Dec = 1 },
@@ -247,9 +259,9 @@ public static class Classes
             },
             Damage = new() { ["main_damage"] = 1, ["deploy_damage"] = 0.5 },
             Weapons = new[] { Dps.Main, Dps.Deployed, Dps.Pd },
-            Kit = new KitPart[] {
-                new() { Slot = GearSlot.Weapon, Id = "freight_main_gun", Name = "Mk I Cargo Gun", Blurb = "the freighter's single main turret" },
-                new() { Slot = GearSlot.Utility, Id = "freight_overdrive", Name = "Overdrive Coils", Blurb = "the overdrive, and how long it holds" },
+            Kit = new[] {
+                CargoGun,
+                ItemDef.Own(GearSlot.Utility, "freight_overdrive", "Overdrive Coils", "the overdrive, and how long it holds", "overdrive_mult"),
             },
             Rows = new StatRow[] {
                 new() { Group = "Deployed turrets", Id = "deploy_damage",   Label = "Damage per shot",  Base = 6, Dec = 1 },
@@ -281,9 +293,9 @@ public static class Classes
             },
             Damage = new() { ["main_damage"] = 1, ["deploy_damage"] = 0.5 },
             Weapons = new[] { Dps.Main, Dps.Deployed, Dps.Pd },
-            Kit = new KitPart[] {
-                new() { Slot = GearSlot.Weapon, Id = "freight_main_gun", Name = "Mk I Cargo Gun", Blurb = "the freighter's single main turret" },
-                new() { Slot = GearSlot.Utility, Id = "freight_emitter", Name = "Shockwave Emitter", Blurb = "the shockwave's reach and its push" },
+            Kit = new[] {
+                CargoGun,
+                ItemDef.Own(GearSlot.Utility, "freight_emitter", "Shockwave Emitter", "the shockwave's reach and its push", "wave_range"),
             },
             Rows = new StatRow[] {
                 new() { Group = "Deployed turrets", Id = "deploy_damage",   Label = "Damage per shot",  Base = 6, Dec = 1 },
@@ -318,9 +330,9 @@ public static class Classes
                 // 7.5 = 5% of the railgun's 150, what a level is worth on a battleship's shell
             Damage = new() { ["main_damage"] = 1, ["rail_damage"] = 7.5 },
             Weapons = new[] { Dps.Main, Dps.Railgun },
-            Kit = new KitPart[] {
-                new() { Slot = GearSlot.Weapon, Id = "heavy_main_gun", Name = "Mk I Light Cannon", Blurb = "the single light turret" },
-                new() { Slot = GearSlot.Utility, Id = "heavy_railgun", Name = "Railgun Mount", Blurb = "the railgun's charge and its slug" },
+            Kit = new[] {
+                HeavyCannon,
+                ItemDef.Own(GearSlot.Utility, "heavy_railgun", "Railgun Mount", "the railgun's charge and its slug", "rail_damage"),
             },
             Rows = new StatRow[] {
                 new() { Group = "Railgun", Id = "rail_damage", Label = "Damage",         Base = 150, Dec = 0 },
@@ -346,9 +358,9 @@ public static class Classes
                 // 3 = 5% of the EMP's 60
             Damage = new() { ["main_damage"] = 1, ["emp_damage"] = 3 },
             Weapons = new[] { Dps.Main, Dps.Emp },
-            Kit = new KitPart[] {
-                new() { Slot = GearSlot.Weapon, Id = "warrior_main_guns", Name = "Mk I Twin Cannons", Blurb = "the two light turrets" },
-                new() { Slot = GearSlot.Utility, Id = "heavy_rush_drive", Name = "Rush Drive", Blurb = "the rush, and the EMP it ends in" },
+            Kit = new[] {
+                ItemDef.Own(GearSlot.Weapon, "warrior_main_guns", "Mk I Twin Cannons", "the two light turrets", "rush_mult"),
+                ItemDef.Own(GearSlot.Utility, "heavy_rush_drive", "Rush Drive", "the rush, and the EMP it ends in", "rush_mult"),
             },
             Rows = new StatRow[] {
                 new() { Group = "Rush", Id = "rush_mult",  Label = "Top speed",        Base = 2.5, Unit = "x", Dec = 1 },
@@ -385,9 +397,9 @@ public static class Classes
                 // so naming it here would hand every ship in the game a chip-powered point-defence buff)
             Damage = new() { ["main_damage"] = 1, ["hunter_damage"] = 2.25 },
             Weapons = new[] { Dps.Main, Dps.Hunters, Dps.Pd },
-            Kit = new KitPart[] {
-                new() { Slot = GearSlot.Weapon, Id = "heavy_main_gun", Name = "Mk I Light Cannon", Blurb = "the single light turret" },
-                new() { Slot = GearSlot.Utility, Id = "heavy_hunter_cells", Name = "Hunter Cells", Blurb = "the six hunter-seekers" },
+            Kit = new[] {
+                HeavyCannon,
+                ItemDef.Own(GearSlot.Utility, "heavy_hunter_cells", "Hunter Cells", "the six hunter-seekers", "hunter_count"),
             },
             Rows = new StatRow[] {
                 new() { Group = "Hunters", Id = "hunter_count",  Label = "Missiles",      Base = 6, Dec = 0 },
@@ -416,9 +428,9 @@ public static class Classes
             },
             Damage = new() { ["main_damage"] = 1 },
             Weapons = new[] { Dps.Main },
-            Kit = new KitPart[] {
-                new() { Slot = GearSlot.Weapon, Id = "light_main_gun", Name = "Mk I Dart Cannon", Blurb = "the light's single turret" },
-                new() { Slot = GearSlot.Utility, Id = "light_roll_thrusters", Name = "Roll Thrusters", Blurb = "the barrel roll, and the boost after it" },
+            Kit = new[] {
+                LightCannon,
+                ItemDef.Own(GearSlot.Utility, "light_roll_thrusters", "Roll Thrusters", "the barrel roll, and the boost after it", "roll_time"),
             },
             Rows = new StatRow[] {
                 new() { Group = "Barrel roll", Id = "roll_time",  Label = "Untouchable",   Base = 1.2, Unit = "s", Dec = 1 },
@@ -445,9 +457,9 @@ public static class Classes
                 // grows with main_damage on its own, and naming it would count the same purchase twice
             Damage = new() { ["main_damage"] = 1 },
             Weapons = new[] { Dps.Main, Dps.Echo },
-            Kit = new KitPart[] {
-                new() { Slot = GearSlot.Weapon, Id = "light_main_gun", Name = "Mk I Dart Cannon", Blurb = "the light's single turret" },
-                new() { Slot = GearSlot.Utility, Id = "light_echo_core", Name = "Echo Core", Blurb = "what the echo remembers, and its blast" },
+            Kit = new[] {
+                LightCannon,
+                ItemDef.Own(GearSlot.Utility, "light_echo_core", "Echo Core", "what the echo remembers, and its blast", "echo_time"),
             },
             Rows = new StatRow[] {
                 new() { Group = "Echo", Id = "echo_time",   Label = "It remembers for", Base = 5, Unit = "s", Dec = 1 },
@@ -471,12 +483,20 @@ public static class Classes
             },
             Damage = new() { ["main_damage"] = 1 },
             Weapons = new[] { Dps.Main },
-            Kit = new KitPart[] {
-                new() { Slot = GearSlot.Weapon, Id = "light_main_gun", Name = "Mk I Dart Cannon", Blurb = "the light's single turret" },
-                new() { Slot = GearSlot.Utility, Id = "light_stealth_veil", Name = "Stealth Veil", Blurb = "how long nothing can pick it" },
+            Kit = new[] {
+                LightCannon,
+                ItemDef.Own(GearSlot.Utility, "light_stealth_veil", "Stealth Veil", "how long nothing can pick it", "stealth_time"),
             },
             Rows = new StatRow[] {
                 new() { Group = "Stealth", Id = "stealth_time", Label = "Unseen for", Base = 5, Unit = "s", Dec = 1 },
+                // WHAT IT DOES WHILE IT IS UNSEEN, x1.00 each: the veil changes nothing about the
+                // ship until a part moves one of them, so a wraith with no veil gear is exactly
+                // the ship it was. They are read the way the dart's boost is read -- the ability
+                // row names them (Ab.Stealth's SpeedStat and RateStat) and PlayerShip.SpeedMult
+                // and FireRate multiply every running row that names one. The veil had two
+                // numbers, which is not a family: two of its four lines had nothing to trade.
+                new() { Group = "Stealth", Id = "stealth_speed", Label = "Top speed, unseen",    Base = 1, Unit = "x", Dec = 2 },
+                new() { Group = "Stealth", Id = "stealth_rof",   Label = "Rate of fire, unseen", Base = 1, Unit = "x", Dec = 2 },
                 new() { Group = "Stealth", Id = "stealth_cooldown", Label = "Cooldown", Base = 20, Unit = "s", Dec = 1, Inverse = true },
             },
             Art = new ClassArt {

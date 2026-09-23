@@ -605,10 +605,10 @@ public partial class _Shots : Node
             var boss = H.Boss; var ash = H.GetNode<PlayerShip>("Ship_1");
             ash.Position = boss.Position + new Vector2(120, 560); ash.Velocity = Vector2.Zero; ash.Rotation = 0f;
             GetViewport().GetCamera2D().Zoom = new Vector2(0.62f, 0.62f); await W(1.5);
-            for (int i = 0; i < 60 * 14 && !N<Telegraph>().Any(t => t.Line); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            for (int i = 0; i < 60 * 14 && !N<FxNode>().Any(t => t.Id == Fx.WarnLane); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             await W(1.0); await Snap("38_arena_beam_telegraph");
             if (GodotObject.IsInstanceValid(H.Boss)) { H.Boss.TakeDamage(90); await W(0.09); await Snap("42_boss_bar_chunk"); }
-            for (int i = 0; i < 60 * 16 && !N<Telegraph>().Any(t => !t.Line); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            for (int i = 0; i < 60 * 16 && !N<FxNode>().Any(t => t.Id == Fx.WarnZone); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             await W(0.9); await Snap("39_arena_shockwave_telegraph");
             // the kill: this pilot's crates on a ring where the boss died, the RETURN button and the
             // ready tally on the boss bar, the crates on the radar; one taken so the count reads 1 of 2

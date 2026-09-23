@@ -120,7 +120,7 @@ public partial class Boss : Node2D, IHittable, ITagged, IStatused
     // -- a move's own live state: one slot per row ----------------------------
     // What PlayerShip.Slot is for an ability. Reached by id -- S("beam"), S("throw") -- never by
     // index and never by the boss's type. The host writes it; a guest's slots sit idle (its boss
-    // never ticks) and what a guest must SEE rides NetState and NetTelegraph.
+    // never ticks) and what a guest must SEE rides NetState and the one effect RPC (Hub.NetFx).
     public enum Phase { Idle, Opening, Winding, Firing }
     public class Slot
     {
@@ -148,7 +148,7 @@ public partial class Boss : Node2D, IHittable, ITagged, IStatused
     private bool Shifting => _slots.Any(s => s.At != Phase.Idle && s.M.Shifts);
     // Warnings up now: a wind-up, or a warp's ring. (The ram's wind-up counts too; it always drew
     // a warning, and it was the one warning this count forgot.)
-    public int TelegraphsPending => _slots.Count(s => s.At == Phase.Winding || (s.At == Phase.Opening && s.M.Warp > 0));
+    public int WarningsPending => _slots.Count(s => s.At == Phase.Winding || (s.At == Phase.Opening && s.M.Warp > 0));
 
     // The skinny bar under the health bar: how far along the wait for the next SUPER MOVE -- the
     // moves whose row says Super. The host says how long is left (NextSuperHost) and across what
@@ -199,7 +199,7 @@ public partial class Boss : Node2D, IHittable, ITagged, IStatused
     {
         float dt = (float)delta;
         _hullWatch.Tick(this, Hp, taken: false);
-        if (!Alive && _telegraphs.Count > 0) ClearTelegraphs();
+        if (!Alive && Fx.Warnings.Any()) Fx.ClearWarnings();
         if (!Net.Sim)
         {
             if (_net.Has)
@@ -301,7 +301,7 @@ public partial class Boss : Node2D, IHittable, ITagged, IStatused
         {   // A RING WHERE IT WILL LAND, Standoff off the pilot; the hull follows (Open)
             s.To = s.Target.Position + (Position - s.Target.Position).Normalized() * m.Standoff;
             s.At = Phase.Opening; s.T = m.Warp;
-            Tele(false, s.To, Vector2.Zero, m.WarpRing, m.Warp, strike: m.WarpSound);
+            Zone(s.To, m.WarpRing, m.Warp, null, m.WarpSound);
             return;
         }
         Aimed(s);
@@ -365,21 +365,20 @@ public partial class Boss : Node2D, IHittable, ITagged, IStatused
         switch (m.Way)
         {
             case MoveWay.Beam:
-                Tele(true, new Vector2(0, -Length * 0.5f), new Vector2(0, -Length * 0.5f - m.Reach), m.Width, m.Windup,
-                     onHull: true, hold: m.Live, cue: m.Cue, strike: m.Strike);
+                Lane(m, new Vector2(0, -Length * 0.5f), new Vector2(0, -Length * 0.5f - m.Reach), onHull: true, hold: m.Live);
                 break;
             case MoveWay.Dash:
-                Tele(true, Vector2.Zero, new Vector2(0, -m.Reach), m.Width, m.Windup, onHull: true, cue: m.Cue, strike: m.Strike);
+                Lane(m, Vector2.Zero, new Vector2(0, -m.Reach), onHull: true);
                 break;
             case MoveWay.Ring:
-                Tele(false, s.To, Vector2.Zero, m.Reach, m.Windup, cue: m.Cue, strike: m.Strike);
+                Zone(s.To, m.Reach, m.Windup, m.Cue, m.Strike);
                 break;
             case MoveWay.Throw:
-                Tele(true, s.From, s.To, m.Width, m.Windup, hold: m.Flight, cue: m.Cue, strike: m.Strike);
+                Lane(m, s.From, s.To, hold: m.Flight);
                 break;
             case MoveWay.Shoot:
                 foreach (float a in Fan(s.Aim, m))
-                    Tele(true, Nose, Nose + Vector2.Right.Rotated(a) * m.Range, m.Width, m.Windup, cue: m.Cue, strike: m.Strike);
+                    Lane(m, Nose, Nose + Vector2.Right.Rotated(a) * m.Range);
                 break;
         }
     }
@@ -518,46 +517,23 @@ public partial class Boss : Node2D, IHittable, ITagged, IStatused
                                                       Radius = radius, Variant = variant, Cosmetic = true });
     }
 
-    // host: show a telegraph here and on every guest.
-    // onHull: a and b are in the BOSS'S OWN FRAME and the telegraph is parented to it, so the
-    // warning swings with the hull instead of being pinned to the spot the boss stood on when it
-    // drew it. Guests already follow the boss's pose from NetState, so their copy tracks too --
-    // no per-frame line updates over the wire.
-    // cue / strike: the move's sounds, as the warning goes up and as it lands (Telegraph)
-    protected void Tele(bool line, Vector2 a, Vector2 b, float size, double time, bool onHull = false, double hold = 0,
-                        string cue = null, string strike = null)
-    {
-        ShowTelegraph(line, a, b, size, time, onHull, hold, cue, strike);
-        // arena peers only, for the same reason as NetState above
-        if (Net.IsOnline) Hub?.RpcToSector(Hub.SectorKind.Arena, this, nameof(NetTelegraph), line, a, b, size, time, onHull, hold, cue ?? "", strike ?? "");
-    }
-    private void ShowTelegraph(bool line, Vector2 a, Vector2 b, float size, double time, bool onHull, double hold, string cue, string strike)
-    {
-        var t = new Telegraph { Line = line, A = a, B = b, Width = size, Radius = size, Duration = time, Hold = hold,
-                                Cue = string.IsNullOrEmpty(cue) ? null : cue, Strike = string.IsNullOrEmpty(strike) ? null : strike };
-        (onHull ? (Node)this : GetParent()).AddChild(t);
-        _telegraphs.RemoveAll(x => !IsInstanceValid(x));
-        _telegraphs.Add(t);
-    }
-    // A boss that is down threatens nothing, and the party stays with it until every pilot presses
-    // RETURN: a beam half wound up went on charging, then "fired", over a DEFEATED boss. Its warnings
-    // go with it, on every peer (a guest's copy dies by the host's figure).
-    private readonly List<Telegraph> _telegraphs = new();
-    private void ClearTelegraphs()
-    {
-        foreach (var t in _telegraphs) if (IsInstanceValid(t)) t.QueueFree();
-        _telegraphs.Clear();
-    }
-
-    // A guest's warning ends when ITS position is judged, not when the host's clock says (see
-    // Net.Arriving): on the internet the two were a round trip apart, and a pilot who cleared the
-    // red on their own screen was hit "outside" it.
-    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetTelegraph(bool line, Vector2 a, Vector2 b, float size, double time, bool onHull, double hold, string cue, string strike) =>
-        ShowTelegraph(line, a, b, size, Net.Arriving(time), onHull, hold, cue, strike);
+    // host: raise this move's warning here and on every guest in the arena -- one ROW of Fx.All,
+    // a lane or a zone, replicated by the one RPC that carries every effect (Fx.On -> Hub.NetFx,
+    // which sends to the sector this is: the arena). A boss's warning was a node of its own and
+    // an RPC of its own. The clock and the two sounds are the MOVE's row, and travel with the
+    // raise; a guest shortens the wind-up by its own round trip when it arrives (Hub.NetFx).
+    // onHull: a and b are in the BOSS'S OWN FRAME and the warning is anchored to this hull by its
+    // NetId, so it swings with the hull instead of being pinned to the spot the boss stood on
+    // when it drew it. Guests already follow the boss's pose from NetState, so their copy tracks
+    // too -- no per-frame line updates over the wire.
+    private void Lane(BossMove m, Vector2 a, Vector2 b, bool onHull = false, double hold = 0) =>
+        Fx.Warn(new FxRaise { Id = Fx.WarnLane, At = a, To = b, Size = m.Width, Time = m.Windup, Hold = hold,
+                              Anchor = onHull ? NetId : Fx.World, Cue = m.Cue, Strike = m.Strike });
+    private void Zone(Vector2 at, float radius, double time, string cue, string strike) =>
+        Fx.Warn(new FxRaise { Id = Fx.WarnZone, At = at, To = at, Size = radius, Time = time, Cue = cue, Strike = strike });
 
     // host: a special move's sound, here and on every guest in the arena -- for a move with no
-    // warning to carry it (Tele's cue and strike)
+    // warning to carry it (a warning plays its move's cue and strike itself)
     protected void Sound(string name, Vector2 at)
     {
         Sfx.Special(name, at);
@@ -572,13 +548,13 @@ public partial class Boss : Node2D, IHittable, ITagged, IStatused
     // opening sound is not replayed; its landing sound still plays.
     public void CatchUp(int peer)
     {
-        foreach (var t in _telegraphs)
+        foreach (var n in Fx.Warnings)
         {
-            if (!IsInstanceValid(t)) continue;
-            double left = t.Duration - t.Elapsed, hold = t.Hold;
+            double left = n.Time - n.Elapsed, hold = n.Hold;
             if (left < 0) { hold += left; left = 0; }
             if (left <= 0 && hold <= 0) continue;                  // landed: only its flash is left
-            RpcId(peer, nameof(NetTelegraph), t.Line, t.A, t.B, t.Width, left, t.GetParent() == this, hold, "", left > 0 ? t.Strike ?? "" : "");
+            Hub?.FxTo(peer, new FxRaise { Id = n.Id, At = n.Position, To = n.To, Size = n.Radius, Time = left, Hold = hold,
+                                          Since = n.Since + n.Elapsed, Anchor = n.Anchor, Cue = n.Cue, Strike = n.Strike });
         }
         if (Rock is { Done: false } r) RpcId(peer, nameof(NetRock), r.From, r.To, r.Hold - r.Elapsed, r.Flight, r.Radius, r.Variant);
     }

@@ -26,17 +26,34 @@ public class ItemDef
     public string Id, Name, Blurb;
     public GearSlot Slot;
     public Rarity Rarity = Rarity.Common;
-    // THE STATS IT MOVES, and so what a hull must have for it to be worth wearing: a part fits a
-    // hull that has AT LEAST ONE of them, because a part whose every stat is missing there would
-    // do nothing at all. A Rapid Battery moves main_interval and main_damage, so it fits every
-    // class with main guns -- eleven of the twelve -- without naming one of them; Elite Hangars
-    // move fighter_speed, so only a carrier can wear them; a Basic Combat Chip moves every
-    // weapon stat in the game, so it fits everything, and lifts whichever of them that hull has.
-    // It was one ShipClass before, which is why the nine new classes could wear nothing but the
-    // parts that named no class at all.
+    // WHAT A HULL MUST HAVE FOR THIS TO FIT, by stat id: a part fits a hull that has AT LEAST
+    // ONE of them. THE ONE FITTING RULE -- there is no second one anywhere.
+    //   A ROLLED part names the stats it MOVES, because a part whose every stat is missing there
+    //   would do nothing at all. A Rapid Battery moves main_interval and main_damage, so it fits
+    //   every class with main guns -- eleven of the twelve -- without naming one of them; Elite
+    //   Hangars move fighter_speed, so only a carrier can wear them; a Basic Combat Chip moves
+    //   every weapon stat in the game, so it fits everything, and lifts whichever of them that
+    //   hull has.
+    //   A HULL'S OWN hardware (Kit, built by Own below) moves nothing, so it names instead the
+    //   SIGNATURE row of the hulls born with it. Every class has one nothing else has --
+    //   broadside_mult, fighter_count, missile_mag, bubble_pool, overdrive_mult, wave_range,
+    //   rail_damage, rush_mult, hunter_count, roll_time, echo_time, stealth_time -- so one id
+    //   names one hull, and three ids name the three freighters that share a cargo gun. It is
+    //   the same OR as every other part, which is why Equipment.KitOwners -- a second table and
+    //   a second answer to "does this fit" -- is gone.
     public string[] Needs = System.Array.Empty<string>();
-    public bool Kit;                         // the starting kit: never dropped
+    public bool Kit;                         // a hull's own hardware: never dropped
     public Dictionary<string, double> Pct = new(), Add = new();
+
+    // A HULL'S OWN HARDWARE, as a class row writes it (ClassDef.Kit) and as Build yields it: a
+    // label with a name and a blurb that changes no number (the sheet already IS the ship),
+    // fitting the hulls whose signature rows it names. Its id is what a SAVE FILE holds, so an
+    // id here is never changed. KitPart -- a four-field mini-item this had to convert into an
+    // ItemDef anyway -- is gone.
+    // STATIC ORDER: Classes.All builds these while IT is initialising, so this may touch no
+    // static field of Equipment (Equipment.All reads Classes.All, and the two would deadlock).
+    public static ItemDef Own(GearSlot slot, string id, string name, string blurb, params string[] needs) =>
+        new() { Slot = slot, Id = id, Name = name, Blurb = blurb, Kit = true, Needs = needs };
 }
 
 public static class Equipment
@@ -72,33 +89,39 @@ public static class Equipment
     private static readonly Dictionary<ShipClass, HashSet<string>> SheetCache = new();
     private static HashSet<string> Sheet(ShipClass c) =>
         SheetCache.TryGetValue(c, out var h) ? h : SheetCache[c] = new ShipStats(c).All.Select(x => x.Id).ToHashSet();
-    // Which classes name a given KIT part in their row (Ships.cs). A kit part is the ship's own
-    // hardware: it fits the hulls that are born with it, and no others.
-    private static readonly Dictionary<string, HashSet<ShipClass>> KitOwners =
-        Classes.All.SelectMany(d => d.Kit.Select(k => (k.Id, d.Id)))
-               .GroupBy(t => t.Item1).ToDictionary(g => g.Key, g => g.Select(t => t.Item2).ToHashSet());
-
-    // It fits if the slot matches AND the hull has every stat it moves. No part names a class.
+    // THE ONE RULE: it fits if the slot matches and the hull has one of the stats it asks for.
+    // No part names a class, and a hull's own hardware is a part like any other -- it asks for
+    // the signature row only the hulls born with it have (ItemDef.Needs). There were two rules
+    // here, one of them a dictionary of class lists built by scanning every class row.
     public static bool Fits(ItemDef i, GearSlot s, ShipClass c)
     {
         if (i == null || i.Slot != s) return false;
-        if (KitOwners.TryGetValue(i.Id, out var born)) return born.Contains(c);
-        if (i.Needs.Length == 0) return true;             // a part that moves nothing fits anything
+        if (i.Needs.Length == 0) return true;             // a part that asks nothing fits anything
         var sheet = Sheet(c);
         foreach (var need in i.Needs) if (sheet.Contains(need)) return true;
         return false;
     }
-    // What a part asks of a hull, in words, for the equipment window: the SYSTEMS it moves, ANY ONE
-    // of which is enough (Fits) -- "Fighters", "Hull or Point defence". It printed the raw stat ids
-    // joined by commas ("needs fighter_speed, fighter_damage, fighter_turn, fighter_count"), which
-    // named nothing a player has ever seen and read as a list of demands rather than a choice.
-    // Describe could not help: the only sheet it can read is the CURRENT class's, which by
-    // definition has not got them. AllStats (Stats.cs) holds every class's.
-    public static string NeedsSaid(ItemDef i) =>
-        KitOwners.TryGetValue(i?.Id ?? "", out var born)
-            ? string.Join(" / ", born.Select(Classes.NameOf))
-            : i == null || i.Needs.Length == 0 ? "any hull"
+    // Every hull that can wear it, in the order the classes are written.
+    private static IEnumerable<ShipClass> Hulls(ItemDef i) =>
+        Classes.All.Where(d => d.Ready && Fits(i, i.Slot, d.Id)).Select(d => d.Id);
+    // What a part asks of a hull, in words, for the equipment window -- worked out from the same
+    // one rule, so a kit part and a rolled part are said the same way.
+    //   THREE HULLS OR FEWER and it names them: "FREIGHTER / TENDER / BASTION" for the cargo gun,
+    //   "FREIGHTER" for a bubble part. That is every signature part, kit or rolled.
+    //   MORE THAN THREE and the names would be a list nobody reads, so it says the SYSTEMS it
+    //   moves instead, ANY ONE of which is enough (Fits) -- "Main guns", "Hull or Point defence".
+    // It printed the raw stat ids joined by commas once ("needs fighter_speed, fighter_damage,
+    // fighter_turn, fighter_count"), which named nothing a player has ever seen. Describe cannot
+    // help: the only sheet it can read is the CURRENT class's, which by definition has not got
+    // them. AllStats (Stats.cs) holds every class's.
+    public static string NeedsSaid(ItemDef i)
+    {
+        if (i == null || i.Needs.Length == 0) return "any hull";
+        var hulls = Hulls(i).ToList();
+        return hulls.Count > 0 && hulls.Count <= 3
+            ? string.Join(" / ", hulls.Select(Classes.NameOf))
             : string.Join(" or ", i.Needs.Select(AllStats.Group).Distinct());
+    }
     public static GearSlot SlotAt(int k) => k < CoreSlots ? Core[k] : GearSlot.Chip;
 
     // Every weapon's damage on ANY class, for a part that lifts all of them. The list of what
@@ -131,19 +154,17 @@ public static class Equipment
 
     private static IEnumerable<ItemDef> Build()
     {
-        // ── the starting kit: the ship's own numbers ──
-        static ItemDef Kit(string id, string name, GearSlot s, string blurb) =>
-            new() { Id = id, Name = name, Slot = s, Kit = true, Blurb = blurb };
-        // EVERY CLASS'S OWN, from its row (ClassDef.Kit): its weapon mount and its signature
-        // system. Two classes may name the same id -- three freighters share one cargo gun -- so
-        // the part is built once.
+        // ── a hull's own hardware: the ship's own numbers, and never a drop ──
+        // EVERY CLASS'S OWN, out of its row (ClassDef.Kit) as the ItemDef it already is -- there
+        // is nothing left to convert. Several classes may carry the SAME part (three freighters
+        // share one cargo gun, two heavies one light cannon), written once and yielded once.
         foreach (var k in Classes.All.SelectMany(d => d.Kit).GroupBy(k => k.Id).Select(g => g.First()))
-            yield return Kit(k.Id, k.Name, k.Slot, k.Blurb);
-        // ...and the four every ship in the game is born with
-        yield return Kit("std_drive", "Standard Drive Cluster", GearSlot.Engines, "the helm: speed and turning");
-        yield return Kit("basic_deflector", "Basic Deflector Array", GearSlot.Shield, "the ship's hull points");
-        yield return Kit("reinforced_frame", "Reinforced Frame", GearSlot.Hull, "the frame, and its point defence");
-        var basic = Kit("chip_basic", "Basic Combat Chip", GearSlot.Chip, "+5% damage, +5% hull");
+            yield return k;
+        // ...and the four every ship in the game is born with, which ask nothing of a hull
+        yield return ItemDef.Own(GearSlot.Engines, "std_drive", "Standard Drive Cluster", "the helm: speed and turning");
+        yield return ItemDef.Own(GearSlot.Shield, "basic_deflector", "Basic Deflector Array", "the ship's hull points");
+        yield return ItemDef.Own(GearSlot.Hull, "reinforced_frame", "Reinforced Frame", "the frame, and its point defence");
+        var basic = ItemDef.Own(GearSlot.Chip, "chip_basic", "Basic Combat Chip", "+5% damage, +5% hull");
         foreach (var (s, p) in AllDamage(0.05)) basic.Pct[s] = p;
         basic.Pct["hull"] = 0.05;
         yield return basic;
@@ -214,6 +235,100 @@ public static class Equipment
             Line("cv_rapidbay", "Rapid Bay", GearSlot.Utility, "rearms fast, more torpedoes a run",
                  new[] { ("bomber_rearm", 0.60) }, new[] { ("torpedo_damage", -0.20) },
                  new[] { ("bomber_ammo", new[] { 1, 2, 3 }) }),
+            // ── THE NINE SYSTEMS THAT HAD NO FAMILY ──
+            // Every one of the nine new classes wore its kit part in the utility slot and nothing
+            // else: the bubble, the overdrive, the shockwave, the railgun, the rush, the hunters,
+            // the roll, the echo and the veil had no rolled part in the game, while the broadside,
+            // the racks and the bays above had four lines each at three rarities. One family each
+            // now, in the same shape, so the twelfth class is as well served as the first.
+            // EVERY LINE NAMES ONLY ITS OWN SYSTEM'S STAT IDS. That is what keeps it on the one
+            // hull that has them (ItemDef.Needs): a bubble part that paid for its pool in
+            // max_speed would fit every ship in the game and do nothing at all on eleven of them.
+            // ── the freighter's bubble ──
+            Line("bub_deep", "Deep Bubble", GearSlot.Utility, "soaks far more; it covers less ground",
+                 new[] { ("bubble_pool", 0.50) }, new[] { ("bubble_radius", -0.20) }),
+            Line("bub_wide", "Wide Bubble", GearSlot.Utility, "covers the whole party; it soaks less",
+                 new[] { ("bubble_radius", 0.40) }, new[] { ("bubble_pool", -0.25) }),
+            Line("bub_long", "Long Bubble", GearSlot.Utility, "stands far longer; slower to come back",
+                 new[] { ("bubble_time", 0.60) }, new[] { ("bubble_cooldown", -0.25) }),
+            Line("bub_snap", "Snap Bubble", GearSlot.Utility, "up again almost at once; thinner, and briefer",
+                 new[] { ("bubble_cooldown", 0.50) }, new[] { ("bubble_time", -0.25), ("bubble_pool", -0.15) }),
+            // ── the tender's overdrive ──
+            Line("ovr_hard", "Hard Coils", GearSlot.Utility, "everything fires much faster, for less time",
+                 new[] { ("overdrive_mult", 0.30) }, new[] { ("overdrive_time", -0.30) }),
+            Line("ovr_long", "Long Coils", GearSlot.Utility, "holds far longer, at a lower rate",
+                 new[] { ("overdrive_time", 0.60) }, new[] { ("overdrive_mult", -0.20) }),
+            Line("ovr_quick", "Quick Coils", GearSlot.Utility, "back far sooner, and up for less",
+                 new[] { ("overdrive_cooldown", 0.50) }, new[] { ("overdrive_time", -0.25) }),
+            Line("ovr_heavy", "Heavy Coils", GearSlot.Utility, "a fierce burst, and a long wait for it",
+                 new[] { ("overdrive_mult", 0.45) }, new[] { ("overdrive_cooldown", -0.30) }),
+            // ── the bastion's shockwave ──
+            Line("wav_far", "Wide Emitter", GearSlot.Utility, "reaches much further; it throws them less far",
+                 new[] { ("wave_range", 0.40) }, new[] { ("wave_push", -0.25) }),
+            Line("wav_hard", "Heavy Emitter", GearSlot.Utility, "throws them much further; a shorter reach",
+                 new[] { ("wave_push", 0.60) }, new[] { ("wave_range", -0.20) }),
+            Line("wav_hold", "Holding Emitter", GearSlot.Utility, "holds a boss far longer; it shoves less",
+                 new[] { ("wave_disable", 0.50) }, new[] { ("wave_push", -0.25) }),
+            Line("wav_quick", "Quick Emitter", GearSlot.Utility, "charges far sooner; it holds nothing as long",
+                 new[] { ("wave_cooldown", 0.50) }, new[] { ("wave_disable", -0.30) }),
+            // ── the sniper's railgun ──
+            Line("rlg_slug", "Heavy Slug", GearSlot.Utility, "a far heavier slug; a longer charge, locked",
+                 new[] { ("rail_damage", 0.50) }, new[] { ("rail_charge", -0.25) }),
+            Line("rlg_quick", "Quick Charge", GearSlot.Utility, "charges far faster; a lighter slug",
+                 new[] { ("rail_charge", 0.60) }, new[] { ("rail_damage", -0.25) }),
+            Line("rlg_long", "Long Barrel", GearSlot.Utility, "throws the line far further; a narrower beam",
+                 new[] { ("rail_range", 0.40) }, new[] { ("rail_width", -0.30) }),
+            Line("rlg_wide", "Wide Beam", GearSlot.Utility, "a far wider line; it costs reach and a longer wait",
+                 new[] { ("rail_width", 0.80) }, new[] { ("rail_range", -0.20), ("rail_cooldown", -0.20) }),
+            // ── the warrior's rush, and the EMP it ends in ──
+            Line("rsh_burn", "Burn Drive", GearSlot.Utility, "far faster while it lasts, and it lasts less",
+                 new[] { ("rush_mult", 0.30) }, new[] { ("rush_time", -0.25) }),
+            Line("rsh_iron", "Iron Drive", GearSlot.Utility, "takes far less while rushing; a weaker EMP",
+                 new[] { ("rush_guard", -0.20) }, new[] { ("emp_damage", -0.25) }),
+            Line("rsh_shock", "Shock Drive", GearSlot.Utility, "an EMP that hits harder and holds them longer; a shorter rush",
+                 new[] { ("emp_damage", 0.50), ("emp_stun", 0.25) }, new[] { ("rush_time", -0.30) }),
+            Line("rsh_wide", "Wide Drive", GearSlot.Utility, "an EMP that reaches much further; a longer wait",
+                 new[] { ("emp_range", 0.50) }, new[] { ("rush_cooldown", -0.25) }),
+            // ── the warden's hunter-seekers ──
+            Line("hnt_heavy", "Heavy Cells", GearSlot.Utility, "warheads that break ships; one missile fewer",
+                 new[] { ("hunter_damage", 0.60) }, null,
+                 new[] { ("hunter_count", new[] { -1, -1, -1 }) }),
+            Line("hnt_swarm", "Swarm Cells", GearSlot.Utility, "more missiles, each of them lighter",
+                 None, new[] { ("hunter_damage", -0.25) },
+                 new[] { ("hunter_count", new[] { 1, 2, 3 }) }),
+            Line("hnt_seeker", "Seeker Cells", GearSlot.Utility, "missiles that turn hard and fly fast; lighter",
+                 new[] { ("hunter_turn", 0.60), ("hunter_speed", 0.20) }, new[] { ("hunter_damage", -0.20) }),
+            Line("hnt_rapid", "Rapid Cells", GearSlot.Utility, "reloads far sooner; a shorter reach",
+                 new[] { ("hunter_cooldown", 0.50) }, new[] { ("hunter_range", -0.20) }),
+            // ── the dart's barrel roll, and the boost out of it ──
+            Line("rol_long", "Long Roll", GearSlot.Utility, "untouchable for longer; a shorter boost",
+                 new[] { ("roll_time", 0.40) }, new[] { ("boost_time", -0.30) }),
+            Line("rol_racing", "Racing Roll", GearSlot.Utility, "far faster out of the roll; it fires slower",
+                 new[] { ("boost_speed", 0.20) }, new[] { ("boost_rof", -0.15) }),
+            Line("rol_hot", "Hot Roll", GearSlot.Utility, "it comes out shooting much faster, and slower",
+                 new[] { ("boost_rof", 0.30) }, new[] { ("boost_speed", -0.15) }),
+            Line("rol_quick", "Quick Roll", GearSlot.Utility, "ready again far sooner; untouchable for less",
+                 new[] { ("roll_cooldown", 0.50) }, new[] { ("roll_time", -0.25) }),
+            // ── the echo's core ──
+            Line("ech_deep", "Deep Core", GearSlot.Utility, "it repeats far more of what you dealt; a tighter blast",
+                 new[] { ("echo_share", 0.40) }, new[] { ("echo_radius", -0.25) }),
+            Line("ech_wide", "Wide Core", GearSlot.Utility, "a far wider blast; it repeats less",
+                 new[] { ("echo_radius", 0.40) }, new[] { ("echo_share", -0.20) }),
+            Line("ech_long", "Long Core", GearSlot.Utility, "it remembers far longer; slower to come back",
+                 new[] { ("echo_time", 0.50) }, new[] { ("echo_cooldown", -0.25) }),
+            Line("ech_quick", "Quick Core", GearSlot.Utility, "back far sooner; it remembers less",
+                 new[] { ("echo_cooldown", 0.50) }, new[] { ("echo_time", -0.30) }),
+            // ── the wraith's veil ──
+            // stealth_speed and stealth_rof are what the veil DOES besides hiding it (Ships.cs:
+            // the wraith's rows, x1.00 each, so a ship with no such part is exactly as it was).
+            Line("vel_deep", "Deep Veil", GearSlot.Utility, "unseen far longer; slower to come back",
+                 new[] { ("stealth_time", 0.50) }, new[] { ("stealth_cooldown", -0.25) }),
+            Line("vel_flicker", "Flicker Veil", GearSlot.Utility, "back almost at once; unseen for less",
+                 new[] { ("stealth_cooldown", 0.60) }, new[] { ("stealth_time", -0.30) }),
+            Line("vel_swift", "Swift Veil", GearSlot.Utility, "it runs hard while unseen, and is seen sooner",
+                 new[] { ("stealth_speed", 0.25) }, new[] { ("stealth_time", -0.20) }),
+            Line("vel_ambush", "Ambush Veil", GearSlot.Utility, "it fires far faster while unseen, and moves slower",
+                 new[] { ("stealth_rof", 0.30) }, new[] { ("stealth_speed", -0.15) }),
             // ── engines ──
             Line("drv_racing", "Racing Drive", GearSlot.Engines, "much faster, turns wider",
                  new[] { ("max_speed", 0.25), ("thrust", 0.30) }, new[] { ("turn_rate", -0.25) }),
