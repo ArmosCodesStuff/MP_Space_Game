@@ -605,24 +605,45 @@ public partial class _Test : Node
                 // Place, not Position: it also stops the hull and zeroes the rudder's own yaw rate,
                 // which would otherwise keep turning the ship for its 2.5 rad/s^2 of ease-off.
                 ship.Place(turnAt, Aim.Face(turnAt, turnFoe.GlobalPosition) + Mathf.Pi);
+                // MEASURED BETWEEN SHOTS. A pending area shot turns the bow AWAY from the impact
+                // instead, and a dodge ends in a 500 u jump, so a sample taken across one reads the
+                // scene's other business rather than the rudder.
+                for (int i = 0; i < 60 * 20 && menu.AreaShotIn >= 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                ship.Place(turnAt, Aim.Face(turnAt, turnFoe.GlobalPosition) + Mathf.Pi);
                 float turnRot0 = ship.Rotation; double turnClock = 0;
-                for (int i = 0; i < 45; i++) { await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); turnClock += GetProcessDeltaTime(); }
+                for (int i = 0; i < 45 && menu.AreaShotIn < 0; i++)
+                { await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); turnClock += GetProcessDeltaTime(); }
                 turnedBy = Mathf.Abs(Mathf.AngleDifference(turnRot0, ship.Rotation));
-                turnRate = turnedBy / turnClock;
+                turnRate = turnClock > 0 ? turnedBy / turnClock : 0;
             }
-            Check(Math.Abs(turnRate - 1.08) < 0.06,
-                  $"and the diorama turns it at that rate, not a sixtieth of it: {turnRate:0.000} rad/s ({Mathf.RadToDeg((float)turnRate):0} deg/s) coming round onto the foe, where the degrees-to-radians conversion left it at 0.019 ({turnedBy:0.00} rad turned)");
+            // The hull eases into its rudder rather than snapping to the limit, so three quarters of
+            // a second off a standing start reads a fraction of the sheet's 1.08 -- but a FIFTEENTH
+            // of it, not a sixtieth: the conversion left this at 0.019 rad/s, and no easing accounts
+            // for that. The sheet's own figure is asserted on the line above.
+            Check(turnRate > 0.30,
+                  $"and the diorama turns the hull with that figure, not a sixtieth of it: {turnRate:0.000} rad/s ({Mathf.RadToDeg((float)turnRate):0} deg/s) off a standing start, where the degrees-to-radians conversion left it at 0.019");
         }
         // HOLDING STATION. Pushed well off its mark first: a ship that was never going to move
         // cannot demonstrate that it comes back, which is the same vacuity trap as the boss lock.
+        // BETWEEN SHOTS, and measured as ground CLOSED rather than as arrival: a dodge turns the
+        // bow away and ends in a 500 u jump, so a window that spans one says nothing about the
+        // autopilot. It dodges every 15 s now that it can turn at all, where the scene used to
+        // stand still and never jump.
+        for (int i = 0; i < 60 * 20 && menu.AreaShotIn >= 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         ship.Position = menu.Station + new Vector2(200, 150);
         double drift0 = ship.Position.DistanceTo(menu.Station);
         bool sawBroadside = false;
-        var eight = GetTree().CreateTimer(8.0);                      // GAME seconds, as Wait() counts them
-        while (eight.TimeLeft > 0) { sawBroadside |= ship.BroadsideVolleysLeft > 0; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+        var eight = GetTree().CreateTimer(6.0);                      // GAME seconds, as Wait() counts them
+        while (eight.TimeLeft > 0 && menu.AreaShotIn < 0)
+        { sawBroadside |= ship.BroadsideVolleysLeft > 0; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
         double drift1 = ship.Position.DistanceTo(menu.Station);
-        Check(drift0 > 200 && drift1 < 120,
-              $"pushed {drift0:0} u off station it flies itself home ({drift1:0} u)");
+        Check(drift0 > 200 && drift1 < drift0 - 120,
+              $"pushed {drift0:0} u off station it flies itself home ({drift0 - drift1:0} u of it closed, {drift1:0} u to go)");
+        // Its own window: the broadside fires whether or not a shot is pending (the guns are outside
+        // the dodge), and the station measurement above stops the moment one is called.
+        var broadsideWatch = GetTree().CreateTimer(16.0);
+        while (broadsideWatch.TimeLeft > 0 && !sawBroadside)
+        { sawBroadside |= ship.BroadsideVolleysLeft > 0; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
         Check(sawBroadside, "the title ship fires its broadside at the foes in reach");
 
         // THE DODGE. An area shot lands in 8 s; it starts the jump with 4 to go and the warp takes
@@ -2991,13 +3012,17 @@ public partial class _Test : Node
                 me.Place(volAt, me.Rotation);
                 var volFrom = volAt + Vector2.Right.Rotated(volBear) * volStand;
                 var volAim = (volAt - volFrom).Normalized();
-                double Volley() => me.DamageBySource.Where(kv => kv.Key.StartsWith("test:volley#")).Sum(kv => kv.Value);
+                // THE GAP COUNTS BODIES, THE TALLY COUNTS WEAPONS. Each shot carries its own
+                // identity for the 0.52 s gap, so all three land; the tally is keyed by the WEAPON
+                // that fired them, so it stays one line per gun instead of gaining one per round
+                // ever fired at this hull.
+                double Volley() => me.DamageBySource.TryGetValue("test:volley", out var v) ? v : 0;
                 for (int i = 0; i < 3; i++)
                     Combat.FireSlug(volFrom, volAim, 900f, volStand * 2f, 6f, 7.0, scrap: false, 0, "test:volley");
                 for (int i = 0; i < 60 * 3 && Volley() < 21.0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-                int volSources = me.DamageBySource.Where(kv => kv.Key.StartsWith("test:volley#")).Count();
-                Check(Math.Abs(Volley() - 21.0) < 1e-9 && volSources == 3,
-                      $"a volley of three from one weapon lands three times on one hull: 3 x 7 = 21 taken from 3 separate sources, not the 7 from 1 that one shared name left of it ({Volley():0.000} from {volSources}, fired from {volStand:0} u off at {Mathf.RadToDeg(volBear):0} deg)");
+                int volLines = me.DamageBySource.Keys.Count(k => k.StartsWith("test:volley"));
+                Check(Math.Abs(Volley() - 21.0) < 1e-9 && volLines == 1,
+                      $"a volley of three from one weapon lands three times on one hull -- 3 x 7 = 21, where one shared name left a hull feeling 7 -- and the tally it lands in is still ONE line for that weapon ({Volley():0.000} over {volLines} line, fired from {volStand:0} u off at {Mathf.RadToDeg(volBear):0} deg)");
             }
             Check(PlayerShip.CombatHold == 12, "out of combat means 12 s without dealing or taking damage");
             me.TakeDamage(me.Hp - me.MaxHp * 0.5); me.NoteCombat(); double h0 = me.Hp;

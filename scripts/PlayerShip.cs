@@ -815,7 +815,12 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         if (d <= 0) return;
         if (from is { } at2)
         {
-            DamageBySource[source ?? "?"] = (DamageBySource.TryGetValue(source ?? "?", out var sum) ? sum : 0) + d;
+            // THE TALLY IS KEYED BY THE FAMILY, THE GAP BY THE BODY. A shot is its own source so a
+            // volley of three lands three times (Shots.SourceKey: "boss:missiles#41"), but the
+            // tally the HUD and the checks read wants one line per WEAPON, not one per round --
+            // keyed by the body it would gain an entry for every shell ever fired at this hull.
+            string tally = Family(source);
+            DamageBySource[tally] = (DamageBySource.TryGetValue(tally, out var sum) ? sum : 0) + d;
             var v = (at2 - Position).Rotated(-Rotation);
             float side = Mathf.Atan2(v.X, -v.Y);            // 0 = ahead, clockwise
             _shield?.Flash(side);
@@ -832,6 +837,13 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // Every source whose last blow is older than HitGap: its entry can now only say "allow it",
     // which is what an absent entry says, so it is dropped. DamageBySource is left alone -- it is
     // a tally the HUD and the checks read, not a timer.
+    // The weapon a source names, without the body that carried it: everything before the '#'.
+    private static string Family(string source)
+    {
+        if (source == null) return "?";
+        int hash = source.IndexOf('#');
+        return hash < 0 ? source : source[..hash];
+    }
     private void SweepHits()
     {
         if (_lastHitBy.Count == 0) return;
