@@ -340,6 +340,7 @@ public partial class _Test : Node
         // this is the one place that already throws pilots away and loads the real one back at the
         // end. Run where the hub starts, its NewBlank wiped the tutorial's hint state.
         RefitChecks();
+        GearLevelChecks();
 
         // Every class is touched first: Load() fills the loadout for ALL of them, so a character that
         // had only ever used one would differ after a round trip for that reason alone and say
@@ -357,6 +358,7 @@ public partial class _Test : Node
         Character.BaseLevels[Economy.All[0].Id] = 3;
         Character.BaseInvested[Economy.All[0].Tab] = 900;
         Character.GearHold["chip_basic"] = 2; Character.GearHold["std_drive"] = 1; Character.GearHold["cv_elite_3"] = 1;
+        Character.GearLevel["bs_rapid_1"] = 7; Character.GearLevel["cv_elite_3"] = 40;
         Character.Unclaimed.AddRange(new[] { "cv_elite_3", "sh_bulwark_2" });
         Character.PaidKills.AddRange(new[] { 638000000000000001L, 638000000000000002L });
         Character.HintsSeen.Add("flight"); Character.HintsSeen.Add("raid"); Character.HintsOff = true;
@@ -383,7 +385,7 @@ public partial class _Test : Node
         // economy fields were added, not saved, and the round trip passed.
         var exercised = new[] { "Accent", "BaseCredits", "BaseInvested", "BaseLevels",
                                 "BaseStock", "BossCleared", "Bonuses", "Bought", "Class", "Exp",
-                                "GearHold", "HintsOff", "HintsSeen", "Id", "Level", "Loadout", "Main",
+                                "GearHold", "GearLevel", "HintsOff", "HintsSeen", "Id", "Level", "Loadout", "Main",
                                 "Name", "PaidKills", "Points", "Spent", "Unclaimed" };
         // Not state a character carries: a path, and the compiler's backing field for a property
         // that reports how the LAST save went. Named explicitly rather than filtered by a pattern,
@@ -1054,6 +1056,49 @@ public partial class _Test : Node
         Check(said is { Success: true } && line.Contains(shown.Label) && Math.Abs(double.Parse(said.Groups[1].Value) - want) < 30,
               $"the HUD names the target AND says how far off it is: {shown.Label} at {said?.Groups[1].Value ?? "nothing"} u, measured {want:0} u");
         H.ClearSelection();
+    }
+
+    // ── LEVELLING A PART WITH SALVAGE ───────────────────────────────────────────────────────────
+    // 100 salvage for the first level and a quarter more each time, stopping at +200%. A level adds
+    // 5% to what the part is FOR and nothing to what it takes in exchange, and it belongs to the
+    // part ID, because the hold stores counts by id and no instance id exists anywhere.
+    void GearLevelChecks()
+    {
+        var battery = Equipment.ById("bs_rapid_1");                  // faster guns, lighter shells
+        if (battery == null) { Check(false, "gear levels: no bs_rapid_1 to level"); return; }
+
+        double first = Equipment.NextLevelCost(battery.Id);
+        Character.GearLevel[battery.Id] = 1;  double second = Equipment.NextLevelCost(battery.Id);
+        Character.GearLevel[battery.Id] = 2;  double third  = Equipment.NextLevelCost(battery.Id);
+        Character.GearLevel[battery.Id] = Equipment.MaxLevel;
+        double ceiling = Equipment.NextLevelCost(battery.Id);
+        double whole = 0; for (int k = 0; k < Equipment.MaxLevel; k++) whole += Math.Round(100 * Math.Pow(1.25, k));
+        Check(Math.Abs(first - 100) < 1e-6 && Math.Abs(second - 125) < 1e-6 && Math.Abs(third - 156) < 1e-6
+              && ceiling < 0 && Equipment.MaxLevel * Equipment.LevelStep == 2.0 && Math.Abs(whole - 3008864) < 2,
+              $"a level costs 100 salvage and a quarter more each time, stopping at +200%: {first:0}, {second:0}, {third:0}, and {whole:0} for the whole ladder of {Equipment.MaxLevel}");
+
+        // WHAT IT LIFTS: the part's own stats, and not what it takes in exchange.
+        Character.GearLevel.Clear();
+        var worn = Equipment.Default(ShipClass.Battleship);
+        worn[Array.IndexOf(Equipment.Core, battery.Slot)] = battery.Id;
+        var bare = Equipment.Bonuses(ShipClass.Battleship, worn);
+        Character.GearLevel[battery.Id] = 10;                        // +50%
+        var lifted = Equipment.Bonuses(ShipClass.Battleship, worn);
+        string up = battery.Ups.FirstOrDefault(), down = battery.Pct.Keys.FirstOrDefault(k => Array.IndexOf(battery.Ups, k) < 0);
+        Check(up != null && down != null
+              && Math.Abs(lifted[up] - bare[up] * 1.5) < 1e-9 && Math.Abs(lifted[down] - bare[down]) < 1e-9,
+              $"ten levels lift what the part is FOR by half and leave what it costs alone: {up} {bare[up] * 100:0.#}% -> {lifted[up] * 100:0.#}%, {down} {bare[down] * 100:0.#}% either way");
+
+        // A LEVEL IS THE ID'S, and it survives a round trip to disk. Under a scratch id of its own:
+        // the pilot this run is flying has a base saved against it.
+        string keepId = Character.Id;
+        Character.Id = "gearlevel"; Character.Save();
+        Character.GearLevel.Clear();
+        bool loaded = Character.Load("gearlevel") && Equipment.LevelOf(battery.Id) == 10;
+        Check(loaded && Equipment.LevelOf("bs_rapid_2") == 0,
+              $"a level belongs to the part id, and comes back off disk ({Equipment.LevelOf(battery.Id)} on the battery, {Equipment.LevelOf("bs_rapid_2")} on the mark II)");
+        Character.Delete("gearlevel");
+        Character.GearLevel.Clear(); Character.Id = keepId;
     }
 
     void RefitChecks()

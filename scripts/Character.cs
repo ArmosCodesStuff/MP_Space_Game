@@ -55,6 +55,10 @@ public static class Character
     public static readonly Dictionary<string, double> BaseStock = new();
     public static double BaseCredits;
     public static readonly Dictionary<string, int> BaseLevels = new();
+    // WHAT EACH PART HAS BEEN LEVELLED TO with salvage, by part id (Equipment.LevelOf). Beside the
+    // hold rather than inside it because a level belongs to the id, not to a copy: a pilot holding
+    // three Rapid Batteries has one level between them.
+    public static readonly Dictionary<string, int> GearLevel = new();
     public static readonly Dictionary<string, double> BaseInvested = new();
     // equipment, per class: what is on each ship. The hold is the pilot's: every part owned and not
     // fitted, for any class -- a part taken off goes into it, a part fitted comes out of it. Counts,
@@ -106,6 +110,7 @@ public static class Character
         (Name, Main, Accent, Class) = (Defaults.Name, Defaults.Main, Defaults.Accent, ShipClass.Battleship);
         Bonuses.Clear();
         Exp = 0; Level = 1; Points = 0; Array.Clear(Bought); BossCleared.Clear(); Loadout.Clear(); GearHold.Clear(); Unclaimed.Clear(); PaidKills.Clear();
+        GearLevel.Clear();
         HintsSeen.Clear(); HintsOff = false;
         BaseCredits = 0; BaseStock.Clear(); BaseLevels.Clear(); BaseInvested.Clear();
     }
@@ -148,6 +153,7 @@ public static class Character
         // one pilot's rudder into another's hull.
         c.SetValue("progress", "spent", string.Join(",", Spent.Select(i => Progression.All[i].Id)));
         foreach (var kv in BossCleared) c.SetValue("boss_cleared", kv.Key, string.Join(",", kv.Value.OrderBy(x => x)));
+        foreach (var kv in GearLevel) if (kv.Value > 0) c.SetValue("gear_level", kv.Key, kv.Value);
         // ONE KEY PER RESOURCE ID, in table order, then the credits: "ore", "salvage", "credits",
         // the same three keys in the same order two named fields wrote.
         foreach (var r in Gathering.Resources) c.SetValue("base", r, BaseStock.GetValueOrDefault(r));
@@ -283,6 +289,11 @@ public static class Character
             if (Hints.All.ContainsKey(h)) HintsSeen.Add(h);
         HintsOff = (bool)c.GetValue("hints", "off", false);
         BossCleared.Clear();
+        GearLevel.Clear();
+        // A file from before parts could be levelled has no section at all and every part reads 0.
+        if (c.HasSection("gear_level"))
+            foreach (var k in c.GetSectionKeys("gear_level"))
+                GearLevel[k] = Math.Clamp((int)c.GetValue("gear_level", k, 0), 0, Equipment.MaxLevel);
         if (c.HasSection("boss_cleared"))
             foreach (var k in c.GetSectionKeys("boss_cleared"))
                 BossCleared[k] = ((string)c.GetValue("boss_cleared", k, "")).Split(',', StringSplitOptions.RemoveEmptyEntries)

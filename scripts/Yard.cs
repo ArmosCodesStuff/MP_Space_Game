@@ -430,8 +430,26 @@ public partial class Yard : Node2D
     // ── REFIT's price: 10% of the stock you own ──────────────────────────────
     // The world's if you are its host (or offline); a guest's own, parked totals. Asked one
     // resource at a time, so the window lists whatever the table holds (BasePanel).
-    public double ResetCost(string res) => (_parked ? _ownStock.GetValueOrDefault(res) : Stock(res)) * 0.1;
+    // YOUR OWN stock of a resource, whether you are home or visiting: what a refit is charged
+    // against, and what a gear level is bought with.
+    public double OwnStock(string res) => _parked ? _ownStock.GetValueOrDefault(res) : Stock(res);
+    public double ResetCost(string res) => OwnStock(res) * 0.1;
     public double ResetCostCredits => (_parked ? _ownCredits : Credits) * 0.1;
+
+    // LEVELLING A PART, paid in salvage from YOUR OWN base -- the rule a refit already follows, so
+    // a pilot visiting a friend spends its own stock and not the host's. True when it was paid for.
+    public bool BuyGearLevel(string id)
+    {
+        double cost = Equipment.NextLevelCost(id);
+        if (cost < 0) return false;                                  // at the ceiling
+        const string res = "salvage";
+        double have = OwnStock(res);
+        if (have < cost) return false;
+        if (_parked) _ownStock[res] = have - cost; else SetStock(res, have - cost);
+        Character.GearLevel[id] = Equipment.LevelOf(id) + 1;
+        Character.Save();
+        return true;
+    }
 
     public void ChargeReset()
     {

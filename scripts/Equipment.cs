@@ -43,6 +43,12 @@ public class ItemDef
     //   a second answer to "does this fit" -- is gone.
     public string[] Needs = System.Array.Empty<string>();
     public bool Kit;                         // a hull's own hardware: never dropped
+    // THE STATS THIS PART IS FOR -- the `up` list it was written with, as opposed to what it takes
+    // in exchange. Levelling a part with salvage improves these and leaves the drawbacks exactly as
+    // printed, so a Rapid Battery's guns get faster and its shells never get lighter. Without this
+    // the two are indistinguishable once they are both a number in Pct: a share is negative on a
+    // reload because a shorter reload IS the improvement.
+    public string[] Ups = System.Array.Empty<string>();
     public Dictionary<string, double> Pct = new(), Add = new();
 
     // A HULL'S OWN HARDWARE, as a class row writes it (ClassDef.Kit) and as Build yields it: a
@@ -144,7 +150,8 @@ public static class Equipment
             .Distinct().ToArray();
         for (int r = 0; r < Scale.Length; r++)
         {
-            var it = new ItemDef { Id = $"{id}_{r + 1}", Name = name + Suffix[r], Slot = slot, Rarity = (Rarity)r, Needs = needs, Blurb = blurb };
+            var it = new ItemDef { Id = $"{id}_{r + 1}", Name = name + Suffix[r], Slot = slot, Rarity = (Rarity)r, Needs = needs, Blurb = blurb,
+                                   Ups = (up ?? None).Select(t => t.stat).Distinct().ToArray() };
             foreach (var (s, p) in up) it.Pct[s] = it.Pct.GetValueOrDefault(s) + p * Scale[r];
             foreach (var (s, p) in down ?? Array.Empty<(string, double)>()) it.Pct[s] = it.Pct.GetValueOrDefault(s) + p;
             foreach (var (s, a) in add ?? Array.Empty<(string, int[])>()) it.Add[s] = a[r];
@@ -414,10 +421,31 @@ public static class Equipment
         return o;
     }
 
+    // ── LEVELLING A PART WITH SALVAGE ────────────────────────────────────────────────────────
+    // Salvage had nothing to buy but a refit, and a part was worth exactly what it rolled. A level
+    // adds 5% to what the part is FOR (ItemDef.Ups) and nothing to what it costs you, at 100
+    // salvage for the first and a quarter more each time, stopping at +200%.
+    //
+    // A LEVEL BELONGS TO THE PART ID, not to a copy: the hold has always stored counts by id and
+    // there is no instance id anywhere in the save or on the wire, so "this Rapid Battery II" is
+    // not a thing the game can say. Levelling one levels every one you own, which is also the
+    // reading that cannot lose a levelled part by scrapping the wrong copy.
+    public const int MaxLevel = 40;                 // 40 x 5% = +200%
+    public const double LevelStep = 0.05, LevelCost = 100, LevelGrowth = 1.25;
+    public static int LevelOf(string id) => System.Math.Clamp(Character.GearLevel.GetValueOrDefault(id ?? "", 0), 0, MaxLevel);
+    // What the NEXT level costs, in salvage -- or -1 at the ceiling.
+    public static double NextLevelCost(string id) =>
+        LevelOf(id) >= MaxLevel ? -1 : System.Math.Round(LevelCost * System.Math.Pow(LevelGrowth, LevelOf(id)));
+    // Everything a part is for, lifted by its level. A kit part has no ups and never moves.
+    private static double Lifted(ItemDef i, string stat, double v) =>
+        System.Array.IndexOf(i.Ups, stat) < 0 ? v : v * (1 + LevelStep * LevelOf(i.Id));
+
     // What a loadout does to the sheet, summed per stat over its SANITISED parts, so a part in the
     // wrong slot or for another class changes nothing: the shares, and the whole additions.
-    public static Dictionary<string, double> Bonuses(ShipClass c, string[] loadout) => Sum(c, loadout, i => i.Pct);
-    public static Dictionary<string, double> Adds(ShipClass c, string[] loadout) => Sum(c, loadout, i => i.Add.ToDictionary(kv => kv.Key, kv => (double)kv.Value));
+    public static Dictionary<string, double> Bonuses(ShipClass c, string[] loadout) =>
+        Sum(c, loadout, i => i.Pct.ToDictionary(kv => kv.Key, kv => Lifted(i, kv.Key, kv.Value)));
+    public static Dictionary<string, double> Adds(ShipClass c, string[] loadout) =>
+        Sum(c, loadout, i => i.Add.ToDictionary(kv => kv.Key, kv => Lifted(i, kv.Key, kv.Value)));
     private static Dictionary<string, double> Sum(ShipClass c, string[] loadout, Func<ItemDef, IReadOnlyDictionary<string, double>> part)
     {
         var d = new Dictionary<string, double>();

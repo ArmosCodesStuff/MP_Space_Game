@@ -349,8 +349,9 @@ From the 2026-09-21 batch (each is a constant or one rule to change):
    - Each level adds **5%** to a part's passive benefits. **The drawbacks do not scale**: a Rapid
      Battery's faster guns improve, its softer shells stay exactly as printed.
    - **100 salvage for the first level, x1.25 compounding**, capped at **+200%** (40 levels).
-     Level 20 is 34k salvage all in, level 40 is 3.76M -- about an hour and about 104 hours of a
-     full salvager fleet, so +100% is a session's goal and +200% is a save's.
+     Level 20 is 34k salvage all in, level 40 is 3.01M (the figure first written here, 3.76M, was
+     an arithmetic slip caught by the check) -- about an hour and about 84 hours of a full
+     salvager fleet, so +100% is a session's goal and +200% is a save's.
    - **A level belongs to the part ID**, not to a copy: upgrade a Rapid Battery II and every one
      you own is that level. The hold stores counts by id, and instance ids do not exist anywhere
      in the save or on the wire.

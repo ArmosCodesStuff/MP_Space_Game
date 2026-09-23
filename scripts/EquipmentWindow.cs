@@ -44,14 +44,14 @@ public partial class EquipmentWindow : PanelContainer
         var cls = Character.Class; var l = Character.LoadoutFor(cls);
         _ship.AddChild(Ui.Heading($"{Classes.NameOf(cls)}  ·  core parts"));
         for (int k = 0; k < Equipment.CoreSlots; k++)
-            _ship.AddChild(Ui.CardWrap(PartRow($"Slot_{Equipment.Core[k]}", Equipment.Core[k].ToString().ToUpperInvariant(), l[k], cls, null)));
+            _ship.AddChild(Ui.CardWrap(PartRow($"Slot_{Equipment.Core[k]}", Equipment.Core[k].ToString().ToUpperInvariant(), l[k], cls, Upgrade(l[k]))));
         _ship.AddChild(Ui.Heading("Chips"));
         for (int k = 0; k < Equipment.ChipSlots; k++)
         {
             int slot = Equipment.CoreSlots + k;
             var off = string.IsNullOrEmpty(l[slot]) ? null
                     : Ui.Btn("UNEQUIP", () => { Character.Stow(l[slot]); l[slot] = ""; Changed(); }, "Unequip");
-            _ship.AddChild(Ui.CardWrap(PartRow($"Chip_{k}", $"CHIP {k + 1}", l[slot], cls, off)));
+            _ship.AddChild(Ui.CardWrap(PartRow($"Chip_{k}", $"CHIP {k + 1}", l[slot], cls, off ?? Upgrade(l[slot]))));
         }
 
         // THE HOLD: this class's parts first, in slot order, rarest first; then other classes' parts,
@@ -93,7 +93,11 @@ public partial class EquipmentWindow : PanelContainer
         head.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         head.CustomMinimumSize = new Vector2(width - (action != null ? 110 : 0), 0);
         text.AddChild(head);
-        var item = Ui.Lbl(it?.Name ?? "(empty)", Ui.Body, it != null ? Ui.RarityColor(it.Rarity) : Ui.Dim);
+        // A LEVELLED PART SAYS SO beside its name: what it has been lifted to, in the units the
+        // salvage bought (+5% a level to what the part is FOR).
+        int lv = it != null ? Equipment.LevelOf(it.Id) : 0;
+        var item = Ui.Lbl((it?.Name ?? "(empty)") + (lv > 0 ? $"   +{lv * Equipment.LevelStep * 100:0}%" : ""),
+                          Ui.Body, it != null ? Ui.RarityColor(it.Rarity) : Ui.Dim);
         item.Name = "Item"; text.AddChild(item);
         if (it != null)
         {
@@ -109,6 +113,20 @@ public partial class EquipmentWindow : PanelContainer
     }
 
     // A core part from the hold onto its slot; the part it replaces goes into the hold.
+    // LEVEL THIS PART, in salvage from your own base: what the next one costs, or nothing at all
+    // for an empty slot, a part at the ceiling, or a base with no salvage in it. A level lifts what
+    // the part is FOR by 5% and leaves what it takes exactly as printed.
+    private Button Upgrade(string id)
+    {
+        var it = Equipment.ById(id);
+        if (it == null || Hub.I?.Yard is not { } yard) return null;
+        double cost = Equipment.NextLevelCost(id);
+        if (cost < 0) { var top = Ui.Btn($"+{Equipment.MaxLevel * Equipment.LevelStep * 100:0}%", () => { }, "Upgrade"); top.Disabled = true; return top; }
+        var b = Ui.Btn($"{cost:0} SALVAGE", () => { if (yard.BuyGearLevel(id)) Changed(); }, "Upgrade");
+        b.Disabled = yard.OwnStock("salvage") < cost;
+        return b;
+    }
+
     private void FitCore(string id)
     {
         var it = Equipment.ById(id); var cls = Character.Class; var l = Character.LoadoutFor(cls);
