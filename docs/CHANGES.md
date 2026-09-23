@@ -312,6 +312,31 @@ From the 2026-09-21 batch (each is a constant or one rule to change):
   hardest-leaning parts (Elite III, Swarm III, Glass III) have not been flown.
 - `Hub.BeginPlacement` for the first non-instant ability; wormhole transit into an instanced system.
 
+**The owner's batch of 2026-09-23, in their order** (decisions already taken are marked):
+
+1. **A refit costs a LEVEL as well as the resources**, and undoes one purchase: the TRUE most
+   recent one, which means the character file starts recording the ORDER points were spent in (a
+   new field and a format bump; a file with no log falls back to the dearest point). The pilot
+   loses the level AND the point -- the stat comes off the sheet -- but **keeps its progress toward
+   the next level**: 560/1000 stays 560/1000.
+2. **A boss awards 100 more EXP at the base**, and **none at all when the boss's level is under
+   half the pilot's** (level 5 against a level 1 or 2 boss pays nothing).
+3. **A pilot's warp reaches 1200 u, not 2000.**
+4. **A distance-to-target readout** under the target's window: a small widget.
+5. **An EXP popup** through the damage-number mechanism, bolder and white, above the pilot's ship.
+6. **A boss's escorts stop belonging to the Lancer.** A boss row says what it calls in; a boss with
+   escorts gains one more every 10 levels to a maximum of five, with formation places for five (or
+   a queue, where the next waits for one of the others to die).
+7. **A warp does not land a capital ship on top of the thing it is aimed at.**
+8. **SIEGE: a second Threat Intelligence Operations mission type**, offered at any unlocked level
+   beside the boss, scaling off the same level.
+   - The crescent hull is the pirate base, in red and black; the other is a pylon.
+   - Four pylons on an invisible X, 1200 u out on each diagonal, 400 hull each.
+   - **The four pylons hold the base's shield up: every one must fall before the base can be hurt**,
+     and the base wears a shield sprite on each side while they stand.
+   - The base has twice the hull of that level's boss (level 3: about 1600).
+   - Only the base drops loot.
+
 ---
 
 ## Unreleased
