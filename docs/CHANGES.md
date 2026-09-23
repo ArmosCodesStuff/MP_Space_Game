@@ -366,6 +366,30 @@ From the 2026-09-21 batch (each is a constant or one rule to change):
     - Default for what a set DOES, to be confirmed when it is built: anything that takes "the
       selected target" uses the FIRST of the set, and anything that can spread -- a wing's orders,
       a hunter volley, a missile burst -- divides across it.
+13. **THREE MORE PILOT UPGRADES** beside Rudder, Hull, Engines and Weapons, chosen by the owner:
+    - **REACH** -- +1% weapon range a level, read from the class row the way Weapons reads its
+      damage. Needs `ClassDef.Reach` (the Targeting Chip wants it too: today that part lifts a
+      hardcoded list of six stat ids and does nothing for seven of the nine new classes).
+    - **COOLING** -- -0.5% on every ability's cooldown a level, capped so a long career is -30%
+      and not free abilities. The only upgrade that touches what makes the nine classes differ.
+    - **RATE OF FIRE** -- the main gun fires faster per level.
+14. **THE BOSS CURVE PRESSES.** Tuned against a pilot who beats each level's boss TWICE before
+    moving on: at that rate the boss should pull SLIGHTLY ahead, so a third clear or better gear is
+    the answer to a wall. Measure first -- two clears' EXP, the points they buy and the gear those
+    kills drop, against 10% hull and damage and 1% wind-up and reach -- and report the numbers
+    before changing any of them.
+15. **A BOSS'S PROJECTILES SCALE FASTER over time; A PIRATE'S DO NOT.** A raider scales in its own
+    stats only and throws the same missile at level 40 as at level 1.
+16. **A HEAVY FIGHTER'S MISSILE LANDS AFTER 12 s** (it is 7 today) and hits about 40% harder. That
+    moves the prediction: the lead is computed from the flight, so a longer flight means a longer
+    guess, and the anticipation code has to be checked against it rather than assumed.
+17. **A SOFT TUTORIAL** on a pilot's first character: a layer with CONTINUE buttons, and a SKIP
+    TUTORIAL button at the top right of the screen.
+18. **MORE CHECKS, AND MORE VARIED ONES**, per mechanism rather than per scenario: minimum and
+    maximum range for every class, every class ability exercised, and variation in the geometry
+    each run draws (the harness already seeds its own -- this is about covering more of what the
+    game has with it).
+
 12. **A DUMB LAUNCHER, and clients that update themselves.** A second, tiny executable: the
     changelog, an UPDATE button and PLAY -- and nothing else, so it never needs updating itself.
     The real main menu stays in the game, because it is a live diorama with character creation and
