@@ -82,6 +82,9 @@ public partial class Hub : Node2D
     // Threat Intelligence Operations: south-west of the base, clear of the wreck, the
     // salvage routes, the haul lane and the dummies.
     public static readonly Vector2 TioPos = new(-650, 640);
+    // THE RECYCLER: a smaller yard beside the intelligence office, where a hold is turned back
+    // into salvage.
+    public static readonly Vector2 RecyclerPos = new(-1180, 520);
     public const float TioHeight = 260f;   // on the lane through that pad
     // three dummies south-east of the base, below the haul lane and far enough apart
     // that a click is never ambiguous
@@ -160,6 +163,7 @@ public partial class Hub : Node2D
         {   // home's landmarks: the arena has none of them
             yield return new ScopeMark("BASE", BasePos, 260f, MarkShape.Box, new Vector2(4f, 4f), new Color(0.75f, 0.78f, 0.8f));
             yield return new ScopeMark("THREAT INTELLIGENCE", TioPos, 140f, MarkShape.Box, new Vector2(3f, 4f), new Color(0.6f, 0.64f, 0.7f));
+            yield return new ScopeMark("RECYCLER", RecyclerPos, 110f, MarkShape.Box, new Vector2(3f, 3f), new Color(0.55f, 0.62f, 0.55f));
             yield return new ScopeMark("PORTAL", PortalPos, 160f, MarkShape.Ring, new Vector2(5f, 5f), new Color(0.4f, 0.8f, 1f));
             yield return new ScopeMark("SALVAGE FIELD", WreckPos, 340f, MarkShape.Dot, new Vector2(4f, 4f), new Color(0.5f, 0.35f, 0.25f, 0.9f));
             // the belt's sun: the rocks ring it, and nothing was drawn at the point the mark picks
@@ -803,6 +807,8 @@ public partial class Hub : Node2D
     public string PilotName(int id) => _ships.TryGetValue(id, out var s) && IsInstanceValid(s) ? s.Pilot
                                      : _away.TryGetValue(id, out var n) ? $"{n} (reconnecting)" : $"pilot {id}";
     public bool TioOpen => SideIs<TioWindow>();
+    public bool RecyclerOpen => SideIs<RecyclerPanel>();
+    public void ToggleRecycler() => ToggleSide(() => new RecyclerPanel { Hub = this });
 
     public void OpenTio()
     {
@@ -1421,6 +1427,7 @@ public partial class Hub : Node2D
         // buildings: a left-click on one opens its menu
         if (IsInstanceValid(_tioSprite) && _tioSprite.GetRect().HasPoint(_tioSprite.ToLocal(world))) { OpenTio(); return true; }
         if (!InArena && world.DistanceTo(BasePos) < 200f) { if (!SideIs<BasePanel>()) ToggleBase(); return true; }
+        if (!InArena && world.DistanceTo(RecyclerPos) < 110f) { if (!RecyclerOpen) ToggleRecycler(); return true; }
         return false;
     }
 

@@ -451,6 +451,46 @@ public partial class Yard : Node2D
         return true;
     }
 
+    // ── THE RECYCLER'S QUEUE ────────────────────────────────────────────────────────────────
+    // Parts waiting to be scrapped, oldest first, chewed through one every Economy.ScrapEvery.
+    // The part leaves the hold the moment it is QUEUED, so it cannot be fitted or queued twice
+    // while it waits, and TAKE BACK puts it straight back. The salvage lands in YOUR OWN base --
+    // the rule a refit and a gear level already follow -- so a pilot visiting a friend is not
+    // feeding the host's stock.
+    private readonly List<string> _scrap = new();
+    private double _scrapClock;
+    public IReadOnlyList<string> ScrapQueue => _scrap;
+    public int ScrapPending => _scrap.Count;
+
+    public bool QueueScrap(string id)
+    {
+        var it = Equipment.ById(id);
+        if (it == null || it.Kit || Character.GearLocked.Contains(id) || Character.GearHold.GetValueOrDefault(id) <= 0) return false;
+        Character.Unstow(id);                       // out of the hold at once: it is spoken for
+        _scrap.Add(id);
+        Character.Save();
+        return true;
+    }
+    public bool UnqueueScrap(string id)
+    {
+        if (!_scrap.Remove(id)) return false;
+        Character.Stow(id);
+        Character.Save();
+        return true;
+    }
+    private void TickScrap(double delta)
+    {
+        if (_scrap.Count == 0) { _scrapClock = 0; return; }
+        if ((_scrapClock += delta) < Economy.ScrapEvery) return;
+        _scrapClock = 0;
+        var id = _scrap[0]; _scrap.RemoveAt(0);
+        var it = Equipment.ById(id);
+        double paid = Economy.ScrapValue(it?.Rarity ?? Rarity.Common);
+        const string res = "salvage";
+        if (_parked) _ownStock[res] = _ownStock.GetValueOrDefault(res) + paid; else SetStock(res, Stock(res) + paid);
+        Character.Save();
+    }
+
     public void ChargeReset()
     {
         foreach (var r in Gathering.Resources)
@@ -530,6 +570,9 @@ public partial class Yard : Node2D
         // base for every player except the single-player one.
         _saveCd -= delta;
         if (_saveCd <= 0) { _saveCd = AutoSaveEvery; SaveBase(); }
+        // ...and the recycler, for the same reason: a pilot alone in its own world still has a
+        // hold to be rid of, and the line below is where ONLINE begins.
+        TickScrap(delta);
         if (!Net.Sim || !Net.IsOnline) return;
         _totalsCd -= delta;
         if (_totalsCd <= 0)

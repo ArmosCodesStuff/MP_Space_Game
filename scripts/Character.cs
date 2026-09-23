@@ -59,6 +59,15 @@ public static class Character
     // hold rather than inside it because a level belongs to the id, not to a copy: a pilot holding
     // three Rapid Batteries has one level between them.
     public static readonly Dictionary<string, int> GearLevel = new();
+    // PARTS THE RECYCLER MAY NOT TOUCH, by id -- the same id a level belongs to, because the hold
+    // counts parts by id and there is no "this copy" for a lock to be about.
+    public static readonly HashSet<string> GearLocked = new();
+    public static void ToggleGearLock(string id)
+    {
+        if (string.IsNullOrEmpty(id)) return;
+        if (!GearLocked.Remove(id)) GearLocked.Add(id);
+        Save();
+    }
     public static readonly Dictionary<string, double> BaseInvested = new();
     // equipment, per class: what is on each ship. The hold is the pilot's: every part owned and not
     // fitted, for any class -- a part taken off goes into it, a part fitted comes out of it. Counts,
@@ -110,7 +119,7 @@ public static class Character
         (Name, Main, Accent, Class) = (Defaults.Name, Defaults.Main, Defaults.Accent, ShipClass.Battleship);
         Bonuses.Clear();
         Exp = 0; Level = 1; Points = 0; Array.Clear(Bought); BossCleared.Clear(); Loadout.Clear(); GearHold.Clear(); Unclaimed.Clear(); PaidKills.Clear();
-        GearLevel.Clear();
+        GearLevel.Clear(); GearLocked.Clear();
         HintsSeen.Clear(); HintsOff = false;
         BaseCredits = 0; BaseStock.Clear(); BaseLevels.Clear(); BaseInvested.Clear();
     }
@@ -154,6 +163,8 @@ public static class Character
         c.SetValue("progress", "spent", string.Join(",", Spent.Select(i => Progression.All[i].Id)));
         foreach (var kv in BossCleared) c.SetValue("boss_cleared", kv.Key, string.Join(",", kv.Value.OrderBy(x => x)));
         foreach (var kv in GearLevel) if (kv.Value > 0) c.SetValue("gear_level", kv.Key, kv.Value);
+        c.SetValue("gear", "locked", string.Join(",", GearLocked.OrderBy(x => x, StringComparer.Ordinal)));
+        c.SetValue("gear", "locked", string.Join(",", GearLocked.OrderBy(x => x, StringComparer.Ordinal)));
         // ONE KEY PER RESOURCE ID, in table order, then the credits: "ore", "salvage", "credits",
         // the same three keys in the same order two named fields wrote.
         foreach (var r in Gathering.Resources) c.SetValue("base", r, BaseStock.GetValueOrDefault(r));
@@ -289,7 +300,9 @@ public static class Character
             if (Hints.All.ContainsKey(h)) HintsSeen.Add(h);
         HintsOff = (bool)c.GetValue("hints", "off", false);
         BossCleared.Clear();
-        GearLevel.Clear();
+        GearLevel.Clear(); GearLocked.Clear();
+        foreach (var lockedId in ((string)c.GetValue("gear", "locked", "")).Split(',', StringSplitOptions.RemoveEmptyEntries))
+            GearLocked.Add(lockedId);
         // A file from before parts could be levelled has no section at all and every part reads 0.
         if (c.HasSection("gear_level"))
             foreach (var k in c.GetSectionKeys("gear_level"))

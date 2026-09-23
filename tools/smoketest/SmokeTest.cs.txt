@@ -342,6 +342,7 @@ public partial class _Test : Node
         RefitChecks();
         GearLevelChecks();
         BossScaleChecks();
+        await RecyclerChecks();
 
         // Every class is touched first: Load() fills the loadout for ALL of them, so a character that
         // had only ever used one would differ after a round trip for that reason alone and say
@@ -360,6 +361,7 @@ public partial class _Test : Node
         Character.BaseInvested[Economy.All[0].Tab] = 900;
         Character.GearHold["chip_basic"] = 2; Character.GearHold["std_drive"] = 1; Character.GearHold["cv_elite_3"] = 1;
         Character.GearLevel["bs_rapid_1"] = 7; Character.GearLevel["cv_elite_3"] = 40;
+        Character.GearLocked.Add("cv_elite_3");
         Character.Unclaimed.AddRange(new[] { "cv_elite_3", "sh_bulwark_2" });
         Character.PaidKills.AddRange(new[] { 638000000000000001L, 638000000000000002L });
         Character.HintsSeen.Add("flight"); Character.HintsSeen.Add("raid"); Character.HintsOff = true;
@@ -386,7 +388,7 @@ public partial class _Test : Node
         // economy fields were added, not saved, and the round trip passed.
         var exercised = new[] { "Accent", "BaseCredits", "BaseInvested", "BaseLevels",
                                 "BaseStock", "BossCleared", "Bonuses", "Bought", "Class", "Exp",
-                                "GearHold", "GearLevel", "HintsOff", "HintsSeen", "Id", "Level", "Loadout", "Main",
+                                "GearHold", "GearLevel", "GearLocked", "HintsOff", "HintsSeen", "Id", "Level", "Loadout", "Main",
                                 "Name", "PaidKills", "Points", "Spent", "Unclaimed" };
         // Not state a character carries: a path, and the compiler's backing field for a property
         // that reports how the LAST save went. Named explicitly rather than filtered by a pattern,
@@ -1078,6 +1080,57 @@ public partial class _Test : Node
               && Math.Abs(Missions.Quicken(51) - Math.Pow(1.01, 50)) < 1e-9,
               $"a boss gains 1% a level on its wind-ups and its reach: x{Missions.Quicken(2):0.000} at level 2, x{Missions.Quicken(11):0.000} at 11, x{Missions.Quicken(51):0.000} at 51");
 
+    }
+
+    // ── THE RECYCLER: a hold turned back into salvage, and a lock so it cannot eat what you fly ──
+    // A part could not be got rid of at all before this: a hold filled with commons a pilot would
+    // never fit again, and salvage had nothing to buy but a refit and gear levels.
+    async Task RecyclerChecks()
+    {
+        var yard = H.Yard;
+        Character.GearHold.Clear(); Character.GearLocked.Clear();
+        Character.Stow("bs_rapid_1"); Character.Stow("bs_rapid_1"); Character.Stow("cv_elite_3");
+        yard.SetStock("salvage", 0);
+
+        // A KIT PART IS NOT LOOT and is refused outright; a LOCKED part is refused too.
+        Character.Stow("bs_main_battery");
+        bool kitRefused = !yard.QueueScrap("bs_main_battery");
+        Character.ToggleGearLock("cv_elite_3");
+        bool lockedRefused = !yard.QueueScrap("cv_elite_3") && Character.GearLocked.Contains("cv_elite_3");
+
+        // QUEUED: out of the hold at once, so it cannot be fitted or queued twice while it waits.
+        bool queued = yard.QueueScrap("bs_rapid_1");
+        bool goneFromHold = Character.GearHold.GetValueOrDefault("bs_rapid_1") == 1 && yard.ScrapPending == 1;
+        // ...and TAKE BACK puts it straight back.
+        bool back = yard.UnqueueScrap("bs_rapid_1") && Character.GearHold.GetValueOrDefault("bs_rapid_1") == 2 && yard.ScrapPending == 0;
+        Check(kitRefused && lockedRefused && queued && goneFromHold && back,
+              $"the recycler takes loot and nothing else: a hull's own mount refused, a locked part refused, a queued part out of the hold at once and back again when taken back ({yard.ScrapPending} queued)");
+
+        // IT PAYS, one part every Economy.ScrapEvery, in salvage, by rarity.
+        // ONE EPIC, because the pile will not hold still: the salvagers fill it and the hauler
+        // takes loads off it while this runs, so the payment has to be big enough to read through
+        // that. 600 against a fleet that moves tens either way in five seconds.
+        Character.ToggleGearLock("cv_elite_3");                      // unlocked, to be scrapped
+        bool epicQueued = yard.QueueScrap("cv_elite_3");
+        double paid0 = yard.Stock("salvage");
+        await Wait(Economy.ScrapEvery + 0.6);
+        double paid = yard.Stock("salvage") - paid0;
+        Check(epicQueued && paid > 450 && paid < 750 && yard.ScrapPending == 0
+              && Math.Abs(Economy.ScrapValue(Rarity.Common) - 100) < 1e-6
+              && Math.Abs(Economy.ScrapValue(Rarity.Rare) - 250) < 1e-6
+              && Math.Abs(Economy.ScrapValue(Rarity.Epic) - 600) < 1e-6,
+              $"it chews through the queue one part every {Economy.ScrapEvery:0} s and pays by rarity -- an epic is 600 ({paid:0} into a pile the fleet is also working), a rare 250, a common 100");
+        Character.ToggleGearLock("cv_elite_3");                      // ...and locked again for the round trip below
+        Character.Stow("cv_elite_3");
+
+        // A LOCK IS THE PART ID'S, like its level, and it survives a round trip to disk.
+        string keepId = Character.Id;
+        Character.Id = "recycler"; Character.Save();
+        Character.GearLocked.Clear();
+        bool loaded = Character.Load("recycler") && Character.GearLocked.Contains("cv_elite_3");
+        Character.Delete("recycler"); Character.Id = keepId;
+        Check(loaded, $"a lock belongs to the part id and comes back off disk ({string.Join(",", Character.GearLocked)})");
+        Character.GearHold.Clear(); Character.GearLocked.Clear();
     }
 
     void GearLevelChecks()
@@ -2149,10 +2202,10 @@ public partial class _Test : Node
             // There were two lists, and they had drifted -- MISSION PORTAL was pickable with no
             // glyph of its own, so the only way to that waypoint was a click on empty scope.
             var scopeAtHome = H.ScopeMarks().ToList();
-            var wantMarks = new[] { "BASE", "THREAT INTELLIGENCE", "PORTAL", "SALVAGE FIELD", "MINING BELT",
+            var wantMarks = new[] { "BASE", "THREAT INTELLIGENCE", "RECYCLER", "PORTAL", "SALVAGE FIELD", "MINING BELT",
                                     "OUTPOST SE", "OUTPOST NE", "OUTPOST NW", "OUTPOST SW" };
-            Check(scopeAtHome.Count == 9 && wantMarks.All(n => scopeAtHome.Count(smk => smk.Name == n) == 1),
-                  $"the scope's marks at home are the 9 landmarks, once each ({scopeAtHome.Count}: {string.Join(", ", scopeAtHome.Select(smk => smk.Name))})");
+            Check(scopeAtHome.Count == 10 && wantMarks.All(n => scopeAtHome.Count(smk => smk.Name == n) == 1),
+                  $"the scope's marks at home are the 10 landmarks, once each ({scopeAtHome.Count}: {string.Join(", ", scopeAtHome.Select(smk => smk.Name))})");
             Check(scopeAtHome.All(smk => smk.Name.Length > 0 && smk.Pick > 0f && smk.Size.X > 0f && smk.Size.Y > 0f && smk.Colour.A > 0f),
                   $"every one of the {scopeAtHome.Count} marks that can be picked carries a glyph -- a size and a colour to draw it with");
             foreach (var smk in scopeAtHome)
