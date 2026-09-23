@@ -133,7 +133,10 @@ public static class Progression
         bool first = !Missions.Cleared(level);
         if (!Character.BossCleared.TryGetValue(id, out var set)) Character.BossCleared[id] = set = new System.Collections.Generic.HashSet<int>();
         set.Add(level);
-        int exp = Missions.KillExpFor(level, Character.Level) + (first ? Missions.FirstClearExp : 0) + Missions.CompletionExp;
+        // Nothing at all under the mark -- the bonuses too, not just the kill's share.
+        int exp = Missions.WorthExp(level, Character.Level)
+                ? Missions.KillExpFor(level, Character.Level) + (first ? Missions.FirstClearExp : 0) + Missions.CompletionExp
+                : 0;
         AddExp(exp);                                                         // (saves)
         return exp;
     }

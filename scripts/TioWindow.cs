@@ -54,9 +54,14 @@ public partial class TioWindow : PanelContainer
         _down.Disabled = !Net.IsHost || lv <= 1 || Hub.Mission != Hub.MissionState.Idle;
         _up.Disabled = !Net.IsHost || lv >= top || Hub.Mission != Hub.MissionState.Idle;
         bool first = !Missions.Cleared(lv);
+        // A boss under half this pilot's level pays no EXP at all, so the line says that instead of
+        // quoting bonuses it will not pay. The credits and the crates are unaffected.
+        bool worth = Missions.WorthExp(lv, Character.Level);
         Ui.SetText(_bounty, $"BOUNTY  ·  {Missions.ForLevel(lv).Name}  ·  party of {party}\n"
-                     + $"You: {Missions.KillExpFor(lv, Character.Level)} EXP for the kill (your level {Character.Level})"
-                     + (first ? $" + {Missions.FirstClearExp} first clear" : "") + $" + {Missions.CompletionExp} completing, "
+                     + (worth
+                        ? $"You: {Missions.KillExpFor(lv, Character.Level)} EXP for the kill (your level {Character.Level})"
+                          + (first ? $" + {Missions.FirstClearExp} first clear" : "") + $" + {Missions.CompletionExp} completing, "
+                        : $"You: NO EXP -- level {lv} is under half your level {Character.Level}, ")
                      + $"{Missions.BountyEach(lv, party):0} credits each.\n"
                      + $"Parts: {Loot.CratesFor(lv)} crates, yours alone ({(lv <= 5 ? "Common" : lv <= 10 ? "Common or Rare" : "Common, Rare or Epic")}).");
         Ui.SetText(_party, string.Join("\n", Hub.PartyIds.OrderBy(i => i).Select(i => $"  {Hub.PilotName(i)}   {(Hub.IsReady(i) ? "READY" : "not ready")}")));

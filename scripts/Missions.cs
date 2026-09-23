@@ -70,6 +70,14 @@ public static class Missions
     private const double BountyBase = 2000;
     public static double BountyEach(int level, int party) => BountyBase * S(level) * (1 + 0.5 * (Math.Max(1, party) - 1)) / Math.Max(1, party);
 
-    public const int KillExp = 200, FirstClearExp = 250, CompletionExp = 100;
-    public static int KillExpFor(int bossLevel, int pilotLevel) => (int)Math.Round(KillExp * (double)bossLevel / Math.Max(1, pilotLevel));
+    public const int KillExp = 300, FirstClearExp = 250, CompletionExp = 100;
+    // A BOSS UNDER HALF YOUR LEVEL TEACHES YOU NOTHING. The kill's EXP already fell away with the
+    // gap -- 300 x its level over yours -- but it never reached zero, so farming a level-1 boss
+    // for ever still paid, and the first-clear and completion bonuses paid in full whatever you
+    // flew against. Below the mark the whole award is nothing; the clear is still RECORDED, so the
+    // ladder and the levels you have beaten do not care what level you were when you beat them.
+    public const double ExpFloorShare = 0.5;
+    public static bool WorthExp(int bossLevel, int pilotLevel) => bossLevel >= pilotLevel * ExpFloorShare;
+    public static int KillExpFor(int bossLevel, int pilotLevel) =>
+        !WorthExp(bossLevel, pilotLevel) ? 0 : (int)Math.Round(KillExp * (double)bossLevel / Math.Max(1, pilotLevel));
 }
