@@ -323,7 +323,11 @@ From the 2026-09-21 batch (each is a constant or one rule to change):
    half the pilot's** (level 5 against a level 1 or 2 boss pays nothing).
 3. **A pilot's warp reaches 1200 u, not 2000.**
 4. **A distance-to-target readout** under the target's window: a small widget.
-5. **An EXP popup** through the damage-number mechanism, bolder and white, above the pilot's ship.
+5. **An EXP popup with its own entry point and its own look** -- bold white, above the pilot's own
+   ship -- asked for as a copy of the damage numbers. It gets its own function and its own row;
+   what it does NOT get is a copied file, because a second floating readout is exactly the second
+   of a thing the rules say to make a row of (one mechanism, a row each for damage and for EXP,
+   differing in colour, weight, where it rises from and how long it lives).
 6. **A boss's escorts stop belonging to the Lancer.** A boss row says what it calls in; a boss with
    escorts gains one more every 10 levels to a maximum of five, with formation places for five (or
    a queue, where the next waits for one of the others to die).
