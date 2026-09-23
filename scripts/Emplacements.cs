@@ -129,6 +129,7 @@ public partial class Emplacement : Node2D, IQuarry, ITagged, IStatused, ITurretH
     public bool Alive => Hp > 0;
     public Tag Tags => Tag.Structure;
     public string Title => Def.Label;
+    public double SuperFill => -1;              // no wind-up: a base does not charge, it stands
     public string Label => Def.Label;
     public float HitRadius => Def.HalfWidth;
     public bool Covers(Vector2 p, float pad) => Combat.KeelCovers(this, Def.Length, Def.HalfWidth, p, pad);

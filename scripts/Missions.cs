@@ -25,6 +25,10 @@ public interface IQuarry : IHittable
     string Title { get; }
     double Hp { get; }
     double MaxHp { get; }
+    // How full the wind-up to its next big move is, 0..1 -- or BELOW ZERO for a quarry that has no
+    // such move, which is how the bar knows not to draw the skinny meter under the hull. A type
+    // test would have done it and is exactly what this interface exists to avoid.
+    double SuperFill { get; }
 }
 
 public static class Missions

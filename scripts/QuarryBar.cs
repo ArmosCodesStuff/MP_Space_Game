@@ -2,13 +2,16 @@ using Godot;
 using System;
 using System.Collections.Generic;
 
-// THE BOSS'S HEALTH BAR -- top centre, in the arena only.
+// THE QUARRY'S HEALTH BAR -- top centre, in the arena only, whatever the mission is hunting.
+// NAMED FOR WHAT IT IS: it was BossBar until a siege wanted one too, and a name that describes the
+// first thing to use it is a name the next instance either believes or copies. It reads Hub.Quarry
+// (IQuarry) -- a boss, a pirate base, or whatever a mission row names next.
 // Every hit leaves a CHUNK: the slice of the bar it took. The chunk bobs up and down
 // a few times, quickly, the bounces dying away, while it turns from red to white and
 // fades off. Hits within 60 ms of each other share one chunk, so a stream of small
 // hits reads as one clean chunk rather than a flicker of dozens. Driven by the boss's
 // hull, which every peer already has, so guests see it too.
-public partial class BossBar : Control
+public partial class QuarryBar : Control
 {
     public Hub Hub;
     public const float W = 640, H = 18, Bounce = 6f;
@@ -40,10 +43,10 @@ public partial class BossBar : Control
 
     public override void _Process(double delta)
     {
-        var boss = Hub?.Boss;
-        Visible = Hub.InArena && IsInstanceValid(boss);
+        var quarry = Hub?.Quarry;
+        Visible = Hub.InArena && quarry is Node2D n && IsInstanceValid(n);
         if (!Visible) { _lastHp = -1; Chunks.Clear(); return; }
-        double max = Math.Max(1, boss.MaxHp), hp = boss.Hp;
+        double max = Math.Max(1, quarry.MaxHp), hp = quarry.Hp;
         if (_lastHp >= 0 && hp < _lastHp - 1e-9)
         {
             double from = hp / max, to = _lastHp / max;
@@ -59,15 +62,15 @@ public partial class BossBar : Control
 
     public override void _Draw()
     {
-        var boss = Hub?.Boss;
-        if (!IsInstanceValid(boss)) return;                       // the first draw can come before any boss
+        var quarry = Hub?.Quarry;
+        if (quarry is not Node2D qn || !IsInstanceValid(qn)) return;   // the first draw can come before one exists
         _panel.Draw(GetCanvasItem(), new Rect2(-10, -26, W + 20, H + 34 + SuperPad + SuperH));
         // after the kill: your parts collected of those dropped, and how many pilots are ready to go home
         string title = Hub.MissionWon
-            ? $"{boss.Type.Name}  ·  DEFEATED  ·  PARTS {Hub.CratesDropped - Hub.Crates.Count} / {Hub.CratesDropped}  ·  {Hub.ReturnReady} / {Hub.ReturnTotal} READY TO RETURN"
-            : $"{boss.Type.Name}  ·  LEVEL {Missions.Level}  ·  {boss.Hp:0} / {boss.MaxHp:0}";
+            ? $"{quarry.Title}  ·  DEFEATED  ·  PARTS {Hub.CratesDropped - Hub.Crates.Count} / {Hub.CratesDropped}  ·  {Hub.ReturnReady} / {Hub.ReturnTotal} READY TO RETURN"
+            : $"{quarry.Title}  ·  LEVEL {Missions.Level}  ·  {quarry.Hp:0} / {quarry.MaxHp:0}";
         Txt.D(this, ThemeDB.FallbackFont, new Vector2(0, -8), title, HorizontalAlignment.Center, W, 13, Hub.MissionWon ? Ui.Good : Ui.Text);
-        float frac = (float)Math.Clamp(boss.Hp / Math.Max(1, boss.MaxHp), 0, 1);
+        float frac = (float)Math.Clamp(quarry.Hp / Math.Max(1, quarry.MaxHp), 0, 1);
         // The hull stays RED whatever the palette does -- it is the one bar on screen that means
         // "the thing trying to kill you", and reading it as an accent-blue meter would be a lie.
         _track.Draw(GetCanvasItem(), new Rect2(0, 0, W, H));
@@ -80,8 +83,10 @@ public partial class BossBar : Control
             DrawRect(new Rect2(x0, Offset(c.T), Math.Max(1f, x1 - x0), H), col);
         }
 
-        // the super-move wind-up: skinny, directly under, filling towards the next one
-        float y = H + SuperPad, sf = (float)Math.Clamp(boss.SuperFill, 0, 1);
+        // the super-move wind-up: skinny, directly under, filling towards the next one -- and not
+        // drawn at all for a quarry that has none (SuperFill below zero), which is a pirate base
+        float y = H + SuperPad, sf = (float)Math.Clamp(quarry.SuperFill, 0, 1);
+        if (quarry.SuperFill < 0) return;
         _superTrack.Draw(GetCanvasItem(), new Rect2(0, y, W, SuperH));
         // it warms from the accent towards white as it tops out, so a full bar reads at a glance
         var warm = Ui.Accent.Lerp(new Color(1f, 0.95f, 0.85f), sf * sf);

@@ -301,7 +301,7 @@ public partial class Hub : Node2D
         layer.AddChild(helpPanel);
 
         layer.AddChild(new HullHud { Hub = this });
-        layer.AddChild(new BossBar { Hub = this });                 // shows itself in the arena
+        layer.AddChild(new QuarryBar { Hub = this });               // shows itself in the arena
         layer.AddChild(new ReturnButton { Hub = this });            // RETURN TO BASE, after a win only
         layer.AddChild(new Radar { Hub = this });
         layer.AddChild(new AbilityBar { Hub = this });
