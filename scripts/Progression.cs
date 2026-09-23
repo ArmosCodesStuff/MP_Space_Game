@@ -145,7 +145,48 @@ public static class Progression
         int cost = Cost(Character.Bought[i]);
         if (Character.Points < cost || Character.Bought[i] >= MaxPerUpgrade) return false;
         Character.Points -= cost; Character.Bought[i]++;
+        Character.Spent.Add(i);                      // so a refit can undo THIS one, not the dearest
         Character.Save();
         return true;
+    }
+
+    // ── WHAT A REFIT COSTS A PILOT, beside the ore, the salvage and the credits ──────────────
+    // One LEVEL, and the most recent point it spent comes back off the sheet. The points that
+    // bought it are refunded -- it is a refit, not a forfeit -- and the level's own point goes
+    // with the level, so a refit can never leave a pilot ahead of where it started. What it does
+    // NOT take is the progress toward the next level: losing 560 of 1000 nobody had spent would be
+    // a second cost, hidden, on top of the one the panel quotes.
+    //
+    // A file written before purchases were recorded has no order to read, so the DEAREST point
+    // goes instead -- the row with the most levels, whose last point cost the most.
+    // What a refit would undo, so the panel can name it before the pilot commits to it.
+    public static string NextRefund
+    {
+        get
+        {
+            int i = Character.Spent.Count > 0 && Character.Bought[Character.Spent[^1]] > 0 ? Character.Spent[^1] : -1;
+            if (i < 0)
+                for (int k = 0; k < All.Length; k++) if (Character.Bought[k] > 0 && (i < 0 || Character.Bought[k] > Character.Bought[i])) i = k;
+            return i < 0 ? "" : $" (a level of {All[i].Name} comes off)";
+        }
+    }
+
+    public static (string name, int refunded) Refit()
+    {
+        int i = -1;
+        if (Character.Spent.Count > 0)
+        {
+            i = Character.Spent[^1];
+            Character.Spent.RemoveAt(Character.Spent.Count - 1);
+            if (Character.Bought[i] <= 0) i = -1;    // a list out of step with the counts: fall through
+        }
+        if (i < 0)
+            for (int k = 0; k < All.Length; k++) if (Character.Bought[k] > 0 && (i < 0 || Character.Bought[k] > Character.Bought[i])) i = k;
+
+        int back = 0;
+        if (i >= 0) { back = Cost(Character.Bought[i] - 1); Character.Bought[i]--; Character.Points += back; }
+        if (Character.Level > 1) { Character.Level--; Character.Points = Math.Max(0, Character.Points - 1); }
+        Character.Save();
+        return (i >= 0 ? All[i].Name : null, back);
     }
 }

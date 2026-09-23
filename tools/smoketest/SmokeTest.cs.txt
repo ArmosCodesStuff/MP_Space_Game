@@ -311,6 +311,11 @@ public partial class _Test : Node
     // ── the save carries everything the character IS, and only this build can read it ────────
     async Task SaveCoverage()
     {
+        // The refit's arithmetic runs here rather than in the world: it works on a BLANK pilot, and
+        // this is the one place that already throws pilots away and loads the real one back at the
+        // end. Run where the hub starts, its NewBlank wiped the tutorial's hint state.
+        RefitChecks();
+
         // Every class is touched first: Load() fills the loadout for ALL of them, so a character that
         // had only ever used one would differ after a round trip for that reason alone and say
         // nothing about saving.
@@ -320,6 +325,8 @@ public partial class _Test : Node
         Character.Main = new Color(0.11f, 0.22f, 0.33f); Character.Accent = new Color(0.44f, 0.55f, 0.66f);
         Character.Exp = 777; Character.Level = 5; Character.Points = 3;
         for (int i = 0; i < Character.Bought.Length; i++) Character.Bought[i] = i % (Progression.MaxPerUpgrade + 1);
+        Character.Spent.Clear(); Character.Spent.AddRange(new[] { 1, 3, 1 });   // the order they were bought in
+        Character.Spent.Clear(); Character.Spent.AddRange(new[] { 1, 3, 1 });   // the order they were bought in
         Character.BossCleared["ironhold"] = new System.Collections.Generic.HashSet<int> { 1, 3 };
         Character.BaseStock["ore"] = 123.5; Character.BaseStock["salvage"] = 67.25; Character.BaseCredits = 4321;
         Character.BaseLevels[Economy.All[0].Id] = 3;
@@ -352,7 +359,7 @@ public partial class _Test : Node
         var exercised = new[] { "Accent", "BaseCredits", "BaseInvested", "BaseLevels",
                                 "BaseStock", "BossCleared", "Bonuses", "Bought", "Class", "Exp",
                                 "GearHold", "HintsOff", "HintsSeen", "Id", "Level", "Loadout", "Main",
-                                "Name", "PaidKills", "Points", "Unclaimed" };
+                                "Name", "PaidKills", "Points", "Spent", "Unclaimed" };
         // Not state a character carries: a path, and the compiler's backing field for a property
         // that reports how the LAST save went. Named explicitly rather than filtered by a pattern,
         // so a real field that happens to look like one cannot slip through.
@@ -989,6 +996,36 @@ public partial class _Test : Node
         if (!s.Alive) { s.Restore(s.MaxHp, true, 0); await Wait(0.4); }
 
         _table.Add($"{cd.Name,-12} {top,7:0} ({want:0})      {(turnT < 0 ? "  --  " : $"{turnT,5:0.0}s")}   {dps,7:0.0} ({S.MainDps:0.0})     {lost,5:0} of {s.MaxHp:0}{(s.Alive ? "" : "  DEAD")}");
+    }
+
+    // ── A REFIT COSTS A LEVEL AND UNDOES THE LAST POINT ──────────────────────────────────────
+    // The file records the ORDER points were spent in now, because `Bought` only ever said how
+    // many of each a pilot owned -- so "undo the most recent" had nothing to read and a refit
+    // could only ever have taken the dearest. Both paths are proved: a pilot with an order, and a
+    // file from before there was one.
+    void RefitChecks()
+    {
+        Character.NewBlank();
+        Character.Level = 40; Character.Points = 39; Character.Exp = 560;     // 560 of 1000 toward 41
+        bool bought = Progression.TryBuy("hull") && Progression.TryBuy("hull") && Progression.TryBuy("turn");
+        int pointsBefore = Character.Points, hullBefore = Character.Bought[1], turnBefore = Character.Bought[0];
+        var (undone, back) = Progression.Refit();
+        Check(bought && undone == "Rudder" && back == 1 && Character.Bought[0] == turnBefore - 1
+              && Character.Bought[1] == hullBefore && Character.Level == 39 && Character.Exp == 560
+              && Character.Points == pointsBefore + 1 - 1,
+              $"a refit takes a level and undoes the LAST point bought -- rudder, not the two hull levels that cost more -- refunds what it cost, and leaves the progress toward the next level alone ({undone} came off for {back} back, level {Character.Level}, {Character.Exp} of 1000, {Character.Points} points)");
+
+        // ...and a pilot from before the order was written down loses its DEAREST point instead,
+        // which is the most a file with nothing to read can honestly say.
+        Character.NewBlank();
+        Character.Level = 40; Character.Points = 39;
+        for (int i = 0; i < 4; i++) Progression.TryBuy("hull");
+        Progression.TryBuy("speed");
+        Character.Spent.Clear();                                              // as an old file loads: no order at all
+        var (old, oldBack) = Progression.Refit();
+        Check(old == "Hull" && oldBack == 4 && Character.Bought[1] == 3,
+              $"a pilot saved before the order was recorded loses its dearest point instead: the fourth hull level, {oldBack} points back ({old})");
+        Character.NewBlank();
     }
 
     async Task Solo()

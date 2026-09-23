@@ -1587,6 +1587,7 @@ public partial class Hub : Node2D
     {
         if (IsInstanceValid(_creator) || InArena) return;            // REFIT is at the base
         Yard.ChargeReset();
+        Progression.Refit();                                         // ...and a level, and the last point it spent
         if (SideIs<BasePanel>()) CloseSide();
         OpenCreator();
     }

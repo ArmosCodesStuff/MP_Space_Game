@@ -35,6 +35,11 @@ public static class Character
     // pilot progression (see Progression)
     public static int Exp, Level = 1, Points;
     public static readonly int[] Bought = new int[Progression.All.Length];
+    // THE ORDER THE POINTS WERE SPENT IN, one upgrade index per purchase, oldest first. `Bought`
+    // says how many of each a pilot owns and never said WHICH it bought last, so a refit could not
+    // undo the most recent one. A file written before this has no list: the refit falls back to
+    // the dearest point it can see (Progression.Refit).
+    public static readonly List<int> Spent = new();
     // the levels of each boss this pilot has beaten (the +250 first-clear bonus, and unlocking)
     public static readonly Dictionary<string, HashSet<int>> BossCleared = new();
     // THE TUTORIAL: the hints this pilot has been shown (Hints.All ids), and its off switch (Esc menu)
@@ -139,6 +144,9 @@ public static class Character
         foreach (var kv in Bonuses) c.SetValue("bonus", kv.Key, kv.Value);
         c.SetValue("progress", "exp", Exp); c.SetValue("progress", "level", Level); c.SetValue("progress", "points", Points);
         for (int i = 0; i < Bought.Length; i++) c.SetValue("progress", "bought_" + Progression.All[i].Id, Bought[i]);
+        // The ids, not the indices: a row added or moved in Progression.All would otherwise turn
+        // one pilot's rudder into another's hull.
+        c.SetValue("progress", "spent", string.Join(",", Spent.Select(i => Progression.All[i].Id)));
         foreach (var kv in BossCleared) c.SetValue("boss_cleared", kv.Key, string.Join(",", kv.Value.OrderBy(x => x)));
         // ONE KEY PER RESOURCE ID, in table order, then the credits: "ore", "salvage", "credits",
         // the same three keys in the same order two named fields wrote.
@@ -237,6 +245,12 @@ public static class Character
         Exp = (int)c.GetValue("progress", "exp", 0); Level = Math.Max(1, (int)c.GetValue("progress", "level", 1));
         Points = Math.Max(0, (int)c.GetValue("progress", "points", 0));
         for (int i = 0; i < Bought.Length; i++) Bought[i] = Math.Clamp((int)c.GetValue("progress", "bought_" + Progression.All[i].Id, 0), 0, Progression.MaxPerUpgrade);
+        Spent.Clear();
+        foreach (var spentId in ((string)c.GetValue("progress", "spent", "")).Split(',', StringSplitOptions.RemoveEmptyEntries))
+        {
+            int at = Array.FindIndex(Progression.All, u => u.Id == spentId); // an id this build no longer has counts for nothing
+            if (at >= 0) Spent.Add(at);
+        }
         // Every part id read from the file goes through Equipment.Migrated first (see there). A
         // dropped part that no longer fits the slot it was fitted in is not lost: it goes into the
         // hold, and the slot takes the class's own kit.

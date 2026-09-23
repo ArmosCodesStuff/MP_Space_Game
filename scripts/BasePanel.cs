@@ -64,7 +64,9 @@ public partial class BasePanel : PanelContainer
         if (tab == "REFIT")
         {
             _body.AddChild(Ui.Heading("Refit"));
-            var note = Ui.Lbl("Change class, name or colours. Costs 10% of your ore, salvage and credits.", Ui.Small, Ui.Dim);
+            var note = Ui.Lbl("Change class, name or colours. Costs 10% of your ore, salvage and credits, and a pilot level -- "
+                             + "the last upgrade you bought comes off the sheet and its points come back. What you have earned "
+                             + "toward your next level is untouched.", Ui.Small, Ui.Dim);
             note.AutowrapMode = TextServer.AutowrapMode.WordSmart;
             _body.AddChild(note);
             _resetCost = Ui.Lbl("", Ui.Body, Ui.Warn); _body.AddChild(Ui.CardWrap(_resetCost));
@@ -131,7 +133,8 @@ public partial class BasePanel : PanelContainer
         {
             // One figure per resource the fleet gathers, named by its row, then the credits.
             Ui.SetText(_resetCost, "Cost now: " + string.Join(", ",
-                Gathering.All.Select(g => $"{Y.ResetCost(g.Resource):0} {g.Unit}")) + $", {Y.ResetCostCredits:0} credits");
+                Gathering.All.Select(g => $"{Y.ResetCost(g.Resource):0} {g.Unit}")) + $", {Y.ResetCostCredits:0} credits"
+                + $", and a LEVEL{Progression.NextRefund}");
             Ui.SetText(_reset, _armed > 0 ? "CLICK AGAIN TO PAY AND RESET" : "RESET");
             _reset.Disabled = Hub.CreatorOpen;
         }
