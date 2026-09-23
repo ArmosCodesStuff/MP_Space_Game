@@ -24,6 +24,25 @@ Anything in the tree you did not write: report it in one line, then ADOPT or REV
 3. One clarifying question batch, each with the default you will use anyway. Then build.
 4. Never ask what the repo answers.
 
+### Fan out by default; sequence only what depends
+
+Two pieces of work are sequential only when one needs the other's OUTPUT -- a foundation before
+the feature that uses it, an edit before the check that proves it. Everything else starts at once.
+
+- **Independent tool calls go in one message**, never one per turn.
+- **Read-only work goes to several agents at once, each on a DIFFERENT ANGLE**: a review, an audit,
+  a cross-reference, a sweep of a subsystem you have not read. Give each a scope no other one has,
+  so their findings ADD UP. Variations cover more ground; duplicates of one job only cost tokens.
+- **Take results as they land.** Stop the stragglers once the map is complete rather than waiting
+  for the slowest.
+- **An engine rung and read-only agents run together fine** -- but every agent's prompt must say
+  not to build and not to start the engine: the rung 3-6 harnesses share one scratch folder, and a
+  second one wipes the first (§4).
+- **Agents that WRITE never run in parallel** unless each has its own worktree. Two edits to one
+  file is a lost edit.
+- Sequential is a decision that needs a reason. If you cannot name what the second step takes from
+  the first, they were concurrent and you were slow.
+
 ## 3 · Build
 
 - Batch edits. No engine run during development, ever. Compile checks (`typecheck.ps1`,
