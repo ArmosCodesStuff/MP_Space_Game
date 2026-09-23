@@ -60,14 +60,14 @@ public partial class EquipmentWindow : PanelContainer
         _hold.AddChild(Ui.Heading(total > 0 ? $"Hold  ·  {total} part{(total == 1 ? "" : "s")}" : "Hold  ·  empty"));
         var owned = Character.GearHold.Where(kv => kv.Value > 0).Select(kv => (it: Equipment.ById(kv.Key), n: kv.Value))
                              .Where(x => x.it != null)
-                             .OrderBy(x => x.it.Class != null && x.it.Class != cls)
+                             .OrderBy(x => !Equipment.Fits(x.it, x.it.Slot, cls))
                              .ThenBy(x => x.it.Slot).ThenByDescending(x => x.it.Rarity).ThenBy(x => x.it.Name).ToList();
         if (owned.Count == 0) _hold.AddChild(Ui.Lbl("Parts a boss drops for you land here.", Ui.Small, Ui.Dim));
         foreach (var (it, n) in owned)
         {
             string id = it.Id;
             Button fit = null;
-            if (it.Class == null || it.Class == cls)
+            if (Equipment.Fits(it, it.Slot, cls))
             {
                 int free = System.Array.FindIndex(l, Equipment.CoreSlots, Equipment.ChipSlots, string.IsNullOrEmpty);
                 fit = it.Slot == GearSlot.Chip
@@ -75,9 +75,9 @@ public partial class EquipmentWindow : PanelContainer
                     : Ui.Btn("FIT", () => FitCore(id), "Fit");
                 fit.Disabled = it.Slot == GearSlot.Chip && free < 0;
             }
-            string what = it.Class != null && it.Class != cls ? $"{it.Slot.ToString().ToUpperInvariant()}  ·  {Classes.NameOf(it.Class.Value)} part"
+            string what = !Equipment.Fits(it, it.Slot, cls) ? $"{it.Slot.ToString().ToUpperInvariant()}  ·  needs {Equipment.NeedsSaid(it)}"
                                                               : it.Slot.ToString().ToUpperInvariant();
-            _hold.AddChild(Ui.CardWrap(PartRow($"Hold_{id}", what + (n > 1 ? $"  ·  x{n}" : ""), id, it.Class ?? cls, fit, HoldW - 40)));
+            _hold.AddChild(Ui.CardWrap(PartRow($"Hold_{id}", what + (n > 1 ? $"  ·  x{n}" : ""), id, cls, fit, HoldW - 40)));
         }
     }
 

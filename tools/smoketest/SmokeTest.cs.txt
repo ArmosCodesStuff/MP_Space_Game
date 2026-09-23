@@ -2553,19 +2553,36 @@ public partial class _Test : Node
             Check(Enum.GetNames(typeof(Rarity)).SequenceEqual(new[] { "Common", "Rare", "Epic" }), "three rarities: Common, Rare, Epic");
             var drops = Equipment.Drops.ToList();
             var bsC = ShipClass.Battleship; var cvC = ShipClass.Carrier; var ddC = ShipClass.Destroyer;
-            (GearSlot s, ShipClass? c)[] kinds = { (GearSlot.Weapon, bsC), (GearSlot.Weapon, cvC), (GearSlot.Weapon, ddC),
-                                                   (GearSlot.Utility, bsC), (GearSlot.Utility, cvC), (GearSlot.Utility, ddC),
-                                                   (GearSlot.Engines, null), (GearSlot.Shield, null), (GearSlot.Hull, null), (GearSlot.Chip, null) };
-            bool twelve = kinds.All(k => drops.Count(i => i.Slot == k.s && i.Class == k.c) == 12
-                                    && new[] { Rarity.Common, Rarity.Rare, Rarity.Epic }.All(r => drops.Count(i => i.Slot == k.s && i.Class == k.c && i.Rarity == r) == 4));
+            // A PART ASKS WHAT THE HULL HAS, it does not name a hull. Every family is still four
+            // lines at three rarities; what changed is who may wear them -- a battery needs
+            // main_damage and main_interval, so the nine new classes can wear one too, where
+            // before they could wear nothing but the parts that named no class at all.
+            int Wear(ShipClass c, GearSlot s) => drops.Count(i => Equipment.Fits(i, s, c));
+            bool famShape = new[] { GearSlot.Weapon, GearSlot.Utility, GearSlot.Engines, GearSlot.Shield, GearSlot.Hull, GearSlot.Chip }
+                .All(s => new[] { Rarity.Common, Rarity.Rare, Rarity.Epic }
+                    .All(r => drops.Count(i => i.Slot == s && i.Rarity == r) * 3 == drops.Count(i => i.Slot == s)));
             var kit = Equipment.All.Where(i => i.Kit).ToList();
-            Check(drops.Count == 120 && twelve && kit.Count == 10 && kit.All(i => i.Rarity == Rarity.Common)
-                  && kit.Select(i => i.Id).OrderBy(x => x, StringComparer.Ordinal).SequenceEqual(new[] { "basic_deflector", "bs_broadside", "bs_main_battery",
-                     "chip_basic", "cv_bomber_bay", "cv_fighter_hangars", "dd_main_battery", "dd_missile_rack", "reinforced_frame", "std_drive" }),
-                  $"the gear: 120 drops, 12 for each slot type with 4 at each rarity, and the 10-part kit, all Common ({drops.Count} drops)");
-            Check(Equipment.All.Where(i => i.Class == bsC && i.Slot == GearSlot.Utility).All(i => i.Pct.Keys.Concat(i.Add.Keys).All(k => k.StartsWith("broadside_")))
-                  && Equipment.All.Where(i => i.Class != null && i.Pct.Keys.Concat(i.Add.Keys).Any(k => k.StartsWith("missile_"))).All(i => i.Class == ddC),
-                  "every missile part for one class is the destroyer's; the battleship's utility parts are all broadside parts");
+            Check(drops.Count == 120 && famShape && kit.Count == 23 && kit.All(i => i.Rarity == Rarity.Common)
+                  && kit.Count(i => i.Slot == GearSlot.Weapon) == 7 && kit.Count(i => i.Slot == GearSlot.Utility) == 12,
+                  $"the gear: 120 drops, a third of each slot at each rarity, and a 23-part kit -- seven weapon mounts and twelve signature systems across twelve classes, plus the drive, the deflector, the frame and the chip every ship has ({drops.Count} drops, {kit.Count} kit)");
+            Check(Wear(bsC, GearSlot.Weapon) == 24 && Wear(cvC, GearSlot.Weapon) == 12 && Wear(ddC, GearSlot.Weapon) == 24
+                  && Wear(ShipClass.FreightHauler, GearSlot.Weapon) == 24 && Wear(ShipClass.LightDart, GearSlot.Weapon) == 24
+                  && Wear(bsC, GearSlot.Utility) == 12 && Wear(cvC, GearSlot.Utility) == 12 && Wear(ddC, GearSlot.Utility) == 12
+                  && Wear(ShipClass.FreightHauler, GearSlot.Utility) == 0
+                  && new[] { GearSlot.Engines, GearSlot.Shield, GearSlot.Chip }
+                        .All(g => Classes.All.Where(c => c.Ready).All(c => Wear(c.Id, g) == 12))
+                  // the frame family is point defence's: nine of its twelve move only pd_ stats, so the
+                  // five classes with no point-defence mount wear the three that are about the hull
+                  && Classes.All.Where(c => c.Ready).All(c => Wear(c.Id, GearSlot.Hull) == (c.Has(Fit.Pd) ? 12 : 3)),
+                  "a hull wears what it has the stats for: 24 weapon parts for anything with main guns -- a freighter and a dart included, which could wear none -- 12 for the carrier's hangars, 12 utility parts each for the three systems that have any (and none yet for the nine new ones), every hull all 12 engines, shields and chips, and the frame family only where there is point defence to reinforce");
+            bool OnlyFamily(ItemDef i, string fam) => i.Pct.Keys.Concat(i.Add.Keys).All(k => k.StartsWith(fam));
+            Check(Equipment.All.Where(i => !i.Kit && OnlyFamily(i, "broadside_")).All(i => Equipment.Fits(i, i.Slot, bsC) && !Equipment.Fits(i, i.Slot, ddC))
+                  && Equipment.All.Where(i => !i.Kit && OnlyFamily(i, "missile_")).All(i => Equipment.Fits(i, i.Slot, ddC) && !Equipment.Fits(i, i.Slot, bsC))
+                  && Equipment.All.Where(i => !i.Kit && OnlyFamily(i, "fighter_")).All(i => Equipment.Fits(i, i.Slot, cvC) && !Equipment.Fits(i, i.Slot, bsC))
+                  && Equipment.All.Count(i => !i.Kit && OnlyFamily(i, "broadside_")) == 12
+                  && Equipment.All.Count(i => !i.Kit && OnlyFamily(i, "missile_")) == 12
+                  && Equipment.All.Count(i => !i.Kit && OnlyFamily(i, "fighter_")) == 9,
+                  "and a part whose every stat belongs to one system still fits only the hull that has it: twelve broadside parts on the battleship alone, twelve missile parts on the destroyer, nine pure fighter parts on the carrier");
             // a sheet with only the named parts on the kit, chips off
             ShipStats Sheet(ShipClass c, string part)
             {
@@ -2613,7 +2630,7 @@ public partial class _Test : Node
             // every stat a part names is real on a class it fits, and none touches the turret counts
             string[] addable = { "fighter_count", "bomber_count", "missile_mag", "bomber_ammo", "broadside_volleys" };
             var unknown = Equipment.All.SelectMany(i => i.Pct.Keys.Concat(i.Add.Keys).Where(k =>
-                              !(i.Class is ShipClass only ? new[] { only } : Enum.GetValues<ShipClass>()).Any(c => new ShipStats(c).All.Any(s => s.Id == k)))
+                              !Enum.GetValues<ShipClass>().Any(c => new ShipStats(c).All.Any(s => s.Id == k)))
                               .Select(k => i.Id + ":" + k)).ToList();
             bool noCounts = Equipment.All.All(i => !i.Pct.Keys.Concat(i.Add.Keys).Any(k => k is "main_count" or "pd_count" or "strike_range"));
             bool addsOk = Equipment.All.All(i => i.Add.Keys.All(addable.Contains));
@@ -2656,16 +2673,39 @@ public partial class _Test : Node
                     foreach (var id in roll[peer])
                     {
                         var it = Equipment.ById(id); var (n, b, c) = share[peer];
-                        share[peer] = (n + 1, b + (it.Class == ShipClass.Battleship ? 1 : 0), c + (it.Class == ShipClass.Carrier ? 1 : 0));
+                        // "a battleship part" is one a battleship can wear and a carrier cannot, and
+                        // the other way about: a part fits by what the hull has now, not by a name.
+                        bool bsOnly = Equipment.Fits(it, it.Slot, ShipClass.Battleship) && !Equipment.Fits(it, it.Slot, ShipClass.Carrier);
+                        bool cvOnly = Equipment.Fits(it, it.Slot, ShipClass.Carrier) && !Equipment.Fits(it, it.Slot, ShipClass.Battleship);
+                        share[peer] = (n + 1, b + (bsOnly ? 1 : 0), c + (cvOnly ? 1 : 0));
                         if (it.Kit) kit++;
                     }
             }
             double Of(int peer, int k) => k / (double)share[peer].n;
-            // own roll (70%): its class's 8 parts of 24; any roll (30%): each class's 8 of 40 -- so its own
-            // class 0.7 x 8/24 + 0.3 x 8/40 = 29.3%, another class's 0.3 x 8/40 = 6%
-            Check(kit == 0 && Math.Abs(Of(7, share[7].bs) - 0.06) < 0.012 && Math.Abs(Of(7, share[7].cv) - 0.2933) < 0.025
-                  && Math.Abs(Of(1, share[1].cv) - 0.06) < 0.012 && Math.Abs(Of(1, share[1].bs) - 0.2933) < 0.025,
-                  $"each pilot's own roll: 70% its own class or general, 30% anything -- another class's parts 6%, its own 29% (carrier pilot {Of(7, share[7].bs):0.000} / {Of(7, share[7].cv):0.000}, battleship pilot {Of(1, share[1].cv):0.000} / {Of(1, share[1].bs):0.000})");
+            // THE RULE, not the pool: seven rolls in ten are drawn from what this pilot's own hull
+            // can wear, three from everything. So a pilot sees parts only its own hull can wear at
+            // 0.7 x (its own share of its pool) + 0.3 x (their share of all), and parts only the
+            // other hull can wear at 0.3 x (their share of all). The pools come from the same
+            // Fits the roll uses, so this cannot drift when a family is added.
+            var pool = Equipment.Drops.ToList();
+            int all = pool.Count;
+            double MineOf(ShipClass mine, ShipClass theirs)
+            {
+                int fitsMine = pool.Count(i => Equipment.Fits(i, i.Slot, mine));
+                int onlyMine = pool.Count(i => Equipment.Fits(i, i.Slot, mine) && !Equipment.Fits(i, i.Slot, theirs));
+                return 0.7 * onlyMine / fitsMine + 0.3 * onlyMine / (double)all;
+            }
+            double TheirsOf(ShipClass mine, ShipClass theirs)
+            {
+                int onlyTheirs = pool.Count(i => Equipment.Fits(i, i.Slot, theirs) && !Equipment.Fits(i, i.Slot, mine));
+                return 0.3 * onlyTheirs / all;
+            }
+            Check(kit == 0
+                  && Math.Abs(Of(1, share[1].bs) - MineOf(ShipClass.Battleship, ShipClass.Carrier)) < 0.03
+                  && Math.Abs(Of(1, share[1].cv) - TheirsOf(ShipClass.Battleship, ShipClass.Carrier)) < 0.02
+                  && Math.Abs(Of(7, share[7].cv) - MineOf(ShipClass.Carrier, ShipClass.Battleship)) < 0.03
+                  && Math.Abs(Of(7, share[7].bs) - TheirsOf(ShipClass.Carrier, ShipClass.Battleship)) < 0.02,
+                  $"each pilot's own roll: seven in ten from what its own hull can wear, three from everything -- the battleship pilot sees {Of(1, share[1].bs):0.000} of its own against {MineOf(ShipClass.Battleship, ShipClass.Carrier):0.000} expected, and {Of(1, share[1].cv):0.000} of the carrier's against {TheirsOf(ShipClass.Battleship, ShipClass.Carrier):0.000}");
         }
 
         // ── equipment (I): per-class gear; common defaults and five chips (+5% damage, +5% hull each) ──

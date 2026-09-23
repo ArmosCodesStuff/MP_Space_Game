@@ -46,7 +46,7 @@ public static class Loot
             {
                 var rarity = RollRarity(level, rng);
                 bool own = rng.NextDouble() < 0.7;
-                var pool = all.Where(it => it.Rarity == rarity && (!own || it.Class == null || it.Class == cls)).ToList();
+                var pool = all.Where(it => it.Rarity == rarity && (!own || Equipment.Fits(it, it.Slot, cls))).ToList();
                 drops[i] = pool[rng.Next(pool.Count)].Id;
             }
             d[peer] = drops;
