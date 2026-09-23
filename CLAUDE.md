@@ -158,11 +158,32 @@ faces. A check that only holds at one spot is a check that hides a bug.
 
 ## 6 · Replies to the player
 
-- Default: **≤ 4 lines.** One line per request: what is true now.
-- State failures and unverified work plainly. Never call something verified without a green run.
-- No narration of what you are about to do, no restating their request, no progress commentary
-  unless a run is minutes long (then one line).
-- Numbers and file paths, not adjectives.
+**Two to four lines. State facts, not process.** The player reads these to decide what to do next,
+not to learn what you did.
+
+Say only what they cannot see for themselves:
+
+- **Done, or not**, with the rung that proved it: `rung 3 green` · `rung 5: 2 fails` ·
+  `compiles, untested`. Never "verified" without a green run.
+- **A problem**, in one line: what broke, where, and what it costs.
+- **Scope**, whenever they ask for something new -- this is the one thing they always want and
+  cannot get anywhere else. Three answers, in these words:
+  - **a row** -- it fits a table that exists; say which.
+  - **a new table** -- it needs a foundation first; say what the foundation is, in one line.
+  - **not without X** -- it cannot be done as asked; say what X is.
+- **A number they asked for**, on its own.
+- **A question you need answered**, in one line, with the default you will use if they do not answer.
+
+Never:
+
+- narrate what you are about to do, or what you just read
+- restate their request back to them
+- re-explain a design they have already approved
+- paste a table, a log or a diff the tool already printed -- point at it
+- use adjectives about your own work
+
+If they ask WHY, answer in one sentence. If they ask for detail, give it -- brevity is the default,
+not a rule against answering.
 
 ## 7 · Commands
 
