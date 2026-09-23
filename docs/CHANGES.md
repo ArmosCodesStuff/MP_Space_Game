@@ -356,6 +356,18 @@ From the 2026-09-21 batch (each is a constant or one rule to change):
    - Bought where a part is fitted (the EQUIPMENT window), paid from YOUR OWN base's salvage even
      while visiting another host -- the rule a refit already follows.
 
+10. **UP TO THREE TARGETS AT ONCE, for the hulls big enough to hold them.** Ctrl + left-drag a box
+    over enemies, or shift + left-click to add one at a time; clicking normally still picks one.
+    - **How many a hull may hold is a ROW** (`ClassDef.Targets`, 1 by default and 3 on the
+      capitals), so "capital ships only" is data rather than a list of class names in an `if`, and
+      a thirteenth class states its own answer.
+    - Default for what a set DOES, to be confirmed when it is built: anything that takes "the
+      selected target" uses the FIRST of the set, and anything that can spread -- a wing's orders,
+      a hunter volley, a missile burst -- divides across it.
+11. **Gear lines that read clearly.** Some parts' stats and blurbs are ambiguous about what they
+    move (the engine families especially): one pass over every line so a part says plainly what it
+    does to which system, in the words the STATS tab uses.
+
 ---
 
 ## Unreleased
