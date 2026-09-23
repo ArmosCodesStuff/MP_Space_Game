@@ -40,7 +40,10 @@ public static class Economy
     public const double AutoSellCost = 4462;
     public const int AutoSellBoss = 3;            // ...and only once the level-3 boss is beaten
     // THE ESCORT: 5x the income; a wave of hunters 5 s in, then every 20 s for as long as the run
-    // lasts; a 4 s hold at each outpost to offload
+    // lasts; a 4 s hold at each outpost to offload.
+    // WHEN a wave comes is here, because it is the run's own clock and the Yard runs the run.
+    // WHAT arrives in it -- how many, of what, how hard -- is a row of Waves.All (scripts/Waves.cs);
+    // no composition belongs in this file.
     public const double EscortPay = 5;
     public const double EscortFirstWave = 5, EscortWaveEvery = 20;
     public const double OutpostStop = 4;

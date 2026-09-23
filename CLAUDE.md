@@ -71,6 +71,11 @@ the feature that uses it, an edit before the check that proves it. Everything el
      `is Raider` / `is Torpedo` / `HitRadius < 20f` in new code is a bug in the design, not a shortcut.
   5. **The generic path is the ONLY path.** Delete the specific one in the same edit. Two ways to
      do a thing is how the next instance picks the wrong one.
+- **NAME IT FOR THE MECHANISM, NEVER FOR ITS FIRST USE.** `DamageNumbers` was right until
+  something else wanted a floating readout; `ShipClasses.cs` stopped being true the day the class
+  table moved to `Ships.cs`. A name that describes one use is a name that becomes a lie, and the
+  next instance either believes it or copies the file rather than extending it. When a second use
+  arrives, the rename happens in the SAME edit as the second use -- never "later".
 - **Extend a table before inventing one.** These already exist — add to them:
   `Classes.All` (a class) · `Ab.*` + `ClassDef.Abilities` (an ability) · `ClassDef.Rows` (a stat
   only one class has) · `Enemies.All` (an enemy) · `Economy.All` (an upgrade) · `Missions` (a boss

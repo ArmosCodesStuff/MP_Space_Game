@@ -1,0 +1,90 @@
+using Godot;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE SESSION'S BOOK — what outlives a world.
+//
+// Cut out of Hub.cs, which is where every static in the game's world code lived, and for one
+// reason: a host reloads its own scene on every trip (home to the arena and back), and none of
+// this may be lost when it does. Three things are the session's, not the world's --
+//   SECTORS   which world each guest is in, so home-only traffic reaches only peers at home
+//   PLACES    the place held for a pilot whose connection dropped: 90 s, by CHARACTER ID, which
+//             is the guest's own claim (a peer id changes on a reconnect, and the host has no
+//             other way to know a returning player -- Hub.NetIdentity refuses an id a live peer
+//             is already flying)
+//   KILLS     the boss kills of the last 12 s, because a pilot whose link died just before one is
+//             still in the party when it happens -- the host notices a dead link seconds later --
+//             and would otherwise never be paid
+// Session.End() is the whole of forgetting them. Hub keeps the RPCs and the per-world glue: who
+// is away, and whose place is waiting to be delivered.
+// ─────────────────────────────────────────────────────────────────────────────
+public static class Session
+{
+    // A DROPPED PILOT'S PLACE: its party slot and its votes, and, in the same world, its hull,
+    // its stasis and where it was. The boss is scaled by the ships present, and a kill while it is
+    // away is owed to it: its EXP, its bounty share and its crates arrive when it does. A pilot
+    // that leaves on purpose gives its place up.
+    public sealed class Held
+    {
+        public int OldPeer, World; public string Name = ""; public ShipClass Class; public ulong Until;
+        public Vector2 Pos; public float Rot; public double Hp, Stasis; public bool Alive = true;
+        public readonly List<Kill> Owed = new();
+    }
+
+    // A BOSS KILL, ONCE FOR EACH PILOT. Every kill has a serial, unique to the host that announced
+    // it: a pilot is paid for a serial once, however the payment reaches it -- at the kill, or
+    // owed when it comes back from a drop. The serials a pilot has been paid are on its file
+    // (Character.PaidKills), so not even a restart in between pays one twice.
+    public sealed class Kill
+    {
+        public long Serial; public int Level, Party, World; public Vector2 At; public ulong When;
+        public Dictionary<int, string[]> Drops; public HashSet<int> Present;
+    }
+
+    public const double HoldFor = 90;
+    public const ulong OwedWindowMs = 12000;
+
+    public static readonly Dictionary<int, Hub.SectorKind> Sectors = new();
+    public static readonly Dictionary<string, Held> Places = new();
+    public static readonly List<Kill> Kills = new();
+
+    private static long _serial = DateTime.UtcNow.Ticks;
+    private static int _worlds;
+    public static long NextKill() => ++_serial;
+    public static int NextWorld() => ++_worlds;          // this world, of all the host has built
+
+    // A session over (offline, a guest now, the main menu): all three go with it.
+    public static void End() { Sectors.Clear(); Places.Clear(); Kills.Clear(); }
+
+    public static Hub.SectorKind? SectorOf(int id) => Sectors.TryGetValue(id, out var s) ? s : null;
+
+    // the place to hold for a pilot that dropped without saying goodbye
+    public static Held Hold(int peer, Net.PlayerInfo info, int world, PlayerShip ship)
+    {
+        var h = new Held { OldPeer = peer, World = world, Name = info.Name, Class = info.Class,
+                           Until = Time.GetTicksMsec() + (ulong)(HoldFor * 1000) };
+        if (ship != null && GodotObject.IsInstanceValid(ship))
+            (h.Pos, h.Rot, h.Hp, h.Alive, h.Stasis) = (ship.Position, ship.Rotation, ship.Hp, ship.Alive, ship.StasisLeft);
+        return h;
+    }
+
+    // the kills in the moments before a drop that this pilot was still in the party for (paid
+    // once, by serial)
+    public static IEnumerable<Kill> Owed(int peer, int world) =>
+        Kills.Where(k => k.World == world && k.Present.Contains(peer) && Time.GetTicksMsec() - k.When <= OwedWindowMs);
+
+    public static void Note(Kill k)
+    {
+        Kills.RemoveAll(x => k.When - x.When > OwedWindowMs);
+        Kills.Add(k);
+    }
+
+    // the character ids whose hold has run out
+    public static List<string> Lapsed()
+    {
+        ulong now = Time.GetTicksMsec();
+        return Places.Where(kv => kv.Value.Until <= now).Select(kv => kv.Key).ToList();
+    }
+}

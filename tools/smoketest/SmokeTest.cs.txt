@@ -248,7 +248,7 @@ public partial class _Test : Node
         Net.I.Host(27123);
         for (int i = 0; i < 60 && !Net.IsOnline; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         bool wasOnline = Net.IsOnline;
-        ((System.Collections.IDictionary)typeof(Hub).GetField("_peerSector", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null))[99] = Hub.SectorKind.Home;
+        Session.Sectors[99] = Hub.SectorKind.Home;      // the book is Session's now, not a private static of Hub
         // The pilot's own battleship has a Barrage Broadside III fitted (six volleys): the title
         // screen must fly the kit regardless.
         var rack = Character.LoadoutFor(ShipClass.Battleship)[4];
@@ -1510,10 +1510,10 @@ public partial class _Test : Node
         // THE ESCORT'S THREAT sets each wave: a quarter each from the load (a level per 1000 cr it will
         // fetch escorted), the party (half its mean level, half its ships' toughness -- a level per 10%
         // of hull over its class's own), the highest boss, and the route (half a level a wave)
-        Check(Math.Abs(Hub.EscortThreat(0, 1, 1, 0, 0) - 1.0) < 1e-9 && Math.Abs(Hub.EscortThreat(4000, 5, 3, 5, 8) - 4.75) < 1e-9,
+        Check(Math.Abs(Waves.EscortThreat(0, 1, 1, 0, 0) - 1.0) < 1e-9 && Math.Abs(Waves.EscortThreat(4000, 5, 3, 5, 8) - 4.75) < 1e-9,
               "an escort's threat: 1 for a fresh base's first wave; 4.75 for 4000 cr aboard, a level-5 party of toughness 3, the level-5 boss beaten, the ninth wave");
-        Check(Math.Abs(Hub.ThreatStrength(4.75) - Math.Pow(1.1, 3.75)) < 1e-9 && Hub.ThreatLights(1.0) == 3 && Hub.ThreatLights(4.75) == 4 && Hub.ThreatLights(40) == 6
-              && Math.Abs(Hub.ThreatAgility(4.75) - 1.0375) < 1e-9 && Math.Abs(Hub.ThreatAgility(40) - 1.1) < 1e-9,
+        Check(Math.Abs(Waves.ThreatStrength(4.75) - Math.Pow(1.1, 3.75)) < 1e-9 && Waves.ThreatLights(1.0) == 3 && Waves.ThreatLights(4.75) == 4 && Waves.ThreatLights(40) == 6
+              && Math.Abs(Waves.ThreatAgility(4.75) - 1.0375) < 1e-9 && Math.Abs(Waves.ThreatAgility(40) - 1.1) < 1e-9,
               "...which sets the hunters' hull and damage (+10% a level), their numbers (a light more every 3 levels, 3 more at most) and, very slightly, their speed and turning (1% a level, 10% at most)");
         {
             double ownHull = new ShipStats(Me.Class)["hull"];
@@ -1557,7 +1557,11 @@ public partial class _Test : Node
         typeof(Hauler).GetField("_waves", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(hauler, 11);
         int preLate = H.Raiders.Count(r => r.Quarry == hauler);
         hauler.T = 224.9; await Wait(0.2);
-        Check(H.Raiders.Count(r => r.Quarry == hauler) - preLate == 4, $"waves keep coming for the whole route: the twelfth, at 225 s ({H.Raiders.Count(r => r.Quarry == hauler) - preLate} more)");
+        // FIVE, not four: from the tenth wave the rotation fields TWO standoffs 120 u apart -- one
+        // drawn from the rotation, the gunship named outright -- beside its line of pinners. No
+        // builder could field two of one way before the wave rows; one kind of each way per wave
+        // was its whole vocabulary. The late escort is harder by exactly that one standoff.
+        Check(H.Raiders.Count(r => r.Quarry == hauler) - preLate == 5, $"waves keep coming for the whole route: the twelfth, at 225 s ({H.Raiders.Count(r => r.Quarry == hauler) - preLate} more)");
         // near the end of the route: it charges at the portal, and the hunters withdraw at the jump
         typeof(Hauler).GetField("_leg", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(hauler, Hub.EscortRoute.Length - 1);
         hauler.Position = Hub.PortalPos + new Vector2(0, 20);
@@ -3393,6 +3397,72 @@ public partial class _Test : Node
                   $"one patrol of each way, and the next wave draws different kinds ({string.Join(",", w1.Select(r => Enemies.Of(r.Kind).Name).Distinct())} then {string.Join(",", w2.Select(r => Enemies.Of(r.Kind).Name).Distinct())})");
             foreach (var r in H.Raiders.Where(r => r.Patrol == p1 || r.Patrol == p2).ToList()) r.TakeDamage(99999);
             await Wait(0.3);
+
+            // ── A WAVE IS A ROW (Waves.All) ─────────────────────────────────
+            // Both of these are sent by the SAME builder that sent the two patrols above -- the
+            // only builder there is (Raids.Send) -- and both were impossible before it: the old
+            // Hub.SpawnPatrol drew ONE pin kind and ONE standoff kind a wave, and took `heavy` as
+            // a bool. The escort's late waves are the rows that ask for them.
+            {
+                var was = H.Raiders.Select(r => r.NetId).ToHashSet();
+                H.HuntWave(Me, 6);                                    // an even wave from the seventh on: hunt_mixed
+                await Wait(0.05);
+                var mixed = H.Raiders.Where(r => !was.Contains(r.NetId)).ToList();
+                var pins = mixed.Where(r => !r.Heavy).ToList();
+                Check(mixed.Count(r => r.Heavy) == 0 && pins.Count >= 5
+                      && pins.Select(r => r.Kind).Distinct().Count() == 2
+                      && pins.GroupBy(r => r.Kind).Min(g => g.Count()) == 2
+                      && pins.All(r => Math.Abs(r.MaxHull - 0.5 * Enemies.Of(r.Kind).Hull * r.Strength) < 1e-9),
+                      $"a wave MIXES TWO PINNER KINDS -- the rotation's next row, two of them, at half hull ({string.Join(" + ", pins.GroupBy(r => r.Kind).Select(g => $"{g.Count()} {Enemies.Of(g.Key).Name}"))})");
+                foreach (var r in mixed) r.TakeDamage(1e9);
+                await Wait(0.2);
+
+                was = H.Raiders.Select(r => r.NetId).ToHashSet();
+                H.HuntWave(Me, 9);                                    // an odd wave from the tenth on: hunt_twin
+                await Wait(0.05);
+                var twin = H.Raiders.Where(r => !was.Contains(r.NetId)).ToList();
+                var stand = twin.Where(r => r.Heavy).ToList();
+                Check(stand.Count == 2 && twin.Count(r => !r.Heavy) >= 3
+                      && stand.Any(r => r.Kind == Enemies.Gunship),
+                      $"...and a wave fields TWO STANDOFFS -- one drawn from the rotation and the gunship named outright ({string.Join(" + ", stand.Select(r => Enemies.Of(r.Kind).Name))})");
+                foreach (var r in twin) r.TakeDamage(1e9);
+                await Wait(0.2);
+            }
+
+            // ── A THIRD HOST-SPAWNED REPLICATED KIND IS A ROW, NOT A THIRD COPY ──
+            // The raiders and the deployed turrets were the same six methods written twice: mint
+            // an id from a NetIds space, add, tell the world, guard for idempotence, remove with
+            // or without a burst. Registering a kind here adds NOTHING to Hub -- the row says its
+            // space, what bag holds it and how one is built, and Hub.Spawn / Hub.Down take it.
+            {
+                var nfm = BindingFlags.NonPublic | BindingFlags.Instance;
+                int raiders0 = H.Raiders.Count, turrets0 = H.Deployed.Count;
+                int third = Spawns.All.Count;
+                Spawns.All.Add(new SpawnKind {
+                    Id = "Probe", Space = NetIds.Menu, Burst = 0f,
+                    Bag = k => new SpawnSet<SpawnProbe>(k),
+                    Make = (h, s) => new SpawnProbe { NetId = s.NetId, Position = s.At },
+                    Seed = n => new SpawnSeed(((SpawnProbe)n).NetId, n.Position, 0, 0, 0),
+                });
+                var probeAt = VaryNear(Hub.BasePos + new Vector2(0, -5400), 400f);
+                var probe = H.Spawn(third, probeAt, 0, 0, 0) as SpawnProbe;
+                bool born = probe != null && probe.GetParent() == H && probe.Position == probeAt
+                            && probe.NetId > NetIds.Menu && probe.NetId < NetIds.Menu + 10000
+                            && probe.Name.ToString() == $"Probe_{probe.NetId}";
+                H.Down(third, probe, burst: false, 0f);
+                bool buried = probe != null && probe.IsQueuedForDeletion();
+                // ...and the six each kind used to need are GONE, with exactly two spawn RPCs left
+                // on Hub for every kind there will ever be
+                int spawnRpcs = typeof(Hub).GetMethods(nfm).Count(mi => mi.Name.StartsWith("NetSpawn"));
+                bool noCopies = new[] { "NetRaiderSpawn", "AddRaider", "DropRaider", "NetRaiderGone",
+                                        "NetDeploy", "AddDeployed", "DropDeployed", "RemoveDeployed", "NetDeployGone" }
+                                .All(nm => typeof(Hub).GetMethod(nm, nfm) == null);
+                Spawns.All.RemoveAt(third);                           // the table back as the game ships it
+                Check(born && buried && spawnRpcs == 2 && noCopies
+                      && H.Raiders.Count == raiders0 && H.Deployed.Count == turrets0,
+                      $"a THIRD host-spawned replicated kind took the generic path with no new method: its own id space ({probe?.NetId}), "
+                      + $"built, named and dropped by Hub.Spawn/Hub.Down, {spawnRpcs} spawn RPCs on Hub and none of the six per-kind methods left ({noCopies})");
+            }
         }
 
         // ── THE NINE NEW CLASSES ────────────────────────────────────────────────
@@ -4392,7 +4462,7 @@ public partial class _Test : Node
             Check(!GodotObject.IsInstanceValid(crD) && Count<LootCrate>() == 0 && Character.Unclaimed.Count == 0 && Character.GearHold.Values.Sum() == hold0 + 4,
                   $"the crate left behind comes home in the hold, its node gone with the arena ({Character.GearHold.Values.Sum() - hold0} of 4 parts)");
             Character.HintsOff = false;
-            await Wait(Hub.RaidDelay + 0.5);
+            await Wait(Raids.Delay + 0.5);
             Check(H.Raiders.Count == 0, "a won mission brings no raid");
             // exactly the credits set aside at departure + the 2000 bounty (a hauler sale before
             // departure is part of what was set aside, so a fixed window was fragile)
@@ -4728,12 +4798,9 @@ public partial class _Test : Node
         bool hosted = Net.IsOnline;
         yard.Credits = 4242;
         // a place held for a pilot that dropped, as the session ends
-        var soloHeld = (System.Collections.IDictionary)typeof(Hub).GetField("_held", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
-        var heldT = typeof(Hub).GetNestedType("Held", BindingFlags.NonPublic);
-        var ghostS = Activator.CreateInstance(heldT);
-        heldT.GetField("OldPeer").SetValue(ghostS, 515151); heldT.GetField("Name").SetValue(ghostS, "Ghost");
-        heldT.GetField("Until").SetValue(ghostS, Time.GetTicksMsec() + 60000);
-        soloHeld["ghost"] = ghostS; Priv(H, "RefreshAway");
+        var soloHeld = (System.Collections.IDictionary)Session.Places;   // Session.Held is a public record now
+        soloHeld["ghost"] = new Session.Held { OldPeer = 515151, Name = "Ghost", Until = Time.GetTicksMsec() + 60000 };
+        Priv(H, "RefreshAway");
         bool ghostInParty = H.PartyIds.Contains(515151);
         Net.I.GoOffline();
         await Wait(0.15);
@@ -4919,7 +4986,7 @@ public partial class _Test : Node
             await RealTime(() => !H.Ships.Any(s => s.OwnerId == agOld), 3);
             Check(H.Ships.Count() == 1 && H.PartyIds.Count() == 2, $"arena host: a guest dropped mid-arena keeps its place in the party ({H.Ships.Count()} ship, {H.PartyIds.Count()} in the party)");
             // THE BOSS DIES WHILE IT IS AWAY: it helped win it, so the kill is owed to it
-            var arenaHeld = (System.Collections.IDictionary)typeof(Hub).GetField("_held", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
+            var arenaHeld = (System.Collections.IDictionary)Session.Places;
             H.Boss.TakeDamage(H.Boss.Hp + 1);
             var owedA = arenaHeld.Values.Cast<object>().Select(x => (System.Collections.IList)x.GetType().GetField("Owed").GetValue(x)).FirstOrDefault();
             Check(H.MissionWon && owedA?.Count == 1, $"arena host: the boss killed while the guest is away -- the kill is owed to it ({owedA?.Count})");
@@ -5252,8 +5319,7 @@ public partial class _Test : Node
             // every pilot: its own EXP by its own level, and its own drops -- each guest ITS OWN, and only its own
             H.AnnounceBossKill(1, Vector2.Zero);
             // what the host rolled for whom, by character, for each guest to hold its own parts against
-            var kills = (System.Collections.IList)typeof(Hub).GetField("_recentKills", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
-            var rolled = (System.Collections.Generic.Dictionary<int, string[]>)kills[kills.Count - 1].GetType().GetField("Drops").GetValue(kills[kills.Count - 1]);
+            var rolled = Session.Kills[Session.Kills.Count - 1].Drops;   // Session.Kill is a public record now
             var dropsFile = new ConfigFile();
             foreach (var kv in rolled) dropsFile.SetValue("drops", kv.Key == Net.LocalId ? Character.Id : Net.I.Players[kv.Key].CharacterId, string.Join(",", kv.Value.OrderBy(x => x, StringComparer.Ordinal)));
             dropsFile.Save("user://smoke_drops.cfg");
@@ -5301,7 +5367,7 @@ public partial class _Test : Node
             };
             await Wait(2.0);
             // A DROP: Third's connection cut by the engine, no goodbye -- what a Wi-Fi drop looks like
-            var heldD = (System.Collections.IDictionary)typeof(Hub).GetField("_held", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
+            var heldD = (System.Collections.IDictionary)Session.Places;
             int thirdOld = third?.OwnerId ?? 0;
             Drop(thirdOld);
             await RealTime(() => !Multiplayer.GetPeers().Contains(thirdOld) && !H.Ships.Any(s => s.OwnerId == thirdOld), 3);
@@ -5321,14 +5387,8 @@ public partial class _Test : Node
             Check(third2 != null && H.IsReady(third2.OwnerId) && !H.PartyIds.Contains(thirdOld) && H.PartyIds.Count() == 3 && hullOnDrop < 300 && Math.Abs(hullBack - hullOnDrop) < 1 && heldD.Count == 0,
                   $"back under a new id: READY and the damaged hull move to it, the place is released ({third2?.OwnerId}, {hullBack:0.0} hull back of {hullOnDrop:0.0} held)");
             // A HOLD THAT LAPSES: a held pilot that was not READY keeps the portal shut until its time is up
-            var heldType = typeof(Hub).GetNestedType("Held", BindingFlags.NonPublic);
-            object Ghost(int peer, ulong ms)
-            {
-                var gh = Activator.CreateInstance(heldType);
-                heldType.GetField("OldPeer").SetValue(gh, peer); heldType.GetField("Name").SetValue(gh, "Ghost");
-                heldType.GetField("Until").SetValue(gh, Time.GetTicksMsec() + ms);
-                return gh;
-            }
+            object Ghost(int peer, ulong ms) =>
+                new Session.Held { OldPeer = peer, Name = "Ghost", Until = Time.GetTicksMsec() + ms };
             heldD["ghost"] = Ghost(424242, 300); Priv(H, "RefreshAway");
             bool shut = !H.AllReady;
             await Wait(0.6);
@@ -5632,6 +5692,11 @@ public partial class LateSampler : Node
     public override void _Ready() => ProcessPriority = int.MaxValue;
     public override void _Process(double delta) { if (Probe?.Invoke() == true) Seen = true; }
 }
+
+// A third host-spawned replicated kind, registered by the check that proves a third kind is a ROW
+// of Spawns.All and not a third copy of the six methods each one used to need. The game builds
+// none of these; only the check does.
+public partial class SpawnProbe : Node2D { public int NetId; }
 
 // A fighter-sized stand-in, only for the PD priority check.
 // A small craft, for the point-defence priority: it says what it IS (Tag.Light), which is what
