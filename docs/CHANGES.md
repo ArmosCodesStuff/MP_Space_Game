@@ -316,6 +316,66 @@ From the 2026-09-21 batch (each is a constant or one rule to change):
 
 ## Unreleased
 
+### A class says what its weapons are and what it is born with, and two of the nine fly in a session (2026-09-22, in the WarShips_Version_L fork)
+
+Three gaps from the flight test's Known broken list, closed by three declarations on the class row.
+
+**The pilot's Weapons points reach what the class calls its weapons.** `Progression` named ONE stat
+for every class in the game -- torpedoes for a carrier, main guns for everything else -- so a
+sniper's railgun, a warden's hunters, a warrior's EMP and a freighter's deployed turrets took
+nothing from a pilot's damage purchases, and `Equipment` held the same fact again in its own
+per-class switch. The row declares it once (`ClassDef.Damage`: stat id → what one level adds) and
+both read it.
+
+| a level of Weapons adds | |
+|---|---|
+| railgun | +7.5 (5% of its 150) |
+| hunter-seekers | +2.25 each |
+| the warrior's EMP | +3 |
+| a dropped turret | +0.5 (three are out at once: 1.5 across them) |
+| every light's gun | +1 |
+| the line, unchanged | +1 to the gun, or the torpedoes |
+
+The gear that lifts "every weapon" reaches those eight stats too, so a railgun finally takes the
++25% five starting chips have always given a battleship's shells: **it lands 187.5, not 150**. A
+saved pilot's points do exactly what they always did on the three original classes -- the carrier's
+`fighter_damage` and the destroyer's `missile_damage` are declared at a step of 0 for that reason,
+and `pd_damage` is declared by nobody, because the union of these declarations is what the chips
+reach and every class has a point-defence row.
+
+**Gear fits by what a hull HAS, not by which hull it is.** Every part carried a `ShipClass`, so a
+freighter, a sniper or a dart could wear nothing but the parts that named no class at all. A part
+declares the stats it moves now, and fits a hull with at least one of them -- because a part whose
+every stat is missing there would do nothing. A Rapid Battery (`main_interval`, `main_damage`) fits
+all eleven classes with main guns; Elite Hangars (`fighter_speed`) fit the carrier alone; a Basic
+Combat Chip moves every weapon stat in the game and fits everything, lifting whichever of them that
+hull has. `ItemDef.Class` is gone, with the class argument on all forty part lines.
+
+**Every hull has all seven slots filled with parts that mean something on it.**
+
+- Each class comes out of the yard with ITS OWN two mounts (`ClassDef.Kit`, read by
+  `Equipment.Default`): a sniper starts with a Railgun Mount, a wraith with a Stealth Veil. Twelve
+  rows name seven weapon mounts and twelve signature systems between them (three freighters share
+  one cargo gun).
+- The HULL slot says what the hull is: three new families of hull-and-handling frames (**Braced**,
+  **Spar**, **Keel Brace**) fit every ship, and three **turret cradles** fit only a hull that drops
+  turrets. A sniper wears 12 hull parts where it wore 3; a freighter wears 30.
+- 138 drops, up from 120. A new class gets 24 weapon parts where it had none, all 12 engines, all
+  12 shields, all 12 chips, and its own two mounts.
+
+**Two of the nine fly in a session.** The two-player arena run flies a WARRIOR (host) and a
+FREIGHTER (guest) at home before its first arena trip, and proves what can only be wrong between
+two peers: a guest's T makes nothing on the guest and a 120-hull turret firing the GUEST's sheet
+arrives from the host; the guest's 400 bubble spends 150 of itself on the HOST's hull and the guest
+reads 250 left off the host's slot arrays; the host's rush reads HARDENED on the guest (which can
+only come from `statusBits`); and the EMP's ring and a destroyed turret's burst both arrive as `Fx`
+rows. A refit is announced now (`SetClass` goes through `Hub.PilotChanged`), so each peer can see
+which hull the other flies.
+
+Two things that run taught, both written into the checks: a guest's hull is the HOST's word and
+lags a round trip behind its own refit, and a refit rebuilds the ship's slots -- so an ability still
+running is discarded with them.
+
 ### Two more tables underneath: everything that flies, and everything that flashes (2026-09-22, in the WarShips_Version_L fork)
 
 No new behaviour. Four files fewer, and the two things every future weapon and every future ability
@@ -442,20 +502,19 @@ run; every figure they assert stays a literal.
 
 ### Known broken (as of this batch)
 
+- **Only two of the nine have flown in a session** -- a warrior and a freighter, in the arena pair.
+  The wing and deck classes, the sniper's rail line and the echo's detonation are still unproven
+  between two peers.
+- **The nine new classes have no UTILITY family of their own.** The bubble, the overdrive, the
+  shockwave, the railgun, the rush, the hunters, the roll, the echo and the veil have no rolled
+  parts, so that slot holds the kit part alone. Their weapon, engine, shield, hull and chip slots
+  all have families.
+
 - **Nobody has flown the nine new classes.** They are proved by the solo smoke run (every ability,
   every number) and by the sweep's frames; their BALANCE is arithmetic, not play. The three
   freighters share one hull sheet, and the lights' 90 hull against a raid is a guess.
-- **The new classes have never been flown as a GUEST.** The protocol carries them (statuses as
-  bits, abilities as slot arrays, deployed turrets by RPC, all covered by the full six-process
-  run), but no multiplayer scenario picks a freighter, a heavy fighter or a light, so
-  "the bubble covers the guest beside you" is untested.
 - **The bubble covers pilots' ships only.** A miner, a salvager or the hauler standing inside it
   takes its damage on the hull: their damage does not come through `PlayerShip.Incoming`.
-- **Pilot damage upgrades do not touch the new weapons.** `Progression.DamageStat` maps every class
-  without a wing to `main_damage`, so a sniper's railgun, a warden's hunters and an echo's blast
-  ignore the pilot's damage levels.
-- **The new classes have no gear of their own.** `Equipment`'s class parts were written for the
-  three; a freighter or a dart fits only the class-agnostic ones.
 - **Bosses are still classes, not rows.** The Lancer and the Drake are behaviour machines with
   per-move state and their own telegraphs; a third boss is a subclass plus a `Missions` row. What
   repeats between them (hull and damage scaling, telegraphs, net state, the super bar, catch-up)

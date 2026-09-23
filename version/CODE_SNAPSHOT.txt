@@ -1,8 +1,8 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-22 20:11, on top of git commit b9c6660. How it was verified is in the message of the
+// Taken 2026-09-22 21:35, on top of git commit 74058b5. How it was verified is in the message of the
 //   commit that carries this file: one starting VERIFIED: is a green verify.ps1 -Update.
-// 97 files, 21851 lines. Code only: sprites, sounds and docs are in the zip.
+// 97 files, 22240 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -34,8 +34,8 @@
 //   scripts/Drake.cs                               147 lines   sha256 1f03acbab106
 //   scripts/Economy.cs                             119 lines   sha256 1dec71a6ffa8
 //   scripts/Enemies.cs                             106 lines   sha256 b3603fe6ece2
-//   scripts/Equipment.cs                           274 lines   sha256 0eab67468e18
-//   scripts/EquipmentWindow.cs                     126 lines   sha256 88af43fe3901
+//   scripts/Equipment.cs                           326 lines   sha256 44da887d6c21
+//   scripts/EquipmentWindow.cs                     126 lines   sha256 6640b484ee1a
 //   scripts/EscapePod.cs                            49 lines   sha256 d21d4103150b
 //   scripts/EscMenu.cs                              68 lines   sha256 a6334f984666
 //   scripts/Fx.cs                                  126 lines   sha256 39637cba2318
@@ -47,7 +47,7 @@
 //   scripts/Hub.cs                                1744 lines   sha256 60a6e540a722
 //   scripts/Ids.cs                                  28 lines   sha256 230fc2305f97
 //   scripts/Lancer.cs                              194 lines   sha256 2793cf3479db
-//   scripts/Loot.cs                                118 lines   sha256 f8a5de98fe1f
+//   scripts/Loot.cs                                118 lines   sha256 206397f16a58
 //   scripts/MainMenu.cs                            288 lines   sha256 9307a6a697bc
 //   scripts/MenuFoe.cs                             202 lines   sha256 b14b23208a4f
 //   scripts/Missions.cs                             50 lines   sha256 2d0007b08c4b
@@ -56,7 +56,7 @@
 //   scripts/PilotWindow.cs                          60 lines   sha256 4e05487ebecd
 //   scripts/PlayerShip.cs                         1258 lines   sha256 09174a279dfe
 //   scripts/Plume.cs                                25 lines   sha256 cdbeb9b8fc58
-//   scripts/Progression.cs                         107 lines   sha256 d94ab4162045
+//   scripts/Progression.cs                         122 lines   sha256 a2b32f3e1498
 //   scripts/Radar.cs                               137 lines   sha256 a9169e79860b
 //   scripts/Raider.cs                              361 lines   sha256 c047342f8cf4
 //   scripts/ReturnButton.cs                         27 lines   sha256 e36ddbb19a08
@@ -66,7 +66,7 @@
 //   scripts/Sfx.cs                                 105 lines   sha256 879dc5464b7a
 //   scripts/Shield.cs                               71 lines   sha256 99c7fa4a2a8e
 //   scripts/ShipClasses.cs                         445 lines   sha256 b3cc070d57c1
-//   scripts/Ships.cs                               399 lines   sha256 f867c4b9f232
+//   scripts/Ships.cs                               496 lines   sha256 ad0264770dde
 //   scripts/Shots.cs                               285 lines   sha256 fdf79e9dce61
 //   scripts/Sprites.cs                              13 lines   sha256 f2374b1d9777
 //   scripts/Stats.cs                               220 lines   sha256 c00971eb343d
@@ -101,9 +101,9 @@
 //   tools/screens/run.sh                            42 lines   sha256 73a5b3c63476
 //   tools/screens/Shots.cs.txt                     659 lines   sha256 1ecdc3f35962
 //   tools/smoketest/fakeigd.py                     155 lines   sha256 b980d4fa4ad4
-//   tools/smoketest/run.ps1                        225 lines   sha256 8aac48df9920
+//   tools/smoketest/run.ps1                        225 lines   sha256 ba91f3de2ffe
 //   tools/smoketest/run.sh                          57 lines   sha256 9ac9cbdf9115
-//   tools/smoketest/SmokeTest.cs.txt              4880 lines   sha256 d077f2797350
+//   tools/smoketest/SmokeTest.cs.txt              5105 lines   sha256 75daa8065d6a
 //   tools/smoketest/wan.py                          61 lines   sha256 97db24aa3f91
 //   tools/snapshot.ps1                              94 lines   sha256 3ca9bfe56185
 //==============================================================================
@@ -2971,7 +2971,7 @@ public static class Enemies
 
 //==============================================================================
 // FILE: scripts/Equipment.cs
-// 274 lines   sha256 0eab67468e18
+// 326 lines   sha256 44da887d6c21
 //==============================================================================
 using System;
 using System.Collections.Generic;
@@ -3001,7 +3001,15 @@ public class ItemDef
     public string Id, Name, Blurb;
     public GearSlot Slot;
     public Rarity Rarity = Rarity.Common;
-    public ShipClass? Class;                 // one class's part; null: any capital ship
+    // THE STATS IT MOVES, and so what a hull must have for it to be worth wearing: a part fits a
+    // hull that has AT LEAST ONE of them, because a part whose every stat is missing there would
+    // do nothing at all. A Rapid Battery moves main_interval and main_damage, so it fits every
+    // class with main guns -- eleven of the twelve -- without naming one of them; Elite Hangars
+    // move fighter_speed, so only a carrier can wear them; a Basic Combat Chip moves every
+    // weapon stat in the game, so it fits everything, and lifts whichever of them that hull has.
+    // It was one ShipClass before, which is why the nine new classes could wear nothing but the
+    // parts that named no class at all.
+    public string[] Needs = System.Array.Empty<string>();
     public bool Kit;                         // the starting kit: never dropped
     public Dictionary<string, double> Pct = new(), Add = new();
 }
@@ -3034,29 +3042,55 @@ public static class Equipment
             if (id.StartsWith("bs_" + line + "_", StringComparison.Ordinal)) return "dd_" + id[3..];
         return id;
     }
-    public static bool Fits(ItemDef i, GearSlot s, ShipClass c) => i != null && i.Slot == s && (i.Class == null || i.Class == c);
+    // A class's own sheet, by stat id -- built once per class, and lazily: Equipment's static
+    // fields are built before this is ever asked, and a sheet read during that would be a cycle.
+    private static readonly Dictionary<ShipClass, HashSet<string>> SheetCache = new();
+    private static HashSet<string> Sheet(ShipClass c) =>
+        SheetCache.TryGetValue(c, out var h) ? h : SheetCache[c] = new ShipStats(c).All.Select(x => x.Id).ToHashSet();
+    // Which classes name a given KIT part in their row (Ships.cs). A kit part is the ship's own
+    // hardware: it fits the hulls that are born with it, and no others.
+    private static readonly Dictionary<string, HashSet<ShipClass>> KitOwners =
+        Classes.All.SelectMany(d => d.Kit.Select(k => (k.Id, d.Id)))
+               .GroupBy(t => t.Item1).ToDictionary(g => g.Key, g => g.Select(t => t.Item2).ToHashSet());
+
+    // It fits if the slot matches AND the hull has every stat it moves. No part names a class.
+    public static bool Fits(ItemDef i, GearSlot s, ShipClass c)
+    {
+        if (i == null || i.Slot != s) return false;
+        if (KitOwners.TryGetValue(i.Id, out var born)) return born.Contains(c);
+        if (i.Needs.Length == 0) return true;             // a part that moves nothing fits anything
+        var sheet = Sheet(c);
+        foreach (var need in i.Needs) if (sheet.Contains(need)) return true;
+        return false;
+    }
+    // What a part asks of a hull, in words, for the equipment window.
+    public static string NeedsSaid(ItemDef i) =>
+        KitOwners.TryGetValue(i?.Id ?? "", out var born)
+            ? string.Join(" / ", born.Select(Classes.NameOf))
+            : i == null || i.Needs.Length == 0 ? "any hull" : string.Join(", ", i.Needs);
     public static GearSlot SlotAt(int k) => k < CoreSlots ? Core[k] : GearSlot.Chip;
 
-    // every weapon's damage on a class (the battleship's broadside fires main-gun shells)
-    private static string[] DamageStats(ShipClass c) => c switch
-    {
-        ShipClass.Carrier   => new[] { "fighter_damage", "torpedo_damage" },
-        ShipClass.Destroyer => new[] { "main_damage", "missile_damage" },
-        _                   => new[] { "main_damage" },
-    };
-    // every weapon's damage on ANY class, for a general part
+    // Every weapon's damage on ANY class, for a part that lifts all of them. The list of what
+    // counts as a weapon was written out here per class as well as in Progression; it is the
+    // CLASS's to state now (ClassDef.Damage), and both read that one declaration. A stat a hull
+    // does not have is simply not on its sheet, so a chip that names it changes nothing there.
     private static (string, double)[] AllDamage(double p) =>
-        Enum.GetValues<ShipClass>().SelectMany(DamageStats).Distinct().Select(s => (s, p)).ToArray();
+        Classes.EveryDamageStat().Select(s => (s, p)).ToArray();
 
     // One specialisation at all three rarities: `up` is the lean (scaled by rarity), `down` its
     // price (not scaled), `add` whole-number changes, one value per rarity.
-    private static IEnumerable<ItemDef> Line(string id, string name, GearSlot slot, ShipClass? cls, string blurb,
+    private static IEnumerable<ItemDef> Line(string id, string name, GearSlot slot, string blurb,
                                              (string stat, double pct)[] up, (string stat, double pct)[] down = null,
                                              (string stat, int[] byRarity)[] add = null)
     {
+        // What it needs is what it moves: every stat id it names, once.
+        var needs = (up ?? None).Select(t => t.stat)
+            .Concat((down ?? None).Select(t => t.stat))
+            .Concat((add ?? Array.Empty<(string, int[])>()).Select(t => t.stat))
+            .Distinct().ToArray();
         for (int r = 0; r < Scale.Length; r++)
         {
-            var it = new ItemDef { Id = $"{id}_{r + 1}", Name = name + Suffix[r], Slot = slot, Rarity = (Rarity)r, Class = cls, Blurb = blurb };
+            var it = new ItemDef { Id = $"{id}_{r + 1}", Name = name + Suffix[r], Slot = slot, Rarity = (Rarity)r, Needs = needs, Blurb = blurb };
             foreach (var (s, p) in up) it.Pct[s] = it.Pct.GetValueOrDefault(s) + p * Scale[r];
             foreach (var (s, p) in down ?? Array.Empty<(string, double)>()) it.Pct[s] = it.Pct.GetValueOrDefault(s) + p;
             foreach (var (s, a) in add ?? Array.Empty<(string, int[])>()) it.Add[s] = a[r];
@@ -3067,139 +3101,157 @@ public static class Equipment
     private static IEnumerable<ItemDef> Build()
     {
         // ── the starting kit: the ship's own numbers ──
-        static ItemDef Kit(string id, string name, GearSlot s, ShipClass? c, string blurb) =>
-            new() { Id = id, Name = name, Slot = s, Class = c, Kit = true, Blurb = blurb };
-        yield return Kit("bs_main_battery", "Mk I Main Battery", GearSlot.Weapon, ShipClass.Battleship, "the four main turrets");
-        yield return Kit("cv_fighter_hangars", "Mk I Fighter Hangars", GearSlot.Weapon, ShipClass.Carrier, "the fighter wing");
-        yield return Kit("dd_main_battery", "Mk I Twin Turrets", GearSlot.Weapon, ShipClass.Destroyer, "the two main turrets");
-        yield return Kit("std_drive", "Standard Drive Cluster", GearSlot.Engines, null, "the helm: speed and turning");
-        yield return Kit("basic_deflector", "Basic Deflector Array", GearSlot.Shield, null, "the ship's hull points");
-        yield return Kit("reinforced_frame", "Reinforced Frame", GearSlot.Hull, null, "the frame, and its point defence");
-        yield return Kit("bs_broadside", "Broadside Battery", GearSlot.Utility, ShipClass.Battleship, "the broadside: every main gun, volley on volley");
-        yield return Kit("cv_bomber_bay", "Bomber Bay", GearSlot.Utility, ShipClass.Carrier, "the bomber wing");
-        yield return Kit("dd_missile_rack", "Missile Rack", GearSlot.Utility, ShipClass.Destroyer, "the missile bursts and their magazine");
-        var basic = Kit("chip_basic", "Basic Combat Chip", GearSlot.Chip, null, "+5% damage, +5% hull");
+        static ItemDef Kit(string id, string name, GearSlot s, string blurb) =>
+            new() { Id = id, Name = name, Slot = s, Kit = true, Blurb = blurb };
+        // EVERY CLASS'S OWN, from its row (ClassDef.Kit): its weapon mount and its signature
+        // system. Two classes may name the same id -- three freighters share one cargo gun -- so
+        // the part is built once.
+        foreach (var k in Classes.All.SelectMany(d => d.Kit).GroupBy(k => k.Id).Select(g => g.First()))
+            yield return Kit(k.Id, k.Name, k.Slot, k.Blurb);
+        // ...and the four every ship in the game is born with
+        yield return Kit("std_drive", "Standard Drive Cluster", GearSlot.Engines, "the helm: speed and turning");
+        yield return Kit("basic_deflector", "Basic Deflector Array", GearSlot.Shield, "the ship's hull points");
+        yield return Kit("reinforced_frame", "Reinforced Frame", GearSlot.Hull, "the frame, and its point defence");
+        var basic = Kit("chip_basic", "Basic Combat Chip", GearSlot.Chip, "+5% damage, +5% hull");
         foreach (var (s, p) in AllDamage(0.05)) basic.Pct[s] = p;
         basic.Pct["hull"] = 0.05;
         yield return basic;
 
-        var bs = ShipClass.Battleship; var cv = ShipClass.Carrier; var dd = ShipClass.Destroyer;
         IEnumerable<ItemDef>[] lines =
         {
             // ── battleship main battery ──
-            Line("bs_rapid", "Rapid Battery", GearSlot.Weapon, bs, "fires far faster, hits lighter",
+            Line("bs_rapid", "Rapid Battery", GearSlot.Weapon, "fires far faster, hits lighter",
                  new[] { ("main_interval", 0.60) }, new[] { ("main_damage", -0.30) }),
-            Line("bs_heavy", "Heavy Battery", GearSlot.Weapon, bs, "huge shells, slow to reload and to train",
+            Line("bs_heavy", "Heavy Battery", GearSlot.Weapon, "huge shells, slow to reload and to train",
                  new[] { ("main_damage", 0.80) }, new[] { ("main_interval", -0.35), ("main_turn", -0.30) }),
-            Line("bs_long", "Long Battery", GearSlot.Weapon, bs, "reaches much further, a little lighter",
+            Line("bs_long", "Long Battery", GearSlot.Weapon, "reaches much further, a little lighter",
                  new[] { ("main_range", 0.40) }, new[] { ("main_damage", -0.15) }),
-            Line("bs_track", "Tracking Battery", GearSlot.Weapon, bs, "turrets that swing fast; shorter reach",
+            Line("bs_track", "Tracking Battery", GearSlot.Weapon, "turrets that swing fast; shorter reach",
                  new[] { ("main_turn", 1.00), ("main_damage", 0.10) }, new[] { ("main_range", -0.15) }),
             // ── carrier fighter hangars: the owner's three (Elite III is two fighters, +200% speed and
             //    damage, +50% turning; Swarm III is nine, 22% slower and weaker; Line is between) ──
-            Line("cv_elite", "Elite Hangars", GearSlot.Weapon, cv, "two fighters, very fast and very deadly",
+            Line("cv_elite", "Elite Hangars", GearSlot.Weapon, "two fighters, very fast and very deadly",
                  new[] { ("fighter_speed", 1.00), ("fighter_damage", 1.00), ("fighter_turn", 0.25) }, null,
                  new[] { ("fighter_count", new[] { -1, -1, -1 }) }),
-            Line("cv_swarm", "Swarm Hangars", GearSlot.Weapon, cv, "a swarm of slower, weaker fighters",
+            Line("cv_swarm", "Swarm Hangars", GearSlot.Weapon, "a swarm of slower, weaker fighters",
                  None, new[] { ("fighter_speed", -0.22), ("fighter_damage", -0.22) },
                  new[] { ("fighter_count", new[] { 3, 4, 6 }) }),
-            Line("cv_line", "Line Hangars", GearSlot.Weapon, cv, "one more fighter, a little better all round",
+            Line("cv_line", "Line Hangars", GearSlot.Weapon, "one more fighter, a little better all round",
                  new[] { ("fighter_damage", 0.20), ("fighter_speed", 0.10) }, null,
                  new[] { ("fighter_count", new[] { 1, 1, 1 }) }),
-            Line("cv_leash", "Leash Hangars", GearSlot.Weapon, cv, "fighters that fight far from the carrier",
+            Line("cv_leash", "Leash Hangars", GearSlot.Weapon, "fighters that fight far from the carrier",
                  new[] { ("control_range", 0.40), ("fighter_range", 0.20) }, new[] { ("fighter_damage", -0.10) }),
             // ── destroyer main turrets: the battery's four leans, on two guns ──
-            Line("dd_rapid", "Rapid Twins", GearSlot.Weapon, dd, "fires far faster, hits lighter",
+            Line("dd_rapid", "Rapid Twins", GearSlot.Weapon, "fires far faster, hits lighter",
                  new[] { ("main_interval", 0.60) }, new[] { ("main_damage", -0.30) }),
-            Line("dd_heavy", "Heavy Twins", GearSlot.Weapon, dd, "huge shells, slow to reload and to train",
+            Line("dd_heavy", "Heavy Twins", GearSlot.Weapon, "huge shells, slow to reload and to train",
                  new[] { ("main_damage", 0.80) }, new[] { ("main_interval", -0.35), ("main_turn", -0.30) }),
-            Line("dd_long", "Long Twins", GearSlot.Weapon, dd, "reaches much further, a little lighter",
+            Line("dd_long", "Long Twins", GearSlot.Weapon, "reaches much further, a little lighter",
                  new[] { ("main_range", 0.40) }, new[] { ("main_damage", -0.15) }),
-            Line("dd_track", "Tracking Twins", GearSlot.Weapon, dd, "turrets that swing fast; shorter reach",
+            Line("dd_track", "Tracking Twins", GearSlot.Weapon, "turrets that swing fast; shorter reach",
                  new[] { ("main_turn", 1.00), ("main_damage", 0.10) }, new[] { ("main_range", -0.15) }),
             // ── battleship broadside ──
-            Line("bs_heavyside", "Heavy Broadside", GearSlot.Utility, bs, "shells that hit far harder; a longer cooldown",
+            Line("bs_heavyside", "Heavy Broadside", GearSlot.Utility, "shells that hit far harder; a longer cooldown",
                  new[] { ("broadside_mult", 0.40) }, new[] { ("broadside_cooldown", -0.25) }),
-            Line("bs_rapidside", "Rapid Broadside", GearSlot.Utility, bs, "back far sooner, lighter shells",
+            Line("bs_rapidside", "Rapid Broadside", GearSlot.Utility, "back far sooner, lighter shells",
                  new[] { ("broadside_cooldown", 0.50) }, new[] { ("broadside_mult", -0.25) }),
-            Line("bs_barrage", "Barrage Broadside", GearSlot.Utility, bs, "more volleys; slower to aim and to return",
+            Line("bs_barrage", "Barrage Broadside", GearSlot.Utility, "more volleys; slower to aim and to return",
                  None, new[] { ("broadside_windup", -0.30), ("broadside_cooldown", -0.20) },
                  new[] { ("broadside_volleys", new[] { 1, 2, 3 }) }),
-            Line("bs_snap", "Snap Broadside", GearSlot.Utility, bs, "fires almost at once; one volley fewer",
+            Line("bs_snap", "Snap Broadside", GearSlot.Utility, "fires almost at once; one volley fewer",
                  new[] { ("broadside_windup", 1.00) }, null,
                  new[] { ("broadside_volleys", new[] { -1, -1, -1 }) }),
             // ── destroyer missile rack ──
-            Line("dd_salvo", "Salvo Rack", GearSlot.Utility, dd, "more bursts a magazine, a slower reload",
+            Line("dd_salvo", "Salvo Rack", GearSlot.Utility, "more bursts a magazine, a slower reload",
                  None, new[] { ("missile_reload", -0.25), ("missile_damage", -0.20) },
                  new[] { ("missile_mag", new[] { 1, 2, 3 }) }),
-            Line("dd_buster", "Buster Rack", GearSlot.Utility, dd, "devastating missiles, slow and clumsy",
+            Line("dd_buster", "Buster Rack", GearSlot.Utility, "devastating missiles, slow and clumsy",
                  new[] { ("missile_damage", 1.00) }, new[] { ("missile_speed", -0.20), ("missile_turn", -0.30) }),
-            Line("dd_seeker", "Seeker Rack", GearSlot.Utility, dd, "missiles that hunt; lighter warheads",
+            Line("dd_seeker", "Seeker Rack", GearSlot.Utility, "missiles that hunt; lighter warheads",
                  new[] { ("missile_turn", 1.00), ("missile_speed", 0.20) }, new[] { ("missile_damage", -0.20) }),
-            Line("dd_loader", "Loader Rack", GearSlot.Utility, dd, "reloads fast, lighter warheads",
+            Line("dd_loader", "Loader Rack", GearSlot.Utility, "reloads fast, lighter warheads",
                  new[] { ("missile_reload", 0.60), ("missile_refire", 0.40) }, new[] { ("missile_damage", -0.25) }),
             // ── carrier bomber bay ──
-            Line("cv_heavybay", "Heavy Bay", GearSlot.Utility, cv, "one bomber, torpedoes that break ships",
+            Line("cv_heavybay", "Heavy Bay", GearSlot.Utility, "one bomber, torpedoes that break ships",
                  new[] { ("torpedo_damage", 0.80) }, new[] { ("bomber_speed", -0.20) },
                  new[] { ("bomber_count", new[] { -1, -1, -1 }) }),
-            Line("cv_widebay", "Wide Bay", GearSlot.Utility, cv, "more bombers, lighter torpedoes",
+            Line("cv_widebay", "Wide Bay", GearSlot.Utility, "more bombers, lighter torpedoes",
                  None, new[] { ("torpedo_damage", -0.30) },
                  new[] { ("bomber_count", new[] { 1, 2, 3 }) }),
-            Line("cv_longbay", "Long Bay", GearSlot.Utility, cv, "torpedoes launched from far off",
+            Line("cv_longbay", "Long Bay", GearSlot.Utility, "torpedoes launched from far off",
                  new[] { ("torpedo_range", 0.40), ("launch_range", 0.30), ("torpedo_speed", 0.20) }, new[] { ("torpedo_damage", -0.15) }),
-            Line("cv_rapidbay", "Rapid Bay", GearSlot.Utility, cv, "rearms fast, more torpedoes a run",
+            Line("cv_rapidbay", "Rapid Bay", GearSlot.Utility, "rearms fast, more torpedoes a run",
                  new[] { ("bomber_rearm", 0.60) }, new[] { ("torpedo_damage", -0.20) },
                  new[] { ("bomber_ammo", new[] { 1, 2, 3 }) }),
             // ── engines ──
-            Line("drv_racing", "Racing Drive", GearSlot.Engines, null, "much faster, turns wider",
+            Line("drv_racing", "Racing Drive", GearSlot.Engines, "much faster, turns wider",
                  new[] { ("max_speed", 0.25), ("thrust", 0.30) }, new[] { ("turn_rate", -0.25) }),
-            Line("drv_helm", "Helm Drive", GearSlot.Engines, null, "turns tight and quick, slower",
+            Line("drv_helm", "Helm Drive", GearSlot.Engines, "turns tight and quick, slower",
                  new[] { ("turn_rate", 0.40), ("turn_radius", 0.30) }, new[] { ("max_speed", -0.15) }),
-            Line("drv_surge", "Surge Drive", GearSlot.Engines, null, "leaps forward and back, a lower top speed",
+            Line("drv_surge", "Surge Drive", GearSlot.Engines, "leaps forward and back, a lower top speed",
                  new[] { ("thrust", 0.80), ("reverse_thrust", 0.80) }, new[] { ("max_speed", -0.10) }),
-            Line("drv_cruiser", "Cruiser Drive", GearSlot.Engines, null, "fast ahead and astern, slow to get going",
+            Line("drv_cruiser", "Cruiser Drive", GearSlot.Engines, "fast ahead and astern, slow to get going",
                  new[] { ("max_speed", 0.15), ("reverse_speed", 0.50) }, new[] { ("thrust", -0.20) }),
             // ── shield: the hull points ──
-            Line("sh_bulwark", "Bulwark Array", GearSlot.Shield, null, "a great deal of hull, slower",
+            Line("sh_bulwark", "Bulwark Array", GearSlot.Shield, "a great deal of hull, slower",
                  new[] { ("hull", 0.40) }, new[] { ("max_speed", -0.15) }),
-            Line("sh_balanced", "Balanced Array", GearSlot.Shield, null, "more hull, a longer point defence",
+            Line("sh_balanced", "Balanced Array", GearSlot.Shield, "more hull, a longer point defence",
                  new[] { ("hull", 0.20), ("pd_range", 0.10) }),
-            Line("sh_glass", "Glass Array", GearSlot.Shield, null, "every weapon hits harder; less hull",
+            Line("sh_glass", "Glass Array", GearSlot.Shield, "every weapon hits harder; less hull",
                  AllDamage(0.20), new[] { ("hull", -0.25) }),
-            Line("sh_screen", "Screen Array", GearSlot.Shield, null, "more hull, sluggish off the mark",
+            Line("sh_screen", "Screen Array", GearSlot.Shield, "more hull, sluggish off the mark",
                  new[] { ("hull", 0.25) }, new[] { ("thrust", -0.10) }),
             // ── hull: the frame and its point defence ──
-            Line("fr_flak", "Flak Frame", GearSlot.Hull, null, "point defence that shreds, shorter",
+            Line("fr_flak", "Flak Frame", GearSlot.Hull, "point defence that shreds, shorter",
                  new[] { ("pd_damage", 0.60), ("pd_interval", 0.30) }, new[] { ("pd_range", -0.15) }),
-            Line("fr_picket", "Picket Frame", GearSlot.Hull, null, "point defence that reaches, lighter",
+            Line("fr_picket", "Picket Frame", GearSlot.Hull, "point defence that reaches, lighter",
                  new[] { ("pd_range", 0.40), ("pd_turn", 0.50) }, new[] { ("pd_damage", -0.20) }),
-            Line("fr_endurance", "Endurance Frame", GearSlot.Hull, null, "point defence that fires longer and returns sooner",
+            Line("fr_endurance", "Endurance Frame", GearSlot.Hull, "point defence that fires longer and returns sooner",
                  new[] { ("pd_active", 0.50), ("pd_reload", 0.30) }),
-            Line("fr_armour", "Armoured Frame", GearSlot.Hull, null, "a tougher frame, a shorter point-defence window",
+            Line("fr_armour", "Armoured Frame", GearSlot.Hull, "a tougher frame, a shorter point-defence window",
                  new[] { ("hull", 0.20) }, new[] { ("pd_active", -0.30) }),
+            // ── frames for a hull with no point defence to reinforce ──
+            // The four above are point defence's: nine of their twelve parts move nothing but pd_
+            // stats, so the five classes that mount no point defence -- the sniper, the warrior,
+            // the dart, the echo and the wraith -- could wear three of the twelve. These three
+            // families are about the HULL itself, so every ship in the game can wear them.
+            Line("fr_braced", "Braced Frame", GearSlot.Hull, "a heavier frame: it takes more, and comes round slower",
+                 new[] { ("hull", 0.30) }, new[] { ("turn_rate", -0.20), ("max_speed", -0.10) }),
+            Line("fr_spar", "Spar Frame", GearSlot.Hull, "stripped to the spars: it turns far harder, and dents",
+                 new[] { ("turn_rate", 0.45), ("turn_radius", 0.20) }, new[] { ("hull", -0.20) }),
+            Line("fr_keel", "Keel Brace", GearSlot.Hull, "it holds the water: no drift, and a little heavy",
+                 new[] { ("keel", 0.60), ("water_drag", 0.25) }, new[] { ("max_speed", -0.08) }),
+            // ── frames for the turrets a freighter carries about ──
+            // Its deployed turrets ARE its frame: these only mean anything on a hull that drops them.
+            Line("cr_cradle", "Turret Cradle", GearSlot.Hull, "the turrets it drops stand up to far more",
+                 new[] { ("deploy_hull", 0.60) }, new[] { ("deploy_range", -0.15) }),
+            Line("cr_rack", "Launch Rack", GearSlot.Hull, "drops them far sooner, and lighter",
+                 new[] { ("deploy_cooldown", 0.50) }, new[] { ("deploy_damage", -0.20) }),
+            Line("cr_heavy", "Heavy Cradle", GearSlot.Hull, "turrets that hit much harder and reach further; slow to drop",
+                 new[] { ("deploy_damage", 0.45), ("deploy_range", 0.25) }, new[] { ("deploy_cooldown", -0.30) }),
             // ── chips ──
-            Line("chip_combat", "Combat Chip", GearSlot.Chip, null, "every weapon hits harder; a little less hull",
+            Line("chip_combat", "Combat Chip", GearSlot.Chip, "every weapon hits harder; a little less hull",
                  AllDamage(0.08), new[] { ("hull", -0.05) }),
-            Line("chip_armour", "Armour Chip", GearSlot.Chip, null, "more hull; a little less damage",
+            Line("chip_armour", "Armour Chip", GearSlot.Chip, "more hull; a little less damage",
                  new[] { ("hull", 0.08) }, AllDamage(-0.05)),
-            Line("chip_engine", "Engine Chip", GearSlot.Chip, null, "faster, and turns quicker",
+            Line("chip_engine", "Engine Chip", GearSlot.Chip, "faster, and turns quicker",
                  new[] { ("max_speed", 0.06), ("turn_rate", 0.06) }),
-            Line("chip_target", "Targeting Chip", GearSlot.Chip, null, "every weapon reaches further",
+            Line("chip_target", "Targeting Chip", GearSlot.Chip, "every weapon reaches further",
                  Ranges.Select(r => (r, 0.08)).ToArray()),
         };
         foreach (var l in lines) foreach (var it in l) yield return it;
     }
 
     // the loadout: 5 core slots in order, then 5 chips ("" = empty)
+    // What a ship of this class comes out of the yard with: ITS OWN two parts, from its row
+    // (ClassDef.Kit), and the four every ship is born with. It used to name three classes here and
+    // hand everything else the battleship's mounts -- which the nine new classes cannot even wear,
+    // so their weapon and utility slots came up empty.
     public static string[] Default(ShipClass c)
     {
-        var (weapon, utility) = c switch
-        {
-            ShipClass.Carrier   => ("cv_fighter_hangars", "cv_bomber_bay"),
-            ShipClass.Destroyer => ("dd_main_battery", "dd_missile_rack"),
-            _                   => ("bs_main_battery", "bs_broadside"),
-        };
-        return new[] { weapon, "std_drive", "basic_deflector", "reinforced_frame", utility,
+        var kit = Classes.Of(c).Kit;
+        string Own(GearSlot s) => kit.FirstOrDefault(k => k.Slot == s)?.Id ?? "";
+        return new[] { Own(GearSlot.Weapon), "std_drive", "basic_deflector", "reinforced_frame", Own(GearSlot.Utility),
                        "chip_basic", "chip_basic", "chip_basic", "chip_basic", "chip_basic" };
     }
 
@@ -3250,7 +3302,7 @@ public static class Equipment
 
 //==============================================================================
 // FILE: scripts/EquipmentWindow.cs
-// 126 lines   sha256 88af43fe3901
+// 126 lines   sha256 6640b484ee1a
 //==============================================================================
 using Godot;
 using System.Linq;
@@ -3314,14 +3366,14 @@ public partial class EquipmentWindow : PanelContainer
         _hold.AddChild(Ui.Heading(total > 0 ? $"Hold  ·  {total} part{(total == 1 ? "" : "s")}" : "Hold  ·  empty"));
         var owned = Character.GearHold.Where(kv => kv.Value > 0).Select(kv => (it: Equipment.ById(kv.Key), n: kv.Value))
                              .Where(x => x.it != null)
-                             .OrderBy(x => x.it.Class != null && x.it.Class != cls)
+                             .OrderBy(x => !Equipment.Fits(x.it, x.it.Slot, cls))
                              .ThenBy(x => x.it.Slot).ThenByDescending(x => x.it.Rarity).ThenBy(x => x.it.Name).ToList();
         if (owned.Count == 0) _hold.AddChild(Ui.Lbl("Parts a boss drops for you land here.", Ui.Small, Ui.Dim));
         foreach (var (it, n) in owned)
         {
             string id = it.Id;
             Button fit = null;
-            if (it.Class == null || it.Class == cls)
+            if (Equipment.Fits(it, it.Slot, cls))
             {
                 int free = System.Array.FindIndex(l, Equipment.CoreSlots, Equipment.ChipSlots, string.IsNullOrEmpty);
                 fit = it.Slot == GearSlot.Chip
@@ -3329,9 +3381,9 @@ public partial class EquipmentWindow : PanelContainer
                     : Ui.Btn("FIT", () => FitCore(id), "Fit");
                 fit.Disabled = it.Slot == GearSlot.Chip && free < 0;
             }
-            string what = it.Class != null && it.Class != cls ? $"{it.Slot.ToString().ToUpperInvariant()}  ·  {Classes.NameOf(it.Class.Value)} part"
+            string what = !Equipment.Fits(it, it.Slot, cls) ? $"{it.Slot.ToString().ToUpperInvariant()}  ·  needs {Equipment.NeedsSaid(it)}"
                                                               : it.Slot.ToString().ToUpperInvariant();
-            _hold.AddChild(Ui.CardWrap(PartRow($"Hold_{id}", what + (n > 1 ? $"  ·  x{n}" : ""), id, it.Class ?? cls, fit, HoldW - 40)));
+            _hold.AddChild(Ui.CardWrap(PartRow($"Hold_{id}", what + (n > 1 ? $"  ·  x{n}" : ""), id, cls, fit, HoldW - 40)));
         }
     }
 
@@ -6503,7 +6555,7 @@ public partial class Lancer : Boss
 
 //==============================================================================
 // FILE: scripts/Loot.cs
-// 118 lines   sha256 f8a5de98fe1f
+// 118 lines   sha256 206397f16a58
 //==============================================================================
 using Godot;
 using System;
@@ -6553,7 +6605,7 @@ public static class Loot
             {
                 var rarity = RollRarity(level, rng);
                 bool own = rng.NextDouble() < 0.7;
-                var pool = all.Where(it => it.Rarity == rarity && (!own || it.Class == null || it.Class == cls)).ToList();
+                var pool = all.Where(it => it.Rarity == rarity && (!own || Equipment.Fits(it, it.Slot, cls))).ToList();
                 drops[i] = pool[rng.Next(pool.Count)].Id;
             }
             d[peer] = drops;
@@ -9411,10 +9463,11 @@ public static class Plume
 
 //==============================================================================
 // FILE: scripts/Progression.cs
-// 107 lines   sha256 d94ab4162045
+// 122 lines   sha256 a2b32f3e1498
 //==============================================================================
 using Godot;
 using System;
+using System.Collections.Generic;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PILOT PROGRESSION -- EXP, levels, and the points they buy.
@@ -9432,12 +9485,25 @@ public static class Progression
 {
     public class Upgrade { public string Id, Name, Unit; public double Per; }
 
-    // The damage upgrade lands on each hull's main weapon: its gun shells, or its torpedoes.
-    public static string DamageStat(ShipClass c) => Classes.Has(c, Fit.Wing) ? "torpedo_damage" : "main_damage";
-    public static string StatFor(string id, ShipClass c) => id switch
+    // WHAT AN UPGRADE MOVES, on a given hull. Everything but Weapons lands on one stat, the same
+    // on every class. WEAPONS asks the CLASS what its weapons are (ClassDef.Damage): it used to
+    // name one stat here -- torpedoes for a carrier, main guns for everything else -- so a
+    // sniper's railgun, a warden's hunters, a warrior's EMP and a freighter's deployed turrets
+    // took nothing at all from a pilot's damage points.
+    private static readonly Dictionary<string, string> Simple = new()
     {
-        "turn" => "turn_rate", "hull" => "hull", "speed" => "max_speed", "damage" => DamageStat(c), _ => null
+        ["turn"] = "turn_rate", ["hull"] = "hull", ["speed"] = "max_speed",
     };
+    // stat id -> what ONE level of `id` adds on class `c`
+    public static IEnumerable<(string stat, double per)> StatsFor(string id, ShipClass c, double per)
+    {
+        if (id == "damage")
+        {
+            foreach (var kv in Classes.Damage(c)) if (kv.Value != 0) yield return (kv.Key, kv.Value);
+            yield break;
+        }
+        if (Simple.TryGetValue(id, out var one)) yield return (one, per);
+    }
 
     public static readonly Upgrade[] All =
     {
@@ -9466,16 +9532,17 @@ public static class Progression
     public static int ExpToNext => ExpPerLevel;                             // always 1000, whatever the level
 
     // Flat stat additions for a set of purchases, on a given hull.
-    public static System.Collections.Generic.Dictionary<string, double> Flats(int[] bought, ShipClass c)
+    public static Dictionary<string, double> Flats(int[] bought, ShipClass c)
     {
-        var d = new System.Collections.Generic.Dictionary<string, double>();
+        var d = new Dictionary<string, double>();
         for (int i = 0; i < All.Length && i < (bought?.Length ?? 0); i++)
         {
-            // StatFor falls through to null for an id it does not know. Every id in All is
-            // covered today, but adding a fifth upgrade and forgetting the switch would put a
-            // null key in here -- an ArgumentNullException a long way from the cause.
-            var stat = StatFor(All[i].Id, c);
-            if (stat != null && bought[i] > 0) d[stat] = bought[i] * All[i].Per;
+            // StatsFor yields nothing for an id it does not know. Every id in All is covered
+            // today, but adding a fifth upgrade and forgetting it would otherwise put a null key
+            // in here -- an ArgumentNullException a long way from the cause.
+            if (bought[i] <= 0) continue;
+            foreach (var (stat, per) in StatsFor(All[i].Id, c, All[i].Per))
+                d[stat] = d.GetValueOrDefault(stat) + bought[i] * per;
         }
         return d;
     }
@@ -11371,7 +11438,7 @@ public partial class Wing : Node2D
 
 //==============================================================================
 // FILE: scripts/Ships.cs
-// 399 lines   sha256 f867c4b9f232
+// 496 lines   sha256 ad0264770dde
 //==============================================================================
 using Godot;
 using System;
@@ -11453,6 +11520,13 @@ public class StatRow
     public bool Inverse;                     // an interval: a rate bonus divides it
 }
 
+// THE PARTS A CLASS IS BORN WITH -- its weapon mount and its signature system, named as the
+// ship's own hardware. A kit part changes no numbers (the sheet already IS the ship): it is a
+// label, and its id is what a save file holds. The drive, the deflector, the frame and the chips
+// are every ship's and live in Equipment. Two classes may name the SAME id when the hardware is
+// the same, and a kit part fits only the classes that name it.
+public class KitPart { public GearSlot Slot; public string Id, Name, Blurb; }
+
 public class ClassDef
 {
     public ShipClass Id;
@@ -11463,10 +11537,22 @@ public class ClassDef
     // This class's own numbers, by stat id. Everything it does NOT name it takes from the sheet's
     // default (Stats.cs), so a row here is a difference, never a copy.
     public Dictionary<string, double> Nums = new();
+    // WHAT ITS WEAPONS ARE, and what ONE pilot Weapons level adds to each, in that stat's own
+    // units. The one place a class says this: Progression turns it into the pilot's flat
+    // additions, and the gear that lifts "every weapon" (the basic chips, the Glass Array) takes
+    // its share on every id any class names here. A 0 is a weapon gear reaches and the pilot's
+    // points do not -- which is exactly what the carrier's fighters and the destroyer's missiles
+    // were before this existed, and a saved pilot must not notice the change.
+    // It defaults to EMPTY on purpose: a new class that forgets it is caught by a check, rather
+    // than quietly given the battleship's gun.
+    public Dictionary<string, double> Damage = new();
     // Rows only this class has: the numbers its own abilities are made of. They join the sheet
     // like any other, so the K window prints them and gear and purchases can move them, without
     // Stats.cs knowing that this class exists.
     public StatRow[] Rows = Array.Empty<StatRow>();
+    // Its own parts. Everything ELSE it can wear follows from its sheet: a part declares the stat
+    // ids it needs, and this hull has them or it does not (Equipment.Fits).
+    public KitPart[] Kit = Array.Empty<KitPart>();
     public AbilityDef[] Abilities = Array.Empty<AbilityDef>();
     public string Hint = "";                 // the controls line's own part, before the common one
     public bool Has(Fit f) => (Fit & f) != 0;
@@ -11487,6 +11573,11 @@ public static class Classes
                 ["main_count"] = 4, ["main_damage"] = 17.9, ["main_interval"] = 2.0, ["main_range"] = 1000, ["shell_speed"] = 650,
                 ["pd_count"] = 2,
             },
+            Damage = new() { ["main_damage"] = 1 },
+            Kit = new KitPart[] {
+                new() { Slot = GearSlot.Weapon, Id = "bs_main_battery", Name = "Mk I Main Battery", Blurb = "the four main turrets" },
+                new() { Slot = GearSlot.Utility, Id = "bs_broadside", Name = "Broadside Battery", Blurb = "the broadside: every main gun, volley on volley" },
+            },
             Art = new ClassArt {
                 Texture = "res://battleship_hull.png", Length = 378f, HalfWidth = 43.875f,
                 Mains = new Vector2[] { new(0f, -93.85f), new(0f, -7.56f), new(0f, 73.34f), new(0f, 122.15f) },
@@ -11502,6 +11593,12 @@ public static class Classes
                 ["thrust"] = ShipStats.CarrierTop / 2, ["reverse_thrust"] = ShipStats.CarrierTop * 5 / 24, ["max_speed"] = ShipStats.CarrierTop, ["reverse_speed"] = ShipStats.CarrierTop / 3,
                 ["turn_radius"] = 127, ["turn_rate"] = 0.9,
                 ["pd_count"] = 3, ["pd_turn"] = Mathf.Tau / 1.2f,
+            },
+                // the 0: gear reaches the fighters, the pilot's points do not -- as it was
+            Damage = new() { ["torpedo_damage"] = 1, ["fighter_damage"] = 0 },
+            Kit = new KitPart[] {
+                new() { Slot = GearSlot.Weapon, Id = "cv_fighter_hangars", Name = "Mk I Fighter Hangars", Blurb = "the fighter wing" },
+                new() { Slot = GearSlot.Utility, Id = "cv_bomber_bay", Name = "Bomber Bay", Blurb = "the bomber wing" },
             },
             Art = new ClassArt {
                 Texture = "res://carrier_player.png", Length = 283.5f, HalfWidth = 40.02f,
@@ -11520,6 +11617,12 @@ public static class Classes
                 ["main_count"] = 2, ["main_damage"] = 7.5, ["main_interval"] = 1.0, ["main_range"] = 720, ["shell_speed"] = 520,
                 ["pd_count"] = 2,
             },
+                // the 0: gear reaches the missiles, the pilot's points do not -- as it was
+            Damage = new() { ["main_damage"] = 1, ["missile_damage"] = 0 },
+            Kit = new KitPart[] {
+                new() { Slot = GearSlot.Weapon, Id = "dd_main_battery", Name = "Mk I Twin Turrets", Blurb = "the two main turrets" },
+                new() { Slot = GearSlot.Utility, Id = "dd_missile_rack", Name = "Missile Rack", Blurb = "the missile bursts and their magazine" },
+            },
             Art = new ClassArt {
                 Texture = "res://destroyer_hull.png", Length = 212.625f, HalfWidth = 27.8f,
                 Mains = new Vector2[] { new(0f, -57.31f), new(0f, 24.66f) },
@@ -11537,6 +11640,12 @@ public static class Classes
                 ["turn_radius"] = 150, ["turn_rate"] = 0.85,
                 ["main_count"] = 1, ["main_damage"] = 12, ["main_interval"] = 1.0, ["main_range"] = 800, ["shell_speed"] = 560,
                 ["pd_count"] = 2,
+            },
+                // half a point each: three turrets are out at once, so a level is worth 1.5 across them
+            Damage = new() { ["main_damage"] = 1, ["deploy_damage"] = 0.5 },
+            Kit = new KitPart[] {
+                new() { Slot = GearSlot.Weapon, Id = "freight_main_gun", Name = "Mk I Cargo Gun", Blurb = "the freighter's single main turret" },
+                new() { Slot = GearSlot.Utility, Id = "freight_bubble", Name = "Bubble Projector", Blurb = "the bubble, and what it soaks" },
             },
             Rows = new StatRow[] {
                 new() { Group = "Deployed turrets", Id = "deploy_damage",   Label = "Damage per shot",  Base = 6, Dec = 1 },
@@ -11567,6 +11676,11 @@ public static class Classes
                 ["main_count"] = 1, ["main_damage"] = 12, ["main_interval"] = 1.0, ["main_range"] = 800, ["shell_speed"] = 560,
                 ["pd_count"] = 2,
             },
+            Damage = new() { ["main_damage"] = 1, ["deploy_damage"] = 0.5 },
+            Kit = new KitPart[] {
+                new() { Slot = GearSlot.Weapon, Id = "freight_main_gun", Name = "Mk I Cargo Gun", Blurb = "the freighter's single main turret" },
+                new() { Slot = GearSlot.Utility, Id = "freight_overdrive", Name = "Overdrive Coils", Blurb = "the overdrive, and how long it holds" },
+            },
             Rows = new StatRow[] {
                 new() { Group = "Deployed turrets", Id = "deploy_damage",   Label = "Damage per shot",  Base = 6, Dec = 1 },
                 new() { Group = "Deployed turrets", Id = "deploy_interval", Label = "Reload",           Base = 0.5, Unit = "s", Dec = 2, Inverse = true },
@@ -11594,6 +11708,11 @@ public static class Classes
                 ["turn_radius"] = 150, ["turn_rate"] = 0.85,
                 ["main_count"] = 1, ["main_damage"] = 12, ["main_interval"] = 1.0, ["main_range"] = 800, ["shell_speed"] = 560,
                 ["pd_count"] = 2,
+            },
+            Damage = new() { ["main_damage"] = 1, ["deploy_damage"] = 0.5 },
+            Kit = new KitPart[] {
+                new() { Slot = GearSlot.Weapon, Id = "freight_main_gun", Name = "Mk I Cargo Gun", Blurb = "the freighter's single main turret" },
+                new() { Slot = GearSlot.Utility, Id = "freight_emitter", Name = "Shockwave Emitter", Blurb = "the shockwave's reach and its push" },
             },
             Rows = new StatRow[] {
                 new() { Group = "Deployed turrets", Id = "deploy_damage",   Label = "Damage per shot",  Base = 6, Dec = 1 },
@@ -11625,6 +11744,12 @@ public static class Classes
                 ["turn_radius"] = 55, ["turn_rate"] = 2.2,
                 ["main_count"] = 1, ["main_damage"] = 6, ["main_interval"] = 0.8, ["main_range"] = 900, ["shell_speed"] = 700,
             },
+                // 7.5 = 5% of the railgun's 150, what a level is worth on a battleship's shell
+            Damage = new() { ["main_damage"] = 1, ["rail_damage"] = 7.5 },
+            Kit = new KitPart[] {
+                new() { Slot = GearSlot.Weapon, Id = "heavy_main_gun", Name = "Mk I Light Cannon", Blurb = "the single light turret" },
+                new() { Slot = GearSlot.Utility, Id = "heavy_railgun", Name = "Railgun Mount", Blurb = "the railgun's charge and its slug" },
+            },
             Rows = new StatRow[] {
                 new() { Group = "Railgun", Id = "rail_damage", Label = "Damage",         Base = 150, Dec = 0 },
                 new() { Group = "Railgun", Id = "rail_charge", Label = "Charge (locked)",Base = 3, Unit = "s", Dec = 1, Inverse = true },
@@ -11645,6 +11770,12 @@ public static class Classes
                 ["thrust"] = 130, ["reverse_thrust"] = 60, ["max_speed"] = 190, ["reverse_speed"] = 70,
                 ["turn_radius"] = 55, ["turn_rate"] = 2.2,
                 ["main_count"] = 2, ["main_damage"] = 9, ["main_interval"] = 0.7, ["main_range"] = 600, ["shell_speed"] = 520,
+            },
+                // 3 = 5% of the EMP's 60
+            Damage = new() { ["main_damage"] = 1, ["emp_damage"] = 3 },
+            Kit = new KitPart[] {
+                new() { Slot = GearSlot.Weapon, Id = "warrior_main_guns", Name = "Mk I Twin Cannons", Blurb = "the two light turrets" },
+                new() { Slot = GearSlot.Utility, Id = "heavy_rush_drive", Name = "Rush Drive", Blurb = "the rush, and the EMP it ends in" },
             },
             Rows = new StatRow[] {
                 new() { Group = "Rush", Id = "rush_mult",  Label = "Top speed",        Base = 2.5, Unit = "x", Dec = 1 },
@@ -11677,6 +11808,13 @@ public static class Classes
             // whole game is tuned to.
             ["pd_count"] = 1, ["pd_damage"] = 5.0, ["pd_range"] = 420,
             },
+                // 2.25 = 5% of a hunter's 45 (pd_damage is left out on purpose: every class has that row,
+                // so naming it here would hand every ship in the game a chip-powered point-defence buff)
+            Damage = new() { ["main_damage"] = 1, ["hunter_damage"] = 2.25 },
+            Kit = new KitPart[] {
+                new() { Slot = GearSlot.Weapon, Id = "heavy_main_gun", Name = "Mk I Light Cannon", Blurb = "the single light turret" },
+                new() { Slot = GearSlot.Utility, Id = "heavy_hunter_cells", Name = "Hunter Cells", Blurb = "the six hunter-seekers" },
+            },
             Rows = new StatRow[] {
                 new() { Group = "Hunters", Id = "hunter_count",  Label = "Missiles",      Base = 6, Dec = 0 },
                 new() { Group = "Hunters", Id = "hunter_damage", Label = "Damage (each)", Base = 45, Dec = 0 },
@@ -11702,6 +11840,11 @@ public static class Classes
                 ["turn_radius"] = 35, ["turn_rate"] = 3.0,
                 ["main_count"] = 1, ["main_damage"] = 5, ["main_interval"] = 0.35, ["main_range"] = 500, ["shell_speed"] = 620,
             },
+            Damage = new() { ["main_damage"] = 1 },
+            Kit = new KitPart[] {
+                new() { Slot = GearSlot.Weapon, Id = "light_main_gun", Name = "Mk I Dart Cannon", Blurb = "the light's single turret" },
+                new() { Slot = GearSlot.Utility, Id = "light_roll_thrusters", Name = "Roll Thrusters", Blurb = "the barrel roll, and the boost after it" },
+            },
             Rows = new StatRow[] {
                 new() { Group = "Barrel roll", Id = "roll_time",  Label = "Untouchable",   Base = 1.2, Unit = "s", Dec = 1 },
                 new() { Group = "Barrel roll", Id = "boost_time", Label = "Boost after",   Base = 4, Unit = "s", Dec = 1 },
@@ -11723,6 +11866,13 @@ public static class Classes
                 ["turn_radius"] = 35, ["turn_rate"] = 3.0,
                 ["main_count"] = 1, ["main_damage"] = 5, ["main_interval"] = 0.35, ["main_range"] = 500, ["shell_speed"] = 620,
             },
+                // echo_share is NOT a weapon: the blast is a share of damage already dealt, so it
+                // grows with main_damage on its own, and naming it would count the same purchase twice
+            Damage = new() { ["main_damage"] = 1 },
+            Kit = new KitPart[] {
+                new() { Slot = GearSlot.Weapon, Id = "light_main_gun", Name = "Mk I Dart Cannon", Blurb = "the light's single turret" },
+                new() { Slot = GearSlot.Utility, Id = "light_echo_core", Name = "Echo Core", Blurb = "what the echo remembers, and its blast" },
+            },
             Rows = new StatRow[] {
                 new() { Group = "Echo", Id = "echo_time",   Label = "It remembers for", Base = 5, Unit = "s", Dec = 1 },
                 new() { Group = "Echo", Id = "echo_radius", Label = "Blast radius",     Base = 220, Unit = "u", Dec = 0 },
@@ -11742,6 +11892,11 @@ public static class Classes
                 ["thrust"] = 190, ["reverse_thrust"] = 90, ["max_speed"] = 260, ["reverse_speed"] = 95,
                 ["turn_radius"] = 35, ["turn_rate"] = 3.0,
                 ["main_count"] = 1, ["main_damage"] = 5, ["main_interval"] = 0.35, ["main_range"] = 500, ["shell_speed"] = 620,
+            },
+            Damage = new() { ["main_damage"] = 1 },
+            Kit = new KitPart[] {
+                new() { Slot = GearSlot.Weapon, Id = "light_main_gun", Name = "Mk I Dart Cannon", Blurb = "the light's single turret" },
+                new() { Slot = GearSlot.Utility, Id = "light_stealth_veil", Name = "Stealth Veil", Blurb = "how long nothing can pick it" },
             },
             Rows = new StatRow[] {
                 new() { Group = "Stealth", Id = "stealth_time", Label = "Unseen for", Base = 5, Unit = "s", Dec = 1 },
@@ -11763,6 +11918,15 @@ public static class Classes
     public static ClassDef Of(ShipClass c) => ById.TryGetValue(c, out var d) ? d : Missing;
     public static ClassArt Art(ShipClass c) => Of(c).Art;
     public static bool Has(ShipClass c, Fit f) => Of(c).Has(f);
+    // stat id -> what one Weapons level adds. Asked of the class, never "is it the carrier".
+    public static IReadOnlyDictionary<string, double> Damage(ShipClass c) => Of(c).Damage;
+    // every weapon stat any class has: what a part that lifts "every weapon" reaches
+    public static IEnumerable<string> EveryDamageStat()
+    {
+        var seen = new SortedSet<string>();
+        foreach (var c in All) foreach (var k in c.Damage.Keys) seen.Add(k);
+        return seen;
+    }
     // Its name as the screens print it ("BATTLESHIP"), from the one table that holds it.
     public static string NameOf(ShipClass c) => Of(c).Name;
     // A class number from a file or a packet: one this build can actually fly, or the Battleship.
@@ -17104,7 +17268,7 @@ time.sleep(LIFE)
 
 //==============================================================================
 // FILE: tools/smoketest/run.ps1
-// 225 lines   sha256 8aac48df9920
+// 225 lines   sha256 ba91f3de2ffe
 //==============================================================================
 # Windows port of run.sh -- headless runtime check: boots the REAL engine, drives real
 # input, and runs a host and TWO guests (three players) against each other over localhost.
@@ -17307,9 +17471,9 @@ try {
     $all += Complete-Run $g2    '[third] '
 
     # the dedicated two-player arena run: after the three-player run, on its own port
-    $ah = Start-Run (@('--headless','--path',$W,'--','ahost') + $seedArg)  'ahost'  120
+    $ah = Start-Run (@('--headless','--path',$W,'--','ahost') + $seedArg)  'ahost'  150
     Start-Sleep -Milliseconds 500
-    $ag = Start-Run (@('--headless','--path',$W,'--','aguest') + $gx + $seedArg) 'aguest' 120
+    $ag = Start-Run (@('--headless','--path',$W,'--','aguest') + $gx + $seedArg) 'aguest' 150
     $all += Complete-Run $ag '[aguest]'
     $all += Complete-Run $ah '[ahost] '
     $want += 5
@@ -17396,7 +17560,7 @@ echo "SMOKE TEST PASSED"
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 4880 lines   sha256 d077f2797350
+// 5105 lines   sha256 75daa8065d6a
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -18141,7 +18305,10 @@ public partial class _Test : Node
         if (typeof(PlayerShip).GetField("_pod", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(s) is EscapePod p) { p.Position = at; p.Velocity = Vector2.Zero; }
     }
     // class changes go through the creator path now (there are no class hotkeys)
-    async Task SetClass(ShipClass c) { Character.Class = c; Priv(H, "ApplyLocalIdentity"); await Wait(0.1); }
+    // A refit, ANNOUNCED: PilotChanged applies it here and tells every peer, so a multiplayer
+    // scenario can fly one of the nine and have the other side see which hull it is. Offline,
+    // SendIdentity returns at once, so the solo callers are unchanged.
+    async Task SetClass(ShipClass c) { Character.Class = c; H.PilotChanged(); await Wait(0.1); }
     System.Collections.Generic.List<(Vector2 p, float age)> Smoke(Shot t) =>
         (System.Collections.Generic.List<(Vector2 p, float age)>)typeof(Shot).GetField("_smoke", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(t);
     // the three projectile classes are one flyer with a row each now (Shots.All)
@@ -19953,19 +20120,41 @@ public partial class _Test : Node
             Check(Enum.GetNames(typeof(Rarity)).SequenceEqual(new[] { "Common", "Rare", "Epic" }), "three rarities: Common, Rare, Epic");
             var drops = Equipment.Drops.ToList();
             var bsC = ShipClass.Battleship; var cvC = ShipClass.Carrier; var ddC = ShipClass.Destroyer;
-            (GearSlot s, ShipClass? c)[] kinds = { (GearSlot.Weapon, bsC), (GearSlot.Weapon, cvC), (GearSlot.Weapon, ddC),
-                                                   (GearSlot.Utility, bsC), (GearSlot.Utility, cvC), (GearSlot.Utility, ddC),
-                                                   (GearSlot.Engines, null), (GearSlot.Shield, null), (GearSlot.Hull, null), (GearSlot.Chip, null) };
-            bool twelve = kinds.All(k => drops.Count(i => i.Slot == k.s && i.Class == k.c) == 12
-                                    && new[] { Rarity.Common, Rarity.Rare, Rarity.Epic }.All(r => drops.Count(i => i.Slot == k.s && i.Class == k.c && i.Rarity == r) == 4));
+            // A PART ASKS WHAT THE HULL HAS, it does not name a hull. Every family is still four
+            // lines at three rarities; what changed is who may wear them -- a battery needs
+            // main_damage and main_interval, so the nine new classes can wear one too, where
+            // before they could wear nothing but the parts that named no class at all.
+            int Wear(ShipClass c, GearSlot s) => drops.Count(i => Equipment.Fits(i, s, c));
+            bool famShape = new[] { GearSlot.Weapon, GearSlot.Utility, GearSlot.Engines, GearSlot.Shield, GearSlot.Hull, GearSlot.Chip }
+                .All(s => new[] { Rarity.Common, Rarity.Rare, Rarity.Epic }
+                    .All(r => drops.Count(i => i.Slot == s && i.Rarity == r) * 3 == drops.Count(i => i.Slot == s)));
             var kit = Equipment.All.Where(i => i.Kit).ToList();
-            Check(drops.Count == 120 && twelve && kit.Count == 10 && kit.All(i => i.Rarity == Rarity.Common)
-                  && kit.Select(i => i.Id).OrderBy(x => x, StringComparer.Ordinal).SequenceEqual(new[] { "basic_deflector", "bs_broadside", "bs_main_battery",
-                     "chip_basic", "cv_bomber_bay", "cv_fighter_hangars", "dd_main_battery", "dd_missile_rack", "reinforced_frame", "std_drive" }),
-                  $"the gear: 120 drops, 12 for each slot type with 4 at each rarity, and the 10-part kit, all Common ({drops.Count} drops)");
-            Check(Equipment.All.Where(i => i.Class == bsC && i.Slot == GearSlot.Utility).All(i => i.Pct.Keys.Concat(i.Add.Keys).All(k => k.StartsWith("broadside_")))
-                  && Equipment.All.Where(i => i.Class != null && i.Pct.Keys.Concat(i.Add.Keys).Any(k => k.StartsWith("missile_"))).All(i => i.Class == ddC),
-                  "every missile part for one class is the destroyer's; the battleship's utility parts are all broadside parts");
+            Check(drops.Count == 138 && famShape && kit.Count == 23 && kit.All(i => i.Rarity == Rarity.Common)
+                  && kit.Count(i => i.Slot == GearSlot.Weapon) == 7 && kit.Count(i => i.Slot == GearSlot.Utility) == 12,
+                  $"the gear: 138 drops, a third of each slot at each rarity, and a 23-part kit -- seven weapon mounts and twelve signature systems across twelve classes, plus the drive, the deflector, the frame and the chip every ship has ({drops.Count} drops, {kit.Count} kit)");
+            Check(Wear(bsC, GearSlot.Weapon) == 24 && Wear(cvC, GearSlot.Weapon) == 12 && Wear(ddC, GearSlot.Weapon) == 24
+                  && Wear(ShipClass.FreightHauler, GearSlot.Weapon) == 24 && Wear(ShipClass.LightDart, GearSlot.Weapon) == 24
+                  && Wear(bsC, GearSlot.Utility) == 12 && Wear(cvC, GearSlot.Utility) == 12 && Wear(ddC, GearSlot.Utility) == 12
+                  && Wear(ShipClass.FreightHauler, GearSlot.Utility) == 0
+                  && new[] { GearSlot.Engines, GearSlot.Shield, GearSlot.Chip }
+                        .All(g => Classes.All.Where(c => c.Ready).All(c => Wear(c.Id, g) == 12))
+                  // THE HULL SLOT, by what a hull actually is: the four point-defence frames (12
+                  // parts) only where there is point defence, the three turret cradles (9) only on
+                  // a hull that drops turrets, and the three hull-and-handling frames (9) on
+                  // everything. So a sniper wears 9 where it used to wear 3, and a freighter 30.
+                  && Wear(bsC, GearSlot.Hull) == 21 && Wear(ShipClass.HeavySniper, GearSlot.Hull) == 12
+                  && Wear(ShipClass.FreightHauler, GearSlot.Hull) == 30 && Wear(ShipClass.LightWraith, GearSlot.Hull) == 12
+                  && Classes.All.Where(c => c.Ready).All(c => Wear(c.Id, GearSlot.Hull)
+                         == 12 + (c.Has(Fit.Pd) ? 9 : 0) + (c.Has(Fit.Deploy) ? 9 : 0)),
+                  "a hull wears what it has the stats for: 24 weapon parts for anything with main guns -- a freighter and a dart included, which could wear none -- 12 for the carrier's hangars, 12 utility parts each for the three systems that have any (and none yet for the nine new ones), every hull all 12 engines, shields and chips, and a hull slot that says what the hull IS: twelve hull-and-handling frames for everything (the armoured frame among them, which is about the hull as much as the window), nine that are point defence's alone, nine turret cradles where turrets are dropped -- a sniper 12 where it wore 3, a battleship 21, a freighter 30");
+            bool OnlyFamily(ItemDef i, string fam) => i.Pct.Keys.Concat(i.Add.Keys).All(k => k.StartsWith(fam));
+            Check(Equipment.All.Where(i => !i.Kit && OnlyFamily(i, "broadside_")).All(i => Equipment.Fits(i, i.Slot, bsC) && !Equipment.Fits(i, i.Slot, ddC))
+                  && Equipment.All.Where(i => !i.Kit && OnlyFamily(i, "missile_")).All(i => Equipment.Fits(i, i.Slot, ddC) && !Equipment.Fits(i, i.Slot, bsC))
+                  && Equipment.All.Where(i => !i.Kit && OnlyFamily(i, "fighter_")).All(i => Equipment.Fits(i, i.Slot, cvC) && !Equipment.Fits(i, i.Slot, bsC))
+                  && Equipment.All.Count(i => !i.Kit && OnlyFamily(i, "broadside_")) == 12
+                  && Equipment.All.Count(i => !i.Kit && OnlyFamily(i, "missile_")) == 12
+                  && Equipment.All.Count(i => !i.Kit && OnlyFamily(i, "fighter_")) == 9,
+                  "and a part whose every stat belongs to one system still fits only the hull that has it: twelve broadside parts on the battleship alone, twelve missile parts on the destroyer, nine pure fighter parts on the carrier");
             // a sheet with only the named parts on the kit, chips off
             ShipStats Sheet(ShipClass c, string part)
             {
@@ -20008,12 +20197,12 @@ public partial class _Test : Node
                 return w + Equipment.ChipSlots * Math.Min(0, Equipment.All.Where(i => i.Slot == GearSlot.Chip).Select(i => i.Pct.GetValueOrDefault(stat)).DefaultIfEmpty(0).Min());
             }
             foreach (var c in Enum.GetValues<ShipClass>()) foreach (var st in new ShipStats(c).All) if (Worst(c, st.Id) <= -1) allPositive = false;
-            Check(allPositive && Near(Worst(cvC, "fighter_damage"), -0.47) && Near(Worst(bsC, "main_damage"), -0.55) && Near(Worst(bsC, "hull"), -0.50) && Near(Worst(cvC, "hull"), -0.50),
-                  $"no stack of gear takes a number to zero: worst fighter damage -47% (1.325), shell -55% (8.055), hull -50% (150 / 100) ({Worst(cvC, "fighter_damage"):0.00}, {Worst(bsC, "main_damage"):0.00}, {Worst(bsC, "hull"):0.00})");
+            Check(allPositive && Near(Worst(cvC, "fighter_damage"), -0.47) && Near(Worst(bsC, "main_damage"), -0.55) && Near(Worst(bsC, "hull"), -0.70) && Near(Worst(cvC, "hull"), -0.70),
+                  $"no stack of gear takes a number to zero: worst fighter damage -47% (1.325), shell -55% (8.055), hull -70% since the spar frame joined the deepest stack (112.5 / 75) ({Worst(cvC, "fighter_damage"):0.00}, {Worst(bsC, "main_damage"):0.00}, {Worst(bsC, "hull"):0.00})");
             // every stat a part names is real on a class it fits, and none touches the turret counts
             string[] addable = { "fighter_count", "bomber_count", "missile_mag", "bomber_ammo", "broadside_volleys" };
             var unknown = Equipment.All.SelectMany(i => i.Pct.Keys.Concat(i.Add.Keys).Where(k =>
-                              !(i.Class is ShipClass only ? new[] { only } : Enum.GetValues<ShipClass>()).Any(c => new ShipStats(c).All.Any(s => s.Id == k)))
+                              !Enum.GetValues<ShipClass>().Any(c => new ShipStats(c).All.Any(s => s.Id == k)))
                               .Select(k => i.Id + ":" + k)).ToList();
             bool noCounts = Equipment.All.All(i => !i.Pct.Keys.Concat(i.Add.Keys).Any(k => k is "main_count" or "pd_count" or "strike_range"));
             bool addsOk = Equipment.All.All(i => i.Add.Keys.All(addable.Contains));
@@ -20056,23 +20245,52 @@ public partial class _Test : Node
                     foreach (var id in roll[peer])
                     {
                         var it = Equipment.ById(id); var (n, b, c) = share[peer];
-                        share[peer] = (n + 1, b + (it.Class == ShipClass.Battleship ? 1 : 0), c + (it.Class == ShipClass.Carrier ? 1 : 0));
+                        // "a battleship part" is one a battleship can wear and a carrier cannot, and
+                        // the other way about: a part fits by what the hull has now, not by a name.
+                        bool bsOnly = Equipment.Fits(it, it.Slot, ShipClass.Battleship) && !Equipment.Fits(it, it.Slot, ShipClass.Carrier);
+                        bool cvOnly = Equipment.Fits(it, it.Slot, ShipClass.Carrier) && !Equipment.Fits(it, it.Slot, ShipClass.Battleship);
+                        share[peer] = (n + 1, b + (bsOnly ? 1 : 0), c + (cvOnly ? 1 : 0));
                         if (it.Kit) kit++;
                     }
             }
             double Of(int peer, int k) => k / (double)share[peer].n;
-            // own roll (70%): its class's 8 parts of 24; any roll (30%): each class's 8 of 40 -- so its own
-            // class 0.7 x 8/24 + 0.3 x 8/40 = 29.3%, another class's 0.3 x 8/40 = 6%
-            Check(kit == 0 && Math.Abs(Of(7, share[7].bs) - 0.06) < 0.012 && Math.Abs(Of(7, share[7].cv) - 0.2933) < 0.025
-                  && Math.Abs(Of(1, share[1].cv) - 0.06) < 0.012 && Math.Abs(Of(1, share[1].bs) - 0.2933) < 0.025,
-                  $"each pilot's own roll: 70% its own class or general, 30% anything -- another class's parts 6%, its own 29% (carrier pilot {Of(7, share[7].bs):0.000} / {Of(7, share[7].cv):0.000}, battleship pilot {Of(1, share[1].cv):0.000} / {Of(1, share[1].bs):0.000})");
+            // THE RULE, not the pool: seven rolls in ten are drawn from what this pilot's own hull
+            // can wear, three from everything. So a pilot sees parts only its own hull can wear at
+            // 0.7 x (its own share of its pool) + 0.3 x (their share of all), and parts only the
+            // other hull can wear at 0.3 x (their share of all). The pools come from the same
+            // Fits the roll uses, so this cannot drift when a family is added.
+            var pool = Equipment.Drops.ToList();
+            int all = pool.Count;
+            double MineOf(ShipClass mine, ShipClass theirs)
+            {
+                int fitsMine = pool.Count(i => Equipment.Fits(i, i.Slot, mine));
+                int onlyMine = pool.Count(i => Equipment.Fits(i, i.Slot, mine) && !Equipment.Fits(i, i.Slot, theirs));
+                return 0.7 * onlyMine / fitsMine + 0.3 * onlyMine / (double)all;
+            }
+            double TheirsOf(ShipClass mine, ShipClass theirs)
+            {
+                int onlyTheirs = pool.Count(i => Equipment.Fits(i, i.Slot, theirs) && !Equipment.Fits(i, i.Slot, mine));
+                return 0.3 * onlyTheirs / all;
+            }
+            Check(kit == 0
+                  && Math.Abs(Of(1, share[1].bs) - MineOf(ShipClass.Battleship, ShipClass.Carrier)) < 0.03
+                  && Math.Abs(Of(1, share[1].cv) - TheirsOf(ShipClass.Battleship, ShipClass.Carrier)) < 0.02
+                  && Math.Abs(Of(7, share[7].cv) - MineOf(ShipClass.Carrier, ShipClass.Battleship)) < 0.03
+                  && Math.Abs(Of(7, share[7].bs) - TheirsOf(ShipClass.Carrier, ShipClass.Battleship)) < 0.02,
+                  $"each pilot's own roll: seven in ten from what its own hull can wear, three from everything -- the battleship pilot sees {Of(1, share[1].bs):0.000} of its own against {MineOf(ShipClass.Battleship, ShipClass.Carrier):0.000} expected, and {Of(1, share[1].cv):0.000} of the carrier's against {TheirsOf(ShipClass.Battleship, ShipClass.Carrier):0.000}");
         }
 
         // ── equipment (I): per-class gear; common defaults and five chips (+5% damage, +5% hull each) ──
         {
             Check(Equipment.Default(ShipClass.Carrier)[0] == "cv_fighter_hangars" && Equipment.ById("cv_fighter_hangars").Name == "Mk I Fighter Hangars"
-                  && Equipment.Default(ShipClass.Battleship).Take(5).All(id => Equipment.ById(id).Rarity == Rarity.Common),
-                  "the defaults: common parts in five slots; a carrier's weapon slot holds its Fighter Hangars");
+                  && Equipment.Default(ShipClass.Battleship).Take(5).All(id => Equipment.ById(id).Rarity == Rarity.Common)
+                  // EVERY class comes out of the yard with its own two mounts, not the battleship's
+                  && Classes.All.Where(c => c.Ready).All(c => Equipment.Default(c.Id).Take(5).All(id =>
+                         Equipment.ById(id) is { } part && Equipment.Fits(part, part.Slot, c.Id)))
+                  && Equipment.Default(ShipClass.HeavySniper)[0] == "heavy_main_gun"
+                  && Equipment.Default(ShipClass.HeavySniper)[4] == "heavy_railgun"
+                  && Equipment.Default(ShipClass.LightWraith)[4] == "light_stealth_veil",
+                  "the defaults: common parts in five slots, and every one of the twelve classes starts with mounts it can actually wear -- a carrier's Fighter Hangars, a sniper's Railgun Mount, a wraith's Stealth Veil");
             var bsE = new ShipStats(ShipClass.Battleship, Equipment.Bonuses(ShipClass.Battleship, Equipment.Default(ShipClass.Battleship)));
             var cvE = new ShipStats(ShipClass.Carrier, Equipment.Bonuses(ShipClass.Carrier, Equipment.Default(ShipClass.Carrier)));
             Check(Math.Abs(bsE["hull"] - 375) < 1e-6 && Math.Abs(bsE["main_damage"] - 22.375) < 1e-6 && Math.Abs(cvE["hull"] - 250) < 1e-6
@@ -20211,10 +20429,14 @@ public partial class _Test : Node
             Character.Points = 6;
             PBuy("damage").EmitSignal(BaseButton.SignalName.Pressed); PBuy("speed").EmitSignal(BaseButton.SignalName.Pressed); PBuy("turn").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
             var baseSheet = new ShipStats(me.Class, Equipment.Bonuses(me.Class, me.Loadout));            // the same gear, no points
-            Check(Math.Abs(me.Stats[Progression.DamageStat(me.Class)] - baseSheet[Progression.DamageStat(me.Class)] - 1.25) < 1e-9
+            // Weapons moves whatever THIS hull calls its weapons, by the step its own row declares
+            // (Classes.Damage); the figures behind that declaration are checked as literals where
+            // the table is proved.
+            var mine = Classes.Damage(me.Class).Where(kv => kv.Value != 0).ToList();
+            Check(mine.Count > 0 && mine.All(kv => Math.Abs(me.Stats[kv.Key] - baseSheet[kv.Key] - kv.Value * 1.25) < 1e-9)
                   && Math.Abs(me.Stats["max_speed"] - baseSheet["max_speed"] - 1) < 1e-9
                   && Math.Abs(me.Stats["turn_rate"] - baseSheet["turn_rate"] - Mathf.DegToRad(1f)) < 1e-6,
-                  "Weapons +1 damage (x1.25 by the chips) on the main weapon, Engines +1 speed, Rudder +1 degree/s");
+                  $"Weapons +1 (x1.25 by the chips) on every weapon this hull declares ({string.Join(", ", mine.Select(kv => kv.Key))}), Engines +1 speed, Rudder +1 degree/s");
             string cid = Character.Id; int[] saved = (int[])Character.Bought.Clone();
             Character.Save(); System.Array.Clear(Character.Bought); Character.Load(cid);
             Check(Character.Bought.SequenceEqual(saved) && Character.Level == 3, "purchases and level are saved with the character");
@@ -20610,9 +20832,14 @@ public partial class _Test : Node
             Check(fr.TurretsOut == 3 && H.Deployed.Count(t => t.OwnerId == fr.OwnerId) == 3,
                   $"T drops a turret where you are, and a fourth is refused: three out ({fr.TurretsOut})");
             var one = H.Deployed.First();
-            Check(Math.Abs(one.Hp - fr.Stats["deploy_hull"]) < 1e-6 && Math.Abs(one.Spec(true).Damage - 6) < 1e-9
-                  && Math.Abs(one.Spec(true).Interval - 0.5) < 1e-9 && Math.Abs(one.Spec(true).Range - 500f) < 1e-3,
-                  $"a dropped turret: 120 hull, 6 a shot every 0.5 s inside 500 u ({one.Hp:0} hull)");
+            // its gun is its OWNER's sheet, read live -- so the pilot's points and its gear reach
+            // every turret it has out. (A bare freighter's 6 a shot is a literal where the table is proved.)
+            Check(Math.Abs(one.Hp - fr.Stats["deploy_hull"]) < 1e-6
+                  && Math.Abs(one.Spec(true).Damage - fr.Stats["deploy_damage"]) < 1e-9
+                  && Math.Abs(one.Spec(true).Interval - fr.Stats["deploy_interval"]) < 1e-9
+                  && Math.Abs(one.Spec(true).Range - (float)fr.Stats["deploy_range"]) < 1e-3
+                  && Math.Abs(new ShipStats(ShipClass.FreightHauler)["deploy_damage"] - 6) < 1e-9,
+                  $"a dropped turret fires its owner's sheet: {one.Spec(true).Damage:0.0} a shot every {one.Spec(true).Interval:0.00} s inside {one.Spec(true).Range:0} u, on {one.Hp:0} hull");
             fr.Position = one.Position + new Vector2(90, 0); await Wait(0.15);
             fr.UseAbility("collect", 0); await Wait(0.15);
             Check(fr.TurretsOut == 2, $"C over one picks it up again ({fr.TurretsOut} left out)");
@@ -20662,6 +20889,39 @@ public partial class _Test : Node
             // because that was the only drawing that reached a guest, and the echo's burst was
             // added straight to the host's own tree where nobody else ever saw it.
             {
+                // ── A PILOT'S WEAPONS POINTS REACH WHAT THE CLASS CALLS ITS WEAPONS ──
+                // The damage upgrade used to name ONE stat for every class in the game -- torpedoes
+                // for a carrier, main guns for everything else -- so a sniper's railgun, a warden's
+                // hunters, a warrior's EMP and a freighter's deployed turrets took nothing from it.
+                {
+                    var keepBought = (int[])Character.Bought.Clone();
+                    int[] two = new int[Progression.All.Length];
+                    two[System.Array.FindIndex(Progression.All, u => u.Id == "damage")] = 2;   // two Weapons levels
+                    double Rise(ShipClass c, string stat)
+                        => new ShipStats(c, null, Progression.Flats(two, c))[stat] - new ShipStats(c)[stat];
+                    Check(Math.Abs(Rise(ShipClass.HeavySniper, "rail_damage") - 15) < 1e-9
+                          && Math.Abs(Rise(ShipClass.HeavyWarden, "hunter_damage") - 4.5) < 1e-9
+                          && Math.Abs(Rise(ShipClass.HeavyWarrior, "emp_damage") - 6) < 1e-9
+                          && Math.Abs(Rise(ShipClass.FreightHauler, "deploy_damage") - 1) < 1e-9
+                          && Math.Abs(Rise(ShipClass.LightEcho, "main_damage") - 2) < 1e-9,
+                          "two Weapons levels reach the class's own weapons: the railgun +15, the hunters +4.5, the EMP +6, a dropped turret +1, a light's gun +2");
+                    // ...and change NOTHING a saved pilot already had on the three it could reach
+                    Check(Math.Abs(Rise(ShipClass.Battleship, "main_damage") - 2) < 1e-9
+                          && Rise(ShipClass.Battleship, "pd_damage") == 0
+                          && Math.Abs(Rise(ShipClass.Carrier, "torpedo_damage") - 2) < 1e-9
+                          && Rise(ShipClass.Carrier, "fighter_damage") == 0
+                          && Math.Abs(Rise(ShipClass.Destroyer, "main_damage") - 2) < 1e-9
+                          && Rise(ShipClass.Destroyer, "missile_damage") == 0,
+                          "and a saved pilot's points do exactly what they always did on the line: +2 to the gun or the torpedoes, and nothing to the fighters, the missiles or the point defence");
+                    // the gear that lifts "every weapon" reaches the same list, and nothing else
+                    Check(string.Join(",", Classes.EveryDamageStat())
+                          == "deploy_damage,emp_damage,fighter_damage,hunter_damage,main_damage,missile_damage,rail_damage,torpedo_damage"
+                          && Classes.All.Where(c => c.Ready).All(c => c.Damage.Count > 0)
+                          && Classes.All.Where(c => c.Ready).All(c => c.Damage.Keys.All(k => new ShipStats(c.Id)[k] > 0)),
+                          $"eight weapon stats in the whole game, every flyable class names at least one, and every one it names is a row on its own sheet");
+                    System.Array.Copy(keepBought, Character.Bought, keepBought.Length);
+                }
+
                 // ── EVERYTHING THAT FLIES IS ONE FLYER WITH A ROW ──
                 // Three classes (Shell, Slug, Torpedo) with one copy each of the same sweep,
                 // lifetime, cosmetic-copy rule and hit. Six rows and one node now, and ONE launch
@@ -20727,8 +20987,9 @@ public partial class _Test : Node
             Check(sn.Statuses.Has(Status.Disabled) && sn.Position.DistanceTo(wasAt) < 1f,
                   $"the railgun charges with the hull locked: W and A move it nowhere ({sn.Position.DistanceTo(wasAt):0.00} u)");
             for (int i = 0; i < 60 * 4 && dTgt.Total == dmg0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            Check(Math.Abs(dTgt.Total - dmg0 - 150) < 0.01 && !sn.Statuses.Has(Status.Disabled),
-                  $"then 150 lands {railAt:0} u away, on the line, and the hull is free again ({dTgt.Total - dmg0:0.0})");
+            Check(Math.Abs(dTgt.Total - dmg0 - sn.Stats["rail_damage"]) < 0.01 && !sn.Statuses.Has(Status.Disabled)
+                  && Math.Abs(new ShipStats(ShipClass.HeavySniper)["rail_damage"] - 150) < 1e-9,
+                  $"then its railgun's whole {sn.Stats["rail_damage"]:0.0} lands {railAt:0} u away, on the line, and the hull is free again ({dTgt.Total - dmg0:0.0})");
 
             // ── WARRIOR: two and a half times its speed, half the damage, then the EMP ──
             await SetClass(ShipClass.HeavyWarrior);
@@ -20745,7 +21006,8 @@ public partial class _Test : Node
                   $"the rush: 2.5x top speed ({top0 * wr.SpeedMult:0} u/s) and a 100 blow lands for {wh0 - wr.Hp:0}");
             double e10 = e1.Hp, e20 = e2.Hp;
             for (int i = 0; i < 60 * 4 && e1.Hp == e10; i++) { e2.Position = e2Home; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
-            Check(Math.Abs(e10 - e1.Hp - 60) < 0.01 && e1.Statuses.Has(Status.Disabled) && e2.Hp == e20,
+            Check(Math.Abs(e10 - e1.Hp - wr.Stats["emp_damage"]) < 0.01 && e1.Statuses.Has(Status.Disabled) && e2.Hp == e20
+                  && Math.Abs(new ShipStats(ShipClass.HeavyWarrior)["emp_damage"] - 60) < 1e-9,
                   $"and it ends in an EMP: 60 to what is within 260 u ({e1.Position.DistanceTo(wr.Position):0} u) and it is held; nothing at {e2.Position.DistanceTo(wr.Position):0} u ({e10 - e1.Hp:0})");
             e1.TakeDamage(99999); e2.TakeDamage(99999); await Wait(0.2);
 
@@ -21573,6 +21835,73 @@ public partial class _Test : Node
             for (int i = 0; i < 60 * 10 && Net.I.Players.Count < 2; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(Net.I.Players.Count == 2, "arena host: the guest joined");
             await Wait(1.0);
+            // ── TWO OF THE NINE, IN A SESSION ─────────────────────────────────────
+            // Everything the nine classes put on the wire had only ever flown alone: the status
+            // bits, the slot array a class names itself, a turret dropped into the world, an
+            // effect, and a bubble that covers SOMEBODY ELSE. At home before the first arena trip
+            // the host flies a WARRIOR and the guest a FREIGHTER.
+            // Each process seeds its own varied geometry, so the rendezvous is a LITERAL and
+            // everything varied is the HOST's -- the guest reads it off the wire.
+            var mpSpot = Hub.BasePos + new Vector2(2400, 2400);   // clear of the belt, the wreck, the dummies and the lane
+            await SetClass(ShipClass.HeavyWarrior);
+            var hw = Me; hw.AutopilotTo = null;
+            Check(hw.Class == ShipClass.HeavyWarrior && Math.Abs(hw.MaxHp - 175) < 1e-6 && Abilities.For(ShipClass.HeavyWarrior).Length == 9,
+                  $"arena host: hosting as a WARRIOR -- 140 x 1.25 for five chips = 175 hull, three abilities and six open slots ({hw.MaxHp:0})");
+            await RealTime(() => H.Ships.FirstOrDefault(s => !s.Mine) is { Class: ShipClass.FreightHauler } gg
+                                 && gg.Position.DistanceTo(mpSpot) < 60, Wan ? 25 : 15);
+            var fg = H.Ships.FirstOrDefault(s => !s.Mine);
+            Check(fg != null && fg.Class == ShipClass.FreightHauler && Math.Abs(fg.MaxHp - 500) < 1e-6
+                  && fg.Position.DistanceTo(mpSpot) < 60,
+                  $"arena host: the guest refitted to a FREIGHTER and parked -- 400 x 1.25 = 500 hull ({fg?.Class}, {fg?.MaxHp:0}, {fg?.Position.DistanceTo(mpSpot):0} u off)");
+            hw.Position = VaryNear(fg.Position, 230f); hw.Velocity = Vector2.Zero; hw.Rotation = 0f;   // inside its 260 u, any bearing
+            await Wait(0.3);
+            // ITS TURRET, MADE BY THE HOST: the guest presses T; only the host may put one in the
+            // world, and only the host may take it away again.
+            await RealTime(() => H.Deployed.Count(t => t.OwnerId == fg.OwnerId) == 1, Wan ? 15 : 8);
+            var t1 = H.Deployed.FirstOrDefault(t => t.OwnerId == fg.OwnerId);
+            Check(t1 != null && H.Deployed.Count == 1 && fg.TurretsOut == 1
+                  && Math.Abs(t1.Hp - 120) < 1e-6
+                  && Math.Abs(t1.Spec(true).Damage - fg.Stats["deploy_damage"]) < 1e-9
+                  && Math.Abs(fg.Stats["deploy_damage"] - 7.5) < 1e-9,   // 6 x 1.25, the guest's five chips
+                  $"arena host: a guest's T reached the host -- one 120-hull turret firing the GUEST's sheet, {t1?.Spec(true).Damage:0.0} a shot, owned by the guest ({H.Deployed.Count} out)");
+            H.Drop(fg, VaryNear(fg.Position, 420f), fg.Stats["deploy_hull"]);
+            H.Drop(fg, VaryNear(fg.Position, 420f), fg.Stats["deploy_hull"]);
+            await Wait(0.3);
+            Check(fg.TurretsOut == 3, $"arena host: three of the guest's turrets standing ({fg.TurretsOut})");
+            // THE BUBBLE IS OVER SOMEBODY ELSE. The pool is the GUEST's and the blow lands on the
+            // HOST's hull: PlayerShip.ThroughBubbles reads Combat.Players, and until now no check
+            // had ever had two pilots in it.
+            await RealTime(() => fg.BubbleUp, Wan ? 15 : 8);
+            Check(fg.BubbleUp && Math.Abs(fg.BubbleLeft - 400) < 1e-6 && hw.Position.DistanceTo(fg.Position) < 260f,
+                  $"arena host: the guest's F raised its 400 bubble, and this hull is inside its 260 u ({hw.Position.DistanceTo(fg.Position):0} u)");
+            double hwHull0 = hw.Hp;
+            hw.Hit(150, hw.Position + new Vector2(0, -200), "test:mpbubble");
+            Check(Math.Abs(hw.Hp - hwHull0) < 1e-6 && Math.Abs(fg.BubbleLeft - 250) < 1e-6,
+                  $"...and a 150 blow on the HOST's hull comes out of the GUEST's pool ({fg.BubbleLeft:0} of 400 left, hull {hw.Hp:0} of {hwHull0:0})");
+            // THE RUSH: a status only the host decides, and an EMP whose ring is an Fx row.
+            hw.UseAbility("rush", 0);
+            double rushLeft = hw.Sl("rush").Left, rushCool = hw.Sl("rush").Cool;
+            Check(hw.Statuses.Has(Status.Hardened) && Math.Abs(rushLeft - 2.5) < 1e-9 && Math.Abs(rushCool - 18) < 1e-9
+                  && Math.Abs(hw.SpeedMult - 2.5f) < 1e-6,
+                  $"arena host: the warrior's rush -- hardened, 2.5 s up, 18 s cooling, 2.5x top speed ({rushLeft:0.0} s, {rushCool:0.0} s)");
+            // ...and one of the guest's turrets shot off its base, for the guest to see the gap and the burst
+            var doomed = H.Deployed.First(t => t.OwnerId == fg.OwnerId);
+            int doomedId = doomed.NetId;
+            doomed.TakeDamage(1e12); await Wait(0.4);
+            Check(H.Deployed.All(t => t.NetId != doomedId) && fg.TurretsOut == 2,
+                  $"arena host: a turret shot off its base is gone here ({fg.TurretsOut} left out)");
+            await RealTime(() => fg.TurretsOut == 1, Wan ? 20 : 12);
+            Check(fg.TurretsOut == 1 && H.Deployed.Count == 1,
+                  $"arena host: the guest's C picked one up again -- one of its three left standing ({fg.TurretsOut})");
+            // THE RUSH MUST LAND BEFORE THE REFIT. A refit rebuilds the ship's slots, so a rush
+            // still running is discarded with them and its EMP never fires -- which is right (it is
+            // a different ship now), but it would leave the guest waiting for a ring that never came.
+            await RealTime(() => !hw.Statuses.Has(Status.Hardened) && hw.Sl("rush").Left <= 0, Wan ? 12 : 6);
+            await Wait(0.4);
+            foreach (var dpl in H.Deployed.ToList()) H.DeployedTaken(dpl);   // the world clear for the arena
+            await Wait(0.3);
+            await SetClass(ShipClass.Battleship);                            // the hull the rest of this scenario flies
+            await RealTime(() => H.Ships.FirstOrDefault(s => !s.Mine) is { Class: ShipClass.Destroyer }, Wan ? 20 : 12);
             await ToArena("arena host", 1);
             // Built after a scene change, so from what is REMEMBERED of each pilot, not a fresh
             // announcement. It used to be only names and colours: every boss a solo boss (it counted
@@ -21665,6 +21994,66 @@ public partial class _Test : Node
             Net.I.Join(HostAt(Port));
             for (int i = 0; i < 60 * 10 && !(Net.IsOnline && Net.LocalId != 1); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(Net.IsOnline && Net.LocalId != 1, "arena guest: joined");
+            // ── TWO OF THE NINE, IN A SESSION (the host's side is in the ahost branch) ──
+            // A FREIGHTER: the class whose abilities MAKE things in the world. Every press below
+            // is a request -- nothing here is made on this peer.
+            await SetClass(ShipClass.FreightHauler);
+            var fgm = Me; fgm.AutopilotTo = null;
+            fgm.Position = Hub.BasePos + new Vector2(2400, 2400); fgm.Velocity = Vector2.Zero;
+            // ITS HULL IS THE HOST'S WORD. A guest applies the refit locally and announces it; the
+            // hull it then flies comes back in the host's report (ApplyHostState), a round trip
+            // later -- so this waits for the host to have refitted its copy too.
+            await RealTime(() => Math.Abs(fgm.MaxHp - 500) < 1e-6, Wan ? 20 : 10);
+            Check(fgm.Class == ShipClass.FreightHauler && Math.Abs(fgm.MaxHp - 500) < 1e-6
+                  && Abilities.For(ShipClass.FreightHauler).Length == 12,
+                  $"arena guest: flying a FREIGHTER in a session -- 400 x 1.25 for five chips = 500 hull, and the host's word for it, six abilities and six open slots ({fgm.MaxHp:0})");
+            // Watched from before the host does any of it: an effect lives well under a second and
+            // a status bit is held for a packet, so neither survives a single sample.
+            bool sawEmp = false, sawBurst = false;
+            var fxWatch = new LateSampler { Probe = () =>
+            {
+                sawEmp   |= Nodes<FxNode>().Any(f => f.Id == Fx.Emp);
+                sawBurst |= Nodes<FxNode>().Any(f => f.Id == Fx.Burst);
+                return sawEmp && sawBurst;
+            } };
+            AddChild(fxWatch);
+            var hardWatch = new LateSampler { Probe = () =>
+                H.Ships.FirstOrDefault(s => s.OwnerId == 1) is { } hs && hs.Statuses.Has(Status.Hardened) };
+            AddChild(hardWatch);
+            fgm.UseAbility("deploy", 0);                       // T
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            bool ownDrop = fgm.TurretsOut > 0;                 // a peer that made its own would have one already
+            await RealTime(() => H.Deployed.Count == 1, Wan ? 15 : 8);
+            Check(!ownDrop && H.Deployed.Count == 1 && H.Deployed[0].OwnerId == Net.LocalId && fgm.TurretsOut == 1
+                  && Math.Abs(H.Deployed[0].Hp - 120) < 1e-6,
+                  $"arena guest: its T is the host's -- nothing made here ({ownDrop}), then a 120-hull turret of its own arrives ({H.Deployed.Count} out)");
+            await RealTime(() => H.Deployed.Count == 3, Wan ? 15 : 8);
+            Check(H.Deployed.Count == 3 && H.Deployed.All(t => t.OwnerId == Net.LocalId),
+                  $"arena guest: every turret the host put out for it stands here ({H.Deployed.Count})");
+            fgm.UseAbility("bubble", 0);                       // F
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            bool ownBubble = fgm.BubbleUp;
+            await RealTime(() => fgm.BubbleUp && fgm.BubbleLeft < 400, Wan ? 20 : 12);
+            Check(!ownBubble && fgm.BubbleUp && Math.Abs(fgm.BubbleLeft - 250) < 0.01 && Math.Abs(fgm.BubbleRadius - 260f) < 1e-3,
+                  $"arena guest: its bubble is the host's ({ownBubble}), and what the host spent of it on ANOTHER pilot's hull comes back on the wire ({fgm.BubbleLeft:0} of 400)");
+            await RealTime(() => H.Deployed.Count == 2, Wan ? 20 : 12);
+            Check(H.Deployed.Count == 2, $"arena guest: the turret the host shot off its base is gone here too ({H.Deployed.Count} left)");
+            var takeBack = H.Deployed.First();
+            fgm.Position = takeBack.Position; fgm.Velocity = Vector2.Zero;
+            await Wait(0.6);                                   // the host must see it over the turret before C
+            fgm.UseAbility("collect", 0);                      // C
+            await RealTime(() => H.Deployed.Count == 1, Wan ? 15 : 8);
+            Check(H.Deployed.Count == 1 && fgm.TurretsOut == 1,
+                  $"arena guest: C over one picked it up, and the host's word of it is here ({H.Deployed.Count} left)");
+            await RealTime(() => hardWatch.Seen && sawEmp && sawBurst, Wan ? 20 : 12);
+            Check(hardWatch.Seen, "arena guest: the host's warrior reads HARDENED here -- a status bit is the host's word, counted down on no other peer");
+            Check(sawEmp && sawBurst,
+                  $"arena guest: the rush's EMP ring and the turret's burst both reached this peer (emp {sawEmp}, burst {sawBurst})");
+            fxWatch.QueueFree(); hardWatch.QueueFree();
+            await RealTime(() => H.Deployed.Count == 0, Wan ? 15 : 8);
+            await SetClass(ShipClass.Destroyer);               // back to the hull and the rack the rest of this scenario flies
+            await Wait(0.5);
+
             await ToArena("arena guest", 1);
             await GuestSeesTheFight();
             if (Wan) Check(Net.Arriving(1.5) < 1.45 && Net.Arriving(1.5) >= 0.6,

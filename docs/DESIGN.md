@@ -1189,6 +1189,9 @@ produced, and what each one replaced.
 | `Ids.cs` | an id space per kind | six hardcoded bases with six private counters |
 | `Shots.cs` → `Shots.All` | a projectile: who it hits, how its path is tested, how it ends, how it looks | `Shell.cs`, `Slug.cs`, `Torpedo.cs` — three classes, one copy each of the same sweep, lifetime and hit, and three launch RPCs |
 | `Fx.cs` → `Fx.All` | an effect: a shape, a colour, a life | one `Explosion` node, and everything else drawn as spokes of laser flashes because that was the only drawing a guest ever saw |
+| `Ships.cs` → `ClassDef.Damage` | what a class calls its weapons, and what one pilot level adds to each | `Progression.DamageStat` naming one stat for every class, and `Equipment.DamageStats` naming them again per class |
+| `Ships.cs` → `ClassDef.Kit` | the two parts a class is born with | three classes named in `Equipment`, and the battleship's mounts handed to everything else |
+| `Equipment.cs` → `ItemDef.Needs` | the stats a part moves, and so the hulls it fits | `ItemDef.Class`: one class per part, which is why nine classes could wear almost nothing |
 
 **What is deliberately NOT a table.** The two ways an enemy fights (PIN and STANDOFF), the two
 bosses, and a boss's THROWN ROCK -- held in a tractor beam, thrown down a fixed lane on a cubic
@@ -1203,6 +1206,12 @@ unless it wants a third way to fight.
 names itself, a count), in the class's own ability order. That is why adding an ability costs no
 field on the ship and no field on the wire: `NetHostState` carries four slot arrays where it used
 to carry seven named figures, and a guest reads them by index.
+
+**A part fits where it does something.** `Equipment.Fits` asks whether the hull has at least ONE
+of the stats the part moves, because a part whose every stat is missing there would change nothing
+on it. That one rule gives a Rapid Battery to all eleven classes with main guns, keeps Elite
+Hangars on the carrier, lets a chip that lifts every weapon fit everything, and leaves the
+point-defence frames off the hulls with no point defence -- without any of them naming a class.
 
 **One door for damage** (`PlayerShip.Incoming`). The 0.52 s per-source gap, the tally, the shield
 flash, the impact point, the death -- and `Guarded()`, where a dart's evasion, a warrior's
