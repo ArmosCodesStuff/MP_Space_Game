@@ -9,13 +9,17 @@
 # FALLBACK: GodotStub.cs, which only proves shape. Errors in the stub are FATAL,
 # because Roslyn binds declarations before method bodies: one bad declaration in the
 # stub means no method body is ever checked, and every script error vanishes.
+# THE PROJECT'S OWN TARGET, read from the .csproj rather than written here as well, so this rung
+# always checks the game against the framework it is actually built for.
+TFM=$(sed -n 's/.*<TargetFramework>\(net[0-9]*\.[0-9]*\)<.*/\1/p' ../Warships.csproj | head -1)
+MAJOR=$(echo "$TFM" | sed 's/^net//; s/\..*$//')
 CSC=$(find /usr/lib/dotnet -name csc.dll -path "*Roslyn*" | head -1)
-REF=$(ls -d /usr/lib/dotnet/packs/Microsoft.NETCore.App.Ref/8*/ref/net8*/ | head -1)
+REF=$(ls -d /usr/lib/dotnet/packs/Microsoft.NETCore.App.Ref/"$MAJOR"*/ref/"$TFM"/ | head -1)
 
 # No compiler means no check. Without this guard the harness found nothing, ran
 # nothing, and the error grep below turned "no compiler" into "0 errors".
 if [ -z "$CSC" ] || [ -z "$REF" ]; then
-  echo "NO .NET 8 SDK FOUND -- nothing was checked. Install dotnet-sdk-8.0." >&2
+  echo "NO .NET $MAJOR SDK FOUND -- nothing was checked. Install dotnet-sdk-$MAJOR.0." >&2
   exit 2
 fi
 R=""; for d in "$REF"*.dll; do R="$R -r:$d"; done

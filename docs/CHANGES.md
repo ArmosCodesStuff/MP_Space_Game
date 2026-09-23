@@ -316,6 +316,40 @@ From the 2026-09-21 batch (each is a constant or one rule to change):
 
 ## Unreleased
 
+### A peer in transit is in no sector, and the runtime the game targets is written once (2026-09-22, in the WarShips_Version_L fork)
+
+**A peer moving between worlds was still recorded in the one it was leaving.** `EnterSector` tells
+every peer to go, then changes its own scene -- and each peer's sector was only corrected when its
+NEW world reported itself, a round trip and a scene load later. For that whole window the host went
+on sending the old world's traffic to peers that had already gone, which is the exact thing
+`RpcToSector` exists to prevent: the yard's 10 Hz state arriving in an arena, where there is no
+`Yard` node to deliver it to. It cost three engine errors in one bar run of three -- `Node not
+found: "Hub/Yard"`, then a cache miss, then `Invalid packet received` -- and nothing in the game
+noticed, because a lost packet for a world you have left looks exactly like a packet you did not
+need. The host forgets every peer's sector the moment it moves the party; each one is placed again
+by its own report, which is also what brings it up to date.
+
+**The runtime is stated in one place, and `net10.0` was tried and reverted.** `net8.0` leaves
+support in November 2026, so the move was attempted. It builds with 0 warnings and it PLAYS -- three
+bar runs of 830 checks, six processes each, and the screenshot sweep, all green on .NET 10. But
+about one process exit in five ends in `0xC000001D`, an illegal instruction inside
+`GodotObject.Finalize` under `GC.RunFinalizers`, after the engine prints `Leaked unsafe reference
+to object` for a handful of resources and then `FATAL: Condition "!rc_owner" is true`. That is the
+.NET finalizers running after Godot has torn its object database down: a shutdown-order problem
+between 4.7.2 and a runtime it does not target. The same wrappers are outstanding on net8.0, where
+the teardown tolerates them, so it is not a leak in game code and there is nothing here to fix.
+**The runtime moves when the engine does** -- `Godot.NET.Sdk` is pinned to the binary anyway -- and
+November 2026 is the deadline for that upgrade, not for a csproj edit.
+
+What survives from the attempt is worth keeping: the framework was written down in SIX places --
+`typecheck.ps1` and `typecheck.sh` each pinned "8" three times, for the compiler to use, the
+reference pack to compile against, and the message printed when neither is found -- and both now
+read `<TargetFramework>` out of `Warships.csproj` and follow it. A rung that checks the game against
+a framework it is no longer built for is worse than no rung: it is green for the wrong reason.
+
+Nothing else in the build has a support cliff: not one `PackageReference` in the project, the five
+Python tools import the standard library alone, and the engine has no release train to fall off.
+
 ### The host's word: what a wreck may do, what a claim may buy, and what a guest is told (2026-09-22, in the WarShips_Version_L fork)
 
 Found by a code-only audit of the whole build -- six read-only passes over combat, rewards, UI, all
@@ -576,6 +610,11 @@ numbers back for every role. The new checks place their ships and raiders somewh
 run; every figure they assert stays a literal.
 
 ### Known broken (as of this batch)
+
+- **The runtime leaves support in November 2026 and cannot move until the engine does.** `net8.0`
+  is what Godot 4.7.2 targets; on `net10.0` the game builds, plays and passes the whole bar, but
+  roughly one process exit in five crashes inside Godot's own teardown. The fix is a Godot upgrade,
+  not a csproj edit.
 
 - **Only two of the nine have flown in a session** -- a warrior and a freighter, in the arena pair.
   The wing and deck classes, the sniper's rail line and the echo's detonation are still unproven

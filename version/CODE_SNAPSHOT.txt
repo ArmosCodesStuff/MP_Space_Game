@@ -1,8 +1,8 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-22 21:52, on top of git commit d1ab923. How it was verified is in the message of the
+// Taken 2026-09-22 22:56, on top of git commit 5542579. How it was verified is in the message of the
 //   commit that carries this file: one starting VERIFIED: is a green verify.ps1 -Update.
-// 97 files, 22240 lines. Code only: sprites, sounds and docs are in the zip.
+// 97 files, 22460 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -10,13 +10,13 @@
 //
 // Contents:
 //   project.godot                                   42 lines   sha256 aaa06503a405
-//   Warships.csproj                                 10 lines   sha256 487f229ceaef
+//   Warships.csproj                                 10 lines   sha256 5a587d9e4334
 //   CharacterSelect.tscn                            12 lines   sha256 bde251d0afb9
 //   Hub.tscn                                        10 lines   sha256 3a99e0df7b39
 //   MainMenu.tscn                                    6 lines   sha256 8a8dbe40f248
 //   play.ps1                                        61 lines   sha256 2cdeaf3aab37
 //   verify.ps1                                     132 lines   sha256 93974a6f6f1a
-//   scripts/Abilities.cs                           399 lines   sha256 e3e98ec32d5b
+//   scripts/Abilities.cs                           402 lines   sha256 77a272c4ee27
 //   scripts/AbilityBar.cs                           74 lines   sha256 bd8a2a1c61b4
 //   scripts/Aim.cs                                  27 lines   sha256 bb01868343ee
 //   scripts/Autopilot.cs                            40 lines   sha256 d560586e62a6
@@ -28,9 +28,9 @@
 //   scripts/Character.cs                           312 lines   sha256 edc5f9ba2172
 //   scripts/CharacterCreator.cs                    226 lines   sha256 be5f79dccf98
 //   scripts/CharacterSelect.cs                     184 lines   sha256 241e2389c734
-//   scripts/Combat.cs                              128 lines   sha256 0a76b28c7a7b
+//   scripts/Combat.cs                              132 lines   sha256 406c37b27560
 //   scripts/DamageNumbers.cs                        83 lines   sha256 20747f8cd3bd
-//   scripts/Deployed.cs                            103 lines   sha256 ffa277824dbe
+//   scripts/Deployed.cs                            105 lines   sha256 efde7021d1c3
 //   scripts/Drake.cs                               147 lines   sha256 1f03acbab106
 //   scripts/Economy.cs                             119 lines   sha256 1dec71a6ffa8
 //   scripts/Enemies.cs                             106 lines   sha256 b3603fe6ece2
@@ -38,25 +38,25 @@
 //   scripts/EquipmentWindow.cs                     126 lines   sha256 6640b484ee1a
 //   scripts/EscapePod.cs                            49 lines   sha256 d21d4103150b
 //   scripts/EscMenu.cs                              68 lines   sha256 a6334f984666
-//   scripts/Fx.cs                                  126 lines   sha256 39637cba2318
+//   scripts/Fx.cs                                  131 lines   sha256 a418534ea352
 //   scripts/Game.cs                                 60 lines   sha256 9d93b07815b8
 //   scripts/Gatherer.cs                            236 lines   sha256 34a9fe70df8a
 //   scripts/Hauler.cs                              441 lines   sha256 a1073a523398
 //   scripts/HealthBar.cs                            23 lines   sha256 fafaf0102ffb
 //   scripts/Hints.cs                                98 lines   sha256 1b018c88396f
-//   scripts/Hub.cs                                1744 lines   sha256 60a6e540a722
+//   scripts/Hub.cs                                1780 lines   sha256 9b4b6e4747fa
 //   scripts/Ids.cs                                  28 lines   sha256 230fc2305f97
 //   scripts/Lancer.cs                              194 lines   sha256 2793cf3479db
 //   scripts/Loot.cs                                118 lines   sha256 206397f16a58
-//   scripts/MainMenu.cs                            288 lines   sha256 9307a6a697bc
-//   scripts/MenuFoe.cs                             202 lines   sha256 b14b23208a4f
-//   scripts/Missions.cs                             50 lines   sha256 2d0007b08c4b
+//   scripts/MainMenu.cs                            289 lines   sha256 53cbc4b5df73
+//   scripts/MenuFoe.cs                             202 lines   sha256 a0ced7757310
+//   scripts/Missions.cs                             57 lines   sha256 9c8b82611fb8
 //   scripts/Music.cs                                81 lines   sha256 d77805e7d7ae
-//   scripts/Net.cs                                 781 lines   sha256 89afe425d9cb
+//   scripts/Net.cs                                 801 lines   sha256 88a91ca1f2a6
 //   scripts/PilotWindow.cs                          60 lines   sha256 4e05487ebecd
-//   scripts/PlayerShip.cs                         1258 lines   sha256 09174a279dfe
+//   scripts/PlayerShip.cs                         1282 lines   sha256 1d30d45254fa
 //   scripts/Plume.cs                                25 lines   sha256 cdbeb9b8fc58
-//   scripts/Progression.cs                         122 lines   sha256 a2b32f3e1498
+//   scripts/Progression.cs                         146 lines   sha256 b127285f566b
 //   scripts/Radar.cs                               137 lines   sha256 a9169e79860b
 //   scripts/Raider.cs                              361 lines   sha256 c047342f8cf4
 //   scripts/ReturnButton.cs                         27 lines   sha256 e36ddbb19a08
@@ -65,7 +65,7 @@
 //   scripts/Settings.cs                             87 lines   sha256 4dd23a4a672f
 //   scripts/Sfx.cs                                 105 lines   sha256 879dc5464b7a
 //   scripts/Shield.cs                               71 lines   sha256 99c7fa4a2a8e
-//   scripts/ShipClasses.cs                         445 lines   sha256 b3cc070d57c1
+//   scripts/ShipClasses.cs                         447 lines   sha256 ccf18102df9c
 //   scripts/Ships.cs                               496 lines   sha256 ad0264770dde
 //   scripts/Shots.cs                               285 lines   sha256 fdf79e9dce61
 //   scripts/Sprites.cs                              13 lines   sha256 f2374b1d9777
@@ -84,8 +84,8 @@
 //   scripts/UtilityShip.cs                          81 lines   sha256 19003132b8a5
 //   scripts/Yard.cs                                534 lines   sha256 09ca20f88ed4
 //   typecheck/GodotStub.cs                         192 lines   sha256 2c5c2967bf5c
-//   typecheck/typecheck.ps1                         93 lines   sha256 a5fe67e9843e
-//   typecheck/typecheck.sh                          57 lines   sha256 e68277c09f34
+//   typecheck/typecheck.ps1                         99 lines   sha256 8e8a45b067c2
+//   typecheck/typecheck.sh                          61 lines   sha256 c94fe5471263
 //   tools/analyse/analysers.editorconfig            15 lines   sha256 45fdb7258163
 //   tools/analyse/run.ps1                           39 lines   sha256 fccca5633aba
 //   tools/analyse/run.sh                            16 lines   sha256 e6f2cd50f0c4
@@ -98,12 +98,12 @@
 //   tools/manifest.ps1                              42 lines   sha256 2bd8e7cbf24b
 //   tools/map.py                                   232 lines   sha256 01a23fceab11
 //   tools/screens/run.ps1                          128 lines   sha256 9e8d569b0b94
-//   tools/screens/run.sh                            42 lines   sha256 73a5b3c63476
+//   tools/screens/run.sh                            42 lines   sha256 e98005dda796
 //   tools/screens/Shots.cs.txt                     659 lines   sha256 1ecdc3f35962
 //   tools/smoketest/fakeigd.py                     155 lines   sha256 b980d4fa4ad4
 //   tools/smoketest/run.ps1                        225 lines   sha256 ba91f3de2ffe
-//   tools/smoketest/run.sh                          57 lines   sha256 9ac9cbdf9115
-//   tools/smoketest/SmokeTest.cs.txt              5105 lines   sha256 75daa8065d6a
+//   tools/smoketest/run.sh                          57 lines   sha256 927b13b8da10
+//   tools/smoketest/SmokeTest.cs.txt              5187 lines   sha256 5afc9d33715e
 //   tools/smoketest/wan.py                          61 lines   sha256 97db24aa3f91
 //   tools/snapshot.ps1                              94 lines   sha256 3ca9bfe56185
 //==============================================================================
@@ -157,11 +157,11 @@ environment/defaults/default_clear_color=Color(0, 0, 0, 1)
 
 //==============================================================================
 // FILE: Warships.csproj
-// 10 lines   sha256 487f229ceaef
+// 10 lines   sha256 5a587d9e4334
 //==============================================================================
 <Project Sdk="Godot.NET.Sdk/4.7.2">
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <EnableDynamicLoading>true</EnableDynamicLoading>
     <Nullable>disable</Nullable>
   </PropertyGroup>
@@ -418,7 +418,7 @@ Write-Host ("FAILED: {0}" -f ($failed -join ', ')); exit 1
 
 //==============================================================================
 // FILE: scripts/Abilities.cs
-// 399 lines   sha256 e3e98ec32d5b
+// 402 lines   sha256 77a272c4ee27
 //==============================================================================
 using Godot;
 using System;
@@ -461,6 +461,9 @@ public class AbilityDef
     // The owner's own intent, not an order to the host: it rides in the ship's state report
     // instead of being asked for (the fire mode).
     public bool Local;
+    // Pressable while the hull is a wreck. One row has it (reboard, the escape pod's F); the gate
+    // is PlayerShip.DoAbility, so a new ability is refused from stasis without saying anything.
+    public bool WhenWrecked;
 
     public Action<PlayerShip, IHittable> Press;
     public Func<PlayerShip, IHittable, string> Refuse;
@@ -720,7 +723,7 @@ public static class Ab
     // Not on any bar: the escape pod's F. Every class has it, and it is reached by id.
     public static readonly AbilityDef Reboard = new()
     {
-        Id = "reboard", Name = "Reboard", Short = "REBOARD", Default = Key.F,
+        Id = "reboard", Name = "Reboard", Short = "REBOARD", Default = Key.F, WhenWrecked = true,
         Blurb = "Climbs back aboard the hull while the pod is still beside it.",
         Press = (s, _) => s.Reboard(),
     };
@@ -2255,7 +2258,7 @@ public partial class CharacterSelect : Control
 
 //==============================================================================
 // FILE: scripts/Combat.cs
-// 128 lines   sha256 0a76b28c7a7b
+// 132 lines   sha256 406c37b27560
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -2383,7 +2386,11 @@ public static class Combat
     // lambda holding the Hub, so one left behind is a freed node the next shot calls into, and a
     // Hub that can never be collected once you are back at the menu.
     // A world ends: its lists, its hooks (each a lambda holding that world) and its ids.
-    public static void Clear() { Hostiles.Clear(); Players.Clear(); OnFlash = null; World = null; ShotFired = null; Fx.On = null; NetIds.Reset(); }
+    public static void Clear()
+    {
+        Hostiles.Clear(); Players.Clear(); OnFlash = null; World = null; ShotFired = null; Fx.On = null;
+        NetIds.Reset(); Shot.Intercepted = 0;
+    }
 }
 
 //==============================================================================
@@ -2476,7 +2483,7 @@ public struct HullWatch
 
 //==============================================================================
 // FILE: scripts/Deployed.cs
-// 103 lines   sha256 ffa277824dbe
+// 105 lines   sha256 efde7021d1c3
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -2537,6 +2544,8 @@ public partial class DeployedTurret : Node2D, IRaidTarget, ITagged, ITurretHost
     public StatusSet Statuses => _status;
     public void ApplyStatus(Status s, double seconds) { if (Net.Sim) _status.Apply(s, seconds); }
     public (float halfLength, float halfWidth) Extent => (Radius, Radius);
+    // the host's word on its hull (Hub.NetDeployHulls); the host's own copy keeps its own figure
+    public void SetNet(float hp) { if (!Net.Sim) Hp = hp; }
     public void Hit(double d, Vector2 from, string source) => TakeDamage(d);
     public void TakeDamage(double d)
     {
@@ -3560,7 +3569,7 @@ public partial class EscMenu : CanvasLayer
 
 //==============================================================================
 // FILE: scripts/Fx.cs
-// 126 lines   sha256 39637cba2318
+// 131 lines   sha256 a418534ea352
 //==============================================================================
 using Godot;
 
@@ -3627,8 +3636,13 @@ public static class Fx
     public static System.Action<int, Vector2, Vector2, float> On;
 
     // `at` is where it happens; `radius` how far it reaches; `to` the far end of a bar.
-    public static void Raise(int id, Vector2 at, float radius = 30f) => On?.Invoke(id, at, at, radius);
-    public static void Line(int id, Vector2 a, Vector2 b) => On?.Invoke(id, a, b, 0f);
+    //
+    // ONLY THE SIMULATOR RAISES. The hook puts it up here and tells every guest through one RPC
+    // (Hub.NetFx), so a guest that also raised its own -- the burst on a turret it saw removed,
+    // the blast at the end of a missile it was drawing, a miner's loss -- drew the same effect
+    // twice. The single player and the title screen are their own simulator and are unaffected.
+    public static void Raise(int id, Vector2 at, float radius = 30f) { if (Net.Sim) On?.Invoke(id, at, at, radius); }
+    public static void Line(int id, Vector2 a, Vector2 b) { if (Net.Sim) On?.Invoke(id, a, b, 0f); }
 }
 
 // One node for every row: the shape is the row's, so a new effect never brings a new node.
@@ -4574,7 +4588,7 @@ public partial class Hints : CanvasLayer
 
 //==============================================================================
 // FILE: scripts/Hub.cs
-// 1744 lines   sha256 60a6e540a722
+// 1780 lines   sha256 9b4b6e4747fa
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -4964,15 +4978,15 @@ public partial class Hub : Node2D
         ShipOf(Net.SenderOf(this))?.ApplyState(px, py, vx, vy, rot, ax, ay, trigger, staggered, podX, podY, podRot, warping);
     public void SendHostState(int owner, double hp, double maxHp, bool alive, double stasis, int statusBits, double combat,
                               float[] slotLeft, float[] slotCool, float[] slotOwn, int[] slotN,
-                              int wingTarget, Vector2[] wingPos, float[] wingRot, int[] wingState, float[] wingRearm) =>
+                              int wingTarget, int strikeTarget, Vector2[] wingPos, float[] wingRot, int[] wingState, float[] wingRearm) =>
         Rpc(nameof(NetHostState), owner, hp, maxHp, alive, stasis, statusBits, combat, slotLeft, slotCool, slotOwn, slotN,
-            wingTarget, wingPos, wingRot, wingState, wingRearm);
+            wingTarget, strikeTarget, wingPos, wingRot, wingState, wingRearm);
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
     private void NetHostState(int owner, double hp, double maxHp, bool alive, double stasis, int statusBits, double combat,
                               float[] slotLeft, float[] slotCool, float[] slotOwn, int[] slotN,
-                              int wingTarget, Vector2[] wingPos, float[] wingRot, int[] wingState, float[] wingRearm) =>
+                              int wingTarget, int strikeTarget, Vector2[] wingPos, float[] wingRot, int[] wingState, float[] wingRearm) =>
         ShipOf(owner)?.ApplyHostState(hp, maxHp, alive, stasis, statusBits, combat, slotLeft, slotCool, slotOwn, slotN,
-                                      wingTarget, wingPos, wingRot, wingState, wingRearm);
+                                      wingTarget, strikeTarget, wingPos, wingRot, wingState, wingRearm);
     public void SendShield(int owner, float side) => Rpc(nameof(NetShield), owner, side);
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
     private void NetShield(int owner, float side) => ShipOf(owner)?.ApplyShield(side);
@@ -5006,12 +5020,17 @@ public partial class Hub : Node2D
         if (!Net.FromPlayer(this, out int who)) return;
         _peerSector[who] = (SectorKind)s;
         if ((SectorKind)s != Sector) { RpcId(who, nameof(NetSector), (int)Sector, Missions.Level); return; }
+        // The place a pilot is owed goes first and is never metered: a reconnecting pilot's held
+        // spot is delivered by whichever report first finds it in the host's world.
+        if (_placeFor.Remove(who, out var owed)) RpcId(who, nameof(NetPlace), owed.at, owed.rot);
+        // THE CATCH-UP, and only it, is rate-limited -- one ask, dozens of reliable packets. Half a
+        // second: the guest's own repeats are at 1 s and 3 s (ReportSector).
+        if (!Net.Metered(who, nameof(NetMySector), 0.5)) return;
         RpcId(who, nameof(NetMission), MissionArgs());
         foreach (var r in Raiders) RpcId(who, nameof(NetRaiderSpawn), r.NetId, r.Position, r.Kind, r.Strength, r.HullShare);
-        foreach (var t in Deployed) RpcId(who, nameof(NetDeploy), t.NetId, t.OwnerId, t.Position, (float)t.Hp);
+        foreach (var t in Deployed) RpcId(who, nameof(NetDeploy), t.NetId, t.OwnerId, t.Position, (float)t.Hp, (float)t.MaxHp);
         if (Sector == SectorKind.Arena && IsInstanceValid(Boss) && Boss.Alive) Boss.CatchUp(who);   // the warnings (and a rock) up now
         if (MissionWon) { RpcId(who, nameof(NetWon), _ships.Count); RpcId(who, nameof(NetReturnCount), ReturnReady, ReturnTotal); }
-        if (_placeFor.Remove(who, out var place)) RpcId(who, nameof(NetPlace), place.at, place.rot);
     }
     private void ReportSector() { if (!Net.IsHost) Net.AskHost(this, nameof(NetMySector), (int)Sector); }
 
@@ -5216,13 +5235,23 @@ public partial class Hub : Node2D
         // Equipment.Sanitize); the name was not. A null here threw on .Length, and a null that got
         // past became a null Pilot in every label that draws it.
         name = string.IsNullOrEmpty(name) ? Character.Defaults.Name : name.Length > 24 ? name[..24] : name;
-        // purchases the claimed level could not have paid for are refused outright
-        if (!Progression.Affordable(bought, level)) bought = new int[Progression.All.Length];
+        // Purchases are held to what the claimed level could have paid for, and to what this host
+        // lets any claim spend (Progression.MaxSpendLevel). It used to weigh the RAW wire level
+        // against the claim and refuse the lot on a mismatch, so a peer claiming two billion
+        // bought every row maxed, and an honest pilot past level 100 arrived as a stock hull.
+        bought = Progression.Afford(bought, level);
         characterId ??= "";
         if (characterId.Length > 64) characterId = "";
+        // A HELD PLACE IS NOT CLAIMABLE BY NAME. The character id is the guest's own word -- the
+        // host has no other way to know a returning pilot -- so a peer announcing the id of a
+        // pilot ALREADY in the party took its place the moment that pilot dropped: its party slot,
+        // its READY, its position, and every kill owed to it. An id another live peer is flying
+        // belongs to that peer; this one simply has no hold.
+        if (characterId.Length > 0 && Net.I.Players.Any(kv => kv.Key != peer && kv.Value.CharacterId == characterId))
+            characterId = "";
         (p.Name, p.Main, p.Accent, p.Class, p.Bought, p.Equip, p.CharacterId, p.HasIdentity) =
             (name, main, accent, Classes.Sanitize(cls), bought, equip ?? System.Array.Empty<string>(), characterId, true);
-        p.Level = System.Math.Clamp(level, 1, 100);             // a claim: bounded before it weighs on an escort's threat
+        p.Level = System.Math.Max(1, level);                    // a claim; what it may SPEND is capped above
         if (_ships.TryGetValue(peer, out var s) && IsInstanceValid(s)) ApplyIdentity(s);
         TryRestoreHold(peer);
     }
@@ -5374,8 +5403,8 @@ public partial class Hub : Node2D
         // static, so every `Yard.<static>` call in this file is safe (see also AddGuestShare and
         // AddHostShare, both reached from the arena). Make any of them an instance member and
         // these lines start throwing. See DESIGN.md -> Traps.
-        Yard.TripClock += delta;                              // what the base is missing, in game time
         if (!Net.IsHost) return;
+        Yard.TripClock += delta;                              // what the base is missing, in game time
         // the whole party in stasis at once: the mission fails, everyone goes home
         if (!MissionWon && _arenaEndT < 0 && _ships.Count > 0 && _ships.Values.All(s => IsInstanceValid(s) && !s.Alive)) _arenaEndT = 3.0;
         if (_arenaEndT >= 0 && (_arenaEndT -= delta) <= 0)
@@ -5570,13 +5599,18 @@ public partial class Hub : Node2D
 
     // the party, for an escort's threat: each pilot's level (the host's from its character, a
     // guest's as its identity claimed it, bounded) and its ship's toughness (EscortThreat)
+    // Past this a level stops making a raid stronger -- the host's own as much as a guest's claim.
+    // It was a clamp on the stored claim alone, which left an honest host's level unbounded and
+    // made a display bound look like the validation rule it was not.
+    public const int ThreatLevelCap = 100;
     private (double level, double toughness) PartyStanding()
     {
         double level = 0, toughness = 0; int n = 0;
         foreach (var s in _ships.Values)
         {
             if (!IsInstanceValid(s)) continue;
-            level += s.Mine ? Character.Level : Net.I != null && Net.I.Players.TryGetValue(s.OwnerId, out var p) ? p.Level : 1;
+            level += System.Math.Min(ThreatLevelCap,
+                s.Mine ? Character.Level : Net.I != null && Net.I.Players.TryGetValue(s.OwnerId, out var p) ? p.Level : 1);
             double own = new ShipStats(s.Class)["hull"];
             toughness += 1 + System.Math.Log(System.Math.Max(1, own > 0 ? s.MaxHp / own : 1)) / System.Math.Log(Missions.LevelStep);
             n++;
@@ -5599,19 +5633,21 @@ public partial class Hub : Node2D
     public DeployedTurret Drop(PlayerShip owner, Vector2 at, double hull)
     {
         if (!Net.IsHost || owner == null) return null;
-        var t = AddDeployed(NetIds.Next(NetIds.Deployed), owner.OwnerId, at, hull);
-        ToWorld(nameof(NetDeploy), t.NetId, owner.OwnerId, at, (float)hull);
+        var t = AddDeployed(NetIds.Next(NetIds.Deployed), owner.OwnerId, at, hull, hull);
+        ToWorld(nameof(NetDeploy), t.NetId, owner.OwnerId, at, (float)hull, (float)hull);
         return t;
     }
+    // `max` as well as `hull`: the join catch-up sends a turret's LIVE hull, and a joiner that
+    // took it for the maximum too drew a half-dead turret with a full bar.
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetDeploy(int id, int owner, Vector2 at, float hull)
+    private void NetDeploy(int id, int owner, Vector2 at, float hull, float max)
     {
-        if (Deployed.All(x => x.NetId != id)) AddDeployed(id, owner, at, hull);
+        if (Deployed.All(x => x.NetId != id)) AddDeployed(id, owner, at, hull, max);
     }
-    private DeployedTurret AddDeployed(int id, int owner, Vector2 at, double hull)
+    private DeployedTurret AddDeployed(int id, int owner, Vector2 at, double hull, double max)
     {
         var t = new DeployedTurret { NetId = id, OwnerId = owner, Ship = ShipOf(owner), Position = at,
-                                     Hp = hull, MaxHp = hull, Name = $"Deployed_{id}" };
+                                     Hp = hull, MaxHp = max, Name = $"Deployed_{id}" };
         Deployed.Add(t); AddChild(t);
         return t;
     }
@@ -5718,15 +5754,29 @@ public partial class Hub : Node2D
     // with one piece lost is lost whole: every raider froze for that update. Each packet names its
     // raiders, so each stands alone.
     private const int RaidersPerPacket = 24;
-    private void SendRaiders(double delta)
+    // EVERY HOST-OWNED THING THE WORLD CAN DAMAGE, on one clock. A raider's packet carries where
+    // it is as well, because it moves; a dropped turret holds its spot, so its hull is all there
+    // is to say -- and nothing said it at all, so its owner watched a pristine turret vanish in a
+    // burst with no warning and no bar.
+    private void SendWorldState(double delta)
     {
-        if (!Net.IsHost || !Net.IsOnline || Raiders.Count == 0) return;
+        if (!Net.IsHost || !Net.IsOnline || (Raiders.Count == 0 && Deployed.Count == 0)) return;
         _raiderSend -= delta; if (_raiderSend > 0) return; _raiderSend = 0.1;
+        if (Deployed.Count > 0)
+            ToWorld(nameof(NetDeployHulls), Deployed.Select(t => t.NetId).ToArray(),
+                                            Deployed.Select(t => (float)t.Hp).ToArray());
         foreach (var part in Raiders.Chunk(RaidersPerPacket))
             ToWorld(nameof(NetRaiders), part.Select(r => r.NetId).ToArray(), part.Select(r => r.Position).ToArray(),
                 part.Select(r => r.Rotation).ToArray(), part.Select(r => (float)r.Hp).ToArray(),
                 part.Select(r => r.TetherTo ?? new Vector2(float.NaN, float.NaN)).ToArray(),
                 part.Select(r => r.NetFlags).ToArray());
+    }
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
+    private void NetDeployHulls(int[] ids, float[] hp)
+    {
+        int n = Mathf.Min(ids.Length, hp.Length);
+        for (int i = 0; i < n; i++)
+            if (Deployed.FirstOrDefault(x => x.NetId == ids[i]) is { } t) t.SetNet(hp[i]);
     }
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
     private void NetRaiders(int[] ids, Vector2[] pos, float[] rot, float[] hp, Vector2[] tether, int[] flags)
@@ -5899,7 +5949,7 @@ public partial class Hub : Node2D
     // ── tick ─────────────────────────────────────────────────────────────────
     public override void _Process(double delta)
     {
-        SendRaiders(delta);
+        SendWorldState(delta);
         if (Net.IsHost && _held.Count > 0) ExpireHolds();
         if (Net.IsHost) TickRaid(delta);
         if (Net.IsHost) TickBlasts(delta);
@@ -6678,7 +6728,7 @@ public partial class LootCrate : Node2D
 
 //==============================================================================
 // FILE: scripts/MainMenu.cs
-// 288 lines   sha256 9307a6a697bc
+// 289 lines   sha256 53cbc4b5df73
 //==============================================================================
 using Godot;
 using System;
@@ -6743,6 +6793,7 @@ public partial class MainMenu : Node2D
         Hub.Sector = Hub.SectorKind.Home;
         Yard.EndSession();      // and the trip snapshot / parked base, for the same reason
         Hub.EndSession();       // and which world each guest was in, and the places held for dropped pilots
+        Missions.EndSession();  // and the level that was selected, which a guest took from its host
         // ...AND THE NETWORK SESSION. Every other session-scoped thing was reset here with the
         // argument that covering every route back matters more than covering the Esc menu's quit
         // button; the session itself was not, because the menu used to be sprites and structs and
@@ -6971,7 +7022,7 @@ public partial class MainMenu : Node2D
 
 //==============================================================================
 // FILE: scripts/MenuFoe.cs
-// 202 lines   sha256 b14b23208a4f
+// 202 lines   sha256 a0ced7757310
 //==============================================================================
 using Godot;
 using System;
@@ -6989,9 +7040,9 @@ public enum MenuFoeKind { Light, Heavy, Web }
 
 public partial class MenuFoe : Node2D, IHittable, ITagged
 {
-    // One id space of its own: the menu is a world, but not the hub's world.
-    private const int IdBase = NetIds.Menu;
-    private static int _next;
+    // One id space of its own: the menu is a world, but not the hub's world. Minted by NetIds
+    // like every other kind, so Combat.Clear resets it with the world rather than letting the
+    // title screen's ids climb for the life of the process.
 
     public Tag Tags => Tag.Light;
     public MenuFoeKind Kind;
@@ -7009,7 +7060,7 @@ public partial class MenuFoe : Node2D, IHittable, ITagged
     private readonly float _length;          // the size it IS, in world units -- not a scale factor
     private readonly Random _rng;
 
-    public int NetId { get; } = IdBase + (++_next);
+    public int NetId { get; } = NetIds.Next(NetIds.Menu);
     public float HitRadius { get; private set; }
     public bool Alive { get; private set; } = true;
     public bool Webbing { get; private set; }     // drawing its tether this frame
@@ -7178,7 +7229,7 @@ public partial class MenuFoe : Node2D, IHittable, ITagged
 
 //==============================================================================
 // FILE: scripts/Missions.cs
-// 50 lines   sha256 2d0007b08c4b
+// 57 lines   sha256 9c8b82611fb8
 //==============================================================================
 using System;
 using System.Collections.Generic;
@@ -7213,7 +7264,14 @@ public static class Missions
 
     public const double LevelStep = 1.10;
     public static double S(int level) => Math.Pow(LevelStep, Math.Max(1, level) - 1);
-    public static int Level = 1;                            // the selected level (the host decides; replicated)
+    // THE SELECTED LEVEL (the host decides; replicated). A property, so the floor is kept once
+    // here rather than by each arrival -- the sector RPC floored it and the mission RPC beside it
+    // did not.
+    private static int _level = 1;
+    public static int Level { get => _level; set => _level = Math.Max(1, value); }
+    // Session state, like the world a guest was in: a pilot that visited a host sitting on level
+    // 12 carried that 12 into its own next session, and hosting broadcast it to every guest.
+    public static void EndSession() { Level = Unlocked; }
     // The levels this pilot has cleared, of every boss this build knows (an id in the file it does
     // not know counts for nothing): one ladder, whoever held each level.
     private static IEnumerable<int> ClearedLevels =>
@@ -7319,7 +7377,7 @@ public partial class Music : Node
 
 //==============================================================================
 // FILE: scripts/Net.cs
-// 781 lines   sha256 89afe425d9cb
+// 801 lines   sha256 88a91ca1f2a6
 //==============================================================================
 using Godot;
 using System;
@@ -7992,7 +8050,7 @@ public partial class Net : Node
         // An explicit offline peer rather than null: IsServer() and GetUniqueId() then
         // answer 1 / true offline instead of depending on engine fallback behaviour.
         Multiplayer.MultiplayerPeer = new OfflineMultiplayerPeer();
-        Players.Clear();
+        Players.Clear(); _asked.Clear();
         _hostSaidBye = false; _leaving.Clear(); _peerGone = false;
     }
 
@@ -8012,7 +8070,7 @@ public partial class Net : Node
         }
         else
         {
-            Players.Remove(id, out var info);
+            Players.Remove(id, out var info); ForgetAsks(id);
             bool onPurpose = _leaving.Remove(id);
             Say(onPurpose || !_isHost ? $"Player {id} left." : $"Player {id} dropped.");   // only the host hears goodbyes
             PlayerLeft?.Invoke(id, info ?? new PlayerInfo(), onPurpose);
@@ -8053,6 +8111,26 @@ public partial class Net : Node
     {
         who = SenderOf(node);
         return IsHost && I != null && I.Players.ContainsKey(who);
+    }
+    // A RATE METER for the EXPENSIVE ANSWER to a guest's request -- not for the request itself.
+    // True when `gap` seconds have passed since this peer last had this answer, and false while it
+    // is early. NetMySector answers a four-byte ask with the whole world -- the mission, every
+    // raider, every turret, the boss's warnings, all reliable -- so a peer calling it in a loop
+    // made the host marshal dozens of packets an ask, on the channel every other peer's
+    // telegraphs share. What the report itself does (where that peer is, the place it is owed)
+    // stays unmetered: a dropped report is a pilot left where it spawned.
+    private static readonly Dictionary<(int peer, string ask), ulong> _asked = new();
+    public static bool Metered(int peer, string ask, double gap)
+    {
+        ulong now = Time.GetTicksMsec();
+        if (_asked.TryGetValue((peer, ask), out var last) && now - last < (ulong)(gap * 1000)) return false;
+        _asked[(peer, ask)] = now;
+        return true;
+    }
+    // a peer is forgotten: so is what it asked for
+    private static void ForgetAsks(int peer)
+    {
+        foreach (var k in _asked.Keys.Where(k => k.peer == peer).ToList()) _asked.Remove(k);
     }
     // Who sent the RPC now being run on `node` -- 0 if it is no longer in the tree. A world on its
     // way out (a scene change, the game quitting) still gets the packets already on the wire, and
@@ -8170,7 +8248,7 @@ public partial class PilotWindow : PanelContainer
 
 //==============================================================================
 // FILE: scripts/PlayerShip.cs
-// 1258 lines   sha256 09174a279dfe
+// 1282 lines   sha256 1d30d45254fa
 //==============================================================================
 using Godot;
 using System;
@@ -8251,7 +8329,15 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // ── the owner's intent, replicated at 20 Hz ──────────────────────────────
     public Vector2 AimPoint;               // where the main guns point
     private bool Thrusting;                 // the owner is on the throttle (plume flicker)
-    public bool Trigger;                   // guns key held (battleship, destroyer)
+    private bool _trigger;
+    // GUNS KEY HELD (battleship, destroyer) -- and A WRECK DOES NOT FIRE. Three drivers write it:
+    // the local flight, the display ship's demo, and the WIRE. A guest's 20 Hz report is built
+    // before it can learn it died (its death arrives on the host's 10 Hz packet), so the raw field
+    // was re-armed after Die() cleared it and the host fired live shells out of a hull in stasis
+    // for a round trip -- for ever, from a client that simply never cleared it. FireControl was
+    // the one host-side weapon path with no liveness test; the rule belongs here, where every gun
+    // and every readout that asks already looks.
+    public bool Trigger { get => _trigger && Alive; set => _trigger = value; }
     public bool Staggered;                 // fire mode: false = salvo, true = staggered
 
     // ── orders and ability state, held on the host ───────────────────────────
@@ -8594,8 +8680,17 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         if (Net.FromPlayer(this, out int who) && who == OwnerId) DoAbility(id, targetId);
     }
 
-    private void DoAbility(string id, int targetId) =>
-        Abilities.Find(Class, id)?.Press?.Invoke(this, targetId != 0 ? Combat.ById(targetId) : null);
+    // THE GATE, not a courtesy. Refuse (above) runs on the owner so the slot says why at once;
+    // this is what the host is held to. A wreck presses nothing but the one ability declared for
+    // it (AbilityDef.WhenWrecked -- reboard). The nine newest abilities each repeated `!Net.Sim ||
+    // !Alive` in their own body and the seven oldest never did, so a guest in stasis could fire a
+    // missile burst, switch on point defence and order a bomber strike out of its own wreck.
+    private void DoAbility(string id, int targetId)
+    {
+        var def = Abilities.Find(Class, id);
+        if (def == null || !Net.Sim || (!Alive && !def.WhenWrecked)) return;
+        def.Press?.Invoke(this, targetId != 0 ? Combat.ById(targetId) : null);
+    }
 
     // ── what the abilities do. The catalogue (Abilities.cs) points at these, and each one
     // guards itself: the press arrives from a guest's keyboard, so the host never trusts it.
@@ -8636,14 +8731,14 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     }
     public void DeployTurret()
     {
-        if (!Net.Sim || !Alive || !Stats.Def.Has(Fit.Deploy)) return;
+        if (!Stats.Def.Has(Fit.Deploy)) return;
         if (Sl("deploy").Cool > 0 || TurretsOut >= (int)Stats["deploy_max"]) return;
         MyHub?.Drop(this, Position, Stats["deploy_hull"]);
         Sl("deploy").Cool = Stats["deploy_cooldown"];
     }
     public void CollectTurret()
     {
-        if (!Net.Sim || !Stats.Def.Has(Fit.Deploy)) return;
+        if (!Stats.Def.Has(Fit.Deploy)) return;
         if (NearestOwnTurret() is { } t) MyHub?.DeployedTaken(t);
     }
 
@@ -8654,7 +8749,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     public double BubbleLeft => Sl("bubble").Own;
     public void RaiseBubble()
     {
-        if (!Net.Sim || !Alive || Sl("bubble").Cool > 0) return;
+        if (Sl("bubble").Cool > 0) return;
         ref var b = ref Sl("bubble");
         b.Left = Stats["bubble_time"]; b.Own = Stats["bubble_pool"]; b.Cool = Stats["bubble_cooldown"];
         b.N = (int)Stats["bubble_pool"];
@@ -8677,7 +8772,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
 
     public void StartOverdrive()
     {
-        if (!Net.Sim || !Alive || Sl("overdrive").Cool > 0) return;
+        if (Sl("overdrive").Cool > 0) return;
         ref var o = ref Sl("overdrive");
         o.Left = Stats["overdrive_time"]; o.Cool = Stats["overdrive_cooldown"];
     }
@@ -8686,12 +8781,16 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // still instead, which is what the reach is really for.
     public void Shockwave()
     {
-        if (!Net.Sim || !Alive || Sl("shockwave").Cool > 0) return;
+        if (Sl("shockwave").Cool > 0) return;
         Sl("shockwave").Cool = Stats["wave_cooldown"];
         float reach = (float)Stats["wave_range"], push = (float)Stats["wave_push"];
-        foreach (var h in new List<IHittable>(Combat.Hostiles))
+        // Targeting.Attackable, not the raw list: a missile in flight is point defence's business,
+        // and THROWING one was worse than hitting it -- the host moved a live hostile seeker 1000 u
+        // while every guest flew its own copy along the old path, so the two peers held a damaging
+        // missile a thousand units apart.
+        foreach (var h in new List<IHittable>(Targeting.All(Combat.Hostiles, Targeting.Attackable)))
         {
-            if (h == null || !h.Alive || h.Position.DistanceTo(Position) > reach) continue;
+            if (h.Position.DistanceTo(Position) > reach) continue;
             if (TagExt.Is(h, Tag.Boss)) { (h as IStatused)?.ApplyStatus(Status.Disabled, Stats["wave_disable"]); continue; }
             if (h is Node2D n)
             {
@@ -8707,7 +8806,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // itself), and at the end everything on the line takes the whole of it at once.
     public void ChargeRail()
     {
-        if (!Net.Sim || !Alive || Sl("railgun").Left > 0 || Sl("railgun").Cool > 0) return;
+        if (Sl("railgun").Left > 0 || Sl("railgun").Cool > 0) return;
         Sl("railgun").Left = Stats["rail_charge"];
         ApplyStatus(Status.Disabled, Stats["rail_charge"]);
     }
@@ -8716,9 +8815,8 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         var a = Aim.Nose(this, MyArt.Length * 0.5f);
         var b = a + Vector2.Up.Rotated(Rotation) * (float)Stats["rail_range"];
         float halfWidth = (float)Stats["rail_width"] * 0.5f;
-        foreach (var h in new List<IHittable>(Combat.Hostiles))
+        foreach (var h in new List<IHittable>(Targeting.All(Combat.Hostiles, Targeting.Attackable)))
         {
-            if (h == null || !h.Alive || TagExt.Is(h, Tag.Missile)) continue;
             if (Combat.DistToSegment(h.Position, a, b) <= halfWidth + h.HitRadius)
             {
                 h.TakeDamage(Stats["rail_damage"]);
@@ -8733,7 +8831,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
 
     public void StartRush()
     {
-        if (!Net.Sim || !Alive || Sl("rush").Cool > 0) return;
+        if (Sl("rush").Cool > 0) return;
         ref var r = ref Sl("rush");
         r.Left = Stats["rush_time"]; r.Cool = Stats["rush_cooldown"];
         ApplyStatus(Status.Hardened, r.Left);
@@ -8742,9 +8840,9 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     private void RushEmp()
     {
         float reach = (float)Stats["emp_range"];
-        foreach (var h in new List<IHittable>(Combat.Hostiles))
+        foreach (var h in new List<IHittable>(Targeting.All(Combat.Hostiles, Targeting.Attackable)))
         {
-            if (h == null || !h.Alive || h.Position.DistanceTo(Position) > reach) continue;
+            if (h.Position.DistanceTo(Position) > reach) continue;
             h.TakeDamage(Stats["emp_damage"]);
             NoteDealt(Stats["emp_damage"], h.Position);
             if (!TagExt.Is(h, Tag.Boss)) (h as IStatused)?.ApplyStatus(Status.Disabled, Stats["emp_stun"]);
@@ -8756,7 +8854,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // over goes at the nearest one.
     public void LaunchHunters()
     {
-        if (!Net.Sim || !Alive || Sl("hunters").Cool > 0) return;
+        if (Sl("hunters").Cool > 0) return;
         Sl("hunters").Cool = Stats["hunter_cooldown"];
         int n = (int)Stats["hunter_count"];
         float range = (float)Stats["hunter_range"];
@@ -8779,7 +8877,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // The roll: nothing can touch it while it turns, and it comes out faster and firing quicker.
     public void BarrelRoll()
     {
-        if (!Net.Sim || !Alive || Sl("roll").Cool > 0) return;
+        if (Sl("roll").Cool > 0) return;
         ref var r = ref Sl("roll");
         r.Left = Stats["roll_time"] + Stats["boost_time"];      // the roll, then the boost
         r.Cool = Stats["roll_cooldown"];
@@ -8790,7 +8888,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // the last of it landed.
     public void StartEcho()
     {
-        if (!Net.Sim || !Alive || Sl("echo").Cool > 0) return;
+        if (Sl("echo").Cool > 0) return;
         ref var e = ref Sl("echo");
         e.Left = Stats["echo_time"]; e.Own = 0; e.Cool = Stats["echo_cooldown"];
         _echoAt = Position;
@@ -8800,9 +8898,9 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         if (stored <= 0) return;
         double blast = stored * Stats["echo_share"];
         float reach = (float)Stats["echo_radius"];
-        foreach (var h in new List<IHittable>(Combat.Hostiles))
+        foreach (var h in new List<IHittable>(Targeting.All(Combat.Hostiles, Targeting.Attackable)))
         {
-            if (h == null || !h.Alive || h.Position.DistanceTo(_echoAt) > reach) continue;
+            if (h.Position.DistanceTo(_echoAt) > reach) continue;
             h.TakeDamage(blast);
             if (h is Node2D n) DamageNumbers.NoteImpact(n, h.Position);
         }
@@ -8812,7 +8910,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
 
     public void GoDark()
     {
-        if (!Net.Sim || !Alive || Sl("stealth").Cool > 0) return;
+        if (Sl("stealth").Cool > 0) return;
         ref var s = ref Sl("stealth");
         s.Left = Stats["stealth_time"]; s.Cool = Stats["stealth_cooldown"];
         ApplyStatus(Status.Untargetable, s.Left);
@@ -9018,7 +9116,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     private void Die()
     {
         Hp = 0; Alive = false; _stasis = StasisTime;
-        Velocity = Vector2.Zero; Trigger = false; Sl("pd").Left = 0;
+        Velocity = Vector2.Zero; Sl("pd").Left = 0;
         WingTarget = null; StrikeTarget = null;
     }
 
@@ -9173,7 +9271,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     {
         if (!Alive)
         {   // in stasis the hull stays put; the pod flies (EscapePod reads the keys)
-            Velocity = Vector2.Zero; Trigger = false;
+            Velocity = Vector2.Zero;
             SendState(dt);
             return;
         }
@@ -9337,13 +9435,14 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             _netSlotOwn[i] = (float)_slots[i].Own;   _netSlotN[i] = _slots[i].N;
         }
         (GetParent() as Hub)?.SendHostState(OwnerId, Hp, MaxHp, Alive, _stasis, _status.Bits, _combatT,
-            _netSlotLeft, _netSlotCool, _netSlotOwn, _netSlotN, WingTarget?.NetId ?? 0, pos, rot, st, rearm);
+            _netSlotLeft, _netSlotCool, _netSlotOwn, _netSlotN, WingTarget?.NetId ?? 0, StrikeTarget?.NetId ?? 0,
+            pos, rot, st, rearm);
     }
 
     // the host's report (Hub.NetHostState: only the host speaks for combat state)
     public void ApplyHostState(double hp, double maxHp, bool alive, double stasis, int statusBits, double combat,
                                float[] slotLeft, float[] slotCool, float[] slotOwn, int[] slotN,
-                               int wingTarget, Vector2[] wingPos, float[] wingRot, int[] wingState, float[] wingRearm)
+                               int wingTarget, int strikeTarget, Vector2[] wingPos, float[] wingRot, int[] wingState, float[] wingRearm)
     {
         if (System.Math.Abs(maxHp - _hostMax) > 1e-9) _hullWatch = default;    // the first report, or a refit: not damage
         _hostMax = maxHp;
@@ -9354,6 +9453,9 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         for (int i = 0; i < Math.Min(_slots.Length, slotLeft.Length); i++)
             _slots[i] = new Slot { Left = slotLeft[i], Cool = slotCool[i], Own = slotOwn[i], N = slotN[i] };
         WingTarget = wingTarget != 0 ? Combat.ById(wingTarget) : null;
+        // What the bombers were sent at. It was host-only, so a guest's own BOMB slot read
+        // "RETURNING" for the whole of every strike it ordered -- the one word its bar had for it.
+        StrikeTarget = strikeTarget != 0 ? Combat.ById(strikeTarget) : null;
         for (int i = 0; i < Math.Min(_wings.Count, wingPos.Length); i++)
         {
             _wings[i].SetNet(wingPos[i], wingRot[i]);
@@ -9463,7 +9565,7 @@ public static class Plume
 
 //==============================================================================
 // FILE: scripts/Progression.cs
-// 122 lines   sha256 a2b32f3e1498
+// 146 lines   sha256 b127285f566b
 //==============================================================================
 using Godot;
 using System;
@@ -9513,6 +9615,30 @@ public static class Progression
         new() { Id = "damage", Name = "Weapons", Per = 1,  Unit = "damage" },
     };
     public const int MaxPerUpgrade = 60;       // a sanity cap on what a peer may claim
+    // THE MOST A CLAIM MAY BUY on someone else's host. A pilot's level is its own word and there
+    // is no way to check it, so what a claim may SPEND is capped here -- 99 points, a level-100
+    // pilot's worth. The gate used to read the raw wire level, so a peer claiming two billion
+    // bought every row maxed on the host's own copy of its ship: +300 hull and four times the
+    // damage, from a level-1 pilot.
+    public const int MaxSpendLevel = 100;
+    // The claim, trimmed until a pilot of that level could have paid for it: the DEAREST point
+    // goes first, so what survives is the most of what was claimed. Trimmed rather than refused
+    // whole -- a pilot past level 100 used to arrive on any host it visited as a stock hull.
+    public static int[] Afford(int[] bought, int level)
+    {
+        var b = new int[All.Length];
+        for (int i = 0; i < b.Length && i < (bought?.Length ?? 0); i++)
+            b[i] = System.Math.Clamp(bought[i], 0, MaxPerUpgrade);
+        int lv = System.Math.Clamp(level, 1, MaxSpendLevel);
+        while (!Affordable(b, lv))
+        {
+            int most = 0;
+            for (int i = 1; i < b.Length; i++) if (b[i] > b[most]) most = i;
+            if (b[most] == 0) break;
+            b[most]--;
+        }
+        return b;
+    }
 
     public static int Cost(int owned) => owned + 1;                        // 1, 2, 3, ...
     // Whether a pilot of `level` could have paid for `bought`: a point a level after the first,
@@ -10988,7 +11114,7 @@ public partial class ShieldFlash : Node2D
 
 //==============================================================================
 // FILE: scripts/ShipClasses.cs
-// 445 lines   sha256 b3cc070d57c1
+// 447 lines   sha256 ccf18102df9c
 //==============================================================================
 using System.Linq;
 using Godot;
@@ -11258,7 +11384,9 @@ public partial class Wing : Node2D
     private void TickBomber(double delta)
     {
         var t = Carrier.StrikeTarget;
-        bool live = t != null && t.Alive && Carrier.Position.DistanceTo(t.Position) <= S["strike_range"];
+        // Carrier.Alive, as the fighter's `engage` has: a strike ordered in the moment the deck
+        // died kept flying, and a host that ran a guest's press on a wreck launched a fresh one.
+        bool live = Carrier.Alive && t != null && t.Alive && Carrier.Position.DistanceTo(t.Position) <= S["strike_range"];
         switch (_b)
         {
             case BSt.Docked:
@@ -14591,7 +14719,7 @@ namespace Godot
 
 //==============================================================================
 // FILE: typecheck/typecheck.ps1
-// 93 lines   sha256 a5fe67e9843e
+// 99 lines   sha256 8e8a45b067c2
 //==============================================================================
 # Windows port of typecheck.sh -- type-checks every script with the real Roslyn compiler.
 #
@@ -14607,17 +14735,23 @@ $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 
 $sdkRoot = 'C:\Program Files\dotnet'
+# THE PROJECT'S OWN TARGET, not a number written here as well: the .csproj says which framework the
+# game is built for, and this rung compiles against THAT one's reference assemblies with THAT one's
+# compiler. It was pinned to 8 in three lines, so moving the game to net10 would have left the
+# cheapest rung quietly checking it against a framework it is no longer built for.
+$tfm = (Select-String -Path (Join-Path $PSScriptRoot '..\Warships.csproj') -Pattern '<TargetFramework>(net[0-9]+\.[0-9]+)</TargetFramework>').Matches[0].Groups[1].Value
+$major = ($tfm -replace '^net', '') -replace '\..*$', ''
 $csc = Get-ChildItem "$sdkRoot\sdk" -Recurse -Filter csc.dll -ErrorAction SilentlyContinue |
-       Where-Object { $_.FullName -like '*Roslyn*' -and $_.FullName -like '*\8.*' } |
+       Where-Object { $_.FullName -like '*Roslyn*' -and $_.FullName -like "*\$major.*" } |
        Select-Object -First 1 -ExpandProperty FullName
 $refDir = Get-ChildItem "$sdkRoot\packs\Microsoft.NETCore.App.Ref" -Directory -ErrorAction SilentlyContinue |
-          Where-Object { $_.Name -like '8.*' } | Select-Object -First 1 |
-          ForEach-Object { Join-Path $_.FullName 'ref\net8.0' }
+          Where-Object { $_.Name -like "$major.*" } | Select-Object -First 1 |
+          ForEach-Object { Join-Path $_.FullName "ref\$tfm" }
 
 # No compiler means no check. Without this guard the harness finds nothing, runs
 # nothing, and the error grep below turns "no compiler" into "0 errors".
 if (-not $csc -or -not $refDir -or -not (Test-Path $refDir)) {
-  Write-Host 'NO .NET 8 SDK FOUND -- nothing was checked. Install dotnet-sdk-8.0.'
+  Write-Host "NO .NET $major SDK FOUND -- nothing was checked. Install dotnet-sdk-$major.0."
   exit 2
 }
 
@@ -14689,7 +14823,7 @@ Write-Host '0 errors.'
 
 //==============================================================================
 // FILE: typecheck/typecheck.sh
-// 57 lines   sha256 e68277c09f34
+// 61 lines   sha256 c94fe5471263
 //==============================================================================
 #!/bin/sh
 # Type-checks every script with the real Roslyn compiler.
@@ -14702,13 +14836,17 @@ Write-Host '0 errors.'
 # FALLBACK: GodotStub.cs, which only proves shape. Errors in the stub are FATAL,
 # because Roslyn binds declarations before method bodies: one bad declaration in the
 # stub means no method body is ever checked, and every script error vanishes.
+# THE PROJECT'S OWN TARGET, read from the .csproj rather than written here as well, so this rung
+# always checks the game against the framework it is actually built for.
+TFM=$(sed -n 's/.*<TargetFramework>\(net[0-9]*\.[0-9]*\)<.*/\1/p' ../Warships.csproj | head -1)
+MAJOR=$(echo "$TFM" | sed 's/^net//; s/\..*$//')
 CSC=$(find /usr/lib/dotnet -name csc.dll -path "*Roslyn*" | head -1)
-REF=$(ls -d /usr/lib/dotnet/packs/Microsoft.NETCore.App.Ref/8*/ref/net8*/ | head -1)
+REF=$(ls -d /usr/lib/dotnet/packs/Microsoft.NETCore.App.Ref/"$MAJOR"*/ref/"$TFM"/ | head -1)
 
 # No compiler means no check. Without this guard the harness found nothing, ran
 # nothing, and the error grep below turned "no compiler" into "0 errors".
 if [ -z "$CSC" ] || [ -z "$REF" ]; then
-  echo "NO .NET 8 SDK FOUND -- nothing was checked. Install dotnet-sdk-8.0." >&2
+  echo "NO .NET $MAJOR SDK FOUND -- nothing was checked. Install dotnet-sdk-$MAJOR.0." >&2
   exit 2
 fi
 R=""; for d in "$REF"*.dll; do R="$R -r:$d"; done
@@ -16397,7 +16535,7 @@ try {
 
 //==============================================================================
 // FILE: tools/screens/run.sh
-// 42 lines   sha256 73a5b3c63476
+// 42 lines   sha256 e98005dda796
 //==============================================================================
 #!/bin/sh
 # Renders real screenshots of the game (select screen, creator, both classes in the
@@ -16406,7 +16544,7 @@ try {
 #
 #   sh tools/screens/run.sh /path/to/Godot_v4.7.2-stable_mono_linux.x86_64
 #
-# Needs: .NET 8 SDK, and a virtual display with software OpenGL:
+# Needs: .NET 10 SDK, and a virtual display with software OpenGL:
 #   apt-get install -y xvfb libgl1-mesa-dri libglx-mesa0 libgl1 libxcursor1 libxinerama1 libxrandr2 libxi6
 set -e
 G="$1"; [ -x "$G" ] || { echo "usage: run.sh <godot mono binary>"; exit 2; }
@@ -17498,7 +17636,7 @@ try {
 
 //==============================================================================
 // FILE: tools/smoketest/run.sh
-// 57 lines   sha256 9ac9cbdf9115
+// 57 lines   sha256 927b13b8da10
 //==============================================================================
 #!/bin/sh
 # Headless runtime check: boots the REAL engine, drives real input, and runs a host
@@ -17507,7 +17645,7 @@ try {
 #
 #   sh tools/smoketest/run.sh /path/to/Godot_v4.7.2-stable_mono_linux.x86_64
 #
-# Needs the .NET 8 SDK. Works offline: the Godot.NET.Sdk packages come from the
+# Needs the .NET 10 SDK. Works offline: the Godot.NET.Sdk packages come from the
 # nupkgs folder that ships beside the editor binary.
 set -e
 G="$1"; [ -x "$G" ] || { echo "usage: run.sh <godot mono binary>"; exit 2; }
@@ -17560,7 +17698,7 @@ echo "SMOKE TEST PASSED"
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 5105 lines   sha256 75daa8065d6a
+// 5187 lines   sha256 5afc9d33715e
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -20872,6 +21010,53 @@ public partial class _Test : Node
             Check(fr.BubbleLeft == 0 && Math.Abs(fr.Hp - (hull0 - 50)) < 1e-6,
                   $"and when the pool is spent the rest lands on the hull ({fr.Hp:0} of {hull0:0})");
 
+            // ── A WRECK FIRES NOTHING, AND PRESSES NOTHING BUT REBOARD ──
+            // Both halves are the HOST's rule, so both are poked the way a guest reaches them: the
+            // trigger comes off the wire (a guest's 20 Hz report is built before the host's 10 Hz
+            // word of its death arrives, so it re-armed a cleared trigger for a round trip, and a
+            // client that never cleared it fired out of stasis for ever), and a press arrives at
+            // DoAbility, where Refuse -- the owner's courtesy -- has no say.
+            var doAbility = typeof(PlayerShip).GetMethod("DoAbility", BindingFlags.NonPublic | BindingFlags.Instance);
+            foreach (var dpl0 in H.Deployed.ToList()) H.DeployedTaken(dpl0);
+            await Wait(0.1);
+            fr.Restore(0, false, 0);                       // a wreck, its stasis already run out
+            fr.Trigger = true;                             // ...as the wire would set it
+            bool wreckTrigger = fr.Trigger;
+            fr.Sl("deploy").Cool = 0;
+            doAbility.Invoke(fr, new object[] { "deploy", 0 });
+            await Wait(0.15);
+            int outWhileDead = fr.TurretsOut;
+            doAbility.Invoke(fr, new object[] { "reboard", 0 });
+            await Wait(0.1);
+            Check(!wreckTrigger && outWhileDead == 0 && fr.Alive && Math.Abs(fr.Hp - fr.MaxHp * 0.33) < 0.5,
+                  $"a wreck fires nothing and drops nothing: the wire's trigger reads {wreckTrigger} on it and a T from its own peer makes {outWhileDead} turrets -- and reboard, the one ability declared for a wreck, still climbs aboard at a third of the hull ({fr.Hp:0} of {fr.MaxHp:0})");
+            fr.Restore(fr.MaxHp, true, 0); fr.Trigger = false;
+            await Wait(0.1);
+
+            // ── A WAVE LEAVES A MISSILE IN FLIGHT ALONE ──
+            // The wave, the EMP and the echo read the raw hostile list, where an interceptable
+            // seeker also lives. So they deleted missiles (counting each as a point-defence
+            // intercept), and the wave THREW one its full push -- on the host only, while every
+            // guest flew its own copy along the old path: two peers, one damaging missile, a
+            // thousand units apart.
+            await SetClass(ShipClass.FreightBastion);
+            var bn = Me; bn.Position = yonder; bn.Velocity = Vector2.Zero; await Wait(0.2);
+            int took0 = Shot.Intercepted;
+            Combat.LaunchTorpedo(bn.Position + new Vector2(0, -140), Vector2.Down, 40f, 900f, 5, bn.NetId, 0.4f,
+                                 heavy: false, hostile: true);
+            await Wait(0.1);
+            var seeker = Nodes<Shot>().FirstOrDefault(s => s.HostileFire);
+            var seekerWas = seeker?.Position ?? Vector2.Zero;
+            bn.Sl("shockwave").Cool = 0; bn.UseAbility("shockwave", 0);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(seeker != null && GodotObject.IsInstanceValid(seeker) && seeker.Position.DistanceTo(seekerWas) < 60f
+                  && Shot.Intercepted == took0 && Math.Abs(bn.Stats["wave_push"] - 1000) < 1e-6,
+                  $"a 1000 u shockwave does not throw a missile in flight, or count it as an intercept: it moved {seeker?.Position.DistanceTo(seekerWas):0} u of its own and {Shot.Intercepted - took0} were taken");
+            if (seeker != null && GodotObject.IsInstanceValid(seeker)) seeker.QueueFree();
+            // The ring this raised must be gone before the effects block below counts what is up:
+            // the checks between here and there are table reads, and pass no game time at all.
+            await Wait(0.9);
+
             // ── TENDER: everything it owns fires twice as fast ──
             await SetClass(ShipClass.FreightTender);
             var td = Me; td.Position = yonder; td.Velocity = Vector2.Zero; await Wait(0.2);
@@ -20889,6 +21074,23 @@ public partial class _Test : Node
             // because that was the only drawing that reached a guest, and the echo's burst was
             // added straight to the host's own tree where nobody else ever saw it.
             {
+                // ── A CLAIMED LEVEL BUYS ONLY WHAT IT COULD HAVE PAID FOR ──
+                // The host has no way to check a guest's level, so what a claim may SPEND is
+                // capped. The affordability gate used to weigh the RAW wire level and the clamp
+                // landed after it, on the stored field: a peer claiming two billion bought every
+                // row maxed on the host's own copy of its ship -- +300 hull and four times the
+                // damage on a level-1 pilot. And a claim it could not pay for was refused WHOLE,
+                // so an honest pilot past the cap arrived anywhere as a stock hull.
+                int Spent(int[] b) { int s = 0; for (int i = 0; i < b.Length; i++) for (int k = 0; k < b[i]; k++) s += Progression.Cost(k); return s; }
+                var greedy = Progression.Afford(new[] { 60, 60, 60, 60 }, 2000000000);
+                var honest = Progression.Afford(new[] { 0, 13, 0, 0 }, 92);          // 13 hull levels cost 1+2+...+13 = 91
+                var past   = Progression.Afford(new[] { 0, 60, 0, 0 }, 100000);
+                double greedyHull = Progression.Flats(greedy, ShipClass.Battleship).GetValueOrDefault("hull");
+                Check(Progression.MaxSpendLevel == 100 && Spent(greedy) <= 99 && greedyHull <= 65
+                      && Spent(honest) == 91 && honest[1] == 13
+                      && Spent(past) <= 99 && past[1] == 13,
+                      $"a claim buys only what its level could have paid for, and no more than 99 points on anyone's host: every row maxed at level two billion comes to {Spent(greedy)} points and +{greedyHull:0} hull, not +300; an honest 13 hull levels at level 92 survive whole; and a pilot past the cap keeps {past[1]} of its 60");
+
                 // ── A PILOT'S WEAPONS POINTS REACH WHAT THE CLASS CALLS ITS WEAPONS ──
                 // The damage upgrade used to name ONE stat for every class in the game -- torpedoes
                 // for a carrier, main guns for everything else -- so a sniper's railgun, a warden's
@@ -21868,6 +22070,13 @@ public partial class _Test : Node
             H.Drop(fg, VaryNear(fg.Position, 420f), fg.Stats["deploy_hull"]);
             await Wait(0.3);
             Check(fg.TurretsOut == 3, $"arena host: three of the guest's turrets standing ({fg.TurretsOut})");
+            // 45 into the LAST of them (the first is the one shot off its base below): nothing
+            // carried a turret's hull after the drop, so its owner watched a pristine turret take
+            // a whole raid and then vanish in a burst.
+            var hurtT = H.Deployed.Last(t => t.OwnerId == fg.OwnerId);
+            hurtT.TakeDamage(45);
+            Check(Math.Abs(hurtT.Hp - 75) < 1e-6 && Math.Abs(hurtT.MaxHp - 120) < 1e-6,
+                  $"arena host: 45 into one of the guest's turrets leaves 75 of 120 ({hurtT.Hp:0})");
             // THE BUBBLE IS OVER SOMEBODY ELSE. The pool is the GUEST's and the blow lands on the
             // HOST's hull: PlayerShip.ThroughBubbles reads Combat.Players, and until now no check
             // had ever had two pilots in it.
@@ -22009,20 +22218,26 @@ public partial class _Test : Node
                   $"arena guest: flying a FREIGHTER in a session -- 400 x 1.25 for five chips = 500 hull, and the host's word for it, six abilities and six open slots ({fgm.MaxHp:0})");
             // Watched from before the host does any of it: an effect lives well under a second and
             // a status bit is held for a packet, so neither survives a single sample.
-            bool sawEmp = false, sawBurst = false;
+            bool sawEmp = false, sawBurst = false; int mostBursts = 0;
             var fxWatch = new LateSampler { Probe = () =>
             {
                 sawEmp   |= Nodes<FxNode>().Any(f => f.Id == Fx.Emp);
                 sawBurst |= Nodes<FxNode>().Any(f => f.Id == Fx.Burst);
+                // ...and ONCE. The host raises an effect and tells its guests through one RPC, but
+                // a guest also ran the code that raised it -- the burst on a turret it was told to
+                // remove -- and drew the same burst twice, a frame apart.
+                mostBursts = Math.Max(mostBursts, Nodes<FxNode>().Count(f => f.Id == Fx.Burst));
                 return sawEmp && sawBurst;
             } };
             AddChild(fxWatch);
             var hardWatch = new LateSampler { Probe = () =>
                 H.Ships.FirstOrDefault(s => s.OwnerId == 1) is { } hs && hs.Statuses.Has(Status.Hardened) };
             AddChild(hardWatch);
+            // ONLY THE HOST MAY PUT ONE IN THE WORLD, asked at the door itself rather than by
+            // pressing T and looking a frame later: on a loopback the host's answer can beat that
+            // frame, and a check that depends on losing a race is a check that hides a bug.
+            bool ownDrop = H.Drop(fgm, fgm.Position, 120) != null || fgm.TurretsOut > 0;
             fgm.UseAbility("deploy", 0);                       // T
-            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            bool ownDrop = fgm.TurretsOut > 0;                 // a peer that made its own would have one already
             await RealTime(() => H.Deployed.Count == 1, Wan ? 15 : 8);
             Check(!ownDrop && H.Deployed.Count == 1 && H.Deployed[0].OwnerId == Net.LocalId && fgm.TurretsOut == 1
                   && Math.Abs(H.Deployed[0].Hp - 120) < 1e-6,
@@ -22030,6 +22245,11 @@ public partial class _Test : Node
             await RealTime(() => H.Deployed.Count == 3, Wan ? 15 : 8);
             Check(H.Deployed.Count == 3 && H.Deployed.All(t => t.OwnerId == Net.LocalId),
                   $"arena guest: every turret the host put out for it stands here ({H.Deployed.Count})");
+            // ...and what the host puts INTO one of them arrives too
+            await RealTime(() => H.Deployed.Any(t => t.Hp < 119), Wan ? 20 : 12);
+            var hurtHere = H.Deployed.FirstOrDefault(t => t.Hp < 119);
+            Check(hurtHere != null && Math.Abs(hurtHere.Hp - 75) < 0.01 && Math.Abs(hurtHere.MaxHp - 120) < 1e-6,
+                  $"arena guest: the 45 the host put into one of its turrets arrives -- {hurtHere?.Hp:0} of {hurtHere?.MaxHp:0}, and a bar to draw it");
             fgm.UseAbility("bubble", 0);                       // F
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             bool ownBubble = fgm.BubbleUp;
@@ -22047,8 +22267,8 @@ public partial class _Test : Node
                   $"arena guest: C over one picked it up, and the host's word of it is here ({H.Deployed.Count} left)");
             await RealTime(() => hardWatch.Seen && sawEmp && sawBurst, Wan ? 20 : 12);
             Check(hardWatch.Seen, "arena guest: the host's warrior reads HARDENED here -- a status bit is the host's word, counted down on no other peer");
-            Check(sawEmp && sawBurst,
-                  $"arena guest: the rush's EMP ring and the turret's burst both reached this peer (emp {sawEmp}, burst {sawBurst})");
+            Check(sawEmp && sawBurst && mostBursts == 1,
+                  $"arena guest: the rush's EMP ring and the turret's burst both reached this peer, each drawn ONCE (emp {sawEmp}, burst {sawBurst}, most bursts at once {mostBursts})");
             fxWatch.QueueFree(); hardWatch.QueueFree();
             await RealTime(() => H.Deployed.Count == 0, Wan ? 15 : 8);
             await SetClass(ShipClass.Destroyer);               // back to the hull and the rack the rest of this scenario flies

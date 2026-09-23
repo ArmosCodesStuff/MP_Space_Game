@@ -743,12 +743,19 @@ public partial class Hub : Node2D
         if (!Net.IsHost) return;
         if (k == SectorKind.Arena) Yard?.SaveForTrip();
         if (Net.IsOnline) Rpc(nameof(NetSector), (int)k, Missions.Level);
+        // NOBODY IS IN A SECTOR WHILE THEY ARE MOVING BETWEEN THEM. Every peer was left recorded
+        // in the world it is LEAVING until its new world reported itself, so for a round trip plus
+        // a scene load the host went on sending that world's traffic to peers that had already
+        // gone: the yard's 10 Hz state reaching an arena, where there is no Yard node to deliver it
+        // to ("Node not found: Hub/Yard", seen in one run of three). Forgetting them sends nothing
+        // until each one reports, and its report is also what brings it up to date (NetMySector).
+        foreach (var id in Multiplayer.GetPeers()) _peerSector.Remove(id);
         GoTo(k);
     }
     // With the level: a world is built from it (the arena's boss is the level's), so a peer must
     // have it BEFORE the scene changes, not in the mission report that follows.
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetSector(int k, int level) { Missions.Level = System.Math.Max(1, level); GoTo((SectorKind)k); }
+    private void NetSector(int k, int level) { Missions.Level = level; GoTo((SectorKind)k); }
     private void GoTo(SectorKind k)
     {
         Sector = k;

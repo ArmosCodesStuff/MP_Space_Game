@@ -124,6 +124,24 @@ says *hand-written stub*, the DLL is missing — ask for it:
 
     C:\Users\<you>\.nuget\packages\godotsharp\4.7.2\lib\net8.0\GodotSharp.dll
 
+`net8.0` there is the framework the whole build targets, engine included: the GodotSharp package
+ships one library and it is built for net8.0, and the engine's own `GodotPlugins` is a net8.0
+assembly. **The target framework is stated in exactly one place** -- `<TargetFramework>` in
+`Warships.csproj` -- and both typecheck scripts read it from there, so moving the runtime is one
+line and the cheapest rung follows it instead of checking the game against a framework it is no
+longer built for.
+
+**net10.0 was tried and reverted (2026-09-22).** It builds with 0 warnings and plays: three full
+bar runs at 830 checks each, and the screenshot sweep, all green on it. But roughly one process
+exit in five ends in `0xC000001D` (illegal instruction) inside `GodotObject.Finalize` under
+`GC.RunFinalizers`, after the engine prints `Leaked unsafe reference to object` for a handful of
+resources and then `FATAL: Condition "!rc_owner" is true`. That is the .NET finalizers running
+after Godot has torn its object database down -- a shutdown-order problem between 4.7.2 and a
+runtime it does not target, not a leak in game code (the same wrappers are outstanding on net8.0,
+where the teardown tolerates them). **The runtime moves when the ENGINE does**, since
+`Godot.NET.Sdk` is pinned to the binary anyway; net8.0 leaves support in November 2026, so that is
+the deadline for a Godot upgrade, not for a csproj edit.
+
 Drop it in `typecheck/`. It is gitignored on purpose: a build dependency, not game content.
 (The Windows `typecheck.ps1` fetches it from that cache by itself; only the Linux `typecheck.sh`
 still needs it handed over, because a sandbox has no such cache.)
