@@ -3981,9 +3981,97 @@ public partial class _Test : Node
             var leftWith = new ConfigFile(); leftWith.Load($"{Character.Dir}/{Character.Id}.cfg");
             Check(Math.Abs((double)leftWith.GetValue("base", "credits", -1.0) - 424242) < 1e-6,
                   $"leaving for the arena writes the base to disk on the way out ({(double)leftWith.GetValue("base", "credits", -1.0):0} of 424242)");
-            var boss = H.Boss as Lancer;
+            var boss = H.Boss;
             Check(boss != null && boss.Alive && boss.Type.Id == "silver_lancer" && boss.Type.Name == "SILVER LANCER" && H.Yard == null && !Nodes<TargetDummy>().Any() && Combat.Hostiles.Contains(boss),
                   "the arena at level 1: the Silver Lancer, and no base or dummies");
+            // ITS MOVES ARE ROWS, so what follows reads the SLOT a row drives, by that row's id.
+            // A beam's phases: Opening -- its escorts are out; Winding -- the red line is charging;
+            // Firing -- it is burning down that line. These were five private fields and a
+            // reflection handle each.
+            Boss.Slot BeamSlot() => boss.S("beam");
+            bool EscortsOut() => BeamSlot().At == Boss.Phase.Opening;
+            bool BeamCharging() => BeamSlot().At == Boss.Phase.Winding;
+            bool BeamLive() => BeamSlot().At == Boss.Phase.Firing;
+            bool Ramming() => boss.S("ram").At == Boss.Phase.Firing;
+            // -- THE MOVES ARE A TABLE, AND THESE ARE ITS FIGURES --------------------------
+            // Every number the two bosses fight with, against the literals of the design rather
+            // than against the code's own constants. The behaviour checks below read the rows;
+            // this is the one place that says what a row must SAY.
+            {
+                var lan = Missions.Bosses[0]; var dra = Missions.Bosses[1];
+                BossMove L(string id) => lan.Moves.First(m => m.Id == id);
+                BossMove D(string id) => dra.Moves.First(m => m.Id == id);
+                Check(lan.Moves.Select(m => m.Id).SequenceEqual(new[] { "guns", "trident", "beam", "ram", "wave" })
+                      && dra.Moves.Select(m => m.Id).SequenceEqual(new[] { "gun", "shotgun", "throw" }),
+                      $"a boss's moves are a table of rows, in the order a frame resolves them ({string.Join(",", lan.Moves.Select(m => m.Id))} / {string.Join(",", dra.Moves.Select(m => m.Id))})");
+                // its art, its shape and what it closes on are the row's too, as EnemyDef carries
+                // a raider's -- they were abstract members of a boss class each
+                Check(lan.Hull == 760 && lan.Length == 360f && lan.HalfWidth == 70f && lan.Sprite == "res://boss_raider.png"
+                      && dra.Hull == 700 && dra.Length == 420f && dra.HalfWidth == 90f && dra.Sprite == "res://boss_drake.png"
+                      && lan.HoldOff == 650f && lan.CloseSpeed == 30f && Math.Abs(lan.TurnRate - 0.3f) < 1e-6
+                      && dra.HoldOff == 650f && dra.CloseSpeed == 30f && Math.Abs(dra.TurnRate - 0.3f) < 1e-6,
+                      "a boss's hull, art and approach are its row's: 760 / 360 / 70 and 700 / 420 / 90, both closing to 650 u at 30 u/s and turning at 0.3 rad/s");
+                var gn = L("guns");
+                Check(gn.Way == MoveWay.Bolt && gn.Every == 1.2 && gn.First == 2.0 && gn.Damage == 3.6 && gn.Find == 900f
+                      && gn.Waits == MoveWait.Nothing && !gn.Busy && !gn.Super && gn.Source == "boss:guns"
+                      && Math.Abs(gn.Damage / gn.Every - 3) < 1e-9,
+                      $"the guns: {gn.Damage} every {gn.Every} s (3 DPS) at the nearest ship within 900 u, and they wait on nothing");
+                var tr = L("trident");
+                Check(tr.Way == MoveWay.Shoot && tr.Shot == Shots.Seeker && tr.Every == 15 && tr.First == 13.5
+                      && tr.Count == 3 && tr.Spread == 25f && tr.Damage == 15 && tr.Speed == 135f && tr.Range == 1920f
+                      && tr.Turn == 1.4f && tr.Size == 2f && tr.Muzzle == 14f && tr.Cue == "boss_trident"
+                      && tr.Waits == MoveWait.Nothing && !tr.Busy && tr.Source == "boss:missiles",
+                      $"the trident: {tr.Count} seekers at -25 / 0 / +25 degrees, 15 each, 135 u/s out to 1920 u, twice the size");
+                var bm = L("beam");
+                Check(bm.Way == MoveWay.Beam && bm.Every == 30 && bm.First == 6.0 && bm.Windup == 6.0 && bm.Live == 3.0
+                      && bm.Tick == 0.25 && bm.Damage == 50 && bm.Reach == 10000f && bm.Width == 70f
+                      && bm.Busy && bm.Super && bm.Waits == MoveWait.Itself && bm.Source == "boss:beam"
+                      && bm.Cue == "boss_beam_charge" && bm.Strike == "boss_beam"
+                      && bm.Escorts == 2 && bm.EscortKind == Enemies.Webifier && bm.EscortAngle == 45f
+                      && bm.EscortOut == 130f && bm.EscortHull == 3 && bm.WebGrace == 1.0 && bm.WebSlack == 1.0
+                      && bm.ArmMax == 5.0 && bm.ArmMax < bm.Windup,
+                      $"the beam: wind-up {bm.Windup} s, live {bm.Live} s judged every {bm.Tick} s for {bm.Damage}, 70 u wide down 10000 u; two escorts 45 degrees off at 3 hull, never stalling it past 5 s");
+                var rm = L("ram");
+                Check(rm.Way == MoveWay.Dash && rm.Every == 30 && rm.First == 21.0 && rm.Windup == 1.5
+                      && rm.Damage == 40 && rm.Reach == 900f && rm.Speed == 1200f && rm.Width == 140f
+                      && rm.Busy && rm.Super && rm.Shifts && rm.Waits == MoveWait.Everything && rm.Source == "boss:charge",
+                      $"the ram: wind-up {rm.Windup} s, {rm.Reach} u at {rm.Speed} u/s, {rm.Damage} on contact -- and a cadence of its OWN ({rm.Every} s, where it read the beam's constant by accident)");
+                var wv = L("wave");
+                Check(wv.Way == MoveWay.Ring && wv.Every == 17.0 && wv.First == 10.0 && wv.Windup == 1.8
+                      && wv.Damage == 45 && wv.Reach == 340f && wv.Busy && !wv.Super && !wv.Shifts
+                      && wv.Waits == MoveWait.Movers && wv.Source == "boss:wave" && wv.Strike == "boss_shockwave",
+                      $"the shockwave: every {wv.Every} s, wind-up {wv.Windup} s, {wv.Damage} within {wv.Reach} u -- the period and the damage were bare literals in a method body");
+                var dg = D("gun"); var sg = D("shotgun"); var th = D("throw");
+                Check(dg.Way == MoveWay.Shoot && dg.Shot == Shots.Slug && dg.Every == 2.5 && dg.First == 2.0
+                      && dg.Find == 1100f && dg.Damage == 6 && dg.Speed == 220f && dg.Range == 1300f
+                      && dg.Radius == 7f && dg.Waits == MoveWait.Nothing && !dg.Busy && dg.Source == "boss:gun",
+                      $"the Drake's main gun: {dg.Damage} a shell (2.4 DPS) every {dg.Every} s at 220 u/s within 1100 u, through its own specials");
+                Check(sg.Way == MoveWay.Shoot && sg.Shot == Shots.Scrap && sg.Every == 15 && sg.First == 17.0
+                      && sg.Warp == 1.0 && sg.Standoff == 600f && sg.WarpRing == 117f && sg.WarpSound == "drake_warp"
+                      && sg.Windup == 1.875 && sg.Count == 7 && sg.Spread == 10f && sg.Width == 28f
+                      && sg.Damage == 18.75 && sg.Speed == 480f && sg.Range == 1400f && sg.Radius == 9f
+                      && sg.Busy && sg.Super && sg.Shifts && sg.Waits == MoveWait.Everything && sg.Source == "boss:scrap",
+                      $"the scrap shotgun: a {sg.Warp} s ring, a warp to {sg.Standoff} u off, {sg.Windup} s of fan, then {sg.Count} pieces of {sg.Damage} at {sg.Spread} degrees apart");
+                Check(th.Way == MoveWay.Throw && th.Every == 30 && th.First == 6.0 && th.Windup == 7.5
+                      && th.Flight == 1.6 && th.Damage == 250 && th.Reach == 1800f && th.Width == 180f
+                      && th.Radius == 90f && th.Offset == 220f && th.Busy && th.Super
+                      && th.Waits == MoveWait.Everything && th.Cue == "drake_tractor" && th.Strike == "drake_throw",
+                      $"the asteroid throw: a {th.Radius} u body {th.Offset} u off the flank, a {th.Windup} s lane {th.Reach} u long, {th.Flight} s of flight, {th.Damage} to a ship in it");
+                // ...AND A BOSS'S MOVES COME FROM ITS ROW, NOT FROM ITS CLASS. There is one Boss
+                // class now: given the Lancer's hull with the DRAKE'S Moves, the boss built from
+                // that row schedules the Drake's moves and knows nothing of the Lancer's.
+                var mixed = new Missions.BossType { Id = "mixed", Name = "MIXED", Hull = 100, Sprite = lan.Sprite,
+                                                    Length = lan.Length, HalfWidth = lan.HalfWidth, Moves = dra.Moves };
+                var proof = new Boss { Hub = H, Type = mixed, Position = boss.Position + new Vector2(0, -6000) };
+                AddChild(proof);                                  // _Ready builds its slots from the row
+                Check(boss.GetType() == typeof(Boss) && proof.GetType() == typeof(Boss)
+                      && proof.S("beam") == null && proof.S("ram") == null && proof.S("throw") != null
+                      && proof.S("throw").Due == 6.0 && proof.S("shotgun").Due == 17.0
+                      && proof.Length == 360f && Math.Abs(proof.MaxHp - 100) < 1e-6,
+                      $"a boss's moves come from its ROW, not its class: one Boss class, and the Lancer's hull handed the Drake's rows runs the Drake's moves ({string.Join(",", proof.Type.Moves.Select(m => m.Id))})");
+                proof.QueueFree();
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            }
             Check(Met("boss"), "THE BOSS: met on entering the arena");
             Key(global::Godot.Key.B); await Wait(0.1);
             var bb = Nodes<Button>().FirstOrDefault(b => b.Name == "BaseButton");
@@ -3993,7 +4081,7 @@ public partial class _Test : Node
             Check(Music.CombatZone, "the arena counts as combat for the music");
             Me.Position = boss.Position + new Vector2(0, 500); Me.Velocity = Vector2.Zero; Me.Rotation = 0;
             Key(global::Godot.Key.Q); await Wait(0.1);                           // point defence up
-            Check(Math.Abs(boss.MaxHp - 760) < 1e-6 && Math.Abs(Lancer.GunDamage / Lancer.GunEvery - 3) < 1e-9, "the boss: 760 hull at level 1 (solo); its guns 3 DPS");
+            Check(Math.Abs(boss.MaxHp - 760) < 1e-6 && Math.Abs(boss.S("guns").M.Damage / boss.S("guns").M.Every - 3) < 1e-9, "the boss: 760 hull at level 1 (solo); its guns 3 DPS");
             // stand in the beam on purpose with a thick hull (test only), and watch the rhythm
             // the boss's health bar: a chunk per hit, bouncing, whitening, fading; bursts merge
             var bar = Nodes<BossBar>().First();
@@ -4022,14 +4110,13 @@ public partial class _Test : Node
             // -- an invisible line sweeping the arena. 2.2 s in, the pilot is moved clear to the
             // side (after five 50-hull ticks, which the damage check below counts on): a boss that
             // turns would now swing after it.
-            var beamLiveF = typeof(Lancer).GetField("_beamLive", BindingFlags.NonPublic | BindingFlags.Instance);
             double liveT = 0; float liveRot0 = 0, liveTurn = 0; bool liveDrawn = false, sidestep = false;
             async void Watch()
             {
                 while (Hub.InArena && GodotObject.IsInstanceValid(boss))
                 {
                     arenaT += 1.0 / 60;
-                    if ((double)beamLiveF.GetValue(boss) >= 0)
+                    if (BeamLive())
                     {
                         if (liveT == 0) liveRot0 = boss.Rotation;
                         liveT += 1.0 / 60;
@@ -4042,8 +4129,8 @@ public partial class _Test : Node
                     // off the telegraph would measure that wait, not the rhythm.
                     if (tBeam < 0 && H.Raiders.Any(r => r.IsEscort)) tBeam = arenaT;
                     foreach (var tl in Nodes<Telegraph>().Where(x => x.Line))
-                        if (tCharge < 0 && Math.Abs(tl.Width - Lancer.HullHalfWidth * 2f) < 0.1f) tCharge = arenaT;
-                    if (tVolley < 0 && boss.Volleys > 0)
+                        if (tCharge < 0 && Math.Abs(tl.Width - 140f) < 0.1f) tCharge = arenaT;   // the ram's line, 140 u
+                    if (tVolley < 0 && boss.S("trident").Fired > 0)
                     {
                         tVolley = arenaT;
                         var big = Missiles().Where(x => x.HostileFire && x.Size == 2f).ToList();
@@ -4062,7 +4149,7 @@ public partial class _Test : Node
             var bnose = Vector2.Up.Rotated(boss.Rotation);
             var escAng = escorts.Select(r => Mathf.RadToDeg(bnose.AngleTo(r.Position - boss.Position))).OrderBy(x => x).ToList();
             Check(escorts.Count == 2 && Math.Abs(escAng[0] + 45) < 12 && Math.Abs(escAng[1] - 45) < 12
-                  && escorts.All(r => r.Target == me2 && r.Hp > 0 && r.Hp <= Lancer.EscortHull * Missions.S(Missions.Level) + 1e-6),
+                  && escorts.All(r => r.Target == me2 && r.Hp > 0 && r.Hp <= 3 * Missions.S(Missions.Level) + 1e-6),
                   $"two escorts launch at the pilot, 45 degrees to port and starboard ({string.Join(", ", escAng.Select(x => x.ToString("0")))}), fragile");
             Check(escorts.All(r => r.Shivering), "the escorts shiver at the launch point before the run in");
             // ESCORTS OUT, THE BOSS ALREADY HOLDS ITS POSITION -- and turns only to face the pilot. Pushed
@@ -4077,7 +4164,7 @@ public partial class _Test : Node
                 float armOff0 = Off();
                 await Wait(0.35);
                 float armOff1 = Off();
-                Check(boss.EscortsOut && !boss.BeamCharging && boss.Locked && boss.Position.DistanceTo(armAt) < 0.01f && armOff0 - armOff1 > 0.07f,
+                Check(EscortsOut() && !BeamCharging() && boss.Locked && boss.Position.DistanceTo(armAt) < 0.01f && armOff0 - armOff1 > 0.07f,
                       $"escorts out, the boss holds its position already ({boss.Position.DistanceTo(armAt):0.000} u) and turns only to face the pilot ({armOff0:0.000} -> {armOff1:0.000} rad)");
                 boss.Position = armHome;
             }
@@ -4100,23 +4187,23 @@ public partial class _Test : Node
             Check(Nodes<Telegraph>().All(t => !t.Line), "no beam line yet: the escorts go first, the charge follows their web");
             // THE CHARGE STARTS ON THE PIN -- not on a guess made at launch. Pinned now, well before the
             // web was predicted to land, it charges at once (the old boss waited out its estimate).
-            if (boss.EscortsOut)
+            if (EscortsOut())
             {
-                double predicted = (double)typeof(Lancer).GetField("_beamPredict", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(boss);
+                double predicted = BeamSlot().Predict;
                 me2.ApplyStatus(Status.Pinned, 0.3);
                 await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-                Check(boss.BeamCharging && boss.ChargeCause == "pinned" && boss.ArmedFor < predicted - 0.2,
-                      $"the charge starts the moment the pilot is pinned, before the web was predicted to land ({boss.ChargeCause} at {boss.ArmedFor:0.00} s, predicted {predicted:0.00} s)");
+                Check(BeamCharging() && BeamSlot().Cause == "pinned" && BeamSlot().ArmedFor < predicted - 0.2,
+                      $"the charge starts the moment the pilot is pinned, before the web was predicted to land ({BeamSlot().Cause} at {BeamSlot().ArmedFor:0.00} s, predicted {predicted:0.00} s)");
             }
-            else Check(boss.BeamCharging && boss.ChargeCause == "pinned",
-                       $"the charge starts the moment the pilot is pinned ({boss.ChargeCause} at {boss.ArmedFor:0.00} s)");
+            else Check(BeamCharging() && BeamSlot().Cause == "pinned",
+                       $"the charge starts the moment the pilot is pinned ({BeamSlot().Cause} at {BeamSlot().ArmedFor:0.00} s)");
             // the bar under the boss's hull resets as a super commits and counts the 15 s to the next
             Check(boss.SuperFill < 0.15 && Math.Abs(boss.NextSuperIn - 15) < 1.5,
                   $"the super-move bar resets as the beam commits, counting the 15 s to the ram ({boss.NextSuperIn:0.0} s, fill {boss.SuperFill:0.00})");
             Telegraph beam = null;
             for (int i = 0; i < 60 * 14 && beam == null; i++) { beam = Nodes<Telegraph>().FirstOrDefault(t => t.Line); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
             Check(beam != null && boss.TelegraphsPending > 0, "the death beam is telegraphed: a red line before it fires");
-            Check(Math.Abs(beam.Duration - Lancer.BeamWindup) < 1e-6 && Lancer.BeamWindup == 6, "the beam charges 6 s");
+            Check(Math.Abs(beam.Duration - 6.0) < 1e-6 && BeamSlot().M.Windup == 6, "the beam charges 6 s -- its row's wind-up, drawn for exactly that long");
             // the warning is parented to the boss, so it swings with the hull instead of being
             // pinned to the spot the boss stood on: the line drawn IS the line fired
             Check(beam.GetParent() == boss, "the beam's telegraph rides the hull rather than the world");
@@ -4129,7 +4216,7 @@ public partial class _Test : Node
             var lockAt = boss.Position;
             double standoff = boss.Position.DistanceTo(me2.Position);
             await Wait(0.75);
-            Check(boss.BeamCharging && boss.Locked && standoff > 650 && boss.Position.DistanceTo(lockAt) < 0.01f,
+            Check(BeamCharging() && boss.Locked && standoff > 650 && boss.Position.DistanceTo(lockAt) < 0.01f,
                   $"the boss is locked in place while the beam charges, {standoff:0} u out where it would otherwise close (drifted {boss.Position.DistanceTo(lockAt):0.000} u)");
             boss.Position = bossWasAt;   // put it back: left out there its tridents take so long to
                                          // arrive that the point-defence check below times out
@@ -4137,9 +4224,9 @@ public partial class _Test : Node
             // 30 s rhythm, the nearest pilot, the escorts' web). Compared with
             // the spec's number as a literal, never with BeamLength itself, and checked on the
             // real segment so the drawn indicator and the hit line are both covered.
-            var (segA, segB) = boss.BeamSegment();
+            var (segA, segB) = boss.Segment("beam");
             var farOut = segA + (segB - segA).Normalized() * 5000f;
-            Check(Lancer.BeamLength == 10000f && Math.Abs((beam.B - beam.A).Length() - 10000f) < 1f
+            Check(BeamSlot().M.Reach == 10000f && Math.Abs((beam.B - beam.A).Length() - 10000f) < 1f
                   && Combat.DistToSegment(farOut, segA, segB) < 1f,
                   $"beam and indicator both reach 10000 u -- a point 5000 u out is inside it, where the old 1800 u fell short (indicator {(beam.B - beam.A).Length():0} u)");
             // HARD LOCKED while it charges -- with the pilot FREE: the old boss froze too once the pilot
@@ -4150,7 +4237,7 @@ public partial class _Test : Node
             boss.Rotation += 0.6f;
             float heldAt = boss.Rotation;
             await Wait(0.5);
-            Check(boss.BeamCharging && !me2.Pinned && Mathf.Abs(Mathf.AngleDifference(boss.Rotation, heldAt)) < 1e-4f,
+            Check(BeamCharging() && !me2.Pinned && Mathf.Abs(Mathf.AngleDifference(boss.Rotation, heldAt)) < 1e-4f,
                   $"hard locked while the beam charges, the pilot free: twisted off it, the boss does not turn back (pinned {me2.Pinned}, turned {Mathf.AngleDifference(boss.Rotation, heldAt):0.0000} rad in 0.5 s)");
             // The twist was a probe, and the aim is locked, so put it back on the pilot by hand: the
             // beam below has to be the real shot, and the damage check at the end of this scenario is
@@ -4172,15 +4259,15 @@ public partial class _Test : Node
                   "then small craft (by their tag, not their size), then everything else -- and a boss is never a PD target");
             Telegraph ring = null;
             for (int i = 0; i < 60 * 18 && ring == null; i++) { ring = Nodes<Telegraph>().FirstOrDefault(t => !t.Line); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
-            Check(ring != null && ring.Radius == Lancer.WaveRadius, "the shockwave is telegraphed: a red ring before it lands");
+            Check(ring != null && ring.Radius == 340f && boss.S("wave").M.Reach == 340f, "the shockwave is telegraphed: a red ring 340 u across before it lands");
             // without point defence, a pair of escorts reaches the pilot and pins it inside the charge
             for (int i = 0; i < 60 * 8 && Me.PdActive; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            boss.LaunchEscorts(me2);
+            boss.LaunchEscorts("beam", me2);
             bool pinnedInTime = false;
-            for (int i = 0; i < (int)(60 * Lancer.BeamWindup) && !pinnedInTime; i++) { pinnedInTime = me2.Pinned; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            for (int i = 0; i < (int)(60 * BeamSlot().M.Windup) && !pinnedInTime; i++) { pinnedInTime = me2.Pinned; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
             Check(pinnedInTime, "left alone (no point defence), the escorts pin the pilot before the charge ends");
             foreach (var r in H.Raiders.Where(r => r.IsEscort).ToList()) r.TakeDamage(999);
-            for (int i = 0; i < 60 * 25 && (tCharge < 0 || boss.Charging || tVolley < 0); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            for (int i = 0; i < 60 * 25 && (tCharge < 0 || Ramming() || tVolley < 0); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             await Wait(1.0);
             GD.Print($"  boss rhythm: beam {tBeam:0.0} s, trident {tVolley:0.0} s, charge {tCharge:0.0} s; trident of {trident}, spread {Mathf.RadToDeg(spread):0} deg");
             // the watcher starts a moment after the boss's clock, so compare the gaps, not the times
@@ -4194,29 +4281,29 @@ public partial class _Test : Node
             Check(Math.Abs(chargeDmg - 40) < 1e-6, $"the charge rams for 40 ({chargeDmg:0})");
             Check(sidestep && liveTurn < 0.01f, $"the live beam holds the line it drew, with the pilot gone from it (turned {Mathf.RadToDeg(liveTurn):0.00} deg)");
             Check(liveDrawn, "and the line is still drawn 2 s into its 3 s burn");
-            Check(Music.I == null || Math.Abs(Lancer.TridentSpeed - 135f) < 1e-3, "trident missiles fly at 135 u/s (10% slower)");
+            Check(Music.I == null || Math.Abs(boss.S("trident").M.Speed - 135f) < 1e-3, "trident missiles fly at 135 u/s (10% slower)");
             // THE FALLBACKS, each on a beam started by hand. The escorts shot down: the charge still comes,
             // but not before their web would have landed. Escorts that neither pin nor die (the pilot far
             // off): they cannot stall it past 5 s. And the ram waits out a beam rather than snapping round
             // in the middle of one.
             {
-                var nf = BindingFlags.NonPublic | BindingFlags.Instance;
-                var fBeam = typeof(Lancer).GetField("_beam", nf); var fPredict = typeof(Lancer).GetField("_beamPredict", nf);
-                var fCharge = typeof(Lancer).GetField("_charge", nf); var fPending = typeof(Lancer).GetField("_pendingCharge", nf);
-                bool RamLine() => Nodes<Telegraph>().Any(t => t.Line && Math.Abs(t.Width - Lancer.HullHalfWidth * 2f) < 0.1f) || fPending.GetValue(boss) != null || boss.Charging;
+                // A MOVE IS ARMED BY ITS ROW'S CLOCK, so each fallback is started by putting that
+                // clock on the point of coming round -- no reflection, and a renamed field can no
+                // longer pass silently.
+                bool RamLine() => Nodes<Telegraph>().Any(t => t.Line && Math.Abs(t.Width - 140f) < 0.1f) || boss.S("ram").At != Boss.Phase.Idle;
                 for (int i = 0; i < 60 * 12 && (boss.Locked || RamLine()); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                 me2.Position = boss.Position + new Vector2(0, 500); me2.Velocity = Vector2.Zero;
-                fBeam.SetValue(boss, 0.01);
-                for (int i = 0; i < 60 * 3 && !boss.EscortsOut; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-                double predictD = (double)fPredict.GetValue(boss);
+                BeamSlot().Due = 0.01;
+                for (int i = 0; i < 60 * 3 && !EscortsOut(); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                double predictD = BeamSlot().Predict;
                 foreach (var r in H.Raiders.Where(r => r.IsEscort).ToList()) r.TakeDamage(999);
-                for (int i = 0; i < 60 * 8 && !boss.BeamCharging; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-                Check(boss.BeamCharging && boss.ChargeCause == "escorts down" && boss.ArmedFor >= predictD - 0.02 && boss.ArmedFor < predictD + 0.1,
-                      $"the escorts shot down, the beam still charges -- once their web would have landed, not before ({boss.ChargeCause} at {boss.ArmedFor:0.00} s, web due {predictD:0.00} s)");
+                for (int i = 0; i < 60 * 8 && !BeamCharging(); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                Check(BeamCharging() && BeamSlot().Cause == "escorts down" && BeamSlot().ArmedFor >= predictD - 0.02 && BeamSlot().ArmedFor < predictD + 0.1,
+                      $"the escorts shot down, the beam still charges -- once their web would have landed, not before ({BeamSlot().Cause} at {BeamSlot().ArmedFor:0.00} s, web due {predictD:0.00} s)");
                 // the ram falls due in the middle of this beam: it waits for the beam to end, then comes
-                fCharge.SetValue(boss, 0.01);
+                boss.S("ram").Due = 0.01;
                 bool ramDuringBeam = false;
-                for (int i = 0; i < 60 * 10 && (boss.BeamCharging || (double)typeof(Lancer).GetField("_beamLive", nf).GetValue(boss) >= 0); i++)
+                for (int i = 0; i < 60 * 10 && (BeamCharging() || BeamLive()); i++)
                 { ramDuringBeam |= RamLine(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
                 bool ramAfter = false;
                 for (int i = 0; i < 60 * 3 && !ramAfter; i++) { ramAfter = RamLine(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
@@ -4224,10 +4311,10 @@ public partial class _Test : Node
                 for (int i = 0; i < 60 * 6 && (boss.Locked || RamLine()); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                 // the pilot 3000 u off: the escorts need longer than 5 s to reach it
                 me2.Position = boss.Position + new Vector2(0, 3000); me2.Velocity = Vector2.Zero;
-                fBeam.SetValue(boss, 0.01);
-                for (int i = 0; i < 60 * 8 && !boss.BeamCharging; i++) { me2.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
-                Check(boss.BeamCharging && boss.ChargeCause == "overdue" && Math.Abs(boss.ArmedFor - 5.0) < 0.05,
-                      $"escorts that neither pin nor die cannot stall it: it charges 5 s after they launch ({boss.ChargeCause} at {boss.ArmedFor:0.00} s)");
+                BeamSlot().Due = 0.01;
+                for (int i = 0; i < 60 * 8 && !BeamCharging(); i++) { me2.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+                Check(BeamCharging() && BeamSlot().Cause == "overdue" && Math.Abs(BeamSlot().ArmedFor - 5.0) < 0.05,
+                      $"escorts that neither pin nor die cannot stall it: it charges 5 s after they launch ({BeamSlot().Cause} at {BeamSlot().ArmedFor:0.00} s)");
                 foreach (var r in H.Raiders.Where(r => r.IsEscort).ToList()) r.TakeDamage(999);
                 me2.Position = boss.Position + new Vector2(0, 500); me2.Velocity = Vector2.Zero;
             }
@@ -4237,7 +4324,7 @@ public partial class _Test : Node
             Character.HintsOff = true;
             // clear of where the crates will fall, with the boss's escorts out (they must die with it)
             Me.Position = boss.Position + new Vector2(0, 1500); Me.Velocity = Vector2.Zero;
-            boss.LaunchEscorts(Me); await Wait(0.1);
+            boss.LaunchEscorts("beam", Me); await Wait(0.1);
             int escortsOut = H.Raiders.Count;
             int HoldOnDisk() { var c = new ConfigFile(); if (c.Load($"{Character.Dir}/{Character.Id}.cfg") != Error.Ok || !c.HasSection("gear_hold")) return 0;
                                return c.GetSectionKeys("gear_hold").Sum(k => (int)c.GetValue("gear_hold", k, 0)); }
@@ -4338,7 +4425,7 @@ public partial class _Test : Node
             H.EnterSector(Hub.SectorKind.Arena); await Wait(1.5);
             // THE DRAKE BASTION: level 2 is its. Checked here, in the arena the wipe below fails.
             {
-                var dk = H.Boss as Drake;
+                var dk = H.Boss;
                 var me3 = Me; me3.MaxHp = 5000; me3.TakeDamage(-(5000 - me3.Hp)); me3.Velocity = Vector2.Zero; me3.Rotation = 0f;
                 var dspr = dk?.GetChildren().OfType<Sprite2D>().FirstOrDefault();
                 Check(dk != null && dk.Type.Id == "drake_bastion" && dk.Type.Name == "DRAKE BASTION" && Math.Abs(dk.MaxHp - 770) < 1e-6
@@ -4346,15 +4433,14 @@ public partial class _Test : Node
                       $"level 2 is the Drake Bastion: 700 hull x1.1 = 770, 420 u long ({dk?.Type.Name}, {dk?.MaxHp:0})");
                 if (dk != null)
                 {
-                    var nf = BindingFlags.NonPublic | BindingFlags.Instance;
                     // ITS CLOCKS: a throw every 30 s from 6 s, the shotgun every 15 s from 17 s -- 11 s after a
                     // throw starts, clear of its 9.1 s (7.5 s of warning and 1.6 s of flight), so the two never
                     // run back to back (at the trident's own 13.5 s it fell inside the first throw)
-                    double gap = (double)typeof(Drake).GetField("_shotgun", nf).GetValue(dk) - (double)typeof(Drake).GetField("_throw", nf).GetValue(dk);
+                    double gap = dk.S("shotgun").Due - dk.S("throw").Due;
                     Check(Math.Abs(gap - 11) < 1e-6 && 11 > 7.5 + 1.6 && 30 - 11 - 15 > 0,
                           $"its specials never run back to back: the shotgun 11 s after each throw starts, clear of the throw's 9.1 s ({gap:0.00} s)");
                     // its own clocks out of the way: each special below is started by hand, alone
-                    typeof(Drake).GetField("_throw", nf).SetValue(dk, 999.0); typeof(Drake).GetField("_shotgun", nf).SetValue(dk, 999.0);
+                    dk.S("throw").Due = 999.0; dk.S("shotgun").Due = 999.0;
                     // MAIN GUN: a slow shell every 2.5 s (2.4 DPS at 6 a shell), dodged by moving
                     me3.Position = dk.Position + new Vector2(0, 700); await Wait(0.1);
                     var shellSeen = new System.Collections.Generic.HashSet<Shot>(Slugs());
@@ -4381,10 +4467,10 @@ public partial class _Test : Node
                     // seven pieces of scrap down them: the same fixed fan, 10 degrees apart
                     for (int i = 0; i < 60 * 12 && dk.Locked; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                     me3.Position = dk.Position + new Vector2(0, 1400); me3.Velocity = Vector2.Zero;
-                    typeof(Drake).GetField("_shotgun", nf).SetValue(dk, 0.01);
+                    dk.S("shotgun").Due = 0.01;
                     Telegraph warpRing = null;
                     for (int i = 0; i < 60 * 2 && warpRing == null; i++) { warpRing = Nodes<Telegraph>().FirstOrDefault(t => !t.Line); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
-                    for (int i = 0; i < 60 * 3 && !dk.FanWinding; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                    for (int i = 0; i < 60 * 3 && dk.S("shotgun").At != Boss.Phase.Winding; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                     var landed = dk.Position; float warpOff = landed.DistanceTo(me3.Position);
                     var fan = Nodes<Telegraph>().Where(t => t.Line && Math.Abs(t.Duration - 1.875) < 1e-6).ToList();
                     var scrapSeen = new System.Collections.Generic.HashSet<Shot>(Slugs());
@@ -4395,8 +4481,9 @@ public partial class _Test : Node
                     float aimTo = (me3.Position - landed).Angle();
                     var offs = scrap.Select(s => Mathf.RadToDeg(Mathf.AngleDifference(aimTo, s.Dir.Angle()))).OrderBy(a => a).ToList();
                     bool fanned = offs.Count == 7 && offs.Zip(new[] { -30f, -20f, -10f, 0f, 10f, 20f, 30f }, (a, b) => Math.Abs(a - b) < 0.5f).All(x => x);
-                    Check(warpRing != null && Math.Abs(warpRing.Duration - 1.0) < 1e-6 && Math.Abs(warpOff - 600) < 5 && fan.Count == 7 && heldStill && fanned,
-                          $"the scrap shotgun: a warp to 600 u off the pilot ({warpOff:0}), a fan of 7 lines for 1.875 s held still, then 7 pieces at -30..+30 in 10s ({string.Join(" ", offs.Select(a => a.ToString("0")))})");
+                    Check(warpRing != null && Math.Abs(warpRing.Duration - 1.0) < 1e-6 && Math.Abs(warpOff - 600) < 5 && fan.Count == 7 && heldStill && fanned
+                          && dk.S("shotgun").Fired == 1,
+                          $"the scrap shotgun: a warp to 600 u off the pilot ({warpOff:0}), a fan of 7 lines for 1.875 s held still, then 7 pieces at -30..+30 in 10s ({string.Join(" ", offs.Select(a => a.ToString("0")))}), counted once ({dk.S("shotgun").Fired})");
                     // EACH PIECE ITS OWN HIT, by construction rather than by hand. The fan used to
                     // number its seven source keys itself (boss:scrap:0..6) so the pieces would not
                     // swallow one another inside a hull's 0.52 s per-source gap; every fired shot
@@ -4417,7 +4504,7 @@ public partial class _Test : Node
                     for (int i = 0; i < 60 * 6 && dk.Locked; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                     me3.Position = dk.Position + new Vector2(0, 700); me3.Velocity = Vector2.Zero;
                     await Wait(0.2);
-                    typeof(Drake).GetField("_throw", nf).SetValue(dk, 0.01);
+                    dk.S("throw").Due = 0.01;
                     for (int i = 0; i < 60 && dk.Rock == null; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                     var rock = dk.Rock;
                     var lane = Nodes<Telegraph>().FirstOrDefault(t => t.Line && Math.Abs(t.Width - 180f) < 0.5f);
@@ -4426,8 +4513,8 @@ public partial class _Test : Node
                     bool heldRock = rock != null && GodotObject.IsInstanceValid(rock) && rock.Position.DistanceTo(rockAt) < 0.01f && !rock.Thrown
                                     && dk.Position.DistanceTo(drakeAt) < 0.01f && dk.Locked;
                     Check(rock != null && lane != null && Math.Abs(lane.Duration - 7.5) < 1e-6 && Math.Abs(lane.Hold - 1.6) < 1e-6
-                          && Math.Abs(rockAt.DistanceTo(drakeAt) - 220) < 1 && heldRock,
-                          $"the throw: a rock beside it in its tractor (220 u off), a lane of its width for 7.5 s, the boss and the rock held still ({rockAt.DistanceTo(drakeAt):0} u, lane {lane?.Duration:0.0} s)");
+                          && Math.Abs(rockAt.DistanceTo(drakeAt) - 220) < 1 && heldRock && dk.S("throw").Fired == 1,
+                          $"the throw: a rock beside it in its tractor (220 u off), a lane of its width for 7.5 s, the boss and the rock held still ({rockAt.DistanceTo(drakeAt):0} u, lane {lane?.Duration:0.0} s), counted once ({dk.S("throw").Fired})");
                     for (int i = 0; i < 60 * 6 && rock != null && GodotObject.IsInstanceValid(rock) && !rock.Thrown; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                     var lane0 = rock?.From ?? Vector2.Zero; float laneLen = rock == null ? 1 : rock.From.DistanceTo(rock.To);
                     await Wait(0.8);
@@ -4810,16 +4897,16 @@ public partial class _Test : Node
             await Wait(2.0);
             H.SelectLevel(2);                                    // mission 2 is the Drake Bastion's level
             await ToArena("arena host", 2);
-            Check(H.Boss is Drake { Type.Id: "drake_bastion" }, $"arena host: mission 2, level 2, is the Drake Bastion ({H.Boss?.Type.Name})");
+            Check(H.Boss is { Type.Id: "drake_bastion" }, $"arena host: mission 2, level 2, is the Drake Bastion ({H.Boss?.Type.Name})");
             H.Boss.DamageMult = 0;                               // nobody is lost while the rest is checked
             H.Boss.HullMult = 2.2;                               // a party-of-3 scale: the guest must show the host's
             // in its gun's reach, and a rock thrown as soon as the guest is in the arena to be told of it
             // (a boss's events go to the peers already there), for the guest to see both
-            if (H.Boss is Drake hd)
+            if (H.Boss is { Type.Id: "drake_bastion" } hd)
             {
                 Me.Position = hd.Position + new Vector2(0, 600); Me.Velocity = Vector2.Zero;
                 await RealTime(() => H.Ships.Any(s => !s.Mine && Hub.PeerSector(s.OwnerId) == Hub.SectorKind.Arena), 6);
-                typeof(Drake).GetField("_throw", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(hd, 0.01);
+                hd.S("throw").Due = 0.01;
             }
             await Wait(3.5);
             // A GUEST DROPPED MID-ARENA (no goodbye): its place is held, and it comes back into the
@@ -4983,7 +5070,7 @@ public partial class _Test : Node
             var drakeWatch = new LateSampler { Probe = () =>
             {
                 if (H == null || !Hub.InArena || !GodotObject.IsInstanceValid(H.Boss)) return false;
-                sawDrake |= H.Boss is Drake { Type.Id: "drake_bastion" };
+                sawDrake |= H.Boss is { Type.Id: "drake_bastion" };
                 sawShell |= Slugs().Any(s => s.Cosmetic && s.Kind == Shots.Slug);
                 sawRock |= Nodes<ThrownRock>().Any(r => r.Cosmetic && r.Hold <= 7.5 && r.From.DistanceTo(H.Boss.Position) < 260f);
                 return sawDrake && sawShell && sawRock;

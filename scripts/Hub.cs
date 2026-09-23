@@ -839,7 +839,7 @@ public partial class Hub : Node2D
     private void BuildArena()
     {
         var type = Missions.ForLevel(Missions.Level);
-        Boss = type.Make();
+        Boss = new Boss();
         Boss.Hub = this; Boss.Type = type; Boss.Position = BasePos + new Vector2(0, -700f); Boss.Rotation = Mathf.Pi;
         AddChild(Boss);
     }

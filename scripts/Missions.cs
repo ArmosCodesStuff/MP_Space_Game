@@ -18,13 +18,31 @@ using System.Linq;
 //     parts      Loot.CratesFor(L) crates of gear, rolled by the host for each pilot (see Loot)
 public static class Missions
 {
-    // A boss: its id (a pilot's clears are recorded under it), its name, its base hull, and how to
-    // build one.
-    public class BossType { public string Id, Name; public double Hull; public Func<Boss> Make; }
+    // A BOSS, WHOLE: its id (a pilot's clears are recorded under it), its name, its base hull, the
+    // art and shape of that hull, how it closes when no move holds it, and its MOVES -- a BossMove
+    // row each. EnemyDef carries exactly this for a raider, down to the sprite and the length, and
+    // for the same reason: BEHAVIOUR is code, geometry and art are data. There is no Make: every
+    // boss is the one Boss class reading this row, where each was a subclass of its own with the
+    // sprite, the length and the half-width written into it as abstract members.
+    public class BossType
+    {
+        public string Id, Name;
+        public double Hull;
+        public string Sprite;
+        public float Length, HalfWidth;
+        public float HoldOff = 650f;        // unlocked, it closes to about this and no nearer
+        public float CloseSpeed = 30f;      // ...at this, ponderously
+        public float TurnRate = 0.3f;       // its native turn (rad/s)
+        public BossMove[] Moves;
+    }
     public static readonly BossType[] Bosses =
     {
-        new() { Id = "silver_lancer", Name = "SILVER LANCER", Hull = 760, Make = () => new Lancer() },
-        new() { Id = "drake_bastion", Name = "DRAKE BASTION", Hull = 700, Make = () => new Drake() },
+        new() { Id = "silver_lancer", Name = "SILVER LANCER", Hull = 760,
+                Sprite = "res://boss_raider.png",          // raider red, a white skull on its centre
+                Length = 360f, HalfWidth = 70f, Moves = Lancer.Moves },
+        new() { Id = "drake_bastion", Name = "DRAKE BASTION", Hull = 700,
+                Sprite = "res://boss_drake.png",
+                Length = 420f, HalfWidth = 90f, Moves = Drake.Moves },
     };
     // The boss of a level: every peer works it out from the replicated level alone.
     public static BossType ForLevel(int level) => Bosses[(Math.Max(1, level) - 1) % Bosses.Length];
