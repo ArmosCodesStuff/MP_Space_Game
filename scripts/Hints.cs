@@ -24,7 +24,7 @@ public partial class Hints : CanvasLayer
         ["raid"]        = ("RAIDERS", "They come for your base after a failed mission, and for your hauler on an escort. The base's guns help; miners, salvagers and the hauler cannot fight back."),
         ["hauler"]      = ("THE HAULER", "DISPATCH sends it alone: past the portal it may be lost (EVASION, on the HAULER tab, lowers the risk). ESCORT flies it round the four outposts for five times the pay; keep the raiders off it."),
         ["pilot"]       = ("A LEVEL UP", "L spends your points on rudder, hull, engines and weapons. Bosses give EXP; the first clear of each level gives more."),
-        ["warp"]        = ("WARP", "V charges for 3 s, then jumps to your target or waypoint if the bow is on it, else 2000 u ahead. 30 s to recharge."),
+        ["warp"]        = ("WARP", "V charges for 3 s, then jumps toward your target or waypoint if the bow is on it, else straight ahead. 1200 u at most, and 30 s to recharge."),
         ["stasis"]      = ("STASIS", "Your ship is held in stasis, not lost. Fly the escape pod clear; when the ship is ready, F re-boards it."),
         ["boss"]        = ("THE BOSS", "Red shapes are its attacks, drawn before they land: get out of them. Beat it for EXP, a bounty and parts."),
     };

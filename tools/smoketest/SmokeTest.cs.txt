@@ -1844,21 +1844,32 @@ public partial class _Test : Node
             Check(me.Warping && me.Position.DistanceTo(start) < 20f, "V starts a 3 s warm-up; the ship holds until it jumps");
             await Wait(PlayerShip.WarpWarmup);
             var moved = me.Position - start;
-            Check(!me.Warping && Math.Abs(moved.Length() - 2000f) < 40f && Mathf.Abs(Vector2.Up.AngleTo(moved)) < 0.05f,
-                  $"nothing selected ahead: 2000 u straight ahead ({moved.Length():0} u)");
+            Check(!me.Warping && Math.Abs(moved.Length() - 1200f) < 40f && Mathf.Abs(Vector2.Up.AngleTo(moved)) < 0.05f,
+                  $"nothing selected ahead: 1200 u straight ahead ({moved.Length():0} u)");
             Check(Math.Abs(me.WarpCooldownLeft - PlayerShip.WarpCooldown) < 0.6 && PlayerShip.WarpCooldown == 30, "then a 30 s cooldown");
             Key(global::Godot.Key.V); await Wait(0.1);
             Check(!me.Warping, "V does nothing while it cools down");
             // a target within 45 degrees of the bow: arrive just short of it
-            Ready(); me.Position = d2w.Position + new Vector2(0, 1400); await Wait(0.3);
+            Ready(); me.Position = d2w.Position + new Vector2(0, 900); await Wait(0.3);
             Click(Scr(d2w.Position)); await Wait(0.05);
             Key(global::Godot.Key.V); await Wait(PlayerShip.WarpWarmup + 0.2);
             float want = d2w.HitRadius + Classes.Art(me.Class).Length * 0.5f + PlayerShip.WarpStandoff;
-            Check(Math.Abs(me.Position.DistanceTo(d2w.Position) - want) < 20f, $"a target ahead: it warps to just short of it ({me.Position.DistanceTo(d2w.Position):0} u, wanted {want:0})");
+            double noseGap = me.Position.DistanceTo(d2w.Position) - d2w.HitRadius - Classes.Art(me.Class).Length * 0.5f;
+            Check(Math.Abs(me.Position.DistanceTo(d2w.Position) - want) < 20f && noseGap > 120,
+                  $"a target ahead: it warps to short of it, and a hull most of 400 u long stops with its NOSE {noseGap:0} u clear of the target's circle, not through it ({me.Position.DistanceTo(d2w.Position):0} u, wanted {want:0})");
+            // FURTHER OFF THAN THE DRIVE REACHES: the heading is the target's, the distance is the
+            // drive's. An aimed jump used to arrive whatever the distance, so anything selected was
+            // one press away however far off it stood.
+            Ready(); me.Position = d2w.Position + new Vector2(0, 3000); var far0 = me.Position; await Wait(0.3);
+            Click(Scr(d2w.Position)); await Wait(0.05);
+            Key(global::Godot.Key.V); await Wait(PlayerShip.WarpWarmup + 0.2);
+            var farMoved = me.Position - far0;
+            Check(Math.Abs(farMoved.Length() - 1200f) < 40f && farMoved.Y < 0 && me.Position.DistanceTo(d2w.Position) > 1700,
+                  $"a target 3000 u ahead: 1200 u toward it, not onto it ({farMoved.Length():0} u moved, {me.Position.DistanceTo(d2w.Position):0} u still to go)");
             // a target behind: outside the cone, so straight ahead instead
             Ready(); me.Position = d2w.Position + new Vector2(0, -900); var s3 = me.Position; await Wait(0.2);
             Key(global::Godot.Key.V); await Wait(PlayerShip.WarpWarmup + 0.2);
-            Check(Math.Abs((me.Position - s3).Y + 2000f) < 40f && H.Selected == d2w, "a target behind (outside 45 degrees): straight ahead instead");
+            Check(Math.Abs((me.Position - s3).Y + 1200f) < 40f && H.Selected == d2w, "a target behind (outside 45 degrees): straight ahead instead");
             // aimed when it JUMPS, by the heading then: swing onto a target during the charge...
             Ready(); me.Position = d2w.Position + new Vector2(0, -900); await Wait(0.2);          // facing north, d2 behind
             Click(Scr(d2w.Position)); await Wait(0.05);
@@ -1871,7 +1882,7 @@ public partial class _Test : Node
             Key(global::Godot.Key.V); await Wait(1.0);
             me.Rotation = Mathf.Pi / 2f; await Wait(PlayerShip.WarpWarmup - 1.0 + 0.2);            // now facing east
             var mv = me.Position - s4;
-            Check(Math.Abs(mv.X - 2000f) < 40f && Math.Abs(mv.Y) < 40f, $"V pressed facing the target, then turned east: 2000 u east ({mv.X:0}, {mv.Y:0})");
+            Check(Math.Abs(mv.X - 1200f) < 40f && Math.Abs(mv.Y) < 40f, $"V pressed facing the target, then turned east: 1200 u east ({mv.X:0}, {mv.Y:0})");
             // the radar: click a marker to select it -- an enemy as the target, a landmark as a waypoint
             // beside the base: every landmark it clicks below is within the radar's 3600 u reach from here
             Ready(); me.Position = Hub.BasePos + new Vector2(0, 300); me.Rotation = 0f; await Wait(0.6);

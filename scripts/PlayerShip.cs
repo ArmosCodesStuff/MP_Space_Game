@@ -683,10 +683,16 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // ── WARP (V) -- every capital ship ─────────────────────────────────────────
     // A fixed key and a hull cooldown, never an ability-bar slot. After a 3 s warm-up
     // the ship jumps to the selected target or waypoint if it lies within 45 degrees of the bow
-    // (stopping just short of it), otherwise 2000 u straight ahead. Movement is the
+    // (stopping short of it), otherwise 1200 u straight ahead. Movement is the
     // owner's, so the owner jumps; everyone else sees the charge and a clean snap.
+    //
+    // THE DRIVE THROWS IT 1200 u AND NO FURTHER. An aimed jump used to arrive AT the target
+    // whatever the distance, so anything selected was one press away however far off it stood;
+    // now the aim decides the heading and the drive decides the reach.
     public const double WarpWarmup = 3.0, WarpCooldown = 30.0;
-    public const float WarpRange = 2000f, WarpCone = Mathf.Pi / 4f, WarpStandoff = 60f;
+    // The standoff is the gap between the ship's NOSE and the target's circle. A capital ship is
+    // most of 400 u long, so 60 u of it put a battleship's bow through whatever it aimed at.
+    public const float WarpRange = 1200f, WarpCone = Mathf.Pi / 4f, WarpStandoff = 160f;
     // A display ship jumps its own distance on its own clock (the title screen dodges an area
     // shot, which wants a short hop and a short wait). Defaulted to the class numbers, so a real
     // ship is unaffected -- these exist so the menu does not need a second warp implementation.
@@ -723,7 +729,16 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         var bow = Vector2.Up.Rotated(Rotation);
         var dest = Position + bow * WarpHop;
         var aim = (GetParent() as Hub)?.WarpAim() ?? (false, Vector2.Zero, 0f);
-        if (aim.has && Mathf.Abs(bow.AngleTo(aim.at - Position)) <= WarpCone) dest = WarpArrival(Position, aim.at, aim.radius, MyArt.Length);
+        if (aim.has && Mathf.Abs(bow.AngleTo(aim.at - Position)) <= WarpCone)
+        {
+            var step = WarpArrival(Position, aim.at, aim.radius, MyArt.Length) - Position;
+            // The aim gives the heading; the drive gives the reach. Further off than the hop and
+            // the jump ends where the drive runs out, on the line to it.
+            if (step.Length() > WarpHop) step = step.Normalized() * WarpHop;
+            // ...and never backwards: a target already nearer than the arrival standoff would put
+            // the arrival BEHIND the ship, which is not a jump toward anything.
+            if (step.Dot(bow) > 0) dest = Position + step;
+        }
         Position = dest; Velocity = Vector2.Zero;
         _warpLeft = -1; _warpCd = WarpEvery; _warpFlash = 0.6;
     }

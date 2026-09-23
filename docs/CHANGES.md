@@ -340,6 +340,8 @@ From the 2026-09-21 batch (each is a constant or one rule to change):
      and the base wears a shield sprite on each side while they stand.
    - The base has twice the hull of that level's boss (level 3: about 1600).
    - Only the base drops loot.
+   - **Waves come in as an escort's do** -- the same director, the same cadence -- but at FULL
+     strength: none of the escort's reductions to damage or hull.
 
 ---
 
