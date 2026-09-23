@@ -129,8 +129,9 @@ public partial class BasePanel : PanelContainer
         }
         if (_reset != null)
         {
-            var (o, s, c) = Y.ResetCost();
-            Ui.SetText(_resetCost, $"Cost now: {o:0} ore, {s:0} salvage, {c:0} credits");
+            // One figure per resource the fleet gathers, named by its row, then the credits.
+            Ui.SetText(_resetCost, "Cost now: " + string.Join(", ",
+                Gathering.All.Select(g => $"{Y.ResetCost(g.Resource):0} {g.Unit}")) + $", {Y.ResetCostCredits:0} credits");
             Ui.SetText(_reset, _armed > 0 ? "CLICK AGAIN TO PAY AND RESET" : "RESET");
             _reset.Disabled = Hub.CreatorOpen;
         }

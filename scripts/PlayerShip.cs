@@ -310,7 +310,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         if (WingCount(WingKind.Bomber) != hadB) { StrikeTarget = null; _strikesOut = 0; }
         if (!Net.Sim) return;
         Sl("missile").N = Math.Min(MissilesLoaded, (int)Stats["missile_mag"]);
-        foreach (var w in _wings) if (w.IsBomber) w.Ammo = Math.Min(w.Ammo, (int)Stats["bomber_ammo"]);
+        foreach (var w in _wings) if (w.Def.AmmoStat != null) w.Ammo = Math.Min(w.Ammo, (int)Stats[w.Def.AmmoStat]);
     }
 
     private void AddTurret(Vector2 offset, bool pd)
@@ -389,7 +389,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     public Vector2 Bay(Wing w)
     {
         int i = 0, n = 0;
-        foreach (var x in _wings) { if (!x.IsBomber) continue; if (x == w) i = n; n++; }
+        foreach (var x in _wings) { if (!x.Def.Parks) continue; if (x == w) i = n; n++; }
         bool port = i % 2 == 0;
         int onSide = port ? (n + 1) / 2 : n / 2, j = i / 2;
         var art = MyArt;
@@ -677,7 +677,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             || Position.DistanceTo(t.Position) > Stats["strike_range"]) return;
         // the bombers armed now are the strike: each is called, and answers once
         StrikeTarget = t; _strikesOut = 0;
-        foreach (var w in _wings) if (w.IsBomber && w.Armed) { w.Call(); _strikesOut++; }
+        foreach (var w in _wings) if (w.Def.Parks && w.Armed) { w.Call(); _strikesOut++; }
     }
 
     // ── WARP (V) -- every capital ship ─────────────────────────────────────────
@@ -759,14 +759,15 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     public void Fail(string id, string msg) => _fails[id] = (msg, _clock + FailShow);
     public string FailNote(string id) => _fails.TryGetValue(id, out var f) && _clock < f.until ? f.msg : null;
 
-    // Craft leave the carrier one at a time, at least Wing.LaunchInterval apart: fighters out of
-    // the hangar, bombers off the deck, each kind on its own clock.
-    private double _nextFighter, _nextBomber;
+    // Craft leave the carrier one at a time, at least the row's LaunchInterval apart: fighters out
+    // of the hangar, bombers off the deck, EACH KIND ON ITS OWN CLOCK -- one slot per row of
+    // Wings.All rather than two named fields and a ternary picking between them, so a third craft
+    // brings its own clock with it.
+    private readonly double[] _nextLaunch = new double[System.Enum.GetValues<WingKind>().Length];
     public bool TakeLaunchSlot(WingKind k)
     {
-        ref double next = ref (k == WingKind.Fighter ? ref _nextFighter : ref _nextBomber);
-        if (_clock < next) return false;
-        next = _clock + Wing.LaunchInterval;
+        if (_clock < _nextLaunch[(int)k]) return false;
+        _nextLaunch[(int)k] = _clock + Wings.Of(k).LaunchInterval;
         return true;
     }
 

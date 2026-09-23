@@ -44,7 +44,11 @@ public static class Character
     // THE BASE. It belongs to the pilot, not to the session: each character has its own, and a
     // guest visiting someone else's sets its own aside rather than sharing theirs. Yard owns the
     // live numbers and writes them here; this is the copy that reaches disk.
-    public static double BaseOre, BaseSalvage, BaseCredits;
+    // The stock BY RESOURCE ID (Gathering.Resources) -- which is also its key in the file, so
+    // "ore" and "salvage" are the same keys two fields wrote and a third resource needs no new
+    // code here. Credits are not gathered, so they stay their own figure.
+    public static readonly Dictionary<string, double> BaseStock = new();
+    public static double BaseCredits;
     public static readonly Dictionary<string, int> BaseLevels = new();
     public static readonly Dictionary<string, double> BaseInvested = new();
     // equipment, per class: what is on each ship. The hold is the pilot's: every part owned and not
@@ -98,7 +102,7 @@ public static class Character
         Bonuses.Clear();
         Exp = 0; Level = 1; Points = 0; Array.Clear(Bought); BossCleared.Clear(); Loadout.Clear(); GearHold.Clear(); Unclaimed.Clear(); PaidKills.Clear();
         HintsSeen.Clear(); HintsOff = false;
-        BaseOre = BaseSalvage = BaseCredits = 0; BaseLevels.Clear(); BaseInvested.Clear();
+        BaseCredits = 0; BaseStock.Clear(); BaseLevels.Clear(); BaseInvested.Clear();
     }
 
     // THE BATCHED SAVE, for things that come in runs -- loot picked up crate after crate. Each call
@@ -136,7 +140,10 @@ public static class Character
         c.SetValue("progress", "exp", Exp); c.SetValue("progress", "level", Level); c.SetValue("progress", "points", Points);
         for (int i = 0; i < Bought.Length; i++) c.SetValue("progress", "bought_" + Progression.All[i].Id, Bought[i]);
         foreach (var kv in BossCleared) c.SetValue("boss_cleared", kv.Key, string.Join(",", kv.Value.OrderBy(x => x)));
-        c.SetValue("base", "ore", BaseOre); c.SetValue("base", "salvage", BaseSalvage); c.SetValue("base", "credits", BaseCredits);
+        // ONE KEY PER RESOURCE ID, in table order, then the credits: "ore", "salvage", "credits",
+        // the same three keys in the same order two named fields wrote.
+        foreach (var r in Gathering.Resources) c.SetValue("base", r, BaseStock.GetValueOrDefault(r));
+        c.SetValue("base", "credits", BaseCredits);
         foreach (var kv in BaseLevels) c.SetValue("base_levels", kv.Key, kv.Value);
         foreach (var kv in BaseInvested) c.SetValue("base_invested", kv.Key, kv.Value);
         foreach (var kv in Loadout) c.SetValue("equipment", kv.Key.ToString(), string.Join(",", kv.Value));
@@ -211,8 +218,10 @@ public static class Character
         // is held to its upgrade's cap: this is a file on the player's disk, and a level for an
         // upgrade that no longer exists, or more levels than it has, would be spent money nothing
         // can show.
-        BaseOre = Num(c, "base", "ore", 0, MaxStock);
-        BaseSalvage = Num(c, "base", "salvage", 0, MaxStock);
+        // A RESOURCE THIS FILE HAS NEVER HEARD OF READS 0, not a refusal: that is the whole of
+        // what a new gatherer costs a pilot's existing save.
+        BaseStock.Clear();
+        foreach (var r in Gathering.Resources) BaseStock[r] = Num(c, "base", r, 0, MaxStock);
         BaseCredits = Num(c, "base", "credits", 0, MaxStock);
         BaseLevels.Clear();
         if (c.HasSection("base_levels"))

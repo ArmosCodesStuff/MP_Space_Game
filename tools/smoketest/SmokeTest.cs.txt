@@ -197,15 +197,15 @@ public partial class _Test : Node
         // Set here, asserted below, for every role.
         Character.NewBlank(); if (role != "solo") Character.Id += "-" + role;
         Character.Name = role + " Base"; Character.BaseCredits = 7777;
-        Character.BaseOre = 55; Character.Save();
+        Character.BaseStock["ore"] = 55; Character.Save();
         string baseId = Character.Id;
         GetTree().ChangeSceneToFile("res://Hub.tscn");
         await Wait(0.4);
         // Credits, not ore: ore is live stock and the hauler starts loading from it within the
         // first half second, so an exact ore figure here is a check on the clock. Credits only
         // move when something is bought.
-        Check(H?.Yard != null && Math.Abs(H.Yard.Credits - 7777) < 1e-6 && H.Yard.Ore > 0,
-              $"a saved base survives entering the hub ({H?.Yard?.Credits:0} cr, {H?.Yard?.Ore:0} ore of 55)");
+        Check(H?.Yard != null && Math.Abs(H.Yard.Credits - 7777) < 1e-6 && H.Yard.Stock("ore") > 0,
+              $"a saved base survives entering the hub ({H?.Yard?.Credits:0} cr, {H?.Yard?.Stock("ore"):0} ore of 55)");
         var stillThere = new ConfigFile();
         stillThere.Load($"{Character.Dir}/{baseId}.cfg");
         Check(Math.Abs((double)stillThere.GetValue("base", "credits", -1.0) - 7777) < 1e-6,
@@ -321,7 +321,7 @@ public partial class _Test : Node
         Character.Exp = 777; Character.Level = 5; Character.Points = 3;
         for (int i = 0; i < Character.Bought.Length; i++) Character.Bought[i] = i % (Progression.MaxPerUpgrade + 1);
         Character.BossCleared["ironhold"] = new System.Collections.Generic.HashSet<int> { 1, 3 };
-        Character.BaseOre = 123.5; Character.BaseSalvage = 67.25; Character.BaseCredits = 4321;
+        Character.BaseStock["ore"] = 123.5; Character.BaseStock["salvage"] = 67.25; Character.BaseCredits = 4321;
         Character.BaseLevels[Economy.All[0].Id] = 3;
         Character.BaseInvested[Economy.All[0].Tab] = 900;
         Character.GearHold["chip_basic"] = 2; Character.GearHold["std_drive"] = 1; Character.GearHold["cv_elite_3"] = 1;
@@ -349,8 +349,8 @@ public partial class _Test : Node
         // against the list this test exercises. Add a field and this goes red until it is either
         // set above or named here as deliberately not persisted. Found the hard way: the base
         // economy fields were added, not saved, and the round trip passed.
-        var exercised = new[] { "Accent", "BaseCredits", "BaseInvested", "BaseLevels", "BaseOre",
-                                "BaseSalvage", "BossCleared", "Bonuses", "Bought", "Class", "Exp",
+        var exercised = new[] { "Accent", "BaseCredits", "BaseInvested", "BaseLevels",
+                                "BaseStock", "BossCleared", "Bonuses", "Bought", "Class", "Exp",
                                 "GearHold", "HintsOff", "HintsSeen", "Id", "Level", "Loadout", "Main",
                                 "Name", "PaidKills", "Points", "Unclaimed" };
         // Not state a character carries: a path, and the compiler's backing field for a property
@@ -414,6 +414,37 @@ public partial class _Test : Node
             Character.NewBlank();
             Check(DumpCharacter().Replace(Character.Id, "") == fresh.Replace(freshId, ""),
                   "a new pilot starts with an empty hold, no loot, no hints seen and hints on");
+            // A PILOT'S FILE FROM BEFORE THE RESOURCE TABLE, written key by key with the names
+            // the old build used. The stock's keys ARE the resource ids and the level keys ARE
+            // the upgrade ids, so there is nothing to migrate -- including "mine_rate", whose id
+            // is not its gatherer's prefix and which a tidier generated id would have DROPPED,
+            // losing a level the player paid for.
+            var old = new ConfigFile();
+            old.SetValue("id", "version", 2); old.SetValue("id", "name", "OldKeys");
+            old.SetValue("base", "ore", 1234.5); old.SetValue("base", "salvage", 678.25); old.SetValue("base", "credits", 4321.0);
+            old.SetValue("base_levels", "miner_hold", 3); old.SetValue("base_levels", "mine_rate", 2);
+            old.SetValue("base_levels", "salvage_rate", 1); old.SetValue("base_levels", "salvager_hull", 1);
+            old.SetValue("base_invested", "MINERS", 900.0);
+            old.Save($"{Character.Dir}/oldkeys.cfg");
+            bool ol = Character.Load("oldkeys");
+            Check(ol && Math.Abs(Character.BaseStock.GetValueOrDefault("ore") - 1234.5) < 1e-6
+                  && Math.Abs(Character.BaseStock.GetValueOrDefault("salvage") - 678.25) < 1e-6
+                  && Math.Abs(Character.BaseCredits - 4321) < 1e-6
+                  && Character.BaseLevels.GetValueOrDefault("miner_hold") == 3
+                  && Character.BaseLevels.GetValueOrDefault("mine_rate") == 2
+                  && Character.BaseLevels.GetValueOrDefault("salvage_rate") == 1
+                  && Character.BaseLevels.GetValueOrDefault("salvager_hull") == 1
+                  && Math.Abs(Character.BaseInvested.GetValueOrDefault("MINERS") - 900) < 1e-6,
+                  $"a base written with the old key names loads unchanged -- [base] ore/salvage/credits, and every upgrade id including mine_rate ({Character.BaseStock.GetValueOrDefault("ore"):0.0} ore, {Character.BaseStock.GetValueOrDefault("salvage"):0.00} salvage, {Character.BaseCredits:0} cr, mine_rate {Character.BaseLevels.GetValueOrDefault("mine_rate")}, salvage_rate {Character.BaseLevels.GetValueOrDefault("salvage_rate")})");
+            Character.Save(); await Wait(0.05);
+            var rewritten = new ConfigFile(); rewritten.Load($"{Character.Dir}/oldkeys.cfg");
+            Check(Math.Abs((double)rewritten.GetValue("base", "ore", -1.0) - 1234.5) < 1e-6
+                  && Math.Abs((double)rewritten.GetValue("base", "salvage", -1.0) - 678.25) < 1e-6
+                  && Math.Abs((double)rewritten.GetValue("base", "credits", -1.0) - 4321) < 1e-6
+                  && rewritten.GetSectionKeys("base").Length == Gathering.Resources.Length + 1
+                  && Gathering.Resources.All(r => rewritten.HasSectionKey("base", r)),
+                  $"...and saving it writes those same keys back: one per resource id, then the credits ({string.Join(",", rewritten.GetSectionKeys("base"))})");
+            Character.Delete("oldkeys");
             Character.Delete("tampered"); Character.Delete("bare");
             Check(Character.Load(id), "(back to the round-trip pilot)");
         }
@@ -1067,7 +1098,7 @@ public partial class _Test : Node
         // the ship menu is behind REFIT in the BASE menu now, and it costs 10%
         Key(global::Godot.Key.C); await Wait(0.1);
         Check(Count<CharacterCreator>() == 0, "C no longer opens the ship menu");
-        H.Yard.Ore = 1000; H.Yard.Salvage = 500; H.Yard.Credits = 200;
+        H.Yard.SetStock("ore", 1000); H.Yard.SetStock("salvage", 500); H.Yard.Credits = 200;
         Key(global::Godot.Key.B); await Wait(0.1);
         var bp = Nodes<BasePanel>().FirstOrDefault();
         Check(bp != null, "B opens the base menu");
@@ -1089,14 +1120,14 @@ public partial class _Test : Node
         var reset = Nodes<Button>(bp).First(b => b.Name == "Reset");
         // The docked hauler keeps loading from stock every frame, so amounts are read
         // immediately around each click (a button press runs synchronously).
-        double o0 = H.Yard.Ore;
+        double o0 = H.Yard.Stock("ore");
         reset.EmitSignal(BaseButton.SignalName.Pressed);
-        Check(Count<CharacterCreator>() == 0 && H.Yard.Ore == o0, "first RESET click charges nothing and opens nothing");
+        Check(Count<CharacterCreator>() == 0 && H.Yard.Stock("ore") == o0, "first RESET click charges nothing and opens nothing");
         await Wait(0.05);
         Check(reset.Text.StartsWith("CLICK AGAIN"), "it asks for a second click");
-        double o1 = H.Yard.Ore, s1 = H.Yard.Salvage, c1 = H.Yard.Credits;
+        double o1 = H.Yard.Stock("ore"), s1 = H.Yard.Stock("salvage"), c1 = H.Yard.Credits;
         reset.EmitSignal(BaseButton.SignalName.Pressed);
-        Check(Count<CharacterCreator>() == 1 && Math.Abs(H.Yard.Ore - o1 * 0.9) < 1e-9 && Math.Abs(H.Yard.Salvage - s1 * 0.9) < 1e-9 && Math.Abs(H.Yard.Credits - c1 * 0.9) < 1e-9,
+        Check(Count<CharacterCreator>() == 1 && Math.Abs(H.Yard.Stock("ore") - o1 * 0.9) < 1e-9 && Math.Abs(H.Yard.Stock("salvage") - s1 * 0.9) < 1e-9 && Math.Abs(H.Yard.Credits - c1 * 0.9) < 1e-9,
               "second click: exactly 10% of ore, salvage and credits taken; the ship menu opens");
         await Wait(0.1);
         Check(Count<BasePanel>() == 0, "the base menu steps aside for it");
@@ -1228,7 +1259,7 @@ public partial class _Test : Node
         Check(tioS != null && tioS.Position == Hub.TioPos && Math.Abs(tioS.Texture.GetHeight() * tioS.Scale.Y - Hub.TioHeight) < 0.5f,
               "the Threat Intelligence Operations building stands south-west of the base");
         var bomb0 = GD.Load<Texture2D>("res://wing_bomber.png");
-        Check(Math.Abs(Wing.BomberLength - 37.5f * 0.75f) < 1e-4, "bombers are 25% smaller (28.1 u)");
+        Check(Math.Abs(Wings.Of(WingKind.Bomber).Length - 37.5f * 0.75f) < 1e-4, "bombers are 25% smaller (28.1 u)");
         var baseSpr = H.GetNode<Sprite2D>("Base");
         Check(baseSpr.Texture.ResourcePath.EndsWith("base_station.png") && Math.Abs(baseSpr.Scale.X - Hub.BaseScale) < 0.001f, "the base is the new station sprite");
         Check(ship.Position.Y - Classes.Art(ship.Class).Length / 2 > Hub.BaseBottom, "a new ship spawns clear of the base");
@@ -1260,9 +1291,9 @@ public partial class _Test : Node
         float cone = 0; foreach (Vector2[] bl in bolts) cone = Mathf.Max(cone, Mathf.Abs(Mathf.AngleDifference(aim, (bl[^1] - nose).Angle())));
         Check(bolts.Count >= 2 && cone < 0.33f, $"salvager's beam is a narrow scan: {bolts.Count} arcs within {cone:0.00} rad of centre");
         Check(miner.BeamTo.DistanceTo(Y.WorkSpot(miner).target) < 0.01f, "miner's single beam holds on its asteroid");
-        double mined0 = Y.TotalMined, salv0 = Y.TotalSalvaged;
-        for (int i = 0; i < 12000 && (Y.TotalMined - mined0 < 99.9 || Y.TotalSalvaged - salv0 < 99.9); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-        Check(Y.TotalMined - mined0 >= 99.9 && Y.TotalSalvaged - salv0 >= 99.9, "a full hold (100) of each is unloaded through an arm");
+        double mined0 = Y.Delivered("ore"), salv0 = Y.Delivered("salvage");
+        for (int i = 0; i < 12000 && (Y.Delivered("ore") - mined0 < 99.9 || Y.Delivered("salvage") - salv0 < 99.9); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        Check(Y.Delivered("ore") - mined0 >= 99.9 && Y.Delivered("salvage") - salv0 >= 99.9, "a full hold (100) of each is unloaded through an arm");
 
         // ── upgrades, by tab ──
         Y.Credits = 1000;
@@ -1274,6 +1305,30 @@ public partial class _Test : Node
             return Nodes<Button>(Nodes<HBoxContainer>(panel).First(r => r.Name == "Up_" + id)).First(b => b.Name == "Buy");
         }
         Check(Nodes<HBoxContainer>(panel).Count(r => r.Name.ToString().StartsWith("Up_")) == 5, "MINERS tab: five upgrades (count, hold, engines, beam, hull)");
+        // EVERY GATHERER'S FIVE ROWS ARE ONE SHAPE, GENERATED FROM ONE PLACE. They were written
+        // out twice -- same kind, same price, same growth, same cap -- differing only in an id
+        // prefix, a label and a unit, so a third gatherer was five more copies to keep in step.
+        // The numbers are the request's literals, never Economy's own constants: a check that
+        // reads the constant cannot catch the constant being wrong.
+        bool oneShape = Gathering.All.Length > 0;
+        foreach (var d in Gathering.All)
+        {
+            var rows = new[] { Economy.ById(d.CountId), Economy.ById(d.HoldId), Economy.ById(d.SpeedId), Economy.ById(d.RateId), Economy.ById(d.HullId) };
+            if (rows.Any(u => u == null)) { oneShape = false; break; }
+            oneShape &= rows.All(u => u.Tab == d.Tab) && Economy.All.Count(u => u.Tab == d.Tab) == 5;
+            oneShape &= rows[0].Kind == Economy.Kind.Count && rows[0].BaseCost == 400 && rows[0].Max == 4 && rows[0].BaseValue == 1 && rows[0].Step == 1;
+            oneShape &= rows.Skip(1).All(u => u.Kind == Economy.Kind.Percent && u.Max == int.MaxValue && Math.Abs(u.Per - 0.10) < 1e-12);
+            oneShape &= rows[1].BaseCost == 100 && rows[2].BaseCost == 100 && rows[3].BaseCost == 100 && rows[4].BaseCost == 125;
+            oneShape &= rows[1].BaseValue == 100 && rows[2].BaseValue == 110 && rows[3].BaseValue == 2 && rows[4].BaseValue == 120;
+            oneShape &= rows[1].Unit == d.Unit && rows[2].Unit == "u/s" && rows[3].Unit == d.Unit + "/s" && rows[4].Unit == "hull";
+            oneShape &= rows[0].Name == d.Name + "s" && rows[1].Name == d.Name + " hold" && rows[2].Name == d.Name + " engines"
+                        && rows[3].Name == d.RateName && rows[4].Name == d.Name + " hull";
+            oneShape &= rows.Select(u => u.Id).SequenceEqual(Economy.All.Where(u => u.Tab == d.Tab).Select(u => u.Id));
+        }
+        Check(oneShape && Gathering.All.Length == 2 && Gathering.Resources.SequenceEqual(new[] { "ore", "salvage" })
+              && Economy.All.Take(10).Select(u => u.Id).SequenceEqual(new[] { "miner_count", "miner_hold", "miner_speed", "mine_rate", "miner_hull",
+                                                                             "salvager_count", "salvager_hold", "salvager_speed", "salvage_rate", "salvager_hull" }),
+              $"each gatherer's five rows are one generated shape -- 400/100/100/100/125 cr, 1 ship, 100 hold, 110 u/s, 2 a second, 120 hull, the count capped at 4 purchases -- in the order the wire reads them, for each of {Gathering.All.Length} gatherers ({string.Join(", ", Gathering.Resources)})");
         // The footnote called every Percent row "+10%", which two HAULER rows are not, and stated
         // both cost curves as text; the fleet line wrote "(10%)" beside a figure computed from
         // Economy.RebuildShare.
@@ -1347,9 +1402,9 @@ public partial class _Test : Node
         // lands in the stock while the hauler's rules are checked (a hold takes 50+ s).
         foreach (var g in Y.Gatherers) g.ResetToWork();
         hauler.ResetToPad();                // it may be mid-run from the earlier sections
-        hauler.Cargo = 0; Y.Ore = 150; Y.Salvage = 0;
+        hauler.Cargo = 0; Y.SetStock("ore", 150); Y.SetStock("salvage", 0);
         await Wait(8.0);
-        GD.Print($"  hauler: {hauler.State} cargo {hauler.Cargo:0} / pod {Y.PodSize:0} x {Y.Pods}; stock {Y.Ore:0}+{Y.Salvage:0}");
+        GD.Print($"  hauler: {hauler.State} cargo {hauler.Cargo:0} / pod {Y.PodSize:0} x {Y.Pods}; stock {Y.Stock("ore"):0}+{Y.Stock("salvage"):0}");
         Check(hauler.State == Hauler.St.Loading && !hauler.CanDispatch, "150 of 300 in the first pod: cannot dispatch");
         Unmeet("hauler"); await Wait(0.1);
         bool haulerEarly = Met("hauler");
@@ -1358,7 +1413,7 @@ public partial class _Test : Node
         hauler.Dispatch(escorted: true); await Wait(0.05);
         Check(plainRefused && hauler.State == Hauler.St.Loading, "dispatch refused until a pod is full, alone or escorted");
         Hauler.PretendRoll = 0f;                    // the dice with this run: the lost run has checks of its own
-        Y.Ore += 200; await Wait(10.0);
+        Y.SetStock("ore", Y.Stock("ore") + 200); await Wait(10.0);
         var hud = Nodes<HaulerHud>().First(); var go = Nodes<Button>(hud).First(b => b.Name == "Dispatch");
         Check(hauler.State == Hauler.St.Loading && hauler.CanDispatch && hauler.FullPods == 1 && !go.Disabled,
               $"one pod full (350 of 600): the floating DISPATCH button lights ({go.Text})");
@@ -1396,7 +1451,7 @@ public partial class _Test : Node
               && Mathf.Abs(Mathf.AngleDifference(hauler.Rotation, Hauler.East)) < 0.01f, "lands facing the portal, and loads");
         // AUTO-SELL: completely full, it waits for DISPATCH -- until the level-3 boss is beaten and
         // the 4462 cr upgrade bought; then it goes by itself
-        Y.Ore = 700; Y.Salvage = 0;
+        Y.SetStock("ore", 700); Y.SetStock("salvage", 0);
         for (int i = 0; i < 3000 && hauler.Cargo < Y.Capacity - 1e-6; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         await Wait(2.0);
         Check(hauler.State == Hauler.St.Loading && Math.Abs(hauler.Cargo - 600) < 1e-6, $"completely full (600), it waits while AUTO-SELL is locked ({hauler.State}, {hauler.Cargo:0})");
@@ -1483,7 +1538,7 @@ public partial class _Test : Node
         ((System.Collections.Generic.Dictionary<string, int>)typeof(Yard).GetField("_levels", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(Y)).Remove("hauler_evasion");
 
         // ── THE ESCORT: the long way round, waves of hunters after the hauler, x5 at the portal ──
-        hauler.ResetToPad(); hauler.Cargo = 300; Y.Ore = 0; Y.Salvage = 0;
+        hauler.ResetToPad(); hauler.Cargo = 300; Y.SetStock("ore", 0); Y.SetStock("salvage", 0);
         await Wait(0.2);
         var hh = Nodes<HaulerHud>().FirstOrDefault(); var escBtn = hh == null ? null : Nodes<Button>(hh).FirstOrDefault(b => b.Name == "Escort");
         Check(escBtn != null && escBtn.Visible, "the base owner's hauler offers ESCORT beside DISPATCH");
@@ -1613,8 +1668,8 @@ public partial class _Test : Node
         foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e9);
         hauler.ResetToPad(); hauler.Cargo = 300; Hauler.PretendRoll = 0.99f; Y.RequestDispatch(escorted: false); await ToAway();
         Y.SaveBase(); double lostOnFile = (double)OnDisk("base", "credits", -1.0) - Y.Credits;
-        double lostOre = (double)OnDisk("base", "ore", -1.0) - Y.Ore - Y.Gatherers.Where(g => g.Kind == GatherKind.Miner).Sum(g => g.Cargo);
-        double lostSalvage = (double)OnDisk("base", "salvage", -1.0) - Y.Salvage - Y.Gatherers.Where(g => g.Kind != GatherKind.Miner).Sum(g => g.Cargo);
+        double lostOre = (double)OnDisk("base", "ore", -1.0) - Y.Stock("ore") - Y.Gatherers.Where(g => g.Kind == GatherKind.Miner).Sum(g => g.Cargo);
+        double lostSalvage = (double)OnDisk("base", "salvage", -1.0) - Y.Stock("salvage") - Y.Gatherers.Where(g => g.Kind != GatherKind.Miner).Sum(g => g.Cargo);
         Hauler.PretendRoll = null;
         Check(Math.Abs(escortOnFile - 1500) < 1e-6 && Math.Abs(lostOnFile) < 1e-6 && Math.Abs(lostOre) < 1e-6 && Math.Abs(lostSalvage) < 1e-6,
               $"a save while the hauler is through the portal counts what it will be paid: an escort's 300 as 1500, a lost run's as nothing -- no credits, no stock back ({escortOnFile:0}, {lostOnFile:0}, ore {lostOre:0}, salvage {lostSalvage:0})");
@@ -1622,7 +1677,7 @@ public partial class _Test : Node
         // A SAVE COUNTS THE LOADS: with AUTO-SELL locked a full hauler waiting on its pad is the
         // usual state, and a quit used to throw its load away
         hauler.Cargo = 300;
-        double loaded = Y.Ore + Y.Salvage + hauler.Cargo + Y.Gatherers.Sum(g => g.Cargo);
+        double loaded = Y.Stock("ore") + Y.Stock("salvage") + hauler.Cargo + Y.Gatherers.Sum(g => g.Cargo);
         Y.SaveBase();
         double onFile = (double)OnDisk("base", "ore", -1.0) + (double)OnDisk("base", "salvage", -1.0);
         Check(Math.Abs(onFile - loaded) < 1e-6 && hauler.Cargo == 300, $"a save counts what the hauler and the fleet are carrying, as if home ({onFile:0} of {loaded:0})");
@@ -2122,7 +2177,7 @@ public partial class _Test : Node
         Check(ship.PdTurrets.Count == 3, "carrier has three PD turrets");
 
         // bombers park in bays on the deck, half each side of the runway, and stay put as the carrier moves
-        Wing[] Bombers() => Nodes<Wing>().Where(w => w.Carrier == ship && w.IsBomber).ToArray();
+        Wing[] Bombers() => Nodes<Wing>().Where(w => w.Carrier == ship && w.Def.Parks).ToArray();
         async Task CheckBays(int n)
         {
             await Wait(0.3);
@@ -2162,8 +2217,8 @@ public partial class _Test : Node
             int eliteCraft = Craft();
             await Hangar("cv_fighter_hangars");
             var wingOrder = (List<Wing>)typeof(PlayerShip).GetField("_wings", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(ship);
-            int firstBomber = wingOrder.FindIndex(w => w.IsBomber);
-            bool fightersFirst = firstBomber < 0 || wingOrder.Skip(firstBomber).All(w => w.IsBomber);
+            int firstBomber = wingOrder.FindIndex(w => w.Def.Parks);
+            bool fightersFirst = firstBomber < 0 || wingOrder.Skip(firstBomber).All(w => w.Def.Parks);
             Check(swarmCraft == 11 && out0 >= 2 && eliteCraft == 4 && Craft() == 5 && ship.WingCount(WingKind.Fighter) == 3 && fightersFirst,
                   $"the wing follows the hangar: 9 + 2 craft, then Elite with fighters out -- 2 + 2, the rest freed -- then the kit's 3 + 2; fighters listed first ({swarmCraft}, {out0} out, {eliteCraft}, {Craft()})");
             Key(global::Godot.Key.R); await Wait(0.2);
@@ -2216,7 +2271,7 @@ public partial class _Test : Node
         // parked SMALL, as far below as the deck is: 65% of 28.125 u (the hauler's landed size), facing
         // the bow, the whole of it (18 u across) on the white between the runway's edge (15.2 u out) and
         // the hull's (37.9 u)
-        foreach (var bw in Nodes<Wing>().Where(w => w.Carrier == ship && w.IsBomber && w.Docked))
+        foreach (var bw in Nodes<Wing>().Where(w => w.Carrier == ship && w.Def.Parks && w.Docked))
         {
             var lp = ship.ToLocal(bw.Position); var bsp = Nodes<Sprite2D>(bw).First();
             float half = bsp.Texture.GetWidth() * bsp.Scale.X * 0.5f;
@@ -2234,7 +2289,7 @@ public partial class _Test : Node
         double minGap = 99; for (int g = 1; g < order.Count; g++) minGap = Math.Min(minGap, order[g] - order[g - 1]);
         GD.Print($"  fighter launches at {string.Join(", ", order.Select(t => t.ToString("0.000")))} s; smallest gap {minGap:0.000} s");
         Check(fts.Count == 3 && ship.Stats["fighter_count"] == 3, "the carrier starts with 3 fighters");
-        Check(order.Count == 3 && minGap >= Wing.LaunchInterval - 1e-9, "fighters launch one at a time, at least 0.83 s apart");
+        Check(order.Count == 3 && minGap >= Wings.Of(WingKind.Bomber).LaunchInterval - 1e-9, "fighters launch one at a time, at least 0.83 s apart");
         Check(ship.SignalsLit > sig0 || order.Count == 3, "launching fighters light the hangar signal");
         Check(ship.Stats["torpedo_speed"] == 300 && ship.Stats["launch_range"] == 1900 && ship.Stats["torpedo_interval"] == 0.5,
               "torpedoes: 300 u/s, launched from 1900 u, one every 0.5 s");
@@ -2248,14 +2303,14 @@ public partial class _Test : Node
         {
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             string ph = fx.FighterPhase;
-            if (lastPhase == "Burst" && ph == "Overshoot") { passes++; three &= fx.ShotsThisPass == Wing.BurstShots; }
+            if (lastPhase == "Burst" && ph == "Overshoot") { passes++; three &= fx.ShotsThisPass == Wings.Of(WingKind.Fighter).Shots; }
             if (lastPhase == "Overshoot" && ph == "Turn") { through &= fx.LastOvershoot >= Math.Max(1.2 * 2 * d3.HitRadius, 2 * 352 / 3.5) - 0.5; worst = Mathf.Min(worst, fx.LastOvershoot); }
             lastPhase = ph;
         }
         GD.Print($"  fighter: {passes} passes in 13 s; shortest overshoot {worst:0} u (needs {Math.Max(1.2 * 2 * d3.HitRadius, 2 * 352 / 3.5):0}: 1.2 diameters, and the fighter's own 201 u turning circle)");
         Check(passes >= 2 && three, $"fighters strafe: every pass fires exactly 3 shots ({passes} passes)");
         Check(through, "each pass carries on through the target by at least 1.2x its diameter -- and a turning circle -- then turns");
-        var fighters = Nodes<Wing>().Where(w => w.Carrier == ship && !w.IsBomber).ToList();
+        var fighters = Nodes<Wing>().Where(w => w.Carrier == ship && !w.Def.Parks).ToList();
         for (int i = 0; i < 1200 && !fighters.All(f => f.Resting); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         Check(fighters.All(f => f.Resting), "after 15 s of firing, every fighter heads home to rest");
         for (int i = 0; i < 1200 && !fighters.All(f => f.GlobalPosition.DistanceTo(ship.GlobalPosition) < 1f); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
@@ -2277,7 +2332,7 @@ public partial class _Test : Node
         {
             var pf = d2; var pfHome = pf.Position;
             await Park(pf.Position + new Vector2(0, 500), 0);
-            var wing = Nodes<Wing>().Where(w => w.Carrier == ship && !w.IsBomber).ToList();
+            var wing = Nodes<Wing>().Where(w => w.Carrier == ship && !w.Def.Parks).ToList();
             for (int i = 0; i < 60 * 25 && !wing.All(f => f.Inside && !f.Resting); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Click(Scr(pf.Position)); await Wait(0.05);
             Key(global::Godot.Key.Space); await Wait(0.05);
@@ -2361,7 +2416,7 @@ public partial class _Test : Node
               $"bombers keep closing slowly while they launch ({crawl?.Velocity.Length():0} u/s)");
         float launchDist = crawl?.Position.DistanceTo(d1.Position) ?? -1;
         Check(launchDist > 1850 && launchDist <= 1901, $"the bombers close to 1900 u before they launch ({launchDist:0} u)");
-        var fspr = Nodes<Sprite2D>(Nodes<Wing>().First(w => w.Carrier == ship && !w.IsBomber)).First(); var bspr = Nodes<Sprite2D>(crawl).First();
+        var fspr = Nodes<Sprite2D>(Nodes<Wing>().First(w => w.Carrier == ship && !w.Def.Parks)).First(); var bspr = Nodes<Sprite2D>(crawl).First();
         Check(Math.Abs(fspr.Texture.GetHeight() * fspr.Scale.Y - 17f) < 0.1f && Math.Abs(bspr.Texture.GetHeight() * bspr.Scale.Y - 28.125f) < 0.1f, "fighters 17 u, bombers 28.1 u (snout-nosed, 25% smaller)");
         Shot first = null;
         for (int i = 0; i < 1200 && first == null; i++) { first = Missiles().FirstOrDefault(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
@@ -4116,12 +4171,14 @@ public partial class _Test : Node
                 if (H?.Yard != null && GodotObject.IsInstanceValid(H.Yard))
                 {
                     H.Yard.Credits = 424242;
-                    heldAtLeaving = H.Yard.Ore + H.Yard.Salvage + H.Yard.Hauler.Cargo + H.Yard.Gatherers.Sum(g => g.Cargo);
+                    heldAtLeaving = H.Yard.Stock("ore") + H.Yard.Stock("salvage") + H.Yard.Hauler.Cargo + H.Yard.Gatherers.Sum(g => g.Cargo);
                 }
                 await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             }
             var tripRec = typeof(Yard).GetField("_trip", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
-            double tripStock = tripRec == null ? -1 : (double)tripRec.GetType().GetProperty("Ore").GetValue(tripRec) + (double)tripRec.GetType().GetProperty("Salvage").GetValue(tripRec);
+            // The trip's stock is one figure per resource row now, not two named fields.
+            var tripBag = tripRec?.GetType().GetProperty("Stock").GetValue(tripRec) as System.Collections.Generic.Dictionary<string, double>;
+            double tripStock = tripBag == null ? -1 : Gathering.Resources.Sum(r => tripBag.GetValueOrDefault(r));
             Check(Math.Abs(tripStock - heldAtLeaving) < 1.0, $"leaving for the arena, the loads come home first: the base set aside holds the hauler's 300 too ({tripStock:0} of {heldAtLeaving:0})");
             await Wait(1.0);
             Check(Hub.InArena, $"the capital-ship autopilot flew {d0:0} u to the portal and the party went through");
@@ -4554,8 +4611,8 @@ public partial class _Test : Node
             Check(Math.Abs(H.Yard.Credits - Yard.TripStartCredits - 2000) < 1e-6, $"the bounty's 2000 credits are paid at home ({Yard.TripStartCredits:0} + 2000 = {H.Yard.Credits:0})");
             // the literal 1/20 asked for -- not Yard.AwayShare, or the check could never fail
             double want = H.Yard.FleetRate(GatherKind.Miner) * Yard.LastAway / 20.0;
-            Check(Yard.LastAway > 1 && Yard.LastAwayOre > 0 && Math.Abs(Yard.LastAwayOre - want) < 1e-6,
-                  $"while away the base earned 1/20 of its rate ({Yard.LastAwayOre:0.0} ore for {Yard.LastAway:0} s)");
+            Check(Yard.LastAway > 1 && Yard.LastAwayGained("ore") > 0 && Math.Abs(Yard.LastAwayGained("ore") - want) < 1e-6,
+                  $"while away the base earned 1/20 of its rate ({Yard.LastAwayGained("ore"):0.0} ore for {Yard.LastAway:0} s)");
             // levels: the win cleared level 1; docking at the TIO selects level 2
             Check(Character.BossCleared.TryGetValue("silver_lancer", out var cleared) && cleared.Contains(1), "the win records level 1 as cleared");
             Check(Math.Abs(Missions.S(2) - 1.1) < 1e-9 && Math.Abs(Missions.S(3) - 1.21) < 1e-9 && Math.Abs(Missions.ForLevel(3).Hull * Missions.S(3) - 919.6) < 1e-6,
@@ -5583,7 +5640,7 @@ public partial class _Test : Node
         }
         else
         {
-            H.Yard.Ore = 5000;       // "own" hub total, should come back after leaving
+            H.Yard.SetStock("ore", 5000);       // "own" hub total, should come back after leaving
             // a NON-default loadout (two chips off): a host that ignored the guest's gear would fall
             // back to the default (five chips) and replicate 250 hull instead of 230
             // The CLASS FIRST: gear is per class, and this used to edit whichever class the
@@ -5597,7 +5654,7 @@ public partial class _Test : Node
             // Everything this pilot holds as it leaves for the host's world -- the ore above, AND the
             // 7777 credits every role's base now starts with. This check used to assume the ore was
             // all of it, and failed from the day each role got a base of its own.
-            double Held() => H.Yard.Ore + H.Yard.Salvage + H.Yard.Hauler.Cargo + H.Yard.Gatherers.Sum(x => x.Cargo) + H.Yard.Credits;
+            double Held() => H.Yard.Stock("ore") + H.Yard.Stock("salvage") + H.Yard.Hauler.Cargo + H.Yard.Gatherers.Sum(x => x.Cargo) + H.Yard.Credits;
             double held0 = Held();
             Net.I.Join(HostAt(27115));
             await Wait(1.2);
@@ -5646,7 +5703,7 @@ public partial class _Test : Node
             var deckWatch = new LateSampler { Probe = () =>
             {
                 if (mine == null || !GodotObject.IsInstanceValid(mine)) return false;
-                foreach (var w in Nodes<Wing>().Where(w => w.Carrier == mine && w.IsBomber))
+                foreach (var w in Nodes<Wing>().Where(w => w.Carrier == mine && w.Def.Parks))
                 {
                     var lp = mine.ToLocal(w.Position); var sp = Nodes<Sprite2D>(w).First();
                     float drawn = sp.Scale.Y * sp.Texture.GetHeight() / 28.125f;
@@ -5708,7 +5765,7 @@ public partial class _Test : Node
             Check(H.Yard.Gatherers.Any(x => x.Position.DistanceTo(Hub.BasePos) > 400) && H.Yard.Hauler.Position.Y == Hub.LaneY,
                   "guest sees the host's miner out working and the hauler on its lane");
             Check(host != null && host.Pilot == "HostPilot", $"host identity reached guest ({host?.Pilot})");
-            Check(H.Yard.Ore < 1000, $"guest shows host's totals ({H.Yard.Ore:0})");
+            Check(H.Yard.Stock("ore") < 1000, $"guest shows host's totals ({H.Yard.Stock("ore"):0})");
             Check(dummy.Total > 0 && dummy.LastSecond > 0, $"dummy readout reached the guest ({dummy.LastSecond:0.00} / {dummy.Total:0.0})");
             int near = Nodes<Wing>().Count(w => w.Carrier == mine && w.Kind == WingKind.Fighter && w.Position.DistanceTo(dummy.Position) < 400);
             Check(near >= 3, $"guest sees its fighters at the target, as the host flies them ({near})");
@@ -5724,7 +5781,7 @@ public partial class _Test : Node
             var lostSv = H.Yard.Gatherers.FirstOrDefault(x => x.Kind == GatherKind.Salvager);
             Check(lostSv != null && lostSv.Lost && lostSv.RebuildIn > 5 && lostSv.RebuildIn < 29,
                   $"a salvager the host lost is lost here too, its 30 s rebuild counting down -- not stuck at 0 s ({lostSv?.RebuildIn:0.0} s)");
-            var gb = Nodes<Wing>().Where(w => w.Carrier == mine && w.IsBomber).ToArray();
+            var gb = Nodes<Wing>().Where(w => w.Carrier == mine && w.Def.Parks).ToArray();
             Check(gb.Length == 2 && gb.All(w => w.Docked && w.GlobalPosition.DistanceTo(mine.ToGlobal(mine.Bay(w))) < 0.5f),
                   "guest sees its bombers parked in their bays on the carrier's deck (the state from the host, placed in its carrier's frame)");
             Check(gLift < 0.67f && gBow && gLand < 0.67f && gOff < 0.05f,

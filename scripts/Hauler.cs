@@ -353,7 +353,7 @@ public partial class Hauler : UtilityShip, ITurretHost
         }
 
         var inv = GlobalTransform.AffineInverse();
-        if (State == St.Loading && Cargo < Yard.Capacity - 1e-6 && Yard.Ore + Yard.Salvage > 0.5)
+        if (State == St.Loading && Cargo < Yard.Capacity - 1e-6 && Yard.StockHeld > 0.5)
         {   // crates of stock coming down the stem into the pod being filled
             int into = Math.Min(pods - 1, (int)(Cargo / podSize));
             var from = inv * Hub.StemFoot; var to = PodCentre[into] * s;

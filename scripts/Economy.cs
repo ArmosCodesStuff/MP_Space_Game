@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ECONOMY — every number of the idle game, in one place. (The Yard runs it.)
@@ -20,9 +21,6 @@ using System;
 public static class Economy
 {
     // ── miners and salvagers, before upgrades ────────────────────────────────
-    private const double BaseHold = 100;          // units
-    private const double BaseShipSpeed = 110;     // u/s
-    private const double BaseGatherRate = 2;      // units per second while beaming
     public const double UnloadRate = 50;         // units per second into an arm
 
     // ── the hauler ───────────────────────────────────────────────────────────
@@ -48,7 +46,7 @@ public static class Economy
     public const double EscortFirstWave = 5, EscortWaveEvery = 20;
     public const double OutpostStop = 4;
     // ── hull, and rebuilding what is lost ──
-    public const double UtilityHull = 120, HaulerHull = 262.5;
+    public const double HaulerHull = 262.5;
     public const double RebuildDelay = 30;         // seconds after it is destroyed
     public const double RebuildShare = 0.10;       // of everything invested so far in its category
     // ITS OWN POINT DEFENCE: one turret on the spine, firing whenever the hauler is out there.
@@ -79,20 +77,34 @@ public static class Economy
         public bool OwnerOnly;                       // the base owner's alone to buy: a guest's request is refused
     }
 
-    public static readonly string[] Tabs = { "MINERS", "SALVAGERS", "HAULER" };
+    // The tabs of the BASE window, in order: one per gatherer row, then the hauler's. A guest is
+    // sent each tab's investment in this order (Yard.NetTotals), so the window follows the table.
+    public const string HaulerTab = "HAULER";
+    public static readonly string[] Tabs = Gathering.All.Select(d => d.Tab).Append(HaulerTab).ToArray();
 
-    public static readonly Upgrade[] All =
+    // EVERY GATHERER HAS THE SAME FIVE ROWS: one more ship, a bigger hold, faster engines, a
+    // faster beam, more hull. They were written out TWICE -- same kind, same price, same growth,
+    // same cap -- differing only in an id prefix, a label and a unit, so a third gatherer was five
+    // more copies to keep in step with the first ten. The shape lives here once; a gatherer's row
+    // (Gathering.All) fills in the prefix, the words and the base numbers.
+    //
+    // THE IDS ARE ON DISK, in every pilot's [base_levels]. Four of the five are "<Id>_count",
+    // "_hold", "_speed" and "_hull"; the beam's is the row's own RateId, because the id already
+    // written to disk is "mine_rate" and not "miner_rate" -- generating it would make
+    // Economy.ById return null and silently drop a level the player paid for.
+    private static Upgrade[] Rows(GathererDef g) => new Upgrade[]
     {
-        new() { Id = "miner_count",     Tab = "MINERS",    Kind = Kind.Count,   Name = "Miners",           BaseValue = 1,              Unit = "",          BaseCost = 400, Max = 4, Blurb = "+1 miner (up to 5)" },
-        new() { Id = "miner_hold",      Tab = "MINERS",    Kind = Kind.Percent, Name = "Miner hold",       BaseValue = BaseHold,       Unit = "ore",       BaseCost = 100, Blurb = "+10% hull space" },
-        new() { Id = "miner_speed",     Tab = "MINERS",    Kind = Kind.Percent, Name = "Miner engines",    BaseValue = BaseShipSpeed,  Unit = "u/s",       BaseCost = 100, Blurb = "+10% speed" },
-        new() { Id = "mine_rate",       Tab = "MINERS",    Kind = Kind.Percent, Name = "Mining beam",      BaseValue = BaseGatherRate, Unit = "ore/s",     BaseCost = 100, Blurb = "+10% mining speed" },
-        new() { Id = "miner_hull",      Tab = "MINERS",    Kind = Kind.Percent, Name = "Miner hull",       BaseValue = UtilityHull,    Unit = "hull",      BaseCost = 125, Blurb = "+10% hull (25% dearer to start)" },
-        new() { Id = "salvager_count",  Tab = "SALVAGERS", Kind = Kind.Count,   Name = "Salvagers",        BaseValue = 1,              Unit = "",          BaseCost = 400, Max = 4, Blurb = "+1 salvager (up to 5)" },
-        new() { Id = "salvager_hold",   Tab = "SALVAGERS", Kind = Kind.Percent, Name = "Salvager hold",    BaseValue = BaseHold,       Unit = "salvage",   BaseCost = 100, Blurb = "+10% hull space" },
-        new() { Id = "salvager_speed",  Tab = "SALVAGERS", Kind = Kind.Percent, Name = "Salvager engines", BaseValue = BaseShipSpeed,  Unit = "u/s",       BaseCost = 100, Blurb = "+10% speed" },
-        new() { Id = "salvage_rate",    Tab = "SALVAGERS", Kind = Kind.Percent, Name = "Salvage beam",     BaseValue = BaseGatherRate, Unit = "salvage/s", BaseCost = 100, Blurb = "+10% salvage speed" },
-        new() { Id = "salvager_hull",   Tab = "SALVAGERS", Kind = Kind.Percent, Name = "Salvager hull",    BaseValue = UtilityHull,    Unit = "hull",      BaseCost = 125, Blurb = "+10% hull (25% dearer to start)" },
+        new() { Id = g.CountId, Tab = g.Tab, Kind = Kind.Count,   Name = g.Name + "s",        BaseValue = 1,       Unit = "",            BaseCost = 400, Max = 4, Blurb = $"+1 {g.Name.ToLowerInvariant()} (up to 5)" },
+        new() { Id = g.HoldId,  Tab = g.Tab, Kind = Kind.Percent, Name = g.Name + " hold",    BaseValue = g.Hold,  Unit = g.Unit,        BaseCost = 100, Blurb = "+10% hull space" },
+        new() { Id = g.SpeedId, Tab = g.Tab, Kind = Kind.Percent, Name = g.Name + " engines", BaseValue = g.Speed, Unit = "u/s",         BaseCost = 100, Blurb = "+10% speed" },
+        new() { Id = g.RateId,  Tab = g.Tab, Kind = Kind.Percent, Name = g.RateName,          BaseValue = g.Rate,  Unit = g.Unit + "/s", BaseCost = 100, Blurb = g.RateBlurb },
+        new() { Id = g.HullId,  Tab = g.Tab, Kind = Kind.Percent, Name = g.Name + " hull",    BaseValue = g.Hull,  Unit = "hull",        BaseCost = 125, Blurb = "+10% hull (25% dearer to start)" },
+    };
+
+    // The hauler's own rows. Declared ABOVE All because a static field initialiser runs in the
+    // order it is written, and All reads this one.
+    private static readonly Upgrade[] HaulerRows =
+    {
         new() { Id = "hauler_pods",     Tab = "HAULER",    Kind = Kind.Count,   Name = "Cargo pods",       BaseValue = 1,              Unit = "",          BaseCost = 500, Max = MaxPods - 1, Blurb = "+1 pod (up to 6)" },
         new() { Id = "pod_size",        Tab = "HAULER",    Kind = Kind.Percent, Name = "Pod size",         BaseValue = BasePodSize,    Unit = "per pod",   BaseCost = 150, Blurb = "+10% per pod" },
         // (at the END: a guest is sent the levels in this order)
@@ -101,6 +113,12 @@ public static class Economy
         new() { Id = "hauler_speed",    Tab = "HAULER",    Kind = Kind.Percent, Name = "Hauler engines",   BaseValue = HaulerSpeed,    Unit = "u/s",       BaseCost = 150, Per = 0.02, Blurb = "+2% speed per level" },
         new() { Id = "hauler_pd_damage",Tab = "HAULER",    Kind = Kind.Percent, Name = "Hauler point defence", BaseValue = HaulerPdDamage, Unit = "per shot", BaseCost = 200, Per = 0.05, Blurb = "+5% damage per level" },
     };
+
+    // Every gatherer's five rows in table order, then the hauler's. THE ORDER IS THE WIRE: a guest
+    // is sent the levels as an array indexed by position (Yard.NetTotals), so adding a gatherer
+    // adds five rows before the hauler's -- which is why both peers must be on the same build, and
+    // Net's fingerprint is what makes sure of it.
+    public static readonly Upgrade[] All = Gathering.All.SelectMany(Rows).Concat(HaulerRows).ToArray();
 
     public static Upgrade ById(string id) { foreach (var u in All) if (u.Id == id) return u; return null; }
 

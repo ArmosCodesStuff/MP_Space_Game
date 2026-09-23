@@ -7,7 +7,8 @@ using System.Linq;
 // YARD — the idle economy of the hub, as one node (Hub/Yard, the same path on
 // every peer so its RPCs arrive). It owns:
 //
-//   stock        ore, salvage, credits, and what has been delivered
+//   stock        one figure per resource id (Gathering.Resources), credits, and what has
+//                been delivered -- never a field per resource
 //   upgrades     their levels, purchases (a guest asks, the host decides)
 //   the fleet    miners and salvagers, as many as the +1 upgrades allow
 //   the arms     the base's five service arms: each takes one miner or salvager at
@@ -24,16 +25,28 @@ using System.Linq;
 public partial class Yard : Node2D
 {
     public Hub Hub;
-    public double Ore, Salvage, Credits;
-    public double TotalMined, TotalSalvaged;              // delivered, host-side
+    public double Credits;
     public readonly List<Gatherer> Gatherers = new();
     public Hauler Hauler;
+
+    // THE STOCK, BY RESOURCE ID. `Ore` and `Salvage` were two fields, and every place that read
+    // them -- the deposit, the bank, the trip, the refit, the totals packet and the save -- had
+    // to name both; a third gatherer's resource was a third field in six places. A resource is
+    // a row's Resource now, and this dictionary is keyed by it. Delivered is the running total
+    // that was TotalMined / TotalSalvaged.
+    private readonly Dictionary<string, double> _stock = new(), _delivered = new();
+    public double Stock(string res) => _stock.GetValueOrDefault(res);
+    public void SetStock(string res, double v) => _stock[res] = v;
+    public double Delivered(string res) => _delivered.GetValueOrDefault(res);
+    // everything the base is holding, across every resource (what the hauler can still load)
+    public double StockHeld { get { double t = 0; foreach (var r in Gathering.Resources) t += Stock(r); return t; } }
 
     private readonly Dictionary<string, int> _levels = new();
     // A guest's OWN base, set aside while it visits someone else's. Static: the scene is
     // reloaded when the party goes to the arena and back, and an instance field went
     // with it -- a guest who followed the party lost its own base.
-    private static double _ownOre, _ownSalvage, _ownCredits;
+    private static readonly Dictionary<string, double> _ownStock = new();
+    private static double _ownCredits;
     private static readonly Dictionary<string, int> _ownLevels = new();
     private static readonly Dictionary<string, double> _ownInvested = new();
     private static bool _parked;
@@ -112,15 +125,24 @@ public partial class Yard : Node2D
             // ends -- has to write THAT, not the base it happens to be looking at. Writing the
             // visible one would hand the guest a base it never built; writing nothing would lose
             // the one it did.
-            Character.BaseOre = _ownOre; Character.BaseSalvage = _ownSalvage; Character.BaseCredits = _ownCredits;
+            WriteStock(_ownStock); Character.BaseCredits = _ownCredits;
             Character.BaseLevels.Clear();   foreach (var kv in _ownLevels)   Character.BaseLevels[kv.Key] = kv.Value;
             Character.BaseInvested.Clear(); foreach (var kv in _ownInvested) Character.BaseInvested[kv.Key] = kv.Value;
             return;
         }
         if (!IsMyOwnBase) return;
-        (Character.BaseOre, Character.BaseSalvage, Character.BaseCredits) = Banked();
+        var (stock, credits) = Banked();
+        WriteStock(stock); Character.BaseCredits = credits;
         Character.BaseLevels.Clear();   foreach (var kv in _levels)   Character.BaseLevels[kv.Key] = kv.Value;
         Character.BaseInvested.Clear(); foreach (var kv in _invested) Character.BaseInvested[kv.Key] = kv.Value;
+    }
+
+    // The character's copy of the stock: one entry per resource this build has, always, so what
+    // reaches disk does not depend on which piles happen to be non-empty.
+    private static void WriteStock(Dictionary<string, double> from)
+    {
+        Character.BaseStock.Clear();
+        foreach (var r in Gathering.Resources) Character.BaseStock[r] = from.GetValueOrDefault(r);
     }
 
     public void SaveBase()
@@ -131,7 +153,9 @@ public partial class Yard : Node2D
 
     private void LoadFromCharacter()
     {
-        Ore = Character.BaseOre; Salvage = Character.BaseSalvage; Credits = Character.BaseCredits;
+        _stock.Clear();
+        foreach (var r in Gathering.Resources) SetStock(r, Character.BaseStock.GetValueOrDefault(r));
+        Credits = Character.BaseCredits;
         _levels.Clear();   foreach (var kv in Character.BaseLevels)   _levels[kv.Key] = kv.Value;
         _invested.Clear(); foreach (var kv in Character.BaseInvested) _invested[kv.Key] = kv.Value;
     }
@@ -150,12 +174,16 @@ public partial class Yard : Node2D
     public double Invested(string category) => _invested.TryGetValue(category, out var v) ? v : 0;
     public double RebuildCost(string category) => Math.Round(Invested(category) * Economy.RebuildShare);
 
-    private sealed record Trip(double Ore, double Salvage, double Credits, Dictionary<string, int> Levels, Dictionary<string, double> Invested,
-                               double OrePerSec, double SalvagePerSec);
+    private sealed record Trip(Dictionary<string, double> Stock, double Credits, Dictionary<string, int> Levels,
+                               Dictionary<string, double> Invested, Dictionary<string, double> PerSec);
     public static double TripClock;                   // game seconds in the arena (Hub counts them)
     private static Trip _trip;
     public static double TripCredits;                 // earned while away (a bounty), paid on return
-    public static double LastAway, LastAwayOre;                    // what the last return credited
+    public static double LastAway;                    // how long the last trip was, in game seconds
+    // ...and what it credited, per resource. Two named statics for a two-resource fleet was the
+    // same trap as two named fields.
+    private static readonly Dictionary<string, double> _lastAwayGain = new();
+    public static double LastAwayGained(string res) => _lastAwayGain.GetValueOrDefault(res);
     public static double TripStartCredits;            // the credits set aside when the last trip began
     // A bounty share. On disk AT ONCE (the caller saves next): quitting between the kill and home
     // (the victory window) used to keep the EXP and lose the credits. The live base still
@@ -174,17 +202,19 @@ public partial class Yard : Node2D
     {
         _trip = null;
         TripCredits = TripClock = TripStartCredits = 0;
-        LastAway = LastAwayOre = 0;
+        LastAway = 0; _lastAwayGain.Clear();
         _parked = false;
-        _ownOre = _ownSalvage = _ownCredits = 0;
+        _ownCredits = 0; _ownStock.Clear();
         _ownLevels.Clear(); _ownInvested.Clear();
     }
 
     public void SaveForTrip()
     {
         Bank();                                                   // the loads come home first: nothing flies off with the party
-        _trip = new Trip(Ore, Salvage, Credits, new Dictionary<string, int>(_levels), new Dictionary<string, double>(_invested),
-                         FleetRate(GatherKind.Miner), FleetRate(GatherKind.Salvager));
+        var stock = new Dictionary<string, double>(); var perSec = new Dictionary<string, double>();
+        foreach (var r in Gathering.Resources) stock[r] = Stock(r);
+        foreach (GatherKind k in Enum.GetValues(typeof(GatherKind))) perSec[Gathering.Of(k).Resource] = FleetRate(k);
+        _trip = new Trip(stock, Credits, new Dictionary<string, int>(_levels), new Dictionary<string, double>(_invested), perSec);
         TripCredits = 0; TripClock = 0; TripStartCredits = Credits;
     }
 
@@ -193,8 +223,13 @@ public partial class Yard : Node2D
         if (_trip == null) return;
         var t = _trip; _trip = null;
         LastAway = TripClock;
-        LastAwayOre = t.OrePerSec * LastAway * AwayShare;
-        Ore = t.Ore + LastAwayOre; Salvage = t.Salvage + t.SalvagePerSec * LastAway * AwayShare;
+        _lastAwayGain.Clear();
+        foreach (var r in Gathering.Resources)
+        {
+            double gain = t.PerSec.GetValueOrDefault(r) * LastAway * AwayShare;
+            _lastAwayGain[r] = gain;
+            SetStock(r, t.Stock.GetValueOrDefault(r) + gain);
+        }
         Credits = t.Credits + TripCredits; TripCredits = 0;
         _levels.Clear(); foreach (var kv in t.Levels) _levels[kv.Key] = kv.Value;
         _invested.Clear(); foreach (var kv in t.Invested) _invested[kv.Key] = kv.Value;
@@ -207,7 +242,7 @@ public partial class Yard : Node2D
     {
         double rate = 0;
         foreach (var g in Gatherers)
-            if (g.Kind == k)
+            if (g.Def == Gathering.Of(k))
             {
                 double trip = WorkSpot(g).spot.DistanceTo(Hub.BasePos);           // its real route, one way
                 rate += g.Hold / (g.Hold / g.Rate + 2 * trip / g.Speed + g.Hold / Economy.UnloadRate);
@@ -243,10 +278,13 @@ public partial class Yard : Node2D
         // the new level arrives, and over the internet a second click inside that second bought
         // the NEXT level too.
         _totalsCd = 0;
-        if (id is "miner_hull" or "salvager_hull")                   // the living ships of that kind gain it at once
-            foreach (var g in Gatherers)
-                if (g.State != Gatherer.St.Destroyed && (g.Kind == GatherKind.Miner) == (id == "miner_hull"))
-                    g.Hull += Economy.UtilityHull * Economy.PercentEffect;
+        // a hull row: the living ships of THAT gatherer gain the level at once, and what a level
+        // is worth is the row's own step, not a constant read twice
+        foreach (GatherKind k in Enum.GetValues(typeof(GatherKind)))
+            if (Gathering.Of(k).HullId == id)
+                foreach (var g in Gatherers)
+                    if (g.State != Gatherer.St.Destroyed && g.Kind == k)
+                        g.Hull += Economy.Value(u, lv + 1) - Economy.Value(u, lv);
         SyncFleet();
         return true;
     }
@@ -256,24 +294,26 @@ public partial class Yard : Node2D
     // host's state arrays line up with each guest's list.
     private void SyncFleet()
     {
-        void Match(GatherKind k, int want)
+        foreach (GatherKind k in Enum.GetValues(typeof(GatherKind)))
         {
+            var d = Gathering.Of(k);
+            int want = (int)Value(d.CountId);
             var have = Gatherers.Where(g => g.Kind == k).OrderBy(g => g.Index).ToList();
             for (int i = have.Count; i < want; i++)
             {
-                var g = new Gatherer { Yard = this, Kind = k, Index = i, Name = $"{k}{i + 1}",
-                                       Position = Hub.BasePos + (k == GatherKind.Miner ? new Vector2(-60 + 30 * i, -300) : new Vector2(-300, -60 + 30 * i)) };
+                var g = new Gatherer { Yard = this, Kind = k, Index = i, Name = $"{d.Name}{i + 1}",
+                                       Position = Hub.BasePos + d.Muster + d.MusterStep * i };
                 AddChild(g); Gatherers.Add(g);
             }
             foreach (var g in have.Where(g => g.Index >= want)) { Release(g); Gatherers.Remove(g); g.QueueFree(); }
         }
-        Match(GatherKind.Miner, (int)Value("miner_count"));
-        Match(GatherKind.Salvager, (int)Value("salvager_count"));
         Gatherers.Sort((a, b) => a.Kind != b.Kind ? a.Kind.CompareTo(b.Kind) : a.Index.CompareTo(b.Index));
     }
 
-    // Where a ship works. Miners take different asteroids, nearest the base first;
-    // salvagers spread over the face of the wreck that looks toward the base.
+    // Where a ship works, by its row's Site. ROCKS take different asteroids, nearest the base
+    // first; a WRECK's spread over the face that looks toward the base. (WreckSpread and
+    // WreckEdge are measurements of one piece of art, so they live here beside the arm that
+    // flies it, not on a gatherer's row.)
     private static readonly float[] WreckSpread = { 0f, 0.35f, -0.35f, 0.7f, -0.7f, 1.05f };
     // Where the hull really begins along each of those approaches, measured from
     // behemoth_wreck.png at its 0.34 scale (the outline is ragged, so no single radius
@@ -282,7 +322,7 @@ public partial class Yard : Node2D
     private List<Vector2> _rocksNearFirst;
     public (Vector2 spot, Vector2 target) WorkSpot(Gatherer g)
     {
-        if (g.Kind == GatherKind.Miner)
+        if (g.Def.Site == GatherSite.Rocks)
         {
             // the belt's rocks, nearest the base first: sorted once, not every frame for every miner
             var rocks = _rocksNearFirst ??= Hub.Rocks.OrderBy(r => r.Position.DistanceTo(Hub.BasePos)).Select(r => r.Position).ToList();
@@ -343,21 +383,29 @@ public partial class Yard : Node2D
     }
 
     // ── stock ────────────────────────────────────────────────────────────────
-    public void Deposit(GatherKind k, double amount)
+    // A DELIVERY, into the resource its row names. One line for any number of resources: the
+    // if/else into two named fields is what a third gatherer used to have to edit.
+    public void Deposit(string res, double amount)
     {
-        if (k == GatherKind.Miner) { Ore += amount; TotalMined += amount; }
-        else { Salvage += amount; TotalSalvaged += amount; }
+        SetStock(res, Stock(res) + amount);
+        _delivered[res] = Delivered(res) + amount;
     }
 
-    // The hauler loads the larger pile first, then both evenly.
+    // The hauler takes the DEEPEST pile first, then evenly: every pile is left at the same depth.
+    // With two that is exactly "the gap, then both evenly"; with three it needs no new arm.
     public double TakeStock(double want)
     {
-        want = Math.Min(want, Ore + Salvage);
+        want = Math.Min(want, StockHeld);
         if (want <= 0) return 0;
-        double gap = Math.Min(Math.Abs(Ore - Salvage), want);
-        if (Ore >= Salvage) Ore -= gap; else Salvage -= gap;
-        double rest = want - gap;
-        Ore -= rest / 2; Salvage -= rest / 2;
+        var deep = Gathering.Resources.Select(Stock).OrderByDescending(v => v).ToArray();
+        double level = 0;
+        for (int k = 1; k <= deep.Length; k++)
+        {   // can the top k piles alone give `want`, cut no deeper than the (k+1)-th?
+            double floor = k < deep.Length ? deep[k] : 0, takeable = 0, sum = 0;
+            for (int i = 0; i < k; i++) { takeable += deep[i] - floor; sum += deep[i]; }
+            if (takeable >= want) { level = (sum - want) / k; break; }
+        }
+        foreach (var r in Gathering.Resources) SetStock(r, Math.Min(Stock(r), level));
         return want;
     }
 
@@ -380,14 +428,17 @@ public partial class Yard : Node2D
     private void NetPortalFlash() => Hub.Portal.Flash();
 
     // ── REFIT's price: 10% of the stock you own ──────────────────────────────
-    // The world's if you are its host (or offline); a guest's own, parked totals.
-    public (double ore, double salvage, double credits) ResetCost() =>
-        _parked ? (_ownOre * 0.1, _ownSalvage * 0.1, _ownCredits * 0.1) : (Ore * 0.1, Salvage * 0.1, Credits * 0.1);
+    // The world's if you are its host (or offline); a guest's own, parked totals. Asked one
+    // resource at a time, so the window lists whatever the table holds (BasePanel).
+    public double ResetCost(string res) => (_parked ? _ownStock.GetValueOrDefault(res) : Stock(res)) * 0.1;
+    public double ResetCostCredits => (_parked ? _ownCredits : Credits) * 0.1;
 
     public void ChargeReset()
     {
-        if (_parked) { _ownOre *= 0.9; _ownSalvage *= 0.9; _ownCredits *= 0.9; }
-        else { Ore *= 0.9; Salvage *= 0.9; Credits *= 0.9; }
+        foreach (var r in Gathering.Resources)
+            if (_parked) _ownStock[r] = _ownStock.GetValueOrDefault(r) * 0.9;
+            else SetStock(r, Stock(r) * 0.9);
+        if (_parked) _ownCredits *= 0.9; else Credits *= 0.9;
     }
 
     // ── visiting: park your own yard, restore it after ───────────────────────
@@ -396,7 +447,8 @@ public partial class Yard : Node2D
         if (guest && !_parked)
         {
             Bank();                                        // nothing your ships carry is lost
-            (_ownOre, _ownSalvage, _ownCredits) = (Ore, Salvage, Credits);
+            _ownStock.Clear(); foreach (var r in Gathering.Resources) _ownStock[r] = Stock(r);
+            _ownCredits = Credits;
             _ownLevels.Clear(); foreach (var kv in _levels) _ownLevels[kv.Key] = kv.Value;
             _ownInvested.Clear(); foreach (var kv in _invested) _ownInvested[kv.Key] = kv.Value;
             _parked = true;
@@ -404,7 +456,8 @@ public partial class Yard : Node2D
         }
         else if (!guest && _parked)
         {
-            (Ore, Salvage, Credits) = (_ownOre, _ownSalvage, _ownCredits);
+            foreach (var r in Gathering.Resources) SetStock(r, _ownStock.GetValueOrDefault(r));
+            Credits = _ownCredits;
             _levels.Clear(); foreach (var kv in _ownLevels) _levels[kv.Key] = kv.Value;
             _invested.Clear(); foreach (var kv in _ownInvested) _invested[kv.Key] = kv.Value;
             _parked = false;
@@ -418,20 +471,25 @@ public partial class Yard : Node2D
     // already through the portal. Parking, a trip and a save all count the loads this way: with
     // AUTO-SELL locked, a full hauler waiting on its pad is the usual state, and a trip or a quit
     // used to throw its load away.
-    private (double ore, double salvage, double credits) Banked()
+    private (Dictionary<string, double> stock, double credits) Banked()
     {
-        double ore = Ore, salvage = Salvage, credits = Credits;
-        foreach (var g in Gatherers) { if (g.Kind == GatherKind.Miner) ore += g.Cargo; else salvage += g.Cargo; }
+        var stock = new Dictionary<string, double>();
+        foreach (var r in Gathering.Resources) stock[r] = Stock(r);
+        double credits = Credits;
+        foreach (var g in Gatherers) stock[g.Def.Resource] += g.Cargo;
         if (Hauler.Cargo > 0)
         {
             if (Hauler.State == Hauler.St.Away) credits += Hauler.Payout;
-            else { ore += Hauler.Cargo / 2; salvage += Hauler.Cargo / 2; }
+            // its load came off the piles evenly (TakeStock), so it goes back the same way
+            else foreach (var r in Gathering.Resources) stock[r] += Hauler.Cargo / Gathering.Resources.Length;
         }
-        return (ore, salvage, credits);
+        return (stock, credits);
     }
     private void Bank()
     {
-        (Ore, Salvage, Credits) = Banked();
+        var (stock, credits) = Banked();
+        foreach (var r in Gathering.Resources) SetStock(r, stock.GetValueOrDefault(r));
+        Credits = credits;
         foreach (var g in Gatherers) g.Cargo = 0;
         Hauler.Cargo = 0;
     }
@@ -460,18 +518,21 @@ public partial class Yard : Node2D
         {
             _totalsCd = 1.0;
             var lv = Economy.All.Select(u => Level(u.Id)).ToArray();
-            Hub.RpcHome(this, nameof(NetTotals), Ore, Salvage, Credits, lv, Economy.Tabs.Select(Invested).ToArray(), Missions.HighestBeaten);
+            Hub.RpcHome(this, nameof(NetTotals), Gathering.Resources.Select(Stock).ToArray(), Credits, lv,
+                        Economy.Tabs.Select(Invested).ToArray(), Missions.HighestBeaten);
         }
         _stateCd -= delta;
         if (_stateCd <= 0) { _stateCd = 0.1; SendState(); }
     }
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetTotals(double ore, double salvage, double credits, int[] levels, double[] invested, int ownerBoss)
+    private void NetTotals(double[] stock, double credits, int[] levels, double[] invested, int ownerBoss)
     {
         _ownerBoss = ownerBoss;
         for (int i = 0; i < Math.Min(invested.Length, Economy.Tabs.Length); i++) _invested[Economy.Tabs[i]] = invested[i];
-        (Ore, Salvage, Credits) = (ore, salvage, credits);
+        // by position, as the levels are: the resources are a table, in table order
+        for (int i = 0; i < Math.Min(stock.Length, Gathering.Resources.Length); i++) SetStock(Gathering.Resources[i], stock[i]);
+        Credits = credits;
         for (int i = 0; i < Math.Min(levels.Length, Economy.All.Length); i++) _levels[Economy.All[i].Id] = levels[i];
         SyncFleet();
     }

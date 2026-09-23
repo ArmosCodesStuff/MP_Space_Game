@@ -1365,7 +1365,10 @@ public partial class Hub : Node2D
         string place = InArena
             ? $"ARENA  ·  {(IsInstanceValid(Boss) ? Boss.Type.Name : "")} (LEVEL {Missions.Level})  {(IsInstanceValid(Boss) ? Boss.Hp : 0):0} / {(IsInstanceValid(Boss) ? Boss.MaxHp : 0):0}" + (MissionWon ? "  ·  DEFEATED" : "")
             : Yard == null ? ""          // the frame at home before the base is built: nothing to report yet
-            : $"ORE {Yard.Ore:0}    SALVAGE {Yard.Salvage:0}    CREDITS {Yard.Credits:0}"
+            // One reading per resource the fleet gathers, named by its row, so a third gatherer
+            // puts its own stock on the line without an edit here.
+            : string.Join("    ", Gathering.All.Select(g => $"{g.Unit.ToUpperInvariant()} {Yard.Stock(g.Resource):0}"))
+              + $"    CREDITS {Yard.Credits:0}"
               + $"    HAULER {Yard.Hauler.Cargo:0}/{Yard.Capacity:0} {Yard.Hauler.State.ToString().ToUpperInvariant()}";
         Ui.SetText(_hud, place + ship
                   + (Net.IsOnline ? (Net.IsHost ? $"        HOSTING ({_ships.Count})" : $"        GUEST ({_ships.Count})")
