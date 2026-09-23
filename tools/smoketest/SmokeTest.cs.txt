@@ -5365,7 +5365,7 @@ public partial class _Test : Node
             // the sector changes at once, the world a frame later: wait for the home world to be built
             await RealTime(() => H != null && H.Yard != null && H.IsNodeReady(), 5);
             Check(!Hub.InArena && Net.IsOnline, "arena guest: home with the host after the win");
-            Check(Character.Exp == 450, $"arena guest: its OWN EXP for the kill -- 100 at level 2, +250 first clear, +100 (450; exp {Character.Exp})");
+            Check(Character.Exp == 500, $"arena guest: its OWN EXP for the kill -- 150 at level 2 (300 x the boss's level over its own), +250 first clear, +100 (500; exp {Character.Exp})");
             var agFile = new ConfigFile(); agFile.Load($"{Character.Dir}/{Character.Id}.cfg");
             int agDisk = agFile.HasSection("gear_hold") ? agFile.GetSectionKeys("gear_hold").Sum(k => (int)agFile.GetValue("gear_hold", k, 0)) : 0;
             Check(agDisk == agHold0 + 2 && (string)agFile.GetValue("id", "name", "") == "Arena Guest",
@@ -5415,10 +5415,10 @@ public partial class _Test : Node
                   $"arena guest: put back where it was when it dropped ({Me?.Position.DistanceTo(new Vector2(900, 300)):0} u off; at {Me?.Position})");
             // the boss died while it was away: it helped win it, so it is paid on its return -- its EXP
             // (the level-2 Drake at pilot level 2: 300, +250 its first clear of level 2, +100 = 650 on its
-            // 450: 1000, a level -- level 3 with 0 over) and both its parts (straight to the hold if they
+            // 500: 1150, a level and 150 over -- level 3) and both its parts (straight to the hold if they
             // reach it at home, else as crates)
             await RealTime(() => Character.Level == 3 && Character.GearHold.Values.Sum() + Character.Unclaimed.Count == agHold1 + 2, 6);
-            Check(Character.Level == 3 && Character.Exp == 0 && Character.GearHold.Values.Sum() + Character.Unclaimed.Count == agHold1 + 2,
+            Check(Character.Level == 3 && Character.Exp == 150 && Character.GearHold.Values.Sum() + Character.Unclaimed.Count == agHold1 + 2,
                   $"arena guest: the kill made while it was away is paid on its return: its EXP and its 2 parts (level {Character.Level}, exp {Character.Exp}; {Character.GearHold.Values.Sum() + Character.Unclaimed.Count - agHold1} parts)");
             await RealTime(() => H.MissionWon && H.Boss != null && GodotObject.IsInstanceValid(H.Boss) && H.Boss.Hp == 0, 5);
             Check(H.MissionWon && H.Boss != null && GodotObject.IsInstanceValid(H.Boss) && H.Boss.Hp == 0, "arena guest: back in an arena already won -- the boss reads zero");
@@ -5455,7 +5455,7 @@ public partial class _Test : Node
                   && Math.Abs((double)guestFile.GetValue("base", "credits", -1.0) - want) < 1e-6,
                   $"arena guest: its own base reached its OWN file ({(string)guestFile.GetValue("id", "name", "?")}, {(double)guestFile.GetValue("base", "credits", -1.0):0} of {want:0})");
             int agDisk2 = guestFile.HasSection("gear_hold") ? guestFile.GetSectionKeys("gear_hold").Sum(k => (int)guestFile.GetValue("gear_hold", k, 0)) : 0;
-            Check(agDisk2 == agHold1 + 2 && (int)guestFile.GetValue("progress", "level", 0) == 3 && (int)guestFile.GetValue("progress", "exp", -1) == 0,
+            Check(agDisk2 == agHold1 + 2 && (int)guestFile.GetValue("progress", "level", 0) == 3 && (int)guestFile.GetValue("progress", "exp", -1) == 150,
                   $"arena guest: the kill paid on its return is on its own file: its EXP, both parts in the hold ({agDisk2 - agHold1} of 2, exp {(int)guestFile.GetValue("progress", "exp", 0)})");
             // PRESSING RECONNECT: a try (5 s: the host was here a moment ago, or it is gone), and when
             // that fails too, the button again
