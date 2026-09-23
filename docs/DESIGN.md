@@ -1187,10 +1187,14 @@ produced, and what each one replaced.
 | `Tags.cs` | what a thing IS | `h is Torpedo`, `h is Raider r && !r.Heavy`, `HitRadius < 20f` |
 | `Statuses.cs` | what is being DONE to a thing | a bool and a timer per class, per effect |
 | `Ids.cs` | an id space per kind | six hardcoded bases with six private counters |
+| `Shots.cs` → `Shots.All` | a projectile: who it hits, how its path is tested, how it ends, how it looks | `Shell.cs`, `Slug.cs`, `Torpedo.cs` — three classes, one copy each of the same sweep, lifetime and hit, and three launch RPCs |
+| `Fx.cs` → `Fx.All` | an effect: a shape, a colour, a life | one `Explosion` node, and everything else drawn as spokes of laser flashes because that was the only drawing a guest ever saw |
 
-**What is deliberately NOT a table.** The two ways an enemy fights (PIN and STANDOFF) and the two
-bosses are BEHAVIOUR, and behaviour that differs in kind does not compress into rows without
-inventing a scripting language to hold it. `Boss` already carries everything the bosses share --
+**What is deliberately NOT a table.** The two ways an enemy fights (PIN and STANDOFF), the two
+bosses, and a boss's THROWN ROCK -- held in a tractor beam, thrown down a fixed lane on a cubic
+ease, striking everything in the lane once and breaking at the end -- are BEHAVIOUR, and behaviour
+that differs in kind does not compress into rows without inventing a scripting language to hold
+it. The rock still shares the one path test (`Shots.Sweep`), which is the part that repeats. `Boss` already carries everything the bosses share --
 hull and damage scaling, telegraphs, net state, the super bar, a late joiner's catch-up -- so a
 third boss is a subclass with its own moves plus a `Missions` row, and a seventh enemy is a row
 unless it wants a third way to fight.

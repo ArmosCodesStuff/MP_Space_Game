@@ -1,8 +1,8 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-22 19:39, on top of git commit d1ea99a. How it was verified is in the message of the
+// Taken 2026-09-22 20:11, on top of git commit b9c6660. How it was verified is in the message of the
 //   commit that carries this file: one starting VERIFIED: is a green verify.ps1 -Update.
-// 99 files, 21691 lines. Code only: sprites, sounds and docs are in the zip.
+// 97 files, 21851 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -28,33 +28,33 @@
 //   scripts/Character.cs                           312 lines   sha256 edc5f9ba2172
 //   scripts/CharacterCreator.cs                    226 lines   sha256 be5f79dccf98
 //   scripts/CharacterSelect.cs                     184 lines   sha256 241e2389c734
-//   scripts/Combat.cs                              125 lines   sha256 5592ca99fc3e
+//   scripts/Combat.cs                              128 lines   sha256 0a76b28c7a7b
 //   scripts/DamageNumbers.cs                        83 lines   sha256 20747f8cd3bd
 //   scripts/Deployed.cs                            103 lines   sha256 ffa277824dbe
-//   scripts/Drake.cs                               147 lines   sha256 35ea4012f32e
+//   scripts/Drake.cs                               147 lines   sha256 1f03acbab106
 //   scripts/Economy.cs                             119 lines   sha256 1dec71a6ffa8
 //   scripts/Enemies.cs                             106 lines   sha256 b3603fe6ece2
 //   scripts/Equipment.cs                           274 lines   sha256 0eab67468e18
 //   scripts/EquipmentWindow.cs                     126 lines   sha256 88af43fe3901
 //   scripts/EscapePod.cs                            49 lines   sha256 d21d4103150b
 //   scripts/EscMenu.cs                              68 lines   sha256 a6334f984666
-//   scripts/Explosion.cs                            18 lines   sha256 12209b0c72ce
+//   scripts/Fx.cs                                  126 lines   sha256 39637cba2318
 //   scripts/Game.cs                                 60 lines   sha256 9d93b07815b8
 //   scripts/Gatherer.cs                            236 lines   sha256 34a9fe70df8a
 //   scripts/Hauler.cs                              441 lines   sha256 a1073a523398
 //   scripts/HealthBar.cs                            23 lines   sha256 fafaf0102ffb
 //   scripts/Hints.cs                                98 lines   sha256 1b018c88396f
-//   scripts/Hub.cs                                1728 lines   sha256 09d39f485439
+//   scripts/Hub.cs                                1744 lines   sha256 60a6e540a722
 //   scripts/Ids.cs                                  28 lines   sha256 230fc2305f97
 //   scripts/Lancer.cs                              194 lines   sha256 2793cf3479db
 //   scripts/Loot.cs                                118 lines   sha256 f8a5de98fe1f
-//   scripts/MainMenu.cs                            287 lines   sha256 694b182d3a94
+//   scripts/MainMenu.cs                            288 lines   sha256 9307a6a697bc
 //   scripts/MenuFoe.cs                             202 lines   sha256 b14b23208a4f
 //   scripts/Missions.cs                             50 lines   sha256 2d0007b08c4b
 //   scripts/Music.cs                                81 lines   sha256 d77805e7d7ae
 //   scripts/Net.cs                                 781 lines   sha256 89afe425d9cb
 //   scripts/PilotWindow.cs                          60 lines   sha256 4e05487ebecd
-//   scripts/PlayerShip.cs                         1262 lines   sha256 b131f216aeae
+//   scripts/PlayerShip.cs                         1258 lines   sha256 09174a279dfe
 //   scripts/Plume.cs                                25 lines   sha256 cdbeb9b8fc58
 //   scripts/Progression.cs                         107 lines   sha256 d94ab4162045
 //   scripts/Radar.cs                               137 lines   sha256 a9169e79860b
@@ -64,11 +64,10 @@
 //   scripts/SessionMenu.cs                         141 lines   sha256 777687907142
 //   scripts/Settings.cs                             87 lines   sha256 4dd23a4a672f
 //   scripts/Sfx.cs                                 105 lines   sha256 879dc5464b7a
-//   scripts/Shell.cs                                53 lines   sha256 b55ab8451f54
 //   scripts/Shield.cs                               71 lines   sha256 99c7fa4a2a8e
 //   scripts/ShipClasses.cs                         445 lines   sha256 b3cc070d57c1
 //   scripts/Ships.cs                               399 lines   sha256 f867c4b9f232
-//   scripts/Slug.cs                                 97 lines   sha256 a033d5dde5b4
+//   scripts/Shots.cs                               285 lines   sha256 fdf79e9dce61
 //   scripts/Sprites.cs                              13 lines   sha256 f2374b1d9777
 //   scripts/Stats.cs                               220 lines   sha256 c00971eb343d
 //   scripts/StatsWindow.cs                         227 lines   sha256 0cef18b216f8
@@ -77,13 +76,12 @@
 //   scripts/TargetDummy.cs                         146 lines   sha256 b0af5279949a
 //   scripts/Targeting.cs                            59 lines   sha256 84482143da58
 //   scripts/Telegraph.cs                            55 lines   sha256 f456ac50c42c
-//   scripts/ThrownRock.cs                           98 lines   sha256 416b29fe403e
+//   scripts/ThrownRock.cs                           98 lines   sha256 5c912def557e
 //   scripts/TioWindow.cs                            75 lines   sha256 5da271b76838
-//   scripts/Torpedo.cs                             151 lines   sha256 4f0b68620c00
 //   scripts/Turrets.cs                             214 lines   sha256 22f572331a13
 //   scripts/Txt.cs                                  32 lines   sha256 8823251c9a4f
 //   scripts/Ui.cs                                  236 lines   sha256 e6d274f5a4cd
-//   scripts/UtilityShip.cs                          82 lines   sha256 653a02c9d63b
+//   scripts/UtilityShip.cs                          81 lines   sha256 19003132b8a5
 //   scripts/Yard.cs                                534 lines   sha256 09ca20f88ed4
 //   typecheck/GodotStub.cs                         192 lines   sha256 2c5c2967bf5c
 //   typecheck/typecheck.ps1                         93 lines   sha256 a5fe67e9843e
@@ -101,11 +99,11 @@
 //   tools/map.py                                   232 lines   sha256 01a23fceab11
 //   tools/screens/run.ps1                          128 lines   sha256 9e8d569b0b94
 //   tools/screens/run.sh                            42 lines   sha256 73a5b3c63476
-//   tools/screens/Shots.cs.txt                     659 lines   sha256 c105183f6344
+//   tools/screens/Shots.cs.txt                     659 lines   sha256 1ecdc3f35962
 //   tools/smoketest/fakeigd.py                     155 lines   sha256 b980d4fa4ad4
 //   tools/smoketest/run.ps1                        225 lines   sha256 8aac48df9920
 //   tools/smoketest/run.sh                          57 lines   sha256 9ac9cbdf9115
-//   tools/smoketest/SmokeTest.cs.txt              4827 lines   sha256 64aa0d114766
+//   tools/smoketest/SmokeTest.cs.txt              4880 lines   sha256 d077f2797350
 //   tools/smoketest/wan.py                          61 lines   sha256 97db24aa3f91
 //   tools/snapshot.ps1                              94 lines   sha256 3ca9bfe56185
 //==============================================================================
@@ -2257,7 +2255,7 @@ public partial class CharacterSelect : Control
 
 //==============================================================================
 // FILE: scripts/Combat.cs
-// 125 lines   sha256 5592ca99fc3e
+// 128 lines   sha256 0a76b28c7a7b
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -2338,30 +2336,39 @@ public static class Combat
     // is the one that deals damage; a world with guests to tell hooks ShellFired / TorpedoFired
     // and sends the launch on, and guests fly a cosmetic copy.
     public static Node World;
-    public static System.Action<Shell> ShellFired;
-    public static System.Action<Torpedo> TorpedoFired;
-    public static System.Action<Slug> SlugFired;
+    // One hook for everything that flies: the world sends the launch on to its guests, which fly a
+    // cosmetic copy of their own (the run is deterministic, so it lands where the host's lands).
+    public static System.Action<Shot> ShotFired;
 
-    // a boss's hostile round (the Drake's shells and scrap): straight, dodgeable, and never a point-
-    // defence target (see Slug)
-    public static void FireSlug(Vector2 from, Vector2 dir, float speed, float range, float radius, double damage,
-                                Slug.Kind look, int variant, string hitSource)
+    // THE ONE DOOR EVERYTHING THAT FLIES COMES THROUGH. `kind` is a row of Shots.All -- what it
+    // hits, how it ends, what it looks like; everything else is the weapon's own numbers. The
+    // host's copy deals the damage and the world tells its guests to fly a cosmetic one.
+    public static Shot Fire(int kind, Vector2 from, Vector2 dir, float speed, float range, double damage,
+                            float radius = 0f, int targetId = 0, float turnRate = 0f, PlayerShip source = null,
+                            string hitSource = null, float size = 1f, int variant = 0)
     {
-        if (World == null) return;
-        var s = new Slug { Position = from, Dir = dir.Normalized(), Speed = speed, Range = range, Radius = radius, Damage = damage,
-                           Look = look, Variant = variant, HitSource = hitSource };
+        if (World == null) return null;
+        var s = new Shot { Kind = kind, Position = from, Dir = dir.Normalized(), Speed = speed, Range = range,
+                           Damage = damage, Radius = radius, TargetId = targetId, TurnRate = turnRate,
+                           Source = source, HitSource = hitSource, Size = size, Variant = variant,
+                           NetId = Shots.Of(kind).Interceptable ? NextMissileId() : 0 };
         World.AddChild(s);
-        SlugFired?.Invoke(s);
+        ShotFired?.Invoke(s);
+        return s;
     }
 
-    // a main-gun shell (battleship, destroyer): straight, and it hits the first hostile it touches
+    // a main gun's round: straight, and it hits the first thing that is not a missile
     public static void FireShell(Vector2 from, Vector2 dir, float speed, float range, double damage, PlayerShip source)
-    {
-        if (World == null) return;
-        var s = new Shell { Position = from, Dir = dir.Normalized(), Speed = speed, Range = range, Damage = damage, Source = source };
-        World.AddChild(s);
-        ShellFired?.Invoke(s);
-    }
+        => Fire(Shots.Shell, from, dir, speed, range, damage, source: source);
+
+    // a boss's dodgeable round, and the scrap of the same volley: never a point-defence target,
+    // because a round that is MEANT to be dodged, and that point defence could delete, would never
+    // need dodging
+    public static void FireSlug(Vector2 from, Vector2 dir, float speed, float range, float radius, double damage,
+                                bool scrap, int variant, string hitSource)
+        => Fire(scrap ? Shots.Scrap : Shots.Slug, from, dir, speed, range, damage, radius,
+                hitSource: hitSource, variant: variant);
+
     // Unguided torpedoes pass targetId 0; a missile passes its target and a small turn rate, and
     // heavy for its looks. hostile = fired BY an enemy, so it seeks and hits player ships -- and it
     // gets an id, so point defence can shoot it down on every peer at once. source: the player
@@ -2369,20 +2376,14 @@ public static class Combat
     public static void LaunchTorpedo(Vector2 from, Vector2 dir, float speed, float range, double damage,
                                      int targetId = 0, float turnRate = 0f, bool heavy = false, bool hostile = false,
                                      PlayerShip source = null, string hitSource = null, float size = 1f)
-    {
-        if (World == null) return;
-        var t = new Torpedo { Position = from, Dir = dir.Normalized(), Speed = speed, Range = range, Damage = damage, TargetId = targetId,
-                              TurnRate = turnRate, Heavy = heavy, HostileFire = hostile, Source = source, HitSource = hitSource, Size = size,
-                              NetId = hostile ? NextMissileId() : 0 };
-        World.AddChild(t);
-        TorpedoFired?.Invoke(t);
-    }
+        => Fire(hostile ? Shots.Seeker : heavy ? Shots.Missile : Shots.Torpedo, from, dir, speed, range, damage,
+                targetId: targetId, turnRate: turnRate, source: source, hitSource: hitSource, size: size);
 
     // Dropped by the world on its way out. EVERY hook set by that world must go: each one is a
     // lambda holding the Hub, so one left behind is a freed node the next shot calls into, and a
     // Hub that can never be collected once you are back at the menu.
     // A world ends: its lists, its hooks (each a lambda holding that world) and its ids.
-    public static void Clear() { Hostiles.Clear(); Players.Clear(); OnFlash = null; World = null; ShellFired = null; TorpedoFired = null; SlugFired = null; NetIds.Reset(); }
+    public static void Clear() { Hostiles.Clear(); Players.Clear(); OnFlash = null; World = null; ShotFired = null; Fx.On = null; NetIds.Reset(); }
 }
 
 //==============================================================================
@@ -2583,7 +2584,7 @@ public partial class DeployedTurret : Node2D, IRaidTarget, ITagged, ITurretHost
 
 //==============================================================================
 // FILE: scripts/Drake.cs
-// 147 lines   sha256 35ea4012f32e
+// 147 lines   sha256 1f03acbab106
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -2660,7 +2661,7 @@ public partial class Drake : Boss
         {
             _gun = GunEvery;
             var t = Nearest(GunReach);
-            if (t != null) Combat.FireSlug(Nose, t.Position - Nose, GunSpeed, GunRange, GunRadius, GunDamage * DamageMult, Slug.Kind.Shell, 0, "boss:gun");
+            if (t != null) Combat.FireSlug(Nose, t.Position - Nose, GunSpeed, GunRange, GunRadius, GunDamage * DamageMult, scrap: false, 0, "boss:gun");
         }
 
         // THE SCRAP SHOTGUN: warp to range, the fan, then the scrap
@@ -2689,7 +2690,7 @@ public partial class Drake : Boss
             _fanT = -1; int k = 0;
             foreach (float a in FanAngles(_fanAim))
             {
-                Combat.FireSlug(Nose, Vector2.Right.Rotated(a), ScrapSpeed, ScrapRange, ScrapRadius, ScrapDamage * DamageMult, Slug.Kind.Scrap, k, $"boss:scrap:{k}");
+                Combat.FireSlug(Nose, Vector2.Right.Rotated(a), ScrapSpeed, ScrapRange, ScrapRadius, ScrapDamage * DamageMult, scrap: true, k, $"boss:scrap:{k}");
                 k++;
             }
         }
@@ -3506,25 +3507,133 @@ public partial class EscMenu : CanvasLayer
 }
 
 //==============================================================================
-// FILE: scripts/Explosion.cs
-// 18 lines   sha256 12209b0c72ce
+// FILE: scripts/Fx.cs
+// 126 lines   sha256 39637cba2318
 //==============================================================================
 using Godot;
 
-// A short burst where something is destroyed (or appears): a flash and a ring, then gone.
-public partial class Explosion : Node2D
+// ─────────────────────────────────────────────────────────────────────────────
+// WHAT AN EFFECT LOOKS LIKE — one row each, raised by name, seen by everyone.
+//
+// There was one effect node in the game (Explosion) and everything else improvised. The
+// freighter's shockwave, the warrior's EMP and the echo's detonation were drawn as SPOKES OF
+// LASER FLASHES, because Combat.Flash happened to be the only drawing that reached a guest; the
+// echo's burst was added straight to the host's tree, so nobody else ever saw it. Every new
+// ability was going to invent its own again.
+//
+// An effect is a ROW: a shape, a colour, how long it lives, how wide it draws. `Fx.Raise` names
+// the row and the world puts it up -- on the host AND on every guest, through one RPC
+// (Hub.NetFx). One node draws them all, with the switch on the row's shape in one place.
+//
+// A NEW EFFECT IS A ROW HERE and a call to Fx.Raise. Nothing else in the game learns about it.
+// ─────────────────────────────────────────────────────────────────────────────
+public enum FxShape
 {
-    public float Radius = 30f;
+    Burst,     // a disc that swells and fades, with a ring running ahead of it: something died
+    Ring,      // one expanding ring: a wave going out, and how far it reaches
+    Spokes,    // a ring with spokes to its edge: a pulse that struck everything inside it
+    Bar,       // a thick straight bar from A to B, fading: a railgun's line
+}
+
+public class FxDef
+{
+    public string Id;
+    public FxShape Shape;
     public Color Tint = new(1f, 0.7f, 0.3f);
-    public const double Life = 0.6;
+    public double Life = 0.6;
+    public float Width = 2f;        // the stroke of a ring, a spoke or a bar
+    public int Spokes = 8;
+    public bool Fill = true;        // a soft disc inside the ring
+    public string Sound;            // Sfx.Special id, or null for silence
+}
+
+public static class Fx
+{
+    // The index IS the id on the wire (Hub.NetFx), so APPEND ONLY.
+    public const int Burst = 0, Lost = 1, Rebuilt = 2, Wave = 3, Emp = 4, Echo = 5, Rail = 6;
+
+    public static readonly FxDef[] All =
+    {
+        new() { Id = "burst",   Shape = FxShape.Burst, Tint = new(1f, 0.70f, 0.30f), Life = 0.6 },
+        new() { Id = "lost",    Shape = FxShape.Burst, Tint = new(1f, 0.70f, 0.30f), Life = 0.6 },
+        new() { Id = "rebuilt", Shape = FxShape.Burst, Tint = new(0.5f, 0.80f, 1.0f), Life = 0.6 },
+        // a freighter's shockwave: a wide, slow ring that says exactly how far it threw things
+        new() { Id = "wave",    Shape = FxShape.Ring,  Tint = new(0.60f, 0.80f, 1f), Life = 0.9, Width = 3f },
+        // a warrior's EMP: a hard pulse with spokes, close in
+        new() { Id = "emp",     Shape = FxShape.Spokes, Tint = new(0.70f, 0.90f, 1f), Life = 0.5, Width = 2f, Spokes = 10 },
+        // an echo's detonation: everything it remembered, at once
+        new() { Id = "echo",    Shape = FxShape.Spokes, Tint = new(1f, 0.80f, 0.45f), Life = 0.7, Width = 2.5f, Spokes = 6 },
+        // a sniper's railgun: the line it threw down
+        new() { Id = "rail",    Shape = FxShape.Bar,   Tint = new(0.45f, 0.70f, 1f), Life = 0.35, Width = 7f, Fill = false },
+    };
+
+    public static FxDef Of(int id) => All[id >= 0 && id < All.Length ? id : Burst];
+
+    // Set by the live world: it puts the effect up here AND tells its guests (Hub), or just puts
+    // it up (the title screen). Dropped with the world by Combat.Clear -- it is a lambda holding
+    // that world, like every other hook here.
+    public static System.Action<int, Vector2, Vector2, float> On;
+
+    // `at` is where it happens; `radius` how far it reaches; `to` the far end of a bar.
+    public static void Raise(int id, Vector2 at, float radius = 30f) => On?.Invoke(id, at, at, radius);
+    public static void Line(int id, Vector2 a, Vector2 b) => On?.Invoke(id, a, b, 0f);
+}
+
+// One node for every row: the shape is the row's, so a new effect never brings a new node.
+public partial class FxNode : Node2D
+{
+    public int Id;
+    public Vector2 To;
+    public float Radius = 30f;
     private double _t;
-    public override void _Ready() { ZIndex = 7; ZAsRelative = false; }
-    public override void _Process(double delta) { _t += delta; if (_t >= Life) QueueFree(); QueueRedraw(); }
+    private FxDef D => Fx.Of(Id);
+
+    public override void _Ready()
+    {
+        ZIndex = 7; ZAsRelative = false;
+        if (D.Sound != null) Sfx.Special(D.Sound, Position);
+    }
+
+    public override void _Process(double delta)
+    {
+        _t += delta;
+        if (_t >= D.Life) QueueFree();
+        QueueRedraw();
+    }
+
     public override void _Draw()
     {
-        float k = (float)(_t / Life);
-        DrawCircle(Vector2.Zero, Radius * (0.4f + 0.8f * k), new Color(Tint.R, Tint.G, Tint.B, 0.55f * (1 - k)));
-        DrawArc(Vector2.Zero, Radius * (0.6f + 1.2f * k), 0, Mathf.Tau, 32, new Color(1f, 0.9f, 0.7f, 0.8f * (1 - k)), 2f);
+        var d = D;
+        float k = (float)Mathf.Clamp(_t / d.Life, 0, 1), fade = 1 - k;
+        var c = d.Tint;
+        switch (d.Shape)
+        {
+            case FxShape.Burst:
+                DrawCircle(Vector2.Zero, Radius * (0.4f + 0.8f * k), new Color(c.R, c.G, c.B, 0.55f * fade));
+                DrawArc(Vector2.Zero, Radius * (0.6f + 1.2f * k), 0, Mathf.Tau, 32, new Color(1f, 0.9f, 0.7f, 0.8f * fade), 2f);
+                break;
+            case FxShape.Ring:
+                if (d.Fill) DrawCircle(Vector2.Zero, Radius * k, new Color(c.R, c.G, c.B, 0.10f * fade));
+                DrawArc(Vector2.Zero, Radius * k, 0, Mathf.Tau, 96, new Color(c.R, c.G, c.B, fade), d.Width);
+                break;
+            case FxShape.Spokes:
+                if (d.Fill) DrawCircle(Vector2.Zero, Radius * k, new Color(c.R, c.G, c.B, 0.12f * fade));
+                DrawArc(Vector2.Zero, Radius * k, 0, Mathf.Tau, 64, new Color(c.R, c.G, c.B, fade), d.Width);
+                for (int i = 0; i < d.Spokes; i++)
+                {
+                    var dir = Vector2.Up.Rotated(Mathf.Tau * i / d.Spokes);
+                    DrawLine(dir * (Radius * k * 0.25f), dir * (Radius * k), new Color(c.R, c.G, c.B, 0.7f * fade), d.Width * 0.6f);
+                }
+                break;
+            case FxShape.Bar:
+            {
+                var b = ToLocal(To);
+                DrawLine(Vector2.Zero, b, new Color(c.R, c.G, c.B, 0.35f * fade), d.Width * 2.2f);
+                DrawLine(Vector2.Zero, b, new Color(c.R, c.G, c.B, fade), d.Width);
+                DrawLine(Vector2.Zero, b, new Color(1f, 1f, 1f, 0.9f * fade), d.Width * 0.3f);
+                break;
+            }
+        }
     }
 }
 
@@ -4413,7 +4522,7 @@ public partial class Hints : CanvasLayer
 
 //==============================================================================
 // FILE: scripts/Hub.cs
-// 1728 lines   sha256 09d39f485439
+// 1744 lines   sha256 60a6e540a722
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -4646,20 +4755,7 @@ public partial class Hub : Node2D
 
         Settings.EnsureLoaded();       // ability key bindings
         Combat.Clear();
-        // Flashes are made on the host, where the shots happen. Guests are sent them,
-        // or a guest firing at the dummy would see nothing at all.
-        Combat.OnFlash = (a, b, c, snd) =>
-        {
-            AddFlash(a, b, c, snd);
-            ToWorld(nameof(NetFlash), a, b, c, (int)snd);
-        };
-        // Shells and torpedoes are born in this world; the host's copy deals damage, and guests
-        // get the launch and fly a cosmetic copy (the run is straight and steady, so it lands in
-        // the same place).
-        Combat.World = this;
-        Combat.ShellFired = s => ToWorld(nameof(NetShell), s.Position, s.Dir, s.Speed, s.Range);
-        Combat.TorpedoFired = t => ToWorld(nameof(NetTorpedo), t.Position, t.Dir, t.Speed, t.Range, t.TargetId, t.TurnRate, t.Heavy, t.HostileFire, t.NetId, t.Size);
-        Combat.SlugFired = s => ToWorld(nameof(NetSlug), s.Position, s.Dir, s.Speed, s.Range, s.Radius, (int)s.Look, s.Variant);
+        Hooks();
 
         // THE SHIPS BEFORE THE BOSS. The boss sizes itself to the party in its _Ready, and it used
         // to be built first, count zero ships, and come out a solo boss for every party.
@@ -4692,6 +4788,34 @@ public partial class Hub : Node2D
 
     // Net is an autoload and outlives this scene. Every handler added in _Ready comes
     // off here, or the next join or status line calls into a freed Hub.
+    // EVERY HOOK THIS WORLD INSTALLS, in one place. Combat.Clear drops them all on the way out
+    // (each is a lambda holding this node), so there has to be exactly one place that puts them
+    // back -- the harness used to restore them by hand from a list it kept, and every hook added
+    // after that list was written was silently lost for the rest of the run.
+    private void Hooks()
+    {
+        // Flashes are made on the host, where the shots happen. Guests are sent them,
+        // or a guest firing at the dummy would see nothing at all.
+        Combat.OnFlash = (a, b, c, snd) =>
+        {
+            AddFlash(a, b, c, snd);
+            ToWorld(nameof(NetFlash), a, b, c, (int)snd);
+        };
+        // Shells and torpedoes are born in this world; the host's copy deals damage, and guests
+        // get the launch and fly a cosmetic copy (the run is straight and steady, so it lands in
+        // the same place).
+        // EFFECTS GO UP EVERYWHERE. The host raises one and every guest gets it, exactly as a
+        // flash does -- an effect added straight to this tree was one only the host ever saw.
+        Fx.On = (id, a, b, r) =>
+        {
+            AddFx(id, a, b, r);
+            ToWorld(nameof(NetFx), id, a, b, r);
+        };
+        Combat.World = this;
+        Combat.ShotFired = s => ToWorld(nameof(NetShot), s.Kind, s.Position, s.Dir, s.Speed, s.Range,
+                                        s.Radius, s.TargetId, s.TurnRate, s.NetId, s.Size, s.Variant);
+    }
+
     public override void _ExitTree()
     {
         if (Net.I != null)
@@ -5222,7 +5346,7 @@ public partial class Hub : Node2D
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable, TransferChannel = Cosmetic)]
     private void NetMissileDown(int id)
     {
-        foreach (var t in GetChildren().OfType<Torpedo>()) if (t.NetId == id) t.Intercept();
+        foreach (var t in GetChildren().OfType<Shot>()) if (t.NetId == id) t.Intercept();
     }
 
     // host: pick a level between 1 and the newest unlocked
@@ -5455,7 +5579,7 @@ public partial class Hub : Node2D
     }
     private void DropDeployed(DeployedTurret t, bool burst)
     {
-        if (burst) AddChild(new Explosion { Position = t.Position, Radius = 22f });
+        if (burst) Fx.Raise(Fx.Burst, t.Position, 22f);
         Deployed.Remove(t); t.QueueFree();
     }
 
@@ -5501,7 +5625,7 @@ public partial class Hub : Node2D
     // same frame acquired it again.
     private void DropRaider(Raider r, bool burst)
     {
-        if (burst) AddChild(new Explosion { Position = r.Position, Radius = 28f });
+        if (burst) Fx.Raise(Fx.Burst, r.Position, 28f);
         if (ReferenceEquals(_selected, r)) _selected = null;
         Combat.Hostiles.Remove(r);
         foreach (var s in _ships.Values) if (IsInstanceValid(s)) s.Forget(r);
@@ -5912,19 +6036,20 @@ public partial class Hub : Node2D
         }
     }
 
+    // ONE LAUNCH ON THE WIRE. There were three of these -- a shell's, a slug's and a torpedo's --
+    // with the same four fields and their own spellings of the rest. A guest builds the same row
+    // (Shots.Of) and flies a cosmetic copy: it draws and bursts, and damages nothing.
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable, TransferChannel = Cosmetic)]
-    private void NetShell(Vector2 from, Vector2 dir, float speed, float range) =>
-        AddChild(new Shell { Position = from, Dir = dir, Speed = speed, Range = range, Cosmetic = true });
+    private void NetShot(int kind, Vector2 from, Vector2 dir, float speed, float range,
+                         float radius, int target, float turn, int id, float size, int variant) =>
+        AddChild(new Shot { Kind = kind, Position = from, Dir = dir, Speed = speed, Range = range, Cosmetic = true,
+                            Radius = radius, TargetId = target, TurnRate = turn, NetId = id, Size = size, Variant = variant,
+                            Lead = (float)(1.0 - Net.Arriving(1.0)) });   // the round trip (see Shot.Lead)
 
-    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable, TransferChannel = Cosmetic)]
-    private void NetSlug(Vector2 from, Vector2 dir, float speed, float range, float radius, int look, int variant) =>
-        AddChild(new Slug { Position = from, Dir = dir, Speed = speed, Range = range, Radius = radius, Look = (Slug.Kind)look, Variant = variant, Cosmetic = true,
-                            Lead = (float)(1.0 - Net.Arriving(1.0)) });   // the round trip (see Slug.Lead)
-
-    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable, TransferChannel = Cosmetic)]
-    private void NetTorpedo(Vector2 from, Vector2 dir, float speed, float range, int target, float turn, bool heavy, bool hostile, int id, float size) =>
-        AddChild(new Torpedo { Position = from, Dir = dir, Speed = speed, Range = range, Cosmetic = true, TargetId = target, TurnRate = turn,
-                               Heavy = heavy, HostileFire = hostile, NetId = id, Size = size });
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void NetFx(int id, Vector2 a, Vector2 b, float r) => AddFx(id, a, b, r);
+    private void AddFx(int id, Vector2 a, Vector2 b, float r) =>
+        AddChild(new FxNode { Id = id, Position = a, To = b, Radius = r });
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
     private void NetFlash(Vector2 a, Vector2 b, Color c, int snd)
@@ -6132,7 +6257,7 @@ public partial class HeavyMissileVisual : Node2D
     {
         _t += delta;
         Position = From.Lerp(To, (float)System.Math.Min(1, _t / Flight));
-        if (_t >= Flight) { GetParent().AddChild(new Explosion { Position = To, Radius = Raider.BlastRadius * 0.8f }); QueueFree(); }
+        if (_t >= Flight) { Fx.Raise(Fx.Burst, To, Raider.BlastRadius * 0.8f); QueueFree(); }
         QueueRedraw();
     }
     public override void _Draw()
@@ -6501,7 +6626,7 @@ public partial class LootCrate : Node2D
 
 //==============================================================================
 // FILE: scripts/MainMenu.cs
-// 287 lines   sha256 694b182d3a94
+// 288 lines   sha256 9307a6a697bc
 //==============================================================================
 using Godot;
 using System;
@@ -6635,6 +6760,7 @@ public partial class MainMenu : Node2D
 
         // Its turrets and shells all go through Combat, exactly as in the hub.
         Combat.OnFlash = (a, b, c, snd) => { _shots.Add(new Shot { A = a, B = b, T = 0.15 }); Sfx.Laser(a, b, snd); };
+        Fx.On = (id, a, b, r) => AddChild(new FxNode { Id = id, Position = a, To = b, Radius = r });
         Combat.World = this;
 
         // three lights, two heavies and a webifier
@@ -7992,7 +8118,7 @@ public partial class PilotWindow : PanelContainer
 
 //==============================================================================
 // FILE: scripts/PlayerShip.cs
-// 1262 lines   sha256 b131f216aeae
+// 1258 lines   sha256 09174a279dfe
 //==============================================================================
 using Godot;
 using System;
@@ -8521,9 +8647,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
                 n.Position += (away.LengthSquared() > 1f ? away.Normalized() : Vector2.Up) * push;
             }
         }
-        // the ring, on every peer: eight spokes out to its reach
-        for (int i = 0; i < 8; i++)
-            Combat.Flash(Position, Position + Vector2.Up.Rotated(Mathf.Tau * i / 8f) * reach, new Color(0.6f, 0.8f, 1f));
+        Fx.Raise(Fx.Wave, Position, reach);                 // the ring, on every peer: how far it threw them
     }
 
     // ── THE HEAVY FIGHTERS ──────────────────────────────────────────────
@@ -8550,7 +8674,8 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
                 if (h is Node2D n) DamageNumbers.NoteImpact(n, h.Position);
             }
         }
-        Combat.Flash(a, b, new Color(0.45f, 0.7f, 1f), ShotSound.Boss);
+        Fx.Line(Fx.Rail, a, b);                             // the line it threw, on every peer
+        Sfx.Laser(a, b, ShotSound.Boss);
         Sl("railgun").Cool = Stats["rail_cooldown"];
     }
 
@@ -8572,8 +8697,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             NoteDealt(Stats["emp_damage"], h.Position);
             if (!TagExt.Is(h, Tag.Boss)) (h as IStatused)?.ApplyStatus(Status.Disabled, Stats["emp_stun"]);
         }
-        for (int i = 0; i < 6; i++)
-            Combat.Flash(Position, Position + Vector2.Up.Rotated(Mathf.Tau * i / 6f) * reach, new Color(0.7f, 0.9f, 1f));
+        Fx.Raise(Fx.Emp, Position, reach);
     }
 
     // Six missiles, each on a target of its own while there are targets to go round; what is left
@@ -8631,9 +8755,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             if (h is Node2D n) DamageNumbers.NoteImpact(n, h.Position);
         }
         NoteCombat();
-        MyHub?.AddChild(new Explosion { Position = _echoAt, Radius = reach * 0.5f });
-        for (int i = 0; i < 6; i++)
-            Combat.Flash(_echoAt, _echoAt + Vector2.Up.Rotated(Mathf.Tau * i / 6f) * reach, new Color(1f, 0.8f, 0.45f));
+        Fx.Raise(Fx.Echo, _echoAt, reach);                  // on every peer, where it remembered
     }
 
     public void GoDark()
@@ -10722,64 +10844,6 @@ public partial class SfxPool : Node
 }
 
 //==============================================================================
-// FILE: scripts/Shell.cs
-// 53 lines   sha256 b55ab8451f54
-//==============================================================================
-using Godot;
-
-// A MAIN-GUN SHELL (battleship, destroyer): the main guns' round. It flies straight -- no tracking --
-// at the guns' shell speed (520 u/s; its own stat, so no other weapon's gear changes it), as far as the
-// guns' range, and hits the first hostile it touches
-// (never a missile: that is point defence's job). The host's shell does the damage; guests
-// fly a cosmetic copy. Its path is swept in short steps each frame, so it cannot pass
-// through a small target between frames.
-public partial class Shell : Node2D
-{
-    public Vector2 Dir; public float Speed, Range; public double Damage;
-    public bool Cosmetic; public PlayerShip Source;
-    private float _flown;
-
-    // every shell, the host's and a guest's copy alike, is heard: a cannon's report where it leaves
-    public override void _Ready() { ZIndex = 6; Rotation = Aim.Along(Dir); Sfx.Cannon(Position); }
-
-    public override void _Process(double delta)
-    {
-        float step = Speed * (float)delta;
-        var from = Position;
-        Position += Dir * step; _flown += step;
-        if (!Cosmetic && Net.Sim)
-        {
-            int n = Mathf.Max(1, Mathf.CeilToInt(step / 6f));
-            for (int i = 1; i <= n; i++)
-            {
-                var p = from.Lerp(Position, (float)i / n);
-                // A plain loop, not FirstOrDefault: the lambda captures `p`, so it allocated a
-                // closure for every sweep step of every shell in flight, and a battleship puts
-                // four in the air at once. Same result -- the first match in list order.
-                IHittable hit = null;
-                foreach (var h in Combat.Hostiles)
-                    if (h != null && h.Alive && h is not Torpedo && h.Covers(p, 3f)) { hit = h; break; }
-                if (hit == null) continue;
-                if (hit is Node2D struck) DamageNumbers.NoteImpact(struck, p);
-                hit.TakeDamage(Damage);
-                Source?.NoteDealt(Damage, p);
-                Sfx.Impact(p);
-                QueueFree(); return;
-            }
-        }
-        if (_flown >= Range) QueueFree();
-        QueueRedraw();
-    }
-
-    public override void _Draw()
-    {   // a bright slug with a short glow behind it
-        DrawLine(new Vector2(0, 4f), new Vector2(0, 22f), new Color(1f, 0.75f, 0.35f, 0.35f), 3f);
-        DrawRect(new Rect2(-1.8f, -5f, 3.6f, 9f), new Color(1f, 0.92f, 0.7f));
-        DrawColoredPolygon(new[] { new Vector2(-1.8f, -5f), new Vector2(0, -8f), new Vector2(1.8f, -5f) }, new Color(1f, 0.85f, 0.5f));
-    }
-}
-
-//==============================================================================
 // FILE: scripts/Shield.cs
 // 71 lines   sha256 99c7fa4a2a8e
 //==============================================================================
@@ -11710,72 +11774,206 @@ public static class Classes
 }
 
 //==============================================================================
-// FILE: scripts/Slug.cs
-// 97 lines   sha256 a033d5dde5b4
+// FILE: scripts/Shots.cs
+// 285 lines   sha256 fdf79e9dce61
 //==============================================================================
 using Godot;
-using System.Linq;
+using System.Collections.Generic;
 
-// A HOSTILE ROUND: a boss's slow, straight, DODGEABLE shot -- the Drake Bastion's main-gun shell and
-// its scrap. Not a missile: point defence never sees it (it is not in Combat.Hostiles), because a round
-// that is meant to be dodged, and that point defence could delete, would never need dodging. It hits
-// the first player ship it touches, under its own hit source (a volley of scrap lands piece by piece),
-// and is swept in short steps so it cannot pass through a ship between frames. The host's copy deals
-// the damage; guests fly a cosmetic copy (Hub.NetSlug) that bursts where it touches a ship on their
-// own screen, and deals nothing.
-public partial class Slug : Node2D
+// ─────────────────────────────────────────────────────────────────────────────
+// EVERYTHING THAT FLIES AND HITS — one row each, one flyer.
+//
+// There were three of these classes, each with its own copy of the same job: step along a
+// heading, sweep the step for something it touches, deal the damage, burst, and draw itself.
+// Shell.cs, Slug.cs and Torpedo.cs shared the sweep, the lifetime, the cosmetic-copy rule and the
+// hit -- and differed only in WHO they hit, HOW LONG they burst for and WHAT THEY LOOK LIKE. A
+// fourth weapon meant a fourth copy, and the railgun and the hunter-seekers this session nearly
+// were two more.
+//
+// A shot is now a ROW (ShotDef) and a call. Its numbers -- speed, range, damage, radius, guidance,
+// size -- come from whatever fires it; its behaviour comes from the row. One RPC carries all of
+// them to guests (Hub.NetShot) where there used to be three.
+//
+// NOT here: ThrownRock. A boss's rock is not a projectile -- it is held in a tractor beam, thrown
+// down a fixed lane on a cubic ease, strikes everything in the lane ONCE and breaks at the end.
+// It shares the sweep (Shots.Sweep) and nothing else.
+// ─────────────────────────────────────────────────────────────────────────────
+public enum ShotLook { Bullet, Ball, Shard, Missile }
+
+public class ShotDef
 {
-    public enum Kind { Shell, Scrap }
-    public Kind Look;
-    public int Variant;                    // scrap: which of its jagged shapes
+    public string Id;
+    public bool AtPlayers;           // who it may touch: the base's enemies, or the pilots
+    public float Pad = 3f;           // added to the target's own radius when testing a touch
+    public float Sweep = 6f;         // the path is tested every this many units; 0 = the end point only
+    public double Burst;             // seconds it burns where it stopped; 0 = it simply goes
+    public bool Smoke;               // a trail behind it, and it lingers until the last of it fades
+    public bool Guided;              // its nose may turn toward a target (TurnRate, TargetId)
+    public bool Interceptable;       // it joins Combat.Hostiles with an id: point defence can kill it
+    public bool MarkEveryPeer;       // the damage number is drawn wherever it is seen, not just on the host
+    public ShotLook Look;
+    public bool Heavy;               // the bigger body, the darker smoke, the wider blast
+    public string Sound;             // Sfx.Special id at launch, or null (Bullet and Missile have their own)
+}
+
+public static class Shots
+{
+    // The index IS the id on the wire (Hub.NetShot), so APPEND ONLY.
+    public const int Shell = 0, Slug = 1, Scrap = 2, Torpedo = 3, Missile = 4, Seeker = 5;
+
+    public static readonly ShotDef[] All =
+    {
+        // a main gun's round: straight, and it hits the first thing that is not a missile
+        new() { Id = "shell",   AtPlayers = false, Pad = 3f,  Sweep = 6f, Look = ShotLook.Bullet },
+        // a boss's slow, dodgeable round, and the scrap of the same volley
+        new() { Id = "slug",    AtPlayers = true,  Pad = 0f,  Sweep = 6f, Burst = 0.25, Look = ShotLook.Ball, Sound = "drake_gun" },
+        new() { Id = "scrap",   AtPlayers = true,  Pad = 0f,  Sweep = 6f, Burst = 0.25, Look = ShotLook.Shard },
+        // a bomber's torpedo: straight, trailing smoke, and it detonates on what it touches
+        new() { Id = "torpedo", AtPlayers = false, Pad = 4f,  Sweep = 0f, Burst = 0.5, Smoke = true, Guided = true,
+                MarkEveryPeer = true, Look = ShotLook.Missile },
+        // the destroyer's burst and the warden's hunters: the same thing, heavier
+        new() { Id = "missile", AtPlayers = false, Pad = 4f,  Sweep = 0f, Burst = 0.5, Smoke = true, Guided = true,
+                MarkEveryPeer = true, Look = ShotLook.Missile, Heavy = true },
+        // fired AT the pilots, and the one thing point defence exists for
+        new() { Id = "seeker",  AtPlayers = true,  Pad = 4f,  Sweep = 0f, Burst = 0.5, Smoke = true, Guided = true,
+                Interceptable = true, MarkEveryPeer = true, Look = ShotLook.Missile },
+    };
+
+    public static ShotDef Of(int id) => All[id >= 0 && id < All.Length ? id : Shell];
+
+    // THE PATH TEST every flying thing shares: walk `from` to `to` in steps no longer than
+    // `step` (0 = just the end), and hand each point to `at` until it says it struck something.
+    // A step longer than a target is wide is how a shot passes through it between frames.
+    public static bool Sweep(Vector2 from, Vector2 to, float step, System.Func<Vector2, bool> at)
+    {
+        int n = step > 0 ? Mathf.Max(1, Mathf.CeilToInt(from.DistanceTo(to) / step)) : 1;
+        for (int i = 1; i <= n; i++)
+            if (at(from.Lerp(to, (float)i / n))) return true;
+        return false;
+    }
+}
+
+public partial class Shot : Node2D, IHittable, ITagged
+{
+    public int Kind = Shots.Shell;
+    public ShotDef Def => Shots.Of(Kind);
+    public Tag Tags => Tag.Missile;
+
     public Vector2 Dir;
-    public float Speed, Range, Radius;
+    public float Speed, Range, Radius, Size = 1f;
     public double Damage;
-    public string HitSource;
-    public bool Cosmetic;
-    // A guest's copy starts this far into its flight (seconds): the round trip. The host judges a hit
-    // against where the guest's ship was a one-way trip ago, and the round reached the guest a one-way
-    // trip late -- so without the lead, the round a guest sidesteps on its own screen was one it had
-    // not yet cleared.
-    public float Lead;
-    private float _flown;
-    private double _burst = -1;            // >= 0: spent, bursting
-    private const double BurstTime = 0.25;
+    public bool Cosmetic;                  // a guest's copy: it flies and bursts, and damages nothing
+    public int TargetId;                   // 0 = unguided
+    public float TurnRate;                 // rad/s its nose may turn toward the target
+    public PlayerShip Source;              // who fired it (the host's copy): a hit is their combat
+    public string HitSource;               // the damage source's name (a ship takes one per source per 0.52 s)
+    public int Variant;                    // scrap: which jagged shape
+    public float Lead;                     // a guest's copy starts this far into the flight (the round trip)
+
+    private float _flown, _puffCd;
+    private bool _spent;
+    private double _burnt;
+    private readonly List<(Vector2 p, float age)> _smoke = new();
+    public const float SmokeLife = 1.6f, PuffEvery = 0.03f;
+
+    // ── as a target: a seeker, and one hit brings it down ────────────────────
+    public int NetId { get; set; }
+    public float HitRadius => 8f * Size;
+    public bool Alive => !_spent;
+    public bool Selectable => false;
+    public static int Intercepted;                       // brought down (host), for the record
+    // What it is, in the words the rest of the game uses. The rows carry the truth; these are how
+    // a caller (and a check) asks without naming an index.
+    public bool HostileFire => Def.AtPlayers;
+    public bool Heavy => Def.Heavy;
+    public bool IsMissile => Def.Look == ShotLook.Missile;
+    public void TakeDamage(double d)
+    {
+        if (!Net.Sim || _spent) return;
+        Intercepted++;
+        Intercept();
+        Hub.I?.MissileDown(NetId);
+    }
+    public void Intercept() { if (!_spent) End(); Combat.Hostiles.Remove(this); }
 
     public override void _Ready()
     {
         ZIndex = 6; Rotation = Aim.Along(Dir);
-        if (Look == Kind.Shell) Sfx.Special("drake_gun", Position);            // the Drake's main gun, on every peer
-        _flown = Mathf.Min(Speed * Lead, Range); Position += Dir * _flown;
+        var d = Def;
+        if (d.Sound != null) Sfx.Special(d.Sound, Position);
+        else if (d.Look == ShotLook.Bullet) Sfx.Cannon(Position);
+        else if (d.Smoke) Sfx.Missile(GlobalPosition);          // self-propelled: a soft whoosh
+        if (d.Interceptable && NetId != 0) Combat.Hostiles.Add(this);
+        if (Lead > 0) { _flown = Mathf.Min(Speed * Lead, Range); Position += Dir * _flown; }
     }
+    public override void _ExitTree() => Combat.Hostiles.Remove(this);
 
     public override void _Process(double delta)
     {
-        if (_burst >= 0)
+        float dt = (float)delta;
+        var d = Def;
+        for (int i = _smoke.Count - 1; i >= 0; i--)
         {
-            if ((_burst += delta) >= BurstTime) QueueFree();
+            var s = _smoke[i]; s.age += dt;
+            if (s.age >= SmokeLife) _smoke.RemoveAt(i); else _smoke[i] = s;
+        }
+
+        if (_spent)
+        {
+            _burnt += delta;
+            // smoke lingers past the burst; everything else goes when its burst is done
+            if (_burnt >= d.Burst && (!d.Smoke || _smoke.Count == 0)) QueueFree();
             QueueRedraw();
             return;
         }
-        float step = Speed * (float)delta;
-        var from = Position;
-        Position += Dir * step; _flown += step;
-        int n = Mathf.Max(1, Mathf.CeilToInt(step / 6f));
-        for (int i = 1; i <= n; i++)
-        {
-            var p = from.Lerp(Position, (float)i / n);
-            PlayerShip hit = null;
-            foreach (var s in Combat.Players)
-                if (s is PlayerShip ps && ps.Alive && ps.Covers(p, Radius)) { hit = ps; break; }
-            if (hit == null) continue;
-            if (!Cosmetic && Net.Sim) hit.Hit(Damage, p - Dir * 10f, HitSource);
-            Position = p; Burst(); return;
+
+        if (d.Guided && TurnRate > 0 && TargetId != 0
+            && (d.AtPlayers ? Combat.PlayerById(TargetId) : Combat.ById(TargetId)) is { } tgt)
+        {   // guided: the nose turns toward the target at TurnRate, and never snaps
+            float want = (tgt.Position - GlobalPosition).Angle(), have = Dir.Angle();
+            Dir = Dir.Rotated(Mathf.Clamp(Mathf.AngleDifference(have, want), -TurnRate * dt, TurnRate * dt));
+            Rotation = Aim.Along(Dir);
         }
-        if (_flown >= Range) Burst();
+
+        float step = Speed * dt;
+        var from = GlobalPosition;
+        GlobalPosition += Dir * step; _flown += step;
+        if (d.Smoke) { _puffCd -= dt; if (_puffCd <= 0) { _puffCd += PuffEvery; _smoke.Add((GlobalPosition - Dir * 8f, 0f)); } }
+
+        Shots.Sweep(from, GlobalPosition, d.Sweep, p => Strike(p, d));
+        if (!_spent && _flown >= Range) End();
         QueueRedraw();
     }
 
-    private void Burst() { _burst = 0; Sfx.Impact(Position); }
+    // What it touches at `p`, and what that costs. True when it struck.
+    private bool Strike(Vector2 p, ShotDef d)
+    {
+        foreach (var h in d.AtPlayers ? Combat.Players : Combat.Hostiles)
+        {
+            // a shell never takes a missile out of the air: that is point defence's job
+            if (h == null || !h.Alive || TagExt.Is(h, Tag.Missile) || !h.Covers(p, d.Pad + Radius)) continue;
+            if (d.MarkEveryPeer && h is Node2D seen) DamageNumbers.NoteImpact(seen, p);
+            if (!Cosmetic && Net.Sim)
+            {
+                if (!d.MarkEveryPeer && h is Node2D struck) DamageNumbers.NoteImpact(struck, p);
+                // a ship is told where the blow came from, for its shield
+                if (h is PlayerShip ps) ps.Hit(Damage, p - Dir * 10f, HitSource);
+                else h.TakeDamage(Damage);
+                if (IsInstanceValid(Source)) Source.NoteDealt(Damage, h.Position);
+            }
+            GlobalPosition = p;
+            End();
+            return true;
+        }
+        return false;
+    }
+
+    private void End()
+    {
+        _spent = true; _burnt = 0;
+        Sfx.Impact(GlobalPosition);
+        if (Def.Burst <= 0 && !Def.Smoke) QueueFree();
+    }
 
     // a scrap piece's jagged outline, one of three, in its own frame (nose up)
     private static readonly Vector2[][] Shards =
@@ -11787,26 +11985,80 @@ public partial class Slug : Node2D
 
     public override void _Draw()
     {
-        if (_burst >= 0)
-        {   // a quick spray where it struck
-            float k = (float)(_burst / BurstTime);
-            DrawCircle(Vector2.Zero, Radius * (1f + 1.5f * k), new Color(1f, 0.6f, 0.25f, 0.6f * (1 - k)));
+        var d = Def;
+        // smoke is kept in world space: draw it relative to this node
+        if (d.Smoke)
+        {
+            var inv = GlobalTransform.AffineInverse();
+            foreach (var (p, age) in _smoke)
+            {
+                float k = age / SmokeLife;
+                var smoke = d.Heavy ? new Color(0.45f, 0.43f, 0.42f) : new Color(0.86f, 0.86f, 0.88f);
+                DrawCircle(inv * p, (d.Heavy ? 5f : 3.5f) + (d.Heavy ? 14f : 10f) * k,
+                           new Color(smoke.R, smoke.G, smoke.B, 0.75f * (1f - k) * (1f - k * 0.3f)));
+            }
+        }
+
+        if (_spent)
+        {
+            float k = (float)(_burnt / Mathf.Max(0.01f, (float)d.Burst));
+            if (k >= 1) return;
+            if (d.Look == ShotLook.Missile)
+            {
+                float big = d.Heavy ? 2f : 1f;
+                DrawCircle(Vector2.Zero, (10f + 30f * k) * big, new Color(1f, 0.7f, 0.3f, 0.8f * (1f - k)));
+                if (d.Heavy) DrawArc(Vector2.Zero, 70f * k, 0, Mathf.Tau, 40, new Color(1f, 0.9f, 0.6f, 0.7f * (1f - k)), 3f);
+            }
+            else   // a quick spray where it struck
+                DrawCircle(Vector2.Zero, Radius * (1f + 1.5f * k), new Color(1f, 0.6f, 0.25f, 0.6f * (1 - k)));
             return;
         }
-        if (Look == Kind.Shell)
-        {   // a slow, glowing ball with a short tail: easy to see coming
-            DrawLine(new Vector2(0, Radius * 0.5f), new Vector2(0, Radius * 3f), new Color(1f, 0.45f, 0.2f, 0.35f), Radius);
-            DrawCircle(Vector2.Zero, Radius * 1.4f, new Color(1f, 0.45f, 0.15f, 0.3f));
-            DrawCircle(Vector2.Zero, Radius, new Color(1f, 0.62f, 0.3f));
-            DrawCircle(Vector2.Zero, Radius * 0.5f, new Color(1f, 0.92f, 0.75f));
-        }
-        else
-        {   // a tumbling shard of hull plate, hot along its edge
-            DrawSetTransform(Vector2.Zero, _flown * 0.05f, Vector2.One * (Radius / 9f));
-            var shard = Shards[Mathf.PosMod(Variant, Shards.Length)];
-            DrawColoredPolygon(shard, new Color(0.42f, 0.30f, 0.24f));
-            DrawPolyline(shard.Append(shard[0]).ToArray(), new Color(1f, 0.55f, 0.25f, 0.9f), 1.5f);
-            DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
+
+        switch (d.Look)
+        {
+            case ShotLook.Bullet:   // a bright slug with a short glow behind it
+                DrawLine(new Vector2(0, 4f), new Vector2(0, 22f), new Color(1f, 0.75f, 0.35f, 0.35f), 3f);
+                DrawRect(new Rect2(-1.8f, -5f, 3.6f, 9f), new Color(1f, 0.92f, 0.7f));
+                DrawColoredPolygon(new[] { new Vector2(-1.8f, -5f), new Vector2(0, -8f), new Vector2(1.8f, -5f) }, new Color(1f, 0.85f, 0.5f));
+                break;
+            case ShotLook.Ball:     // a slow, glowing ball with a short tail: easy to see coming
+                DrawLine(new Vector2(0, Radius * 0.5f), new Vector2(0, Radius * 3f), new Color(1f, 0.45f, 0.2f, 0.35f), Radius);
+                DrawCircle(Vector2.Zero, Radius * 1.4f, new Color(1f, 0.45f, 0.15f, 0.3f));
+                DrawCircle(Vector2.Zero, Radius, new Color(1f, 0.62f, 0.3f));
+                DrawCircle(Vector2.Zero, Radius * 0.5f, new Color(1f, 0.92f, 0.75f));
+                break;
+            case ShotLook.Shard:    // a tumbling shard of hull plate, hot along its edge
+            {
+                DrawSetTransform(Vector2.Zero, _flown * 0.05f, Vector2.One * (Radius / 9f));
+                var shard = Shards[Mathf.PosMod(Variant, Shards.Length)];
+                DrawColoredPolygon(shard, new Color(0.42f, 0.30f, 0.24f));
+                var loop = new Vector2[shard.Length + 1];
+                shard.CopyTo(loop, 0); loop[^1] = shard[0];
+                DrawPolyline(loop, new Color(1f, 0.55f, 0.25f, 0.9f), 1.5f);
+                DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
+                break;
+            }
+            case ShotLook.Missile when d.Heavy:
+            {   // long and slim (6.4 x 32.5), a sharp nose, swept fins, a band and a seam
+                var body = new Color(0.58f, 0.60f, 0.56f); var dark = new Color(0.30f, 0.31f, 0.29f);
+                DrawRect(new Rect2(-3.2f, -12f, 6.4f, 26f), body);
+                DrawColoredPolygon(new[] { new Vector2(-3.2f, -12f), new Vector2(0, -19.5f), new Vector2(3.2f, -12f) }, new Color(0.85f, 0.25f, 0.2f));
+                DrawRect(new Rect2(-3.2f, -10f, 6.4f, 2f), new Color(0.85f, 0.25f, 0.2f));
+                DrawLine(new Vector2(0, -8f), new Vector2(0, 11f), dark, 0.8f);
+                DrawColoredPolygon(new[] { new Vector2(-3.2f, 6f), new Vector2(-7f, 13f), new Vector2(-3.2f, 12f) }, dark);
+                DrawColoredPolygon(new[] { new Vector2(3.2f, 6f), new Vector2(7f, 13f), new Vector2(3.2f, 12f) }, dark);
+                DrawCircle(new Vector2(0, 13.5f), 2.8f, new Color(1f, 0.75f, 0.35f));
+                break;
+            }
+            default:
+            {   // a missile at its own size (a boss's are twice as big), a red tip on every one
+                DrawSetTransform(Vector2.Zero, 0f, Vector2.One * Size);
+                DrawRect(new Rect2(-2.2f, -9f, 4.4f, 18f), new Color(0.85f, 0.85f, 0.8f));
+                DrawColoredPolygon(new[] { new Vector2(-2.2f, -9f), new Vector2(0, -13f), new Vector2(2.2f, -9f) }, new Color(0.9f, 0.2f, 0.18f));
+                DrawCircle(new Vector2(0, 9f), 2.4f, new Color(1f, 0.7f, 0.3f));
+                DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
+                break;
+            }
         }
     }
 }
@@ -12673,7 +12925,7 @@ public partial class Telegraph : Node2D
 
 //==============================================================================
 // FILE: scripts/ThrownRock.cs
-// 98 lines   sha256 416b29fe403e
+// 98 lines   sha256 5c912def557e
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -12746,7 +12998,7 @@ public partial class ThrownRock : Node2D
             if (f >= 1f)
             {   // the lane's end: it breaks apart
                 _broken = 0; _sprite.Visible = false; Sfx.Special("drake_rock", Position);
-                GetParent().AddChild(new Explosion { Position = Position, Radius = Radius * 1.2f });
+                Fx.Raise(Fx.Burst, Position, Radius * 1.2f);
             }
         }
         QueueRedraw();
@@ -12851,162 +13103,6 @@ public partial class TioWindow : PanelContainer
             _ => waiting > 0 ? $"Waiting for {waiting} pilot(s) to press READY. READY flies you to the portal."
                : away > 0 ? $"Waiting for {away} pilot(s) to reconnect (their places are held 90 s)." : "Everyone is ready.",
         });
-    }
-}
-
-//==============================================================================
-// FILE: scripts/Torpedo.cs
-// 151 lines   sha256 4f0b68620c00
-//==============================================================================
-using Godot;
-using System.Collections.Generic;
-
-// A bomber's torpedo. It runs STRAIGHT at a steady speed along the heading it was
-// launched on -- no tracking, no acceleration -- trailing smoke, and detonates on
-// the first hostile it touches or when its run is spent. Aim is the bomber's job;
-// a target that moves can step out of the way.
-//
-// The host's copy deals the damage. Guests are sent the launch (from, heading) and
-// fly a cosmetic copy of their own: the run is deterministic, so it goes where the
-// host's goes and bursts in the same place, without streaming positions.
-// A MISSILE is the same projectile with two differences: it is GUIDED (its heading turns
-// toward its target at no more than TurnRate), and it may be HEAVY -- the destroyer's
-// burst: a bigger body, darker smoke and a bigger blast. Guests run the same guidance on
-// the same positions, so their cosmetic copy follows the host's.
-public partial class Torpedo : Node2D, IHittable, ITagged
-{
-    public Tag Tags => Tag.Missile;
-    public Vector2 Dir;
-    public float Speed, Range;
-    public double Damage;
-    public bool Cosmetic;             // a guest's copy: draws and bursts, never damages
-    public int TargetId;              // 0 = unguided
-    public float TurnRate;            // rad/s the heading may turn toward the target
-    public bool Heavy;                // the destroyer's missile's look
-    public bool HostileFire;          // fired by an enemy: seeks and hits player ships
-    public PlayerShip Source;         // who fired it (host copy only): a hit counts as their combat
-
-    private float _flown;
-    private bool _spent;
-    private double _burst;            // time since detonation, for the flash
-    private readonly List<(Vector2 p, float age)> _smoke = new();
-    private float _puffCd;
-
-    public const float SmokeLife = 1.6f, PuffEvery = 0.03f;
-
-    // As a TARGET (hostile missiles only): small, and one hit brings it down. The host
-    // resolves the hit and tells every guest to burst its copy (by NetId).
-    public int NetId { get; set; }
-    public float HitRadius => 8f * Size;
-    public string HitSource;          // the damage source's name (a player takes one hit per source per 0.52 s)
-    public float Size = 1f;           // a boss's missiles are twice the size
-    public bool Alive => !_spent;
-    public bool Selectable => false;
-    public static int Intercepted;                       // missiles shot down (host), for the record
-    public void TakeDamage(double d)
-    {
-        if (!Net.Sim || _spent) return;
-        Intercepted++;
-        Intercept();
-        Hub.I?.MissileDown(NetId);
-    }
-    public void Intercept() { if (!_spent) Detonate(); Combat.Hostiles.Remove(this); }
-
-    public override void _Ready()
-    {
-        Sfx.Missile(GlobalPosition);                        // self-propelled: a soft whoosh at launch
-        ZIndex = 6; Rotation = Aim.Along(Dir);
-        if (HostileFire && NetId != 0) Combat.Hostiles.Add(this);
-    }
-    public override void _ExitTree() => Combat.Hostiles.Remove(this);
-
-    public override void _Process(double delta)
-    {
-        float dt = (float)delta;
-        for (int i = _smoke.Count - 1; i >= 0; i--)
-        {
-            var s = _smoke[i]; s.age += dt;
-            if (s.age >= SmokeLife) _smoke.RemoveAt(i); else _smoke[i] = s;
-        }
-
-        if (!_spent)
-        {
-            var tgt = TurnRate > 0 && TargetId != 0 ? (HostileFire ? Combat.PlayerById(TargetId) : Combat.ById(TargetId)) : null;
-            if (tgt != null)
-            {   // guided: the nose turns toward the target at TurnRate, never snaps
-                float want = (tgt.Position - GlobalPosition).Angle(), have = Dir.Angle();
-                float turn = Mathf.Clamp(Mathf.AngleDifference(have, want), -TurnRate * dt, TurnRate * dt);
-                Dir = Dir.Rotated(turn);
-                Rotation = Aim.Along(Dir);
-            }
-            float step = Speed * dt;
-            GlobalPosition += Dir * step; _flown += step;
-            _puffCd -= dt;
-            if (_puffCd <= 0) { _puffCd += PuffEvery; _smoke.Add((GlobalPosition - Dir * 8f, 0f)); }
-
-            foreach (var h in HostileFire ? Combat.Players : Combat.Hostiles)
-            {
-                if (h == null || !h.Alive || !h.Covers(GlobalPosition, 4f)) continue;
-                if (h is Node2D struck) DamageNumbers.NoteImpact(struck, GlobalPosition);   // on every peer that sees it strike
-                if (!Cosmetic && Net.Sim)
-                {   // a player ship is told where the hit came from, for its shield
-                    if (h is PlayerShip ps) ps.Hit(Damage, GlobalPosition - Dir * 10f, HitSource); else h.TakeDamage(Damage);
-                    if (IsInstanceValid(Source)) Source.NoteDealt(Damage, h.Position);
-                }
-                Detonate(); break;
-            }
-            if (!_spent && _flown >= Range) Detonate();
-        }
-        else
-        {
-            _burst += delta;
-            // linger until the last of the smoke has faded, then go
-            if (_smoke.Count == 0 && _burst > 0.5) QueueFree();
-        }
-        QueueRedraw();
-    }
-
-    private void Detonate() { _spent = true; _burst = 0; Sfx.Impact(GlobalPosition); }
-
-    public override void _Draw()
-    {
-        // smoke is stored in world space; draw it relative to this node
-        var inv = GlobalTransform.AffineInverse();
-        foreach (var (p, age) in _smoke)
-        {
-            float k = age / SmokeLife;
-            // bright enough to read against black space; spreads as it fades
-            var smoke = Heavy ? new Color(0.45f, 0.43f, 0.42f) : new Color(0.86f, 0.86f, 0.88f);
-            DrawCircle(inv * p, (Heavy ? 5f : 3.5f) + (Heavy ? 14f : 10f) * k, new Color(smoke.R, smoke.G, smoke.B, 0.75f * (1f - k) * (1f - k * 0.3f)));
-        }
-        if (!_spent)
-        {
-            if (Heavy)
-            {   // the heavy missile: long and slim (6.4 x 32.5), a sharp nose, swept fins, a band and a seam
-                var body = new Color(0.58f, 0.60f, 0.56f); var dark = new Color(0.30f, 0.31f, 0.29f);
-                DrawRect(new Rect2(-3.2f, -12f, 6.4f, 26f), body);
-                DrawColoredPolygon(new[] { new Vector2(-3.2f, -12f), new Vector2(0, -19.5f), new Vector2(3.2f, -12f) }, new Color(0.85f, 0.25f, 0.2f));
-                DrawRect(new Rect2(-3.2f, -10f, 6.4f, 2f), new Color(0.85f, 0.25f, 0.2f));
-                DrawLine(new Vector2(0, -8f), new Vector2(0, 11f), dark, 0.8f);
-                DrawColoredPolygon(new[] { new Vector2(-3.2f, 6f), new Vector2(-7f, 13f), new Vector2(-3.2f, 12f) }, dark);
-                DrawColoredPolygon(new[] { new Vector2(3.2f, 6f), new Vector2(7f, 13f), new Vector2(3.2f, 12f) }, dark);
-                DrawCircle(new Vector2(0, 13.5f), 2.8f, new Color(1f, 0.75f, 0.35f));
-            }
-            else
-            {   // a missile, drawn at its size (a boss's are twice as big), a red tip on every one
-                DrawSetTransform(Vector2.Zero, 0f, Vector2.One * Size);
-                DrawRect(new Rect2(-2.2f, -9f, 4.4f, 18f), new Color(0.85f, 0.85f, 0.8f));
-                DrawColoredPolygon(new[] { new Vector2(-2.2f, -9f), new Vector2(0, -13f), new Vector2(2.2f, -9f) }, new Color(0.9f, 0.2f, 0.18f));
-                DrawCircle(new Vector2(0, 9f), 2.4f, new Color(1f, 0.7f, 0.3f));
-                DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
-            }
-        }
-        else if (_burst < 0.5)
-        {
-            float k = (float)(_burst / 0.5), big = Heavy ? 2f : 1f;
-            DrawCircle(Vector2.Zero, (10f + 30f * k) * big, new Color(1f, 0.7f, 0.3f, 0.8f * (1f - k)));
-            if (Heavy) DrawArc(Vector2.Zero, 70f * k, 0, Mathf.Tau, 40, new Color(1f, 0.9f, 0.6f, 0.7f * (1f - k)), 3f);
-        }
     }
 }
 
@@ -13509,7 +13605,7 @@ public static class Ui
 
 //==============================================================================
 // FILE: scripts/UtilityShip.cs
-// 82 lines   sha256 653a02c9d63b
+// 81 lines   sha256 19003132b8a5
 //==============================================================================
 using Godot;
 using System;
@@ -13573,8 +13669,7 @@ public abstract partial class UtilityShip : Node2D, IRaidTarget, ITagged
     }
 
     protected void Burst(bool rebuilt) =>
-        GetParent().AddChild(new Explosion { Position = Position, Radius = rebuilt ? RebuiltBlast : LostBlast,
-                                             Tint = rebuilt ? new Color(0.5f, 0.8f, 1f) : new Color(1f, 0.7f, 0.3f) });
+        Fx.Raise(rebuilt ? Fx.Rebuilt : Fx.Lost, Position, rebuilt ? RebuiltBlast : LostBlast);
 
     // The rebuild as the host reports it: seconds to go, or -1 while it waits for the credits.
     public float NetRebuild => WaitingForCredits ? -1f : (float)RebuildIn;
@@ -16185,7 +16280,7 @@ ls /tmp/shots
 
 //==============================================================================
 // FILE: tools/screens/Shots.cs.txt
-// 659 lines   sha256 c105183f6344
+// 659 lines   sha256 1ecdc3f35962
 //==============================================================================
 // Screenshot driver. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Shots.cs, registers it as an autoload, and runs the real
@@ -16563,7 +16658,7 @@ public partial class _Shots : Node
             ms.UseAbility("missile", md.NetId); await W(0.9);
             await Snap("43_missile_burst");
             zp.SetValue(H, z0);
-            var mt = H.GetChildren().OfType<Torpedo>().FirstOrDefault(x => x.Heavy);
+            var mt = H.GetChildren().OfType<Shot>().FirstOrDefault(x => x.Heavy);
             if (mt != null)
             {
                 ms.Visible = false; GetViewport().GetCamera2D().Zoom = new Vector2(5f, 5f);
@@ -16680,9 +16775,9 @@ public partial class _Shots : Node
             await Frame(new Vector2(-2600, 2000), 0.9f, false);
             sel.SetValue(hub, d1); await W(0.3); await Snap("25_bar_out_of_range");
             Key(global::Godot.Key.F);
-            for (int i = 0; i < 1500 && !N<Torpedo>().Any(); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            for (int i = 0; i < 1500 && !N<Shot>().Any(x => x.IsMissile); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             // framed on the bomber, not the target: it launches from 1900 u out, far off the dummy's frame
-            var torp = N<Torpedo>().FirstOrDefault();
+            var torp = N<Shot>().FirstOrDefault(x => x.IsMissile);
             await Frame((torp?.GlobalPosition ?? d1.Position) + new Vector2(-120, 120), 1.0f, false);
             await W(0.5); await Snap("26_torpedoes_launching");
             Key(global::Godot.Key.Space);
@@ -17301,7 +17396,7 @@ echo "SMOKE TEST PASSED"
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 4827 lines   sha256 64aa0d114766
+// 4880 lines   sha256 d077f2797350
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -18047,8 +18142,12 @@ public partial class _Test : Node
     }
     // class changes go through the creator path now (there are no class hotkeys)
     async Task SetClass(ShipClass c) { Character.Class = c; Priv(H, "ApplyLocalIdentity"); await Wait(0.1); }
-    System.Collections.Generic.List<(Vector2 p, float age)> Smoke(Torpedo t) =>
-        (System.Collections.Generic.List<(Vector2 p, float age)>)typeof(Torpedo).GetField("_smoke", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(t);
+    System.Collections.Generic.List<(Vector2 p, float age)> Smoke(Shot t) =>
+        (System.Collections.Generic.List<(Vector2 p, float age)>)typeof(Shot).GetField("_smoke", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(t);
+    // the three projectile classes are one flyer with a row each now (Shots.All)
+    System.Collections.Generic.IEnumerable<Shot> Missiles() => Nodes<Shot>().Where(x => x.IsMissile);
+    System.Collections.Generic.IEnumerable<Shot> Shells() => Nodes<Shot>().Where(x => x.Kind == Shots.Shell);
+    System.Collections.Generic.IEnumerable<Shot> Slugs() => Nodes<Shot>().Where(x => x.Kind == Shots.Slug || x.Kind == Shots.Scrap);
     Vector2 Scr(Vector2 w) => GetViewport().GetCanvasTransform() * w;
     async Task Park(Vector2 at, float rot = 0) { var s = Me; s.Position = at; s.Velocity = Vector2.Zero; s.Rotation = rot; await Wait(2.5); s.Velocity = Vector2.Zero; }
 
@@ -18693,11 +18792,11 @@ public partial class _Test : Node
                   $"three levels of hauler point defence: +5% each, 1.15 a shot ({hauler.Spec(true).Damage:0.000})");
             ((System.Collections.Generic.Dictionary<string, int>)typeof(Yard).GetField("_levels", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(Y)).Remove("hauler_pd_damage");
             // a hostile missile crossing the pad is shot down without anyone opening a window
-            int down0 = Torpedo.Intercepted;
+            int down0 = Shot.Intercepted;
             var mp = hauler.Position + new Vector2(0, -250);
             Combat.LaunchTorpedo(mp, Vector2.Down, 40f, 600f, 5, 0, 0f, heavy: false, hostile: true);
-            for (int i = 0; i < 60 * 8 && Torpedo.Intercepted == down0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            Check(Torpedo.Intercepted > down0, "and it shoots down a missile that comes at it, with nobody flying it");
+            for (int i = 0; i < 60 * 8 && Shot.Intercepted == down0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(Shot.Intercepted > down0, "and it shoots down a missile that comes at it, with nobody flying it");
         }
 
         // bought for real: five levels to 95%, and no sixth
@@ -18795,10 +18894,10 @@ public partial class _Test : Node
         hauler.Position = Hub.PortalPos + new Vector2(0, 20);
         for (int i = 0; i < 120 && hauler.State == Hauler.St.Escorting; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         Check(hauler.State == Hauler.St.Charging && hauler.Position.DistanceTo(Hub.PortalPos) < 0.6f, $"the route ends in the portal: it charges there ({hauler.State})");
-        int booms0 = Nodes<Explosion>().Count();
+        int booms0 = Nodes<FxNode>().Count();
         double ec0 = Y.Credits;
         hauler.T = Economy.HaulerCharge; await Wait(0.1);
-        Check(hauler.State == Hauler.St.Away && H.Raiders.Count(r => r.Quarry == hauler) == 0 && Nodes<Explosion>().Count() <= booms0,
+        Check(hauler.State == Hauler.St.Away && H.Raiders.Count(r => r.Quarry == hauler) == 0 && Nodes<FxNode>().Count() <= booms0,
               $"through the portal: the hunters withdraw, none shot down ({H.Raiders.Count(r => r.Quarry == hauler)} left)");
         double atJump = hauler.Cargo;                  // 300, and whatever a delivery added before it lifted
         hauler.T = Economy.HaulerAway; await Wait(0.1);
@@ -18987,7 +19086,7 @@ public partial class _Test : Node
             AimWorld(ship.Position + new Vector2(450, 450)); await Wait(2.5);
             float off0 = mainsB.Min(Off);
             await Wait(TargetDummy.IdleReset + 0.2); d1.ResetMeter();
-            var seen = new System.Collections.Generic.HashSet<Shell>(Nodes<Shell>());
+            var seen = new System.Collections.Generic.HashSet<Shot>(Shells());
             var volleys = new System.Collections.Generic.List<(double t, int n)>();
             double bc0 = ship.Clock, cdAtLast = -1, speedAtFire = -1; float offAtFire = -1; string barAiming = null, barFiring = null;
             AimWorld(d1.Position);
@@ -18998,7 +19097,7 @@ public partial class _Test : Node
                 await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                 AimWorld(d1.Position);                                     // the camera follows the ship: keep the cursor on the dummy
                 if (barAiming == null && ship.BroadsideWindupLeft > 0) barAiming = AbilityBar.StateOf(ship, "broadside", H.Selected).Line;
-                int fresh = Nodes<Shell>().Count(s => seen.Add(s));
+                int fresh = Shells().Count(s => seen.Add(s));
                 if (fresh == 0) continue;
                 if (volleys.Count == 0) { offAtFire = mainsB.Max(Off); speedAtFire = ship.SpeedAhead; }
                 volleys.Add((ship.Clock - bc0, fresh));
@@ -19018,15 +19117,15 @@ public partial class _Test : Node
             Check(Math.Abs(d1.Total - 268.5) < 0.01, $"every shell lands: 3 volleys x 4 shells x 22.375 (17.9 x1.25 by the chips) = 268.5 ({d1.Total:0.000})");
             Check(cdAtLast > 13.9 && cdAtLast <= 14 && AbilityBar.StateOf(ship, "broadside", H.Selected).Busy > 0.8f,
                   $"the 14 s cooldown starts with the last volley, and the slot shows it ({cdAtLast:0.00} s)");
-            int shellsBefore = Nodes<Shell>().Count(s => seen.Add(s));
+            int shellsBefore = Shells().Count(s => seen.Add(s));
             Key(global::Godot.Key.F); await Wait(0.8);
-            Check(ship.BroadsideWindupLeft == 0 && ship.BroadsideVolleysLeft == 0 && Nodes<Shell>().Count(s => seen.Add(s)) == 0,
+            Check(ship.BroadsideWindupLeft == 0 && ship.BroadsideVolleysLeft == 0 && Shells().Count(s => seen.Add(s)) == 0,
                   "F during the cooldown does nothing");
             ship.Sl("broadside").Cool = 0.02;                       // the slot by name, not a private field
             await Wait(0.1); Key(global::Godot.Key.F); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(ship.BroadsideWindupLeft > 0.4, $"once the cooldown is over, F winds up again ({ship.BroadsideWindupLeft:0.00} s)");
             await Wait(1.5);
-            Check(Nodes<Torpedo>().All(t => t.HostileFire), "a battleship launches no missile of its own");
+            Check(Missiles().All(t => t.HostileFire), "a battleship launches no missile of its own");
         }
 
         // ── the main guns fire SHELLS: straight, at 650 u/s (the battleship's), damage on arrival ──
@@ -19036,8 +19135,8 @@ public partial class _Test : Node
             AimWorld(gd.Position); await Wait(1.2);                                   // turrets swing onto it
             await Wait(TargetDummy.IdleReset + 0.2); gd.ResetMeter();
             Input.ParseInputEvent(new InputEventKey { Keycode = global::Godot.Key.Space, PhysicalKeycode = global::Godot.Key.Space, Pressed = true });
-            Shell sh1 = null;
-            for (int i = 0; i < 90 && sh1 == null; i++) { AimWorld(gd.Position); sh1 = Nodes<Shell>().FirstOrDefault(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            Shot sh1 = null;
+            for (int i = 0; i < 90 && sh1 == null; i++) { AimWorld(gd.Position); sh1 = Shells().FirstOrDefault(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
             Input.ParseInputEvent(new InputEventKey { Keycode = global::Godot.Key.Space, PhysicalKeycode = global::Godot.Key.Space, Pressed = false });
             double atFire = gd.Total;
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
@@ -19155,13 +19254,17 @@ public partial class _Test : Node
         // behind: a lambda holding the Hub, so the next shot called into a freed node, and a Hub
         // that could never be collected once you were back at the menu. Snapshot and restore --
         // this all happens inside one frame, so nothing ever sees the cleared state.
+        // The hooks go back through the world's OWN installer (Hub.Hooks), not a list kept here:
+        // this check used to restore four of them by hand, so every hook added after it was
+        // written -- the slug hook, and then Fx.On -- was silently dropped for the rest of the run,
+        // and the effects raised after this point went up on nobody's screen.
         var keepHostiles = Combat.Hostiles.ToList(); var keepPlayers = Combat.Players.ToList();
-        var keepFlash = Combat.OnFlash; var keepWorld = Combat.World; var keepShell = Combat.ShellFired; var keepTorp = Combat.TorpedoFired;
         Combat.Clear();
-        bool hooksDropped = Combat.OnFlash == null && Combat.World == null && Combat.ShellFired == null && Combat.TorpedoFired == null && Combat.SlugFired == null;
+        bool hooksDropped = Combat.OnFlash == null && Combat.World == null && Combat.ShotFired == null && Fx.On == null;
+        Priv(H, "Hooks");
         Combat.Hostiles.AddRange(keepHostiles); Combat.Players.AddRange(keepPlayers);
-        Combat.OnFlash = keepFlash; Combat.World = keepWorld; Combat.ShellFired = keepShell; Combat.TorpedoFired = keepTorp;
-        Check(hooksDropped, "Combat.Clear lets go of the world and every hook it installed");
+        Check(hooksDropped && Combat.OnFlash != null && Combat.World != null && Combat.ShotFired != null && Fx.On != null,
+              "Combat.Clear lets go of the world and every hook it installed, and the world puts every one of them back");
 
         // ── A REFIT, on the battleship: the hull keeps its fraction (keeping the damage taken let a
         //    pilot heal by swapping parts) ──
@@ -19214,14 +19317,14 @@ public partial class _Test : Node
             ship.Staggered = false;
             // its two guns: Space fires both (salvo)
             AimWorld(d1.Position); await Wait(1.5);
-            var seenD = new System.Collections.Generic.HashSet<Shell>(Nodes<Shell>());
+            var seenD = new System.Collections.Generic.HashSet<Shot>(Shells());
             KeyDown(global::Godot.Key.Space); await Wait(0.15); KeyUp(global::Godot.Key.Space);
-            int ddShells = Nodes<Shell>().Count(s => seenD.Add(s));
+            int ddShells = Shells().Count(s => seenD.Add(s));
             Check(ddShells == 2, $"Space fires the destroyer's two main guns ({ddShells} shells)");
             await Wait(2.0);
 
             // ── the missile BURST: a magazine of three bursts; a selected target in range, or it refuses ──
-            System.Collections.Generic.List<Torpedo> Burst() => Nodes<Torpedo>().Where(x => x.Heavy && !x.HostileFire && Smoke(x).Count < 40).ToList();
+            System.Collections.Generic.List<Shot> Burst() => Missiles().Where(x => x.Heavy && !x.HostileFire && Smoke(x).Count < 40).ToList();
             string SlotMsg() => AbilityBar.StateOf(ship, "missile", H.Selected) is var st && st.Fail ? st.Line : null;
             Check(ship.Stats["missile_mag"] == 3 && ship.MissilesLoaded == 3, "the destroyer starts with a magazine of three bursts");
             // Esc only if something is selected: with nothing selected, Esc opens the Esc menu
@@ -19259,9 +19362,9 @@ public partial class _Test : Node
             Key(global::Godot.Key.F); await Wait(0.5);
             Check(ship.MissilesLoaded == 0 && Burst().Count - before3 == 3, $"the third burst empties the magazine ({Burst().Count - before3} new missiles, {ship.MissilesLoaded} left)");
             await Wait(0.7);
-            var flying = new System.Collections.Generic.HashSet<Torpedo>(Nodes<Torpedo>());
+            var flying = new System.Collections.Generic.HashSet<Shot>(Missiles());
             Key(global::Godot.Key.F); await Wait(0.1);
-            Check(Nodes<Torpedo>().All(flying.Contains), "empty magazine: F does nothing");
+            Check(Missiles().All(flying.Contains), "empty magazine: F does nothing");
             Key(global::Godot.Key.R); await Wait(0.1);
             Check(ship.Reloading && AbilityBar.StateOf(ship, "reload", H.Selected).Busy > 0.9f, "R starts the reload; the bar shows it");
             await Wait(9.2);
@@ -19548,8 +19651,8 @@ public partial class _Test : Node
         Check(launchDist > 1850 && launchDist <= 1901, $"the bombers close to 1900 u before they launch ({launchDist:0} u)");
         var fspr = Nodes<Sprite2D>(Nodes<Wing>().First(w => w.Carrier == ship && !w.IsBomber)).First(); var bspr = Nodes<Sprite2D>(crawl).First();
         Check(Math.Abs(fspr.Texture.GetHeight() * fspr.Scale.Y - 17f) < 0.1f && Math.Abs(bspr.Texture.GetHeight() * bspr.Scale.Y - 28.125f) < 0.1f, "fighters 17 u, bombers 28.1 u (snout-nosed, 25% smaller)");
-        Torpedo first = null;
-        for (int i = 0; i < 1200 && first == null; i++) { first = Nodes<Torpedo>().FirstOrDefault(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+        Shot first = null;
+        for (int i = 0; i < 1200 && first == null; i++) { first = Missiles().FirstOrDefault(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
         Check(first != null, "bombers launch torpedoes");
         // measure over an exact frame count: timers round up to the next frame
         var dir0 = first.Dir; var q0 = first.GlobalPosition;
@@ -20316,11 +20419,11 @@ public partial class _Test : Node
             var spot2 = Hub.BasePos + new Vector2(0, -500);        // north of the base: clear of the hauler pad's own gun
             var rc = H.SpawnRaider(spot2); rc.Hp = 1000;
             int mz = bd.MissilesFired; double lz2 = bd.LaserDealt;
-            Torpedo bm = null;
+            Shot bm = null;
             for (int i = 0; i < 60 * 6 && bm == null; i++)
             {
                 rc.Position = spot2;
-                bm = Nodes<Torpedo>().FirstOrDefault(t => !t.HostileFire && !t.Heavy && t.TargetId == rc.NetId);
+                bm = Missiles().FirstOrDefault(t => !t.HostileFire && !t.Heavy && t.TargetId == rc.NetId);
                 await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             }
             var bp1 = bm?.GlobalPosition ?? Vector2.Zero;
@@ -20554,6 +20657,50 @@ public partial class _Test : Node
                   $"overdrive halves the reload of its gun AND of every turret it has out ({gun0:0.00} -> {td.Spec(false).Interval:0.00} s)");
             foreach (var dpl in H.Deployed.ToList()) H.DeployedTaken(dpl);
 
+            // ── EVERY EFFECT IS A ROW, AND EVERY PEER GETS IT ──
+            // The shockwave, the EMP and the echo used to be drawn as spokes of LASER FLASHES,
+            // because that was the only drawing that reached a guest, and the echo's burst was
+            // added straight to the host's own tree where nobody else ever saw it.
+            {
+                // ── EVERYTHING THAT FLIES IS ONE FLYER WITH A ROW ──
+                // Three classes (Shell, Slug, Torpedo) with one copy each of the same sweep,
+                // lifetime, cosmetic-copy rule and hit. Six rows and one node now, and ONE launch
+                // on the wire where there were three.
+                Check(Shots.All.Length == 6
+                      && !Shots.Of(Shots.Shell).AtPlayers && Shots.Of(Shots.Shell).Sweep == 6f && Shots.Of(Shots.Shell).Burst == 0
+                      && Shots.Of(Shots.Slug).AtPlayers && Shots.Of(Shots.Scrap).AtPlayers
+                      && Shots.Of(Shots.Slug).Burst == 0.25 && Shots.Of(Shots.Scrap).Look == ShotLook.Shard
+                      && Shots.Of(Shots.Missile).Heavy && !Shots.Of(Shots.Torpedo).Heavy
+                      && Shots.Of(Shots.Seeker).Interceptable && !Shots.Of(Shots.Missile).Interceptable
+                      && Shots.All.Count(x => x.Smoke) == 3,
+                      "six kinds of shot, each a row: a shell, a boss's slug and its scrap, a torpedo, a heavy missile, and the seeker point defence exists for");
+                // the sweep the shell and the rock share: a step longer than a hull is how a shot
+                // passes through it between frames
+                {
+                    int seen = 0;
+                    bool struck = Shots.Sweep(Vector2.Zero, new Vector2(60, 0), 6f, _ => { seen++; return false; });
+                    bool stops = Shots.Sweep(Vector2.Zero, new Vector2(60, 0), 6f, _ => true);
+                    int once = 0;
+                    Shots.Sweep(Vector2.Zero, new Vector2(600, 0), 0f, _ => { once++; return false; });
+                    Check(seen == 10 && !struck && stops && once == 1,
+                          $"Shots.Sweep walks a 60 u step in ten 6 u tests, stops at the first touch, and tests only the end point when a row asks for no sweep ({seen}, {once})");
+                }
+
+                Check(Fx.All.Length == 7 && Fx.Of(Fx.Wave).Shape == FxShape.Ring
+                      && Fx.Of(Fx.Emp).Shape == FxShape.Spokes && Fx.Of(Fx.Echo).Shape == FxShape.Spokes
+                      && Fx.Of(Fx.Rail).Shape == FxShape.Bar && Fx.Of(Fx.Burst).Shape == FxShape.Burst
+                      && Fx.Of(Fx.Rebuilt).Tint != Fx.Of(Fx.Lost).Tint,
+                      "seven effects, each a row: a burst, a fleet craft lost and rebuilt, a wave, an EMP, an echo and a railgun's bar");
+                int fxBefore = Nodes<FxNode>().Count();
+                Fx.Raise(Fx.Wave, fr.Position + new Vector2(0, -600), 400f);
+                await Wait(0.1);
+                var raised = Nodes<FxNode>().Where(f => f.Id == Fx.Wave).ToList();
+                Check(raised.Count == 1 && Nodes<FxNode>().Count() == fxBefore + 1 && Math.Abs(raised[0].Radius - 400f) < 1e-3,
+                      $"Fx.Raise puts one up in the live world, at the reach it was given ({raised.Count} up)");
+                await Wait(1.0);
+                Check(!Nodes<FxNode>().Any(f => f.Id == Fx.Wave), "and it takes itself away when its life is up");
+            }
+
             // ── BASTION: everything within 1000 u thrown a thousand units clear ──
             await SetClass(ShipClass.FreightBastion);
             var bs = Me; bs.Position = yonder; bs.Velocity = Vector2.Zero; await Wait(0.2);
@@ -20563,6 +20710,7 @@ public partial class _Test : Node
             float nd0 = near.Position.DistanceTo(yonder), fd0 = far.Position.DistanceTo(yonder);
             bs.UseAbility("shockwave", 0); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             float nd1 = near.Position.DistanceTo(yonder), fd1 = far.Position.DistanceTo(yonder);
+            Check(Nodes<FxNode>().Any(f => f.Id == Fx.Wave), "the shockwave puts its ring up where it went off");
             Check(nd1 - nd0 > 950 && nd1 - nd0 < 1050 && Math.Abs(fd1 - fd0) < 60,
                   $"the shockwave throws what is within 1000 u a thousand units clear, and nothing beyond it ({nd1 - nd0:0} u / {fd1 - fd0:0} u)");
             near.TakeDamage(99999); far.TakeDamage(99999); await Wait(0.2);
@@ -20620,9 +20768,9 @@ public partial class _Test : Node
             var marks = new List<Raider>();
             for (int i = 0; i < 4; i++) { var m = H.SpawnRaider(yonder + new Vector2(300 + 60 * i, -200 + 90 * i)); m.Hp = 3000; marks.Add(m); }
             await Wait(0.2);
-            int torp0 = Nodes<Torpedo>().Count();
+            int torp0 = Missiles().Count();
             wd.UseAbility("hunters", 0); await Wait(0.2);
-            var fired = Nodes<Torpedo>().Where(t => !t.HostileFire && t.TargetId != 0).ToList();
+            var fired = Missiles().Where(t => !t.HostileFire && t.TargetId != 0).ToList();
             Check(fired.Count >= 6 - torp0 && fired.Select(t => t.TargetId).Distinct().Count() >= 4,
                   $"six hunter-seekers away, each on a target of its own ({fired.Count} out, {fired.Select(t => t.TargetId).Distinct().Count()} targets)");
             foreach (var m in marks) m.TakeDamage(99999);
@@ -20792,7 +20940,7 @@ public partial class _Test : Node
                     if (tVolley < 0 && boss.Volleys > 0)
                     {
                         tVolley = arenaT;
-                        var big = Nodes<Torpedo>().Where(x => x.HostileFire && x.Size == 2f).ToList();
+                        var big = Missiles().Where(x => x.HostileFire && x.Size == 2f).ToList();
                         trident = big.Count;
                         if (big.Count == 3) spread = big.Max(x => x.Dir.Angle()) - big.Min(x => x.Dir.Angle());
                     }
@@ -20902,15 +21050,15 @@ public partial class _Test : Node
             // beam below has to be the real shot, and the damage check at the end of this scenario is
             // the only thing that proves the locked line still lands.
             boss.Rotation = (me2.Position - boss.Position).Angle() + Mathf.Pi / 2f;
-            int down0 = Torpedo.Intercepted;
-            for (int i = 0; i < 60 * 10 && Torpedo.Intercepted == down0; i++)
+            int down0 = Shot.Intercepted;
+            for (int i = 0; i < 60 * 10 && Shot.Intercepted == down0; i++)
             {
                 if (!Me.PdActive && Me.PdReady) Key(global::Godot.Key.Q);
                 await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             }
-            Check(Torpedo.Intercepted > down0, "point defence shoots the boss's missiles down");
+            Check(Shot.Intercepted > down0, "point defence shoots the boss's missiles down");
             Check(!H.Raiders.Any(r => r.IsEscort), "point defence, switched on, kills the beam's escorts");
-            var aMissile = Nodes<Torpedo>().FirstOrDefault(t => t.HostileFire);
+            var aMissile = Missiles().FirstOrDefault(t => t.HostileFire);
             Check(Turret.PdPriority(boss) == 2 && (aMissile == null || Turret.PdPriority(aMissile) == 0), "point defence takes missiles before anything else");
             var tiny = new TinyTarget();
             Check(Turret.PdPriority(tiny) == 1 && Turret.PdPriority(tiny) < Turret.PdPriority(boss)
@@ -21103,13 +21251,13 @@ public partial class _Test : Node
                     typeof(Drake).GetField("_throw", nf).SetValue(dk, 999.0); typeof(Drake).GetField("_shotgun", nf).SetValue(dk, 999.0);
                     // MAIN GUN: a slow shell every 2.5 s (2.4 DPS at 6 a shell), dodged by moving
                     me3.Position = dk.Position + new Vector2(0, 700); await Wait(0.1);
-                    var shellSeen = new System.Collections.Generic.HashSet<Slug>(Nodes<Slug>());
-                    var shellAt = new System.Collections.Generic.List<double>(); Slug shell = null; double clock = 0;
+                    var shellSeen = new System.Collections.Generic.HashSet<Shot>(Slugs());
+                    var shellAt = new System.Collections.Generic.List<double>(); Shot shell = null; double clock = 0;
                     double gun0 = me3.DamageBySource.GetValueOrDefault("boss:gun");
                     for (int i = 0; i < 60 * 7 && shellAt.Count < 2; i++)
                     {
                         await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); clock += GetProcessDeltaTime();
-                        foreach (var s in Nodes<Slug>().Where(s => s.Look == Slug.Kind.Shell && shellSeen.Add(s))) { shellAt.Add(clock); shell = s; }
+                        foreach (var s in Slugs().Where(s => s.Kind == Shots.Slug && shellSeen.Add(s))) { shellAt.Add(clock); shell = s; }
                     }
                     float sspd = 0;
                     if (shell != null && GodotObject.IsInstanceValid(shell)) { var sp0 = shell.Position; for (int i = 0; i < 10; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); sspd = GodotObject.IsInstanceValid(shell) ? (shell.Position - sp0).Length() / (10f / 60f) : 0; }
@@ -21128,11 +21276,11 @@ public partial class _Test : Node
                     for (int i = 0; i < 60 * 3 && !dk.FanWinding; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                     var landed = dk.Position; float warpOff = landed.DistanceTo(me3.Position);
                     var fan = Nodes<Telegraph>().Where(t => t.Line && Math.Abs(t.Duration - 1.875) < 1e-6).ToList();
-                    var scrapSeen = new System.Collections.Generic.HashSet<Slug>(Nodes<Slug>());
+                    var scrapSeen = new System.Collections.Generic.HashSet<Shot>(Slugs());
                     await Wait(1.0);
                     bool heldStill = dk.Position.DistanceTo(landed) < 0.01f && dk.Locked;
-                    var scrap = new System.Collections.Generic.List<Slug>();
-                    for (int i = 0; i < 60 * 2 && scrap.Count < 7; i++) { scrap.AddRange(Nodes<Slug>().Where(s => s.Look == Slug.Kind.Scrap && scrapSeen.Add(s))); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+                    var scrap = new System.Collections.Generic.List<Shot>();
+                    for (int i = 0; i < 60 * 2 && scrap.Count < 7; i++) { scrap.AddRange(Slugs().Where(s => s.Kind == Shots.Scrap && scrapSeen.Add(s))); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
                     float aimTo = (me3.Position - landed).Angle();
                     var offs = scrap.Select(s => Mathf.RadToDeg(Mathf.AngleDifference(aimTo, s.Dir.Angle()))).OrderBy(a => a).ToList();
                     bool fanned = offs.Count == 7 && offs.Zip(new[] { -30f, -20f, -10f, 0f, 10f, 20f, 30f }, (a, b) => Math.Abs(a - b) < 0.5f).All(x => x);
@@ -21556,7 +21704,7 @@ public partial class _Test : Node
             {
                 if (H == null || !Hub.InArena || !GodotObject.IsInstanceValid(H.Boss)) return false;
                 sawDrake |= H.Boss is Drake { Type.Id: "drake_bastion" };
-                sawShell |= Nodes<Slug>().Any(s => s.Cosmetic && s.Look == Slug.Kind.Shell);
+                sawShell |= Slugs().Any(s => s.Cosmetic && s.Kind == Shots.Slug);
                 sawRock |= Nodes<ThrownRock>().Any(r => r.Cosmetic && r.Hold <= 7.5 && r.From.DistanceTo(H.Boss.Position) < 260f);
                 return sawDrake && sawShell && sawRock;
             } };
@@ -21765,7 +21913,7 @@ public partial class _Test : Node
             Check(g != null && g.WingTarget == dummy, "guest's Space order reached the host");
             Check(dummy.Total > 5, $"guest's wing hit the dummy on the host ({dummy.Total:0.0})");
             Check(g != null && g.PdActive, "guest's PD activation reached the host");
-            Check(Nodes<Torpedo>().Any(x => !x.Cosmetic) || dummy.Total > 12, "guest's bomber strike launched real torpedoes on the host");
+            Check(Missiles().Any(x => !x.Cosmetic) || dummy.Total > 12, "guest's bomber strike launched real torpedoes on the host");
             // stay up while the guest watches its bombers come home and dock (it checks ~22 s in), and
             // send the hauler on an escort half way through for it to see
             ulong w0 = Time.GetTicksMsec();
@@ -21861,7 +22009,7 @@ public partial class _Test : Node
                 for (ulong t0 = Time.GetTicksMsec(); Time.GetTicksMsec() - t0 < 4000 && cdBack <= 0; )
                 {
                     sawWindup |= me3.BroadsideWindupLeft > 0 || me3.BroadsideVolleysLeft > 0;
-                    sawShells |= Nodes<Shell>().Any(s => s.Cosmetic);
+                    sawShells |= Shells().Any(s => s.Cosmetic);
                     cdBack = me3.BroadsideCooldownLeft;
                     await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                 }
@@ -22018,7 +22166,7 @@ public partial class _Test : Node
             Key(global::Godot.Key.Q);              // point defence
             // torpedoes live a couple of seconds; watch for one across the window
             bool sawTorp = false;
-            for (int i = 0; i < 240; i++) { if (Nodes<Torpedo>().Any(x => x.Cosmetic)) sawTorp = true; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            for (int i = 0; i < 240; i++) { if (Missiles().Any(x => x.Cosmetic)) sawTorp = true; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
             Check(mine != null && mine.PdActive, "guest sees its PD window running (replicated)");
             Check(sawTorp, "guest sees cosmetic copies of its torpedoes");
             var host = Nodes<PlayerShip>().FirstOrDefault(s => s.OwnerId == 1);

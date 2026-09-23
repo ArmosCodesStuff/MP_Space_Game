@@ -12,8 +12,8 @@ If you are a fresh session with no history of this project, read in this order:
 3. This file for the mechanics of working on it.
 
 **You also need the code.** These documents describe the project; they do not replace it. Whoever
-starts the session should attach the project zip (~6 MB, ~27 MB with its git history; 69 scripts,
-13300 lines; every code file inline in `version/CODE_SNAPSHOT.txt`).
+starts the session should attach the project zip (~6 MB, ~27 MB with its git history; 67 scripts,
+13500 lines; every code file inline in `version/CODE_SNAPSHOT.txt`).
 
 | File | For |
 |---|---|
