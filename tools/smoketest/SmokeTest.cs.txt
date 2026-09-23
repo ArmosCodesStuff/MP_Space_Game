@@ -2562,19 +2562,24 @@ public partial class _Test : Node
                 .All(s => new[] { Rarity.Common, Rarity.Rare, Rarity.Epic }
                     .All(r => drops.Count(i => i.Slot == s && i.Rarity == r) * 3 == drops.Count(i => i.Slot == s)));
             var kit = Equipment.All.Where(i => i.Kit).ToList();
-            Check(drops.Count == 120 && famShape && kit.Count == 23 && kit.All(i => i.Rarity == Rarity.Common)
+            Check(drops.Count == 138 && famShape && kit.Count == 23 && kit.All(i => i.Rarity == Rarity.Common)
                   && kit.Count(i => i.Slot == GearSlot.Weapon) == 7 && kit.Count(i => i.Slot == GearSlot.Utility) == 12,
-                  $"the gear: 120 drops, a third of each slot at each rarity, and a 23-part kit -- seven weapon mounts and twelve signature systems across twelve classes, plus the drive, the deflector, the frame and the chip every ship has ({drops.Count} drops, {kit.Count} kit)");
+                  $"the gear: 138 drops, a third of each slot at each rarity, and a 23-part kit -- seven weapon mounts and twelve signature systems across twelve classes, plus the drive, the deflector, the frame and the chip every ship has ({drops.Count} drops, {kit.Count} kit)");
             Check(Wear(bsC, GearSlot.Weapon) == 24 && Wear(cvC, GearSlot.Weapon) == 12 && Wear(ddC, GearSlot.Weapon) == 24
                   && Wear(ShipClass.FreightHauler, GearSlot.Weapon) == 24 && Wear(ShipClass.LightDart, GearSlot.Weapon) == 24
                   && Wear(bsC, GearSlot.Utility) == 12 && Wear(cvC, GearSlot.Utility) == 12 && Wear(ddC, GearSlot.Utility) == 12
                   && Wear(ShipClass.FreightHauler, GearSlot.Utility) == 0
                   && new[] { GearSlot.Engines, GearSlot.Shield, GearSlot.Chip }
                         .All(g => Classes.All.Where(c => c.Ready).All(c => Wear(c.Id, g) == 12))
-                  // the frame family is point defence's: nine of its twelve move only pd_ stats, so the
-                  // five classes with no point-defence mount wear the three that are about the hull
-                  && Classes.All.Where(c => c.Ready).All(c => Wear(c.Id, GearSlot.Hull) == (c.Has(Fit.Pd) ? 12 : 3)),
-                  "a hull wears what it has the stats for: 24 weapon parts for anything with main guns -- a freighter and a dart included, which could wear none -- 12 for the carrier's hangars, 12 utility parts each for the three systems that have any (and none yet for the nine new ones), every hull all 12 engines, shields and chips, and the frame family only where there is point defence to reinforce");
+                  // THE HULL SLOT, by what a hull actually is: the four point-defence frames (12
+                  // parts) only where there is point defence, the three turret cradles (9) only on
+                  // a hull that drops turrets, and the three hull-and-handling frames (9) on
+                  // everything. So a sniper wears 9 where it used to wear 3, and a freighter 30.
+                  && Wear(bsC, GearSlot.Hull) == 21 && Wear(ShipClass.HeavySniper, GearSlot.Hull) == 12
+                  && Wear(ShipClass.FreightHauler, GearSlot.Hull) == 30 && Wear(ShipClass.LightWraith, GearSlot.Hull) == 12
+                  && Classes.All.Where(c => c.Ready).All(c => Wear(c.Id, GearSlot.Hull)
+                         == 12 + (c.Has(Fit.Pd) ? 9 : 0) + (c.Has(Fit.Deploy) ? 9 : 0)),
+                  "a hull wears what it has the stats for: 24 weapon parts for anything with main guns -- a freighter and a dart included, which could wear none -- 12 for the carrier's hangars, 12 utility parts each for the three systems that have any (and none yet for the nine new ones), every hull all 12 engines, shields and chips, and a hull slot that says what the hull IS: twelve hull-and-handling frames for everything (the armoured frame among them, which is about the hull as much as the window), nine that are point defence's alone, nine turret cradles where turrets are dropped -- a sniper 12 where it wore 3, a battleship 21, a freighter 30");
             bool OnlyFamily(ItemDef i, string fam) => i.Pct.Keys.Concat(i.Add.Keys).All(k => k.StartsWith(fam));
             Check(Equipment.All.Where(i => !i.Kit && OnlyFamily(i, "broadside_")).All(i => Equipment.Fits(i, i.Slot, bsC) && !Equipment.Fits(i, i.Slot, ddC))
                   && Equipment.All.Where(i => !i.Kit && OnlyFamily(i, "missile_")).All(i => Equipment.Fits(i, i.Slot, ddC) && !Equipment.Fits(i, i.Slot, bsC))
@@ -2625,8 +2630,8 @@ public partial class _Test : Node
                 return w + Equipment.ChipSlots * Math.Min(0, Equipment.All.Where(i => i.Slot == GearSlot.Chip).Select(i => i.Pct.GetValueOrDefault(stat)).DefaultIfEmpty(0).Min());
             }
             foreach (var c in Enum.GetValues<ShipClass>()) foreach (var st in new ShipStats(c).All) if (Worst(c, st.Id) <= -1) allPositive = false;
-            Check(allPositive && Near(Worst(cvC, "fighter_damage"), -0.47) && Near(Worst(bsC, "main_damage"), -0.55) && Near(Worst(bsC, "hull"), -0.50) && Near(Worst(cvC, "hull"), -0.50),
-                  $"no stack of gear takes a number to zero: worst fighter damage -47% (1.325), shell -55% (8.055), hull -50% (150 / 100) ({Worst(cvC, "fighter_damage"):0.00}, {Worst(bsC, "main_damage"):0.00}, {Worst(bsC, "hull"):0.00})");
+            Check(allPositive && Near(Worst(cvC, "fighter_damage"), -0.47) && Near(Worst(bsC, "main_damage"), -0.55) && Near(Worst(bsC, "hull"), -0.70) && Near(Worst(cvC, "hull"), -0.70),
+                  $"no stack of gear takes a number to zero: worst fighter damage -47% (1.325), shell -55% (8.055), hull -70% since the spar frame joined the deepest stack (112.5 / 75) ({Worst(cvC, "fighter_damage"):0.00}, {Worst(bsC, "main_damage"):0.00}, {Worst(bsC, "hull"):0.00})");
             // every stat a part names is real on a class it fits, and none touches the turret counts
             string[] addable = { "fighter_count", "bomber_count", "missile_mag", "bomber_ammo", "broadside_volleys" };
             var unknown = Equipment.All.SelectMany(i => i.Pct.Keys.Concat(i.Add.Keys).Where(k =>
@@ -2711,8 +2716,14 @@ public partial class _Test : Node
         // ── equipment (I): per-class gear; common defaults and five chips (+5% damage, +5% hull each) ──
         {
             Check(Equipment.Default(ShipClass.Carrier)[0] == "cv_fighter_hangars" && Equipment.ById("cv_fighter_hangars").Name == "Mk I Fighter Hangars"
-                  && Equipment.Default(ShipClass.Battleship).Take(5).All(id => Equipment.ById(id).Rarity == Rarity.Common),
-                  "the defaults: common parts in five slots; a carrier's weapon slot holds its Fighter Hangars");
+                  && Equipment.Default(ShipClass.Battleship).Take(5).All(id => Equipment.ById(id).Rarity == Rarity.Common)
+                  // EVERY class comes out of the yard with its own two mounts, not the battleship's
+                  && Classes.All.Where(c => c.Ready).All(c => Equipment.Default(c.Id).Take(5).All(id =>
+                         Equipment.ById(id) is { } part && Equipment.Fits(part, part.Slot, c.Id)))
+                  && Equipment.Default(ShipClass.HeavySniper)[0] == "heavy_main_gun"
+                  && Equipment.Default(ShipClass.HeavySniper)[4] == "heavy_railgun"
+                  && Equipment.Default(ShipClass.LightWraith)[4] == "light_stealth_veil",
+                  "the defaults: common parts in five slots, and every one of the twelve classes starts with mounts it can actually wear -- a carrier's Fighter Hangars, a sniper's Railgun Mount, a wraith's Stealth Veil");
             var bsE = new ShipStats(ShipClass.Battleship, Equipment.Bonuses(ShipClass.Battleship, Equipment.Default(ShipClass.Battleship)));
             var cvE = new ShipStats(ShipClass.Carrier, Equipment.Bonuses(ShipClass.Carrier, Equipment.Default(ShipClass.Carrier)));
             Check(Math.Abs(bsE["hull"] - 375) < 1e-6 && Math.Abs(bsE["main_damage"] - 22.375) < 1e-6 && Math.Abs(cvE["hull"] - 250) < 1e-6

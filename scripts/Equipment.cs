@@ -235,6 +235,25 @@ public static class Equipment
                  new[] { ("pd_active", 0.50), ("pd_reload", 0.30) }),
             Line("fr_armour", "Armoured Frame", GearSlot.Hull, "a tougher frame, a shorter point-defence window",
                  new[] { ("hull", 0.20) }, new[] { ("pd_active", -0.30) }),
+            // ── frames for a hull with no point defence to reinforce ──
+            // The four above are point defence's: nine of their twelve parts move nothing but pd_
+            // stats, so the five classes that mount no point defence -- the sniper, the warrior,
+            // the dart, the echo and the wraith -- could wear three of the twelve. These three
+            // families are about the HULL itself, so every ship in the game can wear them.
+            Line("fr_braced", "Braced Frame", GearSlot.Hull, "a heavier frame: it takes more, and comes round slower",
+                 new[] { ("hull", 0.30) }, new[] { ("turn_rate", -0.20), ("max_speed", -0.10) }),
+            Line("fr_spar", "Spar Frame", GearSlot.Hull, "stripped to the spars: it turns far harder, and dents",
+                 new[] { ("turn_rate", 0.45), ("turn_radius", 0.20) }, new[] { ("hull", -0.20) }),
+            Line("fr_keel", "Keel Brace", GearSlot.Hull, "it holds the water: no drift, and a little heavy",
+                 new[] { ("keel", 0.60), ("water_drag", 0.25) }, new[] { ("max_speed", -0.08) }),
+            // ── frames for the turrets a freighter carries about ──
+            // Its deployed turrets ARE its frame: these only mean anything on a hull that drops them.
+            Line("cr_cradle", "Turret Cradle", GearSlot.Hull, "the turrets it drops stand up to far more",
+                 new[] { ("deploy_hull", 0.60) }, new[] { ("deploy_range", -0.15) }),
+            Line("cr_rack", "Launch Rack", GearSlot.Hull, "drops them far sooner, and lighter",
+                 new[] { ("deploy_cooldown", 0.50) }, new[] { ("deploy_damage", -0.20) }),
+            Line("cr_heavy", "Heavy Cradle", GearSlot.Hull, "turrets that hit much harder and reach further; slow to drop",
+                 new[] { ("deploy_damage", 0.45), ("deploy_range", 0.25) }, new[] { ("deploy_cooldown", -0.30) }),
             // ── chips ──
             Line("chip_combat", "Combat Chip", GearSlot.Chip, "every weapon hits harder; a little less hull",
                  AllDamage(0.08), new[] { ("hull", -0.05) }),
@@ -249,15 +268,15 @@ public static class Equipment
     }
 
     // the loadout: 5 core slots in order, then 5 chips ("" = empty)
+    // What a ship of this class comes out of the yard with: ITS OWN two parts, from its row
+    // (ClassDef.Kit), and the four every ship is born with. It used to name three classes here and
+    // hand everything else the battleship's mounts -- which the nine new classes cannot even wear,
+    // so their weapon and utility slots came up empty.
     public static string[] Default(ShipClass c)
     {
-        var (weapon, utility) = c switch
-        {
-            ShipClass.Carrier   => ("cv_fighter_hangars", "cv_bomber_bay"),
-            ShipClass.Destroyer => ("dd_main_battery", "dd_missile_rack"),
-            _                   => ("bs_main_battery", "bs_broadside"),
-        };
-        return new[] { weapon, "std_drive", "basic_deflector", "reinforced_frame", utility,
+        var kit = Classes.Of(c).Kit;
+        string Own(GearSlot s) => kit.FirstOrDefault(k => k.Slot == s)?.Id ?? "";
+        return new[] { Own(GearSlot.Weapon), "std_drive", "basic_deflector", "reinforced_frame", Own(GearSlot.Utility),
                        "chip_basic", "chip_basic", "chip_basic", "chip_basic", "chip_basic" };
     }
 
