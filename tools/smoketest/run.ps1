@@ -199,9 +199,9 @@ try {
     $all += Complete-Run $g2    '[third] '
 
     # the dedicated two-player arena run: after the three-player run, on its own port
-    $ah = Start-Run (@('--headless','--path',$W,'--','ahost') + $seedArg)  'ahost'  120
+    $ah = Start-Run (@('--headless','--path',$W,'--','ahost') + $seedArg)  'ahost'  150
     Start-Sleep -Milliseconds 500
-    $ag = Start-Run (@('--headless','--path',$W,'--','aguest') + $gx + $seedArg) 'aguest' 120
+    $ag = Start-Run (@('--headless','--path',$W,'--','aguest') + $gx + $seedArg) 'aguest' 150
     $all += Complete-Run $ag '[aguest]'
     $all += Complete-Run $ah '[ahost] '
     $want += 5

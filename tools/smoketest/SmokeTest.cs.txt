@@ -741,7 +741,10 @@ public partial class _Test : Node
         if (typeof(PlayerShip).GetField("_pod", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(s) is EscapePod p) { p.Position = at; p.Velocity = Vector2.Zero; }
     }
     // class changes go through the creator path now (there are no class hotkeys)
-    async Task SetClass(ShipClass c) { Character.Class = c; Priv(H, "ApplyLocalIdentity"); await Wait(0.1); }
+    // A refit, ANNOUNCED: PilotChanged applies it here and tells every peer, so a multiplayer
+    // scenario can fly one of the nine and have the other side see which hull it is. Offline,
+    // SendIdentity returns at once, so the solo callers are unchanged.
+    async Task SetClass(ShipClass c) { Character.Class = c; H.PilotChanged(); await Wait(0.1); }
     System.Collections.Generic.List<(Vector2 p, float age)> Smoke(Shot t) =>
         (System.Collections.Generic.List<(Vector2 p, float age)>)typeof(Shot).GetField("_smoke", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(t);
     // the three projectile classes are one flyer with a row each now (Shots.All)
@@ -4268,6 +4271,73 @@ public partial class _Test : Node
             for (int i = 0; i < 60 * 10 && Net.I.Players.Count < 2; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(Net.I.Players.Count == 2, "arena host: the guest joined");
             await Wait(1.0);
+            // ── TWO OF THE NINE, IN A SESSION ─────────────────────────────────────
+            // Everything the nine classes put on the wire had only ever flown alone: the status
+            // bits, the slot array a class names itself, a turret dropped into the world, an
+            // effect, and a bubble that covers SOMEBODY ELSE. At home before the first arena trip
+            // the host flies a WARRIOR and the guest a FREIGHTER.
+            // Each process seeds its own varied geometry, so the rendezvous is a LITERAL and
+            // everything varied is the HOST's -- the guest reads it off the wire.
+            var mpSpot = Hub.BasePos + new Vector2(2400, 2400);   // clear of the belt, the wreck, the dummies and the lane
+            await SetClass(ShipClass.HeavyWarrior);
+            var hw = Me; hw.AutopilotTo = null;
+            Check(hw.Class == ShipClass.HeavyWarrior && Math.Abs(hw.MaxHp - 175) < 1e-6 && Abilities.For(ShipClass.HeavyWarrior).Length == 9,
+                  $"arena host: hosting as a WARRIOR -- 140 x 1.25 for five chips = 175 hull, three abilities and six open slots ({hw.MaxHp:0})");
+            await RealTime(() => H.Ships.FirstOrDefault(s => !s.Mine) is { Class: ShipClass.FreightHauler } gg
+                                 && gg.Position.DistanceTo(mpSpot) < 60, Wan ? 25 : 15);
+            var fg = H.Ships.FirstOrDefault(s => !s.Mine);
+            Check(fg != null && fg.Class == ShipClass.FreightHauler && Math.Abs(fg.MaxHp - 500) < 1e-6
+                  && fg.Position.DistanceTo(mpSpot) < 60,
+                  $"arena host: the guest refitted to a FREIGHTER and parked -- 400 x 1.25 = 500 hull ({fg?.Class}, {fg?.MaxHp:0}, {fg?.Position.DistanceTo(mpSpot):0} u off)");
+            hw.Position = VaryNear(fg.Position, 230f); hw.Velocity = Vector2.Zero; hw.Rotation = 0f;   // inside its 260 u, any bearing
+            await Wait(0.3);
+            // ITS TURRET, MADE BY THE HOST: the guest presses T; only the host may put one in the
+            // world, and only the host may take it away again.
+            await RealTime(() => H.Deployed.Count(t => t.OwnerId == fg.OwnerId) == 1, Wan ? 15 : 8);
+            var t1 = H.Deployed.FirstOrDefault(t => t.OwnerId == fg.OwnerId);
+            Check(t1 != null && H.Deployed.Count == 1 && fg.TurretsOut == 1
+                  && Math.Abs(t1.Hp - 120) < 1e-6
+                  && Math.Abs(t1.Spec(true).Damage - fg.Stats["deploy_damage"]) < 1e-9
+                  && Math.Abs(fg.Stats["deploy_damage"] - 7.5) < 1e-9,   // 6 x 1.25, the guest's five chips
+                  $"arena host: a guest's T reached the host -- one 120-hull turret firing the GUEST's sheet, {t1?.Spec(true).Damage:0.0} a shot, owned by the guest ({H.Deployed.Count} out)");
+            H.Drop(fg, VaryNear(fg.Position, 420f), fg.Stats["deploy_hull"]);
+            H.Drop(fg, VaryNear(fg.Position, 420f), fg.Stats["deploy_hull"]);
+            await Wait(0.3);
+            Check(fg.TurretsOut == 3, $"arena host: three of the guest's turrets standing ({fg.TurretsOut})");
+            // THE BUBBLE IS OVER SOMEBODY ELSE. The pool is the GUEST's and the blow lands on the
+            // HOST's hull: PlayerShip.ThroughBubbles reads Combat.Players, and until now no check
+            // had ever had two pilots in it.
+            await RealTime(() => fg.BubbleUp, Wan ? 15 : 8);
+            Check(fg.BubbleUp && Math.Abs(fg.BubbleLeft - 400) < 1e-6 && hw.Position.DistanceTo(fg.Position) < 260f,
+                  $"arena host: the guest's F raised its 400 bubble, and this hull is inside its 260 u ({hw.Position.DistanceTo(fg.Position):0} u)");
+            double hwHull0 = hw.Hp;
+            hw.Hit(150, hw.Position + new Vector2(0, -200), "test:mpbubble");
+            Check(Math.Abs(hw.Hp - hwHull0) < 1e-6 && Math.Abs(fg.BubbleLeft - 250) < 1e-6,
+                  $"...and a 150 blow on the HOST's hull comes out of the GUEST's pool ({fg.BubbleLeft:0} of 400 left, hull {hw.Hp:0} of {hwHull0:0})");
+            // THE RUSH: a status only the host decides, and an EMP whose ring is an Fx row.
+            hw.UseAbility("rush", 0);
+            double rushLeft = hw.Sl("rush").Left, rushCool = hw.Sl("rush").Cool;
+            Check(hw.Statuses.Has(Status.Hardened) && Math.Abs(rushLeft - 2.5) < 1e-9 && Math.Abs(rushCool - 18) < 1e-9
+                  && Math.Abs(hw.SpeedMult - 2.5f) < 1e-6,
+                  $"arena host: the warrior's rush -- hardened, 2.5 s up, 18 s cooling, 2.5x top speed ({rushLeft:0.0} s, {rushCool:0.0} s)");
+            // ...and one of the guest's turrets shot off its base, for the guest to see the gap and the burst
+            var doomed = H.Deployed.First(t => t.OwnerId == fg.OwnerId);
+            int doomedId = doomed.NetId;
+            doomed.TakeDamage(1e12); await Wait(0.4);
+            Check(H.Deployed.All(t => t.NetId != doomedId) && fg.TurretsOut == 2,
+                  $"arena host: a turret shot off its base is gone here ({fg.TurretsOut} left out)");
+            await RealTime(() => fg.TurretsOut == 1, Wan ? 20 : 12);
+            Check(fg.TurretsOut == 1 && H.Deployed.Count == 1,
+                  $"arena host: the guest's C picked one up again -- one of its three left standing ({fg.TurretsOut})");
+            // THE RUSH MUST LAND BEFORE THE REFIT. A refit rebuilds the ship's slots, so a rush
+            // still running is discarded with them and its EMP never fires -- which is right (it is
+            // a different ship now), but it would leave the guest waiting for a ring that never came.
+            await RealTime(() => !hw.Statuses.Has(Status.Hardened) && hw.Sl("rush").Left <= 0, Wan ? 12 : 6);
+            await Wait(0.4);
+            foreach (var dpl in H.Deployed.ToList()) H.DeployedTaken(dpl);   // the world clear for the arena
+            await Wait(0.3);
+            await SetClass(ShipClass.Battleship);                            // the hull the rest of this scenario flies
+            await RealTime(() => H.Ships.FirstOrDefault(s => !s.Mine) is { Class: ShipClass.Destroyer }, Wan ? 20 : 12);
             await ToArena("arena host", 1);
             // Built after a scene change, so from what is REMEMBERED of each pilot, not a fresh
             // announcement. It used to be only names and colours: every boss a solo boss (it counted
@@ -4360,6 +4430,66 @@ public partial class _Test : Node
             Net.I.Join(HostAt(Port));
             for (int i = 0; i < 60 * 10 && !(Net.IsOnline && Net.LocalId != 1); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(Net.IsOnline && Net.LocalId != 1, "arena guest: joined");
+            // ── TWO OF THE NINE, IN A SESSION (the host's side is in the ahost branch) ──
+            // A FREIGHTER: the class whose abilities MAKE things in the world. Every press below
+            // is a request -- nothing here is made on this peer.
+            await SetClass(ShipClass.FreightHauler);
+            var fgm = Me; fgm.AutopilotTo = null;
+            fgm.Position = Hub.BasePos + new Vector2(2400, 2400); fgm.Velocity = Vector2.Zero;
+            // ITS HULL IS THE HOST'S WORD. A guest applies the refit locally and announces it; the
+            // hull it then flies comes back in the host's report (ApplyHostState), a round trip
+            // later -- so this waits for the host to have refitted its copy too.
+            await RealTime(() => Math.Abs(fgm.MaxHp - 500) < 1e-6, Wan ? 20 : 10);
+            Check(fgm.Class == ShipClass.FreightHauler && Math.Abs(fgm.MaxHp - 500) < 1e-6
+                  && Abilities.For(ShipClass.FreightHauler).Length == 12,
+                  $"arena guest: flying a FREIGHTER in a session -- 400 x 1.25 for five chips = 500 hull, and the host's word for it, six abilities and six open slots ({fgm.MaxHp:0})");
+            // Watched from before the host does any of it: an effect lives well under a second and
+            // a status bit is held for a packet, so neither survives a single sample.
+            bool sawEmp = false, sawBurst = false;
+            var fxWatch = new LateSampler { Probe = () =>
+            {
+                sawEmp   |= Nodes<FxNode>().Any(f => f.Id == Fx.Emp);
+                sawBurst |= Nodes<FxNode>().Any(f => f.Id == Fx.Burst);
+                return sawEmp && sawBurst;
+            } };
+            AddChild(fxWatch);
+            var hardWatch = new LateSampler { Probe = () =>
+                H.Ships.FirstOrDefault(s => s.OwnerId == 1) is { } hs && hs.Statuses.Has(Status.Hardened) };
+            AddChild(hardWatch);
+            fgm.UseAbility("deploy", 0);                       // T
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            bool ownDrop = fgm.TurretsOut > 0;                 // a peer that made its own would have one already
+            await RealTime(() => H.Deployed.Count == 1, Wan ? 15 : 8);
+            Check(!ownDrop && H.Deployed.Count == 1 && H.Deployed[0].OwnerId == Net.LocalId && fgm.TurretsOut == 1
+                  && Math.Abs(H.Deployed[0].Hp - 120) < 1e-6,
+                  $"arena guest: its T is the host's -- nothing made here ({ownDrop}), then a 120-hull turret of its own arrives ({H.Deployed.Count} out)");
+            await RealTime(() => H.Deployed.Count == 3, Wan ? 15 : 8);
+            Check(H.Deployed.Count == 3 && H.Deployed.All(t => t.OwnerId == Net.LocalId),
+                  $"arena guest: every turret the host put out for it stands here ({H.Deployed.Count})");
+            fgm.UseAbility("bubble", 0);                       // F
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            bool ownBubble = fgm.BubbleUp;
+            await RealTime(() => fgm.BubbleUp && fgm.BubbleLeft < 400, Wan ? 20 : 12);
+            Check(!ownBubble && fgm.BubbleUp && Math.Abs(fgm.BubbleLeft - 250) < 0.01 && Math.Abs(fgm.BubbleRadius - 260f) < 1e-3,
+                  $"arena guest: its bubble is the host's ({ownBubble}), and what the host spent of it on ANOTHER pilot's hull comes back on the wire ({fgm.BubbleLeft:0} of 400)");
+            await RealTime(() => H.Deployed.Count == 2, Wan ? 20 : 12);
+            Check(H.Deployed.Count == 2, $"arena guest: the turret the host shot off its base is gone here too ({H.Deployed.Count} left)");
+            var takeBack = H.Deployed.First();
+            fgm.Position = takeBack.Position; fgm.Velocity = Vector2.Zero;
+            await Wait(0.6);                                   // the host must see it over the turret before C
+            fgm.UseAbility("collect", 0);                      // C
+            await RealTime(() => H.Deployed.Count == 1, Wan ? 15 : 8);
+            Check(H.Deployed.Count == 1 && fgm.TurretsOut == 1,
+                  $"arena guest: C over one picked it up, and the host's word of it is here ({H.Deployed.Count} left)");
+            await RealTime(() => hardWatch.Seen && sawEmp && sawBurst, Wan ? 20 : 12);
+            Check(hardWatch.Seen, "arena guest: the host's warrior reads HARDENED here -- a status bit is the host's word, counted down on no other peer");
+            Check(sawEmp && sawBurst,
+                  $"arena guest: the rush's EMP ring and the turret's burst both reached this peer (emp {sawEmp}, burst {sawBurst})");
+            fxWatch.QueueFree(); hardWatch.QueueFree();
+            await RealTime(() => H.Deployed.Count == 0, Wan ? 15 : 8);
+            await SetClass(ShipClass.Destroyer);               // back to the hull and the rack the rest of this scenario flies
+            await Wait(0.5);
+
             await ToArena("arena guest", 1);
             await GuestSeesTheFight();
             if (Wan) Check(Net.Arriving(1.5) < 1.45 && Net.Arriving(1.5) >= 0.6,
