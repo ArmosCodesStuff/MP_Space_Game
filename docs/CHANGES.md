@@ -316,6 +316,81 @@ From the 2026-09-21 batch (each is a constant or one rule to change):
 
 ## Unreleased
 
+### The host's word: what a wreck may do, what a claim may buy, and what a guest is told (2026-09-22, in the WarShips_Version_L fork)
+
+Found by a code-only audit of the whole build -- six read-only passes over combat, rewards, UI, all
+34 RPCs, every mutable static, and a map of each mechanic to the table that owns it -- and then by
+putting all forty findings through a refutation pass before a line was edited. Twenty of them were
+checked twice with different lenses; **seven of the twenty came back with two different verdicts**,
+and in two cases the second lens stopped a fix being written for a bug that was not there. Three
+holes a modified client could walk through, and six places a guest was shown something untrue.
+
+**A claim buys only what it could have paid for.** A pilot's level is its own word -- the host has
+no way to check it -- and the gate that held a claim to it read the RAW wire figure, while the
+clamp landed on the line below, on the stored field. So a peer announcing level 2000000000 with
+every row maxed had all of it granted on the host's own copy of its ship: **+300 hull on a 300-hull
+battleship and four times its main damage**, from a level-1 pilot. What a claim may SPEND is now
+capped (`Progression.MaxSpendLevel`, 99 points), and a claim above it is **trimmed, dearest point
+first, rather than refused whole** -- refusing whole is why an honest pilot past level 100 arrived
+on anyone's host as a stock hull.
+
+**A wreck fires nothing.** `Trigger` is written by three drivers -- the local flight, the demo ship
+and the WIRE -- and a guest's 20 Hz report is built before the host's 10 Hz word of its own death
+reaches it, so a cleared trigger was re-armed for a round trip and the host fired live shells out of
+a hull in stasis; a client that never cleared it fired for ever. The rule now lives on the field
+they share (`Trigger => _trigger && Alive`), so every gun and every readout inherits it.
+
+**A wreck presses nothing but reboard.** `Refuse` runs on the OWNER and is a courtesy, never the
+guard -- and the guard did not exist: a guest in stasis could fire a missile burst, switch on point
+defence, reload and order a bomber strike out of its own wreck. One gate at `PlayerShip.DoAbility`,
+with the exception declared as a row field (`AbilityDef.WhenWrecked`, set on reboard alone); the
+nine newest abilities stop repeating it in their own bodies and the seven oldest stop lacking it.
+A carrier's bombers now check the deck is alive, as its fighters already did.
+
+**A wave, a pulse and a blast leave a missile in flight alone.** The shockwave, the EMP and the
+echo read the raw hostile list, where interceptable seekers also live, so they deleted missiles and
+counted each as a point-defence intercept -- and the shockwave **threw one its full 1000 u on the
+host alone**, while every guest flew its own copy along the old path: two peers holding one
+damaging missile a thousand units apart. All four loops (the railgun's too) now read
+`Targeting.Attackable`, the row that already says "never a missile in flight".
+
+**A held place is not claimable by name.** The character id is the guest's own claim, and nothing
+checked that two peers were not flying the same one: announce the id of a pilot in the party, wait
+for them to drop, and the host handed over its party slot, its READY, its position and every kill
+owed to it -- bounty, EXP and crates -- while the real pilot came back to nothing. An id another
+live peer is flying is refused.
+
+**What a guest was not told.** A deployed turret's hull was sent once, at the drop, so its owner
+watched a pristine turret take a whole raid and then vanish in a burst (`NetDeployHulls`, on the
+world tick that already carries the raiders; `NetDeploy` carries the maximum too, so a mid-fight
+joiner's bar has the right denominator). What a carrier's bombers were sent at was host-only, so a
+guest's own BOMB slot read "RETURNING" for the whole of every strike it ordered (`strikeTarget`,
+beside `wingTarget`). And an effect was raised by the host AND by each guest that ran the same
+code, so a guest drew every burst twice -- only the simulator raises now, and `Hub.NetFx` is the
+one road to a guest.
+
+**The catch-up is metered; the report is not.** `NetMySector` answers a four-byte ask with the
+whole world -- the mission, every raider, every turret, the boss's warnings, all reliable -- with
+no limit of any kind, so a peer in a loop made the host marshal dozens of packets an ask on the
+channel every other peer's telegraphs share. `Net.Metered` guards the answer. It first guarded the
+whole handler, which cost a reconnecting pilot the held place it was waiting for and was caught by
+the six-process run: **the meter belongs on the expensive answer, never on the door**.
+
+Smaller, all of a kind: the arena's trip clock is wound only by the host (every guest advanced a
+host-owned economy figure); the selected mission level is a floored property with a session reset,
+so a guest that visited a host on level 12 stops carrying 12 into its own next session and
+broadcasting it; a world's intercept counter and the title screen's ids end with the world, like
+every other counter; and a pilot's level stops making a raid stronger past the same cap for the
+host's own pilot as for a guest's claim.
+
+**The checks:** a wreck's trigger and a press reaching `DoAbility` from its own peer (both poked
+the way a guest reaches them, not through the owner's courtesy); a 1000 u shockwave that moves a
+seeker 0 u and takes 0 intercepts; a claim of two billion with every row maxed trimmed to 98 points
+and +30 hull; on the guest of the arena pair, the 45 the host put into one of its turrets arriving
+as 75 of 120, and the turret's burst drawn exactly once. One racy check went with them -- it proved
+"a guest cannot make its own turret" by pressing T and looking a frame later, which on a loopback
+depends on losing a race; it now asks the host-only door directly.
+
 ### A class says what its weapons are and what it is born with, and two of the nine fly in a session (2026-09-22, in the WarShips_Version_L fork)
 
 Three gaps from the flight test's Known broken list, closed by three declarations on the class row.
@@ -520,7 +595,7 @@ run; every figure they assert stays a literal.
   repeats between them (hull and damage scaling, telegraphs, net state, the super bar, catch-up)
   is already in `Boss`.
 - **A deployed turret is not on the radar** and has no bar in the HUD; it draws its own hull bar
-  when hurt.
+  when hurt -- on every peer now, not only the host's.
 
 ### Bigger ships, grey and white (2026-09-22, in the WarShips_Version_L fork)
 

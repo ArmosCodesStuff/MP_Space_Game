@@ -61,6 +61,7 @@ public partial class MainMenu : Node2D
         Hub.Sector = Hub.SectorKind.Home;
         Yard.EndSession();      // and the trip snapshot / parked base, for the same reason
         Hub.EndSession();       // and which world each guest was in, and the places held for dropped pilots
+        Missions.EndSession();  // and the level that was selected, which a guest took from its host
         // ...AND THE NETWORK SESSION. Every other session-scoped thing was reset here with the
         // argument that covering every route back matters more than covering the Esc menu's quit
         // button; the session itself was not, because the menu used to be sprites and structs and

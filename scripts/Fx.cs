@@ -63,8 +63,13 @@ public static class Fx
     public static System.Action<int, Vector2, Vector2, float> On;
 
     // `at` is where it happens; `radius` how far it reaches; `to` the far end of a bar.
-    public static void Raise(int id, Vector2 at, float radius = 30f) => On?.Invoke(id, at, at, radius);
-    public static void Line(int id, Vector2 a, Vector2 b) => On?.Invoke(id, a, b, 0f);
+    //
+    // ONLY THE SIMULATOR RAISES. The hook puts it up here and tells every guest through one RPC
+    // (Hub.NetFx), so a guest that also raised its own -- the burst on a turret it saw removed,
+    // the blast at the end of a missile it was drawing, a miner's loss -- drew the same effect
+    // twice. The single player and the title screen are their own simulator and are unaffected.
+    public static void Raise(int id, Vector2 at, float radius = 30f) { if (Net.Sim) On?.Invoke(id, at, at, radius); }
+    public static void Line(int id, Vector2 a, Vector2 b) { if (Net.Sim) On?.Invoke(id, a, b, 0f); }
 }
 
 // One node for every row: the shape is the row's, so a new effect never brings a new node.

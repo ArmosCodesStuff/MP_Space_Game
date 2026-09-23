@@ -14,9 +14,9 @@ public enum MenuFoeKind { Light, Heavy, Web }
 
 public partial class MenuFoe : Node2D, IHittable, ITagged
 {
-    // One id space of its own: the menu is a world, but not the hub's world.
-    private const int IdBase = NetIds.Menu;
-    private static int _next;
+    // One id space of its own: the menu is a world, but not the hub's world. Minted by NetIds
+    // like every other kind, so Combat.Clear resets it with the world rather than letting the
+    // title screen's ids climb for the life of the process.
 
     public Tag Tags => Tag.Light;
     public MenuFoeKind Kind;
@@ -34,7 +34,7 @@ public partial class MenuFoe : Node2D, IHittable, ITagged
     private readonly float _length;          // the size it IS, in world units -- not a scale factor
     private readonly Random _rng;
 
-    public int NetId { get; } = IdBase + (++_next);
+    public int NetId { get; } = NetIds.Next(NetIds.Menu);
     public float HitRadius { get; private set; }
     public bool Alive { get; private set; } = true;
     public bool Webbing { get; private set; }     // drawing its tether this frame

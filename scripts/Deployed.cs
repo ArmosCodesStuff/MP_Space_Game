@@ -57,6 +57,8 @@ public partial class DeployedTurret : Node2D, IRaidTarget, ITagged, ITurretHost
     public StatusSet Statuses => _status;
     public void ApplyStatus(Status s, double seconds) { if (Net.Sim) _status.Apply(s, seconds); }
     public (float halfLength, float halfWidth) Extent => (Radius, Radius);
+    // the host's word on its hull (Hub.NetDeployHulls); the host's own copy keeps its own figure
+    public void SetNet(float hp) { if (!Net.Sim) Hp = hp; }
     public void Hit(double d, Vector2 from, string source) => TakeDamage(d);
     public void TakeDamage(double d)
     {

@@ -31,7 +31,14 @@ public static class Missions
 
     public const double LevelStep = 1.10;
     public static double S(int level) => Math.Pow(LevelStep, Math.Max(1, level) - 1);
-    public static int Level = 1;                            // the selected level (the host decides; replicated)
+    // THE SELECTED LEVEL (the host decides; replicated). A property, so the floor is kept once
+    // here rather than by each arrival -- the sector RPC floored it and the mission RPC beside it
+    // did not.
+    private static int _level = 1;
+    public static int Level { get => _level; set => _level = Math.Max(1, value); }
+    // Session state, like the world a guest was in: a pilot that visited a host sitting on level
+    // 12 carried that 12 into its own next session, and hosting broadcast it to every guest.
+    public static void EndSession() { Level = Unlocked; }
     // The levels this pilot has cleared, of every boss this build knows (an id in the file it does
     // not know counts for nothing): one ladder, whoever held each level.
     private static IEnumerable<int> ClearedLevels =>

@@ -77,7 +77,15 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // ── the owner's intent, replicated at 20 Hz ──────────────────────────────
     public Vector2 AimPoint;               // where the main guns point
     private bool Thrusting;                 // the owner is on the throttle (plume flicker)
-    public bool Trigger;                   // guns key held (battleship, destroyer)
+    private bool _trigger;
+    // GUNS KEY HELD (battleship, destroyer) -- and A WRECK DOES NOT FIRE. Three drivers write it:
+    // the local flight, the display ship's demo, and the WIRE. A guest's 20 Hz report is built
+    // before it can learn it died (its death arrives on the host's 10 Hz packet), so the raw field
+    // was re-armed after Die() cleared it and the host fired live shells out of a hull in stasis
+    // for a round trip -- for ever, from a client that simply never cleared it. FireControl was
+    // the one host-side weapon path with no liveness test; the rule belongs here, where every gun
+    // and every readout that asks already looks.
+    public bool Trigger { get => _trigger && Alive; set => _trigger = value; }
     public bool Staggered;                 // fire mode: false = salvo, true = staggered
 
     // ── orders and ability state, held on the host ───────────────────────────
@@ -420,8 +428,17 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         if (Net.FromPlayer(this, out int who) && who == OwnerId) DoAbility(id, targetId);
     }
 
-    private void DoAbility(string id, int targetId) =>
-        Abilities.Find(Class, id)?.Press?.Invoke(this, targetId != 0 ? Combat.ById(targetId) : null);
+    // THE GATE, not a courtesy. Refuse (above) runs on the owner so the slot says why at once;
+    // this is what the host is held to. A wreck presses nothing but the one ability declared for
+    // it (AbilityDef.WhenWrecked -- reboard). The nine newest abilities each repeated `!Net.Sim ||
+    // !Alive` in their own body and the seven oldest never did, so a guest in stasis could fire a
+    // missile burst, switch on point defence and order a bomber strike out of its own wreck.
+    private void DoAbility(string id, int targetId)
+    {
+        var def = Abilities.Find(Class, id);
+        if (def == null || !Net.Sim || (!Alive && !def.WhenWrecked)) return;
+        def.Press?.Invoke(this, targetId != 0 ? Combat.ById(targetId) : null);
+    }
 
     // ── what the abilities do. The catalogue (Abilities.cs) points at these, and each one
     // guards itself: the press arrives from a guest's keyboard, so the host never trusts it.
@@ -462,14 +479,14 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     }
     public void DeployTurret()
     {
-        if (!Net.Sim || !Alive || !Stats.Def.Has(Fit.Deploy)) return;
+        if (!Stats.Def.Has(Fit.Deploy)) return;
         if (Sl("deploy").Cool > 0 || TurretsOut >= (int)Stats["deploy_max"]) return;
         MyHub?.Drop(this, Position, Stats["deploy_hull"]);
         Sl("deploy").Cool = Stats["deploy_cooldown"];
     }
     public void CollectTurret()
     {
-        if (!Net.Sim || !Stats.Def.Has(Fit.Deploy)) return;
+        if (!Stats.Def.Has(Fit.Deploy)) return;
         if (NearestOwnTurret() is { } t) MyHub?.DeployedTaken(t);
     }
 
@@ -480,7 +497,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     public double BubbleLeft => Sl("bubble").Own;
     public void RaiseBubble()
     {
-        if (!Net.Sim || !Alive || Sl("bubble").Cool > 0) return;
+        if (Sl("bubble").Cool > 0) return;
         ref var b = ref Sl("bubble");
         b.Left = Stats["bubble_time"]; b.Own = Stats["bubble_pool"]; b.Cool = Stats["bubble_cooldown"];
         b.N = (int)Stats["bubble_pool"];
@@ -503,7 +520,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
 
     public void StartOverdrive()
     {
-        if (!Net.Sim || !Alive || Sl("overdrive").Cool > 0) return;
+        if (Sl("overdrive").Cool > 0) return;
         ref var o = ref Sl("overdrive");
         o.Left = Stats["overdrive_time"]; o.Cool = Stats["overdrive_cooldown"];
     }
@@ -512,12 +529,16 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // still instead, which is what the reach is really for.
     public void Shockwave()
     {
-        if (!Net.Sim || !Alive || Sl("shockwave").Cool > 0) return;
+        if (Sl("shockwave").Cool > 0) return;
         Sl("shockwave").Cool = Stats["wave_cooldown"];
         float reach = (float)Stats["wave_range"], push = (float)Stats["wave_push"];
-        foreach (var h in new List<IHittable>(Combat.Hostiles))
+        // Targeting.Attackable, not the raw list: a missile in flight is point defence's business,
+        // and THROWING one was worse than hitting it -- the host moved a live hostile seeker 1000 u
+        // while every guest flew its own copy along the old path, so the two peers held a damaging
+        // missile a thousand units apart.
+        foreach (var h in new List<IHittable>(Targeting.All(Combat.Hostiles, Targeting.Attackable)))
         {
-            if (h == null || !h.Alive || h.Position.DistanceTo(Position) > reach) continue;
+            if (h.Position.DistanceTo(Position) > reach) continue;
             if (TagExt.Is(h, Tag.Boss)) { (h as IStatused)?.ApplyStatus(Status.Disabled, Stats["wave_disable"]); continue; }
             if (h is Node2D n)
             {
@@ -533,7 +554,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // itself), and at the end everything on the line takes the whole of it at once.
     public void ChargeRail()
     {
-        if (!Net.Sim || !Alive || Sl("railgun").Left > 0 || Sl("railgun").Cool > 0) return;
+        if (Sl("railgun").Left > 0 || Sl("railgun").Cool > 0) return;
         Sl("railgun").Left = Stats["rail_charge"];
         ApplyStatus(Status.Disabled, Stats["rail_charge"]);
     }
@@ -542,9 +563,8 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         var a = Aim.Nose(this, MyArt.Length * 0.5f);
         var b = a + Vector2.Up.Rotated(Rotation) * (float)Stats["rail_range"];
         float halfWidth = (float)Stats["rail_width"] * 0.5f;
-        foreach (var h in new List<IHittable>(Combat.Hostiles))
+        foreach (var h in new List<IHittable>(Targeting.All(Combat.Hostiles, Targeting.Attackable)))
         {
-            if (h == null || !h.Alive || TagExt.Is(h, Tag.Missile)) continue;
             if (Combat.DistToSegment(h.Position, a, b) <= halfWidth + h.HitRadius)
             {
                 h.TakeDamage(Stats["rail_damage"]);
@@ -559,7 +579,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
 
     public void StartRush()
     {
-        if (!Net.Sim || !Alive || Sl("rush").Cool > 0) return;
+        if (Sl("rush").Cool > 0) return;
         ref var r = ref Sl("rush");
         r.Left = Stats["rush_time"]; r.Cool = Stats["rush_cooldown"];
         ApplyStatus(Status.Hardened, r.Left);
@@ -568,9 +588,9 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     private void RushEmp()
     {
         float reach = (float)Stats["emp_range"];
-        foreach (var h in new List<IHittable>(Combat.Hostiles))
+        foreach (var h in new List<IHittable>(Targeting.All(Combat.Hostiles, Targeting.Attackable)))
         {
-            if (h == null || !h.Alive || h.Position.DistanceTo(Position) > reach) continue;
+            if (h.Position.DistanceTo(Position) > reach) continue;
             h.TakeDamage(Stats["emp_damage"]);
             NoteDealt(Stats["emp_damage"], h.Position);
             if (!TagExt.Is(h, Tag.Boss)) (h as IStatused)?.ApplyStatus(Status.Disabled, Stats["emp_stun"]);
@@ -582,7 +602,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // over goes at the nearest one.
     public void LaunchHunters()
     {
-        if (!Net.Sim || !Alive || Sl("hunters").Cool > 0) return;
+        if (Sl("hunters").Cool > 0) return;
         Sl("hunters").Cool = Stats["hunter_cooldown"];
         int n = (int)Stats["hunter_count"];
         float range = (float)Stats["hunter_range"];
@@ -605,7 +625,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // The roll: nothing can touch it while it turns, and it comes out faster and firing quicker.
     public void BarrelRoll()
     {
-        if (!Net.Sim || !Alive || Sl("roll").Cool > 0) return;
+        if (Sl("roll").Cool > 0) return;
         ref var r = ref Sl("roll");
         r.Left = Stats["roll_time"] + Stats["boost_time"];      // the roll, then the boost
         r.Cool = Stats["roll_cooldown"];
@@ -616,7 +636,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // the last of it landed.
     public void StartEcho()
     {
-        if (!Net.Sim || !Alive || Sl("echo").Cool > 0) return;
+        if (Sl("echo").Cool > 0) return;
         ref var e = ref Sl("echo");
         e.Left = Stats["echo_time"]; e.Own = 0; e.Cool = Stats["echo_cooldown"];
         _echoAt = Position;
@@ -626,9 +646,9 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         if (stored <= 0) return;
         double blast = stored * Stats["echo_share"];
         float reach = (float)Stats["echo_radius"];
-        foreach (var h in new List<IHittable>(Combat.Hostiles))
+        foreach (var h in new List<IHittable>(Targeting.All(Combat.Hostiles, Targeting.Attackable)))
         {
-            if (h == null || !h.Alive || h.Position.DistanceTo(_echoAt) > reach) continue;
+            if (h.Position.DistanceTo(_echoAt) > reach) continue;
             h.TakeDamage(blast);
             if (h is Node2D n) DamageNumbers.NoteImpact(n, h.Position);
         }
@@ -638,7 +658,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
 
     public void GoDark()
     {
-        if (!Net.Sim || !Alive || Sl("stealth").Cool > 0) return;
+        if (Sl("stealth").Cool > 0) return;
         ref var s = ref Sl("stealth");
         s.Left = Stats["stealth_time"]; s.Cool = Stats["stealth_cooldown"];
         ApplyStatus(Status.Untargetable, s.Left);
@@ -844,7 +864,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     private void Die()
     {
         Hp = 0; Alive = false; _stasis = StasisTime;
-        Velocity = Vector2.Zero; Trigger = false; Sl("pd").Left = 0;
+        Velocity = Vector2.Zero; Sl("pd").Left = 0;
         WingTarget = null; StrikeTarget = null;
     }
 
@@ -999,7 +1019,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     {
         if (!Alive)
         {   // in stasis the hull stays put; the pod flies (EscapePod reads the keys)
-            Velocity = Vector2.Zero; Trigger = false;
+            Velocity = Vector2.Zero;
             SendState(dt);
             return;
         }
@@ -1163,13 +1183,14 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             _netSlotOwn[i] = (float)_slots[i].Own;   _netSlotN[i] = _slots[i].N;
         }
         (GetParent() as Hub)?.SendHostState(OwnerId, Hp, MaxHp, Alive, _stasis, _status.Bits, _combatT,
-            _netSlotLeft, _netSlotCool, _netSlotOwn, _netSlotN, WingTarget?.NetId ?? 0, pos, rot, st, rearm);
+            _netSlotLeft, _netSlotCool, _netSlotOwn, _netSlotN, WingTarget?.NetId ?? 0, StrikeTarget?.NetId ?? 0,
+            pos, rot, st, rearm);
     }
 
     // the host's report (Hub.NetHostState: only the host speaks for combat state)
     public void ApplyHostState(double hp, double maxHp, bool alive, double stasis, int statusBits, double combat,
                                float[] slotLeft, float[] slotCool, float[] slotOwn, int[] slotN,
-                               int wingTarget, Vector2[] wingPos, float[] wingRot, int[] wingState, float[] wingRearm)
+                               int wingTarget, int strikeTarget, Vector2[] wingPos, float[] wingRot, int[] wingState, float[] wingRearm)
     {
         if (System.Math.Abs(maxHp - _hostMax) > 1e-9) _hullWatch = default;    // the first report, or a refit: not damage
         _hostMax = maxHp;
@@ -1180,6 +1201,9 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         for (int i = 0; i < Math.Min(_slots.Length, slotLeft.Length); i++)
             _slots[i] = new Slot { Left = slotLeft[i], Cool = slotCool[i], Own = slotOwn[i], N = slotN[i] };
         WingTarget = wingTarget != 0 ? Combat.ById(wingTarget) : null;
+        // What the bombers were sent at. It was host-only, so a guest's own BOMB slot read
+        // "RETURNING" for the whole of every strike it ordered -- the one word its bar had for it.
+        StrikeTarget = strikeTarget != 0 ? Combat.ById(strikeTarget) : null;
         for (int i = 0; i < Math.Min(_wings.Count, wingPos.Length); i++)
         {
             _wings[i].SetNet(wingPos[i], wingRot[i]);

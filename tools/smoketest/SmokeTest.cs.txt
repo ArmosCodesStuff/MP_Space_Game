@@ -3308,6 +3308,53 @@ public partial class _Test : Node
             Check(fr.BubbleLeft == 0 && Math.Abs(fr.Hp - (hull0 - 50)) < 1e-6,
                   $"and when the pool is spent the rest lands on the hull ({fr.Hp:0} of {hull0:0})");
 
+            // ── A WRECK FIRES NOTHING, AND PRESSES NOTHING BUT REBOARD ──
+            // Both halves are the HOST's rule, so both are poked the way a guest reaches them: the
+            // trigger comes off the wire (a guest's 20 Hz report is built before the host's 10 Hz
+            // word of its death arrives, so it re-armed a cleared trigger for a round trip, and a
+            // client that never cleared it fired out of stasis for ever), and a press arrives at
+            // DoAbility, where Refuse -- the owner's courtesy -- has no say.
+            var doAbility = typeof(PlayerShip).GetMethod("DoAbility", BindingFlags.NonPublic | BindingFlags.Instance);
+            foreach (var dpl0 in H.Deployed.ToList()) H.DeployedTaken(dpl0);
+            await Wait(0.1);
+            fr.Restore(0, false, 0);                       // a wreck, its stasis already run out
+            fr.Trigger = true;                             // ...as the wire would set it
+            bool wreckTrigger = fr.Trigger;
+            fr.Sl("deploy").Cool = 0;
+            doAbility.Invoke(fr, new object[] { "deploy", 0 });
+            await Wait(0.15);
+            int outWhileDead = fr.TurretsOut;
+            doAbility.Invoke(fr, new object[] { "reboard", 0 });
+            await Wait(0.1);
+            Check(!wreckTrigger && outWhileDead == 0 && fr.Alive && Math.Abs(fr.Hp - fr.MaxHp * 0.33) < 0.5,
+                  $"a wreck fires nothing and drops nothing: the wire's trigger reads {wreckTrigger} on it and a T from its own peer makes {outWhileDead} turrets -- and reboard, the one ability declared for a wreck, still climbs aboard at a third of the hull ({fr.Hp:0} of {fr.MaxHp:0})");
+            fr.Restore(fr.MaxHp, true, 0); fr.Trigger = false;
+            await Wait(0.1);
+
+            // ── A WAVE LEAVES A MISSILE IN FLIGHT ALONE ──
+            // The wave, the EMP and the echo read the raw hostile list, where an interceptable
+            // seeker also lives. So they deleted missiles (counting each as a point-defence
+            // intercept), and the wave THREW one its full push -- on the host only, while every
+            // guest flew its own copy along the old path: two peers, one damaging missile, a
+            // thousand units apart.
+            await SetClass(ShipClass.FreightBastion);
+            var bn = Me; bn.Position = yonder; bn.Velocity = Vector2.Zero; await Wait(0.2);
+            int took0 = Shot.Intercepted;
+            Combat.LaunchTorpedo(bn.Position + new Vector2(0, -140), Vector2.Down, 40f, 900f, 5, bn.NetId, 0.4f,
+                                 heavy: false, hostile: true);
+            await Wait(0.1);
+            var seeker = Nodes<Shot>().FirstOrDefault(s => s.HostileFire);
+            var seekerWas = seeker?.Position ?? Vector2.Zero;
+            bn.Sl("shockwave").Cool = 0; bn.UseAbility("shockwave", 0);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(seeker != null && GodotObject.IsInstanceValid(seeker) && seeker.Position.DistanceTo(seekerWas) < 60f
+                  && Shot.Intercepted == took0 && Math.Abs(bn.Stats["wave_push"] - 1000) < 1e-6,
+                  $"a 1000 u shockwave does not throw a missile in flight, or count it as an intercept: it moved {seeker?.Position.DistanceTo(seekerWas):0} u of its own and {Shot.Intercepted - took0} were taken");
+            if (seeker != null && GodotObject.IsInstanceValid(seeker)) seeker.QueueFree();
+            // The ring this raised must be gone before the effects block below counts what is up:
+            // the checks between here and there are table reads, and pass no game time at all.
+            await Wait(0.9);
+
             // ── TENDER: everything it owns fires twice as fast ──
             await SetClass(ShipClass.FreightTender);
             var td = Me; td.Position = yonder; td.Velocity = Vector2.Zero; await Wait(0.2);
@@ -3325,6 +3372,23 @@ public partial class _Test : Node
             // because that was the only drawing that reached a guest, and the echo's burst was
             // added straight to the host's own tree where nobody else ever saw it.
             {
+                // ── A CLAIMED LEVEL BUYS ONLY WHAT IT COULD HAVE PAID FOR ──
+                // The host has no way to check a guest's level, so what a claim may SPEND is
+                // capped. The affordability gate used to weigh the RAW wire level and the clamp
+                // landed after it, on the stored field: a peer claiming two billion bought every
+                // row maxed on the host's own copy of its ship -- +300 hull and four times the
+                // damage on a level-1 pilot. And a claim it could not pay for was refused WHOLE,
+                // so an honest pilot past the cap arrived anywhere as a stock hull.
+                int Spent(int[] b) { int s = 0; for (int i = 0; i < b.Length; i++) for (int k = 0; k < b[i]; k++) s += Progression.Cost(k); return s; }
+                var greedy = Progression.Afford(new[] { 60, 60, 60, 60 }, 2000000000);
+                var honest = Progression.Afford(new[] { 0, 13, 0, 0 }, 92);          // 13 hull levels cost 1+2+...+13 = 91
+                var past   = Progression.Afford(new[] { 0, 60, 0, 0 }, 100000);
+                double greedyHull = Progression.Flats(greedy, ShipClass.Battleship).GetValueOrDefault("hull");
+                Check(Progression.MaxSpendLevel == 100 && Spent(greedy) <= 99 && greedyHull <= 65
+                      && Spent(honest) == 91 && honest[1] == 13
+                      && Spent(past) <= 99 && past[1] == 13,
+                      $"a claim buys only what its level could have paid for, and no more than 99 points on anyone's host: every row maxed at level two billion comes to {Spent(greedy)} points and +{greedyHull:0} hull, not +300; an honest 13 hull levels at level 92 survive whole; and a pilot past the cap keeps {past[1]} of its 60");
+
                 // ── A PILOT'S WEAPONS POINTS REACH WHAT THE CLASS CALLS ITS WEAPONS ──
                 // The damage upgrade used to name ONE stat for every class in the game -- torpedoes
                 // for a carrier, main guns for everything else -- so a sniper's railgun, a warden's
@@ -4304,6 +4368,13 @@ public partial class _Test : Node
             H.Drop(fg, VaryNear(fg.Position, 420f), fg.Stats["deploy_hull"]);
             await Wait(0.3);
             Check(fg.TurretsOut == 3, $"arena host: three of the guest's turrets standing ({fg.TurretsOut})");
+            // 45 into the LAST of them (the first is the one shot off its base below): nothing
+            // carried a turret's hull after the drop, so its owner watched a pristine turret take
+            // a whole raid and then vanish in a burst.
+            var hurtT = H.Deployed.Last(t => t.OwnerId == fg.OwnerId);
+            hurtT.TakeDamage(45);
+            Check(Math.Abs(hurtT.Hp - 75) < 1e-6 && Math.Abs(hurtT.MaxHp - 120) < 1e-6,
+                  $"arena host: 45 into one of the guest's turrets leaves 75 of 120 ({hurtT.Hp:0})");
             // THE BUBBLE IS OVER SOMEBODY ELSE. The pool is the GUEST's and the blow lands on the
             // HOST's hull: PlayerShip.ThroughBubbles reads Combat.Players, and until now no check
             // had ever had two pilots in it.
@@ -4445,20 +4516,26 @@ public partial class _Test : Node
                   $"arena guest: flying a FREIGHTER in a session -- 400 x 1.25 for five chips = 500 hull, and the host's word for it, six abilities and six open slots ({fgm.MaxHp:0})");
             // Watched from before the host does any of it: an effect lives well under a second and
             // a status bit is held for a packet, so neither survives a single sample.
-            bool sawEmp = false, sawBurst = false;
+            bool sawEmp = false, sawBurst = false; int mostBursts = 0;
             var fxWatch = new LateSampler { Probe = () =>
             {
                 sawEmp   |= Nodes<FxNode>().Any(f => f.Id == Fx.Emp);
                 sawBurst |= Nodes<FxNode>().Any(f => f.Id == Fx.Burst);
+                // ...and ONCE. The host raises an effect and tells its guests through one RPC, but
+                // a guest also ran the code that raised it -- the burst on a turret it was told to
+                // remove -- and drew the same burst twice, a frame apart.
+                mostBursts = Math.Max(mostBursts, Nodes<FxNode>().Count(f => f.Id == Fx.Burst));
                 return sawEmp && sawBurst;
             } };
             AddChild(fxWatch);
             var hardWatch = new LateSampler { Probe = () =>
                 H.Ships.FirstOrDefault(s => s.OwnerId == 1) is { } hs && hs.Statuses.Has(Status.Hardened) };
             AddChild(hardWatch);
+            // ONLY THE HOST MAY PUT ONE IN THE WORLD, asked at the door itself rather than by
+            // pressing T and looking a frame later: on a loopback the host's answer can beat that
+            // frame, and a check that depends on losing a race is a check that hides a bug.
+            bool ownDrop = H.Drop(fgm, fgm.Position, 120) != null || fgm.TurretsOut > 0;
             fgm.UseAbility("deploy", 0);                       // T
-            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            bool ownDrop = fgm.TurretsOut > 0;                 // a peer that made its own would have one already
             await RealTime(() => H.Deployed.Count == 1, Wan ? 15 : 8);
             Check(!ownDrop && H.Deployed.Count == 1 && H.Deployed[0].OwnerId == Net.LocalId && fgm.TurretsOut == 1
                   && Math.Abs(H.Deployed[0].Hp - 120) < 1e-6,
@@ -4466,6 +4543,11 @@ public partial class _Test : Node
             await RealTime(() => H.Deployed.Count == 3, Wan ? 15 : 8);
             Check(H.Deployed.Count == 3 && H.Deployed.All(t => t.OwnerId == Net.LocalId),
                   $"arena guest: every turret the host put out for it stands here ({H.Deployed.Count})");
+            // ...and what the host puts INTO one of them arrives too
+            await RealTime(() => H.Deployed.Any(t => t.Hp < 119), Wan ? 20 : 12);
+            var hurtHere = H.Deployed.FirstOrDefault(t => t.Hp < 119);
+            Check(hurtHere != null && Math.Abs(hurtHere.Hp - 75) < 0.01 && Math.Abs(hurtHere.MaxHp - 120) < 1e-6,
+                  $"arena guest: the 45 the host put into one of its turrets arrives -- {hurtHere?.Hp:0} of {hurtHere?.MaxHp:0}, and a bar to draw it");
             fgm.UseAbility("bubble", 0);                       // F
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             bool ownBubble = fgm.BubbleUp;
@@ -4483,8 +4565,8 @@ public partial class _Test : Node
                   $"arena guest: C over one picked it up, and the host's word of it is here ({H.Deployed.Count} left)");
             await RealTime(() => hardWatch.Seen && sawEmp && sawBurst, Wan ? 20 : 12);
             Check(hardWatch.Seen, "arena guest: the host's warrior reads HARDENED here -- a status bit is the host's word, counted down on no other peer");
-            Check(sawEmp && sawBurst,
-                  $"arena guest: the rush's EMP ring and the turret's burst both reached this peer (emp {sawEmp}, burst {sawBurst})");
+            Check(sawEmp && sawBurst && mostBursts == 1,
+                  $"arena guest: the rush's EMP ring and the turret's burst both reached this peer, each drawn ONCE (emp {sawEmp}, burst {sawBurst}, most bursts at once {mostBursts})");
             fxWatch.QueueFree(); hardWatch.QueueFree();
             await RealTime(() => H.Deployed.Count == 0, Wan ? 15 : 8);
             await SetClass(ShipClass.Destroyer);               // back to the hull and the rack the rest of this scenario flies

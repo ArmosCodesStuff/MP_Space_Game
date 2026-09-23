@@ -39,6 +39,9 @@ public class AbilityDef
     // The owner's own intent, not an order to the host: it rides in the ship's state report
     // instead of being asked for (the fire mode).
     public bool Local;
+    // Pressable while the hull is a wreck. One row has it (reboard, the escape pod's F); the gate
+    // is PlayerShip.DoAbility, so a new ability is refused from stasis without saying anything.
+    public bool WhenWrecked;
 
     public Action<PlayerShip, IHittable> Press;
     public Func<PlayerShip, IHittable, string> Refuse;
@@ -298,7 +301,7 @@ public static class Ab
     // Not on any bar: the escape pod's F. Every class has it, and it is reached by id.
     public static readonly AbilityDef Reboard = new()
     {
-        Id = "reboard", Name = "Reboard", Short = "REBOARD", Default = Key.F,
+        Id = "reboard", Name = "Reboard", Short = "REBOARD", Default = Key.F, WhenWrecked = true,
         Blurb = "Climbs back aboard the hull while the pod is still beside it.",
         Press = (s, _) => s.Reboard(),
     };

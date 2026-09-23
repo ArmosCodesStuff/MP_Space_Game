@@ -117,6 +117,30 @@ away and respawns from `Net.Players`.
 **Offline is not a separate mode.** Single player is a host with no peers, so there is exactly one
 code path and offline can never drift from online.
 
+### What the host must never take on trust (2026-09-22)
+
+Four rules, each of which was once missing, each now held in ONE place so the next thing that
+arrives on the wire inherits it rather than repeating it:
+
+- **A claim is bounded before it is spent, not after.** The affordability gate read the raw wire
+  level and the clamp landed on the line below, on the stored field. Bound the value, then read it.
+  And bound by TRIMMING, not by refusing: a claim refused whole makes an honest pilot past the cap
+  fly a stock hull (`Progression.Afford`).
+- **A wreck does nothing.** A guest's 20 Hz report is built BEFORE the host's 10 Hz word of its own
+  death arrives, so anything the wire writes -- a trigger, a key -- comes back armed for a round
+  trip. Put the liveness rule on the field every reader shares (`PlayerShip.Trigger`) and on the
+  one door presses pass through (`DoAbility`), never in each gun.
+- **`Refuse` is the owner's courtesy; it is never the guard.** It runs on the guest so the slot can
+  say why at once. A press the host acts on must be held to something the host decides.
+- **The meter belongs on the expensive ANSWER, never on the door.** A guest's request is also how
+  it learns what it is owed -- a held place, the world it should be in. Rate-limiting the handler
+  drops the report with the answer, and a reconnecting pilot stays where it spawned. `Net.Metered`
+  guards the catch-up; the report itself is always heard.
+
+And one shape that keeps recurring: **a thing the host simulates has state a guest must be TOLD,
+and "it was sent once, at creation" is not telling.** A deployed turret's hull, a carrier's strike
+target, a docked arm: each looked replicated because the object itself was.
+
 ## The idle economy
 
 One node runs it: **`Yard`** (`Hub/Yard`, the same path on every peer, so its RPCs arrive). It

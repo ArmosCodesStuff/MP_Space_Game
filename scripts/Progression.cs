@@ -46,6 +46,30 @@ public static class Progression
         new() { Id = "damage", Name = "Weapons", Per = 1,  Unit = "damage" },
     };
     public const int MaxPerUpgrade = 60;       // a sanity cap on what a peer may claim
+    // THE MOST A CLAIM MAY BUY on someone else's host. A pilot's level is its own word and there
+    // is no way to check it, so what a claim may SPEND is capped here -- 99 points, a level-100
+    // pilot's worth. The gate used to read the raw wire level, so a peer claiming two billion
+    // bought every row maxed on the host's own copy of its ship: +300 hull and four times the
+    // damage, from a level-1 pilot.
+    public const int MaxSpendLevel = 100;
+    // The claim, trimmed until a pilot of that level could have paid for it: the DEAREST point
+    // goes first, so what survives is the most of what was claimed. Trimmed rather than refused
+    // whole -- a pilot past level 100 used to arrive on any host it visited as a stock hull.
+    public static int[] Afford(int[] bought, int level)
+    {
+        var b = new int[All.Length];
+        for (int i = 0; i < b.Length && i < (bought?.Length ?? 0); i++)
+            b[i] = System.Math.Clamp(bought[i], 0, MaxPerUpgrade);
+        int lv = System.Math.Clamp(level, 1, MaxSpendLevel);
+        while (!Affordable(b, lv))
+        {
+            int most = 0;
+            for (int i = 1; i < b.Length; i++) if (b[i] > b[most]) most = i;
+            if (b[most] == 0) break;
+            b[most]--;
+        }
+        return b;
+    }
 
     public static int Cost(int owned) => owned + 1;                        // 1, 2, 3, ...
     // Whether a pilot of `level` could have paid for `bought`: a point a level after the first,

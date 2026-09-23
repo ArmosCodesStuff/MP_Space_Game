@@ -669,7 +669,7 @@ public partial class Net : Node
         // An explicit offline peer rather than null: IsServer() and GetUniqueId() then
         // answer 1 / true offline instead of depending on engine fallback behaviour.
         Multiplayer.MultiplayerPeer = new OfflineMultiplayerPeer();
-        Players.Clear();
+        Players.Clear(); _asked.Clear();
         _hostSaidBye = false; _leaving.Clear(); _peerGone = false;
     }
 
@@ -689,7 +689,7 @@ public partial class Net : Node
         }
         else
         {
-            Players.Remove(id, out var info);
+            Players.Remove(id, out var info); ForgetAsks(id);
             bool onPurpose = _leaving.Remove(id);
             Say(onPurpose || !_isHost ? $"Player {id} left." : $"Player {id} dropped.");   // only the host hears goodbyes
             PlayerLeft?.Invoke(id, info ?? new PlayerInfo(), onPurpose);
@@ -730,6 +730,26 @@ public partial class Net : Node
     {
         who = SenderOf(node);
         return IsHost && I != null && I.Players.ContainsKey(who);
+    }
+    // A RATE METER for the EXPENSIVE ANSWER to a guest's request -- not for the request itself.
+    // True when `gap` seconds have passed since this peer last had this answer, and false while it
+    // is early. NetMySector answers a four-byte ask with the whole world -- the mission, every
+    // raider, every turret, the boss's warnings, all reliable -- so a peer calling it in a loop
+    // made the host marshal dozens of packets an ask, on the channel every other peer's
+    // telegraphs share. What the report itself does (where that peer is, the place it is owed)
+    // stays unmetered: a dropped report is a pilot left where it spawned.
+    private static readonly Dictionary<(int peer, string ask), ulong> _asked = new();
+    public static bool Metered(int peer, string ask, double gap)
+    {
+        ulong now = Time.GetTicksMsec();
+        if (_asked.TryGetValue((peer, ask), out var last) && now - last < (ulong)(gap * 1000)) return false;
+        _asked[(peer, ask)] = now;
+        return true;
+    }
+    // a peer is forgotten: so is what it asked for
+    private static void ForgetAsks(int peer)
+    {
+        foreach (var k in _asked.Keys.Where(k => k.peer == peer).ToList()) _asked.Remove(k);
     }
     // Who sent the RPC now being run on `node` -- 0 if it is no longer in the tree. A world on its
     // way out (a scene change, the game quitting) still gets the packets already on the wire, and

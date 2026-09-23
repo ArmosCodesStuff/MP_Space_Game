@@ -386,15 +386,15 @@ public partial class Hub : Node2D
         ShipOf(Net.SenderOf(this))?.ApplyState(px, py, vx, vy, rot, ax, ay, trigger, staggered, podX, podY, podRot, warping);
     public void SendHostState(int owner, double hp, double maxHp, bool alive, double stasis, int statusBits, double combat,
                               float[] slotLeft, float[] slotCool, float[] slotOwn, int[] slotN,
-                              int wingTarget, Vector2[] wingPos, float[] wingRot, int[] wingState, float[] wingRearm) =>
+                              int wingTarget, int strikeTarget, Vector2[] wingPos, float[] wingRot, int[] wingState, float[] wingRearm) =>
         Rpc(nameof(NetHostState), owner, hp, maxHp, alive, stasis, statusBits, combat, slotLeft, slotCool, slotOwn, slotN,
-            wingTarget, wingPos, wingRot, wingState, wingRearm);
+            wingTarget, strikeTarget, wingPos, wingRot, wingState, wingRearm);
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
     private void NetHostState(int owner, double hp, double maxHp, bool alive, double stasis, int statusBits, double combat,
                               float[] slotLeft, float[] slotCool, float[] slotOwn, int[] slotN,
-                              int wingTarget, Vector2[] wingPos, float[] wingRot, int[] wingState, float[] wingRearm) =>
+                              int wingTarget, int strikeTarget, Vector2[] wingPos, float[] wingRot, int[] wingState, float[] wingRearm) =>
         ShipOf(owner)?.ApplyHostState(hp, maxHp, alive, stasis, statusBits, combat, slotLeft, slotCool, slotOwn, slotN,
-                                      wingTarget, wingPos, wingRot, wingState, wingRearm);
+                                      wingTarget, strikeTarget, wingPos, wingRot, wingState, wingRearm);
     public void SendShield(int owner, float side) => Rpc(nameof(NetShield), owner, side);
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
     private void NetShield(int owner, float side) => ShipOf(owner)?.ApplyShield(side);
@@ -428,12 +428,17 @@ public partial class Hub : Node2D
         if (!Net.FromPlayer(this, out int who)) return;
         _peerSector[who] = (SectorKind)s;
         if ((SectorKind)s != Sector) { RpcId(who, nameof(NetSector), (int)Sector, Missions.Level); return; }
+        // The place a pilot is owed goes first and is never metered: a reconnecting pilot's held
+        // spot is delivered by whichever report first finds it in the host's world.
+        if (_placeFor.Remove(who, out var owed)) RpcId(who, nameof(NetPlace), owed.at, owed.rot);
+        // THE CATCH-UP, and only it, is rate-limited -- one ask, dozens of reliable packets. Half a
+        // second: the guest's own repeats are at 1 s and 3 s (ReportSector).
+        if (!Net.Metered(who, nameof(NetMySector), 0.5)) return;
         RpcId(who, nameof(NetMission), MissionArgs());
         foreach (var r in Raiders) RpcId(who, nameof(NetRaiderSpawn), r.NetId, r.Position, r.Kind, r.Strength, r.HullShare);
-        foreach (var t in Deployed) RpcId(who, nameof(NetDeploy), t.NetId, t.OwnerId, t.Position, (float)t.Hp);
+        foreach (var t in Deployed) RpcId(who, nameof(NetDeploy), t.NetId, t.OwnerId, t.Position, (float)t.Hp, (float)t.MaxHp);
         if (Sector == SectorKind.Arena && IsInstanceValid(Boss) && Boss.Alive) Boss.CatchUp(who);   // the warnings (and a rock) up now
         if (MissionWon) { RpcId(who, nameof(NetWon), _ships.Count); RpcId(who, nameof(NetReturnCount), ReturnReady, ReturnTotal); }
-        if (_placeFor.Remove(who, out var place)) RpcId(who, nameof(NetPlace), place.at, place.rot);
     }
     private void ReportSector() { if (!Net.IsHost) Net.AskHost(this, nameof(NetMySector), (int)Sector); }
 
@@ -638,13 +643,23 @@ public partial class Hub : Node2D
         // Equipment.Sanitize); the name was not. A null here threw on .Length, and a null that got
         // past became a null Pilot in every label that draws it.
         name = string.IsNullOrEmpty(name) ? Character.Defaults.Name : name.Length > 24 ? name[..24] : name;
-        // purchases the claimed level could not have paid for are refused outright
-        if (!Progression.Affordable(bought, level)) bought = new int[Progression.All.Length];
+        // Purchases are held to what the claimed level could have paid for, and to what this host
+        // lets any claim spend (Progression.MaxSpendLevel). It used to weigh the RAW wire level
+        // against the claim and refuse the lot on a mismatch, so a peer claiming two billion
+        // bought every row maxed, and an honest pilot past level 100 arrived as a stock hull.
+        bought = Progression.Afford(bought, level);
         characterId ??= "";
         if (characterId.Length > 64) characterId = "";
+        // A HELD PLACE IS NOT CLAIMABLE BY NAME. The character id is the guest's own word -- the
+        // host has no other way to know a returning pilot -- so a peer announcing the id of a
+        // pilot ALREADY in the party took its place the moment that pilot dropped: its party slot,
+        // its READY, its position, and every kill owed to it. An id another live peer is flying
+        // belongs to that peer; this one simply has no hold.
+        if (characterId.Length > 0 && Net.I.Players.Any(kv => kv.Key != peer && kv.Value.CharacterId == characterId))
+            characterId = "";
         (p.Name, p.Main, p.Accent, p.Class, p.Bought, p.Equip, p.CharacterId, p.HasIdentity) =
             (name, main, accent, Classes.Sanitize(cls), bought, equip ?? System.Array.Empty<string>(), characterId, true);
-        p.Level = System.Math.Clamp(level, 1, 100);             // a claim: bounded before it weighs on an escort's threat
+        p.Level = System.Math.Max(1, level);                    // a claim; what it may SPEND is capped above
         if (_ships.TryGetValue(peer, out var s) && IsInstanceValid(s)) ApplyIdentity(s);
         TryRestoreHold(peer);
     }
@@ -796,8 +811,8 @@ public partial class Hub : Node2D
         // static, so every `Yard.<static>` call in this file is safe (see also AddGuestShare and
         // AddHostShare, both reached from the arena). Make any of them an instance member and
         // these lines start throwing. See DESIGN.md -> Traps.
-        Yard.TripClock += delta;                              // what the base is missing, in game time
         if (!Net.IsHost) return;
+        Yard.TripClock += delta;                              // what the base is missing, in game time
         // the whole party in stasis at once: the mission fails, everyone goes home
         if (!MissionWon && _arenaEndT < 0 && _ships.Count > 0 && _ships.Values.All(s => IsInstanceValid(s) && !s.Alive)) _arenaEndT = 3.0;
         if (_arenaEndT >= 0 && (_arenaEndT -= delta) <= 0)
@@ -992,13 +1007,18 @@ public partial class Hub : Node2D
 
     // the party, for an escort's threat: each pilot's level (the host's from its character, a
     // guest's as its identity claimed it, bounded) and its ship's toughness (EscortThreat)
+    // Past this a level stops making a raid stronger -- the host's own as much as a guest's claim.
+    // It was a clamp on the stored claim alone, which left an honest host's level unbounded and
+    // made a display bound look like the validation rule it was not.
+    public const int ThreatLevelCap = 100;
     private (double level, double toughness) PartyStanding()
     {
         double level = 0, toughness = 0; int n = 0;
         foreach (var s in _ships.Values)
         {
             if (!IsInstanceValid(s)) continue;
-            level += s.Mine ? Character.Level : Net.I != null && Net.I.Players.TryGetValue(s.OwnerId, out var p) ? p.Level : 1;
+            level += System.Math.Min(ThreatLevelCap,
+                s.Mine ? Character.Level : Net.I != null && Net.I.Players.TryGetValue(s.OwnerId, out var p) ? p.Level : 1);
             double own = new ShipStats(s.Class)["hull"];
             toughness += 1 + System.Math.Log(System.Math.Max(1, own > 0 ? s.MaxHp / own : 1)) / System.Math.Log(Missions.LevelStep);
             n++;
@@ -1021,19 +1041,21 @@ public partial class Hub : Node2D
     public DeployedTurret Drop(PlayerShip owner, Vector2 at, double hull)
     {
         if (!Net.IsHost || owner == null) return null;
-        var t = AddDeployed(NetIds.Next(NetIds.Deployed), owner.OwnerId, at, hull);
-        ToWorld(nameof(NetDeploy), t.NetId, owner.OwnerId, at, (float)hull);
+        var t = AddDeployed(NetIds.Next(NetIds.Deployed), owner.OwnerId, at, hull, hull);
+        ToWorld(nameof(NetDeploy), t.NetId, owner.OwnerId, at, (float)hull, (float)hull);
         return t;
     }
+    // `max` as well as `hull`: the join catch-up sends a turret's LIVE hull, and a joiner that
+    // took it for the maximum too drew a half-dead turret with a full bar.
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetDeploy(int id, int owner, Vector2 at, float hull)
+    private void NetDeploy(int id, int owner, Vector2 at, float hull, float max)
     {
-        if (Deployed.All(x => x.NetId != id)) AddDeployed(id, owner, at, hull);
+        if (Deployed.All(x => x.NetId != id)) AddDeployed(id, owner, at, hull, max);
     }
-    private DeployedTurret AddDeployed(int id, int owner, Vector2 at, double hull)
+    private DeployedTurret AddDeployed(int id, int owner, Vector2 at, double hull, double max)
     {
         var t = new DeployedTurret { NetId = id, OwnerId = owner, Ship = ShipOf(owner), Position = at,
-                                     Hp = hull, MaxHp = hull, Name = $"Deployed_{id}" };
+                                     Hp = hull, MaxHp = max, Name = $"Deployed_{id}" };
         Deployed.Add(t); AddChild(t);
         return t;
     }
@@ -1140,15 +1162,29 @@ public partial class Hub : Node2D
     // with one piece lost is lost whole: every raider froze for that update. Each packet names its
     // raiders, so each stands alone.
     private const int RaidersPerPacket = 24;
-    private void SendRaiders(double delta)
+    // EVERY HOST-OWNED THING THE WORLD CAN DAMAGE, on one clock. A raider's packet carries where
+    // it is as well, because it moves; a dropped turret holds its spot, so its hull is all there
+    // is to say -- and nothing said it at all, so its owner watched a pristine turret vanish in a
+    // burst with no warning and no bar.
+    private void SendWorldState(double delta)
     {
-        if (!Net.IsHost || !Net.IsOnline || Raiders.Count == 0) return;
+        if (!Net.IsHost || !Net.IsOnline || (Raiders.Count == 0 && Deployed.Count == 0)) return;
         _raiderSend -= delta; if (_raiderSend > 0) return; _raiderSend = 0.1;
+        if (Deployed.Count > 0)
+            ToWorld(nameof(NetDeployHulls), Deployed.Select(t => t.NetId).ToArray(),
+                                            Deployed.Select(t => (float)t.Hp).ToArray());
         foreach (var part in Raiders.Chunk(RaidersPerPacket))
             ToWorld(nameof(NetRaiders), part.Select(r => r.NetId).ToArray(), part.Select(r => r.Position).ToArray(),
                 part.Select(r => r.Rotation).ToArray(), part.Select(r => (float)r.Hp).ToArray(),
                 part.Select(r => r.TetherTo ?? new Vector2(float.NaN, float.NaN)).ToArray(),
                 part.Select(r => r.NetFlags).ToArray());
+    }
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
+    private void NetDeployHulls(int[] ids, float[] hp)
+    {
+        int n = Mathf.Min(ids.Length, hp.Length);
+        for (int i = 0; i < n; i++)
+            if (Deployed.FirstOrDefault(x => x.NetId == ids[i]) is { } t) t.SetNet(hp[i]);
     }
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
     private void NetRaiders(int[] ids, Vector2[] pos, float[] rot, float[] hp, Vector2[] tether, int[] flags)
@@ -1321,7 +1357,7 @@ public partial class Hub : Node2D
     // ── tick ─────────────────────────────────────────────────────────────────
     public override void _Process(double delta)
     {
-        SendRaiders(delta);
+        SendWorldState(delta);
         if (Net.IsHost && _held.Count > 0) ExpireHolds();
         if (Net.IsHost) TickRaid(delta);
         if (Net.IsHost) TickBlasts(delta);

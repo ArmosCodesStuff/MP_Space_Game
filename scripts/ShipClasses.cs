@@ -266,7 +266,9 @@ public partial class Wing : Node2D
     private void TickBomber(double delta)
     {
         var t = Carrier.StrikeTarget;
-        bool live = t != null && t.Alive && Carrier.Position.DistanceTo(t.Position) <= S["strike_range"];
+        // Carrier.Alive, as the fighter's `engage` has: a strike ordered in the moment the deck
+        // died kept flying, and a host that ran a guest's press on a wreck launched a fresh one.
+        bool live = Carrier.Alive && t != null && t.Alive && Carrier.Position.DistanceTo(t.Position) <= S["strike_range"];
         switch (_b)
         {
             case BSt.Docked:
