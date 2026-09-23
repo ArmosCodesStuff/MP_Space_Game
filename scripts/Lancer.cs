@@ -18,7 +18,10 @@ using System.Linq;
 //   CHARGE     15 s after each beam (never during one): a red line for 1.5 s, then a ram along it
 //              at 1200 u/s: 40 to any ship in its path -- the one special that moves it
 //   TRIDENT    between them (every 15 s from 13.5 s): 3 guided missiles, 0 and +-25
-//              degrees, 15 each, twice the size -- INTERCEPTABLE (PD shoots them)
+//              degrees, 15 each, twice the size -- INTERCEPTABLE (PD shoots them). ALL THREE
+//              LAND: each seeker is its own damage source (Shots.SourceKey), where one shared
+//              name meant a hull felt only the first inside its 0.52 s gap, so two of every
+//              three hits went nowhere.
 //   SHOCKWAVE  every 17 s: a red ring for 1.8 s, held still, then 45 within 340 u
 // Slow and heavy: between its specials it closes on the party to about 650 u and turns ponderously.
 public partial class Lancer : Boss
@@ -104,7 +107,7 @@ public partial class Lancer : Boss
         var nose = ToGlobal(new Vector2(0, -Length * 0.5f));
         PlayerShip Nearest(float within = float.MaxValue) => Combat.Nearest(pilots, Position, p => p.Position, within);
         _guns -= delta;
-        if (_guns <= 0) { _guns = GunEvery; var t = Nearest(900f); if (t != null) { t.Hit(GunDamage * DamageMult, Position, "boss:guns"); Combat.Flash(nose, t.Position, new Color(1f, 0.5f, 0.35f), ShotSound.Boss); } }
+        if (_guns <= 0) { _guns = GunEvery; var t = Nearest(900f); if (t != null) { t.Hit(GunDamage * DamageMult, Position, DamageSource.LancerGuns); Combat.Flash(nose, t.Position, new Color(1f, 0.5f, 0.35f), ShotSound.Boss); } }
         _missiles -= delta;
         if (_missiles <= 0)
         {   // a trident at the nearest ship: straight at it and 25 degrees either side
@@ -116,7 +119,7 @@ public partial class Lancer : Boss
             {
                 var dir = aim.Rotated(Mathf.DegToRad(deg));
                 Combat.LaunchTorpedo(nose + dir * 14f, dir, TridentSpeed, TridentRange, TridentDamage * DamageMult, t.NetId, 1.4f,
-                                     heavy: false, hostile: true, hitSource: "boss:missiles", size: 2f);
+                                     heavy: false, hostile: true, hitSource: DamageSource.LancerMissiles, size: 2f);
             }
         }
         _beam -= delta;
@@ -156,7 +159,7 @@ public partial class Lancer : Boss
                 _beamTickT = BeamTick;
                 var (la, lb) = BeamSegment();
                 foreach (var p in pilots)
-                    if (Combat.DistToSegment(p.Position, la, lb) <= BeamWidth / 2f + p.HitRadius) p.Hit(BeamDamage * DamageMult, Position, "boss:beam");
+                    if (Combat.DistToSegment(p.Position, la, lb) <= BeamWidth / 2f + p.HitRadius) p.Hit(BeamDamage * DamageMult, Position, DamageSource.LancerBeam);
             }
             _beamLive -= delta;
         }
@@ -176,7 +179,7 @@ public partial class Lancer : Boss
         if (_dashTo is { } to)
         {
             Position = Position.MoveToward(to, ChargeSpeed * (float)delta);
-            foreach (var p in pilots) if (Covers(p.Position, p.HitRadius)) p.Hit(ChargeDamage * DamageMult, Position, "boss:charge");
+            foreach (var p in pilots) if (Covers(p.Position, p.HitRadius)) p.Hit(ChargeDamage * DamageMult, Position, DamageSource.LancerCharge);
             if (Position.DistanceTo(to) < 1f) _dashTo = null;
         }
         _wave -= delta;
@@ -187,7 +190,7 @@ public partial class Lancer : Boss
         }
         if (_pendingWave is { } c && (_waveT -= delta) <= 0)
         {
-            foreach (var p in pilots) if (p.Position.DistanceTo(c) <= WaveRadius + p.HitRadius) p.Hit(45 * DamageMult, c, "boss:wave");
+            foreach (var p in pilots) if (p.Position.DistanceTo(c) <= WaveRadius + p.HitRadius) p.Hit(45 * DamageMult, c, DamageSource.LancerWave);
             _pendingWave = null;
         }
     }

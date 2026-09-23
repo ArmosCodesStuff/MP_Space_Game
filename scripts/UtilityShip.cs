@@ -13,6 +13,10 @@ using System;
 public abstract partial class UtilityShip : Node2D, IRaidTarget, ITagged
 {
     public Tag Tags => Tag.Fleet;
+    // WHAT COMING FOR IT IS WORTH (IRaidTarget). This class is the one that names the interface,
+    // so the mapping is fixed here: a Payout declared only on the Hauler would hide this rather
+    // than implement it, and every raid would price the convoy at nothing.
+    public virtual double Payout => 0;
     public Yard Yard;
     public double Cargo, Hull, RebuildIn;
     private HullWatch _hullWatch; private bool _hostSeen;

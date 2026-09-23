@@ -1,6 +1,30 @@
 using Godot;
 using System.Collections.Generic;
 
+// WHAT DEALT IT -- the name a blow carries into PlayerShip.Incoming, which keys the 0.52 s
+// per-source gap and the damage tally on it. They were free-form strings spelled by hand at the
+// call sites, and two of them are ONE CHARACTER apart: "boss:gun" is the Drake Bastion's main gun
+// and "boss:guns" is the Silver Lancer's lasers. A typo makes one weapon silently suppress
+// another's hits, or stop suppressing its own, and nothing in the build could catch it. A name
+// used by a file that owns a weapon is a member here or it does not exist.
+//
+// These are the FAMILY only -- what the weapon is. Combat.Fire adds the firing body's own identity
+// to whatever name it is given (Shots.SourceKey), so a volley of any size lands every hit; a blow
+// that does not fly (a beam's tick, a ram, a shockwave) passes the family straight to Hit and
+// keeps the single shared name the gap is for.
+public static class DamageSource
+{
+    // the Silver Lancer (Lancer.cs)
+    public const string LancerGuns = "boss:guns";
+    public const string LancerMissiles = "boss:missiles";
+    public const string LancerBeam = "boss:beam";
+    public const string LancerCharge = "boss:charge";
+    public const string LancerWave = "boss:wave";
+    // the Drake Bastion (Drake.cs)
+    public const string DrakeGun = "boss:gun";
+    public const string DrakeScrap = "boss:scrap";
+}
+
 // Combat services. Everything here is HOST-SIDE: target lookup, damage, and the
 // hit flashes clients are told to draw. A client asking "who is nearest" and
 // acting on it would be inventing damage, which is exactly what Net forbids.
@@ -91,7 +115,10 @@ public static class Combat
         if (World == null) return null;
         var s = new Shot { Kind = kind, Position = from, Dir = dir.Normalized(), Speed = speed, Range = range,
                            Damage = damage, Radius = radius, TargetId = targetId, TurnRate = turnRate,
-                           Source = source, HitSource = hitSource, Size = size, Variant = variant,
+                           // EVERY SHOT IS ITS OWN SOURCE: the caller names the weapon, the body's
+                           // identity is added here, so no volley can be mistaken for one ongoing
+                           // source and swallowed by PlayerShip's 0.52 s gap
+                           Source = source, HitSource = Shots.SourceKey(hitSource), Size = size, Variant = variant,
                            NetId = Shots.Of(kind).Interceptable ? NextMissileId() : 0 };
         World.AddChild(s);
         ShotFired?.Invoke(s);
@@ -123,6 +150,6 @@ public static class Combat
     public static void Clear()
     {
         Hostiles.Clear(); Players.Clear(); OnFlash = null; World = null; ShotFired = null; Fx.On = null;
-        NetIds.Reset(); Shot.Intercepted = 0;
+        NetIds.Reset(); Shots.ResetSources(); Shot.Intercepted = 0;
     }
 }

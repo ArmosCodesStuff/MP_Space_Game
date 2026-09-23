@@ -309,9 +309,20 @@ public partial class Yard : Node2D
             float d = g.Position.DistanceTo(Hub.BasePos + Arms[i].Pad);
             if (d < bd) { bd = d; best = i; }
         }
-        if (best >= 0) { Arms[best].Occupant = g; _queue.Remove(g); return best; }
+        if (best >= 0) { SetArm(g, best); _queue.Remove(g); return best; }
         if (!_queue.Contains(g)) _queue.Add(g);
         return -1;
+    }
+
+    // WHICH ARM HOLDS WHICH SHIP, on every peer. The one place a ship moves between arms: the
+    // host decides it (RequestArm, Release) and sends the index with that ship's state; a guest
+    // sets it here from the wire. -1 is "in no arm". Before this, Occupant was written only under
+    // Net.Sim, so on a guest the hologram bars never brightened for a ship it could plainly see
+    // standing in one -- and _Draw reads Occupant, with no Net.Sim branch of its own.
+    public void SetArm(Gatherer g, int arm)
+    {
+        for (int i = 0; i < Arms.Length; i++) if (Arms[i].Occupant == g) Arms[i].Occupant = null;
+        if (arm >= 0 && arm < Arms.Length) Arms[arm].Occupant = g;
     }
 
     public int ArmOf(Gatherer g) { for (int i = 0; i < Arms.Length; i++) if (Arms[i].Occupant == g) return i; return -1; }
@@ -327,8 +338,8 @@ public partial class Yard : Node2D
         _queue.Remove(g);
         int i = ArmOf(g);
         if (i < 0) return;
-        Arms[i].Occupant = null;
-        if (_queue.Count > 0) { Arms[i].Occupant = _queue[0]; _queue.RemoveAt(0); }
+        SetArm(g, -1);
+        if (_queue.Count > 0) { SetArm(_queue[0], i); _queue.RemoveAt(0); }
     }
 
     // ── stock ────────────────────────────────────────────────────────────────
@@ -468,24 +479,26 @@ public partial class Yard : Node2D
     private void SendState()
     {
         int n = Gatherers.Count;
-        var gp = new Vector2[n]; var gr = new float[n]; var gs = new int[n]; var gc = new float[n]; var gb = new Vector2[n]; var gh = new float[n]; var gw = new float[n];
+        // ga: the ARM each ship is in, -1 for none. The eighth per-gatherer array, because the
+        // arms were host-only state that the drawing reads on every peer.
+        var gp = new Vector2[n]; var gr = new float[n]; var gs = new int[n]; var gc = new float[n]; var gb = new Vector2[n]; var gh = new float[n]; var gw = new float[n]; var ga = new int[n];
         for (int i = 0; i < n; i++)
         {
             var g = Gatherers[i];
-            (gp[i], gr[i], gs[i], gc[i], gb[i], gh[i], gw[i]) = (g.Position, g.Rotation, (int)g.State, (float)g.Cargo, g.BeamTo, (float)g.Hull, g.NetRebuild);
+            (gp[i], gr[i], gs[i], gc[i], gb[i], gh[i], gw[i], ga[i]) = (g.Position, g.Rotation, (int)g.State, (float)g.Cargo, g.BeamTo, (float)g.Hull, g.NetRebuild, ArmOf(g));
         }
         var h = Hauler;
-        Hub.RpcHome(this, nameof(NetState), gp, gr, gs, gc, gb, gh, gw, h.Position, h.Rotation, (int)h.State, (float)h.T, (float)h.Cargo, (float)h.LastSale, (float)h.Hull, h.NetRebuild, h.NetFlags, (float)h.StopLeft);
+        Hub.RpcHome(this, nameof(NetState), gp, gr, gs, gc, gb, gh, gw, ga, h.Position, h.Rotation, (int)h.State, (float)h.T, (float)h.Cargo, (float)h.LastSale, (float)h.Hull, h.NetRebuild, h.NetFlags, (float)h.StopLeft);
     }
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
-    private void NetState(Vector2[] gp, float[] gr, int[] gs, float[] gc, Vector2[] gb, float[] gh, float[] gw,
+    private void NetState(Vector2[] gp, float[] gr, int[] gs, float[] gc, Vector2[] gb, float[] gh, float[] gw, int[] ga,
                           Vector2 hp, float hr, int hs, float ht, float hc, float sale, float hh, float hw, int hf, float hstop)
     {
         // the fleet follows the levels (1 s); until they agree, skip the ships this once
-        int n = Math.Min(gp.Length, Math.Min(gr.Length, Math.Min(gs.Length, Math.Min(gc.Length, Math.Min(gb.Length, Math.Min(gh.Length, gw.Length))))));
+        int n = Math.Min(gp.Length, Math.Min(gr.Length, Math.Min(gs.Length, Math.Min(gc.Length, Math.Min(gb.Length, Math.Min(gh.Length, Math.Min(gw.Length, ga.Length)))))));
         if (n == Gatherers.Count)
-            for (int i = 0; i < n; i++) Gatherers[i].SetNet(gp[i], gr[i], gs[i], gc[i], gb[i], gh[i], gw[i]);
+            for (int i = 0; i < n; i++) { Gatherers[i].SetNet(gp[i], gr[i], gs[i], gc[i], gb[i], gh[i], gw[i]); SetArm(Gatherers[i], ga[i]); }
         Hauler.SetNet(hp, hr, hs, ht, hc, sale, hh, hw, hf, hstop);
     }
 

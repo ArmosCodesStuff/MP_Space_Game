@@ -73,7 +73,7 @@ public partial class Drake : Boss
         {
             _gun = GunEvery;
             var t = Nearest(GunReach);
-            if (t != null) Combat.FireSlug(Nose, t.Position - Nose, GunSpeed, GunRange, GunRadius, GunDamage * DamageMult, scrap: false, 0, "boss:gun");
+            if (t != null) Combat.FireSlug(Nose, t.Position - Nose, GunSpeed, GunRange, GunRadius, GunDamage * DamageMult, scrap: false, 0, DamageSource.DrakeGun);
         }
 
         // THE SCRAP SHOTGUN: warp to range, the fan, then the scrap
@@ -102,7 +102,11 @@ public partial class Drake : Boss
             _fanT = -1; int k = 0;
             foreach (float a in FanAngles(_fanAim))
             {
-                Combat.FireSlug(Nose, Vector2.Right.Rotated(a), ScrapSpeed, ScrapRange, ScrapRadius, ScrapDamage * DamageMult, scrap: true, k, $"boss:scrap:{k}");
+                // ONE NAME FOR THE FAN. It numbered the seven keys by hand ("boss:scrap:0".."6")
+                // so the pieces would not swallow one another inside a hull's 0.52 s per-source
+                // gap -- which is Combat.Fire's job now, for every weapon at once (Shots.SourceKey).
+                // k stays: it is which jagged shape the piece is drawn as (Shot.Variant).
+                Combat.FireSlug(Nose, Vector2.Right.Rotated(a), ScrapSpeed, ScrapRange, ScrapRadius, ScrapDamage * DamageMult, scrap: true, k, DamageSource.DrakeScrap);
                 k++;
             }
         }

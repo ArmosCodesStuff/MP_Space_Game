@@ -94,6 +94,54 @@ public partial class Hub : Node2D
     public (bool has, Vector2 at, float radius) WarpAim() =>
         _selected != null && _selected.Alive ? (true, _selected.Position, _selected.HitRadius)
         : Waypoint is { } w ? (true, w, WaypointRadius) : (false, Vector2.Zero, 0f);
+
+    // ── THE SCOPE MARKS: everything the radar can point at ───────────────────
+    // ONE TABLE. A row says what a mark is called, where it is, how close a warp to it stops
+    // (its pick radius too), and the glyph that stands for it -- shape, half-size and colour.
+    // Radar._GuiInput picks from this table and Radar._Draw draws from it, so a mark can never
+    // again be pickable with nothing drawn for it. REPLACED: two hand-written lists of the same
+    // seven landmarks, one in each half of Radar.cs, which had already drifted -- MISSION PORTAL
+    // was clickable with no glyph, so the only way to that waypoint was a click on empty scope.
+    // A NEW MARK IS A ROW HERE and nothing at all in Radar.cs. Which rows exist is decided here
+    // too: the home landmarks only at home, the mission portal only while it is open, and a
+    // turret a freighter left out in whichever sector it stands in.
+    public enum MarkShape { Dot, Box, Diamond, Ring }
+    public readonly struct ScopeMark
+    {
+        public readonly string Name;        // what the waypoint is called
+        public readonly Vector2 At;         // where it is, in the world
+        public readonly float Pick;         // the waypoint's radius: a warp stops this far short
+        public readonly MarkShape Shape;
+        public readonly Vector2 Size;       // half-extents on the scope (X is the radius of a Dot or a Ring)
+        public readonly Color Colour;
+        public ScopeMark(string name, Vector2 at, float pick, MarkShape shape, Vector2 size, Color colour)
+            => (Name, At, Pick, Shape, Size, Colour) = (name, at, pick, shape, size, colour);
+    }
+
+    public IEnumerable<ScopeMark> ScopeMarks()
+    {
+        if (!InArena)
+        {   // home's landmarks: the arena has none of them
+            yield return new ScopeMark("BASE", BasePos, 260f, MarkShape.Box, new Vector2(4f, 4f), new Color(0.75f, 0.78f, 0.8f));
+            yield return new ScopeMark("THREAT INTELLIGENCE", TioPos, 140f, MarkShape.Box, new Vector2(3f, 4f), new Color(0.6f, 0.64f, 0.7f));
+            yield return new ScopeMark("PORTAL", PortalPos, 160f, MarkShape.Ring, new Vector2(5f, 5f), new Color(0.4f, 0.8f, 1f));
+            yield return new ScopeMark("SALVAGE FIELD", WreckPos, 340f, MarkShape.Dot, new Vector2(4f, 4f), new Color(0.5f, 0.35f, 0.25f, 0.9f));
+            // the belt's sun: the rocks ring it, and nothing was drawn at the point the mark picks
+            yield return new ScopeMark("MINING BELT", SunPos, 540f, MarkShape.Ring, new Vector2(4f, 4f), new Color(1f, 0.82f, 0.42f));
+            foreach (var (name, at) in Outposts)
+                yield return new ScopeMark("OUTPOST " + name, at, OutpostHeight * 0.5f, MarkShape.Diamond, new Vector2(3.5f, 4f), new Color(0.55f, 0.72f, 0.85f));
+            if (Mission == MissionState.PortalOpen)
+                yield return new ScopeMark("MISSION PORTAL", MissionPortalPos, 160f, MarkShape.Ring, new Vector2(5f, 5f), new Color(1f, 0.35f, 0.3f));
+        }
+        // THE TURRETS A FREIGHTER LEFT OUT, in either sector: the one thing a pilot places by hand
+        // that the scope would not show, so three of them 3000 u away could not be found again.
+        // In the owner's hull colour, as the turret itself is drawn.
+        foreach (var t in Deployed)
+            if (IsInstanceValid(t))
+                yield return new ScopeMark(t.Label, t.Position, DeployedTurret.Radius, MarkShape.Box, new Vector2(2.5f, 2.5f),
+                                           t.Ship != null && IsInstanceValid(t.Ship) ? t.Ship.Main : new Color(0.55f, 0.58f, 0.62f));
+    }
+
     public Boss Boss { get; private set; }
     private double _arenaEndT = -1;                         // the FAILURE clock only: a wiped party home in 3 s
     public bool MissionWon { get; private set; }
@@ -479,8 +527,14 @@ public partial class Hub : Node2D
         }
     }
 
+    // A REBUILD IS NOT A ROSTER CHANGE: every ship goes and comes straight back. Reporting each
+    // arrival would broadcast the party once per pilot, and at world build that lands on peers
+    // still loading a world of their own ("Node not found"). Every peer reports its world when it
+    // has one, and that report is what brings it up to date (NetMySector).
+    private bool _rebuilding;
     private void RebuildShips()
     {
+        _rebuilding = true;
         foreach (var s in _ships.Values)
             if (IsInstanceValid(s)) { RemoveChild(s); s.QueueFree(); }   // out now, so the name frees up
         _ships.Clear();
@@ -488,6 +542,7 @@ public partial class Hub : Node2D
         SpawnFor(Net.LocalId);          // your own ship, always
         if (Net.I != null)
             foreach (var id in Net.I.Players.Keys) SpawnFor(id);
+        _rebuilding = false;
         if (IsInstanceValid(_statsWin)) _statsWin.Ship = MyShip;
     }
 
@@ -507,6 +562,7 @@ public partial class Hub : Node2D
         _ships[peerId] = s;
         ApplyIdentity(s);
         TryRestoreHold(peerId);                // its identity may have arrived before its ship
+        RosterChanged();
     }
 
     // ── A DROPPED PILOT'S PLACE (host) ───────────────────────────────────────
@@ -542,8 +598,7 @@ public partial class Hub : Node2D
             else _ready.Remove(peer);
         }
         _peerSector.Remove(peer);
-        if (Net.IsHost) { RefreshAway(); BroadcastMission(); }
-        DespawnFor(peer);
+        DespawnFor(peer);                        // which reports the roster, the ship already gone
     }
     private Held HoldOf(int peer, Net.PlayerInfo info)
     {
@@ -558,7 +613,7 @@ public partial class Hub : Node2D
         if (!Net.IsHost || !Net.I.Players.TryGetValue(peer, out var p) || p.CharacterId.Length == 0) return;
         if (!_held.Remove(p.CharacterId, out var h) || !_ships.ContainsKey(peer)) { if (h != null) _held[p.CharacterId] = h; return; }
         RestoreHeld(h, peer);
-        RefreshAway(); BroadcastMission();
+        RosterChanged();
     }
     private void RestoreHeld(Held h, int peer)
     {
@@ -578,7 +633,7 @@ public partial class Hub : Node2D
         var gone = _held.Where(kv => kv.Value.Until <= now).Select(kv => kv.Key).ToList();
         if (gone.Count == 0) return;
         foreach (var id in gone) { _ready.Remove(_held[id].OldPeer); _held.Remove(id); }
-        RefreshAway(); BroadcastMission();
+        RosterChanged();
     }
     private void RefreshAway()
     {
@@ -586,11 +641,28 @@ public partial class Hub : Node2D
         foreach (var h in _held.Values) _away[h.OldPeer] = h.Name;
     }
 
+    // ── THE PARTY CHANGED ────────────────────────────────────────────────────
+    // ONE OPERATION, called from the two places that own `_ships` (SpawnFor, DespawnFor) and from
+    // the two that own a held place (TryRestoreHold, ExpireHolds). Everything decided by WHO IS IN
+    // THE PARTY is decided here: the absent list, the report every peer's READY and RETURN buttons
+    // are drawn from, and the RETURN gate. REPLACED: three hand-written `RefreshAway();
+    // BroadcastMission();` pairs, none of which asked the gate -- which was asked only when a
+    // RETURN button was pressed, so the last un-returned pilot dropping out of a WON arena left the
+    // party sitting in it until somebody toggled the button.
+    private void RosterChanged()
+    {
+        if (!Net.IsHost || _rebuilding) return;
+        RefreshAway();
+        BroadcastMission();
+        if (MissionWon) AfterReturn();
+    }
+
     private void DespawnFor(int peerId)
     {
         if (!_ships.TryGetValue(peerId, out var s)) return;
         _ships.Remove(peerId);
         if (IsInstanceValid(s)) { RemoveChild(s); s.QueueFree(); }
+        RosterChanged();
     }
 
     // ── identity ─────────────────────────────────────────────────────────────
@@ -948,7 +1020,9 @@ public partial class Hub : Node2D
         // a turret a freighter left out is the base's too: something to go for, and something
         // that shoots back
         foreach (var t in Deployed) if (Raider.Up(t)) yield return t;
-        if (Yard == null) yield break;
+        // No fleet to come for: out in the arena there is no base, and at home there is a frame
+        // before it is built. The sector is the reason; the null is the frame.
+        if (InArena || Yard == null) yield break;
         foreach (var u in Yard.Fleet) if (Raider.Up(u)) yield return u;
     }
 
@@ -985,7 +1059,7 @@ public partial class Hub : Node2D
     {
         if (!Net.IsHost) return;
         var (level, toughness) = PartyStanding();
-        double t = EscortThreat(quarry is Hauler h ? h.Payout : 0, level, toughness, Missions.HighestBeaten, wave);
+        double t = EscortThreat((quarry as IRaidTarget)?.Payout ?? 0, level, toughness, Missions.HighestBeaten, wave);
         int patrols = 1 + System.Math.Max(0, _ships.Count - 1);
         var edge = Raider.EdgeSpot(quarry.Position) - BasePos;
         for (int i = 0; i < patrols; i++)
@@ -1319,11 +1393,11 @@ public partial class Hub : Node2D
     // peer has -- its own ship, the world it sees -- so a guest meets them as a host does.
     private void MeetHints(PlayerShip me)
     {
-        if (Hints.Wants("base") && Yard != null && me.Position.DistanceTo(BasePos) < Hints.BaseMeet) Hints.Meet("base");
-        if (Hints.Wants("tio") && Yard != null && me.Position.DistanceTo(TioPos) < Hints.TioMeet) Hints.Meet("tio");
+        if (Hints.Wants("base") && !InArena && me.Position.DistanceTo(BasePos) < Hints.BaseMeet) Hints.Meet("base");
+        if (Hints.Wants("tio") && !InArena && me.Position.DistanceTo(TioPos) < Hints.TioMeet) Hints.Meet("tio");
         if (Hints.Wants("target") && Combat.Nearest(Combat.Hostiles, me.Position, h => h.Position, Hints.TargetMeet, Combat.Pickable) != null) Hints.Meet("target");
         if (Hints.Wants("abilities") && Selected != null) Hints.Meet("abilities");
-        if (Hints.Wants("raid") && Yard != null && Raiders.Count > 0) Hints.Meet("raid");
+        if (Hints.Wants("raid") && !InArena && Raiders.Count > 0) Hints.Meet("raid");
         if (Hints.Wants("stasis") && !me.Alive) Hints.Meet("stasis");
         if (Hints.Wants("boss") && InArena && IsInstanceValid(Boss)) Hints.Meet("boss");
         if (Hints.Wants("warp") && WarpAim() is { has: true } aim && aim.at.DistanceTo(me.Position) > Hints.WarpMeet) Hints.Meet("warp");
@@ -1398,14 +1472,17 @@ public partial class Hub : Node2D
             Ui.SetText(_help, Abilities.ControlsHint(me.Class));
             ship = $"    |    {Character.Name}  {Classes.NameOf(me.Class)}"
                  + $"  {Mathf.Abs(me.SpeedAhead):0} u/s{(me.SpeedAhead < -1 ? " astern" : "")}";
-            ship += Selected != null ? "    target: " + (Selected is TargetDummy td ? $"TARGET DUMMY {td.Number}" : $"#{Selected.NetId}")
+            ship += Selected != null ? "    target: " + Selected.Label
                   : Waypoint != null ? $"    waypoint: {WaypointName}"
                                      : "    no target (Tab / click)";
             if (Raiders.Count > 0) ship += $"    |    RAIDERS {Raiders.Count}";
             if (Placing) ship += $"    PLACING {_placingLabel}: left-click to confirm, right-click / Esc to cancel";
         }
-        string place = Yard == null
+        // WHICH SECTOR, not whether a Yard happens to exist: a third sector, or a home world
+        // without a base, would have silently read as the arena.
+        string place = InArena
             ? $"ARENA  ·  {(IsInstanceValid(Boss) ? Boss.Type.Name : "")} (LEVEL {Missions.Level})  {(IsInstanceValid(Boss) ? Boss.Hp : 0):0} / {(IsInstanceValid(Boss) ? Boss.MaxHp : 0):0}" + (MissionWon ? "  ·  DEFEATED" : "")
+            : Yard == null ? ""          // the frame at home before the base is built: nothing to report yet
             : $"ORE {Yard.Ore:0}    SALVAGE {Yard.Salvage:0}    CREDITS {Yard.Credits:0}"
               + $"    HAULER {Yard.Hauler.Cargo:0}/{Yard.Capacity:0} {Yard.Hauler.State.ToString().ToUpperInvariant()}";
         Ui.SetText(_hud, place + ship
@@ -1596,7 +1673,7 @@ public partial class Hub : Node2D
         CloseSide();
         if (!open) { _side = make(); _hudLayer.AddChild(_side); }
     }
-    private void ToggleBase() { if (Yard != null) ToggleSide(() => new BasePanel { Hub = this }); }   // the arena: no base to open
+    private void ToggleBase() { if (!InArena) ToggleSide(() => new BasePanel { Hub = this }); }   // the arena: no base to open
     public void ToggleEquipment() => ToggleSide(() => new EquipmentWindow { Hub = this });
     public void TogglePilot() => ToggleSide(() => new PilotWindow { Hub = this });
     public bool CreatorOpen => IsInstanceValid(_creator);
@@ -1608,7 +1685,7 @@ public partial class Hub : Node2D
     // REFIT: the only way into the ship menu (it costs 10%; see Yard.ResetCost).
     public void ResetShip()
     {
-        if (IsInstanceValid(_creator) || Yard == null) return;       // REFIT is at the base
+        if (IsInstanceValid(_creator) || InArena) return;            // REFIT is at the base
         Yard.ChargeReset();
         if (SideIs<BasePanel>()) CloseSide();
         OpenCreator();

@@ -62,6 +62,22 @@ public static class Shots
 
     public static ShotDef Of(int id) => All[id >= 0 && id < All.Length ? id : Shell];
 
+    // A FIRED SHOT'S OWN DAMAGE SOURCE. A ship ignores a repeat from the same source NAME inside
+    // PlayerShip's 0.52 s gap -- a rule written for an ONGOING source (a sweeping beam, a ram, an
+    // area tick), where one name has to cover every tick of one thing. A PROJECTILE is not
+    // ongoing: it is a body that strikes once and ends, so three seekers of one volley are three
+    // sources, not one. They used to share the weapon's name and a hull felt only the first of
+    // them; the Drake numbered its seven scrap pieces by hand to dodge it, which is this fix
+    // written once per weapon and forgotten by the next one. The weapon still says what it IS
+    // ("boss:missiles", DamageSource in Combat.cs); the "#n" after it is this body's own, handed
+    // out here so no caller can forget it. A beam, a ram or an area tick never comes through
+    // Combat.Fire and keeps the single shared name it needs. Host-side only: HitSource is not on
+    // the wire (Hub.NetShot) and a guest's copy is Cosmetic and damages nothing.
+    private static int _fired;
+    public static string SourceKey(string family) => family == null ? null : family + "#" + (++_fired);
+    // with the world (Combat.Clear), or a second session in one process carries the first's count
+    public static void ResetSources() => _fired = 0;
+
     // THE PATH TEST every flying thing shares: walk `from` to `to` in steps no longer than
     // `step` (0 = just the end), and hand each point to `at` until it says it struck something.
     // A step longer than a target is wide is how a shot passes through it between frames.
@@ -87,7 +103,7 @@ public partial class Shot : Node2D, IHittable, ITagged
     public int TargetId;                   // 0 = unguided
     public float TurnRate;                 // rad/s its nose may turn toward the target
     public PlayerShip Source;              // who fired it (the host's copy): a hit is their combat
-    public string HitSource;               // the damage source's name (a ship takes one per source per 0.52 s)
+    public string HitSource;               // family#body (Shots.SourceKey): its OWN source, so a volley is never one
     public int Variant;                    // scrap: which jagged shape
     public float Lead;                     // a guest's copy starts this far into the flight (the round trip)
 

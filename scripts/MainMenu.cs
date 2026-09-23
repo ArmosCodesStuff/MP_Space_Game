@@ -23,7 +23,12 @@ public partial class MainMenu : Node2D
     private const float AoeRadius = 260f, WarpHop = 500f;
     // It starts the jump with 4 s to go and the warp takes 3, so it lands ONE SECOND before the
     // shot arrives. Dodging by a whole second reads as a dodge; dodging by a frame reads as luck.
-    private const double DodgeAt = 4.0;
+    // HOW LONG BEFORE THE SHOT IT STARTS TO MOVE: its own warm-up, plus the time its own rudder
+    // needs for a half turn, because the jump goes along the keel and the turn IS the aim. It was
+    // a flat 4 s, which was enough only while the turn was read as degrees and the hull barely
+    // moved; at the rate a battleship really turns, a half turn is 2.9 s and 4 s left it clearing
+    // the blast with 0.2 s to spare.
+    private double DodgeAt => PlayerShip.WarpWarmup + Mathf.Pi / System.Math.Max(0.1, _cap.Stats["turn_rate"]);
     private const double GunRange = 620;
     // The diorama gets a camera, for the same reason the hub has one: the ships are drawn at the
     // size they really are, and at 1:1 a battleship is a smudge on a 2560-wide screen.
@@ -264,9 +269,17 @@ public partial class MainMenu : Node2D
 
     // The hull turns at its own rate and no faster. The autopilot does this for a real pilot;
     // holding station, there is nowhere to go, so the turn is all there is.
+    //
+    // turn_rate IS RADIANS A SECOND. The sheet says so (Stats.cs: "Rudder limit", rad/s) and
+    // PlayerShip.Steer caps its yaw with the figure itself. This read it as DEGREES and multiplied
+    // by pi/180, so the title battleship came round at 1.08 degrees a second where the ship it is
+    // meant to BE turns 61.9: a sixtieth of its rate. It never came onto the foe it was shooting
+    // at, and the warp dodge below -- which waits until the bow is within 0.25 rad of the heading
+    // away from the shot -- almost never fired, which is the scene's whole set piece. There is no
+    // degrees-per-second turn rate anywhere in this build, so the conversion is gone, not corrected.
     private void TurnTowards(float want, double delta)
     {
-        float rate = (float)(_cap.Stats["turn_rate"] * Mathf.Pi / 180.0);
+        float rate = (float)_cap.Stats["turn_rate"];
         if (rate <= 0f) rate = 0.4f;
         _cap.Rotation += Mathf.Clamp(Mathf.AngleDifference(_cap.Rotation, want), -rate * (float)delta, rate * (float)delta);
     }

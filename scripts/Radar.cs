@@ -6,7 +6,8 @@ using Godot;
 //   white arrow   you                     blue arrows   other players
 //   red           hostiles (ringed yellow when selected)
 //   yellow        gatherers and the hauler
-//   grey          the base; cyan ring the portal; brown the wreck and asteroids
+//   the landmarks, and the turrets a freighter left out, are Hub.ScopeMarks: one row
+//   each, picked below and drawn below, so nothing can be pickable and invisible
 //   a thin box    what the free camera is looking at, when it is unlocked
 // Purely local: it draws what this machine already knows.
 public partial class Radar : Control
@@ -37,14 +38,7 @@ public partial class Radar : Control
         var best = Combat.Nearest(Combat.Hostiles, world, h => h.Position, tol, Combat.Pickable);
         if (best != null) { Hub.SelectTarget(best); return; }
         var marks = new System.Collections.Generic.List<(string name, Vector2 at, float radius)>();
-        if (!Hub.InArena)
-        {
-            marks.Add(("BASE", Hub.BasePos, 260f)); marks.Add(("THREAT INTELLIGENCE", Hub.TioPos, 140f));
-            marks.Add(("PORTAL", Hub.PortalPos, 160f)); marks.Add(("SALVAGE FIELD", Hub.WreckPos, 340f));
-            marks.Add(("MINING BELT", Hub.SunPos, 540f));
-            foreach (var (name, at) in Hub.Outposts) marks.Add(("OUTPOST " + name, at, Hub.OutpostHeight * 0.5f));
-            if (Hub.Mission == Hub.MissionState.PortalOpen) marks.Add(("MISSION PORTAL", Hub.MissionPortalPos, 160f));
-        }
+        foreach (var m in Hub.ScopeMarks()) marks.Add((m.Name, m.At, m.Pick));   // the table _Draw draws
         foreach (var s in Hub.Ships) if (s != me) marks.Add((s.Pilot, s.Position, s.HitRadius));
         (string name, Vector2 at, float radius)? pick = null; float pd = tol;
         foreach (var m in marks) { float d = world.DistanceTo(m.at); if (d <= pd) { pd = d; pick = m; } }
@@ -81,18 +75,19 @@ public partial class Radar : Control
         if (IsInstanceValid(Hub.Boss)) { var p = P(Hub.Boss.Position); if (Inside(p)) DrawCircle(p, 6f, new Color(1f, 0.3f, 0.25f)); }   // the boss
         foreach (var cr in Hub.Crates)                                     // this pilot's crates: only its own exist here
             if (IsInstanceValid(cr)) { var p = P(cr.Position); if (Inside(p)) DrawRect(new Rect2(p - new Vector2(2, 2), new Vector2(4, 4)), Ui.RarityColor(Equipment.ById(cr.Item)?.Rarity ?? Rarity.Common)); }
-        if (!Hub.InArena)
-        {   // home's landmarks: the arena has none of them, and drew a wreck and a portal where nothing is
-            { var p = P(Hub.WreckPos); if (Inside(p)) DrawCircle(p, 4f, new Color(0.5f, 0.35f, 0.25f, 0.9f)); }
-            { var p = P(Hub.TioPos); if (Inside(p)) DrawRect(new Rect2(p - new Vector2(3, 4), new Vector2(6, 8)), new Color(0.6f, 0.64f, 0.7f)); }   // the TIO
-            { var p = P(Hub.BasePos); if (Inside(p)) DrawRect(new Rect2(p - new Vector2(4, 4), new Vector2(8, 8)), new Color(0.75f, 0.78f, 0.8f)); }
-            { var p = P(Hub.PortalPos); if (Inside(p)) DrawArc(p, 5f, 0, Mathf.Tau, 16, new Color(0.4f, 0.8f, 1f), 1.5f); }
-            foreach (var (_, at) in Hub.Outposts)                                                    // the outposts: small diamonds
-            {
-                var p = P(at);
-                if (Inside(p)) DrawColoredPolygon(new[] { p + new Vector2(0, -4), p + new Vector2(3.5f, 0), p + new Vector2(0, 4), p + new Vector2(-3.5f, 0) },
-                                                  new Color(0.55f, 0.72f, 0.85f));
-            }
+        // EVERY MARK THE SCOPE CAN POINT AT, from the one table _GuiInput picks from: the home
+        // landmarks, the mission portal while it is open, and the turrets a freighter left out.
+        // A row here is a row there: nothing is pickable without a glyph.
+        foreach (var m in Hub.ScopeMarks())
+        {
+            var p = P(m.At);
+            if (!Inside(p)) continue;
+            if (m.Shape == Hub.MarkShape.Dot) DrawCircle(p, m.Size.X, m.Colour);
+            else if (m.Shape == Hub.MarkShape.Box) DrawRect(new Rect2(p - m.Size, m.Size * 2f), m.Colour);
+            else if (m.Shape == Hub.MarkShape.Ring) DrawArc(p, m.Size.X, 0, Mathf.Tau, 16, m.Colour, 1.5f);
+            else if (m.Shape == Hub.MarkShape.Diamond)
+                DrawColoredPolygon(new[] { p + new Vector2(0, -m.Size.Y), p + new Vector2(m.Size.X, 0),
+                                           p + new Vector2(0, m.Size.Y), p + new Vector2(-m.Size.X, 0) }, m.Colour);
         }
         // the fleet that is out there: a lost ship, or the hauler through the portal, has no dot
         if (Hub.Yard != null) foreach (var g in Hub.Yard.Gatherers) { var p = P(g.Position); if (g.InReach && Inside(p)) DrawCircle(p, 1.8f, Plume.Utility); }

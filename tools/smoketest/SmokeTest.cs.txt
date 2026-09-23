@@ -584,6 +584,35 @@ public partial class _Test : Node
               && menu.Foes.Count(f => f.Kind == MenuFoeKind.Light) == 3
               && menu.Foes.All(f => Combat.Hostiles.Contains(f)),
               "heavies, a webifier and light fighters, all of them real targets the ship can shoot");
+
+        // THE HULL COMES ROUND AT THE SHEET'S RATE. turn_rate is RADIANS a second -- the sheet says
+        // so ("Rudder limit", rad/s) and PlayerShip.Steer caps its yaw with the figure itself --
+        // and the menu read it as degrees and multiplied by pi/180, so the title battleship turned
+        // 1.08 degrees a second instead of 61.9. It never came onto the foe it was shooting at, and
+        // the warp dodge below, which waits until the bow is within 0.25 rad of its heading, almost
+        // never fired: the scene's set piece. 1.08 as a literal from the class row, never the
+        // menu's own reading of it.
+        Check(Math.Abs(ship.Stats["turn_rate"] - 1.08) < 1e-9,
+              $"the title battleship's rudder limit is the battleship's own 1.08 rad/s ({ship.Stats["turn_rate"]:0.000} rad/s)");
+        {
+            // Any spot inside the 40 u it holds station within, and any bearing to the foe: what
+            // is asserted is the RATE, so only where it sits and which way it faces are varied.
+            double turnRate = -1; float turnedBy = 0;
+            var turnFoe = Combat.Nearest(menu.Foes.Where(f => f.Alive), ship.Position, f => f.GlobalPosition);
+            if (turnFoe != null)
+            {
+                var turnAt = VaryNear(menu.Station, 30f);
+                // Place, not Position: it also stops the hull and zeroes the rudder's own yaw rate,
+                // which would otherwise keep turning the ship for its 2.5 rad/s^2 of ease-off.
+                ship.Place(turnAt, Aim.Face(turnAt, turnFoe.GlobalPosition) + Mathf.Pi);
+                float turnRot0 = ship.Rotation; double turnClock = 0;
+                for (int i = 0; i < 45; i++) { await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); turnClock += GetProcessDeltaTime(); }
+                turnedBy = Mathf.Abs(Mathf.AngleDifference(turnRot0, ship.Rotation));
+                turnRate = turnedBy / turnClock;
+            }
+            Check(Math.Abs(turnRate - 1.08) < 0.06,
+                  $"and the diorama turns it at that rate, not a sixtieth of it: {turnRate:0.000} rad/s ({Mathf.RadToDeg((float)turnRate):0} deg/s) coming round onto the foe, where the degrees-to-radians conversion left it at 0.019 ({turnedBy:0.00} rad turned)");
+        }
         // HOLDING STATION. Pushed well off its mark first: a ship that was never going to move
         // cannot demonstrate that it comes back, which is the same vacuity trap as the boss lock.
         ship.Position = menu.Station + new Vector2(200, 150);
@@ -612,8 +641,12 @@ public partial class _Test : Node
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         }
         Check(Math.Abs(called - 8) < 0.2, $"the area shot is called 8 s before it lands ({called:0.0} s)");
-        Check(startedAt > 3.0 && startedAt <= 4.05, $"it starts the jump with four seconds to go ({startedAt:0.0} s)");
-        Check(landedAt > 0.6 && landedAt < 1.6, $"and is clear a whole second before impact ({landedAt:0.0} s)");
+        // It begins with its OWN warm-up plus its own half turn to go -- 3 s and 2.9 s on a
+        // battleship's 1.08 rad/s -- because the jump goes along the keel, so the turn is the aim.
+        // A flat 4 s was enough only while the diorama read the turn rate as degrees and the hull
+        // barely moved: at the rate it really turns it cleared the blast with 0.2 s to spare.
+        Check(startedAt > 4.5 && startedAt <= 6.0, $"it starts the jump with its warm-up and a half turn to go ({startedAt:0.0} s)");
+        Check(landedAt > 1.5 && landedAt < 3.5, $"and is clear with seconds to spare, not tenths ({landedAt:0.0} s)");
         Check(before.DistanceTo(ship.Position) > 300, $"the jump actually moved it ({before.DistanceTo(ship.Position):0} u)");
     }
 
@@ -1831,6 +1864,22 @@ public partial class _Test : Node
             var ne = new Vector2(2121.3f, -2121.3f);
             Click(OnRadar(ne)); await Wait(0.05);
             Check(H.WaypointName == "OUTPOST NE" && H.Waypoint is { } wp && wp.DistanceTo(ne) < 1f, $"an outpost is on the radar: clicking it makes OUTPOST NE the waypoint ({H.WaypointName})");
+            // ONE TABLE BEHIND THE SCOPE (Hub.ScopeMarks): what can be picked is what is drawn.
+            // There were two lists, and they had drifted -- MISSION PORTAL was pickable with no
+            // glyph of its own, so the only way to that waypoint was a click on empty scope.
+            var scopeAtHome = H.ScopeMarks().ToList();
+            var wantMarks = new[] { "BASE", "THREAT INTELLIGENCE", "PORTAL", "SALVAGE FIELD", "MINING BELT",
+                                    "OUTPOST SE", "OUTPOST NE", "OUTPOST NW", "OUTPOST SW" };
+            Check(scopeAtHome.Count == 9 && wantMarks.All(n => scopeAtHome.Count(smk => smk.Name == n) == 1),
+                  $"the scope's marks at home are the 9 landmarks, once each ({scopeAtHome.Count}: {string.Join(", ", scopeAtHome.Select(smk => smk.Name))})");
+            Check(scopeAtHome.All(smk => smk.Name.Length > 0 && smk.Pick > 0f && smk.Size.X > 0f && smk.Size.Y > 0f && smk.Colour.A > 0f),
+                  $"every one of the {scopeAtHome.Count} marks that can be picked carries a glyph -- a size and a colour to draw it with");
+            foreach (var smk in scopeAtHome)
+            {
+                Click(OnRadar(smk.At)); await Wait(0.05);
+                Check(H.WaypointName == smk.Name && H.Waypoint is { } mkAt && mkAt.DistanceTo(smk.At) < 1f,
+                      $"{smk.Name} is drawn on the scope at ({smk.At.X:0}, {smk.At.Y:0}) and picks there as itself ({H.WaypointName})");
+            }
             Click(OnRadar(Hub.BasePos)); await Wait(0.05);
             me.Position = Hub.BasePos + new Vector2(0, 1500); me.Rotation = 0f; await Wait(0.2);    // the base dead ahead
             Key(global::Godot.Key.V); await Wait(PlayerShip.WarpWarmup + 0.2);
@@ -2929,6 +2978,27 @@ public partial class _Test : Node
             await Wait(0.55); double hp1 = me.Hp;
             me.Hit(5, me.Position + Vector2.Up * 100, "test:a");
             Check(hp1 - me.Hp > 4.5, "after 0.52 s the first source lands again");
+            // ...AND A VOLLEY IS NOT ONE SOURCE. The gap exists for an ONGOING source -- a
+            // sweeping beam, a ram, an area tick -- not for three separate bodies that each strike
+            // once and end. Three shots down one bearing in one frame, all naming one weapon, as
+            // the Lancer's trident does: every fired shot carries its own identity now
+            // (Shots.SourceKey), so all three land where a shared name left a hull feeling one.
+            // Any bearing and any standoff; the hull is put at rest first (Place) so the shots
+            // cannot chase it, and the damage is read off the tally, which regeneration does not
+            // move. Nothing is healed afterwards: the line below puts the hull on 50% anyway.
+            {
+                var volAt = me.Position; float volBear = VaryAngle(), volStand = Vary(200f, 320f);
+                me.Place(volAt, me.Rotation);
+                var volFrom = volAt + Vector2.Right.Rotated(volBear) * volStand;
+                var volAim = (volAt - volFrom).Normalized();
+                double Volley() => me.DamageBySource.Where(kv => kv.Key.StartsWith("test:volley#")).Sum(kv => kv.Value);
+                for (int i = 0; i < 3; i++)
+                    Combat.FireSlug(volFrom, volAim, 900f, volStand * 2f, 6f, 7.0, scrap: false, 0, "test:volley");
+                for (int i = 0; i < 60 * 3 && Volley() < 21.0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                int volSources = me.DamageBySource.Where(kv => kv.Key.StartsWith("test:volley#")).Count();
+                Check(Math.Abs(Volley() - 21.0) < 1e-9 && volSources == 3,
+                      $"a volley of three from one weapon lands three times on one hull: 3 x 7 = 21 taken from 3 separate sources, not the 7 from 1 that one shared name left of it ({Volley():0.000} from {volSources}, fired from {volStand:0} u off at {Mathf.RadToDeg(volBear):0} deg)");
+            }
             Check(PlayerShip.CombatHold == 12, "out of combat means 12 s without dealing or taking damage");
             me.TakeDamage(me.Hp - me.MaxHp * 0.5); me.NoteCombat(); double h0 = me.Hp;
             await Wait(1.0);
@@ -3844,6 +3914,12 @@ public partial class _Test : Node
             var tio = H.GetNode<Sprite2D>("TIO"); float halfW = tio.GetRect().Size.X * tio.Scale.X / 2f;
             Check(H.Mission == Hub.MissionState.PortalOpen && mp != null && mp.Position.X > Hub.TioPos.X + halfW && mp.Position.Y < Hub.TioPos.Y - Hub.TioHeight / 2f,
                   "after 3 s the portal opens off the TIO's top-right corner");
+            // THE MARK THAT WAS PICKABLE AND INVISIBLE: the open portal is one row of the scope
+            // table now, so the glyph and the pick are the same row or neither exists.
+            var mpMark = H.ScopeMarks().Where(smk => smk.Name == "MISSION PORTAL").ToList();
+            Check(mpMark.Count == 1 && mpMark[0].At.DistanceTo(H.MissionPortalPos) < 0.01f && mpMark[0].Pick > 0f
+                  && mpMark[0].Size.X > 0f && mpMark[0].Colour.A > 0f,
+                  $"the open mission portal is 1 scope mark with a glyph of its own ({mpMark.Count} row, pick {(mpMark.Count == 1 ? mpMark[0].Pick : -1):0} u)");
             float d0 = Me.Position.DistanceTo(H.MissionPortalPos);
             // The base as it LEAVES, marked: the only thing that can put this figure on disk is the
             // save on the way out (the 30 s autosave is held off). That save used to write nothing --
@@ -4247,7 +4323,12 @@ public partial class _Test : Node
                     me3.Position = dk.Position + new Vector2(0, 700); await Wait(0.1);
                     var shellSeen = new System.Collections.Generic.HashSet<Shot>(Slugs());
                     var shellAt = new System.Collections.Generic.List<double>(); Shot shell = null; double clock = 0;
-                    double gun0 = me3.DamageBySource.GetValueOrDefault("boss:gun");
+                    // EVERY FIRED SHOT IS ITS OWN SOURCE (Shots.SourceKey), so a weapon's tally is
+                    // its family name, then "#", then the body's number. Summed by family here --
+                    // and "boss:gun" is matched WHOLE as well, so the Lancer's "boss:guns", one
+                    // character away, can never be counted as this boss's gun.
+                    double Fired(string fam) => me3.DamageBySource.Where(kv => kv.Key == fam || kv.Key.StartsWith(fam + "#")).Sum(kv => kv.Value);
+                    double gun0 = Fired("boss:gun");
                     for (int i = 0; i < 60 * 7 && shellAt.Count < 2; i++)
                     {
                         await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); clock += GetProcessDeltaTime();
@@ -4255,8 +4336,8 @@ public partial class _Test : Node
                     }
                     float sspd = 0;
                     if (shell != null && GodotObject.IsInstanceValid(shell)) { var sp0 = shell.Position; for (int i = 0; i < 10; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); sspd = GodotObject.IsInstanceValid(shell) ? (shell.Position - sp0).Length() / (10f / 60f) : 0; }
-                    for (int i = 0; i < 60 * 5 && me3.DamageBySource.GetValueOrDefault("boss:gun") == gun0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-                    double gunHit = me3.DamageBySource.GetValueOrDefault("boss:gun") - gun0;
+                    for (int i = 0; i < 60 * 5 && Fired("boss:gun") == gun0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                    double gunHit = Fired("boss:gun") - gun0;
                     Check(shellAt.Count == 2 && Math.Abs(shellAt[1] - shellAt[0] - 2.5) < 0.05 && Math.Abs(sspd - 220) < 4 && Math.Abs(gunHit - 6.6) < 1e-6,
                           $"its main gun: a slow shell (220 u/s) every 2.5 s, 6 a hit -- 2.4 DPS before the level's scale (x1.1 here: 6.6) ({sspd:0} u/s, {(shellAt.Count == 2 ? shellAt[1] - shellAt[0] : -1):0.00} s apart, {gunHit:0.00})");
                     // THE SCRAP SHOTGUN (started by hand): a warpRing where it will land -- 600 u from the pilot --
@@ -4280,14 +4361,19 @@ public partial class _Test : Node
                     bool fanned = offs.Count == 7 && offs.Zip(new[] { -30f, -20f, -10f, 0f, 10f, 20f, 30f }, (a, b) => Math.Abs(a - b) < 0.5f).All(x => x);
                     Check(warpRing != null && Math.Abs(warpRing.Duration - 1.0) < 1e-6 && Math.Abs(warpOff - 600) < 5 && fan.Count == 7 && heldStill && fanned,
                           $"the scrap shotgun: a warp to 600 u off the pilot ({warpOff:0}), a fan of 7 lines for 1.875 s held still, then 7 pieces at -30..+30 in 10s ({string.Join(" ", offs.Select(a => a.ToString("0")))})");
-                    // each piece is its own hit (boss:scrap:0..6, the middle one 3): the middle piece, aimed at the
-                    // pilot, strikes it -- and a hull as broad as the 302 u battleship's takes its neighbours too
-                    double Piece(int k) => me3.DamageBySource.TryGetValue($"boss:scrap:{k}", out var v) ? v : 0;
-                    double mid0 = Piece(3), all0 = Enumerable.Range(0, 7).Sum(Piece);
+                    // EACH PIECE ITS OWN HIT, by construction rather than by hand. The fan used to
+                    // number its seven source keys itself (boss:scrap:0..6) so the pieces would not
+                    // swallow one another inside a hull's 0.52 s per-source gap; every fired shot
+                    // carries its own identity now, so the fan says "boss:scrap" once. The piece at
+                    // 0 degrees is aimed dead at the pilot (`fanned`, above), and a hull as broad as
+                    // the 302 u battleship's takes its neighbours too -- so what the tally must show
+                    // is a WHOLE number of 20.625, at least one: every piece that lands felt in
+                    // full, and not one of them swallowed.
+                    double all0 = Fired("boss:scrap");
                     for (int i = 0; i < 60 * 3; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-                    double midDmg = Piece(3) - mid0, allDmg = Enumerable.Range(0, 7).Sum(Piece) - all0;
-                    Check(Math.Abs(midDmg - 20.625) < 1e-6 && Math.Abs(allDmg / 20.625 - Math.Round(allDmg / 20.625)) < 1e-6,
-                          $"the middle piece strikes the pilot it was aimed at, each piece its own 15 x1.25 = 18.75, x1.1 = 20.625 ({midDmg:0.000}; {allDmg / 20.625:0} of the 7 struck)");
+                    double allDmg = Fired("boss:scrap") - all0, pieces = allDmg / 20.625;
+                    Check(pieces >= 1 && Math.Abs(pieces - Math.Round(pieces)) < 1e-6,
+                          $"the piece aimed at the pilot strikes it, and every piece that lands is felt in full -- 15 x1.25 = 18.75, x1.1 = 20.625 each ({allDmg:0.000} taken, {pieces:0} of the 7 struck)");
                     // THE ASTEROID THROW (started by hand): a rock beside it in its tractor, a red lane of the
                     // rock's width for 7.5 s (1.25 x the Lancer's 6 s charge), the boss held still -- then the
                     // throw: slow, then very fast (the first half of the flight covers an eighth of the lane),
@@ -4600,6 +4686,14 @@ public partial class _Test : Node
             H.Drop(fg, VaryNear(fg.Position, 420f), fg.Stats["deploy_hull"]);
             await Wait(0.3);
             Check(fg.TurretsOut == 3, $"arena host: three of the guest's turrets standing ({fg.TurretsOut})");
+            // WHICH ARM HOLDS WHICH SHIP IS THE HOST'S WORD. Put the first gatherer in arm 3 of the
+            // base's 5 for the guest to read off the wire: the hologram bars are drawn from
+            // Arm.Occupant on every peer, and nothing had ever written it anywhere but here.
+            var armShip = H.Yard.Gatherers.FirstOrDefault();
+            H.Yard.SetArm(armShip, 3);
+            Check(armShip != null && H.Yard.ArmOf(armShip) == 3 && H.Yard.Arms[3].Occupant == armShip
+                  && H.Yard.Arms.Count(a => a.Occupant != null) == 1,
+                  $"arena host: its first gatherer stands in arm 3 of the base's 5, and no other arm is taken ({(armShip == null ? -1 : H.Yard.ArmOf(armShip))}, {H.Yard.Arms.Count(a => a.Occupant != null)} busy)");
             // 45 into the LAST of them (the first is the one shot off its base below): nothing
             // carried a turret's hull after the drop, so its owner watched a pristine turret take
             // a whole raid and then vanish in a burst.
@@ -4775,6 +4869,17 @@ public partial class _Test : Node
             await RealTime(() => H.Deployed.Count == 3, Wan ? 15 : 8);
             Check(H.Deployed.Count == 3 && H.Deployed.All(t => t.OwnerId == Net.LocalId),
                   $"arena guest: every turret the host put out for it stands here ({H.Deployed.Count})");
+            // ...AND ON ITS OWN SCOPE. A freighter's turrets were the one thing a pilot places by
+            // hand that the radar refused to draw, so three left out could not be found again.
+            var dpMarks = H.ScopeMarks().Where(smk => H.Deployed.Any(dp => dp.Position.DistanceTo(smk.At) < 0.01f)).ToList();
+            Check(dpMarks.Count == 3 && dpMarks.All(smk => smk.Name.Length > 0 && smk.Pick > 0f && smk.Size.X > 0f && smk.Colour.A > 0f),
+                  $"arena guest: all 3 of its turrets are marks on its own scope, each with a name and a glyph ({dpMarks.Count} of {H.Deployed.Count} standing)");
+            // THE ARM INDEX IS ON THE WIRE: the arms used to be host-only state, so on a guest the
+            // hologram bars never brightened for a ship it could plainly see standing in one.
+            await RealTime(() => H.Yard.Gatherers.Count > 0 && H.Yard.ArmOf(H.Yard.Gatherers[0]) == 3, Wan ? 20 : 12);
+            int gArm = H.Yard.Gatherers.Count > 0 ? H.Yard.ArmOf(H.Yard.Gatherers[0]) : -1;
+            Check(gArm == 3 && H.Yard.Arms[3].Occupant == H.Yard.Gatherers[0] && H.Yard.Arms.Count(a => a.Occupant != null) == 1,
+                  $"arena guest: arm 3 of the base's 5 holds the host's first gatherer here too, the other 4 free ({gArm}, {H.Yard.Arms.Count(a => a.Occupant != null)} busy)");
             // ...and what the host puts INTO one of them arrives too
             await RealTime(() => H.Deployed.Any(t => t.Hp < 119), Wan ? 20 : 12);
             var hurtHere = H.Deployed.FirstOrDefault(t => t.Hp < 119);

@@ -191,7 +191,7 @@ levels once a second and ship and hauler state ten times a second; a guest's own
   `NetRaiderSpawn`; not `Strength`, which scales their damage too). At the jump they withdraw and the
   sale pays 5x. The hauler has **262.5 hull**. **Nothing is ever lost to a trip or a save**: the Yard
   counts what the fleet and the hauler carry as home (`Yard.Banked`).
-- **The outposts** (`Hub.Outposts`, `outpost.png` at 170 u): four small permanent stations 2000 u out on
+- **The outposts** (`Hub.Outposts`, `outpost.png` at 170 u): four small permanent stations `Hub.OutpostOut` out (3000 u) on
   the diagonals, labelled OUTPOST SE / NE / NW / SW, on the radar as small diamonds and pickable there
   as waypoints. Every peer builds the same four in `BuildWorld`; nothing about them is replicated.
 - **Upgrades** cost credits, in tabs **MINERS, SALVAGERS, HAULER** (plus **REFIT**) in the BASE
@@ -249,6 +249,9 @@ levels once a second and ship and hauler state ten times a second; a guest's own
 
 - **A (DONE)**: bomber docking; boss 600; fighters 2/shot; torpedoes 15; utility hull 120; guard 0.52 s;
   red missile tips; PD only missiles and light fighters; dummy 2 -> two practice fighters.
+  *(As shipped THEN. The 50 DPS pass has since moved every weapon figure in that line -- a
+  fighter's shot and a bomber's torpedo are `fighter_damage` and `torpedo_damage` in `Stats.cs`,
+  and the rows are the truth. The utility hull is still 120: `Economy.UtilityHull`.)*
 - **B (DONE; escorts 3 hull)**: the beam charges **6 s**; meanwhile the boss launches **2 light fighters, 45° to port and to
   starboard**, straight at the player, their boost lasting until they reach it (a pin to hold the pilot
   in the beam unless point defence — or, for a fighter pilot, their guns — kills them); live **3 s**,
@@ -285,7 +288,10 @@ Recorded here so every chunk builds from the written word, not from memory.
   quickly, turning white as it fades.
 - **Chunk 4 — layout (DONE: 1500 u to each field's edge)**: the salvage field ~500 u further left; the mining belt 300–500 u closer; both
   the **same distance from the base, measured to each area's boundary**.
-- **Chunk 5 — utility hull and rebuilds (DONE)**: miners/salvagers 60 hull, hauler 150; destroyed ones are
+- **Chunk 5 — utility hull and rebuilds (DONE, but NOT at the hulls asked for)**: the 60 and 150 here
+  were never built; a miner and a salvager have `Economy.UtilityHull` (120, which is what chunk A
+  above said) and the hauler `Economy.HaulerHull` (262.5). Those two consts own the figures.
+  Destroyed ones are
   rebuilt at the base after 30 s for **10% of all money invested so far in that category's upgrades**
   (a running total per category: miner, salvager, hauler).
 - **Chunk 6 — enemy fighters.** A variable **raider damage x**: **light fighters 1 DPS** (x), **heavy
@@ -413,8 +419,18 @@ Recorded here so every chunk builds from the written word, not from memory.
 - **Who can be hit**: player weapons hit `Combat.Hostiles`; enemy fire hits `Combat.Players`. A
   player ship's collider is a capsule along its keel (`PlayerShip.Covers`); everything else is a
   circle (`IHittable.Covers`). Escape pods are in neither list: nothing can touch them.
-- **Hits** go through `PlayerShip.Hit(damage, from)` on the host, which applies the damage and tells
-  every peer which side to light on the shield (`ShieldFlash`: one generic hex panel, four sides).
+- **Hits** go through `PlayerShip.Hit(damage, from, source)` on the host, which applies the damage and
+  tells every peer which side to light on the shield (`ShieldFlash`: one generic hex panel, four sides).
+- **A source lands at most once per 0.52 s, and A PROJECTILE IS ITS OWN SOURCE.** The gap
+  (`PlayerShip.Incoming`, keyed by the source's name) is there for an ONGOING source — a sweeping
+  beam, a ram, an area tick — where one name has to cover every tick of one thing. Three bodies that
+  each strike once are three sources: the Lancer's trident passed one name for all three seekers and
+  a hull felt only the first, and the Drake numbered its seven scrap pieces by hand to avoid exactly
+  that. `Combat.Fire` now adds the firing body's own identity to whatever name it is given
+  (`Shots.SourceKey`, `family#n`), so a volley of any size lands every hit while a beam, a ram or an
+  area tick — none of which come through `Combat.Fire` — keep the single shared name they need. The
+  names themselves are members of `DamageSource` (`Combat.cs`): "boss:gun" and "boss:guns" are two
+  weapons on two bosses one character apart, and a typo there suppresses hits in silence.
 - **Death**: 0 hull puts the ship into a 2-minute **stasis** where it lies; the owner flies an
   **escape pod**; afterwards **F** re-boards at 33% hull (a request the host decides). Stasis and
   hull are host state, replicated with the rest.
@@ -450,9 +466,9 @@ rows (`Ab.*`). Nothing else in the game is touched.
 
 | | Hull | Length | Top speed | Main guns | Its F | PD turrets | Wing | Sprite |
 |---|---|---|---|---|---|---|---|---|
-| **Battleship** | 300 | 378 u | 104 u/s | 4, 5.9 a shell | broadside | 2 (slow, τ/3) | — | `battleship_hull.png` |
+| **Battleship** | 300 | 378 u | 104 u/s | 4, 17.9 a shell | broadside | 2 (slow, τ/3) | — | `battleship_hull.png` |
 | **Carrier** | 200 | 283.5 u | 116.48 u/s | — | bomber strike | 3 (fast, τ/1.2) | 3 fighters + 2 bombers | `carrier_player.png` |
-| **Destroyer** | 250 | 212.6 u | 130 u/s | 2, 5.9 a shell | missile burst | 2 (slow, τ/3) | — | `destroyer_hull.png` |
+| **Destroyer** | 250 | 212.6 u | 130 u/s | 2, 7.5 a shell | missile burst | 2 (slow, τ/3) | — | `destroyer_hull.png` |
 | **Freighter** | 400 | 230 u | 85 u/s | 1, 12 a shell | bubble (400 soaked) | 2 | 3 deployable turrets | `freight_hauler_hull.png` |
 | **Tender** | 400 | 230 u | 85 u/s | 1, 12 a shell | overdrive (x2 fire) | 2 | 3 deployable turrets | `freight_tender_hull.png` |
 | **Bastion** | 400 | 230 u | 85 u/s | 1, 12 a shell | shockwave (1000 u) | 2 | 3 deployable turrets | `freight_bastion_hull.png` |
@@ -463,10 +479,15 @@ rows (`Ab.*`). Nothing else in the game is touched.
 | **Echo** | 90 | 70 u | 260 u/s | 1, 5 a shell | bullet echo | — | — | `light_echo_hull.png` |
 | **Wraith** | 90 | 70 u | 260 u/s | 1, 5 a shell | stealth (5 s) | — | — | `light_wraith_hull.png` |
 
-**Damage**: main gun 5.9 a shell, one a second per barrel · PD 0.5 every 0.5 s per turret · fighter 2
-every 0.35 s · torpedo 15 · missile 5 (three to a burst). Every number lives in **`ShipStats`**
-(`Stats.cs`); turrets, wings and helm read it and the K window prints the same object, so the two
-cannot drift. Stat = base × (1 + bonus); reload, cooldown and radius bonuses divide. Bonuses are
+**Damage**: every figure is a row, and the row is the only place it is written down — repeating one
+here is how this section came to claim a 5.9 shell for a gun that fires 17.9. The main gun's shell
+and its reload belong to the CLASS (`main_damage` / `main_interval` in that class's `Nums`,
+`Ships.cs`): the same weapon runs from the dart's 5 every 0.35 s to the battleship's 17.9 every
+2 s. Everything else is a default on the sheet (`Stats.cs`), which a class overrides only where its
+row says so — point defence `pd_damage` / `pd_interval` (the warden's mount is the one override), a
+fighter's `fighter_damage` / `fighter_interval`, a bomber's `torpedo_damage`, a missile's
+`missile_damage`, three to a burst (`PlayerShip.BurstSides`). Turrets, wings and helm read that
+sheet and the K window prints the same object, so the two cannot drift. Stat = base × (1 + bonus); reload, cooldown and radius bonuses divide. Bonuses are
 saved per character; nothing grants them yet.
 
 **A class is asked what it is FITTED with, never "is it the battleship".** `Fit.Guns`
@@ -502,7 +523,10 @@ Every class action is an ability (`Abilities.cs`): an id, a default key, and a k
 (fires once) or **Hold** (active while held). The bar along the bottom shows each ability's key,
 name and live state, with a dark sweep while it recharges. **K** opens a window whose first tab
 remaps them: click the key, press a new one. A key another ability holds is **swapped**, never
-duplicated; the fixed keys (W A S D, Tab, K, C, Esc, Enter) are refused. Bindings are per class and
+duplicated; the keys the hub itself flies and opens windows with are refused, and they are a set,
+not a sentence: `Abilities.Reserved` (W A S D, Tab, Esc, Enter and keypad Enter, K B L I V, and Y
+with the four arrows for the free camera). **C is not one of them** — it stopped opening the ship
+menu and was never taken back. Bindings are per class and
 belong to the machine (`settings.cfg`, section `keys`, only changed keys stored).
 
 | Battleship | default | Destroyer | default | Carrier | default |
@@ -518,7 +542,8 @@ A binding saved for an ability that has since changed id is carried over when th
 fire mode onto F never finds two abilities on it, and its `reload`, which is gone, keeps none.
 
 - **Main guns** swing toward the cursor at τ/4 and fire, while the key is held, along wherever each
-  barrel points — a fast flick fires wide. Reach 720 u. **Salvo** fires every barrel once per reload;
+  barrel points — a fast flick fires wide. Reach is the class's own `main_range` (`Ships.cs`), from
+  the dart's 500 u to the battleship's 1000; 720 u is the destroyer's. **Salvo** fires every barrel once per reload;
   **staggered** fires one every reload ÷ barrels. Same rate: reloads **carry their remainder**
   (`cd += step`); resetting instead rounds each step up to a whole frame and staggered falls behind
   (measured 4.50 against 6.00).
@@ -529,39 +554,42 @@ fire mode onto F never finds two abilities on it, and its `reload`, which is gon
 - **The broadside (battleship, F).** A **0.5 s wind-up** in which every main turret swings onto the
   cursor — fast enough to come round from anywhere in time (half a turn in the wind-up, or their own
   τ/4 if that is faster) — then **three volleys of every main gun, 0.25 s apart**, each shell a normal
-  shell, then a **10 s cooldown**. The ship steers throughout; nothing about it touches the helm. The
+  shell, then the cooldown (`broadside_cooldown`, 14 s on the kit). The ship steers throughout; nothing about it touches the helm. The
   host fires it (`PlayerShip.TickAbilities`, `Turret.Shoot(mult)`), along each barrel as it points —
   the aim is the owner's cursor as it last reached the host. Guests count the wind-up down themselves
   and show the volleys from its end until the host's report says how many are left, so the bar and
-  the turrets' fast swing never drop back to READY in between. 3 × 4 × 5.9 = 70.8 damage every 11 s:
-  6.44 DPS on top of the guns' 23.6. Its gear (the battleship's utility slot): Heavy (×1.4 shells,
+  the turrets' fast swing never drop back to READY in between. `ShipStats.BroadsideDps` owns the
+  arithmetic and is the only place it is worked: volleys × barrels × shell × `broadside_mult`, over
+  the whole cycle (the wind-up, the gaps between volleys and the cooldown). Its gear (the battleship's utility slot): Heavy (×1.4 shells,
   longer cooldown), Rapid (cooldown +50% rate, ×0.75 shells), Barrage (+1/+2/+3 volleys, slower wind-up
   and cooldown), Snap (a wind-up twice as fast, one volley fewer).
-- **The missile burst (destroyer, F).** A magazine of **2 bursts**, 0.6 s apart; **R** reloads it (16 s,
-  nothing fires meanwhile). A burst is **three guided missiles** off the nose — one straight at the
-  target, two launched **up to 70°** either side that curve in — at 160 u/s, turning 1.5 rad/s, 5 damage
-  each. It needs a selected target in range (900 u); the slot says why when it refuses. **Close in, the
+- **The missile burst (destroyer, F).** A magazine of `missile_mag` bursts, `missile_refire` apart;
+  **R** reloads it (`missile_reload`, nothing fires meanwhile). A burst is **three guided missiles**
+  off the nose (`PlayerShip.BurstSides`) — one straight at the target, two launched **up to 70°**
+  either side that curve in — at `missile_speed`, turning `missile_turn`, for `missile_damage` each.
+  It needs a selected target inside `missile_range`; the slot says why when it refuses. **Close in, the
   fan narrows**: a missile heading θ off a target d away can only come round onto it if d > 2r·sin θ
-  (r = speed ÷ turn, ~107 u); inside that it circles the target until its run ends. So the side angle is
-  the widest that still converges with a 0.8 margin (`PlayerShip.BurstSplayFor`) — the full 70° from
-  about 250 u out on the kit's rack, and it follows the gear (a Buster Rack turns wider). Missiles share
-  `Torpedo.cs` with the bombers' torpedoes (which have no guidance at all); guests fly a cosmetic copy
-  with the same guidance.
+  (r = speed ÷ turn); inside that it circles the target until its run ends. So the side angle is
+  the widest that still converges with a 0.8 margin — `PlayerShip.BurstSplayFor` is that formula and
+  the only place the distance it implies is worked out, and it follows the gear (a Buster Rack turns
+  wider). A missile is a row of `Shots.All` (`missile`), the same flyer as the bombers' torpedo at a
+  different row; guests fly a cosmetic copy with the same guidance.
 - **Fighters** (17 u) hold orbit until **attack** sends them at the selected target; they fight
-  while it is within the 1080 u control range. They fly in bursts: after **15 s of firing** a
-  fighter returns to the **carrier's centre for a 3 s rest**, then rejoins. **R** recalls them.
+  while it is within `control_range` (1500 u on the kit). They fly in bursts: after `fighter_burst`
+  of firing a fighter returns to the **carrier's centre** to rest for `fighter_rest`, then rejoins.
+  **R** recalls them.
 - **Bombers park on the carrier's deck**, in bays on the white either side of the runway, drawn at
   **65%** (the deck is far below, as the hauler's pad is; the hauler's own landed size), alternating port and starboard so the sides
-  always split evenly (6 → 3 + 3), and rearm there (6 s). **Bomber strike** sends them at the target if
-  it is within the **strike range, defined as twice the fighters' control range** (2160 u; it takes the
-  same bonus). They **take off one at a time, 0.83 s apart** -- the fighters' cadence, on the deck's own
+  always split evenly (6 → 3 + 3), and rearm there (`bomber_rearm`). **Bomber strike** sends them at the target if
+  it is within the **strike range, defined as twice the fighters' control range** (`strike_range`,
+  3000 u on the kit; it is built from `control_range` and takes the same bonus, so the two cannot drift). They **take off one at a time, 0.83 s apart** -- the fighters' cadence, on the deck's own
   clock (`PlayerShip.TakeLaunchSlot(kind)`) -- each rolling onto the runway and up it to the bow end,
-  **growing to full size as it lifts** (1.6 s, the hauler's SmoothStep). Bombers are 28.1 u. At launch
-  distance (**283.5 u**: close, because the torpedoes do not track) each swings its nose onto the target
+  **growing to full size as it lifts** (1.6 s, the hauler's SmoothStep). Bombers are 28.1 u. At
+  `launch_range` (1900 u on the kit) each swings its nose onto the target
   and launches 4 torpedoes straight ahead **while still closing slowly** (never quite stopped), then
   comes home **over the carrier's centre, settles onto the runway there** (1 s, shrinking back to deck
-  size, turning to face the bow) and **taxis to its bay** (0.6 s). Torpedoes run at **112.5 u/s** out to
-  **1215 u**. A strike whose target goes out of range is called off -- and a bomber still waiting on the
+  size, turning to face the bow) and **taxis to its bay** (0.6 s). Torpedoes run at `torpedo_speed`
+  out to `torpedo_range`. A strike whose target goes out of range is called off -- and a bomber still waiting on the
   deck for its turn answers for itself, so the strike ends. `PlayerShip.Bay` places the bays
   (`ClassArt.BayX/BayY/BaySpacing`), `ClassArt.RunwayBow` the end of the take-off.
 - **An escort's hunters scale with its THREAT** (`Hub.EscortThreat`): a mission level made a quarter each
@@ -573,8 +601,14 @@ fire mode onto F never finds two abilities on it, and its `reload`, which is gon
   turns. A guest places the deck moves itself from the state the host sends, on its own clock.
 - **Six open hotkeys** (1–6 by default) follow every class's own abilities, for every class. They
   bind and remap like any ability and do nothing until something is assigned.
-  **Torpedoes do not track**: straight line, steady 240 u/s, smoke trail, burst on the first hostile
-  touched or at 900 u. A target that steps aside after launch is missed (checked on single torpedoes: a still target
+- **A bomber's torpedoes do not track — and that is the LAUNCH's doing, not the row's.** The
+  `torpedo` row of `Shots.All` is marked `Guided`: it is the same flyer the destroyer's missile and
+  a boss's seeker are. Guidance only runs when the SHOT is handed both a target and a turn rate
+  (`Shot._Process`: `Guided && TurnRate > 0 && TargetId != 0`), and the bomber's
+  `Combat.LaunchTorpedo` (`ShipClasses.cs`, `BSt.Launch`) passes neither — that call is where the
+  invariant lives, and adding a target id there is all it would take to break it. So a torpedo runs
+  straight at `torpedo_speed` out to `torpedo_range`, smoke trailing, and bursts on the first
+  hostile it touches. A target that steps aside after launch is missed (checked on single torpedoes: a still target
   takes the hit, a moved one takes nothing, and a homing torpedo fails the same check).
 
 ### The input model
@@ -597,23 +631,28 @@ This is the developer's rule, not a default to revisit:
   menu, the K window, the creator's columns and the main menu.
 
 Selection is local UI state. It reaches the host only as the `NetId` argument of an ability, so
-every hostile needs a `NetId` that is the same on every peer (the dummies are 1000, 1001, 1002).
+every hostile needs a `NetId` that is the same on every peer (`TargetDummy.NetId` is
+`NetIds.Dummy + Number - 1`, and `BuildWorld` builds numbers 1, 3, 4 and 5: so 1000, 1002, 1003, 1004).
 
 ### Balance on paper
 
-| | Sustained DPS, on the kit without chips, if everything hits | |
-|---|---|---|
-| Battleship | 31.0 (23.6 guns + 6.44 broadside + 1.0 PD at 50% duty) | the K window's figures |
-| Destroyer | 14.6 (11.8 guns + 1.81 missile bursts + 1.0 PD) | the fastest, and 250 hull |
-| Carrier | ≈ 20.6 (19.07 **measured**: fighters and bombers on a dummy for 90 s, + 1.5 PD) | reaches 1.5× as far |
+**Every class is tuned to about 50 sustained DPS on the kit without chips** — the 50 DPS pass
+(`Stats.cs`, at `main_damage`). No class's total is repeated here: a table of them is how this
+section came to say 31.0 for a battleship that deals 51. A ship's total is
+`ShipStats.SustainedDps`, added up from the damaging systems its class declares
+(`ClassDef.Weapons`, out of the one `Dps` catalogue), and the K window prints that same object, so
+the window and the game cannot disagree.
 
-⚠ **The broadside puts the battleship at about 1.6× the carrier**, where its guns alone were 1.24×; the
-destroyer trades damage for pace and a burst that cannot be dodged by a turn. Recorded rather than
-quietly patched: the levers are `broadside_cooldown`, `broadside_volleys` and `missile_damage` in
-`Stats.cs`, each one number.
+What the classes trade is SHAPE, not size. The battleship is the steady one from range, guns plus a
+broadside. The destroyer is the fastest hull with the burstiest weapon: a magazine of guided threes
+that a turn cannot dodge. The carrier reaches furthest — fighters out to `control_range`, bombers to
+twice it — and holds the least hull. The levers are the rows themselves: `main_damage` and
+`main_interval` in a class's `Nums`, `broadside_cooldown`, `missile_damage`, each one number, and
+`tools\smoketest\run.ps1 -Solo` proves each total against literals.
 
-The **three target dummies** in the hub are the test bench: hostile, harmless, unkillable, each
-reporting damage per second. The meter restarts itself on the first hit after 5 s without one.
+The hub's test bench is **two target dummies (1, and 3 armed) and two practice fighters (4 and 5)**
+standing where dummy 2 used to: hostile, harmless, unkillable, each reporting damage per second. The
+meter restarts itself on the first hit after 5 s without one.
 
 ### Art
 

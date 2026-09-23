@@ -45,7 +45,7 @@ public partial class Hauler : UtilityShip, ITurretHost
     public const int FlagEscorted = 1, FlagLost = 2, LegShift = 2;
     public int NetFlags => (Escorted ? FlagEscorted : 0) | (RunLost ? FlagLost : 0) | (_leg << LegShift);
     // What this load sells for at the portal: x5 on an escort, nothing if a lone run was lost.
-    public double Payout => Cargo * Economy.CreditsPerUnit * (Escorted ? Economy.EscortPay : RunLost ? 0 : 1);
+    public override double Payout => Cargo * Economy.CreditsPerUnit * (Escorted ? Economy.EscortPay : RunLost ? 0 : 1);
     private int _leg, _waves;                    // an escort: the route point it is flying to, the waves sent
     public int Leg => _leg;
     // An escort holding at an outpost: seconds of the stop left (guests are sent it, and count it down).
