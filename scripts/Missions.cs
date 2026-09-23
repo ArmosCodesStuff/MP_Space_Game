@@ -108,6 +108,10 @@ public static class Missions
         public Action<Hub, int> CatchUp;            // a peer arriving mid-mission: what Hub.Spawn's catch-up cannot carry
         public Func<int, string> Record;            // what a clear at level L files under (null: this row's Id)
         public double Pay = 1;                      // its share of BountyBase
+        // ...and its share of the EXP a clear pays. TWO SIEGES OR FOUR BOSS KILLS is the owner's
+        // rate for a pilot to come level with a level, so a siege is worth two bounties: it is a
+        // base with four pylons and a garrison, against one hull.
+        public double Exp = 1;
         public bool Drops = true;                   // its quarry's wreck leaves crates
         public double FirstWave, WaveEvery;         // its own garrison clock, in seconds (0: it brings none)
         public string RecordId(int level) => Record?.Invoke(level) ?? Id;
@@ -134,7 +138,7 @@ public static class Missions
                 Title = _ => Emplacements.Of(Emplacements.RowOf(Emplacements.Base)).Label,
                 Build = h => Emplacements.Raise(h, Emplacements.PirateBase),
                 Quarry = h => h.Emplacements.FirstOrDefault(e => GodotObject.IsInstanceValid(e) && e.Def.Id == Emplacements.Base),
-                FirstWave = 12, WaveEvery = 25 },
+                Exp = 2, FirstWave = 12, WaveEvery = 25 },
     };
     public static MissionKind KindOf(int kind) => Kinds[kind >= 0 && kind < Kinds.Length ? kind : Bounty];
     public static MissionCategory CatOf(int kind)
@@ -160,7 +164,16 @@ public static class Missions
     // scale of its own.
     public const double MoveStep = 1.01;
     public static double Quicken(int level) => Math.Pow(MoveStep, Math.Max(1, level) - 1);
-    public const double LevelStep = 1.10;
+    // WHAT A LEVEL ADDS TO A MISSION: its hull, its damage, its bounty and its crates.
+    //
+    // 1.025, not the 1.10 it was. Measured against the owner's own target -- a pilot on par after
+    // FOUR boss kills at a level (or two sieges), carrying gear levelled to about 65% of the
+    // salvage ladder -- a tenth a level was unwinnable: the boss grew forty-fold across forty
+    // levels while the points those kills paid for bought +45%, so the fight at level 20 was a
+    // 200-shot slog and level 40 was arithmetic, not combat. At 1.025 a level-40 fight is twice
+    // the length of a level-1 fight: the boss pulls steadily ahead, which is what was asked for,
+    // and the answer is a fourth clear or better gear rather than a wall.
+    public const double LevelStep = 1.025;
     public static double S(int level) => Math.Pow(LevelStep, Math.Max(1, level) - 1);
     // THE SELECTED LEVEL -- ONE PER CATEGORY (the host decides; replicated). The bounty ladder and
     // the raid ladder are separate, so the level left selected for one is never moved by stepping

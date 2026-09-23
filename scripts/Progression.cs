@@ -30,6 +30,10 @@ public static class Progression
         // a different set on every hull -- a sniper's railgun, a warden's hunters, a warrior's EMP,
         // a freighter's deployed turrets.
         public bool Weapons;
+        // Whether the figures above are SHARES of the stat (a percentage) or amounts of it. Hull,
+        // Rudder and Engines add amounts; Weapons, Reach, Cooling and Gunnery are shares, because
+        // a boss compounds and a pilot adding a flat amount a level can never catch one up.
+        public bool Share;
         // ...and the same for what they REACH (ClassDef.Reach): a share of each id, not a step.
         public bool Reach;
         // ...and how fast they CYCLE (ClassDef.Cycle): the seconds between shots, so a share here
@@ -52,7 +56,9 @@ public static class Progression
         }
         if (u.Weapons)
         {
-            foreach (var kv in Classes.Damage(c)) if (kv.Value != 0) yield return (kv.Key, kv.Value);
+            // THREE PERCENT OF EACH, per point. The class says WHICH stats and in what proportion
+            // (a sniper's railgun moves 7.5 to its gun's 1); the share is the same 3% of each.
+            foreach (var kv in Classes.Damage(c)) if (kv.Value != 0) yield return (kv.Key, 0.03);
             yield break;
         }
         foreach (var m in u.Moves) if (m.per != 0) yield return m;
@@ -63,16 +69,20 @@ public static class Progression
         new() { Id = "turn",   Name = "Rudder",  Moves = new[] { ("turn_rate", (double)Mathf.DegToRad(1f)) } },   // +1 degree per second
         new() { Id = "hull",   Name = "Hull",    Moves = new[] { ("hull", 5.0) } },
         new() { Id = "speed",  Name = "Engines", Moves = new[] { ("max_speed", 1.0) } },
-        new() { Id = "damage", Name = "Weapons", Weapons = true },
+        // WEAPONS IS A SHARE, NOT AN AMOUNT. It was +1 damage a point, against a boss whose hull
+        // climbed by a fifth of itself every level: 41 points bought +45% while the boss grew
+        // forty-fold, so past the middle levels no pilot could ever catch up. Three percent of what
+        // the class declares, per point, so both sides compound.
+        new() { Id = "damage", Name = "Weapons", Weapons = true, Share = true },
         // REACH: every weapon the class declares carries 1% further a level (ClassDef.Reach), so a
         // pilot keeps pace with a boss, whose own reach grows 1% a level (Missions.Quicken).
-        new() { Id = "reach",  Name = "Reach",   Reach = true },
+        new() { Id = "reach",  Name = "Reach",   Reach = true, Share = true },
         // COOLING: every ability comes back sooner. Half a percent a level, and PlayerShip caps
         // what it can ever be worth -- an ability with no cooldown is not an ability.
-        new() { Id = "cool",   Name = "Cooling", Moves = new[] { ("cooldown_share", -0.005) } },
+        new() { Id = "cool",   Name = "Cooling", Moves = new[] { ("cooldown_share", -0.005) }, Share = true },
         // RATE OF FIRE: the main gun's cycle, shorter. Named for the gun, not for "weapons", so it
         // cannot be confused with the Weapons row that buys damage.
-        new() { Id = "rof",    Name = "Gunnery", Cycle = true },
+        new() { Id = "rof",    Name = "Gunnery", Cycle = true, Share = true },
     };
     public const int MaxPerUpgrade = 60;       // a sanity cap on what a peer may claim
     // THE MOST A CLAIM MAY BUY on someone else's host. A pilot's level is its own word and there
@@ -118,11 +128,18 @@ public static class Progression
     public static int ExpToNext => ExpPerLevel;                             // always 1000, whatever the level
 
     // Flat stat additions for a set of purchases, on a given hull.
-    public static Dictionary<string, double> Flats(int[] bought, ShipClass c)
+    // WHAT THE POINTS ADD, in amounts (hull, rudder, engines). A row marked Share is not here: its
+    // figures are percentages and belong with the gear's (Shares below). Adding a share as an
+    // amount is how +1% of a range became one hundredth of a unit of it.
+    public static Dictionary<string, double> Flats(int[] bought, ShipClass c) => Gather(bought, c, false);
+    // ...and what they add as SHARES of a stat, summed with the gear's own percentages.
+    public static Dictionary<string, double> Shares(int[] bought, ShipClass c) => Gather(bought, c, true);
+    private static Dictionary<string, double> Gather(int[] bought, ShipClass c, bool shares)
     {
         var d = new Dictionary<string, double>();
         for (int i = 0; i < All.Length && i < (bought?.Length ?? 0); i++)
         {
+            if (All[i].Share != shares) continue;
             // A row that declares neither Moves nor Weapons yields nothing and adds nothing: a row
             // that can be bought and does not exist. A check names one (SmokeTest: every row moves
             // at least one stat on every flyable class).
@@ -163,7 +180,8 @@ public static class Progression
         set.Add(level);
         // Nothing at all under the mark -- the bonuses too, not just the kill's share.
         int exp = Missions.WorthExp(level, Character.Level)
-                ? Missions.KillExpFor(level, Character.Level) + (first ? Missions.FirstClearExp : 0) + Missions.CompletionExp
+                ? (int)System.Math.Round(Missions.KindOf(kind).Exp *
+                    (Missions.KillExpFor(level, Character.Level) + (first ? Missions.FirstClearExp : 0) + Missions.CompletionExp))
                 : 0;
         AddExp(exp);                                                         // (saves)
         // ...and it says so over the ship, where the pilot is looking (Pop.Exp).

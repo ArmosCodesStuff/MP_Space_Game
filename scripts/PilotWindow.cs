@@ -75,7 +75,11 @@ public partial class PilotWindow : PanelContainer
     {
         string s = "";
         foreach (var (stat, per) in Progression.StatsFor(u, Character.Class))
-            s += $"\n    {AllStats.Said(stat)}   +{AllStats.Fmt(stat, per * n)} now, +{AllStats.Fmt(stat, per)} next";
+            // A SHARE READS AS A PERCENTAGE and an amount in the stat's own units, because
+            // "+0.03 damage" is not what three percent of a weapon looks like to anybody.
+            s += u.Share
+                ? "\n    " + AllStats.Said(stat) + "   " + (per * n * 100).ToString("+0.#;-0.#;0") + "% now, " + (per * 100).ToString("+0.#;-0.#;0") + "% next"
+                : "\n    " + AllStats.Said(stat) + "   +" + AllStats.Fmt(stat, per * n) + " now, +" + AllStats.Fmt(stat, per) + " next";
         return s.Length > 0 ? s : "\n    nothing on this hull";
     }
 }

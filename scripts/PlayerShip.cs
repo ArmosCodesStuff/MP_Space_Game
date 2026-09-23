@@ -291,6 +291,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         if (Mine && !Demo) _loadout = (string[])Character.LoadoutFor(Class).Clone();   // a COPY: the window edits the saved one in place
         var pct = Equipment.Bonuses(Class, Loadout);
         if (Mine && !Demo) pct = ShipStats.Sum(pct, Character.Bonuses);
+        pct = ShipStats.Sum(pct, Progression.Shares(_bought, Class));       // the pilot's own percentages
         return new ShipStats(Class, pct, ShipStats.Sum(Progression.Flats(_bought, Class), Equipment.Adds(Class, Loadout)));
     }
 
