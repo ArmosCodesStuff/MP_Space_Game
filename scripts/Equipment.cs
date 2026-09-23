@@ -62,16 +62,12 @@ public static class Equipment
     public static bool Fits(ItemDef i, GearSlot s, ShipClass c) => i != null && i.Slot == s && (i.Class == null || i.Class == c);
     public static GearSlot SlotAt(int k) => k < CoreSlots ? Core[k] : GearSlot.Chip;
 
-    // every weapon's damage on a class (the battleship's broadside fires main-gun shells)
-    private static string[] DamageStats(ShipClass c) => c switch
-    {
-        ShipClass.Carrier   => new[] { "fighter_damage", "torpedo_damage" },
-        ShipClass.Destroyer => new[] { "main_damage", "missile_damage" },
-        _                   => new[] { "main_damage" },
-    };
-    // every weapon's damage on ANY class, for a general part
+    // Every weapon's damage on ANY class, for a part that lifts all of them. The list of what
+    // counts as a weapon was written out here per class as well as in Progression; it is the
+    // CLASS's to state now (ClassDef.Damage), and both read that one declaration. A stat a hull
+    // does not have is simply not on its sheet, so a chip that names it changes nothing there.
     private static (string, double)[] AllDamage(double p) =>
-        Enum.GetValues<ShipClass>().SelectMany(DamageStats).Distinct().Select(s => (s, p)).ToArray();
+        Classes.EveryDamageStat().Select(s => (s, p)).ToArray();
 
     // One specialisation at all three rarities: `up` is the lean (scaled by rarity), `down` its
     // price (not scaled), `add` whole-number changes, one value per rarity.

@@ -88,6 +88,15 @@ public class ClassDef
     // This class's own numbers, by stat id. Everything it does NOT name it takes from the sheet's
     // default (Stats.cs), so a row here is a difference, never a copy.
     public Dictionary<string, double> Nums = new();
+    // WHAT ITS WEAPONS ARE, and what ONE pilot Weapons level adds to each, in that stat's own
+    // units. The one place a class says this: Progression turns it into the pilot's flat
+    // additions, and the gear that lifts "every weapon" (the basic chips, the Glass Array) takes
+    // its share on every id any class names here. A 0 is a weapon gear reaches and the pilot's
+    // points do not -- which is exactly what the carrier's fighters and the destroyer's missiles
+    // were before this existed, and a saved pilot must not notice the change.
+    // It defaults to EMPTY on purpose: a new class that forgets it is caught by a check, rather
+    // than quietly given the battleship's gun.
+    public Dictionary<string, double> Damage = new();
     // Rows only this class has: the numbers its own abilities are made of. They join the sheet
     // like any other, so the K window prints them and gear and purchases can move them, without
     // Stats.cs knowing that this class exists.
@@ -112,6 +121,7 @@ public static class Classes
                 ["main_count"] = 4, ["main_damage"] = 17.9, ["main_interval"] = 2.0, ["main_range"] = 1000, ["shell_speed"] = 650,
                 ["pd_count"] = 2,
             },
+            Damage = new() { ["main_damage"] = 1 },
             Art = new ClassArt {
                 Texture = "res://battleship_hull.png", Length = 378f, HalfWidth = 43.875f,
                 Mains = new Vector2[] { new(0f, -93.85f), new(0f, -7.56f), new(0f, 73.34f), new(0f, 122.15f) },
@@ -128,6 +138,8 @@ public static class Classes
                 ["turn_radius"] = 127, ["turn_rate"] = 0.9,
                 ["pd_count"] = 3, ["pd_turn"] = Mathf.Tau / 1.2f,
             },
+                // the 0: gear reaches the fighters, the pilot's points do not -- as it was
+            Damage = new() { ["torpedo_damage"] = 1, ["fighter_damage"] = 0 },
             Art = new ClassArt {
                 Texture = "res://carrier_player.png", Length = 283.5f, HalfWidth = 40.02f,
                 BayX = 25.01f, BayY = 8.34f, BaySpacing = 46.69f, RunwayBow = 110.06f, EngineInset = 8f,
@@ -145,6 +157,8 @@ public static class Classes
                 ["main_count"] = 2, ["main_damage"] = 7.5, ["main_interval"] = 1.0, ["main_range"] = 720, ["shell_speed"] = 520,
                 ["pd_count"] = 2,
             },
+                // the 0: gear reaches the missiles, the pilot's points do not -- as it was
+            Damage = new() { ["main_damage"] = 1, ["missile_damage"] = 0 },
             Art = new ClassArt {
                 Texture = "res://destroyer_hull.png", Length = 212.625f, HalfWidth = 27.8f,
                 Mains = new Vector2[] { new(0f, -57.31f), new(0f, 24.66f) },
@@ -163,6 +177,8 @@ public static class Classes
                 ["main_count"] = 1, ["main_damage"] = 12, ["main_interval"] = 1.0, ["main_range"] = 800, ["shell_speed"] = 560,
                 ["pd_count"] = 2,
             },
+                // half a point each: three turrets are out at once, so a level is worth 1.5 across them
+            Damage = new() { ["main_damage"] = 1, ["deploy_damage"] = 0.5 },
             Rows = new StatRow[] {
                 new() { Group = "Deployed turrets", Id = "deploy_damage",   Label = "Damage per shot",  Base = 6, Dec = 1 },
                 new() { Group = "Deployed turrets", Id = "deploy_interval", Label = "Reload",           Base = 0.5, Unit = "s", Dec = 2, Inverse = true },
@@ -192,6 +208,7 @@ public static class Classes
                 ["main_count"] = 1, ["main_damage"] = 12, ["main_interval"] = 1.0, ["main_range"] = 800, ["shell_speed"] = 560,
                 ["pd_count"] = 2,
             },
+            Damage = new() { ["main_damage"] = 1, ["deploy_damage"] = 0.5 },
             Rows = new StatRow[] {
                 new() { Group = "Deployed turrets", Id = "deploy_damage",   Label = "Damage per shot",  Base = 6, Dec = 1 },
                 new() { Group = "Deployed turrets", Id = "deploy_interval", Label = "Reload",           Base = 0.5, Unit = "s", Dec = 2, Inverse = true },
@@ -220,6 +237,7 @@ public static class Classes
                 ["main_count"] = 1, ["main_damage"] = 12, ["main_interval"] = 1.0, ["main_range"] = 800, ["shell_speed"] = 560,
                 ["pd_count"] = 2,
             },
+            Damage = new() { ["main_damage"] = 1, ["deploy_damage"] = 0.5 },
             Rows = new StatRow[] {
                 new() { Group = "Deployed turrets", Id = "deploy_damage",   Label = "Damage per shot",  Base = 6, Dec = 1 },
                 new() { Group = "Deployed turrets", Id = "deploy_interval", Label = "Reload",           Base = 0.5, Unit = "s", Dec = 2, Inverse = true },
@@ -250,6 +268,8 @@ public static class Classes
                 ["turn_radius"] = 55, ["turn_rate"] = 2.2,
                 ["main_count"] = 1, ["main_damage"] = 6, ["main_interval"] = 0.8, ["main_range"] = 900, ["shell_speed"] = 700,
             },
+                // 7.5 = 5% of the railgun's 150, what a level is worth on a battleship's shell
+            Damage = new() { ["main_damage"] = 1, ["rail_damage"] = 7.5 },
             Rows = new StatRow[] {
                 new() { Group = "Railgun", Id = "rail_damage", Label = "Damage",         Base = 150, Dec = 0 },
                 new() { Group = "Railgun", Id = "rail_charge", Label = "Charge (locked)",Base = 3, Unit = "s", Dec = 1, Inverse = true },
@@ -271,6 +291,8 @@ public static class Classes
                 ["turn_radius"] = 55, ["turn_rate"] = 2.2,
                 ["main_count"] = 2, ["main_damage"] = 9, ["main_interval"] = 0.7, ["main_range"] = 600, ["shell_speed"] = 520,
             },
+                // 3 = 5% of the EMP's 60
+            Damage = new() { ["main_damage"] = 1, ["emp_damage"] = 3 },
             Rows = new StatRow[] {
                 new() { Group = "Rush", Id = "rush_mult",  Label = "Top speed",        Base = 2.5, Unit = "x", Dec = 1 },
                 new() { Group = "Rush", Id = "rush_time",  Label = "Time up",          Base = 2.5, Unit = "s", Dec = 1 },
@@ -302,6 +324,9 @@ public static class Classes
             // whole game is tuned to.
             ["pd_count"] = 1, ["pd_damage"] = 5.0, ["pd_range"] = 420,
             },
+                // 2.25 = 5% of a hunter's 45 (pd_damage is left out on purpose: every class has that row,
+                // so naming it here would hand every ship in the game a chip-powered point-defence buff)
+            Damage = new() { ["main_damage"] = 1, ["hunter_damage"] = 2.25 },
             Rows = new StatRow[] {
                 new() { Group = "Hunters", Id = "hunter_count",  Label = "Missiles",      Base = 6, Dec = 0 },
                 new() { Group = "Hunters", Id = "hunter_damage", Label = "Damage (each)", Base = 45, Dec = 0 },
@@ -327,6 +352,7 @@ public static class Classes
                 ["turn_radius"] = 35, ["turn_rate"] = 3.0,
                 ["main_count"] = 1, ["main_damage"] = 5, ["main_interval"] = 0.35, ["main_range"] = 500, ["shell_speed"] = 620,
             },
+            Damage = new() { ["main_damage"] = 1 },
             Rows = new StatRow[] {
                 new() { Group = "Barrel roll", Id = "roll_time",  Label = "Untouchable",   Base = 1.2, Unit = "s", Dec = 1 },
                 new() { Group = "Barrel roll", Id = "boost_time", Label = "Boost after",   Base = 4, Unit = "s", Dec = 1 },
@@ -348,6 +374,9 @@ public static class Classes
                 ["turn_radius"] = 35, ["turn_rate"] = 3.0,
                 ["main_count"] = 1, ["main_damage"] = 5, ["main_interval"] = 0.35, ["main_range"] = 500, ["shell_speed"] = 620,
             },
+                // echo_share is NOT a weapon: the blast is a share of damage already dealt, so it
+                // grows with main_damage on its own, and naming it would count the same purchase twice
+            Damage = new() { ["main_damage"] = 1 },
             Rows = new StatRow[] {
                 new() { Group = "Echo", Id = "echo_time",   Label = "It remembers for", Base = 5, Unit = "s", Dec = 1 },
                 new() { Group = "Echo", Id = "echo_radius", Label = "Blast radius",     Base = 220, Unit = "u", Dec = 0 },
@@ -368,6 +397,7 @@ public static class Classes
                 ["turn_radius"] = 35, ["turn_rate"] = 3.0,
                 ["main_count"] = 1, ["main_damage"] = 5, ["main_interval"] = 0.35, ["main_range"] = 500, ["shell_speed"] = 620,
             },
+            Damage = new() { ["main_damage"] = 1 },
             Rows = new StatRow[] {
                 new() { Group = "Stealth", Id = "stealth_time", Label = "Unseen for", Base = 5, Unit = "s", Dec = 1 },
                 new() { Group = "Stealth", Id = "stealth_cooldown", Label = "Cooldown", Base = 20, Unit = "s", Dec = 1, Inverse = true },
@@ -388,6 +418,15 @@ public static class Classes
     public static ClassDef Of(ShipClass c) => ById.TryGetValue(c, out var d) ? d : Missing;
     public static ClassArt Art(ShipClass c) => Of(c).Art;
     public static bool Has(ShipClass c, Fit f) => Of(c).Has(f);
+    // stat id -> what one Weapons level adds. Asked of the class, never "is it the carrier".
+    public static IReadOnlyDictionary<string, double> Damage(ShipClass c) => Of(c).Damage;
+    // every weapon stat any class has: what a part that lifts "every weapon" reaches
+    public static IEnumerable<string> EveryDamageStat()
+    {
+        var seen = new SortedSet<string>();
+        foreach (var c in All) foreach (var k in c.Damage.Keys) seen.Add(k);
+        return seen;
+    }
     // Its name as the screens print it ("BATTLESHIP"), from the one table that holds it.
     public static string NameOf(ShipClass c) => Of(c).Name;
     // A class number from a file or a packet: one this build can actually fly, or the Battleship.

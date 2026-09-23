@@ -1,5 +1,6 @@
 using Godot;
 using System;
+using System.Collections.Generic;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PILOT PROGRESSION -- EXP, levels, and the points they buy.
@@ -17,12 +18,25 @@ public static class Progression
 {
     public class Upgrade { public string Id, Name, Unit; public double Per; }
 
-    // The damage upgrade lands on each hull's main weapon: its gun shells, or its torpedoes.
-    public static string DamageStat(ShipClass c) => Classes.Has(c, Fit.Wing) ? "torpedo_damage" : "main_damage";
-    public static string StatFor(string id, ShipClass c) => id switch
+    // WHAT AN UPGRADE MOVES, on a given hull. Everything but Weapons lands on one stat, the same
+    // on every class. WEAPONS asks the CLASS what its weapons are (ClassDef.Damage): it used to
+    // name one stat here -- torpedoes for a carrier, main guns for everything else -- so a
+    // sniper's railgun, a warden's hunters, a warrior's EMP and a freighter's deployed turrets
+    // took nothing at all from a pilot's damage points.
+    private static readonly Dictionary<string, string> Simple = new()
     {
-        "turn" => "turn_rate", "hull" => "hull", "speed" => "max_speed", "damage" => DamageStat(c), _ => null
+        ["turn"] = "turn_rate", ["hull"] = "hull", ["speed"] = "max_speed",
     };
+    // stat id -> what ONE level of `id` adds on class `c`
+    public static IEnumerable<(string stat, double per)> StatsFor(string id, ShipClass c, double per)
+    {
+        if (id == "damage")
+        {
+            foreach (var kv in Classes.Damage(c)) if (kv.Value != 0) yield return (kv.Key, kv.Value);
+            yield break;
+        }
+        if (Simple.TryGetValue(id, out var one)) yield return (one, per);
+    }
 
     public static readonly Upgrade[] All =
     {
@@ -51,16 +65,17 @@ public static class Progression
     public static int ExpToNext => ExpPerLevel;                             // always 1000, whatever the level
 
     // Flat stat additions for a set of purchases, on a given hull.
-    public static System.Collections.Generic.Dictionary<string, double> Flats(int[] bought, ShipClass c)
+    public static Dictionary<string, double> Flats(int[] bought, ShipClass c)
     {
-        var d = new System.Collections.Generic.Dictionary<string, double>();
+        var d = new Dictionary<string, double>();
         for (int i = 0; i < All.Length && i < (bought?.Length ?? 0); i++)
         {
-            // StatFor falls through to null for an id it does not know. Every id in All is
-            // covered today, but adding a fifth upgrade and forgetting the switch would put a
-            // null key in here -- an ArgumentNullException a long way from the cause.
-            var stat = StatFor(All[i].Id, c);
-            if (stat != null && bought[i] > 0) d[stat] = bought[i] * All[i].Per;
+            // StatsFor yields nothing for an id it does not know. Every id in All is covered
+            // today, but adding a fifth upgrade and forgetting it would otherwise put a null key
+            // in here -- an ArgumentNullException a long way from the cause.
+            if (bought[i] <= 0) continue;
+            foreach (var (stat, per) in StatsFor(All[i].Id, c, All[i].Per))
+                d[stat] = d.GetValueOrDefault(stat) + bought[i] * per;
         }
         return d;
     }

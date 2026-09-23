@@ -2811,10 +2811,14 @@ public partial class _Test : Node
             Character.Points = 6;
             PBuy("damage").EmitSignal(BaseButton.SignalName.Pressed); PBuy("speed").EmitSignal(BaseButton.SignalName.Pressed); PBuy("turn").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
             var baseSheet = new ShipStats(me.Class, Equipment.Bonuses(me.Class, me.Loadout));            // the same gear, no points
-            Check(Math.Abs(me.Stats[Progression.DamageStat(me.Class)] - baseSheet[Progression.DamageStat(me.Class)] - 1.25) < 1e-9
+            // Weapons moves whatever THIS hull calls its weapons, by the step its own row declares
+            // (Classes.Damage); the figures behind that declaration are checked as literals where
+            // the table is proved.
+            var mine = Classes.Damage(me.Class).Where(kv => kv.Value != 0).ToList();
+            Check(mine.Count > 0 && mine.All(kv => Math.Abs(me.Stats[kv.Key] - baseSheet[kv.Key] - kv.Value * 1.25) < 1e-9)
                   && Math.Abs(me.Stats["max_speed"] - baseSheet["max_speed"] - 1) < 1e-9
                   && Math.Abs(me.Stats["turn_rate"] - baseSheet["turn_rate"] - Mathf.DegToRad(1f)) < 1e-6,
-                  "Weapons +1 damage (x1.25 by the chips) on the main weapon, Engines +1 speed, Rudder +1 degree/s");
+                  $"Weapons +1 (x1.25 by the chips) on every weapon this hull declares ({string.Join(", ", mine.Select(kv => kv.Key))}), Engines +1 speed, Rudder +1 degree/s");
             string cid = Character.Id; int[] saved = (int[])Character.Bought.Clone();
             Character.Save(); System.Array.Clear(Character.Bought); Character.Load(cid);
             Check(Character.Bought.SequenceEqual(saved) && Character.Level == 3, "purchases and level are saved with the character");
@@ -3210,9 +3214,14 @@ public partial class _Test : Node
             Check(fr.TurretsOut == 3 && H.Deployed.Count(t => t.OwnerId == fr.OwnerId) == 3,
                   $"T drops a turret where you are, and a fourth is refused: three out ({fr.TurretsOut})");
             var one = H.Deployed.First();
-            Check(Math.Abs(one.Hp - fr.Stats["deploy_hull"]) < 1e-6 && Math.Abs(one.Spec(true).Damage - 6) < 1e-9
-                  && Math.Abs(one.Spec(true).Interval - 0.5) < 1e-9 && Math.Abs(one.Spec(true).Range - 500f) < 1e-3,
-                  $"a dropped turret: 120 hull, 6 a shot every 0.5 s inside 500 u ({one.Hp:0} hull)");
+            // its gun is its OWNER's sheet, read live -- so the pilot's points and its gear reach
+            // every turret it has out. (A bare freighter's 6 a shot is a literal where the table is proved.)
+            Check(Math.Abs(one.Hp - fr.Stats["deploy_hull"]) < 1e-6
+                  && Math.Abs(one.Spec(true).Damage - fr.Stats["deploy_damage"]) < 1e-9
+                  && Math.Abs(one.Spec(true).Interval - fr.Stats["deploy_interval"]) < 1e-9
+                  && Math.Abs(one.Spec(true).Range - (float)fr.Stats["deploy_range"]) < 1e-3
+                  && Math.Abs(new ShipStats(ShipClass.FreightHauler)["deploy_damage"] - 6) < 1e-9,
+                  $"a dropped turret fires its owner's sheet: {one.Spec(true).Damage:0.0} a shot every {one.Spec(true).Interval:0.00} s inside {one.Spec(true).Range:0} u, on {one.Hp:0} hull");
             fr.Position = one.Position + new Vector2(90, 0); await Wait(0.15);
             fr.UseAbility("collect", 0); await Wait(0.15);
             Check(fr.TurretsOut == 2, $"C over one picks it up again ({fr.TurretsOut} left out)");
@@ -3262,6 +3271,39 @@ public partial class _Test : Node
             // because that was the only drawing that reached a guest, and the echo's burst was
             // added straight to the host's own tree where nobody else ever saw it.
             {
+                // ── A PILOT'S WEAPONS POINTS REACH WHAT THE CLASS CALLS ITS WEAPONS ──
+                // The damage upgrade used to name ONE stat for every class in the game -- torpedoes
+                // for a carrier, main guns for everything else -- so a sniper's railgun, a warden's
+                // hunters, a warrior's EMP and a freighter's deployed turrets took nothing from it.
+                {
+                    var keepBought = (int[])Character.Bought.Clone();
+                    int[] two = new int[Progression.All.Length];
+                    two[System.Array.FindIndex(Progression.All, u => u.Id == "damage")] = 2;   // two Weapons levels
+                    double Rise(ShipClass c, string stat)
+                        => new ShipStats(c, null, Progression.Flats(two, c))[stat] - new ShipStats(c)[stat];
+                    Check(Math.Abs(Rise(ShipClass.HeavySniper, "rail_damage") - 15) < 1e-9
+                          && Math.Abs(Rise(ShipClass.HeavyWarden, "hunter_damage") - 4.5) < 1e-9
+                          && Math.Abs(Rise(ShipClass.HeavyWarrior, "emp_damage") - 6) < 1e-9
+                          && Math.Abs(Rise(ShipClass.FreightHauler, "deploy_damage") - 1) < 1e-9
+                          && Math.Abs(Rise(ShipClass.LightEcho, "main_damage") - 2) < 1e-9,
+                          "two Weapons levels reach the class's own weapons: the railgun +15, the hunters +4.5, the EMP +6, a dropped turret +1, a light's gun +2");
+                    // ...and change NOTHING a saved pilot already had on the three it could reach
+                    Check(Math.Abs(Rise(ShipClass.Battleship, "main_damage") - 2) < 1e-9
+                          && Rise(ShipClass.Battleship, "pd_damage") == 0
+                          && Math.Abs(Rise(ShipClass.Carrier, "torpedo_damage") - 2) < 1e-9
+                          && Rise(ShipClass.Carrier, "fighter_damage") == 0
+                          && Math.Abs(Rise(ShipClass.Destroyer, "main_damage") - 2) < 1e-9
+                          && Rise(ShipClass.Destroyer, "missile_damage") == 0,
+                          "and a saved pilot's points do exactly what they always did on the line: +2 to the gun or the torpedoes, and nothing to the fighters, the missiles or the point defence");
+                    // the gear that lifts "every weapon" reaches the same list, and nothing else
+                    Check(string.Join(",", Classes.EveryDamageStat())
+                          == "deploy_damage,emp_damage,fighter_damage,hunter_damage,main_damage,missile_damage,rail_damage,torpedo_damage"
+                          && Classes.All.Where(c => c.Ready).All(c => c.Damage.Count > 0)
+                          && Classes.All.Where(c => c.Ready).All(c => c.Damage.Keys.All(k => new ShipStats(c.Id)[k] > 0)),
+                          $"eight weapon stats in the whole game, every flyable class names at least one, and every one it names is a row on its own sheet");
+                    System.Array.Copy(keepBought, Character.Bought, keepBought.Length);
+                }
+
                 // ── EVERYTHING THAT FLIES IS ONE FLYER WITH A ROW ──
                 // Three classes (Shell, Slug, Torpedo) with one copy each of the same sweep,
                 // lifetime, cosmetic-copy rule and hit. Six rows and one node now, and ONE launch
@@ -3327,8 +3369,9 @@ public partial class _Test : Node
             Check(sn.Statuses.Has(Status.Disabled) && sn.Position.DistanceTo(wasAt) < 1f,
                   $"the railgun charges with the hull locked: W and A move it nowhere ({sn.Position.DistanceTo(wasAt):0.00} u)");
             for (int i = 0; i < 60 * 4 && dTgt.Total == dmg0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            Check(Math.Abs(dTgt.Total - dmg0 - 150) < 0.01 && !sn.Statuses.Has(Status.Disabled),
-                  $"then 150 lands {railAt:0} u away, on the line, and the hull is free again ({dTgt.Total - dmg0:0.0})");
+            Check(Math.Abs(dTgt.Total - dmg0 - sn.Stats["rail_damage"]) < 0.01 && !sn.Statuses.Has(Status.Disabled)
+                  && Math.Abs(new ShipStats(ShipClass.HeavySniper)["rail_damage"] - 150) < 1e-9,
+                  $"then its railgun's whole {sn.Stats["rail_damage"]:0.0} lands {railAt:0} u away, on the line, and the hull is free again ({dTgt.Total - dmg0:0.0})");
 
             // ── WARRIOR: two and a half times its speed, half the damage, then the EMP ──
             await SetClass(ShipClass.HeavyWarrior);
@@ -3345,7 +3388,8 @@ public partial class _Test : Node
                   $"the rush: 2.5x top speed ({top0 * wr.SpeedMult:0} u/s) and a 100 blow lands for {wh0 - wr.Hp:0}");
             double e10 = e1.Hp, e20 = e2.Hp;
             for (int i = 0; i < 60 * 4 && e1.Hp == e10; i++) { e2.Position = e2Home; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
-            Check(Math.Abs(e10 - e1.Hp - 60) < 0.01 && e1.Statuses.Has(Status.Disabled) && e2.Hp == e20,
+            Check(Math.Abs(e10 - e1.Hp - wr.Stats["emp_damage"]) < 0.01 && e1.Statuses.Has(Status.Disabled) && e2.Hp == e20
+                  && Math.Abs(new ShipStats(ShipClass.HeavyWarrior)["emp_damage"] - 60) < 1e-9,
                   $"and it ends in an EMP: 60 to what is within 260 u ({e1.Position.DistanceTo(wr.Position):0} u) and it is held; nothing at {e2.Position.DistanceTo(wr.Position):0} u ({e10 - e1.Hp:0})");
             e1.TakeDamage(99999); e2.TakeDamage(99999); await Wait(0.2);
 
