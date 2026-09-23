@@ -101,6 +101,15 @@ public class ClassDef
     // It defaults to EMPTY on purpose: a new class that forgets it is caught by a check, rather
     // than quietly given the battleship's gun.
     public Dictionary<string, double> Damage = new();
+    // WHAT ITS WEAPONS REACH, by stat id -- the same shape as Damage and for the same reason. A
+    // pilot's REACH points and the Targeting Chip both lift these, and both used to work off a
+    // list written somewhere else: the chip's was six ids hardcoded in Equipment, which did
+    // nothing at all for seven of the nine newest classes. The share is per id, so a class whose
+    // reach should climb slower says so.
+    public Dictionary<string, double> Reach = new();
+    // ...and HOW FAST THEY CYCLE: the seconds-between-shots ids, for the pilot's Gunnery points.
+    // A share of one of these is applied NEGATIVE (Progression): a shorter interval is the gain.
+    public Dictionary<string, double> Cycle = new();
     // WHAT IT KILLS WITH, for the K window's DAMAGE block: the damaging systems it carries, by id
     // out of the one catalogue (Dps, in Stats.cs). Each one works its own sustained rate out of
     // this ship's sheet, and the window adds up the ones the ship can hold. The window used to ask
@@ -155,6 +164,8 @@ public static class Classes
                 ["pd_count"] = 2,
             },
             Damage = new() { ["main_damage"] = 1 },
+            Reach = new() { ["main_range"] = 1, ["pd_range"] = 1 },
+            Cycle = new() { ["main_interval"] = 1, ["pd_interval"] = 1 },
             Weapons = new[] { Dps.Main, Dps.Broadside, Dps.Pd },
             Kit = new[] {
                 ItemDef.Own(GearSlot.Weapon, "bs_main_battery", "Mk I Main Battery", "the four main turrets", "broadside_mult"),
@@ -178,6 +189,8 @@ public static class Classes
             },
                 // the 0: gear reaches the fighters, the pilot's points do not -- as it was
             Damage = new() { ["torpedo_damage"] = 1, ["fighter_damage"] = 0 },
+            Reach = new() { ["fighter_range"] = 1, ["control_range"] = 1, ["torpedo_range"] = 1, ["launch_range"] = 1, ["pd_range"] = 1 },
+            Cycle = new() { ["fighter_interval"] = 1, ["bomber_rearm"] = 1, ["pd_interval"] = 1 },
             Weapons = new[] { Dps.Fighters, Dps.Bombers, Dps.Pd },
             Kit = new[] {
                 ItemDef.Own(GearSlot.Weapon, "cv_fighter_hangars", "Mk I Fighter Hangars", "the fighter wing", "fighter_count"),
@@ -202,6 +215,8 @@ public static class Classes
             },
                 // the 0: gear reaches the missiles, the pilot's points do not -- as it was
             Damage = new() { ["main_damage"] = 1, ["missile_damage"] = 0 },
+            Reach = new() { ["main_range"] = 1, ["missile_range"] = 1, ["pd_range"] = 1 },
+            Cycle = new() { ["main_interval"] = 1, ["missile_reload"] = 1, ["pd_interval"] = 1 },
             Weapons = new[] { Dps.Main, Dps.Missiles, Dps.Pd },
             Kit = new[] {
                 ItemDef.Own(GearSlot.Weapon, "dd_main_battery", "Mk I Twin Turrets", "the two main turrets", "missile_mag"),
@@ -227,6 +242,8 @@ public static class Classes
             },
                 // half a point each: three turrets are out at once, so a level is worth 1.5 across them
             Damage = new() { ["main_damage"] = 1, ["deploy_damage"] = 0.5 },
+            Reach = new() { ["main_range"] = 1, ["deploy_range"] = 1, ["pd_range"] = 1 },
+            Cycle = new() { ["main_interval"] = 1, ["deploy_interval"] = 1, ["pd_interval"] = 1 },
             Weapons = new[] { Dps.Main, Dps.Deployed, Dps.Pd },
             Kit = new[] {
                 CargoGun,
@@ -262,6 +279,8 @@ public static class Classes
                 ["pd_count"] = 2,
             },
             Damage = new() { ["main_damage"] = 1, ["deploy_damage"] = 0.5 },
+            Reach = new() { ["main_range"] = 1, ["deploy_range"] = 1, ["pd_range"] = 1 },
+            Cycle = new() { ["main_interval"] = 1, ["deploy_interval"] = 1, ["pd_interval"] = 1 },
             Weapons = new[] { Dps.Main, Dps.Deployed, Dps.Pd },
             Kit = new[] {
                 CargoGun,
@@ -296,6 +315,8 @@ public static class Classes
                 ["pd_count"] = 2,
             },
             Damage = new() { ["main_damage"] = 1, ["deploy_damage"] = 0.5 },
+            Reach = new() { ["main_range"] = 1, ["deploy_range"] = 1, ["wave_range"] = 1, ["pd_range"] = 1 },
+            Cycle = new() { ["main_interval"] = 1, ["deploy_interval"] = 1, ["pd_interval"] = 1 },
             Weapons = new[] { Dps.Main, Dps.Deployed, Dps.Pd },
             Kit = new[] {
                 CargoGun,
@@ -333,6 +354,8 @@ public static class Classes
             },
                 // 7.5 = 5% of the railgun's 150, what a level is worth on a battleship's shell
             Damage = new() { ["main_damage"] = 1, ["rail_damage"] = 7.5 },
+            Reach = new() { ["main_range"] = 1, ["rail_range"] = 1 },
+            Cycle = new() { ["main_interval"] = 1, ["rail_charge"] = 1 },
             Weapons = new[] { Dps.Main, Dps.Railgun },
             Kit = new[] {
                 HeavyCannon,
@@ -361,6 +384,8 @@ public static class Classes
             },
                 // 3 = 5% of the EMP's 60
             Damage = new() { ["main_damage"] = 1, ["emp_damage"] = 3 },
+            Reach = new() { ["main_range"] = 1, ["emp_range"] = 1 },
+            Cycle = new() { ["main_interval"] = 1 },
             Weapons = new[] { Dps.Main, Dps.Emp },
             Kit = new[] {
                 ItemDef.Own(GearSlot.Weapon, "warrior_main_guns", "Mk I Twin Cannons", "the two light turrets", "rush_mult"),
@@ -400,6 +425,8 @@ public static class Classes
                 // 2.25 = 5% of a hunter's 45 (pd_damage is left out on purpose: every class has that row,
                 // so naming it here would hand every ship in the game a chip-powered point-defence buff)
             Damage = new() { ["main_damage"] = 1, ["hunter_damage"] = 2.25 },
+            Reach = new() { ["main_range"] = 1, ["hunter_range"] = 1, ["pd_range"] = 1 },
+            Cycle = new() { ["main_interval"] = 1, ["pd_interval"] = 1 },
             Weapons = new[] { Dps.Main, Dps.Hunters, Dps.Pd },
             Kit = new[] {
                 HeavyCannon,
@@ -431,6 +458,8 @@ public static class Classes
                 ["main_count"] = 1, ["main_damage"] = 5, ["main_interval"] = 0.35, ["main_range"] = 500, ["shell_speed"] = 620,
             },
             Damage = new() { ["main_damage"] = 1 },
+            Reach = new() { ["main_range"] = 1 },
+            Cycle = new() { ["main_interval"] = 1 },
             Weapons = new[] { Dps.Main },
             Kit = new[] {
                 LightCannon,
@@ -460,6 +489,8 @@ public static class Classes
                 // echo_share is NOT a weapon: the blast is a share of damage already dealt, so it
                 // grows with main_damage on its own, and naming it would count the same purchase twice
             Damage = new() { ["main_damage"] = 1 },
+            Reach = new() { ["main_range"] = 1, ["echo_radius"] = 1 },
+            Cycle = new() { ["main_interval"] = 1 },
             Weapons = new[] { Dps.Main, Dps.Echo },
             Kit = new[] {
                 LightCannon,
@@ -486,6 +517,8 @@ public static class Classes
                 ["main_count"] = 1, ["main_damage"] = 5, ["main_interval"] = 0.35, ["main_range"] = 500, ["shell_speed"] = 620,
             },
             Damage = new() { ["main_damage"] = 1 },
+            Reach = new() { ["main_range"] = 1 },
+            Cycle = new() { ["main_interval"] = 1 },
             Weapons = new[] { Dps.Main },
             Kit = new[] {
                 LightCannon,
@@ -522,6 +555,15 @@ public static class Classes
     // stat id -> what one Weapons level adds. Asked of the class, never "is it the carrier".
     public static IReadOnlyDictionary<string, double> Damage(ShipClass c) => Of(c).Damage;
     // every weapon stat any class has: what a part that lifts "every weapon" reaches
+    public static IReadOnlyDictionary<string, double> ReachOf(ShipClass c) => Of(c).Reach;
+    public static IReadOnlyDictionary<string, double> CycleOf(ShipClass c) => Of(c).Cycle;
+    // Every reach id any class declares, for a part that lifts "every weapon's range".
+    public static IEnumerable<string> EveryReachStat()
+    {
+        var seen = new SortedSet<string>();
+        foreach (var c in All) foreach (var k in c.Reach.Keys) seen.Add(k);
+        return seen;
+    }
     public static IEnumerable<string> EveryDamageStat()
     {
         var seen = new SortedSet<string>();

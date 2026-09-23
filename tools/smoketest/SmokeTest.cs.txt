@@ -4060,11 +4060,18 @@ public partial class _Test : Node
                                     silent.Add($"{Progression.All[i].Id}/{cd.Id}");
                             }
                         }
-                        Check(Progression.All.Length == 4 && silent.Count == 0
+                        // SEVEN ROWS: the four it opened with, and the owner's three -- reach,
+                        // cooling and gunnery. Every one of them must move something on every
+                        // flyable class, which is what makes them worth a point on any hull.
+                        var reachOf = Moved("reach"); var coolOf = Moved("cool"); var rofOf = Moved("rof");
+                        Check(Progression.All.Length == 7 && silent.Count == 0
                               && Moved("turn").Length == 1 && Moved("turn")[0].stat == "turn_rate"
                               && Math.Abs(Moved("turn")[0].per - Mathf.DegToRad(1f)) < 1e-9
-                              && Moved("hull")[0] == ("hull", 5.0) && Moved("speed")[0] == ("max_speed", 1.0),
-                              $"all 4 upgrade rows move at least one stat on each of the {Classes.All.Count(x => x.Ready)} flyable classes -- a degree of rudder, 5 hull, 1 u/s, and the weapons the class itself names ({(silent.Count == 0 ? "none silent" : string.Join(" ", silent))})");
+                              && Moved("hull")[0] == ("hull", 5.0) && Moved("speed")[0] == ("max_speed", 1.0)
+                              && reachOf.Any(t => t.stat == "main_range" && Math.Abs(t.per - 0.01) < 1e-9)
+                              && coolOf.Length == 1 && coolOf[0].stat == "cooldown_share" && Math.Abs(coolOf[0].per + 0.005) < 1e-9
+                              && rofOf.Any(t => t.stat == "main_interval" && Math.Abs(t.per + 0.005) < 1e-9),
+                              $"all 7 upgrade rows move at least one stat on each of the {Classes.All.Count(x => x.Ready)} flyable classes -- a degree of rudder, 5 hull, 1 u/s, the weapons the class names, 1% of its reach, half a percent off its cooldowns and half a percent off its gun's cycle ({(silent.Count == 0 ? "none silent" : string.Join(" ", silent))})");
                     }
                     // ── WHAT A TARGET IS CALLED, AND WHAT COMING FOR IT IS WORTH ──
                     // Both were type tests in Hub: `Selected is TargetDummy td` for the HUD's

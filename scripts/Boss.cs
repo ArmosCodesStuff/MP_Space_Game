@@ -145,6 +145,10 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
     // A move as this level flies it: quicker to wind up, faster in flight, and longer-armed, by
     // Missions.Quicken. The burn of a beam and how often it is judged are left alone -- they are
     // the damage, not the animation.
+    // ITS OWN TURN AT THIS LEVEL: the row's rate, one percent a level quicker, worked out once.
+    private float _turn;
+    public float Turning => _turn > 0 ? _turn : Type.TurnRate;
+
     private static BossMove Scaled(BossMove m, int level)
     {
         double q = Missions.Quicken(level);
@@ -153,6 +157,7 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
         c.Windup /= q; c.Warp /= q; c.Flight /= q;
         c.Speed = (float)(c.Speed * q);
         c.Reach = (float)(c.Reach * q); c.Range = (float)(c.Range * q); c.Radius = (float)(c.Radius * q);
+        c.Turn = (float)(c.Turn * q);                   // a guided body comes round faster too
         c.Find = (float)(c.Find * q); c.Standoff = (float)(c.Standoff * q); c.EscortOut = (float)(c.EscortOut * q);
         return c;
     }
@@ -195,6 +200,10 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
         HullMult = Missions.HullMult(Missions.Level, party); DamageMult = Missions.DamageMult(Missions.Level, party); Hp = MaxHp;
         Name = "Boss";
         // ITS MOVES, FROM ITS ROW: one slot of live state each, in the row's order
+        // ...AND IT COMES ROUND FASTER. A boss that turned at a fixed rate was out-turned by every
+        // level's better engines, so late fights were won by circling something that could not
+        // follow. The same one percent a level as its wind-ups and its reach.
+        _turn = (float)(Type.TurnRate * Missions.Quicken(Missions.Level));
         // THE LEVEL'S OWN COPY OF EVERY MOVE. The rows are the build's, shared by every boss that
         // ever flies, so the level's scale is applied to a CLONE -- scaling the row itself would
         // make the second boss of a session faster than the first. Done here, once, so not one of
@@ -273,7 +282,7 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
     {
         var centre = pilots.Aggregate(Vector2.Zero, (s, p) => s + p.Position) / pilots.Count;
         float want = Aim.Face(Position, centre);
-        Rotation = Mathf.RotateToward(Rotation, want, Type.TurnRate * dt);
+        Rotation = Mathf.RotateToward(Rotation, want, Turning * dt);
         if (Position.DistanceTo(centre) > Type.HoldOff) Position += (centre - Position).Normalized() * Type.CloseSpeed * dt;
     }
 
@@ -359,7 +368,7 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
             s.T += delta;
             if (!IsInstanceValid(s.Target) || !s.Target.Alive) s.Target = pilots.FirstOrDefault();
             if (s.Target != null)
-                Rotation = Mathf.RotateToward(Rotation, Aim.Face(Position, s.Target.Position), Type.TurnRate * (float)delta);
+                Rotation = Mathf.RotateToward(Rotation, Aim.Face(Position, s.Target.Position), Turning * (float)delta);
             // A pin counts once THIS cycle's escorts have left the launch point: a pilot still held
             // by the last cycle's escorts (they never expire) would otherwise skip the whole phase.
             bool pinned = s.T >= Raider.EscortShiver && s.Target != null && s.Target.Pinned;

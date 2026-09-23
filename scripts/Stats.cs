@@ -104,6 +104,12 @@ public class ShipStats
         Class = cls; Def = Classes.Of(cls);
 
         Add("Hull",   "hull",          "Hull points",        300, "", 0);
+        // WHAT EVERY ABILITY'S COOLDOWN IS MULTIPLIED BY. 1.00 out of the yard; the pilot's
+        // COOLING points take it down half a percent a level, and PlayerShip refuses to let it go
+        // below a floor -- an ability with no cooldown is not an ability. Every class has this row
+        // because every class has abilities, which is also what lets one upgrade buy something on
+        // all twelve.
+        Add("Hull",   "cooldown_share", "Ability cooldowns",    1.00, "x", 2, inverse: true);
 
         // Capital ships handle like naval ships: thrust only along the keel, sideways drift
         // bleeds off fast, and they turn on a radius -- no strafing; almost stopped, the rudder

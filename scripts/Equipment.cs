@@ -69,7 +69,11 @@ public static class Equipment
     // Above All: static fields start in the order they are written, and Build() reads these.
     private static readonly double[] Scale = { 1.0, 1.5, 2.0 };        // the upside, by rarity
     private static readonly string[] Suffix = { "", " II", " III" };
-    private static readonly string[] Ranges = { "main_range", "missile_range", "fighter_range", "control_range", "torpedo_range", "pd_range" };
+    // WHAT "EVERY WEAPON REACHES FURTHER" MEANS: whatever the classes say it does. It was six ids
+    // written out here, so a part promising every weapon did nothing for a sniper's railgun, a
+    // warden's hunters, a warrior's EMP, a bastion's wave, a freighter's turrets or an echo's
+    // blast -- seven of the nine newest classes bought a lie.
+    private static string[] Ranges => Classes.EveryReachStat().ToArray();
     private static readonly (string, double)[] None = Array.Empty<(string, double)>();
 
     public static readonly ItemDef[] All = Build().ToArray();

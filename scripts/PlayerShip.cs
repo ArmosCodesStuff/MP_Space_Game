@@ -431,6 +431,12 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // it (AbilityDef.WhenWrecked -- reboard). The nine newest abilities each repeated `!Net.Sim ||
     // !Alive` in their own body and the seven oldest never did, so a guest in stasis could fire a
     // missile burst, switch on point defence and order a bomber strike out of its own wreck.
+    // WHAT A COOLDOWN REALLY IS, once the pilot's COOLING points are in it: the sheet's share of
+    // the row's seconds, never below a floor. Every ability that sets a cooldown reads it here
+    // rather than each one multiplying for itself.
+    public const double CoolFloor = 0.5;              // half the row's seconds, whatever is bought
+    public double Cooling(double seconds) => seconds * System.Math.Max(CoolFloor, Stats["cooldown_share"]);
+
     private void DoAbility(string id, int targetId)
     {
         var def = Abilities.Find(Class, id);
@@ -480,7 +486,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         if (!Stats.Def.Has(Fit.Deploy)) return;
         if (Sl("deploy").Cool > 0 || TurretsOut >= (int)Stats["deploy_max"]) return;
         MyHub?.Drop(this, Position, Stats["deploy_hull"]);
-        Sl("deploy").Cool = Stats["deploy_cooldown"];
+        Sl("deploy").Cool = Cooling(Stats["deploy_cooldown"]);
     }
     public void CollectTurret()
     {
@@ -497,7 +503,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     {
         if (Sl("bubble").Cool > 0) return;
         ref var b = ref Sl("bubble");
-        b.Left = Stats["bubble_time"]; b.Own = Stats["bubble_pool"]; b.Cool = Stats["bubble_cooldown"];
+        b.Left = Stats["bubble_time"]; b.Own = Stats["bubble_pool"]; b.Cool = Cooling(Stats["bubble_cooldown"]);
         b.N = (int)Stats["bubble_pool"];
     }
     private double SpendBubble(double d)
@@ -520,7 +526,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     {
         if (Sl("overdrive").Cool > 0) return;
         ref var o = ref Sl("overdrive");
-        o.Left = Stats["overdrive_time"]; o.Cool = Stats["overdrive_cooldown"];
+        o.Left = Stats["overdrive_time"]; o.Cool = Cooling(Stats["overdrive_cooldown"]);
     }
 
     // Everything within reach is thrown clear -- and what is too big to throw (a boss) is held
@@ -528,7 +534,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     public void Shockwave()
     {
         if (Sl("shockwave").Cool > 0) return;
-        Sl("shockwave").Cool = Stats["wave_cooldown"];
+        Sl("shockwave").Cool = Cooling(Stats["wave_cooldown"]);
         float reach = (float)Stats["wave_range"], push = (float)Stats["wave_push"];
         // Targeting.Attackable, not the raw list: a missile in flight is point defence's business,
         // and THROWING one was worse than hitting it -- the host moved a live hostile seeker 1000 u
@@ -573,14 +579,14 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         }
         Fx.Line(Fx.Rail, a, b);                             // the line it threw, on every peer
         Sfx.Laser(a, b, ShotSound.Boss);
-        Sl("railgun").Cool = Stats["rail_cooldown"];
+        Sl("railgun").Cool = Cooling(Stats["rail_cooldown"]);
     }
 
     public void StartRush()
     {
         if (Sl("rush").Cool > 0) return;
         ref var r = ref Sl("rush");
-        r.Left = Stats["rush_time"]; r.Cool = Stats["rush_cooldown"];
+        r.Left = Stats["rush_time"]; r.Cool = Cooling(Stats["rush_cooldown"]);
         ApplyStatus(Status.Hardened, r.Left);
     }
     // The rush ends in an EMP: everything close takes it, and everything small enough is held.
@@ -603,7 +609,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     public void LaunchHunters()
     {
         if (Sl("hunters").Cool > 0) return;
-        Sl("hunters").Cool = Stats["hunter_cooldown"];
+        Sl("hunters").Cool = Cooling(Stats["hunter_cooldown"]);
         int n = (int)Stats["hunter_count"];
         float range = (float)Stats["hunter_range"];
         var seen = new List<IHittable>();
@@ -628,7 +634,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         if (Sl("roll").Cool > 0) return;
         ref var r = ref Sl("roll");
         r.Left = Stats["roll_time"] + Stats["boost_time"];      // the roll, then the boost
-        r.Cool = Stats["roll_cooldown"];
+        r.Cool = Cooling(Stats["roll_cooldown"]);
         ApplyStatus(Status.Evading, Stats["roll_time"]);
     }
 
@@ -638,7 +644,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     {
         if (Sl("echo").Cool > 0) return;
         ref var e = ref Sl("echo");
-        e.Left = Stats["echo_time"]; e.Own = 0; e.Cool = Stats["echo_cooldown"];
+        e.Left = Stats["echo_time"]; e.Own = 0; e.Cool = Cooling(Stats["echo_cooldown"]);
         _echoAt = Position;
     }
     // The echo's time is up (the Echo row's Expire, on the host). What it remembered is its OWN
@@ -664,7 +670,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     {
         if (Sl("stealth").Cool > 0) return;
         ref var s = ref Sl("stealth");
-        s.Left = Stats["stealth_time"]; s.Cool = Stats["stealth_cooldown"];
+        s.Left = Stats["stealth_time"]; s.Cool = Cooling(Stats["stealth_cooldown"]);
         ApplyStatus(Status.Untargetable, s.Left);
         // whatever had picked this ship lets go of it at once, rather than at its next thought
         foreach (var t in new List<Turret>(Siblings)) t.Forget(this);
@@ -1010,7 +1016,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
                 {
                     foreach (var m in _mains) m.Shoot(Stats["broadside_mult"]);
                     bs.Own += Stats["broadside_gap"];
-                    if (--bs.N == 0) bs.Cool = Stats["broadside_cooldown"];
+                    if (--bs.N == 0) bs.Cool = Cooling(Stats["broadside_cooldown"]);
                 }
             }
         }

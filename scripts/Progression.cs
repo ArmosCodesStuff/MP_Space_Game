@@ -30,11 +30,26 @@ public static class Progression
         // a different set on every hull -- a sniper's railgun, a warden's hunters, a warrior's EMP,
         // a freighter's deployed turrets.
         public bool Weapons;
+        // ...and the same for what they REACH (ClassDef.Reach): a share of each id, not a step.
+        public bool Reach;
+        // ...and how fast they CYCLE (ClassDef.Cycle): the seconds between shots, so a share here
+        // is NEGATIVE -- a shorter interval is the improvement.
+        public bool Cycle;
     }
 
     // stat id -> what ONE level of `u` adds on class `c`: the row's own list, or the class's weapons
     public static IEnumerable<(string stat, double per)> StatsFor(Upgrade u, ShipClass c)
     {
+        if (u.Reach)
+        {
+            foreach (var kv in Classes.ReachOf(c)) if (kv.Value != 0) yield return (kv.Key, kv.Value * 0.01);
+            yield break;
+        }
+        if (u.Cycle)
+        {
+            foreach (var kv in Classes.CycleOf(c)) if (kv.Value != 0) yield return (kv.Key, kv.Value * -0.005);
+            yield break;
+        }
         if (u.Weapons)
         {
             foreach (var kv in Classes.Damage(c)) if (kv.Value != 0) yield return (kv.Key, kv.Value);
@@ -49,6 +64,15 @@ public static class Progression
         new() { Id = "hull",   Name = "Hull",    Moves = new[] { ("hull", 5.0) } },
         new() { Id = "speed",  Name = "Engines", Moves = new[] { ("max_speed", 1.0) } },
         new() { Id = "damage", Name = "Weapons", Weapons = true },
+        // REACH: every weapon the class declares carries 1% further a level (ClassDef.Reach), so a
+        // pilot keeps pace with a boss, whose own reach grows 1% a level (Missions.Quicken).
+        new() { Id = "reach",  Name = "Reach",   Reach = true },
+        // COOLING: every ability comes back sooner. Half a percent a level, and PlayerShip caps
+        // what it can ever be worth -- an ability with no cooldown is not an ability.
+        new() { Id = "cool",   Name = "Cooling", Moves = new[] { ("cooldown_share", -0.005) } },
+        // RATE OF FIRE: the main gun's cycle, shorter. Named for the gun, not for "weapons", so it
+        // cannot be confused with the Weapons row that buys damage.
+        new() { Id = "rof",    Name = "Gunnery", Cycle = true },
     };
     public const int MaxPerUpgrade = 60;       // a sanity cap on what a peer may claim
     // THE MOST A CLAIM MAY BUY on someone else's host. A pilot's level is its own word and there
