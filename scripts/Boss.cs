@@ -466,16 +466,26 @@ public partial class Boss : Node2D, IHittable, ITagged, IStatused
     // straight at the pilot, boosting for the whole wind-up and fragile on purpose (point defence
     // must be able to kill them inside it). Returns roughly how long until their web should land --
     // the wind-up's floor if they are all shot down first.
+    // HOW MANY A MOVE LAUNCHES AT THIS LEVEL: its row's own count, and ONE MORE EVERY TEN LEVELS
+    // to a ceiling of five. A move that calls nothing calls nothing however high the level goes, so
+    // this belongs to every boss with escorts rather than to the one that happened to have them
+    // first. They fan across the same arc whatever the count, so five need no new formation.
+    public const int EscortStep = 10, EscortMax = 5;
+    public static int EscortsAt(BossMove m, int level) =>
+        m == null || m.Escorts <= 0 ? 0
+        : System.Math.Min(EscortMax, m.Escorts + System.Math.Max(0, (level - 1) / EscortStep));
+
     public double LaunchEscorts(string move, Node2D target)
     {
         var s = S(move); var m = s?.M;
         if (!Net.Sim || m == null || target == null || Hub == null) return Raider.EscortShiver;
         var nose = Vector2.Up.Rotated(Rotation);
         double eta = 0;
+        int n = EscortsAt(m, Missions.Level);
         s.Escorts.Clear();
-        for (int k = 0; k < m.Escorts; k++)
+        for (int k = 0; k < n; k++)
         {
-            float side = m.Escorts > 1 ? (2f * k / (m.Escorts - 1) - 1f) * m.EscortAngle : 0f;
+            float side = n > 1 ? (2f * k / (n - 1) - 1f) * m.EscortAngle : 0f;
             var dir = nose.Rotated(Mathf.DegToRad(side));
             var at = Position + dir * m.EscortOut;
             var r = Hub.SpawnRaider(at, m.EscortKind, 0, Missions.S(Missions.Level));

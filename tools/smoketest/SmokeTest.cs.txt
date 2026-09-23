@@ -4440,6 +4440,18 @@ public partial class _Test : Node
                   && escorts.All(r => r.Target == me2 && r.Hp > 0 && r.Hp <= 3 * Missions.S(Missions.Level) + 1e-6),
                   $"two escorts launch at the pilot, 45 degrees to port and starboard ({string.Join(", ", escAng.Select(x => x.ToString("0")))}), fragile");
             Check(escorts.All(r => r.Shivering), "the escorts shiver at the launch point before the run in");
+            // ── A BOSS'S ESCORTS ARE NOT THE LANCER'S: one more every ten levels, to five ──
+            // The count was the row's alone, so every boss that ever calls craft in would have had
+            // to grow its own. It belongs to the move table: a move that calls nothing still calls
+            // nothing, and the fan spreads across the same arc whatever the count, so five need no
+            // new formation.
+            var callsThem = Missions.ForLevel(1).Moves.First(m => m.Escorts > 0);
+            var callsNone = Missions.ForLevel(1).Moves.First(m => m.Escorts == 0);
+            Check(Boss.EscortsAt(callsThem, 1) == 2 && Boss.EscortsAt(callsThem, 10) == 2
+                  && Boss.EscortsAt(callsThem, 11) == 3 && Boss.EscortsAt(callsThem, 21) == 4
+                  && Boss.EscortsAt(callsThem, 31) == 5 && Boss.EscortsAt(callsThem, 99) == 5
+                  && Boss.EscortsAt(callsNone, 99) == 0,
+                  $"a move's escorts grow with the level and stop at five: {Boss.EscortsAt(callsThem, 1)} at level 1, {Boss.EscortsAt(callsThem, 11)} at 11, {Boss.EscortsAt(callsThem, 21)} at 21, {Boss.EscortsAt(callsThem, 31)} at 31, {Boss.EscortsAt(callsThem, 99)} at 99 -- and a move that calls none still calls none");
             // ESCORTS OUT, THE BOSS ALREADY HOLDS ITS POSITION -- and turns only to face the pilot. Pushed
             // out past its 650 u standoff (where it would otherwise close at 30 u/s) and twisted 0.6 rad
             // off the pilot first, so both "it held" and "it turned" are real claims.
