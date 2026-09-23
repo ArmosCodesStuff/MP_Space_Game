@@ -66,7 +66,7 @@ public partial class DeployedTurret : Node2D, IRaidTarget, ITagged, ITurretHost
     public void TakeDamage(double d)
     {
         if (!Net.Sim || !Alive) return;
-        DamageNumbers.NoteImpact(this, Position);
+        Popups.NoteImpact(this, Position);
         Hp -= d;
         if (Hp <= 0) (GetParent() as Hub)?.DeployedDown(this);
     }

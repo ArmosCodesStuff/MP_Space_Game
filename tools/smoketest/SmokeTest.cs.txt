@@ -1003,6 +1003,31 @@ public partial class _Test : Node
     // many of each a pilot owned -- so "undo the most recent" had nothing to read and a refit
     // could only ever have taken the dearest. Both paths are proved: a pilot with an order, and a
     // file from before there was one.
+    // ── THE RANGE TO THE TARGET, under it and on the HUD line ────────────────────────────────
+    // The HUD named what was selected and nothing anywhere said how far off it was, which is the
+    // figure that decides whether a weapon reaches at all.
+    async Task RangeChecks()
+    {
+        var far = H.Raiders.FirstOrDefault();
+        if (far == null) { Check(false, "range readout: no raider to select"); return; }
+        H.SelectTarget(far);
+        // TWO frames: the first may resume before the Hub's own _Process has run, and the line
+        // would then still be the one written for the previous target.
+        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        // Whatever is selected when the line is WRITTEN, not what this asked for: a tutorial hint
+        // and the ship's own acquisition both pick targets, and the check is about the readout.
+        var shown = H.Selected ?? far;
+        double want = Me.Position.DistanceTo(shown.Position);
+        var line = Nodes<Label>().Select(l => l.Text).FirstOrDefault(t => t != null && t.Contains("target: "));
+        // Read the figure back rather than matching the string: the raider is under way, so the
+        // line was written a frame before this measured it and the two round a unit apart.
+        var said = line == null ? null : System.Text.RegularExpressions.Regex.Match(line, @"\((\d+) u\)");
+        Check(said is { Success: true } && line.Contains(shown.Label) && Math.Abs(double.Parse(said.Groups[1].Value) - want) < 30,
+              $"the HUD names the target AND says how far off it is: {shown.Label} at {said?.Groups[1].Value ?? "nothing"} u, measured {want:0} u");
+        H.ClearSelection();
+    }
+
     void RefitChecks()
     {
         Character.NewBlank();
@@ -1235,7 +1260,7 @@ public partial class _Test : Node
         // DAMAGE NUMBERS: small figures where damage lands -- gold for damage dealt, red for damage
         // taken -- floating up and gone after a second or so; hits in quick succession add into one
         {
-            var dn = H.GetNodeOrNull<DamageNumbers>("DamageNumbers");
+            var dn = H.GetNodeOrNull<Popups>("Popups");
             var dum = H.GetNode<TargetDummy>("TargetDummy1");
             dum.TakeDamage(5); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             dum.TakeDamage(2.5); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
@@ -1243,10 +1268,26 @@ public partial class _Test : Node
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             var dealt = dn?.Figures.Where(f => f.Who == dum.GetInstanceId()).ToList();
             var taken = dn?.Figures.Where(f => f.Who == ship.GetInstanceId()).ToList();
-            Check(dealt?.Count == 1 && Math.Abs(dealt[0].Amount - 7.5) < 1e-6 && !dealt[0].Taken && dealt[0].At.DistanceTo(dum.Position) < 15f,
+            Check(dealt?.Count == 1 && Math.Abs(dealt[0].Amount - 7.5) < 1e-6 && dealt[0].Kind == Pop.Dealt && dealt[0].At.DistanceTo(dum.Position) < 15f,
                   $"damage dealt shows as one gold figure where it landed: 5 and 2.5 a frame apart read 7.5 ({dealt?.Count} figure(s), {dealt?.FirstOrDefault()?.Amount:0.##})");
-            Check(taken?.Count == 1 && Math.Abs(taken[0].Amount - 4) < 0.1 && taken[0].Taken,
+            Check(taken?.Count == 1 && Math.Abs(taken[0].Amount - 4) < 0.1 && taken[0].Kind == Pop.Taken,
                   $"damage taken shows red on the ship that took it ({taken?.FirstOrDefault()?.Amount:0.##})");
+            // ── EXP IS ITS OWN READOUT, over the pilot's own hull ──
+            // Asked for as a copy of the damage numbers; built as a row of the one mechanism, which
+            // is why the file is named for what it does rather than for the first thing that used
+            // it. Bolder, whiter, larger, higher and longer-lived than a hit -- and it NEVER merges,
+            // because two kills adding into one bigger figure would read as one bigger kill.
+            int popsBefore = dn.Figures.Count;
+            Popups.Exp(ship, 650); Popups.Exp(ship, 400);
+            var expPops = dn.Figures.Where(f => f.Kind == Pop.Exp).ToList();
+            var expRow = Pop.Of(Pop.Exp); var dealtRow = Pop.Of(Pop.Dealt);
+            Check(expPops.Count == 2 && dn.Figures.Count == popsBefore + 2
+                  && Math.Abs(expPops[0].Amount - 650) < 1e-6 && Math.Abs(expPops[1].Amount - 400) < 1e-6
+                  && expPops.All(f => f.At.Y < ship.Position.Y && Math.Abs(f.At.X - ship.Position.X) < 1e-3)
+                  && expRow.Tint == new Color(1f, 1f, 1f) && expRow.Merge == 0 && expRow.Prefix == "+"
+                  && expRow.Size > dealtRow.Size && expRow.Rise > dealtRow.Rise && expRow.Life > dealtRow.Life,
+                  $"EXP rises off the pilot's own ship as its own kind of readout -- white, larger, higher, longer, and two kills are TWO figures where two hits would have merged into one ({expPops.Count} figures of {expPops.Sum(f => f.Amount):0} over the hull)");
+            foreach (var f in expPops) f.Age = 99;                      // gone before the next block counts figures
             await Wait(1.3);
             Check(dn != null && dn.Figures.All(f => f.Who != dum.GetInstanceId() && f.Who != ship.GetInstanceId()), "the figures fade out after a second or so");
             ship.Hp = ship.MaxHp;
@@ -3359,6 +3400,7 @@ public partial class _Test : Node
             var heavyP = pat.First(r => r.Heavy);
             Check(pat.Where(r => !r.Heavy).All(r => r.Target == pm) && heavyP.Target == pm,
                   "a ship within 2000 u: the lights go for it, and their heavy takes the same target");
+            await RangeChecks();                // something real to select, at a real distance
             foreach (var r in pat) if (GodotObject.IsInstanceValid(r)) r.TakeDamage(9999);
             await Wait(0.3);
             pm.Position = keepP; pm.Velocity = Vector2.Zero; pm.TakeDamage(-(pm.MaxHp - pm.Hp));
@@ -5770,7 +5812,7 @@ public partial class _Test : Node
             } };
             AddChild(deckWatch);
             // the hits the host resolves show here as damage numbers too, from the figures it sends
-            var numberWatch = new LateSampler { Probe = () => DamageNumbers.Live?.Figures.Any(f => !f.Taken && f.Who == dummy.GetInstanceId()) == true };
+            var numberWatch = new LateSampler { Probe = () => Popups.Live?.Figures.Any(f => f.Kind != Pop.Taken && f.Who == dummy.GetInstanceId()) == true };
             AddChild(numberWatch);
             Key(global::Godot.Key.Space);          // fighters attack
             Key(global::Godot.Key.F);              // bomber strike

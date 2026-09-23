@@ -568,7 +568,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             {
                 h.TakeDamage(Stats["rail_damage"]);
                 NoteDealt(Stats["rail_damage"], h.Position);
-                if (h is Node2D n) DamageNumbers.NoteImpact(n, h.Position);
+                if (h is Node2D n) Popups.NoteImpact(n, h.Position);
             }
         }
         Fx.Line(Fx.Rail, a, b);                             // the line it threw, on every peer
@@ -654,7 +654,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         {
             if (h.Position.DistanceTo(_echoAt) > reach) continue;
             h.TakeDamage(blast);
-            if (h is Node2D n) DamageNumbers.NoteImpact(n, h.Position);
+            if (h is Node2D n) Popups.NoteImpact(n, h.Position);
         }
         NoteCombat();
         Fx.Raise(Fx.Echo, _echoAt, reach);                  // on every peer, where it remembered
@@ -842,7 +842,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             _shield?.Flash(side);
             // where it struck: the hull's edge toward the hit, off the keel's nearest point
             var keel = new Vector2(0, Mathf.Clamp(v.Y, -MyArt.Length * 0.5f, MyArt.Length * 0.5f));
-            DamageNumbers.NoteImpact(this, ToGlobal(keel + (v - keel).LimitLength(MyArt.HalfWidth)));
+            Popups.NoteImpact(this, ToGlobal(keel + (v - keel).LimitLength(MyArt.HalfWidth)));
             if (Net.IsOnline) (GetParent() as Hub)?.SendShield(OwnerId, side);
             NoteCombat();                                   // taking damage is combat
         }
@@ -892,7 +892,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     public void ApplyShield(float side)
     {
         _shield?.Flash(side);
-        DamageNumbers.NoteImpact(this, ToGlobal(new Vector2(Mathf.Sin(side) * MyArt.HalfWidth, -Mathf.Cos(side) * MyArt.Length * 0.5f)));
+        Popups.NoteImpact(this, ToGlobal(new Vector2(Mathf.Sin(side) * MyArt.HalfWidth, -Mathf.Cos(side) * MyArt.Length * 0.5f)));
     }
 
     // A RETURNING PILOT's ship, put back as it was (Hub's held places). Place: on the owner, where
@@ -920,7 +920,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     public bool Mine => Net.OwnedByMe(this);
 
     // ── frame ────────────────────────────────────────────────────────────────
-    // Damage taken, shown where it lands (DamageNumbers). The host watches its own hull; a guest the
+    // Damage taken, shown where it lands (Popups). The host watches its own hull; a guest the
     // host's figures as they arrive (ApplyHostState) -- never the hull it regenerates between them.
     private HullWatch _hullWatch;
     private double _hostMax = -1;                  // the last hull size the host reported (a refit changes it)

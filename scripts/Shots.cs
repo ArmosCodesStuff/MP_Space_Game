@@ -189,10 +189,10 @@ public partial class Shot : Node2D, IHittable, ITagged
         {
             // a shell never takes a missile out of the air: that is point defence's job
             if (h == null || !h.Alive || TagExt.Is(h, Tag.Missile) || !h.Covers(p, d.Pad + Radius)) continue;
-            if (d.MarkEveryPeer && h is Node2D seen) DamageNumbers.NoteImpact(seen, p);
+            if (d.MarkEveryPeer && h is Node2D seen) Popups.NoteImpact(seen, p);
             if (!Cosmetic && Net.Sim)
             {
-                if (!d.MarkEveryPeer && h is Node2D struck) DamageNumbers.NoteImpact(struck, p);
+                if (!d.MarkEveryPeer && h is Node2D struck) Popups.NoteImpact(struck, p);
                 // a ship is told where the blow came from, for its shield
                 if (h is PlayerShip ps) ps.Hit(Damage, p - Dir * 10f, HitSource);
                 else h.TakeDamage(Damage);

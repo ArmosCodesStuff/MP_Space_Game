@@ -138,6 +138,8 @@ public static class Progression
                 ? Missions.KillExpFor(level, Character.Level) + (first ? Missions.FirstClearExp : 0) + Missions.CompletionExp
                 : 0;
         AddExp(exp);                                                         // (saves)
+        // ...and it says so over the ship, where the pilot is looking (Pop.Exp).
+        if (exp > 0 && Hub.I?.MyShip is { } me) Popups.Exp(me, exp);
         return exp;
     }
 

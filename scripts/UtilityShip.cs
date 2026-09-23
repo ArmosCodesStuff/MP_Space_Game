@@ -20,7 +20,7 @@ public abstract partial class UtilityShip : Node2D, IRaidTarget, ITagged
     public Yard Yard;
     public double Cargo, Hull, RebuildIn;
     private HullWatch _hullWatch; private bool _hostSeen;
-    // damage taken, shown where it lands (DamageNumbers): each kind calls it every frame
+    // damage taken, shown where it lands (Popups): each kind calls it every frame
     protected void WatchHull() => _hullWatch.Tick(this, Hull, taken: true);
     public bool WaitingForCredits;
     // what is being done to it (Statuses): a raider's web today, the host's to decide

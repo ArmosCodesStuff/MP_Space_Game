@@ -253,7 +253,7 @@ public partial class Hub : Node2D
         // turret sprites, so a shot is seen leaving a turret on top of the ship -- drawn at
         // the world's own level they started underneath it.
         AddChild(new FlashLayer { Hub = this, ZIndex = 8, ZAsRelative = false });
-        AddChild(new DamageNumbers { Name = "DamageNumbers" });
+        AddChild(new Popups { Name = "Popups" });
         _cam = new Camera2D { Zoom = new Vector2(DefaultZoom, DefaultZoom) }; AddChild(_cam); _cam.MakeCurrent();
 
         var layer = new CanvasLayer(); AddChild(layer);
@@ -1354,7 +1354,7 @@ public partial class Hub : Node2D
             Ui.SetText(_help, Abilities.ControlsHint(me.Class));
             ship = $"    |    {Character.Name}  {Classes.NameOf(me.Class)}"
                  + $"  {Mathf.Abs(me.SpeedAhead):0} u/s{(me.SpeedAhead < -1 ? " astern" : "")}";
-            ship += Selected != null ? "    target: " + Selected.Label
+            ship += Selected != null ? $"    target: {Selected.Label}  ({me.Position.DistanceTo(Selected.Position):0} u)"
                   : Waypoint != null ? $"    waypoint: {WaypointName}"
                                      : "    no target (Tab / click)";
             if (Raiders.Count > 0) ship += $"    |    RAIDERS {Raiders.Count}";
@@ -1400,6 +1400,13 @@ public partial class Hub : Node2D
             DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
             Txt.Centre(this, font, s.Position + new Vector2(0, -(s.MyArt.Length * 0.5f + 28f)), s.Pilot, Txt.Size(16), new Color(0.75f, 0.9f, 1f, 0.85f));
         }
+
+        // THE RANGE TO WHAT IS SELECTED, under it. The HUD names the target; what decides whether
+        // anything reaches it is how far off it is, and that was nowhere on screen. Under the thing
+        // rather than over it, because a hull bar and a pilot's name are already above.
+        if (Selected is { Alive: true } aim && MyShip is { } from)
+            Txt.Centre(this, font, aim.Position + new Vector2(0, aim.HitRadius + 30f),
+                       $"{from.Position.DistanceTo(aim.Position):0} u", Txt.Size(12), new Color(1f, 0.85f, 0.3f, 0.9f));
 
         // a pending placement shows where the click will land
         if (Placing)
