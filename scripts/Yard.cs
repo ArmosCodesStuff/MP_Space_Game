@@ -112,7 +112,7 @@ public partial class Yard : Node2D
     // THE BASE OWNER'S BOSS RECORD: what a gated upgrade asks for. The host is the owner of the
     // base everyone is standing in; a guest is told it with the totals.
     private int _ownerBoss;
-    public int OwnerBoss => Net.IsHost ? Missions.HighestBeaten : _ownerBoss;
+    public int OwnerBoss => Net.IsHost ? Missions.HighestBeaten(Missions.Bounty) : _ownerBoss;
     public bool AutoSell => Level("hauler_autosell") >= 1;
     public double RunSafe => Value("hauler_evasion") / 100.0;       // a lone run's chance of getting through
 
@@ -519,7 +519,7 @@ public partial class Yard : Node2D
             _totalsCd = 1.0;
             var lv = Economy.All.Select(u => Level(u.Id)).ToArray();
             Hub.RpcHome(this, nameof(NetTotals), Gathering.Resources.Select(Stock).ToArray(), Credits, lv,
-                        Economy.Tabs.Select(Invested).ToArray(), Missions.HighestBeaten);
+                        Economy.Tabs.Select(Invested).ToArray(), Missions.HighestBeaten(Missions.Bounty));
         }
         _stateCd -= delta;
         if (_stateCd <= 0) { _stateCd = 0.1; SendState(); }

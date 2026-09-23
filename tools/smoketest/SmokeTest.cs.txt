@@ -309,8 +309,33 @@ public partial class _Test : Node
         .Select(f => f.Name + "=" + Describe(f.GetValue(null))));
 
     // ── the save carries everything the character IS, and only this build can read it ────────
+    // ── EVERY ITEM IN THE GAME, WRITTEN OUT FOR THE OWNER TO READ ───────────────────────────────
+    // version/ITEMS.csv, from the LIVE table on every run, because a sheet kept by hand is a sheet
+    // that disagrees with the game the first time a line changes. One row per part: what it is,
+    // what it needs, every stat it moves and by how much, and the words the player is shown.
+    void WriteItemSheet()
+    {
+        var rows = new List<string> { "id,name,slot,rarity,kit,fits,needs,percent,flat,blurb" };
+        string Q(string s) => "\"" + (s ?? "").Replace("\"", "\"\"") + "\"";
+        string Moves(Dictionary<string, double> d, bool pct) =>
+            string.Join("; ", d.OrderBy(kv => kv.Key, StringComparer.Ordinal)
+                               .Select(kv => $"{kv.Key} {(kv.Value >= 0 ? "+" : "")}{(pct ? kv.Value * 100 : kv.Value):0.##}{(pct ? "%" : "")}"));
+        foreach (var i in Equipment.All.OrderBy(x => x.Slot).ThenBy(x => x.Rarity).ThenBy(x => x.Id, StringComparer.Ordinal))
+        {
+            var fits = Classes.All.Where(c => c.Ready && Equipment.Fits(i, i.Slot, c.Id)).Select(c => Classes.NameOf(c.Id)).ToList();
+            rows.Add(string.Join(",", Q(i.Id), Q(i.Name), Q(i.Slot.ToString()), Q(i.Rarity.ToString()), Q(i.Kit ? "kit" : ""),
+                                 Q(fits.Count == Classes.All.Count(c => c.Ready) ? "every hull" : string.Join(" / ", fits)),
+                                 Q(string.Join(" or ", i.Needs)), Q(Moves(i.Pct, true)), Q(Moves(i.Add, false)), Q(i.Blurb)));
+        }
+        using var f = Godot.FileAccess.Open("res://version/ITEMS.csv", Godot.FileAccess.ModeFlags.Write);
+        if (f != null) f.StoreString(string.Join("\n", rows) + "\n");
+        Check(rows.Count == Equipment.All.Count() + 1 && f != null,
+              $"every item in the game is written out for review: version/ITEMS.csv, {rows.Count - 1} parts from the live table");
+    }
+
     async Task SaveCoverage()
     {
+        WriteItemSheet();
         // The refit's arithmetic runs here rather than in the world: it works on a BLANK pilot, and
         // this is the one place that already throws pilots away and loads the real one back at the
         // end. Run where the hub starts, its NewBlank wiped the tutorial's hint state.
@@ -1541,7 +1566,7 @@ public partial class _Test : Node
               "EVASION: a lone run is 60% safe, +7% a level to 95% at its 5-level cap (400, 800, 1600, 3200, 6400 cr)");
         Character.BossCleared["silver_lancer"] = new System.Collections.Generic.HashSet<int> { 1, 2 };
         Character.BossCleared["ironhold"] = new System.Collections.Generic.HashSet<int> { 9 };     // a boss this build does not know counts for nothing
-        Check(Missions.HighestBeaten == 2, $"the highest boss beaten is of the bosses this build knows ({Missions.HighestBeaten})");
+        Check(Missions.HighestBeaten(Missions.Bounty) == 2, $"the highest boss beaten is of the bosses this build knows ({Missions.HighestBeaten(Missions.Bounty)})");
         Y.Credits = 100000;
         Key(global::Godot.Key.B); await Wait(0.1);
         Nodes<Button>(Nodes<BasePanel>().First()).First(b => b.Name == "Tab_HAULER").ButtonPressed = true; await Wait(0.1);
@@ -1658,7 +1683,7 @@ public partial class _Test : Node
         {
             double ownHull = new ShipStats(Me.Class)["hull"];
             double tough = 1 + Math.Log(Math.Max(1, Me.MaxHp / ownHull)) / Math.Log(1.1);
-            double threat = 0.25 * ((1 + 300 * 5 / 1000.0) + (0.5 * Character.Level + 0.5 * tough) + Math.Max(1, Missions.HighestBeaten) + 1);
+            double threat = 0.25 * ((1 + 300 * 5 / 1000.0) + (0.5 * Character.Level + 0.5 * tough) + Math.Max(1, Missions.HighestBeaten(Missions.Bounty)) + 1);
             Check(hunters.All(r => Math.Abs(r.Strength - Math.Pow(1.1, threat - 1)) < 1e-9 && Math.Abs(r.Agility - (1 + Math.Min(0.1, 0.01 * (threat - 1)))) < 1e-9),
                   $"the first wave carries THIS escort's threat: 300 units at x5 aboard, this pilot (level {Character.Level}), the highest boss, the first wave ({threat:0.000}; x{hunters.FirstOrDefault()?.Strength:0.000})");
         }
@@ -3135,27 +3160,29 @@ public partial class _Test : Node
                   && Missions.KillExpFor(2, 5) == 0 && Missions.KillExpFor(1, 5) == 0 && Missions.KillExpFor(3, 5) == 180
                   && Missions.WorthExp(3, 5) && !Missions.WorthExp(2, 5),
                   $"kill EXP 300 x boss level / pilot level (5 vs 10: {Missions.KillExpFor(5, 10)}; 2 vs 1: {Missions.KillExpFor(2, 1)}), and nothing at all under half the pilot's level (level 5 against a level 2 boss: {Missions.KillExpFor(2, 5)})");
-            Check(Math.Abs(Missions.BountyEach(1, 1) - 2000) < 1e-9 && Math.Abs(Missions.BountyEach(1, 2) - 1500) < 1e-9 && Math.Abs(Missions.BountyEach(1, 3) - 4000.0 / 3) < 1e-9,
-                  "the bounty, +50% per extra pilot, split: 2000 solo, 1500 each for two, 1333 each for three");
+            Check(Math.Abs(Missions.BountyEach(Missions.Bounty, 1, 1) - 2000) < 1e-9 && Math.Abs(Missions.BountyEach(Missions.Bounty, 1, 2) - 1500) < 1e-9
+                  && Math.Abs(Missions.BountyEach(Missions.Bounty, 1, 3) - 4000.0 / 3) < 1e-9
+                  && Math.Abs(Missions.BountyEach(Missions.Siege, 1, 1) - 2000) < 1e-9,
+                  "the bounty, +50% per extra pilot, split: 2000 solo, 1500 each for two, 1333 each for three -- and a raid pays off the same base figure");
             Character.BossCleared.Clear(); Character.Exp = 0; Character.Level = 1;
-            int k1 = Progression.AwardBossKill(1), k2 = Progression.AwardBossKill(1);
+            int k1 = Progression.AwardClear(Missions.Bounty, 1), k2 = Progression.AwardClear(Missions.Bounty, 1);
             Check(k1 == 650 && k2 == 400, $"a level-1 boss: 300 + 250 first clear + 100 = 650; again: 400 ({k1}, {k2})");
             // ONE LADDER: a level counts as cleared whichever known boss held it -- the first-clear bonus is
             // paid once a level, and the next level opens; a clear under an id this build does not know
             // counts for nothing
             Character.BossCleared.Clear(); Character.Exp = 0; Character.Level = 1;
             Character.BossCleared["ironhold"] = new System.Collections.Generic.HashSet<int> { 1, 2 };
-            bool unknownIgnored = !Missions.Cleared(1) && Missions.HighestBeaten == 0 && Missions.Unlocked == 1;
+            bool unknownIgnored = !Missions.Cleared(Missions.Bounty, 1) && Missions.HighestBeaten(Missions.Bounty) == 0 && Missions.Unlocked(Missions.Bounty) == 1;
             Character.BossCleared["silver_lancer"] = new System.Collections.Generic.HashSet<int> { 1 };
-            int again = Progression.AwardBossKill(1);
-            Check(unknownIgnored && Missions.Cleared(1) && !Missions.Cleared(2) && Missions.Unlocked == 2 && again == 400
+            int again = Progression.AwardClear(Missions.Bounty, 1);
+            Check(unknownIgnored && Missions.Cleared(Missions.Bounty, 1) && !Missions.Cleared(Missions.Bounty, 2) && Missions.Unlocked(Missions.Bounty) == 2 && again == 400
                   && Character.BossCleared["silver_lancer"].SetEquals(new[] { 1 }) && Missions.ForLevel(1).Id == "silver_lancer",
-                  $"one ladder: a level cleared under a known boss counts, and pays no second first-clear bonus ({again}); an unknown boss's clears count for nothing");
+                  $"ONE BOSS LADDER: a level cleared under a known boss counts, and pays no second first-clear bonus ({again}); an unknown boss's clears count for nothing");
             // ...WHICHEVER BOSS HELD IT: the bosses take the levels in turn, and a level cleared under the
             // other one counts all the same -- recorded under the Drake, level 1 is no first clear for the Lancer
             Character.BossCleared.Clear(); Character.Exp = 0; Character.Level = 1;
             Character.BossCleared["drake_bastion"] = new System.Collections.Generic.HashSet<int> { 1 };
-            int crossed = Progression.AwardBossKill(1);
+            int crossed = Progression.AwardClear(Missions.Bounty, 1);
             Check(Missions.ForLevel(1).Id == "silver_lancer" && Missions.ForLevel(2).Id == "drake_bastion" && Missions.ForLevel(3).Id == "silver_lancer"
                   && crossed == 400 && Character.BossCleared["silver_lancer"].Contains(1),
                   $"the bosses take the levels in turn (Lancer, Drake, Lancer), and a level cleared under either is cleared: no second first-clear bonus ({crossed})");
@@ -3640,7 +3667,7 @@ public partial class _Test : Node
             {
                 var nfm = BindingFlags.NonPublic | BindingFlags.Instance;
                 int raiders0 = H.Raiders.Count, turrets0 = H.Deployed.Count;
-                int third = Spawns.All.Count;
+                int extra = Spawns.All.Count;
                 Spawns.All.Add(new SpawnKind {
                     Id = "Probe", Space = NetIds.Menu, Burst = 0f,
                     Bag = k => new SpawnSet<SpawnProbe>(k),
@@ -3648,23 +3675,26 @@ public partial class _Test : Node
                     Seed = n => new SpawnSeed(((SpawnProbe)n).NetId, n.Position, 0, 0, 0),
                 });
                 var probeAt = VaryNear(Hub.BasePos + new Vector2(0, -5400), 400f);
-                var probe = H.Spawn(third, probeAt, 0, 0, 0) as SpawnProbe;
+                var probe = H.Spawn(extra, probeAt, 0, 0, 0) as SpawnProbe;
                 bool born = probe != null && probe.GetParent() == H && probe.Position == probeAt
                             && probe.NetId > NetIds.Menu && probe.NetId < NetIds.Menu + 10000
                             && probe.Name.ToString() == $"Probe_{probe.NetId}";
-                H.Down(third, probe, burst: false, 0f);
+                H.Down(extra, probe, burst: false, 0f);
                 bool buried = probe != null && probe.IsQueuedForDeletion();
                 // ...and the six each kind used to need are GONE, with exactly two spawn RPCs left
-                // on Hub for every kind there will ever be
+                // on Hub for every kind there will ever be. NetDeployHulls is in the list too: the
+                // 10 Hz HULL packet was the turrets' own, and is now one packet for every kind that
+                // fills in SpawnKind.Hull (Hub.NetHulls), so a further kind adds no RPC either.
                 int spawnRpcs = typeof(Hub).GetMethods(nfm).Count(mi => mi.Name.StartsWith("NetSpawn"));
                 bool noCopies = new[] { "NetRaiderSpawn", "AddRaider", "DropRaider", "NetRaiderGone",
-                                        "NetDeploy", "AddDeployed", "DropDeployed", "RemoveDeployed", "NetDeployGone" }
+                                        "NetDeploy", "AddDeployed", "DropDeployed", "RemoveDeployed", "NetDeployGone",
+                                        "NetDeployHulls" }
                                 .All(nm => typeof(Hub).GetMethod(nm, nfm) == null);
-                Spawns.All.RemoveAt(third);                           // the table back as the game ships it
+                Spawns.All.RemoveAt(extra);                           // the table back as the game ships it
                 Check(born && buried && spawnRpcs == 2 && noCopies
                       && H.Raiders.Count == raiders0 && H.Deployed.Count == turrets0,
-                      $"a THIRD host-spawned replicated kind took the generic path with no new method: its own id space ({probe?.NetId}), "
-                      + $"built, named and dropped by Hub.Spawn/Hub.Down, {spawnRpcs} spawn RPCs on Hub and none of the six per-kind methods left ({noCopies})");
+                      $"a FURTHER host-spawned replicated kind took the generic path with no new method: its own id space ({probe?.NetId}), "
+                      + $"built, named and dropped by Hub.Spawn/Hub.Down, {spawnRpcs} spawn RPCs on Hub and none of the per-kind methods left ({noCopies})");
             }
         }
 
@@ -4873,6 +4903,116 @@ public partial class _Test : Node
             }
             Check(fp.DistanceTo(goal) < 80f, $"the fighter-class autopilot reaches its point ({fp.DistanceTo(goal):0} u off)");
             Check(Settings.MusicOn, "music is on by default");
+
+            // ── THE PIRATE BASE SIEGE: the first entry of RAIDS, the second thing a mission has
+            //    ever been able to be, and a LADDER OF ITS OWN ─────────────────────────────────
+            {
+                Character.BossCleared.Clear(); Character.Exp = 0; Character.Level = 1;
+                Character.Unclaimed.Clear(); Character.Save();
+                Check(Missions.KindOf(Missions.Bounty).Category == "BOSS" && Missions.KindOf(Missions.Siege).Category == "RAIDS"
+                      && Missions.KindOf(Missions.Siege).Name == "PIRATE BASE SIEGE",
+                      $"a mission kind is a ROW: RAIDS beside BOSS, the siege its first entry ({Missions.KindOf(Missions.Siege).Category} · {Missions.KindOf(Missions.Siege).Name})");
+                // THE SELECTED LEVEL IS PER CATEGORY: stepping one never moves the other
+                Missions.Kind = Missions.Bounty; Missions.Level = 2;
+                Missions.Kind = Missions.Siege;  Missions.Level = 3;
+                int raidSel = Missions.Level;
+                Missions.Kind = Missions.Bounty; int bossSel = Missions.Level;
+                Missions.Kind = Missions.Siege;
+                Check(raidSel == 3 && bossSel == 2 && Missions.Level == 3,
+                      $"the selected level is the CATEGORY's: RAIDS on 3 left BOSS on 2 ({raidSel} raids, {bossSel} boss)");
+
+                H.EnterSector(Hub.SectorKind.Arena); await Wait(1.5);
+                // well outside the base's own guns, and the pylons': nothing shoots at the pilot
+                // while the numbers below are read, and where it sits is not one of them
+                var sme = Me; sme.MaxHp = 500000; sme.TakeDamage(-(500000 - sme.Hp));
+                sme.Position = VaryNear(Hub.ArenaCentre + new Vector2(0, 3400), 500f); sme.Velocity = Vector2.Zero;
+                await Wait(0.2);
+                var em = H.Emplacements.ToList();
+                var pbase = em.FirstOrDefault(e => e.Def.Id == Emplacements.Base);
+                var pylons = em.Where(e => e.Def.Id == Emplacements.Pylon).ToList();
+                Check(em.Count == 5 && pbase != null && pylons.Count == 4 && H.Boss == null,
+                      $"a siege builds a pirate base and FOUR pylons, and no boss at all ({em.Count} hulls, {pylons.Count} pylons, boss {(H.Boss == null ? "none" : "built")})");
+                // 1200 u out on each diagonal -- the four ends of an invisible X, one per corner
+                var pylonCorners = pylons.Select(p => (Math.Sign(p.Position.X - pbase.Position.X), Math.Sign(p.Position.Y - pbase.Position.Y))).ToHashSet();
+                Check(pylons.All(p => Math.Abs(p.Position.DistanceTo(pbase.Position) - 1200) < 1f
+                                   && Math.Abs(Math.Abs(p.Position.X - pbase.Position.X) - Math.Abs(p.Position.Y - pbase.Position.Y)) < 1f)
+                      && pylonCorners.Count == 4,
+                      $"four pylons 1200 u out on the diagonals, one to each corner ({string.Join(", ", pylons.Select(p => $"{p.Position.DistanceTo(pbase.Position):0}"))} u; {pylonCorners.Count} pylonCorners)");
+                // TWICE THE BOSS OF THIS LEVEL, at the same scale -- one hull formula, not a second.
+                // (That the level-3 boss is 760 x 1.21 = 919.6 is proved against its literals above.)
+                double bossAt3 = Missions.ForLevel(3).Hull * Missions.HullMult(3, 1);
+                Check(Math.Abs(pbase.MaxHp - 2 * bossAt3) < 1e-6 && Math.Abs(pbase.MaxHp - 1839.2) < 1e-3,
+                      $"the pirate base is 2x the boss of its own level: 2 x {bossAt3:0.0} = {pbase.MaxHp:0.0} at level 3");
+                Check(pylons.All(p => Math.Abs(p.MaxHp - 400 * Missions.S(3)) < 1e-6) && Math.Abs(400 * Missions.S(3) - 484) < 1e-6,
+                      $"each pylon starts at 400 hull and climbs the same 10%-a-level scale (level 3: 400 x 1.21 = {pylons[0].MaxHp:0})");
+
+                // ITS GARRISON comes as an escort's hunters do -- the same one builder, a row of
+                // Waves.All -- but at FULL hull and the mission's own strength: the escort halves
+                // its hunters (Waves.HunterHull), and none of that reaches here.
+                var siegeRow = Missions.KindOf(Missions.Siege);
+                Check(siegeRow.WaveEvery > 0 && Missions.KindOf(Missions.Bounty).WaveEvery == 0,
+                      $"the wave clock is the mission ROW's: a siege every {siegeRow.WaveEvery:0} s from {siegeRow.FirstWave:0} s, a bounty none");
+                int raid0 = H.Raiders.Count;
+                H.GarrisonWave(Hub.ArenaCentre, 0); await Wait(0.3);
+                var wave = H.Raiders.Skip(raid0).ToList();
+                double siegeLv = Math.Pow(1.1, 3 - 1);
+                Check(wave.Count == 4 && wave.Count(r => r.Heavy) == 1 && Math.Abs(Waves.HunterHull - 0.5) < 1e-9
+                      && wave.All(r => Math.Abs(r.Strength - siegeLv) < 1e-9 && Math.Abs(r.MaxHull - Enemies.Of(r.Kind).Hull * siegeLv) < 1e-6),
+                      $"a siege wave is 3 pinners and a standoff at FULL hull and x{siegeLv:0.00} -- not the escort's half ({wave.Count} raiders, {wave.Count(r => r.Heavy)} heavy)");
+                foreach (var r in H.Raiders.ToList()) H.RaiderDown(r);
+                await Wait(0.2);
+
+                // THE SHIELD: the four pylons hold it up, and nothing touches the base until every
+                // one of them is down. All in one frame -- a dropped hull leaves H.Emplacements at
+                // the call, not at the frame's end.
+                double baseHp0 = pbase.Hp;
+                pbase.TakeDamage(500);
+                bool allFour = pbase.Shielded && Math.Abs(pbase.Hp - baseHp0) < 1e-9;
+                for (int i = 0; i < 3; i++) pylons[i].TakeDamage(pylons[i].MaxHp * 2);
+                pbase.TakeDamage(500);
+                bool lastOne = pbase.Shielded && Math.Abs(pbase.Hp - baseHp0) < 1e-9
+                               && H.Emplacements.Count(e => e.Def.Id == Emplacements.Pylon) == 1;
+                Check(allFour && lastOne,
+                      $"the base takes NOTHING while a pylon stands: 500 with four up and 500 with one, {baseHp0 - pbase.Hp:0} taken of 1000");
+                pylons[3].TakeDamage(pylons[3].MaxHp * 2);
+                pbase.TakeDamage(500);
+                Check(!pbase.Shielded && Math.Abs(baseHp0 - pbase.Hp - 500) < 1e-6
+                      && H.Emplacements.Count(e => e.Def.Id == Emplacements.Pylon) == 0,
+                      $"all four pylons down, the base takes damage: 500 off {baseHp0:0} leaves {pbase.Hp:0}");
+                await Wait(0.2);
+                // ONLY THE BASE DROPS: four pylons have fallen and left nothing at all
+                Check(H.CratesDropped == 0 && Count<LootCrate>() == 0 && Character.Unclaimed.Count == 0,
+                      $"four pylons down and not one crate: only the base drops in a siege ({H.CratesDropped} crates, {Character.Unclaimed.Count} unclaimed)");
+                var wreck = pbase.Position;
+                pbase.TakeDamage(pbase.Hp + 1);
+                await Wait(0.6);
+                Check(H.MissionWon && H.CratesDropped == Loot.CratesFor(3) && Count<LootCrate>() == Loot.CratesFor(3)
+                      && H.Crates.All(c => Math.Abs(c.Position.DistanceTo(wreck) - Loot.Ring) < 1f),
+                      $"the base's fall ends the siege and drops ITS crates, on the {Loot.Ring:0} u ring ({H.CratesDropped} of {Loot.CratesFor(3)})");
+
+                // ── TWO LADDERS ──────────────────────────────────────────────────────────
+                // The siege clear opens the next RAID and leaves the bosses exactly where they
+                // were; a boss clear then opens the next BOSS and leaves the raids where they are.
+                Check(Missions.Cleared(Missions.Siege, 3) && Missions.HighestBeaten(Missions.Siege) == 3 && Missions.Unlocked(Missions.Siege) == 4
+                      && Character.BossCleared.TryGetValue("siege", out var sieged) && sieged.Contains(3),
+                      $"a siege clear counts on the RAID ladder: level 3 cleared, {Missions.Unlocked(Missions.Siege)} unlocked, filed under its own id");
+                Check(!Missions.Cleared(Missions.Bounty, 3) && Missions.HighestBeaten(Missions.Bounty) == 0 && Missions.Unlocked(Missions.Bounty) == 1,
+                      $"...and it unlocked NO boss level: the bounties are still at {Missions.Unlocked(Missions.Bounty)} with raids at {Missions.Unlocked(Missions.Siege)}");
+                Progression.AwardClear(Missions.Bounty, 1);
+                Check(Missions.Cleared(Missions.Bounty, 1) && Missions.Unlocked(Missions.Bounty) == 2
+                      && !Missions.Cleared(Missions.Siege, 1) && Missions.Unlocked(Missions.Siege) == 4,
+                      $"a boss clear opens the next BOSS and no raid ({Missions.Unlocked(Missions.Bounty)} boss, {Missions.Unlocked(Missions.Siege)} raids)");
+
+                H.EnterSector(Hub.SectorKind.Home); await Wait(1.5);
+                // the TIO's ◀ ▶ are capped by whichever ladder the selected operation climbs
+                H.SelectMission(Missions.Siege); H.SelectLevel(99); int raidTop = Missions.Level;
+                H.SelectMission(Missions.Bounty); H.SelectLevel(99); int bossTop = Missions.Level;
+                Check(raidTop == 4 && bossTop == 2,
+                      $"the level selector is capped by the OPERATION's own ladder: raids stop at {raidTop}, bosses at {bossTop}");
+                Missions.Kind = Missions.Bounty; Missions.Level = 1;
+                Character.Unclaimed.Clear();
+            }
+
             Character.Exp = 0; Character.Level = 1; Character.BossCleared.Clear(); Character.Points = 0; Character.Save();
             Me.Position = Hub.BasePos + new Vector2(0, 330); Me.Velocity = Vector2.Zero; await Wait(1.5);
             Click(Scr(Hub.BasePos)); await Wait(0.1);
@@ -5013,7 +5153,7 @@ public partial class _Test : Node
         // mission report that follows. (Sent home again here, where the hub has just been rebuilt.)
         {
             int lv0 = Missions.Level;
-            Priv(H, "NetSector", (int)Hub.SectorKind.Home, 7);
+            Priv(H, "NetSector", (int)Hub.SectorKind.Home, Missions.Kind, 7);   // the kind rides beside the level now
             int lvSet = Missions.Level;
             await Wait(1.0);                                   // the home world, rebuilt
             Missions.Level = lv0;
@@ -5556,7 +5696,7 @@ public partial class _Test : Node
             Check(!rev.Text.Contains("203.0.113.7"), "click again: hidden");
             Character.BossCleared.Clear();
             // every pilot: its own EXP by its own level, and its own drops -- each guest ITS OWN, and only its own
-            H.AnnounceBossKill(1, Vector2.Zero);
+            H.AnnounceClear(Missions.Bounty, 1, Vector2.Zero);
             // what the host rolled for whom, by character, for each guest to hold its own parts against
             var rolled = Session.Kills[Session.Kills.Count - 1].Drops;   // Session.Kill is a public record now
             var dropsFile = new ConfigFile();
@@ -5846,8 +5986,8 @@ public partial class _Test : Node
                   $"a kill's drops with two guests in the session: this guest gets its own 2 parts, the very ones the host rolled for it ({HoldIds()} / {RolledFor(Character.Id)})");
             Check(Met("equipment") && !Met("loot"), "a kill's parts reaching a guest at home: EQUIPMENT is met (they are in the hold), not LOOT (there are no crates)");
             await RealTime(() => H.Yard.OwnerBoss == 3, 3);
-            Check(H.Yard.OwnerBoss == 3 && Missions.HighestBeaten == 1,
-                  $"AUTO-SELL here is judged by the base owner's boss record (3), not this guest's (1) ({H.Yard.OwnerBoss}, {Missions.HighestBeaten})");
+            Check(H.Yard.OwnerBoss == 3 && Missions.HighestBeaten(Missions.Bounty) == 1,
+                  $"AUTO-SELL here is judged by the base owner's boss record (3), not this guest's (1) ({H.Yard.OwnerBoss}, {Missions.HighestBeaten(Missions.Bounty)})");
             var ghud = Nodes<HaulerHud>().FirstOrDefault();
             Check(ghud != null && Nodes<Button>(ghud).Any(b => b.Name == "Escort") && Nodes<Button>(ghud).Any(b => b.Name == "Dispatch") && Nodes<Button>(ghud).All(b => !b.Visible),
                   "a guest sees the host's hauler load, but DISPATCH and ESCORT are the base owner's alone");
@@ -5910,7 +6050,7 @@ public partial class _Test : Node
             // ships' cargo, and credits from a sale -- is at least the 5000 it had, and
             // nowhere near the host's few hundred.
             double own = Held();
-            double share = Missions.BountyEach(1, 3);                // the host's announced kill, a party of three
+            double share = Missions.BountyEach(Missions.Bounty, 1, 3);   // the host's announced kill, a party of three
             Check(own - share >= held0 - 1e-6 && own - share < held0 + 400,
                   $"guest's own totals restored, nothing lost, plus its bounty share ({own:0.00} held, {share:0.00} of it the share, {held0:0.00} on leaving)");
             Check(H.Yard.Level("salvage_rate") == 0, "guest's own upgrade levels restored (the host's level 1 stays in the host's world)");

@@ -38,6 +38,10 @@ public struct TurretSpec
     public float TexScale;               // world units per turret-texture pixel
     public float Barrel, Ring;           // muzzle from the pivot; the radius of the ring it draws
     public Color Tint;
+    // WHAT A HULL CALLS A BLOW FROM THIS GUN (DamageSource): the FAMILY name, to which Combat.Fire
+    // adds the firing body's own identity. Null -- every gun a pilot's ship carries -- keeps the
+    // behaviour these all had: the blow is nameless, and the 0.52 s per-source gap does not hold it.
+    public string Source;
 }
 
 public interface ITurretHost
@@ -181,7 +185,8 @@ public partial class Turret : Node2D
         if (!Net.Sim) return;
         var spec = S;
         var dir = Vector2.Right.Rotated(GlobalRotation);
-        Combat.Fire(spec.Kind, GlobalPosition + dir * spec.Barrel, dir, spec.ShellSpeed, spec.Range, spec.Damage * mult, source: Host.Credit);
+        Combat.Fire(spec.Kind, GlobalPosition + dir * spec.Barrel, dir, spec.ShellSpeed, spec.Range, spec.Damage * mult,
+                    source: Host.Credit, hitSource: spec.Source);
     }
 
     // _angle is a WORLD angle, so it is applied as GlobalRotation; as a local

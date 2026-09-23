@@ -39,7 +39,10 @@ public static class Session
     // (Character.PaidKills), so not even a restart in between pays one twice.
     public sealed class Kill
     {
-        public long Serial; public int Level, Party, World; public Vector2 At; public ulong When;
+        // Kind: which row of Missions.Kinds was cleared. An owed clear may be paid in a world
+        // flying a different operation, and it decides which LADDER the clear counts on, so it
+        // travels with the kill rather than being read off Missions.Kind when it lands.
+        public long Serial; public int Kind, Level, Party, World; public Vector2 At; public ulong When;
         public Dictionary<int, string[]> Drops; public HashSet<int> Present;
     }
 

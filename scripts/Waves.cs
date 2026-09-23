@@ -45,6 +45,7 @@ public enum WaveTrigger
     Failed,      // a mission the party lost: the boss sends its raiders to the base
     Hunt,        // an escort's leg N: hunters sent after one quarry
     Called,      // asked for outright, at a spot, at a strength named on the spot
+    Garrison,    // a mission's target defending itself: wave N of ITS own clock (Missions.Kinds)
 }
 
 // WHERE THE SQUADS OF A WAVE FORM UP, measured from the brief's Origin.
@@ -218,7 +219,30 @@ public static class Waves
                 Crew = new[] { HuntPin,
                                Draw(EnemyWay.Standoff, 0, _ => 1, new Vector2(-60f, 90f), Vector2.Zero),
                                Named(Enemies.Gunship, _ => 1, new Vector2(60f, 90f), Vector2.Zero) } },
+
+        // A MISSION'S GARRISON -- the pirate base answering a siege. The escort's SCHEDULE (a first
+        // wave, then one every so often) with none of the escort's REDUCTIONS: HullShare is the
+        // default 1, not Waves.HunterHull, and the strength is the mission's own level, not an
+        // escort's threat. One squad, and one more for each pilot past the first, off a ring round
+        // the thing being besieged.
+        new() { Id = "siege", Trigger = WaveTrigger.Garrison,
+                Squads = 1, SquadsPerPilot = 1,
+                Form = WaveForm.Ring, Radius = GarrisonRing, Turn = 0.35f,
+                Strength = b => Missions.S(b.Level),
+                Crew = Patrol },
+
+        // ...AND FROM THE THIRD WAVE ON a gunship comes with each squad.
+        new() { Id = "siege_heavy", Trigger = WaveTrigger.Garrison, When = b => b.Index >= 2,
+                Squads = 1, SquadsPerPilot = 1,
+                Form = WaveForm.Ring, Radius = GarrisonRing, Turn = 0.35f,
+                Strength = b => Missions.S(b.Level),
+                Crew = new[] { Patrol[0], Patrol[1],
+                               Named(Enemies.Gunship, _ => 1, new Vector2(0f, 160f), Vector2.Zero) } },
     };
+
+    // How far out a garrison forms up from what it is defending: outside the pirate base's own
+    // 2200 u guns, so a wave is never born under them.
+    public const float GarrisonRing = 2600f;
 
     // THE ROW A TRIGGER MEANS RIGHT NOW: the LAST one that matches, so a row written under
     // another takes over from it wherever its `When` says yes.

@@ -92,10 +92,11 @@ public class BossMove
 // LOCKED: a move that holds the hull is winding up or firing. The boss then neither closes nor
 // turns except as that move itself decides -- the red line it drew is the line it fires down --
 // and a guest takes its pose flat rather than easing it (see _netLocked).
-public partial class Boss : Node2D, IHittable, ITagged, IStatused
+public partial class Boss : Node2D, IQuarry, ITagged, IStatused
 {
     public Hub Hub;
     public Missions.BossType Type;              // which boss: its name, its hull, its shape, its moves
+    public string Title => Type.Name;           // what the arena's line calls it (IQuarry)
     // hull and damage by level and party: S(L)(1 + 0.6(P-1)) and S(L)(1 + 0.2(P-1))
     public double HullMult = 1, DamageMult = 1;
     public double MaxHp => Type.Hull * HullMult;
@@ -111,7 +112,7 @@ public partial class Boss : Node2D, IHittable, ITagged, IStatused
     public StatusSet Statuses => _status;
     public void ApplyStatus(Status s, double seconds) { if (Net.Sim) _status.Apply(s, seconds); }
     public bool Held => _status.Has(Status.Disabled);
-    public double Hp;
+    public double Hp { get; set; }              // a property, not a field: IQuarry asks for it
     public bool Alive => Hp > 0;
     public int NetId => Id;
     public float HitRadius => HalfWidth;
@@ -187,7 +188,7 @@ public partial class Boss : Node2D, IHittable, ITagged, IStatused
     {
         if (!Net.Sim || !Alive) return;
         Hp = System.Math.Max(0, Hp - d);
-        if (Hp <= 0) Hub.BossDefeated();
+        if (Hp <= 0) Hub.MissionCleared(Position);
     }
     // the host's word that it is down: a peer that never had its figures (one that arrived after the
     // win) shows nothing for it

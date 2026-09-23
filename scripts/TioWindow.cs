@@ -10,8 +10,8 @@ public partial class TioWindow : PanelContainer
 {
     public Hub Hub;
     private Label _party, _status;
-    private Button _ready, _down, _up;
-    private Label _tier, _bounty;
+    private Button _ready, _down, _up, _opDown, _opUp;
+    private Label _tier, _bounty, _op;
 
     public override void _Ready()
     {
@@ -23,6 +23,17 @@ public partial class TioWindow : PanelContainer
         title.AddChild(Ui.Lbl("WARP TO TARGET", Ui.Title, Ui.Accent));
         title.AddChild(Ui.Lbl("Threat Intelligence Operations", Ui.Small, Ui.Dim));
         col.AddChild(title);
+        // WHICH OPERATION: a row of Missions.Kinds, its category shown with it (BOSS, RAIDS).
+        // Each category climbs its OWN ladder, so the level below is this operation's alone -- the
+        // one you left selected for the other is untouched by stepping this.
+        col.AddChild(Ui.Heading("Operation"));
+        var op = Ui.HBox(8, "Operation"); col.AddChild(op);
+        _opDown = new Button { Name = "OperationDown", Text = "◀", FocusMode = FocusModeEnum.None }; _opDown.Pressed += () => Hub.SelectMission(Missions.Kind - 1);
+        _op = Ui.Lbl("", Ui.Body); _op.CustomMinimumSize = new Vector2(230, 0);
+        _op.HorizontalAlignment = HorizontalAlignment.Center; _op.VerticalAlignment = VerticalAlignment.Center;
+        _op.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        _opUp = new Button { Name = "OperationUp", Text = "▶", FocusMode = FocusModeEnum.None }; _opUp.Pressed += () => Hub.SelectMission(Missions.Kind + 1);
+        op.AddChild(_opDown); op.AddChild(_op); op.AddChild(_opUp);
         col.AddChild(Ui.Heading("Bounty"));
         _bounty = Ui.Lbl("", Ui.Body);
         _bounty.AutowrapMode = TextServer.AutowrapMode.WordSmart; _bounty.CustomMinimumSize = new Vector2(440, 0);
@@ -48,21 +59,25 @@ public partial class TioWindow : PanelContainer
     public override void _Process(double delta)
     {
         if (Hub == null) return;
-        int top = Missions.Unlocked;
+        int top = Missions.Unlocked(Missions.Kind);          // this operation's own ladder
         int lv = Missions.Level, party = System.Math.Max(1, Hub.PartySize);
         Ui.SetText(_tier, $"LEVEL {lv}  ·  ×{Missions.S(lv):0.00}" + (lv == top ? "  (newest)" : ""));
         _down.Disabled = !Net.IsHost || lv <= 1 || Hub.Mission != Hub.MissionState.Idle;
         _up.Disabled = !Net.IsHost || lv >= top || Hub.Mission != Hub.MissionState.Idle;
-        bool first = !Missions.Cleared(lv);
+        var kind = Missions.KindOf(Missions.Kind);
+        Ui.SetText(_op, $"{kind.Category}  ·  {kind.Name}");
+        _opDown.Disabled = !Net.IsHost || Missions.Kind <= 0 || Hub.Mission != Hub.MissionState.Idle;
+        _opUp.Disabled = !Net.IsHost || Missions.Kind >= Missions.Kinds.Length - 1 || Hub.Mission != Hub.MissionState.Idle;
+        bool first = !Missions.Cleared(Missions.Kind, lv);
         // A boss under half this pilot's level pays no EXP at all, so the line says that instead of
         // quoting bonuses it will not pay. The credits and the crates are unaffected.
         bool worth = Missions.WorthExp(lv, Character.Level);
-        Ui.SetText(_bounty, $"BOUNTY  ·  {Missions.ForLevel(lv).Name}  ·  party of {party}\n"
+        Ui.SetText(_bounty, $"{kind.Name}  ·  {kind.Title?.Invoke(lv) ?? kind.Name}  ·  party of {party}\n"
                      + (worth
                         ? $"You: {Missions.KillExpFor(lv, Character.Level)} EXP for the kill (your level {Character.Level})"
                           + (first ? $" + {Missions.FirstClearExp} first clear" : "") + $" + {Missions.CompletionExp} completing, "
                         : $"You: NO EXP -- level {lv} is under half your level {Character.Level}, ")
-                     + $"{Missions.BountyEach(lv, party):0} credits each.\n"
+                     + $"{Missions.BountyEach(Missions.Kind, lv, party):0} credits each.\n"
                      + $"Parts: {Loot.CratesFor(lv)} crates, yours alone ({(lv <= 5 ? "Common" : lv <= 10 ? "Common or Rare" : "Common, Rare or Epic")}).");
         Ui.SetText(_party, string.Join("\n", Hub.PartyIds.OrderBy(i => i).Select(i => $"  {Hub.PilotName(i)}   {(Hub.IsReady(i) ? "READY" : "not ready")}")));
         bool mine = Hub.IsReady(Net.LocalId);

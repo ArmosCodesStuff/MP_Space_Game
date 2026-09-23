@@ -60,7 +60,8 @@ public partial class DeployedTurret : Node2D, IRaidTarget, ITagged, ITurretHost
     public (float halfLength, float halfWidth) Extent => (Radius, Radius);
     // what the scope and the HUD call it: its owner's, because three of them stand together
     public string Label => Ship != null ? $"{Ship.Pilot}'S TURRET" : "TURRET";
-    // the host's word on its hull (Hub.NetDeployHulls); the host's own copy keeps its own figure
+    // the host's word on its hull (Hub.NetHulls, the one hull clock for every kind that has one);
+    // the host's own copy keeps its own figure
     public void SetNet(float hp) { if (!Net.Sim) Hp = hp; }
     public void Hit(double d, Vector2 from, string source) => TakeDamage(d);
     public void TakeDamage(double d)

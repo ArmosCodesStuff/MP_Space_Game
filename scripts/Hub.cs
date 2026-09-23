@@ -59,6 +59,9 @@ public partial class Hub : Node2D
     public static readonly Vector2 SunPos    = new(0, -1794);
     public static readonly Vector2 WreckPos  = new(-1840, 60);
     public static readonly Vector2 PortalPos = new(1500, 219);
+    // WHERE A MISSION IS BUILT in the arena: a boss's spot, and a raid site's centre. It was
+    // `BasePos + new Vector2(0, -700f)` written into BuildArena, which made it the boss's alone.
+    public static readonly Vector2 ArenaCentre = BasePos + new Vector2(0, -700f);
     // FOUR OUTPOSTS, 3000 u out from the base on the diagonals (1000 further than they were) (y grows south): small permanent
     // stations the escort delivers to, named for their corner, in the order the escort visits
     // them -- counter-clockwise from the south-east. Every peer builds them (BuildWorld).
@@ -162,10 +165,19 @@ public partial class Hub : Node2D
             if (IsInstanceValid(t))
                 yield return new ScopeMark(t.Label, t.Position, DeployedTurret.Radius, MarkShape.Box, new Vector2(2.5f, 2.5f),
                                            t.Ship != null && IsInstanceValid(t.Ship) ? t.Ship.Main : new Color(0.55f, 0.58f, 0.62f));
+        // ...AND WHATEVER THE MISSION BUILT. A raid site is 2400 u across and nothing else puts it
+        // on the scope, so four pylons were four things a pilot could only find by flying at them.
+        foreach (var e in Emplacements)
+            if (IsInstanceValid(e))
+                yield return new ScopeMark(e.Label, e.Position, e.HitRadius, MarkShape.Diamond, new Vector2(3.5f, 4f), e.Def.Main);
     }
 
     public Boss Boss { get; private set; }
+    // WHAT THIS MISSION IS WON BY KILLING -- the boss, or the pirate base. The arena's status line
+    // reads this and names no kind (Missions.Kinds[].Quarry).
+    public IQuarry Quarry => Missions.KindOf(Missions.Kind).Quarry?.Invoke(this);
     private double _arenaEndT = -1;                         // the FAILURE clock only: a wiped party home in 3 s
+    private double _garrisonT; private int _garrisonWaves;  // the mission row's own wave clock, in the arena
     public bool MissionWon { get; private set; }
     // THE PARTY'S VOTES. READY (launch a mission) and RETURN (leave a won arena) are ONE
     // mechanic with a row each (Votes.cs). The comment that stood here said they were kept apart
@@ -495,7 +507,7 @@ public partial class Hub : Node2D
     {
         if (!Net.FromPlayer(this, out int who)) return;
         Session.Sectors[who] = (SectorKind)s;
-        if ((SectorKind)s != Sector) { RpcId(who, nameof(NetSector), (int)Sector, Missions.Level); return; }
+        if ((SectorKind)s != Sector) { RpcId(who, nameof(NetSector), (int)Sector, Missions.Kind, Missions.Level); return; }
         // The place a pilot is owed goes first and is never metered: a reconnecting pilot's held
         // spot is delivered by whichever report first finds it in the host's world.
         if (_placeFor.Remove(who, out var owed)) RpcId(who, nameof(NetPlace), owed.at, owed.rot);
@@ -514,7 +526,10 @@ public partial class Hub : Node2D
                     var seed = set.Kind.Seed(n);
                     RpcId(who, nameof(NetSpawn), k, seed.NetId, seed.At, seed.N, seed.A, seed.B);
                 }
-        if (Sector == SectorKind.Arena && IsInstanceValid(Boss) && Boss.Alive) Boss.CatchUp(who);   // the warnings (and a rock) up now
+        // ...AND WHATEVER ELSE THIS MISSION OWES A LATE ARRIVAL, from its row: a boss's warnings
+        // and the rock in its tractor. A raid owes nothing here -- its hulls came down the loop
+        // above, and its shield is worked out from them on every peer alike.
+        if (Sector == SectorKind.Arena) Missions.KindOf(Missions.Kind).CatchUp?.Invoke(this, who);
         if (MissionWon) RpcId(who, nameof(NetWon), _ships.Count);
     }
     private void ReportSector() { if (!Net.IsHost) Net.AskHost(this, nameof(NetMySector), (int)Sector); }
@@ -774,8 +789,8 @@ public partial class Hub : Node2D
         if (SideIs<TioWindow>()) return;
         Hints.Meet("tio");
         if (Net.IsHost && Mission == MissionState.Idle)
-        {   // docking at the TIO selects the newest unlocked tier
-            Missions.Level = Missions.Unlocked;
+        {   // docking at the TIO selects the newest unlocked level of THIS operation's own ladder
+            Missions.Level = Missions.Unlocked(Missions.Kind);
             BroadcastMission();
         }
         ToggleSide(() => new TioWindow { Hub = this });
@@ -828,7 +843,7 @@ public partial class Hub : Node2D
     {
         if (!Net.IsHost) return;
         if (k == SectorKind.Arena) Yard?.SaveForTrip();
-        if (Net.IsOnline) Rpc(nameof(NetSector), (int)k, Missions.Level);
+        if (Net.IsOnline) Rpc(nameof(NetSector), (int)k, Missions.Kind, Missions.Level);
         // NOBODY IS IN A SECTOR WHILE THEY ARE MOVING BETWEEN THEM. Every peer was left recorded
         // in the world it is LEAVING until its new world reported itself, so for a round trip plus
         // a scene load the host went on sending that world's traffic to peers that had already
@@ -838,46 +853,67 @@ public partial class Hub : Node2D
         foreach (var id in Multiplayer.GetPeers()) Session.Sectors.Remove(id);
         GoTo(k);
     }
-    // With the level: a world is built from it (the arena's boss is the level's), so a peer must
-    // have it BEFORE the scene changes, not in the mission report that follows.
+    // With the KIND and the level: a world is BUILT from both (the arena builds what the mission
+    // row says, at the level's scale), so a peer must have them BEFORE the scene changes, not in
+    // the mission report that follows. The KIND FIRST: a category owns its own ladder, so the
+    // level being set has to land on the ladder the host meant.
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetSector(int k, int level) { Missions.Level = level; GoTo((SectorKind)k); }
+    private void NetSector(int k, int kind, int level) { Missions.Kind = kind; Missions.Level = level; GoTo((SectorKind)k); }
     private void GoTo(SectorKind k)
     {
         Sector = k;
         GetTree().CallDeferred(SceneTree.MethodName.ChangeSceneToFile, "res://Hub.tscn");
     }
 
-    // ── the arena: the boss, and how it ends ────────────────────────────────
-    // The level's boss (Missions.ForLevel), the same one on every peer.
-    private void BuildArena()
+    // ── the arena: what the mission built, and how it ends ───────────────────
+    // WHAT A MISSION IS is a row of Missions.Kinds. This reads the row and nothing else: a third
+    // kind is a row, not a branch here. (It was `new Boss()` spelled out, because a bounty was the
+    // only thing a mission had ever been able to be.)
+    private void BuildArena() => Missions.KindOf(Missions.Kind).Build?.Invoke(this);
+    // The BOUNTY's own build, reached from its row: the level's boss (Missions.ForLevel), the same
+    // one on every peer.
+    public void BuildBoss()
     {
-        var type = Missions.ForLevel(Missions.Level);
-        Boss = new Boss();
-        Boss.Hub = this; Boss.Type = type; Boss.Position = BasePos + new Vector2(0, -700f); Boss.Rotation = Mathf.Pi;
+        Boss = new Boss { Hub = this, Type = Missions.ForLevel(Missions.Level),
+                          Position = ArenaCentre, Rotation = Mathf.Pi };
         AddChild(Boss);
     }
+    // host: an emplacement is down. It goes the way every host-spawned thing goes; if it was the
+    // one the mission is WON by killing, that is the mission over. Which it is, is the row's
+    // (Missions.Kinds[].Quarry) -- a pylon falls and nothing happens, and nothing here says pylon.
+    public void EmplacementDown(Emplacement e)
+    {
+        if (!Net.IsHost || e == null) return;
+        bool quarry = ReferenceEquals(Quarry, e);
+        var at = e.Position;
+        Down(Spawns.Emplacement, e, burst: true, 0f);
+        if (quarry) MissionCleared(at);
+    }
 
-    // host: the boss is dead. Its escorts and raiders die with it -- collecting is not fighting. Every
-    // pilot gets its own EXP (its level, its first clears) and its share of the bounty, then its own
-    // crates. Nothing sends anyone home on a clock: each pilot presses RETURN when it is done.
-    public void BossDefeated()
+    // host: the mission's quarry is dead -- a boss, or a pirate base. Its escorts and raiders die
+    // with it -- collecting is not fighting. Every pilot gets its own EXP (its level, its first
+    // clears) and its share of the bounty, then its own crates. Nothing sends anyone home on a
+    // clock: each pilot presses RETURN when it is done. (Was BossDefeated, which was true of the
+    // only mission there was.)
+    public void MissionCleared(Vector2 at)
     {
         if (!Net.IsHost || MissionWon) return;
         MissionWon = true;
         foreach (var r in Raiders.ToList()) RaiderDown(r);
-        AnnounceBossKill(Missions.Level, IsInstanceValid(Boss) ? Boss.Position : Vector2.Zero);
+        AnnounceClear(Missions.Kind, Missions.Level, at);
         _votes[Votes.Return].Clear();
         ToWorld(nameof(NetWon), _ships.Count);               // the party may now RETURN; how many must
     }
-    // Guests see the boss at zero too (its last hull report went out before the killing blow), and
-    // learn how many pilots the RETURN needs.
+    // Guests see the quarry at zero too (its last hull report went out before the killing blow),
+    // and learn how many pilots the RETURN needs. WHAT a guest's copy must be told is the row's: a
+    // boss is still standing there and has to be put to zero, a pirate base was removed by
+    // Hub.Down and every guest heard it.
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
     private void NetWon(int total)
     {
         MissionWon = true;
         _votes[Votes.Return].Guest(total);
-        if (IsInstanceValid(Boss)) Boss.Downed();
+        Missions.KindOf(Missions.Kind).Won?.Invoke(this);
     }
 
     // This pilot's drops: on its own file at once (like the bounty), then as crates to fly over
@@ -906,6 +942,16 @@ public partial class Hub : Node2D
         // these lines start throwing. See DESIGN.md -> Traps.
         if (!Net.IsHost) return;
         Yard.TripClock += delta;                              // what the base is missing, in game time
+        // THE MISSION'S OWN GARRISON, on its row's clock: an escort's schedule (a first wave, then
+        // one every so often -- Economy.EscortFirstWave / EscortWaveEvery is the Yard's version of
+        // the same) run in the arena, at FULL strength. A row with no clock brings none, which is
+        // every bounty.
+        var kind = Missions.KindOf(Missions.Kind);
+        if (!MissionWon && kind.WaveEvery > 0)
+        {
+            _garrisonT += delta;
+            if (_garrisonT >= kind.FirstWave + _garrisonWaves * kind.WaveEvery) GarrisonWave(ArenaCentre, _garrisonWaves++);
+        }
         // the whole party in stasis at once: the mission fails, everyone goes home
         if (!MissionWon && _arenaEndT < 0 && _ships.Count > 0 && _ships.Values.All(s => IsInstanceValid(s) && !s.Alive)) _arenaEndT = 3.0;
         if (_arenaEndT >= 0 && (_arenaEndT -= delta) <= 0)
@@ -931,11 +977,24 @@ public partial class Hub : Node2D
         foreach (var t in GetChildren().OfType<Shot>()) if (t.NetId == id) t.Intercept();
     }
 
-    // host: pick a level between 1 and the newest unlocked
+    // host: pick a level between 1 and the newest unlocked ON THIS OPERATION'S OWN LADDER. The
+    // level is per category (Missions.Level), so this never moves the other one.
     public void SelectLevel(int level)
     {
         if (!Net.IsHost || Mission != MissionState.Idle) return;
-        Missions.Level = System.Math.Clamp(level, 1, Missions.Unlocked);
+        Missions.Level = System.Math.Clamp(level, 1, Missions.Unlocked(Missions.Kind));
+        BroadcastMission();
+    }
+
+    // host: pick which OPERATION the party flies -- a row of Missions.Kinds, in the TIO above the
+    // level. Each category keeps the level it was left on; the clamp is there because a category's
+    // ladder can only ever shrink by a save being edited, and a selection past its top would then
+    // launch a mission that is not unlocked.
+    public void SelectMission(int kind)
+    {
+        if (!Net.IsHost || Mission != MissionState.Idle) return;
+        Missions.Kind = System.Math.Clamp(kind, 0, Missions.Kinds.Length - 1);
+        Missions.Level = System.Math.Clamp(Missions.Level, 1, Missions.Unlocked(Missions.Kind));
         BroadcastMission();
     }
 
@@ -983,10 +1042,11 @@ public partial class Hub : Node2D
     // WHO IS READY IS NOT IN HERE. Every tally is on the one vote packet (NetVote), so the launch
     // READY and the arena RETURN reach a guest by the same route rather than two.
     private Variant[] MissionArgs() =>
-        new Variant[] { (int)Mission, MissionT, Missions.Level, _away.Keys.ToArray(), _away.Values.ToArray() };
+        new Variant[] { (int)Mission, MissionT, Missions.Kind, Missions.Level, _away.Keys.ToArray(), _away.Values.ToArray() };
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetMission(int state, double t, int level, int[] away, string[] awayNames)
+    private void NetMission(int state, double t, int kind, int level, int[] away, string[] awayNames)
     {
+        Missions.Kind = kind;                     // the kind FIRST: the level lands on its ladder
         Missions.Level = level;
         Mission = (MissionState)state; MissionT = t;
         _away.Clear(); for (int i = 0; i < away.Length && i < awayNames.Length; i++) _away[away[i]] = awayNames[i] ?? "";
@@ -1005,6 +1065,7 @@ public partial class Hub : Node2D
     public Hub() { _raids = new Raids(this); }      // this world's director, built before _Ready
     public int SpawnPatrol(Vector2 at, double scale = 1) => _raids.Patrol(at, scale);
     public void HuntWave(Node2D quarry, int wave) => _raids.Hunt(quarry, wave);
+    public void GarrisonWave(Vector2 at, int wave) => _raids.Garrison(Missions.Level, at, wave);
     public void CallOff(Node2D quarry) => _raids.CallOff(quarry);
 
     // ── HOST-SPAWNED, REPLICATED: ONE MECHANIC (Spawned.cs) ──────────────────
@@ -1021,6 +1082,7 @@ public partial class Hub : Node2D
     }
     public IReadOnlyList<Raider> Raiders => ((SpawnSet<Raider>)_sets[Spawns.Raider]).Live;
     public IReadOnlyList<DeployedTurret> Deployed => ((SpawnSet<DeployedTurret>)_sets[Spawns.Turret]).Live;
+    public IReadOnlyList<Emplacement> Emplacements => ((SpawnSet<Emplacement>)_sets[Spawns.Emplacement]).Live;
 
     // host: mint an id from this kind's space, build it, and tell this world
     public Node2D Spawn(int kind, Vector2 at, int n = 0, double a = 1, double b = 1)
@@ -1138,16 +1200,22 @@ public partial class Hub : Node2D
     // raiders, so each stands alone.
     private const int RaidersPerPacket = 24;
     // EVERY HOST-OWNED THING THE WORLD CAN DAMAGE, on one clock. A raider's packet carries where
-    // it is as well, because it moves; a dropped turret holds its spot, so its hull is all there
-    // is to say -- and nothing said it at all, so its owner watched a pristine turret vanish in a
-    // burst with no warning and no bar.
+    // it is as well, because it moves; everything that HOLDS A SPOT -- a dropped turret, a pirate
+    // base, a shield pylon -- has nothing to say but what is left of it, and says it here. This
+    // named the turrets outright, so a third kind with a hull meant a third packet and a third
+    // RPC; the kinds that have a hull to report are the rows of Spawns.All that fill in `Hull`.
     private void SendWorldState(double delta)
     {
-        if (!Net.IsHost || !Net.IsOnline || (Raiders.Count == 0 && Deployed.Count == 0)) return;
+        if (!Net.IsHost || !Net.IsOnline) return;
         _raiderSend -= delta; if (_raiderSend > 0) return; _raiderSend = 0.1;
-        if (Deployed.Count > 0)
-            ToWorld(nameof(NetDeployHulls), Deployed.Select(t => t.NetId).ToArray(),
-                                            Deployed.Select(t => (float)t.Hp).ToArray());
+        for (int k = 0; k < Spawns.All.Count; k++)
+        {
+            if (Set(k) is not { Kind.Hull: not null } set) continue;
+            var live = set.Nodes.ToList();
+            if (live.Count == 0) continue;
+            ToWorld(nameof(NetHulls), k, live.Select(n => set.Kind.Seed(n).NetId).ToArray(),
+                                         live.Select(n => set.Kind.Hull(n)).ToArray());
+        }
         foreach (var part in Raiders.Chunk(RaidersPerPacket))
             ToWorld(nameof(NetRaiders), part.Select(r => r.NetId).ToArray(), part.Select(r => r.Position).ToArray(),
                 part.Select(r => r.Rotation).ToArray(), part.Select(r => (float)r.Hp).ToArray(),
@@ -1155,11 +1223,12 @@ public partial class Hub : Node2D
                 part.Select(r => r.NetFlags).ToArray());
     }
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
-    private void NetDeployHulls(int[] ids, float[] hp)
+    private void NetHulls(int kind, int[] ids, float[] hp)
     {
+        if (Set(kind) is not { Kind.TakeHull: not null } set) return;
         int n = Mathf.Min(ids.Length, hp.Length);
         for (int i = 0; i < n; i++)
-            if (Deployed.FirstOrDefault(x => x.NetId == ids[i]) is { } t) t.SetNet(hp[i]);
+            if (set.Find(ids[i]) is { } node) set.Kind.TakeHull(node, hp[i]);
     }
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
     private void NetRaiders(int[] ids, Vector2[] pos, float[] rot, float[] hp, Vector2[] tether, int[] flags)
@@ -1175,47 +1244,51 @@ public partial class Hub : Node2D
         }
     }
 
-    // ── A BOSS KILL, ONCE FOR EACH PILOT ──────────────────────────────────────
+    // ── A MISSION CLEARED, ONCE FOR EACH PILOT ────────────────────────────────
     // The record, the serial and the 12 s window are Session (Session.Kill, Session.Kills,
-    // Session.NextKill, Session.OwedWindowMs): a kill outlives this world, because the pilot it is
-    // owed to may only come back into the next one.
+    // Session.NextKill, Session.OwedWindowMs): a clear outlives this world, because the pilot it is
+    // owed to may only come back into the next one. The KIND travels with it: an owed one may be
+    // paid in a world flying a different operation, and the kind is which LADDER it counts on.
     //
-    // a boss kill, as each guest receives it: its share of the bounty, its own parts, its own EXP
+    // a clear, as each guest receives it: its share of the bounty, its own parts, its own EXP
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetKill(int level, int party, long serial, string[] drops, Vector2 at)
+    private void NetKill(int kind, int level, int party, long serial, string[] drops, Vector2 at)
     {
         if (!Character.PayOnce(serial)) return;
-        Yard.AddGuestShare(Missions.BountyEach(level, party));              // to its own base, set aside while it visits
+        Yard.AddGuestShare(Missions.BountyEach(kind, level, party));        // to its own base, set aside while it visits
         ReceiveLoot(drops, at, level);
-        Progression.AwardBossKill(level);                                   // (which saves: the share and the serial with it)
+        Progression.AwardClear(kind, level);                                // (which saves: the share and the serial with it)
     }
     public int PartySize => _ships.Count;
 
-    // host: a level-L boss is down. Every pilot credited with it -- the ships here, in stasis or not
-    // (a pilot shot down still helped win it), and any whose place is held in this world -- gets its
-    // own EXP, its share of the bounty (split among all of them) and its own crates, each sent to
-    // that pilot alone: a pilot whose world is still loading still gets them, and nobody sees
-    // another's. The held are owed theirs until they are back.
-    public void AnnounceBossKill(int level, Vector2 at)
+    // host: a level-L mission is cleared. Every pilot credited with it -- the ships here, in stasis
+    // or not (a pilot shot down still helped win it), and any whose place is held in this world --
+    // gets its own EXP, its share of the bounty (split among all of them) and its own crates, each
+    // sent to that pilot alone: a pilot whose world is still loading still gets them, and nobody
+    // sees another's. The held are owed theirs until they are back. WHETHER there are crates at all
+    // is the mission row's (MissionKind.Drops), not this code's.
+    public void AnnounceClear(int kind, int level, Vector2 at)
     {
         if (!Net.IsHost) return;
         var held = Session.Places.Values.Where(h => h.World == _world).ToList();
         var here = _ships.Where(kv => IsInstanceValid(kv.Value)).Select(kv => (kv.Key, kv.Value.Class));
-        var k = new Session.Kill { Serial = Session.NextKill(), Level = level, Party = System.Math.Max(1, PartySize + held.Count), World = _world, At = at,
+        var k = new Session.Kill { Serial = Session.NextKill(), Kind = kind, Level = level, Party = System.Math.Max(1, PartySize + held.Count), World = _world, At = at,
                                    When = Time.GetTicksMsec(), Present = _ships.Keys.ToHashSet(),
-                                   Drops = Loot.RollParty(here.Concat(held.Select(h => (h.OldPeer, h.Class))), level) };
+                                   Drops = Missions.KindOf(kind).Drops
+                                         ? Loot.RollParty(here.Concat(held.Select(h => (h.OldPeer, h.Class))), level)
+                                         : new Dictionary<int, string[]>() };
         Session.Note(k);
         foreach (var h in held) h.Owed.Add(k);
         Character.PayOnce(k.Serial);
-        Yard.AddHostShare(Missions.BountyEach(k.Level, k.Party));        // the host's own share, paid at home
+        Yard.AddHostShare(Missions.BountyEach(k.Kind, k.Level, k.Party));  // the host's own share, paid at home
         ReceiveLoot(k.Drops.GetValueOrDefault(Net.LocalId, System.Array.Empty<string>()), at, k.Level);
-        Progression.AwardBossKill(k.Level);                              // (which saves: the share and the parts with it)
+        Progression.AwardClear(k.Kind, k.Level);                          // (which saves: the share and the parts with it)
         foreach (var peer in k.Present.Where(p => p != Net.LocalId)) PayKill(k, peer, peer);
     }
-    // one pilot's share of a kill: `key` is who it was at the kill, `peer` who it is now
+    // one pilot's share of a clear: `key` is who it was at the clear, `peer` who it is now
     private void PayKill(Session.Kill k, int key, int peer)
     {
-        RpcId(peer, nameof(NetKill), k.Level, k.Party, k.Serial, k.Drops.GetValueOrDefault(key, System.Array.Empty<string>()), k.At);
+        RpcId(peer, nameof(NetKill), k.Kind, k.Level, k.Party, k.Serial, k.Drops.GetValueOrDefault(key, System.Array.Empty<string>()), k.At);
     }
 
     // ── character creator ────────────────────────────────────────────────────
@@ -1362,8 +1435,9 @@ public partial class Hub : Node2D
         }
         // WHICH SECTOR, not whether a Yard happens to exist: a third sector, or a home world
         // without a base, would have silently read as the arena.
+        var q = InArena ? Quarry : null;                 // the boss, or the pirate base: the row decides
         string place = InArena
-            ? $"ARENA  ·  {(IsInstanceValid(Boss) ? Boss.Type.Name : "")} (LEVEL {Missions.Level})  {(IsInstanceValid(Boss) ? Boss.Hp : 0):0} / {(IsInstanceValid(Boss) ? Boss.MaxHp : 0):0}" + (MissionWon ? "  ·  DEFEATED" : "")
+            ? $"ARENA  ·  {(q?.Title ?? "")} (LEVEL {Missions.Level})  {(q?.Hp ?? 0):0} / {(q?.MaxHp ?? 0):0}" + (MissionWon ? "  ·  DEFEATED" : "")
             : Yard == null ? ""          // the frame at home before the base is built: nothing to report yet
             // One reading per resource the fleet gathers, named by its row, so a third gatherer
             // puts its own stock on the line without an edit here.

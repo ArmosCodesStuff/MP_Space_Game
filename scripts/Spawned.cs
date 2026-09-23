@@ -23,6 +23,9 @@ using System.Collections.Generic;
 //   Seed    what a joiner must be told to build the one that already exists
 //   Gone    what the world must let go of when one dies (null: nothing holds it). Its `hp` is
 //           the host's last word on the hull; NaN means nothing was said about it.
+//   Hull    what is left of one, for the 10 Hz hull clock (null: it says nothing there -- a
+//           raider's hull rides its own packet, because its POSITION must arrive with it)
+//   TakeHull   ...and the host's word on that hull, applied on a guest
 //
 // AUTHORITY: only the host calls Hub.Spawn and Hub.Down. A guest builds and drops its copies from
 // the two RPCs alone, and its copies damage nothing.
@@ -49,6 +52,8 @@ public sealed class SpawnKind
     public Func<Hub, SpawnSeed, Node2D> Make;
     public Func<Node2D, SpawnSeed> Seed;
     public Action<Hub, Node2D, float> Gone;
+    public Func<Node2D, float> Hull;
+    public Action<Node2D, float> TakeHull;
 }
 
 // THE LIVE ONES OF ONE KIND. The typed half is SpawnSet<T>, so a caller reads
@@ -107,7 +112,7 @@ public sealed class SpawnSet<T> : SpawnSet where T : Node2D
 public static class Spawns
 {
     // The index IS the kind on the wire (Hub.NetSpawn), so APPEND ONLY.
-    public const int Raider = 0, Turret = 1;
+    public const int Raider = 0, Turret = 1, Emplacement = 2;
 
     public static readonly List<SpawnKind> All = new()
     {
@@ -130,6 +135,23 @@ public static class Spawns
                 Bag = k => new SpawnSet<DeployedTurret>(k),
                 Make = (h, s) => new DeployedTurret { NetId = s.NetId, OwnerId = s.N, Ship = h.ShipOf(s.N),
                                                       Position = s.At, Hp = s.A, MaxHp = s.B },
-                Seed = n => { var t = (DeployedTurret)n; return new SpawnSeed(t.NetId, t.Position, t.OwnerId, t.Hp, t.MaxHp); } },
+                Seed = n => { var t = (DeployedTurret)n; return new SpawnSeed(t.NetId, t.Position, t.OwnerId, t.Hp, t.MaxHp); },
+                Hull = n => (float)((DeployedTurret)n).Hp,
+                TakeHull = (n, hp) => ((DeployedTurret)n).SetNet(hp) },
+
+        // A MISSION'S EMPLACEMENTS -- a pirate base and its shield pylons (Emplacements.cs). They
+        // hold a spot as a dropped turret does, so `At` never changes and the hull clock is all
+        // there is to say about one; unlike a turret they are HOSTILE, so `Gone` hands them to
+        // Hub.LetGo -- out of Combat.Hostiles and out of every turret's aim IN THIS CALL, not at
+        // the frame's end. `N` is the row of Emplacements.All, `A`/`B` the live hull and its
+        // maximum, exactly as a turret's are, so a joiner never draws a half-dead base full.
+        new() { Id = "Emplacement", Space = NetIds.Emplacement, Burst = 60f,
+                Bag = k => new SpawnSet<Emplacement>(k),
+                Make = (h, s) => new Emplacement { Hub = h, NetId = s.NetId, Kind = s.N,
+                                                   Position = s.At, Hp = s.A, MaxHp = s.B },
+                Seed = n => { var e = (Emplacement)n; return new SpawnSeed(e.NetId, e.Position, e.Kind, e.Hp, e.MaxHp); },
+                Gone = (h, n, hp) => { var e = (Emplacement)n; if (float.IsFinite(hp)) e.Hp = hp; h.LetGo(e); },
+                Hull = n => (float)((Emplacement)n).Hp,
+                TakeHull = (n, hp) => ((Emplacement)n).SetNet(hp) },
     };
 }

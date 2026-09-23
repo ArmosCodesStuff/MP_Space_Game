@@ -14,6 +14,10 @@ public partial class ShieldFlash : Node2D
     private readonly float[] _glow = new float[4];     // front, right, back, left
     private const float Fade = 0.7f;
     private bool _wasLit;
+    // HELD UP rather than lit by a hit: every side at full, and no fade. A permanent shield is
+    // this same panel with its clock stopped -- there is not a second way to draw one
+    // (Emplacements.cs: a pirate base is shielded while a pylon stands). Cleared, it fades out.
+    public bool Up;
 
     // localAngle: the impact direction in the ship's frame, 0 = straight ahead (-y).
     public void Flash(float localAngle)
@@ -30,7 +34,7 @@ public partial class ShieldFlash : Node2D
     public override void _Process(double delta)
     {
         bool any = false;
-        for (int i = 0; i < 4; i++) { _glow[i] = Mathf.Max(0f, _glow[i] - (float)delta / Fade); any |= _glow[i] > 0; }
+        for (int i = 0; i < 4; i++) { _glow[i] = Up ? 1f : Mathf.Max(0f, _glow[i] - (float)delta / Fade); any |= _glow[i] > 0; }
         // redraw while lit AND once more as it goes out: skipping that last redraw left
         // the final faint frame of hexagons on screen for good
         if (any || _wasLit) QueueRedraw();

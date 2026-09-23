@@ -38,12 +38,18 @@ public sealed class Raids
         if ((_in -= delta) <= 0) { _in = -1; Raid(_level); }
     }
 
-    // ── the three moments a wave comes from ─────────────────────────────────
+    // ── the four moments a wave comes from ──────────────────────────────────
     public void Raid(int level) =>
         Send(WaveTrigger.Failed, new WaveBrief { Pilots = _hub.PartySize, Level = level, Origin = Hub.BasePos });
 
     public int Patrol(Vector2 at, double scale = 1) =>
         Send(WaveTrigger.Called, new WaveBrief { Pilots = _hub.PartySize, Scale = scale, Origin = Hub.BasePos, Anchor = at });
+
+    // A MISSION'S TARGET DEFENDING ITSELF: wave `wave` of its own clock, formed up round `at`, at
+    // the mission's level. It is the same builder an escort's hunters come from -- what differs is
+    // the ROW (Waves.All: "siege"), which brings them at full hull.
+    public void Garrison(int level, Vector2 at, int wave) =>
+        Send(WaveTrigger.Garrison, new WaveBrief { Pilots = _hub.PartySize, Index = wave, Level = level, Origin = at });
 
     public void Hunt(Node2D quarry, int wave)
     {
@@ -52,7 +58,9 @@ public sealed class Raids
         Send(WaveTrigger.Hunt, new WaveBrief
         {
             Pilots = _hub.PartySize, Index = wave, Level = Missions.Level, Quarry = quarry,
-            Threat = Waves.EscortThreat((quarry as IRaidTarget)?.Payout ?? 0, level, toughness, Missions.HighestBeaten, wave),
+            // the BOSS ladder, said outright: an escort's threat has always been judged by how
+            // far up the bounties the base owner has got, and the raids climb a ladder of their own
+            Threat = Waves.EscortThreat((quarry as IRaidTarget)?.Payout ?? 0, level, toughness, Missions.HighestBeaten(Missions.Bounty), wave),
             Origin = Hub.BasePos, Anchor = Raider.EdgeSpot(quarry.Position),
         });
     }

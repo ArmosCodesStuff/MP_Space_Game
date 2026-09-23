@@ -125,12 +125,16 @@ public static class Progression
         return gained;
     }
 
-    // A boss beaten at `level`: this pilot's own EXP -- the kill by its own level, the first
+    // A MISSION CLEARED at `level`: this pilot's own EXP -- the kill by its own level, the first
     // clear of that level, completing the mission -- and the record. Returns the EXP given.
-    public static int AwardBossKill(int level)
-    {   // recorded under the boss that held the level; first by the ladder, whoever held it before
-        var id = Missions.ForLevel(level).Id;
-        bool first = !Missions.Cleared(level);
+    // WHAT IT IS FILED UNDER is the mission row's (MissionKind.RecordId), never this code's: a
+    // bounty files under the boss that held the level, a raid under its own id -- and the two are
+    // separate ladders, so a first clear is first ON THIS KIND'S ladder and no other.
+    // Named for what it does now that a boss is not the only thing a mission can be won against.
+    public static int AwardClear(int kind, int level)
+    {   // first by ITS OWN LADDER -- whatever took the level before on that ladder, and whoever held it
+        var id = Missions.KindOf(kind).RecordId(level);
+        bool first = !Missions.Cleared(kind, level);
         if (!Character.BossCleared.TryGetValue(id, out var set)) Character.BossCleared[id] = set = new System.Collections.Generic.HashSet<int>();
         set.Add(level);
         // Nothing at all under the mark -- the bonuses too, not just the kill's share.

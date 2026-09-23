@@ -23,6 +23,9 @@ public static class DamageSource
     // the Drake Bastion (Drake.cs)
     public const string DrakeGun = "boss:gun";
     public const string DrakeScrap = "boss:scrap";
+    // the guns an emplacement answers with, one name per row of Emplacements.All
+    public const string BaseGun = "base:gun";
+    public const string PylonGun = "pylon:gun";
 }
 
 // Combat services. Everything here is HOST-SIDE: target lookup, damage, and the
