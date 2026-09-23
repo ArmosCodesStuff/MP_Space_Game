@@ -332,8 +332,9 @@ From the 2026-09-21 batch (each is a constant or one rule to change):
    escorts gains one more every 10 levels to a maximum of five, with formation places for five (or
    a queue, where the next waits for one of the others to die).
 7. **A warp does not land a capital ship on top of the thing it is aimed at.**
-8. **SIEGE: a second Threat Intelligence Operations mission type**, offered at any unlocked level
-   beside the boss, scaling off the same level.
+8. **RAIDS: a second CATEGORY of Threat Intelligence Operations mission**, beside BOSS, with the
+   siege as its first entry. A mission KIND is the new table (`MissionKind`); everything under it
+   is rows. Raids share the boss ladder's unlocked levels and scale off the same selected level.
    - The crescent hull is the pirate base, in red and black; the other is a pylon.
    - Four pylons on an invisible X, 1200 u out on each diagonal, 400 hull each.
    - **The four pylons hold the base's shield up: every one must fall before the base can be hurt**,
