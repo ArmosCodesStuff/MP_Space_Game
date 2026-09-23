@@ -1,4 +1,5 @@
 using Godot;
+using System.Linq;
 
 // The radar: a round, north-up scope in the top-right corner, centred on the
 // player (the escape pod, while the ship is in stasis), reaching Range world units.
@@ -98,7 +99,7 @@ public partial class Radar : Control
             var p = P(h.Position);
             if (!Inside(p)) p = c + (p - c).Normalized() * (r - 5f);          // off-scope: pinned to the rim
             DrawCircle(p, 2.6f, new Color(1f, 0.35f, 0.3f));
-            if (h == Hub.Selected) DrawArc(p, 5f, 0, Mathf.Tau, 16, new Color(1f, 0.85f, 0.3f), 1.2f);
+            if (Hub.I != null && Hub.I.Targets.Any(t => ReferenceEquals(t, h))) DrawArc(p, 5f, 0, Mathf.Tau, 16, new Color(1f, 0.85f, 0.3f), 1.2f);
         }
         foreach (var s in Hub.Ships)
         {

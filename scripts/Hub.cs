@@ -112,12 +112,23 @@ public partial class Hub : Node2D
     public Vector2? Waypoint { get; private set; }
     public string WaypointName { get; private set; } = "";
     private float WaypointRadius { get; set; }   // private already: the inner `private set` would be redundant
-    public void SelectTarget(IHittable h) { _selected = h; Waypoint = null; }
-    public void SelectWaypoint(string name, Vector2 at, float radius) { _selected = null; Waypoint = at; WaypointName = name; WaypointRadius = radius; }
-    public void ClearSelection() { _selected = null; Waypoint = null; }
+    public void SelectTarget(IHittable h) { _targets.Clear(); if (h != null) _targets.Add(h); Waypoint = null; }
+    // ...and one MORE of them, up to what the hull can hold: shift-click, or a ctrl-drag's box.
+    // Picking one already held drops it again, which is the only way to let one go without
+    // starting over.
+    public void AddTarget(IHittable h)
+    {
+        if (h == null) return;
+        Waypoint = null;
+        if (_targets.Remove(h)) return;
+        if (_targets.Count >= TargetCap) { if (TargetCap <= 1) { _targets.Clear(); } else return; }
+        _targets.Add(h);
+    }
+    public void SelectWaypoint(string name, Vector2 at, float radius) { _targets.Clear(); Waypoint = at; WaypointName = name; WaypointRadius = radius; }
+    public void ClearSelection() { _targets.Clear(); Waypoint = null; }
     // what a warp aims at right now: the target, else the waypoint
     public (bool has, Vector2 at, float radius) WarpAim() =>
-        _selected != null && _selected.Alive ? (true, _selected.Position, _selected.HitRadius)
+        Selected is { } t ? (true, t.Position, t.HitRadius)
         : Waypoint is { } w ? (true, w, WaypointRadius) : (false, Vector2.Zero, 0f);
 
     // ── THE SCOPE MARKS: everything the radar can point at ───────────────────
@@ -230,8 +241,14 @@ public partial class Hub : Node2D
 
     // The local player's selected target. A UI choice, not an order: it is sent to
     // the host only as the argument of an order (Space, F).
-    private IHittable _selected;
-    public IHittable Selected => _selected != null && _selected.Alive ? _selected : null;
+    // THE THINGS THIS PILOT HAS PICKED, in the order they were picked. One source of truth: what
+    // used to be a single `_selected` is the FIRST of this list, so everything that asks for "the
+    // target" keeps working and nothing has to be kept in step with anything else. How many it may
+    // hold is the class's own row (ClassDef.Targets).
+    private readonly List<IHittable> _targets = new();
+    public IHittable Selected => _targets.FirstOrDefault(t => t != null && t.Alive);
+    public IReadOnlyList<IHittable> Targets => _targets;
+    public int TargetCap => MyShip is { } me && Classes.Known(me.Class) ? Classes.Of(me.Class).Targets : 1;
     private readonly List<(Vector2 a, Vector2 b, Color c, double t)> _flashes = new();
     public IReadOnlyList<(Vector2 a, Vector2 b, Color c, double t)> Flashes => _flashes;
 
@@ -1161,7 +1178,7 @@ public partial class Hub : Node2D
     // and a kind that nothing holds simply has no `Gone`.
     public void LetGo(IHittable h)
     {
-        if (ReferenceEquals(_selected, h)) _selected = null;
+        _targets.Remove(h);
         Combat.Hostiles.Remove(h);
         foreach (var s in _ships.Values) if (IsInstanceValid(s)) s.Forget(h);
     }
@@ -1365,17 +1382,38 @@ public partial class Hub : Node2D
     private void SelectNearest()
     {
         var me = MyShip;
-        if (me != null) _selected = Combat.Nearest(Combat.Hostiles, me.Position, h => h.Position, ok: Combat.Pickable);
+        if (me != null) SelectTarget(Combat.Nearest(Combat.Hostiles, me.Position, h => h.Position, ok: Combat.Pickable));
     }
 
     // Left-click in the world: the hostile under the cursor (its hit circle, plus a
     // little slack), nearest the click if circles overlap. Clicking empty space keeps
     // the current target, so a stray click never drops it; Esc clears it.
     // true if the click landed on something (a hostile to select, or a building)
+    // A CTRL-DRAG'S BOX, from the press to the release: everything pickable inside it, nearest to
+    // the box's middle first, up to what the hull can hold. Nothing inside it leaves the selection
+    // as it was rather than emptying it -- a stray drag should not cost a pilot its target.
+    private Vector2? _boxFrom;
+    public Rect2? SelectionBox => _boxFrom is { } f && MyShip != null
+        ? new Rect2(new Vector2(Mathf.Min(f.X, GetGlobalMousePosition().X), Mathf.Min(f.Y, GetGlobalMousePosition().Y)),
+                    (GetGlobalMousePosition() - f).Abs()) : null;
+    private void BoxSelect(Vector2 a, Vector2 b)
+    {
+        var box = new Rect2(new Vector2(Mathf.Min(a.X, b.X), Mathf.Min(a.Y, b.Y)), (b - a).Abs());
+        var mid = box.Position + box.Size * 0.5f;
+        var inside = Combat.Hostiles.Where(h => Combat.Pickable(h) && box.HasPoint(h.Position))
+                                    .OrderBy(h => h.Position.DistanceSquaredTo(mid)).Take(TargetCap).ToList();
+        if (inside.Count == 0) return;
+        _targets.Clear(); _targets.AddRange(inside); Waypoint = null;
+    }
+
+    // what a click at `world` would pick, without picking it
+    private IHittable PickAt(Vector2 world) =>
+        Combat.Nearest(Combat.Hostiles, world, h => h.Position,
+                       ok: h => Combat.Pickable(h) && world.DistanceTo(h.Position) <= h.HitRadius + 16f);
+
     private bool SelectAt(Vector2 world)
     {
-        var best = Combat.Nearest(Combat.Hostiles, world, h => h.Position,
-                                  ok: h => Combat.Pickable(h) && world.DistanceTo(h.Position) <= h.HitRadius + 16f);
+        var best = PickAt(world);
         if (best != null) { SelectTarget(best); return true; }
         // buildings: a left-click on one opens its menu
         if (IsInstanceValid(_tioSprite) && _tioSprite.GetRect().HasPoint(_tioSprite.ToLocal(world))) { OpenTio(); return true; }
@@ -1406,7 +1444,7 @@ public partial class Hub : Node2D
                          || (IsInstanceValid(_statsWin) && _statsWin.Capturing);
         // bars and labels keep a constant on-screen size whatever the zoom
         Txt.UiScale = 1f / _cam.Zoom.X;
-        if (_selected != null && !_selected.Alive) _selected = null;
+        _targets.RemoveAll(t => t == null || !t.Alive);
         if (me != null) MoveCamera(me, (float)delta);
         if (me != null) MeetHints(me);
 
@@ -1428,6 +1466,7 @@ public partial class Hub : Node2D
             ship = $"    |    {Character.Name}  {Classes.NameOf(me.Class)}"
                  + $"  {Mathf.Abs(me.SpeedAhead):0} u/s{(me.SpeedAhead < -1 ? " astern" : "")}";
             ship += Selected != null ? $"    target: {Selected.Label}  ({me.Position.DistanceTo(Selected.Position):0} u)"
+                                       + (_targets.Count > 1 ? $"  +{_targets.Count - 1}" : "")
                   : Waypoint != null ? $"    waypoint: {WaypointName}"
                                      : "    no target (Tab / click)";
             if (Raiders.Count > 0) ship += $"    |    RAIDERS {Raiders.Count}";
@@ -1478,9 +1517,15 @@ public partial class Hub : Node2D
         // THE RANGE TO WHAT IS SELECTED, under it. The HUD names the target; what decides whether
         // anything reaches it is how far off it is, and that was nowhere on screen. Under the thing
         // rather than over it, because a hull bar and a pilot's name are already above.
-        if (Selected is { Alive: true } aim && MyShip is { } from)
-            Txt.Centre(this, font, aim.Position + new Vector2(0, aim.HitRadius + 30f),
-                       $"{from.Position.DistanceTo(aim.Position):0} u", Txt.Size(12), new Color(1f, 0.85f, 0.3f, 0.9f));
+        if (MyShip is { } from)
+            foreach (var aim in _targets)
+            {
+                if (aim is not { Alive: true }) continue;
+                DrawArc(aim.Position, aim.HitRadius + 14f, 0, Mathf.Tau, 24, new Color(1f, 0.85f, 0.3f, 0.55f), 1.5f);
+                Txt.Centre(this, font, aim.Position + new Vector2(0, aim.HitRadius + 30f),
+                           $"{from.Position.DistanceTo(aim.Position):0} u", Txt.Size(12), new Color(1f, 0.85f, 0.3f, 0.9f));
+            }
+        if (SelectionBox is { } box) DrawRect(box, new Color(1f, 0.85f, 0.3f, 0.55f), false, 1.5f);
 
         // a pending placement shows where the click will land
         if (Placing)
@@ -1559,7 +1604,12 @@ public partial class Hub : Node2D
             if (mb.ButtonIndex == MouseButton.Left)
             {
                 if (Placing) { var confirm = _placing; CancelPlacement(); confirm(at); }
-                // a double-click on empty space clears the target
+                // CTRL AND DRAG: everything the box covers, up to what the hull can hold. The press
+                // starts it; the release below is what picks, so a click that never moves is still
+                // an ordinary click.
+                else if (mb.CtrlPressed && TargetCap > 1) _boxFrom = at;
+                // SHIFT: one more, or one fewer if it was already held
+                else if (mb.ShiftPressed && TargetCap > 1) AddTarget(PickAt(at));
                 else if (!SelectAt(at) && mb.DoubleClick) ClearSelection();
                 GetViewport().SetInputAsHandled();
             }
@@ -1568,6 +1618,13 @@ public partial class Hub : Node2D
                 CancelPlacement();
                 GetViewport().SetInputAsHandled();
             }
+            return;
+        }
+        if (e is InputEventMouseButton up && !up.Pressed && up.ButtonIndex == MouseButton.Left && _boxFrom is { } from)
+        {
+            BoxSelect(from, GetGlobalMousePosition());
+            _boxFrom = null;
+            GetViewport().SetInputAsHandled();
             return;
         }
 

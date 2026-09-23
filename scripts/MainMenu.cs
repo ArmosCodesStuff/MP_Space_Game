@@ -28,7 +28,11 @@ public partial class MainMenu : Node2D
     // a flat 4 s, which was enough only while the turn was read as degrees and the hull barely
     // moved; at the rate a battleship really turns, a half turn is 2.9 s and 4 s left it clearing
     // the blast with 0.2 s to spare.
-    private double DodgeAt => PlayerShip.WarpWarmup + Mathf.Pi / System.Math.Max(0.1, _cap.Stats["turn_rate"]);
+    // ...plus a second in hand. Worst case is a HALF turn, and the margin left over is whatever the
+    // turn did not need -- so without this a dodge that happened to need the full half turn cleared
+    // the blast by nothing at all, which is not a scene, it is a coin toss.
+    private const double DodgeSpare = 1.0;
+    private double DodgeAt => PlayerShip.WarpWarmup + Mathf.Pi / System.Math.Max(0.1, _cap.Stats["turn_rate"]) + DodgeSpare;
     private const double GunRange = 620;
     // The diorama gets a camera, for the same reason the hub has one: the ships are drawn at the
     // size they really are, and at 1:1 a battleship is a smudge on a 2560-wide screen.

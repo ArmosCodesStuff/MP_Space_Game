@@ -83,6 +83,10 @@ public class ClassDef
     public ShipClass Id;
     public string Name, Blurb;
     public bool Ready;                       // flyable: the creator offers it, Sanitize accepts it
+    // HOW MANY THINGS IT MAY HOLD AT ONCE. One for a hull with one pair of eyes; three on the
+    // capitals, which have the crew and the fire control for it. "Capital ships only" is this
+    // number, not a list of class names in an `if` -- a thirteenth class states its own answer.
+    public int Targets = 1;
     public Fit Fit;
     public ClassArt Art = new();
     // This class's own numbers, by stat id. Everything it does NOT name it takes from the sheet's
@@ -140,7 +144,7 @@ public static class Classes
     public static readonly ClassDef[] All =
     {
         // -- page 1: the line ------------------------------------------------
-        new() { Id = ShipClass.Battleship, Name = "BATTLESHIP", Ready = true, Fit = Fit.Guns | Fit.Broadside | Fit.Pd,
+        new() { Id = ShipClass.Battleship, Name = "BATTLESHIP", Ready = true, Targets = 3, Fit = Fit.Guns | Fit.Broadside | Fit.Pd,
             Blurb = "Four cursor-aimed main guns, a broadside of all four, two point-defence turrets.",
             Hint = "BATTLESHIP  ·  mouse aims the main guns",
             Nums = new() {
@@ -163,7 +167,7 @@ public static class Classes
                 TurretTexScale = 2.5f / 5.5f, MainBarrel = 30.5f, PdBarrel = 13.75f, PdRing = 7.5f },
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Broadside, Ab.Pd } },
 
-        new() { Id = ShipClass.Carrier, Name = "CARRIER", Ready = true, Fit = Fit.Wing | Fit.Pd,
+        new() { Id = ShipClass.Carrier, Name = "CARRIER", Ready = true, Targets = 3, Fit = Fit.Wing | Fit.Pd,
             Blurb = "No main gun: point-defence turrets, a fighter wing, and torpedo bombers off its deck.",
             Hint = "CARRIER",
             Nums = new() {
@@ -186,7 +190,7 @@ public static class Classes
                 TurretTexScale = 1.9178f / 5.5f, PdBarrel = 10.51f, PdRing = 5.76f },
             Abilities = new[] { Ab.Attack, Ab.Recall, Ab.Bombers, Ab.Pd } },
 
-        new() { Id = ShipClass.Destroyer, Name = "DESTROYER", Ready = true, Fit = Fit.Guns | Fit.Missiles | Fit.Pd,
+        new() { Id = ShipClass.Destroyer, Name = "DESTROYER", Ready = true, Targets = 3, Fit = Fit.Guns | Fit.Missiles | Fit.Pd,
             Blurb = "The fastest of the line. Two cursor-aimed main guns, missile bursts of three, two point-defence turrets.",
             Hint = "DESTROYER  ·  mouse aims the main guns",
             Nums = new() {

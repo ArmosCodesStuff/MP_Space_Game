@@ -736,8 +736,11 @@ public partial class _Test : Node
         // battleship's 1.08 rad/s -- because the jump goes along the keel, so the turn is the aim.
         // A flat 4 s was enough only while the diorama read the turn rate as degrees and the hull
         // barely moved: at the rate it really turns it cleared the blast with 0.2 s to spare.
-        Check(startedAt > 4.5 && startedAt <= 6.0, $"it starts the jump with its warm-up and a half turn to go ({startedAt:0.0} s)");
-        Check(landedAt > 1.5 && landedAt < 3.5, $"and is clear with seconds to spare, not tenths ({landedAt:0.0} s)");
+        // The jump begins once the bow is round, which takes anything up to a half turn -- so what
+        // is fixed is the WARNING it allows itself (warm-up + a half turn + a second), and what
+        // varies is how much of that the turn ate. The margin is never nothing, which is the point.
+        Check(startedAt > 2.5 && startedAt <= 7.0, $"it starts the jump once the bow is round, inside the warning it allows itself ({startedAt:0.0} s)");
+        Check(landedAt > 0.9 && landedAt < 4.5, $"and is clear with a second in hand at worst ({landedAt:0.0} s)");
         Check(before.DistanceTo(ship.Position) > 300, $"the jump actually moved it ({before.DistanceTo(ship.Position):0} u)");
     }
 
@@ -2006,7 +2009,7 @@ public partial class _Test : Node
         {
             var me = Me; var warpHome = me.Position; var d2w = H.GetNode<TargetDummy>("TargetDummy3");
             void Ready() { typeof(PlayerShip).GetField("_warpCd", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(me, 0.0); me.Velocity = Vector2.Zero; me.Rotation = 0f; }
-            void Deselect() => typeof(Hub).GetField("_selected", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(H, null);
+            void Deselect() => H.ClearSelection();     // the selection is a SET now, and the Hub owns clearing it
             Check(Abilities.For(me.Class).All(a => a.Id != "warp"), "warp takes no slot on the ability bar");
             Ready(); Deselect(); var start = me.Position;
             Key(global::Godot.Key.V); await Wait(0.2);
@@ -3428,6 +3431,41 @@ public partial class _Test : Node
             Check(pat.Where(r => !r.Heavy).All(r => r.Target == pm) && heavyP.Target == pm,
                   "a ship within 2000 u: the lights go for it, and their heavy takes the same target");
             await RangeChecks();                // something real to select, at a real distance
+            // ── THREE AT ONCE, ON THE HULLS BIG ENOUGH TO HOLD THEM ──
+            // How many a hull may hold is its class's row, so "capital ships only" is a number and
+            // not a list of class names in an `if`. A light still holds one: picking a second
+            // REPLACES the first rather than being refused, because a pilot who clicks a new
+            // target means to take it.
+            {
+                var trio = H.Raiders.Take(4).Cast<IHittable>().ToList();
+                if (trio.Count < 4) { Check(false, "multi-target: fewer than four raiders to pick"); }
+                else
+                {
+                    H.ClearSelection();
+                    foreach (var pick in trio) H.AddTarget(pick);
+                    int capHeld = H.Targets.Count;
+                    bool orderKept = H.Targets.SequenceEqual(trio.Take(3));
+                    H.AddTarget(trio[1]);                          // picking one already held drops it
+                    bool dropped = H.Targets.Count == 2 && !H.Targets.Contains(trio[1]);
+                    var firstOf = H.Selected;
+                    H.SelectTarget(trio[3]);                        // a plain click starts over
+                    bool restart = H.Targets.Count == 1 && H.Selected == trio[3];
+                    Check(H.TargetCap == 3 && capHeld == 3 && orderKept && dropped && restart
+                          && ReferenceEquals(firstOf, trio[0]),
+                          $"a capital holds trio targets at once and no more, in the order it picked them; picking one it holds drops that one, and a plain click starts over ({capHeld} of {H.TargetCap} held)");
+
+                    // ...and a light fighter holds exactly one, from the same row.
+                    var keepClass = Character.Class;
+                    await SetClass(ShipClass.LightDart);
+                    H.ClearSelection();
+                    foreach (var pick in trio) H.AddTarget(pick);
+                    Check(H.TargetCap == 1 && H.Targets.Count == 1 && H.Selected == trio[3]
+                          && Classes.Of(ShipClass.Battleship).Targets == 3 && Classes.Of(ShipClass.LightDart).Targets == 1,
+                          $"a light holds one, and taking another replaces it -- the number is the class's row, not a list of names ({H.Targets.Count} of {H.TargetCap})");
+                    await SetClass(keepClass);
+                    H.ClearSelection();
+                }
+            }
             foreach (var r in pat) if (GodotObject.IsInstanceValid(r)) r.TakeDamage(9999);
             await Wait(0.3);
             pm.Position = keepP; pm.Velocity = Vector2.Zero; pm.TakeDamage(-(pm.MaxHp - pm.Hp));
@@ -5060,17 +5098,17 @@ public partial class _Test : Node
         {
             var sh = Me; var mus = Music.I;
             Check(mus != null, "the music player is running");
-            H.GetType().GetField("_selected", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(H, null);
+            H.ClearSelection();
             await Wait(9.0);
             Check(mus.Target == Music.Mood.Ambient && Mathf.IsEqualApprox(mus.AmbientLevel, 1f) && mus.CombatLevel == 0f, "nothing selected: ambient only");
-            H.GetType().GetField("_selected", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(H, H.GetNode<TargetDummy>("TargetDummy1"));
+            H.SelectTarget(H.GetNode<TargetDummy>("TargetDummy1"));
             await Wait(2.5);
             Check(mus.Target == Music.Mood.Alert && Mathf.IsEqualApprox(mus.CombatLevel, 0.2f), $"enemy selected: combat music at 20% ({mus.CombatLevel:0.00})");
             Check(Math.Abs(Music.I.AmbientLevel - 0.35f) < 0.02, $"and the ambient at half its alert level under it (0.35: {Music.I.AmbientLevel:0.00})");
             sh.Hit(1, sh.Position + Vector2.Up.Rotated(sh.Rotation) * 80f); await Wait(2.0);
             Check(sh.InCombat && mus.Target == Music.Mood.Combat && Mathf.IsEqualApprox(mus.CombatLevel, 1f) && mus.AmbientLevel == 0f,
                   "taking damage: combat music at 100%");
-            H.GetType().GetField("_selected", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(H, null);
+            H.ClearSelection();
             await Wait(PlayerShip.CombatHold + 3.0);
             Check(!sh.InCombat && mus.Target == Music.Mood.Ambient, "8 s after the last damage, back to ambient");
             sh.TakeDamage(-1);
@@ -5079,7 +5117,7 @@ public partial class _Test : Node
         Key(global::Godot.Key.K); await Wait(0.1);
         Key(global::Godot.Key.Escape); await Wait(0.1);
         Check(Count<StatsWindow>() == 0 && H != null, "Esc closes the K window first");
-        H.GetType().GetField("_selected", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(H, null);
+        H.ClearSelection();
         // a part dropped and not flown over when the pilot quits (as in a victory window)
         Character.Unclaimed.Add("drv_surge_2"); Character.Save(); int surge0 = Character.GearHold.GetValueOrDefault("drv_surge_2");
         Key(global::Godot.Key.Escape); await Wait(0.1);
