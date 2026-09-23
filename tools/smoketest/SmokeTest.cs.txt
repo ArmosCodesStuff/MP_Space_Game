@@ -3434,27 +3434,30 @@ public partial class _Test : Node
             float hvFacing = Mathf.RadToDeg(Mathf.Abs(Mathf.AngleDifference(hv.Rotation, (hm.Position - hv.Position).Angle() + Mathf.Pi / 2f)));
             Check(hv.Position.DistanceTo(edge) < 10f && Math.Abs(hv.Position.DistanceTo(Hub.BasePos) - 4200f) < 10f && hvFacing < 15f && HvLaser() == 0,
                   $"its target unpinned, it waits at the map's edge nearest it ({hv.Position.DistanceTo(Hub.BasePos):0} u from the base), facing it, laser silent");
-            // the missile: within 500 u of the heavy, at where the target will be in 7 s
+            // the missile: within 500 u of the heavy, at where the target will be in TWELVE s
             hm.Position = edge + (Hub.BasePos - edge).Normalized() * 420f; hm.Velocity = Vector2.Zero;
             for (int i = 0; i < 60 * 14 && H.BlastsPending == 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             var blastRing = Nodes<FxNode>().FirstOrDefault(t => t.Id == Fx.WarnZone && Math.Abs(t.Radius - Raider.BlastRadius) < 0.1f);
             Check(H.BlastsPending == 1 && blastRing != null && blastRing.Position.DistanceTo(hm.Position) < 6f
-                  && Math.Abs(blastRing.Time - 7) < 1e-6 && blastRing.Warn && blastRing.Anchor == Fx.World,
-                  "within 500 u it fires at where the target will be; a red circle -- a warning row of Fx.All, pinned to the ground -- marks it for 7 s");
+                  && Math.Abs(blastRing.Time - 12) < 1e-6 && blastRing.Warn && blastRing.Anchor == Fx.World,
+                  "within 500 u it fires at where the target will be; a red circle -- a warning row of Fx.All, pinned to the ground -- marks it for 12 s, long enough to be somewhere else by then");
             double mm0 = HvMissile();
-            for (int i = 0; i < 60 * 9 && H.BlastsPending > 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            Check(Math.Abs(HvMissile() - mm0 - 30) < 1e-6, $"staying on the circle, the gunship row's 30-damage blast lands ({HvMissile() - mm0:0})");
+            for (int i = 0; i < 60 * 15 && H.BlastsPending > 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(Math.Abs(HvMissile() - mm0 - 42) < 1e-6, $"staying on the circle, the gunship row's 42-damage blast lands -- 40% harder than the 30 it was, for being 12 s in the air rather than 7 ({HvMissile() - mm0:0})");
             typeof(Raider).GetField("_missileCd", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(hv, 0.0);
-            for (int i = 0; i < 60 && H.BlastsPending == 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            for (int i = 0; i < 60 * 3 && H.BlastsPending == 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             hm.Position += new Vector2(0, 300); hm.Velocity = Vector2.Zero;                         // off the circle
+            // ...and no SECOND missile while this one flies: the flight is 12 s and so is the
+            // cadence, so a 15 s wait would otherwise end with a fresh one still in the air.
+            typeof(Raider).GetField("_missileCd", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(hv, 99.0);
             double mm1 = HvMissile();
-            for (int i = 0; i < 60 * 9 && H.BlastsPending > 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            for (int i = 0; i < 60 * 15 && H.BlastsPending > 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(H.BlastsPending == 0 && HvMissile() == mm1, "moving off the circle dodges it");
             // anything out of place -- a wild speed, a broken number -- and it aims right at the target
             var pz = new Vector2(100, 200);
-            Check(Raider.PredictSpot(pz, new Vector2(10, 0)) == pz + new Vector2(70, 0) && Raider.PredictSpot(pz, new Vector2(5000, 0)) == pz
+            Check(Raider.PredictSpot(pz, new Vector2(10, 0)) == pz + new Vector2(120, 0) && Raider.PredictSpot(pz, new Vector2(5000, 0)) == pz
                   && Raider.PredictSpot(pz, new Vector2(float.NaN, 0)) == pz && Raider.PredictSpot(pz, new Vector2(float.PositiveInfinity, 1)) == pz,
-                  "the missile leads a sane speed 7 s; a wild speed, NaN or infinity: it aims at where the target is");
+                  "the missile leads a sane speed the whole 12 s of its flight -- 10 u/s carried 120 u -- and a wild speed, NaN or infinity aims at where the target is");
             // live: 2700 u/s in 45 u steps (wild, yet under the 50 u jump filter) -- the circle must sit on the ship
             hm.Position = edge + (Hub.BasePos - edge).Normalized() * 400f; hm.Velocity = Vector2.Zero;
             typeof(Raider).GetField("_missileCd", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(hv, 0.12);
@@ -3725,12 +3728,12 @@ public partial class _Test : Node
                 float keepRange = kin.MissileRange; double keepEvery = kin.MissileEvery, keepDamage = kin.MissileDamage;
                 kin.MissileRange = 900f; kin.MissileEvery = 5.0; kin.MissileDamage = 44;
                 bool apart = kin.MissileRange == 900f && kin.MissileEvery == 5.0 && kin.MissileDamage == 44
-                             && gun.MissileRange == 500f && gun.MissileEvery == 12.0 && gun.MissileDamage == 30;
+                             && gun.MissileRange == 500f && gun.MissileEvery == 12.0 && gun.MissileDamage == 42;
                 kin.MissileRange = keepRange; kin.MissileEvery = keepEvery; kin.MissileDamage = keepDamage;
                 Check(apart && Enemies.All.Count(x => x.Missiles) == 2
-                      && kin.MissileRange == 500f && kin.MissileEvery == 12.0 && kin.MissileDamage == 30 && kin.BlastRadius == 90f
-                      && gun.BlastRadius == 90f && Math.Abs(Raider.MissileFlight - 7) < 1e-9,
-                      $"the missile is each row's own: 30 damage inside 500 u every 12 s in a 90 u blast, 7 s out -- and a lancerkin given 900 u / 5 s / 44 leaves the gunship's 500 u / 12 s / 30 exactly where they were (back at {kin.MissileRange:0} u)");
+                      && kin.MissileRange == 500f && kin.MissileEvery == 12.0 && kin.MissileDamage == 42 && kin.BlastRadius == 90f
+                      && gun.BlastRadius == 90f && Math.Abs(Raider.MissileFlight - 12) < 1e-9,
+                      $"the missile is each row's own: 42 damage inside 500 u every 12 s in a 90 u blast, 12 s out -- and a lancerkin given 900 u / 5 s / 44 leaves the gunship's 500 u / 12 s / 42 exactly where they were (back at {kin.MissileRange:0} u)");
             }
             // a wave draws from the table, so the kinds rotate rather than being written in
             var p1 = H.SpawnPatrol(Hub.BasePos + new Vector2(0, -3400));

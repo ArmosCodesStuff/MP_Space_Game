@@ -45,7 +45,9 @@ public class EnemyDef
     // row: Hub takes it as a compile-time default -- see Raider.MissileFlight.)
     public float MissileRange = 500f;    // it throws one from within this
     public double MissileEvery = 12.0;   // seconds between them
-    public double MissileDamage = 30;    // what the blast does, before Strength
+    // WHAT THE BLAST DOES, before Strength. 42 rather than 30: the missile is 12 s in the air now
+    // instead of 7, so it is dodged far more easily and has to be worth dodging.
+    public double MissileDamage = 42;
     public float BlastRadius = 90f;      // how wide the blast is where it lands
     public Color Tint;
 

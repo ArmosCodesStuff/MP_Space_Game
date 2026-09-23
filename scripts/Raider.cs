@@ -72,7 +72,12 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
     // draws the telegraph and resolves the blast for every raider alike -- and both are the plain
     // gunship's figures. The FLIGHT is a const because Hub.ShowHeavyMissile takes it as a default
     // parameter, which only a compile-time constant can be.
-    public const double MissileFlight = 7.0;
+    // TWELVE SECONDS IN THE AIR. It was seven; the owner asked for twelve and about 40% more
+    // damage with it, so the answer to a heavy's missile is to be somewhere else when it lands
+    // rather than to tank it. A longer flight is a LONGER GUESS -- PredictSpot carries the target
+    // forward by exactly this, and MaxLead below is derived from it, so both follow the figure
+    // rather than repeating it.
+    public const double MissileFlight = 12.0;
     public static float BlastRadius => Enemies.Of(Enemies.Gunship).BlastRadius;
     public const float PerimeterR = 1800f, Detect = 2000f, PatrolSpeed = 100f;
     private const float MaxStep = 50f;                  // more than this in one frame is a jump (a warp), not motion
@@ -335,7 +340,12 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
         {   // at where it WILL be: its velocity carried 7 s forward -- from ITS row's reach, on its
             // row's cadence, for its row's damage
             _missileCd = Def.MissileEvery;
-            Hub.HeavyMissile(Position, PredictSpot(Target.Position, _targetVel), NetId, Def.MissileDamage * Strength);
+            // THE ROW'S DAMAGE, AND NOTHING ELSE. A raider's own hull and guns climb with the
+            // level through Strength, but the MISSILE it throws is the same missile at level 40 as
+            // at level 1 -- the owner's rule, and the reason a level-40 raid is survivable at all:
+            // a blast that scaled with the level would be unavoidable rather than merely heavy.
+            // (A boss's projectiles DO scale; that is Missions.Quicken, and it is a boss.)
+            Hub.HeavyMissile(Position, PredictSpot(Target.Position, _targetVel), NetId, Def.MissileDamage);
         }
     }
 
