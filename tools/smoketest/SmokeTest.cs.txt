@@ -341,6 +341,7 @@ public partial class _Test : Node
         // end. Run where the hub starts, its NewBlank wiped the tutorial's hint state.
         RefitChecks();
         GearLevelChecks();
+        BossScaleChecks();
 
         // Every class is touched first: Load() fills the loadout for ALL of them, so a character that
         // had only ever used one would differ after a round trip for that reason alone and say
@@ -1062,6 +1063,23 @@ public partial class _Test : Node
     // 100 salvage for the first level and a quarter more each time, stopping at +200%. A level adds
     // 5% to what the part is FOR and nothing to what it takes in exchange, and it belongs to the
     // part ID, because the hold stores counts by id and no instance id exists anywhere.
+    // ── A BOSS KEEPS UP WITH THE PILOT IT IS FIGHTING ───────────────────────────────────────────
+    // Its hull and damage have always climbed 10% a level; its WIND-UPS and its REACH never moved,
+    // so a pilot whose gear and points lengthen its own reach every level would fight each boss
+    // from further out and dodge it more easily than the last. One percent a level, compounding:
+    // quicker to wind up, faster in flight, longer-armed. The burn of a beam and how often that
+    // burn is judged are left alone, because those are the damage and it has a scale of its own.
+    void BossScaleChecks()
+    {
+        var row = Missions.ForLevel(1).Moves.First(m => m.Windup > 0 && m.Reach > 0);
+        Check(Math.Abs(Missions.Quicken(1) - 1.0) < 1e-9
+              && Math.Abs(Missions.Quicken(2) - 1.01) < 1e-9
+              && Math.Abs(Missions.Quicken(11) - Math.Pow(1.01, 10)) < 1e-9
+              && Math.Abs(Missions.Quicken(51) - Math.Pow(1.01, 50)) < 1e-9,
+              $"a boss gains 1% a level on its wind-ups and its reach: x{Missions.Quicken(2):0.000} at level 2, x{Missions.Quicken(11):0.000} at 11, x{Missions.Quicken(51):0.000} at 51");
+
+    }
+
     void GearLevelChecks()
     {
         var battery = Equipment.ById("bs_rapid_1");                  // faster guns, lighter shells
@@ -1099,6 +1117,20 @@ public partial class _Test : Node
               $"a level belongs to the part id, and comes back off disk ({Equipment.LevelOf(battery.Id)} on the battery, {Equipment.LevelOf("bs_rapid_2")} on the mark II)");
         Character.Delete("gearlevel");
         Character.GearLevel.Clear(); Character.Id = keepId;
+    }
+
+    // A wider view than before: a boss's reach grows with the level, and a fight whose edges are
+    // off screen is a fight fought on the minimap.
+    void ZoomChecks()
+    {
+        H.SetZoom(0.0001f);                                   // as far out as the wheel will go
+        float out0 = H.ZoomLevel;
+        H.SetZoom(1000f);                                     // ...and as far in
+        float in0 = H.ZoomLevel;
+        H.SetZoom(Hub.DefaultZoom);
+        Check(Math.Abs(out0 - Hub.DefaultZoom / 1.53f) < 1e-6 && Math.Abs(in0 - Hub.DefaultZoom * 1.5f) < 1e-6
+              && Math.Abs(Hub.ZoomOutMax / 1.33f - 1.15f) < 0.005f,
+              $"the wheel reaches 15% further out than it did -- 1.33 of the default was the limit, 1.53 is ({out0:0.000} out, {in0:0.000} in)");
     }
 
     void RefitChecks()
@@ -3476,6 +3508,7 @@ public partial class _Test : Node
             Check(pat.Where(r => !r.Heavy).All(r => r.Target == pm) && heavyP.Target == pm,
                   "a ship within 2000 u: the lights go for it, and their heavy takes the same target");
             await RangeChecks();                // something real to select, at a real distance
+            ZoomChecks();
             // ── THREE AT ONCE, ON THE HULLS BIG ENOUGH TO HOLD THEM ──
             // How many a hull may hold is its class's row, so "capital ships only" is a number and
             // not a list of class names in an `if`. A light still holds one: picking a second
@@ -4385,6 +4418,19 @@ public partial class _Test : Node
             var boss = H.Boss;
             Check(boss != null && boss.Alive && boss.Type.Id == "silver_lancer" && boss.Type.Name == "SILVER LANCER" && H.Yard == null && !Nodes<TargetDummy>().Any() && Combat.Hostiles.Contains(boss),
                   "the arena at level 1: the Silver Lancer, and no base or dummies");
+            // THE LEVEL'S OWN COPY of every move. At level 1 the scale is exactly 1, so the boss
+            // flies the build's rows unaltered -- which is also how this proves the copy is made
+            // from them rather than instead of them.
+            {
+                var flown = boss.Type.Moves.First(m => m.Windup > 0 && m.Reach > 0);
+                var slot = boss.S(flown.Id);
+                double q1 = Missions.Quicken(Missions.Level);
+                Check(Math.Abs(q1 - 1.0) < 1e-9 && slot != null
+                      && Math.Abs(slot.M.Windup - flown.Windup / q1) < 1e-6
+                      && Math.Abs(slot.M.Reach - flown.Reach * q1) < 0.01
+                      && Math.Abs(slot.M.Live - flown.Live) < 1e-9,
+                      $"the boss flies the level's own copy of its rows: at level {Missions.Level} the scale is x{q1:0.000}, so its {flown.Id} winds up in {slot?.M.Windup:0.00} s and reaches {slot?.M.Reach:0} u -- its row's own figures");
+            }
             // ITS MOVES ARE ROWS, so what follows reads the SLOT a row drives, by that row's id.
             // A beam's phases: Opening -- its escorts are out; Winding -- the red line is charging;
             // Firing -- it is burning down that line. These were five private fields and a
@@ -4893,7 +4939,8 @@ public partial class _Test : Node
                     for (int i = 0; i < 60 * 2 && warpRing == null; i++) { warpRing = Nodes<FxNode>().FirstOrDefault(t => t.Id == Fx.WarnZone); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
                     for (int i = 0; i < 60 * 3 && dk.S("shotgun").At != Boss.Phase.Winding; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                     var landed = dk.Position; float warpOff = landed.DistanceTo(me3.Position);
-                    var fan = Nodes<FxNode>().Where(t => t.Id == Fx.WarnLane && Math.Abs(t.Time - 1.875) < 1e-6).ToList();
+                    // by the move's OWN wind-up, which the level shortens (1.875 at level 1)
+                    var fan = Nodes<FxNode>().Where(t => t.Id == Fx.WarnLane && Math.Abs(t.Time - dk.S("shotgun").M.Windup) < 1e-3).ToList();
                     var scrapSeen = new System.Collections.Generic.HashSet<Shot>(Slugs());
                     await Wait(1.0);
                     bool heldStill = dk.Position.DistanceTo(landed) < 0.01f && dk.Locked;
@@ -4902,9 +4949,15 @@ public partial class _Test : Node
                     float aimTo = (me3.Position - landed).Angle();
                     var offs = scrap.Select(s => Mathf.RadToDeg(Mathf.AngleDifference(aimTo, s.Dir.Angle()))).OrderBy(a => a).ToList();
                     bool fanned = offs.Count == 7 && offs.Zip(new[] { -30f, -20f, -10f, 0f, 10f, 20f, 30f }, (a, b) => Math.Abs(a - b) < 0.5f).All(x => x);
-                    Check(warpRing != null && Math.Abs(warpRing.Time - 1.0) < 1e-6 && Math.Abs(warpOff - 600) < 5 && fan.Count == 7 && heldStill && fanned
+                    // 606, not 600: this is the LEVEL-2 Drake, and a boss gains 1% a level on its
+                    // reach (Missions.Quicken), so its 600 u standoff is 600 x 1.01.
+                    // The FIGURES ARE THE BOSS'S OWN, scaled for its level -- 1% a level on wind-ups
+                    // and reach, proved against literals where that scale is defined. What is
+                    // checked here is the SHAPE: a ring, a standoff, seven lines, seven pieces.
+                    var shot = dk.S("shotgun").M;
+                    Check(warpRing != null && Math.Abs(warpRing.Time - shot.Warp) < 1e-3 && Math.Abs(warpOff - shot.Standoff) < 6 && fan.Count == 7 && heldStill && fanned
                           && dk.S("shotgun").Fired == 1,
-                          $"the scrap shotgun: a warp to 600 u off the pilot ({warpOff:0}), a fan of 7 lines for 1.875 s held still, then 7 pieces at -30..+30 in 10s ({string.Join(" ", offs.Select(a => a.ToString("0")))}), counted once ({dk.S("shotgun").Fired})");
+                          $"the scrap shotgun: a warp to its own standoff off the pilot ({warpOff:0} u of {shot.Standoff:0}, ring {warpRing?.Time:0.000} of {shot.Warp:0.000}), a fan of {fan.Count} lines for {shot.Windup:0.000} s held still ({heldStill}), then 7 pieces at -30..+30 in 10s ({string.Join(" ", offs.Select(a => a.ToString("0")))}), counted once ({dk.S("shotgun").Fired})");
                     // EACH PIECE ITS OWN HIT, by construction rather than by hand. The fan used to
                     // number its seven source keys itself (boss:scrap:0..6) so the pieces would not
                     // swallow one another inside a hull's 0.52 s per-source gap; every fired shot
@@ -4933,9 +4986,13 @@ public partial class _Test : Node
                     await Wait(3.0);
                     bool heldRock = rock != null && GodotObject.IsInstanceValid(rock) && rock.Position.DistanceTo(rockAt) < 0.01f && !rock.Thrown
                                     && dk.Position.DistanceTo(drakeAt) < 0.01f && dk.Locked;
-                    Check(rock != null && lane != null && Math.Abs(lane.Time - 7.5) < 1e-6 && Math.Abs(lane.Hold - 1.6) < 1e-6
-                          && Math.Abs(rockAt.DistanceTo(drakeAt) - 220) < 1 && heldRock && dk.S("throw").Fired == 1,
-                          $"the throw: a rock beside it in its tractor (220 u off), a lane of its width for 7.5 s, the boss and the rock held still ({rockAt.DistanceTo(drakeAt):0} u, lane {lane?.Time:0.0} s), counted once ({dk.S("throw").Fired})");
+                    // 7.43 s and 1.58: the flight and the wind-up are the level-2 Drake's, one
+                    // percent quicker than the row's 7.5 and 1.6 (Missions.Quicken). The 220 u the
+                    // rock is held at is a reach, so it goes the other way: 220 x 1.01 = 222.
+                    var heave = dk.S("throw").M;
+                    Check(rock != null && lane != null && Math.Abs(lane.Time - heave.Windup) < 1e-3 && Math.Abs(lane.Hold - heave.Flight) < 1e-3
+                          && Math.Abs(rockAt.DistanceTo(drakeAt) - heave.Offset) < 1.5 && heldRock && dk.S("throw").Fired == 1,
+                          $"the throw: a rock beside it in its tractor ({heave.Offset:0} u off), a lane of its width for {heave.Windup:0.00} s then {heave.Flight:0.00} s of flight, the boss and the rock held still ({rockAt.DistanceTo(drakeAt):0} u, lane {lane?.Time:0.00} s), counted once ({dk.S("throw").Fired})");
                     for (int i = 0; i < 60 * 6 && rock != null && GodotObject.IsInstanceValid(rock) && !rock.Thrown; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                     var lane0 = rock?.From ?? Vector2.Zero; float laneLen = rock == null ? 1 : rock.From.DistanceTo(rock.To);
                     await Wait(0.8);
@@ -4943,8 +5000,8 @@ public partial class _Test : Node
                     bool broke = false;
                     for (int i = 0; i < 60 * 3 && rock != null && GodotObject.IsInstanceValid(rock); i++) { broke |= rock.Done; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
                     double rockDmg = me3.DamageBySource.GetValueOrDefault("boss:rock");
-                    Check(Math.Abs(half - 0.125) < 0.04 && broke && Math.Abs(laneLen - 1800) < 1 && Math.Abs(rockDmg - 275) < 1e-6,
-                          $"thrown: half the flight covers an eighth of the 1800 u lane ({half:0.000}), it strikes the pilot for 275 ({rockDmg:0}), and breaks apart at the end ({broke})");
+                    Check(Math.Abs(half - 0.125) < 0.04 && broke && Math.Abs(laneLen - heave.Reach) < 1 && Math.Abs(rockDmg - 275) < 1e-6,
+                          $"thrown: half the flight covers an eighth of its {heave.Reach:0} u lane ({half:0.000}) -- the ease, whatever the level does to the length -- it strikes the pilot for 275 ({rockDmg:0}), and breaks apart at the end ({broke})");
                 }
             }
             // EVERY BOSS SPECIAL HAS ITS OWN SOUND, heard as it happens: the Lancer's beam (its charge, and

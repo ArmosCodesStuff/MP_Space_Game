@@ -221,7 +221,10 @@ public partial class Hub : Node2D
     // the camera: arrow keys, or the mouse against a screen edge, move it -- no
     // further than the ship's CameraRange (5000 for capital ships). Y again returns
     // it to the ship, keeping the zoom.
-    public const float DefaultZoom = 0.9f, ZoomOutMax = 1.33f, ZoomInMax = 1.5f;
+    // ZoomOutMax is how much FURTHER out than the default the wheel will go: 15% more of it than
+    // it was (1.33), because a boss's reach grows with the level and a fight you cannot see the
+    // edges of is a fight fought on the minimap.
+    public const float DefaultZoom = 0.9f, ZoomOutMax = 1.53f, ZoomInMax = 1.5f;
     public const float PanSpeed = 1400f, EdgeBand = 14f;
     public float ZoomLevel { get; private set; } = DefaultZoom;
     public bool FreeCamera { get; private set; }

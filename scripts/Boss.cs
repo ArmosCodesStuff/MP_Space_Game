@@ -42,6 +42,9 @@ public enum MoveWait { Nothing, Itself, Movers, Everything }
 // ONE MOVE. Everything a boss does is one of these, and a boss is the array of them on its row.
 public class BossMove
 {
+    // A copy to scale for one fight, leaving the build's own row untouched (Boss.Scaled).
+    public object MemberwiseCloneOf() => MemberwiseClone();
+
     public string Id;                  // reached by id -- S("beam"), S("throw") -- never by type
     public MoveWay Way;
     public MoveWait Waits;
@@ -139,6 +142,21 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
         public readonly List<Raider> Escorts = new();
     }
     private Slot[] _slots = System.Array.Empty<Slot>();
+    // A move as this level flies it: quicker to wind up, faster in flight, and longer-armed, by
+    // Missions.Quicken. The burn of a beam and how often it is judged are left alone -- they are
+    // the damage, not the animation.
+    private static BossMove Scaled(BossMove m, int level)
+    {
+        double q = Missions.Quicken(level);
+        if (q <= 1.0000001) return m;                       // level 1: the row itself, unchanged
+        var c = (BossMove)m.MemberwiseCloneOf();
+        c.Windup /= q; c.Warp /= q; c.Flight /= q;
+        c.Speed = (float)(c.Speed * q);
+        c.Reach = (float)(c.Reach * q); c.Range = (float)(c.Range * q); c.Radius = (float)(c.Radius * q);
+        c.Find = (float)(c.Find * q); c.Standoff = (float)(c.Standoff * q); c.EscortOut = (float)(c.EscortOut * q);
+        return c;
+    }
+
     public Slot S(string id)
     {
         foreach (var s in _slots) if (s.M.Id == id) return s;
@@ -177,7 +195,11 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
         HullMult = Missions.HullMult(Missions.Level, party); DamageMult = Missions.DamageMult(Missions.Level, party); Hp = MaxHp;
         Name = "Boss";
         // ITS MOVES, FROM ITS ROW: one slot of live state each, in the row's order
-        _slots = Type.Moves.Select(m => new Slot { M = m, Due = m.First }).ToArray();
+        // THE LEVEL'S OWN COPY OF EVERY MOVE. The rows are the build's, shared by every boss that
+        // ever flies, so the level's scale is applied to a CLONE -- scaling the row itself would
+        // make the second boss of a session faster than the first. Done here, once, so not one of
+        // the twenty-odd places that read a move has to know the level exists.
+        _slots = Type.Moves.Select(m => new Slot { M = Scaled(m, Missions.Level), Due = m.First }).ToArray();
         AddChild(Sprites.Fit(Type.Sprite, Length));
         ZIndex = 4;
         Combat.Hostiles.Add(this);

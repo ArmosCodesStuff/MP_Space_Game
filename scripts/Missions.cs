@@ -150,6 +150,16 @@ public static class Missions
     private static int _kind;
     public static int Kind { get => _kind; set => _kind = value >= 0 && value < Kinds.Length ? value : Bounty; }
 
+    // A BOSS GETS QUICKER AND LONGER-ARMED WITH THE LEVEL, gently: one percent a level, compounding,
+    // beside the 10% a level its hull and damage already take. A pilot's reach and rate of fire
+    // climb with gear and points, and a boss whose wind-ups and ranges never moved would be fought
+    // from further out and dodged more easily every level -- the fight would get EASIER as the
+    // numbers got bigger. What it touches: how long it takes to wind up and how fast a fired body
+    // flies (its animation), and how far its moves carry. What it does NOT touch is how long a beam
+    // BURNS or how often that burn is judged, because those are the damage itself, which has a
+    // scale of its own.
+    public const double MoveStep = 1.01;
+    public static double Quicken(int level) => Math.Pow(MoveStep, Math.Max(1, level) - 1);
     public const double LevelStep = 1.10;
     public static double S(int level) => Math.Pow(LevelStep, Math.Max(1, level) - 1);
     // THE SELECTED LEVEL -- ONE PER CATEGORY (the host decides; replicated). The bounty ladder and
