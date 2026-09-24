@@ -390,6 +390,19 @@ From the 2026-09-21 batch (each is a constant or one rule to change):
     each run draws (the harness already seeds its own -- this is about covering more of what the
     game has with it).
 
+19. **THE LANES: couriers, blockades, and outpost guns.** The four outposts are positions today
+    and nothing travels between them; this makes the base's passive income a thing you can SEE and
+    a thing that can be cut.
+    - **Small drones** -- the miner's and salvager's hulls at a fraction of the size, tinted to
+      the station they belong to -- carry commodities between the base and each outpost, both ways.
+    - **A lane is a row** (the new table): its outpost, its two ends, its courier, and the share of
+      passive income it carries -- **25% each, four lanes**.
+    - **A blockade is a wave row**: raiders sit on a lane and stop it. While a lane is blockaded
+      its quarter of the income stops. Several can be cut at once, and the answer is the pilot.
+    - **Each outpost has a gun, and the gun is upgradable** -- range, rate of fire, missile speed --
+      through the economy table like every other upgrade. It fires the heavy fighter's own missile
+      mechanism in friendly colours, which makes it a late-game deterrent rather than a decoration.
+
 12. **A DUMB LAUNCHER, and clients that update themselves.** A second, tiny executable: the
     changelog, an UPDATE button and PLAY -- and nothing else, so it never needs updating itself.
     The real main menu stays in the game, because it is a live diorama with character creation and
