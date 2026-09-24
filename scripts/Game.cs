@@ -16,11 +16,15 @@ public static class Game
 {
     public const int Version = 2;
 
-    // WHICH BUILD THIS IS, for a bug report to name. Read once out of the BUILD.txt the release
-    // ships beside the executable (Builds.cs, and tools\pack.ps1 which writes it); "dev" in the
-    // editor and in every harness, where there is no release. It is DISPLAY ONLY -- Net.Protocol
-    // is the identity that decides whether two peers may play, and it is computed by reflection
-    // over what the build actually contains.
+    // WHICH BUILD THIS IS, for a bug report to name. Read once out of the BUILD.txt a release
+    // ships beside the executable (tools\pack.ps1 writes it); "dev" in the editor and in every
+    // harness, where there is no release. It is DISPLAY ONLY -- Net.Protocol is the identity that
+    // decides whether two peers may play, and it is computed by reflection over what the build
+    // actually contains.
+    //
+    // ONE LINE OF PARSING, ON PURPOSE. This used to call Builds.ReadInfo, from the file that ran
+    // the launcher's install-and-update mechanism. The launcher is gone and so is that file; all
+    // the game ever wanted from it was the value of one key.
     //
     // NEVER readonly, NEVER const, and this is not a style note. Net.Fingerprint() folds in every
     // static field that is IsLiteral or IsInitOnly whose type is Plain, and string is Plain -- so
@@ -37,17 +41,16 @@ public static class Game
             try
             {
                 var beside = System.IO.Path.GetDirectoryName(OS.GetExecutablePath());
-                var at = System.IO.Path.Combine(beside ?? "", Builds.InfoName);
+                var at = System.IO.Path.Combine(beside ?? "", "BUILD.txt");
                 if (System.IO.File.Exists(at))
-                {
-                    var info = Builds.ReadInfo(System.IO.File.ReadAllText(at));
-                    if (info != null && !string.IsNullOrEmpty(info.Build)) _build = info.Build;
-                }
+                    foreach (var raw in System.IO.File.ReadAllLines(at))
+                        if (raw.StartsWith("build=") && raw.Length > 6) { _build = raw[6..].Trim(); break; }
             }
             catch (System.Exception) { }      // no release beside us: "dev" is the honest answer
             return _build;
         }
     }
+
 
     // Shown when a character cannot be loaded because it predates this build. Kept here, beside
     // the number that causes it, rather than in the screen that happens to draw it.

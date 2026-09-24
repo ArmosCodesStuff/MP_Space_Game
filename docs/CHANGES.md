@@ -418,6 +418,30 @@ Unreleased. Nothing is outstanding from the batch of 2026-09-23.)*
 
 ## Unreleased
 
+### The launcher is gone (2026-09-24, in the WarShips_Version_L fork)
+
+**Deleted, not moved.** `launcher/` (3 files, 417 lines) and `scripts/Builds.cs` (the
+install-and-update mechanism it was built on) are removed, along with the 30 rung-3 checks that
+proved that mechanism and the `dotnet publish` step in `tools/pack.ps1`.
+
+**Why it stopped earning its place.** `tools/install.ps1` does the job with nothing installed --
+Windows PowerShell is the whole requirement -- so the launcher was a 66 MB unsigned executable
+standing between a player and a script that needed no executable at all. Smart App Control
+hard-blocks an unsigned exe with no way through, which is the one failure mode the launcher could
+not talk its way out of; a PowerShell script is not blocked by it.
+
+**What the game keeps.** `Game.Build` still reads the build id out of the `BUILD.txt` a release
+ships beside the executable, and still shows it at the bottom of the Esc menu -- but it parses the
+one key it wants in six lines instead of calling into a file that ran an update engine. The check
+that it is a property over a mutable static stays, because that trap is about THIS game's protocol
+hash and has nothing to do with the launcher: a `readonly` build string would enter
+`Net.Fingerprint` and make two byte-identical builds refuse each other.
+
+**What a release is now:** five assets, not six. `tools/pack.ps1` exports, hashes, cuts the notes
+and zips the two parts; nothing publishes an executable for a player to keep. The bracketed
+sections in `NOTES.txt` stayed even though the thing that drew them in colour is gone -- they read
+perfectly well as plain text, which is all GitHub's release body needs them to do.
+
 ### Six more steps that could not fail, found by sweeping every PowerShell file (2026-09-24, in the WarShips_Version_L fork)
 
 After the analyser turned out never to have run, four agents read all fifteen `.ps1` files looking
@@ -1048,11 +1072,6 @@ run; every figure they assert stays a literal.
 
 ### Known broken (as of this batch)
 
-- **Three things about the launcher are unproven, because no rung can see them.** Its WinForms
-  window has never been opened, and nothing has renamed a file over a running exe. Everything with a DECISION in it is
-  in `scripts/Builds.cs` and is proved by 30 rung-3 checks -- but the window and the operating
-  system are manual checks that have not been run. `docs/README.md` lists them under Releasing.
-  (The fourth, a real HTTPS fetch, is now proved: see below.)
 - **SMART APP CONTROL HARD-BLOCKS THIS on the machines that have it**, and the answer is a note
   asking the player to switch it off. It is a Windows 11 feature separate from SmartScreen: no
   "Run anyway", no bypass, and it is only ever on for clean installs of 22H2 or later. Switching

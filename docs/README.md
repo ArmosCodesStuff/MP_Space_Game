@@ -73,8 +73,8 @@ in the other -- give each its own character first, they share one save folder.
 `toolsind-godot.ps1`, which reads `$env:WARSHIPS_GODOT` and a gitignored `local.config.ps1`,
 so your engine path survives a pull.
 
-**Someone who only wants to play needs none of this.** Point them at the Releases page:
-`WarshipsLauncher.exe`, run it, press UPDATE.
+**Someone who only wants to play needs none of this.** Point them at the repo: download the ZIP,
+extract, double-click `PLAY.bat`.
 
 ## Releasing
 
@@ -83,7 +83,7 @@ powershell -ExecutionPolicy Bypass -File tools\pack.ps1
 ```
 
 One command. It refuses a dirty tree (pass `-Dirty` for a test build, which marks the id), exports
-the game headlessly, publishes the launcher, hashes all 189 installed files, cuts the changelog out
+the game headlessly, hashes all 189 installed files, cuts the changelog out
 of `docs/CHANGES.md`, zips the two parts, and prints exactly what to upload. Output lands in
 `dist\` (gitignored: a release is an output, and the build id carries the commit that made it).
 
@@ -91,10 +91,9 @@ of `docs/CHANGES.md`, zips the two parts, and prints exactly what to upload. Out
 
 | | |
 |---|---|
-| `dist\WarshipsLauncher.exe` | 66 MB. What a player keeps. Downloaded once, by hand, then never again. |
 | `dist\release\BUILD.txt` | 13 KB -- schema, build id, the part table, one `in=` line per file |
 | `dist\release\BUILD.sha256` | 23 KB -- one SHA-256 per file, sha256sum's exact format |
-| `dist\release\NOTES.txt` | the changelog the launcher shows |
+| `dist\release\NOTES.txt` | the changelog, shown as the release body |
 | `dist\release\code.zip` | 10 MB -- the 5 files an ordinary release changes |
 | `dist\release\runtime.zip` | 73 MB -- the 184 that move only when Godot or .NET does |
 
@@ -103,25 +102,25 @@ of `docs/CHANGES.md`, zips the two parts, and prints exactly what to upload. Out
 1. Commit, and run `verify.ps1 -Update` until it is green.
 2. `tools\pack.ps1`.
 3. Draft a GitHub release on `ArmosCodesStuff/MP_Space_Game`, tag it anything, and upload the five
-   files from `dist\release\` **under exactly those names** -- the launcher reads
-   `releases/latest/download/<name>`, so a renamed asset is an asset it cannot find.
+   files from `dist\release\` **under exactly those names** -- `tools\install.ps1` reads
+   `releases/latest/download/<name>`, so a renamed asset is one it cannot find.
 4. Publish it, and not as a pre-release: `latest` skips pre-releases.
-5. Hand out `WarshipsLauncher.exe` once. Every release after this one reaches players through it.
+5. That is it. Players get the new build the next time they run `PLAY.bat`.
 
-The download is PUBLIC and deliberately so: anything the launcher can fetch unaided, a player can
+The download is PUBLIC and deliberately so: anything the installer can fetch unaided, a player can
 fetch unaided, so a token or a key inside a file players hold is not a secret. Gating it for real
-would need a service in front of the download that the launcher asks instead of asking GitHub.
+would need a service in front of the download that the installer asks instead of asking GitHub.
 
 **Checking a release by hand.** `cd dist\game` then `sha256sum -c BUILD.sha256` from Git Bash.
-That is the answer to "it's broken" with no launcher involved, and it is why the manifest keeps
+That is the answer to "it's broken" with nothing else involved, and it is why the manifest keeps
 sha256sum's format.
 
-**A test install without uploading anything.** Put a `source.txt` beside the launcher holding
-`file:///C:/.../dist/release/` and it reads that folder instead of GitHub.
+**A test install without uploading anything.** Unpack the two zips from `dist\release\` into
+`play\` by hand and copy `BUILD.txt` beside them; `PLAY.bat` starts whatever is there.
 
-**Four things no rung covers**, because they are a GUI, a network and an operating system:
-the launcher's window; a real HTTPS fetch; renaming over a running exe; and SmartScreen. Run them
-once by hand. Everything with a *decision* in it lives in `scripts/Builds.cs` and is on rung 3.
+**Two things no rung covers**, because they are a network and an operating system: a real HTTPS
+fetch, and what Windows says about an unsigned program. Run them once by hand -- `PLAY.bat` on a
+machine without the developer tools exercises both.
 
 **The build is UNSIGNED, deliberately.** A player sees "Windows protected your PC" and clicks
 *More info -> Run anyway*. `tools\pack.ps1` puts that instruction at the top of every release's
@@ -142,12 +141,9 @@ Signing would not fix it cheaply: SmartScreen trusts a CERTIFICATE'S REPUTATION,
 of a signature, and a new OV certificate shows the same wall until enough downloads accrue against
 it. Only an EV certificate (~$300-600/yr, and a USB token in the post) is trusted on day one;
 Azure Trusted Signing (~$10/mo, no hardware) builds reputation over weeks like OV does. The file
-whose reputation would accrue is `WarshipsLauncher.exe` -- it is the one downloaded by hand, and
-the one that stays the same across releases. Revisit if strangers start playing; not worth it for
-friends.
+whose reputation would accrue is `Warships.exe`, and it changes every release, so the reputation
+never settles. Revisit if strangers start playing; not worth it for friends.
 
-**The launcher must stay frozen.** A change to it is a file every player fetches by hand again.
-That is what `schema=1` and `source.txt` are for.
 
 ## Checking your work
 

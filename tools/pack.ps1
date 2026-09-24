@@ -1,5 +1,4 @@
-# MAKE A RELEASE -- the one command that turns this tree into the five assets a player's launcher
-# reads, plus the launcher itself.
+# MAKE A RELEASE -- the one command that turns this tree into the five assets a player installs.
 #
 #     powershell -ExecutionPolicy Bypass -File tools\pack.ps1
 #     powershell -ExecutionPolicy Bypass -File tools\pack.ps1 -Dirty     # a test build, unclean tree
@@ -8,9 +7,6 @@
 # came from is named inside it (the build id carries the commit) so it can always be remade.
 #
 # WHAT IT PRODUCES
-#   dist\WarshipsLauncher.exe   what a player keeps and runs. NOT a release asset -- it is
-#                               downloaded once, by hand, and then never again. That is the point
-#                               of it: the five assets below are what changes.
 #   dist\release\BUILD.txt      what the release says about itself -- schema, build id, the part
 #                               table, and one `in=` line per file saying which part carries it
 #   dist\release\BUILD.sha256   one SHA-256 per installed file, sha256sum's exact format
@@ -20,14 +16,12 @@
 #
 # WHY TWO ZIPS. On an ordinary release only Warships.pck and the four managed files beside it
 # change: 5 files of 189, and 9.8 MB zipped of 79.3. Everything else is the export template and
-# the .NET base library, which move when Godot or .NET does and not otherwise. The launcher
-# downloads only the parts holding a file whose hash differs, so an ordinary update is ~10 MB
-# instead of ~80. A THIRD part is a row in this script plus its `in=` lines; nothing in the
-# launcher changes for it.
+# the .NET base library, which move when Godot or .NET does and not otherwise. The installer
+# fetches every part; the split is kept because it costs nothing and an installer that fetched
+# only what changed would want it. A THIRD part is a row in this script plus its `in=` lines.
 #
-# THE PART SPLIT IS DECIDED HERE, NEVER IN THE LAUNCHER. The launcher reads the expanded `in=`
-# list -- one explicit line per file, no globs -- because pattern matching is logic, and logic that
-# might need fixing belongs on the repo side of the line and not in a program that must stay frozen.
+# THE PART SPLIT IS DECIDED HERE. BUILD.txt carries the expanded `in=` list -- one explicit line
+# per file, no globs -- because a glob is logic, and logic belongs where it can be fixed.
 #
 # THE VERSION IS NOT STAMPED INTO THE EXE. export_presets.cfg leaves application/file_version and
 # product_version empty on purpose: modify_resources patches them into Warships.exe's PE
@@ -100,16 +94,6 @@ if (-not $proc.WaitForExit($ExportWait * 1000)) {
 }
 if (-not (Test-Path (Join-Path $game 'Warships.exe'))) { Write-Host 'pack: no exe was produced'; exit 1 }
 
-# -- 2 . the launcher --------------------------------------------------------
-# Self-contained and single-file: a player runs it without installing a .NET runtime first, and a
-# prerequisite dialog would defeat the whole point of it.
-Write-Host 'pack: publishing the launcher'
-$pub = Join-Path $dist 'launcher_publish'
-& dotnet publish 'launcher\Launcher.csproj' -c Release -r win-x64 --nologo -v q -o $pub
-if ($LASTEXITCODE -ne 0) { Write-Host 'pack: the launcher did not publish'; exit 1 }
-Copy-Item (Join-Path $pub 'WarshipsLauncher.exe') (Join-Path $dist 'WarshipsLauncher.exe') -Force
-Remove-Item $pub -Recurse -Force -Confirm:$false
-
 # -- 3 . every installed file, and which part carries it ---------------------
 # CODE is what an ordinary release changes: the resource pack, and the managed assembly and its
 # three companions. RUNTIME is the rest -- the export template and the .NET base library.
@@ -163,23 +147,22 @@ foreach ($id in @('code', 'runtime')) {
 
 # -- 6 . the changelog, cut from the record that is already kept -------------
 # docs\CHANGES.md's Unreleased section: from the line after "## Unreleased" to the SECOND "### "
-# heading, which starts the entry before this batch's. THIS LOGIC LIVES HERE, not in the launcher:
-# the launcher shows the text it is handed and knows nothing about markdown.
+# heading, which starts the entry before this batch's. Cutting markdown is logic, and it lives
+# HERE, in the tool that already reads the record.
 #
-# WHAT A PLAYER READS IS A SET OF SECTIONS, and this is where they are decided. A SECTION IS A
-# HEADING IN SQUARE BRACKETS on its own line; the launcher strips the brackets, draws the heading
-# bold in its colour, and colours the lines under it to match. It knows how to DRAW a section and
-# nothing about which sections exist -- so a third one is a row HERE, and every launcher already in
-# players' hands renders it correctly without being replaced. That is what lets the launcher be
-# frozen: the part with a decision in it stays on the repo side of the line.
+# WHAT A PLAYER READS IS A SET OF SECTIONS, decided here. A section is a heading in square
+# brackets on its own line, and NOTES.txt is plain text: it is what GitHub shows as the release
+# body and what a player opens beside the game. A third section is a row below and nothing else.
 #
-# A heading the launcher has no colour for still draws, plainly. Nothing here can break it.
+# (These brackets were once read by a launcher that drew each heading bold in its own colour.
+# There is no launcher now. They stayed because they read perfectly well as plain text, which
+# is all they ever needed to do.)
 $sections = @(
     @{ Head = 'FIRST TIME'; Lines = @(
         'Windows will say it does not recognise this program. It is unsigned -- a',
         'certificate is a few hundred a year and this is a game for friends.',
         'Click "More info", then "Run anyway".',
-        'You will see this once per version of the launcher, not once per update.'
+        'You will see it again each time an update replaces the game itself.'
     )},
     @{ Head = 'IF WINDOWS BLOCKS IT OUTRIGHT'; Lines = @(
         'A few Windows 11 machines have SMART APP CONTROL switched on. It blocks',
@@ -237,13 +220,10 @@ Copy-Item (Join-Path $game 'BUILD.sha256') (Join-Path $rel 'BUILD.sha256') -Forc
 $fileUrl = 'file:///' + ($rel -replace '\\', '/') + '/'
 Write-Host ''
 Write-Host "pack: $build"
-Write-Host "  the launcher:            $Out\WarshipsLauncher.exe"
-Write-Host '  upload all SIX to the GitHub release, with these exact names -- the launcher too,'
-Write-Host '  because tools\play.ps1 fetches it from releases/latest/download on a machine with no'
-Write-Host '  developer tools, and a file nobody can reach by URL has to be handed over by hand:'
-Write-Host ('    {0,-22} {1,12:N0} bytes' -f 'WarshipsLauncher.exe', (Get-Item (Join-Path $dist 'WarshipsLauncher.exe')).Length)
+Write-Host '  upload all five to the GitHub release, with these exact names -- tools\install.ps1'
+Write-Host '  fetches them from releases/latest/download, so a renamed asset is one it cannot find:'
 Get-ChildItem $rel -File | Sort-Object Name | ForEach-Object {
     Write-Host ('    {0,-22} {1,12:N0} bytes' -f $_.Name, $_.Length)
 }
-Write-Host '  the launcher reads releases/latest/download/<name>, so the names must not change.'
-Write-Host "  a test install: put source.txt beside the launcher holding  $fileUrl"
+Write-Host '  a player needs nothing installed: PLAY.bat runs tools\install.ps1, which reads these.'
+Write-Host "  to test before uploading: unpack $rel by hand into play\"
