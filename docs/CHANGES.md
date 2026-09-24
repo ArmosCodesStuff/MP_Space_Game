@@ -883,21 +883,35 @@ run; every figure they assert stays a literal.
 
 ### Known broken (as of this batch)
 
-- **Four things about the launcher are unproven, because no rung can see them.** Its WinForms
-  window has never been opened; no real HTTPS fetch has been made (every check runs against a
-  folder source); nothing has renamed a file over a running exe; and neither executable is signed,
-  so SmartScreen's behaviour is a guess. Everything with a DECISION in it is in `scripts/Builds.cs`
-  and is proved by 29 rung-3 checks -- but the window, the network and the operating system are
-  four manual checks that have not been run. `docs/README.md` lists them under Releasing.
+- **Three things about the launcher are unproven, because no rung can see them.** Its WinForms
+  window has never been opened; nothing has renamed a file over a running exe; and neither
+  executable is signed, so SmartScreen's behaviour is a guess. Everything with a DECISION in it is
+  in `scripts/Builds.cs` and is proved by 30 rung-3 checks -- but the window and the operating
+  system are manual checks that have not been run. `docs/README.md` lists them under Releasing.
+  (The fourth, a real HTTPS fetch, is now proved: see below.)
 - **The headless export sometimes finishes and never exits.** On the first real release run
   `savepack` printed DONE, all 189 files were on disk, and the Godot process then sat at 0 CPU for
   eight minutes without leaving -- hanging `pack.ps1` with nothing to read. It is judged by its
   OUTPUT now: `pack.ps1` waits `-ExportWait` seconds (600 by default), then stops waiting and lets
   the files decide. Whether this is the same teardown fault as the net10.0 exit crash is unknown;
   it did not happen on three earlier `-Dirty` runs.
-- **No release has been published.** `tools/pack.ps1` has made a `-Dirty` test build end to end
-  (189 files, 191 MB, `sha256sum -c` clean on all of them), and nothing has been uploaded to
-  GitHub, so the `releases/latest/download/` path has never been fetched by anything.
+- ~~No release has been published.~~ **The first release is out and the channel is proved.** Tag
+  `2026-09-23.2ea5a0a` on `ArmosCodesStuff/MP_Space_Game`, all five assets. Fetched ANONYMOUSLY
+  over the launcher's own path, `releases/latest/download/`: `BUILD.txt` came back byte-identical
+  to the local one, and `code.zip` came back at 10,271,112 bytes with a SHA-256 equal to the one
+  its own `part=` line claims. That is the whole chain -- redirect, CDN, bytes, hash -- with no
+  launcher involved.
+- **The repo is PUBLIC, and so is the download.** It was private until the release went out; the
+  launcher ships no token, so a private repo returns 404 to it and the update channel could not
+  work at all. Made public deliberately, after a scan of the working tree and ~400 commits of
+  history found no token, key or credential (`local.config.ps1`, the only machine-local config, is
+  gitignored and untracked). **"Public but with a hidden URL" is not a thing on GitHub:** a public
+  repo's releases page is listed, browsable and indexed. What protects the build is that nobody is
+  looking, which is not access control. Gating it for real needs a service in front of the
+  download that the launcher asks instead of asking GitHub -- the launcher would gain one field
+  and no logic, and `source.txt` plus `schema=1` are what make that swap possible without shipping
+  a new launcher. A design for exactly that (a Cloudflare Worker holding the token plus a list of
+  player keys) was drafted and set aside when the owner chose public.
 
 - **The runtime leaves support in November 2026 and cannot move until the engine does.** `net8.0`
   is what Godot 4.7.2 targets; on `net10.0` the game builds, plays and passes the whole bar, but
