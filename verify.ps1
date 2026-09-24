@@ -44,7 +44,12 @@ Step 'typecheck' {
 }
 
 Step 'build' {
-    $o = & dotnet build -v q -nologo 2>&1
+    # -t:Rebuild, OR THIS STEP IS A NO-OP. An incremental build of an unchanged tree emits no
+    # warnings whatever the code contains: measured on a project with a live CS0219, cold
+    # build said '1 Warning(s)' and the very next build said '0 Warning(s)'. Every bar after
+    # the first was therefore asking a question that could only be answered clean.
+    # toolsnalyseun.ps1 already knew this and had the flag; this step did not.
+    $o = & dotnet build -t:Rebuild -v q -nologo 2>&1
     $o | Select-String 'Warning\(s\)|Error\(s\)|error CS' | ForEach-Object { Write-Host "  $($_.Line.Trim())" }
     # ANCHORED, for the same reason: '10 Warning(s)' and '10 Error(s)' both CONTAIN the
     # unanchored pattern, so a build with ten of each reported clean.

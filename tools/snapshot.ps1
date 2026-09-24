@@ -21,11 +21,6 @@ $env:Path += ';C:\Program Files\Git\cmd'
 # until it is staged, and a snapshot that quietly leaves out the file you just wrote is the
 # same silent omission this generator exists to prevent.
 $tracked = @(& git ls-files --cached --others --exclude-standard | Sort-Object -Unique)
-function Dir-Files($prefix) {
-  @($tracked | Where-Object { $_ -like "$prefix/*" -and ($_ -split '/').Count -eq (($prefix -split '/').Count + 1) }) |
-    Where-Object { $_ -notmatch '\.(uid|dll|import)$' } |
-    Sort-Object { $_ } -CaseSensitive
-}
 
 # Root files keep the original snapshot's order, which is not alphabetical.
 $fixed = @('project.godot', 'Warships.csproj', 'CharacterSelect.tscn', 'Hub.tscn', 'MainMenu.tscn')
@@ -33,12 +28,26 @@ $final = @($fixed)
 # Everything else is DISCOVERED, not listed. A hard-coded set of directories is how
 # typecheck/GodotStub.cs stayed out of this file for the project's whole history, and it would
 # have quietly dropped verify.ps1 and tools/find-godot.ps1 the moment they were added.
-$code = @($tracked | Where-Object { $_ -match '\.(cs|sh|ps1|py|tscn|csproj|godot|editorconfig)$' -or $_ -match '\.cs\.txt$' })
+# .bat and .sln are in the list because a master copy has to rebuild a RUNNABLE clone: PLAY.bat
+# is how the thing is started and Warships.sln is what `dotnet build` resolves at the root.
+$code = @($tracked | Where-Object { $_ -match '\.(cs|sh|ps1|py|bat|sln|tscn|csproj|godot|editorconfig)$' -or $_ -match '\.cs\.txt$' })
+# THE DIRECTORIES ARE DISCOVERED TOO, and that is the whole point of the paragraph above. They
+# used to be four hard-coded buckets -- root, scripts/, typecheck/, tools/ -- which is the SAME
+# mistake the comment warns about, one level up: launcher/Main.cs and launcher/Launcher.csproj
+# matched $code, belonged to no bucket, and were silently absent from the master copy. So was
+# PLAY.bat, and so would anything in a folder added tomorrow.
 $final += @($code | Where-Object { $_ -notin $fixed -and $_ -notlike '*/*' } | Sort-Object { $_ } -CaseSensitive)
-$final += @($code | Where-Object { $_ -like 'scripts/*' }   | Sort-Object { $_ } -CaseSensitive)
-$final += @($code | Where-Object { $_ -like 'typecheck/*' } | Sort-Object { $_ } -CaseSensitive)
-$final += @($code | Where-Object { $_ -like 'tools/*' }     | Sort-Object { $_ } -CaseSensitive)
+foreach ($dir in @($code | Where-Object { $_ -like '*/*' } |
+                   ForEach-Object { $_.Substring(0, $_.LastIndexOf('/')) } |
+                   Sort-Object -Unique)) {
+    $final += @($code | Where-Object { $_ -like "$dir/*" -and $_.Substring($dir.Length + 1) -notlike '*/*' } |
+                Sort-Object { $_ } -CaseSensitive)
+}
 $final = @($final | Select-Object -Unique)
+# ...AND NOTHING DISCOVERED IS DROPPED. The check below proves every path in $final is tracked;
+# this proves the other direction, which is the one that was failing silently.
+$missed = @($code | Where-Object { $_ -notin $final })
+if ($missed.Count) { throw "snapshot would drop $($missed.Count) tracked source files: $($missed -join ', ')" }
 
 foreach ($p in $final) { if ($tracked -notcontains $p) { throw "not tracked: $p" } }
 

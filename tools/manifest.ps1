@@ -55,8 +55,22 @@ $lines = foreach ($f in $Files) {
 
 $sha = 'C:\Program Files\Git\usr\bin\sha256sum.exe'
 if (-not (Test-Path $sha)) { Write-Host ("manifest: {0} files written; sha256sum not found, not verified" -f $Files.Count); exit 0 }
+# A FLOOR, BECAUSE ZERO OF ZERO VERIFIES PERFECTLY. With an empty list this printed
+# "manifest: 0 files, 0 not verifying" and exited 0 -- while sha256sum itself had exited 1 with
+# nothing on stdout. That is how a release manifest that hashed ONE of 189 files passed its own
+# check earlier today: nothing here ever asked how many there were meant to be.
+if ($Files.Count -lt 1) { Write-Host 'manifest: nothing to hash -- refusing to write an empty manifest.'; exit 1 }
 $check = & $sha -c $Out
+$shaExit = $LASTEXITCODE
 $bad = @($check | Where-Object { $_ -notmatch ': OK$' })
+$okLines = @($check | Where-Object { $_ -match ': OK$' }).Count
 Write-Host ("manifest: {0} files, {1} not verifying" -f $Files.Count, $bad.Count)
 $bad | ForEach-Object { Write-Host "  $_" }
+# ...AND THE CHECKER AGREED, AND CHECKED THEM ALL. Its exit code was never read, and a run that
+# printed no OK lines at all counted zero failures and passed.
+if ($shaExit -ne 0) { Write-Host "manifest: sha256sum exited $shaExit"; exit 1 }
+if ($okLines -ne $Files.Count) {
+    Write-Host ("manifest: {0} files hashed but only {1} verified -- the checker did not read them all." -f $Files.Count, $okLines)
+    exit 1
+}
 if ($bad.Count -ne 0) { exit 1 }

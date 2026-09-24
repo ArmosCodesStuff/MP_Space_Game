@@ -67,6 +67,9 @@ if (Test-Path $W) {
 New-Item -ItemType Directory -Path $W -Force | Out-Null
 # /.godot, bin and obj are build output; copying them just makes the import stale.
 robocopy $src $W /E /XD .godot .git bin obj /NFL /NDL /NJH /NJS /NP | Out-Null
+# ROBOCOPY'S EXIT CODE IS A BITFIELD: 0-7 is success (8 = some files did not copy). It was
+# discarded, so a half-copied tree went on to build, import and report on whatever arrived.
+if ($LASTEXITCODE -ge 8) { Write-Host "copy FAILED (robocopy $LASTEXITCODE): $src -> $W"; exit 2 }
 Copy-Item (Join-Path $PSScriptRoot 'SmokeTest.cs.txt') (Join-Path $W 'scripts\_Test.cs') -Force
 
 $pg = Join-Path $W 'project.godot'

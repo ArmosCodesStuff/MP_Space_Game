@@ -1,8 +1,8 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-24 01:48, on top of git commit ab81ddd. How it was verified is in the message of the
+// Taken 2026-09-24 02:14, on top of git commit 5b7bea2. How it was verified is in the message of the
 //   commit that carries this file: one starting VERIFIED: is a green verify.ps1 -Update.
-// 111 files, 29346 lines. Code only: sprites, sounds and docs are in the zip.
+// 115 files, 29819 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -14,8 +14,12 @@
 //   CharacterSelect.tscn                            12 lines   sha256 bde251d0afb9
 //   Hub.tscn                                        10 lines   sha256 3a99e0df7b39
 //   MainMenu.tscn                                    6 lines   sha256 8a8dbe40f248
+//   PLAY.bat                                         6 lines   sha256 7f0033cefcde
 //   play.ps1                                        89 lines   sha256 8879c5d80511
-//   verify.ps1                                     162 lines   sha256 f971110154f0
+//   verify.ps1                                     168 lines   sha256 9c3857ca59ee
+//   Warships.sln                                    19 lines   sha256 e41be78ae1d5
+//   launcher/Launcher.csproj                        57 lines   sha256 804b1cd151aa
+//   launcher/Main.cs                               360 lines   sha256 8fe110a7b332
 //   scripts/Abilities.cs                           440 lines   sha256 b6b9ae84062e
 //   scripts/AbilityBar.cs                           74 lines   sha256 bd8a2a1c61b4
 //   scripts/Aim.cs                                  27 lines   sha256 bb01868343ee
@@ -95,13 +99,6 @@
 //   scripts/Votes.cs                               111 lines   sha256 553528af04ee
 //   scripts/Waves.cs                               298 lines   sha256 e503ba2ab286
 //   scripts/Yard.cs                                676 lines   sha256 ecbcf026947c
-//   typecheck/GodotStub.cs                         192 lines   sha256 2c5c2967bf5c
-//   typecheck/typecheck.ps1                         99 lines   sha256 8e8a45b067c2
-//   typecheck/typecheck.sh                          61 lines   sha256 c94fe5471263
-//   tools/analyse/analysers.editorconfig            15 lines   sha256 45fdb7258163
-//   tools/analyse/run.ps1                           46 lines   sha256 a8a14f6dfd92
-//   tools/analyse/run.sh                            16 lines   sha256 e6f2cd50f0c4
-//   tools/analyse/xref.py                           35 lines   sha256 2e1d2a7688ed
 //   tools/find-godot.ps1                            53 lines   sha256 fabe4c75faae
 //   tools/finish_ships.ps1                         132 lines   sha256 2d7e2d5de2e4
 //   tools/gain.ps1                                  44 lines   sha256 41f4d8f93189
@@ -111,6 +108,11 @@
 //   tools/manifest.ps1                              62 lines   sha256 2edb5f604152
 //   tools/map.py                                   232 lines   sha256 01a23fceab11
 //   tools/pack.ps1                                 249 lines   sha256 d827cee82f7c
+//   tools/snapshot.ps1                             103 lines   sha256 bdcb9f8150b0
+//   tools/analyse/analysers.editorconfig            15 lines   sha256 45fdb7258163
+//   tools/analyse/run.ps1                           62 lines   sha256 794cbfa66944
+//   tools/analyse/run.sh                            16 lines   sha256 e6f2cd50f0c4
+//   tools/analyse/xref.py                           35 lines   sha256 2e1d2a7688ed
 //   tools/screens/run.ps1                          128 lines   sha256 9e8d569b0b94
 //   tools/screens/run.sh                            42 lines   sha256 73a5b3c63476
 //   tools/screens/Shots.cs.txt                     664 lines   sha256 8e067c22aaa8
@@ -119,7 +121,9 @@
 //   tools/smoketest/run.sh                          57 lines   sha256 9ac9cbdf9115
 //   tools/smoketest/SmokeTest.cs.txt              7379 lines   sha256 d1fdc42c9ebc
 //   tools/smoketest/wan.py                          61 lines   sha256 97db24aa3f91
-//   tools/snapshot.ps1                              94 lines   sha256 3ca9bfe56185
+//   typecheck/GodotStub.cs                         192 lines   sha256 2c5c2967bf5c
+//   typecheck/typecheck.ps1                         99 lines   sha256 8e8a45b067c2
+//   typecheck/typecheck.sh                          61 lines   sha256 c94fe5471263
 //==============================================================================
 
 //==============================================================================
@@ -228,6 +232,17 @@ script = ExtResource("2_sess")
 script = ExtResource("1_menu")
 
 //==============================================================================
+// FILE: PLAY.bat
+// 6 lines   sha256 7f0033cefcde
+//==============================================================================
+@echo off
+REM Double-click this to play. It is one line: PowerShell refuses a .ps1 on a double-click by
+REM default, and -ExecutionPolicy Bypass answers that for this one command without changing
+REM anything on the machine. See play.ps1 for what it does, and docs\README.md for the rest.
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0play.ps1" %*
+if errorlevel 1 pause
+
+//==============================================================================
 // FILE: play.ps1
 // 89 lines   sha256 8879c5d80511
 //==============================================================================
@@ -323,7 +338,7 @@ if ($Two) {
 
 //==============================================================================
 // FILE: verify.ps1
-// 162 lines   sha256 f971110154f0
+// 168 lines   sha256 9c3857ca59ee
 //==============================================================================
 # The whole bar, in one command:
 #
@@ -371,7 +386,12 @@ Step 'typecheck' {
 }
 
 Step 'build' {
-    $o = & dotnet build -v q -nologo 2>&1
+    # -t:Rebuild, OR THIS STEP IS A NO-OP. An incremental build of an unchanged tree emits no
+    # warnings whatever the code contains: measured on a project with a live CS0219, cold
+    # build said '1 Warning(s)' and the very next build said '0 Warning(s)'. Every bar after
+    # the first was therefore asking a question that could only be answered clean.
+    # toolsnalyseun.ps1 already knew this and had the flag; this step did not.
+    $o = & dotnet build -t:Rebuild -v q -nologo 2>&1
     $o | Select-String 'Warning\(s\)|Error\(s\)|error CS' | ForEach-Object { Write-Host "  $($_.Line.Trim())" }
     # ANCHORED, for the same reason: '10 Warning(s)' and '10 Error(s)' both CONTAIN the
     # unanchored pattern, so a build with ten of each reported clean.
@@ -487,6 +507,457 @@ foreach ($k in $results.Keys) { Write-Host ("  {0,-34} {1}" -f $k, $(if ($result
 $failed = @($results.Keys | Where-Object { -not $results[$_] })
 if ($failed.Count -eq 0) { Write-Host "ALL CHECKS PASSED"; exit 0 }
 Write-Host ("FAILED: {0}" -f ($failed -join ', ')); exit 1
+
+//==============================================================================
+// FILE: Warships.sln
+// 19 lines   sha256 e41be78ae1d5
+//==============================================================================
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2012
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Warships", "Warships.csproj", "{6A01195D-5FF7-466E-BBDE-B7698B012B53}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+	Debug|Any CPU = Debug|Any CPU
+	ExportDebug|Any CPU = ExportDebug|Any CPU
+	ExportRelease|Any CPU = ExportRelease|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{6A01195D-5FF7-466E-BBDE-B7698B012B53}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6A01195D-5FF7-466E-BBDE-B7698B012B53}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6A01195D-5FF7-466E-BBDE-B7698B012B53}.ExportDebug|Any CPU.ActiveCfg = ExportDebug|Any CPU
+		{6A01195D-5FF7-466E-BBDE-B7698B012B53}.ExportDebug|Any CPU.Build.0 = ExportDebug|Any CPU
+		{6A01195D-5FF7-466E-BBDE-B7698B012B53}.ExportRelease|Any CPU.ActiveCfg = ExportRelease|Any CPU
+		{6A01195D-5FF7-466E-BBDE-B7698B012B53}.ExportRelease|Any CPU.Build.0 = ExportRelease|Any CPU
+	EndGlobalSection
+EndGlobal
+
+//==============================================================================
+// FILE: launcher/Launcher.csproj
+// 57 lines   sha256 804b1cd151aa
+//==============================================================================
+<!-- THE LAUNCHER. A separate program on purpose: a running executable cannot overwrite itself, so
+     something that is not the game has to replace the game, and a build that bricks itself can
+     still be fixed by the thing that did not brick.
+
+     IT IS NOT IN Warships.sln, DELIBERATELY. verify.ps1 runs `dotnet build` at the repo root, which
+     takes the solution; adding this would put a WinForms project's warnings in the game's gate and
+     its build time in every -Quick. Its compile gate is TreatWarningsAsErrors below, run by
+     tools/pack.ps1.
+
+     THE ONE LINE THAT MATTERS is the <Compile Include> at the bottom. Every decision this program
+     makes lives in scripts/Builds.cs, which is compiled into the GAME as well, so typecheck.ps1
+     sees it, xref.py sees it, and the smoke test can call it. Nothing in this project may grow a
+     decision of its own; if something here needs an `if`, it belongs in Builds.cs or in pack.ps1.
+
+     SIZE: ~65-70 MB published. "Tiny" is the code, not the file. Self-contained is the only setting
+     a player can run without first installing the .NET 8 Desktop Runtime, and a prerequisite dialog
+     would defeat the whole point. To trade that for ~250 KB and a prerequisite, set SelfContained
+     to false: it is a property here, not a redesign. -->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <!-- NOT "Warships": the launcher sits in the same folder as the game it starts, and the
+         game's own exe is Warships.exe (export_presets.cfg, and BUILD.txt's launch= field).
+         Two files of one name in one folder is a launcher that replaces itself. -->
+    <AssemblyName>WarshipsLauncher</AssemblyName>
+    <RootNamespace>Warships.Launcher</RootNamespace>
+
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <!-- SELF-CONTAINED AND WINFORMS IS 145 MB UNCOMPRESSED, which is 15x the game's own code part
+         and the one file a player fetches by hand. Compressing the bundle is one property and
+         costs a slower FIRST start only (the runtime is unpacked to a temp folder once, then
+         cached). Trimming would be the real fix and WinForms cannot be trimmed. -->
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <!-- WinForms does not support trimming; leaving it on produces a program that starts and then
+         throws on the first control it reflects over. -->
+    <PublishTrimmed>false</PublishTrimmed>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- THE SHARED MECHANISM. One copy, compiled into both programs, so the game's ladder proves
+         the launcher's logic. -->
+    <Compile Include="..\scripts\Builds.cs" Link="Builds.cs" />
+  </ItemGroup>
+</Project>
+
+//==============================================================================
+// FILE: launcher/Main.cs
+// 360 lines   sha256 8fe110a7b332
+//==============================================================================
+// THE DUMB LAUNCHER: the changelog, an UPDATE button and PLAY, and nothing else.
+//
+// THE REAL MAIN MENU STAYS IN THE GAME. It is a live diorama with character creation and the whole
+// join UI in it; a second copy of that here would be two UIs to keep in step, which is the thing
+// this design exists to avoid.
+//
+// THIS FILE CONTAINS NO DECISIONS. Every branch below is a BuildOutcome that scripts/Builds.cs
+// already decided, switched on to set two Enabled flags and one label -- which is why the smoke
+// test proving Builds.cs proves this program too. If something here ever seems to need an `if` of
+// its own, it belongs in Builds.cs (where the ladder can see it) or in tools/pack.ps1 (where it can
+// be changed). THIS PROGRAM CAN NEVER BE CHANGED ONCE IT IS IN PLAYERS' HANDS -- there is nothing
+// to update it. That is the constraint everything here is shaped by.
+//
+// THE TWO HEDGES, both of which have to be in v1 or "frozen" is a wish rather than a plan:
+//   * BUILD.txt carries `schema`. A release numbered higher than Builds.Schema stops with a
+//     message and a URL instead of breaking.
+//   * `source.txt` beside this exe overrides the base URL, so the host can move -- and so a test
+//     install can be pointed at a file:/// folder -- without a new launcher.
+using System;
+using System.Diagnostics;
+using System.Drawing;
+using System.IO;
+using System.Net.Http;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+
+namespace Warships.Launcher
+{
+    // The release over HTTPS. The GAME never carries System.Net.Http: IBuildSource is the seam, and
+    // the checks implement it over a folder instead.
+    internal sealed class HttpBuildSource : IBuildSource
+    {
+        private readonly string _base;
+        private readonly HttpClient _http;
+
+        public HttpBuildSource(string baseUrl)
+        {
+            _base = baseUrl.EndsWith("/", StringComparison.Ordinal) ? baseUrl : baseUrl + "/";
+            // A folder can be a source too, which is what source.txt is for.
+            _http = new HttpClient { Timeout = TimeSpan.FromMinutes(30) };
+            _http.DefaultRequestHeaders.UserAgent.ParseAdd("WarshipsLauncher/1");
+        }
+
+        public string Text(string name)
+        {
+            if (_base.StartsWith("file:", StringComparison.OrdinalIgnoreCase))
+                return File.ReadAllText(new Uri(_base + name).LocalPath);
+            return _http.GetStringAsync(_base + name).GetAwaiter().GetResult();
+        }
+
+        public Stream Open(string name)
+        {
+            if (_base.StartsWith("file:", StringComparison.OrdinalIgnoreCase))
+                return File.OpenRead(new Uri(_base + name).LocalPath);
+            var r = _http.GetAsync(_base + name, HttpCompletionOption.ResponseHeadersRead)
+                         .GetAwaiter().GetResult();
+            r.EnsureSuccessStatusCode();
+            return r.Content.ReadAsStreamAsync().GetAwaiter().GetResult();
+        }
+    }
+
+    internal sealed class Shell : Form
+    {
+        // Where releases live. Overridden by source.txt beside this exe. The `latest/download`
+        // path is a permanent redirect to the newest release's asset of that name: no API call, no
+        // token, no rate limit, and the asset NAMES are ours rather than GitHub's schema.
+        private const string DefaultBase =
+            "https://github.com/ArmosCodesStuff/MP_Space_Game/releases/latest/download/";
+
+        // Environment.ProcessPath, not AppContext.BaseDirectory: under PublishSingleFile the latter
+        // has meant the extraction folder, and writing an update there would update nothing.
+        private readonly string _root =
+            Path.GetDirectoryName(Environment.ProcessPath ?? Application.ExecutablePath);
+        private readonly RichTextBox _notes = new RichTextBox();
+        private readonly Label _status = new Label();
+        private readonly ProgressBar _bar = new ProgressBar();
+        private readonly Button _update = new Button();
+        private readonly Button _play = new Button();
+
+        private IBuildSource _src;
+        private BuildInfo _local, _remote;
+        private BuildPlan _plan;
+        private string _launch;
+
+        internal Shell()
+        {
+            Text = "Warships";
+            ClientSize = new Size(760, 520);
+            StartPosition = FormStartPosition.CenterScreen;
+            BackColor = Color.FromArgb(18, 18, 20);
+            MinimumSize = new Size(560, 400);
+
+            _notes.ReadOnly = true;
+            _notes.DetectUrls = false;
+            // BOTH bars. The notes are hard-wrapped in the record, but at a width the record chose
+            // and not one this window knows, so a line CAN be wider than the box -- and with no
+            // horizontal bar the end of it is simply unreachable.
+            _notes.ScrollBars = RichTextBoxScrollBars.Both;
+            _notes.WordWrap = false;                       // wrapping hard-wrapped text reads worse
+            _notes.Font = NoteFont;
+            _notes.BackColor = Color.FromArgb(24, 24, 28);
+            _notes.ForeColor = Plain;
+            _notes.BorderStyle = BorderStyle.None;
+            _notes.Dock = DockStyle.Fill;
+            _notes.Text = "Checking for updates...";
+
+            _status.Dock = DockStyle.Top;
+            _status.Height = 26;
+            _status.ForeColor = Color.FromArgb(180, 180, 190);
+            _status.TextAlign = ContentAlignment.MiddleLeft;
+            _status.Padding = new Padding(4, 0, 0, 0);
+
+            _bar.Dock = DockStyle.Bottom;
+            _bar.Height = 6;
+            _bar.Style = ProgressBarStyle.Continuous;
+            _bar.Visible = false;
+
+            var row = new Panel { Dock = DockStyle.Bottom, Height = 52 };
+            foreach (var b in new[] { _update, _play })
+            {
+                b.Size = new Size(150, 36);
+                b.FlatStyle = FlatStyle.Flat;
+                b.ForeColor = Color.White;
+                b.BackColor = Color.FromArgb(44, 44, 52);
+                b.Enabled = false;
+                row.Controls.Add(b);
+            }
+            _update.Text = "UPDATE";
+            _play.Text = "PLAY";
+            _play.BackColor = Color.FromArgb(38, 82, 56);
+            row.Resize += (s, e) =>
+            {
+                _play.Location = new Point(row.Width - 162, 8);
+                _update.Location = new Point(row.Width - 324, 8);
+            };
+
+            _update.Click += (s, e) => RunUpdate();
+            _play.Click += (s, e) => Play();
+
+            Controls.Add(_notes);
+            Controls.Add(row);
+            Controls.Add(_bar);
+            Controls.Add(_status);
+
+            Shown += (s, e) => Look();
+        }
+
+        // ── the decision, once, at startup ───────────────────────────────────
+        private void Look()
+        {
+            // A journal on disk outranks everything: an update was interrupted between the download
+            // and the swap, and the install is neither one build nor the other until it is finished.
+            if (Builds.Resume(_root)) Say("finished an interrupted update");
+
+            string baseUrl = DefaultBase;
+            try
+            {
+                string over = Path.Combine(_root, Builds.SourceName);
+                if (File.Exists(over)) baseUrl = File.ReadAllText(over).Trim();
+            }
+            catch (IOException) { }
+
+            _src = new HttpBuildSource(baseUrl);
+            _local = Read(() => Builds.ReadInfo(File.ReadAllText(Path.Combine(_root, Builds.InfoName))));
+            _remote = Read(() => Builds.ReadInfo(_src.Text(Builds.InfoName)));
+
+            string malformed = null;
+            BuildDiff diff = null;
+            if (_remote != null && _remote.Schema <= Builds.Schema)
+            {
+                var want = Read(() => Builds.ReadManifest(_src.Text(_remote.Manifest)));
+                malformed = Builds.Validate(_remote, want);
+                if (malformed == null && (_local == null || _local.Build != _remote.Build))
+                {
+                    var ignore = new[] { _remote.Manifest, Builds.InfoName, _remote.Notes };
+                    diff = Builds.Compare(_root, want, ignore);
+                    if (!diff.Same) _plan = Builds.Plan(_remote, diff);
+                }
+            }
+
+            string say;
+            BuildOutcome what = Builds.Decide(_root, _local, _remote, diff, malformed, out say);
+            _launch = (_remote ?? _local)?.Launch;
+
+            // EVERY ROW ENDS THE SAME WAY: PLAY stays on unless there is genuinely nothing to play.
+            bool haveGame = _launch != null && File.Exists(Path.Combine(_root, _launch));
+            _play.Enabled = haveGame;
+            _update.Enabled = what == BuildOutcome.UpdateReady || what == BuildOutcome.NotInstalled;
+            if (what == BuildOutcome.UpdateReady && _plan != null)
+                say += string.Format(" -- {0:0.0} MB", _plan.Bytes / 1048576.0);
+            if (what == BuildOutcome.LauncherTooOld) say += ": " + DefaultBase;
+            Say(say);
+
+            ShowNotes(Read(() => _src.Text((_remote ?? _local)?.Notes ?? "NOTES.txt"))
+                      ?? "(no release notes -- " + say + ")");
+
+            if (what == BuildOutcome.Interrupted) Look();          // it is finished now; ask again
+        }
+
+        // ── HOW THE NOTES ARE DRAWN ───────────────────────────────────────────────────────
+        // A SECTION IS A HEADING IN SQUARE BRACKETS ON ITS OWN LINE, and tools\pack.ps1 writes
+        // them. This end knows how to DRAW a section and nothing about which sections exist:
+        // the brackets are stripped, the heading is drawn bold in its row colour, and the lines
+        // under it take that row body colour until the next heading.
+        //
+        // AN UNKNOWN HEADING DRAWS PLAINLY rather than being refused, and that is the whole
+        // point: a release can add a section and every launcher already in the world renders it
+        // correctly without being replaced. Deciding WHAT the sections are stays on the repo
+        // side of the line, where a mistake can be fixed.
+        private sealed class NoteStyle
+        {
+            public string Head;        // the bracketed text, matched whole, ignoring case
+            public Color Title, Body;
+        }
+        private static readonly Color Plain = Color.FromArgb(210, 210, 215);
+        private static readonly Font NoteFont = new Font("Consolas", 9f);
+        private static readonly Font NoteBold = new Font("Consolas", 9f, FontStyle.Bold);
+        private static readonly NoteStyle[] Styles =
+        {
+            // The standing notice: amber, because it is the one part a player must ACT on.
+            new NoteStyle { Head = "FIRST TIME", Title = Color.FromArgb(255, 190,  90),
+                            Body = Color.FromArgb(235, 200, 150) },
+            // The hard block, and the only section that asks a player to change their machine.
+            // Red, because "this cannot be undone" has to be read before it is acted on.
+            new NoteStyle { Head = "IF WINDOWS BLOCKS IT OUTRIGHT", Title = Color.FromArgb(255, 110, 100),
+                            Body = Color.FromArgb(240, 180, 175) },
+            // What actually changed: the heading stands out, the entry reads as ordinary text.
+            new NoteStyle { Head = "GAME UPDATES", Title = Color.FromArgb(120, 200, 255),
+                            Body = Plain },
+        };
+        private static NoteStyle StyleFor(string head)
+        {
+            foreach (var st in Styles)
+                if (string.Equals(st.Head, head, StringComparison.OrdinalIgnoreCase)) return st;
+            return new NoteStyle { Head = head, Title = Plain, Body = Plain };
+        }
+
+        private void ShowNotes(string text)
+        {
+            _notes.Clear();
+            var body = Plain;
+            foreach (string raw in (text ?? "").Replace("\r\n", "\n").Replace("\r", "\n").Split('\n'))
+            {
+                string line = raw.TrimEnd();
+                bool head = line.Length > 2 && line[0] == '[' && line[line.Length - 1] == ']';
+                if (head)
+                {
+                    var st = StyleFor(line.Substring(1, line.Length - 2).Trim());
+                    body = st.Body;
+                    Put(line.Substring(1, line.Length - 2).Trim(), st.Title, NoteBold);
+                }
+                else Put(raw, body, NoteFont);
+            }
+            _notes.SelectionStart = 0;
+            _notes.ScrollToCaret();
+        }
+
+        private void Put(string line, Color colour, Font font)
+        {
+            _notes.SelectionStart = _notes.TextLength;
+            _notes.SelectionLength = 0;
+            _notes.SelectionColor = colour;
+            _notes.SelectionFont = font;
+            _notes.AppendText(line + Environment.NewLine);
+        }
+
+        // ── the update ───────────────────────────────────────────────────────
+        private async void RunUpdate()
+        {
+            // Asked BEFORE a byte is downloaded. A live Windows image cannot be renamed over.
+            if (_launch != null && Builds.Locked(Path.Combine(_root, _launch)))
+            { Say("close the game before updating"); return; }
+
+            _update.Enabled = false;
+            _play.Enabled = false;
+            _bar.Visible = true;
+            try
+            {
+                BuildPlan plan = _plan;
+                BuildInfo remote = _remote;
+                IBuildSource src = _src;
+                string root = _root;
+                if (plan == null)                                   // a fresh install: take it all
+                {
+                    var want = Builds.ReadManifest(src.Text(remote.Manifest));
+                    var ignore = new[] { remote.Manifest, Builds.InfoName, remote.Notes };
+                    plan = Builds.Plan(remote, Builds.Compare(root, want, ignore));
+                }
+                await Task.Run(() => Builds.Apply(root, src, remote, plan, Progress));
+                _bar.Visible = false;
+                Say("updated to " + remote.Build);
+                Look();
+            }
+            catch (Exception ex)
+            {
+                // ROWS 10, 11 AND 12 ALL LAND HERE, and all three leave the install exactly as it
+                // was: nothing outside .staging is written until every byte has been verified.
+                // There is no automatic retry -- a checksum that does not match is a bad release or
+                // an interfering proxy, not a blip, and retrying turns one into a loop.
+                _bar.Visible = false;
+                Say("update failed: " + ex.Message + " -- the game you have is untouched");
+                _update.Enabled = true;
+                _play.Enabled = _launch != null && File.Exists(Path.Combine(_root, _launch));
+            }
+        }
+
+        private void Progress(string what, double frac)
+        {
+            if (IsDisposed) return;
+            try
+            {
+                BeginInvoke((Action)(() =>
+                {
+                    _status.Text = what;
+                    _bar.Value = Math.Max(0, Math.Min(100, (int)(frac * 100)));
+                }));
+            }
+            catch (InvalidOperationException) { }
+        }
+
+        // ── play ─────────────────────────────────────────────────────────────
+        private void Play()
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = Path.Combine(_root, _launch),
+                    WorkingDirectory = _root,
+                    UseShellExecute = false,
+                });
+                // EXIT rather than wait: the launcher must not be holding a handle in the folder
+                // the next update has to replace.
+                Application.Exit();
+            }
+            catch (Exception ex) { Say("could not start the game: " + ex.Message); }
+        }
+
+        private void Say(string s) { _status.Text = s; }
+
+        private static T Read<T>(Func<T> f) where T : class
+        {
+            try { return f(); } catch (Exception) { return null; }
+        }
+    }
+
+    internal static class Program
+    {
+        [STAThread]
+        private static void Main()
+        {
+            // Spelled out rather than ApplicationConfiguration.Initialize(): that is generated by a
+            // source generator, and a program that can never be rebuilt should not depend on one.
+            Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
+            Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
+            Application.Run(new Shell());
+        }
+    }
+}
 
 //==============================================================================
 // FILE: scripts/Abilities.cs
@@ -18868,505 +19339,6 @@ public partial class Yard : Node2D
 }
 
 //==============================================================================
-// FILE: typecheck/GodotStub.cs
-// 192 lines   sha256 2c5c2967bf5c
-//==============================================================================
-// FALLBACK ONLY. GodotSharp.dll is present in this folder, so typecheck.sh
-// references the real assembly and ignores this file entirely. It is kept for
-// environments without the dll. Do not trust it over the real thing: it has
-// twice passed code that could not compile in Godot.
-
-// Minimal Godot surface so Roslyn can type-check the game's own logic.
-namespace Godot {
- public struct Vector2 { public Vector2 Lerp(Vector2 to, float w) => this; public float X,Y; public Vector2(float x,float y){X=x;Y=y;}
-   public float Length()=>0; public float LengthSquared()=>0; public Vector2 Normalized()=>this;
-   public float DistanceTo(Vector2 o)=>0; public float DistanceSquaredTo(Vector2 o)=>0;
-   public float Dot(Vector2 o)=>0; public float Angle()=>0; public Vector2 Rotated(float a)=>this;
-   public Vector2 MoveToward(Vector2 t,float d)=>this;
-   public static Vector2 Zero=>default; public static Vector2 One=>default; public static Vector2 Right=>default; public static Vector2 Left=>default; public static Vector2 Up=>default; public static Vector2 Down=>default; public static Vector2 operator+(Vector2 a,Vector2 b)=>a;
-   public static Vector2 operator-(Vector2 a,Vector2 b)=>a; public static Vector2 operator-(Vector2 a)=>a;
-   public static Vector2 operator*(Vector2 a,float b)=>a; public static Vector2 operator*(float b,Vector2 a)=>a;
-   public static Vector2 operator/(Vector2 a,float b)=>a; public static bool operator==(Vector2 a,Vector2 b)=>true;
-   public static bool operator!=(Vector2 a,Vector2 b)=>false; public override bool Equals(object o)=>true; public override int GetHashCode()=>0; }
- public struct Vector2I { public int X,Y; public Vector2I(int x,int y){X=x;Y=y;} }
- public struct Rect2I { public Vector2I Position,Size; }
- public struct Color { public float R,G,B,A; public Color(float r,float g,float b,float a=1){R=r;G=g;B=b;A=a;}
-   public static Color operator*(Color a,float b)=>a; public Color Lightened(float f)=>this; public Color Darkened(float f)=>this; public Color Lerp(Color c,float f)=>this; }
- public static class Colors { public static Color White, Red, Green, Blue, Black; }
- public struct Rect2 { public Vector2 Position,Size; public Rect2(Vector2 p,Vector2 s){Position=p;Size=s;} public Rect2(float x,float y,float w,float h){Position=default;Size=default;} public Rect2 Abs()=>this; public bool HasPoint(Vector2 p)=>true; }
- public static class Mathf { public static float LerpAngle(float a, float b, float w)=>a; public static float Wrap(float v, float lo, float hi)=>v; public const float Tau=6.28f, Pi=3.14f;
-   public static float Cos(float a)=>0; public static float Sin(float a)=>0; public static float Sqrt(float a)=>0; public static double Sqrt(double a)=>0;
-   public static float Abs(float a)=>0; public static double Abs(double a)=>0; public static int Abs(int a)=>0;
-   public static float Min(float a,float b)=>0; public static double Min(double a,double b)=>0; public static int Min(int a,int b)=>0;
-   public static float Max(float a,float b)=>0; public static double Max(double a,double b)=>0; public static int Max(int a,int b)=>0;
-   public static float Clamp(float v,float a,float b)=>0; public static double Clamp(double v,double a,double b)=>0; public static int Clamp(int v,int a,int b)=>0;
-   public static float Pow(float a,float b)=>0; public static double Pow(double a,double b)=>0;
-   public static float Sign(float a)=>0; public static double Sign(double a)=>0; public static int Sign(int a)=>0;
-   public static int CeilToInt(float a)=>0; public static int CeilToInt(double a)=>0;
-   public static int FloorToInt(float a)=>0; public static int FloorToInt(double a)=>0;
-   public static int RoundToInt(float a)=>0; public static int RoundToInt(double a)=>0;
-   public static float Round(float a)=>0; public static double Round(double a)=>0;
-   public static float DegToRad(float a)=>0; public static double DegToRad(double a)=>0;
-   public static float LinearToDb(float v)=>0; public static float Lerp(float a,float b,float t)=>0; public static double Lerp(double a,double b,double t)=>0;
-   public static float Log(float a)=>0; public static double Log(double a)=>0; public static float Exp(float a)=>0; public static double Exp(double a)=>0; }
-public static class Performance { public enum Monitor { ObjectCount, ObjectNodeCount, ObjectOrphanNodeCount, MemoryStatic } public static double GetMonitor(Monitor m)=>0; }
- public static class AudioServer { public static int GetBusIndex(string n)=>0; public static void SetBusMute(int i,bool m){} public static void SetBusVolumeDb(int i,float db){} }
- public static class GD { public static float Randf()=>0; public static uint Randi()=>0; public static void Print(object o){} public static void PushWarning(object o){}
-   public static T Load<T>(string p) where T:class=>null; }
- public class GodotObject { public ulong GetInstanceId()=>0; public bool IsQueuedForDeletion()=>false; public void QueueFree(){} }
- public class Node : GodotObject { public Node GetParent()=>this; public MultiplayerApi Multiplayer => new MultiplayerApi();
-   public void SetMultiplayerAuthority(int id, bool recursive = true) { }
-   public int GetMultiplayerAuthority() => 1;
-   public bool IsMultiplayerAuthority() => true;
-   public void Rpc(string method, params object[] args) { }
-   public void RpcId(long peerId, string method, params object[] args) { }
-   public double GetProcessDeltaTime()=>0.016; public string Name; public Node Owner; public void AddChild(Node n){} public void RemoveChild(Node n){}
-   public Godot.Collections.Array<Node> GetChildren()=>null; public int GetChildCount()=>0; public Node GetChild(int i)=>null;
-   public SceneTree GetTree()=>null; public Viewport GetViewport()=>null; public Window GetWindow()=>null; public virtual void _Ready(){} public virtual void _Process(double d){}
-   public virtual void _Input(InputEvent e){} public virtual void _UnhandledInput(InputEvent e){} public void SetProcess(bool b){} }
- public class CanvasItem : Node { public bool Visible; public Color Modulate; public int ZIndex; public TextureRepeatEnum TextureRepeat; public enum TextureRepeatEnum { Disabled, Enabled } public void QueueRedraw(){}
-   public virtual void _Draw(){} public void DrawCircle(Vector2 p,float r,Color c){} public void DrawArc(Vector2 p,float r,float a,float b,int n,Color c,float w=1){}
-   public void DrawLine(Vector2 a,Vector2 b,Color c,float w=1){} public void DrawRect(Rect2 r,Color c,bool f=true,float w=1){}
-   public void DrawPolygon(Vector2[] p,Color[] c){} public void DrawTexture(Texture2D t,Vector2 p){} public void DrawSetTransform(Vector2 p,float r,Vector2 s){} public void DrawString(Font f,Vector2 p,string s,HorizontalAlignment h,float w,int sz,Color c){}
-   public Vector2 GetGlobalMousePosition()=>default; }
- public class Node2D : CanvasItem { public Vector2 Position { get; set; } public Vector2 GlobalPosition { get; set; } public Vector2 Scale { get; set; } public float Rotation { get; set; } public Vector2 ToLocal(Vector2 v)=>v; }
- public class Sprite2D : Node2D { public Texture2D Texture; public bool Centered, RegionEnabled; public Rect2 RegionRect; }
- public class Area2D : Node2D { public bool Monitoring, Monitorable; }
- public class CollisionShape2D : Node2D { public Shape2D Shape; }
- public class Shape2D : Resource {} public class CircleShape2D : Shape2D { public float Radius; }
- public class Camera2D : Node2D { public Vector2 Zoom; public void MakeCurrent(){} }
- public class CanvasLayer : Node { public int Layer; public bool Visible; public Vector2 Scale { get; set; } }
- public class Resource : GodotObject {} public class ImageTexture : Texture2D { public static ImageTexture CreateFromImage(Image i)=>null; }
- public class Image : Resource { public enum Format { Rgba8 } public static Image CreateEmpty(int w,int h,bool m,Format f)=>null; public void Fill(Color c){} public void SetPixel(int x,int y,Color c){} }
- public class Texture2D : Resource { public int GetHeight()=>0; public int GetWidth()=>0; public Vector2 GetSize()=>default; } public class Font : Resource {
-    public Vector2 GetStringSize(string t, HorizontalAlignment a=HorizontalAlignment.Left, float w=-1, int size=16)=>default;} public class Theme : Resource {
-   public void SetStylebox(string a,string b,StyleBox s){} public void SetColor(string a,string b,Color c){} public void SetFontSize(string a,string b,int i){} }
- public class StyleBox : Resource {} public class StyleBoxFlat : StyleBox { public Color BgColor,BorderColor;
-   public int CornerRadiusTopLeft,CornerRadiusTopRight,CornerRadiusBottomLeft,CornerRadiusBottomRight,BorderWidthTop,BorderWidthBottom,BorderWidthLeft,BorderWidthRight,ContentMarginLeft,ContentMarginRight,ContentMarginTop,ContentMarginBottom; }
- public static class ThemeDB { public static Font FallbackFont; }
- public class Control : CanvasItem { public virtual void _GuiInput(InputEvent e){} public void AcceptEvent(){} public MouseFilterEnum MouseFilter; public enum MouseFilterEnum { Stop, Pass, Ignore } public Vector2 Position,Size,CustomMinimumSize; public Theme Theme; public SizeFlags SizeFlagsHorizontal;
-   public FocusModeEnum FocusMode; public void SetAnchorsPreset(LayoutPreset p){} public Vector2 GetCombinedMinimumSize()=>default; public void ReleaseFocus(){}
-   public void AddThemeStyleboxOverride(string n,StyleBox s){} public void AddThemeColorOverride(string n,Color c){} public void AddThemeFontSizeOverride(string n,int i){} public void AddThemeConstantOverride(string n,int i){}
-   public StyleBox GetThemeStylebox(string n)=>null;
-   public enum SizeFlags { Fill, Expand, ExpandFill, ShrinkCenter } public enum LayoutPreset { FullRect } public enum FocusModeEnum { None, All } }
- public class Label : Control { public string Text; public bool ClipText; public TextServer.OverrunBehavior TextOverrunBehavior; public HorizontalAlignment HorizontalAlignment; public TextServer.AutowrapMode AutowrapMode; }
- public class Button : Control { public string Text; public bool Disabled; public HorizontalAlignment Alignment; public TextServer.AutowrapMode AutowrapMode;
-   public bool ClipText; public TextServer.OverrunBehavior TextOverrunBehavior; public event System.Action Pressed; }
- public class LineEdit : Control { public string Text, PlaceholderText; public event System.Action<string> TextChanged; }
- public class BoxContainer : Control {} public class HBoxContainer : BoxContainer {} public class VBoxContainer : BoxContainer {}
- public class PanelContainer : Control {} public class CenterContainer : Control {}
- public class ScrollContainer : Control { public ScrollMode HorizontalScrollMode; public enum ScrollMode { Disabled, Auto } }
- public class ColorRect : Control { public Color Color; }
- public class HSeparator : Control {}
- public static class TextServer { public enum AutowrapMode { Off, WordSmart } public enum OverrunBehavior { TrimEllipsis } }
- public enum HorizontalAlignment { Left, Center, Right }
- public class SceneTree : GodotObject { public Error ChangeSceneToFile(string p)=>default; public void ReloadCurrentScene(){} public void Quit(){} }
- public class Viewport : GodotObject { public Vector2 GetMousePosition()=>default; public Rect2 GetVisibleRect()=>default; public void SetInputAsHandled(){} public Control GuiGetFocusOwner()=>null; }
- public class Window : Viewport { public Vector2I Size, ContentScaleSize, Position; public ModeEnum Mode; public bool Borderless; public ContentScaleModeEnum ContentScaleMode; public ContentScaleAspectEnum ContentScaleAspect; public enum ContentScaleModeEnum { Disabled, CanvasItems, Viewport } public enum ContentScaleAspectEnum { Ignore, Keep, Expand }
-   public enum ModeEnum { Windowed, Fullscreen, ExclusiveFullscreen } }
- public class InputEvent : Resource { public bool IsAction(string a)=>false; }
- public class InputEventKey : InputEvent { public Key Keycode, PhysicalKeycode; public bool Pressed, Echo, CtrlPressed, MetaPressed, ShiftPressed, AltPressed; }
- public class InputEventMouseButton : InputEvent { public MouseButton ButtonIndex; public bool Pressed; public Vector2 Position; }
- public class InputEventMouseMotion : InputEvent { public Vector2 Position, Relative; }
- public static class Input { public static bool IsKeyPressed(Key k)=>false; public static bool IsMouseButtonPressed(MouseButton b)=>false; public static Vector2 GetMousePosition()=>default; }
- public enum Key { Key0, Key1, Key2, Key3, Key4, Key5, Key6, Key7, W,A,S,D,E,H,R,F,G,C,V,Escape,F1,F2,Ctrl,Shift,Alt,Space,Enter,Key8,Key9 } public enum MouseButton { Left,Right,WheelUp,WheelDown }
- public static class DisplayServer { public static Rect2I ScreenGetUsableRect()=>default; public static int WindowGetCurrentScreen()=>0; public static Rect2I ScreenGetUsableRect(int i)=>default; public static Vector2I ScreenGetSize(int i)=>default; public static Vector2I ScreenGetSize()=>default; }
- public static class ProjectSettings { public static string GlobalizePath(string p)=>p; }
- public class FileAccess : GodotObject, System.IDisposable { public enum ModeFlags { Read, Write } public static bool FileExists(string p)=>false;
-   public static FileAccess Open(string p,ModeFlags m)=>null; public static Error GetOpenError()=>default;
-   public string GetAsText()=>""; public void StoreString(string s){} public void Dispose(){} }
- public static class DirAccess { public static Error RemoveAbsolute(string p)=>default; public static Error RenameAbsolute(string a,string b)=>default; }
- public enum Error { Ok, Failed }
- public class AudioStreamPlayer : Node { public AudioStream Stream; public float VolumeDb; public bool Playing; public void Play(){}
-   public AudioStreamGeneratorPlayback GetStreamPlayback()=>null; }
- public class AudioStream : Resource {} public class AudioStreamGenerator : AudioStream { public float MixRate, BufferLength; }
- public class AudioStreamGeneratorPlayback : Resource { public int GetFramesAvailable()=>0; public void PushBuffer(Vector2[] b){} }
- public struct Callable { public static Callable From(System.Action a)=>default; public void CallDeferred(){} }
- namespace Collections { public class Array<T> : System.Collections.Generic.List<T> {} }
-}
-
-// ── multiplayer surface used by Warships (stub only; the real API lives in Godot) ──
-namespace Godot
-{
-    // Base types the appended stubs derive from. Without these, every class below
-    // becomes an error type -- and Roslyn stops before it ever binds method bodies,
-    // so NOTHING in scripts/ gets checked. That is how a broken stub hides real bugs.
-    public class RefCounted : GodotObject { }
-    public struct Variant
-    {
-        public static implicit operator Variant(int v) => default;
-        public static implicit operator Variant(float v) => default;
-        public static implicit operator Variant(double v) => default;
-        public static implicit operator Variant(bool v) => default;
-        public static implicit operator Variant(string v) => default;
-        public static implicit operator Variant(Color v) => default;
-        public static explicit operator int(Variant v) => 0;
-        public static explicit operator float(Variant v) => 0f;
-        public static explicit operator double(Variant v) => 0;
-        public static explicit operator bool(Variant v) => false;
-        public static explicit operator string(Variant v) => "";
-        public static explicit operator Color(Variant v) => default;
-    }
-
-    public enum MultiplayerPeerConnectionStatus { Disconnected, Connecting, Connected }
-    public partial class MultiplayerPeer : RefCounted
-    {
-        // Real Godot nests this on MultiplayerPeer. The stub previously declared a
-        // top-level MultiplayerPeerTransferMode, which does not exist -- so code using
-        // it typechecked here and failed in the engine. Names must match exactly.
-        public enum TransferModeEnum { Unreliable, UnreliableOrdered, Reliable }
-        public MultiplayerPeerConnectionStatus GetConnectionStatus() => MultiplayerPeerConnectionStatus.Connected;
-        public void Close() { }
-    }
-    public partial class ENetMultiplayerPeer : MultiplayerPeer
-    {
-        public Error CreateServer(int port, int maxClients = 32) => Error.Ok;
-        public Error CreateClient(string address, int port) => Error.Ok;
-    }
-    public partial class MultiplayerApi : RefCounted
-    {
-        public enum RpcMode { Disabled, AnyPeer, Authority }
-        public MultiplayerPeer MultiplayerPeer { get; set; }
-        public int GetUniqueId() => 1;
-        public bool IsServer() => true;
-        public int[] GetPeers() => new int[0];
-        public int GetRemoteSenderId() => 1;
-        public event System.Action<long> PeerConnected;
-        public event System.Action<long> PeerDisconnected;
-        public event System.Action ConnectedToServer;
-        public event System.Action ConnectionFailed;
-        public event System.Action ServerDisconnected;
-    }
-    [System.AttributeUsage(System.AttributeTargets.Method)]
-    public class RpcAttribute : System.Attribute
-    {
-        public RpcAttribute() { }
-        public RpcAttribute(MultiplayerApi.RpcMode mode) { }
-        public MultiplayerApi.RpcMode Mode { get; set; }
-        public bool CallLocal { get; set; }
-        public MultiplayerPeer.TransferModeEnum TransferMode { get; set; }
-    }
-}
-
-namespace Godot
-{
-    public partial class ColorPickerButton : Button
-    {
-        public Color Color { get; set; }
-        public event System.Action<Color> ColorChanged;
-    }
-    public partial class ConfigFile : RefCounted
-    {
-        public void SetValue(string section, string key, Variant value) { }
-        public Variant GetValue(string section, string key, Variant def = default) => def;
-        public Error Save(string path) => Error.Ok;
-        public Error Load(string path) => Error.Ok;
-    }
-}
-
-//==============================================================================
-// FILE: typecheck/typecheck.ps1
-// 99 lines   sha256 8e8a45b067c2
-//==============================================================================
-# Windows port of typecheck.sh -- type-checks every script with the real Roslyn compiler.
-#
-# PREFERRED: if GodotSharp.dll is present in this folder, it is referenced directly
-# and the hand-written stub is ignored entirely. That makes this check identical to
-# what Godot itself compiles -- same reference assembly, same compiler.
-#
-# FALLBACK: GodotStub.cs, which only proves shape. Errors in the stub are FATAL,
-# because Roslyn binds declarations before method bodies: one bad declaration in the
-# stub means no method body is ever checked, and every script error vanishes.
-
-$ErrorActionPreference = 'Stop'
-Set-Location $PSScriptRoot
-
-$sdkRoot = 'C:\Program Files\dotnet'
-# THE PROJECT'S OWN TARGET, not a number written here as well: the .csproj says which framework the
-# game is built for, and this rung compiles against THAT one's reference assemblies with THAT one's
-# compiler. It was pinned to 8 in three lines, so moving the game to net10 would have left the
-# cheapest rung quietly checking it against a framework it is no longer built for.
-$tfm = (Select-String -Path (Join-Path $PSScriptRoot '..\Warships.csproj') -Pattern '<TargetFramework>(net[0-9]+\.[0-9]+)</TargetFramework>').Matches[0].Groups[1].Value
-$major = ($tfm -replace '^net', '') -replace '\..*$', ''
-$csc = Get-ChildItem "$sdkRoot\sdk" -Recurse -Filter csc.dll -ErrorAction SilentlyContinue |
-       Where-Object { $_.FullName -like '*Roslyn*' -and $_.FullName -like "*\$major.*" } |
-       Select-Object -First 1 -ExpandProperty FullName
-$refDir = Get-ChildItem "$sdkRoot\packs\Microsoft.NETCore.App.Ref" -Directory -ErrorAction SilentlyContinue |
-          Where-Object { $_.Name -like "$major.*" } | Select-Object -First 1 |
-          ForEach-Object { Join-Path $_.FullName "ref\$tfm" }
-
-# No compiler means no check. Without this guard the harness finds nothing, runs
-# nothing, and the error grep below turns "no compiler" into "0 errors".
-if (-not $csc -or -not $refDir -or -not (Test-Path $refDir)) {
-  Write-Host "NO .NET $major SDK FOUND -- nothing was checked. Install dotnet-sdk-$major.0."
-  exit 2
-}
-
-$refs = Get-ChildItem "$refDir\*.dll" | ForEach-Object { "-r:$($_.FullName)" }
-$outDll = Join-Path $env:TEMP 'typecheck.dll'
-
-# THE HARNESS IS SOURCE TOO. SmokeTest.cs.txt and Shots.cs.txt are compiled INTO the game by the
-# runners (as scripts/_Test.cs and scripts/_Shots.cs), but `dotnet build` never sees them -- so a
-# rename that missed a call in them used to compile clean here and only fail three minutes into an
-# engine run, after a full copy and import. They are checked with everything else now: a .txt is
-# copied to a .cs beside the temp output and handed to the same compiler.
-$harness = @()
-foreach ($h in @('..\tools\smoketest\SmokeTest.cs.txt', '..\tools\screens\Shots.cs.txt')) {
-  if (-not (Test-Path $h)) { continue }
-  $dst = Join-Path $env:TEMP ('typecheck_' + [IO.Path]::GetFileNameWithoutExtension($h))
-  Copy-Item $h $dst -Force
-  $harness += $dst
-}
-if (Test-Path $outDll) { Remove-Item $outDll -Force }
-
-# GodotSharp.dll is gitignored -- a build dependency, not game content -- so every fresh clone or
-# unzipped copy arrives without it and silently drops to the hand-written stub, which is the weak
-# check this harness exists to avoid. It is already on any machine that has built the project, in
-# the NuGet cache. Fetch it rather than quietly checking against the stub.
-if (-not (Test-Path 'GodotSharp.dll')) {
-    $cached = Join-Path $env:USERPROFILE '.nuget\packages\godotsharp\4.7.2\lib\net8.0\GodotSharp.dll'
-    if (Test-Path $cached) {
-        Copy-Item $cached 'GodotSharp.dll'
-        Write-Host "fetched GodotSharp.dll from the NuGet cache (it is gitignored on purpose)"
-    }
-}
-
-$haveReal = Test-Path 'GodotSharp.dll'
-if ($haveReal) {
-  $extra = @('-r:GodotSharp.dll')
-  if (Test-Path 'GodotSharpEditor.dll') { $extra += '-r:GodotSharpEditor.dll' }
-  $src = @(Get-ChildItem '..\scripts\*.cs' | ForEach-Object { $_.FullName }) + $harness
-  $mode = 'REAL GodotSharp.dll'
-} else {
-  $extra = @()
-  $src = @(Get-ChildItem '..\scripts\*.cs' | ForEach-Object { $_.FullName }) + $harness + @('GodotStub.cs')
-  $mode = 'hand-written stub (weaker -- drop GodotSharp.dll here to fix)'
-}
-
-$argsList = @('-target:library','-nologo','-langversion:12.0','-nostdlib+','-define:GODOT',"-out:$outDll") +
-            $src + $extra + $refs
-$out = & dotnet $csc $argsList | Select-String -Pattern 'error CS' | ForEach-Object { $_.Line }
-
-if (-not $env:GODOT_QUIET) { Write-Host "checking against: $mode" }
-
-if (-not $haveReal) {
-  $stub = @($out | Where-Object { $_ -match 'GodotStub' })
-  if ($stub.Count -gt 0) {
-    Write-Host 'STUB IS BROKEN -- script checking did NOT run. Fix these first:'
-    $stub | ForEach-Object { Write-Host $_ }
-    exit 1
-  }
-}
-if ($out) {
-  $out | Where-Object { $_ -ne '' } | ForEach-Object { Write-Host $_ }
-  exit 1
-}
-# Zero errors only counts if the compiler actually produced its output.
-if (-not (Test-Path $outDll)) {
-  Write-Host 'COMPILER PRODUCED NOTHING -- result is not trustworthy.'
-  exit 2
-}
-Write-Host '0 errors.'
-
-//==============================================================================
-// FILE: typecheck/typecheck.sh
-// 61 lines   sha256 c94fe5471263
-//==============================================================================
-#!/bin/sh
-# Type-checks every script with the real Roslyn compiler.
-#
-# PREFERRED: if GodotSharp.dll is present in this folder, it is referenced directly
-# and the hand-written stub is ignored entirely. That makes this check identical to
-# what Godot itself compiles -- same reference assembly, same compiler -- and removes
-# the whole class of "the stub invented an API" and "the stub was incomplete" bugs.
-#
-# FALLBACK: GodotStub.cs, which only proves shape. Errors in the stub are FATAL,
-# because Roslyn binds declarations before method bodies: one bad declaration in the
-# stub means no method body is ever checked, and every script error vanishes.
-# THE PROJECT'S OWN TARGET, read from the .csproj rather than written here as well, so this rung
-# always checks the game against the framework it is actually built for.
-TFM=$(sed -n 's/.*<TargetFramework>\(net[0-9]*\.[0-9]*\)<.*/\1/p' ../Warships.csproj | head -1)
-MAJOR=$(echo "$TFM" | sed 's/^net//; s/\..*$//')
-CSC=$(find /usr/lib/dotnet -name csc.dll -path "*Roslyn*" | head -1)
-REF=$(ls -d /usr/lib/dotnet/packs/Microsoft.NETCore.App.Ref/"$MAJOR"*/ref/"$TFM"/ | head -1)
-
-# No compiler means no check. Without this guard the harness found nothing, ran
-# nothing, and the error grep below turned "no compiler" into "0 errors".
-if [ -z "$CSC" ] || [ -z "$REF" ]; then
-  echo "NO .NET $MAJOR SDK FOUND -- nothing was checked. Install dotnet-sdk-$MAJOR.0." >&2
-  exit 2
-fi
-R=""; for d in "$REF"*.dll; do R="$R -r:$d"; done
-rm -f /tmp/typecheck.dll
-
-if [ -f GodotSharp.dll ]; then
-  EXTRA="-r:GodotSharp.dll"
-  [ -f GodotSharpEditor.dll ] && EXTRA="$EXTRA -r:GodotSharpEditor.dll"
-  SRC="../scripts/*.cs"
-  MODE="REAL GodotSharp.dll"
-else
-  EXTRA=""
-  SRC="../scripts/*.cs GodotStub.cs"
-  MODE="hand-written stub (weaker -- drop GodotSharp.dll here to fix)"
-fi
-
-OUT=$(dotnet "$CSC" -target:library -nologo -langversion:12.0 -nostdlib+ \
-      -define:GODOT -out:/tmp/typecheck.dll $SRC $EXTRA $R 2>&1 | grep -E "error CS")
-
-if [ -z "$GODOT_QUIET" ]; then echo "checking against: $MODE" >&2; fi
-
-if [ ! -f GodotSharp.dll ]; then
-  STUB=$(printf '%s\n' "$OUT" | grep -c "GodotStub")
-  if [ "$STUB" -gt 0 ]; then
-    echo "STUB IS BROKEN -- script checking did NOT run. Fix these first:"
-    printf '%s\n' "$OUT" | grep "GodotStub"
-    exit 1
-  fi
-fi
-if [ -n "$OUT" ]; then
-  printf '%s\n' "$OUT" | grep -v '^$'
-  exit 1
-fi
-# Zero errors only counts if the compiler actually produced its output.
-if [ ! -f /tmp/typecheck.dll ]; then
-  echo "COMPILER PRODUCED NOTHING -- result is not trustworthy." >&2
-  exit 2
-fi
-echo "0 errors." >&2
-
-//==============================================================================
-// FILE: tools/analyse/analysers.editorconfig
-// 15 lines   sha256 45fdb7258163
-//==============================================================================
-root = true
-[*.cs]
-dotnet_diagnostic.IDE0051.severity = warning
-dotnet_diagnostic.IDE0052.severity = warning
-dotnet_diagnostic.IDE0059.severity = warning
-dotnet_diagnostic.IDE0060.severity = warning
-dotnet_diagnostic.IDE0005.severity = warning
-dotnet_diagnostic.IDE0035.severity = warning
-dotnet_diagnostic.IDE0044.severity = warning
-dotnet_diagnostic.CS0162.severity = warning
-dotnet_diagnostic.CS0168.severity = warning
-dotnet_diagnostic.CS0219.severity = warning
-dotnet_diagnostic.CS0414.severity = warning
-dotnet_diagnostic.CS0649.severity = warning
-dotnet_diagnostic.CA1822.severity = none
-
-//==============================================================================
-// FILE: tools/analyse/run.ps1
-// 46 lines   sha256 a8a14f6dfd92
-//==============================================================================
-# Windows port of run.sh -- code analysers over the game scripts (unused private members,
-# unread fields, unused assignments and parameters, needless usings, unreachable code).
-#
-# Unlike the Linux version this does NOT need the smoke test's restored build folder:
-# NuGet is reachable on Windows, so it builds the project in place. The temporary
-# .editorconfig is always removed again, even if the build fails.
-# Prints each finding; the last line is the count.
-
-$ErrorActionPreference = 'Stop'
-$root = Resolve-Path (Join-Path $PSScriptRoot '..\..')
-$ec = Join-Path $root '.editorconfig'
-
-if (Test-Path $ec) {
-  Write-Host "REFUSING: $ec already exists -- it would be overwritten and then deleted."
-  exit 2
-}
-
-$log = Join-Path $env:TEMP 'warships_analyse.log'
-Copy-Item (Join-Path $PSScriptRoot 'analysers.editorconfig') $ec
-try {
-  Push-Location $root
-  # -t:Rebuild so analyser warnings re-emit; an incremental build reports nothing.
-  #
-  # %3B, NOT ';', AND NOT QUOTES. PowerShell strips the quotes off a native command's argument, so
-  # -p:NoWarn='A;B;C' reached MSBuild as three arguments and it aborted with MSB1006 before loading
-  # the project at all -- and this script then grepped that error log for warnings, found none, and
-  # printed "ANALYSERS: 0 findings". A step that cannot run, reporting a pass, for the whole
-  # Windows history of this project. MSBuild decodes %3B back to a semicolon itself, which is what
-  # the Linux original always did. IF THIS EVER PRINTS 0 AGAIN, CHECK THE LOG IS A BUILD.
-  & dotnet build -t:Rebuild --nologo -v q `
-      -p:EnforceCodeStyleInBuild=true -p:GenerateDocumentationFile=true `
-      -p:NoWarn=CS1591%3BCS1573%3BCS1587 *> $log
-  Pop-Location
-} finally {
-  Remove-Item $ec -Force -ErrorAction SilentlyContinue
-}
-
-$findings = Get-Content $log -ErrorAction SilentlyContinue |
-  Select-String -Pattern 'warning (IDE|CS)[0-9]+' |
-  ForEach-Object { $_.Line } |
-  Where-Object { $_ -notmatch '_Test\.cs' } |
-  ForEach-Object { ($_ -replace '.*[\\/]scripts[\\/]', '') -replace ' \[.*', '' } |
-  Sort-Object -Unique
-
-$findings | ForEach-Object { Write-Host $_ }
-Write-Host "ANALYSERS: $(@($findings).Count) findings"
-
-//==============================================================================
-// FILE: tools/analyse/run.sh
-// 16 lines   sha256 e6f2cd50f0c4
-//==============================================================================
-#!/bin/sh
-# Code analysers over the game scripts (unused private members, unread fields, unused
-# assignments and parameters, needless usings, unreachable code). Needs the smoke test's
-# restored build folder (run tools/smoketest/run.sh once first): package restore is not
-# possible offline. Prints each finding; the last line is the count.
-set -e
-B=/tmp/warships_smoke
-[ -f "$B/Warships.csproj" ] || { echo "run tools/smoketest/run.sh first (it restores the build)"; exit 2; }
-cp "$(dirname "$0")/analysers.editorconfig" "$B/.editorconfig"
-cd "$B"
-dotnet build --no-restore -v q -nologo -p:EnforceCodeStyleInBuild=true -p:GenerateDocumentationFile=true \
-  -p:NoWarn=CS1591%3BCS1573%3BCS1587 > analyse.log 2>&1 || true
-rm -f "$B/.editorconfig"
-grep -E "warning (IDE|CS)[0-9]+" analyse.log | grep -v "_Test.cs" | sed 's#.*/scripts/##; s/ \[.*//' | sort -u > findings.txt || true
-cat findings.txt
-echo "ANALYSERS: $(wc -l < findings.txt) findings"
-
-//==============================================================================
-// FILE: tools/analyse/xref.py
-// 35 lines   sha256 2e1d2a7688ed
-//==============================================================================
-# Cross-reference scan: public members of the game scripts that nothing uses, and those
-# only the tests use (read-only observers are fine; anything else is a question).
-import re, glob, os
-root = os.path.join(os.path.dirname(__file__), '..', '..')
-src = {f: open(f, encoding='utf-8').read() for f in glob.glob(os.path.join(root, 'scripts', '*.cs'))}
-tests = ''.join(open(os.path.join(root, 'tools', p), encoding='utf-8').read() for p in ('smoketest/SmokeTest.cs.txt', 'screens/Shots.cs.txt'))
-decl = re.compile(r'^\s*public\s+(?:static\s+|readonly\s+|const\s+|override\s+|virtual\s+|partial\s+|event\s+|new\s+)*([\w<>\[\],.?() ]+?)\s+(\w+)\s*(\(|=>|=|;|\{)', re.M)
-# AN ENUM MEMBER IS A DECLARATION TOO. It carries no access modifier, so the pattern above --
-# which starts at `public` -- could never see one, and every member of Status, Tag, Fit, ShotLook,
-# FxShape and every other enum sat outside the UNUSED ANYWHERE gate. Status.Shielded was declared,
-# shipped on the wire and implemented by nothing for as long as this script had been run.
-# An enum body holds no braces, so the first closing one ends it; comments are dropped and what is
-# left is split on commas, which reads a one-line body and a one-per-line body with values
-# (`Pinned = 1,`) the same way. Members are then counted through the same reference count.
-body = re.compile(r'\benum\s+(\w+)\s*(?::\s*[\w.]+\s*)?\{(.*?)\}', re.S)
-note = re.compile(r'//.*')
-skip = {'_Ready', '_Process', '_Draw', '_Input', '_UnhandledInput', '_GuiInput', '_ExitTree', '_EnterTree', '_PhysicsProcess', '_Notification', 'Position', 'Rotation', 'Visible', 'Name'}
-game = '\n'.join(src.values())
-dead, test_only = [], []
-
-def declared(s):
-    for m in decl.finditer(s):
-        if m.group(2) not in skip: yield m.group(2), m.group(2)
-    for m in body.finditer(s):
-        for part in note.sub('', m.group(2)).split(','):
-            n = part.split('=')[0].strip()
-            if n.isidentifier() and n not in skip: yield n, m.group(1) + '.' + n
-
-for f, s in src.items():
-    for n, shown in declared(s):
-        g = len(re.findall(r'\b' + re.escape(n) + r'\b', game)) - 1
-        t = len(re.findall(r'\b' + re.escape(n) + r'\b', tests))
-        if g <= 0: (test_only if t else dead).append(f"{os.path.basename(f)}: {shown}")
-print('UNUSED ANYWHERE:', len(dead)); [print('  ' + x) for x in sorted(dead)]
-print('USED ONLY BY TESTS:', len(test_only)); [print('  ' + x) for x in sorted(test_only)]
-
-//==============================================================================
 // FILE: tools/find-godot.ps1
 // 53 lines   sha256 fabe4c75faae
 //==============================================================================
@@ -21172,6 +21144,262 @@ Get-ChildItem $rel -File | Sort-Object Name | ForEach-Object {
 }
 Write-Host '  the launcher reads releases/latest/download/<name>, so the names must not change.'
 Write-Host "  a test install: put source.txt beside the launcher holding  $fileUrl"
+
+//==============================================================================
+// FILE: tools/snapshot.ps1
+// 103 lines   sha256 bdcb9f8150b0
+//==============================================================================
+# Regenerate version/CODE_SNAPSHOT.txt.
+#
+# The file list is derived here rather than inherited from the previous snapshot, so a
+# file that was never in it (typecheck/GodotStub.cs was missing for the project's whole
+# history) cannot stay missing just because it was missing before.
+#
+# Format, measured from the file rather than guessed:
+#   divider      = "//" + 78 "="
+#   contents row = "//   " + <path left, count right, inside one 50-char field>
+#                  + " lines   sha256 " + <first 12 hex>      (total length 83)
+#   file block   = blank line, divider, "// FILE: <path>", "// <N> lines   sha256 <12>",
+#                  divider, then the file verbatim
+#
+# Lives in the repo rather than in a session's scratch folder for the same reason verify.ps1
+# does: a generator kept outside the project is a generator the next session does not have.
+$ErrorActionPreference = 'Stop'
+Set-Location (Join-Path $PSScriptRoot '..')
+$env:Path += ';C:\Program Files\Git\cmd'
+
+# --others --exclude-standard as well as the index: a brand-new file is not in `git ls-files`
+# until it is staged, and a snapshot that quietly leaves out the file you just wrote is the
+# same silent omission this generator exists to prevent.
+$tracked = @(& git ls-files --cached --others --exclude-standard | Sort-Object -Unique)
+
+# Root files keep the original snapshot's order, which is not alphabetical.
+$fixed = @('project.godot', 'Warships.csproj', 'CharacterSelect.tscn', 'Hub.tscn', 'MainMenu.tscn')
+$final = @($fixed)
+# Everything else is DISCOVERED, not listed. A hard-coded set of directories is how
+# typecheck/GodotStub.cs stayed out of this file for the project's whole history, and it would
+# have quietly dropped verify.ps1 and tools/find-godot.ps1 the moment they were added.
+# .bat and .sln are in the list because a master copy has to rebuild a RUNNABLE clone: PLAY.bat
+# is how the thing is started and Warships.sln is what `dotnet build` resolves at the root.
+$code = @($tracked | Where-Object { $_ -match '\.(cs|sh|ps1|py|bat|sln|tscn|csproj|godot|editorconfig)$' -or $_ -match '\.cs\.txt$' })
+# THE DIRECTORIES ARE DISCOVERED TOO, and that is the whole point of the paragraph above. They
+# used to be four hard-coded buckets -- root, scripts/, typecheck/, tools/ -- which is the SAME
+# mistake the comment warns about, one level up: launcher/Main.cs and launcher/Launcher.csproj
+# matched $code, belonged to no bucket, and were silently absent from the master copy. So was
+# PLAY.bat, and so would anything in a folder added tomorrow.
+$final += @($code | Where-Object { $_ -notin $fixed -and $_ -notlike '*/*' } | Sort-Object { $_ } -CaseSensitive)
+foreach ($dir in @($code | Where-Object { $_ -like '*/*' } |
+                   ForEach-Object { $_.Substring(0, $_.LastIndexOf('/')) } |
+                   Sort-Object -Unique)) {
+    $final += @($code | Where-Object { $_ -like "$dir/*" -and $_.Substring($dir.Length + 1) -notlike '*/*' } |
+                Sort-Object { $_ } -CaseSensitive)
+}
+$final = @($final | Select-Object -Unique)
+# ...AND NOTHING DISCOVERED IS DROPPED. The check below proves every path in $final is tracked;
+# this proves the other direction, which is the one that was failing silently.
+$missed = @($code | Where-Object { $_ -notin $final })
+if ($missed.Count) { throw "snapshot would drop $($missed.Count) tracked source files: $($missed -join ', ')" }
+
+foreach ($p in $final) { if ($tracked -notcontains $p) { throw "not tracked: $p" } }
+
+$info = @{}; $total = 0
+foreach ($p in $final) {
+  $win = $p -replace '/', '\'
+  if (-not (Test-Path $win)) { throw "missing: $win" }
+  $n = @(Get-Content $win).Count
+  $h = (Get-FileHash $win -Algorithm SHA256).Hash.ToLower().Substring(0, 12)
+  $info[$p] = @{ N = $n; H = $h }
+  $total += $n
+}
+
+$D = '//' + ('=' * 78)
+$commit = (& git rev-parse --short HEAD).Trim()
+$stamp = (Get-Date).ToString('yyyy-MM-dd HH:mm')
+
+$out = New-Object System.Text.StringBuilder
+function W($s) { [void]$out.Append($s); [void]$out.Append("`n") }
+
+W $D
+W '// WARSHIPS -- code snapshot (master copy)'
+W "// Taken $stamp, on top of git commit ${commit}. How it was verified is in the message of the"
+W '//   commit that carries this file: one starting VERIFIED: is a green verify.ps1 -Update.'
+W "// $($final.Count) files, $total lines. Code only: sprites, sounds and docs are in the zip."
+W '//'
+W '// Each file starts with a divider and a "// FILE: <path>" line. To split it back into'
+W '// files, cut at each divider: everything after the divider''s third line, up to the next'
+W '// divider, is that file verbatim.'
+W '//'
+W '// Contents:'
+foreach ($p in $final) {
+  $n = [string]$info[$p].N
+  $pad = 50 - $p.Length - $n.Length
+  if ($pad -lt 1) { $pad = 1 }
+  W ('//   ' + $p + (' ' * $pad) + $n + ' lines   sha256 ' + $info[$p].H)
+}
+W $D
+
+foreach ($p in $final) {
+  $win = $p -replace '/', '\'
+  W ''
+  W $D
+  W "// FILE: $p"
+  W "// $($info[$p].N) lines   sha256 $($info[$p].H)"
+  W $D
+  $txt = [System.IO.File]::ReadAllText($win) -replace "`r`n", "`n"
+  [void]$out.Append($txt)
+  if (-not $txt.EndsWith("`n")) { [void]$out.Append("`n") }
+}
+
+[System.IO.File]::WriteAllText((Join-Path (Get-Location) 'version\CODE_SNAPSHOT.txt'), $out.ToString())
+"files: $($final.Count)   lines: $total"
+
+//==============================================================================
+// FILE: tools/analyse/analysers.editorconfig
+// 15 lines   sha256 45fdb7258163
+//==============================================================================
+root = true
+[*.cs]
+dotnet_diagnostic.IDE0051.severity = warning
+dotnet_diagnostic.IDE0052.severity = warning
+dotnet_diagnostic.IDE0059.severity = warning
+dotnet_diagnostic.IDE0060.severity = warning
+dotnet_diagnostic.IDE0005.severity = warning
+dotnet_diagnostic.IDE0035.severity = warning
+dotnet_diagnostic.IDE0044.severity = warning
+dotnet_diagnostic.CS0162.severity = warning
+dotnet_diagnostic.CS0168.severity = warning
+dotnet_diagnostic.CS0219.severity = warning
+dotnet_diagnostic.CS0414.severity = warning
+dotnet_diagnostic.CS0649.severity = warning
+dotnet_diagnostic.CA1822.severity = none
+
+//==============================================================================
+// FILE: tools/analyse/run.ps1
+// 62 lines   sha256 794cbfa66944
+//==============================================================================
+# Windows port of run.sh -- code analysers over the game scripts (unused private members,
+# unread fields, unused assignments and parameters, needless usings, unreachable code).
+#
+# Unlike the Linux version this does NOT need the smoke test's restored build folder:
+# NuGet is reachable on Windows, so it builds the project in place. The temporary
+# .editorconfig is always removed again, even if the build fails.
+# Prints each finding; the last line is the count.
+
+$ErrorActionPreference = 'Stop'
+$root = Resolve-Path (Join-Path $PSScriptRoot '..\..')
+$ec = Join-Path $root '.editorconfig'
+
+if (Test-Path $ec) {
+  Write-Host "REFUSING: $ec already exists -- it would be overwritten and then deleted."
+  exit 2
+}
+
+$log = Join-Path $env:TEMP 'warships_analyse.log'
+Copy-Item (Join-Path $PSScriptRoot 'analysers.editorconfig') $ec
+try {
+  Push-Location $root
+  # -t:Rebuild so analyser warnings re-emit; an incremental build reports nothing.
+  #
+  # %3B, NOT ';', AND NOT QUOTES. PowerShell strips the quotes off a native command's argument, so
+  # -p:NoWarn='A;B;C' reached MSBuild as three arguments and it aborted with MSB1006 before loading
+  # the project at all -- and this script then grepped that error log for warnings, found none, and
+  # printed "ANALYSERS: 0 findings". A step that cannot run, reporting a pass, for the whole
+  # Windows history of this project. MSBuild decodes %3B back to a semicolon itself, which is what
+  # the Linux original always did. IF THIS EVER PRINTS 0 AGAIN, CHECK THE LOG IS A BUILD.
+  & dotnet build -t:Rebuild --nologo -v q `
+      -p:EnforceCodeStyleInBuild=true -p:GenerateDocumentationFile=true `
+      -p:NoWarn=CS1591%3BCS1573%3BCS1587 *> $log
+  $build = $LASTEXITCODE
+  Pop-Location
+} finally {
+  Remove-Item $ec -Force -ErrorAction SilentlyContinue
+}
+
+# IT RAN, AND IT SUCCEEDED. Fixing the quoting made the build happen; it did NOT make this
+# script able to tell a FAILED build from a clean one. Measured on a project that does not
+# compile: exit code 1, a log full of `error CS0103`, and this pipeline still printed
+# `ANALYSERS: 0 findings` -- because a build that dies produces no WARNING lines to count.
+# The same held for a log that was never written, thanks to the SilentlyContinue below.
+# An analyser pass that cannot fail is the thing this whole file was just fixed for.
+if ($build -ne 0) {
+  Write-Host "ANALYSERS: the build FAILED (exit $build) -- there is nothing to analyse."
+  Get-Content $log -ErrorAction SilentlyContinue |
+    Where-Object { $_ -match ': error |error MSB' } | Select-Object -First 5 |
+    ForEach-Object { Write-Host "  $_" }
+  exit 1
+}
+if (-not (Test-Path $log)) { Write-Host 'ANALYSERS: no log was written -- the build did not run.'; exit 1 }
+
+$findings = Get-Content $log -ErrorAction SilentlyContinue |
+  Select-String -Pattern 'warning (IDE|CS)[0-9]+' |
+  ForEach-Object { $_.Line } |
+  Where-Object { $_ -notmatch '_Test\.cs' } |
+  ForEach-Object { ($_ -replace '.*[\\/]scripts[\\/]', '') -replace ' \[.*', '' } |
+  Sort-Object -Unique
+
+$findings | ForEach-Object { Write-Host $_ }
+Write-Host "ANALYSERS: $(@($findings).Count) findings"
+
+//==============================================================================
+// FILE: tools/analyse/run.sh
+// 16 lines   sha256 e6f2cd50f0c4
+//==============================================================================
+#!/bin/sh
+# Code analysers over the game scripts (unused private members, unread fields, unused
+# assignments and parameters, needless usings, unreachable code). Needs the smoke test's
+# restored build folder (run tools/smoketest/run.sh once first): package restore is not
+# possible offline. Prints each finding; the last line is the count.
+set -e
+B=/tmp/warships_smoke
+[ -f "$B/Warships.csproj" ] || { echo "run tools/smoketest/run.sh first (it restores the build)"; exit 2; }
+cp "$(dirname "$0")/analysers.editorconfig" "$B/.editorconfig"
+cd "$B"
+dotnet build --no-restore -v q -nologo -p:EnforceCodeStyleInBuild=true -p:GenerateDocumentationFile=true \
+  -p:NoWarn=CS1591%3BCS1573%3BCS1587 > analyse.log 2>&1 || true
+rm -f "$B/.editorconfig"
+grep -E "warning (IDE|CS)[0-9]+" analyse.log | grep -v "_Test.cs" | sed 's#.*/scripts/##; s/ \[.*//' | sort -u > findings.txt || true
+cat findings.txt
+echo "ANALYSERS: $(wc -l < findings.txt) findings"
+
+//==============================================================================
+// FILE: tools/analyse/xref.py
+// 35 lines   sha256 2e1d2a7688ed
+//==============================================================================
+# Cross-reference scan: public members of the game scripts that nothing uses, and those
+# only the tests use (read-only observers are fine; anything else is a question).
+import re, glob, os
+root = os.path.join(os.path.dirname(__file__), '..', '..')
+src = {f: open(f, encoding='utf-8').read() for f in glob.glob(os.path.join(root, 'scripts', '*.cs'))}
+tests = ''.join(open(os.path.join(root, 'tools', p), encoding='utf-8').read() for p in ('smoketest/SmokeTest.cs.txt', 'screens/Shots.cs.txt'))
+decl = re.compile(r'^\s*public\s+(?:static\s+|readonly\s+|const\s+|override\s+|virtual\s+|partial\s+|event\s+|new\s+)*([\w<>\[\],.?() ]+?)\s+(\w+)\s*(\(|=>|=|;|\{)', re.M)
+# AN ENUM MEMBER IS A DECLARATION TOO. It carries no access modifier, so the pattern above --
+# which starts at `public` -- could never see one, and every member of Status, Tag, Fit, ShotLook,
+# FxShape and every other enum sat outside the UNUSED ANYWHERE gate. Status.Shielded was declared,
+# shipped on the wire and implemented by nothing for as long as this script had been run.
+# An enum body holds no braces, so the first closing one ends it; comments are dropped and what is
+# left is split on commas, which reads a one-line body and a one-per-line body with values
+# (`Pinned = 1,`) the same way. Members are then counted through the same reference count.
+body = re.compile(r'\benum\s+(\w+)\s*(?::\s*[\w.]+\s*)?\{(.*?)\}', re.S)
+note = re.compile(r'//.*')
+skip = {'_Ready', '_Process', '_Draw', '_Input', '_UnhandledInput', '_GuiInput', '_ExitTree', '_EnterTree', '_PhysicsProcess', '_Notification', 'Position', 'Rotation', 'Visible', 'Name'}
+game = '\n'.join(src.values())
+dead, test_only = [], []
+
+def declared(s):
+    for m in decl.finditer(s):
+        if m.group(2) not in skip: yield m.group(2), m.group(2)
+    for m in body.finditer(s):
+        for part in note.sub('', m.group(2)).split(','):
+            n = part.split('=')[0].strip()
+            if n.isidentifier() and n not in skip: yield n, m.group(1) + '.' + n
+
+for f, s in src.items():
+    for n, shown in declared(s):
+        g = len(re.findall(r'\b' + re.escape(n) + r'\b', game)) - 1
+        t = len(re.findall(r'\b' + re.escape(n) + r'\b', tests))
+        if g <= 0: (test_only if t else dead).append(f"{os.path.basename(f)}: {shown}")
+print('UNUSED ANYWHERE:', len(dead)); [print('  ' + x) for x in sorted(dead)]
+print('USED ONLY BY TESTS:', len(test_only)); [print('  ' + x) for x in sorted(test_only)]
 
 //==============================================================================
 // FILE: tools/screens/run.ps1
@@ -29925,100 +30153,368 @@ while time.monotonic() < end:
 print(f"wan {listen_port}->{host_port}: {sent} delivered, {dropped} lost, {len(upstream)} guests", flush=True)
 
 //==============================================================================
-// FILE: tools/snapshot.ps1
-// 94 lines   sha256 3ca9bfe56185
+// FILE: typecheck/GodotStub.cs
+// 192 lines   sha256 2c5c2967bf5c
 //==============================================================================
-# Regenerate version/CODE_SNAPSHOT.txt.
+// FALLBACK ONLY. GodotSharp.dll is present in this folder, so typecheck.sh
+// references the real assembly and ignores this file entirely. It is kept for
+// environments without the dll. Do not trust it over the real thing: it has
+// twice passed code that could not compile in Godot.
+
+// Minimal Godot surface so Roslyn can type-check the game's own logic.
+namespace Godot {
+ public struct Vector2 { public Vector2 Lerp(Vector2 to, float w) => this; public float X,Y; public Vector2(float x,float y){X=x;Y=y;}
+   public float Length()=>0; public float LengthSquared()=>0; public Vector2 Normalized()=>this;
+   public float DistanceTo(Vector2 o)=>0; public float DistanceSquaredTo(Vector2 o)=>0;
+   public float Dot(Vector2 o)=>0; public float Angle()=>0; public Vector2 Rotated(float a)=>this;
+   public Vector2 MoveToward(Vector2 t,float d)=>this;
+   public static Vector2 Zero=>default; public static Vector2 One=>default; public static Vector2 Right=>default; public static Vector2 Left=>default; public static Vector2 Up=>default; public static Vector2 Down=>default; public static Vector2 operator+(Vector2 a,Vector2 b)=>a;
+   public static Vector2 operator-(Vector2 a,Vector2 b)=>a; public static Vector2 operator-(Vector2 a)=>a;
+   public static Vector2 operator*(Vector2 a,float b)=>a; public static Vector2 operator*(float b,Vector2 a)=>a;
+   public static Vector2 operator/(Vector2 a,float b)=>a; public static bool operator==(Vector2 a,Vector2 b)=>true;
+   public static bool operator!=(Vector2 a,Vector2 b)=>false; public override bool Equals(object o)=>true; public override int GetHashCode()=>0; }
+ public struct Vector2I { public int X,Y; public Vector2I(int x,int y){X=x;Y=y;} }
+ public struct Rect2I { public Vector2I Position,Size; }
+ public struct Color { public float R,G,B,A; public Color(float r,float g,float b,float a=1){R=r;G=g;B=b;A=a;}
+   public static Color operator*(Color a,float b)=>a; public Color Lightened(float f)=>this; public Color Darkened(float f)=>this; public Color Lerp(Color c,float f)=>this; }
+ public static class Colors { public static Color White, Red, Green, Blue, Black; }
+ public struct Rect2 { public Vector2 Position,Size; public Rect2(Vector2 p,Vector2 s){Position=p;Size=s;} public Rect2(float x,float y,float w,float h){Position=default;Size=default;} public Rect2 Abs()=>this; public bool HasPoint(Vector2 p)=>true; }
+ public static class Mathf { public static float LerpAngle(float a, float b, float w)=>a; public static float Wrap(float v, float lo, float hi)=>v; public const float Tau=6.28f, Pi=3.14f;
+   public static float Cos(float a)=>0; public static float Sin(float a)=>0; public static float Sqrt(float a)=>0; public static double Sqrt(double a)=>0;
+   public static float Abs(float a)=>0; public static double Abs(double a)=>0; public static int Abs(int a)=>0;
+   public static float Min(float a,float b)=>0; public static double Min(double a,double b)=>0; public static int Min(int a,int b)=>0;
+   public static float Max(float a,float b)=>0; public static double Max(double a,double b)=>0; public static int Max(int a,int b)=>0;
+   public static float Clamp(float v,float a,float b)=>0; public static double Clamp(double v,double a,double b)=>0; public static int Clamp(int v,int a,int b)=>0;
+   public static float Pow(float a,float b)=>0; public static double Pow(double a,double b)=>0;
+   public static float Sign(float a)=>0; public static double Sign(double a)=>0; public static int Sign(int a)=>0;
+   public static int CeilToInt(float a)=>0; public static int CeilToInt(double a)=>0;
+   public static int FloorToInt(float a)=>0; public static int FloorToInt(double a)=>0;
+   public static int RoundToInt(float a)=>0; public static int RoundToInt(double a)=>0;
+   public static float Round(float a)=>0; public static double Round(double a)=>0;
+   public static float DegToRad(float a)=>0; public static double DegToRad(double a)=>0;
+   public static float LinearToDb(float v)=>0; public static float Lerp(float a,float b,float t)=>0; public static double Lerp(double a,double b,double t)=>0;
+   public static float Log(float a)=>0; public static double Log(double a)=>0; public static float Exp(float a)=>0; public static double Exp(double a)=>0; }
+public static class Performance { public enum Monitor { ObjectCount, ObjectNodeCount, ObjectOrphanNodeCount, MemoryStatic } public static double GetMonitor(Monitor m)=>0; }
+ public static class AudioServer { public static int GetBusIndex(string n)=>0; public static void SetBusMute(int i,bool m){} public static void SetBusVolumeDb(int i,float db){} }
+ public static class GD { public static float Randf()=>0; public static uint Randi()=>0; public static void Print(object o){} public static void PushWarning(object o){}
+   public static T Load<T>(string p) where T:class=>null; }
+ public class GodotObject { public ulong GetInstanceId()=>0; public bool IsQueuedForDeletion()=>false; public void QueueFree(){} }
+ public class Node : GodotObject { public Node GetParent()=>this; public MultiplayerApi Multiplayer => new MultiplayerApi();
+   public void SetMultiplayerAuthority(int id, bool recursive = true) { }
+   public int GetMultiplayerAuthority() => 1;
+   public bool IsMultiplayerAuthority() => true;
+   public void Rpc(string method, params object[] args) { }
+   public void RpcId(long peerId, string method, params object[] args) { }
+   public double GetProcessDeltaTime()=>0.016; public string Name; public Node Owner; public void AddChild(Node n){} public void RemoveChild(Node n){}
+   public Godot.Collections.Array<Node> GetChildren()=>null; public int GetChildCount()=>0; public Node GetChild(int i)=>null;
+   public SceneTree GetTree()=>null; public Viewport GetViewport()=>null; public Window GetWindow()=>null; public virtual void _Ready(){} public virtual void _Process(double d){}
+   public virtual void _Input(InputEvent e){} public virtual void _UnhandledInput(InputEvent e){} public void SetProcess(bool b){} }
+ public class CanvasItem : Node { public bool Visible; public Color Modulate; public int ZIndex; public TextureRepeatEnum TextureRepeat; public enum TextureRepeatEnum { Disabled, Enabled } public void QueueRedraw(){}
+   public virtual void _Draw(){} public void DrawCircle(Vector2 p,float r,Color c){} public void DrawArc(Vector2 p,float r,float a,float b,int n,Color c,float w=1){}
+   public void DrawLine(Vector2 a,Vector2 b,Color c,float w=1){} public void DrawRect(Rect2 r,Color c,bool f=true,float w=1){}
+   public void DrawPolygon(Vector2[] p,Color[] c){} public void DrawTexture(Texture2D t,Vector2 p){} public void DrawSetTransform(Vector2 p,float r,Vector2 s){} public void DrawString(Font f,Vector2 p,string s,HorizontalAlignment h,float w,int sz,Color c){}
+   public Vector2 GetGlobalMousePosition()=>default; }
+ public class Node2D : CanvasItem { public Vector2 Position { get; set; } public Vector2 GlobalPosition { get; set; } public Vector2 Scale { get; set; } public float Rotation { get; set; } public Vector2 ToLocal(Vector2 v)=>v; }
+ public class Sprite2D : Node2D { public Texture2D Texture; public bool Centered, RegionEnabled; public Rect2 RegionRect; }
+ public class Area2D : Node2D { public bool Monitoring, Monitorable; }
+ public class CollisionShape2D : Node2D { public Shape2D Shape; }
+ public class Shape2D : Resource {} public class CircleShape2D : Shape2D { public float Radius; }
+ public class Camera2D : Node2D { public Vector2 Zoom; public void MakeCurrent(){} }
+ public class CanvasLayer : Node { public int Layer; public bool Visible; public Vector2 Scale { get; set; } }
+ public class Resource : GodotObject {} public class ImageTexture : Texture2D { public static ImageTexture CreateFromImage(Image i)=>null; }
+ public class Image : Resource { public enum Format { Rgba8 } public static Image CreateEmpty(int w,int h,bool m,Format f)=>null; public void Fill(Color c){} public void SetPixel(int x,int y,Color c){} }
+ public class Texture2D : Resource { public int GetHeight()=>0; public int GetWidth()=>0; public Vector2 GetSize()=>default; } public class Font : Resource {
+    public Vector2 GetStringSize(string t, HorizontalAlignment a=HorizontalAlignment.Left, float w=-1, int size=16)=>default;} public class Theme : Resource {
+   public void SetStylebox(string a,string b,StyleBox s){} public void SetColor(string a,string b,Color c){} public void SetFontSize(string a,string b,int i){} }
+ public class StyleBox : Resource {} public class StyleBoxFlat : StyleBox { public Color BgColor,BorderColor;
+   public int CornerRadiusTopLeft,CornerRadiusTopRight,CornerRadiusBottomLeft,CornerRadiusBottomRight,BorderWidthTop,BorderWidthBottom,BorderWidthLeft,BorderWidthRight,ContentMarginLeft,ContentMarginRight,ContentMarginTop,ContentMarginBottom; }
+ public static class ThemeDB { public static Font FallbackFont; }
+ public class Control : CanvasItem { public virtual void _GuiInput(InputEvent e){} public void AcceptEvent(){} public MouseFilterEnum MouseFilter; public enum MouseFilterEnum { Stop, Pass, Ignore } public Vector2 Position,Size,CustomMinimumSize; public Theme Theme; public SizeFlags SizeFlagsHorizontal;
+   public FocusModeEnum FocusMode; public void SetAnchorsPreset(LayoutPreset p){} public Vector2 GetCombinedMinimumSize()=>default; public void ReleaseFocus(){}
+   public void AddThemeStyleboxOverride(string n,StyleBox s){} public void AddThemeColorOverride(string n,Color c){} public void AddThemeFontSizeOverride(string n,int i){} public void AddThemeConstantOverride(string n,int i){}
+   public StyleBox GetThemeStylebox(string n)=>null;
+   public enum SizeFlags { Fill, Expand, ExpandFill, ShrinkCenter } public enum LayoutPreset { FullRect } public enum FocusModeEnum { None, All } }
+ public class Label : Control { public string Text; public bool ClipText; public TextServer.OverrunBehavior TextOverrunBehavior; public HorizontalAlignment HorizontalAlignment; public TextServer.AutowrapMode AutowrapMode; }
+ public class Button : Control { public string Text; public bool Disabled; public HorizontalAlignment Alignment; public TextServer.AutowrapMode AutowrapMode;
+   public bool ClipText; public TextServer.OverrunBehavior TextOverrunBehavior; public event System.Action Pressed; }
+ public class LineEdit : Control { public string Text, PlaceholderText; public event System.Action<string> TextChanged; }
+ public class BoxContainer : Control {} public class HBoxContainer : BoxContainer {} public class VBoxContainer : BoxContainer {}
+ public class PanelContainer : Control {} public class CenterContainer : Control {}
+ public class ScrollContainer : Control { public ScrollMode HorizontalScrollMode; public enum ScrollMode { Disabled, Auto } }
+ public class ColorRect : Control { public Color Color; }
+ public class HSeparator : Control {}
+ public static class TextServer { public enum AutowrapMode { Off, WordSmart } public enum OverrunBehavior { TrimEllipsis } }
+ public enum HorizontalAlignment { Left, Center, Right }
+ public class SceneTree : GodotObject { public Error ChangeSceneToFile(string p)=>default; public void ReloadCurrentScene(){} public void Quit(){} }
+ public class Viewport : GodotObject { public Vector2 GetMousePosition()=>default; public Rect2 GetVisibleRect()=>default; public void SetInputAsHandled(){} public Control GuiGetFocusOwner()=>null; }
+ public class Window : Viewport { public Vector2I Size, ContentScaleSize, Position; public ModeEnum Mode; public bool Borderless; public ContentScaleModeEnum ContentScaleMode; public ContentScaleAspectEnum ContentScaleAspect; public enum ContentScaleModeEnum { Disabled, CanvasItems, Viewport } public enum ContentScaleAspectEnum { Ignore, Keep, Expand }
+   public enum ModeEnum { Windowed, Fullscreen, ExclusiveFullscreen } }
+ public class InputEvent : Resource { public bool IsAction(string a)=>false; }
+ public class InputEventKey : InputEvent { public Key Keycode, PhysicalKeycode; public bool Pressed, Echo, CtrlPressed, MetaPressed, ShiftPressed, AltPressed; }
+ public class InputEventMouseButton : InputEvent { public MouseButton ButtonIndex; public bool Pressed; public Vector2 Position; }
+ public class InputEventMouseMotion : InputEvent { public Vector2 Position, Relative; }
+ public static class Input { public static bool IsKeyPressed(Key k)=>false; public static bool IsMouseButtonPressed(MouseButton b)=>false; public static Vector2 GetMousePosition()=>default; }
+ public enum Key { Key0, Key1, Key2, Key3, Key4, Key5, Key6, Key7, W,A,S,D,E,H,R,F,G,C,V,Escape,F1,F2,Ctrl,Shift,Alt,Space,Enter,Key8,Key9 } public enum MouseButton { Left,Right,WheelUp,WheelDown }
+ public static class DisplayServer { public static Rect2I ScreenGetUsableRect()=>default; public static int WindowGetCurrentScreen()=>0; public static Rect2I ScreenGetUsableRect(int i)=>default; public static Vector2I ScreenGetSize(int i)=>default; public static Vector2I ScreenGetSize()=>default; }
+ public static class ProjectSettings { public static string GlobalizePath(string p)=>p; }
+ public class FileAccess : GodotObject, System.IDisposable { public enum ModeFlags { Read, Write } public static bool FileExists(string p)=>false;
+   public static FileAccess Open(string p,ModeFlags m)=>null; public static Error GetOpenError()=>default;
+   public string GetAsText()=>""; public void StoreString(string s){} public void Dispose(){} }
+ public static class DirAccess { public static Error RemoveAbsolute(string p)=>default; public static Error RenameAbsolute(string a,string b)=>default; }
+ public enum Error { Ok, Failed }
+ public class AudioStreamPlayer : Node { public AudioStream Stream; public float VolumeDb; public bool Playing; public void Play(){}
+   public AudioStreamGeneratorPlayback GetStreamPlayback()=>null; }
+ public class AudioStream : Resource {} public class AudioStreamGenerator : AudioStream { public float MixRate, BufferLength; }
+ public class AudioStreamGeneratorPlayback : Resource { public int GetFramesAvailable()=>0; public void PushBuffer(Vector2[] b){} }
+ public struct Callable { public static Callable From(System.Action a)=>default; public void CallDeferred(){} }
+ namespace Collections { public class Array<T> : System.Collections.Generic.List<T> {} }
+}
+
+// ── multiplayer surface used by Warships (stub only; the real API lives in Godot) ──
+namespace Godot
+{
+    // Base types the appended stubs derive from. Without these, every class below
+    // becomes an error type -- and Roslyn stops before it ever binds method bodies,
+    // so NOTHING in scripts/ gets checked. That is how a broken stub hides real bugs.
+    public class RefCounted : GodotObject { }
+    public struct Variant
+    {
+        public static implicit operator Variant(int v) => default;
+        public static implicit operator Variant(float v) => default;
+        public static implicit operator Variant(double v) => default;
+        public static implicit operator Variant(bool v) => default;
+        public static implicit operator Variant(string v) => default;
+        public static implicit operator Variant(Color v) => default;
+        public static explicit operator int(Variant v) => 0;
+        public static explicit operator float(Variant v) => 0f;
+        public static explicit operator double(Variant v) => 0;
+        public static explicit operator bool(Variant v) => false;
+        public static explicit operator string(Variant v) => "";
+        public static explicit operator Color(Variant v) => default;
+    }
+
+    public enum MultiplayerPeerConnectionStatus { Disconnected, Connecting, Connected }
+    public partial class MultiplayerPeer : RefCounted
+    {
+        // Real Godot nests this on MultiplayerPeer. The stub previously declared a
+        // top-level MultiplayerPeerTransferMode, which does not exist -- so code using
+        // it typechecked here and failed in the engine. Names must match exactly.
+        public enum TransferModeEnum { Unreliable, UnreliableOrdered, Reliable }
+        public MultiplayerPeerConnectionStatus GetConnectionStatus() => MultiplayerPeerConnectionStatus.Connected;
+        public void Close() { }
+    }
+    public partial class ENetMultiplayerPeer : MultiplayerPeer
+    {
+        public Error CreateServer(int port, int maxClients = 32) => Error.Ok;
+        public Error CreateClient(string address, int port) => Error.Ok;
+    }
+    public partial class MultiplayerApi : RefCounted
+    {
+        public enum RpcMode { Disabled, AnyPeer, Authority }
+        public MultiplayerPeer MultiplayerPeer { get; set; }
+        public int GetUniqueId() => 1;
+        public bool IsServer() => true;
+        public int[] GetPeers() => new int[0];
+        public int GetRemoteSenderId() => 1;
+        public event System.Action<long> PeerConnected;
+        public event System.Action<long> PeerDisconnected;
+        public event System.Action ConnectedToServer;
+        public event System.Action ConnectionFailed;
+        public event System.Action ServerDisconnected;
+    }
+    [System.AttributeUsage(System.AttributeTargets.Method)]
+    public class RpcAttribute : System.Attribute
+    {
+        public RpcAttribute() { }
+        public RpcAttribute(MultiplayerApi.RpcMode mode) { }
+        public MultiplayerApi.RpcMode Mode { get; set; }
+        public bool CallLocal { get; set; }
+        public MultiplayerPeer.TransferModeEnum TransferMode { get; set; }
+    }
+}
+
+namespace Godot
+{
+    public partial class ColorPickerButton : Button
+    {
+        public Color Color { get; set; }
+        public event System.Action<Color> ColorChanged;
+    }
+    public partial class ConfigFile : RefCounted
+    {
+        public void SetValue(string section, string key, Variant value) { }
+        public Variant GetValue(string section, string key, Variant def = default) => def;
+        public Error Save(string path) => Error.Ok;
+        public Error Load(string path) => Error.Ok;
+    }
+}
+
+//==============================================================================
+// FILE: typecheck/typecheck.ps1
+// 99 lines   sha256 8e8a45b067c2
+//==============================================================================
+# Windows port of typecheck.sh -- type-checks every script with the real Roslyn compiler.
 #
-# The file list is derived here rather than inherited from the previous snapshot, so a
-# file that was never in it (typecheck/GodotStub.cs was missing for the project's whole
-# history) cannot stay missing just because it was missing before.
+# PREFERRED: if GodotSharp.dll is present in this folder, it is referenced directly
+# and the hand-written stub is ignored entirely. That makes this check identical to
+# what Godot itself compiles -- same reference assembly, same compiler.
 #
-# Format, measured from the file rather than guessed:
-#   divider      = "//" + 78 "="
-#   contents row = "//   " + <path left, count right, inside one 50-char field>
-#                  + " lines   sha256 " + <first 12 hex>      (total length 83)
-#   file block   = blank line, divider, "// FILE: <path>", "// <N> lines   sha256 <12>",
-#                  divider, then the file verbatim
-#
-# Lives in the repo rather than in a session's scratch folder for the same reason verify.ps1
-# does: a generator kept outside the project is a generator the next session does not have.
+# FALLBACK: GodotStub.cs, which only proves shape. Errors in the stub are FATAL,
+# because Roslyn binds declarations before method bodies: one bad declaration in the
+# stub means no method body is ever checked, and every script error vanishes.
+
 $ErrorActionPreference = 'Stop'
-Set-Location (Join-Path $PSScriptRoot '..')
-$env:Path += ';C:\Program Files\Git\cmd'
+Set-Location $PSScriptRoot
 
-# --others --exclude-standard as well as the index: a brand-new file is not in `git ls-files`
-# until it is staged, and a snapshot that quietly leaves out the file you just wrote is the
-# same silent omission this generator exists to prevent.
-$tracked = @(& git ls-files --cached --others --exclude-standard | Sort-Object -Unique)
-function Dir-Files($prefix) {
-  @($tracked | Where-Object { $_ -like "$prefix/*" -and ($_ -split '/').Count -eq (($prefix -split '/').Count + 1) }) |
-    Where-Object { $_ -notmatch '\.(uid|dll|import)$' } |
-    Sort-Object { $_ } -CaseSensitive
+$sdkRoot = 'C:\Program Files\dotnet'
+# THE PROJECT'S OWN TARGET, not a number written here as well: the .csproj says which framework the
+# game is built for, and this rung compiles against THAT one's reference assemblies with THAT one's
+# compiler. It was pinned to 8 in three lines, so moving the game to net10 would have left the
+# cheapest rung quietly checking it against a framework it is no longer built for.
+$tfm = (Select-String -Path (Join-Path $PSScriptRoot '..\Warships.csproj') -Pattern '<TargetFramework>(net[0-9]+\.[0-9]+)</TargetFramework>').Matches[0].Groups[1].Value
+$major = ($tfm -replace '^net', '') -replace '\..*$', ''
+$csc = Get-ChildItem "$sdkRoot\sdk" -Recurse -Filter csc.dll -ErrorAction SilentlyContinue |
+       Where-Object { $_.FullName -like '*Roslyn*' -and $_.FullName -like "*\$major.*" } |
+       Select-Object -First 1 -ExpandProperty FullName
+$refDir = Get-ChildItem "$sdkRoot\packs\Microsoft.NETCore.App.Ref" -Directory -ErrorAction SilentlyContinue |
+          Where-Object { $_.Name -like "$major.*" } | Select-Object -First 1 |
+          ForEach-Object { Join-Path $_.FullName "ref\$tfm" }
+
+# No compiler means no check. Without this guard the harness finds nothing, runs
+# nothing, and the error grep below turns "no compiler" into "0 errors".
+if (-not $csc -or -not $refDir -or -not (Test-Path $refDir)) {
+  Write-Host "NO .NET $major SDK FOUND -- nothing was checked. Install dotnet-sdk-$major.0."
+  exit 2
 }
 
-# Root files keep the original snapshot's order, which is not alphabetical.
-$fixed = @('project.godot', 'Warships.csproj', 'CharacterSelect.tscn', 'Hub.tscn', 'MainMenu.tscn')
-$final = @($fixed)
-# Everything else is DISCOVERED, not listed. A hard-coded set of directories is how
-# typecheck/GodotStub.cs stayed out of this file for the project's whole history, and it would
-# have quietly dropped verify.ps1 and tools/find-godot.ps1 the moment they were added.
-$code = @($tracked | Where-Object { $_ -match '\.(cs|sh|ps1|py|tscn|csproj|godot|editorconfig)$' -or $_ -match '\.cs\.txt$' })
-$final += @($code | Where-Object { $_ -notin $fixed -and $_ -notlike '*/*' } | Sort-Object { $_ } -CaseSensitive)
-$final += @($code | Where-Object { $_ -like 'scripts/*' }   | Sort-Object { $_ } -CaseSensitive)
-$final += @($code | Where-Object { $_ -like 'typecheck/*' } | Sort-Object { $_ } -CaseSensitive)
-$final += @($code | Where-Object { $_ -like 'tools/*' }     | Sort-Object { $_ } -CaseSensitive)
-$final = @($final | Select-Object -Unique)
+$refs = Get-ChildItem "$refDir\*.dll" | ForEach-Object { "-r:$($_.FullName)" }
+$outDll = Join-Path $env:TEMP 'typecheck.dll'
 
-foreach ($p in $final) { if ($tracked -notcontains $p) { throw "not tracked: $p" } }
+# THE HARNESS IS SOURCE TOO. SmokeTest.cs.txt and Shots.cs.txt are compiled INTO the game by the
+# runners (as scripts/_Test.cs and scripts/_Shots.cs), but `dotnet build` never sees them -- so a
+# rename that missed a call in them used to compile clean here and only fail three minutes into an
+# engine run, after a full copy and import. They are checked with everything else now: a .txt is
+# copied to a .cs beside the temp output and handed to the same compiler.
+$harness = @()
+foreach ($h in @('..\tools\smoketest\SmokeTest.cs.txt', '..\tools\screens\Shots.cs.txt')) {
+  if (-not (Test-Path $h)) { continue }
+  $dst = Join-Path $env:TEMP ('typecheck_' + [IO.Path]::GetFileNameWithoutExtension($h))
+  Copy-Item $h $dst -Force
+  $harness += $dst
+}
+if (Test-Path $outDll) { Remove-Item $outDll -Force }
 
-$info = @{}; $total = 0
-foreach ($p in $final) {
-  $win = $p -replace '/', '\'
-  if (-not (Test-Path $win)) { throw "missing: $win" }
-  $n = @(Get-Content $win).Count
-  $h = (Get-FileHash $win -Algorithm SHA256).Hash.ToLower().Substring(0, 12)
-  $info[$p] = @{ N = $n; H = $h }
-  $total += $n
+# GodotSharp.dll is gitignored -- a build dependency, not game content -- so every fresh clone or
+# unzipped copy arrives without it and silently drops to the hand-written stub, which is the weak
+# check this harness exists to avoid. It is already on any machine that has built the project, in
+# the NuGet cache. Fetch it rather than quietly checking against the stub.
+if (-not (Test-Path 'GodotSharp.dll')) {
+    $cached = Join-Path $env:USERPROFILE '.nuget\packages\godotsharp\4.7.2\lib\net8.0\GodotSharp.dll'
+    if (Test-Path $cached) {
+        Copy-Item $cached 'GodotSharp.dll'
+        Write-Host "fetched GodotSharp.dll from the NuGet cache (it is gitignored on purpose)"
+    }
 }
 
-$D = '//' + ('=' * 78)
-$commit = (& git rev-parse --short HEAD).Trim()
-$stamp = (Get-Date).ToString('yyyy-MM-dd HH:mm')
-
-$out = New-Object System.Text.StringBuilder
-function W($s) { [void]$out.Append($s); [void]$out.Append("`n") }
-
-W $D
-W '// WARSHIPS -- code snapshot (master copy)'
-W "// Taken $stamp, on top of git commit ${commit}. How it was verified is in the message of the"
-W '//   commit that carries this file: one starting VERIFIED: is a green verify.ps1 -Update.'
-W "// $($final.Count) files, $total lines. Code only: sprites, sounds and docs are in the zip."
-W '//'
-W '// Each file starts with a divider and a "// FILE: <path>" line. To split it back into'
-W '// files, cut at each divider: everything after the divider''s third line, up to the next'
-W '// divider, is that file verbatim.'
-W '//'
-W '// Contents:'
-foreach ($p in $final) {
-  $n = [string]$info[$p].N
-  $pad = 50 - $p.Length - $n.Length
-  if ($pad -lt 1) { $pad = 1 }
-  W ('//   ' + $p + (' ' * $pad) + $n + ' lines   sha256 ' + $info[$p].H)
-}
-W $D
-
-foreach ($p in $final) {
-  $win = $p -replace '/', '\'
-  W ''
-  W $D
-  W "// FILE: $p"
-  W "// $($info[$p].N) lines   sha256 $($info[$p].H)"
-  W $D
-  $txt = [System.IO.File]::ReadAllText($win) -replace "`r`n", "`n"
-  [void]$out.Append($txt)
-  if (-not $txt.EndsWith("`n")) { [void]$out.Append("`n") }
+$haveReal = Test-Path 'GodotSharp.dll'
+if ($haveReal) {
+  $extra = @('-r:GodotSharp.dll')
+  if (Test-Path 'GodotSharpEditor.dll') { $extra += '-r:GodotSharpEditor.dll' }
+  $src = @(Get-ChildItem '..\scripts\*.cs' | ForEach-Object { $_.FullName }) + $harness
+  $mode = 'REAL GodotSharp.dll'
+} else {
+  $extra = @()
+  $src = @(Get-ChildItem '..\scripts\*.cs' | ForEach-Object { $_.FullName }) + $harness + @('GodotStub.cs')
+  $mode = 'hand-written stub (weaker -- drop GodotSharp.dll here to fix)'
 }
 
-[System.IO.File]::WriteAllText((Join-Path (Get-Location) 'version\CODE_SNAPSHOT.txt'), $out.ToString())
-"files: $($final.Count)   lines: $total"
+$argsList = @('-target:library','-nologo','-langversion:12.0','-nostdlib+','-define:GODOT',"-out:$outDll") +
+            $src + $extra + $refs
+$out = & dotnet $csc $argsList | Select-String -Pattern 'error CS' | ForEach-Object { $_.Line }
+
+if (-not $env:GODOT_QUIET) { Write-Host "checking against: $mode" }
+
+if (-not $haveReal) {
+  $stub = @($out | Where-Object { $_ -match 'GodotStub' })
+  if ($stub.Count -gt 0) {
+    Write-Host 'STUB IS BROKEN -- script checking did NOT run. Fix these first:'
+    $stub | ForEach-Object { Write-Host $_ }
+    exit 1
+  }
+}
+if ($out) {
+  $out | Where-Object { $_ -ne '' } | ForEach-Object { Write-Host $_ }
+  exit 1
+}
+# Zero errors only counts if the compiler actually produced its output.
+if (-not (Test-Path $outDll)) {
+  Write-Host 'COMPILER PRODUCED NOTHING -- result is not trustworthy.'
+  exit 2
+}
+Write-Host '0 errors.'
+
+//==============================================================================
+// FILE: typecheck/typecheck.sh
+// 61 lines   sha256 c94fe5471263
+//==============================================================================
+#!/bin/sh
+# Type-checks every script with the real Roslyn compiler.
+#
+# PREFERRED: if GodotSharp.dll is present in this folder, it is referenced directly
+# and the hand-written stub is ignored entirely. That makes this check identical to
+# what Godot itself compiles -- same reference assembly, same compiler -- and removes
+# the whole class of "the stub invented an API" and "the stub was incomplete" bugs.
+#
+# FALLBACK: GodotStub.cs, which only proves shape. Errors in the stub are FATAL,
+# because Roslyn binds declarations before method bodies: one bad declaration in the
+# stub means no method body is ever checked, and every script error vanishes.
+# THE PROJECT'S OWN TARGET, read from the .csproj rather than written here as well, so this rung
+# always checks the game against the framework it is actually built for.
+TFM=$(sed -n 's/.*<TargetFramework>\(net[0-9]*\.[0-9]*\)<.*/\1/p' ../Warships.csproj | head -1)
+MAJOR=$(echo "$TFM" | sed 's/^net//; s/\..*$//')
+CSC=$(find /usr/lib/dotnet -name csc.dll -path "*Roslyn*" | head -1)
+REF=$(ls -d /usr/lib/dotnet/packs/Microsoft.NETCore.App.Ref/"$MAJOR"*/ref/"$TFM"/ | head -1)
+
+# No compiler means no check. Without this guard the harness found nothing, ran
+# nothing, and the error grep below turned "no compiler" into "0 errors".
+if [ -z "$CSC" ] || [ -z "$REF" ]; then
+  echo "NO .NET $MAJOR SDK FOUND -- nothing was checked. Install dotnet-sdk-$MAJOR.0." >&2
+  exit 2
+fi
+R=""; for d in "$REF"*.dll; do R="$R -r:$d"; done
+rm -f /tmp/typecheck.dll
+
+if [ -f GodotSharp.dll ]; then
+  EXTRA="-r:GodotSharp.dll"
+  [ -f GodotSharpEditor.dll ] && EXTRA="$EXTRA -r:GodotSharpEditor.dll"
+  SRC="../scripts/*.cs"
+  MODE="REAL GodotSharp.dll"
+else
+  EXTRA=""
+  SRC="../scripts/*.cs GodotStub.cs"
+  MODE="hand-written stub (weaker -- drop GodotSharp.dll here to fix)"
+fi
+
+OUT=$(dotnet "$CSC" -target:library -nologo -langversion:12.0 -nostdlib+ \
+      -define:GODOT -out:/tmp/typecheck.dll $SRC $EXTRA $R 2>&1 | grep -E "error CS")
+
+if [ -z "$GODOT_QUIET" ]; then echo "checking against: $MODE" >&2; fi
+
+if [ ! -f GodotSharp.dll ]; then
+  STUB=$(printf '%s\n' "$OUT" | grep -c "GodotStub")
+  if [ "$STUB" -gt 0 ]; then
+    echo "STUB IS BROKEN -- script checking did NOT run. Fix these first:"
+    printf '%s\n' "$OUT" | grep "GodotStub"
+    exit 1
+  fi
+fi
+if [ -n "$OUT" ]; then
+  printf '%s\n' "$OUT" | grep -v '^$'
+  exit 1
+fi
+# Zero errors only counts if the compiler actually produced its output.
+if [ ! -f /tmp/typecheck.dll ]; then
+  echo "COMPILER PRODUCED NOTHING -- result is not trustworthy." >&2
+  exit 2
+fi
+echo "0 errors." >&2

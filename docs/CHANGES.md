@@ -418,6 +418,48 @@ Unreleased. Nothing is outstanding from the batch of 2026-09-23.)*
 
 ## Unreleased
 
+### Six more steps that could not fail, found by sweeping every PowerShell file (2026-09-24, in the WarShips_Version_L fork)
+
+After the analyser turned out never to have run, four agents read all fifteen `.ps1` files looking
+for the same family. They found it repeatedly. Everything below was reproduced in a scratch folder
+before it was touched.
+
+**The build step never rebuilt, so it asked a question that could only come back clean.**
+`verify.ps1` ran `dotnet build` with no `-t:Rebuild`, and an incremental build of an unchanged tree
+emits no warnings whatever the code says. Measured on a project with a live CS0219: cold build
+`1 Warning(s)`, the very next build `0 Warning(s)`, rebuild `1 Warning(s)` again. So invariant D's
+COMPILER half was as unenforced as its analyser half, on every bar after the first.
+`tools/analyse/run.ps1` had had the flag all along.
+
+**The analyser still could not tell a failed build from a clean one.** Fixing the quoting made it
+run; it did not make it check. Measured on a project that does not compile: exit code 1, a log
+full of `error CS0103`, and the script printed `ANALYSERS: 0 findings` -- because a build that
+dies produces no WARNING lines to count. It reads the exit code now, and a mutant proves it: a
+line of nonsense appended to `Sky.cs` turns it red, removing it turns it green.
+
+**The snapshot was dropping source, and by the very mistake its own comment warns about.** It
+bucketed discovered files into four HARD-CODED directories, so `launcher/Main.cs` and
+`launcher/Launcher.csproj` matched the filter, belonged to no bucket, and were silently absent
+from the master copy; `PLAY.bat` and `Warships.sln` never reached the filter at all. The
+directories are discovered now, a check proves nothing discovered is dropped, and the file went
+from 111 entries to 115. A dead `Dir-Files` helper that nothing called went with it.
+
+**The manifest passed a verification that failed.** `sha256sum`'s exit code was never read and
+there was no floor on the count, so an empty list printed `manifest: 0 files, 0 not verifying` and
+exited 0 while sha256sum had exited 1. That is precisely how a release manifest that hashed ONE of
+189 files passed its own check earlier the same day. It now refuses an empty list, reads the exit
+code, and requires an OK line per file.
+
+**The screenshot sweep had no failing exit path at all.** `SWEEP INCOMPLETE` printed and fell
+through; `$lint` and `$frames` were computed, printed and thrown away. A sweep whose engine died
+at frame 0 ended on `frames: 0 | LINT: 0` and exited 0 -- and CLAUDE.md section 7 tells a reader to
+trust `LINT: 0` for rung 4. The bar re-derived it from stdout so the BAR was covered; rung 4 run on
+its own, which the ladder tells you to do for anything visual, was not.
+
+**A half-copied tree was not noticed.** `robocopy`'s exit code is a bitfield -- 0-7 success, 8 and
+up failure -- and both engine runners discarded it, so a partial copy went on to build, import and
+report on whatever happened to arrive.
+
 ### The gate could not go red in three more places, and there was a second play script (2026-09-24, in the WarShips_Version_L fork)
 
 **`0 Warning(s)` is a SUBSTRING of `10 Warning(s)`.** `verify.ps1` matched both that and

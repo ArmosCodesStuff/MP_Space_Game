@@ -30,10 +30,26 @@ try {
   & dotnet build -t:Rebuild --nologo -v q `
       -p:EnforceCodeStyleInBuild=true -p:GenerateDocumentationFile=true `
       -p:NoWarn=CS1591%3BCS1573%3BCS1587 *> $log
+  $build = $LASTEXITCODE
   Pop-Location
 } finally {
   Remove-Item $ec -Force -ErrorAction SilentlyContinue
 }
+
+# IT RAN, AND IT SUCCEEDED. Fixing the quoting made the build happen; it did NOT make this
+# script able to tell a FAILED build from a clean one. Measured on a project that does not
+# compile: exit code 1, a log full of `error CS0103`, and this pipeline still printed
+# `ANALYSERS: 0 findings` -- because a build that dies produces no WARNING lines to count.
+# The same held for a log that was never written, thanks to the SilentlyContinue below.
+# An analyser pass that cannot fail is the thing this whole file was just fixed for.
+if ($build -ne 0) {
+  Write-Host "ANALYSERS: the build FAILED (exit $build) -- there is nothing to analyse."
+  Get-Content $log -ErrorAction SilentlyContinue |
+    Where-Object { $_ -match ': error |error MSB' } | Select-Object -First 5 |
+    ForEach-Object { Write-Host "  $_" }
+  exit 1
+}
+if (-not (Test-Path $log)) { Write-Host 'ANALYSERS: no log was written -- the build did not run.'; exit 1 }
 
 $findings = Get-Content $log -ErrorAction SilentlyContinue |
   Select-String -Pattern 'warning (IDE|CS)[0-9]+' |

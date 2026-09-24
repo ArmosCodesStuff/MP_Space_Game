@@ -59,6 +59,9 @@ foreach ($dir in @($W, $shots)) {
 }
 New-Item -ItemType Directory -Path $W, $shots -Force | Out-Null
 robocopy $src $W /E /XD .godot .git bin obj /NFL /NDL /NJH /NJS /NP | Out-Null
+# ROBOCOPY'S EXIT CODE IS A BITFIELD: 0-7 is success (8 = some files did not copy). It was
+# discarded, so a half-copied tree went on to build, import and report on whatever arrived.
+if ($LASTEXITCODE -ge 8) { Write-Host "copy FAILED (robocopy $LASTEXITCODE): $src -> $W"; exit 2 }
 
 # Rewrite the one POSIX path in the shot writer. Godot's SavePng takes forward slashes
 # happily on Windows, so only the prefix changes.
@@ -119,10 +122,20 @@ try {
   $keep | ForEach-Object { Write-Host $_ }
 
   # a sweep cut off part-way (a timeout) must never pass as clean
+  $bad = 0
   if (-not ($keep | Where-Object { $_ -cmatch '^SWEEP DONE' })) {
     Write-Host "SWEEP INCOMPLETE -- the run was cut off; later frames were not rendered"
+    $bad = 1
   }
   $lint = @($keep | Where-Object { $_ -cmatch '^LINT' }).Count
   $frames = @(Get-ChildItem $shots -Filter *.png -ErrorAction SilentlyContinue).Count
   Write-Host "frames: $frames in $shots  |  LINT: $lint"
+  # ...AND IT SAYS SO IN ITS EXIT CODE. All three of these were computed, printed and thrown away:
+  # SWEEP INCOMPLETE only printed, and $lint and $frames were never asserted at all -- so a sweep
+  # whose engine died at frame 0 ended on "frames: 0 | LINT: 0" and exited 0. CLAUDE.md section 7
+  # tells a reader to trust LINT: 0 for rung 4, and nothing to draw is nothing to lint.
+  # verify.ps1 re-derives this from stdout, so the BAR was covered; rung 4 run on its own was not.
+  if ($frames -lt 1) { Write-Host 'the sweep drew NO frames -- LINT: 0 means nothing.'; $bad = 1 }
+  if ($lint -ne 0)   { Write-Host "the sweep reported $lint layout problems."; $bad = 1 }
+  if ($bad) { Pop-Location; exit 1 }
 } finally { Pop-Location }
