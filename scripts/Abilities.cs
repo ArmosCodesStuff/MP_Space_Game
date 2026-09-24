@@ -283,7 +283,8 @@ public static class Ab
         Id = "hunters", Name = "Hunter-seekers", Short = "HUNTERS", Default = Key.F,
         Blurb = "A cell of missiles, each taking a target of its own; all of them at the nearest if there is only one.",
         Press = (s, _) => s.LaunchHunters(),
-        Refuse = (s, _) => s.Sl("hunters").Cool > 0 ? "RELOADING" : null,
+        Refuse = (s, _) => s.Sl("hunters").Cool > 0 ? "RELOADING"
+                         : s.SeekerPrey().Count == 0 ? "NOTHING IN REACH" : null,
         Show = (s, _) => Timed(s, "hunters", "hunter_cooldown", "AWAY"),
     };
 

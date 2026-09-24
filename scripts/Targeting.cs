@@ -27,10 +27,15 @@ public static class Targeting
     // Point defence takes missiles and small craft only -- never a heavy, a boss or a dummy hulk.
     // (a practice dummy's FIGHTER is Light, so PD still engages it; the hulk itself is not.)
     public static readonly TargetFilter PointDefence = new(require: Tag.Missile | Tag.Light | Tag.Fighter);
-    // What something hostile may attack: a ship or a fleet craft, never a missile in flight.
+    // ANYTHING BUT A MISSILE IN FLIGHT. Two things want exactly this: something hostile choosing a
+    // ship or a fleet craft to attack, and a FIRE-AND-FORGET SEEKER choosing what to chase. One
+    // row, because a second one with the same contents is a second one to keep true.
     public static readonly TargetFilter Attackable = new(forbid: Tag.Missile);
     // What a wing takes for itself when its target dies: never a missile, never a practice dummy
-    // (it cannot die, so the wing would strafe it for ever).
+    // (it cannot die, so the wing would strafe it for ever). A SEEKER DOES NOT USE THIS, and using
+    // it is what made the warden look broken -- the dummy a pilot tests on was the one thing its
+    // missiles refused to fly at. The reasoning above is about a wing RE-TARGETING; a seeker hits
+    // once and dies, so it never applied to one.
     public static readonly TargetFilter WingPrey = new(forbid: Tag.Missile | Tag.Dummy);
     // Raiding craft, for the base's guns: what actually comes at the station.
     public static readonly TargetFilter Craft = new(require: Tag.Light | Tag.Heavy, forbid: Tag.Dummy);

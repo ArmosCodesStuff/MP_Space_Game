@@ -313,6 +313,43 @@ public partial class _Test : Node
     // version/ITEMS.csv, from the LIVE table on every run, because a sheet kept by hand is a sheet
     // that disagrees with the game the first time a line changes. One row per part: what it is,
     // what it needs, every stat it moves and by how much, and the words the player is shown.
+    // EVERY HULL, EVERY NUMBER, FROM THE LIVE SHEET. Written like WriteItemSheet and for the same
+    // reason: the owner approves a balance change against what the GAME computes, not against what
+    // the source appears to say. Ships.cs cannot be read for this -- the carrier's helm figures are
+    // expressions over ShipStats.CarrierTop, and ShipStats fills in a default for every row a class
+    // does not state, so a static read of the table is wrong in both directions.
+    void WriteShipSheet()
+    {
+        string Q(string x) => "\"" + (x ?? "").Replace("\"", "\"\"") + "\"";
+        var flyable = Classes.All.Where(c => c.Ready).ToList();
+        var sheets = flyable.ToDictionary(c => c.Id, c => new ShipStats(c.Id));
+        // the union of every stat any hull has, in the order the first hull to carry it lists it
+        var ids = new List<string>();
+        foreach (var c in flyable) foreach (var st in sheets[c.Id].All) if (!ids.Contains(st.Id)) ids.Add(st.Id);
+
+        var head = new List<string> { "class", "abilities", "targets", "sustained_dps", "weapons" };
+        head.AddRange(ids);
+        var rows = new List<string> { string.Join(",", head.Select(Q)) };
+        foreach (var c in flyable)
+        {
+            var sh = sheets[c.Id];
+            var cells = new List<string>
+            {
+                Classes.NameOf(c.Id),
+                string.Join(" ", c.Abilities.Select(a2 => a2.Id)),
+                c.Targets.ToString(),
+                sh.SustainedDps.ToString("0.00"),
+                string.Join("; ", sh.DamageLines.Select(l => $"{l.Label} {l.Dps:0.00}{(l.Sustained ? "" : " burst")}")),
+            };
+            cells.AddRange(ids.Select(id => sh.All.Any(st => st.Id == id) ? sh[id].ToString("0.###") : ""));
+            rows.Add(string.Join(",", cells.Select(Q)));
+        }
+        using var f = Godot.FileAccess.Open("res://version/SHIPS.csv", Godot.FileAccess.ModeFlags.Write);
+        if (f != null) f.StoreString(string.Join("\n", rows) + "\n");
+        Check(rows.Count == flyable.Count + 1 && ids.Count > 20 && f != null,
+              $"every flyable hull is written out for review: version/SHIPS.csv, {rows.Count - 1} hulls over {ids.Count} stats from the live sheets");
+    }
+
     void WriteItemSheet()
     {
         var rows = new List<string> { "id,name,slot,rarity,kit,fits,needs,percent,flat,blurb" };
@@ -336,6 +373,7 @@ public partial class _Test : Node
     async Task SaveCoverage()
     {
         WriteItemSheet();
+        WriteShipSheet();
         // The refit's arithmetic runs here rather than in the world: it works on a BLANK pilot, and
         // this is the one place that already throws pilots away and loads the real one back at the
         // end. Run where the hub starts, its NewBlank wiped the tutorial's hint state.
@@ -5026,27 +5064,61 @@ public partial class _Test : Node
                         }
                         case "hunter_range":
                         {
-                            // The cell only sees what is inside its reach: with nothing in reach
-                            // the press spends the cooldown and launches nothing at all.
+                            // THREE SITUATIONS, because two of them were wrong in the shipped game
+                            // and the old check called one of them correct.
+                            //   1. NOTHING IN REACH: nothing launches, the cooldown is NOT spent,
+                            //      and the slot says so. It used to take the cooldown on the line
+                            //      above the search, so a press at an empty sky burned all 14 s and
+                            //      fired nothing -- which from the cockpit is the ability being
+                            //      broken, and is what the owner reported.
+                            //   2. A PRACTICE DUMMY IN REACH: it launches. The cell used
+                            //      Targeting.WingPrey, which forbids a dummy because a WING would
+                            //      strafe something immortal for ever -- so the one thing a pilot
+                            //      tests a hull on was the one thing its missiles refused to fly
+                            //      at. A seeker hits once and dies; it uses Attackable now.
+                            //   3. SOMETHING REAL IN REACH: it launches and the cooldown IS spent.
                             var mkOut = await Marker(pilot.Position + way * (float)(reach * Vary(1.15f, 1.45f)));
                             int flying0 = InFlight().Count();
                             pilot.Sl("hunters").Cool = 0;
                             doAbility.Invoke(pilot, new object[] { "hunters", 0 });
                             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                             int flewNone = InFlight().Count() - flying0;
-                            // ITS DISTANCE IS READ BEFORE IT IS SUNK: a sunk mark is freed on the
-                            // next frame, and the line below is written after that frame.
+                            bool keptCool = pilot.Sl("hunters").Cool == 0;
+                            string emptySays = Abilities.Find(pilot.Class, "hunters").Refuse?.Invoke(pilot, null);
                             float noneAt = pilot.Position.DistanceTo(mkOut.Position);
                             Sink(mkOut);
                             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+
+                            // 2 -- a DUMMY, the thing a pilot actually practises on
+                            var dummy = Nodes<TargetDummy>().FirstOrDefault();
+                            int flewDummy = -1;
+                            if (dummy != null)
+                            {
+                                var wasAt = pilot.Position;
+                                pilot.Position = dummy.Position + Vector2.Right.Rotated(VaryAngle()) * (float)(reach * Vary(0.35f, 0.7f));
+                                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                                flying0 = InFlight().Count();
+                                pilot.Sl("hunters").Cool = 0;
+                                doAbility.Invoke(pilot, new object[] { "hunters", 0 });
+                                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                                flewDummy = InFlight().Count() - flying0;
+                                pilot.Position = wasAt;
+                                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                            }
+
+                            // 3 -- something real, and the cooldown goes this time
                             var mkIn = await Marker(pilot.Position + wide * (float)(reach * Vary(0.40f, 0.85f)));
                             flying0 = InFlight().Count();
                             pilot.Sl("hunters").Cool = 0;
                             doAbility.Invoke(pilot, new object[] { "hunters", 0 });
                             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                             int flew = InFlight().Count() - flying0;
-                            proved = flewNone == 0 && flew >= (int)pilot.Stats["hunter_count"];
-                            told = $"{flewNone} away with only a mark at {noneAt:0} u, {flew} away with one at {pilot.Position.DistanceTo(mkIn.Position):0} u";
+                            bool spentCool = pilot.Sl("hunters").Cool > 0;
+                            int want = (int)pilot.Stats["hunter_count"];
+                            proved = flewNone == 0 && keptCool && emptySays == "NOTHING IN REACH"
+                                     && flewDummy >= want && flew >= want && spentCool;
+                            told = $"empty sky: {flewNone} away, cooldown kept ({keptCool}), slot says {emptySays ?? "nothing"}; "
+                                 + $"a dummy at hand: {flewDummy} away; a hostile at {pilot.Position.DistanceTo(mkIn.Position):0} u: {flew} away and the cooldown spent ({spentCool})";
                             Sink(mkIn);
                             pilot.Sl("hunters").Cool = 0;
                             break;

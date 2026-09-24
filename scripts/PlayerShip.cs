@@ -607,16 +607,29 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
 
     // Six missiles, each on a target of its own while there are targets to go round; what is left
     // over goes at the nearest one.
+    // WHAT THE CELL CAN SEE, in one place, because the slot has to say "NOTHING IN REACH" before
+    // the press and the press has to find the same things afterwards. Targeting.Attackable, not
+    // WingPrey: a seeker hits once and dies, so a practice dummy is a perfectly good target for it.
+    public List<IHittable> SeekerPrey()
+    {
+        float range = (float)Stats["hunter_range"];
+        var seen = new List<IHittable>();
+        foreach (var h in Targeting.All(Combat.Hostiles, Targeting.Attackable))
+            if (Position.DistanceTo(h.Position) <= range) seen.Add(h);
+        return seen;
+    }
+
     public void LaunchHunters()
     {
         if (Sl("hunters").Cool > 0) return;
-        Sl("hunters").Cool = Cooling(Stats["hunter_cooldown"]);
         int n = (int)Stats["hunter_count"];
         float range = (float)Stats["hunter_range"];
-        var seen = new List<IHittable>();
-        foreach (var h in Targeting.All(Combat.Hostiles, Targeting.WingPrey))
-            if (Position.DistanceTo(h.Position) <= range) seen.Add(h);
+        var seen = SeekerPrey();
+        // NOTHING IN REACH SPENDS NOTHING. The cooldown used to be taken on the line above this
+        // search, so a press with an empty sky burned all 14 s and fired nothing -- which is
+        // indistinguishable, from the cockpit, from the ability being broken.
         if (seen.Count == 0) return;
+        Sl("hunters").Cool = Cooling(Stats["hunter_cooldown"]);
         var nose = Aim.Nose(this, MyArt.Length * 0.5f);
         for (int i = 0; i < n; i++)
         {
