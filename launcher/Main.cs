@@ -220,6 +220,10 @@ namespace Warships.Launcher
             // The standing notice: amber, because it is the one part a player must ACT on.
             new NoteStyle { Head = "FIRST TIME", Title = Color.FromArgb(255, 190,  90),
                             Body = Color.FromArgb(235, 200, 150) },
+            // The hard block, and the only section that asks a player to change their machine.
+            // Red, because "this cannot be undone" has to be read before it is acted on.
+            new NoteStyle { Head = "IF WINDOWS BLOCKS IT OUTRIGHT", Title = Color.FromArgb(255, 110, 100),
+                            Body = Color.FromArgb(240, 180, 175) },
             // What actually changed: the heading stands out, the entry reads as ordinary text.
             new NoteStyle { Head = "GAME UPDATES", Title = Color.FromArgb(120, 200, 255),
                             Body = Plain },

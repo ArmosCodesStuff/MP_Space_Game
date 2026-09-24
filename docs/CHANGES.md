@@ -888,6 +888,16 @@ run; every figure they assert stays a literal.
   in `scripts/Builds.cs` and is proved by 30 rung-3 checks -- but the window and the operating
   system are manual checks that have not been run. `docs/README.md` lists them under Releasing.
   (The fourth, a real HTTPS fetch, is now proved: see below.)
+- **SMART APP CONTROL HARD-BLOCKS THIS on the machines that have it**, and the answer is a note
+  asking the player to switch it off. It is a Windows 11 feature separate from SmartScreen: no
+  "Run anyway", no bypass, and it is only ever on for clean installs of 22H2 or later. Switching
+  it off **cannot be undone** -- Windows lets that setting go one way and the only route back is a
+  reinstall -- so the release notes say that plainly and tell the player it is fine to decline.
+  A section of `NOTES.txt` carries it (`tools/pack.ps1`), which is one row there and a colour in
+  the launcher. THE HONEST POSITION: this asks a friend to permanently disable a security feature
+  to play a game. It is the owner's call and it is made knowingly, but it is the reason to revisit
+  signing, or Steam (whose client is trusted, and which does the launcher's whole job), if this
+  ever goes past friends.
 - **Nothing is signed, and that is a decision rather than an omission.** SmartScreen trusts a
   certificate's REPUTATION, not the presence of a signature: a new OV certificate shows the same
   "Windows protected your PC" wall until downloads accrue against it, and only an EV certificate

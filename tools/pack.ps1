@@ -180,6 +180,25 @@ $sections = @(
         'certificate is a few hundred a year and this is a game for friends.',
         'Click "More info", then "Run anyway".',
         'You will see this once per version of the launcher, not once per update.'
+    )},
+    @{ Head = 'IF WINDOWS BLOCKS IT OUTRIGHT'; Lines = @(
+        'A few Windows 11 machines have SMART APP CONTROL switched on. It blocks',
+        'unsigned programs with no "Run anyway" -- if the box says "Smart App Control',
+        'blocked an app" and offers you no way through, that is this.',
+        '',
+        'Most machines do not have it. It is only ever on for CLEAN INSTALLS of',
+        'Windows 11 22H2 or later; an upgraded machine does not get it. If you cannot',
+        'find the setting below, you do not have it, and your problem is something',
+        'else -- say so rather than hunting for it.',
+        '',
+        'To turn it off:',
+        '  Settings > Privacy & security > Windows Security > App & browser control',
+        '  > Smart App Control settings > Off',
+        '',
+        'READ THIS BEFORE YOU DO: turning it off CANNOT BE UNDONE. Windows only lets',
+        'it go one way, and the only route back is reinstalling Windows. It is a real',
+        'security feature and you are switching it off for good, for a game. Nobody',
+        'will mind if you decide that is not a trade you want to make.'
     )}
 )
 $preamble = @()

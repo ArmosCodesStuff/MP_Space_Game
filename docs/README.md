@@ -97,6 +97,17 @@ once by hand. Everything with a *decision* in it lives in `scripts/Builds.cs` an
 *More info -> Run anyway*. `tools\pack.ps1` puts that instruction at the top of every release's
 NOTES.txt, so nobody has to be told twice.
 
+**SMART APP CONTROL IS A HARDER BLOCK, and some players hit it.** It is a Windows 11 feature,
+separate from SmartScreen, that refuses unsigned programs with NO "Run anyway" at all. It is only
+ever on for clean installs of 22H2 or later, so most machines do not have it -- but the ones that
+do cannot run this at all while it is on. The release notes carry the instruction to switch it off
+(*Settings > Privacy & security > Windows Security > App & browser control > Smart App Control
+settings > Off*) **and the warning that it cannot be undone**: Windows only lets that setting go
+one way, and the route back is a reinstall. That is a real thing to ask of someone, and the notes
+say so rather than glossing it. If asking stops being acceptable, the fix is a certificate -- and
+Smart App Control weighs reputation too, so it wants EV or a signing service with history, not the
+cheapest option.
+
 Signing would not fix it cheaply: SmartScreen trusts a CERTIFICATE'S REPUTATION, not the presence
 of a signature, and a new OV certificate shows the same wall until enough downloads accrue against
 it. Only an EV certificate (~$300-600/yr, and a USB token in the post) is trusted on day one;
