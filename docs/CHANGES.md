@@ -418,6 +418,25 @@ Unreleased. Nothing is outstanding from the batch of 2026-09-23.)*
 
 ## Unreleased
 
+### A clone can be played (2026-09-24, in the WarShips_Version_L fork)
+
+**Nothing in the repo launched the game.** There is no runnable file here and there is not meant
+to be -- no `.exe`, no `.pck`, `dist\` gitignored -- so anyone given access had to know to install
+the right Godot, know that the PLAIN build cannot run a C# project at all, find the engine, and
+know `--path`. Each of those fails with an error about something else.
+
+**`PLAY.bat` at the root, and `tools/play.ps1` under it.** The bat is one line, because PowerShell
+refuses a `.ps1` on a double-click by default and `-ExecutionPolicy Bypass` answers that for one
+command without changing anything on the machine. The script resolves the engine through
+`tools/find-godot.ps1` -- the same resolver every other tool here uses, so `$env:WARSHIPS_GODOT`
+and a gitignored `local.config.ps1` work exactly as they already did -- and checks the two things
+that are ever actually missing BEFORE the engine can fail confusingly about them: the .NET SDK,
+and that the engine is the mono build. Each failure prints the download link and the fix.
+`-Editor` opens the editor instead.
+
+It also says that a first run on a fresh clone takes a minute or two and has not hung, which is
+the difference between waiting and giving up.
+
 ### The sky is layered, so flying looks like flying (2026-09-24, in the WarShips_Version_L fork)
 
 **The background could not move, by construction.** It was one `TextureRect`, anchored `FullRect`

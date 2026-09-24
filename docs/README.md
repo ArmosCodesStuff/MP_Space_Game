@@ -46,6 +46,30 @@ build handshake refuses a peer on a different build, deliberately.
 window its own character before hosting**: two peers writing one character file is the collision
 that made a day of save bugs look real.
 
+## Playing it from a clone
+
+Double-click **`PLAY.bat`**, or:
+
+```
+powershell -ExecutionPolicy Bypass -File tools\play.ps1
+```
+
+`-Editor` opens the Godot editor instead of running the game.
+
+**There is no runnable file in this repo and there is not meant to be** -- no `.exe`, no `.pck`,
+and `dist\` is gitignored. A release is an OUTPUT (see Releasing below); a clone gets the project.
+`tools\play.ps1` runs it, and checks the two things that are actually ever missing before the
+engine can fail confusingly about them:
+
+- **Godot 4.7.2, the .NET / MONO build.** The plain build has no C# in it at all: it opens this
+  project and then cannot load a single script, which reads like the project is broken and is not.
+  Found by `toolsind-godot.ps1`, which also reads `$env:WARSHIPS_GODOT` and `local.config.ps1`
+  (gitignored, so your path survives a pull).
+- **The .NET 8 SDK**, because the engine builds the C# before the window opens.
+
+A FIRST run on a fresh clone takes a minute or two -- every asset is imported and the assembly is
+built before anything appears. It has not hung.
+
 ## Releasing
 
 ```
