@@ -144,7 +144,7 @@ public partial class CharacterSelect : Control
     {
         _pendingDelete = s.Id;
         _confirm.DialogText = $"Delete {s.Name} ({Classes.NameOf(s.Class)})?\n\n"
-                            + "This removes the character from disk. It cannot be undone.";
+                            + "Removes the character from disk. It cannot be undone.";
         _confirm.PopupCentered(new Vector2I(460, 170));
     }
 

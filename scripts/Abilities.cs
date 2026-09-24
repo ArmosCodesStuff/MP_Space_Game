@@ -81,7 +81,7 @@ public static class Ab
     public static readonly AbilityDef Guns = new()
     {
         Id = "guns", Name = "Main guns", Short = "GUNS", Kind = AbilityKind.Hold, Default = Key.Space,
-        Blurb = "Hold to fire. The barrels aim at the cursor and swing slowly.",
+        Blurb = "Hold to fire. The barrels follow the cursor, slowly.",
         Show = (s, _) => new SlotState { Line = s.Staggered ? "STAGGERED" : "SALVO", Lit = s.Trigger },
     };
 
@@ -96,7 +96,7 @@ public static class Ab
     public static readonly AbilityDef Broadside = new()
     {
         Id = "broadside", Name = "Broadside", Short = "BROADSIDE", Default = Key.F,
-        Blurb = "The turrets swing onto the cursor, then every main gun fires, volley after volley. The ship steers throughout.",
+        Blurb = "The turrets swing onto the cursor, then every main gun fires, volley after volley. You keep steering.",
         Press = (s, _) => s.StartBroadside(),
         // the wind-up spent: every peer moves on to the volleys (the bar, the turrets' fast
         // swing) until the host's next report says how many are left; only the host fires them
@@ -116,7 +116,7 @@ public static class Ab
     public static readonly AbilityDef Pd = new()
     {
         Id = "pd", Name = "Point defence", Short = "PD", Default = Key.Q,
-        Blurb = "Opens a firing window; each turret picks and tracks its own target. Recharges after.",
+        Blurb = "Opens a firing window: each turret picks its own target. Recharges after.",
         Press = (s, _) => s.StartPd(),
         Expire = s => s.Sl("pd").Cool = s.Stats["pd_reload"],      // the window closed: the recharge
         Show = (s, _) =>
@@ -130,7 +130,7 @@ public static class Ab
     public static readonly AbilityDef Missile = new()
     {
         Id = "missile", Name = "Missile burst", Short = "MSL", Default = Key.F,
-        Blurb = "Three guided missiles: one at the target, two launched wide that curve in. Needs a selected target in range. Uses the magazine.",
+        Blurb = "Three guided missiles: one at the target, two wide that curve in. Needs a target in range; uses the magazine.",
         Press = (s, t) => s.FireMissile(t),
         Refuse = (s, t) => t == null ? "NO TARGET"
                          : s.Position.DistanceTo(t.Position) > s.Stats["missile_range"] ? "OUT OF RANGE" : null,
@@ -147,7 +147,7 @@ public static class Ab
     public static readonly AbilityDef Reload = new()
     {
         Id = "reload", Name = "Reload missiles", Short = "RELOAD", Default = Key.R,
-        Blurb = "Refills the missile magazine. Nothing fires while it runs.",
+        Blurb = "Refills the magazine. Nothing fires while it runs.",
         Press = (s, _) => s.StartReload(),
         Expire = s => s.Sl("missile").N = (int)s.Stats["missile_mag"],   // loaded: the magazine full
         Show = (s, _) => s.Reloading
@@ -158,7 +158,7 @@ public static class Ab
     public static readonly AbilityDef Attack = new()
     {
         Id = "attack", Name = "Fighters: attack", Short = "ATTACK", Default = Key.Space,
-        Blurb = "Sends the fighters at the selected target while it is within control range.",
+        Blurb = "Sends the fighters at the selected target, inside control range.",
         Press = (s, t) => s.OrderAttack(t),
         Show = (s, sel) =>
         {
@@ -172,7 +172,7 @@ public static class Ab
     public static readonly AbilityDef Recall = new()
     {
         Id = "recall", Name = "Fighters: recall", Short = "RECALL", Default = Key.R,
-        Blurb = "Calls the fighters home: they dock inside the carrier.",
+        Blurb = "Calls the fighters home; they dock inside.",
         Press = (s, _) => s.RecallWing(),
         Show = (s, _) => new SlotState { Line = s.WingTarget != null ? "READY" : "HOME" },
     };
@@ -202,7 +202,7 @@ public static class Ab
     public static readonly AbilityDef Deploy = new()
     {
         Id = "deploy", Name = "Deploy turret", Short = "DEPLOY", Default = Key.T,
-        Blurb = "Drops a turret where you are. It holds the spot, shooting what comes near, until you collect it (C) or it is destroyed.",
+        Blurb = "Drops a turret where you are. It holds the spot and shoots what comes near until you collect it (C) or it dies.",
         Press = (s, _) => s.DeployTurret(),
         Refuse = (s, _) => s.TurretsOut >= (int)s.Stats["deploy_max"] ? "ALL OUT"
                          : s.Sl("deploy").Cool > 0 ? "RELOADING" : null,
@@ -218,7 +218,7 @@ public static class Ab
     public static readonly AbilityDef Collect = new()
     {
         Id = "collect", Name = "Collect turret", Short = "COLLECT", Default = Key.C,
-        Blurb = "Picks up a turret of yours you are sitting over, ready to drop again.",
+        Blurb = "Picks up one of your turrets you are sitting over, to drop again.",
         Press = (s, _) => s.CollectTurret(),
         Refuse = (s, _) => s.TurretsOut == 0 ? "NONE OUT" : s.NearestOwnTurret() == null ? "NOT OVER ONE" : null,
         Show = (s, _) => new SlotState { Line = s.TurretsOut == 0 ? "NONE OUT" : s.NearestOwnTurret() != null ? "PICK UP" : "FLY OVER ONE",
@@ -228,7 +228,7 @@ public static class Ab
     public static readonly AbilityDef Bubble = new()
     {
         Id = "bubble", Name = "Bubble", Short = "BUBBLE", Default = Key.F,
-        Blurb = "A bubble over you and everyone near you: it soaks damage until its pool is spent, or the time is up.",
+        Blurb = "A bubble over you and everyone near: it soaks damage until its pool is spent or the time is up.",
         Press = (s, _) => s.RaiseBubble(),
         Refuse = (s, _) => s.Sl("bubble").Cool > 0 ? "CHARGING" : null,
         Show = (s, _) => Timed(s, "bubble", "bubble_cooldown", $"UP {s.Sl("bubble").N}"),
@@ -237,7 +237,7 @@ public static class Ab
     public static readonly AbilityDef Overdrive = new()
     {
         Id = "overdrive", Name = "Overdrive", Short = "OVERDRIVE", Default = Key.F,
-        Blurb = "Everything you own fires faster: your gun, your point defence and every turret you have out.",
+        Blurb = "Everything you own fires faster: your gun, your point defence, every turret out.",
         Press = (s, _) => s.StartOverdrive(),
         RateStat = "overdrive_mult",
         Refuse = (s, _) => s.Sl("overdrive").Cool > 0 ? "COOLING" : null,
@@ -247,7 +247,7 @@ public static class Ab
     public static readonly AbilityDef Shockwave = new()
     {
         Id = "shockwave", Name = "Shockwave", Short = "WAVE", Default = Key.F,
-        Blurb = "Throws everything near you away from you -- and what is too big to throw (a boss) is held still instead.",
+        Blurb = "Throws everything near you clear. What is too big to throw (a boss) is held still instead.",
         Press = (s, _) => s.Shockwave(),
         Refuse = (s, _) => s.Sl("shockwave").Cool > 0 ? "CHARGING" : null,
         Show = (s, _) => Timed(s, "shockwave", "wave_cooldown", "READY"),
@@ -257,7 +257,7 @@ public static class Ab
     public static readonly AbilityDef Railgun = new()
     {
         Id = "railgun", Name = "Railgun", Short = "RAIL", Default = Key.F,
-        Blurb = "A charge you can neither turn nor thrust through, then a straight blue line through everything on it.",
+        Blurb = "A charge you cannot turn or thrust through, then a straight blue line through everything on it.",
         Press = (s, _) => s.ChargeRail(),
         Expire = s => s.FireRail(),
         Refuse = (s, _) => s.Sl("railgun").Left > 0 ? "CHARGING" : s.Sl("railgun").Cool > 0 ? "COOLING" : null,
@@ -270,7 +270,7 @@ public static class Ab
     public static readonly AbilityDef Rush = new()
     {
         Id = "rush", Name = "Rush", Short = "RUSH", Default = Key.F,
-        Blurb = "A burst of speed, taking a fraction of the damage while it lasts. It ends in an EMP that stuns everything close.",
+        Blurb = "A burst of speed at a fraction of the damage taken. It ends in an EMP that stuns everything close.",
         Press = (s, _) => s.StartRush(),
         Expire = s => s.RushEmp(),
         SpeedStat = "rush_mult",
@@ -281,7 +281,7 @@ public static class Ab
     public static readonly AbilityDef Hunters = new()
     {
         Id = "hunters", Name = "Hunter-seekers", Short = "HUNTERS", Default = Key.F,
-        Blurb = "A cell of missiles, each taking a target of its own -- and all of them at the nearest if there is only the one.",
+        Blurb = "A cell of missiles, each taking a target of its own; all of them at the nearest if there is only one.",
         Press = (s, _) => s.LaunchHunters(),
         Refuse = (s, _) => s.Sl("hunters").Cool > 0 ? "RELOADING" : null,
         Show = (s, _) => Timed(s, "hunters", "hunter_cooldown", "AWAY"),
@@ -291,7 +291,7 @@ public static class Ab
     public static readonly AbilityDef Roll = new()
     {
         Id = "roll", Name = "Barrel roll", Short = "ROLL", Default = Key.F,
-        Blurb = "Nothing can hit you while you roll, and you come out of it faster and firing quicker.",
+        Blurb = "Nothing can hit you while you roll; you come out faster and firing quicker.",
         Press = (s, _) => s.BarrelRoll(),
         RateStat = "boost_rof", SpeedStat = "boost_speed",
         While = s => !s.Statuses.Has(Status.Evading),     // the boost is the part after the roll
@@ -304,7 +304,7 @@ public static class Ab
     public static readonly AbilityDef Echo = new()
     {
         Id = "echo", Name = "Bullet echo", Short = "ECHO", Default = Key.F,
-        Blurb = "The echo remembers every point of damage you deal, then detonates all of it where your last shot landed.",
+        Blurb = "The echo remembers the damage you deal, then detonates all of it where your last shot landed.",
         Press = (s, _) => s.StartEcho(),
         Expire = s => s.Detonate(),
         Refuse = (s, _) => s.Sl("echo").Cool > 0 ? "COOLING" : null,
@@ -316,7 +316,7 @@ public static class Ab
     public static readonly AbilityDef Stealth = new()
     {
         Id = "stealth", Name = "Stealth", Short = "STEALTH", Default = Key.F,
-        Blurb = "While the veil is up nothing hostile can pick you: whatever was coming for you goes after someone else, or gives up.",
+        Blurb = "While the veil is up nothing hostile can pick you: whatever was coming for you goes elsewhere, or gives up.",
         // what the veil itself is worth, x1.00 each until a part moves one (Ships.cs, the wraith)
         RateStat = "stealth_rof", SpeedStat = "stealth_speed",
         Press = (s, _) => s.GoDark(),

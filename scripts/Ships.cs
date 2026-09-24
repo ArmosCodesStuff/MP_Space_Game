@@ -169,7 +169,7 @@ public static class Classes
             Weapons = new[] { Dps.Main, Dps.Broadside, Dps.Pd },
             Kit = new[] {
                 ItemDef.Own(GearSlot.Weapon, "bs_main_battery", "Mk I Main Battery", "the four main turrets", "broadside_mult"),
-                ItemDef.Own(GearSlot.Utility, "bs_broadside", "Broadside Battery", "the broadside: every main gun, volley on volley", "broadside_mult"),
+                ItemDef.Own(GearSlot.Utility, "bs_broadside", "Broadside Battery", "every main gun, volley on volley", "broadside_mult"),
             },
             Art = new ClassArt {
                 Texture = "res://battleship_hull.png", Length = 378f, HalfWidth = 43.875f,
@@ -179,7 +179,7 @@ public static class Classes
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Broadside, Ab.Pd } },
 
         new() { Id = ShipClass.Carrier, Name = "CARRIER", Ready = true, Targets = 3, Fit = Fit.Wing | Fit.Pd,
-            Blurb = "No main gun: point-defence turrets, a fighter wing, and torpedo bombers off its deck.",
+            Blurb = "No main gun: point defence, a fighter wing, torpedo bombers off its deck.",
             Hint = "CARRIER",
             Nums = new() {
                 ["hull"] = 200,
@@ -204,7 +204,7 @@ public static class Classes
             Abilities = new[] { Ab.Attack, Ab.Recall, Ab.Bombers, Ab.Pd } },
 
         new() { Id = ShipClass.Destroyer, Name = "DESTROYER", Ready = true, Targets = 3, Fit = Fit.Guns | Fit.Missiles | Fit.Pd,
-            Blurb = "The fastest of the line. Two cursor-aimed main guns, missile bursts of three, two point-defence turrets.",
+            Blurb = "Fastest of the line. Two cursor-aimed main guns, missile bursts of three, two point-defence turrets.",
             Hint = "DESTROYER  ·  mouse aims the main guns",
             Nums = new() {
                 ["hull"] = 250,
@@ -231,7 +231,7 @@ public static class Classes
 
         // -- page 2: freight, which carries its own defences -------------------
         new() { Id = ShipClass.FreightHauler, Name = "FREIGHTER", Ready = true, Fit = Fit.Guns | Fit.Pd | Fit.Deploy,
-            Blurb = "The toughest hull there is. One main gun, two point-defence turrets, three deployable turrets, and a bubble that soaks damage for everything inside it.",
+            Blurb = "Toughest hull there is. One main gun, two point-defence turrets, three deployable turrets, and a bubble that soaks damage.",
             Hint = "FREIGHTER  ·  mouse aims the main gun",
             Nums = new() {
                 ["hull"] = 400,
@@ -269,7 +269,7 @@ public static class Classes
                 TurretTexScale = 2.20f / 5.5f, MainBarrel = 27.0f, PdBarrel = 12.1f, PdRing = 6.6f },
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Bubble, Ab.Deploy, Ab.Collect, Ab.Pd } },
         new() { Id = ShipClass.FreightTender, Name = "TENDER", Ready = true, Fit = Fit.Guns | Fit.Pd | Fit.Deploy,
-            Blurb = "One main gun, two point-defence turrets, three deployable turrets, and an overdrive that lifts the rate of fire of everything it owns.",
+            Blurb = "One main gun, two point-defence turrets, three deployable turrets, and an overdrive that lifts everything's rate of fire.",
             Hint = "TENDER  ·  mouse aims the main gun",
             Nums = new() {
                 ["hull"] = 400,
@@ -305,7 +305,7 @@ public static class Classes
                 TurretTexScale = 2.20f / 5.5f, MainBarrel = 27.0f, PdBarrel = 12.1f, PdRing = 6.6f },
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Overdrive, Ab.Deploy, Ab.Collect, Ab.Pd } },
         new() { Id = ShipClass.FreightBastion, Name = "BASTION", Ready = true, Fit = Fit.Guns | Fit.Pd | Fit.Deploy,
-            Blurb = "One main gun, two point-defence turrets, three deployable turrets, and a shockwave that throws everything near it clear -- or holds a boss still.",
+            Blurb = "One main gun, two point-defence turrets, three deployable turrets, and a shockwave that throws what is near it clear, or holds a boss still.",
             Hint = "BASTION  ·  mouse aims the main gun",
             Nums = new() {
                 ["hull"] = 400,
@@ -344,7 +344,7 @@ public static class Classes
 
         // -- page 3: heavy fighters --------------------------------------------
         new() { Id = ShipClass.HeavySniper, Name = "SNIPER", Ready = true, Fit = Fit.Guns,
-            Blurb = "Fast. A light main gun, and a railgun it can neither turn nor thrust while charging, which then throws a straight blue line through everything on it.",
+            Blurb = "Fast. A light main gun, and a railgun: locked while it charges, then a straight blue line through everything on it.",
             Hint = "SNIPER  ·  mouse aims the main gun",
             Nums = new() {
                 ["hull"] = 140,
@@ -374,7 +374,7 @@ public static class Classes
                 TurretTexScale = 1.18f / 5.5f, MainBarrel = 14.5f, PdBarrel = 6.5f, PdRing = 3.55f },
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Railgun } },
         new() { Id = ShipClass.HeavyWarrior, Name = "WARRIOR", Ready = true, Fit = Fit.Guns,
-            Blurb = "Fast. Two main guns, and a rush: a burst of speed at a fraction of the damage taken, ending in an EMP that stuns everything close.",
+            Blurb = "Fast. Two main guns, and a rush: a burst of speed at a fraction of the damage taken, ending in a stunning EMP.",
             Hint = "WARRIOR  ·  mouse aims the main guns",
             Nums = new() {
                 ["hull"] = 140,
@@ -406,7 +406,7 @@ public static class Classes
                 TurretTexScale = 1.18f / 5.5f, MainBarrel = 14.5f, PdBarrel = 6.5f, PdRing = 3.55f },
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Rush } },
         new() { Id = ShipClass.HeavyWarden, Name = "WARDEN", Ready = true, Fit = Fit.Guns | Fit.Pd | Fit.AlwaysPd,
-            Blurb = "Fast. Point defence that never switches off and kills what comes close, a modest main gun, and hunter-seekers that each take a target of their own.",
+            Blurb = "Fast. Point defence that never switches off, a modest main gun, and hunter-seekers that each take a target of their own.",
             Hint = "WARDEN  ·  mouse aims the main gun",
             Nums = new() {
                 ["hull"] = 140,
@@ -449,7 +449,7 @@ public static class Classes
 
         // -- page 4: lights -----------------------------------------------------
         new() { Id = ShipClass.LightDart, Name = "DART", Ready = true, Fit = Fit.Guns,
-            Blurb = "The fastest thing with a pilot in it. A barrel roll nothing can hit, and a burst of speed and rate of fire out of it.",
+            Blurb = "Fastest thing with a pilot in it. A barrel roll nothing can hit, and a burst of speed and rate of fire out of it.",
             Hint = "DART  ·  mouse aims the main gun",
             Nums = new() {
                 ["hull"] = 90,
@@ -478,7 +478,7 @@ public static class Classes
                 TurretTexScale = 0.65f / 5.5f, MainBarrel = 8.0f, PdBarrel = 3.6f, PdRing = 1.95f },
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Roll } },
         new() { Id = ShipClass.LightEcho, Name = "ECHO", Ready = true, Fit = Fit.Guns,
-            Blurb = "Its echo remembers every point of damage it deals, then detonates the lot where the last shot landed.",
+            Blurb = "Its echo remembers the damage it deals, then detonates the lot where the last shot landed.",
             Hint = "ECHO  ·  mouse aims the main gun",
             Nums = new() {
                 ["hull"] = 90,
@@ -508,7 +508,7 @@ public static class Classes
                 TurretTexScale = 0.65f / 5.5f, MainBarrel = 8.0f, PdBarrel = 3.6f, PdRing = 1.95f },
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Echo } },
         new() { Id = ShipClass.LightWraith, Name = "WRAITH", Ready = true, Fit = Fit.Guns,
-            Blurb = "While its veil is up nothing hostile can pick it: whatever was coming for it goes after someone else, or gives up.",
+            Blurb = "While its veil is up nothing hostile can pick it: whatever was coming for it goes elsewhere, or gives up.",
             Hint = "WRAITH  ·  mouse aims the main gun",
             Nums = new() {
                 ["hull"] = 90,

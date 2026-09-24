@@ -13,19 +13,19 @@ public partial class Hints : CanvasLayer
     // Every hint there is: its id (what a character remembers), a title and a line or two.
     public static readonly Dictionary<string, (string Title, string Body)> All = new()
     {
-        ["flight"]      = ("FLYING", "W ahead, S astern, A / D the rudder. A capital ship turns on a radius; almost stopped, it pivots slowly. Every key is listed along the bottom of the screen."),
-        ["target"]      = ("TARGETING", "Tab takes the nearest enemy; left-click one, or click it on the radar. Esc lets it go."),
-        ["abilities"]   = ("ABILITIES", "The bar along the bottom shows each ability and its key. K lists every number your ship flies and fights with, and changes any ability's key."),
+        ["flight"]      = ("FLYING", "W ahead, S astern, A / D the rudder. A capital ship turns on a radius; almost stopped it pivots slowly. Every key is listed along the bottom."),
+        ["target"]      = ("TARGETING", "Tab takes the nearest enemy; left-click one, or click it on the radar. Esc lets go."),
+        ["abilities"]   = ("ABILITIES", "The bar along the bottom shows each ability and its key. K lists every number your ship flies and fights with, and rebinds any key."),
         ["base"]        = ("THE BASE", "B, or left-click the station. Miners, salvagers and the hauler earn while you fly; spend the credits here. REFIT changes your ship."),
-        ["tio"]         = ("THE TIO", "Left-click the building for boss missions. When every pilot is READY the portal opens and the party goes through together."),
-        ["equipment"]   = ("EQUIPMENT", "I. Bosses drop parts that lean hard one way; your hold keeps what you are not flying. Fit them here; each class keeps its own."),
+        ["tio"]         = ("THE TIO", "Left-click the building for boss missions. When every pilot is READY the portal opens and the party goes through."),
+        ["equipment"]   = ("EQUIPMENT", "I. Bosses drop parts that lean hard one way; your hold keeps what you are not flying. Each class keeps its own."),
         ["loot"]        = ("LOOT", "Crates only you can see. Fly over one to take it; any you leave behind come home with you."),
-        ["multiplayer"] = ("MULTIPLAYER", "HOST THIS WORLD, then COPY ADDRESS for your friends. To join a friend, type their address, then JOIN."),
-        ["raid"]        = ("RAIDERS", "They come for your base after a failed mission, and for your hauler on an escort. The base's guns help; miners, salvagers and the hauler cannot fight back."),
-        ["hauler"]      = ("THE HAULER", "DISPATCH sends it alone: past the portal it may be lost (EVASION, on the HAULER tab, lowers the risk). ESCORT flies it round the four outposts for five times the pay; keep the raiders off it."),
-        ["pilot"]       = ("A LEVEL UP", "L spends your points on rudder, hull, engines and weapons. Bosses give EXP; the first clear of each level gives more."),
-        ["warp"]        = ("WARP", "V charges for 3 s, then jumps toward your target or waypoint if the bow is on it, else straight ahead. 1200 u at most, and 30 s to recharge."),
-        ["stasis"]      = ("STASIS", "Your ship is held in stasis, not lost. Fly the escape pod clear; when the ship is ready, F re-boards it."),
+        ["multiplayer"] = ("MULTIPLAYER", "HOST THIS WORLD, then COPY ADDRESS for your friends. To join one, type their address and JOIN."),
+        ["raid"]        = ("RAIDERS", "They come for your base after a failed mission, and for your hauler on an escort. The base's guns help; nothing else you own can fight back."),
+        ["hauler"]      = ("THE HAULER", "DISPATCH sends it alone: past the portal it may be lost (EVASION lowers the risk). ESCORT flies it round the four outposts for five times the pay; keep the raiders off it."),
+        ["pilot"]       = ("A LEVEL UP", "L spends your points on rudder, hull, engines and weapons. Bosses give EXP; a level's first clear gives more."),
+        ["warp"]        = ("WARP", "V charges for 3 s, then jumps toward your target or waypoint if the bow is on it, else straight ahead. 1200 u at most, 30 s to recharge."),
+        ["stasis"]      = ("STASIS", "Your ship is held in stasis, not lost. Fly the escape pod clear; F re-boards when the ship is ready."),
         ["boss"]        = ("THE BOSS", "Red shapes are its attacks, drawn before they land: get out of them. Beat it for EXP, a bounty and parts."),
     };
 

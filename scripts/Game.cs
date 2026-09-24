@@ -19,7 +19,7 @@ public static class Game
     // Shown when a character cannot be loaded because it predates this build. Kept here, beside
     // the number that causes it, rather than in the screen that happens to draw it.
     public const string IncompatibleNote =
-        "May be possible to import in the future, for now, a new character is required";
+        "Too old to load. Importing may come later; for now, make a new one.";
 
     // THE ONE WAY OUT. The window's close button, the menu's QUIT and the smoke test all come
     // through here, because a bare Quit() cuts off three things that need a moment to finish:

@@ -116,7 +116,7 @@ public static class Economy
         new() { Id = "pod_size",        Tab = "HAULER",    Kind = Kind.Percent, Name = "Pod size",         BaseValue = BasePodSize,    Unit = "per pod",   BaseCost = 150, Blurb = "+10% per pod" },
         // (at the END: a guest is sent the levels in this order)
         new() { Id = "hauler_evasion",  Tab = "HAULER",    Kind = Kind.Count,   Name = "Evasion",          BaseValue = 60, Step = 7,   Unit = "% safe",    BaseCost = 400, Max = 5, Blurb = "+7% chance a lone run gets through (up to 95%)" },
-        new() { Id = "hauler_autosell", Tab = "HAULER",    Kind = Kind.Unlock,  Name = "Auto-sell",        BaseValue = 0,              Unit = "",          BaseCost = AutoSellCost, Max = 1, NeedsBoss = AutoSellBoss, OwnerOnly = true, Blurb = "completely full, it goes by itself" },
+        new() { Id = "hauler_autosell", Tab = "HAULER",    Kind = Kind.Unlock,  Name = "Auto-sell",        BaseValue = 0,              Unit = "",          BaseCost = AutoSellCost, Max = 1, NeedsBoss = AutoSellBoss, OwnerOnly = true, Blurb = "full, it goes by itself" },
         new() { Id = "hauler_speed",    Tab = "HAULER",    Kind = Kind.Percent, Name = "Hauler engines",   BaseValue = HaulerSpeed,    Unit = "u/s",       BaseCost = 150, Per = 0.02, Blurb = "+2% speed per level" },
         new() { Id = "hauler_pd_damage",Tab = "HAULER",    Kind = Kind.Percent, Name = "Hauler point defence", BaseValue = HaulerPdDamage, Unit = "per shot", BaseCost = 200, Per = 0.05, Blurb = "+5% damage per level" },
     };
@@ -130,7 +130,7 @@ public static class Economy
     {
         new() { Id = Lanes.RangeId, Tab = Lanes.Tab, Kind = Kind.Percent, Name = "Outpost missile range", BaseValue = Lanes.GunRange, Unit = "u",    BaseCost = 300, Blurb = "+10% reach on every outpost" },
         new() { Id = Lanes.RateId,  Tab = Lanes.Tab, Kind = Kind.Percent, Name = "Outpost rate of fire",  BaseValue = Lanes.GunRate,  Unit = "/min", BaseCost = 300, Blurb = "+10% missiles a minute" },
-        new() { Id = Lanes.SpeedId, Tab = Lanes.Tab, Kind = Kind.Percent, Name = "Outpost missile speed", BaseValue = Lanes.GunSpeed, Unit = "u/s",  BaseCost = 300, Blurb = "+10% speed: less time to move off the mark" },
+        new() { Id = Lanes.SpeedId, Tab = Lanes.Tab, Kind = Kind.Percent, Name = "Outpost missile speed", BaseValue = Lanes.GunSpeed, Unit = "u/s",  BaseCost = 300, Blurb = "+10% speed: off the mark sooner" },
     };
 
     // Every gatherer's five rows in table order, then the hauler's, then the outposts'. THE ORDER

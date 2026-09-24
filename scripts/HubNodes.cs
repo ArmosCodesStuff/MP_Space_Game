@@ -112,7 +112,7 @@ public partial class HullHud : Control
     {
         var s = Hub.MyShip;
         Txt.D(c, ThemeDB.FallbackFont, new Vector2(0, H - 5), s.Alive ? $"HULL  {s.Hp:0} / {s.MaxHp:0}"
-                  : s.CanReboard ? "SHIP READY  —  press F to re-board"
+                  : s.CanReboard ? "SHIP READY  —  F re-boards"
                   : $"SHIP IN STASIS  {(int)s.StasisLeft / 60}:{(int)s.StasisLeft % 60:00}  —  flying the escape pod",
               HorizontalAlignment.Center, W, 15, onFill && _frac > 0.35f ? Ui.Deep : Colors.White);
         if (!s.Alive) return;

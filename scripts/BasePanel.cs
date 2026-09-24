@@ -64,9 +64,9 @@ public partial class BasePanel : PanelContainer
         if (tab == "REFIT")
         {
             _body.AddChild(Ui.Heading("Refit"));
-            var note = Ui.Lbl("Change class, name or colours. Costs 10% of your ore, salvage and credits, and a pilot level -- "
-                             + "the last upgrade you bought comes off the sheet and its points come back. What you have earned "
-                             + "toward your next level is untouched.", Ui.Small, Ui.Dim);
+            var note = Ui.Lbl("Change class, name or colours. Costs 10% of your ore, salvage and credits, and a pilot level: "
+                             + "your last upgrade comes off the sheet and its points come back. Progress toward "
+                             + "your next level is untouched.", Ui.Small, Ui.Dim);
             note.AutowrapMode = TextServer.AutowrapMode.WordSmart;
             _body.AddChild(note);
             _resetCost = Ui.Lbl("", Ui.Body, Ui.Warn); _body.AddChild(Ui.CardWrap(_resetCost));

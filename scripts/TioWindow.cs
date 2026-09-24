@@ -87,7 +87,7 @@ public partial class TioWindow : PanelContainer
         Ui.SetText(_status, Hub.Mission switch
         {
             Hub.MissionState.Opening    => $"Opening the portal…  {Hub.MissionT:0.0} / {Hub.PortalOpenTime:0} s",
-            Hub.MissionState.PortalOpen => "The portal is open: the party goes through when every ship is at it.",
+            Hub.MissionState.PortalOpen => "The portal is open: the party goes when every ship is at it.",
             _ => waiting > 0 ? $"Waiting for {waiting} pilot(s) to press READY. READY flies you to the portal."
                : away > 0 ? $"Waiting for {away} pilot(s) to reconnect (their places are held 90 s)." : "Everyone is ready.",
         });
