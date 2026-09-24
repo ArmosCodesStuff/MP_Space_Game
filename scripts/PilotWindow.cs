@@ -85,7 +85,7 @@ public partial class PilotWindow : PanelContainer
         string s = "";
         foreach (var (stat, per) in moves.Take(Listed))
             s += u.Share
-                ? "\n    " + AllStats.Said(stat) + "   " + (per * 100).ToString("+0.#;-0.#;0") + "% a level"
+                ? "\n    " + AllStats.Said(stat) + "   " + (AllStats.Change(stat, per) * 100).ToString("+0.#;-0.#;0") + "% a level"
                 : "\n    " + AllStats.Said(stat) + "   +" + AllStats.Fmt(stat, per * n) + " now, +" + AllStats.Fmt(stat, per) + " next";
         if (moves.Count > Listed) s += "\n    ...and " + (moves.Count - Listed) + " more on this hull";
         return s.Length > 0 ? s : "\n    nothing on this hull";

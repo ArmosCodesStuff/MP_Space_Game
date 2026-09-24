@@ -17,7 +17,8 @@ using System.Linq;
 // A part is a set of stat changes: shares (Pct: +0.30 = +30%; on an interval or a radius the
 // share is a RATE and divides, see Stat) and whole additions (Add: one fighter fewer, two more
 // bursts in the magazine). The host applies every pilot's gear (it resolves damage and hull):
-// the loadout travels with the identity and is sanitised on arrival.
+// the loadout, and the levels its pilot bought for those parts, travel with the identity and are
+// sanitised on arrival (Sanitize, SanitizeLevels).
 public enum GearSlot { Weapon, Engines, Shield, Hull, Utility, Chip }
 public enum Rarity { Common, Rare, Epic }
 
@@ -246,12 +247,11 @@ public static class Equipment
             Line("cv_rapidbay", "Rapid Bay", GearSlot.Utility, "a faster rearm and more torpedoes a run; less damage",
                  new[] { ("bomber_rearm", 0.60) }, new[] { ("torpedo_damage", -0.20) },
                  new[] { ("bomber_ammo", new[] { 1, 2, 3 }) }),
-            // ── THE NINE SYSTEMS THAT HAD NO FAMILY ──
-            // Every one of the nine new classes wore its kit part in the utility slot and nothing
-            // else: the bubble, the overdrive, the shockwave, the railgun, the rush, the hunters,
-            // the roll, the echo and the veil had no rolled part in the game, while the broadside,
-            // the racks and the bays above had four lines each at three rarities. One family each
-            // now, in the same shape, so the twelfth class is as well served as the first.
+            // ── A FAMILY FOR EACH OF THE NINE NEWER CLASSES' SYSTEMS ──
+            // The bubble, the overdrive, the shockwave, the railgun, the rush, the hunters, the roll,
+            // the echo and the veil: four lines each at three rarities, in the same shape as the
+            // broadside, the racks and the bays above, so the twelfth class is as well served as the
+            // first.
             // EVERY LINE NAMES ONLY ITS OWN SYSTEM'S STAT IDS. That is what keeps it on the one
             // hull that has them (ItemDef.Needs): a bubble part that paid for its pool in
             // max_speed would fit every ship in the game and do nothing at all on eleven of them.
@@ -436,20 +436,39 @@ public static class Equipment
     // reading that cannot lose a levelled part by scrapping the wrong copy.
     public const int MaxLevel = 40;                 // 40 x 5% = +200%
     public const double LevelStep = 0.05, LevelCost = 100, LevelGrowth = 1.25;
-    public static int LevelOf(string id) => System.Math.Clamp(Character.GearLevel.GetValueOrDefault(id ?? "", 0), 0, MaxLevel);
+    // WHOSE LEVELS. A sheet is lifted by the levels it is GIVEN -- a ship's by its own pilot's
+    // (PlayerShip.Levels, which came with that pilot's identity) -- never by the pilot at this
+    // keyboard. LevelOf is THIS pilot's, for what only this pilot sees: the window, the recycler,
+    // the price.
+    private static int LevelIn(IReadOnlyDictionary<string, int> levels, string id) =>
+        System.Math.Clamp(levels.GetValueOrDefault(id ?? "", 0), 0, MaxLevel);
+    public static int LevelOf(string id) => LevelIn(Character.GearLevel, id);
+    // A PILOT'S LEVELS MADE SAFE, as a copy: parts the game knows, each held to the ladder, a 0 left
+    // out. The one way levels are taken in -- a pilot's claim on the wire (Hub.NetIdentity), a file
+    // on disk (Character.Load), and what a ship keeps of its pilot's (PlayerShip.SetEquipment). A
+    // COPY, so a level bought later is a change the ship can see rather than an edit to a dictionary
+    // it already shares.
+    public static Dictionary<string, int> SanitizeLevels(IEnumerable<(string id, int level)> claimed)
+    {
+        var d = new Dictionary<string, int>();
+        foreach (var (id, level) in claimed ?? Enumerable.Empty<(string, int)>())
+            if (ById(id) != null && level > 0) d[id] = System.Math.Min(level, MaxLevel);
+        return d;
+    }
     // What the NEXT level costs, in salvage -- or -1 at the ceiling.
     public static double NextLevelCost(string id) =>
         LevelOf(id) >= MaxLevel ? -1 : System.Math.Round(LevelCost * System.Math.Pow(LevelGrowth, LevelOf(id)));
-    // Everything a part is for, lifted by its level. A kit part has no ups and never moves.
-    private static double Lifted(ItemDef i, string stat, double v) =>
-        System.Array.IndexOf(i.Ups, stat) < 0 ? v : v * (1 + LevelStep * LevelOf(i.Id));
+    // Everything a part is for, lifted by its level in `levels`. A kit part has no ups and never moves.
+    private static double Lifted(ItemDef i, string stat, double v, IReadOnlyDictionary<string, int> levels) =>
+        System.Array.IndexOf(i.Ups, stat) < 0 ? v : v * (1 + LevelStep * LevelIn(levels, i.Id));
 
     // What a loadout does to the sheet, summed per stat over its SANITISED parts, so a part in the
-    // wrong slot or for another class changes nothing: the shares, and the whole additions.
-    public static Dictionary<string, double> Bonuses(ShipClass c, string[] loadout) =>
-        Sum(c, loadout, i => i.Pct.ToDictionary(kv => kv.Key, kv => Lifted(i, kv.Key, kv.Value)));
-    public static Dictionary<string, double> Adds(ShipClass c, string[] loadout) =>
-        Sum(c, loadout, i => i.Add.ToDictionary(kv => kv.Key, kv => Lifted(i, kv.Key, kv.Value)));
+    // wrong slot or for another class changes nothing: the shares, and the whole additions -- each
+    // part lifted by the level `levels` gives it (a ship's own pilot's; this pilot's for its previews).
+    public static Dictionary<string, double> Bonuses(ShipClass c, string[] loadout, IReadOnlyDictionary<string, int> levels) =>
+        Sum(c, loadout, i => i.Pct.ToDictionary(kv => kv.Key, kv => Lifted(i, kv.Key, kv.Value, levels)));
+    public static Dictionary<string, double> Adds(ShipClass c, string[] loadout, IReadOnlyDictionary<string, int> levels) =>
+        Sum(c, loadout, i => i.Add.ToDictionary(kv => kv.Key, kv => Lifted(i, kv.Key, kv.Value, levels)));
     private static Dictionary<string, double> Sum(ShipClass c, string[] loadout, Func<ItemDef, IReadOnlyDictionary<string, double>> part)
     {
         var d = new Dictionary<string, double>();

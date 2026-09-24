@@ -36,8 +36,9 @@ public static class Progression
         public bool Share;
         // ...and the same for what they REACH (ClassDef.Reach): a share of each id, not a step.
         public bool Reach;
-        // ...and how fast they CYCLE (ClassDef.Cycle): the seconds between shots, so a share here
-        // is NEGATIVE -- a shorter interval is the improvement.
+        // ...and how fast they CYCLE (ClassDef.Cycle): the seconds between shots. Those are INVERSE
+        // stats, which a share DIVIDES (Stat.Value), so a POSITIVE share is the shorter interval --
+        // the way a rate part's is.
         public bool Cycle;
     }
 
@@ -51,7 +52,7 @@ public static class Progression
         }
         if (u.Cycle)
         {
-            foreach (var kv in Classes.CycleOf(c)) if (kv.Value != 0) yield return (kv.Key, kv.Value * -0.005);
+            foreach (var kv in Classes.CycleOf(c)) if (kv.Value != 0) yield return (kv.Key, kv.Value * 0.005);
             yield break;
         }
         if (u.Weapons)
@@ -77,9 +78,10 @@ public static class Progression
         // REACH: every weapon the class declares carries 1% further a level (ClassDef.Reach), so a
         // pilot keeps pace with a boss, whose own reach grows 1% a level (Missions.Quicken).
         new() { Id = "reach",  Name = "Reach",   Reach = true, Share = true },
-        // COOLING: every ability comes back sooner. Half a percent a level, and PlayerShip caps
-        // what it can ever be worth -- an ability with no cooldown is not an ability.
-        new() { Id = "cool",   Name = "Cooling", Moves = new[] { ("cooldown_share", -0.005) }, Share = true },
+        // COOLING: every ability comes back sooner. Half a percent a level -- a POSITIVE share,
+        // because cooldown_share is an inverse stat a share divides -- and PlayerShip caps what it
+        // can ever be worth: an ability with no cooldown is not an ability.
+        new() { Id = "cool",   Name = "Cooling", Moves = new[] { ("cooldown_share", 0.005) }, Share = true },
         // RATE OF FIRE: the main gun's cycle, shorter. Named for the gun, not for "weapons", so it
         // cannot be confused with the Weapons row that buys damage.
         new() { Id = "rof",    Name = "Gunnery", Cycle = true, Share = true },

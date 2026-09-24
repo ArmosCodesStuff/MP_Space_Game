@@ -2,14 +2,14 @@
 #
 #     powershell -ExecutionPolicy Bypass -File verify.ps1
 #
-# Runs typecheck, build, analysers, cross-reference, the smoke test THREE TIMES (the protocol
+# Runs typecheck, build, analysers, cross-reference, text, the smoke test THREE TIMES (the protocol
 # asks for three in a row -- one run has hidden a flaky check before) and the screenshot sweep,
 # then prints a single verdict. Nothing needs to be passed in: the Godot binary is resolved by
 # tools\find-godot.ps1 and GodotSharp.dll is fetched from the NuGet cache if it is missing.
 #
 # THREE GEARS. Use the smallest one that can see the change you just made:
 #
-#   -Quick   static only: typecheck, build, analysers, cross-reference.   ~1 min
+#   -Quick   static: typecheck, build, analysers, cross-reference, text, checks with code.  ~1 min
 #            Enough for a refactor, a rename, a comment, a doc edit.
 #   -Fast    static + ONE solo smoke run + the sweep.                     ~3 min
 #            The loop while a change is being built. One engine, not six: it cannot see a
@@ -68,6 +68,53 @@ Step 'cross-reference' {
     ($o -join "`n") -match 'UNUSED ANYWHERE: 0'
 }
 
+Step 'text' {
+    # NO CONTROL CHARACTER IN A TRACKED TEXT FILE. Backslash paths written through something that
+    # read them as escapes turn into characters that show as nothing: tools\find-godot.ps1 lost its
+    # \f to a form feed, and tools\analyse\run.ps1 its \a and \r to a bell and a carriage return,
+    # which split a comment in this file into a command. Tab and newline are text, and so is a
+    # carriage return directly before a newline (PLAY.bat is CRLF, as a .bat should be). version/
+    # is generated, and an image or a sound is not text.
+    $env:Path += ';C:\Program Files\Git\cmd'
+    $files = @(& git ls-files --cached --others --exclude-standard | Where-Object { $_ })
+    $read = 0
+    $bad = @()
+    foreach ($f in $files) {
+        if ($f -like 'version/*' -or $f -match '\.(png|ogg|wav)$' -or -not (Test-Path -LiteralPath $f)) { continue }
+        $read++
+        $t = [System.IO.File]::ReadAllText((Join-Path $PSScriptRoot $f))
+        foreach ($m in [regex]::Matches($t, '[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]|\r(?!\n)')) {
+            $bad += ('{0}:{1} U+{2:X4}' -f $f, $t.Substring(0, $m.Index).Split("`n").Count, [int][char]$m.Value)
+        }
+    }
+    $bad | ForEach-Object { Write-Host "    $_" }
+    # NONE READ IS NOT CLEAN. A git that listed nothing would otherwise pass this with 0 of 0.
+    Write-Host ("  {0} text files read, {1} control characters" -f $read, $bad.Count)
+    $read -gt 0 -and $bad.Count -eq 0
+}
+
+Step 'checks with code' {
+    # NO CODE CHANGE WITHOUT A CHECK CHANGE (CLAUDE.md section 3: every change carries its check).
+    # Measured since the last VERIFIED: commit, working tree included, so a batch of slices is judged
+    # as one: if any line of code under scripts/ that is not a comment moved and neither harness
+    # file did, something new or changed went in with nothing proving it. Coarse on purpose -- it
+    # cannot tell WHICH check covers which change; that is the Checks: line in the commit and the
+    # reviewer's job. What it can do is make the lazy case impossible to miss.
+    $env:Path += ';C:\Program Files\Git\cmd'
+    $base = (& git log --grep='^VERIFIED:' -1 --format=%H 2>$null | Select-Object -First 1)
+    if (-not $base) { Write-Host '  no VERIFIED: commit to measure from'; return $true }
+    $code = 0
+    foreach ($line in @(& git diff $base -- scripts/ 2>$null)) {
+        if ($line -match '^[+-](?![+-])\s*(.*)$' -and $Matches[1] -ne '' -and $Matches[1] -notmatch '^//') { $code++ }
+    }
+    $newCode = @(& git ls-files --others --exclude-standard -- scripts/ 2>$null | Where-Object { $_ -like '*.cs' })
+    $code += $newCode.Count
+    $harness = @(& git diff --name-only $base -- tools/smoketest/SmokeTest.cs.txt tools/screens/Shots.cs.txt 2>$null | Where-Object { $_ })
+    Write-Host ("  since {0}: {1} code lines moved under scripts/, {2} harness file(s) changed" -f $base.Substring(0, 7), $code, $harness.Count)
+    if ($code -gt 0 -and $harness.Count -eq 0) { Write-Host '  code changed with no check added or rewritten' }
+    $code -eq 0 -or $harness.Count -gt 0
+}
+
 if (-not $Quick) {
     $engine = & 'tools\find-godot.ps1' -Godot $Godot
     if ($LASTEXITCODE -ne 0) { Write-Host "cannot run the engine checks without Godot"; exit 2 }
@@ -88,7 +135,7 @@ if (-not $Quick) {
             $done = @($o | Where-Object { $_ -cmatch 'DONE' }).Count
             $counts += $pass
             # THE SEEDS, HERE, WHERE THEY SURVIVE. Every run wipes the scratch folder, so run
-            # 3 destroys run 2 logs and with them the number that reproduces run 2 geometry.
+            # 3 destroys run 2's logs and with them the number that reproduces run 2's geometry.
             # Printed per run, any failure can be put back with run.ps1 -Seed <n>.
             $seeds = @($o | Where-Object { $_ -cmatch 'SEED \d' } |
                        ForEach-Object { ($_ -split 'SEED ')[-1].Trim() })

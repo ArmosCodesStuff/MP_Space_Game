@@ -53,7 +53,7 @@ public partial class Net : Node
     public readonly Dictionary<int, PlayerInfo> Players = new();
     // Identity is the one piece of player state that is not host-owned: each owner
     // announces its own, and everyone stores it here so a ship spawned later still
-    // gets the right name, colours, class, pilot upgrades and gear.
+    // gets the right name, colours, class, pilot upgrades, gear and gear levels.
     public class PlayerInfo
     {
         public string Name = Character.Defaults.Name;
@@ -61,6 +61,7 @@ public partial class Net : Node
         public ShipClass Class = ShipClass.Battleship;
         public int[] Bought = Array.Empty<int>();
         public string[] Equip = Array.Empty<string>();
+        public Dictionary<string, int> GearLevel = new();  // what the pilot levelled each part to, by id (Equipment.SanitizeLevels on arrival)
         public string CharacterId = "";                   // the pilot's stable identity: a peer id changes on a reconnect
         public int Level = 1;                              // the pilot's level, as claimed (an escort's threat)
         public bool HasIdentity;

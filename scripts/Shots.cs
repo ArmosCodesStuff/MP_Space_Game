@@ -164,8 +164,13 @@ public partial class Shot : Node2D, IHittable, ITagged
             return;
         }
 
+        // HOMING IS CHOOSING: while its target is dark (Targeting.Hidden) a body does not follow
+        // it -- it flies on down the heading it had, and still strikes whatever it touches (Strike
+        // asks nobody's stealth); the target seen again, it homes again. A guest's copy reads the
+        // same status bits, which the host sends every peer for every ship.
         if (d.Guided && TurnRate > 0 && TargetId != 0
-            && (d.AtPlayers ? Combat.PlayerById(TargetId) : Combat.ById(TargetId)) is { } tgt)
+            && (d.AtPlayers ? Combat.PlayerById(TargetId) : Combat.ById(TargetId)) is { } tgt
+            && !Targeting.Hidden(tgt))
         {   // guided: the nose turns toward the target at TurnRate, and never snaps
             float want = (tgt.Position - GlobalPosition).Angle(), have = Dir.Angle();
             Dir = Dir.Rotated(Mathf.Clamp(Mathf.AngleDifference(have, want), -TurnRate * dt, TurnRate * dt));

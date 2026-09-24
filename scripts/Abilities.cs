@@ -61,12 +61,13 @@ public class AbilityDef
     // (PlayerShip.Sl): the echo detonates Sl("echo").Own, so no number has to be carried here.
     public Action<PlayerShip> Elapsed, Expire;
 
-    // WHILE IT RUNS, what it multiplies. A row that speeds a ship's guns or its hull up names the
-    // stat id that says by how much; PlayerShip.FireRate and PlayerShip.SpeedMult are the product
-    // of every running row that names one, which replaced two hardcoded `if`s naming slot ids and
-    // stat ids by string in the one place every gun, every point-defence mount and every deployed
-    // turret reads its rate. `While` narrows it to part of a run: the dart's roll buffs nothing
-    // until the untouchable part of it is over.
+    // WHILE IT RUNS, what it lifts. A row that speeds a ship's guns or its hull up names the stat
+    // id that says by how much (x2: twice as fast); PlayerShip.FireRate and PlayerShip.SpeedMult
+    // ADD every running row that names one (PlayerShip.LiftShares, the sheet's own rule), which
+    // replaced two hardcoded `if`s naming slot ids and stat ids by string. The rate reaches every
+    // gun's reload -- main guns, point defence, dropped turrets, the wing's shots -- through
+    // PlayerShip.Cadence; the speed lifts its top speed and its thrust. `While` narrows it to part of a run: the dart's roll buffs nothing until the
+    // untouchable part of it is over.
     public string RateStat, SpeedStat;
     public Func<PlayerShip, bool> While;
 

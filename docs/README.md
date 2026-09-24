@@ -116,7 +116,9 @@ That is the answer to "it's broken" with nothing else involved, and it is why th
 sha256sum's format.
 
 **A test install without uploading anything.** Unpack the two zips from `dist\release\` into
-`play\` by hand and copy `BUILD.txt` beside them; `PLAY.bat` starts whatever is there.
+`play\` by hand and copy `BUILD.txt` beside them, then start `play\Warships.exe` itself.
+`PLAY.bat` would not run it: with the developer tools it plays the source, and without them
+`tools\install.ps1` replaces any build whose id is not the published one.
 
 **Two things no rung covers**, because they are a network and an operating system: a real HTTPS
 fetch, and what Windows says about an unsigned program. Run them once by hand -- `PLAY.bat` on a
@@ -141,8 +143,9 @@ Signing would not fix it cheaply: SmartScreen trusts a CERTIFICATE'S REPUTATION,
 of a signature, and a new OV certificate shows the same wall until enough downloads accrue against
 it. Only an EV certificate (~$300-600/yr, and a USB token in the post) is trusted on day one;
 Azure Trusted Signing (~$10/mo, no hardware) builds reputation over weeks like OV does. The file
-whose reputation would accrue is `Warships.exe`, and it changes every release, so the reputation
-never settles. Revisit if strangers start playing; not worth it for friends.
+whose reputation would accrue is `Warships.exe`, which rides in `runtime.zip` and does not change
+between releases (`tools/pack.ps1` leaves the version out of it for that reason). Revisit if
+strangers start playing; not worth it for friends.
 
 
 ## Checking your work
@@ -151,7 +154,7 @@ never settles. Revisit if strangers start playing; not worth it for friends.
 
     powershell -ExecutionPolicy Bypass -File verify.ps1
 
-typecheck → build → analysers → cross-reference → smoke test **×3** → screenshot sweep →
+typecheck → build → analysers → cross-reference → text → smoke test **×3** → screenshot sweep →
 integrity, then one verdict. `-Quick` stops after the static checks (about a minute); `-Fast` adds
 ONE solo smoke run and the sweep (about three).
 

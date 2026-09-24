@@ -4,14 +4,10 @@
 #
 # NOTHING IS REQUIRED THAT WINDOWS DOES NOT ALREADY HAVE. Windows PowerShell 5.1 ships with every
 # Windows 10 and 11; Get-FileHash, Expand-Archive and Invoke-WebRequest are all built in. No Godot,
-# no .NET SDK, no launcher, no git. Download this repo, run it, play.
+# no .NET SDK, no git. Download this repo, run it, play. PLAY.bat reaches it through play.ps1 on
+# any machine without the developer tools.
 #
-# IT IS NOT THE LAUNCHER AND DOES NOT USE IT. The launcher is a program a player keeps, with a
-# window and buttons, that updates a build in place; this is a script that installs one and starts
-# it. They read the same release and the same BUILD.txt, so neither can drift from the other, but
-# this one has no window, no dependency and nothing to press.
-#
-#     -Root <dir>   where to install (default: play\ beside this repo)
+#     -Root <dir>   where to install (default: play\ inside this repo, which git ignores)
 #     -NoRun        install and stop, do not start the game
 #     -Force        reinstall even if this build is already there
 #

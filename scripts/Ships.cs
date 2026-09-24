@@ -530,7 +530,7 @@ public static class Classes
                 // ship until a part moves one of them, so a wraith with no veil gear is exactly
                 // the ship it was. They are read the way the dart's boost is read -- the ability
                 // row names them (Ab.Stealth's SpeedStat and RateStat) and PlayerShip.SpeedMult
-                // and FireRate multiply every running row that names one. The veil had two
+                // and FireRate add up every running row that names one. The veil had two
                 // numbers, which is not a family: two of its four lines had nothing to trade.
                 new() { Group = "Stealth", Id = "stealth_speed", Label = "Top speed, unseen",    Base = 1, Unit = "x", Dec = 2 },
                 new() { Group = "Stealth", Id = "stealth_rof",   Label = "Rate of fire, unseen", Base = 1, Unit = "x", Dec = 2 },

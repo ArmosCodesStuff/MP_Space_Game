@@ -27,13 +27,17 @@ public class Stat
     public int Decimals = 1;
 
     private const double MinScale = 0.1;
-    public double Value
+    // HOW SHARES STACK, wherever they stack: ADDED, then 1 + the sum, never below MinScale. A
+    // stat's own bonuses, a ship's running lifts (PlayerShip.LiftShares) and the two together
+    // (With, which PlayerShip.Cadence reads) are this one rule, so two +100% rate buffs are x3 --
+    // two parts, two abilities, or a part under an ability -- and never x4 (the owner's ruling).
+    public static double Scale(double shares) => System.Math.Max(MinScale, 1.0 + shares);
+    public double Value => With(0);
+    // ...and with more shares ADDED to its own: what a running lift makes of it.
+    public double With(double shares)
     {
-        get
-        {
-            double k = System.Math.Max(MinScale, 1.0 + Bonus);
-            return Inverse ? (Base + Flat) / k : (Base + Flat) * k;
-        }
+        double k = Scale(Bonus + shares);
+        return Inverse ? (Base + Flat) / k : (Base + Flat) * k;
     }
     public string Fmt(double v) => v.ToString("F" + Decimals) + (Unit.Length > 0 ? " " + Unit : "");
 }
@@ -75,6 +79,10 @@ public class ShipStats
     private readonly Dictionary<string, Stat> _byId = new();
 
     public double this[string id] => _byId.TryGetValue(id, out var s) ? s.Value : 0;
+    // A row with more shares added to its OWN bonus -- a running lift's (PlayerShip.Cadence) -- so
+    // a part's +100% rate and an overdrive's x2 are x3 together, as two parts are. 0 for a row this
+    // sheet has not got, as the indexer answers.
+    public double With(string id, double shares) => _byId.TryGetValue(id, out var s) ? s.With(shares) : 0;
 
     // Two sets of shares or additions, added key by key (either may be null).
     public static Dictionary<string, double> Sum(IReadOnlyDictionary<string, double> a, IReadOnlyDictionary<string, double> b)
@@ -381,4 +389,9 @@ public static class AllStats
     // than the figure it adds to -- 7.5 on a railgun the sheet prints whole.
     public static string Fmt(string id, double v) =>
         v.ToString("0.##") + (Rows.TryGetValue(id, out var s) && s.Unit.Length > 0 ? " " + s.Unit : "");
+    // WHAT A SHARE DOES TO THE FIGURE, as a share of it: the share itself, or -- on an interval or
+    // a cooldown (Stat.Inverse), which a share divides -- what the division comes to. A Gunnery
+    // point's +0.5% takes 0.5% off the reload, and the pilot window says so.
+    public static double Change(string id, double share) =>
+        Rows.TryGetValue(id, out var s) && s.Inverse ? 1 / Stat.Scale(share) - 1 : share;
 }

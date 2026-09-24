@@ -142,9 +142,10 @@ public static class Spawns
         // A MISSION'S EMPLACEMENTS -- a pirate base and its shield pylons (Emplacements.cs). They
         // hold a spot as a dropped turret does, so `At` never changes and the hull clock is all
         // there is to say about one; unlike a turret they are HOSTILE, so `Gone` hands them to
-        // Hub.LetGo -- out of Combat.Hostiles and out of every turret's aim IN THIS CALL, not at
-        // the frame's end. `N` is the row of Emplacements.All, `A`/`B` the live hull and its
-        // maximum, exactly as a turret's are, so a joiner never draws a half-dead base full.
+        // Hub.LetGo -- out of Combat.Hostiles IN THIS CALL, not at the frame's end, and with that
+        // out of every turret's aim (Turret.StillThere). `N` is the row of Emplacements.All,
+        // `A`/`B` the live hull and its maximum, exactly as a turret's are, so a joiner never
+        // draws a half-dead base full.
         new() { Id = "Emplacement", Space = NetIds.Emplacement, Burst = 60f,
                 Bag = k => new SpawnSet<Emplacement>(k),
                 Make = (h, s) => new Emplacement { Hub = h, NetId = s.NetId, Kind = s.N,

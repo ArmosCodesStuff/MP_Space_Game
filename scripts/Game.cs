@@ -22,9 +22,8 @@ public static class Game
     // decides whether two peers may play, and it is computed by reflection over what the build
     // actually contains.
     //
-    // ONE LINE OF PARSING, ON PURPOSE. This used to call Builds.ReadInfo, from the file that ran
-    // the launcher's install-and-update mechanism. The launcher is gone and so is that file; all
-    // the game ever wanted from it was the value of one key.
+    // ONE LINE OF PARSING, ON PURPOSE. All the game wants from BUILD.txt is the value of one key,
+    // so it reads that key and nothing else.
     //
     // NEVER readonly, NEVER const, and this is not a style note. Net.Fingerprint() folds in every
     // static field that is IsLiteral or IsInitOnly whose type is Plain, and string is Plain -- so

@@ -138,7 +138,8 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
         public int Fired;                  // how many times it has committed
         public float Aim;                  // the world angle it points down, frozen with the warning
         public Vector2 From, To;           // a dash's end, a warp's landing, a ring's centre, a lane
-        public PlayerShip Target;
+        public PlayerShip Target;          // the pilot it chose, while it can see one (Sight)
+        public Vector2 Spot;               // where it aims: that pilot, or where anyone was last seen
         public double Predict, Overdue, ArmedFor;   // an escort opener's clock
         public string Cause = "";                   // what ended the escorts' wait
         public readonly List<Raider> Escorts = new();
@@ -231,7 +232,30 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
     // win) shows nothing for it
     public void Downed() { if (!_net.Has) _hullWatch = default; Hp = 0; }
 
-    private IEnumerable<PlayerShip> Pilots => Targeting.All(Combat.Players, Targeting.Attackable).OfType<PlayerShip>();
+    // WHO IT CAN SEE, AND WHO IT CAN HIT -- two lists, filled once a frame, never one. Stealth
+    // (Status.Untargetable) hides a pilot from everything the boss CHOOSES: whom it closes on, whom
+    // a move is aimed at, whom its escorts go after, whom a guided body is given. It hides nobody
+    // from what LANDS: a ring, a beam and a ram catch every live pilot under them, seen or not
+    // (Targeting.cs). With nobody in sight it closes on, and aims at, the last place it saw anyone;
+    // its clocks run on.
+    private readonly List<PlayerShip> _choosable = new(), _hittable = new();
+    private Vector2? _lastSeen;                 // the centre of the pilots it saw, the last frame it saw any
+    private void Look()
+    {
+        _choosable.Clear(); _hittable.Clear();
+        _choosable.AddRange(Targeting.Choosable(Combat.Players, Targeting.Attackable).OfType<PlayerShip>());
+        _hittable.AddRange(Targeting.Hittable(Combat.Players, Targeting.Attackable).OfType<PlayerShip>());
+        if (_choosable.Count > 0) _lastSeen = _choosable.Aggregate(Vector2.Zero, (c, p) => c + p.Position) / _choosable.Count;
+    }
+    private bool Sees(PlayerShip p) => _choosable.Contains(p);
+    // THE PILOT A RUNNING MOVE FOLLOWS: while it is in sight, the move's spot goes with it; out of
+    // sight -- dark, down, gone -- the nearest pilot in sight takes its place; with nobody in sight
+    // the move keeps the spot it had.
+    private void Sight(Slot s)
+    {
+        if (!Sees(s.Target)) s.Target = Combat.Nearest(_choosable, Position, p => p.Position);
+        if (s.Target != null) s.Spot = s.Target.Position;
+    }
 
     public override void _Process(double delta)
     {
@@ -259,11 +283,11 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
         if (!Alive) return;
         _status.Tick(delta);
         if (Held) { QueueRedraw(); return; }         // held still: no approach, no ability, no turn
-        var pilots = Pilots.ToList();
-        if (pilots.Count > 0)
+        Look();
+        if (_hittable.Count > 0)                    // nobody alive at all -- every pilot in stasis -- and it waits
         {
-            if (!Locked) Approach(pilots, dt);
-            Tick(pilots, delta);
+            if (!Locked) Approach(dt);
+            Tick(delta);
         }
         _send -= delta;
         // While a super move winds up the HULL IS THE TELEGRAPH, so a guest needs its angle far
@@ -280,13 +304,13 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
         }
     }
 
-    // Unlocked, it closes on the party, ponderously: turning onto the party's centre at its row's
-    // turn rate, and moving in to its row's hold-off. These were 650, 30 and 0.3 written into this
-    // method, so every boss ever written closed exactly alike and none could be told to do
-    // otherwise.
-    private void Approach(List<PlayerShip> pilots, float dt)
+    // Unlocked, it closes on the party, ponderously: turning onto the centre of the party it can
+    // see -- or, with nobody in sight, onto where it last saw them (Look) -- at its row's turn rate,
+    // and moving in to its row's hold-off. These were 650, 30 and 0.3 written into this method, so
+    // every boss ever written closed exactly alike and none could be told to do otherwise.
+    private void Approach(float dt)
     {
-        var centre = pilots.Aggregate(Vector2.Zero, (s, p) => s + p.Position) / pilots.Count;
+        if (_lastSeen is not { } centre) return;    // it has never seen anyone: it holds
         float want = Aim.Face(Position, centre);
         Rotation = Mathf.RotateToward(Rotation, want, Turning * dt);
         if (Position.DistanceTo(centre) > Type.HoldOff) Position += (centre - Position).Normalized() * Type.CloseSpeed * dt;
@@ -297,15 +321,15 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
     // In the row's order, so a boss's table IS the order a frame resolves its moves in -- and a
     // phase that ends here is picked up by the next step in the SAME frame, as every one of the
     // eight hand-written clocks did.
-    private void Tick(List<PlayerShip> pilots, double delta)
+    private void Tick(double delta)
     {
         foreach (var s in _slots)
         {
             s.Due -= delta;
-            if (s.Due <= 0 && Armable(s)) Arm(s, pilots);
-            if (s.At == Phase.Opening) Open(s, pilots, delta);
-            if (s.At == Phase.Winding && (s.T -= delta) <= 0) { s.At = Phase.Idle; Land(s, pilots); }
-            if (s.At == Phase.Firing) Burn(s, pilots, delta);
+            if (s.Due <= 0 && Armable(s)) Arm(s);
+            if (s.At == Phase.Opening) Open(s, delta);
+            if (s.At == Phase.Winding && (s.T -= delta) <= 0) { s.At = Phase.Idle; Land(s); }
+            if (s.At == Phase.Firing) Burn(s, delta);
         }
     }
     // The row says what must be idle; this is the only place that asks.
@@ -320,15 +344,22 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
     // ARMED, IN ONE PLACE. It was four arms per move -- reset the clock, count it, re-base the
     // super bar, raise the warning -- written out again for each of the eight, and no two of them
     // owed the same four.
-    private void Arm(Slot s, List<PlayerShip> pilots)
+    private void Arm(Slot s)
     {
         var m = s.M;
         s.Due = m.Every; s.Fired++;
         if (m.Super) SuperGap = NextSuperHost;
-        s.Target = Combat.Nearest(pilots, Position, p => p.Position, m.Find > 0 ? m.Find : float.MaxValue);
-        if (s.Target == null && m.Find <= 0) return;      // nothing to aim at: the clock comes round again
+        s.Target = Combat.Nearest(_choosable, Position, p => p.Position, m.Find > 0 ? m.Find : float.MaxValue);
+        // WHAT IT AIMS AT: the pilot it chose -- or, with nobody in sight, where it last saw anyone,
+        // so going dark is not a pause button. A move that looks only so far (Find) is a gun for
+        // whoever is inside that reach, and waits for someone there; so does every move of a boss
+        // that has never seen anyone. Either way the clock comes round again.
+        if (s.Target != null) s.Spot = s.Target.Position;
+        else if (m.Find <= 0 && _lastSeen is { } seen) s.Spot = seen;
+        else return;
         if (m.Escorts > 0)
-        {   // ESCORTS OUT -- and the wind-up waits on their web (Open)
+        {   // ESCORTS OUT -- and the wind-up waits on their web (Open). With nobody in sight there is
+            // nobody to send them after: none go, and the wind-up comes on Open's own fallbacks.
             double eta = LaunchEscorts(m.Id, s.Target);
             s.At = Phase.Opening; s.T = 0;
             s.Predict = eta + m.WebGrace;
@@ -336,45 +367,44 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
             return;
         }
         if (m.Warp > 0)
-        {   // A RING WHERE IT WILL LAND, Standoff off the pilot; the hull follows (Open)
-            s.To = s.Target.Position + (Position - s.Target.Position).Normalized() * m.Standoff;
+        {   // A RING WHERE IT WILL LAND, Standoff off where it aims; the hull follows (Open)
+            s.To = s.Spot + (Position - s.Spot).Normalized() * m.Standoff;
             s.At = Phase.Opening; s.T = m.Warp;
             Zone(s.To, m.WarpRing, m.Warp, null, m.WarpSound);
             return;
         }
         Aimed(s);
         if (m.Windup > 0) { Warn(s); s.At = Phase.Winding; s.T = m.Windup; }
-        else { if (m.Cue != null) Sound(m.Cue, Nose); Land(s, pilots); }
+        else { if (m.Cue != null) Sound(m.Cue, Nose); Land(s); }
     }
 
-    // Where the move points, taken once and then held: a dash comes round onto its target and the
-    // line it will ram down is fixed here, a ring is centred where the boss stands, a thrown body
-    // is swung out on the flank, and everything else is aimed from the nose.
+    // Where the move points, taken once and then held: a dash comes round onto its spot (Arm,
+    // Sight) and the line it will ram down is fixed here, a ring is centred where the boss stands, a
+    // thrown body is swung out on the flank, and everything else is aimed from the nose.
     private void Aimed(Slot s)
     {
         var m = s.M;
         switch (m.Way)
         {
             case MoveWay.Dash:
-                Rotation = Aim.Face(Position, s.Target.Position);
+                Rotation = Aim.Face(Position, s.Spot);
                 s.To = Aim.Nose(this, m.Reach);
                 break;
             case MoveWay.Ring: s.To = Position; break;
             case MoveWay.Throw: Heave(s); break;
-            default: if (s.Target != null) s.Aim = (s.Target.Position - Nose).Angle(); break;
+            default: s.Aim = (s.Spot - Nose).Angle(); break;
         }
     }
 
     // THE OPENERS, in flight. Both end the same way: the warning goes up and the wind-up starts.
-    private void Open(Slot s, List<PlayerShip> pilots, double delta)
+    private void Open(Slot s, double delta)
     {
         var m = s.M;
         if (m.Escorts > 0)
-        {   // held in place; turning to face the pilot is all it does
+        {   // held in place; turning to face the pilot -- or where it was last seen -- is all it does
             s.T += delta;
-            if (!IsInstanceValid(s.Target) || !s.Target.Alive) s.Target = pilots.FirstOrDefault();
-            if (s.Target != null)
-                Rotation = Mathf.RotateToward(Rotation, Aim.Face(Position, s.Target.Position), Turning * (float)delta);
+            Sight(s);
+            Rotation = Mathf.RotateToward(Rotation, Aim.Face(Position, s.Spot), Turning * (float)delta);
             // A pin counts once THIS cycle's escorts have left the launch point: a pilot still held
             // by the last cycle's escorts (they never expire) would otherwise skip the whole phase.
             bool pinned = s.T >= Raider.EscortShiver && s.Target != null && s.Target.Pinned;
@@ -385,18 +415,14 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
         }
         else if ((s.T -= delta) > 0) return;
         else
-        {   // it lands, facing the pilot, and what follows is aimed from there -- fixed from here on
+        {   // it lands, facing the pilot -- or where one was last seen -- and what follows is aimed
+            // from there, fixed from here on
             Position = s.To;
-            if (!IsInstanceValid(s.Target) || !s.Target.Alive) s.Target = Combat.Nearest(pilots, Position, p => p.Position);
-            if (s.Target != null) Rotation = Aim.Face(Position, s.Target.Position);
-            s.Aim = Rotation - Mathf.Pi / 2f;
+            Sight(s);
+            Rotation = Aim.Face(Position, s.Spot);
         }
-        // AIMED FROM WHERE IT LANDED, and this line was missing. A move that opens with a warp
-        // went straight from the landing to its warning, skipping Aimed -- which is where a dash's
-        // line, a ring's centre and A THROWN BODY are worked out. Every opener that existed when
-        // this was written aimed down the nose, which the two lines above already cover, so
-        // nothing noticed; the first move to want BOTH a warp and a thrown rock got a lane drawn
-        // between the warp's own leftover coordinates and no rock at all.
+        // AIMED FROM WHERE IT LANDED: a warp's landing goes through Aimed like every other move,
+        // because that is where a dash's line, a ring's centre and a thrown body are worked out.
         Aimed(s);
         Warn(s); s.At = Phase.Winding; s.T = m.Windup;
     }
@@ -431,26 +457,28 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
         }
     }
 
-    // WHAT THE MOVE DOES when its warning ends (or, with no wind-up, this instant).
-    private void Land(Slot s, List<PlayerShip> pilots)
+    // WHAT THE MOVE DOES when its warning ends (or, with no wind-up, this instant). A BOLT and a
+    // GUIDED BODY are CHOSEN blows: they go to a pilot, and only to one still in sight. Everything
+    // else lands where it lands -- a fired body hits what it touches; a ring, a beam and a ram
+    // catch every live pilot under them -- seen or not (_hittable).
+    private void Land(Slot s)
     {
         var m = s.M; var nose = Nose;
         switch (m.Way)
         {
             case MoveWay.Bolt:
-                if (s.Target == null) break;
+                if (!Sees(s.Target)) break;
                 s.Target.Hit(m.Damage * DamageMult, Position, m.Source);
                 Combat.Flash(nose, s.Target.Position, m.Flash, ShotSound.Boss);
                 break;
             case MoveWay.Shoot:
             {
-                if (s.Target == null) break;
                 int k = 0;
                 foreach (float a in Fan(s.Aim, m))
                 {
                     var dir = Vector2.Right.Rotated(a);
                     Combat.Fire(m.Shot, nose + dir * m.Muzzle, dir, m.Speed, m.Range, m.Damage * DamageMult, m.Radius,
-                                Shots.Of(m.Shot).Guided ? s.Target.NetId : 0, m.Turn,
+                                Shots.Of(m.Shot).Guided && Sees(s.Target) ? s.Target.NetId : 0, m.Turn,
                                 hitSource: m.Source, size: m.Size, variant: k++);
                 }
                 break;
@@ -458,7 +486,7 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
             case MoveWay.Beam: s.At = Phase.Firing; s.T = m.Live; s.Next = 0; break;
             case MoveWay.Dash: s.At = Phase.Firing; break;
             case MoveWay.Ring:
-                foreach (var p in pilots)
+                foreach (var p in _hittable)
                     if (p.Position.DistanceTo(s.To) <= m.Reach + p.HitRadius) p.Hit(m.Damage * DamageMult, s.To, m.Source);
                 break;
             case MoveWay.Throw: s.At = Phase.Firing; break;
@@ -467,7 +495,7 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
 
     // WHAT THE MOVE KEEPS DOING once it has landed: a beam burns, a dash travels, a thrown body
     // flies (ThrownRock does the flying, and the boss is held until it breaks).
-    private void Burn(Slot s, List<PlayerShip> pilots, double delta)
+    private void Burn(Slot s, double delta)
     {
         var m = s.M;
         switch (m.Way)
@@ -477,7 +505,7 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
                 {   // judged every Tick, down the nose -- which has not moved since the wind-up began
                     s.Next = m.Tick;
                     var (la, lb) = Segment(m.Id);
-                    foreach (var p in pilots)
+                    foreach (var p in _hittable)
                         if (Combat.DistToSegment(p.Position, la, lb) <= m.Width / 2f + p.HitRadius)
                             p.Hit(m.Damage * DamageMult, Position, m.Source);
                 }
@@ -485,7 +513,7 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
                 break;
             case MoveWay.Dash:
                 Position = Position.MoveToward(s.To, m.Speed * (float)delta);
-                foreach (var p in pilots) if (Covers(p.Position, p.HitRadius)) p.Hit(m.Damage * DamageMult, Position, m.Source);
+                foreach (var p in _hittable) if (Covers(p.Position, p.HitRadius)) p.Hit(m.Damage * DamageMult, Position, m.Source);
                 if (Position.DistanceTo(s.To) < 1f) s.At = Phase.Idle;
                 break;
             case MoveWay.Throw:
@@ -545,17 +573,18 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
         return eta;
     }
 
-    // A THROWN BODY: Offset off the flank toward the pilot, a lane Reach long, and the body itself
-    // -- the same one on every peer, from one event (ThrownRock). It names the blow it deals.
+    // A THROWN BODY: Offset off the flank toward where it aims, a lane Reach long, and the body
+    // itself -- the same one on every peer, from one event (ThrownRock). It names the blow it
+    // deals, and strikes every live pilot in its lane, seen or not.
     private ThrownRock _rock;
     public ThrownRock Rock => IsInstanceValid(_rock) ? _rock : null;
     private void Heave(Slot s)
     {
         var m = s.M;
         var side = Vector2.Right.Rotated(Rotation);
-        if (side.Dot(s.Target.Position - Position) < 0) side = -side;          // on the flank toward the pilot
+        if (side.Dot(s.Spot - Position) < 0) side = -side;                     // on the flank toward where it aims
         s.From = Position + side * m.Offset;
-        s.To = s.From + (s.Target.Position - s.From).Normalized() * m.Reach;
+        s.To = s.From + (s.Spot - s.From).Normalized() * m.Reach;
         int variant = s.Fired % 2;                                            // the two bodies ThrownRock draws
         _rock = new ThrownRock { Boss = this, From = s.From, To = s.To, Hold = m.Windup, Flight = m.Flight,
                                  Damage = m.Damage * DamageMult, Radius = m.Radius, Variant = variant };

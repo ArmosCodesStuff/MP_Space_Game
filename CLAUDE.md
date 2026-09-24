@@ -52,7 +52,32 @@ the feature that uses it, an edit before the check that proves it. Everything el
   fix in the same edit. `typecheck.ps1` compiles them with `scripts/`, so it costs a minute;
   before it did, it cost an engine run three minutes in, after a full copy and import.
 - **Never start an engine run while a compile check is red.** Green `-Quick` first, always.
-- Write the smoke checks for a feature as you write the feature, in the same edit pass.
+- **EVERY CHANGE CARRIES ITS CHECK — no exceptions, same edit pass.** Before the first line of a
+  feature is written, name the checks that will prove it; they land in the same commit.
+  1. **New** (a mechanic, feature, ability, row, weapon, enemy, status, screen, rule): at least one
+     NEW check that fails without it and passes with it — asserting a literal from the request,
+     from **3 varied situations** (range, angle, in front / behind, moving / still — `Vary`).
+  2. **Interaction** (two things meeting: a weapon on a heavy, a status on a boss, a light's web
+     under a heavy's missile, an ability against a platform): its OWN check, per pair touched. "Each
+     side works alone" is not a check of the pair.
+  3. **Changed** (a number, a rule, a behaviour): grep the harness for every check that asserts the
+     old truth — its literal, its row id, its message — and REWRITE each to the new truth in the same
+     edit. A check is never deleted or loosened to make a change pass; if it is truly obsolete, its
+     replacement lands in the same edit.
+  4. **Fixed bug**: a check that reproduces the bug first (it must fail on the old code), then passes.
+  5. **Visible**: a named frame in `Shots.cs.txt`, read by eye once.
+  6. **Wire** (an RPC, a field, a host-decided state a guest sees): a check in a guest role (rung 5).
+  The commit message ends with a `Checks:` line naming every check added or rewritten. `verify.ps1`
+  refuses a code change under `scripts/` with no harness change since the last `VERIFIED:` commit.
+- **A CHECK IS CODE, AND FLAKES ARE BUGS IN IT.** Before a new check is committed, rule out the
+  three traps that have cost this project engine runs — each of them passed once and failed later:
+  - **A knife edge.** A spot exactly ON a boundary, dead astern (π), exactly at a range limit,
+    a float compare on an accumulated clock: vary AROUND the edge, never onto it.
+  - **A stale pick.** Anything chosen or measured before a wait (the nearest foe, a position, a
+    heading) is re-taken after it — the world moved.
+  - **Timed from the input, not the effect.** Start a clock on the first frame the effect shows (the
+    hull moves, the shot exists), never on the key press or the call.
+  A new or rewritten check must pass on **two different seeds** at its rung before its commit.
 - **Generalise, never special-case.** A new boss, class, enemy, ability or upgrade must be a row of
   data plus parameters, not a new `if`. If a request forces a special case, the system is wrong:
   fix the system.
@@ -100,7 +125,7 @@ changed. Never run a higher rung to prove something a lower rung proves.**
 |---|---|---|---|---|
 | 0 | Read the code, and the log you already have | free | anything you can reason about | nothing it was not given |
 | 1 | `typecheck\typecheck.ps1` | ~20 s | every rename, signature, missing caller — in `scripts/` **and in the harness** (`SmokeTest.cs.txt`, `Shots.cs.txt`) | behaviour, numbers, reflection by string |
-| 2 | `verify.ps1 -Quick` | ~1 min | rung 1 + 0 warnings, 0 analyser findings, `UNUSED ANYWHERE: 0` | behaviour, numbers, anything drawn |
+| 2 | `verify.ps1 -Quick` | ~1 min | rung 1 + 0 warnings, 0 analyser findings, `UNUSED ANYWHERE: 0`, no control characters, and no code change without a check change | behaviour, numbers, anything drawn |
 | 3 | `tools\smoketest\run.ps1 -Solo` | ~1.5 min | the whole single-player narrative: behaviour, every number, ability state, UI state | a host and a guest disagreeing |
 | 4 | `tools\screens\run.ps1` | ~1.5 min | what is DRAWN: 99 frames, `LINT: 0` for off-screen, clipped and overlapping | behaviour |
 | 5 | `tools\smoketest\run.ps1` (all six) | ~4 min | authority, replication, the protocol: host + two guests + the two-player arena | nothing the game does; it is the last word on correctness |
@@ -134,7 +159,7 @@ fix means the ladder was skipped.
   behaviour check must read a table, prove that table against literals in one place and let the
   behaviour check read the row.
 - Mutants only for authority, save-format and removed-path invariants, and only when a check's
-  wiring is in doubt. Otherwise seeing a new check pass once is enough.
+  wiring is in doubt. Otherwise a new check passing on two different seeds is enough (§3).
 - A flaky check is a broken check. Fix its geometry at rung 3 until it passes three runs with
   different seeds; never re-run a higher rung hoping for a different draw.
 

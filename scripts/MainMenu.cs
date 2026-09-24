@@ -46,6 +46,8 @@ public partial class MainMenu : Node2D
     private struct Shot { public Vector2 A, B; public double T; public bool Hostile; }
     private readonly List<Shot> _shots = new();
     private readonly List<MenuFoe> _foes = new();
+    private MenuFoe _target;
+    private const float Switch = 0.8f;                    // a new foe must be this much closer to be taken instead
     private readonly List<Sprite2D> _rocks = new();
     private PlayerShip _cap = null!;
     private Vector2 _centre;
@@ -190,6 +192,7 @@ public partial class MainMenu : Node2D
     public PlayerShip DemoShip => _cap;
     public Vector2 Station => _centre;
     public IReadOnlyList<MenuFoe> Foes => _foes;
+    public MenuFoe Target => _target;                     // the foe the ship is fighting now
     public double AreaShotIn => _aoeLeft;                 // seconds to impact, or -1 between shots
     public float CameraZoom => Zoom;
     public void ForceAreaShot() { _aoeCd = 0; _aoeLeft = -1; }
@@ -221,7 +224,16 @@ public partial class MainMenu : Node2D
     {
         if (!IsInstanceValid(_cap)) return;
         var live = _foes.Where(f => f.Alive).ToList();
-        var near = Combat.Nearest(live, _cap.Position, f => f.GlobalPosition);
+        // ONE FOE AT A TIME. The ship holds station in the middle of the ring the foes circle, so
+        // every foe is about as far away as every other, and "the nearest" changed hands as they
+        // went round: the bow was sent after one and then the next, and the hull dithered where it
+        // lay instead of coming onto anything. It keeps its foe until that one is gone or another
+        // is clearly closer (by the Switch margin).
+        var nearest = Combat.Nearest(live, _cap.Position, f => f.GlobalPosition);
+        if (_target == null || !live.Contains(_target)
+            || (nearest != null && nearest.GlobalPosition.DistanceTo(_cap.Position) < Switch * _target.GlobalPosition.DistanceTo(_cap.Position)))
+            _target = nearest;
+        var near = _target;
 
         // ── the area shot, and the jump out of it ──
         if (_aoeLeft < 0)

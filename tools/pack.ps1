@@ -153,10 +153,6 @@ foreach ($id in @('code', 'runtime')) {
 # WHAT A PLAYER READS IS A SET OF SECTIONS, decided here. A section is a heading in square
 # brackets on its own line, and NOTES.txt is plain text: it is what GitHub shows as the release
 # body and what a player opens beside the game. A third section is a row below and nothing else.
-#
-# (These brackets were once read by a launcher that drew each heading bold in its own colour.
-# There is no launcher now. They stayed because they read perfectly well as plain text, which
-# is all they ever needed to do.)
 $sections = @(
     @{ Head = 'FIRST TIME'; Lines = @(
         'Windows will say it does not recognise this program. It is unsigned -- a',

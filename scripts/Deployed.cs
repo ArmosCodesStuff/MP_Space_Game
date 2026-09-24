@@ -5,7 +5,9 @@ using System.Collections.Generic;
 // A TURRET LEFT BEHIND. The freighters drop these (T) and pick them up again (C, sitting over
 // one). It does not fly: it holds the spot it was left on and shoots what comes near with the
 // same component a warship's point defence uses, so there is one acquisition rule, one swing and
-// one reload in the game rather than a second copy for structures.
+// one reload in the game rather than a second copy for structures. WHAT it shoots is not point
+// defence's: anything hostile in reach -- missiles and small craft first, then a heavy, a boss, a
+// station -- and a practice dummy only while nothing that can die is in reach (Targeting.Sentry).
 //
 // Its gun is its OWNER's sheet (deploy_damage, deploy_interval, deploy_range), read every tick --
 // so a level bought while three are out improves all three -- and its owner's overdrive doubles
@@ -44,8 +46,9 @@ public partial class DeployedTurret : Node2D, IRaidTarget, ITagged, ITurretHost
     public TurretSpec Spec(bool pd) => new()
     {
         Kind     = Shots.Shell,          // what it fires, said out loud: a row of Shots.All
+        Prey     = Targeting.Sentry,     // ...and what it takes: anything hostile
         Damage   = Ship != null ? Ship.Stats["deploy_damage"] : SpareDamage,
-        Interval = (Ship != null ? Ship.Stats["deploy_interval"] : SpareInterval) / (Ship != null ? Ship.FireRate : 1),
+        Interval = Ship != null ? Ship.Cadence("deploy_interval") : SpareInterval,
         Range    = Ship != null ? (float)Ship.Stats["deploy_range"] : SpareRange,
         Turn     = Mathf.Tau / 2f,
         Texture  = "res://turret_deploy.png",

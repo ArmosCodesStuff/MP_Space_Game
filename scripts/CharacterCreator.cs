@@ -128,8 +128,8 @@ public partial class CharacterCreator : CanvasLayer
 
     // What a ship of this class would come out of the yard with, for this pilot.
     private static double ClassHull(ShipClass c) =>
-        new ShipStats(c, Equipment.Bonuses(c, Character.LoadoutFor(c)),
-                      Equipment.Adds(c, Character.LoadoutFor(c)))["hull"];
+        new ShipStats(c, Equipment.Bonuses(c, Character.LoadoutFor(c), Character.GearLevel),
+                      Equipment.Adds(c, Character.LoadoutFor(c), Character.GearLevel))["hull"];
 
     private void Rebuild()
     {

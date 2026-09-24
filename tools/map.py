@@ -140,6 +140,16 @@ asset_ext = ('.png', '.ogg', '.wav', '.tscn', '.ttf', '.otf', '.tres', '.svg')
 assets = sorted(p.replace('\\', '/') for p in glob.glob('**/*', recursive=True)
                 if p.endswith(asset_ext) and not p.replace('\\', '/').startswith(('.godot/', 'bin/', 'obj/')))
 
+# PARKED: under a folder with a .gdignore, which Godot never imports -- so it can neither ship nor
+# be loaded by res://. Read from the tree rather than listed, so a folder parked tomorrow needs no
+# edit here.
+def parked(a):
+    d = os.path.dirname(a)
+    while d:
+        if os.path.exists(os.path.join(d, '.gdignore')): return True
+        d = os.path.dirname(d)
+    return False
+
 def asset_users(a):
     who = set(refs.get(a, set()))
     for f, folder, ext in templated:
@@ -219,8 +229,7 @@ w('| asset | used by |')
 w('|---|---|')
 for a in assets:
     u = asset_users(a)
-    parked = a.startswith(('retired/', 'art_unused/'))
-    w(f"| {a} | {', '.join(u) if u else ('parked (not shipped in play)' if parked else '**UNREFERENCED**')} |")
+    w(f"| {a} | {', '.join(u) if u else ('parked (not shipped in play)' if parked(a) else '**UNREFERENCED**')} |")
 missing = sorted(p for p in refs if not os.path.exists(p) and '{' not in p)
 w('')
 w('res:// paths that name a file that does not exist: ' + (', '.join(missing) if missing else 'none') + '.')
@@ -229,4 +238,4 @@ w('')
 os.makedirs('version', exist_ok=True)
 open('version/MAP.md', 'w', encoding='utf-8', newline='\n').write('\n'.join(out))
 print(f"MAP: {len(scripts)} scripts, {len(members)} members, {len(rpcs)} RPCs, {len(assets)} assets, "
-      f"{len(missing)} missing, {sum(1 for a in assets if not asset_users(a) and not a.startswith(('retired/', 'art_unused/')))} unreferenced")
+      f"{len(missing)} missing, {sum(1 for a in assets if not asset_users(a) and not parked(a))} unreferenced")

@@ -733,23 +733,21 @@ public partial class Hub : Node2D
         if (_ships.TryGetValue(Net.LocalId, out var me) && IsInstanceValid(me)) ApplyIdentity(me);
     }
 
-    // THE ONE WAY A SHIP GETS ITS PILOT: name, colours, class, the pilot's upgrades and gear --
-    // your own from Character, anyone else's from what they announced. A ship spawned used to get
-    // only the name and colours, so after any scene change (to the arena and back) every ship flew
-    // at base stats: the host judged guests' hulls and damage without their upgrades.
+    // THE ONE WAY A SHIP GETS ITS PILOT: name, colours, class, the pilot's upgrades, gear and gear levels --
+    // your own from Character, anyone else's from what they announced.
     private void ApplyIdentity(PlayerShip s)
     {
         if (s.OwnerId == Net.LocalId)
         {
             s.SetIdentity(Character.Name, Character.Main, Character.Accent, Character.Class);
             s.SetProgress(Character.Bought);
-            s.SetEquipment(Character.LoadoutFor(Character.Class));
+            s.SetEquipment(Character.LoadoutFor(Character.Class), Character.GearLevel);
         }
         else if (Net.I != null && Net.I.Players.TryGetValue(s.OwnerId, out var p) && p.HasIdentity)
         {
             s.SetIdentity(p.Name, p.Main, p.Accent, p.Class);
             s.SetProgress(p.Bought);
-            s.SetEquipment(p.Equip);
+            s.SetEquipment(p.Equip, p.GearLevel);
         }
     }
 
@@ -759,20 +757,24 @@ public partial class Hub : Node2D
         // a guest mid-handshake still reports LocalId 1; peers would rightly reject
         // that as impersonating the host, so wait for the real id (OnSessionChanged)
         if (!Net.IsHost && Net.LocalId == 1) return;
-        var args = new Variant[] { Net.LocalId, Character.Name, Character.Main, Character.Accent, (int)Character.Class, Character.Bought, Character.Level, Character.LoadoutFor(Character.Class), Character.Id };
+        // THE LEVELS GO WITH THE GEAR, as two lists in step (one dictionary's keys and values, which
+        // enumerate in the same order): every peer lifts this pilot's parts by this pilot's levels.
+        var args = new Variant[] { Net.LocalId, Character.Name, Character.Main, Character.Accent, (int)Character.Class, Character.Bought, Character.Level,
+                                   Character.LoadoutFor(Character.Class), Character.GearLevel.Keys.ToArray(), Character.GearLevel.Values.ToArray(), Character.Id };
         if (toPeer == 0) Rpc(nameof(NetIdentity), args);
         else             RpcId(toPeer, nameof(NetIdentity), args);
     }
 
     [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetIdentity(int peer, string name, Color main, Color accent, int cls, int[] bought, int level, string[] equip, string characterId)
+    private void NetIdentity(int peer, string name, Color main, Color accent, int cls, int[] bought, int level, string[] equip,
+                             string[] gearIds, int[] gearLevels, string characterId)
     {
         // a peer may only describe itself
         if (Net.SenderOf(this) != peer || Net.I == null) return;
         if (!Net.I.Players.TryGetValue(peer, out var p)) Net.I.Players[peer] = p = new Net.PlayerInfo();
         // Everything else off this wire is sanitised (bought is null-guarded below, equip inside
-        // Equipment.Sanitize); the name was not. A null here threw on .Length, and a null that got
-        // past became a null Pilot in every label that draws it.
+        // Equipment.Sanitize, the gear levels by Equipment.SanitizeLevels); the name was not. A null
+        // here threw on .Length, and a null that got past became a null Pilot in every label that draws it.
         name = string.IsNullOrEmpty(name) ? Character.Defaults.Name : name.Length > 24 ? name[..24] : name;
         // Purchases are held to what the claimed level could have paid for, and to what this host
         // lets any claim spend (Progression.MaxSpendLevel). It used to weigh the RAW wire level
@@ -790,6 +792,9 @@ public partial class Hub : Node2D
             characterId = "";
         (p.Name, p.Main, p.Accent, p.Class, p.Bought, p.Equip, p.CharacterId, p.HasIdentity) =
             (name, main, accent, Classes.Sanitize(cls), bought, equip ?? System.Array.Empty<string>(), characterId, true);
+        // ITS OWN LEVELS, held to the ladder and to parts that exist, like the loadout: what this
+        // peer's copy of its ship is lifted by. Never this host's -- those are the host's pilot's.
+        p.GearLevel = Equipment.SanitizeLevels((gearIds ?? System.Array.Empty<string>()).Zip(gearLevels ?? System.Array.Empty<int>()));
         p.Level = System.Math.Max(1, level);                    // a claim; what it may SPEND is capped above
         if (_ships.TryGetValue(peer, out var s) && IsInstanceValid(s)) ApplyIdentity(s);
         TryRestoreHold(peer);
@@ -1149,17 +1154,19 @@ public partial class Hub : Node2D
     }
     private double _raiderSend;
 
-    // what a raider may go after: player ships, and the utility ships at home
+    // WHAT A RAID CAN REACH: player ships, and the utility ships at home -- SEEN OR NOT. A raider
+    // chooses from it only what it can see (Raider.Up); a raid's burst lands on all of it
+    // (Missiles.Raid), because stealth stops a raider picking a ship, not a missile bursting on one.
     public IEnumerable<Node2D> RaiderTargets()
     {
-        foreach (var s in _ships.Values) if (Raider.Up(s)) yield return s;
+        foreach (var s in _ships.Values) if (Raider.Reachable(s)) yield return s;
         // a turret a freighter left out is the base's too: something to go for, and something
         // that shoots back
-        foreach (var t in Deployed) if (Raider.Up(t)) yield return t;
+        foreach (var t in Deployed) if (Raider.Reachable(t)) yield return t;
         // No fleet to come for: out in the arena there is no base, and at home there is a frame
         // before it is built. The sector is the reason; the null is the frame.
         if (InArena || Yard == null) yield break;
-        foreach (var u in Yard.Fleet) if (Raider.Up(u)) yield return u;
+        foreach (var u in Yard.Fleet) if (Raider.Reachable(u)) yield return u;
     }
 
     // (A wave's composition, an escort's threat and the party's standing are Waves.cs; the
@@ -1185,12 +1192,13 @@ public partial class Hub : Node2D
     }
     public void RaiderDown(Raider r) => Down(Spawns.Raider, r, burst: true, (float)System.Math.Max(0, r.Hp));
 
-    // LET GO OF A HOSTILE, EVERYWHERE, IN THIS CALL. As the selection and as every ship's target:
+    // LET GO OF A HOSTILE, EVERYWHERE, IN THIS CALL. As the selection and as every ship's orders:
     // on a guest a raider's hull never reads zero (the host removes it before its last hull
     // reaches anyone), and a withdrawn hunter (Raids.CallOff) is freed with hull left -- either
-    // way it stayed "alive" and freed, and a carrier's fighters and point defence went on reading
-    // it. It leaves the hostiles NOW, not when the queued free takes it out of the tree at the
-    // frame's end: a turret that ticked later in the same frame acquired it again.
+    // way it stays "alive" and freed, and a carrier's fighters would go on reading it. It leaves
+    // the hostiles NOW, not when the queued free takes it out of the tree at the frame's end: a
+    // turret that ticked later in the same frame would acquire it again. Leaving the hostiles IS
+    // how every gun lets go, whatever carries it (Turret.StillThere), so nothing here names a turret.
     // Reached from a row's `Gone` (Spawns.All), so every kind that is a hostile lets go this way
     // and a kind that nothing holds simply has no `Gone`.
     public void LetGo(IHittable h)
@@ -1232,12 +1240,13 @@ public partial class Hub : Node2D
             if (b.left > 0) { _blasts[i] = b; continue; }
             _blasts.RemoveAt(i);
             // WHAT IT MAY CATCH is its row's: a pool to look through and a TargetFilter over it,
-            // never a type test. The row's id is the FAMILY the blow belongs to and the launcher's
+            // never a type test -- asked what it HITS, never what it would choose, so a burst lands
+            // on a ship gone dark. The row's id is the FAMILY the blow belongs to and the launcher's
             // own id is added to it, so two of them are never mistaken for one source
             // (PlayerShip.Incoming) -- "heavy:1042:missile", exactly the name it always had.
             var side = Missiles.Of(b.shot.Side);
             foreach (var t in side.Pool(this).ToList())
-                if (side.Prey.Allows(t) && Raider.Gap(b.at, t) <= b.shot.Blast)
+                if (side.Prey.Hits(t) && Raider.Gap(b.at, t) <= b.shot.Blast)
                     side.Land(t, b.shot.Damage, b.at, $"{side.Id}:{b.from}:missile");
         }
     }

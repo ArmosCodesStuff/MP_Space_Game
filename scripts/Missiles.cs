@@ -29,8 +29,9 @@ using System.Linq;
 //                    for one source (see DamageSource, PlayerShip.Incoming)
 //   Mark             the Fx row its telegraph is drawn as: red for a threat, friendly for ours
 //   Body/Nose/Glow   what the thing in the air is painted in
-//   Pool             everything the blast might catch
-//   Prey             ...and who in there it may hurt -- a TargetFilter, never a type test
+//   Pool             everything the blast might catch, seen or not
+//   Prey             ...and who in there it may hurt -- a TargetFilter, asked what it HITS (a
+//                    burst lands on a ship gone dark), never a type test
 //   Land             how a hit lands on one of those
 //
 // THE INDEX IS ON THE WIRE (Hub.NetMissile carries it, so a guest paints the right missile), so
@@ -73,9 +74,9 @@ public static class Missiles
     public static readonly MissileSide[] All =
     {
         // A RAIDER'S. Its blast catches what a raid can reach -- the pilots, the fleet, the
-        // turrets a freighter left out (Hub.RaiderTargets) -- and lands as every raider blow
-        // lands. Its id is "heavy" because that is the name already on this blow in every
-        // pilot's damage tally.
+        // turrets a freighter left out (Hub.RaiderTargets), a ship gone dark among them -- and
+        // lands as every raider blow lands. Its id is "heavy" because that is the name already on
+        // this blow in every pilot's damage tally.
         new() { Id = "heavy", Mark = Fx.WarnZone,
                 Body = new Color(0.45f, 0.30f, 0.28f), Nose = new Color(1f, 0.30f, 0.25f),
                 Glow = new Color(1f, 0.60f, 0.30f),

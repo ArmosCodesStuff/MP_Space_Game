@@ -47,7 +47,7 @@ public static class Drake
                 Strike = "drake_scrap", Source = DamageSource.DrakeScrap },
 
         // THE ASTEROID THROW: a 180 u body 310 u off the flank (HalfWidth + Radius + 40: 90 + 180
-        // + 40), down a lane 1800 u long held 7.5 s, then 1.6 s of flight. ThrownRock flies it and
+        // + 40), down a lane 1800 u long held 7.5 s, then 1.2 s of flight. ThrownRock flies it and
         // names the blow it deals.
         //
         // NO WIDTH HERE. A thrown body's lane is the BODY'S OWN WIDTH and Boss.Warn works it out
@@ -56,14 +56,13 @@ public static class Drake
         // red lane warning about it: at level 40 (Missions.Quicken(40) = 1.01^39 = 1.474) a 90 u
         // body stood 42.7 u past each edge of its lane and a 180 u body stands 85.3 u past it.
         // A telegraph that under-reports the blow it telegraphs is the bug, not the row.
-        // IT BACKS OFF BEFORE IT WINDS UP. The throw is a 1800 u lane and the boss used to start it
-        // from wherever it was standing -- often inside the pilot's face, where a 1800 u lane is
-        // not a threat you can answer. It warps to 1300 u first, on its own side of the pilot (the
-        // same Warp/Standoff the scrap shotgun uses, with the sense that falls out of a standoff
-        // longer than the range it closes to), so the throw becomes the ranged move it looks like.
+        // IT BACKS OFF BEFORE IT WINDS UP. An 1800 u lane thrown from inside the pilot's face is
+        // not a threat anyone can answer, so it warps to 1300 u first, on its own side of the pilot
+        // (the same Warp/Standoff the scrap shotgun uses, with the sense that falls out of a
+        // standoff longer than the range it closes to), and the throw is the ranged move it looks
+        // like.
         //
-        // FLIGHT 1.2, NOT 1.6: a third faster in the air. The 7.5 s of red lane is unchanged, so
-        // the warning is as long as it ever was and only the rock is quicker.
+        // A LONG WARNING AND A QUICK ROCK: 7.5 s of red lane, then 1.2 s in the air.
         new() { Id = "throw", Way = MoveWay.Throw, Waits = MoveWait.Everything, Busy = true, Super = true,
                 Every = 30, First = 6.0, Windup = 7.5, Flight = 1.2,
                 Warp = 1.0, Standoff = 1300f, WarpRing = 117f, WarpSound = "drake_warp",

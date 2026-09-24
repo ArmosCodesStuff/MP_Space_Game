@@ -172,9 +172,12 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
         if (Hp <= 0) Hub.RaiderDown(this);
     }
 
-    // ── what it can go after: an IRaidTarget in reach ──
-    public static bool Up(Node2D t) =>
-        GodotObject.IsInstanceValid(t) && t is IRaidTarget r && r.InReach && !Targeting.Hidden(r);
+    // ── what a raid can reach, and what a raider can go after ──
+    // REACHABLE: an IRaidTarget there to be hit -- what a raid's burst lands on (Hub.RaiderTargets,
+    // Missiles.Raid). UP: reachable AND SEEN -- what a raider may choose to come for. Stealth is the
+    // whole difference between the two (Targeting.cs: it stops choosing, never hitting).
+    public static bool Reachable(Node2D t) => GodotObject.IsInstanceValid(t) && t is IRaidTarget r && r.InReach;
+    public static bool Up(Node2D t) => Reachable(t) && !Targeting.Hidden(t);
     // How far the target's hull reaches from its centre along `dir`: an ellipse with the
     // hull's half-length and half-width. Posts and reach are measured from the HULL, so a
     // raider holds station beside a long ship, never on top of its bow.
@@ -277,8 +280,9 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
     private Node2D Choose()
     {
         if (Up(Quarry)) return Quarry;
-        if (Patrol == 0) return Combat.Nearest(Hub.RaiderTargets(), Position, t => t.Position);
-        if (!Heavy && Combat.Nearest(Hub.RaiderTargets(), Position, t => t.Position, Detect) is { } near) return near;
+        // everything a raid can reach, seen or not: a raider picks only what it can see (Up)
+        if (Patrol == 0) return Combat.Nearest(Hub.RaiderTargets(), Position, t => t.Position, ok: Up);
+        if (!Heavy && Combat.Nearest(Hub.RaiderTargets(), Position, t => t.Position, Detect, Up) is { } near) return near;
         foreach (var r in Hub.Raiders)                                           // a mate spotted one
             if (r != this && r.Patrol == Patrol && r.Alive && !r.Heavy && Up(r.Target)) return r.Target;
         return null;

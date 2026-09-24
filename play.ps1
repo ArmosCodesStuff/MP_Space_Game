@@ -11,7 +11,7 @@
 #   .NET (mono) and the .NET SDK -- about 330 MB of tooling.
 #
 #   THE PUBLISHED BUILD otherwise, handed to tools\install.ps1, which downloads it, checks it
-#   against the release own checksums and starts it. NEEDS NOTHING INSTALLED: Windows
+#   against the release's own checksums and starts it. NEEDS NOTHING INSTALLED: Windows
 #   PowerShell is the whole requirement. Someone who only wants to play never needs the
 #   developer tools at all.
 #

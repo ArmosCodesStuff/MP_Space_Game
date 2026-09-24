@@ -106,9 +106,14 @@ craft's position and state. It also sends hit flashes,
 the dummies' readouts, and each torpedo launch — guests fly a cosmetic copy of a torpedo, since its
 run is straight and steady.
 
-**Identity is owner-announced, and rides on the Hub.** Name, colours and class are the one
-client-owned state. Each owner broadcasts its own; everyone stores it in `Net.Players`. It goes
-through the Hub rather than the ship because the Hub exists on every peer before any ship does.
+**Identity is owner-announced, and rides on the Hub.** Name, colours, class, pilot upgrades, gear
+and the levels bought for that gear are the one client-owned state. Each owner broadcasts its own;
+everyone stores it in `Net.Players`, sanitised on arrival. It goes through the Hub rather than the
+ship because the Hub exists on every peer before any ship does. **A ship's sheet is a function of
+its own pilot only:** `Equipment.Bonuses`/`Adds` take the levels to lift by and a ship passes its
+own (`PlayerShip.Levels`); `Equipment.LevelOf` is the pilot at this keyboard, for its own windows
+and prices, and never reaches a sheet. Levels are taken in one way, `Equipment.SanitizeLevels`,
+whether they come off the wire, off disk or onto a ship.
 
 **Ships are rebuilt on every session change.** They are keyed and authorised by peer id, and
 `LocalId` changes on host, join and drop. `Net.SessionChanged` fires; the world throws its ships
@@ -345,10 +350,11 @@ Recorded here so every chunk builds from the written word, not from memory.
 - **A scene change**: `Hub.GoTo` reloads the game scene with `Hub.Sector` set; the host tells every
   guest to do the same. Anything that must survive the trip lives outside the scene (static): the
   host's trip record (`Yard._trip`) and a guest's set-aside base (`Yard._own*`).
-- **A boss is a class of its own on a shared base.** `Boss` (abstract) is everything every boss is:
+- **A boss is a row, and one class runs every row.** `Boss` is everything every boss is:
   hull and damage scaled by level and party, a hostile, host-simulated and drawn on guests from
-  `NetState` (flat while `Locked`), telegraphs, the super-move bar, the approach. Each boss is a
-  subclass with its own weapons and timers (`Lancer`, ...), built from `Missions.BossType.Make`.
+  `NetState` (flat while `Locked`), telegraphs, the super-move bar, the approach. Everything that
+  makes one boss differ from another is its `Missions.BossType` row -- name, hull, art, shape and
+  a `BossMove[]`, one row per move, the arrays held in `Lancer.cs` and `Drake.cs`.
   **One ladder of levels, the bosses taking them in turn** (`Missions.ForLevel`): every peer works out
   a level's boss from the replicated level alone, and a peer sent into a world is told the level WITH
   the sector (`NetSector`), because the arena's boss is built from it before any mission report
@@ -389,8 +395,8 @@ Recorded here so every chunk builds from the written word, not from memory.
   silently retuned the other; the two are not the same fight and must be tuned apart, so each row now
   carries its own numbers and nothing multiplies across. The SCRAP SHOTGUN warps it to 600 u of the
   nearest pilot (a ring shows where, 1 s) and fires a fixed fan -- the same seven lines every time, so
-  it is learned, not rolled. The ASTEROID THROW holds a 180 u rock in a tractor beam over a red lane
-  for 7.5 s, then hurls it: its path is fixed at the throw (the distance flown as the cube of the time
+  it is learned, not rolled. The ASTEROID THROW warps it back to 1300 u of the pilot first (the same
+  ring, 1 s), then holds a 180 u rock in a tractor beam over a red lane for 7.5 s and hurls it: its path is fixed at the throw (the distance flown as the cube of the time
   -- slow, then very fast), so every peer flies the same rock from one event and a guest shortens only
   the hold.
   **A THROWN BODY'S LANE IS DERIVED FROM THE BODY, never written beside it.** `BossMove.Width` is left
@@ -407,7 +413,11 @@ Recorded here so every chunk builds from the written word, not from memory.
   the screen: the odd-level boss is shown to a player as RUSTY BUCKET and none of them moved. **Its rounds are
   not missiles**: `Slug` is never in `Combat.Hostiles`, so point defence cannot delete a shot that is
   meant to be dodged.
-- **Point defence order**: missiles, then small craft, then anything else (`Turret.PdPriority`).
+- **What a self-picking gun takes first**: missiles, then small craft, then anything else
+  (`Turret.Rank`). What it may take at all is the gun's own `TurretSpec.Prey`: point defence
+  `Targeting.PointDefence` (never past the small craft), a turret left standing `Targeting.Sentry`
+  (anything hostile; a practice dummy only as a `TargetFilter.Fallback`, never held over anything
+  that can die).
 - **Test harness trap**: three processes on fixed timings do not choreograph scene changes well; the
   multiplayer arena needs its own purpose-built test.
 
@@ -427,6 +437,11 @@ Recorded here so every chunk builds from the written word, not from memory.
   scales rates of fire can touch it.
 - **The missile needs a selected target in range.** Refusals are shown on the ability's own slot
   (`PlayerShip.Fail` / `FailNote`), the pattern for any ability that can be refused.
+- **Stealth stops choosing, never hitting.** A filter is asked one of two things: `Chooses` (aimed
+  at, homed on, picked -- stealth hides) or `Hits` (a blow that lands where it lands -- it does not).
+  A new chooser asks `Chooses` / `Nearest` / `Choosable`; a new area blow asks `Hits` / `Hittable`.
+  A boss with nobody in sight aims at the last place it saw anyone and its clocks run on; with nobody
+  alive it waits.
 
 ## Damage, death and the two colours
 
@@ -694,7 +709,13 @@ meter restarts itself on the first hit after 5 s without one.
   brightness remapped so shading keeps its direction, the outer outline kept dark against space, and
   the purple (the saturated pixels) taken to neutral with a faint cool cast on the canopy.
 - **Unused art** (21 carried-over sprites nothing references) lives in `art_unused/`, which has a
-  `.gdignore` so Godot never imports it. Kept deliberately, at the developer's request.
+  `.gdignore` so Godot never imports it. Kept deliberately, at the developer's request, and so is
+  `art_unused/art_4x/`: five hulls at twice and the two turrets at four times the resolution the
+  game loads. **Anything NOT under a `.gdignore` ships.** The export preset takes `all_resources`,
+  so every file Godot imports goes into the `.pck` whether or not anything loads it -- which is
+  how that art (13 MB of PNG, about 3 MB once imported) and 45 `.translation` files Godot made
+  out of `version/*.csv` rode in every release. `version/` has a `.gdignore` of its own for that
+  reason.
 - **Background** (`stars.png`): 1024 px, seamless (stars near an edge wrap), on a screen-space layer
   at −100. Client-side only.
 - **Bomber** (`wing_bomber.png`): the developer's small airframe, doubled in resolution, wings swept
@@ -865,6 +886,18 @@ where the editor cannot delete it.*
 
 ## Traps that have already cost time
 
+- **A spec's figure is not the gun's.** `Spec().Interval` carried the overdrive while `FireControl`
+  fired off the raw reload, and every check read the spec. A rate or a speed is proved by counting
+  what leaves the barrel or measuring the hull's way, never by reading a figure the gun does not
+  fire from. Every gun's reload (main guns, point defence, dropped turrets, the wing's shots)
+  becomes time in one place, `PlayerShip.Cadence`, which adds a lift's shares to the reload's own
+  bonus rather than multiplying the two; a magazine reload, a bomber's rearm, a broadside's gap and
+  a missile burst's refire are not lifted.
+- **A share on an inverse stat divides: positive is shorter.** An interval or a cooldown
+  (`Stat.Inverse`) is `(Base + Flat) / (1 + Bonus)`, so the improvement is a POSITIVE share, as every
+  rate part writes it. Gunnery and Cooling wrote -0.005 and made every point a downside, while the
+  only check pinned the table's own sign. Prove the direction on the sheet, and print what a share
+  DOES (`AllStats.Change`), never the share.
 - **An event sent once reaches only the peers there to hear it.** A boss's warnings and the Drake's rock
   go out as they start, to the peers in the arena then; a guest that arrived later (a rejoin, a slow load)
   never heard of them and was hit by a rock it could not see. `Boss.CatchUp` sends what is up now to a
@@ -900,10 +933,16 @@ where the editor cannot delete it.*
   passed throughout; the check that catches it moves a small target at 12 u/s.
 - **A node freed with hull left still reads "alive".** A withdrawn hunter (`Hub.CallOff`) is freed with
   its hull, so `Alive` stays true and a carrier's fighters went on reading a freed node.
-  `Hub.DropRaider` now takes it off every ship's targets (`PlayerShip.Forget`) -- and out of
-  `Combat.Hostiles` at once: `QueueFree` only takes a node out of the tree at the frame's end, and a
-  point-defence turret that ticked later in the same frame acquired the dropped raider again, then read
-  it freed (an `ObjectDisposedException` a frame later).
+  `Hub.LetGo` takes it off every ship's orders (`PlayerShip.Forget`) and out of `Combat.Hostiles` at
+  once: `QueueFree` only takes a node out of the tree at the frame's end, and a point-defence turret
+  that ticked later in the same frame acquired the dropped raider again, then read it freed (an
+  `ObjectDisposedException` a frame later). **A turret is never told**: it holds only what is still
+  in `Combat.Hostiles` and alive, asked every tick, list first (`Turret.StillThere`). Telling each
+  ship's turrets reached the guns on pilots' ships and no others -- a freighter's dropped turret
+  holding a hunter when an escort ended threw on it every frame after and never fired again, and so
+  did the hauler's own mount after a reset mid-escort (`ResetToPad` calls off the hunters, then puts
+  it back on the pad online). A push reaches what one list knows; a re-check against the live list
+  reaches everything that holds the reference.
 - **The typecheck does not compile the harnesses.** `typecheck.ps1` checks `scripts/*.cs`; the smoke
   test and the sweep (`tools/*/*.cs.txt`) are compiled only inside an engine run, so a typo in a
   check costs a whole run to find. Compile them first: `scripts/*.cs` plus both `.cs.txt` files (as
@@ -1270,14 +1309,14 @@ produced, and what each one replaced.
 | `Ships.cs` → `ClassDef.Kit` | the two parts a class is born with | three classes named in `Equipment`, and the battleship's mounts handed to everything else |
 | `Equipment.cs` → `ItemDef.Needs` | the stats a part moves, and so the hulls it fits | `ItemDef.Class`: one class per part, which is why nine classes could wear almost nothing |
 
-**What is deliberately NOT a table.** The two ways an enemy fights (PIN and STANDOFF), the two
-bosses, and a boss's THROWN ROCK -- held in a tractor beam, thrown down a fixed lane on a cubic
+**What is deliberately NOT a table.** The two ways an enemy fights (PIN and STANDOFF), the
+ways a boss move runs (`MoveWay`), and a boss's THROWN ROCK -- held in a tractor beam, thrown down a fixed lane on a cubic
 ease, striking everything in the lane once and breaking at the end -- are BEHAVIOUR, and behaviour
 that differs in kind does not compress into rows without inventing a scripting language to hold
-it. The rock still shares the one path test (`Shots.Sweep`), which is the part that repeats. `Boss` already carries everything the bosses share --
-hull and damage scaling, telegraphs, net state, the super bar, a late joiner's catch-up -- so a
-third boss is a subclass with its own moves plus a `Missions` row, and a seventh enemy is a row
-unless it wants a third way to fight.
+it. The rock still shares the one path test (`Shots.Sweep`), which is the part that repeats. A boss's NUMBERS are rows: `Boss`
+runs any `Missions.BossType` and its `BossMove[]`, so a third boss is one row and one move array,
+a move shape no row can express is one more `MoveWay`, and a seventh enemy is a row unless it
+wants a third way to fight.
 
 **Per-ship ability state is four numbers** (`PlayerShip.Slot`: running, cooling, one the ability
 names itself, a count), in the class's own ability order. That is why adding an ability costs no
@@ -1318,20 +1357,21 @@ verdict is how a real failure gets waved through.
 - Balance with the new gear in play; `Hub.BeginPlacement` for the first non-instant ability;
   wormhole transit into an instanced system; the RTS half of hybrid control.
 
-## An installed build that can be replaced from a source of truth
+## A release, and what installs it
 
-`scripts/Builds.cs` owns this. The launcher is its first use, not its name.
-
-**The mechanism, once:** an installed build is a set of files with known hashes; a release is the
-same set with different hashes; updating is replacing only the files whose hashes differ, through a
-temp name and a verify, and never touching anything the release does not name.
+`tools/pack.ps1` makes one and `tools/install.ps1` installs one; `PLAY.bat` -> `play.ps1` reaches
+the installer on any machine without the developer tools. Everything in a release that might need
+fixing -- the part split, the 189 explicit `in=` lines, cutting `NOTES.txt` out of
+`docs/CHANGES.md` -- is decided in `pack.ps1`, on the developer's machine. `install.ps1` decides
+nothing: it reads `BUILD.txt` from the release and checks each part against the SHA-256 that file
+states. That matters because a player's copy of it is whatever the repo held the day they
+downloaded it, and nothing here updates it.
 
 **`version/MANIFEST.sha256` is the SOURCE manifest, not a release.** It is built from
 `git ls-files` and contains no build output at all -- not one `.dll`. Shipping it to a player would
 send them `art_source/`, `retired/` and `docs/` and still not name a file the game needs to run.
-What it got right is the FORMAT, and `tools/manifest.ps1` is now general enough to write both: one
-hashing implementation, two callers. A future instance reading item 12's old text in a changelog
-should know it was wrong about this one fact.
+What it got right is the FORMAT, and `tools/manifest.ps1` is general enough to write both: one
+hashing implementation, two callers (`verify.ps1 -Update` and `tools/pack.ps1`).
 
 **The build string must never be `readonly` or `const`.** `Net.Fingerprint()` walks every static
 field of every null-namespace type and folds in any that is `IsLiteral || IsInitOnly` with a
@@ -1342,31 +1382,25 @@ that structurally.
 
 **The version does not go in the .exe.** `export_presets.cfg` leaves `application/file_version`
 and `product_version` empty on purpose: `modify_resources=true` patches them into the PE resources,
-which would change the 103 MB exe on every release and move it out of the part that stands still --
-turning a 10 MB update into an 80 MB one. The id lives in `BUILD.txt` beside it.
+which would change the 103 MB exe on every release and move it out of the part that stands still.
+The id lives in `BUILD.txt` beside it. (`install.ps1` fetches every part today; the split is kept
+for an installer that fetches only what changed.)
 
 **`user://` is outside the install.** `%APPDATA%\Godot\app_userdata\Warships\` holds the saves, and
-`project.godot` does not set `use_custom_user_dir`. The launcher's write scope is the install folder
-only, so a save is out of reach by geometry rather than by care. Every path still goes through
-`Builds.Resolve`, which refuses anything that is not a plain relative path inside the root, and the
-delete set is empty by construction: a file is only ever renamed over.
+`project.godot` does not set `use_custom_user_dir`. `install.ps1` writes its install folder (`play\` by
+default) and a temp folder of its own, and deletes nothing but that temp folder -- a part is
+unpacked over what is there -- so a save is out of reach by geometry rather than by care.
 
 **Build ids are opaque strings compared for equality, never ordered.** `2026-09-23.ec0d138` is a
-date and a commit for humans. If the published id differs from the installed one the launcher
-hashes and looks -- the only question it can answer honestly -- which makes re-publishing an older
-build work as a rollback with no extra code.
+date and a commit for humans. If the published id differs from the installed one,
+`install.ps1` fetches and unpacks every part again, which makes re-publishing an older build work
+as a rollback with no extra code.
 
-**Everything that might need fixing is on the repo side of the line.** The part split, the 189
-explicit `in=` lines, and cutting `NOTES.txt` out of `docs/CHANGES.md` all happen in
-`tools/pack.ps1`. The launcher has no globs and no markdown: it shows the text it is handed and
-switches on a `Builds.Decide` result. A frozen program earns its freeze by containing no logic
-worth changing.
-
-**The download is public, and that is a decision, not an oversight.** Anything the launcher can
+**The download is public, and that is a decision, not an oversight.** Anything `install.ps1` can
 fetch unaided, a player can fetch unaided: a token or key inside a file players hold is extractable
-in a minute. Gating it for real needs a service in front of the download that the launcher asks
-instead of asking GitHub -- the launcher would gain one field and no logic, and `source.txt` plus
-`schema=1` are what make that swap possible without shipping a new launcher.
+in a minute. Gating it for real needs a service in front of the download that `install.ps1` asks
+instead of GitHub. It reads one base URL (`$Base`), so that is one line here -- and a player keeps
+asking GitHub until they download the repo again.
 
 ## The sky: screen space, and a direction a distance check cannot see
 

@@ -33,8 +33,8 @@ $final = @($fixed)
 $code = @($tracked | Where-Object { $_ -match '\.(cs|sh|ps1|py|bat|sln|tscn|csproj|godot|editorconfig)$' -or $_ -match '\.cs\.txt$' })
 # THE DIRECTORIES ARE DISCOVERED TOO, and that is the whole point of the paragraph above. They
 # used to be four hard-coded buckets -- root, scripts/, typecheck/, tools/ -- which is the SAME
-# mistake the comment warns about, one level up: launcher/Main.cs and launcher/Launcher.csproj
-# matched $code, belonged to no bucket, and were silently absent from the master copy. So was
+# mistake the comment warns about, one level up: a file in any fifth directory matched $code,
+# belonged to no bucket, and was silently absent from the master copy -- two were. So was
 # PLAY.bat, and so would anything in a folder added tomorrow.
 $final += @($code | Where-Object { $_ -notin $fixed -and $_ -notlike '*/*' } | Sort-Object { $_ } -CaseSensitive)
 foreach ($dir in @($code | Where-Object { $_ -like '*/*' } |

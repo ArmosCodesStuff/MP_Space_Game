@@ -10,16 +10,20 @@ using System.Collections.Generic;
 // base's gun and a class whose point defence never switches off all wanted the same swing, the
 // same claim-sharing acquisition and the same reload that carries its remainder.
 //
-// A turret now asks its HOST two things: what gun this is (TurretSpec -- numbers, art and the row
-// of Shots.All it fires, read every tick so a bonus applies at once) and whether it may fire.
-// Anything that can answer those can mount one.
+// A turret now asks its HOST two things: what gun this is (TurretSpec -- numbers, art, the row
+// of Shots.All it fires and what it may pick, read every tick so a bonus applies at once) and
+// whether it may fire. Anything that can answer those can mount one.
 //
 //   MAIN GUNS aim where the host says (a pilot's cursor) and fire only when the host tells them
 //             to; the host decides when (salvo or staggered), the turret just shoots along
 //             wherever its barrel points at that moment.
 //   POINT DEFENCE fires by itself while the host says it is online. Every turret picks and tracks
 //             its OWN target, preferring one no sibling has claimed, so a group spreads across
-//             what is coming rather than piling onto one of it.
+//             what is coming rather than piling onto one of it. WHAT it may pick is the gun's
+//             own (TurretSpec.Prey): a warship's and the hauler's take missiles and small craft
+//             (Targeting.PointDefence); a turret left standing takes anything hostile
+//             (Targeting.Sentry). Nothing tells it to let go: what it holds is asked of the live
+//             world every tick (StillThere).
 // ─────────────────────────────────────────────────────────────────────────────
 
 // What the gun IS. A struct, built per tick: the numbers live wherever the host keeps them (a
@@ -32,6 +36,12 @@ public struct TurretSpec
     // and Shoot put a main gun's shell down the barrel whatever was bolted on. Shots.Shell is 0,
     // so a gun that says nothing fires a shell.
     public int Kind;
+    // WHO IT MAY PICK, when it picks for itself (a mount set up `pd`): Turret.Acquire takes only
+    // what this allows, ranked by Turret.Rank, with its Fallback below every rank. A main gun never
+    // picks, so a main gun's is never read -- but a mount that picks MUST name one: the default
+    // filter forbids nothing and has no fallback, so it would take every hostile and HOLD a
+    // practice dummy like anything else.
+    public TargetFilter Prey;
     public float ShellSpeed;             // main guns: the shell's speed
     public string Texture;               // the sprite (barrels up, pivot at the sheet's centre)
     public float TexScale;               // world units per turret-texture pixel
@@ -67,8 +77,13 @@ public partial class Turret : Node2D
     public IHittable Target { get; private set; }
 
     private bool Online => !PointDefense || Host.PdOnline;
-    // a target that has left the world (Hub.DropRaider, through PlayerShip.Forget)
-    public void Forget(IHittable t) { if (ReferenceEquals(Target, t)) Target = null; }
+    // WHAT IT HOLDS IS ASKED OF THE LIVE WORLD, EVERY TICK -- never told to it. Nothing can list
+    // every turret to tell it: a gun on the hauler or on a dropped turret is on no pilot's ship. A
+    // target leaves the world by leaving Combat.Hostiles (Hub.LetGo, in the call that drops it), and
+    // a hunter withdrawn with its hull left (Hub.CallOff) still reads alive -- so the question is
+    // "still in that list, AND alive", and the list is asked FIRST: a node that has left the world
+    // is asked nothing of its own, and never its position.
+    private static bool StillThere(IHittable t) => t != null && Combat.Hostiles.Contains(t) && t.Alive;
 
     private TurretSpec S => Host.Spec(PointDefense);
     public float Range => S.Range;
@@ -117,9 +132,11 @@ public partial class Turret : Node2D
 
         // Acquire. Runs on guests too, as cosmetics: the same rule on the same
         // positions picks the same targets, so a guest sees its turrets track what
-        // the host's are shooting. Only the host's copy deals damage.
+        // the host's are shooting. Only the host's copy deals damage. A FALLBACK (a practice
+        // dummy, to a turret left standing) is never HELD: it is picked again every tick, so the
+        // first thing that can die to come into reach takes the gun off it.
         Vector2 wp = GlobalPosition;
-        if (Target == null || !Target.Alive || wp.DistanceTo(Target.Position) > Range * 1.15f) Target = Acquire(wp);
+        if (!StillThere(Target) || S.Prey.IsFallback(Target) || wp.DistanceTo(Target.Position) > Range * 1.15f) Target = Acquire(wp);
 
         float desired = Target != null ? (Target.Position - wp).Angle() : rest;
         float diff = Swing(desired, delta);
@@ -132,9 +149,10 @@ public partial class Turret : Node2D
         _cd -= delta;
         if (!canFire) { if (_cd < 0) _cd = 0; }
         else for (int n = 0; _cd <= 0 && n < 8; n++)
-        {   // the target held for the shot: a shot that kills it drops it from this turret (Hub.DropRaider)
+        {   // the target held for the shot: a shot that kills it ends the run here, and the next
+            // tick picks again
             var tgt = Target;
-            if (tgt == null) break;
+            if (!StillThere(tgt)) { Target = null; break; }
             var spec = S;
             _cd += spec.Interval;
             tgt.TakeDamage(spec.Damage); Host.NoteDealt(spec.Damage, tgt.Position);
@@ -143,27 +161,31 @@ public partial class Turret : Node2D
         QueueRedraw();
     }
 
-    // Point defence shoots ONLY missiles and small craft (light raiders, fighters, the practice
-    // fighters) -- never heavies, bosses or the dummy hulks (Targeting.PointDefence). Missiles
-    // first; within that, the nearest one no sibling turret has claimed (if all are claimed, the
-    // nearest regardless).
-    public static int PdPriority(IHittable h) => TagExt.Is(h, Tag.Missile) ? 0 : TagExt.Is(h, Tag.Light | Tag.Fighter) ? 1 : 2;
-    // Best by (priority, then distance), preferring one no sibling turret has claimed, falling
+    // WHAT A GUN THAT PICKS FOR ITSELF TAKES FIRST: missiles, then small craft (light raiders,
+    // fighters, the practice fighters), then everything else -- a heavy, a boss, a station. WHAT it
+    // may take at all is its own (TurretSpec.Prey): point defence never gets past the small craft
+    // (Targeting.PointDefence), a turret left standing takes them all (Targeting.Sentry). Below
+    // every rank, what its filter takes only as a FALLBACK. Within a rank, the nearest one no
+    // sibling turret has claimed (if all are claimed, the nearest regardless).
+    public static int Rank(IHittable h) => TagExt.Is(h, Tag.Missile) ? 0 : TagExt.Is(h, Tag.Light | Tag.Fighter) ? 1 : 2;
+    private const int FallbackRank = 3;
+    // Best by (rank, then distance), preferring one no sibling turret has claimed, falling
     // back to the best claimed one -- in a single pass with no allocation. This used to be a LINQ
     // chain with two lists built and sorted, and Tick calls it EVERY FRAME FOR EVERY PD TURRET
     // while point defence is active with nothing in range, because a null Target never satisfies
-    // the guard.
+    // the guard -- and every frame a turret holds a fallback.
     private IHittable Acquire(Vector2 from)
     {
         IHittable bestFree = null, bestAny = null;
         int freePri = 0, anyPri = 0; float freeDist = 0, anyDist = 0;
-        float range = Range;
+        var spec = S;
+        float range = spec.Range;
         foreach (var h in Combat.Hostiles)
         {
-            if (!Targeting.PointDefence.Allows(h)) continue;
+            if (!spec.Prey.Chooses(h)) continue;
             float d = from.DistanceTo(h.Position);
             if (d > range) continue;
-            int p = PdPriority(h);
+            int p = spec.Prey.IsFallback(h) ? FallbackRank : Rank(h);
             if (bestAny == null || p < anyPri || (p == anyPri && d < anyDist)) { bestAny = h; anyPri = p; anyDist = d; }
             bool claimed = false;
             foreach (var t in Host.Siblings) if (t != this && t.Target == h) { claimed = true; break; }

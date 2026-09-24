@@ -314,10 +314,11 @@ public partial class Wing : Node2D
                 break;
             case FSt.Burst:
                 SteerTo(t.Position, dt); Fly(dt);
-                _cd -= delta;
+                // the reload runs down ONCE a frame, in Tick; its gap is the carrier's Cadence, so a
+                // lift on the carrier's rate of fire reaches its wing as it reaches its guns
                 if (_cd <= 0 && _shots < Def.Shots)
                 {
-                    _cd += S[Def.IntervalStat]; _shots++;
+                    _cd += Carrier.Cadence(Def.IntervalStat); _shots++;
                     t.TakeDamage(S[Def.DamageStat]); Carrier.NoteCombat();
                     Combat.Flash(Position, t.Position, Def.ShotTint, Def.Report);
                 }
@@ -414,7 +415,7 @@ public partial class Wing : Node2D
                 else { Velocity = Velocity.MoveToward(Vector2.Zero, Accel * (float)delta); Position += Velocity * (float)delta; }
                 if (_cd <= 0 && Ammo > 0)
                 {
-                    _cd += S[Def.IntervalStat]; Ammo--;
+                    _cd += Carrier.Cadence(Def.IntervalStat); Ammo--;
                     var dir = Vector2.Up.Rotated(Rotation);           // straight off the nose
                     Combat.LaunchTorpedo(Position + dir * Def.Length * 0.45f, dir, (float)S[Def.ShotSpeedStat],
                                          (float)S[Def.ShotRangeStat], S[Def.DamageStat], source: Carrier);

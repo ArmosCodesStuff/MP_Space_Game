@@ -151,8 +151,9 @@ public partial class Emplacement : Node2D, IQuarry, ITagged, IStatused, ITurretH
     private double _cd, _dmg = 1;
 
     // ── the gun, and what carries it (ITurretHost) ───────────────────────────
-    // MAIN guns, not point defence: point defence takes missiles and small craft only
-    // (Targeting.PointDefence), so a PD mount would never fire at the ship besieging it.
+    // MAIN guns, not point defence: a mount that picks for itself picks from Combat.Hostiles
+    // (Turret.Acquire) -- this emplacement's own side -- so a PD mount would never fire at the ship
+    // besieging it.
     public Node2D AsNode => this;
     public bool PdOnline => false;
     public float PdRing => 0f;

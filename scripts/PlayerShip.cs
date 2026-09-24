@@ -115,26 +115,45 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // ── what this ship's own class brings ────────────────────────────────
     private Vector2 _echoAt;                      // where this ship's last shot landed
 
-    // WHAT MULTIPLIES ITS RATE OF FIRE, and WHAT MULTIPLIES ITS TOP SPEED, right now -- the
-    // tender's overdrive, the warrior's rush, the dart's boost. Every running ability that names
-    // a stat for one of them (AbilityDef.RateStat, AbilityDef.SpeedStat) multiplies it, and the
-    // row knows its own slot, so the third rate buff is a ROW rather than a third `if` naming a
-    // slot id and a stat id by string. FireRate is read by this ship's guns, its point defence
-    // and every turret it has out (Spec, Deployed.Spec).
-    public float FireRate => Multiplied(rate: true);
-    public float SpeedMult => Multiplied(rate: false);
-    private float Multiplied(bool rate)
+    // WHAT LIFTS ITS RATE OF FIRE, and WHAT LIFTS ITS SPEED, right now -- the tender's overdrive,
+    // the warrior's rush, the dart's boost, the wraith's veil. Every running ability that names a
+    // stat for one of them (AbilityDef.RateStat, AbilityDef.SpeedStat) lifts it by that figure,
+    // and the row knows its own slot, so the next buff is a ROW rather than an `if` naming a slot
+    // id and a stat id by string.
+    //   Lifts ADD (LiftShares; the owner's ruling): two x2 buffs at once are x3, not x4. A product
+    // would have compounded every rate part the item pass adds.
+    //   The rate reaches the reloads through ONE door, Cadence, which adds the lifts' shares to
+    // the reload's own bonus -- so a part's +100% under an overdrive's x2 is x3 as well: the main
+    // guns (FireControl), the point defence (Spec), every turret it has out (Deployed.Spec) and
+    // every craft of its wing. SpeedMult lifts the top speed AND the thrust (Steer).
+    public float FireRate => (float)Stat.Scale(Lifts(rate: true));
+    public float SpeedMult => (float)Stat.Scale(Lifts(rate: false));
+    private readonly List<double> _lifts = new();
+    private double Lifts(bool rate)
     {
-        float k = 1f;
+        _lifts.Clear();
         foreach (var def in Abilities.For(Class))
         {
             string stat = rate ? def.RateStat : def.SpeedStat;
             if (stat == null || Sl(def.Id).Left <= 0) continue;
             if (def.While != null && !def.While(this)) continue;
-            k *= (float)Stats[stat];
+            _lifts.Add(Stats[stat]);
         }
-        return k <= 0 ? 1f : k;      // a sheet with no such row answers 0: unbuffed, never stopped
+        return LiftShares(_lifts);
     }
+    // Lifts, as SHARES: each adds what it is worth over x1 (x2 is +1, x0.85 is -0.15), and the ship
+    // takes Stat.Scale of the sum -- the sheet's own rule, on its own floor. A sheet with no such
+    // row answers 0: that lifts nothing, rather than stopping the ship.
+    public static double LiftShares(IReadOnlyList<double> lifts)
+    {
+        double shares = 0;
+        for (int i = 0; i < lifts.Count; i++) if (lifts[i] > 0) shares += lifts[i] - 1;
+        return shares;
+    }
+    // THE SECONDS BETWEEN SHOTS of the gun whose interval stat this is, at the rate this ship fires
+    // at now: the one place a lift becomes time. (A broadside's volley gap and a missile burst's
+    // refire are not a gun's reload, and no class that has them carries a rate row.)
+    public double Cadence(string intervalStat) => Stats.With(intervalStat, Lifts(rate: true));
 
     // ── ABILITY SLOTS ────────────────────────────────────────────────────
     // The state of every ability this class carries, in the class's own order. Each ability
@@ -202,8 +221,9 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     {
         var art = MyArt;
         return new TurretSpec {
+            Prey     = Targeting.PointDefence,        // what its PD takes: a main gun never picks
             Damage   = pd ? Stats["pd_damage"]   : Stats["main_damage"],
-            Interval = (pd ? Stats["pd_interval"] : Stats["main_interval"]) / FireRate,
+            Interval = Cadence(pd ? "pd_interval" : "main_interval"),
             Range    = (float)(pd ? Stats["pd_range"] : Stats["main_range"]),
             Turn     = (float)(pd ? Stats["pd_turn"]  : Stats["main_turn"]),
             ShellSpeed = (float)Stats["shell_speed"],
@@ -283,16 +303,17 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         FitWings(fresh: true);
     }
 
-    // THE ONE SHEET: class, gear and purchases. Every ship carries its pilot's gear and purchases
-    // (they come with the identity); your own adds Character.Bonuses. The title screen's ship
-    // (Demo) flies the kit, whatever the pilot has fitted.
+    // THE ONE SHEET: class, gear and purchases. Every ship carries its pilot's gear, the levels that
+    // pilot bought for it, and its purchases (they come with the identity); your own adds
+    // Character.Bonuses. The title screen's ship (Demo) flies the kit, whatever the pilot has fitted
+    // or levelled.
     private ShipStats BuildSheet()
     {
         if (Mine && !Demo) _loadout = (string[])Character.LoadoutFor(Class).Clone();   // a COPY: the window edits the saved one in place
-        var pct = Equipment.Bonuses(Class, Loadout);
+        var pct = Equipment.Bonuses(Class, Loadout, Levels);
         if (Mine && !Demo) pct = ShipStats.Sum(pct, Character.Bonuses);
         pct = ShipStats.Sum(pct, Progression.Shares(_bought, Class));       // the pilot's own percentages
-        return new ShipStats(Class, pct, ShipStats.Sum(Progression.Flats(_bought, Class), Equipment.Adds(Class, Loadout)));
+        return new ShipStats(Class, pct, ShipStats.Sum(Progression.Flats(_bought, Class), Equipment.Adds(Class, Loadout, Levels)));
     }
 
     // THE WING, brought to the sheet's counts: gear adds fighters or takes bombers away, and may be
@@ -363,15 +384,21 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         FitWings(fresh: false);
     }
 
-    // Equipment: the owner's saved loadout for this class (on the host, what the identity
-    // carried). A change refits.
+    // Equipment: the owner's saved loadout for this class, and the levels its pilot bought for its
+    // parts (on the host, what the identity carried; your own, from Character -- copied, never
+    // shared). A change to EITHER refits: a level bought for a part already fitted is the same
+    // loadout, and must refit all the same.
     private string[] _loadout;
     public string[] Loadout => _loadout ?? Equipment.Default(Class);
-    public void SetEquipment(string[] ids)
+    private Dictionary<string, int> _levels = new();
+    public IReadOnlyDictionary<string, int> Levels => _levels;
+    public void SetEquipment(string[] ids, IReadOnlyDictionary<string, int> levels)
     {
         var l = Equipment.Sanitize(Class, ids);
-        if (_loadout != null && l.AsSpan().SequenceEqual(_loadout)) return;
-        _loadout = l;
+        var lv = Equipment.SanitizeLevels(levels?.Select(kv => (kv.Key, kv.Value)));
+        if (_loadout != null && l.AsSpan().SequenceEqual(_loadout)
+            && lv.Count == _levels.Count && lv.All(kv => _levels.GetValueOrDefault(kv.Key) == kv.Value)) return;
+        _loadout = l; _levels = lv;
         Restat();
     }
 
@@ -541,7 +568,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         // and THROWING one was worse than hitting it -- the host moved a live hostile seeker 1000 u
         // while every guest flew its own copy along the old path, so the two peers held a damaging
         // missile a thousand units apart.
-        foreach (var h in new List<IHittable>(Targeting.All(Combat.Hostiles, Targeting.Attackable)))
+        foreach (var h in new List<IHittable>(Targeting.Hittable(Combat.Hostiles, Targeting.Attackable)))
         {
             if (h.Position.DistanceTo(Position) > reach) continue;
             if (TagExt.Is(h, Tag.Boss)) { (h as IStatused)?.ApplyStatus(Status.Disabled, Stats["wave_disable"]); continue; }
@@ -569,7 +596,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         var a = Aim.Nose(this, MyArt.Length * 0.5f);
         var b = a + Vector2.Up.Rotated(Rotation) * (float)Stats["rail_range"];
         float halfWidth = (float)Stats["rail_width"] * 0.5f;
-        foreach (var h in new List<IHittable>(Targeting.All(Combat.Hostiles, Targeting.Attackable)))
+        foreach (var h in new List<IHittable>(Targeting.Hittable(Combat.Hostiles, Targeting.Attackable)))
         {
             if (Combat.DistToSegment(h.Position, a, b) <= halfWidth + h.HitRadius)
             {
@@ -595,7 +622,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     public void RushEmp()
     {
         float reach = (float)Stats["emp_range"];
-        foreach (var h in new List<IHittable>(Targeting.All(Combat.Hostiles, Targeting.Attackable)))
+        foreach (var h in new List<IHittable>(Targeting.Hittable(Combat.Hostiles, Targeting.Attackable)))
         {
             if (h.Position.DistanceTo(Position) > reach) continue;
             h.TakeDamage(Stats["emp_damage"]);
@@ -614,7 +641,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     {
         float range = (float)Stats["hunter_range"];
         var seen = new List<IHittable>();
-        foreach (var h in Targeting.All(Combat.Hostiles, Targeting.Attackable))
+        foreach (var h in Targeting.Choosable(Combat.Hostiles, Targeting.Attackable))
             if (Position.DistanceTo(h.Position) <= range) seen.Add(h);
         return seen;
     }
@@ -670,7 +697,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         if (stored <= 0) return;
         double blast = stored * Stats["echo_share"];
         float reach = (float)Stats["echo_radius"];
-        foreach (var h in new List<IHittable>(Targeting.All(Combat.Hostiles, Targeting.Attackable)))
+        foreach (var h in new List<IHittable>(Targeting.Hittable(Combat.Hostiles, Targeting.Attackable)))
         {
             if (h.Position.DistanceTo(_echoAt) > reach) continue;
             h.TakeDamage(blast);
@@ -686,8 +713,6 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         ref var s = ref Sl("stealth");
         s.Left = Stats["stealth_time"]; s.Cool = Cooling(Stats["stealth_cooldown"]);
         ApplyStatus(Status.Untargetable, s.Left);
-        // whatever had picked this ship lets go of it at once, rather than at its next thought
-        foreach (var t in new List<Turret>(Siblings)) t.Forget(this);
     }
 
     public void OrderStrike(IHittable t)
@@ -792,14 +817,14 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     }
 
     public void NoteStrikeDone() { if (--_strikesOut <= 0) StrikeTarget = null; }
-    // A target that has left the world: the wing, the bombers and every turret let go of it. The
+    // A target that has left the world: the wing and the bombers let go of it. (Its turrets need
+    // no telling: a turret holds only what is still in Combat.Hostiles -- Turret.StillThere.) The
     // strike's count is NOT reset: bombers already out still report back (NoteStrikeDone), and a new
     // strike waits for all of them, as it did when a dead target stayed the strike's until then.
     public void Forget(IHittable t)
     {
         if (ReferenceEquals(WingTarget, t)) WingTarget = null;
         if (ReferenceEquals(StrikeTarget, t)) StrikeTarget = null;
-        foreach (var tu in _turrets) tu.Forget(t);
     }
 
     // A BURST (destroyer): three missiles off the nose, one straight at the target and two launched
@@ -1044,12 +1069,15 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // The reload CARRIES its remainder (cd += step) instead of resetting. Resetting
     // would round every step up to a whole frame -- and staggered takes four steps
     // per salvo's one, so it would fall behind (measured: 4.50 vs 6.00 DPS).
+    //
+    // The reload is the ship's CADENCE -- the sheet's, with whatever is running added to its bonus
+    // -- the door its point defence, its dropped turrets and its wing come through too.
     private void FireControl(double delta)
     {
         if (!Stats.Def.Has(Fit.Guns) || _mains.Count == 0) return;
         if (!Trigger) { _gunCd = Math.Max(0, _gunCd - delta); return; }   // keep reloading while idle
 
-        double interval = Stats["main_interval"];
+        double interval = Cadence("main_interval");
         double step = Staggered ? interval / _mains.Count : interval;
         _gunCd -= delta;
         for (int n = 0; _gunCd <= 0 && n < 32; n++)
@@ -1139,11 +1167,16 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
 
         // Held: a railgun charging, a shockwave's stun. No thrust, no rudder, whatever is pressed.
         if (_status.Has(Status.Disabled)) { throttle = 0f; rudder = 0f; }
-        if (throttle > 0) along += (float)Stats["thrust"] * throttle * dt;
+        // A SPEED LIFT (the rush, the boost, the veil) lifts the push ahead WITH the top speed. The
+        // water holds a hull to thrust / drag, so a lift on the cap alone would stop there: a warrior
+        // pushes 130 against 0.35, which is 371 u/s of the 475 its 2.5x rush promises. Astern is
+        // not lifted, and neither is its cap.
+        float lift = SpeedMult;
+        if (throttle > 0) along += (float)Stats["thrust"] * lift * throttle * dt;
         else if (throttle < 0) along += (float)Stats["reverse_thrust"] * throttle * dt;
         along -= along * Mathf.Clamp((float)Stats["water_drag"] * dt, 0f, 1f);
         along = Mathf.Clamp(along, -(float)Stats["reverse_speed"],
-                            (float)Stats["max_speed"] * SpeedMult * (Pinned ? StatusSet.PinSpeed : 1f));
+                            (float)Stats["max_speed"] * lift * (Pinned ? StatusSet.PinSpeed : 1f));
         across *= Mathf.Exp(-(float)Stats["keel"] * dt);
 
         // turning circle: yaw rate = speed / radius, capped by the rudder; astern the

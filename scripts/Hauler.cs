@@ -92,6 +92,7 @@ public partial class Hauler : UtilityShip, ITurretHost
     public PlayerShip Credit => null;                // its shots are the base's, not a pilot's
     public TurretSpec Spec(bool pd) => new()
     {
+        Prey = Targeting.PointDefence,               // missiles and small craft, as a warship's
         Damage = Yard?.Value("hauler_pd_damage") ?? Economy.HaulerPdDamage,
         Interval = Economy.HaulerPdInterval,
         Range = (float)Economy.HaulerPdRange,

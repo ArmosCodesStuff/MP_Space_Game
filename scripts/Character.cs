@@ -309,9 +309,13 @@ public static class Character
         foreach (var lockedId in ((string)c.GetValue("gear", "locked", "")).Split(',', StringSplitOptions.RemoveEmptyEntries))
             GearLocked.Add(lockedId);
         // A file from before parts could be levelled has no section at all and every part reads 0.
+        // What is there is taken in like a claim off the wire (Equipment.SanitizeLevels: parts this
+        // build knows, 1-40), each id through Equipment.Migrated like every other part id here -- a
+        // rack line that moved to the destroyer keeps the level its pilot paid for.
         if (c.HasSection("gear_level"))
-            foreach (var k in c.GetSectionKeys("gear_level"))
-                GearLevel[k] = Math.Clamp((int)c.GetValue("gear_level", k, 0), 0, Equipment.MaxLevel);
+            foreach (var (lid, lv) in Equipment.SanitizeLevels(c.GetSectionKeys("gear_level")
+                         .Select(gid => (Equipment.Migrated(gid), (int)c.GetValue("gear_level", gid, 0)))))
+                GearLevel[lid] = lv;
         if (c.HasSection("boss_cleared"))
             foreach (var k in c.GetSectionKeys("boss_cleared"))
                 BossCleared[k] = ((string)c.GetValue("boss_cleared", k, "")).Split(',', StringSplitOptions.RemoveEmptyEntries)
