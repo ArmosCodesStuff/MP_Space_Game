@@ -36,7 +36,8 @@
 param(
     [string] $Godot,
     [switch] $Dirty,          # allow an unclean tree (a test build; the id is marked)
-    [string] $Out = 'dist'
+    [string] $Out = 'dist',
+    [int]    $ExportWait = 600   # seconds to wait for the export to EXIT; see below, it may not
 )
 $ErrorActionPreference = 'Stop'
 Set-Location (Join-Path $PSScriptRoot '..')
@@ -85,7 +86,18 @@ foreach ($d in @($dist, $game, $rel)) { New-Item -ItemType Directory -Force $d |
 # --headless so no window opens; the preset's own export_path is overridden by the argument, which
 # is why the export lands in dist\game and not in the folder above the repo.
 Write-Host 'pack: exporting the game (a few minutes)'
-& $godotExe --headless --path $repo --export-release 'Windows Desktop' (Join-Path $game 'Warships.exe')
+# IT IS JUDGED BY ITS OUTPUT, NOT BY ITS EXIT. The headless export sometimes finishes every scrap
+# of its work -- savepack prints DONE, all 189 files are on disk -- and then never exits, sitting
+# at 0 CPU indefinitely. Waiting on that hangs the release with nothing to read and nothing to
+# diagnose. So: wait generously, then stop waiting and let the files decide. ($args is an
+# automatic variable in PowerShell and must not be used for this.)
+$exportArgs = @('--headless', '--path', $repo, '--export-release', 'Windows Desktop',
+                (Join-Path $game 'Warships.exe'))
+$proc = Start-Process -FilePath $godotExe -ArgumentList $exportArgs -PassThru -NoNewWindow
+if (-not $proc.WaitForExit($ExportWait * 1000)) {
+    Write-Host ('pack: the export has not exited after {0} s -- judging it by what it wrote' -f $ExportWait)
+    try { $proc.Kill() } catch { }
+}
 if (-not (Test-Path (Join-Path $game 'Warships.exe'))) { Write-Host 'pack: no exe was produced'; exit 1 }
 
 # -- 2 . the launcher --------------------------------------------------------

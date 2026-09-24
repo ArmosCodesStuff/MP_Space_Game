@@ -889,6 +889,12 @@ run; every figure they assert stays a literal.
   so SmartScreen's behaviour is a guess. Everything with a DECISION in it is in `scripts/Builds.cs`
   and is proved by 29 rung-3 checks -- but the window, the network and the operating system are
   four manual checks that have not been run. `docs/README.md` lists them under Releasing.
+- **The headless export sometimes finishes and never exits.** On the first real release run
+  `savepack` printed DONE, all 189 files were on disk, and the Godot process then sat at 0 CPU for
+  eight minutes without leaving -- hanging `pack.ps1` with nothing to read. It is judged by its
+  OUTPUT now: `pack.ps1` waits `-ExportWait` seconds (600 by default), then stops waiting and lets
+  the files decide. Whether this is the same teardown fault as the net10.0 exit crash is unknown;
+  it did not happen on three earlier `-Dirty` runs.
 - **No release has been published.** `tools/pack.ps1` has made a `-Dirty` test build end to end
   (189 files, 191 MB, `sha256sum -c` clean on all of them), and nothing has been uploaded to
   GitHub, so the `releases/latest/download/` path has never been fetched by anything.
