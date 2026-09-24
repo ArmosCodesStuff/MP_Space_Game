@@ -109,6 +109,10 @@ public partial class TargetDummy : Node2D, IHittable, ITagged
     // a guest's copy of the host's meter, once a second: its first figures are where this peer starts
     // counting, and a meter the host restarted (its sums restart together) counts from zero
     private bool _readSeen;
+    // Its "10s avg / total" line is drawn at HitRadius + 22 at 13 px, so anything else that wants
+    // to write under this hull starts below that. Kept beside the draw call it describes.
+    public float LabelDrop => 22f + 13f;
+
     public void SetReadout(double last, double avg, double total)
     {
         if (!_readSeen) _hullWatch = default;

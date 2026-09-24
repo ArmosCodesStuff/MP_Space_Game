@@ -40,6 +40,16 @@ public interface IHittable
     // (`Selected is TargetDummy td`), so a second kind with a name of its own meant a second arm
     // on that expression.
     string Label => $"#{NetId}";
+
+    // HOW FAR BELOW ITS HULL IT ALREADY WRITES SOMETHING. The range readout is drawn under a
+    // selected target (Hub), and a target that writes its own text down there had the two land on
+    // top of each other: the practice dummy's "10s avg / total" line sits at HitRadius + 22 in
+    // 13 px and the range sat at HitRadius + 30 in 12, which is not a gap.
+    //
+    // The DRAWER cannot know this -- it has an IHittable and nothing else -- so the TARGET says
+    // it, the same way it says its own Label rather than being type-tested for one. Anything with
+    // nothing under it keeps the 0 and nothing moves for it.
+    float LabelDrop => 0f;
     // Does a projectile at p (with pad for its own size) touch this? A circle by
     // default; a long ship answers with a capsule along its keel.
     bool Covers(Vector2 p, float pad) => p.DistanceTo(Position) <= HitRadius + pad;

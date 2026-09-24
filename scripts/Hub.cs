@@ -1556,7 +1556,7 @@ public partial class Hub : Node2D
             {
                 if (aim is not { Alive: true }) continue;
                 DrawArc(aim.Position, aim.HitRadius + 14f, 0, Mathf.Tau, 24, new Color(1f, 0.85f, 0.3f, 0.55f), 1.5f);
-                Txt.Centre(this, font, aim.Position + new Vector2(0, aim.HitRadius + 30f),
+                Txt.Centre(this, font, aim.Position + new Vector2(0, aim.HitRadius + 30f + aim.LabelDrop),
                            $"{from.Position.DistanceTo(aim.Position):0} u", Txt.Size(12), new Color(1f, 0.85f, 0.3f, 0.9f));
             }
         if (SelectionBox is { } box) DrawRect(box, new Color(1f, 0.85f, 0.3f, 0.55f), false, 1.5f);
