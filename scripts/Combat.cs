@@ -4,7 +4,7 @@ using System.Collections.Generic;
 // WHAT DEALT IT -- the name a blow carries into PlayerShip.Incoming, which keys the 0.52 s
 // per-source gap and the damage tally on it. They were free-form strings spelled by hand at the
 // call sites, and two of them are ONE CHARACTER apart: "boss:gun" is the Drake Bastion's main gun
-// and "boss:guns" is the Silver Lancer's lasers. A typo makes one weapon silently suppress
+// and "boss:guns" is the odd-level boss's lasers (Lancer.cs; a player reads it as RUSTY BUCKET). A typo makes one weapon silently suppress
 // another's hits, or stop suppressing its own, and nothing in the build could catch it. A name
 // used by a file that owns a weapon is a member here or it does not exist.
 //
@@ -14,7 +14,8 @@ using System.Collections.Generic;
 // keeps the single shared name the gap is for.
 public static class DamageSource
 {
-    // the Silver Lancer (Lancer.cs)
+    // the odd-level boss (Lancer.cs; shown as RUSTY BUCKET -- these names are the frozen id's,
+    // and the runtime keys beside them are on every save and every wire, so none of them move)
     public const string LancerGuns = "boss:guns";
     public const string LancerMissiles = "boss:missiles";
     public const string LancerBeam = "boss:beam";

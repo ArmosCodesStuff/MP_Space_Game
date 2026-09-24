@@ -636,7 +636,13 @@ public partial class _Shots : Node
                 dsh.Position = dk.Position + new Vector2(140, 700); dsh.Velocity = Vector2.Zero; dsh.Rotation = 0f;
                 dk.DamageMult = 0;
                 dk.S("throw").Due = 999.0; dk.S("shotgun").Due = 999.0;
-                GetViewport().GetCamera2D().Zoom = new Vector2(0.62f, 0.62f); await W(1.5);
+                // THROUGH THE HUB, like every other staged frame here. Setting the camera's own
+                // Zoom does nothing that lasts: Hub.MoveCamera lerps it back to Hub.ZoomLevel
+                // every frame, in the arena too, so these four frames were taken at the default
+                // zoom with the boss about 100 u above the top edge -- a frame named for a tractor
+                // lane that could not show the boss holding it.
+                var dzp = typeof(Hub).GetProperty("ZoomLevel"); float dz0 = (float)dzp.GetValue(H);
+                dzp.SetValue(H, 0.62f); await W(1.5);
                 await Snap("63_drake_arena");
                 for (int i = 0; i < 60 * 12 && dk.Locked; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                 dk.S("shotgun").Due = 0.01;
@@ -649,6 +655,7 @@ public partial class _Shots : Node
                 await W(3.0); await Snap("65_drake_tractor_lane");
                 for (int i = 0; i < 60 * 8 && dk.Rock != null && !dk.Rock.Thrown; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                 await W(1.1); await Snap("66_drake_rock_flight");
+                dzp.SetValue(H, dz0);
             }
         }
         GD.Print("SWEEP DONE");          // the runner fails without it: a cut-off sweep must never pass as clean

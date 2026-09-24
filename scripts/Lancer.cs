@@ -1,6 +1,9 @@
 using Godot;
 
-// THE SILVER LANCER -- the bounty boss of the odd levels (Missions.ForLevel): FIVE ROWS, and the
+// THE BOUNTY BOSS OF THE ODD LEVELS (Missions.ForLevel), shown to a player as RUSTY BUCKET. This
+// file and its id keep the Lancer name because the ID IS A SAVE KEY ("silver_lancer", written into
+// [boss_cleared] by every build there has ever been); renaming either would orphan every pilot's
+// ladder. The name a player reads is the one field of its row (Missions.Bosses) -- FIVE ROWS, and the
 // class that held them is gone. It was a Boss subclass whose Tick was five open-coded clocks, each
 // the same shape written out again; Boss now runs any table of moves and this is the Lancer's.
 //

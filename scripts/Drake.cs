@@ -45,12 +45,19 @@ public static class Drake
                 Damage = 18.75, Speed = 480f, Range = 1400f, Radius = 9f,
                 Strike = "drake_scrap", Source = DamageSource.DrakeScrap },
 
-        // THE ASTEROID THROW: a 90 u body 220 u off the flank (was HalfWidth + RockRadius + 40),
-        // a lane 1800 u long and 180 u wide (the body's own width) held 7.5 s, then 1.6 s of
-        // flight. ThrownRock flies it and names the blow it deals.
+        // THE ASTEROID THROW: a 180 u body 310 u off the flank (HalfWidth + Radius + 40: 90 + 180
+        // + 40), down a lane 1800 u long held 7.5 s, then 1.6 s of flight. ThrownRock flies it and
+        // names the blow it deals.
+        //
+        // NO WIDTH HERE. A thrown body's lane is the BODY'S OWN WIDTH and Boss.Warn works it out
+        // (Radius x 2). Written down a second time it drifted: Boss.Scaled lifts Radius one
+        // percent a level and a written Width would have stayed put, so the rock grew out of the
+        // red lane warning about it: at level 40 (Missions.Quicken(40) = 1.01^39 = 1.474) a 90 u
+        // body stood 42.7 u past each edge of its lane and a 180 u body stands 85.3 u past it.
+        // A telegraph that under-reports the blow it telegraphs is the bug, not the row.
         new() { Id = "throw", Way = MoveWay.Throw, Waits = MoveWait.Everything, Busy = true, Super = true,
                 Every = 30, First = 6.0, Windup = 7.5, Flight = 1.6,
-                Damage = 250, Reach = 1800f, Width = 180f, Radius = 90f, Offset = 220f,
+                Damage = 250, Reach = 1800f, Radius = 180f, Offset = 310f,
                 Cue = "drake_tractor", Strike = "drake_throw" },
     };
 }

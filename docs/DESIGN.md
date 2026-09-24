@@ -383,14 +383,28 @@ Recorded here so every chunk builds from the written word, not from memory.
   landed) was the game visibly playing against its own telegraph. The ram waits for a beam to end
   rather than snapping round during it; the shockwave's wind-up holds still too. Only the ram moves
   the boss during a special.
-- **The Drake Bastion (the even levels) is the Lancer's opposite in feel**: no escorts and no trap, a
-  slow gun that is dodged by moving, and two big specials on the Lancer's own clocks, each 25% harder
-  with 25% more warning than the Lancer's matching one (`Drake.ThreatMult` times a Lancer constant, so
-  retuning the Lancer carries through). The SCRAP SHOTGUN warps it to 600 u of the nearest pilot (a ring
-  shows where, 1 s) and fires a fixed fan -- the same seven lines every time, so it is learned, not
-  rolled. The ASTEROID THROW holds a rock in a tractor beam over a red lane for 7.5 s, then hurls it:
-  its path is fixed at the throw (the distance flown as the cube of the time -- slow, then very fast), so
-  every peer flies the same rock from one event and a guest shortens only the hold. **Its rounds are
+- **The Drake Bastion (the even levels) is the odd boss's opposite in feel**: no escorts and no trap,
+  a slow gun that is dodged by moving, and two big specials. **Its figures are its OWN literals.** They
+  were once written as a `ThreatMult` times a constant of the other boss's, which meant tuning one boss
+  silently retuned the other; the two are not the same fight and must be tuned apart, so each row now
+  carries its own numbers and nothing multiplies across. The SCRAP SHOTGUN warps it to 600 u of the
+  nearest pilot (a ring shows where, 1 s) and fires a fixed fan -- the same seven lines every time, so
+  it is learned, not rolled. The ASTEROID THROW holds a 180 u rock in a tractor beam over a red lane
+  for 7.5 s, then hurls it: its path is fixed at the throw (the distance flown as the cube of the time
+  -- slow, then very fast), so every peer flies the same rock from one event and a guest shortens only
+  the hold.
+  **A THROWN BODY'S LANE IS DERIVED FROM THE BODY, never written beside it.** `BossMove.Width` is left
+  0 on the throw row and `Boss.Warn` raises the lane at twice the body's radius. The trap it closes:
+  `Boss.Scaled` lifts `Radius` one percent a level and would never have lifted a written `Width`, so
+  the rock grew out of the red lane warning about it -- 85.3 u past each edge by level 40. `Offset`,
+  the clearance the body is held at off the flank, is scaled with `Radius` for the same reason: it is
+  HalfWidth + Radius + 40, so a body that grows and an offset that does not ends with the rock drawn
+  inside the hull holding it.
+  **A BOSS'S ID IS NOT ITS NAME.** `Missions.BossType.Id` ("silver_lancer", "drake_bastion") is a save
+  key -- `Character.BossCleared` writes it into `[boss_cleared]` and every build there has ever been
+  wrote those two strings -- so the id is frozen and the `Name` beside it is free. `Lancer.cs`,
+  `DamageSource.Lancer*` and the runtime keys `boss:guns`/`boss:beam` are all named for the ID, not for
+  the screen: the odd-level boss is shown to a player as RUSTY BUCKET and none of them moved. **Its rounds are
   not missiles**: `Slug` is never in `Combat.Hostiles`, so point defence cannot delete a shot that is
   meant to be dodged.
 - **Point defence order**: missiles, then small craft, then anything else (`Turret.PdPriority`).

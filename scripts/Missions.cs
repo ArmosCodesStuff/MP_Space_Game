@@ -4,9 +4,10 @@ using System.Collections.Generic;
 using System.Linq;
 
 // Bounty missions from Threat Intelligence Operations: bosses, LEVELS, and rewards.
-//   ONE LADDER OF LEVELS, the bosses taking them in turn (ForLevel): odd levels the Silver Lancer,
-//   even levels the Drake Bastion. LEVELS start at 1:
-//     S(L) = 1.1^(L-1)   -- a level-5 boss is 1.1^4 = 1.46x.
+//   ONE LADDER OF LEVELS, the bosses taking them in turn (ForLevel): odd levels RUSTY BUCKET,
+//   even levels the DRAKE BASTION. LEVELS start at 1:
+//     S(L) = 1.025^(L-1)   -- a level-5 boss is 1.025^4 = 1.10x, a level-40 boss 2.6x. It was
+//     1.1 a level, which doubled a boss every seven levels and left no pilot able to catch it.
 //   A PARTY of P pilots: the boss's hull x S(L)(1 + 0.6(P-1)), its damage x S(L)(1 + 0.2(P-1)).
 //   A failed level-L mission's raids are S(L) too.
 //   Beating a level -- whichever boss held it -- unlocks the next; the TIO selects the newest when
@@ -52,7 +53,11 @@ public static class Missions
     }
     public static readonly BossType[] Bosses =
     {
-        new() { Id = "silver_lancer", Name = "SILVER LANCER", Hull = 760,
+        // ITS ID IS NOT ITS NAME. "silver_lancer" is a save key -- Character.BossCleared writes it
+        // into [boss_cleared], and every file ever written carries it -- so the id is frozen and
+        // the name above it is free. The code that holds its moves is Lancer.cs for the same
+        // reason: it is named for the id on disk, not for the words on the screen.
+        new() { Id = "silver_lancer", Name = "RUSTY BUCKET", Hull = 760,
                 Sprite = "res://boss_raider.png",          // raider red, a white skull on its centre
                 Length = 360f, HalfWidth = 70f, Moves = Lancer.Moves },
         new() { Id = "drake_bastion", Name = "DRAKE BASTION", Hull = 700,

@@ -55,7 +55,9 @@ public class BossMove
     public double Damage;              // before the level's and the party's scale (DamageMult)
     public float Find;                 // how far it looks for a target; 0: the whole arena
     public float Reach;                // how far the move itself carries: a beam, a dash, a lane
-    public float Width;                // the warning's width, and a beam's own
+    public float Width;                // the warning's width, and a beam's own. A move whose
+                                       // warning is as wide as the BODY it warns about leaves this
+                                       // 0 and Boss.Warn works it out instead (MoveWay.Throw).
     public float Speed, Range, Radius; // a dash's speed; a fired body's speed, flight and body
     public float Muzzle;               // how far ahead of the nose a fired body is born
     public float Offset;               // how far off the flank a thrown body is held
@@ -157,6 +159,10 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
         c.Windup /= q; c.Warp /= q; c.Flight /= q;
         c.Speed = (float)(c.Speed * q);
         c.Reach = (float)(c.Reach * q); c.Range = (float)(c.Range * q); c.Radius = (float)(c.Radius * q);
+        // ...and how far off the flank a thrown body is held goes with the body: it is a clearance
+        // (HalfWidth + Radius + a gap), so a rock that grows with the level and an offset that did
+        // not would end up drawn inside the hull holding it.
+        c.Offset = (float)(c.Offset * q);
         c.Turn = (float)(c.Turn * q);                   // a guided body comes round faster too
         c.Find = (float)(c.Find * q); c.Standoff = (float)(c.Standoff * q); c.EscortOut = (float)(c.EscortOut * q);
         return c;
@@ -406,7 +412,10 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
                 Zone(s.To, m.Reach, m.Windup, m.Cue, m.Strike);
                 break;
             case MoveWay.Throw:
-                Lane(m, s.From, s.To, hold: m.Flight);
+                // THE LANE IS THE BODY, not a number beside it: Radius is what ThrownRock draws
+                // and what its hit sweep tests against, so the red lane is exactly as wide at
+                // every level (Drake.cs, the throw row, says why this is not a Width field).
+                Lane(m, s.From, s.To, hold: m.Flight, width: m.Radius * 2f);
                 break;
             case MoveWay.Shoot:
                 foreach (float a in Fan(s.Aim, m))
@@ -568,8 +577,10 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
     // NetId, so it swings with the hull instead of being pinned to the spot the boss stood on
     // when it drew it. Guests already follow the boss's pose from NetState, so their copy tracks
     // too -- no per-frame line updates over the wire.
-    private void Lane(BossMove m, Vector2 a, Vector2 b, bool onHull = false, double hold = 0) =>
-        Fx.Warn(new FxRaise { Id = Fx.WarnLane, At = a, To = b, Size = m.Width, Time = m.Windup, Hold = hold,
+    // width: a move whose warning is as wide as the thing it warns about passes that width here
+    // rather than keeping a second copy of it in its row (MoveWay.Throw). 0 means "the row's".
+    private void Lane(BossMove m, Vector2 a, Vector2 b, bool onHull = false, double hold = 0, float width = 0) =>
+        Fx.Warn(new FxRaise { Id = Fx.WarnLane, At = a, To = b, Size = width > 0 ? width : m.Width, Time = m.Windup, Hold = hold,
                               Anchor = onHull ? NetId : Fx.World, Cue = m.Cue, Strike = m.Strike });
     private void Zone(Vector2 at, float radius, double time, string cue, string strike) =>
         Fx.Warn(new FxRaise { Id = Fx.WarnZone, At = at, To = at, Size = radius, Time = time, Cue = cue, Strike = strike });

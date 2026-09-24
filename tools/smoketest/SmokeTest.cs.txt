@@ -5183,7 +5183,7 @@ public partial class _Test : Node
             Check(Math.Abs((double)leftWith.GetValue("base", "credits", -1.0) - 424242) < 1e-6,
                   $"leaving for the arena writes the base to disk on the way out ({(double)leftWith.GetValue("base", "credits", -1.0):0} of 424242)");
             var boss = H.Boss;
-            Check(boss != null && boss.Alive && boss.Type.Id == "silver_lancer" && boss.Type.Name == "SILVER LANCER" && H.Yard == null && !Nodes<TargetDummy>().Any() && Combat.Hostiles.Contains(boss),
+            Check(boss != null && boss.Alive && boss.Type.Id == "silver_lancer" && boss.Type.Name == "RUSTY BUCKET" && H.Yard == null && !Nodes<TargetDummy>().Any() && Combat.Hostiles.Contains(boss),
                   "the arena at level 1: the Silver Lancer, and no base or dummies");
             // THE LEVEL'S OWN COPY of every move. At level 1 the scale is exactly 1, so the boss
             // flies the build's rows unaltered -- which is also how this proves the copy is made
@@ -5266,11 +5266,19 @@ public partial class _Test : Node
                       && sg.Damage == 18.75 && sg.Speed == 480f && sg.Range == 1400f && sg.Radius == 9f
                       && sg.Busy && sg.Super && sg.Shifts && sg.Waits == MoveWait.Everything && sg.Source == "boss:scrap",
                       $"the scrap shotgun: a {sg.Warp} s ring, a warp to {sg.Standoff} u off, {sg.Windup} s of fan, then {sg.Count} pieces of {sg.Damage} at {sg.Spread} degrees apart");
+                // THE BODY IS 180 u and the row carries NO Width, because a thrown body's lane is
+                // the body's own width and Boss.Warn works it out. Width == 0 is asserted here so
+                // a Width put back on this row fails rather than quietly taking over; that the
+                // lane really is twice the body is proved where the throw runs, on this peer and
+                // on a guest, because only a live raise can show it.
+                // The 310 u it is held at is the clearance the row's comment sets out: the hull's
+                // own half-width, the body, and a 40 u gap -- 90 + 180 + 40.
                 Check(th.Way == MoveWay.Throw && th.Every == 30 && th.First == 6.0 && th.Windup == 7.5
-                      && th.Flight == 1.6 && th.Damage == 250 && th.Reach == 1800f && th.Width == 180f
-                      && th.Radius == 90f && th.Offset == 220f && th.Busy && th.Super
+                      && th.Flight == 1.6 && th.Damage == 250 && th.Reach == 1800f && th.Width == 0f
+                      && th.Radius == 180f && th.Offset == 310f
+                      && th.Offset == Missions.Bosses[1].HalfWidth + th.Radius + 40f && th.Busy && th.Super
                       && th.Waits == MoveWait.Everything && th.Cue == "drake_tractor" && th.Strike == "drake_throw",
-                      $"the asteroid throw: a {th.Radius} u body {th.Offset} u off the flank, a {th.Windup} s lane {th.Reach} u long, {th.Flight} s of flight, {th.Damage} to a ship in it");
+                      $"the asteroid throw: a {th.Radius} u body {th.Offset} u off the flank, a {th.Windup} s lane {th.Reach} u long and as wide as the body ({th.Radius * 2f} u), {th.Flight} s of flight, {th.Damage} to a ship in it");
                 // ...AND A BOSS'S MOVES COME FROM ITS ROW, NOT FROM ITS CLASS. There is one Boss
                 // class now: given the Lancer's hull with the DRAKE'S Moves, the boss built from
                 // that row schedules the Drake's moves and knows nothing of the Lancer's.
@@ -5748,18 +5756,27 @@ public partial class _Test : Node
                     dk.S("throw").Due = 0.01;
                     for (int i = 0; i < 60 && dk.Rock == null; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                     var rock = dk.Rock;
-                    var lane = Nodes<FxNode>().FirstOrDefault(t => t.Id == Fx.WarnLane && Math.Abs(t.Radius - 180f) < 0.5f);
+                    // FOUND BY THE BODY IT IS WARNING ABOUT: the lane this move raises is twice
+                    // the rock's radius at this level, which is the whole point of not writing a
+                    // width down beside it. The row's 180 u body is proved against its literal in
+                    // the Drake's row check above; this reads the row and the level's scale.
+                    var heave = dk.S("throw").M;
+                    var lane = Nodes<FxNode>().FirstOrDefault(t => t.Id == Fx.WarnLane && Math.Abs(t.Radius - heave.Radius * 2f) < 0.5f);
                     var drakeAt = dk.Position; var rockAt = rock?.Position ?? Vector2.Zero;
                     await Wait(3.0);
                     bool heldRock = rock != null && GodotObject.IsInstanceValid(rock) && rock.Position.DistanceTo(rockAt) < 0.01f && !rock.Thrown
                                     && dk.Position.DistanceTo(drakeAt) < 0.01f && dk.Locked;
                     // 7.43 s and 1.58: the flight and the wind-up are the level-2 Drake's, one
-                    // percent quicker than the row's 7.5 and 1.6 (Missions.Quicken). The 220 u the
-                    // rock is held at is a reach, so it goes the other way: 220 x 1.01 = 222.
-                    var heave = dk.S("throw").M;
+                    // percent quicker than the row's 7.5 and 1.6 (Missions.Quicken). The 310 u the
+                    // rock is held at is a clearance, so it goes the other way: 310 x 1.01 = 313 --
+                    // and the body it clears grew by the same one percent, which is why the offset
+                    // is scaled with it (Boss.Scaled) and the rock is never drawn inside the hull.
+                    bool clearsHull = rockAt.DistanceTo(drakeAt) - heave.Radius > dk.HalfWidth;
                     Check(rock != null && lane != null && Math.Abs(lane.Time - heave.Windup) < 1e-3 && Math.Abs(lane.Hold - heave.Flight) < 1e-3
-                          && Math.Abs(rockAt.DistanceTo(drakeAt) - heave.Offset) < 1.5 && heldRock && dk.S("throw").Fired == 1,
-                          $"the throw: a rock beside it in its tractor ({heave.Offset:0} u off), a lane of its width for {heave.Windup:0.00} s then {heave.Flight:0.00} s of flight, the boss and the rock held still ({rockAt.DistanceTo(drakeAt):0} u, lane {lane?.Time:0.00} s), counted once ({dk.S("throw").Fired})");
+                          && Math.Abs(rockAt.DistanceTo(drakeAt) - heave.Offset) < 1.5 && heave.Offset > 310f && clearsHull
+                          && Math.Abs(rock.Radius - heave.Radius) < 1e-3 && Math.Abs(lane.Radius - heave.Radius * 2f) < 0.5f
+                          && heldRock && dk.S("throw").Fired == 1,
+                          $"the throw: a {heave.Radius:0} u rock beside it in its tractor ({heave.Offset:0} u off, clear of a {dk.HalfWidth:0} u flank), a lane of its own width ({lane?.Radius:0} u) for {heave.Windup:0.00} s then {heave.Flight:0.00} s of flight, the boss and the rock held still ({rockAt.DistanceTo(drakeAt):0} u, lane {lane?.Time:0.00} s), counted once ({dk.S("throw").Fired})");
                     for (int i = 0; i < 60 * 6 && rock != null && GodotObject.IsInstanceValid(rock) && !rock.Thrown; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                     var lane0 = rock?.From ?? Vector2.Zero; float laneLen = rock == null ? 1 : rock.From.DistanceTo(rock.To);
                     await Wait(0.8);
@@ -6424,7 +6441,13 @@ public partial class _Test : Node
                 if (H == null || !Hub.InArena || !GodotObject.IsInstanceValid(H.Boss)) return false;
                 sawDrake |= H.Boss is { Type.Id: "drake_bastion" };
                 sawShell |= Slugs().Any(s => s.Cosmetic && s.Kind == Shots.Slug);
-                sawRock |= Nodes<ThrownRock>().Any(r => r.Cosmetic && r.Hold <= 7.5 && r.From.DistanceTo(H.Boss.Position) < 260f);
+                // WHERE THE HOST HELD IT, not a figure written down here: the body is held
+                // Offset off the flank, and Offset is scaled by the level with the body it clears
+                // (Boss.Scaled), so a literal here would have to be re-chosen every time either
+                // the rock or the level's scale moved. Read the row and assert the spot exactly.
+                double heldAt = H.Boss.S("throw")?.M.Offset ?? 0;
+                sawRock |= heldAt > 0 && Nodes<ThrownRock>().Any(r => r.Cosmetic && r.Hold <= 7.5
+                                                                      && Math.Abs(r.From.DistanceTo(H.Boss.Position) - heldAt) < 2f);
                 return sawDrake && sawShell && sawRock;
             } };
             AddChild(drakeWatch);
@@ -6444,9 +6467,14 @@ public partial class _Test : Node
             typeof(Hub).GetMethod("ReportSector", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(H, null);
             await RealTime(() => Nodes<ThrownRock>().Any(r => r.Cosmetic && !r.Done && !r.IsQueuedForDeletion() && r.Hold < 6.9), 3);
             var lateRocks = Nodes<ThrownRock>().Where(r => r.Cosmetic && !r.Done && !r.IsQueuedForDeletion()).ToList();
-            Check(lateRocks.Count == 1 && lateRocks[0].Hold < 6.9
-                  && Nodes<FxNode>().Any(t => t.Id == Fx.WarnLane && Math.Abs(t.Radius - 180f) < 0.1f && t.Time < 6.9 && t.Since > 0),
-                  $"arena guest: a peer arriving mid-throw is sent the rock and its lane as they stand -- one rock, with what was left of its warning ({lateRocks.FirstOrDefault()?.Hold:0.00} s)");
+            // ...AT THE HOST'S SIZE. The lane a guest is sent is the body's own width (twice its
+            // radius, Boss.Warn) and the body is the host's, so this proves the two agree ACROSS
+            // PEERS -- which is the one thing rung 5 can see and rung 3 cannot.
+            float lateBody = H.Boss.S("throw")?.M.Radius ?? 0;
+            Check(lateRocks.Count == 1 && lateRocks[0].Hold < 6.9 && lateBody > 0
+                  && Math.Abs(lateRocks[0].Radius - lateBody) < 1e-3
+                  && Nodes<FxNode>().Any(t => t.Id == Fx.WarnLane && Math.Abs(t.Radius - lateBody * 2f) < 0.5f && t.Time < 6.9 && t.Since > 0),
+                  $"arena guest: a peer arriving mid-throw is sent the rock and its lane as they stand -- one {lateRocks.FirstOrDefault()?.Radius:0} u rock in a lane of its own width, with what was left of its warning ({lateRocks.FirstOrDefault()?.Hold:0.00} s)");
             await RealTime(() => drakeWatch.Seen, 4);
             Check(sawDrake && sawShell && sawRock,
                   $"arena guest: mission 2 is the Drake Bastion here too, and its slow shells and its thrown rock reach this guest (Drake {sawDrake}, shell {sawShell}, rock {sawRock})");
