@@ -93,10 +93,20 @@ sha256sum's format.
 the launcher's window; a real HTTPS fetch; renaming over a running exe; and SmartScreen. Run them
 once by hand. Everything with a *decision* in it lives in `scripts/Builds.cs` and is on rung 3.
 
-**Two costs that are not code.** The launcher and the game are unsigned, so a player sees two
-SmartScreen prompts (a certificate is roughly $100-300 a year). And the launcher must stay frozen:
-a change to it is a file every player has to fetch by hand again. That is what `schema=1` and
-`source.txt` are for.
+**The build is UNSIGNED, deliberately.** A player sees "Windows protected your PC" and clicks
+*More info -> Run anyway*. `tools\pack.ps1` puts that instruction at the top of every release's
+NOTES.txt, so nobody has to be told twice.
+
+Signing would not fix it cheaply: SmartScreen trusts a CERTIFICATE'S REPUTATION, not the presence
+of a signature, and a new OV certificate shows the same wall until enough downloads accrue against
+it. Only an EV certificate (~$300-600/yr, and a USB token in the post) is trusted on day one;
+Azure Trusted Signing (~$10/mo, no hardware) builds reputation over weeks like OV does. The file
+whose reputation would accrue is `WarshipsLauncher.exe` -- it is the one downloaded by hand, and
+the one that stays the same across releases. Revisit if strangers start playing; not worth it for
+friends.
+
+**The launcher must stay frozen.** A change to it is a file every player fetches by hand again.
+That is what `schema=1` and `source.txt` are for.
 
 ## Checking your work
 

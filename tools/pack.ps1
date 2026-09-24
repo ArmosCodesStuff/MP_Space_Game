@@ -165,10 +165,22 @@ foreach ($id in @('code', 'runtime')) {
 # docs\CHANGES.md's Unreleased section: from the line after "## Unreleased" to the SECOND "### "
 # heading, which starts the entry before this batch's. THIS LOGIC LIVES HERE, not in the launcher:
 # the launcher shows the text it is handed and knows nothing about markdown.
+#
+# WHAT A PLAYER READS IS A PREAMBLE PLUS THE CHANGELOG. The preamble is what is true of EVERY
+# release and belongs in no single entry -- it goes here rather than being typed into the record
+# once a batch and then forgotten, or into the launcher, which must stay frozen. A second standing
+# line is a second entry in $preamble and nothing else changes.
+$preamble = @(
+    'FIRST TIME: Windows will say it does not recognise this program.',
+    'It is unsigned -- a certificate is a few hundred a year and this is a game for',
+    'friends. Click "More info", then "Run anyway". You will see this once per version',
+    'of the launcher, not once per update.',
+    ''
+)
 $md = [System.IO.File]::ReadAllLines((Join-Path $repo 'docs\CHANGES.md'))
 $start = -1
 for ($i = 0; $i -lt $md.Count; $i++) { if ($md[$i] -eq '## Unreleased') { $start = $i; break } }
-$notes = @("WARSHIPS $build", '')
+$notes = @("WARSHIPS $build", '') + $preamble
 if ($start -ge 0) {
     $heads = 0
     for ($i = $start + 1; $i -lt $md.Count; $i++) {

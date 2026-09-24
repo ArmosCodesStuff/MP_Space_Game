@@ -884,11 +884,19 @@ run; every figure they assert stays a literal.
 ### Known broken (as of this batch)
 
 - **Three things about the launcher are unproven, because no rung can see them.** Its WinForms
-  window has never been opened; nothing has renamed a file over a running exe; and neither
-  executable is signed, so SmartScreen's behaviour is a guess. Everything with a DECISION in it is
+  window has never been opened, and nothing has renamed a file over a running exe. Everything with a DECISION in it is
   in `scripts/Builds.cs` and is proved by 30 rung-3 checks -- but the window and the operating
   system are manual checks that have not been run. `docs/README.md` lists them under Releasing.
   (The fourth, a real HTTPS fetch, is now proved: see below.)
+- **Nothing is signed, and that is a decision rather than an omission.** SmartScreen trusts a
+  certificate's REPUTATION, not the presence of a signature: a new OV certificate shows the same
+  "Windows protected your PC" wall until downloads accrue against it, and only an EV certificate
+  (~$300-600/yr plus a hardware token) is trusted on day one. Not worth it for a game going to
+  friends. `tools/pack.ps1` puts *More info -> Run anyway* at the top of every release's NOTES.txt
+  instead -- a standing preamble, so it is true of every release without being typed into the
+  record once a batch and then forgotten. Revisit if strangers start playing; the file whose
+  reputation would accrue is `WarshipsLauncher.exe`, because it is downloaded by hand and does not
+  change between releases.
 - **The headless export sometimes finishes and never exits.** On the first real release run
   `savepack` printed DONE, all 189 files were on disk, and the Godot process then sat at 0 CPU for
   eight minutes without leaving -- hanging `pack.ps1` with nothing to read. It is judged by its
