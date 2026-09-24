@@ -1,8 +1,8 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-23 23:11, on top of git commit c779ae6. How it was verified is in the message of the
+// Taken 2026-09-24 01:48, on top of git commit ab81ddd. How it was verified is in the message of the
 //   commit that carries this file: one starting VERIFIED: is a green verify.ps1 -Update.
-// 109 files, 28932 lines. Code only: sprites, sounds and docs are in the zip.
+// 111 files, 29346 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -14,13 +14,13 @@
 //   CharacterSelect.tscn                            12 lines   sha256 bde251d0afb9
 //   Hub.tscn                                        10 lines   sha256 3a99e0df7b39
 //   MainMenu.tscn                                    6 lines   sha256 8a8dbe40f248
-//   play.ps1                                        61 lines   sha256 2cdeaf3aab37
-//   verify.ps1                                     132 lines   sha256 93974a6f6f1a
+//   play.ps1                                        89 lines   sha256 8879c5d80511
+//   verify.ps1                                     162 lines   sha256 f971110154f0
 //   scripts/Abilities.cs                           440 lines   sha256 b6b9ae84062e
 //   scripts/AbilityBar.cs                           74 lines   sha256 bd8a2a1c61b4
 //   scripts/Aim.cs                                  27 lines   sha256 bb01868343ee
 //   scripts/Autopilot.cs                            40 lines   sha256 d560586e62a6
-//   scripts/BaseDefense.cs                          52 lines   sha256 cfa489627645
+//   scripts/BaseDefense.cs                          51 lines   sha256 1e1c0f1c2661
 //   scripts/BasePanel.cs                           154 lines   sha256 c99b199ed211
 //   scripts/Beam.cs                                 17 lines   sha256 0891bde6e0cc
 //   scripts/Boss.cs                                624 lines   sha256 5a714f9dc0d7
@@ -44,14 +44,14 @@
 //   scripts/Hauler.cs                              441 lines   sha256 4240817e1932
 //   scripts/HealthBar.cs                            23 lines   sha256 fafaf0102ffb
 //   scripts/Hints.cs                               111 lines   sha256 4e8335e7010a
-//   scripts/Hub.cs                                1768 lines   sha256 d7a3cb361e1d
+//   scripts/Hub.cs                                1766 lines   sha256 ec48c4e5ee71
 //   scripts/HubNodes.cs                            161 lines   sha256 39a2d7a89dcd
 //   scripts/Ids.cs                                  46 lines   sha256 9f001a323e57
 //   scripts/Lancer.cs                               79 lines   sha256 6445b3e4ddcc
 //   scripts/Lanes.cs                               305 lines   sha256 3cae0e4d5ca6
 //   scripts/Loot.cs                                126 lines   sha256 e6667f04b596
 //   scripts/MainMenu.cs                            307 lines   sha256 4f88c2623727
-//   scripts/MenuFoe.cs                             228 lines   sha256 8e653b818cab
+//   scripts/MenuFoe.cs                             227 lines   sha256 14fb37605948
 //   scripts/Missiles.cs                            156 lines   sha256 8224b0b7ad81
 //   scripts/Missions.cs                            239 lines   sha256 30297d3155a2
 //   scripts/Music.cs                                81 lines   sha256 d77805e7d7ae
@@ -63,9 +63,9 @@
 //   scripts/Progression.cs                         243 lines   sha256 45e9dff24803
 //   scripts/QuarryBar.cs                            95 lines   sha256 f1f7e97abb44
 //   scripts/Radar.cs                               133 lines   sha256 24602428968b
-//   scripts/Raider.cs                              374 lines   sha256 76e6c8f76d04
+//   scripts/Raider.cs                              373 lines   sha256 939322823bfb
 //   scripts/Raids.cs                               142 lines   sha256 a0b7e32ea912
-//   scripts/RecyclerPanel.cs                        95 lines   sha256 2507a4283fb2
+//   scripts/RecyclerPanel.cs                        94 lines   sha256 8052ead2c918
 //   scripts/ReturnButton.cs                         27 lines   sha256 e36ddbb19a08
 //   scripts/Router.cs                              429 lines   sha256 294cec245abf
 //   scripts/Session.cs                              93 lines   sha256 46348517ca82
@@ -73,9 +73,10 @@
 //   scripts/Settings.cs                             87 lines   sha256 4dd23a4a672f
 //   scripts/Sfx.cs                                 105 lines   sha256 879dc5464b7a
 //   scripts/Shield.cs                               75 lines   sha256 0b089054ef52
-//   scripts/ShipClasses.cs                         533 lines   sha256 c18ddfd8d44c
+//   scripts/ShipClasses.cs                         532 lines   sha256 3c3f2bad5fc3
 //   scripts/Ships.cs                               581 lines   sha256 794038de303f
 //   scripts/Shots.cs                               301 lines   sha256 ab94d95e2d26
+//   scripts/Sky.cs                                 108 lines   sha256 a8d5b26cb21a
 //   scripts/Spawned.cs                             157 lines   sha256 cecadf512ab4
 //   scripts/Sprites.cs                              13 lines   sha256 f2374b1d9777
 //   scripts/Stats.cs                               384 lines   sha256 f55cac67f0aa
@@ -86,36 +87,37 @@
 //   scripts/Targeting.cs                            59 lines   sha256 84482143da58
 //   scripts/ThrownRock.cs                           98 lines   sha256 5c912def557e
 //   scripts/TioWindow.cs                            95 lines   sha256 6a7b446135b8
-//   scripts/Tour.cs                                111 lines   sha256 6936e91b8f41
-//   scripts/Turrets.cs                             226 lines   sha256 aa25c9f12911
+//   scripts/Tour.cs                                110 lines   sha256 33e0c65f8e2b
+//   scripts/Turrets.cs                             225 lines   sha256 afdb0acc1578
 //   scripts/Txt.cs                                  32 lines   sha256 8823251c9a4f
 //   scripts/Ui.cs                                  236 lines   sha256 e6d274f5a4cd
 //   scripts/UtilityShip.cs                          85 lines   sha256 81bfb4407dcd
 //   scripts/Votes.cs                               111 lines   sha256 553528af04ee
-//   scripts/Waves.cs                               299 lines   sha256 71aac3b227b7
+//   scripts/Waves.cs                               298 lines   sha256 e503ba2ab286
 //   scripts/Yard.cs                                676 lines   sha256 ecbcf026947c
 //   typecheck/GodotStub.cs                         192 lines   sha256 2c5c2967bf5c
 //   typecheck/typecheck.ps1                         99 lines   sha256 8e8a45b067c2
 //   typecheck/typecheck.sh                          61 lines   sha256 c94fe5471263
 //   tools/analyse/analysers.editorconfig            15 lines   sha256 45fdb7258163
-//   tools/analyse/run.ps1                           39 lines   sha256 fccca5633aba
+//   tools/analyse/run.ps1                           46 lines   sha256 a8a14f6dfd92
 //   tools/analyse/run.sh                            16 lines   sha256 e6f2cd50f0c4
 //   tools/analyse/xref.py                           35 lines   sha256 2e1d2a7688ed
 //   tools/find-godot.ps1                            53 lines   sha256 fabe4c75faae
 //   tools/finish_ships.ps1                         132 lines   sha256 2d7e2d5de2e4
 //   tools/gain.ps1                                  44 lines   sha256 41f4d8f93189
+//   tools/install.ps1                              124 lines   sha256 44bb18f4edb5
 //   tools/make_ships.ps1                           634 lines   sha256 805d9920a015
 //   tools/make_sounds.py                           232 lines   sha256 85eba97b8ac6
 //   tools/manifest.ps1                              62 lines   sha256 2edb5f604152
 //   tools/map.py                                   232 lines   sha256 01a23fceab11
-//   tools/pack.ps1                                 195 lines   sha256 322f0fd51eba
+//   tools/pack.ps1                                 249 lines   sha256 d827cee82f7c
 //   tools/screens/run.ps1                          128 lines   sha256 9e8d569b0b94
 //   tools/screens/run.sh                            42 lines   sha256 73a5b3c63476
 //   tools/screens/Shots.cs.txt                     664 lines   sha256 8e067c22aaa8
 //   tools/smoketest/fakeigd.py                     155 lines   sha256 b980d4fa4ad4
 //   tools/smoketest/run.ps1                        225 lines   sha256 ba91f3de2ffe
 //   tools/smoketest/run.sh                          57 lines   sha256 9ac9cbdf9115
-//   tools/smoketest/SmokeTest.cs.txt              7306 lines   sha256 b4ba6346645a
+//   tools/smoketest/SmokeTest.cs.txt              7379 lines   sha256 d1fdc42c9ebc
 //   tools/smoketest/wan.py                          61 lines   sha256 97db24aa3f91
 //   tools/snapshot.ps1                              94 lines   sha256 3ca9bfe56185
 //==============================================================================
@@ -227,7 +229,7 @@ script = ExtResource("1_menu")
 
 //==============================================================================
 // FILE: play.ps1
-// 61 lines   sha256 2cdeaf3aab37
+// 89 lines   sha256 8879c5d80511
 //==============================================================================
 # Play Warships.
 #
@@ -235,9 +237,19 @@ script = ExtResource("1_menu")
 #     powershell -ExecutionPolicy Bypass -File play.ps1 -Two     two windows, for multiplayer
 #     powershell -ExecutionPolicy Bypass -File play.ps1 -Editor  open it in the Godot editor instead
 #
-# THIS IS NOT A STANDALONE BUILD. A Godot .NET project needs the engine to run it: this script
-# finds the engine, compiles the C#, and launches the project. Anyone you send the folder to needs
-# Godot 4.7.2 .NET (mono) as well -- see "Sending it to someone" at the bottom.
+# TWO WAYS TO PLAY, AND IT PICKS THE ONE THAT WILL WORK.
+#
+#   FROM SOURCE, if this machine has the developer tools: it finds the engine, compiles the
+#   C# and launches the project, so you play the code in this folder. Needs Godot 4.7.2
+#   .NET (mono) and the .NET SDK -- about 330 MB of tooling.
+#
+#   THE PUBLISHED BUILD otherwise, handed to tools\install.ps1, which downloads it, checks it
+#   against the release own checksums and starts it. NEEDS NOTHING INSTALLED: Windows
+#   PowerShell is the whole requirement. Someone who only wants to play never needs the
+#   developer tools at all.
+#
+# So: download this repo, double-click PLAY.bat, play. If the tools appear later, the same
+# double-click starts running your own code instead.
 #
 #   -Two launches two windows so you can host in one and join 127.0.0.1 in the other. They share
 #   one user:// and therefore one character list, which is fine for testing but means both windows
@@ -248,14 +260,31 @@ param([switch]$Two, [switch]$Editor, [string]$Godot)
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 
-$Godot = & (Join-Path $PSScriptRoot 'tools\find-godot.ps1') -Godot $Godot
-if ($LASTEXITCODE -ne 0 -or -not $Godot) {
-    Write-Host ""
-    Write-Host "Could not find Godot 4.7.2 .NET (mono)."
-    Write-Host "Download it from https://godotengine.org/download -- the .NET build, not the standard one --"
-    Write-Host "then either put it somewhere obvious, set WARSHIPS_GODOT to its path, or create"
-    Write-Host "local.config.ps1 beside this script containing:  `$Godot = 'C:\path\to\Godot_v4.7.2-stable_mono_win64.exe'"
-    exit 2
+$hasDotnet = [bool](Get-Command dotnet -ErrorAction SilentlyContinue)
+try { $Godot = & (Join-Path $PSScriptRoot 'tools\find-godot.ps1') -Godot $Godot } catch { $Godot = $null }
+if ($LASTEXITCODE -ne 0) { $Godot = $null }
+# THE MONO BUILD OR NOTHING: the plain export of Godot carries no C# runtime at all, so it
+# opens this project and then fails to load a single script -- which reads as the project
+# being broken, and is not.
+if ($Godot -and $Godot -notmatch 'mono') { $Godot = $null }
+
+# NO TOOLS? PLAY THE BUILT GAME rather than refuse. This used to exit 2 with a download
+# link, which is the right answer for someone who came to WORK on it and the wrong one for
+# everyone else.
+if (-not $Godot -or -not $hasDotnet) {
+    if ($Editor) {
+        Write-Host "-Editor needs the developer tools, and they are not here."
+        Write-Host "  Godot 4.7.2 MONO: https://godotengine.org/download/archive/4.7.2-stable/"
+        Write-Host "  .NET 8 SDK:       https://dotnet.microsoft.com/download/dotnet/8.0"
+        exit 2
+    }
+    $missing = @()
+    if (-not $hasDotnet) { $missing += '.NET SDK' }
+    if (-not $Godot)     { $missing += 'Godot 4.7.2 mono' }
+    Write-Host ("no developer tools here ({0}), so this plays the BUILT game instead." -f ($missing -join ", "))
+    Write-Host "you need neither of them to play."
+    & (Join-Path $PSScriptRoot 'tools\install.ps1')
+    exit $LASTEXITCODE
 }
 
 if ($Editor) {
@@ -287,13 +316,14 @@ if ($Two) {
 # They need the same zip AND Godot 4.7.2 .NET: the build handshake refuses a peer on a different
 # build, deliberately, because two builds disagree about every number.
 #
-# To make a real .exe instead, open the editor (-Editor), install the export templates it offers,
-# then Project -> Export -> Windows Desktop. That is a one-time setup per machine and is not
-# scripted here, because nothing in this repo has been exported or tested that way yet.
+# ...but someone who only wants to PLAY needs none of that: point them at the repo, or at
+# the Releases page. tools\install.ps1 fetches the published build and needs no engine.
+#
+# To MAKE a release: tools\pack.ps1, one command. See docs\README.md under Releasing.
 
 //==============================================================================
 // FILE: verify.ps1
-// 132 lines   sha256 93974a6f6f1a
+// 162 lines   sha256 f971110154f0
 //==============================================================================
 # The whole bar, in one command:
 #
@@ -335,13 +365,17 @@ Step 'typecheck' {
     $o | ForEach-Object { Write-Host "  $_" }
     # "0 errors." is necessary but not sufficient: the stub mode is a weaker check and must not
     # pass silently as if it were the real thing.
-    ($o -join "`n") -match '0 errors\.' -and ($o -join "`n") -match 'REAL GodotSharp\.dll'
+    # ANCHORED. '0 errors.' is a SUBSTRING of '10 errors.', so the unanchored form passed a
+    # typecheck with ten errors in it. Same family as the analyser step that never ran.
+    ($o -join "`n") -match '(^|\s)0 errors\.' -and ($o -join "`n") -match 'REAL GodotSharp\.dll'
 }
 
 Step 'build' {
     $o = & dotnet build -v q -nologo 2>&1
     $o | Select-String 'Warning\(s\)|Error\(s\)|error CS' | ForEach-Object { Write-Host "  $($_.Line.Trim())" }
-    ($o -join "`n") -match '0 Warning\(s\)' -and ($o -join "`n") -match '0 Error\(s\)'
+    # ANCHORED, for the same reason: '10 Warning(s)' and '10 Error(s)' both CONTAIN the
+    # unanchored pattern, so a build with ten of each reported clean.
+    ($o -join "`n") -match '(^|\s)0 Warning\(s\)' -and ($o -join "`n") -match '(^|\s)0 Error\(s\)'
 }
 
 Step 'analysers' {
@@ -369,10 +403,18 @@ if (-not $Quick) {
     if ($Fast) { $smokeArgs += '-Solo' }
     Step $(if ($Fast) { 'smoke test (solo only)' } else { 'smoke test x3' }) {
         $allOk = $true
+        $counts = @()
         foreach ($i in 1..$runs) {
             $o = & powershell @smokeArgs -Godot $engine 2>&1
             $pass = @($o | Where-Object { $_ -cmatch 'PASS ' }).Count
             $done = @($o | Where-Object { $_ -cmatch 'DONE' }).Count
+            $counts += $pass
+            # THE SEEDS, HERE, WHERE THEY SURVIVE. Every run wipes the scratch folder, so run
+            # 3 destroys run 2 logs and with them the number that reproduces run 2 geometry.
+            # Printed per run, any failure can be put back with run.ps1 -Seed <n>.
+            $seeds = @($o | Where-Object { $_ -cmatch 'SEED \d' } |
+                       ForEach-Object { ($_ -split 'SEED ')[-1].Trim() })
+            if ($seeds.Count) { Write-Host ("  run {0} seeds: {1}" -f $i, ($seeds -join ", ")) }
             # Not the runner's own verdict line: "SMOKE TEST FAILED (2 problems...)" contains
             # FAIL and would be counted as a problem on top of the problems it is reporting.
             $bad  = @($o | Where-Object { $_ -cmatch 'FAIL|Exception|ERROR' -and $_ -notmatch 'SMOKE TEST' })
@@ -383,6 +425,18 @@ if (-not $Quick) {
             $bad | ForEach-Object { Write-Host "    $_" }
             if ($bad.Count -ne 0 -or $done -ne $want) { $allOk = $false }
         }
+        # ...AND THE SUITE DID NOT QUIETLY SHRINK. $pass was computed and thrown away, so six
+        # DONE lines with twelve checks behind them passed exactly like six with eleven
+        # hundred: this step measured COMPLETION and never COVERAGE. There is no number to
+        # keep up to date -- the runs are compared against EACH OTHER, so it fails when
+        # checks stop running rather than when somebody adds some.
+        if (($counts | Select-Object -Unique).Count -ne 1) {
+            Write-Host ("  the runs do not agree on how many checks ran: {0}" -f ($counts -join ", "))
+            Write-Host "  a check that runs sometimes is a check that proves nothing."
+            $allOk = $false
+        }
+        if ($counts[0] -lt 1) { Write-Host "  no checks ran at all."; $allOk = $false }
+        Write-Host ("  {0} checks, the same in every run" -f $counts[0])
         $allOk
     }
 
@@ -390,6 +444,12 @@ if (-not $Quick) {
         $o = & powershell -NoProfile -ExecutionPolicy Bypass -File 'tools\screens\run.ps1' -Godot $engine 2>&1
         $o | Where-Object { $_ -cmatch '^SWEEP|^frames' } | ForEach-Object { Write-Host "  $_" }
         $ok = ($o -join "`n") -match 'SWEEP DONE' -and ($o -join "`n") -match 'LINT: 0'
+        # ...AND IT DREW SOMETHING. The frame count was printed and never read, so a sweep
+        # that rendered NOTHING still said SWEEP DONE and LINT: 0 -- nothing to draw is
+        # nothing to lint, and an empty pass looked exactly like a clean one.
+        $frames = 0
+        if (($o -join "`n") -match 'frames:\s*(\d+)') { $frames = [int]$Matches[1] }
+        if ($frames -lt 1) { Write-Host "  the sweep drew no frames, so LINT: 0 means nothing."; $ok = $false }
         # a failure that printed no SWEEP line (a stopped script) would otherwise be silent
         if (-not $ok) { $o | Select-Object -Last 8 | ForEach-Object { Write-Host "    $_" } }
         $ok
@@ -1031,10 +1091,9 @@ public static class Autopilot
 
 //==============================================================================
 // FILE: scripts/BaseDefense.cs
-// 52 lines   sha256 cfa489627645
+// 51 lines   sha256 1e1c0f1c2661
 //==============================================================================
 using Godot;
-using System.Linq;
 
 // THE BASE'S OWN WEAPONS -- a laser and a tracking missile, on a turret at the station's
 // heart. Host-simulated (its shots reach guests like every other shot); it fires only at
@@ -6074,7 +6133,7 @@ public partial class Hints : CanvasLayer
 
 //==============================================================================
 // FILE: scripts/Hub.cs
-// 1768 lines   sha256 d7a3cb361e1d
+// 1766 lines   sha256 ec48c4e5ee71
 //==============================================================================
 using Godot;
 using System.Collections.Generic;
@@ -6340,13 +6399,11 @@ public partial class Hub : Node2D
     public override void _Ready()
     {
         Ui.Install(GetTree());                                  // the game-wide look
-        // Background stars: a static, tiled image on a deep screen-space layer, behind
-        // everything in the world. Purely local -- nothing about it is networked.
+        // THE SKY, behind everything in the world: a layer per row of Sky.All, each taking a
+        // different share of the camera's motion so that flying reads as flying. Purely local --
+        // nothing about it is networked, and no two peers need agree on it.
         var sky = new CanvasLayer { Layer = -100, Name = "Stars" }; AddChild(sky);
-        var stars = new TextureRect { Texture = GD.Load<Texture2D>("res://stars.png"),
-                                      StretchMode = TextureRect.StretchModeEnum.Tile, MouseFilter = Control.MouseFilterEnum.Ignore };
-        stars.SetAnchorsPreset(Control.LayoutPreset.FullRect);
-        sky.AddChild(stars);
+        Sky.Build(sky);
 
         I = this;
         _world = Session.NextWorld();
@@ -8901,7 +8958,7 @@ public partial class MainMenu : Node2D
 
 //==============================================================================
 // FILE: scripts/MenuFoe.cs
-// 228 lines   sha256 8e653b818cab
+// 227 lines   sha256 14fb37605948
 //==============================================================================
 using Godot;
 using System;
@@ -9032,7 +9089,6 @@ public partial class MenuFoe : Node2D, IHittable, ITagged
     // people look at a menu.
     public void Deploy(Vector2 home)
     {
-        float a = (float)(_rng.NextDouble() * Math.PI * 2);
         float r = Standoff > 0f ? Standoff * (0.95f + (float)_rng.NextDouble() * 0.25f)
                                 : 300f + (float)_rng.NextDouble() * 220f;
         Respawn(home, r);
@@ -12500,10 +12556,9 @@ public partial class Radar : Control
 
 //==============================================================================
 // FILE: scripts/Raider.cs
-// 374 lines   sha256 76e6c8f76d04
+// 373 lines   sha256 939322823bfb
 //==============================================================================
 using Godot;
-using System.Linq;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RAIDERS -- enemy fighters. Host-simulated; guests draw them from the host's
@@ -13026,10 +13081,9 @@ public sealed class Raids
 
 //==============================================================================
 // FILE: scripts/RecyclerPanel.cs
-// 95 lines   sha256 2507a4283fb2
+// 94 lines   sha256 8052ead2c918
 //==============================================================================
 using Godot;
-using System.Collections.Generic;
 using System.Linq;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -14118,9 +14172,8 @@ public partial class ShieldFlash : Node2D
 
 //==============================================================================
 // FILE: scripts/ShipClasses.cs
-// 533 lines   sha256 c18ddfd8d44c
+// 532 lines   sha256 3c3f2bad5fc3
 //==============================================================================
-using System.Linq;
 using Godot;
 using System;
 
@@ -15547,6 +15600,119 @@ public partial class Shot : Node2D, IHittable, ITagged
 }
 
 //==============================================================================
+// FILE: scripts/Sky.cs
+// 108 lines   sha256 a8d5b26cb21a
+//==============================================================================
+using Godot;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE SKY — what is behind the world, and how fast it goes past.
+//
+// REPLACED: eight lines in Hub._Ready that made ONE TextureRect, anchored FullRect on a CanvasLayer
+// of its own. Anchored to the screen is anchored to the screen: it could not move, at any speed,
+// for any reason -- so a ship at 190 u/s crossed a field of stars that never shifted a pixel, and
+// the only thing on screen saying the ship was moving was the speed readout. A hull that feels
+// nailed down is a hull nobody enjoys flying.
+//
+// WHAT A LAYER IS: a row. `Parallax2D` does the work -- it reads the canvas transform every frame
+// and offsets itself by `ScrollScale`, repeating itself forever at `RepeatSize` so there is no edge
+// to reach. This file decides only WHICH layers exist and what each one is made of.
+//
+// A ROW OF Sky.All MUST FILL IN:
+//   Id        what it is called, for a check to name and for a reader to find
+//   Texture   what it draws. Several rows may share one; Scale and Tint are what make them differ
+//   Drift     HOW MUCH OF THE WORLD'S MOTION A PLAYER SEES IT MAKE. 0 is nailed to the screen
+//             (the old behaviour, and the bug); 1 slides past exactly like the world does. Far
+//             things drift LESS: that is the whole illusion, and why the rows run far to near.
+//
+//             It is written in the player's terms and converted once, in Build. The engine's own
+//             `ScrollScale` is the INVERSE -- 1 means "follows the camera exactly", which is a
+//             layer that never appears to move -- and stating the table in engine terms means
+//             every future row is written backwards by whoever reads the numbers and trusts them.
+//             Measured: on-screen travel is exactly (1 - ScrollScale) x the camera's, so
+//             ScrollScale = 1 - Drift and the row says what it looks like.
+//   Scale     how big the tile is drawn. A far layer wants a SMALLER tile: more, finer specks
+//   Tint      its colour, alpha included -- a far layer is dimmer as well as slower
+//   Spin      a few degrees of rotation, so two rows sharing one texture do not line up and read
+//             as one grid sliding over itself
+//   Z         the order within the sky. All of it is behind the world (Hub puts it on Layer -100)
+//
+// ADDING A LAYER IS A ROW. A nebula, a dust band, a debris field: a row here and nothing else, and
+// nothing in Hub changes for it.
+//
+// IT IS PURELY LOCAL. Nothing here is networked, nothing here is simulated, nothing here can be
+// hit, and no check on the wire knows it exists -- two peers may see different skies without
+// disagreeing about anything that matters.
+// ─────────────────────────────────────────────────────────────────────────────
+public sealed class SkyLayer
+{
+    public string Id;
+    public string Texture;
+    public float Drift;
+    public float Scale;
+    public Color Tint;
+    public float Spin;
+    public int Z;
+}
+
+public static class Sky
+{
+    // The one texture the layers are made from today. Rows may name their own; sharing this one
+    // and differing by Scale, Tint and Spin is what keeps a three-layer sky at zero new art.
+    public const string Stars = "res://stars.png";
+
+    // How far apart in speed the layers are. The near layer drifts at 0.45 -- less than half the
+    // world -- so the sky NEVER looks like it is keeping up with the ship; it looks like distance.
+    // Past about 0.6 the illusion inverts and the stars start reading as debris flying by.
+    public static readonly SkyLayer[] All =
+    {
+        // FAR: fine, dim, and nearly still. Small scale = a denser field of smaller specks.
+        new() { Id = "far",  Texture = Stars, Drift = 0.08f, Scale = 0.55f, Spin = 0f,
+                Tint = new Color(0.62f, 0.68f, 0.85f, 0.45f), Z = -3 },
+        // MID: the field the old static layer used to be, now moving.
+        new() { Id = "mid",  Texture = Stars, Drift = 0.22f, Scale = 1.00f, Spin = 17f,
+                Tint = new Color(0.85f, 0.88f, 1.00f, 0.70f), Z = -2 },
+        // NEAR: few, large and bright, and quick enough to read as motion at a glance. Sparse on
+        // purpose -- a dense near layer is visual noise over the thing the player is aiming at.
+        new() { Id = "near", Texture = Stars, Drift = 0.45f, Scale = 2.10f, Spin = 41f,
+                Tint = new Color(1.00f, 1.00f, 1.00f, 0.38f), Z = -1 },
+    };
+
+    // Build the whole sky under `parent` (a CanvasLayer the caller owns). One node per row, made
+    // from the row and nothing else.
+    public static void Build(Node parent)
+    {
+        foreach (var row in All)
+        {
+            var tex = GD.Load<Texture2D>(row.Texture);
+            if (tex == null) continue;                 // a row naming art that is not there is skipped, not fatal
+            // REPEAT FOREVER. RepeatSize is the tile's drawn size, so it must carry the row's
+            // Scale or the seam lands mid-tile and the field visibly steps as it crosses.
+            var layer = new Parallax2D
+            {
+                Name = "Sky_" + row.Id,
+                // THE ONE CONVERSION: the row says what a player sees, the engine wants its
+                // inverse (see the header). Nothing else in the file knows about ScrollScale.
+                ScrollScale = new Vector2(1f - row.Drift, 1f - row.Drift),
+                RepeatSize = new Vector2(tex.GetWidth() * row.Scale, tex.GetHeight() * row.Scale),
+                RepeatTimes = 3,
+                ZIndex = row.Z,
+            };
+            var art = new Sprite2D
+            {
+                Texture = tex,
+                Centered = false,
+                Scale = new Vector2(row.Scale, row.Scale),
+                Modulate = row.Tint,
+                RotationDegrees = row.Spin,
+            };
+            layer.AddChild(art);
+            parent.AddChild(layer);
+        }
+    }
+}
+
+//==============================================================================
 // FILE: scripts/Spawned.cs
 // 157 lines   sha256 cecadf512ab4
 //==============================================================================
@@ -16890,10 +17056,9 @@ public partial class TioWindow : PanelContainer
 
 //==============================================================================
 // FILE: scripts/Tour.cs
-// 111 lines   sha256 6936e91b8f41
+// 110 lines   sha256 33e0c65f8e2b
 //==============================================================================
 using Godot;
-using System.Linq;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // THE TOUR — the soft tutorial a pilot is walked through on its FIRST character, as the owner
@@ -17006,10 +17171,9 @@ public partial class Tour : CanvasLayer
 
 //==============================================================================
 // FILE: scripts/Turrets.cs
-// 226 lines   sha256 aa25c9f12911
+// 225 lines   sha256 afdb0acc1578
 //==============================================================================
 using Godot;
-using System;
 using System.Collections.Generic;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -17721,12 +17885,11 @@ public sealed class Vote
 
 //==============================================================================
 // FILE: scripts/Waves.cs
-// 299 lines   sha256 71aac3b227b7
+// 298 lines   sha256 e503ba2ab286
 //==============================================================================
 using Godot;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // WAVES — what arrives, in what shape, and how hard: one row per wave.
@@ -19093,7 +19256,7 @@ dotnet_diagnostic.CA1822.severity = none
 
 //==============================================================================
 // FILE: tools/analyse/run.ps1
-// 39 lines   sha256 fccca5633aba
+// 46 lines   sha256 a8a14f6dfd92
 //==============================================================================
 # Windows port of run.sh -- code analysers over the game scripts (unused private members,
 # unread fields, unused assignments and parameters, needless usings, unreachable code).
@@ -19117,9 +19280,16 @@ Copy-Item (Join-Path $PSScriptRoot 'analysers.editorconfig') $ec
 try {
   Push-Location $root
   # -t:Rebuild so analyser warnings re-emit; an incremental build reports nothing.
+  #
+  # %3B, NOT ';', AND NOT QUOTES. PowerShell strips the quotes off a native command's argument, so
+  # -p:NoWarn='A;B;C' reached MSBuild as three arguments and it aborted with MSB1006 before loading
+  # the project at all -- and this script then grepped that error log for warnings, found none, and
+  # printed "ANALYSERS: 0 findings". A step that cannot run, reporting a pass, for the whole
+  # Windows history of this project. MSBuild decodes %3B back to a semicolon itself, which is what
+  # the Linux original always did. IF THIS EVER PRINTS 0 AGAIN, CHECK THE LOG IS A BUILD.
   & dotnet build -t:Rebuild --nologo -v q `
       -p:EnforceCodeStyleInBuild=true -p:GenerateDocumentationFile=true `
-      -p:NoWarn='CS1591;CS1573;CS1587' *> $log
+      -p:NoWarn=CS1591%3BCS1573%3BCS1587 *> $log
   Pop-Location
 } finally {
   Remove-Item $ec -Force -ErrorAction SilentlyContinue
@@ -19439,6 +19609,135 @@ for ($i = $dataAt; $i -lt $dataAt + $dataLen - 1; $i += 2) {
 }
 [System.IO.File]::WriteAllBytes((Join-Path (Get-Location) $Out), $b)
 Write-Host ("{0} -> {1}  x{2:0.0000}  ({3} samples)" -f $In, $Out, $Factor, [int]($dataLen / 2))
+
+//==============================================================================
+// FILE: tools/install.ps1
+// 124 lines   sha256 44bb18f4edb5
+//==============================================================================
+# INSTALL THE PUBLISHED GAME AND RUN IT, on a machine with nothing on it.
+#
+#     powershell -ExecutionPolicy Bypass -File tools\install.ps1
+#
+# NOTHING IS REQUIRED THAT WINDOWS DOES NOT ALREADY HAVE. Windows PowerShell 5.1 ships with every
+# Windows 10 and 11; Get-FileHash, Expand-Archive and Invoke-WebRequest are all built in. No Godot,
+# no .NET SDK, no launcher, no git. Download this repo, run it, play.
+#
+# IT IS NOT THE LAUNCHER AND DOES NOT USE IT. The launcher is a program a player keeps, with a
+# window and buttons, that updates a build in place; this is a script that installs one and starts
+# it. They read the same release and the same BUILD.txt, so neither can drift from the other, but
+# this one has no window, no dependency and nothing to press.
+#
+#     -Root <dir>   where to install (default: play\ beside this repo)
+#     -NoRun        install and stop, do not start the game
+#     -Force        reinstall even if this build is already there
+#
+# WHAT IT DOES, in order. Nothing outside a temp folder is written until every byte has been
+# checked, and nothing is checked against a figure this script carries -- the release states its
+# own hashes and this verifies against those.
+#   1. read BUILD.txt from the release: the build id, what to launch, and one `part=` row per zip
+#      with that zip's SHA-256 and size
+#   2. if the installed BUILD.txt already names this build, skip to the end
+#   3. download each part to a temp folder and check its SHA-256 against the row
+#   4. extract them into the install folder
+#   5. write BUILD.txt LAST, so an interrupted install does not claim to be a finished one
+#   6. start the game
+param([string]$Root, [switch]$NoRun, [switch]$Force)
+$ErrorActionPreference = 'Stop'
+Set-Location (Join-Path $PSScriptRoot '..')
+if (-not $Root) { $Root = Join-Path (Get-Location).Path 'play' }
+
+$Base = 'https://github.com/ArmosCodesStuff/MP_Space_Game/releases/latest/download/'
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+$ProgressPreference = 'SilentlyContinue'    # PS 5.1 renders a progress bar per byte otherwise
+
+function Fetch([string]$name, [string]$to) {
+    Invoke-WebRequest -Uri ($Base + $name) -OutFile $to -UseBasicParsing
+}
+
+# ── 1 . what the release says about itself ───────────────────────────────────
+Write-Host 'install: asking the release what it is'
+$tmp = Join-Path $env:TEMP ('warships_install_' + [guid]::NewGuid().ToString('N').Substring(0, 8))
+New-Item -ItemType Directory -Force $tmp | Out-Null
+try {
+    $infoPath = Join-Path $tmp 'BUILD.txt'
+    try { Fetch 'BUILD.txt' $infoPath }
+    catch {
+        Write-Host "install: cannot reach the release -- $($_.Exception.Message)"
+        Write-Host "         $Base"
+        exit 1
+    }
+    # A captive portal or a proxy answers 200 with an HTML page. A release descriptor starts with
+    # schema=, and anything else is not one -- checked before a single byte of it is believed.
+    $info = Get-Content $infoPath
+    if (-not ($info | Select-Object -First 1) -or ($info | Select-Object -First 1) -notmatch '^schema=') {
+        Write-Host 'install: what came back is not a release descriptor -- most likely an error page.'
+        exit 1
+    }
+    $build  = ($info | Where-Object { $_ -like 'build=*'  } | Select-Object -First 1) -replace '^build=', ''
+    $launch = ($info | Where-Object { $_ -like 'launch=*' } | Select-Object -First 1) -replace '^launch=', ''
+    if (-not $launch) { $launch = 'Warships.exe' }
+    $parts = @($info | Where-Object { $_ -like 'part=*' } | ForEach-Object {
+        $f = ($_ -replace '^part=', '') -split '\|'
+        [pscustomobject]@{ Id = $f[0]; Asset = $f[1]; Sha = $f[2]; Bytes = [int64]$f[3] }
+    })
+    if ($parts.Count -eq 0) { Write-Host 'install: the release names no files to install.'; exit 1 }
+    Write-Host ("install: build $build, {0} parts, {1:N0} MB" -f $parts.Count, (($parts | Measure-Object Bytes -Sum).Sum / 1MB))
+
+    # ── 2 . already have it? ─────────────────────────────────────────────────
+    $haveInfo = Join-Path $Root 'BUILD.txt'
+    $exe = Join-Path $Root $launch
+    if (-not $Force -and (Test-Path $haveInfo) -and (Test-Path $exe)) {
+        $have = (Get-Content $haveInfo | Where-Object { $_ -like 'build=*' } | Select-Object -First 1) -replace '^build=', ''
+        if ($have -eq $build) {
+            Write-Host "install: $build is already installed"
+            if (-not $NoRun) { Write-Host 'install: starting the game'; Start-Process -FilePath $exe -WorkingDirectory $Root }
+            exit 0
+        }
+        Write-Host "install: replacing $have"
+    }
+
+    # ── 3 . download, and check each one against the release's own figure ────
+    foreach ($p in $parts) {
+        $to = Join-Path $tmp $p.Asset
+        Write-Host ("install: {0} ({1:N0} MB)" -f $p.Asset, ($p.Bytes / 1MB))
+        try { Fetch $p.Asset $to } catch { Write-Host "install: $($p.Asset) failed -- $($_.Exception.Message)"; exit 1 }
+        $sha = (Get-FileHash $to -Algorithm SHA256).Hash.ToLower()
+        if ($sha -ne $p.Sha.ToLower()) {
+            Write-Host 'install: that download does not match the checksum the release published.'
+            Write-Host "         expected $($p.Sha)"
+            Write-Host "         got      $sha"
+            Write-Host '         Nothing has been installed. Try again later, or on another network.'
+            exit 1
+        }
+    }
+
+    # ── 4 . extract ──────────────────────────────────────────────────────────
+    New-Item -ItemType Directory -Force $Root | Out-Null
+    foreach ($p in $parts) {
+        Write-Host "install: unpacking $($p.Asset)"
+        Expand-Archive -Path (Join-Path $tmp $p.Asset) -DestinationPath $Root -Force
+    }
+
+    # ── 5 . the descriptor LAST ──────────────────────────────────────────────
+    # An install that died halfway must not leave a BUILD.txt claiming it finished: the next run
+    # would believe it and start a game that is missing files. Written only once everything else is.
+    Copy-Item $infoPath $haveInfo -Force
+    if (-not (Test-Path $exe)) {
+        Write-Host "install: unpacked, but $launch is not there. The release may be malformed."
+        exit 1
+    }
+    $n = @(Get-ChildItem $Root -Recurse -File).Count
+    Write-Host ("install: done -- {0} files in {1}" -f $n, $Root)
+} finally {
+    Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+if (-not $NoRun) {
+    Write-Host 'install: starting the game.'
+    Write-Host '         Windows may say it does not recognise it -- nothing here is signed.'
+    Write-Host '         Click "More info", then "Run anyway".'
+    Start-Process -FilePath (Join-Path $Root $launch) -WorkingDirectory $Root
+}
 
 //==============================================================================
 // FILE: tools/make_ships.ps1
@@ -20622,7 +20921,7 @@ print(f"MAP: {len(scripts)} scripts, {len(members)} members, {len(rpcs)} RPCs, {
 
 //==============================================================================
 // FILE: tools/pack.ps1
-// 195 lines   sha256 322f0fd51eba
+// 249 lines   sha256 d827cee82f7c
 //==============================================================================
 # MAKE A RELEASE -- the one command that turns this tree into the five assets a player's launcher
 # reads, plus the launcher itself.
@@ -20662,7 +20961,8 @@ print(f"MAP: {len(scripts)} scripts, {len(members)} members, {len(rpcs)} RPCs, {
 param(
     [string] $Godot,
     [switch] $Dirty,          # allow an unclean tree (a test build; the id is marked)
-    [string] $Out = 'dist'
+    [string] $Out = 'dist',
+    [int]    $ExportWait = 600   # seconds to wait for the export to EXIT; see below, it may not
 )
 $ErrorActionPreference = 'Stop'
 Set-Location (Join-Path $PSScriptRoot '..')
@@ -20711,7 +21011,18 @@ foreach ($d in @($dist, $game, $rel)) { New-Item -ItemType Directory -Force $d |
 # --headless so no window opens; the preset's own export_path is overridden by the argument, which
 # is why the export lands in dist\game and not in the folder above the repo.
 Write-Host 'pack: exporting the game (a few minutes)'
-& $godotExe --headless --path $repo --export-release 'Windows Desktop' (Join-Path $game 'Warships.exe')
+# IT IS JUDGED BY ITS OUTPUT, NOT BY ITS EXIT. The headless export sometimes finishes every scrap
+# of its work -- savepack prints DONE, all 189 files are on disk -- and then never exits, sitting
+# at 0 CPU indefinitely. Waiting on that hangs the release with nothing to read and nothing to
+# diagnose. So: wait generously, then stop waiting and let the files decide. ($args is an
+# automatic variable in PowerShell and must not be used for this.)
+$exportArgs = @('--headless', '--path', $repo, '--export-release', 'Windows Desktop',
+                (Join-Path $game 'Warships.exe'))
+$proc = Start-Process -FilePath $godotExe -ArgumentList $exportArgs -PassThru -NoNewWindow
+if (-not $proc.WaitForExit($ExportWait * 1000)) {
+    Write-Host ('pack: the export has not exited after {0} s -- judging it by what it wrote' -f $ExportWait)
+    try { $proc.Kill() } catch { }
+}
 if (-not (Test-Path (Join-Path $game 'Warships.exe'))) { Write-Host 'pack: no exe was produced'; exit 1 }
 
 # -- 2 . the launcher --------------------------------------------------------
@@ -20779,10 +21090,49 @@ foreach ($id in @('code', 'runtime')) {
 # docs\CHANGES.md's Unreleased section: from the line after "## Unreleased" to the SECOND "### "
 # heading, which starts the entry before this batch's. THIS LOGIC LIVES HERE, not in the launcher:
 # the launcher shows the text it is handed and knows nothing about markdown.
+#
+# WHAT A PLAYER READS IS A SET OF SECTIONS, and this is where they are decided. A SECTION IS A
+# HEADING IN SQUARE BRACKETS on its own line; the launcher strips the brackets, draws the heading
+# bold in its colour, and colours the lines under it to match. It knows how to DRAW a section and
+# nothing about which sections exist -- so a third one is a row HERE, and every launcher already in
+# players' hands renders it correctly without being replaced. That is what lets the launcher be
+# frozen: the part with a decision in it stays on the repo side of the line.
+#
+# A heading the launcher has no colour for still draws, plainly. Nothing here can break it.
+$sections = @(
+    @{ Head = 'FIRST TIME'; Lines = @(
+        'Windows will say it does not recognise this program. It is unsigned -- a',
+        'certificate is a few hundred a year and this is a game for friends.',
+        'Click "More info", then "Run anyway".',
+        'You will see this once per version of the launcher, not once per update.'
+    )},
+    @{ Head = 'IF WINDOWS BLOCKS IT OUTRIGHT'; Lines = @(
+        'A few Windows 11 machines have SMART APP CONTROL switched on. It blocks',
+        'unsigned programs with no "Run anyway" -- if the box says "Smart App Control',
+        'blocked an app" and offers you no way through, that is this.',
+        '',
+        'Most machines do not have it. It is only ever on for CLEAN INSTALLS of',
+        'Windows 11 22H2 or later; an upgraded machine does not get it. If you cannot',
+        'find the setting below, you do not have it, and your problem is something',
+        'else -- say so rather than hunting for it.',
+        '',
+        'To turn it off:',
+        '  Settings > Privacy & security > Windows Security > App & browser control',
+        '  > Smart App Control settings > Off',
+        '',
+        'READ THIS BEFORE YOU DO: turning it off CANNOT BE UNDONE. Windows only lets',
+        'it go one way, and the only route back is reinstalling Windows. It is a real',
+        'security feature and you are switching it off for good, for a game. Nobody',
+        'will mind if you decide that is not a trade you want to make.'
+    )}
+)
+$preamble = @()
+foreach ($sec in $sections) { $preamble += ('[' + $sec.Head + ']'); $preamble += $sec.Lines; $preamble += '' }
+$preamble += '[GAME UPDATES]'
 $md = [System.IO.File]::ReadAllLines((Join-Path $repo 'docs\CHANGES.md'))
 $start = -1
 for ($i = 0; $i -lt $md.Count; $i++) { if ($md[$i] -eq '## Unreleased') { $start = $i; break } }
-$notes = @("WARSHIPS $build", '')
+$notes = @("WARSHIPS $build", '') + $preamble
 if ($start -ge 0) {
     $heads = 0
     for ($i = $start + 1; $i -lt $md.Count; $i++) {
@@ -20812,10 +21162,13 @@ Copy-Item (Join-Path $game 'BUILD.sha256') (Join-Path $rel 'BUILD.sha256') -Forc
 $fileUrl = 'file:///' + ($rel -replace '\\', '/') + '/'
 Write-Host ''
 Write-Host "pack: $build"
-Write-Host "  keep and hand out once:  $Out\WarshipsLauncher.exe"
-Write-Host '  upload all five to the GitHub release, with these exact names:'
+Write-Host "  the launcher:            $Out\WarshipsLauncher.exe"
+Write-Host '  upload all SIX to the GitHub release, with these exact names -- the launcher too,'
+Write-Host '  because tools\play.ps1 fetches it from releases/latest/download on a machine with no'
+Write-Host '  developer tools, and a file nobody can reach by URL has to be handed over by hand:'
+Write-Host ('    {0,-22} {1,12:N0} bytes' -f 'WarshipsLauncher.exe', (Get-Item (Join-Path $dist 'WarshipsLauncher.exe')).Length)
 Get-ChildItem $rel -File | Sort-Object Name | ForEach-Object {
-    Write-Host ('    {0,-14} {1,12:N0} bytes' -f $_.Name, $_.Length)
+    Write-Host ('    {0,-22} {1,12:N0} bytes' -f $_.Name, $_.Length)
 }
 Write-Host '  the launcher reads releases/latest/download/<name>, so the names must not change.'
 Write-Host "  a test install: put source.txt beside the launcher holding  $fileUrl"
@@ -22123,7 +22476,7 @@ echo "SMOKE TEST PASSED"
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 7306 lines   sha256 b4ba6346645a
+// 7379 lines   sha256 d1fdc42c9ebc
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -23748,6 +24101,78 @@ public partial class _Test : Node
         Check(Math.Abs(out0 - Hub.DefaultZoom / 1.53f) < 1e-6 && Math.Abs(in0 - Hub.DefaultZoom * 1.5f) < 1e-6
               && Math.Abs(Hub.ZoomOutMax / 1.33f - 1.15f) < 0.005f,
               $"the wheel reaches 15% further out than it did -- 1.33 of the default was the limit, 1.53 is ({out0:0.000} out, {in0:0.000} in)");
+    }
+
+    // ── THE SKY: layered, and every layer moving at its own speed ───────────────────────────────
+    // What this replaces could not move AT ALL: one TextureRect anchored FullRect to the screen,
+    // so a ship at 190 u/s crossed a starfield that never shifted a pixel. The rows are proved
+    // against literals here; that they actually MOVE, and move by DIFFERENT amounts, is proved by
+    // shifting the camera and reading them back -- which is the only check that would have caught
+    // the thing being fixed.
+    async Task SkyChecks()
+    {
+        var sky = H.GetNodeOrNull<CanvasLayer>("Stars");
+        var layers = sky == null ? new List<Parallax2D>() : Nodes<Parallax2D>(sky).ToList();
+        Check(sky != null && sky.Layer == -100 && layers.Count == Sky.All.Length && Sky.All.Length == 3
+              && layers.Select(l => l.Name.ToString()).SequenceEqual(Sky.All.Select(r => "Sky_" + r.Id)),
+              $"the sky is a layer per row, all of it behind the world ({layers.Count} of {Sky.All.Length} rows on layer {sky?.Layer})");
+
+        // FAR TO NEAR, strictly. The illusion IS the ordering: equal drifts are one flat sheet,
+        // and a row out of order reads as the distance running backwards. Every row must drift
+        // MORE than nothing -- a 0 is the static sky this replaced -- and less than 0.6, past
+        // which the stars stop reading as distance and start reading as debris going by.
+        bool climbs = true;
+        for (int i = 1; i < Sky.All.Length; i++) if (Sky.All[i].Drift <= Sky.All[i - 1].Drift) climbs = false;
+        Check(climbs && Sky.All.All(r => r.Drift > 0f && r.Drift < 0.6f)
+              && Math.Abs(Sky.All[0].Drift - 0.08f) < 1e-6 && Math.Abs(Sky.All[Sky.All.Length - 1].Drift - 0.45f) < 1e-6,
+              $"every layer moves and none keeps up: {string.Join(" < ", Sky.All.Select(r => r.Drift.ToString("0.00")))} of the world's motion, ordered far to near");
+
+        // A ROW'S SCALE REACHES ITS REPEAT. RepeatSize is the tile's DRAWN size, so a row whose
+        // scale is not in it seams mid-tile and the whole field visibly steps as it crosses.
+        bool tiles = true;
+        for (int i = 0; i < layers.Count; i++)
+        {
+            var row = Sky.All[i];
+            var art = Nodes<Sprite2D>(layers[i]).FirstOrDefault();
+            if (art?.Texture == null) { tiles = false; break; }
+            if (Math.Abs(layers[i].RepeatSize.X - art.Texture.GetWidth() * row.Scale) > 0.5f) tiles = false;
+            // ...and the row's Drift reaches the engine as its INVERSE, which is the one place
+            // the two senses meet and the one place a future row can be silently reversed.
+            if (Math.Abs(layers[i].ScrollScale.X - (1f - row.Drift)) > 1e-6) tiles = false;
+            if (Math.Abs(art.Scale.X - row.Scale) > 1e-6) tiles = false;
+        }
+        Check(tiles && layers.Count > 0,
+              $"each layer repeats at its own drawn size and scrolls at its own row's rate ({layers.Count} layers)");
+
+        // AND IT MOVES. The camera goes a long way sideways; every layer must shift, and a NEARER
+        // one must shift further than the one behind it. This is the check the old sky failed.
+        // MEASURED WHERE IT IS DRAWN. Parallax2D.ScreenOffset is the RAW camera offset and reads
+        // the same on every layer -- measuring it said all three moved 4000 u and proved nothing.
+        // The transform-with-canvas is where the art actually lands on the screen.
+        var art0 = layers.Select(l => Nodes<Sprite2D>(l).FirstOrDefault()).ToList();
+        // ...AND MEASURED OVER A SHORT HOP. A layer REPEATS, so its origin jumps by whole tiles as
+        // it re-tiles: the smallest tile here is 563 u (1024 px of stars.png at the far row's
+        // 0.55), and a 4000 u move wrapped every layer several times, which read as 4243 / 4144 /
+        // 4350 -- noise around the raw distance, telling us nothing. 200 u wraps nothing.
+        var wasAt = Me.Position;
+        var before = art0.Select(a2 => a2 == null ? 0f : a2.GetGlobalTransformWithCanvas().Origin.X).ToList();
+        Me.Position = wasAt + new Vector2(200, 0);
+        for (int f = 0; f < 6; f++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        var moved = art0.Select((a2, i) => a2 == null ? 0f : Math.Abs(a2.GetGlobalTransformWithCanvas().Origin.X - before[i])).ToList();
+        bool anyMoved = moved.Any(d => d > 1f);
+        bool deeper = true;
+        for (int i = 1; i < moved.Count; i++) if (moved[i] <= moved[i - 1]) deeper = false;
+        // ...AND BY THE SHARE ITS ROW ASKED FOR. Each layer's travel over the same hop, divided by
+        // its own Drift, must come to the same camera distance -- which is what makes this a check
+        // on the NUMBERS in the table and not merely on the ordering of them.
+        bool byShare = true;
+        double unit = moved.Count > 0 ? moved[0] / Sky.All[0].Drift : 0;
+        for (int i = 1; i < moved.Count; i++)
+            if (Math.Abs(moved[i] / Sky.All[i].Drift - unit) > unit * 0.05) byShare = false;
+        Me.Position = wasAt;
+        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        Check(anyMoved && deeper && byShare,
+              $"200 u of ship moves every layer on screen, each nearer one further than the one behind it, and each by its own row's share ({string.Join(", ", moved.Select(d => d.ToString("0.0")))} u over {string.Join(", ", Sky.All.Select(r => r.Drift.ToString("0.00")))})");
     }
 
     // ── THE SOFT TUTORIAL: a card at a time, CONTINUE, and SKIP in the top right ────────────────
@@ -26183,6 +26608,7 @@ public partial class _Test : Node
                   "a ship within 2000 u: the lights go for it, and their heavy takes the same target");
             await RangeChecks();                // something real to select, at a real distance
             ZoomChecks();
+            await SkyChecks();
             await TourChecks();
             // ── THREE AT ONCE, ON THE HULLS BIG ENOUGH TO HOLD THEM ──
             // How many a hull may hold is its class's row, so "capital ships only" is a number and
