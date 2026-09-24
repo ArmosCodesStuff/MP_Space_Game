@@ -44,7 +44,14 @@ escort's threat, boss sounds and damage numbers (Unreleased, the second section)
 ships bigger and the default grey and white (the first section). The owner asked for **one test run at
 the end of each batch and no mutant runs** for the rest of that session.
 
-**State as of 2026-09-22: the owner's THIRD batch is built** -- nine new classes (three freighters
+**State as of 2026-09-23: the owner's FOURTH batch is all but built** -- the refit that costs a
+level, the EXP rules and its own popup, the 1200 u warp, RAIDS as a second mission category with
+the SIEGE in it, gear levelled with salvage, up to three targets at once, three more pilot
+upgrades (REACH, COOLING, GUNNERY), a boss curve retuned to 1.025 a level, a soft tutorial, the
+RECYCLER, the lanes with their couriers and outpost guns, and 104 new per-mechanism checks. Two
+items are outstanding: the gear-line clarity pass and the dumb launcher.
+
+**The THIRD batch, underneath it** -- nine new classes (three freighters
 that deploy their own turrets, three heavy fighters, three lights), four new enemies in the wave
 rotation, an always-on point-defence mount on the hauler, and the refactor underneath all of it:
 a class, an ability, an enemy and a turret are now ROWS OF A TABLE, not code (`scripts/Ships.cs`,
@@ -67,7 +74,7 @@ against the real `GodotSharp.dll`, `dotnet build` with 0 warnings, analysers 0 f
 unused, the smoke test three full runs in a row (**6 of 6 runs** each: solo, a host with
 two guests, and a two-player arena; `tools\smoketest\run.ps1 -Wan` repeats the multiplayer runs
 with every guest joining through a simulated internet -- 90 ms each way, jitter, 2% loss), and the
-screenshot sweep (**97 frames, 0 lint**) on the developer's own GPU with the project's Forward+
+screenshot sweep (**98 frames, 0 lint**) on the developer's own GPU with the project's Forward+
 renderer. The smoke test builds its own network (fake routers, no internet), so every check means
 the same on every machine -- there are no "environmental" failures to discount.
 What none of it replaces: someone actually flying it, and a real session between two homes.

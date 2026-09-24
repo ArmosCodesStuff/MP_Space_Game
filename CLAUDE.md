@@ -102,7 +102,7 @@ changed. Never run a higher rung to prove something a lower rung proves.**
 | 1 | `typecheck\typecheck.ps1` | ~20 s | every rename, signature, missing caller — in `scripts/` **and in the harness** (`SmokeTest.cs.txt`, `Shots.cs.txt`) | behaviour, numbers, reflection by string |
 | 2 | `verify.ps1 -Quick` | ~1 min | rung 1 + 0 warnings, 0 analyser findings, `UNUSED ANYWHERE: 0` | behaviour, numbers, anything drawn |
 | 3 | `tools\smoketest\run.ps1 -Solo` | ~1.5 min | the whole single-player narrative: behaviour, every number, ability state, UI state | a host and a guest disagreeing |
-| 4 | `tools\screens\run.ps1` | ~1.5 min | what is DRAWN: 97 frames, `LINT: 0` for off-screen, clipped and overlapping | behaviour |
+| 4 | `tools\screens\run.ps1` | ~1.5 min | what is DRAWN: 98 frames, `LINT: 0` for off-screen, clipped and overlapping | behaviour |
 | 5 | `tools\smoketest\run.ps1` (all six) | ~4 min | authority, replication, the protocol: host + two guests + the two-player arena | nothing the game does; it is the last word on correctness |
 | 6 | `verify.ps1 -Update` | ~13 min | **the bar**: rungs 1-5, ×3 runs, + map, snapshot, manifest, integrity | nothing — it is the release gate, not a debugging tool |
 
