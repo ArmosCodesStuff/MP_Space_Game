@@ -385,8 +385,15 @@ public partial class Yard : Node2D
     // ── stock ────────────────────────────────────────────────────────────────
     // A DELIVERY, into the resource its row names. One line for any number of resources: the
     // if/else into two named fields is what a third gatherer used to have to edit.
+    //
+    // AND THE ONE PLACE THE LANES ARE FELT. Every unit the fleet ever delivers comes through here,
+    // so a blockade is ONE MULTIPLY: Lanes.Flow is the shares of the lanes still carrying
+    // (Lanes.cs). Four lanes at a quarter each -- one cut and the base is paid three quarters, two
+    // and it is paid half -- and a fifth row at 0.2 would be fifths with nothing here to change.
+    // (The AWAY SHARE is deliberately not cut: see the Lanes header.)
     public void Deposit(string res, double amount)
     {
+        amount *= Lanes.Flow(Hub);
         SetStock(res, Stock(res) + amount);
         _delivered[res] = Delivered(res) + amount;
     }

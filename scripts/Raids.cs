@@ -34,11 +34,41 @@ public sealed class Raids
     public void Owed(int level) { _level = level; _in = Delay; }
     public void Tick(double delta)
     {
+        TickLanes(delta);
         if (_in < 0) return;
         if ((_in -= delta) <= 0) { _in = -1; Raid(_level); }
     }
 
-    // ── the four moments a wave comes from ──────────────────────────────────
+    // ── THE LANES' OWN CLOCK ────────────────────────────────────────────────
+    // One lane cut at a time, never one already cut, only at home (the arena has no lanes), and
+    // only once this base has something to lose -- a pilot who has never flown a bounty is not
+    // blockaded. The SCHEDULE is Lanes.FirstBlockade / BlockadeEvery, the lanes' own clock, as an
+    // escort's is Economy.EscortFirstWave / EscortWaveEvery; WHAT arrives is a row of Waves.All
+    // and nothing in this file. Several stand at once only because the pilot left the first one
+    // standing, which is the point of them.
+    private double _laneIn = Lanes.FirstBlockade;
+    private int _blockades;
+    private void TickLanes(double delta)
+    {
+        if (Hub.InArena || Missions.HighestBeaten(Missions.Bounty) < Lanes.NeedsBoss) return;
+        if ((_laneIn -= delta) > 0) return;
+        _laneIn = Lanes.BlockadeEvery;
+        int lane = Lanes.NextOpen(_hub);
+        if (lane >= 0) Blockade(lane);
+    }
+
+    // A LANE CUT: one squad on its stand, and one more for each pilot past the first, at the base
+    // owner's own standing. THE ONE DOOR -- the clock above comes through it, and so does anything
+    // else that wants a lane cut on purpose (Hub.Blockade).
+    public void Blockade(int lane)
+    {
+        if (!Net.IsHost || lane < 0 || lane >= Lanes.All.Length) return;
+        var at = Lanes.Stand(lane);
+        Send(WaveTrigger.Blockade, new WaveBrief { Pilots = _hub.PartySize, Index = _blockades++,
+             Level = System.Math.Max(1, Missions.HighestBeaten(Missions.Bounty)), Origin = at, Anchor = at });
+    }
+
+    // ── the five moments a wave comes from ──────────────────────────────────
     public void Raid(int level) =>
         Send(WaveTrigger.Failed, new WaveBrief { Pilots = _hub.PartySize, Level = level, Origin = Hub.BasePos });
 
@@ -100,6 +130,10 @@ public sealed class Raids
                     var r = _hub.SpawnRaider(at + c.At + c.Step * (i - (n - 1) / 2f), kind, squad, strength, d.HullShare);
                     if (r == null) continue;
                     r.Quarry = b.Quarry; r.Agility = agility;
+                    // ...and WHERE IT WAITS with nothing to fight: its squad's own spot if the row
+                    // named a ring to hold, the base's perimeter otherwise -- which is every other
+                    // wave, unchanged.
+                    if (d.Hold > 0) { r.Station = at; r.Circuit = d.Hold; }
                 }
             }
         }

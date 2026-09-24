@@ -881,7 +881,7 @@ public partial class _Test : Node
     System.Collections.Generic.List<(Vector2 p, float age)> Smoke(Shot t) =>
         (System.Collections.Generic.List<(Vector2 p, float age)>)typeof(Shot).GetField("_smoke", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(t);
     // the three projectile classes are one flyer with a row each now (Shots.All)
-    System.Collections.Generic.IEnumerable<Shot> Missiles() => Nodes<Shot>().Where(x => x.IsMissile);
+    System.Collections.Generic.IEnumerable<Shot> InFlight() => Nodes<Shot>().Where(x => x.IsMissile);
     System.Collections.Generic.IEnumerable<Shot> Shells() => Nodes<Shot>().Where(x => x.Kind == Shots.Shell);
     System.Collections.Generic.IEnumerable<Shot> Slugs() => Nodes<Shot>().Where(x => x.Kind == Shots.Slug || x.Kind == Shots.Scrap);
     Vector2 Scr(Vector2 w) => GetViewport().GetCanvasTransform() * w;
@@ -1131,6 +1131,166 @@ public partial class _Test : Node
         Character.Delete("recycler"); Character.Id = keepId;
         Check(loaded, $"a lock belongs to the part id and comes back off disk ({string.Join(",", Character.GearLocked)})");
         Character.GearHold.Clear(); Character.GearLocked.Clear();
+    }
+
+    // ── THE LANES: four courier runs to the outposts, a quarter of the passive income each ──
+    // Everything asserted here is a literal from the owner's words: four lanes, 25% each, both
+    // directions, a quarter off for one blockade and a half for two, and the gunship's own 42
+    // coming back the other way. Where things STAND is varied (VaryNear); what they are worth is
+    // not.
+    async Task LaneChecks()
+    {
+        var Y = H.Yard;
+        var lv = (System.Collections.Generic.Dictionary<string, int>)typeof(Yard)
+                 .GetField("_levels", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(Y);
+        var cdF = typeof(LaneGun).GetField("_cd", BindingFlags.NonPublic | BindingFlags.Instance);
+        double keepOre = Y.Stock("ore"), keepCredits = Y.Credits;
+        var keepMe = Me.Position;
+        // clear of every lane's stand by more than a raider's 2000 u notice, so nothing a check
+        // puts on a lane comes after the pilot instead of holding it
+        var park = VaryNear(Hub.BasePos + new Vector2(-700, 700), 150f);
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e9);
+        Me.Position = park; Me.Velocity = Vector2.Zero;
+        await Wait(0.3);
+        // 100 units delivered, and what the base is actually PAID for them. Yard.Deposit is the
+        // one place the lanes are felt, and this is read in the SAME frame it is called, so the
+        // fleet's own deliveries cannot move the figure.
+        double Paid() { Y.SetStock("ore", 0); Y.Deposit("ore", 100); return Y.Stock("ore"); }
+
+        // ── THE TABLE: four lanes, base to outpost, a quarter each ──────────────────────────
+        Check(Lanes.All.Length == 4 && Lanes.All.All(l => Math.Abs(l.Share - 0.25) < 1e-9)
+              && Math.Abs(Lanes.All.Sum(l => l.Share) - 1.0) < 1e-9
+              && Enumerable.Range(0, Lanes.All.Length).All(i => Lanes.Ends(i).near == Hub.BasePos
+                                                                && Lanes.Ends(i).far == Hub.Outposts[Lanes.All[i].Outpost].at)
+              && Enumerable.Range(0, Lanes.All.Length).Select(Lanes.Name).SequenceEqual(new[] { "SE", "NE", "NW", "SW" }),
+              $"four lanes, each from the base to one outpost, carrying a quarter of the passive income and a whole between them ({string.Join(", ", Enumerable.Range(0, Lanes.All.Length).Select(i => $"{Lanes.Name(i)} {Lanes.All[i].Share:0.00}"))})");
+
+        // ── A COURIER RUNS BOTH WAYS ────────────────────────────────────────────────────────
+        var drones = Nodes<Courier>().ToList();
+        var c0 = drones.FirstOrDefault(c => c.Lane == 0);
+        var (nearEnd, farEnd) = Lanes.Run(0);
+        double cyc = Lanes.Cycle(0);
+        Check(c0 != null && drones.Count == Lanes.All.Sum(l => l.Drones) && drones.Count(c => c.Lane == 0) == 2
+              && farEnd.DistanceTo(Hub.Outposts[0].at) < 200f && nearEnd.DistanceTo(Hub.BasePos) < 400f,
+              $"every lane has its couriers, turning round beside the base and beside its outpost ({drones.Count} of {Lanes.All.Sum(l => l.Drones)} built)");
+        c0.Phase = 0f;
+        c0.Clock = 0;           await Wait(0.05); var atBase = c0.Position;      bool goingOut = c0.Outbound;
+        c0.Clock = cyc * 0.25;  await Wait(0.05); var quarterOut = c0.Position;  bool stillOut = c0.Outbound;
+        c0.Clock = cyc * 0.5;   await Wait(0.05); var atOutpost = c0.Position;
+        c0.Clock = cyc * 0.75;  await Wait(0.05); var quarterBack = c0.Position; bool coming = !c0.Outbound;
+        c0.Clock = cyc * 1.02;  await Wait(0.05); int runs = c0.Runs;
+        double dBase = atBase.DistanceTo(Hub.BasePos), dOut = atOutpost.DistanceTo(Hub.BasePos);
+        Check(goingOut && stillOut && coming && runs >= 2
+              && atBase.DistanceTo(nearEnd) < 40f && atOutpost.DistanceTo(farEnd) < 40f
+              && quarterOut.DistanceTo(Hub.BasePos) > dBase + 400f
+              && quarterBack.DistanceTo(Hub.BasePos) < dOut - 400f,
+              $"a courier runs BOTH WAYS on its lane -- out to the outpost, then home to the base, and round again ({dBase:0} u from the base -> {quarterOut.DistanceTo(Hub.BasePos):0} -> {dOut:0} -> {quarterBack.DistanceTo(Hub.BasePos):0}; {runs} one-way runs done)");
+
+        // ── THE GUN AT THE FAR END ──────────────────────────────────────────────────────────
+        var guns = Nodes<LaneGun>().ToList();
+        var gun = guns.FirstOrDefault(g => g.Lane == 0);
+        Check(gun != null && guns.Count == Lanes.All.Length
+              && gun.Position.DistanceTo(Hub.Outposts[0].at) < Hub.OutpostHeight
+              && Nodes<Turret>(gun).Count() == 1
+              && gun.Range > gun.Position.DistanceTo(Lanes.Stand(0)),
+              $"every outpost carries a gun, on the one turret component, reaching the spot its own lane is cut on ({gun?.Range:0} u of the {gun?.Position.DistanceTo(Lanes.Stand(0)):0} u out to the stand)");
+        // WHO IT MAY SHOOT is a filter, never a type test: raiding craft, and nothing of ours.
+        var anyDummy = Nodes<TargetDummy>().FirstOrDefault();
+        Check(!Targeting.Craft.Allows(Me) && !Targeting.Craft.Allows(Y.Hauler) && !Targeting.Craft.Allows(Y.Gatherers[0])
+              && (H.Deployed.Count == 0 || !Targeting.Craft.Allows(H.Deployed[0]))
+              && (anyDummy == null || !Targeting.Craft.Allows(anyDummy)),
+              "the filter keeps the outposts off their own side: a pilot, the hauler, a miner, a dropped turret and a practice dummy are none of them raiding craft");
+        Check(Math.Abs(gun.Range - 1200) < 1e-3 && Math.Abs(gun.Interval - 10.0) < 1e-9 && Math.Abs(gun.Speed - 300) < 1e-3,
+              $"an unbought outpost gun: 1200 u, one missile every 10 s (6 a minute), 300 u/s ({gun.Range:0} u, {gun.Interval:0.00} s, {gun.Speed:0} u/s)");
+        Y.Credits = 100000;
+        bool three = Y.TryBuy(Lanes.RangeId) && Y.TryBuy(Lanes.RateId) && Y.TryBuy(Lanes.SpeedId);
+        Check(three && Economy.All.Count(u => u.Tab == "OUTPOSTS") == 3 && Economy.Tabs.Contains("OUTPOSTS")
+              && Math.Abs(gun.Range - 1320) < 1e-3 && Math.Abs(gun.Interval - 9.0909) < 1e-3 && Math.Abs(gun.Speed - 330) < 1e-3,
+              $"the OUTPOSTS tab buys range, rate of fire and missile speed, +10% a level, for every outpost at once: {gun.Range:0} u, {gun.Interval:0.000} s a missile, {gun.Speed:0} u/s");
+        lv.Remove(Lanes.RangeId); lv.Remove(Lanes.RateId); lv.Remove(Lanes.SpeedId);
+
+        // NOTHING OF OURS DRAWS A SHOT: the pilot parked on the very spot a blockade stands on.
+        Me.Position = Lanes.Stand(0); Me.Velocity = Vector2.Zero;
+        int blasts0 = H.BlastsPending, flying0 = Nodes<MissileVisual>().Count();
+        await Wait(3.0);
+        Check(H.BlastsPending <= blasts0 && Nodes<MissileVisual>().Count() <= flying0 && gun.Aimed == null,
+              $"and it throws nothing at its own side: a pilot sitting on the stand for 3 s, well inside its 1200 u, is never even aimed at ({H.BlastsPending - blasts0} thrown)");
+        Me.Position = park; Me.Velocity = Vector2.Zero;
+        await Wait(0.3);
+
+        // ── A CUT LANE STOPS PAYING: A QUARTER FOR ONE, A HALF FOR TWO ──────────────────────
+        double whole = Paid();
+        var cutA = H.SpawnRaider(VaryNear(Lanes.Stand(0), 200f), Enemies.Webifier);
+        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        cutA.Hp = 5000;                                  // it is the thing being blockaded WITH
+        double oneCut = Paid();
+        bool threeQuarters = Math.Abs(Lanes.Flow(H) - 0.75) < 1e-9;
+        var heldAt = c0.Position; double heldClock = c0.Clock;
+        var cutB = H.SpawnRaider(VaryNear(Lanes.Stand(1), 200f), Enemies.Webifier);
+        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        cutB.Hp = 5000;
+        double twoCut = Paid();
+        Check(Math.Abs(whole - 100) < 1e-9 && Math.Abs(oneCut - 75) < 1e-9 && Math.Abs(twoCut - 50) < 1e-9
+              && threeQuarters && Math.Abs(Lanes.Flow(H) - 0.5) < 1e-9
+              && Lanes.Cut(H, 0) && Lanes.Cut(H, 1) && !Lanes.Cut(H, 2) && !Lanes.Cut(H, 3),
+              $"one lane blockaded costs exactly a quarter of the passive income and two lanes a half: 100 units delivered pay {whole:0}, then {oneCut:0}, then {twoCut:0}");
+        // ...and the courier on a cut lane holds where it is: the flow has stopped, visibly
+        await Wait(0.6);
+        Check(c0.Held && c0.Position.DistanceTo(heldAt) < 1f && Math.Abs(c0.Clock - heldClock) < 1e-6,
+              $"the cut lane's couriers hold where they are, carrying nothing ({c0.Position.DistanceTo(heldAt):0.0} u in 0.6 s)");
+
+        // ── THE OUTPOST ANSWERS: the heavy fighter's own missile, friendly-coloured ─────────
+        cutB.TakeDamage(1e9);                            // one blockader, so one gun is firing
+        await Wait(0.5);
+        // held on the spot for a few frames first, so the LEAD is zero and this check is about the
+        // blast: the prediction itself is proved against literals where Missiles.Predict is.
+        var markAt = cutA.Position;
+        for (int i = 0; i < 8; i++) { cutA.Position = markAt; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+        cdF.SetValue(gun, 0.0);                          // its reload may be part-spent on the escort's hunters
+        double hp0 = cutA.Hp;
+        FxNode mark = null; MissileVisual flying = null;
+        for (int i = 0; i < 60 * 3 && flying == null; i++)
+        {
+            cutA.Position = markAt;
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            // THIS gun's, at THIS blockader: an outpost missile aimed where the blockader stands
+            flying = Nodes<MissileVisual>().FirstOrDefault(mv => mv.Side == Missiles.Outpost && mv.To.DistanceTo(markAt) < 25f);
+            mark = Nodes<FxNode>().FirstOrDefault(fn => fn.Id == Fx.AimZone && Math.Abs(fn.Radius - 90f) < 0.1f
+                                                       && fn.Position.DistanceTo(markAt) < 25f);
+        }
+        bool marked = flying != null && mark != null && mark.Warn && mark.Anchor == Fx.World
+                      && ReferenceEquals(gun.Aimed, cutA);
+        for (int i = 0; i < 60 * 6 && cutA.Hp >= hp0; i++)
+        { cutA.Position = markAt; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+        Check(marked && Math.Abs(hp0 - cutA.Hp - 42) < 1e-6,
+              $"the outpost throws the heavy fighter's own predicted missile at the blockader, marks where it will land in friendly colours, and lands the gunship's 42 there ({hp0 - cutA.Hp:0} off the blockader)");
+
+        // ── A BLOCKADE IS A ROW OF Waves.All, holding the lane's own stand ─────────────────
+        var plainRow = Waves.For(WaveTrigger.Blockade, new WaveBrief { Index = 0 });
+        var lateRow = Waves.For(WaveTrigger.Blockade, new WaveBrief { Index = 2 });
+        H.Blockade(0);
+        await Wait(0.3);
+        var squad = H.Raiders.Where(r => r != cutA).ToList();
+        Check(plainRow != null && plainRow.Id == "blockade" && Math.Abs(plainRow.Hold - 200f) < 1e-3 && plainRow.Crew.Length == 2
+              && lateRow != null && lateRow.Id == "blockade_heavy" && lateRow.Crew.Length == 3
+              && squad.Count == 4 && squad.Count(r => r.Heavy) == 1
+              && squad.All(r => r.Position.DistanceTo(Lanes.Stand(0)) <= Lanes.Hold)
+              && squad.All(r => r.Station.DistanceTo(Lanes.Stand(0)) < 1f && Math.Abs(r.Circuit - 200f) < 1e-3)
+              && Lanes.Cut(H, 0) && Math.Abs(Lanes.Flow(H) - 0.75) < 1e-9,
+              $"a blockade is a trigger and a row, not a spawner: three lights and a heavy holding a 200 u ring on the lane's own stand, and the base paid three quarters ({squad.Count} sent, {Lanes.Flow(H) * 100:0}% flow)");
+
+        // ── CLEARING IT RESTORES THE INCOME ────────────────────────────────────────────────
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e9);
+        await Wait(0.3);
+        double again = Paid();
+        Check(Enumerable.Range(0, Lanes.All.Length).All(i => !Lanes.Cut(H, i))
+              && Math.Abs(Lanes.Flow(H) - 1.0) < 1e-9 && Math.Abs(again - 100) < 1e-9
+              && Lanes.Readout(H).Length == 0,
+              $"clearing the blockade restores the income at once: 100 units delivered pay {again:0} again, and the HUD stops reporting a cut lane");
+
+        Y.SetStock("ore", keepOre); Y.Credits = keepCredits;
+        Me.Position = keepMe; Me.Velocity = Vector2.Zero;
+        await Wait(0.2);
     }
 
     void GearLevelChecks()
@@ -1960,6 +2120,8 @@ public partial class _Test : Node
         Check(Math.Abs(onFile - loaded) < 1e-6 && hauler.Cargo == 300, $"a save counts what the hauler and the fleet are carrying, as if home ({onFile:0} of {loaded:0})");
         hauler.ResetToPad();
 
+        await LaneChecks();
+
         var t = Nodes<Turret>(ship).First();
         ship.Rotation = 1.3f; await Wait(0.05);
         Check(t.GlobalPosition.DistanceTo(ship.ToGlobal(t.Offset)) < 0.5f, "turret on its mount after turning");
@@ -2142,7 +2304,7 @@ public partial class _Test : Node
             await Wait(0.1); Key(global::Godot.Key.F); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(ship.BroadsideWindupLeft > 0.4, $"once the cooldown is over, F winds up again ({ship.BroadsideWindupLeft:0.00} s)");
             await Wait(1.5);
-            Check(Missiles().All(t => t.HostileFire), "a battleship launches no missile of its own");
+            Check(InFlight().All(t => t.HostileFire), "a battleship launches no missile of its own");
         }
 
         // ── the main guns fire SHELLS: straight, at 650 u/s (the battleship's), damage on arrival ──
@@ -2368,7 +2530,7 @@ public partial class _Test : Node
             await Wait(2.0);
 
             // ── the missile BURST: a magazine of three bursts; a selected target in range, or it refuses ──
-            System.Collections.Generic.List<Shot> Burst() => Missiles().Where(x => x.Heavy && !x.HostileFire && Smoke(x).Count < 40).ToList();
+            System.Collections.Generic.List<Shot> Burst() => InFlight().Where(x => x.Heavy && !x.HostileFire && Smoke(x).Count < 40).ToList();
             string SlotMsg() => AbilityBar.StateOf(ship, "missile", H.Selected) is var st && st.Fail ? st.Line : null;
             Check(ship.Stats["missile_mag"] == 3 && ship.MissilesLoaded == 3, "the destroyer starts with a magazine of three bursts");
             // Esc only if something is selected: with nothing selected, Esc opens the Esc menu
@@ -2406,9 +2568,9 @@ public partial class _Test : Node
             Key(global::Godot.Key.F); await Wait(0.5);
             Check(ship.MissilesLoaded == 0 && Burst().Count - before3 == 3, $"the third burst empties the magazine ({Burst().Count - before3} new missiles, {ship.MissilesLoaded} left)");
             await Wait(0.7);
-            var flying = new System.Collections.Generic.HashSet<Shot>(Missiles());
+            var flying = new System.Collections.Generic.HashSet<Shot>(InFlight());
             Key(global::Godot.Key.F); await Wait(0.1);
-            Check(Missiles().All(flying.Contains), "empty magazine: F does nothing");
+            Check(InFlight().All(flying.Contains), "empty magazine: F does nothing");
             Key(global::Godot.Key.R); await Wait(0.1);
             Check(ship.Reloading && AbilityBar.StateOf(ship, "reload", H.Selected).Busy > 0.9f, "R starts the reload; the bar shows it");
             await Wait(9.2);
@@ -2696,7 +2858,7 @@ public partial class _Test : Node
         var fspr = Nodes<Sprite2D>(Nodes<Wing>().First(w => w.Carrier == ship && !w.Def.Parks)).First(); var bspr = Nodes<Sprite2D>(crawl).First();
         Check(Math.Abs(fspr.Texture.GetHeight() * fspr.Scale.Y - 17f) < 0.1f && Math.Abs(bspr.Texture.GetHeight() * bspr.Scale.Y - 28.125f) < 0.1f, "fighters 17 u, bombers 28.1 u (snout-nosed, 25% smaller)");
         Shot first = null;
-        for (int i = 0; i < 1200 && first == null; i++) { first = Missiles().FirstOrDefault(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+        for (int i = 0; i < 1200 && first == null; i++) { first = InFlight().FirstOrDefault(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
         Check(first != null, "bombers launch torpedoes");
         // measure over an exact frame count: timers round up to the next frame
         var dir0 = first.Dir; var q0 = first.GlobalPosition;
@@ -3558,8 +3720,10 @@ public partial class _Test : Node
             Check(H.BlastsPending == 0 && HvMissile() == mm1, "moving off the circle dodges it");
             // anything out of place -- a wild speed, a broken number -- and it aims right at the target
             var pz = new Vector2(100, 200);
-            Check(Raider.PredictSpot(pz, new Vector2(10, 0)) == pz + new Vector2(120, 0) && Raider.PredictSpot(pz, new Vector2(5000, 0)) == pz
-                  && Raider.PredictSpot(pz, new Vector2(float.NaN, 0)) == pz && Raider.PredictSpot(pz, new Vector2(float.PositiveInfinity, 1)) == pz,
+            Check(Missiles.Predict(pz, new Vector2(10, 0), Raider.MissileFlight) == pz + new Vector2(120, 0)
+                  && Missiles.Predict(pz, new Vector2(5000, 0), Raider.MissileFlight) == pz
+                  && Missiles.Predict(pz, new Vector2(float.NaN, 0), Raider.MissileFlight) == pz
+                  && Missiles.Predict(pz, new Vector2(float.PositiveInfinity, 1), Raider.MissileFlight) == pz,
                   "the missile leads a sane speed the whole 12 s of its flight -- 10 u/s carried 120 u -- and a wild speed, NaN or infinity aims at where the target is");
             // live: 2700 u/s in 45 u steps (wild, yet under the 50 u jump filter) -- the circle must sit on the ship
             hm.Position = edge + (Hub.BasePos - edge).Normalized() * 400f; hm.Velocity = Vector2.Zero;
@@ -3680,7 +3844,7 @@ public partial class _Test : Node
             for (int i = 0; i < 60 * 6 && bm == null; i++)
             {
                 rc.Position = spot2;
-                bm = Missiles().FirstOrDefault(t => !t.HostileFire && !t.Heavy && t.TargetId == rc.NetId);
+                bm = InFlight().FirstOrDefault(t => !t.HostileFire && !t.Heavy && t.TargetId == rc.NetId);
                 await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             }
             var bp1 = bm?.GlobalPosition ?? Vector2.Zero;
@@ -3942,7 +4106,11 @@ public partial class _Test : Node
             // EMPTY SPACE to work in: the practice fighters at (900, 550) are small craft, so a
             // deployed turret would lock onto one and never kill it, and the belt, the wreck and the
             // portal all have traffic. South-east and far out is clear of every one of them.
-            var fr = Me; var yonder = VaryNear(Hub.BasePos + new Vector2(2600, 2400), 500f);
+            // CLEAR OF THE OUTPOST GUNS. Every outpost stands 3000 u out on a diagonal and
+            // answers out to Lanes.Range, so a mark placed where this arena used to sit took an
+            // outpost's 42 before the ability under test ever reached it. Out here nothing but the
+            // check is shooting.
+            var fr = Me; var yonder = VaryNear(Hub.BasePos + new Vector2(4200, 3900), 500f);
             fr.Position = yonder; fr.Velocity = Vector2.Zero; await Wait(0.2);
             for (int i = 0; i < 4; i++)
             {
@@ -4220,13 +4388,16 @@ public partial class _Test : Node
                 // the one that already carried effects. Two warning rows, a lane and a zone; how
                 // long, how wide and what it sounds like are the MOVE's and come with the raise,
                 // because one boss move plays its cue with no warning at all.
-                var warnLane = Fx.Of(Fx.WarnLane); var warnZone = Fx.Of(Fx.WarnZone);
-                Check(Fx.All.Length == 9 && warnLane.Warn && warnZone.Warn
-                      && warnLane.Shape == FxShape.Lane && warnZone.Shape == FxShape.Zone
-                      && warnLane.Sound == null && warnZone.Sound == null
+                var warnLane = Fx.Of(Fx.WarnLane); var warnZone = Fx.Of(Fx.WarnZone); var aimZone = Fx.Of(Fx.AimZone);
+                Check(Fx.All.Length == 10 && warnLane.Warn && warnZone.Warn && aimZone.Warn
+                      && warnLane.Shape == FxShape.Lane && warnZone.Shape == FxShape.Zone && aimZone.Shape == FxShape.Zone
+                      && warnLane.Sound == null && warnZone.Sound == null && aimZone.Sound == null
                       && new[] { Fx.Burst, Fx.Lost, Fx.Rebuilt, Fx.Wave, Fx.Emp, Fx.Echo, Fx.Rail }.All(i => !Fx.Of(i).Warn)
-                      && Fx.All.Count(x => x.Warn) == 2 && Fx.World == 0 && Fx.Flash == 0.35,
-                      $"nine rows of Fx.All, seven effects and two warnings: a red lane and a red zone, whose clock and sounds are the raise's ({Fx.All.Length} rows, {Fx.All.Count(x => x.Warn)} warnings)");
+                      && Fx.All.Count(x => x.Warn) == 3 && Fx.World == 0 && Fx.Flash == 0.35
+                      // ...and the friendly one is the SAME telegraph in another colour: where one
+                      // of YOUR shots will land reads nothing like where one of THEIRS will.
+                      && aimZone.Tint != warnZone.Tint && warnLane.Tint == warnZone.Tint,
+                      $"ten rows of Fx.All, seven effects and three telegraphs: a red lane and a red zone whose clock and sounds are the raise's, and the same zone in your own colours for where your own shot lands ({Fx.All.Length} rows, {Fx.All.Count(x => x.Warn)} telegraphs)");
                 // the sweep the shell and the rock share: a step longer than a hull is how a shot
                 // passes through it between frames
                 {
@@ -4239,11 +4410,11 @@ public partial class _Test : Node
                           $"Shots.Sweep walks a 60 u step in ten 6 u tests, stops at the first touch, and tests only the end point when a row asks for no sweep ({seen}, {once})");
                 }
 
-                Check(Fx.All.Length == 9 && Fx.Of(Fx.Wave).Shape == FxShape.Ring
+                Check(Fx.All.Length == 10 && Fx.Of(Fx.Wave).Shape == FxShape.Ring
                       && Fx.Of(Fx.Emp).Shape == FxShape.Spokes && Fx.Of(Fx.Echo).Shape == FxShape.Spokes
                       && Fx.Of(Fx.Rail).Shape == FxShape.Bar && Fx.Of(Fx.Burst).Shape == FxShape.Burst
                       && Fx.Of(Fx.Rebuilt).Tint != Fx.Of(Fx.Lost).Tint,
-                      "the effects, each a row: a burst, a fleet craft lost and rebuilt, a wave, an EMP, an echo and a railgun's bar -- and the two warnings a boss draws, which were their own node until they became rows beside them");
+                      "the effects, each a row: a burst, a fleet craft lost and rebuilt, a wave, an EMP, an echo and a railgun's bar -- and beside them the three telegraphs, which were their own node until they became rows too");
                 int fxBefore = Nodes<FxNode>().Count();
                 Fx.Raise(Fx.Wave, fr.Position + new Vector2(0, -600), 400f);
                 await Wait(0.1);
@@ -4335,9 +4506,9 @@ public partial class _Test : Node
             var marks = new List<Raider>();
             for (int i = 0; i < 4; i++) { var m = H.SpawnRaider(yonder + new Vector2(300 + 60 * i, -200 + 90 * i)); m.Hp = 3000; marks.Add(m); }
             await Wait(0.2);
-            int torp0 = Missiles().Count();
+            int torp0 = InFlight().Count();
             wd.UseAbility("hunters", 0); await Wait(0.2);
-            var fired = Missiles().Where(t => !t.HostileFire && t.TargetId != 0).ToList();
+            var fired = InFlight().Where(t => !t.HostileFire && t.TargetId != 0).ToList();
             Check(fired.Count >= 6 - torp0 && fired.Select(t => t.TargetId).Distinct().Count() >= 4,
                   $"six hunter-seekers away, each on a target of its own ({fired.Count} out, {fired.Select(t => t.TargetId).Distinct().Count()} targets)");
             foreach (var m in marks) m.TakeDamage(99999);
@@ -4471,7 +4642,7 @@ public partial class _Test : Node
                     ["firemode"]  = sp => sp.Staggered != sweepMode && sp.Sl("firemode").Left == 0 && sp.Sl("firemode").Cool == 0,
                     ["broadside"] = sp => sp.BroadsideTracking && sp.Sl("broadside").Left > sp.Stats["broadside_windup"] - 0.1,
                     ["pd"]        = sp => sp.PdActive && sp.Sl("pd").Left > sp.Stats["pd_active"] - 0.1,
-                    ["missile"]   = sp => sp.MissilesLoaded == sweepMag - 1 && Missiles().Count() >= sweepShots + PlayerShip.BurstSides.Length,
+                    ["missile"]   = sp => sp.MissilesLoaded == sweepMag - 1 && InFlight().Count() >= sweepShots + PlayerShip.BurstSides.Length,
                     ["reload"]    = sp => sp.Reloading && sp.Sl("reload").Left > sp.Stats["missile_reload"] - 0.1,
                     ["attack"]    = sp => ReferenceEquals(sp.WingTarget, sweepMark),
                     ["recall"]    = sp => sp.WingTarget == null,
@@ -4483,7 +4654,7 @@ public partial class _Test : Node
                     ["shockwave"] = sp => sp.Sl("shockwave").Cool > 0 && Nodes<FxNode>().Any(fx3 => fx3.Id == Fx.Wave),
                     ["railgun"]   = sp => sp.Statuses.Has(Status.Disabled) && sp.Sl("railgun").Left > sp.Stats["rail_charge"] - 0.1,
                     ["rush"]      = sp => sp.Statuses.Has(Status.Hardened) && Math.Abs(sp.SpeedMult - (float)sp.Stats["rush_mult"]) < 1e-3f,
-                    ["hunters"]   = sp => sp.Sl("hunters").Cool > 0 && Missiles().Count() >= sweepShots + (int)sp.Stats["hunter_count"],
+                    ["hunters"]   = sp => sp.Sl("hunters").Cool > 0 && InFlight().Count() >= sweepShots + (int)sp.Stats["hunter_count"],
                     ["roll"]      = sp => sp.Statuses.Has(Status.Evading) && sp.Sl("roll").Left > sp.Stats["roll_time"] + sp.Stats["boost_time"] - 0.1,
                     ["echo"]      = sp => sp.Sl("echo").Left > sp.Stats["echo_time"] - 0.1,
                     ["stealth"]   = sp => sp.Statuses.Has(Status.Untargetable) && sp.Sl("stealth").Left > sp.Stats["stealth_time"] - 0.1,
@@ -4544,7 +4715,7 @@ public partial class _Test : Node
                     foreach (var abil in cls.Abilities)
                     {
                         sweepMark.Position = markAt;                  // back where it was, whatever moved it
-                        sweepShots = Missiles().Count();
+                        sweepShots = InFlight().Count();
                         sweepTurrets = sweepShip.TurretsOut;
                         sweepMode = sweepShip.Staggered;
                         sweepMag = sweepShip.MissilesLoaded;
@@ -4683,15 +4854,15 @@ public partial class _Test : Node
                         {
                             var mkIn = await Marker(pilot.Position + way * (float)(reach * Vary(0.55f, 0.90f)));
                             var mkOut = await Marker(pilot.Position + wide * (float)(reach * Vary(1.15f, 1.45f)));
-                            int flying0 = Missiles().Count();
+                            int flying0 = InFlight().Count();
                             pilot.Sl("missile").N = (int)pilot.Stats["missile_mag"]; pilot.Sl("missile").Cool = 0;
                             doAbility.Invoke(pilot, new object[] { "missile", mkIn.NetId });
                             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-                            int flew = Missiles().Count() - flying0;
+                            int flew = InFlight().Count() - flying0;
                             pilot.Sl("missile").Cool = 0;
                             doAbility.Invoke(pilot, new object[] { "missile", mkOut.NetId });
                             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-                            int flewMore = Missiles().Count() - flying0 - flew;
+                            int flewMore = InFlight().Count() - flying0 - flew;
                             proved = flew >= PlayerShip.BurstSides.Length && flewMore == 0;
                             told = $"a burst of {flew} away at {pilot.Position.DistanceTo(mkIn.Position):0} u and {flewMore} away at {pilot.Position.DistanceTo(mkOut.Position):0} u";
                             Sink(mkIn); Sink(mkOut);
@@ -4761,22 +4932,22 @@ public partial class _Test : Node
                             // The cell only sees what is inside its reach: with nothing in reach
                             // the press spends the cooldown and launches nothing at all.
                             var mkOut = await Marker(pilot.Position + way * (float)(reach * Vary(1.15f, 1.45f)));
-                            int flying0 = Missiles().Count();
+                            int flying0 = InFlight().Count();
                             pilot.Sl("hunters").Cool = 0;
                             doAbility.Invoke(pilot, new object[] { "hunters", 0 });
                             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-                            int flewNone = Missiles().Count() - flying0;
+                            int flewNone = InFlight().Count() - flying0;
                             // ITS DISTANCE IS READ BEFORE IT IS SUNK: a sunk mark is freed on the
                             // next frame, and the line below is written after that frame.
                             float noneAt = pilot.Position.DistanceTo(mkOut.Position);
                             Sink(mkOut);
                             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                             var mkIn = await Marker(pilot.Position + wide * (float)(reach * Vary(0.40f, 0.85f)));
-                            flying0 = Missiles().Count();
+                            flying0 = InFlight().Count();
                             pilot.Sl("hunters").Cool = 0;
                             doAbility.Invoke(pilot, new object[] { "hunters", 0 });
                             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-                            int flew = Missiles().Count() - flying0;
+                            int flew = InFlight().Count() - flying0;
                             proved = flewNone == 0 && flew >= (int)pilot.Stats["hunter_count"];
                             told = $"{flewNone} away with only a mark at {noneAt:0} u, {flew} away with one at {pilot.Position.DistanceTo(mkIn.Position):0} u";
                             Sink(mkIn);
@@ -5176,7 +5347,7 @@ public partial class _Test : Node
                     if (tVolley < 0 && boss.S("trident").Fired > 0)
                     {
                         tVolley = arenaT;
-                        var big = Missiles().Where(x => x.HostileFire && x.Size == 2f).ToList();
+                        var big = InFlight().Where(x => x.HostileFire && x.Size == 2f).ToList();
                         trident = big.Count;
                         if (big.Count == 3) spread = big.Max(x => x.Dir.Angle()) - big.Min(x => x.Dir.Angle());
                     }
@@ -5309,7 +5480,7 @@ public partial class _Test : Node
             }
             Check(Shot.Intercepted > down0, "point defence shoots the boss's missiles down");
             Check(!H.Raiders.Any(r => r.IsEscort), "point defence, switched on, kills the beam's escorts");
-            var aMissile = Missiles().FirstOrDefault(t => t.HostileFire);
+            var aMissile = InFlight().FirstOrDefault(t => t.HostileFire);
             Check(Turret.PdPriority(boss) == 2 && (aMissile == null || Turret.PdPriority(aMissile) == 0), "point defence takes missiles before anything else");
             var tiny = new TinyTarget();
             Check(Turret.PdPriority(tiny) == 1 && Turret.PdPriority(tiny) < Turret.PdPriority(boss)
@@ -6317,8 +6488,11 @@ public partial class _Test : Node
             Check(homeShip != null && GodotObject.IsInstanceValid(homeShip) && Me == homeShip, "arena guest: the failed tries left its own world and ship alone");
             await Wait(1.0);
             // its own base, plus its shares of two kills with two pilots -- level 1, 2000 x 1.5 / 2 = 1500;
-            // level 2, at the level's scale -- the second made while it was away, but split two ways all the same
-            double want = 12345 + 1500 + 1650;
+            // level 2 at the level's scale, 1500 x 1.025 = 1537.5 -- the second made while it was
+            // away, but split two ways all the same. (The scale is 1.025 a level because a boss
+            // that doubled every seven levels outran any pilot; the step itself is proved against
+            // its own literal where the curve is.)
+            double want = 12345 + 1500 + 1537.5;
             Check(!Hub.InArena && !Net.IsOnline && H.Yard != null && Math.Abs(H.Yard.Credits - want) < 1e-6,
                   $"arena guest: the host gone mid-arena, home offline with its own base and its bounty share ({H.Yard?.Credits:0} of {want:0})");
             // ...AND IT IS ON DISK, in THIS peer's own file. It used to read the host's: every
@@ -6461,7 +6635,7 @@ public partial class _Test : Node
             Check(g != null && g.WingTarget == dummy, "guest's Space order reached the host");
             Check(dummy.Total > 5, $"guest's wing hit the dummy on the host ({dummy.Total:0.0})");
             Check(g != null && g.PdActive, "guest's PD activation reached the host");
-            Check(Missiles().Any(x => !x.Cosmetic) || dummy.Total > 12, "guest's bomber strike launched real torpedoes on the host");
+            Check(InFlight().Any(x => !x.Cosmetic) || dummy.Total > 12, "guest's bomber strike launched real torpedoes on the host");
             // stay up while the guest watches its bombers come home and dock (it checks ~22 s in), and
             // send the hauler on an escort half way through for it to see
             ulong w0 = Time.GetTicksMsec();
@@ -6708,7 +6882,7 @@ public partial class _Test : Node
             Key(global::Godot.Key.Q);              // point defence
             // torpedoes live a couple of seconds; watch for one across the window
             bool sawTorp = false;
-            for (int i = 0; i < 240; i++) { if (Missiles().Any(x => x.Cosmetic)) sawTorp = true; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            for (int i = 0; i < 240; i++) { if (InFlight().Any(x => x.Cosmetic)) sawTorp = true; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
             Check(mine != null && mine.PdActive, "guest sees its PD window running (replicated)");
             Check(sawTorp, "guest sees cosmetic copies of its torpedoes");
             var host = Nodes<PlayerShip>().FirstOrDefault(s => s.OwnerId == 1);

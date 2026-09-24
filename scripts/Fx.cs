@@ -71,7 +71,7 @@ public static class Fx
 {
     // The index IS the id on the wire (Hub.NetFx), so APPEND ONLY.
     public const int Burst = 0, Lost = 1, Rebuilt = 2, Wave = 3, Emp = 4, Echo = 5, Rail = 6,
-                     WarnLane = 7, WarnZone = 8;
+                     WarnLane = 7, WarnZone = 8, AimZone = 9;
     // WHAT A WARNING RIDES: the world itself, or the NetId of the hull it is drawn on. A beam's
     // and a dash's lane are drawn in the BOSS'S OWN FRAME and parented to it, so the line it drew
     // is the line it fires down however the hull turns; everything else is pinned to the ground
@@ -80,6 +80,9 @@ public static class Fx
     // How long a warning stays lit once its attack is over.
     public const double Flash = 0.35;
     private static readonly Color Warning = new(1f, 0.15f, 0.12f);
+    // ...and the same shape from YOUR side. An outpost's missile marks where it will land too, and
+    // a mark in the enemy's red would read as a threat to the pilot watching it.
+    private static readonly Color Friendly = new(0.35f, 0.75f, 1f);
 
     public static readonly FxDef[] All =
     {
@@ -100,6 +103,11 @@ public static class Fx
         // how wide and what it sounds like are the MOVE's, and come with the raise.
         new() { Id = "warn_lane", Shape = FxShape.Lane, Tint = Warning, Warn = true },
         new() { Id = "warn_zone", Shape = FxShape.Zone, Tint = Warning, Warn = true },
+        // ...AND THE SAME ZONE IN YOUR OWN COLOURS: where one of YOUR side's shots will land. It
+        // is drawn and timed exactly as a warning is -- it fills as the shot comes in -- but
+        // nothing of yours is in danger from it, so it must not read red. Missiles.All names it,
+        // and a second friendly telegraph is this row again.
+        new() { Id = "aim_zone",  Shape = FxShape.Zone, Tint = Friendly, Warn = true },
     };
 
     public static FxDef Of(int id) => All[id >= 0 && id < All.Length ? id : Burst];

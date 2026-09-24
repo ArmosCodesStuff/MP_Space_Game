@@ -445,7 +445,7 @@ public partial class _Shots : Node
             Y.Credits = 26000; Y.SetStock("ore", 900); Y.SetStock("salvage", 700);
             Key(global::Godot.Key.B); await W(0.3);
             var bp = N<BasePanel>().First();
-            foreach (var tab in new[] { "MINERS", "SALVAGERS", "HAULER", "REFIT" })
+            foreach (var tab in new[] { "MINERS", "SALVAGERS", "HAULER", "OUTPOSTS", "REFIT" })
             {
                 var tb = N<Button>(bp).First(b => b.Name == "Tab_" + tab);
                 tb.ButtonPressed = true; await W(0.25); await Snap("20_base_" + tab.ToLower());

@@ -68,33 +68,26 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
     public static float HeavyReach => Enemies.Of(Enemies.Gunship).Reach;
     private const float HeavyBoostStop = 300f;          // boosting in, until this close, then at cruise
     // THE MISSILE IS THE ROW'S: EnemyDef.MissileRange / MissileEvery / MissileDamage /
-    // BlastRadius, read through Def. These two are what the rest of the game names by hand -- Hub
-    // draws the telegraph and resolves the blast for every raider alike -- and both are the plain
-    // gunship's figures. The FLIGHT is a const because Hub.ShowHeavyMissile takes it as a default
-    // parameter, which only a compile-time constant can be.
+    // BlastRadius, read through Def. These two are what the rest of the game names by hand, and
+    // both are the plain gunship's figures.
     // TWELVE SECONDS IN THE AIR. It was seven; the owner asked for twelve and about 40% more
     // damage with it, so the answer to a heavy's missile is to be somewhere else when it lands
-    // rather than to tank it. A longer flight is a LONGER GUESS -- PredictSpot carries the target
-    // forward by exactly this, and MaxLead below is derived from it, so both follow the figure
-    // rather than repeating it.
+    // rather than to tank it. A longer flight is a LONGER GUESS, and Missiles.Predict leads by
+    // exactly the flight it is handed, so the figure lives here once and nowhere else.
+    // HOW a predicted missile flies, telegraphs and lands is Missiles.cs, whosever it is: the
+    // outposts throw the same one back (Lanes.cs), which is why none of it is in this file.
     public const double MissileFlight = 12.0;
     public static float BlastRadius => Enemies.Of(Enemies.Gunship).BlastRadius;
     public const float PerimeterR = 1800f, Detect = 2000f, PatrolSpeed = 100f;
-    private const float MaxStep = 50f;                  // more than this in one frame is a jump (a warp), not motion
-    private const float WildSpeed = 400f;               // faster than this is not flying (4x a capital ship)
-    private const float MaxLead = WildSpeed * (float)MissileFlight;   // no sane prediction lands further off
-
-    // Where a heavy's missile aims: the target carried 7 s forward by its velocity -- UNLESS
-    // anything is out of place (a wild speed, a broken number, a spot absurdly far off):
-    // then right at where the target is now.
-    public static Vector2 PredictSpot(Vector2 pos, Vector2 vel)
-    {
-        bool sane = float.IsFinite(vel.X) && float.IsFinite(vel.Y) && vel.Length() <= WildSpeed;
-        var spot = sane ? pos + vel * (float)MissileFlight : pos;
-        return float.IsFinite(spot.X) && float.IsFinite(spot.Y) && spot.DistanceTo(pos) <= MaxLead ? spot : pos;
-    }
     public int Patrol;                                 // 0: on its own
-    private float _orbit;                              // patrols: its angle round the perimeter
+    // WHERE IT WAITS with nothing to fight: a ring of Circuit round Station. The base's own
+    // perimeter, unless its wave row named a place to hold (WaveDef.Hold) -- a blockade sits ON
+    // the lane it is cutting rather than drifting round the base. The host's own bookkeeping, set
+    // at the spawn exactly as Quarry and Agility are; a guest is told where it IS, which is all a
+    // guest needs.
+    public Vector2 Station = Hub.BasePos;
+    public float Circuit = PerimeterR;
+    private float _orbit;                              // patrols: its angle round that ring
     public static float PinRange => Enemies.Of(Enemies.Webifier).Reach;
     // How far out a raider of THIS kind lights its boost: far enough that the burn ends at its
     // post rather than on top of the target.
@@ -143,7 +136,7 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
     public bool Boosting => Net.Sim ? _boostLeft > 0 : (_netFlags & FlagBoost) != 0;
     public float Speed { get; private set; }
     private double _boostLeft, _shot, _missileCd = 2.0;
-    private Vector2 _lastTargetPos; private Vector2 _targetVel;
+    private Lead _lead;                                // what its target is doing (Missiles.cs)
     private Sprite2D _turret;
     private const float TurretPixels = 66f;            // turret_main.png is 66 px across: the ART's figure, not an enemy's
     private bool _boostUsed;
@@ -222,10 +215,9 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
         }
         if (ReferenceEquals(_dark, Target)) _dark = null;
         if (Target == null) { Speed = 0; if (Patrol != 0) Circle(delta); QueueRedraw(); return; }
-        // its target's velocity, from frame to frame -- except a JUMP (a warp; over 50 u in one frame,
-        // 3000 u/s, nothing flies that fast), which would send the predicted missile miles off
-        var moved = Target.Position - _lastTargetPos;
-        _targetVel = dt > 0 && moved.Length() < MaxStep ? moved / dt : Vector2.Zero; _lastTargetPos = Target.Position;
+        // its target's velocity, from frame to frame -- the one tracker every predicted missile in
+        // the game reads (Missiles.Lead), jump filter and all
+        _lead.Watch(Target.Position, delta);
         if (Heavy) { TickHeavy(delta); QueueRedraw(); return; }
 
         if (_shiver > 0)
@@ -293,13 +285,14 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
         return null;
     }
 
-    // a patrol with nothing to do circles the perimeter round the base, together
+    // a patrol with nothing to do circles the ring it was given, together: the perimeter round
+    // the base, or -- for a blockade -- a tight ring on the lane it is holding (Station/Circuit)
     private void Circle(double delta)
     {
         float dt = (float)delta;
-        if (_orbit == 0f) _orbit = (Position - Hub.BasePos).Angle();
-        _orbit += PatrolSpeed / PerimeterR * dt;
-        var spot = Hub.BasePos + Vector2.Right.Rotated(_orbit) * PerimeterR;
+        if (_orbit == 0f) _orbit = (Position - Station).Angle();
+        _orbit += PatrolSpeed / Mathf.Max(1f, Circuit) * dt;
+        var spot = Station + Vector2.Right.Rotated(_orbit) * Circuit;
         var step = spot - Position;
         Position = Position.MoveToward(spot, PatrolSpeed * 1.5f * dt);     // catches its moving spot, at a believable pace
         if (step.Length() > 1f) Rotation = Mathf.LerpAngle(Rotation, Aim.Along(step), Mathf.Clamp(4f * dt, 0f, 1f));
@@ -337,15 +330,17 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
         }
         _missileCd -= delta;
         if (Def.Missiles && _missileCd <= 0 && Position.DistanceTo(Target.Position) <= Def.MissileRange)
-        {   // at where it WILL be: its velocity carried 7 s forward -- from ITS row's reach, on its
-            // row's cadence, for its row's damage
+        {   // at where it WILL be: its velocity carried the whole flight forward -- from ITS row's
+            // reach, on its row's cadence, for its row's damage
             _missileCd = Def.MissileEvery;
             // THE ROW'S DAMAGE, AND NOTHING ELSE. A raider's own hull and guns climb with the
             // level through Strength, but the MISSILE it throws is the same missile at level 40 as
             // at level 1 -- the owner's rule, and the reason a level-40 raid is survivable at all:
             // a blast that scaled with the level would be unavoidable rather than merely heavy.
             // (A boss's projectiles DO scale; that is Missions.Quicken, and it is a boss.)
-            Hub.HeavyMissile(Position, PredictSpot(Target.Position, _targetVel), NetId, Def.MissileDamage);
+            Hub.ThrowMissile(new MissileSpec { Side = Missiles.Raid, Damage = Def.MissileDamage,
+                                              Blast = Def.BlastRadius, Flight = MissileFlight },
+                             Position, Missiles.Predict(Target.Position, _lead.Velocity, MissileFlight), NetId);
         }
     }
 

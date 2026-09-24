@@ -26,6 +26,8 @@ using System.Linq;
 //   Squads        how many groups arrive -- a base, plus SquadsPerPilot for each pilot past the first
 //   Form/Radius/Turn/Alternate   where those groups form up: a ring at a radius, a fan off an
 //                 anchor so many radians a group, or the anchor itself
+//   Hold          the ring each squad holds with nothing to fight, round its OWN spot. 0 -- every
+//                 wave but a blockade -- is the base's perimeter, which is where they always went
 //   Crew          rows of (an enemy named outright OR a way to draw one, how many, where they sit)
 //   HullShare     the share of its row's hull each of them is built with
 //   Strength      where its hull-and-damage multiplier comes from
@@ -46,6 +48,7 @@ public enum WaveTrigger
     Hunt,        // an escort's leg N: hunters sent after one quarry
     Called,      // asked for outright, at a spot, at a strength named on the spot
     Garrison,    // a mission's target defending itself: wave N of ITS own clock (Missions.Kinds)
+    Blockade,    // a lane cut: a squad sitting ON it, holding that spot rather than the base's ring
 }
 
 // WHERE THE SQUADS OF A WAVE FORM UP, measured from the brief's Origin.
@@ -94,6 +97,10 @@ public sealed class WaveDef
     public float Radius;                          // Ring: how far out
     public float Turn;                            // Ring: the ring's own offset. Fan: radians a squad
     public bool Alternate;                        // Fan: odd waves come round the other side
+    // WHERE ITS SQUADS WAIT with nothing to fight: a ring of this radius round the squad's OWN
+    // spot. 0 is the base's perimeter (Raider.PerimeterR), which is what every wave that is not
+    // holding a place wants, so only a blockade fills this in.
+    public float Hold;
     public WaveCrew[] Crew;
     public double HullShare = 1;
     public Func<WaveBrief, double> Strength;      // null: x1
@@ -235,6 +242,25 @@ public static class Waves
         new() { Id = "siege_heavy", Trigger = WaveTrigger.Garrison, When = b => b.Index >= 2,
                 Squads = 1, SquadsPerPilot = 1,
                 Form = WaveForm.Ring, Radius = GarrisonRing, Turn = 0.35f,
+                Strength = b => Missions.S(b.Level),
+                Crew = new[] { Patrol[0], Patrol[1],
+                               Named(Enemies.Gunship, _ => 1, new Vector2(0f, 160f), Vector2.Zero) } },
+
+        // A BLOCKADE -- the plain squad, sitting ON a lane 80% of the way out (Lanes.Stand) and
+        // holding a tight ring THERE rather than the perimeter round the base. That is the whole
+        // difference between a blockade and a patrol, and it is one field. At the base owner's own
+        // standing on the bounty ladder, because what a blockade costs is that base's income.
+        new() { Id = "blockade", Trigger = WaveTrigger.Blockade,
+                Squads = 1, SquadsPerPilot = 1,
+                Form = WaveForm.Spot, Hold = Lanes.Ring,
+                Strength = b => Missions.S(b.Level),
+                Crew = Patrol },
+
+        // ...AND FROM THE THIRD ONE a gunship holds the lane with them: a late blockade is what
+        // the outposts' own guns are bought for.
+        new() { Id = "blockade_heavy", Trigger = WaveTrigger.Blockade, When = b => b.Index >= 2,
+                Squads = 1, SquadsPerPilot = 1,
+                Form = WaveForm.Spot, Hold = Lanes.Ring,
                 Strength = b => Missions.S(b.Level),
                 Crew = new[] { Patrol[0], Patrol[1],
                                Named(Enemies.Gunship, _ => 1, new Vector2(0f, 160f), Vector2.Zero) } },

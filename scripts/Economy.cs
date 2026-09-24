@@ -83,10 +83,11 @@ public static class Economy
         public bool OwnerOnly;                       // the base owner's alone to buy: a guest's request is refused
     }
 
-    // The tabs of the BASE window, in order: one per gatherer row, then the hauler's. A guest is
-    // sent each tab's investment in this order (Yard.NetTotals), so the window follows the table.
+    // The tabs of the BASE window, in order: one per gatherer row, then the hauler's, then the
+    // outposts' guns (Lanes.cs). A guest is sent each tab's investment in this order
+    // (Yard.NetTotals), so the window follows the table. APPEND ONLY.
     public const string HaulerTab = "HAULER";
-    public static readonly string[] Tabs = Gathering.All.Select(d => d.Tab).Append(HaulerTab).ToArray();
+    public static readonly string[] Tabs = Gathering.All.Select(d => d.Tab).Append(HaulerTab).Append(Lanes.Tab).ToArray();
 
     // EVERY GATHERER HAS THE SAME FIVE ROWS: one more ship, a bigger hold, faster engines, a
     // faster beam, more hull. They were written out TWICE -- same kind, same price, same growth,
@@ -120,11 +121,23 @@ public static class Economy
         new() { Id = "hauler_pd_damage",Tab = "HAULER",    Kind = Kind.Percent, Name = "Hauler point defence", BaseValue = HaulerPdDamage, Unit = "per shot", BaseCost = 200, Per = 0.05, Blurb = "+5% damage per level" },
     };
 
-    // Every gatherer's five rows in table order, then the hauler's. THE ORDER IS THE WIRE: a guest
-    // is sent the levels as an array indexed by position (Yard.NetTotals), so adding a gatherer
-    // adds five rows before the hauler's -- which is why both peers must be on the same build, and
-    // Net's fingerprint is what makes sure of it.
-    public static readonly Upgrade[] All = Gathering.All.SelectMany(Rows).Concat(HaulerRows).ToArray();
+    // THE OUTPOSTS' GUNS: ONE SET OF ROWS FOR ALL OF THEM, as deploy_* is one set for every turret
+    // a freighter leaves out -- so a fifth lane arrives with its gun already upgradeable and no row
+    // is added here. The base numbers are the guns' own (Lanes), exactly as a gatherer's five rows
+    // take theirs from its row. The owner asked for three: range, rate of fire, missile speed.
+    // (RATE is missiles a MINUTE so a +10% row can climb; the gun divides 60 by it.)
+    private static readonly Upgrade[] LaneRows =
+    {
+        new() { Id = Lanes.RangeId, Tab = Lanes.Tab, Kind = Kind.Percent, Name = "Outpost missile range", BaseValue = Lanes.GunRange, Unit = "u",    BaseCost = 300, Blurb = "+10% reach on every outpost" },
+        new() { Id = Lanes.RateId,  Tab = Lanes.Tab, Kind = Kind.Percent, Name = "Outpost rate of fire",  BaseValue = Lanes.GunRate,  Unit = "/min", BaseCost = 300, Blurb = "+10% missiles a minute" },
+        new() { Id = Lanes.SpeedId, Tab = Lanes.Tab, Kind = Kind.Percent, Name = "Outpost missile speed", BaseValue = Lanes.GunSpeed, Unit = "u/s",  BaseCost = 300, Blurb = "+10% speed: less time to move off the mark" },
+    };
+
+    // Every gatherer's five rows in table order, then the hauler's, then the outposts'. THE ORDER
+    // IS THE WIRE: a guest is sent the levels as an array indexed by position (Yard.NetTotals), so
+    // adding a gatherer adds five rows before the hauler's -- which is why both peers must be on
+    // the same build, and Net's fingerprint is what makes sure of it. APPEND ONLY.
+    public static readonly Upgrade[] All = Gathering.All.SelectMany(Rows).Concat(HaulerRows).Concat(LaneRows).ToArray();
 
     public static Upgrade ById(string id) { foreach (var u in All) if (u.Id == id) return u; return null; }
 

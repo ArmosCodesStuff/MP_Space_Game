@@ -1,7 +1,7 @@
 using Godot;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// THE HUB'S PLAIN NODES — the seven small classes that hang off the world and touch none of its
+// THE HUB'S PLAIN NODES — the six small classes that hang off the world and touch none of its
 // state. Cut out of the end of Hub.cs, unchanged: they read only what Hub already publishes
 // (MyShip, Flashes, Mission, MissionT, MissionPortalPos) or nothing at all, so they never had a
 // reason to sit in the world host's file.
@@ -157,27 +157,5 @@ public partial class MissionBar : Node2D
         DrawRect(new Rect2(at - new Vector2(W / 2, H / 2), new Vector2(W * k, H)), new Color(1f, 0.4f, 0.3f, 0.95f));
         DrawRect(new Rect2(at - new Vector2(W / 2, H / 2), new Vector2(W, H)), new Color(1f, 0.6f, 0.5f), false, 1.5f);
         Txt.Centre(this, ThemeDB.FallbackFont, at + new Vector2(0, -16), "OPENING PORTAL", Txt.Size(14), new Color(1f, 0.7f, 0.6f));
-    }
-}
-
-// The heavy's fat missile, drawn flying straight to its marked point (the host lands the blast).
-public partial class HeavyMissileVisual : Node2D
-{
-    public Vector2 From, To; public double Flight;
-    private double _t;
-    public override void _Ready() { Position = From; Rotation = Aim.Face(From, To); ZIndex = 6; }
-    public override void _Process(double delta)
-    {
-        _t += delta;
-        Position = From.Lerp(To, (float)System.Math.Min(1, _t / Flight));
-        if (_t >= Flight) { Fx.Raise(Fx.Burst, To, Raider.BlastRadius * 0.8f); QueueFree(); }
-        QueueRedraw();
-    }
-    public override void _Draw()
-    {   // fat: wider and longer than the player's missile
-        var body = new Color(0.45f, 0.30f, 0.28f);
-        DrawRect(new Rect2(-5f, -16f, 10f, 34f), body);
-        DrawColoredPolygon(new[] { new Vector2(-5f, -16f), new Vector2(0, -25f), new Vector2(5f, -16f) }, new Color(1f, 0.3f, 0.25f));
-        DrawCircle(new Vector2(0, 19f), 4.2f, new Color(1f, 0.6f, 0.3f));
     }
 }

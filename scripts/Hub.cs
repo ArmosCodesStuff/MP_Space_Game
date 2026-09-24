@@ -458,6 +458,11 @@ public partial class Hub : Node2D
             AddChild(o);
             AddChild(new WorldLabel { Text = "OUTPOST " + name, Position = at + new Vector2(0, OutpostHeight / 2 + 16), ZIndex = 2 });
         }
+        // THE LANES BETWEEN THEM AND THE BASE -- their couriers and their guns, by row (Lanes.cs).
+        // Permanent and deterministic like the outposts themselves, so nothing here is replicated
+        // either: what IS decided about a lane is whether it is CUT, and every peer works that out
+        // from the raiders it already holds.
+        Lanes.Build(this);
 
         Portal = new Portal { Position = PortalPos, Name = "Portal" };
         AddChild(Portal);
@@ -1097,6 +1102,7 @@ public partial class Hub : Node2D
     public void HuntWave(Node2D quarry, int wave) => _raids.Hunt(quarry, wave);
     public void GarrisonWave(Vector2 at, int wave) => _raids.Garrison(Missions.Level, at, wave);
     public void CallOff(Node2D quarry) => _raids.CallOff(quarry);
+    public void Blockade(int lane) => _raids.Blockade(lane);
 
     // ── HOST-SPAWNED, REPLICATED: ONE MECHANIC (Spawned.cs) ──────────────────
     // Raiders and the turrets the freighters leave out were the same six methods written twice --
@@ -1196,22 +1202,30 @@ public partial class Hub : Node2D
         foreach (var s in _ships.Values) if (IsInstanceValid(s)) s.Forget(h);
     }
 
-    // A heavy's missile: flies 7 s to a marked point, and the host lands the blast there.
-    private readonly List<(Vector2 at, double left, int from, double damage)> _blasts = new();
+    // ── A PREDICTED MISSILE, WHOSEVER IT IS (Missiles.cs) ───────────────────
+    // The heavy fighter's was the only one in the game and this was written for it alone: the
+    // tuple's third field was a RAIDER id, the blast was resolved against RaiderTargets() only and
+    // landed through IRaidTarget.Hit only, and the flight, the blast and the telegraph's colour
+    // were read straight off Raider. The outposts answer a blockade with the same missile from the
+    // other side (Lanes.cs), so WHOSE it is is a row of Missiles.All and its numbers are the
+    // launcher's own spec. Nothing below names a raider or an outpost.
+    private readonly List<(Vector2 at, double left, int from, MissileSpec shot)> _blasts = new();
     public int BlastsPending => _blasts.Count;
-    public void HeavyMissile(Vector2 from, Vector2 at, int raiderId, double damage)
+    public void ThrowMissile(MissileSpec m, Vector2 from, Vector2 at, int fromId)
     {
         if (!Net.IsHost) return;
-        _blasts.Add((at, Raider.MissileFlight, raiderId, damage));
-        // the circle it marks, as every warning is marked: a row of Fx.All, on every peer
-        Fx.Warn(new FxRaise { Id = Fx.WarnZone, At = at, To = at, Size = Raider.BlastRadius, Time = Raider.MissileFlight });
-        ShowHeavyMissile(from, at);
-        ToWorld(nameof(NetHeavyMissile), from, at);
+        _blasts.Add((at, m.Flight, fromId, m));
+        // the circle it marks, as every warning is marked: a row of Fx.All, on every peer -- red
+        // for a threat, the friendly shape for one of ours
+        Fx.Warn(new FxRaise { Id = Missiles.Of(m.Side).Mark, At = at, To = at, Size = m.Blast, Time = m.Flight });
+        ShowMissile(m.Side, from, at, m.Flight, m.Blast);
+        ToWorld(nameof(NetMissile), m.Side, from, at, m.Flight, m.Blast);
     }
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetHeavyMissile(Vector2 from, Vector2 at) => ShowHeavyMissile(from, at, Net.Arriving(Raider.MissileFlight));
-    private void ShowHeavyMissile(Vector2 from, Vector2 at, double flight = Raider.MissileFlight) =>
-        AddChild(new HeavyMissileVisual { From = from, To = at, Flight = flight });
+    private void NetMissile(int side, Vector2 from, Vector2 at, double flight, float blast) =>
+        ShowMissile(side, from, at, Net.Arriving(flight), blast);
+    private void ShowMissile(int side, Vector2 from, Vector2 at, double flight, float blast) =>
+        AddChild(new MissileVisual { Side = side, From = from, To = at, Flight = flight, Blast = blast });
     private void TickBlasts(double delta)
     {
         for (int i = _blasts.Count - 1; i >= 0; i--)
@@ -1219,8 +1233,14 @@ public partial class Hub : Node2D
             var b = _blasts[i]; b.left -= delta;
             if (b.left > 0) { _blasts[i] = b; continue; }
             _blasts.RemoveAt(i);
-            foreach (var t in RaiderTargets().ToList())
-                if (Raider.Gap(b.at, t) <= Raider.BlastRadius) (t as IRaidTarget)?.Hit(b.damage, b.at, $"heavy:{b.from}:missile");
+            // WHAT IT MAY CATCH is its row's: a pool to look through and a TargetFilter over it,
+            // never a type test. The row's id is the FAMILY the blow belongs to and the launcher's
+            // own id is added to it, so two of them are never mistaken for one source
+            // (PlayerShip.Incoming) -- "heavy:1042:missile", exactly the name it always had.
+            var side = Missiles.Of(b.shot.Side);
+            foreach (var t in side.Pool(this).ToList())
+                if (side.Prey.Allows(t) && Raider.Gap(b.at, t) <= b.shot.Blast)
+                    side.Land(t, b.shot.Damage, b.at, $"{side.Id}:{b.from}:missile");
         }
     }
 
@@ -1496,7 +1516,9 @@ public partial class Hub : Node2D
             // puts its own stock on the line without an edit here.
             : string.Join("    ", Gathering.All.Select(g => $"{g.Unit.ToUpperInvariant()} {Yard.Stock(g.Resource):0}"))
               + $"    CREDITS {Yard.Credits:0}"
-              + $"    HAULER {Yard.Hauler.Cargo:0}/{Yard.Capacity:0} {Yard.Hauler.State.ToString().ToUpperInvariant()}";
+              + $"    HAULER {Yard.Hauler.Cargo:0}/{Yard.Capacity:0} {Yard.Hauler.State.ToString().ToUpperInvariant()}"
+              // ...and the lanes, but only while one of them is cut: a full flow is the usual state
+              + Lanes.Readout(this);
         Ui.SetText(_hud, place + ship
                   + (Net.IsOnline ? (Net.IsHost ? $"        HOSTING ({_ships.Count})" : $"        GUEST ({_ships.Count})")
                      : Net.I == null ? "        OFFLINE"
