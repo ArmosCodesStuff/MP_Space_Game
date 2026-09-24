@@ -418,6 +418,35 @@ Unreleased. Nothing is outstanding from the batch of 2026-09-23.)*
 
 ## Unreleased
 
+### The sky goes the way the world goes, and has no edge; the Drake backs off before it throws (2026-09-24, in the WarShips_Version_L fork)
+
+**The sky slid the wrong way.** Players found the parallax disorienting, and it was: every layer
+moved WITH the ship while the world moved against it, so the stars seemed to swing round the
+hull. The sky lives on a `CanvasLayer`, which is screen space, and its offset was written as if
+it were world space (`+(1 - Drift)` x the camera). `SkyPlane` (replacing `Parallax2D`, whose
+repeat had the same trouble) now sits at `-Drift` x the camera: the world's own direction, at the
+row's share of its speed.
+
+**The dark wedges were the edge of the sky.** A plane moved with the camera and drew a fixed
+region, so far enough out the region slid off the screen and its corners showed through as large
+dark triangles. The region now re-centres on the whole tile under the middle of the screen --
+moving a tiled region by whole tiles changes nothing anyone can see -- so there is no edge at any
+distance, and the plane's own position stays continuous for a check to read.
+
+**The check that let it through measured distance, not direction.** It now hops the ship 200 u
+in a seeded direction and requires every layer to move within 3 degrees of a point fixed in the
+world, by its own share; and it puts the ship 32 000 - 80 000 u out, in a seeded direction, and
+requires every corner of the screen to be inside what each layer draws.
+
+**The Drake's asteroid throw starts with a warp back.** It used to start from wherever it
+stood, often inside the pilot's face, where an 1800 u lane is not a threat anyone can answer. It
+now warps to 1300 u on its own side of its target first (the shotgun's own `Warp`/`Standoff`
+fields -- a row, not a new move), and the rock flies in 1.2 s instead of 1.6, a third faster; the
+7.5 s of red lane is unchanged. `Boss.Open` now calls `Aimed` after a warp: every opener before
+this aimed down the nose, so nothing noticed it was skipped, and the first move with both a warp
+and a thrown body got a lane between the warp's leftover coordinates and no rock at all. The
+shotgun still comes 11 s after each throw starts, clear of its 9.7 s.
+
 ### The launcher is gone (2026-09-24, in the WarShips_Version_L fork)
 
 **Deleted, not moved.** `launcher/` (3 files, 417 lines) and `scripts/Builds.cs` (the
@@ -580,7 +609,7 @@ moving at all was the speed readout.
 
 **`scripts/Sky.cs` is new: a layer is a row.** `SkyLayer{Id, Texture, Drift, Scale, Tint, Spin, Z}`
 and three rows -- far, mid, near -- at 0.08, 0.22 and 0.45 of the world's motion. `Sky.Build`
-makes one `Parallax2D` per row and nothing else; the eight lines in `Hub._Ready` are gone. A
+makes one `SkyPlane` per row and nothing else; the eight lines in `Hub._Ready` are gone. A
 nebula, a dust band or a debris field is a row here and nothing in `Hub` changes for it.
 
 **Zero new art.** All three rows draw `stars.png`; what makes them read as distance is `Scale`
@@ -588,24 +617,13 @@ nebula, a dust band or a debris field is a row here and nothing in `Hub` changes
 further out) and `Spin` (0 / 17 / 41 degrees, so two rows sharing one texture never line up and
 read as a single grid sliding over itself).
 
-**`Drift` is written in the player's terms, and converted once.** The engine's `ScrollScale` is
-the INVERSE of what it sounds like: 1 means "follows the camera exactly", which is a layer that
-never appears to move at all. A table written in engine terms is a table every future row gets
-written backwards from. So the row says what a player sees -- 0.08 is "drifts at eight percent of
-the world" -- and `Sky.Build` does `ScrollScale = 1 - Drift` on one line.
+**`Drift` is written in the player's terms**: 0.08 is "drifts at eight percent of the world".
 
 **Checks:** the rows against literals and strictly ordered far to near, every drift above 0 (a 0
 is the static sky this replaced) and below 0.6 (past which stars read as debris rather than
-distance), each layer's repeat carrying its own scale, and the one that would have caught the
-original bug -- move the ship and read where each layer is actually DRAWN. Measured: 7.5, 20.6 and
-42.2 u of screen travel over drifts of 0.08, 0.22 and 0.45, which divide out to the same camera
-distance within 0.2%, so the check proves the numbers and not merely their order.
-
-**Two wrong measurements before the right one.** `Parallax2D.ScreenOffset` is the RAW camera
-offset and reads identically on every layer -- it said all three moved 4000 u, a green-looking
-number that proved nothing. And a layer REPEATS, so its drawn origin jumps by whole tiles as it
-re-tiles: over 4000 u every layer wrapped several times and the readings came back as noise around
-the raw distance (4243 / 4144 / 4350). The hop is 200 u now, under the smallest tile's 563.
+distance), each plane tiled at its own scale and angle, and the one that would have caught the
+original bug -- move the ship and read where each layer is actually DRAWN, by its own row's share.
+The direction and the far-out edge are the next entry's.
 
 ### A launcher, and a build that can replace itself from a source of truth (2026-09-23, in the WarShips_Version_L fork)
 

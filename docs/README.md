@@ -70,7 +70,7 @@ in the other -- give each its own character first, they share one save folder.
 
 **There is no runnable file in the repo itself and there is not meant to be** -- no `.exe`, no
 `.pck`, `dist\` gitignored. A release is an OUTPUT (see Releasing). Godot is found by
-`toolsind-godot.ps1`, which reads `$env:WARSHIPS_GODOT` and a gitignored `local.config.ps1`,
+`tools\find-godot.ps1`, which reads `$env:WARSHIPS_GODOT` and a gitignored `local.config.ps1`,
 so your engine path survives a pull.
 
 **Someone who only wants to play needs none of this.** Point them at the repo: download the ZIP,
@@ -192,7 +192,7 @@ validated against the numbers the Linux originals produce:
     powershell -ExecutionPolicy Bypass -File tools\screens\run.ps1
     powershell -ExecutionPolicy Bypass -File tools\snapshot.ps1              # rebuild version\CODE_SNAPSHOT.txt
     powershell -ExecutionPolicy Bypass -File tools\make_ships.ps1            # regenerate every ship and turret sprite from art_source\ (-Preview <png>)
-    powershell -ExecutionPolicy Bypass -File toolsinish_ships.ps1 -In x.png -Out x.png -Bevel 110 -LineShade 0.6 -Light 0.9 -Scale 2 -Detail 120
+    powershell -ExecutionPolicy Bypass -File tools\finish_ships.ps1 -In x.png -Out x.png -Bevel 110 -LineShade 0.6 -Light 0.9 -Scale 2 -Detail 120
                                                                              # shade a hull (lit metal), 2x it, and draw seams, rivets and grain into it
     python tools\make_sounds.py                                              # regenerate the bosses' special-move sounds in sfx\
 

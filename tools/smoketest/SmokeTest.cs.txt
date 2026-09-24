@@ -1417,7 +1417,7 @@ public partial class _Test : Node
     async Task SkyChecks()
     {
         var sky = H.GetNodeOrNull<CanvasLayer>("Stars");
-        var layers = sky == null ? new List<Parallax2D>() : Nodes<Parallax2D>(sky).ToList();
+        var layers = sky == null ? new List<SkyPlane>() : Nodes<SkyPlane>(sky).ToList();
         Check(sky != null && sky.Layer == -100 && layers.Count == Sky.All.Length && Sky.All.Length == 3
               && layers.Select(l => l.Name.ToString()).SequenceEqual(Sky.All.Select(r => "Sky_" + r.Id)),
               $"the sky is a layer per row, all of it behind the world ({layers.Count} of {Sky.All.Length} rows on layer {sky?.Layer})");
@@ -1432,38 +1432,43 @@ public partial class _Test : Node
               && Math.Abs(Sky.All[0].Drift - 0.08f) < 1e-6 && Math.Abs(Sky.All[Sky.All.Length - 1].Drift - 0.45f) < 1e-6,
               $"every layer moves and none keeps up: {string.Join(" < ", Sky.All.Select(r => r.Drift.ToString("0.00")))} of the world's motion, ordered far to near");
 
-        // A ROW'S SCALE REACHES ITS REPEAT. RepeatSize is the tile's DRAWN size, so a row whose
-        // scale is not in it seams mid-tile and the whole field visibly steps as it crosses.
+        // A ROW'S LOOK REACHES ITS PLANE: tiled, at its own scale and its own angle. A plane that is
+        // not tiled shows one copy of stars.png and then nothing; one at the wrong scale or angle
+        // lines up with its neighbour and reads as one grid sliding over itself.
         bool tiles = true;
         for (int i = 0; i < layers.Count; i++)
         {
             var row = Sky.All[i];
-            var art = Nodes<Sprite2D>(layers[i]).FirstOrDefault();
-            if (art?.Texture == null) { tiles = false; break; }
-            if (Math.Abs(layers[i].RepeatSize.X - art.Texture.GetWidth() * row.Scale) > 0.5f) tiles = false;
-            // ...and the row's Drift reaches the engine as its INVERSE, which is the one place
-            // the two senses meet and the one place a future row can be silently reversed.
-            if (Math.Abs(layers[i].ScrollScale.X - (1f - row.Drift)) > 1e-6) tiles = false;
-            if (Math.Abs(art.Scale.X - row.Scale) > 1e-6) tiles = false;
+            if (layers[i].Art == null) { tiles = false; break; }
+            if (layers[i].TextureRepeat != CanvasItem.TextureRepeatEnum.Enabled) tiles = false;
+            if (Math.Abs(layers[i].Scale.X - row.Scale) > 1e-6) tiles = false;
+            if (Math.Abs(layers[i].RotationDegrees - row.Spin) > 1e-3) tiles = false;
         }
         Check(tiles && layers.Count > 0,
-              $"each layer repeats at its own drawn size and scrolls at its own row's rate ({layers.Count} layers)");
+              $"each layer draws its own art, tiled, at its own scale and angle ({layers.Count} layers)");
 
-        // AND IT MOVES. The camera goes a long way sideways; every layer must shift, and a NEARER
-        // one must shift further than the one behind it. This is the check the old sky failed.
-        // MEASURED WHERE IT IS DRAWN. Parallax2D.ScreenOffset is the RAW camera offset and reads
-        // the same on every layer -- measuring it said all three moved 4000 u and proved nothing.
-        // The transform-with-canvas is where the art actually lands on the screen.
-        var art0 = layers.Select(l => Nodes<Sprite2D>(l).FirstOrDefault()).ToList();
-        // ...AND MEASURED OVER A SHORT HOP. A layer REPEATS, so its origin jumps by whole tiles as
-        // it re-tiles: the smallest tile here is 563 u (1024 px of stars.png at the far row's
-        // 0.55), and a 4000 u move wrapped every layer several times, which read as 4243 / 4144 /
-        // 4350 -- noise around the raw distance, telling us nothing. 200 u wraps nothing.
+        // AND IT MOVES THE WAY THE WORLD DOES. The ship hops 200 u in a direction drawn from the
+        // seed; every layer must shift on screen, a NEARER one further than the one behind it, each
+        // by its own row's share -- and every one of them the SAME WAY as a point fixed in the
+        // world. Measuring only how FAR each layer moved was the hole the reversed sky went
+        // through: a sky sliding with the ship reads as the stars swinging round it, and an
+        // absolute distance passes that happily. Measured where it is DRAWN, as a screen vector.
+        // A plane's origin is continuous (the region re-centres by whole tiles; the plane never
+        // jumps), so any hop reads true.
+        var hop = Vector2.Right.Rotated(VaryAngle()) * 200f;
+        var fixedPoint = Me.Position + hop.Normalized() * 600f;
+        Vector2 OnScreen(Vector2 w) => H.GetViewport().GetCanvasTransform() * w;
+        var markBefore = OnScreen(fixedPoint);
         var wasAt = Me.Position;
-        var before = art0.Select(a2 => a2 == null ? 0f : a2.GetGlobalTransformWithCanvas().Origin.X).ToList();
-        Me.Position = wasAt + new Vector2(200, 0);
+        var before = layers.Select(l => l.GetGlobalTransformWithCanvas().Origin).ToList();
+        Me.Position = wasAt + hop;
         for (int f = 0; f < 6; f++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-        var moved = art0.Select((a2, i) => a2 == null ? 0f : Math.Abs(a2.GetGlobalTransformWithCanvas().Origin.X - before[i])).ToList();
+        var shift = layers.Select((l, i) => l.GetGlobalTransformWithCanvas().Origin - before[i]).ToList();
+        var moved = shift.Select(d => (double)d.Length()).ToList();
+        var worldWent = OnScreen(fixedPoint) - markBefore;
+        // within 3 degrees of the world's own direction on screen, every layer
+        var off = shift.Select(d => d.Length() < 0.01f ? 0f : Mathf.RadToDeg(Mathf.Abs(d.AngleTo(worldWent)))).ToList();
+        bool sameWay = worldWent.Length() > 1f && off.All(a2 => a2 < 3f);
         bool anyMoved = moved.Any(d => d > 1f);
         bool deeper = true;
         for (int i = 1; i < moved.Count; i++) if (moved[i] <= moved[i - 1]) deeper = false;
@@ -1476,8 +1481,25 @@ public partial class _Test : Node
             if (Math.Abs(moved[i] / Sky.All[i].Drift - unit) > unit * 0.05) byShare = false;
         Me.Position = wasAt;
         await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-        Check(anyMoved && deeper && byShare,
-              $"200 u of ship moves every layer on screen, each nearer one further than the one behind it, and each by its own row's share ({string.Join(", ", moved.Select(d => d.ToString("0.0")))} u over {string.Join(", ", Sky.All.Select(r => r.Drift.ToString("0.00")))})");
+        Check(anyMoved && deeper && byShare && sameWay,
+              $"200 u of ship at {Mathf.RadToDeg(hop.Angle()):0} deg moves every layer THE WAY THE WORLD GOES (off by {string.Join(", ", off.Select(a2 => a2.ToString("0.0")))} deg), each nearer one further than the one behind it, and each by its own row's share ({string.Join(", ", moved.Select(d => d.ToString("0.0")))} u over {string.Join(", ", Sky.All.Select(r => r.Drift.ToString("0.00")))})");
+
+        // NO EDGE, HOWEVER FAR OUT. Far from the origin the old plane had moved off its own drawn
+        // region, and the corners of the screen showed through as large dark wedges. Tens of
+        // thousands of units out, in a direction drawn from the seed, every corner of the screen
+        // must land inside what each layer actually draws.
+        var farAt = VaryNear(wasAt, 80000f);
+        Me.Position = farAt; Me.Velocity = Vector2.Zero;
+        for (int f = 0; f < 4; f++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        var screen = layers.Count > 0 ? layers[0].GetViewportRect() : new Rect2();
+        var corners = new[] { screen.Position, screen.Position + new Vector2(screen.Size.X, 0),
+                              screen.Position + new Vector2(0, screen.Size.Y), screen.End };
+        var bare = layers.Where(l => corners.Any(c => !l.Drawn.HasPoint(l.Transform.AffineInverse() * c)))
+                         .Select(l => l.Name.ToString()).ToList();
+        Me.Position = wasAt;
+        for (int f = 0; f < 4; f++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        Check(layers.Count > 0 && screen.Size.X > 0 && bare.Count == 0,
+              $"{farAt.DistanceTo(wasAt):0} u out, the whole screen is inside every layer's drawn stars ({(bare.Count == 0 ? "none bare" : "bare: " + string.Join(", ", bare))})");
     }
 
     // ── THE SOFT TUTORIAL: a card at a time, CONTINUE, and SKIP in the top right ────────────────
@@ -5443,7 +5465,8 @@ public partial class _Test : Node
                 // The 310 u it is held at is the clearance the row's comment sets out: the hull's
                 // own half-width, the body, and a 40 u gap -- 90 + 180 + 40.
                 Check(th.Way == MoveWay.Throw && th.Every == 30 && th.First == 6.0 && th.Windup == 7.5
-                      && th.Flight == 1.6 && th.Damage == 250 && th.Reach == 1800f && th.Width == 0f
+                      && th.Flight == 1.2 && th.Damage == 250 && th.Reach == 1800f && th.Width == 0f
+                      && th.Warp == 1.0 && th.Standoff == 1300f && th.WarpSound == "drake_warp"
                       && th.Radius == 180f && th.Offset == 310f
                       && th.Offset == Missions.Bosses[1].HalfWidth + th.Radius + 40f && th.Busy && th.Super
                       && th.Waits == MoveWait.Everything && th.Cue == "drake_tractor" && th.Strike == "drake_throw",
@@ -5845,11 +5868,12 @@ public partial class _Test : Node
                 if (dk != null)
                 {
                     // ITS CLOCKS: a throw every 30 s from 6 s, the shotgun every 15 s from 17 s -- 11 s after a
-                    // throw starts, clear of its 9.1 s (7.5 s of warning and 1.6 s of flight), so the two never
-                    // run back to back (at the trident's own 13.5 s it fell inside the first throw)
+                    // throw starts, clear of its 9.7 s (1 s of warp, 7.5 s of warning, 1.2 s of flight), so the
+                    // two never run back to back (at the trident's own 13.5 s it fell inside the first throw).
+                    // The warp is what makes this tight: the throw grew a phase and 11 s now clears it by 1.3.
                     double gap = dk.S("shotgun").Due - dk.S("throw").Due;
-                    Check(Math.Abs(gap - 11) < 1e-6 && 11 > 7.5 + 1.6 && 30 - 11 - 15 > 0,
-                          $"its specials never run back to back: the shotgun 11 s after each throw starts, clear of the throw's 9.1 s ({gap:0.00} s)");
+                    Check(Math.Abs(gap - 11) < 1e-6 && 11 > 1.0 + 7.5 + 1.2 && 30 - 11 - 15 > 0,
+                          $"its specials never run back to back: the shotgun 11 s after each throw starts, clear of the throw's 9.7 s ({gap:0.00} s)");
                     // its own clocks out of the way: each special below is started by hand, alone
                     dk.S("throw").Due = 999.0; dk.S("shotgun").Due = 999.0;
                     // MAIN GUN: a slow shell every 2.5 s (2.4 DPS at 6 a shell), dodged by moving
@@ -5922,8 +5946,15 @@ public partial class _Test : Node
                     for (int i = 0; i < 60 * 6 && dk.Locked; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                     me3.Position = dk.Position + new Vector2(0, 700); me3.Velocity = Vector2.Zero;
                     await Wait(0.2);
+                    float beforeWarp = dk.Position.DistanceTo(me3.Position);
                     dk.S("throw").Due = 0.01;
-                    for (int i = 0; i < 60 && dk.Rock == null; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                    // IT WARPS FIRST, so nothing may be sampled until that is over. The hull is
+                    // still TRAVELLING during Phase.Opening -- reading its position then put the
+                    // rock 424 u from a boss that was 313 u from it a moment later. Wait for
+                    // Winding, exactly as the shotgun's own check does, and everything holds still.
+                    for (int i = 0; i < 60 * 5 && dk.S("throw").At != Boss.Phase.Winding; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                    float afterWarp = dk.Position.DistanceTo(me3.Position);
+                    for (int i = 0; i < 60 * 2 && dk.Rock == null; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                     var rock = dk.Rock;
                     // FOUND BY THE BODY IT IS WARNING ABOUT: the lane this move raises is twice
                     // the rock's radius at this level, which is the whole point of not writing a
@@ -5943,12 +5974,18 @@ public partial class _Test : Node
                     bool clearsHull = rockAt.DistanceTo(drakeAt) - heave.Radius > dk.HalfWidth;
                     Check(rock != null && lane != null && Math.Abs(lane.Time - heave.Windup) < 1e-3 && Math.Abs(lane.Hold - heave.Flight) < 1e-3
                           && Math.Abs(rockAt.DistanceTo(drakeAt) - heave.Offset) < 1.5 && heave.Offset > 310f && clearsHull
+                          // IT BACKED OFF FIRST: 700 u away when the throw was called, its own
+                          // standoff away when the wind-up began, and further than it started.
+                          && Math.Abs(afterWarp - heave.Standoff) < 8 && afterWarp > beforeWarp
                           && Math.Abs(rock.Radius - heave.Radius) < 1e-3 && Math.Abs(lane.Radius - heave.Radius * 2f) < 0.5f
                           && heldRock && dk.S("throw").Fired == 1,
-                          $"the throw: a {heave.Radius:0} u rock beside it in its tractor ({heave.Offset:0} u off, clear of a {dk.HalfWidth:0} u flank), a lane of its own width ({lane?.Radius:0} u) for {heave.Windup:0.00} s then {heave.Flight:0.00} s of flight, the boss and the rock held still ({rockAt.DistanceTo(drakeAt):0} u, lane {lane?.Time:0.00} s), counted once ({dk.S("throw").Fired})");
+                          $"the throw: it backs off from {beforeWarp:0} u to {afterWarp:0} u, then a {heave.Radius:0} u rock beside it in its tractor ({heave.Offset:0} u off, clear of a {dk.HalfWidth:0} u flank), a lane of its own width ({lane?.Radius:0} u) for {heave.Windup:0.00} s then {heave.Flight:0.00} s of flight, the boss and the rock held still ({rockAt.DistanceTo(drakeAt):0} u, lane {lane?.Time:0.00} s), counted once ({dk.S("throw").Fired})");
                     for (int i = 0; i < 60 * 6 && rock != null && GodotObject.IsInstanceValid(rock) && !rock.Thrown; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                     var lane0 = rock?.From ?? Vector2.Zero; float laneLen = rock == null ? 1 : rock.From.DistanceTo(rock.To);
-                    await Wait(0.8);
+                    // HALF OF THIS FLIGHT, not a fixed 0.8 s. The wait was written when the flight
+                    // was 1.58 s; at 1.19 it sampled 0.67 of the way through, and the cube ease
+                    // turned that into 0.30 of the lane against an expected 0.125.
+                    await Wait(heave.Flight / 2);
                     double half = rock != null && GodotObject.IsInstanceValid(rock) ? rock.Position.DistanceTo(lane0) / laneLen : -1;
                     bool broke = false;
                     for (int i = 0; i < 60 * 3 && rock != null && GodotObject.IsInstanceValid(rock); i++) { broke |= rock.Done; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }

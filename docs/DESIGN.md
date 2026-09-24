@@ -1368,22 +1368,23 @@ in a minute. Gating it for real needs a service in front of the download that th
 instead of asking GitHub -- the launcher would gain one field and no logic, and `source.txt` plus
 `schema=1` are what make that swap possible without shipping a new launcher.
 
-## The sky, and a property whose name means the opposite of what it says
+## The sky: screen space, and a direction a distance check cannot see
 
 `scripts/Sky.cs` owns it. A layer is a row; three of them draw one texture at different scales,
-tints and rotations.
+tints and rotations, each on a `SkyPlane`.
 
-**`Parallax2D.ScrollScale` is inverted relative to intuition.** It is how much the layer FOLLOWS
-THE CAMERA, so 1 is a layer that never appears to move (infinitely far) and 0 is a layer fixed in
-the world (moves past at full speed). Measured directly: on-screen travel is exactly
-`(1 - ScrollScale)` times the camera's. The table therefore stores `Drift` -- the share of the
-world's motion a player SEES -- and `Sky.Build` converts once. Anyone writing the table in engine
-terms will write every future row backwards.
+**The sky's CanvasLayer is SCREEN space.** It does not follow the camera, so a plane's `Position`
+is a place on the screen, and parallax is `Position = -cam.GlobalPosition * Drift`: the world
+slides by -1 x the camera, the sky the same way by a fraction. Writing it in world-space terms
+(`+(1 - Drift)` x the camera) gives a sky that slides WITH the ship -- it reads as the stars
+swinging round the hull, and it is what shipped once.
 
-**Two ways to measure a parallax layer that both look like they work.**
-`Parallax2D.ScreenOffset` is the raw camera offset and is IDENTICAL on every layer, so a check
-reading it reports the full camera distance three times and passes a flat sky. And the drawn
-origin wraps: a layer re-tiles itself by whole `RepeatSize` steps, so any hop longer than the
-smallest tile returns noise around the raw distance rather than the parallax share. Measure
-`GetGlobalTransformWithCanvas().Origin` of the child sprite, over a hop shorter than the smallest
-tile.
+**A plane that only moves runs out of sky.** Far from the origin its drawn region slides off the
+screen and the corners show as dark wedges. The region is re-centred on the whole tile under the
+screen's middle instead; a tiled region moved by whole tiles is invisible, and the plane's
+position stays continuous.
+
+**Measure direction against the world, not distance.** A check that reads how FAR each layer
+moved passes a reversed sky. Take a point fixed in the world through the canvas transform and
+require every layer's screen shift to point the same way. (`Parallax2D.ScreenOffset`, from the
+first version, was worse still: the raw camera offset, identical on every layer.)

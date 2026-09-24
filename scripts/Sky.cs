@@ -9,23 +9,18 @@ using Godot;
 // the only thing on screen saying the ship was moving was the speed readout. A hull that feels
 // nailed down is a hull nobody enjoys flying.
 //
-// WHAT A LAYER IS: a row. `Parallax2D` does the work -- it reads the canvas transform every frame
-// and offsets itself by `ScrollScale`, repeating itself forever at `RepeatSize` so there is no edge
-// to reach. This file decides only WHICH layers exist and what each one is made of.
+// WHAT A LAYER IS: a row, drawn by one SkyPlane (below) -- a tiled texture on the sky's CanvasLayer,
+// offset every frame by the row's share of the camera's travel. This file decides WHICH layers
+// exist and what each one is made of; SkyPlane is the only code that moves them.
 //
 // A ROW OF Sky.All MUST FILL IN:
 //   Id        what it is called, for a check to name and for a reader to find
 //   Texture   what it draws. Several rows may share one; Scale and Tint are what make them differ
 //   Drift     HOW MUCH OF THE WORLD'S MOTION A PLAYER SEES IT MAKE. 0 is nailed to the screen
-//             (the old behaviour, and the bug); 1 slides past exactly like the world does. Far
-//             things drift LESS: that is the whole illusion, and why the rows run far to near.
-//
-//             It is written in the player's terms and converted once, in Build. The engine's own
-//             `ScrollScale` is the INVERSE -- 1 means "follows the camera exactly", which is a
-//             layer that never appears to move -- and stating the table in engine terms means
-//             every future row is written backwards by whoever reads the numbers and trusts them.
-//             Measured: on-screen travel is exactly (1 - ScrollScale) x the camera's, so
-//             ScrollScale = 1 - Drift and the row says what it looks like.
+//             (the old behaviour, and the bug); 1 slides past exactly like the world does at
+//             zoom 1. Far things drift LESS: that is the whole illusion, and why the rows run far
+//             to near. It goes the SAME WAY as the world, always -- a sky that slides with the
+//             ship instead of past it reads as the stars swinging round the hull.
 //   Scale     how big the tile is drawn. A far layer wants a SMALLER tile: more, finer specks
 //   Tint      its colour, alpha included -- a far layer is dimmer as well as slower
 //   Spin      a few degrees of rotation, so two rows sharing one texture do not line up and read
@@ -81,28 +76,60 @@ public static class Sky
         {
             var tex = GD.Load<Texture2D>(row.Texture);
             if (tex == null) continue;                 // a row naming art that is not there is skipped, not fatal
-            // REPEAT FOREVER. RepeatSize is the tile's drawn size, so it must carry the row's
-            // Scale or the seam lands mid-tile and the field visibly steps as it crosses.
-            var layer = new Parallax2D
-            {
-                Name = "Sky_" + row.Id,
-                // THE ONE CONVERSION: the row says what a player sees, the engine wants its
-                // inverse (see the header). Nothing else in the file knows about ScrollScale.
-                ScrollScale = new Vector2(1f - row.Drift, 1f - row.Drift),
-                RepeatSize = new Vector2(tex.GetWidth() * row.Scale, tex.GetHeight() * row.Scale),
-                RepeatTimes = 3,
-                ZIndex = row.Z,
-            };
-            var art = new Sprite2D
-            {
-                Texture = tex,
-                Centered = false,
-                Scale = new Vector2(row.Scale, row.Scale),
-                Modulate = row.Tint,
-                RotationDegrees = row.Spin,
-            };
-            layer.AddChild(art);
-            parent.AddChild(layer);
+            parent.AddChild(new SkyPlane { Row = row, Art = tex, Name = "Sky_" + row.Id });
         }
+    }
+}
+
+// ONE LAYER, DRAWN WHERE THIS FILE SAYS.
+//
+// IT LIVES IN SCREEN SPACE. The sky's CanvasLayer (Hub, Layer -100) does not follow the camera, so
+// a plane's Position is a place ON THE SCREEN, and the only motion it has is the one given here:
+// -Drift x the camera's position. The world slides across the screen by -1 x the camera's travel;
+// the sky slides the same way by a fraction of it. The sign is the whole bug this replaced -- a
+// first version wrote +(1 - Drift) x the camera, which is world-space thinking on a screen-space
+// node: every layer slid WITH the ship, and the world slid against it.
+//
+// NO EDGE TO REACH, AT ANY DISTANCE. Position is unbounded (a ship 60 000 u out has a near layer
+// 27 000 px off), so the drawn region follows the middle of the screen instead: it is re-centred on
+// the WHOLE TILE under the screen's centre, in the plane's own rotated, scaled frame. Moving a tiled
+// region by whole tiles moves nothing a player can see, so the field never steps; and because the
+// region is re-centred rather than the plane moved, Position stays continuous and a check can read
+// the true drift off it. A plane that was only moved, never re-centred, ran out of region far from
+// the origin and left the large dark wedges players reported.
+public partial class SkyPlane : Node2D
+{
+    public SkyLayer Row;
+    public Texture2D Art;
+    private const float Span = 20000f;      // the region drawn, in the plane's own units: 11 000 px at the finest scale
+    private Vector2 _cell;                  // the whole tile under the middle of the screen, where the region is centred
+
+    // What is drawn, in the plane's own frame. Public so a check can prove the screen is inside it.
+    public Rect2 Drawn => new(_cell - new Vector2(Span, Span) / 2, new Vector2(Span, Span));
+
+    public override void _Ready()
+    {
+        ZIndex = Row.Z;
+        TextureRepeat = CanvasItem.TextureRepeatEnum.Enabled;
+        RotationDegrees = Row.Spin;
+        Modulate = Row.Tint;
+        Scale = new Vector2(Row.Scale, Row.Scale);
+    }
+
+    // Tiled from the region's corner, and the corner only ever moves by whole tiles plus the one
+    // constant half-span -- so the phase of the art on screen never jumps when the region re-centres.
+    public override void _Draw() => DrawTextureRect(Art, Drawn, tile: true);
+
+    public override void _Process(double _)
+    {
+        var cam = GetViewport()?.GetCamera2D();
+        if (cam == null) return;
+        Position = -cam.GlobalPosition * Row.Drift;
+        var mid = Transform.AffineInverse() * (GetViewportRect().Size / 2);
+        var tile = Art.GetSize();
+        var cell = new Vector2(Mathf.Floor(mid.X / tile.X) * tile.X, Mathf.Floor(mid.Y / tile.Y) * tile.Y);
+        if (cell == _cell) return;
+        _cell = cell;
+        QueueRedraw();
     }
 }

@@ -391,6 +391,13 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
             if (s.Target != null) Rotation = Aim.Face(Position, s.Target.Position);
             s.Aim = Rotation - Mathf.Pi / 2f;
         }
+        // AIMED FROM WHERE IT LANDED, and this line was missing. A move that opens with a warp
+        // went straight from the landing to its warning, skipping Aimed -- which is where a dash's
+        // line, a ring's centre and A THROWN BODY are worked out. Every opener that existed when
+        // this was written aimed down the nose, which the two lines above already cover, so
+        // nothing noticed; the first move to want BOTH a warp and a thrown rock got a lane drawn
+        // between the warp's own leftover coordinates and no rock at all.
+        Aimed(s);
         Warn(s); s.At = Phase.Winding; s.T = m.Windup;
     }
 

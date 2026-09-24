@@ -87,6 +87,9 @@ public partial class _Shots : Node
         GetTree().ChangeSceneToFile("res://Hub.tscn"); await W(0.8);
         await W(1.5); await Snap("3b_spawn_under_base");      // the base and a fresh spawn
         var me = H.GetNode<PlayerShip>("Ship_1");
+        // FAR OUT, where the sky once ran off its own drawn region and the screen's corners showed
+        // through as large dark wedges: every corner of this frame must be stars.
+        me.Position = new Vector2(47000, -39000); await W(0.6); await Snap("3d_sky_far");
         me.Position = new Vector2(620, 780); me.Rotation = -0.4f;
         await W(2.5);
         H.SelectTarget(H.GetNode<TargetDummy>("TargetDummy1"));

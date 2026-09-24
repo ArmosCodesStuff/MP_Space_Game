@@ -11,15 +11,16 @@
 //                  where it will land, 1 s -- 600 u from the nearest pilot, then a fan of seven red
 //                  lines for 1.875 s, then seven pieces of scrap down them at once -- the same
 //                  fixed fan every time, 10 degrees apart -- 18.75 each, each its own hit
-//   ASTEROID THROW every 30 s (the death beam's slot, from 6 s): a big rock appears beside it and
+//   ASTEROID THROW every 30 s (the death beam's slot, from 6 s): it WARPS BACK -- a ring where it
+//                  will land, 1 s -- to 1300 u from its target; a big rock appears beside it and
 //                  its tractor beam takes hold; a red lane to the target for 7.5 s; then the rock
-//                  is hurled down it -- slow to start, then very fast -- striking every ship in
-//                  the lane for 250, and breaking apart at the lane's end
-// It holds still through its specials -- the warp is the shotgun's own opener -- and between them
-// closes on the party like any boss. The two never run back to back: a throw holds it 9.1 s (7.5 s
-// of warning, 1.6 s of flight), so the shotgun comes 11 s after each throw starts (and 4 s after
-// it, in the cycle's other half), never on the trident's own 13.5 s, which fell inside the first
-// throw.
+//                  is hurled down it in 1.2 s -- slow to start, then very fast -- striking every
+//                  ship in the lane for 250, and breaking apart at the lane's end
+// It holds still through its specials -- both open with a warp: the shotgun's closes in, the
+// throw's backs off to 1300 u -- and between them closes on the party like any boss. The two never
+// run back to back: a throw holds it 9.7 s (1 s of warp, 7.5 s of warning, 1.2 s of flight), so
+// the shotgun comes 11 s after each throw starts (and 4 s after it, in the cycle's other half),
+// never on the trident's own 13.5 s, which fell inside the first throw.
 //
 // ITS FIGURES ARE ITS OWN. They were once written as 1.25 x a Lancer constant (a "threat
 // multiple"), so tuning the Lancer silently retuned this boss as well -- and the two are not the
@@ -55,8 +56,17 @@ public static class Drake
         // red lane warning about it: at level 40 (Missions.Quicken(40) = 1.01^39 = 1.474) a 90 u
         // body stood 42.7 u past each edge of its lane and a 180 u body stands 85.3 u past it.
         // A telegraph that under-reports the blow it telegraphs is the bug, not the row.
+        // IT BACKS OFF BEFORE IT WINDS UP. The throw is a 1800 u lane and the boss used to start it
+        // from wherever it was standing -- often inside the pilot's face, where a 1800 u lane is
+        // not a threat you can answer. It warps to 1300 u first, on its own side of the pilot (the
+        // same Warp/Standoff the scrap shotgun uses, with the sense that falls out of a standoff
+        // longer than the range it closes to), so the throw becomes the ranged move it looks like.
+        //
+        // FLIGHT 1.2, NOT 1.6: a third faster in the air. The 7.5 s of red lane is unchanged, so
+        // the warning is as long as it ever was and only the rock is quicker.
         new() { Id = "throw", Way = MoveWay.Throw, Waits = MoveWait.Everything, Busy = true, Super = true,
-                Every = 30, First = 6.0, Windup = 7.5, Flight = 1.6,
+                Every = 30, First = 6.0, Windup = 7.5, Flight = 1.2,
+                Warp = 1.0, Standoff = 1300f, WarpRing = 117f, WarpSound = "drake_warp",
                 Damage = 250, Reach = 1800f, Radius = 180f, Offset = 310f,
                 Cue = "drake_tractor", Strike = "drake_throw" },
     };
