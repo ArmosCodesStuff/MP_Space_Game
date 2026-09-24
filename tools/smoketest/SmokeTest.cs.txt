@@ -4279,7 +4279,7 @@ public partial class _Test : Node
             var sRow = spw == null ? null : Nodes<Label>(Nodes<HBoxContainer>(spw).First(r => r.Name == "Pilot_damage")).First();
             // A SHARE READS AS A PERCENTAGE: +3% of each weapon the class names, where the window
             // used to advertise a step of +1 the purchase never actually gave.
-            Check(sRow != null && sRow.Text.Contains("Damage per shot") && sRow.Text.Contains("+3% next")
+            Check(sRow != null && sRow.Text.Contains("Damage per shot") && sRow.Text.Contains("+3% a level")
                   && sRow.Text.Contains("Railgun · Damage") && !sRow.Text.Contains("+0.03"),
                   $"the sniper's Weapons row prints what a point really buys -- 3% of its gun AND 3% of its railgun, as a percentage rather than three hundredths of a damage ({sRow?.Text.Replace('\n', '|')})");
             Key(global::Godot.Key.L); await Wait(0.1);
@@ -4425,6 +4425,476 @@ public partial class _Test : Node
                 }
                 Check(stuck.Count == 0 && rows >= 12 * 6,
                       $"every ability row of every class runs its own timers down: 5 s put on all {rows} of them, none above 4.7 s half a second later ({(stuck.Count == 0 ? "none stuck" : string.Join(", ", stuck))})");
+            }
+
+            // ── EVERY ABILITY ON EVERY BAR, AND HOW FAR EVERY CLASS REACHES ──────────
+            // The blocks above take ONE class at a time and prove the one thing it is for. These
+            // two take all twelve and sweep them: every ability each of them carries, pressed --
+            // and every reach each of them declares, measured from just inside it and from just
+            // outside it. Both are driven from the TABLES (Classes.All, ClassDef.Abilities,
+            // ClassDef.Reach), so a thirteenth class, a new ability or a new reach id is swept
+            // the moment it is a row -- and one with nothing here to witness it FAILS rather
+            // than passing silently, which is the whole point of a sweep.
+            {
+                // Somewhere with nothing in it: past the outposts (3000 u) and past the edge a
+                // raid comes in from (4200 u), so nothing can wander into a measurement. Every
+                // placement below is drawn from the run's own SEED around this one spot.
+                var afield = Hub.BasePos + new Vector2(4200, 3900);
+                // A HOSTILE HELD EXACTLY WHERE IT IS PUT. Disabled is the shockwave's own hold on
+                // a boss, and a raider under it sits still -- so no marker can fly off on an
+                // errand mid-measurement and no check below is a check on the clock.
+                async Task<Raider> Marker(Vector2 at)
+                {
+                    var born = H.SpawnRaider(at);
+                    born.Hp = 9000; born.ApplyStatus(Status.Disabled, 20);
+                    await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                    return born;
+                }
+                void Sink(Raider mk1) { if (mk1 != null && mk1.Alive) mk1.TakeDamage(99999); }
+
+                // ── A. EVERY ABILITY, PRESSED -- AND THE SECOND PRESS REFUSED ─────────────
+                // WHAT COUNTS AS DONE, one row per ability id: a slot lit, a cooldown set, a
+                // status applied, bodies launched, a turret dropped. Reached BY ID, never by
+                // class, so two classes carrying the same ability share the one witness -- and an
+                // ability added to the catalogue with nothing here to see it fails the coverage
+                // check below. (The trigger's own path from key to shell is proved by the
+                // battleship and destroyer DPS checks earlier in this run; what is asked of a
+                // HOLD row here is that its own key reaches the ship at all.)
+                int sweepShots = 0, sweepTurrets = 0, sweepMag = 0;
+                bool sweepMode = false;
+                Raider sweepMark = null;
+                var witness = new Dictionary<string, Func<PlayerShip, bool>>
+                {
+                    ["guns"]      = sp => sp.Trigger && Abilities.Find(sp.Class, "guns").State(sp, null).Lit,
+                    // LOCAL: the owner's own intent, which never leaves this machine. It flips,
+                    // and it engages no slot at all.
+                    ["firemode"]  = sp => sp.Staggered != sweepMode && sp.Sl("firemode").Left == 0 && sp.Sl("firemode").Cool == 0,
+                    ["broadside"] = sp => sp.BroadsideTracking && sp.Sl("broadside").Left > sp.Stats["broadside_windup"] - 0.1,
+                    ["pd"]        = sp => sp.PdActive && sp.Sl("pd").Left > sp.Stats["pd_active"] - 0.1,
+                    ["missile"]   = sp => sp.MissilesLoaded == sweepMag - 1 && Missiles().Count() >= sweepShots + PlayerShip.BurstSides.Length,
+                    ["reload"]    = sp => sp.Reloading && sp.Sl("reload").Left > sp.Stats["missile_reload"] - 0.1,
+                    ["attack"]    = sp => ReferenceEquals(sp.WingTarget, sweepMark),
+                    ["recall"]    = sp => sp.WingTarget == null,
+                    ["bombers"]   = sp => ReferenceEquals(sp.StrikeTarget, sweepMark),
+                    ["deploy"]    = sp => sp.TurretsOut == sweepTurrets + 1 && sp.Sl("deploy").Cool > 0,
+                    ["collect"]   = sp => sp.TurretsOut == sweepTurrets - 1,
+                    ["bubble"]    = sp => sp.BubbleUp && Math.Abs(sp.BubbleLeft - sp.Stats["bubble_pool"]) < 0.5,
+                    ["overdrive"] = sp => Math.Abs(sp.FireRate - (float)sp.Stats["overdrive_mult"]) < 1e-3f,
+                    ["shockwave"] = sp => sp.Sl("shockwave").Cool > 0 && Nodes<FxNode>().Any(fx3 => fx3.Id == Fx.Wave),
+                    ["railgun"]   = sp => sp.Statuses.Has(Status.Disabled) && sp.Sl("railgun").Left > sp.Stats["rail_charge"] - 0.1,
+                    ["rush"]      = sp => sp.Statuses.Has(Status.Hardened) && Math.Abs(sp.SpeedMult - (float)sp.Stats["rush_mult"]) < 1e-3f,
+                    ["hunters"]   = sp => sp.Sl("hunters").Cool > 0 && Missiles().Count() >= sweepShots + (int)sp.Stats["hunter_count"],
+                    ["roll"]      = sp => sp.Statuses.Has(Status.Evading) && sp.Sl("roll").Left > sp.Stats["roll_time"] + sp.Stats["boost_time"] - 0.1,
+                    ["echo"]      = sp => sp.Sl("echo").Left > sp.Stats["echo_time"] - 0.1,
+                    ["stealth"]   = sp => sp.Statuses.Has(Status.Untargetable) && sp.Sl("stealth").Left > sp.Stats["stealth_time"] - 0.1,
+                };
+                var onBars = Classes.All.Where(cd2 => cd2.Ready).SelectMany(cd2 => cd2.Abilities)
+                                        .Where(ab3 => !ab3.Open).Select(ab3 => ab3.Id).Distinct().ToList();
+                var unwitnessed = onBars.Where(id2 => !witness.ContainsKey(id2)).ToList();
+                Check(unwitnessed.Count == 0 && witness.Count == onBars.Count,
+                      $"every ability on every bar has a witness in this sweep: {onBars.Count} ids across the twelve flyable classes against {witness.Count} rows "
+                      + $"({(unwitnessed.Count == 0 ? "none missing" : "MISSING " + string.Join(", ", unwitnessed))})");
+
+                // WHAT A FITTING BRINGS. A class carries an ability because of a fitting; where it
+                // has NOT got the fitting, that ability must not be on its bar at all. One row per
+                // fitting, so a new ability of an existing kind is covered by adding its id here.
+                var fitRows = new (Fit fit, string[] ids)[] {
+                    (Fit.Guns,      new[] { "guns", "firemode" }),
+                    (Fit.Broadside, new[] { "broadside" }),
+                    (Fit.Missiles,  new[] { "missile", "reload" }),
+                    (Fit.Wing,      new[] { "attack", "recall", "bombers" }),
+                    (Fit.Deploy,    new[] { "deploy", "collect" }),
+                };
+
+                foreach (var cls in Classes.All.Where(cd2 => cd2.Ready).ToList())
+                {
+                    await SetClass(cls.Id);
+                    var sweepShip = Me;
+                    sweepShip.Position = VaryNear(afield, 700f); sweepShip.Velocity = Vector2.Zero;
+                    sweepShip.Rotation = VaryAngle();
+                    await Wait(0.15);
+
+                    // ...and the ABSENCE where that is the fact: a light has no point defence, so
+                    // it has no pd slot and nothing of its own is online. Point defence is the one
+                    // fitting that comes apart from its ability -- a hull whose PD never switches
+                    // off (the warden) HAS the fitting and carries no key for it.
+                    var wrongFit = fitRows.Where(fr2 => fr2.ids.Any(id3 => (Abilities.Find(cls.Id, id3) != null) != cls.Has(fr2.fit)))
+                                          .Select(fr2 => fr2.fit.ToString()).ToList();
+                    bool pdRight = (Abilities.Find(cls.Id, "pd") != null) == (cls.Has(Fit.Pd) && !cls.Has(Fit.AlwaysPd))
+                                   && sweepShip.PdOnline == cls.Has(Fit.AlwaysPd);
+                    Check(wrongFit.Count == 0 && pdRight,
+                          $"{cls.Name}: every ability on its bar is one of its fittings, and every fitting it has NOT got takes its abilities with it -- "
+                          + $"point defence {(cls.Has(Fit.AlwaysPd) ? "always on, no key" : Abilities.Find(cls.Id, "pd") != null ? "on a key, switched off" : "not carried at all")}"
+                          + $"{(wrongFit.Count == 0 ? "" : ", WRONG: " + string.Join(", ", wrongFit))}");
+
+                    // THE SIX OPEN HOTKEYS after its own abilities: bound, shown, and they do
+                    // nothing. Pressing every one of them must engage no slot -- they are where
+                    // the next ability goes, and until then a press is a press on nothing.
+                    var opens = Abilities.For(cls.Id).Where(ab4 => ab4.Open).ToList();
+                    foreach (var openAb in opens) doAbility.Invoke(sweepShip, new object[] { openAb.Id, 0 });
+                    await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                    Check(opens.Count == 6 && opens.All(openAb => openAb.Press == null
+                                                        && sweepShip.Sl(openAb.Id).Left == 0 && sweepShip.Sl(openAb.Id).Cool == 0),
+                          $"{cls.Name}: {opens.Count} open hotkeys after its {cls.Abilities.Length} own, and pressing every one of them engages no slot");
+
+                    // the one target every press that wants one is given, put back before each
+                    sweepMark = await Marker(VaryNear(sweepShip.Position, 320f));
+                    var markAt = sweepMark.Position;
+
+                    foreach (var abil in cls.Abilities)
+                    {
+                        sweepMark.Position = markAt;                  // back where it was, whatever moved it
+                        sweepShots = Missiles().Count();
+                        sweepTurrets = sweepShip.TurretsOut;
+                        sweepMode = sweepShip.Staggered;
+                        sweepMag = sweepShip.MissilesLoaded;
+                        var abKey = Abilities.KeyFor(cls.Id, abil.Id);
+                        bool isHold = abil.Kind == AbilityKind.Hold;
+                        if (isHold)
+                        {   // a HOLD row has no Press at all: its own key goes down and stays down
+                            KeyDown(abKey);
+                            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                        }
+                        else if (abil.Local) sweepShip.UseAbility(abil.Id, 0);
+                        else doAbility.Invoke(sweepShip, new object[] { abil.Id, sweepMark.NetId });
+                        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                        bool didIt = witness.TryGetValue(abil.Id, out var sawIt) && sawIt(sweepShip);
+                        if (isHold) { KeyUp(abKey); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+
+                        // THE SECOND PRESS. A row that engaged its slot must refuse it: neither
+                        // the time it has left nor its cooldown may go UP. (A row that engages no
+                        // slot -- the carrier's attack and recall, a freighter's collect -- has
+                        // nothing to refuse, and its witness is the whole of it; the bombers'
+                        // refusal of a second strike is measured with strike_range below.)
+                        var slotWas = sweepShip.Sl(abil.Id);
+                        bool engaged = slotWas.Left > 0 || slotWas.Cool > 0;
+                        bool refusedAgain = true;
+                        if (engaged)
+                        {
+                            doAbility.Invoke(sweepShip, new object[] { abil.Id, sweepMark.NetId });
+                            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                            var slotNow = sweepShip.Sl(abil.Id);
+                            refusedAgain = slotNow.Left <= slotWas.Left + 1e-9 && slotNow.Cool <= slotWas.Cool + 1e-9;
+                        }
+                        string told = engaged
+                            ? refusedAgain ? $"a second press while it is engaged is refused ({slotWas.Left:0.0} s up, {slotWas.Cool:0.0} s cooling)"
+                                           : $"a second press RESTARTED it ({slotWas.Left:0.0} s up, {slotWas.Cool:0.0} s cooling)"
+                            : $"it engages no slot, so there is nothing to refuse (controls locked: {Hub.ControlsLocked})";
+                        Check(didIt && refusedAgain,
+                              $"{cls.Name} {abil.Short}: the press {(didIt ? "did" : "did NOT do")} what its row says, and {told}");
+
+                        // nothing this press started may run on into the next one
+                        sweepShip.Sl(abil.Id).Left = 0; sweepShip.Sl(abil.Id).Cool = 0; sweepShip.Sl(abil.Id).Own = 0;
+                    }
+
+                    // THE WORLD PUT BACK, so the class after this one starts where this one did:
+                    // every slot at rest, the magazine full, every status this class's abilities
+                    // put on the hull cleared, the wing called home, and whatever it dropped or
+                    // was aiming at gone.
+                    foreach (var abil in Abilities.For(cls.Id))
+                    {
+                        sweepShip.Sl(abil.Id).Left = 0; sweepShip.Sl(abil.Id).Cool = 0;
+                        sweepShip.Sl(abil.Id).Own = 0; sweepShip.Sl(abil.Id).N = 0;
+                    }
+                    sweepShip.Sl("missile").N = (int)sweepShip.Stats["missile_mag"];
+                    foreach (var flag in new[] { Status.Disabled, Status.Evading, Status.Hardened, Status.Untargetable })
+                        sweepShip.Statuses.Clear(flag);
+                    sweepShip.RecallWing();
+                    sweepShip.Forget(sweepMark);
+                    foreach (var standing in H.Deployed.ToList())
+                        if (standing.OwnerId == sweepShip.OwnerId) H.DeployedTaken(standing);
+                    Sink(sweepMark);
+                    await Wait(0.1);
+                }
+
+                // ── B. MINIMUM AND MAXIMUM RANGE, CLASS BY CLASS AND REACH BY REACH ──────
+                // ClassDef.Reach is what a class says its weapons REACH, by stat id: the list a
+                // pilot's REACH points and the Targeting Chip both lift. Nothing proved that any
+                // of those figures was the distance the weapon actually stops at -- so a reach
+                // could be raised by a purchase and change nothing a pilot could see. For every
+                // flyable class and EVERY id it declares, a target stands just inside and a second
+                // just outside, on bearings this run drew, and the weapon must engage the one and
+                // not the other. The `default` arm FAILS: a reach nothing measures cannot be added
+                // quietly.
+                //
+                // THE THREE THAT ARE FLOWN, NOT FIRED, and so are not here: a fighter opens up at
+                // fighter_range only after it has launched and flown its approach; a bomber turns
+                // to launch after a run out to launch_range at 190 u/s; and the torpedo's own run
+                // is that flight again. Each is about ten seconds in the air for one figure, and
+                // the carrier's block above already flies a whole strike.
+                var flownNotFired = new[] { "fighter_range", "launch_range", "torpedo_range" };
+                var skipped = new List<string>();
+
+                async Task ProveReach(PlayerShip pilot, ClassDef cdef, string stat)
+                {
+                    double reach = pilot.Stats[stat];
+                    float bearing = VaryAngle();
+                    var way = Vector2.Right.Rotated(bearing);
+                    var wide = way.Rotated(Vary(1.2f, 2.4f));      // a second bearing, well clear of the first
+                    bool proved = false; string told = "";
+                    switch (stat)
+                    {
+                        case "main_range":
+                        {
+                            // The gun's OWN round, out of the ship's own spec, through Combat.Fire
+                            // -- the one door everything that flies comes through, and the exact
+                            // call Turret.Shoot makes. Only the SPEED is the harness's (four
+                            // reaches a second, so the flight is a quarter of a second rather than
+                            // a second and a half); the reach, the damage and the row of Shots.All
+                            // are the ship's. The far mark stands a quarter past the reach because
+                            // a shell always flies one frame's step past it before it ends.
+                            var gun = pilot.Spec(false);
+                            var nearAt = pilot.Position + way * (float)(reach * Vary(0.80f, 0.92f));
+                            var farAt = pilot.Position + wide * (float)(reach * Vary(1.25f, 1.45f));
+                            var mkIn = await Marker(nearAt); var mkOut = await Marker(farAt);
+                            double inWas = mkIn.Hp, outWas = mkOut.Hp;
+                            Combat.Fire(gun.Kind, pilot.Position, way, (float)reach * 4f, gun.Range, gun.Damage, source: pilot);
+                            Combat.Fire(gun.Kind, pilot.Position, wide, (float)reach * 4f, gun.Range, gun.Damage, source: pilot);
+                            await Wait(0.35);
+                            proved = mkIn.Hp < inWas && mkOut.Hp == outWas;
+                            told = $"a {gun.Damage:0.0} shell lands {pilot.Position.DistanceTo(nearAt):0} u out ({inWas - mkIn.Hp:0.0} taken) and dies short of {pilot.Position.DistanceTo(farAt):0} u ({outWas - mkOut.Hp:0.0} taken)";
+                            Sink(mkIn); Sink(mkOut);
+                            break;
+                        }
+                        case "pd_range":
+                        {
+                            // Point defence picks its OWN target, so it is the ACQUISITION that
+                            // stops at the reach and no shot has to be waited for. A hull whose PD
+                            // never switches off has no window to open first.
+                            var mount = Nodes<Turret>(pilot).FirstOrDefault(tu2 => tu2.PointDefense);
+                            if (mount == null) { told = "it declares a point-defence reach and mounts no point-defence turret"; break; }
+                            if (!pilot.PdOnline) { pilot.Sl("pd").Cool = 0; doAbility.Invoke(pilot, new object[] { "pd", 0 }); }
+                            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                            var mountAt = mount.GlobalPosition;
+                            var mkIn = await Marker(mountAt + way * (float)(reach * Vary(0.60f, 0.90f)));
+                            for (int frame = 0; frame < 8 && mount.Target == null; frame++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                            bool gotIt = ReferenceEquals(mount.Target, mkIn);
+                            float gotAt = mountAt.DistanceTo(mkIn.Position);
+                            mkIn.Position = mountAt + way * (float)(reach * Vary(1.30f, 1.70f));
+                            for (int frame = 0; frame < 8 && mount.Target != null; frame++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                            proved = gotIt && mount.Target == null;
+                            told = $"a turret takes a light at {gotAt:0} u and lets it go at {mountAt.DistanceTo(mkIn.Position):0} u";
+                            Sink(mkIn);
+                            pilot.Sl("pd").Left = 0; pilot.Sl("pd").Cool = 0;
+                            break;
+                        }
+                        case "missile_range":
+                        {
+                            var mkIn = await Marker(pilot.Position + way * (float)(reach * Vary(0.55f, 0.90f)));
+                            var mkOut = await Marker(pilot.Position + wide * (float)(reach * Vary(1.15f, 1.45f)));
+                            int flying0 = Missiles().Count();
+                            pilot.Sl("missile").N = (int)pilot.Stats["missile_mag"]; pilot.Sl("missile").Cool = 0;
+                            doAbility.Invoke(pilot, new object[] { "missile", mkIn.NetId });
+                            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                            int flew = Missiles().Count() - flying0;
+                            pilot.Sl("missile").Cool = 0;
+                            doAbility.Invoke(pilot, new object[] { "missile", mkOut.NetId });
+                            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                            int flewMore = Missiles().Count() - flying0 - flew;
+                            proved = flew >= PlayerShip.BurstSides.Length && flewMore == 0;
+                            told = $"a burst of {flew} away at {pilot.Position.DistanceTo(mkIn.Position):0} u and {flewMore} away at {pilot.Position.DistanceTo(mkOut.Position):0} u";
+                            Sink(mkIn); Sink(mkOut);
+                            pilot.Sl("missile").N = (int)pilot.Stats["missile_mag"]; pilot.Sl("missile").Cool = 0;
+                            break;
+                        }
+                        case "control_range":
+                        {
+                            // The fighters are ordered onto a target only while it is inside the
+                            // control range, and the slot itself says so -- which is what a pilot
+                            // has to go on before pressing it.
+                            var atkRow = Abilities.Find(pilot.Class, "attack");
+                            var mkIn = await Marker(pilot.Position + way * (float)(reach * Vary(0.55f, 0.90f)));
+                            var mkOut = await Marker(pilot.Position + wide * (float)(reach * Vary(1.15f, 1.45f)));
+                            string nearLine = atkRow.State(pilot, mkIn).Line, farLine = atkRow.State(pilot, mkOut).Line;
+                            proved = nearLine == "READY" && farLine == "OUT OF RANGE";
+                            told = $"the attack slot reads {nearLine} at {pilot.Position.DistanceTo(mkIn.Position):0} u and {farLine} at {pilot.Position.DistanceTo(mkOut.Position):0} u";
+                            Sink(mkIn); Sink(mkOut);
+                            break;
+                        }
+                        case "strike_range":
+                        {
+                            var mkOut = await Marker(pilot.Position + wide * (float)(reach * Vary(1.15f, 1.45f)));
+                            doAbility.Invoke(pilot, new object[] { "bombers", mkOut.NetId });
+                            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                            bool refusedFar = pilot.StrikeTarget == null;
+                            var mkIn = await Marker(pilot.Position + way * (float)(reach * Vary(0.45f, 0.85f)));
+                            doAbility.Invoke(pilot, new object[] { "bombers", mkIn.NetId });
+                            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                            bool tookNear = ReferenceEquals(pilot.StrikeTarget, mkIn);
+                            // ...and a second strike ordered while one is out is refused: the
+                            // bombers already called keep the target they were called for.
+                            doAbility.Invoke(pilot, new object[] { "bombers", mkOut.NetId });
+                            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                            bool stillOne = ReferenceEquals(pilot.StrikeTarget, mkIn);
+                            proved = refusedFar && tookNear && stillOne;
+                            told = $"a strike at {pilot.Position.DistanceTo(mkOut.Position):0} u is refused, one at {pilot.Position.DistanceTo(mkIn.Position):0} u is taken, and a second order while it is out is refused ({stillOne})";
+                            Sink(mkIn); Sink(mkOut);
+                            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                            break;
+                        }
+                        case "rail_range":
+                        {
+                            // The line goes off the NOSE, so the hull is turned to whatever
+                            // heading this run drew and the two marks stand on it. The charge is
+                            // cut to one frame: what is measured here is the shot, not the wait.
+                            pilot.Rotation = bearing;
+                            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                            var railWay = Vector2.Up.Rotated(pilot.Rotation);
+                            var railFrom = Aim.Nose(pilot, pilot.MyArt.Length * 0.5f);
+                            var mkIn = await Marker(railFrom + railWay * (float)(reach * Vary(0.55f, 0.90f)));
+                            var mkOut = await Marker(railFrom + railWay * (float)(reach * Vary(1.10f, 1.30f)));
+                            double inWas = mkIn.Hp, outWas = mkOut.Hp;
+                            pilot.Sl("railgun").Left = 0; pilot.Sl("railgun").Cool = 0;
+                            doAbility.Invoke(pilot, new object[] { "railgun", 0 });
+                            pilot.Sl("railgun").Left = 0.001;
+                            await Wait(0.12);
+                            proved = Math.Abs(inWas - mkIn.Hp - pilot.Stats["rail_damage"]) < 0.01 && mkOut.Hp == outWas;
+                            told = $"the slug takes {inWas - mkIn.Hp:0} off what stands {railFrom.DistanceTo(mkIn.Position):0} u down the line and {outWas - mkOut.Hp:0} off what stands {railFrom.DistanceTo(mkOut.Position):0} u down it";
+                            Sink(mkIn); Sink(mkOut);
+                            pilot.Statuses.Clear(Status.Disabled);
+                            pilot.Sl("railgun").Left = 0; pilot.Sl("railgun").Cool = 0;
+                            break;
+                        }
+                        case "hunter_range":
+                        {
+                            // The cell only sees what is inside its reach: with nothing in reach
+                            // the press spends the cooldown and launches nothing at all.
+                            var mkOut = await Marker(pilot.Position + way * (float)(reach * Vary(1.15f, 1.45f)));
+                            int flying0 = Missiles().Count();
+                            pilot.Sl("hunters").Cool = 0;
+                            doAbility.Invoke(pilot, new object[] { "hunters", 0 });
+                            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                            int flewNone = Missiles().Count() - flying0;
+                            // ITS DISTANCE IS READ BEFORE IT IS SUNK: a sunk mark is freed on the
+                            // next frame, and the line below is written after that frame.
+                            float noneAt = pilot.Position.DistanceTo(mkOut.Position);
+                            Sink(mkOut);
+                            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                            var mkIn = await Marker(pilot.Position + wide * (float)(reach * Vary(0.40f, 0.85f)));
+                            flying0 = Missiles().Count();
+                            pilot.Sl("hunters").Cool = 0;
+                            doAbility.Invoke(pilot, new object[] { "hunters", 0 });
+                            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                            int flew = Missiles().Count() - flying0;
+                            proved = flewNone == 0 && flew >= (int)pilot.Stats["hunter_count"];
+                            told = $"{flewNone} away with only a mark at {noneAt:0} u, {flew} away with one at {pilot.Position.DistanceTo(mkIn.Position):0} u";
+                            Sink(mkIn);
+                            pilot.Sl("hunters").Cool = 0;
+                            break;
+                        }
+                        case "emp_range":
+                        {
+                            var mkIn = await Marker(pilot.Position + way * (float)(reach * Vary(0.45f, 0.90f)));
+                            var mkOut = await Marker(pilot.Position + wide * (float)(reach * Vary(1.20f, 1.60f)));
+                            double inWas = mkIn.Hp, outWas = mkOut.Hp;
+                            pilot.Sl("rush").Cool = 0;
+                            doAbility.Invoke(pilot, new object[] { "rush", 0 });
+                            pilot.Sl("rush").Left = 0.001;             // the rush cut short: the EMP is what reaches
+                            await Wait(0.12);
+                            proved = Math.Abs(inWas - mkIn.Hp - pilot.Stats["emp_damage"]) < 0.01 && mkOut.Hp == outWas;
+                            told = $"{inWas - mkIn.Hp:0} at {pilot.Position.DistanceTo(mkIn.Position):0} u and {outWas - mkOut.Hp:0} at {pilot.Position.DistanceTo(mkOut.Position):0} u";
+                            Sink(mkIn); Sink(mkOut);
+                            pilot.Statuses.Clear(Status.Hardened);
+                            pilot.Sl("rush").Left = 0; pilot.Sl("rush").Cool = 0;
+                            break;
+                        }
+                        case "echo_radius":
+                        {
+                            // The blast goes off where the LAST of the damage landed, not where
+                            // the ship is, so both marks are measured from that spot.
+                            var landedAt = pilot.Position + way * Vary(60f, 140f);
+                            var mkIn = await Marker(landedAt + way.Rotated(1f) * (float)(reach * Vary(0.40f, 0.85f)));
+                            var mkOut = await Marker(landedAt + way.Rotated(-1f) * (float)(reach * Vary(1.20f, 1.60f)));
+                            double inWas = mkIn.Hp, outWas = mkOut.Hp;
+                            pilot.Sl("echo").Cool = 0;
+                            doAbility.Invoke(pilot, new object[] { "echo", 0 });
+                            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                            pilot.NoteDealt(80, landedAt);             // as a shell of its own would
+                            pilot.Sl("echo").Left = 0.001;
+                            await Wait(0.12);
+                            double blastWas = 80 * pilot.Stats["echo_share"];
+                            proved = Math.Abs(inWas - mkIn.Hp - blastWas) < 0.01 && mkOut.Hp == outWas;
+                            told = $"{blastWas:0} stored puts {inWas - mkIn.Hp:0} on what stands {landedAt.DistanceTo(mkIn.Position):0} u from where it landed and {outWas - mkOut.Hp:0} on what stands {landedAt.DistanceTo(mkOut.Position):0} u from it";
+                            Sink(mkIn); Sink(mkOut);
+                            pilot.Sl("echo").Left = 0; pilot.Sl("echo").Cool = 0; pilot.Sl("echo").Own = 0;
+                            break;
+                        }
+                        case "wave_range":
+                        {
+                            var mkIn = await Marker(pilot.Position + way * (float)(reach * Vary(0.40f, 0.85f)));
+                            var mkOut = await Marker(pilot.Position + wide * (float)(reach * Vary(1.15f, 1.50f)));
+                            float inWas = mkIn.Position.DistanceTo(pilot.Position), outWas = mkOut.Position.DistanceTo(pilot.Position);
+                            pilot.Sl("shockwave").Cool = 0;
+                            doAbility.Invoke(pilot, new object[] { "shockwave", 0 });
+                            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                            float inNow = mkIn.Position.DistanceTo(pilot.Position), outNow = mkOut.Position.DistanceTo(pilot.Position);
+                            proved = Math.Abs(inNow - inWas - pilot.Stats["wave_push"]) < 2 && Math.Abs(outNow - outWas) < 2;
+                            told = $"what stood {inWas:0} u off is thrown {inNow - inWas:0} u and what stood {outWas:0} u off moves {outNow - outWas:0} u";
+                            Sink(mkIn); Sink(mkOut);
+                            pilot.Sl("shockwave").Cool = 0;
+                            break;
+                        }
+                        case "deploy_range":
+                        {
+                            // A turret left standing picks its own target with the same component
+                            // point defence uses, so again it is the acquisition that stops.
+                            pilot.Sl("deploy").Cool = 0;
+                            doAbility.Invoke(pilot, new object[] { "deploy", 0 });
+                            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                            var standing = H.Deployed.LastOrDefault(tu3 => tu3.OwnerId == pilot.OwnerId);
+                            if (standing == null) { told = "T dropped nothing to measure the reach of"; break; }
+                            var mountAt = standing.Position;
+                            var mkIn = await Marker(mountAt + way * (float)(reach * Vary(0.60f, 0.90f)));
+                            for (int frame = 0; frame < 8 && standing.Aimed == null; frame++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                            bool gotIt = ReferenceEquals(standing.Aimed, mkIn);
+                            float gotAt = mountAt.DistanceTo(mkIn.Position);
+                            mkIn.Position = mountAt + way * (float)(reach * Vary(1.30f, 1.70f));
+                            for (int frame = 0; frame < 8 && standing.Aimed != null; frame++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                            proved = gotIt && standing.Aimed == null;
+                            told = $"the turret it left takes a light at {gotAt:0} u and lets it go at {mountAt.DistanceTo(mkIn.Position):0} u";
+                            Sink(mkIn);
+                            foreach (var taken2 in H.Deployed.ToList())
+                                if (taken2.OwnerId == pilot.OwnerId) H.DeployedTaken(taken2);
+                            pilot.Sl("deploy").Cool = 0;
+                            break;
+                        }
+                        default:
+                            told = "nothing in this sweep knows how to measure it, and a reach nothing measures is a reach an upgrade can raise for free";
+                            break;
+                    }
+                    Check(proved, $"{cdef.Name} {AllStats.Said(stat)} is {reach:0} u: {told}");
+                }
+
+                foreach (var cls in Classes.All.Where(cd2 => cd2.Ready).ToList())
+                {
+                    await SetClass(cls.Id);
+                    var reachShip = Me;
+                    reachShip.Position = VaryNear(afield, 700f); reachShip.Velocity = Vector2.Zero;
+                    reachShip.Rotation = VaryAngle();
+                    await Wait(0.15);
+                    // ...and the STRIKE RANGE with them, LAST. It is the one reach no row
+                    // declares: it is defined FROM the control range (twice it) and takes the same
+                    // bonus, so a class that declares the one has the other whether it says so or
+                    // not. Last because ordering it launches the wing, and a launched wing is not
+                    // armed for the next measurement.
+                    var reachIds = cls.Reach.Keys.ToList();
+                    if (cls.Has(Fit.Wing)) reachIds.Add("strike_range");
+                    foreach (var reachId in reachIds)
+                    {
+                        if (flownNotFired.Contains(reachId)) { skipped.Add($"{cls.Name}.{reachId}"); continue; }
+                        await ProveReach(reachShip, cls, reachId);
+                        reachShip.Position = VaryNear(afield, 700f); reachShip.Velocity = Vector2.Zero;
+                    }
+                    foreach (var flag in new[] { Status.Disabled, Status.Evading, Status.Hardened, Status.Untargetable })
+                        reachShip.Statuses.Clear(flag);
+                    reachShip.RecallWing();
+                }
+                Check(skipped.Count == flownNotFired.Length && skipped.All(sk2 => flownNotFired.Any(fn2 => sk2.EndsWith(fn2)))
+                      && Classes.All.Where(cd2 => cd2.Ready).SelectMany(cd2 => cd2.Reach.Keys).Distinct().Count() == 13
+                      && Classes.All.Where(cd2 => cd2.Ready).Sum(cd2 => cd2.Reach.Count) == 31,
+                      $"thirteen reach ids over 31 class-and-id pairs, and every one of them measured above except the three that are FLOWN rather than fired "
+                      + $"-- the fighters' approach, the bombers' run out and the torpedo's own run ({string.Join(", ", skipped)})");
             }
 
             await SetClass(ShipClass.Battleship);
