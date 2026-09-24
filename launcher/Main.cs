@@ -71,7 +71,7 @@ namespace Warships.Launcher
         // has meant the extraction folder, and writing an update there would update nothing.
         private readonly string _root =
             Path.GetDirectoryName(Environment.ProcessPath ?? Application.ExecutablePath);
-        private readonly TextBox _notes = new TextBox();
+        private readonly RichTextBox _notes = new RichTextBox();
         private readonly Label _status = new Label();
         private readonly ProgressBar _bar = new ProgressBar();
         private readonly Button _update = new Button();
@@ -90,13 +90,16 @@ namespace Warships.Launcher
             BackColor = Color.FromArgb(18, 18, 20);
             MinimumSize = new Size(560, 400);
 
-            _notes.Multiline = true;
             _notes.ReadOnly = true;
-            _notes.ScrollBars = ScrollBars.Vertical;
-            _notes.WordWrap = false;                       // CHANGES.md is hard-wrapped at 80 already
-            _notes.Font = new Font("Consolas", 9f);
+            _notes.DetectUrls = false;
+            // BOTH bars. The notes are hard-wrapped in the record, but at a width the record chose
+            // and not one this window knows, so a line CAN be wider than the box -- and with no
+            // horizontal bar the end of it is simply unreachable.
+            _notes.ScrollBars = RichTextBoxScrollBars.Both;
+            _notes.WordWrap = false;                       // wrapping hard-wrapped text reads worse
+            _notes.Font = NoteFont;
             _notes.BackColor = Color.FromArgb(24, 24, 28);
-            _notes.ForeColor = Color.FromArgb(210, 210, 215);
+            _notes.ForeColor = Plain;
             _notes.BorderStyle = BorderStyle.None;
             _notes.Dock = DockStyle.Fill;
             _notes.Text = "Checking for updates...";
@@ -188,10 +191,73 @@ namespace Warships.Launcher
             if (what == BuildOutcome.LauncherTooOld) say += ": " + DefaultBase;
             Say(say);
 
-            _notes.Text = Read(() => _src.Text((_remote ?? _local)?.Notes ?? "NOTES.txt"))
-                          ?? "(no release notes -- " + say + ")";
+            ShowNotes(Read(() => _src.Text((_remote ?? _local)?.Notes ?? "NOTES.txt"))
+                      ?? "(no release notes -- " + say + ")");
 
             if (what == BuildOutcome.Interrupted) Look();          // it is finished now; ask again
+        }
+
+        // ── HOW THE NOTES ARE DRAWN ───────────────────────────────────────────────────────
+        // A SECTION IS A HEADING IN SQUARE BRACKETS ON ITS OWN LINE, and tools\pack.ps1 writes
+        // them. This end knows how to DRAW a section and nothing about which sections exist:
+        // the brackets are stripped, the heading is drawn bold in its row colour, and the lines
+        // under it take that row body colour until the next heading.
+        //
+        // AN UNKNOWN HEADING DRAWS PLAINLY rather than being refused, and that is the whole
+        // point: a release can add a section and every launcher already in the world renders it
+        // correctly without being replaced. Deciding WHAT the sections are stays on the repo
+        // side of the line, where a mistake can be fixed.
+        private sealed class NoteStyle
+        {
+            public string Head;        // the bracketed text, matched whole, ignoring case
+            public Color Title, Body;
+        }
+        private static readonly Color Plain = Color.FromArgb(210, 210, 215);
+        private static readonly Font NoteFont = new Font("Consolas", 9f);
+        private static readonly Font NoteBold = new Font("Consolas", 9f, FontStyle.Bold);
+        private static readonly NoteStyle[] Styles =
+        {
+            // The standing notice: amber, because it is the one part a player must ACT on.
+            new NoteStyle { Head = "FIRST TIME", Title = Color.FromArgb(255, 190,  90),
+                            Body = Color.FromArgb(235, 200, 150) },
+            // What actually changed: the heading stands out, the entry reads as ordinary text.
+            new NoteStyle { Head = "GAME UPDATES", Title = Color.FromArgb(120, 200, 255),
+                            Body = Plain },
+        };
+        private static NoteStyle StyleFor(string head)
+        {
+            foreach (var st in Styles)
+                if (string.Equals(st.Head, head, StringComparison.OrdinalIgnoreCase)) return st;
+            return new NoteStyle { Head = head, Title = Plain, Body = Plain };
+        }
+
+        private void ShowNotes(string text)
+        {
+            _notes.Clear();
+            var body = Plain;
+            foreach (string raw in (text ?? "").Replace("\r\n", "\n").Replace("\r", "\n").Split('\n'))
+            {
+                string line = raw.TrimEnd();
+                bool head = line.Length > 2 && line[0] == '[' && line[line.Length - 1] == ']';
+                if (head)
+                {
+                    var st = StyleFor(line.Substring(1, line.Length - 2).Trim());
+                    body = st.Body;
+                    Put(line.Substring(1, line.Length - 2).Trim(), st.Title, NoteBold);
+                }
+                else Put(raw, body, NoteFont);
+            }
+            _notes.SelectionStart = 0;
+            _notes.ScrollToCaret();
+        }
+
+        private void Put(string line, Color colour, Font font)
+        {
+            _notes.SelectionStart = _notes.TextLength;
+            _notes.SelectionLength = 0;
+            _notes.SelectionColor = colour;
+            _notes.SelectionFont = font;
+            _notes.AppendText(line + Environment.NewLine);
         }
 
         // ── the update ───────────────────────────────────────────────────────

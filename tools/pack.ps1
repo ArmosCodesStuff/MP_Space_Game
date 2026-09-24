@@ -166,17 +166,25 @@ foreach ($id in @('code', 'runtime')) {
 # heading, which starts the entry before this batch's. THIS LOGIC LIVES HERE, not in the launcher:
 # the launcher shows the text it is handed and knows nothing about markdown.
 #
-# WHAT A PLAYER READS IS A PREAMBLE PLUS THE CHANGELOG. The preamble is what is true of EVERY
-# release and belongs in no single entry -- it goes here rather than being typed into the record
-# once a batch and then forgotten, or into the launcher, which must stay frozen. A second standing
-# line is a second entry in $preamble and nothing else changes.
-$preamble = @(
-    'FIRST TIME: Windows will say it does not recognise this program.',
-    'It is unsigned -- a certificate is a few hundred a year and this is a game for',
-    'friends. Click "More info", then "Run anyway". You will see this once per version',
-    'of the launcher, not once per update.',
-    ''
+# WHAT A PLAYER READS IS A SET OF SECTIONS, and this is where they are decided. A SECTION IS A
+# HEADING IN SQUARE BRACKETS on its own line; the launcher strips the brackets, draws the heading
+# bold in its colour, and colours the lines under it to match. It knows how to DRAW a section and
+# nothing about which sections exist -- so a third one is a row HERE, and every launcher already in
+# players' hands renders it correctly without being replaced. That is what lets the launcher be
+# frozen: the part with a decision in it stays on the repo side of the line.
+#
+# A heading the launcher has no colour for still draws, plainly. Nothing here can break it.
+$sections = @(
+    @{ Head = 'FIRST TIME'; Lines = @(
+        'Windows will say it does not recognise this program. It is unsigned -- a',
+        'certificate is a few hundred a year and this is a game for friends.',
+        'Click "More info", then "Run anyway".',
+        'You will see this once per version of the launcher, not once per update.'
+    )}
 )
+$preamble = @()
+foreach ($sec in $sections) { $preamble += ('[' + $sec.Head + ']'); $preamble += $sec.Lines; $preamble += '' }
+$preamble += '[GAME UPDATES]'
 $md = [System.IO.File]::ReadAllLines((Join-Path $repo 'docs\CHANGES.md'))
 $start = -1
 for ($i = 0; $i -lt $md.Count; $i++) { if ($md[$i] -eq '## Unreleased') { $start = $i; break } }
