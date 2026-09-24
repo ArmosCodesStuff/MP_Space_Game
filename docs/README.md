@@ -62,11 +62,11 @@ It picks the way that will work:
   says it is already installed and just starts it.
 
 ```
-powershell -ExecutionPolicy Bypass -File tools\play.ps1     # same thing, without the double-click
+powershell -ExecutionPolicy Bypass -File play.ps1     # same thing, without the double-click
 ```
 
-`-Editor` opens the Godot editor. `-Game` takes the built-game path even where the tools exist.
-`-Yes` skips the download prompt.
+`-Editor` opens the Godot editor. `-Two` opens two windows, to host in one and join `127.0.0.1`
+in the other -- give each its own character first, they share one save folder.
 
 **There is no runnable file in the repo itself and there is not meant to be** -- no `.exe`, no
 `.pck`, `dist\` gitignored. A release is an OUTPUT (see Releasing). Godot is found by

@@ -418,6 +418,32 @@ Unreleased. Nothing is outstanding from the batch of 2026-09-23.)*
 
 ## Unreleased
 
+### The gate could not go red in three more places, and there was a second play script (2026-09-24, in the WarShips_Version_L fork)
+
+**`0 Warning(s)` is a SUBSTRING of `10 Warning(s)`.** `verify.ps1` matched both that and
+`0 errors.` unanchored, so a build with ten warnings and a typecheck with ten errors both reported
+clean. Anchored with `(^|\s)`, and proved: the old pattern matches `10 Warning(s)`, the new one
+does not. (`ANALYSERS: 0 findings` and `UNUSED ANYWHERE: 0` were already safe -- their prefixes
+pin them.)
+
+**The smoke step counted the checks and threw the number away.** Six `DONE` lines with twelve
+checks behind them passed exactly like six with eleven hundred: it measured COMPLETION and never
+COVERAGE. The three runs are now compared against EACH OTHER -- no figure to keep up to date, and
+it fails when checks stop running rather than when somebody adds some.
+
+**The sweep step did the same with its frame count**, so a sweep that rendered NOTHING still said
+`SWEEP DONE` and `LINT: 0`. Nothing to draw is nothing to lint, and an empty pass looked exactly
+like a clean one.
+
+**And the seeds are printed.** Every run wipes the scratch folder, so run 3 destroyed run 2's logs
+and with them the number that reproduces run 2's geometry. `CLAUDE.md` promises a failure comes
+back with `run.ps1 -Seed <n>`; until now the gate never printed one.
+
+**There were two play scripts.** A root `play.ps1` had existed since it was written; a
+`tools/play.ps1` was added today doing the same job, which is the exact thing CLAUDE.md forbids --
+two ways to do a thing is how the next instance picks the wrong one. Merged into the root one,
+which keeps its `-Two`, and `tools/play.ps1` is deleted. `PLAY.bat` points at the root.
+
 ### The analyser step had never run (2026-09-24, in the WarShips_Version_L fork)
 
 **`ANALYSERS: 0 findings` was a green line about a build that never happened.**

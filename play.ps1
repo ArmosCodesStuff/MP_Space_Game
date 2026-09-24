@@ -4,9 +4,19 @@
 #     powershell -ExecutionPolicy Bypass -File play.ps1 -Two     two windows, for multiplayer
 #     powershell -ExecutionPolicy Bypass -File play.ps1 -Editor  open it in the Godot editor instead
 #
-# THIS IS NOT A STANDALONE BUILD. A Godot .NET project needs the engine to run it: this script
-# finds the engine, compiles the C#, and launches the project. Anyone you send the folder to needs
-# Godot 4.7.2 .NET (mono) as well -- see "Sending it to someone" at the bottom.
+# TWO WAYS TO PLAY, AND IT PICKS THE ONE THAT WILL WORK.
+#
+#   FROM SOURCE, if this machine has the developer tools: it finds the engine, compiles the
+#   C# and launches the project, so you play the code in this folder. Needs Godot 4.7.2
+#   .NET (mono) and the .NET SDK -- about 330 MB of tooling.
+#
+#   THE PUBLISHED BUILD otherwise, handed to tools\install.ps1, which downloads it, checks it
+#   against the release own checksums and starts it. NEEDS NOTHING INSTALLED: Windows
+#   PowerShell is the whole requirement. Someone who only wants to play never needs the
+#   developer tools at all.
+#
+# So: download this repo, double-click PLAY.bat, play. If the tools appear later, the same
+# double-click starts running your own code instead.
 #
 #   -Two launches two windows so you can host in one and join 127.0.0.1 in the other. They share
 #   one user:// and therefore one character list, which is fine for testing but means both windows
@@ -17,14 +27,31 @@ param([switch]$Two, [switch]$Editor, [string]$Godot)
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 
-$Godot = & (Join-Path $PSScriptRoot 'tools\find-godot.ps1') -Godot $Godot
-if ($LASTEXITCODE -ne 0 -or -not $Godot) {
-    Write-Host ""
-    Write-Host "Could not find Godot 4.7.2 .NET (mono)."
-    Write-Host "Download it from https://godotengine.org/download -- the .NET build, not the standard one --"
-    Write-Host "then either put it somewhere obvious, set WARSHIPS_GODOT to its path, or create"
-    Write-Host "local.config.ps1 beside this script containing:  `$Godot = 'C:\path\to\Godot_v4.7.2-stable_mono_win64.exe'"
-    exit 2
+$hasDotnet = [bool](Get-Command dotnet -ErrorAction SilentlyContinue)
+try { $Godot = & (Join-Path $PSScriptRoot 'tools\find-godot.ps1') -Godot $Godot } catch { $Godot = $null }
+if ($LASTEXITCODE -ne 0) { $Godot = $null }
+# THE MONO BUILD OR NOTHING: the plain export of Godot carries no C# runtime at all, so it
+# opens this project and then fails to load a single script -- which reads as the project
+# being broken, and is not.
+if ($Godot -and $Godot -notmatch 'mono') { $Godot = $null }
+
+# NO TOOLS? PLAY THE BUILT GAME rather than refuse. This used to exit 2 with a download
+# link, which is the right answer for someone who came to WORK on it and the wrong one for
+# everyone else.
+if (-not $Godot -or -not $hasDotnet) {
+    if ($Editor) {
+        Write-Host "-Editor needs the developer tools, and they are not here."
+        Write-Host "  Godot 4.7.2 MONO: https://godotengine.org/download/archive/4.7.2-stable/"
+        Write-Host "  .NET 8 SDK:       https://dotnet.microsoft.com/download/dotnet/8.0"
+        exit 2
+    }
+    $missing = @()
+    if (-not $hasDotnet) { $missing += '.NET SDK' }
+    if (-not $Godot)     { $missing += 'Godot 4.7.2 mono' }
+    Write-Host ("no developer tools here ({0}), so this plays the BUILT game instead." -f ($missing -join ", "))
+    Write-Host "you need neither of them to play."
+    & (Join-Path $PSScriptRoot 'tools\install.ps1')
+    exit $LASTEXITCODE
 }
 
 if ($Editor) {
@@ -56,6 +83,7 @@ if ($Two) {
 # They need the same zip AND Godot 4.7.2 .NET: the build handshake refuses a peer on a different
 # build, deliberately, because two builds disagree about every number.
 #
-# To make a real .exe instead, open the editor (-Editor), install the export templates it offers,
-# then Project -> Export -> Windows Desktop. That is a one-time setup per machine and is not
-# scripted here, because nothing in this repo has been exported or tested that way yet.
+# ...but someone who only wants to PLAY needs none of that: point them at the repo, or at
+# the Releases page. tools\install.ps1 fetches the published build and needs no engine.
+#
+# To MAKE a release: tools\pack.ps1, one command. See docs\README.md under Releasing.

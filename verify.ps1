@@ -38,13 +38,17 @@ Step 'typecheck' {
     $o | ForEach-Object { Write-Host "  $_" }
     # "0 errors." is necessary but not sufficient: the stub mode is a weaker check and must not
     # pass silently as if it were the real thing.
-    ($o -join "`n") -match '0 errors\.' -and ($o -join "`n") -match 'REAL GodotSharp\.dll'
+    # ANCHORED. '0 errors.' is a SUBSTRING of '10 errors.', so the unanchored form passed a
+    # typecheck with ten errors in it. Same family as the analyser step that never ran.
+    ($o -join "`n") -match '(^|\s)0 errors\.' -and ($o -join "`n") -match 'REAL GodotSharp\.dll'
 }
 
 Step 'build' {
     $o = & dotnet build -v q -nologo 2>&1
     $o | Select-String 'Warning\(s\)|Error\(s\)|error CS' | ForEach-Object { Write-Host "  $($_.Line.Trim())" }
-    ($o -join "`n") -match '0 Warning\(s\)' -and ($o -join "`n") -match '0 Error\(s\)'
+    # ANCHORED, for the same reason: '10 Warning(s)' and '10 Error(s)' both CONTAIN the
+    # unanchored pattern, so a build with ten of each reported clean.
+    ($o -join "`n") -match '(^|\s)0 Warning\(s\)' -and ($o -join "`n") -match '(^|\s)0 Error\(s\)'
 }
 
 Step 'analysers' {
@@ -72,10 +76,18 @@ if (-not $Quick) {
     if ($Fast) { $smokeArgs += '-Solo' }
     Step $(if ($Fast) { 'smoke test (solo only)' } else { 'smoke test x3' }) {
         $allOk = $true
+        $counts = @()
         foreach ($i in 1..$runs) {
             $o = & powershell @smokeArgs -Godot $engine 2>&1
             $pass = @($o | Where-Object { $_ -cmatch 'PASS ' }).Count
             $done = @($o | Where-Object { $_ -cmatch 'DONE' }).Count
+            $counts += $pass
+            # THE SEEDS, HERE, WHERE THEY SURVIVE. Every run wipes the scratch folder, so run
+            # 3 destroys run 2 logs and with them the number that reproduces run 2 geometry.
+            # Printed per run, any failure can be put back with run.ps1 -Seed <n>.
+            $seeds = @($o | Where-Object { $_ -cmatch 'SEED \d' } |
+                       ForEach-Object { ($_ -split 'SEED ')[-1].Trim() })
+            if ($seeds.Count) { Write-Host ("  run {0} seeds: {1}" -f $i, ($seeds -join ", ")) }
             # Not the runner's own verdict line: "SMOKE TEST FAILED (2 problems...)" contains
             # FAIL and would be counted as a problem on top of the problems it is reporting.
             $bad  = @($o | Where-Object { $_ -cmatch 'FAIL|Exception|ERROR' -and $_ -notmatch 'SMOKE TEST' })
@@ -86,6 +98,18 @@ if (-not $Quick) {
             $bad | ForEach-Object { Write-Host "    $_" }
             if ($bad.Count -ne 0 -or $done -ne $want) { $allOk = $false }
         }
+        # ...AND THE SUITE DID NOT QUIETLY SHRINK. $pass was computed and thrown away, so six
+        # DONE lines with twelve checks behind them passed exactly like six with eleven
+        # hundred: this step measured COMPLETION and never COVERAGE. There is no number to
+        # keep up to date -- the runs are compared against EACH OTHER, so it fails when
+        # checks stop running rather than when somebody adds some.
+        if (($counts | Select-Object -Unique).Count -ne 1) {
+            Write-Host ("  the runs do not agree on how many checks ran: {0}" -f ($counts -join ", "))
+            Write-Host "  a check that runs sometimes is a check that proves nothing."
+            $allOk = $false
+        }
+        if ($counts[0] -lt 1) { Write-Host "  no checks ran at all."; $allOk = $false }
+        Write-Host ("  {0} checks, the same in every run" -f $counts[0])
         $allOk
     }
 
@@ -93,6 +117,12 @@ if (-not $Quick) {
         $o = & powershell -NoProfile -ExecutionPolicy Bypass -File 'tools\screens\run.ps1' -Godot $engine 2>&1
         $o | Where-Object { $_ -cmatch '^SWEEP|^frames' } | ForEach-Object { Write-Host "  $_" }
         $ok = ($o -join "`n") -match 'SWEEP DONE' -and ($o -join "`n") -match 'LINT: 0'
+        # ...AND IT DREW SOMETHING. The frame count was printed and never read, so a sweep
+        # that rendered NOTHING still said SWEEP DONE and LINT: 0 -- nothing to draw is
+        # nothing to lint, and an empty pass looked exactly like a clean one.
+        $frames = 0
+        if (($o -join "`n") -match 'frames:\s*(\d+)') { $frames = [int]$Matches[1] }
+        if ($frames -lt 1) { Write-Host "  the sweep drew no frames, so LINT: 0 means nothing."; $ok = $false }
         # a failure that printed no SWEEP line (a stopped script) would otherwise be silent
         if (-not $ok) { $o | Select-Object -Last 8 | ForEach-Object { Write-Host "    $_" } }
         $ok
