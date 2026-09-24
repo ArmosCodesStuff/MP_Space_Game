@@ -18,3 +18,4 @@ local.config.ps1
 *.import
 *.uid
 dist/
+play/

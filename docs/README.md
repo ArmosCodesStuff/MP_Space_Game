@@ -46,29 +46,36 @@ build handshake refuses a peer on a different build, deliberately.
 window its own character before hosting**: two peers writing one character file is the collision
 that made a day of save bugs look real.
 
-## Playing it from a clone
+## Playing it
 
-Double-click **`PLAY.bat`**, or:
+Clone this, double-click **`PLAY.bat`**. That is the whole instruction, on any machine.
+
+It picks the way that will work:
+
+- **From source**, if this machine has Godot 4.7.2 **mono** and the .NET 8 SDK -- the engine runs
+  the project in this folder, so you play the code you are looking at. A first run imports every
+  asset and builds the C# before a window appears: a minute or two, and it has not hung.
+- **The built game** otherwise. It fetches `WarshipsLauncher.exe` (~66 MB) from the latest release
+  and starts it; the launcher downloads the game itself and keeps it updated from then on.
+  **Nothing needs to be installed for this** -- no Godot, no .NET, no engine. It asks before it
+  downloads anything, checks what came back really is a program (a captive portal returns an HTML
+  page with a 200, and saving that as an `.exe` is the failure that looks like success), and puts
+  it in `play\`, which is gitignored and which no tool here ever deletes.
 
 ```
-powershell -ExecutionPolicy Bypass -File tools\play.ps1
+powershell -ExecutionPolicy Bypass -File tools\play.ps1     # same thing, without the double-click
 ```
 
-`-Editor` opens the Godot editor instead of running the game.
+`-Editor` opens the Godot editor. `-Game` takes the built-game path even where the tools exist.
+`-Yes` skips the download prompt.
 
-**There is no runnable file in this repo and there is not meant to be** -- no `.exe`, no `.pck`,
-and `dist\` is gitignored. A release is an OUTPUT (see Releasing below); a clone gets the project.
-`tools\play.ps1` runs it, and checks the two things that are actually ever missing before the
-engine can fail confusingly about them:
+**There is no runnable file in the repo itself and there is not meant to be** -- no `.exe`, no
+`.pck`, `dist\` gitignored. A release is an OUTPUT (see Releasing). Godot is found by
+`toolsind-godot.ps1`, which reads `$env:WARSHIPS_GODOT` and a gitignored `local.config.ps1`,
+so your engine path survives a pull.
 
-- **Godot 4.7.2, the .NET / MONO build.** The plain build has no C# in it at all: it opens this
-  project and then cannot load a single script, which reads like the project is broken and is not.
-  Found by `toolsind-godot.ps1`, which also reads `$env:WARSHIPS_GODOT` and `local.config.ps1`
-  (gitignored, so your path survives a pull).
-- **The .NET 8 SDK**, because the engine builds the C# before the window opens.
-
-A FIRST run on a fresh clone takes a minute or two -- every asset is imported and the assembly is
-built before anything appears. It has not hung.
+**Someone who only wants to play needs none of this.** Point them at the Releases page:
+`WarshipsLauncher.exe`, run it, press UPDATE.
 
 ## Releasing
 

@@ -237,10 +237,13 @@ Copy-Item (Join-Path $game 'BUILD.sha256') (Join-Path $rel 'BUILD.sha256') -Forc
 $fileUrl = 'file:///' + ($rel -replace '\\', '/') + '/'
 Write-Host ''
 Write-Host "pack: $build"
-Write-Host "  keep and hand out once:  $Out\WarshipsLauncher.exe"
-Write-Host '  upload all five to the GitHub release, with these exact names:'
+Write-Host "  the launcher:            $Out\WarshipsLauncher.exe"
+Write-Host '  upload all SIX to the GitHub release, with these exact names -- the launcher too,'
+Write-Host '  because tools\play.ps1 fetches it from releases/latest/download on a machine with no'
+Write-Host '  developer tools, and a file nobody can reach by URL has to be handed over by hand:'
+Write-Host ('    {0,-22} {1,12:N0} bytes' -f 'WarshipsLauncher.exe', (Get-Item (Join-Path $dist 'WarshipsLauncher.exe')).Length)
 Get-ChildItem $rel -File | Sort-Object Name | ForEach-Object {
-    Write-Host ('    {0,-14} {1,12:N0} bytes' -f $_.Name, $_.Length)
+    Write-Host ('    {0,-22} {1,12:N0} bytes' -f $_.Name, $_.Length)
 }
 Write-Host '  the launcher reads releases/latest/download/<name>, so the names must not change.'
 Write-Host "  a test install: put source.txt beside the launcher holding  $fileUrl"

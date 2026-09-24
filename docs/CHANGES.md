@@ -418,7 +418,7 @@ Unreleased. Nothing is outstanding from the batch of 2026-09-23.)*
 
 ## Unreleased
 
-### A clone can be played (2026-09-24, in the WarShips_Version_L fork)
+### A clone can be played on a machine with nothing installed (2026-09-24, in the WarShips_Version_L fork)
 
 **Nothing in the repo launched the game.** There is no runnable file here and there is not meant
 to be -- no `.exe`, no `.pck`, `dist\` gitignored -- so anyone given access had to know to install
@@ -436,6 +436,27 @@ and that the engine is the mono build. Each failure prints the download link and
 
 It also says that a first run on a fresh clone takes a minute or two and has not hung, which is
 the difference between waiting and giving up.
+
+**AND IT WORKS WITH NOTHING INSTALLED.** The developer tools are about 330 MB and nobody who only
+wants to play should be asked for them -- so when they are absent, `play.ps1` fetches
+`WarshipsLauncher.exe` from the latest release and starts it, and the launcher downloads the game
+itself. No Godot, no .NET, no engine. One double-click covers a bare machine and a dev box; if the
+tools appear later, the same double-click starts running that person's own code instead.
+
+**The launcher is a RELEASE ASSET now.** It was deliberately not one -- "downloaded once, by hand,
+and then never again" -- but a file with no URL is a file that has to be handed over in person,
+which is exactly what stopped a repo link being enough. It is in every release now, so
+`releases/latest/download/WarshipsLauncher.exe` always resolves, and `tools/pack.ps1` prints it in
+the upload list with the other five.
+
+**It goes in `play\`, not `dist\`.** The launcher installs the game BESIDE ITSELF, and
+`tools/pack.ps1` deletes `dist\` whole on every release -- so a player's installed game in there
+would be destroyed by the next build. `play\` is gitignored and no tool touches it.
+
+**The download is checked before it is run.** A captive portal, a proxy or a signed-out link
+returns an HTML page with a 200; saving that as an `.exe` and running it is the failure that looks
+like success. It lands under a `.part` name, its first two bytes must be `MZ`, and only then is it
+moved into place. Proved end to end against the real release: 65,834,679 bytes, verified, started.
 
 ### The sky is layered, so flying looks like flying (2026-09-24, in the WarShips_Version_L fork)
 
