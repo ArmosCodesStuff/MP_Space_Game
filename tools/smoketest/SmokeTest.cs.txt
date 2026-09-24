@@ -1098,6 +1098,22 @@ public partial class _Test : Node
 
     void BuildChecks()
     {
+        // ── THE BUILD STRING IS INVISIBLE TO THE PROTOCOL HASH ───────────────────────────────
+        // Net.Fingerprint() folds in every static field of every null-namespace type that is
+        // IsLiteral or IsInitOnly with a Plain field type -- and string is Plain. A
+        // `public static readonly string Build` would therefore enter the hash two peers are
+        // matched on, and two BYTE-IDENTICAL builds packed a minute apart would refuse each other
+        // at the handshake. Asserted STRUCTURALLY, the way the trap is laid: the member must be a
+        // property, and the static field behind it must be neither literal nor init-only.
+        var buildProp = typeof(Game).GetProperty("Build", BindingFlags.Public | BindingFlags.Static);
+        var buildFields = typeof(Game).GetFields(BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static)
+                                      .Where(f => f.FieldType == typeof(string) && (f.IsLiteral || f.IsInitOnly)).ToList();
+        Check(buildProp != null && buildProp.PropertyType == typeof(string)
+              && typeof(Game).GetField("Build", BindingFlags.Public | BindingFlags.Static) == null
+              && buildFields.All(f => f.Name != "_build")
+              && Game.Build == "dev",
+              $"the build a player reads is a property over a mutable static, so it cannot enter the protocol hash two peers are matched on -- and outside a release it says so ({Game.Build}; {buildFields.Count} frozen strings on Game, none of them the build)");
+
         // THE ONE THAT MATTERS MOST. A manifest line is text from a download; if it can name a
         // place, it can name the player's characters. %APPDATA%\Godot\app_userdata\Warships is
         // outside the install, so the rule is simply that nothing may leave the install at all.

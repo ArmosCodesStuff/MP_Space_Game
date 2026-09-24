@@ -16,6 +16,39 @@ public static class Game
 {
     public const int Version = 2;
 
+    // WHICH BUILD THIS IS, for a bug report to name. Read once out of the BUILD.txt the release
+    // ships beside the executable (Builds.cs, and tools\pack.ps1 which writes it); "dev" in the
+    // editor and in every harness, where there is no release. It is DISPLAY ONLY -- Net.Protocol
+    // is the identity that decides whether two peers may play, and it is computed by reflection
+    // over what the build actually contains.
+    //
+    // NEVER readonly, NEVER const, and this is not a style note. Net.Fingerprint() folds in every
+    // static field that is IsLiteral or IsInitOnly whose type is Plain, and string is Plain -- so
+    // a readonly build string would enter the PROTOCOL HASH, and two byte-identical builds packed
+    // a minute apart would refuse each other at the handshake. A plain mutable static behind a
+    // property is invisible to it; a rung-3 check asserts that structurally.
+    private static string _build;
+    public static string Build
+    {
+        get
+        {
+            if (_build != null) return _build;
+            _build = "dev";
+            try
+            {
+                var beside = System.IO.Path.GetDirectoryName(OS.GetExecutablePath());
+                var at = System.IO.Path.Combine(beside ?? "", Builds.InfoName);
+                if (System.IO.File.Exists(at))
+                {
+                    var info = Builds.ReadInfo(System.IO.File.ReadAllText(at));
+                    if (info != null && !string.IsNullOrEmpty(info.Build)) _build = info.Build;
+                }
+            }
+            catch (System.Exception) { }      // no release beside us: "dev" is the honest answer
+            return _build;
+        }
+    }
+
     // Shown when a character cannot be loaded because it predates this build. Kept here, beside
     // the number that causes it, rather than in the screen that happens to draw it.
     public const string IncompatibleNote =

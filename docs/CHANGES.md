@@ -469,9 +469,18 @@ The delete set is empty by construction: a file is only ever renamed over, and t
 the program are the staging folder it made itself and the `.old` files it made a moment earlier. A
 failed update leaves the install bit-identical with PLAY still enabled.
 
-**Checks:** 29 in the solo role -- path-traversal refusal ten ways, the manifest format including
-CRLF, the whole decision table, and a real apply-and-resume against a folder source with a decoy
-file beside the changed ones.
+**And the game says which build it is**, at the bottom of the Esc menu -- `Game.Build`, read once
+out of the `BUILD.txt` a release ships beside the executable, `"dev"` in the editor and in every
+harness. Display only: `Net.Protocol` is still the identity that decides whether two peers may
+play. **It is a property over a mutable static, and that is not a style choice.**
+`Net.Fingerprint()` folds in every static field that is `IsLiteral || IsInitOnly` whose type is
+`Plain`, and `string` is `Plain` -- so a `readonly` build string would enter the protocol hash and
+two byte-identical builds packed a minute apart would refuse each other at the handshake. A check
+asserts that structurally, the way the trap is laid.
+
+**Checks:** 30 in the solo role -- path-traversal refusal ten ways, the manifest format including
+CRLF, the whole decision table, a real apply-and-resume against a folder source with a decoy file
+beside the changed ones, and the fingerprint blindness above.
 
 **Four things found by building it rather than planning it.** The plain Godot `.exe` on Windows is
 a GUI-subsystem binary, so PowerShell does not wait for it: the export "produced no exe" about a

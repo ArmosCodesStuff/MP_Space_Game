@@ -47,6 +47,12 @@ public partial class EscMenu : CanvasLayer
         var foot = Ui.Lbl("Esc closes.", Ui.Small, Ui.Dim);
         foot.HorizontalAlignment = HorizontalAlignment.Center;
         col.AddChild(foot);
+        // WHICH BUILD THIS IS. The one place a player can read it back, so "it's broken" comes
+        // with a build id (Game.Build). "dev" outside a release.
+        var stamp = Ui.Lbl(Game.Build, Ui.Small, Ui.Dim);
+        stamp.HorizontalAlignment = HorizontalAlignment.Center;
+        stamp.Name = "Build";
+        col.AddChild(stamp);
     }
 
     // a row of toggle buttons, one pressed; choosing saves the setting
