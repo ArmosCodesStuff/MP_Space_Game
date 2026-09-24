@@ -29,6 +29,19 @@ public partial class Hints : CanvasLayer
         ["boss"]        = ("THE BOSS", "Red shapes are its attacks, drawn before they land: get out of them. Beat it for EXP, a bounty and parts."),
     };
 
+    // THE TOUR a first character is walked through, in this order (Tour.cs): the things a pilot
+    // cannot work out by flying around, soonest first. It is an ORDER OF IDS and not a second copy
+    // of the words -- the cards are the ones above, shown with a CONTINUE instead of a clock.
+    // A hint not on this list is still met in play, the way every hint always was.
+    public static readonly string[] Tour =
+    {
+        "flight", "target", "abilities", "base", "tio", "pilot", "equipment", "loot",
+    };
+
+    // THE TOUR a first character is walked through, in this order (Tour.cs): the things a pilot
+    // cannot work out by flying around, soonest first. It is an ORDER OF IDS and not a second copy
+    // of the words -- the cards are the ones above, shown with a CONTINUE instead of a clock.
+
     // how near a pilot has to come to a thing to have "met" it
     public const float TargetMeet = 500, BaseMeet = 600, TioMeet = 400, WarpMeet = 1500;
     private const double UpFor = 8.0, FadeFor = 1.0;               // seconds in full, then fading

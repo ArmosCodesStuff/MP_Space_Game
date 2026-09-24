@@ -361,7 +361,7 @@ public partial class _Test : Node
         Character.BaseInvested[Economy.All[0].Tab] = 900;
         Character.GearHold["chip_basic"] = 2; Character.GearHold["std_drive"] = 1; Character.GearHold["cv_elite_3"] = 1;
         Character.GearLevel["bs_rapid_1"] = 7; Character.GearLevel["cv_elite_3"] = 40;
-        Character.GearLocked.Add("cv_elite_3");
+        Character.GearLocked.Add("cv_elite_3"); Character.TourDone = true;
         Character.Unclaimed.AddRange(new[] { "cv_elite_3", "sh_bulwark_2" });
         Character.PaidKills.AddRange(new[] { 638000000000000001L, 638000000000000002L });
         Character.HintsSeen.Add("flight"); Character.HintsSeen.Add("raid"); Character.HintsOff = true;
@@ -389,7 +389,7 @@ public partial class _Test : Node
         var exercised = new[] { "Accent", "BaseCredits", "BaseInvested", "BaseLevels",
                                 "BaseStock", "BossCleared", "Bonuses", "Bought", "Class", "Exp",
                                 "GearHold", "GearLevel", "GearLocked", "HintsOff", "HintsSeen", "Id", "Level", "Loadout", "Main",
-                                "Name", "PaidKills", "Points", "Spent", "Unclaimed" };
+                                "Name", "PaidKills", "Points", "Spent", "TourDone", "Unclaimed" };
         // Not state a character carries: a path, and the compiler's backing field for a property
         // that reports how the LAST save went. Named explicitly rather than filtered by a pattern,
         // so a real field that happens to look like one cannot slip through.
@@ -1184,6 +1184,47 @@ public partial class _Test : Node
         Check(Math.Abs(out0 - Hub.DefaultZoom / 1.53f) < 1e-6 && Math.Abs(in0 - Hub.DefaultZoom * 1.5f) < 1e-6
               && Math.Abs(Hub.ZoomOutMax / 1.33f - 1.15f) < 0.005f,
               $"the wheel reaches 15% further out than it did -- 1.33 of the default was the limit, 1.53 is ({out0:0.000} out, {in0:0.000} in)");
+    }
+
+    // ── THE SOFT TUTORIAL: a card at a time, CONTINUE, and SKIP in the top right ────────────────
+    // On a FIRST character only. It is an order of hint ids rather than a second copy of the
+    // words, so a card here and a card met in play are the same card, and a card dismissed here is
+    // never shown again.
+    async Task TourChecks()
+    {
+        var tour = Nodes<Tour>().FirstOrDefault();
+        Check(tour != null && Hints.Tour.Length >= 6 && Hints.Tour.All(id => Hints.All.ContainsKey(id))
+              && Hints.Tour.Distinct().Count() == Hints.Tour.Length,
+              $"the tour is an ORDER of hints, not a second copy of them: {Hints.Tour.Length} steps, every one a card the game already has, none of them twice");
+        if (tour == null) return;
+
+        // A pilot that has met anything is not new, and is never offered it.
+        bool offeredToVeteran = false;
+        var was = new System.Collections.Generic.HashSet<string>(Character.HintsSeen);
+        Character.HintsSeen.Add("flight");
+        var late = new Tour { Hub = H }; AddChild(late); late.StartIfNew();
+        offeredToVeteran = late.Running;
+        late.QueueFree();
+        Character.HintsSeen.Clear(); foreach (var id in was) Character.HintsSeen.Add(id);
+        Check(!offeredToVeteran, "a pilot that has met anything at all is not walked through it");
+
+        // CONTINUE steps forward and marks the card seen; the last one reads FLY.
+        Character.HintsSeen.Clear(); Character.TourDone = false;
+        var fresh = new Tour { Hub = H }; AddChild(fresh); fresh.StartIfNew();
+        bool started = fresh.Running;
+        var cont = Nodes<Button>(fresh).First(b => b.Name == "Continue");
+        var skipBtn = Nodes<Button>(fresh).First(b => b.Name == "Skip");
+        cont.EmitSignal(BaseButton.SignalName.Pressed);
+        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        bool stepped = Character.HintsSeen.Contains(Hints.Tour[0]) && fresh.Running;
+        // SKIP ends it and marks the WHOLE tour seen, so the same pilot is not asked again.
+        skipBtn.EmitSignal(BaseButton.SignalName.Pressed);
+        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        bool skipped = Hints.Tour.All(Character.HintsSeen.Contains) && Character.TourDone;
+        Check(started && stepped && skipped,
+              $"CONTINUE marks a card seen and moves on; SKIP ends it and marks every card on it, so nothing is ever said twice ({Character.HintsSeen.Count} seen, done {Character.TourDone})");
+        Character.HintsSeen.Clear(); Character.TourDone = false;
+        foreach (var id in was) Character.HintsSeen.Add(id);
     }
 
     void RefitChecks()
@@ -3574,6 +3615,7 @@ public partial class _Test : Node
                   "a ship within 2000 u: the lights go for it, and their heavy takes the same target");
             await RangeChecks();                // something real to select, at a real distance
             ZoomChecks();
+            await TourChecks();
             // ── THREE AT ONCE, ON THE HULLS BIG ENOUGH TO HOLD THEM ──
             // How many a hull may hold is its class's row, so "capital ships only" is a number and
             // not a list of class names in an `if`. A light still holds one: picking a second

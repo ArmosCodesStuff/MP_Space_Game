@@ -45,6 +45,10 @@ public static class Character
     // THE TUTORIAL: the hints this pilot has been shown (Hints.All ids), and its off switch (Esc menu)
     public static readonly HashSet<string> HintsSeen = new();
     public static bool HintsOff;
+    // Whether this pilot has been walked through the tour (Tour.cs) -- taken to the end or skipped.
+    // Separate from HintsOff, which is the player turning hints off for good.
+    public static bool TourDone;
+    // Whether this pilot has been walked through the tour (Tour.cs) -- taken to the end or skipped.
 
     // THE BASE. It belongs to the pilot, not to the session: each character has its own, and a
     // guest visiting someone else's sets its own aside rather than sharing theirs. Yard owns the
@@ -120,7 +124,7 @@ public static class Character
         Bonuses.Clear();
         Exp = 0; Level = 1; Points = 0; Array.Clear(Bought); BossCleared.Clear(); Loadout.Clear(); GearHold.Clear(); Unclaimed.Clear(); PaidKills.Clear();
         GearLevel.Clear(); GearLocked.Clear();
-        HintsSeen.Clear(); HintsOff = false;
+        HintsSeen.Clear(); HintsOff = false; TourDone = false;
         BaseCredits = 0; BaseStock.Clear(); BaseLevels.Clear(); BaseInvested.Clear();
     }
 
@@ -164,7 +168,7 @@ public static class Character
         foreach (var kv in BossCleared) c.SetValue("boss_cleared", kv.Key, string.Join(",", kv.Value.OrderBy(x => x)));
         foreach (var kv in GearLevel) if (kv.Value > 0) c.SetValue("gear_level", kv.Key, kv.Value);
         c.SetValue("gear", "locked", string.Join(",", GearLocked.OrderBy(x => x, StringComparer.Ordinal)));
-        c.SetValue("gear", "locked", string.Join(",", GearLocked.OrderBy(x => x, StringComparer.Ordinal)));
+        c.SetValue("hints", "tour_done", TourDone);
         // ONE KEY PER RESOURCE ID, in table order, then the credits: "ore", "salvage", "credits",
         // the same three keys in the same order two named fields wrote.
         foreach (var r in Gathering.Resources) c.SetValue("base", r, BaseStock.GetValueOrDefault(r));
@@ -300,6 +304,7 @@ public static class Character
             if (Hints.All.ContainsKey(h)) HintsSeen.Add(h);
         HintsOff = (bool)c.GetValue("hints", "off", false);
         BossCleared.Clear();
+        TourDone = (bool)c.GetValue("hints", "tour_done", false);
         GearLevel.Clear(); GearLocked.Clear();
         foreach (var lockedId in ((string)c.GetValue("gear", "locked", "")).Split(',', StringSplitOptions.RemoveEmptyEntries))
             GearLocked.Add(lockedId);

@@ -89,7 +89,7 @@ public partial class _Shots : Node
         var me = H.GetNode<PlayerShip>("Ship_1");
         me.Position = new Vector2(620, 780); me.Rotation = -0.4f;
         await W(2.5);
-        H.GetType().GetField("_selected", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(H, H.GetNode<TargetDummy>("TargetDummy1"));
+        H.SelectTarget(H.GetNode<TargetDummy>("TargetDummy1"));
         Input.ParseInputEvent(new InputEventMouseMotion { Position = GetViewport().GetFinalTransform() * (GetViewport().GetCanvasTransform() * new Vector2(600, 420)) });
         Key(global::Godot.Key.Q); await W(2.0);
         Input.ParseInputEvent(new InputEventKey { Keycode = global::Godot.Key.Space, PhysicalKeycode = global::Godot.Key.Space, Pressed = true });
@@ -369,7 +369,7 @@ public partial class _Shots : Node
             Character.Class = ShipClass.Destroyer; P(H, "ApplyLocalIdentity"); await W(0.3);
             var ms = H.GetNode<PlayerShip>("Ship_1"); var md = H.GetNode<TargetDummy>("TargetDummy1");
             ms.Position = md.Position + new Vector2(0, 700); ms.Velocity = Vector2.Zero; ms.Rotation = 0f; await W(0.8);
-            typeof(Hub).GetField("_selected", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).SetValue(H, md);
+            H.SelectTarget(md);
             var zp = typeof(Hub).GetProperty("ZoomLevel"); float z0 = (float)zp.GetValue(H); zp.SetValue(H, 1.4f);
             ms.UseAbility("missile", md.NetId); await W(0.9);
             await Snap("43_missile_burst");
@@ -424,7 +424,6 @@ public partial class _Shots : Node
         // ── QA: every remaining feature and UI state, one frame each ─────────────
         {
             var hub = H; var Y = hub.Yard; var cam = GetViewport().GetCamera2D();
-            var sel = hub.GetType().GetField("_selected", BindingFlags.NonPublic | BindingFlags.Instance);
             var d1 = hub.GetNode<TargetDummy>("TargetDummy1");
             PlayerShip Me() => hub.GetNode<PlayerShip>("Ship_1");
             async Task Frame(Vector2 at, float zoom, bool hideShip = true)
@@ -465,7 +464,7 @@ public partial class _Shots : Node
 
             // battleship: the broadside -- the turrets swinging onto the cursor, then a volley in flight;
             // the bar with the broadside cooling down and PD on
-            sel.SetValue(hub, d1);
+            hub.SelectTarget(d1);
             await Frame(d1.Position + new Vector2(-120, 520), 1.3f, false);
             void Cursor(Vector2 w) => Input.WarpMouse(GetViewport().GetFinalTransform() * (GetViewport().GetCanvasTransform() * w));
             Cursor(Me().Position + new Vector2(260, 160)); await W(2.5);      // the turrets swung well away first
@@ -477,7 +476,7 @@ public partial class _Shots : Node
             // destroyer: the magazine spent, then reloading
             await Class(ShipClass.Destroyer);
             await Frame(d1.Position + new Vector2(-120, 520), 1.3f, false);
-            sel.SetValue(hub, d1);
+            hub.SelectTarget(d1);
             Key(global::Godot.Key.F); await W(0.8); Key(global::Godot.Key.F); await W(0.8);
             await Snap("23b_bar_destroyer_empty");
             Key(global::Godot.Key.R); await W(3.0); await Snap("23c_bar_destroyer_reloading");
@@ -489,7 +488,7 @@ public partial class _Shots : Node
             // carrier: out of range, torpedoes while closing, fighters resting over the carrier
             await Class(ShipClass.Carrier);
             await Frame(new Vector2(-2600, 2000), 0.9f, false);
-            sel.SetValue(hub, d1); await W(0.3); await Snap("25_bar_out_of_range");
+            hub.SelectTarget(d1); await W(0.3); await Snap("25_bar_out_of_range");
             Key(global::Godot.Key.F);
             for (int i = 0; i < 1500 && !N<Shot>().Any(x => x.IsMissile); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             // framed on the bomber, not the target: it launches from 1900 u out, far off the dummy's frame

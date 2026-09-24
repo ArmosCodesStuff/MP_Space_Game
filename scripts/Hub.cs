@@ -331,6 +331,10 @@ public partial class Hub : Node2D
         layer.AddChild(new AbilityBar { Hub = this });
         if (!InArena) layer.AddChild(new HaulerHud { Hub = this });
         Hints = new Hints { Hub = this }; AddChild(Hints);
+        // THE SOFT TUTORIAL, on a first character only: a card at a time with CONTINUE, and SKIP
+        // in the top right. It offers itself and removes itself; a pilot that has met anything at
+        // all, or been through it before, never sees it.
+        var tour = new Tour { Hub = this }; AddChild(tour); tour.StartIfNew();
 
         Settings.EnsureLoaded();       // ability key bindings
         Combat.Clear();

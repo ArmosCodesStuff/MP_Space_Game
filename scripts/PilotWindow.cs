@@ -1,4 +1,5 @@
 using Godot;
+using System.Linq;
 
 // PILOT (L): level, EXP (1000 a level), points, and the four upgrades they buy. Each row's BUY costs
 // one more point than its last purchase (1, 2, 3, ...). Purchases save at once and
@@ -14,7 +15,9 @@ public partial class PilotWindow : PanelContainer
     public override void _Ready()
     {
         Name = "PilotWindow";
-        Position = new Vector2(360, 92);
+        // Higher than it used to sit: seven upgrade rows are taller than four, and at 92 the
+        // bottom of the window ran into the hull bar (the sweep's layout lint caught it).
+        Position = new Vector2(360, 64);
         Ui.Panelise(this);
         var col = Ui.VBox(12); AddChild(col);
         _head = Ui.Lbl("", Ui.Title, Ui.Accent); col.AddChild(_head);
@@ -71,15 +74,20 @@ public partial class PilotWindow : PanelContainer
     // carrier's fighters take nothing at all -- while the row said "next +1" for all of it.
     // The unit conversion is gone with the special case: a stat prints in the units the STATS tab
     // prints it in, so the two windows cannot disagree.
+    // WHAT A POINT BUYS, in at most three lines. A share reads as a percentage and an amount in the
+    // stat's own units -- "+0.03 damage" is not what three percent of a weapon looks like to
+    // anybody -- and a row that moves five stats (a carrier's reach) says the first two and counts
+    // the rest, because the window grew into the hull bar when it listed them all.
+    private const int Listed = 2;
     private static string Buys(Progression.Upgrade u, int n)
     {
+        var moves = Progression.StatsFor(u, Character.Class).ToList();
         string s = "";
-        foreach (var (stat, per) in Progression.StatsFor(u, Character.Class))
-            // A SHARE READS AS A PERCENTAGE and an amount in the stat's own units, because
-            // "+0.03 damage" is not what three percent of a weapon looks like to anybody.
+        foreach (var (stat, per) in moves.Take(Listed))
             s += u.Share
-                ? "\n    " + AllStats.Said(stat) + "   " + (per * n * 100).ToString("+0.#;-0.#;0") + "% now, " + (per * 100).ToString("+0.#;-0.#;0") + "% next"
+                ? "\n    " + AllStats.Said(stat) + "   " + (per * 100).ToString("+0.#;-0.#;0") + "% a level"
                 : "\n    " + AllStats.Said(stat) + "   +" + AllStats.Fmt(stat, per * n) + " now, +" + AllStats.Fmt(stat, per) + " next";
+        if (moves.Count > Listed) s += "\n    ...and " + (moves.Count - Listed) + " more on this hull";
         return s.Length > 0 ? s : "\n    nothing on this hull";
     }
 }
