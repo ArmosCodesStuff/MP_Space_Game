@@ -1367,3 +1367,23 @@ fetch unaided, a player can fetch unaided: a token or key inside a file players 
 in a minute. Gating it for real needs a service in front of the download that the launcher asks
 instead of asking GitHub -- the launcher would gain one field and no logic, and `source.txt` plus
 `schema=1` are what make that swap possible without shipping a new launcher.
+
+## The sky, and a property whose name means the opposite of what it says
+
+`scripts/Sky.cs` owns it. A layer is a row; three of them draw one texture at different scales,
+tints and rotations.
+
+**`Parallax2D.ScrollScale` is inverted relative to intuition.** It is how much the layer FOLLOWS
+THE CAMERA, so 1 is a layer that never appears to move (infinitely far) and 0 is a layer fixed in
+the world (moves past at full speed). Measured directly: on-screen travel is exactly
+`(1 - ScrollScale)` times the camera's. The table therefore stores `Drift` -- the share of the
+world's motion a player SEES -- and `Sky.Build` converts once. Anyone writing the table in engine
+terms will write every future row backwards.
+
+**Two ways to measure a parallax layer that both look like they work.**
+`Parallax2D.ScreenOffset` is the raw camera offset and is IDENTICAL on every layer, so a check
+reading it reports the full camera distance three times and passes a flat sky. And the drawn
+origin wraps: a layer re-tiles itself by whole `RepeatSize` steps, so any hop longer than the
+smallest tile returns noise around the raw distance rather than the parallax share. Measure
+`GetGlobalTransformWithCanvas().Origin` of the child sprite, over a hop shorter than the smallest
+tile.

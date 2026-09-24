@@ -262,13 +262,11 @@ public partial class Hub : Node2D
     public override void _Ready()
     {
         Ui.Install(GetTree());                                  // the game-wide look
-        // Background stars: a static, tiled image on a deep screen-space layer, behind
-        // everything in the world. Purely local -- nothing about it is networked.
+        // THE SKY, behind everything in the world: a layer per row of Sky.All, each taking a
+        // different share of the camera's motion so that flying reads as flying. Purely local --
+        // nothing about it is networked, and no two peers need agree on it.
         var sky = new CanvasLayer { Layer = -100, Name = "Stars" }; AddChild(sky);
-        var stars = new TextureRect { Texture = GD.Load<Texture2D>("res://stars.png"),
-                                      StretchMode = TextureRect.StretchModeEnum.Tile, MouseFilter = Control.MouseFilterEnum.Ignore };
-        stars.SetAnchorsPreset(Control.LayoutPreset.FullRect);
-        sky.AddChild(stars);
+        Sky.Build(sky);
 
         I = this;
         _world = Session.NextWorld();

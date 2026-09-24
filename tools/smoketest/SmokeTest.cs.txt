@@ -1623,6 +1623,78 @@ public partial class _Test : Node
               $"the wheel reaches 15% further out than it did -- 1.33 of the default was the limit, 1.53 is ({out0:0.000} out, {in0:0.000} in)");
     }
 
+    // ── THE SKY: layered, and every layer moving at its own speed ───────────────────────────────
+    // What this replaces could not move AT ALL: one TextureRect anchored FullRect to the screen,
+    // so a ship at 190 u/s crossed a starfield that never shifted a pixel. The rows are proved
+    // against literals here; that they actually MOVE, and move by DIFFERENT amounts, is proved by
+    // shifting the camera and reading them back -- which is the only check that would have caught
+    // the thing being fixed.
+    async Task SkyChecks()
+    {
+        var sky = H.GetNodeOrNull<CanvasLayer>("Stars");
+        var layers = sky == null ? new List<Parallax2D>() : Nodes<Parallax2D>(sky).ToList();
+        Check(sky != null && sky.Layer == -100 && layers.Count == Sky.All.Length && Sky.All.Length == 3
+              && layers.Select(l => l.Name.ToString()).SequenceEqual(Sky.All.Select(r => "Sky_" + r.Id)),
+              $"the sky is a layer per row, all of it behind the world ({layers.Count} of {Sky.All.Length} rows on layer {sky?.Layer})");
+
+        // FAR TO NEAR, strictly. The illusion IS the ordering: equal drifts are one flat sheet,
+        // and a row out of order reads as the distance running backwards. Every row must drift
+        // MORE than nothing -- a 0 is the static sky this replaced -- and less than 0.6, past
+        // which the stars stop reading as distance and start reading as debris going by.
+        bool climbs = true;
+        for (int i = 1; i < Sky.All.Length; i++) if (Sky.All[i].Drift <= Sky.All[i - 1].Drift) climbs = false;
+        Check(climbs && Sky.All.All(r => r.Drift > 0f && r.Drift < 0.6f)
+              && Math.Abs(Sky.All[0].Drift - 0.08f) < 1e-6 && Math.Abs(Sky.All[Sky.All.Length - 1].Drift - 0.45f) < 1e-6,
+              $"every layer moves and none keeps up: {string.Join(" < ", Sky.All.Select(r => r.Drift.ToString("0.00")))} of the world's motion, ordered far to near");
+
+        // A ROW'S SCALE REACHES ITS REPEAT. RepeatSize is the tile's DRAWN size, so a row whose
+        // scale is not in it seams mid-tile and the whole field visibly steps as it crosses.
+        bool tiles = true;
+        for (int i = 0; i < layers.Count; i++)
+        {
+            var row = Sky.All[i];
+            var art = Nodes<Sprite2D>(layers[i]).FirstOrDefault();
+            if (art?.Texture == null) { tiles = false; break; }
+            if (Math.Abs(layers[i].RepeatSize.X - art.Texture.GetWidth() * row.Scale) > 0.5f) tiles = false;
+            // ...and the row's Drift reaches the engine as its INVERSE, which is the one place
+            // the two senses meet and the one place a future row can be silently reversed.
+            if (Math.Abs(layers[i].ScrollScale.X - (1f - row.Drift)) > 1e-6) tiles = false;
+            if (Math.Abs(art.Scale.X - row.Scale) > 1e-6) tiles = false;
+        }
+        Check(tiles && layers.Count > 0,
+              $"each layer repeats at its own drawn size and scrolls at its own row's rate ({layers.Count} layers)");
+
+        // AND IT MOVES. The camera goes a long way sideways; every layer must shift, and a NEARER
+        // one must shift further than the one behind it. This is the check the old sky failed.
+        // MEASURED WHERE IT IS DRAWN. Parallax2D.ScreenOffset is the RAW camera offset and reads
+        // the same on every layer -- measuring it said all three moved 4000 u and proved nothing.
+        // The transform-with-canvas is where the art actually lands on the screen.
+        var art0 = layers.Select(l => Nodes<Sprite2D>(l).FirstOrDefault()).ToList();
+        // ...AND MEASURED OVER A SHORT HOP. A layer REPEATS, so its origin jumps by whole tiles as
+        // it re-tiles: the smallest tile here is 563 u (1024 px of stars.png at the far row's
+        // 0.55), and a 4000 u move wrapped every layer several times, which read as 4243 / 4144 /
+        // 4350 -- noise around the raw distance, telling us nothing. 200 u wraps nothing.
+        var wasAt = Me.Position;
+        var before = art0.Select(a2 => a2 == null ? 0f : a2.GetGlobalTransformWithCanvas().Origin.X).ToList();
+        Me.Position = wasAt + new Vector2(200, 0);
+        for (int f = 0; f < 6; f++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        var moved = art0.Select((a2, i) => a2 == null ? 0f : Math.Abs(a2.GetGlobalTransformWithCanvas().Origin.X - before[i])).ToList();
+        bool anyMoved = moved.Any(d => d > 1f);
+        bool deeper = true;
+        for (int i = 1; i < moved.Count; i++) if (moved[i] <= moved[i - 1]) deeper = false;
+        // ...AND BY THE SHARE ITS ROW ASKED FOR. Each layer's travel over the same hop, divided by
+        // its own Drift, must come to the same camera distance -- which is what makes this a check
+        // on the NUMBERS in the table and not merely on the ordering of them.
+        bool byShare = true;
+        double unit = moved.Count > 0 ? moved[0] / Sky.All[0].Drift : 0;
+        for (int i = 1; i < moved.Count; i++)
+            if (Math.Abs(moved[i] / Sky.All[i].Drift - unit) > unit * 0.05) byShare = false;
+        Me.Position = wasAt;
+        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        Check(anyMoved && deeper && byShare,
+              $"200 u of ship moves every layer on screen, each nearer one further than the one behind it, and each by its own row's share ({string.Join(", ", moved.Select(d => d.ToString("0.0")))} u over {string.Join(", ", Sky.All.Select(r => r.Drift.ToString("0.00")))})");
+    }
+
     // ── THE SOFT TUTORIAL: a card at a time, CONTINUE, and SKIP in the top right ────────────────
     // On a FIRST character only. It is an order of hint ids rather than a second copy of the
     // words, so a card here and a card met in play are the same card, and a card dismissed here is
@@ -4056,6 +4128,7 @@ public partial class _Test : Node
                   "a ship within 2000 u: the lights go for it, and their heavy takes the same target");
             await RangeChecks();                // something real to select, at a real distance
             ZoomChecks();
+            await SkyChecks();
             await TourChecks();
             // ── THREE AT ONCE, ON THE HULLS BIG ENOUGH TO HOLD THEM ──
             // How many a hull may hold is its class's row, so "capital ships only" is a number and
