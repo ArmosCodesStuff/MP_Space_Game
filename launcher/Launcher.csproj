@@ -23,13 +23,21 @@
     <UseWindowsForms>true</UseWindowsForms>
     <Nullable>disable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
-    <AssemblyName>Warships</AssemblyName>
+    <!-- NOT "Warships": the launcher sits in the same folder as the game it starts, and the
+         game's own exe is Warships.exe (export_presets.cfg, and BUILD.txt's launch= field).
+         Two files of one name in one folder is a launcher that replaces itself. -->
+    <AssemblyName>WarshipsLauncher</AssemblyName>
     <RootNamespace>Warships.Launcher</RootNamespace>
 
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
     <PublishSingleFile>true</PublishSingleFile>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <!-- SELF-CONTAINED AND WINFORMS IS 145 MB UNCOMPRESSED, which is 15x the game's own code part
+         and the one file a player fetches by hand. Compressing the bundle is one property and
+         costs a slower FIRST start only (the runtime is unpacked to a temp folder once, then
+         cached). Trimming would be the real fix and WinForms cannot be trimmed. -->
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
     <!-- WinForms does not support trimming; leaving it on produces a program that starts and then
          throws on the first control it reflects over. -->
     <PublishTrimmed>false</PublishTrimmed>

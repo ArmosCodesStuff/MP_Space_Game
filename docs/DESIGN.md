@@ -1317,3 +1317,53 @@ verdict is how a real failure gets waved through.
   internet only).
 - Balance with the new gear in play; `Hub.BeginPlacement` for the first non-instant ability;
   wormhole transit into an instanced system; the RTS half of hybrid control.
+
+## An installed build that can be replaced from a source of truth
+
+`scripts/Builds.cs` owns this. The launcher is its first use, not its name.
+
+**The mechanism, once:** an installed build is a set of files with known hashes; a release is the
+same set with different hashes; updating is replacing only the files whose hashes differ, through a
+temp name and a verify, and never touching anything the release does not name.
+
+**`version/MANIFEST.sha256` is the SOURCE manifest, not a release.** It is built from
+`git ls-files` and contains no build output at all -- not one `.dll`. Shipping it to a player would
+send them `art_source/`, `retired/` and `docs/` and still not name a file the game needs to run.
+What it got right is the FORMAT, and `tools/manifest.ps1` is now general enough to write both: one
+hashing implementation, two callers. A future instance reading item 12's old text in a changelog
+should know it was wrong about this one fact.
+
+**The build string must never be `readonly` or `const`.** `Net.Fingerprint()` walks every static
+field of every null-namespace type and folds in any that is `IsLiteral || IsInitOnly` with a
+`Plain` field type -- and `string` is `Plain`. A `public static readonly string Build` therefore
+enters the multiplayer protocol hash, and two byte-identical builds packed a minute apart would
+refuse to play together. It is a plain mutable static behind a property, and a rung-3 check asserts
+that structurally.
+
+**The version does not go in the .exe.** `export_presets.cfg` leaves `application/file_version`
+and `product_version` empty on purpose: `modify_resources=true` patches them into the PE resources,
+which would change the 103 MB exe on every release and move it out of the part that stands still --
+turning a 10 MB update into an 80 MB one. The id lives in `BUILD.txt` beside it.
+
+**`user://` is outside the install.** `%APPDATA%\Godot\app_userdata\Warships\` holds the saves, and
+`project.godot` does not set `use_custom_user_dir`. The launcher's write scope is the install folder
+only, so a save is out of reach by geometry rather than by care. Every path still goes through
+`Builds.Resolve`, which refuses anything that is not a plain relative path inside the root, and the
+delete set is empty by construction: a file is only ever renamed over.
+
+**Build ids are opaque strings compared for equality, never ordered.** `2026-09-23.ec0d138` is a
+date and a commit for humans. If the published id differs from the installed one the launcher
+hashes and looks -- the only question it can answer honestly -- which makes re-publishing an older
+build work as a rollback with no extra code.
+
+**Everything that might need fixing is on the repo side of the line.** The part split, the 189
+explicit `in=` lines, and cutting `NOTES.txt` out of `docs/CHANGES.md` all happen in
+`tools/pack.ps1`. The launcher has no globs and no markdown: it shows the text it is handed and
+switches on a `Builds.Decide` result. A frozen program earns its freeze by containing no logic
+worth changing.
+
+**The download is public, and that is a decision, not an oversight.** Anything the launcher can
+fetch unaided, a player can fetch unaided: a token or key inside a file players hold is extractable
+in a minute. Gating it for real needs a service in front of the download that the launcher asks
+instead of asking GitHub -- the launcher would gain one field and no logic, and `source.txt` plus
+`schema=1` are what make that swap possible without shipping a new launcher.

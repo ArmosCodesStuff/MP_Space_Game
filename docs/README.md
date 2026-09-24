@@ -46,9 +46,57 @@ build handshake refuses a peer on a different build, deliberately.
 window its own character before hosting**: two peers writing one character file is the collision
 that made a day of save bugs look real.
 
-To make a real `.exe`: open the editor, install the export templates it offers, then
-*Project → Export → Windows Desktop*. Not scripted here — nothing in this repo has been exported
-or tested that way yet.
+## Releasing
+
+```
+powershell -ExecutionPolicy Bypass -File tools\pack.ps1
+```
+
+One command. It refuses a dirty tree (pass `-Dirty` for a test build, which marks the id), exports
+the game headlessly, publishes the launcher, hashes all 189 installed files, cuts the changelog out
+of `docs/CHANGES.md`, zips the two parts, and prints exactly what to upload. Output lands in
+`dist\` (gitignored: a release is an output, and the build id carries the commit that made it).
+
+**What comes out**
+
+| | |
+|---|---|
+| `dist\WarshipsLauncher.exe` | 66 MB. What a player keeps. Downloaded once, by hand, then never again. |
+| `dist\release\BUILD.txt` | 13 KB -- schema, build id, the part table, one `in=` line per file |
+| `dist\release\BUILD.sha256` | 23 KB -- one SHA-256 per file, sha256sum's exact format |
+| `dist\release\NOTES.txt` | the changelog the launcher shows |
+| `dist\release\code.zip` | 10 MB -- the 5 files an ordinary release changes |
+| `dist\release\runtime.zip` | 73 MB -- the 184 that move only when Godot or .NET does |
+
+**The five owner steps, once per release**
+
+1. Commit, and run `verify.ps1 -Update` until it is green.
+2. `tools\pack.ps1`.
+3. Draft a GitHub release on `ArmosCodesStuff/MP_Space_Game`, tag it anything, and upload the five
+   files from `dist\release\` **under exactly those names** -- the launcher reads
+   `releases/latest/download/<name>`, so a renamed asset is an asset it cannot find.
+4. Publish it, and not as a pre-release: `latest` skips pre-releases.
+5. Hand out `WarshipsLauncher.exe` once. Every release after this one reaches players through it.
+
+The download is PUBLIC and deliberately so: anything the launcher can fetch unaided, a player can
+fetch unaided, so a token or a key inside a file players hold is not a secret. Gating it for real
+would need a service in front of the download that the launcher asks instead of asking GitHub.
+
+**Checking a release by hand.** `cd dist\game` then `sha256sum -c BUILD.sha256` from Git Bash.
+That is the answer to "it's broken" with no launcher involved, and it is why the manifest keeps
+sha256sum's format.
+
+**A test install without uploading anything.** Put a `source.txt` beside the launcher holding
+`file:///C:/.../dist/release/` and it reads that folder instead of GitHub.
+
+**Four things no rung covers**, because they are a GUI, a network and an operating system:
+the launcher's window; a real HTTPS fetch; renaming over a running exe; and SmartScreen. Run them
+once by hand. Everything with a *decision* in it lives in `scripts/Builds.cs` and is on rung 3.
+
+**Two costs that are not code.** The launcher and the game are unsigned, so a player sees two
+SmartScreen prompts (a certificate is roughly $100-300 a year). And the launcher must stay frozen:
+a change to it is a file every player has to fetch by hand again. That is what `schema=1` and
+`source.txt` are for.
 
 ## Checking your work
 

@@ -17,3 +17,4 @@ local.config.ps1
 # uid in MainMenu.tscn is hand-written), so nothing breaks when they are regenerated.
 *.import
 *.uid
+dist/
