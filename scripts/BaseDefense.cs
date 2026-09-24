@@ -1,5 +1,4 @@
 using Godot;
-using System.Linq;
 
 // THE BASE'S OWN WEAPONS -- a laser and a tracking missile, on a turret at the station's
 // heart. Host-simulated (its shots reach guests like every other shot); it fires only at

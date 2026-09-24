@@ -9,29 +9,20 @@
 #   folder, so what you play is the code you are looking at. Needs Godot 4.7.2 MONO and the .NET
 #   SDK -- about 330 MB of tooling, which is why it is not asked of someone who only wants to play.
 #
-#   THE BUILT GAME, otherwise. It fetches WarshipsLauncher.exe from the latest release and runs it;
-#   the launcher downloads the game itself and keeps it up to date from then on. Needs NOTHING
-#   installed -- no Godot, no .NET, no engine at all. A player never needs the other path.
+#   THE BUILT GAME, otherwise -- handed to tools\install.ps1, which downloads the published build,
+#   checks it against the release's own checksums and starts it. Needs NOTHING installed: no Godot,
+#   no .NET, no engine, not even the launcher. A player never needs the other path.
 #
 # So: a collaborator given the repo link clones it, double-clicks PLAY.bat, and plays. If they
 # later install the tools, the same double-click starts running their own code instead.
 #
 #     -Editor   open the Godot editor instead of running the game (source only)
 #     -Game     skip the source path and use the built game, even if the tools are here
-#     -Yes      do not ask before downloading (for a script; a person should be asked)
 #     -Godot    an explicit path to the engine, if the search cannot find it
-param([switch]$Editor, [switch]$Game, [switch]$Yes, [string]$Godot)
+param([switch]$Editor, [switch]$Game, [string]$Godot)
 $ErrorActionPreference = 'Stop'
 Set-Location (Join-Path $PSScriptRoot '..')
 $repo = (Get-Location).Path
-
-# Where the launcher is published. The SAME fixed redirect the launcher itself uses for its
-# assets, so there is one URL shape to keep true and it always points at the newest release.
-$LauncherUrl  = 'https://github.com/ArmosCodesStuff/MP_Space_Game/releases/latest/download/WarshipsLauncher.exe'
-# NOT dist\. The launcher installs the game BESIDE ITSELF, and tools\pack.ps1 deletes dist\ whole
-# every time it makes a release -- so a player's installed game would be destroyed by the next
-# build. play\ is gitignored, belongs to whoever is playing, and no tool here ever touches it.
-$LauncherPath = Join-Path $repo 'play\WarshipsLauncher.exe'
 
 # ── what this machine has ────────────────────────────────────────────────────
 $hasDotnet = [bool](Get-Command dotnet -ErrorAction SilentlyContinue)
@@ -78,46 +69,10 @@ if (-not $Game) {
     Write-Host ("      (missing: {0} -- you do not need either of them to play.)" -f ($missing -join ', '))
 }
 
-if (-not (Test-Path $LauncherPath)) {
-    Write-Host ''
-    Write-Host 'play: it will download the launcher, about 66 MB:'
-    Write-Host "        $LauncherUrl"
-    Write-Host '      The launcher then downloads the game itself and keeps it updated.'
-    if (-not $Yes) {
-        $answer = Read-Host '      Download it? [Y/n]'
-        if ($answer -and $answer -notmatch '^[Yy]') { Write-Host 'play: stopped, nothing downloaded.'; exit 1 }
-    }
-    New-Item -ItemType Directory -Force (Split-Path $LauncherPath) | Out-Null
-    # A partial download must never be left looking like a finished one, so it lands under a temp
-    # name and is only moved into place once it has been checked.
-    $part = "$LauncherPath.part"
-    try {
-        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-        $ProgressPreference = 'SilentlyContinue'      # PS 5.1 renders a progress bar per BYTE otherwise
-        Write-Host '      downloading...'
-        Invoke-WebRequest -Uri $LauncherUrl -OutFile $part -UseBasicParsing
-    } catch {
-        Write-Host "play: the download failed -- $($_.Exception.Message)"
-        Write-Host '      Get it by hand from the Releases page and put it in play\.'
-        if (Test-Path $part) { Remove-Item $part -Force -Confirm:$false }
-        exit 1
-    }
-    # IT MUST BE AN EXECUTABLE. A captive portal, a proxy or a signed-out link returns an HTML page
-    # with a 200, and saving that as an .exe and running it is the failure that looks like success.
-    $head = [byte[]]::new(2)
-    $fs = [IO.File]::OpenRead($part)
-    try { $null = $fs.Read($head, 0, 2) } finally { $fs.Close() }
-    if ($head[0] -ne 0x4D -or $head[1] -ne 0x5A) {      # 'MZ'
-        Write-Host 'play: what came back is not a Windows program -- most likely an error page.'
-        Write-Host '      Check the Releases page in a browser.'
-        Remove-Item $part -Force -Confirm:$false
-        exit 1
-    }
-    Move-Item $part $LauncherPath -Force
-    Write-Host ("      got it: {0:N0} bytes" -f (Get-Item $LauncherPath).Length)
-}
-
-Write-Host 'play: starting the launcher. Press UPDATE in it, then PLAY.'
-Write-Host '      Windows may warn that it does not recognise it -- the launcher is unsigned.'
-Write-Host '      "More info", then "Run anyway". The release notes in it say more.'
-Start-Process -FilePath $LauncherPath -WorkingDirectory (Split-Path $LauncherPath)
+# THE INSTALLER, not the launcher. tools\install.ps1 needs nothing this machine does not already
+# have -- Windows PowerShell 5.1 ships with Windows, and Get-FileHash, Expand-Archive and
+# Invoke-WebRequest are all built in -- so it goes from a bare machine to a running game with
+# nothing pressed. The launcher is a program a player KEEPS, for updating in place; it is not what
+# a first install should need, and it cannot be what gets one started.
+& (Join-Path $PSScriptRoot 'install.ps1')
+exit $LASTEXITCODE

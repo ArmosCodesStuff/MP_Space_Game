@@ -1,7 +1,6 @@
 using Godot;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // WAVES — what arrives, in what shape, and how hard: one row per wave.

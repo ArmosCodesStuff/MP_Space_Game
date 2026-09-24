@@ -1,5 +1,4 @@
 using Godot;
-using System.Linq;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RAIDERS -- enemy fighters. Host-simulated; guests draw them from the host's

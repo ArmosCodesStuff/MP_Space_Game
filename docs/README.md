@@ -55,12 +55,11 @@ It picks the way that will work:
 - **From source**, if this machine has Godot 4.7.2 **mono** and the .NET 8 SDK -- the engine runs
   the project in this folder, so you play the code you are looking at. A first run imports every
   asset and builds the C# before a window appears: a minute or two, and it has not hung.
-- **The built game** otherwise. It fetches `WarshipsLauncher.exe` (~66 MB) from the latest release
-  and starts it; the launcher downloads the game itself and keeps it updated from then on.
-  **Nothing needs to be installed for this** -- no Godot, no .NET, no engine. It asks before it
-  downloads anything, checks what came back really is a program (a captive portal returns an HTML
-  page with a 200, and saving that as an `.exe` is the failure that looks like success), and puts
-  it in `play\`, which is gitignored and which no tool here ever deletes.
+- **The built game** otherwise, through `tools\install.ps1`. **Nothing needs to be installed for
+  this** -- Windows PowerShell ships with Windows, and that is the whole requirement. It reads the
+  release's own `BUILD.txt`, downloads the two zips, checks each against the checksum the release
+  published, unpacks 189 files into `play\` and starts the game. About 79 MB. Run it again and it
+  says it is already installed and just starts it.
 
 ```
 powershell -ExecutionPolicy Bypass -File tools\play.ps1     # same thing, without the double-click

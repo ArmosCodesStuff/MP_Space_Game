@@ -127,7 +127,6 @@ public partial class MenuFoe : Node2D, IHittable, ITagged
     // people look at a menu.
     public void Deploy(Vector2 home)
     {
-        float a = (float)(_rng.NextDouble() * Math.PI * 2);
         float r = Standoff > 0f ? Standoff * (0.95f + (float)_rng.NextDouble() * 0.25f)
                                 : 300f + (float)_rng.NextDouble() * 220f;
         Respawn(home, r);

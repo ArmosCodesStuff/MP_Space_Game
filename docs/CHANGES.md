@@ -418,6 +418,24 @@ Unreleased. Nothing is outstanding from the batch of 2026-09-23.)*
 
 ## Unreleased
 
+### The analyser step had never run (2026-09-24, in the WarShips_Version_L fork)
+
+**`ANALYSERS: 0 findings` was a green line about a build that never happened.**
+`tools/analyse/run.ps1` passed `-p:NoWarn='CS1591;CS1573;CS1587'`; PowerShell strips the quotes
+off a native command's argument, MSBuild split on the `;` and aborted with `MSB1006: Property is
+not valid. Switch: CS1573` before loading the project at all -- and the script then grepped that
+error log for warnings, found none, and reported a pass. Every `verify.ps1` run in the Windows
+history of this project has matched that line. **CLAUDE.md invariant D has been unenforced for the
+analyser half since the port.**
+
+The fix is `%3B`, which MSBuild decodes itself, and which the Linux original always had.
+
+**It found 8 things the moment it ran:** unnecessary `using` directives in `BaseDefense`, `Raider`,
+`RecyclerPanel`, `ShipClasses`, `Tour`, `Turrets` and `Waves`, and an unread assignment in
+`MenuFoe.Deploy`. All eight fixed. The header of the tool now says what the failure looked like,
+and says to check the log is a build if it ever prints 0 again -- because that is precisely what a
+broken one looks like.
+
 ### A clone can be played on a machine with nothing installed (2026-09-24, in the WarShips_Version_L fork)
 
 **Nothing in the repo launched the game.** There is no runnable file here and there is not meant
@@ -437,26 +455,29 @@ and that the engine is the mono build. Each failure prints the download link and
 It also says that a first run on a fresh clone takes a minute or two and has not hung, which is
 the difference between waiting and giving up.
 
-**AND IT WORKS WITH NOTHING INSTALLED.** The developer tools are about 330 MB and nobody who only
-wants to play should be asked for them -- so when they are absent, `play.ps1` fetches
-`WarshipsLauncher.exe` from the latest release and starts it, and the launcher downloads the game
-itself. No Godot, no .NET, no engine. One double-click covers a bare machine and a dev box; if the
-tools appear later, the same double-click starts running that person's own code instead.
+**AND IT WORKS WITH NOTHING INSTALLED, through `tools/install.ps1` -- which is NOT the launcher.**
+Windows PowerShell 5.1 ships with every Windows 10 and 11, and `Get-FileHash`, `Expand-Archive`
+and `Invoke-WebRequest` are all built in, so a script can go from a bare machine to a running game
+with no Godot, no .NET, no git and no launcher. It reads `BUILD.txt` from the release, downloads
+each `part=` zip, checks each against the SHA-256 the release itself published, unpacks them, and
+writes `BUILD.txt` LAST so an install that died halfway cannot claim to be a finished one. Then it
+starts the game.
 
-**The launcher is a RELEASE ASSET now.** It was deliberately not one -- "downloaded once, by hand,
-and then never again" -- but a file with no URL is a file that has to be handed over in person,
-which is exactly what stopped a repo link being enough. It is in every release now, so
-`releases/latest/download/WarshipsLauncher.exe` always resolves, and `tools/pack.ps1` prints it in
-the upload list with the other five.
+The launcher is a program a player KEEPS, with a window and buttons, for updating a build in
+place. It is not what a first install should need and it cannot be what gets one started. Both
+read the same release and the same `BUILD.txt`, so neither can drift from the other.
 
-**It goes in `play\`, not `dist\`.** The launcher installs the game BESIDE ITSELF, and
-`tools/pack.ps1` deletes `dist\` whole on every release -- so a player's installed game in there
-would be destroyed by the next build. `play\` is gitignored and no tool touches it.
+**It installs into `play\`, never `dist\`,** which `tools/pack.ps1` deletes whole on every
+release -- a game installed there would be destroyed by the next build. `play\` is gitignored and
+no tool here touches it.
 
-**The download is checked before it is run.** A captive portal, a proxy or a signed-out link
-returns an HTML page with a 200; saving that as an `.exe` and running it is the failure that looks
-like success. It lands under a `.part` name, its first two bytes must be `MZ`, and only then is it
-moved into place. Proved end to end against the real release: 65,834,679 bytes, verified, started.
+**Proved end to end, from an empty folder:** 2 parts, 79 MB, both checksums matched, 189 files
+unpacked, all 189 verified against `BUILD.sha256` with `sha256sum -c`, and the game started with a
+window titled Warships. A second run says it is already installed and just starts it.
+
+**The launcher is a release asset now** so it has a URL at all -- a file with none has to be handed
+over in person, which is what stopped a repo link being enough -- and `tools/pack.ps1` prints it
+in the upload list with the other five.
 
 ### The sky is layered, so flying looks like flying (2026-09-24, in the WarShips_Version_L fork)
 

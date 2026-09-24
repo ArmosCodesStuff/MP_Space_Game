@@ -20,9 +20,16 @@ Copy-Item (Join-Path $PSScriptRoot 'analysers.editorconfig') $ec
 try {
   Push-Location $root
   # -t:Rebuild so analyser warnings re-emit; an incremental build reports nothing.
+  #
+  # %3B, NOT ';', AND NOT QUOTES. PowerShell strips the quotes off a native command's argument, so
+  # -p:NoWarn='A;B;C' reached MSBuild as three arguments and it aborted with MSB1006 before loading
+  # the project at all -- and this script then grepped that error log for warnings, found none, and
+  # printed "ANALYSERS: 0 findings". A step that cannot run, reporting a pass, for the whole
+  # Windows history of this project. MSBuild decodes %3B back to a semicolon itself, which is what
+  # the Linux original always did. IF THIS EVER PRINTS 0 AGAIN, CHECK THE LOG IS A BUILD.
   & dotnet build -t:Rebuild --nologo -v q `
       -p:EnforceCodeStyleInBuild=true -p:GenerateDocumentationFile=true `
-      -p:NoWarn='CS1591;CS1573;CS1587' *> $log
+      -p:NoWarn=CS1591%3BCS1573%3BCS1587 *> $log
   Pop-Location
 } finally {
   Remove-Item $ec -Force -ErrorAction SilentlyContinue
