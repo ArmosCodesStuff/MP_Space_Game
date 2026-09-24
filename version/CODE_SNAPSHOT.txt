@@ -1,8 +1,8 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-24 02:14, on top of git commit 5b7bea2. How it was verified is in the message of the
+// Taken 2026-09-24 02:31, on top of git commit 60b6f00. How it was verified is in the message of the
 //   commit that carries this file: one starting VERIFIED: is a green verify.ps1 -Update.
-// 115 files, 29819 lines. Code only: sprites, sounds and docs are in the zip.
+// 115 files, 29849 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -105,7 +105,7 @@
 //   tools/install.ps1                              124 lines   sha256 44bb18f4edb5
 //   tools/make_ships.ps1                           634 lines   sha256 805d9920a015
 //   tools/make_sounds.py                           232 lines   sha256 85eba97b8ac6
-//   tools/manifest.ps1                              62 lines   sha256 2edb5f604152
+//   tools/manifest.ps1                              76 lines   sha256 6f70070569f1
 //   tools/map.py                                   232 lines   sha256 01a23fceab11
 //   tools/pack.ps1                                 249 lines   sha256 d827cee82f7c
 //   tools/snapshot.ps1                             103 lines   sha256 bdcb9f8150b0
@@ -113,11 +113,11 @@
 //   tools/analyse/run.ps1                           62 lines   sha256 794cbfa66944
 //   tools/analyse/run.sh                            16 lines   sha256 e6f2cd50f0c4
 //   tools/analyse/xref.py                           35 lines   sha256 2e1d2a7688ed
-//   tools/screens/run.ps1                          128 lines   sha256 9e8d569b0b94
+//   tools/screens/run.ps1                          141 lines   sha256 99910d14c9b7
 //   tools/screens/run.sh                            42 lines   sha256 73a5b3c63476
 //   tools/screens/Shots.cs.txt                     664 lines   sha256 8e067c22aaa8
 //   tools/smoketest/fakeigd.py                     155 lines   sha256 b980d4fa4ad4
-//   tools/smoketest/run.ps1                        225 lines   sha256 ba91f3de2ffe
+//   tools/smoketest/run.ps1                        228 lines   sha256 1dcfe0554404
 //   tools/smoketest/run.sh                          57 lines   sha256 9ac9cbdf9115
 //   tools/smoketest/SmokeTest.cs.txt              7379 lines   sha256 d1fdc42c9ebc
 //   tools/smoketest/wan.py                          61 lines   sha256 97db24aa3f91
@@ -20589,7 +20589,7 @@ if __name__ == '__main__':
 
 //==============================================================================
 // FILE: tools/manifest.ps1
-// 62 lines   sha256 2edb5f604152
+// 76 lines   sha256 6f70070569f1
 //==============================================================================
 # HASH A LIST OF FILES UNDER A ROOT INTO A MANIFEST -- one SHA-256 per file, in sha256sum's own
 # format, so `sha256sum -c` is what checks it, here and on Linux.
@@ -20648,10 +20648,24 @@ $lines = foreach ($f in $Files) {
 
 $sha = 'C:\Program Files\Git\usr\bin\sha256sum.exe'
 if (-not (Test-Path $sha)) { Write-Host ("manifest: {0} files written; sha256sum not found, not verified" -f $Files.Count); exit 0 }
+# A FLOOR, BECAUSE ZERO OF ZERO VERIFIES PERFECTLY. With an empty list this printed
+# "manifest: 0 files, 0 not verifying" and exited 0 -- while sha256sum itself had exited 1 with
+# nothing on stdout. That is how a release manifest that hashed ONE of 189 files passed its own
+# check earlier today: nothing here ever asked how many there were meant to be.
+if ($Files.Count -lt 1) { Write-Host 'manifest: nothing to hash -- refusing to write an empty manifest.'; exit 1 }
 $check = & $sha -c $Out
+$shaExit = $LASTEXITCODE
 $bad = @($check | Where-Object { $_ -notmatch ': OK$' })
+$okLines = @($check | Where-Object { $_ -match ': OK$' }).Count
 Write-Host ("manifest: {0} files, {1} not verifying" -f $Files.Count, $bad.Count)
 $bad | ForEach-Object { Write-Host "  $_" }
+# ...AND THE CHECKER AGREED, AND CHECKED THEM ALL. Its exit code was never read, and a run that
+# printed no OK lines at all counted zero failures and passed.
+if ($shaExit -ne 0) { Write-Host "manifest: sha256sum exited $shaExit"; exit 1 }
+if ($okLines -ne $Files.Count) {
+    Write-Host ("manifest: {0} files hashed but only {1} verified -- the checker did not read them all." -f $Files.Count, $okLines)
+    exit 1
+}
 if ($bad.Count -ne 0) { exit 1 }
 
 //==============================================================================
@@ -21403,7 +21417,7 @@ print('USED ONLY BY TESTS:', len(test_only)); [print('  ' + x) for x in sorted(t
 
 //==============================================================================
 // FILE: tools/screens/run.ps1
-// 128 lines   sha256 9e8d569b0b94
+// 141 lines   sha256 99910d14c9b7
 //==============================================================================
 # Windows port of run.sh -- renders real screenshots of the game (select screen, creator,
 # both classes in the hub, the K window, a bomber strike) so layout and art can be LOOKED
@@ -21466,6 +21480,9 @@ foreach ($dir in @($W, $shots)) {
 }
 New-Item -ItemType Directory -Path $W, $shots -Force | Out-Null
 robocopy $src $W /E /XD .godot .git bin obj /NFL /NDL /NJH /NJS /NP | Out-Null
+# ROBOCOPY'S EXIT CODE IS A BITFIELD: 0-7 is success (8 = some files did not copy). It was
+# discarded, so a half-copied tree went on to build, import and report on whatever arrived.
+if ($LASTEXITCODE -ge 8) { Write-Host "copy FAILED (robocopy $LASTEXITCODE): $src -> $W"; exit 2 }
 
 # Rewrite the one POSIX path in the shot writer. Godot's SavePng takes forward slashes
 # happily on Windows, so only the prefix changes.
@@ -21526,12 +21543,22 @@ try {
   $keep | ForEach-Object { Write-Host $_ }
 
   # a sweep cut off part-way (a timeout) must never pass as clean
+  $bad = 0
   if (-not ($keep | Where-Object { $_ -cmatch '^SWEEP DONE' })) {
     Write-Host "SWEEP INCOMPLETE -- the run was cut off; later frames were not rendered"
+    $bad = 1
   }
   $lint = @($keep | Where-Object { $_ -cmatch '^LINT' }).Count
   $frames = @(Get-ChildItem $shots -Filter *.png -ErrorAction SilentlyContinue).Count
   Write-Host "frames: $frames in $shots  |  LINT: $lint"
+  # ...AND IT SAYS SO IN ITS EXIT CODE. All three of these were computed, printed and thrown away:
+  # SWEEP INCOMPLETE only printed, and $lint and $frames were never asserted at all -- so a sweep
+  # whose engine died at frame 0 ended on "frames: 0 | LINT: 0" and exited 0. CLAUDE.md section 7
+  # tells a reader to trust LINT: 0 for rung 4, and nothing to draw is nothing to lint.
+  # verify.ps1 re-derives this from stdout, so the BAR was covered; rung 4 run on its own was not.
+  if ($frames -lt 1) { Write-Host 'the sweep drew NO frames -- LINT: 0 means nothing.'; $bad = 1 }
+  if ($lint -ne 0)   { Write-Host "the sweep reported $lint layout problems."; $bad = 1 }
+  if ($bad) { Pop-Location; exit 1 }
 } finally { Pop-Location }
 
 //==============================================================================
@@ -22412,7 +22439,7 @@ time.sleep(LIFE)
 
 //==============================================================================
 // FILE: tools/smoketest/run.ps1
-// 225 lines   sha256 ba91f3de2ffe
+// 228 lines   sha256 1dcfe0554404
 //==============================================================================
 # Windows port of run.sh -- headless runtime check: boots the REAL engine, drives real
 # input, and runs a host and TWO guests (three players) against each other over localhost.
@@ -22483,6 +22510,9 @@ if (Test-Path $W) {
 New-Item -ItemType Directory -Path $W -Force | Out-Null
 # /.godot, bin and obj are build output; copying them just makes the import stale.
 robocopy $src $W /E /XD .godot .git bin obj /NFL /NDL /NJH /NJS /NP | Out-Null
+# ROBOCOPY'S EXIT CODE IS A BITFIELD: 0-7 is success (8 = some files did not copy). It was
+# discarded, so a half-copied tree went on to build, import and report on whatever arrived.
+if ($LASTEXITCODE -ge 8) { Write-Host "copy FAILED (robocopy $LASTEXITCODE): $src -> $W"; exit 2 }
 Copy-Item (Join-Path $PSScriptRoot 'SmokeTest.cs.txt') (Join-Path $W 'scripts\_Test.cs') -Force
 
 $pg = Join-Path $W 'project.godot'
