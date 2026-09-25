@@ -2483,15 +2483,15 @@ public partial class _Test : Node
     // POINT DEFENCE IS PASSIVE (F16): no key, no window, no recharge -- it fires whenever its ship is
     // alive. Every hull that mounts it, each at a seeded spot, heading and reach: a light raider held
     // inside every mount's reach is taken by every mount with NOTHING pressed, at the row's rate --
-    // 0.5 a shot every 0.5 s, 1 DPS a mount (the warden's one mount 5 a shot, 10 DPS: its cut is 6c's,
-    // D8). Counted over 1.9 s from the first shot after all its mounts hold it: 3 or 4 shots a
+    // 0.5 a shot every 0.5 s, 1 DPS a mount (the warden's one mount too: README ruling, hv-R6c-1).
+    // Counted over 1.9 s from the first shot after all its mounts hold it: 3 or 4 shots a
     // mount, never a shot on the window's edge.
     async Task LaneAPassivePdChecks(Vector2 yonder)
     {
         var want = new Dictionary<ShipClass, (int mounts, double shot, float reach)> {
             [ShipClass.Battleship] = (2, 0.5, 460f), [ShipClass.Carrier] = (2, 0.5, 460f), [ShipClass.Destroyer] = (2, 0.5, 460f),
             [ShipClass.FreightHauler] = (2, 0.5, 460f), [ShipClass.FreightTender] = (2, 0.5, 460f), [ShipClass.FreightBastion] = (2, 0.5, 460f),
-            [ShipClass.HeavyWarden] = (1, 5.0, 420f),
+            [ShipClass.HeavyWarden] = (1, 0.5, 420f),
         };
         var pdHulls = Classes.All.Where(c => c.Ready && c.Has(Fit.Pd)).Select(c => c.Id).ToList();
         Check(pdHulls.Count == want.Count && pdHulls.All(want.ContainsKey),
@@ -7081,6 +7081,23 @@ public partial class _Test : Node
                   $"gunships refused: a lone pick {far.Position.DistanceTo(s.Position):0} u off -- {outSaid} (OUT OF RANGE), {outSent} sent; nothing picked or selected -- {noneSaid} (NO TARGET); nothing spent");
             far.TakeDamage(1e12);
         }
+        {   // NO PICK BUT A SELECTED TARGET (carrier.md E: "else the selected one"): two craft on its 240 u circle
+            var at = VaryNear(yonder, 300f);
+            s.Position = at; s.Velocity = Vector2.Zero; s.Sl("gunships").Cool = 0; s.Sl("gunships").Left = 0;
+            await Frame();
+            var spot = at + Vector2.Right.Rotated(VaryAngle()) * Vary(800f, 2600f);
+            var sel = Held(spot);
+            await Frame();
+            H.ClearSelection(); H.SelectTarget(sel);
+            s.UseAbility("gunships", sel.NetId, System.Array.Empty<int>());
+            double tp = s.Clock;
+            while (s.Clock < tp + 3.0) { s.Position = at; s.Velocity = Vector2.Zero; sel.Position = spot; await Frame(); }
+            int on = Gs().Count(w => Mathf.Abs(w.Position.DistanceTo(sel.Position) - 240f) <= 25f);
+            Check(Gs().Count == 2 && on == 2 && Math.Abs(s.Sl("gunships").Cool - 25 + 3) < 0.3,
+                  $"gunships with no pick but a selected target {sel.Position.DistanceTo(at):0} u off: {Gs().Count} craft (2), {on} on its 240 u circle (2); cooling {s.Sl("gunships").Cool:0.0} (22 after 3 s)");
+            sel.TakeDamage(1e12); H.ClearSelection();
+            foreach (var w in Gs()) w.SendOut(null, s.Clock);
+        }
     }
 
     // ── SLICE 6a: THE GUNSHIPS' FIRE (W5: 2.5 a shot every 0.25 s = 10 DPS each, two a pick = 20 DPS) and the leash at the
@@ -7193,6 +7210,56 @@ public partial class _Test : Node
             }
         }
         finally { s.Stats.SetBase("pd_range", was); }
+    }
+
+    // ── SLICE 6a: THE PATROL THROUGH A WARP (carrier.md Identity: "the patrol is leashed to the carrier and flies back
+    // after a jump (~7 s from 2400 u)"). Three varied runs (VaryNear spot, VaryAngle heading): Q, three patrol craft
+    // circling; V held until the charge has run 3.6-3.95 s (2080-2360 u, inside the 2400 u safe ring: no disable) and
+    // let go; from the frame the carrier is 1500 u from where it was, within 9.0 s by its clock all three are back within
+    // 340 u (the 300 u circle + 40) of its NEW position and stay 0.5 s, none Done, the Supercarrier still up.
+    async Task LaneA6aSuperWarpChecks(Vector2 yonder)
+    {
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+        await SetClass(ShipClass.Carrier);
+        var s = Me;
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        var old = new HashSet<Wing>();                                      // craft an earlier run sent out: never this run's
+        List<Wing> Ps() => Nodes<Wing>().Where(w => w.Carrier == s && w.Kind == WingKind.Patrol && !w.Done && !old.Contains(w)).ToList();
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f); float head = VaryAngle();
+            void Hold() { s.Position = at; s.Velocity = Vector2.Zero; s.Rotation = head; }
+            s.Sl("super").Left = 0; s.Sl("super").Cool = 0; s.Sl("warp").Cool = 0; s.Statuses.Clear(Status.Disabled);
+            H.ClearSelection();
+            Hold(); await Wait(0.2); Hold();
+            old.Clear(); old.UnionWith(Ps());
+            s.UseAbility("super", 0);
+            double c0 = s.Clock;
+            while (s.Clock < c0 + 12 && Ps().Count(w => w.FighterPhase == "Circle") < 3) { Hold(); await Frame(); }
+            int circling = Ps().Count(w => w.FighterPhase == "Circle");
+            Hold();
+            double held = Vary(3.6f, 3.95f);
+            var (reach, _, _) = await WarpHold(s, held, () => { s.Position = at; s.Velocity = Vector2.Zero; s.Rotation = head; }, driver: true);
+            double j0 = s.Clock;
+            while (s.Clock < j0 + 2 && s.Position.DistanceTo(at) <= 1500f) await Frame();
+            var landed = s.Position; double t0 = s.Clock, back = -1, onSince = -1;
+            bool disabled = s.Statuses.Has(Status.Disabled);
+            while (s.Clock < t0 + 9.5 && back < 0)
+            {
+                s.Position = landed; s.Velocity = Vector2.Zero; await Frame();
+                bool on = Ps().Count == 3 && Ps().All(w => w.Position.DistanceTo(s.Position) <= 300f + 40f);
+                if (!on) onSince = -1;
+                else if (onSince < 0) onSince = s.Clock;
+                else if (s.Clock - onSince >= 0.5) back = onSince - t0;
+            }
+            int n = Ps().Count; double up = s.Sl("super").Left;
+            Check(circling == 3 && landed.DistanceTo(at) > 1500f && !disabled && back >= 0 && back <= 9.0 && n == 3 && up > 0,
+                  $"patrol through a warp run {run}: {circling} circling (3); charged {held:0.00} s, reach {reach:0} u, landed {landed.DistanceTo(at):0} u off (> 1500), disabled {disabled} (False); "
+                  + $"all 3 back on the 300 u circle round the new spot {back:0.00} s on (<= 9.0), {n} craft (3), the Supercarrier up {up:0.0} s (> 0)");
+            foreach (var w in Ps()) w.SendOut(null, s.Clock);
+            s.Sl("super").Left = 0; s.Sl("super").Cool = 0; s.Sl("warp").Cool = 0; s.Statuses.Clear(Status.Disabled);
+            await Wait(0.5);
+        }
     }
 
     // ── SLICE 6a: THE PATROL TAKES MISSILES (kits_v31 §3.2 and §7: "CV patrol vs BB CIWS vs FR sentries vs PD -- all four
@@ -7414,8 +7481,9 @@ public partial class _Test : Node
             var ls = Lances();
             var l = ls.FirstOrDefault();
             var p0 = l?.GlobalPosition ?? Vector2.Zero;
+            double t0 = s.Clock;                                              // the speed timed by the clock, not by frames
             for (int i = 0; i < 10; i++) { Hold(); tgt.Position = spot; await Frame(); }
-            float spd = l != null && GodotObject.IsInstanceValid(l) ? (l.GlobalPosition - p0).Length() * 6f : 0f;
+            float spd = l != null && GodotObject.IsInstanceValid(l) && s.Clock > t0 ? (float)((l.GlobalPosition - p0).Length() / (s.Clock - t0)) : 0f;
             double cool = s.Sl("longlance").Cool;
             string refused = Abilities.Find(ShipClass.Destroyer, "longlance").Refuse(s, null);
             s.UseAbility("longlance", 0); await Frame(); await Frame();
@@ -8088,6 +8156,9 @@ public partial class _Test : Node
     // heading, the webifier 250-400 u off at a VaryAngle bearing): Pinned by a latched webifier, E still carries the
     // hull 420 +- 5 u along its nose (under 5 sideways) -- the carry runs before the pin's forced thrust -- and the
     // pin is gone within 0.3 s of the dash's end (the latch left behind, its last 0.25 s hold spent).
+    // 4 DISABLED INSIDE THE DASH (review hv-R6c-6): three more runs (VaryNear spot, VaryAngle heading), Disabled
+    // 0.08-0.15 s into the dash: the row's Left reads 0 and the hardening is off within a frame, the hull stays within
+    // 15 u of where it stopped, a gunship 40-90 u down the line took its 40 before and one 330-400 u down it takes 0.
     async Task LaneA6cLungeChecks(Vector2 yonder)
     {
         await SetClass(ShipClass.HeavyWarrior);
@@ -8217,6 +8288,42 @@ public partial class _Test : Node
             for (int i = 0; i < 30 && w.Pinned; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             w.Velocity = Vector2.Zero; w.Sl("lunge").Cool = 0;
         }
+
+        // 4 -- DISABLED inside the dash
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f); float rot = VaryAngle();
+            w.Sl("lunge").Left = 0; w.Sl("lunge").Cool = 0; w.Statuses.Clear(Status.Hardened);
+            w.Position = at; w.Velocity = Vector2.Zero; w.Rotation = rot;
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            at = w.Position; rot = w.Rotation;                                            // re-taken after the wait
+            var nose = Vector2.Up.Rotated(rot); var side = new Vector2(-nose.Y, nose.X);
+            var nearAt = at + nose * Vary(40f, 90f) + side * Vary(-15f, 15f);
+            var farAt = at + nose * Vary(330f, 400f) + side * Vary(-15f, 15f);
+            var near = H.SpawnRaider(nearAt, Enemies.Gunship); near.Hp = 1e9;
+            var far = H.SpawnRaider(farAt, Enemies.Gunship); far.Hp = 1e9;
+            void Hold() { near.Position = nearAt; far.Position = farAt; }
+            Hold(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); Hold();
+            double nearHp = near.Hp, farHp = far.Hp;
+            w.Position = at; w.Velocity = Vector2.Zero;
+            w.UseAbility("lunge", 0);
+            for (int i = 0; i < 30 && w.Sl("lunge").Left <= 0; i++) { Hold(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            double tp = w.Clock, cut = Vary(0.08f, 0.15f);                                // timed from the first frame the dash runs
+            while (w.Clock - tp < cut && w.Sl("lunge").Left > 0) { Hold(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            bool running = w.Sl("lunge").Left > 0;
+            w.ApplyStatus(Status.Disabled, 1.0);
+            var stopAt = w.Position; float gone0 = (stopAt - at).Dot(nose);
+            Hold(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            double leftNext = w.Sl("lunge").Left; bool hardNext = w.Statuses.Has(Status.Hardened);
+            while (w.Clock - tp < 0.6) { Hold(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            float drift = w.Position.DistanceTo(stopAt);
+            double nearTook = nearHp - near.Hp, farTook = farHp - far.Hp;
+            Check(running && leftNext <= 0 && !hardNext && drift < 15f && Math.Abs(nearTook - 40) < 1e-6 && farTook == 0,
+                  $"the lunge DISABLED {cut:0.00} s in, {gone0:0} u along: the row ends within a frame (Left {leftNext:0.00}, hardened {hardNext}), the hull stays within 15 u of where it stopped ({drift:0.0}), a gunship {(nearAt - at).Dot(nose):0} u down the line took {nearTook:0.##} before it (40), one {(farAt - at).Dot(nose):0} u down it {farTook:0.##} (0)");
+            near.TakeDamage(1e12); far.TakeDamage(1e12);
+            for (int i = 0; i < 90 && w.Disabled; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            w.Velocity = Vector2.Zero; w.Sl("lunge").Cool = 0;
+        }
         w.Position = yonder; w.Velocity = Vector2.Zero;
     }
 
@@ -8225,7 +8332,8 @@ public partial class _Test : Node
     // reaches varied): 1 four gunships all round inside 210 u (front, behind, both beams) each lose exactly
     // 8 x 10 = 80 over the spin, one 280-340 u out nothing; the cooldown reads 14.0 and a second press is
     // refused. 2 the web: a webifier latched on the hull (Pinned) -- the press frees it within two frames,
-    // it stays free for the whole spin while the latch still asks, and the web takes it again after.
+    // it stays free for the whole spin, no web latches on it (nor lasers it: the hull loses nothing) for
+    // the spin, and the web takes it again after.
     // 3 the blade held all through the spin swings nothing (DealtBy["blade"] still) and swings again
     // once the spin is over.
     async Task LaneA6cWhirlChecks(Vector2 yonder)
@@ -8270,8 +8378,9 @@ public partial class _Test : Node
             web.Hp = 1e9; web.Quarry = w;
             for (int i = 0; i < 60 * 8 && !w.Pinned; i++) { w.Position = at; w.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
             bool took = w.Pinned;
+            w.Hp = w.MaxHp;
             w.UseAbility("whirlwind", 0);
-            int freeIn = -1; bool heldFree = true, stillLatched = true; double t = 0;
+            int freeIn = -1; bool heldFree = true, unlatched = true; double t = 0;
             for (int i = 0; i < 60 * 3 && t < 1.9; i++)
             {
                 w.Position = at; w.Velocity = Vector2.Zero;
@@ -8279,11 +8388,12 @@ public partial class _Test : Node
                 t += GetProcessDeltaTime();
                 if (freeIn < 0 && !w.Pinned) freeIn = i + 1;
                 if (freeIn >= 0 && w.Pinned) heldFree = false;
-                if (t > 0.5) stillLatched &= web.Latched;
+                if (t > 0.5) unlatched &= !web.Latched;
             }
+            double hpSpin = w.Hp, hpMax = w.MaxHp;                                        // the spin's end, before the web takes it again
             for (int i = 0; i < 60 * 2 && !w.Pinned; i++) { w.Position = at; w.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); t += GetProcessDeltaTime(); }
-            Check(took && freeIn >= 1 && freeIn <= 2 && heldFree && stillLatched && w.Pinned && t >= 1.95,
-                  $"a webifier latched {web.Position.DistanceTo(at):0} u off: the whirlwind frees the hull in {freeIn} frame(s) (1-2), no web takes it for the spin (free throughout {heldFree}, the latch still asking {stillLatched}), and the web takes it again {t:0.00} s after the press (after 2)");
+            Check(took && freeIn >= 1 && freeIn <= 2 && heldFree && unlatched && hpSpin == hpMax && w.Pinned && t >= 1.95,
+                  $"a webifier latched {web.Position.DistanceTo(at):0} u off: the whirlwind frees the hull in {freeIn} frame(s) (1-2), no web latches for the spin (free throughout {heldFree}, unlatched {unlatched}, the hull {hpSpin:0.##} of {hpMax:0.##}), and the web takes it again {t:0.00} s after the press (after 2)");
             web.TakeDamage(1e12);
             for (int i = 0; i < 30 && w.Pinned; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
 
@@ -9456,6 +9566,53 @@ public partial class _Test : Node
             wd.Sl("taunt").Cool = 0;
             await Wait(0.2);
         }
+        // PART 2 -- A STANDOFF HEAVY (cards/warden.md Taunt: "standoff heavies boost in at once instead of waiting at
+        // range"). Three varied runs: a Gunship 600-900 u off at a bearing within 0.5 rad of a sentry 2400-2800 u off (its
+        // Quarry), held there until its squad has committed on that sentry and 2.2-2.6 s have run (its first throw's
+        // clock is spent); Q -- within 3.0 s of the frame the guard shows a raider missile is thrown at the Warden
+        // although no web ever pins it, and on the frame its squad re-commits on the Warden that commit burns.
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f);
+            wd.Position = at; wd.Velocity = Vector2.Zero; wd.Hp = wd.MaxHp; wd.Sl("taunt").Left = 0; wd.Sl("taunt").Cool = 0;
+            wd.Statuses.Clear(Status.Hardened);
+            await Frame();
+            at = wd.Position;                                                      // re-taken after the wait
+            var farS = H.Drop(wd, at + Vector2.Right.Rotated(VaryAngle()) * Vary(2400f, 2800f), 1e9);
+            var gAt = at + (farS.Position - at).Normalized().Rotated(Vary(-0.5f, 0.5f)) * Vary(600f, 900f);
+            var g = H.SpawnRaider(gAt, Enemies.Gunship); g.Hp = 1e9; g.Quarry = farS;
+            void Hold() { wd.Position = at; wd.Velocity = Vector2.Zero; wd.Hp = wd.MaxHp; }
+            double t0 = wd.Clock, settle = Vary(2.2f, 2.6f);
+            for (int i = 0; i < 60 * 12 && !(g.Squad != null && g.Squad.Posted(g) && ReferenceEquals(g.Squad.Target, farS) && wd.Clock - t0 >= settle); i++)
+            { Hold(); g.Position = gAt; await Frame(); }
+            var sq = g.Squad;                                                      // taken after the wait
+            // A RAIDER'S MISSILE IS A THROW (Hub.ThrowMissile): a blast predicted onto where the Warden will be, marked by the
+            // Raid row's warning circle there -- the held Warden's own spot
+            int Thrown() => Fx.Warnings.Count(fw => fw.Id == Missiles.Of(Missiles.Raid).Mark && fw.Position.DistanceTo(at) < 60f);
+            int thrown0 = Thrown();
+            bool onSentry = sq != null && sq.Posted(g) && ReferenceEquals(sq.Target, farS) && thrown0 == 0;
+            float gOff = g.Position.DistanceTo(at);
+            Key(qkey);
+            int frames = 0;
+            for (; frames < 6 && !wd.Statuses.Has(Status.Hardened); frames++) { Hold(); await Frame(); }
+            double tp = wd.Clock;                                                  // timed from the frame the guard shows
+            bool pinnedEver = false, missile = false; int burnt = -1;              // -1: never re-committed on the Warden
+            double missileAt = -1;
+            while (wd.Clock - tp < 3.0 && !(missile && burnt >= 0))
+            {
+                Hold(); await Frame();
+                pinnedEver |= wd.Pinned;
+                sq = g.Squad;
+                if (burnt < 0 && sq != null && sq.Posted(g) && ReferenceEquals(sq.Target, wd)) burnt = sq.Burning ? 1 : 0;
+                if (!missile && Thrown() > thrown0) { missile = true; missileAt = wd.Clock - tp; }
+            }
+            Check(onSentry && frames <= 3 && missile && !pinnedEver && burnt == 1,
+                  $"taunt standoff run {run}: a gunship {gOff:0} u off, committed on a sentry {farS.Position.DistanceTo(at):0} u off ({onSentry}); Q -- a missile at the Warden {(missile ? $"{missileAt:0.00} s" : "never")} after the guard (within 3.0 s), the Warden never pinned ({!pinnedEver}); the re-commit on the Warden burns ({(burnt < 0 ? "never re-committed" : (burnt == 1).ToString())})");
+            g.TakeDamage(1e12); H.DeployedTaken(farS);
+            for (int i = 0; i < 60 * 4 && Thrown() > 0; i++) { Hold(); await Frame(); }
+            wd.Sl("taunt").Cool = 0;
+            await Wait(0.2);
+        }
         wd.Demo = demo; wd.Position = yonder; wd.Velocity = Vector2.Zero; wd.Hp = wd.MaxHp;
     }
 
@@ -9694,6 +9851,43 @@ public partial class _Test : Node
               + $"with Space on it the host's chevron is drawn on it here ({marks}, want 1)");
     }
 
+    // ── SLICE 6a, RUNG 5: A GUEST'S GRAPNEL, ITS HOST HALF (kits_v31 §8: "the Grapnel rip (host damage, the chunk on a
+    // guest)"). Started with the suppress watch; the guest destroyer (re-read every frame) hooks the practice dummy
+    // (LaneA6aGrapnelGuestChecks): its slot up here on the dummy's id; when that slot drops (the guest's E cast-off) the
+    // dummy has taken 10 HERE (the flat; a dummy has no hull to share) and the guest's own tally credits "grapnel" >= 10.
+    // The meter restarts after 5 s idle: a rip that restarts it reads its whole total.
+    sealed class LaneA6aGrapnelSeen { public bool Hooked, Done; public double Before, Credit0, Took = double.NaN, Credit = double.NaN; }
+    LateSampler LaneA6aGrapnelHostWatch(LaneA6aGrapnelSeen seen)
+    {
+        var watch = new LateSampler { Probe = () =>
+        {
+            if (seen.Done || H == null || H.Ships.FirstOrDefault(s => !s.Mine) is not { Class: ShipClass.Destroyer } g) return seen.Done;
+            var dm = H.GetNodeOrNull<TargetDummy>("TargetDummy1");
+            if (dm == null) return false;
+            var sl = g.Sl("grapnel");
+            if (!seen.Hooked)
+            {
+                if (sl.Left <= 0 || sl.N != dm.NetId) return false;
+                seen.Hooked = true; seen.Before = dm.Total; seen.Credit0 = g.DealtBy.GetValueOrDefault("grapnel");
+                return false;
+            }
+            if (sl.Left > 0) return false;
+            seen.Took = dm.Total >= seen.Before ? dm.Total - seen.Before : dm.Total;
+            seen.Credit = g.DealtBy.GetValueOrDefault("grapnel") - seen.Credit0;
+            seen.Done = true;
+            return true;
+        } };
+        AddChild(watch);
+        return watch;
+    }
+    async Task LaneA6aGrapnelHostChecks(LateSampler watch, LaneA6aGrapnelSeen seen)
+    {
+        await RealTime(() => seen.Done, Wan ? 120 : 90);
+        watch.QueueFree();
+        Check(seen.Hooked && Math.Abs(seen.Took - 10) < 1e-6 && seen.Credit >= 10 - 1e-6,
+              $"arena host: the guest's grapnel on the dummy, hooked here ({seen.Hooked}), cast off -- the dummy took {seen.Took:0.###} here (10), credited to the guest's \"grapnel\" {seen.Credit:0.###} (>= 10)");
+    }
+
     // ── SLICE 6a, RUNG 5: A GUEST'S GRAPNEL (kits_v2 / v3 Rung 5: "a guest's swing is drawn on the host"; kits_v31 §8's
     // second-run list: "the Grapnel rip (host damage, the chunk on a guest)"). The guest, a destroyer, stands 400-650 u off
     // the practice dummy at a varied bearing and presses E with it selected: its own pull begins at once and the host's
@@ -9734,6 +9928,31 @@ public partial class _Test : Node
               && cool > 14.5 && cool <= 16.0 + 1e-6 && said == "COOLING",
               $"arena guest: its own E at the dummy -- its pull begun here and the host's mark on the dummy's id ({marked}); hauled to {off:0.0} u off the hull (250 +- 15), swinging {swinging}; E again casts off ({me.Helm.Ended}) and the host's torn chunk is drawn here "
               + $"({Chunks().Count - before}, cut {cut:0.0} u off the hull, within 20); cooling {cool:0.0} (16, a report late); E again {said} (COOLING)");
+        // ITS OWN WARP CHARGE RIPS (kits_v31 §3.3: "the DD's own warp ... rip"): the host's 16 s run out (the host
+        // holds the cooldown), hooked again from a fresh spot, V pressed 0.6-1.2 s into the swing -- the guest ends its
+        // move (Drive) and the host, reading the charge off its report, rips at once: the chunk here within 1.5 s of the
+        // press (the slot's own expiry is 5 s), and the host's cooldown arrives.
+        await RealTime(() => me.Sl("grapnel").Cool <= 0, Wan ? 20 : 18);
+        me.Position = d.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(400f, 650f); me.Velocity = Vector2.Zero; me.Rotation = VaryAngle();
+        await Wait(Vary(0.3f, 0.6f));
+        me.Velocity = Vector2.Zero;
+        H.SelectTarget(d);
+        Key(Abilities.KeyFor(ShipClass.Destroyer, "grapnel"));
+        await RealTime(() => me.Sl("grapnel").Left > 0 && me.Sl("grapnel").N == d.NetId, Wan ? 2 : 1);
+        bool marked2 = me.Sl("grapnel").Left > 0 && me.Sl("grapnel").N == d.NetId && me.Helm.On;
+        await RealTime(() => !me.Helm.On || !me.Helm.Pulling, 3);
+        await Wait(Vary(0.6f, 1.2f));
+        bool swinging2 = me.Helm.On;
+        int before2 = Chunks().Count;
+        me.DriveHeld = true; me.PressDrive();
+        bool ripped = await RealTime(() => Chunks().Count > before2, 1.5);
+        var ended = me.Helm.Ended;
+        me.DriveHeld = false;
+        bool cooled = await RealTime(() => me.Sl("grapnel").Cool > 14.5, Wan ? 2 : 1);
+        double cool2 = me.Sl("grapnel").Cool;
+        H.ClearSelection(); me.Velocity = Vector2.Zero;
+        Check(marked2 && swinging2 && ripped && ended == HelmEnd.Drive && cooled,
+              $"arena guest: hooked again ({marked2}), swinging ({swinging2}), V pressed -- its move ended {ended} (Drive) and the host's chunk drawn here within 1.5 s ({ripped}, not at the 5 s expiry); cooling {cool2:0.0} (> 14.5)");
     }
 
     // ── SLICE 6a, RUNG 5: THE RIP IN A PARTY OF TWO (kits_v31 §3.3 Proves: "in a party of 2, the rip is 1% of the
@@ -9817,6 +10036,8 @@ public partial class _Test : Node
     //   a held gunship whose hull is 1-5 u inside the bar's edge (40 + r - 1..5 off its line) takes nothing before it
     //   arms, then 20 and 10 every 0.5 s (x1.5 when the Warden's taunt called it: 30 and 15); one 1-5 u outside
     //   takes 0; a boss post astride the bar takes 0; the pilot's DealtBy["curtain"] carries it;
+    //   out of the bar for 1.0-1.5 s and back in, it takes one tick (0 or 10) in the first 0.1-0.4 s, never the
+    //   missed ticks at once, and exactly one more by 0.6-0.9 s;
     //   the bar is gone 6.1 s after the press.
     async Task LaneA6cCurtainChecks(Vector2 yonder)
     {
@@ -9856,7 +10077,8 @@ public partial class _Test : Node
                                   Type = new Missions.BossType { Id = "post", Name = "POST", Hull = 100000, Texture = bt.Texture, Length = bt.Length, HalfWidth = bt.HalfWidth,
                                                                  CloseSpeed = 0f, TurnRate = 0f, Moves = System.Array.Empty<BossMove>() } };
             AddChild(post);
-            void Pin() { wd.Position = at; wd.Velocity = Vector2.Zero; wd.AimPoint = cursor; wd.Hp = wd.MaxHp; inG.Position = inAt; outG.Position = outAt; post.Position = bossAt; }
+            var inSpot = inAt;                                                     // where the in-gunship is held (moved out and back below)
+            void Pin() { wd.Position = at; wd.Velocity = Vector2.Zero; wd.AimPoint = cursor; wd.Hp = wd.MaxHp; inG.Position = inSpot; outG.Position = outAt; post.Position = bossAt; }
             for (int i = 0; i < 3; i++) { Pin(); await Frame(); }
             bool taunted = run == 2;
             if (taunted) { wd.UseAbility("taunt", 0); Pin(); await Frame(); }
@@ -9884,6 +10106,24 @@ public partial class _Test : Node
             double credit = wd.DealtBy.GetValueOrDefault("curtain") - credit0;
             Check(early == 0 && Math.Abs(took - want2) < 1e-6 && outTook == 0 && bossTook == 0 && Math.Abs(credit - took) < 1e-6,
                   $"...a gunship {inOff - r0:0.0} u from the bar's line (its hull 1-5 u in) takes {early:0} before it arms, then {took:0.00} by tick {k} ({want2:0.00}); one {outOff - r0:0.0} u off takes {outTook:0} (0); a boss astride it {bossTook:0} (0); credited to the curtain {credit:0.00}");
+            // OUT AND BACK IN: the gunship held outside the bar for 1.0-1.5 s, then back inside -- its clock restarts
+            // from the return (one tick of 10, 15 called, on it), never the ticks it missed all at once
+            {
+                inSpot = outAt; Pin(); await Frame();
+                double outFor = Vary(1.0f, 1.5f), leftAge = bar != null && GodotObject.IsInstanceValid(bar) ? bar.Age : 0;
+                await UntilAge(leftAge + outFor);
+                inSpot = inAt; Pin();
+                double reHp = inG.Hp, reAge = bar != null && GodotObject.IsInstanceValid(bar) ? bar.Age : 0;
+                await Frame();
+                double s1 = Vary(0.1f, 0.4f), s2 = Vary(0.6f, 0.9f);
+                await UntilAge(reAge + s1);
+                double back1 = reHp - inG.Hp;
+                await UntilAge(reAge + s2);
+                double back2 = reHp - inG.Hp;
+                bool oneTick = back1 == 0 || Math.Abs(back1 - 10 * mult) < 1e-6;
+                Check(oneTick && Math.Abs(back2 - back1 - 10 * mult) < 1e-6,
+                      $"...out of the bar {outFor:0.00} s and back in: {back1:0.00} in the first {s1:0.00} s (0 or {10 * mult:0.00}, never the missed ticks at once), {back2 - back1:0.00} more by {s2:0.00} s ({10 * mult:0.00})");
+            }
             await UntilAge(Vary(5.8f, 5.95f));
             bool stands = bar != null && H.Laid.Contains(bar);
             double seen = wd.Clock, standAge = bar != null && GodotObject.IsInstanceValid(bar) ? bar.Age : -1;
@@ -10653,6 +10893,7 @@ public partial class _Test : Node
             for (int k = 0; k < 3; k++)
             {   // ONE, TWO, THREE picked: the host holds them, in order
                 var picks = Shuffled(k + 1);
+                dd.Sl("longlance").Cool = 0;                                  // each press past the refusal: the first set 18 s
                 dd.UseAbility("longlance", 0, picks);
                 Check(picks.Length == k + 1 && Seen().SequenceEqual(picks),
                       $"F8 picks: {k + 1} picked {Ids(picks)}, the host holds {Ids(Seen())}");
@@ -18540,11 +18781,11 @@ public partial class _Test : Node
                           && Math.Abs(snL.DamageLines.First(l => l.Label.StartsWith("Railgun")).Dps - 120 * 1.5 / 3.8) < 1e-6
                           && snL.DamageLines.Count() == 1 && !snL.DamageLines.Any(l => l.Label.Contains("Point defence")),
                           $"the sniper's total is its railgun: 180 (a perfect round, 120 x 1.5) every 3.8 s (the 3.0 s reload and the 0.8 s charge) = 47.4 DPS, and no point-defence line on a hull that mounts none ({snL.SustainedDps:0.00})");
-                    Check(Math.Abs(new ShipStats(ShipClass.HeavyWarden).SustainedDps - (22.5 / 0.5 + 6 * 45 / 14.0 + 5 / 0.5)) < 1e-6
+                    Check(Math.Abs(new ShipStats(ShipClass.HeavyWarden).SustainedDps - (22.5 / 0.5 + 6 * 45 / 14.0 + 0.5 / 0.5)) < 1e-6
                           && Math.Abs(new ShipStats(ShipClass.FreightHauler).SustainedDps - (31.25 / 1.25 + 3 * 5 / 0.5 + 2 * 0.5 / 0.5)) < 1e-6
                           && Math.Abs(new ShipStats(ShipClass.HeavyWarrior).SustainedDps - 26 / 0.40) < 1e-6
                           && Math.Abs(new ShipStats(ShipClass.LightEcho).SustainedDps - (22 / 0.5 + 11 / 0.5 + 66 * 1.2 * 0.35 * 5 / 18.0)) < 1e-6,
-                          $"...and every other signature weapon counts too: the warden's flak 45 + 19.29 + 10, the freighter's spotter 25 + three sentries 30 + its always-on point defence 2 = 57, the warrior's blade 26 every 0.40 s (65), the echo's repeater 44 + its echo rounds 22 + the reverb's 35% of five seconds at x1.2 every 18 s (7.7)");
+                          $"...and every other signature weapon counts too: the warden's flak 45 + 19.29 + its one point-defence mount 1, the freighter's spotter 25 + three sentries 30 + its always-on point defence 2 = 57, the warrior's blade 26 every 0.40 s (65), the echo's repeater 44 + its echo rounds 22 + the reverb's 35% of five seconds at x1.2 every 18 s (7.7)");
                     Check(Math.Abs(new ShipStats(ShipClass.Carrier).SustainedDps - (3 * (3.5 / 0.35) * (15.0 / 18.0) + 4 * 2 * 60 / 27.5 + 2 * 0.5 / 0.5)) < 1e-6
                           && Math.Abs(new ShipStats(ShipClass.Carrier).DamageLines.First(l => l.Label.StartsWith("Bomber")).Dps - 480 / 27.5) < 1e-6,
                           $"the carrier's torpedoes are in its total at last: 8 x 60 = 480 over a 27.5 s run (20 s out and back, 1.5 s launching, 6 s rearming) = 17.45 DPS, beside 25.00 from the fighters and 2 from the point defence, always on ({new ShipStats(ShipClass.Carrier).SustainedDps:0.00})");
@@ -18847,6 +19088,7 @@ public partial class _Test : Node
             await Lane("LaneA6aGunshipChecks", () => LaneA6aGunshipChecks(yonder));
             await Lane("LaneA6aGunshipFireChecks", () => LaneA6aGunshipFireChecks(yonder));
             await Lane("LaneA6aSuperChecks", () => LaneA6aSuperChecks(yonder));
+            await Lane("LaneA6aSuperWarpChecks", () => LaneA6aSuperWarpChecks(yonder));
             await Lane("LaneA6aSuperMissileChecks", () => LaneA6aSuperMissileChecks(yonder));
             await Lane("LaneA6aSuperWingsChecks", () => LaneA6aSuperWingsChecks(yonder));
             await Lane("LaneA6aDirectorChecks", () => LaneA6aDirectorChecks(yonder));
@@ -18938,21 +19180,24 @@ public partial class _Test : Node
                 wr.Sl("boost").Cool = 0;
             }
 
-            // ── WARDEN: point defence that hits hard, and six hunters on six targets ──
+            // ── WARDEN: point defence at 1 DPS a mount (README ruling), and six hunters on six targets ──
             await SetClass(ShipClass.HeavyWarden);
             var wd = Me; wd.Position = yonder; wd.Velocity = Vector2.Zero; await Wait(0.2);
-            Check(wd.PdOnline && Math.Abs(wd.Spec(true).Damage - 5.0) < 1e-9
-                  && Math.Abs(wd.Stats["pd_interval"] - 0.5) < 1e-9 && Math.Abs(wd.Stats.PdDps - 10) < 1e-9,
-                  $"the warden's point defence is on with nothing pressed -- 5 a shot every 0.5 s from its one mount, 10 DPS ({wd.Stats.PdDps:0.0} DPS)");
-            // and it KILLS: one light raider inside its 420 u, nothing else firing, dead in seconds.
-            // (At the 0.25 a shot it was first written with, this took 50 s and the class's whole
-            // reason for existing did nothing a pilot could see.)
+            Check(wd.PdOnline && Math.Abs(wd.Spec(true).Damage - 0.5) < 1e-9 && wd.Stats["pd_count"] == 1
+                  && Math.Abs(wd.Stats["pd_interval"] - 0.5) < 1e-9 && Math.Abs(wd.Stats.PdDps - 1) < 1e-9,
+                  $"the warden's point defence is on with nothing pressed -- 0.5 a shot every 0.5 s from its one mount, 1 DPS ({wd.Stats.PdDps:0.0} DPS)");
+            // and it fires on its own: one light raider inside its 420 u, nothing else firing. The clock
+            // starts on the first frame a shot lands; the next ~4.2 s carry eight more 0.5 s cycles.
             {
-                var pdMark = H.SpawnRaider(VaryNear(wd.Position, 380f));       // inside 420 u, any bearing
-                double pdStart = wd.Clock;
-                for (int i = 0; i < 60 * 8 && pdMark.Alive; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-                Check(!pdMark.Alive && wd.Clock - pdStart < 6,
-                      $"...and it kills a light raider on its own in {wd.Clock - pdStart:0.0} s, with nothing pressed");
+                var pdMark = H.SpawnRaider(VaryNear(wd.Position, 300f)); pdMark.Hp = 400; pdMark.ApplyStatus(Status.Disabled, 30);   // inside 420 u, any bearing, held there
+                double pdHp0 = pdMark.Hp, pdSpawn = wd.Clock;
+                while (pdMark.Hp >= pdHp0 && wd.Clock - pdSpawn < 4) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                double pdFirst = wd.Clock, pdAt = pdMark.Hp, pdSpan = Vary(4.1f, 4.4f);
+                while (wd.Clock - pdFirst < pdSpan) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                double pdTook = pdAt - pdMark.Hp;
+                Check(pdAt < pdHp0 && pdTook >= 3.5 - 1e-6 && pdTook <= 4.5 + 1e-6,
+                      $"...and it fires on its own, with nothing pressed: {pdTook:0.0} in {pdSpan:0.00} s after its first shot landed (8 or 9 shots of 0.5 = 4.0-4.5, 1 DPS)");
+                pdMark.TakeDamage(1e12); await Wait(0.1);
             }
             var marks = new List<Raider>();
             for (int i = 0; i < 4; i++) { var m = H.SpawnRaider(yonder + new Vector2(300 + 60 * i, -200 + 90 * i)); m.Hp = 3000; marks.Add(m); }
@@ -22579,6 +22824,8 @@ public partial class _Test : Node
             var reloadWatch = LaneA6cReloadHostWatch(reloadSeen);           // slice 6c: ...and then fires a railgun, timing its reloads
             var suppressSeen = new LaneA6aSuppressSeen();
             var suppressWatch = LaneA6aSuppressHostWatch(suppressSeen);     // slice 6a: ...and, after its curtain, suppresses a webifier posted here
+            var grapnelSeen = new LaneA6aGrapnelSeen();
+            var grapnelWatch = LaneA6aGrapnelHostWatch(grapnelSeen);        // slice 6a: ...then hooks the dummy and casts off (the rip's damage here)
             var pepperSeen = new LaneA6dPepperSeen();
             var pepperWatch = LaneA6dPepperHostWatch(pepperSeen);           // slice 6d: ...and, after its curtain, holds a Dart's pepperbox
             var rodSeen = new LaneA6dRodSeen();
@@ -22609,6 +22856,7 @@ public partial class _Test : Node
                   && Abilities.For(ShipClass.HeavyWarrior).Length == Classes.Of(ShipClass.HeavyWarrior).Abilities.Length + 7,
                   $"arena host: hosting as a WARRIOR -- its stock 300 hull, no chips, its own rows, the drive and six open slots ({hw.MaxHp:0})");
             await Lane("LaneA6aSuppressHostChecks", () => LaneA6aSuppressHostChecks(suppressWatch, suppressSeen));  // the guest's Suppress comes before it parks as a freighter
+            await Lane("LaneA6aGrapnelHostChecks", () => LaneA6aGrapnelHostChecks(grapnelWatch, grapnelSeen));     // slice 6a: the guest's grapnel rip, its damage on the host
             await Lane("LaneA6dPepperHostChecks", () => LaneA6dPepperHostChecks(pepperWatch, pepperSeen));          // slice 6d: the guest's pepperbox, before it refits to a freighter
             await Lane("LaneA6dRodHostChecks", () => LaneA6dRodHostChecks(rodWatch, rodSeen));                  // slice 6d: the guest's rod, priced on the host
             await Lane("LaneA6dRamjetHostChecks", () => LaneA6dRamjetHostChecks(ramjetWatch, ramjetSeen));         // slice 6d: the host's own copy of the guest's ramjet

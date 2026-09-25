@@ -230,15 +230,19 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused, ISquadMembe
             float top = Squad.Top(this), d = Position.DistanceTo(post);
             float step = Latched ? top : Mathf.Min(top, d / (float)System.Math.Max(Squad.Left, 1.0 / 60));
             Position = Position.MoveToward(post, step * dt);
-            // THE LATCH GATES (F17 rows): a status may refuse a new latch, or drop the one it holds
+            // THE LATCH GATES (F17 rows): a status may refuse a new latch, or drop the one it holds; and a
+            // pinner cannot latch a hull that refuses its pin (Unwebbed: the whirlwind)
             Latched = Position.DistanceTo(post) < 12f && Gap(Position, t) <= Def.Reach
-                      && (Latched ? !_status.DropsLatch : !_status.BlocksLatch);
+                      && (Latched ? !_status.DropsLatch : !_status.BlocksLatch)
+                      && !(Def.Cc == Status.Pinned && t is IStatused ut && ut.Statuses.Has(Status.Unwebbed));
             Rotation = Mathf.LerpAngle(Rotation, Aim.Face(Position, t.Position), Mathf.Clamp(8f * (float)Agility * dt, 0f, 1f));
         }
         Speed = dt > 0 ? from.DistanceTo(Position) / dt : 0f;
         _boosting = Squad.Posted(this) && Squad.Burning && Speed > Cruise + 1f;   // the burn, not a catch-up
         if (t == null) { QueueRedraw(); return; }
-        bool pinned = t is IStatused st && st.Statuses.Has(Status.Pinned);
+        // PINNED: by anyone's web, or the caller of this squad's Call (a Taunt holds a heavy to its target
+        // as a web would: a standoff heavy throws at the caller at once instead of waiting at range)
+        bool pinned = (t is IStatused st && st.Statuses.Has(Status.Pinned)) || ReferenceEquals(Squad?.CalledBy, t);
         if (_turret != null && !_status.HoldsAim) _turret.GlobalRotation = Aim.Face(Position, t.Position);   // its one turret tracks the target, unless jammed
         if (Latched)
         {
