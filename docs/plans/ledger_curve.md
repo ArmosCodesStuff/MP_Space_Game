@@ -63,3 +63,15 @@ comment), Emplacements, Waves, Raider (Strength comment, MaxHull, new Volley use
 TioWindow, SmokeTest. engine-unproven: rungs owed in the final test phase (solo x2: the rewritten boss,
 raid, siege, escort and TIO checks; six: the guest bounty share 1500 x HullScale(2); frame 35 TIO text).
 Next: J3.
+
+## J3 PRE — tier opus
+Intent: Lancer rows guns 2.68, trident 11.2, wave 33.5, ram 29.8 (beam 50 kept); Drake gun 4.72, scrap
+14.76 (rock 250 kept); harness rewrites + CurveBossRowChecks. HEAD 519954a. Hashes:
+  scripts/Lancer.cs 08ac04023b42b8bdf60310057cf5e3f62dd23381
+  scripts/Drake.cs 15db8b36bfee548da969d8b6228cdf2aed7d9ebd
+  tools/smoketest/SmokeTest.cs.txt ea7ae1ed4d662509016ea35c7a52f21e89d1237c
+## J3 POST
+Verdict: typecheck 0 errors, quick ALL CHECKS PASSED; diff read. Files: Lancer.cs, Drake.cs (rows + headers),
+SmokeTest (CurveBossRowChecks new; row literals, L1 guns DPS, ram 29.8, shockwave 33.5 / Suppressed 23.45,
+Drake L2 gun 4.72 / scrap 14.76 rewritten). engine-unproven: rungs owed in the final test phase (solo x2).
+Next: J4.

@@ -4,13 +4,15 @@
 // that copy is what made a table overdue. Boss runs any table of moves; this is the Drake's.
 //
 // A heavy scrapper: no escorts, a lower, steadier pressure than the Lancer, and two specials on
-// the Lancer's own clocks, all damage x the level's and party's scale:
+// the Lancer's own clocks, all damage x the level's and party's scale. EVERY MOVE BUT THE ROCK is
+// cut to x0.787 of its old row (numbers_curve_raids_items.md §1.2): with no chips a par pilot who
+// stops dodging lives 42 s at every level; the rock (250) is a super and is kept:
 //   MAIN GUN       always: a slow shell (220 u/s) every 2.5 s at the nearest ship within 1100 u,
-//                  6 each (2.4 DPS) -- straight, and dodged by moving
+//                  4.72 each (1.89 DPS) -- straight, and dodged by moving
 //   SCRAP SHOTGUN  every 15 s (the trident's cadence), from 17 s: it WARPS to range -- a ring
 //                  where it will land, 1 s -- 600 u from the nearest pilot, then a fan of seven red
 //                  lines for 1.875 s, then seven pieces of scrap down them at once -- the same
-//                  fixed fan every time, 10 degrees apart -- 18.75 each, each its own hit
+//                  fixed fan every time, 10 degrees apart -- 14.76 each, each its own hit
 //   ASTEROID THROW every 30 s (the death beam's slot, from 6 s): it WARPS BACK -- a ring where it
 //                  will land, 1 s -- to 1300 u from its target; a big rock appears beside it and
 //                  its tractor beam takes hold; a red lane to the target for 7.5 s; then the rock
@@ -34,7 +36,7 @@ public static class Drake
         // never need dodging (Shots.Slug carries its own report, "drake_gun").
         new() { Id = "gun", Way = MoveWay.Shoot, Waits = MoveWait.Nothing, Shot = Shots.Slug,
                 Every = 2.5, First = 2.0, Find = 1100f,
-                Damage = 6, Speed = 220f, Range = 1300f, Radius = 7f, Source = DamageSource.DrakeGun },
+                Damage = 4.72, Speed = 220f, Range = 1300f, Radius = 7f, Source = DamageSource.DrakeGun },
 
         // THE SCRAP SHOTGUN: the warp opener first -- a ring 117 u across (was HalfWidth x 1.3)
         // for 1 s, 600 u off the nearest pilot -- then seven red lines 1400 u long and 28 u wide
@@ -43,7 +45,7 @@ public static class Drake
                 Shot = Shots.Scrap, Every = 15, First = 17.0,
                 Warp = 1.0, Standoff = 600f, WarpRing = 117f, WarpSound = "drake_warp",
                 Windup = 1.875, Count = 7, Spread = 10f, Width = 28f,
-                Damage = 18.75, Speed = 480f, Range = 1400f, Radius = 9f,
+                Damage = 14.76, Speed = 480f, Range = 1400f, Radius = 9f,
                 Strike = "drake_scrap", Source = DamageSource.DrakeScrap },
 
         // THE ASTEROID THROW: a 180 u body 310 u off the flank (HalfWidth + Radius + 40: 90 + 180

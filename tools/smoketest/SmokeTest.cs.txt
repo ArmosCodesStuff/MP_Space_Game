@@ -1462,6 +1462,7 @@ public partial class _Test : Node
         GearLevelChecks();
         BossScaleChecks();
         CurveParChecks();
+        CurveBossRowChecks();
         BuildChecks();
         await RecyclerChecks();
         CurveRaiderChecks();
@@ -2606,7 +2607,7 @@ public partial class _Test : Node
 
     // THE OUTGOING DOOR ON A BOSS (F17): Suppressed takes its moves to x0.7 and leaves its supers
     // whole; Dazzled and Jammed never reach it. Every clock held, three times: the pilot at a
-    // seeded spot inside the Lancer's shockwave (45, not a super) and at a seeded reach and offset
+    // seeded spot inside the Lancer's shockwave (33.5, not a super) and at a seeded reach and offset
     // down its beam (50 a judgement, a super), each started by hand and read off the hull it takes.
     async Task LaneAOutDoorBossChecks(Boss boss, PlayerShip me)
     {
@@ -2655,8 +2656,8 @@ public partial class _Test : Node
             bool refused = !boss.Statuses.Has(Status.Dazzled) && !boss.Statuses.Has(Status.Jammed);
             var plainAt = boss.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(150f, 280f);
             double pWave = await WaveLands(plainAt);
-            Check(suppressed && refused && Math.Abs(sWave - 31.5) < 1e-6 && Math.Abs(sBeam - 50) < 1e-6 && Math.Abs(pWave - 45) < 1e-6,
-                  $"a Suppressed boss: its shockwave on a pilot {waveAt.DistanceTo(boss.Position):0} u off lands {sWave:0.0} (45 x 0.7 = 31.5), its beam (a super) {reach:0} u down the line {sBeam:0.0} (50); Dazzled and Jammed put on nothing ({refused}), and the next shockwave {plainAt.DistanceTo(boss.Position):0} u off lands {pWave:0.0} (45)");
+            Check(suppressed && refused && Math.Abs(sWave - 23.45) < 1e-6 && Math.Abs(sBeam - 50) < 1e-6 && Math.Abs(pWave - 33.5) < 1e-6,
+                  $"a Suppressed boss: its shockwave on a pilot {waveAt.DistanceTo(boss.Position):0} u off lands {sWave:0.00} (33.5 x 0.7 = 23.45), its beam (a super) {reach:0} u down the line {sBeam:0.0} (50); Dazzled and Jammed put on nothing ({refused}), and the next shockwave {plainAt.DistanceTo(boss.Position):0} u off lands {pWave:0.0} (33.5)");
             await Wait(0.6);
         }
         foreach (var m in boss.Type.Moves) boss.S(m.Id).Due = held[m.Id];
@@ -3163,6 +3164,28 @@ public partial class _Test : Node
             Check(Math.Abs(Par.HullScale(L) - mid) < 1e-9 && Math.Abs(Par.LevelAtHull(Par.DamageScale(L)) - L) < 1e-6,
                   $"L{L:0.00}: hull x{Par.HullScale(L):0.0000} between L{lo} and L{lo + 1}, and a hull x{Par.DamageScale(L):0.000} of par's L1 stands at L{Par.LevelAtHull(Par.DamageScale(L)):0.00}");
         }
+    }
+
+    // THE CUT (lane F, numbers §1.2): with no chips, par lives 31 s against the Lancer and 42 s against
+    // the Drake at every level, so every boss move but the two 250 supers (the Lancer's burn, the
+    // Drake's rock) is its old row x0.744 / x0.787 -- the ram and the scrap included, though the
+    // code flags them Super. The old rows are literals here, so a row moved back fails.
+    void CurveBossRowChecks()
+    {
+        var lan = Missions.Bosses.First(b => b.Id == "silver_lancer"); var dra = Missions.Bosses.First(b => b.Id == "drake_bastion");
+        double Dmg(Missions.BossType b, string id) => b.Moves.First(m => m.Id == id).Damage;
+        var cut = new (Missions.BossType b, string id, double was, double k, double now)[]
+        {
+            (lan, "guns", 3.6, 0.744, 2.68), (lan, "trident", 15, 0.744, 11.2), (lan, "wave", 45, 0.744, 33.5), (lan, "ram", 40, 0.744, 29.8),
+            (dra, "gun", 6, 0.787, 4.72), (dra, "shotgun", 18.75, 0.787, 14.76),
+        };
+        foreach (var (b, id, was, k, now) in cut)
+            Check(Math.Abs(Dmg(b, id) - now) < 1e-9 && Math.Abs(Dmg(b, id) / was - k) < 0.003,
+                  $"{b.Name}'s {id}: {Dmg(b, id)} = {was} x{Dmg(b, id) / was:0.000} (the cut is x{k})");
+        var beam = lan.Moves.First(m => m.Id == "beam");
+        Check(beam.Damage == 50 && beam.Damage * 5 == 250 && Dmg(dra, "throw") == 250
+              && lan.Moves.Length == 5 && dra.Moves.Length == 3,
+              $"the two supers are kept: the burn {beam.Damage} a tick (250 over its five landings) and the rock {Dmg(dra, "throw")}; no other move on either row");
     }
 
     // A RAIDER'S STRENGTH IS A LEVEL (lane F): its hull on Par's craft scale, its laser volley on
@@ -8719,16 +8742,16 @@ public partial class _Test : Node
                       && dra.HoldOff == 650f && dra.CloseSpeed == 30f && Math.Abs(dra.TurnRate - 0.3f) < 1e-6,
                       "a boss's hull, art and approach are its row's: 3222 / 360 / 70 and 2968 / 420 / 90, both closing to 650 u at 30 u/s and turning at 0.3 rad/s");
                 var gn = L("guns");
-                Check(gn.Way == MoveWay.Bolt && gn.Every == 1.2 && gn.First == 2.0 && gn.Damage == 3.6 && gn.Find == 900f
+                Check(gn.Way == MoveWay.Bolt && gn.Every == 1.2 && gn.First == 2.0 && gn.Damage == 2.68 && gn.Find == 900f
                       && gn.Waits == MoveWait.Nothing && !gn.Busy && !gn.Super && gn.Source == "boss:guns"
-                      && Math.Abs(gn.Damage / gn.Every - 3) < 1e-9 && gn.Beam == Beam.Bolt,
-                      $"the guns: {gn.Damage} every {gn.Every} s (3 DPS) at the nearest ship within 900 u, they wait on nothing, and they are seen and heard as a boss's bolt ({Beam.Of(gn.Beam).Id})");
+                      && Math.Abs(gn.Damage / gn.Every - 2.68 / 1.2) < 1e-9 && gn.Beam == Beam.Bolt,
+                      $"the guns: {gn.Damage} every {gn.Every} s (2.23 DPS) at the nearest ship within 900 u, they wait on nothing, and they are seen and heard as a boss's bolt ({Beam.Of(gn.Beam).Id})");
                 var tr = L("trident");
                 Check(tr.Way == MoveWay.Shoot && tr.Shot == Shots.Seeker && tr.Every == 15 && tr.First == 13.5
-                      && tr.Count == 3 && tr.Spread == 25f && tr.Damage == 15 && tr.Speed == 135f && tr.Range == 1920f
+                      && tr.Count == 3 && tr.Spread == 25f && tr.Damage == 11.2 && tr.Speed == 135f && tr.Range == 1920f
                       && tr.Turn == 1.4f && tr.Size == 2f && tr.Muzzle == 14f && tr.Cue == "boss_trident"
                       && tr.Waits == MoveWait.Nothing && !tr.Busy && tr.Source == "boss:missiles",
-                      $"the trident: {tr.Count} seekers at -25 / 0 / +25 degrees, 15 each, 135 u/s out to 1920 u, twice the size");
+                      $"the trident: {tr.Count} seekers at -25 / 0 / +25 degrees, 11.2 each, 135 u/s out to 1920 u, twice the size");
                 var bm = L("beam");
                 Check(bm.Way == MoveWay.Beam && bm.Every == 30 && bm.First == 6.0 && bm.Windup == 6.0 && bm.Live == 3.0
                       && bm.Tick == 0.25 && bm.Damage == 50 && bm.Reach == 10000f && bm.Width == 70f
@@ -8740,23 +8763,23 @@ public partial class _Test : Node
                       $"the beam: wind-up {bm.Windup} s, live {bm.Live} s judged every {bm.Tick} s for {bm.Damage}, 70 u wide down 10000 u; two escorts 45 degrees off at 3 hull, never stalling it past 5 s");
                 var rm = L("ram");
                 Check(rm.Way == MoveWay.Dash && rm.Every == 30 && rm.First == 21.0 && rm.Windup == 1.5
-                      && rm.Damage == 40 && rm.Reach == 900f && rm.Speed == 1200f && rm.Width == 140f
+                      && rm.Damage == 29.8 && rm.Reach == 900f && rm.Speed == 1200f && rm.Width == 140f
                       && rm.Busy && rm.Super && rm.Shifts && rm.Waits == MoveWait.Everything && rm.Source == "boss:charge",
                       $"the ram: wind-up {rm.Windup} s, {rm.Reach} u at {rm.Speed} u/s, {rm.Damage} on contact -- and a cadence of its OWN ({rm.Every} s, where it read the beam's constant by accident)");
                 var wv = L("wave");
                 Check(wv.Way == MoveWay.Ring && wv.Every == 17.0 && wv.First == 10.0 && wv.Windup == 1.8
-                      && wv.Damage == 45 && wv.Reach == 340f && wv.Busy && !wv.Super && !wv.Shifts
+                      && wv.Damage == 33.5 && wv.Reach == 340f && wv.Busy && !wv.Super && !wv.Shifts
                       && wv.Waits == MoveWait.Movers && wv.Source == "boss:wave" && wv.Strike == "boss_shockwave",
                       $"the shockwave: every {wv.Every} s, wind-up {wv.Windup} s, {wv.Damage} within {wv.Reach} u -- the period and the damage were bare literals in a method body");
                 var dg = D("gun"); var sg = D("shotgun"); var th = D("throw");
                 Check(dg.Way == MoveWay.Shoot && dg.Shot == Shots.Slug && dg.Every == 2.5 && dg.First == 2.0
-                      && dg.Find == 1100f && dg.Damage == 6 && dg.Speed == 220f && dg.Range == 1300f
+                      && dg.Find == 1100f && dg.Damage == 4.72 && dg.Speed == 220f && dg.Range == 1300f
                       && dg.Radius == 7f && dg.Waits == MoveWait.Nothing && !dg.Busy && dg.Source == "boss:gun",
-                      $"the Drake's main gun: {dg.Damage} a shell (2.4 DPS) every {dg.Every} s at 220 u/s within 1100 u, through its own specials");
+                      $"the Drake's main gun: {dg.Damage} a shell (1.89 DPS) every {dg.Every} s at 220 u/s within 1100 u, through its own specials");
                 Check(sg.Way == MoveWay.Shoot && sg.Shot == Shots.Scrap && sg.Every == 15 && sg.First == 17.0
                       && sg.Warp == 1.0 && sg.Standoff == 600f && sg.WarpRing == 117f && sg.WarpSound == "drake_warp"
                       && sg.Windup == 1.875 && sg.Count == 7 && sg.Spread == 10f && sg.Width == 28f
-                      && sg.Damage == 18.75 && sg.Speed == 480f && sg.Range == 1400f && sg.Radius == 9f
+                      && sg.Damage == 14.76 && sg.Speed == 480f && sg.Range == 1400f && sg.Radius == 9f
                       && sg.Busy && sg.Super && sg.Shifts && sg.Waits == MoveWait.Everything && sg.Source == "boss:scrap",
                       $"the scrap shotgun: a {sg.Warp} s ring, a warp to {sg.Standoff} u off, {sg.Windup} s of fan, then {sg.Count} pieces of {sg.Damage} at {sg.Spread} degrees apart");
                 // THE BODY IS 180 u and the row carries NO Width, because a thrown body's lane is
@@ -8796,7 +8819,7 @@ public partial class _Test : Node
             Check(Count<BasePanel>() == 0, "neither B nor the button opens a base menu out there");
             Check(Music.CombatZone, "the arena counts as combat for the music");
             Me.Position = boss.Position + new Vector2(0, 500); Me.Velocity = Vector2.Zero; Me.Rotation = 0;
-            Check(Math.Abs(boss.MaxHp - 3222) < 1e-6 && Math.Abs(boss.S("guns").M.Damage / boss.S("guns").M.Every - 3) < 1e-9, "the boss: 3222 hull at level 1 (solo); its guns 3 DPS");
+            Check(Math.Abs(boss.MaxHp - 3222) < 1e-6 && Math.Abs(boss.S("guns").M.Damage / boss.S("guns").M.Every - 2.68 / 1.2) < 1e-9, "the boss: 3222 hull at level 1 (solo); its guns 2.23 DPS");
             // stand in the beam on purpose with a thick hull (test only), and watch the rhythm
             // the boss's health bar: a chunk per hit, bouncing, whitening, fading; bursts merge
             var bar = Nodes<QuarryBar>().First();
@@ -9008,7 +9031,7 @@ public partial class _Test : Node
             // judgement lands, 0.75 s apart -- at 0, 0.75 and 1.5 s before the 1.9 s sidestep. With no
             // guard it would be 8 (400); on the old clock's 16-frame judgements, 0.53 s apart, 4 (200).
             Check(Math.Abs(beamDmg - 150) < 1e-6, $"the beam, judged every 0.25 s for 50, through the 0.52 s guard: 3 hits in the 1.9 s the pilot sits in it, 150 ({beamDmg / 50:0} hits, {beamDmg:0})");
-            Check(Math.Abs(chargeDmg - 40) < 1e-6, $"the charge rams for 40 ({chargeDmg:0})");
+            Check(Math.Abs(chargeDmg - 29.8) < 1e-6, $"the charge rams for 29.8 ({chargeDmg:0.0})");
             Check(sidestep && liveTurn < 0.01f, $"the live beam holds the line it drew, with the pilot gone from it (turned {Mathf.RadToDeg(liveTurn):0.00} deg)");
             Check(liveDrawn, "and the line is still drawn 2 s into its 3 s burn");
             Check(Music.I == null || Math.Abs(boss.S("trident").M.Speed - 135f) < 1e-3, "trident missiles fly at 135 u/s (10% slower)");
@@ -9087,8 +9110,8 @@ public partial class _Test : Node
                 for (int i = 0; i < 60 * 4 && (boss.S("wave").Fired == dkWaves0 || boss.S("wave").At != Boss.Phase.Idle); i++)
                 { me2.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
                 double dkWaveHit = me2.DamageBySource.GetValueOrDefault("boss:wave") - dkWave0;
-                Check(Targeting.Hidden(me2) && boss.S("wave").Fired == dkWaves0 + 1 && Math.Abs(dkWaveHit - 45) < 1e-6,
-                      $"a pilot it cannot see, {me2.Position.DistanceTo(boss.S("wave").To):0} u inside its 340 u shockwave, still takes the whole 45 ({dkWaveHit:0})");
+                Check(Targeting.Hidden(me2) && boss.S("wave").Fired == dkWaves0 + 1 && Math.Abs(dkWaveHit - 33.5) < 1e-6,
+                      $"a pilot it cannot see, {me2.Position.DistanceTo(boss.S("wave").To):0} u inside its 340 u shockwave, still takes the whole 33.5 ({dkWaveHit:0.0})");
 
                 // ...AND ITS MOVES STILL COME, AIMED WHERE IT LAST SAW ANYONE: not held back for want
                 // of a pilot in sight, and not aimed at the one it cannot see
@@ -9274,8 +9297,8 @@ public partial class _Test : Node
                     if (shell != null && GodotObject.IsInstanceValid(shell)) { var sp0 = shell.Position; for (int i = 0; i < 10; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); sspd = GodotObject.IsInstanceValid(shell) ? (shell.Position - sp0).Length() / (10f / 60f) : 0; }
                     for (int i = 0; i < 60 * 5 && Fired("boss:gun") == gun0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                     double gunHit = Fired("boss:gun") - gun0;
-                    Check(shellAt.Count == 2 && Math.Abs(shellAt[1] - shellAt[0] - 2.5) < 0.05 && Math.Abs(sspd - 220) < 4 && Math.Abs(gunHit - 6 * Par.DamageScale(2)) < 1e-6,
-                          $"its main gun: a slow shell (220 u/s) every 2.5 s, 6 a hit -- 2.4 DPS before the level's scale (here {6 * Par.DamageScale(2):0.00}) ({sspd:0} u/s, {(shellAt.Count == 2 ? shellAt[1] - shellAt[0] : -1):0.00} s apart, {gunHit:0.00})");
+                    Check(shellAt.Count == 2 && Math.Abs(shellAt[1] - shellAt[0] - 2.5) < 0.05 && Math.Abs(sspd - 220) < 4 && Math.Abs(gunHit - 4.72 * Par.DamageScale(2)) < 1e-6,
+                          $"its main gun: a slow shell (220 u/s) every 2.5 s, 4.72 a hit -- 1.89 DPS before the level's scale (here {4.72 * Par.DamageScale(2):0.00}) ({sspd:0} u/s, {(shellAt.Count == 2 ? shellAt[1] - shellAt[0] : -1):0.00} s apart, {gunHit:0.00})");
                     // THE SCRAP SHOTGUN (started by hand): a warpRing where it will land -- 600 u from the pilot --
                     // then, held still, a fan of seven red lines for 1.875 s (1.25 x the Lancer's 1.5 s), then
                     // seven pieces of scrap down them: the same fixed fan, 10 degrees apart
@@ -9315,9 +9338,9 @@ public partial class _Test : Node
                     // full, and not one of them swallowed.
                     double all0 = Fired("boss:scrap");
                     for (int i = 0; i < 60 * 3; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-                    double allDmg = Fired("boss:scrap") - all0, pieces = allDmg / (18.75 * Par.DamageScale(2));
+                    double allDmg = Fired("boss:scrap") - all0, pieces = allDmg / (14.76 * Par.DamageScale(2));
                     Check(pieces >= 1 && Math.Abs(pieces - Math.Round(pieces)) < 1e-6,
-                          $"the piece aimed at the pilot strikes it, and every piece that lands is felt in full -- 15 x1.25 = 18.75, x the level's scale ({18.75 * Par.DamageScale(2):0.00} each) ({allDmg:0.000} taken, {pieces:0} of the 7 struck)");
+                          $"the piece aimed at the pilot strikes it, and every piece that lands is felt in full -- 14.76, x the level's scale ({14.76 * Par.DamageScale(2):0.00} each) ({allDmg:0.000} taken, {pieces:0} of the 7 struck)");
                     // THE ASTEROID THROW (started by hand): a rock beside it in its tractor, a red lane of the
                     // rock's width for 7.5 s (1.25 x the Lancer's 6 s charge), the boss held still -- then the
                     // throw: slow, then very fast (the first half of the flight covers an eighth of the lane),
