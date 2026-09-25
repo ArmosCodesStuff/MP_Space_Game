@@ -429,3 +429,8 @@ Done: J2, J3, J4 (a3265f7, 43b0953, 19cfffa). Next is kits6b-J5; no PRE written.
   sweep witness 'well' (H.Laid, row Well), sweep's H.Wells.Clear dropped (Laid already cleared), Fx.All.Length 17 x2,
   frame 79g's cleanup. Docs: CHANGES Handoff, DESIGN D39.
 - Test phase owes (unchanged chain): solo x2 for the above, screens for 79g (the well is now drawn by ZoneNode: read once).
+
+## MERGE version-l -> wt/kits6b (2026-09-25)
+PRE: merge commit f9d53703bd1a6122860e2b347e892724bb4b93fc (version-l merged, auto, no conflicts; only docs/plans/ledger_main.md changed).
+POST: conflicted files: none. typecheck green, verify -Quick green. Next: merge into version-l.
+
