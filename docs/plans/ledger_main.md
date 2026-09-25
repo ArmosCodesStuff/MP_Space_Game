@@ -4,8 +4,10 @@ Engine outputs for the old-way batches: S = C:\Users\logan\AppData\Local\Temp\cl
 (their summary.txt is UTF-16: read with powershell Get-Content). New batches write to %TEMP%\warships_rungs.
 
 ## Running (BUILD PHASE: no engine anywhere until every planned lane is merged -- owner; all agents Opus 5.5)
-- wf_b2ed579d-80a / task wydvp93f5, "lane-kits-k" (no engine). K1 done (da21442); K2 = merge version-l, IN PROGRESS in wt_kits; quick at HEAD,
-  opus code gate, merge. Returns {kits, gate, merge}. merge=false: merge by hand. gate fail: one fix batch from its problems.
+- wf_604b8361-142 / task wthoe9tj1, "lane-kits-fix" (no engine). Kits gate 1 (wydvp93f5, HEAD 809313c: K1+K2 done, net merged in) failed on
+  7: knife-edge DPS windows; screens frame 49 + a twin-barrel frame; outpost GunDamage 42 -> derive from the gunship row = 35 (COORDINATOR
+  DECISION); Ramp stepped on every peer (guest-flown Ramjet broken) -> owner-stepped; BaseDefense/Shots bypass Dealt.Deal; D17's echo check
+  unwritten; stale comments. Fix, gate 2, then merge (it merges version-l into the lane first if art got there first). merge=false: by hand.
 - wf_cd730b78-323 / task wzrk1yb4f, "lane-art-fix" (no engine). Art gate 1 (w3j9do0p7) failed e72fe19 on 6: the 2x Rusty rams twice (80 not
   40; check hid it) -> once per dash; ring-hit reach and approach/spawn had no failing check; boss Find measured from the centre (COORDINATOR
   DECISION: from the hull, m.Find + L/2, per the owner's "what is placed around a boss scales with it"); stale comments; a false Known broken.
