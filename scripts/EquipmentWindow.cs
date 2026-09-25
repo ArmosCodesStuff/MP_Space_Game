@@ -19,6 +19,8 @@ public partial class EquipmentWindow : PanelContainer
     private VBoxContainer _ship, _hold;
     private Label _gate;                 // why the SALVAGE buttons are grey, when they are (on the foot line)
     private bool _served;                // what the equipment base's gate said at the last Rebuild
+    private int _peak = -1;              // Character.Peak at the last Rebuild: a level-up can open a
+                                          // chip slot while this window is open (AwardClear, mid-arena)
     // Both columns scroll, at a height that ends the window above the hull bar (930 px down a
     // 1080 screen): a ship's eleven parts, each with what it does, run past 970 px on their own.
     private const float ShipW = 500, HoldW = 400, ColH = 700;
@@ -70,13 +72,14 @@ public partial class EquipmentWindow : PanelContainer
     {
         var gate = Landmarks.Serves(Hub?.MyShip, Service.LevelGear);
         Ui.SetText(_gate, gate.Ok || Hub?.Yard == null ? "" : "Levelling is shut: " + gate.Why);
-        if (gate.Ok != _served) Rebuild();
+        if (gate.Ok != _served || Character.Peak != _peak) Rebuild();
     }
 
     private void Rebuild()
     {
         Ui.Clear(_ship); Ui.Clear(_hold);
         _served = Landmarks.Serves(Hub?.MyShip, Service.LevelGear).Ok;
+        _peak = Character.Peak;
         var cls = Character.Class; var l = Character.LoadoutFor(cls);
         _ship.AddChild(Ui.Heading($"{Classes.NameOf(cls)}  ·  core parts"));
         for (int k = 0; k < Equipment.CoreSlots; k++)

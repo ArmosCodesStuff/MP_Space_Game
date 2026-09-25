@@ -374,5 +374,29 @@ BasePanel.cs:120-129, Raids.cs:53 ask Unlocks. Grep the harness for NeedsBoss an
   switching away and back"; "Hull (1 pt): +5 flat under the chip's +8% share is +5.4"; "Hull again
   (2 pts): +10.8 in all".
 - rung 5 owed: none new.
-- commit: (fix 3-5) "Walls fix 3-5: three SmokeTest checks proved what they named again".
+- commit: 067f70f "Walls fix 3-5: three SmokeTest checks proved what they named again".
 - next: fix 6 (EquipmentWindow.cs, finding 6).
+
+### Fix 6 PRE (finding 6, minor -- EquipmentWindow's locked chip rows stale after Peak changes)
+- model: sonnet
+- intent: `_Process` only calls `Rebuild()` on a gate flip, so a chip slot opening mid-session
+  (AwardClear raising Character.Peak while the window is open) leaves locked rows and greyed EQUIP
+  buttons stale until a close/reopen. Track `Character.Peak` at the last Rebuild beside `_served`
+  and Rebuild on either changing. New check: open the window fresh at peak 2 (chip slot 2 LOCKED ·
+  L4), raise Peak to 4 with NO I press, and prove the row updates without a re-open (fails on the
+  old code: the row stays LOCKED).
+- start: 067f70fe9945132ba1baf4eb3c17cc3234a732f8
+- files (hash-object at start):
+  - scripts/EquipmentWindow.cs 36e7617b96db808fd8dfd03b6ad067cb62a5bfea
+  - tools/smoketest/SmokeTest.cs.txt e73d98d80f6e446c922193eff3f170e3c7756f29
+
+### Fix 6 POST
+- verdict: typecheck 0 errors, `verify.ps1 -Quick` ALL CHECKS PASSED.
+- files: scripts/EquipmentWindow.cs (`_peak` field, `_Process`'s Rebuild condition, `Rebuild` sets
+  `_peak`), tools/smoketest/SmokeTest.cs.txt (new block after the peak-8 kind-cap test, :4587-4604:
+  peak 2 -> fresh window locked at CHIP 2 -> Peak = 4 with no I press -> row unlocks live).
+- rung 3 owed: "at peak 2, chip slot 2 reads LOCKED · L4 on a fresh window"; "...and notices a wall
+  crossed while it is still open: chip slot 2 drops LOCKED with no re-open".
+- rung 5 owed: none (a local UI read, not wire state).
+- commit: (fix 6) "Walls fix 6: the equipment window notices a wall crossed while it is open".
+- next: fix 7 (finding 7, split -- confirm before fixing).

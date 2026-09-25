@@ -4584,6 +4584,26 @@ public partial class _Test : Node
                 Character.Peak = keepPeak; H.PilotChanged(); Character.Save();
                 Key(global::Godot.Key.I); await Wait(0.1); Key(global::Godot.Key.I); await Wait(0.2);
             }
+            // THE WINDOW STAYS LIVE AS THE PILOT LEVELS: locked chip rows and greyed EQUIP buttons used to
+            // read Character.Peak only at Rebuild, so a wall crossed with the window still open stayed
+            // drawn locked (EquipmentWindow.cs finding: they stay locked after the slot opens).
+            {
+                int keepPeak2 = Character.Peak;
+                Character.Peak = 2; H.PilotChanged();
+                Key(global::Godot.Key.I); await Wait(0.1); Key(global::Godot.Key.I); await Wait(0.2);   // fresh, at peak 2
+                var ewL = Nodes<EquipmentWindow>().First();
+                var chip1Row = Nodes<HBoxContainer>(ewL).FirstOrDefault(r => r.Name == "Chip_1");
+                Check(chip1Row != null && Nodes<Label>(chip1Row).Any(l => l.Text == "CHIP 2  ·  LOCKED · L4"),
+                      "at peak 2, chip slot 2 reads LOCKED · L4 on a fresh window");
+                Character.Peak = 4; H.PilotChanged();                          // the wall crossed with NO I press: the window stays open
+                await Wait(0.3);
+                chip1Row = Nodes<HBoxContainer>(ewL).FirstOrDefault(r => r.Name == "Chip_1");
+                Check(Nodes<EquipmentWindow>().Count() == 1 && chip1Row != null
+                      && Nodes<Label>(chip1Row).Any(l => l.Text == "CHIP 2") && !Nodes<Label>(chip1Row).Any(l => l.Text.Contains("LOCKED")),
+                      "...and notices a wall crossed while it is still open: chip slot 2 drops LOCKED with no re-open");
+                Character.Peak = keepPeak2; H.PilotChanged(); Character.Save();
+                Key(global::Godot.Key.I); await Wait(0.1); Key(global::Godot.Key.I); await Wait(0.2);   // back open at the real peak
+            }
             Key(global::Godot.Key.Escape); await Wait(0.2);
             Check(Nodes<EquipmentWindow>().Count() == 0, "Esc closes it");
 
