@@ -117,8 +117,9 @@ Sprites
   L 720, Drake L 840, and their HIT SIZE scales with the art (HW 140 / 180) -- "hit sizes unchanged"
   no longer holds for bosses. A bigger boss is easier to hit, so the numbers model's land rates move.
   What is placed around a boss scales with it too (2026-09-25): the Rusty Bucket's shockwave ring grows
-  with `BossSize`, keeping its reach past bow and stern; the camera may zoom out far enough for the
-  Drake's whole hull at its closest approach.
+  with `BossSize`, keeping its reach past bow and stern. The camera NEVER zooms out past the player's
+  own maximum; to show the Drake's whole hull at its closest approach it is REPOSITIONED instead (its
+  centre moves toward the boss, the player's ship kept on screen).
 - The BOSSES are RED AND BLACK (2026-09-25): the owner's swatch, mean RGB 172, 7, 2 = tint
   (0.67, 0.03, 0.01), over the grey art so the shadows go black; value lifted only as far as a frame
   needs to read against space.
