@@ -197,7 +197,11 @@ revert or keep the half-made edits, then run the job again (CLAUDE.md §2b rule 
 | J3 F16 | 5 (`tools\smoketest\run.ps1`) | - | host "a guest's point defence fires on the host with nothing pressed"; guest "guest sees its own point defence fire with nothing pressed and no key for it"; unchanged neighbours "guest's bomber strike launched real torpedoes on the host", "the host's raiders reached this guest" |
 | J3b job 1b | 3 (`-Solo`) | 11400714819323522083 and one other | the four that failed: "carrier PD: three turrets on three different LIGHT targets -- never a plain dummy" · "three lights, 1 DPS each (3.0 +- 0.7)" · "a DISABLED warden at N deg, turning at N deg/s on A/D when it is disabled: ... turn it 0.00 deg" x3 (each turning > 20 deg/s) · new "BATTLESHIP / CARRIER / DESTROYER: a point-defence mount gives way to something free that betters what it holds" x3. Neighbours the re-pick could move: "with more turrets than light targets, the spare turret still never takes a plain dummy", "each battleship PD turret picks its own target", the 7 x passive-PD table lines, "a battleship's point defence picks a cruise missile ... before a light raider", "a turret left standing takes the small craft first", "a hunter called off while the fighters and point defence are on it", "pinned: A does not turn it" |
 
-## Handover 3: slice 2's plan (the third agent read the spec, then handed each job to a fresh writer)
+## Handover 3: slice 2's plan (the third agent read the spec and stopped at its context cap)
+
+Nothing in flight: J3b (job 1b) has its POST, the tree is clean at its commit. No slice-2 job has
+started. The next FRESH writer starts J4 with a PRE entry, then J5, J6, J7 (one writer at a time;
+a new agent per job if its context passes ~150k).
 
 Read this, not the specs again: it is kits_v2 §5 (F4/F17/F18/F20 + the OutGuards table), v3 §3.6
 (Ramjet) / §3.7 (heavies) / §5, v31 §6 / §8, README rulings, raids_squads_adds.md's EnemyDef rows,
