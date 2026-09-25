@@ -930,6 +930,17 @@ piece of player state that is **not** host-owned — it is identity, not a resou
   slow in `ApplyStatus` and the pinned top, the primary's rate after the drive's run, the primary's
   ramp on one target. A row's share stops at its ceiling (Ablative 40%, Web Breaker 60%). Unpriced
   (§3.1), and Par never wears one.
+- **A web's hold is the pin's own clock, not the ask's length.** A raider's latch asks for the pin
+  again every frame, so shortening each ask (the first Web Breaker) only trimmed the 0.25 s tail and
+  the latch held as long as ever. The ship keeps the longest ask whole and holds it in
+  `Items.WebRound` (2 s) rounds, pinned (1 - cut) of each (`Items.WebHoldLeft`); with no cut a round
+  is all hold, so an unworn ship is pinned exactly as before.
+- **A repeat is weighed once** (`Items.Repeats`): the echo stores blows already weighed at the door,
+  so its blast passes `Outgoing` as it is. Weighing it again squared every Dealt condition (Redline
+  T10 x2.53 for x1.59).
+- **The boost's slide is a row of its own** (`surge_strafe`, `AbilityDef.StrafeStat`, read by
+  `PlayerShip.StrafeMult`): one lift on top speed and slide made a slide part (Convoy Rig) move the
+  top speed too, which is Burner Drive's headline.
 - **The multiplier floor (0.1)** is there because gear stacks: the worst sum of downsides on any stat
   is -55%, but a file on the player's disk can carry any bonus.
 - **The hull keeps its fraction across a refit.** Keeping the damage taken let a pilot swap Bulwark

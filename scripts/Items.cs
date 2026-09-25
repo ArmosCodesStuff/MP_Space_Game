@@ -204,7 +204,7 @@ public static class Items
                 Up = U(("hull", Tiers.Power)), Down = U(("turn_rate", Price.Turn)) },
         new() { Stem = "convoy_rig", Name = "Convoy Rig", Slot = GearSlot.Hull, Cat = HullCat.Freighter,
                 Blurb = "the convoy: the boost lasts longer and strafes harder; less top speed",
-                Up = U(("surge_time", Tiers.Multiplier), ("~surge_lift", Tiers.Power)), Down = U(("max_speed", Price.Top)) },
+                Up = U(("surge_time", Tiers.Multiplier), ("~surge_strafe", Tiers.Power)), Down = U(("max_speed", Price.Top)) },
         new() { Stem = "hauler_drive", Name = "Hauler Drive", Slot = GearSlot.Engines, Cat = HullCat.Freighter,
                 Blurb = "reach over distance: more top speed and acceleration; a lower rudder limit",
                 Up = U(("max_speed", Tiers.Top), ("thrust", Tiers.Top)), Down = U(("turn_rate", Price.Turn)) },
@@ -320,6 +320,10 @@ public static class Items
     // THE PRIMARY'S BLOWS by weapon id (Dealt): what Spin-up Feed ramps. The kits' new primaries add
     // their ids here (ITEM ASSUMPTIONS A10).
     public static readonly string[] PrimaryShots = { "shell", Dealt.Fighter };
+    // THE BLOWS THAT REPEAT BLOWS ALREADY WEIGHED (Dealt.Deal): the echo puts down what its ship dealt,
+    // and every blow it stored was weighed at the door as it landed, so PlayerShip.Outgoing passes a
+    // repeat as it is. A second repeating weapon is a row here.
+    public static readonly string[] Repeats = { Dealt.Echo };
 
     public static readonly Condition[] Conditions =
     {
@@ -361,6 +365,18 @@ public static class Items
     public static double SpinShare(double share, double secsOn) => share * Math.Clamp(secsOn / SpinSecs, 0, 1);
     // A WEB'S TOP SPEED under a cut of `cut`: the slow (1 - pin) shrinks by the cut.
     public static float PinnedSpeed(float pin, double cut) => (float)(1 - (1 - pin) * (1 - Math.Clamp(cut, 0, 1)));
+    // HOW LONG A WEB HOLDS under a cut (PlayerShip's web clock): a web is held in rounds of WebRound
+    // seconds, pinned for (1 - cut) of each and free for the rest, so a raider's latch, which asks for
+    // the pin again every frame, holds (1 - cut) of the time it is on, and a single timed web about
+    // the same share of its time. With no cut the round is all hold: a web holds as long as it is asked.
+    // `phase` is the seconds since the web took; the answer is the seconds of this round's hold left
+    // (0: the free part of the round).
+    public const double WebRound = 2.0;
+    public static double WebHoldLeft(double phase, double cut)
+    {
+        double hold = WebRound * (1 - Math.Clamp(cut, 0, 1)), at = phase % WebRound;
+        return at < hold ? hold - at : 0;
+    }
 
     public static string IdOf(string stem, int tier) => $"{stem}_t{tier}";
 

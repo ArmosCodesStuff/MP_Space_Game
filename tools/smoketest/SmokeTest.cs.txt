@@ -4858,18 +4858,44 @@ public partial class _Test : Node
         }
         await WornOffI(ShipClass.LightEcho, was);
 
-        // WEB BREAKER: a web holds 25% shorter at T1, 58.9% at T10, whole with no breaker; the pinned
-        // top speed is 20% of top with no cut, 40% at a 25% cut, and the cut stops at 60% (68%)
-        foreach (var (id, cut) in new[] { ("web_breaker_t1", 0.25), ("web_breaker_t10", 0.589487), ("heavy_plating_t1", 0.0) })
+        // WEB BREAKER ON A REAL LATCH: a webifier latched on a Warrior asks for the pin every frame; the
+        // pin's own clock holds it in 2 s rounds, 25% shorter at T1 (1.50 s held, 0.50 s free), 58.9%
+        // at T10 (0.82 s held), and with no breaker the whole time. Timed from the first pinned frame,
+        // over three rounds, the ship held on its spot so the latch stays on; the webifier's death
+        // frees it within its 0.25 s ask whatever is worn. The pinned top speed is 20% of top with no
+        // cut, 40% at a 25% cut, and the cut stops at 60% (68%).
+        foreach (var (id, cut) in new[] { ("heavy_plating_t1", 0.0), ("web_breaker_t1", 0.25), ("web_breaker_t10", 0.589487) })
         {
             was = await WearI(ShipClass.HeavyWarrior, id);
-            var wr = Me; double secs = Vary(2f, 6f);
-            wr.ApplyStatus(Status.Pinned, secs);
-            double held = wr.Statuses.Left(Status.Pinned);
-            Check(NearI(held, secs * (1 - cut), 1e-3), $"{id} on a Warrior: a {secs:0.00} s web holds {held:0.00} s ({secs * (1 - cut):0.00})");
-            wr.Statuses.Clear(Status.Pinned);
+            var wr = Me; var at = VaryNear(yonder, 300f);
+            wr.Position = at; wr.Velocity = Vector2.Zero; wr.Rotation = VaryAngle();
+            await Wait(0.1);
+            var web = H.SpawnRaider(at + Vector2.Right.Rotated(VaryAngle()) * Vary(250f, 400f), Enemies.Webifier);
+            web.Hp = 1e9; web.Quarry = wr;
+            for (int i = 0; i < 60 * 8 && !wr.Pinned; i++) { wr.Position = at; wr.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            bool took = wr.Pinned;
+            double t = 0, pinnedFor = 0, firstFree = -1; bool latched = true;
+            while (took && t < 3 * Items.WebRound)
+            {
+                wr.Position = at; wr.Velocity = Vector2.Zero;
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                double dt = GetProcessDeltaTime(); t += dt;
+                if (wr.Pinned) pinnedFor += dt; else if (firstFree < 0) firstFree = t;
+                latched &= web.Latched;
+            }
+            double hold = 2.0 * (1 - cut), share = t > 0 ? pinnedFor / t : 0;
+            bool heldRight = cut == 0 ? firstFree < 0 : NearI(firstFree, hold, 0.06);
+            web.TakeDamage(1e12);
+            double free = 0;
+            for (int i = 0; i < 60 && wr.Pinned; i++) { wr.Position = at; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); free += GetProcessDeltaTime(); }
+            Check(took && latched && heldRight && NearI(share, 1 - cut, 0.03) && !wr.Pinned && free < 0.3,
+                  $"{id} on a Warrior, a webifier latched {web.Position.DistanceTo(at):0} u off: the first hold {(firstFree < 0 ? "never let go" : $"{firstFree:0.00} s")} ({(cut == 0 ? "never lets go" : $"{hold:0.00} s")}), pinned {share * 100:0.0}% of {t:0.00} s ({(1 - cut) * 100:0.0}%), latched throughout {latched}; free {free:0.00} s after it dies (under 0.3)");
             await WornOffI(ShipClass.HeavyWarrior, was);
         }
+        // the pure rule behind it, at points of a round: the seconds of its hold left
+        Check(NearI(Items.WebHoldLeft(0, 0.25), 1.5) && NearI(Items.WebHoldLeft(1.7, 0.25), 0) && NearI(Items.WebHoldLeft(2.3, 0.25), 1.2)
+              && NearI(Items.WebHoldLeft(3.9, 0), 0.1) && NearI(Items.WebHoldLeft(0.5, 0.60), 0.3) && NearI(Items.WebHoldLeft(1.0, 0.60), 0),
+              $"a web's round: at a 25% cut 1.5 s held at the start, free 1.7 s in, 1.2 s left 2.3 s in; with no cut still held 3.9 s in; at the 60% ceiling 0.8 s held ({Items.WebHoldLeft(0.5, 0.60):0.00} s left 0.5 s in)");
         var capS = new ShipStats(ShipClass.HeavyWarrior, new Dictionary<string, double> { ["web_resist"] = 0.9 });
         double capped = Items.Shares(Items.Door.Web, capS, default);
         Check(NearI(Items.PinnedSpeed(0.2f, 0), 0.2, 1e-6) && NearI(Items.PinnedSpeed(0.2f, 0.25), 0.4, 1e-6) && NearI(Items.PinnedSpeed(0.2f, 0.60), 0.68, 1e-6) && NearI(capped, 0.60),
@@ -4915,6 +4941,82 @@ public partial class _Test : Node
             t.TakeDamage(1e12); u.TakeDamage(1e12);
         }
         await WornOffI(ShipClass.FreightHauler, was);
+
+        await ItemsEchoChecks(yonder);
+        await ItemsBoostLiftChecks();
+    }
+
+    // THE ECHO REPEATS WHAT WAS WEIGHED, ONCE (Items.Repeats): each blow it stores was weighed at the
+    // door as it landed, so its blast is that sum x echo_share and nothing at the door weighs it again.
+    // Redline T10 (x1.5895 under 50% own hull): a 100 blow stored at 10-45% of the hull is 158.95, at
+    // 55-100% it is 100, and the blast is that stored figure x echo_share whatever the hull is when it
+    // goes off. The Hunter Chip T1 (+8% against craft): a blow on a webifier stores 108, on a gunship
+    // 100, and the blast lands stored x echo_share on a craft and a gunship alike.
+    async Task ItemsEchoChecks(Vector2 yonder)
+    {
+        static void Arm(PlayerShip ec) { ec.Sl("echo").Cool = 0; ec.Sl("echo").Left = 0; ec.Sl("echo").Own = 0; ec.StartEcho(); }
+
+        var was = await WearI(ShipClass.LightEcho, "redline_t10");
+        foreach (var (lo, hi, blo, bhi) in new[] { (0.10f, 0.45f, 0.10f, 0.45f), (0.55f, 1.0f, 0.10f, 0.45f), (0.10f, 0.45f, 0.55f, 1.0f) })
+        {
+            var ec = Me; ec.Position = VaryNear(yonder, 300f); ec.Velocity = Vector2.Zero;
+            double storeAt = Vary(lo, hi), blastAt = Vary(blo, bhi);
+            Arm(ec);
+            ec.Hp = ec.MaxHp * storeAt;
+            var t = HeldI(ec.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(200f, 400f), Enemies.Gunship);
+            Dealt.Deal(t, 100, ec, "shell");
+            double stored = ec.Sl("echo").Own, want = storeAt < 0.5 ? 158.9487 : 100.0;
+            ec.Hp = ec.MaxHp * blastAt;
+            double share = ec.Stats["echo_share"];
+            ec.Sl("echo").Left = 0;                                           // its time up: the blast stores nothing (Detonate's own rule)
+            double h0 = t.Hp; ec.Detonate(); double got = h0 - t.Hp;
+            Check(NearI(stored, want, 1e-3) && NearI(got, want * share, 1e-3),
+                  $"Echo + Redline T10: a 100 blow at {storeAt * 100:0}% of its own hull stores {stored:0.00} ({want:0.00}); gone off at {blastAt * 100:0}% it lands {got:0.00} (stored x {share:0.###} = {want * share:0.00}, weighed once)");
+            t.TakeDamage(1e12); ec.Hp = ec.MaxHp; ec.Sl("echo").Cool = 0;
+        }
+        await WornOffI(ShipClass.LightEcho, was);
+
+        was = await WearI(ShipClass.LightEcho, "chip_hunter_t1");
+        foreach (var (onCraft, want) in new[] { (new[] { true }, 108.0), (new[] { false }, 100.0), (new[] { false, true }, 208.0) })
+        {
+            var ec = Me; ec.Position = VaryNear(yonder, 300f); ec.Velocity = Vector2.Zero;
+            Arm(ec);
+            var spot = ec.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(200f, 400f);
+            float reach = (float)ec.Stats["echo_radius"];
+            var craft = HeldI(spot, Enemies.Webifier);
+            var heavy = HeldI(spot + Vector2.Right.Rotated(VaryAngle()) * reach * Vary(0.2f, 0.5f), Enemies.Gunship);
+            foreach (bool c in onCraft) Dealt.Deal(c ? craft : heavy, 100, ec, "shell");
+            ec.Sl("echo").At = spot;                                          // it goes off over the craft, the gunship in reach
+            double stored = ec.Sl("echo").Own, share = ec.Stats["echo_share"];
+            ec.Sl("echo").Left = 0;
+            double c0 = craft.Hp, g0 = heavy.Hp; ec.Detonate();
+            double onC = c0 - craft.Hp, onG = g0 - heavy.Hp;
+            Check(NearI(stored, want, 1e-6) && NearI(onC, want * share, 1e-6) && NearI(onG, want * share, 1e-6),
+                  $"Echo + Hunter Chip T1: {string.Join(" then ", onCraft.Select(c => c ? "a craft" : "a gunship"))} struck for 100 stores {stored:0.00} ({want:0}); the blast lands {onC:0.00} on the craft and {onG:0.00} on the gunship ({want * share:0.00} each: no second +8%)");
+            craft.TakeDamage(1e12); heavy.TakeDamage(1e12); ec.Sl("echo").Cool = 0;
+        }
+        await WornOffI(ShipClass.LightEcho, was);
+    }
+
+    // THE BOOST'S SLIDE IS A ROW OF ITS OWN (surge_strafe): Convoy Rig lifts the slide alone, +25% of
+    // its +50% at T1 (x1.625), and a freighter's boosted top speed stays x1.5; Burner Drive lifts the
+    // top speed alone (x1.625) and the Dart's boosted slide stays x1.5. On the ship, the boost running.
+    async Task ItemsBoostLiftChecks()
+    {
+        foreach (var (c, id, top, slide) in new[] { (ShipClass.FreightHauler, "convoy_rig_t1", 1.5, 1.625), (ShipClass.FreightBastion, "convoy_rig_t10", 1.5, 1.7947434),
+                                                    (ShipClass.LightDart, "burner_drive_t1", 1.625, 1.5) })
+        {
+            var was = await WearI(c, id);
+            var s = Me; string boost = s.Drive.Id;
+            s.Sl(boost).Left = Vary(1f, 2.5f);
+            float sm = s.SpeedMult, st = s.StrafeMult, topNow = s.TopNow, slideNow = s.StrafeNow;
+            s.Sl(boost).Left = 0;
+            float idle = s.StrafeMult;
+            double sheetTop = s.Stats["max_speed"], sheetSlide = s.Stats["strafe_speed"];
+            Check(NearI(sm, top, 1e-5) && NearI(st, slide, 1e-5) && NearI(topNow, sheetTop * top, 1e-2) && NearI(slideNow, sheetSlide * slide, 1e-2) && NearI(idle, 1),
+                  $"{id} on a {Classes.NameOf(c)}, boosting: top speed x{sm:0.000} ({top:0.000}), slide x{st:0.000} ({slide:0.000}); {topNow:0.0} u/s ahead, {slideNow:0.0} u/s across; x{idle:0.00} with the boost down");
+            await WornOffI(c, was);
+        }
     }
 
     // THE LAW (§3.1): P(t), the five leans, the rider's +n, the scrap.
@@ -5078,7 +5180,7 @@ public partial class _Test : Node
             ("heavy_ordnance", "@damage", 25, 59), ("long_arc", "@primary_range", 18, 42), ("long_arc", "@shot_speed", 25, 59), ("long_arc", "@primary", 5, 12),
             ("spinup_feed", "spinup_damage", 25, 59), ("field_core", "@output", 25, 59), ("field_emitter", "@area", 18, 42), ("field_emitter", "@duration", 20, 47),
             ("cargo_plating", "hull", 25, 59), ("buffer_array", "hull", 12.5, 29), ("cargo_spine", "hull", 25, 59), ("convoy_rig", "surge_time", 20, 47),
-            ("convoy_rig", "~surge_lift", 25, 59), ("hauler_drive", "max_speed", 22, 52), ("hauler_drive", "thrust", 22, 52),
+            ("convoy_rig", "~surge_strafe", 25, 59), ("hauler_drive", "max_speed", 22, 52), ("hauler_drive", "thrust", 22, 52),
             ("heavy_barrel", "@damage", 25, 59), ("rapid_action", "@primary_rate", 20, 47), ("executioner", "execute_damage", 25, 59),
             ("tactical_core", "@output", 25, 59), ("endurance_core", "@duration", 20, 47), ("swarm_rack", "@output", 25, 59),
             ("heavy_plating", "hull", 25, 59), ("web_breaker", "web_resist", 25, 59), ("bulkhead_frame", "hull", 25, 59),
@@ -5112,6 +5214,19 @@ public partial class _Test : Node
                     if (!NearI(hull, b * m, 1e-4)) off.Add($"{l.Stem}_t{t}/{Classes.NameOf(c)} {hull:0.##}");
                 }
         Check(off.Count == 0, $"the eight reference hull lines on all three hulls of their category: hull x1.25 at T1, x1.366 at T5, x1.5895 at T10 ({string.Join(", ", off)})");
+        // CONVOY RIG LIFTS THE BOOST'S SLIDE, NEVER ITS TOP SPEED (§3.3: +50% -> +62.5% strafe): on all
+        // three freighters at T1 / T5 / T10 the slide row is x1.625 / x1.6830 / x1.7947 and the boost's
+        // top-speed row stays x1.5; Burner Drive, the mirror, on all three lights
+        var boostOff = new List<string>();
+        foreach (var (stem, cat, lifted, kept) in new[] { ("convoy_rig", HullCat.Freighter, "surge_strafe", "surge_lift"), ("burner_drive", HullCat.Light, "surge_lift", "surge_strafe") })
+            foreach (var c in Hulls.All.First(r => r.Cat == cat).Classes)
+                foreach (var (t, want) in new[] { (1, 1.625), (5, 1.6830127), (10, 1.7947434) })
+                {
+                    var it = Equipment.ById($"{stem}_t{t}"); var lo = Equipment.Default(c); lo[Array.IndexOf(Equipment.Core, it.Slot)] = it.Id;
+                    var st = new ShipStats(c, Equipment.Bonuses(c, lo, 1, NoLevels));
+                    if (!NearI(st[lifted], want, 1e-5) || !NearI(st[kept], 1.5, 1e-9)) boostOff.Add($"{it.Id}/{Classes.NameOf(c)} {lifted} {st[lifted]:0.0000} {kept} {st[kept]:0.0000}");
+                }
+        Check(boostOff.Count == 0, $"Convoy Rig lifts the boost's slide alone (x1.625 / x1.6830 / x1.7947 at T1 / T5 / T10) and its top speed stays x1.5 on every freighter; Burner Drive the top speed alone on every light ({string.Join(", ", boostOff)})");
         // A LEVEL LIFTS THE UPS ONLY, THE RIDER'S COUNT NEVER: Magazine Core T6 on a battleship, 10
         // Utility levels (+30%): output 40.3% -> 52.4%, the price and the +2 volleys unchanged
         var ml = Equipment.Default(ShipClass.Battleship); ml[4] = "magazine_core_t6";

@@ -134,22 +134,25 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     //   The rate reaches the reloads through ONE door, Cadence, which adds the lifts' shares to
     // the reload's own bonus -- so a part's +100% under an overdrive's x2 is x3 as well: the main
     // guns (FireControl), the point defence (Spec), every turret it has out (Deployed.Spec) and
-    // every craft of its wing. SpeedMult lifts the top speed AND the thrust (Steer).
-    public float FireRate => (float)Stat.Scale(Lifts(rate: true));
-    public float SpeedMult => (float)Stat.Scale(Lifts(rate: false));
+    // every craft of its wing. SpeedMult lifts the top speed AND the thrust (Steer); StrafeMult the
+    // slide's speed and thrust, by each row's StrafeStat where it names one (the boost's surge_strafe).
+    public float FireRate => (float)Stat.Scale(Lifts(Lift.Rate));
+    public float SpeedMult => (float)Stat.Scale(Lifts(Lift.Speed));
+    public float StrafeMult => (float)Stat.Scale(Lifts(Lift.Strafe));
+    private enum Lift { Rate, Speed, Strafe }
     private readonly List<double> _lifts = new();
-    private double Lifts(bool rate)
+    private double Lifts(Lift kind)
     {
         _lifts.Clear();
         foreach (var def in Abilities.For(Class))
         {
             ref var sl = ref Sl(def.Id);
-            string stat = rate ? def.RateStat : def.SpeedStat;
+            string stat = kind == Lift.Rate ? def.RateStat : kind == Lift.Speed ? def.SpeedStat : def.StrafeStat ?? def.SpeedStat;
             if (stat != null && sl.Left > 0 && (def.While == null || def.While(this))) _lifts.Add(Stats[stat]);
             // a RAMP's running total is already a share (F1, D18): 1 + it reads the same as any
             // other lift's raw multiplier would, and it keeps lifting through its post-run drain,
             // not only while Left > 0.
-            if (!rate && def.Ramp != null && sl.Own > 0) _lifts.Add(1 + sl.Own);
+            if (kind != Lift.Rate && def.Ramp != null && sl.Own > 0) _lifts.Add(1 + sl.Own);
         }
         return LiftShares(_lifts);
     }
@@ -198,7 +201,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // refire are not a gun's reload, and no class that has them carries a rate row.)
     // Burst Feed's window (Items.Door.AfterDrive) lifts the primary's reloads alone, for AfterDriveSecs
     // after the drive's run ends.
-    public double Cadence(string intervalStat) => Stats.With(intervalStat, Lifts(rate: true)
+    public double Cadence(string intervalStat) => Stats.With(intervalStat, Lifts(Lift.Rate)
         + (_afterDrive > 0 && Items.IdsOf("@primary_rate", Class).Contains(intervalStat)
             ? Items.Shares(Items.Door.AfterDrive, Stats, default) : 0));
     private double _afterDrive;
@@ -208,9 +211,11 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     private double _spinSince, _spinLast;
     public double HullLeft => MaxHp > 0 ? Hp / MaxHp : 1;
     private Items.Blow BlowOn(IHittable target, double d) => new(target, HullLeft, d, MaxHp);
-    // A blow this ship deals, weighed (Dealt.Deal): its Dealt rows added, and the primary's ramp.
+    // A blow this ship deals, weighed (Dealt.Deal): its Dealt rows added, and the primary's ramp. A
+    // repeat (Items.Repeats: the echo's blast) is what was already weighed, and passes as it is.
     public double Outgoing(IHittable target, double d, string weapon)
     {
+        if (Array.IndexOf(Items.Repeats, weapon) >= 0) return d;        // weighed once, as each stored blow landed
         double share = Items.Shares(Items.Door.Dealt, Stats, BlowOn(target, d));
         if (Array.IndexOf(Items.PrimaryShots, weapon) >= 0)
         {
@@ -837,7 +842,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // THE FASTEST THIS HULL GOES NOW, ahead and sideways, lifted and unheld: what the host's speed
     // clamp and its jump pricing allow a guest's report (F24's hypot rule, Drives.SpeedCap).
     public float TopNow => TopSpeed((float)Stats["max_speed"], SpeedMult, SpeedAdds(), 1f);
-    public float StrafeNow => StrafeTop((float)Stats["strafe_speed"], SpeedMult, 1f);
+    public float StrafeNow => StrafeTop((float)Stats["strafe_speed"], StrafeMult, 1f);
 
     // ── what is being done to it (Statuses): a raider's web today, and whatever a class's
     // ability puts on it next. The HOST decides; a guest is sent the bits and shows them.
@@ -847,10 +852,30 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     public void ApplyStatus(Status s, double seconds, double share = double.NaN)
     {
         if (!Net.Sim) return;
-        if (s == Status.Pinned) seconds *= 1 - WebCut;             // Web Breaker: a web holds shorter
+        if (s == Status.Pinned && WebCut > 0)
+        {   // Web Breaker: the web's ask is kept whole, and the pin's own clock holds it shorter
+            _webAsked = Math.Max(_webAsked, seconds);
+            HoldWeb(0);
+            return;
+        }
         _status.Apply(s, seconds, share);
     }
     public bool Pinned => _status.Has(Status.Pinned);
+    // THE WEB'S OWN HOLD CLOCK (Web Breaker, host): what the webs on this ship still ask for (the
+    // longest ask, whole) and how long since the web took. A raider's latch asks again every frame
+    // for as long as it is on, so a web holds by rounds (Items.WebHoldLeft): pinned (1 - cut) of each,
+    // then free for the rest of it, the latch still on. The ask running out ends the web and the clock.
+    private double _webAsked, _webPhase;
+    private void HoldWeb(double delta)
+    {
+        if (_webAsked <= 0) return;
+        _webAsked = Math.Max(0, _webAsked - delta);
+        _webPhase += delta;
+        double left = _webAsked > 0 ? Math.Min(Items.WebHoldLeft(_webPhase, WebCut), _webAsked) : 0;
+        if (left > 0) _status.Apply(Status.Pinned, left);
+        else _status.Clear(Status.Pinned);
+        if (_webAsked <= 0) _webPhase = 0;                  // the web is over: the next one starts a round
+    }
 
     // A refused ability: its slot shows the reason, in red, for a moment.
     public const double FailShow = 1.5;
@@ -1037,7 +1062,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         if (Alive && Hp < MaxHp) Hp = Math.Min(MaxHp, Hp + MaxHp * (InCombat ? RegenInCombat : RegenOutOfCombat) * delta);
         // The HOST decides pinned. A guest used to count its own (never-set) timer down here and
         // overwrite the host's flag every frame, so a raider's web never held a guest at all.
-        if (Net.Sim) _status.Tick(delta);
+        if (Net.Sim) { _status.Tick(delta); HoldWeb(delta); }
         // the drive's clocks run on every peer: the landing flash used to fade only on the owner's,
         // and a remote ship's warp left it lit for good
         Drives.Tick(_drive, delta);
@@ -1261,8 +1286,11 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         along = Mathf.Clamp(along, -(float)Stats["reverse_speed"] * hold,
                             top * (Pinned ? Items.PinnedSpeed(StatusSet.PinSpeed, WebCut) : 1f));
         if (strafe != 0f)
-            across = Mathf.MoveToward(across, strafe * StrafeTop((float)Stats["strafe_speed"], lift, hold),
-                                      (float)Stats["strafe_thrust"] * lift * dt);
+        {   // the slide takes its own lift (StrafeMult: the boost's surge_strafe), the same rule
+            float slide = StrafeMult;
+            across = Mathf.MoveToward(across, strafe * StrafeTop((float)Stats["strafe_speed"], slide, hold),
+                                      (float)Stats["strafe_thrust"] * slide * dt);
+        }
         else across *= Mathf.Exp(-(float)Stats["keel"] * dt);
         if (hold <= 0f) across = 0f;                      // rooted: nothing slides it either
 

@@ -41,7 +41,7 @@ J1-J6; compiles, rung 2 green. engine-unproven: rungs owed in the final test pha
 screens). 48 lines x 10 tiers (`Items.cs`), rarity deleted, Loot on tiers, conditional doors, save format
 4 with no migrations. EXPECTED RED at rung 3 until the kits reconcile: `ItemsTableChecks` "every stat a part
 names is on every hull it fits" (`flare_count`, `@area` / `@duration` rows the kits add). Detail and the
-kit assumptions the reconcile job checks: `docs/plans/ledger_items.md` (J7 POST).
+kit assumptions the reconcile job checks: `docs/plans/ledger_items.md` (J7 POST; J8 the merge gate's three fixes).
 
 **2026-09-25 (worktree `WarShips_wt_drives`, branch `wt/drives`): kits lane B -- drives, helm,
 strafe (F21, F22, F24) -- built J1-J6; compiles, rung 2 green. engine-unproven: rungs owed in the final
@@ -565,8 +565,14 @@ Executioner (target under 35%), Redline (own hull under 50%), Spin-up Feed (+5% 
 Ablative Skin (hits under 10% of the hull, ceiling 40%), Web Breaker (a web shorter and weaker, ceiling
 60%). Escort Hunter's tracking lifts point defence only: the main guns follow the cursor.
 
+**Gate fixes (J8).** Web Breaker now acts on a real latch: the pin holds in 2 s rounds, pinned (1 - cut)
+of each (T1: 1.5 s held, 0.5 s free, the latch still on); before, it only trimmed the latch's 0.25 s
+tail. The echo's blast is weighed once (`Items.Repeats`): Redline T10 no longer squares on it (x2.53).
+The boost's slide has its own row, `surge_strafe` (x1.5): Convoy Rig lifts it alone, so a freighter's
+boosted top speed stays x1.5; Burner Drive's `surge_lift` is now top speed and thrust only.
+
 **Checks:** new `ItemsLawChecks`, `ItemsTableChecks`, `ItemsLineChecks`, `ItemsLootChecks`,
-`ItemsParRowsChecks`, `ItemsDoorChecks` (rung 3), `ItemsGuestChecks` (rung 5), frame
+`ItemsParRowsChecks`, `ItemsDoorChecks`, `ItemsEchoChecks`, `ItemsBoostLiftChecks` (rung 3), `ItemsGuestChecks` (rung 5), frame
 `6d_k_stats_conditions`; about 20 rewritten onto the new ids (the save round trip at version 4, the
 old ids read as nothing, recycler, gear levels, chips, the guest carrier's Magazine Core T9), frames 6b,
 58, 58b, 81c, 10b. **Rungs:** 1 and 2 in the worktree; none of it has run on the engine.

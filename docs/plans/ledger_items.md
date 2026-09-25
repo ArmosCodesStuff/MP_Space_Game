@@ -213,3 +213,43 @@ THE TEST PHASE OWES (engine-unproven, nothing in this lane has run on the engine
 - rung 5 (six) x2: ItemsGuestChecks (both ends), the guest carrier's Magazine Core T9, the guest's levelled Helm Drive.
 Open for the reconcile job: ITEM ASSUMPTIONS A1-A11 above; Items.Roles and Items.PrimaryShots are the two tables
 it edits.
+
+## J8 PRE -- tier opus -- items gate fix (the opus merge gate's three findings)
+Intent: (1) Web Breaker acts on a real latch: the pin keeps its own hold clock (Items.WebRound 2 s rounds,
+pinned (1 - cut) of each, free the rest; a web's ask is kept whole and its time is the pin's clock), so a
+refreshed latch is held 75% of the time at T1; ItemsDoorChecks' single-apply check rewritten onto a real
+Webifier latch at none / T1 / T10, timed from the first pinned frame. (2) The echo's blast is weighed once:
+Items.Repeats (weapon ids that repeat blows already weighed at the door: the echo) pass Outgoing as they are;
+new checks Echo + Redline (3 hull shares) and Echo + Hunter Chip (craft). (3) The boost's slide gets its own
+lift row surge_strafe (x1.5; AbilityDef.StrafeStat, PlayerShip.StrafeMult); Convoy Rig lifts ~surge_strafe;
+Burner Drive keeps ~surge_lift, which is now top speed and thrust only (§3.3 prints it so).
+Files: scripts/PlayerShip.cs, scripts/Items.cs, scripts/Drives.cs, scripts/Abilities.cs,
+tools/smoketest/SmokeTest.cs.txt, docs/CHANGES.md, docs/plans/ledger_items.md. HEAD 35d58a4. Hashes:
+  scripts/PlayerShip.cs 4d7e78daca3cd2e9ce425b25a0fd8b440754175d
+  scripts/Items.cs 10aed943726a400cad99cbccd6917573149dec01
+  scripts/Drives.cs fba973520b87d7c6fe366df8d2ee2a232da5574b
+  scripts/Abilities.cs 4f130c86b8b5160df23cfb8eb9358de085b58e9d
+  tools/smoketest/SmokeTest.cs.txt 03a281a19331b3ec6341f2452e36ca2453217aaa
+  docs/CHANGES.md 7290d2da3f29704780c4e9d91e726553686f74c7
+## J8 POST
+Verdict: done. typecheck 0 errors; verify -Quick ALL CHECKS PASSED (0 warnings, 0 findings, UNUSED 0). Own diff read.
+Files: scripts/PlayerShip.cs (web hold clock HoldWeb/_webAsked/_webPhase; Outgoing passes Items.Repeats; Lift enum
++ StrafeMult, Steer's slide and StrafeNow on it), scripts/Items.cs (Repeats, WebRound, WebHoldLeft; Convoy Rig
+~surge_strafe), scripts/Drives.cs (surge_strafe row x1.5, labels Speed / Strafe; Boost.StrafeStat),
+scripts/Abilities.cs (AbilityDef.StrafeStat), harness, docs/DESIGN.md (three law bullets), docs/CHANGES.md.
+Checks written (engine-unproven: rungs owed in the final test phase, rung 3 x2 seeds): REWRITTEN ItemsDoorChecks
+Web Breaker (a real Webifier latch on a Warrior at none / T1 / T10, timed from the first pinned frame over 3
+rounds: first hold never / 1.50 / 0.82 s, pinned share 100 / 75 / 41%, free < 0.3 s after it dies) + the pure
+WebHoldLeft rule; NEW ItemsEchoChecks (Echo + Redline T10 over 3 hull shares; Echo + Hunter Chip T1 onto a craft
+and a gunship, 3 situations); NEW ItemsBoostLiftChecks (live: Convoy Rig T1 Hauler / T10 Bastion, Burner Drive
+T1 Dart); ItemsLineChecks rows table onto ~surge_strafe + NEW sheet proof on all 3 freighters / 3 lights x T1/T5/T10.
+Decisions (defaults, owner questions):
+- D-J8a Items.WebRound = 2 s: a web holds in 2 s rounds, pinned (1 - cut) of each (T1 1.5 s held / 0.5 s free).
+  The spec gives no round; an unworn ship is pinned exactly as before.
+- D-J8b The echo stores the blow as it landed (weighed) and its blast is not weighed again (Items.Repeats), rather
+  than storing the unweighed blow and weighing the blast per target.
+- D-J8c Burner Drive's ~surge_lift is now top speed and thrust only (§3.3 prints "boost top speed"); before, the
+  one row also lifted the slide.
+- Behaviour to watch in the test phase: a heavy gunship reads the pin, so in a Web Breaker ship's free part of a
+  round it turns for the map's edge and comes back on the next hold.
+Next: none; the lane's merge gate re-runs.
