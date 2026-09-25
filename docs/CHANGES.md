@@ -551,8 +551,9 @@ ship nearest a lock line's end within its hit radius + 150 u.
 
 Checks: new RaidsFoundationChecks, RaidsSquadChecks (N1-N6, N9, N10, N17), RaidsAddsTableChecks (N11, N12,
 N14), RaidsArenaAddsChecks (N12 live, N13, N15, N16), RaidsSightChecks (labels, crews, names on view and
-commit, the GANK line, TIO and hint text), RaidsHostAddsWire + RaidsGuestAddsWire (N18, the stretched lane
-replaced on the guest, the squad label and names on the guest), raiders 6b (N7, N8), the arena beam block
+commit and the GANK line, each still / crossing / run from astern; TIO and hint text), RaidsHostAddsWire +
+RaidsGuestAddsWire (N18, the stretched lane replaced on the guest, the squad label and names on the guest, the
+GANK line on the guest from a host gank squad), raiders 6b (N7, N8), the arena beam block
 (any-pin start, floor literals, live floor); frames 49a_squad_inbound, 49b_squad_lock_lines (now with the
 GANK line), 49c_squad_names_radar, 49_heavy_astern_missile; rewritten: the escort checks, the mission wave clock, patrol
 and raid squad ids, blockade Station/Circuit.

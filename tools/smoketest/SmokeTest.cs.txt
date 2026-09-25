@@ -2442,16 +2442,28 @@ public partial class _Test : Node
             Clear(); await Wait(0.2);
         }
 
-        // THE NAMES AND THE LINE on a live gank at this ship, still or moving, from a seeded bearing:
-        // named at the first frame the squad is in view and again at its commit; the victim's line
-        // through the burn, and none once every member holds its line
+        // THE NAMES AND THE LINE on a live gank at this ship, in three situations, each from a seeded
+        // bearing and range: still; crossing the approach at 60 u/s; running from a squad that comes up
+        // astern (off dead astern by a seeded angle, closing at its 100 less this 60, so from nearer).
+        // In each: named at the first frame the squad is in view and again at its commit; the victim's
+        // line through the burn, and none once every member holds its line
+        foreach (var (how, near, far) in new[] { ("still", 2600f, 3400f), ("crossing", 2200f, 2800f), ("from astern", 1750f, 2050f) })
         {
+            me.Statuses.Clear(Status.Pinned); me.TakeDamage(-(me.MaxHp - me.Hp));
             me.Position = Hub.BasePos + new Vector2(Vary(5200f, 6200f), Vary(3800f, 4800f)); me.Velocity = Vector2.Zero;
             await Wait(0.5);                                        // the camera settles on the ship
-            bool moving = Vary(0f, 1f) < 0.5f; float course = VaryAngle();
-            var at = me.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(2600f, 3400f);
+            var toSquad = Vector2.Right.Rotated(VaryAngle());
+            var at = me.Position + toSquad * Vary(near, far);
+            float side = Vary(0f, 1f) < 0.5f ? -1f : 1f;
+            var run = how switch
+            {
+                "crossing" => toSquad.Rotated(side * Mathf.Pi / 2f) * 60f,
+                "from astern" => (-toSquad).Rotated(side * Vary(0.15f, 0.45f)) * 60f,
+                _ => Vector2.Zero,
+            };
+            if (run != Vector2.Zero) me.Rotation = Aim.Along(run);
             var ms = MakeSquad(at, Aim.Face(at, me.Position), Enemies.Gunship, Enemies.Webifier, Enemies.Webifier, Enemies.Webifier);
-            async Task Step() { if (moving && !me.Pinned) me.Velocity = Vector2.Up.Rotated(course) * 60f; await Frame(); }
+            async Task Step() { me.Velocity = me.Pinned ? Vector2.Zero : run; await Frame(); }
             double viewNames = -1, lockName = -1; float drop = -1; string burnLine = null, heldLine = "unread";
             bool formedFirst = SquadSight.InFormation(ms), formedInBurn = true;
             for (int f = 0; f < 60 * 30 && (viewNames < 0 || lockName < 0 || burnLine == null); f++)
@@ -2476,12 +2488,12 @@ public partial class _Test : Node
             }
             for (int f = 0; f < 60 * 12 && ms.Any(r => r.Locking); f++) await Step();
             if (!ms.Any(r => r.Locking)) heldLine = SquadSight.GankLine(H.Raiders, H.Ships, me);
-            Check(viewNames > SquadSight.NameShow - 0.25 && Math.Abs(drop - 35f) < 1e-3,
-                  $"a squad coming into view is named, every member for {SquadSight.NameShow} s ({viewNames:0.00} s left two frames on), the range label dropped under the name ({drop})");
-            Check(lockName > SquadSight.NameShow - 0.25,
-                  $"and named again as it commits ({lockName:0.00} s left two frames on)");
+            Check(viewNames > 3.0 - 0.25 && viewNames <= 3.0 && Math.Abs(drop - 35f) < 1e-3,
+                  $"{how}: a squad coming into view is named, every member for 3 s ({viewNames:0.00} s left two frames on), the range label dropped 35 under the name ({drop})");
+            Check(lockName > 3.0 - 0.25 && lockName <= 3.0,
+                  $"{how}: and named again as it commits ({lockName:0.00} s of 3 left two frames on)");
             Check(formedFirst && !formedInBurn && burnLine == "GANK: GUNSHIP + 3 WEBIFIER" && heldLine == null,
-                  $"the victim's HUD line through the burn: '{burnLine}' (GANK: GUNSHIP + 3 WEBIFIER); in formation before it {formedFirst}, not during {!formedInBurn}; once all hold their lines, none ('{heldLine}')");
+                  $"{how}: the victim's HUD line through the burn: '{burnLine}' (GANK: GUNSHIP + 3 WEBIFIER); in formation before it {formedFirst}, not during {!formedInBurn}; once all hold their lines, none ('{heldLine}')");
             Clear(); await Wait(0.3);
         }
         me.Statuses.Clear(Status.Pinned);
@@ -11253,7 +11265,8 @@ public partial class _Test : Node
     // (two webifiers, paying 6 each); once the guest has watched the super bar, a lone webifier webs
     // the GUEST, the beam is made due and must charge on that web (the guest is its nearest pilot:
     // this host stands off), and one of the paying adds is shot down -- the guest is paid by
-    // NetKillExp at its own level. The guest's half (RaidsGuestAddsWire) reads all of it off the wire.
+    // NetKillExp at its own level. First, a gank squad of its own burns onto the guest and latches, for
+    // the guest's HUD line. The guest's half (RaidsGuestAddsWire) reads all of it off the wire.
     async Task RaidsHostAddsWire(PlayerShip guest)
     {
         var boss = H.Boss;
@@ -11262,6 +11275,28 @@ public partial class _Test : Node
         var paying = H.Raiders.Where(r => r.Worth > 0).ToList();
         boss.S("beam").At = Boss.Phase.Idle; boss.S("beam").Due = 999;   // a beam of its own clock's, stood down
         Me.Position = boss.Position + (Me.Position - boss.Position).Normalized() * 3600f; Me.Velocity = Vector2.Zero;
+        // THE GANK LINE ON THE WIRE (§1e): a gank squad -- a gunship and three webifiers -- formed at a
+        // seeded bearing inside its commit range of the GUEST (0.55-0.8 of the webifiers' 1600 u) burns
+        // onto it and latches; the guest's half reads its HUD line off the packet alone. The beam is
+        // stood down, so these webs start nothing; the guest's point defence is out of reach for the
+        // while (the SQUAD on trial, test only); the squad is shot down and the web let go before the
+        // lone web below
+        double guestPd = PdReachOff(guest);
+        var gankKinds = new[] { Enemies.Gunship, Enemies.Webifier, Enemies.Webifier, Enemies.Webifier };
+        float gankFrom = Squads.CommitOf(gankKinds.Select(Enemies.Of)) * Vary(0.55f, 0.8f);
+        var gankAt = guest.Position + Vector2.Right.Rotated(VaryAngle()) * gankFrom;
+        float gankFace = Aim.Face(gankAt, guest.Position);
+        var gank = H.FormSquad(Squads.Gank, gankAt, gankFace);
+        gank.Quarry = guest;
+        var ganks = gankKinds.Select((k, i) => H.SpawnRaider(gankAt + new Vector2(70f * (i - 1.5f), 40f * (i % 2)).Rotated(gankFace), k, gank)).ToList();
+        bool GankUp() => ganks.All(r => r != null && GodotObject.IsInstanceValid(r) && r.Alive);
+        await RealTime(() => !GankUp() || ganks.All(r => r.Latched), 6);
+        bool gankHeld = GankUp() && ganks.All(r => r.Latched && ReferenceEquals(r.Target, guest));
+        await Wait(0.6);                                           // the guest sees every member hold its line
+        Check(gankHeld, $"arena host: a gank squad (gunship + 3 webifiers, formed {gankFrom:0} u out) commits on the guest and every member latches ({ganks.Count(r => r != null && GodotObject.IsInstanceValid(r) && r.Latched)} of 4)");
+        foreach (var r in ganks) if (r != null && GodotObject.IsInstanceValid(r)) r.TakeDamage(9999);
+        guest.Stats.SetBase("pd_range", guestPd);
+        await RealTime(() => !guest.Pinned, 2);
         var web = H.SpawnRaider(guest.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(220f, 360f));
         await RealTime(() => guest.Pinned, 6);
         bool pinned = guest.Pinned;
@@ -11290,7 +11325,8 @@ public partial class _Test : Node
         await Wait(1.0);
     }
 
-    // ...and the guest's half: the squad's id bits and its one lead, this ship webbed by an add while
+    // ...and the guest's half: the squad's id bits and its one lead, the GANK line while the host's gank
+    // squad burns at this ship and none once it holds, this ship webbed by an add while
     // the beam's lane is up at it, the lane REPLACED when the host stretches the wind-up (one lane,
     // ending later, and no strike heard before its end), and the add's kill paid here at this
     // pilot's own level
@@ -11320,8 +11356,30 @@ public partial class _Test : Node
             if (GodotObject.IsInstanceValid(lastLane) && clock < lastEnd - 0.05 && strike != null
                 && Sfx.Played.GetValueOrDefault(strike) > struck0) earlyStrikes = Sfx.Played.GetValueOrDefault(strike) - struck0;
         }
-        for (int i = 0; i < 60 * 14 && !H.MissionWon && gained == 0; i++)
+        // THE GANK LINE here, from the packet alone (FlagLock, the line's end, this ship as its victim):
+        // on every frame the host's gank squad -- the one group of four with a heavy -- has a member
+        // burning, this ship's HUD line names its crew; once every member holds a line, none. A frame
+        // another squad is also burning at this ship is not read (the line names one squad)
+        const string GankWant = "GANK: GUNSHIP + 3 WEBIFIER";
+        int gankFrames = 0; string gankWrong = null, gankHeld = "unread";
+        void WatchGank()
         {
+            var me = Me;
+            if (me == null || gankHeld != "unread") return;
+            var groups = SquadSight.Groups(H.Raiders);
+            var gank = groups.FirstOrDefault(g => g.Count == 4 && g.Any(r => (r.Tags & Tag.Heavy) != 0));
+            if (gank == null || groups.Any(g => g != gank && g.Any(r => r.Locking && ReferenceEquals(SquadSight.Victim(r, H.Ships), me)))) return;
+            if (gank.Any(r => r.Locking))
+            {
+                gankFrames++;
+                var line = SquadSight.GankLine(H.Raiders, H.Ships, me);
+                if (line != GankWant) gankWrong ??= line ?? "none";
+            }
+            else if (gankFrames > 0 && gank.All(r => r.TetherTo != null)) gankHeld = SquadSight.GankLine(H.Raiders, H.Ships, me);
+        }
+        for (int i = 0; i < 60 * 22 && !H.MissionWon && gained == 0; i++)
+        {
+            WatchGank();
             var two = H.Raiders.Where(r => r.SquadId != 0).GroupBy(r => r.SquadId).FirstOrDefault(g => g.Count() == 2);
             squadSeen |= two != null && two.Count(r => r.Leads) == 1;
             labelOk |= two != null && SquadSight.Label(two.ToList()) == "2" && SquadSight.Groups(H.Raiders).Any(g => g.Count == 2);
@@ -11339,6 +11397,8 @@ public partial class _Test : Node
         }
         Check(squadSeen, "arena guest: the adds' squad arrives on the wire as one -- both members under one squad id, exactly one of them its lead");
         Check(labelOk && namesSeen, $"arena guest: drawn from the packet alone, the squad reads as one on the radar (label '2': {labelOk}) and its rows are named under their hulls ({namesSeen})");
+        Check(gankFrames > 0 && gankWrong == null && gankHeld == null,
+              $"arena guest: the host's gank squad burning at this ship reads '{GankWant}' on its HUD line from the packet alone ({gankFrames} burn frames{(gankWrong == null ? "" : $", one read '{gankWrong}'")}); once every member holds its line, none ('{gankHeld}')");
         Check(beamOnWeb, "arena guest: webbed by an add, this ship sees the beam's lane go up at it (the host charged on an add's web)");
         Check(firstLane != null && lastLane != null && mostAfter == 1 && lastEnd > firstEnd + 0.5 && earlyStrikes == 0,
               $"arena guest: the host's stretched wind-up REPLACES this peer's lane -- one Radius-70 lane standing ({mostAfter}), ending at the stretched time ({firstEnd:0.00} -> {lastEnd:0.00} s), no strike heard before it ({earlyStrikes})");

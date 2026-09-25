@@ -138,3 +138,13 @@ lone web, the guest's PD out of reach for the while; RaidsGuestAddsWire records 
 member is Locking (= "GANK: GUNSHIP + 3 WEBIFIER") and reads null once every member holds its line; (2) RaidsSightChecks'
 names + GANK block looped over 3 situations (still; crossing at 60 u/s; run from astern, off dead astern by a seeded angle),
 each a Vary bearing and range, same literals. HEAD cbf81d6. Files: SmokeTest 5f89a4b4, CHANGES 7792fbbd.
+## GF2 POST -- done. typecheck 0 errors; quick ALL PASSED. RaidsHostAddsWire: before the lone web, a gank squad
+(GUNSHIP + 3 WEBIFIER, Quarry the guest) formed at a seeded bearing 0.55-0.8 of the 1600 u commit range off the guest;
+the guest's PD reach 0 for the while (restored); host Check: all 4 latch on the guest; held 0.6 s, shot down, waits
+!guest.Pinned. RaidsGuestAddsWire: WatchGank (the group of 4 with Tag.Heavy; frames with another squad burning at this
+ship skipped) -- every Locking frame's GankLine == "GANK: GUNSHIP + 3 WEBIFIER", null at the first all-held frame; its
+loop cap 14 -> 22 s for the host's added ~3-4 s. RaidsSightChecks: the names + GANK block looped over still / crossing
+(60 u/s square across) / from astern (running away at 60 u/s, off dead astern by 0.15-0.45 rad, from 1750-2050 u),
+literals 3 s, 35, the GANK string, null once held; ship stopped while pinned. CHANGES Checks line updated.
+Rung-5 risks: the host's arena stay is ~3-4 s longer (the call site warns later waits are tight); a ram lane (Radius 70?)
+during the gank's pin could be taken for the beam's first lane by Watch(). engine-unproven: solo x2, six x2 owed.
