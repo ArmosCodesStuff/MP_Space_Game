@@ -305,3 +305,35 @@ Done: J2, J3, J4 (a3265f7, 43b0953, 19cfffa). Next is kits6b-J5; no PRE written.
 - Lane state: J1-J6 built; J7/J8 (Tender) WAIT on kits4 in version-l (D37). Test phase owes for J1-J6: rung 3 x2
   (LaneA6bSpotter/Tot/BubbleCover/Redeploy/Mortar/Buster/Well, LaneA6bBusterBossChecks, LaneA6bSiegeChecks, every
   rewritten check), rung 4 (79c-79g), rung 5 six x2 (LaneA6bPaintWire*, LaneA6bTot*).
+
+## Agent 4 resumes (ffdcbc4; J9 POSTed, nothing interrupted, no COORDINATOR NOTE): the Tender
+
+### kits6b-0 · version-l merged in (ba6a4f9)
+- version-l now holds slices 4 (Mend.Give), 5 and 6c. Conflicts kept both sides; 6b's appended ids move past 6c's:
+  Shots.Flak 8 / Spotter 9 / Buster 10, Fx.RailEnhanced 15 / Tot 16 / Well 17, Beam.RailEnhanced 9 / Tot 10,
+  Lines.RailEnhanced 3 / Tot 4. ClassDef.MainShot (6b) == ClassDef.Shot (6c): MainShot deleted, the freighter's
+  spotter is its Shot. Harness table checks rewritten to the merged counts. typecheck 0, quick ALL CHECKS PASSED.
+- D37 now holds: Mend.Give is in the tree. Job list for the Tender (replaces J7/J8's WAIT):
+  - **kits6b-J7 TE Mending lance + Beam primary + Mend on every friendly hull.** D43: Mend.Give takes an
+    `IMendable` (PlayerShip, DeployedTurret, UtilityShip: alive/in reach, hull now/max, BodyRadius) and
+    `Mend.Friendlies(hub)` = Hub.RaiderTargets() that are IMendable (pilots, sentries, the fleet at home). D44: the
+    lance is `Ab.Lance` (id "lance", Weapon, Hold, Space) with Primary.Beam; FireOnce -> PlayerShip.LanceTick(bore):
+    Lines.Pick over hostiles (never Tag.Missile|Hulled) and friendlies (never itself), stops 1; a hostile takes
+    main_damage 4 (Dealt.Lance), a friend lance_heal 0.8 (Mend, "lance"); main_interval 0.1, main_range 650,
+    main_turn 90 deg/s (the stat's default, asserted). The slot carries it to every peer (Left while held, N
+    0/1 mend/2 burn, Own = length); drawn by a Fields row look Lance. Tender row: hull 380, Fit Guns|Pd (no Deploy),
+    FireMode out, Abilities {Lance, Overdrive, Repair, Resupply} after J8 (J7: {Lance, Overdrive}).
+    Checks LaneA6bLanceChecks (solo), LaneA6bLanceReach in sweep B, frame 79h_lance.
+  - **kits6b-J8 TE Overdrive field, Repair field, Resupply** (D38). AbilityDef.Aura (radius stat: a running row's
+    lifts reach every other pilot inside it), AbilityDef.Tick (host, every frame it runs), AbilityDef.Cuts (a press
+    cuts this many seconds of cooling from every friendly pilot's abilities in its Aura, never the row itself nor
+    the drive). Rows field_radius 500, overdrive_mult 1.5 / time 8 / cd 24, repair_share 0.02 / time 8 / cd 30,
+    resupply_cut 8 / cd 30. Fields rows overdrive + repair (Ring, field_radius). Checks LaneA6bOverdriveFieldChecks,
+    LaneA6bRepairFieldChecks, LaneA6bResupplyChecks (solo, a mate pilot as TauntMate does), rewritten overdrive
+    block (~13723), sweep witnesses, frames 79i_overdrive_field / 79j_repair_field; rung 5 pair LaneA6bFieldHost/Guest.
+  - **kits6b-J10** the record (CHANGES Handoff + Unreleased, DESIGN) and the final POST.
+
+### kits6b-J7 · PRE · TE Mending lance, Beam primary, Mend on every friendly hull (D43, D44) -- tier opus
+- Files: Mend.cs 6cd5c59, PlayerShip.cs 69938b8, Deployed.cs 26f5efa, UtilityShip.cs 4b4a9da, Turrets.cs 471d84e,
+  Abilities.cs a4cb677, Ships.cs 44e89bb, Dealt.cs c9c0020, Items.cs d69fd08, Fx.cs ea7dcc2, SmokeTest.cs.txt 5dc1fee,
+  Shots.cs.txt 05fa0d7. HEAD ba6a4f945ca200fd95a84e83dd62614d508801f3.
