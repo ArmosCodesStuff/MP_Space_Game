@@ -16,6 +16,25 @@ revert or keep the half-made edits, then run the job again (CLAUDE.md §2b rule 
 - **D3** Spec read for the code slices: kits_v2 §5 (foundations, OutGuards, build order) and the card
   sections a foundation names; kits_v3 §5 and §7; kits_v31 §6, §8, §10. The rest was diffed / skimmed
   by heading to keep this agent under its context cap.
+- **D4** F2's new statuses (Parrying 32 on the wire; Suppressed 64, Dazzled 128, Jammed 256 host-only)
+  and the host-only wire mask land with their first users (6a Suppress, 6c Prism/Flares, 6d EMP):
+  enum members are under UNUSED ANYWHERE (tools/analyse/xref.py), so declaring them now fails rung 2.
+- **D5** The share rule's HOLD half (F1) lands in slice 1, because the railgun lock needs it;
+  Add and Ramp stay in slice 2.
+- **D6** A hold multiplies the whole helm after the lifts' sum: both speed caps, both thrusts and the
+  rudder, so x0 roots the hull heading included (the railgun keeps "cannot turn or thrust"). It is
+  `AbilityDef.Hold` (a share on the row, 1 = none). If the 6c Anchor must turn while rooted, 6c
+  splits the rudder off as its own row. Lane B puts the same hold on strafe_speed.
+- **D7** Disabled on a pilot: no helm, no main guns (they keep reloading), no ability presses (owner
+  Refuse says DISABLED; the host's DoAbility gate drops them; a Local toggle and the wreck's reboard
+  still work), no warp; PD, the wing and turrets already out keep fighting.
+- **D8** F16 (passive PD) is its own job (J3): it deletes the pd ability, window, recharge and
+  Fit.AlwaysPd across ~25 harness lines, two of them rung-5 guest checks. The per-hull numbers (CV
+  3 -> 2 mounts, Warden 10 -> 1 DPS) go with their cards in 6a / 6c, where the power table is
+  re-witnessed.
+- **D9** Hardened takes its share from the applier: `IStatused.ApplyStatus(s, seconds, share)`;
+  with no share given, the Guards row's default (0.5). Two hardenings at once keep the stronger
+  (lower) share until the status lapses. `StatusGuard.Stat` is deleted (its one user was rush_guard).
 
 ## Jobs
 
@@ -39,3 +58,34 @@ revert or keep the half-made edits, then run the job again (CLAUDE.md §2b rule 
 - Files: kits_v2.md, kits_v3.md (new); README.md (3 rows, raids row); kits_v31.md (lines 15, 39, 501,
   513); numbers_curve_raids_items.md (line 44); DESIGN.md (one pointer section under Ship classes).
 - Next: J2, lane A slice 1.
+
+### J2 · PRE · slice 1a: B, F2 (with the hold), the stale comments
+- Intent: B `s.Next += m.Tick` (Boss.cs Burn); F2 per D4/D6/D7/D9 (railgun lock -> `Hold = 0`);
+  stale comments Raider.cs:17-20 (7 s -> 12 s flight), :48 and Waves.cs:174 (1.1 -> 1.025 = Missions.S),
+  Enemies.cs:44 (7 s). Checks in lane A's own methods: `BurnClockChecks` (called from the Lancer
+  arena, after the fallback beams), `HoldAndDisabledChecks`; rewrites of the sniper's charge checks
+  (Status.Disabled -> the hold) and the Hardened share check.
+- Files: scripts/Boss.cs, Statuses.cs, PlayerShip.cs, Abilities.cs, Targeting.cs, Raider.cs, Waves.cs,
+  Enemies.cs, Deployed.cs, Emplacements.cs, UtilityShip.cs; tools/smoketest/SmokeTest.cs.txt;
+  docs/CHANGES.md.
+- Start: e4bd15156a6302a7fd2ae133afd7c8b8990deb32
+- Hashes: Boss 28201da9 · Statuses ea97ced8 · PlayerShip 6feada71 · Abilities 8807eee5 ·
+  Targeting cf2e7399 · Raider 11393eb2 · Waves 3a5fd6f9 · Enemies 9412635e · Deployed 9fee7444 ·
+  Emplacements b7df20d3 · UtilityShip 83d1ab96 · SmokeTest 00e6f1ba · CHANGES 3631a5f6
+
+### J2 · POST
+- Verdict: rung 1 (typecheck, 0 errors) and rung 2 (`verify.ps1 -Quick`, ALL CHECKS PASSED, UNUSED 0)
+  green in the worktree. Rung 3 NOT run (no engine runs in this lane).
+- Files: Boss.cs (Burn `+=`), Statuses.cs (share from the applier, StatusGuard.Stat gone),
+  Targeting.cs + the six IStatused implementers (share parameter), PlayerShip.cs (Held, Steer's
+  hold, PressHeld, FireControl and CanWarp gates, the rush's share, ChargeRail without Disabled),
+  Abilities.cs (`Hold`; railgun `Hold = 0`), Raider.cs / Waves.cs / Enemies.cs (stale comments),
+  SmokeTest.cs.txt, CHANGES.md.
+- Checkpoint: the commit after this entry ("Kits lane A slice 1a").
+- Next: J3 = F16 passive PD (D8), then slice 2.
+
+## Engine rungs owed to the main session (run in the worktree, rebased, one engine at a time)
+
+| after | rung | seeds | look for (PASS lines) |
+|---|---|---|---|
+| J2 slice 1a | 3 (`tools\smoketest\run.ps1 -Solo`) | two different seeds | "the burn clock:" x3 · "the railgun's charge is a hold of x0" x3 · "a DISABLED warden" x3 · "Hardened at the applier's share" x3 · rewritten: "the railgun charges with the hull held at x0", "then its railgun's whole", the ability sweep's railgun row, "a 100 blow on a HARDENED battleship" |

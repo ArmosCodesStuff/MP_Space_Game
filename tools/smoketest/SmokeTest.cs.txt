@@ -1427,6 +1427,145 @@ public partial class _Test : Node
         H.ClearSelection();
     }
 
+    // ══ LANE A · COMBAT CORE (docs/plans/kits_v31.md §8) ═══════════════════════════════════════
+    // Each slice's checks live in methods of their own, named for the mechanism, and are called
+    // from the moment of Solo that has the world they need.
+
+    // THE BURN CLOCK (fix B). A beam's burn is judged every Tick, and the judgement's clock was SET
+    // back to Tick each time, throwing the frame it overshot by away: at 60 fps the judgements came
+    // 16 frames apart, not 15, and through a ship's 0.52 s gap a pilot sitting in the line took 6
+    // hits 0.53 s apart (300). Added, it is 13 judgements in the 3 s and 5 hits 0.75 s apart: 250.
+    // Three hand-started beams, every other move held, the pilot kept in the line at a seeded
+    // bearing, reach and offset -- the line re-read every frame, so nothing is picked stale.
+    async Task LaneABurnClockChecks(Boss boss, PlayerShip me)
+    {
+        var held = boss.Type.Moves.ToDictionary(m => m.Id, m => boss.S(m.Id).Due);
+        foreach (var m in boss.Type.Moves) { boss.S(m.Id).Due = 999; boss.S(m.Id).At = Boss.Phase.Idle; }
+        foreach (var r in H.Raiders.Where(r => r.IsEscort).ToList()) r.TakeDamage(999);
+        var beam = boss.S("beam");
+        await Wait(0.6);                                        // past the 0.52 s gap of any earlier burn
+        for (int run = 0; run < 3; run++)
+        {
+            boss.Rotation = VaryAngle();
+            float reach = Vary(350f, 900f), off = Vary(-15f, 15f);   // the line is 70 u wide: well inside it
+            double was = me.DamageBySource.GetValueOrDefault("boss:beam"), last = was;
+            var hitsAt = new List<int>();
+            beam.At = Boss.Phase.Winding; beam.T = 0.01;         // the wind-up ends on its next tick and the burn lands
+            for (int f = 0; f < 60 * 5 && (f < 2 || beam.At != Boss.Phase.Idle); f++)
+            {
+                var (la, lb) = boss.Segment("beam");
+                var dir = (lb - la).Normalized();
+                me.Position = la + dir * reach + dir.Orthogonal() * off; me.Velocity = Vector2.Zero;
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                double now = me.DamageBySource.GetValueOrDefault("boss:beam");
+                if (now > last + 1e-9) { hitsAt.Add(f); last = now; }
+            }
+            var gaps = hitsAt.Zip(hitsAt.Skip(1), (x, y) => (y - x) / 60.0).ToList();
+            Check(beam.At == Boss.Phase.Idle && Math.Abs(last - was - 250) < 1e-6 && hitsAt.Count == 5 && gaps.All(g => Math.Abs(g - 0.75) < 0.02),
+                  $"the burn clock: a pilot {reach:0} u down a live beam and {off:0} u off its line (bearing {Mathf.RadToDeg(boss.Rotation):0} deg) takes the whole 3 s burn as 5 hits of 50, 0.75 s apart: 250 (took {last - was:0} in {hitsAt.Count}, {string.Join("/", gaps.Select(g => g.ToString("0.000")))} s apart)");
+            await Wait(0.6);
+        }
+        foreach (var m in boss.Type.Moves) boss.S(m.Id).Due = held[m.Id];
+    }
+
+    // THE HOLD (F2, with F1's share rule). The railgun's charge rooted the hull through
+    // Status.Disabled, which on a pilot now also silences its guns and its keys, so the lock is its
+    // row's Hold of x0: a share taken after the lifts, on the whole helm. From three seeded headings,
+    // a different pair of keys held each time, the charging hull neither moves nor turns; the charge
+    // spent, W moves it again.
+    async Task LaneAHoldChecks(PlayerShip sn)
+    {
+        var pairs = new[] { (global::Godot.Key.W, global::Godot.Key.A), (global::Godot.Key.S, global::Godot.Key.D), (global::Godot.Key.W, global::Godot.Key.D) };
+        foreach (var (k1, k2) in pairs)
+        {
+            sn.Sl("railgun").Left = 0; sn.Sl("railgun").Cool = 0;
+            sn.Rotation = VaryAngle(); sn.Velocity = Vector2.Zero; await Wait(0.2);
+            sn.UseAbility("railgun", 0);
+            for (int i = 0; i < 30 && sn.Sl("railgun").Left <= 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            var at = sn.Position; float rot = sn.Rotation;               // from the first frame the charge runs
+            KeyDown(k1); KeyDown(k2); await Wait(0.6);
+            float moved = sn.Position.DistanceTo(at), turned = Mathf.Abs(Mathf.AngleDifference(rot, sn.Rotation));
+            bool rooted = sn.Held == 0f && sn.Sl("railgun").Left > 0;
+            KeyUp(k1); KeyUp(k2);
+            sn.Sl("railgun").Left = 0.001;                               // spend the charge now
+            for (int i = 0; i < 30 && sn.Sl("railgun").Left > 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            var free = sn.Position;
+            KeyDown(global::Godot.Key.W); await Wait(0.8); KeyUp(global::Godot.Key.W);
+            float after = sn.Position.DistanceTo(free);
+            Check(rooted && moved < 1f && turned < 0.005f && sn.Held == 1f && after > 5f,
+                  $"the railgun's charge is a hold of x0 on the whole helm: {k1}+{k2} held 0.6 s at {Mathf.RadToDeg(rot):0} deg move it {moved:0.00} u and turn it {Mathf.RadToDeg(turned):0.00} deg; the charge spent, W moves it {after:0} u");
+            sn.Velocity = Vector2.Zero;
+        }
+        sn.Sl("railgun").Left = 0; sn.Sl("railgun").Cool = 0;
+    }
+
+    // DISABLED ON A PILOT (F2): the capitals' warp overshoot will be its one cause. It stops the helm,
+    // the main guns and every key; point defence, a wing and turrets already out are not presses and
+    // fight on. A warden (point defence always on, a main gun, hunters on a key) is disabled three
+    // times at a seeded heading, a light raider held at a seeded spot inside its 420 u point-defence
+    // reach; then, the status cleared, the same keys fire and move it (so the check can fail).
+    async Task LaneADisabledChecks(Vector2 yonder)
+    {
+        await SetClass(ShipClass.HeavyWarden);
+        var wd = Me; wd.Position = yonder; wd.Velocity = Vector2.Zero; await Wait(0.3);
+        var gun = Abilities.KeyFor(wd.Class, "guns");
+        for (int run = 0; run < 3; run++)
+        {
+            wd.Rotation = VaryAngle(); wd.Velocity = Vector2.Zero;
+            var prey = H.SpawnRaider(VaryNear(wd.Position, 300f), Enemies.Webifier);
+            prey.Hp = 9000; prey.ApplyStatus(Status.Disabled, 30);
+            wd.Sl("hunters").Left = 0; wd.Sl("hunters").Cool = 0;
+            wd.ApplyStatus(Status.Disabled, 3.0);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            var at = wd.Position; float rot = wd.Rotation;
+            var seen = new HashSet<Shot>(Nodes<Shot>());
+            int shellsHeld = 0, shellsFree = 0; bool pdOn = false;
+            KeyDown(global::Godot.Key.W); KeyDown(global::Godot.Key.A); KeyDown(gun);
+            wd.UseAbility("hunters", 0);
+            for (int i = 0; i < 36; i++)
+            {
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                foreach (var x in Nodes<Shot>()) if (seen.Add(x) && !x.HostileFire && !x.IsMissile) shellsHeld++;
+                pdOn |= wd.PdTurrets.Any(t => ReferenceEquals(t.Target, prey));
+            }
+            float moved = wd.Position.DistanceTo(at), turned = Mathf.Abs(Mathf.AngleDifference(rot, wd.Rotation));
+            bool noHunters = wd.Sl("hunters").Cool <= 0 && wd.Sl("hunters").Left <= 0;
+            wd.Statuses.Clear(Status.Disabled);
+            var freeAt = wd.Position;
+            for (int i = 0; i < 48; i++)
+            {
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                foreach (var x in Nodes<Shot>()) if (seen.Add(x) && !x.HostileFire && !x.IsMissile) shellsFree++;
+            }
+            KeyUp(global::Godot.Key.W); KeyUp(global::Godot.Key.A); KeyUp(gun);
+            float freeMoved = wd.Position.DistanceTo(freeAt);
+            Check(moved < 1f && turned < 0.005f && shellsHeld == 0 && noHunters && pdOn && shellsFree > 0 && freeMoved > 5f,
+                  $"a DISABLED warden at {Mathf.RadToDeg(rot):0} deg: W+A move it {moved:0.00} u and turn it {Mathf.RadToDeg(turned):0.00} deg, its held trigger fires {shellsHeld} shells, its hunters key starts nothing ({noHunters}), and its point defence still takes the raider {prey.Position.DistanceTo(wd.Position):0} u off ({pdOn}); cleared, the same keys fire {shellsFree} and move it {freeMoved:0} u");
+            prey.TakeDamage(99999);
+            wd.Velocity = Vector2.Zero; await Wait(0.3);
+        }
+    }
+
+    // HARDENED TAKES ITS SHARE FROM WHOEVER APPLIED IT (F2): a taunt's 0.67 lets 67 of a 100 blow
+    // through; a second, harder application while it runs (0.5) is the one that holds; an applier
+    // that names none gets the row's half. Each from a seeded side.
+    async Task LaneAHardenedShareChecks(PlayerShip gd)
+    {
+        var runs = new[] { (first: 0.67, second: double.NaN, want: 67.0), (first: 0.67, second: 0.5, want: 50.0), (first: double.NaN, second: double.NaN, want: 50.0) };
+        for (int run = 0; run < runs.Length; run++)
+        {
+            var (first, second, want) = runs[run];
+            gd.ApplyStatus(Status.Hardened, 0.4, first);
+            if (!double.IsNaN(second)) gd.ApplyStatus(Status.Hardened, 0.4, second);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            double hp0 = gd.Hp;
+            gd.Hit(100, gd.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(100f, 400f), $"test:share{run}");
+            Check(gd.Statuses.Has(Status.Hardened) && Math.Abs(hp0 - gd.Hp - want) < 1e-6,
+                  $"Hardened at the applier's share: applied at {first}{(double.IsNaN(second) ? "" : $" then {second}")}, a 100 blow lands for {hp0 - gd.Hp:0} (want {want:0})");
+            await Wait(0.6);
+        }
+    }
+
     // ── THE BUILD A PLAYER READS ──────────────────────────────────────────────────────────────
     // One check, about a trap in THIS game's protocol hash that a build string can fall into.
     void BuildChecks()
@@ -5548,12 +5687,15 @@ public partial class _Test : Node
             sn.UseAbility("railgun", 0); await Wait(0.2);
             var wasAt = sn.Position;
             KeyDown(global::Godot.Key.W); KeyDown(global::Godot.Key.A); await Wait(1.0); KeyUp(global::Godot.Key.W); KeyUp(global::Godot.Key.A);
-            Check(sn.Statuses.Has(Status.Disabled) && sn.Position.DistanceTo(wasAt) < 1f,
-                  $"the railgun charges with the hull locked: W and A move it nowhere ({sn.Position.DistanceTo(wasAt):0.00} u)");
+            Check(sn.Held == 0f && sn.Position.DistanceTo(wasAt) < 1f,
+                  $"the railgun charges with the hull held at x0 (its row's Hold): W and A move it nowhere ({sn.Position.DistanceTo(wasAt):0.00} u)");
             for (int i = 0; i < 60 * 4 && dTgt.Total == dmg0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            Check(Math.Abs(dTgt.Total - dmg0 - sn.Stats["rail_damage"]) < 0.01 && !sn.Statuses.Has(Status.Disabled)
+            Check(Math.Abs(dTgt.Total - dmg0 - sn.Stats["rail_damage"]) < 0.01 && sn.Held == 1f
                   && Math.Abs(new ShipStats(ShipClass.HeavySniper)["rail_damage"] - 150) < 1e-9,
                   $"then its railgun's whole {sn.Stats["rail_damage"]:0.0} lands {railAt:0} u away, on the line, and the hull is free again ({dTgt.Total - dmg0:0.0})");
+
+            await LaneAHoldChecks(sn);
+            await LaneADisabledChecks(yonder);
 
             // ── WARRIOR: two and a half times its speed, half the damage, then the EMP ──
             await SetClass(ShipClass.HeavyWarrior);
@@ -5951,7 +6093,7 @@ public partial class _Test : Node
                     ["bubble"]    = sp => sp.BubbleUp && Math.Abs(sp.BubbleLeft - sp.Stats["bubble_pool"]) < 0.5,
                     ["overdrive"] = sp => Math.Abs(sp.FireRate - (float)sp.Stats["overdrive_mult"]) < 1e-3f,
                     ["shockwave"] = sp => sp.Sl("shockwave").Cool > 0 && Nodes<FxNode>().Any(fx3 => fx3.Id == Fx.Wave),
-                    ["railgun"]   = sp => sp.Statuses.Has(Status.Disabled) && sp.Sl("railgun").Left > sp.Stats["rail_charge"] - 0.1,
+                    ["railgun"]   = sp => sp.Held == 0f && sp.Sl("railgun").Left > sp.Stats["rail_charge"] - 0.1,
                     ["rush"]      = sp => sp.Statuses.Has(Status.Hardened) && Math.Abs(sp.SpeedMult - (float)sp.Stats["rush_mult"]) < 1e-3f,
                     ["hunters"]   = sp => sp.Sl("hunters").Cool > 0 && InFlight().Count() >= sweepShots + (int)sp.Stats["hunter_count"],
                     ["roll"]      = sp => sp.Statuses.Has(Status.Evading) && sp.Sl("roll").Left > sp.Stats["roll_time"] + sp.Stats["boost_time"] - 0.1,
@@ -6222,7 +6364,6 @@ public partial class _Test : Node
                             proved = Math.Abs(inWas - mkIn.Hp - pilot.Stats["rail_damage"]) < 0.01 && mkOut.Hp == outWas;
                             told = $"the slug takes {inWas - mkIn.Hp:0} off what stands {railFrom.DistanceTo(mkIn.Position):0} u down the line and {outWas - mkOut.Hp:0} off what stands {railFrom.DistanceTo(mkOut.Position):0} u down it";
                             Sink(mkIn); Sink(mkOut);
-                            pilot.Statuses.Clear(Status.Disabled);
                             pilot.Sl("railgun").Left = 0; pilot.Sl("railgun").Cool = 0;
                             break;
                         }
@@ -6447,6 +6588,7 @@ public partial class _Test : Node
                 Check(gd.Statuses.Has(Status.Hardened) && Math.Abs(hd0 - gd.Hp - 50) < 1e-6,
                       $"a 100 blow on a HARDENED battleship -- a class with no rush_guard row -- lands for 50 ({hd0 - gd.Hp:0})");
                 await Wait(0.6);
+                await LaneAHardenedShareChecks(gd);
                 // and EVADING, the same table's other row, on a hull that cannot roll
                 gd.ApplyStatus(Status.Evading, 0.4); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                 double ev0 = gd.Hp;
@@ -6902,6 +7044,7 @@ public partial class _Test : Node
                 foreach (var r in H.Raiders.Where(r => r.IsEscort).ToList()) r.TakeDamage(999);
                 me2.Position = boss.Position + new Vector2(0, 500); me2.Velocity = Vector2.Zero;
             }
+            await LaneABurnClockChecks(boss, me2);
             // ── STEALTH STOPS THE BOSS CHOOSING, NEVER HITTING, AND NEVER STOPS THE FIGHT ──
             // Its pilots were ONE list, the seen one: a solo pilot who went dark emptied it and the
             // boss stopped closing, turning and counting every clock it had until the pilot came

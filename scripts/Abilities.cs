@@ -70,6 +70,10 @@ public class AbilityDef
     // untouchable part of it is over.
     public string RateStat, SpeedStat;
     public Func<PlayerShip, bool> While;
+    // WHILE IT RUNS, what it HOLDS the helm to: a share taken after the lifts are summed
+    // (PlayerShip.Held), so no speed lift moves a held hull. 0 roots it, heading included; 0.5
+    // halves it; 1, the default, holds nothing. `While` narrows it the same way.
+    public double Hold = 1;
 
     public SlotState State(PlayerShip s, IHittable selected) =>
         Show != null ? Show(s, selected) : new SlotState { Line = "READY" };
@@ -260,6 +264,7 @@ public static class Ab
         Id = "railgun", Name = "Railgun", Short = "RAIL", Default = Key.F,
         Blurb = "A charge you cannot turn or thrust through, then a straight blue line through everything on it.",
         Press = (s, _) => s.ChargeRail(),
+        Hold = 0,                                           // the charge: rooted, heading and all
         Expire = s => s.FireRail(),
         Refuse = (s, _) => s.Sl("railgun").Left > 0 ? "CHARGING" : s.Sl("railgun").Cool > 0 ? "COOLING" : null,
         Show = (s, _) => s.Sl("railgun").Left > 0

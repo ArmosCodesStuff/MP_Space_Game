@@ -16,9 +16,9 @@ using Godot;
 //   EDGE nearest its target, facing it, until the target is pinned; then it boosts at 700%
 //   until 300 u away, and closes at cruise to 135 u off the hull, astern, where it fires a
 //   short, hard laser: 2x the raider damage. Within its own row's missile reach (a gunship's
-//   500 u) it also fires a fat missile at where the target WILL be in 7 s (its speed carried
-//   forward): a red circle marks the spot for all 7 s, and the blast lands there -- move off the
-//   line and it misses.
+//   500 u) it also fires a fat missile at where the target WILL be in 12 s (its speed carried
+//   forward; MissileFlight): a red circle marks the spot for all 12 s, and the blast lands there --
+//   move off the line and it misses.
 //
 // Targets: the nearest player ship, miner, salvager or hauler -- except a HUNTER, sent after
 // one quarry (the hauler on an escort), which goes for its quarry while it is there.
@@ -43,9 +43,9 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
     // sees it stop because the host stops sending it anywhere.
     private StatusSet _status;
     public StatusSet Statuses => _status;
-    public void ApplyStatus(Status st, double seconds) { if (Net.Sim) _status.Apply(st, seconds); }
+    public void ApplyStatus(Status st, double seconds, double share = double.NaN) { if (Net.Sim) _status.Apply(st, seconds, share); }
     public float Length => Def.Length;
-    // a raid's raiders are as strong as the boss that was failed: S(L) = 1.1^(L-1)
+    // a raid's raiders are as strong as the boss that was failed: S(L) = 1.025^(L-1) (Missions.S)
     public double Strength = 1;          // S(L) (was "Scale", which hid Node2D.Scale)
     // The share of that hull it is built with: an escort's hunters come at half (Hub.HunterHull).
     // Not Strength, which scales its damage too. Set before it enters the tree (_Ready reads it).

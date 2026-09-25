@@ -142,7 +142,7 @@ public partial class Emplacement : Node2D, IQuarry, ITagged, IStatused, ITurretH
 
     private StatusSet _status;
     public StatusSet Statuses => _status;
-    public void ApplyStatus(Status s, double seconds) { if (Net.Sim) _status.Apply(s, seconds); }
+    public void ApplyStatus(Status s, double seconds, double share = double.NaN) { if (Net.Sim) _status.Apply(s, seconds, share); }
     private bool Held => _status.Has(Status.Disabled);
 
     // UP WHILE ANYTHING OF ITS SHIELDING ROW STILL STANDS. Every peer works this out from the

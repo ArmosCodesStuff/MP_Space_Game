@@ -41,7 +41,7 @@ public class EnemyDef
     public bool Missiles;                // the fat missile, thrown at where the target WILL be
     // ITS MISSILE, when Missiles is set. These were `Raider` consts, so every row that set
     // Missiles threw the SAME missile: the Lancerkin, whose whole point is standing 260 u off,
-    // fired the gunship's 500 u missile and could not be given its own. (The 7 s flight is not a
+    // fired the gunship's 500 u missile and could not be given its own. (The 12 s flight is not a
     // row: Hub takes it as a compile-time default -- see Raider.MissileFlight.)
     public float MissileRange = 500f;    // it throws one from within this
     public double MissileEvery = 12.0;   // seconds between them

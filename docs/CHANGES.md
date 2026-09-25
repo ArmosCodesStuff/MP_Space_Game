@@ -467,6 +467,39 @@ outstanding from the batch of 2026-09-23.)*
 
 ## Unreleased
 
+### Class kits, lane A slice 1a: the burn clock, a hold on the helm, Disabled on a pilot, Hardened from its applier (2026-09-25, worktree wt/kits)
+
+kits_v31 §8 lane A slice 1, less F16 (passive point defence, its own commit next).
+- **The burn clock (fix B).** A beam's judgement clock was set back to its Tick, throwing the
+  overshoot away, so at 60 fps every judgement came a frame late: 12 in the Rusty Bucket's 3 s burn,
+  and a pilot in the line took 6 hits 0.53 s apart (300). It is added now: 13 judgements, 5 hits
+  0.75 s apart, 250 -- the figure the design and the 240 / 250 hull witnesses were written for.
+- **A hold on the helm** (the hold half of F1's share rule, landed early because the railgun needs
+  it). `AbilityDef.Hold` is a share a running row puts on the whole helm AFTER the lifts are summed:
+  both thrusts, both speed caps and the rudder, so x0 roots the hull, heading included, whatever
+  lift runs. The railgun's charge is `Hold = 0`, no longer Status.Disabled.
+- **Disabled on a pilot** now means what the capitals' warp overshoot will need: no helm, no main
+  guns (they keep reloading), no ability presses (the slot says DISABLED; the host drops a press
+  that arrives anyway), no warp. Point defence, the wing and turrets already out fight on. Nothing
+  in the game disables a pilot yet; lane B's overshoot will be the first.
+- **Hardened takes its share from whoever applied it** (`ApplyStatus(status, seconds, share)`), the
+  row's half when none is named; two at once keep the harder. The rush gives its own rush_guard; the
+  Taunt will give 0.67. `StatusGuard.Stat` is gone.
+- Stale comments: a raider missile flies 12 s, not 7; raid strength is 1.025^(L-1), not 1.1^(L-1).
+
+**Checks:** new `LaneABurnClockChecks` (3 hand-started beams at seeded bearings, reaches and
+offsets: 5 hits, 0.75 s apart, 250), `LaneAHoldChecks` (3 headings x 3 key pairs: the charging
+hull moves < 1 u and turns < 0.005 rad; free again after), `LaneADisabledChecks` (a warden disabled
+3 times: no move, no turn, no shell, hunters refused, PD still takes a raider; cleared, it fires and
+moves), `LaneAHardenedShareChecks` (0.67 -> 67, 0.67 then 0.5 -> 50, none -> 50). Rewritten: the
+sniper's "charges with the hull locked" (now `Held == 0`), its "hull is free again" (`Held == 1`),
+the ability sweep's railgun row, and the stat-reach sweep's railgun case (no Disabled to clear).
+**Rungs:** 1 and 2 green in the worktree; rung 3 owed on two seeds (ledger_kits.md).
+
+**Known broken:** nothing known; rung 3 has not run. The burn clock's 5th hit lands on the burn's
+last frame (t = 3.0 s): deterministic at the harness's fixed 60 fps, and the check also asserts the
+0.75 s spacing, which does not sit on that edge.
+
 ### verify's text step skips a binary by what it holds, not by its extension (2026-09-24, in the WarShips_Version_L fork)
 
 The text step skipped `.png`, `.ogg` and `.wav` by name, so the two vendored plugin DLLs (4 MB each)

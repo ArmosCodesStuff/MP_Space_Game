@@ -171,8 +171,8 @@ public static class Waves
 
     public static readonly WaveDef[] All =
     {
-        // A FAILED MISSION'S RAID. Level L (the failed boss's): raiders at S(L) = 1.1^(L-1), the
-        // boss's own scaling. 2 squads, and 1 more per extra pilot in the session, in from the
+        // A FAILED MISSION'S RAID. Level L (the failed boss's): raiders at S(L) = 1.025^(L-1), the
+        // boss's own scaling (Missions.S). 2 squads, and 1 more per extra pilot in the session, in from the
         // map's edge (the clock that holds them 3 s is Raids.Delay).
         new() { Id = "raid", Trigger = WaveTrigger.Failed,
                 Squads = 2, SquadsPerPilot = 1,

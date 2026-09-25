@@ -153,6 +153,20 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // Lifts, as SHARES: each adds what it is worth over x1 (x2 is +1, x0.85 is -0.15), and the ship
     // takes Stat.Scale of the sum -- the sheet's own rule, on its own floor. A sheet with no such
     // row answers 0: that lifts nothing, rather than stopping the ship.
+    // WHAT HOLDS IT, right now: every running row's Hold (AbilityDef.Hold), MULTIPLIED, and taken
+    // AFTER the lifts are summed -- the share rule: buffs add, holds and slows multiply, as the
+    // web's PinSpeed does. So no lift moves a held hull: x0 is rooted whatever else runs. Steer
+    // puts it on the whole helm, both ways and the rudder.
+    public float Held
+    {
+        get
+        {
+            double h = 1;
+            foreach (var def in Abilities.For(Class))
+                if (def.Hold < 1 && Sl(def.Id).Left > 0 && (def.While == null || def.While(this))) h *= def.Hold;
+            return (float)h;
+        }
+    }
     public static double LiftShares(IReadOnlyList<double> lifts)
     {
         double shares = 0;
@@ -452,6 +466,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         if (def.Local) { def.Press?.Invoke(this, null); return; }
         // Why it cannot be pressed, decided on the OWNER's machine so the slot says so at once.
         // The host checks again inside Press: this is a courtesy, never the guard.
+        if (PressHeld(def)) { Fail(id, "DISABLED"); return; }
         if (def.Refuse?.Invoke(this, targetId != 0 ? Combat.ById(targetId) : null) is { } why) { Fail(id, why); return; }
         if (Net.Sim) DoAbility(id, targetId);
         else Net.AskHost(this, nameof(RequestAbility), id, targetId);
@@ -477,12 +492,15 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     private void DoAbility(string id, int targetId)
     {
         var def = Abilities.Find(Class, id);
-        if (def == null || !Net.Sim || (!Alive && !def.WhenWrecked)) return;
+        if (def == null || !Net.Sim || (!Alive && !def.WhenWrecked) || PressHeld(def)) return;
         def.Press?.Invoke(this, targetId != 0 ? Combat.ById(targetId) : null);
     }
 
     // ── what the abilities do. The catalogue (Abilities.cs) points at these, and each one
     // guards itself: the press arrives from a guest's keyboard, so the host never trusts it.
+    // DISABLED, a pilot presses nothing (the wreck's own reboard aside). Its point defence, its wing
+    // and its turrets already out are not presses, and fight on.
+    private bool PressHeld(AbilityDef def) => _status.Has(Status.Disabled) && !def.WhenWrecked;
     public void Reboard() { if (CanReboard) { Alive = true; Hp = MaxHp * ReboardHull; _stasis = 0; } }
     public void StartPd() { if (PdReady) Sl("pd").Left = Stats["pd_active"]; }
     public void StartBroadside() { if (BroadsideReady) Sl("broadside").Left = Stats["broadside_windup"]; }
@@ -591,13 +609,12 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     }
 
     // ── THE HEAVY FIGHTERS ──────────────────────────────────────────────
-    // The railgun commits: while it charges the ship cannot turn or thrust (Status.Disabled on
-    // itself), and at the end everything on the line takes the whole of it at once.
+    // The railgun commits: while it charges the ship cannot turn or thrust (its row's Hold of x0,
+    // taken after the lifts: see Held), and at the end everything on the line takes the whole of it.
     public void ChargeRail()
     {
         if (Sl("railgun").Left > 0 || Sl("railgun").Cool > 0) return;
         Sl("railgun").Left = Stats["rail_charge"];
-        ApplyStatus(Status.Disabled, Stats["rail_charge"]);
     }
     // The charge is spent (the Railgun row's Expire, on the host).
     public void FireRail()
@@ -624,7 +641,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         if (Sl("rush").Cool > 0) return;
         ref var r = ref Sl("rush");
         r.Left = Stats["rush_time"]; r.Cool = Cooling(Stats["rush_cooldown"]);
-        ApplyStatus(Status.Hardened, r.Left);
+        ApplyStatus(Status.Hardened, r.Left, Stats["rush_guard"]);   // the rush says how hard, not the hit hull
     }
     // The rush ends in an EMP: everything close takes it, and everything small enough is held.
     // (The Rush row's Expire, on the host.)
@@ -757,7 +774,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     public bool Warping => _warpLeft >= 0;
     public double WarpWarmupLeft => Math.Max(0, _warpLeft);
     public double WarpCooldownLeft => _warpCd;
-    private bool CanWarp => Alive && !Warping && _warpCd <= 0;
+    private bool CanWarp => Alive && !Warping && _warpCd <= 0 && !_status.Has(Status.Disabled);
 
     // V starts the charge; WHERE it goes is decided when it jumps, by the heading then --
     // so a pilot can press V and swing onto a target while it charges.
@@ -802,7 +819,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // Pinned holds the ship to StatusSet.PinSpeed of top speed, thrusting, unable to turn.
     private StatusSet _status;
     public StatusSet Statuses => _status;
-    public void ApplyStatus(Status s, double seconds) { if (Net.Sim) _status.Apply(s, seconds); }
+    public void ApplyStatus(Status s, double seconds, double share = double.NaN) { if (Net.Sim) _status.Apply(s, seconds, share); }
     public bool Pinned => _status.Has(Status.Pinned);
 
     // A refused ability: its slot shows the reason, in red, for a moment.
@@ -924,15 +941,14 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // WHAT THE STATUSES ON THIS SHIP LET THROUGH. Each status that changes a blow is a row of
     // StatusSet.Guards (Statuses.cs), walked in the order written there -- evasion first, because
     // it decides whether the blow happened at all, then the shares, then the bubbles. The share is
-    // this hull's own stat row where it has one and the status's own default where it has not: it
-    // read Stats["rush_guard"] here, a row only the HeavyWarrior carries, so a hardening arriving
-    // from any second class, a gear part or a boss debuff was a status that did nothing.
+    // the one its APPLIER named (the rush's rush_guard, a taunt's 0.67) and the row's default where
+    // none was named -- never a row read off this hull's own sheet.
     private double Guarded(double d)
     {
         foreach (var g in StatusSet.Guards)
         {
             if (!_status.Has(g.Status)) continue;
-            d *= !string.IsNullOrEmpty(g.Stat) && Stats[g.Stat] > 0 ? Stats[g.Stat] : g.Share;
+            d *= _status.ShareOf(g.Status, g.Share);
             if (d <= 0) return 0;
         }
         return ThroughBubbles(this, d);                                  // a bubble over it spends first
@@ -1084,7 +1100,8 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     private void FireControl(double delta)
     {
         if (!Stats.Def.Has(Fit.Guns) || _mains.Count == 0) return;
-        if (!Trigger) { _gunCd = Math.Max(0, _gunCd - delta); return; }   // keep reloading while idle
+        // idle, or DISABLED: the guns hold, and keep reloading
+        if (!Trigger || _status.Has(Status.Disabled)) { _gunCd = Math.Max(0, _gunCd - delta); return; }
 
         double interval = Cadence("main_interval");
         double step = Staggered ? interval / _mains.Count : interval;
@@ -1174,8 +1191,11 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         var side = new Vector2(-fwd.Y, fwd.X);
         float along = Velocity.Dot(fwd), across = Velocity.Dot(side);
 
-        // Held: a railgun charging, a shockwave's stun. No thrust, no rudder, whatever is pressed.
+        // DISABLED: no thrust, no rudder, whatever is pressed. HELD (a running row's Hold, after
+        // the lifts): the thrust both ways, both caps and the rudder, all by the one share.
         if (_status.Has(Status.Disabled)) { throttle = 0f; rudder = 0f; }
+        float hold = Held;
+        throttle *= hold; rudder *= hold;
         // A SPEED LIFT (the rush, the boost, the veil) lifts the push ahead WITH the top speed. The
         // water holds a hull to thrust / drag, so a lift on the cap alone would stop there: a warrior
         // pushes 130 against 0.35, which is 371 u/s of the 475 its 2.5x rush promises. Astern is
@@ -1184,8 +1204,8 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         if (throttle > 0) along += (float)Stats["thrust"] * lift * throttle * dt;
         else if (throttle < 0) along += (float)Stats["reverse_thrust"] * throttle * dt;
         along -= along * Mathf.Clamp((float)Stats["water_drag"] * dt, 0f, 1f);
-        along = Mathf.Clamp(along, -(float)Stats["reverse_speed"],
-                            (float)Stats["max_speed"] * lift * (Pinned ? StatusSet.PinSpeed : 1f));
+        along = Mathf.Clamp(along, -(float)Stats["reverse_speed"] * hold,
+                            (float)Stats["max_speed"] * lift * hold * (Pinned ? StatusSet.PinSpeed : 1f));
         across *= Mathf.Exp(-(float)Stats["keel"] * dt);
 
         // turning circle: yaw rate = speed / radius, capped by the rudder; astern the
@@ -1201,6 +1221,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             _yawRate = Mathf.MoveToward(_yawRate, want, 2.5f * dt);     // the rudder takes a moment to bite
             if (Pinned || _status.Has(Status.Disabled)) _yawRate = 0f;  // pinned or held: it cannot turn
         }
+        if (hold <= 0f) _yawRate = 0f;                                  // rooted: the heading holds too
         Rotation += _yawRate * dt;
 
         fwd = Vector2.Up.Rotated(Rotation); side = new Vector2(-fwd.Y, fwd.X);

@@ -60,7 +60,7 @@ public partial class DeployedTurret : Node2D, IRaidTarget, ITagged, ITurretHost
     // ── as something a raider can go after ──────────────────────────────────
     public bool InReach => Alive;
     public StatusSet Statuses => _status;
-    public void ApplyStatus(Status s, double seconds) { if (Net.Sim) _status.Apply(s, seconds); }
+    public void ApplyStatus(Status s, double seconds, double share = double.NaN) { if (Net.Sim) _status.Apply(s, seconds, share); }
     public (float halfLength, float halfWidth) Extent => (Radius, Radius);
     // what the scope and the HUD call it: its owner's, because three of them stand together
     public string Label => Ship != null ? $"{Ship.Pilot}'S TURRET" : "TURRET";

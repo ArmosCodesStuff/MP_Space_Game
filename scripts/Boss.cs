@@ -118,7 +118,7 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
     // to move it.
     private StatusSet _status;
     public StatusSet Statuses => _status;
-    public void ApplyStatus(Status s, double seconds) { if (Net.Sim) _status.Apply(s, seconds); }
+    public void ApplyStatus(Status s, double seconds, double share = double.NaN) { if (Net.Sim) _status.Apply(s, seconds, share); }
     public bool Held => _status.Has(Status.Disabled);
     public double Hp { get; set; }              // a property, not a field: IQuarry asks for it
     public bool Alive => Hp > 0;
@@ -504,8 +504,10 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
         {
             case MoveWay.Beam:
                 if ((s.Next -= delta) <= 0)
-                {   // judged every Tick, down the nose -- which has not moved since the wind-up began
-                    s.Next = m.Tick;
+                {   // judged every Tick, down the nose -- which has not moved since the wind-up began.
+                    // ADDED, not set: `= m.Tick` threw away the overshoot, so at 60 fps each judgement
+                    // came a frame late (16 frames, not 15) and a full burn was 12 of them, not 13.
+                    s.Next += m.Tick;
                     var (la, lb) = Segment(m.Id);
                     foreach (var p in _hittable)
                         if (Combat.DistToSegment(p.Position, la, lb) <= m.Width / 2f + p.HitRadius)
