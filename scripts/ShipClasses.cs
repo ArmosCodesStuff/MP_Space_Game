@@ -98,12 +98,13 @@ public interface IRaidTarget : IStatused
 public enum WingKind { Fighter, Bomber }
 public enum WingWay { Strafe, Strike }
 
-public class WingDef
+// Its ART -- Texture, Length (the airframe at flight size), Tint and its bells -- is the HullArt it
+// derives from (Sprites.cs).
+public class WingDef : HullArt
 {
     public string Id, Name;
     public WingWay Way;                 // which machine flies it
-    public string Texture;
-    public float Length;                // the airframe, in units, at flight size
+    public Vector2 Launch;              // where a launched round leaves: the port side's, mirrored each round (hull frame, u)
     public bool Parks;                  // it waits in a bay ON the deck, not inside the hull
     public float LandedScale = 1f;      // drawn this small parked, growing to 1 as it lifts
     // WHAT IT READS OFF THE CARRIER'S SHEET. Every number a craft flies and fights on is a stat
@@ -138,11 +139,14 @@ public static class Wings
     public static readonly WingDef[] All =
     {
         // The bomber is the LARGER airframe (28.125 to the fighter's 17), so the two read apart
-        // at a glance; 0.65 parked is the hauler's own (18 u across, inside the 21.3 u of white
+        // at a glance; 0.65 parked is the hauler's own (12 u across, inside the 21.3 u of white
         // beside the runway), and 1.6 / 1.0 / 0.6 s are the deck's moves (the lift's run up 118 u
-        // of runway ends at about its top speed).
+        // of runway ends at about its top speed). The art is the pack's fighter_delta and fighter_g
+        // (the owner's picks), the bells and the bomber's wingtip rails as tools/make_ships.ps1
+        // prints them.
         new() { Id = "fighter", Name = "Fighter", Way = WingWay.Strafe,
                 Texture = "res://wing_fighter.png", Length = 17f,
+                Nozzles = new Nozzle[] { new(-2.62f, 8.29f, 1.42f), new(2.62f, 8.29f, 1.42f) },
                 CountStat = "fighter_count", SpeedStat = "fighter_speed", RangeStat = "fighter_range",
                 IntervalStat = "fighter_interval", DamageStat = "fighter_damage",
                 TurnStat = "fighter_turn", BurstStat = "fighter_burst", RestStat = "fighter_rest",
@@ -151,6 +155,8 @@ public static class Wings
 
         new() { Id = "bomber", Name = "Bomber", Way = WingWay.Strike,
                 Texture = "res://wing_bomber.png", Length = 28.125f,
+                Nozzles = new Nozzle[] { new(-2.99f, 13.08f, 2.04f), new(3.11f, 13.08f, 2.04f) },
+                Launch = new(-8.48f, -0.12f),                                  // the front of its wingtip rails
                 Parks = true, LandedScale = 0.65f,
                 CountStat = "bomber_count", SpeedStat = "bomber_speed", AccelStat = "bomber_accel",
                 RangeStat = "launch_range",
@@ -246,7 +252,7 @@ public partial class Wing : Node2D
     {
         Carrier = carrier; Kind = kind; Position = at;
         Ammo = Def.AmmoStat == null ? 0 : (int)S[Def.AmmoStat];     // no AmmoStat: no magazine
-        _sprite = Sprites.Fit(Def.Texture, Def.Length);
+        _sprite = Sprites.Fit(Def);
         _fit = _sprite.Scale;
         AddChild(_sprite);
         ZIndex = 4;
@@ -411,8 +417,9 @@ public partial class Wing : Node2D
                 if (_cd <= 0 && Ammo > 0)
                 {
                     _cd += Carrier.Cadence(Def.IntervalStat); Ammo--;
-                    var dir = Vector2.Up.Rotated(Rotation);           // straight off the nose
-                    Combat.LaunchTorpedo(Position + dir * Def.Length * 0.45f, dir, (float)S[Def.ShotSpeedStat],
+                    var dir = Vector2.Up.Rotated(Rotation);           // straight off the nose, off one wingtip rail and then the other
+                    var rail = Ammo % 2 == 0 ? Def.Launch : Def.Launch with { X = -Def.Launch.X };
+                    Combat.LaunchTorpedo(Position + rail.Rotated(Rotation), dir, (float)S[Def.ShotSpeedStat],
                                          (float)S[Def.ShotRangeStat], S[Def.DamageStat], source: Carrier);
                 }
                 if (Ammo <= 0) { _b = BSt.Return; Carrier.NoteStrikeDone(); }
@@ -522,7 +529,6 @@ public partial class Wing : Node2D
     public override void _Draw()
     {
         if (Inside) return;                                      // a craft inside the hangar
-        float len = Def.Length * VisualScale;
         if (Def.Parks && OnDeck)
         {   // its shadow on the deck, tucked in when parked, further out and fainter the higher it
             // rises (the hauler's): screen down-right, in the bomber's own frame
@@ -532,7 +538,6 @@ public partial class Wing : Node2D
             DrawTextureRect(_sprite.Texture, new Rect2(drop - size / 2, size), false, new Color(0, 0, 0, (0.45f - 0.15f * alt) * (1f - alt)));
             if (_b is BSt.Docked or BSt.Taxiing) return;       // engines off on the deck
         }
-        Plume.Draw(this, new Vector2(0, len * 0.5f), Vector2.Down, len, Carrier.Accent,
-                   Velocity.Length() / Mathf.Max(1f, Speed), Velocity.Length() > 2f);
+        Def.DrawPlumes(this, Vector2.Zero, VisualScale, Carrier.Accent, Velocity.Length() / Mathf.Max(1f, Speed), Velocity.Length() > 2f);
     }
 }

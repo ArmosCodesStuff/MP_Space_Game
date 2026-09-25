@@ -255,8 +255,8 @@ public class ShipStats
     public double FighterDpsEach   => Def.Has(Fit.Wing) ? this["fighter_damage"] / this["fighter_interval"] : 0;
     public double FighterDps       => FighterDpsEach * this["fighter_count"];
     // Fighters strafe and then dock to rest, so the rate they HOLD is their firing rate over the
-    // share of the time they are out -- the sheet's own two figures, worked out exactly as the
-    // point-defence window's duty is above.
+    // share of the time they are out -- the burst over the whole burst-and-rest cycle, the
+    // sheet's own two figures.
     public double FighterDuty      => Def.Has(Fit.Wing) && this["fighter_burst"] + this["fighter_rest"] > 0
                                     ? this["fighter_burst"] / (this["fighter_burst"] + this["fighter_rest"]) : 0;
     public double FighterSustainedDps => FighterDps * FighterDuty;

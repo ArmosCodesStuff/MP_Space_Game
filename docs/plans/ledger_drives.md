@@ -177,3 +177,6 @@ engine-unproven: rungs owed in the final test phase -- solo x2 for the three Lan
 (watch: the carrier block's "shots >= 2 in 3 s" and the fighters' 15 s burst clock), six x2 for
 LaneBWorldEntryChecks (host role). Owner-facing: raiders (100) now out-cruise the BB and CV (F22).
 Next: none; the lane waits for its re-gate and merge.
+
+## M1 (lane merge step 0): version-l merged into wt/drives
+Conflicts: PlayerShip._Draw (fields lane's Fields.Draw kept + this lane's Drives.Draw; version-l's inline warp glow dropped, Drives.Draw owns it); SmokeTest solo list (LaneB* + FieldsLiveRowChecks both kept); SmokeTest Mp host GearLevel keyed by slot "Engines" (lane F J5), Drives.PriceSnaps line kept; CHANGES Handoff/Unreleased both sides. typecheck 0 errors, verify -Quick ALL CHECKS PASSED. Test phase: fields' `boost` row may still print NOTE unbound field row (binding is not in this lane's plan).

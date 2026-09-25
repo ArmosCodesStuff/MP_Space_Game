@@ -61,8 +61,9 @@ public partial class Hub : Node2D
     public static readonly Vector2 SunPos    = new(0, -1794);
     public static readonly Vector2 WreckPos  = new(-1840, 60);
     public static readonly Vector2 PortalPos = new(1500, 219);
-    // WHERE A MISSION IS BUILT in the arena: a boss's spot, and a raid site's centre. It was
-    // `BasePos + new Vector2(0, -700f)` written into BuildArena, which made it the boss's alone.
+    // WHERE A MISSION IS BUILT in the arena: where a boss's NOSE stands (so a bigger boss stands
+    // no nearer the party), and a raid site's centre. It was `BasePos + new Vector2(0, -700f)`
+    // written into BuildArena, which made it the boss's alone.
     public static readonly Vector2 ArenaCentre = BasePos + new Vector2(0, -700f);
     // FOUR OUTPOSTS, 3000 u out from the base on the diagonals (1000 further than they were) (y grows south): small permanent
     // stations the escort delivers to, named for their corner, in the order the escort visits
@@ -203,7 +204,7 @@ public partial class Hub : Node2D
         // on the scope, so four pylons were four things a pilot could only find by flying at them.
         foreach (var e in Emplacements)
             if (IsInstanceValid(e))
-                yield return new ScopeMark(e.Label, e.Position, e.HitRadius, MarkShape.Diamond, new Vector2(3.5f, 4f), e.Def.Main);
+                yield return new ScopeMark(e.Label, e.Position, e.HitRadius, MarkShape.Diamond, new Vector2(3.5f, 4f), e.Def.Tint);
     }
 
     public Boss Boss { get; private set; }
@@ -245,7 +246,8 @@ public partial class Hub : Node2D
     // it to the ship, keeping the zoom.
     // ZoomOutMax is how much FURTHER out than the default the wheel will go: 15% more of it than
     // it was (1.33), because a boss's reach grows with the level and a fight you cannot see the
-    // edges of is a fight fought on the minimap.
+    // edges of is a fight fought on the minimap. The wheel never goes past this ceiling -- a boss
+    // too big for it is framed by MOVING the camera, not by raising it (BossReach, below).
     public const float DefaultZoom = 0.9f, ZoomOutMax = 1.53f, ZoomInMax = 1.5f;
     public const float PanSpeed = 1400f, EdgeBand = 14f;
     public float ZoomLevel { get; private set; } = DefaultZoom;
@@ -959,8 +961,9 @@ public partial class Hub : Node2D
     // one on every peer.
     public void BuildBoss()
     {
-        Boss = new Boss { Hub = this, Type = Missions.ForLevel(Missions.Level),
-                          Position = ArenaCentre, Rotation = Mathf.Pi };
+        var type = Missions.ForLevel(Missions.Level);
+        Boss = new Boss { Hub = this, Type = type,                     // facing the party, its nose on the spot
+                          Position = ArenaCentre + Vector2.Up * (type.Length * 0.5f), Rotation = Mathf.Pi };
         AddChild(Boss);
     }
     // host: an emplacement is down. It goes the way every host-spawned thing goes; if it was the
@@ -1063,12 +1066,12 @@ public partial class Hub : Node2D
         foreach (var t in GetChildren().OfType<Shot>()) if (t.NetId == id) t.Intercept();
     }
 
-    // host: pick a level between 1 and the newest unlocked ON THIS OPERATION'S OWN LADDER. The
-    // level is per category (Missions.Level), so this never moves the other one.
+    // host: pick a level between 1 and Missions.SkipAhead past the newest unlocked ON THIS
+    // OPERATION'S OWN LADDER. The level is per category (Missions.Level), so this never moves the other one.
     public void SelectLevel(int level)
     {
         if (!Net.IsHost || Mission != MissionState.Idle) return;
-        Missions.Level = System.Math.Clamp(level, 1, Missions.Unlocked(Missions.Kind));
+        Missions.Level = System.Math.Clamp(level, 1, Missions.Top(Missions.Kind));
         BroadcastMission();
     }
 
@@ -1080,7 +1083,7 @@ public partial class Hub : Node2D
     {
         if (!Net.IsHost || Mission != MissionState.Idle) return;
         Missions.Kind = System.Math.Clamp(kind, 0, Missions.Kinds.Length - 1);
-        Missions.Level = System.Math.Clamp(Missions.Level, 1, Missions.Unlocked(Missions.Kind));
+        Missions.Level = System.Math.Clamp(Missions.Level, 1, Missions.Top(Missions.Kind));
         BroadcastMission();
     }
 
@@ -1149,7 +1152,7 @@ public partial class Hub : Node2D
     public const float RaidEdge = 4200f;
     private readonly Raids _raids;
     public Hub() { _raids = new Raids(this); }      // this world's director, built before _Ready
-    public int SpawnPatrol(Vector2 at, double scale = 1) => _raids.Patrol(at, scale);
+    public int SpawnPatrol(Vector2 at, double level = 1) => _raids.Patrol(at, level);
     public void HuntWave(Node2D quarry, int wave) => _raids.Hunt(quarry, wave);
     public void GarrisonWave(Vector2 at, int wave) => _raids.Garrison(Missions.Level, at, wave);
     public void CallOff(Node2D quarry) => _raids.CallOff(quarry);
@@ -1232,9 +1235,9 @@ public partial class Hub : Node2D
     // A raider is a row of Spawns.All too. `patrol` -- which squad it flew in with -- is the
     // host's own bookkeeping and is not on the wire, so it is set after the spawn, exactly as
     // Quarry and Agility are (Raids.Send).
-    public Raider SpawnRaider(Vector2 at, int kind = Enemies.Webifier, int patrol = 0, double scale = 1, double hullShare = 1)
+    public Raider SpawnRaider(Vector2 at, int kind = Enemies.Webifier, int patrol = 0, double level = 1, double hullShare = 1)
     {
-        if (Spawn(Spawns.Raider, at, kind, scale, hullShare) is not Raider r) return null;
+        if (Spawn(Spawns.Raider, at, kind, level, hullShare) is not Raider r) return null;
         r.Patrol = patrol;
         return r;
     }
@@ -1407,12 +1410,36 @@ public partial class Hub : Node2D
         AddChild(_creator);
     }
 
+    // A BOSS BIGGER THAN THE WHEEL'S WIDEST ZOOM CAN SHOW is framed by MOVING the centre toward it,
+    // not by raising the ceiling (the owner, 2026-09-25: the wheel never zooms out past what it
+    // already reaches). Generic for any boss row -- the far end of ITS hull, from ITS Length, never
+    // a Drake `if`. The centre slides toward whichever end (nose or stern) sits farther from the
+    // ship, only as far as that end needs and never past BossPilotMargin from the ship itself, so a
+    // boss too big even then (Length > 2 x reach, the two margins) stays a design question, not a
+    // camera bug -- and is gated to boss encounters (within 2 x reach) so a boss across the map
+    // never tugs the view.
+    private const float BossPilotMargin = 150f, BossEdgeMargin = 80f;
+    private Vector2 BossFramed(Vector2 anchor)
+    {
+        if (Boss is not { Alive: true } b) return anchor;
+        float reach = GetViewport().GetVisibleRect().Size.Y * 0.5f / ZoomLevel;
+        if (anchor.DistanceTo(b.Position) > reach * 2f) return anchor;
+        var half = Vector2.Up.Rotated(b.Rotation) * (b.Length * 0.5f);
+        var far = anchor.DistanceSquaredTo(b.Position + half) > anchor.DistanceSquaredTo(b.Position - half)
+                  ? b.Position + half : b.Position - half;
+        float need = anchor.DistanceTo(far) - (reach - BossEdgeMargin);
+        if (need <= 0f) return anchor;
+        float slide = Mathf.Min(need, reach - BossPilotMargin);
+        return slide <= 0f ? anchor : anchor + (far - anchor).Normalized() * slide;
+    }
+
     private void MoveCamera(PlayerShip me, float dt)
     {
         _cam.Zoom = _cam.Zoom.Lerp(new Vector2(ZoomLevel, ZoomLevel), Mathf.Clamp(10f * dt, 0f, 1f));
         var anchor = me.ViewPosition;                                  // the pod, while in stasis
         if (!FreeCamera)
         {
+            anchor = BossFramed(anchor);
             // follow smoothly -- but cut straight to the ship after a warp: panning 2000 u is disorienting
             if (_cam.Position.DistanceTo(anchor) > 1200f) _cam.Position = anchor;
             else _cam.Position = _cam.Position.Lerp(anchor, Mathf.Clamp(6f * dt, 0f, 1f));

@@ -46,8 +46,9 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
     public StatusSet Statuses => _status;
     public void ApplyStatus(Status st, double seconds, double share = double.NaN) { if (Net.Sim && StatusSet.Reaches(st, Tags)) _status.Apply(st, seconds, share); }
     public float Length => Def.Length;
-    // a raid's raiders are as strong as the boss that was failed: S(L) = 1.025^(L-1) (Missions.S)
-    public double Strength = 1;          // S(L) (was "Scale", which hid Node2D.Scale)
+    // A LEVEL, the boss's that was failed (fractional for an escort's threat): its hull x
+    // Par.CraftScale, its guns x Par.DamageScale -- the curve a boss is on (Par.cs)
+    public double Strength = 1;
     // The share of that hull it is built with: an escort's hunters come at half (Hub.HunterHull).
     // Not Strength, which scales its damage too. Set before it enters the tree (_Ready reads it).
     public double HullShare = 1;
@@ -55,7 +56,9 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
     // (Hub.ThreatAgility). The host flies every raider; guests follow where it says.
     public double Agility = 1;
     private HullWatch _hullWatch;
-    public double MaxHull => Def.Hull * Strength * HullShare;
+    public double MaxHull => Def.Hull * Par.CraftScale(Strength) * HullShare;
+    // ONE VOLLEY, every barrel at once (F20), on its level's damage scale: what each laser Strike carries
+    public double Volley => Def.Dps * Def.Barrels * Def.ShotEvery * Par.DamageScale(Strength);
     public float HitRadius => Length * Def.HitShare;
     public bool Selectable => true;
 
@@ -68,8 +71,8 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
     public static float HeavyReach => Enemies.Of(Enemies.Gunship).Reach;
     private const float HeavyBoostStop = 300f;          // boosting in, until this close, then at cruise
     // THE MISSILE IS THE ROW'S: EnemyDef.MissileRange / MissileEvery / MissileDamage / MissileFlight /
-    // BlastRadius, read through Def (F20: MissileFlight moved onto the row, from a shared const --
-    // the Lancerkin's own point is standing off further, so its flight need not match the gunship's).
+    // BlastRadius, read through Def (F20: each row its own flight -- the Lancerkin's own point is
+    // standing off further, so its flight need not match the gunship's).
     // HOW a predicted missile flies, telegraphs and lands is Missiles.cs, whosever it is: the
     // outposts throw the same one back (Lanes.cs), which is why none of it is in this file.
     public static float BlastRadius => Enemies.Of(Enemies.Gunship).BlastRadius;
@@ -142,8 +145,7 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
     public override void _Ready()
     {
         Hp = MaxHull;
-        _sprite = Sprites.Fit(Def.Texture, Length);
-        _sprite.Modulate = Def.Tint;
+        _sprite = Sprites.Fit(Def);
         AddChild(_sprite);
         if (Def.Turret)
         {   // the main turret on its spine behind the canopy, mounted where ITS OWN ROW says and
@@ -272,7 +274,7 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
             if (_shot <= 0)
             {
                 _shot = Def.ShotEvery;
-                Strike(Target, Def.Dps * Def.Barrels * Def.ShotEvery * Strength);
+                Strike(Target, Volley);
                 Combat.Flash(Position, Target.Position, Def.Beam);
             }
         }
@@ -333,7 +335,7 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
                 _shot = Def.ShotEvery;       // 1 s: slower than a target's 0.52 s invulnerability, so no shot is wasted
                 // ONE Strike per volley carries every barrel's damage (F20): two separate Strikes,
                 // 0.52 s apart or not, would be eaten by the target's own hit gap and undercount.
-                Strike(Target, Def.Dps * Def.Barrels * Def.ShotEvery * Strength);
+                Strike(Target, Volley);
                 if (Def.Barrels > 1 && _turret != null)
                 {   // drawn as that many flashes, from barrel offsets either side of the turret's centre
                     var side = Vector2.Right.Rotated(face) * (Length * Def.TurretWidth * 0.5f);
@@ -346,9 +348,8 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
         }
         _missileCd -= delta;
         // HELD while a status holds its throw (StatusSet.HoldsThrow): the clock keeps its zero, and
-        // it throws the frame the status lapses. ONLY AT A PINNED TARGET (F20): before, a heavy
-        // waiting at the map's edge could already be lobbing missiles at a target that had never
-        // been pinned at all.
+        // it throws the frame the status lapses. ONLY AT A PINNED TARGET (F20): a heavy waiting at
+        // the map's edge throws nothing at a target that is not pinned.
         if (Def.Missiles && pinned && _missileCd <= 0 && !_status.HoldsThrow && Position.DistanceTo(Target.Position) <= Def.MissileRange)
         {   // at where it WILL be: its velocity carried the whole flight forward -- from ITS row's
             // reach, on its row's cadence, for its row's damage
@@ -385,10 +386,11 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
             var inv = GlobalTransform.AffineInverse();
             DrawLine(Vector2.Zero, inv * to, new Color(1f, 0.3f, 0.25f, 0.35f), 1.5f);
         }
-        float plume = Heavy ? Length * 0.5f : Length;
+        // a flame out of every bell its art has (its row's Nozzles)
+        var flame = new Color(1f, 0.35f, 0.25f);
         // an escort's run-in is unmistakable: it goes on the boost with a plume three times over
-        if (Boosting && IsEscort && !Shivering) Plume.Draw(this, new Vector2(0, Length * 0.5f), Vector2.Down, plume * EscortPlume, new Color(1f, 0.35f, 0.25f), 1f, true);
-        else if (Boosting || (Heavy && Speed > Def.Cruise + 1f)) Plume.Draw(this, new Vector2(0, Length * 0.5f), Vector2.Down, plume * 1.6f, new Color(1f, 0.35f, 0.25f), 1f, true);
-        else Plume.Draw(this, new Vector2(0, Length * 0.5f), Vector2.Down, plume, new Color(1f, 0.35f, 0.25f), 0.5f, Speed > 1f);
+        if (Boosting && IsEscort && !Shivering) Def.DrawPlumes(this, Vector2.Zero, 1f, flame, 1f, true, EscortPlume);
+        else if (Boosting || (Heavy && Speed > Def.Cruise + 1f)) Def.DrawPlumes(this, Vector2.Zero, 1f, flame, 1f, true, 1.6f);
+        else Def.DrawPlumes(this, Vector2.Zero, 1f, flame, 0.5f, Speed > 1f);
     }
 }

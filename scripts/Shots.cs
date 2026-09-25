@@ -223,8 +223,7 @@ public partial class Shot : Node2D, IHittable, ITagged
                 // a ship is told where the blow came from, for its shield; a hostile is dealt with
                 // through the door (Dealt.Deal), the shot's own row naming the weapon
                 if (h is PlayerShip ps) ps.Hit(Damage, p - Dir * 10f, HitSource);
-                else if (IsInstanceValid(Source)) Dealt.Deal(h, Damage, Source, d.Id);
-                else h.TakeDamage(Damage);
+                else Dealt.Deal(h, Damage, IsInstanceValid(Source) ? Source : null, d.Id);
             }
             GlobalPosition = p;
             End();
@@ -241,7 +240,7 @@ public partial class Shot : Node2D, IHittable, ITagged
     }
 
     // a scrap piece's jagged outline, one of three, in its own frame (nose up)
-    private static readonly Vector2[][] Shards =
+    internal static readonly Vector2[][] Shards =
     {
         new Vector2[] { new(-7, -6), new(2, -9), new(8, -2), new(5, 7), new(-4, 8), new(-9, 1) },
         new Vector2[] { new(-5, -9), new(6, -7), new(9, 3), new(1, 9), new(-8, 5) },

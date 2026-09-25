@@ -130,11 +130,19 @@ Sprites
 Agents (owner, 2026-09-25)
 - BUILD EVERYTHING, THEN TEST (2026-09-25): no engine run until every planned lane is built and merged; per job the compiler
   (typecheck, verify -Quick) and a read of the code; per lane an opus code gate. Then all the testing at once. (CLAUDE.md top.)
+- (2026-09-25) Proceed and push when due (a green bar, both branches) without asking; the coordinator's recommendations are
+  approved. Save tokens: each agent gets a task no other agent has; no duplicate agents on one objective unless truly needed.
 - Every agent runs Opus 5.5, "just to be safe" (replaces the earlier "lowest tier you can trust"); effort still set per call.
 - Run several engine and game instances at once: "my PC can handle it no prob" (Ryzen 7 7700, 16 threads, 47 GB). Engine slots
   (tools/rungs.ps1 -Slots) make it safe; the limit was shared folders and ports, never the PC.
 
+- (2026-09-25) Kits slices build SIDE BY SIDE in their own worktrees; ITEMS build alongside slice 6, then a reconcile pass checks and
+  corrects every item against the built kits. Never skip a review; be efficient wherever the outcome does not suffer.
+
 Testing (owner, standing)
+- (2026-09-25) Once everything requested is built: 3+ tests IN THE ENGINE for every ability added through the class system (and
+  every drive row), on top of typecheck, verify, the smoke and screens runs and the bar; an audit maps each ability to its checks.
+  Everything clean in the engine and the cross-checks = push version-l AND main (permission given again) and release.
 - Every change carries its check (CLAUDE.md §6). After the features: new Python scenario tools and
   smoke tests covering every mechanic for every class, every ability, and interactions between
   heavies, bosses and lights for every weapon and platform.

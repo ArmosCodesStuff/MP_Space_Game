@@ -1036,14 +1036,9 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // EVERY ABILITY THIS CLASS CARRIES, BY ITS OWN ROW. The cooldown runs down, a timer that is
     // up runs down, and on the frame it reaches zero the ROW says what happens: Elapsed on every
     // peer (the phase the bar must show at once), Expire on the host alone (what it resolves --
-    // the railgun's shot, the rush's EMP, the echo's blast, the recharge after a point-defence
-    // window, the magazine a reload refills). Every peer counts down so a guest's bars move
-    // smoothly between host packets, and the next packet corrects any drift.
-    //   This replaced a string[] naming the nine ids that had timers and a switch on the id
-    // beside it: a tenth timed ability added as a row compiled, bound, drew on the bar and its
-    // Left never moved, with nothing to say so. It replaced the point-defence window's own block
-    // and the missile reload's too -- both were an expiry written out by hand -- and a second
-    // tick of the freighter's deploy cooldown that this loop's first line already does.
+    // the railgun's shot, the rush's EMP, the echo's blast, the magazine a reload refills). Every
+    // peer counts down so a guest's bars move smoothly between host packets, and the next packet
+    // corrects any drift. A timed ability is a row and nothing else: this loop is the only expiry.
     private void TickAbilities(double delta)
     {
         foreach (var def in Abilities.For(Class))
@@ -1052,8 +1047,11 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             if (sl.Cool > 0) sl.Cool = Math.Max(0, sl.Cool - delta);
             // A RAMP's running total (F1, D18) steps every frame regardless of Left, so it keeps
             // draining after the row stops -- Steer already ran this frame (LocalFlight, above),
-            // so _yawRate is this frame's, not last frame's.
-            if (def.Ramp is { } ramp)
+            // so _yawRate is this frame's, not last frame's. OWNER-STEPPED: only the peer that
+            // holds the helm (Mine) has a throttle and a yaw to read; every other copy of the
+            // ship (the host's of a guest's included) never steps it, and ApplyHostState leaves
+            // the owner's own value alone (DESIGN.md, the authority model).
+            if (def.Ramp is { } ramp && Mine)
             {
                 bool holding = sl.Left > 0;
                 bool cond = holding && (ramp.Condition == null || ramp.Condition(this));
@@ -1347,8 +1345,14 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         Hp = hp; MaxHp = maxHp; Alive = alive; _stasis = stasis; _status.FromBits(statusBits); _combatT = combat;
         // The slots, by the class's own order. Shortest array wins: a refit mid-packet can leave
         // the two sides a slot apart for one report.
+        // A RAMP row's Own is the one field the host does not speak for on the owner's own ship:
+        // the owner steps it from its own helm (TickAbilities), which the host never sees.
+        var rows = Abilities.For(Class);
         for (int i = 0; i < Math.Min(_slots.Length, slotLeft.Length); i++)
-            _slots[i] = new Slot { Left = slotLeft[i], Cool = slotCool[i], Own = slotOwn[i], N = slotN[i] };
+        {
+            bool ownerStepped = Mine && i > 0 && i - 1 < rows.Length && rows[i - 1].Ramp != null;
+            _slots[i] = new Slot { Left = slotLeft[i], Cool = slotCool[i], Own = ownerStepped ? _slots[i].Own : slotOwn[i], N = slotN[i] };
+        }
         WingTarget = wingTarget != 0 ? Combat.ById(wingTarget) : null;
         // What the bombers were sent at. It was host-only, so a guest's own BOMB slot read
         // "RETURNING" for the whole of every strike it ordered -- the one word its bar had for it.
@@ -1380,15 +1384,8 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
 
     public override void _Draw()
     {
-        // THE BUBBLE (a freighter's): a ring the size of what it covers, fading as its pool is
-        // spent, so everyone can see how much of it is left and who is inside it.
-        if (BubbleUp)
-        {
-            float left = (float)Mathf.Clamp(BubbleLeft / Math.Max(1, Stats["bubble_pool"]), 0, 1);
-            var c = new Color(0.55f, 0.85f, 1f, 0.15f + 0.35f * left);
-            DrawCircle(Vector2.Zero, BubbleRadius, c with { A = c.A * 0.25f });
-            DrawArc(Vector2.Zero, BubbleRadius, 0, Mathf.Tau, 64, c, 2.5f);
-        }
+        // EVERY FIELD ITS SLOTS HAVE UP (the bubble, ...): one row each in Fields.All (Fx.cs)
+        Fields.Draw(this);
         // the drive: a warp's charge glow and landing flash on every peer, and the pilot's range (Drives.Draw)
         Drives.Draw(this, _drive);
         // engine plumes at the stern, in the accent colour
