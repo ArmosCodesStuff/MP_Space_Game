@@ -8,10 +8,10 @@ Engine outputs for the old-way batches: S = C:\Users\logan\AppData\Local\Temp\cl
   7: knife-edge DPS windows; screens frame 49 + a twin-barrel frame; outpost GunDamage 42 -> derive from the gunship row = 35 (COORDINATOR
   DECISION); Ramp stepped on every peer (guest-flown Ramjet broken) -> owner-stepped; BaseDefense/Shots bypass Dealt.Deal; D17's echo check
   unwritten; stale comments. Fix, gate 2, then merge (it merges version-l into the lane first if art got there first). merge=false: by hand.
-- wf_cd730b78-323 / task wzrk1yb4f, "lane-art-fix" (no engine). Art gate 1 (w3j9do0p7) failed e72fe19 on 6: the 2x Rusty rams twice (80 not
-  40; check hid it) -> once per dash; ring-hit reach and approach/spawn had no failing check; boss Find measured from the centre (COORDINATOR
-  DECISION: from the hull, m.Find + L/2, per the owner's "what is placed around a boss scales with it"); stale comments; a false Known broken.
-  Camera ruling PASSED (Hub.BossFramed slides, ZoomOutMax 1.53 asserted). Fix A4, quick, gate 2, merge. Frames are read in the test phase.
+- wf_b2cacf8b-53f / task w3yjvxmzy, "lane-art-fix2" (no engine). Art A4 (1f3a6ae) fixed gate 1's six (ram once per dash via Slot.Struck; Find
+  from the hull; ring/approach/spawn checks); gate 2 failed on 3 false comments only. COORDINATOR DECISION: the Drake's throw standoff also
+  measured from the hull (nose 1300 u off) so the target is 200 u outside gun reach again (it was 10 u inside after Find moved). Fix A5,
+  gate 3, merge (syncs version-l first). Tell the owner the throw decision.
 - wf_b63808ec-4ad / task wojzfsouf, "wave-1-build": six lanes in parallel, build only, each from base f168508 (= kits 809313c + version-l;
   branch wt/wave): drives (B: F21/F22/F24), fields (D: F9), wings (E: F13), curve (F: Par, boss rows, ladder), raids (G: Squads), net2
   (R2-R5 code; S2 first if missing). Worktrees WarShips_wt_<key>, ledgers ledger_<key>.md (net2: ledger_webrtc.md). Each: build, opus gate,
