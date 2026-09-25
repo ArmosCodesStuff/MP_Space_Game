@@ -76,3 +76,11 @@ RaiderDown; Hub: PayKill + reliable NetKillExp (new RPC: Net.Protocol changes); 
 PilotWindow's EXP note names the adds. Checks new: N15 by literal inside RaidsArenaAddsChecks (L6 light 6,
 heavy 18 / 9 / 0 at PL 6 / 12 / 13, L39 light 3 at PL 78, refill 0, the sweep and a quiet withdrawal 0).
 engine-unproven: rungs owed in the final test phase (solo x2).
+## J5 PRE -- tier opus -- N18 guest-role checks (squad id bits + one lead on the guest, an add's web on the guest starts the beam, NetKillExp pays the guest). HEAD 265361b. Files: SmokeTest 7cf3400c.
+## J5 POST -- done. typecheck 0 errors; quick ALL PASSED. Checks new (rung 5, ahost/aguest mission 1):
+RaidsHostAddsWire (an add's web on the GUEST starts the beam, aimed at the guest; squad wave 1 = 2 paying
+webifiers under one squad id) and RaidsGuestAddsWire (squad id bits + exactly one lead seen on the guest;
+webbed by an add while the beam's lane is up; NetKillExp pays this pilot ExpFor(6, 1, its level)).
+Not covered on the wire (open): a guest above 2L paid 0 (the guest's level is not varied in the MP run),
+L18 P2 add hull/shot on a guest (proved by table in RaidsAddsTableChecks instead).
+engine-unproven: rungs owed in the final test phase (six x2).

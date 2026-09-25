@@ -10683,6 +10683,7 @@ public partial class _Test : Node
                 Check(cruiseStood && !hostCruise.Alive && Shot.Intercepted == cruiseDown0 + 1,
                       $"arena host: a cruise missile at the guest stands half its {hostRound.Hull:0} hull and falls to the other half ({Shot.Intercepted - cruiseDown0} down)");
             }
+            await RaidsHostAddsWire(gship);
             // Long enough for the guest to watch the super-move bar move, and no longer: this
             // scenario has a second arena visit after it, and a stay stretched to fit a whole beam
             // cycle pushed that off the end of every wait that follows. (Two of its four seconds are
@@ -10936,6 +10937,7 @@ public partial class _Test : Node
                   $"arena guest: a railgun the host fired near this ship is heard here ({Sfx.Played.GetValueOrDefault("rail") - railHeard0} reports since joining)");
             await ToArena("arena guest", "mission 1");
             await GuestSeesTheFight();
+            await RaidsGuestAddsWire();
             if (Wan) Check(Net.Arriving(1.5) < 1.45 && Net.Arriving(1.5) >= 0.6,
                            $"over the internet, a 1.5 s warning is shown a round trip short, so it ends when this pilot is judged ({Net.Arriving(1.5):0.00} s)");
             int agHold0 = Character.GearHold.Values.Sum();
@@ -11154,6 +11156,54 @@ public partial class _Test : Node
 
     // WHAT A GUEST IS SHOWN. Both of these were host-only state read by drawing code, so on a
     // guest they were simply wrong -- and nothing said so, because the solo run is the host.
+    // ── LANE G (raids v2) ON THE WIRE (N18), the host's half: the level-1 arena's squad wave 1 is up
+    // (two webifiers, paying 6 each); once the guest has watched the super bar, a lone webifier webs
+    // the GUEST, the beam is made due and must charge on that web (the guest is its nearest pilot:
+    // this host stands off), and one of the paying adds is shot down -- the guest is paid by
+    // NetKillExp at its own level. The guest's half (RaidsGuestAddsWire) reads all of it off the wire.
+    async Task RaidsHostAddsWire(PlayerShip guest)
+    {
+        var boss = H.Boss;
+        if (guest == null || boss == null) { Check(false, "arena host: no guest or no boss for the adds on the wire"); return; }
+        await Wait(3.0);                                           // the guest's super-bar watch is over first
+        var paying = H.Raiders.Where(r => r.Worth > 0).ToList();
+        boss.S("beam").At = Boss.Phase.Idle; boss.S("beam").Due = 999;   // a beam of its own clock's, stood down
+        Me.Position = boss.Position + (Me.Position - boss.Position).Normalized() * 3600f; Me.Velocity = Vector2.Zero;
+        var web = H.SpawnRaider(guest.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(220f, 360f));
+        await RealTime(() => guest.Pinned, 6);
+        bool pinned = guest.Pinned;
+        boss.S("beam").Due = 0.01;
+        await RealTime(() => boss.S("beam").At == Boss.Phase.Winding, 3);
+        Check(pinned && boss.S("beam").At == Boss.Phase.Winding && boss.S("beam").Cause == "pinned" && ReferenceEquals(boss.S("beam").Target, guest)
+              && paying.Count == 2 && paying.All(r => r.Worth == 6 && ((r.NetFlags >> 8) & 0xFFFF) == paying[0].Squad.Id),
+              $"arena host: an add's web on the GUEST starts the beam ({boss.S("beam").Cause}, aimed at the guest {ReferenceEquals(boss.S("beam").Target, guest)}); squad wave 1 is two paying webifiers ({paying.Count})");
+        await Wait(1.0);                                           // the guest sees the lane while it is webbed
+        if (GodotObject.IsInstanceValid(web)) web.TakeDamage(9999);
+        var one = paying.FirstOrDefault(r => GodotObject.IsInstanceValid(r) && r.Alive);
+        one?.TakeDamage(1e9);
+        await Wait(1.0);
+    }
+
+    // ...and the guest's half: the squad's id bits and its one lead, this ship webbed by an add while
+    // the beam's lane is up at it, and the add's kill paid here at this pilot's own level
+    async Task RaidsGuestAddsWire()
+    {
+        int lv0 = Character.Level, exp0 = Character.Exp;
+        bool squadSeen = false, beamOnWeb = false; int gained = 0;
+        for (int i = 0; i < 60 * 14 && !H.MissionWon && gained == 0; i++)
+        {
+            var two = H.Raiders.Where(r => r.SquadId != 0).GroupBy(r => r.SquadId).FirstOrDefault(g => g.Count() == 2);
+            squadSeen |= two != null && two.Count(r => r.Leads) == 1;
+            beamOnWeb |= Me != null && Me.Pinned && Nodes<FxNode>().Any(t => t.Id == Fx.WarnLane && Math.Abs(t.Radius - 70f) < 0.1f);
+            if (!H.MissionWon && (Character.Level != lv0 || Character.Exp != exp0)) gained = Character.Exp - exp0 + 1000 * (Character.Level - lv0);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        }
+        Check(squadSeen, "arena guest: the adds' squad arrives on the wire as one -- both members under one squad id, exactly one of them its lead");
+        Check(beamOnWeb, "arena guest: webbed by an add, this ship sees the beam's lane go up at it (the host charged on an add's web)");
+        Check(gained == Missions.ExpFor(6, 1, lv0),
+              $"arena guest: an add shot down on the host pays this pilot at its own level, by NetKillExp ({gained} EXP; {Missions.ExpFor(6, 1, lv0)} due at level {lv0})");
+    }
+
     async Task GuestSeesTheFight()
     {
         Boss boss = null;
