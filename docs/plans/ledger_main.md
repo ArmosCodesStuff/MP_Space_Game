@@ -7,16 +7,10 @@ Engine outputs for the old-way batches: S = C:\Users\logan\AppData\Local\Temp\cl
 - wf_e2b4eda1-d12 / task wq9tnfn98, "lanes-walls-art" (old way). Returns {walls, gate, merge, art}; walls already merged (29b154e).
   art: J4 siege, J5 player ships. On return: check the camera never zooms past the player's max (moved only), send the owner the frames.
   COORDINATOR NOTE 2 (UTF-16 summaries) appended to wt_art's ledger_sprites.md.
-- kits: w79l6jmmg STOPPED by the owner at ~2 h (one sonnet agent, 689k tokens, 3rd try at the J7 red; chain kits_j67c killed
-  mid-solo). wt_kits = 6aeb9e9 + 8 uncommitted files (J6+J7, red: "...and it lands 35 (0)"); its ledger's J6/J7 POST claims green, FALSE
-  (kits_j67a/b solo FAILED). When wx9xf98c3 lands: launch a NEW-WAY kits batch (fresh sonnet agent from the ledger + NOTE 2; fix the red, J6+J7
-  commit, then the slice chain quick,solo,solo,six, opus gate, merge batch).
-- wf_2b58e76d-117 / task wx9xf98c3, "kits-heavy-missile-diagnose" (owner asked for 5 agents): 5 opus read-only angles (check, missile, door,
-  launcher, logs) on "lands 35 (0)", then a synthesis appends COORDINATOR NOTE 2 (cause + exact fix) to wt_kits' ledger, or reports already_fixed.
-  On return: tell the owner the cause in one line, then launch the kits batch above.
-- wf_d333d7cd-747 / task w7j1zzr40, "lane-slots" (relaunch; worktree WarShips_wt_slots). S1 done at 985d4d8 (rungs.ps1 -Slot/-Slots,
-  per-tree lock, UTF-8 summary). First run: agent 1 stopped_context, agent 2 took the owner's "2 hours?" as its instruction and stopped;
-  the prompt now says owner messages are for the coordinator. Now: S2 harness --port-shift / P(), S3 docs, 3-chain proof, opus gate, haiku merge. Returns {slots{slots=proven default}, gate, merge}. merge=false: merge by hand.
+- wf_1bf3d281-818 / task wp5moexdp, "lane-kits-k" (new way). K1: NOTE 2's check fix (diagnosis wx9xf98c3, 5/5: the J7 CHECK was wrong --
+  first-tick zero lead + pinned pilot under forced thrust drifting off the blast; hvL's stray blast passed "flight 10 s"), commit J6+J7, J7 POST
+  corrected; K2: merge version-l (net R1); chain quick,solo,solo,six,screens; opus gate; haiku merge. Returns {kits, gate, merge}.
+  merge=false: merge by hand. gate fail or red: one fix batch from its problems. (w79l6jmmg was stopped by the owner at ~2 h.)
 
 ## Next
 1. Merge slots, kits, art into version-l (net merged: eb5b2cb, after the coordinator fixed gate 3's two comment defects in fa20b7f).
@@ -32,4 +26,5 @@ Engine outputs for the old-way batches: S = C:\Users\logan\AppData\Local\Temp\cl
 - Merge risks: ClassArt.PdRing removed (kits) vs art rows; Ships.cs art rows vs kits rows; kits/art vs net's SmokeTest.cs.txt and Net.cs.
 - Follow-up from net gate 2 (not blocking): these constant tables are Lists or Dictionaries, so the fingerprint never hashes them:
   NetIds.Widths, Spawns.All (the wire kind index), Hints.All, Sfx._gap and Abilities.Reserved. The fix is to make them arrays or row tables.
+- Follow-up (kits NOTE 2): a heavy throws with zero lead right after a retarget (game side, latent); not fixed.
 - Net fingerprint: a delegate field is hashed only as its type name, so a changed WaveCrew.Count rule is not compared (accepted, documented).
