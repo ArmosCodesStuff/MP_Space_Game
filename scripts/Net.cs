@@ -195,8 +195,9 @@ public partial class Net : Node, Rendezvous.IHostDesk, Rendezvous.IGuestDesk
     // THE SMOKE TEST'S WAY TO BE A DIFFERENT BUILD, to prove each refusal on a real connection: where the
     // pretended build shows (§3.8). Code: this player's knock, and its own check of a pasted invite (the
     // listener refuses the one, the other is refused before any network step). Auth: the in-band handshake
-    // (OnAuth), the last guard.
-    [Flags] public enum Pretend { None = 0, Code = 1, Auth = 2 }
+    // (OnAuth), the last guard. Mute: a player that finishes the handshake and never answers the welcome
+    // (NetWelcome), which the host's watchdog must let go.
+    [Flags] public enum Pretend { None = 0, Code = 1, Auth = 2, Mute = 4 }
     public static Pretend PretendAt;
     // The build this player claims at `where`: its own, or the one next to it.
     public static int Claimed(Pretend where) => PretendAt.HasFlag(where) ? Protocol ^ 1 : Protocol;
@@ -349,7 +350,7 @@ public partial class Net : Node, Rendezvous.IHostDesk, Rendezvous.IGuestDesk
         if (_isHost || !_inSession || !Connecting) return;
         Connecting = false;
         if (_times.TryGetValue(_joinId, out var t)) t.Admitted = Time.GetTicksMsec();
-        RpcId(1, nameof(NetWelcomed));
+        if (!PretendAt.HasFlag(Pretend.Mute)) RpcId(1, nameof(NetWelcomed));
         Say($"Connected as player {_localId}.");
         Admitted?.Invoke();
     }
@@ -368,6 +369,7 @@ public partial class Net : Node, Rendezvous.IHostDesk, Rendezvous.IGuestDesk
         int from = Multiplayer.GetRemoteSenderId();
         if (!_isHost || !Players.ContainsKey(from)) return;
         _heard.Add(from);
+        _silence[from] = 0;                                // its silence so far was the wait for this answer
         if (_times.TryGetValue(from, out var t)) t.Admitted = Time.GetTicksMsec();
     }
     public static bool Hears(int peer) => I != null && I._heard.Contains(peer);
@@ -386,6 +388,8 @@ public partial class Net : Node, Rendezvous.IHostDesk, Rendezvous.IGuestDesk
     // welcome, a guest to its host), and the other end echoes it. Anything heard from a peer -- a beat or
     // an echo -- ends its silence; a silence over Link.QuietMs, counted in capped frames (Link.Quiet),
     // drops it: the host hangs the guest up, a guest takes its host as gone (OnHostGone: the retries).
+    // The host watches EVERY guest it has let in, not only those that answered the welcome: one that
+    // never answers is silent from its join, and is let go like any other (it held a place, and Full).
     // Its own row, NetChannels.Beat, so a beat never waits behind the game's reliable words.
     private readonly Dictionary<int, double> _silence = new();
     private Link.Trip _trip = new();
@@ -393,13 +397,13 @@ public partial class Net : Node, Rendezvous.IHostDesk, Rendezvous.IGuestDesk
     private void Beat(double delta)
     {
         if (!IsOnline || _peerGone) return;
-        var peers = _isHost ? _heard.ToList() : new List<int> { 1 };
+        var peers = _isHost ? Players.Keys.Where(p => p != 1).ToList() : new List<int> { 1 };
         foreach (int p in peers) _longestQuiet = System.Math.Max(_longestQuiet, _silence[p] = Link.Quiet(_silence.GetValueOrDefault(p), delta));
         _beatClock += delta;
         if (_beatClock * 1000 >= Link.BeatMs)
         {
             _beatClock = 0;
-            foreach (int p in peers) RpcId(p, nameof(NetBeat), (long)Time.GetTicksMsec());
+            foreach (int p in peers.Where(p => !_isHost || _heard.Contains(p))) RpcId(p, nameof(NetBeat), (long)Time.GetTicksMsec());
         }
         foreach (int p in peers)
         {
