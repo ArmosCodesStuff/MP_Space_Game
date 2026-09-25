@@ -731,3 +731,10 @@ Other defects worth fixing now:
    lead (the jump filter), which is a sure miss on a pinned, forced-thrust target. Add a `Ready` flag to Lead and `&& _lead.Ready`
    at Raider.cs:352 only if the owner wants it, and give it its own check.
 Apply this before re-running the chain; the PRE that applies it says 'applies NOTE 2'.
+
+## K4 PRE -- tier opus, applies gate 2
+Intent: replace the outpost-guns comment in the freighter check (comment only). Files: tools/smoketest/SmokeTest.cs.txt
+HEAD 97f767ed4b85b4be33e61fbfb01768a5f85391a0; hash SmokeTest.cs.txt c4c55a50d63644cedaa02eec10c532fc4db3a322
+## K4 POST -- done. Comment replaced as gate 2 asked; typecheck 0 errors, quick ALL CHECKS PASSED. Checks: none (comment only).
+COORDINATOR DECISION -- Dealt.Landed (a static event on the damage door for blows with no ship behind them) is accepted.
+engine-unproven: rungs owed in the final test phase. Next: none (lane ready for merge).

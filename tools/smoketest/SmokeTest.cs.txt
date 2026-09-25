@@ -7265,10 +7265,9 @@ public partial class _Test : Node
             // EMPTY SPACE to work in: the practice fighters south of the base are small craft, so a
             // deployed turret would lock onto one and never kill it, and the belt, the wreck and the
             // portal all have traffic. South-east and far out is clear of every one of them.
-            // CLEAR OF THE OUTPOST GUNS. Every outpost stands 3000 u out on a diagonal and
-            // answers out to Lanes.Range, so a mark placed where this arena used to sit took an
-            // outpost's 42 before the ability under test ever reached it. Out here nothing but the
-            // check is shooting.
+            // CLEAR OF THE OUTPOST GUNS. Every outpost stands 3000 u out on a diagonal and answers out to
+            // Lanes.Range; a mark inside that reach takes an outpost's missile (Lanes.GunDamage) before the
+            // ability under test reaches it. Out here nothing but the check is shooting.
             var fr = Me; var yonder = VaryNear(Hub.BasePos + new Vector2(4200, 3900), 500f);
             fr.Position = yonder; fr.Velocity = Vector2.Zero; await Wait(0.2);
             for (int i = 0; i < 4; i++)
