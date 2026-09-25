@@ -60,6 +60,10 @@ public class AbilityDef
     public bool TakesTargets;
 
     public Action<PlayerShip, IHittable> Press;
+    // WHAT THE OWNER DOES AT ONCE, on its own machine, when its press passes the courtesy checks (PlayerShip.UseAbility),
+    // handed the point it pressed at: flight is the owner's, so a snap of the heading or the hull cannot wait a round
+    // trip for the host. The host's Press still resolves the rest (the cooldown). The Slingshot.
+    public Action<PlayerShip, Vector2> AtOnce;
     public Func<PlayerShip, IHittable, string> Refuse;
     public Func<PlayerShip, IHittable, SlotState> Show;
 
@@ -71,37 +75,46 @@ public class AbilityDef
     //              must show at once, before the host's next report (the broadside leaving its
     //              wind-up for its volleys). Nothing that damages or spends belongs here.
     //   Expire  -- on the HOST alone: what it resolves (the railgun's shot, the lunge's end, the
-    //              echo's blast, the magazine a reload refills). The host gate is the LOOP's, so a new row is safe by default.
+    //              reverb's blast, the magazine a reload refills). The host gate is the LOOP's, so a new row is safe by default.
     // Each is handed the ship, and a row that stored a number reads it back from its own slot
-    // (PlayerShip.Sl): the echo detonates Sl("echo").Own, so no number has to be carried here.
+    // (PlayerShip.Sl): the reverb detonates Sl("reverb").Own, so no number has to be carried here.
     public Action<PlayerShip> Elapsed, Expire;
 
     // WHAT THIS ROW HEARS OF ITS OWN SHIP'S BLOWS, WHILE IT RUNS (F18): every weapon's hit comes
     // through PlayerShip.NoteDealt (the hostile damage door, Dealt.Deal), which calls this on every
     // row whose Left > 0 (and While, if it narrows the run) -- the target, how much, and the
-    // weapon's id (Dealt.*, or a shot row's own). The echo is the one row that uses it today: it
-    // stores the damage and where it landed in its own slot (PlayerShip.Sl("echo").Own / .At)
-    // rather than NoteDealt knowing the echo by name.
+    // weapon's id (Dealt.*, or a shot row's own). The reverb is the one row that uses it today: it
+    // stores the damage and where it landed in its own slot (PlayerShip.Sl("reverb").Own / .At)
+    // rather than NoteDealt knowing the reverb by name.
     public Action<PlayerShip, IHittable, double, string> OnDealt;
+    // WHAT THIS ROW DOES WHEN ITS SHIP FIRES ITS MAIN GUNS, WHILE IT RUNS (host, PlayerShip.FireControl, before the volley
+    // leaves): the Veil ends. Null: every other row.
+    public Action<PlayerShip> OnFire;
 
     // WHILE IT RUNS, what it lifts. A row that speeds a ship's guns or its hull up names the stat
     // id that says by how much (x2: twice as fast); PlayerShip.FireRate and PlayerShip.SpeedMult
     // ADD every running row that names one (PlayerShip.LiftShares, the sheet's own rule), which
     // replaced two hardcoded `if`s naming slot ids and stat ids by string. The rate reaches every
     // gun's reload -- main guns, point defence, dropped turrets, the wing's shots -- through
-    // PlayerShip.Cadence; the speed lifts its top speed and its thrust. `While` narrows it to part of a run: the dart's roll buffs nothing until the
-    // untouchable part of it is over.
+    // PlayerShip.Cadence; the speed lifts its top speed and its thrust. `While` narrows it to part of a run (a
+    // row whose lift waits on a status or a phase of its own run).
     //   The SLIDE (strafe speed and strafe thrust, PlayerShip.StrafeMult) takes StrafeStat when a row
     // names one, and its SpeedStat otherwise: the boost's slide is a row of its own (surge_strafe), so
     // gear can lift the slide without the top speed (Convoy Rig) or the top speed without the slide.
     public string RateStat, SpeedStat, StrafeStat;
+    // WHILE IT RUNS, what it lifts the PUSH AHEAD by and nothing else (the Dart's sprint, x3): a thrust-only lift,
+    // added to SpeedStat's shares (PlayerShip.ThrustMult), so the boost's +50% on a sprint is x3.5. The top speed is
+    // SpeedStat's and SpeedAdd's, never this.
+    public string ThrustStat;
+    // WHILE IT RUNS, THE THROTTLE IS FORCED OPEN (PlayerShip.Forced, read by LocalFlight as a web's pin is): S does
+    // nothing, the rudder and the slide stay the pilot's. The Dart's sprint.
+    public bool Forces;
     // WHILE IT RUNS, what it lifts the REACH of the ship's weapons by (the anchor's x1.4), added like every
     // other lift (PlayerShip.ReachMult). A gun that reads it multiplies its own range row: the railgun.
     public string ReachStat;
-    public Func<PlayerShip, bool> While;
     // WHILE IT RUNS, what it HOLDS the helm to: a share taken after the lifts are summed
     // (PlayerShip.Held), so no speed lift moves a held hull. 0 roots it, heading included; 0.5
-    // halves it; 1, the default, holds nothing. `While` narrows it the same way.
+    // halves it; 1, the default, holds nothing.
     public double Hold = 1;
 
     // A MELEE ROW IT SWINGS (Melee.cs): a Hold row swings it while the trigger holds, a Press row while
@@ -116,12 +129,12 @@ public class AbilityDef
 
     // A FLAT TOP SPEED (F1's Add), on top of SpeedStat's multiplier, before the hold: the stat id
     // this row's ship sheet names for it (PlayerShip.SpeedAdds sums every running row's, added in
-    // PlayerShip.TopSpeed -- see D18). No row uses it yet.
+    // PlayerShip.TopSpeed -- see D18). The Dart's sprint (Ab.Rod) is the first row.
     public string SpeedAdd;
     // A LIFT WHOSE SIZE IS A RUNNING TOTAL (F1's Ramp, D18): builds while it runs and Condition
     // holds, bleeds with the turn (whether or not Condition holds), caps, and drains once the row
     // stops. See RampSpec below -- the row names three stat ids and a condition; the math is not
-    // its own. No row uses it yet (6d, the Dart's Ramjet).
+    // its own. The Dart's Ramjet (Ab.Ramjet).
     public RampSpec Ramp;
     // A DASH (DashSpec below): pressed, it carries the hull a fixed distance along its nose, and the
     // host strikes what lies on that line. The Warrior's lunge is the first row.
@@ -135,6 +148,14 @@ public class AbilityDef
     // charge latch, on the host).
     public ReloadSpec Reload;
     public Action<PlayerShip, double> Loose;
+    // A GUN DOWN THE NOSE (Bores.cs): set on a Hold weapon row, whose trigger fires the spec's rounds off its
+    // rails at the ship's Cadence of the row's Every (Bores.Tick, host). The Dart's Pepperbox.
+    public BoreSpec Bore;
+    // A ROUND OF ITS OWN FIRED DOWN THE NOSE AS ITS RUN ENDS (Bores.cs; PlayerShip.Part from the row's Expire, host),
+    // priced at the top speed the run gave (the row's own SpeedAdd still counted); its Recoil, if it names one, is
+    // the share of the hull's speed kept after (the owner, on its own falling edge of a Forces row: PlayerShip._forcedBy).
+    // The Rod from God.
+    public BoreSpec Parting;
     // A CHARGED ROW: it holds Charges (a stat id) presses; its slot's N counts those spent, and one comes back
     // every Recharge seconds (a stat id), one at a time (PlayerShip.Spend, and TickAbilities' Cool). The tether.
     public string Charges, Recharge;
@@ -165,7 +186,7 @@ public class AbilityDef
 // rewards flying straight and bleeds it into a turn. A row is nothing but three stat ids (how fast
 // it builds, its ceiling, how hard turning costs it) and a condition; the number itself lives in
 // the ship's own slot (PlayerShip.Sl(id).Own -- per-ability state is how it reaches the wire, same
-// as the echo's stored damage). Step is the ONE place the arithmetic lives: pure, no ship and no
+// as the reverb's stored damage). Step is the ONE place the arithmetic lives: pure, no ship and no
 // Godot frame, so it is provable (LaneARampChecks) before any row exists to carry it.
 public class RampSpec
 {
@@ -603,43 +624,145 @@ public static class Ab
     };
 
     // ── the lights ───────────────────────────────────────────────────────────
-    public static readonly AbilityDef Roll = new()
+    // THE PEPPERBOX (the Dart's primary, kits_v2's card): held, two nose rails alternate, 6 darts a second
+    // (pepper_interval through Cadence); each leaves along the nose at 520 u/s plus the ship's own velocity and
+    // turns up to 6 rad/s onto the pilot's LIVE cursor (Shots "pepper", Commanded), 750 u, the first hostile
+    // body. 7.5 a dart, priced on the host at the launch: x clamp(top speed / 260, 1, 1.5).
+    public static readonly AbilityDef Pepperbox = new()
     {
-        Id = "roll", Name = "Barrel roll", Short = "ROLL", Default = Key.F,
-        Blurb = "Nothing can hit you while you roll; you come out faster and firing quicker.",
-        Press = (s, _) => s.BarrelRoll(),
-        RateStat = "boost_rof", SpeedStat = "boost_speed",
-        While = s => !s.Statuses.Has(Status.Evading),     // the boost is the part after the roll
-        Refuse = (s, _) => s.Sl("roll").Cool > 0 ? "COOLING" : null,
-        Show = (s, _) => s.Statuses.Has(Status.Evading)
-            ? new SlotState { Line = "ROLLING", Lit = true }
-            : Timed(s, "roll", "roll_cooldown", "BOOST"),
+        Weapon = true, Id = "pepperbox", Name = "Pepperbox", Short = "PEPPER", Kind = AbilityKind.Hold, Default = Key.Space,
+        Blurb = "Hold to fire: two nose rails, six darts a second, each steering onto the cursor as it flies. The faster you are going, the harder they hit: up to half again at 390 u/s.",
+        Bore = new BoreSpec { Shot = Shots.Pepper, Damage = "pepper_damage", Every = "pepper_interval", Speed = "pepper_speed",
+                              Range = "pepper_range", Turn = "pepper_turn", PriceTop = "price_top", PriceCap = "pepper_cap",
+                              Rails = new[] { -5f, 5f } },
+        Show = (s, _) => new SlotState { Line = $"x{Bores.Price(1, s.TopNow, s.Stats["price_top"], s.Stats["pepper_cap"]):0.00}", Lit = s.Trigger },
     };
 
-    public static readonly AbilityDef Echo = new()
+    // ROD FROM GOD (the Dart's F, kits_v2's card): a 3 s sprint -- thrust x3, top +100 u/s, the throttle forced open
+    // (S dead, the rudder free) -- and as it ends a rod down the nose at 300 u/s plus the ship's own, 1400 u, through
+    // every hostile body on its line once (never a missile): 180 x clamp(top / 260, 1, 2) at the top the sprint gave.
+    // The hull keeps 30% of its speed after. 12 s from the press. Wrecked mid-sprint: no rod.
+    public static readonly AbilityDef Rod = new()
     {
-        Id = "echo", Name = "Bullet echo", Short = "ECHO", Default = Key.F,
-        Blurb = "The echo remembers the damage you deal, then detonates all of it where your last shot landed.",
-        Press = (s, _) => s.StartEcho(),
-        OnDealt = (s, t, d, w) => { ref var e = ref s.Sl("echo"); e.Own += d; e.At = t.Position; },
+        Id = "rod", Name = "Rod from God", Short = "ROD", Default = Key.F,
+        Blurb = "Sprint for 3 s, thrust x3 and 100 u/s over your top, the throttle wide open; as it ends a rod leaves the nose and goes through everything in 1400 u. The faster you were going, the harder it hits: up to twice at 520 u/s. You keep 30% of your speed after.",
+        ThrustStat = "sprint_thrust", SpeedAdd = "sprint_add", Forces = true,
+        Parting = new BoreSpec { Shot = Shots.Rod, Damage = "rod_damage", Speed = "rod_speed", Range = "rod_range",
+                                 PriceTop = "price_top", PriceCap = "rod_cap", Recoil = "rod_recoil" },
+        Press = (s, _) => s.Run("rod", "sprint_time", "rod_cooldown"),
+        Expire = s => s.Part("rod"),
+        Refuse = (s, _) => s.Sl("rod").Left > 0 ? "SPRINTING" : s.Sl("rod").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => Timed(s, "rod", "rod_cooldown", "SPRINT"),
+    };
+
+    // RAMJET (the Dart's Q, kits_v3 §3.6): lit 8 s; at full throttle with the keel within 5% of the current top it builds
+    // +10% top a second, to +50%; a full turn bleeds 20% a second whether or not it builds (the slide never does); once
+    // it goes out it drains in at most 1 s. 20 s from the press. A Ramp row (F1, D18): the owner flies its own total, the
+    // host prices from ITS copy, stepped from the guest's reports (PlayerShip.RampsFromReport).
+    public static readonly AbilityDef Ramjet = new()
+    {
+        Id = "ramjet", Name = "Ramjet", Short = "RAMJET", Default = Key.Q,
+        Blurb = "Lit for 8 s: flat out and flying straight, your top speed climbs 10% a second, to half again. Turning bleeds it. The faster you go, the harder your darts and your rod hit.",
+        Ramp = new RampSpec { Build = "ramjet_build", Cap = "ramjet_cap", Bleed = "ramjet_bleed", Condition = s => s.FullAhead(0.95f) },
+        Press = (s, _) => s.Run("ramjet", "ramjet_time", "ramjet_cooldown"),
+        Refuse = (s, _) => s.Sl("ramjet").Left > 0 ? "LIT" : s.Sl("ramjet").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => s.Sl("ramjet").Left > 0
+            ? new SlotState { Line = $"+{s.Sl("ramjet").Own * 100:0}% {s.Sl("ramjet").Left:0.0}s", Lit = true }
+            : Timed(s, "ramjet", "ramjet_cooldown", "READY"),
+    };
+
+    // SLINGSHOT (the Dart's E, kits_v2's card): the heading AND the whole velocity (the slide included) snapped onto the
+    // cursor's bearing, up to 180°, the speed kept -- a snap, not a turn, so the Ramjet keeps what it built (the host's
+    // copy skips the report: SkipYaw). A sprint's rod leaves down the new nose. 6 s.
+    public static readonly AbilityDef Slingshot = new()
+    {
+        Id = "slingshot", Name = "Slingshot", Short = "SLING", Default = Key.E, TakesPoint = true,
+        Blurb = "Snaps your nose and all of your speed onto the cursor, even straight behind you. A snap, not a turn: the ramjet keeps what it built.",
+        AtOnce = (s, at) => s.Snap(at),
+        Press = (s, _) => s.Slung("slingshot", "sling_cooldown"),
+        Refuse = (s, _) => s.Sl("slingshot").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => Timed(s, "slingshot", "sling_cooldown", "READY"),
+    };
+
+    // THE ECHO'S REVERB (kits_v2's card): 5 s of guns at x1.2 while it remembers what they deal, then 35% of the lot in
+    // 220 u where the last of it landed; 18 s from the press
+    public static readonly AbilityDef Reverb = new()
+    {
+        Id = "reverb", Name = "Reverb", Short = "REVERB", Default = Key.F,
+        Blurb = "Your guns run hot for five seconds while the reverb remembers what they deal, then a third of it goes off where your last shot landed.",
+        RateStat = "reverb_rate",
+        Press = (s, _) => s.StartReverb(),
+        OnDealt = (s, t, d, w) => { ref var e = ref s.Sl("reverb"); e.Own += d; e.At = t.Position; },
         Expire = s => s.Detonate(),
-        Refuse = (s, _) => s.Sl("echo").Cool > 0 ? "COOLING" : null,
-        Show = (s, _) => s.Sl("echo").Left > 0
-            ? new SlotState { Line = $"{s.Sl("echo").Own:0} STORED", Lit = true }
-            : Timed(s, "echo", "echo_cooldown", "READY"),
+        Refuse = (s, _) => s.Sl("reverb").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => s.Sl("reverb").Left > 0
+            ? new SlotState { Line = $"{s.Sl("reverb").Own:0} STORED", Lit = true }
+            : Timed(s, "reverb", "reverb_cooldown", "READY"),
     };
 
-    public static readonly AbilityDef Stealth = new()
+    // THE ECHO'S REWIND (kits_v2's card, the README ruling): back 8 s -- position, heading and velocity on the owner,
+    // the hull on the host, each from its own trail (a mark every 0.5 s, the one nearest 8 s ago); every web let go; 30 s
+    public static readonly AbilityDef Rewind = new()
     {
-        Id = "stealth", Name = "Stealth", Short = "STEALTH", Default = Key.F,
-        Blurb = "While the veil is up nothing hostile can pick you: whatever was coming for you goes elsewhere, or gives up.",
-        // what the veil itself is worth, x1.00 each until a part moves one (Ships.cs, the wraith)
-        RateStat = "stealth_rof", SpeedStat = "stealth_speed",
-        Press = (s, _) => s.GoDark(),
-        Refuse = (s, _) => s.Sl("stealth").Cool > 0 ? "COOLING" : null,
+        Id = "rewind", Name = "Rewind", Short = "REWIND", Default = Key.Q,
+        Blurb = "Back to where you were eight seconds ago: the place, the heading, the speed and the hull. Any web on you lets go.",
+        AtOnce = (s, _) => s.Rewind(),
+        Press = (s, _) => s.Rewound(),
+        Refuse = (s, _) => s.Sl("rewind").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => Timed(s, "rewind", "rewind_cooldown", "READY"),
+    };
+
+    // THE ECHO'S EMP (kits_v2's card): every hostile craft within 300 u JAMMED 4 s (no strikes, no launches, the turret
+    // held, a web let go), a second pulse 0.6 s later from where it was pressed refreshing it; no damage; 18 s
+    public static readonly AbilityDef Emp = new()
+    {
+        Id = "emp", Name = "EMP", Short = "EMP", Default = Key.E,
+        Blurb = "Jams every hostile craft within 300 u for four seconds: no shots, no missiles, and any web on a friend lets go. It pulses twice.",
+        Press = (s, _) => s.StartEmp(),
+        Expire = s => s.Pulse(s.Sl("emp").At),
+        Refuse = (s, _) => s.Sl("emp").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => Timed(s, "emp", "emp_cooldown", "READY"),
+    };
+
+    // THE WRAITH'S VENOM (DL3): 6 s coated -- each pellet that lands puts a stack of poison on what it hit (up to 10,
+    // 1.25 a second each, for 5 s after the last: DoseRows.Venom); 22 s
+    public static readonly AbilityDef Venom = new()
+    {
+        Id = "venom", Name = "Venom", Short = "VENOM", Default = Key.Q,
+        Blurb = "Coats your pellets for six seconds: each one that lands poisons what it hits, up to ten doses, each eating 1.25 a second until five seconds after the last.",
+        Press = (s, _) => s.Coat(),
+        OnDealt = (s, t, _, weapon) => s.Dose(DoseRows.Venom, t, weapon),
+        Refuse = (s, _) => s.Sl("venom").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => Timed(s, "venom", "venom_cooldown", "COATED"),
+    };
+
+    // THE WRAITH'S SHADOW STEP (DL3): a blink to 140 u behind the selected hostile within 900 u, nose on it, the speed
+    // kept; any web lets go; 14 s. The owner blinks at the press (flight is its own); the host counts it.
+    public static readonly AbilityDef Step = new()
+    {
+        Id = "step", Name = "Shadow step", Short = "STEP", Default = Key.E,
+        Blurb = "Blinks you 140 u behind the hostile you have selected, up to 900 u off, nose on it and your speed kept. Any web on you lets go.",
+        AtOnce = (s, _) => s.Step(s.PressTarget),
+        Press = (s, t) => s.Stepped(t),
+        Refuse = (s, t) => !PlayerShip.Steppable(t) ? "NO TARGET"
+                         : s.Position.DistanceTo(t.Position) > s.Stats["step_reach"] ? "OUT OF REACH"
+                         : s.Sl("step").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => Timed(s, "step", "step_cooldown", "READY"),
+    };
+
+    // THE WRAITH'S VEIL (DL3): 5 s nothing hostile can pick it (it can still be hit), x1.35 top speed, and the next volley
+    // x3 -- fired from inside it, which ends it, or the first after; 18 s
+    public static readonly AbilityDef Veil = new()
+    {
+        Id = "veil", Name = "Veil", Short = "VEIL", Default = Key.F,
+        Blurb = "For five seconds nothing hostile can pick you, and you run faster. Your next volley hits three times as hard; firing drops the veil.",
+        SpeedStat = "veil_speed",
+        Press = (s, _) => s.Veil(),
+        OnFire = s => s.Unveil(),
+        Refuse = (s, _) => s.Sl("veil").Cool > 0 ? "COOLING" : null,
         Show = (s, _) => s.Statuses.Has(Status.Untargetable)
-            ? new SlotState { Line = $"UNSEEN {s.Statuses.Left(Status.Untargetable):0.0}s", Lit = true }
-            : Timed(s, "stealth", "stealth_cooldown", "READY"),
+            ? new SlotState { Line = $"VEILED {s.Statuses.Left(Status.Untargetable):0.0}s", Lit = true }
+            : Timed(s, "veil", "veil_cooldown", "READY"),
     };
 
     // The shape nearly every timed ability shows: running (lit, with its own word), cooling

@@ -136,6 +136,7 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
     public bool Alive => Hp > 0;
     public int NetId => Id;
     public float HitRadius => HalfWidth;
+    public Vector2? Facing => Vector2.Up.Rotated(Rotation);
     public bool Covers(Vector2 p, float pad) => Combat.KeelCovers(this, Length, HalfWidth, p, pad);
 
     // -- a move's own live state: one slot per row ----------------------------

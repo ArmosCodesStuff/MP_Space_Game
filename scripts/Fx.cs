@@ -83,10 +83,10 @@ public struct FxRaise
 public static class Fx
 {
     // The index IS the id on the wire (Hub.NetFx), so APPEND ONLY.
-    public const int Burst = 0, Lost = 1, Rebuilt = 2, Wave = 3, Emp = 4, Echo = 5, Rail = 6,
+    public const int Burst = 0, Lost = 1, Rebuilt = 2, Wave = 3, Emp = 4, Reverb = 5, Rail = 6,
                      WarnLane = 7, WarnZone = 8, AimZone = 9, TauntRing = 10,
                      Rip = 11, RipSparks = 12, RipSmoke = 13, Scar = 14,
-                     RailEnhanced = 15, Tot = 16;
+                     RailEnhanced = 15, Tot = 16, Venom = 17;
     // WHAT A WARNING RIDES: the world itself, or the NetId of the hull it is drawn on. A beam's
     // and a dash's lane are drawn in the BOSS'S OWN FRAME and parented to it, so the line it drew
     // is the line it fires down however the hull turns; everything else is pinned to the ground
@@ -108,8 +108,8 @@ public static class Fx
         new() { Id = "wave",    Shape = FxShape.Ring,  Tint = new(0.60f, 0.80f, 1f), Life = 0.9, Width = 3f },
         // a warrior's EMP: a hard pulse with spokes, close in
         new() { Id = "emp",     Shape = FxShape.Spokes, Tint = new(0.70f, 0.90f, 1f), Life = 0.5, Width = 2f, Spokes = 10 },
-        // an echo's detonation: everything it remembered, at once
-        new() { Id = "echo",    Shape = FxShape.Spokes, Tint = new(1f, 0.80f, 0.45f), Life = 0.7, Width = 2.5f, Spokes = 6 },
+        // the reverb's blast (the Echo's F): everything it remembered, at once
+        new() { Id = "reverb",  Shape = FxShape.Spokes, Tint = new(1f, 0.80f, 0.45f), Life = 0.7, Width = 2.5f, Spokes = 6 },
         // a sniper's railgun: the line it threw down
         new() { Id = "rail",    Shape = FxShape.Bar,   Tint = new(0.45f, 0.70f, 1f), Life = 0.35, Width = 7f, Fill = false },
         // ── THE TWO WARNINGS: every red shape a boss or a raider raises is one of these ──
@@ -139,6 +139,8 @@ public static class Fx
         new() { Id = "rail_enhanced", Shape = FxShape.Bar, Tint = new(0.92f, 0.96f, 1f), Life = 0.35, Width = 10.5f, Fill = false },
         // the freighter's Time on target: each line it converged on the paint, in the spotter's amber
         new() { Id = "tot",        Shape = FxShape.Bar,    Tint = new(1f, 0.78f, 0.35f), Life = 0.35, Width = 5f, Fill = false },
+        // a dose's tick (Doses: the Wraith's Venom) on the hull it eats: a small sickly-green flare, one a tick
+        new() { Id = "venom", Shape = FxShape.Spokes, Tint = new(0.55f, 1f, 0.35f), Life = 0.5, Width = 1.5f, Spokes = 5 },
     };
 
     public static FxDef Of(int id) => All[id >= 0 && id < All.Length ? id : Burst];

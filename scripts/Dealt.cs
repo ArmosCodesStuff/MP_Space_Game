@@ -2,7 +2,7 @@
 // THE HOSTILE DAMAGE DOOR (F4 + F18) — every blow a player's side deals to a hostile goes through
 // here: the damage lands (IHittable.TakeDamage), then whoever dealt it is credited
 // (ITurretHost.NoteDealt), by a weapon id, so anything that listens for "I just hit something" --
-// the echo, a future ability's AbilityDef.OnDealt -- has ONE place to hear it, instead of a copy of
+// the reverb, a future ability's AbilityDef.OnDealt -- has ONE place to hear it, instead of a copy of
 // the credit line at every gun. A hostile hitting a PLAYER (PlayerShip.Incoming / Hit) is NOT this
 // door: that one is unchanged.
 //
@@ -14,7 +14,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 public static class Dealt
 {
-    public const string Pd = "pd", Turret = "turret", Rail = "rail", Emp = "emp", Echo = "echo",
+    public const string Pd = "pd", Turret = "turret", Rail = "rail", Emp = "emp", Reverb = "reverb", Venom = "venom",
         Outpost = "outpost", Base = "base", Prism = "prism", Tot = "tot", Mortar = "mortar",
         Lance = "lance";
 

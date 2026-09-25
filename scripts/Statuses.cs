@@ -1,14 +1,14 @@
 using System.Collections.Generic;
 
 // WHAT IS BEING DONE TO A THING, right now: held by a web, knocked out by a shockwave, hidden,
-// hardened, dodging. Each was a bool and a timer on whichever class needed it (a ship's `_pinT`,
+// hardened, parrying. Each was a bool and a timer on whichever class needed it (a ship's `_pinT`,
 // a utility craft's `PinT`), so a second one meant a second pair, and nothing could ask "is this
 // disabled?" without knowing what it was.
 //
 // THE HOST DECIDES. A guest counts nothing down: it is sent the bits (PlayerShip's state) and
 // shows them. A status with no time left is simply absent.
 // THESE VALUES ARE THE WIRE FORMAT (StatusSet.Bits). Never renumber one that is here.
-// 32 is Parrying (F11): every peer draws a prism stance from it. (Shielded held 32 once and was never
+// 16 is unassigned. 32 is Parrying (F11): every peer draws a prism stance from it. (Shielded held 32 once and was never
 // set, read or implemented by anything; the only such pool is the freighter's bubble.)
 // 64 and up are HOST-ONLY (StatusSet.HostOnly): the host resolves them and no packet carries them.
 [System.Flags]
@@ -21,7 +21,6 @@ public enum Status
                          // its wing and its turrets already out fight on)
     Untargetable = 4,    // nothing hostile may choose it (stealth)
     Hardened = 8,        // taking less: by the share its applier gave (StatusSet.Apply), else the row's
-    Evading = 16,        // the next hits miss outright
     Parrying = 32,       // a prism stance is up: light caught off its guard is split, rounds reflected (Prism.cs; on the wire)
     Suppressed = 64,     // its guns weakened, its throws held (StatusSet.OutGuards; host-only)
     Dazzled = 128,       // blinded: its throws held (StatusSet.OutGuards; host-only; never on a boss)
@@ -46,6 +45,7 @@ public struct OutGuard
     public bool HoldsThrow;
     public bool BlocksLatch;      // a raider carrying it takes no NEW latch (kits_v2 F17: Dazzled, Jammed)
     public bool DropsLatch;       // ...and lets go of the one it holds (Jammed)
+    public bool HoldsAim;         // its turret stops tracking its target (Jammed: the Echo's EMP)
     public Tag Spares;
 }
 
@@ -64,12 +64,10 @@ public struct StatusSet
 {
     public const float PinSpeed = 0.2f;        // a pinned ship: 20% of its top speed
 
-    // IN ORDER, and the order is the point: evasion decides whether the blow happened at all
-    // before anything else scales it. Half of it is what Hardened means when its applier named
-    // no share of its own.
+    // IN ORDER, each row's share multiplied in the order written; a share of 0 stops the blow there.
+    // Half of it is what Hardened means when its applier named no share of its own.
     public static readonly StatusGuard[] Guards =
     {
-        new() { Status = Status.Evading,  Share = 0 },      // the dart's roll: it is not there to be hit
         new() { Status = Status.Hardened, Share = 0.5 },    // half of it, unless the applier says otherwise
     };
 
@@ -80,7 +78,7 @@ public struct StatusSet
     {
         new() { Status = Status.Suppressed, Gun = 0.5, Move = 0.7, Super = 1.0, HoldsThrow = true },
         new() { Status = Status.Dazzled,    Gun = 1.0, Move = 1.0, Super = 1.0, HoldsThrow = true, BlocksLatch = true, Spares = Tag.Boss },
-        new() { Status = Status.Jammed,     Gun = 0.0, Move = 1.0, Super = 1.0, HoldsThrow = true, BlocksLatch = true, DropsLatch = true, Spares = Tag.Boss },
+        new() { Status = Status.Jammed,     Gun = 0.0, Move = 1.0, Super = 1.0, HoldsThrow = true, BlocksLatch = true, DropsLatch = true, HoldsAim = true, Spares = Tag.Boss },
     };
     // never on the wire: the host resolves them, and a guest has nothing that reads them
     public const Status HostOnly = Status.Suppressed | Status.Dazzled | Status.Jammed | Status.Unwebbed;
@@ -102,6 +100,8 @@ public struct StatusSet
     }
     // ...and whether a launcher carrying them must hold its throw
     public bool HoldsThrow => Any(g => g.HoldsThrow);
+    // ...and whether its turret must stop tracking
+    public bool HoldsAim => Any(g => g.HoldsAim);
 
     // ...and whether a raider carrying them may take a new latch, or keep the one it has
     public bool BlocksLatch => Any(g => g.BlocksLatch);

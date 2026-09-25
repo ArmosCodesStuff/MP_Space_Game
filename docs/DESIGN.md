@@ -1141,6 +1141,26 @@ bosses"); the numbers are `numbers_curve_raids_items.md` §2.
   the radar's diamond / bracket / rim chevron, the victim's "GANK:" line and the names under the hulls are
   all worked out from those, on the host as on a guest. A new enemy row needs nothing there.
 
+## Class kits, lane A slice 6d: the lights (2026-09-25)
+
+The three lights' rows and keys (ledger_kits6d.md DL1-DL14). What is durable:
+- **A gun down the nose is a row** (`Bores.cs`, `AbilityDef.Bore` / `Parting`): the Dart's darts and its rod leave the
+  hull, not a turret, priced by the HOST's own top speed at launch; a guest's copy never prices.
+- **A snap is owner-side, counted by the host** (`AbilityDef.AtOnce`: the Slingshot, the Rewind, the Shadow step): the
+  owner moves at the press; the host sets the cooldown, lets webs go and sets `SkipYaw` so its ramp copy does not read
+  the snap as a turn. `PlayerShip.PressTarget` hands an AtOnce row the press's target.
+- **A ship's past is a Trail** (`Trails.cs`): each peer keeps what it owns -- the owner its flight, the host the hull.
+- **A volley is a spec field** (`TurretSpec.Pellets` / `Fan`, `RepeatShare` / `RepeatDelay`): the Wraith's fan and the
+  Echo's echo are fields Turret.Shoot reads, not second gun paths; `ShipStats.MainDpsPerBarrel` counts the pellets.
+- **Behind is the target's** (`IHittable.Facing`, null for a thing with no heading): Backstab reads it through
+  `Outgoing` by the stat (`backstab_mult`, 0 elsewhere); the Shadow step lands off the same tail.
+- **A primed volley and a row that a shot ends** (`PlayerShip.Prime`, `AbilityDef.OnFire`): the Veil primes x3 and
+  ends when the guns fire; FireControl spends the prime once, on the host.
+- **A stacking poison is a dose row** (`Doses.cs`): per-target stacks on the dealer's ship, ticked on the host
+  through `Dealt` under the row's credit; a tick is an `Items.Repeats` entry, so no backstab or prime weighs it twice.
+- **The jam mark rides the raider's flags** (`Raider.FlagJam`); a jammed turret holds (`OutGuard.HoldsAim`).
+- Trap: the Wraith's v1 numbers were never committed; the built ones are derived from the signed power rows (DL3).
+
 ## Class kits, lane A slice 6c: the heavies (2026-09-25)
 
 The three heavies' rows and keys (ledger_kits6c.md D38-D58). What is durable:

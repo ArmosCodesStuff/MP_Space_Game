@@ -154,15 +154,12 @@ public static class Classes
     // THE MOUNTS MORE THAN ONE HULL IS BORN WITH -- one ItemDef each, fitted to every hull that
     // carries it below. A part fits the hulls whose SIGNATURE row it names (ItemDef.Needs), so a
     // shared mount names one id per hull: the cargo gun the three freighters' three systems, the
-    // light cannon the warden's hunters, the dart cannon the three
-    // lights'. Written above All because static fields start in the order they are written, and
-    // All is what fits them.
+    // flak battery the warden's hunters. Written above All because static fields start in the order they are
+    // written, and All is what fits them.
     private static readonly ItemDef CargoGun = ItemDef.Own(GearSlot.Weapon, "freight_main_gun", "Mk I Cargo Gun",
         "the freighter's single main turret", "bubble_pool", "overdrive_mult", "wave_range");
     private static readonly ItemDef WardenFlak = ItemDef.Own(GearSlot.Weapon, "heavy_main_gun", "Mk I Flak Battery",
         "the proximity flak", "hunter_count");
-    private static readonly ItemDef LightCannon = ItemDef.Own(GearSlot.Weapon, "light_main_gun", "Mk I Dart Cannon",
-        "the light's single turret", "roll_time", "echo_time", "stealth_time");
 
     public static readonly ClassDef[] All =
     {
@@ -539,61 +536,102 @@ public static class Classes
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Hunters, Ab.Taunt, Ab.Curtain } },
 
         // -- page 4: lights -----------------------------------------------------
-        new() { Id = ShipClass.LightDart, Name = "DART", Ready = true, Fit = Fit.Guns,
-            Blurb = "Fastest thing with a pilot in it. A barrel roll nothing can hit, and a burst of speed and rate of fire out of it.",
-            Hint = "DART  ·  mouse aims the main gun",
+        new() { Id = ShipClass.LightDart, Name = "DART", Ready = true, Fit = Fit.None,
+            Blurb = "Fastest thing with a pilot in it, and the faster it goes the harder it hits: darts that steer onto the cursor, a sprint that ends in a rod, a ramjet that builds while it flies straight.",
+            Hint = "DART  ·  Space: hold to fire, the darts steer onto the cursor  ·  F sprint, then the rod  ·  Q ramjet  ·  E slingshot onto the cursor",
             Drive = Drives.Boost,
             Nums = new() {
-                ["hull"] = 90,
+                ["hull"] = 200,
                 ["thrust"] = 190, ["reverse_thrust"] = 90, ["max_speed"] = 260, ["reverse_speed"] = 95,
                 ["turn_radius"] = 35, ["turn_rate"] = 3.0, ["strafe_speed"] = 130, ["strafe_thrust"] = 520,
-                ["main_count"] = 1, ["main_damage"] = 5, ["main_interval"] = 0.35, ["main_range"] = 500, ["shell_speed"] = 620,
             },
-            Damage = new() { ["main_damage"] = 1 },
-            Reach = new() { ["main_range"] = 1 },
-            Cycle = new() { ["main_interval"] = 1 },
-            Weapons = new[] { Dps.Main },
+                // 0.375 = 5% of the dart's 7.5, what a level is worth on every other primary
+            Damage = new() { ["pepper_damage"] = 0.375 },
+            Reach = new() { ["pepper_range"] = 1 },
+            Cycle = new() { ["pepper_interval"] = 1 },
+            Weapons = new[] { Dps.Pepper, Dps.Rod },
             Kit = new[] {
-                LightCannon,
-                ItemDef.Own(GearSlot.Utility, "light_roll_thrusters", "Roll Thrusters", "the barrel roll, and the boost after it", "roll_time"),
+                ItemDef.Own(GearSlot.Weapon, "light_pepperbox", "Pepperbox Rails", "the pepperbox: its darts, their rate and their reach", "pepper_damage"),
+                ItemDef.Own(GearSlot.Utility, "light_roll_thrusters", "Sprint Thrusters", "the sprint, and the rod at its end", "sprint_time"),
             },
             Rows = new StatRow[] {
-                new() { Group = "Barrel roll", Id = "roll_time",  Label = "Untouchable",   Base = 1.2, Unit = "s", Dec = 1 },
-                new() { Group = "Barrel roll", Id = "boost_time", Label = "Boost after",   Base = 4, Unit = "s", Dec = 1 },
-                new() { Group = "Barrel roll", Id = "boost_speed",Label = "Top speed",     Base = 1.6, Unit = "x", Dec = 2 },
-                new() { Group = "Barrel roll", Id = "boost_rof",  Label = "Rate of fire",  Base = 1.25, Unit = "x", Dec = 2 },
-                new() { Group = "Barrel roll", Id = "roll_cooldown", Label = "Cooldown",   Base = 12, Unit = "s", Dec = 1, Inverse = true },
+                // THE PEPPERBOX (kits_v2's card): 7.5 a dart, 6 a second off two rails, 520 u/s + the ship's own, 6 rad/s onto
+                // the cursor, 750 u; priced x clamp(top / 260, 1, 1.5) on the host at the launch (numbers §8 R6)
+                new() { Group = "Pepperbox", Id = "pepper_damage",   Label = "Damage, a dart",   Base = 7.5, Dec = 2 },
+                new() { Group = "Pepperbox", Id = "pepper_interval", Label = "Between darts",    Base = 1.0 / 6, Unit = "s", Dec = 3, Inverse = true },
+                new() { Group = "Pepperbox", Id = "pepper_speed",    Label = "Dart speed",       Base = 520, Unit = "u/s", Dec = 0 },
+                new() { Group = "Pepperbox", Id = "pepper_range",    Label = "Reach",            Base = 750, Unit = "u", Dec = 0 },
+                new() { Group = "Pepperbox", Id = "pepper_turn",     Label = "Steering",         Base = 6, Unit = "rad/s", Dec = 1 },
+                new() { Group = "Pepperbox", Id = "pepper_cap",      Label = "Speed price, most", Base = 1.5, Unit = "x", Dec = 2 },
+                new() { Group = "Pepperbox", Id = "price_top",       Label = "Priced from",      Base = 260, Unit = "u/s", Dec = 0 },
+                // ROD FROM GOD (kits_v2's card): a 3 s sprint (thrust x3, top +100, forced), then a rod along the nose at
+                // 300 u/s + the ship's own, 1400 u, through everything: 180 x clamp(top / 260, 1, 2); recoil to 30%; 12 s from the press
+                new() { Group = "Rod from God", Id = "sprint_time",   Label = "Sprint",            Base = 3.0, Unit = "s", Dec = 1 },
+                new() { Group = "Rod from God", Id = "sprint_thrust", Label = "Sprint thrust",     Base = 3.0, Unit = "x", Dec = 1 },
+                new() { Group = "Rod from God", Id = "sprint_add",    Label = "Sprint top speed",  Base = 100, Unit = "u/s", Dec = 0 },
+                new() { Group = "Rod from God", Id = "rod_damage",    Label = "Rod damage",        Base = 180, Dec = 0 },
+                new() { Group = "Rod from God", Id = "rod_cap",       Label = "Speed price, most", Base = 2.0, Unit = "x", Dec = 2 },
+                new() { Group = "Rod from God", Id = "rod_speed",     Label = "Rod speed",         Base = 300, Unit = "u/s", Dec = 0 },
+                new() { Group = "Rod from God", Id = "rod_range",     Label = "Rod reach",         Base = 1400, Unit = "u", Dec = 0 },
+                new() { Group = "Rod from God", Id = "rod_recoil",    Label = "Speed kept",        Base = 0.30, Unit = "x", Dec = 2 },
+                new() { Group = "Rod from God", Id = "rod_cooldown",  Label = "Cooldown",          Base = 12, Unit = "s", Dec = 1, Inverse = true },
+                // RAMJET (kits_v3 §3.6): 8 s; +10% top a second at full throttle, to +50%; a full turn bleeds 20% a second; 20 s
+                new() { Group = "Ramjet", Id = "ramjet_time",     Label = "Lit for",          Base = 8, Unit = "s", Dec = 1 },
+                new() { Group = "Ramjet", Id = "ramjet_build",    Label = "Builds, a second", Base = 0.10, Unit = "x", Dec = 2 },
+                new() { Group = "Ramjet", Id = "ramjet_cap",      Label = "Most",             Base = 0.50, Unit = "x", Dec = 2 },
+                new() { Group = "Ramjet", Id = "ramjet_bleed",    Label = "Bleeds, full turn", Base = 0.20, Unit = "x", Dec = 2 },
+                new() { Group = "Ramjet", Id = "ramjet_cooldown", Label = "Cooldown",         Base = 20, Unit = "s", Dec = 1, Inverse = true },
+                // SLINGSHOT (kits_v2's card): heading and velocity onto the cursor, up to 180°, the speed kept; 6 s
+                new() { Group = "Slingshot", Id = "sling_cooldown", Label = "Cooldown", Base = 6, Unit = "s", Dec = 1, Inverse = true },
+                // SLIPSTREAM (passive): x0.7 taken at 325 u/s or more
+                new() { Group = "Slipstream", Id = "slip_guard", Label = "Damage taken, fast", Base = 0.7, Unit = "x", Dec = 2 },
+                new() { Group = "Slipstream", Id = "slip_speed", Label = "Fast from",          Base = 325, Unit = "u/s", Dec = 0 },
             },
             Art = new ClassArt {
                 Texture = "res://light_dart_hull.png", Length = 70f, HalfWidth = 16.78f,
-                Mains = new Vector2[] { new(0.0f, -10.5f) },
                 TurretTexScale = 0.65f / 5.5f, MainBarrel = 8.0f, PdBarrel = 3.6f },
-            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Roll } },
+            Abilities = new[] { Ab.Pepperbox, Ab.Rod, Ab.Ramjet, Ab.Slingshot } },
         new() { Id = ShipClass.LightEcho, Name = "ECHO", Ready = true, Fit = Fit.Guns,
-            Blurb = "Its echo remembers the damage it deals, then detonates the lot where the last shot landed.",
-            Hint = "ECHO  ·  mouse aims the main gun",
+            Blurb = "Every round it fires comes again a moment later from where it was fired. Its reverb stores what it deals and puts a third of it down at once; it can rewind eight seconds, hull and all, and jam every craft near it.",
+            Hint = "ECHO  ·  mouse aims the repeater, every round echoes 0.6 s later  ·  F reverb  ·  Q rewind 8 s  ·  E EMP",
             Drive = Drives.Boost,
             Nums = new() {
-                ["hull"] = 90,
+                ["hull"] = 180,
                 ["thrust"] = 190, ["reverse_thrust"] = 90, ["max_speed"] = 260, ["reverse_speed"] = 95,
                 ["turn_radius"] = 35, ["turn_rate"] = 3.0, ["strafe_speed"] = 130, ["strafe_thrust"] = 520,
-                ["main_count"] = 1, ["main_damage"] = 5, ["main_interval"] = 0.35, ["main_range"] = 500, ["shell_speed"] = 620,
+                // THE ECHO REPEATER (kits_v2's card): 22 every 0.5 s out to 500 u, and each round's echo (Shots row "echo")
+                // at 0.5 of it 0.6 s later from the recorded muzzle: 44 + 22 = 66 DPS
+                ["main_count"] = 1, ["main_damage"] = 22, ["main_interval"] = 0.5, ["main_range"] = 500, ["shell_speed"] = 620,
             },
-                // echo_share is NOT a weapon: the blast is a share of damage already dealt, so it
-                // grows with main_damage on its own, and naming it would count the same purchase twice
-            Damage = new() { ["main_damage"] = 1 },
-            Reach = new() { ["main_range"] = 1, ["echo_radius"] = 1 },
+                // 1.1 = 5% of the repeater's 22, what a level is worth on every other primary. reverb_share is NOT a weapon:
+                // the blast is a share of damage already dealt, so it grows with main_damage on its own
+            Damage = new() { ["main_damage"] = 1.1 },
+            Reach = new() { ["main_range"] = 1, ["reverb_radius"] = 1 },
             Cycle = new() { ["main_interval"] = 1 },
-            Weapons = new[] { Dps.Main, Dps.Echo },
+            Weapons = new[] { Dps.Main, Dps.Repeat, Dps.Reverb },
             Kit = new[] {
-                LightCannon,
-                ItemDef.Own(GearSlot.Utility, "light_echo_core", "Echo Core", "what the echo remembers, and its blast", "echo_time"),
+                ItemDef.Own(GearSlot.Weapon, "light_main_gun", "Mk I Echo Repeater", "the repeater: its rounds and their echoes", "echo_share"),
+                ItemDef.Own(GearSlot.Utility, "light_echo_core", "Reverb Core", "what the reverb remembers, and its blast", "reverb_time"),
             },
             Rows = new StatRow[] {
-                new() { Group = "Echo", Id = "echo_time",   Label = "It remembers for", Base = 5, Unit = "s", Dec = 1 },
-                new() { Group = "Echo", Id = "echo_radius", Label = "Blast radius",     Base = 220, Unit = "u", Dec = 0 },
-                new() { Group = "Echo", Id = "echo_share",  Label = "Of what it dealt", Base = 1, Unit = "x", Dec = 2 },
-                new() { Group = "Echo", Id = "echo_cooldown", Label = "Cooldown",       Base = 15, Unit = "s", Dec = 1, Inverse = true },
+                // THE REPEATER'S ECHO: half of each round, 0.6 s after it, from where it left
+                new() { Group = "Echo repeater", Id = "echo_share", Label = "Echo, of the round", Base = 0.5, Unit = "x", Dec = 2 },
+                new() { Group = "Echo repeater", Id = "echo_delay", Label = "Echo after",         Base = 0.6, Unit = "s", Dec = 2 },
+                // REVERB (kits_v2's card): 5 s at x1.2 rate, 35% of what it dealt in 220 u where the last landed; 18 s
+                new() { Group = "Reverb", Id = "reverb_time",     Label = "It remembers for", Base = 5, Unit = "s", Dec = 1 },
+                new() { Group = "Reverb", Id = "reverb_rate",     Label = "Rate of fire",     Base = 1.2, Unit = "x", Dec = 2 },
+                new() { Group = "Reverb", Id = "reverb_share",    Label = "Of what it dealt", Base = 0.35, Unit = "x", Dec = 2 },
+                new() { Group = "Reverb", Id = "reverb_radius",   Label = "Blast radius",     Base = 220, Unit = "u", Dec = 0 },
+                new() { Group = "Reverb", Id = "reverb_cooldown", Label = "Cooldown",         Base = 18, Unit = "s", Dec = 1, Inverse = true },
+                // REWIND (the README ruling): 8 s back, a mark every 0.5 s; 30 s
+                new() { Group = "Rewind", Id = "rewind_back",     Label = "Back",             Base = 8, Unit = "s", Dec = 1 },
+                new() { Group = "Rewind", Id = "rewind_every",    Label = "A mark every",     Base = 0.5, Unit = "s", Dec = 2 },
+                new() { Group = "Rewind", Id = "rewind_cooldown", Label = "Cooldown",         Base = 30, Unit = "s", Dec = 1, Inverse = true },
+                // EMP (kits_v2's card): 300 u, jammed 4 s, a second pulse 0.6 s later from the press point; 18 s
+                new() { Group = "EMP", Id = "emp_range",    Label = "Reach",         Base = 300, Unit = "u", Dec = 0 },
+                new() { Group = "EMP", Id = "emp_jam",      Label = "Jammed for",    Base = 4.0, Unit = "s", Dec = 1 },
+                new() { Group = "EMP", Id = "emp_echo",     Label = "Second pulse",  Base = 0.6, Unit = "s", Dec = 2 },
+                new() { Group = "EMP", Id = "emp_cooldown", Label = "Cooldown",      Base = 18, Unit = "s", Dec = 1, Inverse = true },
             },
             Art = new ClassArt {
                 // fighter_f (the pack, J5): one main on the centreline stands for the paired
@@ -601,42 +639,56 @@ public static class Classes
                 Texture = "res://light_echo_hull.png", Length = 70f, HalfWidth = 14.68f,
                 Mains = new Vector2[] { new(0.0f, -23.39f) },
                 TurretTexScale = 0.65f / 5.5f, MainBarrel = 8.0f, PdBarrel = 3.6f },
-            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Echo } },
+            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Reverb, Ab.Rewind, Ab.Emp } },
         new() { Id = ShipClass.LightWraith, Name = "WRAITH", Ready = true, Fit = Fit.Guns,
-            Blurb = "While its veil is up nothing hostile can pick it: whatever was coming for it goes elsewhere, or gives up.",
-            Hint = "WRAITH  ·  mouse aims the main gun",
+            Blurb = "An ambusher: its scattergun is murder point blank and half again from behind. It veils so nothing can pick it, poisons what it hits, and steps into the shadow behind its prey.",
+            Hint = "WRAITH  ·  mouse aims the scattergun, x1.5 from behind  ·  F veil  ·  Q venom  ·  E shadow step",
             Drive = Drives.Boost,
+            Shot = Shots.Pellet,
             Nums = new() {
-                ["hull"] = 90,
+                ["hull"] = 220,
                 ["thrust"] = 190, ["reverse_thrust"] = 90, ["max_speed"] = 260, ["reverse_speed"] = 95,
                 ["turn_radius"] = 35, ["turn_rate"] = 3.0, ["strafe_speed"] = 130, ["strafe_thrust"] = 520,
-                ["main_count"] = 1, ["main_damage"] = 5, ["main_interval"] = 0.35, ["main_range"] = 500, ["shell_speed"] = 620,
+                // THE AMBUSH SCATTERGUN (DL3): 7 pellets of 7 every 0.75 s, fanned +-10 deg, out to 320 u = 65.3 DPS point blank
+                ["main_count"] = 1, ["main_damage"] = 7, ["main_interval"] = 0.75, ["main_range"] = 320, ["shell_speed"] = 620,
             },
-            Damage = new() { ["main_damage"] = 1 },
+            // 0.35 = 5% of a pellet's 7, what a level is worth on every other primary
+            Damage = new() { ["main_damage"] = 0.35 },
             Reach = new() { ["main_range"] = 1 },
             Cycle = new() { ["main_interval"] = 1 },
-            Weapons = new[] { Dps.Main },
+            Weapons = new[] { Dps.Main, Dps.Veil, Dps.Venom },
             Kit = new[] {
-                LightCannon,
-                ItemDef.Own(GearSlot.Utility, "light_stealth_veil", "Stealth Veil", "how long nothing can pick it", "stealth_time"),
+                ItemDef.Own(GearSlot.Weapon, "light_scattergun", "Ambush Scattergun", "the scattergun: its pellets, their rate and their reach", "scatter_pellets"),
+                ItemDef.Own(GearSlot.Utility, "light_stealth_veil", "Veil Emitter", "how long nothing can pick it", "veil_time"),
             },
             Rows = new StatRow[] {
-                new() { Group = "Stealth", Id = "stealth_time", Label = "Unseen for", Base = 5, Unit = "s", Dec = 1 },
-                // WHAT IT DOES WHILE IT IS UNSEEN, x1.00 each: the veil changes nothing about the
-                // ship until a part moves one of them, so a wraith with no veil gear is exactly
-                // the ship it was. They are read the way the dart's boost is read -- the ability
-                // row names them (Ab.Stealth's SpeedStat and RateStat) and PlayerShip.SpeedMult
-                // and FireRate add up every running row that names one. The veil had two
-                // numbers, which is not a family: two of its four lines had nothing to trade.
-                new() { Group = "Stealth", Id = "stealth_speed", Label = "Top speed, unseen",    Base = 1, Unit = "x", Dec = 2 },
-                new() { Group = "Stealth", Id = "stealth_rof",   Label = "Rate of fire, unseen", Base = 1, Unit = "x", Dec = 2 },
-                new() { Group = "Stealth", Id = "stealth_cooldown", Label = "Cooldown", Base = 20, Unit = "s", Dec = 1, Inverse = true },
+                // THE SCATTERGUN'S VOLLEY (TurretSpec.Pellets / Fan): seven pellets fanned +-10 deg
+                new() { Group = "Scattergun", Id = "scatter_pellets", Label = "Pellets a volley", Base = 7, Unit = "", Dec = 0 },
+                new() { Group = "Scattergun", Id = "scatter_spread",  Label = "Fanned either side", Base = 10, Unit = "deg", Dec = 0 },
+                // BACKSTAB (the passive, PlayerShip.Backstab): x1.5 on a blow landed within 60 deg of a heading target's tail
+                new() { Group = "Backstab", Id = "backstab_mult", Label = "From behind",   Base = 1.5, Unit = "x", Dec = 2 },
+                new() { Group = "Backstab", Id = "backstab_arc",  Label = "Behind within", Base = 60, Unit = "deg", Dec = 0 },
+                // THE VEIL (DL3): 5 s unpickable at x1.35 top (added to the boost's shares: x1.85), the next volley x3; 18 s
+                new() { Group = "Veil", Id = "veil_time",     Label = "Unseen for",       Base = 5, Unit = "s", Dec = 1 },
+                new() { Group = "Veil", Id = "veil_speed",    Label = "Top speed, veiled", Base = 1.35, Unit = "x", Dec = 2 },
+                new() { Group = "Veil", Id = "veil_break",    Label = "The volley out of it", Base = 3, Unit = "x", Dec = 1 },
+                new() { Group = "Veil", Id = "veil_cooldown", Label = "Cooldown",          Base = 18, Unit = "s", Dec = 1, Inverse = true },
+                // VENOM (DL3, a DoseRows row): 6 s coated; each landed pellet a stack, up to 10, 1.25 a second each, 5 s after the last; 22 s
+                new() { Group = "Venom", Id = "venom_time",     Label = "Coated for",        Base = 6, Unit = "s", Dec = 1 },
+                new() { Group = "Venom", Id = "venom_cap",      Label = "Doses on one hull", Base = 10, Unit = "", Dec = 0 },
+                new() { Group = "Venom", Id = "venom_dps",      Label = "Each dose eats",    Base = 1.25, Unit = "/s", Dec = 2 },
+                new() { Group = "Venom", Id = "venom_last",     Label = "After the last",    Base = 5, Unit = "s", Dec = 1 },
+                new() { Group = "Venom", Id = "venom_cooldown", Label = "Cooldown",          Base = 22, Unit = "s", Dec = 1, Inverse = true },
+                // SHADOW STEP (DL3): 140 u behind the selected hostile, up to 900 u off; 14 s
+                new() { Group = "Shadow step", Id = "step_reach",    Label = "Reach",        Base = 900, Unit = "u", Dec = 0 },
+                new() { Group = "Shadow step", Id = "step_behind",   Label = "Lands behind", Base = 140, Unit = "u", Dec = 0 },
+                new() { Group = "Shadow step", Id = "step_cooldown", Label = "Cooldown",     Base = 14, Unit = "s", Dec = 1, Inverse = true },
             },
             Art = new ClassArt {
                 Texture = "res://light_wraith_hull.png", Length = 70f, HalfWidth = 14.97f,
                 Mains = new Vector2[] { new(0.0f, -10.5f) },
                 TurretTexScale = 0.65f / 5.5f, MainBarrel = 8.0f, PdBarrel = 3.6f },
-            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Stealth } },
+            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Veil, Ab.Venom, Ab.Step } },
     };
 
     private static readonly Dictionary<ShipClass, ClassDef> ById = All.ToDictionary(c => c.Id);

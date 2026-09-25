@@ -19,7 +19,7 @@ using System.Collections.Generic;
 // down a fixed lane on a cubic ease, strikes everything in the lane ONCE and breaks at the end.
 // It shares the sweep (Shots.Sweep) and nothing else.
 // ─────────────────────────────────────────────────────────────────────────────
-public enum ShotLook { Bullet, Ball, Shard, Missile }
+public enum ShotLook { Bullet, Ball, Shard, Missile, Rod, Ghost }
 
 public class ShotDef
 {
@@ -66,12 +66,18 @@ public class ShotDef
     // takes Through of it (0 = the shield stops it, as it stops everything else).
     public Tag Versus;
     public double VersusMult = 1, Through;
+    // A COMMANDED ROUND (the Dart's Pepperbox, BoreSpec): Guided, but what it steers for is its LAUNCHER'S live
+    // cursor -- TargetId is the firing pilot's NetId and the round turns toward Combat.PlayerById(it).AimPoint,
+    // on every peer (a guest's copy reads the same replicated cursor). Once within Command of that point it flies
+    // straight for good, and straight for good if the launcher is gone. 0: an ordinary row.
+    public float Command;
 }
 
 public static class Shots
 {
     // The index IS the id on the wire (Hub.NetShot), so APPEND ONLY.
-    public const int Shell = 0, Slug = 1, Scrap = 2, Torpedo = 3, Missile = 4, Seeker = 5, Cruise = 6, Reflect = 7, Flak = 8, Spotter = 9, Buster = 10;
+    public const int Shell = 0, Slug = 1, Scrap = 2, Torpedo = 3, Missile = 4, Seeker = 5, Cruise = 6, Reflect = 7, Flak = 8, Spotter = 9, Buster = 10,
+                     Pepper = 11, Rod = 12, Echo = 13, Pellet = 14;
 
     public static readonly ShotDef[] All =
     {
@@ -111,6 +117,18 @@ public static class Shots
         // a boss or a structure, and a quarter of that through a pylon's shield (180 / 360 / 90)
         new() { Id = "buster", AtPlayers = false, Pad = 4f, Sweep = 6f, Burst = 0.4, Look = ShotLook.Ball,
                 Versus = Tag.Boss | Tag.Structure, VersusMult = 2, Through = 0.25 },
+        // THE DART'S PEPPERBOX (kits_v2's card, BoreSpec): a tracer dart off a nose rail, steered onto the pilot's
+        // live cursor, straight once within 24 u of it; the first hostile body it touches, never a missile
+        new() { Id = "pepper", AtPlayers = false, Pad = 3f, Sweep = 6f, Look = ShotLook.Bullet, Guided = true, Command = 24f },
+        // THE DART'S ROD FROM GOD (kits_v2's card, AbilityDef.Parting): straight down the nose, through every hostile body
+        // on its line once each (Stops 0) to its range, never a missile
+        new() { Id = "rod", AtPlayers = false, Pad = 4f, Sweep = 6f, Look = ShotLook.Rod, Stops = 0 },
+        // A ROUND'S ECHO (TurretSpec.RepeatShare, the Echo's repeater): a ghost of a round already fired, leaving the muzzle
+        // it left and along the bearing it took, a moment later; straight, the first hostile body, never a missile
+        new() { Id = "echo", AtPlayers = false, Pad = 3f, Sweep = 6f, Look = ShotLook.Ghost },
+        // THE WRAITH'S AMBUSH SCATTERGUN (TurretSpec.Pellets): one of a volley fanned about the barrel; straight, the first
+        // hostile body, never a missile
+        new() { Id = "pellet", AtPlayers = false, Pad = 2f, Sweep = 6f, Look = ShotLook.Bullet },
     };
 
     public static ShotDef Of(int id) => All[id >= 0 && id < All.Length ? id : Shell];
@@ -163,7 +181,7 @@ public partial class Shot : Node2D, IHittable, ITagged
     public int? Stops;                     // the firer's own count of bodies (ShotDef.Stops); null = its row's
 
     private float _flown, _puffCd;
-    private bool _spent;
+    private bool _spent, _loose;           // _loose: a commanded round flying straight for good (ShotDef.Command)
     private double _burnt;
     private readonly List<(Vector2 p, float age)> _smoke = new();
     private readonly HashSet<IHittable> _struck = new();   // every body this one has struck: each is struck once
@@ -258,6 +276,13 @@ public partial class Shot : Node2D, IHittable, ITagged
     private Vector2? GuideTo(ShotDef d)
     {
         if (DecoyPoint is { } lure) return lure;
+        if (d.Command > 0)
+        {
+            if (!_loose && Combat.PlayerById(TargetId) is PlayerShip pilot && GlobalPosition.DistanceTo(pilot.AimPoint) > d.Command)
+                return pilot.AimPoint;
+            _loose = true;
+            return null;
+        }
         if (TargetId != 0 && (d.AtPlayers ? Combat.PlayerById(TargetId) : Combat.ById(TargetId)) is { } tgt && !Targeting.Hidden(tgt))
             return tgt.Position;
         return null;
@@ -394,6 +419,15 @@ public partial class Shot : Node2D, IHittable, ITagged
                 DrawLine(new Vector2(0, 4f), new Vector2(0, 22f), new Color(1f, 0.75f, 0.35f, 0.35f), 3f);
                 DrawRect(new Rect2(-1.8f, -5f, 3.6f, 9f), new Color(1f, 0.92f, 0.7f));
                 DrawColoredPolygon(new[] { new Vector2(-1.8f, -5f), new Vector2(0, -8f), new Vector2(1.8f, -5f) }, new Color(1f, 0.85f, 0.5f));
+                break;
+            case ShotLook.Ghost:    // a pale, see-through slug: a round's echo (the Echo's repeater)
+                DrawLine(new Vector2(0, 4f), new Vector2(0, 20f), new Color(0.55f, 0.85f, 1f, 0.25f), 3f);
+                DrawRect(new Rect2(-1.8f, -5f, 3.6f, 9f), new Color(0.7f, 0.9f, 1f, 0.55f));
+                break;
+            case ShotLook.Rod:      // a white-hot lance with a long wake: the Dart's rod
+                DrawLine(new Vector2(0, 10f), new Vector2(0, 70f), new Color(0.75f, 0.9f, 1f, 0.3f), 5f);
+                DrawLine(new Vector2(0, -16f), new Vector2(0, 16f), new Color(0.8f, 0.92f, 1f, 0.55f), 6f);
+                DrawLine(new Vector2(0, -18f), new Vector2(0, 18f), new Color(1f, 1f, 1f), 2.5f);
                 break;
             case ShotLook.Ball:     // a slow, glowing ball with a short tail: easy to see coming
                 DrawLine(new Vector2(0, Radius * 0.5f), new Vector2(0, Radius * 3f), new Color(1f, 0.45f, 0.2f, 0.35f), Radius);

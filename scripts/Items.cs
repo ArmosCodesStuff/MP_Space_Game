@@ -93,15 +93,15 @@ public static class Items
     // ability's output, area or duration joins its role by id (the lane's ITEM ASSUMPTIONS).
     private static readonly (string role, string[] ids)[] Roles =
     {
-        ("@primary",       new[] { "main_damage", "fighter_damage", "blade_damage" }),
-        ("@primary_rate",  new[] { "main_interval", "fighter_interval", "blade_interval" }),
-        ("@primary_range", new[] { "main_range", "fighter_range", "blade_reach" }),
-        ("@tracking",      new[] { "main_turn", "fighter_turn" }),
-        ("@shot_speed",    new[] { "shell_speed", "fighter_speed" }),
+        ("@primary",       new[] { "main_damage", "fighter_damage", "blade_damage", "pepper_damage" }),
+        ("@primary_rate",  new[] { "main_interval", "fighter_interval", "blade_interval", "pepper_interval" }),
+        ("@primary_range", new[] { "main_range", "fighter_range", "blade_reach", "pepper_range" }),
+        ("@tracking",      new[] { "main_turn", "fighter_turn", "pepper_turn" }),
+        ("@shot_speed",    new[] { "shell_speed", "fighter_speed", "pepper_speed" }),
         ("@output",        new[] { "broadside_mult", "torpedo_damage", "missile_damage", "bubble_pool", "overdrive_mult",
-                                   "wave_push", "rail_damage", "hunter_damage", "echo_share", "lunge_damage", "whirl_damage" }),
-        ("@area",          new[] { "bubble_radius", "wave_range", "echo_radius", "whirl_reach", "hunter_range", "launch_range", "taunt_reach" }),
-        ("@duration",      new[] { "bubble_time", "overdrive_time", "wave_disable", "stealth_time", "roll_time", "echo_time", "whirl_time", "prism_time", "anchor_time", "tether_hold", "taunt_time" }),
+                                   "wave_push", "rail_damage", "hunter_damage", "reverb_share", "lunge_damage", "whirl_damage", "rod_damage", "venom_dps" }),
+        ("@area",          new[] { "bubble_radius", "wave_range", "reverb_radius", "whirl_reach", "hunter_range", "launch_range", "taunt_reach" }),
+        ("@duration",      new[] { "bubble_time", "overdrive_time", "wave_disable", "veil_time", "venom_time", "sprint_time", "ramjet_time", "reverb_time", "whirl_time", "prism_time", "anchor_time", "tether_hold", "taunt_time" }),
     };
 
     // The stat ids a key stands for on hull `c`: a role's rows the hull has, or the id itself.
@@ -319,11 +319,11 @@ public static class Items
     public static bool IsCraft(IHittable t) => t != null && TagExt.Is(t, Tag.Light | Tag.Fighter) && !TagExt.Is(t, Tag.Boss);
     // THE PRIMARY'S BLOWS by weapon id (Dealt): what Spin-up Feed ramps. The kits' new primaries add
     // their ids here (ITEM ASSUMPTIONS A10).
-    public static readonly string[] PrimaryShots = { "shell", "fighter", "blade", "spotter", Dealt.Mortar, Dealt.Lance };   // a wing craft's blow is its Wings row id; a melee row's its Id
-    // THE BLOWS THAT REPEAT BLOWS ALREADY WEIGHED (Dealt.Deal): the echo puts down what its ship dealt,
+    public static readonly string[] PrimaryShots = { "shell", "fighter", "blade", "echo", "pellet", "spotter", Dealt.Mortar, Dealt.Lance };   // a wing craft's blow is its Wings row id; a melee row's its Id
+    // THE BLOWS THAT REPEAT BLOWS ALREADY WEIGHED (Dealt.Deal): the reverb puts down what its ship dealt,
     // and every blow it stored was weighed at the door as it landed, so PlayerShip.Outgoing passes a
     // repeat as it is. A second repeating weapon is a row here.
-    public static readonly string[] Repeats = { Dealt.Echo };
+    public static readonly string[] Repeats = { Dealt.Reverb, Dealt.Venom };
 
     public static readonly Condition[] Conditions =
     {
