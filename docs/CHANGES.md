@@ -43,8 +43,7 @@ plugin-missing gate, the harness's stream on channel 12, the R0 pair checks in t
 reply-window measurement (opt-in), `tools/import.ps1` and both runners calling it. The session is
 still ENet: R2 switches it. The plugin is vendored in `addons/webrtc_native/` (9474f91: the
 `.gdextension` trimmed to the two `windows.*.x86_64` lines and both DLLs, byte-identical to the
-spike's); 5 of its 7 `LICENSE.*` files are in (libdatachannel, libjuice, libsrtp, mbedtls, plog); **2 are still
-missing** (likely usrsctp and the plugin's own) -- only pack.ps1 (R5) needs them.
+spike's); with all 7 `LICENSE.*` files: the plugin is fully vendored.
 **Then, in order:** `verify.ps1 -Quick` (rung 2), `tools\smoketest\run.ps1 -Solo` (rung 3) twice on
 different seeds, `run.ps1 -Solo -OneDll` once, `run.ps1 -ReplyWindow` once -- its `reply window:` line
 goes into DESIGN.md, and a window under 15 s stops the batch before R1 (plan §3.4). The runners also
