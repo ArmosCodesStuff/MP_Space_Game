@@ -241,28 +241,21 @@ public static class Ab
     // ── the freighters ───────────────────────────────────────────────────────
     public static readonly AbilityDef Deploy = new()
     {
-        Weapon = true, Id = "deploy", Name = "Deploy turret", Short = "DEPLOY", Default = Key.T,
-        Blurb = "Drops a turret where you are. It holds the spot and shoots what comes near until you collect it (C) or it dies.",
-        Press = (s, _) => s.DeployTurret(),
-        Refuse = (s, _) => s.TurretsOut >= (int)s.Stats["deploy_max"] ? "ALL OUT"
+        Weapon = true, Id = "deploy", Name = "Sentry", Short = "SENTRY", Default = Key.R,
+        Blurb = "Throws a sentry to the cursor, up to 600 u; it lands 0.8 s later and shoots what comes near. R with the cursor on one of yours recalls it.",
+        Press = (s, _) => s.DeployTurret(s.AimPoint),
+        // a recall is never refused
+        Refuse = (s, _) => s.RecallAt(s.AimPoint) != null ? null
+                         : s.TurretsOut >= (int)s.Stats["deploy_max"] ? "ALL OUT"
                          : s.Sl("deploy").Cool > 0 ? "RELOADING" : null,
         Show = (s, _) =>
         {
             int max = (int)s.Stats["deploy_max"];
+            if (s.RecallAt(s.AimPoint) != null) return new SlotState { Line = "RECALL", Lit = true };
             if (s.Sl("deploy").Cool > 0)
                 return new SlotState { Line = $"{s.Sl("deploy").Cool:0.0}s", Busy = (float)(s.Sl("deploy").Cool / s.Stats["deploy_cooldown"]) };
             return new SlotState { Line = $"{max - s.TurretsOut}/{max}", Lit = s.TurretsOut > 0 };
         },
-    };
-
-    public static readonly AbilityDef Collect = new()
-    {
-        Weapon = true, Id = "collect", Name = "Collect turret", Short = "COLLECT", Default = Key.C,
-        Blurb = "Picks up one of your turrets you are sitting over, to drop again.",
-        Press = (s, _) => s.CollectTurret(),
-        Refuse = (s, _) => s.TurretsOut == 0 ? "NONE OUT" : s.NearestOwnTurret() == null ? "NOT OVER ONE" : null,
-        Show = (s, _) => new SlotState { Line = s.TurretsOut == 0 ? "NONE OUT" : s.NearestOwnTurret() != null ? "PICK UP" : "FLY OVER ONE",
-                                         Lit = s.NearestOwnTurret() != null },
     };
 
     public static readonly AbilityDef Bubble = new()

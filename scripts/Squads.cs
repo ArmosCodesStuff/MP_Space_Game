@@ -141,6 +141,17 @@ public sealed class Squad
     public SquadPhase Phase { get; private set; } = SquadPhase.Hold;
     public Node2D Target { get; private set; }
     public Node2D Quarry;
+    // A CALL (Raider.Call; Taunt): a timed target override. While it is up the squad goes for the
+    // caller whatever it was after; at the lapse it picks again, its Quarry first. Quarry is untouched.
+    public Node2D CalledBy => _callLeft > 0 && Raider.Up(_call) ? _call : null;
+    private Node2D _call;
+    private double _callLeft;
+    public void Call(Node2D by, double seconds)
+    {
+        if (!Raider.Up(by) || seconds <= 0) return;
+        _call = by; _callLeft = seconds;
+        if (!ReferenceEquals(Target, by)) { Target = by; Reform(); }
+    }
     public Vector2 Station;
     public float Circuit = PerimeterR;
     public bool Burning { get; private set; }  // this commit is on the boost (Reboost says whether)
@@ -198,13 +209,19 @@ public sealed class Squad
         if (_sinceBurn < double.MaxValue) _sinceBurn += delta;
         Moving = 0f;
         if (_dark != null && !GodotObject.IsInstanceValid(_dark)) _dark = null;
+        if (_call != null && ((_callLeft -= delta) <= 0 || !Raider.Up(_call)))
+        {   // the call is over: back to what it would have taken
+            bool held = ReferenceEquals(Target, _call);
+            _call = null; _callLeft = 0;
+            if (held) { var next = Pick(hub); if (!ReferenceEquals(next, Target)) { Target = next; Reform(); } }
+        }
         if (!Raider.Up(Target))
         {   // it died, hid or left: re-pick, keeping what went dark to take back the moment it is seen
             if (Target != null && GodotObject.IsInstanceValid(Target) && Targeting.Hidden(Target)) _dark = Target;
             var next = Pick(hub);
             if (!ReferenceEquals(next, Target)) { Target = next; Reform(); }
         }
-        else if (_dark != null && !ReferenceEquals(_dark, Target) && Raider.Up(_dark)) { Target = _dark; Reform(); }
+        else if (_call == null && _dark != null && !ReferenceEquals(_dark, Target) && Raider.Up(_dark)) { Target = _dark; Reform(); }
         if (ReferenceEquals(_dark, Target)) _dark = null;
         if (Target == null) { Circle(dt); return; }
         _track.Watch(Target.Position, delta);
@@ -222,11 +239,12 @@ public sealed class Squad
         Left = left;
     }
 
-    // WHAT IT GOES FOR: its quarry while there is one; else what it can see (within Detect of the
+    // WHAT IT GOES FOR: its caller while a call is up; its quarry while there is one; else what it can see (within Detect of the
     // anchor, for a squad that holds a ring), the preferred tag first, spread across its wave, and
     // the nearest or the loneliest of those.
     private Node2D Pick(Hub hub)
     {
+        if (CalledBy is { } caller) return caller;
         if (Raider.Up(Quarry)) return Quarry;
         if (hub == null) return null;
         var all = hub.RaiderTargets().ToList();

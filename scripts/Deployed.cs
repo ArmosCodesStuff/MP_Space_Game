@@ -41,6 +41,7 @@ public partial class DeployedTurret : Node2D, IRaidTarget, ITagged, ITurretHost
     public IReadOnlyList<Turret> Siblings => _mounts;
     public void NoteDealt(double d, IHittable target, string weapon) => Ship?.NoteDealt(d, target, weapon);
     public PlayerShip Credit => Ship;
+    public IHittable Prefer => Ship?.Painted;         // its owner's paint first (F14)
 
     public TurretSpec Spec(bool pd) => new()
     {

@@ -19,7 +19,7 @@ using Godot;
 //                 pinned, and its row's missile -- only at a PINNED target -- lands where the target
 //                 WILL be when the row's flight ends (EnemyDef.MissileFlight): a red circle marks it.
 // ─────────────────────────────────────────────────────────────────────────────
-public partial class Raider : Node2D, IHittable, ITagged, IStatused, ISquadMember
+public partial class Raider : Node2D, IHittable, ITagged, IStatused, ISquadMember, ITowable
 {
     public Hub Hub;
     // WHICH enemy this is: a row of Enemies.All. The index is what goes on the wire.
@@ -94,6 +94,10 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused, ISquadMembe
         get => Squad?.Quarry;
         set { if (Squad != null) Squad.Quarry = value; }
     }
+    // A CALL is its squad's too (Squad.Call): host, a timed override that leaves Quarry alone
+    public void Call(Node2D by, double seconds) { if (Net.Sim) Squad?.Call(by, seconds); }
+    public Node2D CalledBy => Squad?.CalledBy;
+    public TowState Towed { get; set; }            // F19 (Towing.cs): held off a bow or hurled from it; host
     public bool Latched { get; private set; }
     public bool Boosting => Net.Sim ? _boosting : (_netFlags & FlagBoost) != 0;
     public float Speed { get; private set; }
@@ -186,7 +190,8 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused, ISquadMembe
     void Strike(Node2D t, double d)
     {
         d = _status.Out(d, OutKind.Gun);
-        if (d > 0) (t as IRaidTarget)?.Hit(d, Position, $"raider:{NetId}");
+        if (d > 0 && !(t is IHittable h && Prism.Catch(h, BlowKind.Ray, Position, t.Position, d, $"raider:{NetId}")))   // a prism splits the ray (F11)
+            (t as IRaidTarget)?.Hit(d, Position, $"raider:{NetId}");
     }
 
     public override void _Process(double delta)
@@ -203,6 +208,7 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused, ISquadMembe
         if (!Alive) return;
         _status.Tick(delta);
         _boosting = false;
+        if (Towed != null) { Speed = 0; Latched = false; if (!Towing.Step(this, this, delta)) Towed = null; QueueRedraw(); return; }   // towed: off its post
         if (_status.Has(Status.Disabled) || Squad == null) { Speed = 0; Latched = false; QueueRedraw(); return; }   // stunned: it sits there
         var from = Position;
         var t = Target;
@@ -223,7 +229,9 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused, ISquadMembe
             float top = Squad.Top(this), d = Position.DistanceTo(post);
             float step = Latched ? top : Mathf.Min(top, d / (float)System.Math.Max(Squad.Left, 1.0 / 60));
             Position = Position.MoveToward(post, step * dt);
-            Latched = Position.DistanceTo(post) < 12f && Gap(Position, t) <= Def.Reach;
+            // THE LATCH GATES (F17 rows): a status may refuse a new latch, or drop the one it holds
+            Latched = Position.DistanceTo(post) < 12f && Gap(Position, t) <= Def.Reach
+                      && (Latched ? !_status.DropsLatch : !_status.BlocksLatch);
             Rotation = Mathf.LerpAngle(Rotation, Aim.Face(Position, t.Position), Mathf.Clamp(8f * (float)Agility * dt, 0f, 1f));
         }
         Speed = dt > 0 ? from.DistanceTo(Position) / dt : 0f;

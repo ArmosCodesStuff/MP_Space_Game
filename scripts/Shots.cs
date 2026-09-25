@@ -45,12 +45,18 @@ public class ShotDef
     // piercing slug and a piercing line are one idea. Each body is struck once, however many of the
     // sweep's points fall inside it.
     public int Stops = 1;
+    // A PRISM MAY TURN IT BACK (F11, Prism.cs): a round of this row caught on a guard is fired back as a
+    // friendly Reflect round (Shot.Strike). The siege's cruise missile never is.
+    public bool Reflectable;
+    // A DECOY MAY TURN IT (F14, Decoys.cs): a hostile guided row a burning point lures onto itself. The
+    // siege's cruise missile never is.
+    public bool Decoyable;
 }
 
 public static class Shots
 {
     // The index IS the id on the wire (Hub.NetShot), so APPEND ONLY.
-    public const int Shell = 0, Slug = 1, Scrap = 2, Torpedo = 3, Missile = 4, Seeker = 5, Cruise = 6;
+    public const int Shell = 0, Slug = 1, Scrap = 2, Torpedo = 3, Missile = 4, Seeker = 5, Cruise = 6, Reflect = 7;
 
     public static readonly ShotDef[] All =
     {
@@ -58,8 +64,8 @@ public static class Shots
         // defence alone may have (Tag.Missile) -- a cruise missile's hull it strikes like any hull
         new() { Id = "shell",   AtPlayers = false, Pad = 3f,  Sweep = 6f, Look = ShotLook.Bullet },
         // a boss's slow, dodgeable round, and the scrap of the same volley
-        new() { Id = "slug",    AtPlayers = true,  Pad = 0f,  Sweep = 6f, Burst = 0.25, Look = ShotLook.Ball, Sound = "drake_gun" },
-        new() { Id = "scrap",   AtPlayers = true,  Pad = 0f,  Sweep = 6f, Burst = 0.25, Look = ShotLook.Shard },
+        new() { Id = "slug",    AtPlayers = true,  Pad = 0f,  Sweep = 6f, Burst = 0.25, Look = ShotLook.Ball, Sound = "drake_gun", Reflectable = true },
+        new() { Id = "scrap",   AtPlayers = true,  Pad = 0f,  Sweep = 6f, Burst = 0.25, Look = ShotLook.Shard, Reflectable = true },
         // a bomber's torpedo: straight, trailing smoke, and it detonates on what it touches
         new() { Id = "torpedo", AtPlayers = false, Pad = 4f,  Sweep = 0f, Burst = 0.5, Smoke = true, Guided = true,
                 MarkEveryPeer = true, Look = ShotLook.Missile },
@@ -68,7 +74,7 @@ public static class Shots
                 MarkEveryPeer = true, Look = ShotLook.Missile, Heavy = true },
         // fired AT the pilots, and the one thing point defence exists for
         new() { Id = "seeker",  AtPlayers = true,  Pad = 4f,  Sweep = 0f, Burst = 0.5, Smoke = true, Guided = true,
-                Interceptable = true, MarkEveryPeer = true, Look = ShotLook.Missile },
+                Interceptable = true, MarkEveryPeer = true, Look = ShotLook.Missile, Reflectable = true, Decoyable = true },
         // A CRUISE MISSILE: slow, long-legged and guided, fired AT the pilots -- and a target in its
         // own right. Its body carries a hull (Tag.Hulled, not Tag.Missile), so every gun, blow, wing
         // and seeker a pilot has may bring it down and point defence wears it down rather than
@@ -76,6 +82,9 @@ public static class Shots
         new() { Id = "cruise",  AtPlayers = true,  Pad = 4f,  Sweep = 0f, Burst = 0.5, Smoke = true, Guided = true,
                 Interceptable = true, MarkEveryPeer = true, Look = ShotLook.Missile,
                 Tags = Tag.Hulled, Label = "CRUISE MISSILE" },
+        // A ROUND A PRISM TURNED BACK (Shot.Strike): the enemy's own round, now the catcher's -- straight,
+        // unguided, at the base's enemies. Its speed, damage and size are the caught round's.
+        new() { Id = "reflect", AtPlayers = false, Pad = 3f, Sweep = 6f, Burst = 0.25, Look = ShotLook.Ball },
     };
 
     public static ShotDef Of(int id) => All[id >= 0 && id < All.Length ? id : Shell];
@@ -148,6 +157,12 @@ public partial class Shot : Node2D, IHittable, ITagged
     public bool HostileFire => Def.AtPlayers;
     public bool Heavy => Def.Heavy;
     public bool IsMissile => Def.Look == ShotLook.Missile;
+    // LURED (Hub.NetDecoy, on every peer): it steers for this point instead of its target, and bursts
+    // there, harmlessly, once within `_catch` of it. Sticky.
+    public bool Decoyable => Def.Decoyable;
+    public Vector2? DecoyPoint { get; private set; }
+    private float _catch;
+    public void DecoyTo(Vector2 point, float catchRadius) { DecoyPoint = point; _catch = catchRadius; }
     public void TakeDamage(double d)
     {
         if (!Net.Sim || _spent) return;
@@ -196,11 +211,9 @@ public partial class Shot : Node2D, IHittable, ITagged
         // it -- it flies on down the heading it had, and still strikes whatever it touches (Strike
         // asks nobody's stealth); the target seen again, it homes again. A guest's copy reads the
         // same status bits, which the host sends every peer for every ship.
-        if (d.Guided && TurnRate > 0 && TargetId != 0
-            && (d.AtPlayers ? Combat.PlayerById(TargetId) : Combat.ById(TargetId)) is { } tgt
-            && !Targeting.Hidden(tgt))
-        {   // guided: the nose turns toward the target at TurnRate, and never snaps
-            float want = (tgt.Position - GlobalPosition).Angle(), have = Dir.Angle();
+        if (d.Guided && TurnRate > 0 && GuideTo(d) is { } spot)
+        {   // guided: the nose turns toward the target (or its lure) at TurnRate, and never snaps
+            float want = (spot - GlobalPosition).Angle(), have = Dir.Angle();
             Dir = Dir.Rotated(Mathf.Clamp(Mathf.AngleDifference(have, want), -TurnRate * dt, TurnRate * dt));
             Rotation = Aim.Along(Dir);
         }
@@ -211,8 +224,17 @@ public partial class Shot : Node2D, IHittable, ITagged
         if (d.Smoke) { _puffCd -= dt; if (_puffCd <= 0) { _puffCd += PuffEvery; _smoke.Add((GlobalPosition - Dir * 8f, 0f)); } }
 
         Shots.Sweep(from, GlobalPosition, d.Sweep, p => Strike(p, d));
+        if (!_spent && DecoyPoint is { } lure && GlobalPosition.DistanceTo(lure) <= _catch) Intercept();   // burst on the lure
         if (!_spent && _flown >= Range) End();
         QueueRedraw();
+    }
+    // What a guided body steers for: its lure once it has one, else its target while it is seen.
+    private Vector2? GuideTo(ShotDef d)
+    {
+        if (DecoyPoint is { } lure) return lure;
+        if (TargetId != 0 && (d.AtPlayers ? Combat.PlayerById(TargetId) : Combat.ById(TargetId)) is { } tgt && !Targeting.Hidden(tgt))
+            return tgt.Position;
+        return null;
     }
 
     // What it touches at `p`, and what that costs. True when it has ENDED: it struck its last body
@@ -230,8 +252,9 @@ public partial class Shot : Node2D, IHittable, ITagged
             {
                 if (!d.MarkEveryPeer && h is Node2D struck) Popups.NoteImpact(struck, p);
                 // a ship is told where the blow came from, for its shield; a hostile is dealt with
-                // through the door (Dealt.Deal), the shot's own row naming the weapon
-                if (h is PlayerShip ps) ps.Hit(Damage, p - Dir * 10f, HitSource);
+                // through the door (Dealt.Deal), the shot's own row naming the weapon. A prism turns a
+                // reflectable round back instead (Reflected), and takes nothing of it.
+                if (h is PlayerShip ps) { if (!Reflected(ps, p, d)) ps.Hit(Damage, p - Dir * 10f, HitSource); }
                 else Dealt.Deal(h, Damage, IsInstanceValid(Source) ? Source : null, d.Id);
             }
             if (stops > 0 && _struck.Count >= stops)
@@ -242,6 +265,19 @@ public partial class Shot : Node2D, IHittable, ITagged
             }
         }
         return false;
+    }
+
+    // A ROUND CAUGHT ON A GUARD (Prism.cs): fired back from `p` as the catcher's own Reflect round --
+    // SQUARE along the guard at the band's x1.5, SLANT along the mirror at x1.0 -- unguided, with the
+    // damage, size and what is left of the flight it had. Host. False: not caught; it lands.
+    private bool Reflected(PlayerShip ps, Vector2 p, ShotDef d)
+    {
+        if (!d.Reflectable) return false;
+        var split = Prism.Resolve(ps, Dir);
+        if (!split.Caught) return false;
+        Combat.Fire(Shots.Reflect, p, split.Out, Speed * Prism.Bands[split.Band].RoundSpeed, Mathf.Max(Range - _flown, 0f),
+                    Damage, radius: Radius, source: ps, size: Size);
+        return true;
     }
 
     // The first body at `p` it may strike and has not: a shell never takes a Missile out of the air --

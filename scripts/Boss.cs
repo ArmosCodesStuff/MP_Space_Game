@@ -510,7 +510,8 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
         {
             case MoveWay.Bolt:
                 if (!Sees(s.Target)) break;
-                s.Target.Hit(Out(m), Position, m.Source);
+                if (!Prism.Catch(s.Target, BlowKind.Ray, nose, s.Target.Position, Out(m), m.Source))   // a bolt is a ray (F11)
+                    s.Target.Hit(Out(m), Position, m.Source);
                 Combat.Flash(nose, s.Target.Position, m.Beam);
                 break;
             case MoveWay.Shoot:
@@ -548,10 +549,9 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
                     // ADDED, not set: the overshoot carries, so at 60 fps a judgement lands every 15
                     // frames and a full burn is all 13 of them.
                     s.Next += m.Tick;
+                    // Walked nearest first, and a prism on it catches the rest (Prism.Walk, F11)
                     var (la, lb) = Segment(m.Id);
-                    foreach (var p in _hittable)
-                        if (Combat.DistToSegment(p.Position, la, lb) <= m.Width / 2f + p.HitRadius)
-                            p.Hit(Out(m), Position, m.Source);
+                    Prism.Walk(la, lb, m.Width / 2f, Out(m), Position, m.Source, _hittable);
                     if (--s.Left <= 0) s.At = Phase.Idle;   // its last judgement ends it (Judgements)
                 }
                 break;
