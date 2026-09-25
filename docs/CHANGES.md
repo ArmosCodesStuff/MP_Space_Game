@@ -36,6 +36,16 @@ history pick the work up from it alone. Update it in the same change as the code
 
 ## Handoff — read this first
 
+**2026-09-25 (worktree `WarShips_wt_kits6d`, branch `wt/kits6d`): kits lane A slice 6d, the lights (Dart, Echo, Wraith),
+built J1-J12. Compiles, rung 2 green; engine-unproven: every check is owed in the final test phase** -- rung 3 twice
+(LaneA6d Pepper, Rod, Ramjet, Sling, Slip, Repeater, Reverb, Rewind, Emp, Scatter, Backstab, Veil, Venom, Step checks and
+their Row checks; the rewritten walls, kit-carry, defaults, ability tour and sweep), rung 4 (frames 76b-76f, 78b-78d), rung 5
+`six,six` (the Pepperbox, Rod, Ramjet, Rewind, EMP and Shadow step guest pairs). Wire: Shots rows pepper 9 / rod 10 /
+echo 11 / pellet 12, ShotLook Rod / Ghost, Fx.Venom 16, Raider.FlagJam 16 (DL11: renumber at the merge if another lane took
+it); the ability ids change (roll, echo, stealth gone; pepperbox, rod, ramjet, slingshot, reverb, rewind, emp, veil, venom,
+step), so the protocol fingerprint moves. Owner question with its default built: the Wraith's v1 numbers were never
+committed (DL3), derived from the signed power rows. Detail, DL1-DL14 and what is owed: `docs/plans/ledger_kits6d.md`.
+
 **2026-09-25 (worktree `WarShips_wt_kits4`, branch `wt/kits4`): class kits lane A slice 4 -- F8 (the
 press's point, helm moves with the Grapnel's pull and swing, the host's mark and wards) and F10 (Mend)
 built, and the merge gate's four findings fixed (kits4-J5); compiles, rung 2 green. engine-unproven: rung
@@ -336,9 +346,9 @@ whenever the ship is alive, on every hull that mounts it.
 | Sniper | railgun (hold to charge; Space in the white box while it reloads: x1.5) | — | Anchor (8 s rooted, x2.5, reach x1.4) | Q tether mine (2 charges), E flares |
 | Warrior | blade (26 every 0.40 s) | — | prism stance (2 s) | E lunge (420 u), Q whirlwind (2 s) |
 | Warden | proximity flak (45 DPS, 70 u fuse) | fire mode | six hunter-seekers (latched raiders first) | Q taunt (6 s), E flak curtain, point defence (passive), 10 DPS |
-| Dart | main gun | fire mode | barrel roll (1.2 s untouchable, then a boost) | |
-| Echo | main gun | fire mode | echo (5 s remembered, then detonated) | |
-| Wraith | main gun | fire mode | stealth (5 s unseen) | |
+| Dart | pepperbox (hold: darts steered onto the cursor) | — | sprint and Rod from God (3 s, then the rod) | Q ramjet (+10% top a second, up to +50%), E slingshot, slipstream (passive) |
+| Echo | repeater (every round again 0.6 s later) | fire mode | reverb (5 s x1.2, 35% of it blasted) | Q rewind (8 s back, hull too), E EMP (300 u, 4 s) |
+| Wraith | ambush scattergun (7 pellets; x1.5 from behind) | fire mode | veil (5 s unpickable, next volley x3) | Q venom (poison doses), E shadow step (140 u behind the target) |
 
 ### Where things are
 
@@ -614,6 +624,28 @@ outstanding from the batch of 2026-09-23.)*
 ---
 
 ## Unreleased
+
+### Class kits, lane A slice 6d: the lights -- Dart, Echo, Wraith (2026-09-25, worktree wt/kits6d)
+
+**Dart** (hull 200): Space the **pepperbox** (two nose rails, a dart every 1/6 s steered onto the live cursor, 750 u,
+7.5 each x top/260 up to x1.5, priced by the host); F **sprint and Rod from God** (3 s of x3 thrust and +100 top with the
+throttle forced open, then a rod down the nose through everything on its line, 180 x top/260 up to x2, 30% of the speed
+kept; 12 s); Q **Ramjet** (8 s: +10% top a second at full throttle up to +50%, a turn bleeds it; 20 s); E **Slingshot**
+(the nose and the whole velocity snapped onto the cursor; 6 s); **Slipstream** (x0.7 taken at 325 u/s). Its barrel roll
+is gone. **Echo** (hull 180): Space the **repeater** (22 every 0.5 s to 500 u, each round again at 11 from where it left,
+0.6 s later); F **Reverb** (5 s at x1.2 rate, 35% of what it dealt in 220 u where the last landed; 18 s); Q **Rewind** (back
+8 s: position, heading, velocity and hull, every web let go; 30 s); E **EMP** (every hostile craft within 300 u jammed
+4 s -- no shots, no launches, the turret held, webs let go -- pulsing twice; 18 s). **Wraith** (hull 220): Space the
+**Ambush scattergun** (7 pellets of 7 every 0.75 s, +-10 deg, 320 u: 65.3 DPS point blank); **Backstab** (x1.5 from
+within 60 deg of a heading target's tail); F **Veil** (5 s nothing hostile can pick it, x1.35 top, the next volley x3,
+firing drops it; 18 s); Q **Venom** (6 s coated: each landed pellet a dose, up to 10 at 1.25 a second, for 5 s after the
+last; 22 s); E **Shadow step** (140 u behind the selected hostile within 900 u, nose on it, speed kept, webs let go;
+14 s). New mechanisms: `Bores.cs` (rounds down the nose), `Trails.cs` (a ship's recent past), `Doses.cs` (stacking damage
+over time), `TurretSpec.RepeatShare` / `Pellets`, `IHittable.Facing`, `AbilityDef.AtOnce` / `Forces` / `Parting` /
+`ThrustStat` / `OnFire`, `PlayerShip.Prime`.
+**Known broken:** engine-unproven (rungs 3-5 owed). The Wraith's numbers are a derived default, not a signed card (DL3).
+The Slingshot has no rung-5 pair (kits_v31 §8 does not list it; DL10). The kit-carry check was already stale on this
+branch after J1/J5 (the Echo could not wear its own gun); J8 fixed and rewrote it.
 
 ### Class kits, lane A slice 4: helm moves, wards, the press's point, Mend -- F8, F10 (2026-09-25, worktree wt/kits4)
 

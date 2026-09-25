@@ -497,3 +497,20 @@ PlayerShip 9, Stats 2, Dealt 1, Fx 1, Items 3, SmokeTest 42; stealth_*|GoDark Pl
   LaneA6dStepHostWatch/HostChecks (counted, the guest's hull within 30 u of the host's spot) + LaneA6dStepGuestChecks;
   sweep witness ["step"].
 - next: kits6d-J12 (record).
+
+## kits6d-J12 · PRE
+- tier opus; intent: the record -- CHANGES.md Handoff + Unreleased (Known broken honest) + the abilities table's three light rows; DESIGN.md slice-6d section; final POST listing what the test phase owes.
+- HEAD b399a8a32d865a18f8f3a1af6451e58d39ace0b1
+- docs/CHANGES.md da5597d82222a106aed81b6abd3b45079edbae36
+- docs/DESIGN.md 7a1b07f95074213d332987e451ab544cecb8acf0
+
+## kits6d-J12 · POST
+- verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final test phase.
+- written: CHANGES.md Handoff + Unreleased (Known broken: engine-unproven, DL3 derived numbers, no Slingshot rung-5 pair,
+  the kit-carry check's earlier staleness) + the abilities table's Dart / Echo / Wraith rows; DESIGN.md "slice 6d: the lights".
+- THE TEST PHASE OWES (nothing here has run): rung 3 `quick,solo,solo` -- LaneA6d{Pepper,Rod,Ramjet,Sling,Slip,Repeater,Reverb,
+  Rewind,Emp,Scatter,Backstab,Veil,Venom,Step}Checks and their Row checks, the rewritten walls / kit-carry / defaults / tour
+  / sweep witnesses; rung 4 `screens` -- frames 76b-76f, 78b_wraith_scatter, 78c_wraith_veil, 78d_wraith_venom (one look by
+  eye for the new art: the veil's fade, the venom flare, the pellet fan); rung 5 `six,six` -- the Pepperbox, Rod, Ramjet,
+  Rewind, EMP and Step host/guest pairs.
+- SLICE 6d DONE: J1-J12 committed. Open: DL3 (the Wraith's numbers, owner), DL11 (FlagJam 16 at the merge), DL14.
