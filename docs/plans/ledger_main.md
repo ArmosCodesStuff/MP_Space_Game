@@ -8,8 +8,9 @@ Engine outputs for the old-way batches: S = C:\Users\logan\AppData\Local\Temp\cl
   opus code gate, merge. Returns {kits, gate, merge}. merge=false: merge by hand. gate fail: one fix batch from its problems.
 - wf_ee2e95db-7a6 / task w3j9do0p7, "lane-art-j45" (no engine). J4+J5 POSTed; A3 = merge version-l, IN PROGRESS in wt_art; quick, opus code
   gate (camera ruling in code + its written check), merge. Frames are read in the test phase.
-- wf_0829fd71-6a7 / task wva52tsb5, "lane-slots-gate". S1-S3 built (933450b, 39cd05c); opus code gate, merge. Its CLAUDE.md s8 edit may
-  conflict with the coordinator's rewrite (merge=false): resolve by hand, keeping the build/test phase text and its slot sentence.
+- wf_532652e7-46e / task wecrtf9yf, "lane-slots-fix" (no engine). Gate 1 (wva52tsb5) failed 39cd05c on 4: the sweep's P(27015) = the next slot's
+  host 27115 (move to P(27140)); -Slots 3 -> 4 + clamp at 4 (slot 4's fakeigd 19480 = slot 0's box); slot 0 took the lock before quick (take it
+  lazily); an untrue NuGet comment. Fix S4, quick, gate 2, merge. merge=false (CLAUDE.md s8/s12 hunk): resolve by hand, keeping both.
 
 ## Next
 1. When kits merges: launch the next wave ALL AT ONCE, build only (kits_v31.md section 8): lane A slice 3 (F5, F23 Lines, F6, F7), then
