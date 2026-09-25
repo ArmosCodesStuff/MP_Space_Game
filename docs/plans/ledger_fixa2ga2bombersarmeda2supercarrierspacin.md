@@ -27,3 +27,10 @@ Kind check: kits_v3 §3.1 "At 20 s they fly home and dock", as the code does. `L
 patrol home between runs (so a run counts only its own craft) and asserts at the end: 3 still out at 19.7 s, all
 docked by 26 s, cooling 29.4-30, Q COOLING. solo@11400714819323392986 (tag ..._d): runs 0-2 0.03/0.85/1.68 PASS;
 the last docked at 22.7 s. Checks: LaneA6aSuperChecks (runs 0-2, the 20.4 s end).
+
+## POST a2-anchor-warp-end
+
+Kind check: `0.000 s on` proved no hull flew between the jump and the read (a timer resumes after the frame's
+ships fly, a Frame before). `LaneA4AnchorWarpChecks` takes one Frame after each Wait, so the jump's Frame holds one
+flight; the literal (AnchorWarped that frame, < 0.05 s, moved < 40 u) unchanged. HelmMoves untouched.
+solo@11400714819323392986 (tag ..._d): bite/pull/swing PASS. Checks: LaneA4AnchorWarpChecks.

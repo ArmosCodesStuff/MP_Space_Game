@@ -10992,13 +10992,15 @@ public partial class _Test : Node
             HelmMoves.Confirm(dd, dummy, n, n.Time + 1);
             var key = Vary(0f, 1f) < 0.5f ? global::Godot.Key.A : global::Godot.Key.D;
             if (k == 0) { int f = (int)Vary(1f, 3.99f); for (int i = 0; i < f; i++) await Frame(); }
-            else if (k == 1) await Wait(Vary(0.2f, 0.3f));
+            else if (k == 1) { await Wait(Vary(0.2f, 0.3f)); await Frame(); }
             else
             {
                 for (int i = 0; i < 60 * 3 && dd.Helm.On && dd.Helm.Pulling; i++) await Frame();
                 KeyDown(key);
-                await Wait(Vary(0.3f, 0.8f));
+                await Wait(Vary(0.3f, 0.8f)); await Frame();
             }
+            // (a timer resumes AFTER the frame's ships have flown, a frame BEFORE: the Frame after each Wait puts the
+            // jump's one Frame below round exactly one flight of the hull, as the bite's frames already do)
             bool inPhase = dd.Helm.On && (k == 0 ? dd.Helm.T < n.Bite : k == 1 ? dd.Helm.Pulling && dd.Helm.T > n.Bite : !dd.Helm.Pulling);
             var shipAt = dd.Position; double t0 = dd.Helm.T;
             float jump = Vary(1500f, 3000f);
