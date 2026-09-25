@@ -2186,14 +2186,12 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // (Missiles.Predict on a Lead watched frame to frame), so the guns lead it by themselves; with none, the cursor.
     // Worked out on the owner and sent as its aim, as the cursor was: the host fires at it, no new wire.
     private Lead _director;
-    private IHittable _directed;
     public Vector2 Directed(Vector2 cursor, IHittable selected, double dt)
     {
         double lead = Stats["director_lead"];
         if (lead <= 0 || selected is not { Alive: true } || Position.DistanceTo(selected.Position) > Stats["main_range"] * lead)
-        { _directed = null; return cursor; }
-        if (!ReferenceEquals(selected, _directed)) { _director = default; _directed = selected; }
-        _director.Watch(selected.Position, dt);
+        { _director = default; return cursor; }
+        _director.Watch(selected, selected.Position, dt);
         double speed = Math.Max(1, Stats["shell_speed"]);
         var at = selected.Position;
         // the flight to where it will be, taken again from that point: 8 passes settle to a unit or two at 400 u/s

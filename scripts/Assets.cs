@@ -28,7 +28,7 @@ using System.Collections.Generic;
 // Game.Quit, would hand a node that still draws it a disposed texture.
 public static class Assets
 {
-    private static readonly Dictionary<string, Resource> _held = new();
+    [Live] private static readonly Dictionary<string, Resource> _held = new();
 
     public static T Load<T>(string path) where T : Resource
     {

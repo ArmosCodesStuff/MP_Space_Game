@@ -46,10 +46,10 @@ public partial class Yard : Node2D
     // A guest's OWN base, set aside while it visits someone else's. Static: the scene is
     // reloaded when the party goes to the arena and back, and an instance field went
     // with it -- a guest who followed the party lost its own base.
-    private static readonly Dictionary<string, double> _ownStock = new();
+    [Live] private static readonly Dictionary<string, double> _ownStock = new();
     private static double _ownCredits;
-    private static readonly Dictionary<string, int> _ownLevels = new();
-    private static readonly Dictionary<string, double> _ownInvested = new();
+    [Live] private static readonly Dictionary<string, int> _ownLevels = new();
+    [Live] private static readonly Dictionary<string, double> _ownInvested = new();
     private static bool _parked;
     private double _totalsCd, _stateCd, _t, _saveCd;
     // How often the base is written to disk while it ticks over. Mining income arrives every
@@ -172,7 +172,7 @@ public partial class Yard : Node2D
     public static double LastAway;                    // how long the last trip was, in game seconds
     // ...and what it credited, per resource. Two named statics for a two-resource fleet was the
     // same trap as two named fields.
-    private static readonly Dictionary<string, double> _lastAwayGain = new();
+    [Live] private static readonly Dictionary<string, double> _lastAwayGain = new();
     public static double LastAwayGained(string res) => _lastAwayGain.GetValueOrDefault(res);
     public static double TripStartCredits;            // the credits set aside when the last trip began
     // A bounty share. On disk AT ONCE (the caller saves next): quitting between the kill and home

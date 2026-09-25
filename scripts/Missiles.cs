@@ -124,19 +124,32 @@ public static class Missiles
 // holds one of these and feeds it the target's position; a jump is read as standing still, or the
 // predicted spot lands miles away. Raider kept this by hand in two fields, and the second
 // launcher would have kept a second copy of the same four lines.
+// KEYED ON WHO IT WATCHES (Watch(who, at, dt)): a new target starts a new estimate, never a velocity
+// taken from the old target's spot to the new one's (a retarget is not a jump), and `Ready` says the
+// estimate is this target's own -- two frames of it. A launcher that throws before it is Ready throws
+// with no lead (a heavy's first throw after a retarget was a sure miss on a moving hull).
 public struct Lead
 {
     private Vector2 _last;
     private bool _has;
+    private object _who;
     public Vector2 Velocity { get; private set; }
+    // two frames of the same target are in: Velocity is its own
+    public bool Ready { get; private set; }
     // IT JUMPED this frame (a warp, a Rewind, a Shadow step): moved Missiles.Step or more. A squad
     // re-forms on it (Squads.cs) rather than chasing a spot its posts no longer mean.
     public bool Jumped { get; private set; }
+    public void Watch(object who, Vector2 at, double delta)
+    {
+        if (!ReferenceEquals(who, _who)) { this = default; _who = who; }
+        Watch(at, delta);
+    }
     public void Watch(Vector2 at, double delta)
     {
         var moved = at - _last;
         Jumped = _has && moved.Length() >= Missiles.Step;
         Velocity = _has && delta > 0 && moved.Length() < Missiles.Step ? moved / (float)delta : Vector2.Zero;
+        Ready = _has;
         _last = at; _has = true;
     }
 }

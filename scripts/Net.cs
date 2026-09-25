@@ -252,7 +252,7 @@ public partial class Net : Node, Rendezvous.IHostDesk, Rendezvous.IGuestDesk
                 if (m.GetCustomAttribute<RpcAttribute>() is { } a)
                     parts.Add($"{t.Name}.{m.Name}({string.Join(",", m.GetParameters().Select(p => p.ParameterType.Name))}) {a.Mode} {a.TransferMode} {a.TransferChannel}");
             foreach (var f in t.GetFields(all & ~BindingFlags.Instance).OrderBy(f => f.Name))
-                if ((f.IsLiteral || f.IsInitOnly) && Plain(f.FieldType))
+                if ((f.IsLiteral || f.IsInitOnly) && Plain(f.FieldType) && f.GetCustomAttribute<LiveAttribute>() == null)
                     parts.Add($"{t.Name}.{f.Name}={Show(f.GetValue(null))}");
         }
         // THE SHEETS: each class's base numbers are written in ShipStats' constructor, not a field.
@@ -263,13 +263,22 @@ public partial class Net : Node, Rendezvous.IHostDesk, Rendezvous.IGuestDesk
         return (int)h;
     }
     // Values whose text is the same on every machine: numbers, words, colours and vectors, and
-    // records, tables, struct rows and arrays of them. Not engine objects, and not the game's live
-    // collections (a list or dictionary field is what a run fills in -- the key bindings, the character).
+    // records, tables, struct rows, arrays and COLLECTIONS of them (a List, a Dictionary, a HashSet of
+    // Plain things: NetIds.Widths, Spawns.All, Hints.All). Not engine objects, and never a field marked
+    // [Live]: what a run fills in (the key bindings, the character, a cache) is not the build.
     private static bool Plain(Type t) =>
         t.IsPrimitive || t.IsEnum || t == typeof(string) || t == typeof(decimal) || t == typeof(Color) || t == typeof(Vector2)
         || (t.IsArray && Plain(t.GetElementType()))
         || (t.GetMethod("<Clone>$") != null && !typeof(GodotObject).IsAssignableFrom(t))
-        || Table(t) || StructRow(t);
+        || Table(t) || StructRow(t) || Collection(t);
+    // A COLLECTION TABLE: any System.Collections.Generic type (List, Dictionary, HashSet, their
+    // interfaces) whose type arguments are all Plain. Show writes a list in order, a dictionary and a
+    // set in key order, so two machines that built them in another order still agree.
+    private static bool Collection(Type t) =>
+        t.IsGenericType && t.Namespace == "System.Collections.Generic" && typeof(System.Collections.IEnumerable).IsAssignableFrom(t)
+        && t.GetGenericArguments().All(Plain);
+    private static bool IsSet(Type t) =>
+        t.GetInterfaces().Append(t).Any(i => i.IsGenericType && (i.GetGenericTypeDefinition() == typeof(ISet<>) || i.GetGenericTypeDefinition() == typeof(IReadOnlySet<>)));
     // A STRUCT ROW: a value type of the game's own assembly whose public fields are all Plain OR A
     // DELEGATE (a site's post, a target filter, a status guard, a turret's spec, a wave's crew row
     // whose Count is a Func), or a `System.ValueTuple`N` whose fields are all Plain (a table row of
@@ -304,6 +313,9 @@ public partial class Net : Node, Rendezvous.IHostDesk, Rendezvous.IGuestDesk
         Array a => "[" + string.Join(",", a.Cast<object>().Select(x => Show(x, depth))) + "]",
         System.Collections.IDictionary d => "{" + string.Join(",", d.Keys.Cast<object>()
             .Select(k => Show(k, depth) + ":" + Show(d[k], depth)).OrderBy(x => x, StringComparer.Ordinal)) + "}",
+        System.Collections.IList l => "[" + string.Join(",", l.Cast<object>().Select(x => Show(x, depth))) + "]",
+        System.Collections.IEnumerable e when IsSet(v.GetType()) => "{" + string.Join(",", e.Cast<object>()
+            .Select(x => Show(x, depth)).OrderBy(x => x, StringComparer.Ordinal)) + "}",
         _ when depth < 4 && (Table(v.GetType()) || StructRow(v.GetType())) => v.GetType().Name + "{" + string.Join(",", v.GetType()
             .GetFields(BindingFlags.Public | BindingFlags.Instance).OrderBy(f => f.Name).Select(f => f.Name + "=" + Show(f.GetValue(v), depth + 1))) + "}",
         _ => v.ToString(),
@@ -1109,7 +1121,7 @@ public partial class Net : Node, Rendezvous.IHostDesk, Rendezvous.IGuestDesk
     // made the host marshal dozens of packets an ask, on the channel every other peer's
     // telegraphs share. What the report itself does (where that peer is, the place it is owed)
     // stays unmetered: a dropped report is a pilot left where it spawned.
-    private static readonly Dictionary<(int peer, string ask), ulong> _asked = new();
+    [Live] private static readonly Dictionary<(int peer, string ask), ulong> _asked = new();
     public static bool Metered(int peer, string ask, double gap)
     {
         ulong now = Time.GetTicksMsec();
@@ -1208,3 +1220,11 @@ public struct NetPose
         n.Rotation = Mathf.LerpAngle(n.Rotation, Rot, k);
     }
 }
+
+// WHAT A RUN FILLS IN, not what the build is: a static readonly collection marked [Live] (the pilot's
+// save, the session, the key bindings, a cache) is never part of Net.Fingerprint. Every other static
+// readonly List / Dictionary / HashSet of Plain things is a constant table and is hashed; a new live one
+// takes this mark in the same edit, or the build's fingerprint moves as a run fills it
+// (FollowFingerprintCollectionChecks guards both).
+[AttributeUsage(AttributeTargets.Field)]
+public sealed class LiveAttribute : Attribute { }

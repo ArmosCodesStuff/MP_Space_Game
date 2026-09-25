@@ -313,7 +313,7 @@ public partial class LaneGun : Node2D, ITurretHost
         // pilot, never the fleet, never a dropped turret, never a practice dummy -- and never by
         // asking what class a thing is.
         _prey = Targeting.Nearest(Combat.Hostiles, Position, Targeting.Craft, Range);
-        if (_prey != null) { _aim = _prey.Position; _lead.Watch(_prey.Position, delta); }
+        if (_prey != null) { _aim = _prey.Position; _lead.Watch(_prey, _prey.Position, delta); }
         _mount.Tick(delta);
         if (!Net.Sim) return;                           // guests: the mount tracks; the host fires
         _cd -= delta;

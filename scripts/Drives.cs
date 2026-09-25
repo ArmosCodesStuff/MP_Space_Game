@@ -64,6 +64,9 @@ public static class Drives
     public const float SnapAt = 600f;                 // a report this far from the last is a jump, bit or no bit
     public const double FlashFor = 0.6;
     public const double QuietFor = 1.0;               // after a relocation the host made
+    // A WARP INSIDE THE COOLDOWN: the host's slot may still read this much when an honest owner jumps (its
+    // clock ran ahead of the host's by a report's travel); more, and the jump is unwarranted (Priced).
+    public const double CoolGrace = 0.5;
     public const float ClampShare = 1.1f;             // the host's speed clamp: 10% over the hull's own figure
     // A HARNESS SWITCH, as Net.SkipGoodbye is: the host roles of the smoke test move their guests' hulls
     // by hand, which is exactly a bit-less snap, so they turn this off outside the checks that price
@@ -127,6 +130,10 @@ public static class Drives
     // where a jump at `target` ends: on the line from here, just short of its hull
     public static Vector2 Arrival(Vector2 from, Vector2 target, float targetRadius, float shipLength) =>
         target - (target - from).Normalized() * (targetRadius + shipLength * 0.5f + Standoff);
+
+    // WARRANTED: a jump the host sees while its copy of the drive's slot reads `cool` seconds left. The owner
+    // refuses its own release while cooling (TickOwner), so only a modified client jumps inside it.
+    public static bool Warranted(double cool) => cool <= CoolGrace;
 
     // THE HOST'S SPEED CLAMP (F24): a legal slide at full speed ahead reads hypot(top, strafe), so
     // top x 1.1 alone would read a boosted slide as a cheat.
@@ -231,8 +238,11 @@ public static class Drives
     // one, and any snap over SnapAt whatever the bit says -- so a guest that clears the bit early, or
     // never sets it, buys nothing. Only a warp hull is priced. A relocation the host itself made
     // (Quiet) and a ship new to this world (no From) are never a jump; nor is a report from a peer
-    // the host does not count in its own world (PlayerShip.ApplyState forgets From for it). `age`:
-    // seconds since the last report; `flight`: the fastest the hull may fly, u/s.
+    // the host does not count in its own world (PlayerShip.ApplyState forgets From for it). A jump
+    // INSIDE THE DRIVE'S COOLDOWN (not Warranted by the host's own slot) is an unwarranted snap: priced
+    // with no safe range, the whole distance over, so chained jumps cannot buy distance for nothing;
+    // the cooldown starts again either way. `age`: seconds since the last report; `flight`: the fastest
+    // the hull may fly, u/s.
     public static void Priced(PlayerShip s, DriveRun r, Vector2 now, bool bit, float age, float flight)
     {
         bool fell = r.Bit && !bit;
@@ -243,8 +253,10 @@ public static class Drives
         float moved = was.DistanceTo(now);
         float jump = moved - flight * Math.Max(age, 0.05f);
         if (!(fell && jump > 0) && !(PriceSnaps && moved > SnapAt)) return;
-        s.Sl(s.Drive.Id).Cool = s.Cooling(s.Stats["warp_cooldown"]);
-        double off = DisabledFor(jump - s.Stats["warp_safe"]);
+        ref var sl = ref s.Sl(s.Drive.Id);
+        double safe = Warranted(sl.Cool) ? s.Stats["warp_safe"] : 0;
+        sl.Cool = s.Cooling(s.Stats["warp_cooldown"]);
+        double off = DisabledFor(jump - safe);
         if (off > 0) s.ApplyStatus(Status.Disabled, off);
     }
 

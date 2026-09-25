@@ -22,9 +22,8 @@ using System.Linq;
 //          charge go through everything)
 //   Ramp   true: the multiplier rises in a straight line from the band below's to this one's as
 //          the charge crosses from that band's At to this one's (a ramp, not a step)
-// A charge short of the lowest band fires as the lowest. Charges.All is an array of rows, never a
-// dictionary: Net.Fingerprint hashes a constant table only as an array or a row, so two builds whose
-// bands differ refuse each other.
+// A charge short of the lowest band fires as the lowest. Charges.All is a constant table, so
+// Net.Fingerprint writes it out row by row: two builds whose bands differ refuse each other.
 // ─────────────────────────────────────────────────────────────────────────────
 public sealed class ChargeBand
 {

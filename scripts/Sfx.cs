@@ -17,7 +17,7 @@ public static class Sfx
 {
     private const float ListenerHeight = 700f;       // at zoom 1: how far "above" the view the ears are
     private const float Cull = 5000f;                // past this effective distance: silent
-    static readonly Dictionary<string, double> _last = new();
+    [Live] static readonly Dictionary<string, double> _last = new();
 
     // Every sound there is (sfx/<name>.wav), and the least time between two of it FROM ONE NAME: a
     // wing firing is not a wall of noise. The name is a beam's row id when a beam plays the file --
@@ -26,7 +26,7 @@ public static class Sfx
         ["boss_beam_charge"] = 0.5, ["boss_beam"] = 0.5, ["boss_ram"] = 0.5, ["boss_shockwave"] = 0.5, ["boss_trident"] = 0.3,
         ["drake_gun"] = 0.2, ["drake_warp"] = 0.5, ["drake_scrap"] = 0.3, ["drake_tractor"] = 0.5, ["drake_throw"] = 0.5, ["drake_rock"] = 0.3,
         ["rail_perfect"] = 0.2, ["rail_miss"] = 0.2 };
-    public static readonly Dictionary<string, int> Played = new();            // by that name, for the smoke test
+    [Live] public static readonly Dictionary<string, int> Played = new();            // by that name, for the smoke test
     static Node _pool; static int _next;
     static bool _closed;                             // quitting: see Close
     const int Voices = 16;

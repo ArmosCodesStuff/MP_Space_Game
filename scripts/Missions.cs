@@ -208,7 +208,7 @@ public static class Missions
     // and the only one on the wire -- the KIND rides beside it, and a category is the kind's, so a
     // guest always knows which ladder the level it was sent belongs to. It stays a property so the
     // floor is kept once, here, rather than by each arrival.
-    private static readonly Dictionary<string, int> _levels = new();
+    [Live] private static readonly Dictionary<string, int> _levels = new();
     public static int Level
     {
         get => _levels.TryGetValue(KindOf(Kind).Category, out var l) ? Math.Max(1, l) : 1;

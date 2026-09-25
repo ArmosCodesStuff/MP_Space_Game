@@ -1740,6 +1740,13 @@ Each of these compiled clean and was wrong at runtime. The smoke test covers all
   The `BuildChecks` solo check first asserted zero `Character.` parts at all and failed on its own
   build-time constants; it now names them and asserts only that nothing a PLAYER decided (`Bought`
   chief among them) is among the rest.
+- **A collection table is hashed; a live collection is marked `[Live]`.** `Net.Plain` took arrays and rows,
+  never a List / Dictionary / HashSet, so `NetIds.Widths`, `Spawns.All` (the wire kind index), `Hints.All`,
+  `Sfx._gap` and `Abilities.Reserved` could differ between builds that admitted each other. Any
+  `System.Collections.Generic` collection of Plain things is Plain now (a list in order, a dictionary and a
+  set in key order). The trap it opens: a static readonly collection a run FILLS (the pilot, the session,
+  a cache) would move the fingerprint mid-run, so it carries `[Live]` (Net.cs) and is skipped. A new one
+  takes the mark in the same edit; `FollowFingerprintCollectionChecks` fails any that is neither.
 - **A worktree goes BESIDE the project folder, never inside it.** Both runners robocopy the whole
   folder (excluding only `.godot`, `.git`, `bin`, `obj`) into the scratch project, so a worktree
   under `.claude\` or anywhere inside would put a second copy of every script into the build.
