@@ -18,3 +18,5 @@
 
 ## PRE J2 (merge version-l 221749e, typecheck, quick, prove quick,solo,six as rvlt_a), tier opus
 - HEAD 6765b7dd42dcbbe7f62fa0d52f494e400f3500d6
+- merged version-l 221749e clean (bd94560); typecheck 0, verify -Quick ALL CHECKS PASSED.
+- rvlt_a (quick,solo,six): quick green; solo 202 FAIL / 3 FAIL LANE (FieldsRipYard, WingsGunship, ItemsDoor: base) -- one red mine: LaneA6dPepperGearChecks (c) "top under 249.6" false premise (Items.Build prices as written at every tier: T10 top 249.6). Fixed 06142bf.
