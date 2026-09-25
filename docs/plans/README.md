@@ -150,7 +150,11 @@ Agents (owner, 2026-09-25)
 - Compaction-safe: docs/plans/ledger_main.md is the coordinator's memory, updated and committed first after every event; the
   owner compacts at will; Claude never asks for a compact (2026-09-25).
 - The process per role lives in docs/process/ (coordinator, writer, gate, tester; MAP.md says where every earlier rule went);
-  CLAUDE.md is the lean common part (Fable's redesign, applied 2026-09-25 at the build/test boundary).
+  CLAUDE.md is the lean common part (Fable's redesign, applied 2026-09-25 at the build/test boundary; approved by the owner).
+- (2026-09-25) THE END GOAL IS AN EXTREMELY EFFICIENT WORKFLOW. Fable keeps iterating CLAUDE.md and the methodology after every phase
+  (a retrospective with numbers from the journals), cuts reply and prompt text (the owner finds replies overly verbose), and builds a
+  method that lets the owner compact at any moment with nothing lost. CLAUDE.md changes are applied at a batch boundary and reported in
+  three lines.
 
 Testing (owner, standing)
 - (2026-09-25) Once everything requested is built: 3+ tests IN THE ENGINE for every ability added through the class system (and
