@@ -345,3 +345,28 @@ ItemsAnchorLiftChecks (rung 3, live: none / Tactical Core T1 / T10 on a running 
 x2.5 / x2.875 / x3.3842, the charge 0.8 / rate, reach x1.4 / x1.288, x1 after); REWRITTEN ItemsTableChecks "every stat
 a part names" (an up must find a row; a price may miss only the R-D5 four, asserted exactly).
 Next: items-J2 (the flare count).
+
+## items-J2 PRE -- tier opus
+Intent: R-D6 -- the Sniper's flare_count row (base 6); DecoyDef.CountStat; a salvo's count in its seed's N (Decoys.Pack /
+Unpack, row + 64 x count; 0 = the row's Count); DecoySalvo.Count; Hub.Flares(count); PlayerShip.Pop reads the row;
+Swarm Rack fits the Sniper. Checks: NEW ItemsFlareRiderChecks (rung 3), NEW ItemsFlareRiderGuestChecks (rung 5),
+REWRITTEN ItemsTableChecks wears / fit. HEAD 584cd54614c642d94eb43b403db0c235c2b388d1. Hashes:
+  scripts/Ships.cs 592f4b707b51efc1cbde39d0bfbfa99702da5c0e
+  scripts/Decoys.cs 8d5c2ce5752f41cdfb2baba5f97844eb78bf900b
+  scripts/Spawned.cs 872ea8753b282769449623319e28a2f04524230c
+  scripts/Hub.cs 06a7752d90dfaea6dd54a4314625e62b79b4fbb5
+  scripts/PlayerShip.cs 4de55a9d83db4428321c0e17b997c179941bd1ae
+  tools/smoketest/SmokeTest.cs.txt 03fc46d477cf50843ba50808a6bdb87bab1b97b3
+## items-J2 POST
+Verdict: done. typecheck 0 errors; verify -Quick ALL CHECKS PASSED (0 warnings, UNUSED 0). Own diff read.
+Files: scripts/Ships.cs (Sniper row flare_count 6), scripts/Decoys.cs (DecoyDef.CountStat, the flares row names
+flare_count, CountSpan 64 + Pack / Unpack, Points(count), DecoySalvo.Count), scripts/Spawned.cs (the Decoy seed's N
+packs row + count), scripts/Hub.cs (Flares(count)), scripts/PlayerShip.cs (Pop reads the row's CountStat),
+SmokeTest.cs.txt. WIRE: no new RPC or field; the spawn seed's N now carries the count (an old N = the bare row
+draws the row's six). Swarm Rack now fits the Sniper (the audit: every line fits as §3.3 says).
+Checks (engine-unproven: rungs owed in the final test phase): NEW ItemsFlareRiderChecks (rung 3: Pack / Unpack,
+the Warden's rack 6 -> 7 hunters and no flare row; E under no part / Swarm Rack T1 / T6 at VaryNear / VaryAngle:
+6 / 7 / 8 flares, 360/n apart, 180 u, first astern); NEW ItemsFlareRiderGuestChecks (rung 5, guest role: its
+re-announced Swarm Rack T1 -> the host's salvo drawn on the guest has 7, evenly); REWRITTEN ItemsTableChecks (the
+sniper wears 11; Swarm Rack fits the sniper). ItemsAnchorLiftChecks' no-part run now wears the kit Utility.
+Next: items-J3 (the record, the final POST).

@@ -1969,12 +1969,12 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     }
 
     // A SALVO POPPED (AbilityDef.Pops: the flares), on the host: what the press spends (its Cooldown), then the
-    // row round the hull (Hub.Flares).
+    // row round the hull (Hub.Flares), as many as this sheet's CountStat row says (the row's Count without one).
     public void Pop(string id)
     {
         var def = Abilities.Find(Class, id);
         if (def?.Pops is not { } row || !Net.Sim || MyHub is not { } hub || !Spend(def)) return;
-        hub.Flares(Position, Rotation, Array.IndexOf(Decoys.All, row));
+        hub.Flares(Position, Rotation, Array.IndexOf(Decoys.All, row), row.CountStat != null ? (int)Math.Round(Stats[row.CountStat]) : 0);
     }
 
     // THE TAUNT (AbilityDef Taunt: the Warden's Q), on the host: for taunt_time every raider squad with a member

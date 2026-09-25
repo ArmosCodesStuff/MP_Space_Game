@@ -8,11 +8,12 @@ using System.Linq;
 //
 // REPLACED: nothing; v1's drafted decoy BODY (a hull the raiders shot at) was dropped for points.
 // A salvo is a row of Spawns.All ("Decoy"): one spawn per salvo, and every peer derives its points
-// from the seed (where, the row, the thrower's rotation), so six flares cost one message.
+// from the seed (where, the row and its count, the thrower's rotation), so six flares cost one message.
 //
 // A ROW OF Decoys.All MUST FILL IN:
 //   Id         what it is called
-//   Count      how many points a salvo throws, evenly round, the first dead astern
+//   Count      how many points a salvo throws, evenly round, the first dead astern...
+//   CountStat  ...unless the thrower's sheet has this row: then its number (a count rider lifts it)
 //   Ring       how far out they stop
 //   Coast      seconds to coast out to the ring
 //   Life       seconds from the pop to the last of it (it lures the whole time)
@@ -33,6 +34,7 @@ public sealed class DecoyDef
 {
     public string Id;
     public int Count;
+    public string CountStat;
     public float Ring;
     public double Coast, Life;
     public float Lure, Catch, Mark;
@@ -45,23 +47,29 @@ public static class Decoys
 {
     // The index IS the id on the wire (the spawn seed's N), so APPEND ONLY.
     public const int Flares = 0;
+    // THE SEED'S N CARRIES THE ROW AND THE COUNT: row + CountSpan x count (count 0: the row's own Count), so
+    // a thrower's own count reaches every peer in the one spawn message.
+    public const int CountSpan = 64;
+    public static int Pack(int row, int count) => row + CountSpan * Math.Max(0, count);
+    public static (int row, int count) Unpack(int n) => (n % CountSpan, n / CountSpan);
 
     public static readonly DecoyDef[] All =
     {
         // THE SNIPER'S FLARES (kits_v2's card): 6 in a ring 180 u out, 0.6 s to coast out, 5 s alight
-        new() { Id = "flares", Count = 6, Ring = 180f, Coast = 0.6, Life = 5.0, Lure = 500f, Catch = 30f,
+        new() { Id = "flares", Count = 6, CountStat = "flare_count", Ring = 180f, Coast = 0.6, Life = 5.0, Lure = 500f, Catch = 30f,
                 Mark = 300f, MarkLeft = 1.0, Dazzle = 150f, DazzleFor = 4.0 },
     };
     public static DecoyDef Of(int row) => All[row >= 0 && row < All.Length ? row : Flares];
 
     // ── the pure rules ──────────────────────────────────────────────────────────
-    // Where a salvo's points are `age` seconds after the pop from `at`, the thrower's rotation `rot`:
-    // evenly round, the first dead astern, coasting out to the ring.
-    public static Vector2[] Points(DecoyDef d, Vector2 at, float rot, double age)
+    // Where a salvo's `count` points (0: the row's Count) are `age` seconds after the pop from `at`, the
+    // thrower's rotation `rot`: evenly round, the first dead astern, coasting out to the ring.
+    public static Vector2[] Points(DecoyDef d, Vector2 at, float rot, double age, int count = 0)
     {
+        int n = count > 0 ? count : d.Count;
         float out_ = d.Ring * (float)Math.Clamp(d.Coast > 0 ? age / d.Coast : 1, 0, 1);
-        var p = new Vector2[d.Count];
-        for (int i = 0; i < d.Count; i++) p[i] = at + Vector2.Down.Rotated(rot + i * Mathf.Tau / d.Count) * out_;
+        var p = new Vector2[n];
+        for (int i = 0; i < n; i++) p[i] = at + Vector2.Down.Rotated(rot + i * Mathf.Tau / n) * out_;
         return p;
     }
     // The nearest of `points` within `reach` of `at`, or none.
@@ -98,13 +106,14 @@ public partial class DecoySalvo : Node2D
 {
     public int NetId;
     public int Row;
+    public int Count;          // its points (0: the row's Count): the thrower's CountStat at the pop
     public float Rot;          // the thrower's rotation at the pop
     public Vector2 At;         // where it was popped
     public double Age;         // seconds since the pop (a joiner is told how old it is)
     public DecoyDef Def => Decoys.Of(Row);
-    public Vector2[] Points => Decoys.Points(Def, At, Rot, Age);
+    public Vector2[] Points => Decoys.Points(Def, At, Rot, Age, Count);
     // where they burn: every rule (the lure, the mark, the dazzle) reads these, from the pop
-    public Vector2[] Resting => Decoys.Points(Def, At, Rot, Def.Coast);
+    public Vector2[] Resting => Decoys.Points(Def, At, Rot, Def.Coast, Count);
 
     public override void _Ready() { Position = Vector2.Zero; ZIndex = 6; }
     public override void _Process(double delta) { Age += delta; QueueRedraw(); }

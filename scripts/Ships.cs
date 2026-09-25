@@ -465,8 +465,10 @@ public static class Classes
                 new() { Group = "Tether mine", Id = "tether_recharge", Label = "Recharge (each)", Base = 12, Unit = "s", Dec = 1, Inverse = true },
                 new() { Group = "Tether mine", Id = "tether_hold",     Label = "Holds",          Base = 3, Unit = "s", Dec = 1 },
                 new() { Group = "Tether mine", Id = "tether_most",     Label = "Out at once",    Base = 2, Dec = 0 },
-                // the Flares (kits_v2's card; the salvo itself is Decoys.All "flares"): 16 s
+                // the Flares (kits_v2's card; the salvo itself is Decoys.All "flares"): 16 s; six a salvo, the
+                // row's CountStat, so a count rider (Swarm Rack) adds flares as it adds hunters
                 new() { Group = "Flares", Id = "flare_cooldown", Label = "Cooldown", Base = 16, Unit = "s", Dec = 1, Inverse = true },
+                new() { Group = "Flares", Id = "flare_count",    Label = "Flares a salvo", Base = 6, Dec = 0 },
             },
             Art = new ClassArt {
                 Texture = "res://heavy_sniper_hull.png", Length = 120f, HalfWidth = 30.03f,
