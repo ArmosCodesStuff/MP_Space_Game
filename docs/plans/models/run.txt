@@ -1,0 +1,285 @@
+== 1 · THE CURVE (reference = DESTROYER base class, no chips, walls 1/3/6; items +10% a tier; salvage step 0.03 )
+   pace: pilot level entering boss L: L1:PL1, L2:PL2, L3:PL4, L4:PL5, L5:PL7, L6:PL8, L8:PL11, L10:PL14, L15:PL22, L20:PL30, L30:PL46, L40:PL62, L60:PL96, L80:PL129
+   PL1  (ability 1) reached at boss L1 fight 1
+   PL3  (ability 2) reached at boss L2 fight 2
+   PL6  (ability 3) reached at boss L4 fight 2
+   PL2  (chip 1) reached at boss L1 fight 3
+   PL4  (chip 2) reached at boss L3 fight 1
+   PL8  (chip 3) reached at boss L5 fight 3
+   PL10 (chip 4) reached at boss L7 fight 1
+   PL12 (chip 5) reached at boss L8 fight 2
+   PL14 (chip 6) reached at boss L9 fight 3
+   L1 par: hull 423.1, DPS vs craft 57.61; LANCER L1 = 60 s x par = 3222; DRAKE = 2968
+   (the approved 3820 assumed 3 kit chips + 1 Weapons point: x1.186 of this)
+   damage anchor on NON-super rows: Lancer x0.744, Drake x0.787; sheets 15.76 / 12.19; realistic long 5.68 (short 6.67) / 3.52
+   rows: Lancer guns 3.6 -> 2.68, trident 15 -> 11.2, wave 45 -> 33.5; beam tick 50 / burn 250 and ram 40 unchanged. Drake gun 6 -> 4.72, scrap 18.75 -> 14.76; rock 250 unchanged
+
+   L  | PL in | worn P W/U/Sh/Fr (E)      | g    | HullScale DamageScale craft | Lancer  Drake | par TTK L/D | TTD L / D | w h
+   1  |  1-2  | 0.00 0.00 0.00 0.00      |  0.7 |  1.000    1.000    1.000 |   3222   2968 | 56.0 / 51.6 | 31.0 / 42.0 | 0 0
+   2  |  2-3  | 0.37 0.56 0.35 0.34      |  1.3 |  1.098    1.151    1.098 |   3537   3257 | 55.9 / 51.5 | 31.0 / 42.0 | 1 0
+   3  |  4-5  | 0.58 0.82 0.53 0.58      |  2.0 |  1.158    1.259    1.158 |   3733   3438 | 56.0 / 51.5 | 31.0 / 42.0 | 1 1
+   4  |  5-6  | 0.70 0.94 0.71 0.77      |  2.6 |  1.242    1.334    1.214 |   4003   3687 | 56.0 / 51.6 | 31.0 / 42.0 | 2 1
+   5  |  7-8  | 0.79 1.00 0.79 0.81      |  3.2 |  1.282    1.403    1.244 |   4130   3804 | 56.0 / 51.6 | 31.0 / 42.0 | 2 2
+   6  |  8-9  | 0.88 1.07 0.91 0.92      |  3.9 |  1.310    1.463    1.271 |   4222   3889 | 56.0 / 51.6 | 31.0 / 42.0 | 2 2
+   7  | 10-11 | 1.01 1.11 1.00 1.00      |  4.5 |  1.366    1.510    1.325 |   4401   4053 | 56.0 / 51.6 | 31.0 / 42.0 | 3 2
+   8  | 11-12 | 1.06 1.13 1.05 1.04      |  5.2 |  1.382    1.543    1.341 |   4453   4102 | 56.0 / 51.6 | 31.0 / 42.0 | 3 2
+   9  | 13-14 | 1.10 1.14 1.08 1.08      |  5.9 |  1.400    1.595    1.358 |   4510   4154 | 56.0 / 51.6 | 31.0 / 42.0 | 3 3
+   10 | 14-15 | 1.15 1.20 1.14 1.13      |  6.5 |  1.418    1.636    1.376 |   4569   4208 | 56.0 / 51.6 | 31.0 / 42.0 | 3 3
+   11 | 16-17 | 1.18 1.22 1.18 1.16      |  7.2 |  1.447    1.667    1.404 |   4661   4293 | 56.0 / 51.6 | 31.0 / 42.0 | 3 3
+   12 | 17-18 | 1.20 1.25 1.21 1.21      |  7.8 |  1.473    1.695    1.429 |   4745   4371 | 56.0 / 51.6 | 31.0 / 42.0 | 4 3
+   13 | 19-20 | 1.22 1.26 1.22 1.22      |  8.5 |  1.490    1.727    1.446 |   4802   4423 | 56.0 / 51.6 | 31.0 / 42.0 | 4 3
+   14 | 20-22 | 1.29 1.33 1.28 1.28      |  9.1 |  1.512    1.785    1.467 |   4872   4487 | 56.0 / 51.6 | 31.0 / 42.0 | 4 3
+   15 | 22-23 | 1.31 1.36 1.31 1.32      |  9.8 |  1.527    1.823    1.482 |   4920   4532 | 56.0 / 51.6 | 31.0 / 42.0 | 4 4
+   16 | 23-25 | 1.34 1.38 1.34 1.35      | 10.4 |  1.540    1.849    1.495 |   4963   4571 | 56.0 / 51.6 | 31.0 / 42.0 | 4 4
+   17 | 25-26 | 1.36 1.39 1.35 1.36      | 11.1 |  1.581    1.883    1.534 |   5093   4691 | 56.0 / 51.6 | 31.0 / 42.0 | 4 4
+   18 | 27-28 | 1.42 1.47 1.41 1.42      | 11.7 |  1.612    1.930    1.564 |   5194   4784 | 56.0 / 51.6 | 31.0 / 42.0 | 5 4
+   19 | 28-29 | 1.45 1.49 1.46 1.45      | 12.3 |  1.628    1.965    1.580 |   5245   4831 | 56.0 / 51.6 | 31.0 / 42.0 | 5 4
+   20 | 30-31 | 1.47 1.52 1.48 1.47      | 13.0 |  1.642    2.004    1.593 |   5290   4872 | 56.0 / 51.6 | 31.0 / 42.0 | 5 4
+   21 | 31-33 | 1.49 1.53 1.50 1.49      | 13.7 |  1.665    2.057    1.615 |   5363   4940 | 56.0 / 51.6 | 31.0 / 42.0 | 5 5
+   22 | 33-34 | 1.58 1.60 1.56 1.56      | 14.3 |  1.694    2.112    1.644 |   5458   5027 | 56.0 / 51.6 | 31.0 / 42.0 | 5 5
+   23 | 34-36 | 1.61 1.64 1.60 1.60      | 15.0 |  1.711    2.151    1.660 |   5513   5078 | 56.0 / 51.6 | 31.0 / 42.0 | 5 5
+   24 | 36-37 | 1.63 1.66 1.62 1.63      | 15.6 |  1.747    2.184    1.696 |   5630   5186 | 56.0 / 51.6 | 31.0 / 42.0 | 5 5
+   25 | 38-39 | 1.65 1.67 1.64 1.65      | 16.2 |  1.778    2.229    1.726 |   5730   5277 | 56.0 / 51.6 | 31.0 / 42.0 | 6 5
+   26 | 39-41 | 1.71 1.77 1.72 1.72      | 16.9 |  1.808    2.291    1.755 |   5826   5366 | 56.0 / 51.6 | 31.0 / 42.0 | 6 5
+   27 | 41-42 | 1.76 1.81 1.76 1.76      | 17.6 |  1.830    2.335    1.776 |   5897   5432 | 56.0 / 51.6 | 31.0 / 42.0 | 6 5
+   28 | 42-44 | 1.79 1.83 1.79 1.79      | 18.2 |  1.847    2.391    1.793 |   5952   5482 | 56.0 / 51.6 | 31.0 / 42.0 | 6 5
+   29 | 44-45 | 1.81 1.84 1.80 1.81      | 18.9 |  1.874    2.453    1.818 |   6037   5561 | 56.0 / 51.6 | 31.0 / 42.0 | 6 6
+   30 | 46-47 | 1.88 1.95 1.89 1.90      | 19.5 |  1.909    2.529    1.853 |   6151   5666 | 56.0 / 51.6 | 31.0 / 42.0 | 6 6
+   31 | 47-49 | 1.93 2.00 1.94 1.95      | 20.2 |  1.935    2.581    1.877 |   6233   5741 | 56.0 / 51.6 | 31.0 / 42.0 | 6 6
+   32 | 49-50 | 1.96 2.02 1.97 1.98      | 20.8 |  1.977    2.621    1.918 |   6370   5867 | 56.0 / 51.6 | 31.0 / 42.0 | 6 6
+   33 | 51-52 | 1.98 2.04 2.00 1.99      | 21.4 |  2.015    2.680    1.955 |   6491   5979 | 56.0 / 51.6 | 31.0 / 42.0 | 7 6
+   34 | 52-54 | 2.08 2.14 2.08 2.08      | 22.1 |  2.056    2.759    1.995 |   6624   6101 | 56.0 / 51.6 | 31.0 / 42.0 | 7 6
+   35 | 54-55 | 2.13 2.18 2.12 2.14      | 22.8 |  2.083    2.816    2.021 |   6710   6181 | 56.0 / 51.6 | 31.0 / 42.0 | 7 6
+   36 | 56-57 | 2.16 2.22 2.16 2.17      | 23.4 |  2.106    2.880    2.044 |   6786   6250 | 56.0 / 51.6 | 31.0 / 42.0 | 7 6
+   37 | 57-59 | 2.19 2.24 2.19 2.19      | 24.1 |  2.137    2.959    2.074 |   6886   6342 | 56.0 / 51.6 | 31.0 / 42.0 | 7 7
+   38 | 59-60 | 2.27 2.32 2.27 2.26      | 24.7 |  2.177    3.035    2.112 |   7014   6460 | 56.0 / 51.6 | 31.0 / 42.0 | 7 7
+   39 | 61-62 | 2.32 2.35 2.32 2.30      | 25.4 |  2.200    3.090    2.135 |   7087   6528 | 56.0 / 51.6 | 31.0 / 42.0 | 7 7
+   40 | 62-64 | 2.33 2.36 2.34 2.33      | 26.0 |  2.216    3.131    2.151 |   7141   6577 | 56.0 / 51.6 | 31.0 / 42.0 | 7 7
+   45 | 71-72 | 2.36 2.36 2.36 2.36      | 26.0 |  2.252    3.149    2.186 |   7257   6684 | 56.0 / 51.6 | 31.0 / 42.0 | 8 7
+   50 | 79-80 | 2.36 2.36 2.36 2.36      | 26.0 |  2.252    3.186    2.186 |   7257   6684 | 56.0 / 51.6 | 31.0 / 42.0 | 8 8
+   60 | 96-97 | 2.36 2.36 2.36 2.36      | 26.0 |  2.282    3.222    2.214 |   7352   6772 | 56.0 / 51.6 | 31.0 / 42.0 | 9 9
+   80 | 129-130| 2.36 2.36 2.36 2.36      | 26.0 |  2.341    3.259    2.272 |   7542   6947 | 56.0 / 51.6 | 31.0 / 42.0 | 11 10
+   level skipping (+2 on the TIO): the level-L par against the boss k levels up, TTK s / TTD s (Lancer)
+     L5   +1: 57.2 / 29.6 | +2: 59.6 / 28.5 | +3: 60.3 / 27.8
+     L10  +1: 57.1 / 30.3 | +2: 58.1 / 29.8 | +3: 58.8 / 29.1
+     L20  +1: 56.8 / 30.1 | +2: 57.8 / 29.2 | +3: 58.3 / 28.6
+     L30  +1: 56.7 / 30.3 | +2: 58.0 / 29.8 | +3: 59.0 / 29.0
+     L40  +1: 56.7 / 30.9 | +2: 56.9 / 30.9 | +3: 56.9 / 30.8
+   siege rows follow the Lancer row: base 1.0 x = 3222, pylon 0.125 x = 403 at L1, both x HullScale(L)
+   a home raid wave (3 pinners + 1 standoff, 229.7 row hull) at ANY level: 5.7 s of par fire to clear
+   within-level spread of the par TTK (walls and drops land mid-level):
+     L1    59.3  57.5  54.2  53.1  | TTD L 28.6 30.4 31.8 33.2
+     L2    57.1  56.2  55.6  54.8  | TTD L 29.4 30.7 31.5 32.4
+     L3    57.2  56.8  55.0  54.8  | TTD L 30.0 30.7 31.3 32.0
+     L4    58.2  55.6  55.3  55.1  | TTD L 30.6 30.9 31.1 31.4
+     L5    56.4  56.1  55.9  55.7  | TTD L 30.4 30.8 31.2 31.6
+     L6    56.5  56.0  55.9  55.7  | TTD L 30.6 30.8 31.1 31.4
+     L8    56.1  56.0  56.0  55.9  | TTD L 30.9 31.0 31.0 31.1
+     L10   56.2  56.1  56.0  55.9  | TTD L 30.8 30.9 31.1 31.2
+     L20   56.1  56.0  56.0  55.9  | TTD L 30.7 30.7 31.3 31.3
+     L40   56.1  56.0  56.0  56.0  | TTD L 31.0 31.0 31.0 31.0
+
+== 1b · EVERY CLASS against the par boss: TTK s / TTD s (Lancer sheet), each flying its own category's drops, no chips
+   class        realistic        L1        L2        L3        L4        L6        L8       L10       L20       L30       L40
+   BATTLESHIP    46.0      65/41     64/41     65/40     67/40     68/40     69/41     69/41     69/40     68/40     69/40  
+   CARRIER       52.6      80/34     68/34     64/34     61/34     60/33     60/34     60/34     60/34     60/33     60/34  
+   DESTROYER     55.0      56/31     56/31     56/31     56/31     56/31     56/31     56/31     56/31     56/31     56/31  
+   FREIGHTER     56.0      54/36     53/36     52/36     54/36     56/36     56/36     56/36     56/36     56/36     56/36  
+   TENDER        46.0      68/29     67/29     66/29     67/30     68/30     69/30     69/30     69/30     68/30     69/30  
+   BASTION       47.0      65/33     64/33     64/33     66/33     67/33     67/33     67/33     67/33     67/33     67/33  
+   WARRIOR       50.0      66/22     65/22     64/22     63/23     62/23     63/23     63/23     63/23     63/23     63/23  
+   SNIPER        51.0      59/18     58/18     58/18     60/18     61/18     62/18     62/18     62/18     61/19     62/19  
+   WARDEN        49.0      61/20     60/20     60/20     62/20     63/20     64/20     64/21     64/21     64/21     65/21  
+   DART          72.0      46/15     44/15     43/15     44/15     44/15     44/15     44/15     44/15     44/16     44/16  
+   ECHO          72.0      43/13     43/13     43/13     44/13     44/13     44/13     44/14     44/14     44/14     44/14  
+   WRAITH        64.0      52/16     49/16     48/16     50/16     50/17     50/17     50/17     50/17     50/17     50/17  
+   fleet median realistic 51.8; the reference's 55.0. A median-DPS class kills in 59.4 s at L20+ (anchor x0.932).
+
+== 1c · THE SAME PILOT WITH EVERY OPEN CHIP SLOT FILLED (Combat, Combat, Combat, Armour, Armour, Armour in slot order; no starting chips; no chip ladder)
+   L  | chips open | TTK par -> chipped | x DPS | TTD par -> chipped (Lancer) | x hull || with a chip ladder at g = 0.65L: TTK
+   1  | 0-1        | 56.0 -> 55.3       | x1.01 | 31.0 -> 31.0                | x1.00 || 55.3
+   2  | 1-1        | 55.9 -> 53.5       | x1.05 | 31.0 -> 31.0                | x1.00 || 53.4
+   3  | 2-2        | 56.0 -> 51.3       | x1.09 | 31.0 -> 31.0                | x1.00 || 51.0
+   4  | 2-2        | 56.0 -> 50.7       | x1.10 | 31.0 -> 31.0                | x1.00 || 50.3
+   5  | 2-3        | 56.0 -> 49.5       | x1.13 | 31.0 -> 31.0                | x1.00 || 48.9
+   6  | 3-3        | 56.0 -> 48.0       | x1.17 | 31.0 -> 31.0                | x1.00 || 47.3
+   8  | 4-5        | 56.0 -> 47.5       | x1.18 | 31.0 -> 34.0                | x1.08 || 46.4
+   10 | 6-6        | 56.0 -> 47.1       | x1.19 | 31.0 -> 36.2                | x1.14 || 45.7
+   12 | 6-6        | 56.0 -> 47.0       | x1.19 | 31.0 -> 36.7                | x1.15 || 45.3
+   15 | 6-6        | 56.0 -> 46.6       | x1.20 | 31.0 -> 37.0                | x1.16 || 44.4
+   20 | 6-6        | 56.0 -> 46.3       | x1.21 | 31.0 -> 37.2                | x1.17 || 43.4
+   25 | 6-6        | 56.0 -> 46.1       | x1.22 | 31.0 -> 37.3                | x1.17 || 42.4
+   30 | 6-6        | 56.0 -> 45.6       | x1.23 | 31.0 -> 37.4                | x1.17 || 41.1
+   35 | 6-6        | 56.0 -> 45.3       | x1.24 | 31.0 -> 37.4                | x1.18 || 40.1
+   40 | 6-6        | 56.0 -> 45.0       | x1.24 | 31.0 -> 37.5                | x1.18 || 39.0
+   60 | 6-6        | 56.0 -> 45.2       | x1.24 | 31.0 -> 37.7                | x1.18 || 39.3
+
+== 2 · RAIDS: boss-fight adds re-run (heavy 2.58, heavies never web, Rusty escorts = squad wave 1 from L1, any web starts the beam, escape floor 0.6 s). Scaling: add hull x craft_scale(L), all damage x DamageScale(L)
+   escape floor: windup = max(6 s / 1.01^(L-1), 2 s react + (pinner hull on you) / (0.7 x par DPS) + 0.6 s). With raiders taking a level, the strip is the same at every level (par L1 DPS vs craft 57.6):
+     2 webifiers (Rusty L1-8)           strip 3.48 s -> floor 4.08 s
+     3 webifiers (squad 1 from L15)     strip 4.22 s -> floor 4.82 s
+     3 talons (squad 2)                 strip 3.60 s -> floor 4.20 s
+     3 pods (squad 3, L39)              strip 7.34 s -> floor 7.94 s
+     all 9 lights at once (L39 worst)   strip 11.16 s -> floor 11.76 s
+   L  | boss  | squads (H+lights)        | 6/Q(L) | squad-1 floor | windup vs squad 1 | margin || in the fight: wind-ups flown (s), beams landed on par
+   1  | RUSTY | [+2]                     |  6.00  |  4.08         |  6.00             | 2.52   || 6.03 6.00  landed 0
+   3  | RUSTY | [+2]                     |  5.88  |  4.08         |  5.88             | 2.40   || 6.03 5.88  landed 0
+   5  | RUSTY | [+2]                     |  5.77  |  4.08         |  5.77             | 2.28   || 6.03 5.77  landed 0
+   7  | RUSTY | [H+2]                    |  5.65  |  4.08         |  5.65             | 2.17   || 6.03 5.65  landed 0
+   9  | RUSTY | [H+2]                    |  5.54  |  4.08         |  5.54             | 2.06   || 6.03 5.54  landed 0
+   11 | RUSTY | [H+2]                    |  5.43  |  4.08         |  5.43             | 1.95   || 6.03 5.43  landed 0
+   15 | RUSTY | [H+3]                    |  5.22  |  4.82         |  5.22             | 1.00   || 6.77 5.22  landed 0
+   17 | RUSTY | [H+3]                    |  5.12  |  4.82         |  5.12             | 0.89   || 6.77 5.12  landed 0
+   21 | RUSTY | [H+3] [H+1]              |  4.92  |  4.82         |  4.92             | 0.69   || 6.77 5.78  landed 0
+   25 | RUSTY | [H+3] [H+2]              |  4.73  |  4.82         |  4.82             | 0.60   || 6.77 6.32  landed 0
+   27 | RUSTY | [H+3] [H+3]              |  4.63  |  4.82         |  4.82             | 0.60   || 6.77 6.85  landed 0
+   29 | RUSTY | [H+3] [H+3]              |  4.54  |  4.82         |  4.82             | 0.60   || 6.77 6.85  landed 0
+   31 | RUSTY | [H+3] [H+3] [H+0]        |  4.45  |  4.82         |  4.82             | 0.60   || 6.77 4.45 4.45  landed 0
+   33 | RUSTY | [H+3] [H+3] [H+1]        |  4.36  |  4.82         |  4.82             | 0.60   || 6.77 4.36 4.36  landed 0
+   35 | RUSTY | [H+3] [H+3] [H+1]        |  4.28  |  4.82         |  4.82             | 0.60   || 6.77 4.28 4.28  landed 0
+   37 | RUSTY | [H+3] [H+3] [H+2]        |  4.19  |  4.82         |  4.82             | 0.60   || 6.77 4.20 4.19  landed 0
+   39 | RUSTY | [H+3] [H+3] [H+3]        |  4.11  |  4.82         |  4.82             | 0.60   || 6.77 4.20 4.36  landed 0
+   41 | RUSTY | [H+3] [H+3] [H+3]        |  4.03  |  4.82         |  4.82             | 0.60   || 6.77 4.20 4.36  landed 0
+   51 | RUSTY | [H+3] [H+3] [H+3]        |  3.65  |  4.82         |  4.82             | 0.60   || 6.77 4.20 4.36  landed 0
+
+   | L | adds | x boss | pinned | fight +% | adds' own DPS / DamageScale | full beams on par / fired | EXP +% (first fill) |
+   | 1-5 RUSTY | [+2] | x1.03 | 6% | +2% | 0.10 | 0/6 | +3% |
+   | 1-5 DRAKE | - | x1.00 | 0% | +0% | 0.00 | 0/0 | +0% |
+   | 6-8 RUSTY | [H+2] | x1.06 | 5% | +7% | 0.41 | 0/2 | +7% |
+   | 6-8 DRAKE | [H+0] | x1.06 | 0% | +5% | 0.21 | 0/0 | +4% |
+   | 9-11 RUSTY | [H+2] | x1.06 | 5% | +7% | 0.41 | 0/4 | +7% |
+   | 9-11 DRAKE | [H+1] | x1.22 | 5% | +6% | 0.36 | 0/0 | +5% |
+   | 12-14 RUSTY | [H+2] | x1.06 | 5% | +7% | 0.40 | 0/2 | +7% |
+   | 12-14 DRAKE | [H+2] | x1.27 | 6% | +7% | 0.44 | 0/0 | +7% |
+   | 15-17 RUSTY | [H+3] | x1.07 | 6% | +8% | 0.49 | 0/4 | +8% |
+   | 15-17 DRAKE | [H+3] | x1.32 | 7% | +8% | 0.52 | 0/0 | +8% |
+   | 18-20 RUSTY | [H+3] [H+0] | x1.11 | 8% | +14% | 0.79 | 0/2 | +12% |
+   | 18-20 DRAKE | [H+3] [H+0] | x1.36 | 6% | +15% | 0.72 | 0/0 | +12% |
+   | 21-23 RUSTY | [H+3] [H+1] | x1.14 | 13% | +14% | 0.89 | 0/4 | +13% |
+   | 21-23 DRAKE | [H+3] [H+1] | x1.48 | 10% | +16% | 0.78 | 0/0 | +13% |
+   | 24-26 RUSTY | [H+3] [H+2] | x1.17 | 15% | +23% | 1.13 | 0/2 | +15% |
+   | 24-26 DRAKE | [H+3] [H+2] | x1.52 | 11% | +16% | 0.86 | 0/0 | +15% |
+   | 27-29 RUSTY | [H+3] [H+3] | x1.18 | 16% | +24% | 1.20 | 0/4 | +16% |
+   | 27-29 DRAKE | [H+3] [H+3] | x1.56 | 12% | +17% | 0.95 | 0/0 | +16% |
+   | 30-32 RUSTY | [H+3] [H+3] [H+0] | x1.34 | 15% | +30% | 1.56 | 0/3 | +20% |
+   | 30-32 DRAKE | [H+3] [H+3] [H+0] | x1.80 | 16% | +33% | 1.42 | 0/0 | +20% |
+   | 33-35 RUSTY | [H+3] [H+3] [H+1] | x1.36 | 19% | +33% | 1.61 | 0/6 | +21% |
+   | 33-35 DRAKE | [H+3] [H+3] [H+1] | x1.94 | 21% | +36% | 1.51 | 0/0 | +21% |
+   | 36-38 RUSTY | [H+3] [H+3] [H+2] | x1.36 | 18% | +36% | 1.66 | 0/3 | +22% |
+   | 36-38 DRAKE | [H+3] [H+3] [H+2] | x2.04 | 22% | +39% | 1.73 | 0/0 | +22% |
+   | 39-40 RUSTY | [H+3] [H+3] [H+3] | x1.38 | 20% | +38% | 1.80 | 0/3 | +24% |
+   | 39-40 DRAKE | [H+3] [H+3] [H+3] | x2.09 | 23% | +42% | 1.84 | 0/0 | +24% |
+
+   TIME TO DIE, realistic (dodging), boss alone -> with adds; par gear on each class's base hull
+   L1  RUSTY (fight 57 s, alone 56 s) | ECH  192: 33 -> 32 | WAR  288: 54 -> 52 | DES  423: 90 -> 86 | BAT  535: 129 -> 123
+   L6  DRAKE (fight 54 s, alone 52 s) | ECH  291: 79 -> 73 | WAR  426: 141 -> 128 | DES  619: 301 -> 262 | BAT  774: 607 -> 488
+   L9  RUSTY (fight 60 s, alone 56 s) | ECH  322: 35 -> 32 | WAR  470: 55 -> 51 | DES  675: 90 -> 83 | BAT  847: 128 -> 116
+   L18 DRAKE (fight 59 s, alone 52 s) | ECH  393: 81 -> 54 | WAR  571: 145 -> 89 | DES  817: 301 -> 158 | BAT 1021: 605 -> 245
+   L20 DRAKE (fight 59 s, alone 52 s) | ECH  411: 82 -> 54 | WAR  595: 146 -> 90 | DES  848: 301 -> 158 | BAT 1062: 609 -> 247
+   L30 DRAKE (fight 69 s, alone 52 s) | ECH  528: 84 -> 39 | WAR  754: 147 -> 62 | DES 1070: 301 -> 100 | BAT 1334: 597 -> 143
+   L39 RUSTY (fight 78 s, alone 56 s) | ECH  655: 37 -> 26 | WAR  926: 56 -> 38 | DES 1308: 90 -> 58 | BAT 1626: 126 -> 78
+   L40 DRAKE (fight 73 s, alone 52 s) | ECH  663: 86 -> 34 | WAR  939: 148 -> 51 | DES 1325: 301 -> 81 | BAT 1647: 592 -> 111
+
+   IGNORE THE ADDS (worst case):
+     L1: x2.53, pinned 77%, beams landed 2
+     L9: x3.01, pinned 77%, beams landed 2
+     L20: x4.52, pinned 75%, beams landed 0
+     L39: x3.52, pinned 77%, beams landed 2
+
+   KEEPING PACE (raiders take a LEVEL): par seconds to kill one add, and one add's DPS as % of par hull / s
+   L  | webifier | gunship | lancerkin || webifier dmg %/s | gunship laser %/s || old multiplier 1.025^(L-1) vs craft_scale
+   1  |   0.62   |   2.48  |   3.72    ||  0.236           |  0.610            ||  1.00 vs  1.00
+   5  |   0.62   |   2.48  |   3.72    ||  0.236           |  0.610            ||  1.10 vs  1.24
+   10 |   0.62   |   2.48  |   3.72    ||  0.236           |  0.610            ||  1.25 vs  1.38
+   20 |   0.62   |   2.48  |   3.72    ||  0.236           |  0.610            ||  1.60 vs  1.59
+   30 |   0.62   |   2.48  |   3.72    ||  0.236           |  0.610            ||  2.05 vs  1.85
+   40 |   0.62   |   2.48  |   3.72    ||  0.236           |  0.610            ||  2.62 vs  2.15
+   60 |   0.62   |   2.48  |   3.72    ||  0.236           |  0.610            ||  4.29 vs  2.21
+
+== 3 · ITEMS: the law (+10% compounding, 10 tiers), drops, the catalogue checks, and L40
+   t | P(t)  | headline (T1 +25%) | reach/area (T1 18%) | top/accel (T1 22%) | chip (T1 8%) | +n on base 4/6/7 | price | scrap | first drops at L | main at L
+   1 | 1.000 | + 25.0%            | +18.0%              | +22.0%             | + 8.0%       | +1/+1/+1         | fixed |   100 | 1                | 1-4
+   2 | 1.100 | + 27.5%            | +19.8%              | +24.2%             | + 8.8%       | +1/+1/+1         | fixed |   125 | 1                | 5-8
+   3 | 1.210 | + 30.3%            | +21.8%              | +26.6%             | + 9.7%       | +1/+1/+1         | fixed |   156 | 5                | 9-12
+   4 | 1.331 | + 33.3%            | +24.0%              | +29.3%             | +10.6%       | +1/+1/+1         | fixed |   195 | 9                | 13-16
+   5 | 1.464 | + 36.6%            | +26.4%              | +32.2%             | +11.7%       | +1/+1/+1         | fixed |   244 | 13               | 17-20
+   6 | 1.611 | + 40.3%            | +29.0%              | +35.4%             | +12.9%       | +1/+2/+2         | fixed |   305 | 17               | 21-24
+   7 | 1.772 | + 44.3%            | +31.9%              | +39.0%             | +14.2%       | +1/+2/+2         | fixed |   381 | 21               | 25-28
+   8 | 1.949 | + 48.7%            | +35.1%              | +42.9%             | +15.6%       | +1/+2/+2         | fixed |   477 | 25               | 29-32
+   9 | 2.144 | + 53.6%            | +38.6%              | +47.2%             | +17.1%       | +2/+2/+2         | fixed |   596 | 29               | 33-36
+   10| 2.358 | + 58.9%            | +42.4%              | +51.9%             | +18.9%       | +2/+2/+2         | fixed |   745 | 33               | 37-40+
+   with salvage: F = P(t) x (1 + 0.03 g); T10 at g26 = x4.20, at g40 = x5.19 of the T1 headline
+
+   catalogue checks:
+     capital   11 lines | slots W 3, U 3, Sh 2, Fr 2, E 1 | REF axes ['Fr', 'Sh', 'U', 'W'] | wearable per class {'BATTLESHIP': 11, 'CARRIER': 11, 'DESTROYER': 10} | duplicate lean: False -> OK
+     freighter 10 lines | slots W 3, U 2, Sh 2, Fr 2, E 1 | REF axes ['Fr', 'Sh', 'U', 'W'] | wearable per class {'FREIGHTER': 10, 'TENDER': 10, 'BASTION': 10} | duplicate lean: False -> OK
+     heavy     11 lines | slots W 3, U 3, Sh 2, Fr 2, E 1 | REF axes ['Fr', 'Sh', 'U', 'W'] | wearable per class {'WARRIOR': 10, 'SNIPER': 11, 'WARDEN': 11} | duplicate lean: False -> OK
+     light     10 lines | slots W 3, U 2, Sh 2, Fr 2, E 1 | REF axes ['Fr', 'Sh', 'U', 'W'] | wearable per class {'DART': 10, 'ECHO': 10, 'WRAITH': 10} | duplicate lean: False -> OK
+     chips: 6 generic lines (3 combat, 3 utility) -> ALL OK
+
+   drop tier by boss level (base = 1 + floor((L-1)/4); 20% one lower / 70% on / 10% one higher), and what Par wears (E[P] -> tier)
+     L1   base T1  | Par owns a hull part   0%, mean tier worn T 0.0 | E[P] W 0.00 U 0.00 Sh 0.00 Fr 0.00
+     L2   base T1  | Par owns a hull part  35%, mean tier worn T 1.1 | E[P] W 0.37 U 0.56 Sh 0.35 Fr 0.34
+     L3   base T1  | Par owns a hull part  53%, mean tier worn T 1.1 | E[P] W 0.58 U 0.82 Sh 0.53 Fr 0.58
+     L4   base T1  | Par owns a hull part  70%, mean tier worn T 1.1 | E[P] W 0.70 U 0.94 Sh 0.71 Fr 0.77
+     L5   base T2  | Par owns a hull part  78%, mean tier worn T 1.2 | E[P] W 0.79 U 1.00 Sh 0.79 Fr 0.81
+     L8   base T2  | Par owns a hull part  96%, mean tier worn T 2.0 | E[P] W 1.06 U 1.13 Sh 1.05 Fr 1.04
+     L9   base T3  | Par owns a hull part  97%, mean tier worn T 2.1 | E[P] W 1.10 U 1.14 Sh 1.08 Fr 1.08
+     L12  base T3  | Par owns a hull part 100%, mean tier worn T 3.0 | E[P] W 1.20 U 1.25 Sh 1.21 Fr 1.21
+     L13  base T4  | Par owns a hull part 100%, mean tier worn T 3.1 | E[P] W 1.22 U 1.26 Sh 1.22 Fr 1.22
+     L16  base T4  | Par owns a hull part 100%, mean tier worn T 4.1 | E[P] W 1.34 U 1.38 Sh 1.34 Fr 1.35
+     L17  base T5  | Par owns a hull part 100%, mean tier worn T 4.2 | E[P] W 1.36 U 1.39 Sh 1.35 Fr 1.36
+     L20  base T5  | Par owns a hull part 100%, mean tier worn T 5.1 | E[P] W 1.47 U 1.52 Sh 1.48 Fr 1.47
+     L24  base T6  | Par owns a hull part 100%, mean tier worn T 6.1 | E[P] W 1.63 U 1.66 Sh 1.62 Fr 1.63
+     L28  base T7  | Par owns a hull part 100%, mean tier worn T 7.1 | E[P] W 1.79 U 1.83 Sh 1.79 Fr 1.79
+     L32  base T8  | Par owns a hull part 100%, mean tier worn T 8.1 | E[P] W 1.96 U 2.02 Sh 1.97 Fr 1.98
+     L36  base T9  | Par owns a hull part 100%, mean tier worn T 9.1 | E[P] W 2.16 U 2.22 Sh 2.16 Fr 2.17
+     L37  base T10 | Par owns a hull part 100%, mean tier worn T 9.2 | E[P] W 2.19 U 2.24 Sh 2.19 Fr 2.19
+     L40  base T10 | Par owns a hull part 100%, mean tier worn T 9.9 | E[P] W 2.33 U 2.36 Sh 2.34 Fr 2.33
+
+   salvage: can a rewards-only pilot keep 4 ladders at 65% of the gate? (% of gate reached; fleet income + scrap by tier)
+     scrap 100 x 1.1^(t-1): L5  49%  L10  55%  L20  58%  L30  54%  L40  50%
+     scrap 100 x 1.2^(t-1): L5  50%  L10  58%  L20  64%  L30  62%  L40  60%
+     scrap 100 x 1.25^(t-1): L5  50%  L10  60%  L20  68%  L30  67%  L40  65%
+     scrap 100 x 1.28^(t-1): L5  51%  L10  61%  L20  70%  L30  70%  L40  68%
+
+   L40, the reference class (DESTROYER, capital lines), against the L40 Lancer (hull 7141 ): TTK s / TTD s (Lancer; Drake)
+     Par (REF lines at worn tier, g26, no chips)                hull   1325 | TTK  56.0 | TTD  31.0;  42.0
+     Par + 6 chips (3 Combat + 3 Armour)                        hull   1559 | TTK  45.0 | TTD  37.5;  51.3
+     Par, no salvage (g0)                                       hull    933 | TTK  69.9 | TTD  20.9;  27.8
+     Par, no hull lines (Sh and Fr on non-hull lines)           hull    430 | TTK  56.0 | TTD   9.1;  11.9
+     stock (no parts, no chips)                                 hull    430 | TTK 102.4 | TTD   9.1;  11.9
+     T10 REF lines, g26, no chips                               hull   1332 | TTK  55.9 | TTD  31.2;  42.3
+     T10 REF lines, g40 (100% of the gate), no chips            hull   1545 | TTK  50.4 | TTD  37.1;  50.8
+     CEILING: T10, g40, 3 Combat + 3 Armour (the best no-trade build) hull   1789 | TTK  41.3 | TTD  44.3;  61.2
+     FASTEST: T10, g40, W+U damage, no hull lines, 3 Combat     hull    430 | TTK  41.3 | TTD   9.1;  11.9
+     RATE: T10, g40, Tempo Core in U (cooldown), 3 Combat + 3 Armour hull   1789 | TTK  39.5 | TTD  44.3;  61.2
+     RATE, no chips: T10, g26, Tempo Core in U                  hull   1332 | TTK  56.1 | TTD  31.2;  42.3
+
+   multiplier leans (T1 +20%) against damage leans (T1 +25%), on one slot, median class: DPS ratio rate/damage
+     L1  T1  g0   : W (Sniper) x0.98 | U (Battleship) x0.98 | W (Sniper) +chips x0.98 | U (Battleship) +chips x0.98
+     L10 T3  g6.5 : W (Sniper) x0.98 | U (Battleship) x0.98 | W (Sniper) +chips x1.01 | U (Battleship) +chips x1.01
+     L20 T5  g13  : W (Sniper) x0.98 | U (Battleship) x0.99 | W (Sniper) +chips x1.03 | U (Battleship) +chips x1.03
+     L30 T8  g19.5: W (Sniper) x0.99 | U (Battleship) x0.99 | W (Sniper) +chips x1.07 | U (Battleship) +chips x1.05
+     L40 T10 g26  : W (Sniper) x0.99 | U (Battleship) x0.99 | W (Sniper) +chips x1.11 | U (Battleship) +chips x1.08
+     L40 T10 g40  : W (Sniper) x0.99 | U (Battleship) x0.99 | W (Sniper) +chips x1.12 | U (Battleship) +chips x1.09
+
+   every class at L40: its own par TTK -> its ceiling (T10, 100% of the gate, 3 Combat + 3 Armour; the category's multiplier line in W or U where one exists)
+     BATTLESHIP  capital   TTK  68.9 ->  46.3 (x1.49)   TTD 40.1 -> 58.2
+     CARRIER     capital   TTK  60.2 ->  40.1 (x1.50)   TTD 33.5 -> 48.1
+     DESTROYER   capital   TTK  56.0 ->  39.5 (x1.42)   TTD 31.0 -> 44.3
+     FREIGHTER   freighter TTK  56.5 ->  41.5 (x1.36)   TTD 35.7 -> 51.4
+     TENDER      freighter TTK  68.8 ->  50.5 (x1.36)   TTD 29.8 -> 42.4
+     BASTION     freighter TTK  67.4 ->  49.4 (x1.36)   TTD 33.1 -> 47.4
+     WARRIOR     heavy     TTK  63.3 ->  40.7 (x1.55)   TTD 23.4 -> 32.9
+     SNIPER      heavy     TTK  62.0 ->  40.7 (x1.52)   TTD 18.8 -> 26.2
+     WARDEN      heavy     TTK  64.5 ->  42.6 (x1.52)   TTD 21.0 -> 29.5
+     DART        light     TTK  44.1 ->  32.3 (x1.37)   TTD 15.8 -> 22.0
+     ECHO        light     TTK  44.0 ->  32.3 (x1.36)   TTD 14.4 -> 19.9
+     WRAITH      light     TTK  49.6 ->  36.3 (x1.37)   TTD 17.3 -> 24.1
+
+   Par's L40 hull 1325: base 30% · points 3% · parts (tier) 38% · salvage (levels) 30%  -> gear 68% of hull
+   Par's L40 damage (weapon share): base 1 · points 0.21 · parts 0.58 · salvage 0.46  -> gear 46% of damage
+     step 0.03: salvage 30% of the L40 hull, gear 68%
+     step 0.035: salvage 33% of the L40 hull, gear 69%
+     step 0.05: salvage 41% of the L40 hull, gear 73%

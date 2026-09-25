@@ -349,7 +349,7 @@ public static readonly Unlock[] All = { ... the 9 pilot rows above, + {Boss, 3, 
 | 8 | **Refit never re-locks:** level 6 → refit → level 5. Ability 3 still open; `peak` 6 saved and reloaded | L6 / L5 | three classes | 3 |
 | 9 | **Cards:** 2600 EXP from level 1 queues `unlock` chip-1 then ability-2, naming this class's ability 2 | "LEVEL 3 · Q · …" | {Destroyer, Warrior (E), Carrier (E)} | 3 |
 | 10 | The stock sheet is unchanged by baking: level-1 hull = the class hull literal × (1 + 0.05N) | the class hull literals | 3 classes | 3 |
-| 11 | *(when Par.cs exists)* `Par` reads the walls: `HullScale(2)` | 1.109; anchor 3779 (§2.1) | | 3 |
+| 11 | *(when Par.cs exists)* `Par` reads the walls: `HullScale(2)` | 1.098; anchor 3222 (`numbers_curve_raids_items.md` §1.3, §8) | | 3 |
 | 12 | **What is drawn:** a locked slot (`LOCKED · L3`), a locked chip row, the Pilot NEXT line, one unlock card | | a capital, a light, and the Warrior (bar order E Q F) | **4** (LINT 0) |
 | 13 | **Guest, host decides:** guest at claimed level 1 sends `RequestAbility` for ability 2 bypassing its own refusal. The host's ship shows no state, and the other guest sees nothing | | guest is a {capital, light} | **5** (+ **mutant**: delete the `DoAbility` wall line and the check must fail) |
 | 14 | Guest at level 3: ability 2 acts on the host, and the other guest sees the effect | | | 5 |

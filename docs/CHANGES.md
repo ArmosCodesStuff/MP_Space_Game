@@ -36,6 +36,14 @@ history pick the work up from it alone. Update it in the same change as the code
 
 ## Handoff — read this first
 
+**2026-09-25 (cloud session, design only, no game code touched):** step 1 of `docs/plans/README.md` is
+done. `kits_v31.md` and `numbers_curve_raids_items.md` are reconciled in the numbers file's §8: it owns
+every curve, boss, raid, chip and item number; the kits file owns what each class does. L1 Lancer 3222 /
+Drake 2968; non-super moves Lancer x0.744 / Drake x0.787; no starting chips; the Dart at 72; no hull trim
+for adds. `docs/plans/models/numbers_v2.py` carries the rows (and now runs on Python 3.11); its output is
+`models/run.txt`. NEXT: step 2, WebRTC slices R0-R5 (`docs/plans/network_webrtc.md`); engine rungs 3-6
+need the owner's PC.
+
 **This folder is the `WarShips_Version_L` fork** (git branch `version-l`), copied from `Downloads\Warships`
 at its last VERIFIED commit (b258590, slice 3b) so this work stays off `main`: nothing here is pushed,
 and the original folder is untouched. Its first batch is the owner's line art -- every ship redrawn from

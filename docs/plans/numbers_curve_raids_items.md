@@ -2,17 +2,18 @@
 
 ## Owner summary
 
-1. **Scope: a new table.** `Par.cs` is the reference row: the DESTROYER base class with no chips, behind the level walls (abilities at L1/L3/L6). It wears 4 power lines and draws its tiers from Loot's drop row. **L1 anchors: Lancer 3456, Drake 3183** (was 3820/3520, which counted 3 kit chips). Boss hull ×2.22 and damage ×3.13 at L40, then flat (×2.34 / ×3.26 at L80).
-2. **Par kills in 60.0 s at every level** (the Drake 55.3 s, the kept 700/760 row ratio). **Time to die holds at 31.0 s against the Lancer and 42.0 s against the Drake at every level.** To get there without chips, every boss row except the two supers is cut: Lancer ×0.744 (guns 3.6→2.68, trident 15→11.2, wave 45→33.5, ram 40→29.8), Drake ×0.787 (gun 6→4.72, scrap 18.75→14.76). The burn (250, 50 a tick) and the rock (250) are unchanged: your supers ruling names those two.
-3. **Chips are upside.** Every open slot filled (3 Combat + 3 Armour, no chip ladder) kills ×1.10 faster at L3, ×1.19 at L10 and ×1.24 at L40 (48 s). From L10 it survives ×1.14-1.18 longer (TTD 36-37 s).
-4. **Raids keep pace by construction.** Raiders take a level, so at every level an add dies in the same time (webifier 0.62 s, gunship 2.5 s) and deals the same share of hull. The beam's windup is max(6 s / 1.01^(L-1), strip time + 0.6 s), with the strip priced on the slowest class (par's strip ×1.2: the BB and TE fly at 84% of par). The squad-1 floor binds from L23 at 4.82 s. A web that lands mid-windup stretches it (to 5.8-7.5 s). **No full beam lands on any class at any level**, except once on the Carrier at L1, behind its walls.
-5. **Raids, with adds against the boss alone:** x1.06 (Rusty L1-5) rising to x1.39 (Rusty L39) and x2.01 (Drake L40). Fights run 4-39% longer, pinned at most 20% of the time, and the adds pay +3-24% EXP.
-6. **Items: 42 lines** (capital 11, freighter 10, heavy 11, light 10) **plus 6 generic chips**. Tiers go ×1.10 each: a +25% T1 is +59% at T10. Rate, cooldown and duration lines start at +20%, which puts them at ×0.98-0.99 of a damage line (at most ×1.12 with full chips). The two rider lines (Magazine Core, Swarm Rack) add a count to the full lean, so on a boss they are ×1.06-1.17 of the reference line (D11). Scrap is 100×1.25^(t-1).
-7. **L40:** gear is 68% of Par's hull (parts 38%, salvage 30%) and 46% of its damage. With no salvage Par takes 75 s to kill and dies in 21 s. The best possible build (T10, 100% of the gate, full chips) is ×1.36-1.68 of the class's own par: 42 s for the DD, 41 s for the Warden and Carrier on their riders, 35 s at the fastest (Echo). **No build reaches half of par**, as long as gear top speed never prices the Dart's damage (D6). If it does, a Dart on Engine chips reaches about 29 s.
-8. **Your calls (defaults stand):** D1 cut every row but the burn and the rock (not everything ×0.86/0.92); D2 no chip ladder; D3 no boss-hull trim for adds; D4 the escape floor priced on the slowest class. Priced on par instead, the 7 classes slower than par take a full beam on a quarter to a half of the Rusty's beams. §6 has all eleven.
-9. **The parallel kits draft (kits v3.1) disagrees** on the anchor (3091 there, 3456 here), the size of the cut, three class rows and the chip budget. §8 lists them; the two must agree before either is built.
+**RECONCILED with `kits_v31.md` on 2026-09-25 (§8).** This file is now the one source for every curve, boss, raid, chip and item number; `kits_v31.md` owns what each class does. The figures below are the model's (`models/numbers_v2.py`, output in `models/run.txt`).
 
-Read-only design. Nothing in the repo was edited, built or run. The numbers are from `numbers_v2.py` in this folder (`python numbers_v2.py [all|curve|classes|chips|raids|items]`; the full output is `run.txt`). It imports `../curve.py`, `../player_model.py` and `../raids_v2_model.py` and changes nothing in them. **Three rows here differ from the script as it stands** (the ram is not a super, the raider missile is 42, the escape floor is priced on the slowest class). §7 has the three edits that make it print this file's §1.2 and §2.
+1. **Scope: a new table.** `Par.cs` is the reference row: the DESTROYER base class with no chips, behind the level walls (abilities at L1/L3/L6). It wears 4 power lines and draws its tiers from Loot's drop row. Its rows set the SHAPE of every scale; the L1 hull is set on the fleet's walled L1 median (§8 R1), ×0.932 of the DD's own. **L1 anchors: Lancer 3222, Drake 2968** (was 3820/3520, which counted 3 kit chips). Boss hull ×2.22 and damage ×3.13 at L40, then flat (×2.34 / ×3.26 at L80).
+2. **The median class kills in about 60 s at every level** (59.4 s from L20; the DD 56.0 s, the Drake ×700/760). **Time to die holds at 31.0 s against the Lancer and 42.0 s against the Drake at every level.** To get there without chips, every boss row except the two supers is cut: Lancer ×0.744 (guns 3.6→2.68, trident 15→11.2, wave 45→33.5, ram 40→29.8), Drake ×0.787 (gun 6→4.72, scrap 18.75→14.76). The burn (250, 50 a tick) and the rock (250) are unchanged: your supers ruling names those two.
+3. **Chips are upside.** No chips at the start (`chip_basic` is deleted). Every open slot filled (3 Combat + 3 Armour, no chip ladder) kills ×1.09 faster at L3, ×1.19 at L10 and ×1.24 at L40 (the DD 45 s). From L10 it survives ×1.14-1.18 longer (TTD 36-37 s).
+4. **Raids keep pace by construction.** Raiders take a level, so at every level an add dies in the same time (webifier 0.62 s, gunship 2.5 s) and deals the same share of hull. The beam's windup is max(6 s / 1.01^(L-1), strip time + 0.6 s), with the strip priced on the slowest class (par's strip ×1.2: the BB and TE fly at 84% of par). The squad-1 floor binds from L23 at 4.82 s. A web that lands mid-windup stretches it (to 5.8-7.5 s). **No full beam lands on any class at any level**, except once on the Carrier at L1, behind its walls.
+5. **Raids, with adds against the boss alone:** x1.03 (Rusty L1-5) rising to x1.38 (Rusty L39) and x2.09 (Drake L40). Fights run 2-42% longer, pinned at most 23% of the time, and the adds pay +3-24% EXP.
+6. **Items: 42 lines** (capital 11, freighter 10, heavy 11, light 10) **plus 6 generic chips**. Tiers go ×1.10 each: a +25% T1 is +59% at T10. Rate, cooldown and duration lines start at +20%, which puts them at ×0.98-0.99 of a damage line (at most ×1.12 with full chips). The two rider lines (Magazine Core, Swarm Rack) add a count to the full lean, so on a boss they are ×1.06-1.17 of the reference line (D11). Scrap is 100×1.25^(t-1).
+7. **L40:** gear is 68% of Par's hull (parts 38%, salvage 30%) and 46% of its damage. With no salvage the DD takes 70 s to kill and dies in 21 s. The best possible build (T10, 100% of the gate, full chips) is ×1.36-1.68 of the class's own par: 39.5 s for the DD, 38.4 s for the Warden on its rider, 32.3 s at the fastest (Echo, Dart). **No build without Engine chips reaches half of the median's 59.4 s.** Gear top speed now prices the Dart's guns (D6, the generic path), so a Dart on 3 T10 Engine chips reaches about 27 s: the item pass must re-check it (§8 R6).
+8. **Your calls (defaults stand):** D1 cut every row but the burn and the rock (not everything ×0.86/0.92); D2 no chip ladder; D3 no boss-hull trim for adds (kits v3.1's decision 15 had the opposite default; §8 R8 settles it this way, and it is the one reconciled row worth your word); D4 the escape floor priced on the slowest class. §6 has all eleven; D6 and D7 are settled by §8.
+
+Design only: no game code was edited, built or run. The numbers are from `models/numbers_v2.py` (`python numbers_v2.py [all|curve|classes|chips|raids|items]`, run from `models/`; the full output is `models/run.txt`). It imports `curve.py`, `player_model.py` and `raids_v2_model.py` and changes nothing in them.
 
 ---
 
@@ -41,15 +42,15 @@ Read-only design. Nothing in the repo was edited, built or run. The numbers are 
 - The Warden's Taunt guard is not hull, so TTD does not see it.
 
 **Class inputs** (realistic DPS against a lone boss, stock, no chips). They come from the kits v3 power table (`kits3/signoff_v3.md` §4), with two changes:
-- **Freighter 56.7**: Time on target goes hitscan (10.0 sheet × 0.9 painted × 0.97 landed = 8.7 realistic, against v2's 7.0), plus 1.5 from thrown sentries.
+- **Freighter 56.0**: Time on target goes hitscan at kits v3.1's 8.0 realistic (paint up 90%, sentries in reach 85%; §8 R5).
 - **DD rip**: 1% of the boss's total hull + 10 per cast-off, one every 21 s, used 80% of the time. That is 2.3% of a boss per fight. It opens at PL6 with the Grapnel.
-- **The Dart is v3's 66.8**, which does not price the V boost. D6's default does price it (the kit's boost reaches the Pepperbox and the rod). With it the Dart is 72.0 (kits v3.1: 71.9): 47 s at par instead of 51, and 35 s at its ceiling instead of 37. Nothing else in this file moves.
+- **The Dart is 72.0** (kits v3.1: 71.9): every top-speed lift prices the Pepperbox and the rod, the V boost included (weapon and rod each +2.6 over v3's 66.8; §8 R6).
 
 Each class splits its realistic DPS into weapon + abilities 1-3 in learn order (the `CLASSES` rows).
 
 **The reference.**
 - It is still the DESTROYER (curve.md's median row): realistic 55.0 and hull 395.
-- The fleet's median realistic is 51.8. A median-DPS class kills in 63.7 s at L1 and **65.7 s from L10**, once the boss counts the DD's rip (decision D7).
+- The fleet's median realistic is 51.8. The boss hull is Par's 60 s hull × 0.932 (the fleet's walled L1 median over the DD's, §8 R1), so a median-DPS class kills in **59.4 s** from L20 and the DD in 56.0 s.
 
 **Boss rows.**
 - Lancer per unit of scale: guns 3.0, trident 3.0, wave 2.65, **beam 8.33** (5 ticks = 250 after fix B), ram 1.33. The escorts' 0.4 has left the Lancer's sheet: they are now squad wave 1.
@@ -83,8 +84,8 @@ HullScale = BossHull(L)/BossHull(1) · CraftScale = D_craft(L)/D_craft(1) · Dam
 
 ### 1.2 The L1 anchors
 
-- **Hull:** Lancer **3456** = 60 s × 57.6, which is par's average DPS over L1's four fights (54.35 walled on the first fight, 60.7 by the fourth, as its first parts and point arrive). Drake **3183** (× 700/760).
-  - The approved 3820 is 1.105 × this. The difference is the three kit chips and the Weapons point that curve.md counted.
+- **Hull:** Lancer **3222** = 60 s × 57.6 × 0.932. 57.6 is the DD's average DPS over L1's four fights (54.35 walled on the first fight, 60.7 by the fourth, as its first parts and point arrive); 0.932 is the fleet's walled L1 median over the DD's, over the same four fights (§8 R1). Drake **2968** (× 700/760).
+  - The approved 3820 is 1.186 × this: the three kit chips and the Weapons point that curve.md counted, and the DD sitting above the no-chip median.
 - **Damage (the time-to-die anchor):** par's L1 hull averages 423 (395 on the first fight, 449 by the fourth). Holding 31.0 / 42.0 s needs a sheet of 15.76 (Lancer) and 12.19 (Drake).
   - The two supers stay at their rows, so every other row carries the cut.
 
@@ -106,67 +107,67 @@ HullScale = BossHull(L)/BossHull(1) · CraftScale = D_craft(L)/D_craft(1) · Dam
 
 ### 1.3 The scale, level by level
 
-Lancer and Drake are the absolute hulls. TTK is par's kill time, averaged over the level's 4 fights. TTD is against the sheet ("stops dodging").
+Lancer and Drake are the absolute hulls. DD TTK is the reference class's kill time (the median class takes ×1.06 of it), averaged over the level's 4 fights. TTD is against the sheet ("stops dodging").
 
-| L | PL | worn E[P] W/U/Sh/Fr | g | HullScale | DamageScale | CraftScale | Lancer | Drake | par TTK L / D | TTD L / D |
+| L | PL | worn E[P] W/U/Sh/Fr | g | HullScale | DamageScale | CraftScale | Lancer | Drake | DD TTK L / D | TTD L / D |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 1 | 1-2 | 0 / 0 / 0 / 0 | 0.7 | 1.000 | 1.000 | 1.000 | **3456** | **3183** | 60.1 / 55.4 | 31.0 / 42.0 |
-| 2 | 2-3 | .37 .56 .35 .34 | 1.3 | 1.098 | 1.151 | 1.098 | 3794 | 3494 | 60.0 / 55.3 | 31.0 / 42.0 |
-| 3 | 4-5 | .58 .82 .53 .58 | 2.0 | 1.158 | 1.259 | 1.158 | 4004 | 3688 | 60.0 / 55.3 | 31.0 / 42.0 |
-| 4 | 5-6 | .70 .94 .71 .77 | 2.6 | 1.242 | 1.334 | 1.214 | 4294 | 3955 | 60.0 / 55.3 | 31.0 / 42.0 |
-| 5 | 7-8 | .79 1.00 .79 .81 | 3.2 | 1.282 | 1.403 | 1.244 | 4430 | 4081 | 60.0 / 55.3 | 31.0 / 42.0 |
-| 6 | 8-9 | .88 1.07 .91 .92 | 3.9 | 1.310 | 1.463 | 1.271 | 4529 | 4172 | 60.0 / 55.3 | 31.0 / 42.0 |
-| 7 | 10-11 | 1.01 1.11 1.00 1.00 | 4.5 | 1.366 | 1.510 | 1.325 | 4721 | 4348 | 60.0 / 55.3 | 31.0 / 42.0 |
-| 8 | 11-12 | 1.06 1.13 1.05 1.04 | 5.2 | 1.382 | 1.543 | 1.341 | 4777 | 4400 | 60.0 | 31.0 / 42.0 |
-| 9 | 13-14 | 1.10 1.14 1.08 1.08 | 5.9 | 1.400 | 1.595 | 1.358 | 4838 | 4456 | 60.0 | 31.0 / 42.0 |
-| 10 | 14-15 | 1.15 1.20 1.14 1.13 | 6.5 | 1.418 | 1.636 | 1.376 | 4901 | 4514 | 60.0 | 31.0 / 42.0 |
-| 11 | 16-17 | | 7.2 | 1.447 | 1.667 | 1.404 | 5000 | 4605 | 60.0 | 31.0 / 42.0 |
-| 12 | 17-18 | | 7.8 | 1.473 | 1.695 | 1.429 | 5091 | 4689 | 60.0 | 31.0 / 42.0 |
-| 13 | 19-20 | | 8.5 | 1.490 | 1.727 | 1.446 | 5151 | 4744 | 60.0 | 31.0 / 42.0 |
-| 14 | 20-22 | | 9.1 | 1.512 | 1.785 | 1.467 | 5226 | 4813 | 60.0 | 31.0 / 42.0 |
-| 15 | 22-23 | 1.31 1.36 1.31 1.32 | 9.8 | 1.527 | 1.823 | 1.482 | 5278 | 4861 | 60.0 | 31.0 / 42.0 |
-| 16 | 23-25 | | 10.4 | 1.540 | 1.849 | 1.495 | 5324 | 4904 | 60.0 | 31.0 / 42.0 |
-| 17 | 25-26 | | 11.1 | 1.581 | 1.883 | 1.534 | 5464 | 5032 | 60.0 | 31.0 / 42.0 |
-| 18 | 27-28 | | 11.7 | 1.612 | 1.930 | 1.564 | 5572 | 5132 | 60.0 | 31.0 / 42.0 |
-| 19 | 28-29 | | 12.3 | 1.628 | 1.965 | 1.580 | 5627 | 5182 | 60.0 | 31.0 / 42.0 |
-| 20 | 30-31 | 1.47 1.52 1.48 1.47 | 13.0 | 1.642 | 2.004 | 1.593 | 5674 | 5226 | 60.0 | 31.0 / 42.0 |
-| 21 | 31-33 | | 13.7 | 1.665 | 2.057 | 1.615 | 5753 | 5299 | 60.0 | 31.0 / 42.0 |
-| 22 | 33-34 | | 14.3 | 1.694 | 2.112 | 1.644 | 5855 | 5392 | 60.0 | 31.0 / 42.0 |
-| 23 | 34-36 | | 15.0 | 1.711 | 2.151 | 1.660 | 5914 | 5447 | 60.0 | 31.0 / 42.0 |
-| 24 | 36-37 | | 15.6 | 1.747 | 2.184 | 1.696 | 6039 | 5563 | 60.0 | 31.0 / 42.0 |
-| 25 | 38-39 | 1.65 1.67 1.64 1.65 | 16.2 | 1.778 | 2.229 | 1.726 | 6146 | 5661 | 60.0 | 31.0 / 42.0 |
-| 26 | 39-41 | | 16.9 | 1.808 | 2.291 | 1.755 | 6250 | 5756 | 60.0 | 31.0 / 42.0 |
-| 27 | 41-42 | | 17.6 | 1.830 | 2.335 | 1.776 | 6326 | 5827 | 60.0 | 31.0 / 42.0 |
-| 28 | 42-44 | | 18.2 | 1.847 | 2.391 | 1.793 | 6385 | 5881 | 60.0 | 31.0 / 42.0 |
-| 29 | 44-45 | | 18.9 | 1.874 | 2.453 | 1.818 | 6477 | 5965 | 60.0 | 31.0 / 42.0 |
-| 30 | 46-47 | 1.88 1.95 1.89 1.90 | 19.5 | 1.909 | 2.529 | 1.853 | 6599 | 6078 | 60.0 | 31.0 / 42.0 |
-| 31 | 47-49 | | 20.2 | 1.935 | 2.581 | 1.877 | 6686 | 6158 | 60.0 | 31.0 / 42.0 |
-| 32 | 49-50 | | 20.8 | 1.977 | 2.621 | 1.918 | 6833 | 6293 | 60.0 | 31.0 / 42.0 |
-| 33 | 51-52 | | 21.4 | 2.015 | 2.680 | 1.955 | 6963 | 6414 | 60.0 | 31.0 / 42.0 |
-| 34 | 52-54 | | 22.1 | 2.056 | 2.759 | 1.995 | 7106 | 6545 | 60.0 | 31.0 / 42.0 |
-| 35 | 54-55 | 2.13 2.18 2.12 2.14 | 22.8 | 2.083 | 2.816 | 2.021 | 7198 | 6630 | 60.0 | 31.0 / 42.0 |
-| 36 | 56-57 | | 23.4 | 2.106 | 2.880 | 2.044 | 7279 | 6704 | 60.0 | 31.0 / 42.0 |
-| 37 | 57-59 | | 24.1 | 2.137 | 2.959 | 2.074 | 7387 | 6803 | 60.0 | 31.0 / 42.0 |
-| 38 | 59-60 | | 24.7 | 2.177 | 3.035 | 2.112 | 7524 | 6930 | 60.0 | 31.0 / 42.0 |
-| 39 | 61-62 | | 25.4 | 2.200 | 3.090 | 2.135 | 7603 | 7002 | 60.0 | 31.0 / 42.0 |
-| **40** | 62-64 | 2.33 2.36 2.34 2.33 | 26.0 | **2.216** | **3.131** | **2.151** | **7661** | **7056** | 60.0 | 31.0 / 42.0 |
-| 45 | 71-72 | 2.36 (T10) | 26.0 | 2.252 | 3.149 | 2.186 | 7785 | 7170 | 60.0 | 31.0 / 42.0 |
-| 50 | 79-80 | | 26.0 | 2.252 | 3.186 | 2.186 | 7785 | 7170 | 60.0 | 31.0 / 42.0 |
-| 60 | 96-97 | | 26.0 | 2.282 | 3.222 | 2.214 | 7887 | 7264 | 60.0 | 31.0 / 42.0 |
-| 80 | 129-130 | | 26.0 | 2.341 | 3.259 | 2.272 | 8091 | 7452 | 60.0 | 31.0 / 42.0 |
+| **1** | 1-2 | 0 0 0 0 | 0.7 | **1.000** | **1.000** | 1.000 | **3222** | **2968** | 56.0 / 51.6 | 31.0 / 42.0 |
+| 2 | 2-3 | .37 .56 .35 .34 | 1.3 | 1.098 | 1.151 | 1.098 | 3537 | 3257 | 55.9 / 51.5 | 31.0 / 42.0 |
+| 3 | 4-5 | .58 .82 .53 .58 | 2.0 | 1.158 | 1.259 | 1.158 | 3733 | 3438 | 56.0 / 51.5 | 31.0 / 42.0 |
+| 4 | 5-6 | .70 .94 .71 .77 | 2.6 | 1.242 | 1.334 | 1.214 | 4003 | 3687 | 56.0 / 51.6 | 31.0 / 42.0 |
+| 5 | 7-8 | .79 1.00 .79 .81 | 3.2 | 1.282 | 1.403 | 1.244 | 4130 | 3804 | 56.0 / 51.6 | 31.0 / 42.0 |
+| 6 | 8-9 | .88 1.07 .91 .92 | 3.9 | 1.310 | 1.463 | 1.271 | 4222 | 3889 | 56.0 / 51.6 | 31.0 / 42.0 |
+| 7 | 10-11 | 1.01 1.11 1.00 1.00 | 4.5 | 1.366 | 1.510 | 1.325 | 4401 | 4053 | 56.0 / 51.6 | 31.0 / 42.0 |
+| 8 | 11-12 | 1.06 1.13 1.05 1.04 | 5.2 | 1.382 | 1.543 | 1.341 | 4453 | 4102 | 56.0 / 51.6 | 31.0 / 42.0 |
+| 9 | 13-14 | 1.10 1.14 1.08 1.08 | 5.9 | 1.400 | 1.595 | 1.358 | 4510 | 4154 | 56.0 / 51.6 | 31.0 / 42.0 |
+| 10 | 14-15 | 1.15 1.20 1.14 1.13 | 6.5 | 1.418 | 1.636 | 1.376 | 4569 | 4208 | 56.0 / 51.6 | 31.0 / 42.0 |
+| 11 | 16-17 | 1.18 1.22 1.18 1.16 | 7.2 | 1.447 | 1.667 | 1.404 | 4661 | 4293 | 56.0 / 51.6 | 31.0 / 42.0 |
+| 12 | 17-18 | 1.20 1.25 1.21 1.21 | 7.8 | 1.473 | 1.695 | 1.429 | 4745 | 4371 | 56.0 / 51.6 | 31.0 / 42.0 |
+| 13 | 19-20 | 1.22 1.26 1.22 1.22 | 8.5 | 1.490 | 1.727 | 1.446 | 4802 | 4423 | 56.0 / 51.6 | 31.0 / 42.0 |
+| 14 | 20-22 | 1.29 1.33 1.28 1.28 | 9.1 | 1.512 | 1.785 | 1.467 | 4872 | 4487 | 56.0 / 51.6 | 31.0 / 42.0 |
+| 15 | 22-23 | 1.31 1.36 1.31 1.32 | 9.8 | 1.527 | 1.823 | 1.482 | 4920 | 4532 | 56.0 / 51.6 | 31.0 / 42.0 |
+| 16 | 23-25 | 1.34 1.38 1.34 1.35 | 10.4 | 1.540 | 1.849 | 1.495 | 4963 | 4571 | 56.0 / 51.6 | 31.0 / 42.0 |
+| 17 | 25-26 | 1.36 1.39 1.35 1.36 | 11.1 | 1.581 | 1.883 | 1.534 | 5093 | 4691 | 56.0 / 51.6 | 31.0 / 42.0 |
+| 18 | 27-28 | 1.42 1.47 1.41 1.42 | 11.7 | 1.612 | 1.930 | 1.564 | 5194 | 4784 | 56.0 / 51.6 | 31.0 / 42.0 |
+| 19 | 28-29 | 1.45 1.49 1.46 1.45 | 12.3 | 1.628 | 1.965 | 1.580 | 5245 | 4831 | 56.0 / 51.6 | 31.0 / 42.0 |
+| 20 | 30-31 | 1.47 1.52 1.48 1.47 | 13.0 | 1.642 | 2.004 | 1.593 | 5290 | 4872 | 56.0 / 51.6 | 31.0 / 42.0 |
+| 21 | 31-33 | 1.49 1.53 1.50 1.49 | 13.7 | 1.665 | 2.057 | 1.615 | 5363 | 4940 | 56.0 / 51.6 | 31.0 / 42.0 |
+| 22 | 33-34 | 1.58 1.60 1.56 1.56 | 14.3 | 1.694 | 2.112 | 1.644 | 5458 | 5027 | 56.0 / 51.6 | 31.0 / 42.0 |
+| 23 | 34-36 | 1.61 1.64 1.60 1.60 | 15.0 | 1.711 | 2.151 | 1.660 | 5513 | 5078 | 56.0 / 51.6 | 31.0 / 42.0 |
+| 24 | 36-37 | 1.63 1.66 1.62 1.63 | 15.6 | 1.747 | 2.184 | 1.696 | 5630 | 5186 | 56.0 / 51.6 | 31.0 / 42.0 |
+| 25 | 38-39 | 1.65 1.67 1.64 1.65 | 16.2 | 1.778 | 2.229 | 1.726 | 5730 | 5277 | 56.0 / 51.6 | 31.0 / 42.0 |
+| 26 | 39-41 | 1.71 1.77 1.72 1.72 | 16.9 | 1.808 | 2.291 | 1.755 | 5826 | 5366 | 56.0 / 51.6 | 31.0 / 42.0 |
+| 27 | 41-42 | 1.76 1.81 1.76 1.76 | 17.6 | 1.830 | 2.335 | 1.776 | 5897 | 5432 | 56.0 / 51.6 | 31.0 / 42.0 |
+| 28 | 42-44 | 1.79 1.83 1.79 1.79 | 18.2 | 1.847 | 2.391 | 1.793 | 5952 | 5482 | 56.0 / 51.6 | 31.0 / 42.0 |
+| 29 | 44-45 | 1.81 1.84 1.80 1.81 | 18.9 | 1.874 | 2.453 | 1.818 | 6037 | 5561 | 56.0 / 51.6 | 31.0 / 42.0 |
+| 30 | 46-47 | 1.88 1.95 1.89 1.90 | 19.5 | 1.909 | 2.529 | 1.853 | 6151 | 5666 | 56.0 / 51.6 | 31.0 / 42.0 |
+| 31 | 47-49 | 1.93 2.00 1.94 1.95 | 20.2 | 1.935 | 2.581 | 1.877 | 6233 | 5741 | 56.0 / 51.6 | 31.0 / 42.0 |
+| 32 | 49-50 | 1.96 2.02 1.97 1.98 | 20.8 | 1.977 | 2.621 | 1.918 | 6370 | 5867 | 56.0 / 51.6 | 31.0 / 42.0 |
+| 33 | 51-52 | 1.98 2.04 2.00 1.99 | 21.4 | 2.015 | 2.680 | 1.955 | 6491 | 5979 | 56.0 / 51.6 | 31.0 / 42.0 |
+| 34 | 52-54 | 2.08 2.14 2.08 2.08 | 22.1 | 2.056 | 2.759 | 1.995 | 6624 | 6101 | 56.0 / 51.6 | 31.0 / 42.0 |
+| 35 | 54-55 | 2.13 2.18 2.12 2.14 | 22.8 | 2.083 | 2.816 | 2.021 | 6710 | 6181 | 56.0 / 51.6 | 31.0 / 42.0 |
+| 36 | 56-57 | 2.16 2.22 2.16 2.17 | 23.4 | 2.106 | 2.880 | 2.044 | 6786 | 6250 | 56.0 / 51.6 | 31.0 / 42.0 |
+| 37 | 57-59 | 2.19 2.24 2.19 2.19 | 24.1 | 2.137 | 2.959 | 2.074 | 6886 | 6342 | 56.0 / 51.6 | 31.0 / 42.0 |
+| 38 | 59-60 | 2.27 2.32 2.27 2.26 | 24.7 | 2.177 | 3.035 | 2.112 | 7014 | 6460 | 56.0 / 51.6 | 31.0 / 42.0 |
+| 39 | 61-62 | 2.32 2.35 2.32 2.30 | 25.4 | 2.200 | 3.090 | 2.135 | 7087 | 6528 | 56.0 / 51.6 | 31.0 / 42.0 |
+| **40** | 62-64 | 2.33 2.36 2.34 2.33 | 26.0 | **2.216** | **3.131** | 2.151 | **7141** | **6577** | 56.0 / 51.6 | 31.0 / 42.0 |
+| 45 | 71-72 | 2.36 2.36 2.36 2.36 | 26.0 | 2.252 | 3.149 | 2.186 | 7257 | 6684 | 56.0 / 51.6 | 31.0 / 42.0 |
+| 50 | 79-80 | 2.36 2.36 2.36 2.36 | 26.0 | 2.252 | 3.186 | 2.186 | 7257 | 6684 | 56.0 / 51.6 | 31.0 / 42.0 |
+| 60 | 96-97 | 2.36 2.36 2.36 2.36 | 26.0 | 2.282 | 3.222 | 2.214 | 7352 | 6772 | 56.0 / 51.6 | 31.0 / 42.0 |
+| 80 | 129-130 | 2.36 2.36 2.36 2.36 | 26.0 | 2.341 | 3.259 | 2.272 | 7542 | 6947 | 56.0 / 51.6 | 31.0 / 42.0 |
 
 - **Shape.** Growth is fast while the first parts arrive: +9.8% hull and +15% damage from L1 to L2. It settles to about 1.6% and 2.3% a level from L5 to L40. It is flat past L40, because tiers stop at T10 (L37) and the gate at g26: HullScale(80) / HullScale(40) = 1.056.
 - **Damage outgrows hull** (×3.13 against ×2.22 at L40). Par wears two hull slots against one damage lift per system; that is items_design's F1 (the frame counts), kept.
 - **Bosses against raiders.** `HullScale` runs above `CraftScale` by 2.3% from L4, because the rip hits bosses and never craft.
 - **Within a level** the 4 fights spread because walls and drops land mid-level:
 
-  | L | fight 1-4 TTK | fight 1-4 TTD (Lancer) |
+  | L | DD fight 1-4 TTK | fight 1-4 TTD (Lancer) |
   |---|---|---|
-  | 1 | 63.6 / 61.7 / 58.2 / 57.0 | 28.6 / 30.4 / 31.8 / 33.2 |
-  | 2 | 61.3 / 60.3 / 59.6 / 58.8 | 29.4 / 30.7 / 31.5 / 32.4 |
-  | 4 | 62.4 / 59.5 / 59.2 / 59.0 | 30.6 / 30.9 / 31.1 / 31.4 |
-  | 10 | 60.1 / 60.0 / 60.0 / 59.9 | 30.8 / 30.9 / 31.1 / 31.2 |
-  | 40 | 60.0 all four | 31.0 all four |
+  | 1 | 59.3 / 57.5 / 54.2 / 53.1 | 28.6 / 30.4 / 31.8 / 33.2 |
+  | 2 | 57.1 / 56.2 / 55.6 / 54.8 | 29.4 / 30.7 / 31.5 / 32.4 |
+  | 4 | 58.2 / 55.6 / 55.3 / 55.1 | 30.6 / 30.9 / 31.1 / 31.4 |
+  | 10 | 56.2 / 56.1 / 56.0 / 55.9 | 30.8 / 30.9 / 31.1 / 31.2 |
+  | 40 | 56.0 all four | 31.0 all four |
 
 - **The walls, at this pace:**
   - Ability 2 opens at boss L2 fight 2, and ability 3 at L4 fight 2.
@@ -177,61 +178,67 @@ Lancer and Drake are the absolute hulls. TTK is par's kill time, averaged over t
 
 TTK s / TTD s (Lancer sheet):
 
-| class | realistic | L1 | L2 | L3 | L4 | L6 | L10 | L20 | L40 |
-|---|---|---|---|---|---|---|---|---|---|
-| BATTLESHIP | 46.0 | 70/41 | 69/41 | 70/40 | 72/40 | 73/40 | 74/41 | 74/40 | 74/40 |
-| CARRIER | 52.6 | **85**/34 | **72**/34 | 69/34 | 65/34 | 64/33 | 64/34 | 64/34 | 65/34 |
-| **DESTROYER** | 55.0 | 60/31 | 60/31 | 60/31 | 60/31 | 60/31 | 60/31 | 60/31 | 60/31 |
-| FREIGHTER | 56.7 | 57/36 | 56/36 | 55/36 | 58/36 | 59/36 | 60/36 | 60/36 | 60/36 |
-| TENDER | 46.0 | 73/29 | 71/29 | 71/29 | 72/30 | 73/30 | 74/30 | 73/30 | 74/30 |
-| BASTION | 47.0 | 69/33 | 69/33 | 69/33 | 71/33 | 72/33 | 72/33 | 72/33 | 72/33 |
-| WARRIOR | 50.0 | 70/22 | 69/22 | 69/22 | 67/23 | 67/23 | 68/23 | 68/23 | 68/23 |
-| SNIPER | 51.0 | 63/18 | 62/18 | 62/18 | 64/18 | 65/18 | 66/18 | 66/18 | 67/19 |
-| WARDEN | 49.0 | 66/20 | 65/20 | 64/20 | 67/20 | 68/20 | 69/21 | 69/21 | 69/21 |
-| DART | 66.8 | 54/15 | 51/15 | 49/15 | 51/15 | 51/15 | 51/15 | 51/15 | 51/16 |
-| ECHO | 72.0 | 46/13 | 46/13 | 46/13 | 47/13 | 47/13 | 47/14 | 47/14 | 47/14 |
-| WRAITH | 64.0 | 56/16 | 53/16 | 52/16 | 53/16 | 53/17 | 53/17 | 53/17 | 53/17 |
+| class | realistic | L1 | L2 | L3 | L4 | L6 | L8 | L10 | L20 | L30 | L40 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| BATTLESHIP | 46.0 | 65/41 | 64/41 | 65/40 | 67/40 | 68/40 | 69/41 | 69/41 | 69/40 | 68/40 | 69/40 |
+| CARRIER | 52.6 | 80/34 | 68/34 | 64/34 | 61/34 | 60/33 | 60/34 | 60/34 | 60/34 | 60/33 | 60/34 |
+| **DESTROYER** | 55.0 | 56/31 | 56/31 | 56/31 | 56/31 | 56/31 | 56/31 | 56/31 | 56/31 | 56/31 | 56/31 |
+| FREIGHTER | 56.0 | 54/36 | 53/36 | 52/36 | 54/36 | 56/36 | 56/36 | 56/36 | 56/36 | 56/36 | 56/36 |
+| TENDER | 46.0 | 68/29 | 67/29 | 66/29 | 67/30 | 68/30 | 69/30 | 69/30 | 69/30 | 68/30 | 69/30 |
+| BASTION | 47.0 | 65/33 | 64/33 | 64/33 | 66/33 | 67/33 | 67/33 | 67/33 | 67/33 | 67/33 | 67/33 |
+| WARRIOR | 50.0 | 66/22 | 65/22 | 64/22 | 63/23 | 62/23 | 63/23 | 63/23 | 63/23 | 63/23 | 63/23 |
+| SNIPER | 51.0 | 59/18 | 58/18 | 58/18 | 60/18 | 61/18 | 62/18 | 62/18 | 62/18 | 61/19 | 62/19 |
+| WARDEN | 49.0 | 61/20 | 60/20 | 60/20 | 62/20 | 63/20 | 64/20 | 64/21 | 64/21 | 64/21 | 65/21 |
+| DART | 72.0 | 46/15 | 44/15 | 43/15 | 44/15 | 44/15 | 44/15 | 44/15 | 44/15 | 44/16 | 44/16 |
+| ECHO | 72.0 | 43/13 | 43/13 | 43/13 | 44/13 | 44/13 | 44/13 | 44/14 | 44/14 | 44/14 | 44/14 |
+| WRAITH | 64.0 | 52/16 | 49/16 | 48/16 | 50/16 | 50/17 | 50/17 | 50/17 | 50/17 | 50/17 | 50/17 |
 
-- **Every class holds its own time within ±2 s from L4 to L40.** The spread (47-74 s) is the kits' ×1.57 power spread, not the curve.
-- **Before L4 the walls move it.** The Carrier is the one class they hurt: 85 s at L1, because its ability shares are walled until L3 and L6 (as in `level_gates.md`). The Warrior is at 70 s against its usual 68.
-- **Every other class is 3-6% slower from L6 than at L1:** BB 70 → 74, Sniper 63 → 67. The rip is 2.3% of it: a boss sized by Par counts the DD's rip once the Grapnel opens (L4, fight 2). The rest is the DD's own L1 (its walled Grapnel and first parts), which the L1 anchor averages.
+- **Every class holds its own time within ±2 s from L4 to L40.** The spread (44-69 s) is the kits' ×1.57 power spread, not the curve. The median pair (Sniper 62, Carrier 60) sits at 60 s.
+- **Before L4 the walls move it.** The Carrier is the one class they hurt: 80 s at L1, because its ability shares are walled until L3 and L6 (as in `level_gates.md`). The Warrior is at 66 s against its usual 63.
+- **Every other class is 3-6% slower from L6 than at L1:** BB 65 → 69, Sniper 59 → 62. The rip is 2.3% of it: a boss sized by Par counts the DD's rip once the Grapnel opens (L4, fight 2). The rest is the DD's own L1 (its walled Grapnel and first parts), which the L1 anchor averages.
 - **Lights and heavies lost their kit-chip hull.** They die in 13-23 s against the Lancer's sheet (curve.md had 15-25 s). Chips give it back (§1.5).
 
 ### 1.5 The same pilot with every open chip slot filled
 
-The order is Combat, Combat, Combat, Armour, Armour, Armour, in slot order. A kit Basic chip (+5% damage, +5% hull) sits in a slot until a found chip beats it. Chip tiers come from the drop sim. There is no chip ladder (D2).
+The order is Combat, Combat, Combat, Armour, Armour, Armour, in slot order. No chip is fitted at the start (`chip_basic` is deleted, §8 R7): a slot is empty until a chip drops. Chip tiers come from the drop sim. There is no chip ladder (D2).
 
 | L | chips open | TTK par → chipped | ×DPS | TTD par → chipped | ×hull | with a chip ladder (g = 0.65 L) |
 |---|---|---|---|---|---|---|
-| 1 | 0-1 | 60.1 → 58.9 | ×1.02 | 31.0 → 31.8 | ×1.02 | 58.9 |
-| 2 | 1 | 60.0 → 57.3 | ×1.05 | 31.0 → 31.4 | ×1.01 | 57.2 |
-| 3 | 2 | 60.0 → 54.7 | ×1.10 | 31.0 → 32.4 | ×1.04 | 54.5 |
-| 5 | 2-3 | 60.0 → 53.0 | ×1.13 | 31.0 | ×1.00 | 52.4 |
-| 6 | 3 | 60.0 → 51.5 | ×1.17 | 31.0 | ×1.00 | 50.6 |
-| 8 | 4-5 | 60.0 → 50.9 | ×1.18 | 31.0 → 34.0 | ×1.08 | 49.7 |
-| 10 | 6 | 60.0 → 50.5 | ×1.19 | 31.0 → 36.2 | ×1.14 | 49.0 |
-| 20 | 6 | 60.0 → 49.6 | ×1.21 | 31.0 → 37.2 | ×1.17 | 46.5 |
-| 30 | 6 | 60.0 → 48.8 | ×1.23 | 31.0 → 37.4 | ×1.17 | 44.0 |
-| **40** | 6 | 60.0 → **48.2** | **×1.24** | 31.0 → **37.5** | ×1.18 | 41.8 |
-| 60 | 6 | 60.0 → 48.4 | ×1.24 | 31.0 → 37.7 | ×1.18 | 42.1 |
+| 1 | 0-1 | 56.0 → 55.3 | ×1.01 | 31.0 → 31.0 | ×1.00 | 55.3 |
+| 2 | 1-1 | 55.9 → 53.5 | ×1.05 | 31.0 → 31.0 | ×1.00 | 53.4 |
+| 3 | 2-2 | 56.0 → 51.3 | ×1.09 | 31.0 → 31.0 | ×1.00 | 51.0 |
+| 4 | 2-2 | 56.0 → 50.7 | ×1.10 | 31.0 → 31.0 | ×1.00 | 50.3 |
+| 5 | 2-3 | 56.0 → 49.5 | ×1.13 | 31.0 → 31.0 | ×1.00 | 48.9 |
+| 6 | 3-3 | 56.0 → 48.0 | ×1.17 | 31.0 → 31.0 | ×1.00 | 47.3 |
+| 8 | 4-5 | 56.0 → 47.5 | ×1.18 | 31.0 → 34.0 | ×1.08 | 46.4 |
+| 10 | 6-6 | 56.0 → 47.1 | ×1.19 | 31.0 → 36.2 | ×1.14 | 45.7 |
+| 12 | 6-6 | 56.0 → 47.0 | ×1.19 | 31.0 → 36.7 | ×1.15 | 45.3 |
+| 15 | 6-6 | 56.0 → 46.6 | ×1.20 | 31.0 → 37.0 | ×1.16 | 44.4 |
+| 20 | 6-6 | 56.0 → 46.3 | ×1.21 | 31.0 → 37.2 | ×1.17 | 43.4 |
+| 25 | 6-6 | 56.0 → 46.1 | ×1.22 | 31.0 → 37.3 | ×1.17 | 42.4 |
+| 30 | 6-6 | 56.0 → 45.6 | ×1.23 | 31.0 → 37.4 | ×1.17 | 41.1 |
+| 35 | 6-6 | 56.0 → 45.3 | ×1.24 | 31.0 → 37.4 | ×1.18 | 40.1 |
+| **40** | 6-6 | 56.0 → 45.0 | ×1.24 | 31.0 → 37.5 | ×1.18 | 39.0 |
+| 60 | 6-6 | 56.0 → 45.2 | ×1.24 | 31.0 → 37.7 | ×1.18 | 39.3 |
 
 - **The upside.** A pilot who fills its chips is 20-24% faster from L10, and lives 14-18% longer. A 3 Combat + 3 Armour loadout is the strongest; any other mix trades one for the other.
-- **The level walls hand out chips across L1-L9.** A new pilot's first 36 fights ramp the upside from ×1.02 to ×1.19.
-- **A chip ladder** (one ladder for the 6 chip slots) takes the L40 chipped pilot to ×1.44 (41.8 s) and keeps growing with salvage. Without one, chips grow only by tier and hold at ×1.24. Hence D2.
+- **The level walls hand out chips across L1-L9.** A new pilot's first 36 fights ramp the upside from ×1.01 to ×1.19. Armour only arrives with slots 4-6, so time to die gains nothing before L8.
+- **A chip ladder** (one ladder for the 6 chip slots) takes the L40 chipped pilot to ×1.44 (39.0 s) and keeps growing with salvage. Without one, chips grow only by tier and hold at ×1.24. Hence D2.
 
 ### 1.6 Level skipping and the siege
 
-The level-L par against the boss k levels up, TTK s / TTD s (Lancer):
+The level-L DD against the boss k levels up, TTK s / TTD s (Lancer):
 
 | L | +1 | +2 | +3 |
 |---|---|---|---|
-| 5 | 61.3 / 29.6 | 63.8 / 28.5 | 64.6 / 27.8 |
-| 10 | 61.2 / 30.3 | 62.3 / 29.8 | 63.0 / 29.1 |
-| 20 | 60.8 / 30.1 | 61.9 / 29.2 | 62.5 / 28.6 |
-| 40 | 60.7 / 30.9 | 60.9 / 30.9 | 60.9 / 30.8 |
+| 5 | 57.2 / 29.6 | 59.6 / 28.5 | 60.3 / 27.8 |
+| 10 | 57.1 / 30.3 | 58.1 / 29.8 | 58.8 / 29.1 |
+| 20 | 56.8 / 30.1 | 57.8 / 29.2 | 58.3 / 28.6 |
+| 30 | 56.7 / 30.3 | 58.0 / 29.8 | 59.0 / 29.0 |
+| 40 | 56.7 / 30.9 | 56.9 / 30.9 | 56.9 / 30.8 |
 
-- Skipping +2 (curve.md's approved TIO limit) costs 1-4 s. A chipped pilot takes +3 inside 55 s from L10 (53 s); at L5 it takes 57 s.
-- **The siege follows the Lancer row, not the boss hull.** The base is 1.0× that row and a pylon 0.125×, so **3456 / 432** at L1 (curve.md had 3820 / 480), each × HullScale(L).
+- Skipping +2 (curve.md's approved TIO limit) costs 1-4 s. A chipped pilot takes +3 inside 50 s from L10; at L5 it takes 53 s.
+- **The siege follows the Lancer row, not the boss hull.** The base is 1.0× that row and a pylon 0.125×, so **3222 / 403** at L1 (curve.md had 3820 / 480), each × HullScale(L).
 - **The siege guns are cut** (the approved curve default, in the working tree, uncommitted): the base's damage is `prep/siege_missile.md`'s cruise missile, 126 = the curve's 8.4 a second over 15 s, × DamageScale. That sheet (8.4 + 5.23 from the waves = 13.6) is below the new Lancer's 15.76, so par lives about 37 s in a siege rather than 31. Re-literal the 126 here if the siege should match the Lancer.
 - **A home raid wave** (3 pinners + 1 standoff, 229.7 row hull) takes **5.7 s of par fire to clear at any level**: raiders take a level. See §2.4.
 
@@ -292,31 +299,42 @@ windup = max(6 s / 1.01^(L-1),  2 s react + 1.2 × (hull of every pinner on you)
 
 ### 2.2 What the adds do to a boss fight (solo, par pilot)
 
-x boss = all DPS taken / the boss alone. Fight +% is measured against the boss alone (Rusty 60 s, Drake 55.3 s). EXP +% is the first fill's EXP against a repeat clear at par PL.
+x boss = all DPS taken / the boss alone. Fight +% is measured against the boss alone (Rusty 56 s, Drake 52 s for the DD). EXP +% is the first fill's EXP against a repeat clear at par PL.
 
 | L | boss | squads | x boss | pinned | fight +% | adds' own DPS / DamageScale | full beams / fired | EXP +% |
 |---|---|---|---|---|---|---|---|---|
-| 1-5 | RUSTY | [W W] | **x1.06** | 10% | +4% | 0.19 | 0/6 | +3% |
-| 1-5 | DRAKE | none | x1.00 | 0% | 0 | 0 | | 0 |
-| 6-14 | RUSTY | [G W W] | x1.11 | 9% | +12% | 0.66 | 0/8 | +7% |
-| 6-8 | DRAKE | [G] | x1.06 | 0% | +5% | 0.20 | | +4% |
-| 9-11 | DRAKE | [G W] | x1.20 | 4% | +6% | 0.33 | | +5% |
-| 12-14 | DRAKE | [G W W] | x1.25 | 5% | +7% | 0.41 | | +7% |
-| 15-17 | RUSTY / DRAKE | [G+3W] | x1.13 / x1.30 | 11% / 6% | +14% / +8% | 0.80 / 0.49 | 0/4 | +8% |
-| 18-20 | R / D | + [X] | x1.27 / x1.39 | 11% / 7% | +20% / +14% | 0.95 / 0.74 | 0/3 | +12% |
-| 21-23 | R / D | + [X+T] | x1.29 / x1.53 | 14% / 12% | +21% / +15% | 1.05 / 0.84 | 0/6 | +13% |
-| 24-26 | R / D | + [X+2T] | x1.30 / x1.59 | 14% / 13% | +21% / +15% | 1.10 / 0.95 | 0/3 | +15% |
-| 27-29 | R / D | + [X+3T] | x1.31 / x1.74 | 15% / 16% | +22% / +24% | 1.17 / 1.21 | 0/6 | +16% |
-| 30-32 | R / D | + [K] | x1.33 / x1.82 | 14% / 15% | +28% / +31% | 1.45 / 1.57 | 0/3 | +20% |
-| 33-35 | R / D | + [K+P] | x1.35 / x1.94 | 16% / 19% | +31% / +33% | 1.58 / 1.62 | 0/6 | +21% |
-| 36-38 | R / D | + [K+2P] | x1.37 / x1.95 | 18% / 19% | +33% / +36% | 1.70 / 1.68 | 0/3 | +22% |
-| **39-40** | R / D | **3H+9L** | **x1.39 / x2.01** | 19% / 20% | **+36% / +39%** | 1.83 / 1.80 | 0/3 | +24% |
+| 1-5 | RUSTY | [+2] | x1.03 | 6% | +2% | 0.10 | 0/6 | +3% |
+| 1-5 | DRAKE | - | x1.00 | 0% | +0% | 0.00 | - | +0% |
+| 6-8 | RUSTY | [H+2] | x1.06 | 5% | +7% | 0.41 | 0/2 | +7% |
+| 6-8 | DRAKE | [H+0] | x1.06 | 0% | +5% | 0.21 | - | +4% |
+| 9-11 | RUSTY | [H+2] | x1.06 | 5% | +7% | 0.41 | 0/4 | +7% |
+| 9-11 | DRAKE | [H+1] | x1.22 | 5% | +6% | 0.36 | - | +5% |
+| 12-14 | RUSTY | [H+2] | x1.06 | 5% | +7% | 0.40 | 0/2 | +7% |
+| 12-14 | DRAKE | [H+2] | x1.27 | 6% | +7% | 0.44 | - | +7% |
+| 15-17 | RUSTY | [H+3] | x1.07 | 6% | +8% | 0.49 | 0/4 | +8% |
+| 15-17 | DRAKE | [H+3] | x1.32 | 7% | +8% | 0.52 | - | +8% |
+| 18-20 | RUSTY | [H+3] [H+0] | x1.11 | 8% | +14% | 0.79 | 0/2 | +12% |
+| 18-20 | DRAKE | [H+3] [H+0] | x1.36 | 6% | +15% | 0.72 | - | +12% |
+| 21-23 | RUSTY | [H+3] [H+1] | x1.14 | 13% | +14% | 0.89 | 0/4 | +13% |
+| 21-23 | DRAKE | [H+3] [H+1] | x1.48 | 10% | +16% | 0.78 | - | +13% |
+| 24-26 | RUSTY | [H+3] [H+2] | x1.17 | 15% | +23% | 1.13 | 0/2 | +15% |
+| 24-26 | DRAKE | [H+3] [H+2] | x1.52 | 11% | +16% | 0.86 | - | +15% |
+| 27-29 | RUSTY | [H+3] [H+3] | x1.18 | 16% | +24% | 1.20 | 0/4 | +16% |
+| 27-29 | DRAKE | [H+3] [H+3] | x1.56 | 12% | +17% | 0.95 | - | +16% |
+| 30-32 | RUSTY | [H+3] [H+3] [H+0] | x1.34 | 15% | +30% | 1.56 | 0/3 | +20% |
+| 30-32 | DRAKE | [H+3] [H+3] [H+0] | x1.80 | 16% | +33% | 1.42 | - | +20% |
+| 33-35 | RUSTY | [H+3] [H+3] [H+1] | x1.36 | 19% | +33% | 1.61 | 0/6 | +21% |
+| 33-35 | DRAKE | [H+3] [H+3] [H+1] | x1.94 | 21% | +36% | 1.51 | - | +21% |
+| 36-38 | RUSTY | [H+3] [H+3] [H+2] | x1.36 | 18% | +36% | 1.66 | 0/3 | +22% |
+| 36-38 | DRAKE | [H+3] [H+3] [H+2] | x2.04 | 22% | +39% | 1.73 | - | +22% |
+| **39-40** | RUSTY | **3H+9L** | **x1.38** | 20% | **+38%** | 1.80 | 0/3 | +24% |
+| **39-40** | DRAKE | **3H+9L** | **x2.09** | 23% | **+42%** | 1.84 | - | +24% |
 
-- **Against kits v3's table** (Rusty x1.51, Drake x2.07 at L39-40): the Rusty drops, because the floor means par never eats a full beam; the Drake is about the same.
-- **The Rusty's L1-5 levels now have adds:** the two escort webifiers are a real squad, x1.06.
-- **The web is still the danger, not the guns.** Pinned 0-20%. The adds' own guns reach 1.8 per unit of DamageScale at L39.
-- **Fight length.** Par's L39 Rusty fight is 81 s and the L40 Drake 77 s. A chipped pilot (×1.24) flies them in about 65 s. The boss hull is not trimmed for adds (D3).
-- **Ignore the adds** (the worst case): x2.51 at L1, x3.05 at L9, x4.58 at L20, x3.58 at L39, pinned 78%. Such a pilot eats full beams: 2 at L1, L9 and L39. The floor protects a pilot who strips, not one who ignores the web.
+- **Against kits v3's table** (Rusty x1.51, Drake x2.07 at L39-40): the Rusty drops, because the floor means par never eats a full beam; the Drake is about the same. Kits v3.1's +5% to +51% ran the old raids model on the 1.025 step (its own risk 9); this table replaces it.
+- **The Rusty's L1-5 levels now have adds:** the two escort webifiers are a real squad, x1.03.
+- **The web is still the danger, not the guns.** Pinned 0-23%. The adds' own guns reach 1.8 per unit of DamageScale at L39.
+- **Fight length.** The DD's L39 Rusty fight is 78 s and the L40 Drake 73 s. A chipped pilot (×1.24) flies them in about 60 s. The boss hull is not trimmed for adds (D3).
+- **Ignore the adds** (the worst case): x2.53 at L1, x3.01 at L9, x4.52 at L20, x3.52 at L39, pinned 75-77%. Such a pilot eats full beams: 2 at L1, L9 and L39. The floor protects a pilot who strips, not one who ignores the web.
 
 ### 2.3 Time to die, dodging (realistic), boss alone → with adds
 
@@ -324,17 +342,18 @@ Par gear on each class's base hull; no chips.
 
 | L (fight) | Echo | Warden | Destroyer | Battleship |
 |---|---|---|---|---|
-| 1 RUSTY (63 s) | 192: 34 → 31 s | 288: 55 → 51 | 423: 93 → 86 | 535: 134 → 122 |
-| 6 DRAKE (58 s) | 291: 79 → 73 | 426: 141 → 129 | 619: 301 → 264 | 774: 607 → 494 |
-| 9 RUSTY (67 s) | 322: 36 → **32** | 470: 57 → **50** | 675: 93 → 80 | 847: 132 → 113 |
-| 20 DRAKE (63 s) | 411: 82 → **53** | 595: 146 → 87 | 848: 301 → 153 | 1062: 609 → 237 |
-| 30 DRAKE (72 s) | 528: 84 → **39** | 754: 147 → **61** | 1070: 301 → 99 | 1334: 597 → 140 |
-| 39 RUSTY (81 s) | 655: 38 → **26** | 926: 58 → **39** | 1308: 93 → **59** | 1626: 130 → 79 |
-| 40 DRAKE (77 s) | 663: 86 → **35** | 939: 148 → **54** | 1325: 301 → 85 | 1647: 592 → 118 |
+| 1 RUSTY (57 s) | 192: 33 → **32** | 288: 54 → **52** | 423: 90 → 86 | 535: 129 → 123 |
+| 6 DRAKE (54 s) | 291: 79 → 73 | 426: 141 → 128 | 619: 301 → 262 | 774: 607 → 488 |
+| 9 RUSTY (60 s) | 322: 35 → **32** | 470: 55 → **51** | 675: 90 → 83 | 847: 128 → 116 |
+| 18 DRAKE (59 s) | 393: 81 → **54** | 571: 145 → 89 | 817: 301 → 158 | 1021: 605 → 245 |
+| 20 DRAKE (59 s) | 411: 82 → **54** | 595: 146 → 90 | 848: 301 → 158 | 1062: 609 → 247 |
+| 30 DRAKE (69 s) | 528: 84 → **39** | 754: 147 → **62** | 1070: 301 → 100 | 1334: 597 → 143 |
+| 39 RUSTY (78 s) | 655: 37 → **26** | 926: 56 → **38** | 1308: 90 → **58** | 1626: 126 → 78 |
+| 40 DRAKE (73 s) | 663: 86 → **34** | 939: 148 → **51** | 1325: 301 → 81 | 1647: 592 → 111 |
 
 - **Bold** means it dies before the fight ends if it never mitigates.
 - **Solo, that is a failed mission** (the respawn ruling).
-- **Lights against the Rusty** are short at every level, with or without adds: the Echo lives 26-38 s dodging in a 60-81 s fight. This is the kits' light hull against an undodgeable bolt, cut here by 26% (risk 2).
+- **Lights against the Rusty** are short at every level, with or without adds: the Echo lives 26-37 s dodging in a 56-78 s fight. This is the kits' light hull against an undodgeable bolt, cut here by 26% (risk 2).
 - **The capitals are safe** until L39.
 
 ### 2.4 Keeping pace
@@ -528,43 +547,43 @@ The playstyles: the glass cannon, hit-and-run, the raid dancer, swarm armour and
 
 That makes **gear 68% of the hull**: items_design had 85% at ×1.20 tiers. Gear is **46% of its damage** (weapon share: base 1, points 0.21, parts 0.58, salvage 0.46).
 
-**Builds, DESTROYER on capital lines, against the L40 Lancer (7661 hull):**
+**Builds, DESTROYER on capital lines, against the L40 Lancer (7141 hull):**
 
 | build | hull | TTK | TTD Lancer / Drake |
 |---|---|---|---|
-| **Par** (4 reference lines at worn tier, g26, no chips) | 1325 | **60.0** | **31.0 / 42.0** |
-| Par + 6 chips (3 Combat + 3 Armour) | 1559 | 48.2 | 37.5 / 51.3 |
-| Par, no salvage (g0) | 933 | 74.8 | 20.9 / 27.8 |
-| Par, no hull lines (Shield and Hull slots on other lines) | 430 | 60.0 | **9.1** / 11.9 |
-| stock (no parts, no chips) | 430 | 109.5 | 9.1 / 11.9 |
-| T10 reference lines, g26, no chips | 1332 | 59.8 | 31.2 / 42.3 |
-| T10 reference lines, g40 (100% of the gate), no chips | 1545 | 54.0 | 37.1 / 50.8 |
-| **CEILING:** T10, g40, 3 Combat + 3 Armour | 1789 | **44.3** | 44.3 / 61.2 |
-| the same with Tempo Core in Utility (a multiplier line) | 1789 | 42.3 | 44.3 / 61.2 |
-| the fastest glass: T10, g40, damage lines, no hull lines, 3 Combat | 430 | 44.3 | 9.1 / 11.9 |
+| **Par** (4 reference lines at worn tier, g26, no chips) | 1325 | **56.0** | **31.0 / 42.0** |
+| Par + 6 chips (3 Combat + 3 Armour) | 1559 | 45.0 | 37.5 / 51.3 |
+| Par, no salvage (g0) | 933 | 69.9 | 20.9 / 27.8 |
+| Par, no hull lines (Shield and Hull slots on other lines) | 430 | 56.0 | **9.1** / 11.9 |
+| stock (no parts, no chips) | 430 | 102.4 | 9.1 / 11.9 |
+| T10 reference lines, g26, no chips | 1332 | 55.9 | 31.2 / 42.3 |
+| T10 reference lines, g40 (100% of the gate), no chips | 1545 | 50.4 | 37.1 / 50.8 |
+| **CEILING:** T10, g40, 3 Combat + 3 Armour | 1789 | **41.3** | 44.3 / 61.2 |
+| the same with Tempo Core in Utility (a multiplier line) | 1789 | 39.5 | 44.3 / 61.2 |
+| the fastest glass: T10, g40, damage lines, no hull lines, 3 Combat | 430 | 41.3 | 9.1 / 11.9 |
 
-**Every class's ceiling** (T10, g40, full chips, its category's multiplier line where one exists, and its rider in Utility where it can fit one) against its own par time:
+**Every class's ceiling** (T10, g40, full chips, its category's multiplier line where one exists, and its rider in Utility where it can fit one) against its own par time. Every TTK is the model's; the rider rows are its one-off runs ×0.932 (TTK scales 1:1 with the anchor):
 
 | class | par TTK → ceiling | × | TTD par → ceiling |
 |---|---|---|---|
-| BATTLESHIP | 73.9 → **46.2** (Magazine Core; 49.6 on Tempo Core) | **×1.60** | 40.1 → 58.2 |
-| CARRIER | 64.5 → **41.3** (Magazine Core; 43.0 on Tempo Core) | ×1.56 | 33.5 → 48.1 |
-| DESTROYER | 60.0 → 42.3 | ×1.42 | 31.0 → 44.3 |
-| FREIGHTER | 59.8 → 44.0 | ×1.36 | 35.7 → 51.4 |
-| TENDER | 73.8 → 54.2 | ×1.36 | 29.8 → 42.4 |
-| BASTION | 72.3 → 53.0 | ×1.36 | 33.1 → 47.4 |
-| WARRIOR | 67.9 → 43.7 | ×1.55 | 23.4 → 32.9 |
-| SNIPER | 66.5 → 43.7 | ×1.52 | 18.8 → 26.2 |
-| WARDEN | 69.2 → **41.2** (Swarm Rack; 45.7 on Tactical Core) | **×1.68** | 21.0 → 29.5 |
-| DART | 51.0 → 37.3 (47.3 → 34.6 with the boost priced, D6) | ×1.37 | 15.8 → 22.0 |
-| ECHO | 47.2 → **34.6** | ×1.36 | 14.4 → 19.9 |
-| WRAITH | 53.2 → 39.0 | ×1.37 | 17.3 → 24.1 |
+| BATTLESHIP | 68.9 → **43.1** (Magazine Core; 46.3 on Tempo Core) | **×1.60** | 40.1 → 58.2 |
+| CARRIER | 60.2 → **38.5** (Magazine Core; 40.1 on Tempo Core) | ×1.56 | 33.5 → 48.1 |
+| DESTROYER | 56.0 → 39.5 | ×1.42 | 31.0 → 44.3 |
+| FREIGHTER | 56.5 → 41.5 | ×1.36 | 35.7 → 51.4 |
+| TENDER | 68.8 → 50.5 | ×1.36 | 29.8 → 42.4 |
+| BASTION | 67.4 → 49.4 | ×1.36 | 33.1 → 47.4 |
+| WARRIOR | 63.3 → 40.7 | ×1.55 | 23.4 → 32.9 |
+| SNIPER | 62.0 → 40.7 | ×1.52 | 18.8 → 26.2 |
+| WARDEN | 64.5 → **38.4** (Swarm Rack; 42.6 on Tactical Core) | **×1.68** | 21.0 → 29.5 |
+| DART | 44.1 → 32.3 (boost priced; no Engine chips) | ×1.37 | 15.8 → 22.0 |
+| ECHO | 44.0 → **32.3** | ×1.36 | 14.4 → 19.9 |
+| WRAITH | 49.6 → 36.3 | ×1.37 | 17.3 → 24.1 |
 
 **Why no build breaks the 60 s boss:**
 - Damage lives in two core slots (Weapon, Utility) and three combat chips. Shield and Hull carry hull, PD and helm, and **no Shield or Hull line adds damage** (the old Glass Array is gone).
-- So the only way to trade hull for damage is to give it up. The glass build is no faster than the ceiling (44.3 s) and dies in 9 s.
-- The fastest kill in the game at L40 is the Echo's 34.6 s at T10, 100% of the gate and full chips (the Dart matches it once its boost is priced). The largest gain over a class's own par is the Warden's ×1.68, from Swarm Rack's two extra Hunters.
-- **This holds only under D6's default.** If gear top speed priced the Dart's guns, 3 T10 Engine chips (+20% DPS, risk 4) take the Dart to about 29 s, under half of par, and Burner Drive would take it lower.
+- So the only way to trade hull for damage is to give it up. The glass build is no faster than the ceiling (41.3 s) and dies in 9 s.
+- The fastest kill in the game at L40 is the Echo's and the Dart's 32.3 s at T10, 100% of the gate and full chips: above half of the median's 59.4 s. The largest gain over a class's own par is the Warden's ×1.68, from Swarm Rack's two extra Hunters.
+- **The Dart on Engine chips is the exception** (D6 now takes the generic path, §8 R6): 3 T10 Engine chips (+20% DPS, risk 4) take it to about 27 s, under half of the median, and Burner Drive lower. The item pass re-checks it.
 - The heavies' and capitals' ceilings run up to 24% higher than the rest (the DD 4%, the Warden 24%). Their categories have a multiplier line (Rapid Action, Tempo Core) that multiplies with points and chips, and the BB, CV and Warden have a rider. The multiplier line is ×0.99 of a damage line on Par and ×1.08-1.12 fully chipped:
 
   | L, tier, g | W multiplier / damage (Sniper) | + full chips | U multiplier / damage (Battleship) | + full chips |
@@ -599,8 +618,8 @@ That makes **gear 68% of the hull**: items_design had 85% at ×1.20 tiers. Gear 
 
 | # | where | old | new | rung that proves it |
 |---|---|---|---|---|
-| 1 | `Par.cs` (new; with curve.md's `Missions.S` / `LevelStep` deletion) | — | the reference row (DESTROYER, no chips, `Unlocks` walls, 4 power lines, Loot's drop row, g = 0.65·gate), queried **by target tag**: `Par.Scale(L, boss)`, `Par.Scale(L, craft)`, `Par.DamageScale(L)` | 3 (literals from §1.3 at L1/10/20/40) |
-| 2 | `Missions.Bosses[].Hull` | 760 / 700 (approved 3820 / 3520) | **3456 / 3183** | 3 |
+| 1 | `Par.cs` (new; with curve.md's `Missions.S` / `LevelStep` deletion) | — | the reference row (DESTROYER rows for the shape, the L1 hull on the fleet's walled L1 median, no chips, `Unlocks` walls, 4 power lines, Loot's drop row, g = 0.65·gate), queried **by target tag**: `Par.Scale(L, boss)`, `Par.Scale(L, craft)`, `Par.DamageScale(L)` | 3 (literals from §1.3 at L1/10/20/40) |
+| 2 | `Missions.Bosses[].Hull` | 760 / 700 (approved 3820 / 3520) | **3222 / 2968** | 3 |
 | 3 | Lancer rows (Lancer.cs) | guns 3.6, trident 15, wave 45, ram 40 | **2.68, 11.2, 33.5, 29.8**; the beam unchanged | 3 |
 | 4 | Drake rows (Drake.cs) | gun 6, scrap 18.75 | **4.72, 14.76**; rock unchanged | 3 |
 | 5 | Lancer beam row | `Escorts 2`, `EscortHull 3`; `EscortStep` / `EscortMax` / `EscortsAt` (Boss.cs:552-555) | deleted: the escorts are squad wave 1, one path (raids batch `Squads.cs`) | 3 |
@@ -611,7 +630,7 @@ That makes **gear 68% of the hull**: items_design had 85% at ×1.20 tiers. Gear 
 | 10 | `Tiers` (Items.cs, item pass) | rarity 1 / 1.5 / 2 | ×1.10 a tier, 10 tiers; power T1 25%, multiplier 20%, reach 18%, top 22%; scrap 100·1.25^(t−1) | 3 |
 | 11 | `Equipment.LevelStep`, ladders | 0.05 per id | **0.03 per slot level, 5 core ladders**, 500·1.10^n, gated (D10: curve.md approved 0.05) | 3 |
 | 12 | `Loot` | 70% own class; rarity bands | 70% own hull category; base tier + 20/70/10 | 3 |
-| 13 | chips (F15 + walls) | 5 slots, `chip_basic` × 5 | 6 slots walled at PL 2/4/8/10/12/14, at most 3 combat and 3 utility, kit = 3 Basic | 3; 5 (the host sanitises) |
+| 13 | chips (F15 + walls) | 5 slots, `chip_basic` × 5 | 6 slots walled at PL 2/4/8/10/12/14, at most 3 combat and 3 utility, none fitted at start, `chip_basic` deleted; no salvage levels on chip slots | 3; 5 (the host sanitises) |
 
 **Order.**
 - The curve (1-4) lands after lane A's slice 2 (F17's `Boss.Out` carries DamageScale). Its literals are this model's, on the new tier law.
@@ -623,7 +642,7 @@ That makes **gear 68% of the hull**: items_design had 85% at ×1.20 tiers. Gear 
 
 ## 5 · RISKS
 
-1. **The anchor rests on estimated DPS.** The DD's 55.0 is the v3 table's. Freighter hitscan (8.7) and the rip use (80%) are this file's. TTK scales 1:1 with the error. The rung-3 DealtBy probe on the DD at L1 replaces 3456.
+1. **The anchor rests on estimated DPS.** The class rows are the v3 / v3.1 tables'; the rip use (80%) is this file's. TTK scales 1:1 with the error. The rung-3 DealtBy probe of the fleet's walled L1 median replaces 3222.
 2. **Lights against the Rusty.** The par Echo dodging lives 26-38 s in a 60-81 s fight, and with no chips a full burn (250) is more than every light's and the Sniper's L1 hull (180-240). Solo, a death fails the mission.
    - The cut rows help: the Lancer's undodgeable bolt is 26% smaller. So do Rewind, EMP and 3 Armour chips (+18%).
    - The lever is the burn, which you ruled unchanged.
@@ -635,10 +654,10 @@ That makes **gear 68% of the hull**: items_design had 85% at ×1.20 tiers. Gear 
    - **D6's default is a special case.** A Pepperbox that reads the kit's speed but not the gear's needs a second, gear-blind speed read, which CLAUDE.md §3 forbids ("the generic path is the only path"). Kits v3.1 takes the generic path for the boost (the Dart at 71.9). The system fix, if D6 stays, belongs in the item pass: no line or chip a Dart can fit lifts the speed its guns read.
    - The V boost itself (+50% top for 3 s in 15) adds about 7% to the Dart if it prices the Pepperbox (72.0 against 66.8). D6's default counts it; the `CLASSES` row does not yet (§0).
 5. **The rip is 2.3% of every boss from L4.** Par counts it (it is the DD's real kit), so every other class takes 2.3% longer. Raiders read the craft scale, which has no rip.
-6. **Early levels are averages.** L1's first fight runs 63.6 s and its fourth 57.0 s, as parts arrive. The Carrier's L1 is 85 s (the walls). A pilot with no hull part at L5 (22% of them) dies in 20 s, not 31, until one drops (18 s at L8).
+6. **Early levels are averages.** The DD's L1 first fight runs 59.3 s and its fourth 53.1 s, as parts arrive. The Carrier's L1 is 80 s (the walls). A pilot with no hull part at L5 (22% of them) dies in 20 s, not 31, until one drops (18 s at L8).
 7. **Salvage early.** A pilot on rewards alone sits at 50% of the gate at L5 and 60% at L10, against Par's 65%: about 1% slower at L5-10. That is small, because early levels are worth little.
 8. **Past L40 the curve is flat** (×1.056 by L80), but `Quicken` keeps shortening the windups. The squad-1 floor holds the beam at 4.82 s from L23. The ram and ring windups are not floored.
-9. **Adds lengthen every fight:** +4% at L1 Rusty, +39% at L40. The 60 s promise is for the boss's own hull (D3).
+9. **Adds lengthen every fight:** +2% at L1 Rusty, +42% at L40 Drake. The 60 s promise is for the boss's own hull (D3).
 
 ---
 
@@ -648,11 +667,11 @@ That makes **gear 68% of the hull**: items_design had 85% at ×1.20 tiers. Gear 
 |---|---|---|---|
 | D1 | how 31 / 42 s holds without chips | **cut every row but the two supers**: Lancer ×0.744 (the ram 40 → 29.8 with the rest), Drake ×0.787; the burn (50 a tick) and the rock unchanged (the supers ruling, 250/250) | every row ×0.860 / ×0.921 (burn 215, rock 230 at L1) · keep every code-`Super` move too: Lancer ×0.705 on guns, trident and wave with the ram at 40, and the Drake's gun alone ×0.57 (6 → 3.39) with the scrap at 18.75 · or change nothing: TTD 26.1 / 38.1 s |
 | D2 | chip ladder | **none**: chips grow by tier only, ×1.24 at L40 | one shared chip ladder: ×1.44 at L40 (41.8 s), more to buy with salvage |
-| D3 | adds and the boss's hull | **no trim**: 60 s is the boss's own hull; adds add 4-39% and pay 3-24% EXP | trim the hull by 1/(1 + fight%) so the whole fight is 60 s at par (kits v3.1's decision 15 makes this its default) |
+| D3 | adds and the boss's hull | **no trim**: 60 s is the boss's own hull; adds add 2-42% and pay 3-24% EXP | trim the hull by 1/(1 + fight%) so the whole fight is 60 s at par (kits v3.1's decision 15 makes this its default) |
 | D4 | the escape floor's DPS | **the slowest class** (`StripShare` 1.2 = 55/46): every class keeps 0.6 s; windups run 0.2-0.9 s longer where the floor binds | par (1.0): par keeps 0.6 s, the 7 slower classes 0.24-0.52 s, and flown they take a full beam on a quarter to a half of the Rusty's beams |
 | D5 | multiplier leans | **T1 +20%, ×1.10 a tier** | T1 +25% with √ growth (items_design F2): equal at T1, ×0.87 of a damage line at L40 unchipped (×0.97 chipped) · or T1 +25% at ×1.10: ×1.07 / ×1.19 |
-| D6 | what prices the Dart's damage | **its kit only** (Ramjet, sprint, V boost). Needs a gear-blind speed read, a special case under CLAUDE.md §3 (risk 4) | all top speed, gear and chips included, the generic path (+20% DPS with Engine chips; the Dart's ceiling about 29 s, under half of par) |
-| D7 | the reference class | **DESTROYER** (curve.md's row; a median-DPS class takes 63.7 s at L1 and 65.7 s from L10) | anchor on the fleet's walled L1 median (50.0 against the DD's 54.35): Lancer 3179, Drake 2928; the median class then kills in about 60 s from L10 and the DD in 55 s (kits v3.1 takes this, at 3091 / 2847) |
+| D6 | what prices the Dart's damage | **SETTLED (§8 R6): all top speed, the generic path** (Dart 72.0); the item pass holds the Engine-chip Dart (about 27 s) | its kit only: needs a gear-blind speed read, a special case CLAUDE.md §3 forbids |
+| D7 | the reference class | **SETTLED (§8 R1): DD rows for the shape, the L1 hull on the fleet's walled L1 median** (3222 / 2968; the median class 59.4 s, the DD 56.0 s) | the DD's own (3456 / 3183; the median class about 64 s) |
 | D8 | the loot split | **70% own hull category, 30% anything** | 100% own category (Par's parts arrive sooner and the curve re-derives from the row; a class switch gets nothing until it flies) |
 | D9 | the Lancer's first beam | **arms at 6 s, and the live floor covers squad 1 latching mid-windup** | `First` 6 → 16 s, so it arms after squad 1 engages |
 | D10 | the salvage step (changes an approved curve.md value) | **+3% a level** (salvage 30% of Par's L40 hull, gear 68%): curve.md's 28-35% band on the ×1.10 tier law | curve.md's approved +5% (salvage 41%, gear 73%). The 60 s holds either way, because the boss reads Par |
@@ -662,30 +681,27 @@ That makes **gear 68% of the hull**: items_design had 85% at ×1.20 tiers. Gear 
 
 ## 7 · FILES (this folder)
 
-- `numbers_v2.py`: the model. It imports `../curve.py`, `../player_model.py` and `../raids_v2_model.py` read-only.
-- `run.txt`: its full output (`python numbers_v2.py all`), from the script **before** the review below.
-- `numbers_v2.md`: this file.
-
-**The review's three row edits** (the script was not touched). With them, `numbers_v2.py` prints this file's §1.2 and §2; nothing in §1.1, §1.3-§1.6 or §3 moves:
-1. `LANCER['ram'] = (40 / 30, 0.25, False)`: only the burn and the rock are supers.
-2. `MISSILE = 42.0`: the row's `EnemyDef.MissileDamage` (Enemies.cs:50), not raids_v2_model's 35.
-3. `STRIP_SHARE = 55 / 46`, multiplying the hull term of `strip_time()`, which `fight()` uses only for the floor. The pilot still strips at its own DPS. §2.1's per-class check runs `fight()` with the pilot's DPS at each class's own ratio to par and the floor left on par's.
-
-The §3.5 rider rows (BB, CV, Warden) and the Dart-with-boost figures are one-off runs of `pilot()` with the counted ability's share × (base + n) / base, and the Dart's weapon and rod each +2.6.
+- `models/numbers_v2.py`: the model. It imports `curve.py`, `player_model.py` and `raids_v2_model.py` read-only. Its rows carry the review's three edits (the ram is not a super, the raider missile is 42, the escape floor is priced on the slowest class via `STRIP_SHARE`) and the §8 reconciliation (`ANCHOR = 'median'`, Freighter TOT 8.0, Dart 72.0, no starting chips).
+- `models/run.txt`: its full output (`python numbers_v2.py all`), which every table in this file matches.
+- The §3.5 rider rows (BB, CV, Warden) are one-off runs of `pilot()` with the counted ability's share × (base + n) / base.
 
 ---
 
-## 8 · AGAINST KITS v3.1 (the parallel kits draft, `kits3/signoff_v31.md`)
+## 8 · RECONCILED WITH KITS v3.1 (2026-09-25)
 
-Both drafts apply the same rulings and reach different rows. Each row below must be settled once, in one place, before either lands.
+`kits_v31.md` and this file disagreed on eight rows. Each is settled once, here. **The rule:** `kits_v31.md` owns what each class does and its realistic-DPS row; this file owns every curve, boss, raid, chip and item number, because only its model runs on the item law that will be built (+10% a tier, the drop sim, the new salvage step). Kits v3.1's §5 curve ran on today's items, so its HullScale (3.42 at L40) and adds share (+51%) are replaced, not averaged.
 
-| row | this file | kits v3.1 | why they differ |
-|---|---|---|---|
-| L1 anchor | Lancer 3456 / Drake 3183 (the DD's walled L1, with its first parts) | 3091 / 2847 (the fleet's walled median 50.0 × 1.03) | D7: which class is the reference, and whether L1's first parts count |
-| the cut | Lancer ×0.744, Drake ×0.787, burn and rock kept | every move but the burn and the rock ×0.64 | the same rule on different anchors and hulls |
-| DD | 55.0 + the rip as a share of the boss (2.3%) | 56.6 with the rip folded in | the same rip, counted two ways |
-| Freighter Time on target | 8.7 realistic | 8.0 | the paint and landing assumptions |
-| Dart | 66.8 (§0: 72.0 once D6's boost is counted) | 71.9 | D6 |
-| chips | T1 +8% → T10 +18.9%; the kit is 3 Basic chips | at most +10% at T10 (4.2% at T1); `chip_basic` deleted | the chip budget; both put no salvage on chip slots |
-| adds and 60 s | D3: no trim | decision 15: the boss hull ÷ (1 + the adds' share) | the same fork, opposite defaults |
-| freighter top | the lines here assume the kits' 120 | 120 (its decision 2) | agreed |
+| # | row | settled | from | why |
+|---|---|---|---|---|
+| R1 | L1 anchor | **Lancer 3222 / Drake 2968**: DD rows for the scale's shape, the L1 hull on the fleet's walled L1 median over L1's four fights (×0.932 of the DD's) | kits v3.1 decision 8's rule, on this file's machinery | the ruling is "every boss killed in ~60 s": without chips the DD sits above the median (55.0 against 51.8), so a DD anchor leaves the median class at 64 s. Kits v3.1's 3091 left out L1's first parts; this file's 3456 was the DD's own |
+| R2 | the cut | **Lancer ×0.744, Drake ×0.787**; the burn and the rock (250) kept; the ram and the scrap cut with the rest | this file | both files read the supers as the burn and the rock. Kits v3.1's ×0.64 held the hull at a flat 395 and left the escorts in the Lancer's sheet (its own noted approximation); here the hull is L1's four-fight 423 and the escorts are squad wave 1. The anchor does not move the cut: time to die reads hull, not boss hull |
+| R3 | the scales | this file's §1.3 (HullScale 2.216, DamageScale 3.131 at L40) | this file | kits v3.1 §5 ran on today's items; the items pass replaces them |
+| R4 | DD rip | a share of the boss's total hull, read by target tag (bosses only) | this file | the same rip; kits v3.1's 56.6 is what it adds against the L1 Lancer. As a share it scales with the boss and never reaches craft |
+| R5 | Freighter Time on target | **8.0** realistic (Freighter 56.0) | kits v3.1 | the kits file owns class rows; the gap (0.7 DPS) is inside the estimate, and the rung-3 probe replaces both |
+| R6 | the Dart | **72.0**: every top-speed lift prices the Pepperbox and the rod, the boost and gear included | kits v3.1 decision 14 (this file's D6 reversed) | a gear-blind speed read is a special case CLAUDE.md §3 forbids. Cost: 3 T10 Engine chips take the Dart to about 27 s at L40. **The items pass re-checks it**; the lever is the Engine chip's top-speed lean, a row |
+| R7 | chips | **none fitted at the start; `chip_basic` deleted**; chip rows T1 +8% ×1.10 a tier; no salvage levels on chip slots; no chip ladder | kits v3.1 decision 7 for the start, this file for the rows | the walls give 0 chip slots at L1, so a 3-chip kit cannot be fitted. This file's rows keep a full-chip pilot within ×1.24 of par at L40, inside kits v3.1's ×1.33 bound, so its "≤ +10% at T10" cap is not needed |
+| R8 | adds and the 60 s | **no trim**: 60 s is the boss's own hull; adds lengthen a fight 2-42% and pay 3-24% EXP | this file's D3 (kits v3.1 decision 15 reversed) | "bosses and raids must not fall behind": trimming the boss for its adds makes it fall behind. **The one reconciled row that is the owner's taste;** the default stands unless the owner says otherwise |
+| — | freighter top | 120 | both | agreed |
+| — | the Sniper's piece | the ACTIVE RELOAD (`sniper_active_reload.md`) | the owner's ruling | closes kits v3.1 decision 9 |
+
+**Still true after it.** A par Echo, dodging, lives 26-37 s against the Rusty Bucket in a 56-78 s fight, and solo a death fails the mission (§2.3, risk 2). The lever is the burn, which the owner ruled unchanged.

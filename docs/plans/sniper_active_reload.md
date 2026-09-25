@@ -143,7 +143,7 @@ release: FIRE ─┬─ grey fill, 3.0 s ─────────────
 
 - The fleet median moves from 51.5 to **51.9**.
 - Lights stay on top: the lowest light is 64, and the highest non-light is still the DD at 56.6.
-- The L1 hull curve (3091) is set from the probe's median, not from this table (v3.1 §9 mitigation), so nothing else moves.
+- The L1 hull curve (3222) is set from the probe's median, not from this table (v3.1 §9 mitigation), so nothing else moves.
 
 ---
 

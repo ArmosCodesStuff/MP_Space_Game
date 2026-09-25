@@ -13,10 +13,10 @@ temporary "scratchpad" folder refer to the originals of these same files.
 
 | file | what it is | status |
 |---|---|---|
-| `kits_v31.md` | the 12 class kits, every owner change folded in; power table; build order (9 lanes) | signed off with changes; 14 decisions in its §10 still open (defaults stand) |
+| `kits_v31.md` | the 12 class kits, every owner change folded in; power table; build order (9 lanes) | signed off with changes; §10 decisions 6, 8, 9, 14, 15 settled, the rest open (defaults stand) |
 | `sniper_active_reload.md` | the Sniper's one-round chamber with an active reload on Space | designed; one question (below) |
 | `level_walls.md` | abilities and chip slots unlocked by pilot level | approved (6 chip slots on every hull) |
-| `numbers_curve_raids_items.md` | the progression curve with a chip-free reference pilot, raids/adds pacing, and the items by hull category at +10% a tier | designed; decisions D1-D11 open (defaults stand) |
+| `numbers_curve_raids_items.md` | the progression curve with a chip-free reference pilot, raids/adds pacing, and the items by hull category at +10% a tier | designed and reconciled with the kits (§8); D6/D7 settled, the rest open (defaults stand) |
 | `progression_curve.md` | the earlier curve design (its defaults were approved) | superseded in its numbers by the file above |
 | `raids_squads_adds.md` | raid squads in formation and boss-fight adds, EXP for adds | defaults approved; owner changes in the rulings below |
 | `network_webrtc.md` | multiplayer over the official Godot WebRTC plugin, invite codes, Google/Cloudflare STUN only | designed (v2); 3 questions (below) |
@@ -24,11 +24,11 @@ temporary "scratchpad" folder refer to the originals of these same files.
 | `network_audit_connection.md`, `network_audit_protocol.md` | why real two-machine play never worked, and the protocol bugs found | reference |
 | `sprites.md` | mapping of the 34 new ship sprites (in `art_source/pack_2026-09-24/`) onto every entity | defaults approved |
 
-**`kits_v31.md` and `numbers_curve_raids_items.md` DISAGREE** on the L1 boss anchor (3091 / 2847 vs
-3456 / 3183) and on how far every non-super boss move is cut (x0.64 vs Lancer x0.744 / Drake x0.787),
-and on three class rows and chips (see the numbers file's §8). **Reconcile them first, before
-anything in either is built.** Also flagged there: a par light (Echo) solo still dies to the Rusty
-Bucket before the fight ends; a solo death fails the mission.
+**Reconciled 2026-09-25** (`numbers_curve_raids_items.md` §8): that file owns every curve, boss, raid,
+chip and item number; `kits_v31.md` owns what each class does. L1 Lancer 3222 / Drake 2968 (the fleet's
+walled L1 median); every non-super move Lancer ×0.744 / Drake ×0.787; no starting chips; the Dart at 72
+(every speed lift prices it); the boss hull is NOT trimmed for adds (the one owner-taste row; default
+stands). Still true: a par Echo solo still dies to the Rusty Bucket before the fight ends.
 
 ## The owner's rulings (binding; newest win)
 
@@ -117,7 +117,7 @@ siege cruise missile, 24 s respawn, one holder for loaded assets, and networking
 guests, a channel per stream, goodbyes that survive a lossy link).
 
 Next, in order:
-1. Reconcile `kits_v31.md` with `numbers_curve_raids_items.md` (anchor, cuts, rows, chips).
+1. ~~Reconcile the kits with the numbers~~ (done 2026-09-25, numbers §8).
 2. WebRTC: `network_webrtc.md` slices R0-R5 (R0 measures the invite reply window first); then a
    release and the owner's two-machine test (its §4 script).
 3. The class batch from `kits_v31.md` (9 lanes), with the level walls, 6 chip slots, warp for

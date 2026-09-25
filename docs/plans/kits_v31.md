@@ -5,9 +5,7 @@
 1. **Scope.** Most of this is rows on the v3 foundations. Three things are new tables: `Drives.cs` (what V does), `Lines.cs` (hitscan lines: the railgun and Time on target) and a strafe helm. The strafe helm is needed because **no ship can strafe today**, so the boost's "+50% strafe" has nothing to raise.
 2. **Strafe default:** on the 9 non-capitals, hold Shift and A/D slide the ship sideways at half its top speed. The nose, the cursor and every approved card work as they do now.
 3. **Power, base classes, no chips.** The median is 51.5 realistic DPS and the spread is 46-72 (1.57x). Lights stay on top: the lowest light is 64, the highest non-light is the DD at 56.6 with its 1% + 10 rip. The Dart rises to 71.9, because the boost's +50% top speed also raises the damage of its speed-priced guns.
-4. **Curve with no chips.** The L1 Lancer goes from 3820 to **3091** and the Drake from 3520 to **2847**, so the median class still kills in 60 s at every level. The burn and the rock stay 250 and every other boss move is cut to x0.64, so the no-chip reference still dies in 30.4 s against the Lancer and 41.6 s against the Drake. That cut includes the ram and the scrap shotgun, which the code also flags `Super`: I read your "supers (250/250)" as the burn and the rock alone. Keeping every `Super` move would push the Drake's gun down to x0.28 (6 → 1.65).
-5. **Chips are upside, with a cap.** Chip slots never take salvage levels, and one chip is at most +10% at T10. Then the **median** pilot with all 6 slots filled never kills faster than 45 s, and bosses and raids stay within x1.33 of it. The Echo and the Dart, at 43 s with no chips, reach about 32 s. If chip slots levelled like the core slots, the median's L40 kill would drop to 29 s.
-6. **Adds make the fight longer with no chips.** The adds keep their rows (2.58 is your ruling) and a chipless pilot clears them more slowly. A boss fight with its adds runs +5% at L6 and **+51% at L39-40** (v3: +4% to +39%). **Decision 15 (new)** holds your 60 s by dividing the boss's hull by that share.
+4. **Curve, chips and adds: RECONCILED on 2026-09-25** with `numbers_curve_raids_items.md` §8, which now owns every curve, boss, raid, chip and item number. What this file proposed and what stands: the median-class anchor stands (Lancer **3222** / Drake **2968** on the numbers model, not 3091 / 2847); the burn and the rock stay 250 and every other move is cut, but by Lancer **×0.744** / Drake **×0.787**, not ×0.64; no starting chips and `chip_basic` deleted stand; the Dart at 72 stands (every speed lift prices it); chip slots take no salvage levels. Reversed: decision 15 (the boss hull is NOT trimmed for adds) and the "≤ +10% a chip" cap (the numbers file's chip rows stay within ×1.24).
 7. **Warp is capitals only.** BB 88, CV 99 and DD 117 u/s in the water; with warp, 183-211 u/s over distance (today 136-161). Freighters lose warp, so by default their top speed goes 85 → **120**. That makes every non-capital faster than every capital in the water, and freighters still cover distance at 129 u/s (today 118).
 8. **Freighter F is Time on target again**, now as hitscan lines (8.0 realistic), and Unmask is deleted. Sentries shoot the painted target first and anything hostile otherwise; this resolves v3 decision 14 as you ruled. The Supercarrier engages anything, missiles included (I found no reason to exclude them). The 24 s respawn is already in the working tree.
 9. **Build.** 9 lanes; the kits cost about 140 S-units (v3: 133). Rung 5 runs twice and rung 6 once for the kits, then once each for items. **14 decisions are open in §10** (decision 5 is closed by your sentry ruling; 15 is new). **Say nothing and the defaults are what gets built.**
@@ -29,14 +27,14 @@ This file starts from `signoff_v3.md` and applies every ruling that v3 did not y
 | 6 chip slots on every hull; at most 3 combat and at most 3 utility | Slots 3/4/5/6 are gone: every hull has 6. F15 becomes one constant plus the two kind caps | 3.6 |
 | Walls: ability 1 at L1, chip 1 at L2, ability 2 at L3, chip 2 at L4, ability 3 at L6, chips 3-6 at L8/10/12/14. Keys keep their layout; walls read the highest level reached; Auto-sell and raids fold into the wall table | `Unlocks.cs` as `level_gates.md` §3, with 6 chip rows on every hull and no per-class chip count | 3.6 |
 | Kit chips are NOT baked into base stats | `chip_basic` leaves the game, and `Equipment.Default` fits no chips (decision 7) | 3.6 |
-| Balance on base classes; the reference pilot carries no chips; hold 60 s and ~31 / ~42 s; chips are upside; bosses and raids must not fall far behind | The power table is stock with no chips. The curve is re-anchored (3091 / 2847; every move but the two 250s at x0.64). A chip budget is set for the items pass | 4, 5 |
+| Balance on base classes; the reference pilot carries no chips; hold 60 s and ~31 / ~42 s; chips are upside; bosses and raids must not fall far behind | The power table is stock with no chips. The curve, the cut and the chips: `numbers_curve_raids_items.md` §8 (3222 / 2968; Lancer ×0.744, Drake ×0.787) | 4, 5 |
 | Warp is capital-only. The other nine get V = +50% top speed and +50% strafe for 3 s, cooldown 15 s | `Drives.cs`: warp on BB/CV/DD, the boost on the nine. The strafe helm (F24) exists so the boost has a strafe to raise. Every class's interactions are redone | 3.4 |
 | Freighter F = Time on target, hitscan like the railgun, all lines landing at once. Sentries thrown to the cursor. Sentries prefer the paint, otherwise anything (8fddb84 kept) | TOT card, Unmask deleted, `ITurretHost.Prefer` added, and the turret's hold rule lets go for a new paint. v3 decision 14 closes this way | 3.1 |
 | DD Grapnel pulls the DD in; the torn chunk deals 1% of the target's total hull + 10 | The rip is a real hit through the hostile damage door | 3.3 |
 | Carrier Q = Supercarrier; it engages "anything" | Missiles included, ranked as a sentry ranks | 3.2 |
 | Warden Taunt 33% for 6 s; Dart keeps Ramjet; Sniper: v1 Anchor + a new piece | v3 §3.5 / §3.6 / §3.4 unchanged. The Sniper's piece is still open (decision 9) | — |
 | Heavies' twin laser 2.58; heavies never own CC | v3 §3.7 unchanged | — |
-| Supers unchanged (250 / 250) | The burn and the rock stay 250. The curve's x0.64 cut takes every other move, including the ram and the scrap shotgun, which the code flags `Super` | 5 |
+| Supers unchanged (250 / 250) | The burn and the rock stay 250. The curve's cut (Lancer ×0.744, Drake ×0.787) takes every other move, including the ram and the scrap shotgun, which the code flags `Super` | 5 |
 | Player respawn 24 s; the whole party down at once fails the mission | **Already in the working tree** (uncommitted, with its rung-3 check). The kits add nothing | 3.7 |
 | Raids: beam escorts become squad wave 1 from L1; any add's web may start the beam; 0.6 s escape floor; H,L,L,L growth; 30 s refills with no EXP | The raids lane (G), unchanged from `raids_v2.md` plus these rulings. With no chips the fight with adds runs longer; decision 15 holds the 60 s | 5, 8 |
 | Curve defaults; salvage levels live on the slot, per pilot | The curve lane (F) | 8 |
@@ -62,7 +60,7 @@ This file starts from `signoff_v3.md` and applies every ruling that v3 did not y
 | FREIGHTER, TENDER, BASTION | helm | top 85, and capital warp (decision 9) | **top 120**, thrust scaled to match, no warp (decision 2) | row |
 | BB, CV, DD | V | warp | warp, unchanged from v3 §3.9, now on the capitals alone | row on `Drives.All` |
 | every class | chips | 3/4/5/6 slots, kind caps | **6 slots**, kind caps, walled at L2/4/8/10/12/14, none fitted at start | row |
-| curve | L1 boss | 3820 / 3520 (3 kit chips) | **3091 / 2847**, every move but the two 250s at **x0.64** | rows (curve lane) |
+| curve | L1 boss | 3820 / 3520 (3 kit chips) | **3222 / 2968**, every move but the two 250s at **×0.744 / ×0.787** (numbers §8) | rows (curve lane) |
 
 **Gone:**
 - Unmask: `TurretSpec.While`, the `ClassArt.Hidden` seats, the unmask_* rows, and the sprite batch's flank seats.
@@ -153,7 +151,7 @@ v3 §3.1 stands with one change. **The patrol wing takes whatever `Turret.Rank` 
 **What it costs, what it saves.**
 - Against a lone Lancer, about 8% of the patrol's time goes on seekers: 3 every 15 s, one 1.2 s pass each.
 - The patrol is **11.0 sheet / 5.6 realistic** (v3: 12.0 / 6.1). The Carrier is **52.1** (v3: 52.6).
-- It stops about 0.6 DPS of trident sheet aimed at the carrier at today's rows, 0.4 after the x0.64 cut (§5).
+- It stops about 0.6 DPS of trident sheet aimed at the carrier at today's rows, 0.45 after the ×0.744 cut (numbers §8).
 
 **Engine.**
 - The `Patrol` TargetFilter row forbids nothing and takes a Dummy only as a fallback (`WingPrey` today forbids Missile and Dummy).
@@ -170,7 +168,7 @@ v3 §3.2 stands: the pull, the swing, the tow and hurl, and the rip's look (chun
 
 - **At cast-off, the anchor takes 1% of its own maximum hull, plus 10.**
   - Maximum hull is the level- and party-scaled `MaxHp`.
-  - On the L1 Lancer (3091) that is **40.9**; at L40 (10,583) it is 115.8.
+  - On the L1 Lancer (3222) that is **42.2**; at L40 (7141) it is 81.4.
   - It is a hit through the hostile damage door (F4), credited to the DD as `grapnel`.
 - **Where it applies:** bosses, structures and dummies. Never a craft; the tow and hurl keep their own 60 / 120.
 - **When there is no rip:** the anchor died or warped. A second E, the 5 s limit, a web and the DD's own warp all rip.
@@ -335,7 +333,7 @@ v3 §3.9 unchanged, on the capitals alone:
 - Everything else stands as written: `level_gates.md` §3.3 items 2-10, `Character.Peak` from its item 1, and its checks 1-17.
   - `ChipSlots(IGated)` is now `Count(ChipSlot, Peak)`.
   - Check 6's literals become "every hull: 0, 1, 2, 3, 6 at levels {1, 2, 4, 8, 14}".
-  - Check 11's literals become HullScale(2) = 1.075 and anchor 3091 (§5). Its 1.109 / 3779 assumed the baked chips.
+  - Check 11's literals become HullScale(2) = 1.098 and anchor 3222 (numbers §1.3). Its 1.109 / 3779 assumed the baked chips.
   - The "bake" edits and `ClassDef.Chips` (§3.3 item 1, check 10) are dropped.
 - **What the walls cost** (Lancer kill in seconds, from `power_v31.py`):
 
@@ -371,7 +369,7 @@ Everything else in these sections of v3 §3 stands unchanged:
 The method is v2's. **Stock with no chips** is what the realistic column always was. What is new is the columns around it:
 - **Kill L1** is the class's own walls (ability 1 only) against the new L1 Lancer.
 - **Kill from L6** has every ability open. It holds at every level after L6, because the boss and the pilot grow by the same factor.
-- **TTD** is a pilot who stops dodging, against the L1 boss with every move but the burn and the rock at x0.64, and those two at 250.
+- **TTD** is a pilot who stops dodging, against the L1 boss with every move but the burn and the rock at kits v3.1's ×0.64, and those two at 250 (the reconciled cut is ×0.744 / ×0.787 on a four-fight hull, which holds 31 / 42 s; numbers §1.2).
 - **Hull lost** is the realistic share of hull lost over the class's own L6+ kill, with 0.5%/s regen.
 
 | class | tier | hull | top | sheet | realistic (v3) | kill L1 (walled) | kill from L6 | TTD Lancer / Drake | hull lost Lancer / Drake |
@@ -412,81 +410,7 @@ The method is v2's. **Stock with no chips** is what the realistic column always 
 
 ## 5 · THE CURVE WITHOUT CHIPS
 
-**The anchor.**
-- The reference pilot carries no chips. At L1 its walls leave it only ability 1, and it has 1 Weapons point.
-- Over L1's four fights (PL 1, 1, 2, 2), the fleet's median walled realistic DPS is **50.0** (51.5 with every ability open).
-- **Lancer L1 = 60 × 50.0 × 1.03 = 3091.** Drake = 3091 × 700 / 760 = **2847**. The approved curve had 3820 / 3520, with 3 kit chips (x1.18).
-- **The DPS anchor is the fleet's median, not the DD's own DPS** (decision 8). curve.md chose the DD because it sat at the median *with* kit chips. Without chips it sits at 56.6, against a median of 51.5.
-
-**Time to die: the damage anchor on every move but the two 250s.**
-- The reference hull is the DD's **395**. That is what the approved 31 / 42 s were set on, and with no chips it falls from 454.
-- The supers stay 250 (burn, 5 ticks after fix B; rock).
-- Holding the time to die needs **every other move at x0.627 (Lancer) and x0.645 (Drake)**. One value, **x0.64**, gives **30.4 s / 41.6 s**. With no anchor it would be 23.6 / 35.1 s.
-- **Which moves count as supers.** Your ruling named 250 / 250: the burn and the rock. The code also flags the Lancer's ram (40) and the Drake's scrap shotgun (18.75) `Super` (Lancer.cs, Drake.cs), and they take the cut here. If every `Super` move stayed at today's rows, the Lancer's guns, trident and wave would need x0.57, and the Drake's gun x0.28 (6 → 1.65) as its only cut move.
-- **As rows** (curve lane):
-
-  | boss | move | today | at x0.64 |
-  |---|---|---|---|
-  | Lancer | guns | 3.6 | 2.30 |
-  | Lancer | trident seeker | 15 | 9.6 |
-  | Lancer | wave | 45 | 28.8 |
-  | Lancer | ram | 40 | 25.6 |
-  | Drake | gun | 6 | 3.84 |
-  | Drake | scrap | 18.75 | 12.0 |
-
-  - The beam's 50 a tick and the rock's 250 are untouched.
-  - The escorts become raid-manager squads (raids lane) and take DamageScale like any add.
-  - **One approximation in the model:** it cuts the escorts' 0.4 sheet (boss_model.md) with the moves. As adds they keep their rows, which puts the reference at **30.0 s** against the Lancer rather than 30.4. x0.61 on the Lancer's rows would restore 30.7. The curve lane sets the value from the probe (risk 4).
-  - Missions' `DamageMult` is still 1.0 at L1, so the cut is in the rows, not in a multiplier with an exception for supers.
-
-**Par, no chips** (today's items; the capped set is in `power_v31.py`; the items pass replaces both, since Par reads rows):
-
-| L | 1 | 2 | 3 | 4 | 5 | 10 | 20 | 30 | 40 | 80 |
-|---|---|---|---|---|---|---|---|---|---|---|
-| HullScale | 1.000 | 1.075 | 1.174 | 1.233 | 1.291 | 1.576 | 2.324 | 2.967 | 3.424 | 3.762 |
-| DamageScale | 1.000 | 1.121 | 1.235 | 1.373 | 1.502 | 1.726 | 2.264 | 2.776 | 3.092 | 3.199 |
-| Lancer hull | 3091 | 3324 | 3630 | 3810 | 3990 | 4872 | 7184 | 9173 | 10583 | 11630 |
-| approved H / D (with chips) | 1 / 1 | 1.086 / 1.106 | 1.194 / 1.206 | 1.259 / 1.328 | 1.309 / 1.440 | 1.588 / 1.636 | 2.316 / 2.106 | 2.942 / 2.554 | 3.378 / 2.830 | 3.664 / 2.929 |
-
-- **HullScale** is almost the approved shape (within 3%; +2.7% at L80). It rises a little more slowly to L5, because abilities 2 and 3 open inside it.
-- **DamageScale** grows about 9% more by L40. Parts are a bigger share of a smaller no-chip hull, so the boss must hit harder to keep 30.4 s.
-- By construction, the reference kills in 60 s and dies in 30.4 / 41.6 s at every level.
-
-**Chips are upside: how far above par a chipped pilot gets.**
-- The pilot is the median at par, with every open chip slot filled: 3 Combat first, then Armour.
-- **(i)** today's chip rows at the par's rarity, **levelled on the slot** at the par's 65%.
-- **(ii)** today's rows, chip slots not levelled.
-- **(iii)** the proposed budget: no levels on chip slots, 10% a chip at T10, compounding 10% a tier down to T1, no drawback.
-
-| L | open slots | tier | kill: (i) / (ii) / (iii) | TTD vs Lancer: (i) / (ii) / (iii) |
-|---|---|---|---|---|
-| 2 | 1 | T1 | 55 / 55 / 57 s | 29 / 29 / 30 s |
-| 4 | 2 | T1 | 49 / 50 / 54 s | 28 / 28 / 30 s |
-| 8 | 5 | T2 | 46 / 49 / 51 s | 32 / 31 / 32 s |
-| 14 | 6 | T4 | 42 / 48 / 50 s | 37 / 34 / 34 s |
-| 20 | 6 | T5 | 37 / 46 / 49 s | 40 / 35 / 33 s |
-| 40 | 6 | T10 | **29** / 44 / **45** s | 43 / 35 / 34 s |
-
-- **The salvage level on a chip slot is what makes bosses and raids fall behind.**
-  - Levelled chips (i) take the L40 kill to 29 s: the boss is x2.07 behind.
-  - Unlevelled (ii) and the budget (iii) both hold it at 44-45 s, within x1.33 at every level.
-- **The rule for the items pass (decision 6):**
-  - chip slots never take salvage levels (levels live on the 5 core slots);
-  - one chip's up is at most +10% at T10, which is 4.2% at T1 under the +10% compounding law.
-- **Raids follow the same Par.** Raiders' Strength becomes a level (curve.md item 10), so the same x1.33 bounds them.
-- **The skip-ahead (+2 levels) is where a chipped pilot spends its margin.** At L10-20, +2 levels is about +7% hull.
-- **The adds: the fight runs longer with no chips.** `raids_v2_model.fight` was re-run as `raids_rerun.py` runs it (heavies 2.58, `heavy_web=999`), with three inputs patched: `BOSS_REAL` 6.15 / 3.25 and `BOSS_SHEET` 14.98 / 11.47 (the moves at x0.64, the burn at 250), and `PAR` x 1.03 / 1.18 (no chips). Two things move. The adds keep their rows (2.58 is your ruling) while the boss's moves are cut. A chipless pilot also clears the adds more slowly.
-
-  | L | 6 | 9 | 12 | 15 | 18 | 24 | 30 | 36 | 39 | 40 |
-  |---|---|---|---|---|---|---|---|---|---|---|
-  | fight with adds, v3.1 | +5% | +12% | +14% | +16% | +21% | +23% | +33% | +44% | **+50%** | **+51%** |
-  | the same, v3 basis | +4% | +10% | +11% | +12% | +16% | +18% | +25% | +33% | +38% | +39% |
-  | x boss (DPS taken with adds / boss alone), v3.1 (v3) | x1.08 (1.06) | x1.21 (1.15) | x1.46 (1.38) | x1.30 (1.21) | x1.59 (1.46) | x1.73 (1.58) | x1.84 (1.69) | x2.21 (1.91) | x1.71 (1.51) | x2.31 (2.07) |
-
-  - With adds, a par fight is 63 s at L6 and 90 s at L39-40, so your 60 s does not hold once squads arrive. Raids stay **ahead of** the pilot, not behind.
-  - **Decision 15:** by default Par carries this share per level, and the boss's hull is divided by (1 + share), so the fight *with* its adds is 60 s. This is the lever raids_v2 §3 named. The rung-3 probe sets the column, not this model.
-  - The 0.6 s escape floor is timed on the no-chip reference's strip time, which is about 15% longer than raids_v2 assumed.
-  - raids_v2 §3's time-to-die table (hull = stock × 1.64) is re-run on the no-chip hull before the lane lands.
+**Moved.** The curve, the boss cut, the chip budget and the adds share live in `numbers_curve_raids_items.md` (§1-§3), reconciled with this file in its §8 on 2026-09-25. This file's own §5 ran on today's items and is replaced, not kept beside it. In short: Lancer 3222 / Drake 2968 at L1 (the fleet's walled L1 median); every move but the burn and the rock ×0.744 / ×0.787; no starting chips, no salvage on chip slots, chips ×1.24 at L40; the boss hull is not trimmed for adds (fights +2% to +42%).
 
 ---
 
@@ -585,7 +509,7 @@ The method is v2's. **Stock with no chips** is what the realistic column always 
 | **C · chips and walls** | F15 (6 slots), `Unlocks.cs`, `Peak`, `Game.Version` 3, the folded Auto-sell and raid gates | step 0 | Equipment, EquipmentWindow, Character, `Unlocks.cs`, Progression, the AbilityBar lock, `DoAbility`'s wall line, Yard / BasePanel / Raids gates | 2 · 3 · 5 at A's first run (+ the two mutants in `level_gates.md` checks 7 and 13) |
 | **D · fields and effects** | F9 | slice 1 | Fx.cs, FxNode, the slot-drawn fields in `PlayerShip._Draw` | 2 · 3 |
 | **E · wings** | F13 (gunships, patrol with missiles) | slice 2 (F4 credits wing hits) | ShipClasses.cs (Wing), the fighter and patrol rows in Stats | 2 · 3 · 5 at A's first run |
-| **F · curve** | `Par.cs`, boss rows 3091 / 2847, every move but the two 250s at x0.64, the adds share that divides the boss's hull (decision 15), siege rows, the salvage ladder 500 × 1.10 capped at highest boss cleared + 1, **salvage levels on the slot, per pilot**, levels on the identity, skip +2, raider Strength as a level | slice 2 for Par, Missions and the boss rows (DamageScale goes in `Boss.Out`); its Equipment / Character part (ladder, slot levels, identity) waits for lane C's merge (one writer on those two files) | Par.cs, Missions, Lancer / Drake move rows, Emplacements, Waves, TioWindow, the Equipment ladder, Character's slot levels | 2 · 3 · 5 at A's second run |
+| **F · curve** | `Par.cs`, boss rows 3222 / 2968, every move but the two 250s at ×0.744 / ×0.787 (numbers §8), no hull trim for adds, siege rows, the salvage ladder 500 × 1.10 capped at highest boss cleared + 1, **salvage levels on the slot, per pilot**, levels on the identity, skip +2, raider Strength as a level | slice 2 for Par, Missions and the boss rows (DamageScale goes in `Boss.Out`); its Equipment / Character part (ladder, slot levels, identity) waits for lane C's merge (one writer on those two files) | Par.cs, Missions, Lancer / Drake move rows, Emplacements, Waves, TioWindow, the Equipment ladder, Character's slot levels | 2 · 3 · 5 at A's second run |
 | **G · raids** | `Squads.cs` and raids_v2, plus the rulings: beam escorts become squad wave 1 from L1; any add's web may start the beam; the 0.6 s escape floor; H,L,L,L growth; 30 s refills that pay no EXP | slice 2 (F17 + F20) | Squads.cs, Raids, Waves rows, Raider (its turn in the order below), Boss's beam start (the `s.Target.Pinned` test, Boss.cs:413 today) | 2 · 3 · 5 at A's first run |
 | **H · sprites** | the 12 player ships: hit sizes unchanged, BB mains on the 4 flanking twins; `finish_ships.ps1` and old art deleted if unused (CLAUDE.md §7's command list edited in the same commit) | step 0 | art, `ClassArt` in Ships.cs, tools/make_ships | its frames ride the one rung-4 sweep |
 | **I · items** | hull-category lines (8-12 each), +10% compounding over 10 tiers, **the chip budget (decision 6)** | the kits' rung 6 is green and lane F has merged (Par reads item rows) | Equipment rows, Loot, the item generator | 3 per slice · 4 once · 5 once · **6 once** |
@@ -672,8 +596,8 @@ That is roughly **60 minutes** of engine, run one at a time.
 3. **Pricing parity.** The host prices the Dart's rod and Pepperbox from its own copy of the Ramjet and the boost, both built from 20 Hz state and the boost's slot.
    - **Mitigation:** the host's figure is the only one that counts. Rung 5 asserts the two agree within 1%.
 4. **The anchor rests on estimated realistic DPS.**
-   - The median walled 50.0 sets 3091 one-for-one.
-   - x0.64 rests on the Lancer and Drake sheets from boss_model.md, with the 5-tick burn.
+   - The fleet's walled L1 median sets 3222 one-for-one (numbers §8 R1).
+   - The ×0.744 / ×0.787 cut rests on the Lancer and Drake sheets from boss_model.md, with the 5-tick burn.
    - **Mitigation:** the curve lane sets `Bosses[].Hull` from the probe's median at L1, not from this table.
 5. **The rip in a party.** 1% of a party-scaled hull is the one damage that grows with the party rather than with the pilot. Watch it at 4 players; the lever is grapnel_rip_share.
 6. **Merge pressure.** Raider.cs, Ships.cs, PlayerShip.cs, Boss.cs, Equipment.cs, Character.cs and SmokeTest.cs.txt are shared.
@@ -694,13 +618,13 @@ That is roughly **60 minutes** of engine, run one at a time.
 | 3 | Does the boost break a web? | **no**: only the capitals' warp still does | a boost clears Pinned as a jump does (the nine get back the web break the warp gave them) |
 | 4 | What Time on target's lines hit | **the railgun's rule**: every hostile on a line takes 40, and the line stops at the painted target | only the painted target takes them |
 | 5 | *(closed by your ruling)* Sentries: the paint against a missile | **the paint first**, then anything hostile; the freighter's PD takes missiles at the hull | none: "prefer painted targets" answers it |
-| 6 | **The chip budget** (for the items pass) | **chip slots never take salvage levels; one chip ≤ +10% at T10** (4.2% at T1). The median pilot with 6 chips never kills faster than 45 s, a boss is never more than x1.33 behind it, and raids follow | chip slots level like core slots (29 s kills at L40; the boss x2.07 behind) |
+| 6 | **The chip budget** (SETTLED, numbers §8 R7: no salvage on chip slots; the numbers file's chip rows, ×1.24 at L40, replace the +10% cap) | **chip slots never take salvage levels; one chip ≤ +10% at T10** (4.2% at T1). The median pilot with 6 chips never kills faster than 45 s, a boss is never more than x1.33 behind it, and raids follow | chip slots level like core slots (29 s kills at L40; the boss x2.07 behind) |
 | 7 | Starting chips | **none**; `chip_basic` is deleted; chips come from crates | the L2 unlock card gives one common Combat Chip |
-| 8 | The curve's DPS anchor | **the fleet's median walled DPS** (3091: the median class 60 s, the DD 55 s) | the DD's own walled DPS (about 3330: the DD 60 s, the median class about 65 s) |
-| 9 | The Sniper's new piece (v3 decisions 1-2; you have not picked) | **Overcharge, a passive on the railgun** (51.0) | Fracture (51.1; stacks like Venom) · Deadeye (51.4; a ragged window on the wire) · or a key, replacing the Tether or the Flares |
+| 8 | The curve's DPS anchor (SETTLED, numbers §8 R1: 3222) | **the fleet's median walled DPS** (3091: the median class 60 s, the DD 55 s) | the DD's own walled DPS (about 3330: the DD 60 s, the median class about 65 s) |
+| 9 | The Sniper's new piece (CLOSED by the ruling: the active reload, `sniper_active_reload.md`) | **Overcharge, a passive on the railgun** (51.0) | Fracture (51.1; stacks like Venom) · Deadeye (51.4; a ragged window on the wire) · or a key, replacing the Tether or the Flares |
 | 10 | Supercarrier (v3 decision 3) | **timed: 20 s, cooldown 30 s from the end** (52.1) | a toggle (about 61: above every non-light, just under the lowest light) |
 | 11 | Grapnel on a boss (v3 decisions 4-5) | **pull, then the v2 swing; the rip at cast-off** | pull only · the rip on arrival |
 | 12 | Overshoot penalty (v3 decision 7) | **proportional**: 2 s per 300 u | whole steps: 2 / 4 / 6 s |
 | 13 | What a capital's overshoot disables (v3 decision 8) | **helm, guns (CIWS included), abilities and warp**; PD and craft already out keep going | the helm only |
-| 14 | Speed lifts in the Dart's pricing (v3 decision 12, now with the boost) | **they count**: the Ramjet and the boost (Dart 71.9, level with the Echo) | flight only (the Dart at 61) · or the boost excluded (66.8, but that is a special case in the pricing) |
-| 15 | **The adds and the 60 s** (new, §5): with no chips, a boss fight with its squads runs +5% at L6 to +51% at L39-40 | **hold 60 s with the adds**: Par carries the adds share per level (from the rung-3 probe), and the boss's hull is divided by (1 + share) | leave the boss's hull alone: fights with squads run 63-90 s, and EXP per minute falls with them |
+| 14 | Speed lifts in the Dart's pricing (SETTLED, numbers §8 R6: they count, gear included) | **they count**: the Ramjet and the boost (Dart 71.9, level with the Echo) | flight only (the Dart at 61) · or the boost excluded (66.8, but that is a special case in the pricing) |
+| 15 | **The adds and the 60 s** (SETTLED the other way, numbers §8 R8: NO trim) (new, §5): with no chips, a boss fight with its squads runs +5% at L6 to +51% at L39-40 | **hold 60 s with the adds**: Par carries the adds share per level (from the rung-3 probe), and the boss's hull is divided by (1 + share) | leave the boss's hull alone: fights with squads run 63-90 s, and EXP per minute falls with them |

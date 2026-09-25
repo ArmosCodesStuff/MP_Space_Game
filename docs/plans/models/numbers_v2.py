@@ -18,14 +18,14 @@ FIGHT, SHARE, MAXLEVEL = 60.0, 0.65, 40                # 60 s at par; par at 65%
 STEP = 0.03                                            # salvage: +3% of a part's ups per slot level (slot ladders)
 GROW, UP1, CHIP1 = 1.10, 0.25, 0.08                    # tiers compound +10%; T1 headline cap +25%; a chip's T1 lean
 MULT1 = 0.20                                           # T1 headline of a MULTIPLIER lean (rate, cooldown, duration)
-BASIC = (0.05, 0.05)                                   # the kit's Basic Combat Chip (+5% damage, +5% hull), NOT baked
 WALL_AB = (1, 3, 6)                                    # ability 1 / 2 / 3 open at pilot level
 WALL_CHIP = (2, 4, 8, 10, 12, 14)                      # chip slots 1-6 open at pilot level (6 on every hull)
 COMBAT_CAP = UTILITY_CAP = 3
 DRAKE_R = 700 / 760                                    # Drake row / Lancer row (kept from curve.md)
 TTD_TARGET = {'lancer': 31.0, 'drake': 42.0}           # the agreed time to die at par, sheet ("stops dodging")
 LADDER = (500, 1.10)                                   # salvage level n -> n+1 costs 500 x 1.10^n, gated
-REF = 'DESTROYER'                                      # the reference class (curve.md's median row)
+REF = 'DESTROYER'                                      # the reference class: its ROWS set every scale's shape
+ANCHOR = 'median'                                      # the L1 hull: 'median' = the fleet's walled L1 median (reconciled), 'ref' = REF's own
 Q_STEP = 1.01                                          # Missions.Quicken: wind-ups / 1.01^(L-1)
 
 # ---- the 12 base classes, kits v3 + the owner's later rulings. (category, base hull, weapon realistic DPS vs a
@@ -34,13 +34,13 @@ CLASSES = {
     'BATTLESHIP': ('capital', 500, 22.1, [('Broadside', 23.9), ('Brace', 0.0), ('CIWS', 0.0)]),
     'CARRIER':    ('capital', 425, 22.5, [('Bomber strike', 15.4), ('Warp gunships', 8.5), ('Supercarrier', 6.2)]),
     'DESTROYER':  ('capital', 395, 40.15, [('Long Lance', 14.2), ('Suppressing fire', 0.0), ('Grapnel', 0.65)]),
-    'FREIGHTER':  ('freighter', 450, 48.0, [('Time on target (hitscan)', 8.7), ('Bubble', 0.0), ('Redeploy', 0.0)]),
+    'FREIGHTER':  ('freighter', 450, 48.0, [('Time on target (hitscan)', 8.0), ('Bubble', 0.0), ('Redeploy', 0.0)]),
     'TENDER':     ('freighter', 380, 38.2, [('Overdrive', 6.1), ('Repair field', 0.0), ('Resupply', 1.7)]),
     'BASTION':    ('freighter', 420, 21.15, [('Bunker buster', 25.85), ('Shockwave', 0.0), ('Gravity well', 0.0)]),
     'WARRIOR':    ('heavy', 300, 40.0, [('Lunge', 5.9), ('Whirlwind', 0.0), ('Prism stance', 4.1)]),
     'SNIPER':     ('heavy', 240, 34.3, [('Anchor', 16.7), ('Tether mine', 0.0), ('Flares', 0.0)]),
     'WARDEN':     ('heavy', 270, 31.4, [('Hunters', 17.6), ('Taunt', 0.0), ('Flak curtain', 0.0)]),
-    'DART':       ('light', 200, 39.0, [('Rod from God', 22.0), ('Ramjet', 5.8), ('Slingshot', 0.0)]),
+    'DART':       ('light', 200, 41.6, [('Rod from God', 24.6), ('Ramjet', 5.8), ('Slingshot', 0.0)]),
     'ECHO':       ('light', 180, 61.2, [('Reverb', 10.8), ('Rewind', 0.0), ('EMP', 0.0)]),
     'WRAITH':     ('light', 220, 54.4, [('Veil', 4.4), ('Venom', 5.2), ('Shadow step', 0.0)]),
 }
@@ -51,7 +51,7 @@ RIP = {'DESTROYER': dict(frac=0.01, flat=10.0, cycle=21.0, use=0.8, nth=3)}
 # ---- boss rows per unit of scale (boss_model.md 1.3, re-read in Lancer.cs / Drake.cs). The escorts leave the
 # Lancer's sheet (they are squad wave 1 now). The beam is 5 ticks = 250 (fix B). Supers stay at their rows.
 LANCER = {'guns': (3.00, 1.00, False), 'trident': (3.00, 0.50, False), 'wave': (2.65, 0.50, False),
-          'beam': (250 / 30, 0.25, True), 'ram': (40 / 30, 0.25, True)}          # (sheet, land rate, super)
+          'beam': (250 / 30, 0.25, True), 'ram': (40 / 30, 0.25, False)}          # (sheet, land rate, super)
 DRAKE = {'gun': (2.40, 0.50, False), 'scrap': (2.50, 0.25, False), 'rock': (250 / 30, 0.25, True)}
 
 # ================================================================ THE ADDS SCHEDULE (raids_v2 + the rulings)
@@ -162,7 +162,6 @@ CHIPS = [   # generic: fit every hull; at most 3 combat and 3 utility fitted; NO
   ('chip_engine', 'Engine Chip', 'utility', None, 'top speed +5%, turn rate +6%', 'none'),
   ('chip_target', 'Targeting Chip', 'utility', None, 'every reach +6% (the Supercarrier ring included)', 'none'),
 ]
-BASIC_CHIPS = 3                                        # the starting kit: 3 Basic Combat Chips (combat kind)
 
 def wearable(cls):
     cat = CLASSES[cls][0]
@@ -218,13 +217,12 @@ def pilot(cls, L, k, chips=False, g=None, gear=None, hull_lines=True, chip_mode=
     Gg = G(g)
     dsh = 0.03 * w; hsh = UP1 * Gg * ((gr['Sh'] + gr['Fr']) if hull_lines else 0.0)
     if chips:
-        ci = ai = 0; basic_left = BASIC_CHIPS
+        ci = ai = 0                                                   # no starting chips: chip_basic is deleted
         for s in range(nc):
             kind = chip_mode[s]
             if kind == 'C':
                 p = gr['C'][ci]; ci += 1
-                if CHIP1 * p >= BASIC[0] or not basic_left: dsh += CHIP1 * p
-                else: dsh += BASIC[0]; hsh += BASIC[1]; basic_left -= 1     # the kit's Basic chip until one beats it
+                dsh += CHIP1 * p
             elif kind == 'A':
                 p = gr['A'][ai]; ai += 1
                 if p > 0: hsh += CHIP1 * p
@@ -247,8 +245,16 @@ def par(L):
     if L not in _PAR:
         rows = [pilot(REF, L, k) for k in range(4)]
         _PAR[L] = dict(H=sum(x[0] for x in rows) / 4, Dc=sum(x[1] for x in rows) / 4,
-                       boss=sum(hull_in_60(x[2], x[3]) for x in rows) / 4, rows=rows)
+                       boss=anchor_k() * sum(hull_in_60(x[2], x[3]) for x in rows) / 4, rows=rows)
     return _PAR[L]
+_AK = []
+def l1_dps(c): return sum(pilot(c, 1, k)[2] for k in range(4)) / 4      # a class's walled L1 boss DPS, over L1's 4 fights
+def anchor_k():
+    """Boss hull per unit of REF's 60 s hull: 1 for 'ref'; for 'median' the fleet's walled L1 median over REF's."""
+    if not _AK:
+        xs = sorted(l1_dps(c) for c in CLASSES); med = (xs[5] + xs[6]) / 2
+        _AK.append(1.0 if ANCHOR == 'ref' else med / l1_dps(REF))
+    return _AK[0]
 def hull_scale(L): return par(L)['boss'] / par(1)['boss']                # boss hull growth (the rip counts on bosses)
 def craft_scale(L): return par(L)['Dc'] / par(1)['Dc']                   # raiders' hull growth (no rip on craft)
 def dmg_scale(L): return par(L)['H'] / par(1)['H']                       # every boss and raider move's damage growth
@@ -330,11 +336,11 @@ def class_section():
             row.append(f"{tk:4.0f}/{ttd(hh, S):<4.0f}")
         print(f"   {c:<11}  {full_dps(c):5.1f}    " + ' '.join(row))
     rs = sorted(full_dps(c) for c in CLASSES)
-    print(f"   fleet median realistic {(rs[5] + rs[6]) / 2:.1f}; the reference's {full_dps(REF):.1f}. A median-DPS class kills in {60 * full_dps(REF) / ((rs[5] + rs[6]) / 2):.1f} s at L20+.")
+    print(f"   fleet median realistic {(rs[5] + rs[6]) / 2:.1f}; the reference's {full_dps(REF):.1f}. A median-DPS class kills in {60 * anchor_k() * full_dps(REF) / ((rs[5] + rs[6]) / 2):.1f} s at L20+ (anchor x{anchor_k():.3f}).")
 
 def chips_section():
     print("\n== 1c · THE SAME PILOT WITH EVERY OPEN CHIP SLOT FILLED (Combat, Combat, Combat, Armour, Armour, Armour in slot order;"
-          " a Basic chip until a Combat chip drops; no chip ladder)")
+          " no starting chips; no chip ladder)")
     print("   L  | chips open | TTK par -> chipped | x DPS | TTD par -> chipped (Lancer) | x hull || with a chip ladder at g = 0.65L: TTK")
     for L in (1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 30, 35, 40, 60):
         p = par(L); S = boss_sheet('lancer') * dmg_scale(L)
@@ -354,7 +360,8 @@ def chips_section():
 
 # ================================================================ SECTION 2: RAIDS (boss-fight adds), re-run
 HEAVY_DPS, LIGHT_ROW = 2.58, RV.ROW                     # twin laser, 1.29 a barrel (ruling)
-REACT, EFF, RESPAWN, MISSILE, MISSILE_EVERY, LAND_PINNED = 2.0, 0.7, 30.0, 35.0, 12.0, 0.9
+REACT, EFF, RESPAWN, MISSILE, MISSILE_EVERY, LAND_PINNED = 2.0, 0.7, 30.0, 42.0, 12.0, 0.9   # MISSILE: EnemyDef.MissileDamage
+STRIP_SHARE = 55 / 46                                  # the escape floor is priced on the slowest class (D4)
 BEAM_FIRST, BEAM_EVERY, BEAM_WINDUP, BEAM_WAIT, ESCAPE = 6.0, 30.0, 6.0, 5.0, 0.6
 PAIR = RV.PAIR
 def Q(L): return Q_STEP ** (max(1, L) - 1)
@@ -364,7 +371,8 @@ def travel(slot, nl, heavy):
     c, b, t, r, *_ = RV.ROW[lk]; commit = c * b * t + r                   # a lights-only squad (Rusty L1-5)
     return RV.FORM_FOR + (commit - RV.hold(lk) - RV.EXTENT) / RV.burn(lk)
 def strip_time(hull_left, dp): return REACT + hull_left / (EFF * dp)
-def windup(L, pin_hull, dp): return max(BEAM_WINDUP / Q(L), strip_time(pin_hull, dp) + ESCAPE)
+def floor_strip(hull_left, dp): return strip_time(STRIP_SHARE * hull_left, dp)
+def windup(L, pin_hull, dp): return max(BEAM_WINDUP / Q(L), floor_strip(pin_hull, dp) + ESCAPE)
 
 def fight(L, dt=0.05, ignore=False, adds_on=True, hp=None):
     """Solo par pilot vs the level's boss and its adds. Everything scales by LEVEL: add hull x craft_scale(L), add and
@@ -405,7 +413,7 @@ def fight(L, dt=0.05, ignore=False, adds_on=True, hp=None):
             elif phase == 'winding' and pins > pins_before:
                 # THE ESCAPE FLOOR, live: a web that lands during the wind-up holds the burn until the par pilot
                 # could strip every pinner now on it (2 s react + hull / (0.7 x par DPS)) plus 0.6 s to leave the line.
-                burn_at = max(burn_at, t + strip_time(pin_hull, dp) + ESCAPE)
+                burn_at = max(burn_at, t + floor_strip(pin_hull, dp) + ESCAPE)
             if phase == 'winding': pins_before = pins
             if phase == 'winding' and t >= burn_at:
                 full = last_pin >= burn_at - ESCAPE - dt / 2            # still held 0.6 s before the first tick
@@ -449,13 +457,13 @@ def raids_section():
           f" With raiders taking a level, the strip is the same at every level (par L1 DPS vs craft {D1:.1f}):")
     for name, hull in (('2 webifiers (Rusty L1-8)', 50), ('3 webifiers (squad 1 from L15)', 75), ('3 talons (squad 2)', 54),
                        ('3 pods (squad 3, L39)', 180), ('all 9 lights at once (L39 worst)', 309)):
-        s = strip_time(hull, D1); print(f"     {name:<34} strip {s:4.2f} s -> floor {s + ESCAPE:4.2f} s")
+        s = floor_strip(hull, D1); print(f"     {name:<34} strip {s:4.2f} s -> floor {s + ESCAPE:4.2f} s")
     print("   L  | boss  | squads (H+lights)        | 6/Q(L) | squad-1 floor | windup vs squad 1 | margin || in the fight: wind-ups flown (s), beams landed on par")
     for L in (1, 3, 5, 7, 9, 11, 15, 17, 21, 25, 27, 29, 31, 33, 35, 37, 39, 41, 51):
         kinds = squad_kinds(L); n1 = kinds[0][1] if kinds else 0
-        fl = strip_time(25 * n1, D1) + ESCAPE if n1 else 0.0
+        fl = floor_strip(25 * n1, D1) + ESCAPE if n1 else 0.0
         wu = max(BEAM_WINDUP / Q(L), fl); f = fight(L)
-        print(f"   {L:<3}| {'RUSTY' if rusty(L) else 'DRAKE'} | {' '.join(f'[{('H' if h else '')}+{nl}]' for h, nl in kinds):<24} | {BEAM_WINDUP / Q(L):5.2f}  | {fl:5.2f}         | {wu:5.2f}             | {wu - (fl - ESCAPE) if n1 else float('nan'):4.2f}   || "
+        print(f"   {L:<3}| {'RUSTY' if rusty(L) else 'DRAKE'} | {' '.join('[' + ('H' if h else '') + f'+{nl}]' for h, nl in kinds):<24} | {BEAM_WINDUP / Q(L):5.2f}  | {fl:5.2f}         | {wu:5.2f}             | {wu - (fl - ESCAPE) if n1 else float('nan'):4.2f}   || "
               + ' '.join(f"{b[1]:.2f}" for b in f['beams']) + f"  landed {f['landed']}")
     print("\n   | L | adds | x boss | pinned | fight +% | adds' own DPS / DamageScale | full beams on par / fired | EXP +% (first fill) |")
     BANDS = [(1, 5), (6, 8), (9, 11), (12, 14), (15, 17), (18, 20), (21, 23), (24, 26), (27, 29), (30, 32), (33, 35), (36, 38), (39, 40)]
@@ -471,7 +479,7 @@ def raids_section():
             kinds = squad_kinds(Ls[0]); L0 = Ls[0]; pl = FIGHTS[L0][1]
             roster = sum((EXP_ADD['heavy'] if h else 0) + EXP_ADD['light'] * nl for h, nl in kinds)
             ex = roster * L0 / pl / (KILL * L0 / pl + DONE)
-            print(f"   | {a}-{b} {'RUSTY' if who == 'lancer' else 'DRAKE'} | {' '.join(f'[{('H' if h else '')}+{nl}]' for h, nl in kinds) or '-'} | x{x:.2f} | {100 * pin:.0f}% | {100 * fp:+.0f}% | {ad:.2f} | {lan}/{fired} | +{100 * ex:.0f}% |")
+            print(f"   | {a}-{b} {'RUSTY' if who == 'lancer' else 'DRAKE'} | {' '.join('[' + ('H' if h else '') + f'+{nl}]' for h, nl in kinds) or '-'} | x{x:.2f} | {100 * pin:.0f}% | {100 * fp:+.0f}% | {ad:.2f} | {lan}/{fired} | +{100 * ex:.0f}% |")
     print("\n   TIME TO DIE, realistic (dodging), boss alone -> with adds; par gear on each class's base hull")
     for L in (1, 6, 9, 18, 20, 30, 39, 40):
         r = res[L]; b = base[L]; row = []
@@ -532,7 +540,7 @@ def items_section():
             row.append(f"L{L} {100 * a / min(40, L):3.0f}%")
         print(f"     scrap 100 x {kk}^(t-1): " + '  '.join(row))
     # L40 builds
-    print("\n   L40, median class (DESTROYER, capital lines), against the L40 Lancer (hull", f"{boss_hull(40):.0f}", "): TTK s / TTD s (Lancer; Drake)")
+    print("\n   L40, the reference class (DESTROYER, capital lines), against the L40 Lancer (hull", f"{boss_hull(40):.0f}", "): TTK s / TTD s (Lancer; Drake)")
     L = 40; p = par(L); S_L = boss_sheet('lancer') * dmg_scale(L); S_D = boss_sheet('drake') * dmg_scale(L)
     T10 = {'W': P(10), 'U': P(10), 'Sh': P(10), 'Fr': P(10), 'C': [P(10)] * 3, 'A': [P(10)] * 3}
     NOHULL = dict(T10, Sh=0.0, Fr=0.0)
