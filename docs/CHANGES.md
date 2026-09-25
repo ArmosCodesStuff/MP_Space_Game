@@ -565,7 +565,9 @@ Everything a move places about the hull now reads the row where it is used (Boss
 - the escorts launch 13/7 half-widths out (260 u; 130 on the old hull) and the warp ring is 1.3
   half-widths (234 u; 117);
 - every stand-off is measured from the NOSE: the hold-off (Rusty 470, Drake 440 -- each the old 650 u
-  from the centre of its old hull), the shotgun's warp 390 (600), the throw's 1090 (1300);
+  from the centre of its old hull), the shotgun's warp 390 (600), the throw's 1300 (1720 from the
+  centre) -- 200 u past the Drake gun's Find, so its warp-back throw leaves nothing in the gun's reach
+  and it is silent through the throw (the owner: it stays silent during its throw), at any hull size;
 - how far a move LOOKS (`Find`) is measured from the hull too, `Find + L/2` from the centre: the Rusty's
   guns 900 u past its nose (1260 u from its centre), the Drake's main 1100 u (1520) -- the owner's
   ruling that what is placed around a boss scales with it;
@@ -579,7 +581,7 @@ the whole hull.
 **Checks:** rewritten -- "a boss's hull, art and approach are its row's" (720 / 140, 840 / 180, hold-offs
 470 / 440), "a boss wears the owner's red ... its bells at the stern of the doubled hull" (+ the bells
 scaled), the beam / ram / shotgun / throw row checks (escorts 13/7 = 260 u, ram Width 0, warp 390 / ring
-1.3 = 234 u, throw 1090 and a 400 u hold), "a boss's moves come from its ROW" (720), the two ram-lane
+1.3 = 234 u, throw 1300 = the gun's Find + 200 and a 400 u hold), "a boss's moves come from its ROW" (720), the two ram-lane
 finders (280 u), "two escorts launch ... 260 u out", the two lock pushes (past 470 + 360 u), "level 2 is
 the Drake Bastion ... 840 u long", the live shotgun (its nose's standoff, a 234 u ring) and throw (held
 180 + body + 40, backed off its nose's standoff) checks, and the guest's rock hold. "The charge rams for
@@ -588,7 +590,9 @@ the Drake Bastion ... 840 u long", the live shotgun (its nose's standoff, a 234 
 bearings, 20-60 u either side of 1260 u); "its shockwave hits as far as its ring is drawn" (420-600 u
 out, three bearings); "a pilot held still in the ram's lane ... takes the row's 40 once a pass" (three
 spots 360-480 u down it); "it closes on the pilot and stops with its centre 830 u off" (three bearings,
-1.3-1.8 times that out).
+1.3-1.8 times that out). New (merge gate 2, engine-unproven): "the throw leaves nothing in the gun's
+reach" (three bearings, the pilot held still: more than 150 u outside Find + L/2 once the warp lands,
+no shell for 2 s with the gun armed by hand).
 
 **Resolved (Job P, 2026-09-25 -- the owner's two open questions, built as defaults):**
 - **The shockwave scales with the hull.** `BossType.Size` (the row's own BossSize, 1 for a row never

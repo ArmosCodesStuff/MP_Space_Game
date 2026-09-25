@@ -582,3 +582,32 @@ uncommitted paths: J4's edits (no POST) and J5 started without a PRE.
   900 u past its hull" (1200-1240 u > 900 there). The ring, approach and spawn checks pass at
   e72fe19 and fail without the code the gate named.
 - Next: the final test phase, then the merge gate again.
+
+### A5 merge gate 2 fixes (four) -- PRE
+- Tier opus. Intent: (1) the Drake's warp-back throw stands its NOSE 1300 u off its target (the row's
+  Standoff, already measured from the hull like HoldOff: 1090 -> 1300), 200 u past the gun's Find at
+  any BossSize and level; row check asserts Standoff 1300 = gun Find + 200; a new live check from 3
+  varied bearings: after the warp lands, target > gun Find + L/2 + 150 u from the centre, and no shell
+  at it in the next 2 s (the gun armed by hand, pilot held still), each throw then cancelled.
+  (2) SmokeTest ~9882 comment made true. (3) SmokeTest ~8437 ram comment + message: the tail stops
+  540 u down the lane, the hull covers the pilot to the end of the 0.75 s dash, past the 0.52 s gap.
+  (4) "within N u" -> "of its hull" in Lancer.cs:9, Drake.cs:8, Boss.cs:19 and the harness messages
+  ~7970 / ~8001. CHANGES + DESIGN (1090 -> 1300 nose, 1720 centre).
+- Start: 1f3a6aec152c94560cb44e57a764a46981939fc5
+- Files: scripts/Drake.cs a066c4420492 · scripts/Boss.cs ac0642de68bd · scripts/Lancer.cs 56ba81ce8a4b ·
+  tools/smoketest/SmokeTest.cs.txt 5d6866a3d401 · docs/CHANGES.md 76968d9673ed · docs/DESIGN.md
+  e45e7603d8df · ledger 3ee9a27d9a6b
+
+### A5 -- POST
+- Verdict: typecheck 0 errors; `-Quick` ALL CHECKS PASSED. **engine-unproven: rungs owed in the final
+  test phase** (the lane's chain quick,solo,solo,six,screens; the new check on two seeds).
+- (1) Drake.cs throw row Standoff 1090 -> 1300 (nose; the Standoff was already measured from the hull,
+  `Boss.Arm`: Standoff + L/2), 200 u past the gun's Find at any BossSize and level (both x Quicken).
+  Row check: Standoff == 1300 and Standoff - gun Find == 200. New live check after "thrown:": three
+  bearings from ArenaCentre, pilot 600-900 u out held still; after the warp lands (Winding) the pilot is
+  >= 150 u outside gun Find + L/2, the gun armed by hand at once draws nobody and no Slug appears for
+  2 s; each throw called off (At Idle, rock freed, warnings cleared), boss put back. Fails on 1f3a6ae
+  (margin -10 u, and the gun draws the pilot). (2) the guest's "ONE SHELL FIRST" comment. (3) the ram
+  comment + message (tail stops 540 u down the lane, the rest of the 0.75 s dash). (4) "of its hull"
+  in Lancer.cs, Drake.cs, Boss.cs and the two row-check messages. CHANGES + DESIGN: 1300 (1720).
+- Next: the final test phase, then the merge gate again.

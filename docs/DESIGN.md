@@ -426,8 +426,9 @@ Recorded here so every chunk builds from the written word, not from memory.
   silently retuned the other; the two are not the same fight and must be tuned apart, so each row now
   carries its own numbers and nothing multiplies across. The SCRAP SHOTGUN warps it to 600 u of the
   nearest pilot (a ring shows where, 1 s) and fires a fixed fan -- the same seven lines every time, so
-  it is learned, not rolled. The ASTEROID THROW warps it back to 1300 u of the pilot first (the same
-  ring, 1 s), then holds a 180 u rock in a tractor beam over a red lane for 7.5 s and hurls it: its path is fixed at the throw (the distance flown as the cube of the time
+  it is learned, not rolled. The ASTEROID THROW warps its nose back to 1300 u off the pilot first (the
+  same ring, 1 s) -- 200 u past its gun's Find, both measured from the hull, so it is silent through
+  the throw at any hull size -- then holds a 180 u rock in a tractor beam over a red lane for 7.5 s and hurls it: its path is fixed at the throw (the distance flown as the cube of the time
   -- slow, then very fast), so every peer flies the same rock from one event and a guest shortens only
   the hold.
   **A THROWN BODY'S LANE IS DERIVED FROM THE BODY, never written beside it.** `BossMove.Width` is left

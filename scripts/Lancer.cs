@@ -6,7 +6,7 @@
 // the same shape written out again; Boss now runs any table of moves and this is the Lancer's.
 //
 // One rhythm, 30 s long (all damage x the level's and party's scale):
-//   GUNS       always: 3.6 every 1.2 s (3 DPS) at the nearest ship within 900 u
+//   GUNS       always: 3.6 every 1.2 s (3 DPS) at the nearest ship within 900 u of its hull
 //   DEATH BEAM every 30 s, in three steps, the boss holding position through all of them:
 //              ESCORTS OUT: two escorts go for the nearest pilot to web it; the boss turns to
 //                face that pilot -- the only turning the beam allows, and only now.

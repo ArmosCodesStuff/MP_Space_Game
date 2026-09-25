@@ -16,7 +16,8 @@ using System.Linq;
 // starting phase, wind-up, damage, reach, width, speed, turn, count, spread, the cue it plays,
 // whether it holds the hull still -- are the row's. Only the WAYS a move runs are behaviour, and
 // there are six, as there are two EnemyWays for the raiders:
-//   BOLT   an instant bolt of light at the nearest ship within Find
+//   BOLT   an instant bolt of light at the nearest ship within Find of its hull, Find + L/2
+//          from the centre
 //   SHOOT  Count bodies of Shot, fanned Spread degrees apart about the aim (a main gun is one)
 //   BEAM   a line down the nose for Windup, then Live seconds burning along it, judged every Tick
 //   DASH   a line down the nose for Windup, then the hull down it at Speed, Damage on contact

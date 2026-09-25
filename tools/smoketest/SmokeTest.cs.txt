@@ -7967,7 +7967,7 @@ public partial class _Test : Node
                 Check(gn.Way == MoveWay.Bolt && gn.Every == 1.2 && gn.First == 2.0 && gn.Damage == 3.6 && gn.Find == 900f
                       && gn.Waits == MoveWait.Nothing && !gn.Busy && !gn.Super && gn.Source == "boss:guns"
                       && Math.Abs(gn.Damage / gn.Every - 3) < 1e-9 && gn.Beam == Beam.Bolt,
-                      $"the guns: {gn.Damage} every {gn.Every} s (3 DPS) at the nearest ship within 900 u, they wait on nothing, and they are seen and heard as a boss's bolt ({Beam.Of(gn.Beam).Id})");
+                      $"the guns: {gn.Damage} every {gn.Every} s (3 DPS) at the nearest ship within 900 u of its hull, they wait on nothing, and they are seen and heard as a boss's bolt ({Beam.Of(gn.Beam).Id})");
                 var tr = L("trident");
                 Check(tr.Way == MoveWay.Shoot && tr.Shot == Shots.Seeker && tr.Every == 15 && tr.First == 13.5
                       && tr.Count == 3 && tr.Spread == 25f && tr.Damage == 15 && tr.Speed == 135f && tr.Range == 1920f
@@ -7998,7 +7998,7 @@ public partial class _Test : Node
                 Check(dg.Way == MoveWay.Shoot && dg.Shot == Shots.Slug && dg.Every == 2.5 && dg.First == 2.0
                       && dg.Find == 1100f && dg.Damage == 6 && dg.Speed == 220f && dg.Range == 1300f
                       && dg.Radius == 7f && dg.Waits == MoveWait.Nothing && !dg.Busy && dg.Source == "boss:gun",
-                      $"the Drake's main gun: {dg.Damage} a shell (2.4 DPS) every {dg.Every} s at 220 u/s within 1100 u, through its own specials");
+                      $"the Drake's main gun: {dg.Damage} a shell (2.4 DPS) every {dg.Every} s at 220 u/s within 1100 u of its hull, through its own specials");
                 Check(sg.Way == MoveWay.Shoot && sg.Shot == Shots.Scrap && sg.Every == 15 && sg.First == 17.0
                       && sg.Warp == 1.0 && sg.Standoff == 390f && sg.WarpRing == 1.3f && Math.Abs(sg.WarpRing * dra.HalfWidth - 234f) < 0.01f
                       && sg.WarpSound == "drake_warp"
@@ -8013,11 +8013,12 @@ public partial class _Test : Node
                 // on a guest, because only a live raise can show it.
                 // Where it is held is the clearance the row's comment sets out: the hull's own
                 // half-width, the body, and the row's 40 u gap -- 180 + 180 + 40 = 400 u off the keel
-                // of the doubled hull (310 on the 1x one). It backs its nose off to 1090 u (1300 from
-                // the 420 u hull's centre).
+                // of the doubled hull (310 on the 1x one). It backs its nose off to 1300 u, 200 u past
+                // its main gun's 1100 u Find: both are measured from the hull, so the throw leaves
+                // nothing in the gun's reach at any hull size.
                 Check(th.Way == MoveWay.Throw && th.Every == 30 && th.First == 6.0 && th.Windup == 7.5
                       && th.Flight == 1.2 && th.Damage == 250 && th.Reach == 1800f && th.Width == 0f
-                      && th.Warp == 1.0 && th.Standoff == 1090f && th.WarpSound == "drake_warp"
+                      && th.Warp == 1.0 && th.Standoff == 1300f && th.Standoff - dg.Find == 200f && th.WarpSound == "drake_warp"
                       && th.Radius == 180f && th.Offset == 40f
                       && dra.HalfWidth + th.Radius + th.Offset == 400f && th.Busy && th.Super
                       && th.Waits == MoveWait.Everything && th.Cue == "drake_tractor" && th.Strike == "drake_throw",
@@ -8436,9 +8437,11 @@ public partial class _Test : Node
                 Check(hbSmall && hbRingBad.Count == 0 && Math.Abs(hbWave.M.Reach * boss.Type.Size - 680f) < 0.01f,
                       $"its shockwave hits as far as its ring is drawn: at three bearings, a pilot 420-600 u from the centre (past the row's 340, inside the doubled 680) takes the whole 45{(hbRingBad.Count > 0 ? " -- " + string.Join("; ", hbRingBad) : "")}");
 
-                // A RAM LANDS ONCE A PASS: the 720 u hull at 1200 u/s is over a point for 0.6 s, longer
-                // than the 0.52 s a source is blocked for, and a pilot held still in its lane -- 360
-                // to 480 u down it, so the whole hull goes by -- takes the row's 40 once, not twice.
+                // A RAM LANDS ONCE A PASS: a pilot held still in its lane, 360 to 480 u down it from
+                // the centre, is under the nose as the dash starts, and the dash ends with the hull
+                // still over it (its tail stops 540 u down the lane), so it covers the pilot for the
+                // rest of the 0.75 s dash, longer than the 0.52 s a source is blocked for -- and the
+                // pilot takes the row's 40 once, not twice.
                 // The spot is taken off the lane once the lane is drawn, not before the wait.
                 var hbRam = boss.S("ram");
                 var hbRamBad = new List<string>();
@@ -8459,7 +8462,7 @@ public partial class _Test : Node
                         hbRamBad.Add($"{hbAlong:0} u down the lane: {hbRHit:0}");
                 }
                 Check(hbSmall && hbRamBad.Count == 0,
-                      $"a pilot held still in the ram's lane, at three spots 360-480 u down it, takes the row's 40 once a pass, though the doubled hull is over it for 0.6 s{(hbRamBad.Count > 0 ? " -- " + string.Join("; ", hbRamBad) : "")}");
+                      $"a pilot held still in the ram's lane, at three spots 360-480 u down it, takes the row's 40 once a pass, though the doubled hull is over it for the rest of the 0.75 s dash{(hbRamBad.Count > 0 ? " -- " + string.Join("; ", hbRamBad) : "")}");
 
                 // IT CLOSES TO ITS HOLD-OFF OFF THE NOSE: 470 u, so its centre stops 470 + 360 = 830 u
                 // from the pilot. From three bearings, 1.3-1.8 times that out, it closes and stops there.
@@ -8784,6 +8787,54 @@ public partial class _Test : Node
                     double rockDmg = me3.DamageBySource.GetValueOrDefault("boss:rock");
                     Check(Math.Abs(half - 0.125) < 0.04 && broke && Math.Abs(laneLen - heave.Reach) < 1 && Math.Abs(rockDmg - 250 * Missions.S(2)) < 1e-6,
                           $"thrown: half the flight covers an eighth of its {heave.Reach:0} u lane ({half:0.000}) -- the ease, whatever the level does to the length -- it strikes the pilot for its 250 at the level's scale ({rockDmg:0}), and breaks apart at the end ({broke})");
+                    // THE THROW LEAVES NOTHING IN THE GUN'S REACH (the owner: the Drake stays silent
+                    // through its throw). Its nose lands the row's 1300 u off the target, 200 u past the
+                    // gun's 1100 u Find: both measured from the hull, both grown by the level. From
+                    // three bearings, the pilot held still: once the warp has landed, the pilot is
+                    // more than 150 u outside Find + L/2 of the centre, and the gun -- armed by hand
+                    // the moment it lands, so the 2 s is never a silence of its own clock -- draws on
+                    // nobody and puts no shell in the air for 2 s while the hull is held. Each throw
+                    // is called off after (its rock freed, its warning cleared) and the boss put back
+                    // where the next starts.
+                    {
+                        var twGun = dk.S("gun"); var twThrow = dk.S("throw");
+                        var twHome = Hub.ArenaCentre;
+                        float twReach = twGun.M.Find + dk.Length * 0.5f;
+                        var twBad = new List<string>();
+                        for (int k = 0; k < 3; k++)
+                        {
+                            for (int i = 0; i < 60 * 12 && dk.Locked; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                            dk.Position = twHome;
+                            var twAt = twHome + Vector2.Up.Rotated(VaryAngle()) * Vary(600f, 900f);
+                            me3.Position = twAt; me3.Velocity = Vector2.Zero;
+                            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                            int twThrown = twThrow.Fired;
+                            twThrow.Due = 0.01;
+                            for (int i = 0; i < 60 * 5 && twThrow.At != Boss.Phase.Winding; i++) { me3.Position = twAt; me3.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+                            bool twLanded = twThrow.At == Boss.Phase.Winding && twThrow.Fired == twThrown + 1;
+                            // read after the wait: where the hull landed, from where the pilot is
+                            float twOff = dk.Position.DistanceTo(me3.Position);
+                            var twSeen = new System.Collections.Generic.HashSet<Shot>(Slugs());
+                            int twArmed = twGun.Fired, twShells = 0;
+                            twGun.Due = 0.01;
+                            for (double twClock = 0; twClock < 2.0; twClock += GetProcessDeltaTime())
+                            {
+                                me3.Position = twAt; me3.Velocity = Vector2.Zero;
+                                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                                twShells += Slugs().Count(x => x.Kind == Shots.Slug && twSeen.Add(x));
+                            }
+                            bool twHeld = twThrow.At == Boss.Phase.Winding && dk.Locked;
+                            if (!twLanded || !twHeld || twOff - twReach < 150f || twGun.Fired <= twArmed || twGun.Target != null || twShells > 0)
+                                twBad.Add($"{twOff:0} u off its centre against a reach of {twReach:0} (landed {twLanded}, held {twHeld}), gun armed {twGun.Fired - twArmed}, drew {(twGun.Target != null ? "the pilot" : "nobody")}, {twShells} shells");
+                            twThrow.At = Boss.Phase.Idle;
+                            if (dk.Rock is { } twRock) twRock.QueueFree();
+                            Fx.ClearWarnings();
+                            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                            dk.Position = twHome;
+                        }
+                        Check(twBad.Count == 0 && twThrow.M.Standoff - twGun.M.Find >= 200f,
+                              $"the throw leaves nothing in the gun's reach: at three bearings its nose lands {twThrow.M.Standoff:0} u off a pilot held still, more than 150 u outside the gun's {twReach:0} u from the centre, and the gun fires no shell at it for 2 s{(twBad.Count > 0 ? " -- " + string.Join("; ", twBad) : "")}");
+                    }
                 }
             }
             // EVERY BOSS SPECIAL HAS ITS OWN SOUND, heard as it happens: the Lancer's beam (its charge, and
@@ -9879,10 +9930,11 @@ public partial class _Test : Node
             {
                 Me.Position = hd.Position + new Vector2(0, 600); Me.Velocity = Vector2.Zero;
                 await RealTime(() => H.Ships.Any(s => !s.Mine && Hub.PeerSector(s.OwnerId) == Hub.SectorKind.Arena), 6);
-                // ONE SHELL FIRST, while the guest is there to be sent it. The throw now warps the
-                // Drake back to 1300 u from its target -- past its gun's 1100 u -- so a throw called
-                // the moment the guest arrived left it nothing in reach to shoot for the whole throw,
-                // the guest waited out its watch for a shell, and every step after it ran late.
+                // ONE SHELL FIRST, while the guest is there to be sent it. The throw warps the
+                // Drake's nose back 1300 u off its target -- 200 u past its gun's Find (1100 u past
+                // the hull, both measured from it) -- so a throw called the moment the guest arrived
+                // leaves it nothing in reach to shoot for the whole throw, and a guest that had to
+                // wait out its watch for a shell would make every step after it run late.
                 int gunFired = hd.S("gun").Fired;
                 await RealTime(() => hd.S("gun").Fired > gunFired, 4);
                 hd.S("throw").Due = 0.01;
