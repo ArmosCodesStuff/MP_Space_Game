@@ -87,3 +87,8 @@ docs/CHANGES.md 44ca0246e80b7e3f4c7dd03ab52201f53168a8ac
 verdict: green. files: CLAUDE.md (s8 sentence, s12 rungs line), docs/DESIGN.md (trap: port literal bypassing
 P(), naming wan.py's box), docs/CHANGES.md (Handoff + Unreleased). docs/README.md does not list rungs.ps1: untouched.
 typecheck 0 errors; verify -Quick ALL CHECKS PASSED. next: the proof.
+
+## COORDINATOR NOTE 1 (owner, 2026-09-25): run several engines at once
+The owner: "feel free to run multiple instances of the engine and game at the same time, my PC can handle it no prob". If the 3-chain
+proof (slots 1-3 at once) is ALL GREEN, the default -Slots is 4 (slot 0 plus the three proven). A red that is CPU timing is still a
+bug in that check (CLAUDE.md 6): fix it rather than lowering -Slots.
