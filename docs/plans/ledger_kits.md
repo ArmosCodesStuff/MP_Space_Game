@@ -84,11 +84,34 @@ revert or keep the half-made edits, then run the job again (CLAUDE.md §2b rule 
 - Checkpoint: the commit after this entry ("Kits lane A slice 1a").
 - Next: J3 = F16 passive PD (D8), then slice 2.
 
+### J2b · PRE · the burn clock's knife edge (second agent)
+- Intent: the burn's 13th judgement and its end were two clocks meeting at 3.0 s (Next <= 0 vs
+  T < 0), so the 5th hit of `LaneABurnClockChecks` sat on the float's edge. Count the judgements
+  (D10) so the last one ends the burn; the check asserts 5 hits / 0.75 s / 250 AND nothing more in
+  a window ending 0.4 s past the burn. Also the natural-fight beam (Lancer arena): its sidestep at
+  2.2 s is 2 frames before the new clock's 4th hit (2.233 s) and its `200..350` range is the old
+  clock's truth (J2 left it: it would read 150/200) -> sidestep at 1.9 s, exactly 3 hits = 150.
+- Files: scripts/Boss.cs, tools/smoketest/SmokeTest.cs.txt, docs/CHANGES.md, this ledger.
+- Start: 4d09868cda2dc97ef0abdaa3e7b041fcdb06d43f
+- Hashes: Boss 6c56402f · SmokeTest de2ec320 · CHANGES c3298075
+
+### J2b · POST
+- Verdict: rung 2 (`verify.ps1 -Quick`) ALL CHECKS PASSED, UNUSED 0. No engine rung.
+- Files: Boss.cs (`BossMove.Judgements`, `Slot.Left`; Land sets the count, Burn's last judgement
+  ends the burn, `Slot.T` no longer times a beam); SmokeTest (`LaneABurnClockChecks` window +
+  burn length; the Lancer arena's sidestep 2.2 -> 1.9 s and its damage check 200-350 -> 150);
+  CHANGES.md (entry; the 1a entry's knife-edge note deleted).
+- **D10** The knife edge was in the GAME, not only the check: the 13th judgement and the burn's end
+  were two accumulated clocks meeting at 3.0 s. The burn counts its judgements
+  (floor(Live / Tick + 1e-6) + 1, a constant from the row) and its last one ends it.
+- Checkpoint: the commit after this entry. Next: J3 (F16).
+
 ## Engine rungs owed to the main session (run in the worktree, rebased, one engine at a time)
 
 | after | rung | seeds | look for (PASS lines) |
 |---|---|---|---|
 | J2 slice 1a | 3 (`tools\smoketest\run.ps1 -Solo`) | two different seeds | "the burn clock:" x3 · "the railgun's charge is a hold of x0" x3 · "a DISABLED warden" x3 · "Hardened at the applier's share" x3 · rewritten: "the railgun charges with the hull held at x0", "then its railgun's whole", the ability sweep's railgun row, "a 100 blow on a HARDENED battleship" |
+| J2b knife edge | 3 (`-Solo`) | two different seeds | "the burn clock:" x3 (now "... and nothing in the 0.4 s after it"; burned 3.000 +- 0.017 s) · "the beam, judged every 0.25 s for 50, through the 0.52 s guard: 3 hits ... 150" · unchanged neighbours "the live beam holds the line it drew", "and the line is still drawn 2 s into its 3 s burn", "the ram, due mid-beam, waits for the beam to end" |
 
 ## Handover: the first agent stopped here (context cap), at a job boundary
 

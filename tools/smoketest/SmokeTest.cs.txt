@@ -1435,6 +1435,10 @@ public partial class _Test : Node
     // back to Tick each time, throwing the frame it overshot by away: at 60 fps the judgements came
     // 16 frames apart, not 15, and through a ship's 0.52 s gap a pilot sitting in the line took 6
     // hits 0.53 s apart (300). Added, it is 13 judgements in the 3 s and 5 hits 0.75 s apart: 250.
+    // The 13th falls AT 3 s, so the burn COUNTS its judgements (BossMove.Judgements) instead of
+    // racing a second clock to that instant -- and nothing here is read on an edge: the hits are
+    // counted over a window that runs 0.4 s PAST the burn's end (and nothing lands in it), each gap
+    // and the burn's length are frame counts with a frame's play either side, all from the first hit.
     // Three hand-started beams, every other move held, the pilot kept in the line at a seeded
     // bearing, reach and offset -- the line re-read every frame, so nothing is picked stale.
     async Task LaneABurnClockChecks(Boss boss, PlayerShip me)
@@ -1450,8 +1454,9 @@ public partial class _Test : Node
             float reach = Vary(350f, 900f), off = Vary(-15f, 15f);   // the line is 70 u wide: well inside it
             double was = me.DamageBySource.GetValueOrDefault("boss:beam"), last = was;
             var hitsAt = new List<int>();
+            int endAt = -1; bool burned = false;
             beam.At = Boss.Phase.Winding; beam.T = 0.01;         // the wind-up ends on its next tick and the burn lands
-            for (int f = 0; f < 60 * 5 && (f < 2 || beam.At != Boss.Phase.Idle); f++)
+            for (int f = 0; f < 60 * 6 && (endAt < 0 || f <= endAt + 24); f++)
             {
                 var (la, lb) = boss.Segment("beam");
                 var dir = (lb - la).Normalized();
@@ -1459,10 +1464,14 @@ public partial class _Test : Node
                 await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                 double now = me.DamageBySource.GetValueOrDefault("boss:beam");
                 if (now > last + 1e-9) { hitsAt.Add(f); last = now; }
+                burned |= beam.At == Boss.Phase.Firing;
+                if (endAt < 0 && burned && beam.At == Boss.Phase.Idle) endAt = f;
             }
             var gaps = hitsAt.Zip(hitsAt.Skip(1), (x, y) => (y - x) / 60.0).ToList();
-            Check(beam.At == Boss.Phase.Idle && Math.Abs(last - was - 250) < 1e-6 && hitsAt.Count == 5 && gaps.All(g => Math.Abs(g - 0.75) < 0.02),
-                  $"the burn clock: a pilot {reach:0} u down a live beam and {off:0} u off its line (bearing {Mathf.RadToDeg(boss.Rotation):0} deg) takes the whole 3 s burn as 5 hits of 50, 0.75 s apart: 250 (took {last - was:0} in {hitsAt.Count}, {string.Join("/", gaps.Select(g => g.ToString("0.000")))} s apart)");
+            double burnFor = endAt < 0 || hitsAt.Count == 0 ? -1 : (endAt - hitsAt[0]) / 60.0;
+            bool nothingAfter = endAt >= 0 && hitsAt.All(h => h <= endAt);
+            Check(endAt >= 0 && nothingAfter && Math.Abs(burnFor - 3.0) < 0.02 && Math.Abs(last - was - 250) < 1e-6 && hitsAt.Count == 5 && gaps.All(g => Math.Abs(g - 0.75) < 0.02),
+                  $"the burn clock: a pilot {reach:0} u down a live beam and {off:0} u off its line (bearing {Mathf.RadToDeg(boss.Rotation):0} deg) takes the whole 3 s burn as 5 hits of 50, 0.75 s apart: 250, and nothing in the 0.4 s after it (took {last - was:0} in {hitsAt.Count}, {string.Join("/", gaps.Select(g => g.ToString("0.000")))} s apart; burned {burnFor:0.000} s from the first hit; after it: {(nothingAfter ? "nothing" : "MORE")})");
             await Wait(0.6);
         }
         foreach (var m in boss.Type.Moves) boss.S(m.Id).Due = held[m.Id];
@@ -6817,9 +6826,9 @@ public partial class _Test : Node
             double tBeam = -1, tCharge = -1, tVolley = -1, arenaT = 0; int trident = 0; float spread = 0;
             // THE LIVE BEAM, 3 s: it must hold the line it drew, and that line must still be drawn.
             // The boss used to turn after the pilot the whole time, with the telegraph already gone
-            // -- an invisible line sweeping the arena. 2.2 s in, the pilot is moved clear to the
-            // side (after five 50-hull ticks, which the damage check below counts on): a boss that
-            // turns would now swing after it.
+            // -- an invisible line sweeping the arena. 1.9 s in, the pilot is moved clear to the
+            // side (after the hits at 0, 0.75 and 1.5 s and well before the one at 2.25, which the
+            // damage check below counts on): a boss that turns would now swing after it.
             double liveT = 0; float liveRot0 = 0, liveTurn = 0; bool liveDrawn = false, sidestep = false;
             async void Watch()
             {
@@ -6832,7 +6841,7 @@ public partial class _Test : Node
                         liveT += 1.0 / 60;
                         liveTurn = Math.Max(liveTurn, Mathf.Abs(Mathf.AngleDifference(liveRot0, boss.Rotation)));
                         if (liveT > 2.0 && Nodes<FxNode>(boss).Any(x => x.Id == Fx.WarnLane)) liveDrawn = true;
-                        if (liveT > 2.2 && !sidestep) { sidestep = true; me2.Position += Vector2.Right.Rotated(boss.Rotation) * 400f; }
+                        if (liveT > 1.9 && !sidestep) { sidestep = true; me2.Position += Vector2.Right.Rotated(boss.Rotation) * 400f; }
                     }
                     // The beam's place in the rhythm is where it COMMITS -- its escorts going out.
                     // Its red line comes later, when their web pins the pilot, so timing the rhythm
@@ -7001,9 +7010,10 @@ public partial class _Test : Node
                   "the rhythm: the charge 15 s after the beam, a trident half-way between");
             Check(trident == 3 && Math.Abs(Mathf.RadToDeg(spread) - 50) < 3, "a trident: three double-size missiles, the outer two 25 degrees off the middle");
             double beamDmg = me2.DamageBySource.TryGetValue("boss:beam", out var bd) ? bd : 0, chargeDmg = me2.DamageBySource.TryGetValue("boss:charge", out var cd) ? cd : 0;
-            // live 3 s, checked every 0.25 s for 50 -- one source lands at most once per 0.52 s, and
-            // ticks fall on frames, so two ticks are sometimes 0.533 s apart: 5 to 7 hits of 50
-            Check(beamDmg >= 200 && beamDmg <= 350 && Math.Abs(beamDmg % 50) < 1e-6, $"the beam, live 3 s at 50 a tick, through the 0.52 s guard: {beamDmg / 50:0} hits ({beamDmg:0})");
+            // judged every 0.25 s for 50, and one source lands at most once per 0.52 s: every third
+            // judgement lands, 0.75 s apart -- at 0, 0.75 and 1.5 s before the 1.9 s sidestep. With no
+            // guard it would be 8 (400); on the old clock's 16-frame judgements, 0.53 s apart, 4 (200).
+            Check(Math.Abs(beamDmg - 150) < 1e-6, $"the beam, judged every 0.25 s for 50, through the 0.52 s guard: 3 hits in the 1.9 s the pilot sits in it, 150 ({beamDmg / 50:0} hits, {beamDmg:0})");
             Check(Math.Abs(chargeDmg - 40) < 1e-6, $"the charge rams for 40 ({chargeDmg:0})");
             Check(sidestep && liveTurn < 0.01f, $"the live beam holds the line it drew, with the pilot gone from it (turned {Mathf.RadToDeg(liveTurn):0.00} deg)");
             Check(liveDrawn, "and the line is still drawn 2 s into its 3 s burn");

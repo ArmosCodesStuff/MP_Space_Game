@@ -65,7 +65,11 @@ public class BossMove
     public int Count = 1;              // bodies in one firing
     public float Spread;               // degrees between them, fanned about the aim
     public double Live, Tick;          // a beam's burn, and how often that burn is judged
-    public double Flight;              // a thrown body's flight down its lane
+    // A burn is judged at both ends and every Tick between: 3 s every 0.25 s is 13, the last AT 3 s.
+    // COUNTED, and the last one ends the burn. Timed, the last judgement and the burn's end fell on
+    // one instant, two accumulated clocks decided which came first, and a full burn was 200 or 250.
+    public int Judgements => Mathf.FloorToInt(Live / Tick + 1e-6) + 1;
+    public double Flight;             // a thrown body's flight down its lane
     public float Turn;                 // a guided body's turn rate (rad/s)
     public float Size = 1f;            // a fired body's drawn size
     public string Source;              // DamageSource: what the blow is called on a hull
@@ -138,6 +142,7 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
         public Phase At;
         public double T;                   // the phase's clock: down, except an escort wait
         public double Next;                // a beam's next judgement
+        public int Left;                   // a beam's judgements still to come (BossMove.Judgements)
         public int Fired;                  // how many times it has committed
         public float Aim;                  // the world angle it points down, frozen with the warning
         public Vector2 From, To;           // a dash's end, a warp's landing, a ring's centre, a lane
@@ -485,7 +490,7 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
                 }
                 break;
             }
-            case MoveWay.Beam: s.At = Phase.Firing; s.T = m.Live; s.Next = 0; break;
+            case MoveWay.Beam: s.At = Phase.Firing; s.Left = m.Judgements; s.Next = 0; break;
             case MoveWay.Dash: s.At = Phase.Firing; break;
             case MoveWay.Ring:
                 foreach (var p in _hittable)
@@ -512,8 +517,8 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
                     foreach (var p in _hittable)
                         if (Combat.DistToSegment(p.Position, la, lb) <= m.Width / 2f + p.HitRadius)
                             p.Hit(m.Damage * DamageMult, Position, m.Source);
+                    if (--s.Left <= 0) s.At = Phase.Idle;   // its last judgement ends it (Judgements)
                 }
-                if ((s.T -= delta) < 0) s.At = Phase.Idle;
                 break;
             case MoveWay.Dash:
                 Position = Position.MoveToward(s.To, m.Speed * (float)delta);

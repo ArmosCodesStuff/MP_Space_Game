@@ -467,6 +467,22 @@ outstanding from the batch of 2026-09-23.)*
 
 ## Unreleased
 
+### Class kits, lane A: a burn counts its judgements (2026-09-25, worktree wt/kits)
+
+- The burn's 13th judgement and its end both fell AT 3 s on two accumulated clocks, so which came
+  first was the float's call: 250 at the harness's fixed 60 fps, 200 on another rounding. The burn
+  now counts them (`BossMove.Judgements`: Live / Tick + 1, both ends included) and its last one ends
+  it; `Slot.T` no longer times a beam.
+- The Lancer arena's own beam: its pilot sidestepped at 2.2 s, two frames before the added clock's
+  4th hit (2.233 s), and the check still took the old clock's 5-7 hits. It sidesteps at 1.9 s now.
+
+**Checks:** rewritten `LaneABurnClockChecks` (5 hits, 0.75 s apart, 250, over a window that runs
+0.4 s past the burn with nothing in it; the burn 3 s from its first hit); rewritten "the beam,
+judged every 0.25 s ... 3 hits ... 150" (was 200-350) with the 1.9 s sidestep.
+**Rungs:** 1 and 2 green in the worktree; rung 3 owed (ledger_kits.md).
+
+**Known broken:** nothing known; rung 3 has not run.
+
 ### Class kits, lane A slice 1a: the burn clock, a hold on the helm, Disabled on a pilot, Hardened from its applier (2026-09-25, worktree wt/kits)
 
 kits_v31 §8 lane A slice 1, less F16 (passive point defence, its own commit next).
@@ -496,9 +512,7 @@ sniper's "charges with the hull locked" (now `Held == 0`), its "hull is free aga
 the ability sweep's railgun row, and the stat-reach sweep's railgun case (no Disabled to clear).
 **Rungs:** 1 and 2 green in the worktree; rung 3 owed on two seeds (ledger_kits.md).
 
-**Known broken:** nothing known; rung 3 has not run. The burn clock's 5th hit lands on the burn's
-last frame (t = 3.0 s): deterministic at the harness's fixed 60 fps, and the check also asserts the
-0.75 s spacing, which does not sit on that edge.
+**Known broken:** nothing known; rung 3 has not run.
 
 ### verify's text step skips a binary by what it holds, not by its extension (2026-09-24, in the WarShips_Version_L fork)
 
