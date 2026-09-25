@@ -134,12 +134,14 @@ foreach ($s in $Steps) {
   $log = Join-Path $Out ("{0}_{1}.log" -f $i, ($s -replace '[^\w]', '_'))
   $t0 = Get-Date
   $name = $s
-  $slotArgs = if ($assignedSlot -ge 1) { @('-Slot', $assignedSlot) } else { @() }
-  $screensSlotArgs = @()
+  # Hashtables, never arrays: an ARRAY splat is positional, so @('-Slot', 2) reached run.ps1 as $Godot='-Slot', $Seed=2
+  # and $Slot=0 -- every run on slots 1-3 until 2026-09-25 16:30 printed SEED <slot> and used the unshifted ports.
+  $slotArgs = if ($assignedSlot -ge 1) { @{ Slot = $assignedSlot } } else { @{} }
+  $screensSlotArgs = @{}
   if ($assignedSlot -ge 1) {
     try {
       $sp = Get-Command (Join-Path $Tree 'tools\screens\run.ps1') -ErrorAction Stop
-      if ($sp.Parameters.ContainsKey('Slot')) { $screensSlotArgs = @('-Slot', $assignedSlot) }
+      if ($sp.Parameters.ContainsKey('Slot')) { $screensSlotArgs = @{ Slot = $assignedSlot } }
     } catch {}
   }
   if ($s -match '^solo@(\d+)$') { & "$Tree\tools\smoketest\run.ps1" -Solo -Seed $Matches[1] @slotArgs *> $log; $name = 'seeded' }
