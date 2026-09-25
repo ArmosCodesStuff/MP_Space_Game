@@ -36,6 +36,16 @@ history pick the work up from it alone. Update it in the same change as the code
 
 ## Handoff — read this first
 
+**2026-09-25 (worktree `WarShips_wt_kits6c`, branch `wt/kits6c`): kits lane A slice 6c, the heavies, built J1-J13.
+Compiles, rung 2 green; engine-unproven: every check is owed in the final test phase** -- rung 3 twice (LaneA6cBlade,
+Lunge, Whirl, PrismStance, ReloadJudge, Reload, ReloadBar, Anchor, Zone, Tether, Flares, Flak, HunterPrey, Taunt,
+Curtain checks; the rewritten ability sweep, ChipChecks, the warden's DPS), rung 4 (frames 73c, 73f, 73g, 82, 82c,
+82d and the prism frames: the reload bar needs one look by eye), rung 5 `six,six` (the Lunge, Prism, Reload, Anchor,
+Flares, Taunt and Curtain guest checks). Wire: Spawns.Zone = 4, NetIds.Zone = 60000, Shots.Flak = 8, Zones rows
+tether 0 / curtain 1, the reload press RPC (the protocol fingerprint moves). Risk: the arena guest joins at Level 2,
+but its Flares and Curtain are ability 3 (L6) and its Taunt ability 2 (L3) -- if they read LOCKED there, raise
+the guest's peak before them. Detail, decisions D38-D58 and what is owed: `docs/plans/ledger_kits6c.md`.
+
 **2026-09-25 (worktree `WarShips_wt_kits5`, branch `wt/kits5`): kits lane A slice 5 built -- F12 (`Melee.cs`),
 F11 (`Prism.cs`: bands, the split onto `Lines` rows, reflected rounds, rays), F14 (the paint and `ITurretHost.Prefer`;
 the sentry throw to the cursor and the recall, replacing Collect; `Raider.Call`; `Decoys.cs`: the flares spawn row,
@@ -313,9 +323,9 @@ whenever the ship is alive, on every hull that mounts it.
 | Freighter | main gun | fire mode | bubble (400 soaked, 8 s) | R sentry: throw to the cursor (600 u, 0.8 s) or recall one within 60 u, point defence (passive) |
 | Tender | main gun | fire mode | overdrive (x2 rate of fire, 8 s) | R sentry: throw to the cursor (600 u, 0.8 s) or recall one within 60 u, point defence (passive) |
 | Bastion | main gun | fire mode | shockwave (1000 u, or a boss held 3 s) | R sentry: throw to the cursor (600 u, 0.8 s) or recall one within 60 u, point defence (passive) |
-| Sniper | main gun | fire mode | railgun (3 s charge, locked, 150 at 2500 u) | |
-| Warrior | main guns | fire mode | rush (2.5 s, then an EMP) | |
-| Warden | main gun | fire mode | six hunter-seekers | point defence (passive), 10 DPS |
+| Sniper | railgun (hold to charge; Space in the white box while it reloads: x1.5) | — | Anchor (8 s rooted, x2.5, reach x1.4) | Q tether mine (2 charges), E flares |
+| Warrior | blade (26 every 0.40 s) | — | prism stance (2 s) | E lunge (420 u), Q whirlwind (2 s) |
+| Warden | proximity flak (45 DPS, 70 u fuse) | fire mode | six hunter-seekers (latched raiders first) | Q taunt (6 s), E flak curtain, point defence (passive), 10 DPS |
 | Dart | main gun | fire mode | barrel roll (1.2 s untouchable, then a boost) | |
 | Echo | main gun | fire mode | echo (5 s remembered, then detonated) | |
 | Wraith | main gun | fire mode | stealth (5 s unseen) | |
@@ -594,6 +604,25 @@ outstanding from the batch of 2026-09-23.)*
 ---
 
 ## Unreleased
+
+### Class kits, lane A slice 6c: the heavies -- Warrior, Sniper, Warden (2026-09-25, worktree wt/kits6c)
+
+**Warrior** (hull 300): Space the **blade** (26 every 0.40 s, 160 u, ±55°); E **lunge** (420 u in 0.3 s, 40 to each
+body on the way, half damage taken while it runs, 7 s); Q **whirlwind** (2 s, 40 DPS all round inside 210 u, throws
+off every web and takes none, 14 s); F **prism stance** (2 s at half speed, the guard on the cursor splits light, 12 s
+from its end). Its twin cannons, Rush and EMP are gone. **Sniper** (hull 240): Space the **railgun** with one round and
+an **active reload** (3 s after every shot; Space in the white 0.6 s box makes the next round x1.5; the reload bar
+under the ship); F **Anchor** (up to 8 s rooted, charge and reload x2.5, reach x1.4, V refused ANCHORED, F again
+weighs it in 0.3 s, 12 s); Q **tether mine** (dropped astern, live 0.5 s later, the first raider within 170 u holds
+every raider within 170 u 3 s, never a boss; 2 charges of 12 s, 2 out at most); E **flares** (the slice 5 salvo, 16 s).
+The Anchor keeps through the tether and the flares. **Warden** (hull 270): Space **proximity flak** (22.5 every 0.5 s,
+bursting 70 u off a hostile hull or at 700 u, x0.75 on a boss); F hunters (latched raiders first, then the nearest);
+Q **Taunt** (6 s: every raider within 1000 u, or hunting within it, comes for the Warden and takes x1.5 from all it
+deals; 33% less taken; 20 s); E **flak curtain** (500 x 80 u at the cursor, 150-700 u, across the aim, 6 s: 20 on
+touching, then 10 every 0.5 s; 18 s). New mechanisms: `Zones.cs` (laid zones: traps and fields), charged abilities,
+`ShotDef.Fuse`, `ClassDef.Shot`, `ICalled`.
+**Known broken:** engine-unproven (rungs 3-5 owed). The Taunt's "standoff heavies boost in, emplacements prefer the
+Warden" is not built (D57). The tether's 170 u and the curtain's size take no @area item (literal rows, D54 / D58).
 
 ### Class kits, lane A slice 5: melee, the prism, owned bodies, tow and hurl (2026-09-25, worktree wt/kits5)
 

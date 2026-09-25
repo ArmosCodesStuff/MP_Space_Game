@@ -1119,6 +1119,26 @@ bosses"); the numbers are `numbers_curve_raids_items.md` §2.
   the radar's diamond / bracket / rim chevron, the victim's "GANK:" line and the names under the hulls are
   all worked out from those, on the host as on a guest. A new enemy row needs nothing there.
 
+## Class kits, lane A slice 6c: the heavies (2026-09-25)
+
+The three heavies' rows and keys (ledger_kits6c.md D38-D58). What is durable:
+- **A zone is a row, laid by an ability row** (`Zones.cs`, `AbilityDef.Lays`, `Spawns.Zone`). What every peer DRAWS is
+  literal on the row (reach, length, arm, life), because a guest builds it from the seed alone; what only the host
+  DECIDES (a trap's hold, a field's damage) is a stat of the layer's sheet, read at the lay and kept on the host's
+  node. A trap (Holds) goes off on its first prey; a field (First / Tick / Every) strikes each body on that body's own
+  clock through `Dealt`, credited to the row's id, so the Taunt's x1.5 and every item door reach it.
+- **What a press spends is one door** (`PlayerShip.Spend`): charges (slot N = spent, one recharging at a time) or a
+  Cooldown stat. A new laid or popped ability names its row and its stats, and writes no timer of its own.
+- **A fused round is a shot row** (`ShotDef.Fuse`, `Resists`): the burst takes every hostile hull within the fuse,
+  at the range end too; a class says what its main guns fire (`ClassDef.Shot`), so the Warden's flak is the Guns
+  row's shell swapped, not a second gun path. The Warden keeps FireMode: Fit.Guns brings both rows (D56).
+- **A stance may let go slowly or keep** (`StanceSpec.Release`, `Keeps`): the Anchor weighs in 0.3 s on a second
+  press and survives the tether and the flares; the prism drops at once and ends on any other press.
+- **The Taunt's x1.5 is the dealer's stat** (`taunt_mult`, 0 elsewhere) read in `Outgoing` through `ICalled`, never
+  a class test; the call itself is the squad's (slice 5).
+- **The active reload** is `ActiveReload.cs` (sniper_active_reload.md): one meaning per stroke, the host judges a
+  guest's claimed share within its leeway, and the reload bar (`ReloadBar.cs`) draws only the owner's view.
+
 ## Class kits, lane A slice 5: the mechanisms under the heavies' and freighters' keys (2026-09-25)
 
 The mechanisms only; the class rows and keys that press them are slice 6 (ledger_kits5.md D28).

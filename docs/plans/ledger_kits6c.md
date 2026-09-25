@@ -589,3 +589,23 @@ break the bash tool; write the script with the Write tool), SmokeTest.cs.txt LF 
   82d_flak_curtain (LaneA6cCurtainFrames), NEW sweep witness "curtain"; REWRITTEN LaneA6cZoneChecks (Inside takes the rotation;
   the bar's side and cap proved beside the disc).
 - Next: kits6c-J14 Record.
+
+## kits6c-J14 · PRE
+- tier opus. Intent: the record -- CHANGES.md Handoff + Unreleased + the default-keys table rows for the three heavies, DESIGN.md
+  slice-6c section; the final POST (what the test phase owes). HEAD 8c92c222762f885031b6f8ccf632d9d544824aaa
+- docs/CHANGES.md b8ea2883874cf4ebd42121c6f7c55c4b78bd8352
+- docs/DESIGN.md e6fb2469d75ea399dc4059850553a2dd237d2aa5
+## kits6c-J14 · POST (the lane's final)
+- Verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED, own diff read. engine-unproven: rungs owed in the final test phase.
+- Built: CHANGES.md Handoff + Unreleased entry + the three heavies' rows in the default-keys table; DESIGN.md "slice 6c" section.
+- THE TEST PHASE OWES (chain `quick,solo,solo,six,six,screens`):
+  - rung 3 x2: LaneA6cBlade / Lunge / Whirl / PrismStance / ReloadJudge / Reload / ReloadBar / Anchor / Zone / Tether / Flares /
+    Flak / HunterPrey / Taunt / Curtain checks; the rewritten ability sweep (witnesses anchor, tether, flares, taunt, curtain;
+    the Release rule), ChipChecks (warden 270), the warden's SustainedDps, the weapon-rows list, the walls kit.
+  - rung 4: frames 73c (the reload bar: one look by eye), 73f, 73g, 82 (now owned), 82c, 82d, the prism frames.
+  - rung 5 x2: LaneA6cLunge / Prism / Reload / Anchor / Flares / Taunt / Curtain guest checks. G4 / G5 (guest2) not written.
+- Owed / not built: D57 (Taunt: heavies boost in, emplacements prefer); @area items do not reach the tether / curtain (D54,
+  D58); two stale `Fx.All.Length == 10` checks pre-date this lane (version-l red at rung 3 already).
+- Merge risks: Spawns.Zone = 4, NetIds.Zone, Shots.Flak = 8, Zones rows, ICalled on Raider (one line in Raider.cs),
+  AbilityDef.{Charges, Recharge, Lays, Pops, Cooldown, ReachStat}, StanceSpec.{Release, Keeps}, ClassDef.Shot, Hub (Laid,
+  Zones.Tick, ReloadBar child), the ability sweep's witness table, Items @duration / @area lists.
