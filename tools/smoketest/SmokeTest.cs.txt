@@ -4445,6 +4445,62 @@ public partial class _Test : Node
                   $"fields: the boost's plume burns while its slot runs ({left:0.0} s left) and none of the three is up once it is out");
         }
     }
+    // ── LANE A SLICE 4 · F8 THE PRESS'S POINT (kits_v3 §3.3: the sentry throw's cursor, 600 u clamp) ────
+    // Pure (Abilities.Toward) at the throw's three distances, and live: a row that takes a point finds the
+    // cursor of its press in its own slot; a row that does not is left alone; a point that is not a
+    // number presses nothing. No row takes a point yet (6b's throw), so the bubble is lent the flag for
+    // the check and given it back in a finally.
+    async Task LaneA4PayloadChecks(Vector2 yonder)
+    {
+        foreach (float far in new[] { Vary(150f, 250f), Vary(540f, 590f), Vary(760f, 900f) })
+        {
+            var from = VaryNear(yonder, 400f); float ang = VaryAngle();
+            var got = Abilities.Toward(from, from + Vector2.Right.Rotated(ang) * far, 600f);
+            float want = Math.Min(far, 600f);
+            Check(Math.Abs(from.DistanceTo(got) - want) < 0.01f && Math.Abs(Mathf.AngleDifference((got - from).Angle(), ang)) < 1e-3f,
+                  $"F8: a point {far:0} u out at {Mathf.RadToDeg(ang):0} deg, held to a 600 u reach, lands {from.DistanceTo(got):0.0} u out on its own bearing (want {want:0})");
+        }
+        await SetClass(ShipClass.FreightHauler);
+        var fr = Me; fr.AutopilotTo = null;
+        var doAb = typeof(PlayerShip).GetMethod("DoAbility", BindingFlags.NonPublic | BindingFlags.Instance);
+        void Ready() { ref var b = ref fr.Sl("bubble"); b.Cool = 0; b.Left = 0; b.Own = 0; b.At = new Vector2(-1, -1); }
+        Ab.Bubble.TakesPoint = true;
+        try
+        {
+            for (int run = 0; run < 3; run++)
+            {
+                fr.Position = VaryNear(yonder, 300f); fr.Rotation = VaryAngle();
+                fr.Velocity = run == 1 ? Vector2.Right.Rotated(VaryAngle()) * Vary(30f, 70f) : Vector2.Zero;
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                Ready();
+                var cursor = fr.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(100f, 900f);
+                fr.AimPoint = cursor;
+                fr.UseAbility("bubble", 0);
+                Check(fr.BubbleUp && fr.Sl("bubble").At.DistanceTo(cursor) < 0.01f,
+                      $"F8: a press that takes a point lands its cursor in the row's own slot ({(run == 1 ? "moving" : "still")}, {fr.Position.DistanceTo(cursor):0} u off: slot at {fr.Sl("bubble").At.DistanceTo(cursor):0.00} u from it, pressed {fr.BubbleUp})");
+                // NOT A NUMBER: nothing is pressed, the slot keeps what it had
+                Ready();
+                var bad = run == 0 ? new Vector2(float.NaN, cursor.Y) : run == 1 ? new Vector2(cursor.X, float.PositiveInfinity)
+                                   : new Vector2(float.NegativeInfinity, float.NaN);
+                doAb.Invoke(fr, new object[] { "bubble", 0, bad });
+                Check(!fr.BubbleUp && fr.Sl("bubble").At == new Vector2(-1, -1),
+                      $"F8: a press whose point is not a number ({bad}) presses nothing and writes nothing (pressed {fr.BubbleUp})");
+            }
+        }
+        finally { Ab.Bubble.TakesPoint = false; }
+        // A ROW THAT TAKES NO POINT: its slot's At is its own, whatever the cursor
+        for (int run = 0; run < 3; run++)
+        {
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Ready();
+            fr.AimPoint = fr.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(100f, 900f);
+            fr.UseAbility("bubble", 0);
+            Check(fr.BubbleUp && fr.Sl("bubble").At == new Vector2(-1, -1),
+                  $"F8: a row that takes no point is pressed and its slot's At is untouched by the cursor ({fr.Sl("bubble").At})");
+        }
+        Ready();
+    }
+
     // THE SAME ROWS ON A LIVE SHIP, for every class that owns the slot: its slot running draws the
     // field from its OWN sheet. A slot no class owns yet is another lane's ability still to merge
     // (lane E's Supercarrier, the Warden's Taunt, lane B's boost): said as a NOTE, never a pass.
@@ -5643,7 +5699,7 @@ public partial class _Test : Node
             mark.TakeDamage(1e12); await Wait(0.1);
             s.Sl(a1.Id).Cool = 0;
             string b1 = Sn(s, a1.Id);
-            doAb.Invoke(s, new object[] { a1.Id, 0 });
+            doAb.Invoke(s, new object[] { a1.Id, 0, Vector2.Zero });
             await Wait(0.1);
             string a1After = Sn(s, a1.Id);
             Check(s.Peak == 1 && shut.SequenceEqual(expectShut) && a1After != b1 && dealt > 0,
@@ -5684,7 +5740,7 @@ public partial class _Test : Node
                 var s = Me; var mark = Mark(VaryNear(s.Position, 300f)); H.SelectTarget(mark); await Wait(0.1);
                 s.Sl(a3.Id).Cool = 0;
                 string before = Sn(s, a3.Id);
-                doAb.Invoke(s, new object[] { a3.Id, mark.NetId }); await Wait(0.3);
+                doAb.Invoke(s, new object[] { a3.Id, mark.NetId, Vector2.Zero }); await Wait(0.3);
                 string after = Sn(s, a3.Id);
                 Check(p == 5 ? before == after : before != after,
                       $"{c} at level {p}: {a3.Name} (ability 3) sent straight to the host {(p == 5 ? "does nothing" : "acts")} ({before} -> {after})");
@@ -9444,10 +9500,10 @@ public partial class _Test : Node
             fr.Trigger = true;                             // ...as the wire would set it
             bool wreckTrigger = fr.Trigger;
             fr.Sl("deploy").Cool = 0;
-            doAbility.Invoke(fr, new object[] { "deploy", 0 });
+            doAbility.Invoke(fr, new object[] { "deploy", 0, Vector2.Zero });
             await Wait(0.15);
             int outWhileDead = fr.TurretsOut;
-            doAbility.Invoke(fr, new object[] { "reboard", 0 });
+            doAbility.Invoke(fr, new object[] { "reboard", 0, Vector2.Zero });
             await Wait(0.1);
             Check(!wreckTrigger && outWhileDead == 0 && fr.Alive && Math.Abs(fr.Hp - fr.MaxHp * 0.33) < 0.5,
                   $"a wreck fires nothing and drops nothing: the wire's trigger reads {wreckTrigger} on it and a T from its own peer makes {outWhileDead} turrets -- and reboard, the one ability declared for a wreck, still climbs aboard at a third of the hull ({fr.Hp:0} of {fr.MaxHp:0})");
@@ -9835,6 +9891,7 @@ public partial class _Test : Node
             await LaneBStrafeChecks(yonder);
             await LaneBBoostChecks(yonder);
             await FieldsLiveRowChecks(yonder);
+            await LaneA4PayloadChecks(yonder);
 
             // ── WARRIOR: two and a half times its speed, half the damage, then the EMP ──
             await SetClass(ShipClass.HeavyWarrior);
@@ -10285,7 +10342,7 @@ public partial class _Test : Node
                     // nothing. Pressing every one of them must engage no slot -- they are where
                     // the next ability goes, and until then a press is a press on nothing.
                     var opens = Abilities.For(cls.Id).Where(ab4 => ab4.Open).ToList();
-                    foreach (var openAb in opens) doAbility.Invoke(sweepShip, new object[] { openAb.Id, 0 });
+                    foreach (var openAb in opens) doAbility.Invoke(sweepShip, new object[] { openAb.Id, 0, Vector2.Zero });
                     await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                     Check(opens.Count == 6 && opens.All(openAb => openAb.Press == null
                                                         && sweepShip.Sl(openAb.Id).Left == 0 && sweepShip.Sl(openAb.Id).Cool == 0),
@@ -10311,7 +10368,7 @@ public partial class _Test : Node
                             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                         }
                         else if (abil.Local) sweepShip.UseAbility(abil.Id, 0);
-                        else doAbility.Invoke(sweepShip, new object[] { abil.Id, sweepMark.NetId });
+                        else doAbility.Invoke(sweepShip, new object[] { abil.Id, sweepMark.NetId, Vector2.Zero });
                         await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                         bool didIt = witness.TryGetValue(abil.Id, out var sawIt) && sawIt(sweepShip);
                         if (isHold) { KeyUp(abKey); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
@@ -10326,7 +10383,7 @@ public partial class _Test : Node
                         bool refusedAgain = true;
                         if (engaged)
                         {
-                            doAbility.Invoke(sweepShip, new object[] { abil.Id, sweepMark.NetId });
+                            doAbility.Invoke(sweepShip, new object[] { abil.Id, sweepMark.NetId, Vector2.Zero });
                             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                             var slotNow = sweepShip.Sl(abil.Id);
                             refusedAgain = slotNow.Left <= slotWas.Left + 1e-9 && slotNow.Cool <= slotWas.Cool + 1e-9;
@@ -10437,11 +10494,11 @@ public partial class _Test : Node
                             var mkOut = await Marker(pilot.Position + wide * (float)(reach * Vary(1.15f, 1.45f)));
                             int flying0 = InFlight().Count();
                             pilot.Sl("missile").N = (int)pilot.Stats["missile_mag"]; pilot.Sl("missile").Cool = 0;
-                            doAbility.Invoke(pilot, new object[] { "missile", mkIn.NetId });
+                            doAbility.Invoke(pilot, new object[] { "missile", mkIn.NetId, Vector2.Zero });
                             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                             int flew = InFlight().Count() - flying0;
                             pilot.Sl("missile").Cool = 0;
-                            doAbility.Invoke(pilot, new object[] { "missile", mkOut.NetId });
+                            doAbility.Invoke(pilot, new object[] { "missile", mkOut.NetId, Vector2.Zero });
                             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                             int flewMore = InFlight().Count() - flying0 - flew;
                             proved = flew >= PlayerShip.BurstSides.Length && flewMore == 0;
@@ -10480,16 +10537,16 @@ public partial class _Test : Node
                         case "strike_range":
                         {
                             var mkOut = await Marker(pilot.Position + wide * (float)(reach * Vary(1.15f, 1.45f)));
-                            doAbility.Invoke(pilot, new object[] { "bombers", mkOut.NetId });
+                            doAbility.Invoke(pilot, new object[] { "bombers", mkOut.NetId, Vector2.Zero });
                             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                             bool refusedFar = pilot.StrikeTarget == null;
                             var mkIn = await Marker(pilot.Position + way * (float)(reach * Vary(0.45f, 0.85f)));
-                            doAbility.Invoke(pilot, new object[] { "bombers", mkIn.NetId });
+                            doAbility.Invoke(pilot, new object[] { "bombers", mkIn.NetId, Vector2.Zero });
                             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                             bool tookNear = ReferenceEquals(pilot.StrikeTarget, mkIn);
                             // ...and a second strike ordered while one is out is refused: the
                             // bombers already called keep the target they were called for.
-                            doAbility.Invoke(pilot, new object[] { "bombers", mkOut.NetId });
+                            doAbility.Invoke(pilot, new object[] { "bombers", mkOut.NetId, Vector2.Zero });
                             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                             bool stillOne = ReferenceEquals(pilot.StrikeTarget, mkIn);
                             proved = refusedFar && tookNear && stillOne;
@@ -10511,7 +10568,7 @@ public partial class _Test : Node
                             var mkOut = await Marker(railFrom + railWay * (float)(reach * Vary(1.10f, 1.30f)));
                             double inWas = mkIn.Hp, outWas = mkOut.Hp;
                             pilot.Sl("railgun").Left = 0; pilot.Sl("railgun").Cool = 0;
-                            doAbility.Invoke(pilot, new object[] { "railgun", 0 });
+                            doAbility.Invoke(pilot, new object[] { "railgun", 0, Vector2.Zero });
                             pilot.Sl("railgun").Left = 0.001;
                             await Wait(0.12);
                             proved = Math.Abs(inWas - mkIn.Hp - pilot.Stats["rail_damage"]) < 0.01 && mkOut.Hp == outWas;
@@ -10538,7 +10595,7 @@ public partial class _Test : Node
                             var mkOut = await Marker(pilot.Position + way * (float)(reach * Vary(1.15f, 1.45f)));
                             int flying0 = InFlight().Count();
                             pilot.Sl("hunters").Cool = 0;
-                            doAbility.Invoke(pilot, new object[] { "hunters", 0 });
+                            doAbility.Invoke(pilot, new object[] { "hunters", 0, Vector2.Zero });
                             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                             int flewNone = InFlight().Count() - flying0;
                             bool keptCool = pilot.Sl("hunters").Cool == 0;
@@ -10557,7 +10614,7 @@ public partial class _Test : Node
                                 await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                                 flying0 = InFlight().Count();
                                 pilot.Sl("hunters").Cool = 0;
-                                doAbility.Invoke(pilot, new object[] { "hunters", 0 });
+                                doAbility.Invoke(pilot, new object[] { "hunters", 0, Vector2.Zero });
                                 await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                                 flewDummy = InFlight().Count() - flying0;
                                 pilot.Position = wasAt;
@@ -10568,7 +10625,7 @@ public partial class _Test : Node
                             var mkIn = await Marker(pilot.Position + wide * (float)(reach * Vary(0.40f, 0.85f)));
                             flying0 = InFlight().Count();
                             pilot.Sl("hunters").Cool = 0;
-                            doAbility.Invoke(pilot, new object[] { "hunters", 0 });
+                            doAbility.Invoke(pilot, new object[] { "hunters", 0, Vector2.Zero });
                             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                             int flew = InFlight().Count() - flying0;
                             bool spentCool = pilot.Sl("hunters").Cool > 0;
@@ -10591,7 +10648,7 @@ public partial class _Test : Node
                             var mkOut = await Marker(pilot.Position + wide * (float)(reach * Vary(1.20f, 1.60f)));
                             double inWas = mkIn.Hp, outWas = mkOut.Hp;
                             pilot.Sl("rush").Cool = 0;
-                            doAbility.Invoke(pilot, new object[] { "rush", 0 });
+                            doAbility.Invoke(pilot, new object[] { "rush", 0, Vector2.Zero });
                             pilot.Sl("rush").Left = 0.001;             // the rush cut short: the EMP is what reaches
                             await Wait(0.12);
                             proved = Math.Abs(inWas - mkIn.Hp - pilot.Stats["emp_damage"]) < 0.01 && mkOut.Hp == outWas;
@@ -10618,7 +10675,7 @@ public partial class _Test : Node
                             double inWas = mkIn.Hp, outWas = mkOut.Hp;
                             int strays = InFlight().Count();
                             pilot.Sl("echo").Cool = 0;
-                            doAbility.Invoke(pilot, new object[] { "echo", 0 });
+                            doAbility.Invoke(pilot, new object[] { "echo", 0, Vector2.Zero });
                             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                             pilot.NoteDealt(80, new StandIn { Position = landedAt }, "shell");  // as a shell of its own would
                             pilot.Sl("echo").Left = 0.001;
@@ -10636,7 +10693,7 @@ public partial class _Test : Node
                             var mkOut = await Marker(pilot.Position + wide * (float)(reach * Vary(1.15f, 1.50f)));
                             float inWas = mkIn.Position.DistanceTo(pilot.Position), outWas = mkOut.Position.DistanceTo(pilot.Position);
                             pilot.Sl("shockwave").Cool = 0;
-                            doAbility.Invoke(pilot, new object[] { "shockwave", 0 });
+                            doAbility.Invoke(pilot, new object[] { "shockwave", 0, Vector2.Zero });
                             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                             float inNow = mkIn.Position.DistanceTo(pilot.Position), outNow = mkOut.Position.DistanceTo(pilot.Position);
                             proved = Math.Abs(inNow - inWas - pilot.Stats["wave_push"]) < 2 && Math.Abs(outNow - outWas) < 2;
@@ -10650,7 +10707,7 @@ public partial class _Test : Node
                             // A turret left standing picks its own target with the same component
                             // point defence uses, so again it is the acquisition that stops.
                             pilot.Sl("deploy").Cool = 0;
-                            doAbility.Invoke(pilot, new object[] { "deploy", 0 });
+                            doAbility.Invoke(pilot, new object[] { "deploy", 0, Vector2.Zero });
                             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                             var standing = H.Deployed.LastOrDefault(tu3 => tu3.OwnerId == pilot.OwnerId);
                             if (standing == null) { told = "T dropped nothing to measure the reach of"; break; }
@@ -14241,7 +14298,7 @@ public partial class _Test : Node
         double t0 = me.Clock;
         // 13: ability 3 (level 6) sent past its own refusal, straight to the host: nothing comes back
         string before = Sn(me, shut.Id);
-        Net.AskHost(me, "RequestAbility", shut.Id, 0);
+        Net.AskHost(me, "RequestAbility", shut.Id, 0, Vector2.Zero);
         await Wait(0.6);
         string after = Sn(me, shut.Id);
         Check(me.Peak == 3 && after == before,

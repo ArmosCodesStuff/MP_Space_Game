@@ -511,6 +511,8 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // the host checks the sender owns this ship first. A client says "I pressed
     // missile at target 1000", never "I did 5 damage". The broadside aims at the owner's
     // cursor, which reaches the host with the rest of its intent (AimPoint), not in the request.
+    // A row that TAKES A POINT (AbilityDef.TakesPoint, F8) sends the cursor IN the request: where it
+    // was when the key went down, not where the next report says it is.
     public void UseAbility(string id, int targetId)
     {
         var def = Abilities.Find(Class, id);
@@ -525,14 +527,15 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         // The host checks again inside Press: this is a courtesy, never the guard.
         if (PressHeld(def)) { Fail(id, "DISABLED"); return; }
         if (def.Refuse?.Invoke(this, targetId != 0 ? Combat.ById(targetId) : null) is { } why) { Fail(id, why); return; }
-        if (Net.Sim) DoAbility(id, targetId);
-        else Net.AskHost(this, nameof(RequestAbility), id, targetId);
+        var point = def.TakesPoint ? AimPoint : Vector2.Zero;
+        if (Net.Sim) DoAbility(id, targetId, point);
+        else Net.AskHost(this, nameof(RequestAbility), id, targetId, point);
     }
 
     [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void RequestAbility(string id, int targetId)
+    private void RequestAbility(string id, int targetId, Vector2 at)
     {
-        if (Net.FromPlayer(this, out int who) && who == OwnerId) DoAbility(id, targetId);
+        if (Net.FromPlayer(this, out int who) && who == OwnerId) DoAbility(id, targetId, at);
     }
 
     // THE GATE, not a courtesy. Refuse (above) runs on the owner so the slot says why at once;
@@ -548,11 +551,18 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     public const double CoolFloor = 0.5;              // half the row's seconds, whatever is bought
     public double Cooling(double seconds) => seconds * System.Math.Max(CoolFloor, Stats["cooldown_share"]);
 
-    private void DoAbility(string id, int targetId)
+    // `at`: the press's point (F8), written into the row's own slot for a row that takes one; a point
+    // that is not a number (nothing an honest owner sends) presses nothing.
+    private void DoAbility(string id, int targetId, Vector2 at)
     {
         var def = Abilities.Find(Class, id);
         if (def == null || !Net.Sim || (!Alive && !def.WhenWrecked) || PressHeld(def)
             || Unlocks.LockedAt(Class, Peak, def) != null) return;
+        if (def.TakesPoint)
+        {
+            if (!float.IsFinite(at.X) || !float.IsFinite(at.Y)) return;
+            Sl(id).At = at;
+        }
         def.Press?.Invoke(this, targetId != 0 ? Combat.ById(targetId) : null);
     }
 

@@ -55,3 +55,15 @@ A PRE with no POST is an interrupted job: compare the hashes, revert half-made e
   pass Vector2.Zero. Checks: LaneA4PayloadChecks (solo).
 - Files: scripts/Abilities.cs, scripts/PlayerShip.cs, tools/smoketest/SmokeTest.cs.txt, this ledger.
 - HEAD f2f398be8164f0bee865d4dbd8f0b3c507426e77 · Abilities.cs 4f130c86b8b5160df23cfb8eb9358de085b58e9d · PlayerShip.cs 91bfcf083601bcebc85e830529be06b5adf5ded8 · SmokeTest.cs.txt 93096537210a252c1f5955f72522ecfbeda24102
+### kits4-J1 · POST
+- Verdict: compiles; typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final
+  test phase. `AbilityDef.TakesPoint`; `UseAbility` sends AimPoint for such a row; `RequestAbility(id, targetId, at)`
+  and `DoAbility(id, targetId, at)`; DoAbility writes `Sl(id).At` (non-finite: nothing pressed); pure
+  `Abilities.Toward(from, at, reach)`. The 19 reflection calls and the one string RPC in the harness pass Vector2.Zero.
+- Files: scripts/Abilities.cs, scripts/PlayerShip.cs, tools/smoketest/SmokeTest.cs.txt (NEW `LaneA4PayloadChecks`,
+  called after FieldsLiveRowChecks).
+- Owed at rung 3 (`solo` x2): 3 x "F8: a point N u out at N deg, held to a 600 u reach ..."; 3 x "F8: a press that
+  takes a point lands its cursor in the row's own slot"; 3 x "F8: a press whose point is not a number ..."; 3 x
+  "F8: a row that takes no point is pressed ...". Watch: every doAbility.Invoke sweep line (now 3 args) and
+  "RequestAbility" for a shut ability (rung 5).
+- Checkpoint: the commit after this entry. Next: kits4-J2.
