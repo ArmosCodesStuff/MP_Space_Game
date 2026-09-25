@@ -215,3 +215,25 @@ Done: JOB 0, J1. Next is kits6b-J2; no PRE written for it. What the next agent n
 - Checks written: LaneA6bMortarChecks (solo, after LaneA6bRedeployChecks), frame 79f_mortar_circle (LaneA6bMortarFrame).
   Test phase owes: solo x2, screens.
 - Next: kits6b-J5 (Bunker buster + Shockwave holds structures, Shockwave -> Q).
+
+## Handover 2: agent 2 stops after kits6b-J4 (context), at a job boundary
+
+Done: J2, J3, J4 (a3265f7, 43b0953, 19cfffa). Next is kits6b-J5; no PRE written. For the next agent:
+- **Edit tooling.** Files are LF: a python edit with default newline on Windows wrote CRLF once (fixed with sed).
+  Use the scratchpad helper pattern: a file of EDITS=[(old,new)] applied with open(..., newline='') and a
+  count==1 assert; write long edit files with the Write tool (a bash heredoc with quotes inside failed to parse).
+  verify is `.\verify.ps1 -Quick` at the tree root (not tools\).
+- **Where the new pieces are.** PlayerShip: TimeOnTarget / OwnLanded / Redeploy beside StartOverdrive and the
+  throw code; FireOnce / LobPoint / Lob after FireControl (Primary.Beam falls to the guns path until J7 writes its
+  fire method there). Ships.cs: enum Primary above ClassDef; the Bastion row now {Guns, Shockwave} -- J5 makes it
+  {Guns, Buster, Shockwave} with Shockwave on Q, J6 appends Well on E. Missiles.Land takes (n, d, at, src, from).
+- **Harness.** New solo methods run after LaneA6bSpotterChecks in this order: Tot, BubbleCover, Redeploy, Mortar.
+  Rung-5 pair LaneA6bTotHost/Guest sit after the decoy pair in the arena host/guest. Shots.cs.txt: LaneA6bTotFrame,
+  LaneA6bRedeployFrame, LaneA6bMortarFrame after frame 79 (the freighter block); Shots' Class()/Me() are local
+  functions of its big method, so a new frame method uses Character.Class + P(hub,"ApplyLocalIdentity") itself.
+- **Old truths J5 meets:** the bastion shockwave checks (solo ~11000 "a 1000 u shockwave throws nothing in flight",
+  ~11300 "BASTION: everything within 1000 u thrown", ~14228 the dummy/structure throw check) press "shockwave" by id
+  (keys unaffected) but assert Tag.Boss -> Disabled only; J5's "boss, structure or dummy HELD 3 s" rewrites the
+  structure/dummy case (Targeting.Throwable already refuses to move them: make them held too). The witness sweep
+  needs rows for "buster" (and "well" in J6); sweep B (reach) needs an arm for any Reach id J5/J6 add (or keep
+  them out of ClassDef.Reach). Arena guest `Abilities.For(...).Length` asserts only the freighter's.
