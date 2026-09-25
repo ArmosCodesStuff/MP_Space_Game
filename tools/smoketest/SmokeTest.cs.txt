@@ -277,40 +277,35 @@ public partial class _Test : Node
         return seen;
     }
 
-    // THE REPLY WINDOW, MEASURED ONCE (§3.4; `run.ps1 -ReplyWindow` hands the solo role
-    // `replywindow`). The friend's agent starts its give-up clock at paste; on this path -- an
-    // in-process pair over the LAN host candidate, where the host answers the guest's early checks
-    // (P2) -- the guest's DTLS client may start before the host has the reply, and bound the window
-    // sooner. Seven pairs start together at the top of the run; each host takes its reply 5, 10, 15,
-    // 25, 35, 45 or 60 s after the guest made it; each is judged 5 s after that. About 65 s, in the
-    // background. The edit that sets Link.ReplyWindowS from it replaces this with the permanent check.
-    static readonly int[] ReplyDelaysS = { 5, 10, 15, 25, 35, 45, 60 };
-    Task<List<(int delay, long ms, WebRtcPeerConnection.ConnectionState guest)>> _replyWindow;
-    async Task<List<(int delay, long ms, WebRtcPeerConnection.ConnectionState guest)>> MeasureReplyWindow()
+    // THE REPLY WINDOW HOLDS (§3.4, §10.4 R0). R0 measured it once (DESIGN.md: every delay up to 60 s
+    // connected, so 30 s); this holds the build to it on every solo run. The friend's agent starts its
+    // give-up clock at paste; on this path -- an in-process pair over the LAN host candidate, where the
+    // host answers the guest's early checks (P2) -- the guest's DTLS client may start before the host
+    // has the reply, and a shorter bound than ICE's would show here first. One pair starts at the top
+    // of the run, its host takes the reply Link.ReplyWindowS after the guest made it, and it is judged
+    // in WebRtcPairs: in the background, so it adds no wall time beyond the run's own length.
+    Task<(bool connected, long appliedAfter, long upAfter, string stage)> _replyWindow;
+    async Task<(bool connected, long appliedAfter, long upAfter, string stage)> ReplyWindowHolds()
     {
-        if (!Link.Available) return null;
-        var pairs = ReplyDelaysS.Select((d, i) => new RtcPair(2 + i, d * 1000L)).ToList();
-        bool Judged(RtcPair p) => p.Connected || (p.Applied && RtcPair.Now > p.AppliedAt + 5000);
-        await RtcUntil(() => pairs.All(Judged), (ReplyDelaysS.Max() + 20) * 1000, pairs.ToArray());
-        var seen = pairs.Select(p => ((int)(p.ApplyAfterMs / 1000),
-                                      p.Connected && p.Applied ? (long)Math.Max(p.HostSawAt, p.GuestSawAt) - (long)p.AppliedAt : -1L,
-                                      p.GuestAtApply)).ToList();
-        foreach (var p in pairs) p.Free();
+        if (!Link.Available) return (false, 0, -1, "no plugin");
+        var p = new RtcPair(Rng.RandiRange(2, int.MaxValue), Link.ReplyWindowS * 1000L);
+        await RtcUntil(() => p.Connected || (p.Applied && RtcPair.Now > p.AppliedAt + 4000), (Link.ReplyWindowS + 20) * 1000, p);
+        var seen = (p.Connected, p.Applied ? (long)p.AppliedAt - (long)p.ReplyAt : -1L,
+                    p.Connected && p.Applied ? (long)Math.Max(p.HostSawAt, p.GuestSawAt) - (long)p.AppliedAt : -1L, p.Stage());
+        p.Free();
         return seen;
     }
 
     async Task WebRtcPairs()
     {
-        if (_replyWindow != null && await _replyWindow is { } measured)
+        // the number every friend's countdown shows, proved against the measured literal here; the
+        // pair below reads the row
+        Check(Link.ReplyWindowS == 30, $"Link.ReplyWindowS is the 30 s R0 measured (DESIGN.md: every delay to 60 s connected; {Link.ReplyWindowS})");
+        if (_replyWindow != null)
         {
-            // the window is the longest delay up to which EVERY pair connected
-            int window = 0;
-            foreach (var m in measured) { if (m.ms < 0) break; window = m.delay; }
-            int proposed = Math.Min(window - 10, 30);
-            GD.Print($"  reply window: {string.Join(" · ", measured.Select(m => $"{m.delay} s {(m.ms >= 0 ? $"connected {m.ms} ms after" : "NOT connected")} (guest {m.guest} at the reply)"))}; "
-                     + $"every delay up to {window} s connected, so Link.ReplyWindowS = {proposed}");
-            Check(proposed >= 15,
-                  $"the reply window leaves a friend at least 15 s: Link.ReplyWindowS would be {proposed} (every delay up to {window} s connected; under 15 stops the batch, network_webrtc.md §3.4)");
+            var w = await _replyWindow;
+            Check(w.connected && w.appliedAfter >= Link.ReplyWindowS * 1000L && w.upAfter >= 0 && w.upAfter <= 2000,
+                  $"a host that takes the reply {Link.ReplyWindowS} s after the friend made it still connects, within 2 s of taking it (taken after {w.appliedAfter} ms, connected {w.upAfter} ms later; {w.stage})");
         }
         // THE PLUGIN LOADED, asked by the literal names the spike read (SPIKE Q1), so the row is
         // proved against them here and every other check reads the row.
@@ -440,7 +435,7 @@ public partial class _Test : Node
         var argv = OS.GetCmdlineUserArgs();
         string role = argv.FirstOrDefault() ?? "solo";
         SeedFrom(argv);
-        if (role == "solo" && argv.Contains("replywindow")) _replyWindow = MeasureReplyWindow();
+        if (role == "solo") _replyWindow = ReplyWindowHolds();
         Settings.TestVolume = 0.05f; Settings.ApplyVolume();   // six windows, nobody listening
         NoRouterNoInternet();
         await Wait(0.3);

@@ -262,11 +262,13 @@ levels once a second and ship and hauler state ten times a second; a guest's own
   (`Net.Arriving`) so they end when the guest's own position is judged. Cosmetic reliable traffic
   (shells, torpedoes) rides its own ENet channel so a lost one does not hold up the rest; raider
   updates go in packets of 24, under the internet's ~1.2 KB.
-- **The WebRTC reply window** (R0, measured 2026-09-24, `run.ps1 -ReplyWindow`, an in-process pair
-  over the LAN host candidate): a host applying the reply 5, 10, 15, 25, 35, 45 or 60 s after the
-  guest made it connected every time, 4-6 ms after the reply, the guest `Connecting` at each. Every
-  delay up to 60 s connected, so `Link.ReplyWindowS` = min(60 - 10, 30) = **30 s**. A real internet
-  path is unmeasured (network_webrtc.md §3.4, the owner's two-machine test).
+- **The WebRTC reply window** (R0, measured once on 2026-09-24 by a seven-pair run since deleted, an
+  in-process pair over the LAN host candidate): a host applying the reply 5, 10, 15, 25, 35, 45 or
+  60 s after the guest made it connected every time, 4-6 ms after the reply, the guest `Connecting` at
+  each. Every delay up to 60 s connected, so `Link.ReplyWindowS` = min(60 - 10, 30) = **30 s**. Every
+  solo run now holds one pair to it (the host takes the reply 30 s after it was made, and must be
+  connected within 2 s of that), in the background from the top of the run. A real internet path is
+  unmeasured (network_webrtc.md §3.4, the owner's two-machine test).
 
 ## The batch after the review began (signed off by the player), in chunks
 

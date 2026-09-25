@@ -29,15 +29,10 @@
 # flown, fired, its whole bar pressed with a target selected, and stood in front of a wave -- and
 # what it measured printed as FLY and ISSUE lines. For "what is actually wrong with this class",
 # which assertions cannot answer because they only know what we thought to ask.
-# -ReplyWindow is solo only, and ONE-TIME: the WebRTC reply-window measurement (docs/plans/
-# network_webrtc.md section 3.4). Seven in-process pairs, most of them made to wait until they fail, so the
-# plugin's own error lines are EXPECTED in this mode: they are printed and not counted. Its
-# `reply window:` line goes into DESIGN.md; ordinary runs never carry the measurement.
 # -OneDll is the one-DLL experiment (network_webrtc.md section 8): in the scratch copy only, the plugin's
 # debug line is pointed at its RELEASE DLL and the debug DLL deleted. Green means the editor loads
 # the release library, and the repo can vendor one DLL instead of two.
-param([string]$Godot, [switch]$Solo, [switch]$Wan, [switch]$Fly, [string]$Seed, [switch]$ReplyWindow, [switch]$OneDll)
-if ($ReplyWindow) { $Solo = $true }
+param([string]$Godot, [switch]$Solo, [switch]$Wan, [switch]$Fly, [string]$Seed, [switch]$OneDll)
 
 $ErrorActionPreference = 'Stop'
 
@@ -191,8 +186,7 @@ try {
             -NoNewWindow -PassThru -RedirectStandardOutput (Join-Path $W 'fakeigd.out') -RedirectStandardError (Join-Path $W 'fakeigd.err')
     Start-Sleep -Milliseconds 500
     # fixed 60 fps: identical frame timing every run, so the DPS checks are exact
-    $rwArg = if ($ReplyWindow) { @('replywindow') } else { @() }
-    $all += Complete-Run (Start-Run (@('--headless','--fixed-fps','60','--path',$W,'--','solo') + $rwArg + $seedArg) 'solo' 1200) '[solo] '
+    $all += Complete-Run (Start-Run (@('--headless','--fixed-fps','60','--path',$W,'--','solo') + $seedArg) 'solo' 1200) '[solo] '
     if (-not $fake.HasExited) { try { $fake.Kill() } catch {} }
     $want = 1
   }
@@ -238,13 +232,11 @@ try {
   }
 
   $all | ForEach-Object { Write-Host $_ }
-  $badRe = if ($ReplyWindow) { 'FAIL|Exception' } else { 'FAIL|Exception|ERROR' }
-  if ($ReplyWindow) { Write-Host "(-ReplyWindow: ERROR lines above are the late pairs timing out, and are not counted)" }
-  $bad = @($all | Where-Object { $_ -cmatch $badRe }).Count
+  $bad = @($all | Where-Object { $_ -cmatch 'FAIL|Exception|ERROR' }).Count
   $done = @($all | Where-Object { $_ -cmatch 'DONE' }).Count
   # "SOLO ONLY" in the verdict, always. A partial run that prints the same words as a full one is
   # a partial run that will be mistaken for the bar.
-  $what = if ($ReplyWindow) { 'SMOKE TEST (SOLO ONLY, REPLY WINDOW MEASUREMENT)' } elseif ($Solo) { 'SMOKE TEST (SOLO ONLY)' } elseif ($Wan) { 'SMOKE TEST (MULTIPLAYER OVER A SIMULATED INTERNET)' } else { 'SMOKE TEST' }
+  $what = if ($Solo) { 'SMOKE TEST (SOLO ONLY)' } elseif ($Wan) { 'SMOKE TEST (MULTIPLAYER OVER A SIMULATED INTERNET)' } else { 'SMOKE TEST' }
   if ($OneDll) { $what += ' (ONE DLL)' }
   if ($bad -gt 0 -or $done -ne $want) {
     Write-Host "$what FAILED ($bad problems, $done/$want runs finished)"; exit 1

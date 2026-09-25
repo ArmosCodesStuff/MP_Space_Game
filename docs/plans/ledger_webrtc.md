@@ -148,3 +148,46 @@ Then: `tools\smoketest\run.ps1 -Solo` (rung 3), `-Solo -OneDll` once, `-ReplyWin
   136 where 80; the hunters case intercepts its own now).
 - next: the bar (rung 6), a push to both branches, then R1 (plan §13). R1's first edit adds
   `Link.ReplyWindowS = 30` and turns the one-time measurement into the permanent check (§3.4).
+
+## R1 · the codes and the rows (plan §13, §10.4 R1)
+
+Environment: the owner's PC, worktree `WarShips_wt_net` (branch `wt/net`, from 03d47ba). Compile
+rungs only (typecheck, `verify.ps1 -Quick`), each started only while no Godot process runs: a
+verification run is going in the main checkout and shares `%TEMP%\warships_smoke`. No engine rung in
+this batch; the main session runs rungs 3 (and later 5) from the list at the end of this section.
+Owner defaults: clipboard pickup YES; the 90 s hold KEEP; UPnP DELETE (in R2, not here). No
+third-party infrastructure but the Google and Cloudflare STUN rows.
+
+### Jobs (split so each shares its files)
+
+- J7 `Link.ReplyWindowS` = 30 and the permanent reply-window check (the measurement and
+  `run.ps1 -ReplyWindow` deleted)
+- J8 `scripts/Rendezvous.cs`, the codec half: records and `Pack`/`Unpack` with the check, `Sdp`
+  (template, `Strip`, `Build`), the text (`WSI`/`WSR`, Crockford), `Fit`, `Paths` and `Claims`, the
+  clipboard seam; its checks (codec, byte for byte on the live pair, text, paths, fit, mutability)
+- J9 the rest of `Link.cs` (`Servers`, `StunFirst`, `Config`, the walk, `GatherMs`, `LinkMs`,
+  `InviteLifeS`, `Backlog`, `ChannelOf`) and the box (`wan.py` rewritten, started by run.ps1 for every
+  run); the walk, sealing, backlog and channel checks
+- J10 the rows end to end: the pending table, the listener and dialer, the paste row's pickup, the
+  courier (files, and rewriting codes for the box); the address-row, paste-row and pair-proxy checks
+- J11 records: CHANGES (R1 Unreleased, Known broken, Handoff), DESIGN, this ledger's rungs owed
+
+#### J7 PRE
+- intent: `Link.ReplyWindowS = 30` (the R0 measurement, DESIGN.md); the one-time seven-pair
+  measurement replaced by the permanent check (one pair, the host applying the reply
+  `ReplyWindowS` after the guest made it, connected within 2 s of that; started at the top of every
+  solo run, judged in `WebRtcPairs`); `run.ps1 -ReplyWindow` and its `replywindow` argument deleted.
+- files: scripts/Link.cs, tools/smoketest/SmokeTest.cs.txt, tools/smoketest/run.ps1, docs/DESIGN.md
+- from: 03d47baa504be57aad842eccdfff0b49218623bc
+- hashes: Link.cs bbbd24edad2809221b5142ccf4707d402ff325d1; SmokeTest.cs.txt
+  00e6f1badf3c7f5922b1134e0a9f9cb1bce834e9; run.ps1 0b37ee28966a97c067047e35fb50a6b6d396884a;
+  DESIGN.md 8d15c0e26f08e71e8b96c10151871587e72eea15
+
+#### J7 POST
+- verdict: done; rung 1 green (0 errors, real GodotSharp.dll). Untested at rung 3.
+- files: scripts/Link.cs (`ReplyWindowS`), tools/smoketest/SmokeTest.cs.txt (`ReplyWindowHolds`
+  started at the top of every solo run, judged first in `WebRtcPairs` with the literal 30 check;
+  `ReplyDelaysS`/`MeasureReplyWindow` deleted), tools/smoketest/run.ps1 (`-ReplyWindow` deleted),
+  docs/DESIGN.md (the reply-window entry)
+- checkpoint: the J7 commit ("R1 J7: ...")
+- next: J8

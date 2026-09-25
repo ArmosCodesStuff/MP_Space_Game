@@ -35,6 +35,14 @@ public static class Link
         $"Multiplayer is off on this PC: its network library, {Plugin.ReleaseDll} ({Plugin.Name} {Plugin.Version}), did not load. "
         + "It must sit beside Warships.exe; an antivirus may have quarantined it. Run PLAY.bat again to put it back. Playing offline works as always.";
 
+    // THE REPLY WINDOW (plan §3.4): how long after a friend makes its reply the host's game may take it
+    // and still connect. The friend's side starts ICE's give-up clock when it pastes the invite, so the
+    // reply has to come back inside that clock; the friend's countdown shows this number. MEASURED
+    // (DESIGN.md, R0): an in-process pair over the LAN host candidate connected at every delay up to
+    // 60 s; the rule is that longest delay less 10 s, never above 30. A const, so it is part of the
+    // build's fingerprint, and a solo-run check holds a pair to it on every run.
+    public const int ReplyWindowS = 30;
+
     // THE CHANNELS A SESSION NEGOTIATES, read off every [Rpc] in the game's assembly -- the harness's
     // own stream included, since both ends of a test run are one build (§3.2). Transfer channel N is
     // entry N - 1; a channel whose RPCs all ask for one unreliable mode gets it, anything else
