@@ -10,6 +10,9 @@ Engine outputs for the old-way batches: S = C:\Users\logan\AppData\Local\Temp\cl
 - wf_ab65d36a-eb3 / task w79l6jmmg, "lane-kits-slice2" (old way). Returns {kits, gate}; does not merge. J6+J7 red in solo twice
   (kits_j67a/b: "...and it lands 35 (0)", the heavy missile); its ledger POST claims green: VERIFY against S\kits_j67*\summary.txt on return.
   COORDINATOR NOTE 1 (UTF-16) appended to wt_kits' ledger_kits.md. On gate pass: a merge batch (step 0 merge version-l, merge chain, merge).
+- wf_2b58e76d-117 / task wx9xf98c3, "kits-heavy-missile-diagnose" (owner asked for 5 agents): 5 opus read-only angles (check, missile, door,
+  launcher, logs) on "lands 35 (0)", then a synthesis appends COORDINATOR NOTE 2 (cause + exact fix) to wt_kits' ledger, or reports already_fixed.
+  On return: tell the owner the cause in one line. The kits writer picks the note up at its next PRE.
 - wf_0c3ae007-535 / task w3gvr44ua, "lane-slots" (worktree WarShips_wt_slots, wt/slots from wt/net da35d9d + version-l cd8eb46).
   rungs.ps1 slots + per-tree lock + UTF-8 summary, harness --port-shift / P(), 3-chain concurrency proof, opus gate, then a haiku merge
   (net is now in, so it may merge itself). Returns {slots{slots=proven default}, gate, merge}. merge=false: merge by hand.
