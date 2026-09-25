@@ -70,3 +70,9 @@ bounty_adds pays, N14 routing); RaidsArenaAddsChecks (live L1: squad wave 1 of 2
 formation 9 s; N16 an add's web starts the beam; N13 refill empty at +29.5, same kinds at +30.5, Worth 0,
 never above the roster). The Solo arena holds the adds while the boss's own moves are tested.
 engine-unproven: rungs owed in the final test phase (solo x2).
+## J4 PRE -- tier opus -- the adds pay: Raider kill branch -> Hub.PayKill -> host AwardKill + reliable NetKillExp -> each guest AwardKill at its own level. HEAD 5a3374d. Files: Raider 95a18a25, Hub 91e428b3, Progression 59a6058a, SmokeTest 279b0c63.
+## J4 POST -- done. typecheck 0 errors; quick ALL PASSED. Raider: the kill branch pays (Worth > 0) before
+RaiderDown; Hub: PayKill + reliable NetKillExp (new RPC: Net.Protocol changes); Progression.AwardKill;
+PilotWindow's EXP note names the adds. Checks new: N15 by literal inside RaidsArenaAddsChecks (L6 light 6,
+heavy 18 / 9 / 0 at PL 6 / 12 / 13, L39 light 3 at PL 78, refill 0, the sweep and a quiet withdrawal 0).
+engine-unproven: rungs owed in the final test phase (solo x2).

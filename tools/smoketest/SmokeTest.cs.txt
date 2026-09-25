@@ -4298,6 +4298,27 @@ public partial class _Test : Node
         most = Math.Max(most, back.Count);
         Check(at295 == 0 && back.Count == 2 && kinds1 == kinds0 && back.All(r => r.Worth == 0) && most <= roster,
               $"wiped, the slot is empty at +29.5 s ({at295}) and back at +30.5 s with the same kinds ({kinds1} for {kinds0}), paying nothing, never more than the roster's {roster} live");
+        // N15 BY LITERAL: an add pays its row's worth x its level over the pilot's -- the refill above
+        // paid nothing; a first-fill light at the pilot's level pays 6 with its popup, a heavy 18, at
+        // a pilot twice the level 3 / 9, one past that nothing; the boss-death sweep and a quiet
+        // withdrawal (CallOff's path) pay nothing
+        int keepLv = Character.Level, keepExp = Character.Exp, keepPts = Character.Points;
+        int Paid(Raider r, int pilotLevel)
+        {
+            Character.Level = pilotLevel; Character.Exp = 0; int pts = Character.Points;
+            r.TakeDamage(1e9);
+            int got = Character.Exp; Character.Points = pts; return got;
+        }
+        Raider Add(int kind, int level) { var r = H.SpawnRaider(me.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(900f, 1400f), kind); r.Worth = Enemies.Of(kind).Exp; r.Level = level; return r; }
+        int light6 = Paid(Add(Enemies.Webifier, 6), 6), heavy6 = Paid(Add(Enemies.Gunship, 6), 6), heavy12 = Paid(Add(Enemies.Gunship, 6), 12),
+            heavy13 = Paid(Add(Enemies.Gunship, 6), 13), light39 = Paid(Add(Enemies.Talon, 39), 78), refill = Paid(back.FirstOrDefault(GodotObject.IsInstanceValid) ?? Add(Enemies.Webifier, 1), 1);
+        var swept = Add(Enemies.Gunship, 6); var quiet = Add(Enemies.Webifier, 6);
+        Character.Level = 6; Character.Exp = 0;
+        H.RaiderDown(swept); H.Down(Spawns.Raider, quiet, burst: false, (float)quiet.Hp);
+        int sweep = Character.Exp;
+        Character.Level = keepLv; Character.Exp = keepExp; Character.Points = keepPts;
+        Check(light6 == 6 && heavy6 == 18 && heavy12 == 9 && heavy13 == 0 && light39 == 3 && refill == 0 && sweep == 0,
+              $"an add pays by literal: L6 light 6, heavy 18 at PL 6, 9 at PL 12, 0 at PL 13; an L39 light 3 at PL 78; a refill 0; the sweep and a quiet withdrawal 0 ({light6}/{heavy6}/{heavy12}/{heavy13}/{light39}/{refill}/{sweep})");
         Raids.Held = true;
         foreach (var r in H.Raiders.ToList()) H.RaiderDown(r);
         foreach (var m in boss.Type.Moves) boss.S(m.Id).Due = held[m.Id];

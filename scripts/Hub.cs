@@ -1232,6 +1232,17 @@ public partial class Hub : Node2D
     public void RestartGarrison() => _raids.RestartGarrison();
     public PostBook Posts => _raids.Posts;
     public void RaiderDown(Raider r) => Down(Spawns.Raider, r, burst: true, (float)System.Math.Max(0, r.Hp));
+    // A PAID KILL (a boss fight's add): every pilot in this world is paid at its OWN level -- this
+    // one here, each guest by the reliable NetKillExp (a flag on the unreliable raider packet could
+    // be lost with the kill). Named for the mechanism: any kill that pays comes through it.
+    public void PayKill(double worth, int level)
+    {
+        if (!Net.IsHost) return;
+        if (MyShip != null) Progression.AwardKill(worth, level);
+        ToWorld(nameof(NetKillExp), worth, level);
+    }
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void NetKillExp(double worth, int level) => Progression.AwardKill(worth, level);
 
     // LET GO OF A HOSTILE, EVERYWHERE, IN THIS CALL. As the selection and as every ship's orders:
     // on a guest a raider's hull never reads zero (the host removes it before its last hull

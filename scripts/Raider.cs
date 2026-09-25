@@ -129,7 +129,11 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused, ISquadMembe
     {
         if (!Net.Sim || !Alive) return;
         Hp -= d;
-        if (Hp <= 0) Hub.RaiderDown(this);
+        if (Hp > 0) return;
+        // SHOT DOWN, and only here: a boss's death sweeps its adds out through RaiderDown with their
+        // hull left, and a withdrawn hunter goes quietly -- neither is a kill, so neither pays
+        if (Worth > 0) Hub.PayKill(Worth, Level);
+        Hub.RaiderDown(this);
     }
 
     // ── what a raid can reach, and what a raider can go after ──
