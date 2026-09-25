@@ -369,3 +369,16 @@ hold) = seat the chamber (N = Seated, Left 0, ReloadView = default), KeyDown(Spa
   the guest2 role has a window, else recorded as owed. Pre-existing stale: two `Fx.All.Length == 10` checks (~11431,
   ~11452) already read 15 rows before this lane's 16th; not this lane's truth to rewrite (recorded, untouched).
 - Next: kits6c-J7 ReloadBar (§4) + frame 73c; then J8 Anchor (also makes the SniperAnchor callers live).
+
+## Handover 4: agent 4 stops after J6 (context), at a job boundary. J7 is next; no PRE written for it.
+Conventions kept: edits by a python exact-match script (scratchpad), harness LF preserved (newline=''); LaneA6c methods
+after LaneA6cReloadChecks / LaneA6cReload*Host/Guest (SmokeTest ~5390-5620); solo call after `await
+LaneA6cReloadChecks(yonder);` (~11800); rung-5 host watch beside reloadWatch (~15400), guest after
+LaneA6cReloadGuestChecks; frames: LaneA6cRailFrames (Shots, before LaneA6cPrismFrames) is called from the 73b block.
+J7 (ReloadBar, sniper_active_reload §4.1-4.4): a HUD Control (direct child of the HUD CanvasLayer, Hub.cs ~311-348,
+MouseFilter Ignore, 180 x 22 rect) following the owner's ship, drawn from me.ReloadView (grey track + fill, white box
+at ActiveReload.Spot, white / grey flash from View.Flash + Said, blue while Charge > 0); only when the flown class's
+TriggerOf has a Reload; add "ReloadBar" to the lint's overlap list (Shots.cs.txt ~43); frame 73c_sniper_reload_spot
+(after 73b: fire one real shot, step until the view's share is 0.5, press, snap 3 frames later) -- inside
+LaneA6cRailFrames. J8 Anchor must satisfy SniperAnchor (SmokeTest ~5399): UseAbility("anchor") drops it (Left > 0,
+Held 0), a second UseAbility weighs it (Left runs out within 60 frames, anchor_release 0.3), then write S7 there.
