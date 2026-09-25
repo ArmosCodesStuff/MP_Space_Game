@@ -68,6 +68,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     private double _sweepAt;                     // the clock time the next sweep of _lastHitBy is due at
     public readonly System.Collections.Generic.Dictionary<string, double> DamageBySource = new();   // host: damage taken, by source
     public readonly System.Collections.Generic.Dictionary<string, double> DealtBy = new();           // host: damage dealt, by weapon id (Dealt.Deal)
+    public readonly System.Collections.Generic.Dictionary<string, double> MendedBy = new();          // host: hull healed on others, by source id (Mend.Give)
     private double _combatT;
     public bool InCombat => _combatT > 0;
     // SECONDS SINCE THE LAST BLOW, as far as the clock above can tell. It runs down from

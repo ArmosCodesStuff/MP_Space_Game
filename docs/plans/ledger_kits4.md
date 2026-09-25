@@ -110,3 +110,35 @@ A PRE with no POST is an interrupted job: compare the hashes, revert half-made e
 - Owed at rung 3 (`solo` x2): 3 x "F8 ward: marked, a report at N u/s stands ...". Owed at rung 5 with 6a (the first
   row that marks a guest): "a guest's pull reaches the host unclamped, hull within 60 u" (v2's swing line).
 - Checkpoint: the commit after this entry. Next: kits4-J4 (F10, and the record).
+
+### kits4-J4 · PRE · F10 Mend, and slice 4's record -- tier opus
+- Intent: K4-7. New scripts/Mend.cs (Mend.Give: host only, to MaxHp, nothing to a wreck or for a bad amount, the
+  healer credited what landed in PlayerShip.MendedBy). Checks: LaneA4MendChecks. Record: CHANGES Handoff +
+  Unreleased, DESIGN (helm moves, wards, the press's point, Mend).
+- Files: scripts/Mend.cs (new), scripts/PlayerShip.cs, tools/smoketest/SmokeTest.cs.txt, docs/CHANGES.md,
+  docs/DESIGN.md, this ledger.
+- HEAD 0480f6f02884a7a054eec04753d07aa3ad8b2900 · PlayerShip.cs be81f42fb6adc0c41da6a7ab55b7b4b561832572 · SmokeTest.cs.txt dab68e139f39c3e0d1df6f0f830e9ee9bd11da92 · CHANGES.md 0149ff62e9be99106a483e18eed5458e2c4141f4 · DESIGN.md a313778f0865dde72435f741d8664106ecee8fb6
+### kits4-J4 · POST
+- Verdict: compiles; typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final
+  test phase. New scripts/Mend.cs (`Mend.Give(to, amount, by, source)` -> what landed); PlayerShip `MendedBy`.
+  Record: CHANGES.md Handoff + Unreleased (slice 4), DESIGN.md "Helm moves, wards, the press's point, Mend".
+- Files: scripts/Mend.cs (new), scripts/PlayerShip.cs, SmokeTest.cs.txt (NEW `LaneA4MendChecks`), docs/CHANGES.md,
+  docs/DESIGN.md.
+- Checkpoint: the commit after this entry. Slice 4 is complete (J1-J4).
+
+## WHAT THE FINAL TEST PHASE OWES (slice 4)
+- **Rung 3, `quick,solo,solo`** (two seeds), every line new, in the lane-A call list after FieldsLiveRowChecks:
+  - LaneA4PayloadChecks: 3 x "F8: a point N u out ... held to a 600 u reach"; 3 x "a press that takes a point lands its
+    cursor in the row's own slot"; 3 x "a press whose point is not a number ... presses nothing"; 3 x "a row that takes
+    no point is pressed ...".
+  - LaneA4TetherChecks (pure): "every helm move row ..."; 10 x "F8 tether: pulled from ..."; 3 x "... no pull"; 3 x
+    "5 s round a ..."; 3 x "... the line stops at".
+  - LaneA4HelmLiveChecks (the destroyer on TargetDummy1): the refusals; 3 x unmarked cast off at 0.5 s; 3 x marked
+    pull; 3 x the swing on A/D; 3 x cast off by Pressed / Host / Time with speed kept; 3 x Webbed / Disabled / Drive.
+  - LaneA4WardChecks: 3 x "F8 ward: marked, a report at N u/s stands ...".
+  - LaneA4MendChecks: 3 x "F10: N mended ... lands whole"; 3 x "... stops at full"; 4 x "an amount of X mends
+    nothing"; "a wreck takes nothing; re-boarded, whole again".
+  - Watch (rewritten, 3 args now): every `doAbility.Invoke` / `doAb.Invoke` line of the sweeps and the walls.
+- **Rung 5 (`six`)**: nothing new; watch GuestWalls' "RequestAbility" by string (now 3 args). The payload's and the
+  ward's guest checks land with their first rows (6b throw, 6a Grapnel), K4-8.
+- **Rung 4**: no frame (nothing drawn changed).

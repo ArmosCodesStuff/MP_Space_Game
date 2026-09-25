@@ -4737,6 +4737,56 @@ public partial class _Test : Node
         }
     }
 
+    // ── LANE A SLICE 4 · F10 MEND: the one heal door (the Tender's lance and Repair field are 6b's rows) ──
+    // Synchronous on the host's own tender (no frame between, so regeneration adds nothing): a heal lands
+    // exactly and is credited to its source; it stops at the hull's maximum and credits only what landed;
+    // a wreck, or an amount that is not a positive number, takes nothing.
+    async Task LaneA4MendChecks()
+    {
+        await SetClass(ShipClass.FreightTender);
+        var te = Me; te.AutopilotTo = null;
+        double Cr(string id) => te.MendedBy.GetValueOrDefault(id);
+        for (int k = 0; k < 3; k++)
+        {
+            te.Hp = te.MaxHp * (k == 0 ? Vary(0.15f, 0.35f) : k == 1 ? Vary(0.45f, 0.65f) : Vary(0.75f, 0.85f));
+            double amount = k == 0 ? Vary(5f, 30f) : k == 1 ? Vary(30f, 60f) : Vary(0.5f, 0.1f * (float)te.MaxHp);
+            string src = k == 1 ? "repair" : "lance";
+            double hp0 = te.Hp, cr0 = Cr(src), other0 = Cr(src == "lance" ? "repair" : "lance");
+            double got = Mend.Give(te, amount, te, src);
+            Check(Math.Abs(got - amount) < 1e-9 && Math.Abs(te.Hp - hp0 - amount) < 1e-9 && Math.Abs(Cr(src) - cr0 - amount) < 1e-9
+                  && Cr(src == "lance" ? "repair" : "lance") == other0,
+                  $"F10: {amount:0.0} mended on a hull at {hp0 / te.MaxHp * 100:0}% lands whole ({got:0.00}), credited to {src} alone");
+        }
+        for (int k = 0; k < 3; k++)
+        {
+            double gap = k == 2 ? 0 : k == 0 ? Vary(2f, 10f) : Vary(15f, 40f);
+            te.Hp = te.MaxHp - gap;
+            double amount = gap + Vary(10f, 60f), cr0 = Cr("lance");
+            double got = Mend.Give(te, amount, te, "lance");
+            Check(Math.Abs(got - gap) < 1e-9 && Math.Abs(te.Hp - te.MaxHp) < 1e-9 && Math.Abs(Cr("lance") - cr0 - gap) < 1e-9,
+                  $"F10: {amount:0.0} mended on a hull {gap:0.0} short of full stops at full ({te.Hp:0.0} / {te.MaxHp:0}) and credits {got:0.00}, only what landed");
+        }
+        te.Hp = te.MaxHp * Vary(0.3f, 0.7f);
+        foreach (double bad in new[] { double.NaN, -Vary(5f, 50f), double.PositiveInfinity, 0.0 })
+        {
+            double hp0 = te.Hp, cr0 = Cr("lance");
+            double got = Mend.Give(te, bad, te, "lance");
+            Check(got == 0 && te.Hp == hp0 && Cr("lance") == cr0, $"F10: an amount of {bad} mends nothing ({got})");
+        }
+        {   // A WRECK (in stasis), then re-boarded and put back whole
+            te.Restore(0, false, Vary(20f, 40f));
+            double hp0 = te.Hp, cr0 = Cr("lance");
+            double got = Mend.Give(te, Vary(10f, 50f), te, "lance");
+            bool wreck = !te.Alive;
+            typeof(PlayerShip).GetField("_stasis", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(te, 0.0);
+            te.UseAbility("reboard", 0); await Wait(0.1);
+            te.Restore(te.MaxHp, true, 0);
+            Check(wreck && got == 0 && te.Hp == te.MaxHp && hp0 == 0 && Cr("lance") == cr0 && te.Alive,
+                  $"F10: a wreck takes nothing ({got}); re-boarded, whole again");
+        }
+        te.Hp = te.MaxHp;
+    }
+
     // THE SAME ROWS ON A LIVE SHIP, for every class that owns the slot: its slot running draws the
     // field from its OWN sheet. A slot no class owns yet is another lane's ability still to merge
     // (lane E's Supercarrier, the Warden's Taunt, lane B's boost): said as a NOTE, never a pass.
@@ -10131,6 +10181,7 @@ public partial class _Test : Node
             LaneA4TetherChecks(yonder);
             await LaneA4HelmLiveChecks(yonder);
             await LaneA4WardChecks();
+            await LaneA4MendChecks();
 
             // ── WARRIOR: two and a half times its speed, half the damage, then the EMP ──
             await SetClass(ShipClass.HeavyWarrior);

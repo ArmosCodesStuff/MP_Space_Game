@@ -36,6 +36,14 @@ history pick the work up from it alone. Update it in the same change as the code
 
 ## Handoff — read this first
 
+**2026-09-25 (worktree `WarShips_wt_kits4`, branch `wt/kits4`): class kits lane A slice 4 -- F8 (the
+press's point, helm moves with the Grapnel's pull and swing, the host's mark and wards) and F10 (Mend)
+built; compiles, rung 2 green. engine-unproven: rung 3 (`solo` x2) owed for LaneA4PayloadChecks,
+LaneA4TetherChecks, LaneA4HelmLiveChecks, LaneA4WardChecks and LaneA4MendChecks; no frame, no guest check
+yet (each lands with its first row: 6a's Grapnel, 6b's throw and lance).** Foundations only: no class, bar
+or sheet changes. `DoAbility` / `RequestAbility` take a third argument (the point): a check that reaches
+them by reflection or by name passes `Vector2.Zero`. Detail: `docs/plans/ledger_kits4.md`.
+
 **2026-09-25 (worktree `WarShips_wt_raids`, branch `wt/raids`): lane G, raids v2 -- squads and a boss
 fight's adds, J1-J6 + the merge gate's fixes (GFa, GFb) built; compiles, rung 2 green. engine-unproven:
 every rung 3-5 check below is owed in the final test phase** (solo x2, six x2 for the guest checks, screens
@@ -576,6 +584,24 @@ outstanding from the batch of 2026-09-23.)*
 ---
 
 ## Unreleased
+
+### Class kits, lane A slice 4: helm moves, wards, the press's point, Mend -- F8, F10 (2026-09-25, worktree wt/kits4)
+
+Foundations for slice 6; nothing a pilot sees changes yet.
+- **The press's point** (`AbilityDef.TakesPoint`): a row that takes one sends the cursor with its press,
+  and the host puts it in the row's own slot before the row runs; a point that is not a number presses
+  nothing. `Abilities.Toward` holds a point to a reach on its bearing (the sentry throw's 600 u, 6b).
+- **Helm moves** (`HelmMoves.cs`): flight the owner flies under a move's law instead of the helm. The
+  first row is the tether (the Grapnel, 6a): a 0.15 s bite, a haul in at 450 u/s to 250 u off the anchor's
+  hull, then a swing on the line -- A/D round it at the hull's top, W/S reeling at 100 u/s between 150 u
+  off the hull and 700 u -- the bow on the anchor throughout. The host MARKS the move; the owner casts off
+  one not marked in 0.5 s, or when the mark goes, a web lands, it is disabled, V charges a warp, the anchor
+  is lost, or its time is up, and keeps its speed.
+- **Wards**: while the mark runs, the host's speed clamp and jump pricing let the guest's reports claim
+  the move's speed, so a 450 u/s pull is not cut back or priced as a jump.
+- **Mend** (`Mend.cs`): the one door for a heal one ship gives another -- host only, to the hull's
+  maximum, nothing to a wreck; the healer is credited only what landed (`MendedBy`).
+**Rungs:** 1 and 2 green in the worktree; 3 owed (checks listed in the ledger).
 
 ### Raids v2, lane G: squads in formation and a boss fight's adds (2026-09-25, worktree wt/raids)
 
