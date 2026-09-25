@@ -17,10 +17,13 @@
 # its ports and scratch folders shift too. A tree only supports slot >= 1 when its own
 # tools\smoketest\run.ps1 declares a -Slot parameter; a chain containing bar or wan always runs on
 # slot 0 (the bar is the gate everyone waits on anyway, and -Wan refuses off slot 0 downstream).
-# -Slots picks how many slots (0..Slots-1) auto-assignment tries; the proven default lives with this
-# script's callers. -Slot picks one slot explicitly and waits only for it.
-param([Parameter(Mandatory)][string]$Tree, [Parameter(Mandatory)][string]$Tag, [Parameter(Mandatory)][string[]]$Steps, [string]$Out, [int]$Slot = -1, [int]$Slots = 3)
+# -Slots picks how many slots (0..Slots-1) auto-assignment tries: default 4 (owner, 2026-09-25), at
+# most 4. -Slot picks one slot explicitly and waits only for it. The engine slot (and a slot >= 1's env
+# swap) is taken at the first step that is not quick, so a leading quick step never holds an engine lock.
+param([Parameter(Mandatory)][string]$Tree, [Parameter(Mandatory)][string]$Tag, [Parameter(Mandatory)][string[]]$Steps, [string]$Out, [int]$Slot = -1, [int]$Slots = 4)
 $ErrorActionPreference = 'Continue'
+# At most 4 slots: slot 4's fakeigd HTTP port 19080+400 = 19480 is slot 0's box --http port.
+$Slots = [Math]::Min($Slots, 4)
 
 # The REAL %TEMP%, captured before anything below might repoint $env:TEMP for a non-zero slot: the
 # out dir, summary.txt and every lock this process itself opens stay under it regardless of slot.
@@ -65,9 +68,9 @@ while (-not $treeLock) { try { $treeLock = [System.IO.File]::Open($treeLockPath,
 $tw = [int]((Get-Date) - $treeWaited).TotalSeconds
 if ($tw -gt 5) { Log "   (waited ${tw}s for the tree lock)" }
 
-# Pick the engine slot. Slot 0's lock path and behaviour are UNCHANGED from before slots existed.
-# Only steps that use the engine take a slot at all (a quick-only chain never touches one).
-$needsEngine = @($Steps | Where-Object { $_ -ne 'quick' }).Count -gt 0
+# The engine slot. Slot 0's lock path and behaviour are UNCHANGED from before slots existed. Taken
+# lazily by Enter-EngineSlot at the first step that is not quick, as the runner before slots did: a
+# leading quick step never waits for or holds an engine lock; once taken, it is held to the end.
 function Try-EngineLock([int]$n) {
   $p = if ($n -eq 0) { Join-Path $realTemp 'warships_engine.lock' } else { Join-Path $realTemp "warships_engine_$n.lock" }
   try { [System.IO.File]::Open($p, 'OpenOrCreate', 'ReadWrite', 'None') } catch { $null }
@@ -75,55 +78,58 @@ function Try-EngineLock([int]$n) {
 
 $engineLock = $null
 $assignedSlot = 0
-if ($needsEngine) {
+function Enter-EngineSlot {
   if ($forceZero -or -not $slotsSupported -or $Slots -le 1) {
-    $assignedSlot = 0
+    $script:assignedSlot = 0
   } elseif ($Slot -ge 0) {
-    $assignedSlot = $Slot
+    $script:assignedSlot = $Slot
   } else {
-    $assignedSlot = -1
+    $script:assignedSlot = -1
   }
 
   $engineWaited = Get-Date
-  if ($assignedSlot -ge 0) {
+  if ($script:assignedSlot -ge 0) {
     # a specific slot: wait for that one only
-    while (-not $engineLock) { $engineLock = Try-EngineLock $assignedSlot; if (-not $engineLock) { Start-Sleep 15 } }
+    while (-not $script:engineLock) { $script:engineLock = Try-EngineLock $script:assignedSlot; if (-not $script:engineLock) { Start-Sleep 15 } }
   } else {
     # auto: try slots 0..Slots-1 in order, first lock that opens wins, else sleep and retry the sweep
-    while (-not $engineLock) {
-      for ($n = 0; $n -lt $Slots -and -not $engineLock; $n++) {
-        $engineLock = Try-EngineLock $n
-        if ($engineLock) { $assignedSlot = $n }
+    while (-not $script:engineLock) {
+      for ($n = 0; $n -lt $Slots -and -not $script:engineLock; $n++) {
+        $script:engineLock = Try-EngineLock $n
+        if ($script:engineLock) { $script:assignedSlot = $n }
       }
-      if (-not $engineLock) { Start-Sleep 15 }
+      if (-not $script:engineLock) { Start-Sleep 15 }
     }
   }
   $ew = [int]((Get-Date) - $engineWaited).TotalSeconds
-  if ($ew -gt 5) { Log "   (waited ${ew}s for engine slot $assignedSlot)" }
+  if ($ew -gt 5) { Log "   (waited ${ew}s for engine slot $script:assignedSlot)" }
+
+  # Slot n >= 1: isolate this process's TEMP/APPDATA/LOCALAPPDATA so a slot's Godot editor settings,
+  # import cache and scratch folders never collide with slot 0 or another slot -- created once, never
+  # wiped, so a slot keeps its cache warm across runs. This covers every later step, dotnet included:
+  # NuGet's global packages folder is under USERPROFILE and untouched, the harness nuget.config files
+  # clear their sources down to the local Godot feed, and only NuGet's user config and HTTP cache
+  # become per slot.
+  if ($script:assignedSlot -ge 1) {
+    $slotRoot = Join-Path $realTemp "warships_slot$script:assignedSlot"
+    $slotTemp = Join-Path $slotRoot 'temp'
+    $slotAppData = Join-Path $slotRoot 'appdata'
+    $slotLocalAppData = Join-Path $slotRoot 'localappdata'
+    New-Item -ItemType Directory -Force $slotTemp, $slotAppData, $slotLocalAppData | Out-Null
+    $env:TEMP = $slotTemp
+    $env:TMP = $slotTemp
+    $env:APPDATA = $slotAppData
+    $env:LOCALAPPDATA = $slotLocalAppData
+  }
+  Log "   engine slot $script:assignedSlot"
 }
 
-# Slot n >= 1: isolate this process's TEMP/APPDATA/LOCALAPPDATA so a slot's Godot editor settings,
-# import cache and scratch folders never collide with slot 0 or another slot -- created once, never
-# wiped, so a slot keeps its cache warm across runs. dotnet/NuGet is left on the real APPDATA/LOCALAPPDATA
-# (NUGET_PACKAGES stays global): repointing it broke restore under a per-slot profile in testing, and
-# NuGet's own cache is content-addressed so sharing it across slots is safe.
-if ($assignedSlot -ge 1) {
-  $slotRoot = Join-Path $realTemp "warships_slot$assignedSlot"
-  $slotTemp = Join-Path $slotRoot 'temp'
-  $slotAppData = Join-Path $slotRoot 'appdata'
-  $slotLocalAppData = Join-Path $slotRoot 'localappdata'
-  New-Item -ItemType Directory -Force $slotTemp, $slotAppData, $slotLocalAppData | Out-Null
-  $env:TEMP = $slotTemp
-  $env:TMP = $slotTemp
-  $env:APPDATA = $slotAppData
-  $env:LOCALAPPDATA = $slotLocalAppData
-}
-
-Log "== $Tag at $(git -C $Tree rev-parse --short HEAD) $(Get-Date -Format T) slot $assignedSlot"
+Log "== $Tag at $(git -C $Tree rev-parse --short HEAD) $(Get-Date -Format T)"
 $i = 0
 try {
 foreach ($s in $Steps) {
   $i++
+  if ($s -ne 'quick' -and -not $engineLock) { Enter-EngineSlot }
   $log = Join-Path $Out ("{0}_{1}.log" -f $i, ($s -replace '[^\w]', '_'))
   $t0 = Get-Date
   $name = $s

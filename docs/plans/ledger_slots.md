@@ -92,3 +92,18 @@ typecheck 0 errors; verify -Quick ALL CHECKS PASSED. next: the proof.
 The owner: "feel free to run multiple instances of the engine and game at the same time, my PC can handle it no prob". If the 3-chain
 proof (slots 1-3 at once) is ALL GREEN, the default -Slots is 4 (slot 0 plus the three proven). A red that is CPU timing is still a
 bug in that check (CLAUDE.md 6): fix it rather than lowering -Slots.
+
+## PRE job S4 -- merge-gate fixes (4 problems)
+tier: opus. intent: (1) Shots.cs.txt sweep host port P(27015)->P(27140), outside every smoketest band; (2) rungs.ps1
+-Slots default 4 (applies NOTE 1), header states it, clamp to 4 (slot 4 fakeigd 19480 = slot 0 box --http); (3) engine
+slot + slot>=1 env swap taken lazily at the first non-quick step; tree lock stays whole-chain; (4) reword the NuGet comment
+to the truth. No engine run (build phase).
+files: tools/rungs.ps1, tools/screens/Shots.cs.txt
+HEAD: 39cd05cdbb341833b5a5e58a603e7be1c4565a94
+hashes: tools/rungs.ps1 aafabc85bc37e191e4f27c818400724982449bf9; tools/screens/Shots.cs.txt dd77ac43eb848eb192a9da98f8656647f61deaaf
+
+## POST job S4
+verdict: green (compile rungs only; build phase, no engine run). files: tools/screens/Shots.cs.txt (sweep host P(27140),
+one comment), tools/rungs.ps1 (-Slots 4 default stated in header, clamp to 4 with the 19480 reason, engine slot + slot>=1
+env swap taken lazily in Enter-EngineSlot at the first non-quick step, tree lock unchanged, NuGet comment reworded;
+applies NOTE 1). typecheck 0 errors; verify -Quick ALL CHECKS PASSED. next: merge gate re-review.
