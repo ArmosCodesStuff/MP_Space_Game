@@ -3125,6 +3125,67 @@ public partial class _Test : Node
 
     }
 
+    // ── FIELDS (lane D, F9): what a ship draws round itself while a slot runs is a ROW (Fields.All) ──
+    // The rule, with no ship: a row is up only on a hull that HAS its slot, only while the slot's Left
+    // runs, and a row with a pool only while its Own is unspent, fading as Own / pool. The bubble is
+    // proved against its literals (260 u, a 400 pool) off the freighter's real sheet, from three
+    // seeded draws of what is left of the pool -- never on the pool's edge.
+    void FieldsContractChecks()
+    {
+        var fs = new ShipStats(ShipClass.FreightHauler);
+        Check(Math.Abs(fs["bubble_radius"] - 260) < 1e-9 && Math.Abs(fs["bubble_pool"] - 400) < 1e-9 && Fields.Of("bubble")?.Slot == "bubble",
+              $"fields: the bubble row reads the freighter's own sheet, 260 u over a 400 pool ({fs["bubble_radius"]:0} u, {fs["bubble_pool"]:0})");
+        for (int run = 0; run < 3; run++)
+        {
+            double own = Vary(20f, 380f), left = Vary(0.5f, 7.5f);
+            float len = Vary(80f, 260f);
+            var up = Fields.Up(id => id == "bubble", id => (left, own), id => fs[id], len).ToList();
+            var b = up.FirstOrDefault(u => u.Row.Id == "bubble");
+            Check(up.Count == 1 && b.Row != null && Math.Abs(b.Radius - 260f) < 1e-3 && Math.Abs(b.Left - own / 400) < 1e-4 && b.Tag == null,
+                  $"fields: a bubble with {own:0} of 400 left and {left:0.0} s to run is up at 260 u, drawn at {own / 400:0.00} strength ({b.Radius:0} u, {b.Left:0.00})");
+            Check(!Fields.Up(id => id == "bubble", id => (0.0, own), id => fs[id], len).Any()
+                  && !Fields.Up(id => id == "bubble", id => (left, 0.0), id => fs[id], len).Any()
+                  && !Fields.Up(id => false, id => (left, own), id => fs[id], len).Any(),
+                  $"fields: and none at all once its time is out, once its pool is spent, or on a hull with no bubble slot (run {run})");
+        }
+    }
+    // THE BUBBLE ON A LIVE FREIGHTER: pressed still, pressed while moving, pressed turned and then
+    // spent -- Fields.Up(ship) shows it at the sheet's 260 u from the first frame the slot runs, fades
+    // with the pool, and is gone the moment the pool is.
+    async Task FieldsBubbleChecks(PlayerShip fr, Vector2 yonder)
+    {
+        for (int run = 0; run < 3; run++)
+        {
+            fr.Position = VaryNear(yonder, 300f); fr.Rotation = VaryAngle();
+            fr.Velocity = run == 1 ? Vector2.Right.Rotated(VaryAngle()) * Vary(30f, 70f) : Vector2.Zero;
+            fr.Sl("bubble").Cool = 0; fr.Sl("bubble").Left = 0; fr.Sl("bubble").Own = 0;
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            bool downBefore = !Fields.Up(fr).Any(u => u.Row.Id == "bubble");
+            fr.UseAbility("bubble", 0);
+            for (int i = 0; i < 30 && !fr.BubbleUp; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            var b = Fields.Up(fr).FirstOrDefault(u => u.Row.Id == "bubble");
+            Check(downBefore && b.Row != null && Math.Abs(b.Radius - 260f) < 1e-3 && Math.Abs(b.Left - 1f) < 1e-4,
+                  $"fields: a live freighter's bubble is drawn from its slot, at 260 u and full strength ({(run == 1 ? "moving" : "still")}, {b.Radius:0} u, {b.Left:0.00})");
+            if (run != 2) continue;
+            double spent = Vary(100f, 300f);
+            fr.Hit(spent, fr.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(100f, 200f), "test:fieldspend");
+            var half = Fields.Up(fr).FirstOrDefault(u => u.Row.Id == "bubble");
+            fr.Hit(400 - spent + Vary(5f, 20f), fr.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(100f, 200f), "test:fieldspent");   // just past the pool: the hull keeps nearly all it had
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(half.Row != null && Math.Abs(half.Left - (400 - spent) / 400) < 1e-3 && !Fields.Up(fr).Any(u => u.Row.Id == "bubble"),
+                  $"fields: {spent:0} spent of the pool draws it at {(400 - spent) / 400:0.00} ({half.Left:0.00}); spent out, it is gone though its clock runs ({fr.Sl("bubble").Left:0.0} s)");
+            await Wait(0.6);
+        }
+        fr.Velocity = Vector2.Zero;
+    }
+    // A GUEST DRAWS THE HOST'S BUBBLE: the same row, from the slot the host's report carried.
+    void FieldsGuestBubbleChecks(PlayerShip fgm)
+    {
+        var b = Fields.Up(fgm).FirstOrDefault(u => u.Row.Id == "bubble");
+        Check(b.Row != null && Math.Abs(b.Radius - 260f) < 1e-3 && Math.Abs(b.Left - 250f / 400f) < 1e-3,
+              $"arena guest: its bubble FIELD is drawn from the host's slot, 260 u at 250 of 400 ({b.Radius:0} u, {b.Left:0.000})");
+    }
+
     // ── THE RECYCLER: a hold turned back into salvage, and a lock so it cannot eat what you fly ──
     // A part could not be got rid of at all before this: a hold filled with commons a pilot would
     // never fit again, and salvage had nothing to buy but a refit and gear levels.
@@ -7240,6 +7301,8 @@ public partial class _Test : Node
             fr.Hit(300, fr.Position + new Vector2(0, -200), "test:bubble2");
             Check(fr.BubbleLeft == 0 && Math.Abs(fr.Hp - (hull0 - 50)) < 1e-6,
                   $"and when the pool is spent the rest lands on the hull ({fr.Hp:0} of {hull0:0})");
+            FieldsContractChecks();
+            await FieldsBubbleChecks(fr, yonder);
 
             // ── A WRECK FIRES NOTHING, AND PRESSES NOTHING BUT REBOARD ──
             // Both halves are the HOST's rule, so both are poked the way a guest reaches them: the
@@ -10532,6 +10595,7 @@ public partial class _Test : Node
             await RealTime(() => fgm.BubbleUp && fgm.BubbleLeft < 400, Wan ? 20 : 12);
             Check(!ownBubble && fgm.BubbleUp && Math.Abs(fgm.BubbleLeft - 250) < 0.01 && Math.Abs(fgm.BubbleRadius - 260f) < 1e-3,
                   $"arena guest: its bubble is the host's ({ownBubble}), and what the host spent of it on ANOTHER pilot's hull comes back on the wire ({fgm.BubbleLeft:0} of 400)");
+            FieldsGuestBubbleChecks(fgm);
             await RealTime(() => H.Deployed.Count == 2, Wan ? 20 : 12);
             Check(H.Deployed.Count == 2, $"arena guest: the turret the host shot off its base is gone here too ({H.Deployed.Count} left)");
             var takeBack = H.Deployed.First();

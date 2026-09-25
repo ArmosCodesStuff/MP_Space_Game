@@ -21,3 +21,18 @@ Defaults taken (no ruling found in docs/plans/README.md):
 - D2 the rip's DAMAGE (1% MaxHp + 10 through Dealt.Deal, credited grapnel) belongs to the grapnel (lane A F8, not built);
   this lane gives it `Fx.Rip` for the look only. Debris sound `grapnel_rip`: row name reserved, null until a make_sounds row exists.
 - D3 Unmask panels: never built in this tree; nothing to delete.
+
+## PRE J1 -- Fields table (foundation), the bubble as its first row
+tier: opus. intent: FieldDef/Fields in Fx.cs; PlayerShip._Draw's bubble block -> Fields.Draw(this); checks FieldsContractChecks, FieldsBubbleChecks, guest FieldsGuestChecks.
+files: scripts/Fx.cs, scripts/PlayerShip.cs (_Draw only), tools/smoketest/SmokeTest.cs.txt
+HEAD: c639504e620e016f2d358223a68d167ac59f0da2
+  scripts/Fx.cs 7178f9d49a0e60badfa40b127f77bfec5bff14c2
+  scripts/PlayerShip.cs 2a91383506540c06018bbd6f4240f69b5955f7aa
+  tools/smoketest/SmokeTest.cs.txt 9949bb6009a1bf028fa1a6c78bb9facb92693c3a
+
+## POST J1
+verdict: compiles (typecheck 0 errors; verify -Quick ALL CHECKS PASSED). engine-unproven: rungs owed in the final test phase.
+files: scripts/Fx.cs (FieldLook, FieldDef, FieldUp, Fields), scripts/PlayerShip.cs (_Draw: bubble block -> Fields.Draw), SmokeTest.cs.txt
+(FieldsContractChecks + FieldsBubbleChecks after the solo bubble checks; FieldsGuestBubbleChecks after "arena guest: its bubble is the host's").
+owed: rung 3 x2 (contract + live bubble), rung 5 (guest bubble field); frame 79_freighter_turrets_and_bubble re-read by eye (same draw, now via the row).
+next: J2.

@@ -260,3 +260,97 @@ public partial class FxNode : Node2D
         }
     }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// A FIELD: WHAT A SHIP DRAWS ROUND ITSELF WHILE ONE OF ITS SLOTS RUNS -- one row each (F9).
+//
+// PlayerShip._Draw drew the freighter's bubble as a block of its own, and every field the kits add
+// (the Supercarrier's patrol ring, the Taunt's shimmer, the boost's plume) was going to be another
+// block beside it, each reading its own slot by name. It replaced that block: the bubble is this
+// table's first row, and _Draw draws the table (Fields.Draw).
+//
+// A NEW FIELD IS A ROW: the SLOT it shows for (a class's ability row, or its drive's -- whatever
+// id PlayerShip.Sl knows it by), its LOOK, its RADIUS (a stat on the ship's sheet, else a share of
+// the hull's length), its tint; and, if it has them, the POOL it fades as it spends (the slot's Own
+// against a stat, and it is down once Own is spent) and a TAG (1 - a stat, written "−33%").
+// Slots are on the wire (PlayerShip's state report), so every peer draws the same field from the
+// same slot and a field needs no RPC. A ship that has no such slot draws nothing for the row.
+// ─────────────────────────────────────────────────────────────────────────────
+public enum FieldLook
+{
+    Ring,      // a soft disc and its edge: what it covers (the bubble)
+}
+
+public class FieldDef
+{
+    public string Id, Slot;
+    public FieldLook Look;
+    public string RadiusStat;               // the radius, from the ship's sheet; null: HullShare of its length
+    public float HullShare = 0.6f;
+    public Color Tint = new(0.55f, 0.85f, 1f);
+    public string PoolStat;                 // fades as the slot's Own is spent against this; down at 0
+    public string TagStat;                  // a tag under the hull: 1 - this stat, as a percentage off
+}
+
+// ONE FIELD UP RIGHT NOW: its row, its radius, how much of its pool is left (1 with no pool), its tag.
+public readonly record struct FieldUp(FieldDef Row, float Radius, float Left, string Tag);
+
+public static class Fields
+{
+    public static readonly FieldDef[] All =
+    {
+        // the freighter's bubble: a ring the size of what it covers, fading as its pool is spent, so
+        // everyone can see how much of it is left and who is inside it
+        new() { Id = "bubble", Slot = "bubble", Look = FieldLook.Ring, RadiusStat = "bubble_radius", PoolStat = "bubble_pool" },
+    };
+
+    public static FieldDef Of(string id) => System.Array.Find(All, f => f.Id == id);
+
+    // WHAT IS UP, from four readers, so the rule is provable with no ship at all: does the ship have
+    // the slot, the slot's Left and Own, a stat off its sheet, and its hull's length.
+    public static System.Collections.Generic.IEnumerable<FieldUp> Up(System.Func<string, bool> has,
+        System.Func<string, (double Left, double Own)> slot, System.Func<string, double> stat, float length)
+    {
+        foreach (var f in All)
+        {
+            if (!has(f.Slot)) continue;
+            var (left, own) = slot(f.Slot);
+            if (left <= 0) continue;
+            float share = 1f;
+            if (f.PoolStat != null)
+            {
+                if (own <= 0) continue;
+                share = (float)Mathf.Clamp(own / System.Math.Max(1, stat(f.PoolStat)), 0, 1);
+            }
+            float r = f.RadiusStat != null ? (float)stat(f.RadiusStat) : length * f.HullShare;
+            string tag = f.TagStat != null ? $"−{Mathf.RoundToInt((float)(1 - stat(f.TagStat)) * 100)}%" : null;
+            yield return new FieldUp(f, r, share, tag);
+        }
+    }
+
+    public static System.Collections.Generic.IEnumerable<FieldUp> Up(PlayerShip s)
+    {
+        var mine = Abilities.For(s.Class);
+        return Up(id => System.Array.Exists(mine, d => d.Id == id),
+                  id => { var sl = s.Sl(id); return (sl.Left, sl.Own); }, id => s.Stats[id], s.MyArt.Length);
+    }
+
+    // EVERY FIELD UP ON THIS SHIP, in its own frame (PlayerShip._Draw). The one switch on the look.
+    public static void Draw(PlayerShip s)
+    {
+        foreach (var f in Up(s))
+        {
+            var c = f.Row.Tint;
+            switch (f.Row.Look)
+            {
+                case FieldLook.Ring:
+                {
+                    var e = new Color(c.R, c.G, c.B, 0.15f + 0.35f * f.Left);
+                    s.DrawCircle(Vector2.Zero, f.Radius, e with { A = e.A * 0.25f });
+                    s.DrawArc(Vector2.Zero, f.Radius, 0, Mathf.Tau, 64, e, 2.5f);
+                    break;
+                }
+            }
+        }
+    }
+}
