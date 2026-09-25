@@ -195,9 +195,8 @@ public partial class Net : Node, Rendezvous.IHostDesk, Rendezvous.IGuestDesk
     // THE SMOKE TEST'S WAY TO BE A DIFFERENT BUILD, to prove each refusal on a real connection: where the
     // pretended build shows (§3.8). Code: this player's knock, and its own check of a pasted invite (the
     // listener refuses the one, the other is refused before any network step). Auth: the in-band handshake
-    // (OnAuth), the last guard. Mute: a player that finishes the handshake and never answers the welcome
-    // (NetWelcome), which the host's watchdog must let go.
-    [Flags] public enum Pretend { None = 0, Code = 1, Auth = 2, Mute = 4 }
+    // (OnAuth), the last guard.
+    [Flags] public enum Pretend { None = 0, Code = 1, Auth = 2 }
     public static Pretend PretendAt;
     // The build this player claims at `where`: its own, or the one next to it.
     public static int Claimed(Pretend where) => PretendAt.HasFlag(where) ? Protocol ^ 1 : Protocol;
@@ -350,7 +349,7 @@ public partial class Net : Node, Rendezvous.IHostDesk, Rendezvous.IGuestDesk
         if (_isHost || !_inSession || !Connecting) return;
         Connecting = false;
         if (_times.TryGetValue(_joinId, out var t)) t.Admitted = Time.GetTicksMsec();
-        if (!PretendAt.HasFlag(Pretend.Mute)) RpcId(1, nameof(NetWelcomed));
+        RpcId(1, nameof(NetWelcomed));
         Say($"Connected as player {_localId}.");
         Admitted?.Invoke();
     }
