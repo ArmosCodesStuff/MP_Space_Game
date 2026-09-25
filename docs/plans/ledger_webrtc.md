@@ -998,3 +998,23 @@ heredoc turns "\n" inside C# strings into real newlines: it broke SessionMenu on
   (libdatachannel); if the host sees a close instead, the check reads "again > 0" -- then orphan by
   blackhole under -Wan only.
 - next: R3.
+
+#### R3 PRE
+- job R3, tier opus. HEAD 353203a. Intent: §6's words still missing (the listener moved / could not bind,
+  appended to HOST's line; a SocketException from the OS-picked port no longer escapes Host), COPY NETWORK
+  REPORT (§6.3: `Net.Report()`, a line per code made -- row, STUN row and ms, candidates the fit dropped,
+  length -- and per join -- row, invite made, reply made/taken, connected, admitted; peak backlog per
+  NetChannels row sampled 4 a second; the beat's longest silence; ReplyWindowS; pickup on/off), the pending
+  list with COPY and CANCEL (§7 SessionMenu row; §6.1's full text sends the host to it), Hints'
+  "multiplayer" row (§6.3 literal), Shots 51_invite_ready + 52_reply_countdown replacing 51_address_hidden,
+  60_reply_expired, 61_join_failed (next free numbers). Game.cs already reads `netBusy` (nothing to do).
+- Defaults: v1 §6.1's two listener texts are not in the repo, so they are written here (" Port {p} is taken
+  on this PC, so friends typing an address use port {at}." / " No port could be opened for typed addresses,
+  so friends join by invite only."); the report's "longest gap per row" is the beat's row only (the game
+  cannot see which row a packet came in on; the harness times its own stream, R4).
+- files: scripts/Net.cs f9150394, scripts/SessionMenu.cs 47ea0157, scripts/Hints.cs 87bce0b3,
+  tools/smoketest/SmokeTest.cs.txt 38784fa1, tools/screens/Shots.cs.txt f2d2d599, ledger 959a60ad.
+- checks planned: solo `R3WordsChecks` (listener moved at 3 varied ports/depths; the Linking deadline's
+  text + fresh invite; the 15-min expiry text; CANCEL from full frees a place; the report's lines; COPY
+  NETWORK REPORT on the clipboard; the hint literal; the guest's countdown-ran-out text + MAKE A FRESH
+  REPLY at 3 varied invites; the connection-closed text); Shots frames 51, 52, 60, 61.
