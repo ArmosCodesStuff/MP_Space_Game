@@ -186,3 +186,10 @@ fittings sweep's witness table ~13755, fitRows ~13797.
   (15.625 -> "15.63", 13.75 -> "13.8"); LaneA6aBroadsideChecks' warp run releases V after the volleys (a short jump
   in open water at `yonder`).
 - Checkpoint: the commit after this entry. Next: kits6a-J2 (Brace).
+
+## Handover 1: the first agent stops after kits6a-J1 (context spent on the spec read), at a job boundary
+- Next agent: read this ledger only (decisions A6a-1..11, the job list, the code pointers), then kits6a-J2.
+- Harness helpers seen: SetClass 1997, Park 2008, Shells() 2005, AimWorld 81, Vary/VaryAngle/VaryNear 1136-1139,
+  WarpHold ~3236 (s.DriveHeld / PressDrive / Charging / ChargeHeld); the solo call list for slice 6a sits just
+  before "── WARRIOR: the blade (slice 6c) ──" (~13480); rung-5 guest calls ~17420 (LaneA6c*GuestChecks).
+- Edit SmokeTest.cs.txt with a python script from a file (LF, binary); bash heredocs with long C# fail here.
