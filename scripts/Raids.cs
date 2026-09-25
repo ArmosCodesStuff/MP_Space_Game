@@ -72,8 +72,8 @@ public sealed class Raids
     public void Raid(int level) =>
         Send(WaveTrigger.Failed, new WaveBrief { Pilots = _hub.PartySize, Level = level, Origin = Hub.BasePos });
 
-    public int Patrol(Vector2 at, double scale = 1) =>
-        Send(WaveTrigger.Called, new WaveBrief { Pilots = _hub.PartySize, Scale = scale, Origin = Hub.BasePos, Anchor = at });
+    public int Patrol(Vector2 at, double level = 1) =>
+        Send(WaveTrigger.Called, new WaveBrief { Pilots = _hub.PartySize, CalledLevel = level, Origin = Hub.BasePos, Anchor = at });
 
     // A MISSION'S TARGET DEFENDING ITSELF: wave `wave` of its own clock, formed up round `at`, at
     // the mission's level. It is the same builder an escort's hunters come from -- what differs is

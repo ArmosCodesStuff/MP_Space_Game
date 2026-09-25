@@ -36,6 +36,11 @@ history pick the work up from it alone. Update it in the same change as the code
 
 ## Handoff — read this first
 
+**2026-09-25 (worktree `WarShips_wt_curve`, branch `wt/curve`): lane F, the curve, built J1-J5;
+compiles, rung 2 green. engine-unproven: rungs 3-5 owed in the final test phase.** Par.cs replaces
+x1.025 a level; boss rows 3222 / 2968 and the cut; siege rows; raider Strength is a level; skip +2;
+salvage levels on the slot, capped. What the test phase owes: `docs/plans/ledger_curve.md` (J6 POST).
+
 **2026-09-25 (worktree `WarShips_wt_fields`, branch `wt/fields`): kits lane D (F9 fields, zones, marks)
 built, J1-J3; compiles, rung 2 green. engine-unproven: rungs 3-5 and the frames owed in the final test
 phase.** The field rows for the Supercarrier (`super`), the Taunt (`taunt`) and the boost (`boost`) wait
@@ -527,6 +532,36 @@ outstanding from the batch of 2026-09-23.)*
 ---
 
 ## Unreleased
+
+### The curve, lane F (2026-09-25, worktree wt/curve)
+
+- **Par** (`scripts/Par.cs`, new): the chip-free reference pilot (the Destroyer base class, walled, 4
+  power lines, salvage at 65% of the gate) as rows for L1-80 from `models/numbers_v2.py`. `HullScale`
+  (the boss's hull: x1.418 / 1.642 / 2.216 at L10 / 20 / 40), `DamageScale` (every hostile blow: x1.636
+  / 2.004 / 3.131), `CraftScale` (a raider's hull: x2.151 at L40); flat past L40. It replaces
+  `Missions.S` = 1.025^(L-1), which is deleted with `Missions.LevelStep`.
+- **Bosses**: the Lancer 3222 and the Drake 2968 at L1 (were 760 / 700); no hull trim for adds.
+  Every move but the two 250 supers is cut: Lancer guns 2.68, trident 11.2, shockwave 33.5, ram 29.8
+  (burn 50 a tick kept), Drake gun 4.72, scrap 14.76 (rock 250 kept). With no chips a par pilot kills
+  a boss in about 60 s and lives about 31 s (Lancer) / 42 s (Drake) at every level. The damage scale
+  rides `Missions.DamageMult`, inside `Boss.Out` (F17). Credits follow `HullScale`.
+- **Siege**: the base is the Lancer's row (3222) and a pylon an eighth of it (403), both x `HullScale`
+  (were 2x the level's boss and a flat 400).
+- **Raiders**: `Raider.Strength` is a LEVEL: hull x `CraftScale`, each volley (`Raider.Volley`) x
+  `DamageScale`, the missile the row's flat figure. An escort's threat is its hunters' level
+  (`Waves.ThreatStrength` deleted); a party's toughness is `Par.LevelAtHull`.
+- **Level skipping**: the host may pick up to two levels past the newest (`Missions.SkipAhead`); the
+  TIO says "(skip +N)". A skipped level stays uncleared.
+- **Salvage levels live on the SLOT, per pilot**: five core-slot ladders (Weapon, Engines, Shield,
+  Hull, Utility) in `Character.GearLevel`, keyed by slot name and sent with the identity as before;
+  +3% a level to what the part in the slot is for, round(500 x 1.10^n) salvage, 40 levels (+120%);
+  chip slots take none. A level is sold only up to the highest level cleared on any ladder + 1
+  (`Equipment.LevelCap`); the window greys the price there. Old part-id levels on disk are dropped
+  (saves are disregarded).
+
+**Known broken:** nothing known; nothing here has run on the engine yet (rungs 3-5 owed). Siege `Pay 2`
+/ `Crates 2` (progression_curve §2.4) are not built. Par's rows are the model's on the item law to come:
+the item pass (lane I) re-runs `numbers_v2.py` on its own `Tiers` / `Loot` rows and re-literals Par.
 
 ### Class kits, lane D: fields and the torn chunk, F9 (2026-09-25, worktree wt/fields)
 

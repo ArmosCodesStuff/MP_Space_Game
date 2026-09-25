@@ -65,7 +65,7 @@ public partial class Net : Node
         public ShipClass Class = ShipClass.Battleship;
         public int[] Bought = Array.Empty<int>();
         public string[] Equip = Array.Empty<string>();
-        public Dictionary<string, int> GearLevel = new();  // what the pilot levelled each part to, by id (Equipment.SanitizeLevels on arrival)
+        public Dictionary<string, int> GearLevel = new();  // what the pilot levelled each core slot to, by slot (Equipment.SanitizeLevels on arrival)
         public string CharacterId = "";                   // the pilot's stable identity: a peer id changes on a reconnect
         public int Level = 1;                              // the pilot's level, as claimed (an escort's threat)
         public int Peak = 1;                               // the highest level it has reached, as claimed (Progression.Claim): what its walls read

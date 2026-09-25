@@ -267,6 +267,8 @@ public partial class _Shots : Node
             pship.Position = Hub.TioPos + new Vector2(240, 180); pship.Velocity = Vector2.Zero;
             GetViewport().GetCamera2D().Zoom = new Vector2(1.1f, 1.1f); await W(1.6);
             hub.OpenTio(); await W(0.4); await Snap("35_tio_warp_to_target");
+            hub.SelectLevel(Missions.Level + 2); await W(0.3); await Snap("35b_tio_skip_two");     // lane F: "(skip +2)"
+            hub.SelectLevel(Missions.Unlocked(Missions.Kind)); await W(0.2);
             hub.SetMyReady(true); pship.AutopilotTo = null;              // READY, but stay for the pictures
             await W(1.6); await Snap("36_mission_opening_bar");
             await W(2.0); await Snap("37_mission_portal_open");
@@ -395,7 +397,7 @@ public partial class _Shots : Node
         {
             var rs2 = H.GetNode<PlayerShip>("Ship_1"); var keepR2 = rs2.Position;
             rs2.Position = Hub.BasePos + new Vector2(0, 2600); rs2.Velocity = Vector2.Zero; rs2.Rotation = 0f; await W(0.5);
-            H.SpawnPatrol(rs2.Position + new Vector2(-500, 350), 1.1); H.SpawnPatrol(rs2.Position + new Vector2(500, 350), 1.1);
+            H.SpawnPatrol(rs2.Position + new Vector2(-500, 350), 1); H.SpawnPatrol(rs2.Position + new Vector2(500, 350), 1);
             await W(1.0); await Snap("53_raid_incoming");
             foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e9);
             rs2.Position = keepR2; rs2.Velocity = Vector2.Zero; await W(0.3);
@@ -405,6 +407,18 @@ public partial class _Shots : Node
             H.ToggleEquipment(); await W(0.4);
             await Snap("55_equipment");
             H.ToggleEquipment(); await W(0.2);
+        }
+        // ...and salvage levels on the SLOT (lane F): the Weapon slot at level 4 (+12% beside its part's
+        // name) and held at the cap with level 3 cleared (its price greyed), the Shield slot at level 1
+        {
+            var keepLv = new System.Collections.Generic.Dictionary<string, int>(Character.GearLevel);
+            var keepCl = Character.BossCleared.ToDictionary(kv => kv.Key, kv => kv.Value);
+            Character.GearLevel["Weapon"] = 4; Character.GearLevel["Shield"] = 1; Character.BossCleared["silver_lancer"] = new() { 1, 2, 3 };
+            H.ToggleEquipment(); await W(0.4);
+            await Snap("55b_equipment_slot_levels");
+            H.ToggleEquipment(); await W(0.2);
+            Character.GearLevel.Clear(); foreach (var kv in keepLv) Character.GearLevel[kv.Key] = kv.Value;
+            Character.BossCleared.Clear(); foreach (var kv in keepCl) Character.BossCleared[kv.Key] = kv.Value;
         }
         // ...and with boss drops: an Epic shield fitted (its name in the Epic colour, its effects in
         // words), and a hold of every class's parts, some of them doubled

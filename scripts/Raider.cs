@@ -46,8 +46,9 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
     public StatusSet Statuses => _status;
     public void ApplyStatus(Status st, double seconds, double share = double.NaN) { if (Net.Sim && StatusSet.Reaches(st, Tags)) _status.Apply(st, seconds, share); }
     public float Length => Def.Length;
-    // a raid's raiders are as strong as the boss that was failed: S(L) = 1.025^(L-1) (Missions.S)
-    public double Strength = 1;          // S(L) (was "Scale", which hid Node2D.Scale)
+    // A LEVEL, the boss's that was failed (fractional for an escort's threat): its hull x
+    // Par.CraftScale, its guns x Par.DamageScale -- the curve a boss is on (Par.cs)
+    public double Strength = 1;
     // The share of that hull it is built with: an escort's hunters come at half (Hub.HunterHull).
     // Not Strength, which scales its damage too. Set before it enters the tree (_Ready reads it).
     public double HullShare = 1;
@@ -55,7 +56,9 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
     // (Hub.ThreatAgility). The host flies every raider; guests follow where it says.
     public double Agility = 1;
     private HullWatch _hullWatch;
-    public double MaxHull => Def.Hull * Strength * HullShare;
+    public double MaxHull => Def.Hull * Par.CraftScale(Strength) * HullShare;
+    // ONE VOLLEY, every barrel at once (F20), on its level's damage scale: what each laser Strike carries
+    public double Volley => Def.Dps * Def.Barrels * Def.ShotEvery * Par.DamageScale(Strength);
     public float HitRadius => Length * Def.HitShare;
     public bool Selectable => true;
 
@@ -271,7 +274,7 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
             if (_shot <= 0)
             {
                 _shot = Def.ShotEvery;
-                Strike(Target, Def.Dps * Def.Barrels * Def.ShotEvery * Strength);
+                Strike(Target, Volley);
                 Combat.Flash(Position, Target.Position, Def.Beam);
             }
         }
@@ -332,7 +335,7 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
                 _shot = Def.ShotEvery;       // 1 s: slower than a target's 0.52 s invulnerability, so no shot is wasted
                 // ONE Strike per volley carries every barrel's damage (F20): two separate Strikes,
                 // 0.52 s apart or not, would be eaten by the target's own hit gap and undercount.
-                Strike(Target, Def.Dps * Def.Barrels * Def.ShotEvery * Strength);
+                Strike(Target, Volley);
                 if (Def.Barrels > 1 && _turret != null)
                 {   // drawn as that many flashes, from barrel offsets either side of the turret's centre
                     var side = Vector2.Right.Rotated(face) * (Length * Def.TurretWidth * 0.5f);
