@@ -611,3 +611,7 @@ uncommitted paths: J4's edits (no POST) and J5 started without a PRE.
   comment + message (tail stops 540 u down the lane, the rest of the 0.75 s dash). (4) "of its hull"
   in Lancer.cs, Drake.cs, Boss.cs and the two row-check messages. CHANGES + DESIGN: 1300 (1720).
 - Next: the final test phase, then the merge gate again.
+
+### A6 (coordinator) -- gate 3's one comment
+- Gate 3 passed the A5 code (the throw's Standoff 1300 from the hull, 200q u past Find at every level and BossSize) and failed one clause
+  in the ram check's comment ("under the nose as the dash starts"); replaced with the gate's own wording. Comment only; quick below.

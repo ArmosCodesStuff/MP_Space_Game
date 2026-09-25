@@ -8438,7 +8438,8 @@ public partial class _Test : Node
                       $"its shockwave hits as far as its ring is drawn: at three bearings, a pilot 420-600 u from the centre (past the row's 340, inside the doubled 680) takes the whole 45{(hbRingBad.Count > 0 ? " -- " + string.Join("; ", hbRingBad) : "")}");
 
                 // A RAM LANDS ONCE A PASS: a pilot held still in its lane, 360 to 480 u down it from
-                // the centre, is under the nose as the dash starts, and the dash ends with the hull
+                // the centre, is reached by the nose within the first 0.1 s of the dash (it starts 0-120 u
+                // ahead of it), and the dash ends with the hull
                 // still over it (its tail stops 540 u down the lane), so it covers the pilot for the
                 // rest of the 0.75 s dash, longer than the 0.52 s a source is blocked for -- and the
                 // pilot takes the row's 40 once, not twice.
