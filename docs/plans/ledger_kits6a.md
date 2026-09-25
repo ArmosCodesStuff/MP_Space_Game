@@ -432,3 +432,21 @@ fittings sweep's witness table ~13755, fitRows ~13797.
   Suppress runs after its curtain); the host's watch is created with the lunge / prism / reload watches.
 - Owed: rung 3 the three checks + the sweep; rung 4 frame 85d; rung 5 the host / guest pair.
 - Next: kits6a-J9 (Grapnel).
+
+### kits6a-J9 · PRE · Grapnel: pull, swing, tow, rip (A6a-9) -- tier opus (no COORDINATOR NOTE in the tail)
+- Intent: a HOOK row foundation (AbilityDef.Hook = HookSpec: the helm move + its stat ids, the Towing row, the rip's
+  share / flat, the cooldown) read by generic PlayerShip code: the owner's half of a press (AbilityDef.Owner: begins the
+  helm on an immovable anchor, casts off on a second press), the host's Press (PlayerShip.Hook: HelmMoves.Confirm on an
+  immovable anchor, Towing.Tow on a throwable craft, cast-off on a second press), the host's watch every frame
+  (PlayerShip.HookWatch: anchor dead / warped -> released, no rip; web / Disabled / own charge -> rip; a tow's craft gone
+  -> over), the slot's Expire (5 s -> rip; a tow's haul over -> hurled), the cooldown 16 s from cast-off. The rip
+  (PlayerShip.Rip): Fx.Tear first, then Dealt.Deal(anchor, share x MaxHp (IQuarry; 0 for a dummy) + flat, "grapnel").
+  Refusals NO TARGET / OUT OF RANGE / NO HOLD (a missile or hulled body) / WEBBED (the swing only) / COOLING.
+  DD rows grapnel_reach 700, bite 0.15, pull 450, stop 250, clear 150, reel 100, swing 5, cooldown 16, rip_share 0.01,
+  rip_flat 10; DD Abilities Guns, Lance, Suppress, Grapnel (E).
+  Checks NEW: LaneA6aGrapnelPullChecks, LaneA6aGrapnelRipChecks, LaneA6aGrapnelTowChecks, frame LaneA6aRipFrames
+  (85e_dd_grapnel_rip), rung 5 LaneA6aGrapnelGuestChecks; the sweep's witness "grapnel"; the DD bar list.
+- Files: scripts/Abilities.cs, Ships.cs, PlayerShip.cs, HelmMoves.cs, Items.cs, tools/smoketest/SmokeTest.cs.txt,
+  tools/screens/Shots.cs.txt.
+- HEAD 9b51d2bfa10c98a65c03981f2ed69f78cf9d0c92 · Abilities.cs e3efa812 · Ships.cs e1b793bc · PlayerShip.cs 31293784 ·
+  HelmMoves.cs 82d013f9 · Items.cs 4120eab8 · SmokeTest.cs.txt fe379bd1 · Shots.cs.txt 026ef3b1
