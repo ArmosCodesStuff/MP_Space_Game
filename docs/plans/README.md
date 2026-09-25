@@ -125,7 +125,7 @@ Sprites
   needs to read against space.
 
 Testing (owner, standing)
-- Every change carries its check (CLAUDE.md §3). After the features: new Python scenario tools and
+- Every change carries its check (CLAUDE.md §6). After the features: new Python scenario tools and
   smoke tests covering every mechanic for every class, every ability, and interactions between
   heavies, bosses and lights for every weapon and platform.
 
