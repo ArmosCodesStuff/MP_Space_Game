@@ -765,15 +765,21 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     }
     // A STATUS THIS SHIP PUTS ON A HOSTILE IT HIT (a row's OnDealt, on the host): for the stat's seconds, through the
     // hostile's own ApplyStatus (its Reaches decides whether the status can hold it at all), with the row's mark raised
-    // on the hull -- only when the status is new or has run down by Remark, so a stream of shells raises one mark every
-    // half second, not one a shell. Suppressing fire's chevron.
+    // on the hull: at most one raise every Remark on one hull (_marked: this ship's clock of its last raise of that mark
+    // there), each living the status's time left plus Remark -- so under a stream of shells the mark is raised again
+    // every half second and outlasts the status by under half a second, not one raise a shell. Suppressing fire's chevron.
     public const double Remark = 0.5;
+    private readonly Dictionary<(int id, int mark), double> _marked = new();
     public void Afflict(IHittable target, Status st, string timeStat, int mark)
     {
         if (!Net.Sim || target is not IStatused held || !target.Alive) return;
-        double time = Stats[timeStat], before = held.Statuses.Left(st);
-        held.ApplyStatus(st, time);
-        if (held.Statuses.Has(st) && before < time - Remark) Fx.Mark(mark, target);
+        held.ApplyStatus(st, Stats[timeStat]);
+        if (!held.Statuses.Has(st)) return;
+        var key = (target.NetId, mark);
+        if (_marked.TryGetValue(key, out var at) && _clock - at < Remark) return;
+        foreach (var old in _marked.Where(m => _clock - m.Value >= Remark).Select(m => m.Key).ToList()) _marked.Remove(old);
+        _marked[key] = _clock;
+        Fx.Mark(mark, target, held.Statuses.Left(st) + Remark);
     }
     // A row's time and its cooldown set at once: from the press, or after the time when it CoolAfter.
     private void Engage(AbilityDef def, double secs)
@@ -1966,6 +1972,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         foreach (var w in _wings) if (IsInstanceValid(w)) w.QueueFree();
         _wings.Clear();
         if (IsInstanceValid(_pod)) _pod.QueueFree();
+        _marked.Clear();
         Combat.Players.Remove(this);
     }
 

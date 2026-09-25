@@ -1154,8 +1154,12 @@ The three capitals' rows and keys (ledger_kits6a.md A6a-1..A6a-16). What is dura
 - **A bow shot** (`AbilityDef.Bow`, `PlayerShip.FireAlong`): one round of a Shots row off the nose. The Lance took the
   old missile's Shots row 4 in place (its one user left).
 - **A status put on what the ship hits** (`PlayerShip.Afflict`) goes through the hostile's own `ApplyStatus` (its
-  `Reaches` decides) and raises the row's MARK (`Fx.Mark`: a row riding the hull's NetId) only when new or 0.5 s run down,
-  so a stream of shells is one raise every half second. The chevron is `Fx.Chevron`, Cap 1.
+  `Reaches` decides) and raises the row's MARK (`Fx.Mark`: a row riding the hull's NetId) at most once every 0.5 s
+  (`Remark`) on one hull, on a clock the ship keeps per (hull, mark) and clears in `_ExitTree`; each raise lives the
+  status's time left + 0.5 s (a non-warning `FxRaise` with a Time lives it instead of its row's Life). So under a stream
+  of shells the mark is raised again every half second and outlasts the status by under half a second. Trap: a mark
+  raised only when its status "ran down" is never raised again under steady fire and fades while the status holds.
+  The chevron is `Fx.Chevron`, Cap 1.
 - **A hook row** (`HookSpec`, `AbilityDef.Hook`): the owner flies its own helm move round what cannot move
   (`Targeting.Immovable`) and casts it off itself on a second press; the host marks it, watches it every frame
   (`HookWatch`: anchor gone or warped ends it with no rip; a web, a disable, the ship's own charge rip) and resolves

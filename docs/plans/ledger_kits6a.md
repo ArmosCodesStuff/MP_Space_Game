@@ -516,3 +516,24 @@ fittings sweep's witness table ~13755, fitRows ~13797.
   scripts/Hub.cs 179869a6113e7ec5c6b96f504b65a705362ce50a (a comment), scripts/Ships.cs c97b57464c49ea2c87060c6b1413a35a6fb034a7,
   tools/smoketest/SmokeTest.cs.txt e86a68e5926e08b90638ccb70877dd1fb3ffdd58, docs/CHANGES.md edacdd3f47dd9237607d0a6ac89ba6d676e598e3,
   docs/DESIGN.md 0a41fe9393c16075f03a67db2dc8b3aace936c2e. HEAD d7911b132acc7ffa2b71efddd0f9c827bf325528.
+### kits6a-J11 · POST
+- Verdict: compiles; typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final
+  test phase.
+- Built: (1) `PlayerShip.Afflict` raises the mark at most once every Remark per (hull NetId, mark) on the ship's own
+  clock (`_marked`, pruned as it goes, cleared in _ExitTree), each raise carrying Time = the status's time left + Remark;
+  `Fx.Mark(id, on, life)`; `FxNode.Life` is the raise's Time for a non-warning raise that has one (the draw fades read
+  it), else the row's Life. The chevron is up for the whole suppression and outlasts it by < 0.5 s. (2)-(3) checks
+  below. (4) Ships.cs :223 / :249 say what is true now. Docs: DESIGN (Afflict + the trap), CHANGES (Handoff,
+  Unreleased; the "no rip ... has no check" Known-broken line removed).
+- Decisions: A6a-17 the chevron outlasts its status by under Remark (0.5 s, inside its fade) rather than a raise per
+  shell. A6a-18 the party-of-2 rip is proved at rung 5 by the HOST's own grapnel on three siege pylons raised for the
+  party (the host is the second party member's peer; a guest DD in mission 1 would stretch the boss fight's timing).
+- Checks NEW: LaneA6aSuppressChecks steady-fire block (3 runs); LaneA6aGrapnelPullChecks no-rip block (3 warped on the
+  dummy, 3 died on a lone pylon); LaneA6aGrapnelPartyRipChecks (rung 5, ahost, the siege; 16.444 = 0.01 x 644.4 + 10).
+- Checks REWRITTEN: LaneA6aGrapnelPullChecks pull time +-0.1 -> +-0.05; LaneA6aGrapnelRipChecks(anchor, what, chunk):
+  + the pull (250 +- 10 off, +-0.05 s, bow 5) on the boss / pylon / base, run 0's "no nearer" (not pulled, line >= d,
+  never 15 u nearer), the chunk Size 0.16 x length (57.6 Lancer / 35.2 pylon / 89.6 base), d re-taken after the frame.
+- Traps for the test phase: the party check adds ~5 s to the host's siege before it parks (the guest waits 20 s for
+  the siege's end); the base's own 15 s clock may put a lane up at the host's destroyer near a pylon (still on the
+  base). The pull's +-0.05 s on the Lancer is read against a boss that moves.
+- Owed: rung 3 x2 the steady / no-rip / pull-on-anchor checks; rung 5 x2 LaneA6aGrapnelPartyRipChecks.

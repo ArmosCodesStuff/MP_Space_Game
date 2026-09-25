@@ -36,13 +36,15 @@ history pick the work up from it alone. Update it in the same change as the code
 
 ## Handoff — read this first
 
-**2026-09-25 (worktree `WarShips_wt_kits6a`, branch `wt/kits6a`): kits lane A slice 6a, the capitals, built J1-J9.
-Compiles, rung 2 green; engine-unproven: every check is owed in the final test phase** -- rung 3 twice (LaneA6aArc,
+**2026-09-25 (worktree `WarShips_wt_kits6a`, branch `wt/kits6a`): kits lane A slice 6a, the capitals, built J1-J9,
+and the merge gate's four findings fixed (J11: the chevron's clock per hull, the no-rip ends checked, the pull on
+every real anchor, a party of two at rung 5). Compiles, rung 2 green; engine-unproven: every check is owed in the final test phase** -- rung 3 twice (LaneA6aArc,
 Broadside, Brace, BraceWarp, BraceSplit, Ciws, CiwsDisable, CiwsPrey, CarrierRow, Gunship, GunshipFire, Super,
 SuperMissile, SuperWings, Director, Lance, LanceHit, Suppress, SuppressWeapon, SuppressGun, GrapnelPull, GrapnelTow
 checks; LaneA6aGrapnelRipChecks inside the boss, pylon and base blocks; the rewritten sweep, K window, DPS and kit
 literals), rung 4 (frames 85a-85e, 43_lance_away, 43b_lance_closeup, 23b / 23c destroyer bar), rung 5 `six,six`
-(LaneA6aGunship, Suppress, Grapnel guest checks, the suppress host watch, the hull lines 458.2 / 540 / 527). Wire:
+(LaneA6aGunship, Suppress, Grapnel guest checks, the suppress host watch, LaneA6aGrapnelPartyRipChecks in the siege,
+the hull lines 458.2 / 540 / 527). Wire:
 Fx.Chevron = 16 (appended); Shots row 4 renamed "missile" -> "lance" in place. Detail, decisions A6a-1..16 and what
 is owed: `docs/plans/ledger_kits6a.md`.
 
@@ -642,9 +644,10 @@ its hull and a 5 s bow-on swing, casting off tears 1% of its hull + 10 away; a r
 for 60 / 120; 16 s from the cast-off). New mechanisms: the timed row (`RunFor`), the sortie row (`Launch`), the bow
 shot (`FireAlong`), the scoped lift (`RateOn` / `DamageOn`), `PlayerShip.Afflict` + `Fx.Mark`, the hook row
 (`HookSpec`: `Hook`, `CastOffHook`, `HookWatch`, the rip).
+The chevron is raised again every 0.5 s while shells land and lives the status's time left + 0.5 s, so it stays up
+as long as the hostile is Suppressed (the merge gate: it faded 3 s after the first hit under steady fire).
 **Known broken:** engine-unproven (rungs 3-5 owed). The rip has no sound (A6a-14). The four v2 destroyer gear ids are
-not built (owed to lane I). "No rip when the anchor dies or warps" is built but has no check (no solo anchor can be
-killed or warped without breaking the fights that follow).
+not built (owed to lane I).
 
 ### Class kits, lane A slice 4: helm moves, wards, the press's point, Mend -- F8, F10 (2026-09-25, worktree wt/kits4)
 

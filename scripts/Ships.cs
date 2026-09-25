@@ -220,8 +220,8 @@ public static class Classes
                 ItemDef.Own(GearSlot.Utility, "cv_bomber_bay", "Bomber Bay", "the bomber wing", "bomber_count"),
             },
             Art = new ClassArt {
-                // carrier_a (the pack, J5): a PD pair on the flanks amidships (v1: the stern mount
-                // went, D8); the deck (Bay*/RunwayBow/EngineInset) is the bays abreast amidships,
+                // carrier_a (the pack, J5): a PD pair on the flanks amidships and no mount at the
+                // stern (D8); the deck (Bay*/RunwayBow/EngineInset) is the bays abreast amidships,
                 // the runway run from the bow and the engines inset at the stern
                 Texture = "res://carrier_player.png", Length = 283.5f, HalfWidth = 40.02f,
                 BayX = 25.01f, BayY = 8.34f, BaySpacing = 46.69f, RunwayBow = 110.06f, EngineInset = 8f,
@@ -246,7 +246,7 @@ public static class Classes
                 ["main_turn"] = 2.09,
                 ["pd_count"] = 2,
             },
-                // the 0: gear reaches the Lance, the pilot's points do not -- as the missiles were
+                // the 0: gear reaches the Lance, the pilot's points do not
             Damage = new() { ["main_damage"] = 1, ["lance_damage"] = 0 },
             Reach = new() { ["main_range"] = 1, ["lance_range"] = 1, ["pd_range"] = 1 },
             Cycle = new() { ["main_interval"] = 1, ["pd_interval"] = 1 },

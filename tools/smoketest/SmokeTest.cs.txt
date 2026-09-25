@@ -5800,6 +5800,53 @@ public partial class _Test : Node
             s.Sl("suppress").Left = 0; s.Sl("suppress").Cool = 0;
             await Wait(0.3);
         }
+        // STEADY FIRE (kits_v2 "a grey chevron shows"; PlayerShip.Afflict's clock per hull): three varied runs (a held
+        // gunship / lancerkin / webifier 300-600 u off at a VaryAngle bearing): Q, then a shell every 0.25-0.5 s (each gap
+        // drawn afresh) from 0.1-0.3 s into the window for 4.0-5.4 s of it. At every frame the hostile is Suppressed,
+        // exactly ONE chevron rides its hull; while the shells land the one up is never older than 1.1 s (raised again
+        // every Remark, 0.5 s, and a gap); 2.8-2.9 s after the last shell it is Suppressed under one chevron, 3.05-3.2 s
+        // after the status is gone, and 3.6-3.7 s after the chevron too (it outlasts the status by under 0.5 s).
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f);
+            void Hold() { s.Position = at; s.Velocity = Vector2.Zero; }
+            s.Sl("suppress").Left = 0; s.Sl("suppress").Cool = 0; Hold(); await Wait(0.2); Hold();
+            var spot = at + Vector2.Right.Rotated(VaryAngle()) * Vary(300f, 600f);
+            var tgt = H.SpawnRaider(spot, kinds[(run + 1) % 3]); tgt.Hp = 1e9; tgt.ApplyStatus(Status.Disabled, 60);
+            await Frame();
+            List<FxNode> Marks() => Nodes<FxNode>(tgt).Where(f => f.Id == Fx.Chevron && !f.IsQueuedForDeletion()).ToList();
+            Key(q);
+            for (int i = 0; i < 6 && s.Sl("suppress").Left <= 0; i++) await Frame();
+            double t0 = s.Clock, fireFor = Vary(4.0f, 5.4f), next = t0 + Vary(0.1f, 0.3f), first = -1, last = -1, oldest = 0;
+            int shells = 0, samples = 0, wrong = 0, worstCount = 1;
+            void Sample(bool firing)
+            {
+                if (first < 0 || s.Clock - first < 0.04 || !tgt.Statuses.Has(Status.Suppressed)) return;
+                var m = Marks(); samples++;
+                if (m.Count != 1) { wrong++; worstCount = m.Count; }
+                else if (firing) oldest = Math.Max(oldest, m[0].Elapsed);
+            }
+            while (s.Clock < t0 + fireFor)
+            {
+                Hold();
+                if (s.Clock >= next) { Dealt.Deal(tgt, 1, s, shell); last = s.Clock; if (first < 0) first = last; shells++; next = last + Vary(0.25f, 0.5f); }
+                await Frame();
+                Sample(true);
+            }
+            double stillAt = last + Vary(2.8f, 2.9f), goneAt = last + Vary(3.05f, 3.2f), clearAt = last + Vary(3.6f, 3.7f);
+            while (s.Clock < stillAt) { Hold(); await Frame(); Sample(false); }
+            bool still = tgt.Statuses.Has(Status.Suppressed); int stillMarks = Marks().Count;
+            while (s.Clock < goneAt) { Hold(); await Frame(); Sample(false); }
+            bool gone = !tgt.Statuses.Has(Status.Suppressed);
+            while (s.Clock < clearAt) { Hold(); await Frame(); }
+            int clearMarks = Marks().Count;
+            Check(shells >= 8 && samples > 0 && wrong == 0 && oldest <= 1.1 && still && stillMarks == 1 && gone && clearMarks == 0,
+                  $"suppress steady run {run} ({Enemies.Of(kinds[(run + 1) % 3]).Id} {spot.DistanceTo(at):0} u off): {shells} shells over {last - first:0.0} s, 0.25-0.5 s apart -- {samples} frames Suppressed, {wrong} of them not under exactly one chevron (0; {worstCount} seen); "
+                  + $"the chevron up while they land never older than {oldest:0.00} s (1.1); 2.8-2.9 s after the last shell suppressed {still} under {stillMarks} (1); 3.05-3.2 s after gone {gone}; 3.6-3.7 s after, {clearMarks} chevrons (0)");
+            tgt.TakeDamage(1e12);
+            s.Sl("suppress").Left = 0; s.Sl("suppress").Cool = 0;
+            await Wait(0.3);
+        }
     }
 
     // ── SLICE 6a: WHAT SUPPRESSES (kits_v2 Proves: "a director shell, a Lance and a PD round each hit a webifier; only the
@@ -5932,7 +5979,7 @@ public partial class _Test : Node
     // x0.01 + 10; E, ability 3 at level 6). The refusals: past 700 u OUT OF RANGE, webbed WEBBED, nothing selected NO
     // TARGET, a hostile seeker NO HOLD -- none starts a move or a cooldown. Three varied runs (VaryAngle bearing; pressed
     // 380-420 / 560-620 / 680-699 u off the dummy's centre): the host marks the slot (up, on the dummy's id), the pull lands
-    // 250 +- 10 u off its hull within 0.1 s of 0.15 + (distance - stop) / 450 with the bow within 5 deg, a second of A or D
+    // 250 +- 10 u off its hull within 0.05 s of 0.15 + (distance - stop) / 450 with the bow within 5 deg, a second of A or D
     // swings it round on its line (within 15 u) bow-on (5 deg); then it is cast off by a second E, by its 5 s (the owner's
     // clock or the host's, whichever runs out first that frame), or by a web
     // (the three ends that rip) -- the dummy takes exactly 10 (x0.01 of a hull it has not got, + 10), credited "grapnel",
@@ -6013,11 +6060,71 @@ public partial class _Test : Node
             s.Statuses.Clear(Status.Pinned);
             s.UseAbility("grapnel", dm.NetId); await Frame();
             string again = s.FailNote("grapnel");
-            Check(marked && Math.Abs(off - 250f) <= 10f && Math.Abs(taut - want) <= 0.1 && bow <= 5f && drift <= 15f && bowWorst <= 5f && swinging
+            Check(marked && Math.Abs(off - 250f) <= 10f && Math.Abs(taut - want) <= 0.05 && bow <= 5f && drift <= 15f && bowWorst <= 5f && swinging
                   && (s.Helm.Ended == endWant || (run == 1 && s.Helm.Ended == HelmEnd.Host && Math.Abs(s.Helm.T - 5) < 0.05)) && rips == 1 && Math.Abs(took - 10) < 1e-6 && Math.Abs(credit - 10) < 1e-6
                   && cool > 15.8 && cool <= 16.0 + 1e-6 && again == "COOLING",
                   $"grapnel run {run}: pressed {d0:0} u off the dummy -- marked by the host {marked}; hauled to {off:0.0} u off its hull (250 +- 10) at {taut:0.00} s (want {want:0.00}), bow {bow:0.0} deg; {key} swings it round, {drift:0.0} u off its line, bow {bowWorst:0.0} deg; "
                   + $"cast off by {s.Helm.Ended} ({endWant}) -- {rips} chunk (1), the dummy took {took:0.00} (10) credited {credit:0.00} to \"grapnel\"; cooling {cool:0.0} (16); E again {again} (COOLING)");
+            s.Velocity = Vector2.Zero; H.ClearSelection();
+            Reset();
+            await Wait(0.3);
+        }
+        // THE ENDS THAT DO NOT RIP (HookWatch; kits_v3 §3.2 "an anchor that dies or warps leaves no rip", kits_v31 §3.3
+        // "nothing when the anchor dies first", §3.4 "an anchor that warps casts off with none"). Three varied runs each:
+        // WARPED -- the destroyer pressed 380-650 u off the dummy at a VaryAngle bearing, and 0.3-0.8 s into the swing the
+        // dummy set down 650-900 u from where it stood (past Drives.SnapAt, 600) at a VaryAngle bearing; DIED -- a lone
+        // shield pylon raised near yonder with its level's hull (no base: nothing shields it, and its fall is nothing to a
+        // mission), the destroyer pressed 430-690 u off it at a VaryAngle bearing, and 0.3-0.8 s into the swing the pylon
+        // shot down. Either way, within 0.1 s: the move ends (AnchorWarped / AnchorLost), the line is released (the slot
+        // down, on no id), no chunk rides the anchor's id, the dummy's meter and the "grapnel" credit are unchanged, and
+        // the slot cools 16.0 from that frame.
+        Check(Drives.SnapAt == 600f, $"an anchor that moves over {Drives.SnapAt:0} u in a frame has warped (600)");
+        var dmHome = dm.Position;
+        var pylonRow = Emplacements.RowOf(Emplacements.Pylon);
+        for (int end = 0; end < 6; end++)
+        {
+            bool warp = end < 3;
+            Reset(); s.Hp = s.MaxHp;
+            IHittable anchor = dm; Emplacement py = null;
+            if (warp) Place(Vary(380f, 650f));
+            else
+            {
+                double hull = Emplacements.Of(pylonRow).Hull(Missions.Level) * Missions.HullMult(Missions.Level, 1);
+                py = H.Spawn(Spawns.Emplacement, VaryNear(yonder, 300f), pylonRow, hull, hull) as Emplacement;
+                await Frame();
+                if (py == null) { Check(false, $"grapnel died run {end - 3}: no pylon raised"); continue; }
+                anchor = py;
+                s.Statuses.Clear(Status.Pinned);
+                s.Position = py.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(430f, 690f); s.Velocity = Vector2.Zero; s.Rotation = VaryAngle();
+            }
+            await Frame();
+            float d0 = s.Position.DistanceTo(anchor.Position);                     // re-taken after the frame
+            H.SelectTarget(anchor);
+            s.UseAbility("grapnel", anchor.NetId);
+            for (int i = 0; i < 60 * 3 && s.Helm.On && s.Helm.Pulling; i++) await Frame();
+            double c0 = s.Clock, swingFor = Vary(0.3f, 0.8f);
+            while (s.Clock - c0 < swingFor && s.Helm.On) { s.Hp = s.MaxHp; await Frame(); }
+            bool swung = s.Helm.On && s.Sl("grapnel").Left > 0 && s.Sl("grapnel").N == anchor.NetId;
+            int anchorId = anchor.NetId;
+            double took0 = dm.Total, credit0 = s.DealtBy.GetValueOrDefault("grapnel");
+            int rips0 = Nodes<FxNode>().Count(x => x.Id == Fx.Rip && x.Anchor == anchorId);
+            Vector2 movedTo = Vector2.Zero;
+            if (warp) { movedTo = dmHome + Vector2.Right.Rotated(VaryAngle()) * Vary(650f, 900f); dm.Position = movedTo; }
+            else py.TakeDamage(py.MaxHp * 2);
+            double endedAt = s.Clock;
+            for (int i = 0; i < 6 && (s.Helm.On || s.Sl("grapnel").Left > 0); i++) await Frame();
+            double within = s.Clock - endedAt, cool = s.Sl("grapnel").Cool;
+            await Frame(); await Frame();
+            int rips = Nodes<FxNode>().Count(x => x.Id == Fx.Rip && x.Anchor == anchorId) - rips0;
+            double took = dm.Total - took0, credit = s.DealtBy.GetValueOrDefault("grapnel") - credit0;
+            var endWant = warp ? HelmEnd.AnchorWarped : HelmEnd.AnchorLost;
+            bool released = !s.Helm.On && s.Sl("grapnel").Left == 0 && s.Sl("grapnel").N == 0;
+            if (warp) dm.Position = dmHome;
+            else if (GodotObject.IsInstanceValid(py) && py.Alive) H.Down(Spawns.Emplacement, py, false, 0f);
+            Check(swung && s.Helm.Ended == endWant && released && within <= 0.1 && rips == 0 && Math.Abs(took) < 1e-9 && Math.Abs(credit) < 1e-9
+                  && cool > 16.0 - within - 0.02 && cool <= 16.0 + 1e-6 && (warp || !GodotObject.IsInstanceValid(py) || !py.Alive),
+                  $"grapnel {(warp ? $"warped run {end}: the dummy set down {movedTo.DistanceTo(dmHome):0} u away" : $"died run {end - 3}: a lone pylon shot down")} mid-swing (pressed {d0:0} u off, swinging {swung}) -- "
+                  + $"ended {s.Helm.Ended} ({endWant}) within {within:0.00} s (0.1), the line released {released}; {rips} chunks (0), the dummy took {took:0.00} (0), \"grapnel\" credited {credit:0.00} (0); cooling {cool:0.00} (16 from that frame)");
             s.Velocity = Vector2.Zero; H.ClearSelection();
             Reset();
             await Wait(0.3);
@@ -6027,10 +6134,14 @@ public partial class _Test : Node
     // ── SLICE 6a: THE RIP ON A REAL ANCHOR (kits_v31 §3.3 Proves: "on {Lancer, Drake, pylon, base} the anchor's hull drops by
     // exactly 0.01 x MaxHp + 10 at cast-off"; the scaled MaxHp, so a party's is a party's). Run from each anchor's own
     // fight (the boss, a pylon, the pirate base), as a destroyer, three varied runs (VaryAngle bearing; pressed 80-120 u
-    // inside the stop, or 30-80 u outside it): cast off by a second E, by the 5 s, or by the destroyer's own warp charge --
-    // the anchor's hull drops by exactly 0.01 x its MaxHp + 10, credited "grapnel", ONE chunk raised on its id; its
-    // cooldown 16.0 from then.
-    async Task LaneA6aGrapnelRipChecks(IHittable anchor, string what)
+    // inside the stop, or 30-80 u outside it): the pull on a real anchor (kits_v3 §3.2 Proves, "on each of {Lancer, Drake,
+    // pylon, base, dummy}") -- pressed outside the stop, the centre ends 250 +- 10 u off the hull within 0.05 s of
+    // 0.15 + (distance - stop) / 450 with the bow within 5 deg; pressed inside it, no pull, a line never under the
+    // distance it had, and the destroyer never 15 u nearer ("moves the DD no nearer"); then cast off by a second E, by
+    // the 5 s, or by the destroyer's own warp charge -- the anchor's hull drops by exactly 0.01 x its MaxHp + 10,
+    // credited "grapnel", ONE chunk raised on its id whose Size is 0.16 x the anchor's length (`chunk`, the literal
+    // FieldsRipChecks holds for that anchor, NaN where it holds none); its cooldown 16.0 from then.
+    async Task LaneA6aGrapnelRipChecks(IHittable anchor, string what, float chunk)
     {
         if (anchor is not IQuarry q || anchor is not Node2D an) { Check(false, $"grapnel rip on the {what}: not a hulled anchor"); return; }
         var classWas = Character.Class;
@@ -6045,10 +6156,24 @@ public partial class _Test : Node
             float d0 = Math.Min(run == 0 ? stop - Vary(80f, 120f) : stop + Vary(30f, 80f), 690f);
             s.Position = an.Position + Vector2.Right.Rotated(VaryAngle()) * d0; s.Velocity = Vector2.Zero; s.Hp = s.MaxHp;
             await Frame();
+            d0 = s.Position.DistanceTo(anchor.Position);                           // re-taken after the frame
             double credit0 = s.DealtBy.GetValueOrDefault("grapnel");
             s.UseAbility("grapnel", anchor.NetId);
-            double c0 = s.Clock;
-            while (s.Clock - c0 < Vary(0.9f, 1.4f) && s.Helm.On) { s.Hp = s.MaxHp; await Frame(); }
+            double c0 = s.Clock, swingFor = Vary(0.9f, 1.4f), taut = -1;
+            await Frame();
+            bool pulledAtPress = s.Helm.On && s.Helm.Pulling; float line0 = s.Helm.Line, nearest = s.Position.DistanceTo(anchor.Position);
+            float off = float.NaN, bow = float.NaN;
+            while (s.Clock - c0 < swingFor && s.Helm.On)
+            {
+                s.Hp = s.MaxHp; await Frame();
+                if (!s.Helm.On) break;
+                nearest = Math.Min(nearest, s.Position.DistanceTo(anchor.Position));
+                if (taut < 0 && !s.Helm.Pulling)
+                { taut = s.Helm.T; off = s.Position.DistanceTo(anchor.Position) - anchor.HitRadius; bow = BowOff(s.Rotation, s.Position, anchor.Position); }
+            }
+            double pullWant = 0.15 + (d0 - stop) / 450.0;
+            bool pullOk = run == 0 ? !pulledAtPress && line0 >= d0 - 1e-3f && nearest >= d0 - 15f
+                                   : pulledAtPress && Math.Abs(off - 250f) <= 10f && Math.Abs(taut - pullWant) <= 0.05 && bow <= 5f;
             bool swung = s.Helm.On && s.Sl("grapnel").N == anchor.NetId;
             if (run == 1) while (s.Sl("grapnel").Left > 0.05 && s.Helm.On) { s.Hp = s.MaxHp; await Frame(); }
             double hp0 = q.Hp, max = q.MaxHp;
@@ -6058,10 +6183,16 @@ public partial class _Test : Node
             if (run == 2) s.DriveHeld = false;
             await Frame();
             double drop = hp0 - q.Hp, credit = s.DealtBy.GetValueOrDefault("grapnel") - credit0, cool = s.Sl("grapnel").Cool;
-            int rips = Nodes<FxNode>().Count(x => x.Id == Fx.Rip && x.Anchor == anchor.NetId && x.Elapsed < 0.3);
+            var chunks = Nodes<FxNode>().Where(x => x.Id == Fx.Rip && x.Anchor == anchor.NetId && x.Elapsed < 0.3).ToList();
+            int rips = chunks.Count;
+            float size = chunks.Count > 0 ? chunks[0].Radius : -1f, sizeWant = 0.16f * Fx.LengthOf(anchor);
+            bool sizeOk = Fx.ChunkShare == 0.16f && Math.Abs(size - sizeWant) < 0.01f && (float.IsNaN(chunk) || Math.Abs(size - chunk) < 0.5f);
             double want = 0.01 * max + 10;
-            Check(swung && Math.Abs(drop - want) < 1e-6 && Math.Abs(credit - want) < 1e-6 && rips == 1 && cool > 15.8 && cool <= 16.0 + 1e-6,
-                  $"grapnel rip on the {what} run {run}: hooked {d0:0} u off, cast off by {(run == 0 ? "a second E" : run == 1 ? "its 5 s" : "the destroyer's warp")} -- its hull dropped {drop:0.00} (0.01 x {max:0} + 10 = {want:0.00}), credited {credit:0.00}; {rips} chunk (1); cooling {cool:0.0} (16)");
+            Check(swung && pullOk && Math.Abs(drop - want) < 1e-6 && Math.Abs(credit - want) < 1e-6 && rips == 1 && sizeOk && cool > 15.8 && cool <= 16.0 + 1e-6,
+                  $"grapnel rip on the {what} run {run}: hooked {d0:0} u off (the stop {stop:0}) -- "
+                  + (run == 0 ? $"inside it: pulled {pulledAtPress} (False), its line {line0:0.0} (>= {d0:0.0}), never nearer than {nearest:0.0} (>= {d0 - 15f:0.0}); "
+                              : $"hauled to {off:0.0} u off the hull (250 +- 10) at {taut:0.00} s (want {pullWant:0.00} +- 0.05), bow {bow:0.0} deg (5); ")
+                  + $"cast off by {(run == 0 ? "a second E" : run == 1 ? "its 5 s" : "the destroyer's warp")} -- its hull dropped {drop:0.00} (0.01 x {max:0} + 10 = {want:0.00}), credited {credit:0.00}; {rips} chunk (1) of Size {size:0.0} (0.16 x {Fx.LengthOf(anchor):0} = {sizeWant:0.0}{(float.IsNaN(chunk) ? "" : $"; {chunk:0.0}")}); cooling {cool:0.0} (16)");
             for (int i = 0; i < 60 * 3 && s.Charging; i++) await Frame();
             s.Velocity = Vector2.Zero;
             await Wait(0.2);
@@ -7863,6 +7994,57 @@ public partial class _Test : Node
               && cool > 14.5 && cool <= 16.0 + 1e-6 && said == "COOLING",
               $"arena guest: its own E at the dummy -- its pull begun here and the host's mark on the dummy's id ({marked}); hauled to {off:0.0} u off the hull (250 +- 15), swinging {swinging}; E again casts off ({me.Helm.Ended}) and the host's torn chunk is drawn here "
               + $"({Chunks().Count - before}, cut {cut:0.0} u off the hull, within 20); cooling {cool:0.0} (16, a report late); E again {said} (COOLING)");
+    }
+
+    // ── SLICE 6a, RUNG 5: THE RIP IN A PARTY OF TWO (kits_v31 §3.3 Proves: "in a party of 2, the rip is 1% of the
+    // party-scaled hull"). In the level-1 siege the host raised its pylons for the party of two it hosts
+    // (Emplacements.Raise: 403 x 1.6 = 644.4 hull each, where one pilot's are 402.75). The host refits to the destroyer
+    // and, three varied runs on three of them (VaryAngle bearing, pressed 430-690 u off), hooks one and casts it off by
+    // E 0.3-0.6 s into its swing: its hull drops by exactly 0.01 x 644.4 + 10 = 16.444 (a lone pilot's pylon would
+    // lose 14.03), credited "grapnel" on the host, ONE chunk on its id. Then back to the hull it flew.
+    async Task LaneA6aGrapnelPartyRipChecks()
+    {
+        var row = Emplacements.Of(Emplacements.RowOf(Emplacements.Pylon));
+        double party = row.Hull(1) * Missions.HullMult(1, 2), lone = row.Hull(1) * Missions.HullMult(1, 1);
+        var pylons = H.Emplacements.Where(e => GodotObject.IsInstanceValid(e) && e.Alive && e.Def.Id == Emplacements.Pylon).Take(3).ToList();
+        Check(H.PartySize == 2 && Missions.Level == 1 && Math.Abs(party - 644.4) < 0.05 && Math.Abs(party - 1.6 * lone) < 1e-9
+              && pylons.Count == 3 && pylons.All(p => Math.Abs(p.MaxHp - party) < 1e-6),
+              $"arena host: the siege's pylons raised for a party of {H.PartySize} (2) at level {Missions.Level} (1) -- {string.Join(", ", pylons.Select(p => p.MaxHp.ToString("0.0")))} hull (403 x 1.6 = 644.4, one pilot's {lone:0.00})");
+        var classWas = Character.Class;
+        await SetClass(ShipClass.Destroyer);
+        var s = Me; s.AutopilotTo = null;
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        void Calm() { foreach (var r in H.Raiders.ToList()) H.RaiderDown(r); s.Hp = s.MaxHp; }
+        for (int run = 0; run < pylons.Count; run++)
+        {
+            var p = pylons[run];
+            if (!GodotObject.IsInstanceValid(p) || !p.Alive) { Check(false, $"arena host: party rip run {run} -- its pylon is down"); continue; }
+            s.Sl("grapnel").Left = 0; s.Sl("grapnel").Cool = 0; s.Sl("grapnel").N = 0;
+            s.Statuses.Clear(Status.Pinned); s.Statuses.Clear(Status.Disabled); Calm();
+            s.Position = p.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(430f, 690f); s.Velocity = Vector2.Zero; s.Rotation = VaryAngle();
+            await Frame();
+            float d0 = s.Position.DistanceTo(p.Position);                            // re-taken after the frame
+            double hp0 = p.Hp, credit0 = s.DealtBy.GetValueOrDefault("grapnel"), hold = Vary(0.3f, 0.6f), c0 = s.Clock, swingAt = -1;
+            H.SelectTarget(p);
+            s.UseAbility("grapnel", p.NetId);
+            while (s.Clock - c0 < 3.0 && s.Helm.On)
+            {
+                Calm(); await Frame();
+                if (swingAt < 0 && s.Helm.On && !s.Helm.Pulling) swingAt = s.Clock;
+                if (swingAt >= 0 && s.Clock - swingAt >= hold) break;
+            }
+            bool swung = s.Helm.On && s.Sl("grapnel").Left > 0 && s.Sl("grapnel").N == p.NetId;
+            s.UseAbility("grapnel", p.NetId);
+            for (int i = 0; i < 30 && s.Sl("grapnel").Left > 0; i++) await Frame();
+            await Frame();
+            double drop = hp0 - p.Hp, credit = s.DealtBy.GetValueOrDefault("grapnel") - credit0, want = 0.01 * p.MaxHp + 10;
+            int rips = Nodes<FxNode>().Count(x => x.Id == Fx.Rip && x.Anchor == p.NetId && x.Elapsed < 0.3);
+            Check(swung && s.Helm.Ended == HelmEnd.Pressed && Math.Abs(want - 16.444) < 0.001 && Math.Abs(drop - want) < 1e-6 && Math.Abs(credit - want) < 1e-6 && rips == 1,
+                  $"arena host: party rip run {run} -- hooked a pylon {d0:0} u off, swinging {swung}, cast off by {s.Helm.Ended} (Pressed): its hull dropped {drop:0.000} (0.01 x {p.MaxHp:0.0} + 10 = {want:0.000}, want 16.444; one pilot's {0.01 * lone + 10:0.000}), credited {credit:0.000}; {rips} chunk (1)");
+            H.ClearSelection(); s.Velocity = Vector2.Zero;
+        }
+        s.Sl("grapnel").Left = 0; s.Sl("grapnel").Cool = 0; s.Sl("grapnel").N = 0;
+        if (classWas != ShipClass.Destroyer) await SetClass(classWas);
     }
 
     // ── SLICE 6c, RUNG 5: A GUEST'S TAUNT (kits_v31 §8's second-run list). The guest refits to the Warden (the
@@ -16173,7 +16355,7 @@ public partial class _Test : Node
             await RaidsArenaAddsChecks(boss, me2);
             await LaneAOutDoorBossChecks(boss, me2);
             await FieldsRipChecks(boss, "Lancer", boss.Type.Id == "silver_lancer" ? 57.6f : float.NaN, false);
-            await LaneA6aGrapnelRipChecks(boss, boss.Type.Id);                 // slice 6a: the grapnel's rip, 0.01 x its hull + 10
+            await LaneA6aGrapnelRipChecks(boss, boss.Type.Id, boss.Type.Id == "silver_lancer" ? 57.6f : float.NaN);   // slice 6a: the pull and the rip, 0.01 x its hull + 10
             // ── STEALTH STOPS THE BOSS CHOOSING, NEVER HITTING, AND NEVER STOPS THE FIGHT ──
             // Its pilots were ONE list, the seen one: a solo pilot who went dark emptied it and the
             // boss stopped closing, turning and counting every clock it had until the pilot came
@@ -16906,7 +17088,7 @@ public partial class _Test : Node
                 // the call, not at the frame's end.
                 // the pylon's torn chunk, while they stand; and one torn 0.2 s before it falls below
                 await FieldsRipChecks(pylons[0], "pylon", 35.2f, false);
-                await LaneA6aGrapnelRipChecks(pylons[0], "pylon");
+                await LaneA6aGrapnelRipChecks(pylons[0], "pylon", 35.2f);
                 var tornPylon = await FieldsTearAhead(pylons[2]);
                 double baseHp0 = pbase.Hp;
                 pbase.TakeDamage(500);
@@ -17169,7 +17351,7 @@ public partial class _Test : Node
                           $"the warning after one an EMP's hold spent goes up {gun.Interval:0} s after it, round or no round ({(lanes.Count > 0 && spentLaneAt > 0 ? $"{lanes[0].t - spentLaneAt:0.00} s" : "never")})");
                     await LaneAOutDoorBaseChecks(pbase, bs);
                     await FieldsRipChecks(pbase, "base", 89.6f, false);
-                    await LaneA6aGrapnelRipChecks(pbase, "base");
+                    await LaneA6aGrapnelRipChecks(pbase, "base", 89.6f);
                     bs.Stats.SetBase("pd_range", bsReach);
                     if (classWas != ShipClass.Battleship) await SetClass(classWas);
                 }
@@ -18559,6 +18741,7 @@ public partial class _Test : Node
             await ToArena("arena host", "the siege");
             var sgBase = H.Emplacements.FirstOrDefault(e => e.Def.Id == Emplacements.Base);
             var sgSpot = Hub.ArenaCentre + new Vector2(0, 2200);             // the guest's spot, as a literal
+            await LaneA6aGrapnelPartyRipChecks();                            // slice 6a: the grapnel's rip on a pylon raised for two
             Me.Position = VaryNear(Hub.ArenaCentre + new Vector2(0, -5400), 300f); Me.Velocity = Vector2.Zero; Me.AutopilotTo = null;
             bool SgClear() { foreach (var r in H.Raiders.ToList()) H.RaiderDown(r); return true; }
             await RealTime(() => SgClear() && H.Ships.FirstOrDefault(s => !s.Mine) is { } sgAt && sgAt.Position.DistanceTo(sgSpot) < 60, Wan ? 15 : 8);

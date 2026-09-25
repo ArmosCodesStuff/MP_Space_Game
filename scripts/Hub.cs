@@ -1886,7 +1886,8 @@ public partial class Hub : Node2D
     private void NetFx(int id, Vector2 a, Vector2 b, float size, double time, double hold, double since, int anchor, string cue, string strike) =>
         // A GUEST'S WARNING ENDS WHEN ITS OWN POSITION IS JUDGED, not when the host's clock says
         // (Net.Arriving): on the internet the two are a round trip apart, and a pilot who cleared
-        // the red on their own screen was hit "outside" it. An effect has no wind-up to shorten.
+        // the red on their own screen was hit "outside" it. An effect raised with a Time (a mark that
+        // lasts its status, Fx.Mark) ends with the host's status the same way.
         AddFx(new FxRaise { Id = id, At = a, To = b, Size = size, Time = time > 0 ? Net.Arriving(time) : 0,
                             Hold = hold, Since = since, Anchor = anchor,
                             Cue = string.IsNullOrEmpty(cue) ? null : cue, Strike = string.IsNullOrEmpty(strike) ? null : strike });
