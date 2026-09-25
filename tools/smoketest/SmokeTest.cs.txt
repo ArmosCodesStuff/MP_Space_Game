@@ -9244,10 +9244,20 @@ public partial class _Test : Node
             H.OpenTio(); await Wait(0.1);
             var tw2 = Nodes<TioWindow>().First();
             Check(Missions.Level == 2, "docking at the TIO selects the newest unlocked level (2)");
-            Check(Nodes<Button>(tw2).First(b => b.Name == "LevelUp").Disabled, "no level beyond the newest unlocked");
-            Nodes<Button>(tw2).First(b => b.Name == "LevelDown").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
+            // LEVEL SKIPPING (lane F): up to TWO past the newest, and not a third -- the button greys at
+            // +2, and a press that reaches the host anyway is clamped there (Hub.SelectLevel)
+            var twUp = Nodes<Button>(tw2).First(b => b.Name == "LevelUp"); var twDown = Nodes<Button>(tw2).First(b => b.Name == "LevelDown");
+            bool upOpen = !twUp.Disabled;
+            twUp.EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05); int skip1 = Missions.Level;
+            twUp.EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05); int skip2 = Missions.Level; bool greyAt2 = twUp.Disabled;
+            string skipText = Nodes<Label>(tw2).Select(l => l.Text).FirstOrDefault(t => t.StartsWith("LEVEL ")) ?? "";
+            twUp.EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05); int skip3 = Missions.Level;
+            Check(upOpen && skip1 == 3 && skip2 == 4 && greyAt2 && skip3 == 4 && skipText.Contains("(skip +2)") && !Missions.Cleared(Missions.Bounty, 3),
+                  $"the host may skip up to two levels past the newest (2): {skip1}, {skip2}, and a third press stays at {skip3}; the TIO says \"{skipText}\"");
+            twDown.EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05); twDown.EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
+            twDown.EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
             Check(Missions.Level == 1, "the host can pick an easier, cleared level");
-            Nodes<Button>(tw2).First(b => b.Name == "LevelUp").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
+            twUp.EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
             Check(Missions.Level == 2, "and back up to the newest");
             // ONE SIDE WINDOW AT A TIME: they share a spot. B over the open TIO used to leave both up,
             // one drawn over the other; now it takes the spot, and B again gives it back empty.
@@ -9874,8 +9884,8 @@ public partial class _Test : Node
                 // the TIO's ◀ ▶ are capped by whichever ladder the selected operation climbs
                 H.SelectMission(Missions.Siege); H.SelectLevel(99); int raidTop = Missions.Level;
                 H.SelectMission(Missions.Bounty); H.SelectLevel(99); int bossTop = Missions.Level;
-                Check(raidTop == 4 && bossTop == 2,
-                      $"the level selector is capped by the OPERATION's own ladder: raids stop at {raidTop}, bosses at {bossTop}");
+                Check(raidTop == 6 && bossTop == 4,
+                      $"the level selector is capped by the OPERATION's own ladder, two past its newest: raids stop at {raidTop} (4 + 2), bosses at {bossTop} (2 + 2)");
                 Missions.Kind = Missions.Bounty; Missions.Level = 1;
                 Character.Unclaimed.Clear();
             }

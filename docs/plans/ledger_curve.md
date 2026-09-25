@@ -75,3 +75,18 @@ Verdict: typecheck 0 errors, quick ALL CHECKS PASSED; diff read. Files: Lancer.c
 SmokeTest (CurveBossRowChecks new; row literals, L1 guns DPS, ram 29.8, shockwave 33.5 / Suppressed 23.45,
 Drake L2 gun 4.72 / scrap 14.76 rewritten). engine-unproven: rungs owed in the final test phase (solo x2).
 Next: J4.
+
+## J4 PRE — tier opus
+Intent: level skipping +2 (Missions.SkipAhead / Top; Hub.SelectLevel + SelectMission clamps; TIO arrow
+and '(skip +N)' text); harness TIO skip check + selector caps rewritten; frame 35b_tio_skip_two.
+HEAD 277802a. Hashes:
+  scripts/Missions.cs 6b98b2f36ad1a89e2047fe63c5ed94d30ef0605c
+  scripts/Hub.cs d10481a4a649913f0e8f3da7418465fd9464ccde
+  scripts/TioWindow.cs 81b4616f6370e94d796fa9597a57584f7473c9cf
+  tools/smoketest/SmokeTest.cs.txt 14109a8a046b73aedb6a76e892affa3d42d208c5
+  tools/screens/Shots.cs.txt 20b45d75d2da1b5f72b79798cbcf86619432b69f
+## J4 POST
+Verdict: typecheck 0 errors, quick ALL CHECKS PASSED; diff read. Files: Missions (SkipAhead, Top), Hub (the
+two clamps + comment), TioWindow, SmokeTest (TIO skip check; selector caps 6 / 4), Shots (35b_tio_skip_two).
+engine-unproven: rungs owed in the final test phase (solo x2; screens: frame 35b read by eye once).
+Next: J5.

@@ -59,9 +59,10 @@ public partial class TioWindow : PanelContainer
     public override void _Process(double delta)
     {
         if (Hub == null) return;
-        int top = Missions.Unlocked(Missions.Kind);          // this operation's own ladder
+        int newest = Missions.Unlocked(Missions.Kind);       // this operation's own ladder
+        int top = Missions.Top(Missions.Kind);               // ...and how far past it a skip may go
         int lv = Missions.Level, party = System.Math.Max(1, Hub.PartySize);
-        Ui.SetText(_tier, $"LEVEL {lv}  ·  ×{Par.HullScale(lv):0.00}" + (lv == top ? "  (newest)" : ""));
+        Ui.SetText(_tier, $"LEVEL {lv}  ·  ×{Par.HullScale(lv):0.00}" + (lv == newest ? "  (newest)" : lv > newest ? $"  (skip +{lv - newest})" : ""));
         _down.Disabled = !Net.IsHost || lv <= 1 || Hub.Mission != Hub.MissionState.Idle;
         _up.Disabled = !Net.IsHost || lv >= top || Hub.Mission != Hub.MissionState.Idle;
         var kind = Missions.KindOf(Missions.Kind);

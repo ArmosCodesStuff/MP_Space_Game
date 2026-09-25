@@ -1062,12 +1062,12 @@ public partial class Hub : Node2D
         foreach (var t in GetChildren().OfType<Shot>()) if (t.NetId == id) t.Intercept();
     }
 
-    // host: pick a level between 1 and the newest unlocked ON THIS OPERATION'S OWN LADDER. The
-    // level is per category (Missions.Level), so this never moves the other one.
+    // host: pick a level between 1 and Missions.SkipAhead past the newest unlocked ON THIS
+    // OPERATION'S OWN LADDER. The level is per category (Missions.Level), so this never moves the other one.
     public void SelectLevel(int level)
     {
         if (!Net.IsHost || Mission != MissionState.Idle) return;
-        Missions.Level = System.Math.Clamp(level, 1, Missions.Unlocked(Missions.Kind));
+        Missions.Level = System.Math.Clamp(level, 1, Missions.Top(Missions.Kind));
         BroadcastMission();
     }
 
@@ -1079,7 +1079,7 @@ public partial class Hub : Node2D
     {
         if (!Net.IsHost || Mission != MissionState.Idle) return;
         Missions.Kind = System.Math.Clamp(kind, 0, Missions.Kinds.Length - 1);
-        Missions.Level = System.Math.Clamp(Missions.Level, 1, Missions.Unlocked(Missions.Kind));
+        Missions.Level = System.Math.Clamp(Missions.Level, 1, Missions.Top(Missions.Kind));
         BroadcastMission();
     }
 

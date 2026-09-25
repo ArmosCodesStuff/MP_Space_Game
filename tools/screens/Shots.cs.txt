@@ -226,6 +226,8 @@ public partial class _Shots : Node
             pship.Position = Hub.TioPos + new Vector2(240, 180); pship.Velocity = Vector2.Zero;
             GetViewport().GetCamera2D().Zoom = new Vector2(1.1f, 1.1f); await W(1.6);
             hub.OpenTio(); await W(0.4); await Snap("35_tio_warp_to_target");
+            hub.SelectLevel(Missions.Level + 2); await W(0.3); await Snap("35b_tio_skip_two");     // lane F: "(skip +2)"
+            hub.SelectLevel(Missions.Unlocked(Missions.Kind)); await W(0.2);
             hub.SetMyReady(true); pship.AutopilotTo = null;              // READY, but stay for the pictures
             await W(1.6); await Snap("36_mission_opening_bar");
             await W(2.0); await Snap("37_mission_portal_open");

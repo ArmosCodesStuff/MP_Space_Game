@@ -210,6 +210,12 @@ public static class Missions
     public static bool Cleared(int kind, int level) => ClearedIn(CatOf(kind)).Contains(level);
     public static int HighestBeaten(int kind) => HighestIn(CatOf(kind));
     public static int Unlocked(int kind) => HighestIn(CatOf(kind)) + 1;
+    // LEVEL SKIPPING, the pilot's choice: the host may pick up to SkipAhead levels past the newest
+    // unlocked. Par grows 1-4% a level, so +2 costs a par pilot 1-4 s of a 60 s fight; a skipped
+    // level stays uncleared, its first-clear bonus still there to go back for, and the ladder does
+    // not move (one boss a level; beating level L unlocks L + 1 whatever was skipped to reach it).
+    public const int SkipAhead = 2;
+    public static int Top(int kind) => Unlocked(kind) + SkipAhead;
 
     // WHAT A LEVEL ADDS TO A MISSION: its hull and its damage on Par's scale, and the party's share.
     public static double HullMult(int level, int party) => Par.HullScale(level) * (1 + 0.6 * (Math.Max(1, party) - 1));
