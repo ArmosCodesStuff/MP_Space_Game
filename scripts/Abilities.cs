@@ -153,6 +153,12 @@ public class AbilityDef
     // press; while it runs its Hold, lifts and OnDealt apply as any row's. Guard (a stat id) is the share of every
     // blow the hull takes meanwhile (Hardened at that share: two hardenings keep the stronger, D9). The Brace.
     public string Time, Guard;
+    // COOLS FROM THE END: its Cooldown starts when its time runs out, not at the press (the Supercarrier's 30 s).
+    public bool CoolAfter;
+    // A SORTIE ROW (PlayerShip.Launch): pressed, it sends this wing row's craft (Wings.All) -- one sortie a pick for a
+    // row flown at a target (the pilot's picks, else the selected), one round the carrier for a ToHull row -- and runs
+    // the row's LifeStat. Nothing sent spends nothing. The gunships, the Supercarrier.
+    public WingKind? Sends;
 
     public SlotState State(PlayerShip s, IHittable selected) =>
         Show != null ? Show(s, selected) : new SlotState { Line = "READY" };
@@ -316,6 +322,23 @@ public static class Ab
         },
     };
 
+    // WARP GUNSHIPS (the Carrier's E, kits_v2): two craft to each of up to three picks (else the selected), warped onto
+    // a 240 u circle round it for 12 s, 10 DPS each; a pick past 3000 u gets none. 25 s from the press.
+    public static readonly AbilityDef Gunships = new()
+    {
+        Id = "gunships", Name = "Warp gunships", Short = "GUNSHIPS", Default = Key.E,
+        Blurb = "Two gunships warp onto each of up to three picked targets (or the selected one) within 3000 u and circle it for 12 s.",
+        Sends = WingKind.Gunship, TakesTargets = true, Cooldown = "gunship_cooldown",
+        Press = (s, t) => s.Launch("gunships", t),
+        Refuse = (s, sel) =>
+        {
+            if (s.Sl("gunships").Cool > 0) return "COOLING";
+            var picks = (s.GetParent() as Hub)?.Targets.Where(t => t != null && t.Alive).ToList() is { Count: > 0 } ts ? ts : sel != null ? new List<IHittable> { sel } : new List<IHittable>();
+            if (picks.Count == 0) return "NO TARGET";
+            return picks.Any(p => Wings.Within(s, Wings.Of(WingKind.Gunship), p)) ? null : "OUT OF RANGE";
+        },
+        Show = (s, _) => Timed(s, "gunships", "gunship_cooldown", "GUNSHIPS"),
+    };
 
     // ── the freighters ───────────────────────────────────────────────────────
     public static readonly AbilityDef Deploy = new()

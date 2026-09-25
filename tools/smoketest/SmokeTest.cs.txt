@@ -5279,6 +5279,114 @@ public partial class _Test : Node
         }
     }
 
+    // ── SLICE 6a: WARP GUNSHIPS (the Carrier's E, kits_v2 + W5: two craft a pick, 240 u orbit, 12 s, 3000 u leash at the
+    // launch, 25 s from the press; the CV's ability 2). Three varied runs with {1, 2, 3} picks, each a held gunship-kind
+    // raider 800-2600 u off the carrier at a VaryAngle bearing: E with the picks -- {2, 4, 6} craft, every pick with
+    // two on a 240 +- 25 u circle 3 s on; the slot running 12 s and cooling 25.0 from the press; E again refused
+    // COOLING; 12.6 s after the press none is left. Then, cooled: a lone pick 3050-3400 u off is refused OUT OF RANGE
+    // and sends nothing, and nothing picked nor selected is refused NO TARGET.
+    async Task LaneA6aGunshipChecks(Vector2 yonder)
+    {
+        var cv = new ShipStats(ShipClass.Carrier);
+        Check(cv["gunship_cooldown"] == 25 && cv["gunship_count"] == 2 && cv["gunship_orbit"] == 240 && cv["gunship_time"] == 12 && cv["gunship_leash"] == 3000
+              && Ab.Gunships.Default == global::Godot.Key.E && Ab.Gunships.TakesTargets && Ab.Gunships.Sends == WingKind.Gunship
+              && Unlocks.Nth(ShipClass.Carrier, 1) == Ab.Bombers && Unlocks.Nth(ShipClass.Carrier, 2) == Ab.Gunships && Classes.Of(ShipClass.Carrier).Targets == 3,
+              $"the gunships' rows: {cv["gunship_count"]:0} a pick, {cv["gunship_orbit"]:0} u, {cv["gunship_time"]:0} s, {cv["gunship_leash"]:0} u, {cv["gunship_cooldown"]:0} s (25); E; the carrier's ability 2 ({Unlocks.Nth(ShipClass.Carrier, 2)?.Name}), 3 picks");
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+        await SetClass(ShipClass.Carrier);
+        var s = Me;
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        List<Wing> Gs() => Nodes<Wing>().Where(w => w.Carrier == s && w.Kind == WingKind.Gunship && !w.Done).ToList();
+        Raider Held(Vector2 p) { var r = H.SpawnRaider(p, Enemies.Gunship); r.Hp = 1e9; r.ApplyStatus(Status.Disabled, 60); return r; }
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f); float head = VaryAngle();
+            void Hold() { s.Position = at; s.Velocity = Vector2.Zero; s.Rotation = head; }
+            s.Sl("gunships").Left = 0; s.Sl("gunships").Cool = 0;
+            Hold(); await Wait(0.2); Hold();
+            int n = run + 1;
+            var spots = Enumerable.Range(0, n).Select(k => at + Vector2.Right.Rotated(VaryAngle()) * Vary(800f, 2600f)).ToArray();
+            var picks = spots.Select(Held).ToArray();
+            await Frame(); Hold();
+            H.ClearSelection(); foreach (var p in picks) H.AddTarget(p);
+            s.UseAbility("gunships", 0, picks.Select(p => p.NetId).ToArray());
+            await Frame();
+            double tp = s.Clock, cool = s.Sl("gunships").Cool, left = s.Sl("gunships").Left;
+            s.UseAbility("gunships", 0, picks.Select(p => p.NetId).ToArray()); await Frame();
+            string again = s.FailNote("gunships");
+            while (s.Clock < tp + 3.0) { Hold(); for (int k = 0; k < n; k++) picks[k].Position = spots[k]; await Frame(); }
+            int craft = Gs().Count;
+            var perPick = picks.Select(p => Gs().Count(w => Mathf.Abs(w.Position.DistanceTo(p.Position) - 240f) <= 25f)).ToArray();
+            string line = Abilities.Find(ShipClass.Carrier, "gunships").State(s, null).Line;
+            while (s.Clock < tp + 12.6) { Hold(); await Frame(); }
+            int after = Gs().Count;
+            Check(craft == 2 * n && perPick.All(c => c == 2) && Math.Abs(left - 12) < 0.1 && Math.Abs(cool - 25) < 0.1 && again == "COOLING" && line.StartsWith("GUNSHIPS") && after == 0,
+                  $"gunships run {run}: {n} pick(s) at {string.Join(", ", spots.Select(p => $"{p.DistanceTo(at):0}"))} u -- {craft} craft ({2 * n}), on the 240 u circles {string.Join("/", perPick)} (2 each); up {left:0.0} s (12), cooling {cool:0.0} (25); E again {again} (COOLING); the bar '{line}'; {after} left 12.6 s on (0)");
+            foreach (var p in picks) p.TakeDamage(1e12);
+            await Wait(0.2);
+        }
+        {
+            var at = VaryNear(yonder, 300f);
+            s.Position = at; s.Velocity = Vector2.Zero; s.Sl("gunships").Cool = 0; s.Sl("gunships").Left = 0;
+            await Frame();
+            var far = Held(s.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(3050f, 3400f));
+            await Frame();
+            H.ClearSelection(); H.AddTarget(far);
+            s.UseAbility("gunships", 0, new[] { far.NetId }); await Frame(); await Frame();
+            string outSaid = s.FailNote("gunships"); int outSent = Gs().Count;
+            H.ClearSelection();
+            s.UseAbility("gunships", 0, System.Array.Empty<int>()); await Frame();
+            string noneSaid = s.FailNote("gunships");
+            Check(outSaid == "OUT OF RANGE" && outSent == 0 && noneSaid == "NO TARGET" && s.Sl("gunships").Cool == 0,
+                  $"gunships refused: a lone pick {far.Position.DistanceTo(s.Position):0} u off -- {outSaid} (OUT OF RANGE), {outSent} sent; nothing picked or selected -- {noneSaid} (NO TARGET); nothing spent");
+            far.TakeDamage(1e12);
+        }
+    }
+
+    // ── SLICE 6a: THE GUNSHIPS' FIRE (W5: 2.5 a shot every 0.25 s = 10 DPS each, two a pick = 20 DPS) and the leash at the
+    // launch only (W5 / kits_v2: "the 3000 u leash at launch only"). Three varied runs: a held gunship 1500-2800 u off
+    // at a VaryAngle bearing; E; from the first blow after both are on their circle, 3.0 s takes 60 +- 10; in run 1
+    // the carrier then sails 3200-3600 u away and the craft stay on their circle; in run 2 the pick dies and the
+    // craft leave it (none on its circle 1.0 s on).
+    async Task LaneA6aGunshipFireChecks(Vector2 yonder)
+    {
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+        await SetClass(ShipClass.Carrier);
+        var s = Me;
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        List<Wing> Gs() => Nodes<Wing>().Where(w => w.Carrier == s && w.Kind == WingKind.Gunship && !w.Done).ToList();
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f);
+            s.Position = at; s.Velocity = Vector2.Zero; s.Sl("gunships").Left = 0; s.Sl("gunships").Cool = 0;
+            await Wait(0.2);
+            var spot = at + Vector2.Right.Rotated(VaryAngle()) * Vary(1500f, 2800f);
+            var tgt = H.SpawnRaider(spot, Enemies.Gunship); tgt.Hp = 1e9; tgt.ApplyStatus(Status.Disabled, 60);
+            await Frame();
+            H.ClearSelection(); H.AddTarget(tgt);
+            s.UseAbility("gunships", 0, new[] { tgt.NetId });
+            await RealTime(() => Gs().Count == 2 && Gs().All(w => w.OrbitPhase == "Orbit"), 6);
+            double was = tgt.Hp;
+            for (int i = 0; i < 120 && tgt.Hp >= was; i++) { tgt.Position = spot; await Frame(); }
+            double hp0 = tgt.Hp, c0 = s.Clock;
+            while (s.Clock - c0 < 3.0) { tgt.Position = spot; if (run == 1) s.Position = at + (at - spot).Normalized() * Vary(3200f, 3600f) * (float)((s.Clock - c0) / 3.0); await Frame(); }
+            double got = hp0 - tgt.Hp;
+            bool stayed = Gs().Count == 2 && Gs().All(w => Mathf.Abs(w.Position.DistanceTo(tgt.Position) - 240f) <= 30f);
+            bool left = true;
+            if (run == 2)
+            {
+                tgt.TakeDamage(1e12);
+                await Wait(1.0);
+                left = Gs().All(w => Mathf.Abs(w.Position.DistanceTo(spot) - 240f) > 30f || w.OrbitPhase != "Orbit");
+            }
+            Check(Math.Abs(got - 60) <= 10 && stayed && left,
+                  $"gunships' fire run {run}: a gunship {spot.DistanceTo(at):0} u off takes {got:0.0} in 3.0 s from the first blow (2 x 10 DPS: 60 +- 10); {(run == 1 ? $"the carrier {s.Position.DistanceTo(spot):0} u off and " : "")}both still on the circle ({stayed}){(run == 2 ? $"; the pick dead, they leave it ({left})" : "")}");
+            if (GodotObject.IsInstanceValid(tgt) && tgt.Alive) tgt.TakeDamage(1e12);
+            foreach (var w in Gs()) w.SendOut(null, s.Clock);
+            await Wait(0.5);
+        }
+    }
+
     async Task LaneA6cBladeChecks(Vector2 yonder)
     {
         var sh = new ShipStats(ShipClass.HeavyWarrior);
@@ -6856,6 +6964,31 @@ public partial class _Test : Node
         mate.QueueFree();
         await Frame();
         wd.Demo = demo; wd.Position = yonder; wd.Velocity = Vector2.Zero; wd.Hp = wd.MaxHp;
+    }
+
+    // ── SLICE 6a, RUNG 5: A GUEST'S GUNSHIPS (kits_v31 §8's second-run list). The guest refits to the Carrier (the host's 425
+    // hull on it), stands 1200-2200 u off the practice dummy at a varied bearing and presses E with the dummy as its pick
+    // (the picks ride WITH the press): the host's two gunships come to this carrier's list, and are drawn on their 240 u
+    // circle round the dummy here; the host's 25 s cooldown and 12 s arrive, and E again is refused COOLING.
+    async Task LaneA6aGunshipGuestChecks()
+    {
+        await SetClass(ShipClass.Carrier);
+        var me = Me; me.AutopilotTo = null;
+        await RealTime(() => Math.Abs(me.MaxHp - 425) < 1e-6, Wan ? 20 : 10);
+        var d = H.GetNodeOrNull<TargetDummy>("TargetDummy1");
+        if (d == null) { Check(false, "arena guest: gunships -- no practice dummy"); return; }
+        me.Position = d.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(1200f, 2200f); me.Velocity = Vector2.Zero;
+        await Wait(Vary(0.3f, 0.6f));
+        List<Wing> Gs() => Nodes<Wing>().Where(w => w.Carrier == me && w.Kind == WingKind.Gunship && w.Visible).ToList();
+        H.ClearSelection(); H.AddTarget(d);
+        me.UseAbility("gunships", 0, new[] { d.NetId });
+        await RealTime(() => Gs().Count == 2 && Gs().All(w => Mathf.Abs(w.Position.DistanceTo(d.Position) - 240f) <= 30f), Wan ? 10 : 6);
+        int craft = Gs().Count; bool circle = Gs().All(w => Mathf.Abs(w.Position.DistanceTo(d.Position) - 240f) <= 30f);
+        double left = me.Sl("gunships").Left, cool = me.Sl("gunships").Cool;
+        me.UseAbility("gunships", 0, new[] { d.NetId }); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        var said = me.FailNote("gunships");
+        Check(craft == 2 && circle && left > 8 && left <= 12 + 1e-6 && cool > 20 && cool <= 25 + 1e-6 && said == "COOLING",
+              $"arena guest: its own E at the dummy {d.Position.DistanceTo(me.Position):0} u off -- {craft} gunships here (2), on the 240 u circle ({circle}); up {left:0.0} s (12), cooling {cool:0.0} (25, a report late); E again {said} (COOLING)");
     }
 
     // ── SLICE 6c, RUNG 5: A GUEST'S TAUNT (kits_v31 §8's second-run list). The guest refits to the Warden (the
@@ -11143,7 +11276,7 @@ public partial class _Test : Node
         Check(labels.Any(x => x.Contains("Broadside, averaged over its cycle:  27.27 DPS")) && labels.Any(x => x.Contains("Point defence:  2.00 DPS"))
               && labels.Any(x => x.Contains("2 turrets at 1.00 DPS, always on")) && labels.Any(x => x.Contains("SUSTAINED TOTAL:  54.27 DPS")),
               "and the total adds up every line it prints: guns 25.00 + broadside 27.27 + point defence 2.00 (2 turrets at 1 DPS, always on: passive) = 54.27 DPS");
-        Check(Nodes<HBoxContainer>(win).Count(r => r.Name.ToString().StartsWith("Key_")) == 9, "keys tab lists the battleship's 3 abilities + 6 open slots (point defence is passive: no key)");
+        Check(Nodes<HBoxContainer>(win).Count(r => r.Name.ToString().StartsWith("Key_")) == 11, "keys tab lists the battleship's 5 abilities (guns, mode, broadside, brace, CIWS) + 6 open slots (point defence is passive: no key)");
         Check(Enumerable.Range(1, 6).All(i => Abilities.KeyFor(ShipClass.Battleship, $"open{i}") == global::Godot.Key.Key0 + i)
               && Abilities.For(ShipClass.Carrier).Count(a => a.Open) == 6 && Abilities.For((ShipClass)99).Length == 6,
               "six open hotkeys (1-6) on every class, including undefined ones");
@@ -13761,6 +13894,8 @@ public partial class _Test : Node
             await LaneA6aCiwsDisableChecks(yonder);
             await LaneA6aCiwsPreyChecks(yonder);
             await LaneA6aCarrierRowChecks(yonder);
+            await LaneA6aGunshipChecks(yonder);
+            await LaneA6aGunshipFireChecks(yonder);
 
             // ── WARRIOR: the blade (slice 6c) ──
             await LaneA6cBladeChecks(yonder);
@@ -14183,6 +14318,7 @@ public partial class _Test : Node
                     ["taunt"]     = sp => sp.Sl("taunt").Left > sp.Stats["taunt_time"] - 0.1 && sp.Statuses.Has(Status.Hardened),
                     ["brace"]     = sp => sp.Sl("brace").Left > sp.Stats["brace_time"] - 0.1 && sp.Statuses.Has(Status.Hardened) && Math.Abs(sp.Held - 0.5f) < 1e-3f,
                     ["ciws"]      = sp => sp.Sl("ciws").Left > sp.Stats["ciws_time"] - 0.1 && Math.Abs(sp.Spec(true).Damage - sp.Stats["pd_damage"] * 3) < 1e-9,
+                    ["gunships"]  = sp => sp.Sl("gunships").Left > sp.Stats["gunship_time"] - 0.1 && sp.WingCount(WingKind.Gunship) == (int)sp.Stats["gunship_count"],
                     ["curtain"]   = sp => sp.Sl("curtain").Cool > sp.Stats["curtain_cooldown"] - 0.1 && H.Laid.Any(z => z.OwnerId == sp.OwnerId && z.Row == Zones.Curtain),
                 };
                 var onBars = Classes.All.Where(cd2 => cd2.Ready).SelectMany(cd2 => cd2.Abilities)
@@ -17704,6 +17840,7 @@ public partial class _Test : Node
             await LaneA6cAnchorGuestChecks();                               // slice 6c: a guest's Anchor, rooted by the host's word
             await LaneA6cFlaresGuestChecks();                               // slice 6c: a guest's flares, the host's salvo on its hull
             await LaneA6cTauntGuestChecks();                                // slice 6c: a guest's taunt, the host's guard on its hull
+            await LaneA6aGunshipGuestChecks();                              // slice 6a: a guest's gunships, its picks with the press
             await LaneA6cCurtainGuestChecks();                              // slice 6c: a guest's curtain, drawn where the host laid it
             // ── TWO OF THE NINE, IN A SESSION (the host's side is in the ahost branch) ──
             // A FREIGHTER: the class whose abilities MAKE things in the world. Every press below

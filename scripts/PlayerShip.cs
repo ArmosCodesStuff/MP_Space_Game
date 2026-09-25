@@ -770,9 +770,29 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         var def = Abilities.Find(Class, id);
         ref var sl = ref Sl(id);
         if (!Net.Sim || def?.Time == null || sl.Cool > 0) return;
-        sl.Left = Stats[def.Time];
-        if (def.Cooldown != null) sl.Cool = Cooling(Stats[def.Cooldown]);
+        Engage(def, Stats[def.Time]);
         if (def.Guard != null) _status.Apply(Status.Hardened, sl.Left, Stats[def.Guard]);
+    }
+    // A row's time and its cooldown set at once: from the press, or after the time when it CoolAfter.
+    private void Engage(AbilityDef def, double secs)
+    {
+        ref var sl = ref Sl(def.Id);
+        sl.Left = secs;
+        if (def.Cooldown != null) sl.Cool = (def.CoolAfter ? secs : 0) + Cooling(Stats[def.Cooldown]);
+    }
+    // A SORTIE ROW'S PRESS (AbilityDef.Sends), on the host: the craft go out (Sortie: the host's leash on each target),
+    // and only if one went does the row run the wing's LifeStat and start its cooldown.
+    public void Launch(string id, IHittable selected)
+    {
+        var def = Abilities.Find(Class, id);
+        ref var sl = ref Sl(id);
+        if (!Net.Sim || def?.Sends is not { } kind || sl.Cool > 0 || sl.Left > 0) return;
+        var row = Wings.Of(kind);
+        int sent = 0;
+        if (row.ToHull) sent = Sortie(kind);
+        else foreach (var t in _picked.Count > 0 ? _picked.ToList() : selected != null ? new List<IHittable> { selected } : new List<IHittable>())
+            sent += Sortie(kind, t);
+        if (sent > 0) Engage(def, Stats[row.LifeStat]);
     }
 
     public void StartOverdrive()

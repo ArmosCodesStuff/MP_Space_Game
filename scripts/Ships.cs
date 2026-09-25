@@ -228,7 +228,10 @@ public static class Classes
                 BayX = 25.01f, BayY = 8.34f, BaySpacing = 46.69f, RunwayBow = 110.06f, EngineInset = 8f,
                 Pds = new Vector2[] { new(-30.01f, -0.21f), new(30.01f, -0.21f) },
                 TurretTexScale = 1.9178f / 5.5f, PdBarrel = 10.51f },
-            Abilities = new[] { Ab.Attack, Ab.Recall, Ab.Bombers } },
+            Rows = new StatRow[] {
+                new() { Group = "Gunships", Id = "gunship_cooldown", Label = "Cooldown", Base = 25, Unit = "s", Dec = 1, Inverse = true },
+            },
+            Abilities = new[] { Ab.Attack, Ab.Recall, Ab.Bombers, Ab.Gunships } },
 
         new() { Id = ShipClass.Destroyer, Name = "DESTROYER", Ready = true, Targets = 3, Fit = Fit.Guns | Fit.Missiles | Fit.Pd,
             Blurb = "Fastest of the line. Two cursor-aimed main guns, missile bursts of three, two point-defence turrets.",

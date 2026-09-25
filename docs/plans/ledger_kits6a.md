@@ -261,3 +261,29 @@ fittings sweep's witness table ~13755, fitRows ~13797.
   ratios: re-measure at rung 3 if it misses the +-35%), the kit literal (425 / 3.5 / 60), the sustained / Bomber line
   (480 / 27.5 = 17.45, fighters 25, PD 2), the Heavy Battery T2 fighter 3.5 x 1.275.
 - Next: kits6a-J5 (warp gunships E).
+
+### kits6a-J5 · PRE · Warp gunships E (A6a-5) -- tier opus
+- Intent: a SORTIE row door: AbilityDef Sends (a WingKind) + CoolAfter (cooldown from the END of its time), pressed
+  through PlayerShip.Launch(id, sel) (a targeted wing row: one Sortie per pick, the picks or else the selected; a
+  ToHull row: one Sortie; nothing sent = nothing spent; Left = the row's LifeStat, Cool from the press or the end).
+  RunFor takes CoolAfter too. Ab.Gunships (E, TakesTargets, gunship_cooldown 25 from the press; refused COOLING / NO
+  TARGET / OUT OF RANGE on the owner from its hub's picks or the selected); CV Rows gunship_cooldown; CV bar Attack,
+  Recall, Bombers, Gunships. Checks: NEW LaneA6aGunshipChecks, LaneA6aGunshipRebindChecks, rung 5
+  LaneA6aGunshipGuestChecks; witness "gunships".
+- Files: scripts/Abilities.cs, scripts/Ships.cs, scripts/PlayerShip.cs, tools/smoketest/SmokeTest.cs.txt.
+- HEAD 1535f70f3c46857729fe194ce02cb9748457f5b8 · Abilities.cs 2ddc97fedb88edafc9e7d29808fed7cfd4ddab78 · Ships.cs 7a15042070eca75243ce7103a4715e1d2ca9a07e · PlayerShip.cs 7e468f52b793072e6ed858a61a6bd7a8dda8e64f · SmokeTest.cs.txt 8352cad9bf063d7ae2ef932a8e01596d80b9adc7
+### kits6a-J5 · POST
+- Verdict: compiles; typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final
+  test phase.
+- Built: AbilityDef.CoolAfter + Sends; PlayerShip.Engage (time + cooldown, from the press or the end) shared by RunFor
+  and the new PlayerShip.Launch (the sortie door: Picked, else the selected; ToHull rows once; nothing sent spends
+  nothing). Ab.Gunships (E, TakesTargets; Refuse on the owner reads its hub's live picks, else the selected: COOLING /
+  NO TARGET / OUT OF RANGE). CV Rows gunship_cooldown 25; CV bar + Gunships (ability 2).
+- Checks NEW: LaneA6aGunshipChecks ({1,2,3} picks -> {2,4,6} craft on 240 +- 25 u circles, 12 s up, 25.0 cooling,
+  COOLING, bar GUNSHIPS, none left at 12.6 s; OUT OF RANGE at 3050-3400 u sending nothing, NO TARGET), 
+  LaneA6aGunshipFireChecks (3 runs: 60 +- 10 in 3.0 s; the carrier sailing 3200-3600 u off leaves them on station; a
+  dead pick is left), rung 5 LaneA6aGunshipGuestChecks (a guest's E at the dummy: 2 craft on the circle here, 12 / 25
+  arrive, COOLING); witness "gunships". REWRITTEN: the K window keys-tab count for the battleship 9 -> 11 (J2/J3's
+  Brace and CIWS rows).
+- Default taken: the checks set the hub's picks (H.AddTarget) as a pilot would, so Refuse and the press agree.
+- Next: kits6a-J6 (Supercarrier Q).
