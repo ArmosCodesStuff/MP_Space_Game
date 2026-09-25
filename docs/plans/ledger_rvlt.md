@@ -15,3 +15,6 @@
 - lt-R6d-6 applied: ItemsReconcileChecks Want rod_damage 225, venom_dps 1.5625 (T1) and 1.25 x (1 + 0.25 P(10)) (T10); NEW ItemsVenomLiftChecks after ItemsAnchorLiftChecks (ticks 6.25 / 7.8125 / T10).
 - engine: rvlt_a2 quick green; solo red 41 FAIL + 1 throw (ObjectDisposedException) before any lane this job touched; the same reds (never walled, warp 827/2427, battleship 343.75, ...) are on version-l ae8ae99 (tpslots_0/1). six not reached. New checks unproven in the engine.
 - next: re-prove quick,solo,six once version-l's solo throw is fixed.
+
+## PRE J2 (merge version-l 221749e, typecheck, quick, prove quick,solo,six as rvlt_a), tier opus
+- HEAD 6765b7dd42dcbbe7f62fa0d52f494e400f3500d6
