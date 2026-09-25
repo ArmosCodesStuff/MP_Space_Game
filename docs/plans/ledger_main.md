@@ -4,18 +4,19 @@
 Under 25 lines; Edit tool only; commit FIRST after every event; the hook re-injects it after a compact and cross-checks each `task <id>`.
 
 ## Running (one row per workflow; the form `task <id> (<run id>)` is what tools/lanes.ps1 parses)
-- test-phase / task w00jjvfec (wf_8c62491c-3b2, attempt 3 at 16:08, review [] = all 5 scopes merged, last lt 68ad42c): rounds (5 chains, triage, pooled fixes) -> seed sweep ->
+- test-phase / task wu5xd3g1m (wf_8c62491c-3b2, attempt 4 at 16:33, review [] = all 5 scopes merged, last lt 68ad42c): rounds (5 chains, triage, pooled fixes) -> seed sweep ->
   extras -> bar -> release. lands: 3 lines to the owner + the frames (framesForOwner, netOwed); a stop -> docs/plans/ledger_test.md
   and the journal, fix, relaunch: Workflow({scriptPath: <scripts>\test-phase.js, resumeFromRunId: "wf_8c62491c-3b2", args: {attempt: 2, review: []}}).
   Watchdog Monitor (agents.ps1 -Minutes 30 every 10 min, 30-min timeout) re-armed at each expiry while it runs.
 
 ## Landed (verdict first; delete the row once its action is done)
-- Slot proof dbg6_s2/s3 at 68ad42c: two six at once on slots 2+3 both return verdicts (73 / 240 fails), so the runner launch call was
-  the whole cause. Found: on slots 1-3 the SEED equals the slot (every run, 14 summaries): no fresh seed there; slot 2's log names the
-  unshifted port 19481; both six say "4/6 runs finished". Action: ONE Opus env-fix lane (wt/envseed) for the three, proved on slots 2+3.
+- Slot proof dbg6_s2/s3: two six at once on slots 2+3 return verdicts, and showed that rungs.ps1's array splat sent -Slot positionally
+  (seed = slot, ports unshifted, concurrent six runs joined each other's host): fixed 5a568ef, attempt 3 stopped, attempt 4 launched.
+  Open: prove on attempt 4's six logs (SEED random on slots 1-3, box bound on shifted ports); "4/6 runs finished" (ahost/aguest time
+  out at 150 s on slot 0 too) is for triage, not env.
 
 ## Next (1 is the exact next call, copy-pasteable)
-1. Wait for task w00jjvfec (grouped fixes; launch-call rule for runners); take its return as above. Delete the Landed row once dbg6 is read.
+1. Wait for task wu5xd3g1m; take its return as above. ~16:45: read tp4ar1_2/3's 2_six.log heads (SEED, box ports); delete the Landed row.
 2. After the release: the two-machine test (NOTES.txt) as a ledger row; the fable_report_1/2 "after the release" lists, each a lane + retrospective.
 
 ## Owner questions (one line each, with its default)
