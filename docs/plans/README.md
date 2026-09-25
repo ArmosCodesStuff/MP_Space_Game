@@ -126,6 +126,8 @@ Sprites
 
 Agents (owner, 2026-09-25)
 - Every agent runs Opus 5.5, "just to be safe" (replaces the earlier "lowest tier you can trust"); effort still set per call.
+- Run several engine and game instances at once: "my PC can handle it no prob" (Ryzen 7 7700, 16 threads, 47 GB). Engine slots
+  (tools/rungs.ps1 -Slots) make it safe; the limit was shared folders and ports, never the PC.
 
 Testing (owner, standing)
 - Every change carries its check (CLAUDE.md §6). After the features: new Python scenario tools and
