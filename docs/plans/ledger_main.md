@@ -26,7 +26,9 @@ Done: SLICE 4 3450da4 (gate 3 passed; wt_kits4 removed). 10:55: 6a at J7, 6b in 
   engine-unproven; Drake throw now nose 1300 u off = 200 u past gun reach, tell the owner if asked). Slots merged 25aefc1 (gate 2 passed at a22c187; its 2 notes applied in e104a5a). Engine-unproven: its proof opens the test phase.
 
 ## Owner questions
-- none open (owner: slices side by side, items alongside slice 6 with a reconcile pass, never skip a review)
+- none open. Owner 2026-09-25: Fable orchestrates everything (they switch the model menu); a Fable critique + lean CLAUDE.md proposal is
+  running (workflow "fable-critique"; its report + proposal land in the scratchpad's fable folder): report to the owner, then apply the
+  CLAUDE.md at a batch boundary (standing OK for recommendations).
 
 ## Notes
 - WATCHDOG: while any Sonnet/Haiku agent runs, keep `powershell -File tools/agents.ps1 -Loop` running in the background (Bash

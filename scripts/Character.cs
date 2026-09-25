@@ -31,7 +31,7 @@ public static class Character
 
     // Stat bonuses as fractions keyed by stat id (see ShipStats). Saved with the
     // character; nothing grants any yet.
-    public static readonly Dictionary<string, double> Bonuses = new();
+    [Live] public static readonly Dictionary<string, double> Bonuses = new();
     // pilot progression (see Progression)
     public static int Exp, Level = 1, Points;
     // THE HIGHEST LEVEL THIS PILOT HAS EVER REACHED: what the level walls read (Unlocks). A refit
@@ -45,11 +45,11 @@ public static class Character
     // says how many of each a pilot owns and never said WHICH it bought last, so a refit could not
     // undo the most recent one. A file written before this has no list: the refit falls back to
     // the dearest point it can see (Progression.Refit).
-    public static readonly List<int> Spent = new();
+    [Live] public static readonly List<int> Spent = new();
     // the levels of each boss this pilot has beaten (the +250 first-clear bonus, and unlocking)
-    public static readonly Dictionary<string, HashSet<int>> BossCleared = new();
+    [Live] public static readonly Dictionary<string, HashSet<int>> BossCleared = new();
     // THE TUTORIAL: the hints this pilot has been shown (Hints.All ids), and its off switch (Esc menu)
-    public static readonly HashSet<string> HintsSeen = new();
+    [Live] public static readonly HashSet<string> HintsSeen = new();
     public static bool HintsOff;
     // Whether this pilot has been walked through the tour (Tour.cs) -- taken to the end or skipped.
     // Separate from HintsOff, which is the player turning hints off for good.
@@ -62,29 +62,29 @@ public static class Character
     // The stock BY RESOURCE ID (Gathering.Resources) -- which is also its key in the file, so
     // "ore" and "salvage" are the same keys two fields wrote and a third resource needs no new
     // code here. Credits are not gathered, so they stay their own figure.
-    public static readonly Dictionary<string, double> BaseStock = new();
+    [Live] public static readonly Dictionary<string, double> BaseStock = new();
     public static double BaseCredits;
-    public static readonly Dictionary<string, int> BaseLevels = new();
+    [Live] public static readonly Dictionary<string, int> BaseLevels = new();
     // WHAT EACH CORE SLOT HAS BEEN LEVELLED TO with salvage, by the slot's name (Equipment.LevelKey,
     // LevelOf): per pilot, shared by every class it flies, whatever part sits in the slot.
-    public static readonly Dictionary<string, int> GearLevel = new();
+    [Live] public static readonly Dictionary<string, int> GearLevel = new();
     // PARTS THE RECYCLER MAY NOT TOUCH, by id, because the hold counts parts by id and there is no
     // "this copy" for a lock to be about.
-    public static readonly HashSet<string> GearLocked = new();
+    [Live] public static readonly HashSet<string> GearLocked = new();
     public static void ToggleGearLock(string id)
     {
         if (string.IsNullOrEmpty(id)) return;
         if (!GearLocked.Remove(id)) GearLocked.Add(id);
         Save();
     }
-    public static readonly Dictionary<string, double> BaseInvested = new();
+    [Live] public static readonly Dictionary<string, double> BaseInvested = new();
     // equipment, per class: what is on each ship. The hold is the pilot's: every part owned and not
     // fitted, for any class -- a part taken off goes into it, a part fitted comes out of it. Counts,
     // by part id. (GearHold, not Hold: Hold is already a member of four other types.)
-    public static readonly Dictionary<ShipClass, string[]> Loadout = new();
+    [Live] public static readonly Dictionary<ShipClass, string[]> Loadout = new();
     public static string[] LoadoutFor(ShipClass c) =>
         Loadout.TryGetValue(c, out var l) ? l : Loadout[c] = Equipment.Default(c);
-    public static readonly Dictionary<string, int> GearHold = new();
+    [Live] public static readonly Dictionary<string, int> GearHold = new();
     public static void Stow(string id) { if (Equipment.ById(id) != null) GearHold[id] = GearHold.GetValueOrDefault(id) + 1; }
     public static bool Unstow(string id)
     {
@@ -94,11 +94,11 @@ public static class Character
     }
     // LOOT a boss dropped for this pilot and not yet flown over. On disk from the moment of the kill,
     // so a quit, a crash or a lost host costs nothing: the next world this pilot enters claims them.
-    public static readonly List<string> Unclaimed = new();
+    [Live] public static readonly List<string> Unclaimed = new();
     // THE KILLS THIS PILOT HAS BEEN PAID FOR, by the host's serial (the last 32). A kill can reach a
     // pilot twice -- at the kill and again as owed after a drop -- and on its file, not in memory, it
     // is paid once even when the game was restarted in between.
-    public static readonly List<long> PaidKills = new();
+    [Live] public static readonly List<long> PaidKills = new();
     private const int PaidKept = 32;
     public static bool PayOnce(long serial)
     {

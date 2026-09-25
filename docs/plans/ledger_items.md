@@ -395,3 +395,7 @@ THE FINAL TEST PHASE OWES (engine-unproven: nothing of the reconcile has run on 
 Open (defaults built; owner questions): R-D5 the four unpriced (line, hull) pairs; R-D2's left-out ability outputs
 (CIWS, Prism, Ramjet, Veil's primed volley, Grapnel rip, Resupply, Supercarrier); R-D4 Rapid Action lifts the rail
 reload too (else +20% rate is ~+4% DPS on the Sniper).
+
+## merge version-l PRE/POST
+- PRE: HEAD fdb41ac15ad0eed7db151810fc02d6611d3ca98a, merging version-l d9f2e82952e8221df2f7cb15681f54c83c0c25a8.
+- POST: no conflicts (auto-merged docs/CHANGES.md, docs/DESIGN.md, scripts/PlayerShip.cs, tools/smoketest/SmokeTest.cs.txt); typecheck 0 errors, verify -Quick ALL CHECKS PASSED. No engine run.

@@ -36,6 +36,11 @@ history pick the work up from it alone. Update it in the same change as the code
 
 ## Handoff — read this first
 
+**2026-09-25 (worktree `WarShips_wt_follow`, branch `wt/follow`): the coordinator's three follow-ups, J1-J3.
+Compiles, rung 2 green; engine-unproven: every check is owed in the final test phase** -- rung 3 twice
+(FollowFingerprintCollectionChecks, FollowLeadRetargetChecks, FollowHeavyRetargetLeadChecks,
+FollowWarpCooldownRuleChecks), rung 5 `six,six` (FollowWarpCooldownHostChecks, in the arena host after
+LaneBWorldEntryChecks). No frames. The protocol fingerprint moves (five more tables hashed). Detail: `docs/plans/ledger_follow.md`.
 **2026-09-25 (worktree `WarShips_wt_kits6a`, branch `wt/kits6a`): kits lane A slice 6a, the capitals, built J1-J9,
 and the merge gate's four findings fixed (J11: the chevron's clock per hull, the no-rip ends checked, the pull on
 every real anchor, a party of two at rung 5). Compiles, rung 2 green; engine-unproven: every check is owed in the final test phase** -- rung 3 twice (LaneA6aArc,
@@ -656,6 +661,19 @@ outstanding from the batch of 2026-09-23.)*
 
 ## Unreleased
 
+### Follow-ups: the fingerprint's collections, a heavy's lead on a retarget, a warp inside its cooldown (2026-09-25, worktree wt/follow)
+
+**Fingerprint:** a List / Dictionary / HashSet of Plain things is hashed (a list in order, a dictionary and a set in
+key order): NetIds.Widths, Spawns.All, Hints.All, Sfx._gap, Abilities.Reserved (and AllStats.Rows, Equipment.ByIdMap,
+Classes.ById) now enter Net.Protocol. What a run fills in is marked `[Live]` (Net.cs) and skipped; a check fails any
+static readonly collection that is neither hashed nor `[Live]`. **Lead:** `Missiles.Lead` is keyed on its target
+(`Watch(who, at, dt)`, `Ready`): a retarget starts a new estimate, never a jump, and a heavy throws only once its lead is
+the new target's own, so its first throw after a retarget leads a moving hull (the Director and the lane gun share it).
+**Warp:** the host prices a guest's warp seen while its own copy of the drive still cools past `Drives.CoolGrace`
+(0.5 s) as an unwarranted snap: disabled for the whole distance, no safe range, and the cooldown starts again.
+**Known broken:** engine-unproven (rungs 3 and 5 owed). A lane gun switching prey may still throw one zero-lead shot
+(only the heavy waits for `Ready`).
+
 ### Class kits, lane A slice 6a: the capitals -- Battleship, Carrier, Destroyer (2026-09-25, worktree wt/kits6a)
 
 **Battleship** (hull 500): Space the main battery, 4 x 12.5 every 2.0 s at 1000 u, in ARCS (the fore pair never within
@@ -995,8 +1013,7 @@ hint card, the snap flash, the bar sequences and `Abilities.For` lengths (+1 for
 
 **Known broken:** nothing known; all of it is engine-unproven. `Enemies.cs:30`'s raider cruise (100)
 is now faster than the battleship (88) and the carrier (99): its comment is stale and the number is
-lane A/G's to settle. The host prices a warp's distance, not its cooldown: a modified client could
-chain charged jumps inside 20 s and pay only for distance.
+lane A/G's to settle.
 
 
 ### The curve, lane F (2026-09-25, worktree wt/curve)

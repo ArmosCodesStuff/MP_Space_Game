@@ -3636,6 +3636,7 @@ public partial class _Test : Node
         Check(arrived && !relocDisabled && g.Sl("warp").Cool <= 0,
               $"arena host (lane B): the guest's destroyer put back 3000 u away by the host (a returning pilot's place) is never priced as a jump -- arrived {arrived}, disabled {relocDisabled}, warp cooling {g.Sl("warp").Cool:0.0} s");
         LaneBWorldEntryChecks(g);                                           // snaps priced (this window); one frame, no real report between
+        FollowWarpCooldownHostChecks(g);                                    // the same: a warp inside the host's cooldown is priced
         // THE REST OF THE GUEST'S DRIVES, watched every frame until it becomes a freighter
         double firstOff = -1, secondOff = -1; bool was = false, sawBoost = false;
         float fastest = 0, widest = 0, restOff = -1; int clamps0 = -1, clampsDart = 0;
@@ -3718,6 +3719,99 @@ public partial class _Test : Node
             if (priced) { g.Statuses.Clear(Status.Disabled); g.Sl("warp").Cool = 0; }
             run.From = null; Report(pos, false);                            // back on its real reports
             g.Hp = hp;
+        }
+    }
+
+    // ── A WARP INSIDE THE DRIVE'S COOLDOWN IS PRICED (follow-J3) ─────────────────────────────────
+    // The host priced a guest's warp DISTANCE but not its cooldown, so a modified client could chain jumps.
+    // The rule (Drives.Warranted): a jump the host sees while its own copy of the slot still reads more
+    // than CoolGrace (0.5 s) is unwarranted. From 3 varied situations each: INSIDE the cooldown (1-19 s
+    // left), AT THE EDGE (0.5 s + and - a varied 0.05-0.2 s margin) and AFTER it (0). Then on Priced
+    // itself, on this warp hull with a fresh host record: a varied 700 u to (safe - 200) u snap -- inside
+    // the safe range, so a warranted one costs no disable -- is DISABLED for the whole distance
+    // (Drives.DisabledFor(jump), no safe range) when the slot still cools past the edge, and not at all at
+    // the lower edge or after; the cooldown starts again in every case.
+    void FollowWarpCooldownRuleChecks(PlayerShip me)
+    {
+        for (int run = 0; run < 3; run++)
+        {
+            double inside = Vary(1f, 19f), margin = Vary(0.05f, 0.2f);
+            Check(!Drives.Warranted(inside) && !Drives.Warranted(Drives.CoolGrace + margin) && Drives.Warranted(Drives.CoolGrace - margin) && Drives.Warranted(0),
+                  $"a warp with {inside:0.0} s of cooldown left is unwarranted, so is one {margin:0.00} s past the 0.5 s edge; {margin:0.00} s inside the edge and after the cooldown it is warranted");
+        }
+        bool snaps = Drives.PriceSnaps;
+        Drives.PriceSnaps = true;
+        try
+        {
+            float safe = (float)me.Stats["warp_safe"], flight = 100f, age = 0.05f;
+            double full = me.Cooling(me.Stats["warp_cooldown"]);
+            for (int run = 0; run < 3; run++)
+            {
+                float d = Vary(Drives.SnapAt + 100f, safe - 200f);
+                float jump = d - flight * age;
+                var from = me.Position;
+                var to = from + Vector2.Right.Rotated(VaryAngle()) * d;
+                double margin = Vary(0.05f, 0.2f);
+                var cases = new[] { ("inside", (double)Vary(2f, 15f), true), ("past the edge", Drives.CoolGrace + margin, true),
+                                    ("inside the edge", Drives.CoolGrace - margin, false), ("after", 0.0, false) };
+                foreach (var (name, cool, refused) in cases)
+                {
+                    me.Statuses.Clear(Status.Disabled);
+                    me.Sl("warp").Cool = cool;
+                    var r = new DriveRun();
+                    Drives.Priced(me, r, from, false, age, flight);                  // the report before: where it was
+                    Drives.Priced(me, r, to, false, age, flight);                    // the jump
+                    double off = me.Statuses.Has(Status.Disabled) ? me.Statuses.Left(Status.Disabled) : 0;
+                    double want = refused ? Drives.DisabledFor(jump) : 0;
+                    double cooled = me.Sl("warp").Cool;
+                    Check(Math.Abs(off - want) < 0.05 && Math.Abs(cooled - full) < 1e-6,
+                          $"a {d:0} u warp {name} of the cooldown ({cool:0.00} s left) is {(refused ? "unwarranted" : "warranted")}: DISABLED {off:0.00} s (want {want:0.00}), the cooldown started again ({cooled:0.0} s, want {full:0.0})");
+                }
+            }
+        }
+        finally
+        {
+            Drives.PriceSnaps = snaps;
+            me.Statuses.Clear(Status.Disabled); me.Sl("warp").Cool = 0;
+        }
+    }
+
+    // THE HOST REFUSES A GUEST'S SECOND WARP INSIDE THE COOLDOWN (follow-J3, rung 5, the host role). Fed
+    // straight to the host's copy of the guest's warp hull inside ONE frame (as LaneBWorldEntryChecks is),
+    // with bit-less snaps priced, from 3 varied bearings and distances (700 u to the safe range less
+    // 200): with the host's slot still cooling (a first jump's 3-15 s left) the next warp is DISABLED for
+    // its whole distance; with the cooldown run out, the same kind of warp costs no disable. The cooldown
+    // starts again after either. The hull's real report is restored after each.
+    void FollowWarpCooldownHostChecks(PlayerShip g)
+    {
+        var nf = BindingFlags.NonPublic | BindingFlags.Instance;
+        var pos = (Vector2)typeof(PlayerShip).GetField("_netPos", nf).GetValue(g);
+        var vel = (Vector2)typeof(PlayerShip).GetField("_netVel", nf).GetValue(g);
+        float rot = (float)typeof(PlayerShip).GetField("_netRot", nf).GetValue(g);
+        var run = (DriveRun)typeof(PlayerShip).GetField("_drive", nf).GetValue(g);
+        void Report(Vector2 at) => g.ApplyState(at.X, at.Y, vel.X, vel.Y, rot, g.AimPoint.X, g.AimPoint.Y, g.Trigger, g.Staggered, at.X, at.Y, rot, false);
+        void Rebase() { g.Statuses.Clear(Status.Disabled); run.From = null; Report(pos); }
+        float safe = (float)g.Stats["warp_safe"];
+        double full = g.Cooling(g.Stats["warp_cooldown"]);
+        bool clean = Session.SectorOf(g.OwnerId) == Hub.Sector && Drives.PriceSnaps && g.Alive && !g.Statuses.Has(Status.Disabled);
+        for (int k = 0; k < 3; k++)
+        {
+            float d = Vary(Drives.SnapAt + 100f, safe - 200f);
+            double cooling = Vary(3f, 15f);
+            Rebase();
+            g.Sl("warp").Cool = cooling;                                    // a first jump's cooldown, still running
+            Report(pos + Vector2.Right.Rotated(VaryAngle()) * d);           // the second warp
+            double inside = g.Statuses.Has(Status.Disabled) ? g.Statuses.Left(Status.Disabled) : 0;
+            double insideCool = g.Sl("warp").Cool;
+            Rebase();
+            g.Sl("warp").Cool = 0;                                          // the cooldown has run out
+            Report(pos + Vector2.Right.Rotated(VaryAngle()) * d);           // a warp after it
+            bool afterFree = !g.Statuses.Has(Status.Disabled);
+            double afterCool = g.Sl("warp").Cool;
+            Check(clean && inside >= Drives.DisabledFor(d - 50f) - 0.05 && Math.Abs(insideCool - full) < 1e-6 && afterFree && Math.Abs(afterCool - full) < 1e-6,
+                  $"arena host (follow): a guest's second warp ({d:0} u, inside its {safe:0} u safe range) with {cooling:0.0} s of the host's cooldown left is refused -- DISABLED {inside:0.00} s (want {Drives.DisabledFor(d):0.00}, the whole distance) -- and one after the cooldown passes (disabled {!afterFree}); the cooldown starts again ({insideCool:0.0} / {afterCool:0.0} s, want {full:0.0}; counted in this world, snaps priced {clean})");
+            g.Sl("warp").Cool = 0;
+            Rebase();
         }
     }
 
@@ -3846,6 +3940,89 @@ public partial class _Test : Node
             for (int i = 0; i < 60 * 12 && H.BlastsPending > 0; i++) { pm.Position = at; pm.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
             Check(Math.Abs(HvMissile() - mm0 - 35) < 1e-6, $"...and it lands 35 ({HvMissile() - mm0:0})");
             hvM.TakeDamage(9999);
+            pm.Statuses.Clear(Status.Pinned);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            pm.Hp = pm.MaxHp;
+        }
+        pm.Position = keep; pm.Velocity = Vector2.Zero;
+    }
+
+    // ── A RETARGET IS A NEW ESTIMATE, NOT A JUMP (follow-J2) ──────────────────────────────────────
+    // Pure (Missiles.Lead): three frames on one target moving at va, then the watch moves to another
+    // (20 u to 2000 u off, moving at vb): the first frame of it is NOT Ready, not a jump and has no
+    // velocity; the second is Ready with vb itself (never a velocity taken from the old target's spot to
+    // the new one's); and back on the first target it starts over. 3 varied spots, speeds and bearings.
+    void FollowLeadRetargetChecks()
+    {
+        const double dt = 1.0 / 60;
+        for (int run = 0; run < 3; run++)
+        {
+            object a = new object(), b = new object();
+            var pa = new Vector2(Vary(-3000f, 3000f), Vary(-3000f, 3000f));
+            var va = Vector2.Right.Rotated(VaryAngle()) * Vary(20f, 300f);
+            var pb = pa + Vector2.Right.Rotated(VaryAngle()) * Vary(20f, 2000f);
+            var vb = Vector2.Right.Rotated(VaryAngle()) * Vary(20f, 300f);
+            var lead = new Lead();
+            for (int i = 0; i < 3; i++) lead.Watch(a, pa + va * (float)(i * dt), dt);
+            bool onA = lead.Ready && lead.Velocity.DistanceTo(va) < 0.05f;
+            lead.Watch(b, pb, dt);
+            bool first = !lead.Ready && !lead.Jumped && lead.Velocity == Vector2.Zero;
+            lead.Watch(b, pb + vb * (float)dt, dt);
+            bool second = lead.Ready && !lead.Jumped && lead.Velocity.DistanceTo(vb) < 0.05f;
+            lead.Watch(a, pa, dt);
+            bool again = !lead.Ready && lead.Velocity == Vector2.Zero;
+            Check(onA && first && second && again,
+                  $"a lead moved from a target at {va.Length():0} u/s onto another {pa.DistanceTo(pb):0} u off at {vb.Length():0} u/s: its own before ({onA}), not ready and no jump on the first frame of the new one ({first}), its {vb.Length():0} u/s on the second ({second} -- {lead.Velocity.Length():0}), and a new start back on the first ({again})");
+        }
+    }
+
+    // A HEAVY LEADS ON ITS FIRST THROW AFTER A RETARGET (follow-J2; ledger_kits COORDINATOR NOTE 2 item 4).
+    // A gunship called onto a sentry turret 450-700 u off, then called onto the pinned pilot moving at a
+    // varied speed (20-35, 40-60, 65-90 u/s) on a varied bearing, its missile clock at 0 the moment it
+    // retargets: its first blast lands AHEAD of the pilot along the pilot's velocity by the aim law's lead
+    // (speed x the 10 s flight, within 20%), not on the pilot (the old zero lead). Positions are driven by
+    // the harness each frame (the pinned hull's forced thrust would drift it), the pilot's spot at the
+    // throw re-taken on the frame the blast appears.
+    async Task FollowHeavyRetargetLeadChecks(Vector2 yonder)
+    {
+        var pm = Me; var keep = pm.Position;
+        var cd = typeof(Raider).GetField("_missileCd", BindingFlags.NonPublic | BindingFlags.Instance);
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        var bands = new[] { (20f, 35f), (40f, 60f), (65f, 90f) };
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f);
+            pm.Position = at; pm.Velocity = Vector2.Zero; pm.Hp = pm.MaxHp;
+            pm.ApplyStatus(Status.Pinned, 30.0);
+            var sentry = H.Drop(pm, at + Vector2.Right.Rotated(VaryAngle()) * Vary(450f, 700f), 1e9);
+            var hvSpot = at + Vector2.Right.Rotated(VaryAngle()) * Vary(250f, 330f);
+            var hv = H.SpawnRaider(hvSpot, Enemies.Gunship); hv.Hp = 1e9;
+            cd.SetValue(hv, 99.0);
+            hv.Call(sentry, 30.0);
+            for (int i = 0; i < 5; i++) { pm.Position = at; pm.Velocity = Vector2.Zero; hv.Position = hvSpot; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            bool onSentry = ReferenceEquals(hv.Target, sentry);
+            float speed = Vary(bands[run].Item1, bands[run].Item2);
+            var v = Vector2.Right.Rotated(VaryAngle()) * speed;
+            var before = H.Blasts.Select(b => b.id).ToHashSet();
+            hv.Call(pm, 30.0);                                              // THE RETARGET
+            cd.SetValue(hv, 0.0);
+            double t = 0; Vector2? thrownAt = null; Vector2 aim = Vector2.Zero;
+            for (int i = 0; i < 60 && thrownAt == null; i++)
+            {
+                var here = at + v * (float)t;
+                pm.Position = here; pm.Velocity = Vector2.Zero; hv.Position = hvSpot;
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                t += GetProcessDeltaTime();
+                foreach (var b in H.Blasts) if (!before.Contains(b.id)) { thrownAt = here; aim = b.at; }
+            }
+            var dir = v.Normalized();
+            float want = speed * 10f;
+            var ahead = thrownAt is { } p ? aim - p : Vector2.Zero;
+            float along = ahead.Dot(dir), across = Mathf.Abs(ahead.Dot(new Vector2(-dir.Y, dir.X)));
+            Check(onSentry && thrownAt != null && Mathf.Abs(along - want) < want * 0.2f && across < want * 0.1f,
+                  $"a gunship called off a sentry ({onSentry}) onto a pinned pilot at {speed:0} u/s leads it on its FIRST throw ({thrownAt != null}): {along:0} u ahead along its course (want {want:0}, speed x 10 s), {across:0} u across");
+            hv.TakeDamage(1e12); H.DeployedTaken(sentry);
             pm.Statuses.Clear(Status.Pinned);
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             pm.Hp = pm.MaxHp;
@@ -4064,7 +4241,7 @@ public partial class _Test : Node
     }
 
     // ── THE BANDS AND THE LINES ARE IN THE BUILD'S FINGERPRINT (lane A slice 3, gate fix J12) ───────
-    // The bug: Charges.All was a dictionary, which Net.Fingerprint does not hash, so two builds whose
+    // The bug: Charges.All was a dictionary, which Net.Fingerprint did not then hash, so two builds whose
     // railgun bands differed admitted each other. Now the fingerprint's parts write Charges.All and
     // Lines.All out row by row, and at 3 varied railgun multipliers the fingerprint moves (the band is
     // put back after each, and the build's own fingerprint returns).
@@ -4088,6 +4265,96 @@ public partial class _Test : Node
             Check(moved != build && back == build,
                   $"a build whose railgun band fires x{m:0.00} has another fingerprint ({moved:x8} against the build's {build:x8}), and with the band put back the build's again ({back:x8})");
         }
+    }
+
+    // ── THE FINGERPRINT HASHES CONSTANT COLLECTIONS (follow-J1) ─────────────────────────────────
+    // The bug: Net.Fingerprint hashed a constant table only as an array or a row, so NetIds.Widths,
+    // Spawns.All (the wire kind index), Hints.All, Sfx._gap and Abilities.Reserved -- a List, three
+    // Dictionaries and a HashSet -- could differ between two builds that admitted each other. Now every
+    // System.Collections.Generic collection of Plain things is hashed (a list in order, a dictionary and
+    // a set in key order) unless it is marked [Live] (what a run fills in). From 3 varied entries of each
+    // table: one moved moves the fingerprint off Net.Protocol, and put back (in finally) it is the build's
+    // again; a dictionary and a set rebuilt in reverse order hash the same; and every static readonly
+    // collection is either hashed or [Live], never neither, never both.
+    void FollowFingerprintCollectionChecks()
+    {
+        const BindingFlags st = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static;
+        var widths = (Dictionary<int, int>)typeof(NetIds).GetField("Widths", st).GetValue(null);
+        var gap = (Dictionary<string, double>)typeof(Sfx).GetField("_gap", st).GetValue(null);
+        int build = Net.Protocol;
+        int Moved(Action move, Action back)
+        {
+            int m;
+            try { move(); m = FingerprintNow(); }
+            finally { back(); }
+            return m;
+        }
+        void Pair(string what, int moved)
+        {
+            int back = FingerprintNow();
+            Check(moved != build && back == build,
+                  $"the build's fingerprint reads {what}: moved, {moved:x8} against the build's {build:x8}; put back, {back:x8}");
+        }
+        var parts = FingerprintParts();
+        var named = new[] { "NetIds.Widths=", "Spawns.All=", "Hints.All=", "Sfx._gap=", "Abilities.Reserved=" };
+        var missing = named.Where(n => !parts.Any(p => p.StartsWith(n, StringComparison.Ordinal))).ToList();
+        Check(missing.Count == 0, $"the build's fingerprint has a part for each collection table ({(missing.Count == 0 ? "all five" : "missing " + string.Join(", ", missing))})");
+        for (int run = 0; run < 3; run++)
+        {
+            // a Dictionary<int, int>: one space's width
+            var wk = widths.Keys.ElementAt(Rng.RandiRange(0, widths.Count - 1));
+            int wv = widths[wk];
+            Pair($"NetIds.Widths (space {wk} {wv} -> {wv + run + 1})", Moved(() => widths[wk] = wv + run + 1, () => widths[wk] = wv));
+            // a Dictionary<string, double>: one sound's gap
+            var gk = gap.Keys.ElementAt(Rng.RandiRange(0, gap.Count - 1));
+            double gv = gap[gk], gTo = gv * Vary(1.5f, 3f);
+            Pair($"Sfx._gap ({gk} {gv:0.000} -> {gTo:0.000} s)", Moved(() => gap[gk] = gTo, () => gap[gk] = gv));
+            // a Dictionary<string, (string, string)>: one hint's title
+            var hk = Hints.All.Keys.ElementAt(Rng.RandiRange(0, Hints.All.Count - 1));
+            var hv = Hints.All[hk];
+            Pair($"Hints.All ({hk}'s title)", Moved(() => Hints.All[hk] = (hv.Title + " " + run, hv.Body), () => Hints.All[hk] = hv));
+            // a List<SpawnKind>: one kind's burst, and the ORDER (the index is the kind on the wire)
+            int si = Rng.RandiRange(0, Spawns.All.Count - 1);
+            var sk = Spawns.All[si];
+            float sb = sk.Burst, sTo = sb + Vary(1f, 20f);
+            Pair($"Spawns.All ({sk.Id}'s burst {sb:0} -> {sTo:0})", Moved(() => sk.Burst = sTo, () => sk.Burst = sb));
+            int sj = (si + 1 + Rng.RandiRange(0, Spawns.All.Count - 2)) % Spawns.All.Count;
+            var sOther = Spawns.All[sj];
+            Pair($"Spawns.All (kinds {si} and {sj} swapped)",
+                 Moved(() => { Spawns.All[si] = sOther; Spawns.All[sj] = sk; }, () => { Spawns.All[si] = sk; Spawns.All[sj] = sOther; }));
+            // a HashSet<Key>: one more reserved key
+            var free = Enumerable.Range(0, 10).Select(i => global::Godot.Key.F1 + i).Where(k => !Abilities.Reserved.Contains(k)).ToArray();
+            var rk = free[Rng.RandiRange(0, free.Length - 1)];
+            Pair($"Abilities.Reserved (+{rk})", Moved(() => Abilities.Reserved.Add(rk), () => Abilities.Reserved.Remove(rk)));
+        }
+        // KEY ORDER, NOT INSERTION ORDER: a dictionary and a set rebuilt in reverse hash the same
+        var gapWas = gap.ToList(); var resWas = Abilities.Reserved.ToList();
+        int reversed;
+        try
+        {
+            gap.Clear(); foreach (var kv in Enumerable.Reverse(gapWas)) gap[kv.Key] = kv.Value;
+            Abilities.Reserved.Clear(); foreach (var k in Enumerable.Reverse(resWas)) Abilities.Reserved.Add(k);
+            reversed = FingerprintNow();
+        }
+        finally
+        {
+            gap.Clear(); foreach (var kv in gapWas) gap[kv.Key] = kv.Value;
+            Abilities.Reserved.Clear(); foreach (var k in resWas) Abilities.Reserved.Add(k);
+        }
+        Check(reversed == build, $"a dictionary and a set filled in the reverse order hash the same ({reversed:x8}, the build's {build:x8})");
+        // THE GUARD: every static readonly System.Collections.Generic field is hashed or [Live] -- a new
+        // table cannot go unhashed, and nothing a run fills in is ever part of the build
+        var neither = new List<string>(); var both = new List<string>();
+        foreach (var t in typeof(Net).Assembly.GetTypes().Where(t => t.Namespace == null && !t.Name.StartsWith("_") && !t.ContainsGenericParameters))
+            foreach (var f in t.GetFields(st | BindingFlags.DeclaredOnly).Where(f => f.IsInitOnly && f.FieldType.IsGenericType && f.FieldType.Namespace == "System.Collections.Generic"))
+            {
+                bool live = f.GetCustomAttribute<LiveAttribute>() != null;
+                bool hashed = parts.Any(p => p.StartsWith($"{t.Name}.{f.Name}=", StringComparison.Ordinal));
+                if (!live && !hashed) neither.Add($"{t.Name}.{f.Name}");
+                if (live && hashed) both.Add($"{t.Name}.{f.Name}");
+            }
+        Check(neither.Count == 0 && both.Count == 0,
+              $"every static readonly collection is a hashed table or [Live] (neither: {(neither.Count == 0 ? "none" : string.Join(", ", neither))}; both: {(both.Count == 0 ? "none" : string.Join(", ", both))})");
     }
 
     // ── F11 · THE PRISM (lane A slice 5, kits5-J2) ────────────────────────────────────────────
@@ -15938,6 +16205,8 @@ public partial class _Test : Node
             void Ready() { me.Sl("warp").Cool = 0; me.Statuses.Clear(Status.Disabled); me.Velocity = Vector2.Zero; me.Rotation = 0f; }
             await LaneBWarpChecks(me, d2w);
             Ready();
+            FollowWarpCooldownRuleChecks(me);
+            Ready();
             // the radar: click a marker to select it -- an enemy as the target, a landmark as a waypoint
             // beside the base: every landmark it clicks below is within the radar's 3600 u reach from here
             Ready(); me.Position = Hub.BasePos + new Vector2(0, 300); me.Rotation = 0f; await Wait(0.6);
@@ -18290,6 +18559,8 @@ public partial class _Test : Node
             await LaneARampWiringChecks(yonder);
             LaneASpeedAddChecks();
             await LaneAHeavyRowsChecks(yonder);
+            FollowLeadRetargetChecks();
+            await FollowHeavyRetargetLeadChecks(yonder);
             WingsRowsChecks();
             await WingsPatrolChecks(yonder);
             await WingsGunshipChecks(yonder);
@@ -18299,6 +18570,7 @@ public partial class _Test : Node
             await LaneAMissileIdsChecks(yonder);
             LaneAChargeBandChecks();
             LaneAChargeTableHashedChecks();
+            FollowFingerprintCollectionChecks();
             LaneAMeleeArcChecks();
             await LaneAMeleeStrikeChecks(yonder);
             LaneAPrismBandChecks();

@@ -36,11 +36,11 @@ public static class DamageSource
 public static class Combat
 {
     // Registered by whatever world is live (hub, hostile system, someone else's world).
-    public static readonly List<IHittable> Hostiles = new();
+    [Live] public static readonly List<IHittable> Hostiles = new();
 
     // Player ships, as targets for ENEMY fire only (a hostile dummy's missile). Ships
     // register themselves; an escape pod is in no list, so nothing can touch it.
-    public static readonly List<IHittable> Players = new();
+    [Live] public static readonly List<IHittable> Players = new();
     public static IHittable PlayerById(int id) => Live(Players, id);
 
     // Interceptable missiles get ids the host hands out and sends with the launch (NetIds).

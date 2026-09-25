@@ -22,7 +22,7 @@ public static class NetIds
     };
     private static int Wide(int space) => Widths.TryGetValue(space, out var w) && w > 1 ? w : 1000;
 
-    private static readonly Dictionary<int, int> Handed = new();
+    [Live] private static readonly Dictionary<int, int> Handed = new();
 
     // the next id in a space: Next(NetIds.Enemy) -> 5001, 5002, ... and round to 5001 again at the
     // space's edge, never to 0, which is In(space, 0) -- the space's first seat

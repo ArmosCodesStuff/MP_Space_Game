@@ -213,7 +213,7 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused, ISquadMembe
         if (_status.Has(Status.Disabled) || Squad == null) { Speed = 0; Latched = false; QueueRedraw(); return; }   // stunned: it sits there
         var from = Position;
         var t = Target;
-        if (t != null) _lead.Watch(t.Position, delta);   // the one tracker every predicted missile reads (Missiles.Lead)
+        if (t != null) _lead.Watch(t, t.Position, delta);   // the one tracker every predicted missile reads (Missiles.Lead), a new estimate on a retarget
         if (!Squad.Posted(this))
         {   // IN FORMATION: its slot off the anchor, catching up at CatchUp x its cruise
             Latched = false;
@@ -257,8 +257,9 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused, ISquadMembe
         _missileCd -= delta;
         // HELD while a status holds its throw (StatusSet.HoldsThrow): the clock keeps its zero, and
         // it throws the frame the status lapses. ONLY AT A PINNED TARGET (the doctrine's row), by
-        // anyone's web: a free pilot is never lobbed at.
-        if (Def.Missiles && (pinned || !Squad.Doctrine.MissileNeedsPin) && _missileCd <= 0 && !_status.HoldsThrow
+        // anyone's web: a free pilot is never lobbed at. NOT BEFORE ITS LEAD IS READY: the frame after a
+        // (re)target, when the estimate is the new target's own, so the first throw leads it too.
+        if (Def.Missiles && (pinned || !Squad.Doctrine.MissileNeedsPin) && _missileCd <= 0 && !_status.HoldsThrow && _lead.Ready
             && Position.DistanceTo(t.Position) <= Def.MissileRange)
         {   // at where it WILL be: its velocity carried the whole flight forward -- from ITS row's
             // reach, on its row's cadence, for its row's damage

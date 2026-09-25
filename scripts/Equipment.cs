@@ -68,7 +68,7 @@ public static class Equipment
 
     // A class's own bare sheet -- built once per class, and lazily: Equipment's static fields are
     // built before this is ever asked, and a sheet read during that would be a cycle.
-    private static readonly Dictionary<ShipClass, ShipStats> SheetCache = new();
+    [Live] private static readonly Dictionary<ShipClass, ShipStats> SheetCache = new();
     private static ShipStats Bare(ShipClass c) => SheetCache.TryGetValue(c, out var s) ? s : SheetCache[c] = new ShipStats(c);
     public static HashSet<string> SheetOf(ShipClass c) => Bare(c).All.Select(x => x.Id).ToHashSet();
     // a row's own number on a bare hull of class `c` (0 where it has no such row)

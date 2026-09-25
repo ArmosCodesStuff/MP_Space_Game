@@ -930,7 +930,7 @@ public static class Abilities
     private static readonly AbilityDef[] Open = Enumerable.Range(1, OpenSlots).Select(i => new AbilityDef {
         Id = $"open{i}", Name = $"Open slot {i}", Short = "", Open = true, Default = Key.Key0 + i,
         Blurb = "Unassigned — for abilities and items to come." }).ToArray();
-    private static readonly Dictionary<ShipClass, AbilityDef[]> _full = new();
+    [Live] private static readonly Dictionary<ShipClass, AbilityDef[]> _full = new();
 
     public static AbilityDef[] For(ShipClass c)
     {
@@ -1003,7 +1003,7 @@ public static class Abilities
     // frame to see whether the line changed, and concatenating it allocated a string each time
     // for text that only moves on a refit.
     private const string CommonHint = "W ahead  ·  S astern  ·  A/D rudder  ·  left-click select  ·  Tab nearest enemy  ·  wheel zoom  ·  Y free camera  ·  K abilities & stats  ·  B base  ·  L pilot  ·  I equipment";
-    private static readonly Dictionary<ShipClass, string> _hints = new();
+    [Live] private static readonly Dictionary<ShipClass, string> _hints = new();
 
     public static string ControlsHint(ShipClass c)
     {

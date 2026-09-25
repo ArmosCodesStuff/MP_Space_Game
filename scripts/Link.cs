@@ -243,7 +243,7 @@ public static class Link
         _completeAt[id] = frame;
         return false;
     }
-    private static readonly Dictionary<ulong, ulong> _completeAt = new();
+    [Live] private static readonly Dictionary<ulong, ulong> _completeAt = new();
 
     // EVERY HANG-UP GOES THROUGH HERE (v1 §2.6 S3): the plugin's remove_peer prints an engine ERROR
     // for an id it does not have, and a run with an ERROR line is a red run. A gone id is a no-op.
