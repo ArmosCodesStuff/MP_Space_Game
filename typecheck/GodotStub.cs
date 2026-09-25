@@ -145,10 +145,34 @@ namespace Godot
         public MultiplayerPeerConnectionStatus GetConnectionStatus() => MultiplayerPeerConnectionStatus.Connected;
         public void Close() { }
     }
-    public partial class ENetMultiplayerPeer : MultiplayerPeer
+    // The session's transport (Net, Link): only the shape the game calls. The real classes are core
+    // GodotSharp's, implemented by the webrtc-native plugin.
+    public partial class WebRtcPeerConnection : RefCounted
     {
-        public Error CreateServer(int port, int maxClients = 32) => Error.Ok;
-        public Error CreateClient(string address, int port) => Error.Ok;
+        public enum ConnectionState { New, Connecting, Connected, Disconnected, Failed, Closed }
+        public enum GatheringState { New, Gathering, Complete }
+        public event System.Action<string, string> SessionDescriptionCreated;
+        public event System.Action<string, long, string> IceCandidateCreated;
+        public Error Initialize(object config = null) => Error.Ok;
+        public Error CreateOffer() => Error.Ok;
+        public Error SetLocalDescription(string type, string sdp) => Error.Ok;
+        public Error SetRemoteDescription(string type, string sdp) => Error.Ok;
+        public Error AddIceCandidate(string media, int index, string name) => Error.Ok;
+        public ConnectionState GetConnectionState() => ConnectionState.New;
+        public GatheringState GetGatheringState() => GatheringState.New;
+        public void Close() { }
+        public void Dispose() { }
+    }
+    public partial class WebRtcMultiplayerPeer : MultiplayerPeer
+    {
+        public Error CreateServer(object channels = null) => Error.Ok;
+        public Error CreateClient(int id, object channels = null) => Error.Ok;
+        public Error AddPeer(WebRtcPeerConnection c, int id) => Error.Ok;
+        public void RemovePeer(int id) { }
+        public bool HasPeer(int id) => false;
+        public System.Collections.Generic.Dictionary<int, object> GetPeers() => new();
+        public void Poll() { }
+        public void Dispose() { }
     }
     public partial class MultiplayerApi : RefCounted
     {

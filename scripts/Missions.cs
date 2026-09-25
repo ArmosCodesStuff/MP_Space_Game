@@ -6,17 +6,19 @@ using System.Linq;
 // Bounty missions from Threat Intelligence Operations: bosses, LEVELS, and rewards.
 //   ONE LADDER OF LEVELS, the bosses taking them in turn (ForLevel): odd levels RUSTY BUCKET,
 //   even levels the DRAKE BASTION. LEVELS start at 1:
-//     S(L) = 1.025^(L-1)   -- a level-5 boss is 1.025^4 = 1.10x, a level-40 boss 2.6x. It was
-//     1.1 a level, which doubled a boss every seven levels and left no pilot able to catch it.
-//   A PARTY of P pilots: the boss's hull x S(L)(1 + 0.6(P-1)), its damage x S(L)(1 + 0.2(P-1)).
-//   A failed level-L mission's raids are S(L) too.
+//     a level's scale is PAR's (Par.cs): the boss's hull grows as the chip-free reference pilot's
+//     DPS does (HullScale, x2.22 at level 40), its damage as that pilot's hull does (DamageScale,
+//     x3.13), so the pilot kills it in about 60 s and lives about 31 s (Lancer) / 42 s (Drake) at
+//     every level. Flat past level 40.
+//   A PARTY of P pilots: the boss's hull x HullScale(L)(1 + 0.6(P-1)), its damage x DamageScale(L)(1 + 0.2(P-1)).
+//   A failed level-L mission's raiders are level L too (Raider.Strength is a level).
 //   Beating a level -- whichever boss held it -- unlocks the next; the TIO selects the newest when
 //   the host opens it. The first-clear bonus is paid once a level, not once a boss.
 //   REWARDS, per pilot, each computed on the pilot's own machine:
 //     the kill   round(300 x boss level / pilot level)  (a level-5 boss for a level-10 pilot: 150)
 //     +250       the first time that pilot beats that level
 //     +100       for completing the mission
-//     credits    2000 x S(L) x (1 + 0.5(P-1)), split evenly among the P pilots (solo earns the most)
+//     credits    2000 x HullScale(L) x (1 + 0.5(P-1)), split evenly among the P pilots (solo earns the most)
 //     parts      Loot.CratesFor(L) crates of gear, rolled by the host for each pilot (see Loot)
 // WHAT A MISSION IS WON BY KILLING: a hull with a NAME and a MAXIMUM, so the arena's line reads
 // one thing whether the mission built a boss or a pirate base. Boss answers it; Emplacement
@@ -40,32 +42,57 @@ public static class Missions
     // for the same reason: BEHAVIOUR is code, geometry and art are data. There is no Make: every
     // boss is the one Boss class reading this row, where each was a subclass of its own with the
     // sprite, the length and the half-width written into it as abstract members.
-    public class BossType
+    // Its ART -- Texture, Length, Tint and the Nozzles its art has (listed: a boss draws no flame)
+    // -- is the HullArt it derives from (Sprites.cs). HalfWidth is how it is hit, not its art.
+    public class BossType : HullArt
     {
         public string Id, Name;
         public double Hull;
-        public string Sprite;
-        public float Length, HalfWidth;
-        public float HoldOff = 650f;        // unlocked, it closes to about this and no nearer
+        public float HalfWidth;
+        // UNLOCKED, IT CLOSES TO about this far off its NOSE and no nearer (Boss.Approach adds the
+        // half-length): measured from the hull, so a bigger hull holds the same gap. 470 is the old
+        // 650 u from the centre of the 360 u Rusty Bucket.
+        public float HoldOff = 470f;
         public float CloseSpeed = 30f;      // ...at this, ponderously
         public float TurnRate = 0.3f;       // its native turn (rad/s)
+        // HOW MANY TIMES BossSize MADE THIS ROW -- 1 for a row that was never doubled. A move whose
+        // reach should keep pace with the hull (a Ring's shockwave; nothing else asked for this yet)
+        // reads it at use (Boss.cs), the same way Boss.cs reads Length and HalfWidth: the ROW carries
+        // the scale, never a second copy of the move table.
+        public float Size = 1f;
         public BossMove[] Moves;
         // ITS FIRST ADD SQUAD BRINGS AT LEAST THIS MANY PINNERS, from level 1 (Waves.Roster): the
         // Rusty Bucket's two beam escorts became its squad wave 1 (owner, raids v2).
         public int AddsFloor;
     }
+    // THE BOSSES ARE RED AND BLACK: the owner's swatch (mean RGB 172, 7, 2) multiplying the pack's
+    // grey, so the art's highlights come out that red and its shadows black. Declared before
+    // Bosses: a static field's initialiser runs in the order it is written.
+    private static readonly Color BossRed = new(0.67f, 0.03f, 0.01f);
+    // THE BOSSES ARE THIS MANY TIMES THE SIZE THEIR ART WAS MEASURED AT (the owner's "2 or 3x",
+    // 2026-09-25, built at 2): the length, the half-width -- their HIT SIZE grows with the art --
+    // and the bells. Everything a move places about the hull reads the row (Boss.cs), so 3x is
+    // this one number.
+    private const float BossSize = 2f;
+
     public static readonly BossType[] Bosses =
     {
         // ITS ID IS NOT ITS NAME. "silver_lancer" is a save key -- Character.BossCleared writes it
         // into [boss_cleared], and every file ever written carries it -- so the id is frozen and
         // the name above it is free. The code that holds its moves is Lancer.cs for the same
         // reason: it is named for the id on disk, not for the words on the screen.
-        new() { Id = "silver_lancer", Name = "RUSTY BUCKET", Hull = 760,
-                Sprite = "res://boss_raider.png",          // raider red, a white skull on its centre
-                Length = 360f, HalfWidth = 70f, Moves = Lancer.Moves, AddsFloor = 2 },
-        new() { Id = "drake_bastion", Name = "DRAKE BASTION", Hull = 700,
-                Sprite = "res://boss_drake.png",
-                Length = 420f, HalfWidth = 90f, Moves = Drake.Moves },
+        // THE L1 HULLS ARE PAR'S (Par.Rows[0].Boss): 60 s of the fleet's walled L1 median pilot,
+        // 3222; the Drake x700/760 of it. No hull is trimmed for a fight's adds (owner, 2026-09-24).
+        new() { Id = "silver_lancer", Name = "RUSTY BUCKET", Hull = 3222,
+                Texture = "res://boss_raider.png", Tint = BossRed,
+                Nozzles = Nozzle.Scaled(BossSize, new(-30.30f, 178.81f, 39.21f), new(31.19f, 178.81f, 38.61f)),
+                Length = 360f * BossSize, HalfWidth = 70f * BossSize, Size = BossSize, Moves = Lancer.Moves, AddsFloor = 2 },
+        new() { Id = "drake_bastion", Name = "DRAKE BASTION", Hull = 2968,
+                Texture = "res://boss_drake.png", Tint = BossRed,
+                Nozzles = Nozzle.Scaled(BossSize, new(-53.82f, 209.38f, 20.78f), new(-28.54f, 208.76f, 20.47f), new(-3.57f, 191.39f, 15.82f),
+                                                  new(19.85f, 208.45f, 19.85f), new(50.25f, 208.45f, 22.33f)),
+                Length = 420f * BossSize, HalfWidth = 90f * BossSize, HoldOff = 440f, Size = BossSize,   // 650 u off the centre of its 420 u
+                Moves = Drake.Moves },
     };
     // The boss of a level: every peer works it out from the replicated level alone.
     public static BossType ForLevel(int level) => Bosses[(Math.Max(1, level) - 1) % Bosses.Length];
@@ -165,7 +192,7 @@ public static class Missions
     public static int Kind { get => _kind; set => _kind = value >= 0 && value < Kinds.Length ? value : Bounty; }
 
     // A BOSS GETS QUICKER AND LONGER-ARMED WITH THE LEVEL, gently: one percent a level, compounding,
-    // beside the 2.5% a level its hull and damage already take (LevelStep). A pilot's reach and rate of fire
+    // beside what Par's scale already does to its hull and damage. A pilot's reach and rate of fire
     // climb with gear and points, and a boss whose wind-ups and ranges never moved would be fought
     // from further out and dodged more easily every level -- the fight would get EASIER as the
     // numbers got bigger. What it touches: how long it takes to wind up and how fast a fired body
@@ -174,17 +201,6 @@ public static class Missions
     // scale of its own.
     public const double MoveStep = 1.01;
     public static double Quicken(int level) => Math.Pow(MoveStep, Math.Max(1, level) - 1);
-    // WHAT A LEVEL ADDS TO A MISSION: its hull, its damage, its bounty and its crates.
-    //
-    // 1.025, not the 1.10 it was. Measured against the owner's own target -- a pilot on par after
-    // FOUR boss kills at a level (or two sieges), carrying gear levelled to about 65% of the
-    // salvage ladder -- a tenth a level was unwinnable: the boss grew forty-fold across forty
-    // levels while the points those kills paid for bought +45%, so the fight at level 20 was a
-    // 200-shot slog and level 40 was arithmetic, not combat. At 1.025 a level-40 fight is twice
-    // the length of a level-1 fight: the boss pulls steadily ahead, which is what was asked for,
-    // and the answer is a fourth clear or better gear rather than a wall.
-    public const double LevelStep = 1.025;
-    public static double S(int level) => Math.Pow(LevelStep, Math.Max(1, level) - 1);
     // THE SELECTED LEVEL -- ONE PER CATEGORY (the host decides; replicated). The bounty ladder and
     // the raid ladder are separate, so the level left selected for one is never moved by stepping
     // the other. `Level` is always the SELECTED category's: that is the one an arena is built from
@@ -222,14 +238,24 @@ public static class Missions
     public static bool Cleared(int kind, int level) => ClearedIn(CatOf(kind)).Contains(level);
     public static int HighestBeaten(int kind) => HighestIn(CatOf(kind));
     public static int Unlocked(int kind) => HighestIn(CatOf(kind)) + 1;
+    // LEVEL SKIPPING, the pilot's choice: the host may pick up to SkipAhead levels past the newest
+    // unlocked. Par grows 1-4% a level, so +2 costs a par pilot 1-4 s of a 60 s fight; a skipped
+    // level stays uncleared, its first-clear bonus still there to go back for, and the ladder does
+    // not move (one boss a level; beating level L unlocks L + 1 whatever was skipped to reach it).
+    public const int SkipAhead = 2;
+    public static int Top(int kind) => Unlocked(kind) + SkipAhead;
+    // THE HIGHEST LEVEL CLEARED ON ANY LADDER: what the salvage ladder's cap reads (Equipment.LevelCap).
+    public static int HighestAnywhere() => Categories.Select(HighestIn).DefaultIfEmpty(0).Max();
 
-    public static double HullMult(int level, int party) => S(level) * (1 + 0.6 * (Math.Max(1, party) - 1));
-    public static double DamageMult(int level, int party) => S(level) * (1 + 0.2 * (Math.Max(1, party) - 1));
+    // WHAT A LEVEL ADDS TO A MISSION: its hull and its damage on Par's scale, and the party's share.
+    public static double HullMult(int level, int party) => Par.HullScale(level) * (1 + 0.6 * (Math.Max(1, party) - 1));
+    public static double DamageMult(int level, int party) => Par.DamageScale(level) * (1 + 0.2 * (Math.Max(1, party) - 1));
     private const double BountyBase = 2000;
     // WHAT A MISSION PAYS is its row's share of the base figure (MissionKind.Pay), never a second
-    // formula: the level's scale and the party's split are the same for every kind.
+    // formula: the level's scale (the boss's hull's, so a bigger boss pays more) and the party's
+    // split are the same for every kind.
     public static double BountyEach(int kind, int level, int party) =>
-        BountyBase * KindOf(kind).Pay * S(level) * (1 + 0.5 * (Math.Max(1, party) - 1)) / Math.Max(1, party);
+        BountyBase * KindOf(kind).Pay * Par.HullScale(level) * (1 + 0.5 * (Math.Max(1, party) - 1)) / Math.Max(1, party);
 
     public const int KillExp = 300, FirstClearExp = 250, CompletionExp = 100;
     // A BOSS UNDER HALF YOUR LEVEL TEACHES YOU NOTHING. The kill's EXP already fell away with the

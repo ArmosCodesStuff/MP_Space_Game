@@ -41,8 +41,8 @@ public enum Fit
     Deploy = 32,       // it drops turrets of its own and picks them up again (the freighters)
 }
 
-// Every hull is the owner's line art (tools/make_ships.ps1: symmetrical, grey, tinted here with
-// the hull colour), and every mount below is measured from it: the tool prints them. A turret at
+// Every hull is the owner's pack art (tools/make_ships.ps1: turned nose-up, trimmed, grey, tinted
+// here with the hull colour), and every mount below is measured from it: the tool prints them. A turret at
 // TurretTexScale 1/5.5 is 12 u across the housing, the muzzles 12.2 u from the pivot; point
 // defence 6 u across, the muzzle 5.5 u out. Each class mounts them at its own multiple of that.
 public class ClassArt
@@ -130,6 +130,9 @@ public class ClassDef
     // follows from its sheet by that same rule (Equipment.Fits).
     public ItemDef[] Kit = Array.Empty<ItemDef>();
     public AbilityDef[] Abilities = Array.Empty<AbilityDef>();
+    // WHAT V DOES: one row of Drives.All (the warp on the capitals, the boost on the nine). Not in
+    // Abilities: Abilities.For appends it after them, so it has a slot and no level wall.
+    public DriveDef Drive;
     public string Hint = "";                 // the controls line's own part, before the common one
     public bool Has(Fit f) => (Fit & f) != 0;
 }
@@ -155,9 +158,10 @@ public static class Classes
         new() { Id = ShipClass.Battleship, Name = "BATTLESHIP", Ready = true, Targets = 3, Fit = Fit.Guns | Fit.Broadside | Fit.Pd,
             Blurb = "Four cursor-aimed main guns, a broadside of all four, two point-defence turrets.",
             Hint = "BATTLESHIP  ·  mouse aims the main guns",
+            Drive = Drives.Warp,
             Nums = new() {
                 ["hull"] = 300,
-                ["thrust"] = 56, ["reverse_thrust"] = 24, ["max_speed"] = 104, ["reverse_speed"] = 36,
+                ["thrust"] = 47, ["reverse_thrust"] = 20, ["max_speed"] = 88, ["reverse_speed"] = 30,
                 ["turn_radius"] = 107, ["turn_rate"] = 1.08,
                 ["main_count"] = 4, ["main_damage"] = 17.9, ["main_interval"] = 2.0, ["main_range"] = 1000, ["shell_speed"] = 650,
                 ["pd_count"] = 2,
@@ -171,15 +175,19 @@ public static class Classes
                 ItemDef.Own(GearSlot.Utility, "bs_broadside", "Broadside Battery", "every main gun, volley on volley", "broadside_mult"),
             },
             Art = new ClassArt {
+                // battleship_bb05 (the pack, J5): 4 mains on the flanking twins (the two forward
+                // rows, both sides -- Q3's default), the barrels of all 6 painted twins patched
+                // clean (Q4); PD on the aft domes; the turret scale k measured off the art's own housing
                 Texture = "res://battleship_hull.png", Length = 378f, HalfWidth = 43.875f,
-                Mains = new Vector2[] { new(0f, -93.85f), new(0f, -7.56f), new(0f, 73.34f), new(0f, 122.15f) },
-                Pds   = new Vector2[] { new(-21.3f, 156.93f), new(21.3f, 156.93f) },
-                TurretTexScale = 2.5f / 5.5f, MainBarrel = 30.5f, PdBarrel = 13.75f },
+                Mains = new Vector2[] { new(-23.99f, -74.28f), new(23.99f, -74.28f), new(-23.99f, -36.27f), new(23.99f, -36.27f) },
+                Pds   = new Vector2[] { new(-58.99f, 71.73f), new(58.99f, 71.73f) },
+                TurretTexScale = 1.9f / 5.5f, MainBarrel = 23.18f, PdBarrel = 10.45f },
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Broadside } },
 
         new() { Id = ShipClass.Carrier, Name = "CARRIER", Ready = true, Targets = 3, Fit = Fit.Wing | Fit.Pd,
             Blurb = "No main gun: point defence, a fighter wing, torpedo bombers off its deck.",
             Hint = "CARRIER",
+            Drive = Drives.Warp,
             Nums = new() {
                 ["hull"] = 200,
                 ["thrust"] = ShipStats.CarrierTop / 2, ["reverse_thrust"] = ShipStats.CarrierTop * 5 / 24, ["max_speed"] = ShipStats.CarrierTop, ["reverse_speed"] = ShipStats.CarrierTop / 3,
@@ -188,7 +196,7 @@ public static class Classes
             },
                 // the 0: gear reaches the fighters, the pilot's points do not -- as it was
             Damage = new() { ["torpedo_damage"] = 1, ["fighter_damage"] = 0 },
-            Reach = new() { ["fighter_range"] = 1, ["control_range"] = 1, ["torpedo_range"] = 1, ["launch_range"] = 1, ["pd_range"] = 1 },
+            Reach = new() { ["fighter_range"] = 1, ["control_range"] = 1, ["torpedo_range"] = 1, ["launch_range"] = 1, ["pd_range"] = 1, ["patrol_range"] = 1 },
             Cycle = new() { ["fighter_interval"] = 1, ["bomber_rearm"] = 1, ["pd_interval"] = 1 },
             Weapons = new[] { Dps.Fighters, Dps.Bombers, Dps.Pd },
             Kit = new[] {
@@ -196,18 +204,22 @@ public static class Classes
                 ItemDef.Own(GearSlot.Utility, "cv_bomber_bay", "Bomber Bay", "the bomber wing", "bomber_count"),
             },
             Art = new ClassArt {
+                // carrier_a (the pack, J5): a PD pair on the flanks amidships and one on the stern
+                // centreline; the deck (Bay*/RunwayBow/EngineInset) is the bays abreast amidships,
+                // the runway run from the bow and the engines inset at the stern
                 Texture = "res://carrier_player.png", Length = 283.5f, HalfWidth = 40.02f,
                 BayX = 25.01f, BayY = 8.34f, BaySpacing = 46.69f, RunwayBow = 110.06f, EngineInset = 8f,
-                Pds = new Vector2[] { new(-46.39f, -29.75f), new(46.39f, -29.75f), new(0f, 134.22f) },
+                Pds = new Vector2[] { new(-30.01f, -0.21f), new(30.01f, -0.21f), new(0f, 134.22f) },
                 TurretTexScale = 1.9178f / 5.5f, PdBarrel = 10.51f },
             Abilities = new[] { Ab.Attack, Ab.Recall, Ab.Bombers } },
 
         new() { Id = ShipClass.Destroyer, Name = "DESTROYER", Ready = true, Targets = 3, Fit = Fit.Guns | Fit.Missiles | Fit.Pd,
             Blurb = "Fastest of the line. Two cursor-aimed main guns, missile bursts of three, two point-defence turrets.",
             Hint = "DESTROYER  ·  mouse aims the main guns",
+            Drive = Drives.Warp,
             Nums = new() {
                 ["hull"] = 250,
-                ["thrust"] = 70, ["reverse_thrust"] = 30, ["max_speed"] = 130, ["reverse_speed"] = 45,
+                ["thrust"] = 63, ["reverse_thrust"] = 27, ["max_speed"] = 117, ["reverse_speed"] = 40.5,
                 ["turn_radius"] = 107, ["turn_rate"] = 1.08,
                 ["main_count"] = 2, ["main_damage"] = 7.5, ["main_interval"] = 1.0, ["main_range"] = 720, ["shell_speed"] = 520,
                 ["pd_count"] = 2,
@@ -222,9 +234,11 @@ public static class Classes
                 ItemDef.Own(GearSlot.Utility, "dd_missile_rack", "Missile Rack", "the missile bursts and their magazine", "missile_mag"),
             },
             Art = new ClassArt {
+                // destroyer_dd22 (the pack, J5): both mains on the keel gun cluster near the bow,
+                // PD re-seated on the flank domes
                 Texture = "res://destroyer_hull.png", Length = 212.625f, HalfWidth = 27.8f,
-                Mains = new Vector2[] { new(0f, -57.31f), new(0f, 24.66f) },
-                Pds   = new Vector2[] { new(-13.39f, 68.16f), new(13.39f, 68.16f) },
+                Mains = new Vector2[] { new(0.20f, -14.20f), new(0.20f, 17.81f) },
+                Pds   = new Vector2[] { new(-30.81f, 5.82f), new(30.81f, 5.82f) },
                 TurretTexScale = 1.3085f / 5.5f, MainBarrel = 16.03f, PdBarrel = 7.2f },
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Missile, Ab.Reload } },
 
@@ -232,10 +246,11 @@ public static class Classes
         new() { Id = ShipClass.FreightHauler, Name = "FREIGHTER", Ready = true, Fit = Fit.Guns | Fit.Pd | Fit.Deploy,
             Blurb = "Toughest hull there is. One main gun, two point-defence turrets, three deployable turrets, and a bubble that soaks damage.",
             Hint = "FREIGHTER  ·  mouse aims the main gun",
+            Drive = Drives.Boost,
             Nums = new() {
                 ["hull"] = 400,
-                ["thrust"] = 45, ["reverse_thrust"] = 20, ["max_speed"] = 85, ["reverse_speed"] = 30,
-                ["turn_radius"] = 150, ["turn_rate"] = 0.85,
+                ["thrust"] = 63.5, ["reverse_thrust"] = 28.2, ["max_speed"] = 120, ["reverse_speed"] = 42.4,
+                ["turn_radius"] = 150, ["turn_rate"] = 0.85, ["strafe_speed"] = 60, ["strafe_thrust"] = 120,
                 ["main_count"] = 1, ["main_damage"] = 12, ["main_interval"] = 1.0, ["main_range"] = 800, ["shell_speed"] = 560,
                 ["pd_count"] = 2,
             },
@@ -270,10 +285,11 @@ public static class Classes
         new() { Id = ShipClass.FreightTender, Name = "TENDER", Ready = true, Fit = Fit.Guns | Fit.Pd | Fit.Deploy,
             Blurb = "One main gun, two point-defence turrets, three deployable turrets, and an overdrive that lifts everything's rate of fire.",
             Hint = "TENDER  ·  mouse aims the main gun",
+            Drive = Drives.Boost,
             Nums = new() {
                 ["hull"] = 400,
-                ["thrust"] = 45, ["reverse_thrust"] = 20, ["max_speed"] = 85, ["reverse_speed"] = 30,
-                ["turn_radius"] = 150, ["turn_rate"] = 0.85,
+                ["thrust"] = 63.5, ["reverse_thrust"] = 28.2, ["max_speed"] = 120, ["reverse_speed"] = 42.4,
+                ["turn_radius"] = 150, ["turn_rate"] = 0.85, ["strafe_speed"] = 60, ["strafe_thrust"] = 120,
                 ["main_count"] = 1, ["main_damage"] = 12, ["main_interval"] = 1.0, ["main_range"] = 800, ["shell_speed"] = 560,
                 ["pd_count"] = 2,
             },
@@ -306,10 +322,11 @@ public static class Classes
         new() { Id = ShipClass.FreightBastion, Name = "BASTION", Ready = true, Fit = Fit.Guns | Fit.Pd | Fit.Deploy,
             Blurb = "One main gun, two point-defence turrets, three deployable turrets, and a shockwave that throws what is near it clear, or holds a boss still.",
             Hint = "BASTION  ·  mouse aims the main gun",
+            Drive = Drives.Boost,
             Nums = new() {
                 ["hull"] = 400,
-                ["thrust"] = 45, ["reverse_thrust"] = 20, ["max_speed"] = 85, ["reverse_speed"] = 30,
-                ["turn_radius"] = 150, ["turn_rate"] = 0.85,
+                ["thrust"] = 63.5, ["reverse_thrust"] = 28.2, ["max_speed"] = 120, ["reverse_speed"] = 42.4,
+                ["turn_radius"] = 150, ["turn_rate"] = 0.85, ["strafe_speed"] = 60, ["strafe_thrust"] = 120,
                 ["main_count"] = 1, ["main_damage"] = 12, ["main_interval"] = 1.0, ["main_range"] = 800, ["shell_speed"] = 560,
                 ["pd_count"] = 2,
             },
@@ -335,8 +352,10 @@ public static class Classes
                 new() { Group = "Shockwave", Id = "wave_cooldown", Label = "Cooldown",       Base = 30, Unit = "s", Dec = 1, Inverse = true },
             },
             Art = new ClassArt {
+                // frigate_c (the pack, J5): the main sits aft, on the ring turret the art draws at
+                // the stern, with the PD pair either side of it
                 Texture = "res://freight_bastion_hull.png", Length = 230f, HalfWidth = 49.34f,
-                Mains = new Vector2[] { new(0.0f, -50.6f) },
+                Mains = new Vector2[] { new(0.0f, 53.48f) },
                 Pds   = new Vector2[] { new(-27.1f, 64.4f), new(27.1f, 64.4f) },
                 TurretTexScale = 2.20f / 5.5f, MainBarrel = 27.0f, PdBarrel = 12.1f },
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Shockwave, Ab.Deploy, Ab.Collect } },
@@ -345,10 +364,11 @@ public static class Classes
         new() { Id = ShipClass.HeavySniper, Name = "SNIPER", Ready = true, Fit = Fit.Guns,
             Blurb = "Fast. A light main gun, and a railgun: locked while it charges, then a straight blue line through everything on it.",
             Hint = "SNIPER  ·  mouse aims the main gun",
+            Drive = Drives.Boost,
             Nums = new() {
                 ["hull"] = 140,
                 ["thrust"] = 130, ["reverse_thrust"] = 60, ["max_speed"] = 190, ["reverse_speed"] = 70,
-                ["turn_radius"] = 55, ["turn_rate"] = 2.2,
+                ["turn_radius"] = 55, ["turn_rate"] = 2.2, ["strafe_speed"] = 95, ["strafe_thrust"] = 380,
                 ["main_count"] = 1, ["main_damage"] = 6, ["main_interval"] = 0.8, ["main_range"] = 900, ["shell_speed"] = 700,
             },
                 // 7.5 = 5% of the railgun's 150, what a level is worth on a battleship's shell
@@ -375,10 +395,11 @@ public static class Classes
         new() { Id = ShipClass.HeavyWarrior, Name = "WARRIOR", Ready = true, Fit = Fit.Guns,
             Blurb = "Fast. Two main guns, and a rush: a burst of speed at a fraction of the damage taken, ending in a stunning EMP.",
             Hint = "WARRIOR  ·  mouse aims the main guns",
+            Drive = Drives.Boost,
             Nums = new() {
                 ["hull"] = 140,
                 ["thrust"] = 130, ["reverse_thrust"] = 60, ["max_speed"] = 190, ["reverse_speed"] = 70,
-                ["turn_radius"] = 55, ["turn_rate"] = 2.2,
+                ["turn_radius"] = 55, ["turn_rate"] = 2.2, ["strafe_speed"] = 95, ["strafe_thrust"] = 380,
                 ["main_count"] = 2, ["main_damage"] = 9, ["main_interval"] = 0.7, ["main_range"] = 600, ["shell_speed"] = 520,
             },
                 // 3 = 5% of the EMP's 60
@@ -407,10 +428,11 @@ public static class Classes
         new() { Id = ShipClass.HeavyWarden, Name = "WARDEN", Ready = true, Fit = Fit.Guns | Fit.Pd,
             Blurb = "Fast. Point defence that hits ten times as hard as a warship's, a modest main gun, and hunter-seekers that each take a target of their own.",
             Hint = "WARDEN  ·  mouse aims the main gun",
+            Drive = Drives.Boost,
             Nums = new() {
                 ["hull"] = 140,
                 ["thrust"] = 130, ["reverse_thrust"] = 60, ["max_speed"] = 190, ["reverse_speed"] = 70,
-                ["turn_radius"] = 55, ["turn_rate"] = 2.2,
+                ["turn_radius"] = 55, ["turn_rate"] = 2.2, ["strafe_speed"] = 95, ["strafe_thrust"] = 380,
                 ["main_count"] = 1, ["main_damage"] = 12, ["main_interval"] = 0.6, ["main_range"] = 700, ["shell_speed"] = 600,
                 // ITS ONE MOUNT IS A GUN, NOT A NUISANCE. "Half efficiency, always on" was first read
             // as half a warship's damage PER SHOT: 0.25 every 0.5 s is 0.5 DPS, which is 50 seconds
@@ -450,10 +472,11 @@ public static class Classes
         new() { Id = ShipClass.LightDart, Name = "DART", Ready = true, Fit = Fit.Guns,
             Blurb = "Fastest thing with a pilot in it. A barrel roll nothing can hit, and a burst of speed and rate of fire out of it.",
             Hint = "DART  ·  mouse aims the main gun",
+            Drive = Drives.Boost,
             Nums = new() {
                 ["hull"] = 90,
                 ["thrust"] = 190, ["reverse_thrust"] = 90, ["max_speed"] = 260, ["reverse_speed"] = 95,
-                ["turn_radius"] = 35, ["turn_rate"] = 3.0,
+                ["turn_radius"] = 35, ["turn_rate"] = 3.0, ["strafe_speed"] = 130, ["strafe_thrust"] = 520,
                 ["main_count"] = 1, ["main_damage"] = 5, ["main_interval"] = 0.35, ["main_range"] = 500, ["shell_speed"] = 620,
             },
             Damage = new() { ["main_damage"] = 1 },
@@ -479,10 +502,11 @@ public static class Classes
         new() { Id = ShipClass.LightEcho, Name = "ECHO", Ready = true, Fit = Fit.Guns,
             Blurb = "Its echo remembers the damage it deals, then detonates the lot where the last shot landed.",
             Hint = "ECHO  ·  mouse aims the main gun",
+            Drive = Drives.Boost,
             Nums = new() {
                 ["hull"] = 90,
                 ["thrust"] = 190, ["reverse_thrust"] = 90, ["max_speed"] = 260, ["reverse_speed"] = 95,
-                ["turn_radius"] = 35, ["turn_rate"] = 3.0,
+                ["turn_radius"] = 35, ["turn_rate"] = 3.0, ["strafe_speed"] = 130, ["strafe_thrust"] = 520,
                 ["main_count"] = 1, ["main_damage"] = 5, ["main_interval"] = 0.35, ["main_range"] = 500, ["shell_speed"] = 620,
             },
                 // echo_share is NOT a weapon: the blast is a share of damage already dealt, so it
@@ -502,17 +526,20 @@ public static class Classes
                 new() { Group = "Echo", Id = "echo_cooldown", Label = "Cooldown",       Base = 15, Unit = "s", Dec = 1, Inverse = true },
             },
             Art = new ClassArt {
+                // fighter_f (the pack, J5): one main on the centreline stands for the paired
+                // barrels the art draws on both wings (the flavour, "fires twice")
                 Texture = "res://light_echo_hull.png", Length = 70f, HalfWidth = 14.68f,
-                Mains = new Vector2[] { new(0.0f, -10.5f) },
+                Mains = new Vector2[] { new(0.0f, -23.39f) },
                 TurretTexScale = 0.65f / 5.5f, MainBarrel = 8.0f, PdBarrel = 3.6f },
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Echo } },
         new() { Id = ShipClass.LightWraith, Name = "WRAITH", Ready = true, Fit = Fit.Guns,
             Blurb = "While its veil is up nothing hostile can pick it: whatever was coming for it goes elsewhere, or gives up.",
             Hint = "WRAITH  ·  mouse aims the main gun",
+            Drive = Drives.Boost,
             Nums = new() {
                 ["hull"] = 90,
                 ["thrust"] = 190, ["reverse_thrust"] = 90, ["max_speed"] = 260, ["reverse_speed"] = 95,
-                ["turn_radius"] = 35, ["turn_rate"] = 3.0,
+                ["turn_radius"] = 35, ["turn_rate"] = 3.0, ["strafe_speed"] = 130, ["strafe_thrust"] = 520,
                 ["main_count"] = 1, ["main_damage"] = 5, ["main_interval"] = 0.35, ["main_range"] = 500, ["shell_speed"] = 620,
             },
             Damage = new() { ["main_damage"] = 1 },

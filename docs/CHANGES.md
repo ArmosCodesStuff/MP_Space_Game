@@ -39,13 +39,68 @@ history pick the work up from it alone. Update it in the same change as the code
 **2026-09-25 (worktree `WarShips_wt_raids`, branch `wt/raids`): lane G, raids v2 -- squads and a boss
 fight's adds, J1-J6 + the merge gate's fixes (GFa, GFb) built; compiles, rung 2 green. engine-unproven:
 every rung 3-5 check below is owed in the final test phase** (solo x2, six x2 for the guest checks, screens
-for frames 49a/49b/49c/49). Detail and the job list: `docs/plans/ledger_raids.md`.
+for frames 49a/49d/49c/49/49b). version-l merged in (curve, art, drives, fields, wings, net2, kits slice 3):
+the adds ride Par (a level, hull x the party's 1 + 0.6(P - 1), damage x 1 + 0.2(P - 1) through the host-only
+`Raider.DamageShare`). Detail and the job list: `docs/plans/ledger_raids.md`.
 
-**2026-09-25 (worktree `WarShips_wt_kits`, branch `wt/kits`): kits lane A J1-J7 + K1 built and
-version-l merged in (K2); compiles, rung 2 green. engine-unproven: rungs 3-5 owed in the final test
-phase** (owner: build first, test once at the end). J6/J7's earlier solo runs (kits_j67a/b) FAILED
-and the J7 check was rewritten (COORDINATOR NOTE 2); nothing J3-K2 added is proven on the engine yet.
-Detail: `docs/plans/ledger_kits.md` (K2 POST).
+**2026-09-25 (worktree `WarShips_wt_net2`, branch `wt/net2`): WebRTC S2 + R2-R5 built -- the session is
+on WebRTC; compiles, rung 2 green. engine-unproven: every rung owed in the final test phase.** ENet,
+UPnP, the public-IP lookup (api.ipify.org), `Router.cs` (now `Adapters.cs`) and `fakeigd.py` are gone.
+A friend joins by an invite code (INVITE A FRIEND -> JOIN -> the reply back, taken off the host's
+clipboard) or by the host's typed address (the listener, TCP 27015+). Owed, in this order: rung 3 twice
+on two seeds (S2Checks, S2TokenChecks, R2BeatChecks, R2SwitchChecks, R3WordsChecks, GateFixRefitChecks,
+GateFixJoinBoxChecks, the rewritten join failures), rung 4 (frames 51_invite_ready, 52_reply_countdown,
+60_reply_expired, 61_join_failed, 20_base_refit_in_combat; LINT: 0), rung 5 `six,six` (the roles moved:
+the `guest` joins by invite through the courier, drops, returns by its rejoin token, and returns again
+past a live old link; `guest2` knocks as another build and never hears Guesty's token; the host reads
+the join's five times),
+rung 5 `-Wan` once (the blackhole watchdog), and once at `WARSHIPS_WAN=150,40,5` (the rate check);
+then `pack.ps1 -Dirty`, the one-machine check, rung 6. **Never call multiplayer working until the owner
+and a friend have played (network_webrtc.md §11).** Detail: `docs/plans/ledger_webrtc.md` (lane net2).
+
+**2026-09-25 (worktree `WarShips_wt_wings`, branch `wt/wings`): kits lane E (wings, F13 widened)
+built; compiles, rung 2 green; engine-unproven: rungs 3, 4 and 5 owed in the final test phase.**
+`Wings.All` rows `gunship` (2) and `patrol` (3), the Orbit way, the ring pick, `PlayerShip.Sortie`;
+the Carrier's E and Q keys that call it are lane A slice 6a's. Detail: `docs/plans/ledger_wings.md`.
+
+**2026-09-25 (worktree `WarShips_wt_kits`, branch `wt/kits`): kits lane A slice 3 built** -- F5 (a
+shot strikes each body once, `Stops`), F23 (`Lines.cs`, with `AtTarget` for Time on target; the railgun on it, same literals), F6 (predicted
+missiles carry a NetId on every peer; `Hub.NetMissile` changed), F7 (charge bands, `Charge.cs`, fingerprinted). Compiles,
+rung 2 green; **engine-unproven: rungs 3 and 5 owed in the final test phase** (ledger_kits.md J11 and J12 POST).
+Not built, by ruling: Overcharge (the Sniper's piece is the active reload). Deferred to their readers:
+F5's nine rows and its Decoyable / Command flags, `shell_turn` (D24, D27).
+
+**2026-09-25 (worktree `WarShips_wt_drives`, branch `wt/drives`): kits lane B -- drives, helm,
+strafe (F21, F22, F24) -- built J1-J6; compiles, rung 2 green. engine-unproven: rungs owed in the final
+test phase** (solo x2, six x2, screens); J7 fixed the merge gate's five findings. V is the class's drive (`Drives.cs`): a held warp on the
+capitals, a boost on the nine; Shift + A/D strafe on the nine; capitals 88/99/117, freighters 120.
+Detail and what the test phase owes: `docs/plans/ledger_drives.md` (J6 POST).
+
+
+**2026-09-25 (worktree `WarShips_wt_curve`, branch `wt/curve`): lane F, the curve, built J1-J5;
+compiles, rung 2 green. engine-unproven: rungs 3-5 owed in the final test phase.** Par.cs replaces
+x1.025 a level; boss rows 3222 / 2968 and the cut; siege rows; raider Strength is a level; skip +2;
+salvage levels on the slot, capped. What the test phase owes: `docs/plans/ledger_curve.md` (J6 POST).
+
+**2026-09-25 (worktree `WarShips_wt_fields`, branch `wt/fields`): kits lane D (F9 fields, zones, marks)
+built, J1-J3; compiles, rung 2 green. engine-unproven: rungs 3-5 and the frames owed in the final test
+phase.** The field rows for the Supercarrier (`super`), the Taunt (`taunt`) and the boost (`boost`) wait
+for the lanes that build those slots; until then the harness prints `NOTE unbound field row` and the
+screens `shot skipped`. Detail: `docs/plans/ledger_fields.md` (J4 POST).
+
+
+**2026-09-25 (worktree `WarShips_wt_kits`, branch `wt/kits`): kits lane A J1-J7 + K1 built,
+version-l merged in (K2), and merge gate 1's seven problems fixed (K3); compiles, rung 2 green.
+engine-unproven: rungs 3-5 owed in the final test phase** (owner: build first, test once at the
+end). J6/J7's earlier solo runs (kits_j67a/b) FAILED and the J7 check was rewritten (COORDINATOR
+NOTE 2); nothing J3-K3 added is proven on the engine yet. Detail: `docs/plans/ledger_kits.md` (K3 POST).
+
+**2026-09-25 (worktree `WarShips_wt_art`, branch `wt/art`): every entity wears the pack** -- raiders,
+bosses (2x, the Rusty Bucket's shockwave scaled), fleet, siege (J4) and the 12 player hulls (J5); the
+Drake is framed by moving the camera, never past the wheel's own zoom-out (owner ruling). `version-l`
+(the net lane's R1 and the walls lane) is merged in; `-Quick` green at the lane's HEAD. **J4, J5 and
+the merge are engine-unproven: rungs 3-5 owed in the final test phase** (then `screens` for frames 63-67a).
+Ledger: `docs/plans/ledger_sprites.md`. Not merged to `version-l`, not pushed.
 
 **2026-09-25 (worktree `WarShips_wt_slots`, branch `wt/slots`): engine slots.** `tools\rungs.ps1 -Slot n
 -Slots n` runs several engine chains at once: slot 0 is the old lock and behaviour; slot n >= 1 gets its own
@@ -195,20 +250,22 @@ gear** -- 120 parts that each lean hard one way, fitted from the pilot's **hold*
 window (I). The **hauler** sells alone (DISPATCH, with the EVASION chance of getting through) or on
 an **ESCORT** (round four outposts, offloading at each, hunted by a raider wave every 20 s, 5x the pay);
 AUTO-SELL waits for the
-level-3 boss and 4462 cr. A guest that **drops** is retried and let back into its place; and a new
+level-3 boss and 4462 cr. A guest that **drops** keeps its place 90 s (by address it retries by itself,
+by invite the host's panel has a fresh invite ready); and a new
 pilot is shown **corner hints** the first time it meets each system. The **base** (B) runs an idle economy --
 miners in the belt, salvagers at the wreck, a hauler that sells the load -- and buys upgrades; the
-pilot levels up (L) and fits parts (I). **Multiplayer** is host-and-join over the internet: HOST
-opens the port by itself where the network allows it (UPnP, NAT-PMP, PCP, a router behind a
-router) and says in words what to forward where it cannot; a VPN or overlay address and IPv6 are
-offered too.
+pilot levels up (L) and fits parts (I). **Multiplayer** is host-and-join over WebRTC, with no server
+of ours: the host's INVITE A FRIEND makes a code, the friend pastes it into JOIN and sends back the
+reply it copies; on one network or Radmin VPN the friend types the host's address instead. Untested
+between two homes (see Unreleased, Known broken).
 
 ### Controls (hub) — fixed keys
 
 | Input | Does |
 |---|---|
 | W / S | ahead / astern (thrust along the keel only) |
-| A / D | rudder. Turns on a radius; does nothing with no way on. No strafing. |
+| A / D | rudder. Turns on a radius; almost stopped it pivots slowly. |
+| Shift + A / D | slide sideways, the nose held (the nine; a capital has no slide: Shift changes nothing) |
 | Mouse | aims the main guns (battleship, destroyer). The hull does not follow it. |
 | **Left-click** | **select** the hostile under the cursor — or, while placing, **confirm**. Never attacks. |
 | Right-click | cancel a placement. Nothing else. |
@@ -217,7 +274,7 @@ offered too.
 | Mouse wheel | zoom: 33% further out to 1.5× closer |
 | Y | free camera: arrow keys or the screen edge move it (5000 u tether); Y again returns |
 | L | pilot: level, EXP, points and upgrades |
-| V | warp (every capital ship; 3 s warm-up, 30 s cooldown; aims at the jump) |
+| V | the class's drive: capitals HOLD to warp (1 s spool, 800 u/s to a safe 2400 u, +900 at most, disabled 2 s per 300 u over, 20 s); the nine TAP to boost (+50% top, thrust and slide for 3 s, 15 s) |
 | Click the radar | select an enemy there, or make a landmark or pilot a waypoint |
 | Left-click a building | its menu (TIO: WARP TO TARGET; base: BASE) |
 | B | base menu: upgrades, and REFIT (the only way to change class, name or colours; costs 10%) |
@@ -313,14 +370,14 @@ From the 2026-09-24 triage (the WarShips_Version_L fork):
   acquisition ranks, as point defence always has. Default: as built.
 
 From the line-art batch (the WarShips_Version_L fork):
-- **"25% larger / smaller" was read as every dimension** (lengths 378, 283.5, 212.6 u). The battleship's
-  turrets are 2.5x, not scaled with the rest alone, to keep the drawing's turret-to-hull proportion on the
-  doubled beam. Parked bombers are 65% to fill the bigger deck.
-- **The sprites are as sharp as the drawings allow**: they are small (250-600 px), so they are enlarged,
-  sharpened and cleaned but not redrawn. A clean-line redraw was tried and made fine detail blotchy.
-  Larger source drawings would make sharper ships.
+- **"25% larger / smaller" was read as every dimension** (lengths 378, 283.5, 212.6 u). Parked bombers
+  are 65% to fill the deck.
 - **Turrets wear the accent colour** (white by default), not the hull's -- the accent was already named
-  "turrets, engines, trim", and on the line art a turret in the hull colour disappears into it.
+  "turrets, engines, trim", and on grey art a turret in the hull colour disappears into it.
+- **The 12 player hulls' seats (J5, the pack)**: the battleship's mains on the 4 forward flanking twins
+  (k 1.9, was 2.5), the carrier's deck (bays, runway) kept at its old figures on carrier_a, the
+  bastion's main on the stern centre between its two painted twins, the other seats unmoved. The kits
+  lane may re-seat them. Default: as built.
 - **Point defence "on the back"** is the stern quarters on the battleship and the destroyer; the carrier's
   third PD moved to its stern block, clear of the bow where bombers lift off.
 - **Bombers take off on their own 0.83 s clock**, beside the fighters' rather than sharing it, and land
@@ -554,11 +611,201 @@ N14), RaidsArenaAddsChecks (N12 live, N13, N15, N16), RaidsSightChecks (labels, 
 commit and the GANK line, each still / crossing / run from astern; TIO and hint text), RaidsHostAddsWire +
 RaidsGuestAddsWire (N18, the stretched lane replaced on the guest, the squad label and names on the guest, the
 GANK line on the guest from a host gank squad), raiders 6b (N7, N8), the arena beam block
-(any-pin start, floor literals, live floor); frames 49a_squad_inbound, 49b_squad_lock_lines (now with the
-GANK line), 49c_squad_names_radar, 49_heavy_astern_missile; rewritten: the escort checks, the mission wave clock, patrol
+(any-pin start, floor literals, live floor); frames 49a_squad_inbound, 49d_squad_lock_lines (now with the
+GANK line), 49c_squad_names_radar, 49_heavy_astern_missile, 49b_heavy_both_barrels (kits K3's, now on the posted
+heavy); rewritten: the escort checks, the mission wave clock, patrol
 and raid squad ids, blockade Station/Circuit.
 
 **Known broken:** engine-unproven (rungs 3-5 owed).
+### WebRTC S2 + R2-R5: the session on WebRTC, invite codes, the network report (2026-09-25, branch wt/net2)
+
+**What changed for a player.** MULTIPLAYER -> HOST THIS WORLD, then INVITE A FRIEND: the invite is
+copied, to send privately. The friend pastes the whole message into JOIN; its reply is copied, with a
+30 s countdown. The host copies the friend's message and the game takes it (or it goes in the reply
+box); a friend's JOIN box likewise fills itself from a copied invite. On one network or Radmin VPN the friend types the host's address instead (the panel lists them).
+The panel lists every invite not yet answered, with COPY and CANCEL; COPY NETWORK REPORT copies what a
+failed join should send the developer. A friend dropped from an invite is told to ask for a new code
+(its place held 90 s) and the host's panel has one ready; by address the game retries by itself. The
+only outside contact left is a STUN lookup (Google's, then Cloudflare's) when a code is made.
+
+**Built** (plan `docs/plans/network_webrtc.md`, ledger `docs/plans/ledger_webrtc.md`, jobs S2a-R5):
+- S2 (transport-free): the boss keeps sending while held (P4); a shockwave throws no structure or dummy
+  (P5); a class changes only at home out of a fight (P8: one rule, `Hub.RefitOpen`, read by the host and
+  by the pilot's REFIT, class picker and base menu, which reads IN A FIGHT: NO RESET), and a change keeps
+  the hull's fraction and every cooldown (`PlayerShip.FitClass`); a sector report carries its trip
+  and a stale one is ignored (P9); held turrets re-keyed to the returning pilot (P10); the rejoin token
+  (P10b), sent to the host alone, which also takes a place from a live old link.
+- R2, the switch: `Net` on `WebRtcMultiplayerPeer`, both rows in one session, the pending table, the
+  beat (`NetChannels.Beat` = 12) and its 8 s watchdog, the goodbye's WebRTC body, every hang-up through
+  `Link.Hang`, retries only by typed address, `PretendAt` = Code | Auth. Deleted: ENet, UPnP/NAT-PMP/PCP,
+  describe/reach/reveal, the public-IP lookup, `Router.cs` (-> `Adapters.cs`), `fakeigd.py`, the
+  router scenarios, S1's throttle and `server` flag.
+- R3: HOST's line says where the listener landed; `Net.Report()` and COPY NETWORK REPORT; the pending
+  list; the multiplayer hint; frames 51_invite_ready, 52_reply_countdown, 60_reply_expired,
+  61_join_failed (51_address_hidden gone: CLAUDE.md's rung-4 count of ~110 frames is 3 low).
+- R4: the watchdog through the box's blackhole under `-Wan`; the stream row's longest gap and each
+  end's peak backlog per row printed, not asserted (no literal exists for them yet).
+- R5: pack.ps1 registers the plugin before its export, refuses an export without the release DLL,
+  ships the seven licences, and writes NOTES [PLAYING WITH A FRIEND] and [THIRD-PARTY]; install.ps1
+  checks every listed file is there (step 2 and after unpacking); play.ps1 registers the plugin once
+  before a launch from source; the snapshot carries the `.gdextension`.
+
+**Checks written, none run** (the final test phase runs them): solo `S2Checks`, `S2TripChecks`,
+`S2TokenChecks`, `R2BeatChecks`, `R2SwitchChecks`, `R3WordsChecks`, the rewritten join failures
+("Nothing is hosting at" under 3 s; "No answer ... in 12 s" at 11.8-12.6 s); rung 5 the `ArenaMp` S2
+checks, `R2BeatGuest`, `R2cHostCourier`, `R2cRows`, `R2cHostReturns`, `R2cGuestReturns`, guest2's
+other-build knock, `JoinedBy` per role; rung 5 `-Wan` `R4GuestBlackhole` / `R4HostBlackhole`.
+
+**Known broken** (network_webrtc.md §10.5; true until the owner's two-machine test, §11):
+- Nothing here has run on the engine: every check above is unproven.
+- Real NATs between two homes, the owner's double NAT and the Windows Firewall Block-rule question.
+- The reply window over a real internet path, and whether real players make it inside 30 s.
+- Google's and Cloudflare's STUN from real homes (the spike reached Google's once).
+- Loss and delay on the typed rows' own datagrams (they run direct in every harness run).
+- The exported Warships.exe with the release DLL across two machines; antivirus and SmartScreen; the
+  editor's first open with the addon; a machine with no network adapter up; IPv6 between homes.
+- The "no port could be opened for typed addresses" text has no check (one process cannot take every
+  port the OS would pick).
+- Multiplayer has never worked between two machines: do not call it working until it has.
+
+### Class kits, lane E: the carrier's gunships and patrol, F13 widened (2026-09-25, worktree wt/wings)
+
+The machinery the Carrier's E (warp gunships) and Q (Supercarrier) will use; slice 6a adds only the
+class's ability rows and calls `PlayerShip.Sortie(kind, target)`. **Gunships** (`Wings.All[2]`, the
+new `WingWay.Orbit`): `gunship_count` 2 to a target, sent only at one inside `gunship_leash` 3000 u
+(checked at launch only), they WARP onto a `gunship_orbit` 240 u circle round it and fire a hitscan
+2.5 every 0.25 s (10 DPS each) for `gunship_time` 12 s, then warp out, or at once if it dies. The
+**patrol** (`Wings.All[3]`): the fighter's own count, gun, speed and turn, circling the carrier
+`patrol_orbit` 300 u out for `patrol_time` 20 s and taking whatever `Turret.RankIn` puts first among
+what `Targeting.Patrol` (the Sentry row: nothing forbidden, a dummy as a fallback) chooses inside
+`patrol_range` 600 u of the carrier, measured to the hull's edge -- **missiles first** (kits_v31
+§3.2); it does not rest, and it is amber. `patrol_range` is on the Carrier's Reach list. A wing hit is
+credited by its row id through `Dealt.Deal` ("fighter", "patrol", "gunship"; `Dealt.Fighter` is
+gone). On the wire the state code carries the craft's row (x1000) and a guest adds and drops sortie
+craft to match the host's report: no new RPC.
+
+**Checks:** new `WingsRowsChecks`, `WingsPatrolChecks`, `WingsGunshipChecks` (solo, 3 seeded spots
+each), `WingsHostSortie` + `WingsGuestWatch` (six roles), frames `10e_carrier_patrol` and
+`10f_carrier_gunships`; the reach sweep gains `patrol_range` and its totals 13/31 -> 14/32.
+**Rungs:** 1 and 2 only.
+
+**Known broken:** nothing known; nothing here has run on the engine. Gunship art borrows the
+bomber's airframe until lane H casts one; the patrol's 600 u ring and chevron are lane D / 6a.
+### Class kits, lane A slice 3: Stops, Lines, missile ids, charge bands (2026-09-25, worktree wt/kits)
+
+A shot strikes each body it touches **once** and ends after its **Stops** bodies (every row today is 1,
+so nothing that flies behaves differently; 0 will be a piercing slug). **`Lines.cs`**: a line weapon is
+a row {Id, Width, Reach, Stops, AtTarget, Fx, Beam}, aimed from a point at a point (an AtTarget row ends at
+the point, as Time on target's will); the railgun fires through `Lines.Strike` with its old
+numbers (150, 2500 x 14 u, through everything). A **predicted missile** now has an id from the
+missiles' id space, sent with its launch, the same on every peer (for the flares' decoy, slice 5).
+**Charge bands** (`Charge.cs`, an array of tables the build's fingerprint hashes, so two builds whose
+bands differ refuse each other): what a charge fires as by how far it got; the railgun's table is its
+old whole shot. **Rungs:** 1 and 2 green in the worktree; 3 and 5 owed (checks listed in the ledger).
+
+### Class kits, lane B: drives, helm and strafe -- F21, F22, F24 (2026-09-25, worktree wt/drives)
+
+**F22 helm rows.** The capitals are cut and lean on the warp: battleship 88 u/s (thrust 47, astern
+20/30), carrier 99 (`CarrierTop`, which moves its four rows), destroyer 117 (63, 27/40.5). The three
+freighters lose the warp and go 85 -> 120 (63.5, 28.2/42.4). Every thrust moved with its top, so each
+hull reaches its top in the time it did; turning is unchanged.
+
+**F24 the slide.** Helm rows `strafe_speed` / `strafe_thrust` (0 on the sheet: the capitals never
+slide, read from the stat): lights 130 at 520, heavies 95 at 380, freighters 60 at 120. Hold Shift and
+A/D slide the hull, the nose held; Shift is a fixed key. A web or Disabled leaves no slide; holds
+multiply after the lifted sum (`PlayerShip.StrafeTop`), so a hold of x0 roots it.
+
+**F21 the drives (`Drives.cs`, replacing PlayerShip's warp block and the single "warp" card).** Every
+hull names a drive (`ClassDef.Drive`); `Abilities.For` appends its row, so it has a slot on the wire
+and the bar, fixed on V, never walled. **Warp** (battleship, carrier, destroyer): hold V -- 1.0 s spool,
+then 800 u/s to a safe 2400 u, stopping 900 over; release to jump along the bow or short of a target or
+waypoint the bow is on; past the ring the hull lands DISABLED 2 s per 300 u over (the owner locks at
+once; the host prices what it sees -- a fallen charge bit, or any snap over 600 u with no bit; a
+relocation the host makes, a report from a peer not yet counted in the host's world, and a re-board
+are never priced; a release while the slot cools jumps nothing); 20 s from the jump. The pilot sees the safe ring, the
+charge ring, the amber-to-red band with 2 s / 4 s / 6 s ticks, the landing ghost and its readout; the
+slot and the hull bar read `WARP 1850 u`, `DISABLED 2.8 s`, `WARP 12 s`. **Boost** (the nine): tap V --
++50% top speed, thrust and slide for 3 s (one F1 lift, `surge_lift`), 15 s from the press; refused
+ANCHORED (a hold of x0) and in stasis; allowed webbed, where the web's 20% is taken after the lift.
+The host's speed clamp reads a report held to hypot(top, strafe) x 1.1. The title battleship dodges on
+the same warp, held to 500 u. Hints: warp, boost, strafe; the controls line names the drive.
+
+**Checks:** new `LaneBHelmChecks`, `LaneBStrafeChecks`, `LaneBWarpChecks`, `LaneBBoostChecks` (rung 3),
+`LaneBHostDrives` (+ `LaneBWorldEntryChecks`: world entry, re-board) / `LaneBGuestDrives` (rung 5);
+in `LaneBWarpChecks` the pairs a broadside mid-charge, a carrier's fighters through the warp's disable,
+and a cooldown arriving mid-hold; frames 40, 40b, 41, 41b, 42, 42b (`LaneBDriveFrames`,
+rung 4); rewritten: the battleship/destroyer/carrier speed literals, the title ship's hop, the drive's
+hint card, the snap flash, the bar sequences and `Abilities.For` lengths (+1 for the drive).
+**Rungs:** 1 and 2 in the worktree. None of it has run on the engine.
+
+**Known broken:** nothing known; all of it is engine-unproven. `Enemies.cs:30`'s raider cruise (100)
+is now faster than the battleship (88) and the carrier (99): its comment is stale and the number is
+lane A/G's to settle. The host prices a warp's distance, not its cooldown: a modified client could
+chain charged jumps inside 20 s and pay only for distance.
+
+
+### The curve, lane F (2026-09-25, worktree wt/curve)
+
+- **Par** (`scripts/Par.cs`, new): the chip-free reference pilot (the Destroyer base class, walled, 4
+  power lines, salvage at 65% of the gate) as rows for L1-80 from `models/numbers_v2.py`. `HullScale`
+  (the boss's hull: x1.418 / 1.642 / 2.216 at L10 / 20 / 40), `DamageScale` (every hostile blow: x1.636
+  / 2.004 / 3.131), `CraftScale` (a raider's hull: x2.151 at L40); flat past L40. It replaces
+  `Missions.S` = 1.025^(L-1), which is deleted with `Missions.LevelStep`.
+- **Bosses**: the Lancer 3222 and the Drake 2968 at L1 (were 760 / 700); no hull trim for adds.
+  Every move but the two 250 supers is cut: Lancer guns 2.68, trident 11.2, shockwave 33.5, ram 29.8
+  (burn 50 a tick kept), Drake gun 4.72, scrap 14.76 (rock 250 kept). With no chips a par pilot kills
+  a boss in about 60 s and lives about 31 s (Lancer) / 42 s (Drake) at every level. The damage scale
+  rides `Missions.DamageMult`, inside `Boss.Out` (F17). Credits follow `HullScale`.
+- **Siege**: the base is the Lancer's row (3222) and a pylon an eighth of it (403), both x `HullScale`
+  (were 2x the level's boss and a flat 400).
+- **Raiders**: `Raider.Strength` is a LEVEL: hull x `CraftScale`, each volley (`Raider.Volley`) x
+  `DamageScale`, the missile the row's flat figure. An escort's threat is its hunters' level
+  (`Waves.ThreatStrength` deleted); a party's toughness is `Par.LevelAtHull`.
+- **Level skipping**: the host may pick up to two levels past the newest (`Missions.SkipAhead`); the
+  TIO says "(skip +N)". A skipped level stays uncleared.
+- **Salvage levels live on the SLOT, per pilot**: five core-slot ladders (Weapon, Engines, Shield,
+  Hull, Utility) in `Character.GearLevel`, keyed by slot name and sent with the identity as before;
+  +3% a level to what the part in the slot is for, round(500 x 1.10^n) salvage, 40 levels (+120%);
+  chip slots take none. A level is sold only up to the highest level cleared on any ladder + 1
+  (`Equipment.LevelCap`); the window greys the price there. Old part-id levels on disk are dropped
+  (saves are disregarded).
+
+**Known broken:** nothing known; nothing here has run on the engine yet (rungs 3-5 owed). Siege `Pay 2`
+/ `Crates 2` (progression_curve §2.4) are not built. Par's rows are the model's on the item law to come:
+the item pass (lane I) re-runs `numbers_v2.py` on its own `Tiers` / `Loot` rows and re-literals Par.
+
+### Class kits, lane D: fields and the torn chunk, F9 (2026-09-25, worktree wt/fields)
+
+**Fields are rows** (`Fields.All`, Fx.cs): what a ship draws round itself while one of its slots runs.
+A row names its slot, its look (Ring, Dashed, Shimmer, Plume), its radius (a stat, else a share of the
+hull's length), and optionally a pool it fades with and a tag. Slots are on the wire, so every peer
+draws the same field with no RPC. `PlayerShip._Draw`'s own bubble block is deleted: the bubble is the
+first row. New rows: the Supercarrier's dashed patrol ring at `patrol_range` in the fighter colour, the
+Taunt's hex shimmer with its `−33%` tag (from `taunt_guard`), the boost's hot plume; and an effect row
+`taunt_ring` for the Taunt's 1000 u flash. The Unmask panels were never built, so nothing is removed.
+**The torn chunk** (`Fx.Tear`): one raise, riding the anchor's NetId, Size 0.16 of the hull's length;
+every peer cuts the chunk from the anchor's own art at the hook and tumbles it on a seed from the raise
+(260 u/s within 25° of the line, at rest in 2 s, gone at 3 s), and the row's `With` brings 28 sparks,
+6 puffs of smoke and a scar the chunk's size (10 s, at most 3 on one hull). The chunk and its sprays read
+the hull as they go up, then leave it for the world, so a hull killed within 3 s keeps its chunk flying. The look only: the rip's damage (1% + 10) is
+the grapnel's hit, built with the grapnel (lane A, F8).
+
+**Checks:** FieldsContractChecks, FieldsBubbleChecks, FieldsGuestBubbleChecks, FieldsRowChecks,
+FieldsLiveRowChecks, FieldsTauntRingChecks, FieldsRipChecks (dummies, Lancer, base, pylon),
+FieldsScarCapChecks, FieldsRipOutlivesChecks (a pylon killed 0.2 s after a tear), FieldsGuestRipChecks; frames 81_patrol_ring, 82_taunt_shimmer, 83_boost_plume,
+83b_taunt_ring, 84_rip_chunk_and_scar, 84b_rip_on_boss. **Rungs:** 1 and 2 only.
+
+**Known broken:** unproven on the engine.
+
+### Class kits, lane A K3: merge gate 1's fixes (2026-09-25, worktree wt/kits)
+
+A ramp row (F1's Ramp) is **owner-stepped**: only the peer at the helm steps its running total, and
+the host's report no longer overwrites it on the owner's own ship (a guest's ramp was reset to the
+host's never-moving copy 10 times a second). The base's laser and a shot whose shooter has gone now
+land through the damage door (`Dealt.Deal`, weapon `base`); the door announces every blow
+(`Dealt.Landed`). The outposts' missile does what the gunship's row says (35, was a copy at 42).
+The heavy-laser DPS checks start their clock on the first volley (a knife edge); screens frame 49
+pins its ship so the heavy's missile shows, and frame 49b shows a latched heavy's two barrels.
 
 ### Class kits, lane A J7: heavy rows, F20 (2026-09-25, worktree wt/kits)
 
@@ -821,6 +1068,234 @@ the ability sweep's railgun row, and the stat-reach sweep's railgun case (no Dis
 
 **Known broken:** rung 3 at ad19fd8 (one seed): this entry's checks passed except "a DISABLED
 warden" on 2 of its 3 headings (a carried yaw turned it 7.92 deg), fixed in job 1b above.
+
+### A bare bell table is part of the build's fingerprint (2026-09-25, branch wt/art)
+- `Nozzle` is a readonly struct with public `X`/`Y`/`Bell` fields (was a positional record struct,
+  which `Net.StructRow` never saw), so `Lanes.CourierBells` and `Gatherer.DroneBells` are hashed.
+- The Drake-framing check now also asserts the camera's centre slid toward the boss (the ruling:
+  repositioned, never zoomed past the wheel's ceiling). Engine-unproven: rungs 3-5 owed in the final
+  test phase.
+
+### The 12 player hulls wear the pack (2026-09-25, in the WarShips_Version_L fork, branch wt/art)
+
+Every class's hull is a `$Finished` row of `tools/make_ships.ps1` now (sources and turns:
+`docs/plans/sprites.md` section 1); hit half-beams unchanged (Q1). The battleship's six painted twins
+have their barrels patched out (`Sheet.PatchColumns`, Q4); its four mains sit on the forward flanking
+four, point defence on the aft domes. The destroyer's mains moved onto its keel gun cluster, point
+defence onto the flank domes; the carrier's flank point defence onto carrier_a's sponsons; the
+bastion's and the echo's one main onto what their art draws. The line-drawing code (`Hull`, `CutOut`,
+`Dilate`, `Seed`, `Specks`, `Blank`), `tools/finish_ships.ps1`, `art_unused/art_4x/` and the three
+capitals' drawings (-> `retired/art/`) are gone.
+
+**Checks:** new -- "all 12 classes wear trimmed pack art, hit half-beams unchanged, the destroyer's
+mains on its keel"; rewritten -- the battleship's hull and turret seats, the carrier's sprite line.
+
+### The siege wears the pack too (2026-09-25, in the WarShips_Version_L fork, branch wt/art)
+
+A re-art, not a new mechanic: `EmplacementDef` moves onto `HullArt` (`Sprite` -> `Texture`, `Main` ->
+`Tint`; `HalfWidth` and `Trim` -- the health-bar accent -- stay its own, as no table's hit size moves
+for wearing new art). The pirate base wears `crescent_b`, the owner's pick ("the crescent hull is the
+pirate base"), trimmed to its drawing at 483 u (was 560, hand-drawn). The shield pylon wears the SAME
+file the Pod wears -- `drone_sensor.png`, one game texture on two rows (the Pod's own re-art, J3c) --
+at its own 300 u (was 220). Both hit radii (330 / 150) are unchanged: `Combat.KeelCovers` keeps both a
+circle of its half-width through the length change (L <= 2 HW at both the old and new lengths), so no
+hit-shape check is owed for the re-art alone. Retired: `pirate_base.png` and `pirate_pylon.png`'s old
+hand-drawn source drawings (`art_source/`, -> `retired/art/`) and the old `pirate_pylon.png` game
+texture (unused once the pylon shares the Pod's file); the base's game file keeps its name
+(`pirate_base.png`) and is simply overwritten by the tool.
+
+**Checks:** new -- "the siege wears the pack too" (both textures trimmed, their new lengths, the
+pylon's texture equal to the Pod's, both hit radii unchanged). Existing siege checks (the base's one
+launcher, the four pylons' shield, the garrison wave) untouched: nothing about the fight moved.
+
+**Screens:** new frame `67a_siege_site` (the base and its four pylons, wide, at the wheel's own
+widest zoom) -- read by eye: crescent_b's horns read forward on the base, the pylons read as the same
+round drone the Pod is elsewhere, each in its own tint. `67`/`67b`/`67c` (the missile drama) re-read
+at the new art, unchanged in behaviour.
+
+### The bosses are twice as big (2026-09-25, in the WarShips_Version_L fork, branch wt/art)
+
+The owner's ruling ("2 or 3x", built at 2): `Missions.BossSize = 2` on both boss rows -- the Rusty
+Bucket 720 u long, half-width 140; the Drake Bastion 840, 180. Their HIT SIZE grows with the art (the
+capsule is the row's), and their bells with it (`Nozzle.Scaled`). 3x is that one number.
+Everything a move places about the hull now reads the row where it is used (Boss.cs):
+- the ram's red lane is the hull's own beam (2 x HW, 280 u; the row has no Width);
+- the rock is held `Boss.FlankHold` off the keel -- half-width + body + the row's 40 u gap (400 u; the
+  row's Offset is the gap, not 310);
+- the escorts launch 13/7 half-widths out (260 u; 130 on the old hull) and the warp ring is 1.3
+  half-widths (234 u; 117);
+- every stand-off is measured from the NOSE: the hold-off (Rusty 470, Drake 440 -- each the old 650 u
+  from the centre of its old hull), the shotgun's warp 390 (600), the throw's 1300 (1720 from the
+  centre) -- 200 u past the Drake gun's Find, so its warp-back throw leaves nothing in the gun's reach
+  and it is silent through the throw (the owner: it stays silent during its throw), at any hull size;
+- how far a move LOOKS (`Find`) is measured from the hull too, `Find + L/2` from the centre: the Rusty's
+  guns 900 u past its nose (1260 u from its centre), the Drake's main 1100 u (1520) -- the owner's
+  ruling that what is placed around a boss scales with it;
+- a ram strikes each ship it covers ONCE a dash (`Boss.Slot.Struck`): the 720 u hull at 1200 u/s is over
+  a point for 0.6 s, longer than the 0.52 s a source is blocked for, so a pilot left in the lane (webbed
+  by the beam's escorts, say) would take the row's 40 twice;
+- the boss spawns with its nose on `Hub.ArenaCentre`, so it starts no nearer the party.
+Frames 38/39/42 and 63-66 put the ship a gap off the nose and zoom (through `Hub.ZoomLevel`) to fit
+the whole hull.
+
+**Checks:** rewritten -- "a boss's hull, art and approach are its row's" (720 / 140, 840 / 180, hold-offs
+470 / 440), "a boss wears the owner's red ... its bells at the stern of the doubled hull" (+ the bells
+scaled), the beam / ram / shotgun / throw row checks (escorts 13/7 = 260 u, ram Width 0, warp 390 / ring
+1.3 = 234 u, throw 1300 = the gun's Find + 200 and a 400 u hold), "a boss's moves come from its ROW" (720), the two ram-lane
+finders (280 u), "two escorts launch ... 260 u out", the two lock pushes (past 470 + 360 u), "level 2 is
+the Drake Bastion ... 840 u long", the live shotgun (its nose's standoff, a 234 u ring) and throw (held
+180 + body + 40, backed off its nose's standoff) checks, and the guest's rock hold. "The charge rams for
+40, once" (no sidestep: the pilot stays where the ram finds it). New (merge gate 1, engine-unproven):
+"the boss spawns with its nose on the arena's centre"; "its guns look 900 u past its hull" (three
+bearings, 20-60 u either side of 1260 u); "its shockwave hits as far as its ring is drawn" (420-600 u
+out, three bearings); "a pilot held still in the ram's lane ... takes the row's 40 once a pass" (three
+spots 360-480 u down it); "it closes on the pilot and stops with its centre 830 u off" (three bearings,
+1.3-1.8 times that out). New (merge gate 2, engine-unproven): "the throw leaves nothing in the gun's
+reach" (three bearings, the pilot held still: more than 150 u outside Find + L/2 once the warp lands,
+no shell for 2 s with the gun armed by hand).
+
+**Resolved (Job P, 2026-09-25 -- the owner's two open questions, built as defaults):**
+- **The shockwave scales with the hull.** `BossType.Size` (the row's own BossSize, 1 for a row never
+  doubled) multiplies a Ring move's `Reach` at use (`Boss.Warn`/`Boss.Land`) -- the one move whose
+  telegraph is drawn round the boss itself. The Lancer's shockwave now reaches 680 u (340 x 2), clearing
+  the 720 u hull's bow and stern by the same margin it kept at 1x. Nothing else a move reaches with
+  changed (the beam's 70 u width, ranges and bodies stay reaches, not places).
+- **The Drake's whole hull frames without raising the wheel's ceiling.** The owner's ruling: the wheel
+  never zooms out past what it already reached (`ZoomOutMax` stays 1.53); a boss too big for that is
+  framed by MOVING the camera, not by widening it. `Hub.BossFramed` slides the centre toward whichever
+  end of the boss's hull (nose or stern, from ITS `Length`) sits farther from the ship, only as far as
+  that end needs to clear the frame and never past `BossPilotMargin` (150 u) from the ship itself --
+  generic from the row, not a Drake `if`; gated to actual encounters (within 2x the current reach) so a
+  boss across the map never tugs the view. At the Drake's 440 u hold-off the old floor's 918 u reach fell
+  362 u short of the tail; the centre now slides up to 768 u toward it, clearing the tail with an 80 u
+  margin while the ship stays inside its own 150 u margin. Frames 38/39/42/63-66 read the boss through
+  `H.ZoomLevel` unmoved -- it is the CAMERA that moved, proven at 3 varied approach angles.
+Checked at rung 3 (two seeds) and rung 4 (frames 38, 39, 42, 62-66 by eye).
+
+### The owner's own picks: the pod, the miner and the wing re-arted (2026-09-25, in the WarShips_Version_L fork, branch wt/art)
+
+The owner re-chose six rows of the mapping (`docs/plans/sprites.md` §1, "the owner's picks"); four are
+built here, the carrier and the Wraith come with the player ships:
+- **Pod**: `drone_sensor`, a round drone. It flies on ONE bell, its stern vent (it had two). Hit size
+  unchanged (`HitShare` of its unchanged 52 u).
+- **Miner**: the salvager's drone, `drone_salvager`, in the miner's tint. Both gatherer rows load ONE
+  file, `gatherer.png` (its bells, its claws' mouth and its span shared by name in `Gathering`);
+  `miner.png` and `salvager.png` are deleted. The miner's beam leaves from the claws' mouth, and its
+  Extent is the drone's drawn span, 11.2 u (was 14.2).
+- **Wing fighter**: `fighter_delta` (the pod's old art), two bells (it had five).
+- **Wing bomber**: `fighter_g`. Its torpedoes leave from the front of its wingtip rails, 8.5 u off the
+  keel (the old pods' were 5.3). Parked at 65% it is still 12 u across.
+
+**Checks:** rewritten -- "the fleet wears the pack" (fighter 2 bells; the miner and the salvager one
+texture in their two tints), "a torpedo leaves from a wingtip rail's front, not the nose" (7.2-9.8 u
+off its launcher's keel, was 4.0-6.6 off the pods), "every raider's art ... flames from its own bells"
+(the pod 1).
+
+**Proven (Job P, 2026-09-25):** rung 3 (those three, two seeds) and rung 4 (frames 0, 12, 13, 16b, 16c,
+27, 28-28e, 46, 48, 59, 59b, 80 by eye: the pod's one flame, the gatherers' tints on one drone, the wing,
+all correct). **Known broken:** frame 80's demo row (`Shots.cs.txt`): every raider turns onto the
+nearest reachable target each frame it runs (`Raider._Process`). The frame re-poses the row nose-up and
+stops each raider's `_Process` (`SetProcess(false)`) before the snap, and frame 80 read by eye with that
+freeze in place still showed the row swung off nose-up (ledger_sprites D24) -- what still turns them is
+open; the next screens run says whether it holds. Every raider's own hull, tint and bell count read correctly close
+up (checked by eye, cropped); it is the ROW'S layout that reads as a diagonal pile-up, not the art.
+
+### The base's fleet and the carrier's wing wear the owner's new sprites (2026-09-25, in the WarShips_Version_L fork, branch wt/art)
+
+The hauler is the pack's `cargo_4`, the miner and the salvager `drone_salvager` (the owner's picks,
+above), the lanes' couriers `drone_economy` (a new file, `courier.png`: they borrowed the miner's and
+salvager's art before), the wing's fighter `fighter_delta` and bomber `fighter_g`. Each row derives
+from `HullArt` (`GathererDef`, `LaneDef`, `WingDef`, and the Hauler's own `Hauler.Art`) and flies on
+the bells its art has: hauler 2, miner / salvager / courier 3, fighter 2, bomber 2. The rest, off the
+art (`tools/make_ships.ps1` prints every mark):
+- **Hauler**: the six pods are the six painted cargo frames (smaller and further aft than the old
+  pods); its point defence moved from the spine to the bow dome. Its three inline flames and its two
+  copies of `Length / GetHeight` are gone.
+- **Gatherers**: tinted the old art's average colour (sprites.md Q5): miner (0.63, 0.46, 0.31),
+  salvager (0.61, 0.35, 0.11). The beam and the unloading load leave from the row's `Emitter`
+  (the claws' mouth), not 0.45 L ahead. `Gatherer.Length` is the row's `Length`.
+- **Extent** (the ellipse a raider holds station off and measures its reach to; the fleet has no hit
+  shape) is measured off the art (sprites.md): hauler 40.9 u at its frames' rails (was 24), the
+  gatherers 11.2 at their drawn span (both were 12).
+- **Couriers**: 22 -> 30 u (sprites.md Q6: at 22 the new art is 8.6 u wide).
+- **Bomber**: its torpedoes leave from the front of its wingtip rails, one then the other
+  (`WingDef.Launch`), not 0.45 L ahead on the keel. Parked at 65% it is 12 u across (was 18): still
+  inside the white.
+
+**Checks:** new "the fleet wears the pack" (all six rows trimmed, bell counts, couriers 30 u in the
+livery, gatherer tints, emitters, Extent = drawn span); new "a torpedo leaves from a wingtip rail's
+front, not the nose" (every round in half a second, off its launcher's keel); the courier-sharing,
+salvager-scan and hauler-clears-the-station checks read the rows (`Def.Length`, `Def.Emitter`,
+`Hauler.Art.Length`); the bomber-size message and the parked-bomber comment lost the old art's words.
+
+**Known broken (J3):** UNPROVEN at rung 3 (the two new checks and the three rewritten) and rung 4
+(frames 7, 8, 12-16, 16b, 16c, 27, 28-28e, 46, 59, 59b by eye). No new courier frame: 16b and 16c
+(zoom 3) already show one close. The hauler's wider Extent lets a raider reach it from about 17 u
+further off its keel; the gatherers' moved by -0.8 u.
+
+### The bosses are red and black (2026-09-25, in the WarShips_Version_L fork, branch wt/art)
+
+The owner's ruling, from a swatch (mean RGB 172, 7, 2; "I like this and black probably"): both boss rows
+wear `Missions.BossRed` = (0.67, 0.03, 0.01), which multiplies the pack's grey to red highlights over
+black shadows. It replaces sprites.md Q5's tints (the old art's average colours). A pure multiply: drawn
+on the game's space colour it reads (the hull averages RGB 111, 5, 2 against 11, 15, 24), so the value
+was not lifted.
+
+**Checks:** "a boss wears the owner's red on the pack's grey art, trimmed, its bells listed" and "level 2
+is the Drake Bastion ... in the owner's red" assert the swatch literal (0.67, 0.03, 0.01).
+
+**Known broken (J3b):** UNPROVEN at rung 3 (those two) and rung 4 (frames 38, 42, 62-66 by eye). If a
+frame reads the hull too dark, the lift that keeps the hue is (1.0, 0.045, 0.015): the hull then
+averages the swatch's own red (RGB 166, 7, 2), with less black.
+
+### The bosses wear the owner's new sprites (2026-09-25, in the WarShips_Version_L fork, branch wt/art)
+
+The Rusty Bucket is the pack's `frigate_a` and the Drake Bastion its `flagship` (twice the art's size
+since the owner's ruling, above). The pack is
+grey, so each boss row carries a tint (the owner's red, above). The Rusty's white skull went with its
+old art.
+`BossType` derives from `HullArt` (its `Sprite` is `Texture`) and lists its bells (2 and 5); a boss
+draws no flame, as before. Their painted guns stay: a boss has no moving turret.
+
+**Checks:** "a boss's hull, art and approach are its row's" rewritten (`Texture`, not `Sprite`); new "a
+boss wears the owner's red on the pack's grey art, trimmed, its bells listed" (named for its tint since J3b); "level 2 is the Drake Bastion"
+now also asserts its sprite's tint. The harness's two hand-made boss rows name `Texture`. The trim test
+is one helper, `Trimmed`, which the raider check now uses too.
+
+**Known broken (J2):** UNPROVEN at rung 3 (the three checks above) and rung 4 (frames 38, 39, 42,
+62-66 by eye).
+
+### The raiders wear the owner's new sprites, one flame to a bell (2026-09-25, in the WarShips_Version_L fork, branch wt/art)
+
+The six raider rows and the title screen's Web now wear the pack in `art_source/pack_2026-09-24/`
+(`docs/plans/sprites.md`): webifier `fighter_swept`, gunship `frigate_b`, talon `fighter_tri_a`, pod
+`drone_sensor` (the owner's pick, above), cross `gunship_h`, lancerkin `frigate_d`, the Web `crescent_a`. The files keep their
+names, so no path moved; hit sizes did not move either (each row's `HitShare` of its unchanged Length).
+
+- `tools/make_ships.ps1` has a `$Finished` table: a row turns a pack file nose-up (quarter turns,
+  never mirrored), trims it with the keel on the centre column and writes it grey; it prints the row's
+  turret marks and nozzles in world units. `-Single`, `-Turn`, `-KeepRight`, `-FinalH`, `-Out` and
+  the two raider line-drawing blocks are gone; their drawings are in `retired/art/`.
+- **`HullArt`** (Sprites.cs): Texture, Length, Tint and Nozzles, the one shape a hull's art takes.
+  `EnemyDef` derives from it. `Sprites.Fit(HullArt)` tints; `HullArt.DrawPlumes` draws a flame per
+  bell, sized to the bell (`Plume.Width`), where every raider drew one from the middle of its stern.
+- The heavies' turrets sit where their own art says: the gunship's on its painted twin (0.154 L aft,
+  10.2 u), the cross's on its clean aft deck (0.234 L, 12.0 u), the lancerkin's on the plate aft of
+  its tubes (0.25 L, 12.3 u). Every Turret row names both figures; the gunship's old ones are no
+  longer everyone's default.
+- The title screen's Web wears the webifier's red (it wore its old art's own colours), and the
+  practice fighter reads the webifier's row instead of naming its file.
+
+**Checks:** the title screen's foes wear their raider rows' tints, the Web on its own art (new);
+every raider's art is trimmed to its drawing and flames from its own bells at the stern, the
+gunship drawn 136 u (new); frame `80_every_enemy_hull` (was `80_new_enemies`: now all six rows).
+Compiles (typecheck 0 errors, `-Quick` below); rungs 3 and 4 not run in this lane.
+
+**Known broken (J1):** none known; UNPROVEN at rung 3 (the two checks) and rung 4 (frames 0, 48, 49,
+50, 53, 80 read by eye: the tints on the lighter grey art, the flames on the bells, the turrets on
+their seats). The pack's grey is LIGHTER on average than the old line art (mean lightness under
+the drawing 0.57 against 0.31 on the webifier, 0.63 against 0.40 on the gunship), so the raider reds
+read brighter; the tints are unchanged until a frame says they read too light.
 
 ### Engine slots: engine chains from different lanes run at once (2026-09-25, branch wt/slots)
 

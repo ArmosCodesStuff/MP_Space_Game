@@ -210,6 +210,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     public struct Slot { public double Left, Cool, Own; public int N; public Vector2 At; }
     private Slot[] _slots = new Slot[1];                 // the spare alone, until the class is fitted
     private readonly Dictionary<string, int> _slotAt = new();
+    private readonly Dictionary<string, (Slot slot, double clock)> _slotsAway = new();   // every slot a class change put away, and when (FitClass)
     public ref Slot Sl(string id) => ref _slots[_slotAt.TryGetValue(id, out int i) ? i : 0];
 
     // Missiles (destroyer): a magazine of bursts, reloaded by hand.
@@ -317,10 +318,17 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         _turrets.Clear(); _mains.Clear(); PdTurrets.Clear(); _wings.Clear();
         WingTarget = StrikeTarget = null; _strikesOut = 0; _attacking = false;
 
+        // A CLASS CHANGE IS A REFIT (audit P8): the hull keeps its FRACTION, as Restat does (a new ship's
+        // first fit, MaxHp 0, is a full one), and no slot is refreshed: each one's cooldown and count are
+        // kept by id through every class change, run down by the game seconds it was away, so flying B
+        // and then A again hands back A's bar as it would be now. What was running (Left, Own) ends.
+        double frac = MaxHp > 0 ? Hp / MaxHp : 1;
+        foreach (var (id, at) in _slotAt) _slotsAway[id] = (_slots[at], _clock);
         Stats = BuildSheet();
-        MaxHp = Hp = Stats["hull"];
-        _hullWatch = default;                      // a new hull, not damage
-        // The class's slots, fresh: every timer at zero, the magazine full. Index 0 is the spare.
+        MaxHp = Stats["hull"];
+        Hp = Alive ? Math.Max(1, frac * MaxHp) : MaxHp;
+        _hullWatch = default;                      // a refit, not damage
+        // The class's slots, index 0 the spare: a new one with every timer at zero and the magazine full.
         var list = Abilities.For(Class);
         _slots = new Slot[list.Length + 1];
         _slotAt.Clear();
@@ -328,6 +336,13 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         _netSlotLeft = new float[_slots.Length]; _netSlotCool = new float[_slots.Length];
         _netSlotOwn = new float[_slots.Length]; _netSlotN = new int[_slots.Length];
         Sl("missile").N = (int)Stats["missile_mag"];
+        foreach (var (id, at) in _slotAt)
+            if (_slotsAway.Remove(id, out var kept))
+            {
+                ref var s = ref _slots[at];
+                s.Cool = Math.Max(0, kept.slot.Cool - (_clock - kept.clock));
+                s.N = kept.slot.N;                 // a magazine over the new sheet's is cut to it (FitWings)
+            }
 
         var art = MyArt;
         var tex = Assets.Load<Texture2D>(art.Texture);
@@ -367,7 +382,8 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         int wantF = (int)Stats["fighter_count"], wantB = (int)Stats["bomber_count"], hadB = WingCount(WingKind.Bomber);
         while (WingCount(WingKind.Fighter) < wantF && AddWing(WingKind.Fighter, WingCount(WingKind.Fighter))) { }
         while (WingCount(WingKind.Fighter) > wantF) RemoveWing(WingKind.Fighter);
-        while (WingCount(WingKind.Bomber) < wantB && AddWing(WingKind.Bomber, _wings.Count)) if (!fresh) _wings[^1].StartRearm();
+        // bombers after the fitted craft and before any sortie's, which ride at the end of the list
+        while (WingCount(WingKind.Bomber) < wantB && AddWing(WingKind.Bomber, Fitted)) if (!fresh) _wings[Fitted - 1].StartRearm();
         while (WingCount(WingKind.Bomber) > wantB) RemoveWing(WingKind.Bomber);
         if (WingCount(WingKind.Bomber) != hadB) { StrikeTarget = null; _strikesOut = 0; }
         if (!Net.Sim) return;
@@ -389,12 +405,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         _wings.Insert(at, w);
         return true;
     }
-    private void RemoveWing(WingKind k)
-    {
-        int i = _wings.FindLastIndex(x => x.Kind == k);
-        var w = _wings[i]; _wings.RemoveAt(i);
-        if (IsInstanceValid(w)) w.QueueFree();
-    }
+    private void RemoveWing(WingKind k) => DropWing(_wings.FindLastIndex(x => x.Kind == k));
 
     public void SetClass(ShipClass c) { Class = c; FitClass(); }
 
@@ -473,6 +484,24 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     }
 
     public int WingCount(WingKind k) { int n = 0; foreach (var w in _wings) if (w.Kind == k) n++; return n; }
+    private int Fitted { get { int n = 0; foreach (var w in _wings) if (!w.Def.Sortie) n++; return n; } }
+
+    // A SORTIE (a Wings.All row with a LifeStat): the row's count of craft sent out for its LifeStat
+    // seconds beside the fitted wing, never counted into it -- the patrol round this carrier, or
+    // gunships at `given`. They ride at the END of the wing list, so the host's report lines the
+    // fitted craft up on every peer as before. The host's to decide; a guest's copies come from the
+    // report. Refused (0 sent): not the host, no wing, a wreck, or a given target beyond the row's
+    // EngageStat (the gunships' 3000 u, checked here and only here).
+    public int Sortie(WingKind k, IHittable given = null)
+    {
+        var row = Wings.Of(k);
+        if (!Net.Sim || !Alive || !Stats.Def.Has(Fit.Wing) || !row.Sortie) return 0;
+        if (given != null && !Wings.Within(this, row, given)) return 0;
+        int n = (int)Stats[row.CountStat], sent = 0;
+        for (int i = 0; i < n; i++)
+            if (AddWing(k, _wings.Count)) { _wings[^1].SendOut(given, _clock + Stats[row.LifeStat]); sent++; }
+        return sent;
+    }
     public int BombersReady { get { int n = 0; foreach (var w in _wings) if (w.Kind == WingKind.Bomber && w.Armed) n++; return n; } }
     public double BomberRearmLeft { get { double m = 0; foreach (var w in _wings) if (w.Kind == WingKind.Bomber) m = Math.Max(m, w.RearmLeft); return m; } }
 
@@ -531,7 +560,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // guards itself: the press arrives from a guest's keyboard, so the host never trusts it.
     // DISABLED, a pilot presses nothing (the wreck's own reboard aside). Its point defence, its wing
     // and its turrets already out are not presses, and fight on.
-    private bool PressHeld(AbilityDef def) => _status.Has(Status.Disabled) && !def.WhenWrecked;
+    private bool PressHeld(AbilityDef def) => Disabled && !def.WhenWrecked;
     public void Reboard() { if (CanReboard) { Alive = true; Hp = MaxHp * ReboardHull; _stasis = 0; } }
     public void StartBroadside() { if (BroadsideReady) Sl("broadside").Left = Stats["broadside_windup"]; }
     public void StartReload()
@@ -646,22 +675,15 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         if (Sl("railgun").Left > 0 || Sl("railgun").Cool > 0) return;
         Sl("railgun").Left = Stats["rail_charge"];
     }
-    // The charge is spent (the Railgun row's Expire, on the host).
+    // The charge is spent (the Railgun row's Expire, on the host): the band its charge reached
+    // (Charges.Of("railgun")) says how much of rail_damage goes down which line, from the nose
+    // along the heading, as far as rail_range.
     public void FireRail()
     {
-        var a = Aim.Nose(this, MyArt.Length * 0.5f);
-        var b = a + Vector2.Up.Rotated(Rotation) * (float)Stats["rail_range"];
-        float halfWidth = (float)Stats["rail_width"] * 0.5f;
-        foreach (var h in new List<IHittable>(Targeting.Hittable(Combat.Hostiles, Targeting.Attackable)))
-        {
-            if (Combat.DistToSegment(h.Position, a, b) <= halfWidth + h.HitRadius)
-            {
-                Dealt.Deal(h, Stats["rail_damage"], this, Dealt.Rail);
-                if (h is Node2D n) Popups.NoteImpact(n, h.Position);
-            }
-        }
-        Fx.Line(Fx.Rail, a, b);                             // the line it threw, on every peer
-        Combat.Flash(a, b, Beam.Rail);                      // ...and its report, on every peer: this runs on the host alone
+        double charged = 1 - Sl("railgun").Left / Stats["rail_charge"];
+        var (mult, line) = Charges.At(Charges.Of("railgun"), charged);
+        var nose = Aim.Nose(this, MyArt.Length * 0.5f);
+        Lines.Strike(line, this, nose, nose + Vector2.Up.Rotated(Rotation) * (float)Stats["rail_range"], Stats["rail_damage"] * mult);
         Sl("railgun").Cool = Cooling(Stats["rail_cooldown"]);
     }
 
@@ -780,68 +802,31 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         foreach (var w in _wings) if (w.Def.Parks && w.Armed) { w.Call(); _strikesOut++; }
     }
 
-    // ── WARP (V) -- every capital ship ─────────────────────────────────────────
-    // A fixed key and a hull cooldown, never an ability-bar slot. After a 3 s warm-up
-    // the ship jumps to the selected target or waypoint if it lies within 45 degrees of the bow
-    // (stopping short of it), otherwise 1200 u straight ahead. Movement is the
-    // owner's, so the owner jumps; everyone else sees the charge and a clean snap.
-    //
-    // THE DRIVE THROWS IT 1200 u AND NO FURTHER. An aimed jump used to arrive AT the target
-    // whatever the distance, so anything selected was one press away however far off it stood;
-    // now the aim decides the heading and the drive decides the reach.
-    public const double WarpWarmup = 3.0, WarpCooldown = 30.0;
-    // The standoff is the gap between the ship's NOSE and the target's circle. A capital ship is
-    // most of 400 u long, so 60 u of it put a battleship's bow through whatever it aimed at.
-    public const float WarpRange = 1200f, WarpCone = Mathf.Pi / 4f, WarpStandoff = 160f;
-    // A display ship jumps its own distance on its own clock (the title screen dodges an area
-    // shot, which wants a short hop and a short wait). Defaulted to the class numbers, so a real
-    // ship is unaffected -- these exist so the menu does not need a second warp implementation.
-    public double WarpEvery = WarpCooldown;
-    public float WarpHop = WarpRange;
-    private double _warpLeft = -1, _warpCd, _warpFlash;
-    private bool _remoteWarping;
-    public bool Warping => _warpLeft >= 0;
-    public double WarpWarmupLeft => Math.Max(0, _warpLeft);
-    public double WarpCooldownLeft => _warpCd;
-    private bool CanWarp => Alive && !Warping && _warpCd <= 0 && !_status.Has(Status.Disabled);
-
-    // V starts the charge; WHERE it goes is decided when it jumps, by the heading then --
-    // so a pilot can press V and swing onto a target while it charges.
-    public bool StartWarp()
-    {
-        if (!Mine || !CanWarp) return false;
-        _warpLeft = WarpWarmup;
-        return true;
-    }
-
-    // where a warp to `target` ends: on the line from here, just short of its hull
-    private static Vector2 WarpArrival(Vector2 from, Vector2 target, float targetRadius, float shipLength) =>
-        target - (target - from).Normalized() * (targetRadius + shipLength * 0.5f + WarpStandoff);
-
-    private void TickWarp(float dt)
-    {
-        if (_warpCd > 0) _warpCd = Math.Max(0, _warpCd - dt);
-        if (!Warping) return;
-        if (!Alive) { _warpLeft = -1; return; }
-        _warpLeft -= dt;
-        if (_warpLeft > 0) return;
-        // now: the target or waypoint if it lies within 45 degrees of the bow, else straight on
-        var bow = Vector2.Up.Rotated(Rotation);
-        var dest = Position + bow * WarpHop;
-        var aim = (GetParent() as Hub)?.WarpAim() ?? (false, Vector2.Zero, 0f);
-        if (aim.has && Mathf.Abs(bow.AngleTo(aim.at - Position)) <= WarpCone)
-        {
-            var step = WarpArrival(Position, aim.at, aim.radius, MyArt.Length) - Position;
-            // The aim gives the heading; the drive gives the reach. Further off than the hop and
-            // the jump ends where the drive runs out, on the line to it.
-            if (step.Length() > WarpHop) step = step.Normalized() * WarpHop;
-            // ...and never backwards: a target already nearer than the arrival standoff would put
-            // the arrival BEHIND the ship, which is not a jump toward anything.
-            if (step.Dot(bow) > 0) dest = Position + step;
-        }
-        Position = dest; Velocity = Vector2.Zero;
-        _warpLeft = -1; _warpCd = WarpEvery; _warpFlash = 0.6;
-    }
+    // ── THE DRIVE (V) -- the class's own row (Drives.cs) ───────────────────────────────────
+    // V presses the drive this hull names (ClassDef.Drive): the capitals hold it to warp, the nine
+    // tap it to boost. The drive's slot is in Abilities.For, so its cooldown and its time are on the
+    // wire like any ability's; the warp's charge is the owner's (it flies), in _drive beside it.
+    private readonly DriveRun _drive = new();
+    public DriveDef Drive => Drives.Of(Class);
+    // A DRIVER'S HOLD OF V -- the title screen's ship, or a check -- read with the pilot's own key.
+    public bool DriveHeld;
+    public bool PressDrive() => Drives.Press(this, _drive);
+    public bool Charging => _drive.Held >= 0;
+    public double ChargeHeld => _drive.Held;
+    public float ChargeReach => Drives.Reach(_drive.Held, Stats["warp_rate"], Stats["warp_safe"]);
+    public double DriveLock => _drive.Lock;
+    public double JumpFlash => _drive.Flash;
+    // DISABLED as this peer knows it: the host's status, or the owner's own lock after an overshoot,
+    // held until the host's bit arrives (a guest's jump reaches the host a report later).
+    public bool Disabled => _status.Has(Status.Disabled) || _drive.Lock > 0;
+    // A RELOCATION THE HOST MADE (a returning pilot put back where it was: Hub's NetPlace): the
+    // reports that follow are the ship arriving there, never a jump to price (Drives.Priced).
+    public void Relocated() { _drive.Quiet = Drives.QuietFor; _drive.From = null; }
+    public int SpeedClamps => _drive.Clamped;
+    // THE FASTEST THIS HULL GOES NOW, ahead and sideways, lifted and unheld: what the host's speed
+    // clamp and its jump pricing allow a guest's report (F24's hypot rule, Drives.SpeedCap).
+    public float TopNow => TopSpeed((float)Stats["max_speed"], SpeedMult, SpeedAdds(), 1f);
+    public float StrafeNow => StrafeTop((float)Stats["strafe_speed"], SpeedMult, 1f);
 
     // ── what is being done to it (Statuses): a raider's web today, and whatever a class's
     // ability puts on it next. The HOST decides; a guest is sent the bits and shows them.
@@ -1036,11 +1021,11 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         // The HOST decides pinned. A guest used to count its own (never-set) timer down here and
         // overwrite the host's flag every frame, so a raider's web never held a guest at all.
         if (Net.Sim) _status.Tick(delta);
-        // the landing flash fades on every peer: it used to fade only on the owner's, and a
-        // remote ship's warp left it lit for good
-        _warpFlash = Math.Max(0, _warpFlash - dt);
+        // the drive's clocks run on every peer: the landing flash used to fade only on the owner's,
+        // and a remote ship's warp left it lit for good
+        Drives.Tick(_drive, delta);
         UpdatePod();
-        if (Mine) { TickWarp(dt); LocalFlight(dt); }
+        if (Mine) { Drives.TickOwner(this, _drive, DriveHeld || (!Demo && !Hub.ControlsLocked && Input.IsKeyPressed(Key.V)), delta); LocalFlight(dt); }
         else      RemoteFollow(dt);
 
         TickAbilities(delta);
@@ -1051,6 +1036,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         {
             if (!IsInstanceValid(_wings[i])) { _wings.RemoveAt(i); continue; }
             _wings[i].Tick(delta);
+            if (_wings[i].Done) { _wings[i].QueueFree(); _wings.RemoveAt(i); }    // a sortie's craft, home or warped out
         }
         if (WingTarget != null && !WingTarget.Alive) WingTarget = null;
         // Age the signal lights HERE, not in _Draw. Drawing is not guaranteed to happen -- a
@@ -1073,14 +1059,9 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // EVERY ABILITY THIS CLASS CARRIES, BY ITS OWN ROW. The cooldown runs down, a timer that is
     // up runs down, and on the frame it reaches zero the ROW says what happens: Elapsed on every
     // peer (the phase the bar must show at once), Expire on the host alone (what it resolves --
-    // the railgun's shot, the rush's EMP, the echo's blast, the recharge after a point-defence
-    // window, the magazine a reload refills). Every peer counts down so a guest's bars move
-    // smoothly between host packets, and the next packet corrects any drift.
-    //   This replaced a string[] naming the nine ids that had timers and a switch on the id
-    // beside it: a tenth timed ability added as a row compiled, bound, drew on the bar and its
-    // Left never moved, with nothing to say so. It replaced the point-defence window's own block
-    // and the missile reload's too -- both were an expiry written out by hand -- and a second
-    // tick of the freighter's deploy cooldown that this loop's first line already does.
+    // the railgun's shot, the rush's EMP, the echo's blast, the magazine a reload refills). Every
+    // peer counts down so a guest's bars move smoothly between host packets, and the next packet
+    // corrects any drift. A timed ability is a row and nothing else: this loop is the only expiry.
     private void TickAbilities(double delta)
     {
         foreach (var def in Abilities.For(Class))
@@ -1089,8 +1070,11 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             if (sl.Cool > 0) sl.Cool = Math.Max(0, sl.Cool - delta);
             // A RAMP's running total (F1, D18) steps every frame regardless of Left, so it keeps
             // draining after the row stops -- Steer already ran this frame (LocalFlight, above),
-            // so _yawRate is this frame's, not last frame's.
-            if (def.Ramp is { } ramp)
+            // so _yawRate is this frame's, not last frame's. OWNER-STEPPED: only the peer that
+            // holds the helm (Mine) has a throttle and a yaw to read; every other copy of the
+            // ship (the host's of a guest's included) never steps it, and ApplyHostState leaves
+            // the owner's own value alone (DESIGN.md, the authority model).
+            if (def.Ramp is { } ramp && Mine)
             {
                 bool holding = sl.Left > 0;
                 bool cond = holding && (ramp.Condition == null || ramp.Condition(this));
@@ -1167,20 +1151,24 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         // Input.IsKeyPressed polls the raw keyboard, so it does not care that a text
         // box has focus. Hub decides when the controls belong to the UI instead.
         bool locked = Hub.ControlsLocked || Demo;
-        float throttle = 0f, rudder = 0f;
+        float throttle = 0f, rudder = 0f, strafe = 0f;
         if (!locked)
         {
             if (Input.IsKeyPressed(Key.W)) throttle += 1f;
             if (Input.IsKeyPressed(Key.S)) throttle -= 1f;
             if (Input.IsKeyPressed(Key.A)) rudder -= 1f;
             if (Input.IsKeyPressed(Key.D)) rudder += 1f;
+            // SHIFT TURNS A/D INTO A SLIDE (F24) on a hull whose sheet has one (strafe_speed > 0):
+            // the nose holds its heading, so the guns and the cursor keep their meaning. A hull with
+            // no slide (the capitals) reads Shift + A/D as the rudder it always was.
+            if (Input.IsKeyPressed(Key.Shift) && Stats["strafe_speed"] > 0) { strafe = rudder; rudder = 0f; }
         }
-        if (throttle != 0f || rudder != 0f) AutopilotTo = null;        // any helm key takes the controls back
+        if (throttle != 0f || rudder != 0f || strafe != 0f) AutopilotTo = null;   // any helm key takes the controls back
         else if (AutopilotTo is { } dest)
             (throttle, rudder) = Autopilot.Capital(Position, Rotation, Velocity, (float)Stats["max_speed"], dest, 60f);
-        if (Pinned) { throttle = 1f; rudder = 0f; AutopilotTo = null; }         // forced thrust, no rudder
+        if (Pinned) { throttle = 1f; rudder = 0f; strafe = 0f; AutopilotTo = null; }   // forced thrust, no rudder, no slide
         Thrusting = throttle != 0f;
-        Steer(throttle, rudder, dt);
+        Steer(throttle, rudder, strafe, dt);
 
         // the main guns aim at the cursor; the hull does not follow it
         if (!Demo) Trigger = false;              // a display ship's driver owns the trigger
@@ -1201,7 +1189,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         var pod = IsInstanceValid(_pod) ? _pod.Position : Position;
         float podRot = IsInstanceValid(_pod) ? _pod.Rotation : 0f;
         (GetParent() as Hub)?.SendShipState(Position.X, Position.Y, Velocity.X, Velocity.Y, Rotation,
-            AimPoint.X, AimPoint.Y, Trigger, Staggered, pod.X, pod.Y, podRot, Warping);
+            AimPoint.X, AimPoint.Y, Trigger, Staggered, pod.X, pod.Y, podRot, Charging);
     }
 
     // The pod exists exactly while the ship is in stasis: flown by its owner,
@@ -1225,8 +1213,10 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // adds along the keel; water drag slows both; the keel kills sideways drift
     // quickly, so the ship goes where it points. The rudder turns at speed/radius
     // -- a turning circle -- capped by the rudder limit, and does nothing dead in
-    // the water.
-    private void Steer(float throttle, float rudder, float dt)
+    // the water. THE SLIDE (F24, `strafe` -1..1): while it is held the across speed moves toward
+    // strafe x StrafeTop at the sheet's strafe_thrust x the lift, and the keel lets it; otherwise
+    // the keel's grip damps it, as it always did.
+    private void Steer(float throttle, float rudder, float strafe, float dt)
     {
         var fwd = Vector2.Up.Rotated(Rotation);           // nose direction
         var side = new Vector2(-fwd.Y, fwd.X);
@@ -1235,7 +1225,8 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         // DISABLED: no thrust, no rudder, whatever is pressed, and the heading holds (below). HELD
         // (a running row's Hold, after the lifts): the thrust both ways, both caps and the rudder,
         // all by the one share.
-        bool disabled = _status.Has(Status.Disabled);
+        bool disabled = Disabled;
+        if (disabled || Pinned) strafe = 0f;              // a web or Disabled: no slide, as no rudder
         if (disabled) { throttle = 0f; rudder = 0f; }
         float hold = Held;
         throttle *= hold; rudder *= hold;
@@ -1251,7 +1242,11 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         float top = TopSpeed((float)Stats["max_speed"], lift, SpeedAdds(), hold);
         along = Mathf.Clamp(along, -(float)Stats["reverse_speed"] * hold,
                             top * (Pinned ? StatusSet.PinSpeed : 1f));
-        across *= Mathf.Exp(-(float)Stats["keel"] * dt);
+        if (strafe != 0f)
+            across = Mathf.MoveToward(across, strafe * StrafeTop((float)Stats["strafe_speed"], lift, hold),
+                                      (float)Stats["strafe_thrust"] * lift * dt);
+        else across *= Mathf.Exp(-(float)Stats["keel"] * dt);
+        if (hold <= 0f) across = 0f;                      // rooted: nothing slides it either
 
         // turning circle: yaw rate = speed / radius, capped by the rudder; astern the
         // rudder reverses, as it does on a real ship. At or below 5% of top speed the
@@ -1278,6 +1273,13 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     }
 
     public float SpeedAhead => Velocity.Dot(Vector2.Up.Rotated(Rotation));
+    // THE SLIDE'S OWN SPEED, by F1's share rule: the sheet's strafe_speed x the lift (the boost's +50%
+    // is a lift like any other), THEN every hold multiplied on the whole -- so the Prism's x0.5 is a
+    // share of the lifted slide and the Anchor's x0 stops it, as they do the top speed. Pure, so it is
+    // provable without a hull.
+    public static float StrafeTop(float sheet, float lift, float hold) => sheet * lift * hold;
+    // the slide as it is now: + to starboard (D), - to port (A)
+    public float SpeedAcross { get { var f = Vector2.Up.Rotated(Rotation); return Velocity.Dot(new Vector2(-f.Y, f.X)); } }
     private const float PivotBelow = 0.05f;                     // the pivot works at <= 5% of top speed
     private static readonly float PivotRate = Mathf.DegToRad(10f);   // slowly: 10 degrees a second
 
@@ -1296,7 +1298,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         // guest carrier's fighters on the host.
         Velocity = _netAge < 0.5f ? _netVel : Vector2.Zero;
         // a warp is a jump, not a glide: snap across it (and flash where it lands)
-        if (Position.DistanceTo(_netPos) > 600f) { Position = _netPos; _warpFlash = 0.6; }
+        if (Position.DistanceTo(_netPos) > Drives.SnapAt) { Position = _netPos; _drive.Flash = Drives.FlashFor; }
         else Position = Position.Lerp(_netPos, Mathf.Clamp(12f * dt, 0f, 1f));
         Rotation = Mathf.LerpAngle(Rotation, _netRot, Mathf.Clamp(12f * dt, 0f, 1f));
     }
@@ -1308,6 +1310,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
                            float podX, float podY, float podRot, bool warping)
     {
         if (!new[] { px, py, vx, vy, rot, ax, ay, podX, podY, podRot }.All(float.IsFinite)) return;
+        float age = _netAge;                       // since the last report: what the hull could have flown
         _netAge = 0f;
         _netPos = new Vector2(px, py);
         _netVel = new Vector2(vx, vy);
@@ -1316,7 +1319,17 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         Trigger = trigger;          // the host fires on this; a guest only draws
         Staggered = staggered;
         if (IsInstanceValid(_pod) && !_pod.Local) _pod.SetNet(new Vector2(podX, podY), podRot);
-        _remoteWarping = warping;
+        _drive.Remote = warping;
+        if (Net.Sim)
+        {   // THE HOST'S READING of a guest's report (Drives): a jump it made is priced, and the speed it
+            // claims is held to what its hull can do now. Priced only between two reports of the ship IN
+            // THIS WORLD: entering one drops every peer's sector until it reports again (Hub.EnterSector),
+            // and a guest's last reports from the world it left can still land here: priced, they would
+            // make its first report from the new spawn a snap, and a capital would arrive DISABLED.
+            if (Hub.PeerSector(OwnerId) == Hub.Sector) Drives.Priced(this, _drive, _netPos, warping, age, Drives.SpeedCap(TopNow, StrafeNow));
+            else _drive.From = null;
+            _netVel = Drives.Clamp(_drive, _netVel, TopNow, StrafeNow);
+        }
     }
 
     // The host's side of the conversation: hull, ability state, and the wing.
@@ -1355,18 +1368,43 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         Hp = hp; MaxHp = maxHp; Alive = alive; _stasis = stasis; _status.FromBits(statusBits); _combatT = combat;
         // The slots, by the class's own order. Shortest array wins: a refit mid-packet can leave
         // the two sides a slot apart for one report.
+        // A RAMP row's Own is the one field the host does not speak for on the owner's own ship:
+        // the owner steps it from its own helm (TickAbilities), which the host never sees.
+        var rows = Abilities.For(Class);
         for (int i = 0; i < Math.Min(_slots.Length, slotLeft.Length); i++)
-            _slots[i] = new Slot { Left = slotLeft[i], Cool = slotCool[i], Own = slotOwn[i], N = slotN[i] };
+        {
+            bool ownerStepped = Mine && i > 0 && i - 1 < rows.Length && rows[i - 1].Ramp != null;
+            _slots[i] = new Slot { Left = slotLeft[i], Cool = slotCool[i], Own = ownerStepped ? _slots[i].Own : slotOwn[i], N = slotN[i] };
+        }
         WingTarget = wingTarget != 0 ? Combat.ById(wingTarget) : null;
         // What the bombers were sent at. It was host-only, so a guest's own BOMB slot read
         // "RETURNING" for the whole of every strike it ordered -- the one word its bar had for it.
         StrikeTarget = strikeTarget != 0 ? Combat.ById(strikeTarget) : null;
+        MatchSorties(wingPos, wingState);
         for (int i = 0; i < Math.Min(_wings.Count, wingPos.Length); i++)
         {
             _wings[i].SetNet(wingPos[i], wingRot[i]);
             _wings[i].SetNetState(wingState[i], wingRearm[i]);
         }
     }
+
+    // SORTIE CRAFT come and go on the host alone (Sortie), so a guest's list is brought to the
+    // host's report here: each state code carries its craft's row (Wing.RowCode), and a sortie craft
+    // the host reports is added at its place, one it no longer reports is dropped. The fitted craft
+    // are FitWings' on every peer, from the same sheet, and are left alone.
+    private void MatchSorties(Vector2[] pos, int[] state)
+    {
+        for (int i = 0; i < state.Length; i++)
+        {
+            int kind = state[i] / Wing.RowCode;
+            if (kind < 0 || kind >= Wings.All.Length || !Wings.All[kind].Sortie) continue;
+            while (i < _wings.Count && _wings[i].Def.Sortie && (int)_wings[i].Kind != kind) DropWing(i);
+            if ((i >= _wings.Count || (int)_wings[i].Kind != kind) && AddWing((WingKind)kind, Math.Min(i, _wings.Count)))
+                _wings[Math.Min(i, _wings.Count - 1)].Position = pos[i];
+        }
+        for (int i = _wings.Count - 1; i >= state.Length; i--) if (_wings[i].Def.Sortie) DropWing(i);
+    }
+    private void DropWing(int i) { var w = _wings[i]; _wings.RemoveAt(i); if (IsInstanceValid(w)) w.QueueFree(); }
 
     // Wings are parented to the world, not the ship, so they fly free of its
     // rotation. That means they do not leave with it: free them here, or a
@@ -1388,31 +1426,10 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
 
     public override void _Draw()
     {
-        // THE BUBBLE (a freighter's): a ring the size of what it covers, fading as its pool is
-        // spent, so everyone can see how much of it is left and who is inside it.
-        if (BubbleUp)
-        {
-            float left = (float)Mathf.Clamp(BubbleLeft / Math.Max(1, Stats["bubble_pool"]), 0, 1);
-            var c = new Color(0.55f, 0.85f, 1f, 0.15f + 0.35f * left);
-            DrawCircle(Vector2.Zero, BubbleRadius, c with { A = c.A * 0.25f });
-            DrawArc(Vector2.Zero, BubbleRadius, 0, Mathf.Tau, 64, c, 2.5f);
-        }
-        // warp: a charge building in the accent colour (lighting), then a flash where it lands
-        if (Warping || _remoteWarping)
-        {
-            float k = Mine ? 1f - (float)(_warpLeft / WarpWarmup) : 0.6f;
-            float pulse = 0.5f + 0.5f * Mathf.Sin(Time.GetTicksMsec() / (60f - 30f * k));
-            DrawSetTransform(Vector2.Zero, 0f, new Vector2(0.45f, 1f));
-            for (int i = 0; i < 3; i++)
-                DrawArc(Vector2.Zero, MyArt.Length * (0.55f + 0.08f * i) + 5f * pulse, 0, Mathf.Tau, 48,
-                        new Color(Accent.R, Accent.G, Accent.B, (0.25f + 0.5f * k) / (i + 1)), 2f);
-            DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
-        }
-        if (_warpFlash > 0)
-        {
-            float f = (float)(_warpFlash / 0.6);
-            DrawCircle(Vector2.Zero, MyArt.Length * (0.4f + 0.6f * (1f - f)), new Color(Accent.R, Accent.G, Accent.B, 0.35f * f));
-        }
+        // EVERY FIELD ITS SLOTS HAVE UP (the bubble, ...): one row each in Fields.All (Fx.cs)
+        Fields.Draw(this);
+        // the drive: a warp's charge glow and landing flash on every peer, and the pilot's range (Drives.Draw)
+        Drives.Draw(this, _drive);
         // engine plumes at the stern, in the accent colour
         if (Alive)
             Plume.Draw(this, new Vector2(0, MyArt.Length * 0.5f - MyArt.EngineInset), Vector2.Down, MyArt.Length, Accent,

@@ -5,8 +5,10 @@
 // class that held them is gone. It was a Boss subclass whose Tick was five open-coded clocks, each
 // the same shape written out again; Boss now runs any table of moves and this is the Lancer's.
 //
-// One rhythm, 30 s long (all damage x the level's and party's scale):
-//   GUNS       always: 3.6 every 1.2 s (3 DPS) at the nearest ship within 900 u
+// One rhythm, 30 s long (all damage x the level's and party's scale). EVERY MOVE BUT THE BURN is cut
+// to x0.744 of its old row (numbers_curve_raids_items.md §1.2): with no chips a par pilot who stops
+// dodging lives 31 s at every level; the burn (50 a tick, 250 whole) is a super and is kept:
+//   GUNS       always: 2.68 every 1.2 s (2.23 DPS) at the nearest ship within 900 u of its hull
 //   DEATH BEAM every 30 s, in three steps, the boss holding position through all of them:
 //              ARMED: it waits on a web; the boss turns to face the nearest pilot -- the only
 //                turning the beam allows, and only now. Its craft are its fight's adds (squad wave 1).
@@ -18,13 +20,13 @@
 //              LIVE: 3 s along that line, checking every 0.25 s: 50 each time it lands on a ship
 //                (a ship's 0.52 s invulnerability to one source means a hit about every 0.75 s)
 //   RAM        15 s after each beam (never during one): a red line for 1.5 s, then a ram along it
-//              at 1200 u/s: 40 to any ship in its path -- the one move that shifts the hull
+//              at 1200 u/s: 29.8 to any ship in its path -- the one move that shifts the hull
 //   TRIDENT    between them (every 15 s from 13.5 s): 3 guided missiles, 0 and +-25 degrees,
-//              15 each, twice the size -- INTERCEPTABLE (PD shoots them). ALL THREE LAND: each
+//              11.2 each, twice the size -- INTERCEPTABLE (PD shoots them). ALL THREE LAND: each
 //              seeker is its own damage source (Shots.SourceKey), where one shared name meant a
 //              hull felt only the first inside its 0.52 s gap.
-//   SHOCKWAVE  every 17 s: a red ring for 1.8 s, held still, then 45 within 340 u
-// Slow and heavy: between its moves it closes on the party to about 650 u and turns ponderously
+//   SHOCKWAVE  every 17 s: a red ring for 1.8 s, held still, then 33.5 within 340 u
+// Slow and heavy: between its moves it closes on the party to about 470 u off its nose and turns ponderously
 // (its Missions.BossType row, which carries the hull's art and shape as well).
 public static class Lancer
 {
@@ -33,14 +35,14 @@ public static class Lancer
         // ALWAYS, through everything else it is doing -- as the Drake's main gun fires through its
         // own specials. It waits on nothing, so it needs no idle hull to fire from.
         new() { Id = "guns", Way = MoveWay.Bolt, Waits = MoveWait.Nothing,
-                Every = 1.2, First = 2.0, Damage = 3.6, Find = 900f,
+                Every = 1.2, First = 2.0, Damage = 2.68, Find = 900f,
                 Source = DamageSource.LancerGuns, Beam = Beam.Bolt },
 
         // THE TRIDENT, between the supers: three seekers 25 degrees apart, born 14 u ahead of the
         // nose, twice a missile's size, turning at 1.4 rad/s after the ship they were thrown at.
         new() { Id = "trident", Way = MoveWay.Shoot, Waits = MoveWait.Nothing, Shot = Shots.Seeker,
                 Every = 15, First = 13.5, Count = 3, Spread = 25f,
-                Damage = 15, Speed = 135f, Range = 1920f, Turn = 1.4f, Size = 2f, Muzzle = 14f,
+                Damage = 11.2, Speed = 135f, Range = 1920f, Turn = 1.4f, Size = 2f, Muzzle = 14f,
                 Cue = "boss_trident", Source = DamageSource.LancerMissiles },
 
         // THE DEATH BEAM. Armed, it waits on a web on its target -- any web: its two old escorts are
@@ -55,13 +57,14 @@ public static class Lancer
                 ArmMax = 5.0, Escape = 0.6, React = 2.0, StripShare = 55.0 / 46.0, StripDps = 0.7 * 57.6,
                 Cue = "boss_beam_charge", Strike = "boss_beam", Source = DamageSource.LancerBeam },
 
-        // THE RAM, 15 s after each beam: 1.5 s of red line 900 u long and 140 u wide (the hull's
-        // own beam, 2 x its 70 u half-width), then the hull down it at 1200 u/s for 40 on contact.
+        // THE RAM, 15 s after each beam: 1.5 s of red line 900 u long and as wide as the hull's own
+        // beam (NO Width here: Boss.Warn draws 2 x the row's half-width, and the hull is what hits),
+        // then the hull down it at 1200 u/s for 29.8 on contact.
         // ITS OWN CADENCE. It read the beam's 30 s constant (`_charge = BeamEvery`): the two are
         // the same number BY ACCIDENT, not by design, and tuning the beam retuned the ram.
         new() { Id = "ram", Way = MoveWay.Dash, Waits = MoveWait.Everything, Busy = true, Super = true,
                 Every = 30, First = 21.0, Windup = 1.5,
-                Damage = 40, Reach = 900f, Width = 140f, Speed = 1200f,
+                Damage = 29.8, Reach = 900f, Speed = 1200f,
                 Strike = "boss_ram", Source = DamageSource.LancerCharge },
 
         // THE SHOCKWAVE, every 17 s. Both of these were bare literals in the method that fired it.
@@ -69,7 +72,7 @@ public static class Lancer
         // a boss that rammed out of its own ring would leave it behind. Not a super: the bar under
         // the hull counts down to the beam and the ram, and always did.
         new() { Id = "wave", Way = MoveWay.Ring, Waits = MoveWait.Movers, Busy = true,
-                Every = 17.0, First = 10.0, Windup = 1.8, Damage = 45, Reach = 340f,
+                Every = 17.0, First = 10.0, Windup = 1.8, Damage = 33.5, Reach = 340f,
                 Strike = "boss_shockwave", Source = DamageSource.LancerWave },
     };
 }

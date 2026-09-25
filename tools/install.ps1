@@ -63,10 +63,16 @@ try {
     if ($parts.Count -eq 0) { Write-Host 'install: the release names no files to install.'; exit 1 }
     Write-Host ("install: build $build, {0} parts, {1:N0} MB" -f $parts.Count, (($parts | Measure-Object Bytes -Sum).Sum / 1MB))
 
+    # THE PRESENCE CHECK: every file the release lists (its `in=` rows) is in the install. An antivirus
+    # that took one file -- the WebRTC library is the likeliest, a native DLL nobody signed -- leaves a
+    # game that starts and cannot play with anyone; this names it. Step 2 and step 5 both ask it.
+    $listed = @($info | Where-Object { $_ -like 'in=*' } | ForEach-Object { (($_ -replace '^in=', '') -split '\|', 2)[1] })
+    function Missing { @($listed | Where-Object { -not (Test-Path (Join-Path $Root ($_ -replace '/', '\'))) }) }
+
     # ── 2 . already have it? ─────────────────────────────────────────────────
     $haveInfo = Join-Path $Root 'BUILD.txt'
     $exe = Join-Path $Root $launch
-    if (-not $Force -and (Test-Path $haveInfo) -and (Test-Path $exe)) {
+    if (-not $Force -and (Test-Path $haveInfo) -and (Test-Path $exe) -and (Missing).Count -eq 0) {
         $have = (Get-Content $haveInfo | Where-Object { $_ -like 'build=*' } | Select-Object -First 1) -replace '^build=', ''
         if ($have -eq $build) {
             Write-Host "install: $build is already installed"
@@ -104,6 +110,13 @@ try {
     Copy-Item $infoPath $haveInfo -Force
     if (-not (Test-Path $exe)) {
         Write-Host "install: unpacked, but $launch is not there. The release may be malformed."
+        exit 1
+    }
+    $gone = Missing
+    if ($gone.Count -gt 0) {
+        Write-Host ("install: unpacked, but {0} of the release's files are not there:" -f $gone.Count)
+        $gone | Select-Object -First 5 | ForEach-Object { Write-Host "         $_" }
+        Write-Host '         An antivirus may have taken them. Allow the folder, then run this again.'
         exit 1
     }
     $n = @(Get-ChildItem $Root -Recurse -File).Count

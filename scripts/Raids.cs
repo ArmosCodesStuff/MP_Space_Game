@@ -139,8 +139,8 @@ public sealed class Raids
                                Mission = Missions.KindOf(Missions.Kind).Id };
     }
 
-    public int Patrol(Vector2 at, double scale = 1) =>
-        Send(WaveTrigger.Called, new WaveBrief { Pilots = _hub.PartySize, Scale = scale, Origin = Hub.BasePos, Anchor = at });
+    public int Patrol(Vector2 at, double level = 1) =>
+        Send(WaveTrigger.Called, new WaveBrief { Pilots = _hub.PartySize, CalledLevel = level, Origin = Hub.BasePos, Anchor = at });
 
     // A MISSION'S TARGET DEFENDING ITSELF: wave `wave` of its own clock, formed up round `at`, at
     // the mission's level. It is the same builder an escort's hunters come from -- what differs is
@@ -233,7 +233,7 @@ public sealed class Raids
                 {
                     var r = _hub.SpawnRaider(at + c.Slot(i, n).Rotated(heading), kind, squad, strength, d.HullShare?.Invoke(b) ?? 1);
                     if (r == null) continue;
-                    r.Agility = agility; r.Level = b.Level;
+                    r.Agility = agility; r.Level = b.Level; r.DamageShare = d.DamageShare?.Invoke(b) ?? 1;
                     r.Worth = pays ? r.Def.Exp * d.Exp : 0;     // a refill, and every wave with no Exp, pays nothing
                 }
             }

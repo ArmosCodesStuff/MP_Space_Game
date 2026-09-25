@@ -36,8 +36,9 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused, ISquadMembe
     public StatusSet Statuses => _status;
     public void ApplyStatus(Status st, double seconds, double share = double.NaN) { if (Net.Sim && StatusSet.Reaches(st, Tags)) _status.Apply(st, seconds, share); }
     public float Length => Def.Length;
-    // a raid's raiders are as strong as the boss that was failed: S(L) = 1.025^(L-1) (Missions.S)
-    public double Strength = 1;          // S(L) (was "Scale", which hid Node2D.Scale)
+    // A LEVEL, the boss's that was failed (fractional for an escort's threat): its hull x
+    // Par.CraftScale, its guns x Par.DamageScale -- the curve a boss is on (Par.cs)
+    public double Strength = 1;
     // The share of that hull it is built with: an escort's hunters come at half (Hub.HunterHull).
     // Not Strength, which scales its damage too. Set before it enters the tree (_Ready reads it).
     public double HullShare = 1;
@@ -49,8 +50,13 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused, ISquadMembe
     // EnemyDef.Exp x WaveDef.Exp on a first fill, 0 on a refill and on everything else.
     public int Level = 1;
     public double Worth;
+    // ...and the share of its level's damage it deals (WaveDef.DamageShare: a boss's adds take the
+    // party's damage multiplier). Host-only: only the host strikes.
+    public double DamageShare = 1;
     private HullWatch _hullWatch;
-    public double MaxHull => Def.Hull * Strength * HullShare;
+    public double MaxHull => Def.Hull * Par.CraftScale(Strength) * HullShare;
+    // ONE VOLLEY, every barrel at once (F20), on its level's damage scale: what each laser Strike carries
+    public double Volley => Def.Dps * Def.Barrels * Def.ShotEvery * Par.DamageScale(Strength) * DamageShare;
     public float HitRadius => Length * Def.HitShare;
     public bool Selectable => true;
 
@@ -61,8 +67,8 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused, ISquadMembe
     public static double RaiderDps => Enemies.Of(Enemies.Webifier).Dps;          // x -- the game's damage unit
     public static double HeavyDps => Enemies.Of(Enemies.Gunship).Dps * Enemies.Of(Enemies.Gunship).Barrels;
     // THE MISSILE IS THE ROW'S: EnemyDef.MissileRange / MissileEvery / MissileDamage / MissileFlight /
-    // BlastRadius, read through Def (F20: MissileFlight moved onto the row, from a shared const --
-    // the Lancerkin's own point is standing off further, so its flight need not match the gunship's).
+    // BlastRadius, read through Def (F20: each row its own flight -- the Lancerkin's own point is
+    // standing off further, so its flight need not match the gunship's).
     // HOW a predicted missile flies, telegraphs and lands is Missiles.cs, whosever it is: the
     // outposts throw the same one back (Lanes.cs), which is why none of it is in this file.
     public static float BlastRadius => Enemies.Of(Enemies.Gunship).BlastRadius;
@@ -123,8 +129,7 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused, ISquadMembe
     public override void _Ready()
     {
         Hp = MaxHull;
-        _sprite = Sprites.Fit(Def.Texture, Length);
-        _sprite.Modulate = Def.Tint;
+        _sprite = Sprites.Fit(Def);
         AddChild(_sprite);
         if (Def.Turret)
         {   // the main turret on its spine behind the canopy, mounted where ITS OWN ROW says and
@@ -235,8 +240,8 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused, ISquadMembe
                 _shot = Def.ShotEvery;
                 // ONE Strike per volley carries every barrel's damage (F20): two separate Strikes,
                 // 0.52 s apart or not, would be eaten by the target's own hit gap and undercount.
-                Strike(t, Def.Dps * Def.Barrels * Def.ShotEvery * Strength);
-                Volley(t);
+                Strike(t, Volley);
+                DrawVolley(t);
             }
         }
         _missileCd -= delta;
@@ -262,7 +267,7 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused, ISquadMembe
 
     // A volley, drawn: a light fires from its nose; a turret fires Barrels flashes from offsets
     // either side of its centre
-    private void Volley(Node2D t)
+    private void DrawVolley(Node2D t)
     {
         if (_turret == null) { Combat.Flash(Position, t.Position, Def.Beam); return; }
         var centre = ToGlobal(_turret.Position);
@@ -312,9 +317,10 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused, ISquadMembe
         }
         else if (!Leads && SquadId != 0 && SquadLead() is { } lead)
             DrawLine(Vector2.Zero, inv * lead.GlobalPosition, new Color(1f, 0.4f, 0.35f, 0.25f), 1f);   // in formation: a faint link to its lead
-        float plume = Heavy ? Length * 0.5f : Length;
-        if (Boosting) Plume.Draw(this, new Vector2(0, Length * 0.5f), Vector2.Down, plume * 1.6f, new Color(1f, 0.35f, 0.25f), 1f, true);
-        else Plume.Draw(this, new Vector2(0, Length * 0.5f), Vector2.Down, plume, new Color(1f, 0.35f, 0.25f), 0.5f, Speed > 1f);
+        // a flame out of every bell its art has (its row's Nozzles): the burn on the boost
+        var flame = new Color(1f, 0.35f, 0.25f);
+        if (Boosting) Def.DrawPlumes(this, Vector2.Zero, 1f, flame, 1f, true, 1.6f);
+        else Def.DrawPlumes(this, Vector2.Zero, 1f, flame, 0.5f, Speed > 1f);
         if (_nameT > 0)
         {   // upright whatever its heading, fading over its last half second
             DrawSetTransform(Vector2.Zero, -GlobalRotation, Vector2.One);

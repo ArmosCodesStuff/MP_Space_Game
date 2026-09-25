@@ -119,11 +119,12 @@ public partial class HullHud : Control
                   : $"SHIP IN STASIS  {(int)s.StasisLeft / 60}:{(int)s.StasisLeft % 60:00}  —  flying the escape pod",
               HorizontalAlignment.Center, W, 15, onFill && _frac > 0.35f ? Ui.Deep : Colors.White);
         if (!s.Alive) return;
-        // off the fill the warp readout takes its state's colour; on it, dark like the hull's
-        var warp = onFill ? Ui.Deep : s.Warping ? Ui.Accent : s.WarpCooldownLeft > 0 ? Ui.Dim : Ui.Good;
-        Txt.D(c, ThemeDB.FallbackFont, new Vector2(W - 150, H - 5),
-              s.Warping ? $"WARPING  {s.WarpWarmupLeft:0.0} s" : s.WarpCooldownLeft > 0 ? $"WARP  {s.WarpCooldownLeft:0} s" : "WARP  READY",
-              HorizontalAlignment.Right, 144, 12, warp);
+        // THE DRIVE'S READOUT (Drives.cs): what its slot says -- WARP 1850 u, DISABLED 2.8 s, BOOST 2.1 s,
+        // BOOST 9 s. Off the fill it takes its state's colour; on it, dark like the hull's.
+        if (s.Drive is not { } dv) return;
+        var st = dv.Row.State(s, null);
+        var col = onFill ? Ui.Deep : st.Fail ? Ui.Bad : st.Lit ? Ui.Accent : st.Busy > 0 ? Ui.Dim : Ui.Good;
+        Txt.D(c, ThemeDB.FallbackFont, new Vector2(W - 150, H - 5), st.Line, HorizontalAlignment.Right, 144, 12, col);
     }
 }
 

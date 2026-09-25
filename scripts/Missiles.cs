@@ -138,6 +138,7 @@ public partial class MissileVisual : Node2D
     public Vector2 From, To;
     public double Flight;
     public float Blast = 90f;                  // the burst it leaves; the thrower always says
+    public int NetId;                          // the host's id for this blast (Hub.ThrowMissile), the same on every peer
     private double _t;
     private MissileSide Def => Missiles.Of(Side);
 

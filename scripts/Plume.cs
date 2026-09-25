@@ -7,6 +7,8 @@ using Godot;
 public static class Plume
 {
     public static readonly Color Utility = new(1f, 0.93f, 0.55f);
+    // the flame's width as a share of the size it is drawn at: a bell `b` wide is drawn at b / Width
+    public const float Width = 0.07f;
 
     // at: the nozzle, in the caller's local frame; back: unit vector out of the stern.
     // active: moving or thrusting -- only then does the flame flicker; at rest it
@@ -15,7 +17,7 @@ public static class Plume
     {
         float flick = active ? 0.85f + 0.15f * Mathf.Sin(Time.GetTicksMsec() / 37f + at.X) : 1f;
         float len = shipLength * 0.16f * (0.35f + 0.65f * Mathf.Clamp(throttle, 0f, 1f)) * flick;
-        float w = Mathf.Max(1.2f, shipLength * 0.035f);
+        float w = Mathf.Max(1.2f, shipLength * Width * 0.5f);
         var side = new Vector2(-back.Y, back.X);
         Vector2[] Tear(float l, float ww) => new[] { at + side * ww, at + back * l, at - side * ww };
         ci.DrawColoredPolygon(Tear(len * 1.25f, w * 1.5f), new Color(col.R, col.G, col.B, 0.22f));

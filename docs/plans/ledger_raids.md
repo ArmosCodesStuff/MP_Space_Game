@@ -148,3 +148,29 @@ loop cap 14 -> 22 s for the host's added ~3-4 s. RaidsSightChecks: the names + G
 literals 3 s, 35, the GANK string, null once held; ship stopped while pinned. CHANGES Checks line updated.
 Rung-5 risks: the host's arena stay is ~3-4 s longer (the call site warns later waits are tight); a ram lane (Radius 70?)
 during the gank's pin could be taken for the beam's first lane by Watch(). engine-unproven: solo x2, six x2 owed.
+
+## MERGE PRE -- tier opus -- step 0 of lane G's merge: git merge version-l (23d5b29) into wt/raids (7f13e9c). 12 files conflicted.
+## MERGE POST -- done. typecheck 0 errors; quick ALL PASSED. Resolutions, keeping every lane's intent:
+- Boss.cs: pin-opener + escape-floor fields (G) with art's warp-opener comment; Slot keeps G's ArmedFor/Cause/Pins +
+  Struck (dash ram set); escorts (EscortsAt/LaunchEscorts/Predict/Overdue) stay deleted; art's FlankHold comment.
+- Lancer.cs: G's beam row (no escort fields). Missions.cs: art/curve rows (Par hulls 3222/2968, Texture, Nozzles,
+  BossSize) + G's AddsFloor = 2 on silver_lancer; curve's Par-scale comment.
+- Hub.cs: SpawnRaider(at, kind, Squad squad, double level, hullShare) -- G's Squad, curve's "level" name.
+- Raids.cs: G's garrison slots + curve's Patrol(level)/CalledLevel. Hints.cs: G's pilot text + drives' cards.
+- Raider.cs: G's squad flight; curve's Volley property kept, G's drawing method renamed DrawVolley; art's
+  Def.DrawPlumes (nozzles) with G's link line + name labels (escort plume gone with the escorts); G's missile rule.
+- Waves.cs: G's Doctrine/Mission/Exp/FormFor/Roster + curve's Strength-as-level (b.Threat; ThreatStrength gone).
+  COMBINATION FIX: bounty_adds had Strength = DamageMult (a multiplier) -- now read as a level by Par. Now Strength
+  = b.Level, HullShare = HullMult/HullScale (party 1 + 0.6(P-1)), new host-only WaveDef/Raider.DamageShare =
+  DamageMult/DamageScale (party 1 + 0.2(P-1)), set in Raids.Send, multiplied into Raider.Volley.
+- SmokeTest: 6b N8 laser DPS now timed from the first volley (kits K3's knife-edge fix ported; hl0 > hlLatch);
+  beam row check G's; arena beam-arming G's with art's hold-off comment; shockwave ring 680 (art) + G's text;
+  failed raid: G's 4200 u/vee line + curve's Strength-is-level check; guest role runs both RaidsGuestAddsWire and
+  FieldsGuestRipChecks. Callers fixed: SpawnRaider(.., null, L) and N6's Missions.S(lv) -> lv.
+  Rewritten: RaidsAddsTableChecks' multiplier check (was 1.025^17) -> Par at L18 P2 / L7 P1 / L39 P3.
+- Shots: G's RaidsFrames; kits K3's latched-heavy two-barrel frame kept as 49b_heavy_both_barrels (version-l's
+  name) inside RaidsFrames on the posted heavy; G's 49b_squad_lock_lines renamed 49d_squad_lock_lines.
+- CHANGES.md: both sides (G's handoff + section; version-l's; G's stale kits K2 handoff dropped for version-l's K3).
+  DESIGN.md: G's beam line + art's frigate_a red-and-black.
+Checks: rewritten RaidsAddsTableChecks party multipliers (Par, 3 situations), 6b N8 DPS timing; frames 49b_heavy_both_barrels, 49d_squad_lock_lines.
+engine-unproven: the test phase owes solo x2 (adds table, N8), screens (49b, 49d), six x2 as before.

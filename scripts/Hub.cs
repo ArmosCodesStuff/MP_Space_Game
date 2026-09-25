@@ -61,8 +61,9 @@ public partial class Hub : Node2D
     public static readonly Vector2 SunPos    = new(0, -1794);
     public static readonly Vector2 WreckPos  = new(-1840, 60);
     public static readonly Vector2 PortalPos = new(1500, 219);
-    // WHERE A MISSION IS BUILT in the arena: a boss's spot, and a raid site's centre. It was
-    // `BasePos + new Vector2(0, -700f)` written into BuildArena, which made it the boss's alone.
+    // WHERE A MISSION IS BUILT in the arena: where a boss's NOSE stands (so a bigger boss stands
+    // no nearer the party), and a raid site's centre. It was `BasePos + new Vector2(0, -700f)`
+    // written into BuildArena, which made it the boss's alone.
     public static readonly Vector2 ArenaCentre = BasePos + new Vector2(0, -700f);
     // FOUR OUTPOSTS, 3000 u out from the base on the diagonals (1000 further than they were) (y grows south): small permanent
     // stations the escort delivers to, named for their corner, in the order the escort visits
@@ -203,7 +204,7 @@ public partial class Hub : Node2D
         // on the scope, so four pylons were four things a pilot could only find by flying at them.
         foreach (var e in Emplacements)
             if (IsInstanceValid(e))
-                yield return new ScopeMark(e.Label, e.Position, e.HitRadius, MarkShape.Diamond, new Vector2(3.5f, 4f), e.Def.Main);
+                yield return new ScopeMark(e.Label, e.Position, e.HitRadius, MarkShape.Diamond, new Vector2(3.5f, 4f), e.Def.Tint);
     }
 
     public Boss Boss { get; private set; }
@@ -244,7 +245,8 @@ public partial class Hub : Node2D
     // it to the ship, keeping the zoom.
     // ZoomOutMax is how much FURTHER out than the default the wheel will go: 15% more of it than
     // it was (1.33), because a boss's reach grows with the level and a fight you cannot see the
-    // edges of is a fight fought on the minimap.
+    // edges of is a fight fought on the minimap. The wheel never goes past this ceiling -- a boss
+    // too big for it is framed by MOVING the camera, not by raising it (BossReach, below).
     public const float DefaultZoom = 0.9f, ZoomOutMax = 1.53f, ZoomInMax = 1.5f;
     public const float PanSpeed = 1400f, EdgeBand = 14f;
     public float ZoomLevel { get; private set; } = DefaultZoom;
@@ -591,17 +593,25 @@ public partial class Hub : Node2D
     // empty space, and an open mission portal was invisible to the one pilot it waited for. And a
     // guest in the wrong world is brought into the host's: the party is wherever the host is.
     [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetMySector(int s)
+    private void NetMySector(int s, int trip)
     {
         if (!Net.FromPlayer(this, out int who)) return;
+        // A STALE REPORT IS IGNORED (audit P9): one sent just before its world heard NetSector lands
+        // in the host's NEW world claiming the old one, and recording it sent this pilot none of the
+        // world it was about to be in. A trip is the host's count of sector moves (Session.Trip);
+        // -1 is a pilot that has heard none yet, which is always news.
+        if (trip >= 0 && trip != Session.Trip) return;
         Session.Sectors[who] = (SectorKind)s;
-        if ((SectorKind)s != Sector) { RpcId(who, nameof(NetSector), (int)Sector, Missions.Kind, Missions.Level); return; }
+        if ((SectorKind)s != Sector) { RpcId(who, nameof(NetSector), (int)Sector, Missions.Kind, Missions.Level, Session.Trip); return; }
         // The place a pilot is owed goes first and is never metered: a reconnecting pilot's held
         // spot is delivered by whichever report first finds it in the host's world.
-        if (_placeFor.Remove(who, out var owed)) RpcId(who, nameof(NetPlace), owed.at, owed.rot);
+        if (_placeFor.Remove(who, out var owed)) { RpcId(who, nameof(NetPlace), owed.at, owed.rot); ShipOf(who)?.Relocated(); }
         // THE CATCH-UP, and only it, is rate-limited -- one ask, dozens of reliable packets. Half a
-        // second: the guest's own repeats are at 1 s and 3 s (ReportSector).
-        if (!Net.Metered(who, nameof(NetMySector), 0.5)) return;
+        // second: the guest's own repeats are at 1 s and 3 s (ReportSector). Never the FIRST report
+        // this world has from a pilot (audit P9): it is the only way that pilot learns of what was
+        // spawned before it arrived, and a meter stamped by its previous world's report skipped it.
+        bool first = _caughtUp.Add(who);
+        if (!Net.Metered(who, nameof(NetMySector), 0.5) && !first) return;
         RpcId(who, nameof(NetMission), MissionArgs());
         foreach (var v in _votes) RpcId(who, nameof(NetVote), v.Wire(this));
         // EVERY HOST-SPAWNED THING IN THIS WORLD, of every kind, down the one path. This was two
@@ -620,7 +630,8 @@ public partial class Hub : Node2D
         if (Sector == SectorKind.Arena) Missions.KindOf(Missions.Kind).CatchUp?.Invoke(this, who);
         if (MissionWon) RpcId(who, nameof(NetWon), _ships.Count);
     }
-    private void ReportSector() { if (!Net.IsHost) Net.AskHost(this, nameof(NetMySector), (int)Sector); }
+    private void ReportSector() { if (!Net.IsHost) Net.AskHost(this, nameof(NetMySector), (int)Sector, Session.HeardTrip); }
+    private readonly HashSet<int> _caughtUp = new();           // the pilots this world has sent its catch-up
 
     private bool _guestBefore;
     private void OnSessionChanged()
@@ -702,16 +713,15 @@ public partial class Hub : Node2D
     {
         if (Net.IsHost && Net.IsOnline && info.CharacterId.Length > 0)
         {
-            var back = Net.I.Players.FirstOrDefault(kv => kv.Key != peer && kv.Value.CharacterId == info.CharacterId).Key;
             var h = onPurpose ? null : Session.Hold(peer, info, _world, ShipOf(peer));
             // a kill in the moments before the host noticed the drop: owed too (paid once, by serial)
             if (h != null) h.Owed.AddRange(Session.Owed(peer, _world));
-            if (h != null && back != 0) RestoreHeld(h, back);    // it is already back under a new id
-            else if (h != null) Session.Places[info.CharacterId] = h;
+            if (h != null) Session.Places[info.CharacterId] = h;
             else foreach (var v in _votes) v.Forget(peer);
         }
         Session.Sectors.Remove(peer);
         DespawnFor(peer);                        // which reports the roster, the ship already gone
+        if (_replacing.Remove(peer, out var heir)) TryRestoreHold(heir);   // its place, to the pilot back with its token
     }
     private void TryRestoreHold(int peer)
     {
@@ -723,10 +733,15 @@ public partial class Hub : Node2D
     private void RestoreHeld(Session.Held h, int peer)
     {
         foreach (var v in _votes) v.Rekey(h.OldPeer, peer);
+        // ITS TURRETS ARE ITS OWN AGAIN (audit P10): keyed to the old id, the returning pilot could
+        // not collect them, was not held to its cap, and they fired a spare sheet. Each finds its
+        // ship again by its owner (DeployedTurret.Ship).
+        foreach (var t in Deployed) if (t.OwnerId == h.OldPeer) { t.OwnerId = peer; t.Ship = null; }
         if (h.World == _world && _ships.TryGetValue(peer, out var s) && IsInstanceValid(s))
         {
             s.Restore(h.Hp, h.Alive, h.Stasis);
-            if (PeerSector(peer) == Sector) RpcId(peer, nameof(NetPlace), h.Pos, h.Rot); else _placeFor[peer] = (h.Pos, h.Rot);
+            if (PeerSector(peer) == Sector) { RpcId(peer, nameof(NetPlace), h.Pos, h.Rot); s.Relocated(); }   // never a jump (Drives)
+            else _placeFor[peer] = (h.Pos, h.Rot);
         }
         foreach (var k in h.Owed) PayKill(k, h.OldPeer, peer);          // what it missed (a kill it did get is not paid again)
     }
@@ -806,14 +821,20 @@ public partial class Hub : Node2D
         // THE LEVELS GO WITH THE GEAR, as two lists in step (one dictionary's keys and values, which
         // enumerate in the same order): every peer lifts this pilot's parts by this pilot's levels.
         var args = new Variant[] { Net.LocalId, Character.Name, Character.Main, Character.Accent, (int)Character.Class, Character.Bought, Character.Level, Character.Peak,
-                                   Character.LoadoutFor(Character.Class), Character.GearLevel.Keys.ToArray(), Character.GearLevel.Values.ToArray(), Character.Id };
-        if (toPeer == 0) Rpc(nameof(NetIdentity), args);
-        else             RpcId(toPeer, nameof(NetIdentity), args);
+                                   Character.LoadoutFor(Character.Class), Character.GearLevel.Keys.ToArray(), Character.GearLevel.Values.ToArray(), Character.Id,
+                                   "" };
+        // THE REJOIN TOKEN GOES TO THE HOST ALONE (P10b). Every other peer hears the same identity with
+        // no token: a co-player that learnt it could claim this pilot's place (Session.MayClaim).
+        foreach (int to in toPeer != 0 ? new[] { toPeer } : Multiplayer.GetPeers())
+        {
+            args[^1] = to == 1 && !Net.IsHost ? Session.Rejoin : "";
+            RpcId(to, nameof(NetIdentity), args);
+        }
     }
 
     [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
     private void NetIdentity(int peer, string name, Color main, Color accent, int cls, int[] bought, int level, int peak, string[] equip,
-                             string[] gearIds, int[] gearLevels, string characterId)
+                             string[] gearIds, int[] gearLevels, string characterId, string token)
     {
         // a peer may only describe itself
         if (Net.SenderOf(this) != peer || Net.I == null) return;
@@ -829,23 +850,43 @@ public partial class Hub : Node2D
         bought = Progression.Afford(bought, level);
         characterId ??= "";
         if (characterId.Length > 64) characterId = "";
-        // A HELD PLACE IS NOT CLAIMABLE BY NAME. The character id is the guest's own word -- the
-        // host has no other way to know a returning pilot -- so a peer announcing the id of a
-        // pilot ALREADY in the party took its place the moment that pilot dropped: its party slot,
-        // its READY, its position, and every kill owed to it. An id another live peer is flying
-        // belongs to that peer; this one simply has no hold.
-        if (characterId.Length > 0 && Net.I.Players.Any(kv => kv.Key != peer && kv.Value.CharacterId == characterId))
-            characterId = "";
+        p.Token = token ?? "";
+        // A HELD PLACE IS NOT CLAIMABLE BY NAME. The character id is the guest's own word, so a
+        // peer announcing the id of a pilot ALREADY in the party took its place the moment that
+        // pilot dropped: its party slot, its READY, its position, and every kill owed to it. The
+        // place is the REJOIN TOKEN's (Session.MayClaim): an id another live peer is flying
+        // belongs to that peer unless this one holds its token -- the same pilot back before the
+        // host saw its old connection die, which is then let go and its place handed over (P10b).
+        int holder = characterId.Length == 0 ? 0 : Net.I.Players.FirstOrDefault(kv => kv.Key != peer && kv.Value.CharacterId == characterId).Key;
+        if (characterId.Length > 0 && !Session.MayClaim(characterId, token ?? "", holder != 0)) characterId = "";
+        else if (holder != 0 && Net.IsHost) { _replacing[holder] = peer; Net.I.Hang(holder); }
+        var cship = _ships.TryGetValue(peer, out var cs) && IsInstanceValid(cs) ? cs : null;
+        var klass = Refit(p.HasIdentity ? p.Class : null, Classes.Sanitize(cls), InArena, cship?.InCombat == true);
         (p.Name, p.Main, p.Accent, p.Class, p.Bought, p.Equip, p.CharacterId, p.HasIdentity) =
-            (name, main, accent, Classes.Sanitize(cls), bought, equip ?? System.Array.Empty<string>(), characterId, true);
+            (name, main, accent, klass, bought, equip ?? System.Array.Empty<string>(), characterId, true);
         // ITS OWN LEVELS, held to the ladder and to parts that exist, like the loadout: what this
         // peer's copy of its ship is lifted by. Never this host's -- those are the host's pilot's.
         p.GearLevel = Equipment.SanitizeLevels((gearIds ?? System.Array.Empty<string>()).Zip(gearLevels ?? System.Array.Empty<int>()));
         p.Level = System.Math.Max(1, level);                    // a claim; what it may SPEND is capped above
         p.Peak = Progression.Claim(System.Math.Max(peak, level));   // ...and what it OPENS (Unlocks), by the same cap
         if (_ships.TryGetValue(peer, out var s) && IsInstanceValid(s)) ApplyIdentity(s);
+        if (Net.IsHost && characterId.Length > 0 && holder == 0) RpcId(peer, nameof(NetToken), Session.TokenFor(characterId));
         TryRestoreHold(peer);
     }
+    // the pilot's rejoin token, from the host that issued it (Session.Rejoin)
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void NetToken(string token) { if (!Net.IsHost) Session.Rejoin = token ?? ""; }
+    private readonly Dictionary<int, int> _replacing = new();  // an old connection let go -> the peer its place goes to
+
+    // A CLASS IS CHANGED AT REFIT, never in a fight (audit P8): RefitOpen is the one rule, read by the
+    // host for every announcement (Refit) and by the pilot's own REFIT, class picker and base menu
+    // (MayRefit), so an honest pilot never flies a class the host refused. A peer announcing another
+    // class in the arena, or while its ship is in combat, keeps the one it had; a first announcement
+    // (had == null) is always taken. A change taken keeps the hull's fraction and every cooldown
+    // (PlayerShip.FitClass), so announcing B and then A heals nothing and resets nothing.
+    public static bool RefitOpen(bool arena, bool inCombat) => !arena && !inCombat;
+    public static ShipClass Refit(ShipClass? had, ShipClass want, bool arena, bool inCombat) =>
+        had is { } h && h != want && !RefitOpen(arena, inCombat) ? h : want;
 
     // ── missions: Threat Intelligence Operations (host-authoritative) ────────
     public enum MissionState { Idle, Opening, PortalOpen }
@@ -926,7 +967,8 @@ public partial class Hub : Node2D
     {
         if (!Net.IsHost) return;
         if (k == SectorKind.Arena) Yard?.SaveForTrip();
-        if (Net.IsOnline) Rpc(nameof(NetSector), (int)k, Missions.Kind, Missions.Level);
+        Session.Trip++;
+        if (Net.IsOnline) Rpc(nameof(NetSector), (int)k, Missions.Kind, Missions.Level, Session.Trip);
         // NOBODY IS IN A SECTOR WHILE THEY ARE MOVING BETWEEN THEM. Every peer was left recorded
         // in the world it is LEAVING until its new world reported itself, so for a round trip plus
         // a scene load the host went on sending that world's traffic to peers that had already
@@ -941,7 +983,15 @@ public partial class Hub : Node2D
     // the mission report that follows. The KIND FIRST: a category owns its own ladder, so the
     // level being set has to land on the ladder the host meant.
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetSector(int k, int kind, int level) { Missions.Kind = kind; Missions.Level = level; GoTo((SectorKind)k); }
+    // A TRIP ALREADY MADE IS NOT MADE AGAIN (audit P9): the host answers a stale report with the
+    // world this pilot is already in, and reloading it rebuilt the arena without the spawns its
+    // first report had caught up on.
+    private void NetSector(int k, int kind, int level, int trip)
+    {
+        if (trip == Session.HeardTrip) return;
+        Session.HeardTrip = trip;
+        Missions.Kind = kind; Missions.Level = level; GoTo((SectorKind)k);
+    }
     private void GoTo(SectorKind k)
     {
         Sector = k;
@@ -957,8 +1007,9 @@ public partial class Hub : Node2D
     // one on every peer.
     public void BuildBoss()
     {
-        Boss = new Boss { Hub = this, Type = Missions.ForLevel(Missions.Level),
-                          Position = ArenaCentre, Rotation = Mathf.Pi };
+        var type = Missions.ForLevel(Missions.Level);
+        Boss = new Boss { Hub = this, Type = type,                     // facing the party, its nose on the spot
+                          Position = ArenaCentre + Vector2.Up * (type.Length * 0.5f), Rotation = Mathf.Pi };
         AddChild(Boss);
     }
     // host: an emplacement is down. It goes the way every host-spawned thing goes; if it was the
@@ -1053,12 +1104,12 @@ public partial class Hub : Node2D
         foreach (var t in GetChildren().OfType<Shot>()) if (t.NetId == id) t.Intercept();
     }
 
-    // host: pick a level between 1 and the newest unlocked ON THIS OPERATION'S OWN LADDER. The
-    // level is per category (Missions.Level), so this never moves the other one.
+    // host: pick a level between 1 and Missions.SkipAhead past the newest unlocked ON THIS
+    // OPERATION'S OWN LADDER. The level is per category (Missions.Level), so this never moves the other one.
     public void SelectLevel(int level)
     {
         if (!Net.IsHost || Mission != MissionState.Idle) return;
-        Missions.Level = System.Math.Clamp(level, 1, Missions.Unlocked(Missions.Kind));
+        Missions.Level = System.Math.Clamp(level, 1, Missions.Top(Missions.Kind));
         BroadcastMission();
     }
 
@@ -1070,7 +1121,7 @@ public partial class Hub : Node2D
     {
         if (!Net.IsHost || Mission != MissionState.Idle) return;
         Missions.Kind = System.Math.Clamp(kind, 0, Missions.Kinds.Length - 1);
-        Missions.Level = System.Math.Clamp(Missions.Level, 1, Missions.Unlocked(Missions.Kind));
+        Missions.Level = System.Math.Clamp(Missions.Level, 1, Missions.Top(Missions.Kind));
         BroadcastMission();
     }
 
@@ -1138,7 +1189,7 @@ public partial class Hub : Node2D
     public const float RaidEdge = 4200f;
     private readonly Raids _raids;
     public Hub() { _raids = new Raids(this); }      // this world's director, built before _Ready
-    public int SpawnPatrol(Vector2 at, double scale = 1) => _raids.Patrol(at, scale);
+    public int SpawnPatrol(Vector2 at, double level = 1) => _raids.Patrol(at, level);
     public void HuntWave(Node2D quarry, int wave) => _raids.Hunt(quarry, wave);
     public void GarrisonWave(Vector2 at, int wave) => _raids.Garrison(Missions.Level, at, wave);
     public void CallOff(Node2D quarry) => _raids.CallOff(quarry);
@@ -1221,9 +1272,9 @@ public partial class Hub : Node2D
     // A raider is a row of Spawns.All too. Its SQUAD is the host's own bookkeeping and is not on
     // the wire (bar its id in the flags), so it is joined after the spawn; none named is a squad of
     // its own (Raids.Enlist).
-    public Raider SpawnRaider(Vector2 at, int kind = Enemies.Webifier, Squad squad = null, double scale = 1, double hullShare = 1)
+    public Raider SpawnRaider(Vector2 at, int kind = Enemies.Webifier, Squad squad = null, double level = 1, double hullShare = 1)
     {
-        if (Spawn(Spawns.Raider, at, kind, scale, hullShare) is not Raider r) return null;
+        if (Spawn(Spawns.Raider, at, kind, level, hullShare) is not Raider r) return null;
         _raids.Enlist(r, squad);
         return r;
     }
@@ -1267,23 +1318,27 @@ public partial class Hub : Node2D
     // were read straight off Raider. The outposts answer a blockade with the same missile from the
     // other side (Lanes.cs), so WHOSE it is is a row of Missiles.All and its numbers are the
     // launcher's own spec. Nothing below names a raider or an outpost.
-    private readonly List<(Vector2 at, double left, int from, MissileSpec shot)> _blasts = new();
+    // EACH ONE HAS AN ID, in the one space every missile's id comes from (NetIds.Missile, as an
+    // interceptable shot's), sent with the launch: whatever must name one blast on every peer -- a
+    // flare pulling its landing mark aside (F14's NetDecoy) -- names it by that id.
+    private readonly List<(Vector2 at, double left, int from, MissileSpec shot, int id)> _blasts = new();
     public int BlastsPending => _blasts.Count;
     public void ThrowMissile(MissileSpec m, Vector2 from, Vector2 at, int fromId)
     {
         if (!Net.IsHost) return;
-        _blasts.Add((at, m.Flight, fromId, m));
+        int id = Combat.NextMissileId();
+        _blasts.Add((at, m.Flight, fromId, m, id));
         // the circle it marks, as every warning is marked: a row of Fx.All, on every peer -- red
         // for a threat, the friendly shape for one of ours
         Fx.Warn(new FxRaise { Id = Missiles.Of(m.Side).Mark, At = at, To = at, Size = m.Blast, Time = m.Flight });
-        ShowMissile(m.Side, from, at, m.Flight, m.Blast);
-        ToWorld(nameof(NetMissile), m.Side, from, at, m.Flight, m.Blast);
+        ShowMissile(m.Side, from, at, m.Flight, m.Blast, id);
+        ToWorld(nameof(NetMissile), m.Side, from, at, m.Flight, m.Blast, id);
     }
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetMissile(int side, Vector2 from, Vector2 at, double flight, float blast) =>
-        ShowMissile(side, from, at, Net.Arriving(flight), blast);
-    private void ShowMissile(int side, Vector2 from, Vector2 at, double flight, float blast) =>
-        AddChild(new MissileVisual { Side = side, From = from, To = at, Flight = flight, Blast = blast });
+    private void NetMissile(int side, Vector2 from, Vector2 at, double flight, float blast, int id) =>
+        ShowMissile(side, from, at, Net.Arriving(flight), blast, id);
+    private void ShowMissile(int side, Vector2 from, Vector2 at, double flight, float blast, int id) =>
+        AddChild(new MissileVisual { Side = side, From = from, To = at, Flight = flight, Blast = blast, NetId = id });
     private void TickBlasts(double delta)
     {
         for (int i = _blasts.Count - 1; i >= 0; i--)
@@ -1304,8 +1359,8 @@ public partial class Hub : Node2D
     }
 
     // In packets of at most 24 raiders. A full failed-mission raid is 40, and in one packet that
-    // was 1.5 KB -- past the internet's usual 1.2 KB, so ENet split it, and an unreliable packet
-    // with one piece lost is lost whole: every raider froze for that update. Each packet names its
+    // was 1.5 KB -- past the internet's usual 1.2 KB, so the transport split it, and a packet with
+    // one piece lost waits for that piece: every raider froze for that update. Each packet names its
     // raiders, so each stands alone.
     private const int RaidersPerPacket = 24;
     // EVERY HOST-OWNED THING THE WORLD CAN DAMAGE, on one clock. A raider's packet carries where
@@ -1411,12 +1466,36 @@ public partial class Hub : Node2D
         AddChild(_creator);
     }
 
+    // A BOSS BIGGER THAN THE WHEEL'S WIDEST ZOOM CAN SHOW is framed by MOVING the centre toward it,
+    // not by raising the ceiling (the owner, 2026-09-25: the wheel never zooms out past what it
+    // already reaches). Generic for any boss row -- the far end of ITS hull, from ITS Length, never
+    // a Drake `if`. The centre slides toward whichever end (nose or stern) sits farther from the
+    // ship, only as far as that end needs and never past BossPilotMargin from the ship itself, so a
+    // boss too big even then (Length > 2 x reach, the two margins) stays a design question, not a
+    // camera bug -- and is gated to boss encounters (within 2 x reach) so a boss across the map
+    // never tugs the view.
+    private const float BossPilotMargin = 150f, BossEdgeMargin = 80f;
+    private Vector2 BossFramed(Vector2 anchor)
+    {
+        if (Boss is not { Alive: true } b) return anchor;
+        float reach = GetViewport().GetVisibleRect().Size.Y * 0.5f / ZoomLevel;
+        if (anchor.DistanceTo(b.Position) > reach * 2f) return anchor;
+        var half = Vector2.Up.Rotated(b.Rotation) * (b.Length * 0.5f);
+        var far = anchor.DistanceSquaredTo(b.Position + half) > anchor.DistanceSquaredTo(b.Position - half)
+                  ? b.Position + half : b.Position - half;
+        float need = anchor.DistanceTo(far) - (reach - BossEdgeMargin);
+        if (need <= 0f) return anchor;
+        float slide = Mathf.Min(need, reach - BossPilotMargin);
+        return slide <= 0f ? anchor : anchor + (far - anchor).Normalized() * slide;
+    }
+
     private void MoveCamera(PlayerShip me, float dt)
     {
         _cam.Zoom = _cam.Zoom.Lerp(new Vector2(ZoomLevel, ZoomLevel), Mathf.Clamp(10f * dt, 0f, 1f));
         var anchor = me.ViewPosition;                                  // the pod, while in stasis
         if (!FreeCamera)
         {
+            anchor = BossFramed(anchor);
             // follow smoothly -- but cut straight to the ship after a warp: panning 2000 u is disorienting
             if (_cam.Position.DistanceTo(anchor) > 1200f) _cam.Position = anchor;
             else _cam.Position = _cam.Position.Lerp(anchor, Mathf.Clamp(6f * dt, 0f, 1f));
@@ -1464,7 +1543,10 @@ public partial class Hub : Node2D
         if (Hints.Wants("raid") && !InArena && Raiders.Count > 0) Hints.Meet("raid");
         if (Hints.Wants("stasis") && !me.Alive) Hints.Meet("stasis");
         if (Hints.Wants("boss") && InArena && IsInstanceValid(Boss)) Hints.Meet("boss");
-        if (Hints.Wants("warp") && WarpAim() is { has: true } aim && aim.at.DistanceTo(me.Position) > Hints.WarpMeet) Hints.Meet("warp");
+        // the hull's own drive card (warp or boost) once something far off is picked; the slide's once a hostile is near
+        if (me.Drive is { } dv && Hints.Wants(dv.Id) && WarpAim() is { has: true } aim && aim.at.DistanceTo(me.Position) > Hints.WarpMeet) Hints.Meet(dv.Id);
+        if (Hints.Wants("strafe") && me.Stats["strafe_speed"] > 0
+            && Combat.Nearest(Combat.Hostiles, me.Position, h => h.Position, Hints.TargetMeet, Combat.Pickable) != null) Hints.Meet("strafe");
     }
 
     // Tab: ALWAYS the live hostile nearest your ship, at any range. No cycling --
@@ -1736,7 +1818,7 @@ public partial class Hub : Node2D
             else if (kk.Keycode == Key.B && !InArena) ToggleBase();
             else if (kk.Keycode == Key.L) TogglePilot();
             else if (kk.Keycode == Key.I) ToggleEquipment();
-            else if (kk.Keycode == Key.V) mine.StartWarp();            // warp: a fixed key, not a slot
+            else if (kk.Keycode == Key.V) mine.PressDrive();           // the drive (Drives.cs): a fixed key; a warp's release is read by the ship
             else
             {
                 // in stasis the only order is F: re-board once the ship is ready
@@ -1834,10 +1916,12 @@ public partial class Hub : Node2D
     // A purchase: refit the ship now, and tell the host (it resolves hull and damage).
     public void PilotChanged() { ApplyLocalIdentity(); SendIdentity(); }
 
-    // REFIT: the only way into the ship menu (it costs 10%; see Yard.ResetCost).
+    // REFIT: the only way into the ship menu (it costs 10%; see Yard.ResetCost). At the base, out of a
+    // fight: the host would refuse the class it picks (Refit), and the pilot would fly one nobody else sees.
+    public bool MayRefit => RefitOpen(InArena, MyShip?.InCombat == true);
     public void ResetShip()
     {
-        if (IsInstanceValid(_creator) || InArena) return;            // REFIT is at the base
+        if (IsInstanceValid(_creator) || !MayRefit) return;
         Yard.ChargeReset();
         Progression.Refit();                                         // ...and a level, and the last point it spent
         if (SideIs<BasePanel>()) CloseSide();

@@ -83,7 +83,7 @@ Reused as-is or lightly adapted — these were built and validated:
    raider waves hunt it, for **5x** the pay if it reaches the portal. DISPATCH: send it alone, and it
    gets through with the EVASION upgrade's chance -- or its cargo is lost past the portal. (The
    owner's 2026-09-21 answer; it replaced "alone for a reduced payout".)
-3. **Real multiplayer, now**, peer-to-peer over ENet — one peer hosts, the rest join. Not architected-for-later.
+3. **Real multiplayer, now**, peer-to-peer over WebRTC with invite codes and no server of ours — one peer hosts, the rest join. Not architected-for-later.
 
 ## The authority model
 
@@ -124,6 +124,15 @@ away and respawns from `Net.Players`.
 
 **Offline is not a separate mode.** Single player is a host with no peers, so there is exactly one
 code path and offline can never drift from online.
+
+**A ramp (F1's Ramp, `AbilityDef.Ramp`) is owner-stepped: the one slot field the host does not
+speak for.** Its running total (`Sl(id).Own`) builds on the throttle and bleeds on the yaw, and
+only the owner's peer has either: on the host a guest's ship follows its reports (`RemoteFollow`),
+never `Steer`, so its yaw never moves and there is no helm to read. So `TickAbilities` steps a
+ramp only where `Mine`, and `ApplyHostState` keeps a ramp row's `Own` on the owner's own ship while
+it takes every other slot field from the host. Nothing the host decides reads it: the ramp lifts
+the owner's own top speed and thrust, and the host sees the result as the owner's replicated
+position and speed, as it sees any helm input.
 
 ### What the host must never take on trust (2026-09-22)
 
@@ -224,30 +233,36 @@ levels once a second and ship and hauler state ten times a second; a guest's own
 
 - **Camera**: wheel zoom between `DefaultZoom / ZoomOutMax` (33% further out) and `× ZoomInMax`
   (1.5). **Y** frees it; arrows or the screen edge pan it, tethered to `ClassArt.CameraRange`
-  (5000 for a capital ship). All in `Hub.MoveCamera`.
+  (5000 for a capital ship). All in `Hub.MoveCamera`. A boss too big for that ceiling is framed by
+  `Hub.BossFramed` sliding the centre toward its far hull end instead of raising the ceiling (the
+  owner's open question, 2026-09-25) -- generic from the boss row's own `Length`, gated to actual
+  encounters, and capped so the ship never drifts past `BossPilotMargin` from the edge.
 - **Radar** (`Radar.cs`): local only, draws what this machine knows; size is `Settings.RadarSize`.
 - **Esc menu** (`EscMenu.cs`): the last Esc layer. Multiplayer cannot pause, so it locks the helm.
 - **Music** (`Music.cs`, an autoload): both loops always play; their levels cross-fade by mood,
   which the hub sets each frame from the selection and `PlayerShip.InCombat` (host-tracked: dealing
   or taking damage within 12 s). `Music.CombatZone` forces combat in the arena.
 - **Leaving** (`Game.Quit`): the ONE way out -- the window's close button, the menu's QUIT and the
-  harnesses. It pauses the world, closes the session (saved; router ports closed again), stops every
-  sound, and waits in REAL time for the mixer to let go (150 ms) and for router jobs (up to 10 s,
-  window minimised). A bare `Quit()` left sounds playing ("resources still in use at exit") and could
-  crash inside a router thread.
-- **Internet play** (`Net.cs`, `Router.cs`): ENet over UDP 27015, a direct connection, so the host
-  must be reachable. HOST starts LAN hosting at once; a background job (`Router.Open`) then tries to
-  open the port: UPnP asked directly (our own .NET client), then NAT-PMP / PCP at the gateway, then
-  Godot's UPnP as a last resort. If the router that opened it is behind ANOTHER router (its internet
-  side is private -- your router behind the provider's modem, the developer's own network), the one
-  in front is asked too, directly (a multicast search does not cross a router). What the player is
-  told (`Net.Describe`), from the routers' report and a public "what is my IP" lookup:
-  INTERNET (every hop opened), MANUAL (one step by hand: the exact forward left -- to the inner
-  router's internet side when the outer one is silent -- or "turn the VPN off" when this PC's traffic
-  leaves by a VPN), LAN ONLY (carrier-grade NAT, or nothing learned). Whatever the routers did,
-  virtual networks friends can share (Tailscale, ZeroTier, Radmin VPN, Hamachi, found by adapter
-  NAME) and this PC's IPv6 address are offered too -- IPv6 has no NAT, the one way in left behind
-  carrier-grade NAT. There is no relay server or NAT punch-through: that needs infrastructure.
+  harnesses. It pauses the world, closes the session (saved; every goodbye given its 2 s, the
+  listener closed), stops every sound, and waits in REAL time for the mixer to let go (150 ms) and for
+  the network to go idle (`Net.NetworkIdle`: no peer, no goodbye still going, no listener; up to 10 s,
+  window minimised). A bare `Quit()` left sounds playing ("resources still in use at exit"), and a
+  listener thread must not hand a knock to an engine that is stopping (`Game.ShuttingDown`).
+- **Internet play** (`Net.cs`, `Link.cs`, `Rendezvous.cs`, `Adapters.cs`; docs/plans/network_webrtc.md):
+  WebRTC data channels through the webrtc-native plugin (`Link.Plugin`), peer to peer, no server of
+  ours. A friend joins by one of two rows (`Rendezvous.Paths`). **By invite**: INVITE A FRIEND makes a
+  code holding the host's offer and candidates, the friend pastes the whole message into JOIN and
+  sends back the reply it copies, and the host's game takes that reply off the clipboard while an
+  invite waits (or from the reply box) within `Link.ReplyWindowS`. **By typed address** (a LAN, Radmin
+  VPN, Tailscale): the guest knocks on the host's TCP listener (27015, the nine after it, then one the
+  OS picks), which answers with an invite on the same connection, gathered with no STUN. One session
+  serves both; every join not yet connected is a `Net.Pending` entry, hung up through `Link.Hang` when
+  it runs out (an invite unanswered for 15 min; a taken reply not connected in 12 s, which makes that
+  friend a fresh invite at once, since a connection takes one answer). A code's candidates come from
+  ONE STUN row at a time (Google's, then Cloudflare's, `Link.Servers`; the walk moves on after 2 s of
+  silence and remembers which answered, `Link.StunFirst`); that lookup is the game's only outside
+  contact. There is no TURN relay (the ruling: no servers): two strict NATs cannot meet, and Radmin
+  VPN is the answer then. COPY NETWORK REPORT (`Net.Report`) is what a failed join sends the developer.
 - **The handshake** is Godot's authentication step (`SceneMultiplayer.AuthCallback`), BEFORE a peer
   counts as connected: each side sends `Net.Protocol`, a fingerprint of the build (every RPC's
   signature, every constant and fixed value, the save version) and refuses a mismatch on its own
@@ -256,11 +271,18 @@ levels once a second and ship and hauler state ten times a second; a guest's own
 - **Joining** keeps your own world running until a host answers (`Net.Connecting`), looks names up
   off the main thread, and reads IPv6 / `[v6]:port` / pasted URLs. A late joiner is caught up when it
   reports its world (`Hub.NetMySector`: mission, raiders, a win; a guest in the wrong world is brought
-  into the host's). A dropped friend is let go in ~10 s; the session saves on every leaving route.
+  into the host's). A silent friend is let go after 8 s (the beat's watchdog, `Link.QuietMs`); the
+  session saves on every leaving route.
+- **Getting back in, by row** (`IRendezvousPath.Auto`). A typed address retries by itself (2, 8 and
+  14 s, then RECONNECT); an invite cannot knock again, so a dropped invite friend is told to ask for a
+  new invite code, and the host's panel makes that friend a fresh one at once. The place is held 90 s
+  (`Session.HoldFor`) and reclaimed with the rejoin token (`Session.Rejoin`), which also takes it from
+  an old link the host has not yet noticed die (the old one is let go, its place handed over).
 - **Latency.** Host-owned things are followed with `NetPose` (eased, and carried forward along their
   measured velocity for at most 0.25 s). A guest's telegraphs are shortened by its round trip
   (`Net.Arriving`) so they end when the guest's own position is judged. Cosmetic reliable traffic
-  (shells, torpedoes) rides its own ENet channel so a lost one does not hold up the rest; raider
+  (shells, torpedoes) rides a row of its own (`NetChannels`: each row is its own negotiated data
+  channel and SCTP stream, every one reliable and ordered), so a loss holds back only its row; raider
   updates go in packets of 24, under the internet's ~1.2 KB.
 - **The WebRTC reply window** (R0, measured once on 2026-09-24 by a seven-pair run since deleted, an
   in-process pair over the LAN host candidate): a host applying the reply 5, 10, 15, 25, 35, 45 or
@@ -279,7 +301,8 @@ levels once a second and ship and hauler state ten times a second; a guest's own
   and the rows are the truth. The utility hull is still 120: `Economy.UtilityHull`.)*
 - **B (DONE; the escorts since REPLACED by raids v2's squad wave 1)**: the beam charges **6 s** (never under the
   escape floor); its pin now comes from the fight's adds; live **3 s**,
-  **0.25 s ticks, 50** (half the old tick, twice as long); the boss **raider red with a white skull**.
+  **0.25 s ticks, 50** (half the old tick, twice as long); the boss the pack's `frigate_a` in the owner's
+  **red and black** (its skull went with its old art).
 - **C (DONE — carrier measured 19.07 DPS; guns 5.9 a shell; control 1080 u)**: **battleship total DPS = 1.25 × carrier's**; **carrier range = 1.5 × battleship's**; the
   battleship's main guns fire **shells at 520 u/s** (their own stat since gear came: a missile rack
   must not change the guns), **not tracking**.
@@ -340,7 +363,9 @@ Recorded here so every chunk builds from the written word, not from memory.
   1. **(DONE) Internet address**: the host's panel shows the address a friend in another city needs — the
      public IP (asked of a public "what is my IP" service, compared with the router's own report to
      catch shared/carrier NAT) and the port — behind a **click-to-reveal** button. (Today it is the
-     router's report via UPnP when that works, else only the LAN address.)
+     router's report via UPnP when that works, else only the LAN address.) *(Replaced 2026-09-25 by
+     invite codes, network_webrtc.md: the reveal, the public-IP lookup and UPnP are gone; the owner
+     allows the two STUN rows and nothing else.)*
   2. **(DONE) Single player stays silent** (already: no socket or lookups offline — to be proven by a test);
      the multiplayer buttons get a **1 s rate limit**.
   3. **(DONE) Party size scales the boss and the rewards.** (Formula: to be agreed.)
@@ -422,8 +447,9 @@ Recorded here so every chunk builds from the written word, not from memory.
   silently retuned the other; the two are not the same fight and must be tuned apart, so each row now
   carries its own numbers and nothing multiplies across. The SCRAP SHOTGUN warps it to 600 u of the
   nearest pilot (a ring shows where, 1 s) and fires a fixed fan -- the same seven lines every time, so
-  it is learned, not rolled. The ASTEROID THROW warps it back to 1300 u of the pilot first (the same
-  ring, 1 s), then holds a 180 u rock in a tractor beam over a red lane for 7.5 s and hurls it: its path is fixed at the throw (the distance flown as the cube of the time
+  it is learned, not rolled. The ASTEROID THROW warps its nose back to 1300 u off the pilot first (the
+  same ring, 1 s) -- 200 u past its gun's Find, both measured from the hull, so it is silent through
+  the throw at any hull size -- then holds a 180 u rock in a tractor beam over a red lane for 7.5 s and hurls it: its path is fixed at the throw (the distance flown as the cube of the time
   -- slow, then very fast), so every peer flies the same rock from one event and a guest shortens only
   the hold.
   **A THROWN BODY'S LANE IS DERIVED FROM THE BODY, never written beside it.** `BossMove.Width` is left
@@ -509,8 +535,8 @@ Recorded here so every chunk builds from the written word, not from memory.
 - **Hull colour** is the hull. **Accent colour** is the turrets, engines and lighting: turrets,
   plumes on the player's ship and everything it launches, shields, PD arcs. Utility ships' engines
   are always light yellow (`Plume.Utility`). Missiles keep their smoke. The defaults are a **grey
-  hull (0.6, 0.6, 0.6) and a white accent**, the owner's; the hulls are grey line art that the hull
-  colour multiplies.
+  hull (0.6, 0.6, 0.6) and a white accent**, the owner's; the hulls are the pack's grey art (`Sprites.Fit`
+  by way of `ClassArt`, same as every other row) that the hull colour multiplies.
 - **Fighters** fly strafing runs: 3 shots, through the target by 1.2× its diameter, turn, repeat;
   they live inside the carrier when docked. **Bombers** park small on its deck, facing the bow.
 
@@ -538,12 +564,12 @@ rows (`Ab.*`). Nothing else in the game is touched.
 
 | | Hull | Length | Top speed | Main guns | Its F | PD turrets | Wing | Sprite |
 |---|---|---|---|---|---|---|---|---|
-| **Battleship** | 300 | 378 u | 104 u/s | 4, 17.9 a shell | broadside | 2 (slow, τ/3) | — | `battleship_hull.png` |
-| **Carrier** | 200 | 283.5 u | 116.48 u/s | — | bomber strike | 3 (fast, τ/1.2) | 3 fighters + 2 bombers | `carrier_player.png` |
-| **Destroyer** | 250 | 212.6 u | 130 u/s | 2, 7.5 a shell | missile burst | 2 (slow, τ/3) | — | `destroyer_hull.png` |
-| **Freighter** | 400 | 230 u | 85 u/s | 1, 12 a shell | bubble (400 soaked) | 2 | 3 deployable turrets | `freight_hauler_hull.png` |
-| **Tender** | 400 | 230 u | 85 u/s | 1, 12 a shell | overdrive (x2 fire) | 2 | 3 deployable turrets | `freight_tender_hull.png` |
-| **Bastion** | 400 | 230 u | 85 u/s | 1, 12 a shell | shockwave (1000 u) | 2 | 3 deployable turrets | `freight_bastion_hull.png` |
+| **Battleship** | 300 | 378 u | 88 u/s | 4, 17.9 a shell | broadside | 2 (slow, τ/3) | — | `battleship_hull.png` |
+| **Carrier** | 200 | 283.5 u | 99 u/s | — | bomber strike | 3 (fast, τ/1.2) | 3 fighters + 2 bombers | `carrier_player.png` |
+| **Destroyer** | 250 | 212.6 u | 117 u/s | 2, 7.5 a shell | missile burst | 2 (slow, τ/3) | — | `destroyer_hull.png` |
+| **Freighter** | 400 | 230 u | 120 u/s | 1, 12 a shell | bubble (400 soaked) | 2 | 3 deployable turrets | `freight_hauler_hull.png` |
+| **Tender** | 400 | 230 u | 120 u/s | 1, 12 a shell | overdrive (x2 fire) | 2 | 3 deployable turrets | `freight_tender_hull.png` |
+| **Bastion** | 400 | 230 u | 120 u/s | 1, 12 a shell | shockwave (1000 u) | 2 | 3 deployable turrets | `freight_bastion_hull.png` |
 | **Sniper** | 140 | 120 u | 190 u/s | 1, 6 a shell | railgun (150 at 2500 u) | — | — | `heavy_sniper_hull.png` |
 | **Warrior** | 140 | 120 u | 190 u/s | 2, 9 a shell | rush + EMP | — | — | `heavy_warrior_hull.png` |
 | **Warden** | 140 | 120 u | 190 u/s | 1, 12 a shell | 6 hunter-seekers | 1, always on | — | `heavy_warden_hull.png` |
@@ -574,6 +600,22 @@ and 25% larger: 378 u and a 43.875 u half-beam. The carrier is 25% smaller (283.
 25% smaller again (212.6 u). The hit capsule is the drawn hull. New ships spawn half the longest
 class below the pad (`Hub.SpawnClear`), so any class starts clear of the base.
 
+### V is the class's drive (Drives.cs, lane B, 2026-09-25)
+
+Every hull names one row of `Drives.All` (`ClassDef.Drive`); `Abilities.For` appends it after the
+class's own rows, so it has a slot on the wire and on the bar, sits on V (fixed: `Bind` refuses to
+move it), and no level wall or Resupply reaches it. The capitals WARP: the OWNER holds V, the charge
+is its own (1.0 s spool, then warp_rate to warp_safe + 900), it jumps on release and locks itself at
+once for any overshoot (`PlayerShip.Disabled` = the host's status OR that lock). The HOST prices what
+it sees between two reports (`Drives.Priced`): a fallen charge bit past the flight the hull could have
+made, and any snap over 600 u with no bit at all; only warp hulls. **Traps:** a relocation the host
+makes must call `PlayerShip.Relocated` (both `NetPlace` sends do), or a returning pilot is disabled for
+arriving; the smoke test's host roles move guests' warp hulls by hand, so they set
+`Drives.PriceSnaps = false` outside `LaneBHostDrives`. The nine BOOST on the ability path (one F1 lift
+on top, thrust and the slide). The slide (F24): Shift + A/D on a hull whose `strafe_speed` > 0,
+read from the stat, never the class; holds multiply after the lifted sum (`PlayerShip.StrafeTop`); the
+host reads a report's speed held to hypot(top, strafe) x 1.1 (`Drives.Clamp`).
+
 ### The class kits: the signed spec lives in docs/plans (2026-09-24)
 
 The twelve kits the class batch builds (one primary and three abilities a class, the capitals' warp,
@@ -589,6 +631,34 @@ before, and are NOT copied here:
 
 Numbers for the curve, bosses, raids, chips and items are `numbers_curve_raids_items.md`'s, not the
 kits'. Progress, decisions taken where the spec is silent, and the engine rungs owed: `docs/plans/ledger_kits.md`.
+
+**Stops: one rule for "how many bodies before it ends"** (slice 3). A flyer (`ShotDef.Stops`, and a
+shot's own `Shot.Stops`) and a line (`LineDef.Stops`, `Lines.cs`) both mean the same by it: 1 = the
+first body, n = the first n, 0 = everything on its path; each body is struck once. A piercing slug,
+the railgun, Time on target's lines and the prism's children are rows, never a new loop. Trap: a
+blow may end a body and remove it from the list being walked, so `Shot.Strike` asks for the next
+body afresh after each blow, and `Lines.Strike` picks every body before it deals the first.
+A line is aimed from a point at a point: an `AtTarget` row ends there (never past its Reach), any other runs its
+whole Reach through it. **A charged weapon reads its bands** (`Charge.cs`, `Charges.Of(ability id)`): the share of the full
+charge picks a multiplier and a line row; a ramp is a band flag, not code. The Sniper's active reload
+(6c) is the railgun's table rewritten, not a new path. Trap: a constant table is an ARRAY of rows, never a
+dictionary -- `Net.Plain` does not hash a dictionary field, so a build whose table differed would still be admitted.
+
+### Fields and one-raise effects (kits lane D, F9)
+
+- **A field is a row keyed by a slot id** (`Fields.All`), never a block in `_Draw`. The row names the
+  slot; the ability's own row does not know it has a field. A lane that names its slot differently from
+  `super` / `taunt` / `boost` edits that one row, and `FieldsLiveRowChecks` stops printing its NOTE.
+- **One raise, many pieces.** An effect that is several pieces (the torn chunk: debris, sparks, smoke,
+  scar) is ONE row on the wire with `With` naming the rest; each peer builds them from the same raise.
+  Anything random in them is a pure function of the raise (`Fx.Seed(anchor, at)`, `Fx.Tumble`), never
+  a random number drawn on the peer, or two peers draw two different chunks.
+- **A Loose piece reads its anchor once, then leaves it** (`FxNode.Settle`, deferred, to `Combat.World`),
+  so a hull killed under its chunk does not free it. Its companions are built in that same step, never
+  before, so a hull freed first leaves nothing behind. **Trap:** raise a tear BEFORE the hit it goes
+  with; the world finds the anchor among the living (`Combat.ById`), so a tear after a killing hit has
+  no hull to cut from.
+
 
 ### The helm: capital ships handle like naval ships
 
@@ -755,41 +825,91 @@ under the base. A route or a range that moves must keep the 500.
 
 ### Art
 
-- **Every ship is the owner's line art**, made by `tools/make_ships.ps1` from the drawings in
-  `art_source/` (a `.gdignore` keeps Godot out): turned nose-up, made **exactly symmetrical** (the half
-  on one side of the line the drawing is most nearly symmetrical about, reflected), redrawn at twice its
-  final size, sharpened by its own enlargement's blur, cut out of its paper (a flood from the sheet's
-  edge that never comes within a pixel or two of ink, so a gap in an outline cannot let it into the
-  hull, then the light edge un-mixed from the white it was drawn on) and halved. Grey on transparent:
-  the hull colour tints a hull, the accent a turret, `Raider.HeavyTint`/`LightTint` a raider. It
-  prints every mount in world units; `PlayerShip.Art` and `Raider` carry them. The sprites it replaced
-  are in `retired/` (also ignored).
-- **Carrier**: the runway down the centre, the bays on the white either side of it, three sponsons a
-  flank; point defence on the two middle sponsons and the stern block (the bow is where bombers lift
-  off). **Battleship**: its four painted turrets are painted over from a clean stretch of its spine
-  (the spine's lines all run along it), and the four moving main turrets stand where they stood; point
-  defence on the stern quarters. **Destroyer**: main turrets on the fore spine and the central plate,
-  point defence on the stern quarters, the turrets at 0.8x. **Heavy raider**: the crescent-winged
-  fighter, its one turret on the spine behind the canopy; **light raider**: the small fighter.
+- **Every hull is made by `tools/make_ships.ps1`** from **the pack** (`art_source/pack_2026-09-24/`:
+  the owner's 34+ finished, shaded sprites; which entity wears which is `docs/plans/sprites.md`), the
+  ONLY source since the capitals' slice (J5) retired the last line drawings. Each `$Finished` row turns
+  one file nose-up by quarter turns (never mirrored: the lettering and the asymmetric hulls would
+  flip), patches out any painted gun under a moving turret (`Sheet.PatchColumns`, a clean strip of the
+  SAME housing tiled over the barrel -- player hulls only, Q4), trims it to the drawing with the keel
+  on the centre column, and writes it grey on transparent. Nothing is redrawn or resampled, so a rerun
+  gives the same pixels. It prints the row's marks (a turret, a housing's edge) and its **nozzles**
+  (each bell's aft rim and width) in world units, for the row in the game. Every hull row derives from
+  **`HullArt`** (Sprites.cs: Texture, Length, Tint, Nozzles) and draws one flame per bell; `ClassArt`
+  (`PlayerShip`'s twelve rows) carries the same Texture/Length plus its own `HalfWidth`, turret mounts
+  and scale (no Nozzles: a class's engine plume is one point, `EngineInset`, not a bell list). The
+  sprites every source replaced are in `retired/` (also ignored).
+- **Trap: a run of make_ships.ps1 rewrites EVERY file it makes.** The `$Finished` rows are pixel-stable
+  (no resampling), but `turret_main.png`/`turret_pd.png` are still drawn procedurally and do not come
+  out byte-identical on another machine (GDI+'s bicubic resize) -- `git checkout` them after a run
+  unless the turret-drawing block itself changed.
+- **Hit sizes never follow the art** -- but a boss's do. A raider is hit on its row's `HitShare` of its
+  Length, a class on its `HalfWidth`; the pack re-arted every raider with neither moving. The bosses
+  are `Missions.BossSize` (2, the owner's "2 or 3x") times their art's measure, Length, HalfWidth and
+  bells alike, and everything a move places about the hull reads the row at use: the nose (L/2), the
+  ram's lane (2 HW), the rock's hold (`Boss.FlankHold`: HW + body + gap), the escorts and the warp ring
+  (in half-widths), and every stand-off (`HoldOff`, a warp's `Standoff`) and every look (`Find`, taken as
+  `Find + L/2` from the centre) measured from the NOSE, so a bigger hull stands no nearer the party and
+  its guns reach as far past it (the owner: what is placed around a boss scales with it). A ram
+  (`MoveWay.Dash`) strikes each ship once a dash (`Boss.Slot.Struck`): a long hull is over a point for
+  longer than `PlayerShip.HitGap`, and without it a pilot left in the lane takes the row twice. The
+  boss spawns with its nose on `Hub.ArenaCentre`. What
+  does NOT scale: reaches, ranges and bodies (the beam's 70 u, the rock) -- except a Ring move's own
+  telegraph (`BossType.Size` x `Reach`, at use in `Boss.cs`): it is drawn round the hull itself, so the
+  Lancer's shockwave reaches 680 u (340 x 2), the owner's open question, 2026-09-25, resolved as a
+  default.
+- **The 12 player classes** (`Classes.All`, `Ships.cs`), the pack (J5), hit sizes (`HalfWidth`)
+  UNCHANGED throughout (Q1) -- the art moved, the collider and the shield did not. **Battleship**
+  (`battleship_bb05`): 6 painted twin housings down the spine; the 4 flanking ones (the two forward
+  rows, both sides) carry the real moving mains, their painted barrels patched clean, the aft flanking
+  pair patched too but left unarmed; the 3 centre (keel) turrets are decoration, untouched (Q3's
+  default); point defence on the aft domes. **Carrier** (`carrier_a`): point defence's two flank
+  turrets re-seated on the new hull; the third (stern) turret and the whole deck (`BayX`/`BayY`/
+  `BaySpacing`/`RunwayBow`/`EngineInset`) kept at today's figures -- the old and new hulls read close
+  enough in proportion that a bomber still parks and lifts off correctly proved, but this is the
+  LOWEST-confidence row here (re-measure if the owner sees it sit wrong). **Destroyer**
+  (`destroyer_dd22`): both main mounts moved onto the keel gun cluster near the bow, point defence
+  re-seated on the flank domes. **Freighter/Tender/Sniper/Warrior/Warden/Dart/Wraith**: today's mount
+  literals landed on a sensible feature of their new hull by eye (the freight ships' forward "claw" or
+  spotter mount, the fighters' prow or wing roots) and were left as they were -- only their `Texture`
+  moved. **Bastion** (`frigate_c`): its one main moved from the bow to the stern, onto the ring turret
+  its new art actually draws (today's forward mount had nothing there to sit on); point defence kept.
+  **Echo** (`fighter_f`): its one main moved forward a little, onto the paired barrels its new art
+  draws on both wings (the flavour text, "fires twice"; still one game mount, front and centre of the
+  pair). Every moved literal is one row's `Mains`/`Pds`, printed by the tool from a mark on the turned
+  art -- see the row's own comment in `tools/make_ships.ps1`.
+  **Raiders** (the pack): the webifier `fighter_swept`, the gunship `frigate_b` (its turret on its
+  painted twin), the talon `fighter_tri_a`, the pod `drone_sensor` (a round drone; its one bell the stern vent), the cross `gunship_h` (the gunship's
+  hull with the rack stripped; its turret on the clean aft deck), the lancerkin `frigate_d` (its turret
+  on the plate aft of its tubes), and the title screen's Web `crescent_a` in the webifier's red. Their
+  painted guns stay: too small to see under a turret. **Bosses** (the pack): the Rusty Bucket
+  `frigate_a`, the Drake Bastion `flagship`, both RED AND BLACK (the owner's ruling): the pack's grey
+  multiplied by the owner's swatch red (0.67, 0.03, 0.01), so highlights come out that red and shadows
+  black; a pure multiply, since the hull reads on space without a lift -- with their painted guns (a boss has no moving turret) and their
+  bells listed on the row (2 and 5; a boss draws no flame), at twice the art's size (above). **The fleet** (the pack): the hauler `cargo_4` (`Hauler.Art`; its
+  six painted cargo frames are the six pods, its point defence on the bow dome), the miner and the
+  salvager one drone, `drone_salvager` (`gatherer.png`, the owner's pick for both: told apart by the
+  row's tint, the average colour of the art each first replaced; the beam and the unloading load leave
+  from the row's `Emitter`, the claws' mouth), the lanes' couriers `drone_economy` (a file of their own,
+  `courier.png`, 30 u, in the stations' livery), the wing's fighter `fighter_delta` and bomber
+  `fighter_g` (its torpedoes leave from the front of its wingtip rails, one then the other:
+  `WingDef.Launch`). **One pack file on two rows is one game file**, named for what both rows are
+  (`gatherer.png`), never a copy per row. The hauler's
+  and the gatherers' `Extent` -- what a raider holds off, not a hit size -- is measured off the art.
 - **Turrets**: the owner's twin-barrelled turret is every main turret (`turret_main.png`, lifted out
   of its drawing by an outline, barrels up, the housing's centre the pivot); point defence is a
   smaller, round, single-barrelled turret in the same style, drawn by the tool (`turret_pd.png`). Each
   class mounts them at its own scale (`ClassArt.TurretTexScale`).
-- **Fighter** (`wing_fighter.png`) is the developer's black-and-purple fighter recoloured white:
-  brightness remapped so shading keeps its direction, the outer outline kept dark against space, and
-  the purple (the saturated pixels) taken to neutral with a faint cool cast on the canopy.
 - **Unused art** (21 carried-over sprites nothing references) lives in `art_unused/`, which has a
-  `.gdignore` so Godot never imports it. Kept deliberately, at the developer's request, and so is
-  `art_unused/art_4x/`: five hulls at twice and the two turrets at four times the resolution the
-  game loads. **Anything NOT under a `.gdignore` ships.** The export preset takes `all_resources`,
-  so every file Godot imports goes into the `.pck` whether or not anything loads it -- which is
-  how that art (13 MB of PNG, about 3 MB once imported) and 45 `.translation` files Godot made
-  out of `version/*.csv` rode in every release. `version/` has a `.gdignore` of its own for that
-  reason.
+  `.gdignore` so Godot never imports it. Kept deliberately, at the developer's request. **Anything NOT
+  under a `.gdignore` ships**, which is why `art_unused/art_4x/` -- five OLD line-art hulls at twice
+  and the two OLD turrets at four times the resolution the game loaded, all superseded by the pack --
+  was deleted rather than kept (Q9), along with `tools/finish_ships.ps1` (the line-art shading tool it
+  was made for; both commands dropped from CLAUDE.md and `docs/README.md`'s command lists in this
+  commit). The export preset takes `all_resources`, so every file Godot imports goes into the `.pck`
+  whether or not anything loads it -- which is how 45 `.translation` files Godot made out of
+  `version/*.csv` rode in every release. `version/` has a `.gdignore` of its own for that reason.
 - **Background** (`stars.png`): 1024 px, seamless (stars near an edge wrap), on a screen-space layer
   at −100. Client-side only.
-- **Bomber** (`wing_bomber.png`): the developer's small airframe, doubled in resolution, wings swept
-  forward by a smooth warp (the tail booms stretch to follow), radiation trefoil on the nose.
 - **Mount offsets are measured, not placed by eye**: the tool carries each mount through every step
   and prints it as `(pixel − size/2) × world-per-pixel`. They live in `PlayerShip.Art` with each
   turret's texture scale, barrel length (where shots start) and ring radius (where the PD arc sits).
@@ -836,8 +956,9 @@ piece of player state that is **not** host-owned — it is identity, not a resou
 - **Loot never goes to waste.** Drops are on the pilot's file at the kill and claimed on the next
   world entry: a quit, a crash or a lost host costs nothing. Crates are local nodes with no network:
   only their pilot's machine has them. The host rolls; a guest cannot choose what it gets.
-- **A goodbye is what tells a closed session from a dropped one.** ENet reports both the same way.
-  The goodbye must actually leave, so the peer is disconnected gently and pumped for up to a second.
+- **A goodbye is what tells a closed session from a dropped one.** From the other end they look the
+  same. The goodbye must actually leave: THE HEARER HANGS UP, and the sender keeps polling its old peer
+  until it has, or 2 s have passed (`Net.LetGoMs`, each goodbye on its own clock).
 - **A place is held by character id**, not peer id (it changes on a reconnect). The id is the
   guest's own claim, as its name and gear are: there is nothing else to know a returning player by.
 - **A failed attempt changes nothing.** Going offline raises `SessionChanged` only if a session was
@@ -859,7 +980,8 @@ piece of player state that is **not** host-owned — it is identity, not a resou
   that kill again -- a loot dupe anyone could do on purpose. So a kill is one message (EXP, share and
   parts): two could be paid apart.
 - **Every connection attempt has a deadline of its own**: 12 s for a JOIN, 5 s for a try to get back
-  in (automatic or RECONNECT). ENet's own timeout is not one -- see Traps.
+  in (automatic or RECONNECT); a pasted invite, the reply window and then the host's 12 s. A WebRTC
+  connection notices a hard-killed peer only after 25-26 s (SPIKE F3), so the game keeps its own.
 - **A session's end takes its party with it.** Who is held, who is READY and -- for a pilot that was a
   guest -- the mission: the host's portal stayed open in a guest's own world, and a held pilot kept a
   solo world's portal shut for good.
@@ -872,7 +994,7 @@ each (`python tools/map.py`). The files to start from:
 | File | What it is |
 |---|---|
 | `Hub.cs` | the world: layout, sectors (home / arena), ships, raids, missions, loot drops, held places, the HUD |
-| `Net.cs` / `Router.cs` | sessions, the build handshake, the goodbye and reconnection; opening the port on any router |
+| `Net.cs` / `Link.cs` / `Rendezvous.cs` / `Adapters.cs` | sessions, the build handshake, the beat, the goodbye and reconnection, COPY NETWORK REPORT / the WebRTC transport (the one place that names it) / the codes, the rows (invite, typed address), the listener / this PC's LAN and overlay addresses |
 | `PlayerShip.cs` / `ShipClasses.cs` | the ship (helm, abilities, refit, wing) / turrets and wings |
 | `Stats.cs` / `Equipment.cs` | every number a ship flies with / the 96 drop parts and the kit |
 | `Loot.cs` / `Hints.cs` | drops and crates / the tutorial's corner card |
@@ -1111,17 +1233,12 @@ bosses"); the numbers are `numbers_curve_raids_items.md` §2.
 - **A sound still playing at exit is a "resource still in use".** The mixer releases a stopped
   playback only on its next cycles; stop everything, then wait in REAL time (`Game.Quit`). It was
   first blamed on `GD.Load`'s cache -- which does not hold resources alive -- and chased for days.
-- **Godot's `Upnp` refuses a router whose internet side is private** (double NAT) and returns an
-  empty device list for a router that answered on a search target it did not ask for. `Router.cs`
-  talks UPnP itself; Godot's is the last resort.
-- **Windows will not send from a LAN address to a loopback one** (WSAEADDRNOTAVAIL). Only the
-  network-wide search is bound to the LAN adapter; a search to one address binds to any.
 - **A player still joining is not a guest yet, and a guest is not online until the host says so.**
   `IsHost` stays true until the handshake lets the player in; `Connecting` stays true until the
   host's welcome (`Net.NetWelcome`). Code that must know which end of a join it is on asks
   `Net.Connecting`, never `IsHost`.
 - **Godot throws away, with an engine error, anything but the handshake from a peer it has not let
-  in** ("SYS_COMMAND_AUTH" in the log). ENet calls a link connected before the handshake has let
+  in** ("SYS_COMMAND_AUTH" in the log). The transport calls a link connected before the handshake has let
   either end in, and each end lets the other in the moment it hears the other's "done" -- so a guest's
   first unreliable report, sent right beside its own "done", overtook it on a link that reorders.
   `Net.IsOnline` is true only in a session and, on a guest, only after the host's welcome, which the
@@ -1131,9 +1248,9 @@ bosses"); the numbers are `numbers_curve_raids_items.md` §2.
   "done"; the host sends unreliably only to guests that have answered (`Net.ToHeard`) or reported a
   world (`Hub.RpcToSector`), and guests' ship reports reach the others through the host, never
   Godot's relay, which sends to every admitted peer at once.
-- **ENet's round-trip estimate starts at 500 ms** and settles over the first reliable packets:
-  `Net.Arriving` never shortens a warning below 40% of it.
-- **`ENetMultiplayerPeer.GetPeer(id)` only knows the peers this process is connected to.** A guest
+- **The round trip is the beat's** (`Net.RoundTrip`: the least of the last 8 echoes, 0 before the
+  first): `Net.Arriving` never shortens a warning below 40% of it.
+- **`WebRtcMultiplayerPeer.GetPeer(id)` only knows the peers this process is connected to.** A guest
   hears of the other guests through the host; asking for them is an engine error.
 
 Each of these compiled clean and was wrong at runtime. The smoke test covers all of them.
@@ -1316,7 +1433,7 @@ Each of these compiled clean and was wrong at runtime. The smoke test covers all
   load-bearing needs both its update rate AND its interpolation revisited, not just its position.*
 - **A check can pass for the wrong reason when the setup makes it vacuous.** "The boss is locked in
   place" asserted zero drift, and a mutant that ignored the lock entirely still passed: inside its
-  650 u standoff the boss would not have closed anyway, so the assertion tested nothing but the
+  hold-off the boss would not have closed anyway, so the assertion tested nothing but the
   flag. Arrange the conditions under which the behaviour would actually differ, or the check is
   decoration. Sibling of the constant-comparison lesson above.
 - **A fallback that tidies up after itself makes the check blind.** `Character.Save` writes a temp
@@ -1362,34 +1479,40 @@ Each of these compiled clean and was wrong at runtime. The smoke test covers all
   unreliable one, so over a lossy link the first ones arrived at a guest with no ship for them yet:
   "Node not found ... Invalid packet received". A node that exists on every peer (the hub) takes
   them and drops what it cannot place. The same goes for anything new that talks unreliably at once.
-- **`DisconnectPeer` is a polite hang-up, and ENet empties the peer at once.** Godot keeps listing
-  the peer until the other side answers, and everything sent meanwhile fails ("max channels: 0") --
-  unseen on one machine, a round trip of errors on a real link. The game never hangs up on one
-  peer in session; the tests simulate a drop with `PeerDisconnectNow`, which is what a drop is.
+- **Every hang-up goes through `Link.Hang`.** The plugin's `remove_peer` prints an engine ERROR for
+  an id it does not have, and a run with an ERROR line is red; there a gone id is a no-op. A live
+  peer's hang-up waits for the end of the frame (the call can come from inside that peer's own
+  poll); the tests' `Drop` is the same call, which is what a drop is.
 - **A .NET export needs `Warships.sln`, the run button does not.** Godot's export plugin checks for
   `<assembly_name>.sln` in the project folder and fails every `.cs` file without it; the editor's own
   build falls back to the `.csproj`, so nothing else ever notices it is missing.
-- **ENet's timeout is late, and a pre-handshake drop is not a "failure".** ENet looks at a peer's
-  timeout only when a resend falls due, and its resends double (0.5, 1.5, 3.5, 7.5, 15.5 s): a JOIN
-  set to give up in 12 s gave up after 15, a retry set to 5 after 7.5 -- which made three retries
-  take 24.5 s. `Net._Process` holds the real deadline. And Godot raises `connection_failed` only for a
-  link that never came up: one that came up and dropped before the host let the pilot in is
+- **A pre-handshake drop is not a "failure".** Godot raises `connection_failed` only for a link that
+  never came up: one that came up and dropped before the host let the pilot in is
   `server_disconnected`, the same as a session lost -- so `OnHostGone` checks `Connecting` first.
-- **ENet's timeout MINIMUM is the stall a session survives.** A silent peer is given up once its
-  resends run out AND the minimum has passed, and on a fast link the resends run out in about a
-  second: at 4 s a scene load or a GC pause ended sessions. It is 8 s (`Net.QuietMs`). And a live
-  link's packet throttle is set never to fall (`Net.Link`): at its defaults ENet drops unreliable
-  packets AT THE SENDER whenever a round trip comes back slower than the last few.
-- **An ordered unreliable packet is thrown away when anything sent after it on its channel got
-  there first.** On one shared channel, a ship report overtaking a base report cost the base report,
-  on any link that reorders. Every such stream has a transfer channel of its own (`NetChannels`, a
-  row each); what still shares one is the streams inside a single RPC (one pilot's ship against
-  another's). And every such stream is addressed to the Hub, the one node at the same path in every
-  world: a late unreliable report can land after its world has gone, and the Hub drops it where the
-  base or the boss would have been "Node not found".
-- **Closing an ENet peer still says goodbye to ENet.** `ENetMultiplayerPeer.Close` disconnects every
-  connected peer at once, so a host that closes without the game's goodbye (`Net.SkipGoodbye`) is
-  still noticed at once on a clean link; only a lost disconnect datagram leaves it to the timeout.
+  `Net._Process` holds every attempt's real deadline.
+- **The stall a session survives is `Link.QuietMs`, 8 s**, counted by the beat's watchdog in frames
+  capped at 0.25 s (`Link.Quiet`), so one long frame -- a scene load, a GC pause -- is not a drop; at
+  4 s those ended sessions.
+- **Every stream has a row of its own** (`NetChannels`), and each row is its own negotiated data
+  channel and SCTP stream. Every channel is reliable and ordered, so nothing is thrown away; what a
+  loss costs is a resend's delay to the rest of ITS row -- what still shares one is the streams inside
+  a single RPC (one pilot's ship against another's). `Link.Backlog` reads a row that backs up
+  (§3.8's guard, built only on evidence). And every such stream is addressed to the Hub, the one node
+  at the same path in every world: a late report can land after its world has gone, and the Hub
+  drops it where the base or the boss would have been "Node not found".
+- **Closing a WebRTC connection is heard at once on a live link** (DTLS says so), so a host that
+  closes without the game's goodbye (`Net.SkipGoodbye`) is still noticed at once; a frozen or cut-off
+  one only by the watchdog, 8 s on. So the harness's live-holder check orphans its old peer (up, never
+  polled) rather than closing it: a closed one would read as an ordinary drop.
+- **A connection takes one answer: there is no ICE restart** ("ICE restart is not supported"). A reply
+  that ran out is spent; the host makes that friend a fresh invite, and the guest MAKE A FRESH REPLY
+  answers the same invite again with a new connection.
+- **A bundle is sealed one poll after gathering says Complete** (`Link.Sealed`): the last candidates
+  arrive through signals inside the poll that reports Complete, so a bundle read in that frame can
+  miss one.
+- **One STUN row per connection.** A connection is configured with one row; the walk remakes it on the
+  next row when the first has not answered in 2 s (`Link.Gather`), and the next code starts at the row
+  that answered (`Link.StunFirst`).
 - **The plain `Godot_...win64.exe` writes nothing to stdout.** It is a GUI-subsystem binary, so
   every `GD.Print` from a headless run vanishes and the harness sees an empty log. Use the
   `_console.exe` beside it; both Windows runners swap to it automatically and refuse to run if it
@@ -1467,15 +1590,14 @@ the session.
 
 `tools/smoketest/run.ps1` is the same harness for Windows, driving the win64 mono build.
 
-**The harness builds its own network.** Every role starts with `Router.Fake = (1, 1)` and a public-IP
-service that refuses: no router, no internet, on every machine alike -- the old "two environmental
-failures" off the sandbox are gone, and a test run can never open a port on the real router (the
-game maps ports itself now). The plug-and-play scenarios point `Router.Fake` at
-`tools/smoketest/fakeigd.py`: two fake routers on 127.0.0.1 and 127.0.4.1 answering UPnP, NAT-PMP and
-PCP, in eleven networks (one router, two routers, the front one silent, a refusal, carrier-grade NAT,
-a VPN, NAT-PMP with a reassigned port, PCP, none...). `run.ps1 -Wan` runs the multiplayer half
-through `tools/smoketest/wan.py`, a relay of 90 ms each way, ±25 ms, 2% loss (`WARSHIPS_WAN="ms,jitter,loss"`
-for another day). The runner fails a run whose process crashed (a negative exit code) -- a crash at
+**The harness builds its own network.** Every role points the STUN rows at the box's responder and
+keeps a clipboard of its own (`HermeticNetwork`): no run reaches a real server or the player's
+clipboard. The box (`tools/smoketest/wan.py`, which run.ps1 starts for every run) is a STUN responder,
+two silent UDP ports, a silent TCP port and a pair proxy; the courier carries codes between roles as
+files (`CourierFile`), the way Discord does, into the JOIN box and the reply box. The `guest` role
+joins by invite, `guest2` and `aguest` by typed address. `run.ps1 -Wan` sends the invite path's
+datagrams through the pair proxy at 90 ms each way, ±25 ms, 2% loss (`WARSHIPS_WAN="ms,jitter,loss"`
+for another day); the typed rows run direct. The runner fails a run whose process crashed (a negative exit code) -- a crash at
 exit used to cut off the engine's leak report, so the one crashed run was the one that "passed".
 
 **Use Ubuntu 24.04 for the WSL distro, not the default.** `wsl --install -d Ubuntu` now gives 26.04,

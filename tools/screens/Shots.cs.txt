@@ -58,8 +58,58 @@ public partial class _Shots : Node
             }
     }
     Hub H => GetTree().CurrentScene as Hub;
+
+    // ── FIELDS (lane D, F9): each kit field, drawn from its slot on a class that owns it ──
+    // 81 the Supercarrier's dashed 600 u patrol ring · 82 the Taunt's hex shimmer and its "−33%" tag ·
+    // 83 the boost's hot plume · 83b the Taunt's 1000 u flash. A slot no class owns yet (its ability
+    // is another lane's, still to merge) prints "shot skipped" rather than a frame of nothing.
+    async Task FieldsFrames(Hub hub, Vector2 yard)
+    {
+        var zp = typeof(Hub).GetProperty("ZoomLevel"); float z0 = (float)zp.GetValue(hub);
+        PlayerShip Me() => hub.GetNode<PlayerShip>("Ship_1");
+        foreach (var (row, name, zoom) in new[] { ("patrol", "81_patrol_ring", 0.45f), ("taunt", "82_taunt_shimmer", 1.6f), ("boost", "83_boost_plume", 1.6f) })
+        {
+            var def = Fields.Of(row);
+            var owner = System.Enum.GetValues<ShipClass>().Where(c => Abilities.For(c).Any(a => a.Id == def.Slot)).Cast<ShipClass?>().FirstOrDefault();
+            if (owner == null) { GD.Print($"shot skipped {name}: no class owns slot '{def.Slot}' yet"); continue; }
+            Character.Class = owner.Value; P(hub, "ApplyLocalIdentity"); await W(0.3);
+            var s = Me(); s.Visible = true; s.Position = yard; s.Velocity = Vector2.Zero; s.Rotation = 0.5f;
+            zp.SetValue(hub, zoom); await W(1.2);
+            s.Position = yard; s.Velocity = Vector2.Zero; s.Sl(def.Slot).Left = 5.0;
+            await W(0.3); await Snap(name);
+            s.Sl(def.Slot).Left = 0;
+        }
+        zp.SetValue(hub, 0.45f); await W(1.0);
+        Fx.Raise(Fx.TauntRing, Me().Position, 1000f);
+        await W(0.35); await Snap("83b_taunt_ring");
+        // 84: a chunk torn from a practice dummy, mid-tumble, with its sparks, smoke and scar
+        var d1 = hub.GetNode<TargetDummy>("TargetDummy1");
+        Me().Position = d1.GlobalPosition + new Vector2(0, 320); Me().Velocity = Vector2.Zero;
+        zp.SetValue(hub, 1.4f); await W(1.2);
+        Fx.Tear(d1, d1.ToGlobal(new Vector2(8f, -12f)), d1.GlobalPosition + new Vector2(320f, 180f));
+        await W(0.45); await Snap("84_rip_chunk_and_scar");
+        zp.SetValue(hub, z0); await W(0.4);
+        Character.Class = ShipClass.Battleship; P(hub, "ApplyLocalIdentity"); await W(0.3);
+    }
+    // 84b: the same on the arena's boss -- the chunk is cut from the boss's own art, so it shows its plating
+    async Task FieldsBossFrame(Boss boss, PlayerShip at)
+    {
+        if (!GodotObject.IsInstanceValid(boss)) { GD.Print("shot skipped 84b_rip_on_boss: no boss"); return; }
+        Fx.Tear(boss, boss.ToGlobal(new Vector2(24f, -0.3f * boss.Length)), at.Position);
+        await W(0.5); await Snap("84b_rip_on_boss");
+    }
+
     System.Collections.Generic.IEnumerable<T> N<T>(Node n = null) where T : Node { n ??= GetTree().Root;
         foreach (var c in n.GetChildren()) { if (c is T t) yield return t; foreach (var x in N<T>(c)) yield return x; } }
+    // GATE FIX (lane net2): the REFIT tab in a fight -- RESET shut, and saying why (Hub.MayRefit, P8)
+    async Task RefitInCombatFrame()
+    {
+        var combat = typeof(PlayerShip).GetField("_combatT", BindingFlags.NonPublic | BindingFlags.Instance);
+        var me = H.MyShip;
+        combat.SetValue(me, 8.0); await W(0.2);
+        await Snap("20_base_refit_in_combat");
+        combat.SetValue(me, 0.0); await W(0.1);
+    }
     void Key(Key k) { Input.ParseInputEvent(new InputEventKey { Keycode = k, PhysicalKeycode = k, Pressed = true }); Input.ParseInputEvent(new InputEventKey { Keycode = k, PhysicalKeycode = k, Pressed = false }); }
     object P(object o, string m, params object[] a) => o.GetType().GetMethod(m, BindingFlags.NonPublic | BindingFlags.Instance).Invoke(o, a);
 
@@ -80,7 +130,7 @@ public partial class _Shots : Node
         H.SpawnRaider(at + new Vector2(0f, 60f).Rotated(heading), Enemies.Gunship, sq);
         await W(1.5); await Snap("49a_squad_inbound");
         for (int i = 0; i < 60 * 12 && sq.Phase != SquadPhase.Commit; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-        await W(0.6); await Snap("49b_squad_lock_lines");
+        await W(0.6); await Snap("49d_squad_lock_lines");
         foreach (var r in H.Raiders.ToList()) H.RaiderDown(r);
         await W(0.3);
         zp.SetValue(H, 0.3f);
@@ -102,6 +152,19 @@ public partial class _Shots : Node
         zp.SetValue(H, 1.4f);
         for (int i = 0; i < 60 * 6 && H.BlastsPending == 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         await W(0.8); await Snap("49_heavy_astern_missile");
+        // the same heavy latched on the pinned ship, firing BOTH barrels in one volley: two flashes
+        // from either side of its turret; snapped on the frame a volley lands (a flash lasts 0.1 s)
+        zp.SetValue(H, 2.0f);
+        var hold = s.Position;
+        double HeavyHit() => s.DamageBySource.Where(kv => kv.Key == $"raider:{hv.NetId}").Sum(kv => kv.Value);
+        double hit0 = GodotObject.IsInstanceValid(hv) ? HeavyHit() : 0;
+        for (int i = 0; i < 60 * 8 && GodotObject.IsInstanceValid(hv); i++)
+        {
+            s.Position = hold; s.Velocity = Vector2.Zero;
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            if (GodotObject.IsInstanceValid(hv) && hv.Latched && HeavyHit() > hit0) break;
+        }
+        await Snap("49b_heavy_both_barrels");
         if (GodotObject.IsInstanceValid(hv)) hv.TakeDamage(9999);
         s.Statuses.Clear(Status.Pinned);
         zp.SetValue(H, z0); s.Position = keep; s.Velocity = Vector2.Zero; await W(0.3);
@@ -183,6 +246,25 @@ public partial class _Shots : Node
         await W(1.0); await Snap("8_hub_carrier_strike_later");
         // close-ups: zoom in, lock the controls (a focused text box) so the mouse stops
         // steering the aim, and train every turret on a point off the starboard bow
+        // LANE E: the carrier's sorties, as PlayerShip.Sortie sends them (the keys are 6a's): the PATROL
+        // in amber circling it 300 u out, beside the fitted wing; then two GUNSHIPS in steel on their
+        // 240 u circle round a heavy 730 u off the bow quarter. Both freed before the tour goes on.
+        async Task WingsFrames()
+        {
+            var s = H.GetNode<PlayerShip>("Ship_1");
+            s.Position = new Vector2(-900, 1100); s.Rotation = 0; s.Velocity = Vector2.Zero;
+            GetViewport().GetCamera2D().Zoom = new Vector2(1.1f, 1.1f);
+            s.Sortie(WingKind.Patrol);
+            await W(5.0); await Snap("10e_carrier_patrol");
+            var t = H.SpawnRaider(s.Position + new Vector2(700, -200), Enemies.Gunship); t.Hp = 1e9; t.ApplyStatus(Status.Disabled, 30);
+            await W(0.1);
+            s.Sortie(WingKind.Gunship, t);
+            await W(2.0); await Snap("10f_carrier_gunships");
+            t.TakeDamage(1e12);
+            foreach (var w in N<Wing>().Where(w => w.Carrier == s && w.Def.Sortie)) w.SendOut(null, s.Clock);
+            GetViewport().GetCamera2D().Zoom = new Vector2(3.2f, 3.2f);
+            await W(3.0);
+        }
         async Task Close(ShipClass c, string name)
         {
             Character.Class = c; P(H, "ApplyLocalIdentity"); await W(0.2);
@@ -241,7 +323,7 @@ public partial class _Shots : Node
                 var armDock = Y.Arms[armIx].Dock;
                 Y.Release(miner);                                               // out of the line, its own arm handed on
                 Y.SetArm(miner, armIx); miner.State = Gatherer.St.Unloading; miner.Cargo = 1e6;
-                miner.Position = armDock.Berth(Gatherer.Length); miner.Rotation = armDock.Heading;
+                miner.Position = armDock.Berth(miner.Def.Length); miner.Rotation = armDock.Heading;
                 courier.Phase = 0f; courier.Clock = courier.Cycle - 0.2;       // just short of home: it docks while the frame settles
                 ship.Visible = false; ship.Velocity = Vector2.Zero; ship.Position = armDock.Pad + armDock.Row.Open * 50f;
                 zp.SetValue(H, 3.0f); await W(1.6);
@@ -270,6 +352,8 @@ public partial class _Shots : Node
             pship.Position = Hub.TioPos + new Vector2(240, 180); pship.Velocity = Vector2.Zero;
             GetViewport().GetCamera2D().Zoom = new Vector2(1.1f, 1.1f); await W(1.6);
             hub.OpenTio(); await W(0.4); await Snap("35_tio_warp_to_target");
+            hub.SelectLevel(Missions.Level + 2); await W(0.3); await Snap("35b_tio_skip_two");     // lane F: "(skip +2)"
+            hub.SelectLevel(Missions.Unlocked(Missions.Kind)); await W(0.2);
             hub.SetMyReady(true); pship.AutopilotTo = null;              // READY, but stay for the pictures
             await W(1.6); await Snap("36_mission_opening_bar");
             await W(2.0); await Snap("37_mission_portal_open");
@@ -294,14 +378,7 @@ public partial class _Shots : Node
         }
         await Close(ShipClass.Destroyer, "9d_destroyer_closeup");
         await Close(ShipClass.Battleship, "9_battleship_closeup");
-        // warp: the charge building, then the flash where it lands (and the hull bar's WARP readout)
-        {
-            var ws = H.GetNode<PlayerShip>("Ship_1");
-            typeof(PlayerShip).GetField("_warpCd", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).SetValue(ws, 0.0);
-            ws.Velocity = Vector2.Zero; ws.StartWarp();
-            await W(2.2); await Snap("40_warp_charging");
-            await W(0.95); await Snap("41_warp_arrival");      // the camera cuts to the ship on a jump
-        }
+        await LaneBDriveFrames();
         // hull: a damaged miner's bar; a lost salvager in the base menu, waiting to be rebuilt
         {
             var yd = H.Yard; var hs = H.GetNode<PlayerShip>("Ship_1");
@@ -348,26 +425,38 @@ public partial class _Shots : Node
             await Snap("50_base_defence"); bs3.Visible = true;
             rz.TakeDamage(99999); zp.SetValue(H, z0); bs3.Position = keepB; bs3.Velocity = Vector2.Zero; await W(0.3);
         }
-        // hosting: the address friends in other cities need, hidden until clicked, then shown
+        // THE MULTIPLAYER PANEL (network_webrtc.md §6): the host's -- an invite ready, the pending list and
+        // the typed addresses -- then a guest's: its reply and countdown, the countdown run out with MAKE A
+        // FRESH REPLY, and a typed address nothing answers. A hermetic session: no STUN server is asked (the
+        // invite says so), and the codes go to a clipboard of this run's own.
         {
-            // never the real router: the game maps ports itself now, and a sweep must not open one
-            Router.Fake = (1, 1); Net.PublicIpService = "http://127.0.0.1:1/";
+            Link.Servers = System.Array.Empty<Link.StunRow>();
+            string clip = "";
+            Rendezvous.Copy = t => clip = t; Rendezvous.Clipboard = () => clip;
+            var toggle = N<Button>().First(b => b.Name == "NetToggle");
+            bool wasOpen = toggle.ButtonPressed;
+            toggle.ButtonPressed = true;
             // base 27140, not 27015: P(27015) on slot n is the smoketest host's port on slot n-1; 27140+100k is in no smoketest band (bound, never asserted)
             Net.I.Host(P(27140)); await W(0.5);
-            var d = Net.Describe("", false, "203.0.113.7", 27015, "192.168.1.5:27015", "no router answered");   // the game's own words
-            Net.I.Reachable(d.reach, d.address, d.message);
-            var sm = H.GetTree().Root.FindChild("SessionMenu", true, false) as SessionMenu;
-            await W(0.3); await Snap("51_address_hidden");
-            var rv = sm?.FindChild("RevealAddress", true, false) as Button;
-            rv?.EmitSignal(BaseButton.SignalName.Pressed); await W(0.2); await Snap("52_address_revealed");
-            rv?.EmitSignal(BaseButton.SignalName.Pressed);
+            Net.I.Invite(); await W(0.8);
+            await Snap("51_invite_ready");
+            string invite = Net.I.LastInvite;
             Net.I.GoOffline(); await W(0.5);
+            Net.I.Join(invite); await W(1.0);
+            await Snap("52_reply_countdown");
+            typeof(Net).GetField("_deadline", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(Net.I, Time.GetTicksMsec()); await W(0.5);
+            await Snap("60_reply_expired");
+            Net.I.GoOffline(); await W(0.3);
+            Net.I.Join($"127.0.0.1:{P(27140)}"); await W(1.0);   // the session above is closed: nothing listens there now
+            await Snap("61_join_failed");
+            Net.I.GoOffline(); await W(0.5);
+            toggle.ButtonPressed = wasOpen;
         }
         // a raid: two patrols in from the map's edge, and the HUD's count
         {
             var rs2 = H.GetNode<PlayerShip>("Ship_1"); var keepR2 = rs2.Position;
             rs2.Position = Hub.BasePos + new Vector2(0, 2600); rs2.Velocity = Vector2.Zero; rs2.Rotation = 0f; await W(0.5);
-            H.SpawnPatrol(rs2.Position + new Vector2(-500, 350), 1.1); H.SpawnPatrol(rs2.Position + new Vector2(500, 350), 1.1);
+            H.SpawnPatrol(rs2.Position + new Vector2(-500, 350), 1); H.SpawnPatrol(rs2.Position + new Vector2(500, 350), 1);
             await W(1.0); await Snap("53_raid_incoming");
             foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e9);
             rs2.Position = keepR2; rs2.Velocity = Vector2.Zero; await W(0.3);
@@ -377,6 +466,18 @@ public partial class _Shots : Node
             H.ToggleEquipment(); await W(0.4);
             await Snap("55_equipment");
             H.ToggleEquipment(); await W(0.2);
+        }
+        // ...and salvage levels on the SLOT (lane F): the Weapon slot at level 4 (+12% beside its part's
+        // name) and held at the cap with level 3 cleared (its price greyed), the Shield slot at level 1
+        {
+            var keepLv = new System.Collections.Generic.Dictionary<string, int>(Character.GearLevel);
+            var keepCl = Character.BossCleared.ToDictionary(kv => kv.Key, kv => kv.Value);
+            Character.GearLevel["Weapon"] = 4; Character.GearLevel["Shield"] = 1; Character.BossCleared["silver_lancer"] = new() { 1, 2, 3 };
+            H.ToggleEquipment(); await W(0.4);
+            await Snap("55b_equipment_slot_levels");
+            H.ToggleEquipment(); await W(0.2);
+            Character.GearLevel.Clear(); foreach (var kv in keepLv) Character.GearLevel[kv.Key] = kv.Value;
+            Character.BossCleared.Clear(); foreach (var kv in keepCl) Character.BossCleared[kv.Key] = kv.Value;
         }
         // ...and with boss drops: an Epic shield fitted (its name in the Epic colour, its effects in
         // words), and a hold of every class's parts, some of them doubled
@@ -543,6 +644,7 @@ public partial class _Shots : Node
             bf.SetValue(bw[1], System.Enum.Parse(bf.FieldType, "Landing")); tf.SetValue(bw[1], 0.0);
             await W(0.45); await Snap("10d_carrier_bomber_landing");
         }
+        await WingsFrames();
 
         // ── QA: every remaining feature and UI state, one frame each ─────────────
         {
@@ -575,6 +677,7 @@ public partial class _Shots : Node
             }
             N<Button>(bp).First(b => b.Name == "Reset").EmitSignal(BaseButton.SignalName.Pressed); await W(0.2);
             await Snap("20_base_refit_armed");
+            await RefitInCombatFrame();
             Key(global::Godot.Key.B); await W(0.3);
 
             // K window: waiting for a key, then a reserved key refused
@@ -717,36 +820,54 @@ public partial class _Shots : Node
             await Snap("79_freighter_turrets_and_bubble");
             foreach (var t in hub.Deployed.ToList()) hub.DeployedTaken(t);
             await Class(ShipClass.Battleship); await W(0.3);
+            await FieldsFrames(hub, yard);
 
-            // ── THE FOUR NEW ENEMY HULLS, in a row ──
-            var mob = new[] { Enemies.Talon, Enemies.Pod, Enemies.Cross, Enemies.Lancerkin };
+            // ── EVERY ENEMY HULL, in a row, in Enemies.All order: the pack's art on each, a flame on
+            //    every bell, the heavies' turrets on their mounts (read by eye) ──
+            var mob = Enumerable.Range(0, Enemies.All.Length).ToArray();
             var line = new System.Collections.Generic.List<Raider>();
+            Vector2 Spot(int i) => yard + new Vector2(-425 + 170 * i, 0);
             for (int i = 0; i < mob.Length; i++)
             {
-                var r = hub.SpawnRaider(yard + new Vector2(-330 + 220 * i, 0), mob[i]);
+                var r = hub.SpawnRaider(Spot(i), mob[i]);
                 r.Hp = 1e9; line.Add(r);
             }
             await W(0.3);
-            foreach (var r in line) { r.Position = yard + new Vector2(-330 + 220 * line.IndexOf(r), 0); r.Rotation = 0f; }
+            foreach (var r in line) { r.Position = Spot(line.IndexOf(r)); r.Rotation = 0f; }
             await Frame(yard + new Vector2(0, 60), 1.3f);
-            foreach (var r in line) { r.Position = yard + new Vector2(-330 + 220 * line.IndexOf(r), 0); r.Rotation = 0f; }
-            await W(0.2); await Snap("80_new_enemies");
+            // POSED, THEN FROZEN: every raider here picks the nearest reachable target and turns onto
+            // it every frame it runs (Raider._Process), fast enough to swing most of the way round
+            // inside the wait below. SetProcess(false) stops that turn without stopping the draw;
+            // the frame's last read by eye still showed the row off nose-up (CHANGES.md, Known
+            // broken), so something else still turns them.
+            foreach (var r in line) { r.Position = Spot(line.IndexOf(r)); r.Rotation = 0f; r.SetProcess(false); }
+            await W(0.2); await Snap("80_every_enemy_hull");
             foreach (var r in line.ToList()) r.TakeDamage(1e12);
             await W(0.3);
             Me().Visible = true;
         }
         // the arena, last: the trip replaces the hub scene, so nothing may follow it that
         // holds an old reference. The boss, its death-beam telegraph, its shockwave telegraph.
+        // A BOSS IN FRAME, WHATEVER ITS ROW MAKES IT: the ship a gap off its nose, and the wheel's
+        // own widest zoom-out (Hub.ZoomOutMax, unraised -- the owner's ruling on open question (b),
+        // 2026-09-25: the wheel never goes past its old ceiling). What fits the Drake's whole hull
+        // in from there is Hub.MoveCamera's own BossFramed bias, which runs every frame a boss is
+        // near, same as it would for a live pilot -- so going through H.SetZoom (the one path every
+        // other zoom in the game already uses) is enough; a reflected ZoomLevel set from here used
+        // to get lerped back to nothing worth having by the time of the snap.
         {
             H.EnterSector(Hub.SectorKind.Arena); await W(1.5);
             var boss = H.Boss; var ash = H.GetNode<PlayerShip>("Ship_1");
-            ash.Position = boss.Position + new Vector2(120, 560); ash.Velocity = Vector2.Zero; ash.Rotation = 0f;
-            GetViewport().GetCamera2D().Zoom = new Vector2(0.62f, 0.62f); await W(1.5);
+            float z0 = H.ZoomLevel;
+            ash.Position = boss.Position + new Vector2(120, boss.Length * 0.5f + 380f); ash.Velocity = Vector2.Zero; ash.Rotation = 0f;
+            H.SetZoom(Hub.DefaultZoom / Hub.ZoomOutMax); await W(1.5);
             for (int i = 0; i < 60 * 14 && !N<FxNode>().Any(t => t.Id == Fx.WarnLane); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             await W(1.0); await Snap("38_arena_beam_telegraph");
             if (GodotObject.IsInstanceValid(H.Boss)) { H.Boss.TakeDamage(90); await W(0.09); await Snap("42_boss_bar_chunk"); }
             for (int i = 0; i < 60 * 16 && !N<FxNode>().Any(t => t.Id == Fx.WarnZone); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             await W(0.9); await Snap("39_arena_shockwave_telegraph");
+            await FieldsBossFrame(H.Boss, ash);
+            H.SetZoom(z0);
             // the kill: this pilot's crates on a ring where the boss died, the RETURN button and the
             // ready tally on the boss bar, the crates on the radar; one taken so the count reads 1 of 2
             if (GodotObject.IsInstanceValid(H.Boss))
@@ -771,16 +892,13 @@ public partial class _Shots : Node
             if (H.Boss is { Type.Id: "drake_bastion" } dk)
             {
                 var dsh = H.GetNode<PlayerShip>("Ship_1");
-                dsh.Position = dk.Position + new Vector2(140, 700); dsh.Velocity = Vector2.Zero; dsh.Rotation = 0f;
+                dsh.Position = dk.Position + new Vector2(140, dk.Length * 0.5f + 490f); dsh.Velocity = Vector2.Zero; dsh.Rotation = 0f;
                 dk.DamageMult = 0;
                 dk.S("throw").Due = 999.0; dk.S("shotgun").Due = 999.0;
-                // THROUGH THE HUB, like every other staged frame here. Setting the camera's own
-                // Zoom does nothing that lasts: Hub.MoveCamera lerps it back to Hub.ZoomLevel
-                // every frame, in the arena too, so these four frames were taken at the default
-                // zoom with the boss about 100 u above the top edge -- a frame named for a tractor
-                // lane that could not show the boss holding it.
-                var dzp = typeof(Hub).GetProperty("ZoomLevel"); float dz0 = (float)dzp.GetValue(H);
-                dzp.SetValue(H, 0.62f); await W(1.5);
+                // THROUGH H.SetZoom, like every other staged frame here (see the block above): the
+                // ceiling stays where it was, and Hub.MoveCamera's BossFramed bias does the rest.
+                float dz0 = H.ZoomLevel;
+                H.SetZoom(Hub.DefaultZoom / Hub.ZoomOutMax); await W(1.5);
                 await Snap("63_drake_arena");
                 for (int i = 0; i < 60 * 12 && dk.Locked; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                 dk.S("shotgun").Due = 0.01;
@@ -788,17 +906,21 @@ public partial class _Shots : Node
                 await W(1.2); await Snap("64_drake_scrap_fan");
                 await W(0.9); await Snap("64b_drake_scrap_flying");
                 for (int i = 0; i < 60 * 6 && dk.Locked; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-                dsh.Position = dk.Position + new Vector2(140, 700); dsh.Velocity = Vector2.Zero;
+                // FACED BACK DOWN THE NOSE: the shotgun sequence let it turn onto wherever it last
+                // saw a pilot, and the ship's placement below is a fixed offset off the nose, not a
+                // rotated one -- put back the way it spawned, or 65/66 frame whatever it drifted to.
+                dk.Rotation = Mathf.Pi;
+                dsh.Position = dk.Position + new Vector2(140, dk.Length * 0.5f + 490f); dsh.Velocity = Vector2.Zero;
                 dk.S("throw").Due = 0.01;
                 await W(3.0); await Snap("65_drake_tractor_lane");
                 for (int i = 0; i < 60 * 8 && dk.Rock != null && !dk.Rock.Thrown; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                 await W(1.1); await Snap("66_drake_rock_flight");
-                dzp.SetValue(H, dz0);
+                H.SetZoom(dz0);
             }
         }
         // THE PIRATE BASE SIEGE: the Drake put down, home by RETURN, the siege chosen and in. The
         // base's one weapon: its red lane to the pilot, then the cruise missile that follows it 1.5 s
-        // later, snapped 3 s out of the barrel (about 400 u from the base's centre: past its 280 u
+        // later, snapped 3 s out of the barrel (about 400 u from the base's centre: past its 241.5 u
         // of art and short of the ship's nose, so it is drawn over neither) -- the SECOND pair, once
         // the pilot is parked 700 u under the base (the first went up for the spot it arrived on,
         // and is taken out of the air). One turret on the base, none on a pylon. The garrison's
@@ -817,8 +939,14 @@ public partial class _Shots : Node
             if (pb != null)
             {
                 var ssh = H.GetNode<PlayerShip>("Ship_1");
-                ssh.Position = pb.Position + new Vector2(0, 700); ssh.Velocity = Vector2.Zero; ssh.Rotation = 0f;
                 var szp = typeof(Hub).GetProperty("ZoomLevel"); float sz0 = (float)szp.GetValue(H);
+                // THE SITE, WIDE: the base and its four pylons on the diagonal (Emplacements.PirateBase),
+                // at the wheel's own widest zoom -- crescent_b (the base) and drone_sensor (the
+                // pylons, the same file the Pod wears) at their new lengths (483 / 300)
+                ssh.Position = pb.Position + new Vector2(200, 150); ssh.Velocity = Vector2.Zero; ssh.Rotation = 0f;
+                szp.SetValue(H, Hub.DefaultZoom / Hub.ZoomOutMax);
+                await W(1.5); await Snap("67a_siege_site");
+                ssh.Position = pb.Position + new Vector2(0, 700); ssh.Velocity = Vector2.Zero; ssh.Rotation = 0f;
                 szp.SetValue(H, 0.62f);
                 await W(2.0);
                 foreach (var c in H.GetChildren().OfType<Shot>().Where(x => x.Kind == Shots.Cruise).ToList()) c.Intercept();
@@ -837,5 +965,36 @@ public partial class _Shots : Node
         }
         GD.Print("SWEEP DONE");          // the runner fails without it: a cut-off sweep must never pass as clean
         Game.Quit();                     // the game's own way out, as a player leaves
+    }
+
+    // ── LANE B · THE DRIVES, as drawn (Drives.Draw, the drive's slot and the hull bar's readout) ──
+    // The battleship holds V (a driver's hold, DriveHeld: the text box Close() focused locks the keys):
+    // at 2.6 s the charge ring inside the faint safe ring, the ghost and "1280 u"; at 4.8 s past the
+    // ring, in the amber-to-red band with its 2 s / 4 s / 6 s ticks, the ghost's "+640 u · DISABLED
+    // 4.3 s" and the slot's WARP readout; then the landing flash, and the hull bar's DISABLED. Then a
+    // dart's boost: BOOST 2.1 s on its slot and the hull bar, and BOOST n s while it cools.
+    async Task LaneBDriveFrames()
+    {
+        var cam = GetViewport().GetCamera2D(); var z0 = cam.Zoom;
+        H.ClearSelection();
+        var ws = H.GetNode<PlayerShip>("Ship_1");
+        ws.Position = new Vector2(-900, 1100); ws.Rotation = 0f; ws.Velocity = Vector2.Zero; ws.Sl("warp").Cool = 0;
+        cam.Zoom = new Vector2(0.2f, 0.2f);                               // the whole 3300 u band in view
+        ws.DriveHeld = true; ws.PressDrive();
+        await W(2.6); await Snap("40_warp_charging");
+        await W(2.2); await Snap("40b_warp_overshoot_band");
+        ws.DriveHeld = false;
+        cam.Zoom = new Vector2(0.9f, 0.9f);
+        await W(0.15); await Snap("41_warp_arrival");                    // the camera cuts to the ship on a jump
+        await W(0.8); await Snap("41b_warp_disabled");
+        for (int i = 0; i < 60 * 8 && ws.Disabled; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        Character.Class = ShipClass.LightDart; P(H, "ApplyLocalIdentity"); await W(0.4);
+        var bs = H.GetNode<PlayerShip>("Ship_1");
+        bs.Position = new Vector2(-900, 1100); bs.Rotation = 0f; bs.Velocity = Vector2.Zero; bs.Sl("boost").Cool = 0;
+        bs.PressDrive();
+        await W(0.9); await Snap("42_boost_running");
+        await W(3.0); await Snap("42b_boost_cooling");
+        Character.Class = ShipClass.Battleship; P(H, "ApplyLocalIdentity"); await W(0.4);
+        cam.Zoom = z0;
     }
 }
