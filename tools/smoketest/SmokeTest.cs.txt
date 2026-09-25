@@ -2171,13 +2171,15 @@ public partial class _Test : Node
               $"the PILOT window names the next wall: at level 3 chip slot 2, at 12 chip slot 6, at 14 nothing ({string.Join(" / ", said)})");
 
         // CHECK 3, LIVE: at level 1, a capital, a freighter and a light press ability 1 through the host's gate
-        // (DoAbility) and it acts; nothing on the bar is locked; and Space on a gunship 300-600 u off, inside
-        // the gun's reach, at a varied bearing, lands
+        // (DoAbility) and it acts; the bar's locked set is exactly ability 2 and 3 (the spec's own walls,
+        // level_walls s.1, kits_v31 s.3.6 -- the static twin at WallChecks excludes the same two rows);
+        // and Space on a gunship 300-600 u off, inside the gun's reach, at a varied bearing, lands
         foreach (var c in new[] { ShipClass.Battleship, ShipClass.FreightHauler, ShipClass.LightEcho })
         {
             await At(c, 1);
             var s = Me; var a1 = Unlocks.Nth(c, 1);
-            var shut = Abilities.For(c).Where(a => !a.Open && AbilityBar.StateOf(s, a.Id, null).Locked).Select(a => a.Id).ToList();
+            var expectShut = new[] { Unlocks.Nth(c, 2), Unlocks.Nth(c, 3) }.Where(a => a != null).Select(a => a.Id).OrderBy(x => x, StringComparer.Ordinal).ToArray();
+            var shut = Abilities.For(c).Where(a => !a.Open && AbilityBar.StateOf(s, a.Id, null).Locked).Select(a => a.Id).OrderBy(x => x, StringComparer.Ordinal).ToList();
             // the guns first: ability 1 after (a broadside would land on the gunship too)
             float reach = Math.Min(600f, (float)s.Stats["main_range"] * 0.9f), bearing = VaryAngle(), dist = Vary(300f, reach);
             var from = s.Position; var at = from + Vector2.Right.Rotated(bearing) * dist;
@@ -2199,8 +2201,8 @@ public partial class _Test : Node
             doAb.Invoke(s, new object[] { a1.Id, 0 });
             await Wait(0.1);
             string a1After = Sn(s, a1.Id);
-            Check(s.Peak == 1 && shut.Count == 0 && a1After != b1 && dealt > 0,
-                  $"{c} at level 1: nothing on the bar locked ({string.Join(",", shut)}), its guns land on a gunship {dist:0} u off ({dealt:0.0} dealt), and its {a1.Name} (ability 1) acts through the host's gate ({b1} -> {a1After})");
+            Check(s.Peak == 1 && shut.SequenceEqual(expectShut) && a1After != b1 && dealt > 0,
+                  $"{c} at level 1: the bar's locked set is exactly ability 2 and 3 when this class has them ({string.Join(",", shut)} vs {string.Join(",", expectShut)}), its guns land on a gunship {dist:0} u off ({dealt:0.0} dealt), and its {a1.Name} (ability 1) acts through the host's gate ({b1} -> {a1After})");
         }
 
         // CHECK 4, THE OWNER'S REFUSAL: ability 2 at level 2 says LOCKED · L3 and nothing moves; at 3 it acts
@@ -4502,17 +4504,19 @@ public partial class _Test : Node
             EquipFromHold(ew, "chip_armour_1"); await Wait(0.2);
             Check(Math.Abs(Me.MaxHp - full * 1.08) < 1e-6 && Character.LoadoutFor(cls0)[5] == "chip_armour_1" && Character.GearHold.GetValueOrDefault("chip_armour_1") == 0,
                   $"EQUIP puts an Armour Chip I from the hold into chip slot 1: 8% more hull ({full:0} -> {Me.MaxHp:0.##})");
-            ew = Nodes<EquipmentWindow>().First();
-            Nodes<Button>(ew).First(b => b.Name == "Unequip").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.2);
-            Check(Math.Abs(Me.MaxHp - full) < 1e-6 && Character.GearHold.GetValueOrDefault("chip_armour_1") == 1, $"UNEQUIP takes it off: the stock hull again ({Me.MaxHp:0.##}), the chip in the hold");
+            // SWITCH CLASSES WHILE THE CHIP IS STILL FITTED (not after taking it off): only then does
+            // "the other class has none" actually tell the two per-class loadouts apart.
             var other = cls0 == ShipClass.Battleship ? ShipClass.Carrier : ShipClass.Battleship;
             Me.SetClass(other); await Wait(0.5);
-            Check(Character.LoadoutFor(other).Skip(5).All(x => x == ""), "the other class keeps its own gear: no chips");
+            Check(Character.LoadoutFor(other).Skip(5).All(x => x == "") && Character.LoadoutFor(cls0)[5] == "chip_armour_1",
+                  "the other class keeps its own gear: no chips, while the first class keeps what it fitted");
             Me.SetClass(cls0); await Wait(0.5);
-            Check(Character.LoadoutFor(cls0).Skip(5).All(x => x == "") && Character.GearHold.GetValueOrDefault("chip_armour_1") == 1 && Math.Abs(Me.MaxHp - full) < 1e-6,
-                  "back on the first class: its gear as it was left (no chips, the Armour Chip in the hold)");
+            Check(Math.Abs(Me.MaxHp - full * 1.08) < 1e-6 && Character.LoadoutFor(cls0)[5] == "chip_armour_1" && Character.GearHold.GetValueOrDefault("chip_armour_1") == 0,
+                  "back on the first class: the chip is still fitted, not lost switching away and back");
             ew = Nodes<EquipmentWindow>().FirstOrDefault();
             if (ew == null) { Key(global::Godot.Key.I); await Wait(0.2); ew = Nodes<EquipmentWindow>().First(); }
+            Nodes<Button>(ew).First(b => b.Name == "Unequip").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.2);
+            Check(Math.Abs(Me.MaxHp - full) < 1e-6 && Character.GearHold.GetValueOrDefault("chip_armour_1") == 1, $"UNEQUIP takes it off: the stock hull again ({Me.MaxHp:0.##}), the chip in the hold");
             EquipFromHold(ew, "chip_armour_1"); await Wait(0.2);
             Check(Math.Abs(Me.MaxHp - full * 1.08) < 1e-6 && Character.GearHold.GetValueOrDefault("chip_armour_1") == 0, "the chip back on from the hold: 8% more hull again");
             // A LEVEL REFITS THE SHIP IT IS ON, at once. UPGRADE buys the level and tells the hub; the
@@ -4829,14 +4833,22 @@ public partial class _Test : Node
                                                        && l.Text.Contains("+100 for completing")),
                   "its EXP note reads the mission table's own 300 / 250 / 100 rather than restating them beside it");
             Button PBuy(string id) => Nodes<Button>(Nodes<HBoxContainer>(pw).First(r => r.Name == "Pilot_" + id)).First(b => b.Name == "Buy");
-            var me = Me; me.Hp = me.MaxHp; double hull0 = me.MaxHp, hp0 = me.Hp;
+            var me = Me;
+            // AN ARMOUR CHIP FITTED FIRST: with no percentage bonus at all, +5 flat reads as +5
+            // whichever order flats and percentages apply, so this could not tell the orders apart
+            // (finding: "no proof any more that flats are added before percentages"). The chip's own
+            // +8% share only distinguishes them once a flat point lands on top of it.
+            Character.LoadoutFor(me.Class)[5] = "chip_armour_1"; H.PilotChanged(); await Wait(0.1);
+            me.Hp = me.MaxHp; double hull0 = me.MaxHp, hp0 = me.Hp;
             Character.Points = 3;
             PBuy("hull").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
-            // (points are added BEFORE percentage bonuses; a stock ship has none, so +5 is +5)
-            Check(Character.Bought[1] == 1 && Character.Points == 2 && Math.Abs(me.MaxHp - (hull0 + 5)) < 1e-6 && Math.Abs(me.Hp - (hp0 + 5)) < 1e-6,
-                  "Hull (1 pt): +5 hull on the ship at once");
+            // points are added BEFORE percentage bonuses: +5 flat under the chip's +8% share reads
+            // +5.4, not +5 -- the order a percentage-after-flats bug would get wrong.
+            Check(Character.Bought[1] == 1 && Character.Points == 2 && Math.Abs(me.MaxHp - (hull0 + 5.4)) < 1e-6 && Math.Abs(me.Hp - (hp0 + 5.4)) < 1e-6,
+                  "Hull (1 pt): +5 flat under the chip's +8% share is +5.4 -- flats land before percentages");
             PBuy("hull").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
-            Check(Character.Bought[1] == 2 && Character.Points == 0 && Math.Abs(me.MaxHp - (hull0 + 10)) < 1e-6, "Hull again (2 pts): +10 in all");
+            Check(Character.Bought[1] == 2 && Character.Points == 0 && Math.Abs(me.MaxHp - (hull0 + 10.8)) < 1e-6, "Hull again (2 pts): +10.8 in all, still under the chip's +8%");
+            Character.LoadoutFor(me.Class)[5] = ""; H.PilotChanged(); await Wait(0.1);   // leave the ship as found: no chip
             Check(PBuy("speed").Disabled, "with no points left, BUY is disabled");
             Character.Points = 6;
             PBuy("damage").EmitSignal(BaseButton.SignalName.Pressed); PBuy("speed").EmitSignal(BaseButton.SignalName.Pressed); PBuy("turn").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);

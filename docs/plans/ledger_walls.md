@@ -338,5 +338,41 @@ BasePanel.cs:120-129, Raids.cs:53 ask Unlocks. Grep the harness for NeedsBoss an
   `HoldIds()` sorts; asserts `Sum() == 6` and `HoldIds() == expectHold` instead of the old `== 2`).
 - rung 3 owed: n/a (guest2 is rung 5 only).
 - rung 5 owed: the rewritten "nor after a restart" check itself.
-- commit: (fix 2) "Walls fix 2: the third player's restart re-sanitises its over-cap chips".
+- commit: da60a2d "Walls fix 2: the third player's restart re-sanitises its over-cap chips".
 - next: fix 3-5 (grouped, share SmokeTest.cs.txt).
+
+### Fix 3-5 PRE (grouped: minor findings 3, 4, 5, all in SmokeTest.cs.txt)
+- model: sonnet
+- intent:
+  - finding 3 (:4506-4510 old numbers): "the other class keeps its own gear" is vacuous now that
+    both classes carry zero chips at the moment it is checked (the chip was unequipped BEFORE the
+    class switch). Switch class WHILE the chip is still fitted on cls0, assert `other` has none and
+    cls0 still has it, then switch back and prove it is still fitted before the existing
+    UNEQUIP/EQUIP round trip (unchanged), so the block ends in the same state the code after it
+    (the level-refit block) already assumes.
+  - finding 4 (:4832-4838 old numbers): the pilot hull-point check no longer proves flats are added
+    before percentages (a stock ship has 0% at that point, so +5 reads +5 whichever order applies).
+    Fit an Armour Chip I (+8%) before capturing hull0, assert +5 flat reads +5.4 under the chip's
+    share (not +5), then unfit it, leaving the ship as found for what follows.
+  - finding 5 (:2180-2203 old numbers): the live level-1 check asserted "nothing on the bar locked",
+    the opposite of the spec once a class has abilities 2 and 3 (locked at L3/L6). Assert the
+    locked set equals `{Nth(c,2), Nth(c,3)}` minus nulls, the same exemption the static twin
+    (WallChecks :2063) already uses -- both are PASS-now, PROVES-later once lane A gives a class
+    real 2nd/3rd walled rows.
+- start: da60a2d15b75358e478de02f60b2eb07e61a38da
+- files (hash-object at start):
+  - tools/smoketest/SmokeTest.cs.txt 938db6a21d9194cc28ac86d58a1dd7016e2b35ab
+
+### Fix 3-5 POST
+- verdict: typecheck 0 errors, `verify.ps1 -Quick` ALL CHECKS PASSED.
+- files: tools/smoketest/SmokeTest.cs.txt (three sites: :2176-2204 WallChecksLive check 3's locked
+  set; :4502-4517 the class-switch/chip-separation block reordered; :4834-4848 the hull-point block
+  fits/unfits an Armour Chip I around the two Buy checks).
+- rung 3 owed: all three (WallChecksLive runs at Solo rung 3): "the bar's locked set is exactly
+  ability 2 and 3 ..." x3 classes; "the other class keeps its own gear: no chips, while the first
+  class keeps what it fitted"; "back on the first class: the chip is still fitted, not lost
+  switching away and back"; "Hull (1 pt): +5 flat under the chip's +8% share is +5.4"; "Hull again
+  (2 pts): +10.8 in all".
+- rung 5 owed: none new.
+- commit: (fix 3-5) "Walls fix 3-5: three SmokeTest checks proved what they named again".
+- next: fix 6 (EquipmentWindow.cs, finding 6).
