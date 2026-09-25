@@ -147,6 +147,11 @@ Agents (owner, 2026-09-25)
   cannot switch its own model) and assigns each agent a model by its understanding of the task. Fable critiques the development process
   and redesigns it, with a lean, economical CLAUDE.md; it reports to the owner first.
 
+- Compaction-safe: docs/plans/ledger_main.md is the coordinator's memory, updated and committed first after every event; the
+  owner compacts at will; Claude never asks for a compact (2026-09-25).
+- The process per role lives in docs/process/ (coordinator, writer, gate, tester; MAP.md says where every earlier rule went);
+  CLAUDE.md is the lean common part (Fable's redesign, applied 2026-09-25 at the build/test boundary).
+
 Testing (owner, standing)
 - (2026-09-25) Once everything requested is built: 3+ tests IN THE ENGINE for every ability added through the class system (and
   every drive row), on top of typecheck, verify, the smoke and screens runs and the bar; an audit maps each ability to its checks.
