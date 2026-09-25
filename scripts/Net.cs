@@ -170,7 +170,12 @@ public partial class Net : Node
     // the peer counts as connected: nothing is spawned for it, sent to it or relayed about it
     // until both sides have seen the other's fingerprint -- and each side refuses on its own, so
     // the refused player learns why without any message having to survive a disconnect.
-    public static readonly int Protocol = Fingerprint();
+    // SET BY THE STATIC CONSTRUCTOR, after every static field initializer of Net has run, and a property:
+    // as a readonly field initializer the walk ran mid-way through Net's own initialization, hashed this
+    // very field as 0 and every Net static declared below it as unset, and so differed from any
+    // fingerprint taken later in the same process (R1's first runs: 3724c77b against 7991f5f3).
+    public static int Protocol { get; private set; }
+    static Net() => Protocol = Fingerprint();
     public static bool Accepts(int protocol) => protocol == Protocol;
     // The smoke test's way to be a different build, to prove the refusal on a real connection.
     public static int? PretendProtocol;
@@ -220,13 +225,21 @@ public partial class Net : Node
         return (int)h;
     }
     // Values whose text is the same on every machine: numbers, words, colours and vectors, and
-    // records, tables and arrays of them. Not engine objects, and not the game's live collections
-    // (a list or dictionary field is what a run fills in -- the key bindings, the character).
+    // records, tables, struct rows and arrays of them. Not engine objects, and not the game's live
+    // collections (a list or dictionary field is what a run fills in -- the key bindings, the character).
     private static bool Plain(Type t) =>
         t.IsPrimitive || t.IsEnum || t == typeof(string) || t == typeof(decimal) || t == typeof(Color) || t == typeof(Vector2)
         || (t.IsArray && Plain(t.GetElementType()))
         || (t.GetMethod("<Clone>$") != null && !typeof(GodotObject).IsAssignableFrom(t))
-        || Table(t);
+        || Table(t) || StructRow(t);
+    // A STRUCT ROW: a readonly struct of the game's whose public fields are all Plain (a site's post, a
+    // target filter). As fixed as a table row, and written out the same way; before this, an array of
+    // them was not hashed at all. One with a field that is code (WaveCrew's Count) stays out: its text
+    // would say nothing the other build could compare.
+    private static bool StructRow(Type t) =>
+        t.IsValueType && !t.IsPrimitive && !t.IsEnum && t.Assembly == typeof(Net).Assembly
+        && t.IsDefined(typeof(System.Runtime.CompilerServices.IsReadOnlyAttribute), false)
+        && t.GetFields(BindingFlags.Public | BindingFlags.Instance) is { Length: > 0 } fields && fields.All(f => Plain(f.FieldType));
     // A TABLE ROW: one of the game's own data classes (a gear part, an upgrade, a boss type). Held in
     // a readonly field it is as fixed as a constant -- but a class, so it has no text of its own:
     // its public fields are written out, dictionaries sorted by key.
@@ -242,7 +255,7 @@ public partial class Net : Node
         Array a => "[" + string.Join(",", a.Cast<object>().Select(x => Show(x, depth))) + "]",
         System.Collections.IDictionary d => "{" + string.Join(",", d.Keys.Cast<object>()
             .Select(k => Show(k, depth) + ":" + Show(d[k], depth)).OrderBy(x => x, StringComparer.Ordinal)) + "}",
-        _ when depth < 4 && Table(v.GetType()) => v.GetType().Name + "{" + string.Join(",", v.GetType()
+        _ when depth < 4 && (Table(v.GetType()) || StructRow(v.GetType())) => v.GetType().Name + "{" + string.Join(",", v.GetType()
             .GetFields(BindingFlags.Public | BindingFlags.Instance).OrderBy(f => f.Name).Select(f => f.Name + "=" + Show(f.GetValue(v), depth + 1))) + "}",
         _ => v.ToString(),
     };

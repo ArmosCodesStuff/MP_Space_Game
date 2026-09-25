@@ -526,36 +526,39 @@ public partial class _Test : Node
         Check(smallDropped == 1 && small.Candidates.Count == 4 && small.Candidates.Contains(first6) && Rendezvous.Encode(small).Length <= 400,
               $"two IPv6 addresses on one /64 keep the first, though the code fits; one on another /64 stays ({smallDropped} dropped, {small.Candidates.Count} kept)");
 
-        // THE SEAMS ARE MUTABLE, so they stay out of the build's fingerprint: swapped, it is the same as
-        // unswapped AT THE SAME MOMENT (Net.Protocol is the startup's, and the fingerprint can move in a run)
+        // THE SEAMS ARE MUTABLE, so they stay out of the build's fingerprint: swapped, it is the build's
         var clipField = typeof(Rendezvous).GetField(nameof(Rendezvous.Clipboard), BindingFlags.Public | BindingFlags.Static);
-        int still = FingerprintNow();
         var clipWas = Rendezvous.Clipboard;
         Rendezvous.Clipboard = () => "swapped";
         int swapped = FingerprintNow();
         Rendezvous.Clipboard = clipWas;
-        Check(clipField != null && !clipField.IsInitOnly && !clipField.IsLiteral && swapped == still,
-              $"Rendezvous.Clipboard is mutable and outside the build's fingerprint (swapped {swapped:x8}, unswapped {still:x8}{Moved(still)})");
+        Check(clipField != null && !clipField.IsInitOnly && !clipField.IsLiteral && swapped == Net.Protocol,
+              $"Rendezvous.Clipboard is mutable and outside the build's fingerprint (swapped {swapped:x8}, the build's {Net.Protocol:x8}{Moved(swapped)})");
     }
 
     // THE FINGERPRINT NOW (Net.Fingerprint, as Net.Protocol was taken at startup), and its PARTS: every
     // fixed value it reads, "Type.Field=value". The parts are taken at the top of the solo run, so a
-    // seam's check can say what moved since then: the first solo run of R1 found the fingerprint at the
-    // end of the run differing from Net.Protocol, with no swap in force.
+    // check that finds the fingerprint moved can say what moved: R1's first solo run found it moved by
+    // the pilot's purchases (Character.Bought, a readonly array until then).
     static int FingerprintNow() => (int)typeof(Net).GetMethod("Fingerprint", BindingFlags.NonPublic | BindingFlags.Static, Type.EmptyTypes).Invoke(null, null);
     static List<string> FingerprintParts()
     {
         var parts = new List<string>();
-        typeof(Net).GetMethod("Fingerprint", BindingFlags.NonPublic | BindingFlags.Static, null, new[] { typeof(List<string>) }, null).Invoke(null, new object[] { parts });
+        var culture = System.Globalization.CultureInfo.CurrentCulture;
+        System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
+        try { typeof(Net).GetMethod("Fingerprint", BindingFlags.NonPublic | BindingFlags.Static, null, new[] { typeof(List<string>) }, null).Invoke(null, new object[] { parts }); }
+        finally { System.Globalization.CultureInfo.CurrentCulture = culture; }
         return parts;
     }
     static List<string> _partsAtStart;
+    static int _hashAtStart;                // the fingerprint when the parts were taken: Net's, unless it moved before the run began
     // "" while the fingerprint is still the startup's; otherwise what moved: each changed part, cut to
     // 60 characters either side of where it first differs (a table's part is one long line).
     static string Moved(int now)
     {
         if (now == Net.Protocol) return "";
         if (_partsAtStart == null) return $"; the startup's was {Net.Protocol:x8}";
+        string early = _hashAtStart == Net.Protocol ? "" : $" -- and it had moved before the run began ({_hashAtStart:x8} at the harness's start), which no part below can name";
         static string Key(string p) => p.Split('=')[0];
         static string Cut(string s, int at) { int from = Math.Max(0, at - 60); return s[from..Math.Min(s.Length, at + 60)]; }
         var was = _partsAtStart.GroupBy(Key).ToDictionary(g => g.Key, g => g.First());
@@ -568,7 +571,7 @@ public partial class _Test : Node
             while (at < old.Length && at < p.Length && old[at] == p[at]) at++;
             moved.Add($"{Key(p)} at {at}: \"{Cut(old, at)}\" became \"{Cut(p, at)}\"");
         }
-        return $"; the startup's was {Net.Protocol:x8}, and {moved.Count} parts moved since the run began: {string.Join(" | ", moved.Take(4))}";
+        return $"; the startup's was {Net.Protocol:x8}{early}; {moved.Count} parts moved since the run began: {string.Join(" | ", moved.Take(4))}";
     }
 
     // ── WEBRTC, R1: THE STUN ROWS AND THE WALK (§5, §10.4 R1) ───────────────────────────────────────
@@ -617,15 +620,14 @@ public partial class _Test : Node
               && url0 == "stun:stun.l.google.com:19302" && Link.Config(-1)["iceServers"].AsGodotArray().Count == 0 && Link.Config(2)["iceServers"].AsGodotArray().Count == 0
               && Link.GatherMs == 2000 && Link.LinkMs == 12000 && Link.InviteLifeS == 900,
               $"the STUN rows are Google's then Cloudflare's and nothing else, one to a connection (row 0 configures {url0}); a row is passed over after 2,000 ms, a reply has 12,000 ms, an invite 900 s");
-        // THE SEAMS ARE MUTABLE, so they stay out of the build's fingerprint: swapped, it is the same as
-        // unswapped at the same moment (a readonly StunRow[] would be read: an array of records is Plain)
+        // THE SEAMS ARE MUTABLE, so they stay out of the build's fingerprint: swapped, it is the build's
+        // (a readonly StunRow[] would be read: an array of records is Plain)
         var serversField = typeof(Link).GetField(nameof(Link.Servers), BindingFlags.Public | BindingFlags.Static);
-        int still = FingerprintNow();
         Link.Servers = new[] { SilentA, SilentB, BoxStun };
         int swapped = FingerprintNow();
         Link.Servers = _servers;
-        Check(serversField != null && !serversField.IsInitOnly && !serversField.IsLiteral && swapped == still,
-              $"Link.Servers is mutable and outside the build's fingerprint (with the box's three rows {swapped:x8}, with its own {still:x8}{Moved(still)})");
+        Check(serversField != null && !serversField.IsInitOnly && !serversField.IsLiteral && swapped == Net.Protocol,
+              $"Link.Servers is mutable and outside the build's fingerprint (with the box's three rows {swapped:x8}, the build's {Net.Protocol:x8}{Moved(swapped)})");
 
         var box = Box("GET", "/box/stats");
         bool boxUp = box.TryGetProperty("stun", out var stunStats) && stunStats.GetProperty("bound").GetBoolean()
@@ -807,13 +809,12 @@ public partial class _Test : Node
         // THE GUEST'S MARK: drawn once per process, never 0, outside the build's fingerprint
         var markField = typeof(Rendezvous).GetField("_guest", BindingFlags.NonPublic | BindingFlags.Static);
         uint mark = Rendezvous.Guest;
-        int still = FingerprintNow();
         markField?.SetValue(null, (uint?)(mark ^ 0x80000000u));
         int swapped = FingerprintNow();
         markField?.SetValue(null, (uint?)mark);
-        Check(mark != 0 && Rendezvous.Guest == mark && markField != null && !markField.IsInitOnly && !markField.IsLiteral && swapped == still
+        Check(mark != 0 && Rendezvous.Guest == mark && markField != null && !markField.IsInitOnly && !markField.IsLiteral && swapped == Net.Protocol
               && typeof(Rendezvous).GetField(nameof(Rendezvous.Guest), BindingFlags.Public | BindingFlags.Static) == null,
-              $"the guest's mark is drawn once per process, never 0, a property over a mutable field outside the build's fingerprint ({mark:x8}; swapped {swapped:x8}, unswapped {still:x8})");
+              $"the guest's mark is drawn once per process, never 0, a property over a mutable field outside the build's fingerprint ({mark:x8}; swapped {swapped:x8}, the build's {Net.Protocol:x8}{Moved(swapped)})");
 
         var host = new Desk();
         int from = Rendezvous.ListenFrom;
@@ -1207,7 +1208,7 @@ public partial class _Test : Node
         var argv = OS.GetCmdlineUserArgs();
         string role = argv.FirstOrDefault() ?? "solo";
         SeedFrom(argv);
-        if (role == "solo") { _partsAtStart = FingerprintParts(); _replyWindow = ReplyWindowHolds(); }
+        if (role == "solo") { _partsAtStart = FingerprintParts(); _hashAtStart = FingerprintNow(); _replyWindow = ReplyWindowHolds(); }
         Settings.TestVolume = 0.05f; Settings.ApplyVolume();   // six windows, nobody listening
         NoRouterNoInternet();
         await Wait(0.3);
@@ -2198,6 +2199,38 @@ public partial class _Test : Node
     // One check, about a trap in THIS game's protocol hash that a build string can fall into.
     void BuildChecks()
     {
+        // THE PILOT IS NOT THE BUILD: nothing a run changes about the pilot enters the fingerprint. The
+        // bought upgrades were a readonly int[] -- Plain to the fingerprint -- so every purchase moved it,
+        // and a peer whose Net was first touched after a pilot loaded would have hashed that pilot's
+        // purchases. Asserted by construction (no Character part at all) and by effect (purchases made, the
+        // fingerprint is still the build's).
+        var pilotParts = FingerprintParts().Where(p => p.StartsWith("Character.", StringComparison.Ordinal)).ToList();
+        var boughtWas = Character.Bought.ToArray();
+        for (int i = 0; i < Character.Bought.Length; i++) Character.Bought[i] = Rng.RandiRange(0, Progression.MaxPerUpgrade);
+        int bought = FingerprintNow();
+        boughtWas.CopyTo(Character.Bought, 0);
+        Check(pilotParts.Count == 0 && bought == Net.Protocol && typeof(Character).GetField(nameof(Character.Bought), BindingFlags.Public | BindingFlags.Static) == null,
+              $"nothing about the pilot is part of the build's fingerprint: its bought upgrades are a property over a mutable field, and buying moves nothing ({bought:x8}, the build's {Net.Protocol:x8}; {(pilotParts.Count == 0 ? "no Character part" : string.Join(" | ", pilotParts))}{Moved(bought)})");
+        // THE FINGERPRINT NEVER HASHES ITSELF, and it is whole when it is taken: Net.Protocol is a property
+        // set by Net's static constructor, after every Net static is set. As a readonly field initializer
+        // it hashed itself as 0 and every Net static below it as unset, so it differed from every
+        // fingerprint taken later in the same process (R1's first runs: 3724c77b against 7991f5f3).
+        var selfParts = FingerprintParts().Where(p => p.StartsWith("Net.Protocol", StringComparison.Ordinal)).ToList();
+        int now = FingerprintNow();
+        Check(typeof(Net).GetField(nameof(Net.Protocol), BindingFlags.Public | BindingFlags.Static) == null && selfParts.Count == 0 && _hashAtStart == Net.Protocol && now == Net.Protocol,
+              $"the build's fingerprint never hashes itself and is whole when it is taken: at the harness's start and now it is the build's ({_hashAtStart:x8} at the start, {now:x8} now, the build's {Net.Protocol:x8}{(selfParts.Count == 0 ? "" : "; " + string.Join(" | ", selfParts))})");
+        // A STRUCT ROW IS HASHED: a readonly struct whose public fields are all Plain (a site's post) is
+        // written out field by field -- an array of them was not hashed at all -- so one field of one row,
+        // moved, moves the fingerprint, and put back it is the build's again
+        var posts = Emplacements.PirateBase;
+        int at = Rng.RandiRange(0, posts.Length - 1);
+        var post = posts[at];
+        posts[at] = new Post(post.Row, post.At + Vector2.Right.Rotated(VaryAngle()) * Vary(1f, 50f));
+        int shifted = FingerprintNow();
+        posts[at] = post;
+        string postPart = FingerprintParts().FirstOrDefault(p => p.StartsWith("Emplacements.PirateBase=", StringComparison.Ordinal)) ?? "none";
+        Check(shifted != Net.Protocol && FingerprintNow() == Net.Protocol && postPart.Contains("Post{At=", StringComparison.Ordinal),
+              $"a struct row is part of the build's fingerprint: one pirate-base post moved moves it, put back it is the build's again (post {at}: {shifted:x8}, the build's {Net.Protocol:x8}; {postPart[..Math.Min(90, postPart.Length)]})");
         // Net.Fingerprint() folds in every static field of every null-namespace type that is
         // IsLiteral or IsInitOnly with a Plain field type -- and string is Plain. A
         // `public static readonly string Build` would therefore enter the hash two peers are

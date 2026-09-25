@@ -1343,11 +1343,18 @@ Each of these compiled clean and was wrong at runtime. The smoke test covers all
 - **`Link.Backlog` does not see the SCTP socket's own send buffer.** The plugin's buffered amount is
   what libdatachannel queues after that buffer is full: R1's first solo run put 1 MB on one row in one
   frame and read 0. The check puts until the row backs up; §3.8's backlog guard acts only past it.
-- **`Net.Protocol` is the startup's fingerprint, and the fingerprint moves during a solo run** (R1's
-  first run: 3724c77b at startup, 7991f5f3 near the end, with no seam swapped). A check that a seam is
-  outside the fingerprint compares swapped with unswapped at the same moment, never with
-  `Net.Protocol`; its message names the parts that moved since the run began (open: which, and
-  whether a real game moves them before `Net` is first touched).
+- **The build's fingerprint must never be computed inside a type initializer, nor hash live state.**
+  `Net.Protocol = Fingerprint()` as a readonly field initializer ran mid-way through Net's own
+  initialization: it hashed itself as 0 (a readonly int is Plain) and every Net static declared below
+  it as unset, so every fingerprint taken later in the process differed (R1: 3724c77b at startup,
+  7991f5f3 at any moment after, "0 parts moved" within the run). It is a property now, set in Net's
+  static constructor. The same class of fault: `Character.Bought`, the pilot's purchases, was a
+  readonly int[] and so hashed live; it is a property over a mutable field. A value that is state, not
+  build, is never a readonly static of a Plain type; the solo run's `BuildChecks` hold both.
+- **A readonly struct row was invisible to the fingerprint.** `Net.Plain` took records and table
+  classes, not structs, so an array of `Post` (the pirate base's site) was never hashed and two builds
+  that placed its pylons differently met. `StructRow` takes a game readonly struct whose public fields
+  are all Plain; one whose field is code (`WaveCrew.Count`) stays out, as its text compares nothing.
 
 ## Smoke test
 

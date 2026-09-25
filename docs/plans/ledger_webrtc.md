@@ -364,6 +364,50 @@ third-party infrastructure but the Google and Cloudflare STUN rows.
 - checkpoint: the J10 commit
 - next: J9c (the fingerprint's own drift, below), then J11
 
+#### J9c PRE (the fingerprint drifts; rung 3 on 8760795: both seams 7991f5f3, the startup's 3724c77b, "0 parts moved since the run began")
+- intent: D17's cause. `Net.Protocol = Fingerprint()` was a readonly field INITIALIZER: the walk ran
+  inside Net's own type initialization and hashed `Net.Protocol=0` (itself: a readonly int is Plain)
+  and every Net static declared below it as unset; every later fingerprint sees them set, so it moved
+  before the harness began (hence no part moved within the run). Fix: `Protocol` a property with a
+  private setter, set in Net's static constructor (after every field initializer; not a field, so it
+  never hashes itself). `Character.Bought` a property over a mutable field (live pilot state in a
+  readonly int[] is hashed: latent, the same class of fault). The parts diff also keeps the hash at the
+  harness's start, so it says when the fingerprint moved before the run began. The seam checks back to
+  `== Net.Protocol`; new checks: the fingerprint never hashes itself and is the build's at the harness's
+  start; a purchase leaves it the build's. DESIGN's J9b trap rewritten to the cause.
+- added (coordinator, walls review): `Net.Plain` accepts a readonly struct of the game's whose public
+  fields are all Plain (`StructRow`), written out like a table row: `Post`, `Dock`, `TargetFilter`
+  rows were never hashed. `WaveCrew` stays out (its `Count` is a `Func`). Check: one pirate-base
+  post moved moves the fingerprint. Net.cs has one writer: this lane.
+
+#### J9c POST
+- verdict: done; `verify.ps1 -Quick` ALL CHECKS PASSED. Untested at rung 3.
+- files: scripts/Net.cs (`Protocol` a property set by `static Net()`; `StructRow` in `Plain` and
+  `Show`), scripts/Character.cs (`Bought` a property over a mutable field), tools/smoketest/
+  SmokeTest.cs.txt (`FingerprintParts` under the invariant culture, `_hashAtStart`, `Moved` says when
+  it moved before the run began; the three seam checks back to `== Net.Protocol`; BuildChecks' three
+  new checks), docs/DESIGN.md (the J9b trap rewritten to the cause; the struct-row trap)
+- decisions:
+  - D17 (closed) · **The drift was the fingerprint hashing itself mid-initialization**, not a seam and
+    not the pilot: `Protocol = Fingerprint()` as a field initializer read `Net.Protocol=0` and the Net
+    statics below it unset. `Bought` was the same class of fault, latent (0 parts moved in the run).
+  - D24 · **`StructRow` needs at least one public field, all Plain**; a record struct (no public
+    fields) keeps its old treatment (not hashed), `WaveCrew` stays out (a `Func` field).
+- rungs owed (rung 3, two seeds): "nothing about the pilot is part of the build's fingerprint"; "the
+  build's fingerprint never hashes itself and is whole when it is taken"; "a struct row is part of the
+  build's fingerprint"; the three seam checks ("Rendezvous.Clipboard is mutable ...", "Link.Servers is
+  mutable ...", "the guest's mark ..."), each now against `Net.Protocol`; the existing "the build
+  fingerprint covers the stat sheets, the gear table and the prices". Rung 5 once R2 lands: the
+  fingerprint's value changed (a property now, struct rows in), which both ends of a run share.
+- checkpoint: the J9c commit
+- next: J11
+- files: scripts/Net.cs, scripts/Character.cs, tools/smoketest/SmokeTest.cs.txt, docs/DESIGN.md,
+  docs/plans/ledger_webrtc.md
+- from: 3e4df1bb54cf87085e3fcd8cf0c2d00047b48f2e
+- hashes: Net.cs 1941e3c152c073ab3a7b43d9b684594bf8b402de; Character.cs
+  fbe2cc81e905f8e3d2746f55b2a40b3efa1b7efb; SmokeTest.cs.txt b2d6896f4c20c4f32054c062c99b685b9b0de203;
+  DESIGN.md 5b58972fb5eca8c2f587f99fe9f31eded98d8392
+
 ### HANDOFF for the fresh agent (J10, J11)
 
 Read: this section, `scripts/Rendezvous.cs` (whole, ~420 lines), `scripts/Link.cs` (whole), the
