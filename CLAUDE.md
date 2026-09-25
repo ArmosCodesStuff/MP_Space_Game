@@ -72,7 +72,7 @@ The cost is the context re-read on every turn and by every agent, not the output
    BEFORE replying, and delete what is done; commit it with the next commit. So a compact, the owner's or
    an automatic one, can happen at any moment and loses nothing. After a compact: `tools\lanes.ps1` and
    ledger_main.md, trusted over the summary; nothing else is re-read until a task needs it. Claude cannot
-   run `/compact`; it tells the owner "compact now" when the context passes ~100k, a slice is committed or
+   run `/compact`; it tells the owner "compact now" when the context passes ~200k, a slice is committed or
    merged, the subject changes, a big log or report has been concluded, or batches have just been
    launched (launch first: running batches are untouched by a compact). Never every turn: it throws away
    the prompt cache.
@@ -139,7 +139,7 @@ removed-path invariants, and only when a check's wiring is in doubt.
   Raider`, `HitRadius < 20f` are design bugs); the generic path is the ONLY path.
 - **Name it for the mechanism, not its first use**; the rename happens in the same edit as the second use.
 - **Extend before inventing**: `Classes.All` · `Ab.*` + `ClassDef.Abilities` · `ClassDef.Rows` ·
-  `Enemies.All` · `Economy.All` · `Missions` · `Equipment` · `Tag` · `Status` · `NetIds` ·
+  `Enemies.All` · `Economy.All` · `Unlocks.All` · `Missions` · `Equipment` · `Tag` · `Status` · `NetIds` ·
   `TargetFilter` · `TurretSpec`/`ITurretHost` · `Aim`/`Motion` · `PlayerShip.Slot` ·
   `PlayerShip.Incoming`/`Guarded` · `PlayerShip.NoteDealt`. Before the second of anything, make the first
   a row.

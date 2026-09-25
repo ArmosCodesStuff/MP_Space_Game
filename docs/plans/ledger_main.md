@@ -1,12 +1,11 @@
-# Coordinator state (CLAUDE.md section 4.6) -- updated 2026-09-25 02:35
+# Coordinator state (CLAUDE.md section 4.6) -- updated 2026-09-25 (compact threshold now ~200k)
 
 Engine outputs for the running batches: S = C:\Users\logan\AppData\Local\Temp\claude\C--Users-logan-Downloads-WarShips-Version-L\31bcb796-5d47-41e0-ad68-ba3af2cf375b\scratchpad
 (tools\lanes.ps1 -Runs S). New batches write to %TEMP%\warships_rungs.
 
 ## Running (the old way, rungs per job: let them finish)
 - wf_e2b4eda1-d12 / task wq9tnfn98, "lanes-walls-art". The result is {walls, gate, merge, art}.
-  - walls: the chain is green at 54a0907; next the opus gate, then it merges wt/walls into version-l itself.
-    On merge=true: add `Unlocks.All` to CLAUDE.md section 7's list. On merge=false: merge by hand.
+  - walls: DONE, merged into version-l as 29b154e; `Unlocks.All` added to CLAUDE.md section 7.
   - art: the shockwave ring and camera repositioning, then J4 and J5. The camera must NEVER zoom past the player's max
     (COORDINATOR NOTE at the end of wt_art's ledger_sprites.md). Check for a zoom-out and replace it if found. Send the owner
     the frames it returns.
