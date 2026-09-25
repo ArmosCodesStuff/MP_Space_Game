@@ -12,10 +12,15 @@ Engine outputs for the old-way batches: S = C:\Users\logan\AppData\Local\Temp\cl
   40; check hid it) -> once per dash; ring-hit reach and approach/spawn had no failing check; boss Find measured from the centre (COORDINATOR
   DECISION: from the hull, m.Find + L/2, per the owner's "what is placed around a boss scales with it"); stale comments; a false Known broken.
   Camera ruling PASSED (Hub.BossFramed slides, ZoomOutMax 1.53 asserted). Fix A4, quick, gate 2, merge. Frames are read in the test phase.
+- wf_b63808ec-4ad / task wojzfsouf, "wave-1-build": six lanes in parallel, build only, each from base f168508 (= kits 809313c + version-l;
+  branch wt/wave): drives (B: F21/F22/F24), fields (D: F9), wings (E: F13), curve (F: Par, boss rows, ladder), raids (G: Squads), net2
+  (R2-R5 code; S2 first if missing). Worktrees WarShips_wt_<key>, ledgers ledger_<key>.md (net2: ledger_webrtc.md). Each: build, opus gate,
+  one fix + gate 2, then SERIALIZED merge (merge version-l into the lane, quick, merge --no-ff; waits up to 5 min for a clean MAIN).
+  Returns one row per lane. A lane with no merge: read its row, launch its fix or merge it by hand. Keep MAIN commits quick.
+
 ## Next
-1. When kits merges: launch the next wave ALL AT ONCE, build only (kits_v31.md section 8): lane A slice 3 (F5, F23 Lines, F6, F7), then
-   slices 4-6 (6 = the 12 classes' kits by tier) in the same lane; lanes B (F21, F22, F24), D (F9), E (F13), F (Par.cs, numbers section 8),
-   G (Squads.cs); WebRTC R2-R5 (network_webrtc.md); then lane I (items). Each: quick per job, opus code gate, merge in section 8's order.
+1. When kits (wthoe9tj1) merges: launch lane A slices 3-6 in WarShips_wt_kits, build only (kits_v31 section 8: slice 3 F5, F23 Lines, F6, F7;
+   4 F8, F10; 5 F12, F11, F14, F19; 6 the 12 classes by tier 6a-6d, each ClassDef.Abilities in learn order). Then lane I (items) once curve merges.
 2. TEST PHASE, once everything is merged: the slots proof, then quick,solo,solo,six,screens (+ six,six) across slots, fix low, then the bar
    once, VERIFIED:, push version-l and main, release; frames to the owner (the art lane's Drake, Rusty, siege, player ships).
 3. Delete worktrees WarShips_wt_walls, WarShips_wt_net, WarShips_wt_slots, WarShips_wt_test after the merges.
