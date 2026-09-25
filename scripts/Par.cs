@@ -16,7 +16,8 @@ using System;
 //
 // A ROW MUST FILL IN: its level, par's hull, par's DPS against craft, and the Lancer's 60 s hull.
 // The rows are `models/numbers_v2.py`'s (run from docs/plans/models): the item pass re-runs the model
-// on its own Tiers and Loot rows and re-literals this table, and nothing else moves. Every scale is a
+// on its own Tiers and Loot rows and re-literals this table, and the two L1 boss hulls in Missions.Bosses
+// with it (the Lancer's is Rows[0].Boss, the Drake's x700/760; CurveParChecks ties them). Every scale is a
 // RATIO of two rows, so every peer computes the same figure from the level alone.
 //   HullScale(L)   = Boss(L) / Boss(1)     a boss's and a siege's hull
 //   CraftScale(L)  = Craft(L) / Craft(1)   a raider's hull

@@ -79,7 +79,7 @@ public sealed class WaveBrief
     public int Index;             // which wave of its run this is (an escort's leg; 0 otherwise)
     public int Level = 1;         // the mission level behind it
     public double Threat;         // an escort's threat, when there is one
-    public double Scale = 1;      // a level named outright (a called wave)
+    public double CalledLevel = 1; // a level named outright (a called wave)
     public Vector2 Origin;        // what the wave forms up around
     public Vector2 Anchor;        // the point a Fan is measured to, and a Spot sits on
     public Node2D Quarry;         // the one thing it hunts, or null for whatever it finds
@@ -184,7 +184,7 @@ public static class Waves
         // and nothing about the party in it (Hub.SpawnPatrol's old default arguments).
         new() { Id = "patrol", Trigger = WaveTrigger.Called,
                 Form = WaveForm.Spot,
-                Strength = b => b.Scale,
+                Strength = b => b.CalledLevel,
                 Crew = Patrol },
 
         // AN ESCORT'S HUNTERS: a wave sent after one quarry, in from the map's edge beside it --

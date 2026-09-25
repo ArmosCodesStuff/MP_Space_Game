@@ -134,3 +134,25 @@ engine-unproven: every job's checks. WHAT THE FINAL TEST PHASE OWES (lane F):
 Defaults taken (also the return's open): D1-D6 above; Game.Version not bumped for the gear_level keys
 (saves disregarded; lane C set 3 in this batch); Raider.cs touched in 3 hunks (Strength comment + MaxHull +
 Volley, and the two Strike lines) -- lane G merges around them.
+
+## GATE FIX PRE — tier opus
+Intent: opus merge gate findings: scale->level renames (Hub.SpawnPatrol/SpawnRaider, Raids.Patrol, WaveBrief.Scale->CalledLevel,
+Shots 53 passes level 1); escort-threat toughness comment; Emplacements base/pylons read silver_lancer by id + a
+reorder check; Par.cs:19 comment + CurveParChecks ties Missions boss rows to Par.Rows[0].Boss. HEAD 34112b19daf785cb9898bbfa48a68822ac773229. Hashes:
+  scripts/Hub.cs 69d4eca3c2588d7305df21a0d56d97042fdf1548
+  scripts/Raids.cs 580898dbed1389428696c77f397a3d50e114ce3b
+  scripts/Waves.cs e7cf76426f9d76dedc48e12f5ba86388d205f4d3
+  scripts/Emplacements.cs 597322ba76e8587011e33e1d22f0b93ad26d44c1
+  scripts/Par.cs 80d18a4388a00bb0389544b4ce1e1d0a7f4b8f75
+  tools/smoketest/SmokeTest.cs.txt 1589a1a7629350a3204dd2a67b1e2a677ee17ebf
+  tools/screens/Shots.cs.txt 5ee2c7a2049720b3d561cfaaf484bf1a23e4ffb1
+## GATE FIX POST
+Verdict: typecheck 0 errors, quick ALL CHECKS PASSED; diff read. Files: Hub (SpawnPatrol / SpawnRaider `level`),
+Raids.Patrol `level`, Waves (WaveBrief.Scale -> CalledLevel, the "patrol" row reads it), Shots 53_raid_incoming
+passes level 1 (was 1.1), SmokeTest escort-threat comment (Par.LevelAtHull), Emplacements (SiegeRow
+"silver_lancer" read by id; base + pylons), Par.cs:19 comment (the boss rows move with the table).
+New checks: CurveParChecks "the boss rows stand on Par's anchor" (silver_lancer = Rows[0].Boss, drake_bastion
+x700/760, within 0.5); CurveBossRowChecks "with the boss rows reordered, the siege still stands on
+silver_lancer" (rows swapped in a try/finally, base 3222 / pylon 402.75 at three varied levels).
+engine-unproven: rungs owed in the final test phase (solo x2: both new checks; screens: 53 read once).
+Next: none (lane built; merge gate re-run).

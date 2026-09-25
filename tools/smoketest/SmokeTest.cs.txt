@@ -3145,6 +3145,13 @@ public partial class _Test : Node
         // THE L1 ANCHOR: the Lancer's 60 s hull is 3222 (the fleet's walled L1 median), the Drake's x700/760.
         Check(Math.Abs(Par.Rows[0].Boss - 3222) < 0.5 && Math.Abs(Par.Rows[0].Boss * 700 / 760 - 2968) < 0.5,
               $"the Lancer's L1 hull on par's 60 s is 3222 and the Drake's 2968 ({Par.Rows[0].Boss:0}, {Par.Rows[0].Boss * 700 / 760:0})");
+        // THE BOSS ROWS MOVE WITH PAR: when the item pass re-literals the table, the two L1 hulls in
+        // Missions.Bosses (read by id) must move with Rows[0].Boss, or this goes red.
+        {
+            double lanHull = Missions.Bosses.First(b => b.Id == "silver_lancer").Hull, draHull = Missions.Bosses.First(b => b.Id == "drake_bastion").Hull;
+            Check(Math.Abs(lanHull - Par.Rows[0].Boss) < 0.5 && Math.Abs(draHull - Par.Rows[0].Boss * 700 / 760) < 0.5,
+                  $"the boss rows stand on Par's anchor: silver_lancer {lanHull} = Rows[0].Boss {Par.Rows[0].Boss:0.0}; drake_bastion {draHull} = x700/760 of it ({Par.Rows[0].Boss * 700 / 760:0.0})");
+        }
         // TIME TO DIE holds at every level (a pilot who stops dodging): par's hull against the cut
         // sheet x DamageScale, less the 0.5% a second it regenerates -- 31.0 s against the Lancer's 15.76,
         // 42.0 s against the Drake's 12.19, at three varied levels anywhere on the table (fractional too).
@@ -3186,6 +3193,22 @@ public partial class _Test : Node
         Check(beam.Damage == 50 && beam.Damage * 5 == 250 && Dmg(dra, "throw") == 250
               && lan.Moves.Length == 5 && dra.Moves.Length == 3,
               $"the two supers are kept: the burn {beam.Damage} a tick (250 over its five landings) and the rock {Dmg(dra, "throw")}; no other move on either row");
+        // A SIEGE READS THE LANCER'S ROW BY ID, not by its place in Missions.Bosses (whose order sets
+        // which boss holds odd and even levels): with the two rows swapped for the length of this
+        // check, the base is still 3222 and a pylon 402.75, at three varied levels.
+        var order = Missions.Bosses.ToArray();
+        try
+        {
+            (Missions.Bosses[0], Missions.Bosses[1]) = (Missions.Bosses[1], Missions.Bosses[0]);
+            var pb = Emplacements.Of(Emplacements.RowOf(Emplacements.Base)); var py = Emplacements.Of(Emplacements.RowOf(Emplacements.Pylon));
+            for (int k = 0; k < 3; k++)
+            {
+                int L = (int)Vary(1f, 40f);
+                Check(Missions.Bosses[0].Id == "drake_bastion" && Math.Abs(pb.Hull(L) - 3222) < 1e-9 && Math.Abs(py.Hull(L) - 402.75) < 1e-9,
+                      $"with the boss rows reordered, the siege still stands on silver_lancer at L{L}: base {pb.Hull(L)} (3222), pylon {py.Hull(L)} (402.75)");
+            }
+        }
+        finally { order.CopyTo(Missions.Bosses, 0); }
     }
 
     // A RAIDER'S STRENGTH IS A LEVEL (lane F): its hull on Par's craft scale, its laser volley on
@@ -4743,8 +4766,9 @@ public partial class _Test : Node
         Check(hunters.All(r => !r.Heavy && Math.Abs(r.MaxHull - 0.5 * 25 * Par.CraftScale(r.Strength)) < 1e-9 && Math.Abs(r.Hp - r.MaxHull) < 1e-9),
               $"the first wave is light fighters only, at half hull ({string.Join(", ", hunters.Select(r => $"{(r.Heavy ? "heavy" : "light")} {r.Hp:0.0}"))})");
         // THE ESCORT'S THREAT sets each wave: a quarter each from the load (a level per 1000 cr it will
-        // fetch escorted), the party (half its mean level, half its ships' toughness -- a level per 10%
-        // of hull over its class's own), the highest boss, and the route (half a level a wave)
+        // fetch escorted), the party (half its mean level, half its ships' toughness -- the level par
+        // stands at with that much hull over its class's own, Par.LevelAtHull), the highest boss, and
+        // the route (half a level a wave)
         Check(Math.Abs(Waves.EscortThreat(0, 1, 1, 0, 0) - 1.0) < 1e-9 && Math.Abs(Waves.EscortThreat(4000, 5, 3, 5, 8) - 4.75) < 1e-9,
               "an escort's threat: 1 for a fresh base's first wave; 4.75 for 4000 cr aboard, a level-5 party of toughness 3, the level-5 boss beaten, the ninth wave");
         Check(Waves.ThreatLights(1.0) == 3 && Waves.ThreatLights(4.75) == 4 && Waves.ThreatLights(40) == 6
