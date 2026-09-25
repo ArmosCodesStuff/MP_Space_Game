@@ -1,5 +1,5 @@
-# Coordinator state -- last event 15:20: the test phase resumed as task wbbiuayve (same run id) after a stop: the fails file now
-# collapses repeated lines (59669ac); a blocked review scope retries. Review fixes cap/fr/hv merged; lt and net pending; the baseline
+# Coordinator state -- last event 15:10: review fixes net merged (a83572d); lt retrying (rvlt_c on slot 0, 15:08); then round 1.
+# The test phase runs as task wbbiuayve (resumed at 14:41 with the fails file collapsing repeated lines, 59669ac). The baseline
 # solo has 41 fails + 1 throw, the cap/fr merges added 2 throws (round 1's triage fixes FAIL LANEs first).
 Under 25 lines. Edit tool only; commit as the FIRST call after every event. The hook re-injects this after a compact and
 cross-checks every `task <id>` below against its output file. Facts go to README / CHANGES, not here.
@@ -14,8 +14,8 @@ cross-checks every `task <id>` below against its output file. Facts go to README
 - (none)
 
 ## Next (1 is the exact next call, copy-pasteable)
-1. Wait for task wvagk489n; take its return (under 20 lines) as above.
-3. After the release: the two-machine test (NOTES.txt script) as a ledger row; docs/process/fable_report_1.md + _2.md "after the release"
+1. Wait for task wbbiuayve; take its return (under 20 lines) as above.
+2. After the release: the two-machine test (NOTES.txt script) as a ledger row; docs/process/fable_report_1.md + _2.md "after the release"
    lists (harness split, enums, CHANGES fold, scenarios lane, PlayerShip/Hub split), each as a lane with a retrospective after.
 
 ## Owner questions (one line each, with its default)
