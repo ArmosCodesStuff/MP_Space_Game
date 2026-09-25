@@ -409,3 +409,7 @@ Done: J2, J3, J4 (a3265f7, 43b0953, 19cfffa). Next is kits6b-J5; no PRE written.
     bubble press now LaneA4GuestPointPress on Q.
   - rung 4 (screens): 79c_tot_lines, 79d_redeploy_marks, 79e_redeploy_ring, 79f_mortar_circle, 79g_gravity_well,
     79h_lance_burn, 79i_lance_mend, 79j_overdrive_field, 79k_repair_field (79h-79k new art: read by eye once).
+
+### kits6b-J11 · PRE · kits6b gate fix (the opus merge gate's four findings) -- tier opus
+- Intent: (1) the gravity well becomes a Zones.All row 'well' (ZoneDef Light/Heavy pull stat ids, Zones.Tick drags Prey), Ab.Well Lays it; delete Wells.cs, Hub.Wells + tick, CastWell/WellPoint, Fx 'well' row + FxShape.Vortex + Fx.Raise's time; checks to H.Laid + the row. (2) LaneA6bRedeployChecks' bow knife edge (wrap to [-60,300)). (3) TOT on a moving target 0/130/260 u/s; the repair field skips a wreck. (4) Ships.cs:24 stale comment.
+- HEAD b6e3343. Files: scripts/Wells.cs c1b5ab6, scripts/Zones.cs 2a5475d, scripts/Hub.cs 523046c, scripts/PlayerShip.cs d07b9b2, scripts/Abilities.cs 5b3dd81, scripts/Fx.cs 40b761a, scripts/Ships.cs 775f5d1, scripts/Targeting.cs 7266a74, tools/smoketest/SmokeTest.cs.txt bc154a9, tools/screens/Shots.cs.txt deefe9e, docs/CHANGES.md fc49f8d, docs/DESIGN.md 86a6eab,
