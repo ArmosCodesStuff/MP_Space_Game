@@ -216,6 +216,8 @@ public static class Missions
     // not move (one boss a level; beating level L unlocks L + 1 whatever was skipped to reach it).
     public const int SkipAhead = 2;
     public static int Top(int kind) => Unlocked(kind) + SkipAhead;
+    // THE HIGHEST LEVEL CLEARED ON ANY LADDER: what the salvage ladder's cap reads (Equipment.LevelCap).
+    public static int HighestAnywhere() => Categories.Select(HighestIn).DefaultIfEmpty(0).Max();
 
     // WHAT A LEVEL ADDS TO A MISSION: its hull and its damage on Par's scale, and the party's share.
     public static double HullMult(int level, int party) => Par.HullScale(level) * (1 + 0.6 * (Math.Max(1, party) - 1));

@@ -347,6 +347,18 @@ public partial class _Shots : Node
             await Snap("55_equipment");
             H.ToggleEquipment(); await W(0.2);
         }
+        // ...and salvage levels on the SLOT (lane F): the Weapon slot at level 4 (+12% beside its part's
+        // name) and held at the cap with level 3 cleared (its price greyed), the Shield slot at level 1
+        {
+            var keepLv = new System.Collections.Generic.Dictionary<string, int>(Character.GearLevel);
+            var keepCl = Character.BossCleared.ToDictionary(kv => kv.Key, kv => kv.Value);
+            Character.GearLevel["Weapon"] = 4; Character.GearLevel["Shield"] = 1; Character.BossCleared["silver_lancer"] = new() { 1, 2, 3 };
+            H.ToggleEquipment(); await W(0.4);
+            await Snap("55b_equipment_slot_levels");
+            H.ToggleEquipment(); await W(0.2);
+            Character.GearLevel.Clear(); foreach (var kv in keepLv) Character.GearLevel[kv.Key] = kv.Value;
+            Character.BossCleared.Clear(); foreach (var kv in keepCl) Character.BossCleared[kv.Key] = kv.Value;
+        }
         // ...and with boss drops: an Epic shield fitted (its name in the Epic colour, its effects in
         // words), and a hold of every class's parts, some of them doubled
         {

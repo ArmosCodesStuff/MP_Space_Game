@@ -1483,7 +1483,7 @@ public partial class _Test : Node
         Character.BaseLevels[Economy.All[0].Id] = 3;
         Character.BaseInvested[Economy.All[0].Tab] = 900;
         Character.GearHold["chip_combat_1"] = 2; Character.GearHold["std_drive"] = 1; Character.GearHold["cv_elite_3"] = 1;
-        Character.GearLevel["bs_rapid_1"] = 7; Character.GearLevel["cv_elite_3"] = 40;
+        Character.GearLevel["Weapon"] = 7; Character.GearLevel["Hull"] = 40;
         Character.GearLocked.Add("cv_elite_3"); Character.TourDone = true;
         Character.Unclaimed.AddRange(new[] { "cv_elite_3", "sh_bulwark_2" });
         Character.PaidKills.AddRange(new[] { 638000000000000001L, 638000000000000002L });
@@ -1550,8 +1550,8 @@ public partial class _Test : Node
             bad.SetValue("hints", "seen", "flight,no_such_hint,unlock_chipslot_1"); bad.SetValue("hints", "off", true);
             bad.SetValue("loot", "paid", string.Join(",", Enumerable.Range(1, 40)) + ",not_a_serial,40");
             bad.SetValue("base_levels", "miner_count", 99);
-            bad.SetValue("gear_level", "bs_rapid_1", 99); bad.SetValue("gear_level", "no_such_part", 5);
-            bad.SetValue("gear_level", "bs_rapid_2", 0); bad.SetValue("gear_level", "bs_salvo_1", 3);
+            bad.SetValue("gear_level", "Weapon", 99); bad.SetValue("gear_level", "no_such_slot", 5); bad.SetValue("gear_level", "Chip", 4);
+            bad.SetValue("gear_level", "Shield", 0); bad.SetValue("gear_level", "bs_rapid_1", 6); bad.SetValue("gear_level", "Engines", 3);
             bad.Save($"{Character.Dir}/tampered.cfg");
             bool tl = Character.Load("tampered");
             Check(tl && Character.GearHold.Count == 1 && Character.GearHold.GetValueOrDefault("std_drive") == 2,
@@ -1567,11 +1567,11 @@ public partial class _Test : Node
                   $"hints: unknown ids dropped, an unlock card's id kept, the off switch kept ({string.Join(",", Character.HintsSeen)}, off {Character.HintsOff})");
             Check(tl && Character.BaseLevels.GetValueOrDefault("miner_count") == 4,
                   $"a base upgrade level is held to its cap: 99 miners' levels read as 4 (up to 5 miners) ({Character.BaseLevels.GetValueOrDefault("miner_count")})");
-            // GEAR LEVELS OFF DISK, like a claim off the wire: parts this build knows, held to 40, a 0
-            // dropped -- and a rack line that moved to the destroyer keeps the level paid for it.
-            Check(tl && Character.GearLevel.Count == 2 && Character.GearLevel.GetValueOrDefault("bs_rapid_1") == 40
-                  && Character.GearLevel.GetValueOrDefault("dd_salvo_1") == 3,
-                  $"gear levels off disk: known parts only, held to 40, a renamed part's level follows it ({string.Join(",", Character.GearLevel.Select(kv => kv.Key + "=" + kv.Value))})");
+            // SLOT LEVELS OFF DISK, like a claim off the wire: the five core slots only, held to 40, a 0
+            // dropped -- a chip slot, an unknown key and a part id (an old save's) are left behind.
+            Check(tl && Character.GearLevel.Count == 2 && Character.GearLevel.GetValueOrDefault("Weapon") == 40
+                  && Character.GearLevel.GetValueOrDefault("Engines") == 3,
+                  $"slot levels off disk: core slots only, held to 40, a part id's level left behind ({string.Join(",", Character.GearLevel.Select(kv => kv.Key + "=" + kv.Value))})");
             // a pilot with all of it in memory, then a file that has none of it
             var bare = new ConfigFile(); bare.SetValue("id", "version", Game.Version); bare.SetValue("id", "name", "Bare");
             bare.Save($"{Character.Dir}/bare.cfg");
@@ -3507,53 +3507,83 @@ public partial class _Test : Node
     // A sheet nobody has levelled: the kit's, and a part's own printed numbers.
     static readonly Dictionary<string, int> NoLevels = new();
 
-    // ── LEVELLING A PART WITH SALVAGE ───────────────────────────────────────────────────────────
-    // 100 salvage for the first level and a quarter more each time, stopping at +200%. A level adds
-    // 5% to what the part is FOR and nothing to what it takes in exchange, and it belongs to the
-    // part ID, because the hold stores counts by id and no instance id exists anywhere.
+    // ── SALVAGE LEVELS ON THE SLOT (lane F) ─────────────────────────────────────────────────────
+    // 500 salvage for the first level and a tenth more each time, 40 levels, +3% a level to what the
+    // part in the slot is FOR. A level is the CORE SLOT's, per pilot, whatever part sits there; chip
+    // slots take none; and a level is sold only up to the highest level cleared on any ladder + 1.
     void GearLevelChecks()
     {
         var battery = Equipment.ById("bs_rapid_1");                  // faster guns, lighter shells
-        if (battery == null) { Check(false, "gear levels: no bs_rapid_1 to level"); return; }
+        var heavy = Equipment.ById("bs_heavy_1");                    // the other weapon line, same slot
+        if (battery == null || heavy == null) { Check(false, "gear levels: no bs_rapid_1 / bs_heavy_1 to level"); return; }
+        var keepCleared = Character.BossCleared.ToDictionary(kv => kv.Key, kv => kv.Value);
+        Character.BossCleared.Clear();
 
-        double first = Equipment.NextLevelCost(battery.Id);
-        Character.GearLevel[battery.Id] = 1;  double second = Equipment.NextLevelCost(battery.Id);
-        Character.GearLevel[battery.Id] = 2;  double third  = Equipment.NextLevelCost(battery.Id);
-        Character.GearLevel[battery.Id] = Equipment.MaxLevel;
-        double ceiling = Equipment.NextLevelCost(battery.Id);
-        double whole = 0; for (int k = 0; k < Equipment.MaxLevel; k++) whole += Math.Round(100 * Math.Pow(1.25, k));
-        Check(Math.Abs(first - 100) < 1e-6 && Math.Abs(second - 125) < 1e-6 && Math.Abs(third - 156) < 1e-6
-              && ceiling < 0 && Equipment.MaxLevel * Equipment.LevelStep == 2.0 && Math.Abs(whole - 3008864) < 2,
-              $"a level costs 100 salvage and a quarter more each time, stopping at +200%: {first:0}, {second:0}, {third:0}, and {whole:0} for the whole ladder of {Equipment.MaxLevel}");
+        double first = Equipment.NextLevelCost(GearSlot.Weapon);
+        Character.GearLevel["Weapon"] = 1;  double second = Equipment.NextLevelCost(GearSlot.Weapon);
+        Character.GearLevel["Weapon"] = 2;  double third  = Equipment.NextLevelCost(GearSlot.Weapon);
+        Character.GearLevel["Weapon"] = Equipment.MaxLevel;
+        double ceiling = Equipment.NextLevelCost(GearSlot.Weapon);
+        double whole = 0; for (int k = 0; k < Equipment.MaxLevel; k++) whole += Math.Round(500 * Math.Pow(1.10, k));
+        Check(Math.Abs(first - 500) < 1e-6 && Math.Abs(second - 550) < 1e-6 && Math.Abs(third - 605) < 1e-6
+              && ceiling < 0 && Math.Abs(Equipment.MaxLevel * Equipment.LevelStep - 1.2) < 1e-12 && Math.Abs(whole - 221296) < 2
+              && Equipment.NextLevelCost(GearSlot.Chip) < 0 && Equipment.LevelKey(GearSlot.Chip) == null,
+              $"a slot level costs 500 salvage and a tenth more each time, stopping at +120%: {first:0}, {second:0}, {third:0}, and {whole:0} for the whole ladder of {Equipment.MaxLevel}; a chip slot has no ladder");
 
-        // WHAT IT LIFTS: the part's own stats, and not what it takes in exchange -- by the levels the
-        // sheet is GIVEN (its own pilot's), whatever the pilot at this keyboard holds. This one has the
-        // same part at the ceiling, and none of that may show.
+        // THE CAP: the highest level cleared on ANY ladder + 1, at most 40 -- three situations: nothing
+        // cleared, a boss ladder, and a raid ladder above it; and past 40 it is the ladder's own end.
+        Character.GearLevel.Clear();
+        bool capNone = Equipment.LevelCap == 1 && !Equipment.Capped(GearSlot.Hull);
+        Character.GearLevel["Hull"] = 1; bool heldAt1 = Equipment.Capped(GearSlot.Hull);
+        int lvBoss = (int)Vary(3f, 12f), lvRaid = lvBoss + (int)Vary(2f, 9f);
+        Character.BossCleared["silver_lancer"] = new() { 1, lvBoss };
+        int capBoss = Equipment.LevelCap; Character.GearLevel["Hull"] = lvBoss; bool openBelow = !Equipment.Capped(GearSlot.Hull);
+        Character.GearLevel["Hull"] = lvBoss + 1; bool heldBoss = Equipment.Capped(GearSlot.Hull);
+        Character.BossCleared["siege"] = new() { lvRaid };
+        int capRaid = Equipment.LevelCap;
+        Character.BossCleared["drake_bastion"] = new() { 60 };
+        int capTop = Equipment.LevelCap;
+        Check(capNone && heldAt1 && capBoss == lvBoss + 1 && openBelow && heldBoss && capRaid == lvRaid + 1 && capTop == 40,
+              $"the salvage ladder stops at the highest level cleared + 1: {Equipment.LevelCap} with level 60 cleared (40 at most), {capRaid} with raid {lvRaid} over boss {lvBoss}, {capBoss} on the boss ladder alone, 1 with nothing cleared");
+        Character.BossCleared.Clear();
+        foreach (var kv in keepCleared) Character.BossCleared[kv.Key] = kv.Value;
+
+        // WHAT IT LIFTS: the part in the slot, and not what it takes in exchange -- by the levels the
+        // sheet is GIVEN (its own pilot's), whatever the pilot at this keyboard holds (at the ceiling).
+        // A LEVEL IS THE SLOT'S: the other weapon line in the same slot takes the same lift, and a
+        // level filed under a part id lifts nothing.
         Character.GearLevel.Clear();
         var worn = Equipment.Default(ShipClass.Battleship);
         worn[Array.IndexOf(Equipment.Core, battery.Slot)] = battery.Id;
-        Character.GearLevel[battery.Id] = 40;
+        Character.GearLevel["Weapon"] = 40;
+        var ten = new Dictionary<string, int> { ["Weapon"] = 10 };                                  // +30%
         var bare = Equipment.Bonuses(ShipClass.Battleship, worn, 14, NoLevels);
-        var lifted = Equipment.Bonuses(ShipClass.Battleship, worn, 14, new Dictionary<string, int> { [battery.Id] = 10 });   // +50%
+        var lifted = Equipment.Bonuses(ShipClass.Battleship, worn, 14, ten);
+        var byId = Equipment.Bonuses(ShipClass.Battleship, worn, 14, new Dictionary<string, int> { [battery.Id] = 10 });
         string up = battery.Ups.FirstOrDefault(), down = battery.Pct.Keys.FirstOrDefault(k => Array.IndexOf(battery.Ups, k) < 0);
-        Check(up != null && down != null
-              && Math.Abs(lifted[up] - bare[up] * 1.5) < 1e-9 && Math.Abs(lifted[down] - bare[down]) < 1e-9,
-              $"ten levels lift what the part is FOR by half and leave what it costs alone: {up} {bare[up] * 100:0.#}% -> {lifted[up] * 100:0.#}%, {down} {bare[down] * 100:0.#}% either way");
-        // A CLAIM MADE SAFE: levels announced over the wire are held to the ladder's 40, and a part the
-        // game does not know, a level under one, or no id at all is dropped.
-        var safe = Equipment.SanitizeLevels(new (string, int)[] { (battery.Id, 99), ("no_such_part", 5), ("bs_rapid_2", 0), ("bs_rapid_3", -3), (null, 1) });
-        Check(safe.Count == 1 && safe.GetValueOrDefault(battery.Id) == 40,
-              $"a pilot's claimed gear levels are held to 40, on parts that exist ({string.Join(", ", safe.Select(kv => $"{kv.Key}={kv.Value}"))})");
-        Character.GearLevel[battery.Id] = 10;                        // what the disk round trip below expects back
+        var worn2 = (string[])worn.Clone(); worn2[Array.IndexOf(Equipment.Core, heavy.Slot)] = heavy.Id;
+        string up2 = heavy.Ups.FirstOrDefault(k => heavy.Pct.ContainsKey(k));
+        var bare2 = Equipment.Bonuses(ShipClass.Battleship, worn2, 14, NoLevels);
+        var lifted2 = Equipment.Bonuses(ShipClass.Battleship, worn2, 14, ten);
+        Check(up != null && down != null && up2 != null
+              && Math.Abs(lifted[up] - bare[up] * 1.3) < 1e-9 && Math.Abs(lifted[down] - bare[down]) < 1e-9
+              && Math.Abs(lifted2[up2] - bare2[up2] * 1.3) < 1e-9 && Math.Abs(byId[up] - bare[up]) < 1e-9,
+              $"ten Weapon-slot levels lift what the part in the slot is FOR by 30% and leave what it costs alone: {up} {bare[up] * 100:0.#}% -> {lifted[up] * 100:0.#}%, {down} {bare[down] * 100:0.#}% either way; swapped for a {heavy.Name}, its {up2} {bare2[up2] * 100:0.#}% -> {lifted2[up2] * 100:0.#}%; a level under a part id lifts nothing");
+        // A CLAIM MADE SAFE: levels announced over the wire are held to the ladder's 40, on the five
+        // core slots only -- a chip slot, a part id, a level under one, or no key at all is dropped.
+        var safe = Equipment.SanitizeLevels(new (string, int)[] { ("Weapon", 99), ("Engines", 7), ("Chip", 5), (battery.Id, 5), ("Shield", 0), ("Hull", -3), (null, 1) });
+        Check(safe.Count == 2 && safe.GetValueOrDefault("Weapon") == 40 && safe.GetValueOrDefault("Engines") == 7,
+              $"a pilot's claimed slot levels are held to 40, on core slots only ({string.Join(", ", safe.Select(kv => $"{kv.Key}={kv.Value}"))})");
+        Character.GearLevel["Weapon"] = 10; Character.GearLevel["Hull"] = 3;   // what the disk round trip below expects back
 
-        // A LEVEL IS THE ID'S, and it survives a round trip to disk. Under a scratch id of its own:
+        // A LEVEL IS THE SLOT'S, and it survives a round trip to disk. Under a scratch id of its own:
         // the pilot this run is flying has a base saved against it.
         string keepId = Character.Id;
         Character.Id = "gearlevel"; Character.Save();
         Character.GearLevel.Clear();
-        bool loaded = Character.Load("gearlevel") && Equipment.LevelOf(battery.Id) == 10;
-        Check(loaded && Equipment.LevelOf("bs_rapid_2") == 0,
-              $"a level belongs to the part id, and comes back off disk ({Equipment.LevelOf(battery.Id)} on the battery, {Equipment.LevelOf("bs_rapid_2")} on the mark II)");
+        bool loaded = Character.Load("gearlevel");
+        Check(loaded && Equipment.LevelOf(GearSlot.Weapon) == 10 && Equipment.LevelOf(GearSlot.Hull) == 3 && Equipment.LevelOf(GearSlot.Shield) == 0,
+              $"a level belongs to the slot, and comes back off disk (Weapon {Equipment.LevelOf(GearSlot.Weapon)}, Hull {Equipment.LevelOf(GearSlot.Hull)}, Shield {Equipment.LevelOf(GearSlot.Shield)})");
         Character.Delete("gearlevel");
         Character.GearLevel.Clear(); Character.Id = keepId;
     }
@@ -6252,10 +6282,11 @@ public partial class _Test : Node
             // and the hull stayed put until the next refit of any kind.
             {
                 string keepShield = Character.LoadoutFor(cls0)[2]; double keepSalvage = H.Yard.Stock("salvage");
-                Character.GearLevel.Remove("sh_balanced_1");
+                int keepShieldLv = Equipment.LevelOf(GearSlot.Shield);
+                Character.GearLevel.Remove("Shield");                                   // level 0 -> 1: under any cap (cleared + 1)
                 Character.LoadoutFor(cls0)[2] = "sh_balanced_1"; H.PilotChanged();      // Balanced Array: +20% hull, beside the chip's +8%
                 double fitted = Me.MaxHp;
-                H.Yard.SetStock("salvage", 100);                                         // the first level's price
+                H.Yard.SetStock("salvage", 500);                                         // the first level's price
                 // ...bought where a level is sold: over the EQUIPMENT BASE, clear of combat (Landmarks.Serves)
                 var eqAt = Me.Position; var eqCombat = typeof(PlayerShip).GetField("_combatT", BindingFlags.NonPublic | BindingFlags.Instance);
                 var eqPad = Landmarks.ById("equipment");
@@ -6264,10 +6295,11 @@ public partial class _Test : Node
                 ew = Nodes<EquipmentWindow>().First();
                 Nodes<Button>(Nodes<HBoxContainer>(ew).First(r => r.Name == "Slot_Shield")).First(b => b.Name == "Upgrade").EmitSignal(BaseButton.SignalName.Pressed);
                 await Wait(0.2);
-                Check(Equipment.LevelOf("sh_balanced_1") == 1 && Math.Abs(fitted - full * 1.28) < 1e-6 && Math.Abs(Me.MaxHp - full * 1.29) < 1e-6,
-                      $"a level bought in the window lifts the ship it is on at once: a Balanced Array's +20% hull is +21% at level 1 ({full:0.##} -> {fitted:0.##} fitted -> {Me.MaxHp:0.##} levelled)");
+                Check(Equipment.LevelOf(GearSlot.Shield) == 1 && Math.Abs(fitted - full * 1.28) < 1e-6 && Math.Abs(Me.MaxHp - full * 1.286) < 1e-6,
+                      $"a level bought in the window lifts the ship it is on at once: a Balanced Array's +20% hull is +20.6% with the Shield slot at level 1 ({full:0.##} -> {fitted:0.##} fitted -> {Me.MaxHp:0.##} levelled)");
                 Me.Position = eqAt; Me.Velocity = Vector2.Zero;
-                Character.GearLevel.Remove("sh_balanced_1"); Character.LoadoutFor(cls0)[2] = keepShield; H.PilotChanged();
+                if (keepShieldLv > 0) Character.GearLevel["Shield"] = keepShieldLv; else Character.GearLevel.Remove("Shield");
+                Character.LoadoutFor(cls0)[2] = keepShield; H.PilotChanged();
                 H.Yard.SetStock("salvage", keepSalvage);
             }
             // THE HOLD IS THE PILOT'S: a chip taken off one class goes on the other. The pilot really
@@ -6395,11 +6427,13 @@ public partial class _Test : Node
             void EbBlowAgo(double s) => ebCombat.SetValue(ebMe, Math.Max(0.0, PlayerShip.CombatHold - s));
             // a seeded spot on the pad, `inset` u or more inside every edge
             Vector2 EbOnPad(float inset) => ebRow.At + new Vector2(Vary(-1f, 1f) * (ebRow.Half.X - inset), Vary(-1f, 1f) * (ebRow.Half.Y - inset));
-            string ebPart = Character.LoadoutFor(Character.Class)[0];
+            var ebPart = GearSlot.Weapon;                         // the slot the levels below are bought on
             int ebLv0 = Equipment.LevelOf(ebPart), ebQ0 = ebYard.ScrapPending; double ebSalvage0 = ebYard.Stock("salvage");
             var ebHold0 = new Dictionary<string, int>(Character.GearHold); var ebLocked0 = new HashSet<string>(Character.GearLocked);
             ebYard.SetStock("salvage", 1e6);                       // a pile the fleet cannot move enough to matter
-            Character.GearLevel.Remove(ebPart);                   // from level 0: the six levels bought below stay far under the ceiling
+            Character.GearLevel.Remove(Equipment.LevelKey(ebPart));   // from level 0: the six levels bought below stay far under the ceiling
+            var ebCleared0 = Character.BossCleared.ToDictionary(kv => kv.Key, kv => kv.Value);
+            Character.BossCleared["siege"] = new() { 20 };        // ...and under the cap (cleared + 1): what is proved here is the pad
             Character.GearHold.Clear(); Character.GearLocked.Clear(); Character.Stow("bs_rapid_1"); Character.Stow("bs_rapid_1");
 
             // ITS PLACE, AND WHAT IT OFFERS: right of the station and clear of it, drawn, and on the scope
@@ -6429,7 +6463,20 @@ public partial class _Test : Node
                 ebServedAt += $" ({ebMe.Position.X - ebRow.At.X:0}, {ebMe.Position.Y - ebRow.At.Y:0}) {ebMe.CalmFor:0.0} s";
             }
             Check(ebServed == 3,
-                  $"over the equipment base and calm, it serves: {ebPart} levelled 0 -> {Equipment.LevelOf(ebPart)} and a Rapid Battery queued for scrap and taken back, at {ebServed} of 3 seeded spots (u from the pad's centre, s since the last blow:{ebServedAt})");
+                  $"over the equipment base and calm, it serves: the {ebPart} slot levelled 0 -> {Equipment.LevelOf(ebPart)} and a Rapid Battery queued for scrap and taken back, at {ebServed} of 3 seeded spots (u from the pad's centre, s since the last blow:{ebServedAt})");
+            // ...BUT NEVER PAST THE CAP (lane F): with the raid ladder's level 20 gone and nothing else
+            // cleared, the cap is 1 and the pad, calm, sells no fourth level; with it back, it does.
+            {
+                ebMe.Position = EbOnPad(20f); ebMe.Velocity = Vector2.Zero; EbBlowAgo(Vary(10.1f, 12f));
+                int ebLvCap = Equipment.LevelOf(ebPart); var ebRaid = Character.BossCleared["siege"];
+                Character.BossCleared.Remove("siege"); var ebHeld = Character.BossCleared.ToDictionary(kv => kv.Key, kv => kv.Value); Character.BossCleared.Clear();
+                bool ebCapped = Equipment.Capped(ebPart) && !ebYard.BuyGearLevel(ebPart) && Equipment.LevelOf(ebPart) == ebLvCap;
+                foreach (var kv in ebHeld) Character.BossCleared[kv.Key] = kv.Value;
+                Character.BossCleared["siege"] = ebRaid;
+                bool ebOpen = ebYard.BuyGearLevel(ebPart) && Equipment.LevelOf(ebPart) == ebLvCap + 1;
+                Check(ebCapped && ebOpen && Landmarks.Serves(ebMe, Service.LevelGear).Ok,
+                      $"over the pad and calm, a level past the cap (the highest cleared + 1) is refused: the {ebPart} slot held at {ebLvCap} with nothing cleared, then {Equipment.LevelOf(ebPart)} with raid level 20 cleared");
+            }
 
             // A BLOW SHUTS IT, at three seeded spots from three seeded sides: at once, and still 9.9 s
             // after it, for the same reason and with nothing spent; at 10.1 s it serves again.
@@ -6514,7 +6561,8 @@ public partial class _Test : Node
             Key(global::Godot.Key.Escape); await Wait(0.1);
 
             ebMe.Position = ebKeep; ebMe.Rotation = ebRot; ebMe.Velocity = Vector2.Zero; EbBlowAgo(PlayerShip.CombatHold);
-            if (ebLv0 > 0) Character.GearLevel[ebPart] = ebLv0; else Character.GearLevel.Remove(ebPart);
+            if (ebLv0 > 0) Character.GearLevel[Equipment.LevelKey(ebPart)] = ebLv0; else Character.GearLevel.Remove(Equipment.LevelKey(ebPart));
+            Character.BossCleared.Clear(); foreach (var ebKv in ebCleared0) Character.BossCleared[ebKv.Key] = ebKv.Value;
             Character.GearHold.Clear(); foreach (var ebKv in ebHold0) Character.GearHold[ebKv.Key] = ebKv.Value;
             Character.GearLocked.Clear(); Character.GearLocked.UnionWith(ebLocked0);
             ebYard.SetStock("salvage", ebSalvage0); Character.Save(); H.PilotChanged();
@@ -10960,9 +11008,9 @@ public partial class _Test : Node
         if (role == "host")
         {
             Character.Name = "HostPilot"; Character.Class = ShipClass.Battleship; Priv(H, "ApplyLocalIdentity"); Priv(H, "SendIdentity", 0);
-            // THIS HOST'S OWN LEVEL for the part the guest has levelled, at the ceiling: none of it may
-            // reach the guest's ship. (Its own battleship does not wear one.)
-            Character.GearLevel["drv_racing_1"] = 40;
+            // THIS HOST'S OWN LEVEL for the slot the guest has levelled, at the ceiling: none of it may
+            // reach the guest's ship.
+            Character.GearLevel["Engines"] = 40;
             H.GetNode<PlayerShip>("Ship_1").Position = new Vector2(-900, 900);   // out of the way
             int refusals = 0;
             // THE HOST SENDS A GUEST NOTHING UNRELIABLE UNTIL IT HAS ANSWERED THE WELCOME: read the moment
@@ -11072,11 +11120,11 @@ public partial class _Test : Node
             Check(g != null && g.Loadout[0] == "cv_swarm_3" && g.WingCount(WingKind.Fighter) == 9 && g.WingCount(WingKind.Bomber) == 2,
                   $"the guest's dropped hangar reached the host: its carrier flies 9 fighters and 2 bombers here ({g?.WingCount(WingKind.Fighter)} / {g?.WingCount(WingKind.Bomber)})");
             // ITS PILOT'S LEVELS, NOT THIS HOST'S: the guest levelled its Racing Drive (+25% top speed)
-            // twice, +10% of it; this host holds the same part at 40. Lifted by the host's levels the
-            // sheet read x1.75, by none at all x1.25.
+            // Engines slot twice, +6% of it; this host holds the same slot at 40. Lifted by the host's
+            // levels the sheet would read x1.55, by none at all x1.25.
             double gTop = g == null ? 0 : g.Stats["max_speed"] / new ShipStats(ShipClass.Carrier)["max_speed"];
-            Check(Math.Abs(gTop - 1.275) < 1e-9,
-                  $"a guest's gear levels come with its identity, and the host's own do not leak into its ship: top speed x{gTop:0.0000} here (level 2: 1 + 0.25 x 1.10 = 1.275; the host's level 40 would be 1.75)");
+            Check(Math.Abs(gTop - 1.265) < 1e-9,
+                  $"a guest's slot levels come with its identity, and the host's own do not leak into its ship: top speed x{gTop:0.0000} here (level 2: 1 + 0.25 x 1.06 = 1.265; the host's level 40 would be 1.55)");
             var dummy = H.GetNode<TargetDummy>("TargetDummy1");
             Check(g != null && g.WingTarget == dummy, "guest's Space order reached the host");
             Check(dummy.Total > 5, $"guest's wing hit the dummy on the host ({dummy.Total:0.0})");
@@ -11174,8 +11222,8 @@ public partial class _Test : Node
             // not changed is refitted for it all the same.
             var gNow = H.Ships.FirstOrDefault(s => s.Pilot == "Guesty");
             double gTopNow = gNow == null ? 0 : gNow.Stats["max_speed"] / new ShipStats(ShipClass.Carrier)["max_speed"];
-            Check(Math.Abs(gTopNow - 1.2875) < 1e-9,
-                  $"a level a guest buys mid-session reaches the host's copy of its ship: top speed x{gTopNow:0.0000} (level 3: 1 + 0.25 x 1.15 = 1.2875; still level 2 would be 1.275)");
+            Check(Math.Abs(gTopNow - 1.2725) < 1e-9,
+                  $"a level a guest buys mid-session reaches the host's copy of its ship: top speed x{gTopNow:0.0000} (level 3: 1 + 0.25 x 1.09 = 1.2725; still level 2 would be 1.265)");
             heldD["ghost2"] = Ghost(424243, 60000);          // a place still held when the host leaves
             Net.I.GoOffline();   // drop the guest
             await Wait(2.0);
@@ -11324,11 +11372,12 @@ public partial class _Test : Node
             Character.Class = ShipClass.Carrier;
             var gl = Character.LoadoutFor(Character.Class); for (int k = 5; k < 9; k++) gl[k] = "chip_armour_1";
             gl[0] = "cv_swarm_3";                       // a boss drop: nine fighters, which only this pilot knows it has
-            // ...and a Racing Drive (+25% top speed) this pilot has levelled twice with its OWN salvage:
-            // +10% of what it is for, so every copy of this ship -- the host's included, where the host
-            // holds the same part at 40 -- reads 1 + 0.25 x 1.10 = 1.275 x the carrier's top speed.
+            // ...and a Racing Drive (+25% top speed) in an Engines slot this pilot has levelled twice with
+            // its OWN salvage: +6% of what it is for, so every copy of this ship -- the host's included,
+            // where the host holds the same slot at 40 -- reads 1 + 0.25 x 1.06 = 1.265 x the carrier's
+            // top speed. A raid level 2 cleared lets it buy a third mid-session (the cap: cleared + 1).
             gl[1] = "drv_racing_1";
-            Character.GearLevel["drv_racing_1"] = 2;
+            Character.GearLevel["Engines"] = 2; Character.BossCleared["siege"] = new() { 2 };
             await Wait(0.8);
             // Everything this pilot holds as it leaves for the host's world -- the ore above, AND the
             // 7777 credits every role's base now starts with. This check used to assume the ore was
@@ -11395,7 +11444,7 @@ public partial class _Test : Node
                 var lvClock = typeof(PlayerShip).GetField("_combatT", BindingFlags.NonPublic | BindingFlags.Instance);
                 double lvHot = lvShip == null ? 0 : (double)lvClock.GetValue(lvShip);
                 if (lvShip != null) { lvShip.Position = Landmarks.ById("equipment").At; lvClock.SetValue(lvShip, 0.0); }
-                if (H.Yard.BuyGearLevel("drv_racing_1")) levelPaid = had - H.Yard.OwnStock("salvage");
+                if (H.Yard.BuyGearLevel(GearSlot.Engines)) levelPaid = had - H.Yard.OwnStock("salvage");
                 if (lvShip != null) { lvShip.Position = lvAt; lvClock.SetValue(lvShip, lvHot); }
                 H.PilotChanged();
             }
@@ -11571,8 +11620,8 @@ public partial class _Test : Node
             // ships' cargo, and credits from a sale -- is at least the 5000 it had, and
             // nowhere near the host's few hundred.
             await midSession;
-            Check(Math.Abs(levelPaid - 156) < 1e-9 && Equipment.LevelOf("drv_racing_1") == 3,
-                  $"a guest levels a part mid-session out of its OWN salvage, parked at home: level 2 -> 3 for 156 (100 x 1.25 x 1.25) ({levelPaid:0.##} paid, level {Equipment.LevelOf("drv_racing_1")})");
+            Check(Math.Abs(levelPaid - 605) < 1e-9 && Equipment.LevelOf(GearSlot.Engines) == 3,
+                  $"a guest levels a slot mid-session out of its OWN salvage, parked at home: level 2 -> 3 for 605 (500 x 1.10 x 1.10) ({levelPaid:0.##} paid, level {Equipment.LevelOf(GearSlot.Engines)})");
             double own = Held();
             double share = Missions.BountyEach(Missions.Bounty, 1, 3);   // the host's announced kill, a party of three
             // ...and that level is the one thing it spent while away

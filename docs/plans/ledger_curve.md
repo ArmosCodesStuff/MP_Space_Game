@@ -90,3 +90,25 @@ Verdict: typecheck 0 errors, quick ALL CHECKS PASSED; diff read. Files: Missions
 two clamps + comment), TioWindow, SmokeTest (TIO skip check; selector caps 6 / 4), Shots (35b_tio_skip_two).
 engine-unproven: rungs owed in the final test phase (solo x2; screens: frame 35b read by eye once).
 Next: J5.
+
+## J5 PRE — tier opus
+Intent: salvage levels on the CORE SLOT per pilot (keys = slot names), +3% a level, 500 x 1.10^n, cap
+min(40, highest cleared anywhere + 1) at purchase; Yard.BuyGearLevel(GearSlot); window + recycler text;
+harness GearLevel checks rewritten + CurveSalvageChecks. HEAD 8279732. Hashes:
+  scripts/Equipment.cs a01bd54f689672b0ec36bf3aa52cba9fd90cfd87
+  scripts/Missions.cs ad791e611114082fc773d7e480932f5c88dc07f7
+  scripts/Yard.cs 8be449babb7ae5635e27fd125e2b82d9bb9f0c49
+  scripts/EquipmentWindow.cs 9f115f0c062f73c5265b0edb80876fdc515418f7
+  scripts/RecyclerPanel.cs 916e2291475e93d119f1320a851cdf1a489a816c
+  scripts/Character.cs bed1b72ea627ad471c30dd178fa90091e09678e6
+  scripts/Net.cs 92949cc79d65e3202eb208f2cb811e51d87a93e0
+  tools/smoketest/SmokeTest.cs.txt de38a993b0eccbe6cd450d5e87bdde258feb202b
+  tools/screens/Shots.cs.txt ec4cbc0d41e1261b9cd8df87a6a06f12af25c266
+## J5 POST
+Verdict: typecheck 0 errors, quick ALL CHECKS PASSED; diff read. Files: Equipment (ladder block), Missions
+(HighestAnywhere), Yard.BuyGearLevel(GearSlot), EquipmentWindow (Upgrade per slot, level on the slot row,
+cap greys + tooltip), RecyclerPanel (no level on a hold part), Character + Net comments / load, SmokeTest,
+Shots (55b_equipment_slot_levels). engine-unproven: rungs owed in the final test phase (solo x2: GearLevelChecks,
+save fixture + tampered load, window level refit 1.286, equipment-base pad + cap; six x2: guest Engines 1.265 /
+1.2725 and 605 paid; screens: 55b read by eye).
+Next: J6.
