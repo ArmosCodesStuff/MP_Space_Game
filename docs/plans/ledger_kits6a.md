@@ -482,3 +482,23 @@ fittings sweep's witness table ~13755, fitRows ~13797.
   guest" (the third player) -- the guest-side draw is what the rung-5 checks prove.
 - Owed: rung 3 the pull / tow / sweep checks and the three rip call sites; rung 4 frame 85e; rung 5 the grapnel guest.
 - Next: kits6a-J10 (Record).
+
+### kits6a-J10 · PRE · Record -- tier opus
+- Intent: CHANGES.md Handoff + Unreleased (the slice, Known broken) + the default-keys table's BB / DD / CV rows;
+  DESIGN.md "Class kits, lane A slice 6a" section. Files: docs/CHANGES.md, docs/DESIGN.md. HEAD eddaa27e92a167e455047148f60aea0232b223a6.
+### kits6a-J10 · POST (the lane's final POST)
+- Verdict: compiles; typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final
+  test phase.
+- Built: the record above. No code.
+- THE TEST PHASE OWES this lane (quick,solo,solo,six,six,screens):
+  - rung 3 x2: LaneA6aArc, Broadside, Brace, BraceWarp, BraceSplit, Ciws, CiwsDisable, CiwsPrey, CarrierRow, Gunship,
+    GunshipFire, Super, SuperMissile, SuperWings, Director, Lance, LanceHit, Suppress, SuppressWeapon, SuppressGun,
+    GrapnelPull, GrapnelTow; LaneA6aGrapnelRipChecks in the boss / pylon / base blocks; every rewritten literal (J1-J9
+    POSTs: the K window, sweep witnesses + the hook second-press rule, kit / DPS / hull literals, Fx.All.Length 17).
+  - rung 4: frames 85a_bb_brace, 85b_bb_ciws, 85c_cv_supercarrier, 85d_dd_suppressed, 85e_dd_grapnel_rip,
+    43_lance_away, 43b_lance_closeup, 23b / 23c destroyer bar (by eye once: 85d's chevron, 85e's chunk).
+  - rung 5 x2: LaneA6aGunshipGuestChecks, LaneA6aSuppressGuest/HostChecks (the host posts a webifier off the guest's
+    bow at home; the host awaits it before the freighter park), LaneA6aGrapnelGuestChecks, the 458.2 / 540 / 527 lines.
+- Traps for the test phase: the grapnel's 5 s end reads Time or Host (frame order; both accepted with T = 5 +- 0.05);
+  LaneA6aGrapnelRipChecks refits to the destroyer inside the boss / pylon / base blocks and refits back; the
+  suppress host watch spawns a webifier at home for ~2-3 s.

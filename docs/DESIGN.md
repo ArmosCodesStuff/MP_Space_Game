@@ -1141,6 +1141,30 @@ bosses"); the numbers are `numbers_curve_raids_items.md` §2.
   the radar's diamond / bracket / rim chevron, the victim's "GANK:" line and the names under the hulls are
   all worked out from those, on the host as on a guest. A new enemy row needs nothing there.
 
+## Class kits, lane A slice 6a: the capitals (2026-09-25)
+
+The three capitals' rows and keys (ledger_kits6a.md A6a-1..A6a-16). What is durable:
+- **A gun's arc is a row on its mount** (`ClassArt.MainBears`, `Turret.Bears`, `Turret.InArc`): the barrel still swings,
+  the fire gate holds outside the arc. Every other hull's mounts keep (0, 180).
+- **A timed row** (`AbilityDef.Time` / `Guard` / `CoolAfter`, `PlayerShip.RunFor` / `Engage`) runs its time, hardens at
+  its guard and cools from the press or from its end; a row that hears its own blows (`OnDealt`) while it runs is the
+  Suppress. **A scoped lift** (`RateOn`, `DamageStat` / `DamageOn`) reaches one stat only: the CIWS lifts the PD alone.
+- **A sortie row** (`AbilityDef.Sends`, `PlayerShip.Launch`): a wing row flown at the picks (else the selected) or round
+  the hull; nothing sent spends nothing.
+- **A bow shot** (`AbilityDef.Bow`, `PlayerShip.FireAlong`): one round of a Shots row off the nose. The Lance took the
+  old missile's Shots row 4 in place (its one user left).
+- **A status put on what the ship hits** (`PlayerShip.Afflict`) goes through the hostile's own `ApplyStatus` (its
+  `Reaches` decides) and raises the row's MARK (`Fx.Mark`: a row riding the hull's NetId) only when new or 0.5 s run down,
+  so a stream of shells is one raise every half second. The chevron is `Fx.Chevron`, Cap 1.
+- **A hook row** (`HookSpec`, `AbilityDef.Hook`): the owner flies its own helm move round what cannot move
+  (`Targeting.Immovable`) and casts it off itself on a second press; the host marks it, watches it every frame
+  (`HookWatch`: anchor gone or warped ends it with no rip; a web, a disable, the ship's own charge rip) and resolves
+  the cast-off (`CastOffHook`). What can be thrown (`ITowable`) is towed on a `Towing.All` row. The RIP is the only
+  damage read from the target's own hull (`IQuarry.MaxHp` x share + flat; a dummy has no hull: the flat alone). Trap:
+  raise the tear BEFORE the hit, as `Fx.Tear` says.
+- **The rip at 5 s**: the owner's move clock and the host's slot run out on the same frame; whichever the frame order
+  reads first names the end (Time or Host). Both rip on the host.
+
 ## Class kits, lane A slice 6c: the heavies (2026-09-25)
 
 The three heavies' rows and keys (ledger_kits6c.md D38-D58). What is durable:

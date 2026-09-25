@@ -36,6 +36,16 @@ history pick the work up from it alone. Update it in the same change as the code
 
 ## Handoff — read this first
 
+**2026-09-25 (worktree `WarShips_wt_kits6a`, branch `wt/kits6a`): kits lane A slice 6a, the capitals, built J1-J9.
+Compiles, rung 2 green; engine-unproven: every check is owed in the final test phase** -- rung 3 twice (LaneA6aArc,
+Broadside, Brace, BraceWarp, BraceSplit, Ciws, CiwsDisable, CiwsPrey, CarrierRow, Gunship, GunshipFire, Super,
+SuperMissile, SuperWings, Director, Lance, LanceHit, Suppress, SuppressWeapon, SuppressGun, GrapnelPull, GrapnelTow
+checks; LaneA6aGrapnelRipChecks inside the boss, pylon and base blocks; the rewritten sweep, K window, DPS and kit
+literals), rung 4 (frames 85a-85e, 43_lance_away, 43b_lance_closeup, 23b / 23c destroyer bar), rung 5 `six,six`
+(LaneA6aGunship, Suppress, Grapnel guest checks, the suppress host watch, the hull lines 458.2 / 540 / 527). Wire:
+Fx.Chevron = 16 (appended); Shots row 4 renamed "missile" -> "lance" in place. Detail, decisions A6a-1..16 and what
+is owed: `docs/plans/ledger_kits6a.md`.
+
 **2026-09-25 (worktree `WarShips_wt_kits4`, branch `wt/kits4`): class kits lane A slice 4 -- F8 (the
 press's point, helm moves with the Grapnel's pull and swing, the host's mark and wards) and F10 (Mend)
 built, and the merge gate's four findings fixed (kits4-J5); compiles, rung 2 green. engine-unproven: rung
@@ -327,9 +337,9 @@ whenever the ship is alive, on every hull that mounts it.
 
 | Class | Space | G | F | Other |
 |---|---|---|---|---|
-| Battleship | main guns | fire mode | broadside (3 volleys, 14 s cooldown) | point defence (passive) |
-| Destroyer | main guns | fire mode | missile burst (magazine of 3) | R reload (9 s), point defence (passive) |
-| Carrier | fighters: attack | — | bomber strike | R recall, point defence (passive) |
+| Battleship | main guns (arcs: 4 abeam, 2 near bow or stern) | fire mode | broadside (6 volleys x1.25, 12 s) | Q brace (3 s, x0.35 taken, half speed), E CIWS (6 s, PD x8 rate x3 damage), point defence (passive) |
+| Destroyer | director battery (leads a selected target) | — | Long Lance (300, 18 s) | Q suppressing fire (6 s), E grapnel (pull, swing, rip; or tow and hurl), point defence (passive) |
+| Carrier | fighters: attack | — | bomber strike | R recall, E warp gunships (25 s), Q supercarrier (20 s patrol), point defence (passive) |
 | Freighter | main gun | fire mode | bubble (400 soaked, 8 s) | R sentry: throw to the cursor (600 u, 0.8 s) or recall one within 60 u, point defence (passive) |
 | Tender | main gun | fire mode | overdrive (x2 rate of fire, 8 s) | R sentry: throw to the cursor (600 u, 0.8 s) or recall one within 60 u, point defence (passive) |
 | Bastion | main gun | fire mode | shockwave (1000 u, or a boss held 3 s) | R sentry: throw to the cursor (600 u, 0.8 s) or recall one within 60 u, point defence (passive) |
@@ -614,6 +624,27 @@ outstanding from the batch of 2026-09-23.)*
 ---
 
 ## Unreleased
+
+### Class kits, lane A slice 6a: the capitals -- Battleship, Carrier, Destroyer (2026-09-25, worktree wt/kits6a)
+
+**Battleship** (hull 500): Space the main battery, 4 x 12.5 every 2.0 s at 1000 u, in ARCS (the fore pair never within
+30° of the stern, the aft pair never within 30° of the bow: 4 guns abeam, 2 near either end); F **broadside** (6 volleys
+of 4 at x1.25 = 375 side-on, 12 s; it fires mid warp charge); Q **brace** (3 s taking x0.35 at half speed, 25 s); E
+**CIWS** (6 s, both PD mounts x8 rate and x3 damage on PD's own prey, 20 s; an overshoot's disable stops it). **Carrier**
+(hull 425, turn radius 140, 2 PD): fighters 3.5 a shot, torpedoes 60; E **warp gunships** (2 a pick, 1-3 picks, 12 s on
+a 240 u circle, 25 s); Q **supercarrier** (a second wing patrols 600 u round the carrier for 20 s, missiles included,
+30 s from its end). **Destroyer** (hull 395, turn 1.2 on a 95 u radius): Space the **director battery** (2 x 11.25 every
+0.5 s at 700 u, shells 760 u/s; a selected hostile within 840 u is led by itself); F **Long Lance** (one 300 torpedo off
+the bow, 170 u/s, 3000 u, 18 s; its missiles, reload and fire mode are gone); Q **suppressing fire** (6 s: every hostile
+a director shell hits deals half with its guns and holds its missiles until 3 s after its last hit, a grey chevron over
+it; 20 s); E **grapnel** (the selected hostile within 700 u: round a boss, station or dummy a 450 u/s pull to 250 u off
+its hull and a 5 s bow-on swing, casting off tears 1% of its hull + 10 away; a raider is towed off the bow and hurled
+for 60 / 120; 16 s from the cast-off). New mechanisms: the timed row (`RunFor`), the sortie row (`Launch`), the bow
+shot (`FireAlong`), the scoped lift (`RateOn` / `DamageOn`), `PlayerShip.Afflict` + `Fx.Mark`, the hook row
+(`HookSpec`: `Hook`, `CastOffHook`, `HookWatch`, the rip).
+**Known broken:** engine-unproven (rungs 3-5 owed). The rip has no sound (A6a-14). The four v2 destroyer gear ids are
+not built (owed to lane I). "No rip when the anchor dies or warps" is built but has no check (no solo anchor can be
+killed or warped without breaking the fights that follow).
 
 ### Class kits, lane A slice 4: helm moves, wards, the press's point, Mend -- F8, F10 (2026-09-25, worktree wt/kits4)
 
