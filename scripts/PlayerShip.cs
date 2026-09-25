@@ -1170,7 +1170,12 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         foreach (var def in Abilities.For(Class))
         {
             ref var sl = ref Sl(def.Id);
-            if (sl.Cool > 0) sl.Cool = Math.Max(0, sl.Cool - delta);
+            if (sl.Cool > 0)
+            {
+                sl.Cool = Math.Max(0, sl.Cool - delta);
+                // A CHARGED ROW (AbilityDef.Charges): a charge back, and the next one starts if any is still out
+                if (sl.Cool <= 0 && def.Charges != null && sl.N > 0 && --sl.N > 0) sl.Cool = Cooling(Stats[def.Recharge]);
+            }
             // A RAMP's running total (F1, D18) steps every frame regardless of Left, so it keeps
             // draining after the row stops -- Steer already ran this frame (LocalFlight, above),
             // so _yawRate is this frame's, not last frame's. OWNER-STEPPED: only the peer that
@@ -1309,6 +1314,27 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
 
     // THE WHIRLWIND'S PRESS (host): its time up, its cooldown, its first blow at once; every web on
     // the hull let go (the pin and the web's own ask), and none may take it until the spin is over.
+    // A CHARGED ROW'S PRESS (AbilityDef.Charges), on the host: one charge spent if one is left (its slot's N
+    // counts the spent ones), the recharge started if none was running. A row without charges always may.
+    private bool Spend(AbilityDef def)
+    {
+        if (def.Charges == null) return true;
+        ref var sl = ref Sl(def.Id);
+        if (sl.N >= (int)Stats[def.Charges]) return false;
+        sl.N++;
+        if (sl.Cool <= 0) sl.Cool = Cooling(Stats[def.Recharge]);
+        return true;
+    }
+    // A ZONE LAID (AbilityDef.Lays: the tether mine), on the host: a charge spent, the row laid at the stern,
+    // its hold read from this sheet now (Zones.Lay).
+    public void Lay(string id)
+    {
+        var def = Abilities.Find(Class, id);
+        if (def?.Lays is not { } row || !Net.Sim || MyHub is not { } hub || !Spend(def)) return;
+        var at = Position + Vector2.Down.Rotated(Rotation) * MyArt.Length * 0.5f;
+        Zones.Lay(hub, row, at, Rotation, OwnerId, Stats[row.HoldFor], (int)Stats[row.Most]);
+    }
+
     public void Whirl()
     {
         ref var sl = ref Sl("whirlwind");

@@ -451,3 +451,39 @@ tether press (Stance.Keeps), one line in LaneA6cTetherChecks. Harness: LaneA6c m
 (SmokeTest, before LaneA6cAnchorGuestChecks); solo call after `await LaneA6cAnchorChecks(yonder);`; rung-5 guest call
 after `await LaneA6cAnchorGuestChecks();`. Edits: a python exact-match script in the scratchpad (heredocs with quotes
 break the bash tool; write the script with the Write tool), SmokeTest.cs.txt LF (newline='').
+
+## kits6c-J9 · PRE (agent 6)
+- tier opus. Intent: Zones foundation (D44/D45): new scripts/Zones.cs (ZoneDef table + pure Inside + host Tick + ZoneNode
+  drawn on every peer), Spawns row `Zone` (appended, 4) + NetIds.Zone 60000 (appended), Hub.Zones / Hub.Lay + Zones.Tick;
+  row `tether` (170 u disc, arms 0.5 s, geometry literal on the row; the hold read from the owner's tether_hold at the drop);
+  AbilityDef.Charges / Recharge (a charged row: N spent, one recharging at a time); Ab.Tether (Q, dropped astern);
+  Targeting.Raiding; Sniper rows tether_charges 2 / tether_recharge 12 / tether_hold 3 / tether_most 2; Items @duration
+  + tether_hold; Sniper Abilities {Railgun, Anchor, Tether}. Checks LaneA6cZoneChecks (pure), LaneA6cTetherChecks
+  (169 / 171 u, 3 s hold, boss ignored, charges, recharge, the oldest goes, the Anchor kept), frame 73e_tether_mine.
+  HEAD 0e6138bd54375b8c0145aba4f6d796c4f04eec94
+- scripts/Abilities.cs b6ed93df62e429ea74a8adae8d97f4ff26552a9e
+- scripts/PlayerShip.cs 462c7b56b412d78dd845b8e994d4c15b4b881a23
+- scripts/Ships.cs 5fb399719e97fb93149e4703be71242826a632df
+- scripts/Items.cs 2f0ee2c2c4a3eb024750986ea64d9b2b3a1eb29d
+- scripts/Spawned.cs 33e138055ef12f5bd1dca0b6b0291d115f903c60
+- scripts/Ids.cs 6bf752b43e1b3fc23733ac4dafe10d169a2d77b5
+- scripts/Hub.cs 6cc0e937fb8337da6537c1fcbe4a85f979e599c6
+- scripts/Targeting.cs 68d6620199d90187f05dea54f6fb4dab78de327c
+- tools/smoketest/SmokeTest.cs.txt f48baa06f39ca50c10ea703bf0ef3eccfd3b03e3
+- tools/screens/Shots.cs.txt af566f79a087e46b6a881beb45286fe872ef3f57
+- scripts/Zones.cs (new)
+## kits6c-J9 · POST
+- Verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED, own diff read. engine-unproven: rungs owed in the final test phase.
+- Built: scripts/Zones.cs (ZoneDef table: Id, Reach, Arm, Prey, Holds, HoldFor, Most, Tint; pure Inside; host Lay (oldest goes past
+  Most) and Tick (an armed zone with prey inside holds every prey inside, then Down with a burst); ZoneNode drawn on every peer);
+  Spawns.Zone = 4 + row, NetIds.Zone = 60000 (both appended); Hub.Laid + Zones.Tick beside Decoys.Tick; Targeting.Raiding
+  (Light|Heavy, never Boss/Dummy/Missile/Hulled); AbilityDef.Charges / Recharge (N = spent, one recharging at a time: PlayerShip.Spend
+  + TickAbilities) and AbilityDef.Lays (PlayerShip.Lay, at the stern); Ab.Tether (Q); Sniper rows tether_charges 2 /
+  tether_recharge 12 / tether_hold 3 / tether_most 2; Items @duration + tether_hold; Abilities {Railgun, Anchor, Tether}; hint.
+- D54 (default): the zone's geometry (Reach 170, Arm 0.5) is literal on its row (every peer draws it from the seed), so @area
+  items do not reach the tether's 170 u; its hold (tether_hold) is the owner's stat, read at the lay (@duration reaches it).
+- D55 (default): a mine lasts until it goes off or a third is laid (no lifetime: nothing in the spec gives one).
+- Checks: NEW LaneA6cZoneChecks (pure, 3 runs), NEW LaneA6cTetherChecks (3 runs; the Anchor KEPT through Q in runs 1-2),
+  NEW frame 73f_sniper_tether_mine (LaneA6cTetherFrames, after LaneA6cRailFrames). No guest check: the tether is not on
+  kits_v31 §8's rung-5 list; the frame is its third check.
+- Next: kits6c-J10 Flares ability.

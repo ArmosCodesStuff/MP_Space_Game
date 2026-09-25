@@ -1212,6 +1212,7 @@ public partial class Hub : Node2D
     public IReadOnlyList<DeployedTurret> Deployed => ((SpawnSet<DeployedTurret>)_sets[Spawns.Turret]).Live;
     public IReadOnlyList<Emplacement> Emplacements => ((SpawnSet<Emplacement>)_sets[Spawns.Emplacement]).Live;
     public IReadOnlyList<DecoySalvo> Salvos => ((SpawnSet<DecoySalvo>)_sets[Spawns.Decoy]).Live;
+    public IReadOnlyList<ZoneNode> Laid => ((SpawnSet<ZoneNode>)Set(Spawns.Zone)).Live;
 
     // host: mint an id from this kind's space, build it, and tell this world
     public Node2D Spawn(int kind, Vector2 at, int n = 0, double a = 1, double b = 1)
@@ -1649,6 +1650,7 @@ public partial class Hub : Node2D
         if (Net.IsHost) _raids.Tick(delta);
         if (Net.IsHost) TickBlasts(delta);
         if (Net.IsHost) Decoys.Tick(this);
+        if (Net.IsHost) Zones.Tick(this);
         TickMission(delta);
         var me = MyShip;
         if (Music.I != null)

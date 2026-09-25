@@ -827,6 +827,7 @@ public partial class _Shots : Node
                 await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                 await Snap("73b_sniper_rail_flash");
                 await LaneA6cRailFrames(rs, RailHold);
+                await LaneA6cTetherFrames(rs, RailHold);
                 rzp.SetValue(hub, rz0); await W(0.4);
             }
             // a freighter with its three turrets out, and the bubble up over them
@@ -1059,6 +1060,18 @@ public partial class _Shots : Node
         hold(); Abilities.Find(ShipClass.HeavySniper, "railgun").Loose(rs, 1.0);
         await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         await Snap("73e_sniper_enhanced_rail");
+    }
+
+    // SLICE 6c: the Sniper's tether mine (73f) -- Q laid at the stern, snapped once it is live (0.7 s): the faint
+    // 170 u ring and the bright core. The same sniper and zoom as 73b.
+    async Task LaneA6cTetherFrames(PlayerShip rs, System.Action hold)
+    {
+        hold(); rs.Sl("tether").N = 0; rs.Sl("tether").Cool = 0;
+        rs.UseAbility("tether", 0);
+        for (int i = 0; i < 60 && (H.Laid.Count == 0 || H.Laid[H.Laid.Count - 1].Age < 0.7); i++) { hold(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+        await Snap("73f_sniper_tether_mine");
+        foreach (var z in H.Laid.ToList()) H.Down(Spawns.Zone, z, burst: false, float.NaN);
+        rs.Sl("tether").N = 0; rs.Sl("tether").Cool = 0;
     }
 
     // SLICE 6c: the Warrior's prism stance -- the wedge on its guard (SQUARE bright, SLANT faint), then a

@@ -121,6 +121,11 @@ public class AbilityDef
     // charge latch, on the host).
     public ReloadSpec Reload;
     public Action<PlayerShip, double> Loose;
+    // A CHARGED ROW: it holds Charges (a stat id) presses; its slot's N counts those spent, and one comes back
+    // every Recharge seconds (a stat id), one at a time (PlayerShip.Spend, and TickAbilities' Cool). The tether.
+    public string Charges, Recharge;
+    // A ZONE IT LAYS (Zones.cs), at the stern: a row of Zones.All (PlayerShip.Lay). The tether mine.
+    public ZoneDef Lays;
 
     public SlotState State(PlayerShip s, IHittable selected) =>
         Show != null ? Show(s, selected) : new SlotState { Line = "READY" };
@@ -373,6 +378,24 @@ public static class Ab
             ? new SlotState { Line = $"ANCHORED {s.Sl("anchor").Left:0.0}s", Lit = true }
             : s.Sl("anchor").Left > 0 ? new SlotState { Line = "WEIGHING", Lit = true }
             : Timed(s, "anchor", "anchor_cooldown", "READY"),
+    };
+
+    // THE TETHER MINE (the Sniper's Q, v1): dropped at the stern, live 0.5 s later; the first raiding craft
+    // within 170 u sets it off and every one within 170 u is held 3 s. Two charges, 12 s each; two out at
+    // most, the oldest goes. It keeps the Anchor.
+    public static readonly AbilityDef Tether = new()
+    {
+        Id = "tether", Name = "Tether mine", Short = "TETHER", Default = Key.Q,
+        Blurb = "Drops a mine astern. Half a second later the first raider within 170 u sets it off, and every raider within 170 u is held for 3 s. Two charges; never a boss.",
+        Charges = "tether_charges", Recharge = "tether_recharge", Lays = Zones.All[Zones.Tether],
+        Press = (s, _) => s.Lay("tether"),
+        Refuse = (s, _) => s.Sl("tether").N >= (int)s.Stats["tether_charges"] ? "NO CHARGES" : null,
+        Show = (s, _) =>
+        {
+            int max = (int)s.Stats["tether_charges"], left = max - s.Sl("tether").N;
+            return new SlotState { Line = $"{left}/{max}", Lit = left > 0,
+                                   Busy = left < max ? (float)(s.Sl("tether").Cool / s.Stats["tether_recharge"]) : 0f };
+        },
     };
 
     // THE LUNGE (the Warrior's E): 420 u along the nose in 0.3 s, 40 to each body on the way, half

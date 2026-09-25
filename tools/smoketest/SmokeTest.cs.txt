@@ -5815,6 +5815,148 @@ public partial class _Test : Node
         sn.Position = yonder; sn.Velocity = Vector2.Zero;
     }
 
+    // ── SLICE 6c: ZONES (Zones.cs), pure: a zone takes a body within its row's Reach of where it was laid, from
+    // three varied spots and bearings, 1 u inside and 1 u outside the tether's 170 u (never on the edge itself).
+    void LaneA6cZoneChecks()
+    {
+        var d = Zones.Of(Zones.Tether);
+        Check(d.Id == "tether" && d.Reach == 170f && d.Arm == 0.5 && d.Holds == Status.Disabled && d.HoldFor == "tether_hold" && d.Most == "tether_most"
+              && Zones.RowOf(d) == Zones.Tether && Spawns.All[Spawns.Zone].Id == "Zone" && Spawns.All[Spawns.Zone].Space == NetIds.Zone,
+              $"the tether's zone row: {d.Reach:0} u (170), live {d.Arm:0.0} s after the drop (0.5), holds {d.Holds} for {d.HoldFor}; spawn row {Spawns.All[Spawns.Zone].Id}");
+        for (int run = 0; run < 3; run++)
+        {
+            var at = new Vector2(Vary(-4000f, 4000f), Vary(-4000f, 4000f)); var way = Vector2.Up.Rotated(VaryAngle());
+            float inside = Vary(165f, 169f), outside = Vary(171f, 176f);
+            bool a = Zones.Inside(d, at, at + way * inside), b = Zones.Inside(d, at, at + way * outside), c = Zones.Inside(d, at, at);
+            Check(a && !b && c, $"zone run {run}: a body {inside:0.0} u off is inside ({a}), {outside:0.0} u off is not ({b}), the centre is ({c})");
+        }
+    }
+
+    // ── SLICE 6c: THE SNIPER'S TETHER MINE (kits_v2's card, v1; D45), through Q. The rows once (2 charges, 12 s
+    // each, holds 3 s, 2 out, 170 u, Q, ability 2); then three varied runs (VaryNear spot, VaryAngle heading; runs 1
+    // and 2 anchored first, kits_v31 §7's "the flares and the tether keep it"):
+    //   the mine lands at the stern; a boss inside it and a gunship 171-176 u off, 0.9 s after the drop, set nothing
+    //   off; a gunship moved to 150-169 u sets it off in one frame, is held (DISABLED) 3.0 s and sits still, the
+    //   boss and the far gunship are not held;
+    //   a second mine laid over a gunship already inside goes off when it arms (0.5 s after the drop, not before);
+    //   a third press is refused NO CHARGES; the first charge comes back 12.0 s after the first press (run 0 on
+    //   the clock, runs 1-2 with the running recharge cut short) and the second starts its own 12 s;
+    //   three mines laid with none set off leave two out, the oldest gone.
+    async Task LaneA6cTetherChecks(Vector2 yonder)
+    {
+        var st = new ShipStats(ShipClass.HeavySniper);
+        Check(st["tether_charges"] == 2 && st["tether_recharge"] == 12 && st["tether_hold"] == 3 && st["tether_most"] == 2 && Zones.Of(Zones.Tether).Reach == 170f
+              && Ab.Tether.Default == global::Godot.Key.Q && Ab.Tether.Lays == Zones.Of(Zones.Tether)
+              && Abilities.For(ShipClass.HeavySniper).Take(3).SequenceEqual(new[] { Ab.Railgun, Ab.Anchor, Ab.Tether }) && Unlocks.Nth(ShipClass.HeavySniper, 2) == Ab.Tether,
+              $"the tether's rows: {st["tether_charges"]:0} charges (2), {st["tether_recharge"]:0} s each (12), holds {st["tether_hold"]:0} s (3), {st["tether_most"]:0} out (2), {Zones.Of(Zones.Tether).Reach:0} u (170); Q; ability 2 {Unlocks.Nth(ShipClass.HeavySniper, 2)?.Name}");
+        await SetClass(ShipClass.HeavySniper);
+        var sn = Me; sn.AutopilotTo = null;
+        var qkey = Abilities.KeyFor(ShipClass.HeavySniper, "tether");
+        float half = Classes.Of(ShipClass.HeavySniper).Art.Length * 0.5f;
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        void Clear() { foreach (var z in H.Laid.ToList()) H.Down(Spawns.Zone, z, burst: false, float.NaN); }
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f); float rot = VaryAngle();
+            Clear();
+            sn.Position = at; sn.Rotation = rot; sn.Velocity = Vector2.Zero; sn.Hp = sn.MaxHp;
+            sn.Sl("tether").N = 0; sn.Sl("tether").Cool = 0;
+            await Frame();
+            at = sn.Position; rot = sn.Rotation;                                   // re-taken after the wait
+            void Still() { sn.Position = at; sn.Rotation = rot; sn.Velocity = Vector2.Zero; sn.Hp = sn.MaxHp; }
+            bool anchored = run > 0;
+            if (anchored) { await SniperAnchor(sn, true); Still(); }
+            var stern = at + Vector2.Down.Rotated(rot) * half;
+
+            // 1 -- the drop at the stern; a boss inside and a gunship just outside set nothing off
+            Key(qkey); await Frame(); await Frame(); Still();
+            double pressed = sn.Clock;                                              // timed from the frame the mine shows
+            var mineA = H.Laid.LastOrDefault();
+            bool keptAnchor = !anchored || (sn.Sl("anchor").Left > 0 && sn.Sl("anchor").Cool == 0);
+            float sternOff = mineA == null ? -1f : mineA.At.DistanceTo(stern);
+            int spent1 = sn.Sl("tether").N; double cool1 = sn.Sl("tether").Cool;
+            var aAt = mineA?.At ?? stern;
+            var bossAt = aAt + Vector2.Up.Rotated(VaryAngle()) * Vary(40f, 120f);
+            var farAt = aAt + Vector2.Up.Rotated(VaryAngle()) * Vary(171f, 176f);
+            var bt = Missions.Bosses[0];
+            var post = new Boss { Hub = H, Position = bossAt,
+                                  Type = new Missions.BossType { Id = "post", Name = "POST", Hull = 100000, Texture = bt.Texture, Length = bt.Length, HalfWidth = bt.HalfWidth,
+                                                                 CloseSpeed = 0f, TurnRate = 0f, Moves = System.Array.Empty<BossMove>() } };
+            AddChild(post);
+            var far = H.SpawnRaider(farAt, Enemies.Gunship); far.Hp = 1e9;
+            var near = H.SpawnRaider(aAt + Vector2.Up.Rotated(VaryAngle()) * 900f, Enemies.Gunship); near.Hp = 1e9;
+            var nearAt = near.Position;
+            void Pin() { Still(); post.Position = bossAt; far.Position = farAt; near.Position = nearAt; }
+            for (int i = 0; i < 600 && mineA != null && mineA.Age < 0.9; i++) { Pin(); await Frame(); }
+            bool aStill = mineA != null && H.Laid.Contains(mineA);
+            bool bossHeld0 = post.Statuses.Has(Status.Disabled), farHeld0 = far.Statuses.Has(Status.Disabled);
+            Check(mineA != null && sternOff < 2f && spent1 == 1 && Math.Abs(cool1 - 12.0) < 0.05 && keptAnchor && aStill && !bossHeld0 && !farHeld0,
+                  $"tether run {run} at {Mathf.RadToDeg(rot):0} deg{(anchored ? ", anchored" : "")}: Q lays a mine {sternOff:0.0} u from the stern (0), 1 charge spent ({spent1}), the recharge {cool1:0.00} s (12.0); the Anchor kept {keptAnchor}; 0.9 s on, a boss {bossAt.DistanceTo(aAt):0} u in and a gunship {farAt.DistanceTo(aAt):0} u off leave it laid ({aStill}), held: boss {bossHeld0}, gunship {farHeld0}");
+
+            // 2 -- a gunship at 150-169 u sets it off: held 3.0 s, still; the boss and the far one are not
+            nearAt = aAt + Vector2.Up.Rotated(VaryAngle()) * Vary(150f, 169f);
+            int frames = 0;
+            for (; frames < 10 && mineA != null && H.Laid.Contains(mineA); frames++) { Pin(); await Frame(); }
+            double t0 = sn.Clock; var heldAt = near.Position;
+            bool held = near.Statuses.Has(Status.Disabled), bossHeld = post.Statuses.Has(Status.Disabled), farHeld = far.Statuses.Has(Status.Disabled);
+            for (int i = 0; i < 400 && near.Statuses.Has(Status.Disabled); i++)
+            { Still(); post.Position = bossAt; far.Position = farAt; await Frame(); }
+            double heldFor = sn.Clock - t0; float drift = near.Position.DistanceTo(heldAt);
+            Check(frames <= 2 && held && !bossHeld && !farHeld && Math.Abs(heldFor - 3.0) < 0.05 && drift < 2f,
+                  $"...a gunship {nearAt.DistanceTo(aAt):0.0} u off sets it off in {frames} frame(s) and is held {heldFor:0.00} s (3.0), drifting {drift:0.0} u; held: boss {bossHeld}, the one {farAt.DistanceTo(aAt):0.0} u off {farHeld}");
+            post.QueueFree(); near.TakeDamage(1e12); far.TakeDamage(1e12);
+            await Frame();
+
+            // 3 -- a mine laid over a gunship already inside goes off as it arms, not before
+            Still(); stern = at + Vector2.Down.Rotated(rot) * half;
+            var inAt = stern + Vector2.Up.Rotated(VaryAngle()) * Vary(30f, 150f);
+            var sitter = H.SpawnRaider(inAt, Enemies.Gunship); sitter.Hp = 1e9;
+            await Frame();
+            Key(qkey); await Frame(); Still(); sitter.Position = inAt;
+            var mineB = H.Laid.LastOrDefault(z => z != mineA);
+            double lastAge = 0;
+            for (int i = 0; i < 120 && mineB != null && H.Laid.Contains(mineB); i++) { lastAge = mineB.Age; Still(); sitter.Position = inAt; await Frame(); }
+            bool sat = sitter.Statuses.Has(Status.Disabled);
+            int spent2 = sn.Sl("tether").N;
+            Key(qkey); await Frame(); await Frame();
+            string said = sn.FailNote("tether"); int laid3 = H.Laid.Count;
+            Check(mineB != null && lastAge >= 0.45 && lastAge < 0.6 && sat && spent2 == 2 && said == "NO CHARGES" && laid3 == 0,
+                  $"...a second mine over a gunship {inAt.DistanceTo(stern):0} u in goes off at {lastAge:0.00} s (arms at 0.5), holding it {sat}; 2 spent ({spent2}); a third Q is refused {said} (NO CHARGES), {laid3} laid");
+            sitter.TakeDamage(1e12);
+
+            // 4 -- the recharge: the first charge back 12.0 s after the first press, the second then starts its own
+            if (run == 0)
+            {
+                for (int i = 0; i < 60 * 14 && sn.Sl("tether").N > 1; i++) { Still(); await Frame(); }
+            }
+            else
+            {
+                sn.Sl("tether").Cool = Vary(0.1f, 0.5f); pressed = sn.Clock + sn.Sl("tether").Cool - cool1;
+                for (int i = 0; i < 60 && sn.Sl("tether").N > 1; i++) { Still(); await Frame(); }
+            }
+            double back = sn.Clock - pressed + (12.0 - cool1); int spent3 = sn.Sl("tether").N; double cool3 = sn.Sl("tether").Cool;
+            Check(spent3 == 1 && Math.Abs(back - 12.0) < 0.05 && Math.Abs(cool3 - 12.0) < 0.05,
+                  $"...the first charge back {back:0.00} s after the first press (12.0), 1 spent ({spent3}); the second recharging {cool3:0.00} s (12.0)");
+
+            // 5 -- three laid with none set off: two out, the oldest gone
+            if (anchored) await SniperAnchor(sn, false);
+            Clear(); sn.Sl("tether").N = 0; sn.Sl("tether").Cool = 0;
+            var laid = new List<ZoneNode>();
+            for (int k = 0; k < 3; k++)
+            {
+                if (k == 2) sn.Sl("tether").N = 0;
+                Key(qkey); await Frame(); await Frame();
+                if (H.Laid.LastOrDefault() is { } z && !laid.Contains(z)) laid.Add(z);
+            }
+            bool oldestGone = laid.Count == 3 && !H.Laid.Contains(laid[0]) && H.Laid.Contains(laid[1]) && H.Laid.Contains(laid[2]);
+            Check(oldestGone && H.Laid.Count == 2,
+                  $"...three mines laid ({laid.Count}) leave {H.Laid.Count} out (2), the oldest gone {oldestGone}");
+            Clear(); sn.Sl("tether").N = 0; sn.Sl("tether").Cool = 0;
+            await Frame();
+        }
+        sn.Position = yonder; sn.Velocity = Vector2.Zero;
+    }
+
     // ── SLICE 6c, RUNG 5: A GUEST'S ANCHOR (kits_v31 §7: the boost refused ANCHORED). The guest, right after its
     // active reload, presses F through the key: once the host's word lands on its slot its own helm is rooted --
     // W + Shift + A or D (varied) held a varied 0.8-1.4 s move it under 1 u -- and V is refused ANCHORED; F again
@@ -12024,6 +12166,8 @@ public partial class _Test : Node
             await LaneA6cReloadChecks(yonder);
             await LaneA6cReloadBarChecks(yonder);
             await LaneA6cAnchorChecks(yonder);
+            LaneA6cZoneChecks();
+            await LaneA6cTetherChecks(yonder);
             await SetClass(ShipClass.HeavyWarrior);
             var wr = Me; wr.Position = yonder; wr.Velocity = Vector2.Zero; await Wait(0.2);
             // A SPEED LIFT LIFTS THE PUSH AS WELL AS THE TOP SPEED (PlayerShip.Steer). The water holds a
