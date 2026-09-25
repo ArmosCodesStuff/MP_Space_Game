@@ -4333,6 +4333,7 @@ public partial class _Test : Node
     // the gunship is still in reach.
     async Task LaneASentryPreferChecks(Vector2 yonder)
     {
+        await SetClass(ShipClass.FreightHauler);                 // the paint lives in the spotter's slot (kits6b D33)
         var pm = Me;
         foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
         await Wait(0.2);
@@ -4363,6 +4364,74 @@ public partial class _Test : Node
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         }
         pm.Position = yonder; pm.Velocity = Vector2.Zero;
+    }
+
+    // ── 6b · THE FREIGHTER'S SPOTTER: a hit paints (lane A slice 6b, kits6b-J1, D33/D34) ─────────────
+    // World, host, 3 runs at varied bearings and range bands inside its 800 u (300-420, 480-600,
+    // 660-760 u). The sheet is proved against the request's literals once (31.25 a round every 1.25 s,
+    // 800 u, 560 u/s, paint 5 s); the world runs read the pilot's live sheet. Per run: the spotter's
+    // first rounds on gunship A are credited "spotter", 1.25 s apart, and paint A by id; a round on
+    // gunship B moves the paint (one target, the latest hit) and it is fresh at 5 s (timed from the
+    // frame B's hit shows); with the trigger up the paint still holds 4.7 s after B's hit and is gone
+    // by 5.3 s, though B lives. The paint is the guns slot's (N = the target's NetId): what rides the wire.
+    async Task LaneA6bSpotterChecks(Vector2 yonder)
+    {
+        await SetClass(ShipClass.FreightHauler);
+        var fr = Me; fr.AutopilotTo = null;
+        var sheet = new ShipStats(ShipClass.FreightHauler);
+        Check(Math.Abs(sheet["main_damage"] - 31.25) < 1e-9 && Math.Abs(sheet["main_interval"] - 1.25) < 1e-9
+              && Math.Abs(sheet["main_range"] - 800) < 1e-9 && Math.Abs(sheet["shell_speed"] - 560) < 1e-9
+              && Math.Abs(sheet["paint_time"] - 5) < 1e-9 && Math.Abs(sheet["hull"] - 450) < 1e-9
+              && Classes.Of(ShipClass.FreightHauler).MainShot == Shots.Spotter && Shots.Of(Shots.Spotter).Paint == "paint_time"
+              && Abilities.Find(ShipClass.FreightHauler, "firemode") == null,
+              $"the freighter's spotter: 31.25 every 1.25 s (25 DPS) to 800 u at 560 u/s, a hit paints 5 s, on a 450 hull, no fire mode ({sheet["main_damage"]}/{sheet["main_interval"]}/{sheet["paint_time"]})");
+        var bands = new[] { (300f, 420f), (480f, 600f), (660f, 760f) };
+        for (int run = 0; run < 3; run++)
+        {
+            foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+            await Wait(0.2);
+            fr.PaintOn(null, 0);
+            fr.Position = yonder; fr.Velocity = Vector2.Zero;
+            float bear = VaryAngle();
+            var aSpot = yonder + Vector2.Right.Rotated(bear) * Vary(bands[run].Item1, bands[run].Item2);
+            var bSpot = yonder + Vector2.Right.Rotated(bear + Vary(1.2f, 2.0f)) * Vary(bands[run].Item1, bands[run].Item2);
+            var a = H.SpawnRaider(aSpot, Enemies.Gunship); a.Hp = 1e9; a.ApplyStatus(Status.Disabled, 40);
+            var b = H.SpawnRaider(bSpot, Enemies.Gunship); b.Hp = 1e9; b.ApplyStatus(Status.Disabled, 40);
+            double dealt = fr.DealtBy.GetValueOrDefault("spotter");
+            var hits = new List<(double clock, double d)>();
+            async Task Hold(Raider on, int frames, Func<bool> done)
+            {
+                KeyDown(global::Godot.Key.Space);
+                for (int i = 0; i < frames && !done(); i++)
+                {
+                    a.Position = aSpot; b.Position = bSpot; fr.Position = yonder; fr.Velocity = Vector2.Zero;
+                    AimWorld(on.Position);
+                    await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                    double now = fr.DealtBy.GetValueOrDefault("spotter");
+                    if (now > dealt + 1e-9) { hits.Add((fr.Clock, now - dealt)); dealt = now; }
+                }
+                KeyUp(global::Godot.Key.Space);
+            }
+            await Hold(a, 600, () => hits.Count >= 2);
+            bool firstPaints = hits.Count >= 2 && ReferenceEquals(fr.Painted, a) && fr.Sl(PlayerShip.PaintSlot).N == a.NetId;
+            bool perRound = hits.Count >= 2 && hits.Take(2).All(h => Math.Abs(h.d - fr.Stats["main_damage"]) < 1e-6);
+            double gap = hits.Count >= 2 ? hits[1].clock - hits[0].clock : -1;
+            Check(firstPaints && perRound && Math.Abs(gap - fr.Stats["main_interval"]) < 0.06,
+                  $"spotter run {run}, gunship A {aSpot.DistanceTo(yonder):0} u off: each round credited \"spotter\" at {fr.Stats["main_damage"]:0.00} ({perRound}), {gap:0.00} s apart, and A is painted by id ({firstPaints})");
+            int had = hits.Count;
+            await Hold(b, 600, () => hits.Count > had && ReferenceEquals(fr.Painted, b));
+            double hitB = hits.Count > had ? hits[^1].clock : -1;
+            bool moved = hits.Count > had && ReferenceEquals(fr.Painted, b) && fr.Sl(PlayerShip.PaintSlot).Left > fr.Stats["paint_time"] - 0.1;
+            Check(moved, $"...a round on gunship B {bSpot.DistanceTo(yonder):0} u off moves the paint to B, fresh at {fr.Stats["paint_time"]:0.0} s: one target, the latest hit ({(fr.Painted as Node2D)?.Name})");
+            while (hitB > 0 && fr.Clock - hitB < 4.7) { a.Position = aSpot; b.Position = bSpot; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            bool held = ReferenceEquals(fr.Painted, b);
+            while (hitB > 0 && fr.Clock - hitB < 5.3) { a.Position = aSpot; b.Position = bSpot; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            Check(hitB > 0 && held && fr.Painted == null && b.Alive,
+                  $"...the paint on B holds at 4.7 s after its hit ({held}) and has lapsed by 5.3 s, B still alive ({fr.Painted == null})");
+            a.TakeDamage(1e12); b.TakeDamage(1e12);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        }
+        fr.Position = yonder; fr.Velocity = Vector2.Zero;
     }
 
     // ── F14 · THE SENTRY THROW AND RECALL (lane A slice 5, kits5-J5) ──────────────────────────
@@ -6235,16 +6304,16 @@ public partial class _Test : Node
             var t = HeldI(ha.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(250f, 500f), Enemies.Gunship);
             var u = HeldI(ha.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(250f, 500f), Enemies.Gunship);
             double HitI(Raider r, string w) { double h = r.Hp; Dealt.Deal(r, 100, ha, w); return h - r.Hp; }
-            double first = HitI(t, "shell"), since = ha.Clock, until = since + Vary(1.5f, 3.5f);
-            while (ha.Clock < until) { HitI(t, "shell"); await Wait(0.4); }
-            double mid = HitI(t, "shell"), want = 100 * (1 + 0.25 * (ha.Clock - since) / 5);
+            double first = HitI(t, "spotter"), since = ha.Clock, until = since + Vary(1.5f, 3.5f);
+            while (ha.Clock < until) { HitI(t, "spotter"); await Wait(0.4); }
+            double mid = HitI(t, "spotter"), want = 100 * (1 + 0.25 * (ha.Clock - since) / 5);
             double pd = HitI(t, "pd");
-            while (ha.Clock < since + 5.6) { HitI(t, "shell"); await Wait(0.4); }
-            double full = HitI(t, "shell"), other = HitI(u, "shell");
+            while (ha.Clock < since + 5.6) { HitI(t, "spotter"); await Wait(0.4); }
+            double full = HitI(t, "spotter"), other = HitI(u, "spotter");
             await Wait(Vary(1.3f, 2.0f));
-            double silence = HitI(u, "shell");
+            double silence = HitI(u, "spotter");
             Check(NearI(first, 100) && NearI(mid, want, 0.05) && NearI(pd, 100) && NearI(full, 125, 1e-6) && NearI(other, 100) && NearI(silence, 100),
-                  $"Spin-up Feed T1 on a hauler: 100 on the first shell, {mid:0.00} after {until - since:0.0} s ({want:0.00}), a PD blow {pd:0.00}, {full:0.00} after 5 s (125), a new target {other:0.00}, after a silence {silence:0.00}");
+                  $"Spin-up Feed T1 on a hauler: 100 on the first spotter round, {mid:0.00} after {until - since:0.0} s ({want:0.00}), a PD blow {pd:0.00}, {full:0.00} after 5 s (125), a new target {other:0.00}, after a silence {silence:0.00}");
             t.TakeDamage(1e12); u.TakeDamage(1e12);
         }
         await WornOffI(ShipClass.FreightHauler, was);
@@ -10513,12 +10582,12 @@ public partial class _Test : Node
             }
             var one = H.Deployed.First();
             // its gun is its OWNER's sheet, read live -- so the pilot's points and its gear reach
-            // every turret it has out. (A bare freighter's 6 a shot is a literal where the table is proved.)
+            // every turret it has out. (A bare freighter's 5 a shot is a literal where the table is proved.)
             Check(Math.Abs(one.Hp - fr.Stats["deploy_hull"]) < 1e-6
                   && Math.Abs(one.Spec(true).Damage - fr.Stats["deploy_damage"]) < 1e-9
                   && Math.Abs(one.Spec(true).Interval - fr.Stats["deploy_interval"]) < 1e-9
                   && Math.Abs(one.Spec(true).Range - (float)fr.Stats["deploy_range"]) < 1e-3
-                  && Math.Abs(new ShipStats(ShipClass.FreightHauler)["deploy_damage"] - 6) < 1e-9,
+                  && Math.Abs(new ShipStats(ShipClass.FreightHauler)["deploy_damage"] - 5) < 1e-9 && Math.Abs(new ShipStats(ShipClass.FreightHauler)["deploy_range"] - 650) < 1e-9,
                   $"a dropped turret fires its owner's sheet: {one.Spec(true).Damage:0.0} a shot every {one.Spec(true).Interval:0.00} s inside {one.Spec(true).Range:0} u, on {one.Hp:0} hull");
             fr.Sl("deploy").Cool = 6.0;                                          // reloading: a recall is still never refused
             SentryAt(fr, one.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(10f, 50f)); await Wait(0.15);
@@ -10795,7 +10864,7 @@ public partial class _Test : Node
                           && snL.DamageLines.Count() == 2 && !snL.DamageLines.Any(l => l.Label.Contains("Point defence")),
                           $"the sniper's total counts its railgun: the gun 6/0.8 = 7.5 and the rail 150/(3+1) = 37.5 -- 45 DPS, not 7.50, and no point-defence line on a hull that mounts none ({snL.SustainedDps:0.00})");
                     Check(Math.Abs(new ShipStats(ShipClass.HeavyWarden).SustainedDps - (12 / 0.6 + 6 * 45 / 14.0 + 5 / 0.5)) < 1e-6
-                          && Math.Abs(new ShipStats(ShipClass.FreightHauler).SustainedDps - 50.0) < 1e-6
+                          && Math.Abs(new ShipStats(ShipClass.FreightHauler).SustainedDps - (31.25 / 1.25 + 3 * 5 / 0.5 + 2 * 0.5 / 0.5)) < 1e-6
                           && Math.Abs(new ShipStats(ShipClass.HeavyWarrior).SustainedDps - (2 * 9 / 0.7 + 60 / 18.0)) < 1e-6
                           && Math.Abs(new ShipStats(ShipClass.LightEcho).SustainedDps - (5 / 0.35 + (5 / 0.35) * 5 / 15.0)) < 1e-6,
                           $"...and every other signature weapon counts too: the warden 20 + 19.29 + 10, the freighter's gun 12 + three dropped turrets 36 + its always-on point defence 2 = 50, the warrior's EMP 60 every 18 s, the echo repeating five seconds of its own damage every 15");
@@ -11046,6 +11115,7 @@ public partial class _Test : Node
             await LaneAPrismRayChecks(yonder);
             await LaneASentryPreferChecks(yonder);
             await LaneASentryThrowChecks(yonder);
+            await LaneA6bSpotterChecks(yonder);
             await LaneARaiderCallChecks(yonder);
             await LaneADecoyChecks(yonder);
             await LaneATowChecks(yonder);
@@ -11472,7 +11542,7 @@ public partial class _Test : Node
                 // has NOT got the fitting, that ability must not be on its bar at all. One row per
                 // fitting, so a new ability of an existing kind is covered by adding its id here.
                 var fitRows = new (Fit fit, string[] ids)[] {
-                    (Fit.Guns,      new[] { "guns", "firemode" }),
+                    (Fit.Guns,      new[] { "guns" }),
                     (Fit.Broadside, new[] { "broadside" }),
                     (Fit.Missiles,  new[] { "missile", "reload" }),
                     (Fit.Wing,      new[] { "attack", "recall", "bombers" }),
@@ -11493,6 +11563,9 @@ public partial class _Test : Node
                     // without it (a light) mounts none.
                     var wrongFit = fitRows.Where(fr2 => fr2.ids.Any(id3 => (Abilities.Find(cls.Id, id3) != null) != cls.Has(fr2.fit)))
                                           .Select(fr2 => fr2.fit.ToString()).ToList();
+                    // the fire mode is a gun hull's choice, never carried without main guns; the freighters left it (kits 6b)
+                    if (Abilities.Find(cls.Id, "firemode") != null && !cls.Has(Fit.Guns)) wrongFit.Add("firemode");
+                    if (cls.Id is ShipClass.FreightHauler && Abilities.Find(cls.Id, "firemode") != null) wrongFit.Add("firemode on the freighter");
                     bool pdRight = Abilities.Find(cls.Id, "pd") == null && sweepShip.PdOnline
                                    && (sweepShip.PdTurrets.Count > 0) == cls.Has(Fit.Pd);
                     Check(wrongFit.Count == 0 && pdRight,
@@ -14678,9 +14751,17 @@ public partial class _Test : Node
             await RealTime(() => H.Ships.FirstOrDefault(s => !s.Mine) is { Class: ShipClass.FreightHauler } gg
                                  && gg.Position.DistanceTo(mpSpot) < 60, Wan ? 25 : 15);
             var fg = H.Ships.FirstOrDefault(s => !s.Mine);
-            Check(fg != null && fg.Class == ShipClass.FreightHauler && Math.Abs(fg.MaxHp - 400) < 1e-6
+            Check(fg != null && fg.Class == ShipClass.FreightHauler && Math.Abs(fg.MaxHp - 450) < 1e-6
                   && fg.Position.DistanceTo(mpSpot) < 60,
-                  $"arena host: the guest refitted to a FREIGHTER and parked -- its stock 400 hull ({fg?.Class}, {fg?.MaxHp:0}, {fg?.Position.DistanceTo(mpSpot):0} u off)");
+                  $"arena host: the guest refitted to a FREIGHTER and parked -- its stock 450 hull ({fg?.Class}, {fg?.MaxHp:0}, {fg?.Position.DistanceTo(mpSpot):0} u off)");
+            // 6b (kits6b-J1, D33) LaneA6bPaintWireHost: THE PAINT RIDES THE GUEST'S SLOTS. The host paints
+            // for the guest's freighter (its spotter's hit is the host's), a gunship at a varied spot, held
+            // still; the guest reads the same id off its own copy (LaneA6bPaintWireGuest).
+            var paintGun = H.SpawnRaider(fg.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(560f, 700f), Enemies.Gunship);
+            paintGun.Hp = 1e9; paintGun.ApplyStatus(Status.Disabled, 40);
+            fg.PaintOn(paintGun, 30);
+            Check(ReferenceEquals(fg.Painted, paintGun) && fg.Sl(PlayerShip.PaintSlot).N == paintGun.NetId,
+                  $"arena host: the guest's freighter paints gunship #{paintGun.NetId} on the host, in its spotter's slot");
             hw.Position = VaryNear(fg.Position, 230f); hw.Velocity = Vector2.Zero; hw.Rotation = 0f;   // inside its 260 u, any bearing
             await Wait(0.3);
             // ITS SENTRY, MADE BY THE HOST: the guest presses R; only the host may put one in the
@@ -14960,10 +15041,17 @@ public partial class _Test : Node
             // ITS HULL IS THE HOST'S WORD. A guest applies the refit locally and announces it; the
             // hull it then flies comes back in the host's report (ApplyHostState), a round trip
             // later -- so this waits for the host to have refitted its copy too.
-            await RealTime(() => Math.Abs(fgm.MaxHp - 400) < 1e-6, Wan ? 20 : 10);
-            Check(fgm.Class == ShipClass.FreightHauler && Math.Abs(fgm.MaxHp - 400) < 1e-6
-                  && Abilities.For(ShipClass.FreightHauler).Length == 11,
-                  $"arena guest: flying a FREIGHTER in a session -- its stock 400 hull, no chips, and the host's word for it, four abilities, its drive and six open slots ({fgm.MaxHp:0})");
+            await RealTime(() => Math.Abs(fgm.MaxHp - 450) < 1e-6, Wan ? 20 : 10);
+            Check(fgm.Class == ShipClass.FreightHauler && Math.Abs(fgm.MaxHp - 450) < 1e-6
+                  && Abilities.For(ShipClass.FreightHauler).Length == 10,
+                  $"arena guest: flying a FREIGHTER in a session -- its stock 450 hull, no chips, and the host's word for it, its spotter, sentry and bubble, its drive and six open slots ({fgm.MaxHp:0})");
+            // 6b (kits6b-J1, D33) LaneA6bPaintWireGuest: the host's paint reaches this guest in its own
+            // freighter's slots -- the same live hostile, by id, counting down here between reports.
+            await RealTime(() => fgm.Painted != null, Wan ? 30 : 20);
+            var seenPaint = fgm.Painted;
+            Check(seenPaint != null && seenPaint.NetId == fgm.Sl(PlayerShip.PaintSlot).N && seenPaint.Alive
+                  && fgm.Sl(PlayerShip.PaintSlot).Left > 0 && fgm.Sl(PlayerShip.PaintSlot).Left <= 30,
+                  $"arena guest: the host's paint is on this guest's freighter, #{seenPaint?.NetId} alive, {fgm.Sl(PlayerShip.PaintSlot).Left:0.0} s left");
             // Watched from before the host does any of it: an effect lives well under a second and
             // a status bit is held for a packet, so neither survives a single sample.
             bool sawEmp = false, sawBurst = false; int mostBursts = 0;

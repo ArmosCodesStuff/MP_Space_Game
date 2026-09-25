@@ -87,6 +87,9 @@ public class ClassDef
     // number, not a list of class names in an `if` -- a thirteenth class states its own answer.
     public int Targets = 1;
     public Fit Fit;
+    // WHAT ITS MAIN MOUNTS FIRE: a row of Shots.All (TurretSpec.Kind). A shell unless the class says
+    // otherwise -- the freighter's spotter round, whose hit paints (ShotDef.Paint).
+    public int MainShot = Shots.Shell;
     public ClassArt Art = new();
     // This class's own numbers, by stat id. Everything it does NOT name it takes from the sheet's
     // default (Stats.cs), so a row here is a difference, never a copy.
@@ -243,15 +246,15 @@ public static class Classes
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Missile, Ab.Reload } },
 
         // -- page 2: freight, which carries its own defences -------------------
-        new() { Id = ShipClass.FreightHauler, Name = "FREIGHTER", Ready = true, Fit = Fit.Guns | Fit.Pd | Fit.Deploy,
-            Blurb = "Toughest hull there is. One main gun, two point-defence turrets, three deployable turrets, and a bubble that soaks damage.",
-            Hint = "FREIGHTER  ·  mouse aims the main gun",
+        new() { Id = ShipClass.FreightHauler, Name = "FREIGHTER", Ready = true, Fit = Fit.Guns | Fit.Pd | Fit.Deploy, MainShot = Shots.Spotter,
+            Blurb = "Toughest hull there is. A spotter cannon that paints what it hits, three sentries that shoot the paint first, and a bubble that soaks damage.",
+            Hint = "FREIGHTER  ·  mouse aims the spotter  ·  a hit paints",
             Drive = Drives.Boost,
             Nums = new() {
-                ["hull"] = 400,
+                ["hull"] = 450,
                 ["thrust"] = 63.5, ["reverse_thrust"] = 28.2, ["max_speed"] = 120, ["reverse_speed"] = 42.4,
                 ["turn_radius"] = 150, ["turn_rate"] = 0.85, ["strafe_speed"] = 60, ["strafe_thrust"] = 120,
-                ["main_count"] = 1, ["main_damage"] = 12, ["main_interval"] = 1.0, ["main_range"] = 800, ["shell_speed"] = 560,
+                ["main_count"] = 1, ["main_damage"] = 31.25, ["main_interval"] = 1.25, ["main_range"] = 800, ["shell_speed"] = 560,   // the spotter: 25 DPS
                 ["pd_count"] = 2,
             },
                 // half a point each: three turrets are out at once, so a level is worth 1.5 across them
@@ -264,15 +267,16 @@ public static class Classes
                 ItemDef.Own(GearSlot.Utility, "freight_bubble", "Bubble Projector", "the bubble, and what it soaks", "bubble_pool"),
             },
             Rows = new StatRow[] {
-                new() { Group = "Deployed turrets", Id = "deploy_damage",   Label = "Damage per shot",  Base = 6, Dec = 1 },
+                new() { Group = "Deployed turrets", Id = "deploy_damage",   Label = "Damage per shot",  Base = 5, Dec = 1 },
                 new() { Group = "Deployed turrets", Id = "deploy_interval", Label = "Reload",           Base = 0.5, Unit = "s", Dec = 2, Inverse = true },
-                new() { Group = "Deployed turrets", Id = "deploy_range",    Label = "Range",            Base = 500, Unit = "u", Dec = 0 },
+                new() { Group = "Deployed turrets", Id = "deploy_range",    Label = "Range",            Base = 650, Unit = "u", Dec = 0 },
                 new() { Group = "Deployed turrets", Id = "deploy_hull",     Label = "Turret hull",      Base = 120, Dec = 0 },
                 new() { Group = "Deployed turrets", Id = "deploy_max",      Label = "Out at once",      Base = 3, Dec = 0 },
                 new() { Group = "Deployed turrets", Id = "deploy_cooldown", Label = "Between drops",    Base = 6, Unit = "s", Dec = 1, Inverse = true },
                 new() { Group = "Deployed turrets", Id = "deploy_reach",    Label = "Throw reach",      Base = 600, Unit = "u", Dec = 0 },
                 new() { Group = "Deployed turrets", Id = "deploy_flight",   Label = "Throw flight",     Base = 0.8, Unit = "s", Dec = 1 },
                 new() { Group = "Deployed turrets", Id = "recall_pick",     Label = "Recall within",    Base = 60, Unit = "u", Dec = 0 },
+                new() { Group = "Spotter", Id = "paint_time", Label = "A hit paints for", Base = 5, Unit = "s", Dec = 1 },
                 new() { Group = "Bubble", Id = "bubble_pool", Label = "Damage it soaks", Base = 400, Dec = 0 },
                 new() { Group = "Bubble", Id = "bubble_radius", Label = "Radius",        Base = 260, Unit = "u", Dec = 0 },
                 new() { Group = "Bubble", Id = "bubble_time", Label = "Time up",         Base = 8, Unit = "s", Dec = 1 },
@@ -283,7 +287,7 @@ public static class Classes
                 Mains = new Vector2[] { new(0.0f, -50.6f) },
                 Pds   = new Vector2[] { new(-32.9f, 64.4f), new(32.9f, 64.4f) },
                 TurretTexScale = 2.20f / 5.5f, MainBarrel = 27.0f, PdBarrel = 12.1f },
-            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Bubble, Ab.Deploy } },
+            Abilities = new[] { Ab.Guns, Ab.Deploy, Ab.Bubble } },
         new() { Id = ShipClass.FreightTender, Name = "TENDER", Ready = true, Fit = Fit.Guns | Fit.Pd | Fit.Deploy,
             Blurb = "One main gun, two point-defence turrets, three deployable turrets, and an overdrive that lifts everything's rate of fire.",
             Hint = "TENDER  ·  mouse aims the main gun",

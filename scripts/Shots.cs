@@ -51,12 +51,16 @@ public class ShotDef
     // A DECOY MAY TURN IT (F14, Decoys.cs): a hostile guided row a burning point lures onto itself. The
     // siege's cruise missile never is.
     public bool Decoyable;
+    // A HIT MARKS ITS TARGET FOR ITS FIRER (the freighter's spotter, kits 6b): the stat id, on the firer's
+    // sheet, of the seconds a hit paints for -- or null, a round that marks nothing. The host calls
+    // PlayerShip.PaintOn on a hostile it strikes; the paint rides the firer's slots to every peer.
+    public string Paint;
 }
 
 public static class Shots
 {
     // The index IS the id on the wire (Hub.NetShot), so APPEND ONLY.
-    public const int Shell = 0, Slug = 1, Scrap = 2, Torpedo = 3, Missile = 4, Seeker = 5, Cruise = 6, Reflect = 7;
+    public const int Shell = 0, Slug = 1, Scrap = 2, Torpedo = 3, Missile = 4, Seeker = 5, Cruise = 6, Reflect = 7, Spotter = 8;
 
     public static readonly ShotDef[] All =
     {
@@ -85,6 +89,9 @@ public static class Shots
         // A ROUND A PRISM TURNED BACK (Shot.Strike): the enemy's own round, now the catcher's -- straight,
         // unguided, at the base's enemies. Its speed, damage and size are the caught round's.
         new() { Id = "reflect", AtPlayers = false, Pad = 3f, Sweep = 6f, Burst = 0.25, Look = ShotLook.Ball },
+        // THE FREIGHTER'S SPOTTER ROUND (kits 6b): a shell whose hit paints what it strikes for paint_time
+        // (5 s), the target its sentries take first and Time on target converges on
+        new() { Id = "spotter", AtPlayers = false, Pad = 3f, Sweep = 6f, Look = ShotLook.Bullet, Paint = "paint_time" },
     };
 
     public static ShotDef Of(int id) => All[id >= 0 && id < All.Length ? id : Shell];
@@ -255,7 +262,11 @@ public partial class Shot : Node2D, IHittable, ITagged
                 // through the door (Dealt.Deal), the shot's own row naming the weapon. A prism turns a
                 // reflectable round back instead (Reflected), and takes nothing of it.
                 if (h is PlayerShip ps) { if (!Reflected(ps, p, d)) ps.Hit(Damage, p - Dir * 10f, HitSource); }
-                else Dealt.Deal(h, Damage, IsInstanceValid(Source) ? Source : null, d.Id);
+                else
+                {
+                    Dealt.Deal(h, Damage, IsInstanceValid(Source) ? Source : null, d.Id);
+                    if (d.Paint != null && IsInstanceValid(Source) && h.Alive) Source.PaintOn(h, Source.Stats[d.Paint]);
+                }
             }
             if (stops > 0 && _struck.Count >= stops)
             {

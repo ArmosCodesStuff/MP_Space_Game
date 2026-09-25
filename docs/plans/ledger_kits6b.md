@@ -98,3 +98,27 @@ Before every job: grep the harness for checks asserting the OLD truth of what it
   `LaneA6bResupplyChecks` (slots cooling / running / ready, you included, the drive untouched, NOTHING COOLING free).
   Frames `overdrive_field`, `repair_field`.
 - **kits6b-J9** record: CHANGES Unreleased + Handoff, DESIGN section, final POST (what the test phase owes).
+
+### kits6b-J1 · PRE · FR spotter, the paint on the wire (D33, D34) -- tier opus
+- Intent: Shots.Spotter (appended, 8) + ShotDef.Paint; ClassDef.MainShot -> PlayerShip.Spec(false).Kind; Shot.Strike
+  paints on a host hit; PaintOn / Painted on the guns slot (Left, N = NetId); Freighter row: hull 450, main 31.25 /
+  1.25 s / 800 u / 560 u/s, paint_time 5, deploy_damage 5, deploy_range 650, FireMode out. Old-truth callers rewritten
+  (deploy_damage 6, SustainedDps 50, MaxHp 400, For(...).Length 11). Checks LaneA6bSpotterChecks, LaneA6bPaintWireHost/Guest.
+- Files: scripts/Shots.cs, scripts/Ships.cs, scripts/PlayerShip.cs, scripts/Abilities.cs, tools/smoketest/SmokeTest.cs.txt, this ledger.
+- HEAD fd5dacddc4585901bcafbfaf485084d13f2caadf · Shots.cs 05c56a1f0517457bda6938d963d7330c049989ef · Ships.cs 5415309685219dbbec36724dfee2c526ed106413 · PlayerShip.cs d532201f0baf49377bba9c8b96018b6ddcf6eb88 · Abilities.cs fdd4a423b516cbf1e187e372ec963810e197aea6 · SmokeTest.cs.txt 59e7c40100d0ffc791c20a1e5a65601e740bb610
+### kits6b-J1 · POST
+- Verdict: compiles; typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final
+  test phase. Shots.Spotter = 8 (appended, wire index) with ShotDef.Paint = "paint_time"; ClassDef.MainShot sets the
+  mains' TurretSpec.Kind; Shot.Strike paints on a host hit; the paint lives in the `guns` slot (PlayerShip.PaintSlot:
+  Left, N = NetId) so it rides the host report (D33, D32 closed). Freighter: hull 450, spotter 31.25 / 1.25 s / 800 u /
+  560 u/s, paint_time 5, sentries 5 a shot / 650 u, FireMode out, Abilities {Guns, Deploy, Bubble}. Items.PrimaryShots
+  gains "spotter" (Spin-up Feed ramps the freighter's primary).
+- Old truths rewritten: fitRows (fire mode is no fitting's; never on a hull without guns, never on the freighter),
+  deploy_damage 6 -> 5 (+ range 650), freighter SustainedDps 50 -> 25 + 30 + 2, arena host/guest 400 hull -> 450,
+  For(freighter).Length 11 -> 10, Spin-up Feed's freighter blows "shell" -> "spotter", LaneASentryPreferChecks now
+  flies a freighter (the paint needs the spotter's slot).
+- Files: Shots.cs, Ships.cs, PlayerShip.cs, Items.cs (one id), SmokeTest.cs.txt (LaneA6bSpotterChecks after
+  LaneASentryThrowChecks in solo; LaneA6bPaintWireHost in the arena host after the freighter parks; LaneA6bPaintWireGuest
+  in the arena guest after its 450-hull check). Test phase owes: solo x2 (LaneA6bSpotterChecks, the rewritten five),
+  six x2 (the paint wire pair).
+- Next: kits6b-J2 (TOT). Bubble moves F -> Q in J2 (TOT takes F): rewrite `KeyFor(... "bubble")` / "F" comments then.

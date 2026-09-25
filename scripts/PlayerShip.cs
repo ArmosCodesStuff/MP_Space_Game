@@ -301,6 +301,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         var art = MyArt;
         return new TurretSpec {
             Prey     = Targeting.PointDefence,        // what its PD takes: a main gun never picks
+            Kind     = pd ? Shots.Shell : Stats.Def.MainShot,   // the round its mains fire (the freighter's spotter)
             Damage   = pd ? Stats["pd_damage"]   : Stats["main_damage"],
             Interval = Cadence(pd ? "pd_interval" : "main_interval"),
             Range    = (float)(pd ? Stats["pd_range"] : Stats["main_range"]),
@@ -929,12 +930,16 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         else _status.Clear(Status.Pinned);
         if (_webAsked <= 0) _webPhase = 0;                  // the web is over: the next one starts a round
     }
-    // THE PAINT (F14): one hostile at a time, for so long -- what its sentries take first
-    // (DeployedTurret.Prefer). Host. The spotter's hit raises it (6b); nothing else reads it.
-    private IHittable _paint;
-    private double _paintLeft;
-    public IHittable Painted => _paintLeft > 0 && _paint != null && _paint.Alive && Combat.Hostiles.Contains(_paint) ? _paint : null;
-    public void PaintOn(IHittable t, double seconds) { _paint = t; _paintLeft = seconds; }
+    // THE PAINT (F14, D33): one hostile at a time, for so long -- what its sentries take first
+    // (DeployedTurret.Prefer) and what Time on target converges on. A hit of a Paint round raises it
+    // on the host (Shot.Strike: the freighter's spotter). It lives in the primary's own slot (the
+    // `guns` row: Left = seconds left, N = the target's NetId), so it rides the host's report to every
+    // peer with no field of its own, counts down on every peer between reports (TickAbilities), and a
+    // guest's sentry copies and its F refusal read the host's paint.
+    public const string PaintSlot = "guns";
+    public IHittable Painted => Sl(PaintSlot).Left > 0 && Sl(PaintSlot).N != 0 && Combat.ById(Sl(PaintSlot).N) is { Alive: true } t
+                                && Combat.Hostiles.Contains(t) ? t : null;
+    public void PaintOn(IHittable t, double seconds) { ref var p = ref Sl(PaintSlot); p.N = t?.NetId ?? 0; p.Left = t != null ? seconds : 0; }
 
     // A refused ability: its slot shows the reason, in red, for a moment.
     public const double FailShow = 1.5;
@@ -1121,7 +1126,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         if (Alive && Hp < MaxHp) Hp = Math.Min(MaxHp, Hp + MaxHp * (InCombat ? RegenInCombat : RegenOutOfCombat) * delta);
         // The HOST decides pinned. A guest used to count its own (never-set) timer down here and
         // overwrite the host's flag every frame, so a raider's web never held a guest at all.
-        if (Net.Sim) { _status.Tick(delta); HoldWeb(delta); _paintLeft = System.Math.Max(0, _paintLeft - delta); TickThrows(delta); }
+        if (Net.Sim) { _status.Tick(delta); HoldWeb(delta); TickThrows(delta); }
         // the drive's clocks run on every peer: the landing flash used to fade only on the owner's,
         // and a remote ship's warp left it lit for good
         Drives.Tick(_drive, delta);
