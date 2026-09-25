@@ -509,6 +509,13 @@ outstanding from the batch of 2026-09-23.)*
 
 ## Unreleased
 
+### A bare bell table is part of the build's fingerprint (2026-09-25, branch wt/art)
+- `Nozzle` is a readonly struct with public `X`/`Y`/`Bell` fields (was a positional record struct,
+  which `Net.StructRow` never saw), so `Lanes.CourierBells` and `Gatherer.DroneBells` are hashed.
+- The Drake-framing check now also asserts the camera's centre slid toward the boss (the ruling:
+  repositioned, never zoomed past the wheel's ceiling). Engine-unproven: rungs 3-5 owed in the final
+  test phase.
+
 ### The 12 player hulls wear the pack (2026-09-25, in the WarShips_Version_L fork, branch wt/art)
 
 Every class's hull is a `$Finished` row of `tools/make_ships.ps1` now (sources and turns:

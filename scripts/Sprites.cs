@@ -22,9 +22,13 @@ public static class Sprites
 }
 
 // A BELL: the centre of its aft rim and its width, in world units from the hull's centre (x to
-// starboard, y aft), as tools/make_ships.ps1 prints them off the art.
-public readonly record struct Nozzle(float X, float Y, float Bell)
+// starboard, y aft), as tools/make_ships.ps1 prints them off the art. Public FIELDS, not a positional
+// record's properties: Net.Fingerprint writes a struct row out by its public fields, and a row with
+// none is not a row to it, so a bare Nozzle[] table went unhashed.
+public readonly struct Nozzle
 {
+    public readonly float X, Y, Bell;
+    public Nozzle(float x, float y, float bell) { X = x; Y = y; Bell = bell; }
     // the bells of a hull drawn k times the length the tool measured them at
     public static Nozzle[] Scaled(float k, params Nozzle[] bells) =>
         Array.ConvertAll(bells, n => new Nozzle(n.X * k, n.Y * k, n.Bell * k));

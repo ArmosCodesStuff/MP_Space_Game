@@ -530,3 +530,25 @@ uncommitted paths: J4's edits (no POST) and J5 started without a PRE.
   `Lanes.CourierBells` are NOT Plain and never enter Net.Fingerprint (inside a row they print through
   ToString, so those stay hashed). Fixed next, job A3b.
 - Next: A3b.
+
+### A3b the bells enter the fingerprint; the Drake check asserts the move -- PRE
+- Tier opus. Intent: `Nozzle` becomes a readonly struct with public readonly X/Y/Bell fields (same
+  constructor, same reads), so StructRow sees it and `Gatherer.DroneBells`/`Lanes.CourierBells` are
+  hashed. New BuildCheck: one courier bell moved moves the fingerprint, put back it is the build's.
+  Camera ruling (NOTE 1) re-read against Hub.BossFramed: the wheel's ceiling is untouched (ZoomOutMax
+  1.53) and the centre slides toward the far end; the Drake check asserts the zoom and both ends on
+  screen but not the move itself -- it gains "the centre moved toward the boss" (rewritten check).
+- Start: 2f5d146cb82a6b33e551de4353b681bf98494af1
+- Files: scripts/Sprites.cs 2617f82ebe1a5a1a81ab3a7d696a6d3ee5f60c8b · tools/smoketest/SmokeTest.cs.txt 4a68b6f4dbc008bb75f47a59842f37206ff1c67c · docs/CHANGES.md cd6d758caeb919ef25616ade2187322643d3ae88
+
+### A3b -- POST
+- Verdict: typecheck 0 errors; `-Quick` ALL CHECKS PASSED. Camera ruling confirmed in code:
+  Hub.BossFramed moves the centre (clamped to BossPilotMargin off the ship), ZoomOutMax stays 1.53.
+- Files: scripts/Sprites.cs (Nozzle fields) · SmokeTest.cs.txt (BuildChecks + the Drake framing
+  check) · docs/CHANGES.md.
+- Checks: new "a bare bell table is part of the build's fingerprint"; rewritten "at N degrees off the
+  hold-off, the wheel's own ceiling still frames the Drake's far end ... the centre moved N u toward
+  the boss".
+- **engine-unproven: rungs 3-5 owed in the final test phase** (J4, J5, the merge and A3b; the lane's
+  final chain quick,solo,solo,six,screens, the new/rewritten checks on two seeds).
+- Next: none in this batch; the final test phase, then the merge gate.

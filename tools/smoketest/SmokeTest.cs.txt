@@ -2331,6 +2331,19 @@ public partial class _Test : Node
         finally { w.Crew[ci] = c; }
         Check(FingerprintNow() == Net.Protocol,
               $"a wave crew row put back is the build's fingerprint again ({FingerprintNow():x8}, the build's {Net.Protocol:x8})");
+        // A BARE BELL TABLE IS HASHED: Nozzle was a positional record struct -- no public fields, so
+        // not a row to StructRow -- and Lanes.CourierBells / Gatherer.DroneBells, Nozzle[] fields of
+        // their own, never entered the fingerprint. One courier bell moved moves it; put back it is
+        // the build's again, and the part shows the bell written out field by field.
+        var bells = (Nozzle[])typeof(Lanes).GetField("CourierBells", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
+        int bi = Rng.RandiRange(0, bells.Length - 1);
+        var bellWas = bells[bi];
+        bells[bi] = new Nozzle(bellWas.X + Vary(0.5f, 5f), bellWas.Y, bellWas.Bell);
+        int bellShifted = FingerprintNow();
+        bells[bi] = bellWas;
+        string bellPart = FingerprintParts().FirstOrDefault(p => p.StartsWith("Lanes.CourierBells=", StringComparison.Ordinal)) ?? "none";
+        Check(bellShifted != Net.Protocol && FingerprintNow() == Net.Protocol && bellPart.Contains("Nozzle{Bell=2.11", StringComparison.Ordinal),
+              $"a bare bell table is part of the build's fingerprint: one courier bell moved moves it, put back it is the build's again (bell {bi}: {bellShifted:x8}, the build's {Net.Protocol:x8}; {bellPart[..Math.Min(90, bellPart.Length)]})");
         // Net.Fingerprint() folds in every static field of every null-namespace type that is
         // IsLiteral or IsInitOnly with a Plain field type -- and string is Plain. A
         // `public static readonly string Build` would therefore enter the hash two peers are
@@ -8509,10 +8522,13 @@ public partial class _Test : Node
                         await Wait(1.0);
                         var sternOn = ScreenOf(dk.Position - dir * (dk.Length * 0.5f));
                         var shipOn = ScreenOf(me3.Position);
+                        // REPOSITIONED, not zoomed: the centre has slid off the ship toward the boss
+                        // (the owner's ruling, ledger_sprites NOTE 1), read after the wait
+                        float slid = (H.CameraPosition - me3.Position).Dot(-dir);
                         Check(sternOn.X >= 10f && sternOn.X <= vp.X - 10f && sternOn.Y >= 10f && sternOn.Y <= vp.Y - 10f
                               && shipOn.X >= 10f && shipOn.X <= vp.X - 10f && shipOn.Y >= 10f && shipOn.Y <= vp.Y - 10f
-                              && Mathf.IsEqualApprox(H.ZoomLevel, Hub.DefaultZoom / Hub.ZoomOutMax),
-                              $"at {Mathf.RadToDeg(ang):0} degrees off the hold-off, the wheel's own ceiling ({H.ZoomLevel:0.000}) still frames the Drake's far end ({sternOn.X:0}, {sternOn.Y:0}) and the ship ({shipOn.X:0}, {shipOn.Y:0}) of {vp.X:0} x {vp.Y:0}");
+                              && Mathf.IsEqualApprox(H.ZoomLevel, Hub.DefaultZoom / Hub.ZoomOutMax) && slid > 20f,
+                              $"at {Mathf.RadToDeg(ang):0} degrees off the hold-off, the wheel's own ceiling ({H.ZoomLevel:0.000}) still frames the Drake's far end ({sternOn.X:0}, {sternOn.Y:0}) and the ship ({shipOn.X:0}, {shipOn.Y:0}) of {vp.X:0} x {vp.Y:0}, the centre moved {slid:0} u toward the boss");
                     }
                     H.SetZoom(Hub.DefaultZoom);
                     // BACK TO THE SPAWN POSE before the checks below: the last angle left the boss
