@@ -510,3 +510,22 @@ Owed on the R1 records commit (it carries J10 and J9c):
    0: plan §10.2's fallback (CHANGES Known broken; R4's watchdog uses `Net.DropBeatsFor`).
 3. Rung 5 is R2's (nothing in R1 crosses peers; the fingerprint's new value is shared by both ends).
 4. Optional: one `run.ps1 -Wan` (the ENet relays moved into the box, `--relay`).
+
+### R1P PRE (the owed chain: quick, solo, solo, six)
+- model: sonnet (escalate to opus after one red)
+- intent: run the chain the main session owes (`verify.ps1 -Quick`, rung 3 twice on two seeds, then
+  the six-role run) at HEAD e2d31b3, through the shared `rungs.ps1` runner, tags `net_r1a`, `net_r1b`,
+  ... Read each solo log for the owed check names (a name that never printed is a failure). Fix any
+  red at the lowest rung that sees it, two seeds before its commit. The pair-proxy check is the known
+  unknown: two failures with `to_host`/`to_guest` 0 and nothing else to try takes the ledger's
+  fallback (plan §10.2: CHANGES Known broken, R4's watchdog on `Net.DropBeatsFor`).
+- files (may touch, only if a rung is red): scripts/Link.cs, scripts/Net.cs, scripts/Rendezvous.cs,
+  scripts/Character.cs, tools/smoketest/SmokeTest.cs.txt, tools/smoketest/run.ps1,
+  tools/smoketest/wan.py, docs/CHANGES.md, docs/DESIGN.md, docs/plans/ledger_webrtc.md
+- from: e2d31b36761bae422356ad7e16bfd3bc3fa3680b
+- hashes: Link.cs 67b37be6f99ba9dbcfbf5910a6fe4c070856751d; Net.cs
+  3c10715d9675c949b56010b2c106d2f000254341; Rendezvous.cs 513eddbc99c42984530cce2bfa28a8659ed2446c;
+  Character.cs a23df4a51223f6f9a9be822b4da2d77197d0c862; SmokeTest.cs.txt
+  c595dacea846b11d8e750bcfd1541bc2183f4830; run.ps1 ad134d9c0ffbe6ddba0fb3016534699cebf9a2be;
+  wan.py 74fc642f5d25bd2c3c1d94dd244dda414bc625d4; CHANGES.md 658342ca494153aae9cd0272e31a6f9d131f8e33;
+  DESIGN.md c55c31673f59a2cfc04f9bc70a93253d72c2d3a8; ledger 3ba6ceff4f9f343e6091472e281ad979f7d4e06f

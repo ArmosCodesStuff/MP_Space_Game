@@ -1494,8 +1494,10 @@ public partial class _Test : Node
         // against the list this test exercises. Add a field and this goes red until it is either
         // set above or named here as deliberately not persisted. Found the hard way: the base
         // economy fields were added, not saved, and the round trip passed.
+        // Bought is a property now (J9c, the fingerprint): reflection sees the compiler's backing
+        // field, not the name a player reads, the same way LastSaveRenamed's already does below.
         var exercised = new[] { "Accent", "BaseCredits", "BaseInvested", "BaseLevels",
-                                "BaseStock", "BossCleared", "Bonuses", "Bought", "Class", "Exp",
+                                "BaseStock", "BossCleared", "Bonuses", "<Bought>k__BackingField", "Class", "Exp",
                                 "GearHold", "GearLevel", "GearLocked", "HintsOff", "HintsSeen", "Id", "Level", "Loadout", "Main",
                                 "Name", "PaidKills", "Points", "Spent", "TourDone", "Unclaimed" };
         // Not state a character carries: a path, and the compiler's backing field for a property
@@ -2202,9 +2204,15 @@ public partial class _Test : Node
         // THE PILOT IS NOT THE BUILD: nothing a run changes about the pilot enters the fingerprint. The
         // bought upgrades were a readonly int[] -- Plain to the fingerprint -- so every purchase moved it,
         // and a peer whose Net was first touched after a pilot loaded would have hashed that pilot's
-        // purchases. Asserted by construction (no Character part at all) and by effect (purchases made, the
-        // fingerprint is still the build's).
-        var pilotParts = FingerprintParts().Where(p => p.StartsWith("Character.", StringComparison.Ordinal)).ToList();
+        // purchases. Character itself DOES contribute a few parts -- a save path, a kept-kills cap, the
+        // bounds a stat off disk is clamped to -- every one `const`, the same for every peer on this
+        // build whichever pilot is loaded; named here rather than asserted away. What must never show
+        // up is anything a PLAYER decided -- Bought chief among them -- asserted by construction (no
+        // such part) and by effect (purchases made, the fingerprint is still the build's).
+        var buildConst = new[] { "Character.Dir=", "Character.MaxBonus=", "Character.MaxStock=",
+                                  "Character.PaidKept=", "Character.SaveDelay=" };
+        var pilotParts = FingerprintParts().Where(p => p.StartsWith("Character.", StringComparison.Ordinal)
+                                                      && !buildConst.Any(c => p.StartsWith(c, StringComparison.Ordinal))).ToList();
         var boughtWas = Character.Bought.ToArray();
         for (int i = 0; i < Character.Bought.Length; i++) Character.Bought[i] = Rng.RandiRange(0, Progression.MaxPerUpgrade);
         int bought = FingerprintNow();
