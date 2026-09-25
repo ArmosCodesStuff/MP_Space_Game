@@ -9014,6 +9014,132 @@ public partial class _Test : Node
         wt.Demo = demo; wt.Velocity = Vector2.Zero;
     }
 
+    // ── SLICE 6d: THE WRAITH'S VENOM (DL3, DoseRows.Venom): 6 s coated; each landed pellet a stack on what it hit, up to 10,
+    // 1.25 a second each (ticked every 0.5 s, credit "venom"), for 5 s after the last; never on a round in flight; 22 s.
+    void LaneA6dVenomRowChecks()
+    {
+        var st = new ShipStats(ShipClass.LightWraith);
+        var vn = Abilities.Find(ShipClass.LightWraith, "venom");
+        var row = DoseRows.Venom;
+        Check(st["venom_time"] == 6 && st["venom_cap"] == 10 && st["venom_dps"] == 1.25 && st["venom_last"] == 5 && st["venom_cooldown"] == 22
+              && row.Id == "venom" && row.Every == 0.5 && row.Fx == Fx.Venom && Fx.Of(Fx.Venom).Id == "venom"
+              && vn?.Default == global::Godot.Key.Q && vn?.OnDealt != null && Unlocks.Nth(ShipClass.LightWraith, 2) == Ab.Venom
+              && Items.Repeats.Contains(Dealt.Venom) && Math.Abs(Dps.Venom.Rate(st) - 6.25) < 1e-9
+              && Math.Abs(Dps.Veil.Rate(st) - 98.0 / 18) < 1e-9 && Math.Abs(st.SustainedDps - (65 + 1.0 / 3 + 98.0 / 18 + 6.25)) < 1e-6,
+              $"the Venom row: {st["venom_time"]:0} s coat (6), {st["venom_cap"]:0} doses (10) of {st["venom_dps"]:0.00}/s (1.25) for {st["venom_last"]:0} s after (5), {st["venom_cooldown"]:0} s (22), on Q, ability 2; on the sheet {Dps.Venom.Rate(st):0.00} (6.25 = 12.5 x 11 / 22), the veil's volley {Dps.Veil.Rate(st):0.00} (5.44 = 2 x 49 / 18), the Wraith {st.SustainedDps:0.00} (77.03: the signed 77.1)");
+    }
+
+    async Task LaneA6dVenomChecks(Vector2 yonder)
+    {
+        await SetClass(ShipClass.LightWraith);
+        var wt = Me; bool demo = wt.Demo; wt.Demo = true; wt.AutopilotTo = null;
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        double Pellets() => wt.DealtBy.GetValueOrDefault("pellet");
+        double Venom() => wt.DealtBy.GetValueOrDefault("venom");
+        void Ready() { foreach (var id in new[] { "venom", "veil" }) { wt.Sl(id).Left = 0; wt.Sl(id).Cool = 0; } wt.Unveil(); wt.Prime(1); }
+
+        // STACKS TO 10, 12.5 A SECOND, ENDS 5 s AFTER THE LAST: a held gunship 60-100 u off at a varied bearing, fired on
+        // from its front (run 0), from inside its rear arc (run 1: the ticks take no backstab) and out of the Veil from
+        // behind (run 2: the x3 volley is still 7 doses, and its ticks take no multiple); the gun held till 10 doses
+        for (int run = 0; run < 3; run++)
+        {
+            Ready();
+            var foe = HeldI(VaryNear(yonder, 300f), Enemies.Gunship); float rrot = VaryAngle();
+            float off = run == 0 ? Mathf.Pi + Mathf.DegToRad(Vary(-40f, 40f)) : Mathf.DegToRad(Vary(-45f, 45f));
+            var at = foe.Position + (-Vector2.Up.Rotated(rrot)).Rotated(off) * Vary(60f, 100f);
+            void Hold() { wt.Position = at; wt.Rotation = Aim.Face(at, foe.Position); wt.Velocity = Vector2.Zero; wt.AimPoint = foe.Position; foe.Rotation = rrot; }
+            if (run == 2) wt.UseAbility("veil", 0);
+            wt.UseAbility("venom", 0);
+            for (double t = 0; t < 0.9; t += GetProcessDeltaTime()) { Hold(); await Frame(); }
+            double clock = 0, lastLand = -1, p0 = Pellets(), v0 = Venom(); int firstVolley = -1, most = 0;
+            wt.Trigger = true;
+            for (int i = 0; i < 60 * 4 && wt.DosedOn(foe, DoseRows.Venom) < 10; i++)
+            {
+                Hold(); double p = Pellets(); await Frame(); clock += GetProcessDeltaTime();
+                if (Pellets() > p) lastLand = clock;
+                if (firstVolley < 0 && Pellets() > p0) { for (int k = 0; k < 6; k++) { Hold(); await Frame(); clock += GetProcessDeltaTime(); } firstVolley = wt.DosedOn(foe, DoseRows.Venom); }
+            }
+            wt.Trigger = false;
+            var ticks = new List<(double t, double d)>();
+            double vPrev = Venom();
+            while (clock < lastLand + 5.6)
+            {
+                Hold(); double p = Pellets(); await Frame(); clock += GetProcessDeltaTime();
+                if (Pellets() > p) lastLand = clock;
+                most = Math.Max(most, wt.DosedOn(foe, DoseRows.Venom));
+                if (Venom() > vPrev) ticks.Add((clock, Venom() - vPrev));
+                vPrev = Venom();
+            }
+            bool even = ticks.Count >= 9 && ticks.All(k => NearI(k.d, 6.25))
+                        && Enumerable.Range(1, ticks.Count - 1).All(k => Math.Abs(ticks[k].t - ticks[k - 1].t - 0.5) < 0.04);
+            double lastTick = ticks.Count > 0 ? ticks[^1].t : -1;
+            Check(firstVolley == 7 && most == 10 && even && lastTick <= lastLand + 5.04 && lastTick >= lastLand + 4.4 && wt.DosedOn(foe, DoseRows.Venom) == 0
+                  && Venom() - v0 > 0,
+                  $"venom {(run == 0 ? "from the front" : run == 1 ? "from behind" : "out of the veil, from behind")}: {firstVolley} doses after the first volley (7), {most} held (10); {ticks.Count} ticks of {string.Join("/", ticks.Select(k => k.d.ToString("0.00")).Distinct())} (6.25 = 10 x 1.25 x 0.5) every 0.5 s; the last {lastTick - lastLand:0.00} s after the last pellet (4.4 .. 5.0), none after");
+            foe.TakeDamage(1e12);
+            await Wait(0.5);
+        }
+
+        // THE COAT LASTS 6 s, AND COOLS 22: at 6.3 s after the press a volley doses nothing and no tick follows; a second press
+        // is refused while it cools -- at three varied bearings and ranges
+        for (int run = 0; run < 3; run++)
+        {
+            Ready();
+            var at = VaryNear(yonder, 300f); var spot = at + Vector2.Right.Rotated(VaryAngle()) * Vary(60f, 100f);
+            var foe = HeldI(spot, Enemies.Gunship);
+            void Hold() { wt.Position = at; wt.Rotation = Aim.Face(at, spot); wt.Velocity = Vector2.Zero; wt.AimPoint = spot; foe.Position = spot; foe.Rotation = Aim.Face(spot, at); }
+            wt.UseAbility("venom", 0);
+            double clock = 0;
+            for (; clock < 6.3; clock += GetProcessDeltaTime()) { Hold(); await Frame(); }
+            double p0 = Pellets(), v0 = Venom();
+            wt.Trigger = true; Hold(); await Frame(); wt.Trigger = false; clock += GetProcessDeltaTime();
+            for (double t = 0; t < 1.2; t += GetProcessDeltaTime()) { Hold(); await Frame(); clock += GetProcessDeltaTime(); }
+            double cool = wt.Sl("venom").Cool;
+            wt.UseAbility("venom", 0); await Frame();
+            Check(Pellets() - p0 > 0 && wt.DosedOn(foe, DoseRows.Venom) == 0 && Venom() == v0 && wt.Sl("venom").Left <= 0
+                  && Math.Abs(cool - (22 - clock)) < 0.1,
+                  $"a volley {clock - 1.2:0.0} s after the press ({Pellets() - p0:0} landed): {wt.DosedOn(foe, DoseRows.Venom)} doses, {Venom() - v0:0.00} venom (0: the coat is 6 s); cooling {cool:0.0} s (22 from the press), a press refused");
+            foe.TakeDamage(1e12);
+            await Wait(0.5);
+        }
+
+        // NEVER ON A ROUND IN FLIGHT, AND ONLY FROM THE PRIMARY: coated pellets that strike a cruise missile's hull put no
+        // dose on it; a blow credited to anything but a primary round doses nothing; the practice dummy (a body, no
+        // heading) takes the doses and their ticks, credited "venom" -- from three varied sides
+        {
+            var dummy = H.GetNode<TargetDummy>("TargetDummy1");
+            string ls = ""; bool ok = true;
+            for (int k = 0; k < 3; k++)
+            {
+                Ready();
+                var at = VaryNear(yonder, 300f); var cmAt = at + Vector2.Right.Rotated(VaryAngle()) * Vary(60f, 100f);
+                var cm = Combat.Fire(Shots.Cruise, cmAt, Vector2.Down, 0.001f, 4000f, 1, size: 3f, hull: 30);
+                wt.UseAbility("venom", 0);
+                for (double t = 0; t < 0.9; t += GetProcessDeltaTime()) { wt.Position = at; wt.Velocity = Vector2.Zero; wt.AimPoint = cmAt; await Frame(); }
+                wt.Trigger = true; wt.Position = at; await Frame(); wt.Trigger = false;
+                for (double t = 0; t < 0.5; t += GetProcessDeltaTime()) { wt.Position = at; wt.Velocity = Vector2.Zero; await Frame(); }
+                bool struck = !IsInstanceValid(cm) || !cm.Alive || cm.Hull < 30;
+                int onCm = IsInstanceValid(cm) ? wt.DosedOn(cm, DoseRows.Venom) : 0;
+                wt.Dose(DoseRows.Venom, dummy, Dealt.Reverb);
+                int byOther = wt.DosedOn(dummy, DoseRows.Venom);
+                var dAt = dummy.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(70f, 100f);
+                for (double t = 0; t < 0.9; t += GetProcessDeltaTime()) { wt.Position = dAt; wt.Velocity = Vector2.Zero; wt.AimPoint = dummy.Position; await Frame(); }
+                double v0 = Venom(), t0 = dummy.Total, p0 = Pellets();
+                wt.Trigger = true; wt.Position = dAt; await Frame(); wt.Trigger = false;
+                for (double t = 0; t < 1.8; t += GetProcessDeltaTime()) { wt.Position = dAt; wt.Velocity = Vector2.Zero; await Frame(); }
+                double venom = Venom() - v0, took = dummy.Total - t0, pel = Pellets() - p0;
+                int onDummy = wt.DosedOn(dummy, DoseRows.Venom);
+                ok &= struck && onCm == 0 && byOther == 0 && onDummy == 7 && venom > 0 && NearI(took, pel + venom) && NearI(venom % 4.375, 0, 1e-6);
+                ls += $"[cruise struck {struck}, {onCm} doses; by a blast {byOther}; the dummy {onDummy} doses, {venom:0.00} venom of {took:0.00}] ";
+                if (IsInstanceValid(cm)) cm.TakeDamage(1e12);
+                await Wait(5.5);
+            }
+            Check(ok, $"venom never on a round in flight or from a blow that is not a pellet, and on the dummy credited venom (7 doses: 4.375 a tick): {ls}");
+        }
+        Ready();
+        wt.Demo = demo; wt.Velocity = Vector2.Zero;
+    }
+
     // ── SLICE 6d, RUNG 5: A GUEST'S PEPPERBOX. The guest (LaneA6dPepperGuestChecks) flies a DART at rest, its cursor
     // on a varied point 400-600 u off the nose, and holds the trigger 2 s: its own world shows the host's darts
     // (cosmetic copies, Commanded onto ITS cursor) -- 12 +- 2 of them, each within 10° of the bearing to the cursor
@@ -15102,6 +15228,8 @@ public partial class _Test : Node
             await LaneA6dBackstabChecks(yonder);
             LaneA6dVeilRowChecks();
             await LaneA6dVeilChecks(yonder);
+            LaneA6dVenomRowChecks();
+            await LaneA6dVenomChecks(yonder);
             await SetClass(ShipClass.HeavyWarrior);
             var wr = Me; wr.Position = yonder; wr.Velocity = Vector2.Zero; await Wait(0.2);
             // A SPEED LIFT LIFTS THE PUSH AS WELL AS THE TOP SPEED (PlayerShip.Steer). The water holds a
@@ -15483,6 +15611,7 @@ public partial class _Test : Node
                     ["rewind"]    = sp => sp.Sl("rewind").Cool > sp.Stats["rewind_cooldown"] - 0.1,
                     ["emp"]       = sp => sp.Sl("emp").Cool > sp.Stats["emp_cooldown"] - 0.1,
                     ["veil"]      = sp => sp.Statuses.Has(Status.Untargetable) && sp.Sl("veil").Left > sp.Stats["veil_time"] - 0.1,
+                    ["venom"]     = sp => sp.Sl("venom").Left > sp.Stats["venom_time"] - 0.1 && sp.Sl("venom").Cool > sp.Stats["venom_cooldown"] - 0.1,
                     ["anchor"]    = sp => sp.Sl("anchor").Left > sp.Stats["anchor_time"] - 0.1 && sp.Held == 0f,
                     ["tether"]    = sp => sp.Sl("tether").N == 1 && sp.Sl("tether").Cool > sp.Stats["tether_recharge"] - 0.1 && H.Laid.Any(z => z.OwnerId == sp.OwnerId),
                     ["flares"]    = sp => sp.Sl("flares").Cool > sp.Stats["flare_cooldown"] - 0.1 && H.Salvos.Any(sv2 => sv2.At.DistanceTo(sp.Position) < 5f),

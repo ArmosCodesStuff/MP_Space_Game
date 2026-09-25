@@ -218,7 +218,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     public double HullLeft => MaxHp > 0 ? Hp / MaxHp : 1;
     private Items.Blow BlowOn(IHittable target, double d) => new(target, HullLeft, d, MaxHp);
     // A blow this ship deals, weighed (Dealt.Deal): its Dealt rows added, and the primary's ramp. A
-    // repeat (Items.Repeats: the echo's blast) is what was already weighed, and passes as it is.
+    // repeat (Items.Repeats: the echo's blast, a dose's tick) is what was already weighed, and passes as it is.
     public double Outgoing(IHittable target, double d, string weapon)
     {
         if (Array.IndexOf(Items.Repeats, weapon) >= 0) return d;        // weighed once, as each stored blow landed
@@ -1055,6 +1055,23 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     public void Prime(double mult) => _primed = mult;
     public double Primed => _primed;
     public const float VeiledAlpha = 0.35f;
+
+    // VENOM (the Wraith's Q, DL3; host): coated for venom_time, cooling venom_cooldown; while it runs its OnDealt doses
+    public void Coat()
+    {
+        ref var s = ref Sl("venom");
+        if (s.Cool > 0) return;
+        s.Left = Stats["venom_time"]; s.Cool = Cooling(Stats["venom_cooldown"]);
+    }
+    // A STACK OF A DOSE ROW on what one of this ship's PRIMARY rounds just hit (Items.PrimaryShots); never on a round in
+    // flight (a missile, a cruise missile's hull). Host: Doses ticks it.
+    public void Dose(DoseDef def, IHittable t, string weapon)
+    {
+        if (!Net.Sim || Array.IndexOf(Items.PrimaryShots, weapon) < 0 || TagExt.Is(t, Tag.Missile | Tag.Hulled)) return;
+        _doses.Add(def, t, _clock, Stats);
+    }
+    public int DosedOn(IHittable t, DoseDef def) => _doses.StacksOn(t, def);
+    private readonly Doses _doses = new();
     private double _primed = 1;
 
     public void OrderStrike(IHittable t)
@@ -1345,7 +1362,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             _trail.Note(_clock, Stats["rewind_every"], Stats["rewind_back"], new Mark(0, Position, Rotation, Velocity, Hp));
 
         if (Mine && Abilities.TriggerOf(Class)?.Reload is { } view) ActiveReload.Step(this, view, delta);
-        if (Net.Sim) { FireControl(delta); Bored(delta); Swings(delta); DashSweeps(); ChargeLatch(delta); }
+        if (Net.Sim) { FireControl(delta); Bored(delta); Swings(delta); DashSweeps(); ChargeLatch(delta); _doses.Tick(_clock, Stats, this); }
         foreach (var t in _turrets) t.Tick(delta);
         for (int i = _wings.Count - 1; i >= 0; i--)
         {
@@ -2021,6 +2038,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         foreach (var w in _wings) if (IsInstanceValid(w)) w.QueueFree();
         _wings.Clear();
         if (IsInstanceValid(_pod)) _pod.QueueFree();
+        _doses.Clear();
         Combat.Players.Remove(this);
     }
 

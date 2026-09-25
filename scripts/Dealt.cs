@@ -14,7 +14,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 public static class Dealt
 {
-    public const string Pd = "pd", Turret = "turret", Rail = "rail", Emp = "emp", Reverb = "reverb",
+    public const string Pd = "pd", Turret = "turret", Rail = "rail", Emp = "emp", Reverb = "reverb", Venom = "venom",
         Outpost = "outpost", Base = "base", Prism = "prism";
 
     // EVERY BLOW THROUGH THE DOOR, whoever dealt it -- a blow with no ship behind it (the base's

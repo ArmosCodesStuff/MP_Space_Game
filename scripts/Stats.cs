@@ -394,6 +394,22 @@ public static class Dps
                   + $"every {s["hunter_cooldown"]:0.0} s",
     };
 
+    // THE WRAITH'S VEIL, averaged over its cooldown: the volley out of it at veil_break, once a cooldown (PlayerShip.Prime)
+    public static readonly DpsSource Veil = new()
+    {
+        Label = "The volley out of the veil, averaged over its cooldown",
+        Rate = s => s.MainDpsPerBarrel * s["main_interval"] * (s["veil_break"] - 1) / s["veil_cooldown"],
+        Note = s => $"one volley at x{s["veil_break"]:0} every {s["veil_cooldown"]:0} s",
+    };
+
+    // THE WRAITH'S VENOM, averaged over its cooldown: ten doses held for the coat and the tail after it (DoseRows.Venom)
+    public static readonly DpsSource Venom = new()
+    {
+        Label = "Venom, averaged over its cooldown",
+        Rate = s => s["venom_cap"] * s["venom_dps"] * (s["venom_time"] + s["venom_last"]) / s["venom_cooldown"],
+        Note = s => $"up to {s["venom_cap"]:0} doses of {s["venom_dps"]:0.00}/s on a hull, for the {s["venom_time"]:0} s coat and {s["venom_last"]:0} s after, every {s["venom_cooldown"]:0} s",
+    };
+
     // THE ECHO'S ROUNDS AGAIN (TurretSpec.RepeatShare): each main round's echo, a share of it
     public static readonly DpsSource Repeat = new()
     {

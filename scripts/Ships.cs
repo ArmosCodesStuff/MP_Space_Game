@@ -623,7 +623,7 @@ public static class Classes
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Reverb, Ab.Rewind, Ab.Emp } },
         new() { Id = ShipClass.LightWraith, Name = "WRAITH", Ready = true, Fit = Fit.Guns,
             Blurb = "An ambusher: its scattergun is murder point blank and half again from behind. While its veil is up nothing hostile can pick it.",
-            Hint = "WRAITH  ·  mouse aims the scattergun, x1.5 from behind  ·  F veil",
+            Hint = "WRAITH  ·  mouse aims the scattergun, x1.5 from behind  ·  F veil  ·  Q venom",
             Drive = Drives.Boost,
             Shot = Shots.Pellet,
             Nums = new() {
@@ -637,7 +637,7 @@ public static class Classes
             Damage = new() { ["main_damage"] = 0.35 },
             Reach = new() { ["main_range"] = 1 },
             Cycle = new() { ["main_interval"] = 1 },
-            Weapons = new[] { Dps.Main },
+            Weapons = new[] { Dps.Main, Dps.Veil, Dps.Venom },
             Kit = new[] {
                 ItemDef.Own(GearSlot.Weapon, "light_scattergun", "Ambush Scattergun", "the scattergun: its pellets, their rate and their reach", "scatter_pellets"),
                 ItemDef.Own(GearSlot.Utility, "light_stealth_veil", "Veil Emitter", "how long nothing can pick it", "veil_time"),
@@ -654,12 +654,18 @@ public static class Classes
                 new() { Group = "Veil", Id = "veil_speed",    Label = "Top speed, veiled", Base = 1.35, Unit = "x", Dec = 2 },
                 new() { Group = "Veil", Id = "veil_break",    Label = "The volley out of it", Base = 3, Unit = "x", Dec = 1 },
                 new() { Group = "Veil", Id = "veil_cooldown", Label = "Cooldown",          Base = 18, Unit = "s", Dec = 1, Inverse = true },
+                // VENOM (DL3, a DoseRows row): 6 s coated; each landed pellet a stack, up to 10, 1.25 a second each, 5 s after the last; 22 s
+                new() { Group = "Venom", Id = "venom_time",     Label = "Coated for",        Base = 6, Unit = "s", Dec = 1 },
+                new() { Group = "Venom", Id = "venom_cap",      Label = "Doses on one hull", Base = 10, Unit = "", Dec = 0 },
+                new() { Group = "Venom", Id = "venom_dps",      Label = "Each dose eats",    Base = 1.25, Unit = "/s", Dec = 2 },
+                new() { Group = "Venom", Id = "venom_last",     Label = "After the last",    Base = 5, Unit = "s", Dec = 1 },
+                new() { Group = "Venom", Id = "venom_cooldown", Label = "Cooldown",          Base = 22, Unit = "s", Dec = 1, Inverse = true },
             },
             Art = new ClassArt {
                 Texture = "res://light_wraith_hull.png", Length = 70f, HalfWidth = 14.97f,
                 Mains = new Vector2[] { new(0.0f, -10.5f) },
                 TurretTexScale = 0.65f / 5.5f, MainBarrel = 8.0f, PdBarrel = 3.6f },
-            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Veil } },
+            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Veil, Ab.Venom } },
     };
 
     private static readonly Dictionary<ShipClass, ClassDef> ById = All.ToDictionary(c => c.Id);

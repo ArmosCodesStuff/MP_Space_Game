@@ -1170,7 +1170,7 @@ public partial class _Shots : Node
     }
 
     // SLICE 6d: the Wraith's scattergun a moment after a volley from behind a raider -- seven pellets fanned +-10 deg (78b);
-    // the veiled hull (78c).
+    // the veiled hull (78c); venom ticking on a gunship (78d).
     async Task LaneA6dWraithFrames()
     {
         var cam = GetViewport().GetCamera2D(); var z0 = cam.Zoom;
@@ -1201,6 +1201,17 @@ public partial class _Shots : Node
         ws.Position = at; ws.Rotation = rot; ws.Velocity = Vector2.Zero;
         await Snap("78c_wraith_veil");
         near.TakeDamage(1e12); ws.Unveil(); ws.Sl("veil").Cool = 0;
+        // venom (78d): two coated volleys into a held gunship, then its doses ticking (Fx venom on the hull, every peer)
+        var dosed = H.SpawnRaider(at + Vector2.Up.Rotated(rot) * 90f, Enemies.Gunship); dosed.Hp = 1e9; dosed.ApplyStatus(Status.Disabled, 30);
+        ws.Sl("venom").Cool = 0; ws.UseAbility("venom", 0);
+        ws.AimPoint = dosed.Position; await W(0.8);
+        ws.Trigger = true;
+        for (double t = 0; t < 0.9; t += GetProcessDeltaTime())
+        { ws.Position = at; ws.Rotation = rot; ws.Velocity = Vector2.Zero; ws.AimPoint = dosed.Position; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+        ws.Trigger = false;
+        await W(1.1);
+        await Snap("78d_wraith_venom");
+        dosed.TakeDamage(1e12); ws.Sl("venom").Cool = 0; ws.Sl("venom").Left = 0;
         ws.Demo = demo; ws.Velocity = Vector2.Zero;
         await W(0.8);
         Character.Class = ShipClass.Battleship; P(H, "ApplyLocalIdentity"); await W(0.4);

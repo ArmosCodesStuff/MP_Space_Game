@@ -447,3 +447,30 @@ PlayerShip 9, Stats 2, Dealt 1, Fx 1, Items 3, SmokeTest 42; stealth_*|GoDark Pl
   frame 78c_wraith_veil. Rewritten: walls-by-position (Ab.Veil), the defaults' message (Veil Emitter), the tour's press (veil),
   sweep witness ["veil"].
 - next: kits6d-J10 (Venom).
+
+## kits6d-J10 · PRE
+- tier opus; intent: Venom (DL3): scripts/Doses.cs (DoseDef row + a ship's Doses: per-target stacks, host, ticked every 0.5 s through Dealt with the row's credit, ending Last s after the last refresh); Ab.Venom (Q, ability 2): 6 s coated, each landed primary round on a hostile body (never a round in flight) adds a stack (cap 10, 1.25/s each, 5 s after the last), cooldown 22; Dealt.Venom in Items.Repeats (a tick passes as it is: no backstab, no prime); Dps.Venom 6.25; Fx row venom appended (a tick drawn on every peer).
+- HEAD 908d5758586b66154495e229cba7ea9754b61f71
+- scripts/Abilities.cs e6a396e6eb5525b96fed929cea9a1ea4396a3906
+- scripts/PlayerShip.cs abb15054df6e5ab7a9d08fa395a2f772b96dda0f
+- scripts/Ships.cs 8d42094ba4cd85a33d2b8e26b71e777192843141
+- scripts/Items.cs 8a74d9ab02b67a60bc4d9b880f8c92b4231af725
+- scripts/Dealt.cs f9f38d759793f6e4e412ba5a58cd455dceb7d0a0
+- scripts/Stats.cs 7de88eec1fa85cc8a279f7c51666c436203e2354
+- scripts/Fx.cs 6bfa4408e5484e9b3695121fd480c05147880fd0
+- tools/smoketest/SmokeTest.cs.txt c66aadf3e3178495617bc9cec0a890ebcba92bb8
+- tools/screens/Shots.cs.txt 8f30da64468a72c042460995ee0005380099b6d0
+- new: scripts/Doses.cs
+
+## kits6d-J10 · POST
+- verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final test phase.
+- built: scripts/Doses.cs (DoseDef row: Id/Cap/Rate/Last/Every/Fx; DoseRows.Venom; a ship's Doses: Add caps and refreshes,
+  Tick deals Stacks x Rate x Every through Dealt every 0.5 s from the first stack until Last s after the last, raising Fx.Venom
+  on the hull; host, cleared in _ExitTree). Ab.Venom (Q, ability 2): PlayerShip.Coat (6 s, 22 s), OnDealt -> PlayerShip.Dose
+  (primary rounds only, never Tag.Missile|Hulled). Dealt.Venom in Items.Repeats (a tick passes as it is). Rows venom_time 6 /
+  venom_cap 10 / venom_dps 1.25 / venom_last 5 / venom_cooldown 22; @duration venom_time. Fx row venom (16, appended). Dps.Veil
+  (5.44) and Dps.Venom (6.25) on the Wraith's sheet: 65.33 + 5.44 + 6.25 = 77.03 (the signed 77.1).
+- checks: LaneA6dVenomRowChecks, LaneA6dVenomChecks (7 then 10 doses, ticks 6.25 every 0.5 s, the last 4.4-5.0 s after the
+  last pellet, front / behind / out of the veil x3; the 6 s coat and 22 s cooldown x3; never on a cruise missile's hull, never
+  from a non-primary blow, the dummy dosed and credited venom x3); frame 78d_wraith_venom; sweep witness ["venom"].
+- next: kits6d-J11 (Shadow step).

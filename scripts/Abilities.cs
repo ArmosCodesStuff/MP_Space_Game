@@ -632,6 +632,18 @@ public static class Ab
         Show = (s, _) => Timed(s, "emp", "emp_cooldown", "READY"),
     };
 
+    // THE WRAITH'S VENOM (DL3): 6 s coated -- each pellet that lands puts a stack of poison on what it hit (up to 10,
+    // 1.25 a second each, for 5 s after the last: DoseRows.Venom); 22 s
+    public static readonly AbilityDef Venom = new()
+    {
+        Id = "venom", Name = "Venom", Short = "VENOM", Default = Key.Q,
+        Blurb = "Coats your pellets for six seconds: each one that lands poisons what it hits, up to ten doses, each eating 1.25 a second until five seconds after the last.",
+        Press = (s, _) => s.Coat(),
+        OnDealt = (s, t, _, weapon) => s.Dose(DoseRows.Venom, t, weapon),
+        Refuse = (s, _) => s.Sl("venom").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => Timed(s, "venom", "venom_cooldown", "COATED"),
+    };
+
     // THE WRAITH'S VEIL (DL3): 5 s nothing hostile can pick it (it can still be hit), x1.35 top speed, and the next volley
     // x3 -- fired from inside it, which ends it, or the first after; 18 s
     public static readonly AbilityDef Veil = new()

@@ -86,7 +86,7 @@ public static class Fx
     public const int Burst = 0, Lost = 1, Rebuilt = 2, Wave = 3, Emp = 4, Reverb = 5, Rail = 6,
                      WarnLane = 7, WarnZone = 8, AimZone = 9, TauntRing = 10,
                      Rip = 11, RipSparks = 12, RipSmoke = 13, Scar = 14,
-                     RailEnhanced = 15;
+                     RailEnhanced = 15, Venom = 16;
     // WHAT A WARNING RIDES: the world itself, or the NetId of the hull it is drawn on. A beam's
     // and a dash's lane are drawn in the BOSS'S OWN FRAME and parented to it, so the line it drew
     // is the line it fires down however the hull turns; everything else is pinned to the ground
@@ -137,6 +137,8 @@ public static class Fx
         new() { Id = "scar",       Shape = FxShape.Scar,   Tint = new(0.10f, 0.07f, 0.06f), Life = 10.0, Cap = 3 },
         // an enhanced rail round (ActiveReload's perfect press): the rail's bar in white, 1.5x as wide
         new() { Id = "rail_enhanced", Shape = FxShape.Bar, Tint = new(0.92f, 0.96f, 1f), Life = 0.35, Width = 10.5f, Fill = false },
+        // a dose's tick (Doses: the Wraith's Venom) on the hull it eats: a small sickly-green flare, one a tick
+        new() { Id = "venom", Shape = FxShape.Spokes, Tint = new(0.55f, 1f, 0.35f), Life = 0.5, Width = 1.5f, Spokes = 5 },
     };
 
     public static FxDef Of(int id) => All[id >= 0 && id < All.Length ? id : Burst];
