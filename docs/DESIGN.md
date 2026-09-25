@@ -1340,6 +1340,14 @@ Each of these compiled clean and was wrong at runtime. The smoke test covers all
   plugin upgrade that changes or adds a line is refused by name when a code is made, and the solo run's
   byte-for-byte check (the spike's bundles and the live pair's) fails on its first run, never in the
   field.
+- **`Link.Backlog` does not see the SCTP socket's own send buffer.** The plugin's buffered amount is
+  what libdatachannel queues after that buffer is full: R1's first solo run put 1 MB on one row in one
+  frame and read 0. The check puts until the row backs up; §3.8's backlog guard acts only past it.
+- **`Net.Protocol` is the startup's fingerprint, and the fingerprint moves during a solo run** (R1's
+  first run: 3724c77b at startup, 7991f5f3 near the end, with no seam swapped). A check that a seam is
+  outside the fingerprint compares swapped with unswapped at the same moment, never with
+  `Net.Protocol`; its message names the parts that moved since the run began (open: which, and
+  whether a real game moves them before `Net` is first touched).
 
 ## Smoke test
 

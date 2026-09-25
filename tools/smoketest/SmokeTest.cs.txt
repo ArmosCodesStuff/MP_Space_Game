@@ -506,15 +506,49 @@ public partial class _Test : Node
         Check(smallDropped == 1 && small.Candidates.Count == 4 && small.Candidates.Contains(first6) && Rendezvous.Encode(small).Length <= 400,
               $"two IPv6 addresses on one /64 keep the first, though the code fits; one on another /64 stays ({smallDropped} dropped, {small.Candidates.Count} kept)");
 
-        // THE SEAMS ARE MUTABLE, so they stay out of the build's fingerprint: swapped, it is the same
-        var fingerprint = typeof(Net).GetMethod("Fingerprint", BindingFlags.NonPublic | BindingFlags.Static, Type.EmptyTypes);
+        // THE SEAMS ARE MUTABLE, so they stay out of the build's fingerprint: swapped, it is the same as
+        // unswapped AT THE SAME MOMENT (Net.Protocol is the startup's, and the fingerprint can move in a run)
         var clipField = typeof(Rendezvous).GetField(nameof(Rendezvous.Clipboard), BindingFlags.Public | BindingFlags.Static);
+        int still = FingerprintNow();
         var clipWas = Rendezvous.Clipboard;
         Rendezvous.Clipboard = () => "swapped";
-        int swapped = (int)fingerprint.Invoke(null, null);
+        int swapped = FingerprintNow();
         Rendezvous.Clipboard = clipWas;
-        Check(clipField != null && !clipField.IsInitOnly && !clipField.IsLiteral && swapped == Net.Protocol,
-              $"Rendezvous.Clipboard is mutable and outside the build's fingerprint (swapped: {swapped:x8}, the build's {Net.Protocol:x8})");
+        Check(clipField != null && !clipField.IsInitOnly && !clipField.IsLiteral && swapped == still,
+              $"Rendezvous.Clipboard is mutable and outside the build's fingerprint (swapped {swapped:x8}, unswapped {still:x8}{Moved(still)})");
+    }
+
+    // THE FINGERPRINT NOW (Net.Fingerprint, as Net.Protocol was taken at startup), and its PARTS: every
+    // fixed value it reads, "Type.Field=value". The parts are taken at the top of the solo run, so a
+    // seam's check can say what moved since then: the first solo run of R1 found the fingerprint at the
+    // end of the run differing from Net.Protocol, with no swap in force.
+    static int FingerprintNow() => (int)typeof(Net).GetMethod("Fingerprint", BindingFlags.NonPublic | BindingFlags.Static, Type.EmptyTypes).Invoke(null, null);
+    static List<string> FingerprintParts()
+    {
+        var parts = new List<string>();
+        typeof(Net).GetMethod("Fingerprint", BindingFlags.NonPublic | BindingFlags.Static, null, new[] { typeof(List<string>) }, null).Invoke(null, new object[] { parts });
+        return parts;
+    }
+    static List<string> _partsAtStart;
+    // "" while the fingerprint is still the startup's; otherwise what moved: each changed part, cut to
+    // 60 characters either side of where it first differs (a table's part is one long line).
+    static string Moved(int now)
+    {
+        if (now == Net.Protocol) return "";
+        if (_partsAtStart == null) return $"; the startup's was {Net.Protocol:x8}";
+        static string Key(string p) => p.Split('=')[0];
+        static string Cut(string s, int at) { int from = Math.Max(0, at - 60); return s[from..Math.Min(s.Length, at + 60)]; }
+        var was = _partsAtStart.GroupBy(Key).ToDictionary(g => g.Key, g => g.First());
+        var moved = new List<string>();
+        foreach (var p in FingerprintParts())
+        {
+            if (!was.TryGetValue(Key(p), out var old)) { moved.Add($"new \"{Cut(p, 0)}\""); continue; }
+            if (old == p) continue;
+            int at = 0;
+            while (at < old.Length && at < p.Length && old[at] == p[at]) at++;
+            moved.Add($"{Key(p)} at {at}: \"{Cut(old, at)}\" became \"{Cut(p, at)}\"");
+        }
+        return $"; the startup's was {Net.Protocol:x8}, and {moved.Count} parts moved since the run began: {string.Join(" | ", moved.Take(4))}";
     }
 
     // ── WEBRTC, R1: THE STUN ROWS AND THE WALK (§5, §10.4 R1) ───────────────────────────────────────
@@ -563,14 +597,15 @@ public partial class _Test : Node
               && url0 == "stun:stun.l.google.com:19302" && Link.Config(-1)["iceServers"].AsGodotArray().Count == 0 && Link.Config(2)["iceServers"].AsGodotArray().Count == 0
               && Link.GatherMs == 2000 && Link.LinkMs == 12000 && Link.InviteLifeS == 900,
               $"the STUN rows are Google's then Cloudflare's and nothing else, one to a connection (row 0 configures {url0}); a row is passed over after 2,000 ms, a reply has 12,000 ms, an invite 900 s");
-        // THE SEAMS ARE MUTABLE, so they stay out of the build's fingerprint: swapped, it is the same
-        var fingerprint = typeof(Net).GetMethod("Fingerprint", BindingFlags.NonPublic | BindingFlags.Static, Type.EmptyTypes);
+        // THE SEAMS ARE MUTABLE, so they stay out of the build's fingerprint: swapped, it is the same as
+        // unswapped at the same moment (a readonly StunRow[] would be read: an array of records is Plain)
         var serversField = typeof(Link).GetField(nameof(Link.Servers), BindingFlags.Public | BindingFlags.Static);
+        int still = FingerprintNow();
         Link.Servers = new[] { SilentA, SilentB, BoxStun };
-        int swapped = (int)fingerprint.Invoke(null, null);
+        int swapped = FingerprintNow();
         Link.Servers = _servers;
-        Check(serversField != null && !serversField.IsInitOnly && !serversField.IsLiteral && swapped == Net.Protocol,
-              $"Link.Servers is mutable and outside the build's fingerprint (with the box's three rows: {swapped:x8}, the build's {Net.Protocol:x8})");
+        Check(serversField != null && !serversField.IsInitOnly && !serversField.IsLiteral && swapped == still,
+              $"Link.Servers is mutable and outside the build's fingerprint (with the box's three rows {swapped:x8}, with its own {still:x8}{Moved(still)})");
 
         var box = Box("GET", "/box/stats");
         bool boxUp = box.TryGetProperty("stun", out var stunStats) && stunStats.GetProperty("bound").GetBoolean()
@@ -731,19 +766,22 @@ public partial class _Test : Node
         // WHICH ROW AN RPC RIDES, by name (§3.2's rows: Ships 2, Raiders 5, Boss 10; the harness's stream 12)
         int[] rode = { Link.ChannelOf("NetShipState"), Link.ChannelOf("NetRaiders"), Link.ChannelOf("NetBoss"), Link.ChannelOf(nameof(NetStream)), Link.ChannelOf("NoSuchRpc") };
         Check(rode.SequenceEqual(new[] { 2, 5, 10, 12, -1 }), $"Link.ChannelOf names the row an RPC rides: ships 2, raiders 5, boss 10, the harness's stream 12, none -1 ({string.Join(", ", rode)})");
-        // THE BACKLOG (§3.8): a burst bigger than SCTP lets out at once waits on its row's data channel,
-        // where Link.Backlog reads it, and drains to nothing once the far side has taken it all
+        // THE BACKLOG (§3.8): what waits on a row's data channel beyond the SCTP socket's own send buffer,
+        // which Link.Backlog cannot see (R1's first run put 1 MB, all of it inside that buffer, and read
+        // 0). So 200,000 B at a time, in one frame with no poll between, until the row backs up (8 MB at
+        // most: past that the plugin reports nothing); then it drains to nothing once the far side has
+        // taken it all
         a.Host.TransferChannel = StreamChannel; a.Host.TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered; a.Host.SetTargetPeer(a.Id);
         var burst = new byte[200000];
-        for (int i = 0; i < 5; i++) a.Host.PutPacket(burst);
-        int waiting = Link.Backlog(a.Host, a.Id, StreamChannel), taken = 0;
+        int put = 0, waiting = 0, taken = 0;
+        while (waiting == 0 && put < 40) { a.Host.PutPacket(burst); put++; waiting = Link.Backlog(a.Host, a.Id, StreamChannel); }
         bool drained = await RtcUntil(() =>
         {
             for (; a.Guest.GetAvailablePacketCount() > 0; taken++) a.Guest.GetPacket();
-            return taken == 5 && Link.Backlog(a.Host, a.Id, StreamChannel) == 0;
-        }, 5000, a);
+            return taken == put && Link.Backlog(a.Host, a.Id, StreamChannel) == 0;
+        }, 10000, a);
         Check(waiting > 0 && drained && Link.Backlog(a.Host, a.Id, NetChannels.Ships) == 0 && Link.Backlog(a.Host, Rng.RandiRange(2, int.MaxValue), StreamChannel) == 0,
-              $"Link.Backlog reads a 1 MB burst waiting on row 12 ({waiting} B), and nothing once the guest has taken all 5 ({(drained ? "drained" : $"{taken} taken, {Link.Backlog(a.Host, a.Id, StreamChannel)} B still waiting")}); an idle row and an unknown peer read 0");
+              $"Link.Backlog reads a burst waiting on row 12 once it outgrows the SCTP send buffer ({waiting} B after {put} packets of 200,000 B), and nothing once the guest has taken all {put} ({(drained ? "drained" : $"{taken} taken, {Link.Backlog(a.Host, a.Id, StreamChannel)} B still waiting")}); an idle row and an unknown peer read 0");
         // a guest's Close() is seen by the host within 1 s
         a.Guest.Close(); t0 = RtcPair.Now;
         await RtcUntil(() => a.HostLostAt > 0, 3000, a);
@@ -832,7 +870,7 @@ public partial class _Test : Node
         var argv = OS.GetCmdlineUserArgs();
         string role = argv.FirstOrDefault() ?? "solo";
         SeedFrom(argv);
-        if (role == "solo") _replyWindow = ReplyWindowHolds();
+        if (role == "solo") { _partsAtStart = FingerprintParts(); _replyWindow = ReplyWindowHolds(); }
         Settings.TestVolume = 0.05f; Settings.ApplyVolume();   // six windows, nobody listening
         NoRouterNoInternet();
         await Wait(0.3);

@@ -287,6 +287,39 @@ third-party infrastructure but the Google and Cloudflare STUN rows.
 - checkpoint: the J11a commit
 - next: a FRESH agent does J10, then J11, from the handoff below.
 
+#### J9b PRE (rung 3 red at 6a19f5a, seed 11400714819323466726: three FAILs)
+- intent: (1, 2) the mutability checks compared a swapped fingerprint with `Net.Protocol`, taken at
+  startup, while the fingerprint itself had moved during the run (both swaps read 7991f5f3 against
+  3724c77b): compare swapped with unswapped at the same moment, keep the structural test, and name
+  what moved since the run began in the message. (3) `Link.Backlog` read 0 with 1 MB put: the burst
+  fit inside the SCTP socket's own send buffer, which the plugin does not count; put 200,000 B until
+  the row backs up (at most 8 MB, same frame, no poll), then drain.
+- files: tools/smoketest/SmokeTest.cs.txt, scripts/Link.cs (Backlog's comment), docs/DESIGN.md,
+  docs/plans/ledger_webrtc.md
+- from: 6a19f5a75707f2abddd1bedc423cd406edb06aed
+- hashes: SmokeTest.cs.txt b55f0f84e23554e0962f194abb6ee583eff16048; Link.cs
+  d5cabe36989944d50ed1fdf1b73aa67685a9f3c6; DESIGN.md fe54c65e067b8a8112259743714b9ffc26ec52b0
+
+#### J9b POST
+- verdict: done; `verify.ps1 -Quick` ALL CHECKS PASSED. Untested at rung 3.
+- files: tools/smoketest/SmokeTest.cs.txt (`FingerprintNow`, `FingerprintParts`, `_partsAtStart` taken
+  at the top of the solo run, `Moved`; the two seam checks; the backlog burst), scripts/Link.cs
+  (Backlog's comment), docs/DESIGN.md (two traps)
+- decisions:
+  - D17 · **A seam is outside the fingerprint by the fingerprint's own rule** (neither literal nor
+    init-only); its check compares swapped with unswapped at the same moment. The drift itself
+    (3724c77b at startup, 7991f5f3 near the end of a solo run) is OPEN: the next rung 3 names the moved
+    parts in those two checks' messages whenever the fingerprint is not the startup's.
+  - D18 · **`Link.Backlog` counts only what waits beyond the SCTP send buffer** (1 MB fit and read 0).
+    The check puts 200,000 B in one frame until the row backs up (8 MB cap); 0 after 8 MB would mean
+    the plugin reports nothing, and the message says how many packets it took.
+- rungs owed: rung 3 twice (two seeds): "Rendezvous.Clipboard is mutable and outside the build's
+  fingerprint", "Link.Servers is mutable and outside the build's fingerprint", "Link.Backlog reads a
+  burst waiting on row 12 once it outgrows the SCTP send buffer"; read the first two's messages for
+  the moved parts.
+- checkpoint: the J9b commit
+- next: J10
+
 ### HANDOFF for the fresh agent (J10, J11)
 
 Read: this section, `scripts/Rendezvous.cs` (whole, ~420 lines), `scripts/Link.cs` (whole), the

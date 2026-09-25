@@ -82,7 +82,9 @@ public static class Link
     // HOW MANY BYTES WAIT TO LEAVE on one peer's channel (§3.8): every channel is reliable (§2.1), so a
     // lost datagram holds the rest of its row back, and this is where that shows. Transfer channel N
     // above 0 is the peer's data channel 2 + N (the three before it are channel 0's own); 0 reads
-    // channel 0's reliable one. 0 for a peer or a channel that is not there.
+    // channel 0's reliable one. 0 for a peer or a channel that is not there. It counts only what waits
+    // BEYOND the SCTP socket's own send buffer: a burst that fits inside that reads 0 (R1's first run:
+    // 1 MB put in one frame, 0 read), so a guard on it acts only once a row is backed up that far.
     public static int Backlog(WebRtcMultiplayerPeer mp, int id, int channel)
     {
         if (mp == null || !mp.HasPeer(id)) return 0;
