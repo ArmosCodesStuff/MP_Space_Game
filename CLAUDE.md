@@ -55,7 +55,10 @@ explicit and binding.
    docs/plans/, never only in the conversation), then compact when ANY of these is true: the
    context passes ~200k tokens; a slice is committed; a design or decision document has landed and
    its outcome is written down; the work turns to a different subject; a big log or report has
-   been read and its conclusion written down. Do not compact every turn: it throws away the prompt
+   been read and its conclusion written down; **several agents or a workflow are about to be
+   launched** (owner, 2026-09-25) -- write each agent's prompt to a file in the scratchpad first,
+   tell the owner "compact now", and launch after the compact, so every one of their wake-ups is
+   paid at the small context's price, not the large one's. Do not compact every turn: it throws away the prompt
    cache (a cached re-read costs about a tenth of fresh input) and the detail that then has to be
    re-read. Hold off only while waiting on a job whose purpose is not in the state note yet.
    Claude cannot run `/compact` itself: at a trigger it writes the note and tells the owner
@@ -64,7 +67,12 @@ explicit and binding.
    price (37% of that session's turns were wake-ups). Chain engine rungs into ONE background
    command that stops at the first red; start agents so they finish together; take a finished job
    in silence when nothing is actionable, and report once, when there is something the owner must
-   see or decide.
+   see or decide. **A batch wakes the main conversation ONCE (owner, 2026-09-25):** launch it as
+   one workflow that holds the whole chain -- build, the writer's own engine rungs, a fresh agent
+   from the ledger when one stops at ~150k, one escalation on a red, the merge gate -- with its
+   rules for a red written into the script, so the main conversation hears only "green" or
+   "stuck". Engine runs from agents go through one runner that waits for the engine to be free,
+   never a harness started directly.
 3. **One or two agents at a time, each on a BATCH (the default way to delegate).**
    - At most two agents run at once, never two writers in one checkout. A wider fan-out (a
      workflow) is only for large design, audit or research with genuinely different angles --
@@ -90,9 +98,19 @@ explicit and binding.
      other engine run is going: the fix loop then happens in its small context, not the main one.
    - The main conversation holds only ledger paths and verdicts, so compacting it loses nothing and
      nothing is multiplied by the number of agents.
-4. **Cheap agents for mechanical work.** Applying a written plan, resolving a merge, copying files,
-   grepping, re-running a check: a smaller model at low effort. The default model is for design,
-   diagnosis and review.
+4. **The lowest tier you can trust (owner, 2026-09-25).** Every agent gets the cheapest model that
+   can be trusted to do its job reasonably, and the `model` is set explicitly on every call --
+   never left to inherit the main conversation's. The default is the LOW tier; a higher one needs a
+   reason you can name.
+   - **haiku, low effort:** grepping, copying, reading a log for its verdict, re-running a check,
+     applying exact edits someone else wrote, a merge whose resolution is written down.
+   - **sonnet:** building from a written plan or ledger handoff with its checks (a slice, a sprite
+     re-map, a data row, a named failing check to fix), a read-only sweep or audit of a subsystem.
+   - **opus (the default model):** design, diagnosing a failure nobody has explained yet, authority
+     and wire work, the reviewer or skeptic whose verdict gates a merge -- where a wrong answer
+     costs more than the tokens.
+   - **Escalate one tier after one failed attempt**, having read why it failed; never start high
+     "to be safe". Record each job's tier in its ledger PRE.
 5. **Sequential beats parallel when jobs share files; resume while small.** Several agents reading
    the same files each pay for them; one agent doing the jobs in turn reads them once. For a
    follow-up on the same scope, RESUME the agent that did the work while its transcript is under
