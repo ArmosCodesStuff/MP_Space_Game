@@ -429,5 +429,26 @@ BasePanel.cs:120-129, Raids.cs:53 ask Unlocks. Grep the harness for NeedsBoss an
 - rung 3 owed: the rewritten "hints: unknown ids dropped, an unlock card's id kept, the off switch
   kept" check.
 - rung 5 owed: none (Character.Load is local; nothing on the wire changed).
-- commit: (fix 7) "Walls fix 7: an unlock card's id survives a save/load round trip".
+- commit: 3ebce14 "Walls fix 7: an unlock card's id survives a save/load round trip".
 - next: prove the batch (rungs.ps1 quick,solo,solo,six,screens); update docs/CHANGES.md.
+
+## Batch proof (2026-09-25, tag walls_prove2 -- first attempt walls_prove1 mis-invoked via Git Bash,
+which mangled the -Tree backslash path into a bad Set-Location; re-run through the PowerShell tool)
+- start: 3ebce140af36424e2fd00a444f834512985fe18c (HEAD after fix 7, tree clean)
+- ALL GREEN, no reds, nothing to re-prove:
+  1. quick: exit=0, 74s, ALL CHECKS PASSED.
+  2. solo: exit=0, 112s, SEED 11400714819323513364, SMOKE TEST (SOLO ONLY) PASSED.
+  3. solo: exit=0, 112s, SEED 11400714819323511793, SMOKE TEST (SOLO ONLY) PASSED (two different seeds).
+  4. six: exit=0, 221s, SEED 11400714819323517573, SMOKE TEST PASSED (host + 2 guests + arena guest).
+  5. screens: exit=0, 173s, frames: 111, LINT: 0.
+  (The "FAIL"/"Exception" lines Select-String pulled into the summary for the solo/six steps are
+  false positives: case-insensitive matches on narrative check names containing the word "failed"
+  -- e.g. "a failed JOIN, not a dropped session" -- not real failures; exit codes and verdict lines
+  are all PASSED/0.)
+- docs/CHANGES.md: new Unreleased entry "adversarial review, 7 findings fixed; batch proven" (the 7
+  fixes summarised, the batch's rung numbers); the 5 existing job entries' "Known broken" lines
+  updated from "rung N not yet run" to "rungs 2-5 and screens all green" (job 3's PEND caveat kept:
+  still owed at lane A's slice 6); Handoff's walls bullet rewritten to DONE, ready to merge.
+- commit: (this commit) "Walls: batch proven ALL GREEN; docs updated".
+- next: lane C is done. The main session merges `wt/walls` into `version-l` (not this agent's job --
+  "do not merge into version-l").

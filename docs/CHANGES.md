@@ -51,11 +51,10 @@ folder, compile rungs only; the main session runs every engine rung, one at a ti
 Each ledger lists the engine rungs it owes. A lane whose ledger has a PRE with no POST was interrupted.
 **In flight, 2026-09-25 ~01:10** (engine tests run from a detached checkout `..\WarShips_wt_test`, one
 at a time, by the main session's scratch `rungs.ps1`):
-- **walls (lane C): all 4 jobs + 2b done (58d7d1a).** Rung 2, rung 3 x2 green; rung 5 RED once:
-  `[third] FAIL third player: nor after a restart -- the kills it was paid for are on its file (exp 650
-  -> 650, 6 parts)` (guest2 now claims level 3, D12). A 4-angle review workflow is running on
-  aa1e4f9..58d7d1a; ONE fixer (opus: unexplained) takes the rung-5 fail + the confirmed findings, then
-  rung 5 + screens (111 frames), then merge.
+- **walls (lane C): DONE.** All 4 jobs + 2b (58d7d1a) + the adversarial review's 7 fixes (3ebce14, on
+  top of `version-l` merged in first, docs-only, no conflicts). Rung 2, rung 3 x2 (seeds
+  11400714819323513364, 11400714819323511793), rung 5 six-role (seed 11400714819323517573) and screens
+  (111 frames, `LINT: 0`) all green. Ready for the main session to merge `wt/walls` into `version-l`.
 - **kits (lane A):** slice 1a + J0 + F16 + 1b (606201f) green except the rewritten Disabled check's
   own setup (timed from the input); the writer on J4 (F17) lands "job 1c" first. Next: J5-J7.
 - **net (R1):** J7-J9 + J9b (8760795) under rung 3 now. D17 cause found: `Character.Bought` (a
@@ -491,6 +490,35 @@ outstanding from the batch of 2026-09-23.)*
 
 ## Unreleased
 
+### Level walls: adversarial review, 7 findings fixed; batch proven (2026-09-25, lane C, `wt/walls`)
+
+**`Unlock` is a record class, not a struct**, so `Unlocks.All` (wall levels, the two boss gates) reaches
+`Net.Fingerprint` through `Plain`'s `<Clone>$` check like every other hashed table; two builds that
+disagree on one wall level or boss gate now refuse each other's handshake instead of silently
+disagreeing about what is open. **`Character.Load`'s hint filter asks `Hints.Card(h) != null`** (the
+query `Hints.Meet` already uses) instead of `Hints.All.ContainsKey(h)`, so an unlock card's id (e.g.
+`unlock_chipslot_1`) survives a save/load round trip instead of being silently dropped every time.
+**`EquipmentWindow` tracks `Character.Peak` and rebuilds when it changes**, so a chip slot opening
+mid-session (a level-up while the window is open) unlocks its row and un-greys EQUIP without a
+close/reopen.
+
+**Checks:** the handshake check ("THE HANDSHAKE SEES THE TABLES") now also asserts a wall level and a
+boss-gate literal are in what is hashed; guest2's "nor after a restart" now asserts the true
+post-Sanitize hold (6: 2 kill parts + 4 displaced chips) instead of a stale 2; "the other class keeps
+its own gear" switches class while the chip is still fitted, so it can fail again; the pilot hull-point
+check fits an Armour Chip I first, so +5 flat reads +5.4 under its +8% share, proving flats land before
+percentages again; `WallChecksLive` check 3 asserts the bar's locked set equals `{Nth(c,2), Nth(c,3)}`
+minus nulls (the spec's truth, matching the static twin) instead of "nothing locked"; a new
+EquipmentWindow check opens at peak 2 (chip slot 2 `LOCKED · L4`), raises Peak to 4 with no I press, and
+proves the row unlocks live; Character.Load's hints round trip now seeds `unlock_chipslot_1` and proves
+it survives alongside a known hint while an unknown id is still dropped.
+
+**Batch proven:** `version-l` merged in first (8 docs-only commits since aa1e4f9, no conflicts). Rung 2
+green; rung 3 (Solo) green on two seeds (11400714819323513364, 11400714819323511793); rung 5 (six roles)
+green on seed 11400714819323517573; screens green (111 frames, `LINT: 0`).
+
+**Known broken:** none known.
+
 ### Level walls, job 3: the ability walls (2026-09-25, lane C, `wt/walls`)
 
 **A class's abilities 1, 2 and 3 open at pilot levels 1, 3 and 6** (`Unlocks.AbilityAt`), read from the
@@ -515,9 +543,9 @@ checks 4 and 5 (the owner's LOCKED · L3, the host's gate at 5 / 6) PEND. The me
 (the third player, level 1 / peak 3): checks 13, 14 + 17 and 16 PEND. Shots: `6c_k_keys_walls`,
 `57b_walls_next_card` (new).
 
-**Known broken:** none known; compiles (rungs 1-2), rungs 3, 4 and 5 not yet run. The PEND checks (3, 4,
-5, 9's second card, 13, 14, 16, 17) have never run live: they first run when a class has a 2nd and 3rd
-walled ability, and their timing on the guest has not been proved.
+**Known broken:** none known; rungs 2-5 and screens all green (see the review entry above). The PEND
+checks (3, 4, 5, 9's second card, 13, 14, 16, 17) still print PEND: they go live only when a class has a
+2nd and 3rd walled ability (lane A), and their timing on the guest is unproved until then.
 
 ### Level walls, job 2b: five old-truth checks job 2 missed (2026-09-25, lane C, `wt/walls`)
 
@@ -530,7 +558,7 @@ parts (no chip). No code changed.
 **Checks:** rewritten (rung 3): "stats tab: the stock main guns", "stats tab: the broadside", "and the
 total adds up", "a target 150 u off the nose", "the gear: 246 drops ... a 22-part kit".
 
-**Known broken:** none known; compiles (rungs 1-2); rung 3 owed on these five, rungs 4 and 5 not yet run.
+**Known broken:** none known; rungs 2-5 and screens all green (see the review entry above).
 
 ### Level walls, job 4: Auto-sell and the lanes' blockades are rows of the unlock table (2026-09-25, lane C, `wt/walls`)
 
@@ -544,7 +572,7 @@ beaten (`Measure.Boss`): Auto-sell at boss 3 (`Opens.Economy`, `hauler_autosell`
 open (0); the lanes' clock waits with no bounty boss beaten and runs with 1 and 4 beaten. The existing
 Auto-sell checks (LOCKED until boss 3, the owner's record on a guest) now run through the table unchanged.
 
-**Known broken:** none known; compiles (rungs 1-2), rung 3 not yet run.
+**Known broken:** none known; rungs 2-5 and screens all green (see the review entry above).
 
 ### Level walls, job 2 (F15): six chip slots on every hull, the kind caps, no starting chips (2026-09-25, lane C, `wt/walls`)
 
@@ -572,7 +600,7 @@ rewritten): the arena guest's two Armour Chips (290); Guesty's four Armour Chips
 (248); the third player's five chips at peak 3 flying one on the host, on itself and on the other guest (324).
 Shots: `58b_eq_chip_walls` (new, peak 4: two chips, four locked rows, a greyed EQUIP).
 
-**Known broken:** none known; compiles (rungs 1-2), rungs 3, 4 and 5 not yet run.
+**Known broken:** none known; rungs 2-5 and screens all green (see the review entry above).
 
 ### Level walls, job 1: the unlock table, the pilot's peak, save format 3 (2026-09-25, lane C, `wt/walls`)
 
@@ -594,7 +622,7 @@ literal (3), fixtures written as this build's format, a format-2 file refused. R
 copy of a guest reads peak 14 at level 1. The harness roles and both Shots pilots fly with every wall
 open (`Peak = Unlocks.Top`, level 1).
 
-**Known broken:** none known; compiles (rung 1-2), rungs 3 and 5 not yet run.
+**Known broken:** none known; rungs 2-5 and screens all green (see the review entry above).
 
 ### verify's text step skips a binary by what it holds, not by its extension (2026-09-24, in the WarShips_Version_L fork)
 
