@@ -34,7 +34,7 @@ public class ShotDef
     public bool MarkEveryPeer;       // the damage number is drawn wherever it is seen, not just on the host
     public ShotLook Look;
     public bool Heavy;               // the bigger body, the darker smoke, the wider blast
-    public string Sound;             // Sfx.Special id at launch, or null (Bullet and Missile have their own)
+    public string Sound;             // Sfx.ByName id at launch, or null (Bullet and Missile have their own)
     // WHAT IT COUNTS AS to everything that asks (Tags.cs). Tag.Missile -- point defence's alone, and
     // the first hit brings it down -- for every row but one whose body carries a HULL of its own:
     // that row says Tag.Hulled, and its body is a target like any hull (Shot.Hull).
@@ -180,7 +180,7 @@ public partial class Shot : Node2D, IHittable, ITagged
     {
         ZIndex = 6; Rotation = Aim.Along(Dir);
         var d = Def;
-        if (d.Sound != null) Sfx.Special(d.Sound, Position);
+        if (d.Sound != null) Sfx.ByName(d.Sound, Position);
         else if (d.Look == ShotLook.Bullet) Sfx.Cannon(Position);
         else if (d.Smoke) Sfx.Missile(GlobalPosition);          // self-propelled: a soft whoosh
         if (d.Interceptable && NetId != 0) Combat.Hostiles.Add(this);

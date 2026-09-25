@@ -112,6 +112,12 @@ public class AbilityDef
     // A STANCE (StanceSpec below): pressed it holds a Status for its Time, pressed again it drops, and any
     // other of the class's abilities pressed ends it; its cooldown runs from the END. The prism stance.
     public StanceSpec Stance;
+    // A GUN THAT RELOADS ACTIVELY (ActiveReload.cs): its chamber, its sweet spot and its charge, a
+    // row of that table; set on a Hold weapon row, whose trigger then charges a seated round and whose
+    // release fires it as Loose, handed the charge share (0 = let go at once, 1 = full; PlayerShip's
+    // charge latch, on the host).
+    public ReloadSpec Reload;
+    public Action<PlayerShip, double> Loose;
 
     public SlotState State(PlayerShip s, IHittable selected) =>
         Show != null ? Show(s, selected) : new SlotState { Line = "READY" };

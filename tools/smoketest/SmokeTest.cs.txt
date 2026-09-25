@@ -5345,6 +5345,47 @@ public partial class _Test : Node
               $"arena guest: its own F -- the host's PARRYING bit read here ({up}), its hull held x{held:0.00} (0.5) with the slot up {left:0.0} s; F again drops it (guard {(me.Prismatic ? "STILL UP" : "down")}), cooling {cool:0.0} s (12 from the drop), and F then says {refused ?? "nothing"}");
     }
 
+    // ── SLICE 6c: THE ACTIVE RELOAD'S JUDGEMENT, pure (sniper_active_reload.md §3.2, §3.5; ActiveReload.Judged
+    // and Give). The spot is 40-60% of the reload (the owner's 0.6 s of 3 s, opening at 1.2 s). Three varied
+    // draws each: 1 an honest claim on the host's own clock inside the spot (0.43-0.57) is PERFECT, one before
+    // it (0.30-0.37) or after it (0.63-0.90) MISSED. 2 a lie is clamped to the host's clock: at 0.3 s of 3 s a
+    // claim of 0.5 (or 7.0) with the 0.10 s cap is judged at 0.133 -- MISSED; the give is the leeway over the
+    // length (0.033 of 3 s) but never past a quarter of the spot (0.05 of an anchored 1.2 s); NaN and infinity
+    // are judged on the host's clock; with no leeway (the host's own ship) the claim is the host's share
+    // exactly. 3 the leeway: 0.10 s at most, 0 offline and for the host's own ship.
+    void LaneA6cReloadJudgeChecks()
+    {
+        const double open = 0.40, close = 0.60;
+        var r = ActiveReload.Rail;
+        Check(r.Id == "railgun" && r.Reload == "rail_reload" && r.SpotAt == "rail_spot_at" && r.Spot == "rail_spot" && r.Perfect == "rail_perfect" && r.Charge == "rail_charge"
+              && Net.LeewayCap == 0.10 && Net.Leeway(Net.LocalId) == 0,
+              $"the active reload's row names the railgun's slot and its five stats; the leeway is at most {Net.LeewayCap:0.00} s and {Net.Leeway(Net.LocalId):0.00} for this ship");
+        for (int run = 0; run < 3; run++)
+        {
+            double inside = Vary(0.43f, 0.57f), before = Vary(0.30f, 0.37f), after = Vary(0.63f, 0.90f);
+            double give = ActiveReload.Give(Vary(0f, 0.10f), 3.0, open, close);
+            Check(ActiveReload.Judged(inside, inside, give, open, close) == Verdict.Perfect
+                  && ActiveReload.Judged(before, before, give, open, close) == Verdict.Missed
+                  && ActiveReload.Judged(after, after, give, open, close) == Verdict.Missed,
+                  $"an honest press judged on its own share: {inside:0.000} PERFECT, {before:0.000} and {after:0.000} MISSED (the spot 0.40-0.60)");
+            double early = Vary(0.05f, 0.15f);                          // 0.15-0.45 s into a 3 s reload
+            double g3 = ActiveReload.Give(Net.LeewayCap, 3.0, open, close), g12 = ActiveReload.Give(Net.LeewayCap, 1.2, open, close);
+            var lie = ActiveReload.Judged(early, 0.5, g3, open, close);
+            var seven = ActiveReload.Judged(early, 7.0, g3, open, close);
+            var nanIn = ActiveReload.Judged(inside, double.NaN, g3, open, close);
+            var infIn = ActiveReload.Judged(inside, double.PositiveInfinity, g3, open, close);
+            var nanOut = ActiveReload.Judged(before, double.NaN, g3, open, close);
+            Check(Math.Abs(g3 - 0.10 / 3.0) < 1e-9 && Math.Abs(g12 - 0.05) < 1e-9 && lie == Verdict.Missed && seven == Verdict.Missed
+                  && nanIn == Verdict.Perfect && infIn == Verdict.Perfect && nanOut == Verdict.Missed,
+                  $"a lie is clamped to the host's clock: at {early * 3:0.00} s of 3 s a claim of 0.5 is {lie}, of 7.0 {seven}; the give {g3:0.000} of 3 s, {g12:0.000} of an anchored 1.2 s (a quarter of the spot); NaN / infinity judged on the host's clock: {nanIn} / {infIn} inside, {nanOut} before");
+            double edge = Vary(0.36f, 0.39f);                           // a hair before the spot, on the host's clock
+            var honestNoGive = ActiveReload.Judged(edge, 0.5, ActiveReload.Give(0, 3.0, open, close), open, close);
+            var withGive = ActiveReload.Judged(edge, 0.5, g3, open, close);
+            Check(honestNoGive == Verdict.Missed && withGive == (edge + g3 >= open ? Verdict.Perfect : Verdict.Missed),
+                  $"with no leeway (the host's own ship) the claim is the host's share: at {edge:0.000} a claim of 0.5 is {honestNoGive}; with the cap's give it may reach {edge + g3:0.000}: {withGive}");
+        }
+    }
+
     // ── THE BUILD A PLAYER READS ──────────────────────────────────────────────────────────────
     // One check, about a trap in THIS game's protocol hash that a build string can fall into.
     void BuildChecks()
@@ -11509,6 +11550,7 @@ public partial class _Test : Node
             await LaneA6cLungeChecks(yonder);
             await LaneA6cWhirlChecks(yonder);
             await LaneA6cPrismStanceChecks(yonder);
+            LaneA6cReloadJudgeChecks();
             await SetClass(ShipClass.HeavyWarrior);
             var wr = Me; wr.Position = yonder; wr.Velocity = Vector2.Zero; await Wait(0.2);
             // A SPEED LIFT LIFTS THE PUSH AS WELL AS THE TOP SPEED (PlayerShip.Steer). The water holds a

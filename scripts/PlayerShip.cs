@@ -381,6 +381,9 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
                 s.Cool = Math.Max(0, kept.slot.Cool - (_clock - kept.clock));
                 s.N = kept.slot.N;                 // a magazine over the new sheet's is cut to it (FitWings)
             }
+        // a chamber is fitted seated (a reload that was running ended with the refit), and the owner's view with it
+        foreach (var def in list) if (def.Reload is { } rl) ActiveReload.Seat(this, rl);
+        ReloadView = default; _charge = -1; _strokeDown = false;
 
         var art = MyArt;
         var tex = Assets.Load<Texture2D>(art.Texture);
@@ -571,6 +574,17 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     private void RequestAbility(string id, int targetId)
     {
         if (Net.FromPlayer(this, out int who) && who == OwnerId) DoAbility(id, targetId);
+    }
+
+    // THE ACTIVE RELOAD'S TIMING PRESS (ActiveReload.Press): a guest's claim of how far through its
+    // reload it was, as a share on its own clock. The host judges it, believed within the sender's
+    // leeway only, and only from the ship's own pilot.
+    public void AskReloadPress(string id, float claim) => Net.AskHost(this, nameof(RequestReloadPress), id, claim);
+    [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void RequestReloadPress(string id, float claim)
+    {
+        if (Net.FromPlayer(this, out int who) && who == OwnerId && Abilities.Find(Class, id)?.Reload is { } r)
+            ActiveReload.Judge(this, r, claim, Net.Leeway(who));
     }
 
     // THE GATE, not a courtesy. Refuse (above) runs on the owner so the slot says why at once;
@@ -1118,7 +1132,8 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
 
         TickAbilities(delta);
 
-        if (Net.Sim) { FireControl(delta); Swings(delta); DashSweeps(); }
+        if (Mine && Abilities.TriggerOf(Class)?.Reload is { } view) ActiveReload.Step(this, view, delta);
+        if (Net.Sim) { FireControl(delta); Swings(delta); DashSweeps(); ChargeLatch(delta); }
         foreach (var t in _turrets) t.Tick(delta);
         for (int i = _wings.Count - 1; i >= 0; i--)
         {
@@ -1227,6 +1242,41 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             else foreach (var m in _mains) m.Shoot();
             _gunCd += step;
         }
+    }
+
+    // ── an active reload (AbilityDef.Reload: the Sniper's railgun) ─────────────
+    // THE OWNER'S STROKE RULE (ActiveReload.cs, one meaning per stroke): a trigger row that reloads
+    // actively fixes each stroke's meaning at its press -- the owner's view reloading, it is the timing
+    // press (ActiveReload.Press) and the trigger stays low until it is let go; otherwise it is the
+    // charge, and the trigger follows the key. A guest's own charge let go starts its view's reload.
+    public ActiveReload.View ReloadView;
+    private bool _strokeDown, _strokeTimes;
+    private bool Stroke(AbilityDef def, bool down)
+    {
+        if (def.Reload is not { } r) return down;
+        if (down && !_strokeDown)
+        {
+            _strokeTimes = ReloadView.Running;
+            if (_strokeTimes) ActiveReload.Press(this, r);
+        }
+        else if (!down && _strokeDown && !_strokeTimes && !Net.Sim && ReloadView.Charge > 0) ActiveReload.Shot(this, r);
+        _strokeDown = down;
+        return down && !_strokeTimes;
+    }
+    // THE HOST'S CHARGE LATCH: a charge begins on the later of the trigger rising and the chamber
+    // seating, fills at the ship's Cadence of the row's Charge, and on the trigger falling fires the
+    // row's Loose with the share it reached (1 at full, held past full is full). A wreck or a DISABLED
+    // hull loses a charge it had begun; the round stays in the chamber.
+    private double _charge = -1;
+    private void ChargeLatch(double delta)
+    {
+        if (Abilities.TriggerOf(Class) is not { Reload: { } r } def) return;
+        if (!Alive || Disabled || Stilled) { _charge = -1; return; }
+        if (_charge < 0) { if (Trigger && ActiveReload.Seated(Sl(r.Id))) _charge = 0; return; }
+        if (Trigger) { _charge += delta; return; }
+        double share = Math.Min(1, _charge / Math.Max(1e-6, Cadence(r.Charge)));
+        _charge = -1;
+        def.Loose?.Invoke(this, share);
     }
 
     // ── melee: every row that names a Swing (the blade, the whirlwind) ─────────
@@ -1411,7 +1461,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         if (!locked)
         {
             AimPoint = GetGlobalMousePosition();
-            Trigger = Abilities.TriggerOf(Class) is { } trig && Input.IsKeyPressed(Abilities.KeyFor(Class, trig.Id));
+            Trigger = Abilities.TriggerOf(Class) is { } trig && Stroke(trig, Input.IsKeyPressed(Abilities.KeyFor(Class, trig.Id)));
         }
 
         SendState(dt);

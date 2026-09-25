@@ -280,3 +280,42 @@ rung 5 LaneA6cPrismHostChecks / LaneA6cPrismGuestChecks; sweep witness ["prism"]
 - scripts/Shots.cs 05c56a1f0517457bda6938d963d7330c049989ef
 - scripts/ThrownRock.cs c398efc801266348f7db2d56049911dd7fa64f67
 - tools/smoketest/SmokeTest.cs.txt a1b003390d24ecd2588fb34a5eb2f962b7113f78
+## kits6c-J5 · POST
+- Verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final test phase.
+- Built: scripts/ActiveReload.cs (ReloadSpec {Id, Reload, SpotAt, Spot, Perfect, Charge}, Chamber, Verdict, Rail row,
+  Reloading / Seated / Progress / Spot, Spent, Seat, Take, Judged + Give (pure), Judge (host), Press / Shot / Step (owner),
+  View {Since, Length, Flash, Off, Charge, Said, Running}); Net.LeewayCap 0.10 + Net.Leeway (0 offline and for the host's
+  own ship; a guest gets the cap: WebRTC reports no per-peer jitter -- D54); AbilityDef.Reload + Loose; PlayerShip
+  ReloadView, Stroke (the one-meaning-per-stroke rule on the trigger row), ChargeLatch (host: later of trigger and seat,
+  Cadence(Charge), Loose(share) on release; wreck / DISABLED / Stilled drops the charge), AskReloadPress +
+  RequestReloadPress RPC (FromPlayer && OwnerId), a refit seats every chamber and clears the view. Sfx.Special renamed
+  Sfx.ByName (Boss, Fx, Hub, Shots, ThrownRock); Sfx._gap rail_perfect / rail_miss; tools/make_sounds.py rows
+  perfect_tick / miss_click, header renamed; sfx/rail_perfect.wav + sfx/rail_miss.wav generated (python, no engine; the
+  other wavs byte-identical). Spent / Take / Rail have no game caller until J6 (the Sniper's Space row).
+- Checks: LaneA6cReloadJudgeChecks (new, pure: the row's ids and the leeway; 3 draws: honest in / before / after;
+  lies clamped (0.5 and 7.0 at 0.15-0.45 s), give 0.033 of 3 s and 0.05 anchored, NaN / inf on the host's clock;
+  no-leeway vs the cap's give at 0.36-0.39).
+- Next: kits6c-J6 the Sniper row + the railgun on Space (the first ActiveReload row).
+
+## Handover 3: agent 3 stops after J5 (context), at a job boundary. J6 is next; no PRE written for it.
+J6 plan (sniper_active_reload.md §2.1, §2.2 "Where it is wired", §3.6, §4.3, §5; D38, D42): Ships.cs Sniper row ->
+Fit.None, hull 240, no main_* rows, Guns / FireMode gone; rows rail_damage 120, rail_charge 0.8 (Inverse), rail_tap 40,
+rail_reload 3.0 (Inverse), rail_spot_at 40, rail_spot 20, rail_perfect 1.5, rail_range 2500, rail_width 14;
+rail_cooldown deleted (Abilities :345, PlayerShip FireRail, Stats Dps.Railgun :364-365); Damage rail_damage 6.0;
+Cycle rail_charge 1 + rail_reload 1; Dps.Railgun = rail_damage * rail_perfect / (rail_reload + rail_charge) = 47.4,
+note "180 every 3.8 s ...". Ab.Railgun -> Weapon, Hold, Space, Reload = ActiveReload.Rail, Elapsed = Seat, Loose =
+(s, share) => s.FireRail(share), no Hold 0 / Press / Expire / Refuse; Show per §4.3 (RELOAD x.xs / PERFECT / READY /
+x1.5 ROUND / CHARGE). FireRail(share): ramp = tap + (1 - tap) * share (rail_tap / 100), Charges band line, x
+ActiveReload.Take, the Lines row RailEnhanced (append to Lines.All: Fx rail_enhanced + Beam rail_enhanced, both appended at
+the END of their tables; Beam: Tint (0.92, 0.96, 1), Report laser_boss, Pitch 0.63), then ActiveReload.Spent.
+Sfx.ByName("rail_enhanced") is NOT needed: the Beam row plays it. The muzzle glint in PlayerShip._Draw when
+Sl(railgun).N == Enhanced. Kit: HeavyCannon Needs loses rail_damage (Warden only until J11); Sniper Kit = Weapon
+"heavy_railgun" (rail_damage) + a Utility part (anchor later, J8 re-points it). Hint per §4.3 and a Hints row "reload".
+HARNESS CALLERS TO REWRITE (the old F-press + `Sl("railgun").Left = 0.001` idiom): SmokeTest ~2236-2264 LaneAHoldChecks
+(the railgun lock is gone: re-point to the Anchor in J8, or to a Hold-0 row), ~2831-2855 (rail credit), ~3215-3228,
+~3599-3610, ~3946-3948 (Lines rail sheet: rail_damage 150 -> 120), ~4063-4084 (Charges bands), ~9931-9932
+(Equipment.Default(HeavySniper)[0] heavy_main_gun / [4] heavy_railgun), ~11214-11240 (Weapons rise: 9 of 150 -> 7.2 of
+120), ~11441-11466, ~11688-11697 (cruise missile), sweep witness ["railgun"] ~11894 and its reach case ~12164-12183,
+rung 5 ~15207-15217 (railgun heard on a guest), Shots.cs.txt ~819-827 (73b). Suggested helper in SmokeTest: RailFire(sn,
+hold) = seat the chamber (N = Seated, Left 0, ReloadView = default), KeyDown(Space) for Cadence(rail_charge) + 0.05 s (or
+`hold`), KeyUp, two frames. Checks owed: S1-S9 (LaneA6cReloadChecks), G1-G5 rung 5, then J7 ReloadBar + frame 73c.

@@ -1,4 +1,4 @@
-# THE BOSSES' SOUNDS: one for every special move, synthesised here (no samples, nothing to license),
+# THE SYNTHESISED SOUNDS: the bosses' moves and the guns' cues, synthesised here (no samples, nothing to license),
 # written to sfx\<name>.wav at the level each is meant to be heard at (Sfx plays every file at 0 dB).
 # Deterministic: the same file every run. Mono, 16-bit, 44.1 kHz, like every other effect.
 #
@@ -13,6 +13,8 @@
 #   drake_tractor     the tractor taking the rock: a pulsing hum
 #   drake_throw       the throw: a heavy rising whoosh
 #   drake_rock        the rock breaking apart: a crunch over a low boom
+#   rail_perfect      the active reload's perfect press: a bright latch, a small metal knock after it
+#   rail_miss         ...and its miss: a dull click
 #
 # Run: python tools\make_sounds.py
 import math, os, random, struct, wave
@@ -213,6 +215,25 @@ def rock(rng):
     return [math.tanh(1.5 * x) for x in mix([1.6 * c for c in crunch], boom)]
 
 
+def perfect_tick(rng):
+    ts = samples(0.16)
+    ping = [(math.sin(2 * math.pi * 3200 * t) + 0.7 * math.sin(2 * math.pi * 1600 * t)) * min(1.0, t / 0.004) * math.exp(-t / 0.07) for t in ts]
+    tick = highpass(noise(len(ts), rng), 3000)
+    knock = [0.0] * len(ts)
+    for i, t in enumerate(ts):
+        u = t - 0.03
+        if u >= 0:
+            knock[i] = 0.5 * math.sin(2 * math.pi * 900 * u) * math.exp(-u / 0.04) + (0.3 * tick[i] if u < 0.004 else 0.0)
+    return mix(ping, knock)
+
+
+def miss_click(rng):
+    ts = samples(0.10)
+    burst = lowpass([x if t < 0.025 else 0.0 for x, t in zip(noise(len(ts), rng), ts)], 700)
+    thump = [math.sin(2 * math.pi * 160 * t) * math.exp(-t / 0.05) for t in ts]
+    return mix([1.5 * b for b in burst], thump)
+
+
 # A BEAM IS HEARD A QUARTER UNDER THE LEVEL IT WAS MADE AT (the owner: "lower the volume default of
 # beams by 25%"). Each peak below is the level a sound was made at; a beam's is that times BEAM, so
 # the cut is one number and the level it was cut from stays on its row. The other beam files
@@ -232,6 +253,8 @@ SOUNDS = [
     ('drake_tractor', tractor, 0.45 * BEAM),
     ('drake_throw', throw, 0.75),
     ('drake_rock', rock, 0.9),
+    ('rail_perfect', perfect_tick, 0.5),
+    ('rail_miss', miss_click, 0.35),
 ]
 
 if __name__ == '__main__':

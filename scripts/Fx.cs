@@ -49,7 +49,7 @@ public class FxDef
     public float Width = 2f;        // the stroke of a ring, a spoke or a bar
     public int Spokes = 8;
     public bool Fill = true;        // a soft disc inside the ring
-    public string Sound;            // an effect's own noise: Sfx.Special id, or null for silence
+    public string Sound;            // an effect's own noise: Sfx.ByName id, or null for silence
     // A WARNING, NOT AN EFFECT: something is about to be hit here, and the raise says for how
     // long. The row's Life is not used -- a warning lives its wind-up, its hold and one flash --
     // and its sounds are the raise's, because they are the move's.
@@ -281,7 +281,7 @@ public partial class FxNode : Node2D
         // warning that rides a hull is a child of it, and its Position is an offset from the
         // boss's nose rather than a place in the world.
         var opening = Cue ?? D.Sound;
-        if (opening != null && Since <= 0) Sfx.Special(opening, GlobalPosition);
+        if (opening != null && Since <= 0) Sfx.ByName(opening, GlobalPosition);
     }
     public override void _ExitTree() => Fx.Left(this);
 
@@ -328,7 +328,7 @@ public partial class FxNode : Node2D
         if (D.Warn && !_struck && _t >= Time)
         {   // it lands: the move's own sound, once -- and never for a copy that arrived after it
             _struck = true;
-            if (Time > 0 && Strike != null) Sfx.Special(Strike, GlobalPosition);
+            if (Time > 0 && Strike != null) Sfx.ByName(Strike, GlobalPosition);
         }
         if (D.Shape == FxShape.Debris)
         {

@@ -566,7 +566,7 @@ public partial class Hub : Node2D
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered, TransferChannel = NetChannels.BossSounds)]
     private void NetBossSound(string name, Vector2 at)
     {
-        if (InArena) Sfx.Special(name, at);
+        if (InArena) Sfx.ByName(name, at);
     }
 
     public static void EndSession() => Session.End();
