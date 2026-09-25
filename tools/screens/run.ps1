@@ -103,7 +103,9 @@ try {
     Write-Host "SWEEP FAILED (the build failed)"; exit 1
   }
 
-  & $Godot --headless --import --path $W *> (Join-Path $W 'import.log')
+  # judged by what it registered, not by its exit code (SPIKE F1); refused without the WebRTC plugin
+  & (Join-Path $PSScriptRoot '..\import.ps1') -Godot $Godot -Path $W -Log (Join-Path $W 'import.log') -Require 'res://addons/webrtc_native/webrtc_native.gdextension'
+  if ($LASTEXITCODE -ne 0) { Write-Host "SWEEP FAILED (the import)"; exit 1 }
 
   $render = @('--path', $W, '--windowed', '--resolution', '1600x900')
   if ($Compat) { $render += @('--rendering-driver', 'opengl3', '--rendering-method', 'gl_compatibility') }

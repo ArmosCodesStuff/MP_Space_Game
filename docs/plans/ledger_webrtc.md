@@ -97,3 +97,17 @@ Then: `tools\smoketest\run.ps1 -Solo` (rung 3), `-Solo -OneDll` once, `-ReplyWin
 - files: tools/smoketest/SmokeTest.cs.txt
 - from: f70a5bb
 - hashes: SmokeTest.cs.txt ec361f2c82d3a52bda6472fb55eb2d6cf2249b82
+
+#### J3 POST
+- verdict: done; rung 1 green, 0 warnings. Untested (needs the plugin and rung 3 -ReplyWindow).
+- files: tools/smoketest/SmokeTest.cs.txt (ReplyDelaysS, _replyWindow, MeasureReplyWindow, judged at the top of WebRtcPairs)
+- checkpoint: d777dec
+- next: J4
+
+#### J4 PRE
+- intent: new tools/import.ps1 (import judged by what it registered, SPIKE F1 re-import, -Require,
+  every named library present = the trim rule); tools/smoketest/run.ps1 and tools/screens/run.ps1
+  call it; run.ps1 gains -OneDll (D3) and -ReplyWindow (D4).
+- files: tools/import.ps1 (new), tools/smoketest/run.ps1, tools/screens/run.ps1
+- from: d777dec
+- hashes: smoketest/run.ps1 35a6d10c0761475c1fe6f318f36c41f0cdaa94b3; screens/run.ps1 54762a3dc645dd6c978b764ca1edae0c659a5696; import.ps1 absent

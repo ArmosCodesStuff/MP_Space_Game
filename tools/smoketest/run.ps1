@@ -29,7 +29,15 @@
 # flown, fired, its whole bar pressed with a target selected, and stood in front of a wave -- and
 # what it measured printed as FLY and ISSUE lines. For "what is actually wrong with this class",
 # which assertions cannot answer because they only know what we thought to ask.
-param([string]$Godot, [switch]$Solo, [switch]$Wan, [switch]$Fly, [string]$Seed)
+# -ReplyWindow is solo only, and ONE-TIME: the WebRTC reply-window measurement (docs/plans/
+# network_webrtc.md section 3.4). Seven in-process pairs, most of them made to wait until they fail, so the
+# plugin's own error lines are EXPECTED in this mode: they are printed and not counted. Its
+# `reply window:` line goes into DESIGN.md; ordinary runs never carry the measurement.
+# -OneDll is the one-DLL experiment (network_webrtc.md section 8): in the scratch copy only, the plugin's
+# debug line is pointed at its RELEASE DLL and the debug DLL deleted. Green means the editor loads
+# the release library, and the repo can vendor one DLL instead of two.
+param([string]$Godot, [switch]$Solo, [switch]$Wan, [switch]$Fly, [string]$Seed, [switch]$ReplyWindow, [switch]$OneDll)
+if ($ReplyWindow) { $Solo = $true }
 
 $ErrorActionPreference = 'Stop'
 
@@ -71,6 +79,21 @@ robocopy $src $W /E /XD .godot .git bin obj /NFL /NDL /NJH /NJS /NP | Out-Null
 # discarded, so a half-copied tree went on to build, import and report on whatever arrived.
 if ($LASTEXITCODE -ge 8) { Write-Host "copy FAILED (robocopy $LASTEXITCODE): $src -> $W"; exit 2 }
 Copy-Item (Join-Path $PSScriptRoot 'SmokeTest.cs.txt') (Join-Path $W 'scripts\_Test.cs') -Force
+
+# THE WEBRTC PLUGIN every run needs (Link.cs): its folder and the extension file in it.
+$plugin = 'res://addons/webrtc_native/webrtc_native.gdextension'
+if ($OneDll) {
+  $ext1 = Join-Path $W 'addons\webrtc_native\webrtc_native.gdextension'
+  if (-not (Test-Path $ext1)) { Write-Host "-OneDll: $plugin is not in the tree"; exit 2 }
+  $txt = [IO.File]::ReadAllText($ext1)
+  $rel = [regex]::Match($txt, '(?m)^\s*windows\.release\.x86_64\s*=\s*"([^"]+)"').Groups[1].Value
+  $dbg = [regex]::Match($txt, '(?m)^\s*windows\.debug\.x86_64\s*=\s*"([^"]+)"').Groups[1].Value
+  if (-not $rel -or -not $dbg) { Write-Host "-OneDll: the plugin has no windows debug and release x86_64 lines"; exit 2 }
+  [IO.File]::WriteAllText($ext1, $txt.Replace("""$dbg""", """$rel"""))
+  $dbgFile = if ($dbg -like 'res://*') { Join-Path $W (($dbg -replace '^res://', '') -replace '/', '\') } else { Join-Path (Split-Path $ext1) ($dbg -replace '/', '\') }
+  Remove-Item $dbgFile -Force
+  Write-Host "ONE DLL: the debug line now loads $rel, and $dbg is gone from the copy"
+}
 
 $pg = Join-Path $W 'project.godot'
 $t = Get-Content $pg -Raw
@@ -150,7 +173,9 @@ try {
   # the seed every role runs with: given, or each engine picks its own and prints it
   $seedArg = if ($Seed) { @("seed=$Seed") } else { @() }
 
-  & $Godot --headless --import --path $W *> (Join-Path $W 'import.log')
+  # judged by what it registered, not by its exit code (SPIKE F1); refused without the plugin
+  & (Join-Path $PSScriptRoot '..\import.ps1') -Godot $Godot -Path $W -Log (Join-Path $W 'import.log') -Require $plugin
+  if ($LASTEXITCODE -ne 0) { Write-Host "SMOKE TEST FAILED (the import)"; exit 2 }
 
   $all = @()
   $want = 0
@@ -166,7 +191,8 @@ try {
             -NoNewWindow -PassThru -RedirectStandardOutput (Join-Path $W 'fakeigd.out') -RedirectStandardError (Join-Path $W 'fakeigd.err')
     Start-Sleep -Milliseconds 500
     # fixed 60 fps: identical frame timing every run, so the DPS checks are exact
-    $all += Complete-Run (Start-Run (@('--headless','--fixed-fps','60','--path',$W,'--','solo') + $seedArg) 'solo' 1200) '[solo] '
+    $rwArg = if ($ReplyWindow) { @('replywindow') } else { @() }
+    $all += Complete-Run (Start-Run (@('--headless','--fixed-fps','60','--path',$W,'--','solo') + $rwArg + $seedArg) 'solo' 1200) '[solo] '
     if (-not $fake.HasExited) { try { $fake.Kill() } catch {} }
     $want = 1
   }
@@ -212,11 +238,14 @@ try {
   }
 
   $all | ForEach-Object { Write-Host $_ }
-  $bad = @($all | Where-Object { $_ -cmatch 'FAIL|Exception|ERROR' }).Count
+  $badRe = if ($ReplyWindow) { 'FAIL|Exception' } else { 'FAIL|Exception|ERROR' }
+  if ($ReplyWindow) { Write-Host "(-ReplyWindow: ERROR lines above are the late pairs timing out, and are not counted)" }
+  $bad = @($all | Where-Object { $_ -cmatch $badRe }).Count
   $done = @($all | Where-Object { $_ -cmatch 'DONE' }).Count
   # "SOLO ONLY" in the verdict, always. A partial run that prints the same words as a full one is
   # a partial run that will be mistaken for the bar.
-  $what = if ($Solo) { 'SMOKE TEST (SOLO ONLY)' } elseif ($Wan) { 'SMOKE TEST (MULTIPLAYER OVER A SIMULATED INTERNET)' } else { 'SMOKE TEST' }
+  $what = if ($ReplyWindow) { 'SMOKE TEST (SOLO ONLY, REPLY WINDOW MEASUREMENT)' } elseif ($Solo) { 'SMOKE TEST (SOLO ONLY)' } elseif ($Wan) { 'SMOKE TEST (MULTIPLAYER OVER A SIMULATED INTERNET)' } else { 'SMOKE TEST' }
+  if ($OneDll) { $what += ' (ONE DLL)' }
   if ($bad -gt 0 -or $done -ne $want) {
     Write-Host "$what FAILED ($bad problems, $done/$want runs finished)"; exit 1
   }
