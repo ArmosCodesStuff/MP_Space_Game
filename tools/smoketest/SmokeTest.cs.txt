@@ -974,7 +974,11 @@ public partial class _Test : Node
             bool sheet = parts.Contains("sheet Battleship.hull=300") && parts.Contains("sheet Carrier.fighter_speed=352");
             bool gear = parts.Any(p => p.StartsWith("Equipment.All=") && p.Contains("Id=cv_elite_3") && p.Contains("fighter_speed:2"));
             bool prices = parts.Any(p => p.StartsWith("Economy.All=") && p.Contains("Id=miner_count") && p.Contains("BaseCost=400"));
-            Check(sheet && gear && prices, $"the build fingerprint covers the stat sheets, the gear table and the prices (sheet {sheet}, gear {gear}, prices {prices})");
+            // a wall level (ability 2 at level 3, level_walls.md) and a boss gate (Auto-sell after boss 3) --
+            // both moved out of hashed fields and into Unlocks.All, so the table itself must be hashed now.
+            bool walls = parts.Any(p => p.StartsWith("Unlocks.All=") && p.Contains("Pilot/3/Ability/2")
+                                      && p.Contains("Boss/3/Economy/0/hauler_autosell"));
+            Check(sheet && gear && prices && walls, $"the build fingerprint covers the stat sheets, the gear table, the prices and the unlock table (sheet {sheet}, gear {gear}, prices {prices}, walls {walls})");
         }
 
         Character.Delete(alienId); Character.Delete("v1old"); Character.Delete(id);

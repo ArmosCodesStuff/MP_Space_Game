@@ -282,3 +282,38 @@ BasePanel.cs:120-129, Raids.cs:53 ask Unlocks. Grep the harness for NeedsBoss an
   in Character.Load (ChipChecks' files must FAIL).
 - commit: see git log ("Walls job 3: the ability walls")
 - next: lane C's jobs are done; the rungs above are the main session's.
+
+---
+
+## Adversarial review, 2026-09-25 -- 7 findings confirmed (findings_walls.json), fixed one job each
+
+### Step 0: merge version-l (8 docs-only commits since aa1e4f9) into wt/walls
+- `git merge version-l --no-edit` at 58d7d1a: clean, no conflicts (CLAUDE.md, docs/CHANGES.md,
+  docs/DESIGN.md, docs/plans/README.md all auto-merged). Commit f4bb52d "Merge branch 'version-l'
+  into wt/walls".
+
+### Fix 1 PRE (finding 1, major -- Unlocks.All never reached Net.Fingerprint)
+- model: sonnet
+- intent: make `Unlock` a type `Net.Plain` already hashes without touching scripts/Net.cs: a record
+  class (its compiler-made `<Clone>$`), not the readonly struct. Extend "THE HANDSHAKE SEES THE
+  TABLES" to prove a wall level and a boss gate literal are in what is hashed.
+- start: f4bb52d5edc52eb195f50c3f13d3a259a58ae88e
+- files (hash-object at start):
+  - scripts/Unlocks.cs 25c1c88a682f0aa1505f366fb1a4959b4f168c1a
+  - tools/smoketest/SmokeTest.cs.txt f3481bcb8ae223869583a9c8a9f89382a3de2e81
+
+### Fix 1 POST
+- verdict: typecheck 0 errors. `Unlock` is now `public sealed record class Unlock(Measure By, int
+  At, Opens What, int Nth, string Id = null)` with an explicit `ToString() => "{By}/{At}/{What}/{Nth}/{Id}"`
+  (deterministic text for the hash, not the compiler's default record format) -- routes through
+  `Plain()`'s `<Clone>$` check, not `Table()` (no parameterless ctor), same as before for every
+  external `u.By`/`u.At`/... read (now auto-properties, same names). No caller outside Unlocks.cs
+  constructs an `Unlock` directly (grepped clean).
+- files: scripts/Unlocks.cs (struct -> record class), tools/smoketest/SmokeTest.cs.txt (handshake
+  check now also asserts `Unlocks.All=` contains "Pilot/3/Ability/2" (ability 2 at level 3) and
+  "Boss/3/Economy/0/hauler_autosell" (Auto-sell after boss 3), both literals from level_walls.md).
+- rung 3 owed: the rewritten "the build fingerprint covers ... and the unlock table" check.
+- rung 5 owed: none new (no wire shape changed; the fingerprint's own value changing is what rung 5
+  a moment ago (job 1) already proves the build-mismatch refusal with).
+- commit: (next) "Walls fix 1: Unlocks.All reaches the build fingerprint".
+- next: fix 2 (finding 2, major -- guest2's restart fixture).

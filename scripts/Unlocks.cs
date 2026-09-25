@@ -32,16 +32,17 @@ using System.Linq;
 public enum Measure { Pilot, Boss }                 // the pilot's highest level reached (Character.Peak); the base owner's highest boss beaten
 public enum Opens { Ability, ChipSlot, Economy, Raids }
 
-public readonly struct Unlock
+// A RECORD CLASS, not a struct: Net.Fingerprint's Plain() hashes a record (its compiler-made
+// <Clone>$) but never a plain struct, and this table's levels and boss gates must reach the
+// build handshake like any other row (a host and a guest on different Unlocks tables must be
+// refused, not silently disagree about what is open). ToString is written out, not the
+// compiler's default, so the hashed text is a stable, readable line per row.
+public sealed record class Unlock(Measure By, int At, Opens What, int Nth, string Id = null)
 {
-    public readonly Measure By;
-    public readonly int At, Nth;
-    public readonly Opens What;
-    public readonly string Id;                      // the row of another table it opens (an Economy id), or null
-    public Unlock(Measure by, int at, Opens what, int nth, string id = null) { By = by; At = at; What = what; Nth = nth; Id = id; }
     // The card a pilot is shown on crossing a pilot row (Hints), and what its character remembers it
     // was shown: "unlock_ability_2", "unlock_chipslot_1".
     public string Hint => By == Measure.Pilot ? $"unlock_{What.ToString().ToLowerInvariant()}_{Nth}" : null;
+    public override string ToString() => $"{By}/{At}/{What}/{Nth}/{Id}";
 }
 
 public static class Unlocks
