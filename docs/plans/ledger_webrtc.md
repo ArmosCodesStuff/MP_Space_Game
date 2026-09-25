@@ -594,3 +594,26 @@ Owed on the R1 records commit (it carries J10 and J9c):
 - checkpoint: the R1Q commit (code + records together)
 - next: CHANGES.md Handoff and the R1 Unreleased entry updated to carry this fix (same commit); then
   the bar, a merge to `version-l`, and R2.
+
+### R1R PRE (merge gate 2 fix: WaveCrew's delegate field skipped by StructRow)
+- model: sonnet (escalate to opus after one red)
+- intent: step 0, merge `version-l` (f6ae54c, carries the walls lane and docs/tool commits) into
+  `wt/net`; resolve Hub.NetIdentity's peak (walls) vs net's changes from both ledgers, keeping both
+  behaviours; typecheck + `-Quick` green (a new walls table the fingerprint must now hash is a fix
+  here, with its check). Then job R1R: gate 2's defect -- `StructRow` (scripts/Net.cs ~245-248) requires
+  every field Plain, so `WaveCrew` (a Func `Count` field) is skipped and prints bare, and
+  `Waves.Patrol`/`HuntPin` (private static readonly rows of `WaveDef`, whose `Crew: WaveCrew[]` field)
+  never entered the fingerprint. Fix: `StructRow` accepts a field that is Plain OR a delegate
+  (`fields.All(f => Plain(f.FieldType) || typeof(Delegate).IsAssignableFrom(f.FieldType))`); `Show`
+  prints a delegate's type name, null as `null`. New `BuildChecks` row after the value-tuple check
+  moving one `WaveCrew.Step` on `Waves.All["raid"].Crew`, asserting the fingerprint moves and the
+  `Waves.All=` part contains `WaveCrew{`, restored, fingerprint restored. Rewrite the Net.cs comment and
+  DESIGN.md trap (~1365-1366) that say WaveCrew "stays out"; reword the Post check's comment in
+  SmokeTest.cs.txt (~2230-2231) from "a readonly struct whose public fields are all Plain" to the
+  current rule (any game value type or ValueTuple`N` whose public fields are Plain or delegates,
+  readonly or not).
+- files: scripts/Net.cs, tools/smoketest/SmokeTest.cs.txt, docs/DESIGN.md, docs/plans/ledger_webrtc.md
+- from: 94ad917127663fcc1651739f4afb0d89fc1826a9
+- hashes (pre-merge): Net.cs cedcd5086de1baca30525bd70ad1bc88ad4f403a; SmokeTest.cs.txt
+  016aef3225e0914b4fdfde01215783003e2559be; DESIGN.md 0fb7242345053d4db8a5e4c664de98646c4475f0;
+  ledger ce2d58d4728ece7025ce438590e73cd69865a63b; CHANGES.md b029fd808f0ec7e0000563353199ae0fa335e4e2
