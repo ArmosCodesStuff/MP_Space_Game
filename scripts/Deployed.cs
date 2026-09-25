@@ -47,6 +47,7 @@ public partial class DeployedTurret : Node2D, IRaidTarget, ITagged, ITurretHost,
     {
         Kind     = Shots.Shell,          // what it fires, said out loud: a row of Shots.All
         Prey     = Targeting.Sentry,     // ...and what it takes: anything hostile
+        Weapon   = Dealt.Turret,       // ...and what the door credits its owner with
         Beam     = Beam.Deployed,        // ...and its point defence's flash: its own note, not a warship's
         Damage   = Ship != null ? Ship.Stats["deploy_damage"] : SpareDamage,
         Interval = Ship != null ? Ship.Cadence("deploy_interval") : SpareInterval,

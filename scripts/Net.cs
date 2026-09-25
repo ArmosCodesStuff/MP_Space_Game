@@ -140,6 +140,8 @@ public partial class Net : Node, Rendezvous.IHostDesk, Rendezvous.IGuestDesk
         sm.ServerDisconnected -= OnHostGone;
         sm.AuthCallback = new Callable();
         foreach (var row in Rendezvous.Paths) row.Close();
+        HangAll();
+        _answer?.Close(); _answer = null;                   // the guest's own gather: nobody lets it go after this
         foreach (var (p, _) in _lettingGo) p.Close();
         _lettingGo.Clear();
         _peer?.Close(); _peer = null;
@@ -505,6 +507,9 @@ public partial class Net : Node, Rendezvous.IHostDesk, Rendezvous.IGuestDesk
     private string ReplyRanOut => $"{_joinTarget} did not connect within {Link.ReplyWindowS} s of your reply. MAKE A FRESH REPLY and send that one, "
                                 + "or ask them for a new invite. Playing offline.";
     public string LastHost { get; private set; } = "";
+    // WHO THIS GUEST JOINED, as the join named it: the invite's pilot name, or the address typed. The key its
+    // rejoin tokens are kept by (Session.Rejoins).
+    public string HostName => _joinTarget;
     public int Attempt { get; private set; }
     private double _dropClock = -1;
     public bool Reconnecting => _dropClock >= 0;
@@ -1015,16 +1020,24 @@ public partial class Net : Node, Rendezvous.IHostDesk, Rendezvous.IGuestDesk
         else Character.Save();
     }
 
+    // EVERY INVITE NOT YET CONNECTED HUNG UP (Hang: a pending entry's connection is closed here and now),
+    // every record being made let go, and the guest's wait for its answer called off. Shutdown and _ExitTree.
+    private void HangAll()
+    {
+        foreach (var e in Pending.All.ToList()) Hang(e.Id);
+        foreach (var m in _making) m.done.TrySetResult(null);
+        _making.Clear();
+        if (_answering is var (_, answered)) answered.TrySetCanceled();
+        _answering = null;
+    }
+
     private void Shutdown()
     {
         // the rows first: no knock and no pickup reaches a session that is ending; then every invite not yet
         // connected is hung up, because GetPeers lists them and nobody else will (§3.7)
         foreach (var row in Rendezvous.Paths) row.Close();
-        foreach (var e in Pending.All.ToList()) Hang(e.Id);
-        foreach (var m in _making) m.done.TrySetResult(null);
-        _making.Clear();
-        if (_answering is var (_, answered)) answered.TrySetCanceled();
-        _answering = null; _answer = null;
+        HangAll();
+        _answer = null;
         if (_peer != null)
         {
             // EVERY LINK THAT IS UP IS LET GO GENTLY, goodbye or not: what it has queued goes first -- the

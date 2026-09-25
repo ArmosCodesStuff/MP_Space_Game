@@ -67,11 +67,15 @@ public static class Session
     // THE REJOIN TOKEN (audit P10b). A pilot's character id is its own word, so on its own it let
     // anyone who knew it take a held place, and it could not take back a place whose old connection
     // the host had not yet seen die. The host issues each pilot a token once it is in (Hub.NetToken);
-    // the pilot keeps it (Rejoin: never forgotten by End, since a drop ends the guest's session) and
-    // sends it with its identity. Once a token is issued for an id, that id's place is the token's.
+    // the pilot keeps it PER HOST (Rejoins, keyed by the host as the join named it -- Net.HostName: the
+    // invite's pilot name, or the address typed; never forgotten by End, since a drop ends the guest's
+    // session, and a visit to another host in between does not overwrite it) and sends that host's with
+    // its identity. Once a token is issued for an id, that id's place is the token's.
     // It is carried after connection, never in an invite code (network_webrtc.md §3.9).
     [Live] public static readonly Dictionary<string, string> Tokens = new();
-    public static string Rejoin = "";
+    [Live] public static readonly Dictionary<string, string> Rejoins = new();
+    public static string RejoinFor(string host) => Rejoins.GetValueOrDefault(host ?? "", "");
+    public static void Remember(string host, string token) { if (!string.IsNullOrEmpty(host)) Rejoins[host] = token ?? ""; }
     public static string TokenFor(string id)
     {
         if (!Tokens.TryGetValue(id, out var t))

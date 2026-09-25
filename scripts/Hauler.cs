@@ -107,6 +107,7 @@ public partial class Hauler : UtilityShip, ITurretHost
         Turn = (float)Economy.HaulerPdTurn,
         Texture = "res://turret_pd.png",
         TexScale = 1.3085f / 5.5f, Barrel = 7.2f,
+        Weapon = Dealt.Turret,           // what the door names its blows
         Beam = Beam.Hauler,              // its flash: its own note, above a warship's point defence
         Tint = new Color(0.78f, 0.82f, 0.9f),
     };

@@ -2809,6 +2809,15 @@ public partial class _Test : Node
                 Check(mainLost > 0 && Math.Abs(mainLost - mainCredited) < 1e-6,
                       $"the BB's main guns, the pilot {at.DistanceTo(mainTgt.Position):0} u off: DealtBy[\"shell\"] grew {mainCredited:0.0}, the target lost {mainLost:0.0}");
                 mainTgt.TakeDamage(1e12);
+                {
+                    double before = bs.DealtBy.GetValueOrDefault("shell"); int heard = 0;
+                    void Hear(IHittable t, double d, string w) { if (t == mainTgt) heard++; }
+                    Dealt.Landed += Hear;
+                    Dealt.Deal(mainTgt, Vary(20f, 80f), bs, "shell");
+                    Dealt.Landed -= Hear;
+                    Check(!mainTgt.Alive && Math.Abs(bs.DealtBy.GetValueOrDefault("shell") - before) < 1e-9 && heard == 0,
+                          $"a blow on a target already dead credits nothing and is not announced (D17): DealtBy[\"shell\"] moved {bs.DealtBy.GetValueOrDefault("shell") - before:0.0}, Landed heard {heard}");
+                }
                 await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
 
                 var pdTgt = H.SpawnRaider(at + Vector2.Right.Rotated(VaryAngle()) * Vary(150f, 250f), Enemies.Webifier);
@@ -14832,10 +14841,11 @@ public partial class _Test : Node
         List<Raider> Of(Squad sq) => sq.Members.OfType<Raider>().ToList();
         Vector2 Offset(Squad sq, Raider r) => (sq.SlotOf(r) - sq.Anchor).Rotated(-sq.Heading);
 
-        // ── N1 + N2: a squad of 4 closes as ONE, on a still or a moving target ──
+        // ── N1 + N2: a squad of 4 closes as ONE, on a still, a moving or a boosting-away target ──
         {
             Park(Spot()); await Wait(0.2);
-            bool moving = Vary(0f, 1f) < 0.5f; float course = VaryAngle();
+            int how = Rng.RandiRange(0, 2); bool moving = how == 1, boosting = how == 2; float course = VaryAngle();
+            string kind = how == 0 ? "still" : how == 1 ? "moving" : "boosting away";
             var at = me.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(2600f, 3400f);
             var sq = Vee(at, Aim.Face(at, me.Position));
             var ms = Of(sq);
@@ -14855,6 +14865,41 @@ public partial class _Test : Node
                 idsOk &= ms.All(r => ((r.NetFlags >> 8) & 0xFFFF) == (sq.Id & 0xFFFF));
                 await Step();
             }
+            Check(first >= 0 && last - first <= 1 && Math.Abs(boostAt - 1600f) < 30f,
+                  $"...and it commits as one: every boost bit (1) rises in the same frame +-1 ({last - first}), 1600 u out ({boostAt:0}) -- target {kind}");
+            Check(slotErr < 25f && spread <= 62f + 25f && Math.Abs(cSpeed - 100f) < 8f,
+                  $"a squad of four flies as one: every member within 25 u of its slot after 2 s ({slotErr:0}), the spread never past the vee's 62 u + 25 ({spread:0}), the centre at 100 u/s ({cSpeed:0}) -- target {kind}");
+            if (boosting)
+            {   // N2, BOOSTING AWAY: from the frame the burn began, the target runs straight away from the squad's
+                // centre faster than any member's burn, until the squad has let the commit go (its Leash) and a
+                // little after; then it stops. The squad never splits, re-forms, commits again and pins it.
+                float flee = 1.25f * ms.Max(r => r.Burn);
+                var away = (me.Position - sq.Centre).Normalized();
+                bool whole = true, letGo = false; double ran = 0, since = -1, extra = Vary(0.3f, 1.0f);
+                while (ran < 7.0 && (since < 0 || since < extra))
+                {
+                    me.Velocity = Vector2.Zero;
+                    me.Position += away * flee / 60f;
+                    await Frame();
+                    double dt = GetProcessDeltaTime();
+                    ran += dt; whole &= sq.Members.Count == 4;
+                    letGo |= sq.Phase == SquadPhase.Approach;
+                    if (letGo) since = since < 0 ? 0 : since + dt;
+                }
+                me.Velocity = Vector2.Zero;
+                bool again = false, pinnedAfter = false;
+                for (int i = 0; i < 60 * 40 && !pinnedAfter; i++)
+                {
+                    await Frame(); me.Velocity = Vector2.Zero;
+                    whole &= sq.Members.Count == 4;
+                    again |= letGo && sq.Phase == SquadPhase.Commit;
+                    pinnedAfter = again && me.Pinned;
+                }
+                Check(whole && letGo && again && pinnedAfter,
+                      $"N2 boosting away at {flee:0} u/s for {ran:0.0} s: the squad never splits (4 members every frame: {whole}), lets the commit go and re-forms ({letGo}), commits again ({again}) and pins the target once it stops ({pinnedAfter})");
+                me.Velocity = Vector2.Zero;
+            }
+            else {
             var latchF = new Dictionary<Raider, int>();
             int commitF = f;
             for (; f < commitF + 60 * 12 && latchF.Count < ms.Count; f++)
@@ -14870,16 +14915,13 @@ public partial class _Test : Node
             bool pinnedIn6 = false;
             for (int i = 0; i < 60 * 6 - (f - commitF) && !pinnedIn6; i++) { pinnedIn6 = me.Pinned; await Step(); }
             pinnedIn6 |= me.Pinned;
-            Check(slotErr < 25f && spread <= 62f + 25f && Math.Abs(cSpeed - 100f) < 8f,
-                  $"a squad of four flies as one: every member within 25 u of its slot after 2 s ({slotErr:0}), the spread never past the vee's 62 u + 25 ({spread:0}), the centre at 100 u/s ({cSpeed:0}) -- target {(moving ? "moving" : "still")}");
-            Check(first >= 0 && last - first <= 1 && Math.Abs(boostAt - 1600f) < 30f,
-                  $"...and it commits as one: every boost bit (1) rises in the same frame +-1 ({last - first}), 1600 u out ({boostAt:0})");
             Check(allLatched && lightSpan <= 30 && heavyLag <= 30,
                   $"all arrive together: the three lights latch within 0.5 s of each other ({lightSpan} frames), the heavy within 0.5 s of the last ({heavyLag})");
             Check(oneLead && idsOk && lockSeen && ms.All(r => !r.Latched || (r.NetFlags & 8) == 0),
                   "on the wire: exactly one lead bit (4) in the squad, its id in bits 8-23 on every member, the lock bit (8) up through the burn and down once latched");
-            Check(pinnedIn6, $"the {(moving ? "moving" : "still")} target is pinned within 6 s of the commit");
+            Check(pinnedIn6, $"the {kind} target is pinned within 6 s of the commit");
             me.Velocity = Vector2.Zero;
+            }
 
             // ── N5: the target warps mid-engagement -- nobody snaps, the web lets go, no burn for 10 s ──
             var before = ms.ToDictionary(r => r, r => r.Position);
@@ -21638,9 +21680,22 @@ public partial class _Test : Node
         Check(Session.MayClaim(a, ta, liveHolder: false) && Session.MayClaim(a, ta, liveHolder: true)
               && !Session.MayClaim(a, "", liveHolder: false) && !Session.MayClaim(a, tb, liveHolder: false) && !Session.MayClaim(a, tb, liveHolder: true),
               "a token issued: only it claims the place, gone or still live; no token or another pilot's is refused (P10b)");
+        // A GUEST KEEPS ONE PER HOST: a visit to another host in between does not overwrite the first's,
+        // from 3 varied pairs of host names (an invite's pilot name, a typed address)
+        var names = new List<string>();
+        for (int k = 0; k < 3; k++)
+        {
+            string h1 = $"Host{Rng.Randi() % 1000}-{k}", h2 = $"10.{k}.{Rng.Randi() % 250}.{1 + k}:{27000 + Rng.Randi() % 900}";
+            string t1 = Session.TokenFor(h1 + "-pilot"), t2 = Session.TokenFor(h2 + "-pilot");
+            Session.Remember(h1, t1); Session.Remember(h2, t2);
+            names.Add(h1); names.Add(h2);
+            Check(Session.RejoinFor(h1) == t1 && Session.RejoinFor(h2) == t2 && t1 != t2 && Session.RejoinFor("nobody") == "" && Session.RejoinFor(null) == "",
+                  $"a guest keeps its rejoin token per host: back to {h1} after a visit to {h2}, it sends {h1}'s (P10b)");
+        }
         Session.End();
-        Check(Session.Tokens.Count == 0 && Session.MayClaim(a, "", liveHolder: false),
-              "a session over forgets the tokens it issued (P10b)");
+        Check(Session.Tokens.Count == 0 && Session.MayClaim(a, "", liveHolder: false) && names.All(n => Session.RejoinFor(n).Length == 32),
+              "a session over forgets the tokens it issued, and keeps the ones it holds (P10b)");
+        foreach (var n in names) Session.Rejoins.Remove(n);
     }
     // P9 (solo): a trip already made is not made again. (The rewritten check above it: a new trip to
     // the very sector it is in IS made -- a retried mission reloads.)
@@ -21798,6 +21853,26 @@ public partial class _Test : Node
         await RealTime(() => Net.I.NetworkIdle, 3);
         Check(Net.I.NetworkIdle && Net.I.Pending.Count == 0 && Rendezvous.ListenPort == 0,
               $"back offline: every invite hung up, the listener closed, nothing left running ({Net.I.Pending.Count} pending, port {Rendezvous.ListenPort})");
+
+        // THE NODE LEAVES THE TREE WITH INVITES PENDING (invariant A): no Quit, no GoOffline -- a scene
+        // teardown that takes the autoload out. Every pending invite's connection is closed there and then,
+        // not left to the collector's thread. The node is put back where it was, and hooks itself up again.
+        Net.I.Host(P(27131));
+        int want = Rng.RandiRange(2, 3);
+        for (int k = 0; k < want; k++)
+        {
+            Clip = "";
+            await Wait(Vary(0.05f, 0.3f));
+            Net.I.Invite();
+            await RealTime(() => Clip.Length > 0, 6);
+        }
+        var gathers = Net.I.Pending.All.Select(e => e.Conn).Where(g => g != null).ToList();
+        var net = Net.I; var home = net.GetParent(); int slot = net.GetIndex();
+        home.RemoveChild(net);
+        bool closed = gathers.All(g => g.Conn == null), emptied = net.Pending.Count == 0;
+        net.RequestReady(); home.AddChild(net); home.MoveChild(net, slot);
+        Check(gathers.Count == want && closed && emptied && Net.I == net && !Net.IsOnline,
+              $"the network node leaving the tree hangs up every pending invite's connection itself ({gathers.Count} of {want} gathers, all closed {closed}, table empty {emptied})");
     }
 
     // ── WEBRTC, R4: THE WATCHDOG THROUGH THE BOX (§3.6, §10.4 R4; -Wan only) ─────────────────────────────
@@ -22272,8 +22347,8 @@ public partial class _Test : Node
         int before = Net.LocalId;
         bool back = await R2cJoinByInvite(1, 0.5f, 3f, 30);
         await Wait(0.5);
-        Check(back && Net.I.JoinedBy == "paste" && Session.Rejoin.Length == 32 && Me != null && Me.OwnerId == Net.LocalId && Me.Pilot == "Guesty",
-              $"guest: back in by the host's fresh invite, holding its rejoin token, flying its own ship ({Net.I.JoinedBy}; token {Session.Rejoin.Length} characters; id {Net.LocalId})");
+        Check(back && Net.I.JoinedBy == "paste" && Session.RejoinFor(Net.I.HostName).Length == 32 && Me != null && Me.OwnerId == Net.LocalId && Me.Pilot == "Guesty",
+              $"guest: back in by the host's fresh invite, holding its rejoin token for that host, flying its own ship ({Net.I.JoinedBy}; token {Session.RejoinFor(Net.I.HostName).Length} characters for {Net.I.HostName}; id {Net.LocalId})");
         if (Wan) await R4GuestBlackhole();
         // THE LIVE HOLDER: the next invite waits on the courier; this link goes silent without a word (the
         // process frozen: its peer orphaned, still up, never polled), and the pilot joins at once
@@ -22972,7 +23047,7 @@ public partial class _Test : Node
             Check(!Net.IsOnline && !Hub.InArena && Net.I.Reconnecting, "arena guest: dropped mid-arena, home to its own world, trying to get back in");
             await RealTime(() => Hub.InArena && Net.IsOnline && Net.LocalId != 1, 12);
             Check(Hub.InArena && Net.IsOnline && Net.LocalId != agOldId, "arena guest: back in under a new id -- into the arena, where the party is");
-            Check(Session.Rejoin.Length == 32, $"arena guest: it came back holding the rejoin token its host issued ({Session.Rejoin.Length} characters; P10b)");
+            Check(Session.RejoinFor(Net.I.HostName).Length == 32, $"arena guest: it came back holding the rejoin token its host issued ({Session.RejoinFor(Net.I.HostName).Length} characters for {Net.I.HostName}; P10b)");
             await RealTime(() => Me != null && Me.Position.DistanceTo(new Vector2(900, 300)) < 50, 5);
             Check(Me != null && Me.Position.DistanceTo(new Vector2(900, 300)) < 50,
                   $"arena guest: put back where it was when it dropped ({Me?.Position.DistanceTo(new Vector2(900, 300)):0} u off; at {Me?.Position})");

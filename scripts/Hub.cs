@@ -828,7 +828,7 @@ public partial class Hub : Node2D
         // no token: a co-player that learnt it could claim this pilot's place (Session.MayClaim).
         foreach (int to in toPeer != 0 ? new[] { toPeer } : Multiplayer.GetPeers())
         {
-            args[^1] = to == 1 && !Net.IsHost ? Session.Rejoin : "";
+            args[^1] = to == 1 && !Net.IsHost ? Session.RejoinFor(Net.I.HostName) : "";
             RpcId(to, nameof(NetIdentity), args);
         }
     }
@@ -874,9 +874,9 @@ public partial class Hub : Node2D
         if (Net.IsHost && characterId.Length > 0 && holder == 0) RpcId(peer, nameof(NetToken), Session.TokenFor(characterId));
         TryRestoreHold(peer);
     }
-    // the pilot's rejoin token, from the host that issued it (Session.Rejoin)
+    // the pilot's rejoin token, from the host that issued it, kept for that host (Session.Rejoins)
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetToken(string token) { if (!Net.IsHost) Session.Rejoin = token ?? ""; }
+    private void NetToken(string token) { if (!Net.IsHost) Session.Remember(Net.I.HostName, token); }
     private readonly Dictionary<int, int> _replacing = new();  // an old connection let go -> the peer its place goes to
 
     // A CLASS IS CHANGED AT REFIT, never in a fight (audit P8): RefitOpen is the one rule, read by the
