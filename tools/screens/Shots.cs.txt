@@ -113,6 +113,63 @@ public partial class _Shots : Node
     void Key(Key k) { Input.ParseInputEvent(new InputEventKey { Keycode = k, PhysicalKeycode = k, Pressed = true }); Input.ParseInputEvent(new InputEventKey { Keycode = k, PhysicalKeycode = k, Pressed = false }); }
     object P(object o, string m, params object[] a) => o.GetType().GetMethod(m, BindingFlags.NonPublic | BindingFlags.Instance).Invoke(o, a);
 
+    // ── LANE G (raids v2): a squad inbound in its vee (link lines to its lead), the same squad on
+    // its burn (dashed lock lines converging, each row named again, the GANK line over the hull bar),
+    // a squad named under its hulls as it comes into view (a web glyph on the webifiers) with its
+    // radar bracket and heavy diamond while a second squad off the scope is one rim chevron "1+2",
+    // and a heavy posted astern of a PINNED ship with its missile's red circle on the predicted spot ──
+    async Task RaidsFrames()
+    {
+        var s = H.GetNode<PlayerShip>("Ship_1"); var keep = s.Position;
+        s.Position = new Vector2(5200, 4200); s.Velocity = Vector2.Zero; s.Rotation = 0f; await W(0.3);
+        var zp = typeof(Hub).GetProperty("ZoomLevel"); float z0 = (float)zp.GetValue(H); zp.SetValue(H, 0.6f);
+        var at = s.Position + new Vector2(0, -2100f);
+        float heading = Aim.Face(at, s.Position);
+        var sq = H.FormSquad(Squads.Gank, at, heading);
+        for (int i = 0; i < 3; i++) { float k = i - 1f; H.SpawnRaider(at + new Vector2(60f * k, -40f + 30f * Mathf.Abs(k)).Rotated(heading), Enemies.Webifier, sq); }
+        H.SpawnRaider(at + new Vector2(0f, 60f).Rotated(heading), Enemies.Gunship, sq);
+        await W(1.5); await Snap("49a_squad_inbound");
+        for (int i = 0; i < 60 * 12 && sq.Phase != SquadPhase.Commit; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        await W(0.6); await Snap("49d_squad_lock_lines");
+        foreach (var r in H.Raiders.ToList()) H.RaiderDown(r);
+        await W(0.3);
+        zp.SetValue(H, 0.3f);
+        var near = s.Position + new Vector2(2500f, 0f); float across = Aim.Face(near, s.Position);
+        var sn = H.FormSquad(Squads.Gank, near, across);
+        H.SpawnRaider(near + new Vector2(0f, 60f).Rotated(across), Enemies.Gunship, sn);
+        for (int i = 0; i < 3; i++) { float k = i - 1f; H.SpawnRaider(near + new Vector2(60f * k, -40f + 30f * Mathf.Abs(k)).Rotated(across), Enemies.Webifier, sn); }
+        var off = s.Position + new Vector2(-3000f, -3800f);
+        var so = H.FormSquad(Squads.Gank, off, Aim.Face(off, s.Position));
+        H.SpawnRaider(off, Enemies.Cross, so);
+        for (int i = 0; i < 2; i++) H.SpawnRaider(off + new Vector2(70f * (i * 2 - 1), -50f), Enemies.Talon, so);
+        await W(0.5); await Snap("49c_squad_names_radar");
+        foreach (var r in H.Raiders.ToList()) H.RaiderDown(r);
+        zp.SetValue(H, 0.6f);
+        await W(0.3);
+        // a heavy astern of a pinned ship: its missile flies only now, at where the ship will be
+        s.ApplyStatus(Status.Pinned, 12.0);
+        var hv = H.SpawnRaider(s.Position + new Vector2(0, 420), Enemies.Gunship);
+        zp.SetValue(H, 1.4f);
+        for (int i = 0; i < 60 * 6 && H.BlastsPending == 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        await W(0.8); await Snap("49_heavy_astern_missile");
+        // the same heavy latched on the pinned ship, firing BOTH barrels in one volley: two flashes
+        // from either side of its turret; snapped on the frame a volley lands (a flash lasts 0.1 s)
+        zp.SetValue(H, 2.0f);
+        var hold = s.Position;
+        double HeavyHit() => s.DamageBySource.Where(kv => kv.Key == $"raider:{hv.NetId}").Sum(kv => kv.Value);
+        double hit0 = GodotObject.IsInstanceValid(hv) ? HeavyHit() : 0;
+        for (int i = 0; i < 60 * 8 && GodotObject.IsInstanceValid(hv); i++)
+        {
+            s.Position = hold; s.Velocity = Vector2.Zero;
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            if (GodotObject.IsInstanceValid(hv) && hv.Latched && HeavyHit() > hit0) break;
+        }
+        await Snap("49b_heavy_both_barrels");
+        if (GodotObject.IsInstanceValid(hv)) hv.TakeDamage(9999);
+        s.Statuses.Clear(Status.Pinned);
+        zp.SetValue(H, z0); s.Position = keep; s.Velocity = Vector2.Zero; await W(0.3);
+    }
+
     public override async void _Ready()
     {
         // 2x game speed: every wait here is game time, so each frame catches the same moment,
@@ -351,38 +408,7 @@ public partial class _Shots : Node
             foreach (var r in raid) if (GodotObject.IsInstanceValid(r)) r.TakeDamage(999);
             zp.SetValue(H, z0); rs.Position = keepR; rs.Velocity = Vector2.Zero; await W(0.3);
         }
-        // a heavy raider at the map's edge, its missile flying at a PINNED ship's predicted spot (the
-        // red circle): a heavy throws only at a pinned target, so the ship is pinned and held still
-        // (Pinned forces thrust), and the heavy's missile clock is forced ready
-        {
-            var hs2 = H.GetNode<PlayerShip>("Ship_1"); var keepH2 = hs2.Position;
-            // the heavy waits at the map's edge nearest the ship (3200 u out, east of the base);
-            // the ship 400 u inside it, so the heavy's missile is in range
-            var spot = Hub.BasePos + new Vector2(2800, 0);
-            hs2.Position = spot; hs2.Velocity = Vector2.Zero; hs2.Rotation = 0f; await W(0.3);
-            hs2.ApplyStatus(Status.Pinned, 30.0);
-            var hv = H.SpawnRaider(Hub.BasePos + new Vector2(3200, 60), Enemies.Gunship);
-            typeof(Raider).GetField("_missileCd", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(hv, 0.0);
-            var zp = typeof(Hub).GetProperty("ZoomLevel"); float z0 = (float)zp.GetValue(H); zp.SetValue(H, 0.85f);   // ship and heavy both in view
-            for (int i = 0; i < 60 * 3 && !N<FxNode>().Any(t => t.Id == Fx.WarnZone); i++)
-            { hs2.Position = spot; hs2.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
-            for (int i = 0; i < 12; i++) { hs2.Position = spot; hs2.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
-            await Snap("49_heavy_waiting_missile");
-            // the same heavy latched on the pinned ship, firing BOTH barrels in one volley: two flashes
-            // from either side of its turret; snapped on the frame a volley lands (a flash lasts 0.1 s)
-            zp.SetValue(H, 2.0f);
-            double hit0 = hs2.DamageBySource.Where(kv => kv.Key == $"raider:{hv.NetId}").Sum(kv => kv.Value);
-            for (int i = 0; i < 60 * 8; i++)
-            {
-                hs2.Position = spot; hs2.Velocity = Vector2.Zero;
-                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-                if (hv.Latched && hs2.DamageBySource.Where(kv => kv.Key == $"raider:{hv.NetId}").Sum(kv => kv.Value) > hit0) break;
-            }
-            await Snap("49b_heavy_both_barrels");
-            if (GodotObject.IsInstanceValid(hv)) hv.TakeDamage(9999);
-            hs2.Statuses.Clear(Status.Pinned); hs2.Hp = hs2.MaxHp;
-            zp.SetValue(H, z0); hs2.Position = keepH2; hs2.Velocity = Vector2.Zero; await W(0.3);
-        }
+        await RaidsFrames();
         // the base's own weapons: its turret burning a raider inside 300 u
         {
             var bs3 = H.GetNode<PlayerShip>("Ship_1"); var keepB = bs3.Position;

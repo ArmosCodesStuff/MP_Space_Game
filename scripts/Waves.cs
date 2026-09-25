@@ -27,8 +27,14 @@ using System.Collections.Generic;
 //                 anchor so many radians a group, or the anchor itself
 //   Hold          the ring each squad holds with nothing to fight, round its OWN spot. 0 -- every
 //                 wave but a blockade -- is the base's perimeter, which is where they always went
-//   Crew          rows of (an enemy named outright OR a way to draw one, how many, where they sit)
+//   Crew          rows of (an enemy named outright OR a way to draw one, how many, where they sit,
+//                 and a Sweep that bends a line into a vee)
+//   Doctrine      how its squads fly (Squads.All; null: patrol)
+//   Mission       a Garrison row: which mission kind it answers (null: any)
+//   Exp, FormFor  what a kill pays (x EnemyDef.Exp; 0 nothing), and seconds of form-up before commit
+//   Roster        a boss fight's adds: how many the level brings (null: a wave, sent and forgotten)
 //   HullShare     the share of its row's hull each of them is built with
+//   DamageShare   ...and of its level's damage (host-only, as Worth is)
 //   Strength      its LEVEL, which sets its hull and damage on Par's scale (Raider.Strength)
 //   Agility       ...and its speed and turning
 //
@@ -68,8 +74,17 @@ public readonly struct WaveCrew
     public readonly Func<WaveBrief, int> Count;    // how many of them this wave brings
     public readonly Vector2 At;                    // the line's centre, from the squad's spot
     public readonly Vector2 Step;                  // and how far apart they sit along it
-    public WaveCrew(int kind, EnemyWay way, int nth, Func<WaveBrief, int> count, Vector2 at, Vector2 step)
-        => (Kind, Way, Nth, Count, At, Step) = (kind, way, nth, count, at, step);
+    // ...and how far each one off the centre sits BACK (+Y, astern in the squad's frame) for every
+    // step out: 0 is a straight line, 30 a vee with its point forward (Squads.cs flies the shape)
+    public readonly float Sweep;
+    public WaveCrew(int kind, EnemyWay way, int nth, Func<WaveBrief, int> count, Vector2 at, Vector2 step, float sweep = 0f)
+        => (Kind, Way, Nth, Count, At, Step, Sweep) = (kind, way, nth, count, at, step, sweep);
+    // where the i-th of n sits, from its squad's spot, in the squad's own frame (-Y forward)
+    public Vector2 Slot(int i, int n)
+    {
+        float k = i - (n - 1) / 2f;
+        return At + Step * k + new Vector2(0f, Sweep * Mathf.Abs(k));
+    }
 }
 
 // WHAT A WAVE IS BUILT AGAINST: everything a row may ask about the moment it is sent.
@@ -83,6 +98,8 @@ public sealed class WaveBrief
     public Vector2 Origin;        // what the wave forms up around
     public Vector2 Anchor;        // the point a Fan is measured to, and a Spot sits on
     public Node2D Quarry;         // the one thing it hunts, or null for whatever it finds
+    public string Mission;        // the mission kind flying (Missions.Kinds[].Id), for a Garrison row
+    public int Heavies, Lights;   // a rostered squad's share of the roster (Waves.Deal), for its crew's counts
 }
 
 public sealed class WaveDef
@@ -101,7 +118,28 @@ public sealed class WaveDef
     // holding a place wants, so only a blockade fills this in.
     public float Hold;
     public WaveCrew[] Crew;
-    public double HullShare = 1;
+    // HOW ITS SQUADS FLY (Squads.All): null is the patrol's -- hold a ring, take what comes within 2000 u
+    public SquadDoctrine Doctrine;
+    // WHICH MISSION a Garrison row answers (Missions.Kinds[].Id); null answers any. Waves.For
+    // enforces it: without it a bounty's clock would have drawn the siege's rows.
+    public string Mission;
+    // WHAT A KILL OF ONE OF THEM PAYS, x its row's EnemyDef.Exp: 0 (every wave but a boss's adds)
+    // pays nothing. Paid on the first fill only (Raids: a refill's raiders are worth 0).
+    public double Exp;
+    // FORM-UP TIME: >0 spawns each squad this many seconds of its own pace outside its commit range
+    // (Squads.CommitAt), so it is seen coming; 0 is the row's own placement.
+    public double FormFor;
+    // the share of its row's hull each of them is built with (null: 1)
+    public Func<WaveBrief, double> HullShare;
+    // the share of its level's damage each of them deals (null: 1). The host alone deals damage, so it
+    // is set after the spawn and is not on the wire (Raids.Send).
+    public Func<WaveBrief, double> DamageShare;
+    // A ROSTER (a boss fight's adds): how many enemies the level brings in all. Non-null makes the
+    // row a set of SLOTS the arena's clock keeps filled (Raids.TickGarrison) rather than a wave sent
+    // and forgotten: Waves.Deal cuts the roster into squads, slot k comes at k x the mission's
+    // WaveEvery or when the boss's hull falls to 1 - k/slots, and a wiped slot returns WaveEvery later
+    // with the same kinds, paying nothing.
+    public Func<WaveBrief, int> Roster;
     public Func<WaveBrief, double> Strength;      // its level; null: level 1
     public Func<WaveBrief, double> Agility;       // null: x1
 }
@@ -152,18 +190,19 @@ public static class Waves
     }
 
     // ── the two ways a crew row says WHICH enemy ─────────────────────────────
-    private static WaveCrew Draw(EnemyWay way, int nth, Func<WaveBrief, int> count, Vector2 at, Vector2 step)
-        => new(Drawn, way, nth, count, at, step);
+    private static WaveCrew Draw(EnemyWay way, int nth, Func<WaveBrief, int> count, Vector2 at, Vector2 step, float sweep = 0f)
+        => new(Drawn, way, nth, count, at, step, sweep);
     private static WaveCrew Named(int kind, Func<WaveBrief, int> count, Vector2 at, Vector2 step)
         => new(kind, EnemyWay.Pin, 0, count, at, step);
 
-    // THE PLAIN SQUAD: three pinners in a row 40 u apart, and one standoff 90 u behind them.
-    // This was Hub.SpawnPatrol's whole composition, written out in code with `lights` and `heavy`
-    // as arguments -- which is why nothing could ever bring two of either.
+    // THE PLAIN SQUAD: three pinners in a vee -- point (0,-40), wings (+-60,-10) -- and one standoff
+    // close astern at (0,60): every slot within 62 u of the squad's spot. This was Hub.SpawnPatrol's
+    // whole composition, written out in code with `lights` and `heavy` as arguments -- which is why
+    // nothing could ever bring two of either.
     private static readonly WaveCrew[] Patrol =
     {
-        Draw(EnemyWay.Pin, 0, _ => 3, Vector2.Zero, new Vector2(40f, 0f)),
-        Draw(EnemyWay.Standoff, 0, _ => 1, new Vector2(0f, 90f), Vector2.Zero),
+        Draw(EnemyWay.Pin, 0, _ => 3, new Vector2(0f, -40f), new Vector2(60f, 0f), 30f),
+        Draw(EnemyWay.Standoff, 0, _ => 1, new Vector2(0f, 60f), Vector2.Zero),
     };
     // an escort's pinners: as many as its threat asks for, in the same 40 u row
     private static readonly WaveCrew HuntPin =
@@ -193,7 +232,7 @@ public static class Waves
         new() { Id = "hunt", Trigger = WaveTrigger.Hunt, When = b => b.Index % 2 == 0,
                 Squads = 1, SquadsPerPilot = 1,
                 Form = WaveForm.Fan, Turn = 0.35f, Alternate = true,
-                HullShare = HunterHull,
+                HullShare = _ => HunterHull, Doctrine = Squads.Gank,
                 Strength = b => b.Threat, Agility = b => ThreatAgility(b.Threat),
                 Crew = new[] { HuntPin } },
 
@@ -201,7 +240,7 @@ public static class Waves
         new() { Id = "hunt_heavy", Trigger = WaveTrigger.Hunt, When = b => b.Index % 2 == 1,
                 Squads = 1, SquadsPerPilot = 1,
                 Form = WaveForm.Fan, Turn = 0.35f, Alternate = true,
-                HullShare = HunterHull,
+                HullShare = _ => HunterHull, Doctrine = Squads.Gank,
                 Strength = b => b.Threat, Agility = b => ThreatAgility(b.Threat),
                 Crew = new[] { HuntPin, Draw(EnemyWay.Standoff, 0, _ => 1, new Vector2(0f, 90f), Vector2.Zero) } },
 
@@ -211,7 +250,7 @@ public static class Waves
         new() { Id = "hunt_mixed", Trigger = WaveTrigger.Hunt, When = b => b.Index % 2 == 0 && b.Index >= 6,
                 Squads = 1, SquadsPerPilot = 1,
                 Form = WaveForm.Fan, Turn = 0.35f, Alternate = true,
-                HullShare = HunterHull,
+                HullShare = _ => HunterHull, Doctrine = Squads.Gank,
                 Strength = b => b.Threat, Agility = b => ThreatAgility(b.Threat),
                 Crew = new[] { HuntPin, Draw(EnemyWay.Pin, 1, _ => 2, new Vector2(0f, -70f), new Vector2(40f, 0f)) } },
 
@@ -220,7 +259,7 @@ public static class Waves
         new() { Id = "hunt_twin", Trigger = WaveTrigger.Hunt, When = b => b.Index % 2 == 1 && b.Index >= 9,
                 Squads = 1, SquadsPerPilot = 1,
                 Form = WaveForm.Fan, Turn = 0.35f, Alternate = true,
-                HullShare = HunterHull,
+                HullShare = _ => HunterHull, Doctrine = Squads.Gank,
                 Strength = b => b.Threat, Agility = b => ThreatAgility(b.Threat),
                 Crew = new[] { HuntPin,
                                Draw(EnemyWay.Standoff, 0, _ => 1, new Vector2(-60f, 90f), Vector2.Zero),
@@ -231,19 +270,37 @@ public static class Waves
         // default 1, not Waves.HunterHull, and the strength is the mission's own level, not an
         // escort's threat. One squad, and one more for each pilot past the first, off a ring round
         // the thing being besieged.
-        new() { Id = "siege", Trigger = WaveTrigger.Garrison,
+        new() { Id = "siege", Trigger = WaveTrigger.Garrison, Mission = "siege",
                 Squads = 1, SquadsPerPilot = 1,
                 Form = WaveForm.Ring, Radius = GarrisonRing, Turn = 0.35f,
                 Strength = b => b.Level,
                 Crew = Patrol },
 
         // ...AND FROM THE THIRD WAVE ON a gunship comes with each squad.
-        new() { Id = "siege_heavy", Trigger = WaveTrigger.Garrison, When = b => b.Index >= 2,
+        new() { Id = "siege_heavy", Trigger = WaveTrigger.Garrison, Mission = "siege", When = b => b.Index >= 2,
                 Squads = 1, SquadsPerPilot = 1,
                 Form = WaveForm.Ring, Radius = GarrisonRing, Turn = 0.35f,
                 Strength = b => b.Level,
                 Crew = new[] { Patrol[0], Patrol[1],
                                Named(Enemies.Gunship, _ => 1, new Vector2(0f, 160f), Vector2.Zero) } },
+
+        // A BOSS FIGHT'S ADDS (raids v2, owner's rulings): N(L) enemies -- none to L5, one at L6 and
+        // one more every 3 levels to 3 heavies + 9 lights at L39 -- dealt H, L, L, L into squads of a
+        // standoff and three pinners; the boss's first squad brings at least its AddsFloor pinners from
+        // level 1 (the Rusty Bucket's two beam escorts, now its squad wave 1). Each squad draws the
+        // kinds of its SLOT (slot 1 gunship + webifiers, 2 cross + talons, 3 lancerkin + pods), hunts
+        // the loneliest pilot, forms up 10 s of its pace outside its commit range on a fan off the
+        // party -> boss line, and takes the boss's own PARTY multipliers on a raider's curve: its level
+        // (hull x CraftScale, damage x DamageScale), hull x (1 + 0.6(P - 1)), damage x (1 + 0.2(P - 1)).
+        // A first fill pays EXP; a refill never does.
+        new() { Id = "bounty_adds", Trigger = WaveTrigger.Garrison, Mission = "bounty",
+                Roster = b => AddsAt(b.Level), Doctrine = Squads.Gank, FormFor = 10, Exp = 1,
+                Form = WaveForm.Fan, Turn = 0.35f, Alternate = true,
+                Strength = b => b.Level,
+                HullShare = b => Missions.HullMult(b.Level, b.Pilots) / Par.HullScale(b.Level),
+                DamageShare = b => Missions.DamageMult(b.Level, b.Pilots) / Par.DamageScale(b.Level),
+                Crew = new[] { Draw(EnemyWay.Standoff, 0, b => b.Heavies, new Vector2(0f, 60f), Vector2.Zero),
+                               Draw(EnemyWay.Pin, 0, b => b.Lights, new Vector2(0f, -40f), new Vector2(60f, 0f), 30f) } },
 
         // A BLOCKADE -- the plain squad, sitting ON a lane 80% of the way out (Lanes.Stand) and
         // holding a tight ring THERE rather than the perimeter round the base. That is the whole
@@ -265,16 +322,41 @@ public static class Waves
                                Named(Enemies.Gunship, _ => 1, new Vector2(0f, 160f), Vector2.Zero) } },
     };
 
+    // ── THE ADDS' ROSTER ──────────────────────────────────────────────────
+    // N(L): none under level 6, then one more every 3 levels, 12 at the most (3 heavies + 9 lights at L39)
+    public const int AddsFrom = 6, AddsEvery = 3, AddsMax = 12, SquadSize = 4;
+    public static int AddsAt(int level) => level < AddsFrom ? 0 : Math.Min(AddsMax, (level - AddsFrom) / AddsEvery + 1);
+    // DEALT H, L, L, L, H, L, L, L, ...: squad k is (its heavy, its lights). The first squad brings at
+    // least `floor` lights -- a squad of lights alone when the roster brings nothing yet.
+    public static List<(int heavies, int lights)> Deal(int n, int floor = 0)
+    {
+        var squads = new List<(int, int)>();
+        for (int k = 0; k * SquadSize < n; k++)
+            squads.Add((1, Math.Min(SquadSize - 1, n - k * SquadSize - 1)));
+        if (floor > 0)
+        {
+            if (squads.Count == 0) squads.Add((0, floor));
+            else squads[0] = (squads[0].Item1, Math.Max(floor, squads[0].Item2));
+        }
+        return squads;
+    }
+    // SLOT k OF n COMES when its clock is up (k x every), or -- its first fill only -- once the boss's
+    // hull has fallen to 1 - k/n. Slot 0 comes at once.
+    public static bool SlotDue(int k, int n, double t, double every, double bossHull, bool firstFill) =>
+        t >= k * every || (firstFill && k > 0 && n > 0 && bossHull <= 1.0 - (double)k / n);
+
     // How far out a garrison forms up from what it is defending: beyond the four pylons (1200 u)
     // and a pilot at work on one, so a wave is seen coming rather than born on top of the fight.
     public const float GarrisonRing = 2600f;
 
     // THE ROW A TRIGGER MEANS RIGHT NOW: the LAST one that matches, so a row written under
-    // another takes over from it wherever its `When` says yes.
+    // another takes over from it wherever its `When` says yes -- and, for a row that names a
+    // Mission, only for that mission.
     public static WaveDef For(WaveTrigger trigger, WaveBrief b)
     {
         WaveDef found = null;
-        foreach (var d in All) if (d.Trigger == trigger && (d.When == null || d.When(b))) found = d;
+        foreach (var d in All)
+            if (d.Trigger == trigger && (d.Mission == null || d.Mission == b.Mission) && (d.When == null || d.When(b))) found = d;
         return found;
     }
 

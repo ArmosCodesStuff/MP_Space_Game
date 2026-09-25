@@ -24,7 +24,7 @@ using System.Linq;
 //   RING   a circle round the hull for Windup, then everything within Reach
 //   THROW  a body on the flank in a tractor, a lane for Windup, then the body hurled down it
 // Two OPENERS may come before a move's wind-up, and both are numbers rather than paths of their
-// own: ESCORTS (launch them, hold, and charge the moment their web pins) and WARP (a ring where
+// own: a PIN WAIT (hold, and charge the moment any web pins the target) and WARP (a ring where
 // it will land, then the hull there, facing the pilot).
 //
 // A THIRD BOSS WRITES: one Missions.BossType row, and one BossMove[] in a file of its own, as
@@ -79,14 +79,17 @@ public class BossMove
     // point defence, a friend's note. (Not MoveWay.Beam -- that is a move that burns down a line
     // for Live seconds, and it is heard by its Cue and Strike.)
     public int Beam;
-    // THE ESCORT OPENER. Escorts light craft at +-EscortAngle, EscortOut of the hull's HALF-WIDTHS
-    // out from its centre (so a bigger hull launches them as far clear of it), each with
-    // EscortHull hull and boosting for the wind-up. The wind-up then starts on the PIN; with every
-    // escort shot down, WebGrace past when their web was predicted to land; at the outside
-    // WebSlack past that, and never later than ArmMax.
-    public int Escorts, EscortKind;
-    public float EscortAngle, EscortOut;
-    public double EscortHull, WebGrace, WebSlack, ArmMax;
+    // THE PIN OPENER (ArmMax > 0): armed, it holds and faces the pilot, and the wind-up starts on
+    // ANY web on its target -- an add's included (owner, raids v2) -- or ArmMax after arming with
+    // none. The craft that pin come from the fight's own adds (Waves.All "bounty_adds"), never
+    // from the move: its escorts were folded into that squad.
+    public double ArmMax;
+    // THE ESCAPE FLOOR: a wind-up is never shorter than React + StripShare x (the pinners' row
+    // hull on the target) / StripDps + Escape, taken as it starts and again whenever a new pinner
+    // latches during it -- so a pilot who strips the web still has Escape seconds to leave the line
+    // before the first judgement. StripDps is 0.7 x a par pilot's DPS against craft at L1 (57.6);
+    // StripShare prices it on the slowest class (55/46). 0: no floor.
+    public double Escape, React, StripShare, StripDps;
     // THE WARP OPENER. A ring of WarpRing of the hull's HALF-WIDTHS where it will land, Warp
     // seconds, its NOSE Standoff off the nearest pilot (measured from the hull, as HoldOff is).
     public double Warp;
@@ -145,7 +148,7 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
         public BossMove M;
         public double Due;                 // seconds until it may arm
         public Phase At;
-        public double T;                   // the phase's clock: down, except an escort wait
+        public double T;                   // the phase's clock: down, except a pin wait
         public double Next;                // a beam's next judgement
         public int Left;                   // a beam's judgements still to come (BossMove.Judgements)
         public int Fired;                  // how many times it has committed
@@ -154,9 +157,9 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
         public PlayerShip Target;          // the pilot it chose, while it can see one (Sight)
         public Vector2 Spot;               // where it aims: that pilot, or where anyone was last seen
         public readonly HashSet<PlayerShip> Struck = new();   // who a dash has already rammed, this dash
-        public double Predict, Overdue, ArmedFor;   // an escort opener's clock
-        public string Cause = "";                   // what ended the escorts' wait
-        public readonly List<Raider> Escorts = new();
+        public double ArmedFor;                    // a pin opener's wait, when it ended
+        public string Cause = "";                   // what ended it: "pinned" or "overdue"
+        public int Pins;                           // pinners on the target, as the wind-up last saw them
     }
     private Slot[] _slots = System.Array.Empty<Slot>();
     // A move as this level flies it: quicker to wind up, faster in flight, and longer-armed, by
@@ -177,7 +180,7 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
         // (where a thrown body is held goes with the body by construction: FlankHold is the hull's
         // half-width, the body and a gap, so a rock that grows with the level stays clear of it)
         c.Turn = (float)(c.Turn * q);                   // a guided body comes round faster too
-        c.Find = (float)(c.Find * q); c.Standoff = (float)(c.Standoff * q); c.EscortOut = (float)(c.EscortOut * q);
+        c.Find = (float)(c.Find * q); c.Standoff = (float)(c.Standoff * q);
         return c;
     }
 
@@ -246,7 +249,7 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
 
     // WHO IT CAN SEE, AND WHO IT CAN HIT -- two lists, filled once a frame, never one. Stealth
     // (Status.Untargetable) hides a pilot from everything the boss CHOOSES: whom it closes on, whom
-    // a move is aimed at, whom its escorts go after, whom a guided body is given. It hides nobody
+    // a move is aimed at, whom a guided body is given. It hides nobody
     // from what LANDS: a ring, a beam and a ram catch every live pilot under them, seen or not
     // (Targeting.cs). With nobody in sight it closes on, and aims at, the last place it saw anyone;
     // its clocks run on.
@@ -284,7 +287,7 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
                     // at a beam's 10000 u reach, against a beam 70 u wide. A guest would watch
                     // the hit land far outside the line it was shown. Take the host's figures flat;
                     // the boss is standing still and at most turning slowly (to face its target
-                    // while its escorts are out), so there is nothing to smooth.
+                    // while a pin wait holds it), so there is nothing to smooth.
                     Position = _net.Pos; Rotation = _net.Rot;
                 }
                 else _net.Follow(this, dt);
@@ -340,6 +343,7 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
             s.Due -= delta;
             if (s.Due <= 0 && Armable(s)) Arm(s);
             if (s.At == Phase.Opening) Open(s, delta);
+            if (s.At == Phase.Winding) Floor(s, stretch: true);
             if (s.At == Phase.Winding && (s.T -= delta) <= 0) { s.At = Phase.Idle; Land(s); }
             if (s.At == Phase.Firing) Burn(s, delta);
         }
@@ -371,13 +375,9 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
         if (s.Target != null) s.Spot = s.Target.Position;
         else if (m.Find <= 0 && _lastSeen is { } seen) s.Spot = seen;
         else return;
-        if (m.Escorts > 0)
-        {   // ESCORTS OUT -- and the wind-up waits on their web (Open). With nobody in sight there is
-            // nobody to send them after: none go, and the wind-up comes on Open's own fallbacks.
-            double eta = LaunchEscorts(m.Id, s.Target);
+        if (m.ArmMax > 0)
+        {   // ARMED -- and the wind-up waits on a web on its target (Open), ArmMax at the most
             s.At = Phase.Opening; s.T = 0;
-            s.Predict = eta + m.WebGrace;
-            s.Overdue = System.Math.Min(s.Predict + m.WebSlack, m.ArmMax);
             return;
         }
         if (m.Warp > 0)
@@ -415,17 +415,15 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
     private void Open(Slot s, double delta)
     {
         var m = s.M;
-        if (m.Escorts > 0)
+        if (m.ArmMax > 0)
         {   // held in place; turning to face the pilot -- or where it was last seen -- is all it does
             s.T += delta;
             Sight(s);
             Rotation = Mathf.RotateToward(Rotation, Aim.Face(Position, s.Spot), Turning * (float)delta);
-            // A pin counts once THIS cycle's escorts have left the launch point: a pilot still held
-            // by the last cycle's escorts (they never expire) would otherwise skip the whole phase.
-            bool pinned = s.T >= Raider.EscortShiver && s.Target != null && s.Target.Pinned;
-            bool down = !s.Escorts.Any(r => IsInstanceValid(r) && r.Alive);
-            if (!pinned && !(down && s.T >= s.Predict) && s.T < s.Overdue) return;
-            s.Cause = pinned ? "pinned" : s.T >= s.Overdue ? "overdue" : "escorts down";
+            // ANY web on its target starts it: an add's as much as anything else's (owner, raids v2)
+            bool pinned = s.Target != null && s.Target.Pinned;
+            if (!pinned && s.T < m.ArmMax) return;
+            s.Cause = pinned ? "pinned" : "overdue";
             s.ArmedFor = s.T;
         }
         else if ((s.T -= delta) > 0) return;
@@ -439,8 +437,30 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
         // AIMED FROM WHERE IT LANDED: a warp's landing goes through Aimed like every other move,
         // because that is where a dash's line, a ring's centre and a thrown body are worked out.
         Aimed(s);
-        Warn(s); s.At = Phase.Winding; s.T = m.Windup;
+        s.At = Phase.Winding; s.T = m.Windup;
+        Floor(s, stretch: false);
+        Warn(s);
     }
+
+    // THE ESCAPE FLOOR, live: at the charge's start the wind-up is at least the floor for the
+    // pinners on its target; afterwards, each time a NEW pinner latches, what is left of it is at
+    // least that pinner-set's floor. A stretched wind-up redraws its lane for the new length.
+    private void Floor(Slot s, bool stretch)
+    {
+        var m = s.M;
+        if (m.Escape <= 0 || m.StripDps <= 0) return;
+        var (pins, hull) = Squads.PinnersOn(Hub, s.Target);
+        bool fresh = pins > s.Pins;
+        s.Pins = pins;
+        if (stretch && !fresh) return;
+        double floor = pins > 0 ? m.React + m.StripShare * hull / m.StripDps + m.Escape : 0;
+        if (floor <= s.T) return;
+        s.T = floor;
+        // the lane already up would end -- and sound its strike -- early: raised again for what is
+        // left, it replaces that lane on every peer (Hub.AddFx)
+        if (stretch) Warn(s);
+    }
+    public double WindupLeft(string id) => S(id) is { At: Phase.Winding } s ? s.T : 0;
 
     // THE WARNING a move draws, by its way. A beam's and a dash's ride the HULL (the line drawn is
     // the line fired, and it swings with the hull rather than being pinned to the spot the boss
@@ -451,7 +471,9 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
         switch (m.Way)
         {
             case MoveWay.Beam:
-                Lane(m, new Vector2(0, -Length * 0.5f), new Vector2(0, -Length * 0.5f - m.Reach), onHull: true, hold: m.Live);
+                // drawn for the wind-up it really has: the row's, or the escape floor's (Floor)
+                Lane(m, new Vector2(0, -Length * 0.5f), new Vector2(0, -Length * 0.5f - m.Reach), onHull: true, hold: m.Live,
+                     time: s.At == Phase.Winding ? s.T : 0);
                 break;
             case MoveWay.Dash:
                 // THE LANE IS THE HULL'S OWN BEAM: what the ram hits is what the hull covers (Burn)
@@ -565,41 +587,6 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
         return (nose, nose + Vector2.Up.Rotated(Rotation) * (S(id)?.M.Reach ?? 0f));
     }
 
-    // A MOVE'S ESCORTS: EscortAngle to port and to starboard of the nose, EscortOut half-widths out,
-    // straight at the pilot, boosting for the whole wind-up and fragile on purpose (point defence
-    // must be able to kill them inside it). Returns roughly how long until their web should land --
-    // the wind-up's floor if they are all shot down first.
-    // HOW MANY A MOVE LAUNCHES AT THIS LEVEL: its row's own count, and ONE MORE EVERY TEN LEVELS
-    // to a ceiling of five. A move that calls nothing calls nothing however high the level goes, so
-    // this belongs to every boss with escorts rather than to the one that happened to have them
-    // first. They fan across the same arc whatever the count, so five need no new formation.
-    public const int EscortStep = 10, EscortMax = 5;
-    public static int EscortsAt(BossMove m, int level) =>
-        m == null || m.Escorts <= 0 ? 0
-        : System.Math.Min(EscortMax, m.Escorts + System.Math.Max(0, (level - 1) / EscortStep));
-
-    public double LaunchEscorts(string move, Node2D target)
-    {
-        var s = S(move); var m = s?.M;
-        if (!Net.Sim || m == null || target == null || Hub == null) return Raider.EscortShiver;
-        var nose = Vector2.Up.Rotated(Rotation);
-        double eta = 0;
-        int n = EscortsAt(m, Missions.Level);
-        s.Escorts.Clear();
-        for (int k = 0; k < n; k++)
-        {
-            float side = n > 1 ? (2f * k / (n - 1) - 1f) * m.EscortAngle : 0f;
-            var dir = nose.Rotated(Mathf.DegToRad(side));
-            var at = Position + dir * (m.EscortOut * HalfWidth);
-            var r = Hub.SpawnRaider(at, m.EscortKind, 0, Missions.Level);
-            // the one launched to port flanks to port, the other to starboard
-            r?.Escort(target, dir, m.Windup, m.EscortHull * Par.CraftScale(Missions.Level), side < 0 ? -Mathf.Pi / 2f : Mathf.Pi / 2f);
-            if (r != null) s.Escorts.Add(r);
-            eta = System.Math.Max(eta, Raider.WebEta(at.DistanceTo(target.Position)));
-        }
-        return eta;
-    }
-
     // A THROWN BODY: held FlankHold off the keel toward where it aims, a lane Reach long, and the
     // body itself -- the same one on every peer, from one event (ThrownRock). It names the blow it
     // deals, and strikes every live pilot in its lane, seen or not.
@@ -645,8 +632,8 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
     // too -- no per-frame line updates over the wire.
     // width: a move whose warning is as wide as the thing it warns about passes that width here
     // rather than keeping a second copy of it in its row (MoveWay.Throw). 0 means "the row's".
-    private void Lane(BossMove m, Vector2 a, Vector2 b, bool onHull = false, double hold = 0, float width = 0) =>
-        Fx.Warn(new FxRaise { Id = Fx.WarnLane, At = a, To = b, Size = width > 0 ? width : m.Width, Time = m.Windup, Hold = hold,
+    private void Lane(BossMove m, Vector2 a, Vector2 b, bool onHull = false, double hold = 0, float width = 0, double time = 0) =>
+        Fx.Warn(new FxRaise { Id = Fx.WarnLane, At = a, To = b, Size = width > 0 ? width : m.Width, Time = time > 0 ? time : m.Windup, Hold = hold,
                               Anchor = onHull ? NetId : Fx.World, Cue = m.Cue, Strike = m.Strike });
     private void Zone(Vector2 at, float radius, double time, string cue, string strike) =>
         Fx.Warn(new FxRaise { Id = Fx.WarnZone, At = at, To = at, Size = radius, Time = time, Cue = cue, Strike = strike });

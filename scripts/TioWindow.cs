@@ -79,6 +79,7 @@ public partial class TioWindow : PanelContainer
                           + (first ? $" + {Missions.FirstClearExp} first clear" : "") + $" + {Missions.CompletionExp} completing, "
                         : $"You: NO EXP -- level {lv} is under half your level {Character.Level}, ")
                      + $"{Missions.BountyEach(Missions.Kind, lv, party):0} credits each.\n"
+                     + (worth ? AddsLine(lv, Character.Level) + "\n" : "")
                      + $"Parts: {Loot.CratesFor(lv)} crates, yours alone ({(lv <= 5 ? "Common" : lv <= 10 ? "Common or Rare" : "Common, Rare or Epic")}).");
         Ui.SetText(_party, string.Join("\n", Hub.PartyIds.OrderBy(i => i).Select(i => $"  {Hub.PilotName(i)}   {(Hub.IsReady(i) ? "READY" : "not ready")}")));
         bool mine = Hub.IsReady(Net.LocalId);
@@ -92,5 +93,13 @@ public partial class TioWindow : PanelContainer
             _ => waiting > 0 ? $"Waiting for {waiting} pilot(s) to press READY. READY flies you to the portal."
                : away > 0 ? $"Waiting for {away} pilot(s) to reconnect (their places are held 90 s)." : "Everyone is ready.",
         });
+    }
+
+    // WHAT A BOSS FIGHT'S ADDS PAY THIS PILOT, from the rows: the best light's and the best heavy's
+    // EnemyDef.Exp (by tag) through the one kill formula (Missions.ExpFor); a refill pays nothing
+    public static string AddsLine(int level, int pilotLevel)
+    {
+        int Of(Tag t) => Missions.ExpFor(Enemies.All.Where(e => (e.Tag & t) != 0).Max(e => e.Exp), level, pilotLevel);
+        return $"Adds: {Of(Tag.Light)} EXP a light, {Of(Tag.Heavy)} a heavy, the first time they come.";
     }
 }

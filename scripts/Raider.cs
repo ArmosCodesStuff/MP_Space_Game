@@ -4,32 +4,22 @@ using Godot;
 // RAIDERS -- enemy fighters. Host-simulated; guests draw them from the host's
 // 10 Hz state. They are hostile: selectable, and every player weapon can hit them.
 //
-//   LIGHT (a webifier): cruises as slow as an unupgraded capital ship, then, once
-//   within BoostAt of its target, boosts to 500% for 3 s -- which lands it at its post
-//   rather than on top of the target. Lights hold posts AHEAD, LEFT and RIGHT of the
-//   target (by its heading), 90 u out: inside 90% of their 100 u reach, so they never
-//   lose damage to repositioning. Held there, a light PINS its target: the target is
-//   kept to 20% of its top speed, thrusting forward, unable to turn -- a soft lock.
-//   It fires a 1 DPS laser (the raider damage "x").
-//
-//   HEAVY: a snub-nosed gunship -- 4x a light's length, TWO barrels on its one turret (F20),
-//   drawn as two flashes from either side of it. It waits at the MAP'S EDGE nearest its target,
-//   facing it, until the target is pinned; then it boosts at 700% until 300 u away, and closes at
-//   cruise to 135 u off the hull, astern, where it fires a short, hard laser: both barrels at once,
-//   2.58x the raider damage. ONLY WHILE ITS TARGET IS PINNED, within its own row's missile reach
-//   (a gunship's 500 u) it also fires a fat missile at where the target WILL be when its row's
-//   flight ends (its speed carried forward; EnemyDef.MissileFlight): a red circle marks the spot
-//   for the whole flight, and the blast lands there -- move off the line and it misses.
-//
-// Targets: the nearest player ship, miner, salvager or hauler -- except a HUNTER, sent after
-// one quarry (the hauler on an escort), which goes for its quarry while it is there.
-//
-// PATROLS: 3 lights and 1 heavy circle a perimeter round the base (1800 u out) together.
-// When a target comes within 2000 u of the patrol, its lights break off to tackle it, and
-// its heavy takes the SAME target and waits astern for the pin. (A raider on its own,
-// in no patrol, simply goes for the nearest target.)
+// EVERY RAIDER FLIES IN A SQUAD (Squads.cs), a squad of one included (doctrine "lone"). The squad
+// picks the target, holds the formation, decides the commit and the post; this file flies one
+// member of it and fires its guns:
+//   IN FORMATION  it flies its slot off the squad's anchor, at up to CatchUp x its cruise.
+//   COMMITTED     it flies to its post on the target -- a pinner AHEAD / LEFT / RIGHT and on round the
+//                 bow (Front), a standoff astern (Rear) -- every member timed to arrive together, on
+//                 the boost unless the squad burned inside Reboost; posted, it keeps station at no
+//                 more than that speed (a warp never throws it across the map in one frame).
+//   LATCHED       within 12 u of its post and within reach of the hull. A PINNER puts its row's Cc on
+//                 what it holds (Pinned: a fifth of its speed, thrusting, unable to turn) and fires
+//                 its 1 DPS laser (the raider damage "x"). A STANDOFF never holds anything: from
+//                 astern it fires both barrels (2.58x the raider damage) whether or not the target is
+//                 pinned, and its row's missile -- only at a PINNED target -- lands where the target
+//                 WILL be when the row's flight ends (EnemyDef.MissileFlight): a red circle marks it.
 // ─────────────────────────────────────────────────────────────────────────────
-public partial class Raider : Node2D, IHittable, ITagged, IStatused
+public partial class Raider : Node2D, IHittable, ITagged, IStatused, ISquadMember
 {
     public Hub Hub;
     // WHICH enemy this is: a row of Enemies.All. The index is what goes on the wire.
@@ -55,10 +45,18 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
     // Speed and turning, x: an escort's hunters fly a very little quicker the harder the escort
     // (Hub.ThreatAgility). The host flies every raider; guests follow where it says.
     public double Agility = 1;
+    // HOST-ONLY BOOKKEEPING, set at the spawn as Agility is (Raids.Send): the level it was sent at,
+    // and what shooting it down pays each pilot before the level rule (Missions.ExpFor) --
+    // EnemyDef.Exp x WaveDef.Exp on a first fill, 0 on a refill and on everything else.
+    public int Level = 1;
+    public double Worth;
+    // ...and the share of its level's damage it deals (WaveDef.DamageShare: a boss's adds take the
+    // party's damage multiplier). Host-only: only the host strikes.
+    public double DamageShare = 1;
     private HullWatch _hullWatch;
     public double MaxHull => Def.Hull * Par.CraftScale(Strength) * HullShare;
     // ONE VOLLEY, every barrel at once (F20), on its level's damage scale: what each laser Strike carries
-    public double Volley => Def.Dps * Def.Barrels * Def.ShotEvery * Par.DamageScale(Strength);
+    public double Volley => Def.Dps * Def.Barrels * Def.ShotEvery * Par.DamageScale(Strength) * DamageShare;
     public float HitRadius => Length * Def.HitShare;
     public bool Selectable => true;
 
@@ -68,79 +66,65 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
     public static float HeavyLength => Enemies.Of(Enemies.Gunship).Length;
     public static double RaiderDps => Enemies.Of(Enemies.Webifier).Dps;          // x -- the game's damage unit
     public static double HeavyDps => Enemies.Of(Enemies.Gunship).Dps * Enemies.Of(Enemies.Gunship).Barrels;
-    public static float HeavyReach => Enemies.Of(Enemies.Gunship).Reach;
-    private const float HeavyBoostStop = 300f;          // boosting in, until this close, then at cruise
     // THE MISSILE IS THE ROW'S: EnemyDef.MissileRange / MissileEvery / MissileDamage / MissileFlight /
     // BlastRadius, read through Def (F20: each row its own flight -- the Lancerkin's own point is
     // standing off further, so its flight need not match the gunship's).
     // HOW a predicted missile flies, telegraphs and lands is Missiles.cs, whosever it is: the
     // outposts throw the same one back (Lanes.cs), which is why none of it is in this file.
     public static float BlastRadius => Enemies.Of(Enemies.Gunship).BlastRadius;
-    public const float PerimeterR = 1800f, Detect = 2000f, PatrolSpeed = 100f;
-    public int Patrol;                                 // 0: on its own
-    // WHERE IT WAITS with nothing to fight: a ring of Circuit round Station. The base's own
-    // perimeter, unless its wave row named a place to hold (WaveDef.Hold) -- a blockade sits ON
-    // the lane it is cutting rather than drifting round the base. The host's own bookkeeping, set
-    // at the spawn exactly as Quarry and Agility are; a guest is told where it IS, which is all a
-    // guest needs.
-    public Vector2 Station = Hub.BasePos;
-    public float Circuit = PerimeterR;
-    private float _orbit;                              // patrols: its angle round that ring
     public static float PinRange => Enemies.Of(Enemies.Webifier).Reach;
-    // How far out a raider of THIS kind lights its boost: far enough that the burn ends at its
-    // post rather than on top of the target.
-    private float BoostAtMine => Def.Cruise * Def.BoostMult * (float)Def.BoostTime + Def.Reach;
-    public static float BoostAt                        // the webifier's: 1600 u
+    // THE WEBIFIER'S COMMIT RANGE: 1600 u (3 s at 500%, plus its 100 u reach)
+    public static float BoostAt
     {
         get { var d = Enemies.Of(Enemies.Webifier); return d.Cruise * d.BoostMult * (float)d.BoostTime + d.Reach; }
     }
-    static readonly float[] Posts = { 0f, -Mathf.Pi / 2f, Mathf.Pi / 2f };               // ahead, left, right
 
-    public Node2D Target { get; private set; }
-    // WHAT WENT DARK ON IT. A raider re-decides only when its target stops being valid, so a ship
-    // that turned invisible for five seconds used to hand it a miner 3000 u away FOR EVER: the new
-    // target stayed valid, nothing ever looked back, and one press of stealth sent the whole wave
-    // at the base's fleet permanently. It keeps what it lost and takes it back the moment it can
-    // see it again -- five seconds of losing you, not a handover.
-    private Node2D _dark;
-    public Node2D Quarry;                         // a hunter's: set by the host at the spawn
-    // An ESCORT (launched by a boss): its target is set, its boost lasts until it is posted
-    // (or `boostFor` runs out), and it is fragile.
-    public bool IsEscort { get; private set; }
-    public const double EscortShiver = 1.0;            // hangs at the launch point, shaking, coming round onto the pilot
-    private const float EscortShake = 3f;               // how far the shiver throws it
-    private const float EscortPlume = 3f;               // its boost plume: three times the usual reach
-    private double _shiver; private Vector2 _shiverHome; private float _escortPost;
-    // An ESCORT (launched by a boss): it hangs at the launch point shivering while its nose comes
-    // round onto the pilot, then breaks into a long boost and flanks -- one to PORT, one to
-    // STARBOARD, holding station the way a raid's lights do. Fragile on purpose.
-    public void Escort(Node2D target, Vector2 launchDir, double boostFor, double hull, float post)
+    // ── ITS SQUAD (host only; a guest's raiders have none) and what the squad reads of it ──
+    public Squad Squad;
+    public bool Pins => Def.Cc != null;
+    public float Cruise => Def.Cruise * (float)Agility;
+    public float Burn => Def.Cruise * Def.BoostMult * (float)Agility;
+    public float CommitRange => Def.Cruise * Def.BoostMult * (float)Def.BoostTime + Def.Reach;
+    public float Hold => Def.Hold;
+    // WHAT IT IS AFTER is its squad's, and so is a hunter's quarry (set by the host at the spawn)
+    public Node2D Target => Squad?.Target;
+    public Node2D Quarry
     {
-        Target = target; IsEscort = true; _boostUsed = true; _boostLeft = boostFor; Hp = hull;
-        Rotation = Aim.Along(launchDir);
-        _shiver = EscortShiver; _shiverHome = Position; _escortPost = post;
-    }
-    public bool Shivering => Net.Sim ? _shiver > 0 : (_netFlags & FlagShiver) != 0;
-    // Roughly when an escort launched now would have its web on the target: the shiver, then the
-    // run in at boost speed. A PREDICTION, not a promise -- the pilot may shoot it down first. The
-    // Lancer charges on the actual pin; this is only its floor when every escort is shot down, and
-    // (plus a second, at most 5 s) its deadline when they neither pin nor die.
-    public static double WebEta(float distance)
-    {
-        var d = Enemies.Of(Enemies.Webifier);
-        return EscortShiver + distance / (d.Cruise * d.BoostMult);
+        get => Squad?.Quarry;
+        set { if (Squad != null) Squad.Quarry = value; }
     }
     public bool Latched { get; private set; }
-    public bool Boosting => Net.Sim ? _boostLeft > 0 : (_netFlags & FlagBoost) != 0;
+    public bool Boosting => Net.Sim ? _boosting : (_netFlags & FlagBoost) != 0;
     public float Speed { get; private set; }
-    private double _boostLeft, _shot, _missileCd = 2.0;
+    private bool _boosting;
+    private double _shot, _missileCd = 2.0;
     private Lead _lead;                                // what its target is doing (Missiles.cs)
     private Sprite2D _turret;
     private const float TurretPixels = 66f;            // turret_main.png is 66 px across: the ART's figure, not an enemy's
-    private bool _boostUsed;
     private NetPose _net;
     private Vector2? _tether;                          // guests: where the web goes
     private Sprite2D _sprite;
+
+    // ITS ROW'S NAME under the hull, for SquadSight.NameShow s: when its squad enters this peer's
+    // view, and again as it commits -- with a web glyph when the row has a Cc. On every peer: it
+    // reads the packet's bits and this peer's own screen. The range to a selected raider drops
+    // below the name while it shows (LabelDrop).
+    private double _nameT;
+    private bool _inView, _wasLocking;
+    public double NameLeft => _nameT;
+    public float LabelDrop => _nameT > 0 ? 22f + 13f : 0f;
+    private void TickName(double delta)
+    {
+        _nameT = System.Math.Max(0, _nameT - delta);
+        bool inView = GetViewportRect().HasPoint(GetGlobalTransformWithCanvas().Origin), locking = Locking;
+        if (inView && !_inView && Hub != null)
+        {   // coming into view names its whole squad, the ones still off the screen with it
+            foreach (var r in Hub.Raiders)
+                if (ReferenceEquals(r, this) || (SquadId != 0 && r.SquadId == SquadId)) r._nameT = SquadSight.NameShow;
+        }
+        if (locking && !_wasLocking) _nameT = SquadSight.NameShow;
+        _inView = inView; _wasLocking = locking;
+    }
 
     public override void _Ready()
     {
@@ -161,13 +145,21 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
         Combat.Hostiles.Add(this);
     }
     // (the blow that finishes it is shown as it goes: it leaves before its next frame)
-    public override void _ExitTree() { _hullWatch.Tick(this, System.Math.Max(0, Hp), taken: false); Combat.Hostiles.Remove(this); }
+    public override void _ExitTree()
+    {
+        _hullWatch.Tick(this, System.Math.Max(0, Hp), taken: false); Combat.Hostiles.Remove(this);
+        Squad?.Leave(this);                       // its post and slot go with it (invariant A)
+    }
 
     public void TakeDamage(double d)
     {
         if (!Net.Sim || !Alive) return;
         Hp -= d;
-        if (Hp <= 0) Hub.RaiderDown(this);
+        if (Hp > 0) return;
+        // SHOT DOWN, and only here: a boss's death sweeps its adds out through RaiderDown with their
+        // hull left, and a withdrawn hunter goes quietly -- neither is a kill, so neither pays
+        if (Worth > 0) Hub.PayKill(Worth, Level);
+        Hub.RaiderDown(this);
     }
 
     // ── what a raid can reach, and what a raider can go after ──
@@ -179,7 +171,7 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
     // How far the target's hull reaches from its centre along `dir`: an ellipse with the
     // hull's half-length and half-width. Posts and reach are measured from the HULL, so a
     // raider holds station beside a long ship, never on top of its bow.
-    private static float Extent(Node2D t, Vector2 dir)
+    public static float Extent(Node2D t, Vector2 dir)
     {
         var (len, wid) = t is IRaidTarget r ? r.Extent : (20f, 12f);
         var fwd = Vector2.Up.Rotated(t.Rotation); var side = new Vector2(-fwd.Y, fwd.X);
@@ -200,6 +192,7 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
     {
         float dt = (float)delta;
         _hullWatch.Tick(this, System.Math.Max(0, Hp), taken: false);
+        TickName(delta);
         if (!Net.Sim)
         {
             _net.Follow(this, dt);
@@ -208,149 +201,55 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
         }
         if (!Alive) return;
         _status.Tick(delta);
-        if (_status.Has(Status.Disabled)) { Speed = 0; QueueRedraw(); return; }   // stunned: it sits there
-        if (_dark != null && !GodotObject.IsInstanceValid(_dark)) _dark = null;
-        if (!Up(Target))
-        {
-            if (Target != null && GodotObject.IsInstanceValid(Target) && Targeting.Hidden(Target)) _dark = Target;
-            Target = Choose(); Latched = false; _boostUsed = false;
+        _boosting = false;
+        if (_status.Has(Status.Disabled) || Squad == null) { Speed = 0; Latched = false; QueueRedraw(); return; }   // stunned: it sits there
+        var from = Position;
+        var t = Target;
+        if (t != null) _lead.Watch(t.Position, delta);   // the one tracker every predicted missile reads (Missiles.Lead)
+        if (!Squad.Posted(this))
+        {   // IN FORMATION: its slot off the anchor, catching up at CatchUp x its cruise
+            Latched = false;
+            var slot = Squad.SlotOf(this);
+            float d = Position.DistanceTo(slot);
+            Position = Position.MoveToward(slot, Mathf.Min(Squad.Doctrine.CatchUp * Cruise, d * 6f + Squad.Moving) * dt);
+            float face = t != null ? Aim.Face(Position, t.Position) : Squad.Moving > 0 ? Squad.Heading : Rotation;
+            Rotation = Mathf.LerpAngle(Rotation, face, Mathf.Clamp(6f * (float)Agility * dt, 0f, 1f));
         }
-        else if (_dark != null && !ReferenceEquals(_dark, Target) && Up(_dark))
-        {   // it is back: so is the hunt, from wherever this took it
-            Target = _dark; Latched = false; _boostUsed = false;
+        else
+        {   // COMMITTED: to its post, every member timed to land together; posted, station kept at
+            // no more than its top speed
+            var post = Squad.PostOf(this);
+            float top = Squad.Top(this), d = Position.DistanceTo(post);
+            float step = Latched ? top : Mathf.Min(top, d / (float)System.Math.Max(Squad.Left, 1.0 / 60));
+            Position = Position.MoveToward(post, step * dt);
+            Latched = Position.DistanceTo(post) < 12f && Gap(Position, t) <= Def.Reach;
+            Rotation = Mathf.LerpAngle(Rotation, Aim.Face(Position, t.Position), Mathf.Clamp(8f * (float)Agility * dt, 0f, 1f));
         }
-        if (ReferenceEquals(_dark, Target)) _dark = null;
-        if (Target == null) { Speed = 0; if (Patrol != 0) Circle(delta); QueueRedraw(); return; }
-        // its target's velocity, from frame to frame -- the one tracker every predicted missile in
-        // the game reads (Missiles.Lead), jump filter and all
-        _lead.Watch(Target.Position, delta);
-        if (Heavy) { TickHeavy(delta); QueueRedraw(); return; }
-
-        if (_shiver > 0)
-        {   // shaking on the spot, nose swinging onto the pilot -- then it lights up and goes
-            _shiver -= delta;
-            float ms = Time.GetTicksMsec();
-            Position = _shiverHome + new Vector2(Mathf.Sin(ms * 0.061f), Mathf.Cos(ms * 0.083f)) * EscortShake;
-            var onto = Aim.Face(Position, Target.Position);
-            Rotation = Mathf.LerpAngle(Rotation, onto, Mathf.Clamp(6f * dt, 0f, 1f));
-            Speed = 0;
-            QueueRedraw();
-            return;                                   // the boost is not spent while it sits here
-        }
-
-        // My post around the target: ahead, left or right by its heading, 90 u out. An escort
-        // keeps the side it was launched on instead of taking a slot, so the pair always flanks.
-        //
-        // The slot is my rank by NetId among the raiders sharing this target -- counted, not
-        // sorted. This ran as Where + OrderBy + ToList + IndexOf EVERY FRAME FOR EVERY LIGHT, so
-        // a raid of two patrols did six list allocations and six sorts over the whole raider list
-        // per frame. Counting lower NetIds gives the identical index with no allocation at all.
-        int slot = 0;
-        foreach (var r in Hub.Raiders)
-            if (r != this && r.Alive && !r.IsEscort && r.Target == Target && r.NetId < NetId) slot++;
-        slot %= Posts.Length;
-        var postDir = Vector2.Up.Rotated(Target.Rotation + (IsEscort ? _escortPost : Posts[slot]));
-        var post = Target.Position + postDir * (Extent(Target, postDir) + Def.Hold);
-        float toTarget = Position.DistanceTo(Target.Position);
-
-        if (!_boostUsed && toTarget <= BoostAtMine) { _boostUsed = true; _boostLeft = Def.BoostTime; }
-        _boostLeft = System.Math.Max(0, _boostLeft - delta);
-        if (IsEscort && Latched) _boostLeft = 0;                          // posted: the long boost is over
-        float top = (Boosting ? Def.Cruise * Def.BoostMult : Def.Cruise) * (float)Agility;
-        float d = Position.DistanceTo(post);
-        Speed = Mathf.Min(top, d * 6f);                                       // ease onto the post
-        // once posted it keeps station however the target moves
-        Position = Position.MoveToward(post, (Latched ? Mathf.Max(top, d * 12f) : Speed) * dt);
-        Latched = Position.DistanceTo(post) < 12f && Gap(Position, Target) <= Def.Reach;
-        var face = Aim.Face(Position, Target.Position);
-        Rotation = Mathf.LerpAngle(Rotation, face, Mathf.Clamp(8f * (float)Agility * dt, 0f, 1f));
-
+        Speed = dt > 0 ? from.DistanceTo(Position) / dt : 0f;
+        _boosting = Squad.Posted(this) && Squad.Burning && Speed > Cruise + 1f;   // the burn, not a catch-up
+        if (t == null) { QueueRedraw(); return; }
+        bool pinned = t is IStatused st && st.Statuses.Has(Status.Pinned);
+        if (_turret != null) _turret.GlobalRotation = Aim.Face(Position, t.Position);        // its one turret tracks the target
         if (Latched)
         {
-            // WHAT A LATCH APPLIES (F20): the row's own Cc, not a name hardcoded here -- a
-            // Standoff row (the heavies) never latches this way, so it never names one.
-            if (Def.Cc is { } cc) (Target as IRaidTarget)?.ApplyStatus(cc, 0.25);
+            // WHAT A LATCH APPLIES (F20): the row's own Cc -- a standoff row names none, at any level
+            if (Def.Cc is { } cc) (t as IRaidTarget)?.ApplyStatus(cc, 0.25);
             _shot -= delta;
-            if (_shot <= 0)
+            if (_shot <= 0 && (Pins || !Squad.Doctrine.LaserNeedsPin || pinned))
             {
                 _shot = Def.ShotEvery;
-                Strike(Target, Volley);
-                Combat.Flash(Position, Target.Position, Def.Beam);
-            }
-        }
-        QueueRedraw();
-    }
-
-    // what to go after: alone, the nearest target; in a patrol, only once one is within
-    // 2000 u of the patrol -- and a patrol's heavy takes whatever its lights have taken
-    private Node2D Choose()
-    {
-        if (Up(Quarry)) return Quarry;
-        // everything a raid can reach, seen or not: a raider picks only what it can see (Up)
-        if (Patrol == 0) return Combat.Nearest(Hub.RaiderTargets(), Position, t => t.Position, ok: Up);
-        if (!Heavy && Combat.Nearest(Hub.RaiderTargets(), Position, t => t.Position, Detect, Up) is { } near) return near;
-        foreach (var r in Hub.Raiders)                                           // a mate spotted one
-            if (r != this && r.Patrol == Patrol && r.Alive && !r.Heavy && Up(r.Target)) return r.Target;
-        return null;
-    }
-
-    // a patrol with nothing to do circles the ring it was given, together: the perimeter round
-    // the base, or -- for a blockade -- a tight ring on the lane it is holding (Station/Circuit)
-    private void Circle(double delta)
-    {
-        float dt = (float)delta;
-        if (_orbit == 0f) _orbit = (Position - Station).Angle();
-        _orbit += PatrolSpeed / Mathf.Max(1f, Circuit) * dt;
-        var spot = Station + Vector2.Right.Rotated(_orbit) * Circuit;
-        var step = spot - Position;
-        Position = Position.MoveToward(spot, PatrolSpeed * 1.5f * dt);     // catches its moving spot, at a believable pace
-        if (step.Length() > 1f) Rotation = Mathf.LerpAngle(Rotation, Aim.Along(step), Mathf.Clamp(4f * dt, 0f, 1f));
-        Speed = PatrolSpeed;
-    }
-
-
-    // the heavy: wait at the map's edge until the target is pinned, then boost in; missiles within 500 u
-    public static Vector2 EdgeSpot(Vector2 target) =>
-        Hub.BasePos + ((target - Hub.BasePos).LengthSquared() > 1f ? (target - Hub.BasePos).Normalized() : Vector2.Right) * Hub.RaidEdge;
-    private void TickHeavy(double delta)
-    {
-        float dt = (float)delta;
-        var astern = -Vector2.Up.Rotated(Target.Rotation);                    // it comes in from the rear
-        bool pinned = Target is IStatused st && st.Statuses.Has(Status.Pinned);
-        var dest = pinned ? Target.Position + astern * (Extent(Target, astern) + Def.Hold)
-                          : EdgeSpot(Target.Position);                        // patient, at the map's edge nearest it
-        float top = (pinned && Position.DistanceTo(Target.Position) > HeavyBoostStop ? Def.Cruise * Def.BoostMult : Def.Cruise) * (float)Agility;
-        float d = Position.DistanceTo(dest);
-        Speed = Mathf.Min(top, d * 6f);
-        Position = Position.MoveToward(dest, Speed * dt);
-        var face = Aim.Face(Position, Target.Position);
-        Rotation = Mathf.LerpAngle(Rotation, face, Mathf.Clamp(4f * (float)Agility * dt, 0f, 1f));
-        if (_turret != null) _turret.GlobalRotation = face;                  // its one turret tracks the target
-        Latched = pinned && Gap(Position, Target) <= Def.Reach;
-        if (Latched)
-        {
-            _shot -= delta;
-            if (_shot <= 0)
-            {
-                _shot = Def.ShotEvery;       // 1 s: slower than a target's 0.52 s invulnerability, so no shot is wasted
                 // ONE Strike per volley carries every barrel's damage (F20): two separate Strikes,
                 // 0.52 s apart or not, would be eaten by the target's own hit gap and undercount.
-                Strike(Target, Volley);
-                if (Def.Barrels > 1 && _turret != null)
-                {   // drawn as that many flashes, from barrel offsets either side of the turret's centre
-                    var side = Vector2.Right.Rotated(face) * (Length * Def.TurretWidth * 0.5f);
-                    var centre = ToGlobal(_turret.Position);
-                    Combat.Flash(centre + side, Target.Position, Def.Beam);
-                    Combat.Flash(centre - side, Target.Position, Def.Beam);
-                }
-                else Combat.Flash(ToGlobal(_turret?.Position ?? Vector2.Zero), Target.Position, Def.Beam);
+                Strike(t, Volley);
+                DrawVolley(t);
             }
         }
         _missileCd -= delta;
         // HELD while a status holds its throw (StatusSet.HoldsThrow): the clock keeps its zero, and
-        // it throws the frame the status lapses. ONLY AT A PINNED TARGET (F20): a heavy waiting at
-        // the map's edge throws nothing at a target that is not pinned.
-        if (Def.Missiles && pinned && _missileCd <= 0 && !_status.HoldsThrow && Position.DistanceTo(Target.Position) <= Def.MissileRange)
+        // it throws the frame the status lapses. ONLY AT A PINNED TARGET (the doctrine's row), by
+        // anyone's web: a free pilot is never lobbed at.
+        if (Def.Missiles && (pinned || !Squad.Doctrine.MissileNeedsPin) && _missileCd <= 0 && !_status.HoldsThrow
+            && Position.DistanceTo(t.Position) <= Def.MissileRange)
         {   // at where it WILL be: its velocity carried the whole flight forward -- from ITS row's
             // reach, on its row's cadence, for its row's damage
             _missileCd = Def.MissileEvery;
@@ -361,36 +260,90 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
             // (A boss's projectiles DO scale; that is Missions.Quicken, and it is a boss.)
             Hub.ThrowMissile(new MissileSpec { Side = Missiles.Raid, Damage = Def.MissileDamage,
                                               Blast = Def.BlastRadius, Flight = Def.MissileFlight },
-                             Position, Missiles.Predict(Target.Position, _lead.Velocity, Def.MissileFlight), NetId);
+                             Position, Missiles.Predict(t.Position, _lead.Velocity, Def.MissileFlight), NetId);
         }
+        QueueRedraw();
     }
 
-    // Boosting and Shivering are read by _Draw and were host-only, so a guest drew neither the
-    // escorts' triple-length plume nor any raider's boost plume -- the plume was single-player.
-    // Two bits on the same packet that already carries position; a whole array for two booleans
-    // would cost more than the state it replicates.
-    public const int FlagBoost = 1, FlagShiver = 2;
-    public int NetFlags => (Boosting ? FlagBoost : 0) | (Shivering ? FlagShiver : 0);
+    // A volley, drawn: a light fires from its nose; a turret fires Barrels flashes from offsets
+    // either side of its centre
+    private void DrawVolley(Node2D t)
+    {
+        if (_turret == null) { Combat.Flash(Position, t.Position, Def.Beam); return; }
+        var centre = ToGlobal(_turret.Position);
+        if (Def.Barrels <= 1) { Combat.Flash(centre, t.Position, Def.Beam); return; }
+        var side = Vector2.Right.Rotated(_turret.GlobalRotation) * (Length * Def.TurretWidth * 0.5f);
+        Combat.Flash(centre + side, t.Position, Def.Beam);
+        Combat.Flash(centre - side, t.Position, Def.Beam);
+    }
+
+    // WHERE A HUNT FORMS UP (Raids.Hunt): the map's edge nearest its quarry, as seen from the base
+    public static Vector2 EdgeSpot(Vector2 target) =>
+        Hub.BasePos + ((target - Hub.BasePos).LengthSquared() > 1f ? (target - Hub.BasePos).Normalized() : Vector2.Right) * Hub.RaidEdge;
+
+    // WHAT A GUEST NEEDS TO DRAW IT, on the packet that already carries its position: the boost
+    // (its plume), whether it LEADS its squad (link lines), whether it is COMMITTING (lock lines),
+    // and its squad's id in bits 8-23 (grouping). The bit values are literals the harness asserts.
+    public const int FlagBoost = 1, FlagLead = 4, FlagLock = 8, SquadShift = 8, SquadMask = 0xFFFF;
+    public int NetFlags => !Net.Sim ? _netFlags
+                         : (Boosting ? FlagBoost : 0)
+                         | (Squad != null && Squad.Members.Count > 1 && ReferenceEquals(Squad.Leader, this) ? FlagLead : 0)
+                         | (Squad != null && Squad.Posted(this) && !Latched ? FlagLock : 0)
+                         | ((Squad?.Id ?? 0) & SquadMask) << SquadShift;
+    public bool Leads => (NetFlags & FlagLead) != 0;
+    public bool Locking => (NetFlags & FlagLock) != 0;
+    public int SquadId => (NetFlags >> SquadShift) & SquadMask;
     private int _netFlags;
     public void SetNet(Vector2 p, float rot, double hp, Vector2? tether, int flags)
     {
         if (!_net.Has) _hullWatch = default;       // the host's first figure is where this peer starts counting
         _net.Set(p, rot); Hp = hp; _tether = tether; _netFlags = flags;
     }
-    public Vector2? TetherTo => Net.Sim ? (Latched && Up(Target) ? Target.Position : null) : _tether;
+    // WHERE ITS LINE GOES: what it holds, or -- committing -- what it is closing on
+    public Vector2? TetherTo => Net.Sim ? ((Latched || Locking) && Up(Target) ? Target.Position : null) : _tether;
 
     public override void _Draw()
     {
-        if (TetherTo is { } to)   // the web: a faint red line to what it holds
+        var inv = GlobalTransform.AffineInverse();
+        if (TetherTo is { } to)
         {
-            var inv = GlobalTransform.AffineInverse();
-            DrawLine(Vector2.Zero, inv * to, new Color(1f, 0.3f, 0.25f, 0.35f), 1.5f);
+            if (Locking)
+            {   // COMMITTING: a dashed red lock line converging on the victim for the burn
+                var end = inv * to; int dashes = Mathf.Clamp((int)(end.Length() / 24f), 1, 80);
+                for (int i = 0; i < dashes; i += 2)
+                    DrawLine(end * (i / (float)dashes), end * ((i + 1) / (float)dashes), new Color(1f, 0.25f, 0.2f, 0.7f), 2f);
+            }
+            else if (Pins) DrawLine(Vector2.Zero, inv * to, new Color(1f, 0.3f, 0.25f, 0.35f), 1.5f);   // the web; a heavy draws none
         }
-        // a flame out of every bell its art has (its row's Nozzles)
+        else if (!Leads && SquadId != 0 && SquadLead() is { } lead)
+            DrawLine(Vector2.Zero, inv * lead.GlobalPosition, new Color(1f, 0.4f, 0.35f, 0.25f), 1f);   // in formation: a faint link to its lead
+        // a flame out of every bell its art has (its row's Nozzles): the burn on the boost
         var flame = new Color(1f, 0.35f, 0.25f);
-        // an escort's run-in is unmistakable: it goes on the boost with a plume three times over
-        if (Boosting && IsEscort && !Shivering) Def.DrawPlumes(this, Vector2.Zero, 1f, flame, 1f, true, EscortPlume);
-        else if (Boosting || (Heavy && Speed > Def.Cruise + 1f)) Def.DrawPlumes(this, Vector2.Zero, 1f, flame, 1f, true, 1.6f);
+        if (Boosting) Def.DrawPlumes(this, Vector2.Zero, 1f, flame, 1f, true, 1.6f);
         else Def.DrawPlumes(this, Vector2.Zero, 1f, flame, 0.5f, Speed > 1f);
+        if (_nameT > 0)
+        {   // upright whatever its heading, fading over its last half second
+            DrawSetTransform(Vector2.Zero, -GlobalRotation, Vector2.One);
+            var font = ThemeDB.FallbackFont; int px = Txt.Size(13);
+            var col = new Color(1f, 0.6f, 0.55f, 0.9f * (float)System.Math.Min(1.0, _nameT / 0.5));
+            var at = new Vector2(0, HitRadius + 22f);
+            Txt.Centre(this, font, at, Def.Name, px, col);
+            if (Pins)
+            {   // the web glyph: a small ring and its spokes, left of the name
+                float w = font.GetStringSize(Def.Name, HorizontalAlignment.Left, -1, px).X;
+                var g = at + new Vector2(-w * 0.5f - px * 0.7f, -px * 0.35f); float gr = px * 0.38f;
+                DrawArc(g, gr, 0, Mathf.Tau, 12, col, 1f);
+                for (int i = 0; i < 4; i++) DrawLine(g, g + Vector2.Right.Rotated(Mathf.Tau * i / 4f + 0.4f) * gr * 1.3f, col, 1f);
+            }
+            DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
+        }
+    }
+    // its squad's lead, as every peer sees it: the raider of the same squad id that says it leads
+    public Raider SquadLead()
+    {
+        if (Hub == null) return null;
+        int id = SquadId;
+        foreach (var r in Hub.Raiders) if (r != this && r.SquadId == id && r.Leads) return r;
+        return null;
     }
 }

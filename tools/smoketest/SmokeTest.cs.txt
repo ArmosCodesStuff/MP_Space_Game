@@ -1393,6 +1393,8 @@ public partial class _Test : Node
         CurveParChecks();
         CurveBossRowChecks();
         BuildChecks();
+        RaidsFoundationChecks();
+        RaidsAddsTableChecks();
         await RecyclerChecks();
         CurveRaiderChecks();
 
@@ -2187,7 +2189,7 @@ public partial class _Test : Node
     {
         var held = boss.Type.Moves.ToDictionary(m => m.Id, m => boss.S(m.Id).Due);
         foreach (var m in boss.Type.Moves) { boss.S(m.Id).Due = 999; boss.S(m.Id).At = Boss.Phase.Idle; }
-        foreach (var r in H.Raiders.Where(r => r.IsEscort).ToList()) r.TakeDamage(999);
+        foreach (var r in H.Raiders.ToList()) H.RaiderDown(r);            // the fight's adds out of the way
         var beam = boss.S("beam");
         await Wait(0.6);                                        // past the 0.52 s gap of any earlier burn
         for (int run = 0; run < 3; run++)
@@ -2336,6 +2338,110 @@ public partial class _Test : Node
                   $"Hardened at the applier's share: applied at {first}{(double.IsNaN(second) ? "" : $" then {second}")}, a 100 blow lands for {hp0 - gd.Hp:0} (want {want:0})");
             await Wait(0.6);
         }
+    }
+
+    // ── LANE G (raids v2) READABILITY (§1e, N19's logic; the frames are Shots 49a/49b/49c): what every
+    // peer draws of a squad reads SquadSight -- the radar's "1+3" label and bracket, the victim's
+    // "GANK: GUNSHIP + 3 WEBIFIER" line, and each row's name under its hull for 3 s when the squad
+    // comes into view and again at its commit; plus the adds' EXP in the TIO line and the hints ──
+    async Task RaidsSightChecks()
+    {
+        var me = Me; var keepPos = me.Position; double keepMax = me.MaxHp;
+        double pdKeep = PdReachOff(me);
+        me.MaxHp = 5000; me.TakeDamage(-(me.MaxHp - me.Hp));
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        void Clear() { foreach (var r in H.Raiders.ToList()) H.RaiderDown(r); }
+        bool InView(Node2D n) => n.GetViewportRect().HasPoint(n.GetGlobalTransformWithCanvas().Origin);
+        List<Raider> MakeSquad(Vector2 at, float heading, params int[] kinds)
+        {
+            var sq = H.FormSquad(Squads.Gank, at, heading);
+            return kinds.Select((k, i) => H.SpawnRaider(at + new Vector2(70f * (i - (kinds.Length - 1) / 2f), 40f * (i % 2)).Rotated(heading), k, sq)).ToList();
+        }
+
+        // THE WORDS, by literal: the TIO line from the rows (L6 light 6, heavy 18 at PL 6 / 3, 9 at
+        // PL 12 / 3, 9 at L39 PL 78), and the two hints that now name the adds
+        Check(TioWindow.AddsLine(6, 6) == "Adds: 6 EXP a light, 18 a heavy, the first time they come."
+              && TioWindow.AddsLine(6, 12) == "Adds: 3 EXP a light, 9 a heavy, the first time they come."
+              && TioWindow.AddsLine(39, 78) == "Adds: 3 EXP a light, 9 a heavy, the first time they come.",
+              $"the TIO line names what the adds pay this pilot, from the rows ({TioWindow.AddsLine(6, 6)} | {TioWindow.AddsLine(6, 12)} | {TioWindow.AddsLine(39, 78)})");
+        Check(Hints.All["pilot"].Body.Contains("their adds the first time they come") && Hints.All["boss"].Body.Contains("kill the webifiers"),
+              "the pilot and boss hints name the adds: they pay EXP the first time they come, and their webs hold you for the beam");
+
+        // THE LABEL AND THE CREW by composition, three squads apart: H+3L, 2 lights, a heavy and 2 pods
+        {
+            me.Position = Hub.BasePos + new Vector2(Vary(5200f, 6200f), Vary(3800f, 4800f)); me.Velocity = Vector2.Zero;
+            var far = me.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(4400f, 5200f);
+            var a = MakeSquad(far, VaryAngle(), Enemies.Gunship, Enemies.Webifier, Enemies.Webifier, Enemies.Webifier);
+            var b = MakeSquad(far + new Vector2(0, 900f), VaryAngle(), Enemies.Talon, Enemies.Talon);
+            var c = MakeSquad(far - new Vector2(0, 900f), VaryAngle(), Enemies.Cross, Enemies.Pod, Enemies.Pod);
+            await Frame(); await Frame();
+            var groups = SquadSight.Groups(H.Raiders);
+            List<Raider> G(List<Raider> sq) => groups.FirstOrDefault(g => g.Contains(sq[0])) ?? new List<Raider>();
+            Check(groups.Count == 3 && SquadSight.Label(G(a)) == "1+3" && SquadSight.Label(G(b)) == "2" && SquadSight.Label(G(c)) == "1+2"
+                  && SquadSight.Crew(G(a)) == "GUNSHIP + 3 WEBIFIER" && SquadSight.Crew(G(b)) == "2 TALON" && SquadSight.Crew(G(c)) == "CROSS + 2 POD"
+                  && SquadSight.InFormation(G(a)) && SquadSight.InFormation(G(b)) && SquadSight.InFormation(G(c)),
+                  $"squads read by id and tag, not type: {groups.Count} squads, labels {SquadSight.Label(G(a))} / {SquadSight.Label(G(b))} / {SquadSight.Label(G(c))} (1+3 / 2 / 1+2), crews '{SquadSight.Crew(G(a))}' / '{SquadSight.Crew(G(b))}' / '{SquadSight.Crew(G(c))}', all in formation");
+            Clear(); await Wait(0.2);
+        }
+
+        // THE NAMES AND THE LINE on a live gank at this ship, in three situations, each from a seeded
+        // bearing and range: still; crossing the approach at 60 u/s; running from a squad that comes up
+        // astern (off dead astern by a seeded angle, closing at its 100 less this 60, so from nearer).
+        // In each: named at the first frame the squad is in view and again at its commit; the victim's
+        // line through the burn, and none once every member holds its line
+        foreach (var (how, near, far) in new[] { ("still", 2600f, 3400f), ("crossing", 2200f, 2800f), ("from astern", 1750f, 2050f) })
+        {
+            me.Statuses.Clear(Status.Pinned); me.TakeDamage(-(me.MaxHp - me.Hp));
+            me.Position = Hub.BasePos + new Vector2(Vary(5200f, 6200f), Vary(3800f, 4800f)); me.Velocity = Vector2.Zero;
+            await Wait(0.5);                                        // the camera settles on the ship
+            var toSquad = Vector2.Right.Rotated(VaryAngle());
+            var at = me.Position + toSquad * Vary(near, far);
+            float side = Vary(0f, 1f) < 0.5f ? -1f : 1f;
+            var run = how switch
+            {
+                "crossing" => toSquad.Rotated(side * Mathf.Pi / 2f) * 60f,
+                "from astern" => (-toSquad).Rotated(side * Vary(0.15f, 0.45f)) * 60f,
+                _ => Vector2.Zero,
+            };
+            if (run != Vector2.Zero) me.Rotation = Aim.Along(run);
+            var ms = MakeSquad(at, Aim.Face(at, me.Position), Enemies.Gunship, Enemies.Webifier, Enemies.Webifier, Enemies.Webifier);
+            async Task Step() { me.Velocity = me.Pinned ? Vector2.Zero : run; await Frame(); }
+            double viewNames = -1, lockName = -1; float drop = -1; string burnLine = null, heldLine = "unread";
+            bool formedFirst = SquadSight.InFormation(ms), formedInBurn = true;
+            for (int f = 0; f < 60 * 30 && (viewNames < 0 || lockName < 0 || burnLine == null); f++)
+            {
+                if (viewNames < 0 && ms.Any(InView))
+                {   // the first frame the squad shows: every member named, the ones off the screen too
+                    await Step(); await Step();
+                    viewNames = ms.Min(r => r.NameLeft); drop = ms.Min(r => r.LabelDrop);
+                }
+                var locker = ms.FirstOrDefault(r => r.Locking);
+                if (lockName < 0 && locker != null)
+                {   // the member that committed, read again after the wait: named afresh
+                    await Step(); await Step();
+                    lockName = GodotObject.IsInstanceValid(locker) ? locker.NameLeft : 0;
+                }
+                if (burnLine == null && ms.Any(r => r.Locking))
+                {
+                    burnLine = SquadSight.GankLine(H.Raiders, H.Ships, me);
+                    formedInBurn = SquadSight.InFormation(ms);
+                }
+                await Step();
+            }
+            for (int f = 0; f < 60 * 12 && ms.Any(r => r.Locking); f++) await Step();
+            if (!ms.Any(r => r.Locking)) heldLine = SquadSight.GankLine(H.Raiders, H.Ships, me);
+            Check(viewNames > 3.0 - 0.25 && viewNames <= 3.0 && Math.Abs(drop - 35f) < 1e-3,
+                  $"{how}: a squad coming into view is named, every member for 3 s ({viewNames:0.00} s left two frames on), the range label dropped 35 under the name ({drop})");
+            Check(lockName > 3.0 - 0.25 && lockName <= 3.0,
+                  $"{how}: and named again as it commits ({lockName:0.00} s of 3 left two frames on)");
+            Check(formedFirst && !formedInBurn && burnLine == "GANK: GUNSHIP + 3 WEBIFIER" && heldLine == null,
+                  $"{how}: the victim's HUD line through the burn: '{burnLine}' (GANK: GUNSHIP + 3 WEBIFIER); in formation before it {formedFirst}, not during {!formedInBurn}; once all hold their lines, none ('{heldLine}')");
+            Clear(); await Wait(0.3);
+        }
+        me.Statuses.Clear(Status.Pinned);
+        me.MaxHp = keepMax; me.TakeDamage(-(me.MaxHp - me.Hp));
+        me.Stats.SetBase("pd_range", pdKeep);
+        me.Position = keepPos; me.Velocity = Vector2.Zero;
     }
 
     // POINT DEFENCE CANNOT BE SWITCHED OFF (F16), so a check that needs a hull's point defence out
@@ -2555,7 +2661,7 @@ public partial class _Test : Node
               "Suppressed reaches a boss; Dazzled and Jammed reach craft and structures, never a boss");
         var held = boss.Type.Moves.ToDictionary(m => m.Id, m => boss.S(m.Id).Due);
         foreach (var m in boss.Type.Moves) { boss.S(m.Id).Due = 999; boss.S(m.Id).At = Boss.Phase.Idle; }
-        foreach (var r in H.Raiders.Where(r => r.IsEscort).ToList()) r.TakeDamage(999);
+        foreach (var r in H.Raiders.ToList()) H.RaiderDown(r);            // the fight's adds out of the way
         me.Hp = me.MaxHp;                                                 // three runs take about 380
         var wave = boss.S("wave"); var beam = boss.S("beam");
         await Wait(0.6);
@@ -4251,7 +4357,7 @@ public partial class _Test : Node
             for (int k = 0; k < 3; k++)
             {
                 double L = k == 0 ? (int)Vary(2f, 20f) : Vary(20f, 70f);
-                var r = H.SpawnRaider(Hub.BasePos + new Vector2(Vary(-2500f, 2500f), -3900f), kind, 0, L);
+                var r = H.SpawnRaider(Hub.BasePos + new Vector2(Vary(-2500f, 2500f), -3900f), kind, null, L);
                 if (r == null) { Check(false, $"a level-{L:0.0} raider could not be spawned"); continue; }
                 var d = Enemies.Of(kind);
                 Check(Math.Abs(r.Strength - L) < 1e-12 && Math.Abs(r.MaxHull - d.Hull * Par.CraftScale(L)) < 1e-9 && Math.Abs(r.Hp - r.MaxHull) < 1e-9
@@ -5072,7 +5178,7 @@ public partial class _Test : Node
               && lateRow != null && lateRow.Id == "blockade_heavy" && lateRow.Crew.Length == 3
               && squad.Count == 4 && squad.Count(r => r.Heavy) == 1
               && squad.All(r => r.Position.DistanceTo(Lanes.Stand(0)) <= Lanes.Hold)
-              && squad.All(r => r.Station.DistanceTo(Lanes.Stand(0)) < 1f && Math.Abs(r.Circuit - 200f) < 1e-3)
+              && squad.All(r => r.Squad.Station.DistanceTo(Lanes.Stand(0)) < 1f && Math.Abs(r.Squad.Circuit - 200f) < 1e-3)
               && Lanes.Cut(H, 0) && Math.Abs(Lanes.Flow(H) - 0.75) < 1e-9,
               $"a blockade is a trigger and a row, not a spawner: three lights and a heavy holding a 200 u ring on the lane's own stand, and the base paid three quarters ({squad.Count} sent, {Lanes.Flow(H) * 100:0}% flow)");
 
@@ -5660,6 +5766,372 @@ public partial class _Test : Node
             Character.Delete("chipfile");
         }
         Character.NewBlank();
+    }
+
+    // ── LANE G (raids v2): the foundations, by literal (raids_squads_adds.md §2b, §4a, N14) ──
+    void RaidsFoundationChecks()
+    {
+        // EXP BY LITERAL: an add at the boss's level pays its row's worth x level / pilot level,
+        // nothing under half -- the kill's own rule, one formula (Missions.ExpFor)
+        Check(Missions.ExpFor(18, 6, 6) == 18 && Missions.ExpFor(18, 6, 12) == 9 && Missions.ExpFor(18, 6, 13) == 0
+              && Missions.ExpFor(6, 6, 6) == 6 && Missions.ExpFor(6, 6, 12) == 3 && Missions.ExpFor(6, 6, 13) == 0
+              && Missions.ExpFor(18, 39, 39) == 18 && Missions.ExpFor(6, 39, 78) == 3 && Missions.ExpFor(18, 39, 79) == 0
+              && Missions.ExpFor(6, 9, 9) == 6 && Missions.KillExpFor(5, 10) == 150 && Missions.ExpFor(300, 5, 10) == 150,
+              $"an add pays EnemyDef.Exp x its level over the pilot's, and nothing past twice its level: L6 heavy 18 / 9 / 0 at PL 6 / 12 / 13 ({Missions.ExpFor(18, 6, 6)} / {Missions.ExpFor(18, 6, 12)} / {Missions.ExpFor(18, 6, 13)}); the boss kill is the same formula at 300");
+        Check(Enemies.OfWay(EnemyWay.Pin).All(k => Enemies.Of(k).Exp == 6) && Enemies.OfWay(EnemyWay.Standoff).All(k => Enemies.Of(k).Exp == 18),
+              "every light row is worth 6 and every heavy row 18");
+        // ROUTING (N14): a Garrison row answers its own mission; a bounty never draws a siege row
+        var siege0 = Waves.For(WaveTrigger.Garrison, new WaveBrief { Mission = "siege", Index = 0 });
+        var siege2 = Waves.For(WaveTrigger.Garrison, new WaveBrief { Mission = "siege", Index = 2 });
+        var bountyAny = Enumerable.Range(0, 6).Select(i => Waves.For(WaveTrigger.Garrison, new WaveBrief { Mission = "bounty", Index = i, Level = 1 + 7 * i }))
+                                  .Where(d => d != null).ToList();
+        Check(siege0?.Id == "siege" && siege2?.Id == "siege_heavy" && bountyAny.All(d => d.Mission == "bounty")
+              && Waves.All.Where(d => d.Trigger == WaveTrigger.Garrison).All(d => d.Mission != null),
+              $"a siege brief draws the siege rows ({siege0?.Id}, {siege2?.Id}); a bounty brief never does ({string.Join(",", bountyAny.Select(d => d.Id))}); every Garrison row names its mission");
+        // A JUMP IS SEEN (Lead.Jumped): >= 50 u in one frame, at three headings and sizes
+        bool jumpOk = true;
+        for (int k = 0; k < 3; k++)
+        {
+            var dir = Vector2.Right.Rotated(VaryAngle()); var p0 = new Vector2(Vary(-3000f, 3000f), Vary(-3000f, 3000f));
+            var lead = new Lead(); lead.Watch(p0, 1 / 60.0);
+            bool first = lead.Jumped;
+            lead.Watch(p0 + dir * Vary(5f, 45f), 1 / 60.0); bool walk = lead.Jumped;
+            lead.Watch(p0 + dir * Vary(300f, 1500f), 1 / 60.0); bool jump = lead.Jumped;
+            lead.Watch(p0 + dir * 1500f + dir * Vary(1f, 40f), 1 / 60.0); bool after = lead.Jumped;
+            jumpOk &= !first && !walk && jump && !after && lead.Velocity.Length() < Missiles.Wild;
+        }
+        Check(jumpOk, "a squad's tracker reads a jump (a warp, a Rewind) for exactly the frame it happens, never a walk or the first sight");
+        // THE VEE (WaveCrew.Sweep): point (0,-40), wings (+-60,-10) from Step (60,0) and Sweep 30
+        var vee = new WaveCrew(Waves.Drawn, EnemyWay.Pin, 0, _ => 3, new Vector2(0f, -40f), new Vector2(60f, 0f), 30f);
+        Check(vee.Slot(0, 3) == new Vector2(-60f, -10f) && vee.Slot(1, 3) == new Vector2(0f, -40f) && vee.Slot(2, 3) == new Vector2(60f, -10f)
+              && new WaveCrew(Waves.Drawn, EnemyWay.Pin, 0, _ => 1, new Vector2(0f, 60f), Vector2.Zero).Slot(0, 1) == new Vector2(0f, 60f),
+              $"a crew line with Sweep 30 is a vee, point forward: {vee.Slot(0, 3)} {vee.Slot(1, 3)} {vee.Slot(2, 3)}");
+        // THE RUSTY'S TWO BEAM ESCORTS ARE ITS SQUAD WAVE 1 (a row, not the beam's): 2 on the Rusty, none on the Drake
+        Check(Missions.Bosses.First(b => b.Id == "silver_lancer").AddsFloor == 2 && Missions.Bosses.First(b => b.Id == "drake_bastion").AddsFloor == 0,
+              "the Rusty Bucket's first add squad brings at least 2 pinners from level 1; the Drake's none");
+    }
+
+    // ── LANE G (raids v2): squads in formation (raids_squads_adds.md §1; N1-N6, N9, N10, N17) ──
+    // Every squad here is built by hand in the Patrol crew's own vee, far from the base, the fleet
+    // and its guns, with the pilot's point defence out of reach: the squads are on trial.
+    async Task RaidsSquadChecks()
+    {
+        var me = Me; var keepPos = me.Position; double keepMax = me.MaxHp;
+        double pdKeep = PdReachOff(me);
+        me.MaxHp = 5000; me.TakeDamage(-(me.MaxHp - me.Hp));
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        void Clear() { foreach (var r in H.Raiders.ToList()) H.RaiderDown(r); }
+        void Park(Vector2 at) { me.Position = at; me.Velocity = Vector2.Zero; me.Rotation = VaryAngle(); me.Statuses.Clear(Status.Pinned); }
+        Vector2 Spot() => Hub.BasePos + new Vector2(Vary(5200f, 6200f), Vary(3800f, 4800f));
+        // n lights in a vee (point forward), h heavies close astern -- the Patrol crew's shape
+        Squad Vee(Vector2 at, float heading, int n = 3, int h = 1, double scale = 1)
+        {
+            var sq = H.FormSquad(Squads.Gank, at, heading);
+            for (int i = 0; i < n; i++)
+            {
+                float k = i - (n - 1) / 2f;
+                H.SpawnRaider(at + new Vector2(60f * k, -40f + 30f * Mathf.Abs(k)).Rotated(heading), Enemies.Webifier, sq, scale);
+            }
+            for (int j = 0; j < h; j++)
+                H.SpawnRaider(at + new Vector2(80f * (j - (h - 1) / 2f), 60f).Rotated(heading), Enemies.Gunship, sq, scale);
+            return sq;
+        }
+        List<Raider> Of(Squad sq) => sq.Members.OfType<Raider>().ToList();
+        Vector2 Offset(Squad sq, Raider r) => (sq.SlotOf(r) - sq.Anchor).Rotated(-sq.Heading);
+
+        // ── N1 + N2: a squad of 4 closes as ONE, on a still or a moving target ──
+        {
+            Park(Spot()); await Wait(0.2);
+            bool moving = Vary(0f, 1f) < 0.5f; float course = VaryAngle();
+            var at = me.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(2600f, 3400f);
+            var sq = Vee(at, Aim.Face(at, me.Position));
+            var ms = Of(sq);
+            async Task Step() { if (moving && !me.Pinned) me.Velocity = Vector2.Up.Rotated(course) * 60f; await Frame(); }
+            for (int i = 0; i < 120; i++) await Step();
+            float slotErr = ms.Max(r => r.Position.DistanceTo(sq.SlotOf(r)));
+            var c0 = sq.Centre; for (int i = 0; i < 60; i++) await Step();
+            float cSpeed = (sq.Centre - c0).Length();
+            float spread = 0; int f = 0, first = -1, last = -1; float boostAt = 0;
+            var boosted = new HashSet<Raider>(); bool lockSeen = false, oneLead = true, idsOk = true;
+            for (; f < 60 * 30 && boosted.Count < ms.Count; f++)
+            {
+                if (first < 0) spread = Math.Max(spread, ms.Max(r => r.Position.DistanceTo(sq.Centre)));
+                foreach (var r in ms) if (!boosted.Contains(r) && (r.NetFlags & 1) != 0)
+                { boosted.Add(r); if (first < 0) { first = f; boostAt = sq.Anchor.DistanceTo(me.Position); } last = f; }
+                oneLead &= ms.Count(r => (r.NetFlags & 4) != 0) == 1;
+                idsOk &= ms.All(r => ((r.NetFlags >> 8) & 0xFFFF) == (sq.Id & 0xFFFF));
+                await Step();
+            }
+            var latchF = new Dictionary<Raider, int>();
+            int commitF = f;
+            for (; f < commitF + 60 * 12 && latchF.Count < ms.Count; f++)
+            {
+                lockSeen |= ms.Any(r => !r.Latched && (r.NetFlags & 8) != 0);
+                foreach (var r in ms) if (r.Latched && !latchF.ContainsKey(r)) latchF[r] = f;
+                await Step();
+            }
+            var lights = ms.Where(r => !r.Heavy).ToList(); var heavy = ms.First(r => r.Heavy);
+            bool allLatched = latchF.Count == ms.Count;
+            int lightSpan = allLatched ? lights.Max(r => latchF[r]) - lights.Min(r => latchF[r]) : 999;
+            int heavyLag = allLatched ? Math.Abs(latchF[heavy] - lights.Max(r => latchF[r])) : 999;
+            bool pinnedIn6 = false;
+            for (int i = 0; i < 60 * 6 - (f - commitF) && !pinnedIn6; i++) { pinnedIn6 = me.Pinned; await Step(); }
+            pinnedIn6 |= me.Pinned;
+            Check(slotErr < 25f && spread <= 62f + 25f && Math.Abs(cSpeed - 100f) < 8f,
+                  $"a squad of four flies as one: every member within 25 u of its slot after 2 s ({slotErr:0}), the spread never past the vee's 62 u + 25 ({spread:0}), the centre at 100 u/s ({cSpeed:0}) -- target {(moving ? "moving" : "still")}");
+            Check(first >= 0 && last - first <= 1 && Math.Abs(boostAt - 1600f) < 30f,
+                  $"...and it commits as one: every boost bit (1) rises in the same frame +-1 ({last - first}), 1600 u out ({boostAt:0})");
+            Check(allLatched && lightSpan <= 30 && heavyLag <= 30,
+                  $"all arrive together: the three lights latch within 0.5 s of each other ({lightSpan} frames), the heavy within 0.5 s of the last ({heavyLag})");
+            Check(oneLead && idsOk && lockSeen && ms.All(r => !r.Latched || (r.NetFlags & 8) == 0),
+                  "on the wire: exactly one lead bit (4) in the squad, its id in bits 8-23 on every member, the lock bit (8) up through the burn and down once latched");
+            Check(pinnedIn6, $"the {(moving ? "moving" : "still")} target is pinned within 6 s of the commit");
+            me.Velocity = Vector2.Zero;
+
+            // ── N5: the target warps mid-engagement -- nobody snaps, the web lets go, no burn for 10 s ──
+            var before = ms.ToDictionary(r => r, r => r.Position);
+            float worst = 0; bool reformed = false, burned = false; int freeF = -1;
+            me.Position += Vector2.Right.Rotated(VaryAngle()) * Vary(1000f, 1400f); me.Velocity = Vector2.Zero;
+            for (int i = 0; i < 60 * 10; i++)
+            {
+                await Frame(); me.Velocity = Vector2.Zero;
+                foreach (var r in ms.Where(GodotObject.IsInstanceValid)) { worst = Math.Max(worst, r.Position.DistanceTo(before[r])); before[r] = r.Position; }
+                reformed |= sq.Phase != SquadPhase.Commit || !sq.Burning;
+                burned |= ms.Any(r => GodotObject.IsInstanceValid(r) && r.Boosting);
+                if (freeF < 0 && !me.Pinned) freeF = i;
+            }
+            Check(worst <= 700f / 60f + 1f && freeF >= 0 && freeF <= 30 && reformed && !burned,
+                  $"a warp: no raider moves more than 700/60 + 1 u in a frame ({worst:0.0}), the web lets go within 0.5 s ({freeF} frames), the squad re-forms and closes again without a second burn inside 10 s (burned {burned})");
+            Clear(); await Wait(0.2);
+        }
+
+        // ── N4: the leader dies first -- and, before it, a light ──
+        {
+            Park(Spot()); await Wait(0.2);
+            float start = Vary(2600f, 3400f);
+            var at = me.Position + Vector2.Right.Rotated(VaryAngle()) * start;
+            var sq = Vee(at, Aim.Face(at, me.Position));
+            var ms = Of(sq);
+            await Wait(1.0);
+            var lights = ms.Where(r => !r.Heavy).ToList();
+            var lost = lights[(int)Vary(0f, 2.99f)];
+            var keepOff = ms.Where(r => r != lost).ToDictionary(r => r, r => Offset(sq, r));
+            lost.TakeDamage(9999); await Wait(0.3);
+            float drift = keepOff.Max(kv => kv.Value.DistanceTo(Offset(sq, kv.Key)));
+            double runIn = (start - 1600f) / 100f;
+            await Wait(runIn * Vary(0.3f, 0.8f) - 1.3);
+            var lead = (Raider)sq.Leader; lead.TakeDamage(9999); await Wait(1.0);
+            var left = ms.Where(r => GodotObject.IsInstanceValid(r) && r.Alive).ToList();
+            float slotErr = left.Max(r => r.Position.DistanceTo(sq.SlotOf(r)));
+            int leads = left.Count(r => (r.NetFlags & 4) != 0);
+            int first = -1, last = -1, f = 0; var boosted = new HashSet<Raider>();
+            for (; f < 60 * 30 && boosted.Count < left.Count; f++)
+            {
+                foreach (var r in left) if (!boosted.Contains(r) && r.Boosting) { boosted.Add(r); if (first < 0) first = f; last = f; }
+                await Frame();
+            }
+            Check(drift < 2f && lead.Heavy && leads == 1 && slotErr < 25f && first >= 0 && last - first <= 1,
+                  $"a light shot out of the vee moves nobody's slot ({drift:0.0} u); its lead (the heavy) shot down, command passes -- one lead bit ({leads}) -- the vee holds ({slotErr:0} u) and the rest still commit in one frame ({last - first})");
+            Clear(); await Wait(0.2);
+        }
+
+        // ── N3: a squad of twelve on one hull -- 9 lights on 9 front posts, 3 heavies on 3 rear posts ──
+        {
+            Park(Spot()); await Wait(0.2);
+            var at = me.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(1800f, 2200f);
+            var sq = Vee(at, Aim.Face(at, me.Position), 9, 3);
+            var ms = Of(sq);
+            for (int i = 0; i < 60 * 20 && !ms.All(r => r.Latched); i++) await Frame();
+            var fronts = ms.Where(r => !r.Heavy).Select(r => sq.PostAngle(r)).ToList();
+            var rears = ms.Where(r => r.Heavy).Select(r => sq.PostAngle(r)).ToList();
+            float closest = float.MaxValue;
+            foreach (var a in ms) foreach (var b in ms) if (a != b) closest = Math.Min(closest, a.Position.DistanceTo(b.Position));
+            Func<double> Raided = () => me.DamageBySource.Where(kv => kv.Key.StartsWith("raider:")).Sum(kv => kv.Value);
+            double d0 = Raided(); await Wait(3.0);
+            double dps = (Raided() - d0) / 3.0;
+            Check(ms.All(r => r.Latched) && fronts.Distinct().Count() == 9 && rears.Distinct().Count() == 3 && closest >= 30f
+                  && Math.Abs(dps - (9 * 1.0 + 3 * 2.58)) < 2.5,
+                  $"twelve on one hull: 9 lights on 9 distinct front posts, 3 heavies on 3 rear posts, no two within 30 u ({closest:0}), and the whole of their fire lands: {dps:0.0} DPS of 9 x 1 + 3 x 2.58");
+            Clear(); await Wait(0.2);
+        }
+
+        // ── N6: a heavy never pins, at any level; a webifier does ──
+        {
+            Park(Spot()); await Wait(0.2);
+            foreach (int lv in new[] { 1, 20, 40 })
+                H.SpawnRaider(me.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(600f, 900f), Enemies.Gunship, null, lv);
+            var hs = H.Raiders.ToList();
+            for (int i = 0; i < 60 * 12 && !hs.All(r => r.Latched); i++) await Frame();
+            bool pinned = false;
+            for (int i = 0; i < 60 * 3; i++) { pinned |= me.Pinned; await Frame(); }
+            var web = H.SpawnRaider(me.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(300f, 500f));
+            for (int i = 0; i < 60 * 8 && !web.Latched; i++) await Frame();
+            bool webbed = false;
+            for (int i = 0; i < 30 && !webbed; i++) { webbed = me.Pinned; await Frame(); }
+            Check(hs.All(r => r.Latched) && !pinned && hs.All(r => Enemies.Of(r.Kind).Cc == null) && webbed,
+                  $"three heavies latched astern at levels 1, 20 and 40 put no pin on the pilot in 3 s (pinned {pinned}); a level-1 webifier pins it within 0.5 s of its latch ({webbed})");
+            Clear(); await Wait(0.2);
+            me.Statuses.Clear(Status.Pinned);
+        }
+
+        // ── N9 + N10: posts are sticky; a hidden target is taken back when it shows again ──
+        {
+            Park(Spot()); await Wait(0.2);
+            var three = Enumerable.Range(0, 3).Select(_ => H.SpawnRaider(me.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(250f, 450f))).ToList();
+            for (int i = 0; i < 60 * 8 && !three.All(r => r.Latched); i++) await Frame();
+            float Bearing(Raider r) => Mathf.RadToDeg(Vector2.Up.Rotated(me.Rotation).AngleTo(r.Position - me.Position));
+            var gone = three[(int)Vary(0f, 2.99f)];
+            var stay = three.Where(r => r != gone).ToList();
+            var b0 = stay.ToDictionary(r => r, Bearing);
+            gone.TakeDamage(9999); await Wait(2.0);
+            float moved = stay.Max(r => Mathf.Abs(Mathf.Wrap(Bearing(r) - b0[r], -180f, 180f)));
+            Check(stay.All(r => r.Latched) && moved < 10f,
+                  $"posts are sticky: one light shot down, the other two keep their bearings on the bow ({moved:0.0} deg)");
+            double hide = Vary(1f, 4f);
+            me.ApplyStatus(Status.Untargetable, hide);
+            await Wait(0.5);
+            bool dropped = stay.All(r => !ReferenceEquals(r.Target, me));
+            int back = -1;
+            for (int i = 0; i < 60 * (hide + 5) && back < 0; i++) { if (!Targeting.Hidden(me) && stay.All(r => ReferenceEquals(r.Target, me))) back = i; await Frame(); }
+            Check(dropped && back >= 0,
+                  $"hidden for {hide:0.0} s it is let go, and taken back once it shows again ({(back < 0 ? "never" : $"{back / 60.0:0.0} s")} from the hide)");
+            Clear(); await Wait(0.2);
+        }
+
+        // ── N17: nothing left behind -- no squad, no post held ──
+        await Frame(); await Frame();
+        Check(H.Squads.Count == 0 && H.Posts.Held == 0 && H.Raiders.Count == 0,
+              $"every squad gone with its last member, and the post book empty ({H.Squads.Count} squads, {H.Posts.Held} posts)");
+        me.MaxHp = keepMax; me.TakeDamage(-(me.MaxHp - me.Hp));
+        me.Stats.SetBase("pd_range", pdKeep);
+        me.Position = keepPos; me.Velocity = Vector2.Zero;
+    }
+
+    // ── LANE G (raids v2): a boss fight's adds, by literal (raids_squads_adds.md §2; N11, N12's
+    // thresholds, N14, the slot kinds, the form-up distances, the boss's multipliers) ──
+    void RaidsAddsTableChecks()
+    {
+        string Sch(int level, int floor = 0) =>
+            string.Concat(Waves.Deal(Waves.AddsAt(level), floor).Select(q => "[" + new string('H', q.heavies) + new string('L', q.lights) + "]"));
+        Check(Waves.AddsAt(5) == 0 && Waves.AddsAt(6) == 1 && Waves.AddsAt(9) == 2 && Waves.AddsAt(18) == 5 && Waves.AddsAt(39) == 12
+              && Waves.AddsAt(40) == 12 && Waves.AddsAt(99) == 12
+              && Sch(5) == "" && Sch(6) == "[H]" && Sch(9) == "[HL]" && Sch(18) == "[HLLL][H]" && Sch(39) == "[HLLL][HLLL][HLLL]" && Sch(40) == Sch(39),
+              $"the adds by level: none at 5, a heavy at 6, then a light every 3 levels, H L L L, to 3 heavies + 9 lights at 39 and no more (L9 {Sch(9)}, L18 {Sch(18)}, L39 {Sch(39)})");
+        bool sweep = true;
+        for (int lv = 1; lv <= 60; lv++)
+        {
+            int n = Waves.AddsAt(lv);
+            string flat = Sch(lv).Replace("[", "").Replace("]", "");
+            sweep &= n <= 12 && flat == "HLLLHLLLHLLL".Substring(0, n) && flat.Count(c => c == 'H') == (n + 3) / 4;
+        }
+        Check(sweep, "levels 1 to 60 deal exactly HLLLHLLLHLLL cut at N(L): never past 12, a heavy for every squad started");
+        Check(Sch(1, 2) == "[LL]" && Sch(5, 2) == "[LL]" && Sch(6, 2) == "[HLL]" && Sch(14, 2) == "[HLL]" && Sch(15, 2) == "[HLLL]" && Sch(39, 2) == Sch(39),
+              $"the Rusty's floor of 2: its squad wave 1 from level 1 ({Sch(1, 2)}), filled by the roster from 6 ({Sch(6, 2)}, {Sch(15, 2)} at 15)");
+        // ARRIVAL: slot k of n on its clock (k x 30 s) or, its first fill only, at hull 1 - k/n -- around each edge, never on it
+        Check(Waves.SlotDue(0, 3, 0, 30, 1.0, true)
+              && !Waves.SlotDue(1, 3, 1, 30, 0.68, true) && Waves.SlotDue(1, 3, 1, 30, 0.66, true)
+              && !Waves.SlotDue(2, 3, 1, 30, 0.34, true) && Waves.SlotDue(2, 3, 1, 30, 0.32, true)
+              && !Waves.SlotDue(1, 3, 29.5, 30, 1.0, true) && Waves.SlotDue(1, 3, 30.5, 30, 1.0, true)
+              && !Waves.SlotDue(2, 3, 59.5, 30, 1.0, true) && Waves.SlotDue(2, 3, 60.5, 30, 1.0, true)
+              && !Waves.SlotDue(1, 3, 1, 30, 0.10, false),
+              "L39's three slots: slot 2 at hull 66% (not 68%) or 30 s, slot 3 at 32% (not 34%) or 60 s; slot 1 at once; a refill never on the hull");
+        var row = Waves.All.First(d => d.Id == "bounty_adds");
+        string Kinds(int k) => $"{Enemies.Of(Waves.KindOf(row.Crew[0], k)).Id}+{Enemies.Of(Waves.KindOf(row.Crew[1], k)).Id}";
+        Check(Kinds(0) == "gunship+webifier" && Kinds(1) == "cross+talon" && Kinds(2) == "lancerkin+pod" && Kinds(3) == Kinds(0),
+              $"each slot keeps its kinds: {Kinds(0)}, {Kinds(1)}, {Kinds(2)}");
+        float FormAt(params int[] kinds) { var crew = kinds.Select(Enemies.Of).ToList(); return Squads.CommitOf(crew) + Squads.PaceOf(crew) * (float)row.FormFor; }
+        int W = Enemies.Webifier, G = Enemies.Gunship, T = Enemies.Talon, Pd = Enemies.Pod, X = Enemies.Cross, K = Enemies.Lancerkin;
+        Check(Math.Abs(FormAt(W, W, W, G) - 2600) < 1 && Math.Abs(FormAt(W, W) - 2600) < 1 && Math.Abs(FormAt(G) - 3250) < 1
+              && Math.Abs(FormAt(X, T, T, T) - 3040) < 1 && Math.Abs(FormAt(K, Pd, Pd, Pd) - 1729) < 1 && Math.Abs(FormAt(X) - 2940) < 1 && Math.Abs(FormAt(K) - 2910) < 1,
+              $"each squad forms up 10 s of its own pace outside its commit range: webifiers 2600, a lone gunship 3250, talons 3040, pods 1729, a lone cross 2940, a lone lancerkin 2910 ({FormAt(W, W, W, G):0}, {FormAt(G):0}, {FormAt(X, T, T, T):0}, {FormAt(K, Pd, Pd, Pd):0})");
+        // THE BOSS'S PARTY MULTIPLIERS ON A RAIDER'S CURVE (Par; numbers §2.4): an add's damage x
+        // DamageScale(L) x (1 + 0.2(P - 1)), its hull x CraftScale(L) x (1 + 0.6(P - 1)) -- read the way
+        // Raider reads them (Par.DamageScale / CraftScale of its Strength, times DamageShare / HullShare), at three
+        // levels and party sizes: L18 with 2 pilots, L7 alone, L39 with 3
+        double AddDmg(int lv, int p) { var b = new WaveBrief { Level = lv, Pilots = p }; return Par.DamageScale(row.Strength(b)) * row.DamageShare(b); }
+        double AddHull(int lv, int p) { var b = new WaveBrief { Level = lv, Pilots = p }; return Par.CraftScale(row.Strength(b)) * row.HullShare(b); }
+        bool Mults(int lv, int p, double dm, double hm) =>
+            Math.Abs(AddDmg(lv, p) - Par.DamageScale(lv) * dm) < 1e-6 && Math.Abs(AddHull(lv, p) - Par.CraftScale(lv) * hm) < 1e-6;
+        Check(row.Mission == "bounty" && row.Doctrine == Squads.Gank && row.FormFor == 10 && row.Exp == 1
+              && Waves.All.Where(d => d != row).All(d => d.Exp == 0)
+              && Mults(18, 2, 1.2, 1.6) && Mults(7, 1, 1.0, 1.0) && Mults(39, 3, 1.4, 2.2),
+              $"the adds take the boss's party multipliers on the craft curve -- L18 with 2 pilots: damage x{AddDmg(18, 2):0.000} (DamageScale x 1.2), hull x{AddHull(18, 2):0.000} (CraftScale x 1.6); L7 alone x1 / x1; L39 with 3 x1.4 / x2.2 -- hunt the loneliest pilot, and only they pay EXP");
+        bool routed = Enumerable.Range(1, 60).All(lv => Waves.For(WaveTrigger.Garrison, new WaveBrief { Mission = "bounty", Level = lv })?.Id == "bounty_adds")
+                      && Enumerable.Range(0, 6).All(i => Waves.For(WaveTrigger.Garrison, new WaveBrief { Mission = "siege", Index = i })?.Mission == "siege");
+        Check(routed, "a bounty's garrison is always its adds and a siege's never is");
+    }
+
+    // ── LANE G (raids v2): the adds live, in the level-1 arena (N12, N13, N16) ──
+    // The Rusty's squad wave 1 comes at once, 2600 u out, in formation for 9 s; an add's web starts the
+    // beam; wiped at a seeded moment, the slot is empty at +29.5 s and back with the same kinds at +30.5 s.
+    async Task RaidsArenaAddsChecks(Boss boss, PlayerShip me)
+    {
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        var held = boss.Type.Moves.ToDictionary(m => m.Id, m => boss.S(m.Id).Due);
+        foreach (var m in boss.Type.Moves) { boss.S(m.Id).Due = 999; boss.S(m.Id).At = Boss.Phase.Idle; }
+        Fx.ClearWarnings();
+        foreach (var r in H.Raiders.ToList()) H.RaiderDown(r);
+        me.Position = VaryNear(boss.Position, 700f); me.Velocity = Vector2.Zero; me.Statuses.Clear(Status.Pinned);
+        await Frame();
+        var centre = me.Position;
+        int roster = Waves.Deal(Waves.AddsAt(Missions.Level), boss.Type.AddsFloor).Sum(q => q.heavies + q.lights);
+        H.RestartGarrison(); Raids.Held = false;
+        for (int i = 0; i < 30 && H.Raiders.Count == 0; i++) await Frame();
+        var adds = H.Raiders.ToList();
+        var sq = adds.FirstOrDefault()?.Squad;
+        float out0 = sq == null ? 0 : sq.Anchor.DistanceTo(centre);
+        bool formed = true; int most = adds.Count;
+        for (int i = 0; i < 60 * 9; i++) { formed &= sq != null && sq.Phase != SquadPhase.Commit; most = Math.Max(most, H.Raiders.Count); me.Velocity = Vector2.Zero; await Frame(); }
+        Check(Missions.Level == 1 && adds.Count == 2 && adds.All(r => r.Kind == Enemies.Webifier && r.Squad == sq) && sq?.Doctrine == Squads.Gank
+              && Math.Abs(out0 - 2600f) < 2600f * 0.05f && formed,
+              $"the Rusty's squad wave 1 at level 1: its two webifiers at once ({adds.Count}), {out0:0} u out (2600 +-5%), still in formation 9 s later");
+        // N16: an ADD'S web starts the beam (ruling): pinned by the squad, the beam made due charges on it
+        for (int i = 0; i < 60 * 12 && !me.Pinned; i++) { me.Velocity = Vector2.Zero; most = Math.Max(most, H.Raiders.Count); await Frame(); }
+        bool addsPin = me.Pinned && Squads.PinnersOn(H, me).count > 0 && H.Raiders.Where(r => r.Latched).All(r => r.Squad == sq);
+        boss.S("beam").Due = 0.01;
+        for (int i = 0; i < 60 * 2 && boss.S("beam").At != Boss.Phase.Winding; i++) { me.Velocity = Vector2.Zero; await Frame(); }
+        Check(addsPin && boss.S("beam").At == Boss.Phase.Winding && boss.S("beam").Cause == "pinned",
+              $"an add's web on the pilot starts the beam's charge ({boss.S("beam").Cause}, pinned by the adds {addsPin})");
+        boss.S("beam").Due = 999; boss.S("beam").At = Boss.Phase.Idle; Fx.ClearWarnings();
+        // N13: wiped at a seeded moment, the slot returns 30 s later with the same kinds
+        await Wait(Vary(0.2f, 1.5f));
+        var kinds0 = string.Join(",", H.Raiders.Where(r => r.Squad == sq).Select(r => r.Kind).OrderBy(k => k));
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(9999);
+        await Frame();
+        await Wait(29.5);
+        int at295 = H.Raiders.Count;
+        await Wait(1.0);
+        var back = H.Raiders.ToList();
+        var kinds1 = string.Join(",", back.Select(r => r.Kind).OrderBy(k => k));
+        most = Math.Max(most, back.Count);
+        Check(at295 == 0 && back.Count == 2 && kinds1 == kinds0 && back.All(r => r.Worth == 0) && most <= roster,
+              $"wiped, the slot is empty at +29.5 s ({at295}) and back at +30.5 s with the same kinds ({kinds1} for {kinds0}), paying nothing, never more than the roster's {roster} live");
+        // N15 BY LITERAL: an add pays its row's worth x its level over the pilot's -- the refill above
+        // paid nothing; a first-fill light at the pilot's level pays 6 with its popup, a heavy 18, at
+        // a pilot twice the level 3 / 9, one past that nothing; the boss-death sweep and a quiet
+        // withdrawal (CallOff's path) pay nothing
+        int keepLv = Character.Level, keepExp = Character.Exp, keepPts = Character.Points;
+        int Paid(Raider r, int pilotLevel)
+        {
+            Character.Level = pilotLevel; Character.Exp = 0; int pts = Character.Points;
+            r.TakeDamage(1e9);
+            int got = Character.Exp; Character.Points = pts; return got;
+        }
+        Raider Add(int kind, int level) { var r = H.SpawnRaider(me.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(900f, 1400f), kind); r.Worth = Enemies.Of(kind).Exp; r.Level = level; return r; }
+        int light6 = Paid(Add(Enemies.Webifier, 6), 6), heavy6 = Paid(Add(Enemies.Gunship, 6), 6), heavy12 = Paid(Add(Enemies.Gunship, 6), 12),
+            heavy13 = Paid(Add(Enemies.Gunship, 6), 13), light39 = Paid(Add(Enemies.Talon, 39), 78), refill = Paid(back.FirstOrDefault(GodotObject.IsInstanceValid) ?? Add(Enemies.Webifier, 1), 1);
+        var swept = Add(Enemies.Gunship, 6); var quiet = Add(Enemies.Webifier, 6);
+        Character.Level = 6; Character.Exp = 0;
+        H.RaiderDown(swept); H.Down(Spawns.Raider, quiet, burst: false, (float)quiet.Hp);
+        int sweep = Character.Exp;
+        Character.Level = keepLv; Character.Exp = keepExp; Character.Points = keepPts;
+        Check(light6 == 6 && heavy6 == 18 && heavy12 == 9 && heavy13 == 0 && light39 == 3 && refill == 0 && sweep == 0,
+              $"an add pays by literal: L6 light 6, heavy 18 at PL 6, 9 at PL 12, 0 at PL 13; an L39 light 3 at PL 78; a refill 0; the sweep and a quiet withdrawal 0 ({light6}/{heavy6}/{heavy12}/{heavy13}/{light39}/{refill}/{sweep})");
+        Raids.Held = true;
+        foreach (var r in H.Raiders.ToList()) H.RaiderDown(r);
+        foreach (var m in boss.Type.Moves) boss.S(m.Id).Due = held[m.Id];
+        me.Statuses.Clear(Status.Pinned);
+        await Frame();
     }
 
     async Task Solo()
@@ -8355,11 +8827,13 @@ public partial class _Test : Node
             me.Position = keepPos; me.Velocity = Vector2.Zero; me.TakeDamage(-(me.MaxHp - me.Hp));   // hand over at full hull
         }
 
-        // ── raiders (6b): the heavy -- waits at the map's edge; a predicted missile; boosts at 700% on a pinned target ──
+        // ── raiders (6b): the heavy -- no wait anywhere: it cruises in, burns at its own 2250 u,
+        // posts astern and lasers pinned or not; its missile flies only at a PINNED target ──
         {
             var hm = Me; var keepH = hm.Position;
             hm.Position = Hub.BasePos + new Vector2(2000, 0); hm.Velocity = Vector2.Zero; hm.Rotation = 0f; await Wait(0.3);
-            var hv = H.SpawnRaider(Hub.BasePos + new Vector2(2600, 500), Enemies.Gunship);
+            float hvBearing = VaryAngle(), hvOut = Vary(2600f, 3400f);
+            var hv = H.SpawnRaider(hm.Position + Vector2.Right.Rotated(hvBearing) * hvOut, Enemies.Gunship);
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(hv.Heavy && Math.Abs(hv.Length - 4 * Raider.LightLength) < 1e-3 && Math.Abs(Raider.HeavyDps - 2.58 * Raider.RaiderDps) < 1e-9 && Raider.RaiderDps == 1,
                   "a heavy raider: four times a light's length, 2.58x the raider damage (2 barrels of 1.29)");
@@ -8381,23 +8855,33 @@ public partial class _Test : Node
             }
             double HvLaser() => hm.DamageBySource.Where(kv => kv.Key == $"raider:{hv.NetId}").Sum(kv => kv.Value);
             double HvMissile() => hm.DamageBySource.Where(kv => kv.Key == $"heavy:{hv.NetId}:missile").Sum(kv => kv.Value);
-            var edge = Raider.EdgeSpot(hm.Position);
-            for (int i = 0; i < 60 * 22 && hv.Position.DistanceTo(edge) > 8f; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            await Wait(0.5);
-            float hvFacing = Mathf.RadToDeg(Mathf.Abs(Mathf.AngleDifference(hv.Rotation, (hm.Position - hv.Position).Angle() + Mathf.Pi / 2f)));
-            Check(hv.Position.DistanceTo(edge) < 10f && Math.Abs(hv.Position.DistanceTo(Hub.BasePos) - 4200f) < 10f && hvFacing < 15f && HvLaser() == 0,
-                  $"its target unpinned, it waits at the map's edge nearest it ({hv.Position.DistanceTo(Hub.BasePos):0} u from the base), facing it, laser silent");
-            // F20: the missile only throws at a PINNED target -- pin it directly (the door's own
-            // checks pin the same way) rather than waiting on the boost-and-close sequence below,
-            // which proves pinning itself.
+            // N8: it never waits. Timed from the first frame its burn SHOWS, not from the spawn.
+            for (int i = 0; i < 60 * 20 && !hv.Boosting; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            float hvAt = hv.Position.DistanceTo(hm.Position); var hb0 = hv.Position; await Wait(0.3);
+            float hvBurn = (hv.Position - hb0).Length() / 0.3f;
+            Check(hv.Boosting && Math.Abs(hvAt - 2250f) < 40f && Math.Abs(hvBurn - 700f) < 60f,
+                  $"a lone heavy never waits at the edge: it cruises in and, {hvAt:0} u out (its own 3 s at 700% plus its 150 u reach: 2250), burns at {hvBurn:0} u/s -- 700, the lone gunship's burn cap");
+            for (int i = 0; i < 60 * 8 && !hv.Latched; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            var astern = -Vector2.Up.Rotated(hm.Rotation);
+            float offAstern = Mathf.RadToDeg(Mathf.Abs(astern.AngleTo(hv.Position - hm.Position)));
+            // TIMED FROM THE EFFECT: the clock starts on the frame a volley lands (HvLaser() grows);
+            // 210 frames then hold exactly three more volleys (at 60, 120, 180), none on an edge
+            bool everPinned = false; double hlLatch = HvLaser();
+            for (int i = 0; i < 60 * 2 && HvLaser() == hlLatch; i++) { everPinned |= hm.Pinned; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            double hl0 = HvLaser();
+            for (int i = 0; i < 210; i++) { everPinned |= hm.Pinned; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            double hdps = (HvLaser() - hl0) / 3.0;
+            Check(hv.Latched && hl0 > hlLatch && !everPinned && offAstern < 10f && Math.Abs(Raider.Gap(hv.Position, hm) - 135f) < 15f && Math.Abs(hdps - 2.58) < 0.4,
+                  $"posted astern ({offAstern:0} deg off dead astern, {Raider.Gap(hv.Position, hm):0} u off the hull) its laser does 2.58 DPS with the target NEVER pinned ({hdps:0.00}, pinned {everPinned})");
+            // N7, the unpinned half: in reach, its clock long run out, and still no missile
+            Check(H.BlastsPending == 0 && HvMissile() == 0, "an unpinned target draws no missile, however long the heavy sits in reach");
+            // N7, the pinned half: pinned by anyone (here the test), the missile comes -- at where it WILL be in its row's 10 s
             hm.ApplyStatus(Status.Pinned, 60.0);
-            // the missile: within 500 u of the heavy, at where the target will be when its row's flight ends
-            hm.Position = edge + (Hub.BasePos - edge).Normalized() * 420f; hm.Velocity = Vector2.Zero;
-            for (int i = 0; i < 60 * 14 && H.BlastsPending == 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            for (int i = 0; i < 60 * 3 && H.BlastsPending == 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             var blastRing = Nodes<FxNode>().FirstOrDefault(t => t.Id == Fx.WarnZone && Math.Abs(t.Radius - Raider.BlastRadius) < 0.1f);
             Check(H.BlastsPending == 1 && blastRing != null && blastRing.Position.DistanceTo(hm.Position) < 6f
                   && Math.Abs(blastRing.Time - 10) < 1e-6 && blastRing.Warn && blastRing.Anchor == Fx.World,
-                  "within 500 u a PINNED target draws it; a red circle -- a warning row of Fx.All, pinned to the ground -- marks it for 10 s, long enough to be somewhere else by then");
+                  "a PINNED target draws it; a red circle -- a warning row of Fx.All, pinned to the ground -- marks it for 10 s, long enough to be somewhere else by then");
             double mm0 = HvMissile();
             for (int i = 0; i < 60 * 12 && H.BlastsPending > 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(Math.Abs(HvMissile() - mm0 - 35) < 1e-6, $"staying on the circle, the gunship row's 35-damage blast lands, 10 s in the air ({HvMissile() - mm0:0})");
@@ -8419,7 +8903,7 @@ public partial class _Test : Node
                   && Missiles.Predict(pz, new Vector2(float.PositiveInfinity, 1), gunFlight) == pz,
                   "the missile leads a sane speed the whole 10 s of its flight -- 10 u/s carried 100 u -- and a wild speed, NaN or infinity aims at where the target is");
             // live: 2700 u/s in 45 u steps (wild, yet under the 50 u jump filter) -- the circle must sit on the ship
-            hm.Position = edge + (Hub.BasePos - edge).Normalized() * 400f; hm.Velocity = Vector2.Zero;
+            for (int i = 0; i < 60 * 12 && hv.Position.DistanceTo(hm.Position) > 350f; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             typeof(Raider).GetField("_missileCd", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(hv, 0.12);
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             int rings0 = Nodes<FxNode>().Count(t => t.Id == Fx.WarnZone);
@@ -8432,29 +8916,6 @@ public partial class _Test : Node
             var wildRing = Nodes<FxNode>().LastOrDefault(t => t.Id == Fx.WarnZone && Math.Abs(t.Radius - Raider.BlastRadius) < 0.1f);
             Check(wildRing != null && wildRing.Position.DistanceTo(atFire) < 100f,
                   $"a target moving at a wild 2700 u/s: the circle sits on it, not 7 s ahead ({(wildRing == null ? -1 : wildRing.Position.DistanceTo(atFire)):0} u off)");
-            // pinned: it boosts at 700% until 300 u away, then closes at cruise and fires 2.58 DPS (both barrels)
-            hm.Position = Hub.BasePos + new Vector2(1900, 0); hm.Velocity = Vector2.Zero; hm.Rotation = 0f;
-            var lights = new[] { H.SpawnRaider(hm.Position + new Vector2(0, -250)), H.SpawnRaider(hm.Position + new Vector2(250, 0)), H.SpawnRaider(hm.Position + new Vector2(-250, 0)) };
-            for (int i = 0; i < 60 * 8 && !hm.Pinned; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            await Wait(0.1); var hp1 = hv.Position; await Wait(0.2);
-            float burn = (hv.Position - hp1).Length() / 0.2f;
-            // the spec's numbers as literals: a check that reads the code's own constant cannot catch it being wrong
-            Check(hm.Pinned && Math.Abs(burn - 700f) < 60f, $"its target pinned, it boosts at 700% ({burn:0} u/s)");
-            for (int i = 0; i < 60 * 6 && hv.Position.DistanceTo(hm.Position) > 300f - 20f; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            var hp2 = hv.Position; await Wait(0.2);
-            float slow = (hv.Position - hp2).Length() / 0.2f;
-            // (over the ground: cruise plus the pinned target's own forced thrust, ~20 u/s)
-            Check(slow <= 100f + 0.2f * (float)hm.Stats["max_speed"] + 5f, $"inside 300 u it closes at cruise ({slow:0} u/s over the ground)");
-            for (int i = 0; i < 60 * 8 && !hv.Latched; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            // TIMED FROM THE EFFECT: the clock starts on the frame a volley lands (HvLaser() grows);
-            // 210 frames then hold exactly three more volleys (at 60, 120, 180), none on an edge
-            double hlLatch = HvLaser();
-            for (int i = 0; i < 60 * 2 && HvLaser() == hlLatch; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            double hl0 = HvLaser();
-            for (int i = 0; i < 210; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            double hdps = (HvLaser() - hl0) / 3.0;
-            Check(hv.Latched && hl0 > hlLatch && Raider.Gap(hv.Position, hm) <= Raider.HeavyReach && Math.Abs(hdps - 2.58) < 0.4,
-                  $"from 135 u off the hull its laser does 2.58 DPS, both barrels at once ({hdps:0.00})");
             foreach (var r in H.Raiders.ToList()) r.TakeDamage(9999);
             await Wait(0.3);
             hm.Position = keepH; hm.Velocity = Vector2.Zero; hm.TakeDamage(-(hm.MaxHp - hm.Hp));
@@ -8464,7 +8925,7 @@ public partial class _Test : Node
         // ── raiders (6c): patrols -- 3 lights and 1 heavy; nothing within 2000 u, no target ──
         {
             int pid = H.SpawnPatrol(Hub.BasePos + new Vector2(0, 6500));
-            var pat = H.Raiders.Where(r => r.Patrol == pid).ToList();
+            var pat = H.Raiders.Where(r => r.Squad?.Id == pid).ToList();
             Check(pat.Count == 4 && pat.Count(r => !r.Heavy) == 3 && pat.Count(r => r.Heavy) == 1, "a patrol: three lights and one heavy");
             await Wait(1.0);
             float pd0 = pat[0].Position.DistanceTo(Hub.BasePos);
@@ -8522,6 +8983,8 @@ public partial class _Test : Node
             await Wait(0.3);
             pm.Position = keepP; pm.Velocity = Vector2.Zero; pm.TakeDamage(-(pm.MaxHp - pm.Hp));
         }
+        await RaidsSquadChecks();
+        await RaidsSightChecks();
 
         // ── the base's own weapons: a 5 DPS laser at 300 u, a tracking 25-damage missile at 600 u -- raiders only ──
         {
@@ -8721,12 +9184,12 @@ public partial class _Test : Node
             var p1 = H.SpawnPatrol(Hub.BasePos + new Vector2(0, -3400));
             var p2 = H.SpawnPatrol(Hub.BasePos + new Vector2(0, -3600));
             await Wait(0.1);
-            var w1 = H.Raiders.Where(r => r.Patrol == p1).ToList();
-            var w2 = H.Raiders.Where(r => r.Patrol == p2).ToList();
+            var w1 = H.Raiders.Where(r => r.Squad?.Id == p1).ToList();
+            var w2 = H.Raiders.Where(r => r.Squad?.Id == p2).ToList();
             Check(w1.Count > 0 && w2.Count > 0 && w1.Select(r => r.Kind).Distinct().Count() == 2
                   && w1.Select(r => r.Kind).First() != w2.Select(r => r.Kind).First(),
                   $"one patrol of each way, and the next wave draws different kinds ({string.Join(",", w1.Select(r => Enemies.Of(r.Kind).Name).Distinct())} then {string.Join(",", w2.Select(r => Enemies.Of(r.Kind).Name).Distinct())})");
-            foreach (var r in H.Raiders.Where(r => r.Patrol == p1 || r.Patrol == p2).ToList()) r.TakeDamage(99999);
+            foreach (var r in H.Raiders.Where(r => r.Squad?.Id == p1 || r.Squad?.Id == p2).ToList()) r.TakeDamage(99999);
             await Wait(0.3);
 
             // ── A WAVE IS A ROW (Waves.All) ─────────────────────────────────
@@ -10378,6 +10841,8 @@ public partial class _Test : Node
             Check(Math.Abs((double)leftWith.GetValue("base", "credits", -1.0) - 424242) < 1e-6,
                   $"leaving for the arena writes the base to disk on the way out ({(double)leftWith.GetValue("base", "credits", -1.0):0} of 424242)");
             var boss = H.Boss;
+            Raids.Held = true;                                   // the fight's adds held: the boss's own moves are on trial first
+            foreach (var r in H.Raiders.ToList()) H.RaiderDown(r);
             Check(boss != null && boss.Alive && boss.Type.Id == "silver_lancer" && boss.Type.Name == "RUSTY BUCKET" && H.Yard == null && !Nodes<TargetDummy>().Any() && Combat.Hostiles.Contains(boss),
                   "the arena at level 1: the Silver Lancer, and no base or dummies");
             // THE LEVEL'S OWN COPY of every move. At level 1 the scale is exactly 1, so the boss
@@ -10394,11 +10859,11 @@ public partial class _Test : Node
                       $"the boss flies the level's own copy of its rows: at level {Missions.Level} the scale is x{q1:0.000}, so its {flown.Id} winds up in {slot?.M.Windup:0.00} s and reaches {slot?.M.Reach:0} u -- its row's own figures");
             }
             // ITS MOVES ARE ROWS, so what follows reads the SLOT a row drives, by that row's id.
-            // A beam's phases: Opening -- its escorts are out; Winding -- the red line is charging;
+            // A beam's phases: Opening -- armed, waiting on a web; Winding -- the red line is charging;
             // Firing -- it is burning down that line. These were five private fields and a
             // reflection handle each.
             Boss.Slot BeamSlot() => boss.S("beam");
-            bool EscortsOut() => BeamSlot().At == Boss.Phase.Opening;
+            bool BeamArmed() => BeamSlot().At == Boss.Phase.Opening;
             bool BeamCharging() => BeamSlot().At == Boss.Phase.Winding;
             bool BeamLive() => BeamSlot().At == Boss.Phase.Firing;
             bool Ramming() => boss.S("ram").At == Boss.Phase.Firing;
@@ -10451,11 +10916,15 @@ public partial class _Test : Node
                       && bm.Tick == 0.25 && bm.Damage == 50 && bm.Reach == 10000f && bm.Width == 70f
                       && bm.Busy && bm.Super && bm.Waits == MoveWait.Itself && bm.Source == "boss:beam"
                       && bm.Cue == "boss_beam_charge" && bm.Strike == "boss_beam"
-                      && bm.Escorts == 2 && bm.EscortKind == Enemies.Webifier && bm.EscortAngle == 45f
-                      && bm.EscortOut == 13f / 7f && Math.Abs(bm.EscortOut * lan.HalfWidth - 260f) < 0.01f
-                      && bm.EscortHull == 3 && bm.WebGrace == 1.0 && bm.WebSlack == 1.0
-                      && bm.ArmMax == 5.0 && bm.ArmMax < bm.Windup,
-                      $"the beam: wind-up {bm.Windup} s, live {bm.Live} s judged every {bm.Tick} s for {bm.Damage}, 70 u wide down 10000 u; two escorts 45 degrees off, 260 u out (130 on the 1x hull), at 3 hull, never stalling it past 5 s");
+                      && bm.ArmMax == 5.0 && bm.ArmMax < bm.Windup && bm.Escape == 0.6 && bm.React == 2.0
+                      && Math.Abs(bm.StripShare - 55.0 / 46.0) < 1e-12 && Math.Abs(bm.StripDps - 0.7 * 57.6) < 1e-9,
+                      $"the beam: wind-up {bm.Windup} s, live {bm.Live} s judged every {bm.Tick} s for {bm.Damage}, 70 u wide down 10000 u; it waits on a web 5 s at most, and its escape floor is 2 s + 55/46 x pinner hull / (0.7 x 57.6) + 0.6 s");
+                // THE ESCAPE FLOOR BY LITERAL (numbers_curve_raids_items.md §2.1): 2 webifiers 4.08 s, 3 webifiers
+                // 4.82, 3 talons 4.20, 3 pods 7.94 -- the row read once here, against the model's figures
+                double FloorFor(double hull) => bm.React + bm.StripShare * hull / bm.StripDps + bm.Escape;
+                Check(Math.Abs(FloorFor(2 * Enemies.Of(Enemies.Webifier).Hull) - 4.08) < 0.01 && Math.Abs(FloorFor(3 * Enemies.Of(Enemies.Webifier).Hull) - 4.82) < 0.01
+                      && Math.Abs(FloorFor(3 * Enemies.Of(Enemies.Talon).Hull) - 4.20) < 0.01 && Math.Abs(FloorFor(3 * Enemies.Of(Enemies.Pod).Hull) - 7.94) < 0.01,
+                      $"the escape floor, priced on the slowest class: 2 webifiers {FloorFor(50):0.00} s, 3 webifiers {FloorFor(75):0.00}, 3 talons {FloorFor(54):0.00}, 3 pods {FloorFor(180):0.00}");
                 var rm = L("ram");
                 Check(rm.Way == MoveWay.Dash && rm.Every == 30 && rm.First == 21.0 && rm.Windup == 1.5
                       && rm.Damage == 29.8 && rm.Reach == 900f && rm.Speed == 1200f && rm.Width == 0f
@@ -10561,10 +11030,10 @@ public partial class _Test : Node
                         if (liveT > 2.0 && Nodes<FxNode>(boss).Any(x => x.Id == Fx.WarnLane)) liveDrawn = true;
                         if (liveT > 1.9 && !sidestep) { sidestep = true; me2.Position += Vector2.Right.Rotated(boss.Rotation) * 400f; }
                     }
-                    // The beam's place in the rhythm is where it COMMITS -- its escorts going out.
-                    // Its red line comes later, when their web pins the pilot, so timing the rhythm
-                    // off the telegraph would measure that wait, not the rhythm.
-                    if (tBeam < 0 && H.Raiders.Any(r => r.IsEscort)) tBeam = arenaT;
+                    // The beam's place in the rhythm is where it COMMITS -- armed, waiting on a web.
+                    // Its red line comes later, when a web pins the pilot, so timing the rhythm off
+                    // the telegraph would measure that wait, not the rhythm.
+                    if (tBeam < 0 && BeamSlot().At != Boss.Phase.Idle) tBeam = arenaT;
                     foreach (var tl in Nodes<FxNode>().Where(x => x.Id == Fx.WarnLane))
                         if (tCharge < 0 && Math.Abs(tl.Radius - 280f) < 0.1f) tCharge = arenaT;   // the ram's lane: the doubled hull's 280 u beam
                     if (tVolley < 0 && boss.S("trident").Fired > 0)
@@ -10578,35 +11047,14 @@ public partial class _Test : Node
                 }
             }
             Watch();
-            // The death beam OPENS WITH ITS ESCORTS, well before any red line: two fragile lights
-            // 45 degrees to port and starboard of the nose, shivering on the spot while they come
-            // round onto the pilot. The beam starts charging once their web has pinned the pilot.
-            var escorts = new System.Collections.Generic.List<Raider>();
-            for (int i = 0; i < 60 * 20 && escorts.Count < 2; i++) { escorts = H.Raiders.Where(r => r.IsEscort).ToList(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
-            var bnose = Vector2.Up.Rotated(boss.Rotation);
-            var escAng = escorts.Select(r => Mathf.RadToDeg(bnose.AngleTo(r.Position - boss.Position))).OrderBy(x => x).ToList();
-            // ...AS FAR CLEAR OF THE DOUBLED HULL as they stood of the old one: 260 u out, twice the
-            // 130 (13/7 of the 140 u half-width). Read while they shiver on the launch point, which
-            // shakes them a few units: 12 u either way, and 130 is far outside it.
-            var escOut = escorts.Select(r => r.Position.DistanceTo(boss.Position)).ToList();
-            Check(escorts.Count == 2 && Math.Abs(escAng[0] + 45) < 12 && Math.Abs(escAng[1] - 45) < 12
-                  && escOut.All(d => Math.Abs(d - 260f) < 12f)
-                  && escorts.All(r => r.Target == me2 && r.Hp > 0 && r.Hp <= 3 * Par.CraftScale(Missions.Level) + 1e-6),
-                  $"two escorts launch at the pilot, 45 degrees to port and starboard ({string.Join(", ", escAng.Select(x => x.ToString("0")))}), 260 u out from the doubled hull's centre ({string.Join(", ", escOut.Select(x => x.ToString("0")))}), fragile");
-            Check(escorts.All(r => r.Shivering), "the escorts shiver at the launch point before the run in");
-            // ── A BOSS'S ESCORTS ARE NOT THE LANCER'S: one more every ten levels, to five ──
-            // The count was the row's alone, so every boss that ever calls craft in would have had
-            // to grow its own. It belongs to the move table: a move that calls nothing still calls
-            // nothing, and the fan spreads across the same arc whatever the count, so five need no
-            // new formation.
-            var callsThem = Missions.ForLevel(1).Moves.First(m => m.Escorts > 0);
-            var callsNone = Missions.ForLevel(1).Moves.First(m => m.Escorts == 0);
-            Check(Boss.EscortsAt(callsThem, 1) == 2 && Boss.EscortsAt(callsThem, 10) == 2
-                  && Boss.EscortsAt(callsThem, 11) == 3 && Boss.EscortsAt(callsThem, 21) == 4
-                  && Boss.EscortsAt(callsThem, 31) == 5 && Boss.EscortsAt(callsThem, 99) == 5
-                  && Boss.EscortsAt(callsNone, 99) == 0,
-                  $"a move's escorts grow with the level and stop at five: {Boss.EscortsAt(callsThem, 1)} at level 1, {Boss.EscortsAt(callsThem, 11)} at 11, {Boss.EscortsAt(callsThem, 21)} at 21, {Boss.EscortsAt(callsThem, 31)} at 31, {Boss.EscortsAt(callsThem, 99)} at 99 -- and a move that calls none still calls none");
-            // ESCORTS OUT, THE BOSS ALREADY HOLDS ITS POSITION -- and turns only to face the pilot. Pushed
+            // The death beam OPENS BY ARMING, well before any red line: it holds and faces the pilot and
+            // waits on a web -- and launches NOTHING of its own. The Rusty's two escorts are its fight's
+            // squad wave 1 now (Waves.All "bounty_adds"), so the craft that pin for it are its adds.
+            for (int i = 0; i < 60 * 20 && !BeamArmed(); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            int atArm = H.Raiders.Count; await Wait(0.3);
+            Check(BeamArmed() && !BeamCharging() && H.Raiders.Count <= atArm,
+                  $"the beam arms and waits on a web, launching no craft of its own ({atArm} raiders at arming, {H.Raiders.Count} after)");
+            // ARMED, THE BOSS ALREADY HOLDS ITS POSITION -- and turns only to face the pilot. Pushed
             // out past its hold-off (470 u off its nose, 830 from the centre of the 720 u hull, where it
             // would otherwise close at 30 u/s) -- 700 u plus the half-length, so even from beside the
             // pilot it lands past it -- and twisted 0.6 rad off the pilot first, so both "it held" and
@@ -10620,36 +11068,19 @@ public partial class _Test : Node
                 float armOff0 = Off();
                 await Wait(0.35);
                 float armOff1 = Off();
-                Check(EscortsOut() && !BeamCharging() && boss.Locked && boss.Position.DistanceTo(armAt) < 0.01f && armOff0 - armOff1 > 0.07f,
-                      $"escorts out, the boss holds its position already ({boss.Position.DistanceTo(armAt):0.000} u) and turns only to face the pilot ({armOff0:0.000} -> {armOff1:0.000} rad)");
+                Check(BeamArmed() && !BeamCharging() && boss.Locked && boss.Position.DistanceTo(armAt) < 0.01f && armOff0 - armOff1 > 0.07f,
+                      $"armed, the boss holds its position already ({boss.Position.DistanceTo(armAt):0.000} u) and turns only to face the pilot ({armOff0:0.000} -> {armOff1:0.000} rad)");
                 boss.Position = armHome;
             }
-        // ON THE WIRE. Boosting and Shivering are read by _Draw, and both were host-only: a guest
-        // drew neither the escorts' triple-length plume nor any raider's boost plume. They ride
-        // the raider packet as two bits now. Bit values as literals, not Raider.FlagShiver -- a
-        // check that reads the constant cannot catch the constant changing under it.
-        //
-        // An escort is boost-ARMED while it shivers (the boost is not spent sitting still), so
-        // both bits are set here and only the shiver bit clears when it goes. Asserting the pair
-        // BEFORE and AFTER is what makes this a check on the bits rather than on one snapshot:
-        // a NetFlags stuck at any constant value fails one half or the other.
-        var shiverFlags = escorts.Select(r => r.NetFlags).ToList();
-        Check(escorts.All(r => (r.NetFlags & 2) != 0),
-              $"a shivering escort says so on the wire ({string.Join(",", shiverFlags)})");
-        for (int i = 0; i < 60 * 4 && escorts.Any(r => r.Shivering); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-        var runFlags = escorts.Where(r => r.Alive).Select(r => r.NetFlags).ToList();
-        Check(runFlags.Count > 0 && runFlags.All(f => (f & 2) == 0) && runFlags.Any(f => (f & 1) != 0),
-              $"and once it goes, the shiver bit clears and the boost bit stands ({string.Join(",", runFlags)})");
-            Check(!Nodes<FxNode>().Any(t => t.Id == Fx.WarnLane), "no beam line yet: the escorts go first, the charge follows their web");
-            // THE CHARGE STARTS ON THE PIN -- not on a guess made at launch. Pinned now, well before the
-            // web was predicted to land, it charges at once (the old boss waited out its estimate).
-            if (EscortsOut())
+            Check(!Nodes<FxNode>().Any(t => t.Id == Fx.WarnLane), "no beam line yet: armed, the charge follows a web");
+            // THE CHARGE STARTS ON ANY PIN of its target (owner, raids v2: an add's web may start it).
+            // Pinned now, by nobody's craft, well inside its 5 s wait, it charges at once.
+            if (BeamArmed())
             {
-                double predicted = BeamSlot().Predict;
                 me2.ApplyStatus(Status.Pinned, 0.3);
                 await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-                Check(BeamCharging() && BeamSlot().Cause == "pinned" && BeamSlot().ArmedFor < predicted - 0.2,
-                      $"the charge starts the moment the pilot is pinned, before the web was predicted to land ({BeamSlot().Cause} at {BeamSlot().ArmedFor:0.00} s, predicted {predicted:0.00} s)");
+                Check(BeamCharging() && BeamSlot().Cause == "pinned" && BeamSlot().ArmedFor < 5.0 - 0.2,
+                      $"the charge starts the moment the pilot is pinned -- by any web, not only a craft of its own ({BeamSlot().Cause} at {BeamSlot().ArmedFor:0.00} s of its 5)");
             }
             else Check(BeamCharging() && BeamSlot().Cause == "pinned",
                        $"the charge starts the moment the pilot is pinned ({BeamSlot().Cause} at {BeamSlot().ArmedFor:0.00} s)");
@@ -10693,7 +11124,7 @@ public partial class _Test : Node
             // was pinned, and tracked it otherwise, so only a free pilot tells the two apart. Point
             // defence clears the escorts and the web lets go; then, twisted well off the pilot, the boss
             // does not turn back. A boss that tracked would close 0.15 rad of the 0.6 in the 0.5 s.
-            for (int i = 0; i < 60 * 4 && (me2.Pinned || H.Raiders.Any(r => r.IsEscort)); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            for (int i = 0; i < 60 * 4 && me2.Pinned; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             boss.Rotation += 0.6f;
             float heldAt = boss.Rotation;
             await Wait(0.5);
@@ -10706,7 +11137,9 @@ public partial class _Test : Node
             int down0 = Shot.Intercepted;
             for (int i = 0; i < 60 * 10 && Shot.Intercepted == down0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(Shot.Intercepted > down0, "point defence, with nothing pressed, shoots the boss's missiles down");
-            Check(!H.Raiders.Any(r => r.IsEscort), "point defence, always on, kills the beam's escorts");
+            var pdPrey = H.SpawnRaider(me2.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(250f, 400f));
+            for (int i = 0; i < 60 * 6 && GodotObject.IsInstanceValid(pdPrey) && pdPrey.Alive; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(!GodotObject.IsInstanceValid(pdPrey) || !pdPrey.Alive, "point defence, always on, kills a webifier coming for the pilot");
             var aMissile = InFlight().FirstOrDefault(t => t.HostileFire);
             Check(Turret.Rank(boss) == 2 && (aMissile == null || Turret.Rank(aMissile) == 0), "point defence takes missiles before anything else");
             var tiny = new StandIn { Tags = Tag.Light };
@@ -10717,15 +11150,15 @@ public partial class _Test : Node
             for (int i = 0; i < 60 * 18 && ring == null; i++) { ring = Nodes<FxNode>().FirstOrDefault(t => t.Id == Fx.WarnZone); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
             Check(ring != null && ring.Radius == 680f && boss.S("wave").M.Reach == 340f && ring.Anchor == Fx.World,
                   "the shockwave is telegraphed: a red zone 680 u across (the row's 340, twice for the doubled hull), on the ground, before it lands");
-            // without point defence, a pair of escorts reaches the pilot and pins it inside the charge.
+            // without point defence, a pair of webifiers reaches the pilot and pins it inside the charge.
             // It cannot be switched off, so its reach is 0 (test only) from here to the end of the
             // fight: the rhythm, the fallbacks and stealth below are all read with no point defence.
             double lancerReach = PdReachOff(me2);
-            boss.LaunchEscorts("beam", me2);
+            var pair = new[] { -45f, 45f }.Select(a => H.SpawnRaider(boss.Position + Vector2.Up.Rotated(boss.Rotation + Mathf.DegToRad(a)) * Vary(130f, 260f))).ToList();
             bool pinnedInTime = false;
             for (int i = 0; i < (int)(60 * BeamSlot().M.Windup) && !pinnedInTime; i++) { pinnedInTime = me2.Pinned; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
-            Check(pinnedInTime, "left alone (no point defence), the escorts pin the pilot before the charge ends");
-            foreach (var r in H.Raiders.Where(r => r.IsEscort).ToList()) r.TakeDamage(999);
+            Check(pinnedInTime, "left alone (no point defence), two webifiers off the boss's nose pin the pilot inside a wind-up's 6 s");
+            foreach (var r in pair.Where(GodotObject.IsInstanceValid)) r.TakeDamage(999);
             for (int i = 0; i < 60 * 25 && (tCharge < 0 || Ramming() || tVolley < 0); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             await Wait(1.0);
             GD.Print($"  boss rhythm: beam {tBeam:0.0} s, trident {tVolley:0.0} s, charge {tCharge:0.0} s; trident of {trident}, spread {Mathf.RadToDeg(spread):0} deg");
@@ -10742,10 +11175,11 @@ public partial class _Test : Node
             Check(sidestep && liveTurn < 0.01f, $"the live beam holds the line it drew, with the pilot gone from it (turned {Mathf.RadToDeg(liveTurn):0.00} deg)");
             Check(liveDrawn, "and the line is still drawn 2 s into its 3 s burn");
             Check(Music.I == null || Math.Abs(boss.S("trident").M.Speed - 135f) < 1e-3, "trident missiles fly at 135 u/s (10% slower)");
-            // THE FALLBACKS, each on a beam started by hand. The escorts shot down: the charge still comes,
-            // but not before their web would have landed. Escorts that neither pin nor die (the pilot far
-            // off): they cannot stall it past 5 s. And the ram waits out a beam rather than snapping round
-            // in the middle of one.
+            // THE FALLBACKS AND THE FLOOR, each on a beam started by hand. Webs already on the pilot: the
+            // wind-up is at least their escape floor. Webs that land DURING the wind-up stretch what is
+            // left to the floor for them all (the live floor), and a pilot that strips them still has
+            // 0.6 s to leave the line. Nothing pinning: it cannot stall past 5 s. And the ram waits out
+            // a beam rather than snapping round in the middle of one.
             {
                 // A MOVE IS ARMED BY ITS ROW'S CLOCK, so each fallback is started by putting that
                 // clock on the point of coming round -- no reflection, and a renamed field can no
@@ -10753,13 +11187,49 @@ public partial class _Test : Node
                 bool RamLine() => Nodes<FxNode>().Any(t => t.Id == Fx.WarnLane && Math.Abs(t.Radius - 280f) < 0.1f) || boss.S("ram").At != Boss.Phase.Idle;   // the doubled hull's 280 u beam
                 for (int i = 0; i < 60 * 12 && (boss.Locked || RamLine()); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                 me2.Position = boss.Position + new Vector2(0, 500); me2.Velocity = Vector2.Zero;
+                var bmRow = BeamSlot().M;
+                double Floor5() => bmRow.React + bmRow.StripShare * 5 * Enemies.Of(Enemies.Webifier).Hull / bmRow.StripDps + bmRow.Escape;
+                // FIVE WEBS ON FIRST: the charge starts on their pin, wound up for their floor, not the row's 6 s
+                var five = Enumerable.Range(0, 5).Select(_ => H.SpawnRaider(me2.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(200f, 380f))).ToList();
+                for (int i = 0; i < 60 * 8 && !five.All(r => r.Latched); i++) { me2.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
                 BeamSlot().Due = 0.01;
-                for (int i = 0; i < 60 * 3 && !EscortsOut(); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-                double predictD = BeamSlot().Predict;
-                foreach (var r in H.Raiders.Where(r => r.IsEscort).ToList()) r.TakeDamage(999);
+                for (int i = 0; i < 60 * 3 && !BeamCharging(); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                double startLeft = boss.WindupLeft("beam");
+                Check(BeamCharging() && BeamSlot().Cause == "pinned" && Floor5() > bmRow.Windup && Math.Abs(startLeft - Floor5()) < 0.05,
+                      $"five webs already on the pilot: the charge starts on their pin, wound up for their escape floor, {startLeft:0.00} s of {Floor5():0.00} (not the row's {bmRow.Windup} s)");
+                foreach (var r in five) r.TakeDamage(999);
+                for (int i = 0; i < 60 * 10 && (BeamCharging() || BeamLive()); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                for (int i = 0; i < 60 * 12 && (boss.Locked || RamLine()); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                // THE LIVE FLOOR: nothing pinning when it charges ("overdue"), then five webs land in the
+                // wind-up at a seeded moment -- what is left becomes their floor, and a pilot that strips
+                // them the instant the last one latches still has 0.6 s before the first judgement
+                me2.Position = boss.Position + new Vector2(0, 3000); me2.Velocity = Vector2.Zero;
+                BeamSlot().Due = 0.01;
+                for (int i = 0; i < 60 * 8 && !BeamCharging(); i++) { me2.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+                Check(BeamCharging() && BeamSlot().Cause == "overdue" && Math.Abs(BeamSlot().ArmedFor - 5.0) < 0.05,
+                      $"nothing pinning cannot stall it: it charges 5 s after arming ({BeamSlot().Cause} at {BeamSlot().ArmedFor:0.00} s)");
+                await Wait(Vary(0.5f, 2.5f));
+                me2.Position = boss.Position + (me2.Position - boss.Position).Normalized() * 500f; me2.Velocity = Vector2.Zero;
+                var late = Enumerable.Range(0, 5).Select(_ => H.SpawnRaider(me2.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(200f, 380f))).ToList();
+                for (int i = 0; i < 60 * 8 && !late.All(r => r.Latched) && BeamCharging(); i++) { me2.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                double lateLeft = boss.WindupLeft("beam");
+                foreach (var r in late) r.TakeDamage(999);
+                double freeAt = -1, hitAt = -1, tt = 0; double beamDmg0 = me2.DamageBySource.GetValueOrDefault("boss:beam");
+                for (int i = 0; i < 60 * 12 && hitAt < 0; i++)
+                {
+                    await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); tt += 1.0 / 60;
+                    if (freeAt < 0 && !me2.Pinned) freeAt = tt;
+                    if (BeamLive() && hitAt < 0) hitAt = tt;
+                }
+                Check(late.All(r => !GodotObject.IsInstanceValid(r) || !r.Alive) && Math.Abs(lateLeft - Floor5()) < 0.1 && freeAt >= 0 && hitAt - freeAt >= 0.6 - 1e-3,
+                      $"five webs landing in the wind-up stretch it to their floor ({lateLeft:0.00} s left of {Floor5():0.00}), and stripped at once the pilot is free {hitAt - freeAt:0.00} s before the first judgement (never under 0.6)");
+                for (int i = 0; i < 60 * 6 && (BeamCharging() || BeamLive()); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                me2.Position = boss.Position + new Vector2(0, 500); me2.Velocity = Vector2.Zero;
+                me2.Hp = me2.MaxHp;
+                for (int i = 0; i < 60 * 12 && (boss.Locked || RamLine()); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                BeamSlot().Due = 0.01;
                 for (int i = 0; i < 60 * 8 && !BeamCharging(); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-                Check(BeamCharging() && BeamSlot().Cause == "escorts down" && BeamSlot().ArmedFor >= predictD - 0.02 && BeamSlot().ArmedFor < predictD + 0.1,
-                      $"the escorts shot down, the beam still charges -- once their web would have landed, not before ({BeamSlot().Cause} at {BeamSlot().ArmedFor:0.00} s, web due {predictD:0.00} s)");
                 // the ram falls due in the middle of this beam: it waits for the beam to end, then comes
                 boss.S("ram").Due = 0.01;
                 bool ramDuringBeam = false;
@@ -10769,16 +11239,10 @@ public partial class _Test : Node
                 for (int i = 0; i < 60 * 3 && !ramAfter; i++) { ramAfter = RamLine(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
                 Check(!ramDuringBeam && ramAfter, $"the ram, due mid-beam, waits for the beam to end and then comes (during: {ramDuringBeam}, after: {ramAfter})");
                 for (int i = 0; i < 60 * 6 && (boss.Locked || RamLine()); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-                // the pilot 3000 u off: the escorts need longer than 5 s to reach it
-                me2.Position = boss.Position + new Vector2(0, 3000); me2.Velocity = Vector2.Zero;
-                BeamSlot().Due = 0.01;
-                for (int i = 0; i < 60 * 8 && !BeamCharging(); i++) { me2.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
-                Check(BeamCharging() && BeamSlot().Cause == "overdue" && Math.Abs(BeamSlot().ArmedFor - 5.0) < 0.05,
-                      $"escorts that neither pin nor die cannot stall it: it charges 5 s after they launch ({BeamSlot().Cause} at {BeamSlot().ArmedFor:0.00} s)");
-                foreach (var r in H.Raiders.Where(r => r.IsEscort).ToList()) r.TakeDamage(999);
                 me2.Position = boss.Position + new Vector2(0, 500); me2.Velocity = Vector2.Zero;
             }
             await LaneABurnClockChecks(boss, me2);
+            await RaidsArenaAddsChecks(boss, me2);
             await LaneAOutDoorBossChecks(boss, me2);
             await FieldsRipChecks(boss, "Lancer", boss.Type.Id == "silver_lancer" ? 57.6f : float.NaN, false);
             // ── STEALTH STOPS THE BOSS CHOOSING, NEVER HITTING, AND NEVER STOPS THE FIGHT ──
@@ -10968,9 +11432,11 @@ public partial class _Test : Node
             Character.Exp = 0; Character.Level = 1; Character.BossCleared.Clear(); Character.Points = 0; Character.BossCleared.Clear();
             // (hints off meanwhile: a card starting mid-way would move the batched save these checks time)
             Character.HintsOff = true;
-            // clear of where the crates will fall, with the boss's escorts out (they must die with it)
+            Raids.Held = false;                                  // the clock free again for every arena after this one
+            // clear of where the crates will fall, with adds out (they must go with it)
             Me.Position = boss.Position + new Vector2(0, 1500); Me.Velocity = Vector2.Zero;
-            boss.LaunchEscorts("beam", Me); await Wait(0.1);
+            for (int i = 0; i < 2; i++) H.SpawnRaider(Me.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(900f, 1200f));
+            await Wait(0.1);
             int escortsOut = H.Raiders.Count;
             int HoldOnDisk() { var c = new ConfigFile(); if (c.Load($"{Character.Dir}/{Character.Id}.cfg") != Error.Ok || !c.HasSection("gear_hold")) return 0;
                                return c.GetSectionKeys("gear_hold").Sum(k => (int)c.GetValue("gear_hold", k, 0)); }
@@ -11002,7 +11468,8 @@ public partial class _Test : Node
             Check(dropped.Count == 2 && Character.Unclaimed.Count == 2 && UnclaimedOnDisk() == 2
                   && dropped.All(c => c.Position.DistanceTo(bossAt) < 300 && Equipment.ById(c.Item) is { Kit: false, Rarity: Rarity.Common }),
                   $"a level-1 boss drops this pilot 2 Common crates where it died, on disk at once ({dropped.Count} crates, {UnclaimedOnDisk()} on disk)");
-            Check(escortsOut >= 2 && H.Raiders.Count == 0, $"the boss's escorts die with it ({escortsOut} out, {H.Raiders.Count} left)");
+            Check(escortsOut >= 2 && H.Raiders.Count == 0 && H.Squads.Count == 0 && H.Posts.Held == 0,
+                  $"the fight's adds go with the boss ({escortsOut} out, {H.Raiders.Count} left, {H.Squads.Count} squads, {H.Posts.Held} posts)");
             me2.Stats.SetBase("pd_range", lancerReach);                    // the fight is over: point defence back
             // NO CLOCK any more: the failure timer is not armed on a win, and a RETURN button appears
             double solEndT = (double)typeof(Hub).GetField("_arenaEndT", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(H);
@@ -11380,9 +11847,9 @@ public partial class _Test : Node
             double sL = Par.CraftScale(failLevel);
             var raid = H.Raiders.ToList();
             GD.Print($"  raid: {raid.Count} raiders, level {failLevel} (x{sL:0.00}), {raid.Min(r => r.Position.DistanceTo(Hub.BasePos)):0}-{raid.Max(r => r.Position.DistanceTo(Hub.BasePos)):0} u out");
-            Check(raid.Count == 8 && raid.Count(r => r.Heavy) == 2 && raid.Select(r => r.Patrol).Distinct().Count() == 2,
+            Check(raid.Count == 8 && raid.Count(r => r.Heavy) == 2 && raid.Select(r => r.Squad.Id).Distinct().Count() == 2,
                   "a failed mission: the boss sends 2 patrols (3 lights and a heavy each)");
-            Check(raid.All(r => Math.Abs(r.Position.DistanceTo(Hub.BasePos) - Hub.RaidEdge) < 110f), "in from the edge of the base's map (3200 u out)");
+            Check(raid.All(r => Math.Abs(r.Position.DistanceTo(Hub.BasePos) - Hub.RaidEdge) < 110f), "in from the edge of the base's map (4200 u out), every slot of the vee within 62 u of its squad's spot");
             Check(raid.All(r => Math.Abs(r.Strength - failLevel) < 1e-9 && Math.Abs(r.MaxHull - Enemies.Of(r.Kind).Hull * sL) < 1e-6),
                   $"at the failed boss's level: Strength IS the level ({failLevel}), hull x{sL:0.00} (Par's craft scale)");
             foreach (var r in raid) r.TakeDamage(1e9);
@@ -11492,8 +11959,9 @@ public partial class _Test : Node
                 // Waves.All -- but at FULL hull and the mission's own strength: the escort halves
                 // its hunters (Waves.HunterHull), and none of that reaches here.
                 var siegeRow = Missions.KindOf(Missions.Siege);
-                Check(siegeRow.WaveEvery > 0 && Missions.KindOf(Missions.Bounty).WaveEvery == 0,
-                      $"the wave clock is the mission ROW's: a siege every {siegeRow.WaveEvery:0} s from {siegeRow.FirstWave:0} s, a bounty none");
+                var bountyRow = Missions.KindOf(Missions.Bounty);
+                Check(siegeRow.WaveEvery == 25 && siegeRow.FirstWave == 12 && bountyRow.FirstWave == 0 && bountyRow.WaveEvery == 30,
+                      $"the wave clock is the mission ROW's: a siege every {siegeRow.WaveEvery:0} s from {siegeRow.FirstWave:0} s; a bounty's adds from {bountyRow.FirstWave:0} s, a wiped slot back in {bountyRow.WaveEvery:0} s");
                 int raid0 = H.Raiders.Count;
                 H.GarrisonWave(Hub.ArenaCentre, 0); await Wait(0.3);
                 var wave = H.Raiders.Skip(raid0).ToList();
@@ -13099,6 +13567,7 @@ public partial class _Test : Node
                 Check(cruiseStood && !hostCruise.Alive && Shot.Intercepted == cruiseDown0 + 1,
                       $"arena host: a cruise missile at the guest stands half its {hostRound.Hull:0} hull and falls to the other half ({Shot.Intercepted - cruiseDown0} down)");
             }
+            await RaidsHostAddsWire(gship);
             // Long enough for the guest to watch the super-move bar move, and no longer: this
             // scenario has a second arena visit after it, and a stay stretched to fit a whole beam
             // cycle pushed that off the end of every wait that follows. (Two of its four seconds are
@@ -13364,6 +13833,7 @@ public partial class _Test : Node
             await ToArena("arena guest", "mission 1");
             var s2Held = S2HeldBossGuest();
             await GuestSeesTheFight();
+            await RaidsGuestAddsWire();
             await FieldsGuestRipChecks(ripWatch);
             if (Wan) Check(Net.Arriving(1.5) < 1.45 && Net.Arriving(1.5) >= 0.6,
                            $"over the internet, a 1.5 s warning is shown a round trip short, so it ends when this pilot is judged ({Net.Arriving(1.5):0.00} s)");
@@ -13586,6 +14056,151 @@ public partial class _Test : Node
 
     // WHAT A GUEST IS SHOWN. Both of these were host-only state read by drawing code, so on a
     // guest they were simply wrong -- and nothing said so, because the solo run is the host.
+    // ── LANE G (raids v2) ON THE WIRE (N18), the host's half: the level-1 arena's squad wave 1 is up
+    // (two webifiers, paying 6 each); once the guest has watched the super bar, a lone webifier webs
+    // the GUEST, the beam is made due and must charge on that web (the guest is its nearest pilot:
+    // this host stands off), and one of the paying adds is shot down -- the guest is paid by
+    // NetKillExp at its own level. First, a gank squad of its own burns onto the guest and latches, for
+    // the guest's HUD line. The guest's half (RaidsGuestAddsWire) reads all of it off the wire.
+    async Task RaidsHostAddsWire(PlayerShip guest)
+    {
+        var boss = H.Boss;
+        if (guest == null || boss == null) { Check(false, "arena host: no guest or no boss for the adds on the wire"); return; }
+        await Wait(3.0);                                           // the guest's super-bar watch is over first
+        var paying = H.Raiders.Where(r => r.Worth > 0).ToList();
+        boss.S("beam").At = Boss.Phase.Idle; boss.S("beam").Due = 999;   // a beam of its own clock's, stood down
+        Me.Position = boss.Position + (Me.Position - boss.Position).Normalized() * 3600f; Me.Velocity = Vector2.Zero;
+        // THE GANK LINE ON THE WIRE (§1e): a gank squad -- a gunship and three webifiers -- formed at a
+        // seeded bearing inside its commit range of the GUEST (0.55-0.8 of the webifiers' 1600 u) burns
+        // onto it and latches; the guest's half reads its HUD line off the packet alone. The beam is
+        // stood down, so these webs start nothing; the guest's point defence is out of reach for the
+        // while (the SQUAD on trial, test only); the squad is shot down and the web let go before the
+        // lone web below
+        double guestPd = PdReachOff(guest);
+        var gankKinds = new[] { Enemies.Gunship, Enemies.Webifier, Enemies.Webifier, Enemies.Webifier };
+        float gankFrom = Squads.CommitOf(gankKinds.Select(Enemies.Of)) * Vary(0.55f, 0.8f);
+        var gankAt = guest.Position + Vector2.Right.Rotated(VaryAngle()) * gankFrom;
+        float gankFace = Aim.Face(gankAt, guest.Position);
+        var gank = H.FormSquad(Squads.Gank, gankAt, gankFace);
+        gank.Quarry = guest;
+        var ganks = gankKinds.Select((k, i) => H.SpawnRaider(gankAt + new Vector2(70f * (i - 1.5f), 40f * (i % 2)).Rotated(gankFace), k, gank)).ToList();
+        bool GankUp() => ganks.All(r => r != null && GodotObject.IsInstanceValid(r) && r.Alive);
+        await RealTime(() => !GankUp() || ganks.All(r => r.Latched), 6);
+        bool gankHeld = GankUp() && ganks.All(r => r.Latched && ReferenceEquals(r.Target, guest));
+        await Wait(0.6);                                           // the guest sees every member hold its line
+        Check(gankHeld, $"arena host: a gank squad (gunship + 3 webifiers, formed {gankFrom:0} u out) commits on the guest and every member latches ({ganks.Count(r => r != null && GodotObject.IsInstanceValid(r) && r.Latched)} of 4)");
+        foreach (var r in ganks) if (r != null && GodotObject.IsInstanceValid(r)) r.TakeDamage(9999);
+        guest.Stats.SetBase("pd_range", guestPd);
+        await RealTime(() => !guest.Pinned, 2);
+        var web = H.SpawnRaider(guest.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(220f, 360f));
+        await RealTime(() => guest.Pinned, 6);
+        bool pinned = guest.Pinned;
+        boss.S("beam").Due = 0.01;
+        await RealTime(() => boss.S("beam").At == Boss.Phase.Winding, 3);
+        Check(pinned && boss.S("beam").At == Boss.Phase.Winding && boss.S("beam").Cause == "pinned" && ReferenceEquals(boss.S("beam").Target, guest)
+              && paying.Count == 2 && paying.All(r => r.Worth == 6 && ((r.NetFlags >> 8) & 0xFFFF) == paying[0].Squad.Id),
+              $"arena host: an add's web on the GUEST starts the beam ({boss.S("beam").Cause}, aimed at the guest {ReferenceEquals(boss.S("beam").Target, guest)}); squad wave 1 is two paying webifiers ({paying.Count})");
+        // THE LIVE FLOOR ON THE WIRE: four more webs latch on the guest in the wind-up, so what is
+        // left is stretched to their floor and the lane is raised again -- on the guest it must
+        // REPLACE the lane it had (Hub.AddFx), not stand beside it and strike at the old end
+        double leftAtWeb = boss.WindupLeft("beam");
+        var more = Enumerable.Range(0, 4).Select(_ => H.SpawnRaider(guest.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(200f, 320f))).ToList();
+        await RealTime(() => more.All(r => r.Latched) || boss.S("beam").At != Boss.Phase.Winding, 5);
+        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        double stretched = boss.WindupLeft("beam");
+        var hostLanes = Nodes<FxNode>(boss).Where(t => t.Id == Fx.WarnLane && Math.Abs(t.Radius - 70f) < 0.1f && !t.IsQueuedForDeletion()).ToList();
+        Check(more.All(r => r.Latched) && boss.S("beam").At == Boss.Phase.Winding && stretched > leftAtWeb + 0.5
+              && hostLanes.Count == 1 && Math.Abs(hostLanes[0].Time - hostLanes[0].Elapsed - stretched) < 0.1,
+              $"arena host: four more webs latching on the guest stretch the wind-up ({leftAtWeb:0.00} s at the first web -> {stretched:0.00} s left), and the host holds one lane for it ({hostLanes.Count}) ending at the stretched time");
+        await Wait(1.0);                                           // the guest sees the lane while it is webbed
+        if (GodotObject.IsInstanceValid(web)) web.TakeDamage(9999);
+        foreach (var r in more) if (GodotObject.IsInstanceValid(r)) r.TakeDamage(9999);
+        var one = paying.FirstOrDefault(r => GodotObject.IsInstanceValid(r) && r.Alive);
+        one?.TakeDamage(1e9);
+        await Wait(1.0);
+    }
+
+    // ...and the guest's half: the squad's id bits and its one lead, the GANK line while the host's gank
+    // squad burns at this ship and none once it holds, this ship webbed by an add while
+    // the beam's lane is up at it, the lane REPLACED when the host stretches the wind-up (one lane,
+    // ending later, and no strike heard before its end), and the add's kill paid here at this
+    // pilot's own level
+    async Task RaidsGuestAddsWire()
+    {
+        int lv0 = Character.Level, exp0 = Character.Exp;
+        bool squadSeen = false, beamOnWeb = false, labelOk = false, namesSeen = false; int gained = 0;
+        // the beam's lanes on this peer: the first seen while webbed, the one that replaced it, the
+        // most standing at once after the replacement, and strikes heard before the live lane's end
+        FxNode firstLane = null, lastLane = null; double clock = 0, firstEnd = 0, lastEnd = 0;
+        int mostAfter = 0, earlyStrikes = 0; string strike = null; int struck0 = 0;
+        List<FxNode> BeamLanes() => H.Boss == null ? new List<FxNode>()
+            : Nodes<FxNode>(H.Boss).Where(t => t.Id == Fx.WarnLane && Math.Abs(t.Radius - 70f) < 0.1f && !t.IsQueuedForDeletion()).ToList();
+        void Watch()
+        {
+            var lanes = BeamLanes();
+            if (firstLane == null && Me != null && Me.Pinned && lanes.Count > 0)
+            {
+                firstLane = lanes[0]; firstEnd = clock + firstLane.Time - firstLane.Elapsed;
+                strike = firstLane.Strike; struck0 = strike == null ? 0 : Sfx.Played.GetValueOrDefault(strike);
+            }
+            if (firstLane == null) return;
+            var fresh = lanes.FirstOrDefault(t => t != firstLane && t != lastLane);
+            if (fresh != null) { lastLane = fresh; lastEnd = clock + fresh.Time - fresh.Elapsed; }
+            if (lastLane == null) return;
+            mostAfter = Math.Max(mostAfter, lanes.Count);
+            if (GodotObject.IsInstanceValid(lastLane) && clock < lastEnd - 0.05 && strike != null
+                && Sfx.Played.GetValueOrDefault(strike) > struck0) earlyStrikes = Sfx.Played.GetValueOrDefault(strike) - struck0;
+        }
+        // THE GANK LINE here, from the packet alone (FlagLock, the line's end, this ship as its victim):
+        // on every frame the host's gank squad -- the one group of four with a heavy -- has a member
+        // burning, this ship's HUD line names its crew; once every member holds a line, none. A frame
+        // another squad is also burning at this ship is not read (the line names one squad)
+        const string GankWant = "GANK: GUNSHIP + 3 WEBIFIER";
+        int gankFrames = 0; string gankWrong = null, gankHeld = "unread";
+        void WatchGank()
+        {
+            var me = Me;
+            if (me == null || gankHeld != "unread") return;
+            var groups = SquadSight.Groups(H.Raiders);
+            var gank = groups.FirstOrDefault(g => g.Count == 4 && g.Any(r => (r.Tags & Tag.Heavy) != 0));
+            if (gank == null || groups.Any(g => g != gank && g.Any(r => r.Locking && ReferenceEquals(SquadSight.Victim(r, H.Ships), me)))) return;
+            if (gank.Any(r => r.Locking))
+            {
+                gankFrames++;
+                var line = SquadSight.GankLine(H.Raiders, H.Ships, me);
+                if (line != GankWant) gankWrong ??= line ?? "none";
+            }
+            else if (gankFrames > 0 && gank.All(r => r.TetherTo != null)) gankHeld = SquadSight.GankLine(H.Raiders, H.Ships, me);
+        }
+        for (int i = 0; i < 60 * 22 && !H.MissionWon && gained == 0; i++)
+        {
+            WatchGank();
+            var two = H.Raiders.Where(r => r.SquadId != 0).GroupBy(r => r.SquadId).FirstOrDefault(g => g.Count() == 2);
+            squadSeen |= two != null && two.Count(r => r.Leads) == 1;
+            labelOk |= two != null && SquadSight.Label(two.ToList()) == "2" && SquadSight.Groups(H.Raiders).Any(g => g.Count == 2);
+            namesSeen |= two != null && two.Any(r => r.NameLeft > 0);
+            beamOnWeb |= Me != null && Me.Pinned && Nodes<FxNode>().Any(t => t.Id == Fx.WarnLane && Math.Abs(t.Radius - 70f) < 0.1f);
+            if (!H.MissionWon && (Character.Level != lv0 || Character.Exp != exp0)) gained = Character.Exp - exp0 + 1000 * (Character.Level - lv0);
+            Watch();
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); clock += GetProcessDeltaTime();
+        }
+        // the stretched lane is watched out to its end (or until the fight is won and it is cleared)
+        for (int i = 0; i < 60 * 10 && !H.MissionWon && lastLane != null && GodotObject.IsInstanceValid(lastLane) && clock < lastEnd + 0.2; i++)
+        {
+            Watch();
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); clock += GetProcessDeltaTime();
+        }
+        Check(squadSeen, "arena guest: the adds' squad arrives on the wire as one -- both members under one squad id, exactly one of them its lead");
+        Check(labelOk && namesSeen, $"arena guest: drawn from the packet alone, the squad reads as one on the radar (label '2': {labelOk}) and its rows are named under their hulls ({namesSeen})");
+        Check(gankFrames > 0 && gankWrong == null && gankHeld == null,
+              $"arena guest: the host's gank squad burning at this ship reads '{GankWant}' on its HUD line from the packet alone ({gankFrames} burn frames{(gankWrong == null ? "" : $", one read '{gankWrong}'")}); once every member holds its line, none ('{gankHeld}')");
+        Check(beamOnWeb, "arena guest: webbed by an add, this ship sees the beam's lane go up at it (the host charged on an add's web)");
+        Check(firstLane != null && lastLane != null && mostAfter == 1 && lastEnd > firstEnd + 0.5 && earlyStrikes == 0,
+              $"arena guest: the host's stretched wind-up REPLACES this peer's lane -- one Radius-70 lane standing ({mostAfter}), ending at the stretched time ({firstEnd:0.00} -> {lastEnd:0.00} s), no strike heard before it ({earlyStrikes})");
+        Check(gained == Missions.ExpFor(6, 1, lv0),
+              $"arena guest: an add shot down on the host pays this pilot at its own level, by NetKillExp ({gained} EXP; {Missions.ExpFor(6, 1, lv0)} due at level {lv0})");
+    }
+
     async Task GuestSeesTheFight()
     {
         Boss boss = null;

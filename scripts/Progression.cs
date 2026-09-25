@@ -5,8 +5,9 @@ using System.Collections.Generic;
 // ─────────────────────────────────────────────────────────────────────────────
 // PILOT PROGRESSION -- EXP, levels, and the points they buy.
 //
-//   EXP comes from boss kills: the host announces the kill and its level, and every
-//   pilot computes its own share (Missions: the kill by level, +250 first clear, +100).
+//   EXP comes from boss kills and from their adds: the host announces the kill and its level,
+//   and every pilot computes its own share (Missions: the kill by level, +250 first clear, +100;
+//   an add, its row's worth by level -- Missions.ExpFor, one formula).
 //   Every level needs 1000 EXP and pays 1 point.
 //   Points buy flat upgrades; each upgrade's next level costs one more point than
 //   the last (1, 2, 3, ...).
@@ -194,6 +195,17 @@ public static class Progression
         AddExp(exp);                                                         // (saves)
         // ...and it says so over the ship, where the pilot is looking (Pop.Exp).
         if (exp > 0 && Hub.I?.MyShip is { } me) Popups.Exp(me, exp);
+        return exp;
+    }
+
+    // A PAID KILL (a boss fight's add, Hub.PayKill): `worth` x its level over this pilot's, nothing
+    // under half -- the popup only when it pays. Returns the EXP given.
+    public static int AwardKill(double worth, int level)
+    {
+        int exp = Missions.ExpFor(worth, level, Character.Level);
+        if (exp <= 0) return 0;
+        AddExp(exp);                                                         // (saves)
+        if (Hub.I?.MyShip is { } me) Popups.Exp(me, exp);
         return exp;
     }
 

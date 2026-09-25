@@ -212,7 +212,6 @@ public partial class Hub : Node2D
     // reads this and names no kind (Missions.Kinds[].Quarry).
     public IQuarry Quarry => Missions.KindOf(Missions.Kind).Quarry?.Invoke(this);
     private double _arenaEndT = -1;                         // the FAILURE clock only: a wiped party home in 3 s
-    private double _garrisonT; private int _garrisonWaves;  // the mission row's own wave clock, in the arena
     public bool MissionWon { get; private set; }
     // THE PARTY'S VOTES. READY (launch a mission) and RETURN (leave a won arena) are ONE
     // mechanic with a row each (Votes.cs). The comment that stood here said they were kept apart
@@ -1025,7 +1024,7 @@ public partial class Hub : Node2D
         if (quarry) MissionCleared(at);
     }
 
-    // host: the mission's quarry is dead -- a boss, or a pirate base. Its escorts, its raiders and
+    // host: the mission's quarry is dead -- a boss, or a pirate base. Its adds, its raiders and
     // what it has in the air die with it -- collecting is not fighting. Every pilot gets its own
     // EXP (its level, its first clears) and its share of the bounty, then its own crates. Nothing
     // sends anyone home on a clock: each pilot presses RETURN when it is done. (Was BossDefeated,
@@ -1082,16 +1081,8 @@ public partial class Hub : Node2D
         // these lines start throwing. See DESIGN.md -> Traps.
         if (!Net.IsHost) return;
         Yard.TripClock += delta;                              // what the base is missing, in game time
-        // THE MISSION'S OWN GARRISON, on its row's clock: an escort's schedule (a first wave, then
-        // one every so often -- Economy.EscortFirstWave / EscortWaveEvery is the Yard's version of
-        // the same) run in the arena, at FULL strength. A row with no clock brings none, which is
-        // every bounty.
-        var kind = Missions.KindOf(Missions.Kind);
-        if (!MissionWon && kind.WaveEvery > 0)
-        {
-            _garrisonT += delta;
-            if (_garrisonT >= kind.FirstWave + _garrisonWaves * kind.WaveEvery) GarrisonWave(ArenaCentre, _garrisonWaves++);
-        }
+        // THE MISSION'S OWN GARRISON -- a siege's waves, a bounty's adds -- on its row's clock (Raids)
+        if (!MissionWon) _raids.TickGarrison(delta);
         // the whole party in stasis at once: the mission fails, everyone goes home
         if (!MissionWon && _arenaEndT < 0 && _ships.Count > 0 && _ships.Values.All(s => IsInstanceValid(s) && !s.Alive)) _arenaEndT = 3.0;
         if (_arenaEndT >= 0 && (_arenaEndT -= delta) <= 0)
@@ -1192,10 +1183,9 @@ public partial class Hub : Node2D
     // WHAT arrives is a row of Waves.All; the clock and the ONE builder are Raids.cs. The three
     // faces below are the names the rest of the game and the harness already call, each one line.
     //
-    // Where a raid comes in from, and where a heavy waits for its quarry to be pinned: far enough
-    // outside the outposts (3000 u) that the wait is the same 1430 u standoff it was tuned at.
-    // It stays here because it is the MAP'S EDGE -- layout, like BasePos and PortalPos -- and
-    // Raider.EdgeSpot reads it as such. The wave's ring radius is this constant, in its row.
+    // Where a raid comes in from, and where a hunt forms up: outside the outposts (3000 u). It stays
+    // here because it is the MAP'S EDGE -- layout, like BasePos and PortalPos -- and Raider.EdgeSpot
+    // reads it as such. The wave's ring radius is this constant, in its row.
     public const float RaidEdge = 4200f;
     private readonly Raids _raids;
     public Hub() { _raids = new Raids(this); }      // this world's director, built before _Ready
@@ -1279,16 +1269,31 @@ public partial class Hub : Node2D
     public void DeployedDown(DeployedTurret t) => Down(Spawns.Turret, t, burst: true, (float)t.Hp);
     public void DeployedTaken(DeployedTurret t) => Down(Spawns.Turret, t, burst: false, (float)t.Hp);
 
-    // A raider is a row of Spawns.All too. `patrol` -- which squad it flew in with -- is the
-    // host's own bookkeeping and is not on the wire, so it is set after the spawn, exactly as
-    // Quarry and Agility are (Raids.Send).
-    public Raider SpawnRaider(Vector2 at, int kind = Enemies.Webifier, int patrol = 0, double level = 1, double hullShare = 1)
+    // A raider is a row of Spawns.All too. Its SQUAD is the host's own bookkeeping and is not on
+    // the wire (bar its id in the flags), so it is joined after the spawn; none named is a squad of
+    // its own (Raids.Enlist).
+    public Raider SpawnRaider(Vector2 at, int kind = Enemies.Webifier, Squad squad = null, double level = 1, double hullShare = 1)
     {
         if (Spawn(Spawns.Raider, at, kind, level, hullShare) is not Raider r) return null;
-        r.Patrol = patrol;
+        _raids.Enlist(r, squad);
         return r;
     }
+    public IReadOnlyList<Squad> Squads => _raids.LiveSquads;
+    public Squad FormSquad(SquadDoctrine doctrine, Vector2 at, float heading = 0f) => _raids.Form(doctrine, at, 0, heading);
+    public void RestartGarrison() => _raids.RestartGarrison();
+    public PostBook Posts => _raids.Posts;
     public void RaiderDown(Raider r) => Down(Spawns.Raider, r, burst: true, (float)System.Math.Max(0, r.Hp));
+    // A PAID KILL (a boss fight's add): every pilot in this world is paid at its OWN level -- this
+    // one here, each guest by the reliable NetKillExp (a flag on the unreliable raider packet could
+    // be lost with the kill). Named for the mechanism: any kill that pays comes through it.
+    public void PayKill(double worth, int level)
+    {
+        if (!Net.IsHost) return;
+        if (MyShip != null) Progression.AwardKill(worth, level);
+        ToWorld(nameof(NetKillExp), worth, level);
+    }
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void NetKillExp(double worth, int level) => Progression.AwardKill(worth, level);
 
     // LET GO OF A HOSTILE, EVERYWHERE, IN THIS CALL. As the selection and as every ship's orders:
     // on a guest a raider's hull never reads zero (the host removes it before its last hull
@@ -1850,6 +1855,13 @@ public partial class Hub : Node2D
         // WHAT IT RIDES: the world, or the thing with that NetId -- a boss whose beam must swing
         // with its hull. Anything the world simulates and gives an id to can carry a warning.
         var rides = r.Anchor == Fx.World ? this : Combat.ById(r.Anchor) as Node2D;
+        // A HULL'S WARNING RAISED AGAIN REPLACES ITS LANE, on every peer (a beam's wind-up stretched
+        // by the live escape floor, Boss.Floor): the lane it had would run out, and sound its strike,
+        // at the old time. The same move's warning on the same hull: same row, anchor and cue.
+        if (r.Anchor != Fx.World)
+            foreach (var n in Fx.Warnings.Where(n => n.Id == r.Id && n.Anchor == r.Anchor && n.Cue == r.Cue
+                                                     && n.GetParent() == (rides ?? this)).ToList())
+                n.QueueFree();
         (rides ?? this).AddChild(new FxNode { Id = r.Id, Position = r.At, To = r.To, Radius = r.Size, Time = r.Time,
                                               Hold = r.Hold, Since = r.Since, Anchor = r.Anchor, Cue = r.Cue, Strike = r.Strike });
     }
