@@ -53,6 +53,11 @@ public class ClassArt
     // How far the free camera (Y) may wander from the ship: 5000 for a capital ship.
     public float CameraRange = 5000f;
     public Vector2[] Mains = Array.Empty<Vector2>(), Pds = Array.Empty<Vector2>();
+    // WHERE EACH MAIN GUN MAY FIRE: per main mount, in the Mains order, the bearings off the bow (degrees,
+    // 0 = dead ahead, 180 = dead astern, either side) its barrel may fire along -- (min, max). A mount with
+    // no entry fires on every bearing. The battleship's arcs (v1 card): the fore pair never within 30 deg of
+    // the stern, the aft pair never within 30 deg of the bow (Turret.InArc; the barrel still swings).
+    public Vector2[] MainBears = Array.Empty<Vector2>();
 
     // The turrets are their own sprites (barrels up, pivot at the sheet's centre), so they
     // can turn: one main turret and one point-defence turret for every class, each class
@@ -162,10 +167,10 @@ public static class Classes
             Hint = "BATTLESHIP  ·  mouse aims the main guns",
             Drive = Drives.Warp,
             Nums = new() {
-                ["hull"] = 300,
+                ["hull"] = 500,
                 ["thrust"] = 47, ["reverse_thrust"] = 20, ["max_speed"] = 88, ["reverse_speed"] = 30,
                 ["turn_radius"] = 107, ["turn_rate"] = 1.08,
-                ["main_count"] = 4, ["main_damage"] = 17.9, ["main_interval"] = 2.0, ["main_range"] = 1000, ["shell_speed"] = 650,
+                ["main_count"] = 4, ["main_damage"] = 12.5, ["main_interval"] = 2.0, ["main_range"] = 1000, ["shell_speed"] = 650,
                 ["pd_count"] = 2,
             },
             Damage = new() { ["main_damage"] = 1 },
@@ -183,6 +188,7 @@ public static class Classes
                 Texture = "res://battleship_hull.png", Length = 378f, HalfWidth = 43.875f,
                 Mains = new Vector2[] { new(-23.99f, -74.28f), new(23.99f, -74.28f), new(-23.99f, -36.27f), new(23.99f, -36.27f) },
                 Pds   = new Vector2[] { new(-58.99f, 71.73f), new(58.99f, 71.73f) },
+                MainBears = new Vector2[] { new(0f, 150f), new(0f, 150f), new(30f, 180f), new(30f, 180f) },
                 TurretTexScale = 1.9f / 5.5f, MainBarrel = 23.18f, PdBarrel = 10.45f },
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Broadside } },
 

@@ -87,6 +87,17 @@ public partial class Turret : Node2D
     public ITurretHost Host;
     public Vector2 Offset;
     public bool PointDefense;
+    // WHERE THIS MAIN GUN MAY FIRE (ClassArt.MainBears, set by its host at the mount): the bearings off the
+    // bow, degrees, its barrel may fire along. (0, 180) -- every bearing -- unless the mount names its arc.
+    public Vector2 Bears = new(0f, 180f);
+
+    // THE ARC RULE, pure: a bearing off the bow (0..180, either side) inside [min, max].
+    public static bool InArc(float bearing, Vector2 bears) => bearing >= bears.X && bearing <= bears.Y;
+    // how far the barrel points off the host's bow right now, 0..180 degrees, either side
+    public float BearingOffBow =>
+        Mathf.RadToDeg(Mathf.Abs(Vector2.Up.Rotated(Host.AsNode.GlobalRotation).AngleTo(Vector2.Right.Rotated(GlobalRotation))));
+    // the barrel bears: a shot along it now would leave inside the mount's arc
+    public bool Bearing => InArc(BearingOffBow, Bears);
 
     private float _angle;
     private double _cd;
@@ -249,7 +260,7 @@ public partial class Turret : Node2D
     // here: it fires from Tick, at what it has acquired.)
     public void Shoot(double mult = 1.0, int target = 0)
     {
-        if (!Net.Sim) return;
+        if (!Net.Sim || !Bearing) return;     // outside its arc the barrel swings on and holds its fire
         var spec = S;
         var dir = Vector2.Right.Rotated(GlobalRotation);
         Combat.Fire(spec.Kind, GlobalPosition + dir * spec.Barrel, dir, spec.ShellSpeed, spec.Range, spec.Damage * mult,

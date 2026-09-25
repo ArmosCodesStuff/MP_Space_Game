@@ -400,8 +400,8 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         if (!IsInstanceValid(_shield)) { _shield = new ShieldFlash(); AddChild(_shield); }
         _shield.HalfWidth = art.HalfWidth; _shield.HalfLength = art.Length * 0.5f; _shield.Tint = Accent;
 
-        for (int i = 0; i < Math.Min((int)Stats["main_count"], art.Mains.Length); i++) AddTurret(art.Mains[i], false);
-        for (int i = 0; i < Math.Min((int)Stats["pd_count"], art.Pds.Length); i++) AddTurret(art.Pds[i], true);
+        for (int i = 0; i < Math.Min((int)Stats["main_count"], art.Mains.Length); i++) AddTurret(art.Mains[i], false, i < art.MainBears.Length ? art.MainBears[i] : new Vector2(0f, 180f));
+        for (int i = 0; i < Math.Min((int)Stats["pd_count"], art.Pds.Length); i++) AddTurret(art.Pds[i], true, new Vector2(0f, 180f));
         FitWings(fresh: true);
     }
 
@@ -439,9 +439,9 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         foreach (var w in _wings) if (w.Def.AmmoStat != null) w.Ammo = Math.Min(w.Ammo, (int)Stats[w.Def.AmmoStat]);
     }
 
-    private void AddTurret(Vector2 offset, bool pd)
+    private void AddTurret(Vector2 offset, bool pd, Vector2 bears)
     {
-        var t = new Turret(); AddChild(t); t.Setup(this, offset, pd);
+        var t = new Turret { Bears = bears }; AddChild(t); t.Setup(this, offset, pd);
         _turrets.Add(t); if (pd) PdTurrets.Add(t); else _mains.Add(t);
     }
 

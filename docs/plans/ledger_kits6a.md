@@ -155,3 +155,34 @@ fittings sweep's witness table ~13755, fitRows ~13797.
 ## JOB 0 · POST
 - Worktree created from version-l 3450da4 (step 0: it did not exist). Spec read; decisions and job list above.
   No code touched. Next: kits6a-J1.
+
+### kits6a-J1 · PRE · BB row + main battery arcs + Broadside numbers (A6a-1) -- tier opus
+- Intent: BB hull 500, main_damage 12.5 (4 x 12.5 / 2.0 s = 25 DPS); ClassArt.MainBears (per main mount, the
+  bearings off the bow its barrel may fire within: fore pair 0-150°, aft pair 30-180°), Turret.Bears + pure
+  Turret.InArc, Shoot holds fire outside it; broadside_volleys 6, broadside_mult 1.25, broadside_cooldown 12.
+  Checks: NEW LaneA6aArcChecks, NEW LaneA6aBroadsideChecks; harness lines asserting the old BB truths rewritten.
+- Files: scripts/Ships.cs, scripts/Turrets.cs, scripts/PlayerShip.cs, scripts/Stats.cs, tools/smoketest/SmokeTest.cs.txt.
+- HEAD 8d9023affdd9f544a525e71f8c3c3ef1b753aeab · Ships.cs dd6c77c19088e55fc3e815b34640d824b48d30fd · Turrets.cs
+  471d84e4463dbde1f3fd779b4001e3a59af8de63 · PlayerShip.cs 6d41d138618c4c1423779be23acd25e651ec6e5e · Stats.cs
+  64bf427d6f48ed692346d261a56b32ad5a29f582 · SmokeTest.cs.txt f93a02fb2d9489c93e60da27f4f240192bff56ce
+### kits6a-J1 · POST
+- Verdict: compiles; typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final
+  test phase.
+- Built: BB hull 500, main_damage 12.5; `ClassArt.MainBears` (fore pair (0, 150), aft pair (30, 180)); `Turret.Bears`
+  set at the mount (PlayerShip.AddTurret), pure `Turret.InArc`, `Turret.BearingOffBow` / `Bearing`; `Turret.Shoot`
+  holds fire outside the arc (the barrel still swings; every other host's mount keeps (0, 180)). Stats broadside
+  rows 6 / 1.25 / 12.
+- Checks NEW: LaneA6aArcChecks (the table at 0/29/31/90/149/151/180 deg -> 2/2/4/4/4/2/2; 3 live VaryAngle cases:
+  abeam 4, bow 2, stern 2 shells a salvo), LaneA6aBroadsideChecks (sheet 375 / 13.75 s / 27.27 / 25 DPS / hull 500;
+  5 live runs: turrets {0, 90, 180} deg away x {still, ahead, turning} -> 24 shells in 6 volleys, bow-on 12,
+  mid warp charge 24 with Charging true; 12.0 s cooldown). Called after LaneA4/ItemsDoor in the solo list.
+- Checks REWRITTEN (6.3): the menu demo's six volleys; the fingerprint `sheet Battleship.hull=500`; ChipChecks'
+  battleship 500; the K window lines (25.00 / 6.25 / "6 volleys × 4 shells × 15.63 ... = 375.0 damage, every
+  13.8 s" / 27.27 / 54.27); the F block (6 volleys at x1.25, 12 s, 375 landed, the dummy put ABEAM); "a shell lands
+  for the stock 12.5"; the balance 25 + 375 / 13.75 = 52.27; the kit literal (BB half; the CV half is J4's);
+  the refit (60/500, T10 794.75, T1 625); the salvo == staggered block parks the dummy abeam (a bow dummy would
+  take half under the arcs).
+- Owed at rung 3 (`quick,solo,solo`): all of the above. Traps: the K-window strings are format-sensitive
+  (15.625 -> "15.63", 13.75 -> "13.8"); LaneA6aBroadsideChecks' warp run releases V after the volleys (a short jump
+  in open water at `yonder`).
+- Checkpoint: the commit after this entry. Next: kits6a-J2 (Brace).

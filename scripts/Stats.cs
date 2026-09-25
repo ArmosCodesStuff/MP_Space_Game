@@ -156,11 +156,11 @@ public class ShipStats
         if (Def.Has(Fit.Broadside))
         {   // F: the turrets swing onto the cursor through the wind-up, then every main gun fires,
             // volley after volley. Its shells are main-gun shells, at this multiple of their damage.
-            Add("Broadside", "broadside_volleys",  "Volleys",                 3, "", 0);
-            Add("Broadside", "broadside_mult",     "Shell damage (x main)",   1.0, "x", 2);
+            Add("Broadside", "broadside_volleys",  "Volleys",                 6, "", 0);
+            Add("Broadside", "broadside_mult",     "Shell damage (x main)",   1.25, "x", 2);
             Add("Broadside", "broadside_windup",   "Wind-up (turrets aim)",   0.5, "s", 2, inverse: true);
             Add("Broadside", "broadside_gap",      "Between volleys",         0.25, "s", 2, inverse: true);
-            Add("Broadside", "broadside_cooldown", "Cooldown after",          14, "s", 1, inverse: true);   // 12 shells a 15 s cycle: 14.3 DPS
+            Add("Broadside", "broadside_cooldown", "Cooldown after",          12, "s", 1, inverse: true);   // 24 shells x1.25 a 13.75 s cycle: 27.3 DPS (v1)
         }
         if (Def.Has(Fit.Missiles))
         {   // F: a guided BURST of three, one at the target and two launched wide that curve in onto

@@ -1692,7 +1692,7 @@ public partial class _Test : Node
             var parts = new System.Collections.Generic.List<string>();
             typeof(Net).GetMethod("Fingerprint", BindingFlags.NonPublic | BindingFlags.Static, null, new[] { typeof(System.Collections.Generic.List<string>) }, null)
                        .Invoke(null, new object[] { parts });
-            bool sheet = parts.Contains("sheet Battleship.hull=300") && parts.Contains("sheet Carrier.fighter_speed=352");
+            bool sheet = parts.Contains("sheet Battleship.hull=500") && parts.Contains("sheet Carrier.fighter_speed=352");
             bool gear = parts.Any(p => p.StartsWith("Equipment.All=") && p.Contains("Id=cv_elite_3") && p.Contains("fighter_speed:2"));
             bool prices = parts.Any(p => p.StartsWith("Economy.All=") && p.Contains("Id=miner_count") && p.Contains("BaseCost=400"));
             // a wall level (ability 2 at level 3, level_walls.md) and a boss gate (Auto-sell after boss 3) --
@@ -1720,10 +1720,10 @@ public partial class _Test : Node
         Check(ship.Peak == 14, $"...nobody's pilot, so it waits for no level: every wall open, peak 14 ({ship.Peak})");
         // The spec's numbers as literals, never the menu's own constants: a check that reads the
         // constant cannot catch the constant being wrong.
-        Check(Math.Abs(ship.Stats["broadside_cooldown"] - 5) < 1e-9 && Math.Abs(ship.Stats["broadside_volleys"] - 3) < 1e-9
+        Check(Math.Abs(ship.Stats["broadside_cooldown"] - 5) < 1e-9 && Math.Abs(ship.Stats["broadside_volleys"] - 6) < 1e-9
               && ship.Stats["missile_mag"] == 0 && Mathf.IsEqualApprox(MainMenu.DodgeHop, 500f) && Math.Abs(ship.Stats["warp_cooldown"] - 7) < 1e-9
               && ship.Drive == Drives.Warp,
-              $"the kit's three-volley broadside every 5 s, no missile, and a 500 u hop on the pilot's own warp, ready again in 7 s ({ship.Stats["broadside_volleys"]:0} volleys / {ship.Stats["broadside_cooldown"]:0} s / {MainMenu.DodgeHop:0} u / {ship.Stats["warp_cooldown"]:0} s)");
+              $"the kit's six-volley broadside every 5 s, no missile, and a 500 u hop on the pilot's own warp, ready again in 7 s ({ship.Stats["broadside_volleys"]:0} volleys / {ship.Stats["broadside_cooldown"]:0} s / {MainMenu.DodgeHop:0} u / {ship.Stats["warp_cooldown"]:0} s)");
         // The ship has to be the SIZE it is in game. The menu had its own zoom for a while and the
         // battleship was half as big again on the title screen as it is the moment you press PLAY.
         // Compared with 0.9 as a literal rather than with Hub.DefaultZoom, so this also fails if
@@ -4897,6 +4897,99 @@ public partial class _Test : Node
     //   arc loses exactly 3 x 26 in the first 1.0 s after its first blow (timed from that blow), while one
     //   behind, one past 160 u and one 65-80 deg off the nose lose nothing; DealtBy["blade"] grows the same.
     // 3 the interactions: released, it swings no more; DISABLED, it swings no more.
+    // ── SLICE 6a · THE BATTLESHIP'S MAIN BATTERY ARCS (v1 card, A6a-1) ─────────────────────────────
+    // The fore pair never fires within 30 deg of the stern, the aft pair never within 30 deg of the bow:
+    // all four bear 30-150 deg off the bow, two inside 30 deg of bow or stern. The table proved against
+    // the card's bearings as literals, then the live guns at three VaryAngle headings, one bearing drawn
+    // clear of each edge on either side (the barrel sits off the centre, so never ON 30 or 150).
+    async Task LaneA6aArcChecks(Vector2 yonder)
+    {
+        var art = Classes.Of(ShipClass.Battleship).Art;
+        int Bear(float b) => art.MainBears.Count(r => Turret.InArc(b, r));
+        var bearings = new[] { 0f, 29f, 31f, 90f, 149f, 151f, 180f };
+        var want = new[] { 2, 2, 4, 4, 4, 2, 2 };
+        Check(art.MainBears.Length == 4 && art.Mains.Length == 4 && bearings.Select(Bear).SequenceEqual(want),
+              $"the battleship's arcs: at 0 / 29 / 31 / 90 / 149 / 151 / 180 deg off the bow, 2 / 2 / 4 / 4 / 4 / 2 / 2 main guns bear ({string.Join(" / ", bearings.Select(Bear))})");
+        await SetClass(ShipClass.Battleship);
+        var s = Me; s.Staggered = false;
+        var gunKey = Abilities.KeyFor(ShipClass.Battleship, "guns");
+        var cases = new[] { (lo: 45f, hi: 135f, n: 4, what: "abeam"), (lo: 2f, hi: 18f, n: 2, what: "on the bow"), (lo: 162f, hi: 178f, n: 2, what: "on the stern") };
+        foreach (var c in cases)
+        {
+            var at = VaryNear(yonder, 300f); float rot = VaryAngle(), b = Vary(c.lo, c.hi), side = Vary(0f, 1f) < 0.5f ? -1f : 1f;
+            Vector2 AimAt() => s.Position + Vector2.Up.Rotated(s.Rotation).Rotated(side * Mathf.DegToRad(b)) * 700f;
+            void Pose() { s.Position = at; s.Velocity = Vector2.Zero; s.Rotation = rot; AimWorld(AimAt()); }
+            for (int i = 0; i < 150; i++) { Pose(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }   // 2.5 s: every barrel round
+            var mains = Nodes<Turret>(s).Where(t => !t.PointDefense).ToList();
+            int bearing = mains.Count(t => t.Bearing);
+            var seen = new System.Collections.Generic.HashSet<Shot>(Shells());
+            int salvo = 0; double t0 = -1;
+            KeyDown(gunKey);
+            for (int i = 0; i < 150; i++)
+            {
+                Pose(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                int fresh = Shells().Count(x => seen.Add(x));
+                if (fresh > 0 && t0 < 0) t0 = s.Clock;                     // timed from the first shell, not the key
+                if (t0 >= 0) { salvo += fresh; if (s.Clock - t0 > 0.1) break; }
+            }
+            KeyUp(gunKey);
+            Check(salvo == c.n && bearing == c.n,
+                  $"a battleship at {Mathf.RadToDeg(rot):0} deg, the cursor {b:0} deg off the bow {(side > 0 ? "to one side" : "to the other")} ({c.what}): {bearing} barrels bear and the salvo is {salvo} shells ({c.n})");
+            await Wait(0.2);
+        }
+    }
+
+    // ── SLICE 6a · THE BROADSIDE ON THE v1 NUMBERS (A6a-1) ──────────────────────────────────────────
+    // 0.5 s wind-up, 6 volleys x 4 guns 0.25 s apart at x1.25 = 375 side-on (187.5 bow-on: the arcs hold
+    // the aft pair), 12 s cooldown: 27.3 DPS over a 13.75 s cycle. From the turrets aimed {0, 90, 180} deg
+    // away from the cursor, with the ship {still, full ahead, turning}, a side-on broadside is exactly 24
+    // shells; one bow-on is 12; one pressed mid warp charge still fires (kits_v31 §3.4).
+    async Task LaneA6aBroadsideChecks(Vector2 yonder)
+    {
+        var bs = new ShipStats(ShipClass.Battleship);
+        Check(bs["broadside_volleys"] == 6 && bs["broadside_mult"] == 1.25 && bs["broadside_windup"] == 0.5 && bs["broadside_gap"] == 0.25
+              && bs["broadside_cooldown"] == 12 && bs["main_damage"] == 12.5 && bs["main_count"] == 4 && bs["main_interval"] == 2.0 && bs["hull"] == 500
+              && Math.Abs(bs.BroadsideDamage - 375) < 1e-9 && Math.Abs(bs.BroadsideCycle - 13.75) < 1e-9 && Math.Abs(bs.BroadsideDps - 375 / 13.75) < 1e-9
+              && Math.Abs(bs.MainDps - 25) < 1e-9,
+              $"the battleship's sheet (v1): hull {bs["hull"]:0} (500), guns 4 x 12.5 every 2 s = {bs.MainDps:0.00} DPS (25), a broadside of 6 x 4 x 12.5 x 1.25 = {bs.BroadsideDamage:0.0} (375) every {bs.BroadsideCycle:0.00} s (13.75) = {bs.BroadsideDps:0.00} DPS (27.27)");
+        await SetClass(ShipClass.Battleship);
+        var s = Me; var fKey = Abilities.KeyFor(ShipClass.Battleship, "broadside");
+        var runs = new[] { (away: 0f, move: 0, lo: 60f, hi: 120f, n: 24, warp: false), (away: 90f, move: 1, lo: 60f, hi: 120f, n: 24, warp: false),
+                           (away: 180f, move: 2, lo: 60f, hi: 120f, n: 24, warp: false), (away: 90f, move: 0, lo: 2f, hi: 14f, n: 12, warp: false),
+                           (away: 0f, move: 0, lo: 60f, hi: 120f, n: 24, warp: true) };
+        foreach (var r in runs)
+        {
+            var at = VaryNear(yonder, 300f); float rot = VaryAngle(), b = Vary(r.lo, r.hi), side = Vary(0f, 1f) < 0.5f ? -1f : 1f;
+            s.Sl("broadside").Cool = 0; s.Sl("broadside").Left = 0; s.Sl("broadside").N = 0;
+            s.Position = at; s.Velocity = Vector2.Zero; s.Rotation = rot;
+            Vector2 AimAt(float off) => s.Position + Vector2.Up.Rotated(s.Rotation).Rotated(side * Mathf.DegToRad(b + off)) * 700f;
+            for (int i = 0; i < 180; i++) { s.Position = at; s.Velocity = Vector2.Zero; s.Rotation = rot; AimWorld(AimAt(r.away)); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            if (r.move >= 1) { KeyDown(global::Godot.Key.W); s.Velocity = Vector2.Up.Rotated(rot) * 80f; }
+            if (r.move == 2) KeyDown(global::Godot.Key.D);
+            if (r.warp) { s.DriveHeld = true; s.PressDrive(); await Wait(0.2); }
+            bool chargingAtFire = false;
+            var seen = new System.Collections.Generic.HashSet<Shot>(Shells());
+            int shells = 0, volleys = 0; double cdAfter = -1;
+            AimWorld(AimAt(0f)); Key(fKey);
+            for (int i = 0; i < 60 * 3; i++)
+            {
+                AimWorld(AimAt(0f)); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                int fresh = Shells().Count(x => seen.Add(x));
+                if (fresh == 0) continue;
+                if (volleys == 0) chargingAtFire = s.Charging;
+                shells += fresh; volleys++;
+                if (volleys == 6) cdAfter = s.Sl("broadside").Cool;
+            }
+            if (r.warp) { s.DriveHeld = false; for (int i = 0; i < 20 && s.Charging; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            KeyUp(global::Godot.Key.W); KeyUp(global::Godot.Key.D); s.Velocity = Vector2.Zero;
+            Check(shells == r.n && volleys == 6 && cdAfter > 11.9 && cdAfter <= 12.0 && (!r.warp || chargingAtFire),
+                  $"a broadside {b:0} deg off the bow, turrets {r.away:0} deg away at the press, {(r.move == 0 ? "still" : r.move == 1 ? "full ahead" : "turning")}{(r.warp ? ", mid warp charge (" + chargingAtFire + ")" : "")}: "
+                  + $"{volleys} volleys (6), {shells} shells ({r.n}), cooling {cdAfter:0.00} s after the last (12)");
+            s.Sl("broadside").Cool = 0;
+            await Wait(0.3);
+        }
+    }
+
     async Task LaneA6cBladeChecks(Vector2 yonder)
     {
         var sh = new ShipStats(ShipClass.HeavyWarrior);
@@ -9398,10 +9491,10 @@ public partial class _Test : Node
     // ── CHIP SLOTS AND KINDS (F15; level_walls checks 6, 6b and 7) ────────────────────────────────
     // Six chip slots on every hull, opened by the pilot's highest level; at most 3 Combat and 3
     // Utility chips; a file never loses a chip it cannot fly. A capital, a heavy and a light, with
-    // their class rows' hulls as literals: battleship 300, warden 270, echo 90.
+    // their class rows' hulls as literals: battleship 500, warden 270, echo 90.
     void ChipChecks()
     {
-        var three = new[] { (c: ShipClass.Battleship, hull: 300.0), (c: ShipClass.HeavyWarden, hull: 270.0), (c: ShipClass.LightEcho, hull: 90.0) };
+        var three = new[] { (c: ShipClass.Battleship, hull: 500.0), (c: ShipClass.HeavyWarden, hull: 270.0), (c: ShipClass.LightEcho, hull: 90.0) };
         string[] With(ShipClass c, params string[] chips)
         {
             var l = Equipment.Default(c);
@@ -10753,14 +10846,14 @@ public partial class _Test : Node
         Check(Count<StatsWindow>() == 1, "K opens the ability & stats window");
         var win = Nodes<StatsWindow>().First();
         var labels = Nodes<Label>(win).Select(l => l.Text).ToList();
-        Check(labels.Any(x => x.Contains("Main guns:  35.80 DPS")) && labels.Any(x => x.Contains("4 barrels at 8.95 DPS"))
+        Check(labels.Any(x => x.Contains("Main guns:  25.00 DPS")) && labels.Any(x => x.Contains("4 barrels at 6.25 DPS"))
               && labels.Any(x => x.Contains("salvo 4 every 2.00 s = staggered 1 every 0.50 s")) && labels.Any(x => x.Contains("Turning radius")),
-              "stats tab: the stock main guns, 4 x 17.9 every 2 s = 35.80 DPS, 4 barrels of 8.95, and helm stats");
-        Check(labels.Any(x => x.Contains("3 volleys × 4 shells") && x.Contains("= 214.8 damage, every 15.0 s")) && !labels.Any(x => x.StartsWith("Missiles")),
-              "stats tab: the broadside, 3 volleys of 4 shells x 17.9 = 214.8 damage every 15 s; no missiles");
-        Check(labels.Any(x => x.Contains("Broadside, averaged over its cycle:  14.32 DPS")) && labels.Any(x => x.Contains("Point defence:  2.00 DPS"))
-              && labels.Any(x => x.Contains("2 turrets at 1.00 DPS, always on")) && labels.Any(x => x.Contains("SUSTAINED TOTAL:  52.12 DPS")),
-              "and the total adds up every line it prints: guns 35.80 + broadside 14.32 + point defence 2.00 (2 turrets at 1 DPS, always on: passive) = 52.12 DPS");
+              "stats tab: the stock main guns, 4 x 12.5 every 2 s = 25.00 DPS, 4 barrels of 6.25, and helm stats");
+        Check(labels.Any(x => x.Contains("6 volleys × 4 shells × 15.63") && x.Contains("= 375.0 damage, every 13.8 s")) && !labels.Any(x => x.StartsWith("Missiles")),
+              "stats tab: the broadside, 6 volleys of 4 shells x 12.5 x 1.25 = 375 damage every 13.75 s; no missiles");
+        Check(labels.Any(x => x.Contains("Broadside, averaged over its cycle:  27.27 DPS")) && labels.Any(x => x.Contains("Point defence:  2.00 DPS"))
+              && labels.Any(x => x.Contains("2 turrets at 1.00 DPS, always on")) && labels.Any(x => x.Contains("SUSTAINED TOTAL:  54.27 DPS")),
+              "and the total adds up every line it prints: guns 25.00 + broadside 27.27 + point defence 2.00 (2 turrets at 1 DPS, always on: passive) = 54.27 DPS");
         Check(Nodes<HBoxContainer>(win).Count(r => r.Name.ToString().StartsWith("Key_")) == 9, "keys tab lists the battleship's 3 abilities + 6 open slots (point defence is passive: no key)");
         Check(Enumerable.Range(1, 6).All(i => Abilities.KeyFor(ShipClass.Battleship, $"open{i}") == global::Godot.Key.Key0 + i)
               && Abilities.For(ShipClass.Carrier).Count(a => a.Open) == 6 && Abilities.For((ShipClass)99).Length == 6,
@@ -10803,7 +10896,9 @@ public partial class _Test : Node
 
         // ── battleship main guns: cursor aim, hold Space, salvo == staggered ──
         var dummy = d1;
-        await Park(dummy.Position + new Vector2(0, 600));
+        // the dummy ABEAM (600 u to port of a hull parked nose-up): the battleship's arcs let all four
+        // guns bear only 30-150 deg off the bow (slice 6a), so a dummy on the bow would take half
+        await Park(dummy.Position + new Vector2(600, 0));
         AimWorld(dummy.Position); await Wait(0.05);
         Check(H.GetGlobalMousePosition().DistanceTo(dummy.Position) < 3f, "test cursor lands on the dummy");
         await Wait(2.5);
@@ -10829,20 +10924,23 @@ public partial class _Test : Node
         Check(ship.Staggered != before, "G toggles salvo / staggered");
 
         // ── THE BROADSIDE (F): the main turrets swing onto the cursor through a 0.5 s wind-up, then
-        //    every main gun fires three volleys 0.25 s apart; a 14 s cooldown; the ship steers throughout ──
+        //    every main gun fires six volleys 0.25 s apart at x1.25; a 12 s cooldown; the ship steers throughout ──
         Check(Abilities.For(ShipClass.Battleship).Where(a => !a.Open).Select(a => a.Id).SequenceEqual(new[] { "guns", "firemode", "broadside", "warp" })
               && Abilities.KeyFor(ShipClass.Battleship, "broadside") == global::Godot.Key.F,
               "the battleship's bar: guns, fire mode, the BROADSIDE on F -- no missile, no reload, and no key for point defence, which is passive");
-        Check(ship.Stats["broadside_volleys"] == 3 && ship.Stats["broadside_mult"] == 1.0 && ship.Stats["broadside_windup"] == 0.5
-              && ship.Stats["broadside_gap"] == 0.25 && ship.Stats["broadside_cooldown"] == 14 && ship.Stats["missile_mag"] == 0,
-              "the broadside: 3 volleys at a shell's own damage, a 0.5 s wind-up, 0.25 s between volleys, a 14 s cooldown");
+        Check(ship.Stats["broadside_volleys"] == 6 && ship.Stats["broadside_mult"] == 1.25 && ship.Stats["broadside_windup"] == 0.5
+              && ship.Stats["broadside_gap"] == 0.25 && ship.Stats["broadside_cooldown"] == 12 && ship.Stats["missile_mag"] == 0,
+              "the broadside: 6 volleys at x1.25 a shell, a 0.5 s wind-up, 0.25 s between volleys, a 12 s cooldown");
         {
             // Aimed well AWAY first (south-east, ~135 degrees off the dummy): at their own 90 deg/s the
             // turrets would still be 90 degrees off when a 0.5 s wind-up ends, so only a wind-up that
             // really swings them onto the cursor can put every shell on the dummy.
             var mainsB = Nodes<Turret>(ship).Where(x => !x.PointDefense).ToList();
             float Off(Turret t) => Mathf.Abs(Mathf.AngleDifference(t.GlobalRotation, (d1.Position - t.GlobalPosition).Angle()));
+            // the dummy put ABEAM (the arcs: only then do all four guns bear), the hull held there
+            ship.Rotation = Aim.Face(ship.Position, d1.Position) + Mathf.Pi / 2f; ship.Velocity = Vector2.Zero;
             AimWorld(ship.Position + new Vector2(450, 450)); await Wait(2.5);
+            ship.Rotation = Aim.Face(ship.Position, d1.Position) + Mathf.Pi / 2f; ship.Velocity = Vector2.Zero;
             float off0 = mainsB.Min(Off);
             await Wait(TargetDummy.IdleReset + 0.2); d1.ResetMeter();
             var seen = new System.Collections.Generic.HashSet<Shot>(Shells());
@@ -10861,21 +10959,21 @@ public partial class _Test : Node
                 if (volleys.Count == 0) { offAtFire = mainsB.Max(Off); speedAtFire = ship.SpeedAhead; }
                 volleys.Add((ship.Clock - bc0, fresh));
                 if (volleys.Count == 1) barFiring = AbilityBar.StateOf(ship, "broadside", H.Selected).Line;
-                if (volleys.Count == 3) cdAtLast = ship.BroadsideCooldownLeft;
+                if (volleys.Count == 6) cdAtLast = ship.BroadsideCooldownLeft;
             }
             KeyUp(global::Godot.Key.W); ship.Velocity = Vector2.Zero;
             GD.Print($"  broadside: turrets {off0:0.00} rad off at the press, {offAtFire:0.000} at the first volley; volleys at {string.Join(", ", volleys.Select(v => $"{v.t:0.000}s x{v.n}"))}");
             Check(barAiming == "AIMING" && barFiring == "FIRING", $"the slot reads AIMING through the wind-up, FIRING through the volleys ({barAiming}, {barFiring})");
             Check(off0 > 2.0 && offAtFire >= 0 && offAtFire < 0.03,
                   $"the wind-up swings every main turret onto the cursor from ~135 degrees away -- far faster than their own 90 deg/s ({off0:0.00} -> {offAtFire:0.000} rad)");
-            Check(volleys.Count == 3 && volleys.All(v => v.n == 4) && volleys[0].t > 0.45 && volleys[0].t < 0.6
-                  && Math.Abs(volleys[1].t - volleys[0].t - 0.25) < 0.035 && Math.Abs(volleys[2].t - volleys[1].t - 0.25) < 0.035,
-                  $"three volleys of all four guns: the first at the end of the 0.5 s wind-up, then 0.25 s apart ({volleys.Count} volleys)");
+            Check(volleys.Count == 6 && volleys.All(v => v.n == 4) && volleys[0].t > 0.45 && volleys[0].t < 0.6
+                  && Enumerable.Range(1, 5).All(k => Math.Abs(volleys[k].t - volleys[k - 1].t - 0.25) < 0.035),
+                  $"six volleys of all four guns: the first at the end of the 0.5 s wind-up, then 0.25 s apart ({volleys.Count} volleys)");
             Check(speedAtFire > 10, $"the ship steers throughout: under way through the wind-up ({speedAtFire:0} u/s ahead at the first volley)");
             await Wait(0.6);
-            Check(Math.Abs(d1.Total - 214.8) < 0.01, $"every shell lands: 3 volleys x 4 shells x 17.9 = 214.8 ({d1.Total:0.000})");
-            Check(cdAtLast > 13.9 && cdAtLast <= 14 && AbilityBar.StateOf(ship, "broadside", H.Selected).Busy > 0.8f,
-                  $"the 14 s cooldown starts with the last volley, and the slot shows it ({cdAtLast:0.00} s)");
+            Check(Math.Abs(d1.Total - 375) < 0.01, $"every shell lands: 6 volleys x 4 shells x 12.5 x 1.25 = 375 ({d1.Total:0.000})");
+            Check(cdAtLast > 11.9 && cdAtLast <= 12 && AbilityBar.StateOf(ship, "broadside", H.Selected).Busy > 0.8f,
+                  $"the 12 s cooldown starts with the last volley, and the slot shows it ({cdAtLast:0.00} s)");
             int shellsBefore = Shells().Count(s => seen.Add(s));
             Key(global::Godot.Key.F); await Wait(0.8);
             Check(ship.BroadsideWindupLeft == 0 && ship.BroadsideVolleysLeft == 0 && Shells().Count(s => seen.Add(s)) == 0,
@@ -10905,14 +11003,14 @@ public partial class _Test : Node
             Check(Math.Abs(shSpd - 650) < 6f && GodotObject.IsInstanceValid(sh1) && sh1.Dir == sd0 && atFire == 0,
                   $"the guns fire shells at 650 u/s, straight, and nothing lands at once ({shSpd:0} u/s)");
             for (int i = 0; i < 90 && gd.Total == 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            Check(gd.Total > 0 && Math.Abs(gd.Total % gs.Stats["main_damage"]) < 1e-6 && Math.Abs(gs.Stats["main_damage"] - 17.9) < 1e-9, $"a shell lands for the stock 17.9 ({gd.Total:0.000})");
-            // the balance: guns 4 x 17.9 every 2 s = 35.8 DPS, and a broadside of 3 x 4 x 17.9 = 214.8 every
-            // 15 s (the wind-up, two gaps, the cooldown): 50.12 DPS in all. The carrier reaches 1.5x as far.
+            Check(gd.Total > 0 && Math.Abs(gd.Total % gs.Stats["main_damage"]) < 1e-6 && Math.Abs(gs.Stats["main_damage"] - 12.5) < 1e-9, $"a shell lands for the stock 12.5 ({gd.Total:0.000})");
+            // the balance (v1): guns 4 x 12.5 every 2 s = 25 DPS, and a broadside of 6 x 4 x 12.5 x 1.25 = 375 every
+            // 13.75 s (the wind-up, five gaps, the cooldown): 52.27 DPS in all. The carrier reaches 1.5x as far.
             var bsS = new ShipStats(ShipClass.Battleship); var caS = new ShipStats(ShipClass.Carrier);
             double bsTotal = bsS.MainDps + bsS.BroadsideDps + bsS.MissileDps;
-            Check(Math.Abs(bsS.MainDps - 35.8) < 1e-9 && Math.Abs(bsS.BroadsideDamage - 214.8) < 1e-9 && Math.Abs(bsS.BroadsideCycle - 15) < 1e-9
-                  && Math.Abs(bsTotal - 50.12) < 0.001,
-                  $"the battleship: guns 35.8 DPS and a 214.8-damage broadside every 15 s -- 50.12 DPS in all, no missile ({bsTotal:0.000})");
+            Check(Math.Abs(bsS.MainDps - 25) < 1e-9 && Math.Abs(bsS.BroadsideDamage - 375) < 1e-9 && Math.Abs(bsS.BroadsideCycle - 13.75) < 1e-9
+                  && Math.Abs(bsTotal - 52.27) < 0.001,
+                  $"the battleship: guns 25 DPS and a 375-damage broadside every 13.75 s -- 52.27 DPS in all, no missile ({bsTotal:0.000})");
             Check(Math.Abs(caS["control_range"] - 1500) < 1e-6 && Math.Abs(bsS["main_range"] - 1000) < 1e-6,
                   "the carrier's fighters reach 1500 u, 1.5x the battleship's 1000 u guns");
             gs.Position = gKeep; gs.Velocity = Vector2.Zero; await Wait(0.5);
@@ -11023,9 +11121,9 @@ public partial class _Test : Node
             double glMax = ship.MaxHp, glHp = ship.Hp;
             bl[2] = "basic_deflector"; H.PilotChanged();
             // Bulwark Belt: hull +25% at T1, +59% at T10 (numbers §3.3)
-            Check(Math.Abs(max0 - 300) < 1e-6 && Math.Abs(bulMax - 476.85) < 0.01 && Math.Abs(bulHp - 95.37) < 0.01 && Math.Abs(glMax - 375) < 1e-6
-                  && Math.Abs(glHp - 75) < 1e-6 && Math.Abs(ship.MaxHp - 300) < 1e-6 && Math.Abs(ship.Hp - 60) < 1e-6,
-                  $"a refit keeps the hull's fraction: 60/300, Bulwark Belt T10 {bulHp:0.##}/{bulMax:0.##}, down to T1 {glHp:0}/{glMax:0}, back {ship.Hp:0}/{ship.MaxHp:0} -- no heal by swapping");
+            Check(Math.Abs(max0 - 500) < 1e-6 && Math.Abs(bulMax - 794.75) < 0.01 && Math.Abs(bulHp - 95.37) < 0.01 && Math.Abs(glMax - 625) < 1e-6
+                  && Math.Abs(glHp - 75) < 1e-6 && Math.Abs(ship.MaxHp - 500) < 1e-6 && Math.Abs(ship.Hp - 60) < 1e-6,
+                  $"a refit keeps the hull's fraction: 60/500, Bulwark Belt T10 {bulHp:0.##}/{bulMax:0.##}, down to T1 {glHp:0}/{glMax:0}, back {ship.Hp:0}/{ship.MaxHp:0} -- no heal by swapping");
             ship.Hp = ship.MaxHp;
         }
 
@@ -11780,9 +11878,9 @@ public partial class _Test : Node
                   "the defaults: common parts in five slots, every one of the twelve classes starts with mounts it can actually wear -- a carrier's Fighter Hangars, a sniper's Railgun Mount, a wraith's Stealth Veil -- and six empty chip slots");
             var bsE = new ShipStats(ShipClass.Battleship, Equipment.Bonuses(ShipClass.Battleship, Equipment.Default(ShipClass.Battleship), 14, NoLevels));
             var cvE = new ShipStats(ShipClass.Carrier, Equipment.Bonuses(ShipClass.Carrier, Equipment.Default(ShipClass.Carrier), 14, NoLevels));
-            Check(Math.Abs(bsE["hull"] - 300) < 1e-6 && Math.Abs(bsE["main_damage"] - 17.9) < 1e-6 && Math.Abs(cvE["hull"] - 200) < 1e-6
+            Check(Math.Abs(bsE["hull"] - 500) < 1e-6 && Math.Abs(bsE["main_damage"] - 12.5) < 1e-6 && Math.Abs(cvE["hull"] - 200) < 1e-6
                   && Math.Abs(cvE["fighter_damage"] - 2.5) < 1e-6 && Math.Abs(cvE["torpedo_damage"] - 137.5) < 1e-6,
-                  $"the kit is the class, with no chips: battleship 300 hull, 17.9 a shell; carrier 200 hull, fighters 2.5, torpedoes 137.5 ({bsE["hull"]:0.###}, {bsE["main_damage"]:0.###}; {cvE["hull"]:0.###}, {cvE["fighter_damage"]:0.###}, {cvE["torpedo_damage"]:0.###})");
+                  $"the kit is the class, with no chips: battleship 500 hull, 12.5 a shell; carrier 200 hull, fighters 2.5, torpedoes 137.5 ({bsE["hull"]:0.###}, {bsE["main_damage"]:0.###}; {cvE["hull"]:0.###}, {cvE["fighter_damage"]:0.###}, {cvE["torpedo_damage"]:0.###})");
             var cls0 = Me.Class;
             Character.GearHold.Remove("chip_armour_t1"); Character.Stow("chip_armour_t1");     // one Armour Chip I in the hold
             Key(global::Godot.Key.I); await Wait(0.2);
@@ -13363,6 +13461,10 @@ public partial class _Test : Node
             await LaneA4WardChecks();
             await LaneA4MendChecks();
             await ItemsDoorChecks(yonder);
+
+            // ── BATTLESHIP: the arcs and the broadside (slice 6a) ──
+            await LaneA6aArcChecks(yonder);
+            await LaneA6aBroadsideChecks(yonder);
 
             // ── WARRIOR: the blade (slice 6c) ──
             await LaneA6cBladeChecks(yonder);
