@@ -303,6 +303,9 @@ public static class Drives
 
         float safe = (float)s.Stats["warp_safe"], reach = s.ChargeReach;
         var font = ThemeDB.FallbackFont;
+        // the labels keep their size on screen however far the camera is out (the ring is 2400 u across)
+        float z = 1f / Mathf.Max(0.05f, s.GetViewport()?.GetCamera2D()?.Zoom.X ?? 1f);
+        int small = Mathf.RoundToInt(Txt.Size(13) * z), big = Mathf.RoundToInt(Txt.Size(15) * z);
         s.DrawSetTransform(Vector2.Zero, -s.Rotation, Vector2.One);        // world-aligned, centred on the hull
         s.DrawArc(Vector2.Zero, safe, 0, Mathf.Tau, 160, new Color(acc.R, acc.G, acc.B, 0.35f), 2f);
         for (int b = 0; b < Band.Length; b++)
@@ -310,7 +313,7 @@ public static class Drives
             float inner = safe + b * PerStep;
             s.DrawArc(Vector2.Zero, inner + PerStep * 0.5f, 0, Mathf.Tau, 160, Band[b] with { A = 0.07f }, PerStep);
             s.DrawArc(Vector2.Zero, inner + PerStep, 0, Mathf.Tau, 160, Band[b] with { A = 0.5f }, 2f);
-            Txt.Centre(s, font, new Vector2(0, -(inner + PerStep) - 6f), $"{StepSecs * (b + 1):0} s", Txt.Size(13), Band[b]);
+            Txt.Centre(s, font, new Vector2(0, -(inner + PerStep) - 6f * z), $"{StepSecs * (b + 1):0} s", small, Band[b]);
         }
         if (reach >= 0)
         {
@@ -328,7 +331,7 @@ public static class Drives
             s.DrawPolyline(pts, ghost, 2f);
             float moved = at.Length(), past = moved - safe;
             string read = past > 0 ? $"+{past:0} u  ·  DISABLED {DisabledFor(past):0.0} s" : $"{moved:0} u";
-            Txt.Centre(s, font, at + new Vector2(0, len * 0.5f + 22f), read, Txt.Size(15), past > 0 ? ring : Ui.Text);
+            Txt.Centre(s, font, at + new Vector2(0, len * 0.5f + 22f * z), read, big, past > 0 ? ring : Ui.Text);
         }
         s.DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
     }

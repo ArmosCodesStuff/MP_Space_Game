@@ -120,3 +120,28 @@ for the guest's freighter with a 70 s (90 s wan) ceiling. The host's copy lags a
 smoothing (about v/12 u), so "within 20 u of its report" is read at rest after the boosted slide.
 engine-unproven: rungs owed in the final test phase (six x2 for the new guest checks).
 Next: J6 (record); J5's frames went in with J3.
+
+### J6 PRE · tier opus · the record
+Intent: CHANGES Handoff paragraph, Unreleased entry and the controls table (V, A/D, Shift); DESIGN's
+class table speeds and a short "Drives" paragraph with the traps (PriceSnaps, relocations, the lock).
+Also in this job: Drives.Draw scales its labels by the camera's zoom (they were 2.6 px at 0.2 zoom).
+HEAD 11a2a80. CHANGES.md 599d498 · DESIGN.md 8545bde · Drives.cs (edited since 11a2a80: labels).
+### J6 POST · green (typecheck 0, verify -Quick ALL CHECKS PASSED) -- the lane is built
+Files: CHANGES.md (Handoff, controls table, Unreleased), DESIGN.md (class speeds, "V is the class's
+drive" with its traps), Drives.cs (range labels scaled by the camera's zoom).
+**What the final test phase owes (nothing here has run on an engine):**
+- rung 3 (solo) x2 seeds: LaneBHelmChecks, LaneBStrafeChecks, LaneBBoostChecks (all from the heavy
+  block after LaneAHeavyRowsChecks), LaneBWarpChecks (the Solo warp section), and the rewritten
+  checks: MenuDiorama (500 u hop / 7 s, the dodge on the held warp), the hint card (drive id), the
+  snap flash (JumpFlash), the BB/DD bar sequences (+ "warp"), For lengths (+7, warrior 10, freighter
+  13), the battleship 88 / F22 speeds / destroyer 117 flown. Fly (role "fly") notes the warp as
+  "refused -- HOLD V". Watch: the arena guest's freighter check reads For length 13.
+- rung 5 (six) x2: LaneBHostDrives / LaneBGuestDrives (the arena pair, ~30 s before "TWO OF THE NINE");
+  and every existing Mp/arena check, since `Drives.PriceSnaps = false` now opens the host roles.
+- rung 4 (screens) once: 40_warp_charging, 40b_warp_overshoot_band, 41_warp_arrival,
+  41b_warp_disabled, 42_boost_running, 42b_boost_cooling (read by eye once), LINT 0 with the bar one
+  slot wider (the drive's box) on every class.
+- Not provable in this lane (their abilities do not exist yet): Resupply leaves the drive alone (6b),
+  the Anchor refuses the boost (6c: proved here with the railgun's hold), Rewind/Ramjet/Slipstream
+  pricing (6d reads Drives.SpeedCap / PlayerShip.TopNow).
+Open defaults: B1-B9 above; decisions 1, 2, 3, 12, 13 at kits_v31 §10's defaults.

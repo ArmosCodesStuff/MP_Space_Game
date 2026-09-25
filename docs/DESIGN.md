@@ -538,12 +538,12 @@ rows (`Ab.*`). Nothing else in the game is touched.
 
 | | Hull | Length | Top speed | Main guns | Its F | PD turrets | Wing | Sprite |
 |---|---|---|---|---|---|---|---|---|
-| **Battleship** | 300 | 378 u | 104 u/s | 4, 17.9 a shell | broadside | 2 (slow, τ/3) | — | `battleship_hull.png` |
-| **Carrier** | 200 | 283.5 u | 116.48 u/s | — | bomber strike | 3 (fast, τ/1.2) | 3 fighters + 2 bombers | `carrier_player.png` |
-| **Destroyer** | 250 | 212.6 u | 130 u/s | 2, 7.5 a shell | missile burst | 2 (slow, τ/3) | — | `destroyer_hull.png` |
-| **Freighter** | 400 | 230 u | 85 u/s | 1, 12 a shell | bubble (400 soaked) | 2 | 3 deployable turrets | `freight_hauler_hull.png` |
-| **Tender** | 400 | 230 u | 85 u/s | 1, 12 a shell | overdrive (x2 fire) | 2 | 3 deployable turrets | `freight_tender_hull.png` |
-| **Bastion** | 400 | 230 u | 85 u/s | 1, 12 a shell | shockwave (1000 u) | 2 | 3 deployable turrets | `freight_bastion_hull.png` |
+| **Battleship** | 300 | 378 u | 88 u/s | 4, 17.9 a shell | broadside | 2 (slow, τ/3) | — | `battleship_hull.png` |
+| **Carrier** | 200 | 283.5 u | 99 u/s | — | bomber strike | 3 (fast, τ/1.2) | 3 fighters + 2 bombers | `carrier_player.png` |
+| **Destroyer** | 250 | 212.6 u | 117 u/s | 2, 7.5 a shell | missile burst | 2 (slow, τ/3) | — | `destroyer_hull.png` |
+| **Freighter** | 400 | 230 u | 120 u/s | 1, 12 a shell | bubble (400 soaked) | 2 | 3 deployable turrets | `freight_hauler_hull.png` |
+| **Tender** | 400 | 230 u | 120 u/s | 1, 12 a shell | overdrive (x2 fire) | 2 | 3 deployable turrets | `freight_tender_hull.png` |
+| **Bastion** | 400 | 230 u | 120 u/s | 1, 12 a shell | shockwave (1000 u) | 2 | 3 deployable turrets | `freight_bastion_hull.png` |
 | **Sniper** | 140 | 120 u | 190 u/s | 1, 6 a shell | railgun (150 at 2500 u) | — | — | `heavy_sniper_hull.png` |
 | **Warrior** | 140 | 120 u | 190 u/s | 2, 9 a shell | rush + EMP | — | — | `heavy_warrior_hull.png` |
 | **Warden** | 140 | 120 u | 190 u/s | 1, 12 a shell | 6 hunter-seekers | 1, always on | — | `heavy_warden_hull.png` |
@@ -573,6 +573,22 @@ window prints the matching figures.
 and 25% larger: 378 u and a 43.875 u half-beam. The carrier is 25% smaller (283.5 u) and the destroyer
 25% smaller again (212.6 u). The hit capsule is the drawn hull. New ships spawn half the longest
 class below the pad (`Hub.SpawnClear`), so any class starts clear of the base.
+
+### V is the class's drive (Drives.cs, lane B, 2026-09-25)
+
+Every hull names one row of `Drives.All` (`ClassDef.Drive`); `Abilities.For` appends it after the
+class's own rows, so it has a slot on the wire and on the bar, sits on V (fixed: `Bind` refuses to
+move it), and no level wall or Resupply reaches it. The capitals WARP: the OWNER holds V, the charge
+is its own (1.0 s spool, then warp_rate to warp_safe + 900), it jumps on release and locks itself at
+once for any overshoot (`PlayerShip.Disabled` = the host's status OR that lock). The HOST prices what
+it sees between two reports (`Drives.Priced`): a fallen charge bit past the flight the hull could have
+made, and any snap over 600 u with no bit at all; only warp hulls. **Traps:** a relocation the host
+makes must call `PlayerShip.Relocated` (both `NetPlace` sends do), or a returning pilot is disabled for
+arriving; the smoke test's host roles move guests' warp hulls by hand, so they set
+`Drives.PriceSnaps = false` outside `LaneBHostDrives`. The nine BOOST on the ability path (one F1 lift
+on top, thrust and the slide). The slide (F24): Shift + A/D on a hull whose `strafe_speed` > 0,
+read from the stat, never the class; holds multiply after the lifted sum (`PlayerShip.StrafeTop`); the
+host reads a report's speed held to hypot(top, strafe) x 1.1 (`Drives.Clamp`).
 
 ### The class kits: the signed spec lives in docs/plans (2026-09-24)
 
