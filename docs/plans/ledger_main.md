@@ -21,11 +21,12 @@ Engine outputs for the old-way batches: S = C:\Users\logan\AppData\Local\Temp\cl
    audit agent maps every ClassDef.Abilities and drive row to its checks and writes the missing ones): the slots proof, then quick,solo,solo,six,screens (+ six,six) across slots, fix low, then the bar
    once, VERIFIED:, push version-l and main, release; frames to the owner (the art lane's Drake, Rusty, siege, player ships).
 3. Delete each lane's worktree once it is merged (walls, net, slots, art, test removed 2026-09-25; branches kept).
-Done: ART MERGED (A5 7717267 passed gate 3's code; coordinator applied its one comment fix A6 761a2ad; quick art_mergeq green;
+Done: KITS slices 1-2 MERGED a515479 (K4 9742789, K-merge b57862d with art + wave). ART MERGED (A5 7717267 passed gate 3's code; coordinator applied its one comment fix A6 761a2ad; quick art_mergeq green;
   engine-unproven; Drake throw now nose 1300 u off = 200 u past gun reach, tell the owner if asked). Slots merged 25aefc1 (gate 2 passed at a22c187; its 2 notes applied in e104a5a). Engine-unproven: its proof opens the test phase.
 
 ## Owner questions
-- none open
+- (asked 04:40) Split slice 6's tiers 6b/6c/6d into parallel lanes after 6a, to save ~6 h? Default YES: when slice 5 merges, edit
+  the a3to6 script so 6b-6d run as parallel worktrees (wt/kits6b..6d from version-l after 6a), resume the run.
 
 ## Notes
 - Keep the version-l tree CLEAN while wthoe9tj1 / wojzfsouf run: their merge steps refuse a dirty tree. Commit ledger edits at once.
