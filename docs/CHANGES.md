@@ -36,11 +36,11 @@ history pick the work up from it alone. Update it in the same change as the code
 
 ## Handoff — read this first
 
-**2026-09-25 (worktree `WarShips_wt_kits`, branch `wt/kits`): kits lane A J1-J7 + K1 built and
-version-l merged in (K2); compiles, rung 2 green. engine-unproven: rungs 3-5 owed in the final test
-phase** (owner: build first, test once at the end). J6/J7's earlier solo runs (kits_j67a/b) FAILED
-and the J7 check was rewritten (COORDINATOR NOTE 2); nothing J3-K2 added is proven on the engine yet.
-Detail: `docs/plans/ledger_kits.md` (K2 POST).
+**2026-09-25 (worktree `WarShips_wt_kits`, branch `wt/kits`): kits lane A J1-J7 + K1 built,
+version-l merged in (K2), and merge gate 1's seven problems fixed (K3); compiles, rung 2 green.
+engine-unproven: rungs 3-5 owed in the final test phase** (owner: build first, test once at the
+end). J6/J7's earlier solo runs (kits_j67a/b) FAILED and the J7 check was rewritten (COORDINATOR
+NOTE 2); nothing J3-K3 added is proven on the engine yet. Detail: `docs/plans/ledger_kits.md` (K3 POST).
 
 **2026-09-25 (local session, worktree `WarShips_wt_net`, branch `wt/net`): WebRTC slice R1 is proved
 on the engine.** Commits 6eef84e, dba1847, 06db494 (J7-J9), 8760795 (J9b, rung 3 green on seeds
@@ -508,6 +508,16 @@ outstanding from the batch of 2026-09-23.)*
 ---
 
 ## Unreleased
+
+### Class kits, lane A K3: merge gate 1's fixes (2026-09-25, worktree wt/kits)
+
+A ramp row (F1's Ramp) is **owner-stepped**: only the peer at the helm steps its running total, and
+the host's report no longer overwrites it on the owner's own ship (a guest's ramp was reset to the
+host's never-moving copy 10 times a second). The base's laser and a shot whose shooter has gone now
+land through the damage door (`Dealt.Deal`, weapon `base`); the door announces every blow
+(`Dealt.Landed`). The outposts' missile does what the gunship's row says (35, was a copy at 42).
+The heavy-laser DPS checks start their clock on the first volley (a knife edge); screens frame 49
+pins its ship so the heavy's missile shows, and frame 49b shows a latched heavy's two barrels.
 
 ### Class kits, lane A J7: heavy rows, F20 (2026-09-25, worktree wt/kits)
 

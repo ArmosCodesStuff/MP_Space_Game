@@ -125,6 +125,15 @@ away and respawns from `Net.Players`.
 **Offline is not a separate mode.** Single player is a host with no peers, so there is exactly one
 code path and offline can never drift from online.
 
+**A ramp (F1's Ramp, `AbilityDef.Ramp`) is owner-stepped: the one slot field the host does not
+speak for.** Its running total (`Sl(id).Own`) builds on the throttle and bleeds on the yaw, and
+only the owner's peer has either: on the host a guest's ship follows its reports (`RemoteFollow`),
+never `Steer`, so its yaw never moves and there is no helm to read. So `TickAbilities` steps a
+ramp only where `Mine`, and `ApplyHostState` keeps a ramp row's `Own` on the owner's own ship while
+it takes every other slot field from the host. Nothing the host decides reads it: the ramp lifts
+the owner's own top speed and thrust, and the host sees the result as the owner's replicated
+position and speed, as it sees any helm input.
+
 ### What the host must never take on trust (2026-09-22)
 
 Four rules, each of which was once missing, each now held in ONE place so the next thing that

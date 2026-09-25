@@ -66,8 +66,7 @@ public class BossMove
     public float Spread;               // degrees between them, fanned about the aim
     public double Live, Tick;          // a beam's burn, and how often that burn is judged
     // A burn is judged at both ends and every Tick between: 3 s every 0.25 s is 13, the last AT 3 s.
-    // COUNTED, and the last one ends the burn. Timed, the last judgement and the burn's end fell on
-    // one instant, two accumulated clocks decided which came first, and a full burn was 200 or 250.
+    // COUNTED, and the last one ends the burn, so no two clocks race over which comes first.
     public int Judgements => Mathf.FloorToInt(Live / Tick + 1e-6) + 1;
     public double Flight;             // a thrown body's flight down its lane
     public float Turn;                 // a guided body's turn rate (rad/s)
@@ -513,8 +512,8 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
             case MoveWay.Beam:
                 if ((s.Next -= delta) <= 0)
                 {   // judged every Tick, down the nose -- which has not moved since the wind-up began.
-                    // ADDED, not set: `= m.Tick` threw away the overshoot, so at 60 fps each judgement
-                    // came a frame late (16 frames, not 15) and a full burn was 12 of them, not 13.
+                    // ADDED, not set: the overshoot carries, so at 60 fps a judgement lands every 15
+                    // frames and a full burn is all 13 of them.
                     s.Next += m.Tick;
                     var (la, lb) = Segment(m.Id);
                     foreach (var p in _hittable)

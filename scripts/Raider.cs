@@ -68,8 +68,8 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
     public static float HeavyReach => Enemies.Of(Enemies.Gunship).Reach;
     private const float HeavyBoostStop = 300f;          // boosting in, until this close, then at cruise
     // THE MISSILE IS THE ROW'S: EnemyDef.MissileRange / MissileEvery / MissileDamage / MissileFlight /
-    // BlastRadius, read through Def (F20: MissileFlight moved onto the row, from a shared const --
-    // the Lancerkin's own point is standing off further, so its flight need not match the gunship's).
+    // BlastRadius, read through Def (F20: each row its own flight -- the Lancerkin's own point is
+    // standing off further, so its flight need not match the gunship's).
     // HOW a predicted missile flies, telegraphs and lands is Missiles.cs, whosever it is: the
     // outposts throw the same one back (Lanes.cs), which is why none of it is in this file.
     public static float BlastRadius => Enemies.Of(Enemies.Gunship).BlastRadius;
@@ -346,9 +346,8 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
         }
         _missileCd -= delta;
         // HELD while a status holds its throw (StatusSet.HoldsThrow): the clock keeps its zero, and
-        // it throws the frame the status lapses. ONLY AT A PINNED TARGET (F20): before, a heavy
-        // waiting at the map's edge could already be lobbing missiles at a target that had never
-        // been pinned at all.
+        // it throws the frame the status lapses. ONLY AT A PINNED TARGET (F20): a heavy waiting at
+        // the map's edge throws nothing at a target that is not pinned.
         if (Def.Missiles && pinned && _missileCd <= 0 && !_status.HoldsThrow && Position.DistanceTo(Target.Position) <= Def.MissileRange)
         {   // at where it WILL be: its velocity carried the whole flight forward -- from ITS row's
             // reach, on its row's cadence, for its row's damage

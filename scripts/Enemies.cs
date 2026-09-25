@@ -49,7 +49,7 @@ public class EnemyDef
     // fired the gunship's 500 u missile and could not be given its own.
     public float MissileRange = 500f;    // it throws one from within this
     public double MissileEvery = 12.0;   // seconds between them
-    public double MissileFlight = 10.0;  // seconds in the air (was Raider.MissileFlight, a shared const)
+    public double MissileFlight = 10.0;  // seconds in the air
     // WHAT THE BLAST DOES, before Strength. Only thrown at a pinned target (Raider.TickHeavy).
     public double MissileDamage = 35;
     public float BlastRadius = 90f;      // how wide the blast is where it lands
@@ -60,8 +60,7 @@ public class EnemyDef
     public int Beam;
     // WHAT A LATCH APPLIES TO WHAT IT HOLDS (F20): a Pin-way row names the status its own hold
     // puts on the target (every one today is Pinned); a Standoff row names none -- it never
-    // latches onto anything, it only fires from range. Generalises what Raider's own latch used to
-    // hardcode as `Status.Pinned` for every Pin-way row alike.
+    // latches onto anything, it only fires from range. Raider's latch applies whatever this names.
     public Status? Cc;
     // BOUNTY, before Strength (F20; lane G pays it: not built here). 6 for a light, 18 for a heavy.
     public double Exp;

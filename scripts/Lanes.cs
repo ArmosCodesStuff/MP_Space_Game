@@ -107,7 +107,7 @@ public static class Lanes
     public const float  GunRange = 1200f;      // u -- it covers its own stand from the first day
     public const double GunRate = 6.0;         // missiles a MINUTE: one every 10 s
     public const float  GunSpeed = 300f;       // u/s -- the flight is the gap over this
-    public const double GunDamage = 42.0;      // what the blast does: the gunship's own figure
+    public static double GunDamage => Enemies.Of(Enemies.Gunship).MissileDamage;   // what the blast does: the gunship row's own missile
     public const float  GunBlast = 90f;        // ...and how wide it is where it lands
     public const double GunMinFlight = 0.6;    // never less than this in the air, however close
     public static readonly float GunTurn = Mathf.Tau / 6f;

@@ -2809,6 +2809,67 @@ public partial class _Test : Node
                 wd.Sl("hunters").Cool = 0;
             }
         }
+
+        // THE BASE'S LASER GOES THROUGH THE DOOR TOO: no ship dealt it, so no NoteDealt hears it, but
+        // Dealt.Landed hears every blow the door lands -- and over the window it must hear exactly what
+        // the base's own laser tally (LaserDealt) grew by, under the base's weapon id. From three
+        // varied spots inside the laser's 300 u, a light held there.
+        {
+            var bdn = H.GetNode<BaseDefense>("BaseDefense");
+            double heard = 0; int blows = 0;
+            System.Action<IHittable, double, string> ear = (t, d, w) => { if (w == Dealt.Base) { heard += d; blows++; } };
+            for (int run = 0; run < 3; run++)
+            {
+                var spot = Hub.BasePos + Vector2.Right.Rotated(VaryAngle()) * Vary(120f, 260f);
+                var bt = H.SpawnRaider(spot, Enemies.Webifier); bt.Hp = 1e9;
+                heard = 0; blows = 0; double laser0 = bdn.LaserDealt;
+                Dealt.Landed += ear;
+                for (int i = 0; i < 150; i++) { bt.Position = spot; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+                Dealt.Landed -= ear;
+                double laser = bdn.LaserDealt - laser0;
+                Check(blows > 0 && Math.Abs(heard - laser) < 1e-9,
+                      $"the base's laser, a light {spot.DistanceTo(Hub.BasePos):0} u from the base: {blows} blows through the door as \"base\" ({heard:0.0}), what its laser dealt ({laser:0.0})");
+                bt.TakeDamage(1e12);
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            }
+        }
+
+        // THE ECHO STORES EXACTLY WHAT WAS DEALT WHILE IT RUNS, AND NOTHING AFTER (D17): a real hit
+        // through the door while it runs is stored; the frame its Left ends it detonates, and that
+        // blast (DealtBy["echo"]) stores nothing; a real hit after it is credited (DealtBy["shell"])
+        // and stores nothing either. From three varied spots, a heavy held still (never point
+        // defence's pick).
+        await SetClass(ShipClass.LightEcho);
+        {
+            var ec = Me;
+            for (int run = 0; run < 3; run++)
+            {
+                var at = VaryNear(yonder, 300f);
+                ec.Position = at; ec.Velocity = Vector2.Zero;
+                var spot = at + Vector2.Right.Rotated(VaryAngle()) * Vary(120f, 200f);
+                var tgt = H.SpawnRaider(spot, Enemies.Gunship); tgt.Hp = 1e9;
+                ec.Sl("echo").Left = 0; ec.Sl("echo").Cool = 0; ec.Sl("echo").Own = 0;
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                ec.UseAbility("echo", 0);
+                for (int i = 0; i < 30 && ec.Sl("echo").Left <= 0; i++) { tgt.Position = spot; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+                Dealt.Deal(tgt, 40, ec, "shell");
+                double stored = ec.Sl("echo").Own;
+                ec.Sl("echo").Left = 0.3;
+                double echo0 = ec.DealtBy.GetValueOrDefault(Dealt.Echo);
+                for (int i = 0; i < 60 && ec.Sl("echo").Left > 0; i++) { tgt.Position = spot; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+                double ownAtEnd = ec.Sl("echo").Own, blast = ec.DealtBy.GetValueOrDefault(Dealt.Echo) - echo0;
+                double shell0 = ec.DealtBy.GetValueOrDefault("shell");
+                Dealt.Deal(tgt, 25, ec, "shell");
+                double ownAfterHit = ec.Sl("echo").Own;
+                for (int i = 0; i < 30; i++) { tgt.Position = spot; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+                Dealt.Deal(tgt, 25, ec, "shell");
+                double ownLater = ec.Sl("echo").Own, shellAfter = ec.DealtBy.GetValueOrDefault("shell") - shell0;
+                Check(Math.Abs(stored - 40) < 1e-9 && ec.Sl("echo").Left <= 0 && blast > 0 && ownAtEnd == 0 && ownAfterHit == 0 && ownLater == 0 && Math.Abs(shellAfter - 50) < 1e-9,
+                      $"the echo, a heavy {at.DistanceTo(spot):0} u off: stores the 40 dealt while it runs ({stored:0}); its end and its own {blast:0.0} blast store {ownAtEnd:0}; two 25 hits after it are credited ({shellAfter:0}) and store {ownAfterHit:0} / {ownLater:0}");
+                tgt.TakeDamage(1e12);
+                ec.Sl("echo").Cool = 0;
+            }
+        }
     }
 
     // F1'S RAMP (D18): the pure step, proved directly (RampSpec.Step) before any row carries it --
@@ -2850,6 +2911,111 @@ public partial class _Test : Node
             Check(own < 1e-9,
                   $"at {1 / dt:0} Hz: released, the ramp drains to {sheet * own:0.000} u/s of top within 1 s (0 by 9.0 s total)");
         }
+    }
+
+    // A TEST-ONLY RAMP ROW (never in the catalogue), put IN PLACE of the class's last open slot under
+    // that slot's own id, so every copy of the ship already has its slot (no refit; host and guest
+    // keep the same slot count, so the host's report reaches it). The Dart's own numbers (v3 3.6:
+    // build 0.10, cap 0.50, bleed 0.20) and a flat add of 60 u/s, on stat ids GiveRampStats puts on
+    // one ship's sheet; it builds on the throttle (W). Returns the open row, for PutBackOpenRow.
+    AbilityDef PutTestRampRow(ShipClass c)
+    {
+        var rows = Abilities.For(c);
+        int k = Array.FindIndex(rows, a => a.Id == "open6");
+        var kept = rows[k];
+        rows[k] = new AbilityDef { Id = kept.Id, Name = kept.Name, Short = kept.Short, Open = true, Default = kept.Default, Blurb = kept.Blurb,
+                                   SpeedAdd = "test_ramp_add",
+                                   Ramp = new RampSpec { Build = "test_ramp_build", Cap = "test_ramp_cap", Bleed = "test_ramp_bleed",
+                                                         Condition = _ => Input.IsKeyPressed(global::Godot.Key.W) } };
+        return kept;
+    }
+    void PutBackOpenRow(ShipClass c, AbilityDef kept)
+    {
+        var rows = Abilities.For(c);
+        rows[Array.FindIndex(rows, a => a.Id == kept.Id)] = kept;
+    }
+    void GiveRampStats(PlayerShip s)
+    {
+        var byId = (Dictionary<string, Stat>)typeof(ShipStats).GetField("_byId", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(s.Stats);
+        foreach (var (id, v) in new[] { ("test_ramp_build", 0.10), ("test_ramp_cap", 0.50), ("test_ramp_bleed", 0.20), ("test_ramp_add", 60.0) })
+            byId[id] = new Stat { Id = id, Label = id, Unit = "", Group = "Test", Base = v };
+    }
+    // THE HOST'S REPORT of this ship, as a guest's own ship receives it: every slot field from the
+    // host's copy, whose ramp is never stepped there (Own 0 -- the host has no helm to read).
+    void ApplyHostReport(PlayerShip s)
+    {
+        var rows = Abilities.For(s.Class);
+        int n = rows.Length + 1;
+        var left = new float[n]; var cool = new float[n]; var own = new float[n]; var cnt = new int[n];
+        for (int i = 0; i < rows.Length; i++)
+        {
+            var sl = s.Sl(rows[i].Id);
+            left[i + 1] = (float)sl.Left; cool[i + 1] = (float)sl.Cool; cnt[i + 1] = sl.N;
+            own[i + 1] = rows[i].Ramp != null ? 0f : (float)sl.Own;
+        }
+        s.ApplyHostState(s.Hp, s.MaxHp, s.Alive, 0, s.Statuses.Bits, 0, left, cool, own, cnt, 0, 0,
+                         Array.Empty<Vector2>(), Array.Empty<float>(), Array.Empty<int>(), Array.Empty<float>());
+    }
+
+    // F1'S RAMP, WIRED (D18): a test-only Ramp row on the hull (PutTestRampRow). Its 1 + Own is a
+    // lift (Lifts -> SpeedMult); TickAbilities steps it from the helm every frame (+0.10 a second
+    // straight on the throttle; minus 0.20 x the yaw share on a turn, the yaw read from THIS frame's
+    // Steer); its SpeedAdd reaches Steer's cap; and a host report (ApplyHostReport) does not reset it
+    // on the owner's own ship. From 3 varied turn rates (the speed the turn starts at) and rudders.
+    async Task LaneARampWiringChecks(Vector2 yonder)
+    {
+        var me = Me; var cls = me.Class;
+        var kept = PutTestRampRow(cls);
+        GiveRampStats(me);
+        var yawF = typeof(PlayerShip).GetField("_yawRate", BindingFlags.NonPublic | BindingFlags.Instance);
+        double turnRate = me.Stats["turn_rate"];
+        var rudders = new[] { global::Godot.Key.A, global::Godot.Key.D, global::Godot.Key.A };
+        for (int run = 0; run < 3; run++)
+        {
+            me.Position = VaryNear(yonder, 300f); me.Velocity = Vector2.Zero; me.Rotation = VaryAngle(); me.AutopilotTo = null;
+            yawF.SetValue(me, 0f);
+            me.Sl("open6").Own = 0; me.Sl("open6").Left = 600;
+            for (int i = 0; i < 10; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            // STRAIGHT, on the throttle: the clock starts on the first frame the ramp shows, never on the key
+            KeyDown(global::Godot.Key.W);
+            for (int i = 0; i < 60 && me.Sl("open6").Own <= 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            double o0 = me.Sl("open6").Own, c0 = me.Clock;
+            for (int i = 0; i < 90; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            double o1 = me.Sl("open6").Own, took = me.Clock - c0;
+            float lift = me.SpeedMult;
+            ApplyHostReport(me);
+            double kept1 = me.Sl("open6").Own;
+            Check(o0 > 0 && Math.Abs((o1 - o0) - 0.10 * took) < 1e-3 && Math.Abs(lift - (1 + o1)) < 1e-4 && kept1 == o1,
+                  $"a ramp row on the hull, {took:0.00} s straight on the throttle: +{o1 - o0:0.000} (0.10 a second: {0.10 * took:0.000}), a lift of x{lift:0.000} (1 + {o1:0.000}), and the host's report leaves the owner's {kept1:0.000}");
+            // ITS SpeedAdd, INTO Steer's CAP: driven far past it, the hull is held to sheet x (1 + Own) + 60
+            double ownPrev = me.Sl("open6").Own;
+            me.Velocity = Vector2.Up.Rotated(me.Rotation) * 3000f;
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            double wantTop = me.Stats["max_speed"] * (1 + ownPrev) + 60;
+            Check(Math.Abs(me.SpeedAhead - wantTop) < 1.5,
+                  $"...and its flat add reaches the helm's cap: {me.SpeedAhead:0.0} u/s (sheet {me.Stats["max_speed"]:0} x {1 + ownPrev:0.000} + 60 = {wantTop:0.0})");
+            // A TURN, begun at a varied speed (so at a varied rate), on the throttle still: each frame
+            // steps +0.10 - 0.20 x |yaw| / the rudder limit, with that frame's yaw
+            float v0 = Vary(0.4f, 0.9f) * (float)(me.Stats["turn_radius"] * turnRate);
+            me.Velocity = Vector2.Up.Rotated(me.Rotation) * v0;
+            KeyDown(rudders[run]);
+            double want = me.Sl("open6").Own, clock = me.Clock, shareSum = 0;
+            for (int i = 0; i < 60; i++)
+            {
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                double dt = me.Clock - clock; clock = me.Clock;
+                double share = Math.Min(1, Math.Abs((float)yawF.GetValue(me)) / turnRate);
+                shareSum += share * dt;
+                want = Math.Clamp(want + (0.10 - 0.20 * share) * dt, 0, 0.50);
+            }
+            ApplyHostReport(me);
+            double got = me.Sl("open6").Own;
+            KeyUp(rudders[run]); KeyUp(global::Godot.Key.W);
+            Check(shareSum > 0.2 && Math.Abs(got - want) < 1e-3,
+                  $"...then a turn begun at {v0:0} u/s (a yaw share of {shareSum:0.00} over the second): the ramp reads {got:0.0000}, its frames' own sum {want:0.0000}, and the host's report left it");
+        }
+        me.Sl("open6").Own = 0; me.Sl("open6").Left = 0; me.Velocity = Vector2.Zero;
+        PutBackOpenRow(cls, kept);
     }
 
     // F1'S ADD (D18): the pure formula, PlayerShip.TopSpeed -- sheet x lift (already Scale(shares))
@@ -2922,11 +3088,14 @@ public partial class _Test : Node
             var hvL = H.SpawnRaider(at + Vector2.Right.Rotated(VaryAngle()) * Vary(100f, 130f), Enemies.Gunship);
             typeof(Raider).GetField("_missileCd", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(hvL, 99.0);   // the laser sub-test's gunship throws nothing: the missile sub-test reads the only blast
             double HvLaser() => pm.DamageBySource.Where(kv => kv.Key == $"raider:{hvL.NetId}").Sum(kv => kv.Value);
-            for (int i = 0; i < 60 * 4 && !hvL.Latched; i++) { pm.Position = at; pm.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            // TIMED FROM THE EFFECT: the clock starts on the first frame a volley has landed (HvLaser()
+            // grows), never on the latch -- a volley then lands every 60 frames, so a 150-frame read
+            // holds exactly two more, each 30 frames from either end of the window (no knife edge).
+            for (int i = 0; i < 60 * 5 && HvLaser() == 0; i++) { pm.Position = at; pm.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
             double hl0 = HvLaser();
-            for (int i = 0; i < 120; i++) { pm.Position = at; pm.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            for (int i = 0; i < 150; i++) { pm.Position = at; pm.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
             double hdps = (HvLaser() - hl0) / 2.0;
-            Check(hvL.Latched && Math.Abs(hdps - 2.58) < 0.15,
+            Check(hvL.Latched && hl0 > 0 && Math.Abs(hdps - 2.58) < 0.15,
                   $"a gunship on a pinned pilot, {at.DistanceTo(hvL.Position):0} u off: {hdps:0.00} DPS (want 2.58, 2 barrels of 1.29)");
             hvL.TakeDamage(9999);
             pm.Position = at; pm.Velocity = Vector2.Zero;
@@ -3384,8 +3553,9 @@ public partial class _Test : Node
                       && ReferenceEquals(gun.Aimed, cutA);
         for (int i = 0; i < 60 * 6 && cutA.Hp >= hp0; i++)
         { cutA.Position = markAt; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
-        Check(marked && Math.Abs(hp0 - cutA.Hp - 42) < 1e-6,
-              $"the outpost throws the heavy fighter's own predicted missile at the blockader, marks where it will land in friendly colours, and lands the gunship's 42 there ({hp0 - cutA.Hp:0} off the blockader)");
+        // 35: a literal from the ruling ("heavy missile 35 in 10 s"), never read from the row it proves
+        Check(marked && Math.Abs(hp0 - cutA.Hp - 35) < 1e-6,
+              $"the outpost throws the heavy fighter's own predicted missile at the blockader, marks where it will land in friendly colours, and lands the gunship's 35 there ({hp0 - cutA.Hp:0} off the blockader)");
 
         // ── A BLOCKADE IS A ROW OF Waves.All, holding the lane's own stand ─────────────────
         var plainRow = Waves.For(WaveTrigger.Blockade, new WaveBrief { Index = 0 });
@@ -6724,9 +6894,14 @@ public partial class _Test : Node
             // (over the ground: cruise plus the pinned target's own forced thrust, ~20 u/s)
             Check(slow <= 100f + 0.2f * (float)hm.Stats["max_speed"] + 5f, $"inside 300 u it closes at cruise ({slow:0} u/s over the ground)");
             for (int i = 0; i < 60 * 8 && !hv.Latched; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            double hl0 = HvLaser(); await Wait(3.0);
+            // TIMED FROM THE EFFECT: the clock starts on the frame a volley lands (HvLaser() grows);
+            // 210 frames then hold exactly three more volleys (at 60, 120, 180), none on an edge
+            double hlLatch = HvLaser();
+            for (int i = 0; i < 60 * 2 && HvLaser() == hlLatch; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            double hl0 = HvLaser();
+            for (int i = 0; i < 210; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             double hdps = (HvLaser() - hl0) / 3.0;
-            Check(hv.Latched && Raider.Gap(hv.Position, hm) <= Raider.HeavyReach && Math.Abs(hdps - 2.58) < 0.4,
+            Check(hv.Latched && hl0 > hlLatch && Raider.Gap(hv.Position, hm) <= Raider.HeavyReach && Math.Abs(hdps - 2.58) < 0.4,
                   $"from 135 u off the hull its laser does 2.58 DPS, both barrels at once ({hdps:0.00})");
             foreach (var r in H.Raiders.ToList()) r.TakeDamage(9999);
             await Wait(0.3);
@@ -7622,6 +7797,7 @@ public partial class _Test : Node
             await LaneAOutDoorChecks(yonder);
             await LaneADamageDoorChecks(yonder);
             LaneARampChecks();
+            await LaneARampWiringChecks(yonder);
             LaneASpeedAddChecks();
             await LaneAHeavyRowsChecks(yonder);
 
@@ -10998,6 +11174,19 @@ public partial class _Test : Node
                 GetTree().CreateTimer(20.0).Timeout += () => { if (GodotObject.IsInstanceValid(gPrey) && gPrey.Alive) gPrey.TakeDamage(1e12); };
             }
             else Check(false, "a guest's point defence fires on the host: no guest ship");
+            // A RAMP ON A GUEST-FLOWN SHIP (D18; the guest branch flies it near its end): the same
+            // test-only row on this host's copy of the guest's carrier, held running (Left) and its
+            // slot's N marked 4242 every frame -- so the guest can count this host's reports landing on
+            // that very slot -- and its stats never given here: this copy has no helm, and must never
+            // step it. (Every frame, not once: the guest's mid-session level refits this copy.)
+            var hostRampKept = PutTestRampRow(ShipClass.Carrier);
+            var hostRampHold = new LateSampler { Probe = () =>
+            {
+                if (H?.Ships.FirstOrDefault(s => s.Pilot == "Guesty") is not { } gr) return false;
+                gr.Sl("open6").Left = 1e4; gr.Sl("open6").N = 4242;
+                return true;
+            } };
+            AddChild(hostRampHold);
             Check(InFlight().Any(x => !x.Cosmetic) || dummy.Total > 12, "guest's bomber strike launched real torpedoes on the host");
             // stay up while the guest watches its bombers come home and dock (it checks ~22 s in), and
             // send the hauler on an escort half way through for it to see
@@ -11075,6 +11264,7 @@ public partial class _Test : Node
             double gTopNow = gNow == null ? 0 : gNow.Stats["max_speed"] / new ShipStats(ShipClass.Carrier)["max_speed"];
             Check(Math.Abs(gTopNow - 1.2875) < 1e-9,
                   $"a level a guest buys mid-session reaches the host's copy of its ship: top speed x{gTopNow:0.0000} (level 3: 1 + 0.25 x 1.15 = 1.2875; still level 2 would be 1.275)");
+            hostRampHold.QueueFree(); PutBackOpenRow(ShipClass.Carrier, hostRampKept);
             heldD["ghost2"] = Ghost(424243, 60000);          // a place still held when the host leaves
             Net.I.GoOffline();   // drop the guest
             await Wait(2.0);
@@ -11455,6 +11645,44 @@ public partial class _Test : Node
                   && Nodes<Sprite2D>().Count(s => s.Name.ToString().StartsWith("Outpost")) == 4,
                   $"a guest sees the host's hauler hold at the south-west outpost and offload -- its outposts built here too (leg {stopLeg}, {stopMax:0.0} s, shown {shownMax:0.00} -> {shownMin:0.00} of the load)");
             Check(dispatchWatch.Seen && !Met("hauler"), "the hauler hint is the base owner's: a guest watching the host's loaded hauler is not shown buttons it cannot press");
+            // A GUEST-FLOWN RAMP (D18): the test-only row on this guest's own carrier (and on the host's
+            // copy, held running there, its slot marked 4242 by every report). The ramp is stepped HERE,
+            // where the helm is: it builds 0.10 a second on the throttle and bleeds 0.20 x the yaw share
+            // on a turn, and the host's reports -- counted as they land on that slot -- never reset it.
+            {
+                var rampKept = PutTestRampRow(ShipClass.Carrier);
+                var gs = H.MyShip;
+                var yawF = typeof(PlayerShip).GetField("_yawRate", BindingFlags.NonPublic | BindingFlags.Instance);
+                int reports = 0;
+                void CountReports() { if (gs.Sl("open6").N == 4242) { reports++; gs.Sl("open6").N = 0; } }
+                GiveRampStats(gs);
+                gs.AutopilotTo = null; yawF.SetValue(gs, 0f);
+                gs.Sl("open6").Own = 0; gs.Sl("open6").Left = 1e4; gs.Sl("open6").N = 0;
+                for (int i = 0; i < 10; i++) { await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); CountReports(); }
+                KeyDown(global::Godot.Key.W);
+                for (int i = 0; i < 60 && gs.Sl("open6").Own <= 0; i++) { await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); CountReports(); }
+                double o0 = gs.Sl("open6").Own, c0 = gs.Clock; int rep0 = reports;
+                for (int i = 0; i < 90; i++) { await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); CountReports(); }
+                double o1 = gs.Sl("open6").Own, took = gs.Clock - c0; int straightReports = reports - rep0;
+                Check(Net.IsOnline && o0 > 0 && straightReports >= 5 && Math.Abs((o1 - o0) - 0.10 * took) < 1e-3,
+                      $"guest: a ramp on its own ship builds on the throttle, {took:0.00} s straight: +{o1 - o0:0.000} (0.10 a second: {0.10 * took:0.000}), through {straightReports} of the host's reports on that slot");
+                KeyDown(global::Godot.Key.A);
+                double want = gs.Sl("open6").Own, clock = gs.Clock, shareSum = 0; rep0 = reports;
+                for (int i = 0; i < 60; i++)
+                {
+                    await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); CountReports();
+                    double dt = gs.Clock - clock; clock = gs.Clock;
+                    double yawShare = Math.Min(1, Math.Abs((float)yawF.GetValue(gs)) / gs.Stats["turn_rate"]);
+                    shareSum += yawShare * dt;
+                    want = Math.Clamp(want + (0.10 - 0.20 * yawShare) * dt, 0, 0.50);
+                }
+                double got = gs.Sl("open6").Own; int turnReports = reports - rep0;
+                KeyUp(global::Godot.Key.A); KeyUp(global::Godot.Key.W);
+                Check(Net.IsOnline && shareSum > 0.2 && turnReports >= 3 && Math.Abs(got - want) < 1e-3,
+                      $"guest: ...and bleeds on a turn (a yaw share of {shareSum:0.00} over the second, pinned: {gs.Pinned}): {got:0.0000}, its frames' own sum {want:0.0000} -- {turnReports} host reports landed and none reset it");
+                gs.Sl("open6").Own = 0;
+                PutBackOpenRow(ShipClass.Carrier, rampKept);
+            }
             // the host closes the session once its 15 s are up and the third player has gone (~24.5 s in)
             await RealTime(() => !Net.IsOnline, Wan ? 40 : 10);
             Check(!Net.IsOnline && Net.LocalId == 1 && Net.I.LastStatus.Contains("Host closed") && !Net.I.Reconnecting,

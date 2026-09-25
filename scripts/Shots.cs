@@ -223,8 +223,7 @@ public partial class Shot : Node2D, IHittable, ITagged
                 // a ship is told where the blow came from, for its shield; a hostile is dealt with
                 // through the door (Dealt.Deal), the shot's own row naming the weapon
                 if (h is PlayerShip ps) ps.Hit(Damage, p - Dir * 10f, HitSource);
-                else if (IsInstanceValid(Source)) Dealt.Deal(h, Damage, Source, d.Id);
-                else h.TakeDamage(Damage);
+                else Dealt.Deal(h, Damage, IsInstanceValid(Source) ? Source : null, d.Id);
             }
             GlobalPosition = p;
             End();
