@@ -2884,6 +2884,58 @@ public partial class _Test : Node
     // missile reach draws nothing (the pin gate); THEN, separately, a pinned one: both barrels at
     // once, 2.58 DPS, and a missile whose flight is 10 s and lands 35. The two are separate loops,
     // never one run's pinned tail bleeding into the next run's "unpinned" head.
+    // ── LANE B · F22 HELM ROWS (kits_v31 §3.5) ──────────────────────────────────────────────
+    // The capitals are cut (BB 88, CV 99, DD 117) and the freighters raised to 120, each thrust
+    // moved with its top so every hull reaches its top in the time it did. The literals are the
+    // request's; "today's" pairs are the sheet before F22 (BB 104/56, CV 116.48/58.24, DD 130/70,
+    // freighters 85/45), and the time to 95% of top is worked from them with the sheet's own drag.
+    // Then flown: three changed hulls from rest at seeded headings, the clock started on the first
+    // frame the hull moves (never on the key), to 95% of its top.
+    static double T95(double top, double thrust, double drag) => -Math.Log(1 - 0.95 * top * drag / thrust) / drag;
+    async Task LaneBHelmChecks(Vector2 yonder)
+    {
+        bool N9(double a, double b) => Math.Abs(a - b) < 1e-9;
+        var bb = new ShipStats(ShipClass.Battleship); var cv = new ShipStats(ShipClass.Carrier); var dd = new ShipStats(ShipClass.Destroyer);
+        var frs = new[] { ShipClass.FreightHauler, ShipClass.FreightTender, ShipClass.FreightBastion }.Select(c => new ShipStats(c)).ToList();
+        Check(N9(bb["max_speed"], 88) && N9(cv["max_speed"], 99) && N9(dd["max_speed"], 117)
+              && frs.All(f => N9(f["max_speed"], 120) && N9(f["thrust"], 63.5) && N9(f["reverse_thrust"], 28.2) && N9(f["reverse_speed"], 42.4)
+                              && N9(f["turn_rate"], 0.85) && N9(f["turn_radius"], 150))
+              && dd["max_speed"] > cv["max_speed"] && cv["max_speed"] > bb["max_speed"] && N9(cv["thrust"], 49.5),
+              $"F22: tops BB 88, CV 99, DD 117 (DD > CV > BB) and the three freighters 120 (thrust 63.5, astern 28.2 / 42.4, turning unchanged); the carrier's thrust 49.5 ({bb["max_speed"]:0}/{cv["max_speed"]:0}/{dd["max_speed"]:0}/{frs[0]["max_speed"]:0})");
+        double drag = bb["water_drag"];
+        var today = new (string name, ShipStats now, double top, double thrust)[]
+        {
+            ("battleship", bb, 104, 56), ("carrier", cv, 116.48, 58.24), ("destroyer", dd, 130, 70),
+            ("freighter", frs[0], 85, 45), ("tender", frs[1], 85, 45), ("bastion", frs[2], 85, 45),
+        };
+        foreach (var (name, now, top, thrust) in today)
+        {
+            double was = T95(top, thrust, drag), is_ = T95(now["max_speed"], now["thrust"], now["water_drag"]);
+            Check(Math.Abs(is_ - was) < 0.05, $"F22: the {name} reaches 95% of its top in {is_:0.000} s, today's {was:0.000} s (within 0.05)");
+        }
+        // flown: the battleship, the carrier and a freighter, each from rest at a seeded heading
+        foreach (var (cls, top, thrust) in new[] { (ShipClass.Battleship, 104.0, 56.0), (ShipClass.Carrier, 116.48, 58.24), (ShipClass.FreightHauler, 85.0, 45.0) })
+        {
+            await SetClass(cls);
+            var s = Me; s.AutopilotTo = null;
+            s.Position = VaryNear(yonder, 300f); s.Rotation = VaryAngle(); s.Velocity = Vector2.Zero; await Wait(0.3);
+            s.Velocity = Vector2.Zero;
+            KeyDown(global::Godot.Key.W);
+            double t = 0; bool moving = false; float want = 0.95f * (float)s.Stats["max_speed"];
+            for (int i = 0; i < 60 * 8 && s.SpeedAhead < want; i++)
+            {
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                if (!moving && s.SpeedAhead > 0.01f) moving = true;       // the first frame it moves
+                else if (moving) t += GetProcessDeltaTime();
+            }
+            KeyUp(global::Godot.Key.W);
+            double was = T95(top, thrust, s.Stats["water_drag"]);
+            Check(s.SpeedAhead >= want && Math.Abs(t - was) < 0.1,
+                  $"F22 flown: a {cls} at {Mathf.RadToDeg(s.Rotation):0} deg reaches 95% of its {s.Stats["max_speed"]:0} u/s in {t:0.00} s from its first frame under way, today's {was:0.00} s (within 0.1: a frame's step)");
+            s.Velocity = Vector2.Zero; await Wait(0.2);
+        }
+    }
+
     async Task LaneAHeavyRowsChecks(Vector2 yonder)
     {
         var pm = Me; var keep = pm.Position;
@@ -4806,7 +4858,7 @@ public partial class _Test : Node
         KeyDown(global::Godot.Key.W); await Wait(4.0);
         var fwd = Vector2.Up.Rotated(ship.Rotation);
         Check(ship.SpeedAhead > 0.95 * ship.Stats["max_speed"] && (ship.Position - p0).Normalized().Dot(fwd) > 0.999f, $"W drives ahead along the keel ({ship.SpeedAhead:0} u/s)");
-        Check(Math.Abs(ship.Stats["max_speed"] - 104) < 0.01 && Math.Abs(ship.Stats["turn_radius"] - 107) < 0.01, "battleship: 104 u/s top speed, 107 u turning radius");
+        Check(Math.Abs(ship.Stats["max_speed"] - 88) < 0.01 && Math.Abs(ship.Stats["turn_radius"] - 107) < 0.01, "battleship: 88 u/s top speed (F22), 107 u turning radius");
         KeyDown(global::Godot.Key.D); await Wait(10.0);                    // settle into the turning circle
         float ra = ship.Rotation; double v = ship.SpeedAhead; await Wait(1.0);
         float omega = Mathf.Abs(Mathf.AngleDifference(ra, ship.Rotation));
@@ -5175,11 +5227,11 @@ public partial class _Test : Node
             bool N9(double a, double b) => Math.Abs(a - b) < 1e-9;
             Check(N9(ddS["hull"], 250) && N9(ship.MaxHp, 250) && N9(ddS["main_count"], 2) && N9(ddS["pd_count"], 2) && ddS["fighter_count"] == 0 && ddS["broadside_volleys"] == 0,
                   $"250 hull on the ship as on the sheet (no chips), two main guns, two PD; no wing, no broadside ({ship.MaxHp:0.0})");
-            Check(N9(bsS0["max_speed"], 104) && N9(ddS["max_speed"], 130) && N9(cvS0["max_speed"], 116.48)
-                  && N9(ddS["thrust"], 70) && N9(ddS["reverse_thrust"], 30) && N9(ddS["reverse_speed"], 45)
-                  && N9(cvS0["thrust"], 48 * 116.48 / 96) && N9(cvS0["reverse_thrust"], 20 * 116.48 / 96) && N9(cvS0["reverse_speed"], 32 * 116.48 / 96)
+            Check(N9(bsS0["max_speed"], 88) && N9(ddS["max_speed"], 117) && N9(cvS0["max_speed"], 99)
+                  && N9(ddS["thrust"], 63) && N9(ddS["reverse_thrust"], 27) && N9(ddS["reverse_speed"], 40.5)
+                  && N9(cvS0["thrust"], 49.5) && N9(cvS0["reverse_thrust"], 20.625) && N9(cvS0["reverse_speed"], 33)
                   && N9(ddS["turn_radius"], 107) && N9(ddS["turn_rate"], 1.08) && N9(cvS0["turn_radius"], 127) && N9(cvS0["turn_rate"], 0.9),
-                  "speeds: the destroyer 130 u/s (the battleship's 104 +25%), the carrier 116.48 (+12%); each class's accelerations and astern speed scale with it; turning unchanged");
+                  "speeds (F22): the destroyer 117 u/s, the carrier 99, the battleship 88; each class's accelerations and astern speed cut with it; turning unchanged");
             Check(N9(ddS.MainDps, 15.0) && Math.Abs(ddS.MissileDps - 441.0 / 9.8) < 1e-9 && Math.Abs(ddS.MainDps + ddS.MissileDps - 60.0) < 0.001,
                   $"the destroyer's damage: guns 11.8 DPS, bursts 2 x 3 x 5 every 16.6 s (1.81) -- 13.61 DPS ({ddS.MainDps + ddS.MissileDps:0.000})");
             // the fastest: flat out for 4 s it is past anything a battleship can reach
@@ -5187,7 +5239,7 @@ public partial class _Test : Node
             KeyDown(global::Godot.Key.W); await Wait(4.0);
             double ddAhead = ship.SpeedAhead;
             KeyUp(global::Godot.Key.W); ship.Velocity = Vector2.Zero;
-            Check(ddAhead > 0.95 * 130, $"W drives the destroyer to its 130 u/s -- past a battleship's 104 ({ddAhead:0} u/s)");
+            Check(ddAhead > 0.95 * 117 && ddAhead > 88 * 1.1, $"W drives the destroyer to its 117 u/s -- past a battleship's 88 ({ddAhead:0} u/s)");
             await Park(d1.Position + new Vector2(0, 600));
             ship.Staggered = false;
             // its two guns: Space fires both (salvo)
@@ -7631,6 +7683,7 @@ public partial class _Test : Node
             LaneARampChecks();
             LaneASpeedAddChecks();
             await LaneAHeavyRowsChecks(yonder);
+            await LaneBHelmChecks(yonder);
 
             // ── WARRIOR: two and a half times its speed, half the damage, then the EMP ──
             await SetClass(ShipClass.HeavyWarrior);

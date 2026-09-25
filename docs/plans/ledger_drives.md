@@ -47,3 +47,18 @@ A PRE with no POST is an interrupted job: compare the hashes, keep only what mat
 | J4 | Wire: the host prices a guest's jump (B6), the host's speed clamp by hypot (B7); guest-role checks (arena guest: overshoot priced 4 s with its own lock bypassed, a bit-less 3300 u snap priced 6 s, boost and strafe replicate within 20 u with no clamp) | Drives.cs, PlayerShip (ApplyState, Restore), SmokeTest (ahost/aguest) |
 | J5 | Frames: warp charging inside the ring, past the safe ring (band, ticks, ghost, readout), the landing, DISABLED; the boost readout | Shots.cs.txt |
 | J6 | Record: CHANGES Unreleased + Handoff, DESIGN trap lines; final POST with what the test phase owes | docs |
+
+## Log
+
+### J1 PRE · tier opus · F22 helm rows
+Intent: capitals as kits_v3 §3.9 (BB 88/47/20/30, CV CarrierTop 99, DD 117/63/27/40.5), freighters to
+120 (thrust 63.5, reverse 28.2, astern 42.4); Stats' Helm defaults follow the BB. Rewrite the checks
+asserting 104/130/116.48; new LaneBHelmChecks (tops, DD > CV > BB, thrusts, t95 within 0.05 s of today's).
+HEAD 7ffa6d9. Ships.cs c272c9b · Stats.cs fdaff34 · SmokeTest.cs.txt 9949bb6.
+### J1 POST · green (typecheck 0 errors, verify -Quick ALL CHECKS PASSED)
+Files: Ships.cs, Stats.cs, SmokeTest.cs.txt (LaneBHelmChecks; rewrote the BB 104, DD/CV speeds and the
+DD 130 flown check). engine-unproven: rungs owed in the final test phase (solo x2).
+Note for the coordinator: Enemies.cs:30 says `Cruise = 100f` is "under every capital ship's top speed
+(104 to 130)"; with F22 the BB is 88 and the CV 99, so raiders now cruise faster than two capitals.
+Not this lane's file; the comment (or the number) is lane A/G's to settle.
+Next: J2.

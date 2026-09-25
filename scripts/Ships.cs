@@ -157,7 +157,7 @@ public static class Classes
             Hint = "BATTLESHIP  ·  mouse aims the main guns",
             Nums = new() {
                 ["hull"] = 300,
-                ["thrust"] = 56, ["reverse_thrust"] = 24, ["max_speed"] = 104, ["reverse_speed"] = 36,
+                ["thrust"] = 47, ["reverse_thrust"] = 20, ["max_speed"] = 88, ["reverse_speed"] = 30,
                 ["turn_radius"] = 107, ["turn_rate"] = 1.08,
                 ["main_count"] = 4, ["main_damage"] = 17.9, ["main_interval"] = 2.0, ["main_range"] = 1000, ["shell_speed"] = 650,
                 ["pd_count"] = 2,
@@ -207,7 +207,7 @@ public static class Classes
             Hint = "DESTROYER  ·  mouse aims the main guns",
             Nums = new() {
                 ["hull"] = 250,
-                ["thrust"] = 70, ["reverse_thrust"] = 30, ["max_speed"] = 130, ["reverse_speed"] = 45,
+                ["thrust"] = 63, ["reverse_thrust"] = 27, ["max_speed"] = 117, ["reverse_speed"] = 40.5,
                 ["turn_radius"] = 107, ["turn_rate"] = 1.08,
                 ["main_count"] = 2, ["main_damage"] = 7.5, ["main_interval"] = 1.0, ["main_range"] = 720, ["shell_speed"] = 520,
                 ["pd_count"] = 2,
@@ -234,7 +234,7 @@ public static class Classes
             Hint = "FREIGHTER  ·  mouse aims the main gun",
             Nums = new() {
                 ["hull"] = 400,
-                ["thrust"] = 45, ["reverse_thrust"] = 20, ["max_speed"] = 85, ["reverse_speed"] = 30,
+                ["thrust"] = 63.5, ["reverse_thrust"] = 28.2, ["max_speed"] = 120, ["reverse_speed"] = 42.4,
                 ["turn_radius"] = 150, ["turn_rate"] = 0.85,
                 ["main_count"] = 1, ["main_damage"] = 12, ["main_interval"] = 1.0, ["main_range"] = 800, ["shell_speed"] = 560,
                 ["pd_count"] = 2,
@@ -272,7 +272,7 @@ public static class Classes
             Hint = "TENDER  ·  mouse aims the main gun",
             Nums = new() {
                 ["hull"] = 400,
-                ["thrust"] = 45, ["reverse_thrust"] = 20, ["max_speed"] = 85, ["reverse_speed"] = 30,
+                ["thrust"] = 63.5, ["reverse_thrust"] = 28.2, ["max_speed"] = 120, ["reverse_speed"] = 42.4,
                 ["turn_radius"] = 150, ["turn_rate"] = 0.85,
                 ["main_count"] = 1, ["main_damage"] = 12, ["main_interval"] = 1.0, ["main_range"] = 800, ["shell_speed"] = 560,
                 ["pd_count"] = 2,
@@ -308,7 +308,7 @@ public static class Classes
             Hint = "BASTION  ·  mouse aims the main gun",
             Nums = new() {
                 ["hull"] = 400,
-                ["thrust"] = 45, ["reverse_thrust"] = 20, ["max_speed"] = 85, ["reverse_speed"] = 30,
+                ["thrust"] = 63.5, ["reverse_thrust"] = 28.2, ["max_speed"] = 120, ["reverse_speed"] = 42.4,
                 ["turn_radius"] = 150, ["turn_rate"] = 0.85,
                 ["main_count"] = 1, ["main_damage"] = 12, ["main_interval"] = 1.0, ["main_range"] = 800, ["shell_speed"] = 560,
                 ["pd_count"] = 2,
