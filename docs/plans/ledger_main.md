@@ -9,13 +9,15 @@ Engine outputs for the old-way batches: S = C:\Users\logan\AppData\Local\Temp\cl
   the Tender waited on slice 4) side by side; then items RECONCILE and the FOLLOW-UPS batch (wt_follow) side by side. Serialized merges.
 
 ## Next
-1. When lane-kits-parallel ends: every unit merged -> wait for wave 1 + net2, then the TEST PHASE (item 2). Else fix the row's unit.
+1. When lane-kits-finish ends with every unit merged: launch Workflow({scriptPath: workflows/scripts/test-phase.js}) (written, not run: audit,
+   rounds of 5 chains on 4 slots + triage + fixes, frames by eye, net extras, bar, VERIFIED, push both, release). Else fix the row's unit first.
 2. (follow-ups now run inside lane-kits-finish.) Raider cruise 100 vs BB 88 / CV 99: note only, by design (capitals rely on warp).
 3. TEST PHASE, once everything is merged (owner 2026-09-25: 3+ engine checks per class ability / drive row, CLAUDE.md 6.7; first an
    audit agent maps every ClassDef.Abilities and drive row to its checks and writes the missing ones): the slots proof, then quick,solo,solo,six,screens (+ six,six) across slots, fix low, then the bar
    once, VERIFIED:, push version-l and main, release; frames to the owner (the art lane's Drake, Rusty, siege, player ships).
 4. Delete each lane's worktree once it is merged (walls, net, slots, art, test removed 2026-09-25; branches kept).
-Done: ITEMS 669c5a3, SLICE 5 a8a5e81, SLICE 6c ac2817d merged (6c risk: rung-5 guest joins at L2 but presses L3/L6
+Done: SLICE 4 3450da4 (gate 3 passed; wt_kits4 removed). 10:55: 6a at J7, 6b in its gate fix (J11), 6d at J5.
+  ITEMS 669c5a3, SLICE 5 a8a5e81, SLICE 6c ac2817d merged (6c risk: rung-5 guest joins at L2 but presses L3/L6
   abilities -> raise its peak if they read LOCKED). WAVE 1 ALL MERGED: wings 9b05fd3, net2 23d5b29 (R2-R5), raids f2f398b (gate 3 passed); worktrees removed.
   KITS SLICE 3 MERGED 25e27d0 (gate 1 failed, gate 2 passed; D24 shot rows land with their classes in 6a-6d, D27 no
   Overcharge -- README ruling added). Wave: drives 8dcc845, fields, curve merged; wings, raids, net2 still running. Worktrees kits,
@@ -26,6 +28,7 @@ Done: ITEMS 669c5a3, SLICE 5 a8a5e81, SLICE 6c ac2817d merged (6c risk: rung-5 g
 - none open (owner: slices side by side, items alongside slice 6 with a reconcile pass, never skip a review)
 
 ## Notes
+- Owner 2026-09-25 "push soon, you have a lot": unverified work is backed up to origin/backup/unverified (never version-l/main before a green bar).
 - A wait agent cannot wait long (the harness forces an early answer): express waits as promises inside ONE workflow.
 - Items defaults to report: D-J8a web hold round 2 s (Web Breaker cuts each round's hold); raids' adds scaling HullShare/DamageShare.
 - Keep the version-l tree CLEAN while wthoe9tj1 / wojzfsouf run: their merge steps refuse a dirty tree. Commit ledger edits at once.
