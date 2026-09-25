@@ -24,8 +24,8 @@ never paste it into a prompt.
 
 ## 2 · Session start (≤ 2 tool calls)
 
-`git -C <repo> log --oneline -3 ; git -C <repo> status --short`, then the `docs/CHANGES.md` Handoff and
-`docs/plans/ledger_main.md` only. `docs/DESIGN.md`, `docs/REVIEW.md`, `docs/plans/`: grep the section a task
+`tools\lanes.ps1` (every worktree's head, ledger and newest engine chains in one call), then
+`docs/plans/ledger_main.md` and the `docs/CHANGES.md` Handoff only. `docs/DESIGN.md`, `docs/REVIEW.md`, `docs/plans/`: grep the section a task
 touches. No verify at session start.
 Anything in the tree you did not write: one line to the owner, then ADOPT or REVERT.
 
@@ -64,14 +64,18 @@ The cost is the context re-read on every turn and by every agent, not the output
    whole; `version/MAP.md` answers "what exists".
 5. **Wake-ups.** Every finished background job is a full coordinator turn. Chain work so each batch wakes
    it once; take a verdict in silence when nothing is actionable; report when the owner must see or decide.
-6. **Compaction.** Claude cannot run `/compact`: it writes a 10-20 line state note to
-   `docs/plans/ledger_main.md` (what runs, what is next, open questions with their defaults; never only in
-   the conversation), then tells the owner "compact now" when: the context passes ~200k; a slice is
-   committed or merged; a decision is written down; the subject changes; a big log or report has been
-   concluded; or batches have just been launched and the context is over ~100k (launch first, never wait
-   on the owner to launch: running batches are untouched by a compact, and every wake-up after it is
-   cheap). Hold off only while waiting on a job whose purpose is not in the note yet. Never every turn:
-   it throws away the prompt cache.
+6. **Compaction-safe at every moment** (owner, 2026-09-25: keep the conversation small).
+   `docs/plans/ledger_main.md` is the coordinator's memory, under 40 lines, in four sections: **Running**
+   (each batch: workflow run id + task id, what it does, where its result lands, what to do when it
+   lands), **Next**, **Owner questions** (each with its default), **Notes** (merge risks, promised
+   follow-ups). Update it on disk at EVERY event (a launch, a verdict, a ruling, a merge, a question)
+   BEFORE replying, and delete what is done; commit it with the next commit. So a compact, the owner's or
+   an automatic one, can happen at any moment and loses nothing. After a compact: `tools\lanes.ps1` and
+   ledger_main.md, trusted over the summary; nothing else is re-read until a task needs it. Claude cannot
+   run `/compact`; it tells the owner "compact now" when the context passes ~100k, a slice is committed or
+   merged, the subject changes, a big log or report has been concluded, or batches have just been
+   launched (launch first: running batches are untouched by a compact). Never every turn: it throws away
+   the prompt cache.
 7. **Agent context.** An agent stops at a job boundary with its ledger current past ~150k; a fresh agent
    reads the ledger, never the old transcript. Resume the same agent only while it is under ~150k.
 
@@ -217,6 +221,7 @@ your own work. WHY gets one sentence; detail when asked.
 
 ```
 typecheck\typecheck.ps1 · dotnet build · tools\analyse\run.ps1 · python tools\analyse\xref.py
+tools\lanes.ps1                                          # state in one call: lanes, ledgers, chains
 tools\rungs.ps1 -Tree <checkout> -Tag <t> -Steps <chain>   # every engine run, the bar included
 tools\smoketest\run.ps1 · tools\screens\run.ps1   # only through rungs.ps1; trust LINT: 0 for layout,
                                                   # read a frame only for new art
