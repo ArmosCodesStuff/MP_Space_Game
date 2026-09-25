@@ -644,6 +644,28 @@ charge picks a multiplier and a line row; a ramp is a band flag, not code. The S
 (6c) is the railgun's table rewritten, not a new path. Trap: a constant table is an ARRAY of rows, never a
 dictionary -- `Net.Plain` does not hash a dictionary field, so a build whose table differed would still be admitted.
 
+### Helm moves, wards, the press's point, Mend (kits lane A slice 4, F8 and F10)
+
+- **A move the owner flies is a row** (`HelmMoves.All`): its Law runs in LocalFlight INSTEAD of Steer while
+  the run lasts, so the helm itself is never special-cased. The END is never the row's: `Fly` decides it by
+  one rule list for every row (a web, Disabled, a warp charge, the anchor gone, the time, the host's mark).
+  Two ends live outside that list, each for a reason: a WRECK (`TickAbilities`: a wreck's LocalFlight never
+  reaches `Fly`, so a run left on would fly the re-boarded hull), and the anchor's WARP, checked first in
+  `Why` against its last position so the law never drags the hull across the jump. `HelmEnd` tells the
+  anchor's warp (`AnchorWarped`, no rip) from the ship's own (`Drive`, which rips).
+- **The host marks, the owner flies.** The owner starts at its press (no round trip under the hull); the
+  host's `Confirm` marks the move's slot, and a move with no mark in 0.5 s, or whose mark is gone, is cast
+  off by its owner. The mark also WARDS the ship: its reports may claim the move's speed (`ReportTop`).
+- **Trap: hold a speed round a point, never read it back off the velocity.** The velocity's inward part,
+  read against the next frame's turned tangent, feeds the sideways speed every frame (a 450 u/s pull added
+  ~60 u/s of slide a second). The tether keeps it in `HelmRun.Side`.
+- **A point rides with the press** (`TakesPoint`) into the row's own slot; a row never reads a guest's
+  AimPoint for where it was aimed (that is a report behind the click). **So do the picks**
+  (`TakesTargets`): the selection is a UI choice that never reaches the host except as a press's payload,
+  and the host, not the owner, holds it to `ClassDef.Targets` and the living (`PlayerShip.Picked`).
+- **Mend is the heal door**: host only, to MaxHp, credited only what landed. Regeneration is not a heal
+  one ship gives another and stays the hull's own.
+
 ### Fields and one-raise effects (kits lane D, F9)
 
 - **A field is a row keyed by a slot id** (`Fields.All`), never a block in `_Draw`. The row names the
@@ -1118,6 +1140,29 @@ bosses"); the numbers are `numbers_curve_raids_items.md` §2.
   the raider packet (squad id in bits 8-23, the lead and lock bits, the line's end) and the kind's row, so
   the radar's diamond / bracket / rim chevron, the victim's "GANK:" line and the names under the hulls are
   all worked out from those, on the host as on a guest. A new enemy row needs nothing there.
+
+## Class kits, lane A slice 6c: the heavies (2026-09-25)
+
+The three heavies' rows and keys (ledger_kits6c.md D38-D58). What is durable:
+- **A zone is a row, laid by an ability row** (`Zones.cs`, `AbilityDef.Lays`, `Spawns.Zone`). What every peer DRAWS is
+  literal on the row (reach, length, arm, life), because a guest builds it from the seed alone; what only the host
+  DECIDES (a trap's hold, a field's damage) is a stat of the layer's sheet, read at the lay and kept on the host's
+  node. A trap (Holds) goes off on its first prey; a field (First / Tick / Every) strikes each body on that body's own
+  clock through `Dealt`, credited to the row's id, so the Taunt's x1.5 and every item door reach it.
+- **What a press spends is one door** (`PlayerShip.Spend`): charges (slot N = spent, one recharging at a time) or a
+  Cooldown stat. A new laid or popped ability names its row and its stats, and writes no timer of its own.
+- **A fused round is a shot row** (`ShotDef.Fuse`, `Resists`): the burst takes every hostile hull within the fuse,
+  at the range end too; a class says what its main guns fire (`ClassDef.Shot`), so the Warden's flak is the Guns
+  row's shell swapped, not a second gun path. The Warden keeps FireMode: Fit.Guns brings both rows (D56).
+- **A stance may let go slowly or keep** (`StanceSpec.Release`, `Keeps`): the Anchor weighs in 0.3 s on a second
+  press and survives the tether and the flares; the prism drops at once and ends on any other press.
+- **The Taunt's x1.5 is the dealer's stat** (`taunt_mult`, 0 elsewhere) read in `Outgoing` through `ICalled`, never
+  a class test; the call itself is the squad's (slice 5).
+- **The Taunt draws the emplacement guns by a row flag** (`AbilityDef.Draws`, read through `IRaidTarget.Draws`): an
+  emplacement's gun takes the nearest drawing pilot in its reach before the nearest of all (`Emplacement.Prefer`, read
+  where each warning goes up). Its mount is a main gun that follows `AimAt`, so `Turret.Preferred` never sees it.
+- **The active reload** is `ActiveReload.cs` (sniper_active_reload.md): one meaning per stroke, the host judges a
+  guest's claimed share within its leeway, and the reload bar (`ReloadBar.cs`) draws only the owner's view.
 
 ## Class kits, lane A slice 5: the mechanisms under the heavies' and freighters' keys (2026-09-25)
 

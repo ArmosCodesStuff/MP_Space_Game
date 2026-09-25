@@ -68,7 +68,7 @@ public partial class ThrownRock : Node2D
             _last = Position;
             if (f >= 1f)
             {   // the lane's end: it breaks apart
-                _broken = 0; _sprite.Visible = false; Sfx.Special("drake_rock", Position);
+                _broken = 0; _sprite.Visible = false; Sfx.ByName("drake_rock", Position);
                 Fx.Raise(Fx.Burst, Position, Radius * 1.2f);
             }
         }

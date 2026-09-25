@@ -65,6 +65,13 @@ public interface ISquadMember
     float Hold { get; }           // how far off the hull it posts
 }
 
+// WHAT A CALL LEAVES ON A CRAFT (Squad.Call; the Taunt): who called it, while the call is up. Read by the caller's
+// own damage door (PlayerShip.Outgoing: a craft it called takes its taunt_mult).
+public interface ICalled
+{
+    Node2D CalledBy { get; }
+}
+
 public static class Squads
 {
     public static readonly SquadDoctrine Lone = new() { Id = "lone" };

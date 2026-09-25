@@ -1082,6 +1082,12 @@ public partial class Net : Node, Rendezvous.IHostDesk, Rendezvous.IGuestDesk
     // a guest's round trip to the host, in seconds (0 on the host, offline, and before the first echo):
     // the least of the beat's last echoes (Link.Trip)
     public static double RoundTrip => IsHost || I == null ? 0 : I._trip.Least;
+    // HOW FAR A PEER'S OWN CLOCK MAY HONESTLY DISAGREE WITH THE HOST'S, in seconds (the active reload's
+    // judgement, ActiveReload.Judge): the owner's report step, a frame and twice the peer's measured
+    // jitter, never more than LeewayCap -- and 0 for the host's own ship and offline. This transport
+    // (WebRTC) reports no per-peer jitter, so a guest is given the cap.
+    public const double LeewayCap = 0.10;
+    public static double Leeway(int peer) => !IsOnline || peer == LocalId ? 0 : LeewayCap;
 
     // A guest's request to the host: the one way a guest asks for anything. Offline, or still
     // connecting, there is no host to ask -- and an RPC then is an engine error.

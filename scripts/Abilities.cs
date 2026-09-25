@@ -47,6 +47,17 @@ public class AbilityDef
     // Pressable while the hull is a wreck. One row has it (reboard, the escape pod's F); the gate
     // is PlayerShip.DoAbility, so a new ability is refused from stasis without saying anything.
     public bool WhenWrecked;
+    // THE PRESS CARRIES A POINT (F8's payload): the owner's cursor in the world rides WITH the press
+    // (PlayerShip.UseAbility -> RequestAbility), and the host writes it into this row's own slot
+    // (Sl(id).At) before Press runs. So a row reads where it was aimed from its slot -- never from a
+    // guest's AimPoint, which is a report behind the click. A point that is not a number presses
+    // nothing. A reach is the row's own: Abilities.Toward clamps a point onto it, on its bearing.
+    public bool TakesPoint;
+    // THE PRESS CARRIES THE PILOT'S PICKS (F8's payload: the gunships' 1-3 targets): the NetIds of what
+    // the owner has picked (Hub.Targets) ride WITH the press, and the host -- holding them to the class's
+    // own ClassDef.Targets, dropping repeats and anything not alive -- sets PlayerShip.Picked before
+    // Press runs. A row reads its targets there, never from a guest's selection, which is never sent.
+    public bool TakesTargets;
 
     public Action<PlayerShip, IHittable> Press;
     public Func<PlayerShip, IHittable, string> Refuse;
@@ -59,7 +70,7 @@ public class AbilityDef
     //   Elapsed -- on EVERY peer, the moment Left reaches zero: the phase the bar and the turrets
     //              must show at once, before the host's next report (the broadside leaving its
     //              wind-up for its volleys). Nothing that damages or spends belongs here.
-    //   Expire  -- on the HOST alone: what it resolves (the railgun's shot, the rush's EMP, the
+    //   Expire  -- on the HOST alone: what it resolves (the railgun's shot, the lunge's end, the
     //              echo's blast, the magazine a reload refills). The host gate is the LOOP's, so a new row is safe by default.
     // Each is handed the ship, and a row that stored a number reads it back from its own slot
     // (PlayerShip.Sl): the echo detonates Sl("echo").Own, so no number has to be carried here.
@@ -84,11 +95,24 @@ public class AbilityDef
     // names one, and its SpeedStat otherwise: the boost's slide is a row of its own (surge_strafe), so
     // gear can lift the slide without the top speed (Convoy Rig) or the top speed without the slide.
     public string RateStat, SpeedStat, StrafeStat;
+    // WHILE IT RUNS, what it lifts the REACH of the ship's weapons by (the anchor's x1.4), added like every
+    // other lift (PlayerShip.ReachMult). A gun that reads it multiplies its own range row: the railgun.
+    public string ReachStat;
     public Func<PlayerShip, bool> While;
     // WHILE IT RUNS, what it HOLDS the helm to: a share taken after the lifts are summed
     // (PlayerShip.Held), so no speed lift moves a held hull. 0 roots it, heading included; 0.5
     // halves it; 1, the default, holds nothing. `While` narrows it the same way.
     public double Hold = 1;
+
+    // A MELEE ROW IT SWINGS (Melee.cs): a Hold row swings it while the trigger holds, a Press row while
+    // its Left runs, once every that row's Every seconds at the ship's Cadence (PlayerShip.Swings).
+    public MeleeDef Swing;
+    // WHILE IT RUNS, THE TRIGGER'S WEAPON HOLDS (the whirlwind's spin, the prism stance): no swing and
+    // no shot off the trigger. Read by PlayerShip.Stilled, never by the row's id.
+    public bool Stills;
+    // WHILE IT RUNS, IT DRAWS THE HOSTILE GUNS: an emplacement's gun takes this pilot before any other in its reach
+    // (IRaidTarget.Draws, read by Emplacement.Prefer). Read by the flag, never by the row's id. The Taunt.
+    public bool Draws;
 
     // A FLAT TOP SPEED (F1's Add), on top of SpeedStat's multiplier, before the hold: the stat id
     // this row's ship sheet names for it (PlayerShip.SpeedAdds sums every running row's, added in
@@ -99,6 +123,28 @@ public class AbilityDef
     // stops. See RampSpec below -- the row names three stat ids and a condition; the math is not
     // its own. No row uses it yet (6d, the Dart's Ramjet).
     public RampSpec Ramp;
+    // A DASH (DashSpec below): pressed, it carries the hull a fixed distance along its nose, and the
+    // host strikes what lies on that line. The Warrior's lunge is the first row.
+    public DashSpec Dash;
+    // A STANCE (StanceSpec below): pressed it holds a Status for its Time, pressed again it drops, and any
+    // other of the class's abilities pressed ends it; its cooldown runs from the END. The prism stance.
+    public StanceSpec Stance;
+    // A GUN THAT RELOADS ACTIVELY (ActiveReload.cs): its chamber, its sweet spot and its charge, a
+    // row of that table; set on a Hold weapon row, whose trigger then charges a seated round and whose
+    // release fires it as Loose, handed the charge share (0 = let go at once, 1 = full; PlayerShip's
+    // charge latch, on the host).
+    public ReloadSpec Reload;
+    public Action<PlayerShip, double> Loose;
+    // A CHARGED ROW: it holds Charges (a stat id) presses; its slot's N counts those spent, and one comes back
+    // every Recharge seconds (a stat id), one at a time (PlayerShip.Spend, and TickAbilities' Cool). The tether.
+    public string Charges, Recharge;
+    // A ZONE IT LAYS (Zones.cs), at the stern or the cursor: a row of Zones.All (PlayerShip.Lay). The tether mine, the curtain.
+    public ZoneDef Lays;
+    // A DECOY SALVO IT POPS round the hull (Decoys.cs): a row of Decoys.All (PlayerShip.Pop). The flares.
+    public DecoyDef Pops;
+    // THE COOLDOWN A PRESS SETS (a stat id), for a row whose press spends through PlayerShip.Spend (Pops, Lays):
+    // the flares, the curtain.
+    public string Cooldown;
 
     public SlotState State(PlayerShip s, IHittable selected) =>
         Show != null ? Show(s, selected) : new SlotState { Line = "READY" };
@@ -125,6 +171,31 @@ public class RampSpec
         => holding
             ? Math.Clamp(own + ((condHolds ? build : 0) - bleed * yawShare) * dt, 0, cap)
             : Math.Max(0, own - cap * dt);
+}
+
+// A DASH: a FIXED distance along the nose in a fixed time, never priced from speed (kits_v31 §3.4) --
+// no lift, hold or throttle changes it, and the hull's own velocity is left as it was. The OWNER
+// carries its hull (PlayerShip.DashCarry: from the first frame it sees the row's Left, for the row's
+// whole Time, so a guest that hears of its press a packet late still goes the whole way); the HOST
+// strikes every hostile body on the line from where it was pressed, once each (PlayerShip.DashSweep),
+// and hardens the hull for the Time at the Guard share. A row names stat ids, never numbers:
+public class DashSpec
+{
+    public string Reach, Time, Damage, Guard, Cooldown;   // u, s, per body, x damage taken, s
+}
+
+// A STANCE: a Status held for Time (PlayerShip.Stance), dropped by a second press or by any other of the
+// class's three abilities (PlayerShip.DoAbility), its Cooldown from the moment it ends (PlayerShip.EndStance,
+// on every peer through the row's Elapsed). Split names the split tick of a prism stance: at most Splits
+// catches split in one stance, Every seconds apart (PlayerShip.Split, read by Prism.Catch). Release names
+// how long a second press takes to let it go (the anchor's 0.3 s; none: at once), and Keeps leaves it
+// running when another of the class's abilities is pressed (the anchor keeps through the flares). Holds
+// may be Status.None: a stance whose whole effect is its row's lifts and hold. Stat ids:
+public class StanceSpec
+{
+    public string Time, Cooldown, Every, Splits, Release;
+    public Status Holds;
+    public bool Keeps;
 }
 
 // THE CATALOGUE. Every ability in the game, once. A class's row (Ships.cs) lists the ones it
@@ -327,29 +398,145 @@ public static class Ab
     };
 
     // ── the heavy fighters ───────────────────────────────────────────────────
-    public static readonly AbilityDef Railgun = new()
+    // THE BLADE (the Warrior's primary): held, it swings Melee.Blade every blade_interval at
+    // everything in its arc (PlayerShip.Swings, on the host).
+    public static readonly AbilityDef Blade = new()
     {
-        Id = "railgun", Name = "Railgun", Short = "RAIL", Default = Key.F,
-        Blurb = "A charge you cannot turn or thrust through, then a straight blue line through everything on it.",
-        Press = (s, _) => s.ChargeRail(),
-        Hold = 0,                                           // the charge: rooted, heading and all
-        Expire = s => s.FireRail(),
-        Refuse = (s, _) => s.Sl("railgun").Left > 0 ? "CHARGING" : s.Sl("railgun").Cool > 0 ? "COOLING" : null,
-        Show = (s, _) => s.Sl("railgun").Left > 0
-            ? new SlotState { Line = $"CHARGE {s.Sl("railgun").Left:0.0}s", Lit = true,
-                              Busy = (float)(s.Sl("railgun").Left / s.Stats["rail_charge"]) }
-            : Timed(s, "railgun", "rail_cooldown", "READY"),
+        Weapon = true, Id = "blade", Name = "Blade", Short = "BLADE", Kind = AbilityKind.Hold, Default = Key.Space,
+        Blurb = "Hold to swing. Everything within 160 u and 55° of the nose is cut, every swing.",
+        Swing = Melee.Blade,
+        Show = (s, _) => new SlotState { Line = s.Stilled ? "HELD" : "SWING", Lit = s.Trigger },
     };
 
-    public static readonly AbilityDef Rush = new()
+    // THE RAILGUN (the Sniper's primary, sniper_active_reload.md): one round in the chamber (ActiveReload.Rail).
+    // Seated, Space held charges it and its release fires (Loose, handed the charge share); after
+    // every shot it reloads by itself, and Space inside the sweet spot enhances the round loading.
+    public static readonly AbilityDef Railgun = new()
     {
-        Id = "rush", Name = "Rush", Short = "RUSH", Default = Key.F,
-        Blurb = "A burst of speed at a fraction of the damage taken. It ends in an EMP that stuns everything close.",
-        Press = (s, _) => s.StartRush(),
-        Expire = s => s.RushEmp(),
-        SpeedStat = "rush_mult",
-        Refuse = (s, _) => s.Sl("rush").Cool > 0 ? "COOLING" : null,
-        Show = (s, _) => Timed(s, "rush", "rush_cooldown", "RUSHING"),
+        Weapon = true, Id = "railgun", Name = "Railgun", Short = "RAIL", Kind = AbilityKind.Hold, Default = Key.Space,
+        Blurb = "Hold to charge, let go to fire: a straight blue line through everything on it. It reloads in 3 s after every shot; Space in the white box (0.6 s of the 3 s) makes the next round hit x1.5.",
+        Reload = ActiveReload.Rail,
+        Elapsed = s => ActiveReload.Seat(s, ActiveReload.Rail),
+        Loose = (s, share) => s.FireRail(share),
+        Show = (s, _) => ActiveReload.Slot(s, ActiveReload.Rail),
+    };
+
+    // THE ANCHOR (the Sniper's F, v1): up to 8 s rooted (a hold of x0, so the boost is refused ANCHORED),
+    // every interval x2.5 (the charge AND the reload, through Cadence), the rail's reach x1.4; F again
+    // weighs it in 0.3 s; the cooldown runs 12 s from the release. The flares and the tether keep it.
+    public static readonly AbilityDef Anchor = new()
+    {
+        Id = "anchor", Name = "Anchor", Short = "ANCHOR", Default = Key.F,
+        Blurb = "Plant the ship for up to 8 s: it cannot move or turn, but the railgun charges and reloads x2.5 and reaches x1.4. F again weighs it in 0.3 s.",
+        Stance = new StanceSpec { Time = "anchor_time", Cooldown = "anchor_cooldown", Release = "anchor_release", Holds = Status.None, Keeps = true },
+        Hold = 0, RateStat = "anchor_rate", ReachStat = "anchor_reach",
+        Press = (s, _) => s.Stance("anchor"),
+        Elapsed = s => s.EndStance("anchor"),
+        Refuse = (s, _) => s.Sl("anchor").Left <= 0 && s.Sl("anchor").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => s.Sl("anchor").Left > s.Stats["anchor_release"]
+            ? new SlotState { Line = $"ANCHORED {s.Sl("anchor").Left:0.0}s", Lit = true }
+            : s.Sl("anchor").Left > 0 ? new SlotState { Line = "WEIGHING", Lit = true }
+            : Timed(s, "anchor", "anchor_cooldown", "READY"),
+    };
+
+    // THE TETHER MINE (the Sniper's Q, v1): dropped at the stern, live 0.5 s later; the first raiding craft
+    // within 170 u sets it off and every one within 170 u is held 3 s. Two charges, 12 s each; two out at
+    // most, the oldest goes. It keeps the Anchor.
+    public static readonly AbilityDef Tether = new()
+    {
+        Id = "tether", Name = "Tether mine", Short = "TETHER", Default = Key.Q,
+        Blurb = "Drops a mine astern. Half a second later the first raider within 170 u sets it off, and every raider within 170 u is held for 3 s. Two charges; never a boss.",
+        Charges = "tether_charges", Recharge = "tether_recharge", Lays = Zones.All[Zones.Tether],
+        Press = (s, _) => s.Lay("tether"),
+        Refuse = (s, _) => s.Sl("tether").N >= (int)s.Stats["tether_charges"] ? "NO CHARGES" : null,
+        Show = (s, _) =>
+        {
+            int max = (int)s.Stats["tether_charges"], left = max - s.Sl("tether").N;
+            return new SlotState { Line = $"{left}/{max}", Lit = left > 0,
+                                   Busy = left < max ? (float)(s.Sl("tether").Cool / s.Stats["tether_recharge"]) : 0f };
+        },
+    };
+
+    // THE FLARES (the Sniper's E, kits_v2's card): six in a ring round the hull, burning 5 s where they stop
+    // (Decoys.All "flares": the lure, the mark and the dazzle are Decoys.Tick's). 16 s; only the cooldown refuses.
+    // It keeps the Anchor.
+    public static readonly AbilityDef Flares = new()
+    {
+        Id = "flares", Name = "Flares", Short = "FLARES", Default = Key.E,
+        Blurb = "Six flares in a ring 180 u out, burning 5 s: guided missiles turn onto them, landing marks slide onto them, and raiders near one are dazzled (no new web, no missile).",
+        Pops = Decoys.All[Decoys.Flares], Cooldown = "flare_cooldown",
+        Press = (s, _) => s.Pop("flares"),
+        Refuse = (s, _) => s.Sl("flares").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => Timed(s, "flares", "flare_cooldown", "READY"),
+    };
+
+    // THE TAUNT (the Warden's Q, kits_v3 §3.5): for 6 s every raider standing within 1000 u, or hunting a target
+    // within it, comes for the Warden and takes x1.5 from all it deals; the Warden takes 33% less meanwhile, and an
+    // emplacement's gun with the Warden in reach takes it first (Draws).
+    public static readonly AbilityDef Taunt = new()
+    {
+        Id = "taunt", Name = "Taunt", Short = "TAUNT", Default = Key.Q,
+        Blurb = "For 6 s every raider within 1000 u, or hunting anything within it, comes for you instead, and takes half again from everything you deal. You take 33% less meanwhile, and an enemy emplacement with you in reach fires at you first. Never a boss.",
+        Draws = true,
+        Press = (s, _) => s.Taunt(),
+        Refuse = (s, _) => s.Sl("taunt").Left > 0 ? "TAUNTING" : s.Sl("taunt").Cool > 0 ? "COOLING" : null,
+        // running, the slot reads its time and its guard (kits_v3 §3.5: "TAUNT 4.2s  -33%")
+        Show = (s, _) => s.Sl("taunt").Left > 0
+            ? new SlotState { Line = $"TAUNT {s.Sl("taunt").Left:0.0}s  -{(1 - s.Stats["taunt_guard"]) * 100:0}%", Lit = true }
+            : Timed(s, "taunt", "taunt_cooldown", "TAUNT"),
+    };
+
+    // THE FLAK CURTAIN (the Warden's E, kits_v2's card): 500 x 80 u at the cursor (150-700 u), across the aim, live
+    // 0.5 s after the press for 6 s: a raider touching it takes 20, then 10 every 0.5 s (Zones.All "curtain"). 18 s.
+    public static readonly AbilityDef Curtain = new()
+    {
+        Id = "curtain", Name = "Flak curtain", Short = "CURTAIN", Default = Key.E,
+        Blurb = "A wall of flak 500 u long at the cursor (150-700 u away), across your aim, for 6 s: a raider touching it takes 20, then 10 every half second. Nothing slows; bosses and missiles pass untouched.",
+        Lays = Zones.All[Zones.Curtain], Cooldown = "curtain_cooldown",
+        Press = (s, _) => s.Lay("curtain"),
+        Refuse = (s, _) => s.Sl("curtain").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => Timed(s, "curtain", "curtain_cooldown", "READY"),
+    };
+
+    // THE LUNGE (the Warrior's E): 420 u along the nose in 0.3 s, 40 to each body on the way, half
+    // damage taken while it runs. It ends a prism stance.
+    public static readonly AbilityDef Lunge = new()
+    {
+        Id = "lunge", Name = "Lunge", Short = "LUNGE", Default = Key.E,
+        Blurb = "A dash of 420 u straight ahead in 0.3 s: 40 to everything on the way, half damage taken while it runs.",
+        Dash = new DashSpec { Reach = "lunge_reach", Time = "lunge_time", Damage = "lunge_damage", Guard = "lunge_guard", Cooldown = "lunge_cooldown" },
+        Press = (s, _) => s.StartDash("lunge"),
+        Expire = s => s.DashSweep("lunge", 1),
+        Refuse = (s, _) => s.Sl("lunge").Left > 0 ? "LUNGING" : s.Sl("lunge").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => Timed(s, "lunge", "lunge_cooldown", "LUNGE"),
+    };
+
+    // THE WHIRLWIND (the Warrior's Q): 2 s spinning, 10 every 0.25 s to everything within 210 u. The
+    // press drops every web on the hull and none can take it while it spins; the blade holds meanwhile.
+    public static readonly AbilityDef Whirlwind = new()
+    {
+        Id = "whirlwind", Name = "Whirlwind", Short = "SPIN", Default = Key.Q,
+        Blurb = "Spin for 2 s: 40 DPS to everything within 210 u. It throws off every web, and none can take you while you spin.",
+        Swing = Melee.Whirl, Stills = true,
+        Press = (s, _) => s.Whirl(),
+        Refuse = (s, _) => s.Sl("whirlwind").Left > 0 ? "SPINNING" : s.Sl("whirlwind").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => Timed(s, "whirlwind", "whirl_cooldown", "SPIN"),
+    };
+
+    // THE PRISM STANCE (the Warrior's F): 2 s catching light off the guard (Prism.cs), at half speed and
+    // with no blade; F again drops it, Q or E ends it; the cooldown runs 12 s from its end.
+    public static readonly AbilityDef PrismStance = new()
+    {
+        Id = "prism", Name = "Prism stance", Short = "PRISM", Default = Key.F,
+        Blurb = "2 s with the guard on the cursor: light that strikes it square goes back along it, light that strikes it slant is split. Half speed, no blade. F again drops it.",
+        Stance = new StanceSpec { Time = "prism_time", Cooldown = "prism_cooldown", Every = "prism_split", Splits = "prism_splits", Holds = Status.Parrying },
+        Hold = 0.5, Stills = true,
+        Press = (s, _) => s.Stance("prism"),
+        Elapsed = s => s.EndStance("prism"),
+        Refuse = (s, _) => s.Sl("prism").Left <= 0 && s.Sl("prism").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => s.Sl("prism").Left > 0
+            ? new SlotState { Line = $"GUARD {s.Sl("prism").Left:0.0}s", Lit = true }
+            : Timed(s, "prism", "prism_cooldown", "READY"),
     };
 
     public static readonly AbilityDef Hunters = new()
@@ -453,12 +640,25 @@ public static class Abilities
         return _full[c] = Classes.Of(c).Abilities.Concat(Drives.RowOf(c)).Concat(Open).ToArray();   // then V's drive, then the open keys
     }
 
+    // THE TRIGGER: the class's weapon row that is held (the guns, the blade). Space on every class that
+    // has one; a class without one (the carrier's wing orders are presses) has no trigger at all.
+    public static AbilityDef TriggerOf(ShipClass c) => For(c).FirstOrDefault(a => a.Weapon && a.Kind == AbilityKind.Hold);
+
     // An ability by id: one of this class's, or one every class has (reboard).
     public static AbilityDef Find(ShipClass c, string id)
     {
         foreach (var a in For(c)) if (a.Id == id) return a;
         foreach (var a in Ab.Universal) if (a.Id == id) return a;
         return null;
+    }
+
+    // A PRESSED POINT HELD TO A REACH (F8): the point itself if it lies within `reach` of `from`, else
+    // the point `reach` out on the same bearing. Pure; a row that takes a point (TakesPoint) and
+    // has a reach reads its slot's At through this.
+    public static Vector2 Toward(Vector2 from, Vector2 at, float reach)
+    {
+        var d = at - from;
+        return d.Length() <= reach ? at : from + d.Normalized() * reach;
     }
 
     private static string SettingKey(ShipClass c, string id) => $"{c}.{id}";

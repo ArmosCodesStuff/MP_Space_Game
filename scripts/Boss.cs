@@ -74,7 +74,7 @@ public class BossMove
     public float Turn;                 // a guided body's turn rate (rad/s)
     public float Size = 1f;            // a fired body's drawn size
     public string Source;              // DamageSource: what the blow is called on a hull
-    public string Cue, Strike;         // Sfx.Special as the warning goes up, and as it lands
+    public string Cue, Strike;         // Sfx.ByName as the warning goes up, and as it lands
     // A BOLT'S FLASH: a row of Beam.All, its line and its note. A Bolt row NAMES one: row 0 is
     // point defence, a friend's note. (Not MoveWay.Beam -- that is a move that burns down a line
     // for Live seconds, and it is heard by its Cue and Strike.)
@@ -642,7 +642,7 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
     // warning to carry it (a warning plays its move's cue and strike itself)
     protected void Sound(string name, Vector2 at)
     {
-        Sfx.Special(name, at);
+        Sfx.ByName(name, at);
         if (Net.IsOnline) Hub?.SendBossSound(name, at);
     }
 

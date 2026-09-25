@@ -346,6 +346,7 @@ public partial class Hub : Node2D
         layer.AddChild(new ReturnButton { Hub = this });            // RETURN TO BASE, after a win only
         layer.AddChild(new Radar { Hub = this });
         layer.AddChild(new AbilityBar { Hub = this });
+        layer.AddChild(new ReloadBar { Hub = this });               // an active reload's timing bar, under the own ship
         if (!InArena) layer.AddChild(new HaulerHud { Hub = this });
         Hints = new Hints { Hub = this }; AddChild(Hints);
         // THE SOFT TUTORIAL, on a first character only: a card at a time with CONTINUE, and SKIP
@@ -566,7 +567,7 @@ public partial class Hub : Node2D
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered, TransferChannel = NetChannels.BossSounds)]
     private void NetBossSound(string name, Vector2 at)
     {
-        if (InArena) Sfx.Special(name, at);
+        if (InArena) Sfx.ByName(name, at);
     }
 
     public static void EndSession() => Session.End();
@@ -1211,6 +1212,7 @@ public partial class Hub : Node2D
     public IReadOnlyList<DeployedTurret> Deployed => ((SpawnSet<DeployedTurret>)_sets[Spawns.Turret]).Live;
     public IReadOnlyList<Emplacement> Emplacements => ((SpawnSet<Emplacement>)_sets[Spawns.Emplacement]).Live;
     public IReadOnlyList<DecoySalvo> Salvos => ((SpawnSet<DecoySalvo>)_sets[Spawns.Decoy]).Live;
+    public IReadOnlyList<ZoneNode> Laid => ((SpawnSet<ZoneNode>)Set(Spawns.Zone)).Live;
 
     // host: mint an id from this kind's space, build it, and tell this world
     public Node2D Spawn(int kind, Vector2 at, int n = 0, double a = 1, double b = 1)
@@ -1578,6 +1580,7 @@ public partial class Hub : Node2D
         if (Hints.Wants("abilities") && Selected != null) Hints.Meet("abilities");
         if (Hints.Wants("raid") && !InArena && Raiders.Count > 0) Hints.Meet("raid");
         if (Hints.Wants("stasis") && !me.Alive) Hints.Meet("stasis");
+        if (Hints.Wants("reload") && me.ReloadView.Running) Hints.Meet("reload");     // an active reload's first round spent
         if (Hints.Wants("boss") && InArena && IsInstanceValid(Boss)) Hints.Meet("boss");
         // the hull's own drive card (warp or boost) once something far off is picked; the slide's once a hostile is near
         if (me.Drive is { } dv && Hints.Wants(dv.Id) && WarpAim() is { has: true } aim && aim.at.DistanceTo(me.Position) > Hints.WarpMeet) Hints.Meet(dv.Id);
@@ -1650,6 +1653,7 @@ public partial class Hub : Node2D
         if (Net.IsHost) TickBlasts(delta);
         if (Net.IsHost) global::Wells.Tick(Wells, Combat.Hostiles, delta);
         if (Net.IsHost) Decoys.Tick(this);
+        if (Net.IsHost) Zones.Tick(this);
         TickMission(delta);
         var me = MyShip;
         if (Music.I != null)
@@ -1863,7 +1867,8 @@ public partial class Hub : Node2D
                 if (!mine.Alive) { if (kk.Keycode == Key.F) mine.UseAbility("reboard", 0); GetViewport().SetInputAsHandled(); return; }
                 var ab = Abilities.ByKey(mine.Class, kk.Keycode);
                 if (ab == null) return;
-                if (ab.Kind == AbilityKind.Press && !ab.Open) mine.UseAbility(ab.Id, Selected?.NetId ?? 0);
+                if (ab.Kind == AbilityKind.Press && !ab.Open)
+                    mine.UseAbility(ab.Id, Selected?.NetId ?? 0, _targets.Where(t => t != null && t.Alive).Select(t => t.NetId).ToArray());
                 // Hold abilities (the main guns) are read by polling in PlayerShip.
             }
             GetViewport().SetInputAsHandled();
