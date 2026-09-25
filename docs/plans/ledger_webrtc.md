@@ -111,3 +111,24 @@ Then: `tools\smoketest\run.ps1 -Solo` (rung 3), `-Solo -OneDll` once, `-ReplyWin
 - files: tools/import.ps1 (new), tools/smoketest/run.ps1, tools/screens/run.ps1
 - from: d777dec
 - hashes: smoketest/run.ps1 35a6d10c0761475c1fe6f318f36c41f0cdaa94b3; screens/run.ps1 54762a3dc645dd6c978b764ca1edae0c659a5696; import.ps1 absent
+
+#### J4 POST
+- verdict: done; PowerShell not available here, so the scripts are read-checked only (no pwsh).
+  Rung 1 green. Non-ASCII removed from the .ps1 files (PowerShell 5.1 reads them as ANSI).
+- files: tools/import.ps1 (new), tools/smoketest/run.ps1, tools/screens/run.ps1
+- checkpoint: 2952468
+- next: J5
+
+#### J5 PRE
+- intent: records: CHANGES Handoff state note at the top, an Unreleased entry, Known broken.
+- files: docs/CHANGES.md, docs/plans/ledger_webrtc.md
+- from: 2952468
+- hashes: CHANGES.md 3895a96d393d8db7b8ab29704e99da5eb3a67d3b
+
+#### J5 POST
+- verdict: done. CHANGES: Handoff note at the top (what landed, what to drop in, rungs to run),
+  the step-1 note's NEXT updated, an Unreleased entry with its Checks and Known broken (R0).
+- files: docs/CHANGES.md, docs/plans/ledger_webrtc.md
+- checkpoint: the J5 commit (records)
+- next: the owner vendors the plugin, then rung 2, rung 3 x2 seeds, -OneDll, -ReplyWindow;
+  DESIGN.md gets the measured window; then R1.

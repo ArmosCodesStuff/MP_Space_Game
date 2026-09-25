@@ -36,13 +36,28 @@ history pick the work up from it alone. Update it in the same change as the code
 
 ## Handoff — read this first
 
+**2026-09-25 (cloud session): WebRTC slice R0's code landed; it compiles (rung 1 green), untested.**
+Ledger: `docs/plans/ledger_webrtc.md` (jobs J1-J5, decisions D1-D7, v1 of the plan is not in the repo).
+`scripts/Link.cs` (plugin row, `Available`, `Channels()`, `Sealed`, `Hang`), SessionMenu's
+plugin-missing gate, the harness's stream on channel 12, the R0 pair checks in the solo run, the
+reply-window measurement (opt-in), `tools/import.ps1` and both runners calling it. The session is
+still ENet: R2 switches it. **The owner must first drop the plugin in** (the cloud could not download
+it; every engine run refuses without it): from webrtc-native 1.2.1 `godot-extension-webrtc_native.zip`
+(sha256 `f37d03da03da3ff0d092542a04586644f889135cb7a1c3566ad57513203a553b`) into
+`addons\webrtc_native\`: `webrtc_native.gdextension` with every `[libraries]` line deleted but the two
+`windows.*.x86_64` ones, `lib\libwebrtc_native.windows.template_debug.x86_64.dll`,
+`lib\libwebrtc_native.windows.template_release.x86_64.dll`, and the 7 `LICENSE.*` files; commit them.
+**Then, in order:** `verify.ps1 -Quick` (rung 2), `tools\smoketest\run.ps1 -Solo` (rung 3) twice on
+different seeds, `run.ps1 -Solo -OneDll` once, `run.ps1 -ReplyWindow` once -- its `reply window:` line
+goes into DESIGN.md, and a window under 15 s stops the batch before R1 (plan §3.4). The runners also
+refuse a `.gdextension` that names a file not vendored. NEXT after that: R1 (plan §13).
+
 **2026-09-25 (cloud session, design only, no game code touched):** step 1 of `docs/plans/README.md` is
 done. `kits_v31.md` and `numbers_curve_raids_items.md` are reconciled in the numbers file's §8: it owns
 every curve, boss, raid, chip and item number; the kits file owns what each class does. L1 Lancer 3222 /
 Drake 2968; non-super moves Lancer x0.744 / Drake x0.787; no starting chips; the Dart at 72; no hull trim
 for adds. `docs/plans/models/numbers_v2.py` carries the rows (and now runs on Python 3.11); its output is
-`models/run.txt`. NEXT: step 2, WebRTC slices R0-R5 (`docs/plans/network_webrtc.md`); engine rungs 3-6
-need the owner's PC.
+`models/run.txt`. Step 2, WebRTC slices R0-R5 (`docs/plans/network_webrtc.md`), is under way: R0 above.
 
 **This folder is the `WarShips_Version_L` fork** (git branch `version-l`), copied from `Downloads\Warships`
 at its last VERIFIED commit (b258590, slice 3b) so this work stays off `main`: nothing here is pushed,
@@ -450,6 +465,41 @@ outstanding from the batch of 2026-09-23.)*
 ---
 
 ## Unreleased
+
+### The WebRTC plugin inside Warships: slice R0 (2026-09-25, in the WarShips_Version_L fork)
+
+**`scripts/Link.cs` is the one place that names WebRTC** (docs/plans/network_webrtc.md §7). The
+plugin is a row (`Link.Plugin`: webrtc-native 1.2.1, `WebRTCLibPeerConnection`, its extension file and
+release DLL); `Link.Available` asks whether that class exists, never a return code (a missing DLL
+still answers Ok, SPIKE F4); `Link.Channels()` is the channel table a session negotiates, read off
+every `[Rpc]` in the build (a channel whose RPCs all ask for one unreliable mode gets it, anything
+else is Reliable); `Link.Sealed` says a bundle is final one poll after gathering is Complete;
+`Link.Hang` is the one way to hang up (a gone id is a no-op, not an engine ERROR). The session itself
+is still ENet until R2. **Without the plugin, HOST and JOIN are shut** (button, Enter, handler) and
+the multiplayer panel says which file is missing, that an antivirus may have quarantined it, and that
+PLAY.bat puts it back; offline play is untouched. The harness's own stream moved from channel 200 to
+12 (`NetChannels.BossSounds + 1`), inside the channels WebRTC opens. **`tools/import.ps1`** imports a
+folder and judges it by what it registered (SPIKE F1's crash-at-exit on the first import is imported
+again, not failed); both runners call it and refuse to run without `addons/webrtc_native`.
+`run.ps1 -ReplyWindow` measures the invite reply window once; `run.ps1 -OneDll` runs on the release
+DLL alone.
+
+**Checks:** new in the solo role -- the plugin loaded; 12 negotiated channels above 0 (Cosmetic
+Reliable, 11 ordered, the stream last); CreateServer Connected in the same call; an in-process pair
+connects, the host offering; 15 data channels open at each end, none with a packet lifetime; a
+packet on channel 12 arrives on it both ways; Close and DisconnectPeer seen within 1 s; `Link.Hang`
+on a gone id and on a pending entry; every handler on the main thread; three connect-and-close cycles
+leave the object count flat; the plugin-missing gate shuts HOST, JOIN and Enter and opens again; with
+`-ReplyWindow`, the measured window is at least 15 s. Compiles (rung 1); rungs 2-3 owed, and need the
+plugin vendored first (Handoff).
+
+**Known broken (R0):**
+- **Nothing here has run.** The plugin is not vendored yet (the cloud session could not download it),
+  so every engine run refuses at the import until the owner drops it in (Handoff).
+- **The plugin-missing text is this batch's own** (plan v1 §6.1's literal was not in the repo); the
+  one-DLL experiment is read as "the editor loads the release DLL" (v1 §8.1 unread). Ledger D1-D3.
+- **The Linux runners** (`run.sh`) have no plugin (it is vendored for Windows x86_64 only), so the
+  WebRTC checks fail there.
 
 ### "Handle is not initialized" after DONE: every file is held by Assets (2026-09-24, in the WarShips_Version_L fork)
 
