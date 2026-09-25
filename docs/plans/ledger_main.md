@@ -1,9 +1,10 @@
 # Coordinator state (CLAUDE.md section 4.6) -- updated 2026-09-25 (the owner compacts at will; the SessionStart hook re-injects this)
 
 ## Running (TEST PHASE since 2026-09-25 12:51; process = lean CLAUDE.md bccdadd + docs/process/*.md; Fable coordinates)
-- test-prep / task w1t537izg (wf_f152cf63-f20): the harness Lane() helper (wt_prep, Opus) and 12 spec cards docs/plans/cards (wt_cards:
-  4 Sonnet writers, an Opus review, a Sonnet fix), merged by the Haiku->Sonnet->Opus chain. Both rows merged: launch test-phase.js (Next 1).
-  A row not merged: read it, one fix agent or a merge by hand, then launch.
+- DONE test-prep: harness Lane() helper 5e688ac (178 calls wrapped; a thrown lane prints "FAIL LANE <name> threw" and the role goes on);
+  12 spec cards docs/plans/cards 306a531. Cards' OPEN lines for the review/triage: BB fire-mode key (spec R, built G, checks assert G);
+  Tender numbers have no source file (kits_v1 missing: the code is the source); DD `longlance` id (renamed off the Tender's lance);
+  grapnel_rip sound never built.
 - watchdog: a 30-min Monitor polls tools/agents.ps1 every 10 min while Sonnet/Haiku agents run; re-arm it at each expiry.
 - fable-critique-2 / task w8qdfovp6 (wf_f703a3a3-c3e): testing, hand-offs + compaction, verbiage -> scratchpad/fable2/REPORT2.md,
   CLAUDE.md v2 + CLAUDE.diff.md, process/, tools/. When it lands: REPORT2 to the owner; apply at the next batch boundary; report in 3 lines.
