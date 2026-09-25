@@ -11,7 +11,7 @@ using System;
 //                  and what coming for it is worth
 //   WingKind       WHICH ROW of Wings.All a craft is: its art, its size, the stats it flies
 //                  and fights on, whether it parks on a deck, its magazine and its cadence
-//   WingWay/Wing   the two machines a craft is flown BY, and the craft itself
+//   WingWay/Wing   the three machines a craft is flown BY, and the craft itself
 //
 // THE CLASSES ARE NOT HERE. A class is a row of Classes.All (Ships.cs), and a pilot's levels and
 // points are Progression + Character + PilotWindow. This header was a census of three classes
@@ -91,12 +91,26 @@ public interface IRaidTarget : IStatused
 //              back to deck size, and taxi to their bay. A target beyond the strike range (twice
 //              the fighters' control range) is refused, and a strike whose target leaves it is
 //              called off.
+//   ORBIT   -- holds a circle round an ANCHOR (OrbitStat out) and fires on its target from
+//              there, a hitscan shot whatever way the nose points. It WARPS: on its turn it
+//              appears on its circle round the target it was given, and when its sortie ends or
+//              the target dies it is gone the same way. (The gunships.)
+//
+// A SORTIE (a row with a LifeStat) is no part of the fitted wing: an ability sends it out
+// (PlayerShip.Sortie) for LifeStat seconds beside the craft the carrier always flies, then it
+// comes home and is freed. WHAT IT FIGHTS is either GIVEN (a gunship's target, which must be
+// inside the row's EngageStat of the carrier when it goes) or PICKED (a row with Picks: the
+// patrol takes whatever the turret's order, Turret.RankIn, puts first among what its filter
+// chooses inside its EngageStat ring round the carrier -- a seeker before a raider before a
+// boss, a practice dummy last -- and between targets it circles the carrier OrbitStat out).
+// The fighter's ring is its row's EngageStat too.
 //
 // A NEW CRAFT MUST FILL IN: an appended WingKind, a row, and its count/speed/range/gun stats on
-// the sheet (Stats.cs). It needs a new tick ONLY if it flies a way neither machine flies.
-// A NEW CRAFT MUST NOT: touch TickStrafe, TickStrike or any `Kind ==` test.
-public enum WingKind { Fighter, Bomber }
-public enum WingWay { Strafe, Strike }
+// the sheet (Stats.cs); a sortie its LifeStat and EngageStat. It needs a new tick ONLY if it flies
+// a way none of the three machines flies.
+// A NEW CRAFT MUST NOT: touch TickStrafe, TickStrike, TickOrbit or any `Kind ==` test.
+public enum WingKind { Fighter, Bomber, Gunship, Patrol }
+public enum WingWay { Strafe, Strike, Orbit }
 
 // Its ART -- Texture, Length (the airframe at flight size), Tint and its bells -- is the HullArt it
 // derives from (Sprites.cs).
@@ -130,6 +144,15 @@ public class WingDef : HullArt
     public double Lift, Land, Taxi;
     public double RollOut = 0.25;
     public float Touch = 10f;
+    // WHERE IT MAY FIGHT: a ring round the carrier's centre, EngageStat across -- measured to the
+    // target's hull edge when ToHull, to its centre otherwise. A craft with an order and a picking
+    // craft test it every tick; a craft GIVEN its target (Orbit) only when it is sent.
+    public string EngageStat;
+    public bool ToHull;
+    public TargetFilter? Picks;         // it chooses its own target (see the header); null: it is told
+    public string OrbitStat;            // the circle it holds round its anchor, or idles on round the carrier
+    public string LifeStat;             // a SORTIE's seconds out; null: a fitted craft
+    public bool Sortie => LifeStat != null;
 }
 
 public static class Wings
@@ -150,6 +173,7 @@ public static class Wings
                 CountStat = "fighter_count", SpeedStat = "fighter_speed", RangeStat = "fighter_range",
                 IntervalStat = "fighter_interval", DamageStat = "fighter_damage",
                 TurnStat = "fighter_turn", BurstStat = "fighter_burst", RestStat = "fighter_rest",
+                EngageStat = "control_range",
                 Beam = Beam.Fighter,
                 Shots = 3, Overshoot = 1.2f, LaunchInterval = 0.83 },
 
@@ -165,9 +189,61 @@ public static class Wings
                 AmmoStat = "bomber_ammo", RearmStat = "bomber_rearm",
                 Crawl = 0.25f, LaunchInterval = 0.83,
                 Lift = 1.6, Land = 1.0, Taxi = 0.6 },
+
+        // WARP GUNSHIPS (the carrier's E): gunship_count to a target, warped onto a 240 u circle
+        // round it, 10 DPS each for 12 s. The target must be within 3000 u of the carrier when they
+        // go, and only then. The bomber's airframe in steel until a gunship is cast (lane H). They
+        // warp, so they leave a quarter second apart, not the deck's 0.83.
+        new() { Id = "gunship", Name = "Gunship", Way = WingWay.Orbit,
+                Texture = "res://wing_bomber.png", Length = 32f, Tint = new Color(0.72f, 0.80f, 0.90f),
+                CountStat = "gunship_count", SpeedStat = "gunship_speed", RangeStat = "gunship_range",
+                IntervalStat = "gunship_interval", DamageStat = "gunship_damage", TurnStat = "gunship_turn",
+                OrbitStat = "gunship_orbit", EngageStat = "gunship_leash", LifeStat = "gunship_time",
+                Beam = Beam.Fighter, LaunchInterval = 0.25 },
+
+        // THE PATROL (the carrier's Q, Supercarrier): a second wing on the FIGHTER'S OWN NUMBERS --
+        // its count, gun, speed and turn, so whatever lifts a fighter lifts these -- circling the
+        // carrier 300 u out and taking whatever Turret.RankIn puts first inside 600 u of it, missiles
+        // included, for 20 s. It does not rest. Amber, so the two wings read apart.
+        new() { Id = "patrol", Name = "Patrol", Way = WingWay.Strafe,
+                Texture = "res://wing_fighter.png", Length = 17f, Tint = new Color(1f, 0.72f, 0.25f),
+                CountStat = "fighter_count", SpeedStat = "fighter_speed", RangeStat = "fighter_range",
+                IntervalStat = "fighter_interval", DamageStat = "fighter_damage", TurnStat = "fighter_turn",
+                EngageStat = "patrol_range", ToHull = true, Picks = Targeting.Patrol,
+                OrbitStat = "patrol_orbit", LifeStat = "patrol_time",
+                Beam = Beam.Fighter,
+                Shots = 3, Overshoot = 1.2f, LaunchInterval = 0.83 },
     };
 
     public static WingDef Of(WingKind k) => All[(int)k];
+
+    // How far `h` is from the carrier by the row's own measure (ToHull: to its hull's edge), and
+    // whether that is inside the row's EngageStat.
+    public static float Reach(PlayerShip carrier, WingDef row, IHittable h)
+        => carrier.Position.DistanceTo(h.Position) - (row.ToHull ? h.HitRadius : 0f);
+    public static bool Within(PlayerShip carrier, WingDef row, IHittable h)
+        => Reach(carrier, row, h) <= carrier.Stats[row.EngageStat];
+
+    // WHAT A CRAFT THAT PICKS FOR ITSELF TAKES (a row with Picks): of what the row's filter would
+    // choose inside its ring, the best by the turret's order (Turret.RankIn: in flight, then small
+    // craft, then the rest, a fallback last), then the nearest the carrier. HELD, a target is kept
+    // while it lives and stays in the ring, and gives way only to a BETTER rank -- a seeker coming
+    // in over the raider it is on; anything that can die over a fallback -- never to one merely
+    // nearer, so a patrol does not flick between two raiders.
+    public static IHittable Pick(PlayerShip carrier, WingDef row, IHittable held)
+    {
+        var f = row.Picks.GetValueOrDefault();
+        IHittable best = null; int bestRank = 0; float bestD = 0;
+        foreach (var h in Combat.Hostiles)
+        {
+            if (!f.Chooses(h) || !Within(carrier, row, h)) continue;
+            int r = Turret.RankIn(f, h); float d = carrier.Position.DistanceTo(h.Position);
+            if (best == null || r < bestRank || (r == bestRank && d < bestD)) { best = h; bestRank = r; bestD = d; }
+        }
+        bool keep = held != null && held.Alive && Combat.Hostiles.Contains(held) && f.Chooses(held) && Within(carrier, row, held)
+                    && (best == null || Turret.RankIn(f, held) <= bestRank);
+        return keep ? held : best;
+    }
 }
 
 public partial class Wing : Node2D
@@ -180,6 +256,18 @@ public partial class Wing : Node2D
     private Sprite2D _sprite;
     private double _cd;
 
+    // ── a sortie (PlayerShip.Sortie): its end on the carrier's clock, what it was given ──
+    private double _until = -1;
+    private IHittable _given, _prey;
+    // Sent out until the carrier's clock reads `until`, at `given` (a gunship's target; null for
+    // a craft that picks its own). The carrier frees it once it is Done (home, or warped out).
+    public void SendOut(IHittable given, double until) { _given = given; _until = until; }
+    public double Until => _until;
+    public bool Done { get; private set; }
+    private bool Over => Def.Sortie && (Carrier.Clock >= _until || !Carrier.Alive);
+    // what it is on: a picking craft's own pick, a gunship's given target (for a check, and a chevron)
+    public IHittable Engaging => Def.Picks != null ? _prey : _given;
+
     // ── fighters: strafing runs ──────────────────────────────────────────────
     // Each pass: 3 shots, straight THROUGH the target until 1.2x its diameter past
     // it -- and at least one of the fighter's own turning circles past it -- then turn
@@ -189,18 +277,24 @@ public partial class Wing : Node2D
     // target (a light raider riding a pinned hauler) ended up there after every pass,
     // and was never fired on again. After 15 s engaged they fly home and dock INSIDE
     // the carrier for a 3 s rest; with nothing to fight they stay inside.
-    private enum FSt { Docked, Launch, Approach, Burst, Overshoot, Turn, Home }
+    // CIRCLE: a craft with an OrbitStat (the patrol) between targets, round the carrier.
+    private enum FSt { Docked, Launch, Approach, Burst, Overshoot, Turn, Home, Circle }
     private FSt _f = FSt.Docked;
     private float _heading;                     // fighter's nose, world angle
     private int _shots;                         // shots fired this pass
     private double _engaged, _rest, _launchT;
     public bool Resting => Strafes && (_f == FSt.Home || (_f == FSt.Docked && _rest > 0));
-    public bool Inside => Strafes && _f == FSt.Docked;
+    public bool Inside => Def.Way switch { WingWay.Strafe => _f == FSt.Docked, WingWay.Orbit => _o == OSt.Waiting, _ => false };
     public string FighterPhase => _f.ToString();
     public int ShotsThisPass => _shots;
     public float LastOvershoot { get; private set; }   // how far past the target the last pass went
     // the carrier's clock when it last took off: a fighter out of the hangar, a bomber off the deck
     public double LaunchedAt { get; private set; } = -1;
+
+    // ── gunships: waiting their turn inside, then on their circle round the target ──
+    private enum OSt { Waiting, Orbit }
+    private OSt _o = OSt.Waiting;
+    public string OrbitPhase => _o.ToString();
 
     // ── bombers: the deck ─────────────────────────────────────────────────────
     // On the deck a bomber is drawn at LandedScale -- far below, as the hauler on its pad -- and
@@ -284,25 +378,38 @@ public partial class Wing : Node2D
         {
             case WingWay.Strafe: TickStrafe(delta); break;
             case WingWay.Strike: TickStrike(delta); break;
+            case WingWay.Orbit:  TickOrbit(delta); break;
         }
     }
 
     private void TickStrafe(double delta)
     {
         float dt = (float)delta;
-        var t = Carrier.FighterTarget(Position);          // a dead target is replaced while they are out
-        bool engage = t != null && t.Alive && Carrier.Alive && Carrier.Position.DistanceTo(t.Position) <= S["control_range"];
+        // a dead target is replaced while they are out: the carrier's order, or the craft's own pick
+        var t = Def.Picks != null ? _prey = Wings.Pick(Carrier, Def, _prey) : Carrier.FighterTarget(Position);
+        bool engage = t != null && t.Alive && Carrier.Alive && !Over && Wings.Within(Carrier, Def, t);
+        // between targets: back round the carrier (a craft with an OrbitStat, while its sortie lasts), or home
+        var idle = Def.OrbitStat != null && !Over ? FSt.Circle : FSt.Home;
         if (_f is FSt.Approach or FSt.Burst or FSt.Overshoot or FSt.Turn)
         {
             _engaged += delta;
-            if (!engage || _engaged >= S[Def.BurstStat]) _f = FSt.Home;
+            if (!engage || (Def.BurstStat != null && _engaged >= S[Def.BurstStat])) _f = idle;
         }
         switch (_f)
         {
             case FSt.Docked:
+                // a sortie that ends (or loses its carrier) before this craft is out never sends it
+                if (Def.Sortie && Over) { Done = true; break; }
                 Position = Carrier.Position; Velocity = Carrier.Velocity; _heading = Carrier.Rotation - Mathf.Pi / 2f;
                 if (_rest > 0) { _rest -= delta; break; }
-                if (engage && Carrier.TakeLaunchSlot(Kind)) { _f = FSt.Launch; _launchT = 0; _engaged = 0; LaunchedAt = Carrier.Clock; Carrier.Signal(Carrier.Position); }
+                // a sortie goes as soon as it is sent; a fitted craft when there is something to fight
+                bool go = Def.Sortie ? !Over : engage;
+                if (go && Carrier.TakeLaunchSlot(Kind)) { _f = FSt.Launch; _launchT = 0; _engaged = 0; LaunchedAt = Carrier.Clock; Carrier.Signal(Carrier.Position); }
+                break;
+            case FSt.Circle:
+                if (_f != idle) { _f = idle; break; }                   // its sortie is over: home
+                if (engage) { _f = FSt.Approach; break; }
+                CircleRound(Carrier.Position, (float)S[Def.OrbitStat], dt);
                 break;
             case FSt.Launch:                       // out along the carrier's heading, clear of the hull
                 _launchT += delta; Fly(dt);
@@ -320,7 +427,7 @@ public partial class Wing : Node2D
                 if (_cd <= 0 && _shots < Def.Shots)
                 {
                     _cd += Carrier.Cadence(Def.IntervalStat); _shots++;
-                    Dealt.Deal(t, S[Def.DamageStat], Carrier, Dealt.Fighter);
+                    Dealt.Deal(t, S[Def.DamageStat], Carrier, Def.Id);
                     Combat.Flash(Position, t.Position, Def.Beam);
                 }
                 if (_shots >= Def.Shots) _f = FSt.Overshoot;
@@ -339,13 +446,61 @@ public partial class Wing : Node2D
             case FSt.Home:
                 SteerTo(Carrier.Position, dt); Fly(dt, 0.7f);
                 if (Position.DistanceTo(Carrier.Position) < 60f)
-                {   // in through the hangar
-                    _f = FSt.Docked; _rest = _engaged > 0 ? S[Def.RestStat] : 0; _engaged = 0;
+                {   // in through the hangar; a sortie's craft is done, and the carrier frees it
+                    _f = FSt.Docked; _rest = _engaged > 0 && Def.RestStat != null ? S[Def.RestStat] : 0; _engaged = 0;
                     Carrier.Signal(Carrier.Position);
+                    if (Def.Sortie) Done = true;
                 }
                 break;
         }
         Rotation = _heading + Mathf.Pi / 2f;
+    }
+
+    // ORBIT: its turn inside the carrier, then it WARPS onto its circle round the target it was
+    // given (on the side facing the carrier), holds that circle, and fires a hitscan shot at it
+    // whenever the target is inside its gun's reach and the reload allows. When the sortie is over
+    // or the target is gone it warps out: Done, and the carrier frees it.
+    private void TickOrbit(double delta)
+    {
+        float dt = (float)delta;
+        var t = _given;
+        if (t == null || !t.Alive || Over) { Done = true; return; }
+        float r = (float)S[Def.OrbitStat];
+        if (_o == OSt.Waiting)
+        {
+            Position = Carrier.Position; Velocity = Carrier.Velocity; _cd = 0;
+            if (!Carrier.TakeLaunchSlot(Kind)) return;
+            var side = Carrier.Position - t.Position;
+            side = side.LengthSquared() > 1f ? side.Normalized() : Vector2.Right;
+            Position = t.Position + side * r; _heading = side.Angle() + Mathf.Pi / 2f;
+            _o = OSt.Orbit; LaunchedAt = Carrier.Clock; Carrier.Signal(Carrier.Position);
+            Rotation = _heading + Mathf.Pi / 2f;
+            return;
+        }
+        CircleRound(t.Position, r, dt);
+        if (Position.DistanceTo(t.Position) > Range) { if (_cd < 0) _cd = 0; }
+        else for (int n = 0; _cd <= 0 && n < 8 && t.Alive; n++)
+        {   // the reload carries its remainder, as a turret's does
+            _cd += Carrier.Cadence(Def.IntervalStat);
+            Dealt.Deal(t, S[Def.DamageStat], Carrier, Def.Id);
+            Combat.Flash(Position, t.Position, Def.Beam);
+        }
+        Rotation = _heading + Mathf.Pi / 2f;
+    }
+
+    // Round `anchor` at radius r, as an aircraft flies: at its own speed and turn rate, nose on a
+    // point `Lead` radians ahead on the circle, pushed out by 1/cos(Lead) so that the circle it
+    // settles on IS r (aimed at the circle itself, pursuit settles at r cos(Lead)). From outside it
+    // comes in, from inside it goes out, and a moving anchor (the carrier under way, a boss) is
+    // followed. It needs r above its own turning radius (speed / turn): the rows' 300 and 240 u
+    // against the fighter's 101 and the gunship's 80.
+    private const float Lead = 0.6f;
+    private void CircleRound(Vector2 anchor, float r, float dt)
+    {
+        var off = Position - anchor;
+        float at = off.LengthSquared() > 1f ? off.Angle() : _heading;
+        SteerTo(anchor + Vector2.Right.Rotated(at + Lead) * (r / Mathf.Cos(Lead)), dt);
+        Fly(dt);
     }
 
     private float TurnRate => (float)S[Def.TurnStat];
@@ -484,11 +639,21 @@ public partial class Wing : Node2D
     }
 
     // Replicated so a guest shows the same state: its ability bar, docked fighters hidden inside,
-    // a bomber's deck moves, and the signal light when anything lands or takes off.
-    public int StateCode => Strafes ? 100 + (int)_f : (int)_b;
+    // a bomber's deck moves, and the signal light when anything lands or takes off. The thousands
+    // are the craft's ROW (Wings.All), so a guest can bring its list to the host's (PlayerShip
+    // MatchSorties); the rest is the state in its own machine.
+    public const int RowCode = 1000;
+    public int StateCode => (int)Kind * RowCode + Def.Way switch { WingWay.Strafe => 100 + (int)_f, WingWay.Orbit => 200 + (int)_o, _ => (int)_b };
     public void SetNetState(int code, double rearm)
     {
         if (Net.Sim) return;
+        code %= RowCode;
+        if (code >= 200)
+        {   // its warp onto the circle is a warp here too: from the host's pose, never eased across
+            var o = (OSt)(code - 200);
+            if (_o == OSt.Waiting && o == OSt.Orbit && _net.Has) { Position = _net.Pos; Rotation = _net.Rot; }
+            _o = o; return;
+        }
         if (code >= 100)
         {
             bool wasDocked = _f == FSt.Docked;

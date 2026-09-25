@@ -180,6 +180,25 @@ public partial class _Shots : Node
         await W(1.0); await Snap("8_hub_carrier_strike_later");
         // close-ups: zoom in, lock the controls (a focused text box) so the mouse stops
         // steering the aim, and train every turret on a point off the starboard bow
+        // LANE E: the carrier's sorties, as PlayerShip.Sortie sends them (the keys are 6a's): the PATROL
+        // in amber circling it 300 u out, beside the fitted wing; then two GUNSHIPS in steel on their
+        // 240 u circle round a heavy 730 u off the bow quarter. Both freed before the tour goes on.
+        async Task WingsFrames()
+        {
+            var s = H.GetNode<PlayerShip>("Ship_1");
+            s.Position = new Vector2(-900, 1100); s.Rotation = 0; s.Velocity = Vector2.Zero;
+            GetViewport().GetCamera2D().Zoom = new Vector2(1.1f, 1.1f);
+            s.Sortie(WingKind.Patrol);
+            await W(5.0); await Snap("10e_carrier_patrol");
+            var t = H.SpawnRaider(s.Position + new Vector2(700, -200), Enemies.Gunship); t.Hp = 1e9; t.ApplyStatus(Status.Disabled, 30);
+            await W(0.1);
+            s.Sortie(WingKind.Gunship, t);
+            await W(2.0); await Snap("10f_carrier_gunships");
+            t.TakeDamage(1e12);
+            foreach (var w in N<Wing>().Where(w => w.Carrier == s && w.Def.Sortie)) w.SendOut(null, s.Clock);
+            GetViewport().GetCamera2D().Zoom = new Vector2(3.2f, 3.2f);
+            await W(3.0);
+        }
         async Task Close(ShipClass c, string name)
         {
             Character.Class = c; P(H, "ApplyLocalIdentity"); await W(0.2);
@@ -578,6 +597,7 @@ public partial class _Shots : Node
             bf.SetValue(bw[1], System.Enum.Parse(bf.FieldType, "Landing")); tf.SetValue(bw[1], 0.0);
             await W(0.45); await Snap("10d_carrier_bomber_landing");
         }
+        await WingsFrames();
 
         // ── QA: every remaining feature and UI state, one frame each ─────────────
         {
