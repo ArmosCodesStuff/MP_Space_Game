@@ -648,19 +648,21 @@ public partial class _Shots : Node
             foreach (var t in hub.Deployed.ToList()) hub.DeployedTaken(t);
             await Class(ShipClass.Battleship); await W(0.3);
 
-            // ── THE FOUR NEW ENEMY HULLS, in a row ──
-            var mob = new[] { Enemies.Talon, Enemies.Pod, Enemies.Cross, Enemies.Lancerkin };
+            // ── EVERY ENEMY HULL, in a row, in Enemies.All order: the pack's art on each, a flame on
+            //    every bell, the heavies' turrets on their mounts (read by eye) ──
+            var mob = Enumerable.Range(0, Enemies.All.Length).ToArray();
             var line = new System.Collections.Generic.List<Raider>();
+            Vector2 Spot(int i) => yard + new Vector2(-425 + 170 * i, 0);
             for (int i = 0; i < mob.Length; i++)
             {
-                var r = hub.SpawnRaider(yard + new Vector2(-330 + 220 * i, 0), mob[i]);
+                var r = hub.SpawnRaider(Spot(i), mob[i]);
                 r.Hp = 1e9; line.Add(r);
             }
             await W(0.3);
-            foreach (var r in line) { r.Position = yard + new Vector2(-330 + 220 * line.IndexOf(r), 0); r.Rotation = 0f; }
+            foreach (var r in line) { r.Position = Spot(line.IndexOf(r)); r.Rotation = 0f; }
             await Frame(yard + new Vector2(0, 60), 1.3f);
-            foreach (var r in line) { r.Position = yard + new Vector2(-330 + 220 * line.IndexOf(r), 0); r.Rotation = 0f; }
-            await W(0.2); await Snap("80_new_enemies");
+            foreach (var r in line) { r.Position = Spot(line.IndexOf(r)); r.Rotation = 0f; }
+            await W(0.2); await Snap("80_every_enemy_hull");
             foreach (var r in line.ToList()) r.TakeDamage(1e12);
             await W(0.3);
             Me().Visible = true;

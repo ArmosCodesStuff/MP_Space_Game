@@ -999,6 +999,15 @@ public partial class _Test : Node
               && menu.Foes.Count(f => f.Kind == MenuFoeKind.Light) == 3
               && menu.Foes.All(f => Combat.Hostiles.Contains(f)),
               "heavies, a webifier and light fighters, all of them real targets the ship can shoot");
+        // ...and every one of them in its enemy row's red, the Web on its own crescent too: it drew in
+        // the art's own colours before the pack's grey art, and untinted grey reads as a neutral hull.
+        {
+            Sprite2D Drawn(MenuFoe f) => f.GetChildren().OfType<Sprite2D>().First();
+            var web = menu.Foes.First(f => f.Kind == MenuFoeKind.Web);
+            Check(menu.Foes.All(f => Drawn(f).Modulate == Enemies.Of(f.Kind == MenuFoeKind.Heavy ? Enemies.Gunship : Enemies.Webifier).Tint)
+                  && Drawn(web).Modulate != Colors.White && Drawn(web).Texture.ResourcePath.EndsWith("enemy_light_tier_2.png"),
+                  $"the title screen's foes wear their raider rows' tints, the Web on its own art (Web {Drawn(web).Modulate})");
+        }
 
         // THE HULL COMES ROUND AT THE SHEET'S RATE. turn_rate is RADIANS a second -- the sheet says
         // so ("Rudder limit", rad/s) and PlayerShip.Steer caps its yaw with the figure itself --
@@ -4617,6 +4626,22 @@ public partial class _Test : Node
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(hv.Heavy && Math.Abs(hv.Length - 4 * Raider.LightLength) < 1e-3 && Math.Abs(Raider.HeavyDps - 2 * Raider.RaiderDps) < 1e-9 && Raider.RaiderDps == 1,
                   "a heavy raider: four times a light's length, twice the raider damage (2 DPS)");
+            // THE PACK'S ART ON EVERY RAIDER ROW (tools/make_ships.ps1). Each texture is trimmed to its
+            // drawing -- it fills 98.5% of its height and reaches a side within 2 px -- so a row's
+            // Length is the drawn hull, nose to tail, and the hit sizes read off it are unchanged. And a
+            // flame for every bell the art has: two on each, counted off the art (the light's centre
+            // spine and the pod's tail are not bells), every one at the stern.
+            {
+                var arts = Enemies.All.Select(e => e.Texture).Append("res://enemy_light_tier_2.png");
+                var loose = arts.Where(t => { var im = Assets.Load<Texture2D>(t).GetImage(); var u = im.GetUsedRect();
+                                              return u.Size.Y < 0.985f * im.GetHeight() || Math.Min(u.Position.X, im.GetWidth() - u.End.X) > 2; }).ToList();
+                int[] bells = { 2, 2, 2, 2, 2, 2 };   // webifier, gunship, talon, pod, cross, lancerkin
+                var hvArt = hv.GetChildren().OfType<Sprite2D>().First();
+                Check(loose.Count == 0 && Enemies.All.Select(e => e.Nozzles.Length).SequenceEqual(bells)
+                      && Enemies.All.All(e => e.Nozzles.All(n => n.Y > e.Length * 0.4f && n.Y <= e.Length * 0.5f + 1f))
+                      && hvArt.Texture.ResourcePath.EndsWith("enemy_heavy_hull.png") && Math.Abs(hvArt.Texture.GetHeight() * hvArt.Scale.Y - 136f) < 0.5f,
+                      $"every raider's art is trimmed to its drawing and flames from its own two bells at the stern; the gunship is drawn 136 u (loose: {string.Join(", ", loose)}; bells {string.Join("/", Enemies.All.Select(e => e.Nozzles.Length))})");
+            }
             double HvLaser() => hm.DamageBySource.Where(kv => kv.Key == $"raider:{hv.NetId}").Sum(kv => kv.Value);
             double HvMissile() => hm.DamageBySource.Where(kv => kv.Key == $"heavy:{hv.NetId}:missile").Sum(kv => kv.Value);
             var edge = Raider.EdgeSpot(hm.Position);

@@ -720,22 +720,36 @@ under the base. A route or a range that moves must keep the 500.
 
 ### Art
 
-- **Every ship is the owner's line art**, made by `tools/make_ships.ps1` from the drawings in
-  `art_source/` (a `.gdignore` keeps Godot out): turned nose-up, made **exactly symmetrical** (the half
-  on one side of the line the drawing is most nearly symmetrical about, reflected), redrawn at twice its
-  final size, sharpened by its own enlargement's blur, cut out of its paper (a flood from the sheet's
-  edge that never comes within a pixel or two of ink, so a gap in an outline cannot let it into the
-  hull, then the light edge un-mixed from the white it was drawn on) and halved. Grey on transparent:
-  the hull colour tints a hull, the accent a turret, `Raider.HeavyTint`/`LightTint` a raider. It
-  prints every mount in world units; `PlayerShip.Art` and `Raider` carry them. The sprites it replaced
-  are in `retired/` (also ignored).
+- **Every hull is made by `tools/make_ships.ps1`** from `art_source/` (a `.gdignore` keeps Godot out),
+  from one of two sources. **The pack** (`art_source/pack_2026-09-24/`: the owner's 34 finished, shaded
+  sprites; which entity wears which is `docs/plans/sprites.md`): each `$Finished` row turns one file
+  nose-up by quarter turns (never mirrored: the lettering and the asymmetric hulls would flip), trims it
+  to the drawing with the keel on the centre column, and writes it grey on transparent. Nothing is
+  redrawn, so a rerun gives the same pixels. It prints the row's marks (a turret, a housing's edge) and
+  its **nozzles** (each bell's aft rim and width) in world units, for the row in the game. Every hull
+  row derives from **`HullArt`** (Sprites.cs: Texture, Length, Tint, Nozzles) and draws one flame per
+  bell. **The line drawings** (the capitals, until their slice): turned nose-up, made **exactly
+  symmetrical** (the half on one side of the line the drawing is most nearly symmetrical about,
+  reflected), redrawn at twice its final size, sharpened by its own enlargement's blur, cut out of its
+  paper and halved. Grey on transparent either way: the hull colour tints a hull, the accent a turret,
+  the row's `Tint` a raider. The sprites it replaced are in `retired/` (also ignored).
+- **Trap: a run of make_ships.ps1 rewrites EVERY file it makes**, and the line-drawing blocks do not
+  come out byte-identical on another machine (GDI+'s bicubic resize). After a run, `git checkout` any
+  line-drawing output (carrier_player, battleship_hull, destroyer_hull, turret_main, turret_pd) whose
+  block you did not change.
+- **Hit sizes never follow the art.** A raider is hit on its row's `HitShare` of its Length, a class on
+  its `HalfWidth`; the pack re-arted every raider with neither moving.
 - **Carrier**: the runway down the centre, the bays on the white either side of it, three sponsons a
   flank; point defence on the two middle sponsons and the stern block (the bow is where bombers lift
   off). **Battleship**: its four painted turrets are painted over from a clean stretch of its spine
   (the spine's lines all run along it), and the four moving main turrets stand where they stood; point
   defence on the stern quarters. **Destroyer**: main turrets on the fore spine and the central plate,
-  point defence on the stern quarters, the turrets at 0.8x. **Heavy raider**: the crescent-winged
-  fighter, its one turret on the spine behind the canopy; **light raider**: the small fighter.
+  point defence on the stern quarters, the turrets at 0.8x.
+  **Raiders** (the pack): the webifier `fighter_swept`, the gunship `frigate_b` (its turret on its
+  painted twin), the talon `fighter_tri_a`, the pod `fighter_delta`, the cross `gunship_h` (the gunship's
+  hull with the rack stripped; its turret on the clean aft deck), the lancerkin `frigate_d` (its turret
+  on the plate aft of its tubes), and the title screen's Web `crescent_a` in the webifier's red. Their
+  painted guns stay: too small to see under a turret.
 - **Turrets**: the owner's twin-barrelled turret is every main turret (`turret_main.png`, lifted out
   of its drawing by an outline, barrels up, the housing's centre the pivot); point defence is a
   smaller, round, single-barrelled turret in the same style, drawn by the tool (`turret_pd.png`). Each

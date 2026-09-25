@@ -467,6 +467,38 @@ outstanding from the batch of 2026-09-23.)*
 
 ## Unreleased
 
+### The raiders wear the owner's new sprites, one flame to a bell (2026-09-25, in the WarShips_Version_L fork, branch wt/art)
+
+The six raider rows and the title screen's Web now wear the pack in `art_source/pack_2026-09-24/`
+(`docs/plans/sprites.md`): webifier `fighter_swept`, gunship `frigate_b`, talon `fighter_tri_a`, pod
+`fighter_delta`, cross `gunship_h`, lancerkin `frigate_d`, the Web `crescent_a`. The files keep their
+names, so no path moved; hit sizes did not move either (each row's `HitShare` of its unchanged Length).
+
+- `tools/make_ships.ps1` has a `$Finished` table: a row turns a pack file nose-up (quarter turns,
+  never mirrored), trims it with the keel on the centre column and writes it grey; it prints the row's
+  turret marks and nozzles in world units. `-Single`, `-Turn`, `-KeepRight`, `-FinalH`, `-Out` and
+  the two raider line-drawing blocks are gone; their drawings are in `retired/art/`.
+- **`HullArt`** (Sprites.cs): Texture, Length, Tint and Nozzles, the one shape a hull's art takes.
+  `EnemyDef` derives from it. `Sprites.Fit(HullArt)` tints; `HullArt.DrawPlumes` draws a flame per
+  bell, sized to the bell (`Plume.Width`), where every raider drew one from the middle of its stern.
+- The heavies' turrets sit where their own art says: the gunship's on its painted twin (0.154 L aft,
+  10.2 u), the cross's on its clean aft deck (0.234 L, 12.0 u), the lancerkin's on the plate aft of
+  its tubes (0.25 L, 12.3 u). Every Turret row names both figures; the gunship's old ones are no
+  longer everyone's default.
+- The title screen's Web wears the webifier's red (it wore its old art's own colours), and the
+  practice fighter reads the webifier's row instead of naming its file.
+
+**Checks:** the title screen's foes wear their raider rows' tints, the Web on its own art (new);
+every raider's art is trimmed to its drawing and flames from its own two bells at the stern, the
+gunship drawn 136 u (new); frame `80_every_enemy_hull` (was `80_new_enemies`: now all six rows).
+Compiles (typecheck 0 errors, `-Quick` below); rungs 3 and 4 not run in this lane.
+
+**Known broken (J1):** none known; UNPROVEN at rung 3 (the two checks) and rung 4 (frames 0, 48, 49,
+50, 53, 80 read by eye: the tints on the lighter grey art, the flames on the bells, the turrets on
+their seats). The pack's grey is LIGHTER on average than the old line art (mean lightness under
+the drawing 0.57 against 0.31 on the webifier, 0.63 against 0.40 on the gunship), so the raider reds
+read brighter; the tints are unchanged until a frame says they read too light.
+
 ### verify's text step skips a binary by what it holds, not by its extension (2026-09-24, in the WarShips_Version_L fork)
 
 The text step skipped `.png`, `.ogg` and `.wav` by name, so the two vendored plugin DLLs (4 MB each)
