@@ -331,3 +331,28 @@ PlayerShip 9, Stats 2, Dealt 1, Fx 1, Items 3, SmokeTest 42; stealth_*|GoDark Pl
   76e_echo_reverb (LaneA6dEchoFrames). Rewritten: every Sl("echo")/UseAbility("echo")/echo_* harness caller -> reverb; Echo
   SustainedDps literal 66 + 7.7; chip hull literal 90 -> 180; the Echo blast 90 -> 31.5 (35%); sweep witness ["reverb"].
 - next: kits6d-J6 (Rewind).
+
+## kits6d-J6 · PRE
+- tier opus; intent: Rewind (DL4): scripts/Trails.cs (Trail ring of Marks, Note/Back), PlayerShip records a mark every rewind_every (by stat), Ab.Rewind (Q, ability 2): AtOnce = owner flight back (speed held to TopNow), Press = host cooldown + hull from its own mark (<= max, never a wreck) + every web let go (LetGoWebs, shared with Whirl); rows rewind_back 8 / rewind_every 0.5 / rewind_cooldown 30.
+- HEAD 21a39a6b73143311d7b9ca54df44dc27becce19d
+- scripts/PlayerShip.cs 467c8d7a88318b39645d1c3530eb8fccb7a8e7f8
+- scripts/Abilities.cs e864e2e94ec98dde65beb16073b1d3d1a8c5c675
+- scripts/Ships.cs 63e82fcc231a879405159877c0884c291e88988f
+- tools/smoketest/SmokeTest.cs.txt 4d6e7dda20211083009c73663baf806bc2425f4a
+- tools/screens/Shots.cs.txt fe2eeb57c1e3316c5013eaec6de94d0cff3efec1
+- new: scripts/Trails.cs
+
+## kits6d-J6 · POST
+- verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final test phase.
+- built: scripts/Trails.cs (Mark + Trail: Note keeps a mark every `every` s, Back = the mark nearest now - back, the oldest with
+  less; Size = ceil(back/every) + 4); PlayerShip records a mark each frame-boundary past rewind_every while Alive (by stat; every
+  peer, each side's own fields matter: the owner's flight, the host's hull); Past (the checks' door); Rewind (owner, AtOnce:
+  position, heading, velocity, speed held to TopNow) and Rewound (host Press: cooldown 30, hull = min(max, the host's own mark),
+  LetGoWebs -- now shared with Whirl). Ab.Rewind (Q, ability 2); rows rewind_back 8 / rewind_every 0.5 / rewind_cooldown 30.
+  Refused wrecked (DoAbility + AtOnce's Alive gate) and Disabled (PressHeld), both generic.
+- checks: LaneA6dRewindRowChecks (rows, learn order, the trail pure x3 + short history x3), LaneA6dRewindChecks (effect x3 with
+  blows: the frame 8 +- 0.25 s ago in position/heading/velocity/hull, cool 30; the oldest with 2-4 s x3; boosted mark clamped
+  to 260 + the boost's clocks untouched x3; a web freed and staying free x3; refused cooling/disabled/wrecked); rung 5
+  LaneA6dRewindHostWatch/HostChecks (host hull back to its own log 8 s before, copy within 20 u) + LaneA6dRewindGuestChecks;
+  sweep witness ["rewind"].
+- next: kits6d-J7 (EMP).

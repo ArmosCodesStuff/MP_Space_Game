@@ -8313,6 +8313,228 @@ public partial class _Test : Node
         ec.Demo = demo; ec.Velocity = Vector2.Zero;
     }
 
+    // ── SLICE 6d: THE ECHO'S REWIND (kits_v2's card, the README ruling): back 8 s -- position, heading, velocity AND hull
+    // -- to the mark nearest 8 s ago (a mark every 0.5 s; the oldest with less history); the speed held to the top it has
+    // now; the boost's time not rewound; every web let go; 30 s; refused wrecked or disabled.
+    void LaneA6dRewindRowChecks()
+    {
+        var st = new ShipStats(ShipClass.LightEcho);
+        var kit = Classes.Of(ShipClass.LightEcho).Abilities.Select(a => a.Id).ToArray();
+        // THE TRAIL ON ITS OWN, at 60 frames a second from three varied clocks: the mark nearest now - 8, and with 2-4 s of
+        // history the oldest
+        bool pure = true; string ps = "";
+        for (int k = 0; k < 3; k++)
+        {
+            var tr = new Trail(); double now = Vary(9f, 20f), t = 0;
+            for (; t <= now; t += 1.0 / 60) tr.Note(t, 0.5, 8, new Mark(0, new Vector2((float)t, 0), 0, Vector2.Zero, t));
+            var m = tr.Back(t, 8);
+            var sh = new Trail(); double start = Vary(0f, 5f), span = Vary(2f, 4f), u = start;
+            for (; u <= start + span; u += 1.0 / 60) sh.Note(u, 0.5, 8, new Mark(0, Vector2.Zero, 0, Vector2.Zero, u));
+            var o = sh.Back(u, 8);
+            bool ok = m is { } mm && Math.Abs(mm.T - (t - 8)) <= 0.25 + 1.0 / 60 && mm.Hull == mm.T && o is { } oo && Math.Abs(oo.T - start) < 1e-9;
+            pure &= ok; ps += $" {t:0.0}s -> {m?.T:0.00} / {span:0.0}s of history -> {o?.T - start:0.00}";
+        }
+        Check(st["rewind_back"] == 8 && st["rewind_every"] == 0.5 && st["rewind_cooldown"] == 30 && Trail.Size(8, 0.5) >= 17
+              && kit.SequenceEqual(new[] { "guns", "firemode", "reverb", "rewind" }) && Ab.Rewind.Default == global::Godot.Key.Q && pure,
+              $"the Rewind row: {st["rewind_back"]:0} s back (8), a mark every {st["rewind_every"]:0.0} s (0.5), {st["rewind_cooldown"]:0} s (30), on Q, learned second; the trail:{ps} (nearest now - 8 within 0.25 s; the oldest)");
+    }
+
+    async Task LaneA6dRewindChecks(Vector2 yonder)
+    {
+        await SetClass(ShipClass.LightEcho);
+        var ec = Me; bool demo = ec.Demo; ec.Demo = true; ec.AutopilotTo = null;
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        var stasis = typeof(PlayerShip).GetField("_stasis", BindingFlags.NonPublic | BindingFlags.Instance);
+        var log = new List<(double T, Vector2 At, float Rot, Vector2 V, double Hp)>();
+        // flies a circle for `secs` (speed well under the top), a varied blow every 1.3 s, logging each frame's end
+        async Task<double> Fly(double secs, float speed, bool hits)
+        {
+            log.Clear(); ec.Past.Clear();
+            var centre = ec.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(150f, 300f);
+            float r = ec.Position.DistanceTo(centre), w = speed / r * (Vary(0f, 1f) < 0.5f ? -1f : 1f);
+            double clock = 0, nextHit = Vary(0.4f, 1.0f);
+            while (clock < secs)
+            {
+                var radial = (ec.Position - centre).Normalized();
+                var tangent = new Vector2(-radial.Y, radial.X) * Mathf.Sign(w);
+                ec.Velocity = tangent * speed; ec.Rotation = tangent.Angle() + Mathf.Pi / 2;
+                if (hits && clock >= nextHit) { ec.TakeDamage(Vary(4f, 9f)); nextHit += 1.3; }
+                await Frame(); clock += GetProcessDeltaTime();
+                log.Add((clock, ec.Position, ec.Rotation, ec.Velocity, ec.Hp));
+            }
+            return clock;
+        }
+        (int i, float d) Nearest(Vector2 at)
+        {
+            int bi = -1; float bd = float.MaxValue;
+            for (int i = 0; i < log.Count; i++) { float d = log[i].At.DistanceTo(at); if (d < bd) { bd = d; bi = i; } }
+            return (bi, bd);
+        }
+
+        // THE EFFECT: after 9-20 s of flight with blows taken, the press puts position, heading, velocity and hull where
+        // one frame 8 s ago (+-0.25 s) had them -- three clocks, three circles
+        for (int run = 0; run < 3; run++)
+        {
+            ec.Position = VaryNear(yonder, 300f); ec.Hp = ec.MaxHp; ec.Sl("rewind").Cool = 0;
+            double now = await Fly(Vary(9f, 20f), Vary(80f, 180f), true);
+            ec.UseAbility("rewind", 0);
+            var (i, d) = Nearest(ec.Position);
+            var e = i >= 0 ? log[i] : default;
+            Check(i >= 0 && d < 0.01f && Math.Abs(e.T - (now - 8)) <= 0.25 + 2.0 / 60 && Mathf.Abs(Mathf.AngleDifference(e.Rot, ec.Rotation)) < 1e-4f
+                  && e.V.DistanceTo(ec.Velocity) < 0.01f && Math.Abs(e.Hp - ec.Hp) < 1e-6 && ec.Hp <= ec.MaxHp && Math.Abs(ec.Sl("rewind").Cool - 30) < 0.05,
+                  $"a rewind after {now:0.0} s of flight: back to the frame {now - e.T:0.00} s ago (8 +- 0.25), {d:0.000} u off it, its heading, its velocity ({e.V.Length():0} u/s) and its hull {ec.Hp:0.0} of {ec.MaxHp:0}; cooling {ec.Sl("rewind").Cool:0.0} s (30)");
+            await Frame();
+        }
+
+        // WITH LESS HISTORY, THE OLDEST: 2-4 s since the trail began, the press goes back to its first frame
+        for (int run = 0; run < 3; run++)
+        {
+            ec.Position = VaryNear(yonder, 300f); ec.Hp = ec.MaxHp; ec.Sl("rewind").Cool = 0;
+            double now = await Fly(Vary(2f, 4f), Vary(80f, 180f), true);
+            ec.UseAbility("rewind", 0);
+            var (i, d) = Nearest(ec.Position);
+            Check(i == 0 && d < 0.01f && Math.Abs(log[0].Hp - ec.Hp) < 1e-6,
+                  $"a rewind {now:0.00} s after the trail began goes back to its oldest mark (frame {i}, {d:0.000} u off; hull {ec.Hp:0.0})");
+            await Frame();
+        }
+
+        // THE SPEED HELD TO THE TOP IT HAS NOW, THE BOOST'S TIME NOT REWOUND: 2.5 s at 330-370 u/s under the boost, then
+        // 6.5-8 s at 120 with the boost down; the press restores the fast mark's bearing at 260, and the boost's clocks
+        // are what they were before the press
+        for (int run = 0; run < 3; run++)
+        {
+            ec.Position = VaryNear(yonder, 300f); ec.Hp = ec.MaxHp; ec.Sl("rewind").Cool = 0;
+            ec.Sl("boost").Cool = 0; ec.Sl("boost").Left = 0;
+            log.Clear(); ec.Past.Clear();
+            float rot = VaryAngle(), fast = Vary(330f, 370f); double clock = 0;
+            ec.DriveHeld = true;
+            while (clock < 2.5)
+            {
+                ec.Rotation = rot; ec.Velocity = Vector2.Up.Rotated(rot) * fast;
+                await Frame(); clock += GetProcessDeltaTime();
+                log.Add((clock, ec.Position, ec.Rotation, ec.Velocity, ec.Hp));
+            }
+            ec.DriveHeld = false;
+            var slowDir = Vector2.Up.Rotated(rot + Vary(1.0f, 2.0f));
+            double until = clock + Vary(6.5f, 8f);
+            while (clock < until || ec.Sl("boost").Left > 0)
+            {
+                ec.Rotation = slowDir.Angle() + Mathf.Pi / 2; ec.Velocity = slowDir * 120f;
+                await Frame(); clock += GetProcessDeltaTime();
+                log.Add((clock, ec.Position, ec.Rotation, ec.Velocity, ec.Hp));
+            }
+            double bLeft = ec.Sl("boost").Left, bCool = ec.Sl("boost").Cool; float top = ec.TopNow;
+            ec.UseAbility("rewind", 0);
+            var (i, d) = Nearest(ec.Position);
+            var e = i >= 0 ? log[i] : default;
+            bool clamped = e.V.Length() > top + 1f && Math.Abs(ec.Velocity.Length() - top) < 0.5f && Mathf.Abs(Mathf.AngleDifference(ec.Velocity.Angle(), e.V.Angle())) < 1e-3f;
+            Check(i >= 0 && d < 0.01f && clamped && ec.Sl("boost").Left == bLeft && ec.Sl("boost").Cool == bCool,
+                  $"a rewind to a mark flown at {e.V.Length():0} u/s under the boost: {ec.Velocity.Length():0.0} u/s on its bearing (the top now, {top:0}); the boost's clocks {ec.Sl("boost").Left:0.00} / {ec.Sl("boost").Cool:0.00} as they were ({bLeft:0.00} / {bCool:0.00})");
+            await Frame();
+        }
+
+        // EVERY WEB LET GO: pinned 2-6 s, the press frees it, and it stays free; three varied spots
+        for (int run = 0; run < 3; run++)
+        {
+            ec.Position = VaryNear(yonder, 300f); ec.Hp = ec.MaxHp; ec.Sl("rewind").Cool = 0;
+            await Fly(Vary(9f, 11f), Vary(80f, 180f), false);
+            ec.ApplyStatus(Status.Pinned, Vary(2f, 6f));
+            await Frame();
+            bool held = ec.Pinned;
+            ec.UseAbility("rewind", 0);
+            bool freed = !ec.Pinned;
+            for (int k = 0; k < 10; k++) await Frame();
+            Check(held && freed && !ec.Pinned, $"a webbed Echo ({held}) rewinds free of it ({freed}), and is still free 10 frames on ({!ec.Pinned})");
+        }
+
+        // REFUSED: a second press inside the 30 s, a press while disabled, a press from a wreck -- none moves it
+        for (int run = 0; run < 3; run++)
+        {
+            ec.Position = VaryNear(yonder, 300f); ec.Hp = ec.MaxHp; ec.Sl("rewind").Cool = run == 0 ? Vary(1f, 29f) : 0;
+            await Fly(Vary(9f, 10f), Vary(80f, 180f), false);
+            if (run == 1) ec.ApplyStatus(Status.Disabled, 2);
+            if (run == 2) ec.Restore(0, false, 30);
+            var was = ec.Position; double hp = ec.Hp;
+            ec.UseAbility("rewind", 0);
+            string why = new[] { "cooling", "disabled", "wrecked" }[run];
+            Check(ec.Position == was && ec.Hp == hp && (run == 0 || ec.Sl("rewind").Cool == 0),
+                  $"a rewind pressed {why}: refused, the hull where it was ({ec.Position.DistanceTo(was):0.0} u moved, cooldown {ec.Sl("rewind").Cool:0.0})");
+            if (run == 1) ec.Statuses.Clear(Status.Disabled);
+            if (run == 2) { stasis.SetValue(ec, 0.0); ec.Reboard(); ec.Hp = ec.MaxHp; }
+            ec.Sl("rewind").Cool = 0;
+            await Frame();
+        }
+        ec.Demo = demo; ec.Velocity = Vector2.Zero; ec.Position = yonder;
+    }
+
+    // ── SLICE 6d, RUNG 5: A GUEST'S REWIND. The guest (LaneA6dRewindGuestChecks) flies an ECHO round a slow circle for
+    // 10-12 s and rewinds; the host (LaneA6dRewindHostWatch) strikes its hull 5 every second, keeps its own log of the
+    // guest's copy, and sees the press land: its hull back to what its own log had 8 s before (+-0.3 s), and 0.8 s
+    // later the copy within 20 u of where its log had it then. The guest: back to its own frame of 8 s ago.
+    sealed class LaneA6dRewindSeen { public double Hull = -1, HullThen = -1, HullBefore = -1, Miss = -1; public bool Done; }
+    LateSampler LaneA6dRewindHostWatch(LaneA6dRewindSeen seen)
+    {
+        var log = new List<(double T, Vector2 At, double Hp)>();
+        double since = -1, pressedAt = -1, struck = 0;
+        var watch = new LateSampler { Probe = () =>
+        {
+            if (seen.Done || H.Ships.FirstOrDefault(s => !s.Mine) is not { Class: ShipClass.LightEcho, Alive: true } g || Math.Abs(g.MaxHp - 180) > 1e-6) return false;
+            double now = Time.GetTicksMsec() / 1000.0;
+            if (since < 0) since = now;
+            if (pressedAt < 0 && now - since > struck + 1.0) { g.TakeDamage(5); struck += 1.0; }
+            log.Add((now, g.Position, g.Hp));
+            if (pressedAt < 0 && g.Sl("rewind").Cool > 0)
+            {
+                pressedAt = now; seen.Hull = g.Hp; seen.HullBefore = log.Count > 1 ? log[^2].Hp : -1;
+                var then = log.Where(e => Math.Abs(e.T - (now - 8)) <= 0.3).ToList();
+                seen.HullThen = then.Count == 0 ? -1 : then.OrderBy(e => Math.Abs(e.Hp - g.Hp)).First().Hp;
+            }
+            if (pressedAt >= 0 && now - pressedAt >= 0.8)
+            {
+                var then = log.Where(e => Math.Abs(e.T - (pressedAt - 8)) <= 0.3).ToList();
+                seen.Miss = then.Count == 0 ? -1 : then.Min(e => e.At.DistanceTo(g.Position));
+                seen.Done = true;
+                return true;
+            }
+            return false;
+        } };
+        AddChild(watch);
+        return watch;
+    }
+    async Task LaneA6dRewindHostChecks(LateSampler watch, LaneA6dRewindSeen seen)
+    {
+        await RealTime(() => seen.Done, Wan ? 90 : 60);
+        watch.QueueFree();
+        Check(seen.Done && seen.HullThen >= 0 && Math.Abs(seen.Hull - seen.HullThen) < 0.5 && seen.Hull - seen.HullBefore >= 20 && seen.Miss >= 0 && seen.Miss <= 20,
+              $"arena host: the guest Echo's rewind puts its hull from {seen.HullBefore:0.0} back to {seen.Hull:0.0} (its own log 8 s before: {seen.HullThen:0.0}, 5 a second struck since) and its copy {seen.Miss:0.0} u from where the log had it (20)");
+    }
+    async Task LaneA6dRewindGuestChecks()
+    {
+        await SetClass(ShipClass.LightEcho);
+        var me = Me; me.AutopilotTo = null; bool demo = me.Demo; me.Demo = true;
+        await RealTime(() => Math.Abs(me.MaxHp - 180) < 1e-6, Wan ? 20 : 10);           // the host's word for the hull
+        me.Sl("rewind").Cool = 0;
+        var log = new List<(double T, Vector2 At)>();
+        var centre = me.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(200f, 300f);
+        float speed = Vary(40f, 60f), sign = Vary(0f, 1f) < 0.5f ? -1f : 1f;
+        double clock = 0, secs = Vary(10f, 12f);
+        while (clock < secs)
+        {
+            var radial = (me.Position - centre).Normalized();
+            var tangent = new Vector2(-radial.Y, radial.X) * sign;
+            me.Velocity = tangent * speed; me.Rotation = tangent.Angle() + Mathf.Pi / 2;
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); clock += GetProcessDeltaTime();
+            log.Add((clock, me.Position));
+        }
+        me.UseAbility("rewind", 0);
+        var back = me.Position;
+        var (t, d) = log.Select(e => (e.T, e.At.DistanceTo(back))).OrderBy(e => e.Item2).First();
+        for (double w = 0; w < 1.5; w += GetProcessDeltaTime()) { me.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+        Check(d < 0.01f && Math.Abs(t - (clock - 8)) <= 0.25 + 2.0 / 60 && me.Position.DistanceTo(back) < 20f,
+              $"arena guest: its Echo's rewind after {clock:0.0} s puts it at its own frame {clock - t:0.00} s ago (8 +- 0.25; {d:0.000} u off), and it is still there 1.5 s on ({me.Position.DistanceTo(back):0.0} u)");
+        me.Demo = demo; me.Velocity = Vector2.Zero;
+    }
+
     // ── SLICE 6d, RUNG 5: A GUEST'S PEPPERBOX. The guest (LaneA6dPepperGuestChecks) flies a DART at rest, its cursor
     // on a varied point 400-600 u off the nose, and holds the trigger 2 s: its own world shows the host's darts
     // (cosmetic copies, Commanded onto ITS cursor) -- 12 +- 2 of them, each within 10° of the bearing to the cursor
@@ -14389,6 +14611,8 @@ public partial class _Test : Node
             LaneA6dRepeaterRowChecks();
             await LaneA6dRepeaterChecks(yonder);
             await LaneA6dReverbChecks(yonder);
+            LaneA6dRewindRowChecks();
+            await LaneA6dRewindChecks(yonder);
             await SetClass(ShipClass.HeavyWarrior);
             var wr = Me; wr.Position = yonder; wr.Velocity = Vector2.Zero; await Wait(0.2);
             // A SPEED LIFT LIFTS THE PUSH AS WELL AS THE TOP SPEED (PlayerShip.Steer). The water holds a
@@ -14767,6 +14991,7 @@ public partial class _Test : Node
                     ["ramjet"]    = sp => sp.Sl("ramjet").Left > sp.Stats["ramjet_time"] - 0.1 && sp.Sl("ramjet").Cool > sp.Stats["ramjet_cooldown"] - 0.1,
                     ["slingshot"] = sp => sp.Sl("slingshot").Cool > sp.Stats["sling_cooldown"] - 0.1,
                     ["reverb"]    = sp => sp.Sl("reverb").Left > sp.Stats["reverb_time"] - 0.1,
+                    ["rewind"]    = sp => sp.Sl("rewind").Cool > sp.Stats["rewind_cooldown"] - 0.1,
                     ["stealth"]   = sp => sp.Statuses.Has(Status.Untargetable) && sp.Sl("stealth").Left > sp.Stats["stealth_time"] - 0.1,
                     ["anchor"]    = sp => sp.Sl("anchor").Left > sp.Stats["anchor_time"] - 0.1 && sp.Held == 0f,
                     ["tether"]    = sp => sp.Sl("tether").N == 1 && sp.Sl("tether").Cool > sp.Stats["tether_recharge"] - 0.1 && H.Laid.Any(z => z.OwnerId == sp.OwnerId),
@@ -17995,6 +18220,8 @@ public partial class _Test : Node
             var rodWatch = LaneA6dRodHostWatch(rodSeen);                    // slice 6d: ...then sprints it and fires the rod
             var ramjetSeen = new LaneA6dRamjetSeen();
             var ramjetWatch = LaneA6dRamjetHostWatch(ramjetSeen);           // slice 6d: ...then lights its ramjet
+            var rewindSeen = new LaneA6dRewindSeen();
+            var rewindWatch = LaneA6dRewindHostWatch(rewindSeen);           // slice 6d: ...then flies an Echo and rewinds
             await LaneBHostDrives();                                        // lane B: the drives across peers (its guest half: LaneBGuestDrives)
             await LaneA6cLungeHostChecks(lungeWatch, lungeSeen);
             await LaneA6cPrismHostChecks(prismWatch, prismSeen);
@@ -18015,6 +18242,7 @@ public partial class _Test : Node
             await LaneA6dPepperHostChecks(pepperWatch, pepperSeen);          // slice 6d: the guest's pepperbox, before it refits to a freighter
             await LaneA6dRodHostChecks(rodWatch, rodSeen);                  // slice 6d: the guest's rod, priced on the host
             await LaneA6dRamjetHostChecks(ramjetWatch, ramjetSeen);         // slice 6d: the host's own copy of the guest's ramjet
+            await LaneA6dRewindHostChecks(rewindWatch, rewindSeen);         // slice 6d: the guest's rewind, its hull from the host's own trail
             await RealTime(() => H.Ships.FirstOrDefault(s => !s.Mine) is { Class: ShipClass.FreightHauler } gg
                                  && gg.Position.DistanceTo(mpSpot) < 60, Wan ? 25 : 15);
             var fg = H.Ships.FirstOrDefault(s => !s.Mine);
@@ -18306,6 +18534,7 @@ public partial class _Test : Node
             await LaneA6dPepperGuestChecks();                               // slice 6d: a guest's pepperbox (its host half: LaneA6dPepperHostChecks)
             await LaneA6dRodGuestChecks();                                  // slice 6d: a guest's sprint and rod (its host half: LaneA6dRodHostChecks)
             await LaneA6dRamjetGuestChecks();                               // slice 6d: a guest's ramjet (its host half: LaneA6dRamjetHostChecks)
+            await LaneA6dRewindGuestChecks();                               // slice 6d: a guest's rewind (its host half: LaneA6dRewindHostChecks)
             // ── TWO OF THE NINE, IN A SESSION (the host's side is in the ahost branch) ──
             // A FREIGHTER: the class whose abilities MAKE things in the world. Every press below
             // is a request -- nothing here is made on this peer.

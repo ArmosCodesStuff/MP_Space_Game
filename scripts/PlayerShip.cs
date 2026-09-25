@@ -983,6 +983,30 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         Fx.Raise(Fx.Reverb, at, reach);                     // on every peer, where it remembered
     }
 
+    // THE REWIND (the Echo's Q, kits_v2's card + the README ruling). ON THE OWNER (AbilityDef.AtOnce: flight is the
+    // owner's): position, heading and velocity back to its trail's mark nearest rewind_back ago, the speed held to
+    // the top it has now. The boost's time left is not the trail's and is not rewound.
+    private readonly Trail _trail = new();
+    public Trail Past => _trail;                     // what the checks read and clear
+    public void Rewind()
+    {
+        if (_trail.Back(_clock, Stats["rewind_back"]) is not { } m) return;
+        float top = TopNow;
+        Position = m.At; Rotation = m.Heading; _yawRate = 0f;
+        Velocity = m.Velocity.Length() > top ? m.Velocity.Normalized() * top : m.Velocity;
+    }
+    // ITS PRESS ON THE HOST: the cooldown; the hull back to the HOST'S OWN mark (hull is host state: a guest's report
+    // never carries it), never above the hull it has room for, never a wreck raised (DoAbility refuses one); every web
+    // let go.
+    public void Rewound()
+    {
+        ref var sl = ref Sl("rewind");
+        if (!Net.Sim || !Alive || sl.Cool > 0) return;
+        sl.Cool = Cooling(Stats["rewind_cooldown"]);
+        if (_trail.Back(_clock, Stats["rewind_back"]) is { } m) Hp = Math.Min(MaxHp, m.Hull);
+        LetGoWebs();
+    }
+
     public void GoDark()
     {
         if (Sl("stealth").Cool > 0) return;
@@ -1274,6 +1298,9 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         else      RemoteFollow(dt);
 
         TickAbilities(delta);
+        // THE TRAIL (a sheet naming rewind_every: the Echo's Rewind): a mark of where it was and its hull, every so often
+        if (Alive && Stats["rewind_every"] > 0)
+            _trail.Note(_clock, Stats["rewind_every"], Stats["rewind_back"], new Mark(0, Position, Rotation, Velocity, Hp));
 
         if (Mine && Abilities.TriggerOf(Class)?.Reload is { } view) ActiveReload.Step(this, view, delta);
         if (Net.Sim) { FireControl(delta); Bored(delta); Swings(delta); DashSweeps(); ChargeLatch(delta); }
@@ -1540,9 +1567,11 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         ref var sl = ref Sl("whirlwind");
         if (sl.Left > 0 || sl.Cool > 0) return;
         sl.Left = Stats["whirl_time"]; sl.Cool = Cooling(Stats["whirl_cooldown"]); sl.Own = 0;
-        _webAsked = 0; _webPhase = 0; _status.Clear(Status.Pinned);
+        LetGoWebs();
         _status.Apply(Status.Unwebbed, sl.Left);
     }
+    // EVERY WEB ON THE HULL LET GO (host): the pin and the web's own ask. A latch still on asks again next frame.
+    private void LetGoWebs() { _webAsked = 0; _webPhase = 0; _status.Clear(Status.Pinned); }
 
     // ── a stance (AbilityDef.Stance: the prism) ─────────────────────────────
     // THE PRESS, on the host: up (its Time, its Status for that Time, no split yet), or, pressed while it

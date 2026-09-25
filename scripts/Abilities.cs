@@ -605,6 +605,18 @@ public static class Ab
             : Timed(s, "reverb", "reverb_cooldown", "READY"),
     };
 
+    // THE ECHO'S REWIND (kits_v2's card, the README ruling): back 8 s -- position, heading and velocity on the owner,
+    // the hull on the host, each from its own trail (a mark every 0.5 s, the one nearest 8 s ago); every web let go; 30 s
+    public static readonly AbilityDef Rewind = new()
+    {
+        Id = "rewind", Name = "Rewind", Short = "REWIND", Default = Key.Q,
+        Blurb = "Back to where you were eight seconds ago: the place, the heading, the speed and the hull. Any web on you lets go.",
+        AtOnce = (s, _) => s.Rewind(),
+        Press = (s, _) => s.Rewound(),
+        Refuse = (s, _) => s.Sl("rewind").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => Timed(s, "rewind", "rewind_cooldown", "READY"),
+    };
+
     public static readonly AbilityDef Stealth = new()
     {
         Id = "stealth", Name = "Stealth", Short = "STEALTH", Default = Key.F,
