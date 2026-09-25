@@ -433,3 +433,21 @@ Held 0), a second UseAbility weighs it (Left runs out within 60 frames, anchor_r
   and the walls kit (Ab.Railgun -> Ab.Anchor, still opens at 6).
 - Owed: the Anchor kept through the flares / tether presses (J9 / J10 write it).
 - Next: kits6c-J9 Zones foundation + Tether mine.
+
+## Handover 5: agent 5 stops after J8 (context), at a job boundary. J9 is next; no PRE written for it.
+J9 pointers (read before the PRE): the pattern to copy is Decoys.cs (a DecoyDef table + a DecoySalvo node + Decoys.Tick
+from Hub ~1651 under Net.IsHost) and its Spawns row (Spawned.cs ~112-160: Spawns.Decoy = 3, Space NetIds.Decoy; Seed N /
+A / B = row / thrower rotation / age; Hub.Flares ~1348 spawns it; Hub.Salvos ~1214 reads the live set). NetIds spaces in
+scripts/Ids.cs:12 (append `Zone = 60000`, width 1000, at the END; the merge renumbers a collision). Spawns: append
+`Zone = 4` + its row. The seed has only N (int), A, B (double): a guest must draw the zone from the ROW, so the drawn
+geometry is the row's own (literal base u); if an @area item should reach it, one way is N = row + 16 x (area share in
+percent, read from the owner's sheet on the host) -- default: geometry literal in the row, the host-only numbers (time,
+arm, damage, hold) read from the owner's stat rows at the drop (kept on the host's node; the host Downs it at its end).
+D44 / D45 hold the rows (tether: 170 u, arms 0.5 s, the first Light|Heavy raider in reach sets it off, every raider in
+170 u Disabled 3 s, never a boss; 2 charges of 12 s each, at most 2 out, the oldest goes; Q, dropped at the stern).
+Charges: grep an existing charged ability (Sl.N as a count) before inventing one. The Sniper's list becomes {Railgun,
+Anchor, Tether} (ability 2, L3); its kit / Items lists take tether_* ids (D42). J9 also owes: the Anchor KEPT through a
+tether press (Stance.Keeps), one line in LaneA6cTetherChecks. Harness: LaneA6c methods go after LaneA6cAnchorChecks
+(SmokeTest, before LaneA6cAnchorGuestChecks); solo call after `await LaneA6cAnchorChecks(yonder);`; rung-5 guest call
+after `await LaneA6cAnchorGuestChecks();`. Edits: a python exact-match script in the scratchpad (heredocs with quotes
+break the bash tool; write the script with the Write tool), SmokeTest.cs.txt LF (newline='').
