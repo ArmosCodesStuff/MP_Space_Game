@@ -46,7 +46,7 @@ public static class Beam
 {
     // The index IS the id on the wire (Hub.NetFlash), so APPEND ONLY.
     public const int Point = 0, Base = 1, Deployed = 2, Hauler = 3, LightRaider = 4, HeavyRaider = 5,
-                     Fighter = 6, Bolt = 7, Rail = 8, RailEnhanced = 9;
+                     Fighter = 6, Bolt = 7, Rail = 8, RailEnhanced = 9, Tot = 10;
 
     // YOUR SIDE CLIMBS AND THEIRS FALLS, so a fight reads by ear. On laser_light, point defence
     // keeps the note every flash used to share -- it is the one heard most -- your other guns climb
@@ -70,6 +70,8 @@ public static class Beam
         new() { Id = "rail",          Tint = new(0.45f, 0.70f, 1f), Report = "laser_boss", Pitch = 0.71f },
         // an enhanced rail round (ActiveReload): white, two semitones under the rail
         new() { Id = "rail_enhanced", Tint = new(0.92f, 0.96f, 1f), Report = "laser_boss", Pitch = 0.63f },
+        // the freighter's Time on target: its bar's tint (Fx "tot"), the rail's file a tone above it
+        new() { Id = "tot",           Tint = new(1f, 0.78f, 0.35f), Report = "laser_boss", Pitch = 0.80f },
     };
 
     public static BeamDef Of(int id) => All[id >= 0 && id < All.Length ? id : Point];

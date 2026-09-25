@@ -57,12 +57,21 @@ public class ShotDef
     public float Fuse;
     public Tag Resists;
     public double ResistShare = 1;
+    // A HIT MARKS ITS TARGET FOR ITS FIRER (the freighter's spotter, kits 6b): the stat id, on the firer's
+    // sheet, of the seconds a hit paints for -- or null, a round that marks nothing. The host calls
+    // PlayerShip.PaintOn on a hostile it strikes; the paint rides the firer's slots to every peer.
+    public string Paint;
+    // A ROUND BUILT FOR WHAT HOLDS A SPOT (the bastion's bunker buster, kits 6b): a body carrying any of
+    // Versus takes VersusMult times the blow, and a body behind a shield (IShielded, Emplacements.cs)
+    // takes Through of it (0 = the shield stops it, as it stops everything else).
+    public Tag Versus;
+    public double VersusMult = 1, Through;
 }
 
 public static class Shots
 {
     // The index IS the id on the wire (Hub.NetShot), so APPEND ONLY.
-    public const int Shell = 0, Slug = 1, Scrap = 2, Torpedo = 3, Missile = 4, Seeker = 5, Cruise = 6, Reflect = 7, Flak = 8;
+    public const int Shell = 0, Slug = 1, Scrap = 2, Torpedo = 3, Missile = 4, Seeker = 5, Cruise = 6, Reflect = 7, Flak = 8, Spotter = 9, Buster = 10;
 
     public static readonly ShotDef[] All =
     {
@@ -95,6 +104,13 @@ public static class Shots
         // everything within 70 u of the burst takes the round; a boss x0.75
         new() { Id = "flak", AtPlayers = false, Pad = 3f, Sweep = 6f, Look = ShotLook.Bullet,
                 Fuse = 70f, Resists = Tag.Boss, ResistShare = 0.75 },
+        // THE FREIGHTER'S SPOTTER ROUND (kits 6b): a shell whose hit paints what it strikes for paint_time
+        // (5 s), the target its sentries take first and Time on target converges on
+        new() { Id = "spotter", AtPlayers = false, Pad = 3f, Sweep = 6f, Look = ShotLook.Bullet, Paint = "paint_time" },
+        // THE BASTION'S BUNKER BUSTER (kits 6b): one slow heavy round that stops on the first body -- x2 on
+        // a boss or a structure, and a quarter of that through a pylon's shield (180 / 360 / 90)
+        new() { Id = "buster", AtPlayers = false, Pad = 4f, Sweep = 6f, Burst = 0.4, Look = ShotLook.Ball,
+                Versus = Tag.Boss | Tag.Structure, VersusMult = 2, Through = 0.25 },
     };
 
     public static ShotDef Of(int id) => All[id >= 0 && id < All.Length ? id : Shell];
@@ -265,7 +281,11 @@ public partial class Shot : Node2D, IHittable, ITagged
                 // through the door (Dealt.Deal), the shot's own row naming the weapon. A prism turns a
                 // reflectable round back instead (Reflected), and takes nothing of it.
                 if (h is PlayerShip ps) { if (!Reflected(ps, p, d)) ps.Hit(Damage, p - Dir * 10f, HitSource); }
-                else Dealt.Deal(h, Damage, IsInstanceValid(Source) ? Source : null, d.Id);
+                else
+                {
+                    Dealt.Deal(h, TagExt.Is(h, d.Versus) ? Damage * d.VersusMult : Damage, IsInstanceValid(Source) ? Source : null, d.Id, d.Through);
+                    if (d.Paint != null && IsInstanceValid(Source) && h.Alive) Source.PaintOn(h, Source.Stats[d.Paint]);
+                }
             }
             if (stops > 0 && _struck.Count >= stops)
             {

@@ -104,6 +104,12 @@ public partial class Turret : Node2D
     private TurretSpec S => Host.Spec(PointDefense);
     public float Range => S.Range;
     public double Interval => S.Interval;
+    // WHERE ITS MUZZLE IS AND WHICH WAY IT POINTS, in the world, right now: what a beam out of this barrel
+    // leaves along (the Tender's lance, PlayerShip.MainBore). On every peer: the barrel's swing is.
+    public (Vector2 at, Vector2 dir) Bore
+    {
+        get { var d = Vector2.Right.Rotated(GlobalRotation); return (GlobalPosition + d * S.Barrel, d); }
+    }
     // Through a broadside the main turrets swing fast enough to come round from anywhere onto the
     // cursor within the wind-up; the host names that rate, and the faster of the two wins.
     private float RotSpeed

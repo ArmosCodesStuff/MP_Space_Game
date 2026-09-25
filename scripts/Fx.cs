@@ -86,7 +86,7 @@ public static class Fx
     public const int Burst = 0, Lost = 1, Rebuilt = 2, Wave = 3, Emp = 4, Echo = 5, Rail = 6,
                      WarnLane = 7, WarnZone = 8, AimZone = 9, TauntRing = 10,
                      Rip = 11, RipSparks = 12, RipSmoke = 13, Scar = 14,
-                     RailEnhanced = 15;
+                     RailEnhanced = 15, Tot = 16;
     // WHAT A WARNING RIDES: the world itself, or the NetId of the hull it is drawn on. A beam's
     // and a dash's lane are drawn in the BOSS'S OWN FRAME and parented to it, so the line it drew
     // is the line it fires down however the hull turns; everything else is pinned to the ground
@@ -137,6 +137,8 @@ public static class Fx
         new() { Id = "scar",       Shape = FxShape.Scar,   Tint = new(0.10f, 0.07f, 0.06f), Life = 10.0, Cap = 3 },
         // an enhanced rail round (ActiveReload's perfect press): the rail's bar in white, 1.5x as wide
         new() { Id = "rail_enhanced", Shape = FxShape.Bar, Tint = new(0.92f, 0.96f, 1f), Life = 0.35, Width = 10.5f, Fill = false },
+        // the freighter's Time on target: each line it converged on the paint, in the spotter's amber
+        new() { Id = "tot",        Shape = FxShape.Bar,    Tint = new(1f, 0.78f, 0.35f), Life = 0.35, Width = 5f, Fill = false },
     };
 
     public static FxDef Of(int id) => All[id >= 0 && id < All.Length ? id : Burst];
@@ -475,6 +477,7 @@ public enum FieldLook
     Shimmer,   // hex plates over the hull, pulsing, and the row's tag under it (the Taunt's guard)
     Plume,     // a long hot plume out of the stern over the engine's own (a drive's boost)
     Wedge,     // a fan on the ship's guard (IPrism.GuardAngle), one shade a band of Prism.Bands (the prism stance)
+    Lance,     // a beam out of the main barrel, the slot's Own long, green on a friend and red on a foe (the Tender's lance)
 }
 
 public class FieldDef
@@ -506,9 +509,16 @@ public static class Fields
         new() { Id = "boost", Slot = "boost", Look = FieldLook.Plume, HullShare = 1.8f, Tint = new(1f, 0.85f, 0.55f) },
         // the prism stance (kits_v2 Warrior card): the guard's wedge, SQUARE bright and SLANT faint, on every peer
         new() { Id = "prism", Slot = "prism", Look = FieldLook.Wedge, HullShare = 1.1f, Tint = new(0.75f, 0.95f, 1f) },
+        // the Tender's mending lance (kits6b-J7): the beam while the trigger holds, pale on nothing, on every peer
+        new() { Id = "lance", Slot = PlayerShip.LanceSlot, Look = FieldLook.Lance, Tint = new(0.85f, 0.95f, 1f) },
+        // the Tender's fields (kits6b-J8): what the overdrive lifts and what the repair field mends, the same 500 u
+        new() { Id = "overdrive", Slot = "overdrive", Look = FieldLook.Ring, RadiusStat = "field_radius", Tint = new(1f, 0.72f, 0.3f) },
+        new() { Id = "repair", Slot = "repair", Look = FieldLook.Ring, RadiusStat = "field_radius", Tint = new(0.45f, 1f, 0.55f) },
     };
 
     public static FieldDef Of(string id) => System.Array.Find(All, f => f.Id == id);
+    // the lance's two colours: what it mends, and what it burns
+    public static readonly Color LanceMend = new(0.45f, 1f, 0.55f), LanceBurn = new(1f, 0.45f, 0.3f);
 
     // WHAT IS UP, from four readers, so the rule is provable with no ship at all: does the ship have
     // the slot, the slot's Left and Own, a stat off its sheet, and its hull's length.
@@ -605,6 +615,18 @@ public static class Fields
                 {
                     var art = s.MyArt;
                     Plume.Draw(s, new Vector2(0, art.Length * 0.5f - art.EngineInset), Vector2.Down, f.Radius, c, 1f, true);
+                    break;
+                }
+                case FieldLook.Lance:
+                {   // out of the main barrel as it points on this peer, as far as the host said it reached,
+                    // in the colour of what it is on (the slot's N): a friend mended, a foe burned, or nothing
+                    var sl = s.Sl(f.Row.Slot);
+                    var (at, dir) = s.MainBore;
+                    Vector2 a = s.ToLocal(at), b = s.ToLocal(at + dir * (float)sl.Own);
+                    var col = sl.N == PlayerShip.LanceMend ? LanceMend : sl.N == PlayerShip.LanceBurn ? LanceBurn : c;
+                    s.DrawLine(a, b, col with { A = 0.3f }, 9f);
+                    s.DrawLine(a, b, col, 3f);
+                    if (sl.N != PlayerShip.LanceNone) s.DrawCircle(b, 7f, col with { A = 0.6f });
                     break;
                 }
             }

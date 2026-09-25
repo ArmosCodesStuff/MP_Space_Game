@@ -32,7 +32,8 @@ using System.Linq;
 //   Pool             everything the blast might catch, seen or not
 //   Prey             ...and who in there it may hurt -- a TargetFilter, asked what it HITS (a
 //                    burst lands on a ship gone dark), never a type test
-//   Land             how a hit lands on one of those
+//   Land             how a hit lands on one of those, handed the blow, where it landed, the source
+//                    name and the thrower's NetId (a pilot's own blast is credited to the pilot)
 //
 // THE INDEX IS ON THE WIRE (Hub.NetMissile carries it, so a guest paints the right missile), so
 // APPEND ONLY.
@@ -58,14 +59,14 @@ public sealed class MissileSide
     public Color Body, Nose, Glow;
     public Func<Hub, IEnumerable<Node2D>> Pool;
     public TargetFilter Prey;
-    public Action<Node2D, double, Vector2, string> Land;
+    public Action<Node2D, double, Vector2, string, int> Land;
     public bool Decoyable;                                   // a decoy may pull its mark aside (Decoys.cs)
 }
 
 public static class Missiles
 {
     // The index IS the id on the wire (Hub.NetMissile), so APPEND ONLY.
-    public const int Raid = 0, Outpost = 1;
+    public const int Raid = 0, Outpost = 1, Mortar = 2;
 
     // More than Step in one frame is a JUMP (a warp; 3000 u/s -- nothing flies that fast) and not
     // motion; faster than Wild is not flying at all (4x a capital ship). Both were Raider's own
@@ -82,7 +83,7 @@ public static class Missiles
                 Body = new Color(0.45f, 0.30f, 0.28f), Nose = new Color(1f, 0.30f, 0.25f),
                 Glow = new Color(1f, 0.60f, 0.30f),
                 Pool = h => h.RaiderTargets(), Prey = Targeting.Attackable, Decoyable = true,
-                Land = (n, d, at, src) => (n as IRaidTarget)?.Hit(d, at, src) },
+                Land = (n, d, at, src, _) => (n as IRaidTarget)?.Hit(d, at, src) },
 
         // AN OUTPOST'S (Lanes.cs). The same missile from the other side: it looks through the
         // hostiles and may hurt RAIDING CRAFT alone -- Targeting.Craft, the filter the base's own
@@ -92,7 +93,16 @@ public static class Missiles
                 Body = new Color(0.28f, 0.34f, 0.42f), Nose = new Color(0.45f, 0.85f, 1f),
                 Glow = new Color(0.70f, 0.95f, 1f),
                 Pool = _ => Combat.Hostiles.OfType<Node2D>(), Prey = Targeting.Craft,
-                Land = (n, d, at, src) => { if (n is IHittable h) Dealt.Deal(h, d, null, Dealt.Outpost); } },
+                Land = (n, d, at, src, _) => { if (n is IHittable h) Dealt.Deal(h, d, null, Dealt.Outpost); } },
+
+        // A BASTION'S SIEGE MORTAR (kits6b-J4, a Lob primary: ClassDef.Primary). Ours: the friendly
+        // landing circle, every hostile body the blast's edge reaches (Raider.Gap: a bow inside it is
+        // caught though the centre is not), credited "mortar" to the pilot who threw it.
+        new() { Id = "mortar", Mark = Fx.AimZone,
+                Body = new Color(0.30f, 0.32f, 0.30f), Nose = new Color(1f, 0.78f, 0.35f),
+                Glow = new Color(1f, 0.85f, 0.55f),
+                Pool = _ => Combat.Hostiles.OfType<Node2D>(), Prey = Targeting.Attackable,
+                Land = (n, d, at, src, from) => { if (n is IHittable h) Dealt.Deal(h, d, Combat.PlayerById(from) as PlayerShip, Dealt.Mortar); } },
     };
 
     public static MissileSide Of(int side) => All[side >= 0 && side < All.Length ? side : Raid];

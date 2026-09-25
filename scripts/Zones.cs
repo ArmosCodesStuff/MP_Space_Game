@@ -5,7 +5,8 @@ using System.Linq;
 // ─────────────────────────────────────────────────────────────────────────────
 // ZONES (F9) — a patch of space a pilot lays, which the host watches and every peer draws.
 //
-// REPLACED: nothing; the v1 tether mine and the curtain were never built. A zone is a row of Zones.All, laid by
+// REPLACED: nothing; the v1 tether mine and the curtain were never built. The gravity well's own host list and
+// drawing (kits 6b) folded into it as its third row. A zone is a row of Zones.All, laid by
 // an ability row that names it (AbilityDef.Lays), and in the world it is one spawn of Spawns.All ("Zone"): every
 // peer draws it from the seed (the row, where, its rotation, its age), so a zone costs one message.
 //
@@ -22,6 +23,9 @@ using System.Linq;
 //            (a stat), and it goes (Status.None: it is no trap)
 //   First, Tick, Every   a FIELD (stat ids; null: it deals nothing): a body takes First the frame it is first
 //            inside, then Tick every Every seconds while it stays
+//   Light, Heavy   a PULL (stat ids; null: it pulls nothing): every prey inside is dragged straight at its
+//            centre, never past it, at Light u/s -- Heavy for a Tag.Heavy craft. A craft LATCHED on its prey
+//            (ISquadMember.Latched) or on a tow line (ITowable.Towed) is not loose, and stays put
 //   Most     a stat: at most this many of the row laid by one pilot; the oldest goes (null: no limit)
 //   Near, Far   laid at the cursor, clamped this near and far, its bar across the aim (0, 0: at the stern)
 //   Tint     its colour
@@ -37,7 +41,7 @@ public sealed class ZoneDef
     public double Arm, Life;
     public TargetFilter Prey;
     public Status Holds;
-    public string HoldFor, Most, First, Tick, Every;
+    public string HoldFor, Most, First, Tick, Every, Light, Heavy;
     public float Near, Far;
     public Color Tint;
 }
@@ -45,7 +49,7 @@ public sealed class ZoneDef
 public static class Zones
 {
     // The index IS the id on the wire (the spawn seed's N), so APPEND ONLY.
-    public const int Tether = 0, Curtain = 1;
+    public const int Tether = 0, Curtain = 1, Well = 2;
 
     public static readonly ZoneDef[] All =
     {
@@ -58,6 +62,10 @@ public static class Zones
         new() { Id = "curtain", Reach = 40f, Length = 500f, Touch = true, Arm = 0.5, Life = 6.0, Prey = Targeting.Raiding,
                 First = "curtain_first", Tick = "curtain_tick", Every = "curtain_every", Near = 150f, Far = 700f,
                 Tint = new Color(1f, 0.62f, 0.25f) },
+        // THE BASTION'S GRAVITY WELL (kits_v31's card): 280 u at the cursor (up to 900 u out), for 6 s from the press;
+        // a loose raiding craft inside is dragged to its centre at well_light u/s, a heavy one at well_heavy
+        new() { Id = "well", Reach = 280f, Life = 6.0, Prey = Targeting.Pullable, Light = "well_light", Heavy = "well_heavy",
+                Near = 0f, Far = 900f, Tint = new Color(0.72f, 0.48f, 1f) },
     };
     public static ZoneDef Of(int row) => All[row >= 0 && row < All.Length ? row : Tether];
     public static int RowOf(ZoneDef d) => System.Array.IndexOf(All, d);
@@ -104,12 +112,14 @@ public static class Zones
         z.OwnerId = by.OwnerId;
         double S(string id) => id != null ? by.Stats[id] : 0;
         z.HoldFor = S(d.HoldFor); z.FirstHit = S(d.First); z.TickHit = S(d.Tick); z.Every = S(d.Every);
+        z.LightPull = S(d.Light); z.HeavyPull = S(d.Heavy);
         return z;
     }
 
     // Every frame: a zone past its Life goes; an armed trap with prey inside goes off -- every prey inside held,
-    // the zone gone; an armed field strikes what is inside on its own clock.
-    public static void Tick(Hub hub)
+    // the zone gone; an armed pull drags what is inside and loose toward its centre; an armed field strikes what
+    // is inside on its own clock.
+    public static void Tick(Hub hub, double delta)
     {
         if (!Net.IsHost || hub.Laid.Count == 0) return;
         foreach (var z in hub.Laid.ToList())
@@ -125,6 +135,7 @@ public static class Zones
                 hub.Down(Spawns.Zone, z, burst: true, float.NaN);
                 continue;
             }
+            if (d.Light != null) foreach (var h in inside) Pull(z, h, delta);
             if (d.First == null) continue;
             var by = hub.ShipOf(z.OwnerId);
             foreach (var h in inside)
@@ -133,6 +144,17 @@ public static class Zones
                 else if (z.Age >= next - 1e-6) { z.Next[h] = next + z.Every; Dealt.Deal(h, z.TickHit, by, d.Id); }
             }
         }
+    }
+
+    // One frame of a pull on one body: straight at the zone's centre, never past it; a latched or towed craft stays.
+    static void Pull(ZoneNode z, IHittable h, double delta)
+    {
+        if (h is not Node2D n || h is ISquadMember { Latched: true } || h is ITowable { Towed: not null }) return;
+        var off = z.At - n.GlobalPosition;
+        float d = off.Length();
+        if (d < 1e-3f) return;
+        float rate = (float)(TagExt.Is(h, Tag.Heavy) ? z.HeavyPull : z.LightPull);
+        n.GlobalPosition += off / d * Mathf.Min(d, rate * (float)delta);
     }
 }
 
@@ -144,10 +166,10 @@ public partial class ZoneNode : Node2D
     public Vector2 At;         // where it was laid
     public float Rot;          // its rotation (a bar runs along Vector2.Right.Rotated(Rot))
     public double Age;         // seconds since it was laid (a joiner is told how old it is)
-    // THE HOST'S alone: whose it is, and what it holds or deals (the layer's sheet at the lay), and when each
+    // THE HOST'S alone: whose it is, and what it holds, deals or pulls (the layer's sheet at the lay), and when each
     // body inside a field is struck next
     public int OwnerId = -1;
-    public double HoldFor, FirstHit, TickHit, Every;
+    public double HoldFor, FirstHit, TickHit, Every, LightPull, HeavyPull;
     public readonly Dictionary<IHittable, double> Next = new();
     public ZoneDef Def => Zones.Of(Row);
     public bool Armed => Age >= Def.Arm;
@@ -166,6 +188,12 @@ public partial class ZoneNode : Node2D
             DrawCircle(Vector2.Zero, d.Reach, new Color(d.Tint, 0.05f * live));
             DrawCircle(Vector2.Zero, 8f, new Color(d.Tint, 0.9f * live));
             DrawCircle(Vector2.Zero, 3f, new Color(1f, 1f, 1f, live));
+            if (d.Light != null)   // a pull: three rings running in to the centre
+                for (int i = 0; i < 3; i++)
+                {
+                    float r = d.Reach * (1f - Mathf.PosMod((float)Age * 0.8f + i / 3f, 1f));
+                    DrawArc(Vector2.Zero, r, 0f, Mathf.Tau, 64, new Color(d.Tint, 0.5f * live * r / d.Reach), 2f);
+                }
             return;
         }
         // a bar: its capsule, and five bursts of flak along it, flickering

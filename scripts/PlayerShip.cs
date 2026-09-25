@@ -18,7 +18,7 @@ using System.Linq;
 //     reports hull, ability state and wing positions back;
 //   everyone else interpolates.
 // ─────────────────────────────────────────────────────────────────────────────
-public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurretHost, IPrism
+public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurretHost, IPrism, IMendable
 {
     public int OwnerId = 1;
 
@@ -44,6 +44,12 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     public bool Covers(Vector2 p, float pad) => Combat.KeelCovers(this, MyArt.Length, MyArt.HalfWidth, p, pad);
     bool IRaidTarget.InReach => Alive;
     (float halfLength, float halfWidth) IRaidTarget.Extent => (MyArt.Length * 0.5f, MyArt.HalfWidth);
+    // ...and as a hull a friend may mend (Mend.Give): never a wreck
+    bool IMendable.Mendable => Alive;
+    double IMendable.HullNow => Hp;
+    double IMendable.HullMax => MaxHp;
+    float IMendable.BodyRadius => HitRadius;
+    void IMendable.Mended(double d) => Hp += d;
 
     // ── death: stasis, and the escape pod ───────────────────────────────────
     // 24 s in stasis, then F re-boards at a third of the hull (the owner's ruling). A party with a
@@ -133,7 +139,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     //   Lifts ADD (LiftShares; the owner's ruling): two x2 buffs at once are x3, not x4. A product
     // would have compounded every rate part the item pass adds.
     //   The rate reaches the reloads through ONE door, Cadence, which adds the lifts' shares to
-    // the reload's own bonus -- so a part's +100% under an overdrive's x2 is x3 as well: the main
+    // the reload's own bonus -- so a part's +100% under a x2 lift is x3 as well: the main
     // guns (FireControl), the point defence (Spec), every turret it has out (Deployed.Spec) and
     // every craft of its wing. SpeedMult lifts the top speed AND the thrust (Steer); StrafeMult the
     // slide's speed and thrust, by each row's StrafeStat where it names one (the boost's surge_strafe).
@@ -144,13 +150,26 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     public float ReachMult => (float)Stat.Scale(Lifts(Lift.Reach));
     private enum Lift { Rate, Speed, Strafe, Reach }
     private readonly List<double> _lifts = new();
+    private static string LiftStat(AbilityDef def, Lift kind) =>
+        kind switch { Lift.Rate => def.RateStat, Lift.Speed => def.SpeedStat, Lift.Reach => def.ReachStat, _ => def.StrafeStat ?? def.SpeedStat };
     private double Lifts(Lift kind)
     {
         _lifts.Clear();
+        // A FIELD'S LIFTS (AbilityDef.Aura, kits6b-J8): every OTHER live pilot's running Aura row whose radius this
+        // hull stands inside lifts it by that pilot's own figure, beside this ship's own rows
+        foreach (var h in Combat.Players)
+        {
+            if (h is not PlayerShip p || ReferenceEquals(p, this) || !p.Alive) continue;
+            foreach (var def in Abilities.For(p.Class))
+            {
+                if (def.Aura == null || LiftStat(def, kind) is not { } their || p.Sl(def.Id).Left <= 0) continue;
+                if ((def.While == null || def.While(p)) && Position.DistanceTo(p.Position) <= p.Stats[def.Aura]) _lifts.Add(p.Stats[their]);
+            }
+        }
         foreach (var def in Abilities.For(Class))
         {
             ref var sl = ref Sl(def.Id);
-            string stat = kind switch { Lift.Rate => def.RateStat, Lift.Speed => def.SpeedStat, Lift.Reach => def.ReachStat, _ => def.StrafeStat ?? def.SpeedStat };
+            string stat = LiftStat(def, kind);
             if (stat != null && sl.Left > 0 && (def.While == null || def.While(this))) _lifts.Add(Stats[stat]);
             // a RAMP's running total is already a share (F1, D18): 1 + it reads the same as any
             // other lift's raw multiplier would, and it keeps lifting through its post-run drain,
@@ -307,12 +326,12 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         var art = MyArt;
         return new TurretSpec {
             Prey     = Targeting.PointDefence,        // what its PD takes: a main gun never picks
+            Kind     = pd ? Shots.Shell : Stats.Def.Shot,   // the round its mains fire (ClassDef.Shot: the freighter's spotter, the Warden's flak)
             Damage   = pd ? Stats["pd_damage"]   : Stats["main_damage"],
             Interval = Cadence(pd ? "pd_interval" : "main_interval"),
             Range    = (float)(pd ? Stats["pd_range"] : Stats["main_range"]),
             Turn     = (float)(pd ? Stats["pd_turn"]  : Stats["main_turn"]),
             ShellSpeed = (float)Stats["shell_speed"],
-            Kind     = Stats.Def.Shot,                // what its main guns fire (ClassDef.Shot); point defence fires none
             Texture  = pd ? art.PdTurret : art.MainTurret,
             TexScale = art.TurretTexScale,
             Barrel   = pd ? art.PdBarrel : art.MainBarrel,
@@ -716,6 +735,33 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         Fx.Warn(new FxRaise { Id = Fx.AimZone, At = at, To = at, Size = DeployedTurret.Radius, Time = flight });
         Sl("deploy").Cool = Cooling(Stats["deploy_cooldown"]);
     }
+    // REDEPLOY (kits6b-J3, D41), on the host: every LANDED sentry of this pilot's folds (it leaves the
+    // world at once, no burst) and flies redeploy_flight to a ring redeploy_ring round the hull as it
+    // stands now, 2 pi / deploy_max apart from the bow (120 deg for three), each with the hull it had.
+    // In flight it is a throw like any other: no body, counted as out, marked where it lands.
+    public List<DeployedTurret> OwnLanded()
+    {
+        var mine = new List<DeployedTurret>();
+        if (MyHub is { } h) foreach (var t in h.Deployed) if (t.OwnerId == OwnerId) mine.Add(t);
+        return mine;
+    }
+    public void Redeploy()
+    {
+        var mine = OwnLanded();
+        if (Sl("redeploy").Cool > 0 || mine.Count == 0) return;
+        Sl("redeploy").Cool = Cooling(Stats["redeploy_cooldown"]);
+        double flight = Stats["redeploy_flight"];
+        float ring = (float)Stats["redeploy_ring"], step = Mathf.Tau / Math.Max(1, (int)Stats["deploy_max"]);
+        var bow = Vector2.Up.Rotated(Rotation);
+        for (int i = 0; i < mine.Count; i++)
+        {
+            var t = mine[i];
+            var at = Position + bow.Rotated(step * i) * ring;
+            _throws.Add((at, flight, t.Hp, t.MaxHp));
+            MyHub?.DeployedTaken(t);
+            Fx.Warn(new FxRaise { Id = Fx.AimZone, At = at, To = at, Size = DeployedTurret.Radius, Time = flight });
+        }
+    }
     // host, each frame: a throw whose flight is over lands as a turret
     private void TickThrows(double delta)
     {
@@ -748,11 +794,13 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         b.Own -= take; b.N = (int)b.Own;
         return d - take;
     }
-    // Every bubble that covers `victim` spends itself on this blow before the hull sees it.
-    private static double ThroughBubbles(PlayerShip victim, double d)
+    // Every bubble that covers `at` spends itself on this blow before the hull there sees it: EVERY
+    // friendly hull's door calls it (kits6b-J3) -- a pilot's (Guarded), a sentry's and a fleet craft's
+    // (DeployedTurret / UtilityShip.TakeDamage) -- so the bubble is a place, not a list of kinds.
+    public static double ThroughBubbles(Vector2 at, double d)
     {
         foreach (var h in Combat.Players)
-            if (d > 0 && h is PlayerShip p && p.BubbleUp && victim.Position.DistanceTo(p.Position) <= p.BubbleRadius)
+            if (d > 0 && h is PlayerShip p && p.BubbleUp && at.DistanceTo(p.Position) <= p.BubbleRadius)
                 d = p.SpendBubble(d);
         return d;
     }
@@ -764,28 +812,139 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         o.Left = Stats["overdrive_time"]; o.Cool = Cooling(Stats["overdrive_cooldown"]);
     }
 
-    // Everything within reach is thrown clear -- and what is too big to throw (a boss) is held
-    // still instead, which is what the reach is really for.
+    // A COOLDOWN RUN DOWN BY `secs`: the clock's own step (TickAbilities, every frame) and a Resupply's cut (D45) are
+    // this one rule -- a CHARGED row (AbilityDef.Charges) gets a charge back when it reaches 0, and the next starts if
+    // any is still out.
+    private void CoolBy(AbilityDef def, ref Slot sl, double secs)
+    {
+        sl.Cool = Math.Max(0, sl.Cool - secs);
+        if (sl.Cool <= 0 && def.Charges != null && sl.N > 0 && --sl.N > 0) sl.Cool = Cooling(Stats[def.Recharge]);
+    }
+
+    // THE PILOTS A FIELD'S PRESS REACHES (AbilityDef.Aura): every live pilot within its radius of this hull, this one
+    // included.
+    public IEnumerable<PlayerShip> InAura(AbilityDef def)
+    {
+        if (def?.Aura == null) yield break;
+        float r = (float)Stats[def.Aura];
+        foreach (var h in Combat.Players)
+            if (h is PlayerShip p && p.Alive && (ReferenceEquals(p, this) || p.Position.DistanceTo(Position) <= r)) yield return p;
+    }
+    // WHAT A CUT WOULD TAKE: the ability rows still cooling on the pilots in `id`'s aura (their ClassDef.Abilities,
+    // never the drive, never a row of the id itself). On every peer: the slots are the host's report.
+    public int CoolingInAura(string id)
+    {
+        int n = 0;
+        foreach (var p in InAura(Abilities.Find(Class, id)))
+            foreach (var def in Classes.Of(p.Class).Abilities)
+                if (def.Id != id && p.Sl(def.Id).Cool > 0) n++;
+        return n;
+    }
+    // RESUPPLY (D45), on the host: the row's Cuts seconds off every cooldown CoolingInAura counts, through CoolBy, then
+    // its own cooldown -- or, nothing cooling, nothing at all (refused, and free). Returns how many it cut.
+    public int Resupply(string id)
+    {
+        var def = Abilities.Find(Class, id);
+        if (def?.Cuts == null || !Net.Sim || Sl(id).Cool > 0 || CoolingInAura(id) == 0) return 0;
+        double secs = Stats[def.Cuts];
+        int n = 0;
+        foreach (var p in InAura(def).ToList())
+            foreach (var row in Classes.Of(p.Class).Abilities)
+            {
+                if (row.Id == id) continue;
+                ref var sl = ref p.Sl(row.Id);
+                if (sl.Cool <= 0) continue;
+                p.CoolBy(row, ref sl, secs);
+                n++;
+            }
+        Spend(def);
+        return n;
+    }
+
+    // THE REPAIR FIELD (kits6b-J8), on the host: up for repair_time, its cooldown set; every frame it runs (its row's
+    // Tick) every friendly hull within field_radius of this one -- this one too -- is mended repair_share of its
+    // MAXIMUM a second (Mend.Give, credited "repair"). A wreck or a craft lost is no friendly hull (Mend).
+    public void StartRepair()
+    {
+        ref var r = ref Sl("repair");
+        if (r.Cool > 0) return;
+        r.Left = Stats["repair_time"]; r.Cool = Cooling(Stats["repair_cooldown"]);
+    }
+    public void RepairTick(double dt)
+    {
+        float reach = (float)Stats["field_radius"];
+        double share = Stats["repair_share"] * dt;
+        foreach (var m in Mend.Friendlies(MyHub).ToList())
+            if (m.Position.DistanceTo(Position) <= reach) Mend.Give(m, share * m.HullMax, this, "repair");
+    }
+
+    // TIME ON TARGET (D36), on the host: every gun of this pilot's that can reach the paint lands one
+    // Lines.Tot line on it in this one tick -- the spotter (the main barrel's tip toward the paint) and
+    // each LANDED sentry (Hub.Deployed; a throw in flight is no gun) within tot_reach of it. Each line
+    // ends at the painted target and lands tot_damage on every hostile on it (Lines: Hostiles only).
+    // Returns how many lines it threw.
+    public int TimeOnTarget()
+    {
+        if (Sl("tot").Cool > 0 || Painted is not { } t) return 0;
+        Sl("tot").Cool = Cooling(Stats["tot_cooldown"]);
+        float reach = (float)Stats["tot_reach"];
+        var to = t.Position;
+        var muzzles = new List<Vector2>();
+        if (_mains.Count > 0)
+        {
+            var m = _mains[0].GlobalPosition;
+            muzzles.Add(m + (to - m).Normalized() * Spec(false).Barrel);
+        }
+        if (MyHub is { } h)
+            foreach (var d in h.Deployed)
+                if (d.OwnerId == OwnerId) muzzles.Add(d.GlobalPosition);
+        int n = 0;
+        foreach (var from in muzzles)
+        {
+            if (from.DistanceTo(to) > reach) continue;
+            Lines.Strike(Lines.Tot, this, from, to, Stats["tot_damage"]);
+            n++;
+        }
+        return n;
+    }
+
+    // Everything within reach is thrown clear -- and what cannot be thrown (a boss, a structure, a
+    // practice dummy: Targeting.Immovable) is HELD still instead, wave_disable, never moved.
     public void Shockwave()
     {
         if (Sl("shockwave").Cool > 0) return;
         Sl("shockwave").Cool = Cooling(Stats["wave_cooldown"]);
         float reach = (float)Stats["wave_range"], push = (float)Stats["wave_push"];
-        // Targeting.Throwable, not the raw list: nothing in flight is thrown, a missile or a body
+        // Targeting.Shaken, not the raw list: nothing in flight is reached, a missile or a body
         // with a hull of its own. THROWING one was worse than hitting it -- the host moved a live
         // hostile seeker 1000 u while every guest flew its own copy along the old path, so the two
-        // peers held a damaging missile a thousand units apart.
-        foreach (var h in new List<IHittable>(Targeting.Hittable(Combat.Hostiles, Targeting.Throwable)))
+        // peers held a damaging missile a thousand units apart. What holds a spot is held, not moved:
+        // every peer builds it where it stands and never hears of a move (audit P5).
+        foreach (var h in new List<IHittable>(Targeting.Hittable(Combat.Hostiles, Targeting.Shaken)))
         {
             if (h.Position.DistanceTo(Position) > reach) continue;
-            if (TagExt.Is(h, Tag.Boss)) { (h as IStatused)?.ApplyStatus(Status.Disabled, Stats["wave_disable"]); continue; }
-            if (h is Node2D n)
+            if (Targeting.Immovable.Hits(h)) { (h as IStatused)?.ApplyStatus(Status.Disabled, Stats["wave_disable"]); continue; }
+            if (Targeting.Throwable.Hits(h) && h is Node2D n)
             {
                 var away = n.Position - Position;
                 n.Position += (away.LengthSquared() > 1f ? away.Normalized() : Vector2.Up) * push;
             }
         }
         Fx.Raise(Fx.Wave, Position, reach);                 // the ring, on every peer: how far it threw them
+    }
+
+    // THE BUNKER BUSTER (the Bastion's F): one slow heavy round from the main barrel toward the cursor,
+    // buster_damage, stopping on the first body. What it does to a boss, a structure or a shield is its
+    // Shots row's (Shots.Buster: Versus, Through), so the rule is data and any hull firing it keeps it.
+    public void FireBuster()
+    {
+        if (Sl("buster").Cool > 0) return;
+        Sl("buster").Cool = Cooling(Stats["buster_cooldown"]);
+        var from = _mains.Count > 0 ? _mains[0].GlobalPosition : Position;
+        var off = AimPoint - from;
+        var dir = off.LengthSquared() > 1f ? off.Normalized() : Vector2.Up.Rotated(Rotation);
+        Combat.Fire(Shots.Buster, from + dir * Spec(false).Barrel, dir, (float)Stats["buster_speed"], (float)Stats["buster_range"],
+                    Stats["buster_damage"], source: this, hitSource: "buster", size: 1.8f);
     }
 
     // ── THE HEAVY FIGHTERS ──────────────────────────────────────────────
@@ -971,12 +1130,16 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         else _status.Clear(Status.Pinned);
         if (_webAsked <= 0) _webPhase = 0;                  // the web is over: the next one starts a round
     }
-    // THE PAINT (F14): one hostile at a time, for so long -- what its sentries take first
-    // (DeployedTurret.Prefer). Host. The spotter's hit raises it (6b); nothing else reads it.
-    private IHittable _paint;
-    private double _paintLeft;
-    public IHittable Painted => _paintLeft > 0 && _paint != null && _paint.Alive && Combat.Hostiles.Contains(_paint) ? _paint : null;
-    public void PaintOn(IHittable t, double seconds) { _paint = t; _paintLeft = seconds; }
+    // THE PAINT (F14, D33): one hostile at a time, for so long -- what its sentries take first
+    // (DeployedTurret.Prefer) and what Time on target converges on. A hit of a Paint round raises it
+    // on the host (Shot.Strike: the freighter's spotter). It lives in the primary's own slot (the
+    // `guns` row: Left = seconds left, N = the target's NetId), so it rides the host's report to every
+    // peer with no field of its own, counts down on every peer between reports (TickAbilities), and a
+    // guest's sentry copies and its F refusal read the host's paint.
+    public const string PaintSlot = "guns";
+    public IHittable Painted => Sl(PaintSlot).Left > 0 && Sl(PaintSlot).N != 0 && Combat.ById(Sl(PaintSlot).N) is { Alive: true } t
+                                && Combat.Hostiles.Contains(t) ? t : null;
+    public void PaintOn(IHittable t, double seconds) { ref var p = ref Sl(PaintSlot); p.N = t?.NetId ?? 0; p.Left = t != null ? seconds : 0; }
 
     // A refused ability: its slot shows the reason, in red, for a moment.
     public const double FailShow = 1.5;
@@ -1108,7 +1271,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             d *= _status.ShareOf(g.Status, g.Share);
             if (d <= 0) return 0;
         }
-        return ThroughBubbles(this, d);                                  // a bubble over it spends first
+        return ThroughBubbles(Position, d);                              // a bubble over it spends first
     }
 
     public void TakeDamage(double d) => Incoming(d);
@@ -1163,7 +1326,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         if (Alive && Hp < MaxHp) Hp = Math.Min(MaxHp, Hp + MaxHp * (InCombat ? RegenInCombat : RegenOutOfCombat) * delta);
         // The HOST decides pinned. A guest used to count its own (never-set) timer down here and
         // overwrite the host's flag every frame, so a raider's web never held a guest at all.
-        if (Net.Sim) { _status.Tick(delta); HoldWeb(delta); _paintLeft = System.Math.Max(0, _paintLeft - delta); TickThrows(delta); }
+        if (Net.Sim) { _status.Tick(delta); HoldWeb(delta); TickThrows(delta); }
         // the drive's clocks run on every peer: the landing flash used to fade only on the owner's,
         // and a remote ship's warp left it lit for good
         Drives.Tick(_drive, delta);
@@ -1215,12 +1378,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         foreach (var def in Abilities.For(Class))
         {
             ref var sl = ref Sl(def.Id);
-            if (sl.Cool > 0)
-            {
-                sl.Cool = Math.Max(0, sl.Cool - delta);
-                // A CHARGED ROW (AbilityDef.Charges): a charge back, and the next one starts if any is still out
-                if (sl.Cool <= 0 && def.Charges != null && sl.N > 0 && --sl.N > 0) sl.Cool = Cooling(Stats[def.Recharge]);
-            }
+            if (sl.Cool > 0) CoolBy(def, ref sl, delta);
             // A RAMP's running total (F1, D18) steps every frame regardless of Left, so it keeps
             // draining after the row stops -- Steer already ran this frame (LocalFlight, above),
             // so _yawRate is this frame's, not last frame's. OWNER-STEPPED: only the peer that
@@ -1237,6 +1395,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
                                        holding, cond, yawShare, delta);
             }
             if (sl.Left <= 0) continue;
+            if (Net.Sim) def.Tick?.Invoke(this, Math.Min(delta, sl.Left));   // a field's frame (AbilityDef.Tick): never past its time
             sl.Left -= delta;
             if (sl.Left > 0) continue;
             sl.Left = 0;
@@ -1287,10 +1446,75 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         _gunCd -= delta;
         for (int n = 0; _gunCd <= 0 && n < 32; n++)
         {
-            if (Staggered) { _mains[_nextBarrel % _mains.Count].Shoot(); _nextBarrel = (_nextBarrel + 1) % _mains.Count; }
-            else foreach (var m in _mains) m.Shoot();
+            FireOnce();
             _gunCd += step;
         }
+    }
+
+    // ONE ROUND OF THE PRIMARY, by the class's kind (ClassDef.Primary, D35): the one place a kind is read.
+    private void FireOnce()
+    {
+        switch (Stats.Def.Primary)
+        {
+            case Primary.Lob: Lob(); break;
+            case Primary.Beam: { var (at, dir) = MainBore; LanceTick(at, dir); break; }
+            default:
+                if (Staggered) { _mains[_nextBarrel % _mains.Count].Shoot(); _nextBarrel = (_nextBarrel + 1) % _mains.Count; }
+                else foreach (var m in _mains) m.Shoot();
+                break;
+        }
+    }
+
+    // A LOB (the Bastion's siege mortar): a predicted blast of the class's Missiles.All row thrown from
+    // the main mount onto the cursor -- clamped to mortar_min .. main_range on the cursor's bearing (the
+    // bow's, for a cursor on the hull) -- landing mortar_flight later, main_damage in mortar_blast.
+    public Vector2 LobPoint(Vector2 cursor)
+    {
+        var off = cursor - Position;
+        var dir = off.LengthSquared() > 1f ? off.Normalized() : Vector2.Up.Rotated(Rotation);
+        return Position + dir * Mathf.Clamp(off.Length(), (float)Stats["mortar_min"], (float)Stats["main_range"]);
+    }
+    // THE MENDING LANCE (the Tender's primary, Primary.Beam, kits6b-J7, D44): one tick of a beam out of
+    // `from` along `dir` (FireOnce: the main barrel, which follows the cursor at main_turn), main_range
+    // long, onto the FIRST body it touches, nearest first -- a hostile takes main_damage through the door
+    // (Dealt.Lance), a friendly hull is mended lance_heal (Mend.Give, "lance"): never both, never this
+    // hull, and nothing in flight (a missile, a hulled round) stops it. Host only. What it touched rides
+    // the lance's slot to every peer, so each draws it (Fields' Lance look): Left while the trigger holds,
+    // N one of Lance*, Own how far it reached. Returns what it touched.
+    public const string LanceSlot = "lance";
+    public const int LanceNone = 0, LanceMend = 1, LanceBurn = 2;
+    public (Vector2 at, Vector2 dir) MainBore => _mains.Count > 0 ? _mains[0].Bore : (Position, Vector2.Up.Rotated(Rotation));
+    public int LanceTick(Vector2 from, Vector2 dir)
+    {
+        if (!Net.Sim) return LanceNone;
+        float reach = (float)Stats["main_range"];
+        var to = from + dir.Normalized() * reach;
+        var pool = new List<(Vector2 at, float r, IHittable foe, IMendable friend)>();
+        foreach (var h in Targeting.Hittable(Combat.Hostiles, Targeting.Attackable))
+            if (!TagExt.Is(h, Tag.Missile | Tag.Hulled)) pool.Add((h.Position, h.HitRadius, h, null));
+        foreach (var m in Mend.Friendlies(MyHub))
+            if (!ReferenceEquals(m, this)) pool.Add((m.Position, m.BodyRadius, null, m));
+        var first = Lines.Pick(from, to, 0f, 1, pool, p => p.at, p => p.r);
+        int touched = LanceNone; float len = reach;
+        if (first.Count > 0)
+        {
+            var (at, _, foe, friend) = first[0];
+            len = Mathf.Clamp((at - from).Dot(dir.Normalized()), 0f, reach);
+            if (foe != null) { Dealt.Deal(foe, Stats["main_damage"], this, Dealt.Lance); touched = LanceBurn; }
+            else { Mend.Give(friend, Stats["lance_heal"], this, Dealt.Lance); touched = LanceMend; }
+        }
+        ref var sl = ref Sl(LanceSlot);
+        sl.Left = Cadence("main_interval") * 2;          // drawn a tick past the last, so a held beam never blinks
+        sl.N = touched; sl.Own = len;
+        return touched;
+    }
+
+    private void Lob()
+    {
+        var from = _mains.Count > 0 ? _mains[0].GlobalPosition : Position;
+        MyHub?.ThrowMissile(new MissileSpec { Side = Stats.Def.LobSide, Damage = Stats["main_damage"],
+                                              Blast = (float)Stats["mortar_blast"], Flight = Stats["mortar_flight"] },
+                            from, LobPoint(AimPoint), NetId);
     }
 
     // ── an active reload (AbilityDef.Reload: the Sniper's railgun) ─────────────
@@ -1375,7 +1599,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         sl.Cool = Cooling(Stats[def.Cooldown]);
         return true;
     }
-    // A ZONE LAID (AbilityDef.Lays: the tether mine, the curtain), on the host: what the press spends, then the
+    // A ZONE LAID (AbilityDef.Lays: the tether mine, the curtain, the well), on the host: what the press spends, then the
     // row laid where it goes (Zones.Spot: the stern, or the cursor clamped with its bar across the aim), what the
     // host decides of it read from this sheet now (Zones.Lay).
     public void Lay(string id)
