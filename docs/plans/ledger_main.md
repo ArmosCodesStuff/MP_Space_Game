@@ -7,12 +7,13 @@ Engine outputs for the old-way batches: S = C:\Users\logan\AppData\Local\Temp\cl
 - wf_e2b4eda1-d12 / task wq9tnfn98, "lanes-walls-art" (old way). Returns {walls, gate, merge, art}; walls already merged (29b154e).
   art: J4 siege, J5 player ships. On return: check the camera never zooms past the player's max (moved only), send the owner the frames.
   COORDINATOR NOTE 2 (UTF-16 summaries) appended to wt_art's ledger_sprites.md.
-- wf_ab65d36a-eb3 / task w79l6jmmg, "lane-kits-slice2" (old way). Returns {kits, gate}; does not merge. J6+J7 red in solo twice
-  (kits_j67a/b: "...and it lands 35 (0)", the heavy missile); its ledger POST claims green: VERIFY against S\kits_j67*\summary.txt on return.
-  COORDINATOR NOTE 1 (UTF-16) appended to wt_kits' ledger_kits.md. On gate pass: a merge batch (step 0 merge version-l, merge chain, merge).
+- kits: w79l6jmmg STOPPED by the owner at ~2 h (one sonnet agent, 689k tokens, 3rd try at the J7 red; chain kits_j67c killed
+  mid-solo). wt_kits = 6aeb9e9 + 8 uncommitted files (J6+J7, red: "...and it lands 35 (0)"); its ledger's J6/J7 POST claims green, FALSE
+  (kits_j67a/b solo FAILED). When wx9xf98c3 lands: launch a NEW-WAY kits batch (fresh sonnet agent from the ledger + NOTE 2; fix the red, J6+J7
+  commit, then the slice chain quick,solo,solo,six, opus gate, merge batch).
 - wf_2b58e76d-117 / task wx9xf98c3, "kits-heavy-missile-diagnose" (owner asked for 5 agents): 5 opus read-only angles (check, missile, door,
   launcher, logs) on "lands 35 (0)", then a synthesis appends COORDINATOR NOTE 2 (cause + exact fix) to wt_kits' ledger, or reports already_fixed.
-  On return: tell the owner the cause in one line. The kits writer picks the note up at its next PRE.
+  On return: tell the owner the cause in one line, then launch the kits batch above.
 - wf_d333d7cd-747 / task w7j1zzr40, "lane-slots" (relaunch; worktree WarShips_wt_slots). S1 done at 985d4d8 (rungs.ps1 -Slot/-Slots,
   per-tree lock, UTF-8 summary). First run: agent 1 stopped_context, agent 2 took the owner's "2 hours?" as its instruction and stopped;
   the prompt now says owner messages are for the coordinator. Now: S2 harness --port-shift / P(), S3 docs, 3-chain proof, opus gate, haiku merge. Returns {slots{slots=proven default}, gate, merge}. merge=false: merge by hand.
