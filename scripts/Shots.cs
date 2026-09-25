@@ -76,7 +76,7 @@ public class ShotDef
 public static class Shots
 {
     // The index IS the id on the wire (Hub.NetShot), so APPEND ONLY.
-    public const int Shell = 0, Slug = 1, Scrap = 2, Torpedo = 3, Missile = 4, Seeker = 5, Cruise = 6, Reflect = 7, Flak = 8, Spotter = 9, Buster = 10,
+    public const int Shell = 0, Slug = 1, Scrap = 2, Torpedo = 3, LongLance = 4, Seeker = 5, Cruise = 6, Reflect = 7, Flak = 8, Spotter = 9, Buster = 10,
                      Pepper = 11, Rod = 12, Echo = 13, Pellet = 14;
 
     public static readonly ShotDef[] All =
@@ -90,8 +90,10 @@ public static class Shots
         // a bomber's torpedo: straight, trailing smoke, and it detonates on what it touches
         new() { Id = "torpedo", AtPlayers = false, Pad = 4f,  Sweep = 0f, Burst = 0.5, Smoke = true, Guided = true,
                 MarkEveryPeer = true, Look = ShotLook.Missile },
-        // the destroyer's burst and the warden's hunters: the same thing, heavier
-        new() { Id = "missile", AtPlayers = false, Pad = 4f,  Sweep = 0f, Burst = 0.5, Smoke = true, Guided = true,
+        // THE DESTROYER'S LONG LANCE (Ab.LongLance): a heavy torpedo straight off the bow, unguided, stopping on the
+        // first hostile body it touches (never a missile: a friendly round passes Tag.Missile by). Index 4 was the
+        // destroyer's missile burst, which it replaced: the wire index is kept.
+        new() { Id = "longlance", AtPlayers = false, Pad = 4f,  Sweep = 6f, Burst = 0.5, Smoke = true,
                 MarkEveryPeer = true, Look = ShotLook.Missile, Heavy = true },
         // fired AT the pilots, and the one thing point defence exists for
         new() { Id = "seeker",  AtPlayers = true,  Pad = 4f,  Sweep = 0f, Burst = 0.5, Smoke = true, Guided = true,

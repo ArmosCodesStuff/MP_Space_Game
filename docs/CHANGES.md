@@ -36,6 +36,17 @@ history pick the work up from it alone. Update it in the same change as the code
 
 ## Handoff — read this first
 
+**2026-09-25 (worktree `WarShips_wt_kits6a`, branch `wt/kits6a`): kits lane A slice 6a, the capitals, built J1-J9,
+and the merge gate's four findings fixed (J11: the chevron's clock per hull, the no-rip ends checked, the pull on
+every real anchor, a party of two at rung 5). Compiles, rung 2 green; engine-unproven: every check is owed in the final test phase** -- rung 3 twice (LaneA6aArc,
+Broadside, Brace, BraceWarp, BraceSplit, Ciws, CiwsDisable, CiwsPrey, CarrierRow, Gunship, GunshipFire, Super,
+SuperMissile, SuperWings, Director, Lance, LanceHit, Suppress, SuppressWeapon, SuppressGun, GrapnelPull, GrapnelTow
+checks; LaneA6aGrapnelRipChecks inside the boss, pylon and base blocks; the rewritten sweep, K window, DPS and kit
+literals), rung 4 (frames 85a-85e, 43_lance_away, 43b_lance_closeup, 23b / 23c destroyer bar), rung 5 `six,six`
+(LaneA6aGunship, Suppress, Grapnel guest checks, the suppress host watch, LaneA6aGrapnelPartyRipChecks in the siege,
+the hull lines 458.2 / 540 / 527). Wire:
+Fx.Chevron = 18 (appended; renumbered past 6b/6d's Tot 16 / Venom 17 on the merge); Shots row 4 renamed "missile" -> "longlance" in place (`Shots.LongLance`, `Ab.LongLance`, slot "longlance": the Tender took "lance" / `Ab.Lance`). Detail, decisions A6a-1..16 and what
+is owed: `docs/plans/ledger_kits6a.md`.
 **2026-09-25 (worktree `WarShips_wt_kits6d`, branch `wt/kits6d`): kits lane A slice 6d, the lights (Dart, Echo, Wraith),
 built J1-J12, the merge gate's findings fixed in J13. Compiles, rung 2 green; engine-unproven: every check is owed in the
 final test phase** -- rung 3 twice (LaneA6d Pepper, Rod, RodRecoil, Ramjet, Sling, Slip, Repeater, Reverb, Rewind, Emp, Scatter, Backstab, Veil, Venom, Step checks and
@@ -353,9 +364,9 @@ whenever the ship is alive, on every hull that mounts it.
 
 | Class | Space | G | F | Other |
 |---|---|---|---|---|
-| Battleship | main guns | fire mode | broadside (3 volleys, 14 s cooldown) | point defence (passive) |
-| Destroyer | main guns | fire mode | missile burst (magazine of 3) | R reload (9 s), point defence (passive) |
-| Carrier | fighters: attack | — | bomber strike | R recall, point defence (passive) |
+| Battleship | main guns (arcs: 4 abeam, 2 near bow or stern) | fire mode | broadside (6 volleys x1.25, 12 s) | Q brace (3 s, x0.35 taken, half speed), E CIWS (6 s, PD x8 rate x3 damage), point defence (passive) |
+| Destroyer | director battery (leads a selected target) | — | Long Lance (300, 18 s) | Q suppressing fire (6 s), E grapnel (pull, swing, rip; or tow and hurl), point defence (passive) |
+| Carrier | fighters: attack | — | bomber strike | R recall, E warp gunships (25 s), Q supercarrier (20 s patrol), point defence (passive) |
 | Freighter | spotter (a hit paints 5 s) | -- | time on target (every gun in 1500 u of the paint, 40 a line, 16 s) | Q bubble (400 soaked, 8 s, every friendly hull in it), E redeploy (a 150 u ring, 1.0 s), R sentry: throw to the cursor (600 u, 0.8 s) or recall one within 60 u, point defence (passive) |
 | Tender | mending lance (4 a tick on a foe, 0.8 on a friend, 650 u) | -- | overdrive field (x1.5 to all in 500 u, 8 s) | Q repair field (2% a second, 8 s), E resupply (8 s off every cooldown in 500 u), point defence (passive) |
 | Bastion | siege mortar (150-1100 u, 1.4 s) | -- | bunker buster (180; 360 on a boss or structure; 12 s) | Q shockwave (1000 u; a boss, structure or dummy held 3 s), E gravity well (900 u, 280 u, 6 s), point defence (passive) |
@@ -641,6 +652,27 @@ outstanding from the batch of 2026-09-23.)*
 
 ## Unreleased
 
+### Class kits, lane A slice 6a: the capitals -- Battleship, Carrier, Destroyer (2026-09-25, worktree wt/kits6a)
+
+**Battleship** (hull 500): Space the main battery, 4 x 12.5 every 2.0 s at 1000 u, in ARCS (the fore pair never within
+30° of the stern, the aft pair never within 30° of the bow: 4 guns abeam, 2 near either end); F **broadside** (6 volleys
+of 4 at x1.25 = 375 side-on, 12 s; it fires mid warp charge); Q **brace** (3 s taking x0.35 at half speed, 25 s); E
+**CIWS** (6 s, both PD mounts x8 rate and x3 damage on PD's own prey, 20 s; an overshoot's disable stops it). **Carrier**
+(hull 425, turn radius 140, 2 PD): fighters 3.5 a shot, torpedoes 60; E **warp gunships** (2 a pick, 1-3 picks, 12 s on
+a 240 u circle, 25 s); Q **supercarrier** (a second wing patrols 600 u round the carrier for 20 s, missiles included,
+30 s from its end). **Destroyer** (hull 395, turn 1.2 on a 95 u radius): Space the **director battery** (2 x 11.25 every
+0.5 s at 700 u, shells 760 u/s; a selected hostile within 840 u is led by itself); F **Long Lance** (one 300 torpedo off
+the bow, 170 u/s, 3000 u, 18 s; its missiles, reload and fire mode are gone); Q **suppressing fire** (6 s: every hostile
+a director shell hits deals half with its guns and holds its missiles until 3 s after its last hit, a grey chevron over
+it; 20 s); E **grapnel** (the selected hostile within 700 u: round a boss, station or dummy a 450 u/s pull to 250 u off
+its hull and a 5 s bow-on swing, casting off tears 1% of its hull + 10 away; a raider is towed off the bow and hurled
+for 60 / 120; 16 s from the cast-off). New mechanisms: the timed row (`RunFor`), the sortie row (`Launch`), the bow
+shot (`FireAlong`), the scoped lift (`RateOn` / `DamageOn`), `PlayerShip.Afflict` + `Fx.Mark`, the hook row
+(`HookSpec`: `Hook`, `CastOffHook`, `HookWatch`, the rip).
+The chevron is raised again every 0.5 s while shells land and lives the status's time left + 0.5 s, so it stays up
+as long as the hostile is Suppressed (the merge gate: it faded 3 s after the first hit under steady fire).
+**Known broken:** engine-unproven (rungs 3-5 owed). The rip has no sound (A6a-14). The four v2 destroyer gear ids are
+not built (owed to lane I).
 ### Class kits, lane A slice 6d: the lights -- Dart, Echo, Wraith (2026-09-25, worktree wt/kits6d)
 
 **Dart** (hull 200): Space the **pepperbox** (two nose rails, a dart every 1/6 s steered onto the live cursor, 750 u,
@@ -660,7 +692,7 @@ last; 22 s); E **Shadow step** (140 u behind the selected hostile within 900 u, 
 over time), `TurretSpec.RepeatShare` / `Pellets`, `IHittable.Facing`, `AbilityDef.AtOnce` / `Forces` / `Parting` /
 `ThrustStat` / `OnFire`, `PlayerShip.Prime`. The rod's recoil is the owner's own falling edge of its forcing row
 (`PlayerShip.Forcing`), so a guest keeps 30% whichever of its countdown or the host's packet ends the sprint. Gone with the
-barrel roll: `Status.Evading` (bit 16 now unassigned) and its guard row, and the unused `AbilityDef.While`.
+barrel roll: `Status.Evading` (bit 16 now unassigned) and its guard row. (`AbilityDef.While` stays: slice 6a's CIWS narrows its lift with it.)
 **Known broken:** engine-unproven (rungs 3-5 owed). The Wraith's numbers are a derived default, not a signed card (DL3).
 The Slingshot has no rung-5 pair (kits_v31 §8 does not list it; DL10). The kit-carry check was already stale on this
 branch after J1/J5 (the Echo could not wear its own gun); J8 fixed and rewrote it.

@@ -38,6 +38,7 @@ public enum FxShape
     Sparks,    // Count hot sparks sprayed from A toward To's side, over the first half second
     Puffs,     // Count grey puffs left along the chunk's own path (the same seed as its Debris)
     Scar,      // a dark jagged patch at A, in the anchor's own frame, so it turns with the hull
+    Chevron,   // a downward chevron over the anchor, upright on screen however the hull turns (a status on it)
 }
 
 public class FxDef
@@ -67,7 +68,9 @@ public class FxDef
 
 // ONE RAISE, whatever it is: which row, where, how big -- and, a warning only, how long the
 // wind-up is, how long the attack itself lasts after it, how much of the wind-up is already
-// gone, what it rides, and the move's two sounds. One struct because it is also what goes on the
+// gone, what it rides, and the move's two sounds. An EFFECT raised with a Time lives that Time
+// instead of its row's Life (a mark that lasts as long as its status: Fx.Mark); with none, the
+// row's. One struct because it is also what goes on the
 // wire (Hub.NetFx): a field added here is added in ONE place, not in a hook, an RPC and two
 // call sites.
 public struct FxRaise
@@ -86,12 +89,14 @@ public static class Fx
     public const int Burst = 0, Lost = 1, Rebuilt = 2, Wave = 3, Emp = 4, Reverb = 5, Rail = 6,
                      WarnLane = 7, WarnZone = 8, AimZone = 9, TauntRing = 10,
                      Rip = 11, RipSparks = 12, RipSmoke = 13, Scar = 14,
-                     RailEnhanced = 15, Tot = 16, Venom = 17;
+                     RailEnhanced = 15, Tot = 16, Venom = 17, Chevron = 18;
     // WHAT A WARNING RIDES: the world itself, or the NetId of the hull it is drawn on. A beam's
     // and a dash's lane are drawn in the BOSS'S OWN FRAME and parented to it, so the line it drew
     // is the line it fires down however the hull turns; everything else is pinned to the ground
     // it will hit. The world resolves the id (Hub.AddFx).
     public const int World = 0;
+    // how far above a hull's hit circle its mark (a chevron) is drawn
+    public const float ChevronGap = 12f;
     // How long a warning stays lit once its attack is over.
     public const double Flash = 0.35;
     private static readonly Color Warning = new(1f, 0.15f, 0.12f);
@@ -141,6 +146,10 @@ public static class Fx
         new() { Id = "tot",        Shape = FxShape.Bar,    Tint = new(1f, 0.78f, 0.35f), Life = 0.35, Width = 5f, Fill = false },
         // a dose's tick (Doses: the Wraith's Venom) on the hull it eats: a small sickly-green flare, one a tick
         new() { Id = "venom", Shape = FxShape.Spokes, Tint = new(0.55f, 1f, 0.35f), Life = 0.5, Width = 1.5f, Spokes = 5 },
+        // a hostile the destroyer's guns have SUPPRESSED (PlayerShip.Afflict): a grey chevron over it, one on a hull at a
+        // time (a re-raise replaces it), lasting the raise's Time (the status's time left + PlayerShip.Remark; its Life
+        // only for a raise with none) and fading over its last half second
+        new() { Id = "chevron", Shape = FxShape.Chevron, Tint = new(0.72f, 0.74f, 0.78f), Life = 3.0, Width = 3f, Cap = 1 },
     };
 
     public static FxDef Of(int id) => All[id >= 0 && id < All.Length ? id : Burst];
@@ -178,6 +187,14 @@ public static class Fx
     {
         if (!Net.Sim || anchor is not Node2D n) return;
         On?.Invoke(new FxRaise { Id = Rip, At = n.ToLocal(hook), To = toward, Size = ChunkShare * LengthOf(anchor), Anchor = anchor.NetId });
+    }
+    // A MARK ON A HULL: a row drawn over the thing (the chevron of a status on it), riding its NetId so it follows the
+    // hull on every peer; the raise's Size is the hull's hit radius, which the row draws clear of, and its Time how long
+    // it lives (`life`, the caller's: Afflict's is what the status has left plus Remark, so the mark goes with it).
+    public static void Mark(int id, IHittable on, double life)
+    {
+        if (!Net.Sim || on is not Node2D || on.NetId == World) return;
+        On?.Invoke(new FxRaise { Id = id, At = Vector2.Zero, To = Vector2.Zero, Size = on.HitRadius, Time = life, Anchor = on.NetId });
     }
     // how long a hull is, for its chunk: its art's length, else the width of its hit circle
     public static float LengthOf(IHittable h) => h is Node n && HullLength(n) is > 0 and var l ? l : 2 * h.HitRadius;
@@ -232,7 +249,8 @@ public static class Fx
 
 // One node for every row -- an effect or a warning: the shape is the row's, so a new one of
 // either never brings a new node. A warning runs on the RAISE's clock (Time, Hold, Since) and
-// plays the RAISE's sounds; everything else lives the row's Life and plays the row's.
+// plays the RAISE's sounds; everything else lives the raise's Time when it has one, else the
+// row's Life, and plays the row's sounds.
 public partial class FxNode : Node2D
 {
     public int Id;
@@ -255,7 +273,7 @@ public partial class FxNode : Node2D
     public double Elapsed => _t;
     public bool Warn => Fx.Of(Id).Warn;
     private FxDef D => Fx.Of(Id);
-    private double Life => D.Warn ? Time + Hold + Fx.Flash : D.Life;
+    private double Life => D.Warn ? Time + Hold + Fx.Flash : Time > 0 ? Time : D.Life;
 
     // In the live list while in the tree, so a Loose piece leaving its hull for the world stays in it.
     public override void _EnterTree() => Fx.Entered(this);
@@ -351,7 +369,7 @@ public partial class FxNode : Node2D
         var d = D;
         // A WARNING FILLS over the whole wind-up, including whatever of it had gone before this
         // copy went up; an effect runs out over its row's Life.
-        float k = (float)Mathf.Clamp(d.Warn ? (Since + _t) / System.Math.Max(1e-6, Since + Time) : _t / d.Life, 0, 1);
+        float k = (float)Mathf.Clamp(d.Warn ? (Since + _t) / System.Math.Max(1e-6, Since + Time) : _t / Life, 0, 1);
         float fade = 1 - k;
         var c = d.Tint;
         // A warning pulses faster as the moment comes, flashes white-hot as the attack lands, and
@@ -411,7 +429,7 @@ public partial class FxNode : Node2D
                 break;
             case FxShape.Debris:
             {   // the plating itself, hot along the torn edge, fading over its last second
-                float a = (float)Mathf.Clamp(d.Life - _t, 0, 1);
+                float a = (float)Mathf.Clamp(Life - _t, 0, 1);
                 var o = Outline(1f);
                 var cols = new Color[o.Length];
                 System.Array.Fill(cols, new Color(1f, 1f, 1f, a));
@@ -446,11 +464,23 @@ public partial class FxNode : Node2D
                 break;
             case FxShape.Scar:
             {
-                float a = 0.85f * (float)Mathf.Clamp((d.Life - _t) / 3.0, 0, 1);
+                float a = 0.85f * (float)Mathf.Clamp((Life - _t) / 3.0, 0, 1);
                 var o = Outline(1f);
                 DrawColoredPolygon(o, new Color(c.R, c.G, c.B, a));
                 var loop = new Vector2[o.Length + 1]; o.CopyTo(loop, 0); loop[^1] = o[0];
                 DrawPolyline(loop, new Color(0.45f, 0.22f, 0.1f, a * 0.8f), 1.2f);
+                break;
+            }
+            case FxShape.Chevron:
+            {   // upright on screen whatever the hull's heading: the hull's turn undone, ChevronGap u clear of its hit circle
+                float a = (float)Mathf.Clamp((Life - _t) / 0.5, 0, 1);
+                var sc = GlobalScale;
+                DrawSetTransform(Vector2.Zero, -GlobalRotation, new Vector2(sc.X != 0 ? 1f / sc.X : 1f, sc.Y != 0 ? 1f / sc.Y : 1f));
+                float y = -(Radius + Fx.ChevronGap);
+                var v = new[] { new Vector2(-9f, y - 6f), new Vector2(0f, y + 2f), new Vector2(9f, y - 6f) };
+                DrawPolyline(v, new Color(0.08f, 0.08f, 0.1f, 0.6f * a), d.Width + 2f);
+                DrawPolyline(v, new Color(c.R, c.G, c.B, a), d.Width);
+                DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
                 break;
             }
         }

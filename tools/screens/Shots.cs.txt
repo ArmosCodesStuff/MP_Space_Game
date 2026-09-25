@@ -84,6 +84,10 @@ public partial class _Shots : Node
         await W(0.35); await Snap("83b_taunt_ring");
         await LaneA6cTauntFrames(hub, yard);
         await LaneA6cCurtainFrames(hub, yard);
+        await LaneA6aBbFrames(hub, yard);
+        await LaneA6aSuperFrames(hub, yard);
+        await LaneA6aSuppressFrames(hub, yard);
+        await LaneA6aGrapnelFrames(hub);
         // 84: a chunk torn from a practice dummy, mid-tumble, with its sparks, smoke and scar
         var d1 = hub.GetNode<TargetDummy>("TargetDummy1");
         Me().Position = d1.GlobalPosition + new Vector2(0, 320); Me().Velocity = Vector2.Zero;
@@ -93,6 +97,81 @@ public partial class _Shots : Node
         zp.SetValue(hub, z0); await W(0.4);
         Character.Class = ShipClass.Battleship; P(hub, "ApplyLocalIdentity"); await W(0.3);
     }
+    // SLICE 6a: the battleship's Q and E on real presses -- 85a BRACE lit on the bar (the hull at half speed); 85b CIWS
+    // with two webifiers 200-300 u off, both PD mounts streaming at x8.
+    async Task LaneA6aBbFrames(Hub hub, Vector2 yard)
+    {
+        var zp = typeof(Hub).GetProperty("ZoomLevel");
+        Character.Class = ShipClass.Battleship; P(hub, "ApplyLocalIdentity"); await W(0.3);
+        var s = hub.GetNode<PlayerShip>("Ship_1"); s.Visible = true; s.Position = yard; s.Velocity = Vector2.Zero; s.Rotation = 0.5f;
+        s.Sl("brace").Left = 0; s.Sl("brace").Cool = 0; s.Sl("ciws").Left = 0; s.Sl("ciws").Cool = 0;
+        zp.SetValue(hub, 0.9f); await W(1.0);
+        s.UseAbility("brace", 0);
+        await W(0.4); await Snap("85a_bb_brace");
+        var webs = new[] { new Vector2(240f, -120f), new Vector2(-200f, 180f) }.Select(o => { var w = hub.SpawnRaider(yard + o, Enemies.Webifier); w.Hp = 1e9; w.ApplyStatus(Status.Disabled, 10); return w; }).ToArray();
+        s.Position = yard; s.Velocity = Vector2.Zero;
+        await W(0.8);
+        s.UseAbility("ciws", 0);
+        await W(0.5); await Snap("85b_bb_ciws");
+        foreach (var w in webs) w.TakeDamage(1e12);
+        s.Sl("brace").Left = 0; s.Sl("brace").Cool = 0; s.Sl("ciws").Left = 0; s.Sl("ciws").Cool = 0; s.Statuses.Clear(Status.Hardened);
+        await W(0.3);
+    }
+
+    // SLICE 6a: the carrier's Q on a real press (85c): the dashed 600 u patrol ring round the hull and the three amber
+    // craft circling inside it, 4 s on.
+    async Task LaneA6aSuperFrames(Hub hub, Vector2 yard)
+    {
+        var zp = typeof(Hub).GetProperty("ZoomLevel");
+        Character.Class = ShipClass.Carrier; P(hub, "ApplyLocalIdentity"); await W(0.3);
+        var s = hub.GetNode<PlayerShip>("Ship_1"); s.Visible = true; s.Position = yard; s.Velocity = Vector2.Zero; s.Rotation = 0.5f;
+        s.Sl("super").Left = 0; s.Sl("super").Cool = 0;
+        zp.SetValue(hub, 0.55f); await W(1.0);
+        s.UseAbility("super", 0);
+        await W(4.0); s.Position = yard; s.Velocity = Vector2.Zero; await Snap("85c_cv_supercarrier");
+        foreach (var w in N<Wing>().Where(w => w.Carrier == s && w.Kind == WingKind.Patrol)) w.SendOut(null, s.Clock);
+        s.Sl("super").Left = 0; s.Sl("super").Cool = 0;
+        await W(0.5);
+    }
+
+    // SLICE 6a: the destroyer's Q on a real press (85d): SUPPRESS lit on the bar, and a held gunship 300 u off that one
+    // director shell has hit, the grey chevron over it (upright, clear of its hull) 0.6 s on.
+    async Task LaneA6aSuppressFrames(Hub hub, Vector2 yard)
+    {
+        var zp = typeof(Hub).GetProperty("ZoomLevel");
+        Character.Class = ShipClass.Destroyer; P(hub, "ApplyLocalIdentity"); await W(0.3);
+        var s = hub.GetNode<PlayerShip>("Ship_1"); s.Visible = true; s.Position = yard; s.Velocity = Vector2.Zero; s.Rotation = 0.5f;
+        s.Sl("suppress").Left = 0; s.Sl("suppress").Cool = 0;
+        zp.SetValue(hub, 1.1f); await W(1.0);
+        var g = hub.SpawnRaider(yard + new Vector2(260f, -160f), Enemies.Gunship); g.Hp = 1e9; g.ApplyStatus(Status.Disabled, 10); g.Rotation = 2.2f;
+        s.UseAbility("suppress", 0);
+        await W(0.3);
+        Dealt.Deal(g, 1, s, Shots.Of(Shots.Shell).Id);
+        await W(0.6); s.Position = yard; s.Velocity = Vector2.Zero; await Snap("85d_dd_suppressed");
+        g.TakeDamage(1e12);
+        s.Sl("suppress").Left = 0; s.Sl("suppress").Cool = 0;
+        await W(0.3);
+    }
+
+    // SLICE 6a: the destroyer's E on a real press (85e): hooked on the practice dummy 520 u off, hauled in and swinging,
+    // then cast off -- the rip's chunk mid-tumble toward the destroyer, its sparks and the scar, 0.45 s on.
+    async Task LaneA6aGrapnelFrames(Hub hub)
+    {
+        var zp = typeof(Hub).GetProperty("ZoomLevel");
+        Character.Class = ShipClass.Destroyer; P(hub, "ApplyLocalIdentity"); await W(0.3);
+        var d1 = hub.GetNode<TargetDummy>("TargetDummy1");
+        var s = hub.GetNode<PlayerShip>("Ship_1"); s.Visible = true; s.Velocity = Vector2.Zero;
+        s.Position = d1.GlobalPosition + new Vector2(420f, 300f); s.Rotation = 0.9f;
+        s.Sl("grapnel").Left = 0; s.Sl("grapnel").Cool = 0; s.Sl("grapnel").N = 0;
+        zp.SetValue(hub, 1.0f); await W(1.0);
+        s.UseAbility("grapnel", d1.NetId);
+        await W(1.3);
+        s.UseAbility("grapnel", d1.NetId);
+        await W(0.45); await Snap("85e_dd_grapnel_rip");
+        s.Velocity = Vector2.Zero; s.Sl("grapnel").Left = 0; s.Sl("grapnel").Cool = 0; s.Sl("grapnel").N = 0;
+        await W(0.3);
+    }
+
     // SLICE 6c: the Warden's taunt on a real press (82c): Q with two webifiers standing 600-800 u off -- the 1000 u
     // flash, the shimmer and its "−33%" over the hull, both webifiers turning for it.
     async Task LaneA6cTauntFrames(Hub hub, Vector2 yard)
@@ -650,23 +729,23 @@ public partial class _Shots : Node
             await Snap("54_shells_in_flight");
             zp.SetValue(H, z0); await W(1.5);
         }
-        // the destroyer's missile burst: three off the nose, the outer two launched wide and curving in;
-        // then one missile close up (the camera rides a stand-in over it)
+        // the destroyer's Long Lance: one heavy torpedo straight off the bow toward the dummy;
+        // then the torpedo close up (the camera rides a stand-in over it)
         {
             Character.Class = ShipClass.Destroyer; P(H, "ApplyLocalIdentity"); await W(0.3);
             var ms = H.GetNode<PlayerShip>("Ship_1"); var md = H.GetNode<TargetDummy>("TargetDummy1");
             ms.Position = md.Position + new Vector2(0, 700); ms.Velocity = Vector2.Zero; ms.Rotation = 0f; await W(0.8);
             H.SelectTarget(md);
             var zp = typeof(Hub).GetProperty("ZoomLevel"); float z0 = (float)zp.GetValue(H); zp.SetValue(H, 1.4f);
-            ms.UseAbility("missile", md.NetId); await W(0.9);
-            await Snap("43_missile_burst");
+            ms.Sl("longlance").Cool = 0; ms.UseAbility("longlance", md.NetId); await W(0.9);
+            await Snap("43_lance_away");
             zp.SetValue(H, z0);
             var mt = H.GetChildren().OfType<Shot>().FirstOrDefault(x => x.Heavy);
             if (mt != null)
             {
                 ms.Visible = false; GetViewport().GetCamera2D().Zoom = new Vector2(5f, 5f);
                 for (int i = 0; i < 20; i++) { ms.Position = mt.GlobalPosition; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
-                await Snap("43b_missile_closeup");
+                await Snap("43b_lance_closeup");
                 ms.Visible = true; GetViewport().GetCamera2D().Zoom = new Vector2(0.9f, 0.9f);
             }
             await W(3.0);
@@ -764,13 +843,13 @@ public partial class _Shots : Node
             await W(0.45); await Snap("22b_broadside_volley");
             await W(1.2);
             await Snap("23_bar_battleship_cooldown");
-            // destroyer: the magazine spent, then reloading
+            // destroyer: the Long Lance away, its slot cooling; a second F refused COOLING
             await Class(ShipClass.Destroyer);
             await Frame(d1.Position + new Vector2(-120, 520), 1.3f, false);
             hub.SelectTarget(d1);
-            Key(global::Godot.Key.F); await W(0.8); Key(global::Godot.Key.F); await W(0.8);
-            await Snap("23b_bar_destroyer_empty");
-            Key(global::Godot.Key.R); await W(3.0); await Snap("23c_bar_destroyer_reloading");
+            Key(global::Godot.Key.F); await W(0.8);
+            await Snap("23b_bar_destroyer_lance_cooling");
+            Key(global::Godot.Key.F); await W(0.1); await Snap("23c_bar_destroyer_lance_refused");
             hub.BeginPlacement("TEST", _ => { });
             Input.WarpMouse(GetViewport().GetFinalTransform() * (GetViewport().GetCanvasTransform() * (Me().Position + new Vector2(160, -120))));
             await W(0.3); await Snap("24_placement_ring");

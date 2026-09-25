@@ -90,7 +90,7 @@ public partial class TargetDummy : Node2D, IHittable, ITagged, IStatused
                 {
                     var dir = (best.Position - GlobalPosition).Normalized();
                     Combat.LaunchTorpedo(GlobalPosition + dir * (HitRadius + 8f), dir, 170f, 400f, ArmedDamage,
-                                         best.NetId, 2.5f, heavy: false, hostile: true);
+                                         best.NetId, 2.5f, hostile: true);
                     _fireCd = ArmedInterval;
                 }
             }

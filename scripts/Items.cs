@@ -98,10 +98,11 @@ public static class Items
         ("@primary_range", new[] { "main_range", "fighter_range", "blade_reach", "pepper_range" }),
         ("@tracking",      new[] { "main_turn", "fighter_turn", "pepper_turn" }),
         ("@shot_speed",    new[] { "shell_speed", "fighter_speed", "pepper_speed" }),
-        ("@output",        new[] { "broadside_mult", "torpedo_damage", "missile_damage", "bubble_pool", "overdrive_mult",
+        ("@output",        new[] { "broadside_mult", "torpedo_damage", "lance_damage", "bubble_pool", "overdrive_mult",
                                    "wave_push", "rail_damage", "hunter_damage", "reverb_share", "lunge_damage", "whirl_damage", "rod_damage", "venom_dps" }),
         ("@area",          new[] { "bubble_radius", "wave_range", "reverb_radius", "whirl_reach", "hunter_range", "launch_range", "taunt_reach" }),
-        ("@duration",      new[] { "bubble_time", "overdrive_time", "wave_disable", "veil_time", "venom_time", "sprint_time", "ramjet_time", "reverb_time", "whirl_time", "prism_time", "anchor_time", "tether_hold", "taunt_time" }),
+        ("@duration",      new[] { "bubble_time", "overdrive_time", "wave_disable", "veil_time", "venom_time", "sprint_time", "ramjet_time", "reverb_time", "whirl_time", "prism_time", "anchor_time", "tether_hold", "taunt_time",
+                                   "brace_time", "ciws_time", "suppress_window" }),
     };
 
     // The stat ids a key stands for on hull `c`: a role's rows the hull has, or the id itself.

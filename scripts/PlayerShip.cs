@@ -148,14 +148,20 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     public float StrafeMult => (float)Stat.Scale(Lifts(Lift.Strafe));
     // REACH: every running row's ReachStat, the same rule (the anchor's x1.4 on the railgun's line)
     public float ReachMult => (float)Stat.Scale(Lifts(Lift.Reach));
+    // DAMAGE: the stat's own figure, lifted by every running row whose DamageOn names it (the CIWS's x3 on pd_damage)
+    public double DamageOf(string stat) => Stats[stat] * Stat.Scale(Lifts(Lift.Damage, stat));
     // THE PUSH AHEAD: the speed lifts' shares PLUS every running row's ThrustStat (the sprint's x3), the same rule --
     // a sprint under the boost is x3.5. Steer's thrust reads it; the top speed never does.
     public float ThrustMult => (float)Stat.Scale(Lifts(Lift.Speed) + Lifts(Lift.Thrust));
-    private enum Lift { Rate, Speed, Strafe, Reach, Thrust }
+    private enum Lift { Rate, Speed, Strafe, Reach, Thrust, Damage }
     private readonly List<double> _lifts = new();
-    private static string LiftStat(AbilityDef def, Lift kind) =>
-        kind switch { Lift.Rate => def.RateStat, Lift.Speed => def.SpeedStat, Lift.Reach => def.ReachStat, Lift.Thrust => def.ThrustStat, _ => def.StrafeStat ?? def.SpeedStat };
-    private double Lifts(Lift kind)
+    // `on` is the stat a scoped row must name (RateOn / DamageOn); a rate asked with none takes the unscoped rows alone
+    private static string LiftStat(AbilityDef def, Lift kind, string on) =>
+        kind switch {
+            Lift.Rate => def.RateOn == null || def.RateOn == on ? def.RateStat : null,
+            Lift.Damage => def.DamageOn != null && def.DamageOn == on ? def.DamageStat : null,
+            Lift.Speed => def.SpeedStat, Lift.Reach => def.ReachStat, Lift.Thrust => def.ThrustStat, _ => def.StrafeStat ?? def.SpeedStat };
+    private double Lifts(Lift kind, string on = null)
     {
         _lifts.Clear();
         // A FIELD'S LIFTS (AbilityDef.Aura, kits6b-J8): every OTHER live pilot's running Aura row whose radius this
@@ -165,15 +171,15 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             if (h is not PlayerShip p || ReferenceEquals(p, this) || !p.Alive) continue;
             foreach (var def in Abilities.For(p.Class))
             {
-                if (def.Aura == null || LiftStat(def, kind) is not { } their || p.Sl(def.Id).Left <= 0) continue;
+                if (def.Aura == null || LiftStat(def, kind, on) is not { } their || p.Sl(def.Id).Left <= 0) continue;
                 if (Position.DistanceTo(p.Position) <= p.Stats[def.Aura]) _lifts.Add(p.Stats[their]);
             }
         }
         foreach (var def in Abilities.For(Class))
         {
             ref var sl = ref Sl(def.Id);
-            string stat = LiftStat(def, kind);
-            if (stat != null && sl.Left > 0) _lifts.Add(Stats[stat]);
+            string stat = LiftStat(def, kind, on);
+            if (stat != null && sl.Left > 0 && (def.While == null || def.While(this))) _lifts.Add(Stats[stat]);
             // a RAMP's running total is already a share (F1, D18): 1 + it reads the same as any
             // other lift's raw multiplier would, and it keeps lifting through its post-run drain,
             // not only while Left > 0. It lifts the helm alone: speed and slide.
@@ -225,7 +231,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // refire are not a gun's reload, and no class that has them carries a rate row.)
     // Burst Feed's window (Items.Door.AfterDrive) lifts the primary's reloads alone, for AfterDriveSecs
     // after the drive's run ends.
-    public double Cadence(string intervalStat) => Stats.With(intervalStat, Lifts(Lift.Rate)
+    public double Cadence(string intervalStat) => Stats.With(intervalStat, Lifts(Lift.Rate, intervalStat)
         + (_afterDrive > 0 && Items.IdsOf("@primary_rate", Class).Contains(intervalStat)
             ? Items.Shares(Items.Door.AfterDrive, Stats, default) : 0));
     private double _afterDrive;
@@ -288,12 +294,6 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     private readonly Dictionary<string, int> _slotAt = new();
     private readonly Dictionary<string, (Slot slot, double clock)> _slotsAway = new();   // every slot a class change put away, and when (FitClass)
     public ref Slot Sl(string id) => ref _slots[_slotAt.TryGetValue(id, out int i) ? i : 0];
-
-    // Missiles (destroyer): a magazine of bursts, reloaded by hand.
-    public int MissilesLoaded => Sl("missile").N;
-    public double MissileReloadLeft => Sl("reload").Left;
-    public bool Reloading => MissileReloadLeft > 0;
-    private bool CanFireMissile => Stats.Def.Has(Fit.Missiles) && MissilesLoaded > 0 && !Reloading && Sl("missile").Cool <= 0;
 
     // The broadside (battleship): a wind-up while the turrets swing onto the cursor, then every main
     // gun fires, volley after volley, then the cooldown. The host acts on it; every peer counts the
@@ -408,20 +408,20 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         MaxHp = Stats["hull"];
         Hp = Alive ? Math.Max(1, frac * MaxHp) : MaxHp;
         _hullWatch = default;                      // a refit, not damage
-        // The class's slots, index 0 the spare: a new one with every timer at zero and the magazine full.
+        // The class's slots, index 0 the spare: a new one with every timer at zero.
         var list = Abilities.For(Class);
         _slots = new Slot[list.Length + 1];
         _slotAt.Clear();
         for (int i = 0; i < list.Length; i++) _slotAt[list[i].Id] = i + 1;
+        if (Array.IndexOf(list, Ab.FireMode) < 0) Staggered = false;   // a hull with no fire mode (the destroyer) fires salvoes
         _netSlotLeft = new float[_slots.Length]; _netSlotCool = new float[_slots.Length];
         _netSlotOwn = new float[_slots.Length]; _netSlotN = new int[_slots.Length];
-        Sl("missile").N = (int)Stats["missile_mag"];
         foreach (var (id, at) in _slotAt)
             if (_slotsAway.Remove(id, out var kept))
             {
                 ref var s = ref _slots[at];
                 s.Cool = Math.Max(0, kept.slot.Cool - (_clock - kept.clock));
-                s.N = kept.slot.N;                 // a magazine over the new sheet's is cut to it (FitWings)
+                s.N = kept.slot.N;                 // its count (charges spent, a chamber) as it was
             }
         // a chamber is fitted seated (a reload that was running ended with the refit), and the owner's view with it
         foreach (var def in list) if (def.Reload is { } rl) ActiveReload.Seat(this, rl);
@@ -435,8 +435,8 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         if (!IsInstanceValid(_shield)) { _shield = new ShieldFlash(); AddChild(_shield); }
         _shield.HalfWidth = art.HalfWidth; _shield.HalfLength = art.Length * 0.5f; _shield.Tint = Accent;
 
-        for (int i = 0; i < Math.Min((int)Stats["main_count"], art.Mains.Length); i++) AddTurret(art.Mains[i], false);
-        for (int i = 0; i < Math.Min((int)Stats["pd_count"], art.Pds.Length); i++) AddTurret(art.Pds[i], true);
+        for (int i = 0; i < Math.Min((int)Stats["main_count"], art.Mains.Length); i++) AddTurret(art.Mains[i], false, i < art.MainBears.Length ? art.MainBears[i] : new Vector2(0f, 180f));
+        for (int i = 0; i < Math.Min((int)Stats["pd_count"], art.Pds.Length); i++) AddTurret(art.Pds[i], true, new Vector2(0f, 180f));
         FitWings(fresh: true);
     }
 
@@ -470,13 +470,12 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         while (WingCount(WingKind.Bomber) > wantB) RemoveWing(WingKind.Bomber);
         if (WingCount(WingKind.Bomber) != hadB) { StrikeTarget = null; _strikesOut = 0; }
         if (!Net.Sim) return;
-        Sl("missile").N = Math.Min(MissilesLoaded, (int)Stats["missile_mag"]);
         foreach (var w in _wings) if (w.Def.AmmoStat != null) w.Ammo = Math.Min(w.Ammo, (int)Stats[w.Def.AmmoStat]);
     }
 
-    private void AddTurret(Vector2 offset, bool pd)
+    private void AddTurret(Vector2 offset, bool pd, Vector2 bears)
     {
-        var t = new Turret(); AddChild(t); t.Setup(this, offset, pd);
+        var t = new Turret { Bears = bears }; AddChild(t); t.Setup(this, offset, pd);
         _turrets.Add(t); if (pd) PdTurrets.Add(t); else _mains.Add(t);
     }
 
@@ -611,6 +610,8 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         // The host checks again inside Press: this is a courtesy, never the guard.
         if (PressHeld(def)) { Fail(id, "DISABLED"); return; }
         if (def.Refuse?.Invoke(this, targetId != 0 ? Combat.ById(targetId) : null) is { } why) { Fail(id, why); return; }
+        // A HOOK's own half, here on the owner: it flies the helm move itself (HookOwner) before the host is asked
+        if (def.Hook != null && HookOwner(def, targetId != 0 ? Combat.ById(targetId) : null) is { } no) { Fail(id, no); return; }
         var point = def.TakesPoint ? AimPoint : Vector2.Zero;
         var ids = def.TakesTargets && picks != null ? picks : System.Array.Empty<int>();
         PressTarget = targetId != 0 ? Combat.ById(targetId) : null;
@@ -693,11 +694,6 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     private bool PressHeld(AbilityDef def) => Disabled && !def.WhenWrecked;
     public void Reboard() { if (CanReboard) { Alive = true; Hp = MaxHp * ReboardHull; _stasis = 0; } }
     public void StartBroadside() { if (BroadsideReady) Sl("broadside").Left = Stats["broadside_windup"]; }
-    public void StartReload()
-    {
-        if (Stats.Def.Has(Fit.Missiles) && !Reloading && MissilesLoaded < (int)Stats["missile_mag"])
-            Sl("reload").Left = Stats["missile_reload"];
-    }
     public void OrderAttack(IHittable t) { if (Stats.Def.Has(Fit.Wing) && t != null) { WingTarget = t; _attacking = true; } }
     public void RecallWing() { WingTarget = null; _attacking = false; }
     // ── THE FREIGHTERS ──────────────────────────────────────────────────
@@ -821,6 +817,56 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             if (d > 0 && h is PlayerShip p && p.BubbleUp && at.DistanceTo(p.Position) <= p.BubbleRadius)
                 d = p.SpendBubble(d);
         return d;
+    }
+
+    // A TIMED ROW'S PRESS (AbilityDef.Time), on the host: it runs its Time, its Cooldown from the press, and
+    // hardens the hull at its Guard share for that time. The row's Refuse holds a press while it cools.
+    public void RunFor(string id)
+    {
+        var def = Abilities.Find(Class, id);
+        ref var sl = ref Sl(id);
+        if (!Net.Sim || def?.Time == null || sl.Cool > 0) return;
+        Engage(def, Stats[def.Time]);
+        if (def.Guard != null) _status.Apply(Status.Hardened, sl.Left, Stats[def.Guard]);
+    }
+    // A STATUS THIS SHIP PUTS ON A HOSTILE IT HIT (a row's OnDealt, on the host): for the stat's seconds, through the
+    // hostile's own ApplyStatus (its Reaches decides whether the status can hold it at all), with the row's mark raised
+    // on the hull: at most one raise every Remark on one hull (_marked: this ship's clock of its last raise of that mark
+    // there), each living the status's time left plus Remark -- so under a stream of shells the mark is raised again
+    // every half second and outlasts the status by under half a second, not one raise a shell. Suppressing fire's chevron.
+    public const double Remark = 0.5;
+    private readonly Dictionary<(int id, int mark), double> _marked = new();
+    public void Afflict(IHittable target, Status st, string timeStat, int mark)
+    {
+        if (!Net.Sim || target is not IStatused held || !target.Alive) return;
+        held.ApplyStatus(st, Stats[timeStat]);
+        if (!held.Statuses.Has(st)) return;
+        var key = (target.NetId, mark);
+        if (_marked.TryGetValue(key, out var at) && _clock - at < Remark) return;
+        foreach (var old in _marked.Where(m => _clock - m.Value >= Remark).Select(m => m.Key).ToList()) _marked.Remove(old);
+        _marked[key] = _clock;
+        Fx.Mark(mark, target, held.Statuses.Left(st) + Remark);
+    }
+    // A row's time and its cooldown set at once: from the press, or after the time when it CoolAfter.
+    private void Engage(AbilityDef def, double secs)
+    {
+        ref var sl = ref Sl(def.Id);
+        sl.Left = secs;
+        if (def.Cooldown != null) sl.Cool = (def.CoolAfter ? secs : 0) + Cooling(Stats[def.Cooldown]);
+    }
+    // A SORTIE ROW'S PRESS (AbilityDef.Sends), on the host: the craft go out (Sortie: the host's leash on each target),
+    // and only if one went does the row run the wing's LifeStat and start its cooldown.
+    public void Launch(string id, IHittable selected)
+    {
+        var def = Abilities.Find(Class, id);
+        ref var sl = ref Sl(id);
+        if (!Net.Sim || def?.Sends is not { } kind || sl.Cool > 0 || sl.Left > 0) return;
+        var row = Wings.Of(kind);
+        int sent = 0;
+        if (row.ToHull) sent = Sortie(kind);
+        else foreach (var t in _picked.Count > 0 ? _picked.ToList() : selected != null ? new List<IHittable> { selected } : new List<IHittable>())
+            sent += Sortie(kind, t);
+        if (sent > 0) Engage(def, Stats[row.LifeStat]);
     }
 
     // A TIMED ROW'S PRESS (host): its Left from `time`, its cooldown from `cool`, both from the press. The sprint.
@@ -1119,7 +1165,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             float side = (i % 2 == 0 ? -1 : 1) * (12f + 8f * (i / 2));
             var dir = (t.Position - nose).Rotated(Mathf.DegToRad(side));
             Combat.LaunchTorpedo(nose, dir, (float)Stats["hunter_speed"], range * 1.6f, Stats["hunter_damage"],
-                                 t.NetId, (float)Stats["hunter_turn"], heavy: false, hostile: false, source: this);
+                                 t.NetId, (float)Stats["hunter_turn"], hostile: false, source: this);
         }
     }
 
@@ -1287,6 +1333,101 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     public string BeginHelm(HelmMove m, IHittable anchor, HelmNums n) =>
         Mine ? HelmMoves.Begin(this, _helm, m, anchor, n) : "NOT THE OWNER";
     public void CastOff() => HelmMoves.End(this, _helm, HelmEnd.Pressed);
+
+    // ── A HOOK (AbilityDef.Hook: the Grapnel) ───────────────────────────────
+    // A hook row's slot: Left while the line holds (the swing's Time, or a tow's haul), N the anchor's or the craft's
+    // NetId, At where the anchor was last frame (a step past Drives.SnapAt is its warp); Cool from the cast-off.
+    public const float HookSlack = 60f;              // the host's give on a guest's reach: it measured a packet ago
+    public HelmNums HookNums(AbilityDef def)
+    {
+        var h = def.Hook;
+        return new HelmNums { Slot = def.Id, Bite = (float)Stats[h.Bite], Pull = (float)Stats[h.Pull], Stop = (float)Stats[h.Stop],
+                              Clear = (float)Stats[h.Clear], Reach = (float)Stats[h.Reach], Reel = (float)Stats[h.Reel], Time = Stats[h.Time] };
+    }
+    private bool Hooked(string id) => Sl(id).Left > 0 || (_helm.On && _helm.N.Slot == id);
+    // WHAT THE LINE WOULD TAKE, or why not: an anchor (Targeting.Immovable), a craft to tow (ITowable, Throwable), or
+    // NO HOLD (a missile, a hulled body). Pressed while the line holds, nothing is refused: the press casts off.
+    public string HookRefusal(string id, IHittable t) => HookWhy(id, t, 0f);
+    private string HookWhy(string id, IHittable t, float slack)
+    {
+        var h = Abilities.Find(Class, id)?.Hook;
+        if (h == null) return "NO HOLD";
+        if (Hooked(id)) return null;
+        if (Sl(id).Cool > 0) return "COOLING";
+        if (t == null || !t.Alive) return "NO TARGET";
+        bool anchor = Targeting.Immovable.Hits(t);
+        if (!anchor && !(t is ITowable && Targeting.Throwable.Hits(t))) return "NO HOLD";
+        if (Position.DistanceTo(t.Position) > Stats[h.Reach] + slack) return "OUT OF RANGE";
+        if (anchor && Pinned) return "WEBBED";                 // the swing only: a craft is towed webbed or not
+        return null;
+    }
+    // THE OWNER'S HALF of the press: a second press casts its own move off at once; an anchor begins the move here
+    // (the host marks it, or the owner casts it off unmarked: HelmMoves.ConfirmWithin). A craft is the host's alone.
+    private string HookOwner(AbilityDef def, IHittable t)
+    {
+        if (_helm.On && _helm.N.Slot == def.Id) { CastOff(); return null; }
+        if (Sl(def.Id).Left > 0 || !Targeting.Immovable.Hits(t)) return null;
+        return BeginHelm(def.Hook.Move, t, HookNums(def));
+    }
+    // THE PRESS, on the host: a second press casts off; else the anchor's move is marked, or the craft towed.
+    public void Hook(string id, IHittable t)
+    {
+        var def = Abilities.Find(Class, id);
+        if (!Net.Sim || def?.Hook is not { } h) return;
+        ref var sl = ref Sl(id);
+        if (sl.Left > 0) { CastOffHook(id, rip: true); return; }
+        if (HookWhy(id, t, HookSlack) != null) return;
+        if (Targeting.Immovable.Hits(t))
+        {
+            HelmMoves.Confirm(this, t, HookNums(def), Stats[h.Time]);
+            Sl(id).At = t.Position;
+        }
+        else if (t is ITowable craft && Towing.Tow(craft, this, this, h.Tow))
+        {
+            sl.Left = Towing.Of(h.Tow).Haul; sl.N = t.NetId;
+        }
+    }
+    // CAST OFF, on the host: a craft still held is hurled; an anchor still there (neither dead nor warped: `rip`) is
+    // RIPPED; the line is released and the cooldown starts. Run by the second press, the slot's Expire, and HookWatch.
+    public void CastOffHook(string id, bool rip)
+    {
+        var h = Abilities.Find(Class, id)?.Hook;
+        if (!Net.Sim || h == null) return;
+        ref var sl = ref Sl(id);
+        var t = sl.N != 0 ? Combat.ById(sl.N) : null;
+        if (t is ITowable { Towed: { Flung: false } tow } craft && tow.By == this) Towing.Hurl(craft);
+        else if (rip && t != null && t.Alive && Targeting.Immovable.Hits(t)) Rip(id, h, t);
+        HelmMoves.Release(this, id);
+        sl.Cool = Cooling(Stats[h.Cooldown]);
+    }
+    // THE HOST'S WATCH on a line that holds, every frame: the anchor or the craft gone, or the anchor warped, ends it with
+    // no rip; a web, a disable or this ship's own warp charge ends a swing WITH one (its owner has cast off already).
+    private void HookWatch()
+    {
+        foreach (var def in Abilities.For(Class))
+        {
+            if (def.Hook == null) continue;
+            ref var sl = ref Sl(def.Id);
+            if (sl.Left <= 0 || sl.N == 0) continue;
+            var t = Combat.ById(sl.N);
+            if (t == null || !t.Alive || !Alive) { CastOffHook(def.Id, rip: false); continue; }
+            if (!Targeting.Immovable.Hits(t)) continue;                       // a tow runs by Towing.Step
+            if (t.Position.DistanceTo(sl.At) > Drives.SnapAt) { CastOffHook(def.Id, rip: false); continue; }
+            sl.At = t.Position;
+            if (Pinned || Disabled || Charging) CastOffHook(def.Id, rip: true);
+        }
+    }
+    // THE RIP: the chunk's look raised FIRST (Fx.Tear finds the anchor among the living), then the hit through the
+    // damage door, credited to the row's id -- the row's share of the anchor's own maximum hull (IQuarry; a dummy has
+    // none) plus the flat.
+    public double RipOf(HookSpec h, IHittable t) => Stats[h.RipShare] * ((t as IQuarry)?.MaxHp ?? 0) + Stats[h.RipFlat];
+    private void Rip(string id, HookSpec h, IHittable t)
+    {
+        var dir = Position - t.Position;
+        var hook = t.Position + (dir.LengthSquared() > 1e-6f ? dir.Normalized() : Vector2.Up) * t.HitRadius * 0.8f;
+        Fx.Tear(t, hook, Position);
+        Dealt.Deal(t, RipOf(h, t), this, id);
+    }
     // THE TOP A GUEST'S REPORT MAY CLAIM, on the host: its hull's, or a marked move's ward (F8).
     public float ReportTop => Math.Max(TopNow, HelmMoves.Ward(this));
     // A DRIVER'S HOLD OF V -- the title screen's ship, or a check -- read with the pilot's own key.
@@ -1387,33 +1528,16 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         if (ReferenceEquals(StrikeTarget, t)) StrikeTarget = null;
     }
 
-    // A BURST (destroyer): three missiles off the nose, one straight at the target and two launched
-    // up to 70 degrees to either side, all guided -- each heading turns toward the target at
-    // missile_turn rad/s, so the outer two curve in onto it from the flanks. One burst spends one
-    // of the magazine.
-    //   A missile heading theta off a target d away can only come round onto it if d > 2 r sin(theta),
-    // r being its turning radius (speed / turn); any closer and it circles the target until its run
-    // ends. So close in, the fan narrows to what the missiles can still turn through, with a margin
-    // (BurstSplayFor): the full 70 degrees from about 250 u out on the kit's rack.
-    public static readonly int[] BurstSides = { 0, -1, 1 };
-    public const float BurstSplay = 70f;
-    public static float BurstSplayFor(float d, float speed, float turn)
+    // A BOW SHOT'S PRESS (AbilityDef.Bow), on the host: one round of its Shots.All row off the nose, straight along the
+    // heading, at the sheet's damage, speed and range; its Cooldown from the press. The Long Lance. The weapon id its
+    // blows carry is the row's own (Shots.Of(kind).Id), so a listener tells a Lance from a director shell.
+    public void FireAlong(string id)
     {
-        float reach = 0.8f * d / (2f * speed / Mathf.Max(0.01f, turn));
-        return reach >= Mathf.Sin(Mathf.DegToRad(BurstSplay)) ? BurstSplay : Mathf.RadToDeg(Mathf.Asin(reach));
-    }
-    public void FireMissile(IHittable t)
-    {
-        if (!Net.Sim || !CanFireMissile) return;
-        float range = (float)Stats["missile_range"];
-        if (t == null || Position.DistanceTo(t.Position) > range) return;   // a target in range, or nothing
-        Sl("missile").N--; Sl("missile").Cool = Stats["missile_refire"];
-        var nose = ToGlobal(new Vector2(0, -MyArt.Length * 0.5f));
-        float speed = (float)Stats["missile_speed"], turn = (float)Stats["missile_turn"];
-        float splay = BurstSplayFor(nose.DistanceTo(t.Position), speed, turn);
-        foreach (int side in BurstSides)
-            Combat.LaunchTorpedo(nose, (t.Position - nose).Rotated(Mathf.DegToRad(side * splay)), speed, range * 1.4f,
-                                 Stats["missile_damage"], t.NetId, turn, heavy: true, source: this);
+        var def = Abilities.Find(Class, id);
+        if (!Net.Sim || def?.Bow is not { } b || Sl(id).Cool > 0) return;
+        Combat.Fire(b.Kind, Aim.Nose(this, MyArt.Length * 0.5f), Vector2.Up.Rotated(Rotation), (float)Stats[b.Speed],
+                    (float)Stats[b.Range], Stats[b.Damage], source: this, hitSource: id);
+        if (def.Cooldown != null) Sl(id).Cool = Cooling(Stats[def.Cooldown]);
     }
 
     // ── THE ONE DOOR DAMAGE COMES THROUGH ───────────────────────────────
@@ -1592,6 +1716,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         // A WRECK ENDS ITS HELM MOVE (F8): the owner's flight stops at the wreck (LocalFlight), so the
         // run's own end rules never see it -- left on, it would fly the re-boarded hull from where it lay.
         if (!Alive) HelmMoves.End(this, _helm, HelmEnd.Wrecked);
+        if (Net.Sim) HookWatch();
         _afterDrive = Math.Max(0, _afterDrive - delta);
         foreach (var def in Abilities.For(Class))
         {
@@ -2045,15 +2170,35 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         if (HelmMoves.Fly(this, _helm, throttle, rudder, dt)) _yawRate = 0f;
         else if (!DashCarry(dt)) Steer(throttle, rudder, strafe, dt);
 
-        // the main guns aim at the cursor; the hull does not follow it
+        // the main guns aim at the cursor (or, a director's, lead the selected); the hull does not follow it
         if (!Demo) Trigger = false;              // a display ship's driver owns the trigger
         if (!locked)
         {
-            AimPoint = GetGlobalMousePosition();
+            AimPoint = Directed(GetGlobalMousePosition(), (GetParent() as Hub)?.Selected, dt);
             Trigger = Abilities.TriggerOf(Class) is { } trig && Stroke(trig, Input.IsKeyPressed(Abilities.KeyFor(Class, trig.Id)));
         }
 
         SendState(dt);
+    }
+
+    // THE DIRECTOR (a sheet whose director_lead is above 0: the destroyer's battery). With a hostile SELECTED within
+    // main_range x director_lead, the aim point is where a shell at shell_speed meets it on its present course
+    // (Missiles.Predict on a Lead watched frame to frame), so the guns lead it by themselves; with none, the cursor.
+    // Worked out on the owner and sent as its aim, as the cursor was: the host fires at it, no new wire.
+    private Lead _director;
+    private IHittable _directed;
+    public Vector2 Directed(Vector2 cursor, IHittable selected, double dt)
+    {
+        double lead = Stats["director_lead"];
+        if (lead <= 0 || selected is not { Alive: true } || Position.DistanceTo(selected.Position) > Stats["main_range"] * lead)
+        { _directed = null; return cursor; }
+        if (!ReferenceEquals(selected, _directed)) { _director = default; _directed = selected; }
+        _director.Watch(selected.Position, dt);
+        double speed = Math.Max(1, Stats["shell_speed"]);
+        var at = selected.Position;
+        // the flight to where it will be, taken again from that point: 8 passes settle to a unit or two at 400 u/s
+        for (int i = 0; i < 8; i++) at = Missiles.Predict(selected.Position, _director.Velocity, Position.DistanceTo(at) / speed);
+        return at;
     }
 
     private void SendState(float dt)
@@ -2295,6 +2440,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         foreach (var w in _wings) if (IsInstanceValid(w)) w.QueueFree();
         _wings.Clear();
         if (IsInstanceValid(_pod)) _pod.QueueFree();
+        _marked.Clear();
         _doses.Clear();
         Combat.Players.Remove(this);
     }

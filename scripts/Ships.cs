@@ -35,7 +35,6 @@ public enum Fit
     None = 0,
     Guns = 1,          // cursor-aimed main turrets
     Broadside = 2,     // every main gun, volley after volley (F)
-    Missiles = 4,      // a magazine of guided bursts
     Wing = 8,          // fighters and bombers from a deck
     Pd = 16,           // point-defence turrets: passive, firing whenever the ship is alive
     Deploy = 32,       // it drops turrets of its own and picks them up again (the freighters)
@@ -53,6 +52,11 @@ public class ClassArt
     // How far the free camera (Y) may wander from the ship: 5000 for a capital ship.
     public float CameraRange = 5000f;
     public Vector2[] Mains = Array.Empty<Vector2>(), Pds = Array.Empty<Vector2>();
+    // WHERE EACH MAIN GUN MAY FIRE: per main mount, in the Mains order, the bearings off the bow (degrees,
+    // 0 = dead ahead, 180 = dead astern, either side) its barrel may fire along -- (min, max). A mount with
+    // no entry fires on every bearing. The battleship's arcs (v1 card): the fore pair never within 30 deg of
+    // the stern, the aft pair never within 30 deg of the bow (Turret.InArc; the barrel still swings).
+    public Vector2[] MainBears = Array.Empty<Vector2>();
 
     // The turrets are their own sprites (barrels up, pivot at the sheet's centre), so they
     // can turn: one main turret and one point-defence turret for every class, each class
@@ -169,10 +173,10 @@ public static class Classes
             Hint = "BATTLESHIP  ·  mouse aims the main guns",
             Drive = Drives.Warp,
             Nums = new() {
-                ["hull"] = 300,
+                ["hull"] = 500,
                 ["thrust"] = 47, ["reverse_thrust"] = 20, ["max_speed"] = 88, ["reverse_speed"] = 30,
                 ["turn_radius"] = 107, ["turn_rate"] = 1.08,
-                ["main_count"] = 4, ["main_damage"] = 17.9, ["main_interval"] = 2.0, ["main_range"] = 1000, ["shell_speed"] = 650,
+                ["main_count"] = 4, ["main_damage"] = 12.5, ["main_interval"] = 2.0, ["main_range"] = 1000, ["shell_speed"] = 650,
                 ["pd_count"] = 2,
             },
             Damage = new() { ["main_damage"] = 1 },
@@ -183,6 +187,15 @@ public static class Classes
                 ItemDef.Own(GearSlot.Weapon, "bs_main_battery", "Mk I Main Battery", "the four main turrets", "broadside_mult"),
                 ItemDef.Own(GearSlot.Utility, "bs_broadside", "Broadside Battery", "every main gun, volley on volley", "broadside_mult"),
             },
+            Rows = new StatRow[] {
+                new() { Group = "Brace", Id = "brace_time",     Label = "Lasts",        Base = 3, Unit = "s", Dec = 1 },
+                new() { Group = "Brace", Id = "brace_share",    Label = "Damage taken", Base = 0.35, Unit = "x", Dec = 2 },
+                new() { Group = "Brace", Id = "brace_cooldown", Label = "Cooldown",     Base = 25, Unit = "s", Dec = 1, Inverse = true },
+                new() { Group = "CIWS", Id = "ciws_time",     Label = "Lasts",             Base = 6, Unit = "s", Dec = 1 },
+                new() { Group = "CIWS", Id = "ciws_rate",     Label = "PD rate of fire",   Base = 8, Unit = "x", Dec = 1 },
+                new() { Group = "CIWS", Id = "ciws_damage",   Label = "PD damage",         Base = 3, Unit = "x", Dec = 1 },
+                new() { Group = "CIWS", Id = "ciws_cooldown", Label = "Cooldown",          Base = 20, Unit = "s", Dec = 1, Inverse = true },
+            },
             Art = new ClassArt {
                 // battleship_bb05 (the pack, J5): 4 mains on the flanking twins (the two forward
                 // rows, both sides -- Q3's default), the barrels of all 6 painted twins patched
@@ -190,18 +203,19 @@ public static class Classes
                 Texture = "res://battleship_hull.png", Length = 378f, HalfWidth = 43.875f,
                 Mains = new Vector2[] { new(-23.99f, -74.28f), new(23.99f, -74.28f), new(-23.99f, -36.27f), new(23.99f, -36.27f) },
                 Pds   = new Vector2[] { new(-58.99f, 71.73f), new(58.99f, 71.73f) },
+                MainBears = new Vector2[] { new(0f, 150f), new(0f, 150f), new(30f, 180f), new(30f, 180f) },
                 TurretTexScale = 1.9f / 5.5f, MainBarrel = 23.18f, PdBarrel = 10.45f },
-            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Broadside } },
+            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Broadside, Ab.Brace, Ab.Ciws } },
 
         new() { Id = ShipClass.Carrier, Name = "CARRIER", Ready = true, Targets = 3, Fit = Fit.Wing | Fit.Pd,
             Blurb = "No main gun: point defence, a fighter wing, torpedo bombers off its deck.",
             Hint = "CARRIER",
             Drive = Drives.Warp,
             Nums = new() {
-                ["hull"] = 200,
+                ["hull"] = 425,
                 ["thrust"] = ShipStats.CarrierTop / 2, ["reverse_thrust"] = ShipStats.CarrierTop * 5 / 24, ["max_speed"] = ShipStats.CarrierTop, ["reverse_speed"] = ShipStats.CarrierTop / 3,
-                ["turn_radius"] = 127, ["turn_rate"] = 0.9,
-                ["pd_count"] = 3, ["pd_turn"] = Mathf.Tau / 1.2f,
+                ["turn_radius"] = 140, ["turn_rate"] = 0.9,
+                ["pd_count"] = 2, ["pd_turn"] = Mathf.Tau / 1.2f,
             },
                 // the 0: gear reaches the fighters, the pilot's points do not -- as it was
             Damage = new() { ["torpedo_damage"] = 1, ["fighter_damage"] = 0 },
@@ -213,34 +227,60 @@ public static class Classes
                 ItemDef.Own(GearSlot.Utility, "cv_bomber_bay", "Bomber Bay", "the bomber wing", "bomber_count"),
             },
             Art = new ClassArt {
-                // carrier_a (the pack, J5): a PD pair on the flanks amidships and one on the stern
-                // centreline; the deck (Bay*/RunwayBow/EngineInset) is the bays abreast amidships,
+                // carrier_a (the pack, J5): a PD pair on the flanks amidships and no mount at the
+                // stern (D8); the deck (Bay*/RunwayBow/EngineInset) is the bays abreast amidships,
                 // the runway run from the bow and the engines inset at the stern
                 Texture = "res://carrier_player.png", Length = 283.5f, HalfWidth = 40.02f,
                 BayX = 25.01f, BayY = 8.34f, BaySpacing = 46.69f, RunwayBow = 110.06f, EngineInset = 8f,
-                Pds = new Vector2[] { new(-30.01f, -0.21f), new(30.01f, -0.21f), new(0f, 134.22f) },
+                Pds = new Vector2[] { new(-30.01f, -0.21f), new(30.01f, -0.21f) },
                 TurretTexScale = 1.9178f / 5.5f, PdBarrel = 10.51f },
-            Abilities = new[] { Ab.Attack, Ab.Recall, Ab.Bombers } },
+            Rows = new StatRow[] {
+                new() { Group = "Gunships", Id = "gunship_cooldown", Label = "Cooldown", Base = 25, Unit = "s", Dec = 1, Inverse = true },
+                new() { Group = "Patrol", Id = "super_cooldown", Label = "Cooldown after", Base = 30, Unit = "s", Dec = 1, Inverse = true },
+            },
+            Abilities = new[] { Ab.Attack, Ab.Recall, Ab.Bombers, Ab.Gunships, Ab.Supercarrier } },
 
-        new() { Id = ShipClass.Destroyer, Name = "DESTROYER", Ready = true, Targets = 3, Fit = Fit.Guns | Fit.Missiles | Fit.Pd,
-            Blurb = "Fastest of the line. Two cursor-aimed main guns, missile bursts of three, two point-defence turrets.",
-            Hint = "DESTROYER  ·  mouse aims the main guns",
+        new() { Id = ShipClass.Destroyer, Name = "DESTROYER", Ready = true, Targets = 3, Fit = Fit.Guns | Fit.Pd,
+            Blurb = "Fastest of the line. A two-gun director battery that leads a selected target, a long-range torpedo, two point-defence turrets.",
+            Hint = "DESTROYER  ·  mouse aims the main guns; a selected target is led",
             Drive = Drives.Warp,
             Nums = new() {
-                ["hull"] = 250,
+                ["hull"] = 395,
                 ["thrust"] = 63, ["reverse_thrust"] = 27, ["max_speed"] = 117, ["reverse_speed"] = 40.5,
-                ["turn_radius"] = 107, ["turn_rate"] = 1.08,
-                ["main_count"] = 2, ["main_damage"] = 7.5, ["main_interval"] = 1.0, ["main_range"] = 720, ["shell_speed"] = 520,
+                ["turn_radius"] = 95, ["turn_rate"] = 1.2,
+                // the director battery (v1): 2 x 11.25 every 0.5 s = 45.0 DPS at 700 u, shells 760 u/s, turrets 2.09 rad/s
+                ["main_count"] = 2, ["main_damage"] = 11.25, ["main_interval"] = 0.5, ["main_range"] = 700, ["shell_speed"] = 760,
+                ["main_turn"] = 2.09,
                 ["pd_count"] = 2,
             },
-                // the 0: gear reaches the missiles, the pilot's points do not -- as it was
-            Damage = new() { ["main_damage"] = 1, ["missile_damage"] = 0 },
-            Reach = new() { ["main_range"] = 1, ["missile_range"] = 1, ["pd_range"] = 1 },
-            Cycle = new() { ["main_interval"] = 1, ["missile_reload"] = 1, ["pd_interval"] = 1 },
-            Weapons = new[] { Dps.Main, Dps.Missiles, Dps.Pd },
+                // the 0: gear reaches the Lance, the pilot's points do not
+            Damage = new() { ["main_damage"] = 1, ["lance_damage"] = 0 },
+            Reach = new() { ["main_range"] = 1, ["lance_range"] = 1, ["pd_range"] = 1 },
+            Cycle = new() { ["main_interval"] = 1, ["pd_interval"] = 1 },
+            Weapons = new[] { Dps.Main, Dps.Lance, Dps.Pd },
             Kit = new[] {
-                ItemDef.Own(GearSlot.Weapon, "dd_main_battery", "Mk I Twin Turrets", "the two main turrets", "missile_mag"),
-                ItemDef.Own(GearSlot.Utility, "dd_missile_rack", "Missile Rack", "the missile bursts and their magazine", "missile_mag"),
+                ItemDef.Own(GearSlot.Weapon, "dd_main_battery", "Mk I Twin Turrets", "the two director turrets", "lance_damage"),
+                ItemDef.Own(GearSlot.Utility, "dd_missile_rack", "Torpedo Tube", "the Long Lance's tube", "lance_damage"),
+            },
+            Rows = new StatRow[] {
+                new() { Group = "Main guns", Id = "director_lead", Label = "Leads a selected target within (x range)", Base = 1.2, Unit = "x", Dec = 2 },
+                new() { Group = "Long Lance", Id = "lance_damage",   Label = "Damage",   Base = 300, Unit = "", Dec = 0 },
+                new() { Group = "Long Lance", Id = "lance_speed",    Label = "Speed",    Base = 170, Unit = "u/s", Dec = 0 },
+                new() { Group = "Long Lance", Id = "lance_range",    Label = "Run",      Base = 3000, Unit = "u", Dec = 0 },
+                new() { Group = "Long Lance", Id = "lance_cooldown", Label = "Cooldown", Base = 18, Unit = "s", Dec = 1, Inverse = true },
+                new() { Group = "Suppressing fire", Id = "suppress_window",   Label = "Lasts",                 Base = 6,  Unit = "s", Dec = 1 },
+                new() { Group = "Suppressing fire", Id = "suppress_time",     Label = "Holds after a hit",     Base = 3,  Unit = "s", Dec = 1 },
+                new() { Group = "Suppressing fire", Id = "suppress_cooldown", Label = "Cooldown",              Base = 20, Unit = "s", Dec = 1, Inverse = true },
+                new() { Group = "Grapnel", Id = "grapnel_reach",     Label = "Reach",                    Base = 700,  Unit = "u",   Dec = 0 },
+                new() { Group = "Grapnel", Id = "grapnel_bite",      Label = "Bite",                     Base = 0.15, Unit = "s",   Dec = 2 },
+                new() { Group = "Grapnel", Id = "grapnel_pull",      Label = "Winch",                    Base = 450,  Unit = "u/s", Dec = 0 },
+                new() { Group = "Grapnel", Id = "grapnel_stop",      Label = "Hauled to (off the hull)", Base = 250,  Unit = "u",   Dec = 0 },
+                new() { Group = "Grapnel", Id = "grapnel_clear",     Label = "Shortest line (off the hull)", Base = 150, Unit = "u", Dec = 0 },
+                new() { Group = "Grapnel", Id = "grapnel_reel",      Label = "Reel",                     Base = 100,  Unit = "u/s", Dec = 0 },
+                new() { Group = "Grapnel", Id = "grapnel_swing",     Label = "Swing",                    Base = 5,    Unit = "s",   Dec = 1 },
+                new() { Group = "Grapnel", Id = "grapnel_cooldown",  Label = "Cooldown (from cast-off)", Base = 16,   Unit = "s",   Dec = 1, Inverse = true },
+                new() { Group = "Grapnel", Id = "grapnel_rip_share", Label = "Rip (x its hull)",         Base = 0.01, Unit = "x",   Dec = 2 },
+                new() { Group = "Grapnel", Id = "grapnel_rip_flat",  Label = "Rip (+ hull)",             Base = 10,   Unit = "",    Dec = 0 },
             },
             Art = new ClassArt {
                 // destroyer_dd22 (the pack, J5): both mains on the keel gun cluster near the bow,
@@ -249,7 +289,7 @@ public static class Classes
                 Mains = new Vector2[] { new(0.20f, -14.20f), new(0.20f, 17.81f) },
                 Pds   = new Vector2[] { new(-30.81f, 5.82f), new(30.81f, 5.82f) },
                 TurretTexScale = 1.3085f / 5.5f, MainBarrel = 16.03f, PdBarrel = 7.2f },
-            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Missile, Ab.Reload } },
+            Abilities = new[] { Ab.Guns, Ab.LongLance, Ab.Suppress, Ab.Grapnel } },
 
         // -- page 2: freight, which carries its own defences -------------------
         new() { Id = ShipClass.FreightHauler, Name = "FREIGHTER", Ready = true, Fit = Fit.Guns | Fit.Pd | Fit.Deploy, Shot = Shots.Spotter,

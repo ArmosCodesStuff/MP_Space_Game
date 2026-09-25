@@ -102,6 +102,10 @@ public class AbilityDef
     // names one, and its SpeedStat otherwise: the boost's slide is a row of its own (surge_strafe), so
     // gear can lift the slide without the top speed (Convoy Rig) or the top speed without the slide.
     public string RateStat, SpeedStat, StrafeStat;
+    // A SCOPED LIFT: RateOn names the ONE interval stat its RateStat reaches (the CIWS's x8 on pd_interval alone);
+    // null reaches every reload, as above. DamageStat lifts the damage stat DamageOn names, the same share rule
+    // (PlayerShip.DamageOf). `While` narrows both.
+    public string RateOn, DamageStat, DamageOn;
     // WHILE IT RUNS, what it lifts the PUSH AHEAD by and nothing else (the Dart's sprint, x3): a thrust-only lift,
     // added to SpeedStat's shares (PlayerShip.ThrustMult), so the boost's +50% on a sprint is x3.5. The top speed is
     // SpeedStat's and SpeedAdd's, never this.
@@ -112,6 +116,8 @@ public class AbilityDef
     // WHILE IT RUNS, what it lifts the REACH of the ship's weapons by (the anchor's x1.4), added like every
     // other lift (PlayerShip.ReachMult). A gun that reads it multiplies its own range row: the railgun.
     public string ReachStat;
+    // NARROWS A RUNNING ROW'S LIFTS (PlayerShip.Lifts) to the frames it says yes: the CIWS lifts nothing while Disabled.
+    public Func<PlayerShip, bool> While;
     // WHILE IT RUNS, what it HOLDS the helm to: a share taken after the lifts are summed
     // (PlayerShip.Held), so no speed lift moves a held hull. 0 roots it, heading included; 0.5
     // halves it; 1, the default, holds nothing.
@@ -166,6 +172,22 @@ public class AbilityDef
     // THE COOLDOWN A PRESS SETS (a stat id), for a row whose press spends through PlayerShip.Spend (Pops, Lays):
     // the flares, the curtain.
     public string Cooldown;
+    // A TIMED ROW (PlayerShip.RunFor): pressed, it runs Time seconds (a stat id) and its Cooldown starts from the
+    // press; while it runs its Hold, lifts and OnDealt apply as any row's. Guard (a stat id) is the share of every
+    // blow the hull takes meanwhile (Hardened at that share: two hardenings keep the stronger, D9). The Brace.
+    public string Time, Guard;
+    // COOLS FROM THE END: its Cooldown starts when its time runs out, not at the press (the Supercarrier's 30 s).
+    public bool CoolAfter;
+    // A SORTIE ROW (PlayerShip.Launch): pressed, it sends this wing row's craft (Wings.All) -- one sortie a pick for a
+    // row flown at a target (the pilot's picks, else the selected), one round the carrier for a ToHull row -- and runs
+    // the row's LifeStat. Nothing sent spends nothing. The gunships, the Supercarrier.
+    public WingKind? Sends;
+    // A BOW SHOT (BowShot below, PlayerShip.FireAlong): pressed, one round of a Shots.All row leaves the nose straight
+    // along the heading, and its Cooldown starts from the press. The Long Lance.
+    public BowShot Bow;
+    // A HOOK (HookSpec below, PlayerShip.Hook): a line to the selected hostile -- flown round what cannot move, towing
+    // what can -- cast off by a second press, and its Cooldown from the cast-off. The Grapnel.
+    public HookSpec Hook;
     // A FIELD (kits6b-J8): WHILE IT RUNS, its lifts (RateStat, SpeedStat, ...) reach every other live pilot within
     // this stat's radius of the ship too, added to that pilot's own by the same share rule (PlayerShip.Lifts): the
     // Tender's Overdrive. A row that Cuts reaches every pilot inside it, the presser included.
@@ -214,6 +236,29 @@ public class RampSpec
 public class DashSpec
 {
     public string Reach, Time, Damage, Guard, Cooldown;   // u, s, per body, x damage taken, s
+}
+
+// A BOW SHOT: one round of the Shots.All row Kind, off the nose along the heading (PlayerShip.FireAlong), at the
+// ship's own damage, speed and range stats. A row names stat ids, never numbers:
+public class BowShot
+{
+    public int Kind;
+    public string Damage, Speed, Range;   // per round, u/s, u
+}
+
+// A HOOK: a line to the selected hostile within Reach (PlayerShip.Hook). Round what cannot move (Targeting.Immovable:
+// a boss, a structure, a dummy) the OWNER flies the helm Move (HelmMoves: the bite, the pull to Stop off its hull,
+// the swing on A/D and W/S between Clear and Reach, for Time) and the host marks it; casting off -- a second press,
+// the Time, a web, a disable, the ship's own warp charge -- tears a chunk away (the RIP: RipShare of the anchor's
+// maximum hull plus RipFlat, through the damage door; none when the anchor died or warped). What can be thrown
+// (an ITowable that Targeting.Throwable passes) is towed off the bow on the Towing.All row Tow and hurled. The
+// Cooldown starts at the cast-off. A row names stat ids, never numbers:
+public class HookSpec
+{
+    public HelmMove Move;
+    public int Tow;
+    public string Reach, Bite, Pull, Stop, Clear, Reel, Time, Cooldown;   // u, s, u/s, u off the hull, u off the hull, u/s, s, s
+    public string RipShare, RipFlat;                                        // x the anchor's maximum hull, + hull
 }
 
 // A STANCE: a Status held for Time (PlayerShip.Stance), dropped by a second press or by any other of the
@@ -285,32 +330,51 @@ public static class Ab
         },
     };
 
-    public static readonly AbilityDef Missile = new()
+    // THE LONG LANCE (the Destroyer's F, v1): one torpedo straight off the bow along the heading -- 300, 170 u/s, a
+    // 3000 u run -- that stops on the first hostile it touches and never on a missile (Shots row "longlance"); 18 s from
+    // the press. A bow-shot row (AbilityDef.Bow, PlayerShip.FireAlong): never refused but COOLING.
+    public static readonly AbilityDef LongLance = new()
     {
-        Id = "missile", Name = "Missile burst", Short = "MSL", Default = Key.F,
-        Blurb = "Three guided missiles: one at the target, two wide that curve in. Needs a target in range; uses the magazine.",
-        Press = (s, t) => s.FireMissile(t),
-        Refuse = (s, t) => t == null ? "NO TARGET"
-                         : s.Position.DistanceTo(t.Position) > s.Stats["missile_range"] ? "OUT OF RANGE" : null,
-        Show = (s, _) =>
-        {
-            var st = new SlotState { Line = s.Reloading ? "RELOADING"
-                                          : s.MissilesLoaded == 0 ? "EMPTY · R"
-                                          : $"{s.MissilesLoaded}/{s.Stats["missile_mag"]:0}" };
-            if (s.Reloading) st.Busy = (float)(s.MissileReloadLeft / s.Stats["missile_reload"]);
-            return st;
-        },
+        Id = "longlance", Name = "Long Lance", Short = "LANCE", Default = Key.F,
+        Blurb = "One heavy torpedo straight off the bow: 300 damage to the first hostile it meets, up to 3000 u out. Slow; lead with the hull.",
+        Bow = new BowShot { Kind = Shots.LongLance, Damage = "lance_damage", Speed = "lance_speed", Range = "lance_range" },
+        Cooldown = "lance_cooldown",
+        Press = (s, _) => s.FireAlong("longlance"),
+        Refuse = (s, _) => s.Sl("longlance").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => Timed(s, "longlance", "lance_cooldown", "LANCE"),
     };
 
-    public static readonly AbilityDef Reload = new()
+    // SUPPRESSING FIRE (the Destroyer's Q, kits_v2): for 6 s every hostile a director SHELL hits is Suppressed until 3 s
+    // after its last hit (StatusSet.OutGuards: guns x0.5, a boss's moves x0.7, supers whole, its throw held; it still
+    // moves and webs), a grey chevron over it on every peer; 20 s from the press. A timed row (RunFor) that hears its
+    // own ship's blows (OnDealt) and afflicts through PlayerShip.Afflict: the Lance ("longlance") and the PD ("pd") carry
+    // other weapon ids and never apply it. A status, so two destroyers do not stack.
+    public static readonly AbilityDef Suppress = new()
     {
-        Weapon = true, Id = "reload", Name = "Reload missiles", Short = "RELOAD", Default = Key.R,
-        Blurb = "Refills the magazine. Nothing fires while it runs.",
-        Press = (s, _) => s.StartReload(),
-        Expire = s => s.Sl("missile").N = (int)s.Stats["missile_mag"],   // loaded: the magazine full
-        Show = (s, _) => s.Reloading
-            ? new SlotState { Line = $"{s.MissileReloadLeft:0.0}s", Busy = (float)(s.MissileReloadLeft / s.Stats["missile_reload"]) }
-            : new SlotState { Line = s.MissilesLoaded >= (int)s.Stats["missile_mag"] ? "FULL" : "READY" },
+        Id = "suppress", Name = "Suppressing fire", Short = "SUPPRESS", Default = Key.Q,
+        Blurb = "For 6 s every hostile your main guns hit deals half damage with its guns and holds its missiles, until 3 s after its last hit.",
+        Time = "suppress_window", Cooldown = "suppress_cooldown",
+        OnDealt = (s, t, _, w) => { if (w == Shots.Of(Shots.Shell).Id) s.Afflict(t, Status.Suppressed, "suppress_time", Fx.Chevron); },
+        Press = (s, _) => s.RunFor("suppress"),
+        Refuse = (s, _) => s.Sl("suppress").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => Timed(s, "suppress", "suppress_cooldown", "SUPPRESS"),
+    };
+
+    // THE GRAPNEL (the Destroyer's E, kits_v2 / v3 3.2 / v31 3.3): the selected hostile within 700 u. A boss, a structure
+    // or a dummy: a 0.15 s bite, the winch hauls the hull in at 450 u/s to 250 u off its hull, then it swings bow-on for
+    // the rest of 5 s from the press (A/D round it, W/S reel at 100 u/s, 150-700 u); casting off rips 1% of its maximum
+    // hull + 10. A raider: towed 160 u off the bow and hurled (Towing.All "hurl"). 16 s from the cast-off. A hook row.
+    public static readonly AbilityDef Grapnel = new()
+    {
+        Id = "grapnel", Name = "Grapnel", Short = "GRAPNEL", Default = Key.E,
+        Blurb = "Hooks the selected hostile within 700 u. A boss, station or dummy: the winch hauls you in and you swing round it bow-on for up to 5 s, and casting off tears 1% of its hull away. A raider: towed off your bow, then hurled. E again casts off.",
+        Hook = new HookSpec { Move = HelmMoves.Tether, Tow = Towing.Grapnel, Reach = "grapnel_reach", Bite = "grapnel_bite", Pull = "grapnel_pull",
+                              Stop = "grapnel_stop", Clear = "grapnel_clear", Reel = "grapnel_reel", Time = "grapnel_swing",
+                              Cooldown = "grapnel_cooldown", RipShare = "grapnel_rip_share", RipFlat = "grapnel_rip_flat" },
+        Press = (s, t) => s.Hook("grapnel", t),
+        Expire = s => s.CastOffHook("grapnel", rip: true),
+        Refuse = (s, t) => s.HookRefusal("grapnel", t),
+        Show = (s, _) => Timed(s, "grapnel", "grapnel_cooldown", "HOOKED"),
     };
 
     public static readonly AbilityDef Attack = new()
@@ -355,6 +419,36 @@ public static class Ab
         },
     };
 
+    // WARP GUNSHIPS (the Carrier's E, kits_v2): two craft to each of up to three picks (else the selected), warped onto
+    // a 240 u circle round it for 12 s, 10 DPS each; a pick past 3000 u gets none. 25 s from the press.
+    public static readonly AbilityDef Gunships = new()
+    {
+        Id = "gunships", Name = "Warp gunships", Short = "GUNSHIPS", Default = Key.E,
+        Blurb = "Two gunships warp onto each of up to three picked targets (or the selected one) within 3000 u and circle it for 12 s.",
+        Sends = WingKind.Gunship, TakesTargets = true, Cooldown = "gunship_cooldown",
+        Press = (s, t) => s.Launch("gunships", t),
+        Refuse = (s, sel) =>
+        {
+            if (s.Sl("gunships").Cool > 0) return "COOLING";
+            var picks = (s.GetParent() as Hub)?.Targets.Where(t => t != null && t.Alive).ToList() is { Count: > 0 } ts ? ts : sel != null ? new List<IHittable> { sel } : new List<IHittable>();
+            if (picks.Count == 0) return "NO TARGET";
+            return picks.Any(p => Wings.Within(s, Wings.Of(WingKind.Gunship), p)) ? null : "OUT OF RANGE";
+        },
+        Show = (s, _) => Timed(s, "gunships", "gunship_cooldown", "GUNSHIPS"),
+    };
+
+    // SUPERCARRIER (the Carrier's Q, kits_v3 §3.1 / v31 §3.2): a second, automated wing -- the fighter's own numbers --
+    // circling the carrier for 20 s and taking whatever Turret.Rank puts first inside 600 u of it, missiles included
+    // (Wings.All "patrol"). 30 s from the END. Its slot id is the patrol ring's (Fx.Fields keys the ring on "super").
+    public static readonly AbilityDef Supercarrier = new()
+    {
+        Id = "super", Name = "Supercarrier", Short = "SUPER", Default = Key.Q,
+        Blurb = "A second wing circles the carrier for 20 s, taking anything that comes within 600 u of it, missiles included.",
+        Sends = WingKind.Patrol, Cooldown = "super_cooldown", CoolAfter = true,
+        Press = (s, _) => s.Launch("super", null),
+        Refuse = (s, _) => s.Sl("super").Left > 0 ? "RUNNING" : s.Sl("super").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => Timed(s, "super", "super_cooldown", "SUPER"),
+    };
 
     // ── the freighters ───────────────────────────────────────────────────────
     public static readonly AbilityDef Deploy = new()
@@ -459,6 +553,34 @@ public static class Ab
         Press = (s, _) => s.Shockwave(),
         Refuse = (s, _) => s.Sl("shockwave").Cool > 0 ? "CHARGING" : null,
         Show = (s, _) => Timed(s, "shockwave", "wave_cooldown", "READY"),
+    };
+
+    // THE BRACE (the Battleship's Q, v1): 3 s taking x0.35 of every blow at half the top speed; 25 s from the press.
+    // A timed row (RunFor): its guard runs through a warp jump, and the broadside and guns keep firing under it.
+    public static readonly AbilityDef Brace = new()
+    {
+        Id = "brace", Name = "Brace", Short = "BRACE", Default = Key.Q,
+        Blurb = "For 3 s the hull takes 35% of every blow, at half its top speed. The guns keep firing.",
+        Time = "brace_time", Guard = "brace_share", Cooldown = "brace_cooldown", Hold = 0.5,
+        Press = (s, _) => s.RunFor("brace"),
+        Refuse = (s, _) => s.Sl("brace").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => Timed(s, "brace", "brace_cooldown", "BRACED"),
+    };
+
+    // CIWS (the Battleship's E, v1): 6 s of both point-defence mounts at x8 rate and x3 damage (1.5 every 0.0625 s,
+    // 24 DPS a mount) on PD's own prey and rank (Targeting.PointDefence, Turret.Rank); 20 s from the press. A scoped
+    // lift (RateOn / DamageOn): nothing but the PD mounts. An overshoot's Disabled stops the lift (decision 13: it is
+    // a gun), while the plain PD keeps firing.
+    public static readonly AbilityDef Ciws = new()
+    {
+        Id = "ciws", Name = "CIWS", Short = "CIWS", Default = Key.E,
+        Blurb = "For 6 s both point-defence turrets fire eight times as fast for three times the damage: missiles, fighters and light craft within 460 u.",
+        Time = "ciws_time", Cooldown = "ciws_cooldown",
+        RateStat = "ciws_rate", RateOn = "pd_interval", DamageStat = "ciws_damage", DamageOn = "pd_damage",
+        While = s => !s.Disabled,
+        Press = (s, _) => s.RunFor("ciws"),
+        Refuse = (s, _) => s.Sl("ciws").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => Timed(s, "ciws", "ciws_cooldown", "CIWS"),
     };
 
     public static readonly AbilityDef Well = new()
