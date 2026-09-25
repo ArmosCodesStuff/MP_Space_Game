@@ -4,7 +4,7 @@ Engine outputs for the old-way batches: S = C:\Users\logan\AppData\Local\Temp\cl
 (their summary.txt is UTF-16: read with powershell Get-Content). New batches write to %TEMP%\warships_rungs.
 
 ## Running (BUILD PHASE: no engine anywhere until every planned lane is merged -- owner; all agents Opus 5.5)
-- (launching) "lane-kits-finish" (script lane-kits-parallel-wf_777978ea-8f6.js, edited): slice 4 (gate 2 failed on ONE: no guest-role check
+- wf_d96c8731-746 / task wplisflb9, "lane-kits-finish" (script workflows/scripts/lane-kits-finish.js): slice 4 (gate 2 failed on ONE: no guest-role check
   carries a non-empty targets[]) fix -> gate 3 -> merge; then 6a, 6d (new worktrees) and 6b (wt_kits6b: Freighter + Bastion built at ffdcbc4,
   the Tender waited on slice 4) side by side; then items RECONCILE and the FOLLOW-UPS batch (wt_follow) side by side. Serialized merges.
 
