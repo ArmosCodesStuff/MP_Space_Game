@@ -25,14 +25,23 @@ fi
 R=""; for d in "$REF"*.dll; do R="$R -r:$d"; done
 rm -f /tmp/typecheck.dll
 
+# THE HARNESS IS SOURCE TOO (as typecheck.ps1): SmokeTest.cs.txt and Shots.cs.txt are compiled into
+# the game by their runners, so they are copied to .cs and handed to the same compiler.
+HARNESS=""
+for h in ../tools/smoketest/SmokeTest.cs.txt ../tools/screens/Shots.cs.txt; do
+  [ -f "$h" ] || continue
+  dst="/tmp/typecheck_$(basename "$h" .txt)"
+  cp "$h" "$dst"; HARNESS="$HARNESS $dst"
+done
+
 if [ -f GodotSharp.dll ]; then
   EXTRA="-r:GodotSharp.dll"
   [ -f GodotSharpEditor.dll ] && EXTRA="$EXTRA -r:GodotSharpEditor.dll"
-  SRC="../scripts/*.cs"
+  SRC="../scripts/*.cs $HARNESS"
   MODE="REAL GodotSharp.dll"
 else
   EXTRA=""
-  SRC="../scripts/*.cs GodotStub.cs"
+  SRC="../scripts/*.cs $HARNESS GodotStub.cs"
   MODE="hand-written stub (weaker -- drop GodotSharp.dll here to fix)"
 fi
 
