@@ -3853,6 +3853,89 @@ public partial class _Test : Node
         pm.Position = keep; pm.Velocity = Vector2.Zero;
     }
 
+    // ── A RETARGET IS A NEW ESTIMATE, NOT A JUMP (follow-J2) ──────────────────────────────────────
+    // Pure (Missiles.Lead): three frames on one target moving at va, then the watch moves to another
+    // (20 u to 2000 u off, moving at vb): the first frame of it is NOT Ready, not a jump and has no
+    // velocity; the second is Ready with vb itself (never a velocity taken from the old target's spot to
+    // the new one's); and back on the first target it starts over. 3 varied spots, speeds and bearings.
+    void FollowLeadRetargetChecks()
+    {
+        const double dt = 1.0 / 60;
+        for (int run = 0; run < 3; run++)
+        {
+            object a = new object(), b = new object();
+            var pa = new Vector2(Vary(-3000f, 3000f), Vary(-3000f, 3000f));
+            var va = Vector2.Right.Rotated(VaryAngle()) * Vary(20f, 300f);
+            var pb = pa + Vector2.Right.Rotated(VaryAngle()) * Vary(20f, 2000f);
+            var vb = Vector2.Right.Rotated(VaryAngle()) * Vary(20f, 300f);
+            var lead = new Lead();
+            for (int i = 0; i < 3; i++) lead.Watch(a, pa + va * (float)(i * dt), dt);
+            bool onA = lead.Ready && lead.Velocity.DistanceTo(va) < 0.05f;
+            lead.Watch(b, pb, dt);
+            bool first = !lead.Ready && !lead.Jumped && lead.Velocity == Vector2.Zero;
+            lead.Watch(b, pb + vb * (float)dt, dt);
+            bool second = lead.Ready && !lead.Jumped && lead.Velocity.DistanceTo(vb) < 0.05f;
+            lead.Watch(a, pa, dt);
+            bool again = !lead.Ready && lead.Velocity == Vector2.Zero;
+            Check(onA && first && second && again,
+                  $"a lead moved from a target at {va.Length():0} u/s onto another {pa.DistanceTo(pb):0} u off at {vb.Length():0} u/s: its own before ({onA}), not ready and no jump on the first frame of the new one ({first}), its {vb.Length():0} u/s on the second ({second} -- {lead.Velocity.Length():0}), and a new start back on the first ({again})");
+        }
+    }
+
+    // A HEAVY LEADS ON ITS FIRST THROW AFTER A RETARGET (follow-J2; ledger_kits COORDINATOR NOTE 2 item 4).
+    // A gunship called onto a sentry turret 450-700 u off, then called onto the pinned pilot moving at a
+    // varied speed (20-35, 40-60, 65-90 u/s) on a varied bearing, its missile clock at 0 the moment it
+    // retargets: its first blast lands AHEAD of the pilot along the pilot's velocity by the aim law's lead
+    // (speed x the 10 s flight, within 20%), not on the pilot (the old zero lead). Positions are driven by
+    // the harness each frame (the pinned hull's forced thrust would drift it), the pilot's spot at the
+    // throw re-taken on the frame the blast appears.
+    async Task FollowHeavyRetargetLeadChecks(Vector2 yonder)
+    {
+        var pm = Me; var keep = pm.Position;
+        var cd = typeof(Raider).GetField("_missileCd", BindingFlags.NonPublic | BindingFlags.Instance);
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        var bands = new[] { (20f, 35f), (40f, 60f), (65f, 90f) };
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f);
+            pm.Position = at; pm.Velocity = Vector2.Zero; pm.Hp = pm.MaxHp;
+            pm.ApplyStatus(Status.Pinned, 30.0);
+            var sentry = H.Drop(pm, at + Vector2.Right.Rotated(VaryAngle()) * Vary(450f, 700f), 1e9);
+            var hvSpot = at + Vector2.Right.Rotated(VaryAngle()) * Vary(250f, 330f);
+            var hv = H.SpawnRaider(hvSpot, Enemies.Gunship); hv.Hp = 1e9;
+            cd.SetValue(hv, 99.0);
+            hv.Call(sentry, 30.0);
+            for (int i = 0; i < 5; i++) { pm.Position = at; pm.Velocity = Vector2.Zero; hv.Position = hvSpot; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            bool onSentry = ReferenceEquals(hv.Target, sentry);
+            float speed = Vary(bands[run].Item1, bands[run].Item2);
+            var v = Vector2.Right.Rotated(VaryAngle()) * speed;
+            var before = H.Blasts.Select(b => b.id).ToHashSet();
+            hv.Call(pm, 30.0);                                              // THE RETARGET
+            cd.SetValue(hv, 0.0);
+            double t = 0; Vector2? thrownAt = null; Vector2 aim = Vector2.Zero;
+            for (int i = 0; i < 60 && thrownAt == null; i++)
+            {
+                var here = at + v * (float)t;
+                pm.Position = here; pm.Velocity = Vector2.Zero; hv.Position = hvSpot;
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                t += GetProcessDeltaTime();
+                foreach (var b in H.Blasts) if (!before.Contains(b.id)) { thrownAt = here; aim = b.at; }
+            }
+            var dir = v.Normalized();
+            float want = speed * 10f;
+            var ahead = thrownAt is { } p ? aim - p : Vector2.Zero;
+            float along = ahead.Dot(dir), across = Mathf.Abs(ahead.Dot(new Vector2(-dir.Y, dir.X)));
+            Check(onSentry && thrownAt != null && Mathf.Abs(along - want) < want * 0.2f && across < want * 0.1f,
+                  $"a gunship called off a sentry ({onSentry}) onto a pinned pilot at {speed:0} u/s leads it on its FIRST throw ({thrownAt != null}): {along:0} u ahead along its course (want {want:0}, speed x 10 s), {across:0} u across");
+            hv.TakeDamage(1e12); H.DeployedTaken(sentry);
+            pm.Statuses.Clear(Status.Pinned);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            pm.Hp = pm.MaxHp;
+        }
+        pm.Position = keep; pm.Velocity = Vector2.Zero;
+    }
+
     // ── F5 · A SHOT STRIKES EACH BODY ONCE, AND ENDS AFTER ITS STOPS (lane A slice 3, J8) ──────────
     // A shell (10 a blow) down a held line of three gunships, from 3 varied angles and spacings, with
     // Stops 1, 2 and 0: exactly the first 1, 2 or 3 lose exactly 10 each -- once, however many of the
@@ -18228,6 +18311,8 @@ public partial class _Test : Node
             await LaneARampWiringChecks(yonder);
             LaneASpeedAddChecks();
             await LaneAHeavyRowsChecks(yonder);
+            FollowLeadRetargetChecks();
+            await FollowHeavyRetargetLeadChecks(yonder);
             WingsRowsChecks();
             await WingsPatrolChecks(yonder);
             await WingsGunshipChecks(yonder);

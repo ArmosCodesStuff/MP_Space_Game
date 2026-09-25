@@ -39,3 +39,14 @@ Ids.Handed, Link, Missions._levels, Net._asked, Session 4, Settings.Keys, Sfx 2,
 AllStats.Rows, Equipment.ByIdMap, Classes.ById (derived constant tables). Charge.cs + SmokeTest comment de-staled.
 Check: FollowFingerprintCollectionChecks (solo, after LaneAChargeTableHashedChecks).
 engine-unproven: rungs owed in the final test phase. Next: follow-J2.
+
+## follow-J2 PRE -- tier opus
+Intent: Lead keyed on who it watches (a retarget drops the old sample; Ready after two frames of one target); Raider throws only when Ready; Director and Lanes' gun onto the keyed Watch. HEAD 3c7ad6e.
+Files+hashes: Missiles.cs ab39fa14, Raider.cs d579d65b, Lanes.cs 01e9085b, PlayerShip.cs 4de55a9d, SmokeTest.cs.txt ba8cbdae,
+## follow-J2 POST -- done (typecheck 0 errors; verify -Quick ALL CHECKS PASSED; own diff read)
+Lead.Watch(who, at, dt) + Lead.Ready (Missiles.cs); Raider watches keyed and throws only when Ready (one frame after a
+(re)target); PlayerShip's Director drops `_directed` (the keyed Watch is its reset); Lanes' gun watches keyed (its fire
+is NOT gated on Ready -- only the heavy was asked; a lane gun switching prey may still throw one zero-lead shot).
+Checks: FollowLeadRetargetChecks (pure), FollowHeavyRetargetLeadChecks (solo, after LaneAHeavyRowsChecks).
+The existing "pinned ... flight is 10 s" check: its hvM now throws one frame later (Ready), aim unchanged (pilot held).
+engine-unproven: rungs owed in the final test phase. Next: follow-J3.
