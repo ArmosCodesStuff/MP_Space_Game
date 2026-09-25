@@ -112,3 +112,25 @@ Shots (55b_equipment_slot_levels). engine-unproven: rungs owed in the final test
 save fixture + tampered load, window level refit 1.286, equipment-base pad + cap; six x2: guest Engines 1.265 /
 1.2725 and 605 paid; screens: 55b read by eye).
 Next: J6.
+
+## J6 PRE — tier opus
+Intent: CHANGES.md Handoff + Unreleased entry; final POST. HEAD 17651bf. Hashes:
+  docs/CHANGES.md 599d498bd5f33695107e66d9bb26924863012e64
+## J6 POST — the lane is built
+Verdict: typecheck 0 errors, quick ALL CHECKS PASSED at HEAD. Files: docs/CHANGES.md (Handoff + Unreleased).
+engine-unproven: every job's checks. WHAT THE FINAL TEST PHASE OWES (lane F):
+- Rung 3 `quick,solo,solo` (two seeds): CurveParChecks, CurveBossRowChecks, CurveRaiderChecks,
+  GearLevelChecks (price, cap x3, slot lift, sanitize, disk), the save fixture + tampered gear_level load,
+  the mission-scale check at 3 varied levels, the boss rows 3222 / 2968 and L1 boss 3222 / guns 2.23 DPS,
+  the charge 29.8, Suppressed shockwave 23.45 / plain 33.5, the unseen pilot 33.5, the Drake L2 hull / gun
+  4.72 / scrap 14.76 / rock on Par, the escort hull, failed-raid and siege-wave Strength = level, siege base
+  3222 x HullScale and pylons 402.75 x HullScale, the escort hunters' threat = level, the TIO skip check
+  and selector caps 6 / 4, the window level refit 1.286, the equipment-base slot levels and the pad's cap.
+- Rung 5 `six,six`: the guest bounty share 1500 x HullScale(2), the guest Engines levels 1.265 / 1.2725
+  and 605 salvage paid mid-session (Raider.Strength's wire meaning changed too: guests build raiders from
+  the same level).
+- Rung 4 `screens`: frames 35_tio_warp_to_target (the TIO's HullScale text), 35b_tio_skip_two and
+  55b_equipment_slot_levels read by eye once.
+Defaults taken (also the return's open): D1-D6 above; Game.Version not bumped for the gear_level keys
+(saves disregarded; lane C set 3 in this batch); Raider.cs touched in 3 hunks (Strength comment + MaxHull +
+Volley, and the two Strike lines) -- lane G merges around them.
