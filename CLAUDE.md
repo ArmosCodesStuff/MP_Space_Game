@@ -143,7 +143,8 @@ removed-path invariants, and only when a check's wiring is in doubt.
   `PlayerShip.Incoming`/`Guarded` · `PlayerShip.NoteDealt`. Before the second of anything, make the first
   a row.
 - Delete what a change replaces in the same edit (`UNUSED ANYWHERE: 0`). No new tool script unless the job
-  recurs; scratch files go in the scratchpad.
+  recurs; scratch files go in the scratchpad, under a
+  subfolder named for your lane (lanes share the scratchpad).
 
 ## 8 · The ladder — the cheapest rung that can SEE it
 
