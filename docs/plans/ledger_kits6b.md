@@ -144,3 +144,29 @@ Done: JOB 0, J1. Next is kits6b-J2; no PRE written for it. What the next agent n
   the Bastion's shockwave (~10680, ~10985); `Abilities.For(FreightHauler).Length == 10` (arena guest) grows with each
   row added; the weaponRows / level-wall tables (~6895-6901) and the every-ability witness sweep (~11446: every row on
   a bar needs a witness entry there); passive PD table (~2476) keeps 2 mounts on all three.
+
+## Agent 2 resumes at kits6b-J2 (3da5808; J1 POSTed, nothing interrupted)
+
+### kits6b-J2 · PRE · FR Time on target (D36) -- tier opus
+- Intent: Lines.Tot (3, appended), Fx.Tot row (15, appended), Beam.Tot (9, appended), Dealt.Tot "tot"; Ab.Tot (F) first
+  in the freighter's learn order (Guns, Deploy, Tot, Bubble); rows tot_damage 40, tot_width 14, tot_reach 1500,
+  tot_cooldown 16; PlayerShip.TimeOnTarget (host): paint alive, the spotter muzzle + each LANDED own sentry within
+  tot_reach of the paint, one Lines.Strike each, same tick. Bubble -> Q. Old truths: witness sweep (+ "tot"; every
+  press is given the mark painted), live wall check 3 (the freighter's ability 1 now needs the paint: the mark is
+  sunk after the press), arena guest For(freighter).Length 10 -> 11. Checks LaneA6bTotChecks (solo),
+  LaneA6bTotHost/Guest (rung 5), frame tot_lines (Shots.cs.txt).
+- Files: scripts/Lines.cs, Fx.cs, Beam.cs, Dealt.cs, Abilities.cs, Ships.cs, PlayerShip.cs, SmokeTest.cs.txt, Shots.cs.txt.
+- HEAD 3da5808dc39ffed6fad455e8b7456565016378da · Lines d418369 · Fx a44e942 · Beam 459b969 · Dealt 055f743 · Abilities
+  fdd4a42 · Ships 1ee522d · PlayerShip b6d72a2 · SmokeTest a0c6c99 · Shots.cs.txt 95eeb17
+### kits6b-J2 · POST
+- Verdict: compiles; typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final
+  test phase. Lines.Tot = 3, Fx.Tot = 15, Beam.Tot = 9 (appended; laser_boss @0.80, between bolt 0.90 and rail 0.71),
+  Dealt.Tot; Ab.Tot on F (ability 1), Bubble on Q; PlayerShip.TimeOnTarget; rows tot_damage/width/reach/cooldown
+  (kept out of Damage/Reach: no Weapons/REACH points lift it -- a default, noted for the gate).
+- Old truths rewritten: witness sweep (+ "tot"; the sweep paints its mark before every press), live wall check 3 (the
+  mark sunk AFTER ability 1, which needs the spotter's paint), the beam pin table (+ tot), Fx.All.Length 10 -> 16
+  (it was already stale at 15 rows before this lane: two checks rewritten), arena host deploy_damage 6 -> 5 (J1 missed
+  it), arena guest For(freighter).Length 10 -> 11, the guest's bubble comment F -> Q.
+- Checks written: LaneA6bTotChecks (solo, after LaneA6bSpotterChecks), LaneA6bTotHost/LaneA6bTotGuest (arena, after
+  the decoy pair), frame 79c_tot_lines (Shots.cs.txt LaneA6bTotFrame). Test phase owes: solo x2, six x2, screens.
+- Next: kits6b-J3 (Bubble on every friendly hull + Redeploy).

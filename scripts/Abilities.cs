@@ -258,9 +258,21 @@ public static class Ab
         },
     };
 
+    // TIME ON TARGET (6b, D36): every gun that can reach the paint -- the spotter and each landed
+    // sentry within tot_reach of it -- lands one line on it in the same host tick (Lines.Tot).
+    public static readonly AbilityDef Tot = new()
+    {
+        Id = "tot", Name = "Time on target", Short = "T.O.T.", Default = Key.F,
+        Blurb = "The spotter and every sentry in reach fire one rail line each at the painted target, all landing at once.",
+        Press = (s, _) => s.TimeOnTarget(),
+        Refuse = (s, _) => s.Sl("tot").Cool > 0 ? "COOLING" : s.Painted == null ? "NO PAINT" : null,
+        Show = (s, _) => s.Sl("tot").Cool > 0 || s.Painted != null ? Timed(s, "tot", "tot_cooldown", "READY")
+                                                                   : new SlotState { Line = "NO PAINT" },
+    };
+
     public static readonly AbilityDef Bubble = new()
     {
-        Id = "bubble", Name = "Bubble", Short = "BUBBLE", Default = Key.F,
+        Id = "bubble", Name = "Bubble", Short = "BUBBLE", Default = Key.Q,
         Blurb = "A bubble over you and everyone near: it soaks damage until its pool is spent or the time is up.",
         Press = (s, _) => s.RaiseBubble(),
         Refuse = (s, _) => s.Sl("bubble").Cool > 0 ? "CHARGING" : null,

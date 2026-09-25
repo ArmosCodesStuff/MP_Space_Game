@@ -842,6 +842,7 @@ public partial class _Shots : Node
             await W(0.9);                                       // the last throw has landed
             fship.Position = yard; fship.UseAbility("bubble", 0); await W(0.5);
             await Snap("79_freighter_turrets_and_bubble");
+            await LaneA6bTotFrame(hub, fship, yard);
             foreach (var t in hub.Deployed.ToList()) hub.DeployedTaken(t);
             await Class(ShipClass.Battleship); await W(0.3);
             await FieldsFrames(hub, yard);
@@ -1013,6 +1014,19 @@ public partial class _Shots : Node
         await W(0.3); await Snap("43_lanea_flares_pull_a_mark");
         await W(5.0);
         cam.Zoom = z0;
+    }
+
+    // 6b (kits6b-J2) tot_lines: the freighter's Time on target -- a gunship 420 u above the yard painted,
+    // F, and four amber lines (the spotter's and its three sentries') converging on it in the one frame
+    async Task LaneA6bTotFrame(Hub hub, PlayerShip fship, Vector2 yard)
+    {
+        var mark = hub.SpawnRaider(yard + new Vector2(60, -420), Enemies.Gunship);
+        mark.Hp = 1e9; mark.ApplyStatus(Status.Disabled, 10);
+        fship.Position = yard; fship.Velocity = Vector2.Zero;
+        fship.PaintOn(mark, 5); fship.Sl("tot").Cool = 0;
+        fship.UseAbility("tot", 0);
+        await W(0.08); await Snap("79c_tot_lines");
+        mark.TakeDamage(1e12); await W(0.3);
     }
 
     async Task LaneBDriveFrames()

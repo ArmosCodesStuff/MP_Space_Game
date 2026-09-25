@@ -710,6 +710,36 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         o.Left = Stats["overdrive_time"]; o.Cool = Cooling(Stats["overdrive_cooldown"]);
     }
 
+    // TIME ON TARGET (D36), on the host: every gun of this pilot's that can reach the paint lands one
+    // Lines.Tot line on it in this one tick -- the spotter (the main barrel's tip toward the paint) and
+    // each LANDED sentry (Hub.Deployed; a throw in flight is no gun) within tot_reach of it. Each line
+    // ends at the painted target and lands tot_damage on every hostile on it (Lines: Hostiles only).
+    // Returns how many lines it threw.
+    public int TimeOnTarget()
+    {
+        if (Sl("tot").Cool > 0 || Painted is not { } t) return 0;
+        Sl("tot").Cool = Cooling(Stats["tot_cooldown"]);
+        float reach = (float)Stats["tot_reach"];
+        var to = t.Position;
+        var muzzles = new List<Vector2>();
+        if (_mains.Count > 0)
+        {
+            var m = _mains[0].GlobalPosition;
+            muzzles.Add(m + (to - m).Normalized() * Spec(false).Barrel);
+        }
+        if (MyHub is { } h)
+            foreach (var d in h.Deployed)
+                if (d.OwnerId == OwnerId) muzzles.Add(d.GlobalPosition);
+        int n = 0;
+        foreach (var from in muzzles)
+        {
+            if (from.DistanceTo(to) > reach) continue;
+            Lines.Strike(Lines.Tot, this, from, to, Stats["tot_damage"]);
+            n++;
+        }
+        return n;
+    }
+
     // Everything within reach is thrown clear -- and what is too big to throw (a boss) is held
     // still instead, which is what the reach is really for.
     public void Shockwave()

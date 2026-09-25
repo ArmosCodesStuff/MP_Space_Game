@@ -247,7 +247,7 @@ public static class Classes
 
         // -- page 2: freight, which carries its own defences -------------------
         new() { Id = ShipClass.FreightHauler, Name = "FREIGHTER", Ready = true, Fit = Fit.Guns | Fit.Pd | Fit.Deploy, MainShot = Shots.Spotter,
-            Blurb = "Toughest hull there is. A spotter cannon that paints what it hits, three sentries that shoot the paint first, and a bubble that soaks damage.",
+            Blurb = "Toughest hull there is. A spotter cannon that paints what it hits, three sentries that shoot the paint first, every gun converging on the paint at once, and a bubble that soaks damage.",
             Hint = "FREIGHTER  ·  mouse aims the spotter  ·  a hit paints",
             Drive = Drives.Boost,
             Nums = new() {
@@ -277,6 +277,10 @@ public static class Classes
                 new() { Group = "Deployed turrets", Id = "deploy_flight",   Label = "Throw flight",     Base = 0.8, Unit = "s", Dec = 1 },
                 new() { Group = "Deployed turrets", Id = "recall_pick",     Label = "Recall within",    Base = 60, Unit = "u", Dec = 0 },
                 new() { Group = "Spotter", Id = "paint_time", Label = "A hit paints for", Base = 5, Unit = "s", Dec = 1 },
+                new() { Group = "Time on target", Id = "tot_damage",   Label = "Each line lands",  Base = 40, Dec = 0 },
+                new() { Group = "Time on target", Id = "tot_width",    Label = "Line width",       Base = 14, Unit = "u", Dec = 0 },
+                new() { Group = "Time on target", Id = "tot_reach",    Label = "A gun joins within", Base = 1500, Unit = "u", Dec = 0 },
+                new() { Group = "Time on target", Id = "tot_cooldown", Label = "Cooldown",         Base = 16, Unit = "s", Dec = 1, Inverse = true },
                 new() { Group = "Bubble", Id = "bubble_pool", Label = "Damage it soaks", Base = 400, Dec = 0 },
                 new() { Group = "Bubble", Id = "bubble_radius", Label = "Radius",        Base = 260, Unit = "u", Dec = 0 },
                 new() { Group = "Bubble", Id = "bubble_time", Label = "Time up",         Base = 8, Unit = "s", Dec = 1 },
@@ -287,7 +291,7 @@ public static class Classes
                 Mains = new Vector2[] { new(0.0f, -50.6f) },
                 Pds   = new Vector2[] { new(-32.9f, 64.4f), new(32.9f, 64.4f) },
                 TurretTexScale = 2.20f / 5.5f, MainBarrel = 27.0f, PdBarrel = 12.1f },
-            Abilities = new[] { Ab.Guns, Ab.Deploy, Ab.Bubble } },
+            Abilities = new[] { Ab.Guns, Ab.Deploy, Ab.Tot, Ab.Bubble } },
         new() { Id = ShipClass.FreightTender, Name = "TENDER", Ready = true, Fit = Fit.Guns | Fit.Pd | Fit.Deploy,
             Blurb = "One main gun, two point-defence turrets, three deployable turrets, and an overdrive that lifts everything's rate of fire.",
             Hint = "TENDER  ·  mouse aims the main gun",
