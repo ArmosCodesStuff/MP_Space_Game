@@ -1066,3 +1066,20 @@ heredoc turns "\n" inside C# strings into real newlines: it broke SessionMenu on
   s in", "back by the host's fresh invite once the blackhole lifted"; host "... lets the guest go 8 +/- 1 s
   in", "the fresh invite, carried after the blackhole lifted, brings the guest back into its place".
 - next: R5 (packaging NOTES and the record; CHANGES in it, the lane's last job).
+
+#### R5 PRE
+- job R5, tier opus. HEAD 547fa86. Intent: packaging (§8, v1 R6) and the record (§13 R5), the lane's LAST
+  job. pack.ps1: tools\import.ps1 before the export (SPIKE F1), the release DLL's presence after it, the
+  seven licences copied into the export before its file listing (runtime part, no part rule), NOTES
+  [PLAYING WITH A FRIEND] (+ the privacy line) and [THIRD-PARTY]; install.ps1: a presence check of every
+  `in=` file, used by step 2 (an install missing a file is not "already installed") and after step 4;
+  play.ps1: tools\import.ps1 before a launch from source; snapshot.ps1: the trimmed .gdextension is in the
+  master copy. Record: DESIGN (the WebRTC section: plugin row, one STUN row per connection and the walk, no
+  ICE restart, the reply window 30 s and its measurement, every channel reliable and per row, seal one
+  poll after Complete, Link.Hang, the codec's template rule, the watchdog, the traps), README ("Playing
+  with a friend"; the -Two text), CHANGES (Unreleased + Handoff + Known broken = §10.5; CLAUDE.md's rung-4
+  frame count goes stale by the new frames).
+- files: tools/pack.ps1 8ed20edb, tools/install.ps1 22492678, play.ps1 27ba61e4, tools/snapshot.ps1 bd84c158,
+  docs/DESIGN.md 8545bdea, docs/README.md c6c0a1c1, docs/CHANGES.md 599d498b, ledger 03c6ea59.
+- checks: packaging has no engine rung in this lane: `pack.ps1 -Dirty` (the export check) and the
+  one-machine check are the test phase's (not this lane); rung 6 reads the manifest/snapshot.
