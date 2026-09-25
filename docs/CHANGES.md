@@ -43,6 +43,18 @@ rung 2 green; **engine-unproven: rungs 3 and 5 owed in the final test phase** (l
 Not built, by ruling: Overcharge (the Sniper's piece is the active reload). Deferred to their readers:
 F5's nine rows and its Decoyable / Command flags, `shell_turn` (D24, D27).
 
+**2026-09-25 (worktree `WarShips_wt_curve`, branch `wt/curve`): lane F, the curve, built J1-J5;
+compiles, rung 2 green. engine-unproven: rungs 3-5 owed in the final test phase.** Par.cs replaces
+x1.025 a level; boss rows 3222 / 2968 and the cut; siege rows; raider Strength is a level; skip +2;
+salvage levels on the slot, capped. What the test phase owes: `docs/plans/ledger_curve.md` (J6 POST).
+
+**2026-09-25 (worktree `WarShips_wt_fields`, branch `wt/fields`): kits lane D (F9 fields, zones, marks)
+built, J1-J3; compiles, rung 2 green. engine-unproven: rungs 3-5 and the frames owed in the final test
+phase.** The field rows for the Supercarrier (`super`), the Taunt (`taunt`) and the boost (`boost`) wait
+for the lanes that build those slots; until then the harness prints `NOTE unbound field row` and the
+screens `shot skipped`. Detail: `docs/plans/ledger_fields.md` (J4 POST).
+
+
 **2026-09-25 (worktree `WarShips_wt_kits`, branch `wt/kits`): kits lane A J1-J7 + K1 built,
 version-l merged in (K2), and merge gate 1's seven problems fixed (K3); compiles, rung 2 green.
 engine-unproven: rungs 3-5 owed in the final test phase** (owner: build first, test once at the
@@ -540,6 +552,59 @@ missiles' id space, sent with its launch, the same on every peer (for the flares
 **Charge bands** (`Charge.cs`, an array of tables the build's fingerprint hashes, so two builds whose
 bands differ refuse each other): what a charge fires as by how far it got; the railgun's table is its
 old whole shot. **Rungs:** 1 and 2 green in the worktree; 3 and 5 owed (checks listed in the ledger).
+
+### The curve, lane F (2026-09-25, worktree wt/curve)
+
+- **Par** (`scripts/Par.cs`, new): the chip-free reference pilot (the Destroyer base class, walled, 4
+  power lines, salvage at 65% of the gate) as rows for L1-80 from `models/numbers_v2.py`. `HullScale`
+  (the boss's hull: x1.418 / 1.642 / 2.216 at L10 / 20 / 40), `DamageScale` (every hostile blow: x1.636
+  / 2.004 / 3.131), `CraftScale` (a raider's hull: x2.151 at L40); flat past L40. It replaces
+  `Missions.S` = 1.025^(L-1), which is deleted with `Missions.LevelStep`.
+- **Bosses**: the Lancer 3222 and the Drake 2968 at L1 (were 760 / 700); no hull trim for adds.
+  Every move but the two 250 supers is cut: Lancer guns 2.68, trident 11.2, shockwave 33.5, ram 29.8
+  (burn 50 a tick kept), Drake gun 4.72, scrap 14.76 (rock 250 kept). With no chips a par pilot kills
+  a boss in about 60 s and lives about 31 s (Lancer) / 42 s (Drake) at every level. The damage scale
+  rides `Missions.DamageMult`, inside `Boss.Out` (F17). Credits follow `HullScale`.
+- **Siege**: the base is the Lancer's row (3222) and a pylon an eighth of it (403), both x `HullScale`
+  (were 2x the level's boss and a flat 400).
+- **Raiders**: `Raider.Strength` is a LEVEL: hull x `CraftScale`, each volley (`Raider.Volley`) x
+  `DamageScale`, the missile the row's flat figure. An escort's threat is its hunters' level
+  (`Waves.ThreatStrength` deleted); a party's toughness is `Par.LevelAtHull`.
+- **Level skipping**: the host may pick up to two levels past the newest (`Missions.SkipAhead`); the
+  TIO says "(skip +N)". A skipped level stays uncleared.
+- **Salvage levels live on the SLOT, per pilot**: five core-slot ladders (Weapon, Engines, Shield,
+  Hull, Utility) in `Character.GearLevel`, keyed by slot name and sent with the identity as before;
+  +3% a level to what the part in the slot is for, round(500 x 1.10^n) salvage, 40 levels (+120%);
+  chip slots take none. A level is sold only up to the highest level cleared on any ladder + 1
+  (`Equipment.LevelCap`); the window greys the price there. Old part-id levels on disk are dropped
+  (saves are disregarded).
+
+**Known broken:** nothing known; nothing here has run on the engine yet (rungs 3-5 owed). Siege `Pay 2`
+/ `Crates 2` (progression_curve §2.4) are not built. Par's rows are the model's on the item law to come:
+the item pass (lane I) re-runs `numbers_v2.py` on its own `Tiers` / `Loot` rows and re-literals Par.
+
+### Class kits, lane D: fields and the torn chunk, F9 (2026-09-25, worktree wt/fields)
+
+**Fields are rows** (`Fields.All`, Fx.cs): what a ship draws round itself while one of its slots runs.
+A row names its slot, its look (Ring, Dashed, Shimmer, Plume), its radius (a stat, else a share of the
+hull's length), and optionally a pool it fades with and a tag. Slots are on the wire, so every peer
+draws the same field with no RPC. `PlayerShip._Draw`'s own bubble block is deleted: the bubble is the
+first row. New rows: the Supercarrier's dashed patrol ring at `patrol_range` in the fighter colour, the
+Taunt's hex shimmer with its `−33%` tag (from `taunt_guard`), the boost's hot plume; and an effect row
+`taunt_ring` for the Taunt's 1000 u flash. The Unmask panels were never built, so nothing is removed.
+**The torn chunk** (`Fx.Tear`): one raise, riding the anchor's NetId, Size 0.16 of the hull's length;
+every peer cuts the chunk from the anchor's own art at the hook and tumbles it on a seed from the raise
+(260 u/s within 25° of the line, at rest in 2 s, gone at 3 s), and the row's `With` brings 28 sparks,
+6 puffs of smoke and a scar the chunk's size (10 s, at most 3 on one hull). The chunk and its sprays read
+the hull as they go up, then leave it for the world, so a hull killed within 3 s keeps its chunk flying. The look only: the rip's damage (1% + 10) is
+the grapnel's hit, built with the grapnel (lane A, F8).
+
+**Checks:** FieldsContractChecks, FieldsBubbleChecks, FieldsGuestBubbleChecks, FieldsRowChecks,
+FieldsLiveRowChecks, FieldsTauntRingChecks, FieldsRipChecks (dummies, Lancer, base, pylon),
+FieldsScarCapChecks, FieldsRipOutlivesChecks (a pylon killed 0.2 s after a tear), FieldsGuestRipChecks; frames 81_patrol_ring, 82_taunt_shimmer, 83_boost_plume,
+83b_taunt_ring, 84_rip_chunk_and_scar, 84b_rip_on_boss. **Rungs:** 1 and 2 only.
+
+**Known broken:** unproven on the engine.
 
 ### Class kits, lane A K3: merge gate 1's fixes (2026-09-25, worktree wt/kits)
 

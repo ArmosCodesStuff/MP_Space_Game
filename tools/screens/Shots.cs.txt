@@ -58,6 +58,47 @@ public partial class _Shots : Node
             }
     }
     Hub H => GetTree().CurrentScene as Hub;
+
+    // ── FIELDS (lane D, F9): each kit field, drawn from its slot on a class that owns it ──
+    // 81 the Supercarrier's dashed 600 u patrol ring · 82 the Taunt's hex shimmer and its "−33%" tag ·
+    // 83 the boost's hot plume · 83b the Taunt's 1000 u flash. A slot no class owns yet (its ability
+    // is another lane's, still to merge) prints "shot skipped" rather than a frame of nothing.
+    async Task FieldsFrames(Hub hub, Vector2 yard)
+    {
+        var zp = typeof(Hub).GetProperty("ZoomLevel"); float z0 = (float)zp.GetValue(hub);
+        PlayerShip Me() => hub.GetNode<PlayerShip>("Ship_1");
+        foreach (var (row, name, zoom) in new[] { ("patrol", "81_patrol_ring", 0.45f), ("taunt", "82_taunt_shimmer", 1.6f), ("boost", "83_boost_plume", 1.6f) })
+        {
+            var def = Fields.Of(row);
+            var owner = System.Enum.GetValues<ShipClass>().Where(c => Abilities.For(c).Any(a => a.Id == def.Slot)).Cast<ShipClass?>().FirstOrDefault();
+            if (owner == null) { GD.Print($"shot skipped {name}: no class owns slot '{def.Slot}' yet"); continue; }
+            Character.Class = owner.Value; P(hub, "ApplyLocalIdentity"); await W(0.3);
+            var s = Me(); s.Visible = true; s.Position = yard; s.Velocity = Vector2.Zero; s.Rotation = 0.5f;
+            zp.SetValue(hub, zoom); await W(1.2);
+            s.Position = yard; s.Velocity = Vector2.Zero; s.Sl(def.Slot).Left = 5.0;
+            await W(0.3); await Snap(name);
+            s.Sl(def.Slot).Left = 0;
+        }
+        zp.SetValue(hub, 0.45f); await W(1.0);
+        Fx.Raise(Fx.TauntRing, Me().Position, 1000f);
+        await W(0.35); await Snap("83b_taunt_ring");
+        // 84: a chunk torn from a practice dummy, mid-tumble, with its sparks, smoke and scar
+        var d1 = hub.GetNode<TargetDummy>("TargetDummy1");
+        Me().Position = d1.GlobalPosition + new Vector2(0, 320); Me().Velocity = Vector2.Zero;
+        zp.SetValue(hub, 1.4f); await W(1.2);
+        Fx.Tear(d1, d1.ToGlobal(new Vector2(8f, -12f)), d1.GlobalPosition + new Vector2(320f, 180f));
+        await W(0.45); await Snap("84_rip_chunk_and_scar");
+        zp.SetValue(hub, z0); await W(0.4);
+        Character.Class = ShipClass.Battleship; P(hub, "ApplyLocalIdentity"); await W(0.3);
+    }
+    // 84b: the same on the arena's boss -- the chunk is cut from the boss's own art, so it shows its plating
+    async Task FieldsBossFrame(Boss boss, PlayerShip at)
+    {
+        if (!GodotObject.IsInstanceValid(boss)) { GD.Print("shot skipped 84b_rip_on_boss: no boss"); return; }
+        Fx.Tear(boss, boss.ToGlobal(new Vector2(24f, -0.3f * boss.Length)), at.Position);
+        await W(0.5); await Snap("84b_rip_on_boss");
+    }
+
     System.Collections.Generic.IEnumerable<T> N<T>(Node n = null) where T : Node { n ??= GetTree().Root;
         foreach (var c in n.GetChildren()) { if (c is T t) yield return t; foreach (var x in N<T>(c)) yield return x; } }
     void Key(Key k) { Input.ParseInputEvent(new InputEventKey { Keycode = k, PhysicalKeycode = k, Pressed = true }); Input.ParseInputEvent(new InputEventKey { Keycode = k, PhysicalKeycode = k, Pressed = false }); }
@@ -226,6 +267,8 @@ public partial class _Shots : Node
             pship.Position = Hub.TioPos + new Vector2(240, 180); pship.Velocity = Vector2.Zero;
             GetViewport().GetCamera2D().Zoom = new Vector2(1.1f, 1.1f); await W(1.6);
             hub.OpenTio(); await W(0.4); await Snap("35_tio_warp_to_target");
+            hub.SelectLevel(Missions.Level + 2); await W(0.3); await Snap("35b_tio_skip_two");     // lane F: "(skip +2)"
+            hub.SelectLevel(Missions.Unlocked(Missions.Kind)); await W(0.2);
             hub.SetMyReady(true); pship.AutopilotTo = null;              // READY, but stay for the pictures
             await W(1.6); await Snap("36_mission_opening_bar");
             await W(2.0); await Snap("37_mission_portal_open");
@@ -354,7 +397,7 @@ public partial class _Shots : Node
         {
             var rs2 = H.GetNode<PlayerShip>("Ship_1"); var keepR2 = rs2.Position;
             rs2.Position = Hub.BasePos + new Vector2(0, 2600); rs2.Velocity = Vector2.Zero; rs2.Rotation = 0f; await W(0.5);
-            H.SpawnPatrol(rs2.Position + new Vector2(-500, 350), 1.1); H.SpawnPatrol(rs2.Position + new Vector2(500, 350), 1.1);
+            H.SpawnPatrol(rs2.Position + new Vector2(-500, 350), 1); H.SpawnPatrol(rs2.Position + new Vector2(500, 350), 1);
             await W(1.0); await Snap("53_raid_incoming");
             foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e9);
             rs2.Position = keepR2; rs2.Velocity = Vector2.Zero; await W(0.3);
@@ -364,6 +407,18 @@ public partial class _Shots : Node
             H.ToggleEquipment(); await W(0.4);
             await Snap("55_equipment");
             H.ToggleEquipment(); await W(0.2);
+        }
+        // ...and salvage levels on the SLOT (lane F): the Weapon slot at level 4 (+12% beside its part's
+        // name) and held at the cap with level 3 cleared (its price greyed), the Shield slot at level 1
+        {
+            var keepLv = new System.Collections.Generic.Dictionary<string, int>(Character.GearLevel);
+            var keepCl = Character.BossCleared.ToDictionary(kv => kv.Key, kv => kv.Value);
+            Character.GearLevel["Weapon"] = 4; Character.GearLevel["Shield"] = 1; Character.BossCleared["silver_lancer"] = new() { 1, 2, 3 };
+            H.ToggleEquipment(); await W(0.4);
+            await Snap("55b_equipment_slot_levels");
+            H.ToggleEquipment(); await W(0.2);
+            Character.GearLevel.Clear(); foreach (var kv in keepLv) Character.GearLevel[kv.Key] = kv.Value;
+            Character.BossCleared.Clear(); foreach (var kv in keepCl) Character.BossCleared[kv.Key] = kv.Value;
         }
         // ...and with boss drops: an Epic shield fitted (its name in the Epic colour, its effects in
         // words), and a hold of every class's parts, some of them doubled
@@ -704,6 +759,7 @@ public partial class _Shots : Node
             await Snap("79_freighter_turrets_and_bubble");
             foreach (var t in hub.Deployed.ToList()) hub.DeployedTaken(t);
             await Class(ShipClass.Battleship); await W(0.3);
+            await FieldsFrames(hub, yard);
 
             // ── EVERY ENEMY HULL, in a row, in Enemies.All order: the pack's art on each, a flame on
             //    every bell, the heavies' turrets on their mounts (read by eye) ──
@@ -749,6 +805,7 @@ public partial class _Shots : Node
             if (GodotObject.IsInstanceValid(H.Boss)) { H.Boss.TakeDamage(90); await W(0.09); await Snap("42_boss_bar_chunk"); }
             for (int i = 0; i < 60 * 16 && !N<FxNode>().Any(t => t.Id == Fx.WarnZone); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             await W(0.9); await Snap("39_arena_shockwave_telegraph");
+            await FieldsBossFrame(H.Boss, ash);
             H.SetZoom(z0);
             // the kill: this pilot's crates on a ring where the boss died, the RETURN button and the
             // ready tally on the boss bar, the crates on the radar; one taken so the count reads 1 of 2

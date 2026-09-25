@@ -57,12 +57,18 @@ public readonly struct Post
 public static class Emplacements
 {
     public const string Base = "pirate_base", Pylon = "pirate_pylon";
+    public const double PylonShare = 0.125;         // a pylon's hull, of the Lancer's row
+    // THE BOSS ROW A SIEGE IS SIZED ON, by id: the order of Missions.Bosses sets which boss holds a
+    // level, so a place in it is never read for this.
+    private const string SiegeRow = "silver_lancer";
+    private static double SiegeHull => Missions.Bosses.First(b => b.Id == SiegeRow).Hull;
 
     public static readonly EmplacementDef[] All =
     {
-        // THE PIRATE BASE. Twice the hull of the boss that holds the SAME LEVEL -- read off
-        // Missions.ForLevel, so there is one ladder and not a second one of its own -- and nothing
-        // may touch it while a pylon stands. It carries NO GUNS: a siege's damage is its garrison's
+        // THE PIRATE BASE. The hull of the LANCER'S ROW (SiegeRow, 3222 at level 1) on the
+        // level's own scale -- a row of its own, never the boss that holds the level (Lancer and
+        // Drake take turns, and the base would swing 8% between odd and even levels) -- and nothing may
+        // touch it while a pylon stands. It carries NO GUNS: a siege's damage is its garrison's
         // (Waves.All, "siege"), and what the base adds is one CRUISE MISSILE every 15 s at the
         // nearest pilot within 4500 u -- a red lane to that pilot 1.5 s ahead, a barrel quick enough
         // to come round from any bearing inside it (Turn x Windup > pi) so the round leaves down its
@@ -70,7 +76,7 @@ public static class Emplacements
         // can bring down (Tag.Hulled). 126 a missile is the base's share of a siege at the curve's
         // fit, 8.4 a second, over the 15 s between them; 30 hull is two seconds of a median main gun,
         // on the level's scale alone because it is fired at ONE pilot (Emplacement._hull).
-        new() { Id = Base, Label = "PIRATE BASE", Hull = l => 2 * Missions.ForLevel(l).Hull,
+        new() { Id = Base, Label = "PIRATE BASE", Hull = _ => SiegeHull,
                 Texture = "res://pirate_base.png", Length = 483f, HalfWidth = 330f,
                 Tint = new Color(0.72f, 0.20f, 0.17f), Trim = new Color(0.08f, 0.08f, 0.10f),
                 Shields = Pylon,
@@ -80,10 +86,10 @@ public static class Emplacements
                                        Texture = "res://turret_main.png", TexScale = 0.26f, Barrel = 34f,
                                        Tint = new Color(0.90f, 0.40f, 0.34f), Source = DamageSource.BaseMissile } },
 
-        // ITS FOUR SHIELD PYLONS. 400 hull to start, on the same ladder above that; nothing shields
+        // ITS FOUR SHIELD PYLONS. An eighth of the Lancer's row (403 at level 1), on the same scale; nothing shields
         // THEM, nothing ends the mission when one falls, and they answer with nothing -- they are
         // only what has to go first.
-        new() { Id = Pylon, Label = "SHIELD PYLON", Hull = _ => 400,
+        new() { Id = Pylon, Label = "SHIELD PYLON", Hull = _ => PylonShare * SiegeHull,
                 Texture = "res://drone_sensor.png", Length = 300f, HalfWidth = 150f,   // the Pod's own file (D18)
                 Tint = new Color(0.68f, 0.20f, 0.20f), Trim = new Color(0.08f, 0.08f, 0.10f) },
     };

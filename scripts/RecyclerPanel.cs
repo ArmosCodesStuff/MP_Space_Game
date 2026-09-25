@@ -95,10 +95,9 @@ public partial class RecyclerPanel : PanelContainer
             var it = Equipment.ById(kv.Key);
             if (it == null || it.Kit) continue;                      // a hull's own hardware is not loot
             bool locked = Character.GearLocked.Contains(kv.Key);
-            int lv = Equipment.LevelOf(kv.Key);
             var row = Ui.HBox(8, "Hold_" + kv.Key);
             var text = Ui.VBox(1); text.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-            text.AddChild(Ui.Lbl($"{it.Name}{(kv.Value > 1 ? $"  x{kv.Value}" : "")}{(lv > 0 ? $"   +{lv * Equipment.LevelStep * 100:0}%" : "")}",
+            text.AddChild(Ui.Lbl($"{it.Name}{(kv.Value > 1 ? $"  x{kv.Value}" : "")}",
                                  Ui.Body, Ui.RarityColor(it.Rarity)));
             text.AddChild(Ui.Lbl($"{it.Slot.ToString().ToUpperInvariant()}  ·  {Economy.ScrapValue(it.Rarity):0} salvage", Ui.Small, Ui.Dim));
             row.AddChild(text);

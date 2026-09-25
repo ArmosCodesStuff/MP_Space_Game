@@ -616,6 +616,22 @@ charge picks a multiplier and a line row; a ramp is a band flag, not code. The S
 (6c) is the railgun's table rewritten, not a new path. Trap: a constant table is an ARRAY of rows, never a
 dictionary -- `Net.Plain` does not hash a dictionary field, so a build whose table differed would still be admitted.
 
+### Fields and one-raise effects (kits lane D, F9)
+
+- **A field is a row keyed by a slot id** (`Fields.All`), never a block in `_Draw`. The row names the
+  slot; the ability's own row does not know it has a field. A lane that names its slot differently from
+  `super` / `taunt` / `boost` edits that one row, and `FieldsLiveRowChecks` stops printing its NOTE.
+- **One raise, many pieces.** An effect that is several pieces (the torn chunk: debris, sparks, smoke,
+  scar) is ONE row on the wire with `With` naming the rest; each peer builds them from the same raise.
+  Anything random in them is a pure function of the raise (`Fx.Seed(anchor, at)`, `Fx.Tumble`), never
+  a random number drawn on the peer, or two peers draw two different chunks.
+- **A Loose piece reads its anchor once, then leaves it** (`FxNode.Settle`, deferred, to `Combat.World`),
+  so a hull killed under its chunk does not free it. Its companions are built in that same step, never
+  before, so a hull freed first leaves nothing behind. **Trap:** raise a tear BEFORE the hit it goes
+  with; the world finds the anchor among the living (`Combat.ById`), so a tear after a killing hit has
+  no hull to cut from.
+
+
 ### The helm: capital ships handle like naval ships
 
 The developer's call: *no strafing, a turning radius, move as if in a medium* — and *slow*: speeds

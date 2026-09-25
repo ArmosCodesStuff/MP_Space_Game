@@ -1065,12 +1065,12 @@ public partial class Hub : Node2D
         foreach (var t in GetChildren().OfType<Shot>()) if (t.NetId == id) t.Intercept();
     }
 
-    // host: pick a level between 1 and the newest unlocked ON THIS OPERATION'S OWN LADDER. The
-    // level is per category (Missions.Level), so this never moves the other one.
+    // host: pick a level between 1 and Missions.SkipAhead past the newest unlocked ON THIS
+    // OPERATION'S OWN LADDER. The level is per category (Missions.Level), so this never moves the other one.
     public void SelectLevel(int level)
     {
         if (!Net.IsHost || Mission != MissionState.Idle) return;
-        Missions.Level = System.Math.Clamp(level, 1, Missions.Unlocked(Missions.Kind));
+        Missions.Level = System.Math.Clamp(level, 1, Missions.Top(Missions.Kind));
         BroadcastMission();
     }
 
@@ -1082,7 +1082,7 @@ public partial class Hub : Node2D
     {
         if (!Net.IsHost || Mission != MissionState.Idle) return;
         Missions.Kind = System.Math.Clamp(kind, 0, Missions.Kinds.Length - 1);
-        Missions.Level = System.Math.Clamp(Missions.Level, 1, Missions.Unlocked(Missions.Kind));
+        Missions.Level = System.Math.Clamp(Missions.Level, 1, Missions.Top(Missions.Kind));
         BroadcastMission();
     }
 
@@ -1151,7 +1151,7 @@ public partial class Hub : Node2D
     public const float RaidEdge = 4200f;
     private readonly Raids _raids;
     public Hub() { _raids = new Raids(this); }      // this world's director, built before _Ready
-    public int SpawnPatrol(Vector2 at, double scale = 1) => _raids.Patrol(at, scale);
+    public int SpawnPatrol(Vector2 at, double level = 1) => _raids.Patrol(at, level);
     public void HuntWave(Node2D quarry, int wave) => _raids.Hunt(quarry, wave);
     public void GarrisonWave(Vector2 at, int wave) => _raids.Garrison(Missions.Level, at, wave);
     public void CallOff(Node2D quarry) => _raids.CallOff(quarry);
@@ -1234,9 +1234,9 @@ public partial class Hub : Node2D
     // A raider is a row of Spawns.All too. `patrol` -- which squad it flew in with -- is the
     // host's own bookkeeping and is not on the wire, so it is set after the spawn, exactly as
     // Quarry and Agility are (Raids.Send).
-    public Raider SpawnRaider(Vector2 at, int kind = Enemies.Webifier, int patrol = 0, double scale = 1, double hullShare = 1)
+    public Raider SpawnRaider(Vector2 at, int kind = Enemies.Webifier, int patrol = 0, double level = 1, double hullShare = 1)
     {
-        if (Spawn(Spawns.Raider, at, kind, scale, hullShare) is not Raider r) return null;
+        if (Spawn(Spawns.Raider, at, kind, level, hullShare) is not Raider r) return null;
         r.Patrol = patrol;
         return r;
     }

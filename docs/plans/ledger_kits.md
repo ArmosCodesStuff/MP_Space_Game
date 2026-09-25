@@ -918,3 +918,17 @@ nothing, and return status blocked with open "NOTE 4: moved to parallel lanes".
   railgun band fires xN has another fingerprint ...". Trap: the latter mutates the railgun band's Mult in place
   and restores it in a finally (synchronous, no frame between).
 - Checkpoint: the commit after this entry. Slice 3 is complete (J8-J12).
+
+## K-merge (slice 3) -- merge version-l 92b330b into wt/kits
+
+PRE: tier merge; intent: sync with version-l (art, curve, fields, wave lanes) before lane A slice 3 merges.
+HEAD 87ad2d2, MERGE_HEAD 92b330b. Conflicted files: docs/CHANGES.md, docs/DESIGN.md, tools/smoketest/SmokeTest.cs.txt.
+
+POST:
+- docs/CHANGES.md: Handoff -- both kept (kits slice 3 entry, then curve and fields entries); Unreleased -- both
+  kept (kits slice 3 section, then curve lane F and kits lane D fields sections).
+- docs/DESIGN.md: both kept (kits "Stops / Lines / charge bands" paragraph, then "Fields and one-raise effects").
+- tools/smoketest/SmokeTest.cs.txt: both kept in the lane A call list (LaneAShotStops .. LaneAChargeTableHashed,
+  then FieldsLiveRowChecks).
+- Auto-merged: Hub.cs, PlayerShip.cs, Shots.cs and the rest; no stale ClassArt.PdRing reference.
+- Verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED. Engine rungs owed in the test phase.

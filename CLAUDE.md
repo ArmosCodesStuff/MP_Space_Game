@@ -54,8 +54,8 @@ The cost is the context re-read on every turn and by every agent, not the output
    **Returns** are a verdict and a pointer: `status` (done / stopped_context / red / blocked), `head`,
    ≤10 lines of summary, `open`. Detail goes to the ledger.
 3. **Fan-outs.** Every lane gets ONE merge-gate reviewer (opus, read-only), once. A fan-out review (≤ 5
-   finders, each finding verified by ≤ 3 skeptics) only for authority, wire or save-format lanes. Any
-   fan-out (review, design, audit, research) is ≤ 5 agents, each on an angle you can name that no other
+   finders, each finding verified by ≤ 3 skeptics) only for authority, wire or save-format lanes. Every agent
+   has a task no other agent has (owner, 2026-09-25). Any fan-out (review, design, audit, research) is ≤ 5 agents, each on an angle you can name that no other
    one sees; duplicates only cost tokens. No critic stage for a mechanical plan.
 4. **Never paste a log.** Redirect it, grep the verdict and the failing lines. **Read slices**: grep, then
    an offset. `SmokeTest.cs.txt`, `Hub.cs`, `PlayerShip.cs`, `CHANGES.md`, `DESIGN.md` are never read
@@ -107,6 +107,9 @@ Before the first line of a change, name its checks; they land in the same commit
 4. **Fixed bug**: a check that fails on the old code first.
 5. **Visible**: a named frame in `Shots.cs.txt`, read by eye once.
 6. **Wire** (RPC, field, host-decided state a guest sees): a check in a guest role (rung 5).
+7. **Class ability** (owner, 2026-09-25): at least THREE distinct checks per ability or drive row, each from 3 varied
+   situations: its effect asserting the spec's literals, each interaction its kit names, a guest-role check or a named frame.
+   The test phase audits every `ClassDef.Abilities` and drive row for three.
 
 The commit message ends with a `Checks:` line naming every check added or rewritten. `verify.ps1` refuses a
 `scripts/` change with no harness change since the last `VERIFIED:` commit.
