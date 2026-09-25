@@ -529,3 +529,27 @@ Owed on the R1 records commit (it carries J10 and J9c):
   c595dacea846b11d8e750bcfd1541bc2183f4830; run.ps1 ad134d9c0ffbe6ddba0fb3016534699cebf9a2be;
   wan.py 74fc642f5d25bd2c3c1d94dd244dda414bc625d4; CHANGES.md 658342ca494153aae9cd0272e31a6f9d131f8e33;
   DESIGN.md c55c31673f59a2cfc04f9bc70a93253d72c2d3a8; ledger 3ba6ceff4f9f343e6091472e281ad979f7d4e06f
+
+### R1P POST
+- verdict: ALL GREEN. `net_r1a` (tag) hit rung 3 red first pass, seed 11400714819322686448: two FAILs,
+  both J9c's, neither visible below rung 3 -- "nothing about the pilot is part of the build's
+  fingerprint" (asserted zero `Character.`-prefixed fingerprint parts at all; `Character` carries five
+  of its own `const` bounds -- `Dir`, `MaxBonus`, `MaxStock`, `PaidKept`, `SaveDelay` -- the same for
+  every peer on this build whichever pilot is loaded, always part of the fingerprint, never the pilot)
+  and "every field of Character is accounted for by this test" (named the field `Bought`; it is a
+  property now, so reflection sees the compiler's backing field, `<Bought>k__BackingField`, the same
+  way `LastSaveRenamed`'s already does). Fixed at rung 3 (the only rung that sees a reflection-driven
+  runtime assertion), checkpoint c4a7e01. `net_r1b` from c4a7e01: `-Quick` green (81s); rung 3 green
+  twice, seeds 11400714819323513555 (143s) and 11400714819323526641 (134s), every owed check name
+  read back PASS in both logs (none missing), no ERROR line; the six-role run green (251s, seed
+  11400714819323519265), all six roles `fails=0`, no build/protocol refusal anywhere -- host and every
+  guest agree on J9c's `Net.Protocol`. **The pair-proxy unknown is CLOSED, in the box's favour:**
+  libjuice does use the loopback pair proxy as a remote candidate ("an in-process pair whose codes the
+  courier rewrote to the box's address connects through the box, datagrams both ways": 9 to the host, 9
+  to the guest, 0 before its endpoints were known); the blackhole check passed alongside it (1468 ms).
+  The `Net.DropBeatsFor` fallback (plan §10.2) was never needed.
+- files: tools/smoketest/SmokeTest.cs.txt (the two rung-3 fixes above), docs/DESIGN.md (the trap),
+  this ledger (PRE/POST)
+- checkpoint: c4a7e01 (the fix); nothing to commit for the green re-run itself (records below carry it)
+- next: CHANGES.md Handoff and Known broken updated to this rung 3/5-equivalent result (the pair-proxy
+  line removed, not a fallback); then the bar, a merge to `version-l`, and R2.

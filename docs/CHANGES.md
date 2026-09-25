@@ -36,14 +36,18 @@ history pick the work up from it alone. Update it in the same change as the code
 
 ## Handoff — read this first
 
-**2026-09-25 (local session, worktree `WarShips_wt_net`, branch `wt/net`): WebRTC slice R1's code
-landed** (Unreleased: "WebRTC slice R1"). Commits 6eef84e, dba1847, 06db494 (J7-J9), 8760795 (J9b,
-rung 3 green on seeds 11400714819323466726 and 11400714819323463562), 3e4df1b (J10, the rows end to
-end), e4cac19 (J9c, the build's fingerprint). **Owed:** rung 3 twice on the R1 records commit (two
-seeds; the names to read are in `docs/plans/ledger_webrtc.md`, "Rungs the main session owes for R1");
-the pair-proxy check is the one unknown (§10.2's fallback if it fails twice). Then the bar, a merge to
-`version-l`, and **R2** (network_webrtc.md §13: the switch; its `Net` is the desks, `Net._Process` polls
-`Rendezvous.Paths`, `Join` adds an invite's candidates only after the walk, D15). Not pushed.
+**2026-09-25 (local session, worktree `WarShips_wt_net`, branch `wt/net`): WebRTC slice R1 is proved
+on the engine.** Commits 6eef84e, dba1847, 06db494 (J7-J9), 8760795 (J9b, rung 3 green on seeds
+11400714819323466726 and 11400714819323463562), 3e4df1b (J10, the rows end to end), e4cac19 (J9c, the
+build's fingerprint), c4a7e01 (R1P: two rung-3-only checks fixed -- `Character`'s own `const` bounds
+are not "the pilot", `Bought`'s reflection name changed with the property). Rung 3 green twice more on
+this commit (seeds 11400714819323513555 and 11400714819323526641) and the six-role run green once
+(seed 11400714819323519265, every role `fails=0`): host and every guest agree on J9c's `Net.Protocol`.
+**The pair-proxy unknown is closed, in the box's favour**: libjuice does use a loopback pair proxy as a
+remote candidate (9 datagrams to the host, 9 to the guest); the `Net.DropBeatsFor` fallback (plan
+§10.2) was never needed. Next: the bar (`verify.ps1 -Update`), a merge to `version-l`, and **R2**
+(network_webrtc.md §13: the switch; its `Net` is the desks, `Net._Process` polls `Rendezvous.Paths`,
+`Join` adds an invite's candidates only after the walk, D15). Not pushed.
 
 **2026-09-24 (local session): R0 is green** -- rung 2, rung 3 on seeds 90331 and 4127, `-OneDll`,
 `-ReplyWindow` (every delay to 60 s connected: `Link.ReplyWindowS` = 30, DESIGN.md). Three harness
@@ -534,15 +538,15 @@ row through the courier's files, the reply taken off the clipboard as a whole Di
 the host's own invite; the pickup's pace and once-only; a pair whose codes the courier rewrote connects
 through the box's pair proxy, datagrams both ways; a packet sent into a 1 s blackhole arrives after it
 lifts; nothing about the pilot is in the fingerprint; the fingerprint never hashes itself; a struct row
-is in it. Replaced: the reply-window measurement. Rung 3 green on two seeds at 8760795 (J7-J9b); J10
-and J9c are `-Quick` green, rung 3 not yet run.
+is in it; every field of Character is accounted for by the round-trip test (`<Bought>k__BackingField`,
+the property's own backing field, now that `Bought` is one); `Character`'s own `const` bounds are not
+the pilot and stay in the fingerprint (`Dir`, `MaxBonus`, `MaxStock`, `PaidKept`, `SaveDelay`).
+Replaced: the reply-window measurement. Rung 3 green on two seeds at 8760795 (J7-J9b); two rung-3
+checks of J9c's fixed at c4a7e01 (both invisible below rung 3); rung 3 green twice more at c4a7e01
+(seeds 11400714819323513555, 11400714819323526641) and the six-role run once (seed
+11400714819323519265, every role `fails=0`): host and every guest agree on `Net.Protocol`.
 
 **Known broken (R1):**
-- **The rows end to end and the fingerprint fix are not run on the engine** (J10 3e4df1b, J9c
-  e4cac19): compiled and `-Quick` green only.
-- **Whether libjuice uses a loopback pair proxy as a remote candidate is unknown** until that rung 3
-  (plan §10.2). If the pair-proxy check fails twice with nothing carried, `-Wan` loses loss and delay on
-  game datagrams and R4's watchdog check uses `Net.DropBeatsFor` instead of the blackhole.
 - **What libjuice writes after an IPv6 server-reflexive candidate is unread**; the codec writes
   `raddr :: rport 0`. No network here has one, so no check can see it.
 - **The Linux runner (run.sh) does not start the box**, and has no plugin (R0); the rows' checks need
