@@ -7,6 +7,9 @@ using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 
 // HOW TWO MACHINES SWAP SESSION DESCRIPTIONS (docs/plans/network_webrtc.md §4, §7). WebRTC needs each
 // side to hand the other its session description -- ICE credentials, the DTLS fingerprint, the
@@ -18,7 +21,12 @@ using System.Text;
 //     carries those five and the candidates, and the far side rebuilds the rest byte for byte;
 //   * the TEXT a player pastes: WSI (invite) or WSR (reply), then Crockford base32, read forgivingly;
 //   * the FIT rule that keeps a code inside its row's budget;
-//   * the ROWS (Paths), the ways in: a pasted code, or a typed address. Each claims the text it can carry.
+//   * the ROWS (Paths), the ways in: a pasted code, or a typed address. Each claims the text it can carry;
+//     the host OPENS each row on its desk, the guest STARTS a join on one;
+//   * the address row's LISTENER (the host's TCP port) and DIALER (the guest's knock), and the paste
+//     row's CLIPBOARD PICKUP (the host's game taking a friend's reply off the clipboard);
+//   * the PENDING table, one entry per invite not yet connected, and the two DESKS a session implements
+//     so the rows can reach it (IHostDesk, IGuestDesk: Net in R2, the harness's desk before that).
 // It replaces the public-address reveal and copy (Net's Describe, Reach and PublicIpService, deleted in
 // R2): a friend is sent an invite, not an address.
 //
@@ -449,6 +457,10 @@ public static class Rendezvous
         bool Stun { get; }                  // does it walk the STUN rows when it gathers (§5.2)
         int Budget { get; }                 // what one code may take on this row, in Measure's unit
         int Measure(Record r);              // what this record takes on this row
+        void Open(IHostDesk desk);          // the host takes joins by this row, on its desk
+        void Close();                       // ...and stops: a join in flight is refused `closed`
+        Task<Record> Start(string text, IGuestDesk desk);   // the guest joins by this text: the host's record back
+        void Poll();                        // once a frame on the main thread: what the row watches by itself
     }
     // BY INVITE: a code the players paste to each other (Discord, a text message). The host makes the
     // first code, so it is the one row that crosses the internet, and the one that walks the STUN rows.
@@ -460,6 +472,34 @@ public static class Rendezvous
         public bool Stun => true;
         public int Budget => PasteBudget;
         public int Measure(Record r) => Encode(r).Length;
+        // The friend pastes the invite; the desk answers it (the reply the friend then sends back).
+        public async Task<Record> Start(string text, IGuestDesk desk)
+        {
+            var invite = Find(text, Kind.Invite) ?? throw new FormatException("the text holds no whole invite code");
+            await desk.Answer(invite);
+            return invite;
+        }
+        // THE CLIPBOARD PICKUP (§3.4, §15 Q1): while an invite is pending, the clipboard is read at most
+        // every PickupMs, and a reply for an entry still Waiting is handed to the desk, once per distinct
+        // text -- so the host's part is to copy the friend's message, in combat, a menu, or alt-tabbed.
+        // Anything else on the clipboard (the host's own invite, a stale reply, words) is left alone.
+        private IHostDesk _desk;
+        private ulong _nextAt;
+        private string _seen;
+        public void Open(IHostDesk desk) { _desk = desk; _nextAt = 0; _seen = null; }
+        public void Close() => _desk = null;
+        public void Poll()
+        {
+            if (_desk == null || _desk.Pending.Count == 0) return;
+            ulong now = Time.GetTicksMsec();
+            if (now < _nextAt) return;
+            _nextAt = now + PickupMs;
+            string text = Clipboard() ?? "";
+            if (text == _seen) return;
+            _seen = text;
+            if (Find(text, Kind.Reply) is { } reply && _desk.Pending.Find(reply.Id) is { Stage: Stage.Waiting })
+                _desk.Replied(reply);
+        }
     }
     // BY TYPED ADDRESS: a LAN, Radmin VPN or Tailscale. The same invite and reply travel over a TCP
     // connection to the host's listener, with no pasting; host candidates are the path, so no STUN.
@@ -471,11 +511,244 @@ public static class Rendezvous
         public bool Stun => false;
         public int Budget => WireMax;
         public int Measure(Record r) => Pack(r).Length;
+        public void Open(IHostDesk desk) { Close(); _listening = new Listener(desk); }
+        public void Close() { _listening?.Close(); _listening = null; }
+        public Task<Record> Start(string text, IGuestDesk desk) => Dial(text, desk);
+        public void Poll() { }              // the listener hands each knock to the main thread itself
     }
     public const int WireMax = 8192;                // bytes: the listener's read cap for one record
     public static readonly IRendezvousPath Paste = new PasteRow(), Address = new AddressRow();
     public static readonly IRendezvousPath[] Paths = { Paste, Address };
     public static IRendezvousPath PathFor(string text) => Paths.FirstOrDefault(p => p.Claims(text));
+    public const int PickupMs = 500;                // the clipboard pickup reads at most twice a second
+
+    // ── the guest's mark (§3.3 B) ────────────────────────────────────────────
+    // A 32-bit value drawn once per game process, never 0: a knock carries it, so the listener tells a
+    // guest's newer knock from a new guest's. A property over a mutable field, NEVER a readonly static:
+    // Net.Fingerprint folds those into Net.Protocol, and a value drawn per process there would make every
+    // process a different build (Game.Build's trap).
+    public static uint Guest => _guest ??= (uint)System.Random.Shared.NextInt64(1, 1L << 32);
+    private static uint? _guest;
+
+    // ── the pending table (§3.1) ─────────────────────────────────────────────
+    // ONE ENTRY PER INVITE NOT YET CONNECTED, whichever row carried it. Waiting: the invite is out and no
+    // reply has been taken. Linking: a reply was taken and the connection has Link.LinkMs to come up.
+    // R2's Net holds one and adds the connection, the name and when it was made.
+    public enum Stage { Waiting, Linking }
+    public sealed class Entry
+    {
+        public int Id;                              // the invite's id, which is also the friend's peer id
+        public string Row = "";                     // the row that carried the invite, by its Id
+        public uint Guest;                          // the knock's mark (the address row); 0 on the paste row
+        public Stage Stage;
+    }
+    public sealed class Pending
+    {
+        private readonly List<Entry> _all = new();
+        public int Count => _all.Count;
+        public void Add(Entry e) { Remove(e.Id); _all.Add(e); }
+        public bool Remove(int id) => _all.RemoveAll(e => e.Id == id) > 0;
+        public Entry Find(int id) => _all.Find(e => e.Id == id);
+        // the entries a knock with this mark made, as a copy (0 is no mark: none)
+        public List<Entry> OfGuest(uint guest) => guest == 0 ? new() : _all.FindAll(e => e.Guest == guest);
+    }
+
+    // ── the desks: what a row asks of the session. Every call is on the main thread ──
+    public interface IHostDesk
+    {
+        Pending Pending { get; }
+        bool Full { get; }                          // no room for another friend: a knock is refused `full`
+        Task<Record> Invite(Record knock);          // an invite for this knock, gathered with no STUN row, its entry added Waiting
+        void Hang(int id);                          // this pending entry is over: hung up (Link.Hang) and gone
+        void Replied(Record reply);                 // a reply for a pending invite: take it (§3.3 A6)
+        void Refused(Record knock, Why why);        // a knock was refused: the host's line naming who knocked
+    }
+    public interface IGuestDesk
+    {
+        Record Knock();                             // this player's knock: the build, the name, Guest
+        Task<Record> Answer(Record invite);         // the reply to an invite (§3.3 A guest 2-4)
+    }
+
+    // ── the address row: the listener and the dialer (§3.3 B) ────────────────
+    public const int ReadMs = 3000;                 // every read and write on a listener connection, at either end
+    public const int KnocksPerMinute = 20;          // from one address; the next within the minute is refused `rate`
+    // The listener's ports: `from`, the nine after it, then one the OS picks. From 0: the OS's alone.
+    public static int[] ListenPorts(int from) => from == 0 ? new[] { 0 } : Enumerable.Range(from, 10).Append(0).ToArray();
+    // Where the listener starts. The harness sets 0, so its listener never takes a port a real session or
+    // another run would. Not readonly: which port this PC gets is not part of what two builds agree on.
+    public static int ListenFrom = Net.DefaultPort;
+    // The port the listener serves, 0 while it is closed (the host panel's "Same network: {lan}:{port}").
+    public static int ListenPort => _listening?.Port ?? 0;
+    private static Listener _listening;
+
+    // THE LISTENER: a dual-stack TCP port (IPv4 and IPv6 in one socket, v1 §4.3). Its threads only move
+    // bytes: each knock goes to the main thread for the checks and the desk's invite, the answer comes
+    // back to the connection by a TaskCompletionSource, and a reply read on it goes to the main thread
+    // for the desk. AN ADDRESS-ROW INVITE LIVES ON ITS CONNECTION: nobody else holds it, so a connection
+    // that ends without its reply hangs its entry up.
+    private sealed class Listener
+    {
+        private readonly IHostDesk _desk;
+        private readonly TcpListener _tcp;
+        public readonly int Port;
+        private volatile bool _closed;
+        private readonly List<TaskCompletionSource<Record>> _inFlight = new();   // knocks on the main thread, not yet answered
+        private readonly Dictionary<IPAddress, Queue<ulong>> _knocks = new();     // the main thread's: each address's last minute
+
+        public Listener(IHostDesk desk)
+        {
+            _desk = desk;
+            foreach (int port in ListenPorts(ListenFrom))
+            {
+                try { _tcp = Bound(port); }
+                catch (SocketException) when (port != 0) { continue; }     // taken, or reserved by the OS
+                Port = ((IPEndPoint)_tcp.LocalEndpoint).Port;
+                break;
+            }
+            _ = Task.Run(Accept);
+        }
+        private static TcpListener Bound(int port)
+        {
+            var l = Socket.OSSupportsIPv6 ? new TcpListener(IPAddress.IPv6Any, port) : new TcpListener(IPAddress.Any, port);
+            if (Socket.OSSupportsIPv6) l.Server.DualMode = true;
+            try { l.Start(); } catch (SocketException) { l.Stop(); throw; }
+            return l;
+        }
+        private async Task Accept()
+        {
+            while (!_closed)
+            {
+                TcpClient client;
+                try { client = await _tcp.AcceptTcpClientAsync(); }
+                catch (Exception e) when (e is SocketException or ObjectDisposedException or InvalidOperationException) { return; }
+                _ = Task.Run(() => Serve(client));
+            }
+        }
+        private async Task Serve(TcpClient client)
+        {
+            using (client)
+            {
+                var stream = client.GetStream();
+                Record knock;
+                IPAddress from;
+                try
+                {
+                    knock = await ReadRecord(stream);
+                    from = ((IPEndPoint)client.Client.RemoteEndPoint).Address;
+                }
+                catch (Exception e) when (Wire(e)) { return; }
+                if (knock.Kind != Kind.Knock) return;
+                if (from.IsIPv4MappedToIPv6) from = from.MapToIPv4();
+                var answer = new TaskCompletionSource<Record>(TaskCreationOptions.RunContinuationsAsynchronously);
+                lock (_inFlight) _inFlight.Add(answer);
+                OnMain(() => _ = Knocked(knock, from, answer));
+                await Task.WhenAny(answer.Task, Task.Delay(ReadMs));
+                answer.TrySetResult(null);                  // too late: an invite the main thread makes after this is hung up there
+                lock (_inFlight) _inFlight.Remove(answer);
+                var said = answer.Task.Result;
+                if (said == null) return;
+                bool taken = false;
+                try
+                {
+                    await WriteRecord(stream, said);
+                    if (said.Kind == Kind.Invite && await ReadRecord(stream) is { Kind: Kind.Reply } reply && reply.Id == said.Id)
+                    {
+                        taken = true;
+                        OnMain(() => _desk.Replied(reply));
+                    }
+                }
+                catch (Exception e) when (Wire(e)) { }
+                if (said.Kind == Kind.Invite && !taken) OnMain(() => _desk.Hang(said.Id));
+            }
+        }
+        // On the main thread: the checks, then the connection's answer. An invite whose connection has
+        // already been answered (the listener closed, or its 3 s ran out) is hung up.
+        private async Task Knocked(Record knock, IPAddress from, TaskCompletionSource<Record> answer)
+        {
+            Record said;
+            try { said = await Weigh(knock, from); }
+            catch (Exception e) { GD.PushError($"the listener's desk threw on a knock: {e}"); said = null; }
+            if (!answer.TrySetResult(said) && said is { Kind: Kind.Invite }) _desk.Hang(said.Id);
+        }
+        // THE CHECKS, IN ORDER (§3.3 B host 2): the build, the rate, one pending entry per guest (a newer
+        // knock supersedes the older entry, which is hung up), the room; then the desk's invite. Every
+        // knock counts toward its address's rate, refused or not.
+        private async Task<Record> Weigh(Record knock, IPAddress from)
+        {
+            if (_closed) return Refusal(Why.Closed);
+            if (!_knocks.TryGetValue(from, out var seen)) _knocks[from] = seen = new Queue<ulong>();
+            ulong now = Time.GetTicksMsec();
+            while (seen.Count > 0 && seen.Peek() + 60000 <= now) seen.Dequeue();
+            seen.Enqueue(now);
+            Why? why = knock.Proto != Net.Protocol ? Why.Build : seen.Count > KnocksPerMinute ? Why.Rate : null;
+            if (why == null)
+            {
+                foreach (var old in _desk.Pending.OfGuest(knock.Guest)) _desk.Hang(old.Id);
+                if (_desk.Full) why = Why.Full;
+            }
+            if (why is { } w) { _desk.Refused(knock, w); return Refusal(w); }
+            return await _desk.Invite(knock);
+        }
+        // On the main thread. A knock still waiting on the main thread is refused `closed`.
+        public void Close()
+        {
+            _closed = true;
+            _tcp.Stop();
+            lock (_inFlight) foreach (var a in _inFlight) a.TrySetResult(Refusal(Why.Closed));
+        }
+    }
+    // A refusal from this host: its build, so the guest's text can name both.
+    private static Record Refusal(Why why) => new() { Kind = Kind.Refuse, Why = why, Proto = Net.Protocol, Build = Game.Build };
+    // Work for the main thread, where the desks live; none once the game is shutting down.
+    private static void OnMain(Action act)
+    {
+        if (!Game.ShuttingDown) Callable.From(act).CallDeferred();
+    }
+
+    // THE DIALER (§3.3 B guest 1-3): a knock to the host's listener; an invite is answered on the same
+    // connection, a refusal handed back as it is. The name is looked up as JOIN always has (DialAddress:
+    // IPv4, else IPv6, never link-local). Returns the host's record.
+    private static async Task<Record> Dial(string text, IGuestDesk desk)
+    {
+        if (Net.ParseAddress(text) is not var (host, port)) throw new FormatException($"\"{text}\" is not an address");
+        string ip = IPAddress.TryParse(host, out _) ? host : Net.DialAddress(await Dns.GetHostAddressesAsync(host));
+        if (ip == "") throw new SocketException((int)SocketError.HostNotFound);
+        var at = IPAddress.Parse(ip);
+        using var tcp = new TcpClient(at.AddressFamily);
+        await tcp.ConnectAsync(at, port);
+        var stream = tcp.GetStream();
+        await WriteRecord(stream, desk.Knock());
+        var got = await ReadRecord(stream);
+        if (got.Kind == Kind.Invite) await WriteRecord(stream, await desk.Answer(got));
+        else if (got.Kind != Kind.Refuse) throw new FormatException($"the host answered a knock with a {got.Kind}");
+        return got;
+    }
+
+    // A RECORD ON A CONNECTION: its length in 2 bytes, big-endian, then Pack's bytes; at most WireMax,
+    // and ReadMs to arrive or leave.
+    private static async Task WriteRecord(Stream s, Record r)
+    {
+        var body = Pack(r);
+        if (body.Length > WireMax) throw new FormatException($"a record of {body.Length} bytes, over the {WireMax} a connection carries");
+        var framed = new byte[2 + body.Length];
+        framed[0] = (byte)(body.Length >> 8); framed[1] = (byte)body.Length;
+        body.CopyTo(framed, 2);
+        using var cut = new CancellationTokenSource(ReadMs);
+        await s.WriteAsync(framed, cut.Token);
+    }
+    private static async Task<Record> ReadRecord(Stream s)
+    {
+        using var cut = new CancellationTokenSource(ReadMs);
+        var head = new byte[2];
+        await s.ReadExactlyAsync(head, cut.Token);
+        int n = head[0] << 8 | head[1];
+        if (n == 0 || n > WireMax) throw new FormatException($"a record of {n} bytes, over the {WireMax} a connection carries");
+        var body = new byte[n];
+        await s.ReadExactlyAsync(body, cut.Token);
+        return Unpack(body);
+    }
+    // What a connection's end throws: a timeout, a closed or reset socket, a damaged record.
+    private static bool Wire(Exception e) => e is IOException or SocketException or OperationCanceledException or FormatException or ObjectDisposedException;
 
     // THE CLIPBOARD, AS A SEAM: what the game reads when it looks for a copied code (§15 Q1: the host's
     // game takes a friend's reply off the clipboard). Never readonly, so it stays out of the build's

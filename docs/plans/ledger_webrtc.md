@@ -320,6 +320,50 @@ third-party infrastructure but the Google and Cloudflare STUN rows.
 - checkpoint: the J9b commit
 - next: J10
 
+#### J10 PRE
+- intent: the rows end to end (handoff below): `Rendezvous.Guest`, the pending table (`Stage`,
+  `Entry`, `Pending`), `IHostDesk`/`IGuestDesk`, `IRendezvousPath` gains `Open`/`Close`/`Start`/`Poll`;
+  the address row's listener (dual-stack TCP, `ListenPorts`, `ListenFrom`, `ListenPort`, 2-byte framing,
+  `ReadMs`, `KnocksPerMinute`, the ordered checks, `closed`) and dialer; the paste row's `Start` and
+  clipboard pickup (`PickupMs`); `Net.DefaultPort` public. Harness: the `Desk`, the courier (files and
+  `Rewrite`), `RtcPair`'s carry, `Polling`, `Rows`/`AddressRows`/`PasteRows`/`Proxied`.
+- files: scripts/Rendezvous.cs, scripts/Net.cs, tools/smoketest/SmokeTest.cs.txt, docs/plans/ledger_webrtc.md
+- from: 876079540db9f18be7b3d9adba2341847fe0f806
+- hashes: Rendezvous.cs 7d5031b69bfe29a413212a796c813179394abee6; Net.cs
+  15e0d9a02d21b7016d720356385d2887a0b1d89d; SmokeTest.cs.txt 33ac9f60e6a133c2b12f622f3c9c6cb2f4d59cac
+- patches (repeatable, exact-match): `%TEMP%\lane_net\j10_rendezvous.py`, `j10_harness.py`, `j10_fix.py`
+
+#### J10 POST
+- verdict: done; rung 1 green, `verify.ps1 -Quick` ALL CHECKS PASSED (0 warnings, xref 0). Untested
+  at rung 3.
+- files: scripts/Rendezvous.cs (Guest, Stage/Entry/Pending, the desks, the rows' Open/Close/Start/
+  Poll, the listener, the dialer, the framing, the pickup), scripts/Net.cs (`DefaultPort` public),
+  tools/smoketest/SmokeTest.cs.txt (`Desk`, `IsRefusal`, `CourierFile`, `Rewrite`, `Polling`,
+  `Message`, `Rows`/`PasteRows`/`AddressRows`/`Proxied`, RtcPair's carry and `Hand`)
+- decisions:
+  - D19 · **The address row's `Poll` does nothing**: its listener hands each knock over by
+    `CallDeferred` (§3.3 B); `Poll` is on the contract for the rows that watch something (the paste
+    row's clipboard). R2's `Net._Process` polls every row of `Paths`.
+  - D20 · **Every refusal reaches `IHostDesk.Refused`** (build, rate, full), not only build: the desk
+    decides what the host reads. `closed` does not (the host is the one closing).
+  - D21 · **An address-row invite lives on its connection**: a connection that ends without the reply
+    (timeout, close, a wrong id) hangs its entry up through the desk; an invite the desk makes after
+    its connection was answered (`closed`, or 3 s passed) is hung up too.
+  - D22 · **The dialer's connect has no bound of its own**: R2's JOIN bounds the whole flow by
+    `JoinTimeoutMs` (§3.3 B guest 4); each record read or written has `ReadMs`.
+  - D23 · **The listener falls back to IPv4 only where the OS has no IPv6** (`Socket.OSSupportsIPv6`;
+    a Linux container), and the IPv6 join form becomes a second IPv4 one there.
+- rungs owed (rung 3, two seeds): "the listener takes 27015, then 27016 ... 27024"; "the guest's mark
+  is drawn once per process"; "by the address row a knock brings an invite"; "a newer knock from the
+  same guest leaves one pending entry"; "a knock is refused `full`"; "an address that knocks 21 times
+  in a minute"; "a knock waiting on the host's desk when the listener closes"; "by the paste row,
+  through the courier's files"; "the clipboard pickup hands a reply over once"; "an in-process pair
+  whose codes the courier rewrote"; "a packet sent into a 1 s blackhole"; plus every J7-J9b check.
+  If the pair-proxy check fails twice at rung 3 with `to_host`/`to_guest` 0: plan §10.2's fallback
+  (Known broken; R4 uses `Net.DropBeatsFor`).
+- checkpoint: the J10 commit
+- next: J9c (the fingerprint's own drift, below), then J11
+
 ### HANDOFF for the fresh agent (J10, J11)
 
 Read: this section, `scripts/Rendezvous.cs` (whole, ~420 lines), `scripts/Link.cs` (whole), the

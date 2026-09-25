@@ -199,9 +199,12 @@ public partial class _Test : Node
         public ulong ReplyAt, AppliedAt, HostSawAt, GuestSawAt, HostLostAt, GuestLostAt;
         public WebRtcPeerConnection.ConnectionState GuestAtApply;   // had the guest's side got through alone (P2)?
         public int Handlers, OffMain;                   // signal handlers run, and how many off the main thread
-        public RtcPair(int id, long applyAfterMs = 0, bool delivered = true)
+        // How the bundles cross: whole, as the plugin made them (null), or through a courier that makes
+        // each a code and reads it back, as the pair-proxy check does
+        readonly Func<Rendezvous.Kind, string, string[], (string sdp, string[] lines)> _carry;
+        public RtcPair(int id, long applyAfterMs = 0, bool delivered = true, Func<Rendezvous.Kind, string, string[], (string sdp, string[] lines)> carry = null)
         {
-            Id = id; ApplyAfterMs = applyAfterMs; Delivered = delivered;
+            Id = id; ApplyAfterMs = applyAfterMs; Delivered = delivered; _carry = carry;
             var ice = new Godot.Collections.Dictionary { ["iceServers"] = new Godot.Collections.Array() };
             Served = Host.CreateServer(Link.Channels());
             ConnectedAtOnce = Host.GetConnectionStatus() == MultiplayerPeer.ConnectionStatus.Connected;
@@ -243,16 +246,28 @@ public partial class _Test : Node
             {
                 Pasted = true;
                 Guest.AddPeer(GuestConn, 1);
-                GuestConn.SetRemoteDescription("offer", _offer);
-                foreach (var c in _offerCands) GuestConn.AddIceCandidate(c.media, c.index, c.name);
+                Hand(GuestConn, "offer", Rendezvous.Kind.Invite, _offer, _offerCands);
             }
             if (Pasted && !ReplySealed && Link.Sealed(GuestConn)) { ReplySealed = true; ReplyAt = Now; }
             if (ReplySealed && !Applied && Now >= ReplyAt + (ulong)ApplyAfterMs)
             {
                 Applied = true; AppliedAt = Now; GuestAtApply = GuestConn.GetConnectionState();
-                HostConn.SetRemoteDescription("answer", _answer);
-                foreach (var c in _answerCands) HostConn.AddIceCandidate(c.media, c.index, c.name);
+                Hand(HostConn, "answer", Rendezvous.Kind.Reply, _answer, _answerCands);
             }
+        }
+        // One side's bundle to the other: whole, or through the courier as a code. A code does not carry a
+        // candidate's section: it is the template's one, a=mid:0, as R2's Net will give it.
+        void Hand(WebRtcPeerConnection to, string type, Rendezvous.Kind kind, string sdp, List<(string media, int index, string name)> cands)
+        {
+            if (_carry == null)
+            {
+                to.SetRemoteDescription(type, sdp);
+                foreach (var c in cands) to.AddIceCandidate(c.media, c.index, c.name);
+                return;
+            }
+            var (built, lines) = _carry(kind, sdp, cands.Select(c => c.name).ToArray());
+            to.SetRemoteDescription(type, built);
+            foreach (var l in lines) to.AddIceCandidate("0", 0, l);
         }
         // Every object this pair made, let go of here and now -- not by the collector's finalizer
         // thread (Assets.cs: a C# handle released there can turn into an engine ERROR).
@@ -315,6 +330,13 @@ public partial class _Test : Node
         + "a=setup:active\r\na=ice-ufrag:BOeX\r\na=ice-pwd:ZOIsPAdHc0dSoJIIX6y8wQ\r\n";
     static readonly string[] SpikeAnswerLines = { "candidate:1 1 UDP 2114977791 192.168.0.33 54581 typ host", "candidate:3 1 UDP 1678769663 203.0.113.7 54581 typ srflx raddr 0.0.0.0 rport 0" };
 
+    // A WHOLE COPIED DISCORD MESSAGE around a code: a name holding "wsr" before it, the time, line breaks,
+    // the code hand-copied over two lines with a hyphen, and words after it.
+    static string Message(string code)
+    {
+        int cut = Rng.RandiRange(10, code.Length - 10);
+        return $"Swsrdna the Brave — Today at {Rng.RandiRange(1, 12)}:{Rng.RandiRange(10, 59)} PM\nhere it is, paste it in:\n{code[..cut]}-\n{code[cut..]}\nthanks! wsr = warships reply btw";
+    }
     // A record as one line of text, every field, for comparing two.
     static string Said(Rendezvous.Record r) =>
         $"{r.Kind} setup {r.Setup} nostun {r.NoStun} proto {r.Proto:x8} id {r.Id} guest {r.Guest} why {r.Why} build '{r.Build}' name '{r.Name}' "
@@ -445,10 +467,8 @@ public partial class _Test : Node
             while (!code[3..].Contains('0') || !code[3..].Contains('1'));
             string Back(string text) => Rendezvous.Find(text) is { } f ? Said(f) : "nothing";
             if (Back(code) != Said(r)) textFails.Add($"round trip: {Back(code)}");
-            // a whole copied Discord message: a name holding "wsr" before the code, the time, line
-            // breaks, a code hand-copied over two lines with a hyphen, and words after it
-            int cut = Rng.RandiRange(10, code.Length - 10);
-            string msg = $"Swsrdna the Brave — Today at {Rng.RandiRange(1, 12)}:{Rng.RandiRange(10, 59)} PM\nhere it is, paste it in:\n{code[..cut]}-\n{code[cut..]}\nthanks! wsr = warships reply btw";
+            // a whole copied Discord message (Message)
+            string msg = Message(code);
             if (Back(msg) != Said(r)) textFails.Add($"in a message: {Back(msg)}");
             // one changed character, anywhere but the last (whose low bits can be padding)
             int at = Rng.RandiRange(3, code.Length - 2);
@@ -698,6 +718,318 @@ public partial class _Test : Node
         }
     }
 
+    // ── WEBRTC, R1: THE ROWS END TO END, THE COURIER, THE PAIR PROXY (§3.3, §10.2, §10.4 R1) ────────
+    // A SESSION FOR THE ROWS: both desks over a real Rendezvous.Pending, answering with drawn invites and
+    // replies, recording what each row asked of it. R2's Net is the real one.
+    sealed class Desk : Rendezvous.IHostDesk, Rendezvous.IGuestDesk
+    {
+        public Rendezvous.Pending Pending { get; } = new();
+        public bool Full { get; set; }
+        public int Proto = Net.Protocol;                        // what this desk's knocks carry
+        public uint Mark = Rendezvous.Guest;                    // ...and whose they are
+        public TaskCompletionSource<Rendezvous.Record> Hold;    // set: the next invite waits on it (a knock in flight)
+        public int Asked;                                       // invites the listener asked for
+        public readonly List<Rendezvous.Record> Invites = new(), Replies = new(), Answered = new(), Made = new();
+        public readonly List<int> Hung = new();
+        public readonly List<Rendezvous.Why> Refusals = new();
+        // an invite from this desk's host, its entry Waiting
+        public Rendezvous.Record Invitation(string row, uint guest)
+        {
+            var inv = VaryRecord(Rendezvous.Kind.Invite);
+            inv.Proto = Net.Protocol; inv.Build = Game.Build;
+            Pending.Add(new Rendezvous.Entry { Id = inv.Id, Row = row, Guest = guest, Stage = Rendezvous.Stage.Waiting });
+            Invites.Add(inv);
+            return inv;
+        }
+        public Task<Rendezvous.Record> Invite(Rendezvous.Record knock)
+        {
+            Asked++;
+            return Hold?.Task ?? Task.FromResult(Invitation(Rendezvous.Address.Id, knock.Guest));
+        }
+        public void Hang(int id) { Hung.Add(id); Pending.Remove(id); }
+        public void Replied(Rendezvous.Record reply)
+        {
+            Replies.Add(reply);
+            if (Pending.Find(reply.Id) is { } e) e.Stage = Rendezvous.Stage.Linking;
+        }
+        public void Refused(Rendezvous.Record knock, Rendezvous.Why why) => Refusals.Add(why);
+        public Rendezvous.Record Knock() => new() { Kind = Rendezvous.Kind.Knock, Proto = Proto, Guest = Mark, Build = Game.Build, Name = "Harbour8" };
+        public Task<Rendezvous.Record> Answer(Rendezvous.Record invite)
+        {
+            Answered.Add(invite);
+            var reply = VaryRecord(Rendezvous.Kind.Reply);
+            reply.Id = invite.Id;
+            Made.Add(reply);
+            return Task.FromResult(reply);
+        }
+    }
+    static bool IsRefusal(Rendezvous.Record r, Rendezvous.Why why) =>
+        r is { Kind: Rendezvous.Kind.Refuse } && r.Why == why && r.Proto == Net.Protocol && r.Build == Game.Build;
+
+    // THE COURIER (§10.2): the harness carrying codes as Discord would. Its FILES sit beside the project
+    // (res://, globalized: the scratch copy both roles of a run share), one per code, named for the host's
+    // listener port and the code's number.
+    static string CourierFile(string kind, int port, int n) => ProjectSettings.GlobalizePath($"res://{kind}-{port}-{n}.txt");
+    // ITS REWRITE, for the box: the code unpacked with the game's own codec, one IPv4 host candidate kept
+    // with the box's address and the given port in place of this PC's, packed again. `real` is the port it
+    // replaced: libjuice binds one socket on every address, so 127.0.0.1 and that port reach it.
+    const string BoxHost = "127.0.42.1";
+    static string Rewrite(string code, Rendezvous.Kind kind, int boxPort, out int real)
+    {
+        var r = Rendezvous.Find(code, kind) ?? throw new FormatException($"the courier found no {kind} code");
+        var keep = r.Candidates.FirstOrDefault(c => c.Type == Rendezvous.Via.Host && c.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+                   ?? throw new FormatException($"the {kind} has no IPv4 host candidate for the courier to keep");
+        real = keep.Port;
+        r.Candidates = new List<Rendezvous.Candidate> { keep with { Address = System.Net.IPAddress.Parse(BoxHost), Port = boxPort } };
+        return Rendezvous.Encode(r);
+    }
+
+    // Frames with every row polled (R2's Net._Process), until `done` or `ms` pass.
+    async Task<bool> Polling(Func<bool> done, int ms)
+    {
+        ulong end = RtcPair.Now + (ulong)ms;
+        while (!done() && RtcPair.Now < end)
+        {
+            foreach (var p in Rendezvous.Paths) p.Poll();
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        }
+        return done();
+    }
+
+    // THE ROWS END TO END with dummy codes (no plugin needed): the address row over a listener on a port
+    // the OS picks (never 27015: the main checkout's runs use it), the paste row through the courier's files
+    async Task Rows()
+    {
+        Check(Net.DefaultPort == 27015 && Rendezvous.ListenFrom == 27015
+              && Rendezvous.ListenPorts(Net.DefaultPort).SequenceEqual(new[] { 27015, 27016, 27017, 27018, 27019, 27020, 27021, 27022, 27023, 27024, 0 })
+              && Rendezvous.ListenPorts(0).SequenceEqual(new[] { 0 }) && Rendezvous.ReadMs == 3000 && Rendezvous.KnocksPerMinute == 20 && Rendezvous.PickupMs == 500,
+              $"the listener takes 27015, then 27016 ... 27024, then a port the OS picks; a record has 3 s to arrive, an address may knock 20 times a minute, the clipboard is read at most twice a second (§3.3 B, §3.4; {string.Join(",", Rendezvous.ListenPorts(Net.DefaultPort))})");
+        // THE GUEST'S MARK: drawn once per process, never 0, outside the build's fingerprint
+        var markField = typeof(Rendezvous).GetField("_guest", BindingFlags.NonPublic | BindingFlags.Static);
+        uint mark = Rendezvous.Guest;
+        int still = FingerprintNow();
+        markField?.SetValue(null, (uint?)(mark ^ 0x80000000u));
+        int swapped = FingerprintNow();
+        markField?.SetValue(null, (uint?)mark);
+        Check(mark != 0 && Rendezvous.Guest == mark && markField != null && !markField.IsInitOnly && !markField.IsLiteral && swapped == still
+              && typeof(Rendezvous).GetField(nameof(Rendezvous.Guest), BindingFlags.Public | BindingFlags.Static) == null,
+              $"the guest's mark is drawn once per process, never 0, a property over a mutable field outside the build's fingerprint ({mark:x8}; swapped {swapped:x8}, unswapped {still:x8})");
+
+        var host = new Desk();
+        int from = Rendezvous.ListenFrom;
+        var clipWas = Rendezvous.Clipboard;
+        var files = new List<string>();
+        Rendezvous.ListenFrom = 0;
+        try
+        {
+            Rendezvous.Address.Open(host);
+            Rendezvous.Paste.Open(host);
+            int port = Rendezvous.ListenPort;
+            await PasteRows(host, port, files);
+            await AddressRows(host, port);
+        }
+        finally
+        {
+            Rendezvous.Address.Close(); Rendezvous.Paste.Close();
+            Rendezvous.ListenFrom = from; Rendezvous.Clipboard = clipWas;
+            foreach (var f in files) System.IO.File.Delete(f);
+        }
+    }
+
+    async Task AddressRows(Desk host, int port)
+    {
+        // KNOCK, INVITE, REPLY: three joins as a player types the host's address -- IPv4, IPv6, a name --
+        // in a varied order, all from one game process (one mark)
+        var forms = new List<string> { $"127.0.0.1:{port}", System.Net.Sockets.Socket.OSSupportsIPv6 ? $"[::1]:{port}" : $"127.0.0.1:{port}", $"localhost:{port}" }
+                    .OrderBy(_ => Rng.Randi()).ToList();
+        var guest = new Desk();
+        var joins = new List<string>();
+        // one session serves both rows: the paste rounds' entries are on this desk already
+        int inv0 = host.Invites.Count, pending0 = host.Pending.Count, hung0 = host.Hung.Count;
+        foreach (var at in forms)
+        {
+            int replies = host.Replies.Count, invites = host.Invites.Count;
+            var row = Rendezvous.PathFor(at);
+            Rendezvous.Record got;
+            try { got = await row.Start(at, guest); }
+            catch (Exception e) { joins.Add($"{at}: {e.GetType().Name}: {e.Message}"); continue; }
+            await RtcUntil(() => host.Replies.Count > replies, Rendezvous.ReadMs);
+            var inv = host.Invites.Count > invites ? host.Invites[^1] : null;
+            var entry = inv == null ? null : host.Pending.Find(inv.Id);
+            bool ok = row == Rendezvous.Address && inv != null && Said(got) == Said(inv) && guest.Answered.Count > 0 && Said(guest.Answered[^1]) == Said(inv)
+                      && host.Replies.Count == replies + 1 && guest.Made.Count > 0 && Said(host.Replies[^1]) == Said(guest.Made[^1]) && host.Replies[^1].Id == inv.Id
+                      && entry is { Stage: Rendezvous.Stage.Linking, Row: "address" } && entry.Guest == guest.Mark;
+            joins.Add(ok ? $"{at} ok" : $"{at}: got {Said(got)}; {host.Replies.Count - replies} replies, entry {entry?.Stage.ToString() ?? "none"}");
+        }
+        Check(joins.Count == 3 && joins.All(j => j.EndsWith(" ok", StringComparison.Ordinal)),
+              $"by the address row a knock brings an invite, and the reply reaches the host's desk with the invite's id, its entry Linking: over IPv4, IPv6 and a name ({string.Join("; ", joins)})");
+
+        // ONE PENDING ENTRY PER GUEST: each newer knock hung the older entry up through the desk; a knock
+        // from another game process keeps its own
+        var second = new Desk { Mark = guest.Mark ^ 0x80000000u };
+        var secondGot = await Rendezvous.Address.Start($"127.0.0.1:{port}", second);
+        await RtcUntil(() => host.Replies.Any(r => r.Id == secondGot.Id), Rendezvous.ReadMs);
+        var mine = host.Pending.OfGuest(guest.Mark);
+        var joined = host.Invites.Skip(inv0).ToList();
+        Check(joined.Count >= 3 && mine.Count == 1 && mine[0].Id == joined[2].Id && host.Hung.Skip(hung0).SequenceEqual(joined.Take(2).Select(i => i.Id))
+              && secondGot.Kind == Rendezvous.Kind.Invite && host.Pending.OfGuest(second.Mark).Count == 1 && host.Pending.Count == pending0 + 2,
+              $"a newer knock from the same guest leaves one pending entry, the older ones hung up through the desk; another guest's keeps its own ({host.Pending.Count - pending0} pending, {host.Hung.Count - hung0} hung, {mine.Count} for the first guest)");
+
+        // REFUSED, and read by the dialer: no room, another build; each refusal carries the host's build
+        host.Full = true;
+        var third = new Desk { Mark = guest.Mark ^ 0x40000000u };
+        var full = await Rendezvous.Address.Start($"127.0.0.1:{port}", third);
+        host.Full = false;
+        var stranger = new Desk { Mark = guest.Mark ^ 0x20000000u, Proto = Net.Protocol ^ 1 };
+        var build = await Rendezvous.Address.Start($"localhost:{port}", stranger);
+        Check(IsRefusal(full, Rendezvous.Why.Full) && IsRefusal(build, Rendezvous.Why.Build) && host.Refusals.SequenceEqual(new[] { Rendezvous.Why.Full, Rendezvous.Why.Build })
+              && third.Answered.Count == 0 && stranger.Answered.Count == 0 && host.Pending.Count == pending0 + 2,
+              $"a knock is refused `full` when the host has no room and `build` from another build, each read by the dialer with the host's build in it, nothing made for either ({Said(full)}; {Said(build)})");
+
+        // THE RATE, on a fresh listener: 20 knocks a minute from one address, the 21st refused
+        Rendezvous.Address.Close();
+        Rendezvous.Address.Open(host);
+        int fresh = Rendezvous.ListenPort;
+        var said = new List<string>();
+        for (int i = 0; i < 21; i++)
+        {
+            var r = await Rendezvous.Address.Start($"127.0.0.1:{fresh}", guest);
+            said.Add(r.Kind == Rendezvous.Kind.Invite ? "i" : r.Why.ToString());
+        }
+        Check(said.Take(20).All(s => s == "i") && said[20] == "Rate" && host.Refusals[^1] == Rendezvous.Why.Rate && host.Pending.OfGuest(guest.Mark).Count == 1,
+              $"an address that knocks 21 times in a minute is refused `rate` the 21st time, each of the 20 before invited ({string.Join(",", said)}; port {fresh})");
+
+        // CLOSED: a knock waiting on the host's desk when the listener closes is refused `closed`, and the
+        // invite the desk makes after that is hung up
+        Rendezvous.Address.Close();
+        Rendezvous.Address.Open(host);
+        host.Hold = new TaskCompletionSource<Rendezvous.Record>();
+        int asked = host.Asked;
+        var fourth = new Desk { Mark = guest.Mark ^ 0x10000000u };
+        var closing = Rendezvous.Address.Start($"127.0.0.1:{Rendezvous.ListenPort}", fourth);
+        bool waiting = await RtcUntil(() => host.Asked > asked, Rendezvous.ReadMs);
+        Rendezvous.Address.Close();
+        var closed = await closing;
+        var late = host.Invitation(Rendezvous.Address.Id, fourth.Mark);
+        host.Hold.SetResult(late);
+        host.Hold = null;
+        await RtcUntil(() => host.Hung.Contains(late.Id), 1000);
+        Check(waiting && IsRefusal(closed, Rendezvous.Why.Closed) && host.Hung.Contains(late.Id) && host.Pending.Find(late.Id) == null && fourth.Answered.Count == 0,
+              $"a knock waiting on the host's desk when the listener closes is refused `closed`, and the invite made after is hung up ({Said(closed)}; waiting {waiting}, late invite hung {host.Hung.Contains(late.Id)})");
+    }
+
+    async Task PasteRows(Desk host, int port, List<string> files)
+    {
+        int reads = 0;
+        string clip = "";
+        Rendezvous.Clipboard = () => { reads++; return clip; };
+        // THREE ROUNDS THROUGH THE COURIER'S FILES: the host posts its invite as a message (and it is on the
+        // host's own clipboard); the friend copies the whole message into JOIN; the friend's whole reply
+        // message comes back, and the host's game takes it off the clipboard once the host copies it
+        var friend = new Desk();
+        var rounds = new List<string>();
+        for (int n = 0; n < 3; n++)
+        {
+            var inv = host.Invitation(Rendezvous.Paste.Id, 0);
+            string invFile = CourierFile("invite", port, n), repFile = CourierFile("reply", port, n);
+            files.Add(invFile); files.Add(repFile);
+            clip = Rendezvous.Encode(inv);
+            System.IO.File.WriteAllText(invFile, Message(clip));
+            string text = System.IO.File.ReadAllText(invFile);
+            var row = Rendezvous.PathFor(text);
+            var got = row == null ? null : await row.Start(text, friend);
+            var reply = friend.Made.Count > n ? friend.Made[^1] : null;
+            if (reply == null) { rounds.Add($"round {n}: the {row?.Id ?? "no"} row made no reply"); continue; }
+            System.IO.File.WriteAllText(repFile, Message(Rendezvous.Encode(reply)));
+            int before = host.Replies.Count;
+            await Polling(() => host.Replies.Count > before, 600);
+            bool leftInvite = host.Replies.Count == before;
+            clip = System.IO.File.ReadAllText(repFile);
+            bool took = await Polling(() => host.Replies.Count > before, 2000);
+            var entry = host.Pending.Find(inv.Id);
+            bool ok = row == Rendezvous.Paste && got != null && Said(got) == Said(inv) && leftInvite && took && host.Replies.Count == before + 1
+                      && Said(host.Replies[^1]) == Said(reply) && entry is { Stage: Rendezvous.Stage.Linking, Row: "paste", Guest: 0 };
+            rounds.Add(ok ? "ok" : $"round {n}: row {row?.Id}, joined {got != null}, own invite left {leftInvite}, reply taken {took}, entry {entry?.Stage.ToString() ?? "none"}");
+        }
+        Check(rounds.Count == 3 && rounds.All(r => r == "ok"),
+              $"by the paste row, through the courier's files: the friend joins by the whole invite message, and the host's game takes the friend's whole reply message off the clipboard -- never its own invite -- its entry Linking (three rounds: {string.Join("; ", rounds)})");
+
+        // ONCE, AT MOST TWICE A SECOND, ONLY WHILE SOMETHING IS PENDING: the last reply is not taken again
+        // (the same text, then re-armed with its entry Linking), nor a reply to no invite; with nothing
+        // pending, or the row closed, the clipboard is not read at all
+        int replies = host.Replies.Count;
+        ulong t0 = RtcPair.Now;
+        int r0 = reads;
+        await Polling(() => false, 1200);
+        long span = (long)(RtcPair.Now - t0);
+        int paced = reads - r0;
+        Rendezvous.Paste.Open(host);
+        await Polling(() => false, 600);
+        clip = Message(Rendezvous.Encode(VaryRecord(Rendezvous.Kind.Reply)));
+        await Polling(() => false, 600);
+        bool never = host.Replies.Count == replies;
+        Rendezvous.Paste.Open(new Desk());
+        int r1 = reads;
+        await Polling(() => false, 600);
+        int idle = reads - r1;
+        Rendezvous.Paste.Close();
+        await Polling(() => false, 600);
+        int shut = reads - r1 - idle;
+        Check(never && paced >= 2 && paced <= 1 + span / 500 && idle == 0 && shut == 0,
+              $"the clipboard pickup hands a reply over once, and neither a reply to a Linking entry nor one to no invite; it reads at most every 500 ms, and not at all with nothing pending or the row closed ({host.Replies.Count - replies} more taken; {paced} reads in {span} ms; {idle} idle, {shut} closed)");
+    }
+
+    // THE PAIR PROXY (§10.2's unknown): an in-process pair whose bundles cross as codes the courier
+    // rewrote -- one IPv4 host candidate kept, its address the box pair's -- so each side knows the other
+    // only by a box address, and every datagram between them crosses the box
+    async Task Proxied()
+    {
+        var made = Box("POST", "/box/pair");
+        if (!made.TryGetProperty("n", out var nAt)) { Check(false, $"the box makes a pair for the pair-proxy check ({made})"); return; }
+        int n = nAt.GetInt32(), boxA = made.GetProperty("a").GetInt32(), boxB = made.GetProperty("b").GetInt32();
+        int id = Rng.RandiRange(2, int.MaxValue), hostPort = 0;
+        var carried = new List<string>();
+        (string, string[]) Carry(Rendezvous.Kind kind, string sdp, string[] lines)
+        {
+            bool invite = kind == Rendezvous.Kind.Invite;
+            var r = Rendezvous.Sdp.Strip(kind, sdp, lines);
+            r.Id = id; r.Name = "Harbour8";
+            if (invite) { r.Proto = Net.Protocol; r.Build = Game.Build; }
+            string code = Rewrite(Rendezvous.Encode(r), kind, invite ? boxA : boxB, out int real);
+            if (invite) hostPort = real;
+            else Box("POST", $"/box/pair/{n}?host=127.0.0.1:{hostPort}&guest=127.0.0.1:{real}&seed={Seed}");
+            var arrived = Rendezvous.Find(Message(code), kind);
+            var rebuilt = arrived.Candidates.Select(Rendezvous.Sdp.Line).ToArray();
+            carried.Add($"{kind}: {string.Join(" | ", rebuilt)}");
+            return (Rendezvous.Sdp.Build(arrived), rebuilt);
+        }
+        var p = new RtcPair(id, carry: Carry);
+        try
+        {
+            ulong t0 = RtcPair.Now;
+            bool up = await RtcUntil(() => p.Connected, 10000, p);
+            var st = Box("GET", "/box/stats").GetProperty("pairs").GetProperty($"{n}");
+            int toHost = st.GetProperty("to_host").GetInt32(), toGuest = st.GetProperty("to_guest").GetInt32();
+            Check(up && toHost > 0 && toGuest > 0 && carried.Count == 2 && carried.All(c => c.Contains($" {BoxHost} ", StringComparison.Ordinal) && !c.Contains('|')),
+                  $"an in-process pair whose codes the courier rewrote to the box's address connects through the box, datagrams both ways ({(up ? $"{RtcPair.Now - t0} ms" : p.Stage())}; box pair {n}: {toHost} to the host, {toGuest} to the guest, {st.GetProperty("unregistered")} before its endpoints were known; {string.Join("; ", carried)})");
+            if (!up) return;
+            // THE BLACKHOLE (R4's watchdog leans on it): a packet sent while the box drops every proxied
+            // datagram for 1 s arrives after it lifts, and the box counts what it dropped
+            int dropped = Box("GET", "/box/stats").GetProperty("blackholed").GetInt32();
+            ulong t1 = RtcPair.Now;
+            Box("POST", "/box/blackhole?s=1");
+            p.Host.TransferChannel = StreamChannel; p.Host.TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered; p.Host.SetTargetPeer(p.Id);
+            p.Host.PutPacket(BitConverter.GetBytes(p.Id));
+            bool through = await RtcUntil(() => p.Guest.GetAvailablePacketCount() > 0, 10000, p);
+            long after = (long)(RtcPair.Now - t1);
+            int blackholed = Box("GET", "/box/stats").GetProperty("blackholed").GetInt32() - dropped;
+            bool whole = through && p.Guest.GetPacket() is { Length: 4 } body && BitConverter.ToInt32(body) == p.Id;
+            Check(whole && after >= 1000 && blackholed > 0,
+                  $"a packet sent into a 1 s blackhole arrives after it lifts, and the box counts what it dropped ({(through ? $"{after} ms" : "never")}; {blackholed} dropped)");
+        }
+        finally { p.Free(); }
+    }
+
     async Task WebRtcPairs()
     {
         // the number every friend's countdown shows, proved against the measured literal here; the
@@ -712,6 +1044,9 @@ public partial class _Test : Node
         // the codec needs no plugin: it runs on every machine
         try { Codes(); }
         catch (Exception ex) { Check(false, $"the codec checks threw: {ex.GetType().Name}: {ex.Message}"); GD.Print(ex.StackTrace); }
+        // nor do the rows end to end: dummy codes over a real listener and the courier's files
+        try { await Rows(); }
+        catch (Exception ex) { Check(false, $"the row checks threw: {ex.GetType().Name}: {ex.Message}"); GD.Print(ex.StackTrace); }
         // THE PLUGIN LOADED, asked by the literal names the spike read (SPIKE Q1), so the row is
         // proved against them here and every other check reads the row.
         bool loaded = GDExtensionManager.GetLoadedExtensions().Contains("res://addons/webrtc_native/webrtc_native.gdextension");
@@ -819,6 +1154,8 @@ public partial class _Test : Node
         try { await Walks(); }
         catch (Exception ex) { Check(false, $"the STUN walk checks threw: {ex.GetType().Name}: {ex.Message}"); GD.Print(ex.StackTrace); }
         finally { Link.Servers = _servers; Link.StunFirst = 0; }
+        try { await Proxied(); }
+        catch (Exception ex) { Check(false, $"the pair-proxy checks threw: {ex.GetType().Name}: {ex.Message}"); GD.Print(ex.StackTrace); }
 
         // NOTHING LEAKS: three connect-and-close cycles, the first to warm up, the count after it
         // against the count after the other two. A leaked pair is 34 objects (two peers, two

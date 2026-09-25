@@ -24,7 +24,7 @@ using System.Reflection;
 // ─────────────────────────────────────────────────────────────────────────────
 public partial class Net : Node
 {
-    private const int DefaultPort = 27015;
+    public const int DefaultPort = 27015;
     private const int MaxPlayers = 8;
 
     public static Net I { get; private set; }
