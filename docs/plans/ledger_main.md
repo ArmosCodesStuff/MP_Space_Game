@@ -1,8 +1,7 @@
 # Coordinator state -- last event 15:10: review fixes net merged (a83572d); lt retrying (rvlt_c on slot 0, 15:08); then round 1.
 # The test phase runs as task wbbiuayve (resumed at 14:41 with the fails file collapsing repeated lines, 59669ac). The baseline
 # solo has 41 fails + 1 throw, the cap/fr merges added 2 throws (round 1's triage fixes FAIL LANEs first).
-Under 25 lines. Edit tool only; commit as the FIRST call after every event. The hook re-injects this after a compact and
-cross-checks every `task <id>` below against its output file. Facts go to README / CHANGES, not here.
+Under 25 lines; Edit tool only; commit FIRST after every event; the hook re-injects it after a compact and cross-checks each `task <id>`.
 
 ## Running (one row per workflow; the form `task <id> (<run id>)` is what tools/lanes.ps1 parses)
 - test-phase / task wbbiuayve (wf_8c62491c-3b2): review fixes per scope -> rounds (5 chains, triage, pooled fixes) -> seed sweep ->
@@ -10,8 +9,7 @@ cross-checks every `task <id>` below against its output file. Facts go to README
   and the journal, fix, relaunch: Workflow({scriptPath: <scripts>\test-phase.js, resumeFromRunId: "wf_8c62491c-3b2", args: {attempt: 2, review: []}}).
   Watchdog Monitor (agents.ps1 -Minutes 30 every 10 min, 30-min timeout) re-armed at each expiry while it runs.
 
-## Landed (verdict first; delete the row once its action is done)
-- (none)
+## Landed (verdict first; delete the row once its action is done): none
 
 ## Next (1 is the exact next call, copy-pasteable)
 1. Bash waiter b9uzzs90h fires when "Merge Fable review fixes (lt)" lands (or tp1ar1_0 appears): TaskStop wbbiuayve, then relaunch
