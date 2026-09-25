@@ -104,7 +104,7 @@ Step 'text' {
 }
 
 Step 'checks with code' {
-    # NO CODE CHANGE WITHOUT A CHECK CHANGE (CLAUDE.md section 3: every change carries its check).
+    # NO CODE CHANGE WITHOUT A CHECK CHANGE (CLAUDE.md section 6: every change carries its check).
     # Measured since the last VERIFIED: commit, working tree included, so a batch of slices is judged
     # as one: if any line of code under scripts/ that is not a comment moved and neither harness
     # file did, something new or changed went in with nothing proving it. Coarse on purpose -- it

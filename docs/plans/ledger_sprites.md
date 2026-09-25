@@ -518,3 +518,15 @@ uncommitted paths: J4's edits (no POST) and J5 started without a PRE.
   Link/Rendezvous, SmokeTest, CLAUDE.md -- plus walls/unlocks; the kits lane is NOT merged there, so
   ClassArt.PdRing stays). Resolve keeping both; every art table stays hashed by Net.Fingerprint.
 - Start: ff30f5df0a1d4bf2ab0c1e9c5fa0fa99c52434c4 · version-l 93b2c8c4135f7789999fa808fba8b738899bea2e
+
+### A3 merge version-l -- POST
+- Verdict: merged 93b2c8c. Conflicts: CHANGES.md (version-l's removal of the four-lanes block taken;
+  both Unreleased sides kept; a new art Handoff paragraph), CLAUDE.md (version-l's rewrite taken,
+  with the art lane's intent re-applied: tools\finish_ships.ps1 is deleted, so it leaves section 12).
+  Everything else merged clean. typecheck 0 errors; `-Quick` ALL CHECKS PASSED.
+- Fingerprint read: every art table is a Table row in a static readonly field (Classes.All's ClassArt,
+  Enemies.All, Missions.Bosses, Emplacements.All, Lanes.All, Hauler.Art, the gatherer and wing rows)
+  EXCEPT `Nozzle`: a positional `record struct` has no public fields, so `Gatherer.DroneBells` and
+  `Lanes.CourierBells` are NOT Plain and never enter Net.Fingerprint (inside a row they print through
+  ToString, so those stay hashed). Fixed next, job A3b.
+- Next: A3b.

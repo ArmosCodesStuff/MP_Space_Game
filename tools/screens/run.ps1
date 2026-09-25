@@ -134,7 +134,7 @@ try {
   Write-Host "frames: $frames in $shots  |  LINT: $lint"
   # ...AND IT SAYS SO IN ITS EXIT CODE. All three of these were computed, printed and thrown away:
   # SWEEP INCOMPLETE only printed, and $lint and $frames were never asserted at all -- so a sweep
-  # whose engine died at frame 0 ended on "frames: 0 | LINT: 0" and exited 0. CLAUDE.md section 7
+  # whose engine died at frame 0 ended on "frames: 0 | LINT: 0" and exited 0. CLAUDE.md section 12
   # tells a reader to trust LINT: 0 for rung 4, and nothing to draw is nothing to lint.
   # verify.ps1 re-derives this from stdout, so the BAR was covered; rung 4 run on its own was not.
   if ($frames -lt 1) { Write-Host 'the sweep drew NO frames -- LINT: 0 means nothing.'; $bad = 1 }

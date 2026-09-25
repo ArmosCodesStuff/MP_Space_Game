@@ -116,12 +116,21 @@ Sprites
 - The BOSSES are TWICE AS BIG (2026-09-25, "2 or 3x"; 2x built, one multiplier on the boss rows): Rusty
   L 720, Drake L 840, and their HIT SIZE scales with the art (HW 140 / 180) -- "hit sizes unchanged"
   no longer holds for bosses. A bigger boss is easier to hit, so the numbers model's land rates move.
+  What is placed around a boss scales with it too (2026-09-25): the Rusty Bucket's shockwave ring grows
+  with `BossSize`, keeping its reach past bow and stern. The camera NEVER zooms out past the player's
+  own maximum; to show the Drake's whole hull at its closest approach it is REPOSITIONED instead (its
+  centre moves toward the boss, the player's ship kept on screen).
 - The BOSSES are RED AND BLACK (2026-09-25): the owner's swatch, mean RGB 172, 7, 2 = tint
   (0.67, 0.03, 0.01), over the grey art so the shadows go black; value lifted only as far as a frame
   needs to read against space.
 
+Agents (owner, 2026-09-25)
+- Every agent runs Opus 5.5, "just to be safe" (replaces the earlier "lowest tier you can trust"); effort still set per call.
+- Run several engine and game instances at once: "my PC can handle it no prob" (Ryzen 7 7700, 16 threads, 47 GB). Engine slots
+  (tools/rungs.ps1 -Slots) make it safe; the limit was shared folders and ports, never the PC.
+
 Testing (owner, standing)
-- Every change carries its check (CLAUDE.md §3). After the features: new Python scenario tools and
+- Every change carries its check (CLAUDE.md §6). After the features: new Python scenario tools and
   smoke tests covering every mechanic for every class, every ability, and interactions between
   heavies, bosses and lights for every weapon and platform.
 

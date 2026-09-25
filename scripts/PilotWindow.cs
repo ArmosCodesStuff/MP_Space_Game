@@ -7,7 +7,7 @@ using System.Linq;
 public partial class PilotWindow : PanelContainer
 {
     public Hub Hub;
-    private Label _head, _exp, _points;
+    private Label _head, _exp, _points, _next;
     private ProgressBar _bar;
     private readonly Label[] _info = new Label[Progression.All.Length];
     private readonly Button[] _buy = new Button[Progression.All.Length];
@@ -25,7 +25,11 @@ public partial class PilotWindow : PanelContainer
         var lvl = Ui.VBox(6);
         _exp = Ui.Lbl("", Ui.Body); lvl.AddChild(_exp);
         _bar = new ProgressBar { CustomMinimumSize = new Vector2(440, 8), ShowPercentage = false, MaxValue = 1 }; lvl.AddChild(_bar);
-        _points = Ui.Lbl("", Ui.Body, Ui.Accent); lvl.AddChild(_points);
+        // ...and the next thing a level opens (Unlocks), beside the points so the window grows no taller
+        var pts = Ui.HBox(12);
+        _points = Ui.Lbl("", Ui.Body, Ui.Accent); _points.SizeFlagsHorizontal = SizeFlags.ExpandFill; pts.AddChild(_points);
+        _next = Ui.Lbl("", Ui.Small, Ui.Dim); _next.Name = "Next"; _next.VerticalAlignment = VerticalAlignment.Center; pts.AddChild(_next);
+        lvl.AddChild(pts);
         col.AddChild(Ui.CardWrap(lvl));
         col.AddChild(Ui.Heading("Upgrades"));
         for (int i = 0; i < Progression.All.Length; i++)
@@ -56,6 +60,7 @@ public partial class PilotWindow : PanelContainer
         Ui.SetText(_exp, $"EXP {Character.Exp} / {need} to level {Character.Level + 1}");
         _bar.Value = (double)Character.Exp / need;
         Ui.SetText(_points, $"{Character.Points} point(s) to spend");
+        Ui.SetText(_next, Unlocks.Next(Character.Class, Character.Peak) is { } next ? $"NEXT  {next}" : "every wall open");
         for (int i = 0; i < Progression.All.Length; i++)
         {
             var u = Progression.All[i]; int n = Character.Bought[i], cost = Progression.Cost(n);

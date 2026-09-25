@@ -318,11 +318,12 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // or levelled.
     private ShipStats BuildSheet()
     {
-        if (Mine && !Demo) _loadout = (string[])Character.LoadoutFor(Class).Clone();   // a COPY: the window edits the saved one in place
-        var pct = Equipment.Bonuses(Class, Loadout, Levels);
+        if (Mine && !Demo) _fitted = (string[])Character.LoadoutFor(Class).Clone();   // a COPY: the window edits the saved one in place
+        var loadout = Loadout;
+        var pct = Equipment.Bonuses(Class, loadout, Peak, Levels);
         if (Mine && !Demo) pct = ShipStats.Sum(pct, Character.Bonuses);
         pct = ShipStats.Sum(pct, Progression.Shares(_bought, Class));       // the pilot's own percentages
-        return new ShipStats(Class, pct, ShipStats.Sum(Progression.Flats(_bought, Class), Equipment.Adds(Class, Loadout, Levels)));
+        return new ShipStats(Class, pct, ShipStats.Sum(Progression.Flats(_bought, Class), Equipment.Adds(Class, loadout, Peak, Levels)));
     }
 
     // THE WING, brought to the sheet's counts: gear adds fighters or takes bombers away, and may be
@@ -367,16 +368,21 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
 
     public void SetClass(ShipClass c) { Class = c; FitClass(); }
 
-    // The pilot's purchased upgrades (Progression). The host needs them too: it resolves
-    // hull and damage. Changing them refits the ship (Restat).
+    // The pilot's purchased upgrades (Progression), and the highest level it has reached (its PEAK,
+    // what the level walls read: Unlocks). The host needs both: it resolves hull and damage, and it
+    // is held to the walls: a chip slot opens on the sheet the moment the peak reaches it (Loadout).
+    // Either one changing refits the ship (Restat). A ship no identity has reached yet is a level-1
+    // pilot's.
     private int[] _bought = new int[Progression.All.Length];
     public int[] Bought => _bought;
-    public void SetProgress(int[] bought)
+    public int Peak { get; private set; } = 1;
+    public void SetProgress(int[] bought, int peak)
     {
         var b = new int[Progression.All.Length];
         for (int i = 0; i < b.Length && i < (bought?.Length ?? 0); i++) b[i] = Math.Clamp(bought[i], 0, Progression.MaxPerUpgrade);
-        if (b.AsSpan().SequenceEqual(_bought)) return;
-        _bought = b;
+        int pk = Progression.Claim(peak);
+        if (b.AsSpan().SequenceEqual(_bought) && pk == Peak) return;
+        _bought = b; Peak = pk;
         Restat();
     }
 
@@ -397,17 +403,20 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // parts (on the host, what the identity carried; your own, from Character -- copied, never
     // shared). A change to EITHER refits: a level bought for a part already fitted is the same
     // loadout, and must refit all the same.
-    private string[] _loadout;
-    public string[] Loadout => _loadout ?? Equipment.Default(Class);
+    // WHAT IS FITTED IS KEPT WHOLE (_fitted: what this hull can wear); what FLIES is what the
+    // pilot's peak has opened of it (Loadout), so a chip slot that opens mid-session applies the
+    // chip already in it, with nothing sent again.
+    private string[] _fitted;
+    public string[] Loadout => Equipment.Sanitize(Class, _fitted, Peak);
     private Dictionary<string, int> _levels = new();
     public IReadOnlyDictionary<string, int> Levels => _levels;
     public void SetEquipment(string[] ids, IReadOnlyDictionary<string, int> levels)
     {
-        var l = Equipment.Sanitize(Class, ids);
+        var f = Equipment.Sanitize(Class, ids, Unlocks.Top);
         var lv = Equipment.SanitizeLevels(levels?.Select(kv => (kv.Key, kv.Value)));
-        if (_loadout != null && l.AsSpan().SequenceEqual(_loadout)
+        if (_fitted != null && f.AsSpan().SequenceEqual(_fitted)
             && lv.Count == _levels.Count && lv.All(kv => _levels.GetValueOrDefault(kv.Key) == kv.Value)) return;
-        _loadout = l; _levels = lv;
+        _fitted = f; _levels = lv;
         Restat();
     }
 
@@ -447,6 +456,9 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     {
         var def = Abilities.Find(Class, id);
         if (def == null) return;                       // not an ability this class carries
+        // BEHIND A LEVEL WALL (Unlocks): the slot says the level that opens it, and nothing is asked --
+        // before a local press too, which the host would never see. The host holds the same wall.
+        if (Unlocks.LockedAt(Class, Peak, def) is int at) { Fail(id, Unlocks.Locked(at)); return; }
         // A LOCAL ability is the owner's own intent (the fire mode): it rides in the state report
         // rather than being asked for.
         if (def.Local) { def.Press?.Invoke(this, null); return; }
@@ -468,6 +480,8 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // it (AbilityDef.WhenWrecked -- reboard). The nine newest abilities each repeated `!Net.Sim ||
     // !Alive` in their own body and the seven oldest never did, so a guest in stasis could fire a
     // missile burst, switch on point defence and order a bomber strike out of its own wreck.
+    // An ability behind a level wall (Unlocks) is refused here too, for the peak this ship's pilot
+    // announced: a guest that skips its own refusal still presses nothing its level has not opened.
     // WHAT A COOLDOWN REALLY IS, once the pilot's COOLING points are in it: the sheet's share of
     // the row's seconds, never below a floor. Every ability that sets a cooldown reads it here
     // rather than each one multiplying for itself.
@@ -477,7 +491,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     private void DoAbility(string id, int targetId)
     {
         var def = Abilities.Find(Class, id);
-        if (def == null || !Net.Sim || (!Alive && !def.WhenWrecked)) return;
+        if (def == null || !Net.Sim || (!Alive && !def.WhenWrecked) || Unlocks.LockedAt(Class, Peak, def) != null) return;
         def.Press?.Invoke(this, targetId != 0 ? Combat.ById(targetId) : null);
     }
 

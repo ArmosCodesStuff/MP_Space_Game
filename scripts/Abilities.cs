@@ -27,8 +27,9 @@ using System.Linq;
 public enum AbilityKind { Press, Hold }
 
 // What a slot on the bar says, whether it is lit (active/engaged), and how much of it is still
-// recharging (0..1). Fail is a refusal, shown in red for a moment.
-public struct SlotState { public string Line; public bool Lit, Fail; public float Busy; }
+// recharging (0..1). Fail is a refusal, shown in red for a moment; Locked is a level wall the
+// pilot has not reached (Unlocks), and the line says the level that opens it.
+public struct SlotState { public string Line; public bool Lit, Fail, Locked; public float Busy; }
 
 public class AbilityDef
 {
@@ -36,6 +37,10 @@ public class AbilityDef
     public AbilityKind Kind = AbilityKind.Press;
     public Key Default;
     public bool Open;               // an open hotkey: bound, shown, does nothing yet
+    // A WEAPON'S OWN ACTION (the guns, their fire mode, R, point defence, the wing's orders, the
+    // sentries): never behind a level wall. Every other row a class lists is one of its abilities
+    // 1, 2 and 3, in list order, opened by the pilot's level (Unlocks.AbilityAt).
+    public bool Weapon;
     // The owner's own intent, not an order to the host: it rides in the ship's state report
     // instead of being asked for (the fire mode).
     public bool Local;
@@ -81,14 +86,14 @@ public static class Ab
 {
     public static readonly AbilityDef Guns = new()
     {
-        Id = "guns", Name = "Main guns", Short = "GUNS", Kind = AbilityKind.Hold, Default = Key.Space,
+        Weapon = true, Id = "guns", Name = "Main guns", Short = "GUNS", Kind = AbilityKind.Hold, Default = Key.Space,
         Blurb = "Hold to fire. The barrels follow the cursor, slowly.",
         Show = (s, _) => new SlotState { Line = s.Staggered ? "STAGGERED" : "SALVO", Lit = s.Trigger },
     };
 
     public static readonly AbilityDef FireMode = new()
     {
-        Id = "firemode", Name = "Fire mode", Short = "MODE", Default = Key.G, Local = true,
+        Weapon = true, Id = "firemode", Name = "Fire mode", Short = "MODE", Default = Key.G, Local = true,
         Blurb = "Salvo (every barrel at once) or staggered (one at a time). Same rate.",
         Press = (s, _) => s.Staggered = !s.Staggered,
         Show = (s, _) => new SlotState { Line = s.Staggered ? "STAGGERED" : "SALVO" },
@@ -116,7 +121,7 @@ public static class Ab
 
     public static readonly AbilityDef Pd = new()
     {
-        Id = "pd", Name = "Point defence", Short = "PD", Default = Key.Q,
+        Weapon = true, Id = "pd", Name = "Point defence", Short = "PD", Default = Key.Q,
         Blurb = "Opens a firing window: each turret picks its own target. Recharges after.",
         Press = (s, _) => s.StartPd(),
         Expire = s => s.Sl("pd").Cool = s.Stats["pd_reload"],      // the window closed: the recharge
@@ -147,7 +152,7 @@ public static class Ab
 
     public static readonly AbilityDef Reload = new()
     {
-        Id = "reload", Name = "Reload missiles", Short = "RELOAD", Default = Key.R,
+        Weapon = true, Id = "reload", Name = "Reload missiles", Short = "RELOAD", Default = Key.R,
         Blurb = "Refills the magazine. Nothing fires while it runs.",
         Press = (s, _) => s.StartReload(),
         Expire = s => s.Sl("missile").N = (int)s.Stats["missile_mag"],   // loaded: the magazine full
@@ -158,7 +163,7 @@ public static class Ab
 
     public static readonly AbilityDef Attack = new()
     {
-        Id = "attack", Name = "Fighters: attack", Short = "ATTACK", Default = Key.Space,
+        Weapon = true, Id = "attack", Name = "Fighters: attack", Short = "ATTACK", Default = Key.Space,
         Blurb = "Sends the fighters at the selected target, inside control range.",
         Press = (s, t) => s.OrderAttack(t),
         Show = (s, sel) =>
@@ -172,7 +177,7 @@ public static class Ab
 
     public static readonly AbilityDef Recall = new()
     {
-        Id = "recall", Name = "Fighters: recall", Short = "RECALL", Default = Key.R,
+        Weapon = true, Id = "recall", Name = "Fighters: recall", Short = "RECALL", Default = Key.R,
         Blurb = "Calls the fighters home; they dock inside.",
         Press = (s, _) => s.RecallWing(),
         Show = (s, _) => new SlotState { Line = s.WingTarget != null ? "READY" : "HOME" },
@@ -202,7 +207,7 @@ public static class Ab
     // ── the freighters ───────────────────────────────────────────────────────
     public static readonly AbilityDef Deploy = new()
     {
-        Id = "deploy", Name = "Deploy turret", Short = "DEPLOY", Default = Key.T,
+        Weapon = true, Id = "deploy", Name = "Deploy turret", Short = "DEPLOY", Default = Key.T,
         Blurb = "Drops a turret where you are. It holds the spot and shoots what comes near until you collect it (C) or it dies.",
         Press = (s, _) => s.DeployTurret(),
         Refuse = (s, _) => s.TurretsOut >= (int)s.Stats["deploy_max"] ? "ALL OUT"
@@ -218,7 +223,7 @@ public static class Ab
 
     public static readonly AbilityDef Collect = new()
     {
-        Id = "collect", Name = "Collect turret", Short = "COLLECT", Default = Key.C,
+        Weapon = true, Id = "collect", Name = "Collect turret", Short = "COLLECT", Default = Key.C,
         Blurb = "Picks up one of your turrets you are sitting over, to drop again.",
         Press = (s, _) => s.CollectTurret(),
         Refuse = (s, _) => s.TurretsOut == 0 ? "NONE OUT" : s.NearestOwnTurret() == null ? "NOT OVER ONE" : null,

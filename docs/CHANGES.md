@@ -36,37 +36,54 @@ history pick the work up from it alone. Update it in the same change as the code
 
 ## Handoff — read this first
 
+**2026-09-25 (worktree `WarShips_wt_art`, branch `wt/art`): every entity wears the pack** -- raiders,
+bosses (2x, the Rusty Bucket's shockwave scaled), fleet, siege (J4) and the 12 player hulls (J5); the
+Drake is framed by moving the camera, never past the wheel's own zoom-out (owner ruling). `version-l`
+(the net lane's R1 and the walls lane) is merged in; `-Quick` green at the lane's HEAD. **J4, J5 and
+the merge are engine-unproven: rungs 3-5 owed in the final test phase** (then `screens` for frames 63-67a).
+Ledger: `docs/plans/ledger_sprites.md`. Not merged to `version-l`, not pushed.
+
+**2026-09-25 (local session, worktree `WarShips_wt_net`, branch `wt/net`): WebRTC slice R1 is proved
+on the engine.** Commits 6eef84e, dba1847, 06db494 (J7-J9), 8760795 (J9b, rung 3 green on seeds
+11400714819323466726 and 11400714819323463562), 3e4df1b (J10, the rows end to end), e4cac19 (J9c, the
+build's fingerprint), c4a7e01 (R1P: two rung-3-only checks fixed -- `Character`'s own `const` bounds
+are not "the pilot", `Bought`'s reflection name changed with the property). Rung 3 green twice more on
+this commit (seeds 11400714819323513555 and 11400714819323526641) and the six-role run green once
+(seed 11400714819323519265, every role `fails=0`): host and every guest agree on J9c's `Net.Protocol`.
+**The pair-proxy unknown is closed, in the box's favour**: libjuice does use a loopback pair proxy as a
+remote candidate (9 datagrams to the host, 9 to the guest); the `Net.DropBeatsFor` fallback (plan
+§10.2) was never needed. **The merge gate then failed the lane on `Net.cs:239-242`: `StructRow`
+demanded `IsReadOnlyAttribute`, so a MUTABLE struct row (`StatusSet.Guards`, `EmplacementDef.Gun`) and
+a `System.ValueTuple`N` row (`Hub.PracticeTargets`, `Hub.Outposts`) never entered the fingerprint.**
+Fixed (ledger R1Q): `StructRow` takes any value type of the game's own assembly, or any
+`System.ValueTuple`N`, whose public fields are all Plain, readonly or not; three new `BuildChecks` (a
+status guard's share, the base gun's damage, one practice target) each move the fingerprint and are
+restored. Re-proved: `-Quick`, rung 3 green twice more (seeds 11400714819323524536 and
+11400714819323511382), the six-role run green once more (seed 11400714819323521240, every role
+`fails=0`) -- host and every guest still agree on `Net.Protocol`.
+**The merge gate found a second defect (job R1R): `StructRow` still demanded every field Plain, so
+`WaveCrew` (a `Func` `Count` field) printed as its bare type name and the private static readonly
+`Waves.Patrol`/`HuntPin` rows never entered the fingerprint.** Fixed: `StructRow` accepts a field that
+is Plain OR a delegate; `Show` prints a delegate's type name, null as `null`. Re-proved at 1a139c0
+(after merging `version-l`'s walls lane in first, no fingerprint fix needed for `Unlocks.All`: it is a
+record class, already hashed through `Plain`'s own `<Clone>$` path): `-Quick` green, rung 3 green twice
+(seeds 11400714819323517228, 11400714819323555799), the six-role run green once (seed
+11400714819323519350, every role `fails=0`), the two new checks ("a row with a delegate field is part
+of the build's fingerprint", "a wave crew row put back is the build's fingerprint again") PASS on
+every run, no FAIL or ERROR line. Next: the bar (`verify.ps1 -Update`), a merge to `version-l`, and
+**R2** (network_webrtc.md §13: the switch; its `Net` is the desks, `Net._Process` polls
+`Rendezvous.Paths`, `Join` adds an invite's candidates only after the walk, D15). Not pushed.
+
+**2026-09-25 (main session): the walls lane (lane C) merged into `version-l`** (`29b154e`), rung
+3/5/4 green in the lane; `Unlocks.All` joins CLAUDE.md §7's extend-before-inventing list.
+`version-l` now also carries this session's docs/tool commits (`tools/lanes.ps1`,
+`docs/plans/ledger_main.md`, compaction-safety rules). kits (lane A) and art (sprites) lanes continue
+separately; see their own ledgers for status.
+
 **2026-09-24 (local session): R0 is VERIFIED (aa1e4f9) and pushed to version-l and main.** Rung 2,
 rung 3 on seeds 90331 and 4127, `-OneDll`, `-ReplyWindow` (every delay to 60 s connected:
 `Link.ReplyWindowS` = 30, DESIGN.md), then a green bar. Owner rulings since: the Echo's Rewind goes
 back 8 s with hull, from a 0.5 s snapshot ring; no boss-hull trim for adds (docs/plans/README.md).
-**Four lanes run in parallel** (owner, for speed), each a writer in its own worktree OUTSIDE this
-folder, compile rungs only; the main session runs every engine rung, one at a time, then merges:
-| worktree (branch) | lane | ledger |
-|---|---|---|
-| `..\WarShips_wt_net` (wt/net) | WebRTC R1: codes, STUN rows, `Link.ReplyWindowS` = 30 | `docs/plans/ledger_webrtc.md` J7+ |
-| `..\WarShips_wt_kits` (wt/kits) | kits lane A: the v2/v3/raids_v2 specs into docs/plans, slices 1-2 | `docs/plans/ledger_kits.md` |
-| `..\WarShips_wt_art` (wt/art) | sprites: enemies, bosses, fleet, siege, then the 12 hulls | `docs/plans/ledger_sprites.md` |
-| `..\WarShips_wt_walls` (wt/walls) | kits lane C: `Unlocks.cs`, 6 chip slots, walls, `Peak` | `docs/plans/ledger_walls.md` |
-Each ledger lists the engine rungs it owes. A lane whose ledger has a PRE with no POST was interrupted.
-**In flight, 2026-09-25 ~01:10** (engine tests run from a detached checkout `..\WarShips_wt_test`, one
-at a time, by the main session's scratch `rungs.ps1`):
-- **walls (lane C): all 4 jobs + 2b done (58d7d1a).** Rung 2, rung 3 x2 green; rung 5 RED once:
-  `[third] FAIL third player: nor after a restart -- the kills it was paid for are on its file (exp 650
-  -> 650, 6 parts)` (guest2 now claims level 3, D12). A 4-angle review workflow is running on
-  aa1e4f9..58d7d1a; ONE fixer (opus: unexplained) takes the rung-5 fail + the confirmed findings, then
-  rung 5 + screens (111 frames), then merge.
-- **kits (lane A):** slice 1a + J0 + F16 + 1b (606201f) green except the rewritten Disabled check's
-  own setup (timed from the input); the writer on J4 (F17) lands "job 1c" first. Next: J5-J7.
-- **net (R1):** J7-J9 + J9b (8760795) under rung 3 now. D17 cause found: `Character.Bought` (a
-  `static readonly int[]`) is hashed live by `Net.Fingerprint` -- two pilots with different upgrades
-  could refuse each other. The writer fixes it as J9c after J10; it wants the text after "parts moved
-  since the run began" from the two seam lines of the 8760795 run. Then J11 (record).
-- **art (sprites):** every entity wears the pack: J1-J3d, the siege (J4) and the 12 player hulls (J5);
-  bosses 2x with the Rusty Bucket's shockwave ring scaled; the Drake framed by moving the camera, never
-  past the wheel's own zoom-out (the owner's ruling). Merge chain: see `docs/plans/ledger_sprites.md`.
-- The owner's casting page: https://claude.ai/artifact/G1HZfHe3ipoKdgUWy964hb (db `picks/current`).
-- New agents follow CLAUDE.md 2b.4 (lowest trusted tier, `model` set explicitly).
 
 **2026-09-25 (cloud session): WebRTC slice R0's code landed** (tested since: above).
 Ledger: `docs/plans/ledger_webrtc.md` (jobs J1-J6, decisions D1-D7, v1 of the plan is not in the repo).
@@ -698,6 +715,225 @@ Compiles (typecheck 0 errors, `-Quick` below); rungs 3 and 4 not run in this lan
 their seats). The pack's grey is LIGHTER on average than the old line art (mean lightness under
 the drawing 0.57 against 0.31 on the webifier, 0.63 against 0.40 on the gunship), so the raider reds
 read brighter; the tints are unchanged until a frame says they read too light.
+### WebRTC slice R1: the reply window, the codes, the STUN walk, the box, the rows end to end (2026-09-25, branch wt/net)
+
+**`Link.ReplyWindowS` is 30 s** (R0's measurement, DESIGN.md), and every solo run holds one pair to it:
+its host takes the reply 30 s after the guest made it and must connect within 2 s; the one-time
+measurement and `run.ps1 -ReplyWindow` are gone. **`scripts/Rendezvous.cs`** owns how two machines swap
+session descriptions (network_webrtc.md §4): the four records (invite, reply, knock, refuse) and their
+one codec, each ending in a 4-byte SHA-256 check; the plugin's 17-line SDP template, so a code carries
+the five values that vary and the candidates, and the far side rebuilds the rest byte for byte; the
+text a player pastes (`WSI`/`WSR` and Crockford base32, found anywhere in a copied message, case and
+I/L/O forgiven, only as many characters read as the record needs); the fit rule (400 characters; the
+/64 rule, then the rest, IPv6, LAN, overlay, server-reflexive last); the two rows (paste, address)
+and which text each claims; the clipboard seam. **The rows end to end:** the pending table (one entry
+per invite not yet connected, Waiting or Linking) and the two desks a session implements
+(`IHostDesk`, `IGuestDesk`: R2's Net); every row opens on a host's desk, starts a guest's join and is
+polled. The address row's **listener** (dual-stack TCP from 27015 .. 27024, then the OS's port;
+records framed in 2 bytes, 3 s to arrive; the checks in order -- build, 20 knocks a minute an address,
+one entry per guest, room; a knock in flight refused `closed`; an invite whose connection ends without
+its reply hung up) and **dialer** (the typed address, `DialAddress` for a name, knock, answer). The
+paste row's **clipboard pickup**: while anything is pending, the clipboard read at most every 500 ms,
+and a reply for a Waiting invite handed over once. `Rendezvous.Guest`, a guest's mark, drawn once per
+process. **`Link.cs`** gains the STUN rows (Google's, then Cloudflare's; mutable, so outside the
+fingerprint), `Config` (one row per connection), the walk (`Link.Gather`: a row unanswered in 2,000 ms
+is passed over, the connection made again with the same id, the answering row remembered, none
+answering leaves this PC's own addresses and a flag), `ChannelOf`, `Backlog` (which counts only what
+waits beyond the SCTP send buffer), `LinkMs`, `InviteLifeS`. **The box** (`tools/smoketest/wan.py`,
+rewritten): a STUN responder, silent ports, the pair proxy, a blackhole and stats, started by run.ps1
+for every run; it also carries `-Wan`'s ENet relays until R2. **The courier** (harness): codes carried
+as files beside the project, and rewritten to the box's address for the pair proxy. Nothing in the
+session uses any of it yet: R2 switches, and R2's `Net._Process` polls the rows.
+
+**The build's fingerprint, fixed on the way.** `Net.Protocol` was a readonly field initializer, so the
+fingerprint was taken mid-way through Net's own initialization: it hashed itself as 0 and the Net
+statics below it as unset, and differed from every fingerprint taken later in the process (3724c77b
+against 7991f5f3). It is a property set by Net's static constructor. `Character.Bought` (the pilot's
+purchases) was a readonly array and so hashed live: a property over a mutable field. And a struct row
+(a pirate-base `Post`, a `TargetFilter`) was never hashed: `Net.Plain` takes one whose public fields are
+all Plain. **Then the merge gate found the fix half done:** `StructRow` still demanded
+`IsReadOnlyAttribute`, so a MUTABLE struct row (`StatusSet.Guards`, `EmplacementDef.Gun` -- the pirate
+base's cruise missile) printed as its bare type name, and a `System.ValueTuple`N` row
+(`Hub.PracticeTargets`, `Hub.Outposts`) was skipped whole, a different assembly than the game's own.
+`StructRow` now takes any value type of the game's own assembly, or any `System.ValueTuple`N`, whose
+public fields are all Plain, readonly or not. The fingerprint's value changes with this; both ends of a
+run share it.
+
+**Checks:** new in the solo role -- `Link.ReplyWindowS` is 30, and a reply taken 30 s late still
+connects within 2 s; every record kind round-trips; the wire values; the spike's bundles pack to the
+plan's 121 B/197 characters and 98 B/160; a name clips to 16 bytes at a character boundary; the
+spike's and the live pair's bundles come back byte for byte but the `o=` id; an unknown SDP line, a
+foundation over 255, a non-base64 credential and a non-sha-256 fingerprint are refused by name; a code
+reads back inside a Discord message, in lower case and with I/L/O, and one changed character does not;
+codes are the paste row's and addresses the address row's; 20 candidates fit 400 characters keeping
+srflx, overlay and LAN; two IPv6 on one /64 keep one; `Rendezvous.Clipboard`, `Link.Servers` and the
+guest's mark stay out of the fingerprint, which is the build's when swapped; the STUN table's literals;
+the box is up; the walk over two silent rows seals at 4,000 ms with host candidates and the flag, on a
+host's and a guest's peer; the next gather skips STUN in under 100 ms; a silent row then the box's
+responder stops at row 2 with a server-reflexive candidate; 20 gathers sealed by `Link.Sealed` hold
+their srflx, and 20 with no STUN hold every host candidate a second later holds; `ChannelOf`; `Backlog`
+reads a burst once it outgrows the SCTP send buffer; the listener's ports and limits; by the address
+row, a knock brings an invite and the reply reaches the host's desk, over IPv4, IPv6 and a name; one
+pending entry per guest; `full`, `build`, `rate` and `closed` refusals, each read by the dialer; the paste
+row through the courier's files, the reply taken off the clipboard as a whole Discord message and never
+the host's own invite; the pickup's pace and once-only; a pair whose codes the courier rewrote connects
+through the box's pair proxy, datagrams both ways; a packet sent into a 1 s blackhole arrives after it
+lifts; nothing about the pilot is in the fingerprint; the fingerprint never hashes itself; a struct row
+is in it; a MUTABLE struct row is in it too (a status guard's share, the pirate base's gun damage); a
+`System.ValueTuple`N` row is in it too (one practice target); every field of Character is accounted for
+by the round-trip test (`<Bought>k__BackingField`, the property's own backing field, now that `Bought`
+is one); `Character`'s own `const` bounds are not the pilot and stay in the fingerprint (`Dir`,
+`MaxBonus`, `MaxStock`, `PaidKept`, `SaveDelay`); a row with a DELEGATE field (`WaveCrew.Count`, a
+`Func`) is in it too -- `Waves.Patrol`/`HuntPin` moved, moves it, and the printed row is written out
+field by field, not its bare type name.
+Replaced: the reply-window measurement. Rung 3 green on two seeds at 8760795 (J7-J9b); two rung-3
+checks of J9c's fixed at c4a7e01 (both invisible below rung 3); rung 3 green twice more at c4a7e01
+(seeds 11400714819323513555, 11400714819323526641) and the six-role run once (seed
+11400714819323519265, every role `fails=0`); the merge gate's `StructRow` fix (R1Q) re-proved: rung 3
+green twice more (seeds 11400714819323524536, 11400714819323511382) and the six-role run once more
+(seed 11400714819323521240, every role `fails=0`): host and every guest agree on `Net.Protocol`; a
+second merge-gate defect fixed (R1R, `StructRow`'s delegate-field gate) and re-proved once more: rung 3
+green twice (seeds 11400714819323517228, 11400714819323555799) and the six-role run once (seed
+11400714819323519350, every role `fails=0`).
+
+**Known broken (R1):**
+- **What libjuice writes after an IPv6 server-reflexive candidate is unread**; the codec writes
+  `raddr :: rport 0`. No network here has one, so no check can see it.
+- **The Linux runner (run.sh) does not start the box**, and has no plugin (R0); the rows' checks need
+  neither and run there, the IPv6 join form becoming a second IPv4 one where the OS has no IPv6.
+### Level walls: adversarial review, 7 findings fixed; batch proven (2026-09-25, lane C, `wt/walls`)
+
+**`Unlock` is a record class, not a struct**, so `Unlocks.All` (wall levels, the two boss gates) reaches
+`Net.Fingerprint` through `Plain`'s `<Clone>$` check like every other hashed table; two builds that
+disagree on one wall level or boss gate now refuse each other's handshake instead of silently
+disagreeing about what is open. **`Character.Load`'s hint filter asks `Hints.Card(h) != null`** (the
+query `Hints.Meet` already uses) instead of `Hints.All.ContainsKey(h)`, so an unlock card's id (e.g.
+`unlock_chipslot_1`) survives a save/load round trip instead of being silently dropped every time.
+**`EquipmentWindow` tracks `Character.Peak` and rebuilds when it changes**, so a chip slot opening
+mid-session (a level-up while the window is open) unlocks its row and un-greys EQUIP without a
+close/reopen.
+
+**Checks:** the handshake check ("THE HANDSHAKE SEES THE TABLES") now also asserts a wall level and a
+boss-gate literal are in what is hashed; guest2's "nor after a restart" now asserts the true
+post-Sanitize hold (6: 2 kill parts + 4 displaced chips) instead of a stale 2; "the other class keeps
+its own gear" switches class while the chip is still fitted, so it can fail again; the pilot hull-point
+check fits an Armour Chip I first, so +5 flat reads +5.4 under its +8% share, proving flats land before
+percentages again; `WallChecksLive` check 3 asserts the bar's locked set equals `{Nth(c,2), Nth(c,3)}`
+minus nulls (the spec's truth, matching the static twin) instead of "nothing locked"; a new
+EquipmentWindow check opens at peak 2 (chip slot 2 `LOCKED · L4`), raises Peak to 4 with no I press, and
+proves the row unlocks live; Character.Load's hints round trip now seeds `unlock_chipslot_1` and proves
+it survives alongside a known hint while an unknown id is still dropped.
+
+**Batch proven:** `version-l` merged in first (8 docs-only commits since aa1e4f9, no conflicts). Rung 2
+green; rung 3 (Solo) green on two seeds (11400714819323513364, 11400714819323511793); rung 5 (six roles)
+green on seed 11400714819323517573; screens green (111 frames, `LINT: 0`).
+
+**Known broken:** none known.
+
+### Level walls, job 3: the ability walls (2026-09-25, lane C, `wt/walls`)
+
+**A class's abilities 1, 2 and 3 open at pilot levels 1, 3 and 6** (`Unlocks.AbilityAt`), read from the
+pilot's peak. They are its rows in `ClassDef.Abilities` order, skipping the new `AbilityDef.Weapon` rows
+(guns, fire mode, point defence, the missile's reload, the wing's attack and recall, the sentries' deploy
+and collect) and the open hotkeys; keys keep their layout. **The host refuses a walled press**
+(`PlayerShip.DoAbility`, for the peak the pilot announced); the owner's press fails at once with
+`LOCKED · L3` (`UseAbility`, before a local press too); the bar draws a locked slot in the quiet box with
+`LOCKED · L3` beneath (`SlotState.Locked`); K adds "opens at level 3" to its row, still bindable. **Crossing
+a wall shows a card** written by the table for the class flown ("LEVEL 3 · Q · <ABILITY>" and its blurb;
+"LEVEL 4 · CHIP SLOT 2"), met in order by `AddExp` (`Unlocks.Crossed`, `Hints.Card`); the PILOT window
+names the next wall beside the points. The menu's battleship flies at peak 14. Today every class carries
+ONE walled ability, so nothing real is refused until lane A writes each kit's three in learn order.
+
+**Checks:** `WallChecks` (rung 3): the eight weapon rows; the index-to-level rule on real rows in three
+orders; all 12 classes open at level 1, every walled row a press; card ids, a chip card, `Crossed` and
+`Next` x battleship / warden / echo; check 3's three-a-class (PEND walls). `WallChecksLive` (rung 3, Solo):
+2600 EXP from level 1 queues LEVEL 2 · CHIP SLOT 1 x destroyer / warrior / carrier (ability 2's card PEND);
+the PILOT window's NEXT at 3 / 12 / 14; at level 1 a battleship, a hauler and an echo lock nothing, land
+their guns on a gunship 300-600 u off at a varied bearing and press ability 1 through `DoAbility`;
+checks 4 and 5 (the owner's LOCKED · L3, the host's gate at 5 / 6) PEND. The menu ship's peak 14. Rung 5
+(the third player, level 1 / peak 3): checks 13, 14 + 17 and 16 PEND. Shots: `6c_k_keys_walls`,
+`57b_walls_next_card` (new).
+
+**Known broken:** none known; rungs 2-5 and screens all green (see the review entry above). The PEND
+checks (3, 4, 5, 9's second card, 13, 14, 16, 17) still print PEND: they go live only when a class has a
+2nd and 3rd walled ability (lane A), and their timing on the guest is unproved until then.
+
+### Level walls, job 2b: five old-truth checks job 2 missed (2026-09-25, lane C, `wt/walls`)
+
+Rung 3 at job 4's commit (seed 11400714819323464263) failed five checks that still asserted the five kit
+chips' x1.25. Rewritten to the stock ship, with literals: the K window's battleship reads main guns
+35.80 DPS (4 x 17.9 every 2 s; 8.95 a barrel), the broadside 214.8 every 15.0 s = 14.32 DPS, the total
+35.80 + 14.32 + 1.00 = 51.12; the destroyer's burst 150 u off the nose lands 3 x 49 = 147; the kit is 22
+parts (no chip). No code changed.
+
+**Checks:** rewritten (rung 3): "stats tab: the stock main guns", "stats tab: the broadside", "and the
+total adds up", "a target 150 u off the nose", "the gear: 246 drops ... a 22-part kit".
+
+**Known broken:** none known; rungs 2-5 and screens all green (see the review entry above).
+
+### Level walls, job 4: Auto-sell and the lanes' blockades are rows of the unlock table (2026-09-25, lane C, `wt/walls`)
+
+**The base's two boss gates fold into `Unlocks.All`** as rows measured by the base owner's highest boss
+beaten (`Measure.Boss`): Auto-sell at boss 3 (`Opens.Economy`, `hauler_autosell`), blockades at boss 1
+(`Opens.Raids`), asked through `Unlocks.Boss(what, id)`. `Economy.Upgrade.NeedsBoss`,
+`Economy.AutoSellBoss` and `Lanes.NeedsBoss` are deleted; `Yard.TryBuy`, the base panel's LOCKED line and
+`Raids`' lane clock read the table. Behaviour is unchanged.
+
+**Checks:** `WallChecks` (new, rung 3): the two rows against the plan's literals (3, 1) and an unnamed row
+open (0); the lanes' clock waits with no bounty boss beaten and runs with 1 and 4 beaten. The existing
+Auto-sell checks (LOCKED until boss 3, the owner's record on a guest) now run through the table unchanged.
+
+**Known broken:** none known; rungs 2-5 and screens all green (see the review entry above).
+
+### Level walls, job 2 (F15): six chip slots on every hull, the kind caps, no starting chips (2026-09-25, lane C, `wt/walls`)
+
+**Every hull has six chip slots** (`Equipment.ChipSlots` 6), opened in order by the pilot's peak
+(`Unlocks`: level 2, 4, 8, 10, 12, 14), with **at most 3 Combat and 3 Utility chips** (`ChipKind` on
+`ItemDef`, `Equipment.KindCap`; the Combat Chip is Combat, Armour, Engine and Targeting are Utility).
+**`chip_basic` is deleted and `Equipment.Default` fits no chips**: a stock ship is its class row (a
+battleship 300 hull where it flew 375). `Equipment.Sanitize(c, ids, peak)` empties a chip in an unopened
+slot or over its kind's cap, and `Bonuses` / `Adds` take the peak, so the host holds a guest's claim to
+its own walls. `PlayerShip` keeps what is fitted whole and flies what its peak opens (`Loadout`), so a
+slot opening mid-session applies its chip. `Character.Load` moves every chip it cannot fly into the hold
+(never deleted). The equipment window shows six chip rows, a locked one reading `CHIP 4  ·  LOCKED · L10`
+with no button; EQUIP uses the first open empty slot (`Equipment.ChipFit`) and greys out with why ("next
+chip slot opens at level 10", "at most 3 Combat chips").
+
+**Checks:** `ChipChecks` (new, rung 3): open slots at levels 1/2/4/8/14 = 0/1/2/3/6 through Sanitize and
+the sheet, the Utility cap, `ChipFit`'s five answers, and files at levels 1/3/14 with five Combat chips
+loading 0/1/3 fitted and the rest held, x battleship / warden / echo, plus a file with no peak. Solo
+(rung 3): EQUIP and UNEQUIP of an Armour Chip I (+8% hull) in place of the five kit chips, and EQUIP greyed
+with both reasons and a locked row at peak 8. Rewritten to the stock numbers (no chips): the creator card
+(300), broadside 214.8, a shell 17.9, the refit's fraction (60/300, 108/540, 45/225), the destroyer 250,
+the missiles 147, a torpedo 137.5, the carrier's 93.6 DPS reference, the worst-case stack (-37% / -45% /
+-60%, chips counted three of a kind), hull points +5 / +10, the arena's 140 / 400 / 6. Rung 5 (new or
+rewritten): the arena guest's two Armour Chips (290); Guesty's four Armour Chips held to three on the host
+(248); the third player's five chips at peak 3 flying one on the host, on itself and on the other guest (324).
+Shots: `58b_eq_chip_walls` (new, peak 4: two chips, four locked rows, a greyed EQUIP).
+
+**Known broken:** none known; rungs 2-5 and screens all green (see the review entry above).
+
+### Level walls, job 1: the unlock table, the pilot's peak, save format 3 (2026-09-25, lane C, `wt/walls`)
+
+**`scripts/Unlocks.cs` is the one table of what a pilot's level opens** (docs/plans/level_walls.md with
+the owner's rulings): ability 1 at level 1, chip slot 1 at 2, ability 2 at 3, chip slot 2 at 4,
+ability 3 at 6, chip slots 3-6 at 8, 10, 12 and 14 (`Unlocks.All`, queried by `At`, `Count`, `Top`).
+**Walls read `Character.Peak`**, the highest level a pilot has ever reached: saved as
+`[progress] peak`, loaded as max(peak, level), raised by `AddExp`, never lowered by a refit. The
+identity carries it after the level; the host takes it through `Progression.Claim` (1-100, the cap a
+claim's spending already had) and hands it to the ship (`PlayerShip.SetProgress(bought, peak)`,
+`PlayerShip.Peak`). **`Game.Version` is 3**: format 2 files are listed greyed out and refused, with
+nothing migrated or refunded (owner's ruling). Nothing reads the walls yet: chip slots (job 2) and
+abilities (job 3) do.
+
+**Checks:** `WallChecks` (new, rung 3): the table against the plan's literals; a level up, a refit and
+a reload from levels 5, 13 and 2 keep the peak; files with no peak / a peak under the level / above it.
+Rewritten: the save round trip and its field inventory (`Peak`), the build stamp (3), the handshake's
+literal (3), fixtures written as this build's format, a format-2 file refused. Rung 5 (new): the host's
+copy of a guest reads peak 14 at level 1. The harness roles and both Shots pilots fly with every wall
+open (`Peak = Unlocks.Top`, level 1).
+
+**Known broken:** none known; rungs 2-5 and screens all green (see the review entry above).
 
 ### verify's text step skips a binary by what it holds, not by its extension (2026-09-24, in the WarShips_Version_L fork)
 

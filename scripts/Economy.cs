@@ -35,8 +35,7 @@ public static class Economy
     // (the owner's rule): (6400 + 244 + 244 + 244 + 305) / 5 = 1487.4, x3 = 4462.2. A THEORETICAL
     // level 5, as the owner put it: the salvager count stops at 4 purchases, so its 6400 is the
     // price the formula would ask, not one a player can pay.
-    public const double AutoSellCost = 4462;
-    public const int AutoSellBoss = 3;            // ...and only once the level-3 boss is beaten
+    public const double AutoSellCost = 4462;      // ...bought once the level-3 boss is beaten (Unlocks)
     // THE ESCORT: 5x the income; a wave of hunters 5 s in, then every 20 s for as long as the run
     // lasts; a 4 s hold at each outpost to offload.
     // WHEN a wave comes is here, because it is the run's own clock and the Yard runs the run.
@@ -79,7 +78,6 @@ public static class Economy
         public double Step = 1;                      // what a level of a Count row adds
         public double Per = PercentEffect;           // what a level of a Percent row adds (a fraction of the base)
         public int Max = int.MaxValue;               // most levels that can be bought (step upgrades and switches)
-        public int NeedsBoss;                        // the base owner's highest boss level before it can be bought
         public bool OwnerOnly;                       // the base owner's alone to buy: a guest's request is refused
     }
 
@@ -116,7 +114,7 @@ public static class Economy
         new() { Id = "pod_size",        Tab = "HAULER",    Kind = Kind.Percent, Name = "Pod size",         BaseValue = BasePodSize,    Unit = "per pod",   BaseCost = 150, Blurb = "+10% per pod" },
         // (at the END: a guest is sent the levels in this order)
         new() { Id = "hauler_evasion",  Tab = "HAULER",    Kind = Kind.Count,   Name = "Evasion",          BaseValue = 60, Step = 7,   Unit = "% safe",    BaseCost = 400, Max = 5, Blurb = "+7% chance a lone run gets through (up to 95%)" },
-        new() { Id = "hauler_autosell", Tab = "HAULER",    Kind = Kind.Unlock,  Name = "Auto-sell",        BaseValue = 0,              Unit = "",          BaseCost = AutoSellCost, Max = 1, NeedsBoss = AutoSellBoss, OwnerOnly = true, Blurb = "full, it goes by itself" },
+        new() { Id = "hauler_autosell", Tab = "HAULER",    Kind = Kind.Unlock,  Name = "Auto-sell",        BaseValue = 0,              Unit = "",          BaseCost = AutoSellCost, Max = 1, OwnerOnly = true, Blurb = "full, it goes by itself" },
         new() { Id = "hauler_speed",    Tab = "HAULER",    Kind = Kind.Percent, Name = "Hauler engines",   BaseValue = HaulerSpeed,    Unit = "u/s",       BaseCost = 150, Per = 0.02, Blurb = "+2% speed per level" },
         new() { Id = "hauler_pd_damage",Tab = "HAULER",    Kind = Kind.Percent, Name = "Hauler point defence", BaseValue = HaulerPdDamage, Unit = "per shot", BaseCost = 200, Per = 0.05, Blurb = "+5% damage per level" },
     };
