@@ -9971,6 +9971,9 @@ public partial class _Test : Node
         H.ClearSelection(); me.Velocity = Vector2.Zero;
         Check(marked2 && swinging2 && ripped && ended == HelmEnd.Drive && cooled,
               $"arena guest: hooked again ({marked2}), swinging ({swinging2}), V pressed -- its move ended {ended} (Drive) and the host's chunk drawn here within 1.5 s ({ripped}, not at the 5 s expiry); cooling {cool2:0.0} (> 14.5)");
+        // off the practice range before the next refit: hauled 250 u off the hulk, its point defence has the practice
+        // fighters in reach and keeps the host's copy in combat for good (Hub.Refit would keep the destroyer)
+        me.Position = Hub.BasePos + new Vector2(2600, 2400); me.Velocity = Vector2.Zero;
     }
 
     // ── SLICE 6a, RUNG 5: THE RIP IN A PARTY OF TWO (kits_v31 §3.3 Proves: "in a party of 2, the rip is 1% of the

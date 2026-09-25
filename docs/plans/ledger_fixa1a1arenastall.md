@@ -9,3 +9,6 @@ Reproduced (fa1as_r1 six@11400714819323305746: fails 2042/2043/2071/2072, 4/6 ru
 SetClass announced a guest's class mid-fight; the host kept the carrier (Hub.Refit, P8: its gunships hit the dummy,
 InCombat) while the guest flew a destroyer, so every press after landed on another class. The curtain lane also
 pressed E on the carrier (it leaned on the taunt lane's class). Fix: a guest's SetClass waits for Hub.MayRefit.
+fa1as_p1 (six@seed): curtain, suppress, grapnel green both sides; the guest then waited 80+ s in the pepper refit:
+hauled 250 u off TargetDummy1, its PD had the practice fighters in reach (combat for good). The grapnel lane now
+parks it at BasePos+(2600,2400) before returning.
