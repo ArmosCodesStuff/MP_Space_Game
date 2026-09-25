@@ -10888,6 +10888,40 @@ public partial class _Test : Node
             foe.TakeDamage(1e12);
         }
 
+        // WEBBED (dart.md: "The Dart has no web-breaker at all -- only hull"): pinned from rest, the sprint runs held -- the web
+        // stays on, the hull never past 0.2 x 360 + 3 u/s, the heading frozen (the rudder held hard over on one run) -- and the
+        // rod leaves at 3.0 s down the frozen nose, priced at the sprint's 360 all the same (249.23)
+        for (int run = 0; run < 3; run++)
+        {
+            dt.Demo = false;
+            float rot = VaryAngle(); var nose = Vector2.Up.Rotated(rot);
+            dt.Position = VaryNear(yonder, 300f); dt.Rotation = rot; dt.Velocity = Vector2.Zero;
+            dt.Sl("rod").Cool = 0; dt.Sl("rod").Left = 0;
+            dt.Statuses.Apply(Status.Pinned, 6.0);
+            await Frame();
+            var was = Rods();
+            if (run == 1) KeyDown(global::Godot.Key.D);
+            dt.UseAbility("rod", 0);
+            double clock = 0, fr = 1.0 / 60, tRod = -1; bool held = true, frozen = true; float fastest = 0; Shot rod = null;
+            for (int i = 0; i < 60 * 5 && rod == null; i++)
+            {
+                await Frame();
+                fr = GetProcessDeltaTime(); clock += fr;
+                held &= dt.Pinned; fastest = Mathf.Max(fastest, dt.Velocity.Length());
+                frozen &= Mathf.Abs(Mathf.AngleDifference(rot, dt.Rotation)) < 1e-3f;
+                if ((rod = NewRod(was)) != null) tRod = clock;
+            }
+            if (run == 1) KeyUp(global::Godot.Key.D);
+            double priced = Bores.Price(rodDmg, 360, 260, 2);
+            bool down = rod != null && Mathf.Abs(Mathf.AngleDifference(rod.Dir.Angle(), nose.Angle())) < 1e-3f;
+            Check(rod != null && held && frozen && fastest <= 0.2f * 360f + 3f && Math.Abs(tRod - 3.0) <= 1.5 * fr + 1e-3 && down
+                  && Math.Abs(rod.Damage - priced) < 1e-6 && Math.Abs(priced - 249.23) < 0.01,
+                  $"webbed{(run == 1 ? " with the rudder hard over" : "")} on {Mathf.RadToDeg(rot):0}°: the web held ({held}), at most {fastest:0.0} u/s (75 = 0.2 x 360 + 3), the heading frozen ({frozen}); the rod at {tRod:0.00} s (3.0) down the nose ({down}) carrying {rod?.Damage:0.00} (249.23)");
+            dt.Statuses.Clear(Status.Pinned); dt.Velocity = Vector2.Zero;
+            await Wait(0.3);
+        }
+        dt.Demo = true;
+
         // WRECKED MID-SPRINT: no rod leaves the wreck
         for (int run = 0; run < 3; run++)
         {
@@ -10906,6 +10940,73 @@ public partial class _Test : Node
             await Frame();
         }
         dt.Demo = demo; dt.Velocity = Vector2.Zero; dt.Position = yonder; dt.Sl("rod").Cool = 0;
+    }
+
+    // RULING R6 WITH GEAR ON (numbers_curve_raids_items.md §8: "every top-speed lift prices the Pepperbox and the rod, the
+    // boost and gear included"): the price reads the live top, so a part on max_speed or the boost's lift reaches it.
+    // (a) Combat Chip T1 (max_speed -4%): top 249.6, a dart at the x1 floor (its own +8% on the dart's row: 8.1), and a
+    // boosted sprint's rod 180 x (249.6 x 1.5 + 100) / 260 = 328.43; (b) Burner Drive T1 (the boost's excess +25%: x1.625)
+    // boosted: top 422.5, a dart 11.25, the rod 360 (the cap: 522.5); (c) Combat Chip T10 boosted, its tiered price: top
+    // under 249.6 and the rod Bores.Price(180, top x 1.5 + 100, 260, 2). Each at a varied spot and heading.
+    async Task LaneA6dPepperGearChecks(Vector2 yonder)
+    {
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        ShipStats Sheet(string id)
+        {
+            var lo = Equipment.Default(ShipClass.LightDart); var it = Equipment.ById(id);
+            lo[it.Slot == GearSlot.Chip ? Equipment.CoreSlots : Array.IndexOf(Equipment.Core, it.Slot)] = id;
+            return new ShipStats(ShipClass.LightDart, Equipment.Bonuses(ShipClass.LightDart, lo, 14, NoLevels));
+        }
+        double t10 = Sheet("chip_combat_t10")["max_speed"];
+        foreach (var (id, boosted) in new[] { ("chip_combat_t1", false), ("burner_drive_t1", true), ("chip_combat_t10", true) })
+        {
+            var was = await WearI(ShipClass.LightDart, id);
+            var dt = Me; bool demo = dt.Demo; dt.Demo = true; dt.AutopilotTo = null;
+            string boost = dt.Drive.Id;
+            var at = VaryNear(yonder, 300f); float rot = VaryAngle();
+            dt.Position = at; dt.Rotation = rot; dt.Velocity = Vector2.Zero; dt.AimPoint = at + Vector2.Up.Rotated(rot) * 600f;
+            dt.Sl(boost).Left = boosted ? Vary(1.5f, 2.5f) : 0;
+            await Frame();
+            float top = dt.TopNow;
+            var dart = await LaneA6dOneDart(dt);
+            double pepper = dt.Stats["pepper_damage"];
+            // the rod at the end of a sprint, the boost lit through it (a sprint's top is the boosted top + 100)
+            dt.Sl(boost).Left = 1.5;
+            var was2 = Nodes<Shot>().Where(x => x.Kind == Shots.Rod).ToHashSet();
+            dt.Sl("rod").Left = 0.02;
+            Shot rod = null;
+            for (int i = 0; i < 20 && rod == null; i++)
+            {
+                dt.Position = at; dt.Rotation = rot; dt.Velocity = Vector2.Zero; if (dt.Sl(boost).Left < 1) dt.Sl(boost).Left = 1;
+                await Frame();
+                rod = Nodes<Shot>().FirstOrDefault(x => x.Kind == Shots.Rod && !was2.Contains(x));
+            }
+            dt.Sl(boost).Left = 0; dt.Sl("rod").Cool = 0;
+            double sheet = dt.Stats["max_speed"];
+            bool ok; string want;
+            if (id == "chip_combat_t1")
+            {
+                ok = NearI(top, 249.6, 1e-2) && NearI(pepper, 8.1, 1e-6) && dart != null && NearI(dart.Damage, 8.1, 1e-6)
+                     && rod != null && NearI(rod.Damage, 328.43, 0.05);
+                want = "top 249.6, the dart 8.1 (x1), the rod 328.43";
+            }
+            else if (id == "burner_drive_t1")
+            {
+                ok = NearI(top, 422.5, 1e-2) && dart != null && NearI(dart.Damage, 11.25, 1e-9) && rod != null && NearI(rod.Damage, 360, 1e-9);
+                want = "top 422.5, the dart 11.25, the rod 360 (the cap)";
+            }
+            else
+            {
+                double rodWant = Bores.Price(180, t10 * 1.5 + 100, 260, 2);
+                ok = t10 < 249.6 && NearI(sheet, t10, 1e-6) && NearI(top, t10 * 1.5, 1e-2) && rod != null && NearI(rod.Damage, rodWant, 1e-3)
+                     && dart != null && NearI(dart.Damage, Bores.Price(pepper, t10 * 1.5, 260, 1.5), 1e-4);
+                want = $"top under 249.6 ({t10:0.00}), the rod {rodWant:0.00}";
+            }
+            Check(ok, $"{id} on the Dart{(boosted ? ", boosted" : "")}: top {top:0.00} u/s, a dart {dart?.Damage:0.000}, a sprint's rod {rod?.Damage:0.00} ({want})");
+            dt.Demo = demo; dt.Trigger = false; dt.Velocity = Vector2.Zero;
+            await Wait(0.3);
+            await WornOffI(ShipClass.LightDart, was);
+        }
     }
 
     // THE RECOIL ON THE OWNER'S OWN FALLING EDGE (kits6d-J13, the gate's fix): a sprint whose Left is zeroed from
@@ -11150,6 +11251,147 @@ public partial class _Test : Node
         Check(Math.Abs(own - 0.5) <= 0.005, $"arena guest: its ramjet flown flat out and straight on {Mathf.RadToDeg(rot):0}° builds its own total to +{own * 100:0.0}% (50)");
     }
 
+    // ── SLICE 6d, RUNG 5: A GUEST'S SLINGSHOT ON A LIT RAMJET (dart.md Interactions: "a snap, not a turn, so it never bleeds a
+    // lit Ramjet"; DL5: the host's copy skips the report). The guest (LaneA6dSlingGuestChecks), its ramjet cooled after the
+    // ramjet pair, flies flat out on a varied heading, lights it again and, 4.5 s lit, slings 120-170° to a varied side: its
+    // own total kept and its nose on the cursor. The host (LaneA6dSlingHostWatch) reads ITS copy 4.5 s into that lit run
+    // (+45%, at least +44%), then the last frame before the sling reaches it and 0.6 s after: the snap bled nothing (within
+    // 0.005), whichever of the reliable press and the unreliable report that carries the snapped heading landed first.
+    sealed class LaneA6dSlingSeen { public double At45 = -1, Last = -1, Before = -1, After = -1, T; public int Stage; public bool Done; }
+    LateSampler LaneA6dSlingHostWatch(LaneA6dSlingSeen seen, LaneA6dRamjetSeen ramjet)
+    {
+        var watch = new LateSampler { Probe = () =>
+        {
+            if (seen.Done || !ramjet.Done || H.Ships.FirstOrDefault(s => !s.Mine) is not { Class: ShipClass.LightDart } g) return false;
+            ref var sl = ref g.Sl("ramjet");
+            double lit = g.Stats["ramjet_time"];
+            switch (seen.Stage)
+            {
+                case 0: if (sl.Left > lit - 1.0) seen.Stage = 1; return false;          // a fresh light, after the ramjet pair's
+                case 1:
+                    if (sl.Left <= 0) { seen.Stage = 0; return false; }
+                    if (sl.Left <= lit - 4.5) { seen.At45 = seen.Last = sl.Own; seen.Stage = 2; }
+                    return false;
+                case 2:
+                    if (g.Sl("slingshot").Cool > 0) { seen.Before = seen.Last; seen.T = 0; seen.Stage = 3; }
+                    else seen.Last = sl.Own;
+                    return false;
+                default:
+                    seen.T += GetProcessDeltaTime();
+                    if (seen.T < 0.6) return false;
+                    seen.After = sl.Own; seen.Done = true;
+                    return true;
+            }
+        } };
+        AddChild(watch);
+        return watch;
+    }
+    async Task LaneA6dSlingHostChecks(LateSampler watch, LaneA6dSlingSeen seen)
+    {
+        await RealTime(() => seen.Done, Wan ? 90 : 60);
+        watch.QueueFree();
+        Check(seen.Done && seen.At45 >= 0.44 && seen.After >= seen.Before - 0.005,
+              $"arena host: its copy of the guest's ramjet 4.5 s lit reads +{seen.At45 * 100:0.0}% (at least 44); slung, +{seen.Before * 100:0.00}% before and +{seen.After * 100:0.00}% 0.6 s after (kept within 0.5: a snap, not a turn)");
+    }
+    async Task LaneA6dSlingGuestChecks()
+    {
+        var me = Me; me.AutopilotTo = null; bool demo = me.Demo; me.Demo = false;
+        var W = global::Godot.Key.W;
+        await RealTime(() => me.Sl("ramjet").Left <= 0 && me.Sl("ramjet").Cool <= 0 && me.Sl("slingshot").Cool <= 0, Wan ? 40 : 30);
+        await Wait(0.5);                                                    // the host's copy has cooled a report before this one
+        float rot = VaryAngle();
+        me.Rotation = rot; me.Velocity = Vector2.Up.Rotated(rot) * 250f;
+        KeyDown(W);
+        for (int i = 0; i < 60 * 6 && me.SpeedAhead < 259f; i++) { me.Rotation = rot; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+        me.UseAbility("ramjet", 0);
+        double lit = me.Stats["ramjet_time"];
+        for (double t = 0; t < 8 && !(me.Sl("ramjet").Left > 0 && me.Sl("ramjet").Left <= lit - 4.5); t += GetProcessDeltaTime())
+        { me.Rotation = rot; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+        double own0 = me.Sl("ramjet").Own;
+        float side = Vary(0f, 1f) < 0.5f ? -1f : 1f, off = Mathf.DegToRad(Vary(120f, 170f)) * side;
+        var from = me.Position;
+        var aim = from + Vector2.Up.Rotated(rot + off) * 500f;
+        me.AimPoint = aim;
+        me.UseAbility("slingshot", 0);
+        bool onIt = Vector2.Up.Rotated(me.Rotation).Dot((aim - from).Normalized()) > 0.9999f;
+        float rot2 = me.Rotation; double own1 = own0;
+        for (double t = 0; t < 0.6; t += GetProcessDeltaTime())
+        { me.Rotation = rot2; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); own1 = me.Sl("ramjet").Own; }
+        KeyUp(W);
+        me.Demo = demo; me.Velocity = Vector2.Zero;
+        Check(own0 >= 0.44 && onIt && own1 >= own0 - 0.005,
+              $"arena guest: its ramjet 4.5 s lit at +{own0 * 100:0.0}%, slung {Mathf.RadToDeg(off):0}° onto its cursor ({onIt}): +{own1 * 100:0.0}% 0.6 s on (kept)");
+    }
+
+    // ── SLICE 6d, RUNG 5: A GUEST'S SLIPSTREAM, JUDGED ON THE HOST FROM ITS REPORT (PlayerShip.SlipShare: a guest's speed is
+    // its report's, held to SlipSpeed's ceiling). The guest (LaneA6dSlipGuestChecks) sits still, then flies flat out on a
+    // varied heading and presses V. The host (LaneA6dSlipHostWatch) strikes ITS copy with 10 at rest (x1: 10), then once
+    // the boost is lit and its judged speed has held past 325 u/s for 0.15 s (x0.7: 7.0); the guest's own hull falls by
+    // the host's figures.
+    sealed class LaneA6dSlipSeen { public double Rest = -1, Fast = -1, Held; public int Stage; public bool Done; }
+    LateSampler LaneA6dSlipHostWatch(LaneA6dSlipSeen seen, LaneA6dSlingSeen sling)
+    {
+        var watch = new LateSampler { Probe = () =>
+        {
+            if (seen.Done || !sling.Done || H.Ships.FirstOrDefault(s => !s.Mine) is not { Class: ShipClass.LightDart } g) return false;
+            string boost = g.Drive.Id;
+            if (seen.Stage == 0)
+            {   // at rest, the ramjet and the boost out: the whole blow
+                if (g.Sl("ramjet").Left > 0 || g.Sl(boost).Left > 0 || g.Velocity.Length() > 5f || g.SlipShare() < 1) { seen.Held = 0; return false; }
+                if ((seen.Held += GetProcessDeltaTime()) < 0.5) return false;
+                double h0 = g.Hp; g.Hit(10, g.Position + Vector2.Right * 60f, "test:6d_slip5#0"); seen.Rest = h0 - g.Hp;
+                seen.Stage = 1; seen.Held = 0;
+                return false;
+            }
+            if (g.Sl(boost).Left <= 0 || g.SlipShare() >= 1) { seen.Held = 0; return false; }
+            if ((seen.Held += GetProcessDeltaTime()) < 0.15) return false;
+            double h1 = g.Hp; g.Hit(10, g.Position + Vector2.Right * 60f, "test:6d_slip5#1"); seen.Fast = h1 - g.Hp;
+            seen.Done = true;
+            return true;
+        } };
+        AddChild(watch);
+        return watch;
+    }
+    async Task LaneA6dSlipHostChecks(LateSampler watch, LaneA6dSlipSeen seen)
+    {
+        await RealTime(() => seen.Done, Wan ? 60 : 40);
+        watch.QueueFree();
+        Check(seen.Done && Math.Abs(seen.Rest - 10) < 1e-6 && Math.Abs(seen.Fast - 7.0) < 1e-6,
+              $"arena host: a blow of 10 on its copy of the guest's Dart lands {seen.Rest:0.00} at rest (10) and {seen.Fast:0.00} boosted past 325 u/s by its report (7.0: x0.7)");
+    }
+    async Task LaneA6dSlipGuestChecks()
+    {
+        var me = Me; me.AutopilotTo = null; bool demo = me.Demo; me.Demo = false;
+        var W = global::Godot.Key.W; string boost = me.Drive.Id;
+        await RealTime(() => Math.Abs(me.MaxHp - 200) < 1e-6 && me.Sl("ramjet").Left <= 0 && me.Sl(boost).Left <= 0 && me.Sl(boost).Cool <= 0, Wan ? 20 : 12);
+        double rest = -1, prev = me.Hp;
+        for (double t = 0; t < (Wan ? 20 : 12) && rest < 0; t += GetProcessDeltaTime())
+        {
+            me.Velocity = Vector2.Zero;
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            if (prev - me.Hp > 0.5) rest = prev - me.Hp;
+            prev = me.Hp;
+        }
+        float rot = VaryAngle();
+        me.Rotation = rot; me.Velocity = Vector2.Up.Rotated(rot) * 250f;
+        KeyDown(W);
+        for (int i = 0; i < 60 * 6 && me.SpeedAhead < 259f; i++) { me.Rotation = rot; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+        me.DriveHeld = true; me.PressDrive();
+        double fast = -1, tLit = -1, tHit = -1; prev = me.Hp;
+        for (double t = 0; t < (Wan ? 6 : 4) && fast < 0; t += GetProcessDeltaTime())
+        {
+            me.Rotation = rot;
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            if (tLit < 0 && me.Sl(boost).Left > 0) tLit = t;
+            if (prev - me.Hp > 0.5) { fast = prev - me.Hp; tHit = t; }
+            prev = me.Hp;
+        }
+        me.DriveHeld = false; KeyUp(W);
+        me.Demo = demo; me.Velocity = Vector2.Zero;
+        Check(Math.Abs(rest - 10) < 0.01 && Math.Abs(fast - 7.0) < 0.01 && tLit >= 0,
+              $"arena guest: its own hull fell {rest:0.00} under the host's blow at rest (10) and {fast:0.00} boosted flat out on {Mathf.RadToDeg(rot):0}° (7.0: the host judged it past 325), {tHit - tLit:0.00} s after its boost showed");
+    }
+
     // ── SLICE 6d, THE DART'S SLINGSHOT (kits_v2's card; v31 §3.4). From 3 varied situations each: the nose and the whole
     // velocity (a slide included) onto the cursor's bearing at up to 180°, the size kept +- 1%, 6 s and a second press
     // refused; a lit Ramjet keeps its total through the snap; a sprint slung mid-run fires its rod down the new nose.
@@ -11265,6 +11507,34 @@ public partial class _Test : Node
                 double took = hp0 - dt.Hp, want = blow * (fast ? 0.7 : 1.0);
                 Check(Math.Abs(took - want) < 1e-6, $"a {(src == 0 ? "blow with a side" : src == 1 ? "plain blow" : "boss's slug")} of {blow:0.0} at {speed:0.0} u/s: {took:0.00} taken ({want:0.00}: x{(fast ? "0.7" : "1")})");
             }
+        }
+        // THE BOOST INTERACTION (dart.md: "Boost pushes a Dart above 325 u/s (Slipstream) within 0.4 s"): flat out at the
+        // sheet's top a blow of 10 lands whole; V, and from the first frame the boost shows the hull is past 325 within 0.4 s;
+        // a frame on, the same blow lands 7.0 (x0.7) -- 3 varied headings and sides of the blow
+        var W = global::Godot.Key.W; string drive = dt.Drive.Id;
+        for (int run = 0; run < 3; run++)
+        {
+            float rot = VaryAngle(); var nose = Vector2.Up.Rotated(rot);
+            dt.Demo = false; dt.Sl(drive).Left = 0; dt.Sl(drive).Cool = 0;
+            dt.Position = VaryNear(yonder, 300f); dt.Rotation = rot; dt.Velocity = nose * 250f; dt.Hp = dt.MaxHp;
+            KeyDown(W);
+            for (int i = 0; i < 60 * 6 && dt.SpeedAhead < 259f; i++) { dt.Rotation = rot; await Frame(); }
+            float flat = dt.Velocity.Length();
+            var side = Vector2.Right.Rotated(VaryAngle()) * 60f;
+            double h0 = dt.Hp; dt.Hit(10, dt.Position + side, $"test:6d_slipv#{++n}"); double whole = h0 - dt.Hp;
+            Key(global::Godot.Key.V);
+            for (int i = 0; i < 30 && dt.Sl(drive).Left <= 0; i++) { dt.Rotation = rot; await Frame(); }
+            bool lit = dt.Sl(drive).Left > 0;
+            double t = 0;
+            while (lit && dt.Velocity.Length() < 325f && t < 1.5) { dt.Rotation = rot; await Frame(); t += GetProcessDeltaTime(); }
+            await Frame();
+            float fast = dt.Velocity.Length();
+            h0 = dt.Hp; dt.Hit(10, dt.Position + side, $"test:6d_slipv#{++n}"); double cut = h0 - dt.Hp;
+            KeyUp(W);
+            Check(lit && flat < 325f && Math.Abs(whole - 10) < 1e-6 && t <= 0.4 && fast >= 325f && Math.Abs(cut - 7.0) < 1e-6,
+                  $"flat out at {flat:0} u/s on {Mathf.RadToDeg(rot):0}°: a blow of 10 lands {whole:0.00} (10); boosted ({lit}), past 325 u/s {t:0.00} s after the boost showed (within 0.4), and at {fast:0} u/s the blow lands {cut:0.00} (7.0)");
+            dt.Sl(drive).Left = 0; dt.Sl(drive).Cool = 0; dt.Velocity = Vector2.Zero; dt.Hp = dt.MaxHp;
+            await Frame();
         }
         dt.Velocity = Vector2.Zero; dt.Demo = demo; dt.Hp = dt.MaxHp;
         // BY THE STAT, NEVER THE CLASS: an Echo past 325 takes the whole blow
@@ -13689,6 +13959,7 @@ public partial class _Test : Node
         await ItemsEchoChecks(yonder);
         await ItemsBoostLiftChecks();
         await ItemsAnchorLiftChecks(yonder);
+        await ItemsVenomLiftChecks(yonder);
         await ItemsFlareRiderChecks(yonder);
     }
 
@@ -13972,8 +14243,10 @@ public partial class _Test : Node
         Want(ShipClass.Carrier, "salvo_core_t1", "gunship_damage", 3.125); Want(ShipClass.Carrier, "salvo_core_t1", "torpedo_damage", 75);
         Want(ShipClass.LightDart, "ace_core_t1", "rod_range", 1008); Want(ShipClass.LightWraith, "ace_core_t5", "step_reach", 648);
         Want(ShipClass.LightEcho, "ace_core_t10", "emp_range", 216);
+        Want(ShipClass.LightDart, "ace_core_t1", "rod_damage", 225); Want(ShipClass.LightWraith, "ace_core_t1", "venom_dps", 1.5625, 1e-9);
+        Want(ShipClass.LightWraith, "ace_core_t10", "venom_dps", 1.25 * (1 + 0.25 * Tiers.P(10)), 1e-6);
         Check(off.Count == 0,
-              $"the items reconciled with the built kits: the railgun is the sniper's primary (Gunner 132, Rapid Action charge 0.667 s + reload 2.5 s at 1800 u), Tactical Core lifts the Anchor's excess (x2.875, reach x1.288), Field Core the Overdrive's excess (x1.625), the Repair field, TOT and the Buster; Field Emitter the tender's fields; Salvo and Ace Core pay the Lance / rod / step / EMP reach ({off.Count} off: {string.Join(", ", off.Take(8))})");
+              $"the items reconciled with the built kits: the railgun is the sniper's primary (Gunner 132, Rapid Action charge 0.667 s + reload 2.5 s at 1800 u), Tactical Core lifts the Anchor's excess (x2.875, reach x1.288), Field Core the Overdrive's excess (x1.625), the Repair field, TOT and the Buster; Field Emitter the tender's fields; Salvo and Ace Core pay the Lance / rod / step / EMP reach, Ace Core's output buys the rod 225 and venom 1.5625 a dose (T10 x(1 + 0.25 x P(10))) ({off.Count} off: {string.Join(", ", off.Take(8))})");
     }
 
     // TACTICAL CORE ON A RUNNING ANCHOR (the interaction: an item's excess share x an ability's running lift).
@@ -13997,6 +14270,49 @@ public partial class _Test : Node
                   $"the Anchor under {(id == "" ? "no part" : id)}: fire rate x{onRate:0.0000} (x{rate}), the 0.8 s charge {onCharge:0.0000} s, reach x{onReach:0.000} (x{reach}); weighed out x{offRate:0.00} / x{offReach:0.00} (x1)");
             sn.Demo = demo;
             await WornOffI(ShipClass.HeavySniper, was);
+        }
+    }
+
+    // ACE CORE ON A RUNNING VENOM (the interaction: an item's @output share x a live dose's rate; Doses.Tick reads venom_dps
+    // each tick). Three situations -- no part, Ace Core T1, Ace Core T10 -- each a held gunship 60-100 u off a varied bearing
+    // and heading: coated, the trigger held till 10 doses, then every tick timed from the first is 10 x venom_dps x 0.5 =
+    // 6.25 / 7.8125 / 10 x 1.25 x (1 + 0.25 x P(10)) x 0.5, 0.5 s apart.
+    async Task ItemsVenomLiftChecks(Vector2 yonder)
+    {
+        foreach (var (id, tick) in new[] { ("", 6.25), ("ace_core_t1", 7.8125), ("ace_core_t10", 10 * 1.25 * (1 + 0.25 * Tiers.P(10)) * 0.5) })
+        {
+            var was = await WearI(ShipClass.LightWraith, id == "" ? Equipment.Default(ShipClass.LightWraith)[4] : id);   // no part: the kit Utility
+            var wt = Me; bool demo = wt.Demo; wt.Demo = true; wt.AutopilotTo = null;
+            async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            double Venom() => wt.DealtBy.GetValueOrDefault("venom");
+            foreach (var s in new[] { "venom", "veil" }) { wt.Sl(s).Left = 0; wt.Sl(s).Cool = 0; }
+            wt.Unveil(); wt.Prime(1);
+            var foe = HeldI(VaryNear(yonder, 300f), Enemies.Gunship); float rrot = VaryAngle();
+            var at = foe.Position + Vector2.Up.Rotated(rrot).Rotated(Mathf.DegToRad(Vary(-40f, 40f))) * Vary(60f, 100f);
+            void Hold() { wt.Position = at; wt.Rotation = Aim.Face(at, foe.Position); wt.Velocity = Vector2.Zero; wt.AimPoint = foe.Position; foe.Rotation = rrot; }
+            wt.UseAbility("venom", 0);
+            for (double t = 0; t < 0.9; t += GetProcessDeltaTime()) { Hold(); await Frame(); }
+            wt.Trigger = true;
+            for (int i = 0; i < 60 * 4 && wt.DosedOn(foe, DoseRows.Venom) < 10; i++) { Hold(); await Frame(); }
+            wt.Trigger = false;
+            int dosed = wt.DosedOn(foe, DoseRows.Venom);
+            var ticks = new List<(double t, double d)>();
+            double clock = 0, vPrev = Venom();
+            while (clock < 2.4)
+            {
+                Hold(); await Frame(); clock += GetProcessDeltaTime();
+                if (Venom() > vPrev) ticks.Add((clock, Venom() - vPrev));
+                vPrev = Venom();
+            }
+            double rate = wt.Stats["venom_dps"];
+            bool even = ticks.Count >= 4 && ticks.All(k => NearI(k.d, tick, 1e-6))
+                        && Enumerable.Range(1, ticks.Count - 1).All(k => Math.Abs(ticks[k].t - ticks[k - 1].t - 0.5) < 0.04);
+            Check(dosed == 10 && even,
+                  $"venom under {(id == "" ? "no part" : id)}: {dosed} doses (10), venom_dps {rate:0.####}; {ticks.Count} ticks of {string.Join("/", ticks.Select(k => k.d.ToString("0.####")).Distinct())} ({tick:0.####}) 0.5 s apart");
+            foe.TakeDamage(1e12);
+            wt.Demo = demo;
+            await Wait(0.5);
+            await WornOffI(ShipClass.LightWraith, was);
         }
     }
 
@@ -18679,6 +18995,7 @@ public partial class _Test : Node
             LaneA6dRodRowChecks();
             await Lane("LaneA6dRodChecks", () => LaneA6dRodChecks(yonder));
             await Lane("LaneA6dRodRecoilChecks", () => LaneA6dRodRecoilChecks(yonder));
+            await Lane("LaneA6dPepperGearChecks", () => LaneA6dPepperGearChecks(yonder));
             LaneA6dRamjetRowChecks();
             await Lane("LaneA6dRamjetChecks", () => LaneA6dRamjetChecks(yonder));
             await Lane("LaneA6dSlingChecks", () => LaneA6dSlingChecks(yonder));
@@ -22382,6 +22699,10 @@ public partial class _Test : Node
             var rodWatch = LaneA6dRodHostWatch(rodSeen);                    // slice 6d: ...then sprints it and fires the rod
             var ramjetSeen = new LaneA6dRamjetSeen();
             var ramjetWatch = LaneA6dRamjetHostWatch(ramjetSeen);           // slice 6d: ...then lights its ramjet
+            var slingSeen = new LaneA6dSlingSeen();
+            var slingWatch = LaneA6dSlingHostWatch(slingSeen, ramjetSeen);  // slice 6d: ...then lights it again and slings
+            var slipSeen = new LaneA6dSlipSeen();
+            var slipWatch = LaneA6dSlipHostWatch(slipSeen, slingSeen);      // slice 6d: ...then sits still and boosts past 325
             var rewindSeen = new LaneA6dRewindSeen();
             var rewindWatch = LaneA6dRewindHostWatch(rewindSeen);           // slice 6d: ...then flies an Echo and rewinds
             var empSeen = new LaneA6dEmpSeen();
@@ -22409,6 +22730,8 @@ public partial class _Test : Node
             await Lane("LaneA6dPepperHostChecks", () => LaneA6dPepperHostChecks(pepperWatch, pepperSeen));          // slice 6d: the guest's pepperbox, before it refits to a freighter
             await Lane("LaneA6dRodHostChecks", () => LaneA6dRodHostChecks(rodWatch, rodSeen));                  // slice 6d: the guest's rod, priced on the host
             await Lane("LaneA6dRamjetHostChecks", () => LaneA6dRamjetHostChecks(ramjetWatch, ramjetSeen));         // slice 6d: the host's own copy of the guest's ramjet
+            await Lane("LaneA6dSlingHostChecks", () => LaneA6dSlingHostChecks(slingWatch, slingSeen));             // slice 6d: the host's copy of a slung ramjet bleeds nothing
+            await Lane("LaneA6dSlipHostChecks", () => LaneA6dSlipHostChecks(slipWatch, slipSeen));                 // slice 6d: the guest's slipstream, judged from its report
             await Lane("LaneA6dRewindHostChecks", () => LaneA6dRewindHostChecks(rewindWatch, rewindSeen));         // slice 6d: the guest's rewind, its hull from the host's own trail
             await Lane("LaneA6dEmpHostChecks", () => LaneA6dEmpHostChecks(empWatch, empSeen));                  // slice 6d: the guest's EMP jams the craft beside it
             await Lane("LaneA6dStepHostChecks", () => LaneA6dStepHostChecks(stepWatch, stepSeen));               // slice 6d: the guest's shadow step, counted and landed on the host
@@ -22718,6 +23041,8 @@ public partial class _Test : Node
             await Lane("LaneA6dPepperGuestChecks", () => LaneA6dPepperGuestChecks());                               // slice 6d: a guest's pepperbox (its host half: LaneA6dPepperHostChecks)
             await Lane("LaneA6dRodGuestChecks", () => LaneA6dRodGuestChecks());                                  // slice 6d: a guest's sprint and rod (its host half: LaneA6dRodHostChecks)
             await Lane("LaneA6dRamjetGuestChecks", () => LaneA6dRamjetGuestChecks());                               // slice 6d: a guest's ramjet (its host half: LaneA6dRamjetHostChecks)
+            await Lane("LaneA6dSlingGuestChecks", () => LaneA6dSlingGuestChecks());                                 // slice 6d: a guest's slingshot on a lit ramjet (its host half: LaneA6dSlingHostChecks)
+            await Lane("LaneA6dSlipGuestChecks", () => LaneA6dSlipGuestChecks());                                  // slice 6d: a guest's slipstream (its host half: LaneA6dSlipHostChecks)
             await Lane("LaneA6dRewindGuestChecks", () => LaneA6dRewindGuestChecks());                               // slice 6d: a guest's rewind (its host half: LaneA6dRewindHostChecks)
             await Lane("LaneA6dEmpGuestChecks", () => LaneA6dEmpGuestChecks());                                  // slice 6d: a guest's EMP, the jam marks on this peer (its host half: LaneA6dEmpHostChecks)
             await Lane("LaneA6dStepGuestChecks", () => LaneA6dStepGuestChecks());                                 // slice 6d: a guest's shadow step (its host half: LaneA6dStepHostChecks)
