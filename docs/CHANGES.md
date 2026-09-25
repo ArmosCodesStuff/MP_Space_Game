@@ -533,16 +533,16 @@ Taunt's hex shimmer with its `−33%` tag (from `taunt_guard`), the boost's hot 
 **The torn chunk** (`Fx.Tear`): one raise, riding the anchor's NetId, Size 0.16 of the hull's length;
 every peer cuts the chunk from the anchor's own art at the hook and tumbles it on a seed from the raise
 (260 u/s within 25° of the line, at rest in 2 s, gone at 3 s), and the row's `With` brings 28 sparks,
-6 puffs of smoke and a scar (10 s, at most 3 on one hull). The look only: the rip's damage (1% + 10) is
+6 puffs of smoke and a scar the chunk's size (10 s, at most 3 on one hull). The chunk and its sprays read
+the hull as they go up, then leave it for the world, so a hull killed within 3 s keeps its chunk flying. The look only: the rip's damage (1% + 10) is
 the grapnel's hit, built with the grapnel (lane A, F8).
 
 **Checks:** FieldsContractChecks, FieldsBubbleChecks, FieldsGuestBubbleChecks, FieldsRowChecks,
 FieldsLiveRowChecks, FieldsTauntRingChecks, FieldsRipChecks (dummies, Lancer, base, pylon),
-FieldsScarCapChecks, FieldsGuestRipChecks; frames 81_patrol_ring, 82_taunt_shimmer, 83_boost_plume,
+FieldsScarCapChecks, FieldsRipOutlivesChecks (a pylon killed 0.2 s after a tear), FieldsGuestRipChecks; frames 81_patrol_ring, 82_taunt_shimmer, 83_boost_plume,
 83b_taunt_ring, 84_rip_chunk_and_scar, 84b_rip_on_boss. **Rungs:** 1 and 2 only.
 
-**Known broken:** unproven on the engine. A chunk and its scar are children of the torn hull, so a boss
-killed within 3 s of a tear takes its chunk with it.
+**Known broken:** unproven on the engine.
 
 ### Class kits, lane A J7: heavy rows, F20 (2026-09-25, worktree wt/kits)
 

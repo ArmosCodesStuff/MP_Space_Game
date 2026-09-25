@@ -95,3 +95,27 @@ THE FINAL TEST PHASE OWES (the lane's merge chain: quick,solo,solo,six,six,scree
 - after lanes E (super), A (Warden Taunt) and B (boost drive) merge: the "NOTE unbound field row" and "shot skipped 81/82/83" lines must be gone;
   if one stays, that lane named its slot differently: edit the one row in Fields.All.
 defaults taken: D1 slot ids, D2 rip damage left to the grapnel (Fx.Tear is the look), D3 no Unmask panels existed.
+
+## PRE gate fix -- the opus merge gate's four findings
+tier: opus. intent: (1) Loose pieces leave their anchor for the world (Combat.World) the frame they go up, companions built by the chunk then (Loose ones in the world, the scar on its hull while it stands), so a kill within 3 s keeps the chunk (invariant A: no companion object is made unless it is added); FieldsRipChecks tests Anchor not parent; new FieldsRipOutlivesChecks frees the torn hull 0.2 s after a tear and the chunk is still drawn at 1 s. (2) dummy tears pass 14.72 (kits_v3 3.2 'dummy 15 u', within 0.3 of 15). (3) FieldsGuestRipWatch compares flight with the seeded direction rebuilt from Fx.U(chunk.Seed,0), not the 25 deg bound. (4) scar drawn from Outline(1f). Delete the CHANGES Known-broken line and the DESIGN trap bullet.
+files: scripts/Fx.cs, tools/smoketest/SmokeTest.cs.txt, docs/CHANGES.md, docs/DESIGN.md, docs/plans/ledger_fields.md
+HEAD: 70d524e91df14a94ce332b7bb2fd3618f5a629d7
+  scripts/Fx.cs 07d5e196522e1fbb69269c98ee4448288078116c
+  tools/smoketest/SmokeTest.cs.txt 7eb58a6232732108108093b893922296d2fe4b52
+  docs/CHANGES.md 20a5b73ba0329aa7058d93fd7fb2523efc5278b3
+  docs/DESIGN.md 1437ce91cc1186f01b3d37e722c91e578c1cc6c8
+
+## POST gate fix
+verdict: compiles (typecheck 0; verify -Quick ALL CHECKS PASSED). engine-unproven: rungs owed in the final test phase.
+files: scripts/Fx.cs (FxNode.Settle: companions built on the anchor in one deferred step, a Loose piece Reparent'ed to
+Combat.World once read; Fx.Entered moved to _EnterTree so a reparented node stays listed; scar Outline(1f); Tear header:
+raise BEFORE the hit), SmokeTest.cs.txt (FieldsRipChecks: Anchor == NetId and parent == Combat.World; dummies pass 14.72
++ a check 0.16 x LengthOf(dummy) within 0.3 of 15; FieldsTearAhead + FieldsRipOutlivesChecks on pylons[2], killed 0.2 s
+after its tear, chunk drawn at 1 s with 2 sprays; FieldsGuestRipWatch vs the seeded line, budget atan((20 + speed x
+(flight + wire)) / distance)), CHANGES (Known-broken line cut), DESIGN (trap bullet replaced by the true rule + the
+raise-before-the-hit trap).
+also fixed: FieldsRipChecks(pylons[0]) ran after all four pylons were killed (a freed node); moved before the shield block.
+owed: rung 3 x2 (siege: pylon rip + FieldsRipOutlivesChecks; yard dummies at 14.72); rung 5 x2 (FieldsGuestRipChecks);
+rung 4 frames 84/84b (scar now the chunk's full size).
+open for the coordinator: the grapnel (lane A) must call Fx.Tear BEFORE its 1% + 10 hit, or a killing rip finds no anchor.
+next: none (lane D done).

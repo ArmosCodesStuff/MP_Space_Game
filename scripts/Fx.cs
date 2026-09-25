@@ -56,8 +56,9 @@ public class FxDef
     public bool Warn;
     // THE TORN CHUNK'S KIND (Debris, Sparks, Puffs, Scar): rows raised WITH this one on every peer,
     // from the one raise (so the wire carries one effect, not four); at most Cap of this row on one
-    // anchor, the oldest going; Loose, it READS its anchor (the hull art, where it went up) but
-    // flies in the world; and how many pieces a spray has.
+    // anchor, the oldest going; Loose, it READS its anchor (the hull art, where it went up, its
+    // heading) as it goes up, then leaves it for the world, so a hull that dies under it does not
+    // take it along; and how many pieces a spray has.
     public int[] With;
     public int Cap;
     public bool Loose;
@@ -163,7 +164,8 @@ public static class Fx
     // anchor's NetId, so every peer cuts it from the same art at the same spot of the same hull and
     // tumbles it on the same seed. What the rip DEALS is its caller's hit (the damage door). A hull
     // with no art of its own (a drawn practice dummy) still tears: a plain chunk, sized off its hit
-    // circle.
+    // circle. Raise it BEFORE the hit it goes with: the world finds the anchor among the living
+    // (Combat.ById), so a tear raised after the hit that killed its hull has nothing to cut from.
     public const float ChunkShare = 0.16f, ChunkSpeed = 260f, ChunkSpread = 25f, ChunkRest = 2f;
     public static void Tear(IHittable anchor, Vector2 hook, Vector2 toward)
     {
@@ -248,17 +250,14 @@ public partial class FxNode : Node2D
     private FxDef D => Fx.Of(Id);
     private double Life => D.Warn ? Time + Hold + Fx.Flash : D.Life;
 
+    // In the live list while in the tree, so a Loose piece leaving its hull for the world stays in it.
+    public override void _EnterTree() => Fx.Entered(this);
     public override void _Ready()
     {
         ZIndex = 7; ZAsRelative = false;
-        Fx.Entered(this);
         var d = D;
         _at = Position;
         _seed = Fx.Seed(Anchor, _at);
-        // its companions, on this peer, from this raise (deferred: the parent is mid-AddChild)
-        if (d.With != null && GetParent() is { } parent)
-            foreach (int w in d.With)
-                parent.CallDeferred(Node.MethodName.AddChild, new FxNode { Id = w, Position = _at, To = To, Radius = Radius, Anchor = Anchor });
         if (d.Cap > 0 && GetParent() is { } home)
         {   // at most Cap on one anchor: the oldest goes
             var same = new System.Collections.Generic.List<FxNode>();
@@ -275,6 +274,8 @@ public partial class FxNode : Node2D
             GlobalPosition = g; Start = g;
             Rotation = d.Shape == FxShape.Debris ? _rot0 : 0f;
         }
+        // its companions, and a Loose piece's move to the world: deferred, the parent is mid-AddChild
+        if (d.With != null || d.Loose) Callable.From(Settle).CallDeferred();
         // A warning's opening sound is the move's, an effect's is its row's; and a copy sent on to
         // a peer that arrived mid-warning has already missed it. GlobalPosition, not Position: a
         // warning that rides a hull is a child of it, and its Position is an offset from the
@@ -283,6 +284,21 @@ public partial class FxNode : Node2D
         if (opening != null && Since <= 0) Sfx.Special(opening, GlobalPosition);
     }
     public override void _ExitTree() => Fx.Left(this);
+
+    // ONCE UP: its companions go up on its anchor from this very raise (each reads the hull as this
+    // did), and a Loose piece, its hull read, leaves it for the world -- nothing after _Ready reads the
+    // anchor again, and a hull killed within the chunk's 3 s would free it along with itself. Nothing
+    // is built before this runs, so a hull freed first frees this node and nothing is left over.
+    private void Settle()
+    {
+        if (!IsInstanceValid(this) || GetParent() is not { } hull) return;
+        var d = D;
+        if (d.With != null)
+            foreach (int w in d.With)
+                hull.AddChild(new FxNode { Id = w, Position = _at, To = To, Radius = Radius, Anchor = Anchor });
+        if (d.Loose && Combat.World is { } world && IsInstanceValid(world) && !world.IsQueuedForDeletion() && world != hull)
+            Reparent(world);
+    }
 
     // THE CHUNK'S OUTLINE (a scrap shard's, scaled to the raise's Size) and where each corner sits
     // on the anchor's texture, so the chunk shows the very plating it was torn from.
@@ -424,7 +440,7 @@ public partial class FxNode : Node2D
             case FxShape.Scar:
             {
                 float a = 0.85f * (float)Mathf.Clamp((d.Life - _t) / 3.0, 0, 1);
-                var o = Outline(0.8f);
+                var o = Outline(1f);
                 DrawColoredPolygon(o, new Color(c.R, c.G, c.B, a));
                 var loop = new Vector2[o.Length + 1]; o.CopyTo(loop, 0); loop[^1] = o[0];
                 DrawPolyline(loop, new Color(0.45f, 0.22f, 0.1f, a * 0.8f), 1.2f);

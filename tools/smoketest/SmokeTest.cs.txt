@@ -3250,9 +3250,11 @@ public partial class _Test : Node
     // anchor's NetId, Size 0.16 x the hull's length; with it the sparks, the smoke and a scar on the
     // hull at the hook. The chunk leaves at 260 u/s within ±25° of the line to the destroyer and is
     // at rest at 2 s; the node follows the pure Fx.Tumble of its raise, which is what lets every peer
-    // draw the same chunk. `size` is the spec's literal (Lancer 57.6, pylon 35.2, base 89.6), NaN
-    // for a hull the spec gives no figure for (a dummy: 0.16 of its length, Fx.LengthOf). The hook, the bearing
-    // and the distance to the destroyer are seeded, and re-taken for every tear.
+    // draw the same chunk. `size` is the spec's literal (kits_v3 §3.2: dummy 14.72 -- its "15 u", 0.16
+    // x 2 x its 46 u hit radius --, Lancer 57.6, pylon 35.2, base 89.6), NaN only for a boss the spec
+    // gives no figure for. Once up the chunk has left its hull for the world (Combat.World), so a hull
+    // killed under it does not take it along. The hook, the bearing and the distance to the destroyer
+    // are seeded, and re-taken for every tear.
     async Task FieldsRipChecks(IHittable anchor, string what, float size, bool timed)
     {
         var n = (Node2D)anchor;
@@ -3266,9 +3268,9 @@ public partial class _Test : Node
         var rips = Nodes<FxNode>().Where(x => x.Id == Fx.Rip && x.Anchor == anchor.NetId && x.Elapsed < 0.3).ToList();
         var chunk = rips.FirstOrDefault();
         float want = float.IsNaN(size) ? 0.16f * len : size;
-        Check(rips.Count == 1 && chunk.GetParent() == n && Math.Abs(chunk.Radius - want) < 0.05f && Math.Abs(0.16f * len - want) < 0.05f
+        Check(rips.Count == 1 && chunk.Anchor == anchor.NetId && chunk.GetParent() == Combat.World && Math.Abs(chunk.Radius - want) < 0.05f && Math.Abs(0.16f * len - want) < 0.05f
               && chunk.Start.DistanceTo(hook) < 0.5f,
-              $"rip on the {what}: ONE chunk rides its id, {want:0.0} u (0.16 of its {len:0} u), cut where the hook was ({rips.Count} raised, {chunk?.Radius:0.0} u, {chunk?.Start.DistanceTo(hook):0.0} u off)");
+              $"rip on the {what}: ONE chunk rides its id, out in the world ({chunk?.GetParent()?.Name}), {want:0.0} u (0.16 of its {len:0} u), cut where the hook was ({rips.Count} raised, {chunk?.Radius:0.0} u, {chunk?.Start.DistanceTo(hook):0.0} u off)");
         int sparks = Nodes<FxNode>().Count(x => x.Id == Fx.RipSparks && x.Anchor == anchor.NetId && x.Elapsed < 0.3);
         int smoke = Nodes<FxNode>().Count(x => x.Id == Fx.RipSmoke && x.Anchor == anchor.NetId && x.Elapsed < 0.3);
         var scars = n.GetChildren().OfType<FxNode>().Where(x => x.Id == Fx.Scar && !x.IsQueuedForDeletion()).ToList();
@@ -3317,19 +3319,50 @@ public partial class _Test : Node
         Check(scars == 3 && (!GodotObject.IsInstanceValid(first) || first.IsQueuedForDeletion()),
               $"four tears in a row leave 3 scars on the hull, the oldest gone ({scars})");
     }
+    // A HULL KILLED UNDER ITS OWN CHUNK: torn at a seeded hook, then killed 0.2 s later by its caller
+    // (the real kill: an emplacement is freed the frame it dies). The chunk was cut and has left for
+    // the world, so at 1 s it is still drawn, where its raise says, with its sparks and smoke -- a
+    // chunk that stayed its hull's child went with it (the gate's finding, kits_v3 §3.2's 3 s life).
+    async Task<FxNode> FieldsTearAhead(IHittable anchor)
+    {
+        var n = (Node2D)anchor;
+        var hook = n.ToGlobal(new Vector2(Vary(-0.4f, 0.4f) * anchor.HitRadius, Vary(-0.4f, 0.4f) * Fx.LengthOf(anchor)));
+        Fx.Tear(anchor, hook, hook + Vector2.Right.Rotated(VaryAngle()) * Vary(400f, 700f));
+        await Wait(0.2);
+        return Nodes<FxNode>().Where(x => x.Id == Fx.Rip && x.Anchor == anchor.NetId).OrderBy(x => x.Elapsed).FirstOrDefault();
+    }
+    async Task FieldsRipOutlivesChecks(FxNode chunk, Node2D hull, string what)
+    {
+        int id = chunk?.Anchor ?? -1;
+        for (int i = 0; i < 60 * 3 && GodotObject.IsInstanceValid(chunk) && !chunk.IsQueuedForDeletion() && chunk.Elapsed < 1.0; i++)
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        bool hullGone = !GodotObject.IsInstanceValid(hull) || hull.IsQueuedForDeletion();
+        bool drawn = GodotObject.IsInstanceValid(chunk) && !chunk.IsQueuedForDeletion() && chunk.IsVisibleInTree()
+                     && chunk.GetParent() == Combat.World && chunk.Elapsed >= 1.0
+                     && chunk.GlobalPosition.DistanceTo(Fx.Tumble(chunk.Seed, chunk.Start, chunk.To, chunk.Elapsed).At) < 0.01f;
+        int sprays = Nodes<FxNode>().Count(x => (x.Id == Fx.RipSparks || x.Id == Fx.RipSmoke) && x.Anchor == id);
+        Check(hullGone && drawn && sprays == 2,
+              $"a {what} killed 0.2 s after a tear leaves its chunk flying: at 1 s it is still drawn where its raise says, with its sparks and smoke (hull gone {hullGone}, chunk {drawn}, {sprays} sprays)");
+    }
     // THE YARD'S DUMMIES: three tears on three of them, the last one watched to the end, then the cap.
     async Task FieldsRipYardChecks()
     {
         var names = new[] { "TargetDummy1", "TargetDummy3", "TargetDummy4" };
+        float dummyLen = Fx.LengthOf(H.GetNode<TargetDummy>(names[0]));
+        Check(Math.Abs(0.16f * dummyLen - 15f) < 0.3f, $"a dummy's chunk is the spec's 15 u: 0.16 of its {dummyLen:0.0} u is {0.16f * dummyLen:0.00} u");
         for (int i = 0; i < names.Length; i++)
-            await FieldsRipChecks(H.GetNode<TargetDummy>(names[i]), $"dummy {names[i][^1]}", float.NaN, timed: i == names.Length - 1);
+            await FieldsRipChecks(H.GetNode<TargetDummy>(names[i]), $"dummy {names[i][^1]}", 14.72f, timed: i == names.Length - 1);
         await FieldsScarCapChecks(H.GetNode<TargetDummy>("TargetDummy1"));
     }
     // A GUEST SEES THE HOST'S TEAR (rung 5). The host tears a chunk from the boss's nose, at the
     // literal hook FieldsRipHook, thrown at the guest's ship; this watches every frame, from before
     // the arena, for the first chunk to go up here, and reads it once it has flown 30 u: riding the
     // boss's id at the Lancer's 57.6 u, gone up within 20 u of where the boss's nose is on THIS
-    // peer, flying at this ship within 25 degrees, and its scar on the boss here too.
+    // peer, flying down its SEEDED line -- the line to this ship turned by this peer's own
+    // Fx.U(seed, 0) x 25 degrees -- and its scar on the boss here too. The line is to where this ship
+    // is NOW and the host aimed at where it was, so the budget is what the ship has moved since (20 u,
+    // plus its speed over the chunk's flight and the wire) seen from where the chunk went up; it
+    // never rests on the spec's 25 degree bound.
     static Vector2 FieldsRipHook(float len) => new(0, -0.4f * len);
     void FieldsHostTears(Boss boss, PlayerShip at)
     {
@@ -3347,10 +3380,14 @@ public partial class _Test : Node
             var chunk = Nodes<FxNode>().FirstOrDefault(x => x.Id == Fx.Rip);
             if (b == null || me == null || chunk == null || chunk.GlobalPosition.DistanceTo(chunk.Start) < 30f) return false;
             float fromNose = chunk.Start.DistanceTo(b.ToGlobal(FieldsRipHook(b.Length)));
-            float off = Mathf.RadToDeg(Mathf.Abs((chunk.GlobalPosition - chunk.Start).AngleTo(me.Position - chunk.Start)));
+            var line = me.Position - chunk.Start;
+            var seeded = line.Normalized().Rotated(Mathf.DegToRad((Fx.U(chunk.Seed, 0) * 2 - 1) * 25f));
+            float off = Mathf.RadToDeg(Mathf.Abs((chunk.GlobalPosition - chunk.Start).AngleTo(seeded)));
+            float moved = 20f + me.Velocity.Length() * (float)(chunk.Elapsed + (Wan ? 0.6 : 0.25));
+            float budget = Mathf.RadToDeg(Mathf.Atan2(moved, Mathf.Max(1f, line.Length())));
             bool scar = b.GetChildren().OfType<FxNode>().Any(x => x.Id == Fx.Scar);
-            bool ok = chunk.Anchor == b.NetId && Math.Abs(chunk.Radius - 57.6f) < 0.05f && fromNose < 20f && off < 25.5f && scar;
-            _guestRip = $"{(ok ? "ok" : "BAD")}: rides {chunk.Anchor} (boss {b.NetId}), {chunk.Radius:0.0} u, {fromNose:0.0} u from the nose here, {off:0.0} degrees off this ship, scar {scar}";
+            bool ok = chunk.Anchor == b.NetId && Math.Abs(chunk.Radius - 57.6f) < 0.05f && fromNose < 20f && off < budget && scar;
+            _guestRip = $"{(ok ? "ok" : "BAD")}: rides {chunk.Anchor} (boss {b.NetId}), {chunk.Radius:0.0} u, {fromNose:0.0} u from the nose here, {off:0.0} degrees off its seeded line to this ship (budget {budget:0.0}), scar {scar}";
             return true;
         } };
         AddChild(w);
@@ -9742,6 +9779,9 @@ public partial class _Test : Node
                 // THE SHIELD: the four pylons hold it up, and nothing touches the base until every
                 // one of them is down. All in one frame -- a dropped hull leaves H.Emplacements at
                 // the call, not at the frame's end.
+                // the pylon's torn chunk, while they stand; and one torn 0.2 s before it falls below
+                await FieldsRipChecks(pylons[0], "pylon", 35.2f, false);
+                var tornPylon = await FieldsTearAhead(pylons[2]);
                 double baseHp0 = pbase.Hp;
                 pbase.TakeDamage(500);
                 bool allFour = pbase.Shielded && Math.Abs(pbase.Hp - baseHp0) < 1e-9;
@@ -9751,6 +9791,7 @@ public partial class _Test : Node
                                && H.Emplacements.Count(e => e.Def.Id == Emplacements.Pylon) == 1;
                 Check(allFour && lastOne,
                       $"the base takes NOTHING while a pylon stands: 500 with four up and 500 with one, {baseHp0 - pbase.Hp:0} taken of 1000");
+                await FieldsRipOutlivesChecks(tornPylon, pylons[2], "pylon");
                 pylons[3].TakeDamage(pylons[3].MaxHp * 2);
                 pbase.TakeDamage(500);
                 Check(!pbase.Shielded && Math.Abs(baseHp0 - pbase.Hp - 500) < 1e-6
@@ -10002,7 +10043,6 @@ public partial class _Test : Node
                           $"the warning after one an EMP's hold spent goes up {gun.Interval:0} s after it, round or no round ({(lanes.Count > 0 && spentLaneAt > 0 ? $"{lanes[0].t - spentLaneAt:0.00} s" : "never")})");
                     await LaneAOutDoorBaseChecks(pbase, bs);
                     await FieldsRipChecks(pbase, "base", 89.6f, false);
-                    await FieldsRipChecks(pylons[0], "pylon", 35.2f, false);
                     bs.Stats.SetBase("pd_range", bsReach);
                     if (classWas != ShipClass.Battleship) await SetClass(classWas);
                 }
