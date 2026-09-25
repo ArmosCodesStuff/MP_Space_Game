@@ -41,12 +41,9 @@ Ledger: `docs/plans/ledger_webrtc.md` (jobs J1-J5, decisions D1-D7, v1 of the pl
 `scripts/Link.cs` (plugin row, `Available`, `Channels()`, `Sealed`, `Hang`), SessionMenu's
 plugin-missing gate, the harness's stream on channel 12, the R0 pair checks in the solo run, the
 reply-window measurement (opt-in), `tools/import.ps1` and both runners calling it. The session is
-still ENet: R2 switches it. **The owner must first drop the plugin in** (the cloud could not download
-it; every engine run refuses without it): from webrtc-native 1.2.1 `godot-extension-webrtc_native.zip`
-(sha256 `f37d03da03da3ff0d092542a04586644f889135cb7a1c3566ad57513203a553b`) into
-`addons\webrtc_native\`: `webrtc_native.gdextension` with every `[libraries]` line deleted but the two
-`windows.*.x86_64` ones, `lib\libwebrtc_native.windows.template_debug.x86_64.dll`,
-`lib\libwebrtc_native.windows.template_release.x86_64.dll`, and the 7 `LICENSE.*` files; commit them.
+still ENet: R2 switches it. The plugin is vendored in `addons/webrtc_native/` (9474f91: the
+`.gdextension` trimmed to the two `windows.*.x86_64` lines and both DLLs, byte-identical to the
+spike's); **its 7 `LICENSE.*` files are still missing** -- only pack.ps1 (R5) needs them.
 **Then, in order:** `verify.ps1 -Quick` (rung 2), `tools\smoketest\run.ps1 -Solo` (rung 3) twice on
 different seeds, `run.ps1 -Solo -OneDll` once, `run.ps1 -ReplyWindow` once -- its `reply window:` line
 goes into DESIGN.md, and a window under 15 s stops the batch before R1 (plan §3.4). The runners also
