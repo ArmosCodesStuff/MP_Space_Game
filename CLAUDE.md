@@ -157,7 +157,8 @@ removed-path invariants, and only when a check's wiring is in doubt.
 **Every engine run goes through `tools\rungs.ps1`** (`powershell -NoProfile -ExecutionPolicy Bypass -File
 tools\rungs.ps1 -Tree <checkout> -Tag <new tag> -Steps <chain>`; `-Tree` is required, so a lane is never
 tested as version-l by mistake): it runs the chain in order, stops at the
-first red, waits for the engine to be free, and writes `%TEMP%\warships_rungs\<tag>\summary.txt` + one log
+first red, takes the first free of `-Slots` engine slots (slot 0 for bar, wan and trees without slots;
+one chain per tree at a time), and writes `%TEMP%\warships_rungs\<tag>\summary.txt` + one log
 per step. Read the summary, grep a log; never start a harness directly.
 
 **Build phase: `quick` only, per job and at a lane's HEAD. No engine.** **Test phase** (everything planned is
@@ -220,10 +221,10 @@ your own work. WHY gets one sentence; detail when asked.
 ```
 typecheck\typecheck.ps1 · dotnet build · tools\analyse\run.ps1 · python tools\analyse\xref.py
 tools\lanes.ps1                                          # state in one call: lanes, chains, ledger_main
-tools\rungs.ps1 -Tree <checkout> -Tag <t> -Steps <chain>   # every engine run, the bar included
+tools\rungs.ps1 -Tree <checkout> -Tag <t> -Steps <chain> [-Slot n] [-Slots n]   # every engine run; lanes run side by side
 tools\smoketest\run.ps1 · tools\screens\run.ps1   # only through rungs.ps1; trust LINT: 0 for layout,
                                                   # read a frame only for new art
-tools\make_ships.ps1 · tools\finish_ships.ps1 · python tools\make_sounds.py
+tools\make_ships.ps1 · python tools\make_sounds.py
 python tools\map.py · tools\snapshot.ps1 · tools\manifest.ps1
 ```
 Godot is found by `tools\find-godot.ps1`. `-Update` regenerates map, snapshot and manifest, then checks

@@ -14,12 +14,17 @@
 #   * Shots.cs.txt hard-codes /tmp/shots/; the copy is rewritten to $env:TEMP\shots.
 #     The original .txt is never modified.
 
+# -Slot <n> (default 0): this run's engine slot (tools\rungs.ps1). Shots.cs.txt's one Net.I.Host()
+# call (line ~318, the "no router" screen) binds Net.DefaultPort with no argument, so it is told this
+# run's shift the same way tools\smoketest\run.ps1 tells SmokeTest.cs.txt: --port-shift=N after "--".
 param(
   [string]$Godot,
-  [switch]$Compat
+  [switch]$Compat,
+  [int]$Slot = 0
 )
 
 $ErrorActionPreference = 'Stop'
+$shift = 100 * $Slot
 
 # -Godot is optional now: find-godot.ps1 resolves it from an explicit path, WARSHIPS_GODOT,
 # local.config.ps1, or a search of the usual places.
@@ -109,6 +114,7 @@ try {
 
   $render = @('--path', $W, '--windowed', '--resolution', '1600x900')
   if ($Compat) { $render += @('--rendering-driver', 'opengl3', '--rendering-method', 'gl_compatibility') }
+  $render += @('--', "port-shift=$shift")
 
   $o = Join-Path $W 'sweep.out'; $e = Join-Path $W 'sweep.err'
   $p = Start-Process -FilePath $Godot -ArgumentList $render -WorkingDirectory $W `

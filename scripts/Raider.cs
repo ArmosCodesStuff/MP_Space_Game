@@ -142,8 +142,7 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
     public override void _Ready()
     {
         Hp = MaxHull;
-        _sprite = Sprites.Fit(Def.Texture, Length);
-        _sprite.Modulate = Def.Tint;
+        _sprite = Sprites.Fit(Def);
         AddChild(_sprite);
         if (Def.Turret)
         {   // the main turret on its spine behind the canopy, mounted where ITS OWN ROW says and
@@ -384,10 +383,11 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
             var inv = GlobalTransform.AffineInverse();
             DrawLine(Vector2.Zero, inv * to, new Color(1f, 0.3f, 0.25f, 0.35f), 1.5f);
         }
-        float plume = Heavy ? Length * 0.5f : Length;
+        // a flame out of every bell its art has (its row's Nozzles)
+        var flame = new Color(1f, 0.35f, 0.25f);
         // an escort's run-in is unmistakable: it goes on the boost with a plume three times over
-        if (Boosting && IsEscort && !Shivering) Plume.Draw(this, new Vector2(0, Length * 0.5f), Vector2.Down, plume * EscortPlume, new Color(1f, 0.35f, 0.25f), 1f, true);
-        else if (Boosting || (Heavy && Speed > Def.Cruise + 1f)) Plume.Draw(this, new Vector2(0, Length * 0.5f), Vector2.Down, plume * 1.6f, new Color(1f, 0.35f, 0.25f), 1f, true);
-        else Plume.Draw(this, new Vector2(0, Length * 0.5f), Vector2.Down, plume, new Color(1f, 0.35f, 0.25f), 0.5f, Speed > 1f);
+        if (Boosting && IsEscort && !Shivering) Def.DrawPlumes(this, Vector2.Zero, 1f, flame, 1f, true, EscortPlume);
+        else if (Boosting || (Heavy && Speed > Def.Cruise + 1f)) Def.DrawPlumes(this, Vector2.Zero, 1f, flame, 1f, true, 1.6f);
+        else Def.DrawPlumes(this, Vector2.Zero, 1f, flame, 0.5f, Speed > 1f);
     }
 }

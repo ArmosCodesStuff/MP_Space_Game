@@ -15,7 +15,7 @@ git -C $root worktree list --porcelain | Select-String '^worktree ' | ForEach-Ob
 "-- newest engine chains"
 Get-ChildItem $Runs -Directory -ErrorAction SilentlyContinue | Sort-Object LastWriteTime | Select-Object -Last $Last | ForEach-Object {
   $lines = @(Get-Content (Join-Path $_.FullName 'summary.txt') -ErrorAction SilentlyContinue |
-    Where-Object { $_ -match '^(==|\d+ |ALL GREEN|STOPPED)' } | ForEach-Object { ($_ -replace '\s*\|.*$', '').Trim() })
+    Where-Object { $_ -match '^(==|\d+ |ALL GREEN|STOPPED|\s+engine slot)' } | ForEach-Object { ($_ -replace '\s*\|.*$', '').Trim() })
   "{0} {1:HH:mm}: {2}" -f $_.Name, $_.LastWriteTime, ($lines -join ' / ')
 }
 "-- docs/plans/ledger_main.md"

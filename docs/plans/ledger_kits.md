@@ -738,3 +738,15 @@ HEAD 97f767ed4b85b4be33e61fbfb01768a5f85391a0; hash SmokeTest.cs.txt c4c55a50d63
 ## K4 POST -- done. Comment replaced as gate 2 asked; typecheck 0 errors, quick ALL CHECKS PASSED. Checks: none (comment only).
 COORDINATOR DECISION -- Dealt.Landed (a static event on the damage door for blows with no ship behind them) is accepted.
 engine-unproven: rungs owed in the final test phase. Next: none (lane ready for merge).
+
+## K-merge PRE -- tier opus, merge version-l (ce7f48e) into wt/kits (9742789)
+Intent: sync kits with art (J1-J5) + wave lanes before merging kits into version-l. Build phase: typecheck + quick only.
+Conflicted: scripts/Boss.cs, scripts/Enemies.cs, scripts/Ships.cs, tools/smoketest/SmokeTest.cs.txt, docs/CHANGES.md.
+## K-merge POST -- done. typecheck 0 errors; verify -Quick ALL CHECKS PASSED.
+- Boss.cs: version-l's Ring reach x Type.Size and the dash's one-ram-a-pass (s.Struck) kept, each landing through kits' Out(m) (the outgoing door).
+- Enemies.cs: version-l's per-row TurretAft/TurretWidth (no defaults, off the art) and Nozzles on every row; kits' Barrels field, Dps 1.29 x 2 barrels, Cc and Exp on every row.
+- Ships.cs: version-l's J5 mount literals (BB, carrier, DD, Echo) with PdRing and Ab.Pd dropped (kits removed both, F16 passive PD).
+- SmokeTest.cs.txt: both fingerprint blocks (kits' tables + art's bell table); kits' 2.58x heavy check + art's raider-art block;
+  version-l's 680 u shockwave ring + kits' PdReachOff; kits' 150 beam check + version-l's charge-once message.
+- CHANGES.md: both sides (Handoff and Unreleased).
+engine-unproven: rungs owed in the final test phase. Checks: none new (merge).

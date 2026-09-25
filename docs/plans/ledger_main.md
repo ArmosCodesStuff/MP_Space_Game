@@ -4,28 +4,31 @@ Engine outputs for the old-way batches: S = C:\Users\logan\AppData\Local\Temp\cl
 (their summary.txt is UTF-16: read with powershell Get-Content). New batches write to %TEMP%\warships_rungs.
 
 ## Running (BUILD PHASE: no engine anywhere until every planned lane is merged -- owner; all agents Opus 5.5)
-- wf_b2ed579d-80a / task wydvp93f5, "lane-kits-k" (no engine). K1 done (da21442); K2 = merge version-l, IN PROGRESS in wt_kits; quick at HEAD,
-  opus code gate, merge. Returns {kits, gate, merge}. merge=false: merge by hand. gate fail: one fix batch from its problems.
-- wf_ee2e95db-7a6 / task w3j9do0p7, "lane-art-j45" (no engine). J4+J5 POSTed; A3 = merge version-l, IN PROGRESS in wt_art; quick, opus code
-  gate (camera ruling in code + its written check), merge. Frames are read in the test phase.
-- wf_532652e7-46e / task wecrtf9yf, "lane-slots-fix" (no engine). Gate 1 (wva52tsb5) failed 39cd05c on 4: the sweep's P(27015) = the next slot's
-  host 27115 (move to P(27140)); -Slots 3 -> 4 + clamp at 4 (slot 4's fakeigd 19480 = slot 0's box); slot 0 took the lock before quick (take it
-  lazily); an untrue NuGet comment. Fix S4, quick, gate 2, merge. merge=false (CLAUDE.md s8/s12 hunk): resolve by hand, keeping both.
+- wf_d703a267-73b / task w2aq1g0re, "lane-kits-a3to6" (no engine), WarShips_wt_kits. K4 = gate 2's one comment; merge kits (slices 1-2)
+  into version-l (art conflicts); then slices 3, 4 (waits for drives), 5 (waits for raids+fields+wings), 6a (waits for curve), 6b, 6c, 6d:
+  each merges version-l in, builds, opus gate, one fix + gate 2, merges into version-l. Waits poll 3 h max; a "waiting" row = resume with
+  Workflow({scriptPath: <its script>, resumeFromRunId: 'wf_d703a267-73b', args: {attempt: n+1}}). Other stops: read the row, fix or merge by hand.
+  COORDINATOR DECISION (kits gate 2): Dealt.Landed accepted.
+- wf_b63808ec-4ad / task wojzfsouf, "wave-1-build": six lanes in parallel, build only, each from base f168508 (= kits 809313c + version-l;
+  branch wt/wave): drives (B: F21/F22/F24), fields (D: F9), wings (E: F13), curve (F: Par, boss rows, ladder), raids (G: Squads), net2
+  (R2-R5 code; S2 first if missing). Worktrees WarShips_wt_<key>, ledgers ledger_<key>.md (net2: ledger_webrtc.md). Each: build, opus gate,
+  one fix + gate 2, then SERIALIZED merge (merge version-l into the lane, quick, merge --no-ff; waits up to 5 min for a clean MAIN).
+  Returns one row per lane. A lane with no merge: read its row, launch its fix or merge it by hand. Keep MAIN commits quick.
 
 ## Next
-1. When kits merges: launch the next wave ALL AT ONCE, build only (kits_v31.md section 8): lane A slice 3 (F5, F23 Lines, F6, F7), then
-   slices 4-6 (6 = the 12 classes' kits by tier) in the same lane; lanes B (F21, F22, F24), D (F9), E (F13), F (Par.cs, numbers section 8),
-   G (Squads.cs); WebRTC R2-R5 (network_webrtc.md); then lane I (items). Each: quick per job, opus code gate, merge in section 8's order.
+1. After slice 6d merges: lane I (items: hull-category lines, 10 tiers, decision 6's chip budget; Game.Version 3 -> 4), build only.
 2. TEST PHASE, once everything is merged: the slots proof, then quick,solo,solo,six,screens (+ six,six) across slots, fix low, then the bar
    once, VERIFIED:, push version-l and main, release; frames to the owner (the art lane's Drake, Rusty, siege, player ships).
-3. Delete worktrees WarShips_wt_walls, WarShips_wt_net, WarShips_wt_test after the merges.
+3. Delete each lane's worktree once it is merged (walls, net, slots, art, test removed 2026-09-25; branches kept).
+Done: ART MERGED (A5 7717267 passed gate 3's code; coordinator applied its one comment fix A6 761a2ad; quick art_mergeq green;
+  engine-unproven; Drake throw now nose 1300 u off = 200 u past gun reach, tell the owner if asked). Slots merged 25aefc1 (gate 2 passed at a22c187; its 2 notes applied in e104a5a). Engine-unproven: its proof opens the test phase.
 
 ## Owner questions
 - none open
 
 ## Notes
-- Keep the version-l tree CLEAN while w3gvr44ua runs: its merge step refuses a dirty tree. Commit ledger edits at once.
-- Merge risks: ClassArt.PdRing removed (kits) vs art rows; Ships.cs art rows vs kits rows; kits/art vs net's SmokeTest.cs.txt and Net.cs.
+- Keep the version-l tree CLEAN while wthoe9tj1 / wojzfsouf run: their merge steps refuse a dirty tree. Commit ledger edits at once.
+- Merge risks: whichever of kits/art merges second resolves ClassArt.PdRing (kits removed it) and Ships.cs mount literals (list: ledger_sprites J5 POST); Ships.cs art rows vs kits rows; kits/art vs net's SmokeTest.cs.txt and Net.cs.
 - Follow-up from net gate 2 (not blocking): these constant tables are Lists or Dictionaries, so the fingerprint never hashes them:
   NetIds.Widths, Spawns.All (the wire kind index), Hints.All, Sfx._gap and Abilities.Reserved. The fix is to make them arrays or row tables.
 - Follow-up (kits NOTE 2): a heavy throws with zero lead right after a retarget (game side, latent); not fixed.
