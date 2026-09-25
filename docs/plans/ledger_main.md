@@ -7,7 +7,7 @@ Engine outputs for the old-way batches: S = C:\Users\logan\AppData\Local\Temp\cl
 - wf_777978ea-8f6 / task wgzvia4p5, "lane-kits-parallel": slices 4 (after drives), 5 (after slice 3 + raids, fields, wings), 6a (after 4+5+curve), 6b/6c (after
   5+curve), 6d (after 3+4+curve), items (after curve), then items RECONCILE (after 6a-6d + items). Own worktrees wt_kits4.. / wt_items. Waits poll 10 h max.
   Returns 8 rows (merged / waiting / skipped / a stop): a stopped unit gets a fix batch; later units that skipped are relaunched then.
-- (launching) "wave-1-finish": wings (gate 2 passed; its merge hit a moved version-l: redo step 1, merge); net2 (gate 2: two stale
+- wf_bfa3a0cb-d62 / task w0vaw4czr, "wave-1-finish": wings (gate 2 passed; its merge hit a moved version-l: redo step 1, merge); net2 (gate 2: two stale
   'router' comments, exact texts given: fix, merge); raids (gate 2 failed: the GANK line's guest check, RaidsSightChecks from 3 situations:
   fix, gate 3, merge). Merges serialized. Unblocks kits slice 5 (waits for raids + wings).
 
