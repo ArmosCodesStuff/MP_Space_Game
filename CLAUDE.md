@@ -53,6 +53,12 @@ the game (`typecheck.ps1` sees them). Name the checks before the first line of a
 7. **Class ability or drive row**: as many distinct checks as its risk needs, Fable's judgment (owner,
    2026-09-25: the blanket 3+ audit is off).
 
+Scenarios before splits, never a remake (owner, 2026-09-25): the harness's methods are the proof until the bar
+is green. After the release the scenarios lane turns each check that places things and asserts a literal into
+a row of the scenario table (class, ability, foe, geometry, literal; rows generated from the cards), one method
+at a time, each row proved against the method it replaces before that method is deleted; then the
+`PlayerShip`/`Hub` split, proved by the rows. Code and checks are never rewritten together.
+
 The commit message ends `Checks:` naming each. Positions and angles come from `Vary`/`VaryAngle`/`VaryNear`
 (a per-run `SEED n`; never vary a figure the check asserts). A flake is a bug in the check; rule out the
 three traps before committing: **knife edge** (nothing exactly on a boundary), **stale pick** (re-take

@@ -95,6 +95,9 @@ shared by two seeds, 16 not): two seeds do not prove a rewritten check.
   ability, foe, geometry, expected literal) reached by `scenario=<id>` through `run.ps1`, and
   `tools/scenarios.py` generating rows from the cards and reading a `.fails.txt` into a table; the
   interactions matrix (heavies x bosses x lights per weapon and platform) is rows of that table.
+  Conversion (owner, 2026-09-25): one method at a time, each row proved against the method it replaces
+  (both run on the same seed and agree three times) before that method is deleted; a red on a row is
+  then a row to read, never a method. The `PlayerShip`/`Hub` split follows and is proved by the rows.
 - Engine slots: at most 4; the PC is not the limit, shared folders and ports were.
 - A tool call that is moved to the background (past its timeout) kills its child processes when it ends: the call that
   starts `rungs.ps1` with Start-Process returns at once (PID only); every wait is a separate call under 10 minutes.
