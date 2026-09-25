@@ -32,7 +32,7 @@ public partial class _Test : Node
         Rendezvous.Clipboard = () => Clip;
         Rendezvous.Copy = text => Clip = text;
     }
-    // Waits in REAL time: the router work runs on its own thread, and at a fixed frame rate a
+    // Waits in REAL time: libjuice's and the listener's timers are real time, and at a fixed frame rate a
     // frame-counted wait can end before a single datagram has had time to come back.
     async Task<bool> RealTime(Func<bool> done, double seconds)
     {
@@ -1183,7 +1183,7 @@ public partial class _Test : Node
         catch (Exception ex) { Check(false, $"test threw: {ex.GetType().Name}: {ex.Message}"); GD.Print(ex.StackTrace); }
         GD.Print($"  elapsed {Time.GetTicksMsec() / 1000.0:0.0} s");     // for sizing the runners' time limits
         GD.Print($"DONE {role} fails={fails}");
-        // THE GAME'S OWN WAY OUT, not a bare Quit: what it waits for (sounds, router jobs) is
+        // THE GAME'S OWN WAY OUT, not a bare Quit: what it waits for (sounds, the goodbye, the listener) is
         // exactly what the runner then checks for -- "resources still in use at exit" and a crash.
         Game.Quit(fails);
     }
@@ -6644,6 +6644,8 @@ public partial class _Test : Node
             await SkyChecks();
             await TourChecks();
             await S2Checks();
+            await GateFixRefitChecks();
+            await GateFixJoinBoxChecks();
             // ── THREE AT ONCE, ON THE HULLS BIG ENOUGH TO HOLD THEM ──
             // How many a hull may hold is its class's row, so "capital ships only" is a number and
             // not a list of class names in an `if`. A light still holds one: picking a second
@@ -10385,6 +10387,7 @@ public partial class _Test : Node
         {
             $"WARSHIPS NETWORK REPORT · build {Game.Build} ({Net.Protocol:x8})", "hosting: 1 players", "typed addresses: Same network: ",
             "reply window 30 s; clipboard pickup on", $"invite {answer.Id} by paste: ", "; the fit dropped ", $"join {answer.Id} by paste: invite made +0 ms, reply taken +",
+            " ms, ICE connected never, channels open never, admitted never",     // a reply with no candidates: nothing came up
             "peak backlog by row: ", $"longest silence from a peer ",
         };
         var missing = wanted.Where(w => !report.Contains(w, StringComparison.Ordinal)).ToList();
@@ -10461,6 +10464,131 @@ public partial class _Test : Node
         }
         Check(guestSaid.All(g => g == "ok"),
               $"a guest's reply is copied with its countdown; the countdown run out says so and offers MAKE A FRESH REPLY, which answers the same invite again; a closed connection says so at once ({string.Join("; ", guestSaid)})");
+    }
+
+    // ── GATE FIX (lane net2): P8's REFIT, the JOIN box's pickup, the token to the host alone, the join's ICE time ──
+    // P8 (solo): REFIT is one rule (Hub.RefitOpen). At home in a fight the pilot's own REFIT and class
+    // picker are shut, as the host would refuse the class; a class change keeps the hull's fraction and
+    // does not reset a cooldown.
+    async Task GateFixRefitChecks()
+    {
+        var combat = typeof(PlayerShip).GetField("_combatT", BindingFlags.NonPublic | BindingFlags.Instance);
+        var cls0 = Character.Class; var at0 = Me.Position;
+        // AT HOME IN A FIGHT, from 3 varied moments of it and 3 places: REFIT charges nothing and opens
+        // nothing, and a class card pressed in a creator already open keeps the class the pilot has
+        int refused = 0; string refusedSeen = "";
+        for (int i = 0; i < 3; i++)
+        {
+            var me = Me; me.Position = VaryNear(Hub.BasePos + new Vector2(0, 900), 400f); me.Velocity = Vector2.Zero;
+            combat.SetValue(me, (double)Vary(2f, (float)PlayerShip.CombatHold - 1f));
+            int lv = Character.Level; var had = Character.Class;
+            double credits = H.Yard.Credits;                    // read right around the press: the hauler sells every frame
+            H.ResetShip();
+            bool noRefit = !H.CreatorOpen && Math.Abs(H.Yard.Credits - credits) < 1e-6 && Character.Level == lv;
+            await Wait(0.05);
+            var cc = new CharacterCreator(); H.AddChild(cc); await Wait(0.05);
+            var card = Nodes<Button>(cc).FirstOrDefault(b => Classes.All.Any(e => e.Ready && e.Id != had && b.Text.StartsWith(e.Name + "  ")));
+            card?.EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
+            bool kept = card != null && Character.Class == had && Me?.Class == had;
+            cc.QueueFree(); await Wait(0.05);
+            refusedSeen += $"{noRefit}/{kept}/{H.MayRefit}; ";
+            if (noRefit && kept && !H.MayRefit) refused++;
+        }
+        combat.SetValue(Me, 0.0);
+        Check(refused == 3 && H.MayRefit,
+              $"at home in a fight, from 3 varied moments of it: REFIT charges nothing and opens nothing, and a class picked in the creator is refused -- the class the host would keep; out of it REFIT is open again ({refusedSeen}P8)");
+        // A CLASS CHANGE KEEPS THE HULL'S FRACTION, from 3 varied pairs and fractions, clear of the base
+        var pairs = new[] { (ShipClass.Battleship, ShipClass.Carrier), (ShipClass.Destroyer, ShipClass.FreightHauler), (ShipClass.HeavyWarrior, ShipClass.LightDart) };
+        int fracKept = 0; string fracSeen = "";
+        foreach (var (a, b) in pairs)
+        {
+            await SetClass(a);
+            var ma = Me; ma.Position = VaryNear(Hub.BasePos + new Vector2(2400, 2400), 150f); ma.Velocity = Vector2.Zero;
+            combat.SetValue(ma, 0.0);
+            double f = Vary(0.25f, 0.75f);
+            ma.Hp = f * ma.MaxHp;
+            await SetClass(b);
+            var mb = Me;                                        // re-taken after the wait
+            double got = mb.MaxHp > 0 ? mb.Hp / mb.MaxHp : -1;
+            fracSeen += $"{a}->{b} {f:0.000}->{got:0.000}; ";
+            if (mb.Class == b && Math.Abs(got - f) < 0.01) fracKept++;   // 0.1 s of calm regeneration is 0.003
+        }
+        Check(fracKept == 3, $"a class changed at home out of a fight keeps the hull's fraction, not a full hull, from 3 varied pairs ({fracSeen}P8)");
+        // ...AND DOES NOT RESET A COOLDOWN: A's, set, then B flown and A again, reads what is left of it
+        int coolKept = 0; string coolSeen = "";
+        foreach (var (a, b) in pairs)
+        {
+            await SetClass(a);
+            var ma = Me; var rows = Abilities.For(a);
+            if (rows.Length == 0) { coolSeen += $"{a} has no ability; "; continue; }
+            string id = rows[Rng.RandiRange(0, rows.Length - 1)].Id;
+            double c = Vary(20f, 40f);
+            ma.Sl(id).Cool = c; double t0 = ma.Clock;
+            await SetClass(b); await SetClass(a);
+            var mc = Me;                                        // re-taken after the waits
+            double left = c - (mc.Clock - t0), got = mc.Sl(id).Cool;
+            coolSeen += $"{a} {id} {c:0.0}->{got:0.00} (left {left:0.00}); ";
+            if (mc.Class == a && got >= left - 0.1 && got <= c + 1e-6 && got > 1) coolKept++;
+        }
+        Check(coolKept == 3, $"a class change does not reset a cooldown: flying another class and back, the ability still has what was left of it, from 3 varied pairs ({coolSeen}P8)");
+        await SetClass(cls0);
+        if (Me is { } back) { back.Position = at0; back.Velocity = Vector2.Zero; back.Hp = back.MaxHp; combat.SetValue(back, 0.0); }
+    }
+
+    // §15 Q1 (solo): the JOIN box fills itself from a copied invite, while a reply or words leave it alone.
+    async Task GateFixJoinBoxChecks()
+    {
+        var toggle = PanelOf<Button>("NetToggle"); var box = PanelOf<LineEdit>("JoinBox");
+        bool wasOpen = toggle.ButtonPressed; string clipWas = Clip;
+        Net.I.GoOffline(); await RealTime(() => Net.I.NetworkIdle, 3);
+        toggle.ButtonPressed = true;
+        int filled = 0;
+        for (int k = 0; k < 3; k++)                              // 3 varied invites, each a friend's whole message
+        {
+            box.Text = "";
+            string msg = Message(Rendezvous.Encode(VaryRecord(Rendezvous.Kind.Invite)));
+            Clip = msg;
+            await RealTime(() => box.Text == msg, 2);
+            if (box.Text == msg) filled++;
+        }
+        box.Text = "";                                           // the pilot empties it: the same invite does not come back
+        await RealTime(() => box.Text.Length > 0, 1.2);
+        bool staysEmpty = box.Text == "";
+        Clip = Message(Rendezvous.Encode(VaryRecord(Rendezvous.Kind.Reply)));
+        await RealTime(() => box.Text.Length > 0, 1.2);
+        bool replyLeft = box.Text == "";
+        Clip = "see you at eight -- bring the good snacks " + Rng.RandiRange(10, 99);
+        await RealTime(() => box.Text.Length > 0, 1.2);
+        bool wordsLeft = box.Text == "";
+        Check(filled == 3 && staysEmpty && replyLeft && wordsLeft,
+              $"the JOIN box fills itself from a copied invite, 3 of 3 ({filled}); emptied, it stays so ({staysEmpty}); a reply ({replyLeft}) or words ({wordsLeft}) leave it alone (§15 Q1)");
+        box.Text = ""; Clip = clipWas; toggle.ButtonPressed = wasOpen;
+    }
+
+    // P10b (rung 5, third player): the rejoin token goes to the host alone. Watched from the moment it
+    // joins to the moment it leaves: its copy of Guesty's identity never carried a token.
+    (LateSampler token, LateSampler heard) GateFixTokenWatch()
+    {
+        var token = new LateSampler { Probe = () => Net.I != null && Net.I.Players.Values.Any(p => p.Name == "Guesty" && p.Token.Length > 0) };
+        var heard = new LateSampler { Probe = () => Net.I != null && Net.I.Players.Values.Any(p => p.Name == "Guesty" && p.HasIdentity) };
+        AddChild(token); AddChild(heard);
+        return (token, heard);
+    }
+    void GateFixTokenCheck((LateSampler token, LateSampler heard) w)
+    {
+        Check(w.heard.Seen && !w.token.Seen,
+              $"third player: Guesty's identity reached it with no rejoin token, from its first join to its last (heard {w.heard.Seen}, a token seen {w.token.Seen}; P10b)");
+        w.token.QueueFree(); w.heard.QueueFree();
+    }
+
+    // §6.3 (rung 5, host): a real join's report line reads its five times, ICE connected before the channels open.
+    void GateFixJoinTimes()
+    {
+        var m = System.Text.RegularExpressions.Regex.Match(Net.I.Report(),
+            @"by paste: invite made \+0 ms, reply taken \+(\d+) ms, ICE connected \+(\d+) ms, channels open \+(\d+) ms, admitted \+(\d+) ms");
+        long Ms(int g) => long.Parse(m.Groups[g].Value);
+        Check(m.Success && Ms(1) <= Ms(2) && Ms(2) <= Ms(3) && Ms(3) <= Ms(4),
+              $"host: the invite guest's join in the report -- invite made, reply taken, ICE connected, channels open, admitted, in that order ({(m.Success ? m.Value : Net.I.Report().Replace("\n", " / "))})");
     }
 
     // ── WEBRTC, R2c: THE ROLES MOVED (§10.2, §10.3) ─────────────────────────────────────────────────
@@ -11427,6 +11555,7 @@ public partial class _Test : Node
             await RealTime(() => Nodes<PlayerShip>().Count() == 3 && Multiplayer.GetPeers().Length == 2, Wan ? 15 : 8);
             await courier;
             R2cRows();
+            GateFixJoinTimes();
             // THE BUILD HANDSHAKE. The save format is versioned (3, as a literal: a check that reads
             // the number it tests cannot catch the number being wrong); a SESSION is matched on the
             // build's fingerprint. The refusal is proved on a real connection by the third player,
@@ -11646,6 +11775,7 @@ public partial class _Test : Node
             await Wait(1.2);
             await RealTime(() => Net.IsOnline, 4);
             Check(Net.IsOnline && Net.I.JoinedBy == "address", $"third player: joined by the typed address, the row that knocks ({Net.I.JoinedBy})");
+            var tokenWatch = GateFixTokenWatch();
             Character.Name = "Third"; Character.Class = ShipClass.Battleship;
             // FIVE CHIPS AT PEAK 3 (level_walls check 15), written past its own window: one chip slot
             // is open at level 3, so every copy of this ship flies the first chip alone (324 hull).
@@ -11747,6 +11877,7 @@ public partial class _Test : Node
                   && Character.GearHold.Values.Sum() == 6 && HoldIds() == expectHold,
                   $"third player: nor after a restart -- the kills it was paid for are on its file, and the four over-cap chips come back to the hold (exp {exp3} -> {Character.Exp}, {Character.GearHold.Values.Sum()} parts, {HoldIds()})");
             await GuestLevelsAndPresses();
+            GateFixTokenCheck(tokenWatch);
             // IT LEAVES, on purpose, by pressing HOST: a goodbye, so nothing to retry -- and the host keeps
             // no place for it (the host checks that goodbye got out: HOST used to cut a guest's off)
             Net.I.Host(P(27116));

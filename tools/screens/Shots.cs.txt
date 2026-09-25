@@ -60,6 +60,15 @@ public partial class _Shots : Node
     Hub H => GetTree().CurrentScene as Hub;
     System.Collections.Generic.IEnumerable<T> N<T>(Node n = null) where T : Node { n ??= GetTree().Root;
         foreach (var c in n.GetChildren()) { if (c is T t) yield return t; foreach (var x in N<T>(c)) yield return x; } }
+    // GATE FIX (lane net2): the REFIT tab in a fight -- RESET shut, and saying why (Hub.MayRefit, P8)
+    async Task RefitInCombatFrame()
+    {
+        var combat = typeof(PlayerShip).GetField("_combatT", BindingFlags.NonPublic | BindingFlags.Instance);
+        var me = H.MyShip;
+        combat.SetValue(me, 8.0); await W(0.2);
+        await Snap("20_base_refit_in_combat");
+        combat.SetValue(me, 0.0); await W(0.1);
+    }
     void Key(Key k) { Input.ParseInputEvent(new InputEventKey { Keycode = k, PhysicalKeycode = k, Pressed = true }); Input.ParseInputEvent(new InputEventKey { Keycode = k, PhysicalKeycode = k, Pressed = false }); }
     object P(object o, string m, params object[] a) => o.GetType().GetMethod(m, BindingFlags.NonPublic | BindingFlags.Instance).Invoke(o, a);
 
@@ -554,6 +563,7 @@ public partial class _Shots : Node
             }
             N<Button>(bp).First(b => b.Name == "Reset").EmitSignal(BaseButton.SignalName.Pressed); await W(0.2);
             await Snap("20_base_refit_armed");
+            await RefitInCombatFrame();
             Key(global::Godot.Key.B); await W(0.3);
 
             // K window: waiting for a key, then a reserved key refused

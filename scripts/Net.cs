@@ -67,6 +67,7 @@ public partial class Net : Node, Rendezvous.IHostDesk, Rendezvous.IGuestDesk
         public string[] Equip = Array.Empty<string>();
         public Dictionary<string, int> GearLevel = new();  // what the pilot levelled each part to, by id (Equipment.SanitizeLevels on arrival)
         public string CharacterId = "";                   // the pilot's stable identity: a peer id changes on a reconnect
+        public string Token = "";                         // the rejoin token its last identity carried: only the host is sent one (Hub.SendIdentity)
         public int Level = 1;                              // the pilot's level, as claimed (an escort's threat)
         public int Peak = 1;                               // the highest level it has reached, as claimed (Progression.Claim): what its walls read
         public bool HasIdentity;
@@ -116,7 +117,8 @@ public partial class Net : Node, Rendezvous.IHostDesk, Rendezvous.IGuestDesk
     private void OnAuthenticating(long id)
     {
         if (_isHost && Pending.Find((int)id) is { } e) { _rowOf[(int)id] = e.Row; Pending.Remove((int)id); }
-        if (_times.TryGetValue(_isHost ? (int)id : _joinId, out var t)) t.Connected = Time.GetTicksMsec();
+        // ICE was up by now at the latest: a poll that brought both in one frame reads them together
+        if (_times.TryGetValue(_isHost ? (int)id : _joinId, out var t)) { t.Channels = Time.GetTicksMsec(); if (t.Ice == 0) t.Ice = t.Channels; }
         ((SceneMultiplayer)Multiplayer).SendAuth((int)id, BitConverter.GetBytes(Claimed(Pretend.Auth)));
     }
     private void OnPeerJoined(long id) => OnPeer((int)id, true);
@@ -745,6 +747,7 @@ public partial class Net : Node, Rendezvous.IHostDesk, Rendezvous.IGuestDesk
             foreach (var row in Rendezvous.Paths) row.Poll();
             foreach (var e in Pending.All.ToList())
             {
+                if (e.Stage == Rendezvous.Stage.Linking) StampIce(e.Id, e.Conn?.Conn, now);
                 if (e.Stage == Rendezvous.Stage.Linking && now >= e.Until)
                 {
                     // host step 8: this invite is spent (a connection takes one answer), so a paste friend gets a fresh one at once
@@ -783,10 +786,16 @@ public partial class Net : Node, Rendezvous.IHostDesk, Rendezvous.IGuestDesk
             }
             answered.TrySetResult(reply);
         }
+        if (Connecting && _answering == null && _answer is { Done: true }) StampIce(_joinId, _answer.Conn, now);
         // a pasted invite's connection that failed is over at once, not at the end of its countdown
         if (Connecting && _joinRow == Rendezvous.Paste && _answer is { Done: true, Conn: { } conn }
             && conn.GetConnectionState() is WebRtcPeerConnection.ConnectionState.Failed or WebRtcPeerConnection.ConnectionState.Closed)
             Failed($"Could not get through to {_joinTarget}: {Reason(conn)}. Try again with you hosting, or use Radmin VPN (radmin-vpn.com). Playing offline.");
+    }
+    // A join's "ICE connected" (the report): the first frame its connection reads Connected.
+    private void StampIce(int id, WebRtcPeerConnection c, ulong now)
+    {
+        if (_times.TryGetValue(id, out var t) && t.Ice == 0 && c?.GetConnectionState() == WebRtcPeerConnection.ConnectionState.Connected) t.Ice = now;
     }
     private static string Reason(WebRtcPeerConnection c) => c?.GetConnectionState() switch
     {
@@ -808,7 +817,9 @@ public partial class Net : Node, Rendezvous.IHostDesk, Rendezvous.IGuestDesk
     // the code is), every join's times, the most that waited per NetChannels row, the longest silence.
     // Kept for the whole game, not the session: the report is copied after a failure, offline.
     private readonly List<string> _made = new();
-    private sealed class JoinTimes { public string Row = ""; public ulong Invite, Reply, Connected, Admitted; }
+    // Ice: the connection reached Connected (ICE and DTLS up, PumpSession); Channels: SCTP's channels
+    // open, the handshake starting (OnAuthenticating). The gap between them is the channels' own.
+    private sealed class JoinTimes { public string Row = ""; public ulong Invite, Reply, Ice, Channels, Admitted; }
     private readonly Dictionary<int, JoinTimes> _times = new();
     private int _joinId;                                  // a guest's own id: the invite's, the key of its join's times
     private readonly Dictionary<int, int> _peakBacklog = new();
@@ -855,7 +866,7 @@ public partial class Net : Node, Rendezvous.IHostDesk, Rendezvous.IGuestDesk
                      : string.Join(", ", _peakBacklog.OrderBy(kv => kv.Key).Select(kv => $"{kv.Key} {rowName.GetValueOrDefault(kv.Key, "stream")} {kv.Value} B"))));
         foreach (var m in _made) r.AppendLine(m);
         foreach (var (id, t) in _times.OrderBy(kv => kv.Value.Invite))
-            r.AppendLine($"join {id} by {t.Row}: invite made +0 ms, reply {(_isHost ? "taken" : "made")} {At(t, t.Reply)}, connected {At(t, t.Connected)}, admitted {At(t, t.Admitted)}");
+            r.AppendLine($"join {id} by {t.Row}: invite made +0 ms, reply {(_isHost ? "taken" : "made")} {At(t, t.Reply)}, ICE connected {At(t, t.Ice)}, channels open {At(t, t.Channels)}, admitted {At(t, t.Admitted)}");
         r.Append($"last: {LastStatus}");
         return r.ToString();
     }

@@ -1118,3 +1118,32 @@ heredoc turns "\n" inside C# strings into real newlines: it broke SessionMenu on
   scripts/SessionMenu.cs 38dc6940, scripts/CharacterCreator.cs f108033a, scripts/BasePanel.cs 3d8362a6,
   tools/smoketest/SmokeTest.cs.txt 6101e98e, tools/smoketest/run.ps1 18b57ec1, tools/screens/Shots.cs.txt
   148de467, docs/CHANGES.md 8107904f, ledger 108a7a6f.
+
+#### GATE FIX POST
+- verdict: done; typecheck 0 errors, `verify.ps1 -Quick` ALL CHECKS PASSED. engine-unproven: rungs owed in
+  the final test phase (3 twice, 4, 5 `six,six`, 5 `-Wan`).
+- (1) Hub.SendIdentity: one RpcId per peer (Multiplayer.GetPeers(), or the one asked for); the token rides
+  only to peer 1 from a guest, "" to everyone else. NetIdentity keeps what it heard in PlayerInfo.Token.
+- (2) Hub.RefitOpen (the one rule) -> Hub.Refit (host), Hub.MayRefit (ResetShip, BasePanel's RESET reads
+  "IN A FIGHT: NO RESET" and is shut), CharacterCreator's class card (Hub.Refit). PlayerShip.FitClass: the
+  hull keeps its fraction (a dead ship still fits full, as before); every slot's Cool and N are kept by id
+  in _slotsAway through class changes, Cool run down by the game seconds away; Left/Own end.
+- (3) SessionMenu.FillJoinBox: open panel, not hosting, not Connecting, empty box: Rendezvous.Clipboard
+  every PickupMs, an invite not the text read last time fills JoinBox.
+- (4) run.ps1: host/guest/guest2 limit 205 s under -Wan, 180 otherwise. (5) JoinTimes Ice/Channels; the
+  line reads "ICE connected", "channels open"; Ice stamped from PumpSession (host Linking entries, guest
+  _answer), or at channels open when one poll brought both. (6) the two router comments rewritten.
+- Checks written (not run): rung 3 `GateFixRefitChecks` ("at home in a fight, from 3 varied moments ...
+  REFIT charges nothing and opens nothing, and a class picked in the creator is refused", "a class changed
+  at home out of a fight keeps the hull's fraction", "a class change does not reset a cooldown"),
+  `GateFixJoinBoxChecks` ("the JOIN box fills itself from a copied invite, 3 of 3 ... a reply or words
+  leave it alone"), R3WordsChecks' wanted list + " ms, ICE connected never, channels open never, admitted
+  never"; rung 5 guest2 `GateFixTokenWatch/Check` ("Guesty's identity reached it with no rejoin token"),
+  host `GateFixJoinTimes` ("invite made, reply taken, ICE connected, channels open, admitted, in that
+  order"); rung 4 frame 20_base_refit_in_combat (Shots `RefitInCombatFrame`).
+- Watch in the test phase: FitClass no longer refills the hull or clears cooldowns on ANY class change, so
+  an older solo check that relied on a class switch as a heal or a cooldown reset goes red there; fix it
+  at rung 3 by setting what it needs (Hp, Sl(id).Cool) explicitly, never by restoring the old refill.
+- Slip, undone: one PowerShell [IO.File] write with a relative path landed in WarShips_Version_L's
+  tools/smoketest/run.ps1 (the same R4 edit); reverted there at once with git checkout (tree clean again).
+- LANE DONE (gate fix): nothing run on the engine.

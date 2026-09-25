@@ -104,9 +104,29 @@ public partial class SessionMenu : CanvasLayer
     }
 
     private void OnStatus(string s) { _status.Text = s; Refresh(); }
+
+    // THE JOIN BOX FILLS ITSELF (§15 Q1, §3.3 A guest 1): while this panel is open, not hosting and not
+    // joining, and the box is empty, the clipboard is read at most every Rendezvous.PickupMs; an
+    // invite on it, not the text read last time (a box the pilot emptied stays empty), is put in the
+    // box. JOIN is still the pilot's to press. A reply or words are left alone.
+    private ulong _joinPickAt;
+    private string _joinSeen;
+    private void FillJoinBox(Net n)
+    {
+        if (!_options.Visible || n == null || n.Connecting || Net.IsHost && Net.IsOnline || _addr.Text.Length > 0) return;
+        ulong now = Time.GetTicksMsec();
+        if (now < _joinPickAt) return;
+        _joinPickAt = now + Rendezvous.PickupMs;
+        string text = Rendezvous.Clipboard() ?? "";
+        if (text == _joinSeen) return;
+        _joinSeen = text;
+        if (Rendezvous.Find(text, Rendezvous.Kind.Invite) != null) _addr.Text = text;
+    }
+
     public override void _Process(double delta)
     {
         _now += delta;
+        FillJoinBox(Net.I);
         bool locked = Locked;                                   // the 1 s rate limit, shown on the buttons
         foreach (var btn in _sessionBtns) btn.Disabled = locked;
         // HOST while hosting would drop every guest to start the same session again

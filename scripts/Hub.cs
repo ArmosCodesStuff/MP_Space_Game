@@ -820,9 +820,14 @@ public partial class Hub : Node2D
         // enumerate in the same order): every peer lifts this pilot's parts by this pilot's levels.
         var args = new Variant[] { Net.LocalId, Character.Name, Character.Main, Character.Accent, (int)Character.Class, Character.Bought, Character.Level, Character.Peak,
                                    Character.LoadoutFor(Character.Class), Character.GearLevel.Keys.ToArray(), Character.GearLevel.Values.ToArray(), Character.Id,
-                                   Session.Rejoin };
-        if (toPeer == 0) Rpc(nameof(NetIdentity), args);
-        else             RpcId(toPeer, nameof(NetIdentity), args);
+                                   "" };
+        // THE REJOIN TOKEN GOES TO THE HOST ALONE (P10b). Every other peer hears the same identity with
+        // no token: a co-player that learnt it could claim this pilot's place (Session.MayClaim).
+        foreach (int to in toPeer != 0 ? new[] { toPeer } : Multiplayer.GetPeers())
+        {
+            args[^1] = to == 1 && !Net.IsHost ? Session.Rejoin : "";
+            RpcId(to, nameof(NetIdentity), args);
+        }
     }
 
     [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
@@ -843,6 +848,7 @@ public partial class Hub : Node2D
         bought = Progression.Afford(bought, level);
         characterId ??= "";
         if (characterId.Length > 64) characterId = "";
+        p.Token = token ?? "";
         // A HELD PLACE IS NOT CLAIMABLE BY NAME. The character id is the guest's own word, so a
         // peer announcing the id of a pilot ALREADY in the party took its place the moment that
         // pilot dropped: its party slot, its READY, its position, and every kill owed to it. The
@@ -870,12 +876,15 @@ public partial class Hub : Node2D
     private void NetToken(string token) { if (!Net.IsHost) Session.Rejoin = token ?? ""; }
     private readonly Dictionary<int, int> _replacing = new();  // an old connection let go -> the peer its place goes to
 
-    // A CLASS IS CHANGED AT REFIT, never in a fight (audit P8). A class change rebuilds the ship: a
-    // full hull and every cooldown at zero. Honest pilots change class only at home (REFIT), so a
-    // peer announcing another class in the arena, or while its ship is in combat, keeps the one it
-    // had. A first announcement (had == null) is always taken.
+    // A CLASS IS CHANGED AT REFIT, never in a fight (audit P8): RefitOpen is the one rule, read by the
+    // host for every announcement (Refit) and by the pilot's own REFIT, class picker and base menu
+    // (MayRefit), so an honest pilot never flies a class the host refused. A peer announcing another
+    // class in the arena, or while its ship is in combat, keeps the one it had; a first announcement
+    // (had == null) is always taken. A change taken keeps the hull's fraction and every cooldown
+    // (PlayerShip.FitClass), so announcing B and then A heals nothing and resets nothing.
+    public static bool RefitOpen(bool arena, bool inCombat) => !arena && !inCombat;
     public static ShipClass Refit(ShipClass? had, ShipClass want, bool arena, bool inCombat) =>
-        had is { } h && h != want && (arena || inCombat) ? h : want;
+        had is { } h && h != want && !RefitOpen(arena, inCombat) ? h : want;
 
     // ── missions: Threat Intelligence Operations (host-authoritative) ────────
     public enum MissionState { Idle, Opening, PortalOpen }
@@ -1860,10 +1869,12 @@ public partial class Hub : Node2D
     // A purchase: refit the ship now, and tell the host (it resolves hull and damage).
     public void PilotChanged() { ApplyLocalIdentity(); SendIdentity(); }
 
-    // REFIT: the only way into the ship menu (it costs 10%; see Yard.ResetCost).
+    // REFIT: the only way into the ship menu (it costs 10%; see Yard.ResetCost). At the base, out of a
+    // fight: the host would refuse the class it picks (Refit), and the pilot would fly one nobody else sees.
+    public bool MayRefit => RefitOpen(InArena, MyShip?.InCombat == true);
     public void ResetShip()
     {
-        if (IsInstanceValid(_creator) || InArena) return;            // REFIT is at the base
+        if (IsInstanceValid(_creator) || !MayRefit) return;
         Yard.ChargeReset();
         Progression.Refit();                                         // ...and a level, and the last point it spent
         if (SideIs<BasePanel>()) CloseSide();

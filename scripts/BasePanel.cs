@@ -21,6 +21,7 @@ public partial class BasePanel : PanelContainer
     private readonly Dictionary<string, (Label info, Button buy)> _rows = new();
     private Label _resetCost; private Button _reset;
     private double _armed;                    // seconds the RESET confirmation stays live
+    public const string ResetInCombat = "IN A FIGHT: NO RESET";
 
     private Yard Y => Hub.Yard;
 
@@ -136,8 +137,11 @@ public partial class BasePanel : PanelContainer
             Ui.SetText(_resetCost, "Cost now: " + string.Join(", ",
                 Gathering.All.Select(g => $"{Y.ResetCost(g.Resource):0} {g.Unit}")) + $", {Y.ResetCostCredits:0} credits"
                 + $", and a LEVEL{Progression.NextRefund}");
-            Ui.SetText(_reset, _armed > 0 ? "CLICK AGAIN TO PAY AND RESET" : "RESET");
-            _reset.Disabled = Hub.CreatorOpen;
+            // In a fight REFIT is shut, and says why (Hub.MayRefit: the host would refuse the class).
+            bool open = Hub.MayRefit;
+            if (!open) _armed = 0;
+            Ui.SetText(_reset, !open ? ResetInCombat : _armed > 0 ? "CLICK AGAIN TO PAY AND RESET" : "RESET");
+            _reset.Disabled = Hub.CreatorOpen || !open;
         }
     }
 

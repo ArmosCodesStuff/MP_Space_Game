@@ -41,10 +41,12 @@ on WebRTC; compiles, rung 2 green. engine-unproven: every rung owed in the final
 UPnP, the public-IP lookup (api.ipify.org), `Router.cs` (now `Adapters.cs`) and `fakeigd.py` are gone.
 A friend joins by an invite code (INVITE A FRIEND -> JOIN -> the reply back, taken off the host's
 clipboard) or by the host's typed address (the listener, TCP 27015+). Owed, in this order: rung 3 twice
-on two seeds (S2Checks, S2TokenChecks, R2BeatChecks, R2SwitchChecks, R3WordsChecks, the rewritten join
-failures), rung 4 (frames 51_invite_ready, 52_reply_countdown, 60_reply_expired, 61_join_failed;
-LINT: 0), rung 5 `six,six` (the roles moved: the `guest` joins by invite through the courier, drops,
-returns by its rejoin token, and returns again past a live old link; `guest2` knocks as another build),
+on two seeds (S2Checks, S2TokenChecks, R2BeatChecks, R2SwitchChecks, R3WordsChecks, GateFixRefitChecks,
+GateFixJoinBoxChecks, the rewritten join failures), rung 4 (frames 51_invite_ready, 52_reply_countdown,
+60_reply_expired, 61_join_failed, 20_base_refit_in_combat; LINT: 0), rung 5 `six,six` (the roles moved:
+the `guest` joins by invite through the courier, drops, returns by its rejoin token, and returns again
+past a live old link; `guest2` knocks as another build and never hears Guesty's token; the host reads
+the join's five times),
 rung 5 `-Wan` once (the blackhole watchdog), and once at `WARSHIPS_WAN=150,40,5` (the rate check);
 then `pack.ps1 -Dirty`, the one-machine check, rung 6. **Never call multiplayer working until the owner
 and a friend have played (network_webrtc.md §11).** Detail: `docs/plans/ledger_webrtc.md` (lane net2).
@@ -534,7 +536,7 @@ outstanding from the batch of 2026-09-23.)*
 **What changed for a player.** MULTIPLAYER -> HOST THIS WORLD, then INVITE A FRIEND: the invite is
 copied, to send privately. The friend pastes the whole message into JOIN; its reply is copied, with a
 30 s countdown. The host copies the friend's message and the game takes it (or it goes in the reply
-box). On one network or Radmin VPN the friend types the host's address instead (the panel lists them).
+box); a friend's JOIN box likewise fills itself from a copied invite. On one network or Radmin VPN the friend types the host's address instead (the panel lists them).
 The panel lists every invite not yet answered, with COPY and CANCEL; COPY NETWORK REPORT copies what a
 failed join should send the developer. A friend dropped from an invite is told to ask for a new code
 (its place held 90 s) and the host's panel has one ready; by address the game retries by itself. The
@@ -542,9 +544,11 @@ only outside contact left is a STUN lookup (Google's, then Cloudflare's) when a 
 
 **Built** (plan `docs/plans/network_webrtc.md`, ledger `docs/plans/ledger_webrtc.md`, jobs S2a-R5):
 - S2 (transport-free): the boss keeps sending while held (P4); a shockwave throws no structure or dummy
-  (P5); the host refuses a class change in the arena or in combat (P8); a sector report carries its trip
+  (P5); a class changes only at home out of a fight (P8: one rule, `Hub.RefitOpen`, read by the host and
+  by the pilot's REFIT, class picker and base menu, which reads IN A FIGHT: NO RESET), and a change keeps
+  the hull's fraction and every cooldown (`PlayerShip.FitClass`); a sector report carries its trip
   and a stale one is ignored (P9); held turrets re-keyed to the returning pilot (P10); the rejoin token
-  (P10b), which also takes a place from a live old link.
+  (P10b), sent to the host alone, which also takes a place from a live old link.
 - R2, the switch: `Net` on `WebRtcMultiplayerPeer`, both rows in one session, the pending table, the
   beat (`NetChannels.Beat` = 12) and its 8 s watchdog, the goodbye's WebRTC body, every hang-up through
   `Link.Hang`, retries only by typed address, `PretendAt` = Code | Auth. Deleted: ENet, UPnP/NAT-PMP/PCP,

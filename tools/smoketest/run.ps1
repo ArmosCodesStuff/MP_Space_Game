@@ -228,10 +228,12 @@ try {
   }
 
   if (-not $Solo -and -not $Fly) {
-    $host1 = Start-Run (@('--headless','--path',$W,'--','host') + $gx + $seedArg + $shiftArg)   'host'   180
+    # R4: -Wan adds the watchdog's 12 s blackhole, the drop, invite 2 and the live holder's invite 3 (about 25 s)
+    $lim = if ($Wan) { 205 } else { 180 }
+    $host1 = Start-Run (@('--headless','--path',$W,'--','host') + $gx + $seedArg + $shiftArg)   'host'   $lim
     Start-Sleep -Milliseconds 500
-    $g2 = Start-Run (@('--headless','--path',$W,'--','guest2') + $gx + $seedArg + $shiftArg) 'guest2' 180
-    $g1 = Start-Run (@('--headless','--path',$W,'--','guest') + $gx + $seedArg + $shiftArg)  'guest'  180
+    $g2 = Start-Run (@('--headless','--path',$W,'--','guest2') + $gx + $seedArg + $shiftArg) 'guest2' $lim
+    $g1 = Start-Run (@('--headless','--path',$W,'--','guest') + $gx + $seedArg + $shiftArg)  'guest'  $lim
     $all += Complete-Run $g1    '[guest] '
     $all += Complete-Run $host1 '[host]  '
     $all += Complete-Run $g2    '[third] '
