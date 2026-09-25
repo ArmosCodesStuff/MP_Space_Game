@@ -240,10 +240,12 @@ try {
     $all += Complete-Run $host1 '[host]  '
     $all += Complete-Run $g2    '[third] '
 
-    # the dedicated two-player arena run: after the three-player run, on its own port
-    $ah = Start-Run (@('--headless','--path',$W,'--','ahost') + $seedArg + $shiftArg)  'ahost'  150
+    # the dedicated two-player arena run: after the three-player run, on its own port. The guest's lanes run one after
+    # another (about 5 min with its refits waiting out a fight, Hub.MayRefit); the host's limit starts when the guest ends.
+    $alim = if ($Wan) { 600 } else { 480 }
+    $ah = Start-Run (@('--headless','--path',$W,'--','ahost') + $seedArg + $shiftArg)  'ahost'  240
     Start-Sleep -Milliseconds 500
-    $ag = Start-Run (@('--headless','--path',$W,'--','aguest') + $gx + $seedArg + $shiftArg) 'aguest' 150
+    $ag = Start-Run (@('--headless','--path',$W,'--','aguest') + $gx + $seedArg + $shiftArg) 'aguest' $alim
     $all += Complete-Run $ag '[aguest]'
     $all += Complete-Run $ah '[ahost] '
     $want += 5

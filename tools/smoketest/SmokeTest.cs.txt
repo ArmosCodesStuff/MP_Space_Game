@@ -1714,7 +1714,7 @@ public partial class _Test : Node
             typeof(Net).GetMethod("Fingerprint", BindingFlags.NonPublic | BindingFlags.Static, null, new[] { typeof(System.Collections.Generic.List<string>) }, null)
                        .Invoke(null, new object[] { parts });
             bool sheet = parts.Contains("sheet Battleship.hull=500") && parts.Contains("sheet Carrier.fighter_speed=352");
-            bool gear = parts.Any(p => p.StartsWith("Equipment.All=") && p.Contains("Id=cv_elite_3") && p.Contains("fighter_speed:2"));
+            bool gear = parts.Any(p => p.StartsWith("Equipment.All=") && p.Contains("Id=chip_combat_t1,") && p.Contains("Pct={@damage:0.08,max_speed:-0.04}"));
             bool prices = parts.Any(p => p.StartsWith("Economy.All=") && p.Contains("Id=miner_count") && p.Contains("BaseCost=400"));
             // a wall level (ability 2 at level 3, level_walls.md) and a boss gate (Auto-sell after boss 3) --
             // both moved out of hashed fields and into Unlocks.All, so the table itself must be hashed now.
@@ -2015,7 +2015,16 @@ public partial class _Test : Node
     // A refit, ANNOUNCED: PilotChanged applies it here and tells every peer, so a multiplayer
     // scenario can fly one of the nine and have the other side see which hull it is. Offline,
     // SendIdentity returns at once, so the solo callers are unchanged.
-    async Task SetClass(ShipClass c) { Character.Class = c; H.PilotChanged(); await Wait(0.1); }
+    // A GUEST REFITS AS AN HONEST PILOT DOES: only once Hub.MayRefit holds (P8; its InCombat is the host's figure). The host
+    // keeps the class a guest announces in a fight (Hub.Refit) while the guest's own ship takes it, so every press after
+    // it reached a copy of another class (a1-arena-stall: a destroyer's Q and E landed on a carrier the gunships kept in
+    // combat). Calm held 0.5 s and read again, so a packet late on either side never sits on the edge.
+    async Task SetClass(ShipClass c)
+    {
+        if (Net.IsOnline && !Net.IsHost && Character.Class != c)
+            for (int i = 0; i < 4; i++) { await RealTime(() => H.MayRefit, Wan ? 40 : 30); await Wait(0.5); if (H.MayRefit) break; }
+        Character.Class = c; H.PilotChanged(); await Wait(0.1);
+    }
     // R at a cursor: the sentry row reads the pilot's AimPoint as it is pressed (the host's copy of
     // its 20 Hz intent), so the press is set up the way the wire would set it.
     static void SentryAt(PlayerShip s, Vector2 cursor) { s.AimPoint = cursor; s.UseAbility("deploy", 0); }
@@ -9971,6 +9980,9 @@ public partial class _Test : Node
         H.ClearSelection(); me.Velocity = Vector2.Zero;
         Check(marked2 && swinging2 && ripped && ended == HelmEnd.Drive && cooled,
               $"arena guest: hooked again ({marked2}), swinging ({swinging2}), V pressed -- its move ended {ended} (Drive) and the host's chunk drawn here within 1.5 s ({ripped}, not at the 5 s expiry); cooling {cool2:0.0} (> 14.5)");
+        // off the practice range before the next refit: hauled 250 u off the hulk, its point defence has the practice
+        // fighters in reach and keeps the host's copy in combat for good (Hub.Refit would keep the destroyer)
+        me.Position = Hub.BasePos + new Vector2(2600, 2400); me.Velocity = Vector2.Zero;
     }
 
     // ── SLICE 6a, RUNG 5: THE RIP IN A PARTY OF TWO (kits_v31 §3.3 Proves: "in a party of 2, the rip is 1% of the
@@ -10162,6 +10174,8 @@ public partial class _Test : Node
     // bar is gone here 6.5 s on.
     async Task LaneA6cCurtainGuestChecks()
     {
+        await SetClass(ShipClass.HeavyWarden);
+        await RealTime(() => Me.Class == ShipClass.HeavyWarden && Math.Abs(Me.MaxHp - 270) < 1e-6, Wan ? 20 : 10);
         var me = Me; me.AutopilotTo = null; bool demo = me.Demo; me.Demo = true;
         me.Velocity = Vector2.Zero;
         var at = me.Position; var dir = Vector2.Right.Rotated(VaryAngle()); float aimed = Vary(300f, 600f);
@@ -13193,12 +13207,13 @@ public partial class _Test : Node
     sealed class LaneA6dPepperSeen { public int Darts, Priced, Steered; public bool Done; public double T; }
     LateSampler LaneA6dPepperHostWatch(LaneA6dPepperSeen seen)
     {
-        var mine = new HashSet<Shot>();
+        var counted = new HashSet<Shot>();   // every dart once (a steered one leaves `mine` and must not be counted again)
+        var mine = new HashSet<Shot>();      // the counted darts not yet seen steering
         var watch = new LateSampler { Probe = () =>
         {
             if (seen.Done || H.Ships.FirstOrDefault(s => !s.Mine) is not { Class: ShipClass.LightDart } g) return false;
             foreach (var x in Nodes<Shot>().Where(x => x.Kind == Shots.Pepper && x.Source == g && x.Alive))
-                if (mine.Add(x)) { seen.Darts++; if (Math.Abs(x.Damage - 7.5) < 1e-6) seen.Priced++; }
+                if (counted.Add(x)) { mine.Add(x); seen.Darts++; if (Math.Abs(x.Damage - 7.5) < 1e-6) seen.Priced++; }
             foreach (var x in mine.Where(x => IsInstanceValid(x) && x.Alive).ToList())
                 if (Mathf.Abs(Mathf.AngleDifference(x.Dir.Angle(), (g.AimPoint - x.GlobalPosition).Angle())) < Mathf.DegToRad(10f)) { seen.Steered++; mine.Remove(x); }
             if (seen.Darts > 0) seen.T += GetProcessDeltaTime();
@@ -14538,10 +14553,14 @@ public partial class _Test : Node
               && Cat(HullCat.Light) == 10 && chips.Count == 6 && chips.All(l => l.Slot == GearSlot.Chip) && ids
               && chips.Count(l => l.Kind == ChipKind.Combat) == 3 && chips.Count(l => l.Kind == ChipKind.Utility) == 3,
               $"the catalogue: 42 category lines (capital 11, freighter 10, heavy 11, light 10) and 6 chips (3 combat, 3 utility), each at ten tiers as {{stem}}_t{{n}}: 480 drops ({drops.Count}, {lines.Length} lines)");
-        // no two lines of a category share a (slot, lean): the ups with their T1 shares
-        string Lean(ItemLine l) => l.Slot + ":" + string.Join(",", l.Up.OrderBy(u => u.key, StringComparer.Ordinal).Select(u => $"{u.key}{u.t1:0.###}"));
+        // no two lines of a category share a (slot, lean): the ups with their T1 shares, and a rider's
+        // count rows ("+25% and +1" is its own lean, §3.1 R8: Magazine Core beside Salvo Core)
+        string Lean(ItemLine l) => l.Slot + ":" + string.Join(",", l.Up.OrderBy(u => u.key, StringComparer.Ordinal).Select(u => $"{u.key}{u.t1:0.###}"))
+                                   + string.Concat(l.Rider.OrderBy(r => r.stat, StringComparer.Ordinal).Select(r => $"+{r.stat}"));
+        bool leanRider = Lean(lines.First(l => l.Stem == "magazine_core")) == "Utility:@output0.25+bomber_ammo+broadside_volleys"
+                         && Lean(lines.First(l => l.Stem == "swarm_rack")) == "Utility:@output0.25+flare_count+hunter_count";
         var dup = lines.GroupBy(l => (l.Cat, Lean(l))).Where(g => g.Count() > 1).Select(g => g.Key.Item2).ToList();
-        Check(dup.Count == 0, $"no two lines of a category share a slot and a lean ({string.Join("; ", dup)})");
+        Check(dup.Count == 0 && leanRider, $"no two lines of a category share a slot and a lean, a rider's +1 its own (Magazine Core beside Salvo Core, Swarm Rack beside Tactical Core) ({string.Join("; ", dup)})");
         // WHAT A HULL WEARS: every line of its category (a rider only where it has the count), every
         // chip, and nothing of another category. Three hulls of three categories, and the two riders.
         int Wears(ShipClass c) => lines.Count(l => l.Cat == Hulls.Of(c) && Equipment.Fits(Equipment.ById($"{l.Stem}_t1"), l.Slot, c));
@@ -14569,11 +14588,14 @@ public partial class _Test : Node
                                  || l.Down.Any(d => d.share < -0.50) || l.Down.Sum(d => d.share) < -0.50).Select(l => l.Stem).ToList();
         var growing = lines.Where(l => l.Down.Any(d => !NearI(Equipment.ById($"{l.Stem}_t1").Pct[d.key], Equipment.ById($"{l.Stem}_t10").Pct[d.key]))).Select(l => l.Stem).ToList();
         var counts = drops.Where(i => i.Add.Count > 0).ToList();
-        Check(over.Count == 0 && growing.Count == 0 && counts.All(i => i.Add.Values.All(n => n == Tiers.Plus(i.Line.Rider.First(r => i.Add.ContainsKey(r.stat)).b, i.Tier)))
+        // each count row its own +n, by its own base: Magazine Core T7 is +2 volleys (6) and +1 torpedo (4)
+        var mag7 = Equipment.ById("magazine_core_t7");
+        Check(over.Count == 0 && growing.Count == 0 && counts.All(i => i.Add.All(kv => kv.Value == Tiers.Plus(i.Line.Rider.First(r => r.stat == kv.Key).b, i.Tier)))
+              && NearI(mag7.Add["broadside_volleys"], 2) && NearI(mag7.Add["bomber_ammo"], 1)
               && counts.Where(i => i.Tier == 1).All(i => i.Add.Values.All(n => NearI(n, 1)))
               && lines.Where(l => l.Conditional).All(l => l.Down.Length == 0)
               && lines.Where(l => !l.Conditional && l.Down.Length == 0 && l.Slot != GearSlot.Chip).Select(l => l.Stem).SequenceEqual(new[] { "buffer_array" }),
-              $"the owner's caps: no T1 up over +25% (18% reach, 22% top), no price past -50%, a count +1 at T1, the price the same at T10 as at T1, every conditional line unpriced, and Buffer Array the one unpriced unconditional line (over {string.Join(",", over)}; growing {string.Join(",", growing)})");
+              $"the owner's caps: no T1 up over +25% (18% reach, 22% top), no price past -50%, a count +1 at T1 and each count its own +n (Magazine Core T7: +2 volleys, +1 torpedo), the price the same at T10 as at T1, every conditional line unpriced, and Buffer Array the one unpriced unconditional line (over {string.Join(",", over)}; growing {string.Join(",", growing)}; T7 +{mag7.Add["broadside_volleys"]} volleys +{mag7.Add["bomber_ammo"]} torpedoes)");
         // THE CHIP BUDGET (kits v3.1 decision 6, settled by §8 R7): chip rows +8% at T1, x1.10 a tier,
         // no salvage level on a chip slot, at most 3 of a kind, six slots
         var combat10 = Equipment.ById("chip_combat_t10");
@@ -14599,8 +14621,8 @@ public partial class _Test : Node
         for (int k = 0; k < 3; k++) bsl[Equipment.CoreSlots + k] = slow[k];
         double crawl = new ShipStats(ShipClass.Battleship, Equipment.Bonuses(ShipClass.Battleship, bsl, 14, NoLevels))["max_speed"];
         Check(NearI(Worst(ShipClass.Battleship, "max_speed"), -1.08) && NearI(Worst(ShipClass.Battleship, "hull"), 0) && NearI(Worst(ShipClass.LightDart, "hull"), -0.15)
-              && NearI(crawl, 104 * 0.1),
-              $"no stack takes a number to zero: a battleship paying top speed in four slots and three combat chips is -108%, held at the x0.1 floor ({crawl:0.0} u/s of 104); the worst hull on a battleship 0, on a dart -15% ({Worst(ShipClass.Battleship, "max_speed"):0.00})");
+              && NearI(crawl, 88 * 0.1),
+              $"no stack takes a number to zero: a battleship paying top speed in four slots and three combat chips is -108%, held at the x0.1 floor ({crawl:0.0} u/s of 88); the worst hull on a battleship 0, on a dart -15% ({Worst(ShipClass.Battleship, "max_speed"):0.00})");
         // EVERY STAT A PART NAMES IS REAL on every hull it fits (a role on at least one of its rows),
         // and no part changes a turret count. An UP always is. A PRICE may find no row only where the
         // hull has no such system at all (ledger_items R-D5): the battleship has no ability reach, so
@@ -14635,7 +14657,7 @@ public partial class _Test : Node
             var anyHull = kit.Where(i => !carries.Contains(i.Id)).ToList();
             // and what a SAVED loadout does with one that no longer fits: the hull's own, as ever
             var saved = Equipment.Sanitize(ddC, new[] { "bs_main_battery", "std_drive", "basic_deflector", "reinforced_frame", "dd_missile_rack", "", "", "", "", "", "" }, 14);
-            Check(wrongHull.Count == 0 && carries.Count == 21 && anyHull.Count == 3
+            Check(wrongHull.Count == 0 && carries.Count == 22 && anyHull.Count == 3
                   && carries["freight_main_gun"].Count() == 3 && carries["heavy_main_gun"].Count() == 1
                   && carries["light_main_gun"].SequenceEqual(new[] { ShipClass.LightEcho })
                   && carries["light_pepperbox"].SequenceEqual(new[] { ShipClass.LightDart })
@@ -14645,7 +14667,7 @@ public partial class _Test : Node
                   && !Equipment.Fits(Equipment.ById("freight_bubble"), GearSlot.Utility, ShipClass.FreightTender)
                   && !Equipment.Fits(Equipment.ById("bs_main_battery"), GearSlot.Weapon, ddC)
                   && saved[0] == "dd_main_battery" && saved[4] == "dd_missile_rack",
-                  $"a kit part fits the hulls born with it and no others: twenty-one named by a class row -- one cargo gun on the three freighters, one flak battery on the warden, each light its own gun (the Echo's repeater, the Dart's pepperbox, the Wraith's scattergun) -- and the drive, the deflector and the frame on any hull; a battleship's mount saved on a destroyer comes back as the destroyer's own ({wrongHull.Count} wrong: {string.Join(", ", wrongHull)})");
+                  $"a kit part fits the hulls born with it and no others: twenty-two named by a class row -- one cargo gun on the three freighters, one flak battery on the warden, each light its own gun (the Echo's repeater, the Dart's pepperbox, the Wraith's scattergun) -- and the drive, the deflector and the frame on any hull; a battleship's mount saved on a destroyer comes back as the destroyer's own ({carries.Count} named, {anyHull.Count} any hull, {wrongHull.Count} wrong: {string.Join(", ", wrongHull)})");
         // a part for another category changes nothing, even named in the loadout
         var wrong = Equipment.Default(bsC); wrong[0] = "hot_barrel_t10";
         var kitB = Equipment.Bonuses(bsC, Equipment.Default(bsC), 14, NoLevels); var wrongB = Equipment.Bonuses(bsC, wrong, 14, NoLevels);

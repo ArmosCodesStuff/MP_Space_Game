@@ -169,6 +169,12 @@ Testing (owner, standing)
 - Every change carries its check (CLAUDE.md §6). After the features: new Python scenario tools and
   smoke tests covering every mechanic for every class, every ability, and interactions between
   heavies, bosses and lights for every weapon and platform.
+- (2026-09-25, later) SCENARIOS BEFORE SPLITS, NEVER A REMAKE ("continue with your suggested modification"): the 563 harness
+  methods (about 48 red signatures) are the proof until the bar is green; then the scenarios lane converts each check that
+  places things and asserts a literal into a row of the scenario table (class, ability, foe, geometry, literal; rows generated
+  from the cards), one method at a time, each row proved against the method it replaces before the method is deleted; then
+  the PlayerShip/Hub split, proved by the rows. Code and checks are never rewritten at once. The counts (methods that fit a
+  row, literals outside row tables, what to split) come from `fable_code_read.md`.
 
 ## What is built, and what is next
 
@@ -188,5 +194,8 @@ Next, in order:
 5. Sprites (enemies, bosses, fleet, siege first; player ships with their kits).
 6. Items by hull category.
 7. The full testing program, then the bar, the record, a push to both branches and a release.
+8. The scenarios lane (tester.md "after the release"): the table, `tools/scenarios.py`, then the method-by-method
+   conversion, each row proved against the method it replaces; `fable_code_read.md` lists the methods that fit.
+9. The PlayerShip/Hub split, proved by the rows; then the rest of the fable_report lists (harness split, enums, CHANGES fold).
 
 The engine ladder (rungs 3-6) runs only on a Windows PC with Godot 4.7.2 .NET (`tools\find-godot.ps1`).

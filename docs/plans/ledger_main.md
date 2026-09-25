@@ -1,23 +1,22 @@
-# Coordinator state -- last event 15:10: review fixes net merged (a83572d); lt retrying (rvlt_c on slot 0, 15:08); then round 1.
-# The test phase runs as task wbbiuayve (resumed at 14:41 with the fails file collapsing repeated lines, 59669ac). The baseline
-# solo has 41 fails + 1 throw, the cap/fr merges added 2 throws (round 1's triage fixes FAIL LANEs first).
+# Coordinator state -- last event 18:40: round 1 merges: items-tables 264d03a, arena-stall 5ec1c98 (ledger_test.md rows); the check group re-runs in wt_fix0.
+# Baseline reds: solo 41 fails + 1 throw at slot 0, 206 + 3 thrown lanes at slot 1, six ~240 + 3 lanes, screens 5 exc / LINT 2.
 Under 25 lines; Edit tool only; commit FIRST after every event; the hook re-injects it after a compact and cross-checks each `task <id>`.
 
 ## Running (one row per workflow; the form `task <id> (<run id>)` is what tools/lanes.ps1 parses)
-- test-phase / task wu5xd3g1m (wf_8c62491c-3b2, attempt 4 at 16:33, review [] = all 5 scopes merged, last lt 68ad42c): rounds (5 chains, triage, pooled fixes) -> seed sweep ->
-  extras -> bar -> release. lands: 3 lines to the owner + the frames (framesForOwner, netOwed); a stop -> docs/plans/ledger_test.md
-  and the journal, fix, relaunch: Workflow({scriptPath: <scripts>\test-phase.js, resumeFromRunId: "wf_8c62491c-3b2", args: {attempt: 2, review: []}}).
-  Watchdog Monitor (agents.ps1 -Minutes 30 every 10 min, 30-min timeout) re-armed at each expiry while it runs.
+- test-phase / task wxmo7btan (wf_8c62491c-3b2, attempt 4 resumed 19:17: premerged arena-stall + the 4-task check group 86be177 in wt_fix0, done 5, preTasks a2 = round2_tasks.json): rounds (5 chains, triage, pooled fixes) -> seed sweep -> extras -> bar
+  -> release. lands: 3 lines to the owner + frames (framesForOwner, netOwed); a stop -> ledger_test.md + journal, fix, relaunch per Next 1. Watchdog Monitor re-armed at expiry.
 
-## Landed (verdict first; delete the row once its action is done): none
+## Landed (verdict first; delete the row once its action is done): none (code-read 17b94df: do not rewrite; round>=2 triage reads it)
 
 ## Next (1 is the exact next call, copy-pasteable)
-1. Wait for task wu5xd3g1m; take its return as above (slots proved 16:40: random seeds on slot 3, box ports bound).
-2. After the release: the two-machine test (NOTES.txt) as a ledger row; the fable_report_1/2 "after the release" lists, each a lane + retrospective.
+1. Wait for task wxmo7btan (round 1: two merges; round 2: 17 pre-authored fixes in 5 groups, no chains, no triage; round 3 measures). A stop ->
+   relaunch with the same args (premerged: arena-stall fix1, a1-rip-dummy4 ids x4 fix0; done: items-tables + the 3 group ids; preTasks a2 from
+   docs/plans/round2_tasks.json) plus every task merged since per ledger_test.md in done; the cache replays only an unchanged PREFIX of calls.
+2. After the release, in order (owner 17:20, README next 8-9): two-machine test row; scenarios lane (row-by-row conversion); PlayerShip/Hub split; fable_report lists.
 
-## Owner questions (one line each, with its default)
-- none open (today's rulings: README, Agents).
+## Owner questions (one line each, with its default): none open (today's rulings: README, Agents).
 
 ## Notes (merge risks, promised follow-ups; nothing done, nothing historical)
 - Cards' OPEN lines for triage: BB fire-mode key (spec R, built G); Tender numbers have no spec file; DD `longlance`; no grapnel_rip sound.
+- Retrospective: a fix prompt with its evidence is ~2,000 chars (P cut fixOne's tail at 1,500 too); six is ~8 min now (arena roles 480 s).
 - Unverified work: origin/backup/unverified; version-l/main move only on a green bar. Lane defaults for the release notes: each lane ledger.
