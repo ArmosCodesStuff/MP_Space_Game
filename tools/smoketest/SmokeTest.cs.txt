@@ -4654,7 +4654,7 @@ public partial class _Test : Node
             var n = GrapnelNums(Mark);
             if (k == 2) n.Time = Vary(2.6f, 3.0f);
             string why = dd.BeginHelm(HelmMoves.Tether, dummy, n);
-            HelmMoves.Confirm(dd, Mark, dummy, n.Time + 1);
+            HelmMoves.Confirm(dd, dummy, n, n.Time + 1);
             for (int i = 0; i < 60 * 3 && dd.Helm.On && dd.Helm.Pulling; i++) await Frame();
             double taut = dd.Helm.T, want = 0.15 + (d0 - 296f) / 450.0;
             float off = dd.Position.DistanceTo(dummy.Position) - dummy.HitRadius;
@@ -4691,7 +4691,7 @@ public partial class _Test : Node
             Place(Vary(400f, 690f), 0f);
             await Frame();
             dd.BeginHelm(HelmMoves.Tether, dummy, GrapnelNums(Mark));
-            HelmMoves.Confirm(dd, Mark, dummy, 6);
+            HelmMoves.Confirm(dd, dummy, GrapnelNums(Mark), 6);
             await Wait(Vary(0.3f, 0.9f));
             var want = k == 0 ? HelmEnd.Webbed : k == 1 ? HelmEnd.Disabled : HelmEnd.Drive;
             if (k == 0) dd.ApplyStatus(Status.Pinned, 1.0);
@@ -4702,6 +4702,38 @@ public partial class _Test : Node
             Check(!dd.Helm.On && dd.Helm.Ended == want, $"F8 helm: {want} ends the move within two frames ({dd.Helm.Ended}, on {dd.Helm.On})");
             dd.Statuses.Clear(Status.Pinned); dd.Statuses.Clear(Status.Disabled);
             dd.Sl(Mark).Left = 0; dd.Sl("warp").Cool = 0; dd.Velocity = Vector2.Zero;
+        }
+    }
+
+    // ── F8 WARDS: while the host's mark runs, a guest's reports may claim the move's speed ──────────────
+    // The host's reading of a report (PlayerShip.ApplyState) clamps its speed to ReportTop: the hull's top,
+    // or a marked move's ward -- the grapnel's 450 u/s pull, or hypot(top, reel) for a slower pull. Read on
+    // the host's own destroyer, with a clamp of its own (Drives.Clamp, F24's rule), at report speeds a
+    // pull really has; the ward goes with the mark (released, run out).
+    async Task LaneA4WardChecks()
+    {
+        await SetClass(ShipClass.Destroyer);
+        var dd = Me; dd.AutopilotTo = null;
+        var dummy = H.GetNode<TargetDummy>("TargetDummy1");
+        const string Mark = "open6";
+        float top = dd.TopNow;
+        for (int k = 0; k < 3; k++)
+        {
+            HelmMoves.Release(dd, Mark);
+            var n = GrapnelNums(Mark);
+            if (k == 2) n.Pull = Vary(60f, 110f);                // a pull slower than the swing: the ward is the swing's
+            float ward = k == 2 ? new Vector2(top, 100f).Length() : 450f;
+            HelmMoves.Confirm(dd, dummy, n, Vary(0.4f, 0.8f));
+            var v = Vector2.Right.Rotated(VaryAngle()) * Vary(top * 1.2f, ward * 0.98f);
+            var during = new DriveRun();
+            var kept = Drives.Clamp(during, v, dd.ReportTop, dd.StrafeNow);
+            float wardNow = dd.ReportTop;
+            if (k == 1) await Wait(1.0); else HelmMoves.Release(dd, Mark);
+            var after = new DriveRun();
+            var cut = Drives.Clamp(after, v, dd.ReportTop, dd.StrafeNow);
+            Check(Math.Abs(wardNow - ward) < 0.01f && kept == v && during.Clamped == 0
+                  && Math.Abs(dd.ReportTop - top) < 1e-3f && after.Clamped == 1 && Math.Abs(cut.Length() - top * 1.1f) < 0.01f,
+                  $"F8 ward: marked, a report at {v.Length():0} u/s stands (ReportTop {wardNow:0.0}, want {ward:0.0}); {(k == 1 ? "the mark run out" : "released")}, it is cut to {cut.Length():0.0} (the hull's {top:0} x 1.1)");
         }
     }
 
@@ -10098,6 +10130,7 @@ public partial class _Test : Node
             await LaneA4PayloadChecks(yonder);
             LaneA4TetherChecks(yonder);
             await LaneA4HelmLiveChecks(yonder);
+            await LaneA4WardChecks();
 
             // ── WARRIOR: two and a half times its speed, half the damage, then the EMP ──
             await SetClass(ShipClass.HeavyWarrior);

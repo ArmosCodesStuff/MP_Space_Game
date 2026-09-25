@@ -93,3 +93,20 @@ A PRE with no POST is an interrupted job: compare the hashes, revert half-made e
   Traps to watch: the live checks use TargetDummy1 (46 u hull, stop 296 u) and the destroyer's `open6` slot as the
   host's mark; a stray web from an earlier check's raider would end a run as Webbed.
 - Checkpoint: the commit after this entry. Next: kits4-J3.
+
+### kits4-J3 · PRE · F8 wards: the host's clamp and pricing read a marked move's speed -- tier opus
+- Intent: K4-5. Confirm(s, anchor, nums, time) also sets the ward (max of the pull and hypot(top, reel)) on the
+  ship's HelmRun (host side); HelmMoves.Ward(s) reads it while the mark's slot runs; PlayerShip.ReportTop =
+  max(TopNow, ward) feeds Drives.Priced / Drives.Clamp in ApplyState. Checks: LaneA4WardChecks.
+- Files: scripts/HelmMoves.cs, scripts/PlayerShip.cs, tools/smoketest/SmokeTest.cs.txt, this ledger.
+- HEAD 46e558328c60beefcb5771b5db46668b61c0d7d3 · HelmMoves.cs f2f2129bb29d99eab9cb856200213488cff2a2d5 · PlayerShip.cs 82b3d73988d6ad32631f194c95716f02232da973 · SmokeTest.cs.txt d484864deea8108eba7510cdce5ae572d1955e03
+### kits4-J3 · POST
+- Verdict: compiles; typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final
+  test phase. `HelmMoves.Confirm(s, anchor, nums, time)` (was (s, slot, anchor, time)) marks the slot and sets the
+  ward on `HelmRun.WardSlot / Ward` = max(Pull, hypot(TopNow, Reel)); `HelmMoves.Ward(s)`; `Release` drops it.
+  PlayerShip `ReportTop` = max(TopNow, ward); ApplyState's Priced and Clamp read it (B's lines, the figure only).
+- Files: scripts/HelmMoves.cs, scripts/PlayerShip.cs, SmokeTest.cs.txt (NEW `LaneA4WardChecks`; the two Confirm
+  calls in LaneA4HelmLiveChecks moved to the new signature).
+- Owed at rung 3 (`solo` x2): 3 x "F8 ward: marked, a report at N u/s stands ...". Owed at rung 5 with 6a (the first
+  row that marks a guest): "a guest's pull reaches the host unclamped, hull within 60 u" (v2's swing line).
+- Checkpoint: the commit after this entry. Next: kits4-J4 (F10, and the record).

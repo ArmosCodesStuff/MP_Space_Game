@@ -10,6 +10,10 @@ using System;
 // that drags, swings or throws it is flown there too: while a HelmRun lasts, LocalFlight calls this
 // instead of Steer (B's helm, untouched), and the reports carry the result like any other flight.
 //
+// WARDS. While the host's mark runs, the host lets that ship's reports claim the move's speed (Ward):
+// its speed clamp and its jump pricing (Drives, F24) read it instead of the hull's own top, so a 450
+// u/s pull is neither cut back to the helm's 117 nor priced as a jump.
+//
 // HOST CONFIRM. The owner starts a move on its own press, at once (PlayerShip.BeginHelm); the host,
 // taking the same press, MARKS the move's slot (Confirm: Left = the move's time, N = the anchor's
 // NetId) and later ends it (Release, or the slot's own clock). The owner casts off if the mark has not
@@ -53,6 +57,10 @@ public class HelmRun
     public float Side;           // the speed round the anchor (starboard +); NaN until the move reads it
     public bool Pulling, Confirmed;
     public HelmEnd Ended;        // the last move's end
+    // THE HOST'S SIDE of a guest's move (the WARD): the slot it marked and the speed it lets the
+    // guest's reports claim while that slot runs.
+    public string WardSlot;
+    public float Ward;
     public bool On => Move != null;
 }
 
@@ -194,17 +202,25 @@ public static class HelmMoves
 
     // ── the host ────────────────────────────────────────────────────────────────────────────────
     // THE MARK: the host took the press. Only the host speaks for it; its report carries the slot.
-    public static void Confirm(PlayerShip s, string slot, IHittable anchor, double time)
+    // `time`: the slot's (the move's own Time, as a rule). It wards the move's fastest: the pull, or
+    // the swing round at the hull's top while it reels.
+    public static void Confirm(PlayerShip s, IHittable anchor, HelmNums n, double time)
     {
         if (!Net.Sim || anchor == null) return;
-        ref var sl = ref s.Sl(slot);
+        ref var sl = ref s.Sl(n.Slot);
         sl.Left = time; sl.N = anchor.NetId;
+        s.Helm.WardSlot = n.Slot;
+        s.Helm.Ward = Math.Max(n.Pull, new Vector2(s.TopNow, n.Reel).Length());
     }
+    // THE WARD NOW: the speed the host lets this ship's reports claim, 0 once the mark is gone.
+    public static float Ward(PlayerShip s) =>
+        s.Helm.WardSlot != null && s.Sl(s.Helm.WardSlot).Left > 0 ? s.Helm.Ward : 0f;
     // ...and its end, before the slot's own clock: the owner casts off when the report says so.
     public static void Release(PlayerShip s, string slot)
     {
         if (!Net.Sim) return;
         ref var sl = ref s.Sl(slot);
         sl.Left = 0; sl.N = 0;
+        if (s.Helm.WardSlot == slot) s.Helm.WardSlot = null;
     }
 }

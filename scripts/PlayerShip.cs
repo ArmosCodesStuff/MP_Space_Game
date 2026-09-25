@@ -825,6 +825,8 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     public string BeginHelm(HelmMove m, IHittable anchor, HelmNums n) =>
         Mine ? HelmMoves.Begin(this, _helm, m, anchor, n) : "NOT THE OWNER";
     public void CastOff() => HelmMoves.End(this, _helm, HelmEnd.Pressed);
+    // THE TOP A GUEST'S REPORT MAY CLAIM, on the host: its hull's, or a marked move's ward (F8).
+    public float ReportTop => Math.Max(TopNow, HelmMoves.Ward(this));
     // A DRIVER'S HOLD OF V -- the title screen's ship, or a check -- read with the pilot's own key.
     public bool DriveHeld;
     public bool PressDrive() => Drives.Press(this, _drive);
@@ -1345,9 +1347,9 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             // THIS WORLD: entering one drops every peer's sector until it reports again (Hub.EnterSector),
             // and a guest's last reports from the world it left can still land here: priced, they would
             // make its first report from the new spawn a snap, and a capital would arrive DISABLED.
-            if (Hub.PeerSector(OwnerId) == Hub.Sector) Drives.Priced(this, _drive, _netPos, warping, age, Drives.SpeedCap(TopNow, StrafeNow));
+            if (Hub.PeerSector(OwnerId) == Hub.Sector) Drives.Priced(this, _drive, _netPos, warping, age, Drives.SpeedCap(ReportTop, StrafeNow));
             else _drive.From = null;
-            _netVel = Drives.Clamp(_drive, _netVel, TopNow, StrafeNow);
+            _netVel = Drives.Clamp(_drive, _netVel, ReportTop, StrafeNow);
         }
     }
 
