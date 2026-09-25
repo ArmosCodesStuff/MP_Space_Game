@@ -13,9 +13,9 @@ Engine outputs for the old-way batches: S = C:\Users\logan\AppData\Local\Temp\cl
 - wf_2b58e76d-117 / task wx9xf98c3, "kits-heavy-missile-diagnose" (owner asked for 5 agents): 5 opus read-only angles (check, missile, door,
   launcher, logs) on "lands 35 (0)", then a synthesis appends COORDINATOR NOTE 2 (cause + exact fix) to wt_kits' ledger, or reports already_fixed.
   On return: tell the owner the cause in one line. The kits writer picks the note up at its next PRE.
-- wf_0c3ae007-535 / task w3gvr44ua, "lane-slots" (worktree WarShips_wt_slots, wt/slots from wt/net da35d9d + version-l cd8eb46).
-  rungs.ps1 slots + per-tree lock + UTF-8 summary, harness --port-shift / P(), 3-chain concurrency proof, opus gate, then a haiku merge
-  (net is now in, so it may merge itself). Returns {slots{slots=proven default}, gate, merge}. merge=false: merge by hand.
+- wf_d333d7cd-747 / task w7j1zzr40, "lane-slots" (relaunch; worktree WarShips_wt_slots). S1 done at 985d4d8 (rungs.ps1 -Slot/-Slots,
+  per-tree lock, UTF-8 summary). First run: agent 1 stopped_context, agent 2 took the owner's "2 hours?" as its instruction and stopped;
+  the prompt now says owner messages are for the coordinator. Now: S2 harness --port-shift / P(), S3 docs, 3-chain proof, opus gate, haiku merge. Returns {slots{slots=proven default}, gate, merge}. merge=false: merge by hand.
 
 ## Next
 1. Merge slots, kits, art into version-l (net merged: eb5b2cb, after the coordinator fixed gate 3's two comment defects in fa20b7f).
