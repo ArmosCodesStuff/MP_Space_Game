@@ -1,0 +1,50 @@
+# Ledger: class-kits batch, lane E (wings)
+
+Writer: one agent in worktree `WarShips_wt_wings`, branch `wt/wings`, started at f168508.
+Spec: `kits_v31.md` §3.2 (Carrier), §6 (F5, F13), §8 (lane E); `kits_v3.md` §3.1 + §5 (F13);
+`kits_v2.md` CARRIER card (gunships) + §5. Build phase: no engine run; every check written now,
+run in the final test phase. A PRE with no POST is an interrupted job (CLAUDE.md §5).
+
+## Decisions taken where the spec is silent (defaults, each the smallest reading)
+
+- **W1** The lane builds the MACHINERY, not the keys: `Wings.All` rows `gunship` (2) and `patrol`
+  (3), the Orbit way, the ring pick, `PlayerShip.Sortie(kind, target)`, the stat rows. Lane A's
+  slice 6a adds the Carrier's E (gunships, targets[]) and Q (Supercarrier) ability rows, their
+  cooldowns (`gunship_cooldown` 25, `super_cooldown` 30) and the bar slots, and calls `Sortie`.
+- **W2** Patrol and gunship lifetimes are wing stat rows (`patrol_time` 20, `gunship_time` 12), so
+  a sortie is ONE call; 6a reads them for its slot line.
+- **W3** Patrol target = best by (`Turret.Rank`, fallback last, then distance from the CARRIER's
+  centre) among hostiles whose HULL EDGE is within `patrol_range` of the carrier's centre; held
+  until it dies or leaves the ring, giving way only to a better RANK (a seeker arriving), the
+  turret's held rule. The whole patrol shares no order: each craft picks by the same rule, so
+  they converge. v3's "a webber first" is superseded by v3.1's "whatever Turret.Rank puts first".
+- **W4** The `Patrol` TargetFilter row IS `Targeting.Sentry`'s contents (forbid nothing, Dummy as
+  fallback): declared `Patrol = Sentry`, one truth, two names for two users.
+- **W5** Gunships WARP: at launch they appear on their orbit round the target (the 3000 u leash is
+  checked at launch only, kits_v31 §3.4 table), orbit at `gunship_orbit` 240 u, fire hitscan at
+  10 DPS each (2.5 a shot / 0.25 s) while inside `gunship_range` 300 u, and at `gunship_time` or
+  when the target dies they warp out (freed). 2 a target (`gunship_count`).
+- **W6** A wing's hit is credited by its ROW's id through Dealt.Deal ("fighter", "patrol",
+  "gunship"), the door's own rule; `Dealt.Fighter` is deleted.
+- **W7** Wire: the wing report's state code carries the craft's row (`kind * 1000 + state`); a
+  guest adds and drops SORTIE craft to match the host's report. No new RPC (v3 §3.1).
+- **W8** Visible: the patrol's amber livery is the row's `Livery` (sprite modulate). The dashed
+  600 u ring and the chevron are F9 (lane D) / 6a, not here.
+- **W9** `patrol_range` joins the Carrier's Reach list (a Targeting Chip / REACH points lift it);
+  the reach sweep gains its case and its totals 13 ids / 31 pairs become 14 / 32.
+
+## Jobs (foundations first)
+
+- **J1** rows: WingKind Gunship/Patrol, WingWay.Orbit, WingDef fields (Sortie/LifeStat, EngageStat,
+  Picks, OrbitStat, Livery), `Targeting.Patrol`, `Turret.RankIn`, Stats rows, Reach, Dealt by row
+  id. Checks: table literals; the reach sweep's patrol_range case.
+- **J2** the machine: patrol (circle the carrier, ring pick, strafing passes, no rest, home and
+  freed at the end), gunships (warp in, orbit, fire, warp out), `PlayerShip.Sortie`, bombers fitted
+  before sortie craft. Checks: solo `WingsPatrolChecks`, `WingsGunshipChecks`.
+- **J3** wire + look: kind in the state code, the guest's reconcile, the livery; checks: guest
+  role `WingsGuestSees` / host `WingsHostSortie`, frame `wings_patrol` in Shots.cs.txt.
+- **J4** docs/CHANGES.md Unreleased + Handoff; the final POST lists what the test phase owes.
+
+## Log
+
+JOB 0 (opus): spec read, job list above. HEAD f168508.
