@@ -415,6 +415,17 @@ public static class Ab
         Show = (s, _) => Timed(s, "flares", "flare_cooldown", "READY"),
     };
 
+    // THE TAUNT (the Warden's Q, kits_v3 §3.5): for 6 s every raider standing within 1000 u, or hunting a target
+    // within it, comes for the Warden and takes x1.5 from all it deals; the Warden takes 33% less meanwhile.
+    public static readonly AbilityDef Taunt = new()
+    {
+        Id = "taunt", Name = "Taunt", Short = "TAUNT", Default = Key.Q,
+        Blurb = "For 6 s every raider within 1000 u, or hunting anything within it, comes for you instead, and takes half again from everything you deal. You take 33% less meanwhile. Never a boss.",
+        Press = (s, _) => s.Taunt(),
+        Refuse = (s, _) => s.Sl("taunt").Left > 0 ? "TAUNTING" : s.Sl("taunt").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => Timed(s, "taunt", "taunt_cooldown", "TAUNT"),
+    };
+
     // THE LUNGE (the Warrior's E): 420 u along the nose in 0.3 s, 40 to each body on the way, half
     // damage taken while it runs. It ends a prism stance.
     public static readonly AbilityDef Lunge = new()

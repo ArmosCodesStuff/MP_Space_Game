@@ -6181,6 +6181,109 @@ public partial class _Test : Node
         wd.Position = yonder; wd.Velocity = Vector2.Zero;
     }
 
+    // ── SLICE 6c: THE WARDEN'S TAUNT THROUGH Q (kits_v2's Beacon Proves under the new name, kits_v3's 33% guard; D52).
+    // The rows once (6 s, 1000 u, x1.5, x0.67, 20 s, Q, ability 2). Three varied runs (VaryNear spot, VaryAngle
+    // bearings), two sentries of no gun standing as other quarries (one 2400-2800 u off, one 850-950 u off):
+    //   a webifier standing 975-995 u off, hunting the far sentry, is called within 3 frames of the press and
+    //   comes for the Warden; one 1005-1025 u off hunting the same stays on it; one 1300-1500 u off hunting the near
+    //   sentry is called; the cooldown is 20.0 s and Q again is refused TAUNTING;
+    //   a 30 blow 0.3-0.7 s in and 5.7-5.9 s in takes 20.1 off the hull, one 6.1-6.4 s in takes 30;
+    //   a flak round deals 33.75 to the called webifier and 22.5 to the one not called;
+    //   6.1-6.4 s in the called one is back on its own quarry.
+    async Task LaneA6cTauntChecks(Vector2 yonder)
+    {
+        var st = new ShipStats(ShipClass.HeavyWarden);
+        Check(st["taunt_time"] == 6 && st["taunt_reach"] == 1000 && st["taunt_mult"] == 1.5 && st["taunt_guard"] == 0.67 && st["taunt_cooldown"] == 20
+              && Ab.Taunt.Default == global::Godot.Key.Q && Unlocks.Nth(ShipClass.HeavyWarden, 1) == Ab.Hunters && Unlocks.Nth(ShipClass.HeavyWarden, 2) == Ab.Taunt
+              && new ShipStats(ShipClass.HeavySniper)["taunt_mult"] == 0,
+              $"the Taunt's rows: {st["taunt_time"]:0} s (6), {st["taunt_reach"]:0} u (1000), x{st["taunt_mult"]:0.0} on the called (1.5), x{st["taunt_guard"]:0.00} taken (0.67), {st["taunt_cooldown"]:0} s (20); Q; ability 2 {Unlocks.Nth(ShipClass.HeavyWarden, 2)?.Name}; a class without the row has none");
+        await SetClass(ShipClass.HeavyWarden);
+        var wd = Me; bool demo = wd.Demo; wd.Demo = true; wd.AutopilotTo = null;
+        var qkey = Abilities.KeyFor(ShipClass.HeavyWarden, "taunt");
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+        await Wait(0.2);
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f);
+            wd.Position = at; wd.Velocity = Vector2.Zero; wd.Hp = wd.MaxHp; wd.Sl("taunt").Left = 0; wd.Sl("taunt").Cool = 0;
+            wd.Statuses.Clear(Status.Hardened);
+            await Frame();
+            at = wd.Position;                                                      // re-taken after the wait
+            float a1 = VaryAngle();
+            var farS = H.Drop(wd, at + Vector2.Right.Rotated(a1 + Mathf.Pi + Vary(-0.4f, 0.4f)) * Vary(2400f, 2800f), 1e9);
+            var nearS = H.Drop(wd, at + Vector2.Right.Rotated(a1 + Mathf.Pi / 2 + Vary(-0.3f, 0.3f)) * Vary(850f, 950f), 1e9);
+            var inAt = at + Vector2.Right.Rotated(a1) * Vary(975f, 995f);
+            var outAt = at + Vector2.Right.Rotated(a1 + Vary(0.5f, 0.9f)) * Vary(1005f, 1025f);
+            var huntAt = at + Vector2.Right.Rotated(a1 - Mathf.Pi / 2 + Vary(-0.3f, 0.3f)) * Vary(1300f, 1500f);
+            Raider Web(Vector2 p, Node2D quarry) { var w = H.SpawnRaider(p, Enemies.Webifier); w.Hp = 1e9; w.Quarry = quarry; return w; }
+            var inW = Web(inAt, farS); var outW = Web(outAt, farS); var huntW = Web(huntAt, nearS);
+            void Pin() { wd.Position = at; wd.Velocity = Vector2.Zero; inW.Position = inAt; outW.Position = outAt; huntW.Position = huntAt; }
+            for (int i = 0; i < 3; i++) { Pin(); await Frame(); }
+            bool before = inW.CalledBy == null && ReferenceEquals(inW.Target, farS) && ReferenceEquals(huntW.Target, nearS);
+            Key(qkey);
+            int frames = 0;
+            for (; frames < 6 && !wd.Statuses.Has(Status.Hardened); frames++) { Pin(); await Frame(); }
+            double tp = wd.Clock;                                                  // timed from the frame the guard shows
+            Pin(); await Frame();
+            bool inCalled = ReferenceEquals(inW.CalledBy, wd) && ReferenceEquals(inW.Target, wd), outFree = outW.CalledBy == null && ReferenceEquals(outW.Target, farS);
+            bool huntCalled = ReferenceEquals(huntW.CalledBy, wd);
+            double cool = wd.Sl("taunt").Cool, left = wd.Sl("taunt").Left;
+            Key(qkey); Pin(); await Frame(); Pin(); await Frame();
+            string again = wd.FailNote("taunt");
+            Check(before && frames <= 3 && inCalled && outFree && huntCalled && Math.Abs(cool - 20.0) < 0.1 && left > 5.8 && again == "TAUNTING",
+                  $"taunt run {run}: Q -- a webifier {inAt.DistanceTo(at):0} u off is called ({inCalled}), one {outAt.DistanceTo(at):0} u off stays on its quarry ({outFree}), one {huntAt.DistanceTo(at):0} u off hunting a sentry {nearS.Position.DistanceTo(at):0} u off is called ({huntCalled}); guard in {frames} frame(s); cooldown {cool:0.00} s (20), {left:0.00} s up; Q again {again} (TAUNTING)");
+
+            async Task Until(double t) { while (wd.Clock < t) { Pin(); await Frame(); } }
+            double Blow(string tag) { double h0 = wd.Hp; wd.Hit(30, wd.Position + Vector2.Right.Rotated(VaryAngle()) * 200f, "taunt_probe:" + tag + run); return h0 - wd.Hp; }
+            await Until(tp + Vary(0.3f, 0.7f));
+            double early = Blow("early"); wd.Hp = wd.MaxHp;
+            // the x1.5, through a flak round each: the called takes 33.75, the free one 22.5
+            var gun = wd.Spec(false);
+            double i0 = inW.Hp, o0 = outW.Hp;
+            var way1 = Vector2.Right.Rotated(VaryAngle()); var way2 = Vector2.Right.Rotated(VaryAngle());
+            var r1 = Combat.Fire(gun.Kind, inAt - way1 * 250f, way1, gun.ShellSpeed, gun.Range, gun.Damage, source: wd);
+            var r2 = Combat.Fire(gun.Kind, outAt - way2 * 250f, way2, gun.ShellSpeed, gun.Range, gun.Damage, source: wd);
+            for (int i = 0; i < 90 && ((GodotObject.IsInstanceValid(r1) && r1.Alive) || (GodotObject.IsInstanceValid(r2) && r2.Alive)); i++) { Pin(); await Frame(); }
+            double inTook = i0 - inW.Hp, outTook = o0 - outW.Hp;
+            await Until(tp + Vary(5.7f, 5.9f));
+            double late = Blow("late"); wd.Hp = wd.MaxHp;
+            await Until(tp + Vary(6.1f, 6.4f));
+            double after = Blow("after"); wd.Hp = wd.MaxHp;
+            bool back = inW.CalledBy == null && ReferenceEquals(inW.Target, farS) && !wd.Statuses.Has(Status.Hardened);
+            Check(Math.Abs(early - 20.1) < 0.01 && Math.Abs(late - 20.1) < 0.01 && Math.Abs(after - 30) < 0.01
+                  && Math.Abs(inTook - 33.75) < 1e-6 && Math.Abs(outTook - 22.5) < 1e-6 && back,
+                  $"...a 30 blow takes {early:0.00} early and {late:0.00} late (20.1), {after:0.00} after 6 s (30); a flak round deals {inTook:0.00} to the called (33.75) and {outTook:0.00} to the free one (22.5); after 6 s the called is back on its quarry ({back})");
+            foreach (var w in new[] { inW, outW, huntW }) w.TakeDamage(1e12);
+            H.DeployedTaken(farS); H.DeployedTaken(nearS);
+            wd.Sl("taunt").Cool = 0;
+            await Wait(0.2);
+        }
+        wd.Demo = demo; wd.Position = yonder; wd.Velocity = Vector2.Zero; wd.Hp = wd.MaxHp;
+    }
+
+    // ── SLICE 6c, RUNG 5: A GUEST'S TAUNT (kits_v31 §8's second-run list). The guest refits to the Warden (the
+    // host's 270 hull on it), turns to a varied heading and presses Q through the key: the host's word lands on its
+    // slot (up 5-6 s), its hull reads the host's Hardened bit (the taunt's guard, drawn as the shimmer from the slot),
+    // the host's 20 s cooldown arrives, and Q again is refused (TAUNTING); 6.5 s on the guard is gone here too.
+    async Task LaneA6cTauntGuestChecks()
+    {
+        await SetClass(ShipClass.HeavyWarden);
+        var me = Me; me.AutopilotTo = null;
+        await RealTime(() => Math.Abs(me.MaxHp - 270) < 1e-6, Wan ? 20 : 10);
+        me.Velocity = Vector2.Zero; me.Rotation = VaryAngle();
+        await Wait(Vary(0.3f, 0.6f));
+        Key(Abilities.KeyFor(ShipClass.HeavyWarden, "taunt"));
+        await RealTime(() => me.Sl("taunt").Left > 0 && me.Statuses.Has(Status.Hardened), Wan ? 6 : 3);
+        double left = me.Sl("taunt").Left, cool = me.Sl("taunt").Cool; bool guard = me.Statuses.Has(Status.Hardened);
+        Key(Abilities.KeyFor(ShipClass.HeavyWarden, "taunt")); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        var said = me.FailNote("taunt");
+        await Wait(6.5);
+        bool gone = !me.Statuses.Has(Status.Hardened) && me.Sl("taunt").Left <= 0;
+        Check(Math.Abs(me.MaxHp - 270) < 1e-6 && left > 5.0 && left <= 6.0 + 1e-6 && guard && cool > 18.5 && cool <= 20.0 + 1e-6 && said == "TAUNTING" && gone,
+              $"arena guest: its own Q -- the host's taunt on its slot, {left:0.0} s up (6, a report late), its guard read here ({guard}), the cooldown {cool:0.0} s (20); Q again {said} (TAUNTING); 6.5 s on the guard is gone ({gone})");
+    }
+
     // ── SLICE 6c, RUNG 5: A GUEST'S ANCHOR (kits_v31 §7: the boost refused ANCHORED). The guest, right after its
     // active reload, presses F through the key: once the host's word lands on its slot its own helm is rooted --
     // W + Shift + A or D (varied) held a varied 0.8-1.4 s move it under 1 u -- and V is refused ANCHORED; F again
@@ -12395,6 +12498,7 @@ public partial class _Test : Node
             await LaneA6cFlaresChecks(yonder);
             await LaneA6cFlakChecks(yonder);
             await LaneA6cHunterPreyChecks(yonder);
+            await LaneA6cTauntChecks(yonder);
             await SetClass(ShipClass.HeavyWarrior);
             var wr = Me; wr.Position = yonder; wr.Velocity = Vector2.Zero; await Wait(0.2);
             // A SPEED LIFT LIFTS THE PUSH AS WELL AS THE TOP SPEED (PlayerShip.Steer). The water holds a
@@ -12795,6 +12899,7 @@ public partial class _Test : Node
                     ["anchor"]    = sp => sp.Sl("anchor").Left > sp.Stats["anchor_time"] - 0.1 && sp.Held == 0f,
                     ["tether"]    = sp => sp.Sl("tether").N == 1 && sp.Sl("tether").Cool > sp.Stats["tether_recharge"] - 0.1 && H.Laid.Any(z => z.OwnerId == sp.OwnerId),
                     ["flares"]    = sp => sp.Sl("flares").Cool > sp.Stats["flare_cooldown"] - 0.1 && H.Salvos.Any(sv2 => sv2.At.DistanceTo(sp.Position) < 5f),
+                    ["taunt"]     = sp => sp.Sl("taunt").Left > sp.Stats["taunt_time"] - 0.1 && sp.Statuses.Has(Status.Hardened),
                 };
                 var onBars = Classes.All.Where(cd2 => cd2.Ready).SelectMany(cd2 => cd2.Abilities)
                                         .Where(ab3 => !ab3.Open).Select(ab3 => ab3.Id).Distinct().ToList();
@@ -16312,6 +16417,7 @@ public partial class _Test : Node
             await LaneA6cReloadGuestChecks();                               // slice 6c: a guest's active reload (its host half: LaneA6cReloadHostChecks)
             await LaneA6cAnchorGuestChecks();                               // slice 6c: a guest's Anchor, rooted by the host's word
             await LaneA6cFlaresGuestChecks();                               // slice 6c: a guest's flares, the host's salvo on its hull
+            await LaneA6cTauntGuestChecks();                                // slice 6c: a guest's taunt, the host's guard on its hull
             // ── TWO OF THE NINE, IN A SESSION (the host's side is in the ahost branch) ──
             // A FREIGHTER: the class whose abilities MAKE things in the world. Every press below
             // is a request -- nothing here is made on this peer.

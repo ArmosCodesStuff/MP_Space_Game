@@ -19,7 +19,7 @@ using Godot;
 //                 pinned, and its row's missile -- only at a PINNED target -- lands where the target
 //                 WILL be when the row's flight ends (EnemyDef.MissileFlight): a red circle marks it.
 // ─────────────────────────────────────────────────────────────────────────────
-public partial class Raider : Node2D, IHittable, ITagged, IStatused, ISquadMember, ITowable
+public partial class Raider : Node2D, IHittable, ITagged, IStatused, ISquadMember, ITowable, ICalled
 {
     public Hub Hub;
     // WHICH enemy this is: a row of Enemies.All. The index is what goes on the wire.

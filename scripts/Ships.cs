@@ -465,7 +465,7 @@ public static class Classes
             Abilities = new[] { Ab.Blade, Ab.Lunge, Ab.Whirlwind, Ab.PrismStance } },
         new() { Id = ShipClass.HeavyWarden, Name = "WARDEN", Ready = true, Fit = Fit.Guns | Fit.Pd,
             Blurb = "Draws raiders in and shreds them. Proximity flak that bursts beside whatever comes near, point defence, and hunter-seekers that go first for whatever has a web on a friend.",
-            Hint = "WARDEN  ·  mouse aims the flak  ·  Space: fire",
+            Hint = "WARDEN  ·  mouse aims the flak  ·  Space: fire  ·  F hunters  ·  Q taunt",
             Shot = Shots.Flak,
             Drive = Drives.Boost,
             Nums = new() {
@@ -500,13 +500,19 @@ public static class Classes
                 new() { Group = "Hunters", Id = "hunter_turn",   Label = "Guidance",      Base = 2.5, Unit = "rad/s", Dec = 2 },
                 new() { Group = "Hunters", Id = "hunter_range",  Label = "Reach",         Base = 1200, Unit = "u", Dec = 0 },
                 new() { Group = "Hunters", Id = "hunter_cooldown", Label = "Cooldown",    Base = 14, Unit = "s", Dec = 1, Inverse = true },
+                // THE TAUNT (kits_v3 §3.5): 6 s, 1000 u, x1.5 on the called, 33% less taken, 20 s
+                new() { Group = "Taunt", Id = "taunt_time",     Label = "Lasts",            Base = 6, Unit = "s", Dec = 1 },
+                new() { Group = "Taunt", Id = "taunt_reach",    Label = "Reach",            Base = 1000, Unit = "u", Dec = 0 },
+                new() { Group = "Taunt", Id = "taunt_mult",     Label = "Called take",      Base = 1.5, Unit = "x", Dec = 2 },
+                new() { Group = "Taunt", Id = "taunt_guard",    Label = "Damage taken",     Base = 0.67, Unit = "x", Dec = 2 },
+                new() { Group = "Taunt", Id = "taunt_cooldown", Label = "Cooldown",         Base = 20, Unit = "s", Dec = 1, Inverse = true },
             },
             Art = new ClassArt {
                 Texture = "res://heavy_warden_hull.png", Length = 120f, HalfWidth = 28.68f,
                 Mains = new Vector2[] { new(0.0f, -24.0f) },
                 Pds   = new Vector2[] { new(0.0f, 31.2f) },
                 TurretTexScale = 1.18f / 5.5f, MainBarrel = 14.5f, PdBarrel = 6.5f },
-            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Hunters } },
+            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Hunters, Ab.Taunt } },
 
         // -- page 4: lights -----------------------------------------------------
         new() { Id = ShipClass.LightDart, Name = "DART", Ready = true, Fit = Fit.Guns,

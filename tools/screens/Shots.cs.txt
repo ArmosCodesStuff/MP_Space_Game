@@ -82,6 +82,7 @@ public partial class _Shots : Node
         zp.SetValue(hub, 0.45f); await W(1.0);
         Fx.Raise(Fx.TauntRing, Me().Position, 1000f);
         await W(0.35); await Snap("83b_taunt_ring");
+        await LaneA6cTauntFrames(hub, yard);
         // 84: a chunk torn from a practice dummy, mid-tumble, with its sparks, smoke and scar
         var d1 = hub.GetNode<TargetDummy>("TargetDummy1");
         Me().Position = d1.GlobalPosition + new Vector2(0, 320); Me().Velocity = Vector2.Zero;
@@ -91,6 +92,24 @@ public partial class _Shots : Node
         zp.SetValue(hub, z0); await W(0.4);
         Character.Class = ShipClass.Battleship; P(hub, "ApplyLocalIdentity"); await W(0.3);
     }
+    // SLICE 6c: the Warden's taunt on a real press (82c): Q with two webifiers standing 600-800 u off -- the 1000 u
+    // flash, the shimmer and its "−33%" over the hull, both webifiers turning for it.
+    async Task LaneA6cTauntFrames(Hub hub, Vector2 yard)
+    {
+        var zp = typeof(Hub).GetProperty("ZoomLevel");
+        Character.Class = ShipClass.HeavyWarden; P(hub, "ApplyLocalIdentity"); await W(0.3);
+        var s = hub.GetNode<PlayerShip>("Ship_1"); s.Visible = true; s.Position = yard; s.Velocity = Vector2.Zero; s.Rotation = 0.5f;
+        s.Sl("taunt").Left = 0; s.Sl("taunt").Cool = 0;
+        var webs = new[] { new Vector2(650f, -300f), new Vector2(-500f, 520f) }.Select(o => { var w = hub.SpawnRaider(yard + o, Enemies.Webifier); w.Hp = 1e9; return w; }).ToArray();
+        zp.SetValue(hub, 0.55f); await W(1.0);
+        s.Position = yard; s.Velocity = Vector2.Zero;
+        s.UseAbility("taunt", 0);
+        await W(0.4); await Snap("82c_taunt_pressed");
+        foreach (var w in webs) w.TakeDamage(1e12);
+        s.Sl("taunt").Left = 0; s.Sl("taunt").Cool = 0; s.Statuses.Clear(Status.Hardened);
+        await W(0.3);
+    }
+
     // 84b: the same on the arena's boss -- the chunk is cut from the boss's own art, so it shows its plating
     async Task FieldsBossFrame(Boss boss, PlayerShip at)
     {

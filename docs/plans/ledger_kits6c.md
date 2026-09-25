@@ -534,3 +534,30 @@ break the bash tool; write the script with the Write tool), SmokeTest.cs.txt LF 
   coverage check would have failed), the second-press rule for a stance with a Release (the anchor's 0.3 s), laid mines and
   salvos put back; the kit-part message.
 - Next: kits6c-J12 Taunt.
+
+## kits6c-J12 · PRE
+- tier opus. Intent: the Taunt (D52): Ab.Taunt (Q, ability 2) -> PlayerShip.Taunt (host: every raider squad with a member within
+  taunt_reach 1000 or hunting a target within it is Called 6 s; Hardened 6 s at taunt_guard 0.67; Fx.TauntRing); ICalled
+  (Squads.cs) on Raider; PlayerShip.Outgoing x taunt_mult 1.5 on a craft this ship called; Warden rows taunt_*; Items
+  @duration + taunt_time, @area + taunt_reach; the sweep's witness. Checks LaneA6cTauntChecks, frame 82c_taunt_pressed
+  (LaneA6cTauntFrames; 82_taunt_shimmer goes live on its own), rung 5 LaneA6cTauntGuestChecks. HEAD 5216caaf428c6e2001a951f28ad365ae8d900852
+- scripts/Abilities.cs 1369b5e006aeeaa8f00ae5dddfb3c3035107c67c
+- scripts/PlayerShip.cs cc487f418c4b04d63ad79fdd513100913a573e3f
+- scripts/Ships.cs b313f0b15d1383ec17c333ea0e2eda4dd25927d1
+- scripts/Items.cs e855cb19e81b50698502357350e94144e10cc7d6
+- scripts/Squads.cs d09edfc48b645789217dc26bf9255e914a6f653d
+- scripts/Raider.cs 80c5232b0031d7a4a6d753a8c9403817ad7f1b67
+- tools/smoketest/SmokeTest.cs.txt 8c545f449a09cd4f6ff94df834b24300f988517c
+- tools/screens/Shots.cs.txt 03e3445c5070853a3ed787faf4f6a4387eddcc42
+## kits6c-J12 · POST
+- Verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED, own diff read. engine-unproven: rungs owed in the final test phase.
+- Built: Ab.Taunt (Q, Warden ability 2); PlayerShip.Taunt (host: calls every Targeting.Raiding raider within taunt_reach or hunting a
+  target within it for taunt_time; Hardened at taunt_guard; Fx.TauntRing); ICalled (Squads.cs) on Raider; Outgoing x taunt_mult on a
+  craft this ship called (0 = none on other sheets); Warden rows taunt_time 6 / reach 1000 / mult 1.5 / guard 0.67 / cooldown 20;
+  Items @duration + taunt_time, @area + taunt_reach; hint. Frame 82_taunt_shimmer now has an owner (it printed "shot skipped").
+- D57 (default, owed): "standoff heavies treat the Warden as pinned and boost in at once" and "emplacement guns prefer it" are NOT
+  built -- Raider.cs's commit / pinned logic and Emplacements.cs have no Prefer hook; both are other lanes' files. The call
+  itself (they turn for the Warden) is built.
+- Checks: NEW LaneA6cTauntChecks (3 runs), NEW rung 5 LaneA6cTauntGuestChecks, NEW frame 82c_taunt_pressed (LaneA6cTauntFrames,
+  after 83b), NEW sweep witness "taunt".
+- Next: kits6c-J13 Flak curtain.

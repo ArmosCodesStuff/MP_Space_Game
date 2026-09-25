@@ -225,7 +225,10 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             _spinLast = _clock;
             share += Items.SpinShare(Items.Shares(Items.Door.Spin, Stats, default), _clock - _spinSince);
         }
-        return d * (1 + share);
+        // A CRAFT THIS SHIP CALLED (the Taunt) takes its taunt_mult -- a row of the dealer's sheet, 0 (nothing)
+        // on a class without it
+        double called = target is ICalled { CalledBy: { } by } && ReferenceEquals(by, this) && Stats["taunt_mult"] > 0 ? Stats["taunt_mult"] : 1;
+        return d * (1 + share) * called;
     }
     // A kill this ship made: every ability cooldown left, less the Kill rows' share.
     public void NoteKill()
@@ -1346,6 +1349,23 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         if (def?.Pops is not { } row || def.Cooldown == null || !Net.Sim || sl.Cool > 0 || MyHub is not { } hub) return;
         sl.Cool = Cooling(Stats[def.Cooldown]);
         hub.Flares(Position, Rotation, Array.IndexOf(Decoys.All, row));
+    }
+
+    // THE TAUNT (AbilityDef Taunt: the Warden's Q), on the host: for taunt_time every raider squad with a member
+    // within taunt_reach, or hunting a target within it, is called onto this ship (Raider.Call: a boss, a missile
+    // or a practice craft never -- Targeting.Raiding); the hull takes taunt_guard of every blow (Hardened); the
+    // reach flashes for every peer. The x taunt_mult is Outgoing's.
+    public void Taunt()
+    {
+        ref var sl = ref Sl("taunt");
+        if (!Net.Sim || sl.Cool > 0 || sl.Left > 0 || MyHub is not { } hub) return;
+        double secs = Stats["taunt_time"]; float reach = (float)Stats["taunt_reach"];
+        sl.Left = secs; sl.Cool = Cooling(Stats["taunt_cooldown"]);
+        _status.Apply(Status.Hardened, secs, Stats["taunt_guard"]);
+        Fx.Raise(Fx.TauntRing, Position, reach);
+        foreach (var r in hub.Raiders.ToList())
+            if (Targeting.Raiding.Hits(r) && (r.Position.DistanceTo(Position) <= reach || (r.Target is { } t && t.Position.DistanceTo(Position) <= reach)))
+                r.Call(this, secs);
     }
 
     public void Whirl()
