@@ -797,6 +797,14 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // DISABLED as this peer knows it: the host's status, or the owner's own lock after an overshoot,
     // held until the host's bit arrives (a guest's jump reaches the host a report later).
     public bool Disabled => _status.Has(Status.Disabled) || _drive.Lock > 0;
+    // A RELOCATION THE HOST MADE (a returning pilot put back where it was: Hub's NetPlace): the
+    // reports that follow are the ship arriving there, never a jump to price (Drives.Priced).
+    public void Relocated() { _drive.Quiet = Drives.QuietFor; _drive.From = null; }
+    public int SpeedClamps => _drive.Clamped;
+    // THE FASTEST THIS HULL GOES NOW, ahead and sideways, lifted and unheld: what the host's speed
+    // clamp and its jump pricing allow a guest's report (F24's hypot rule, Drives.SpeedCap).
+    public float TopNow => TopSpeed((float)Stats["max_speed"], SpeedMult, SpeedAdds(), 1f);
+    public float StrafeNow => StrafeTop((float)Stats["strafe_speed"], SpeedMult, 1f);
 
     // ── what is being done to it (Statuses): a raider's web today, and whatever a class's
     // ability puts on it next. The HOST decides; a guest is sent the bits and shows them.
@@ -1281,6 +1289,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
                            float podX, float podY, float podRot, bool warping)
     {
         if (!new[] { px, py, vx, vy, rot, ax, ay, podX, podY, podRot }.All(float.IsFinite)) return;
+        float age = _netAge;                       // since the last report: what the hull could have flown
         _netAge = 0f;
         _netPos = new Vector2(px, py);
         _netVel = new Vector2(vx, vy);
@@ -1290,6 +1299,12 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         Staggered = staggered;
         if (IsInstanceValid(_pod) && !_pod.Local) _pod.SetNet(new Vector2(podX, podY), podRot);
         _drive.Remote = warping;
+        if (Net.Sim)
+        {   // THE HOST'S READING of a guest's report (Drives): a jump it made is priced, and the speed it
+            // claims is held to what its hull can do now
+            Drives.Priced(this, _drive, _netPos, warping, age, Drives.SpeedCap(TopNow, StrafeNow));
+            _netVel = Drives.Clamp(_drive, _netVel, TopNow, StrafeNow);
+        }
     }
 
     // The host's side of the conversation: hull, ability state, and the wing.

@@ -599,7 +599,7 @@ public partial class Hub : Node2D
         if ((SectorKind)s != Sector) { RpcId(who, nameof(NetSector), (int)Sector, Missions.Kind, Missions.Level); return; }
         // The place a pilot is owed goes first and is never metered: a reconnecting pilot's held
         // spot is delivered by whichever report first finds it in the host's world.
-        if (_placeFor.Remove(who, out var owed)) RpcId(who, nameof(NetPlace), owed.at, owed.rot);
+        if (_placeFor.Remove(who, out var owed)) { RpcId(who, nameof(NetPlace), owed.at, owed.rot); ShipOf(who)?.Relocated(); }
         // THE CATCH-UP, and only it, is rate-limited -- one ask, dozens of reliable packets. Half a
         // second: the guest's own repeats are at 1 s and 3 s (ReportSector).
         if (!Net.Metered(who, nameof(NetMySector), 0.5)) return;
@@ -727,7 +727,8 @@ public partial class Hub : Node2D
         if (h.World == _world && _ships.TryGetValue(peer, out var s) && IsInstanceValid(s))
         {
             s.Restore(h.Hp, h.Alive, h.Stasis);
-            if (PeerSector(peer) == Sector) RpcId(peer, nameof(NetPlace), h.Pos, h.Rot); else _placeFor[peer] = (h.Pos, h.Rot);
+            if (PeerSector(peer) == Sector) { RpcId(peer, nameof(NetPlace), h.Pos, h.Rot); s.Relocated(); }   // never a jump (Drives)
+            else _placeFor[peer] = (h.Pos, h.Rot);
         }
         foreach (var k in h.Owed) PayKill(k, h.OldPeer, peer);          // what it missed (a kill it did get is not paid again)
     }

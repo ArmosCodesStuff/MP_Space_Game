@@ -3019,18 +3019,20 @@ public partial class _Test : Node
     // HOLD V ON A WARP HULL until its charge has run `held` seconds by ITS OWN clock (never the key's:
     // the charge starts on the frame the press is taken), then let go. Returns the reach read on the
     // last held frame, how far the hull went, and whether the release cancelled it. `during` runs every
-    // held frame (a check that swings the bow mid-charge).
-    async Task<(float reach, Vector2 moved, bool cancelled)> WarpHold(PlayerShip s, double held, Action during = null)
+    // held frame (a check that swings the bow mid-charge). `driver`: pressed and held as a driver does
+    // (PressDrive, DriveHeld) rather than by the key -- for a peer whose keys a focused box may take.
+    async Task<(float reach, Vector2 moved, bool cancelled)> WarpHold(PlayerShip s, double held, Action during = null, bool driver = false)
     {
         var at = s.Position;
-        KeyDown(global::Godot.Key.V);
+        if (driver) { s.DriveHeld = true; s.PressDrive(); }
+        else KeyDown(global::Godot.Key.V);
         for (int i = 0; i < 60 * 12 && !(s.Charging && s.ChargeHeld + GetProcessDeltaTime() >= held); i++)
         {
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             during?.Invoke();
         }
         float reach = s.ChargeReach;
-        KeyUp(global::Godot.Key.V);
+        if (driver) s.DriveHeld = false; else KeyUp(global::Godot.Key.V);
         for (int i = 0; i < 10 && s.Charging; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         return (reach, s.Position - at, reach < 0);
     }
@@ -3312,6 +3314,114 @@ public partial class _Test : Node
                   $"a sniper meets the BOOST card with a waypoint 1600 u off (not the warp's), and the STRAFE card with a hostile inside 500 u ({boostMet}, {strafeEarly} -> {Met("strafe")})");
             foe.TakeDamage(1e12); H.ClearSelection();
         }
+    }
+
+    // ── LANE B · THE DRIVES ACROSS PEERS (rung 5; kits_v31 §3.4, kits_v3 §3.9) ────────────────────
+    // The arena pair, before "TWO OF THE NINE": the guest flies its destroyer (a warp hull), then a
+    // dart. Host side: a relocation the host makes is never priced; a guest's charged overshoot and a
+    // bit-less snap ARE, on the host's own measure; a guest's boost and slide replicate, and the host's
+    // speed clamp never cuts a legal boosted slide. Guest side: what the host's word does to it.
+    PlayerShip LaneBGuest() => H?.Ships.FirstOrDefault(s => !s.Mine);
+    async Task LaneBHostDrives()
+    {
+        var nf = BindingFlags.NonPublic | BindingFlags.Instance;
+        Drives.PriceSnaps = true;                                           // this window prices bit-less snaps
+        await RealTime(() => LaneBGuest() is { Class: ShipClass.Destroyer }, Wan ? 20 : 10);
+        var g = LaneBGuest();
+        if (g == null) { Check(false, "arena host (lane B): no guest destroyer to watch"); Drives.PriceSnaps = false; return; }
+        // A RELOCATION THE HOST MAKES -- a returning pilot put back where it was -- is never a jump
+        var reloc = g.Position + Vector2.Right.Rotated(VaryAngle()) * 3000f;
+        var held = new Session.Held { OldPeer = g.OwnerId, World = (int)typeof(Hub).GetField("_world", nf).GetValue(H), Pos = reloc, Rot = g.Rotation, Hp = g.Hp };
+        Priv(H, "RestoreHeld", held, g.OwnerId);
+        bool relocDisabled = false;
+        var relocWatch = new LateSampler { Probe = () => { relocDisabled |= LaneBGuest() is { } gg && gg.Statuses.Has(Status.Disabled); return false; } };
+        AddChild(relocWatch);
+        await RealTime(() => g.Position.DistanceTo(reloc) < 40f, Wan ? 6 : 3);
+        bool arrived = g.Position.DistanceTo(reloc) < 40f;
+        await Wait(1.5);
+        relocWatch.QueueFree();
+        Check(arrived && !relocDisabled && g.Sl("warp").Cool <= 0,
+              $"arena host (lane B): the guest's destroyer put back 3000 u away by the host (a returning pilot's place) is never priced as a jump -- arrived {arrived}, disabled {relocDisabled}, warp cooling {g.Sl("warp").Cool:0.0} s");
+        // THE REST OF THE GUEST'S DRIVES, watched every frame until it becomes a freighter
+        double firstOff = -1, secondOff = -1; bool was = false, sawBoost = false;
+        float fastest = 0, widest = 0, restOff = -1; int clamps0 = -1, clampsDart = 0;
+        var watch = new LateSampler { Probe = () =>
+        {
+            if (LaneBGuest() is not { } gg) return false;
+            bool on = gg.Statuses.Has(Status.Disabled);
+            if (on && !was) { double l = gg.Statuses.Left(Status.Disabled); if (firstOff < 0) firstOff = l; else if (secondOff < 0) secondOff = l; }
+            was = on;
+            if (gg.Class == ShipClass.LightDart)
+            {
+                if (clamps0 < 0) clamps0 = gg.SpeedClamps;
+                clampsDart = gg.SpeedClamps - clamps0;
+                var v = (Vector2)typeof(PlayerShip).GetField("_netVel", nf).GetValue(gg);
+                var f = Vector2.Up.Rotated(gg.Rotation);
+                if (gg.Sl("boost").Left > 0) { sawBoost = true; fastest = Mathf.Max(fastest, v.Dot(f)); widest = Mathf.Max(widest, Mathf.Abs(v.Dot(new Vector2(-f.Y, f.X)))); }
+                restOff = gg.Position.DistanceTo((Vector2)typeof(PlayerShip).GetField("_netPos", nf).GetValue(gg));
+            }
+            return false;
+        } };
+        AddChild(watch);
+        await RealTime(() => LaneBGuest() is { Class: ShipClass.FreightHauler }, Wan ? 90 : 70);
+        watch.QueueFree();
+        Drives.PriceSnaps = false;
+        Check(Math.Abs(firstOff - 4) < 0.2,
+              $"arena host (lane B): the guest's charged jump 600 u past its 2400 u ring is priced HERE, on the host's own measure: disabled {firstOff:0.00} s (want 4)");
+        Check(Math.Abs(secondOff - 6) < 0.2,
+              $"arena host (lane B): a 3300 u snap with no charge bit at all is priced all the same: disabled {secondOff:0.00} s (want 6: 900 over, the cap)");
+        Check(sawBoost && Math.Abs(fastest - 390) < 8 && Math.Abs(widest - 195) < 8 && clampsDart == 0 && restOff >= 0 && restOff < 20,
+              $"arena host (lane B): the guest dart's boost and slide arrive -- the host's slot ran ({sawBoost}), its reports read {fastest:0} u/s ahead (390) and {widest:0} u/s across (195), the speed clamp cut none of them ({clampsDart}), and at rest the host holds it {restOff:0.0} u from its own report");
+    }
+
+    async Task LaneBGuestDrives()
+    {
+        var nf = BindingFlags.NonPublic | BindingFlags.Instance;
+        GetViewport().GuiReleaseFocus();                                    // the helm's keys are polled: no text box may hold them
+        var me = Me; me.AutopilotTo = null;
+        H.ClearSelection();
+        // the host relocates this ship first (its check); wait it out, then fly from wherever it is
+        await Wait(Wan ? 6.0 : 4.0);
+        me.Velocity = Vector2.Zero;
+        void LockOff() { var run = typeof(PlayerShip).GetField("_drive", nf).GetValue(me); run.GetType().GetField("Lock").SetValue(run, 0.0); }
+        async Task<double> HostDisabledFor(double wait)
+        {   // from the first frame the host's bit is here to the first it is gone
+            await RealTime(() => me.Statuses.Has(Status.Disabled), wait);
+            if (!me.Statuses.Has(Status.Disabled)) return -1;
+            double t = 0;
+            for (int i = 0; i < 60 * 10 && me.Statuses.Has(Status.Disabled); i++) { await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); t += GetProcessDeltaTime(); }
+            return t;
+        }
+        // 600 u OVER, and this ship's own lock thrown away the moment it lands: the host's word alone
+        var (_, moved, _) = await WarpHold(me, 1.0 + 3000.0 / 800.0, driver: true);
+        LockOff();
+        bool freeHere = !me.Disabled;
+        double off = await HostDisabledFor(Wan ? 4 : 2);
+        Check(freeHere && Math.Abs(moved.Length() - 3000f) < 20f && Math.Abs(off - 4) < 0.4 && me.Sl("warp").Cool > 10,
+              $"arena guest (lane B): a jump 600 u past the ring with this ship's own lock bypassed ({freeHere}) is still DISABLED {off:0.00} s by the host (want 4), and the host's cooldown is on its slot ({me.Sl("warp").Cool:0.0} s)");
+        // A SNAP WITH NO CHARGE BIT: 3300 u in one report
+        await Wait(0.5);
+        me.Position += Vector2.Up.Rotated(me.Rotation) * 3300f; me.Velocity = Vector2.Zero;
+        double snapOff = await HostDisabledFor(Wan ? 4 : 2);
+        Check(Math.Abs(snapOff - 6) < 0.4, $"arena guest (lane B): 3300 u in one report with no charge bit is priced by the host: DISABLED {snapOff:0.00} s (want 6)");
+        await Wait(0.5);
+        // A DART: the boost and the slide on the ability path and the owner's flight
+        await SetClass(ShipClass.LightDart);
+        var d = Me; d.AutopilotTo = null; d.Velocity = Vector2.Zero;
+        double dartHull = new ShipStats(ShipClass.LightDart)["hull"];
+        await RealTime(() => Math.Abs(d.MaxHp - dartHull) < 1e-6, Wan ? 20 : 10);
+        KeyDown(global::Godot.Key.W); await Wait(3.0);
+        d.PressDrive();                                                     // V, as the hub hands it over
+        for (int i = 0; i < 30 && d.Sl("boost").Left <= 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        await Wait(1.2);
+        float fast = d.SpeedAhead;
+        KeyDown(global::Godot.Key.Shift); KeyDown(global::Godot.Key.D); await Wait(0.8);
+        float across = d.SpeedAcross; double left = d.Sl("boost").Left;
+        KeyUp(global::Godot.Key.D); KeyUp(global::Godot.Key.Shift); KeyUp(global::Godot.Key.W);
+        d.Velocity = Vector2.Zero;
+        Check(Math.Abs(fast - 390) < 5 && Math.Abs(across - 195) < 4 && left > 0,
+              $"arena guest (lane B): its dart's boost holds under the host's slot: {fast:0} u/s ahead (390) and a {across:0} u/s slide (195), {left:0.0} s still up");
+        await Wait(1.5);                                                    // at rest, for the host to read where it is
     }
 
     // F20's BEHAVIOUR, from 3 varied spots each (the numbers themselves are the ENEMY TABLE check,
@@ -10583,10 +10693,12 @@ public partial class _Test : Node
         if (role == "ahost")
         {
             Character.Name = "Arena Host";
+            Drives.PriceSnaps = false;                  // its guest is moved by hand; LaneBHostDrives prices snaps in its own window
             Net.I.Host(Port);
             for (int i = 0; i < 60 * 10 && Net.I.Players.Count < 2; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(Net.I.Players.Count == 2, "arena host: the guest joined");
             await Wait(1.0);
+            await LaneBHostDrives();                                        // lane B: the drives across peers (its guest half: LaneBGuestDrives)
             // ── TWO OF THE NINE, IN A SESSION ─────────────────────────────────────
             // Everything the nine classes put on the wire had only ever flown alone: the status
             // bits, the slot array a class names itself, a turret dropped into the world, an
@@ -10864,6 +10976,7 @@ public partial class _Test : Node
             Net.I.Join(HostAt(Port));
             for (int i = 0; i < 60 * 10 && !(Net.IsOnline && Net.LocalId != 1); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(Net.IsOnline && Net.LocalId != 1, "arena guest: joined");
+            await LaneBGuestDrives();                                       // lane B: the drives across peers (its host half: LaneBHostDrives)
             // ── TWO OF THE NINE, IN A SESSION (the host's side is in the ahost branch) ──
             // A FREIGHTER: the class whose abilities MAKE things in the world. Every press below
             // is a request -- nothing here is made on this peer.
@@ -11264,6 +11377,7 @@ public partial class _Test : Node
         if (role == "host")
         {
             Character.Name = "HostPilot"; Character.Class = ShipClass.Battleship; Priv(H, "ApplyLocalIdentity"); Priv(H, "SendIdentity", 0);
+            Drives.PriceSnaps = false;                  // its guests' warp hulls are moved by hand (lane B prices snaps in the arena pair)
             // THIS HOST'S OWN LEVEL for the part the guest has levelled, at the ceiling: none of it may
             // reach the guest's ship. (Its own battleship does not wear one.)
             Character.GearLevel["drv_racing_1"] = 40;

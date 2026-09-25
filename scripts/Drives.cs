@@ -41,6 +41,10 @@ public class DriveRun
     public bool Remote;          // everyone else: the owner reports a charge (the glow)
     public double Flash;         // the landing flash, on every peer
     public double Lock;          // owner: its own overshoot lock, until the host's Disabled bit arrives
+    public Vector2? From;        // host: where the last report of this live ship put it
+    public bool Bit;             // host: the last report's charge bit
+    public double Quiet;         // host: a relocation it caused -- nothing is priced for this long
+    public int Clamped;          // host: reports whose speed the clamp cut (F24)
 }
 
 public static class Drives
@@ -56,6 +60,12 @@ public static class Drives
     public const float Standoff = 160f;
     public const float SnapAt = 600f;                 // a report this far from the last is a jump, bit or no bit
     public const double FlashFor = 0.6;
+    public const double QuietFor = 1.0;               // after a relocation the host made
+    public const float ClampShare = 1.1f;             // the host's speed clamp: 10% over the hull's own figure
+    // A HARNESS SWITCH, as Net.SkipGoodbye is: the host roles of the smoke test move their guests' hulls
+    // by hand, which is exactly a bit-less snap, so they turn this off outside the checks that price
+    // one. A charged jump (its bit falls) is priced whatever it says. Always on in play.
+    public static bool PriceSnaps = true;
 
     public static readonly DriveDef Warp = new()
     {
@@ -112,6 +122,10 @@ public static class Drives
     // where a jump at `target` ends: on the line from here, just short of its hull
     public static Vector2 Arrival(Vector2 from, Vector2 target, float targetRadius, float shipLength) =>
         target - (target - from).Normalized() * (targetRadius + shipLength * 0.5f + Standoff);
+
+    // THE HOST'S SPEED CLAMP (F24): a legal slide at full speed ahead reads hypot(top, strafe), so
+    // top x 1.1 alone would read a boosted slide as a cheat.
+    public static float SpeedCap(float top, float strafe) => new Vector2(top, strafe).Length() * ClampShare;
 
     // WHERE A JUMP OF `reach` LANDS, decided when it jumps, by the heading then: the target or
     // waypoint if it lies within 45 degrees of the bow (short of it, never further than the reach and
@@ -173,6 +187,7 @@ public static class Drives
     {
         r.Flash = Math.Max(0, r.Flash - dt);
         r.Lock = Math.Max(0, r.Lock - dt);
+        r.Quiet = Math.Max(0, r.Quiet - dt);
     }
 
     // THE OWNER'S CHARGE: held, it grows; released past the spool, it jumps. Nothing survives stasis
@@ -200,6 +215,38 @@ public static class Drives
         r.Lock = off;
         s.Sl(Warp.Id).Cool = s.Cooling(s.Stats["warp_cooldown"]);
         if (Net.Sim && off > 0) s.ApplyStatus(Status.Disabled, off);
+    }
+
+    // ── the host's half: a guest's report ───────────────────────────────────────────────────
+    // THE HOST PRICES EVERY JUMP IT SEES, between two reports of the same live ship: the report
+    // where the charge bit falls with the hull moved further than it could have flown since the last
+    // one, and any snap over SnapAt whatever the bit says -- so a guest that clears the bit early, or
+    // never sets it, buys nothing. Only a warp hull is priced. A relocation the host itself made
+    // (Quiet) and a ship new to this world (no From) are never a jump. `age`: seconds since the last
+    // report; `flight`: the fastest the hull may fly, u/s.
+    public static void Priced(PlayerShip s, DriveRun r, Vector2 now, bool bit, float age, float flight)
+    {
+        bool fell = r.Bit && !bit;
+        r.Bit = bit;
+        var from = r.From;
+        r.From = s.Alive ? now : null;
+        if (from is not { } was || r.Quiet > 0 || !s.Alive || s.Drive?.Kind != DriveKind.Jump) return;
+        float moved = was.DistanceTo(now);
+        float jump = moved - flight * Math.Max(age, 0.05f);
+        if (!(fell && jump > 0) && !(PriceSnaps && moved > SnapAt)) return;
+        s.Sl(Warp.Id).Cool = s.Cooling(s.Stats["warp_cooldown"]);
+        double off = DisabledFor(jump - s.Stats["warp_safe"]);
+        if (off > 0) s.ApplyStatus(Status.Disabled, off);
+    }
+
+    // THE HOST'S SPEED CLAMP (F24): the velocity it reads off a report, held to SpeedCap of the hull's
+    // own lifted top and slide, every cut counted.
+    public static Vector2 Clamp(DriveRun r, Vector2 v, float top, float strafe)
+    {
+        float cap = SpeedCap(top, strafe);
+        if (v.Length() <= cap) return v;
+        r.Clamped++;
+        return v.Normalized() * cap;
     }
 
     // ── what the slot and the hull bar say ─────────────────────────────────────────────────

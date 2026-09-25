@@ -99,3 +99,24 @@ Blurbs carry no digits (the harness's rule); the warp row pressed as an ability 
 Host pricing and the clamp (J4) were cut out of Drives.cs to keep UNUSED at 0 until J4 uses them.
 engine-unproven: rungs owed in the final test phase (solo x2, screens).
 Next: J4.
+
+### J4 PRE · tier opus · the wire: host pricing, the speed clamp, guest-role checks
+Intent: Drives.Priced (a guest's charged jump when its bit falls, any snap over 600 u; quiet for 1 s
+after a relocation the host makes -- Hub's two NetPlace sends call PlayerShip.Relocated; only warp
+hulls), Drives.Clamp (the host reads a report's speed held to hypot(top, strafe) x 1.1, counted);
+`Drives.PriceSnaps`, a harness switch like Net.SkipGoodbye: the host roles turn bit-less snap pricing
+off because their guests are moved by hand (warp hulls: Guesty's carrier, Third's battleship, the
+arena guest's destroyer), and LaneBHostDrives turns it on for its own window. Guest-role checks in
+the arena pair (LaneBGuestDrives / LaneBHostDrives) before "TWO OF THE NINE".
+HEAD 9a90f20. Drives.cs 1177514 · PlayerShip.cs 8055f5e · Hub.cs 708ca91 · SmokeTest 4af7b52.
+### J4 POST · green (typecheck 0, verify -Quick ALL CHECKS PASSED)
+Files: Drives.cs (Priced, Clamp, SpeedCap, PriceSnaps, DriveRun's host fields, Quiet), PlayerShip
+(ApplyState: the host prices and clamps a guest's report; Relocated, SpeedClamps, TopNow, StrafeNow),
+Hub.cs (both NetPlace sends call Relocated: two one-line hunks), SmokeTest (LaneBHostDrives /
+LaneBGuestDrives at the top of the arena pair; `Drives.PriceSnaps = false` at the start of the host
+and ahost roles, since their guests' warp hulls are moved by hand; WarpHold gains `driver:`).
+Risk for the test phase: the arena pair now runs ~30 s longer before "TWO OF THE NINE"; the host waits
+for the guest's freighter with a 70 s (90 s wan) ceiling. The host's copy lags a fast guest by the
+smoothing (about v/12 u), so "within 20 u of its report" is read at rest after the boosted slide.
+engine-unproven: rungs owed in the final test phase (six x2 for the new guest checks).
+Next: J6 (record); J5's frames went in with J3.
