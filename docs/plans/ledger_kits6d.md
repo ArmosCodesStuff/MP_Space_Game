@@ -286,3 +286,17 @@ PlayerShip 9, Stats 2, Dealt 1, Fx 1, Items 3, SmokeTest 42; stealth_*|GoDark Pl
   re-aimed down the new nose x3), LaneA6dSlipChecks (ceiling literals + 3 boosted slides unclamped; 3 sources x {under,
   over} 325 = x1 / x0.7; an Echo x1); sweep witness ["slingshot"].
 - next: kits6d-J5 (Echo row + repeater + Reverb).
+
+## Handover 3: the third agent stops after kits6d-J4 (context), at a job boundary
+- The Dart is complete (J1-J4): Pepperbox, Rod, Ramjet, Slingshot, Slipstream. Next: kits6d-J5 (the Echo), then J6-J12 as listed.
+- Harness: insert snippets with a small python helper (read SmokeTest.cs.txt as bytes, replace one exact anchor, write LF). Solo
+  calls sit after `await LaneA6dSlipChecks(yonder);` (before `await SetClass(ShipClass.HeavyWarrior);`); new check methods go
+  before the `// ── SLICE 6d, RUNG 5: A GUEST'S PEPPERBOX.` comment; rung-5 host watches beside `ramjetWatch`, host checks after
+  `LaneA6dRamjetHostChecks`, guest checks after `LaneA6dRamjetGuestChecks()`; sweep witnesses after `["slingshot"]`.
+  Frames after `await LaneA6dRodFrames();` in Shots.cs.txt. The harness pilot's Peak is Unlocks.Top (no wall in the way).
+- New generic doors from J2-J4 the Echo/Wraith may reuse: PlayerShip.Run(id, time, cool) (a timed press), AbilityDef.AtOnce
+  (owner-side at the press: Shadow step's snap), SkipYaw (a host-side snap flag), Guarded's stat rows (SlipShare pattern for
+  Backstab's Outgoing twin), AbilityDef.Parting / BoreSpec for a round fired as a run ends.
+- J5 pointers: Echo row Ships.cs (grep `ShipClass.LightEcho, Name`), Ab.Echo + StartEcho/Detonate in PlayerShip (grep
+  `public void StartEcho`), Dps.Echo in Stats.cs, Items.cs @-lists hold echo_* ids, SmokeTest has ~42 echo_*/StartEcho/Detonate
+  callers (grep `"echo"` and `echo_`), the sweep witness ["echo"]. LightCannon kit part still used by Echo and Wraith.
