@@ -176,6 +176,12 @@ public class AbilityDef
     // press; while it runs its Hold, lifts and OnDealt apply as any row's. Guard (a stat id) is the share of every
     // blow the hull takes meanwhile (Hardened at that share: two hardenings keep the stronger, D9). The Brace.
     public string Time, Guard;
+    // SHEDS EVERY WEB (a timed row, PlayerShip.RunFor): the press lets go every web on the hull, and none may take it
+    // (Unwebbed) for the row's Time. The whirlwind.
+    public bool Sheds;
+    // A CALL (CallSpec below, a timed row, PlayerShip.RunFor): the press calls every raider squad within its Reach onto
+    // this ship for the row's Time. The Taunt.
+    public CallSpec Call;
     // COOLS FROM THE END: its Cooldown starts when its time runs out, not at the press (the Supercarrier's 30 s).
     public bool CoolAfter;
     // A SORTIE ROW (PlayerShip.Launch): pressed, it sends this wing row's craft (Wings.All) -- one sortie a pick for a
@@ -233,6 +239,15 @@ public class RampSpec
 // whole Time, so a guest that hears of its press a packet late still goes the whole way); the HOST
 // strikes every hostile body on the line from where it was pressed, once each (PlayerShip.DashSweep),
 // and hardens the hull for the Time at the Guard share. A row names stat ids, never numbers:
+// A CALL: every raider squad with a member within Reach (a stat id), or hunting a target within it, is called onto
+// the presser for the row's Time (Raider.Call: a boss, a missile or a practice craft never); the Fx row Ring flashes
+// the reach for every peer.
+public class CallSpec
+{
+    public string Reach;
+    public int Ring;
+}
+
 public class DashSpec
 {
     public string Reach, Time, Damage, Guard, Cooldown;   // u, s, per body, x damage taken, s
@@ -673,8 +688,9 @@ public static class Ab
     {
         Id = "taunt", Name = "Taunt", Short = "TAUNT", Default = Key.Q,
         Blurb = "For 6 s every raider within 1000 u, or hunting anything within it, comes for you instead, and takes half again from everything you deal. You take 33% less meanwhile, and an enemy emplacement with you in reach fires at you first. Never a boss.",
-        Draws = true,
-        Press = (s, _) => s.Taunt(),
+        Draws = true, Time = "taunt_time", Guard = "taunt_guard", Cooldown = "taunt_cooldown",
+        Call = new CallSpec { Reach = "taunt_reach", Ring = Fx.TauntRing },
+        Press = (s, _) => s.RunFor("taunt"),
         Refuse = (s, _) => s.Sl("taunt").Left > 0 ? "TAUNTING" : s.Sl("taunt").Cool > 0 ? "COOLING" : null,
         // running, the slot reads its time and its guard (kits_v3 §3.5: "TAUNT 4.2s  -33%")
         Show = (s, _) => s.Sl("taunt").Left > 0
@@ -713,8 +729,8 @@ public static class Ab
     {
         Id = "whirlwind", Name = "Whirlwind", Short = "SPIN", Default = Key.Q,
         Blurb = "Spin for 2 s: 40 DPS to everything within 210 u. It throws off every web, and none can take you while you spin.",
-        Swing = Melee.Whirl, Stills = true,
-        Press = (s, _) => s.Whirl(),
+        Swing = Melee.Whirl, Stills = true, Time = "whirl_time", Cooldown = "whirl_cooldown", Sheds = true,
+        Press = (s, _) => s.RunFor("whirlwind"),
         Refuse = (s, _) => s.Sl("whirlwind").Left > 0 ? "SPINNING" : s.Sl("whirlwind").Cool > 0 ? "COOLING" : null,
         Show = (s, _) => Timed(s, "whirlwind", "whirl_cooldown", "SPIN"),
     };

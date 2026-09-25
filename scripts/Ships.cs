@@ -532,14 +532,8 @@ public static class Classes
                 ["turn_radius"] = 55, ["turn_rate"] = 2.2, ["strafe_speed"] = 95, ["strafe_thrust"] = 380,
                 // THE PROXIMITY FLAK (kits_v2's card): 22.5 a burst every 0.5 s = 45 DPS, out to 700 u (Shots.All "flak")
                 ["main_count"] = 1, ["main_damage"] = 22.5, ["main_interval"] = 0.5, ["main_range"] = 700, ["shell_speed"] = 600,
-                // ITS ONE MOUNT IS A GUN, NOT A NUISANCE. "Half efficiency, always on" was first read
-            // as half a warship's damage PER SHOT: 0.25 every 0.5 s is 0.5 DPS, which is 50 seconds
-            // to kill one 25-hull light raider -- the class's whole reason for existing did
-            // nothing a pilot could see. It is half by MOUNTS instead: one mount where a warship
-            // carries two, firing the same 0.5 s cycle, at 5 a shot. 10 DPS, always, with nothing
-            // pressed -- and with its 45 DPS flak and 19.3 from the hunters it is well past the 50 the
-            // whole game is tuned to.
-            ["pd_count"] = 1, ["pd_damage"] = 5.0, ["pd_range"] = 420,
+                // POINT DEFENCE x1 (README ruling: 1 DPS a mount): the sheet's 0.5 every 0.5 s from its one mount
+                ["pd_count"] = 1, ["pd_range"] = 420,
             },
                 // 1.125 = 5% of a flak burst's 22.5, 2.25 = 5% of a hunter's 45 (pd_damage is left out on purpose:
                 // every class has that row, so naming it here would hand every ship in the game a chip-powered point-defence buff)

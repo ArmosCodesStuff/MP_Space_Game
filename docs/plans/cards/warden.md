@@ -3,7 +3,7 @@
 ## Identity
 - Heavy, hull **270**, top speed **190 u/s** (`thrust` 130, `reverse_thrust` 60, `reverse_speed` 70, `turn_radius` 55, `turn_rate` 2.2).
 - Drive: **boost** (the nine's Surge, not warp). `strafe_speed` 95, `strafe_thrust` 380. *kits_v31.md §2, §3.4; `Drives.cs` row `Boost`.*
-- Passive: **PD x1** — one point-defence mount (the capitals and freighters carry two; no other heavy or light has PD): `pd_count` 1, `pd_damage` 5.0 every 0.5 s = 10 DPS, `pd_range` 420. Half by MOUNTS, not by damage-per-shot — the code comment is explicit this was a design trap on the first read. *kits_v31.md §2 ("PD x1"); scripts/Ships.cs Warden block comment.*
+- Passive: **PD x1** — one point-defence mount (the capitals and freighters carry two; no other heavy or light has PD): `pd_count` 1, the sheet's `pd_damage` 0.5 every 0.5 s = 1 DPS (README ruling "Point defence passive, 1 DPS per mount"), `pd_range` 420. *kits_v31.md §2 ("PD x1"); docs/plans/README.md.*
 - `Fit = Fit.Guns | Fit.Pd`. Role: draws raiders in, shreds them. *kits_v31.md §2.*
 
 ## Primary — Proximity flak (Space, mouse-aimed)
@@ -33,11 +33,11 @@ For **6 s** (`taunt_time`), every raider within **1000 u** (`taunt_reach`), or h
 - `ClassDef` row: `ShipClass.HeavyWarden`, `Ready = true`, `Fit = Fit.Guns | Fit.Pd`, `Drive = Drives.Boost`, `Shot = Shots.Flak`.
 - `ClassDef.Abilities = { Ab.Guns, Ab.FireMode, Ab.Hunters, Ab.Taunt, Ab.Curtain }` (primary + fire-mode toggle, then the 3 learned abilities).
 - Ability ids: `hunters` (F), `taunt` (Q, `Draws = true`), `curtain` (E).
-- Rows (`ClassDef.Rows`): `hunter_count` 6, `hunter_damage` 45, `hunter_speed` 260, `hunter_turn` 2.5, `hunter_range` 1200, `hunter_cooldown` 14; `taunt_time` 6, `taunt_reach` 1000, `taunt_mult` 1.5, `taunt_guard` 0.67, `taunt_cooldown` 20; `curtain_first` 20, `curtain_tick` 10, `curtain_every` 0.5, `curtain_cooldown` 18. Primary in `Nums`: `main_count` 1, `main_damage` 22.5, `main_interval` 0.5, `main_range` 700, `shell_speed` 600; `pd_count` 1, `pd_damage` 5.0, `pd_range` 420. All values match sourced specs exactly, including the flak's 70 u fuse and x0.75 boss resist share (`scripts/Shots.cs` id `"flak"`).
+- Rows (`ClassDef.Rows`): `hunter_count` 6, `hunter_damage` 45, `hunter_speed` 260, `hunter_turn` 2.5, `hunter_range` 1200, `hunter_cooldown` 14; `taunt_time` 6, `taunt_reach` 1000, `taunt_mult` 1.5, `taunt_guard` 0.67, `taunt_cooldown` 20; `curtain_first` 20, `curtain_tick` 10, `curtain_every` 0.5, `curtain_cooldown` 18. Primary in `Nums`: `main_count` 1, `main_damage` 22.5, `main_interval` 0.5, `main_range` 700, `shell_speed` 600; `pd_count` 1, `pd_range` 420 (`pd_damage` 0.5 from the sheet). All values match sourced specs exactly, including the flak's 70 u fuse and x0.75 boss resist share (`scripts/Shots.cs` id `"flak"`).
 - **Check methods that exist** (`tools/smoketest/SmokeTest.cs.txt`, grep exact names):
   `LaneA6cFlakChecks`, `LaneA6cHunterPreyChecks`, `LaneA6cTauntChecks`, `LaneA6cTauntLatchChecks`, `LaneA6cTauntEmplacementChecks`, `LaneA6cTauntGuestChecks`, `LaneA6cCurtainChecks`, `LaneA6cCurtainGuestChecks`, `LaneA6cZoneChecks` (curtain zone geometry, shared with Sniper's tether). Also `LaneA6aBraceSplitChecks` (the BB slice's check), which proves Taunt's guard and Brace's guard split by depth and never leak onto the other's class.
 - None of these have run in the engine yet (`ledger_main.md`: build phase complete, nothing run).
 
 ## OPEN
-- PD x1 is built at 10 DPS (pd_damage 5.0, pd_interval 0.5; the Ships.cs comment calls 1 DPS a trap), against the README ruling "Point defence passive, 1 DPS per mount" and kits_v2's "PD x1 at 1 DPS". Not resolved here.
+- PD x1: built at 1 DPS (the sheet's pd_damage 0.5 every 0.5 s), per the README ruling (review hv-R6c-1).
 - `Ab.FireMode` is built on G for this class; kits_v31 §2 lists no fire-mode action for it and names G unused (the same R/G gap as the Battleship card's OPEN). Not resolved here.

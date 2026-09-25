@@ -157,6 +157,7 @@ public sealed class Squad
     {
         if (!Raider.Up(by) || seconds <= 0) return;
         _call = by; _callLeft = seconds;
+        _sinceBurn = Doctrine.Reboost;          // the commit a call forces burns: every member boosts in at once
         if (!ReferenceEquals(Target, by)) { Target = by; Reform(); }
     }
     public Vector2 Station;
