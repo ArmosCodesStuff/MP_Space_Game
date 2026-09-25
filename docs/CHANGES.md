@@ -58,12 +58,16 @@ a merge to `version-l`, and **R2** (network_webrtc.md §13: the switch; its `Net
 `Net._Process` polls `Rendezvous.Paths`, `Join` adds an invite's candidates only after the walk, D15).
 Not pushed.
 
-**2026-09-24 (local session): R0 is green** -- rung 2, rung 3 on seeds 90331 and 4127, `-OneDll`,
-`-ReplyWindow` (every delay to 60 s connected: `Link.ReplyWindowS` = 30, DESIGN.md). Three harness
-faults fixed on the way (ledger J6). Owner rulings since: the Echo's Rewind goes back 8 s with hull,
-from a 0.5 s snapshot ring; no boss-hull trim for adds (docs/plans/README.md). **Next:** the bar
-(`verify.ps1 -Update`), a push to both branches, then R1 (network_webrtc.md §13), whose first edit
-adds `Link.ReplyWindowS = 30` and the permanent reply-window check.
+**2026-09-25 (main session): the walls lane (lane C) merged into `version-l`** (`29b154e`), rung
+3/5/4 green in the lane; `Unlocks.All` joins CLAUDE.md §7's extend-before-inventing list.
+`version-l` now also carries this session's docs/tool commits (`tools/lanes.ps1`,
+`docs/plans/ledger_main.md`, compaction-safety rules). kits (lane A) and art (sprites) lanes continue
+separately; see their own ledgers for status.
+
+**2026-09-24 (local session): R0 is VERIFIED (aa1e4f9) and pushed to version-l and main.** Rung 2,
+rung 3 on seeds 90331 and 4127, `-OneDll`, `-ReplyWindow` (every delay to 60 s connected:
+`Link.ReplyWindowS` = 30, DESIGN.md), then a green bar. Owner rulings since: the Echo's Rewind goes
+back 8 s with hull, from a 0.5 s snapshot ring; no boss-hull trim for adds (docs/plans/README.md).
 
 **2026-09-25 (cloud session): WebRTC slice R0's code landed** (tested since: above).
 Ledger: `docs/plans/ledger_webrtc.md` (jobs J1-J6, decisions D1-D7, v1 of the plan is not in the repo).
@@ -570,6 +574,139 @@ green twice more (seeds 11400714819323524536, 11400714819323511382) and the six-
   `raddr :: rport 0`. No network here has one, so no check can see it.
 - **The Linux runner (run.sh) does not start the box**, and has no plugin (R0); the rows' checks need
   neither and run there, the IPv6 join form becoming a second IPv4 one where the OS has no IPv6.
+### Level walls: adversarial review, 7 findings fixed; batch proven (2026-09-25, lane C, `wt/walls`)
+
+**`Unlock` is a record class, not a struct**, so `Unlocks.All` (wall levels, the two boss gates) reaches
+`Net.Fingerprint` through `Plain`'s `<Clone>$` check like every other hashed table; two builds that
+disagree on one wall level or boss gate now refuse each other's handshake instead of silently
+disagreeing about what is open. **`Character.Load`'s hint filter asks `Hints.Card(h) != null`** (the
+query `Hints.Meet` already uses) instead of `Hints.All.ContainsKey(h)`, so an unlock card's id (e.g.
+`unlock_chipslot_1`) survives a save/load round trip instead of being silently dropped every time.
+**`EquipmentWindow` tracks `Character.Peak` and rebuilds when it changes**, so a chip slot opening
+mid-session (a level-up while the window is open) unlocks its row and un-greys EQUIP without a
+close/reopen.
+
+**Checks:** the handshake check ("THE HANDSHAKE SEES THE TABLES") now also asserts a wall level and a
+boss-gate literal are in what is hashed; guest2's "nor after a restart" now asserts the true
+post-Sanitize hold (6: 2 kill parts + 4 displaced chips) instead of a stale 2; "the other class keeps
+its own gear" switches class while the chip is still fitted, so it can fail again; the pilot hull-point
+check fits an Armour Chip I first, so +5 flat reads +5.4 under its +8% share, proving flats land before
+percentages again; `WallChecksLive` check 3 asserts the bar's locked set equals `{Nth(c,2), Nth(c,3)}`
+minus nulls (the spec's truth, matching the static twin) instead of "nothing locked"; a new
+EquipmentWindow check opens at peak 2 (chip slot 2 `LOCKED · L4`), raises Peak to 4 with no I press, and
+proves the row unlocks live; Character.Load's hints round trip now seeds `unlock_chipslot_1` and proves
+it survives alongside a known hint while an unknown id is still dropped.
+
+**Batch proven:** `version-l` merged in first (8 docs-only commits since aa1e4f9, no conflicts). Rung 2
+green; rung 3 (Solo) green on two seeds (11400714819323513364, 11400714819323511793); rung 5 (six roles)
+green on seed 11400714819323517573; screens green (111 frames, `LINT: 0`).
+
+**Known broken:** none known.
+
+### Level walls, job 3: the ability walls (2026-09-25, lane C, `wt/walls`)
+
+**A class's abilities 1, 2 and 3 open at pilot levels 1, 3 and 6** (`Unlocks.AbilityAt`), read from the
+pilot's peak. They are its rows in `ClassDef.Abilities` order, skipping the new `AbilityDef.Weapon` rows
+(guns, fire mode, point defence, the missile's reload, the wing's attack and recall, the sentries' deploy
+and collect) and the open hotkeys; keys keep their layout. **The host refuses a walled press**
+(`PlayerShip.DoAbility`, for the peak the pilot announced); the owner's press fails at once with
+`LOCKED · L3` (`UseAbility`, before a local press too); the bar draws a locked slot in the quiet box with
+`LOCKED · L3` beneath (`SlotState.Locked`); K adds "opens at level 3" to its row, still bindable. **Crossing
+a wall shows a card** written by the table for the class flown ("LEVEL 3 · Q · <ABILITY>" and its blurb;
+"LEVEL 4 · CHIP SLOT 2"), met in order by `AddExp` (`Unlocks.Crossed`, `Hints.Card`); the PILOT window
+names the next wall beside the points. The menu's battleship flies at peak 14. Today every class carries
+ONE walled ability, so nothing real is refused until lane A writes each kit's three in learn order.
+
+**Checks:** `WallChecks` (rung 3): the eight weapon rows; the index-to-level rule on real rows in three
+orders; all 12 classes open at level 1, every walled row a press; card ids, a chip card, `Crossed` and
+`Next` x battleship / warden / echo; check 3's three-a-class (PEND walls). `WallChecksLive` (rung 3, Solo):
+2600 EXP from level 1 queues LEVEL 2 · CHIP SLOT 1 x destroyer / warrior / carrier (ability 2's card PEND);
+the PILOT window's NEXT at 3 / 12 / 14; at level 1 a battleship, a hauler and an echo lock nothing, land
+their guns on a gunship 300-600 u off at a varied bearing and press ability 1 through `DoAbility`;
+checks 4 and 5 (the owner's LOCKED · L3, the host's gate at 5 / 6) PEND. The menu ship's peak 14. Rung 5
+(the third player, level 1 / peak 3): checks 13, 14 + 17 and 16 PEND. Shots: `6c_k_keys_walls`,
+`57b_walls_next_card` (new).
+
+**Known broken:** none known; rungs 2-5 and screens all green (see the review entry above). The PEND
+checks (3, 4, 5, 9's second card, 13, 14, 16, 17) still print PEND: they go live only when a class has a
+2nd and 3rd walled ability (lane A), and their timing on the guest is unproved until then.
+
+### Level walls, job 2b: five old-truth checks job 2 missed (2026-09-25, lane C, `wt/walls`)
+
+Rung 3 at job 4's commit (seed 11400714819323464263) failed five checks that still asserted the five kit
+chips' x1.25. Rewritten to the stock ship, with literals: the K window's battleship reads main guns
+35.80 DPS (4 x 17.9 every 2 s; 8.95 a barrel), the broadside 214.8 every 15.0 s = 14.32 DPS, the total
+35.80 + 14.32 + 1.00 = 51.12; the destroyer's burst 150 u off the nose lands 3 x 49 = 147; the kit is 22
+parts (no chip). No code changed.
+
+**Checks:** rewritten (rung 3): "stats tab: the stock main guns", "stats tab: the broadside", "and the
+total adds up", "a target 150 u off the nose", "the gear: 246 drops ... a 22-part kit".
+
+**Known broken:** none known; rungs 2-5 and screens all green (see the review entry above).
+
+### Level walls, job 4: Auto-sell and the lanes' blockades are rows of the unlock table (2026-09-25, lane C, `wt/walls`)
+
+**The base's two boss gates fold into `Unlocks.All`** as rows measured by the base owner's highest boss
+beaten (`Measure.Boss`): Auto-sell at boss 3 (`Opens.Economy`, `hauler_autosell`), blockades at boss 1
+(`Opens.Raids`), asked through `Unlocks.Boss(what, id)`. `Economy.Upgrade.NeedsBoss`,
+`Economy.AutoSellBoss` and `Lanes.NeedsBoss` are deleted; `Yard.TryBuy`, the base panel's LOCKED line and
+`Raids`' lane clock read the table. Behaviour is unchanged.
+
+**Checks:** `WallChecks` (new, rung 3): the two rows against the plan's literals (3, 1) and an unnamed row
+open (0); the lanes' clock waits with no bounty boss beaten and runs with 1 and 4 beaten. The existing
+Auto-sell checks (LOCKED until boss 3, the owner's record on a guest) now run through the table unchanged.
+
+**Known broken:** none known; rungs 2-5 and screens all green (see the review entry above).
+
+### Level walls, job 2 (F15): six chip slots on every hull, the kind caps, no starting chips (2026-09-25, lane C, `wt/walls`)
+
+**Every hull has six chip slots** (`Equipment.ChipSlots` 6), opened in order by the pilot's peak
+(`Unlocks`: level 2, 4, 8, 10, 12, 14), with **at most 3 Combat and 3 Utility chips** (`ChipKind` on
+`ItemDef`, `Equipment.KindCap`; the Combat Chip is Combat, Armour, Engine and Targeting are Utility).
+**`chip_basic` is deleted and `Equipment.Default` fits no chips**: a stock ship is its class row (a
+battleship 300 hull where it flew 375). `Equipment.Sanitize(c, ids, peak)` empties a chip in an unopened
+slot or over its kind's cap, and `Bonuses` / `Adds` take the peak, so the host holds a guest's claim to
+its own walls. `PlayerShip` keeps what is fitted whole and flies what its peak opens (`Loadout`), so a
+slot opening mid-session applies its chip. `Character.Load` moves every chip it cannot fly into the hold
+(never deleted). The equipment window shows six chip rows, a locked one reading `CHIP 4  ·  LOCKED · L10`
+with no button; EQUIP uses the first open empty slot (`Equipment.ChipFit`) and greys out with why ("next
+chip slot opens at level 10", "at most 3 Combat chips").
+
+**Checks:** `ChipChecks` (new, rung 3): open slots at levels 1/2/4/8/14 = 0/1/2/3/6 through Sanitize and
+the sheet, the Utility cap, `ChipFit`'s five answers, and files at levels 1/3/14 with five Combat chips
+loading 0/1/3 fitted and the rest held, x battleship / warden / echo, plus a file with no peak. Solo
+(rung 3): EQUIP and UNEQUIP of an Armour Chip I (+8% hull) in place of the five kit chips, and EQUIP greyed
+with both reasons and a locked row at peak 8. Rewritten to the stock numbers (no chips): the creator card
+(300), broadside 214.8, a shell 17.9, the refit's fraction (60/300, 108/540, 45/225), the destroyer 250,
+the missiles 147, a torpedo 137.5, the carrier's 93.6 DPS reference, the worst-case stack (-37% / -45% /
+-60%, chips counted three of a kind), hull points +5 / +10, the arena's 140 / 400 / 6. Rung 5 (new or
+rewritten): the arena guest's two Armour Chips (290); Guesty's four Armour Chips held to three on the host
+(248); the third player's five chips at peak 3 flying one on the host, on itself and on the other guest (324).
+Shots: `58b_eq_chip_walls` (new, peak 4: two chips, four locked rows, a greyed EQUIP).
+
+**Known broken:** none known; rungs 2-5 and screens all green (see the review entry above).
+
+### Level walls, job 1: the unlock table, the pilot's peak, save format 3 (2026-09-25, lane C, `wt/walls`)
+
+**`scripts/Unlocks.cs` is the one table of what a pilot's level opens** (docs/plans/level_walls.md with
+the owner's rulings): ability 1 at level 1, chip slot 1 at 2, ability 2 at 3, chip slot 2 at 4,
+ability 3 at 6, chip slots 3-6 at 8, 10, 12 and 14 (`Unlocks.All`, queried by `At`, `Count`, `Top`).
+**Walls read `Character.Peak`**, the highest level a pilot has ever reached: saved as
+`[progress] peak`, loaded as max(peak, level), raised by `AddExp`, never lowered by a refit. The
+identity carries it after the level; the host takes it through `Progression.Claim` (1-100, the cap a
+claim's spending already had) and hands it to the ship (`PlayerShip.SetProgress(bought, peak)`,
+`PlayerShip.Peak`). **`Game.Version` is 3**: format 2 files are listed greyed out and refused, with
+nothing migrated or refunded (owner's ruling). Nothing reads the walls yet: chip slots (job 2) and
+abilities (job 3) do.
+
+**Checks:** `WallChecks` (new, rung 3): the table against the plan's literals; a level up, a refit and
+a reload from levels 5, 13 and 2 keep the peak; files with no peak / a peak under the level / above it.
+Rewritten: the save round trip and its field inventory (`Peak`), the build stamp (3), the handshake's
+literal (3), fixtures written as this build's format, a format-2 file refused. Rung 5 (new): the host's
+copy of a guest reads peak 14 at level 1. The harness roles and both Shots pilots fly with every wall
+open (`Peak = Unlocks.Top`, level 1).
+
+**Known broken:** none known; rungs 2-5 and screens all green (see the review entry above).
 
 ### verify's text step skips a binary by what it holds, not by its extension (2026-09-24, in the WarShips_Version_L fork)
 

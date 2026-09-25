@@ -1226,12 +1226,15 @@ public partial class _Test : Node
         // and deletes its own along the way.
         // Ids get the role too: an id is a millisecond stamp, guest and guest2 start together, and the
         // host holds a dropped pilot's place by that id.
-        if (role != "solo") { Character.NewBlank(); Character.Id += "-" + role; Character.Name = role; Character.Save(); }
+        if (role != "solo") { Character.NewBlank(); Character.Id += "-" + role; Character.Name = role; Character.Peak = Unlocks.Top; Character.Save(); }
         // A SAVED BASE HAS TO SURVIVE ENTERING THE HUB. Hub._Ready builds the Yard, and the Yard
         // reads Character.Base* in its _Ready -- so if the character is loaded AFTER that, the base
         // comes up zero and the Yard's first-frame autosave writes the zeros back over the file.
         // Set here, asserted below, for every role.
         Character.NewBlank(); if (role != "solo") Character.Id += "-" + role;
+        // EVERY WALL OPEN (Unlocks): a pilot that has reached the top level once, at level 1, so every
+        // check that reads the pilot's level keeps its meaning. The wall checks set lower peaks themselves.
+        Character.Peak = Unlocks.Top;
         Character.Name = role + " Base"; Character.BaseCredits = 7777;
         Character.BaseStock["ore"] = 55; Character.Save();
         string baseId = Character.Id;
@@ -1447,6 +1450,8 @@ public partial class _Test : Node
         // this is the one place that already throws pilots away and loads the real one back at the
         // end. Run where the hub starts, its NewBlank wiped the tutorial's hint state.
         RefitChecks();
+        WallChecks();
+        ChipChecks();
         GearLevelChecks();
         BossScaleChecks();
         BuildChecks();
@@ -1459,7 +1464,7 @@ public partial class _Test : Node
         foreach (ShipClass sc in Enum.GetValues(typeof(ShipClass))) Character.LoadoutFor(sc);
         Character.Name = "Roundtrip"; Character.Class = ShipClass.Carrier;
         Character.Main = new Color(0.11f, 0.22f, 0.33f); Character.Accent = new Color(0.44f, 0.55f, 0.66f);
-        Character.Exp = 777; Character.Level = 5; Character.Points = 3;
+        Character.Exp = 777; Character.Level = 5; Character.Peak = 7; Character.Points = 3;
         for (int i = 0; i < Character.Bought.Length; i++) Character.Bought[i] = i % (Progression.MaxPerUpgrade + 1);
         Character.Spent.Clear(); Character.Spent.AddRange(new[] { 1, 3, 1 });   // the order they were bought in
         Character.Spent.Clear(); Character.Spent.AddRange(new[] { 1, 3, 1 });   // the order they were bought in
@@ -1467,7 +1472,7 @@ public partial class _Test : Node
         Character.BaseStock["ore"] = 123.5; Character.BaseStock["salvage"] = 67.25; Character.BaseCredits = 4321;
         Character.BaseLevels[Economy.All[0].Id] = 3;
         Character.BaseInvested[Economy.All[0].Tab] = 900;
-        Character.GearHold["chip_basic"] = 2; Character.GearHold["std_drive"] = 1; Character.GearHold["cv_elite_3"] = 1;
+        Character.GearHold["chip_combat_1"] = 2; Character.GearHold["std_drive"] = 1; Character.GearHold["cv_elite_3"] = 1;
         Character.GearLevel["bs_rapid_1"] = 7; Character.GearLevel["cv_elite_3"] = 40;
         Character.GearLocked.Add("cv_elite_3"); Character.TourDone = true;
         Character.Unclaimed.AddRange(new[] { "cv_elite_3", "sh_bulwark_2" });
@@ -1499,7 +1504,7 @@ public partial class _Test : Node
         var exercised = new[] { "Accent", "BaseCredits", "BaseInvested", "BaseLevels",
                                 "BaseStock", "BossCleared", "Bonuses", "<Bought>k__BackingField", "Class", "Exp",
                                 "GearHold", "GearLevel", "GearLocked", "HintsOff", "HintsSeen", "Id", "Level", "Loadout", "Main",
-                                "Name", "PaidKills", "Points", "Spent", "TourDone", "Unclaimed" };
+                                "Name", "PaidKills", "Peak", "Points", "Spent", "TourDone", "Unclaimed" };
         // Not state a character carries: a path, and the compiler's backing field for a property
         // that reports how the LAST save went. Named explicitly rather than filtered by a pattern,
         // so a real field that happens to look like one cannot slip through.
@@ -1528,11 +1533,11 @@ public partial class _Test : Node
         // ── the format-2 fields, read from a file on the player's disk: sanitised, never trusted ──
         {
             var bad = new ConfigFile();
-            bad.SetValue("id", "version", 2); bad.SetValue("id", "name", "Tampered");
-            bad.SetValue("gear_hold", "std_drive", 2); bad.SetValue("gear_hold", "chip_basic", -3);
+            bad.SetValue("id", "version", Game.Version); bad.SetValue("id", "name", "Tampered");
+            bad.SetValue("gear_hold", "std_drive", 2); bad.SetValue("gear_hold", "chip_combat_1", -3);
             bad.SetValue("gear_hold", "basic_deflector", 0); bad.SetValue("gear_hold", "no_such_part", 1);
-            bad.SetValue("loot", "unclaimed", "chip_basic,no_such_part,cv_elite_3");
-            bad.SetValue("hints", "seen", "flight,no_such_hint"); bad.SetValue("hints", "off", true);
+            bad.SetValue("loot", "unclaimed", "std_drive,no_such_part,cv_elite_3");
+            bad.SetValue("hints", "seen", "flight,no_such_hint,unlock_chipslot_1"); bad.SetValue("hints", "off", true);
             bad.SetValue("loot", "paid", string.Join(",", Enumerable.Range(1, 40)) + ",not_a_serial,40");
             bad.SetValue("base_levels", "miner_count", 99);
             bad.SetValue("gear_level", "bs_rapid_1", 99); bad.SetValue("gear_level", "no_such_part", 5);
@@ -1545,8 +1550,11 @@ public partial class _Test : Node
                   $"unclaimed loot keeps only real drops -- no kit, no unknown ids ({string.Join(",", Character.Unclaimed)})");
             Check(tl && Character.PaidKills.SequenceEqual(Enumerable.Range(9, 32).Select(i => (long)i)),
                   $"the kills paid: numbers only, each once, the last 32 kept ({Character.PaidKills.Count}: {Character.PaidKills.FirstOrDefault()}..{Character.PaidKills.LastOrDefault()})");
-            Check(tl && Character.HintsSeen.SetEquals(new[] { "flight" }) && Character.HintsOff,
-                  $"hints: unknown ids dropped, the off switch kept ({string.Join(",", Character.HintsSeen)}, off {Character.HintsOff})");
+            // an unlock card's id (Unlock.Hint) is no row of Hints.All (D15): it must survive the
+            // same load that drops a truly unknown id, or a wall crossed once is a card shown again
+            // every time this file is loaded.
+            Check(tl && Character.HintsSeen.SetEquals(new[] { "flight", "unlock_chipslot_1" }) && Character.HintsOff,
+                  $"hints: unknown ids dropped, an unlock card's id kept, the off switch kept ({string.Join(",", Character.HintsSeen)}, off {Character.HintsOff})");
             Check(tl && Character.BaseLevels.GetValueOrDefault("miner_count") == 4,
                   $"a base upgrade level is held to its cap: 99 miners' levels read as 4 (up to 5 miners) ({Character.BaseLevels.GetValueOrDefault("miner_count")})");
             // GEAR LEVELS OFF DISK, like a claim off the wire: parts this build knows, held to 40, a 0
@@ -1555,7 +1563,7 @@ public partial class _Test : Node
                   && Character.GearLevel.GetValueOrDefault("dd_salvo_1") == 3,
                   $"gear levels off disk: known parts only, held to 40, a renamed part's level follows it ({string.Join(",", Character.GearLevel.Select(kv => kv.Key + "=" + kv.Value))})");
             // a pilot with all of it in memory, then a file that has none of it
-            var bare = new ConfigFile(); bare.SetValue("id", "version", 2); bare.SetValue("id", "name", "Bare");
+            var bare = new ConfigFile(); bare.SetValue("id", "version", Game.Version); bare.SetValue("id", "name", "Bare");
             bare.Save($"{Character.Dir}/bare.cfg");
             Character.Unclaimed.Add("cv_elite_3"); Character.HintsSeen.Add("raid"); Character.PaidKills.Add(5);
             bool bl = Character.Load("bare");
@@ -1574,7 +1582,7 @@ public partial class _Test : Node
             // is not its gatherer's prefix and which a tidier generated id would have DROPPED,
             // losing a level the player paid for.
             var old = new ConfigFile();
-            old.SetValue("id", "version", 2); old.SetValue("id", "name", "OldKeys");
+            old.SetValue("id", "version", Game.Version); old.SetValue("id", "name", "OldKeys");
             old.SetValue("base", "ore", 1234.5); old.SetValue("base", "salvage", 678.25); old.SetValue("base", "credits", 4321.0);
             old.SetValue("base_levels", "miner_hold", 3); old.SetValue("base_levels", "mine_rate", 2);
             old.SetValue("base_levels", "salvage_rate", 1); old.SetValue("base_levels", "salvager_hull", 1);
@@ -1608,14 +1616,14 @@ public partial class _Test : Node
         // (by some route) a destroyer Seeker Rack I too; a Buster Rack II waited unclaimed.
         {
             var old = new ConfigFile();
-            old.SetValue("id", "version", 2); old.SetValue("id", "name", "Veteran"); old.SetValue("id", "class", 0);
-            old.SetValue("equipment", "Battleship", "bs_heavy_2,std_drive,basic_deflector,reinforced_frame,bs_salvo_3,chip_basic,chip_basic,,,");
+            old.SetValue("id", "version", Game.Version); old.SetValue("id", "name", "Veteran"); old.SetValue("id", "class", 0);
+            old.SetValue("equipment", "Battleship", "bs_heavy_2,std_drive,basic_deflector,reinforced_frame,bs_salvo_3,,,,,,");
             old.SetValue("gear_hold", "bs_seeker_1", 1); old.SetValue("gear_hold", "bs_missile_rack", 1); old.SetValue("gear_hold", "dd_seeker_1", 1);
             old.SetValue("loot", "unclaimed", "bs_buster_2,cv_elite_3");
             old.Save($"{Character.Dir}/veteran.cfg");
             bool vl = Character.Load("veteran");
             var vb = Character.LoadoutFor(ShipClass.Battleship);
-            Check(vl && vb[4] == "bs_broadside" && vb[0] == "bs_heavy_2" && vb[5] == "chip_basic" && vb[6] == "chip_basic" && vb[7] == "",
+            Check(vl && vb[4] == "bs_broadside" && vb[0] == "bs_heavy_2" && vb.Length == 11 && vb.Skip(5).All(x => x == ""),
                   $"an old battleship: its rack's slot now holds the broadside kit, the rest of its gear untouched ({string.Join(",", vb)})");
             Check(vl && Character.GearHold.GetValueOrDefault("dd_salvo_3") == 1 && Character.GearHold.GetValueOrDefault("dd_seeker_1") == 2
                   && Character.GearHold.GetValueOrDefault("dd_missile_rack") == 1 && !Character.GearHold.Keys.Any(k => k.StartsWith("bs_")),
@@ -1627,7 +1635,7 @@ public partial class _Test : Node
         }
 
         // ── the build stamp ──
-        Check(Character.List().First(x => x.Id == id).Version == 2 && Game.Version == 2,
+        Check(Character.List().First(x => x.Id == id).Version == 3 && Game.Version == 3,
               $"a character records the build that wrote it (version {Character.List().First(x => x.Id == id).Version}, game {Game.Version})");
 
         // A character from ANOTHER build: written by hand on disk, because the only other way to
@@ -1655,6 +1663,16 @@ public partial class _Test : Node
         var v1slot = Character.List().FirstOrDefault(x => x.Id == "v1old");
         Check(v1slot != null && v1slot.Version == 1 && !v1slot.Playable && !Character.Load("v1old") && Character.Id == keptId,
               $"a character from the last release (save format 1) is listed, marked unplayable and refused (format {v1slot?.Version})");
+        // FORMAT 2, the build before six chip slots and the level walls: refused the same way, with
+        // nothing migrated and nothing refunded (the owner's ruling: existing saves are disregarded).
+        var v2 = new ConfigFile();
+        v2.SetValue("id", "version", 2); v2.SetValue("id", "name", "FiveChips"); v2.SetValue("id", "class", 0);
+        v2.SetValue("progress", "level", 9);
+        v2.Save($"{Character.Dir}/v2old.cfg"); await Wait(0.05);
+        var v2slot = Character.List().FirstOrDefault(x => x.Id == "v2old");
+        Check(v2slot != null && v2slot.Version == 2 && !v2slot.Playable && !Character.Load("v2old") && Character.Id == keptId,
+              $"a character from save format 2 (five chip slots, no walls) is listed, marked unplayable and refused (format {v2slot?.Version})");
+        Character.Delete("v2old");
 
         // ...and the select screen greys it out and says why, rather than failing on PLAY.
         GetTree().ChangeSceneToFile("res://CharacterSelect.tscn"); await Wait(0.3);
@@ -1729,7 +1747,11 @@ public partial class _Test : Node
             bool sheet = parts.Contains("sheet Battleship.hull=300") && parts.Contains("sheet Carrier.fighter_speed=352");
             bool gear = parts.Any(p => p.StartsWith("Equipment.All=") && p.Contains("Id=cv_elite_3") && p.Contains("fighter_speed:2"));
             bool prices = parts.Any(p => p.StartsWith("Economy.All=") && p.Contains("Id=miner_count") && p.Contains("BaseCost=400"));
-            Check(sheet && gear && prices, $"the build fingerprint covers the stat sheets, the gear table and the prices (sheet {sheet}, gear {gear}, prices {prices})");
+            // a wall level (ability 2 at level 3, level_walls.md) and a boss gate (Auto-sell after boss 3) --
+            // both moved out of hashed fields and into Unlocks.All, so the table itself must be hashed now.
+            bool walls = parts.Any(p => p.StartsWith("Unlocks.All=") && p.Contains("Pilot/3/Ability/2")
+                                      && p.Contains("Boss/3/Economy/0/hauler_autosell"));
+            Check(sheet && gear && prices && walls, $"the build fingerprint covers the stat sheets, the gear table, the prices and the unlock table (sheet {sheet}, gear {gear}, prices {prices}, walls {walls})");
         }
 
         Character.Delete(alienId); Character.Delete("v1old"); Character.Delete(id);
@@ -1747,6 +1769,7 @@ public partial class _Test : Node
               "the title screen flies a REAL battleship, not a picture of one");
         if (menu?.DemoShip == null) return;
         var ship = menu.DemoShip;
+        Check(ship.Peak == 14, $"...nobody's pilot, so it waits for no level: every wall open, peak 14 ({ship.Peak})");
         // The spec's numbers as literals, never the menu's own constants: a check that reads the
         // constant cannot catch the constant being wrong.
         Check(Math.Abs(ship.Stats["broadside_cooldown"] - 5) < 1e-9 && Math.Abs(ship.Stats["broadside_volleys"] - 3) < 1e-9
@@ -2631,8 +2654,8 @@ public partial class _Test : Node
         var worn = Equipment.Default(ShipClass.Battleship);
         worn[Array.IndexOf(Equipment.Core, battery.Slot)] = battery.Id;
         Character.GearLevel[battery.Id] = 40;
-        var bare = Equipment.Bonuses(ShipClass.Battleship, worn, NoLevels);
-        var lifted = Equipment.Bonuses(ShipClass.Battleship, worn, new Dictionary<string, int> { [battery.Id] = 10 });   // +50%
+        var bare = Equipment.Bonuses(ShipClass.Battleship, worn, 14, NoLevels);
+        var lifted = Equipment.Bonuses(ShipClass.Battleship, worn, 14, new Dictionary<string, int> { [battery.Id] = 10 });   // +50%
         string up = battery.Ups.FirstOrDefault(), down = battery.Pct.Keys.FirstOrDefault(k => Array.IndexOf(battery.Ups, k) < 0);
         Check(up != null && down != null
               && Math.Abs(lifted[up] - bare[up] * 1.5) < 1e-9 && Math.Abs(lifted[down] - bare[down]) < 1e-9,
@@ -2830,6 +2853,320 @@ public partial class _Test : Node
         Character.NewBlank();
     }
 
+    // ── THE LEVEL WALLS (Unlocks): what a pilot's highest level reached opens ─────────────────────
+    // docs/plans/level_walls.md with the owner's rulings (6 chip slots on every hull, walls read the
+    // highest level ever reached). The levels are the plan's literals, never the table's own numbers;
+    // levels are never varied. Runs beside the refit's checks, on pilots it throws away.
+    void WallChecks()
+    {
+        // THE TABLE, in one place (level_walls check 2)
+        var abil = new[] { 1, 2, 3 }.Select(n => Unlocks.At(Opens.Ability, n)).ToArray();
+        var chip = Enumerable.Range(1, 6).Select(n => Unlocks.At(Opens.ChipSlot, n)).ToArray();
+        Check(abil.SequenceEqual(new[] { 1, 3, 6 }) && chip.SequenceEqual(new[] { 2, 4, 8, 10, 12, 14 }) && Unlocks.Top == 14
+              && Unlocks.At(Opens.Ability, 4) == int.MaxValue && Unlocks.At(Opens.ChipSlot, 7) == int.MaxValue,
+              $"the walls: abilities at levels 1, 3, 6; chip slots at 2, 4, 8, 10, 12, 14; every wall open at 14; never a 4th ability or a 7th slot (abilities {string.Join(",", abil)}; chips {string.Join(",", chip)}; top {Unlocks.Top})");
+        var chipsOpen = new[] { 1, 2, 4, 8, 14 }.Select(l => Unlocks.Count(Opens.ChipSlot, l)).ToArray();
+        var abOpen = new[] { 1, 2, 3, 5, 6 }.Select(l => Unlocks.Count(Opens.Ability, l)).ToArray();
+        Check(chipsOpen.SequenceEqual(new[] { 0, 1, 2, 3, 6 }) && abOpen.SequenceEqual(new[] { 1, 1, 2, 2, 3 }),
+              $"...so every hull has 0, 1, 2, 3 and 6 chip slots open at levels 1, 2, 4, 8 and 14, and 1, 1, 2, 2 and 3 abilities at 1, 2, 3, 5 and 6 ({string.Join(",", chipsOpen)}; {string.Join(",", abOpen)})");
+        // THE BASE'S ROWS, measured by the base owner's bosses beaten: Auto-sell at boss 3, the lanes'
+        // blockades at boss 1, and an Economy row no wall names open from the start
+        Check(Unlocks.Boss(Opens.Economy, "hauler_autosell") == 3 && Unlocks.Boss(Opens.Raids) == 1 && Unlocks.Boss(Opens.Economy, "miner_hold") == 0,
+              $"the base's walls are rows of the same table: Auto-sell once boss 3 is beaten, blockades once boss 1 is, the miners' hold never walled ({Unlocks.Boss(Opens.Economy, "hauler_autosell")}, {Unlocks.Boss(Opens.Raids)}, {Unlocks.Boss(Opens.Economy, "miner_hold")})");
+        // ...and the lanes' clock reads it: with no bounty boss beaten it never runs; from boss 1 it does
+        var laneIn = typeof(Raids).GetField("_laneIn", BindingFlags.NonPublic | BindingFlags.Instance);
+        foreach (var (beaten, runs) in new[] { (0, false), (1, true), (4, true) })
+        {
+            Character.NewBlank();
+            if (beaten > 0) Character.BossCleared["silver_lancer"] = Enumerable.Range(1, beaten).ToHashSet();
+            var lanes = new Raids(null); laneIn.SetValue(lanes, 5.0); lanes.Tick(0.5);
+            double left = (double)laneIn.GetValue(lanes);
+            Check(Missions.HighestBeaten(Missions.Bounty) == beaten && Math.Abs(left - (runs ? 4.5 : 5.0)) < 1e-9,
+                  $"with bounty boss {beaten} beaten the lanes' blockade clock {(runs ? "runs" : "waits for boss 1")}: 5 s -> {left:0.0} s in half a second");
+        }
+
+        // THE ABILITY WALLS BY POSITION (D4/D5): a class's abilities 1, 2 and 3 are its rows in list order,
+        // skipping a weapon's own actions and the open hotkeys. The weapon rows are exactly these eight.
+        var weaponRows = typeof(Ab).GetFields(BindingFlags.Public | BindingFlags.Static)
+                                   .Select(f => f.GetValue(null)).OfType<AbilityDef>().Where(a => a.Weapon).Select(a => a.Id).OrderBy(x => x, StringComparer.Ordinal).ToArray();
+        Check(weaponRows.SequenceEqual(new[] { "attack", "collect", "deploy", "firemode", "guns", "pd", "recall", "reload" }),
+              $"never walled: the guns, fire mode, point defence, the missile's reload, the wing's attack and recall, the sentries' deploy and collect ({string.Join(",", weaponRows)})");
+        // ...and the rule, on real rows in three orders: weapon rows first, walled rows first, the two interleaved
+        foreach (var (kit, want) in new[] {
+            (new[] { Ab.Guns, Ab.FireMode, Ab.Broadside, Ab.Pd, Ab.Missile, Ab.Reload, Ab.Railgun }, new[] { 1, 1, 1, 1, 3, 1, 6 }),
+            (new[] { Ab.Attack, Ab.Recall, Ab.Bombers, Ab.Pd, Ab.Hunters, Ab.Bubble, Ab.Echo }, new[] { 1, 1, 1, 1, 3, 6, int.MaxValue }),
+            (new[] { Ab.Echo, Ab.Guns, Ab.Stealth, Ab.Deploy, Ab.Collect, Ab.Rush, Ab.FireMode }, new[] { 1, 1, 3, 1, 1, 6, 1 }) })
+        {
+            var got = kit.Select(a => Unlocks.AbilityAt(kit, a)).ToArray();
+            Check(got.SequenceEqual(want) && Unlocks.AbilityAt(kit, Ab.Reboard) == 1,
+                  $"walls by place in the list: {string.Join(", ", kit.Select(a => a.Id))} open at levels {string.Join(", ", want.Select(w => w == int.MaxValue ? "never" : w.ToString()))}; reboard, on no list, at 1 ({string.Join(", ", got.Select(g => g == int.MaxValue ? "never" : g.ToString()))})");
+        }
+        // EVERY FLYABLE CLASS at level 1: every weapon row and ability 1 open, and a walled row is always
+        // a press (a held row is polled, not pressed: nothing on that path reads a wall)
+        var flyable = Classes.All.Where(cd => cd.Ready).ToList();
+        var shutAt1 = flyable.SelectMany(cd => cd.Abilities.Where(a => Unlocks.LockedAt(cd.Id, 1, a) != null && a != Unlocks.Nth(cd.Id, 2) && a != Unlocks.Nth(cd.Id, 3))
+                                                           .Select(a => $"{cd.Id}.{a.Id}")).ToList();
+        var heldWalled = flyable.SelectMany(cd => cd.Abilities.Where(a => Unlocks.Walled(a) && a.Kind != AbilityKind.Press).Select(a => $"{cd.Id}.{a.Id}")).ToList();
+        Check(flyable.Count == 12 && shutAt1.Count == 0 && heldWalled.Count == 0 && flyable.All(cd => Unlocks.Nth(cd.Id, 1) != null),
+              $"all 12 classes at level 1: ability 1 and every weapon row open, and every walled row a press ({string.Join(",", shutAt1)}; held {string.Join(",", heldWalled)})");
+        // level_walls check 3: exactly three walled abilities a class, the Warrior learning lunge, whirlwind,
+        // prism and the Carrier bombers, gunships, supercarrier. PEND while the kits are one ability each.
+        var walledCount = flyable.ToDictionary(cd => cd.Id, cd => cd.Abilities.Count(Unlocks.Walled));
+        bool Learns(ShipClass c, params string[] names) => names.Select((nm, i) => Unlocks.Nth(c, i + 1)?.Name.Contains(nm, StringComparison.OrdinalIgnoreCase) == true).All(x => x);
+        if (walledCount.Values.Any(n => n < 1 || n > 3))
+            Check(false, $"every class carries one to three walled abilities: {string.Join(", ", walledCount.Where(kv => kv.Value < 1 || kv.Value > 3).Select(kv => $"{kv.Key} {kv.Value}"))}");
+        else if (walledCount.Values.All(n => n == 3))
+            Check(Learns(ShipClass.HeavyWarrior, "lunge", "whirlwind", "prism") && Learns(ShipClass.Carrier, "bomber", "gunship", "supercarrier"),
+                  $"every class learns three abilities in its list's order: the Warrior lunge, whirlwind, prism; the Carrier bombers, gunships, supercarrier ({string.Join(", ", Enumerable.Range(1, 3).Select(n => Unlocks.Nth(ShipClass.HeavyWarrior, n)?.Name))}; {string.Join(", ", Enumerable.Range(1, 3).Select(n => Unlocks.Nth(ShipClass.Carrier, n)?.Name))})");
+        else
+            GD.Print($"PEND walls: three walled abilities a class (level_walls check 3) -- {string.Join(", ", walledCount.Where(kv => kv.Value < 3).Select(kv => $"{kv.Key} {kv.Value}"))}");
+        // THE CARDS AND THE NEXT LINE, from the table: a pilot row's card id, a chip slot's card on three
+        // hulls, and what the PILOT window names next at levels 3, 12 and 14
+        var hintIds = Unlocks.All.Select(u => u.Hint).ToArray();
+        Check(hintIds.SequenceEqual(new[] { "unlock_ability_1", "unlock_chipslot_1", "unlock_ability_2", "unlock_chipslot_2", "unlock_ability_3",
+                                            "unlock_chipslot_3", "unlock_chipslot_4", "unlock_chipslot_5", "unlock_chipslot_6", null, null }),
+              $"every pilot row has a card of its own, the base's rows none ({string.Join(",", hintIds.Select(h => h ?? "-"))})");
+        foreach (var c in new[] { ShipClass.Battleship, ShipClass.HeavyWarden, ShipClass.LightEcho })
+        {
+            var card = Unlocks.Card("unlock_chipslot_2", c);
+            var crossed = Unlocks.Crossed(1, 2, c).Select(u => u.Hint).ToArray();
+            var next = new[] { 3, 12, 14 }.Select(p => Unlocks.Next(c, p)).ToArray();
+            Check(card?.Title == "LEVEL 4 · CHIP SLOT 2" && crossed.SequenceEqual(new[] { "unlock_chipslot_1" }) && Unlocks.Card("unlock_ability_1", c) != null
+                  && Unlocks.Card("no_such_row", c) == null && next.SequenceEqual(new[] { "LEVEL 4 · CHIP SLOT 2", "LEVEL 14 · CHIP SLOT 6", null }),
+                  $"{c}: the card for chip slot 2 reads LEVEL 4 · CHIP SLOT 2; level 1 to 2 crosses chip slot 1 alone; next at levels 3, 12, 14: chip slot 2, chip slot 6, nothing ({card?.Title}; {string.Join(",", crossed)}; {string.Join(" / ", next.Select(n => n ?? "-"))})");
+        }
+
+        // THE PEAK (level_walls check 8, the pilot's half): a level up raises it, a refit never lowers
+        // it, and it survives a save and a load. Three pilots: into ability 3, into chip slot 6, into ability 2.
+        foreach (int from in new[] { 5, 13, 2 })
+        {
+            Character.NewBlank(); Character.Level = from; Character.Peak = from;
+            Progression.AddExp(1000);                                   // saves
+            int grew = Character.Peak;
+            Progression.Refit();                                        // saves
+            string pid = Character.Id; int refitTo = Character.Level;
+            Character.NewBlank(); bool back = Character.Load(pid);
+            Check(grew == from + 1 && refitTo == from && back && Character.Level == from && Character.Peak == from + 1,
+                  $"a pilot at level {from} levels up to {from + 1}, refits back to {from}, and its highest level reached stays {from + 1} through a save and a load (peak {grew} after the level; level {Character.Level}, peak {Character.Peak} loaded)");
+            Character.Delete(pid);
+        }
+        // A FILE WITHOUT THE KEY reads its level, and so does one whose peak is under its level
+        foreach (var (level, peak, want) in new[] { (4, -1, 4), (9, 2, 9), (3, 12, 12) })
+        {
+            var f = new ConfigFile(); f.SetValue("id", "version", Game.Version); f.SetValue("id", "name", "PeakFile");
+            f.SetValue("progress", "level", level); if (peak >= 0) f.SetValue("progress", "peak", peak);
+            f.Save($"{Character.Dir}/peakfile.cfg");
+            bool ok = Character.Load("peakfile");
+            Check(ok && Character.Peak == want && Character.Level == level,
+                  $"a file at level {level} {(peak < 0 ? "with no peak" : $"with peak {peak}")} loads with peak {want} ({Character.Peak})");
+            Character.Delete("peakfile");
+        }
+        Character.NewBlank();
+    }
+
+    // ── THE ABILITY WALLS IN THE WORLD (level_walls checks 3, 4, 5, 9 and the PILOT window's NEXT line) ──
+    // Run from the pilot's progression block, in the hub. Leaves the pilot as it found it: its class,
+    // level, EXP, points and peak, and its ship where it was. Checks 4 and 5 need a class's ability 2 or 3,
+    // so they print PEND walls until the kits carry them (lane A, slice 6).
+    string Sn(PlayerShip s, string id) { var t = Snap(s, id); return t[..t.LastIndexOf(" hp", StringComparison.Ordinal)]; }   // the hull is the gunship's business
+    async Task WallChecksLive()
+    {
+        var cls0 = Character.Class; int lv0 = Character.Level, exp0 = Character.Exp, pts0 = Character.Points, peak0 = Character.Peak;
+        var here0 = Me.Position; float rot0 = Me.Rotation;
+        var ids = Unlocks.All.Select(u => u.Hint).Where(h => h != null).ToArray();
+        var doAb = typeof(PlayerShip).GetMethod("DoAbility", BindingFlags.NonPublic | BindingFlags.Instance);
+        var spot = Hub.BasePos + new Vector2(2600, 2400);                  // clear of the belt, the wreck, the dummies and the lane
+        async Task At(ShipClass c, int peak)
+        {
+            Character.Class = c; Character.Peak = peak; H.PilotChanged(); await Wait(0.1);
+            foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+            var s = Me; s.Position = VaryNear(spot, 200f); s.Velocity = Vector2.Zero; s.Restore(s.MaxHp, true, 0);
+        }
+        Raider Mark(Vector2 at) { var m = H.SpawnRaider(at, Enemies.Gunship); m.Hp = 1e9; return m; }
+
+        // CHECK 9, THE CARDS: 2600 EXP from level 1 queues chip slot 1's card, then ability 2's naming this
+        // class's own key and ability (the Destroyer's Q, the Warrior's Q, the Carrier's E)
+        foreach (var (c, key) in new[] { (ShipClass.Destroyer, "Q"), (ShipClass.HeavyWarrior, "Q"), (ShipClass.Carrier, "E") })
+        {
+            await At(c, 1);
+            Character.Level = 1; Character.Exp = 0; Unmeet(ids);
+            Progression.AddExp(2600);
+            var q = HintQueue.Where(h => h.StartsWith("unlock_", StringComparison.Ordinal)).ToList();
+            var a2 = Unlocks.Nth(c, 2);
+            Check(Character.Level == 3 && Character.Peak == 3 && q.FirstOrDefault() == "unlock_chipslot_1" && Hints.Card(q[0])?.Title == "LEVEL 2 · CHIP SLOT 1"
+                  && q.Count == (a2 == null ? 1 : 2),
+                  $"{c}: 2600 EXP from level 1 reaches level 3 and queues the chip slot 1 card first: LEVEL 2 · CHIP SLOT 1 ({Character.Level}, peak {Character.Peak}; {string.Join(",", q)})");
+            if (a2 == null) GD.Print($"PEND walls: {c} has no ability 2 for its LEVEL 3 · {key} card (level_walls check 9)");
+            else Check(q.Count == 2 && q[1] == "unlock_ability_2" && Hints.Card(q[1])?.Title == $"LEVEL 3 · {key} · {a2.Name.ToUpperInvariant()}" && Hints.Card(q[1])?.Body == a2.Blurb,
+                       $"{c}: ...then ability 2's: LEVEL 3 · {key} · {a2.Name.ToUpperInvariant()}, with its blurb ({(q.Count > 1 ? Hints.Card(q[1])?.Title : "none")})");
+            Unmeet(ids);
+        }
+
+        // THE PILOT WINDOW'S NEXT LINE at levels 3, 12 and 14, drawn
+        Key(global::Godot.Key.L); await Wait(0.1);
+        var said = new List<string>();
+        foreach (int p in new[] { 3, 12, 14 })
+        {
+            Character.Peak = p; await Wait(0.05);
+            said.Add(Nodes<PilotWindow>().SelectMany(w => Nodes<Label>(w)).FirstOrDefault(l => l.Name == "Next")?.Text);
+        }
+        Key(global::Godot.Key.L); await Wait(0.1);
+        Check(said.SequenceEqual(new[] { "NEXT  LEVEL 4 · CHIP SLOT 2", "NEXT  LEVEL 14 · CHIP SLOT 6", "every wall open" }),
+              $"the PILOT window names the next wall: at level 3 chip slot 2, at 12 chip slot 6, at 14 nothing ({string.Join(" / ", said)})");
+
+        // CHECK 3, LIVE: at level 1, a capital, a freighter and a light press ability 1 through the host's gate
+        // (DoAbility) and it acts; the bar's locked set is exactly ability 2 and 3 (the spec's own walls,
+        // level_walls s.1, kits_v31 s.3.6 -- the static twin at WallChecks excludes the same two rows);
+        // and Space on a gunship 300-600 u off, inside the gun's reach, at a varied bearing, lands
+        foreach (var c in new[] { ShipClass.Battleship, ShipClass.FreightHauler, ShipClass.LightEcho })
+        {
+            await At(c, 1);
+            var s = Me; var a1 = Unlocks.Nth(c, 1);
+            var expectShut = new[] { Unlocks.Nth(c, 2), Unlocks.Nth(c, 3) }.Where(a => a != null).Select(a => a.Id).OrderBy(x => x, StringComparer.Ordinal).ToArray();
+            var shut = Abilities.For(c).Where(a => !a.Open && AbilityBar.StateOf(s, a.Id, null).Locked).Select(a => a.Id).OrderBy(x => x, StringComparer.Ordinal).ToList();
+            // the guns first: ability 1 after (a broadside would land on the gunship too)
+            float reach = Math.Min(600f, (float)s.Stats["main_range"] * 0.9f), bearing = VaryAngle(), dist = Vary(300f, reach);
+            var from = s.Position; var at = from + Vector2.Right.Rotated(bearing) * dist;
+            var mark = Mark(at); s.Rotation = bearing + Mathf.Pi / 2;
+            AimWorld(at); await Wait(0.5);
+            double hp0 = mark.Hp;
+            KeyDown(global::Godot.Key.Space);
+            for (int i = 0; i < 60 * 3 && mark.Hp >= hp0; i++)
+            {
+                mark.Position = at; s.Position = from; s.Velocity = Vector2.Zero; AimWorld(at);
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            }
+            KeyUp(global::Godot.Key.Space);
+            for (int i = 0; i < 90 && mark.Hp >= hp0; i++) { mark.Position = at; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            double dealt = hp0 - mark.Hp;
+            mark.TakeDamage(1e12); await Wait(0.1);
+            s.Sl(a1.Id).Cool = 0;
+            string b1 = Sn(s, a1.Id);
+            doAb.Invoke(s, new object[] { a1.Id, 0 });
+            await Wait(0.1);
+            string a1After = Sn(s, a1.Id);
+            Check(s.Peak == 1 && shut.SequenceEqual(expectShut) && a1After != b1 && dealt > 0,
+                  $"{c} at level 1: the bar's locked set is exactly ability 2 and 3 when this class has them ({string.Join(",", shut)} vs {string.Join(",", expectShut)}), its guns land on a gunship {dist:0} u off ({dealt:0.0} dealt), and its {a1.Name} (ability 1) acts through the host's gate ({b1} -> {a1After})");
+        }
+
+        // CHECK 4, THE OWNER'S REFUSAL: ability 2 at level 2 says LOCKED · L3 and nothing moves; at 3 it acts
+        foreach (var c in new[] { ShipClass.Destroyer, ShipClass.HeavyWarden, ShipClass.LightEcho })
+        {
+            var a2 = Unlocks.Nth(c, 2);
+            if (a2 == null) { GD.Print($"PEND walls: {c} has no ability 2 to refuse at level 2 (level_walls check 4)"); continue; }
+            foreach (int p in new[] { 2, 3 })
+            {
+                await At(c, p);
+                var s = Me; var mark = Mark(VaryNear(s.Position, 300f)); H.SelectTarget(mark); await Wait(0.1);
+                s.Sl(a2.Id).Cool = 0;
+                string before = Sn(s, a2.Id);
+                s.UseAbility(a2.Id, mark.NetId); await Wait(0.3);
+                string after = Sn(s, a2.Id), note = s.FailNote(a2.Id);
+                if (p == 2)
+                    Check(note == "LOCKED · L3" && before == after && AbilityBar.StateOf(s, a2.Id, mark).Fail,
+                          $"{c} at level 2: {a2.Name} (ability 2) is refused with LOCKED · L3 and nothing moves ({note}; {before} -> {after})");
+                else
+                    Check(note == null && before != after, $"{c} at level 3: {a2.Name} acts ({note}; {before} -> {after})");
+                mark.TakeDamage(1e12);
+            }
+        }
+
+        // CHECK 5, THE HOST'S GATE: ability 3 delivered straight to DoAbility (a guest's request, past its own
+        // refusal) does nothing at level 5 and acts at 6
+        foreach (var c in new[] { ShipClass.Battleship, ShipClass.Destroyer, ShipClass.HeavyWarrior })
+        {
+            var a3 = Unlocks.Nth(c, 3);
+            if (a3 == null) { GD.Print($"PEND walls: {c} has no ability 3 for the host's gate at level 5 (level_walls check 5)"); continue; }
+            foreach (int p in new[] { 5, 6 })
+            {
+                await At(c, p);
+                var s = Me; var mark = Mark(VaryNear(s.Position, 300f)); H.SelectTarget(mark); await Wait(0.1);
+                s.Sl(a3.Id).Cool = 0;
+                string before = Sn(s, a3.Id);
+                doAb.Invoke(s, new object[] { a3.Id, mark.NetId }); await Wait(0.3);
+                string after = Sn(s, a3.Id);
+                Check(p == 5 ? before == after : before != after,
+                      $"{c} at level {p}: {a3.Name} (ability 3) sent straight to the host {(p == 5 ? "does nothing" : "acts")} ({before} -> {after})");
+                mark.TakeDamage(1e12);
+            }
+        }
+
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+        Character.Class = cls0; Character.Level = lv0; Character.Exp = exp0; Character.Points = pts0; Character.Peak = peak0;
+        H.PilotChanged(); await Wait(0.1);
+        var me = Me; me.Position = here0; me.Rotation = rot0; me.Velocity = Vector2.Zero; me.Restore(me.MaxHp, true, 0);
+        Character.Save();
+    }
+
+    // ── CHIP SLOTS AND KINDS (F15; level_walls checks 6, 6b and 7) ────────────────────────────────
+    // Six chip slots on every hull, opened by the pilot's highest level; at most 3 Combat and 3
+    // Utility chips; a file never loses a chip it cannot fly. A capital, a heavy and a light, with
+    // their class rows' hulls as literals: battleship 300, warden 140, echo 90.
+    void ChipChecks()
+    {
+        var three = new[] { (c: ShipClass.Battleship, hull: 300.0), (c: ShipClass.HeavyWarden, hull: 140.0), (c: ShipClass.LightEcho, hull: 90.0) };
+        string[] With(ShipClass c, params string[] chips)
+        {
+            var l = Equipment.Default(c);
+            for (int k = 0; k < chips.Length; k++) l[5 + k] = chips[k];
+            return l;
+        }
+        double Hull(ShipClass c, string[] l, int peak) =>
+            new ShipStats(c, Equipment.Bonuses(c, l, peak, NoLevels), Equipment.Adds(c, l, peak, NoLevels))["hull"];
+        const string A = "chip_armour_1", C = "chip_combat_1";     // Armour Chip I: +8% hull (Utility); Combat Chip I: -5% hull (Combat)
+        foreach (var (c, hull) in three)
+        {
+            // CHECK 6: open slots at levels 1, 2, 4, 8 and 14 are 0, 1, 2, 3 and 6 -- through Sanitize and the sheet
+            var alt = With(c, A, C, A, C, A, C);
+            var peaks = new[] { 1, 2, 4, 8, 14 };
+            var open = peaks.Select(p => Equipment.Sanitize(c, alt, p).Skip(5).Count(x => x != "")).ToArray();
+            var hulls = peaks.Select(p => Hull(c, alt, p)).ToArray();
+            var want = new[] { 1.0, 1.08, 1.03, 1.11, 1.09 }.Select(m => hull * m).ToArray();
+            Check(open.SequenceEqual(new[] { 0, 1, 2, 3, 6 }) && hulls.Zip(want).All(p => Math.Abs(p.First - p.Second) < 1e-6),
+                  $"{c}: chip slots open at levels 1, 2, 4, 8, 14 are 0, 1, 2, 3, 6 -- Armour, Combat, Armour, Combat... fitted, the sheet flies only the open ones: {string.Join(" / ", want.Select(w => w.ToString("0.##")))} hull ({string.Join(",", open)}; {string.Join(" / ", hulls.Select(h => h.ToString("0.##")))})");
+            // THE KIND CAP: four Armour Chips and two Combat Chips at level 14 fly three Armour: the fourth is emptied
+            var four = Equipment.Sanitize(c, With(c, A, A, A, A, C, C), 14);
+            Check(four.Skip(5).SequenceEqual(new[] { A, A, A, "", C, C }) && Math.Abs(Hull(c, With(c, A, A, A, A, C, C), 14) - hull * 1.14) < 1e-6,
+                  $"{c}: at most 3 Utility chips -- a fourth Armour Chip is emptied, so the sheet reads {hull * 1.14:0.##} hull, not {hull * 1.22:0.##} ({string.Join(",", four.Skip(5))})");
+            // CHECK 6b, what EQUIP says (Equipment.ChipFit): the first open empty slot, or why not
+            var f1 = Equipment.ChipFit(Equipment.Default(c), 1, Equipment.ById(A));
+            var f4 = Equipment.ChipFit(With(c, C), 4, Equipment.ById(A));
+            var f8 = Equipment.ChipFit(With(c, C, A, A), 8, Equipment.ById("chip_engine_1"));
+            var f14 = Equipment.ChipFit(With(c, C, C, C), 14, Equipment.ById("chip_combat_2"));
+            var f14u = Equipment.ChipFit(With(c, C, C, C), 14, Equipment.ById(A));
+            Check(f1 == (-1, "next chip slot opens at level 2") && f4.slot == 6 && f4.why == null && f8 == (-1, "next chip slot opens at level 10")
+                  && f14 == (-1, "at most 3 Combat chips") && f14u.slot == 8 && f14u.why == null,
+                  $"{c}: EQUIP at level 1 waits for level 2; at level 4 the second slot takes it; at level 8 with three on it waits for level 10; a fourth Combat chip is refused, a Utility one takes slot 4 ({f1}, {f4}, {f8}, {f14}, {f14u})");
+            // CHECK 7, SAVES NEVER DELETE: five Combat Chips fitted in a file, one more in its hold. Each
+            // pilot keeps all six: as many fitted as its level opens (3 at most, the kind cap), the rest held.
+            foreach (var (level, fitted) in new[] { (1, 0), (3, 1), (14, 3) })
+            {
+                var f = new ConfigFile(); f.SetValue("id", "version", Game.Version); f.SetValue("id", "name", "ChipFile"); f.SetValue("id", "class", (int)c);
+                f.SetValue("progress", "level", level); f.SetValue("progress", "peak", level);
+                f.SetValue("equipment", c.ToString(), string.Join(",", With(c, C, C, C, C, C)));
+                f.SetValue("gear_hold", C, 1);
+                f.Save($"{Character.Dir}/chipfile.cfg");
+                bool ok = Character.Load("chipfile");
+                int on = Character.LoadoutFor(c).Skip(5).Count(x => x == C), held = Character.GearHold.GetValueOrDefault(C);
+                Check(ok && on == fitted && held == 6 - fitted,
+                      $"{c}: a file at level {level} with five Combat Chips fitted and one held loads {fitted} fitted and {6 - fitted} held -- six owned before and after ({on} + {held})");
+                Character.Delete("chipfile");
+            }
+        }
+        // ...and a file with no `peak` reads its level: level 3, one slot open, one of the five fitted
+        {
+            var f = new ConfigFile(); f.SetValue("id", "version", Game.Version); f.SetValue("id", "name", "ChipFile");
+            f.SetValue("progress", "level", 3);
+            f.SetValue("equipment", nameof(ShipClass.Destroyer), string.Join(",", With(ShipClass.Destroyer, C, C, C, C, C)));
+            f.Save($"{Character.Dir}/chipfile.cfg");
+            bool ok = Character.Load("chipfile");
+            int on = Character.LoadoutFor(ShipClass.Destroyer).Skip(5).Count(x => x == C), held = Character.GearHold.GetValueOrDefault(C);
+            Check(ok && on == 1 && held == 4, $"a file at level 3 with no peak and five Combat Chips fitted loads 1 fitted and 4 held ({on} + {held})");
+            Character.Delete("chipfile");
+        }
+        Character.NewBlank();
+    }
+
     async Task Solo()
     {
         Check(H != null, "hub loaded");
@@ -2972,17 +3309,16 @@ public partial class _Test : Node
         Check(Count<BasePanel>() == 0, "the base menu steps aside for it");
         Key(global::Godot.Key.B); await Wait(0.1);
         Check(Count<BasePanel>() == 0, "B does nothing while the ship menu owns the screen");
-        // THE CARD SAYS WHAT THE SHIP WILL HAVE. Its hull used to be hand-written into each
-        // class's blurb ("300 hull"), which is the bare class row -- every real pilot flies 25%
-        // more than that from the five basic chips in the starting kit, so the card disagreed
-        // with the ship from its first flight. It reads the same sheet the ship fights with now.
+        // THE CARD SAYS WHAT THE SHIP WILL HAVE: the same sheet the ship fights with, this pilot's
+        // parts in it, rather than a hull hand-written into each class's blurb. A stock battleship
+        // carries no chips, so its card reads the class's 300.
         {
             var cards = Nodes<Button>(Nodes<CharacterCreator>().First()).Where(b2 => b2.Text.Contains(" hull")).ToList();
             double bsHull = new ShipStats(ShipClass.Battleship,
-                                          Equipment.Bonuses(ShipClass.Battleship, Character.LoadoutFor(ShipClass.Battleship), Character.GearLevel),
-                                          Equipment.Adds(ShipClass.Battleship, Character.LoadoutFor(ShipClass.Battleship), Character.GearLevel))["hull"];
+                                          Equipment.Bonuses(ShipClass.Battleship, Character.LoadoutFor(ShipClass.Battleship), Character.Peak, Character.GearLevel),
+                                          Equipment.Adds(ShipClass.Battleship, Character.LoadoutFor(ShipClass.Battleship), Character.Peak, Character.GearLevel))["hull"];
             var bsCard = cards.FirstOrDefault(b2 => b2.Text.StartsWith("BATTLESHIP"));
-            Check(cards.Count == 3 && bsCard != null && Math.Abs(bsHull - 375) < 1e-9
+            Check(cards.Count == 3 && bsCard != null && Math.Abs(bsHull - 300) < 1e-9
                   && bsCard.Text.Contains($"{bsHull:0} hull") && !Classes.All.Any(c2 => c2.Blurb.Contains(" hull.")),
                   $"a class card prints the hull the ship will actually have -- the sheet's, with the starting kit in it ({bsHull:0} on the battleship's card, and no class blurb writes one any more)");
         }
@@ -3093,7 +3429,7 @@ public partial class _Test : Node
                 typeof(Hub).GetMethod("NetShipState", BindingFlags.NonPublic | BindingFlags.Instance)
                            .Invoke(loose, new object[] { 5, 0f, 0f, 0f, 0f, 0f, 0f, 0f, false, false, 0f, 0f, 0f, false });
                 typeof(Hub).GetMethod("NetIdentity", BindingFlags.NonPublic | BindingFlags.Instance)
-                           .Invoke(loose, new object[] { 5, "X", Colors.White, Colors.White, 0, new int[0], 1, new string[0], new string[0], new int[0], "x" });
+                           .Invoke(loose, new object[] { 5, "X", Colors.White, Colors.White, 0, new int[0], 1, 1, new string[0], new string[0], new int[0], "x" });
                 dropped &= !Net.FromPlayer(loose, out int who) && who == 0;
             }
             catch (Exception) { dropped = false; }
@@ -3703,14 +4039,14 @@ public partial class _Test : Node
         Check(Count<StatsWindow>() == 1, "K opens the ability & stats window");
         var win = Nodes<StatsWindow>().First();
         var labels = Nodes<Label>(win).Select(l => l.Text).ToList();
-        Check(labels.Any(x => x.Contains("Main guns:  44.75 DPS")) && labels.Any(x => x.Contains("4 barrels at 11.19 DPS"))
+        Check(labels.Any(x => x.Contains("Main guns:  35.80 DPS")) && labels.Any(x => x.Contains("4 barrels at 8.95 DPS"))
               && labels.Any(x => x.Contains("salvo 4 every 2.00 s = staggered 1 every 0.50 s")) && labels.Any(x => x.Contains("Turning radius")),
-              "stats tab: the main guns at 44.75 DPS, 4 barrels of 11.19, and helm stats");
-        Check(labels.Any(x => x.Contains("3 volleys × 4 shells") && x.Contains("= 268.5 damage, every 15.0 s")) && !labels.Any(x => x.StartsWith("Missiles")),
-              "stats tab: the broadside, 3 volleys of 4 shells = 268.5 damage every 15 s; no missiles");
-        Check(labels.Any(x => x.Contains("Broadside, averaged over its cycle:  17.90 DPS")) && labels.Any(x => x.Contains("Point defence:  1.00 DPS"))
-              && labels.Any(x => x.Contains("SUSTAINED TOTAL:  63.65 DPS")),
-              "and the total adds up every line it prints: guns 44.75 + broadside 17.90 + point defence 1.00 = 63.65 DPS");
+              "stats tab: the stock main guns, 4 x 17.9 every 2 s = 35.80 DPS, 4 barrels of 8.95, and helm stats");
+        Check(labels.Any(x => x.Contains("3 volleys × 4 shells") && x.Contains("= 214.8 damage, every 15.0 s")) && !labels.Any(x => x.StartsWith("Missiles")),
+              "stats tab: the broadside, 3 volleys of 4 shells x 17.9 = 214.8 damage every 15 s; no missiles");
+        Check(labels.Any(x => x.Contains("Broadside, averaged over its cycle:  14.32 DPS")) && labels.Any(x => x.Contains("Point defence:  1.00 DPS"))
+              && labels.Any(x => x.Contains("SUSTAINED TOTAL:  51.12 DPS")),
+              "and the total adds up every line it prints: guns 35.80 + broadside 14.32 + point defence 1.00 = 51.12 DPS");
         Check(Nodes<HBoxContainer>(win).Count(r => r.Name.ToString().StartsWith("Key_")) == 10, "keys tab lists the battleship's 4 abilities + 6 open slots");
         Check(Enumerable.Range(1, 6).All(i => Abilities.KeyFor(ShipClass.Battleship, $"open{i}") == global::Godot.Key.Key0 + i)
               && Abilities.For(ShipClass.Carrier).Count(a => a.Open) == 6 && Abilities.For((ShipClass)99).Length == 6,
@@ -3823,7 +4159,7 @@ public partial class _Test : Node
                   $"three volleys of all four guns: the first at the end of the 0.5 s wind-up, then 0.25 s apart ({volleys.Count} volleys)");
             Check(speedAtFire > 10, $"the ship steers throughout: under way through the wind-up ({speedAtFire:0} u/s ahead at the first volley)");
             await Wait(0.6);
-            Check(Math.Abs(d1.Total - 268.5) < 0.01, $"every shell lands: 3 volleys x 4 shells x 22.375 (17.9 x1.25 by the chips) = 268.5 ({d1.Total:0.000})");
+            Check(Math.Abs(d1.Total - 214.8) < 0.01, $"every shell lands: 3 volleys x 4 shells x 17.9 = 214.8 ({d1.Total:0.000})");
             Check(cdAtLast > 13.9 && cdAtLast <= 14 && AbilityBar.StateOf(ship, "broadside", H.Selected).Busy > 0.8f,
                   $"the 14 s cooldown starts with the last volley, and the slot shows it ({cdAtLast:0.00} s)");
             int shellsBefore = Shells().Count(s => seen.Add(s));
@@ -3855,7 +4191,7 @@ public partial class _Test : Node
             Check(Math.Abs(shSpd - 650) < 6f && GodotObject.IsInstanceValid(sh1) && sh1.Dir == sd0 && atFire == 0,
                   $"the guns fire shells at 650 u/s, straight, and nothing lands at once ({shSpd:0} u/s)");
             for (int i = 0; i < 90 && gd.Total == 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            Check(gd.Total > 0 && Math.Abs(gd.Total % gs.Stats["main_damage"]) < 1e-6 && Math.Abs(gs.Stats["main_damage"] - 22.375) < 1e-9, $"a shell lands for 17.9 x1.25 by the chips = 22.375 ({gd.Total:0.000})");
+            Check(gd.Total > 0 && Math.Abs(gd.Total % gs.Stats["main_damage"]) < 1e-6 && Math.Abs(gs.Stats["main_damage"] - 17.9) < 1e-9, $"a shell lands for the stock 17.9 ({gd.Total:0.000})");
             // the balance: guns 4 x 17.9 every 2 s = 35.8 DPS, and a broadside of 3 x 4 x 17.9 = 214.8 every
             // 15 s (the wind-up, two gaps, the cooldown): 50.12 DPS in all. The carrier reaches 1.5x as far.
             var bsS = new ShipStats(ShipClass.Battleship); var caS = new ShipStats(ShipClass.Carrier);
@@ -4010,15 +4346,15 @@ public partial class _Test : Node
         {
             var bl = Character.LoadoutFor(ShipClass.Battleship);
             double max0 = ship.MaxHp;
-            ship.Hp = 75;
+            ship.Hp = 60;
             bl[2] = "sh_bulwark_3"; H.PilotChanged();
             double bulMax = ship.MaxHp, bulHp = ship.Hp;
             bl[2] = "sh_glass_3"; H.PilotChanged();
             double glMax = ship.MaxHp, glHp = ship.Hp;
             bl[2] = "basic_deflector"; H.PilotChanged();
-            Check(Math.Abs(max0 - 375) < 1e-6 && Math.Abs(bulMax - 615) < 1e-6 && Math.Abs(bulHp - 123) < 1e-6 && Math.Abs(glMax - 300) < 1e-6
-                  && Math.Abs(glHp - 60) < 1e-6 && Math.Abs(ship.MaxHp - 375) < 1e-6 && Math.Abs(ship.Hp - 75) < 1e-6,
-                  $"a refit keeps the hull's fraction: 75/375, Bulwark III {bulHp:0}/{bulMax:0}, Glass III {glHp:0}/{glMax:0}, back {ship.Hp:0}/{ship.MaxHp:0} -- no heal by swapping");
+            Check(Math.Abs(max0 - 300) < 1e-6 && Math.Abs(bulMax - 540) < 1e-6 && Math.Abs(bulHp - 108) < 1e-6 && Math.Abs(glMax - 225) < 1e-6
+                  && Math.Abs(glHp - 45) < 1e-6 && Math.Abs(ship.MaxHp - 300) < 1e-6 && Math.Abs(ship.Hp - 60) < 1e-6,
+                  $"a refit keeps the hull's fraction: 60/300, Bulwark III {bulHp:0}/{bulMax:0}, Glass III {glHp:0}/{glMax:0}, back {ship.Hp:0}/{ship.MaxHp:0} -- no heal by swapping");
             ship.Hp = ship.MaxHp;
         }
 
@@ -4037,8 +4373,8 @@ public partial class _Test : Node
                   "the destroyer's bar: guns, fire mode, the missile burst on F, reload on R, point defence");
             var ddS = new ShipStats(ShipClass.Destroyer); var bsS0 = new ShipStats(ShipClass.Battleship); var cvS0 = new ShipStats(ShipClass.Carrier);
             bool N9(double a, double b) => Math.Abs(a - b) < 1e-9;
-            Check(N9(ddS["hull"], 250) && N9(ship.MaxHp, 312.5) && N9(ddS["main_count"], 2) && N9(ddS["pd_count"], 2) && ddS["fighter_count"] == 0 && ddS["broadside_volleys"] == 0,
-                  $"250 hull (312.5 with the five chips), two main guns, two PD; no wing, no broadside ({ship.MaxHp:0.0})");
+            Check(N9(ddS["hull"], 250) && N9(ship.MaxHp, 250) && N9(ddS["main_count"], 2) && N9(ddS["pd_count"], 2) && ddS["fighter_count"] == 0 && ddS["broadside_volleys"] == 0,
+                  $"250 hull on the ship as on the sheet (no chips), two main guns, two PD; no wing, no broadside ({ship.MaxHp:0.0})");
             Check(N9(bsS0["max_speed"], 104) && N9(ddS["max_speed"], 130) && N9(cvS0["max_speed"], 116.48)
                   && N9(ddS["thrust"], 70) && N9(ddS["reverse_thrust"], 30) && N9(ddS["reverse_speed"], 45)
                   && N9(cvS0["thrust"], 48 * 116.48 / 96) && N9(cvS0["reverse_thrust"], 20 * 116.48 / 96) && N9(cvS0["reverse_speed"], 32 * 116.48 / 96)
@@ -4094,8 +4430,8 @@ public partial class _Test : Node
                 mspd = GodotObject.IsInstanceValid(burst[0]) ? (burst[0].GlobalPosition - mp1).Length() * 60f : 0;
             }
             Check(Math.Abs(mspd - 200) < 0.5f, $"they fly at 200 u/s ({mspd:0.0})");
-            for (int i = 0; i < 900 && d1.Total < 183.74; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            Check(Math.Abs(d1.Total - 183.75) < 0.01, $"all three land -- the outer two curve in: 3 x 49 x1.25 by the chips = 183.75 ({d1.Total:0.00})");
+            for (int i = 0; i < 900 && d1.Total < 146.99; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(Math.Abs(d1.Total - 147) < 0.01, $"all three land -- the outer two curve in: 3 x 49 = 147 ({d1.Total:0.00})");
             Key(global::Godot.Key.F); await Wait(0.5);        // the 0.4 s between bursts
             int before3 = Burst().Count;
             Key(global::Godot.Key.F); await Wait(0.5);
@@ -4138,9 +4474,9 @@ public partial class _Test : Node
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             var close = Burst();
             float closeSplay = close.Count == 3 ? close.Max(m => Mathf.Abs(Mathf.RadToDeg(Mathf.AngleDifference(Vector2.Up.Angle(), m.Dir.Angle())))) : -1;
-            for (int i = 0; i < 60 * 4 && d1.Total < 183.74; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            Check(close.Count == 3 && closeSplay > 20 && closeSplay < 50 && Math.Abs(d1.Total - 183.75) < 0.01,
-                  $"a target 150 u off the nose: the outer two launch narrower ({closeSplay:0} degrees) and all three land (18.75; {d1.Total:0.00})");
+            for (int i = 0; i < 60 * 4 && d1.Total < 146.99; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(close.Count == 3 && closeSplay > 20 && closeSplay < 50 && Math.Abs(d1.Total - 147) < 0.01,
+                  $"a target 150 u off the nose: the outer two launch narrower ({closeSplay:0} degrees) and all three land: 3 x 49 = 147 ({d1.Total:0.00})");
             await Park(d1.Position + new Vector2(0, 600));
         }
 
@@ -4444,8 +4780,8 @@ public partial class _Test : Node
             }
         }
         for (int fr = 0; fr < 240; fr++) { SampleDeck(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
-        Check(d1.Total >= 171.875 && Math.Abs(ship.Stats["torpedo_damage"] - 171.875) < 1e-6,
-              $"a torpedo lands for 171.875 (137.5 x1.25 by the chips), on top of the fighters' hits ({d1.Total:0})");
+        Check(d1.Total >= 137.5 && Math.Abs(ship.Stats["torpedo_damage"] - 137.5) < 1e-6,
+              $"a torpedo lands for the stock 137.5, on top of the fighters' hits ({d1.Total:0})");
         Check(AbilityBar.StateOf(ship, "bombers", H.Selected).Line.StartsWith("REARM") || AbilityBar.StateOf(ship, "bombers", H.Selected).Line == "RETURNING",
               $"bomber slot shows the return / rearm ({AbilityBar.StateOf(ship, "bombers", H.Selected).Line})");
         // HOME: each comes in over the carrier's centre and settles onto the runway there, shrinking
@@ -4486,10 +4822,10 @@ public partial class _Test : Node
                 await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             }
             double carrierDps = md.Total / 40.0;
-            // (unequipped the sheet gives fighters 3 x 2.5 / 0.35 s and 8 torpedoes of 137.5 a strike; the
-            //  five default chips add 25%, so the expected figure with them is about 117 DPS)
-            GD.Print($"  carrier measured: {carrierDps:0.00} DPS over 40 s (reference 117 with the chips)");
-            Check(Math.Abs(carrierDps / 117.0 - 1) < 0.35, $"the carrier delivers about the 117 DPS its sheet says with the chips ({carrierDps:0.00})");
+            // (the stock sheet, no chips: fighters 3 x 2.5 / 0.35 s and 8 torpedoes of 137.5 a strike,
+            //  about 93.6 DPS -- the 117 once measured with five +5% chips, / 1.25)
+            GD.Print($"  carrier measured: {carrierDps:0.00} DPS over 40 s (reference 93.6)");
+            Check(Math.Abs(carrierDps / 93.6 - 1) < 0.35, $"the carrier delivers about the 93.6 DPS its stock sheet says ({carrierDps:0.00})");
             Key(global::Godot.Key.R); await Wait(12.0);                       // recall the wing for what follows
         }
 
@@ -4772,10 +5108,10 @@ public partial class _Test : Node
                 .All(s => new[] { Rarity.Common, Rarity.Rare, Rarity.Epic }
                     .All(r => drops.Count(i => i.Slot == s && i.Rarity == r) * 3 == drops.Count(i => i.Slot == s)));
             var kit = Equipment.All.Where(i => i.Kit).ToList();
-            Check(drops.Count == 246 && famShape && kit.Count == 23 && kit.All(i => i.Rarity == Rarity.Common)
+            Check(drops.Count == 246 && famShape && kit.Count == 22 && kit.All(i => i.Rarity == Rarity.Common)
                   && kit.Count(i => i.Slot == GearSlot.Weapon) == 7 && kit.Count(i => i.Slot == GearSlot.Utility) == 12
                   && drops.Count(i => i.Slot == GearSlot.Utility) == 144,
-                  $"the gear: 246 drops, a third of each slot at each rarity, and a 23-part kit -- seven weapon mounts and twelve signature systems across twelve classes, plus the drive, the deflector, the frame and the chip every ship has. The utility slot is 144 of the 246: twelve systems with a family of four, where nine of the twelve had none at all ({drops.Count} drops, {drops.Count(i => i.Slot == GearSlot.Utility)} utility, {kit.Count} kit)");
+                  $"the gear: 246 drops, a third of each slot at each rarity, and a 22-part kit -- seven weapon mounts and twelve signature systems across twelve classes, plus the drive, the deflector and the frame every ship has (no chip: a stock ship fits none). The utility slot is 144 of the 246: twelve systems with a family of four, where nine of the twelve had none at all ({drops.Count} drops, {drops.Count(i => i.Slot == GearSlot.Utility)} utility, {kit.Count} kit)");
             Check(Wear(bsC, GearSlot.Weapon) == 24 && Wear(cvC, GearSlot.Weapon) == 12 && Wear(ddC, GearSlot.Weapon) == 24
                   && Wear(ShipClass.FreightHauler, GearSlot.Weapon) == 24 && Wear(ShipClass.LightDart, GearSlot.Weapon) == 24
                   // THE UTILITY SLOT: one family of four per SYSTEM at three rarities, and every
@@ -4824,22 +5160,22 @@ public partial class _Test : Node
                                    .Select(c => $"{i.Id}/{c.Name}")).ToList();
             var anyHull = kit.Where(i => !carries.Contains(i.Id)).ToList();
             // and what a SAVED loadout does with one that no longer fits: the hull's own, as ever
-            var saved = Equipment.Sanitize(ddC, new[] { "bs_main_battery", "std_drive", "basic_deflector", "reinforced_frame", "dd_missile_rack", "", "", "", "", "" });
-            Check(wrongHull.Count == 0 && carries.Count == 19 && anyHull.Count == 4
+            var saved = Equipment.Sanitize(ddC, new[] { "bs_main_battery", "std_drive", "basic_deflector", "reinforced_frame", "dd_missile_rack", "", "", "", "", "", "" }, 14);
+            Check(wrongHull.Count == 0 && carries.Count == 19 && anyHull.Count == 3
                   && carries["freight_main_gun"].Count() == 3 && carries["light_main_gun"].Count() == 3 && carries["heavy_main_gun"].Count() == 2
                   && anyHull.All(i => Classes.All.Where(c => c.Ready).All(c => Equipment.Fits(i, i.Slot, c.Id)))
                   && Equipment.Fits(Equipment.ById("freight_main_gun"), GearSlot.Weapon, ShipClass.FreightTender)
                   && !Equipment.Fits(Equipment.ById("freight_bubble"), GearSlot.Utility, ShipClass.FreightTender)
                   && !Equipment.Fits(Equipment.ById("bs_main_battery"), GearSlot.Weapon, ddC)
                   && saved[0] == "dd_main_battery" && saved[4] == "dd_missile_rack",
-                  $"a kit part fits the hulls born with it and no others: nineteen named by a class row -- one cargo gun on the three freighters, one light cannon on the sniper and the warden, one dart cannon on the three lights -- and the drive, the deflector, the frame and the chip on any hull; a battleship's mount saved on a destroyer comes back as the destroyer's own ({wrongHull.Count} wrong: {string.Join(", ", wrongHull)})");
+                  $"a kit part fits the hulls born with it and no others: nineteen named by a class row -- one cargo gun on the three freighters, one light cannon on the sniper and the warden, one dart cannon on the three lights -- and the drive, the deflector and the frame on any hull; a battleship's mount saved on a destroyer comes back as the destroyer's own ({wrongHull.Count} wrong: {string.Join(", ", wrongHull)})");
             // a sheet with only the named parts on the kit, chips off
             ShipStats Sheet(ShipClass c, string part)
             {
                 var l = Equipment.Default(c); for (int k = Equipment.CoreSlots; k < Equipment.Slots; k++) l[k] = "";
                 var it = Equipment.ById(part);
                 if (it.Slot == GearSlot.Chip) l[Equipment.CoreSlots] = part; else l[Array.IndexOf(Equipment.Core, it.Slot)] = part;
-                return new ShipStats(c, Equipment.Bonuses(c, l, NoLevels), Equipment.Adds(c, l, NoLevels));
+                return new ShipStats(c, Equipment.Bonuses(c, l, 14, NoLevels), Equipment.Adds(c, l, 14, NoLevels));
             }
             bool Near(double a, double b) => Math.Abs(a - b) < 1e-6;
             var e1 = Sheet(cvC, "cv_elite_1"); var e2 = Sheet(cvC, "cv_elite_2");
@@ -4886,18 +5222,21 @@ public partial class _Test : Node
                   && Near(bareVeil["stealth_speed"], 1) && Near(bareVeil["stealth_rof"], 1),
                   $"the veil's gear, on the two rows the veil gained so it could have a family at all: Deep III is unseen 10.0 s and back in 26.7 s; Ambush II fires at x1.45 and moves at x0.85 while unseen -- and a wraith with no veil part is x1.00 at both, the ship it always was ({vel3["stealth_time"]:0.0} s, {vel3["stealth_cooldown"]:0.0} s, {velA["stealth_rof"]:0.00}x, {bareVeil["stealth_speed"]:0.00}x)");
             // THE WORST CASE: the most negative share any fitting part gives each stat, in every core
-            // slot at once and five times over in the chips, must leave the number above zero
+            // slot at once and three times over in each kind of chip (at most 3 Combat and 3 Utility
+            // on a hull), must leave the number above zero
             bool allPositive = true;
             double Worst(ShipClass c, string stat)
             {
                 double w = 0;
                 foreach (var slot in Equipment.Core)
                     w += Math.Min(0, Equipment.All.Where(i => Equipment.Fits(i, slot, c)).Select(i => i.Pct.GetValueOrDefault(stat)).DefaultIfEmpty(0).Min());
-                return w + Equipment.ChipSlots * Math.Min(0, Equipment.All.Where(i => i.Slot == GearSlot.Chip).Select(i => i.Pct.GetValueOrDefault(stat)).DefaultIfEmpty(0).Min());
+                foreach (var kind in Enum.GetValues<ChipKind>())
+                    w += 3 * Math.Min(0, Equipment.All.Where(i => i.Slot == GearSlot.Chip && i.Kind == kind).Select(i => i.Pct.GetValueOrDefault(stat)).DefaultIfEmpty(0).Min());
+                return w;
             }
             foreach (var c in Enum.GetValues<ShipClass>()) foreach (var st in new ShipStats(c).All) if (Worst(c, st.Id) <= -1) allPositive = false;
-            Check(allPositive && Near(Worst(cvC, "fighter_damage"), -0.47) && Near(Worst(bsC, "main_damage"), -0.55) && Near(Worst(bsC, "hull"), -0.70) && Near(Worst(cvC, "hull"), -0.70),
-                  $"no stack of gear takes a number to zero: worst fighter damage -47% (1.325), shell -55% (8.055), hull -70% since the spar frame joined the deepest stack (112.5 / 75) ({Worst(cvC, "fighter_damage"):0.00}, {Worst(bsC, "main_damage"):0.00}, {Worst(bsC, "hull"):0.00})");
+            Check(allPositive && Near(Worst(cvC, "fighter_damage"), -0.37) && Near(Worst(bsC, "main_damage"), -0.45) && Near(Worst(bsC, "hull"), -0.60) && Near(Worst(cvC, "hull"), -0.60),
+                  $"no stack of gear takes a number to zero: worst fighter damage -37% (1.575), shell -45% (9.845), hull -60% (120 of a battleship's 300, 80 of a carrier's 200) ({Worst(cvC, "fighter_damage"):0.00}, {Worst(bsC, "main_damage"):0.00}, {Worst(bsC, "hull"):0.00})");
             // every stat a part names is real on a class it fits, and none touches the turret counts
             string[] addable = { "fighter_count", "bomber_count", "missile_mag", "bomber_ammo", "broadside_volleys", "hunter_count" };
             var unknown = Equipment.All.SelectMany(i => i.Pct.Keys.Concat(i.Add.Keys).Where(k =>
@@ -4909,10 +5248,10 @@ public partial class _Test : Node
                   $"every stat a part names exists on a class it fits; no part changes a turret count; whole additions only to wings, magazines and volleys ({string.Join(",", unknown)})");
             // a part for the other class changes nothing, even named in the loadout
             var wrong = Equipment.Default(bsC); wrong[0] = "cv_elite_3";
-            var kitB = Equipment.Bonuses(bsC, Equipment.Default(bsC), NoLevels); var wrongB = Equipment.Bonuses(bsC, wrong, NoLevels);
-            Check(wrongB.Count == kitB.Count && wrongB.All(kv => kitB.TryGetValue(kv.Key, out var v) && Math.Abs(v - kv.Value) < 1e-12) && Equipment.Adds(bsC, wrong, NoLevels).Count == 0,
+            var kitB = Equipment.Bonuses(bsC, Equipment.Default(bsC), 14, NoLevels); var wrongB = Equipment.Bonuses(bsC, wrong, 14, NoLevels);
+            Check(wrongB.Count == kitB.Count && wrongB.All(kv => kitB.TryGetValue(kv.Key, out var v) && Math.Abs(v - kv.Value) < 1e-12) && Equipment.Adds(bsC, wrong, 14, NoLevels).Count == 0,
                   "a carrier's hangar named on a battleship changes nothing on it: the sheet is the kit's");
-            var words = Equipment.Describe(Equipment.ById("chip_basic"), cvC).ToList();
+            var words = Equipment.Describe(Equipment.ById("chip_combat_1"), cvC).ToList();
             Check(words.Any(w => w.StartsWith("Fighters")) && words.Any(w => w.StartsWith("Hull")) && !words.Any(w => w.StartsWith("Main guns")),
                   $"a part's effects are named for the ship it is on ({string.Join(" | ", words)})");
         }
@@ -4979,7 +5318,7 @@ public partial class _Test : Node
                   $"each pilot's own roll: seven in ten from what its own hull can wear, three from everything -- the battleship pilot sees {Of(1, share[1].bs):0.000} of its own against {MineOf(ShipClass.Battleship, ShipClass.Carrier):0.000} expected, and {Of(1, share[1].cv):0.000} of the carrier's against {TheirsOf(ShipClass.Battleship, ShipClass.Carrier):0.000}");
         }
 
-        // ── equipment (I): per-class gear; common defaults and five chips (+5% damage, +5% hull each) ──
+        // ── equipment (I): per-class gear; common defaults, and six chip slots with no chip in them ──
         {
             Check(Equipment.Default(ShipClass.Carrier)[0] == "cv_fighter_hangars" && Equipment.ById("cv_fighter_hangars").Name == "Mk I Fighter Hangars"
                   && Equipment.Default(ShipClass.Battleship).Take(5).All(id => Equipment.ById(id).Rarity == Rarity.Common)
@@ -4988,38 +5327,49 @@ public partial class _Test : Node
                          Equipment.ById(id) is { } part && Equipment.Fits(part, part.Slot, c.Id)))
                   && Equipment.Default(ShipClass.HeavySniper)[0] == "heavy_main_gun"
                   && Equipment.Default(ShipClass.HeavySniper)[4] == "heavy_railgun"
-                  && Equipment.Default(ShipClass.LightWraith)[4] == "light_stealth_veil",
-                  "the defaults: common parts in five slots, and every one of the twelve classes starts with mounts it can actually wear -- a carrier's Fighter Hangars, a sniper's Railgun Mount, a wraith's Stealth Veil");
-            var bsE = new ShipStats(ShipClass.Battleship, Equipment.Bonuses(ShipClass.Battleship, Equipment.Default(ShipClass.Battleship), NoLevels));
-            var cvE = new ShipStats(ShipClass.Carrier, Equipment.Bonuses(ShipClass.Carrier, Equipment.Default(ShipClass.Carrier), NoLevels));
-            Check(Math.Abs(bsE["hull"] - 375) < 1e-6 && Math.Abs(bsE["main_damage"] - 22.375) < 1e-6 && Math.Abs(cvE["hull"] - 250) < 1e-6
-                  && Math.Abs(cvE["fighter_damage"] - 3.125) < 1e-6 && Math.Abs(cvE["torpedo_damage"] - 171.875) < 1e-6,
-                  "five default chips: +25% damage and hull (battleship 375 hull, 22.375 a shell; carrier 250 hull, fighters 3.125, torpedoes 171.875)");
+                  && Equipment.Default(ShipClass.LightWraith)[4] == "light_stealth_veil"
+                  && Classes.All.Where(c => c.Ready).All(c => Equipment.Default(c.Id).Length == 11 && Equipment.Default(c.Id).Skip(5).All(x => x == "")),
+                  "the defaults: common parts in five slots, every one of the twelve classes starts with mounts it can actually wear -- a carrier's Fighter Hangars, a sniper's Railgun Mount, a wraith's Stealth Veil -- and six empty chip slots");
+            var bsE = new ShipStats(ShipClass.Battleship, Equipment.Bonuses(ShipClass.Battleship, Equipment.Default(ShipClass.Battleship), 14, NoLevels));
+            var cvE = new ShipStats(ShipClass.Carrier, Equipment.Bonuses(ShipClass.Carrier, Equipment.Default(ShipClass.Carrier), 14, NoLevels));
+            Check(Math.Abs(bsE["hull"] - 300) < 1e-6 && Math.Abs(bsE["main_damage"] - 17.9) < 1e-6 && Math.Abs(cvE["hull"] - 200) < 1e-6
+                  && Math.Abs(cvE["fighter_damage"] - 2.5) < 1e-6 && Math.Abs(cvE["torpedo_damage"] - 137.5) < 1e-6,
+                  $"the kit is the class, with no chips: battleship 300 hull, 17.9 a shell; carrier 200 hull, fighters 2.5, torpedoes 137.5 ({bsE["hull"]:0.###}, {bsE["main_damage"]:0.###}; {cvE["hull"]:0.###}, {cvE["fighter_damage"]:0.###}, {cvE["torpedo_damage"]:0.###})");
             var cls0 = Me.Class;
+            Character.GearHold.Remove("chip_armour_1"); Character.Stow("chip_armour_1");     // one Armour Chip I in the hold
             Key(global::Godot.Key.I); await Wait(0.2);
             var ew = Nodes<EquipmentWindow>().FirstOrDefault();
             Check(ew != null && Nodes<HBoxContainer>(ew).Count(r => r.Name.ToString().StartsWith("Slot_")) == 5
-                  && Nodes<HBoxContainer>(ew).Count(r => r.Name.ToString().StartsWith("Chip_")) == 5, "I opens the equipment: five parts and five chips");
+                  && Nodes<HBoxContainer>(ew).Count(r => r.Name.ToString().StartsWith("Chip_")) == 6 && !Nodes<Button>(ew).Any(b => b.Name == "Unequip"),
+                  "I opens the equipment: five parts and six chip slots, every chip slot empty on a stock ship");
             double full = Me.MaxHp;
-            Nodes<Button>(ew).First(b => b.Name == "Unequip").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.2);
-            Check(Math.Abs(Me.MaxHp - full * 1.20 / 1.25) < 1e-6 && Character.GearHold.GetValueOrDefault("chip_basic") == 1, $"a chip off: 5% less hull ({full:0} -> {Me.MaxHp:0}), the chip in the hold");
+            void EquipFromHold(EquipmentWindow w, string part) =>
+                Nodes<HBoxContainer>(w).FirstOrDefault(r => r.Name == "Hold_" + part)?.GetChildren().OfType<Button>().FirstOrDefault(b => b.Name == "Equip")?.EmitSignal(BaseButton.SignalName.Pressed);
+            EquipFromHold(ew, "chip_armour_1"); await Wait(0.2);
+            Check(Math.Abs(Me.MaxHp - full * 1.08) < 1e-6 && Character.LoadoutFor(cls0)[5] == "chip_armour_1" && Character.GearHold.GetValueOrDefault("chip_armour_1") == 0,
+                  $"EQUIP puts an Armour Chip I from the hold into chip slot 1: 8% more hull ({full:0} -> {Me.MaxHp:0.##})");
+            // SWITCH CLASSES WHILE THE CHIP IS STILL FITTED (not after taking it off): only then does
+            // "the other class has none" actually tell the two per-class loadouts apart.
             var other = cls0 == ShipClass.Battleship ? ShipClass.Carrier : ShipClass.Battleship;
             Me.SetClass(other); await Wait(0.5);
-            Check(Character.LoadoutFor(other).Skip(5).Count(x => x == "chip_basic") == 5, "the other class keeps its own gear: five chips");
+            Check(Character.LoadoutFor(other).Skip(5).All(x => x == "") && Character.LoadoutFor(cls0)[5] == "chip_armour_1",
+                  "the other class keeps its own gear: no chips, while the first class keeps what it fitted");
             Me.SetClass(cls0); await Wait(0.5);
-            Check(Character.LoadoutFor(cls0).Skip(5).Count(x => x == "chip_basic") == 4 && Character.GearHold.GetValueOrDefault("chip_basic") == 1 && Math.Abs(Me.MaxHp - full * 1.20 / 1.25) < 1e-6,
-                  "back on the first class: its gear as it was left (four chips, one in the hold)");
+            Check(Math.Abs(Me.MaxHp - full * 1.08) < 1e-6 && Character.LoadoutFor(cls0)[5] == "chip_armour_1" && Character.GearHold.GetValueOrDefault("chip_armour_1") == 0,
+                  "back on the first class: the chip is still fitted, not lost switching away and back");
             ew = Nodes<EquipmentWindow>().FirstOrDefault();
             if (ew == null) { Key(global::Godot.Key.I); await Wait(0.2); ew = Nodes<EquipmentWindow>().First(); }
-            Nodes<Button>(ew).First(b => b.Name == "Equip").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.2);
-            Check(Math.Abs(Me.MaxHp - full) < 1e-6 && Character.GearHold.GetValueOrDefault("chip_basic") == 0, "the chip back on from the hold: full hull again");
+            Nodes<Button>(ew).First(b => b.Name == "Unequip").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.2);
+            Check(Math.Abs(Me.MaxHp - full) < 1e-6 && Character.GearHold.GetValueOrDefault("chip_armour_1") == 1, $"UNEQUIP takes it off: the stock hull again ({Me.MaxHp:0.##}), the chip in the hold");
+            EquipFromHold(ew, "chip_armour_1"); await Wait(0.2);
+            Check(Math.Abs(Me.MaxHp - full * 1.08) < 1e-6 && Character.GearHold.GetValueOrDefault("chip_armour_1") == 0, "the chip back on from the hold: 8% more hull again");
             // A LEVEL REFITS THE SHIP IT IS ON, at once. UPGRADE buys the level and tells the hub; the
             // ship refitted only for a changed PART, so the same parts at a new level read as no change
             // and the hull stayed put until the next refit of any kind.
             {
                 string keepShield = Character.LoadoutFor(cls0)[2]; double keepSalvage = H.Yard.Stock("salvage");
                 Character.GearLevel.Remove("sh_balanced_1");
-                Character.LoadoutFor(cls0)[2] = "sh_balanced_1"; H.PilotChanged();      // Balanced Array: +20% hull
+                Character.LoadoutFor(cls0)[2] = "sh_balanced_1"; H.PilotChanged();      // Balanced Array: +20% hull, beside the chip's +8%
                 double fitted = Me.MaxHp;
                 H.Yard.SetStock("salvage", 100);                                         // the first level's price
                 // ...bought where a level is sold: over the EQUIPMENT BASE, clear of combat (Landmarks.Serves)
@@ -5030,7 +5380,7 @@ public partial class _Test : Node
                 ew = Nodes<EquipmentWindow>().First();
                 Nodes<Button>(Nodes<HBoxContainer>(ew).First(r => r.Name == "Slot_Shield")).First(b => b.Name == "Upgrade").EmitSignal(BaseButton.SignalName.Pressed);
                 await Wait(0.2);
-                Check(Equipment.LevelOf("sh_balanced_1") == 1 && Math.Abs(fitted - full * 1.45 / 1.25) < 1e-6 && Math.Abs(Me.MaxHp - full * 1.46 / 1.25) < 1e-6,
+                Check(Equipment.LevelOf("sh_balanced_1") == 1 && Math.Abs(fitted - full * 1.28) < 1e-6 && Math.Abs(Me.MaxHp - full * 1.29) < 1e-6,
                       $"a level bought in the window lifts the ship it is on at once: a Balanced Array's +20% hull is +21% at level 1 ({full:0.##} -> {fitted:0.##} fitted -> {Me.MaxHp:0.##} levelled)");
                 Me.Position = eqAt; Me.Velocity = Vector2.Zero;
                 Character.GearLevel.Remove("sh_balanced_1"); Character.LoadoutFor(cls0)[2] = keepShield; H.PilotChanged();
@@ -5041,22 +5391,63 @@ public partial class _Test : Node
             Nodes<Button>(ew).First(b => b.Name == "Unequip").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.2);
             Key(global::Godot.Key.I); await Wait(0.1);
             await SetClass(other);
-            Character.LoadoutFor(other)[Equipment.Slots - 1] = "";
             Key(global::Godot.Key.I); await Wait(0.2);
             var ew2 = Nodes<EquipmentWindow>().FirstOrDefault();
-            var holdRow = ew2 == null ? null : Nodes<HBoxContainer>(ew2).FirstOrDefault(r => r.Name == "Hold_chip_basic");
-            holdRow?.GetChildren().OfType<Button>().FirstOrDefault(b => b.Name == "Equip")?.EmitSignal(BaseButton.SignalName.Pressed);
+            if (ew2 != null) EquipFromHold(ew2, "chip_armour_1");
             await Wait(0.2);
-            Check(Character.LoadoutFor(other).Skip(Equipment.CoreSlots).Count(x => x == "chip_basic") == 5 && Character.GearHold.GetValueOrDefault("chip_basic") == 0,
-                  $"the hold is the pilot's: a chip taken off the {cls0} goes on the {other} ({Character.LoadoutFor(other).Skip(Equipment.CoreSlots).Count(x => x == "chip_basic")} chips)");
+            Check(Character.LoadoutFor(other)[5] == "chip_armour_1" && Character.GearHold.GetValueOrDefault("chip_armour_1") == 0,
+                  $"the hold is the pilot's: a chip taken off the {cls0} goes on the {other} ({string.Join(",", Character.LoadoutFor(other).Skip(Equipment.CoreSlots))})");
+            Character.LoadoutFor(other)[5] = "";                  // off the other class for good: the rest of the run flies stock
             Key(global::Godot.Key.I); await Wait(0.1);
             await SetClass(cls0);
-            Character.LoadoutFor(cls0)[Array.IndexOf(Character.LoadoutFor(cls0), "", Equipment.CoreSlots)] = "chip_basic";
+            Character.LoadoutFor(cls0)[5] = "chip_armour_1";      // for the round trip to disk
             H.PilotChanged(); Key(global::Godot.Key.I); await Wait(0.2);
             ew = Nodes<EquipmentWindow>().First();
             Character.Save(); var saved = (string[])Character.LoadoutFor(cls0).Clone();
             string eqId = Character.Id; Character.Loadout.Clear(); Character.Load(eqId);
-            Check(Character.LoadoutFor(cls0).SequenceEqual(saved), "the gear is saved with the pilot");
+            Check(Character.LoadoutFor(cls0).SequenceEqual(saved) && saved[5] == "chip_armour_1", "the gear is saved with the pilot, its chip included");
+            Character.LoadoutFor(cls0)[5] = ""; H.PilotChanged(); Character.Save();
+            // THE WINDOW SAYS WHY A CHIP CANNOT GO ON (level_walls check 6b): at peak 8 three chip slots
+            // are open and all three hold a Combat Chip. A fourth Combat chip is refused for its kind, an
+            // Armour Chip for want of a slot, and slot 4 reads the level that opens it.
+            {
+                int keepPeak = Character.Peak; var lw = Character.LoadoutFor(cls0);
+                Character.Peak = 8; for (int k = 5; k < 8; k++) lw[k] = "chip_combat_1";
+                Character.Stow("chip_combat_2"); Character.Stow("chip_armour_1");
+                H.PilotChanged(); Key(global::Godot.Key.I); await Wait(0.1); Key(global::Godot.Key.I); await Wait(0.2);
+                var ewW = Nodes<EquipmentWindow>().First();
+                Button EquipOf(string part) => Nodes<HBoxContainer>(ewW).FirstOrDefault(r => r.Name == "Hold_" + part)?.GetChildren().OfType<Button>().FirstOrDefault(b => b.Name == "Equip");
+                var eqC = EquipOf("chip_combat_2"); var eqA = EquipOf("chip_armour_1");
+                var row4 = Nodes<HBoxContainer>(ewW).FirstOrDefault(r => r.Name == "Chip_3");
+                Check(eqC != null && eqC.Disabled && eqC.TooltipText == "at most 3 Combat chips"
+                      && eqA != null && eqA.Disabled && eqA.TooltipText == "next chip slot opens at level 10"
+                      && row4 != null && Nodes<Label>(row4).Any(l => l.Text == "CHIP 4  ·  LOCKED · L10") && !Nodes<Button>(row4).Any(),
+                      $"at peak 8 with three Combat Chips on, EQUIP greys out for a fourth ({eqC?.TooltipText}) and for an Armour Chip ({eqA?.TooltipText}); chip slot 4 reads LOCKED · L10 with no button");
+                for (int k = 5; k < 8; k++) lw[k] = "";
+                Character.Unstow("chip_combat_2"); Character.Unstow("chip_armour_1");
+                Character.Peak = keepPeak; H.PilotChanged(); Character.Save();
+                Key(global::Godot.Key.I); await Wait(0.1); Key(global::Godot.Key.I); await Wait(0.2);
+            }
+            // THE WINDOW STAYS LIVE AS THE PILOT LEVELS: locked chip rows and greyed EQUIP buttons used to
+            // read Character.Peak only at Rebuild, so a wall crossed with the window still open stayed
+            // drawn locked (EquipmentWindow.cs finding: they stay locked after the slot opens).
+            {
+                int keepPeak2 = Character.Peak;
+                Character.Peak = 2; H.PilotChanged();
+                Key(global::Godot.Key.I); await Wait(0.1); Key(global::Godot.Key.I); await Wait(0.2);   // fresh, at peak 2
+                var ewL = Nodes<EquipmentWindow>().First();
+                var chip1Row = Nodes<HBoxContainer>(ewL).FirstOrDefault(r => r.Name == "Chip_1");
+                Check(chip1Row != null && Nodes<Label>(chip1Row).Any(l => l.Text == "CHIP 2  ·  LOCKED · L4"),
+                      "at peak 2, chip slot 2 reads LOCKED · L4 on a fresh window");
+                Character.Peak = 4; H.PilotChanged();                          // the wall crossed with NO I press: the window stays open
+                await Wait(0.3);
+                chip1Row = Nodes<HBoxContainer>(ewL).FirstOrDefault(r => r.Name == "Chip_1");
+                Check(Nodes<EquipmentWindow>().Count() == 1 && chip1Row != null
+                      && Nodes<Label>(chip1Row).Any(l => l.Text == "CHIP 2") && !Nodes<Label>(chip1Row).Any(l => l.Text.Contains("LOCKED")),
+                      "...and notices a wall crossed while it is still open: chip slot 2 drops LOCKED with no re-open");
+                Character.Peak = keepPeak2; H.PilotChanged(); Character.Save();
+                Key(global::Godot.Key.I); await Wait(0.1); Key(global::Godot.Key.I); await Wait(0.2);   // back open at the real peak
+            }
             Key(global::Godot.Key.Escape); await Wait(0.2);
             Check(Nodes<EquipmentWindow>().Count() == 0, "Esc closes it");
 
@@ -5254,6 +5645,7 @@ public partial class _Test : Node
             int up = Progression.AddExp(2600);
             Check(Met("pilot"), "A LEVEL UP: met on the first level gained");
             Check(up == 2 && Character.Level == 3 && Character.Exp == 600 && Character.Points == 2, "2600 EXP from level 1: level 3, 600 over, 2 points");
+            await WallChecksLive();
             // the approved formula, in literal numbers (so the checks can fail)
             // THE ONE PLACE THE LEVEL'S SCALE IS PROVED AGAINST A LITERAL. 2.5% a level, not the
             // 10% it was: measured against the owner's target of a pilot on par after four boss
@@ -5305,18 +5697,26 @@ public partial class _Test : Node
                                                        && l.Text.Contains("+100 for completing")),
                   "its EXP note reads the mission table's own 300 / 250 / 100 rather than restating them beside it");
             Button PBuy(string id) => Nodes<Button>(Nodes<HBoxContainer>(pw).First(r => r.Name == "Pilot_" + id)).First(b => b.Name == "Buy");
-            var me = Me; me.Hp = me.MaxHp; double hull0 = me.MaxHp, hp0 = me.Hp;
+            var me = Me;
+            // AN ARMOUR CHIP FITTED FIRST: with no percentage bonus at all, +5 flat reads as +5
+            // whichever order flats and percentages apply, so this could not tell the orders apart
+            // (finding: "no proof any more that flats are added before percentages"). The chip's own
+            // +8% share only distinguishes them once a flat point lands on top of it.
+            Character.LoadoutFor(me.Class)[5] = "chip_armour_1"; H.PilotChanged(); await Wait(0.1);
+            me.Hp = me.MaxHp; double hull0 = me.MaxHp, hp0 = me.Hp;
             Character.Points = 3;
             PBuy("hull").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
-            // (points are added BEFORE percentage bonuses: the five default chips' +25% makes +5 into +6.25)
-            Check(Character.Bought[1] == 1 && Character.Points == 2 && Math.Abs(me.MaxHp - (hull0 + 6.25)) < 1e-6 && Math.Abs(me.Hp - (hp0 + 6.25)) < 1e-6,
-                  "Hull (1 pt): +5 hull (x1.25 by the default chips: +6.25) on the ship at once");
+            // points are added BEFORE percentage bonuses: +5 flat under the chip's +8% share reads
+            // +5.4, not +5 -- the order a percentage-after-flats bug would get wrong.
+            Check(Character.Bought[1] == 1 && Character.Points == 2 && Math.Abs(me.MaxHp - (hull0 + 5.4)) < 1e-6 && Math.Abs(me.Hp - (hp0 + 5.4)) < 1e-6,
+                  "Hull (1 pt): +5 flat under the chip's +8% share is +5.4 -- flats land before percentages");
             PBuy("hull").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
-            Check(Character.Bought[1] == 2 && Character.Points == 0 && Math.Abs(me.MaxHp - (hull0 + 12.5)) < 1e-6, "Hull again (2 pts): +10 in all (+12.5 with the chips)");
+            Check(Character.Bought[1] == 2 && Character.Points == 0 && Math.Abs(me.MaxHp - (hull0 + 10.8)) < 1e-6, "Hull again (2 pts): +10.8 in all, still under the chip's +8%");
+            Character.LoadoutFor(me.Class)[5] = ""; H.PilotChanged(); await Wait(0.1);   // leave the ship as found: no chip
             Check(PBuy("speed").Disabled, "with no points left, BUY is disabled");
             Character.Points = 6;
             PBuy("damage").EmitSignal(BaseButton.SignalName.Pressed); PBuy("speed").EmitSignal(BaseButton.SignalName.Pressed); PBuy("turn").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
-            var baseSheet = new ShipStats(me.Class, Equipment.Bonuses(me.Class, me.Loadout, me.Levels));            // the same gear, no points
+            var baseSheet = new ShipStats(me.Class, Equipment.Bonuses(me.Class, me.Loadout, me.Peak, me.Levels));    // the same gear, no points
             // Weapons moves whatever THIS hull calls its weapons, by the step its own row declares
             // (Classes.Damage); the figures behind that declaration are checked as literals where
             // the table is proved.
@@ -7852,7 +8252,7 @@ public partial class _Test : Node
             double solEndT = (double)typeof(Hub).GetField("_arenaEndT", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(H);
             Check(solEndT < 0 && H.MissionWon && !H.IReturned && H.ReturnTotal == 1 && Nodes<ReturnButton>().Any(),
                   $"after the kill: a RETURN button and no clock sending you home (_arenaEndT {solEndT:0.0}, ready {H.ReturnReady}/{H.ReturnTotal})");
-            Priv(H, "ReceiveLoot", new[] { "no_such_part", "chip_basic", "fr_flak_1", "fr_flak_2", "fr_flak_3" }, bossAt + new Vector2(0, 400), 1);
+            Priv(H, "ReceiveLoot", new[] { "no_such_part", "std_drive", "fr_flak_1", "fr_flak_2", "fr_flak_3" }, bossAt + new Vector2(0, 400), 1);
             Check(H.Crates.Count == 4 && H.Crates.Skip(2).Select(c => c.Item).SequenceEqual(new[] { "fr_flak_1", "fr_flak_2" }),
                   $"a drop off the wire: no unknown part, no kit, and no more than a boss gives -- 2 at level 1 ({string.Join(",", H.Crates.Skip(2).Select(c => c.Item))})");
             // FLY OVER A CRATE: in the hold at once; on disk 2.5 s after the LAST pickup
@@ -8951,14 +9351,14 @@ public partial class _Test : Node
             var mpSpot = Hub.BasePos + new Vector2(2400, 2400);   // clear of the belt, the wreck, the dummies and the lane
             await SetClass(ShipClass.HeavyWarrior);
             var hw = Me; hw.AutopilotTo = null;
-            Check(hw.Class == ShipClass.HeavyWarrior && Math.Abs(hw.MaxHp - 175) < 1e-6 && Abilities.For(ShipClass.HeavyWarrior).Length == 9,
-                  $"arena host: hosting as a WARRIOR -- 140 x 1.25 for five chips = 175 hull, three abilities and six open slots ({hw.MaxHp:0})");
+            Check(hw.Class == ShipClass.HeavyWarrior && Math.Abs(hw.MaxHp - 140) < 1e-6 && Abilities.For(ShipClass.HeavyWarrior).Length == 9,
+                  $"arena host: hosting as a WARRIOR -- its stock 140 hull, no chips, three abilities and six open slots ({hw.MaxHp:0})");
             await RealTime(() => H.Ships.FirstOrDefault(s => !s.Mine) is { Class: ShipClass.FreightHauler } gg
                                  && gg.Position.DistanceTo(mpSpot) < 60, Wan ? 25 : 15);
             var fg = H.Ships.FirstOrDefault(s => !s.Mine);
-            Check(fg != null && fg.Class == ShipClass.FreightHauler && Math.Abs(fg.MaxHp - 500) < 1e-6
+            Check(fg != null && fg.Class == ShipClass.FreightHauler && Math.Abs(fg.MaxHp - 400) < 1e-6
                   && fg.Position.DistanceTo(mpSpot) < 60,
-                  $"arena host: the guest refitted to a FREIGHTER and parked -- 400 x 1.25 = 500 hull ({fg?.Class}, {fg?.MaxHp:0}, {fg?.Position.DistanceTo(mpSpot):0} u off)");
+                  $"arena host: the guest refitted to a FREIGHTER and parked -- its stock 400 hull ({fg?.Class}, {fg?.MaxHp:0}, {fg?.Position.DistanceTo(mpSpot):0} u off)");
             hw.Position = VaryNear(fg.Position, 230f); hw.Velocity = Vector2.Zero; hw.Rotation = 0f;   // inside its 260 u, any bearing
             await Wait(0.3);
             // ITS TURRET, MADE BY THE HOST: the guest presses T; only the host may put one in the
@@ -8968,7 +9368,7 @@ public partial class _Test : Node
             Check(t1 != null && H.Deployed.Count == 1 && fg.TurretsOut == 1
                   && Math.Abs(t1.Hp - 120) < 1e-6
                   && Math.Abs(t1.Spec(true).Damage - fg.Stats["deploy_damage"]) < 1e-9
-                  && Math.Abs(fg.Stats["deploy_damage"] - 7.5) < 1e-9,   // 6 x 1.25, the guest's five chips
+                  && Math.Abs(fg.Stats["deploy_damage"] - 6) < 1e-9,     // the stock 6: the guest's freighter carries no chips
                   $"arena host: a guest's T reached the host -- one 120-hull turret firing the GUEST's sheet, {t1?.Spec(true).Damage:0.0} a shot, owned by the guest ({H.Deployed.Count} out)");
             H.Drop(fg, VaryNear(fg.Position, 420f), fg.Stats["deploy_hull"]);
             H.Drop(fg, VaryNear(fg.Position, 420f), fg.Stats["deploy_hull"]);
@@ -9048,8 +9448,8 @@ public partial class _Test : Node
             Check(Math.Abs(H.Boss.HullMult - 1.6) < 1e-9 && Math.Abs(H.Boss.DamageMult - 1.2) < 1e-9,
                   $"arena host: a party of two faces a boss scaled for two (hull x1.6, damage x1.2; x{H.Boss.HullMult:0.00}, x{H.Boss.DamageMult:0.00})");
             var gship = H.Ships.FirstOrDefault(s => !s.Mine);
-            Check(gship != null && gship.Class == ShipClass.Destroyer && Math.Abs(gship.MaxHp - 287.5) < 1e-6 && Math.Abs(gship.Stats["missile_mag"] - 6) < 1e-9,
-                  $"arena host: the guest's destroyer and its own gear came into the arena with it (287.5 hull, a Salvo Rack III's 6 bursts; {gship?.Class}, {gship?.MaxHp:0.0}, {gship?.Stats["missile_mag"]:0})");
+            Check(gship != null && gship.Class == ShipClass.Destroyer && Math.Abs(gship.MaxHp - 290) < 1e-6 && Math.Abs(gship.Stats["missile_mag"] - 6) < 1e-9,
+                  $"arena host: the guest's destroyer and its own gear came into the arena with it (290 hull from two Armour Chips I, a Salvo Rack III's 6 bursts; {gship?.Class}, {gship?.MaxHp:0.0}, {gship?.Stats["missile_mag"]:0})");
             // A CRUISE MISSILE CROSSES PEERS: the base's own round (Shots.Cruise) through the one
             // launch on the wire, a hull only the host keeps, and a fall every peer hears of. At the
             // guest from 2600 u at a seeded bearing -- 240 u of that is all it closes before it is
@@ -9203,11 +9603,11 @@ public partial class _Test : Node
         else
         {
             Character.Name = "Arena Guest";
-            // Gear the host can only know from this pilot's announcement: two chips off a destroyer
-            // (three left: 250 x 1.15 = 287.5 hull, not the default five's 312.5). The host checks it
-            // survives the move into the arena.
+            // Gear the host can only know from this pilot's announcement: two Armour Chips I on a
+            // destroyer (250 x 1.16 = 290 hull, not the stock 250). The host checks it survives the
+            // move into the arena.
             Character.Class = ShipClass.Destroyer;
-            var agl = Character.LoadoutFor(ShipClass.Destroyer); agl[8] = ""; agl[9] = "";
+            var agl = Character.LoadoutFor(ShipClass.Destroyer); agl[5] = "chip_armour_1"; agl[6] = "chip_armour_1";
             agl[4] = "dd_salvo_3";                      // and a dropped rack: a magazine of 6 bursts
             H.Yard.Credits = 12345;                               // its own base, before it visits
             // Level 2 against the level-1 boss: its OWN share is 100 for the kill (the host's is 200)
@@ -9227,10 +9627,10 @@ public partial class _Test : Node
             // ITS HULL IS THE HOST'S WORD. A guest applies the refit locally and announces it; the
             // hull it then flies comes back in the host's report (ApplyHostState), a round trip
             // later -- so this waits for the host to have refitted its copy too.
-            await RealTime(() => Math.Abs(fgm.MaxHp - 500) < 1e-6, Wan ? 20 : 10);
-            Check(fgm.Class == ShipClass.FreightHauler && Math.Abs(fgm.MaxHp - 500) < 1e-6
+            await RealTime(() => Math.Abs(fgm.MaxHp - 400) < 1e-6, Wan ? 20 : 10);
+            Check(fgm.Class == ShipClass.FreightHauler && Math.Abs(fgm.MaxHp - 400) < 1e-6
                   && Abilities.For(ShipClass.FreightHauler).Length == 12,
-                  $"arena guest: flying a FREIGHTER in a session -- 400 x 1.25 for five chips = 500 hull, and the host's word for it, six abilities and six open slots ({fgm.MaxHp:0})");
+                  $"arena guest: flying a FREIGHTER in a session -- its stock 400 hull, no chips, and the host's word for it, six abilities and six open slots ({fgm.MaxHp:0})");
             // Watched from before the host does any of it: an effect lives well under a second and
             // a status bit is held for a packet, so neither survives a single sample.
             bool sawEmp = false, sawBurst = false; int mostBursts = 0;
@@ -9565,6 +9965,53 @@ public partial class _Test : Node
               $"arena guest: the boss's super-move bar runs ({firstLeft:0.0} -> {boss.NextSuperIn:0.0} s, fill {firstFill:0.00} -> {boss.SuperFill:0.00})");
     }
 
+    // ── A GUEST AGAINST ITS OWN WALLS (level_walls checks 13, 14, 16, 17), played by the third player: a
+    // battleship at level 1 whose peak is 3. The host decides every press; this ship's slots show only
+    // what the host's report says, so what they show here is the host's word. PEND walls until its class
+    // carries an ability 2 and 3 (lane A, slice 6). Returns the game seconds it spent.
+    async Task<double> GuestWalls()
+    {
+        var me = Me; var open = Unlocks.Nth(me.Class, 2); var shut = Unlocks.Nth(me.Class, 3);
+        if (open == null || shut == null)
+        {
+            GD.Print($"PEND walls: the {me.Class} has no ability {(open == null ? 2 : 3)} yet (level_walls checks 13, 14 and 17: a guest's press past its own refusal, the peak on the wire)");
+            return 0;
+        }
+        double t0 = me.Clock;
+        // 13: ability 3 (level 6) sent past its own refusal, straight to the host: nothing comes back
+        string before = Sn(me, shut.Id);
+        Net.AskHost(me, "RequestAbility", shut.Id, 0);
+        await Wait(0.6);
+        string after = Sn(me, shut.Id);
+        Check(me.Peak == 3 && after == before,
+              $"third player at peak 3: its {shut.Name} (ability 3, level 6) sent past its own refusal is refused by the host -- nothing comes back ({before} -> {after})");
+        // 14 and 17: at level 1 with a peak of 3, ability 2 (level 3) acts -- the host reads the peak it was
+        // sent, not the level
+        string b2 = Sn(me, open.Id);
+        me.UseAbility(open.Id, 0);
+        double t1 = me.Clock; bool acted = false;
+        while (me.Clock - t1 < 0.8 && !acted) { await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); acted = Sn(me, open.Id) != b2; }
+        Check(Character.Level == 1 && acted && me.FailNote(open.Id) == null,
+              $"third player at level 1, peak 3: its {open.Name} (ability 2, level 3) acts on the host and comes back -- the wall reads the peak on the wire, not the level ({b2} -> {Sn(me, open.Id)}; {me.FailNote(open.Id)})");
+        return me.Clock - t0;
+    }
+
+    // 16: a level up and a press in the same frame. The identity (the new peak) and the request go on one
+    // reliable channel, in that order, so the host has the peak before the press: ability 3 acts.
+    async Task GuestLevelsAndPresses()
+    {
+        var me = Me; var a3 = me == null ? null : Unlocks.Nth(me.Class, 3);
+        if (a3 == null) { GD.Print("PEND walls: no ability 3 to press in the frame its level opens it (level_walls check 16)"); return; }
+        int peakBefore = me.Peak;
+        string before = Sn(me, a3.Id);
+        if (Character.Level < 6) Progression.AddExp((6 - Character.Level) * Progression.ExpToNext - Character.Exp);   // to level 6, exactly
+        me.UseAbility(a3.Id, 0);
+        double t0 = me.Clock; bool acted = false;
+        while (me.Clock - t0 < 1.0 && !acted) { await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); acted = Sn(me, a3.Id) != before; }
+        Check(peakBefore < 6 && Character.Peak == 6 && acted,
+              $"third player: levelled from peak {peakBefore} to 6 and {a3.Name} (ability 3) pressed in the same frame -- the identity reaches the host first, so it acts ({before} -> {Sn(me, a3.Id)})");
+    }
+
     async Task Mp(string role)
     {
         await Wait(0.1);
@@ -9597,11 +10044,11 @@ public partial class _Test : Node
                   $"no UPnP router: LAN hosting stands, and the status explains the fix");
             Check(Router.IsShared("100.72.1.5") && Router.IsShared("192.168.1.20") && !Router.IsShared("81.2.3.4"),
                   "carrier-grade and private addresses are recognised as unreachable from outside");
-            // THE BUILD HANDSHAKE. The save format is versioned (2, as a literal: a check that reads
+            // THE BUILD HANDSHAKE. The save format is versioned (3, as a literal: a check that reads
             // the number it tests cannot catch the number being wrong); a SESSION is matched on the
             // build's fingerprint. The refusal is proved on a real connection by the third player,
             // who first knocks as another build: exactly one refusal here, and no ship for it.
-            Check(Game.Version == 2 && Net.Accepts(Net.Protocol) && !Net.Accepts(Net.Protocol ^ 1),
+            Check(Game.Version == 3 && Net.Accepts(Net.Protocol) && !Net.Accepts(Net.Protocol ^ 1),
                   $"a session admits this build and refuses any other (save format {Game.Version}, build {Net.Protocol:x8})");
             Check(refusals == 1, $"the host refused the one peer that knocked as another build ({refusals})");
             var ships = Nodes<PlayerShip>().ToList();
@@ -9618,6 +10065,12 @@ public partial class _Test : Node
             Check(links.Count == 2 && links.All(l => l != null && Throttle(l) == (5000, 2, 0)),
                   $"host: its link to each guest keeps every unreliable packet -- ENet's throttle falls by 0 (interval 5000 ms, up 2, down 0; {string.Join(" / ", links.Select(l => l == null ? "none" : Throttle(l).ToString()))})");
             Check(ships.Any(s => s.Pilot == "Third"), "the second guest's identity reached the host");
+            // A GUEST'S CHIPS ARE HELD TO ITS OWN WALLS (level_walls check 15): the third player claims
+            // peak 3 -- one chip slot open -- with five chips fitted, and the host's copy of its
+            // battleship flies the first alone, an Armour Chip I: 300 x 1.08 = 324 hull (all five would be 318).
+            var thirdW = ships.FirstOrDefault(s => s.Pilot == "Third");
+            Check(thirdW != null && thirdW.Peak == 3 && Math.Abs(thirdW.MaxHp - 324) < 1e-6,
+                  $"host: a guest at peak 3 with five chips fitted flies one: 324 hull on the host's copy (peak {thirdW?.Peak}, {thirdW?.MaxHp:0.##})");
             // Each guest is known by its CHARACTER: a returning pilot gets a new peer id, not a new self
             var gInfo = Net.I.Players.Values.FirstOrDefault(p => p.Name == "Guesty"); var tInfo = Net.I.Players.Values.FirstOrDefault(p => p.Name == "Third");
             Check(gInfo != null && gInfo.CharacterId.EndsWith("-guest") && tInfo != null && tInfo.CharacterId.EndsWith("-guest2"),
@@ -9665,6 +10118,10 @@ public partial class _Test : Node
             var g = ships.FirstOrDefault(s => s.Pilot == "Guesty");
             Check(g != null && g.Name == PlayerShip.NodeName(g.OwnerId), "guest ship named by its id");
             Check(g != null && g.Pilot == "Guesty" && g.Class == ShipClass.Carrier && g.Main == new Color(1, 0, 0), $"guest identity reached host ({g?.Pilot}/{g?.Class}/{g?.Main})");
+            // THE GUEST'S PEAK, NOT ITS LEVEL: every role's pilot is level 1 with every wall open (peak
+            // 14), and the host's copy of its ship is held to the peak it announced (Unlocks).
+            Check(g != null && g.Peak == 14 && Net.I.Players.TryGetValue(g.OwnerId, out var gPeakInfo) && gPeakInfo.Peak == 14 && gPeakInfo.Level == 1,
+                  $"a guest's highest level reached comes with its identity: the host's copy of its ship reads peak 14 at level 1 (peak {g?.Peak})");
             Check(g != null && g.Loadout[0] == "cv_swarm_3" && g.WingCount(WingKind.Fighter) == 9 && g.WingCount(WingKind.Bomber) == 2,
                   $"the guest's dropped hangar reached the host: its carrier flies 9 fighters and 2 bombers here ({g?.WingCount(WingKind.Fighter)} / {g?.WingCount(WingKind.Bomber)})");
             // ITS PILOT'S LEVELS, NOT THIS HOST'S: the guest levelled its Racing Drive (+25% top speed)
@@ -9778,8 +10235,16 @@ public partial class _Test : Node
             Net.I.Join(HostAt(27115));
             await Wait(1.2);
             Character.Name = "Third"; Character.Class = ShipClass.Battleship;
+            // FIVE CHIPS AT PEAK 3 (level_walls check 15), written past its own window: one chip slot
+            // is open at level 3, so every copy of this ship flies the first chip alone (324 hull).
+            Character.Peak = 3;
+            var tl = Character.LoadoutFor(ShipClass.Battleship);
+            (tl[5], tl[6], tl[7], tl[8], tl[9]) = ("chip_armour_1", "chip_combat_1", "chip_combat_1", "chip_armour_1", "chip_engine_1");
             Priv(H, "ApplyLocalIdentity"); Priv(H, "SendIdentity", 0);
-            await Wait(3.0);
+            // ...and its presses against its own walls, inside the same 3 s (PEND: nothing spent)
+            await Wait(1.5);
+            double wallsTook = await GuestWalls();
+            await Wait(Math.Max(0.1, 1.5 - wallsTook));
             // A GUEST'S BROADSIDE, inside the 6 s this guest waits after joining (so everything the host
             // times against it -- the drop above all -- happens when it always did). F is a request: this
             // pilot never starts its own -- the host does, and
@@ -9810,6 +10275,9 @@ public partial class _Test : Node
             Check(all.Count == 3 && all.Any(s => s.Pilot == "HostPilot") && all.Any(s => s.Pilot == "Guesty"),
                   $"third player sees the host and the other guest ({string.Join(", ", all.Select(s => s.Pilot))})");
             Check(all.Count(s => s.Mine) == 1 && all.First(s => s.Mine).OwnerId == Net.LocalId, "third player flies its own ship");
+            await RealTime(() => Me != null && Math.Abs(Me.MaxHp - 324) < 1e-6, 5);
+            Check(Me != null && Me.Peak == 3 && Math.Abs(Me.MaxHp - 324) < 1e-6,
+                  $"third player: at peak 3 its five chips fly as one, on its own copy as on the host's (324 hull; peak {Me?.Peak}, {Me?.MaxHp:0.##})");
             await RealTime(() => Character.GearHold.Values.Sum() >= 2, 3); await Wait(0.5);
             Check(Character.GearHold.Values.Sum() == 2 && HoldIds() == RolledFor(Character.Id),
                   $"third player: its own 2 parts from the kill, the very ones the host rolled for it ({HoldIds()} / {RolledFor(Character.Id)})");
@@ -9854,12 +10322,19 @@ public partial class _Test : Node
             // the kill it was owed came again with the rest -- and is not paid twice
             Check(Character.Exp == exp3 && Character.GearHold.Values.Sum() == 2 && Character.Unclaimed.Count == 0,
                   $"third player: a kill it already had is not paid again on its return (exp {exp3} -> {Character.Exp}, {Character.GearHold.Values.Sum()} parts)");
-            // ...nor after a restart: the serials paid are on its file (a restart is a load from it)
+            // ...nor after a restart: the serials paid are on its file (a restart is a load from it).
+            // THE RESTART ALSO RE-RUNS Sanitize AT THIS PEAK (Character.cs ~291), same as any other
+            // load: four of the five chips fitted at peak 3 above (9364-9366 -- only chip slot 1 is
+            // open) come back out of the ship and land in the hold beside the two kill parts.
             long lastPaid = Character.PaidKills.LastOrDefault();
             Character.Load(Character.Id);
+            string expectHold = string.Join(",", RolledFor(Character.Id).Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Concat(new[] { "chip_armour_1", "chip_combat_1", "chip_combat_1", "chip_engine_1" }).OrderBy(x => x, StringComparer.Ordinal));
             Priv(H, "NetKill", Missions.Bounty, 1, 3, lastPaid, new[] { "fr_flak_1", "fr_flak_2" }, Vector2.Zero);   // the kind leads now
-            Check(lastPaid != 0 && Character.PaidKills.Contains(lastPaid) && Character.Exp == exp3 && Character.GearHold.Values.Sum() == 2,
-                  $"third player: nor after a restart -- the kills it was paid for are on its file (exp {exp3} -> {Character.Exp}, {Character.GearHold.Values.Sum()} parts)");
+            Check(lastPaid != 0 && Character.PaidKills.Contains(lastPaid) && Character.Exp == exp3
+                  && Character.GearHold.Values.Sum() == 6 && HoldIds() == expectHold,
+                  $"third player: nor after a restart -- the kills it was paid for are on its file, and the four over-cap chips come back to the hold (exp {exp3} -> {Character.Exp}, {Character.GearHold.Values.Sum()} parts, {HoldIds()})");
+            await GuestLevelsAndPresses();
             // IT LEAVES, on purpose, by pressing HOST: a goodbye, so nothing to retry -- and the host keeps
             // no place for it (the host checks that goodbye got out: HOST used to cut a guest's off)
             Net.I.Host(27116);
@@ -9874,14 +10349,15 @@ public partial class _Test : Node
         {
             H.Yard.SetStock("ore", 5000);       // "own" hub total, should come back after leaving
             H.Yard.SetStock("salvage", 500);    // this pilot's own, for the gear level it buys mid-session (156)
-            // a NON-default loadout (two chips off): a host that ignored the guest's gear would fall
-            // back to the default (five chips) and replicate 250 hull instead of 230
+            // a NON-default loadout: FOUR Armour Chips I, written past this pilot's own window, which
+            // refuses a fourth Utility chip. The host holds the claim to three of a kind: 200 x 1.24 =
+            // 248 hull -- not the stock 200 (gear ignored) and not 264 (the cap ignored).
             // The CLASS FIRST: gear is per class, and this used to edit whichever class the
             // character happened to already be -- inherited from whoever wrote the shared file
-            // last. With a fresh character per role it is a Battleship here, so the two chips
-            // came off a hull this pilot never flies and the carrier still had five.
+            // last. With a fresh character per role it is a Battleship here, so the chips would go
+            // on a hull this pilot never flies.
             Character.Class = ShipClass.Carrier;
-            var gl = Character.LoadoutFor(Character.Class); gl[8] = ""; gl[9] = "";
+            var gl = Character.LoadoutFor(Character.Class); for (int k = 5; k < 9; k++) gl[k] = "chip_armour_1";
             gl[0] = "cv_swarm_3";                       // a boss drop: nine fighters, which only this pilot knows it has
             // ...and a Racing Drive (+25% top speed) this pilot has levelled twice with its OWN salvage:
             // +10% of what it is for, so every copy of this ship -- the host's included, where the host
@@ -10026,6 +10502,10 @@ public partial class _Test : Node
             var host = Nodes<PlayerShip>().FirstOrDefault(s => s.OwnerId == 1);
             await RealTime(() => Nodes<PlayerShip>().Count() == 3 && Nodes<PlayerShip>().Any(s => s.Pilot == "Third"), 8);
             Check(Nodes<PlayerShip>().Count() == 3 && Nodes<PlayerShip>().Any(s => s.Pilot == "Third"), "guest sees the other guest too (3 ships)");
+            await RealTime(() => Nodes<PlayerShip>().FirstOrDefault(s => s.Pilot == "Third") is { } t3 && Math.Abs(t3.MaxHp - 324) < 1e-6, 5);
+            var t3w = Nodes<PlayerShip>().FirstOrDefault(s => s.Pilot == "Third");
+            Check(t3w != null && Math.Abs(t3w.MaxHp - 324) < 1e-6,
+                  $"guest: the other guest's five chips at peak 3 fly as one here too (324 hull; {t3w?.MaxHp:0.##})");
             Check(H.Yard.Level("salvage_rate") == 1, "the upgrade the host granted reached the guest");
             for (int i = 0; i < 480 && Character.Exp != 650; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(Character.Exp == 650, $"the host's kill reached this guest, which took its own 650 (exp {Character.Exp})");
@@ -10065,8 +10545,8 @@ public partial class _Test : Node
             // over the wire.
             int heardFighters = Sfx.Played.GetValueOrDefault("fighter") - heardFighters0;
             Check(heardFighters > 0, $"guest hears its fighters' beams as the fighter's own row, sent by index ({heardFighters} heard since it joined)");
-            Check(mine != null && Math.Abs(mine.MaxHp - 230) < 1e-6 && Math.Abs(mine.Hp - 230) < 1e-6,
-                  $"hull replicated from the host, which applied this pilot's own gear (three chips: 200 x 1.15 = 230; {mine?.Hp:0})");
+            Check(mine != null && Math.Abs(mine.MaxHp - 248) < 1e-6 && Math.Abs(mine.Hp - 248) < 1e-6,
+                  $"hull replicated from the host, which applied this pilot's own gear held to three of a kind (three of its four Armour Chips I: 200 x 1.24 = 248; {mine?.Hp:0})");
             int streamed0 = _streamGot; ulong streamAt = Time.GetTicksMsec();
             await Wait(12.0);                      // strike done, bombers home and docked
             // THE HOST'S TEN A SECOND ARRIVE, over the 12 s just waited: nothing thrown away unsent. The

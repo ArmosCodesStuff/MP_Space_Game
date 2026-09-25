@@ -94,7 +94,7 @@ public class ClassDef
     public Dictionary<string, double> Nums = new();
     // WHAT ITS WEAPONS ARE, and what ONE pilot Weapons level adds to each, in that stat's own
     // units. The one place a class says this: Progression turns it into the pilot's flat
-    // additions, and the gear that lifts "every weapon" (the basic chips, the Glass Array) takes
+    // additions, and the gear that lifts "every weapon" (the Combat Chip, the Glass Array) takes
     // its share on every id any class names here. A 0 is a weapon gear reaches and the pilot's
     // points do not -- which is exactly what the carrier's fighters and the destroyer's missiles
     // were before this existed, and a saved pilot must not notice the change.

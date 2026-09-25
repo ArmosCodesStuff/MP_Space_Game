@@ -117,8 +117,9 @@ public partial class BasePanel : PanelContainer
         {
             var u = Economy.ById(id); int lv = Y.Level(id);
             bool max = Economy.Maxed(u, lv), sw = u.Kind == Economy.Kind.Unlock;
-            bool notMine = u.OwnerOnly && !Y.IsMyOwnBase, locked = notMine || Y.OwnerBoss < u.NeedsBoss;
-            string gate = notMine ? "  -- the base owner's to buy" : locked ? $"  -- beat the level-{u.NeedsBoss} boss first" : "";
+            int boss = Unlocks.Boss(Opens.Economy, u.Id);
+            bool notMine = u.OwnerOnly && !Y.IsMyOwnBase, locked = notMine || Y.OwnerBoss < boss;
+            string gate = notMine ? "  -- the base owner's to buy" : locked ? $"  -- beat the level-{boss} boss first" : "";
             if (sw) Ui.SetText(info, $"{u.Name}  ·  {(lv >= 1 ? "ON" : "OFF → ON")}\n({u.Blurb}){gate}");
             else
             {

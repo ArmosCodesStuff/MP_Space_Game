@@ -6,10 +6,11 @@ using System.Linq;
 // each class keeps its own loadout (saved with the character), so gear left on a ship is still on
 // it when the pilot switches back. Parts change no looks, only numbers.
 //   Slots: Weapon, Engines, Shield (the hull points), Hull (the frame and its point defence),
-//   Utility -- and five Chips.
+//   Utility -- and SIX Chips on every hull, opened in order by the pilot's highest level (Unlocks:
+//   slot 1 at level 2 ... slot 6 at 14), with at most three of each ChipKind (KindCap).
 //
-// THE STARTING KIT (Mk I etc.) reproduces the ship's own numbers; each kit chip adds +5% to every
-// weapon's damage and +5% hull. EVERYTHING ELSE DROPS from bosses (Loot): per slot type, FOUR
+// THE STARTING KIT (Mk I etc.) reproduces the ship's own numbers and fits no chips: a ship is
+// balanced as its class, not as its class plus a kit. EVERYTHING ELSE DROPS from bosses (Loot): per slot type, FOUR
 // SPECIALISATIONS, each leaning hard one way, at THREE RARITIES. The upside grows with rarity
 // (x1, x1.5, x2); the downside does not, so a rarer copy is strictly better. Weapon and Utility
 // parts fit one class; Engines, Shield, Hull and chips fit any capital ship (every class is one).
@@ -21,20 +22,22 @@ using System.Linq;
 // sanitised on arrival (Sanitize, SanitizeLevels).
 public enum GearSlot { Weapon, Engines, Shield, Hull, Utility, Chip }
 public enum Rarity { Common, Rare, Epic }
+// WHAT A CHIP IS FOR: a hull carries at most Equipment.KindCap of each (the fit rule beside Fits).
+public enum ChipKind { Combat, Utility }
 
 public class ItemDef
 {
     public string Id, Name, Blurb;
     public GearSlot Slot;
     public Rarity Rarity = Rarity.Common;
+    public ChipKind Kind;                    // a chip's kind (Equipment.KindCap); no other slot reads it
     // WHAT A HULL MUST HAVE FOR THIS TO FIT, by stat id: a part fits a hull that has AT LEAST
     // ONE of them. THE ONE FITTING RULE -- there is no second one anywhere.
     //   A ROLLED part names the stats it MOVES, because a part whose every stat is missing there
     //   would do nothing at all. A Rapid Battery moves main_interval and main_damage, so it fits
     //   every class with main guns -- eleven of the twelve -- without naming one of them; Elite
-    //   Hangars move fighter_speed, so only a carrier can wear them; a Basic Combat Chip moves
-    //   every weapon stat in the game, so it fits everything, and lifts whichever of them that
-    //   hull has.
+    //   Hangars move fighter_speed, so only a carrier can wear them; a Combat Chip moves every
+    //   weapon stat in the game, so it fits everything, and lifts whichever of them that hull has.
     //   A HULL'S OWN hardware (Kit, built by Own below) moves nothing, so it names instead the
     //   SIGNATURE row of the hulls born with it. Every class has one nothing else has --
     //   broadside_mult, fighter_count, missile_mag, bubble_pool, overdrive_mult, wave_range,
@@ -65,7 +68,9 @@ public class ItemDef
 
 public static class Equipment
 {
-    public const int CoreSlots = 5, ChipSlots = 5, Slots = CoreSlots + ChipSlots;
+    // Six chip slots on every hull, opened in order by the pilot's peak (Unlocks, Opens.ChipSlot),
+    // and at most KindCap chips of each ChipKind among them.
+    public const int CoreSlots = 5, ChipSlots = 6, Slots = CoreSlots + ChipSlots, KindCap = 3;
     public static readonly GearSlot[] Core = { GearSlot.Weapon, GearSlot.Engines, GearSlot.Shield, GearSlot.Hull, GearSlot.Utility };
     // Above All: static fields start in the order they are written, and Build() reads these.
     private static readonly double[] Scale = { 1.0, 1.5, 2.0 };        // the upside, by rarity
@@ -146,7 +151,7 @@ public static class Equipment
     // price (not scaled), `add` whole-number changes, one value per rarity.
     private static IEnumerable<ItemDef> Line(string id, string name, GearSlot slot, string blurb,
                                              (string stat, double pct)[] up, (string stat, double pct)[] down = null,
-                                             (string stat, int[] byRarity)[] add = null)
+                                             (string stat, int[] byRarity)[] add = null, ChipKind kind = ChipKind.Combat)
     {
         // What it needs is what it moves: every stat id it names, once.
         var needs = (up ?? None).Select(t => t.stat)
@@ -155,7 +160,7 @@ public static class Equipment
             .Distinct().ToArray();
         for (int r = 0; r < Scale.Length; r++)
         {
-            var it = new ItemDef { Id = $"{id}_{r + 1}", Name = name + Suffix[r], Slot = slot, Rarity = (Rarity)r, Needs = needs, Blurb = blurb,
+            var it = new ItemDef { Id = $"{id}_{r + 1}", Name = name + Suffix[r], Slot = slot, Rarity = (Rarity)r, Kind = kind, Needs = needs, Blurb = blurb,
                                    Ups = (up ?? None).Select(t => t.stat).Distinct().ToArray() };
             foreach (var (s, p) in up) it.Pct[s] = it.Pct.GetValueOrDefault(s) + p * Scale[r];
             foreach (var (s, p) in down ?? Array.Empty<(string, double)>()) it.Pct[s] = it.Pct.GetValueOrDefault(s) + p;
@@ -172,14 +177,10 @@ public static class Equipment
         // share one cargo gun, two heavies one light cannon), written once and yielded once.
         foreach (var k in Classes.All.SelectMany(d => d.Kit).GroupBy(k => k.Id).Select(g => g.First()))
             yield return k;
-        // ...and the four every ship in the game is born with, which ask nothing of a hull
+        // ...and the three every ship in the game is born with, which ask nothing of a hull
         yield return ItemDef.Own(GearSlot.Engines, "std_drive", "Standard Drive Cluster", "the helm: speed and turning");
         yield return ItemDef.Own(GearSlot.Shield, "basic_deflector", "Basic Deflector Array", "the ship's hull points");
         yield return ItemDef.Own(GearSlot.Hull, "reinforced_frame", "Reinforced Frame", "the frame, and its point defence");
-        var basic = ItemDef.Own(GearSlot.Chip, "chip_basic", "Basic Combat Chip", "+5% damage, +5% hull");
-        foreach (var (s, p) in AllDamage(0.05)) basic.Pct[s] = p;
-        basic.Pct["hull"] = 0.05;
-        yield return basic;
 
         IEnumerable<ItemDef>[] lines =
         {
@@ -386,43 +387,61 @@ public static class Equipment
                  new[] { ("deploy_cooldown", 0.50) }, new[] { ("deploy_damage", -0.20) }),
             Line("cr_heavy", "Heavy Cradle", GearSlot.Hull, "deployed turrets: more damage and range; longer between drops",
                  new[] { ("deploy_damage", 0.45), ("deploy_range", 0.25) }, new[] { ("deploy_cooldown", -0.30) }),
-            // ── chips ──
+            // ── chips: one Combat line and three Utility ones (at most KindCap of each on a hull) ──
             Line("chip_combat", "Combat Chip", GearSlot.Chip, "every weapon hits harder; a little less hull",
-                 AllDamage(0.08), new[] { ("hull", -0.05) }),
+                 AllDamage(0.08), new[] { ("hull", -0.05) }, kind: ChipKind.Combat),
             Line("chip_armour", "Armour Chip", GearSlot.Chip, "more hull; a little less damage",
-                 new[] { ("hull", 0.08) }, AllDamage(-0.05)),
+                 new[] { ("hull", 0.08) }, AllDamage(-0.05), kind: ChipKind.Utility),
             Line("chip_engine", "Engine Chip", GearSlot.Chip, "more top speed ahead and rudder limit",
-                 new[] { ("max_speed", 0.06), ("turn_rate", 0.06) }),
+                 new[] { ("max_speed", 0.06), ("turn_rate", 0.06) }, kind: ChipKind.Utility),
             Line("chip_target", "Targeting Chip", GearSlot.Chip, "every weapon reaches further",
-                 Ranges.Select(r => (r, 0.08)).ToArray()),
+                 Ranges.Select(r => (r, 0.08)).ToArray(), kind: ChipKind.Utility),
         };
         foreach (var l in lines) foreach (var it in l) yield return it;
     }
 
-    // the loadout: 5 core slots in order, then 5 chips ("" = empty)
+    // the loadout: 5 core slots in order, then 6 chips ("" = empty)
     // What a ship of this class comes out of the yard with: ITS OWN two parts, from its row
-    // (ClassDef.Kit), and the four every ship is born with. It used to name three classes here and
-    // hand everything else the battleship's mounts -- which the nine new classes cannot even wear,
-    // so their weapon and utility slots came up empty.
+    // (ClassDef.Kit), the three every ship is born with, and no chips.
     public static string[] Default(ShipClass c)
     {
         var kit = Classes.Of(c).Kit;
         string Own(GearSlot s) => kit.FirstOrDefault(k => k.Slot == s)?.Id ?? "";
-        return new[] { Own(GearSlot.Weapon), "std_drive", "basic_deflector", "reinforced_frame", Own(GearSlot.Utility),
-                       "chip_basic", "chip_basic", "chip_basic", "chip_basic", "chip_basic" };
+        var l = new string[Slots]; Array.Fill(l, "");
+        (l[0], l[1], l[2], l[3], l[4]) = (Own(GearSlot.Weapon), "std_drive", "basic_deflector", "reinforced_frame", Own(GearSlot.Utility));
+        return l;
     }
 
-    // a loadout made safe: known items in the right slots for the class; a bad core slot gets
-    // its default, a bad chip slot is emptied (what the host does with a pilot's claim)
-    public static string[] Sanitize(ShipClass c, string[] ids)
+    // A LOADOUT MADE SAFE for a pilot whose highest level is `peak` -- what the host does with a
+    // pilot's claim, and what a file is read through. Known items in the right slots for the class;
+    // a bad core slot gets its default. A chip is emptied when it does not fit, when its slot is one
+    // `peak` has not opened (Unlocks), or when it is the fourth of its ChipKind, counted in slot
+    // order, so the first three stay.
+    public static string[] Sanitize(ShipClass c, string[] ids, int peak)
     {
         var d = Default(c); var o = new string[Slots];
+        int open = Unlocks.Count(Opens.ChipSlot, peak);
+        var kinds = new int[Enum.GetValues<ChipKind>().Length];
         for (int k = 0; k < Slots; k++)
         {
-            string id = ids != null && k < ids.Length ? ids[k] ?? "" : (k < CoreSlots ? d[k] : "");
-            o[k] = Fits(ById(id), SlotAt(k), c) ? id : (k < CoreSlots ? d[k] : "");
+            string id = ids != null && k < ids.Length ? ids[k] ?? "" : d[k];
+            var it = ById(id);
+            bool ok = Fits(it, SlotAt(k), c) && (k < CoreSlots || (k - CoreSlots < open && kinds[(int)it.Kind]++ < KindCap));
+            o[k] = ok ? id : d[k];
         }
         return o;
+    }
+
+    // WHERE A CHIP FROM THE HOLD GOES on loadout `l` for a pilot at `peak`: the first empty slot
+    // that is open -- or -1, and why not, in the words the window's greyed EQUIP says.
+    public static (int slot, string why) ChipFit(string[] l, int peak, ItemDef chip)
+    {
+        if (chip?.Slot != GearSlot.Chip) return (-1, "not a chip");
+        int open = Unlocks.Count(Opens.ChipSlot, peak);
+        if (Enumerable.Range(CoreSlots, ChipSlots).Count(k => ById(l[k]) is { Slot: GearSlot.Chip } on && on.Kind == chip.Kind) >= KindCap)
+            return (-1, $"at most {KindCap} {chip.Kind} chips");
+        for (int k = CoreSlots; k < CoreSlots + open; k++) if (string.IsNullOrEmpty(l[k])) return (k, null);
+        return open < ChipSlots ? (-1, $"next chip slot opens at level {Unlocks.At(Opens.ChipSlot, open + 1)}") : (-1, "every chip slot is full");
     }
 
     // ── LEVELLING A PART WITH SALVAGE ────────────────────────────────────────────────────────
@@ -463,16 +482,17 @@ public static class Equipment
         System.Array.IndexOf(i.Ups, stat) < 0 ? v : v * (1 + LevelStep * LevelIn(levels, i.Id));
 
     // What a loadout does to the sheet, summed per stat over its SANITISED parts, so a part in the
-    // wrong slot or for another class changes nothing: the shares, and the whole additions -- each
-    // part lifted by the level `levels` gives it (a ship's own pilot's; this pilot's for its previews).
-    public static Dictionary<string, double> Bonuses(ShipClass c, string[] loadout, IReadOnlyDictionary<string, int> levels) =>
-        Sum(c, loadout, i => i.Pct.ToDictionary(kv => kv.Key, kv => Lifted(i, kv.Key, kv.Value, levels)));
-    public static Dictionary<string, double> Adds(ShipClass c, string[] loadout, IReadOnlyDictionary<string, int> levels) =>
-        Sum(c, loadout, i => i.Add.ToDictionary(kv => kv.Key, kv => Lifted(i, kv.Key, kv.Value, levels)));
-    private static Dictionary<string, double> Sum(ShipClass c, string[] loadout, Func<ItemDef, IReadOnlyDictionary<string, double>> part)
+    // wrong slot, for another class, or in a chip slot `peak` has not opened changes nothing: the
+    // shares, and the whole additions -- each part lifted by the level `levels` gives it (a ship's
+    // own pilot's; this pilot's for its previews).
+    public static Dictionary<string, double> Bonuses(ShipClass c, string[] loadout, int peak, IReadOnlyDictionary<string, int> levels) =>
+        Sum(c, loadout, peak, i => i.Pct.ToDictionary(kv => kv.Key, kv => Lifted(i, kv.Key, kv.Value, levels)));
+    public static Dictionary<string, double> Adds(ShipClass c, string[] loadout, int peak, IReadOnlyDictionary<string, int> levels) =>
+        Sum(c, loadout, peak, i => i.Add.ToDictionary(kv => kv.Key, kv => Lifted(i, kv.Key, kv.Value, levels)));
+    private static Dictionary<string, double> Sum(ShipClass c, string[] loadout, int peak, Func<ItemDef, IReadOnlyDictionary<string, double>> part)
     {
         var d = new Dictionary<string, double>();
-        foreach (var it in Sanitize(c, loadout).Select(ById).Where(i => i != null))
+        foreach (var it in Sanitize(c, loadout, peak).Select(ById).Where(i => i != null))
             d = ShipStats.Sum(d, part(it));
         return d;
     }

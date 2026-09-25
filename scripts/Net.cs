@@ -68,6 +68,7 @@ public partial class Net : Node
         public Dictionary<string, int> GearLevel = new();  // what the pilot levelled each part to, by id (Equipment.SanitizeLevels on arrival)
         public string CharacterId = "";                   // the pilot's stable identity: a peer id changes on a reconnect
         public int Level = 1;                              // the pilot's level, as claimed (an escort's threat)
+        public int Peak = 1;                               // the highest level it has reached, as claimed (Progression.Claim): what its walls read
         public bool HasIdentity;
     }
 

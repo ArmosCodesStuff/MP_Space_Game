@@ -7,6 +7,10 @@ using System.Collections.Generic;
 // takes no input and blocks nothing; the Esc menu turns hints off; and each character remembers
 // the hints it has been shown (Character.HintsSeen), so a veteran pilot sees none and a new one
 // sees each once.
+//
+// A LEVEL WALL CROSSED (Unlocks) has a card too, written by the unlock table for the class being
+// flown -- "LEVEL 3 · Q · SUPPRESSING FIRE" and that ability's blurb -- so it is no row here: its id
+// is the table row's (Unlock.Hint), and Card finds either kind.
 // ─────────────────────────────────────────────────────────────────────────────
 public partial class Hints : CanvasLayer
 {
@@ -15,7 +19,7 @@ public partial class Hints : CanvasLayer
     {
         ["flight"]      = ("FLYING", "W ahead, S astern, A / D the rudder. A capital ship turns on a radius; almost stopped it pivots slowly. Every key is listed along the bottom."),
         ["target"]      = ("TARGETING", "Tab takes the nearest enemy; left-click one, or click it on the radar. Esc lets go."),
-        ["abilities"]   = ("ABILITIES", "The bar along the bottom shows each ability and its key. K lists every number your ship flies and fights with, and rebinds any key."),
+        ["abilities"]   = ("ABILITIES", "The bar along the bottom shows each ability and its key; a locked one shows the level that opens it. K lists every number your ship flies and fights with, and rebinds any key."),
         ["base"]        = ("THE BASE", "B, or left-click the station. Miners, salvagers and the hauler earn while you fly; spend the credits here. REFIT changes your ship."),
         ["tio"]         = ("THE TIO", "Left-click the building for boss missions. When every pilot is READY the portal opens and the party goes through."),
         ["equipment"]   = ("EQUIPMENT", "I. Bosses drop parts that lean hard one way; your hold keeps what you are not flying, and each class keeps its own. Level or scrap them on the EQUIPMENT BASE, right of the station, 10 s clear of combat."),
@@ -23,7 +27,7 @@ public partial class Hints : CanvasLayer
         ["multiplayer"] = ("MULTIPLAYER", "HOST THIS WORLD, then COPY ADDRESS for your friends. To join one, type their address and JOIN."),
         ["raid"]        = ("RAIDERS", "They come for your base after a failed mission, and for your hauler on an escort. The base's guns help; nothing else you own can fight back."),
         ["hauler"]      = ("THE HAULER", "DISPATCH sends it alone: past the portal it may be lost (EVASION lowers the risk). ESCORT flies it round the four outposts for five times the pay; keep the raiders off it."),
-        ["pilot"]       = ("A LEVEL UP", "L spends your points on rudder, hull, engines and weapons. Bosses give EXP; a level's first clear gives more."),
+        ["pilot"]       = ("A LEVEL UP", "L spends your points on rudder, hull, engines and weapons, and names what your next level opens. Bosses give EXP; a level's first clear gives more."),
         ["warp"]        = ("WARP", "V charges for 3 s, then jumps toward your target or waypoint if the bow is on it, else straight ahead. 1200 u at most, 30 s to recharge."),
         ["stasis"]      = ("STASIS", "Your ship is held in stasis, not lost. Fly the escape pod clear; F re-boards when the ship is ready."),
         ["boss"]        = ("THE BOSS", "Red shapes are its attacks, drawn before they land: get out of them. Beat it for EXP, a bounty and parts."),
@@ -37,10 +41,6 @@ public partial class Hints : CanvasLayer
     {
         "flight", "target", "abilities", "base", "tio", "pilot", "equipment", "loot",
     };
-
-    // THE TOUR a first character is walked through, in this order (Tour.cs): the things a pilot
-    // cannot work out by flying around, soonest first. It is an ORDER OF IDS and not a second copy
-    // of the words -- the cards are the ones above, shown with a CONTINUE instead of a clock.
 
     // how near a pilot has to come to a thing to have "met" it
     public const float TargetMeet = 500, BaseMeet = 600, TioMeet = 400, WarpMeet = 1500;
@@ -77,10 +77,15 @@ public partial class Hints : CanvasLayer
     // Not yet seen by this pilot, not already up or waiting, and hints are on.
     public bool Wants(string id) => !Character.HintsOff && !Character.HintsSeen.Contains(id) && _showing != id && !_queue.Contains(id);
 
+    // A card's words: a row above, or a wall's (Unlocks.Card) for the class being flown. Null for
+    // an id neither knows.
+    public static (string Title, string Body)? Card(string id) =>
+        All.TryGetValue(id, out var row) ? row : Unlocks.Card(id, Character.Class);
+
     // A pilot has just met a system: its hint, if it is still wanted, joins the queue.
     public void Meet(string id)
     {
-        if (!All.ContainsKey(id)) { GD.PushError($"no hint called {id}"); return; }
+        if (Card(id) == null) { GD.PushError($"no hint called {id}"); return; }
         if (Wants(id)) _queue.Enqueue(id);
     }
 
@@ -101,7 +106,8 @@ public partial class Hints : CanvasLayer
     // Up, and remembered: a pilot is shown each hint once, whatever happens next.
     private void Start(string id)
     {
-        var (title, body) = All[id];
+        if (Card(id) is not { } card) return;          // a wall's card for a class no longer flown
+        var (title, body) = card;
         _title.Text = title; _body.Text = body;
         _showing = id; _age = 0;
         _card.Modulate = Colors.White; _card.Visible = true;

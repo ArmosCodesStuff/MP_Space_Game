@@ -34,6 +34,9 @@ public static class Character
     public static readonly Dictionary<string, double> Bonuses = new();
     // pilot progression (see Progression)
     public static int Exp, Level = 1, Points;
+    // THE HIGHEST LEVEL THIS PILOT HAS EVER REACHED: what the level walls read (Unlocks). A refit
+    // takes a level off and never this, so it can never lock again what a pilot had opened.
+    public static int Peak = 1;
     // How many of each upgrade the pilot owns, by Progression.All's index. A property over a MUTABLE
     // field, never a readonly array: Net.Fingerprint reads every readonly array of numbers as a fixed
     // value of the build, so a pilot's purchases would enter the hash two peers are matched on.
@@ -125,7 +128,7 @@ public static class Character
         Id = DateTime.UtcNow.ToString("yyyyMMddHHmmssfff");
         (Name, Main, Accent, Class) = (Defaults.Name, Defaults.Main, Defaults.Accent, ShipClass.Battleship);
         Bonuses.Clear();
-        Exp = 0; Level = 1; Points = 0; Array.Clear(Bought); BossCleared.Clear(); Loadout.Clear(); GearHold.Clear(); Unclaimed.Clear(); PaidKills.Clear();
+        Exp = 0; Level = 1; Peak = 1; Points = 0; Array.Clear(Bought); BossCleared.Clear(); Loadout.Clear(); GearHold.Clear(); Unclaimed.Clear(); PaidKills.Clear();
         GearLevel.Clear(); GearLocked.Clear();
         HintsSeen.Clear(); HintsOff = false; TourDone = false;
         BaseCredits = 0; BaseStock.Clear(); BaseLevels.Clear(); BaseInvested.Clear();
@@ -164,6 +167,7 @@ public static class Character
         c.SetValue("id", "class", (int)Class);
         foreach (var kv in Bonuses) c.SetValue("bonus", kv.Key, kv.Value);
         c.SetValue("progress", "exp", Exp); c.SetValue("progress", "level", Level); c.SetValue("progress", "points", Points);
+        c.SetValue("progress", "peak", Peak);
         for (int i = 0; i < Bought.Length; i++) c.SetValue("progress", "bought_" + Progression.All[i].Id, Bought[i]);
         // The ids, not the indices: a row added or moved in Progression.All would otherwise turn
         // one pilot's rudder into another's hull.
@@ -267,6 +271,7 @@ public static class Character
             foreach (var k in c.GetSectionKeys("base_invested"))
                 BaseInvested[k] = Num(c, "base_invested", k, 0, MaxStock);
         Exp = (int)c.GetValue("progress", "exp", 0); Level = Math.Max(1, (int)c.GetValue("progress", "level", 1));
+        Peak = Math.Max(Level, (int)c.GetValue("progress", "peak", 0));      // never below the level: a file without it reads its level
         Points = Math.Max(0, (int)c.GetValue("progress", "points", 0));
         for (int i = 0; i < Bought.Length; i++) Bought[i] = Math.Clamp((int)c.GetValue("progress", "bought_" + Progression.All[i].Id, 0), 0, Progression.MaxPerUpgrade);
         Spent.Clear();
@@ -276,17 +281,20 @@ public static class Character
             if (at >= 0) Spent.Add(at);
         }
         // Every part id read from the file goes through Equipment.Migrated first (see there). A
-        // dropped part that no longer fits the slot it was fitted in is not lost: it goes into the
-        // hold, and the slot takes the class's own kit.
+        // dropped part the file has fitted where it may not fly is never lost: it goes into the hold.
+        // That is a part that no longer fits its slot (the slot takes the class's own kit), a chip in
+        // a slot this pilot's peak has not opened, and a chip over its kind's cap (Equipment.Sanitize,
+        // read with the peak loaded above).
         Loadout.Clear();
         var displaced = new List<string>();
         foreach (ShipClass sc in Enum.GetValues(typeof(ShipClass)))
             if (c.HasSectionKey("equipment", sc.ToString()))
             {
                 var ids = ((string)c.GetValue("equipment", sc.ToString(), "")).Split(',').Select(Equipment.Migrated).ToArray();
+                var clean = Equipment.Sanitize(sc, ids, Peak);
                 for (int k = 0; k < ids.Length && k < Equipment.Slots; k++)
-                    if (Equipment.ById(ids[k]) is { Kit: false } part && !Equipment.Fits(part, Equipment.SlotAt(k), sc)) displaced.Add(part.Id);
-                Loadout[sc] = Equipment.Sanitize(sc, ids);
+                    if (Equipment.ById(ids[k]) is { Kit: false } part && clean[k] != part.Id) displaced.Add(part.Id);
+                Loadout[sc] = clean;
             }
         // The hold, loot and hints: parts and hints this build knows, and counts above zero.
         // (`gid`, not `id`: `id` is the CHARACTER's id, the parameter this method was called with.)
@@ -303,8 +311,11 @@ public static class Character
         foreach (var t in ((string)c.GetValue("loot", "paid", "")).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             if (long.TryParse(t, out var serial)) PayOnce(serial);
         HintsSeen.Clear();
+        // An unlock card's id (Unlock.Hint) is no row of Hints.All (D15): the same query Hints.Card
+        // uses is the one that keeps it, or a wall crossed on the class this file was flying gets
+        // dropped silently on every load.
         foreach (var h in ((string)c.GetValue("hints", "seen", "")).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            if (Hints.All.ContainsKey(h)) HintsSeen.Add(h);
+            if (Hints.Card(h) != null) HintsSeen.Add(h);
         HintsOff = (bool)c.GetValue("hints", "off", false);
         BossCleared.Clear();
         TourDone = (bool)c.GetValue("hints", "tour_done", false);
