@@ -465,7 +465,7 @@ public static class Classes
             Abilities = new[] { Ab.Blade, Ab.Lunge, Ab.Whirlwind, Ab.PrismStance } },
         new() { Id = ShipClass.HeavyWarden, Name = "WARDEN", Ready = true, Fit = Fit.Guns | Fit.Pd,
             Blurb = "Draws raiders in and shreds them. Proximity flak that bursts beside whatever comes near, point defence, and hunter-seekers that go first for whatever has a web on a friend.",
-            Hint = "WARDEN  ·  mouse aims the flak  ·  Space: fire  ·  F hunters  ·  Q taunt",
+            Hint = "WARDEN  ·  mouse aims the flak  ·  Space: fire  ·  F hunters  ·  Q taunt  ·  E flak curtain at the cursor",
             Shot = Shots.Flak,
             Drive = Drives.Boost,
             Nums = new() {
@@ -506,13 +506,18 @@ public static class Classes
                 new() { Group = "Taunt", Id = "taunt_mult",     Label = "Called take",      Base = 1.5, Unit = "x", Dec = 2 },
                 new() { Group = "Taunt", Id = "taunt_guard",    Label = "Damage taken",     Base = 0.67, Unit = "x", Dec = 2 },
                 new() { Group = "Taunt", Id = "taunt_cooldown", Label = "Cooldown",         Base = 20, Unit = "s", Dec = 1, Inverse = true },
+                // THE FLAK CURTAIN (kits_v2's card; its 500 x 80 u, 0.5 s and 6 s are the row's, Zones.cs): 20, then 10 every 0.5 s; 18 s
+                new() { Group = "Flak curtain", Id = "curtain_first",    Label = "On touching",  Base = 20, Dec = 0 },
+                new() { Group = "Flak curtain", Id = "curtain_tick",     Label = "Then, each",   Base = 10, Dec = 0 },
+                new() { Group = "Flak curtain", Id = "curtain_every",    Label = "Every",        Base = 0.5, Unit = "s", Dec = 2 },
+                new() { Group = "Flak curtain", Id = "curtain_cooldown", Label = "Cooldown",     Base = 18, Unit = "s", Dec = 1, Inverse = true },
             },
             Art = new ClassArt {
                 Texture = "res://heavy_warden_hull.png", Length = 120f, HalfWidth = 28.68f,
                 Mains = new Vector2[] { new(0.0f, -24.0f) },
                 Pds   = new Vector2[] { new(0.0f, 31.2f) },
                 TurretTexScale = 1.18f / 5.5f, MainBarrel = 14.5f, PdBarrel = 6.5f },
-            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Hunters, Ab.Taunt } },
+            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Hunters, Ab.Taunt, Ab.Curtain } },
 
         // -- page 4: lights -----------------------------------------------------
         new() { Id = ShipClass.LightDart, Name = "DART", Ready = true, Fit = Fit.Guns,

@@ -1319,35 +1319,41 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
 
     // THE WHIRLWIND'S PRESS (host): its time up, its cooldown, its first blow at once; every web on
     // the hull let go (the pin and the web's own ask), and none may take it until the spin is over.
-    // A CHARGED ROW'S PRESS (AbilityDef.Charges), on the host: one charge spent if one is left (its slot's N
-    // counts the spent ones), the recharge started if none was running. A row without charges always may.
+    // WHAT A PRESS SPENDS, on the host: a CHARGED row (AbilityDef.Charges) one charge if one is left (its slot's N
+    // counts the spent ones), the recharge started if none was running; a row with a Cooldown its cooldown, if it
+    // is not cooling. False: nothing to spend, and the press does nothing.
     private bool Spend(AbilityDef def)
     {
-        if (def.Charges == null) return true;
         ref var sl = ref Sl(def.Id);
-        if (sl.N >= (int)Stats[def.Charges]) return false;
-        sl.N++;
-        if (sl.Cool <= 0) sl.Cool = Cooling(Stats[def.Recharge]);
+        if (def.Charges != null)
+        {
+            if (sl.N >= (int)Stats[def.Charges]) return false;
+            sl.N++;
+            if (sl.Cool <= 0) sl.Cool = Cooling(Stats[def.Recharge]);
+            return true;
+        }
+        if (def.Cooldown == null) return true;
+        if (sl.Cool > 0) return false;
+        sl.Cool = Cooling(Stats[def.Cooldown]);
         return true;
     }
-    // A ZONE LAID (AbilityDef.Lays: the tether mine), on the host: a charge spent, the row laid at the stern,
-    // its hold read from this sheet now (Zones.Lay).
+    // A ZONE LAID (AbilityDef.Lays: the tether mine, the curtain), on the host: what the press spends, then the
+    // row laid where it goes (Zones.Spot: the stern, or the cursor clamped with its bar across the aim), what the
+    // host decides of it read from this sheet now (Zones.Lay).
     public void Lay(string id)
     {
         var def = Abilities.Find(Class, id);
         if (def?.Lays is not { } row || !Net.Sim || MyHub is not { } hub || !Spend(def)) return;
-        var at = Position + Vector2.Down.Rotated(Rotation) * MyArt.Length * 0.5f;
-        Zones.Lay(hub, row, at, Rotation, OwnerId, Stats[row.HoldFor], (int)Stats[row.Most]);
+        var (at, rot) = Zones.Spot(row, Position, Rotation, MyArt.Length * 0.5f, AimPoint);
+        Zones.Lay(hub, row, at, rot, this);
     }
 
-    // A SALVO POPPED (AbilityDef.Pops: the flares), on the host: the row round the hull (Hub.Flares), its
-    // cooldown (AbilityDef.Cooldown) from the press.
+    // A SALVO POPPED (AbilityDef.Pops: the flares), on the host: what the press spends (its Cooldown), then the
+    // row round the hull (Hub.Flares).
     public void Pop(string id)
     {
         var def = Abilities.Find(Class, id);
-        ref var sl = ref Sl(id);
-        if (def?.Pops is not { } row || def.Cooldown == null || !Net.Sim || sl.Cool > 0 || MyHub is not { } hub) return;
-        sl.Cool = Cooling(Stats[def.Cooldown]);
+        if (def?.Pops is not { } row || !Net.Sim || MyHub is not { } hub || !Spend(def)) return;
         hub.Flares(Position, Rotation, Array.IndexOf(Decoys.All, row));
     }
 

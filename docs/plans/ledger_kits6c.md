@@ -561,3 +561,31 @@ break the bash tool; write the script with the Write tool), SmokeTest.cs.txt LF 
 - Checks: NEW LaneA6cTauntChecks (3 runs), NEW rung 5 LaneA6cTauntGuestChecks, NEW frame 82c_taunt_pressed (LaneA6cTauntFrames,
   after 83b), NEW sweep witness "taunt".
 - Next: kits6c-J13 Flak curtain.
+
+## kits6c-J13 · PRE
+- tier opus. Intent: the Flak curtain (D44) as a Zones row: ZoneDef gains Length (a bar: a capsule), Life, Touch (a hull, not a
+  centre), First / Tick / Every (stat ids: damage on the first touch, then every Every, through Dealt with the row's id), Near /
+  Far (laid at the cursor clamped, across the aim; 0 = the stern); Zones.Lay reads the layer's sheet; PlayerShip.Spend also
+  takes a Cooldown row (Pop uses it); Ab.Curtain (E, ability 3); Warden rows curtain_first 20 / tick 10 / every 0.5 /
+  cooldown 18. Checks LaneA6cCurtainChecks (+ the pure bar in LaneA6cZoneChecks, rewritten for Inside's rotation), frame
+  82d_flak_curtain (LaneA6cCurtainFrames), rung 5 LaneA6cCurtainGuestChecks, sweep witness. HEAD 68ccceedee7e47d39ff9608b825827c83092fa9a
+- scripts/Zones.cs d655c06f0fc16ebc5fcce2e948801ba6c900a755
+- scripts/Abilities.cs 308b108dfb8e1781c8f70177477c4524da67fac1
+- scripts/PlayerShip.cs 1d4a4c2df00c73cfb006602cfdfb793b0e4ba2a8
+- scripts/Ships.cs 511c4f78c390d98accc834dde2488638865e2c0a
+- tools/smoketest/SmokeTest.cs.txt ab5552acc30b0be01e914da03af047a15b102f6c
+- tools/screens/Shots.cs.txt 6a5e681970ad04bc664d260054c42fb835f8734c
+## kits6c-J13 · POST
+- Verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED, own diff read. engine-unproven: rungs owed in the final test phase.
+- Built: ZoneDef gains Length (a bar), Touch, Life, First / Tick / Every, Near / Far; Zones.Nearest / Inside(d, at, rot, p) /
+  Takes / Spot (stern or clamped cursor, bar across the aim); Zones.Lay reads the layer's sheet (PlayerShip passed); Tick expires
+  by Life and strikes a field on each body's own clock (ZoneNode.Next, cleared in _ExitTree), credit the row id through Dealt
+  (so the Taunt's x1.5 applies); the bar drawn with five flickering bursts. Row curtain = 1 (appended): 500 x 80, 0.5 s, 6 s,
+  150-700 u, Raiding prey. PlayerShip.Spend takes a Cooldown row too (Pop uses it); Ab.Curtain (E, Warden ability 3); Warden
+  rows curtain_first 20 / tick 10 / every 0.5 / cooldown 18.
+- D58 (default): the curtain's geometry and times are literal on its row (drawn on every peer); its damage and cooldown are the
+  Warden's stats. A body that leaves and re-enters keeps its clock (no second First).
+- Checks: NEW LaneA6cCurtainChecks (3 runs; run 2 taunted: 30 / 15), NEW rung 5 LaneA6cCurtainGuestChecks, NEW frame
+  82d_flak_curtain (LaneA6cCurtainFrames), NEW sweep witness "curtain"; REWRITTEN LaneA6cZoneChecks (Inside takes the rotation;
+  the bar's side and cap proved beside the disc).
+- Next: kits6c-J14 Record.

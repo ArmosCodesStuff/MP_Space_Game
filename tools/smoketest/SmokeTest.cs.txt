@@ -5827,8 +5827,16 @@ public partial class _Test : Node
         {
             var at = new Vector2(Vary(-4000f, 4000f), Vary(-4000f, 4000f)); var way = Vector2.Up.Rotated(VaryAngle());
             float inside = Vary(165f, 169f), outside = Vary(171f, 176f);
-            bool a = Zones.Inside(d, at, at + way * inside), b = Zones.Inside(d, at, at + way * outside), c = Zones.Inside(d, at, at);
+            float rot = VaryAngle();
+            bool a = Zones.Inside(d, at, rot, at + way * inside), b = Zones.Inside(d, at, rot, at + way * outside), c = Zones.Inside(d, at, rot, at);
             Check(a && !b && c, $"zone run {run}: a body {inside:0.0} u off is inside ({a}), {outside:0.0} u off is not ({b}), the centre is ({c})");
+            // the curtain's BAR: 500 u along Right.Rotated(rot), 40 u either side, round at its ends
+            var cz = Zones.Of(Zones.Curtain); var ax = Vector2.Right.Rotated(rot); var nrm = ax.Orthogonal();
+            float along = Vary(-240f, 240f), side = Vary(35f, 39f), past = Vary(41f, 46f);
+            bool bIn = Zones.Inside(cz, at, rot, at + ax * along + nrm * side), bOut = Zones.Inside(cz, at, rot, at + ax * along - nrm * past);
+            bool capIn = Zones.Inside(cz, at, rot, at + ax * (250f + side)), capOut = Zones.Inside(cz, at, rot, at - ax * (250f + past));
+            Check(bIn && !bOut && capIn && !capOut,
+                  $"bar run {run} at {Mathf.RadToDeg(rot):0} deg: {side:0.0} u off its line is inside ({bIn}), {past:0.0} u is not ({bOut}); {side:0.0} u past an end inside ({capIn}), {past:0.0} u not ({capOut})");
         }
     }
 
@@ -6282,6 +6290,121 @@ public partial class _Test : Node
         bool gone = !me.Statuses.Has(Status.Hardened) && me.Sl("taunt").Left <= 0;
         Check(Math.Abs(me.MaxHp - 270) < 1e-6 && left > 5.0 && left <= 6.0 + 1e-6 && guard && cool > 18.5 && cool <= 20.0 + 1e-6 && said == "TAUNTING" && gone,
               $"arena guest: its own Q -- the host's taunt on its slot, {left:0.0} s up (6, a report late), its guard read here ({guard}), the cooldown {cool:0.0} s (20); Q again {said} (TAUNTING); 6.5 s on the guard is gone ({gone})");
+    }
+
+    // ── SLICE 6c: THE WARDEN'S FLAK CURTAIN THROUGH E (kits_v2's card and Proves; D44). The rows once (20, then 10 every
+    // 0.5 s, 18 s; 500 x 80 u, live 0.5 s, 6 s; 150-700 u; E, ability 3). Three varied runs (VaryNear spot, VaryAngle
+    // aim; the cursor 100-140 u off in run 0, 800-1000 u in run 1, 300-600 u in run 2, which is taunted first):
+    //   the bar stands at the cursor clamped (150 / 700 / as aimed) and lies across the aim; the cooldown is 18.0 s and
+    //   E again is refused COOLING;
+    //   a held gunship whose hull is 1-5 u inside the bar's edge (40 + r - 1..5 off its line) takes nothing before it
+    //   arms, then 20 and 10 every 0.5 s (x1.5 when the Warden's taunt called it: 30 and 15); one 1-5 u outside
+    //   takes 0; a boss post astride the bar takes 0; the pilot's DealtBy["curtain"] carries it;
+    //   the bar is gone 6.1 s after the press.
+    async Task LaneA6cCurtainChecks(Vector2 yonder)
+    {
+        var st = new ShipStats(ShipClass.HeavyWarden); var cz = Zones.Of(Zones.Curtain);
+        Check(st["curtain_first"] == 20 && st["curtain_tick"] == 10 && st["curtain_every"] == 0.5 && st["curtain_cooldown"] == 18
+              && cz.Id == "curtain" && cz.Length == 500f && cz.Reach == 40f && cz.Arm == 0.5 && cz.Life == 6.0 && cz.Near == 150f && cz.Far == 700f && cz.Touch
+              && Ab.Curtain.Default == global::Godot.Key.E && Ab.Curtain.Lays == cz && Unlocks.Nth(ShipClass.HeavyWarden, 3) == Ab.Curtain,
+              $"the curtain's rows: {st["curtain_first"]:0} then {st["curtain_tick"]:0} every {st["curtain_every"]:0.0} s (20 / 10 / 0.5), {st["curtain_cooldown"]:0} s (18); {cz.Length:0} x {cz.Reach * 2:0} u (500 x 80), live {cz.Arm:0.0} s for {cz.Life:0} s, {cz.Near:0}-{cz.Far:0} u; E; ability 3 {Unlocks.Nth(ShipClass.HeavyWarden, 3)?.Name}");
+        await SetClass(ShipClass.HeavyWarden);
+        var wd = Me; bool demo = wd.Demo; wd.Demo = true; wd.AutopilotTo = null;
+        var ekey = Abilities.KeyFor(ShipClass.HeavyWarden, "curtain");
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+        foreach (var z in H.Laid.ToList()) H.Down(Spawns.Zone, z, burst: false, float.NaN);
+        await Wait(0.2);
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f);
+            wd.Position = at; wd.Velocity = Vector2.Zero; wd.Hp = wd.MaxHp;
+            wd.Sl("curtain").Cool = 0; wd.Sl("taunt").Left = 0; wd.Sl("taunt").Cool = 0;
+            await Frame();
+            at = wd.Position;                                                      // re-taken after the wait
+            var dir = Vector2.Right.Rotated(VaryAngle());
+            float aimed = run == 0 ? Vary(100f, 140f) : run == 1 ? Vary(800f, 1000f) : Vary(300f, 600f);
+            float want = Mathf.Clamp(aimed, 150f, 700f);
+            var cursor = at + dir * aimed;
+            var mid = at + dir * want; var axis = dir.Orthogonal();
+            var probe = H.SpawnRaider(at + dir * 5000f, Enemies.Gunship); float r0 = probe.HitRadius; probe.TakeDamage(1e12);
+            Raider Held(Vector2 p) { var g = H.SpawnRaider(p, Enemies.Gunship); g.Hp = 1e9; g.ApplyStatus(Status.Disabled, 60); return g; }
+            float inOff = 40f + r0 - Vary(1f, 5f), outOff = 40f + r0 + Vary(1f, 5f);
+            var inAt = mid + axis * Vary(-200f, 200f) + dir * inOff * (Vary(0f, 1f) < 0.5f ? 1f : -1f);
+            var outAt = mid + axis * Vary(-200f, 200f) - dir * outOff * (Vary(0f, 1f) < 0.5f ? 1f : -1f);
+            var inG = Held(inAt); var outG = Held(outAt);
+            var bt = Missions.Bosses[0];
+            var bossAt = mid + axis * Vary(-150f, 150f);
+            var post = new Boss { Hub = H, Position = bossAt,
+                                  Type = new Missions.BossType { Id = "post", Name = "POST", Hull = 100000, Texture = bt.Texture, Length = bt.Length, HalfWidth = bt.HalfWidth,
+                                                                 CloseSpeed = 0f, TurnRate = 0f, Moves = System.Array.Empty<BossMove>() } };
+            AddChild(post);
+            void Pin() { wd.Position = at; wd.Velocity = Vector2.Zero; wd.AimPoint = cursor; wd.Hp = wd.MaxHp; inG.Position = inAt; outG.Position = outAt; post.Position = bossAt; }
+            for (int i = 0; i < 3; i++) { Pin(); await Frame(); }
+            bool taunted = run == 2;
+            if (taunted) { wd.UseAbility("taunt", 0); Pin(); await Frame(); }
+            bool called = !taunted || ReferenceEquals(inG.CalledBy, wd);
+            double mult = taunted ? 1.5 : 1.0;
+            double i0 = inG.Hp, o0 = outG.Hp, b0 = post.Hp, credit0 = wd.DealtBy.GetValueOrDefault("curtain");
+            Key(ekey);
+            ZoneNode bar = null;
+            for (int i = 0; i < 6 && bar == null; i++) { Pin(); await Frame(); bar = H.Laid.FirstOrDefault(z => z.Row == Zones.Curtain); }
+            double cool = wd.Sl("curtain").Cool;
+            Key(ekey); Pin(); await Frame(); Pin(); await Frame();
+            string again = wd.FailNote("curtain");
+            float placed = bar == null ? -1f : bar.At.DistanceTo(at);
+            float across = bar == null ? 1f : Mathf.Abs(Vector2.Right.Rotated(bar.Rot).Dot(dir));
+            Check(bar != null && Math.Abs(placed - want) < 1f && across < 0.01f && Math.Abs(cool - 18.0) < 0.05 && again == "COOLING" && called,
+                  $"curtain run {run}{(taunted ? ", taunted" : "")}: E with the cursor {aimed:0} u off lays the bar {placed:0.0} u out ({want:0}), across the aim ({across:0.000} along it); cooldown {cool:0.00} s (18.0); E again {again} (COOLING)");
+            // before it arms: nothing; then 20 (30 called) and 10 (15) every 0.5 s, sampled between ticks
+            async Task UntilAge(double age) { while (bar != null && GodotObject.IsInstanceValid(bar) && bar.Age < age) { Pin(); await Frame(); } }
+            await UntilAge(Vary(0.3f, 0.45f));
+            double early = i0 - inG.Hp;
+            int k = (int)Vary(1f, 3.99f);
+            await UntilAge(0.5 + 0.5 * k + Vary(0.1f, 0.4f));
+            double took = i0 - inG.Hp, want2 = (20 + 10 * k) * mult;
+            double outTook = o0 - outG.Hp, bossTook = b0 - post.Hp;
+            double credit = wd.DealtBy.GetValueOrDefault("curtain") - credit0;
+            Check(early == 0 && Math.Abs(took - want2) < 1e-6 && outTook == 0 && bossTook == 0 && Math.Abs(credit - took) < 1e-6,
+                  $"...a gunship {inOff - r0:0.0} u from the bar's line (its hull 1-5 u in) takes {early:0} before it arms, then {took:0.00} by tick {k} ({want2:0.00}); one {outOff - r0:0.0} u off takes {outTook:0} (0); a boss astride it {bossTook:0} (0); credited to the curtain {credit:0.00}");
+            await UntilAge(Vary(5.8f, 5.95f));
+            bool stands = bar != null && H.Laid.Contains(bar);
+            double seen = wd.Clock, standAge = bar != null && GodotObject.IsInstanceValid(bar) ? bar.Age : -1;
+            while (wd.Clock - seen < 6.1 - standAge) { Pin(); await Frame(); }
+            bool gone = bar != null && !H.Laid.Contains(bar);
+            Check(stands && gone,
+                  $"...the bar stands {standAge:0.00} s after the press ({stands}) and is gone 6.1 s after it ({gone})");
+            inG.TakeDamage(1e12); outG.TakeDamage(1e12); post.QueueFree();
+            wd.Sl("curtain").Cool = 0; wd.Sl("taunt").Left = 0; wd.Sl("taunt").Cool = 0; wd.Statuses.Clear(Status.Hardened);
+            await Wait(0.2);
+        }
+        wd.Demo = demo; wd.Position = yonder; wd.Velocity = Vector2.Zero; wd.Hp = wd.MaxHp;
+    }
+
+    // ── SLICE 6c, RUNG 5: A GUEST'S CURTAIN (kits_v31 §8: the Curtain drawn on every peer). The guest, a Warden, holds
+    // its cursor 300-600 u off at a varied bearing and presses E: the host's bar arrives here where the host laid it --
+    // within 20 u of the cursor (its aim on the host a report old), across the aim -- and the host's 18 s cooldown; the
+    // bar is gone here 6.5 s on.
+    async Task LaneA6cCurtainGuestChecks()
+    {
+        var me = Me; me.AutopilotTo = null; bool demo = me.Demo; me.Demo = true;
+        me.Velocity = Vector2.Zero;
+        var at = me.Position; var dir = Vector2.Right.Rotated(VaryAngle()); float aimed = Vary(300f, 600f);
+        me.AimPoint = at + dir * aimed;
+        await Wait(0.4);
+        me.Velocity = Vector2.Zero; at = me.Position; me.AimPoint = at + dir * aimed;
+        await Wait(0.2);
+        Key(Abilities.KeyFor(ShipClass.HeavyWarden, "curtain"));
+        await RealTime(() => H.Laid.Any(z => z.Row == Zones.Curtain) && me.Sl("curtain").Cool > 0, Wan ? 6 : 3);
+        var bar = H.Laid.FirstOrDefault(z => z.Row == Zones.Curtain);
+        float off = bar == null ? -1f : bar.At.DistanceTo(at + dir * aimed);
+        float across = bar == null ? 1f : Mathf.Abs(Vector2.Right.Rotated(bar.Rot).Dot(dir));
+        double cool = me.Sl("curtain").Cool;
+        await Wait(6.5);
+        bool gone = !H.Laid.Any(z => z.Row == Zones.Curtain);
+        me.Demo = demo;
+        Check(bar != null && off < 20f && across < 0.05f && cool > 16.5 && cool <= 18.0 + 1e-6 && gone,
+              $"arena guest: its own E -- the host's curtain drawn here {off:0.0} u from its cursor ({bar != null}), across its aim ({across:0.000}); the cooldown {cool:0.0} s (18, a report late); gone 6.5 s on ({gone})");
     }
 
     // ── SLICE 6c, RUNG 5: A GUEST'S ANCHOR (kits_v31 §7: the boost refused ANCHORED). The guest, right after its
@@ -12499,6 +12622,7 @@ public partial class _Test : Node
             await LaneA6cFlakChecks(yonder);
             await LaneA6cHunterPreyChecks(yonder);
             await LaneA6cTauntChecks(yonder);
+            await LaneA6cCurtainChecks(yonder);
             await SetClass(ShipClass.HeavyWarrior);
             var wr = Me; wr.Position = yonder; wr.Velocity = Vector2.Zero; await Wait(0.2);
             // A SPEED LIFT LIFTS THE PUSH AS WELL AS THE TOP SPEED (PlayerShip.Steer). The water holds a
@@ -12900,6 +13024,7 @@ public partial class _Test : Node
                     ["tether"]    = sp => sp.Sl("tether").N == 1 && sp.Sl("tether").Cool > sp.Stats["tether_recharge"] - 0.1 && H.Laid.Any(z => z.OwnerId == sp.OwnerId),
                     ["flares"]    = sp => sp.Sl("flares").Cool > sp.Stats["flare_cooldown"] - 0.1 && H.Salvos.Any(sv2 => sv2.At.DistanceTo(sp.Position) < 5f),
                     ["taunt"]     = sp => sp.Sl("taunt").Left > sp.Stats["taunt_time"] - 0.1 && sp.Statuses.Has(Status.Hardened),
+                    ["curtain"]   = sp => sp.Sl("curtain").Cool > sp.Stats["curtain_cooldown"] - 0.1 && H.Laid.Any(z => z.OwnerId == sp.OwnerId && z.Row == Zones.Curtain),
                 };
                 var onBars = Classes.All.Where(cd2 => cd2.Ready).SelectMany(cd2 => cd2.Abilities)
                                         .Where(ab3 => !ab3.Open).Select(ab3 => ab3.Id).Distinct().ToList();
@@ -16418,6 +16543,7 @@ public partial class _Test : Node
             await LaneA6cAnchorGuestChecks();                               // slice 6c: a guest's Anchor, rooted by the host's word
             await LaneA6cFlaresGuestChecks();                               // slice 6c: a guest's flares, the host's salvo on its hull
             await LaneA6cTauntGuestChecks();                                // slice 6c: a guest's taunt, the host's guard on its hull
+            await LaneA6cCurtainGuestChecks();                              // slice 6c: a guest's curtain, drawn where the host laid it
             // ── TWO OF THE NINE, IN A SESSION (the host's side is in the ahost branch) ──
             // A FREIGHTER: the class whose abilities MAKE things in the world. Every press below
             // is a request -- nothing here is made on this peer.

@@ -83,6 +83,7 @@ public partial class _Shots : Node
         Fx.Raise(Fx.TauntRing, Me().Position, 1000f);
         await W(0.35); await Snap("83b_taunt_ring");
         await LaneA6cTauntFrames(hub, yard);
+        await LaneA6cCurtainFrames(hub, yard);
         // 84: a chunk torn from a practice dummy, mid-tumble, with its sparks, smoke and scar
         var d1 = hub.GetNode<TargetDummy>("TargetDummy1");
         Me().Position = d1.GlobalPosition + new Vector2(0, 320); Me().Velocity = Vector2.Zero;
@@ -107,6 +108,26 @@ public partial class _Shots : Node
         await W(0.4); await Snap("82c_taunt_pressed");
         foreach (var w in webs) w.TakeDamage(1e12);
         s.Sl("taunt").Left = 0; s.Sl("taunt").Cool = 0; s.Statuses.Clear(Status.Hardened);
+        await W(0.3);
+    }
+
+    // SLICE 6c: the Warden's flak curtain through E (82d): the cursor 420 u ahead, snapped 1.0 s on -- the 500 x 80 u
+    // bar across the aim, its five bursts, a webifier held inside it.
+    async Task LaneA6cCurtainFrames(Hub hub, Vector2 yard)
+    {
+        var zp = typeof(Hub).GetProperty("ZoomLevel");
+        Character.Class = ShipClass.HeavyWarden; P(hub, "ApplyLocalIdentity"); await W(0.3);
+        var s = hub.GetNode<PlayerShip>("Ship_1"); s.Visible = true; s.Position = yard; s.Velocity = Vector2.Zero; s.Rotation = 0.5f;
+        bool demo = s.Demo; s.Demo = true; s.Sl("curtain").Cool = 0;
+        var aim = yard + Vector2.Up.Rotated(0.5f) * 420f;
+        var web = hub.SpawnRaider(aim + Vector2.Right.Rotated(0.5f) * 120f, Enemies.Webifier); web.Hp = 1e9; web.ApplyStatus(Status.Disabled, 10);
+        zp.SetValue(hub, 0.9f); await W(1.0);
+        s.Position = yard; s.Velocity = Vector2.Zero; s.AimPoint = aim;
+        s.UseAbility("curtain", 0);
+        await W(1.0); await Snap("82d_flak_curtain");
+        web.TakeDamage(1e12);
+        foreach (var z in hub.Laid.ToList()) hub.Down(Spawns.Zone, z, burst: false, float.NaN);
+        s.Sl("curtain").Cool = 0; s.Demo = demo;
         await W(0.3);
     }
 

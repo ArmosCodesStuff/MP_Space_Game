@@ -124,11 +124,12 @@ public class AbilityDef
     // A CHARGED ROW: it holds Charges (a stat id) presses; its slot's N counts those spent, and one comes back
     // every Recharge seconds (a stat id), one at a time (PlayerShip.Spend, and TickAbilities' Cool). The tether.
     public string Charges, Recharge;
-    // A ZONE IT LAYS (Zones.cs), at the stern: a row of Zones.All (PlayerShip.Lay). The tether mine.
+    // A ZONE IT LAYS (Zones.cs), at the stern or the cursor: a row of Zones.All (PlayerShip.Lay). The tether mine, the curtain.
     public ZoneDef Lays;
-    // A DECOY SALVO IT POPS round the hull (Decoys.cs): a row of Decoys.All (PlayerShip.Pop), and the stat id of
-    // the cooldown the press sets. The flares.
+    // A DECOY SALVO IT POPS round the hull (Decoys.cs): a row of Decoys.All (PlayerShip.Pop). The flares.
     public DecoyDef Pops;
+    // THE COOLDOWN A PRESS SETS (a stat id), for a row whose press spends through PlayerShip.Spend (Pops, Lays):
+    // the flares, the curtain.
     public string Cooldown;
 
     public SlotState State(PlayerShip s, IHittable selected) =>
@@ -424,6 +425,18 @@ public static class Ab
         Press = (s, _) => s.Taunt(),
         Refuse = (s, _) => s.Sl("taunt").Left > 0 ? "TAUNTING" : s.Sl("taunt").Cool > 0 ? "COOLING" : null,
         Show = (s, _) => Timed(s, "taunt", "taunt_cooldown", "TAUNT"),
+    };
+
+    // THE FLAK CURTAIN (the Warden's E, kits_v2's card): 500 x 80 u at the cursor (150-700 u), across the aim, live
+    // 0.5 s after the press for 6 s: a raider touching it takes 20, then 10 every 0.5 s (Zones.All "curtain"). 18 s.
+    public static readonly AbilityDef Curtain = new()
+    {
+        Id = "curtain", Name = "Flak curtain", Short = "CURTAIN", Default = Key.E,
+        Blurb = "A wall of flak 500 u long at the cursor (150-700 u away), across your aim, for 6 s: a raider touching it takes 20, then 10 every half second. Nothing slows; bosses and missiles pass untouched.",
+        Lays = Zones.All[Zones.Curtain], Cooldown = "curtain_cooldown",
+        Press = (s, _) => s.Lay("curtain"),
+        Refuse = (s, _) => s.Sl("curtain").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => Timed(s, "curtain", "curtain_cooldown", "READY"),
     };
 
     // THE LUNGE (the Warrior's E): 420 u along the nose in 0.3 s, 40 to each body on the way, half
