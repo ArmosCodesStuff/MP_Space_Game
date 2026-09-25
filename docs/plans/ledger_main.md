@@ -7,12 +7,11 @@ Under 25 lines; Edit tool only; commit FIRST after every event; the hook re-inje
   extras -> bar -> release. lands: 3 lines to the owner + the frames (framesForOwner, netOwed); a stop -> docs/plans/ledger_test.md
   and the journal, fix, relaunch: Workflow({scriptPath: <scripts>\test-phase.js, resumeFromRunId: "wf_8c62491c-3b2", args: {attempt: 2, review: []}}).
   Watchdog Monitor (agents.ps1 -Minutes 30 every 10 min, 30-min timeout) re-armed at each expiry while it runs.
-- code-read / one Fable 5.1 agent (background, 16:52; owner: "read all of the code, is a rewrite easier than testing?"): reads all
-  105 game files, writes + commits docs/plans/fable_code_read.md (map, god files, rule breaks, red sorting, verdict with numbers;
-  17:10 owner's 2nd question sent to the same agent: what to globalize / un-hard-code / split for cheaper testing, 30-line section).
-  lands: 4 lines to the owner from its 20-line return; the file is the durable answer (no task id: an Agent, not a workflow).
 
-## Landed (verdict first; delete the row once its action is done): none
+## Landed (verdict first; delete the row once its action is done)
+- code-read 17:25 (17b94df, fable_code_read.md): do NOT rewrite (fix 2 wk vs 8-12). 4 root causes: NaN cascade Math.Sign at PlayerShip.cs:2299,
+  Turrets.cs:345, Hauler.cs:283, Prism.cs:105 (~48 sigs; triage a1 has only a1-turret-nan, deferred); CIWS DamageOf unwired PlayerShip.cs:343;
+  14 stale literals; 6 bugs; 9 traps. action: round-2 triage reads §4-5 first (script pointer for r>=2 + a message when it starts; Monitor b38t0d23z).
 
 ## Next (1 is the exact next call, copy-pasteable)
 1. Wait for task wu5xd3g1m; take its return as above (slots proved 16:40: random seeds on slot 3, box ports bound).
