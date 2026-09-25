@@ -3,16 +3,15 @@
 Under 25 lines; Edit tool only; commit FIRST after every event; the hook re-injects it after a compact and cross-checks each `task <id>`.
 
 ## Running (one row per workflow; the form `task <id> (<run id>)` is what tools/lanes.ps1 parses)
-- test-phase / task wu5xd3g1m (wf_8c62491c-3b2, attempt 4 at 16:33, review []): rounds (5 chains, triage, pooled fixes) -> seed sweep -> extras -> bar
+- test-phase / task wb7z3o3to (wf_8c62491c-3b2, attempt 4 resumed 18:36: premerged a1-arena-stall, done [a1-items-tables]; the cache replays a PREFIX of calls only): rounds (5 chains, triage, pooled fixes) -> seed sweep -> extras -> bar
   -> release. lands: 3 lines to the owner + frames (framesForOwner, netOwed); a stop -> ledger_test.md + journal, fix, relaunch per Next 1. Watchdog Monitor re-armed at expiry.
 
 ## Landed (verdict first; delete the row once its action is done): none (code-read 17b94df: do not rewrite; round>=2 triage reads it)
 
 ## Next (1 is the exact next call, copy-pasteable)
-1. 18:20 task wu5xd3g1m STOPPED (orphans killed). Script fixed: group rules before the list (cap 1700+480n), red-baseline proof rule RB in
-   round>=2 and escalation prompts, args.premerged merges a lane proved outside the run. Relaunch: Workflow({scriptPath, resumeFromRunId:
-   "wf_8c62491c-3b2", args: {attempt: 4, review: [], premerged: {"a1-arena-stall": {key: "fixa1a1arenastall", tree: "fix1"}}}}) (cached
-   agents replay; the check group re-runs; arena-stall c2790d9 merges), record the new task id in Running.
+1. Wait for task wb7z3o3to (round 1: check group re-running in wt_fix0, arena-stall c2790d9 merging; then round 2). A stop -> relaunch
+   Workflow({scriptPath, resumeFromRunId: "wf_8c62491c-3b2", args: {attempt: 4, review: [], premerged: {...}, done: [<every task merged
+   into version-l per ledger_test.md>]}}): the cache replays only the unchanged PREFIX of agent calls, so name every merged task in done.
 2. After the release, in order (owner 17:20, README next 8-9): two-machine test row; scenarios lane (row-by-row conversion); PlayerShip/Hub split; fable_report lists.
 
 ## Owner questions (one line each, with its default): none open (today's rulings: README, Agents).
