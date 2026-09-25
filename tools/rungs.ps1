@@ -24,6 +24,7 @@ param([Parameter(Mandatory)][string]$Tree, [Parameter(Mandatory)][string]$Tag, [
 $ErrorActionPreference = 'Continue'
 # At most 4 slots: slot 4's fakeigd HTTP port 19080+400 = 19480 is slot 0's box --http port.
 $Slots = [Math]::Min($Slots, 4)
+if ($Slot -gt 3) { "slot $Slot is out of range 0..3"; exit 2 }
 
 # The REAL %TEMP%, captured before anything below might repoint $env:TEMP for a non-zero slot: the
 # out dir, summary.txt and every lock this process itself opens stay under it regardless of slot.
