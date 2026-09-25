@@ -3005,14 +3005,14 @@ public partial class _Test : Node
         Check(Count<StatsWindow>() == 1, "K opens the ability & stats window");
         var win = Nodes<StatsWindow>().First();
         var labels = Nodes<Label>(win).Select(l => l.Text).ToList();
-        Check(labels.Any(x => x.Contains("Main guns:  44.75 DPS")) && labels.Any(x => x.Contains("4 barrels at 11.19 DPS"))
+        Check(labels.Any(x => x.Contains("Main guns:  35.80 DPS")) && labels.Any(x => x.Contains("4 barrels at 8.95 DPS"))
               && labels.Any(x => x.Contains("salvo 4 every 2.00 s = staggered 1 every 0.50 s")) && labels.Any(x => x.Contains("Turning radius")),
-              "stats tab: the main guns at 44.75 DPS, 4 barrels of 11.19, and helm stats");
-        Check(labels.Any(x => x.Contains("3 volleys × 4 shells") && x.Contains("= 268.5 damage, every 15.0 s")) && !labels.Any(x => x.StartsWith("Missiles")),
-              "stats tab: the broadside, 3 volleys of 4 shells = 268.5 damage every 15 s; no missiles");
-        Check(labels.Any(x => x.Contains("Broadside, averaged over its cycle:  17.90 DPS")) && labels.Any(x => x.Contains("Point defence:  1.00 DPS"))
-              && labels.Any(x => x.Contains("SUSTAINED TOTAL:  63.65 DPS")),
-              "and the total adds up every line it prints: guns 44.75 + broadside 17.90 + point defence 1.00 = 63.65 DPS");
+              "stats tab: the stock main guns, 4 x 17.9 every 2 s = 35.80 DPS, 4 barrels of 8.95, and helm stats");
+        Check(labels.Any(x => x.Contains("3 volleys × 4 shells") && x.Contains("= 214.8 damage, every 15.0 s")) && !labels.Any(x => x.StartsWith("Missiles")),
+              "stats tab: the broadside, 3 volleys of 4 shells x 17.9 = 214.8 damage every 15 s; no missiles");
+        Check(labels.Any(x => x.Contains("Broadside, averaged over its cycle:  14.32 DPS")) && labels.Any(x => x.Contains("Point defence:  1.00 DPS"))
+              && labels.Any(x => x.Contains("SUSTAINED TOTAL:  51.12 DPS")),
+              "and the total adds up every line it prints: guns 35.80 + broadside 14.32 + point defence 1.00 = 51.12 DPS");
         Check(Nodes<HBoxContainer>(win).Count(r => r.Name.ToString().StartsWith("Key_")) == 10, "keys tab lists the battleship's 4 abilities + 6 open slots");
         Check(Enumerable.Range(1, 6).All(i => Abilities.KeyFor(ShipClass.Battleship, $"open{i}") == global::Godot.Key.Key0 + i)
               && Abilities.For(ShipClass.Carrier).Count(a => a.Open) == 6 && Abilities.For((ShipClass)99).Length == 6,
@@ -3440,9 +3440,9 @@ public partial class _Test : Node
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             var close = Burst();
             float closeSplay = close.Count == 3 ? close.Max(m => Mathf.Abs(Mathf.RadToDeg(Mathf.AngleDifference(Vector2.Up.Angle(), m.Dir.Angle())))) : -1;
-            for (int i = 0; i < 60 * 4 && d1.Total < 183.74; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            Check(close.Count == 3 && closeSplay > 20 && closeSplay < 50 && Math.Abs(d1.Total - 183.75) < 0.01,
-                  $"a target 150 u off the nose: the outer two launch narrower ({closeSplay:0} degrees) and all three land (18.75; {d1.Total:0.00})");
+            for (int i = 0; i < 60 * 4 && d1.Total < 146.99; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(close.Count == 3 && closeSplay > 20 && closeSplay < 50 && Math.Abs(d1.Total - 147) < 0.01,
+                  $"a target 150 u off the nose: the outer two launch narrower ({closeSplay:0} degrees) and all three land: 3 x 49 = 147 ({d1.Total:0.00})");
             await Park(d1.Position + new Vector2(0, 600));
         }
 
@@ -4074,10 +4074,10 @@ public partial class _Test : Node
                 .All(s => new[] { Rarity.Common, Rarity.Rare, Rarity.Epic }
                     .All(r => drops.Count(i => i.Slot == s && i.Rarity == r) * 3 == drops.Count(i => i.Slot == s)));
             var kit = Equipment.All.Where(i => i.Kit).ToList();
-            Check(drops.Count == 246 && famShape && kit.Count == 23 && kit.All(i => i.Rarity == Rarity.Common)
+            Check(drops.Count == 246 && famShape && kit.Count == 22 && kit.All(i => i.Rarity == Rarity.Common)
                   && kit.Count(i => i.Slot == GearSlot.Weapon) == 7 && kit.Count(i => i.Slot == GearSlot.Utility) == 12
                   && drops.Count(i => i.Slot == GearSlot.Utility) == 144,
-                  $"the gear: 246 drops, a third of each slot at each rarity, and a 23-part kit -- seven weapon mounts and twelve signature systems across twelve classes, plus the drive, the deflector, the frame and the chip every ship has. The utility slot is 144 of the 246: twelve systems with a family of four, where nine of the twelve had none at all ({drops.Count} drops, {drops.Count(i => i.Slot == GearSlot.Utility)} utility, {kit.Count} kit)");
+                  $"the gear: 246 drops, a third of each slot at each rarity, and a 22-part kit -- seven weapon mounts and twelve signature systems across twelve classes, plus the drive, the deflector and the frame every ship has (no chip: a stock ship fits none). The utility slot is 144 of the 246: twelve systems with a family of four, where nine of the twelve had none at all ({drops.Count} drops, {drops.Count(i => i.Slot == GearSlot.Utility)} utility, {kit.Count} kit)");
             Check(Wear(bsC, GearSlot.Weapon) == 24 && Wear(cvC, GearSlot.Weapon) == 12 && Wear(ddC, GearSlot.Weapon) == 24
                   && Wear(ShipClass.FreightHauler, GearSlot.Weapon) == 24 && Wear(ShipClass.LightDart, GearSlot.Weapon) == 24
                   // THE UTILITY SLOT: one family of four per SYSTEM at three rarities, and every

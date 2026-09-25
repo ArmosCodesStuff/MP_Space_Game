@@ -201,3 +201,22 @@ BasePanel.cs:120-129, Raids.cs:53 ask Unlocks. Grep the harness for NeedsBoss an
 - The Solo role's pilot flies at Peak 14 (D9); the third player (guest2) now claims peak 3 (job 2, D12): it
   presses only F (broadside, ability 1) today; if lane A gives the battleship a 2nd/3rd walled row, its
   presses stay legal at 3 only for abilities 1-2.
+
+## Job 2b PRE (the coordinator's rung-3 red at 4e7f0b0, seed 11400714819323464263: 5 old-truth FAILs job 2 missed)
+- intent: rewrite to the no-chip truth with literals, never loosened: the K window's battleship DPS lines
+  (35.80 / 8.95 a barrel, broadside 214.8 every 15.0 s = 14.32 DPS, total 35.80 + 14.32 + 1.00 = 51.12), the
+  close-in missile burst (183.75 -> 147 = 3 x 49), the kit count (23 -> 22: chip_basic gone). Then grep for
+  other x1.25 literals (done: 6787/7345 are the Drake's scrap, 2540/3836/5840/9017/9482 economy or parts).
+- start: 4e7f0b0386a408e0c2c3e9985db586f3ce734621 (job 3 not started: no edits in the tree)
+- files (hash-object at start):
+  - tools/smoketest/SmokeTest.cs.txt 0a3c6a4e0dd7d5a78eb3c280c6fadc6733280a96
+  - docs/CHANGES.md a47cc48dbd9c03072d287cd3e1c42428014f73a6
+
+## Job 2b POST
+- verdict: `verify.ps1 -Quick` ALL CHECKS PASSED (0 errors, 0 warnings, UNUSED 0). Rung 3 owed on the five below.
+- files: tools/smoketest/SmokeTest.cs.txt (:3008-3015, :3443-3445, :4077-4080), docs/CHANGES.md, this ledger.
+- rung 3 owed: "stats tab: the stock main guns ... 35.80 DPS, 4 barrels of 8.95"; "stats tab: the broadside, 3 volleys
+  of 4 shells x 17.9 = 214.8"; "and the total adds up ... 35.80 + 14.32 + 1.00 = 51.12"; "a target 150 u off the nose
+  ... 3 x 49 = 147"; "the gear: 246 drops ... a 22-part kit". Rungs 4/5 not yet run at all (may hold more).
+- commit: see git log ("Walls job 2b: five old-truth checks rewritten to the stock ship").
+- next: job 3 (no PRE yet).

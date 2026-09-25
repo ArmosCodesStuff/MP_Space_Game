@@ -467,6 +467,19 @@ outstanding from the batch of 2026-09-23.)*
 
 ## Unreleased
 
+### Level walls, job 2b: five old-truth checks job 2 missed (2026-09-25, lane C, `wt/walls`)
+
+Rung 3 at job 4's commit (seed 11400714819323464263) failed five checks that still asserted the five kit
+chips' x1.25. Rewritten to the stock ship, with literals: the K window's battleship reads main guns
+35.80 DPS (4 x 17.9 every 2 s; 8.95 a barrel), the broadside 214.8 every 15.0 s = 14.32 DPS, the total
+35.80 + 14.32 + 1.00 = 51.12; the destroyer's burst 150 u off the nose lands 3 x 49 = 147; the kit is 22
+parts (no chip). No code changed.
+
+**Checks:** rewritten (rung 3): "stats tab: the stock main guns", "stats tab: the broadside", "and the
+total adds up", "a target 150 u off the nose", "the gear: 246 drops ... a 22-part kit".
+
+**Known broken:** none known; compiles (rungs 1-2); rung 3 owed on these five, rungs 4 and 5 not yet run.
+
 ### Level walls, job 4: Auto-sell and the lanes' blockades are rows of the unlock table (2026-09-25, lane C, `wt/walls`)
 
 **The base's two boss gates fold into `Unlocks.All`** as rows measured by the base owner's highest boss
