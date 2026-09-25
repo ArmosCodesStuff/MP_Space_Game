@@ -74,3 +74,24 @@ owed: rung 3 x2 (dummy x3 incl. a 10.3 s timed run, scar cap, Lancer, base, pylo
 rung 4 frames 84 and 84b by eye -- confirm DrawPolygon's UVs (normalised 0..1 assumed) show the hull plating, not a smear.
 risk noted: a chunk and scar are children of their anchor, so a boss killed within 3 s of a tear takes its chunk with it.
 next: J4 (records).
+
+## PRE J4 -- records
+tier: opus. intent: CHANGES Handoff + Unreleased (one hunk each), DESIGN note on fields and one-raise effects; final POST (what the test phase owes).
+files: docs/CHANGES.md, docs/DESIGN.md, docs/plans/ledger_fields.md
+HEAD: aabfb255cb9652e649ccc3635127a7b71baac995
+  docs/CHANGES.md 599d498bd5f33695107e66d9bb26924863012e64
+  docs/DESIGN.md 8545bdea6ff8dab64c0a56282434bd1e257fe1c8
+
+## POST J4 (lane D final)
+verdict: every job committed; typecheck 0 and verify -Quick ALL CHECKS PASSED at HEAD. engine-unproven: rungs owed in the final test phase.
+files: docs/CHANGES.md (Handoff + Unreleased "Class kits, lane D"), docs/DESIGN.md ("Fields and one-raise effects"), this ledger.
+THE FINAL TEST PHASE OWES (the lane's merge chain: quick,solo,solo,six,six,screens):
+- rung 3 (solo) on two seeds: FieldsContractChecks, FieldsBubbleChecks, FieldsRowChecks, FieldsTauntRingChecks, FieldsRipYardChecks
+  (FieldsRipChecks x3 dummies, one timed to 10.3 s, + FieldsScarCapChecks), FieldsLiveRowChecks, FieldsRipChecks on the Lancer (arena)
+  and on the base and a pylon (siege).
+- rung 5 (six) twice (new guest checks): FieldsGuestBubbleChecks, FieldsGuestRipChecks (host side FieldsHostTears).
+- rung 4 (screens): frames 81_patrol_ring, 82_taunt_shimmer, 83_boost_plume, 83b_taunt_ring, 84_rip_chunk_and_scar, 84b_rip_on_boss by eye
+  (84/84b: the chunk shows the hull's plating -- DrawPolygon UVs assumed normalised), and 79 unchanged (bubble now drawn by its row).
+- after lanes E (super), A (Warden Taunt) and B (boost drive) merge: the "NOTE unbound field row" and "shot skipped 81/82/83" lines must be gone;
+  if one stays, that lane named its slot differently: edit the one row in Fields.All.
+defaults taken: D1 slot ids, D2 rip damage left to the grapnel (Fx.Tear is the look), D3 no Unmask panels existed.
