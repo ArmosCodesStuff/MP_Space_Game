@@ -60,10 +60,12 @@ public static class Targeting
     public static readonly TargetFilter WingPrey = new(forbid: Tag.Missile | Tag.Dummy);
     // Raiding craft, for the base's guns: what actually comes at the station.
     public static readonly TargetFilter Craft = new(require: Tag.Light | Tag.Heavy, forbid: Tag.Dummy);
-    // WHAT A THROW MAY MOVE (a bastion's shockwave): nothing in flight, of either kind. Every peer
-    // flies a body in flight from its launch, so a throw -- which happens on the host alone -- would
-    // put two copies of one damaging body a throw apart.
-    public static readonly TargetFilter Throwable = new(forbid: Tag.Missile | Tag.Hulled);
+    // WHAT A THROW MAY MOVE (a bastion's shockwave): nothing in flight, of either kind, and nothing
+    // that holds a spot (a structure, a practice dummy). Every peer flies a body in flight from its
+    // launch, and every peer builds a structure or a dummy where it stands, never hearing of a move:
+    // a throw -- which happens on the host alone -- would put two copies of one body a throw apart
+    // (audit P5).
+    public static readonly TargetFilter Throwable = new(forbid: Tag.Missile | Tag.Hulled | Tag.Structure | Tag.Dummy);
     // WHAT A TURRET LEFT STANDING TAKES: anything hostile -- a missile, a raider of any weight, a
     // boss, a station -- ranked as point defence ranks (Turret.Rank), so missiles and small craft
     // still come first. Point defence's own filter would keep it off a heavy, a boss and a pylon,

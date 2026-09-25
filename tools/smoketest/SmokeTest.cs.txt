@@ -6760,6 +6760,7 @@ public partial class _Test : Node
             ZoomChecks();
             await SkyChecks();
             await TourChecks();
+            await S2Checks();
             // ── THREE AT ONCE, ON THE HULLS BIG ENOUGH TO HOLD THEM ──
             // How many a hull may hold is its class's row, so "capital ships only" is a number and
             // not a list of class names in an `if`. A light still holds one: picking a second
@@ -10050,12 +10051,13 @@ public partial class _Test : Node
         // mission report that follows. (Sent home again here, where the hub has just been rebuilt.)
         {
             int lv0 = Missions.Level;
-            Priv(H, "NetSector", (int)Hub.SectorKind.Home, Missions.Kind, 7);   // the kind rides beside the level now
+            Priv(H, "NetSector", (int)Hub.SectorKind.Home, Missions.Kind, 7, Session.HeardTrip + 1);   // the kind rides beside the level now; a new trip
             int lvSet = Missions.Level;
             await Wait(1.0);                                   // the home world, rebuilt
             Missions.Level = lv0;
             Check(lvSet == 7 && H != null && !Hub.InArena, $"a peer sent into a world is told the level with it, before the world is built ({lvSet})");
         }
+        await S2TripChecks();
 
         // ── LAST, because it ends a session and that resets the fleet ────────────────────
         // A session can end without anything else moving. Quitting to the menu changes scene and
@@ -10161,6 +10163,100 @@ public partial class _Test : Node
     // Mission 1: both READY, both at the portal, into the arena together; the boss dies;
     // both home. Mission 2: into the arena again; the host drops -- the guest must land
     // home, offline, with its OWN base (a marker credit total set before it joined).
+    // ── S2: THE TRANSPORT-FREE PROTOCOL FIXES (network_audit_protocol.md P4, P5, P8, P9, P10) ─────
+    sealed class S2Tagged : ITagged { public Tag Tags { get; init; } }
+    // P5, P8 (solo): a throw moves nothing that holds a spot; a class is changed only at refit.
+    async Task S2Checks()
+    {
+        Check(!Targeting.Throwable.Hits(new S2Tagged { Tags = Tag.Structure }) && !Targeting.Throwable.Hits(new S2Tagged { Tags = Tag.Dummy })
+              && !Targeting.Throwable.Hits(new S2Tagged { Tags = Tag.Dummy | Tag.Light }) && Targeting.Throwable.Hits(new S2Tagged { Tags = Tag.Light }),
+              "a throw may not move a structure or a practice dummy (a fighter dummy included), and still moves a light craft (P5)");
+        var cls0 = Character.Class; var at0 = Me.Position;
+        await SetClass(ShipClass.FreightBastion);
+        var still = Nodes<TargetDummy>().Where(d => !d.Fighter).ToList();
+        int kept = 0, thrown = 0;
+        for (int i = 0; i < 3 && still.Count > 0; i++)
+        {
+            var bs = Me; var dm = still[i % still.Count];
+            bs.Position = VaryNear(dm.Position, 600f); bs.Velocity = Vector2.Zero;          // the dummy inside the 1000 u reach
+            var mk = H.SpawnRaider(VaryNear(bs.Position, 500f)); mk.Hp = 9000; mk.ApplyStatus(Status.Disabled, 20);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            var dmAt = dm.Position; float mkWas = mk.Position.DistanceTo(bs.Position);
+            bs.Sl("shockwave").Cool = 0;
+            bs.Shockwave();
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            if (dm.Position.DistanceTo(dmAt) < 1f) kept++;
+            if (mk.Position.DistanceTo(bs.Position) - mkWas > 900f) thrown++;
+            mk.TakeDamage(99999);
+        }
+        Check(kept == 3 && thrown == 3,
+              $"a bastion's shockwave, from 3 varied spots: every practice dummy stays where it stands, every raider beside it is thrown ({kept} kept, {thrown} thrown of 3; P5)");
+        await SetClass(cls0);
+        if (Me is { } back) { back.Position = at0; back.Velocity = Vector2.Zero; }
+        Check(Hub.Refit(ShipClass.Destroyer, ShipClass.Battleship, arena: true, inCombat: false) == ShipClass.Destroyer
+              && Hub.Refit(ShipClass.FreightHauler, ShipClass.HeavyWarrior, arena: false, inCombat: true) == ShipClass.FreightHauler
+              && Hub.Refit(ShipClass.Destroyer, ShipClass.Battleship, arena: true, inCombat: true) == ShipClass.Destroyer,
+              "a class announced in the arena, or in combat at home, is refused: the pilot keeps the class it had (P8)");
+        Check(Hub.Refit(ShipClass.Destroyer, ShipClass.Battleship, arena: false, inCombat: false) == ShipClass.Battleship
+              && Hub.Refit(null, ShipClass.Battleship, arena: true, inCombat: true) == ShipClass.Battleship
+              && Hub.Refit(ShipClass.Battleship, ShipClass.Battleship, arena: true, inCombat: true) == ShipClass.Battleship,
+              "a class announced at home out of combat is taken, and so is a pilot's first announcement anywhere (P8)");
+    }
+    // P9 (solo): a trip already made is not made again. (The rewritten check above it: a new trip to
+    // the very sector it is in IS made -- a retried mission reloads.)
+    async Task S2TripChecks()
+    {
+        var h0 = H; int trip = Session.HeardTrip;
+        Priv(H, "NetSector", (int)Hub.Sector, Missions.Kind, Missions.Level, trip);
+        await Wait(1.0);
+        Check(H == h0 && GodotObject.IsInstanceValid(h0) && Session.HeardTrip == trip,
+              $"a peer told of a trip it has already made stays in its world: no reload (trip {trip}; P9)");
+    }
+    // P4 (host half): a boss held by a shockwave is still being shot. Its hull steps to 0.80, 0.75,
+    // 0.70 and 0.65 of its max INSIDE one 3 s hold, 0.6 s apart, for the guest to see every step.
+    async Task S2HeldBossHost(Boss boss)
+    {
+        if (boss == null || !GodotObject.IsInstanceValid(boss)) { Check(false, "arena host: a boss to hold (P4)"); return; }
+        boss.ApplyStatus(Status.Disabled, 3.0);
+        bool heldAll = true;
+        foreach (var f in new[] { 0.80, 0.75, 0.70, 0.65 })
+        {
+            if (boss.Hp > boss.MaxHp * f) boss.TakeDamage(boss.Hp - boss.MaxHp * f);
+            await Wait(0.6);
+            heldAll &= boss.Held;
+        }
+        Check(heldAll && Math.Abs(boss.Hp / boss.MaxHp - 0.65) < 0.02,
+              $"arena host: the boss held 3 s while its hull stepped 0.80, 0.75, 0.70, 0.65 of its max ({boss.Hp / boss.MaxHp:0.00}; P4)");
+    }
+    // P4 + P9 (guest half). First a STALE sector report, from a trip before this one, claiming home:
+    // the host must ignore it (P9) -- recorded, it would send this arena nothing more. Then every
+    // step of the held boss's hull must arrive (P4): a host that sends nothing while its boss is
+    // held shows only the last.
+    async Task S2HeldBossGuest()
+    {
+        Net.AskHost(H, "NetMySector", (int)Hub.SectorKind.Home, Session.HeardTrip - 1);
+        var seen = new HashSet<double>();
+        await RealTime(() =>
+        {
+            if (H?.Boss is { } b && GodotObject.IsInstanceValid(b) && b.MaxHp > 0)
+                foreach (var f in new[] { 0.80, 0.75, 0.70, 0.65 })
+                    if (Math.Abs(b.Hp / b.MaxHp - f) < 0.02) seen.Add(f);
+            return seen.Contains(0.65) || H?.MissionWon == true;
+        }, 25);
+        Check(seen.Count >= 3,
+              $"arena guest: a held boss's hull reaches this peer step by step, after a stale sector report the host ignored ({seen.Count} of 4 steps seen: {string.Join(", ", seen.OrderByDescending(x => x))}; P4, P9)");
+    }
+    // P10 (host): a turret a guest left standing is its own again when it comes back under a new id.
+    async Task S2TurretRekeyed(DeployedTurret t, int oldId, PlayerShip back)
+    {
+        await Wait(0.3);
+        bool mine = t != null && GodotObject.IsInstanceValid(t) && back != null && t.OwnerId == back.OwnerId
+                    && H.Deployed.Count(d => d.OwnerId == oldId) == 0 && H.Deployed.Count(d => d.OwnerId == back.OwnerId) == 1;
+        Check(mine && t.Ship == back,
+              $"arena host: the turret a guest left standing is keyed to its new id when it comes back, and finds its ship ({t?.OwnerId} vs {back?.OwnerId}; P10)");
+        if (t != null && GodotObject.IsInstanceValid(t)) H.DeployedTaken(t);
+    }
+
     async Task ArenaMp(string role)
     {
         int Port = P(27125);
@@ -10324,6 +10420,7 @@ public partial class _Test : Node
             // cycle pushed that off the end of every wait that follows. (Two of its four seconds are
             // the cruise missile's, above.)
             await Wait(2.0);
+            await S2HeldBossHost(H.Boss);
             // the host in stasis at the moment of the kill: a pilot shot down in the fight still
             // helped win it, and gets its own crates -- only its own
             int ahHold0 = Character.GearHold.Values.Sum();
@@ -10414,6 +10511,7 @@ public partial class _Test : Node
             await RealTime(() => H.Ships.FirstOrDefault(s => !s.Mine) is { } p && p.Position.DistanceTo(new Vector2(900, 300)) < 50, 8);
             var ag = H.Ships.FirstOrDefault(s => !s.Mine); int agOld = ag?.OwnerId ?? 0;
             Check(ag != null && ag.Position.DistanceTo(new Vector2(900, 300)) < 50, $"arena host: the guest parked at (900, 300) before its drop ({ag?.Position})");
+            var s2Turret = ag == null ? null : H.Drop(ag, VaryNear(ag.Position, 400f), 120);
             Drop(agOld);
             await RealTime(() => !H.Ships.Any(s => s.OwnerId == agOld), 3);
             Check(H.Ships.Count() == 1 && H.PartyIds.Count() == 2, $"arena host: a guest dropped mid-arena keeps its place in the party ({H.Ships.Count()} ship, {H.PartyIds.Count()} in the party)");
@@ -10426,6 +10524,7 @@ public partial class _Test : Node
             await RealTime(() => H.Ships.FirstOrDefault(s => !s.Mine) is { } back && Hub.PeerSector(back.OwnerId) == Hub.SectorKind.Arena
                                  && back.Position.DistanceTo(new Vector2(900, 300)) < 50, Wan ? 25 : 15);
             var ag2 = H.Ships.FirstOrDefault(s => !s.Mine);
+            await S2TurretRekeyed(s2Turret, agOld, ag2);
             Check(ag2 != null && ag2.OwnerId != agOld && ag2.Position.DistanceTo(new Vector2(900, 300)) < 50,
                   $"arena host: it came back into the arena, where it was ({ag2?.Position.DistanceTo(new Vector2(900, 300)):0} u off; its world {(ag2 == null ? "-" : Hub.PeerSector(ag2.OwnerId)?.ToString())}; at {ag2?.Position})");
             // A STALL IS NOT A DROP. The guest checks what it was paid, its whole world freezes for 6 s
@@ -10571,11 +10670,13 @@ public partial class _Test : Node
             Check(Sfx.Played.GetValueOrDefault("rail") > railHeard0,
                   $"arena guest: a railgun the host fired near this ship is heard here ({Sfx.Played.GetValueOrDefault("rail") - railHeard0} reports since joining)");
             await ToArena("arena guest", "mission 1");
+            var s2Held = S2HeldBossGuest();
             await GuestSeesTheFight();
             if (Wan) Check(Net.Arriving(1.5) < 1.45 && Net.Arriving(1.5) >= 0.6,
                            $"over the internet, a 1.5 s warning is shown a round trip short, so it ends when this pilot is judged ({Net.Arriving(1.5):0.00} s)");
             int agHold0 = Character.GearHold.Values.Sum();
             await RealTime(() => H.MissionWon, 15);
+            await s2Held;
             var guestRound = Emplacements.Of(Emplacements.RowOf(Emplacements.Base)).Gun.GetValueOrDefault();
             Check(cruiseSeen != 0 && cruiseGone && Math.Abs(cruiseSize - guestRound.RoundSize) < 1e-6,
                   $"arena guest: the host's cruise missile flew here as the base's round -- aimed at this ship, {cruiseSize:0}x a missile, in its hostiles and pickable -- and fell here when the host brought it down, before the win (id {cruiseSeen}, fell {cruiseGone})");

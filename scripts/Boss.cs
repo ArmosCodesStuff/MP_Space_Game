@@ -293,24 +293,25 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
         }
         if (!Alive) return;
         _status.Tick(delta);
-        if (Held) { QueueRedraw(); return; }         // held still: no approach, no ability, no turn
-        Look();
-        if (_hittable.Count > 0)                    // nobody alive at all -- every pilot in stasis -- and it waits
-        {
-            if (!Locked) Approach(dt);
-            Tick(delta);
-        }
         _send -= delta;
         // While a super move winds up the HULL IS THE TELEGRAPH, so a guest needs its angle far
         // more often than 10 Hz: 30 Hz while locked, and guests stop smoothing it (see _netLocked).
         // To the peers actually IN the arena. Broadcasting to everyone meant a guest still loading
         // the arena scene got packets for a Hub/Boss it did not have yet -- "Node not found",
         // "Invalid packet received" -- and at 30 Hz while locked there are three times as many
-        // chances to land in that window.
+        // chances to land in that window. ABOVE the hold: a boss held by a shockwave is still being
+        // shot, so its hull and its frozen super timer must keep reaching the guests (audit P4).
         if (_send <= 0 && Net.IsOnline)
         {
             _send = Locked ? 1.0 / 30 : 0.1;
             Hub?.SendBoss(Position, Rotation, Hp, Locked, NextSuperIn, SuperGap, HullMult);
+        }
+        if (Held) { QueueRedraw(); return; }         // held still: no approach, no ability, no turn
+        Look();
+        if (_hittable.Count > 0)                    // nobody alive at all -- every pilot in stasis -- and it waits
+        {
+            if (!Locked) Approach(dt);
+            Tick(delta);
         }
     }
 

@@ -592,17 +592,25 @@ public partial class Hub : Node2D
     // empty space, and an open mission portal was invisible to the one pilot it waited for. And a
     // guest in the wrong world is brought into the host's: the party is wherever the host is.
     [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetMySector(int s)
+    private void NetMySector(int s, int trip)
     {
         if (!Net.FromPlayer(this, out int who)) return;
+        // A STALE REPORT IS IGNORED (audit P9): one sent just before its world heard NetSector lands
+        // in the host's NEW world claiming the old one, and recording it sent this pilot none of the
+        // world it was about to be in. A trip is the host's count of sector moves (Session.Trip);
+        // -1 is a pilot that has heard none yet, which is always news.
+        if (trip >= 0 && trip != Session.Trip) return;
         Session.Sectors[who] = (SectorKind)s;
-        if ((SectorKind)s != Sector) { RpcId(who, nameof(NetSector), (int)Sector, Missions.Kind, Missions.Level); return; }
+        if ((SectorKind)s != Sector) { RpcId(who, nameof(NetSector), (int)Sector, Missions.Kind, Missions.Level, Session.Trip); return; }
         // The place a pilot is owed goes first and is never metered: a reconnecting pilot's held
         // spot is delivered by whichever report first finds it in the host's world.
         if (_placeFor.Remove(who, out var owed)) RpcId(who, nameof(NetPlace), owed.at, owed.rot);
         // THE CATCH-UP, and only it, is rate-limited -- one ask, dozens of reliable packets. Half a
-        // second: the guest's own repeats are at 1 s and 3 s (ReportSector).
-        if (!Net.Metered(who, nameof(NetMySector), 0.5)) return;
+        // second: the guest's own repeats are at 1 s and 3 s (ReportSector). Never the FIRST report
+        // this world has from a pilot (audit P9): it is the only way that pilot learns of what was
+        // spawned before it arrived, and a meter stamped by its previous world's report skipped it.
+        bool first = _caughtUp.Add(who);
+        if (!Net.Metered(who, nameof(NetMySector), 0.5) && !first) return;
         RpcId(who, nameof(NetMission), MissionArgs());
         foreach (var v in _votes) RpcId(who, nameof(NetVote), v.Wire(this));
         // EVERY HOST-SPAWNED THING IN THIS WORLD, of every kind, down the one path. This was two
@@ -621,7 +629,8 @@ public partial class Hub : Node2D
         if (Sector == SectorKind.Arena) Missions.KindOf(Missions.Kind).CatchUp?.Invoke(this, who);
         if (MissionWon) RpcId(who, nameof(NetWon), _ships.Count);
     }
-    private void ReportSector() { if (!Net.IsHost) Net.AskHost(this, nameof(NetMySector), (int)Sector); }
+    private void ReportSector() { if (!Net.IsHost) Net.AskHost(this, nameof(NetMySector), (int)Sector, Session.HeardTrip); }
+    private readonly HashSet<int> _caughtUp = new();           // the pilots this world has sent its catch-up
 
     private bool _guestBefore;
     private void OnSessionChanged()
@@ -703,12 +712,10 @@ public partial class Hub : Node2D
     {
         if (Net.IsHost && Net.IsOnline && info.CharacterId.Length > 0)
         {
-            var back = Net.I.Players.FirstOrDefault(kv => kv.Key != peer && kv.Value.CharacterId == info.CharacterId).Key;
             var h = onPurpose ? null : Session.Hold(peer, info, _world, ShipOf(peer));
             // a kill in the moments before the host noticed the drop: owed too (paid once, by serial)
             if (h != null) h.Owed.AddRange(Session.Owed(peer, _world));
-            if (h != null && back != 0) RestoreHeld(h, back);    // it is already back under a new id
-            else if (h != null) Session.Places[info.CharacterId] = h;
+            if (h != null) Session.Places[info.CharacterId] = h;
             else foreach (var v in _votes) v.Forget(peer);
         }
         Session.Sectors.Remove(peer);
@@ -724,6 +731,10 @@ public partial class Hub : Node2D
     private void RestoreHeld(Session.Held h, int peer)
     {
         foreach (var v in _votes) v.Rekey(h.OldPeer, peer);
+        // ITS TURRETS ARE ITS OWN AGAIN (audit P10): keyed to the old id, the returning pilot could
+        // not collect them, was not held to its cap, and they fired a spare sheet. Each finds its
+        // ship again by its owner (DeployedTurret.Ship).
+        foreach (var t in Deployed) if (t.OwnerId == h.OldPeer) { t.OwnerId = peer; t.Ship = null; }
         if (h.World == _world && _ships.TryGetValue(peer, out var s) && IsInstanceValid(s))
         {
             s.Restore(h.Hp, h.Alive, h.Stasis);
@@ -837,8 +848,10 @@ public partial class Hub : Node2D
         // belongs to that peer; this one simply has no hold.
         if (characterId.Length > 0 && Net.I.Players.Any(kv => kv.Key != peer && kv.Value.CharacterId == characterId))
             characterId = "";
+        var cship = _ships.TryGetValue(peer, out var cs) && IsInstanceValid(cs) ? cs : null;
+        var klass = Refit(p.HasIdentity ? p.Class : null, Classes.Sanitize(cls), InArena, cship?.InCombat == true);
         (p.Name, p.Main, p.Accent, p.Class, p.Bought, p.Equip, p.CharacterId, p.HasIdentity) =
-            (name, main, accent, Classes.Sanitize(cls), bought, equip ?? System.Array.Empty<string>(), characterId, true);
+            (name, main, accent, klass, bought, equip ?? System.Array.Empty<string>(), characterId, true);
         // ITS OWN LEVELS, held to the ladder and to parts that exist, like the loadout: what this
         // peer's copy of its ship is lifted by. Never this host's -- those are the host's pilot's.
         p.GearLevel = Equipment.SanitizeLevels((gearIds ?? System.Array.Empty<string>()).Zip(gearLevels ?? System.Array.Empty<int>()));
@@ -847,6 +860,13 @@ public partial class Hub : Node2D
         if (_ships.TryGetValue(peer, out var s) && IsInstanceValid(s)) ApplyIdentity(s);
         TryRestoreHold(peer);
     }
+
+    // A CLASS IS CHANGED AT REFIT, never in a fight (audit P8). A class change rebuilds the ship: a
+    // full hull and every cooldown at zero. Honest pilots change class only at home (REFIT), so a
+    // peer announcing another class in the arena, or while its ship is in combat, keeps the one it
+    // had. A first announcement (had == null) is always taken.
+    public static ShipClass Refit(ShipClass? had, ShipClass want, bool arena, bool inCombat) =>
+        had is { } h && h != want && (arena || inCombat) ? h : want;
 
     // ── missions: Threat Intelligence Operations (host-authoritative) ────────
     public enum MissionState { Idle, Opening, PortalOpen }
@@ -927,7 +947,8 @@ public partial class Hub : Node2D
     {
         if (!Net.IsHost) return;
         if (k == SectorKind.Arena) Yard?.SaveForTrip();
-        if (Net.IsOnline) Rpc(nameof(NetSector), (int)k, Missions.Kind, Missions.Level);
+        Session.Trip++;
+        if (Net.IsOnline) Rpc(nameof(NetSector), (int)k, Missions.Kind, Missions.Level, Session.Trip);
         // NOBODY IS IN A SECTOR WHILE THEY ARE MOVING BETWEEN THEM. Every peer was left recorded
         // in the world it is LEAVING until its new world reported itself, so for a round trip plus
         // a scene load the host went on sending that world's traffic to peers that had already
@@ -942,7 +963,15 @@ public partial class Hub : Node2D
     // the mission report that follows. The KIND FIRST: a category owns its own ladder, so the
     // level being set has to land on the ladder the host meant.
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetSector(int k, int kind, int level) { Missions.Kind = kind; Missions.Level = level; GoTo((SectorKind)k); }
+    // A TRIP ALREADY MADE IS NOT MADE AGAIN (audit P9): the host answers a stale report with the
+    // world this pilot is already in, and reloading it rebuilt the arena without the spawns its
+    // first report had caught up on.
+    private void NetSector(int k, int kind, int level, int trip)
+    {
+        if (trip == Session.HeardTrip) return;
+        Session.HeardTrip = trip;
+        Missions.Kind = kind; Missions.Level = level; GoTo((SectorKind)k);
+    }
     private void GoTo(SectorKind k)
     {
         Sector = k;

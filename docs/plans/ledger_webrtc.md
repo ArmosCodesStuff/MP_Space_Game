@@ -688,3 +688,32 @@ S2 is not built (no ledger entry, no commit; P4's `Held` return still precedes B
 - Decisions taken by default (no source says otherwise): P10b's token is 16 random bytes as hex,
   sent by the host after the welcome and kept by the guest per host address/name for the process;
   it is never in a code (plan §3.9: "carried after connection, not in the code").
+
+#### S2a PRE
+- job S2a, tier opus. Intent: P4, P5, P8, P9, P10 (JOB 0's list). HEAD d116c47.
+- files: scripts/Boss.cs 85c742d6, scripts/Targeting.cs 226e78b5, scripts/Hub.cs d10481a4,
+  scripts/Session.cs cbf19552, tools/smoketest/SmokeTest.cs.txt 9949bb60.
+- checks planned: solo `S2Checks` (P5 throw filter + a real shockwave by a BASTION at 3 varied
+  bearings leaving a dummy and an emplacement in place and throwing a raider; P8 a class change
+  announced in the arena / in combat refused, at home out of combat applied; P9 a stale sector report
+  ignored, a same-trip NetSector a no-op, a new trip applied); rung 5 `S2HeldBossHost/Guest` (P4: the
+  host holds the boss and steps its hull 0.80/0.75/0.70/0.65 inside the hold; the guest sees at least
+  3 of the 4); rung 5 P10 in ArenaMp's drop: a guest's turret re-keyed to its new id.
+
+#### S2a POST
+- verdict: done; typecheck 0 errors, `verify.ps1 -Quick` ALL CHECKS PASSED. engine-unproven: rungs owed
+  in the final test phase.
+- P4 Boss.cs: the send block moved above the `Held` return. P5 Targeting.Throwable forbids
+  Structure|Dummy. P8 `Hub.Refit(had, want, arena, inCombat)` (public static, the rule in one place),
+  used by NetIdentity on every peer; the audit's "keep the hull fraction via Restat" half NOT built
+  (honest refits happen at home; a refused change keeps the old class whole). Risk: a pilot whose REFIT
+  UI lets it change class at home while in combat now disagrees with the host until it leaves combat
+  and announces again -- the test phase should watch for it. P9 `Session.Trip` (host's count of sector
+  moves) / `Session.HeardTrip` (guest; -1 = none, reset by `End`); NetSector and NetMySector carry the
+  trip; a stale report is ignored; a trip already made is not reloaded; a world's first report per
+  pilot is never metered (`Hub._caughtUp`). P10 RestoreHeld re-keys DeployedTurret.OwnerId/Ship; the
+  dead `back` branch deleted.
+- checks written (not run): solo `S2Checks` (2 P5 checks, 2 P8 checks), `S2TripChecks` (P9 no-op),
+  the rewritten level-with-the-sector check (passes a new trip); rung 5 ArenaMp `S2HeldBossHost` /
+  `S2HeldBossGuest` (P4 + the host ignoring a stale report, P9), `S2TurretRekeyed` (P10).
+- next: S2b, the rejoin token.

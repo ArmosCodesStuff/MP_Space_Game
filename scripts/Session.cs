@@ -56,10 +56,13 @@ public static class Session
     private static long _serial = DateTime.UtcNow.Ticks;
     private static int _worlds;
     public static long NextKill() => ++_serial;
+    // THE TRIPS (audit P9): the host counts its sector moves, and a guest keeps the last one it made,
+    // so a report from before a move and a move already made are both told apart from news. -1: none.
+    public static int Trip, HeardTrip = -1;
     public static int NextWorld() => ++_worlds;          // this world, of all the host has built
 
     // A session over (offline, a guest now, the main menu): all three go with it.
-    public static void End() { Sectors.Clear(); Places.Clear(); Kills.Clear(); }
+    public static void End() { Sectors.Clear(); Places.Clear(); Kills.Clear(); HeardTrip = -1; }
 
     public static Hub.SectorKind? SectorOf(int id) => Sectors.TryGetValue(id, out var s) ? s : null;
 
