@@ -58,5 +58,60 @@ No engine runs in this lane: compile rungs only (`typecheck.ps1`, `verify.ps1 -Q
 - rung 3 owed: `WallChecks` (table, peak through level-up/refit/reload x3, peak files x3); SaveCoverage round trip +
   inventory (`Peak`), build stamp 3, format-2 refusal.
 - rung 5 owed: Mp host "a guest's highest level reached ... peak 14 at level 1"; handshake literal 3.
-- commit: see `git log` (subject "Walls job 1: ...").
+- commit: 21712ec "Walls job 1: the unlock table, the pilot's peak, save format 3".
 - next: job 2 (F15).
+
+## STOP (context past ~150k): jobs 2-4 go to a FRESH agent that reads this ledger, not the old transcript
+
+### Job 2 plan (F15) -- not started, no PRE written, tree clean at the commit after 21712ec
+API (Equipment.cs):
+- `ChipSlots = 6`; `public enum ChipKind { Combat, Utility }`; `ItemDef.Kind`; `const int KindCap = 3`.
+- `Line(...)` gains an optional `ChipKind kind` (chip_combat = Combat; chip_armour/engine/target = Utility, D3).
+- delete `chip_basic` (Build() lines 179-182) and its header lines 11-12; `Default` = 5 core + 6 "" (no chips).
+- `Sanitize(c, ids, int peak)`: chip j (0..5) emptied when j >= `Unlocks.Count(Opens.ChipSlot, peak)` or it is the
+  4th of its Kind; `Bonuses/Adds(c, loadout, int peak, levels)` -> `Sum` sanitises with peak.
+- `ChipFit(string[] l, int peak, ItemDef chip) -> (int slot, string why)`: first OPEN empty slot, else why:
+  "at most 3 Combat chips" / "next chip slot opens at level 10" / "every chip slot is full".
+Callers to move (scripts): Character.cs:84 (Default), :289-291 Load -> `clean = Sanitize(sc, ids, Peak)`, displaced
+when `ById(ids[k]) is {Kit:false} part && clean[k] != part.Id` (covers unfit core, locked slots, kind caps);
+CharacterCreator.cs:131-132 (+Character.Peak); EquipmentWindow.cs:83 (6 rows; locked row
+`CHIP {k+1}  ·  LOCKED · L{at}` with no button), :106/:110 (EQUIP disabled + TooltipText = why), :180 FitChip via
+ChipFit; PlayerShip.cs:322/325 (Bonuses/Adds with Peak), :410 (Sanitize with Peak).
+Harness literals that assume 5 kit chips (x1.25) -- rewrite each to the stock number, same edit:
+- 706/766/768 chip_basic in hold fixtures -> chip_combat_1 (a real drop); 7073 ReceiveLoot "chip_basic" -> "std_drive"
+  (a kit part refused as loot); 846/852 veteran: drop the chip_basic literals (slots 5-6 empty); 887 v1 file text only.
+- 2200-2203 creator card bsHull 375 -> 300; 3044 268.5 -> 214.8 (3x4x17.9); 3076 22.375 -> 17.9;
+  3237-3239 refit fraction: 375->300, Bulwark III 615->540, 123->108, Glass III 300->225, 60->45, back 75/375->60/300;
+  3259 message "312.5 with the five chips" -> stock; 3316 183.75 -> 147 (3x49); 3665 171.875 -> 137.5;
+  4108-4114 Worst(): chips count KindCap per kind -> literals -0.47/-0.55/-0.70 become -0.37/-0.45/-0.60
+  (message figures 1.575 / 9.845 / 150 and 100); 4133 Describe(chip_basic) -> chip_combat_1;
+  4200-4275 rewrite the flow: stock hull `full`; an Armour Chip I from the hold (EQUIP) = full x1.08; UNEQUIP = full;
+  other class has no chips; level block: Balanced Array fitted = full x1.28, levelled x1.29 (shares add, chip on);
+  hold-is-the-pilot's with the armour chip; 4220 "five parts and six chip slots";
+  4529-4531 +6.25 -> +5 (no chips); 4537/4045/4057-4060/2200 add the peak argument;
+  8173 175 -> 140; 8179/8451 500 -> 400; 8189 7.5 -> 6; ~8880 Mp guest `gl[8]=gl[9]=""` and "the carrier still had five".
+  After editing, grep `chip_basic|x1.25 by|the chips|five chips|22.375|1.25 for` to find stragglers.
+New checks (own method `ChipChecks`, rung 3): level_walls 6 (open slots at peaks 1,2,4,8,14 = 0,1,2,3,6 for
+Battleship, Warden, Echo, through Sanitize + the sheet), 6b (EQUIP greyed with no open slot, tooltip "next chip slot
+opens at level 10"; a 4th Combat chip refused with "at most 3"), 7 (a version-3 file at level 3 with 5 Combat chips
+loads 1 fitted + 4 held, owned count equal; files at levels 1/3/14 x capital/heavy/light, plus one with no `peak`);
+the kind cap on the host (3 Combat + 3 Utility fit, a 4th Combat emptied). Rung 5: level_walls 15 (a guest with 5
+chips at claimed peak 3: host and other guest apply 1). Rung 4: a Shots frame of the window with locked chip rows
+(set Character.Peak = 4 before opening I; name it e.g. "eq_chip_walls").
+
+### Job 3 plan (ability walls) -- see level_walls.md §3.3 items 3, 4, 7 and D4/D5 above
+`AbilityDef.Weapon` on Guns, FireMode, Pd, Reload, Attack, Recall, Deploy, Collect (Abilities.cs, lane A's file:
+field + flags only); `IGated { int Peak; ShipClass Class; }` on PlayerShip (Demo reads `Unlocks.Top`);
+`Unlocks.AbilityWall(IReadOnlyList<AbilityDef> kit, AbilityDef def)` = At(Ability, 1-based index among non-Weapon,
+non-Open rows) or null; `LockedAt(IGated, def)` = AbilityWall(Classes.Of(g.Class).Abilities, def) when > Peak.
+`DoAbility`: `|| Unlocks.LockedAt(this, def) != null` return; `UseAbility`: Fail(id, $"LOCKED · L{n}") before
+Refuse; `SlotState.Locked` + `AbilityBar.StateOf` first; bar draws the `_open` box dimmed with `LOCKED · L3`;
+StatsWindow K row "opens at level 3"; Hints rows `unlock_<n>` + `Unlocks.Crossed(from, to)` in AddExp; PilotWindow
+NEXT line. Checks: table-of-order proof on real rows (D5), live-now "ability 1 and every Weapon row open at level 1"
+for 3 classes pressed through DoAbility; the generic refusal/host-gate checks print `PEND walls` until a class has a
+2nd walled ability (lane A slice 6).
+
+### Job 4 plan (fold the boss gates)
+`Measure.Boss`, `Opens.Economy`, `Opens.Raids`; rows {Boss, 3, Economy, "hauler_autosell"} and {Boss, 1, Raids};
+delete `Economy.Upgrade.NeedsBoss` (Economy.cs:82, :39, :119) and `Lanes.NeedsBoss` (Lanes.cs:103); Yard.cs:263,
+BasePanel.cs:120-129, Raids.cs:53 ask Unlocks. Grep the harness for NeedsBoss and rewrite each to the table.
