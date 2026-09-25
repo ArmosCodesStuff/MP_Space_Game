@@ -1040,3 +1040,15 @@ heredoc turns "\n" inside C# strings into real newlines: it broke SessionMenu on
   MAKE A FRESH REPLY answering the same invite, at 2 varied invites; the closed-connection text).
 - Not checkable in one process: the "no port could be opened" text (every port and the OS's own taken).
 - next: R4.
+
+#### R4 PRE
+- job R4, tier opus. HEAD a58bcfb. Intent (§10.4 R4, -Wan only): the watchdog -- after the paste guest's
+  return the guest blackholes the box for 12 s and posts the moment (UTC ms, the courier's file
+  blackhole-{port}-0); both ends drop each other 8 +/- 1 s after it (the guest's §3.9 text, the host's
+  "Player {id} dropped."); the host's fresh invite, posted once the blackhole lifts, brings it back (invite
+  2; the live holder moves to 3 under -Wan). The rate check is S1's streamRate >= 8 (run at
+  WARSHIPS_WAN=150,40,5 in the test phase); printed, not asserted: the stream row's longest gap over its
+  12 s and each end's peak backlog per NetChannels row (Net.Report's line).
+- files: tools/smoketest/SmokeTest.cs.txt 3d1f31df, ledger 4670d059.
+- checks planned: rung 5 -Wan guest "the watchdog drops the host 8 +/- 1 s into a blackhole", host "the
+  watchdog drops the guest 8 +/- 1 s into a blackhole", both "back by the fresh invite after it lifts".
