@@ -6043,6 +6043,12 @@ public partial class _Test : Node
                             var mkIn = await Marker(landedAt + way.Rotated(1f) * (float)(reach * Vary(0.40f, 0.85f)));
                             var mkOut = await Marker(landedAt + way.Rotated(-1f) * (float)(reach * Vary(1.20f, 1.60f)));
                             double inWas = mkIn.Hp, outWas = mkOut.Hp;
+                            // NOTHING ELSE IN FLIGHT FIRST: an echo round from an earlier check lands
+                            // 0.6 s after its shot, and one landing inside this window is stored and
+                            // blasted too (read once: 136 where 80 was stored). Guns off, and past the
+                            // repeat's own delay before the window opens.
+                            pilot.Trigger = false;
+                            await Wait(0.8);
                             pilot.Sl("echo").Cool = 0;
                             doAbility.Invoke(pilot, new object[] { "echo", 0 });
                             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
