@@ -14,3 +14,5 @@ hauled 250 u off TargetDummy1, its PD had the practice fighters in reach (combat
 parks it at BasePos+(2600,2400) before returning.
 fa1as_p2: the same three host reds, and no guest line after grapnel: run.ps1 kills aguest at 150 s and its lanes
 through grapnel alone take 136 s (the list grew in the build phase, never run). Limits: aguest 480 (wan 600), ahost 240.
+fa1as_p3 (six@seed): 6/6 runs finished; curtain, suppress, grapnel, pepper/rod/ramjet/sling/slip/rewind/emp/step
+guest lanes green. Pepper host counted 1159 darts: a steered dart left the set and was counted again; fixed.

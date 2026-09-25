@@ -13198,12 +13198,13 @@ public partial class _Test : Node
     sealed class LaneA6dPepperSeen { public int Darts, Priced, Steered; public bool Done; public double T; }
     LateSampler LaneA6dPepperHostWatch(LaneA6dPepperSeen seen)
     {
-        var mine = new HashSet<Shot>();
+        var counted = new HashSet<Shot>();   // every dart once (a steered one leaves `mine` and must not be counted again)
+        var mine = new HashSet<Shot>();      // the counted darts not yet seen steering
         var watch = new LateSampler { Probe = () =>
         {
             if (seen.Done || H.Ships.FirstOrDefault(s => !s.Mine) is not { Class: ShipClass.LightDart } g) return false;
             foreach (var x in Nodes<Shot>().Where(x => x.Kind == Shots.Pepper && x.Source == g && x.Alive))
-                if (mine.Add(x)) { seen.Darts++; if (Math.Abs(x.Damage - 7.5) < 1e-6) seen.Priced++; }
+                if (counted.Add(x)) { mine.Add(x); seen.Darts++; if (Math.Abs(x.Damage - 7.5) < 1e-6) seen.Priced++; }
             foreach (var x in mine.Where(x => IsInstanceValid(x) && x.Alive).ToList())
                 if (Mathf.Abs(Mathf.AngleDifference(x.Dir.Angle(), (g.AimPoint - x.GlobalPosition).Angle())) < Mathf.DegToRad(10f)) { seen.Steered++; mine.Remove(x); }
             if (seen.Darts > 0) seen.T += GetProcessDeltaTime();
