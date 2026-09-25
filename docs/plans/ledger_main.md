@@ -8,10 +8,6 @@ Engine outputs for the old-way batches: S = C:\Users\logan\AppData\Local\Temp\cl
   7: knife-edge DPS windows; screens frame 49 + a twin-barrel frame; outpost GunDamage 42 -> derive from the gunship row = 35 (COORDINATOR
   DECISION); Ramp stepped on every peer (guest-flown Ramjet broken) -> owner-stepped; BaseDefense/Shots bypass Dealt.Deal; D17's echo check
   unwritten; stale comments. Fix, gate 2, then merge (it merges version-l into the lane first if art got there first). merge=false: by hand.
-- wf_b2cacf8b-53f / task w3yjvxmzy, "lane-art-fix2" (no engine). Art A4 (1f3a6ae) fixed gate 1's six (ram once per dash via Slot.Struck; Find
-  from the hull; ring/approach/spawn checks); gate 2 failed on 3 false comments only. COORDINATOR DECISION: the Drake's throw standoff also
-  measured from the hull (nose 1300 u off) so the target is 200 u outside gun reach again (it was 10 u inside after Find moved). Fix A5,
-  gate 3, merge (syncs version-l first). Tell the owner the throw decision.
 - wf_b63808ec-4ad / task wojzfsouf, "wave-1-build": six lanes in parallel, build only, each from base f168508 (= kits 809313c + version-l;
   branch wt/wave): drives (B: F21/F22/F24), fields (D: F9), wings (E: F13), curve (F: Par, boss rows, ladder), raids (G: Squads), net2
   (R2-R5 code; S2 first if missing). Worktrees WarShips_wt_<key>, ledgers ledger_<key>.md (net2: ledger_webrtc.md). Each: build, opus gate,
@@ -24,7 +20,8 @@ Engine outputs for the old-way batches: S = C:\Users\logan\AppData\Local\Temp\cl
 2. TEST PHASE, once everything is merged: the slots proof, then quick,solo,solo,six,screens (+ six,six) across slots, fix low, then the bar
    once, VERIFIED:, push version-l and main, release; frames to the owner (the art lane's Drake, Rusty, siege, player ships).
 3. Delete worktrees WarShips_wt_walls, WarShips_wt_net, WarShips_wt_slots, WarShips_wt_test after the merges.
-Done: slots merged 25aefc1 (gate 2 passed at a22c187; its 2 notes applied in e104a5a). Engine-unproven: its proof opens the test phase.
+Done: ART MERGED (A5 7717267 passed gate 3's code; coordinator applied its one comment fix A6 761a2ad; quick art_mergeq green;
+  engine-unproven; Drake throw now nose 1300 u off = 200 u past gun reach, tell the owner if asked). Slots merged 25aefc1 (gate 2 passed at a22c187; its 2 notes applied in e104a5a). Engine-unproven: its proof opens the test phase.
 
 ## Owner questions
 - none open
