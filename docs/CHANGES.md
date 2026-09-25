@@ -53,10 +53,19 @@ Fixed (ledger R1Q): `StructRow` takes any value type of the game's own assembly,
 status guard's share, the base gun's damage, one practice target) each move the fingerprint and are
 restored. Re-proved: `-Quick`, rung 3 green twice more (seeds 11400714819323524536 and
 11400714819323511382), the six-role run green once more (seed 11400714819323521240, every role
-`fails=0`) -- host and every guest still agree on `Net.Protocol`. Next: the bar (`verify.ps1 -Update`),
-a merge to `version-l`, and **R2** (network_webrtc.md §13: the switch; its `Net` is the desks,
-`Net._Process` polls `Rendezvous.Paths`, `Join` adds an invite's candidates only after the walk, D15).
-Not pushed.
+`fails=0`) -- host and every guest still agree on `Net.Protocol`.
+**The merge gate found a second defect (job R1R): `StructRow` still demanded every field Plain, so
+`WaveCrew` (a `Func` `Count` field) printed as its bare type name and the private static readonly
+`Waves.Patrol`/`HuntPin` rows never entered the fingerprint.** Fixed: `StructRow` accepts a field that
+is Plain OR a delegate; `Show` prints a delegate's type name, null as `null`. Re-proved at 1a139c0
+(after merging `version-l`'s walls lane in first, no fingerprint fix needed for `Unlocks.All`: it is a
+record class, already hashed through `Plain`'s own `<Clone>$` path): `-Quick` green, rung 3 green twice
+(seeds 11400714819323517228, 11400714819323555799), the six-role run green once (seed
+11400714819323519350, every role `fails=0`), the two new checks ("a row with a delegate field is part
+of the build's fingerprint", "a wave crew row put back is the build's fingerprint again") PASS on
+every run, no FAIL or ERROR line. Next: the bar (`verify.ps1 -Update`), a merge to `version-l`, and
+**R2** (network_webrtc.md §13: the switch; its `Net` is the desks, `Net._Process` polls
+`Rendezvous.Paths`, `Join` adds an invite's candidates only after the walk, D15). Not pushed.
 
 **2026-09-25 (main session): the walls lane (lane C) merged into `version-l`** (`29b154e`), rung
 3/5/4 green in the lane; `Unlocks.All` joins CLAUDE.md §7's extend-before-inventing list.
@@ -561,13 +570,18 @@ is in it; a MUTABLE struct row is in it too (a status guard's share, the pirate 
 `System.ValueTuple`N` row is in it too (one practice target); every field of Character is accounted for
 by the round-trip test (`<Bought>k__BackingField`, the property's own backing field, now that `Bought`
 is one); `Character`'s own `const` bounds are not the pilot and stay in the fingerprint (`Dir`,
-`MaxBonus`, `MaxStock`, `PaidKept`, `SaveDelay`).
+`MaxBonus`, `MaxStock`, `PaidKept`, `SaveDelay`); a row with a DELEGATE field (`WaveCrew.Count`, a
+`Func`) is in it too -- `Waves.Patrol`/`HuntPin` moved, moves it, and the printed row is written out
+field by field, not its bare type name.
 Replaced: the reply-window measurement. Rung 3 green on two seeds at 8760795 (J7-J9b); two rung-3
 checks of J9c's fixed at c4a7e01 (both invisible below rung 3); rung 3 green twice more at c4a7e01
 (seeds 11400714819323513555, 11400714819323526641) and the six-role run once (seed
 11400714819323519265, every role `fails=0`); the merge gate's `StructRow` fix (R1Q) re-proved: rung 3
 green twice more (seeds 11400714819323524536, 11400714819323511382) and the six-role run once more
-(seed 11400714819323521240, every role `fails=0`): host and every guest agree on `Net.Protocol`.
+(seed 11400714819323521240, every role `fails=0`): host and every guest agree on `Net.Protocol`; a
+second merge-gate defect fixed (R1R, `StructRow`'s delegate-field gate) and re-proved once more: rung 3
+green twice (seeds 11400714819323517228, 11400714819323555799) and the six-role run once (seed
+11400714819323519350, every role `fails=0`).
 
 **Known broken (R1):**
 - **What libjuice writes after an IPv6 server-reflexive candidate is unread**; the codec writes

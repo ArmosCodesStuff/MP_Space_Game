@@ -631,6 +631,14 @@ Owed on the R1 records commit (it carries J10 and J9c):
   (~2253-2256) rewritten to match. `typecheck` and `verify.ps1 -Quick` both ALL CHECKS PASSED.
 - files: scripts/Net.cs (`StructRow`, `Show`), tools/smoketest/SmokeTest.cs.txt (Post check comment,
   new delegate-row `BuildChecks`), docs/DESIGN.md (struct-row trap, four kinds now)
-- checkpoint: (this commit, code + records together)
-- next: the chain `quick,solo,solo,six` once through `rungs.ps1`, tag `net_r1r`; fix a red at the
-  lowest rung, re-run once; then done.
+- checkpoint: 1a139c0 (code); this commit adds the chain result and CHANGES records
+- chain: `net_r1r` (bash-launched detached background, exit 128 at 0s -- the launcher script itself,
+  not rungs.ps1, never actually ran under that method) discarded; re-run `net_r1r2` through the
+  PowerShell tool's own background run, at 1a139c0: `-Quick` green (78s); rung 3 green twice, seeds
+  11400714819323517228 (130s) and 11400714819323555799 (131s); the six-role run green once (241s, seed
+  11400714819323519350, every role `fails=0`). Both new checks ("a row with a delegate field is part of
+  the build's fingerprint: one wave crew's step moved moves it, and it is written out, not bare"; "a
+  wave crew row put back is the build's fingerprint again") read PASS in both solo logs and the six-role
+  log (`[solo]` role), no FAIL or ERROR line anywhere in quick/solo/solo/six.
+- next: docs/CHANGES.md Handoff and the R1 Unreleased entry updated to carry this result (same commit);
+  done.
