@@ -40,6 +40,11 @@ public class ShotDef
     // that row says Tag.Hulled, and its body is a target like any hull (Shot.Hull).
     public Tag Tags = Tag.Missile;
     public string Label;             // what a target line calls one, for a row that can be picked (Tag.Hulled)
+    // HOW MANY BODIES IT STRIKES BEFORE IT ENDS: 1 = the first it touches, 0 = everything on its path
+    // (it flies on to its range). The same word and the same rule as a Lines row's (Lines.cs), so a
+    // piercing slug and a piercing line are one idea. Each body is struck once, however many of the
+    // sweep's points fall inside it.
+    public int Stops = 1;
 }
 
 public static class Shots
@@ -120,11 +125,13 @@ public partial class Shot : Node2D, IHittable, ITagged
     public int Variant;                    // scrap: which jagged shape
     public float Lead;                     // a guest's copy starts this far into the flight (the round trip)
     public double Hull;                    // what is left of its body's hull (host): 0 falls to the first blow
+    public int? Stops;                     // the firer's own count of bodies (ShotDef.Stops); null = its row's
 
     private float _flown, _puffCd;
     private bool _spent;
     private double _burnt;
     private readonly List<(Vector2 p, float age)> _smoke = new();
+    private readonly HashSet<IHittable> _struck = new();   // every body this one has struck: each is struck once
     public const float SmokeLife = 1.6f, PuffEvery = 0.03f;
 
     // ── as a target: a seeker falls to one hit, a Hulled body is worn down ───
@@ -208,14 +215,16 @@ public partial class Shot : Node2D, IHittable, ITagged
         QueueRedraw();
     }
 
-    // What it touches at `p`, and what that costs. True when it struck.
+    // What it touches at `p`, and what that costs. True when it has ENDED: it struck its last body
+    // (Stops). A body already struck is passed through, so a sweep step inside one body is one blow.
     private bool Strike(Vector2 p, ShotDef d)
     {
-        foreach (var h in d.AtPlayers ? Combat.Players : Combat.Hostiles)
+        int stops = Stops ?? d.Stops;
+        // one body at a time, the collection asked afresh after each blow: a blow may end a body,
+        // and a body that ends leaves the list it was found in
+        for (var h = Touching(p, d); h != null; h = Touching(p, d))
         {
-            // a shell never takes a Missile out of the air -- that is point defence's job; a body with
-            // a hull of its own (Tag.Hulled) it strikes like any hull
-            if (h == null || !h.Alive || TagExt.Is(h, Tag.Missile) || !h.Covers(p, d.Pad + Radius)) continue;
+            _struck.Add(h);
             if (d.MarkEveryPeer && h is Node2D seen) Popups.NoteImpact(seen, p);
             if (!Cosmetic && Net.Sim)
             {
@@ -225,11 +234,24 @@ public partial class Shot : Node2D, IHittable, ITagged
                 if (h is PlayerShip ps) ps.Hit(Damage, p - Dir * 10f, HitSource);
                 else Dealt.Deal(h, Damage, IsInstanceValid(Source) ? Source : null, d.Id);
             }
-            GlobalPosition = p;
-            End();
-            return true;
+            if (stops > 0 && _struck.Count >= stops)
+            {
+                GlobalPosition = p;
+                End();
+                return true;
+            }
         }
         return false;
+    }
+
+    // The first body at `p` it may strike and has not: a shell never takes a Missile out of the air --
+    // that is point defence's job; a body with a hull of its own (Tag.Hulled) it strikes like any hull.
+    private IHittable Touching(Vector2 p, ShotDef d)
+    {
+        foreach (var h in d.AtPlayers ? Combat.Players : Combat.Hostiles)
+            if (h != null && h.Alive && !_struck.Contains(h) && !TagExt.Is(h, Tag.Missile) && h.Covers(p, d.Pad + Radius))
+                return h;
+        return null;
     }
 
     private void End()

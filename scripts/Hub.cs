@@ -1266,23 +1266,27 @@ public partial class Hub : Node2D
     // were read straight off Raider. The outposts answer a blockade with the same missile from the
     // other side (Lanes.cs), so WHOSE it is is a row of Missiles.All and its numbers are the
     // launcher's own spec. Nothing below names a raider or an outpost.
-    private readonly List<(Vector2 at, double left, int from, MissileSpec shot)> _blasts = new();
+    // EACH ONE HAS AN ID, in the one space every missile's id comes from (NetIds.Missile, as an
+    // interceptable shot's), sent with the launch: whatever must name one blast on every peer -- a
+    // flare pulling its landing mark aside (F14's NetDecoy) -- names it by that id.
+    private readonly List<(Vector2 at, double left, int from, MissileSpec shot, int id)> _blasts = new();
     public int BlastsPending => _blasts.Count;
     public void ThrowMissile(MissileSpec m, Vector2 from, Vector2 at, int fromId)
     {
         if (!Net.IsHost) return;
-        _blasts.Add((at, m.Flight, fromId, m));
+        int id = Combat.NextMissileId();
+        _blasts.Add((at, m.Flight, fromId, m, id));
         // the circle it marks, as every warning is marked: a row of Fx.All, on every peer -- red
         // for a threat, the friendly shape for one of ours
         Fx.Warn(new FxRaise { Id = Missiles.Of(m.Side).Mark, At = at, To = at, Size = m.Blast, Time = m.Flight });
-        ShowMissile(m.Side, from, at, m.Flight, m.Blast);
-        ToWorld(nameof(NetMissile), m.Side, from, at, m.Flight, m.Blast);
+        ShowMissile(m.Side, from, at, m.Flight, m.Blast, id);
+        ToWorld(nameof(NetMissile), m.Side, from, at, m.Flight, m.Blast, id);
     }
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetMissile(int side, Vector2 from, Vector2 at, double flight, float blast) =>
-        ShowMissile(side, from, at, Net.Arriving(flight), blast);
-    private void ShowMissile(int side, Vector2 from, Vector2 at, double flight, float blast) =>
-        AddChild(new MissileVisual { Side = side, From = from, To = at, Flight = flight, Blast = blast });
+    private void NetMissile(int side, Vector2 from, Vector2 at, double flight, float blast, int id) =>
+        ShowMissile(side, from, at, Net.Arriving(flight), blast, id);
+    private void ShowMissile(int side, Vector2 from, Vector2 at, double flight, float blast, int id) =>
+        AddChild(new MissileVisual { Side = side, From = from, To = at, Flight = flight, Blast = blast, NetId = id });
     private void TickBlasts(double delta)
     {
         for (int i = _blasts.Count - 1; i >= 0; i--)

@@ -3828,6 +3828,235 @@ public partial class _Test : Node
         pm.Position = keep; pm.Velocity = Vector2.Zero;
     }
 
+    // ── F5 · A SHOT STRIKES EACH BODY ONCE, AND ENDS AFTER ITS STOPS (lane A slice 3, J8) ──────────
+    // A shell (10 a blow) down a held line of three gunships, from 3 varied angles and spacings, with
+    // Stops 1, 2 and 0: exactly the first 1, 2 or 3 lose exactly 10 each -- once, however many of the
+    // sweep's 6 u points fall inside a body -- and the ones past its last stop lose nothing.
+    async Task LaneAShotStopsChecks(Vector2 yonder)
+    {
+        var pm = Me; pm.Position = yonder; pm.Velocity = Vector2.Zero;
+        for (int run = 0; run < 3; run++)
+        {
+            var dir = Vector2.Right.Rotated(VaryAngle());
+            var from = yonder + dir.Orthogonal() * Vary(1200f, 1600f);       // well off the pilot, whatever the angle
+            float gap = Vary(160f, 260f), first = Vary(200f, 320f);
+            foreach (int stops in new[] { 1, 2, 0 })
+            {
+                var spots = new Vector2[3];
+                var foes = new Raider[3];
+                for (int k = 0; k < 3; k++)
+                {
+                    spots[k] = from + dir * (first + gap * k) + dir.Orthogonal() * Vary(-4f, 4f);
+                    foes[k] = H.SpawnRaider(spots[k], Enemies.Gunship); foes[k].Hp = 1e9;
+                }
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                for (int k = 0; k < 3; k++) foes[k].Position = spots[k];
+                var hp0 = foes.Select(f => f.Hp).ToArray();
+                float range = first + gap * 2 + 300f;
+                var shot = Combat.Fire(Shots.Shell, from, dir, 1500f, range, 10, radius: 2f, hitSource: "test:stops");
+                shot.Stops = stops;
+                for (int i = 0; i < 120 && IsInstanceValid(shot) && shot.Alive; i++)
+                {
+                    for (int k = 0; k < 3; k++) foes[k].Position = spots[k];
+                    await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                }
+                var lost = Enumerable.Range(0, 3).Select(k => hp0[k] - foes[k].Hp).ToArray();
+                int want = stops == 0 ? 3 : stops;
+                bool ok = Enumerable.Range(0, 3).All(k => Math.Abs(lost[k] - (k < want ? 10 : 0)) < 1e-6);
+                Check(ok, $"a shell with Stops {stops} ({(stops == 0 ? "through everything" : stops == 1 ? "the first body" : "two bodies")}) down a line of three gunships {first:0} u + {gap:0} u apart, at {Mathf.RadToDeg(dir.Angle()):0} deg: the first {want} lose 10 each, once ({string.Join(" / ", lost.Select(l => l.ToString("0.##")))})");
+                foreach (var f in foes) f.TakeDamage(1e12);
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            }
+        }
+        pm.Position = yonder; pm.Velocity = Vector2.Zero;
+    }
+
+    // ── F23 · LINES: what a line strikes, and the railgun's row (lane A slice 3, J9) ─────────────
+    // Pure (Lines.Pick): 3 varied layouts -- an angle, a start, three bodies on the line at varied
+    // spots handed over in a shuffled order, one body just off its side and one past its end -- with
+    // Stops 0 / 1 / 2: everything on it, the nearest, the nearest two, always nearest first. Then the
+    // railgun's row against the kit's literals: 2500 x 14 u, through everything, the rail bar and report.
+    void LaneALinesChecks()
+    {
+        for (int run = 0; run < 3; run++)
+        {
+            var a = new Vector2(Vary(-3000f, 3000f), Vary(-3000f, 3000f));
+            var dir = Vector2.Right.Rotated(VaryAngle());
+            var side = dir.Orthogonal();
+            float length = Vary(1500f, 2500f), half = Vary(5f, 12f);
+            var b = a + dir * length;
+            var pool = new List<(string name, Vector2 at, float r)>();
+            float[] along = { Vary(100f, 400f), Vary(600f, 900f), Vary(1100f, 1400f) };
+            for (int k = 0; k < 3; k++)
+            {
+                float r = Vary(10f, 30f);
+                pool.Add(($"on{k}", a + dir * along[k] + side * Vary(-1f, 1f) * (half + r - 2f), r));
+            }
+            float rOff = Vary(10f, 30f);
+            pool.Add(("beside", a + dir * Vary(200f, 1300f) + side * (half + rOff + Vary(8f, 40f)) * (run % 2 == 0 ? 1 : -1), rOff));
+            pool.Add(("beyond", a + dir * (length + rOff + Vary(20f, 200f)), rOff));
+            var shuffled = pool.OrderBy(_ => Rng.Randi()).ToList();
+            string Names(List<(string name, Vector2 at, float r)> l) => string.Join(",", l.Select(t => t.name));
+            var all = Lines.Pick(a, b, half, 0, shuffled, t => t.at, t => t.r);
+            var one = Lines.Pick(a, b, half, 1, shuffled, t => t.at, t => t.r);
+            var two = Lines.Pick(a, b, half, 2, shuffled, t => t.at, t => t.r);
+            Check(Names(all) == "on0,on1,on2" && Names(one) == "on0" && Names(two) == "on0,on1",
+                  $"a line {length:0} x {half * 2:0} u at {Mathf.RadToDeg(dir.Angle()):0} deg, handed its bodies as {Names(shuffled)}: Stops 0 strikes on0,on1,on2, Stops 1 on0, Stops 2 on0,on1, nearest first, never the one beside it or past its end ({Names(all)} / {Names(one)} / {Names(two)})");
+        }
+        var rail = Lines.All[Lines.Rail];
+        var sheet = new ShipStats(ShipClass.HeavySniper);
+        Check(rail.Id == "rail" && rail.Stops == 0 && !rail.AtTarget && rail.Fx == Fx.Rail && rail.Beam == Beam.Rail
+              && Math.Abs(sheet[rail.Reach] - 2500) < 1e-9 && Math.Abs(sheet[rail.Width] - 14) < 1e-9 && Math.Abs(sheet["rail_damage"] - 150) < 1e-9,
+              $"the railgun is a Lines row: 2500 x 14 u (reach {sheet[rail.Reach]:0}, width {sheet[rail.Width]:0}), through everything (Stops {rail.Stops}), its whole reach (AtTarget {rail.AtTarget}), the rail bar and report, 150 a line");
+    }
+
+    // ── F23 · A LINE THAT STOPS AT ITS TARGET (lane A slice 3, gate fix J12) ────────────────────
+    // Pure (Lines.End, the segment Strike reads, then Lines.Pick): kits_v31 3.1's `tot` shape -- 14 u x
+    // 1500 u, stops at the target -- beside the railgun's row, at 3 varied angles and starts. Aimed at a
+    // point 600-1200 u out: a body short of it is struck by both; a body just past it is untouched on the
+    // AtTarget row and struck on the rail row (which runs its whole 2500). Aimed 2000-2300 u out: the
+    // AtTarget row ends at its 1500 u reach, so a body just past 1500 is untouched on it, struck on the rail.
+    void LaneALinesAtTargetChecks()
+    {
+        var tot = new LineDef { Id = "tot", Stops = 0, AtTarget = true };
+        var rail = Lines.All[Lines.Rail];
+        var sheet = new ShipStats(ShipClass.HeavySniper);
+        const float totReach = 1500f, totHalf = 7f;
+        float railReach = (float)sheet[rail.Reach], railHalf = (float)sheet[rail.Width] * 0.5f;
+        for (int run = 0; run < 3; run++)
+        {
+            var from = new Vector2(Vary(-3000f, 3000f), Vary(-3000f, 3000f));
+            var dir = Vector2.Right.Rotated(VaryAngle());
+            float near = Vary(600f, 1200f), far = Vary(2000f, 2300f), r = Vary(10f, 30f);
+            var to = from + dir * near;
+            var toFar = from + dir * far;
+            var pool = new List<(string name, Vector2 at, float r)>
+            {
+                ("pastReach", from + dir * (totReach + r + Vary(20f, 200f)), r),
+                ("short", from + dir * (near - Vary(150f, 400f)), r),
+                ("past", from + dir * (near + r + Vary(20f, 200f)), r),
+            };
+            string Names(Vector2 end, float half) => string.Join(",", Lines.Pick(from, end, half, 0, pool, t => t.at, t => t.r).Select(t => t.name));
+            Vector2 totEnd = Lines.End(tot, totReach, from, to), totEndFar = Lines.End(tot, totReach, from, toFar);
+            Vector2 railEnd = Lines.End(rail, railReach, from, to), railEndFar = Lines.End(rail, railReach, from, toFar);
+            string tn = Names(totEnd, totHalf), tf = Names(totEndFar, totHalf), rn = Names(railEnd, railHalf), rf = Names(railEndFar, railHalf);
+            Check(totEnd.DistanceTo(to) < 1e-2f && Math.Abs(from.DistanceTo(totEndFar) - 1500f) < 1e-2f
+                  && Math.Abs(from.DistanceTo(railEnd) - 2500f) < 1e-2f && railEndFar.DistanceTo(from + dir * 2500f) < 1e-2f
+                  && tn == "short" && tf == "short,past" && rn == "short,past,pastReach" && rf == "short,past,pastReach",
+                  $"a 14 u x 1500 u line that stops at its target, at {Mathf.RadToDeg(dir.Angle()):0} deg aimed {near:0} u out: strikes {tn}, never the body just past the target; aimed {far:0} u out it ends at {from.DistanceTo(totEndFar):0} u, striking {tf}; the railgun's row runs {from.DistanceTo(railEnd):0} u either way and strikes {rn} / {rf}");
+        }
+    }
+
+    // ── F6 · A PREDICTED MISSILE HAS AN ID ON EVERY PEER (lane A slice 3, J10) ───────────────────
+    // Three harmless outpost missiles (0 damage, 10 u) thrown at 3 varied spots far from anything: each
+    // blast the host holds and each MissileVisual it shows carry the same id, from the missiles' one
+    // space (NetIds.Missile, 10000-19999), three different ids, none a live shot's; then all three land.
+    static IEnumerable<int> BlastIds(Hub h) =>
+        ((System.Collections.IList)typeof(Hub).GetField("_blasts", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(h))
+            .Cast<object>().Select(e => (int)e.GetType().GetField("Item5").GetValue(e));
+    static bool InMissileSpace(int id) => id >= NetIds.Missile && id < NetIds.Missile + 10000;
+    async Task LaneAMissileIdsChecks(Vector2 yonder)
+    {
+        var before = Nodes<MissileVisual>().ToHashSet();
+        var ids0 = BlastIds(H).ToHashSet();
+        int pending0 = H.BlastsPending;
+        var spots = new Vector2[3];
+        for (int k = 0; k < 3; k++)
+        {
+            spots[k] = yonder + Vector2.Right.Rotated(VaryAngle()) * Vary(2500f, 3500f);
+            H.ThrowMissile(new MissileSpec { Side = Missiles.Outpost, Damage = 0, Blast = 10f, Flight = Vary(1.5f, 2.5f) },
+                           spots[k] + new Vector2(0, -600), spots[k], 0);
+        }
+        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        var mine = Nodes<MissileVisual>().Where(v => !before.Contains(v)).ToList();
+        var held = BlastIds(H).Where(i => !ids0.Contains(i)).ToHashSet();
+        var shotIds = Nodes<Shot>().Select(s => s.NetId).Where(i => i != 0).ToHashSet();
+        bool eachAtItsSpot = spots.All(p => mine.Count(v => v.To.DistanceTo(p) < 1f) == 1);
+        var seen = mine.Select(v => v.NetId).ToHashSet();
+        Check(mine.Count == 3 && eachAtItsSpot && seen.Count == 3 && seen.SetEquals(held) && seen.All(InMissileSpace) && !seen.Overlaps(shotIds),
+              $"three predicted missiles thrown at once: the host's blasts and the missiles it draws carry the same three ids, from the missiles' one space ({string.Join(", ", seen)} / held {string.Join(", ", held)})");
+        for (int i = 0; i < 60 * 4 && H.BlastsPending > pending0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        Check(H.BlastsPending == pending0 && !BlastIds(H).Any(held.Contains),
+              $"...and all three land, their ids gone with them ({H.BlastsPending - pending0} still pending)");
+    }
+    // Rung 5, the host's half: three at far spots, once both guests are in; they fly 40 s.
+    void LaneAMissileIdsHost()
+    {
+        for (int k = 0; k < 3; k++)
+        {
+            var at = new Vector2(-7000, 7000) + Vector2.Right.Rotated(VaryAngle()) * Vary(300f, 900f);
+            H.ThrowMissile(new MissileSpec { Side = Missiles.Outpost, Damage = 0, Blast = 10f, Flight = 40 }, at + new Vector2(0, -600), at, 0);
+        }
+        var drawn = Nodes<MissileVisual>().Where(v => v.Flight > 30).Select(v => v.NetId).ToHashSet();
+        Check(drawn.Count == 3 && drawn.All(InMissileSpace), $"host: three predicted missiles thrown for the guests, each with its own id ({string.Join(", ", drawn)})");
+    }
+    // Rung 5, the guest's half: the three arrive with the host's ids -- three, different, in the missiles' space.
+    async Task LaneAMissileIdsGuest()
+    {
+        await RealTime(() => Nodes<MissileVisual>().Count(v => v.Flight > 20) >= 3, 25);
+        var got = Nodes<MissileVisual>().Where(v => v.Flight > 20).Select(v => v.NetId).ToList();
+        Check(got.Count == 3 && got.Distinct().Count() == 3 && got.All(InMissileSpace),
+              $"guest: the host's three predicted missiles arrive each with its id, the host's, three different ones in the missiles' space ({string.Join(", ", got)})");
+    }
+
+    // ── F7 · CHARGE BANDS (lane A slice 3, J11) ───────────────────────────────────────────────
+    // Pure (Charges.At), each at 3 varied charges, never on a band's edge:
+    //  - a ramp (sniper_active_reload.md 1.4: 40% at once rising to 100% at full): 0.40 + 0.60 x share,
+    //    and 1.00 held past full;
+    //  - steps (kits_v2's tap 8 and full 45): 8/45 down the tap's line short of full, 1 down the full line after;
+    //  - the railgun's own table: the whole (x1) down the rail line, however far its charge got (the kit's 150).
+    void LaneAChargeBandChecks()
+    {
+        var ramp = new[] { new ChargeBand { At = 0, Mult = 0.40, Line = 1 }, new ChargeBand { At = 1, Mult = 1.00, Line = 1, Ramp = true } };
+        var steps = new[] { new ChargeBand { At = 0, Mult = 8.0 / 45, Line = 2 }, new ChargeBand { At = 1, Mult = 1, Line = 3 } };
+        float[] shares = { Vary(0.05f, 0.30f), Vary(0.35f, 0.65f), Vary(0.70f, 0.95f) };
+        foreach (float sh in shares)
+        {
+            var (rm, rl) = Charges.At(ramp, sh);
+            var (sm, sl) = Charges.At(steps, sh);
+            Check(Math.Abs(rm - (0.40 + 0.60 * sh)) < 1e-9 && rl == 1 && Math.Abs(sm * 45 - 8) < 1e-9 && sl == 2,
+                  $"a charge {sh * 100:0}% of full: a ramp's 40% -> 100% gives {rm * 100:0.0}% (want {(0.40 + 0.60 * sh) * 100:0.0}), steps give the tap's 8 of 45 down the tap's line ({sm * 45:0.00}, line {sl})");
+        }
+        foreach (float sh in new[] { Vary(1.05f, 1.4f), Vary(1.5f, 2.5f), Vary(3f, 6f) })
+        {
+            var (rm, rl) = Charges.At(ramp, sh);
+            var (sm, sl) = Charges.At(steps, sh);
+            var (km, kl) = Charges.At(Charges.Of("railgun"), sh);
+            var (k0, kl0) = Charges.At(Charges.Of("railgun"), Vary(0.05f, 0.95f));
+            Check(Math.Abs(rm - 1) < 1e-9 && rl == 1 && Math.Abs(sm * 45 - 45) < 1e-9 && sl == 3
+                  && km == 1 && kl == Lines.Rail && k0 == 1 && kl0 == Lines.Rail
+                  && Math.Abs(new ShipStats(ShipClass.HeavySniper)["rail_damage"] * km - 150) < 1e-9,
+                  $"a charge held to {sh * 100:0}% of full: the ramp holds at 100% ({rm * 100:0.0}), steps give the full 45 down the full line ({sm * 45:0.00}, line {sl}), the railgun its whole 150 down the rail line ({km:0.##} x, line {kl})");
+        }
+    }
+
+    // ── THE BANDS AND THE LINES ARE IN THE BUILD'S FINGERPRINT (lane A slice 3, gate fix J12) ───────
+    // The bug: Charges.All was a dictionary, which Net.Fingerprint does not hash, so two builds whose
+    // railgun bands differed admitted each other. Now the fingerprint's parts write Charges.All and
+    // Lines.All out row by row, and at 3 varied railgun multipliers the fingerprint moves (the band is
+    // put back after each, and the build's own fingerprint returns).
+    void LaneAChargeTableHashedChecks()
+    {
+        var parts = FingerprintParts();
+        string charges = parts.FirstOrDefault(p => p.StartsWith("Charges.All=", StringComparison.Ordinal)) ?? "";
+        string lines = parts.FirstOrDefault(p => p.StartsWith("Lines.All=", StringComparison.Ordinal)) ?? "";
+        Check(charges.Contains("Id=railgun") && charges.Contains("ChargeBand{") && lines.Contains("AtTarget=False") && lines.Contains("Reach=rail_range"),
+              $"the build's fingerprint reads the charge bands and the lines row by row ({(charges == "" ? "no Charges.All part" : charges)} / {(lines == "" ? "no Lines.All part" : lines)})");
+        var band = Charges.Of("railgun")[0];
+        int build = FingerprintNow();
+        foreach (double m in new double[] { Vary(0.2f, 0.6f), Vary(1.2f, 2f), Vary(3f, 9f) })
+        {
+            double keep = band.Mult;
+            int moved;
+            band.Mult = m;
+            try { moved = FingerprintNow(); }
+            finally { band.Mult = keep; }
+            int back = FingerprintNow();
+            Check(moved != build && back == build,
+                  $"a build whose railgun band fires x{m:0.00} has another fingerprint ({moved:x8} against the build's {build:x8}), and with the band put back the build's again ({back:x8})");
+        }
+    }
+
     // ── THE BUILD A PLAYER READS ──────────────────────────────────────────────────────────────
     // One check, about a trap in THIS game's protocol hash that a build string can fall into.
     void BuildChecks()
@@ -8998,6 +9227,12 @@ public partial class _Test : Node
             await LaneARampWiringChecks(yonder);
             LaneASpeedAddChecks();
             await LaneAHeavyRowsChecks(yonder);
+            await LaneAShotStopsChecks(yonder);
+            LaneALinesChecks();
+            LaneALinesAtTargetChecks();
+            await LaneAMissileIdsChecks(yonder);
+            LaneAChargeBandChecks();
+            LaneAChargeTableHashedChecks();
             await LaneBHelmChecks(yonder);
             await LaneBStrafeChecks(yonder);
             await LaneBBoostChecks(yonder);
@@ -12555,6 +12790,7 @@ public partial class _Test : Node
             Check(refusals == 1, $"the host refused the one peer that knocked as another build ({refusals})");
             var ships = Nodes<PlayerShip>().ToList();
             Check(ships.Count == 3, $"host sees 3 ships: itself and two guests ({ships.Count})");
+            LaneAMissileIdsHost();
             Multiplayer.PeerConnected -= AtLetIn;
             // A guest just let in may not have the host's own "done" yet (lost on the way, resent), and
             // Godot throws away with an engine error anything else that reaches it first. Its answer to
@@ -12930,6 +13166,7 @@ public partial class _Test : Node
             for (int i = 0; i < 60 * 3 && !H.Raiders.Any(r => r.Position.DistanceTo(new Vector2(-6000, -6000)) < 2500); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(H.Raiders.Any(r => r.Position.DistanceTo(new Vector2(-6000, -6000)) < 2500),
                   "a raider that existed before this guest joined reached it (the catch-up a joining guest is sent)");
+            await LaneAMissileIdsGuest();
             // Watched at the END of every frame: the ship overwrote the host's pinned flag in its own
             // frame, so a check made at any earlier point would have seen the flag and passed.
             var pinWatch = new LateSampler { Probe = () => mine != null && GodotObject.IsInstanceValid(mine) && mine.Pinned };

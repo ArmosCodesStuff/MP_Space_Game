@@ -36,11 +36,19 @@ history pick the work up from it alone. Update it in the same change as the code
 
 ## Handoff — read this first
 
+**2026-09-25 (worktree `WarShips_wt_kits`, branch `wt/kits`): kits lane A slice 3 built** -- F5 (a
+shot strikes each body once, `Stops`), F23 (`Lines.cs`, with `AtTarget` for Time on target; the railgun on it, same literals), F6 (predicted
+missiles carry a NetId on every peer; `Hub.NetMissile` changed), F7 (charge bands, `Charge.cs`, fingerprinted). Compiles,
+rung 2 green; **engine-unproven: rungs 3 and 5 owed in the final test phase** (ledger_kits.md J11 and J12 POST).
+Not built, by ruling: Overcharge (the Sniper's piece is the active reload). Deferred to their readers:
+F5's nine rows and its Decoyable / Command flags, `shell_turn` (D24, D27).
+
 **2026-09-25 (worktree `WarShips_wt_drives`, branch `wt/drives`): kits lane B -- drives, helm,
 strafe (F21, F22, F24) -- built J1-J6; compiles, rung 2 green. engine-unproven: rungs owed in the final
 test phase** (solo x2, six x2, screens); J7 fixed the merge gate's five findings. V is the class's drive (`Drives.cs`): a held warp on the
 capitals, a boost on the nine; Shift + A/D strafe on the nine; capitals 88/99/117, freighters 120.
 Detail and what the test phase owes: `docs/plans/ledger_drives.md` (J6 POST).
+
 
 **2026-09-25 (worktree `WarShips_wt_curve`, branch `wt/curve`): lane F, the curve, built J1-J5;
 compiles, rung 2 green. engine-unproven: rungs 3-5 owed in the final test phase.** Par.cs replaces
@@ -52,6 +60,7 @@ built, J1-J3; compiles, rung 2 green. engine-unproven: rungs 3-5 and the frames 
 phase.** The field rows for the Supercarrier (`super`), the Taunt (`taunt`) and the boost (`boost`) wait
 for the lanes that build those slots; until then the harness prints `NOTE unbound field row` and the
 screens `shot skipped`. Detail: `docs/plans/ledger_fields.md` (J4 POST).
+
 
 **2026-09-25 (worktree `WarShips_wt_kits`, branch `wt/kits`): kits lane A J1-J7 + K1 built,
 version-l merged in (K2), and merge gate 1's seven problems fixed (K3); compiles, rung 2 green.
@@ -540,6 +549,18 @@ outstanding from the batch of 2026-09-23.)*
 
 ## Unreleased
 
+### Class kits, lane A slice 3: Stops, Lines, missile ids, charge bands (2026-09-25, worktree wt/kits)
+
+A shot strikes each body it touches **once** and ends after its **Stops** bodies (every row today is 1,
+so nothing that flies behaves differently; 0 will be a piercing slug). **`Lines.cs`**: a line weapon is
+a row {Id, Width, Reach, Stops, AtTarget, Fx, Beam}, aimed from a point at a point (an AtTarget row ends at
+the point, as Time on target's will); the railgun fires through `Lines.Strike` with its old
+numbers (150, 2500 x 14 u, through everything). A **predicted missile** now has an id from the
+missiles' id space, sent with its launch, the same on every peer (for the flares' decoy, slice 5).
+**Charge bands** (`Charge.cs`, an array of tables the build's fingerprint hashes, so two builds whose
+bands differ refuse each other): what a charge fires as by how far it got; the railgun's table is its
+old whole shot. **Rungs:** 1 and 2 green in the worktree; 3 and 5 owed (checks listed in the ledger).
+
 ### Class kits, lane B: drives, helm and strafe -- F21, F22, F24 (2026-09-25, worktree wt/drives)
 
 **F22 helm rows.** The capitals are cut and lean on the warp: battleship 88 u/s (thrust 47, astern
@@ -579,6 +600,7 @@ hint card, the snap flash, the bar sequences and `Abilities.For` lengths (+1 for
 is now faster than the battleship (88) and the carrier (99): its comment is stale and the number is
 lane A/G's to settle. The host prices a warp's distance, not its cooldown: a modified client could
 chain charged jumps inside 20 s and pay only for distance.
+
 
 ### The curve, lane F (2026-09-25, worktree wt/curve)
 
@@ -632,6 +654,7 @@ FieldsScarCapChecks, FieldsRipOutlivesChecks (a pylon killed 0.2 s after a tear)
 83b_taunt_ring, 84_rip_chunk_and_scar, 84b_rip_on_boss. **Rungs:** 1 and 2 only.
 
 **Known broken:** unproven on the engine.
+
 ### Class kits, lane A K3: merge gate 1's fixes (2026-09-25, worktree wt/kits)
 
 A ramp row (F1's Ramp) is **owner-stepped**: only the peer at the helm steps its running total, and
