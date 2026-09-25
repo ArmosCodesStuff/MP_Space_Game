@@ -4741,12 +4741,14 @@ public partial class _Test : Node
     // The sheet against the request's literals once (40 a line, 14 u wide, guns join within 1500 u, cd
     // 16, F = ability 1: learned at level 1). World, host, 3 runs at varied bearings: a gunship 300-700 u
     // off, painted with 0.1-0.4 s of its 5 s left (age 4.6-4.9: fires). {0, 1, 3} landed sentries
-    // 1440-1490 u from it, from the far side; one more at 1510-1570 u (silent); in runs 0 and 1 a throw
+    // 1440-1490 u from it, from the far side; two more on one ray 52-69 deg off the hull's side, 900-1100 u and
+    // 650-750 u out (the outer's line runs over the inner), and a battleship pilot on that ray 380-480 u out under
+    // both lines (allies never hit, fr-R6b-6); one more at 1510-1570 u (silent); in runs 0 and 1 a throw
     // still in flight toward it (silent: no gun until it lands); a light raider on the spotter's line
     // 35-65% of the way. The gunship MOVING straight on a varied heading at {0, 130, 260} u/s (kits_v31 3.1's
     // Proves line; the kits6b gate fix): moved every frame for 0.25 s along its line, arriving on its spot the
-    // frame of the press, so no sentry's range is on a knife edge. One press: the gunship takes {1, 2, 4} lines
-    // of exactly 40 -- 40 x (k + 1) in all, 160 with three sentries -- all inside that one call (the same tick); the light across the spotter's line 40; the pilot credited "tot" for
+    // frame of the press, so no sentry's range is on a knife edge. One press: the gunship takes {3, 4, 6} lines
+    // of exactly 40 -- 40 x (k + 3) in all, 240 with five sentries -- all inside that one call (the same tick); the light across the spotter's line 40; the pilot credited "tot" for
     // every one; no sentry of its own touched. A second press: COOLING, the clock at the sheet's 16
     // (the pilot's cooling share). The paint let lapse (0.05-0.15 s left, then 0.3 s): NO PAINT, nothing
     // lands, nothing cools.
@@ -4766,6 +4768,8 @@ public partial class _Test : Node
         Dealt.Landed += Heard;
         var ks = new[] { 0, 1, 3 };
         var speeds = new[] { 0f, 130f, 260f };
+        var mate = LaneA6bMate(ShipClass.Battleship, 5, yonder + new Vector2(0, 3400));   // fr-R6b-6: a pilot on a line
+        var mateAt = mate.Position;
         for (int run = 0; run < 3; run++)
         {
             foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
@@ -4783,13 +4787,22 @@ public partial class _Test : Node
             for (int i = 0; i < ks[run]; i++)
                 mine.Add(H.Drop(fr, tSpot + Vector2.Right.Rotated(back + Vary(-1.3f, 1.3f)) * Vary(1440f, 1490f), 1e9));
             mine.Add(H.Drop(fr, tSpot + Vector2.Right.Rotated(back + Vary(-1.3f, 1.3f)) * Vary(1510f, 1570f), 1e9));
+            // fr-R6b-6 ALLIES NEVER HIT: two more of its own sentries (guns: within 1500 u) on one ray from the gunship
+            // 52-69 deg off the hull's side, 900-1100 u and 650-750 u out, so the outer one's line runs over the inner
+            // one; a battleship pilot on the same ray 380-480 u out, under both lines
+            var ray = dir.Rotated((run % 2 == 0 ? 1 : -1) * Vary(0.9f, 1.2f));
+            var outer = H.Drop(fr, tSpot + ray * Vary(900f, 1100f), 1e9);
+            var inner = H.Drop(fr, tSpot + ray * Vary(650f, 750f), 1e9);
+            mine.Add(outer); mine.Add(inner);
+            mateAt = tSpot + ray * Vary(380f, 480f);
+            double mateHp = mate.Hp;
             // the gunship on the move: straight along `heading` at speeds[run] u/s, 0.25 s back along its line to start,
             // its place each frame read off the clock, so it reaches tSpot on the frame of the press (the press follows
             // the last step with no frame between)
             var heading = Vector2.Right.Rotated(VaryAngle()) * speeds[run];
             for (int i = 0; i < 10; i++)
             {
-                gun.Position = tSpot - heading * 0.25f; fr.Position = home; fr.Velocity = Vector2.Zero; fr.Rotation = rot; fr.AimPoint = tSpot;
+                gun.Position = tSpot - heading * 0.25f; fr.Position = home; fr.Velocity = Vector2.Zero; fr.Rotation = rot; fr.AimPoint = tSpot; LaneA6bHold(mate, mateAt);
                 await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             }
             double moveEnd = fr.Clock + 0.25;
@@ -4797,10 +4810,10 @@ public partial class _Test : Node
             for (int i = 0; i < 120 && fr.Clock < moveEnd; i++, moveFrames++)
             {
                 gun.Position = tSpot - heading * (float)Math.Max(0, moveEnd - fr.Clock);
-                fr.Position = home; fr.Velocity = Vector2.Zero; fr.Rotation = rot; fr.AimPoint = tSpot;
+                fr.Position = home; fr.Velocity = Vector2.Zero; fr.Rotation = rot; fr.AimPoint = tSpot; LaneA6bHold(mate, mateAt);
                 await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             }
-            gun.Position = tSpot; fr.Position = home; fr.Velocity = Vector2.Zero; fr.Rotation = rot; fr.AimPoint = tSpot;
+            gun.Position = tSpot; LaneA6bHold(mate, mateAt); mateHp = mate.Hp; fr.Position = home; fr.Velocity = Vector2.Zero; fr.Rotation = rot; fr.AimPoint = tSpot;
             float travelled = gunFrom.DistanceTo(tSpot);
             bool moving = moveFrames >= 2 && Math.Abs(travelled - speeds[run] * 0.25f) < 0.5f;
             bool flying = false;
@@ -4823,13 +4836,14 @@ public partial class _Test : Node
             double credited = fr.DealtBy.GetValueOrDefault(Dealt.Tot) - credit0;
             double onGunAll = blows.Where(b => ReferenceEquals(b.t, gun)).Sum(b => b.d);
             bool mineWhole = mine.All(t => t.Hp >= 1e9 - 1e-6);
-            Check(onGun == ks[run] + 1 && each40 && Math.Abs(onGunAll - 40 * (ks[run] + 1)) < 1e-6 && moving
-                  && onCross == 1 && Math.Abs(credited - 40 * (ks[run] + 2)) < 1e-6 && mineWhole && (run == 2 || flying),
-                  $"time on target run {run}: the gunship moving at {speeds[run]:0} u/s ({moving}: {travelled:0} u over {moveFrames} frames) took {onGunAll:0} in all (want {40 * (ks[run] + 1)}); {ks[run]} sentries 1440-1490 u off, one 1510-1570 u off{(run < 2 ? ", one in flight" : "")} -- the painted gunship {tSpot.DistanceTo(home):0} u off takes {onGun} lines (want {ks[run] + 1}) of 40 ({each40}) in the one press, the light across the spotter's line {onCross} (want 1), {credited:0} credited \"tot\", its own sentries untouched ({mineWhole})");
+            bool mateWhole = Math.Abs(mate.Hp - mateHp) < 1e-9 && blows.All(b => !ReferenceEquals(b.t, mate) && !mine.Contains(b.t as DeployedTurret));
+            Check(onGun == ks[run] + 3 && each40 && Math.Abs(onGunAll - 40 * (ks[run] + 3)) < 1e-6 && moving
+                  && onCross == 1 && Math.Abs(credited - 40 * (ks[run] + 4)) < 1e-6 && mineWhole && mateWhole && (run == 2 || flying),
+                  $"time on target run {run}: the gunship moving at {speeds[run]:0} u/s ({moving}: {travelled:0} u over {moveFrames} frames) took {onGunAll:0} in all (want {40 * (ks[run] + 3)}); {ks[run]} sentries 1440-1490 u off, two on one ray 650-1100 u off, one 1510-1570 u off{(run < 2 ? ", one in flight" : "")} -- the painted gunship {tSpot.DistanceTo(home):0} u off takes {onGun} lines (want {ks[run] + 3}) of 40 ({each40}) in the one press, the light across the spotter's line {onCross} (want 1), {credited:0} credited \"tot\", its own sentries untouched though one lies under another's line ({mineWhole}), the battleship pilot under both lines untouched ({mate.Hp:0} of {mateHp:0}: {mateWhole})");
             fr.UseAbility("tot", 0);
             double cool = fr.Sl("tot").Cool;
             Check(fr.FailNote("tot") == "COOLING" && Math.Abs(cool - fr.Cooling(fr.Stats["tot_cooldown"])) < 0.05 && fr.Stats["tot_cooldown"] == 16
-                  && blows.Count == ks[run] + 2,
+                  && blows.Count == ks[run] + 4,
                   $"...a second press is refused COOLING ({fr.FailNote("tot")}), the clock at {cool:0.0} s of the sheet's 16, nothing more landing ({blows.Count})");
             fr.Sl("tot").Cool = 0;
             fr.Sl(PlayerShip.PaintSlot).Left = Vary(0.05f, 0.15f);
@@ -4842,6 +4856,7 @@ public partial class _Test : Node
             gun.TakeDamage(1e12); cross.TakeDamage(1e12);
         }
         Dealt.Landed -= Heard;
+        mate.QueueFree();
         foreach (var dp in H.Deployed.ToList()) H.DeployedTaken(dp);
         fr.Sl("deploy").Cool = 0; fr.Sl("tot").Cool = 0; fr.Demo = demo;
         fr.Position = yonder; fr.Velocity = Vector2.Zero;
@@ -5191,6 +5206,7 @@ public partial class _Test : Node
     // and its hull drops 90, where any other blow is stopped. (3) Q from 400-700 u off the base on three
     // axes: nothing that holds a spot moves (base, pylons), every one of them inside 980 u is HELD 3 s, none
     // past 1020 u is, and a light 300-600 u off is thrown clear. Every hull and hold is put back after.
+    // (1b) the DD's grapnel rip (1% of the pylon's maximum + 10) then F on three pylons: both add (fr-R6b-8).
     async Task LaneA6bSiegeChecks(Emplacement pbase, List<Emplacement> pylons)
     {
         var cls0 = Character.Class; var at0 = Me.Position; double max0 = Me.MaxHp;
@@ -5199,7 +5215,7 @@ public partial class _Test : Node
         var blows = new List<(IHittable t, double d)>();
         void Heard(IHittable t, double d, string w) { if (w == "buster") blows.Add((t, d)); }
         Dealt.Landed += Heard;
-        async Task<(List<(IHittable t, double d)> got, double took)> Bust(Emplacement at, Vector2 home)
+        async Task<(List<(IHittable t, double d)> got, double took)> Bust(Emplacement at, Vector2 home, System.Action before = null)
         {
             foreach (var r in H.Raiders.ToList()) H.RaiderDown(r);
             bs.Hp = bs.MaxHp;
@@ -5210,6 +5226,7 @@ public partial class _Test : Node
             Hold();
             double hp0 = at.Hp;
             blows.Clear();
+            before?.Invoke();
             bs.Sl("buster").Cool = 0;
             bs.AimPoint = at.Position; bs.UseAbility("buster", 0);
             for (int i = 0; i < 60 * 5 && blows.Count == 0; i++) { Hold(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
@@ -5225,6 +5242,18 @@ public partial class _Test : Node
             var (got, took) = await Bust(p, p.Position + outward * Vary(500f, 1000f));
             Check(got.Count == 1 && ReferenceEquals(got[0].t, p) && Math.Abs(got[0].d - 360) < 1e-9 && Math.Abs(took - 360) < 1e-6,
                   $"buster on pylon {run}: {string.Join("/", got.Select(x => $"{x.d:0}"))} landed, its hull down {took:0} (want 360: x2 on a structure)");
+        }
+        // fr-R6b-8 (b) DD RIP + BUNKER BUSTER ON ONE STRUCTURE (bastion.md Interactions: accepted, both add): the
+        // grapnel's rip (1% of the pylon's maximum hull + 10, through the damage door as the DD's cast-off lands it)
+        // and then the 360 buster, three pylons from varied spots: the hull drops by both, nothing taken off either
+        for (int run = 0; run < 3; run++)
+        {
+            var p = pylons[run];
+            var outward = (p.Position - pbase.Position).Normalized().Rotated(Vary(-0.6f, 0.6f));
+            double rip = 0.01 * p.MaxHp + 10;
+            var (got, took) = await Bust(p, p.Position + outward * Vary(500f, 1000f), () => Dealt.Deal(p, rip, bs, "grapnel"));
+            Check(got.Count == 1 && ReferenceEquals(got[0].t, p) && Math.Abs(got[0].d - 360) < 1e-9 && Math.Abs(took - (360 + rip)) < 1e-6,
+                  $"rip then buster on pylon {run}: the rip {rip:0.#} (1% of {p.MaxHp:0} + 10) and the buster {string.Join("/", got.Select(x => $"{x.d:0}"))}, its hull down {took:0.#} (want {360 + rip:0.#}: both add)");
         }
         for (int run = 0; run < 3; run++)
         {
@@ -5786,6 +5815,7 @@ public partial class _Test : Node
               $"resupply: {sheet["resupply_cut"]:0} s off every cooldown in {sheet["field_radius"]:0} u, every {sheet["resupply_cooldown"]:0} s; ability 3 on E, the walls reading {string.Join(", ", own)}");
         var sn = LaneA6bMate(ShipClass.HeavySniper, 2, yonder + new Vector2(0, 3000));
         var bb = LaneA6bMate(ShipClass.Battleship, 3, yonder + new Vector2(0, -3000));
+        var t2 = LaneA6bMate(ShipClass.FreightTender, 4, yonder + new Vector2(3000, 0));   // fr-R6b-7: a second tender in reach
         string drive = Drives.RowOf(ShipClass.FreightTender).Select(d => d.Id).FirstOrDefault();
         var row = Abilities.Find(ShipClass.FreightTender, "resupply");
         for (int run = 0; run < 3; run++)
@@ -5794,18 +5824,23 @@ public partial class _Test : Node
             var way = Vector2.Right.Rotated(VaryAngle());
             var snAt = home + way * Vary(300f, 480f);
             var bbAt = home + way.Rotated(Vary(1.5f, 3.0f)) * Vary(520f, 700f);
-            async Task Frame() { td.Position = home; td.Velocity = Vector2.Zero; LaneA6bHold(sn, snAt); LaneA6bHold(bb, bbAt); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
-            foreach (var p in new[] { td, sn, bb })
+            var t2At = home + way.Rotated(-Vary(1.0f, 2.0f)) * Vary(300f, 480f);
+            async Task Frame() { td.Position = home; td.Velocity = Vector2.Zero; LaneA6bHold(sn, snAt); LaneA6bHold(bb, bbAt); LaneA6bHold(t2, t2At); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            foreach (var p in new[] { td, sn, bb, t2 })
                 foreach (var ab in Abilities.For(p.Class)) { p.Sl(ab.Id).Cool = 0; p.Sl(ab.Id).Left = 0; p.Sl(ab.Id).N = 0; }
             await Frame(); await Frame();
+            double t2Only = Vary(12f, 18f);
+            t2.Sl("resupply").Cool = t2Only;                       // only ANOTHER tender's resupply cooling: still nothing to cut
             string nothing = row.Refuse(td, null);
             td.UseAbility("resupply", 0); await Frame();
-            bool free = nothing == "NOTHING COOLING" && td.Sl("resupply").Cool == 0;
+            bool free = nothing == "NOTHING COOLING" && td.Sl("resupply").Cool == 0 && t2.Sl("resupply").Cool > t2Only - 0.1;
             double od = Vary(10f, 20f), rp = Vary(1f, 7f), dv = Vary(5f, 15f), an = Vary(10f, 12f), te = Vary(2f, 6f), bs = Vary(15f, 20f);
             td.Sl("overdrive").Cool = od; td.Sl("repair").Cool = rp;
             if (drive != null) td.Sl(drive).Cool = dv;
             sn.Sl("anchor").Cool = an; sn.Sl("tether").N = 2; sn.Sl("tether").Cool = te;
             bb.Sl("broadside").Cool = bs;
+            double r2 = Vary(10f, 20f), od2 = Vary(10f, 20f);
+            t2.Sl("resupply").Cool = r2; t2.Sl("overdrive").Cool = od2;
             double c0 = td.Clock;
             td.UseAbility("resupply", 0);
             double el = td.Clock - c0;       // the press lands this frame, before any clock has run
@@ -5814,16 +5849,17 @@ public partial class _Test : Node
             bool his = Math.Abs(sn.Sl("anchor").Cool - (an - 8)) < 1e-6 && sn.Sl("tether").N == 1
                        && Math.Abs(sn.Sl("tether").Cool - sn.Cooling(sn.Stats["tether_recharge"])) < 1e-6;
             bool farOff = Math.Abs(bb.Sl("broadside").Cool - bs) < 1e-6;
+            bool other = Math.Abs(t2.Sl("resupply").Cool - r2) < 1e-6 && Math.Abs(t2.Sl("overdrive").Cool - (od2 - 8)) < 1e-6;
             bool spent = Math.Abs(td.Sl("resupply").Cool - td.Cooling(30)) < 1e-6 && row.Refuse(td, null) == "COOLING";
-            Check(free && mine && his && farOff && spent && el == 0 && drive != null,
+            Check(free && mine && his && farOff && other && spent && el == 0 && drive != null,
                   $"resupply run {run}: nothing cooling, E refused {nothing} and free ({free}); then its overdrive {od:0.0} -> {td.Sl("overdrive").Cool:0.0}, its repair {rp:0.0} -> {td.Sl("repair").Cool:0.0}, its drive ({drive}) {dv:0.0} untouched ({mine}); "
                   + $"the sniper {snAt.DistanceTo(home):0} u off: anchor {an:0.0} -> {sn.Sl("anchor").Cool:0.0}, tether a charge back ({sn.Sl("tether").N} spent, {sn.Sl("tether").Cool:0.0} s to the next) ({his}); "
-                  + $"the battleship {bbAt.DistanceTo(home):0} u off untouched ({farOff}); resupply cooling {td.Sl("resupply").Cool:0.0} and refused again ({spent})");
+                  + $"the battleship {bbAt.DistanceTo(home):0} u off untouched ({farOff}); a second tender {t2At.DistanceTo(home):0} u off: its resupply {r2:0.0} -> {t2.Sl("resupply").Cool:0.0} (never Resupply itself), its overdrive {od2:0.0} -> {t2.Sl("overdrive").Cool:0.0} ({other}); resupply cooling {td.Sl("resupply").Cool:0.0} and refused again ({spent})");
             await Frame();
         }
-        foreach (var p in new[] { td, sn, bb })
+        foreach (var p in new[] { td, sn, bb, t2 })
             foreach (var ab in Abilities.For(p.Class)) { p.Sl(ab.Id).Cool = 0; p.Sl(ab.Id).Left = 0; p.Sl(ab.Id).N = 0; }
-        sn.QueueFree(); bb.QueueFree();
+        sn.QueueFree(); bb.QueueFree(); t2.QueueFree();
         await Wait(0.1);
         td.Demo = demo; td.Position = yonder; td.Velocity = Vector2.Zero;
     }
