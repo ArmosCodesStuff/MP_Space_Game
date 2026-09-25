@@ -8,6 +8,9 @@ Under 25 lines; Edit tool only; commit FIRST after every event; the hook re-inje
   extras -> bar -> release. lands: 3 lines to the owner + the frames (framesForOwner, netOwed); a stop -> docs/plans/ledger_test.md
   and the journal, fix, relaunch: Workflow({scriptPath: <scripts>\test-phase.js, resumeFromRunId: "wf_8c62491c-3b2", args: {attempt: 2, review: []}}).
   Watchdog Monitor (agents.ps1 -Minutes 30 every 10 min, 30-min timeout) re-armed at each expiry while it runs.
+- code-read / one Fable 5.1 agent (background, 16:52; owner: "read all of the code, is a rewrite easier than testing?"): reads all
+  105 game files, writes + commits docs/plans/fable_code_read.md (map, god files, rule breaks, red sorting, verdict with numbers).
+  lands: 4 lines to the owner from its 20-line return; the file is the durable answer (no task id: an Agent, not a workflow).
 
 ## Landed (verdict first; delete the row once its action is done): none
 
