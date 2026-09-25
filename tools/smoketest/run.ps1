@@ -32,9 +32,17 @@
 # -OneDll is the one-DLL experiment (network_webrtc.md section 8): in the scratch copy only, the plugin's
 # debug line is pointed at its RELEASE DLL and the debug DLL deleted. Green means the editor loads
 # the release library, and the repo can vendor one DLL instead of two.
-param([string]$Godot, [switch]$Solo, [switch]$Wan, [switch]$Fly, [string]$Seed, [switch]$OneDll)
+# -Slot <n> (default 0): this run's engine slot (tools\rungs.ps1 section "ENGINE SLOTS"). Every port
+# the harness binds, joins or asserts is shifted by 100*Slot (see SmokeTest.cs.txt's P() helper),
+# passed down as the user arg --port-shift=N so 2-4 chains from different trees never collide on a
+# port. -Wan refuses off slot 0: the internet-path simulation is one scripted scenario, not worth
+# doubling, and wan.py's relay ports are the unshifted literals below.
+param([string]$Godot, [switch]$Solo, [switch]$Wan, [switch]$Fly, [string]$Seed, [switch]$OneDll, [int]$Slot = 0)
 
 $ErrorActionPreference = 'Stop'
+
+if ($Wan -and $Slot -ne 0) { Write-Host "wan runs on slot 0 only"; exit 2 }
+$shift = 100 * $Slot
 
 # -Godot is optional now: find-godot.ps1 resolves it from an explicit path, WARSHIPS_GODOT,
 # local.config.ps1, or a search of the usual places.
@@ -116,7 +124,7 @@ if (Test-Path $ud) { Remove-Item $ud -Recurse -Force }
 $script:box = $null
 function Stop-Box {
   if (-not $script:box -or $script:box.HasExited) { return }
-  try { Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:19480/box/quit' -TimeoutSec 3 | Out-Null } catch {}
+  try { Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:$(19480 + $shift)/box/quit" -TimeoutSec 3 | Out-Null } catch {}
   if (-not $script:box.WaitForExit(5000)) { try { $script:box.Kill() } catch {} }
 }
 
@@ -177,6 +185,9 @@ try {
 
   # the seed every role runs with: given, or each engine picks its own and prints it
   $seedArg = if ($Seed) { @("seed=$Seed") } else { @() }
+  # every role reads this once (SmokeTest.cs.txt's P() helper) and shifts every port it binds,
+  # joins or asserts by it -- slot 0 passes 0, byte-for-byte today's unshifted ports.
+  $shiftArg = @("port-shift=$shift")
 
   # judged by what it registered, not by its exit code (SPIKE F1); refused without the plugin
   & (Join-Path $PSScriptRoot '..\import.ps1') -Godot $Godot -Path $W -Log (Join-Path $W 'import.log') -Require $plugin
@@ -186,7 +197,9 @@ try {
   # up for every run -- a STUN responder, silent ports, the pair proxy, and under -Wan the relays the
   # guests join through, each 1000 above the session port it fronts. Stopped through its control port
   # at the end, so it prints what it carried.
-  $boxArgs = @((Join-Path $PSScriptRoot 'wan.py'), '--http', 19480, '--life', 1300)
+  # the box runs for EVERY run (not just -Wan): its control port and its own fixed local ports
+  # (STUN responder, silent UDP/TCP) shift with this run's slot so concurrent chains never collide.
+  $boxArgs = @((Join-Path $PSScriptRoot 'wan.py'), '--http', (19480 + $shift), '--shift', $shift, '--life', 1300)
   $gx = @()
   if ($Wan) {
     # one-way ms, jitter ms, loss %: WARSHIPS_WAN="150,40,5" for a worse day
@@ -204,34 +217,34 @@ try {
   $want = 0
   if ($Fly) {
     # the pilot: one engine, no fake routers, no peers
-    $all += Complete-Run (Start-Run (@('--headless','--fixed-fps','60','--path',$W,'--','fly') + $seedArg) 'fly' 1800) '[fly] '
+    $all += Complete-Run (Start-Run (@('--headless','--fixed-fps','60','--path',$W,'--','fly') + $seedArg + $shiftArg) 'fly' 1800) '[fly] '
     $want = 1
   }
   elseif (-not $Wan) {
     # Two fake routers for the plug-and-play scenarios: the run never searches the real network,
     # and never opens a port on the real router (see NoRouterNoInternet in the test).
-    $fake = Start-Process -FilePath python -ArgumentList @((Join-Path $PSScriptRoot 'fakeigd.py'), 19000, 19080, 19351, 1300) `
+    $fake = Start-Process -FilePath python -ArgumentList @((Join-Path $PSScriptRoot 'fakeigd.py'), (19000 + $shift), (19080 + $shift), (19351 + $shift), 1300) `
             -NoNewWindow -PassThru -RedirectStandardOutput (Join-Path $W 'fakeigd.out') -RedirectStandardError (Join-Path $W 'fakeigd.err')
     Start-Sleep -Milliseconds 500
     # fixed 60 fps: identical frame timing every run, so the DPS checks are exact
-    $all += Complete-Run (Start-Run (@('--headless','--fixed-fps','60','--path',$W,'--','solo') + $seedArg) 'solo' 1200) '[solo] '
+    $all += Complete-Run (Start-Run (@('--headless','--fixed-fps','60','--path',$W,'--','solo') + $seedArg + $shiftArg) 'solo' 1200) '[solo] '
     if (-not $fake.HasExited) { try { $fake.Kill() } catch {} }
     $want = 1
   }
 
   if (-not $Solo -and -not $Fly) {
-    $host1 = Start-Run (@('--headless','--path',$W,'--','host') + $seedArg)   'host'   120
+    $host1 = Start-Run (@('--headless','--path',$W,'--','host') + $seedArg + $shiftArg)   'host'   120
     Start-Sleep -Milliseconds 500
-    $g2 = Start-Run (@('--headless','--path',$W,'--','guest2') + $gx + $seedArg) 'guest2' 120
-    $g1 = Start-Run (@('--headless','--path',$W,'--','guest') + $gx + $seedArg)  'guest'  120
+    $g2 = Start-Run (@('--headless','--path',$W,'--','guest2') + $gx + $seedArg + $shiftArg) 'guest2' 120
+    $g1 = Start-Run (@('--headless','--path',$W,'--','guest') + $gx + $seedArg + $shiftArg)  'guest'  120
     $all += Complete-Run $g1    '[guest] '
     $all += Complete-Run $host1 '[host]  '
     $all += Complete-Run $g2    '[third] '
 
     # the dedicated two-player arena run: after the three-player run, on its own port
-    $ah = Start-Run (@('--headless','--path',$W,'--','ahost') + $seedArg)  'ahost'  150
+    $ah = Start-Run (@('--headless','--path',$W,'--','ahost') + $seedArg + $shiftArg)  'ahost'  150
     Start-Sleep -Milliseconds 500
-    $ag = Start-Run (@('--headless','--path',$W,'--','aguest') + $gx + $seedArg) 'aguest' 150
+    $ag = Start-Run (@('--headless','--path',$W,'--','aguest') + $gx + $seedArg + $shiftArg) 'aguest' 150
     $all += Complete-Run $ag '[aguest]'
     $all += Complete-Run $ah '[ahost] '
     $want += 5

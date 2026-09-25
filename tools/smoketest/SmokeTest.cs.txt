@@ -20,7 +20,14 @@ public partial class _Test : Node
     // itself, a test run would have opened ports on the real router. Instead: searches go to a
     // loopback port nobody answers, and the public address to a URL that refuses. A scenario that
     // wants routers points them at tools/smoketest/fakeigd.py (see RouterScenarios).
-    const int FakeSsdp = 19000, FakeHttp = 19080, FakePmp = 19351;
+    // ENGINE SLOTS (tools\rungs.ps1): 2-4 chains run at once, from different trees, and the only thing
+    // they cannot get isolated env/scratch paths for is a bound port -- every port literal this harness
+    // binds, joins, or asserts about a bound socket goes through P(), which shifts it by 100 * the slot
+    // (run.ps1 --port-shift=N, read once). A literal that stays unshifted is a typed-example address or
+    // an external well-known server, never something this run or its fakes actually bind.
+    static readonly int Shift = int.Parse(OS.GetCmdlineUserArgs().FirstOrDefault(a => a.StartsWith("port-shift="))?["port-shift=".Length..] ?? "0");
+    static int P(int port) => port + Shift;
+    static readonly int FakeSsdp = P(19000), FakeHttp = P(19080), FakePmp = P(19351);
     static void NoRouterNoInternet()
     {
         Router.Fake = (1, 1);
@@ -65,48 +72,48 @@ public partial class _Test : Node
             return (reach, addr, status, lan, Fake("/log"));
         }
 
-        var one = await Hosting("single", 27131);
-        Check(one.reach == Net.Reach.Internet && one.addr == "203.0.113.7:27131"
-              && one.log.Contains($"inner add 27131 {one.lan}") && one.log.Contains("inner delete 27131"),
+        var one = await Hosting("single", P(27131));
+        Check(one.reach == Net.Reach.Internet && one.addr == $"203.0.113.7:{P(27131)}"
+              && one.log.Contains($"inner add {P(27131)} {one.lan}") && one.log.Contains($"inner delete {P(27131)}"),
               $"one router with UPnP: it opens the port to this PC, friends join the public address, and leaving closes it ({one.reach}; {one.log.Replace('\n', '|')})");
 
-        var two = await Hosting("double", 27132);
-        Check(two.reach == Net.Reach.Internet && two.addr == "203.0.113.7:27132"
-              && two.log.Contains($"inner add 27132 {two.lan}") && two.log.Contains("front add 27132 127.0.4.40")
-              && two.log.Contains("inner delete 27132") && two.log.Contains("front delete 27132"),
+        var two = await Hosting("double", P(27132));
+        Check(two.reach == Net.Reach.Internet && two.addr == $"203.0.113.7:{P(27132)}"
+              && two.log.Contains($"inner add {P(27132)} {two.lan}") && two.log.Contains($"front add {P(27132)} 127.0.4.40")
+              && two.log.Contains($"inner delete {P(27132)}") && two.log.Contains($"front delete {P(27132)}"),
               $"two routers, both with UPnP: each opens its hop -- the front one to the inner one's internet side -- and both close ({two.reach}; {two.log.Replace('\n', '|')})");
 
-        var quiet = await Hosting("double-quiet", 27133);
-        Check(quiet.reach == Net.Reach.Manual && quiet.addr == "203.0.113.7:27133"
-              && quiet.status.Contains("forward UDP 27133 to 127.0.4.40") && quiet.log.Contains($"inner add 27133 {quiet.lan}"),
+        var quiet = await Hosting("double-quiet", P(27133));
+        Check(quiet.reach == Net.Reach.Manual && quiet.addr == $"203.0.113.7:{P(27133)}"
+              && quiet.status.Contains($"forward UDP {P(27133)} to 127.0.4.40") && quiet.log.Contains($"inner add {P(27133)} {quiet.lan}"),
               $"two routers, the front one silent: ours is opened, and the player is told the ONE forward left, to the address it needs ({quiet.reach})");
 
-        var refused = await Hosting("refuse", 27134);
+        var refused = await Hosting("refuse", P(27134));
         Check(refused.reach == Net.Reach.Manual && refused.status.Contains("ConflictInMappingEntry") && !refused.log.Contains("add"),
               $"a router that refuses: the player is told what it said ({refused.reach})");
 
-        var none = await Hosting("none", 27135);
+        var none = await Hosting("none", P(27135));
         Check(none.reach == Net.Reach.Manual && none.status.Contains("no router answered"),
               $"no UPnP at all: forward the port by hand, and the address to give out ({none.reach})");
 
         // The routers that speak NAT-PMP or PCP instead (Apple's, and many without UPnP). This one
         // hands out a DIFFERENT outside port than the one asked for, as NAT-PMP may: friends must
         // be given the port it chose, not ours.
-        var pmp = await Hosting("pmp", 27136);
-        Check(pmp.reach == Net.Reach.Internet && pmp.addr == "203.0.113.7:28136" && pmp.log.Contains("inner pmp add 27136") && pmp.log.Contains("inner pmp delete 27136"),
+        var pmp = await Hosting("pmp", P(27136));
+        Check(pmp.reach == Net.Reach.Internet && pmp.addr == $"203.0.113.7:{P(28136)}" && pmp.log.Contains($"inner pmp add {P(27136)}") && pmp.log.Contains($"inner pmp delete {P(27136)}"),
               $"a NAT-PMP router: opened, friends given the port IT chose, closed on leaving ({pmp.reach} {pmp.addr}; {pmp.log.Replace('\n', '|')})");
-        var pcp = await Hosting("pcp", 27137);
-        Check(pcp.reach == Net.Reach.Internet && pcp.addr == "203.0.113.7:27137" && pcp.log.Contains("inner pcp add 27137") && pcp.log.Contains("inner pcp delete 27137"),
+        var pcp = await Hosting("pcp", P(27137));
+        Check(pcp.reach == Net.Reach.Internet && pcp.addr == $"203.0.113.7:{P(27137)}" && pcp.log.Contains($"inner pcp add {P(27137)}") && pcp.log.Contains($"inner pcp delete {P(27137)}"),
               $"a PCP router (it answers NAT-PMP with 'unsupported version'): spoken to in PCP, opened and closed ({pcp.reach}; {pcp.log.Replace('\n', '|')})");
 
         // Carrier-grade NAT: the router opens the port on an internet side the provider shares. No
         // router in front is asked (it is the provider's), and nobody is sent to forward anything.
-        var cg = await Hosting("cgnat", 27138);
+        var cg = await Hosting("cgnat", P(27138));
         Check(cg.reach == Net.Reach.LanOnly && !cg.status.Contains("forward UDP") && cg.status.Contains("carrier-grade") && !cg.log.Contains("front"),
               $"carrier-grade NAT: no forwarding advice that cannot work, and a virtual network suggested ({cg.reach})");
         // A VPN on the host PC: the router opened its public address, but the internet sees the VPN's.
-        var vpn = await Hosting("vpn", 27139);
-        Check(vpn.reach == Net.Reach.Manual && vpn.addr == "198.51.100.9:27139" && vpn.status.Contains("VPN"),
+        var vpn = await Hosting("vpn", P(27139));
+        Check(vpn.reach == Net.Reach.Manual && vpn.addr == $"198.51.100.9:{P(27139)}" && vpn.status.Contains("VPN"),
               $"a VPN on this PC: the router's address to try, and the VPN named as the thing to turn off ({vpn.reach} {vpn.addr})");
 
         NoRouterNoInternet();
@@ -576,7 +583,7 @@ public partial class _Test : Node
 
     // ── WEBRTC, R1: THE STUN ROWS AND THE WALK (§5, §10.4 R1) ───────────────────────────────────────
     // THE BOX (tools/smoketest/wan.py): the network between players, which run.ps1 starts for every run.
-    const int BoxHttp = 19480;
+    static readonly int BoxHttp = P(19480);
     static System.Text.Json.JsonElement Box(string method, string path)
     {
         using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(3) };
@@ -589,7 +596,7 @@ public partial class _Test : Node
     }
     static readonly Link.StunRow[] _servers = Link.Servers;          // the game's own rows, put back after
     // the box's rows: two ports that never answer, and its STUN responder
-    static readonly Link.StunRow SilentA = new("stun:127.0.0.1:19482"), SilentB = new("stun:127.0.0.1:19483"), BoxStun = new("stun:127.0.41.1:3478");
+    static readonly Link.StunRow SilentA = new($"stun:127.0.0.1:{P(19482)}"), SilentB = new($"stun:127.0.0.1:{P(19483)}"), BoxStun = new($"stun:127.0.41.1:{P(3478)}");
     // LIBJUICE GATHERS A LOOPBACK-MAPPED SERVER-REFLEXIVE CANDIDATE: the box's responder maps every
     // request to 127.0.0.1. If a run shows libjuice drops it, this goes false and DESIGN.md says so; the
     // answering-row walk and the sealing rule then hold the timing and the host candidates only (§10.4 R1).
@@ -632,7 +639,7 @@ public partial class _Test : Node
         var box = Box("GET", "/box/stats");
         bool boxUp = box.TryGetProperty("stun", out var stunStats) && stunStats.GetProperty("bound").GetBoolean()
                      && box.GetProperty("silent_udp").EnumerateObject().Count() == 2 && box.GetProperty("silent_tcp").GetProperty("bound").GetBoolean();
-        Check(boxUp, $"the box is up: its STUN responder on 127.0.41.1:3478, the silent UDP ports 19482 and 19483, the silent TCP port 19481 ({box})");
+        Check(boxUp, $"the box is up: its STUN responder on 127.0.41.1:{P(3478)}, the silent UDP ports {P(19482)} and {P(19483)}, the silent TCP port {P(19481)} ({box})");
         if (!boxUp) return;
 
         var hostMp = new WebRtcMultiplayerPeer();
@@ -1284,7 +1291,7 @@ public partial class _Test : Node
         // ever online -- it is the difference between a session that ends and one that does not.
         // The menu builds a real PlayerShip now; a session surviving into it means the title
         // screen sends state on an RPC path no peer has.
-        Net.I.Host(27123);
+        Net.I.Host(P(27123));
         for (int i = 0; i < 60 && !Net.IsOnline; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         bool wasOnline = Net.IsOnline;
         // EVERY ORDERED UNRELIABLE STREAM ON A CHANNEL OF ITS OWN. Such a packet is delivered only if
@@ -9876,18 +9883,18 @@ public partial class _Test : Node
         Check(new[] { "laser_light", "laser_fighter", "laser_boss", "laser_hit", "missile_whoosh", "impact_thunk", "cannon" }
                   .All(n => Assets.Load<AudioStream>($"res://sfx/{n}.wav") != null),
               "all seven effects load");
-        int P(string n) => Sfx.Played.TryGetValue(n, out var v) ? v : 0;
-        GD.Print($"  sounds played: {string.Join(", ", Beam.All.Select(b => $"{b.Id} {P(b.Id)}"))}, hit {P("laser_hit")}, whoosh {P("missile_whoosh")}, thunk {P("impact_thunk")}, cannon {P("cannon")}");
-        Check(P("point_defence") > 0 && P("laser_hit") > 0, $"point defence buzzes where it fires and crackles where it hits ({P("point_defence")} / {P("laser_hit")})");
-        Check(P("bolt") > 0, $"the boss's guns are heard as a boss's bolt, their own note ({P("bolt")})");
-        Check(P("missile_whoosh") > 0 && P("impact_thunk") > 0, "missiles and torpedoes whoosh at launch and thunk when they hit");
-        Check(P("fighter") > 0, $"a carrier's fighters are heard as their own beam, not the capital ship's ({P("fighter")})");
+        int Plays(string n) => Sfx.Played.TryGetValue(n, out var v) ? v : 0;
+        GD.Print($"  sounds played: {string.Join(", ", Beam.All.Select(b => $"{b.Id} {Plays(b.Id)}"))}, hit {Plays("laser_hit")}, whoosh {Plays("missile_whoosh")}, thunk {Plays("impact_thunk")}, cannon {Plays("cannon")}");
+        Check(Plays("point_defence") > 0 && Plays("laser_hit") > 0, $"point defence buzzes where it fires and crackles where it hits ({Plays("point_defence")} / {Plays("laser_hit")})");
+        Check(Plays("bolt") > 0, $"the boss's guns are heard as a boss's bolt, their own note ({Plays("bolt")})");
+        Check(Plays("missile_whoosh") > 0 && Plays("impact_thunk") > 0, "missiles and torpedoes whoosh at launch and thunk when they hit");
+        Check(Plays("fighter") > 0, $"a carrier's fighters are heard as their own beam, not the capital ship's ({Plays("fighter")})");
         // THE RAIL WAS SILENT ON EVERY GUEST: its report was played inside FireRail, which runs on
         // the host alone. It comes through the door every beam comes through now, and nothing but
         // that door counts a "rail" -- so this, read before the block below fires one of every row
         // by hand, is the sniper's own railgun (fired earlier in this run) arriving by Combat.Flash.
-        Check(P("rail") > 0, $"a sniper's railgun is heard, through the door every beam comes through ({P("rail")})");
-        Check(P("cannon") > 0, "the battleship's guns have their own file, not the impact played quietly");
+        Check(Plays("rail") > 0, $"a sniper's railgun is heard, through the door every beam comes through ({Plays("rail")})");
+        Check(Plays("cannon") > 0, "the battleship's guns have their own file, not the impact played quietly");
 
         // ── EVERY BEAM IS ITS OWN NOTE (the owner: "different beams have different frequency
         // sounds"). Every beam the game fires is a row of Beam.All; the ones a boss holds for
@@ -9953,14 +9960,14 @@ public partial class _Test : Node
                     await Wait(0.1);
                     var muzzle = VaryNear(cam.GetScreenCenterPosition(), 150f);
                     var landing = muzzle + Vector2.Right.Rotated(VaryAngle()) * Vary(200f, 900f);
-                    int was = P(row.Id);
+                    int was = Plays(row.Id);
                     Combat.Flash(muzzle, landing, k);
                     float db = Sfx.VolumeAt(cam.GetScreenCenterPosition().DistanceTo(muzzle), cam.Zoom.X);
                     var voice = GetTree().Root.GetNodeOrNull("SfxPool")?.GetChildren().OfType<AudioStreamPlayer>()
                         .FirstOrDefault(p => p.Stream?.ResourcePath == $"res://sfx/{row.Report}.wav"
                                              && Mathf.IsEqualApprox(p.PitchScale, row.Pitch) && Mathf.Abs(p.VolumeDb - db) < 0.01f);
-                    miss = P(row.Id) == was + 1 && voice != null && voice.Bus == "Master" ? null
-                         : $"{row.Id}: +{P(row.Id) - was}, {(voice == null ? "no voice" : $"{voice.PitchScale:0.00} at {voice.VolumeDb:0.00} dB on {voice.Bus}")}";
+                    miss = Plays(row.Id) == was + 1 && voice != null && voice.Bus == "Master" ? null
+                         : $"{row.Id}: +{Plays(row.Id) - was}, {(voice == null ? "no voice" : $"{voice.PitchScale:0.00} at {voice.VolumeDb:0.00} dB on {voice.Bus}")}";
                 }
                 if (miss != null) wrong.Add(miss);
             }
@@ -10061,7 +10068,7 @@ public partial class _Test : Node
         // Placed at the very end on purpose -- going offline re-parks the base and resets the
         // ships, which quietly broke four later checks when this sat in the middle of the run.
         var yard = H.Yard;
-        Net.I.Host(27124);
+        Net.I.Host(P(27124));
         for (int i = 0; i < 60 && !Net.IsOnline; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         bool hosted = Net.IsOnline;
         yard.Credits = 4242;
@@ -10156,7 +10163,7 @@ public partial class _Test : Node
     // home, offline, with its OWN base (a marker credit total set before it joined).
     async Task ArenaMp(string role)
     {
-        const int Port = 27125;
+        int Port = P(27125);
         // Where the guest parks once its own stall is over, for the host to see: 400 u from where it
         // was put back, clear of it.
         var stallDone = new Vector2(900, -100);
@@ -10872,18 +10879,20 @@ public partial class _Test : Node
             void AtLetIn(long id) { letIn++; if (Net.Hears((int)id)) heardAtLetIn++; }
             Multiplayer.PeerConnected += AtLetIn;
             Net.I.Status += s => { if (s.StartsWith("Refused")) refusals++; };
-            Net.I.Host(27115);
+            Net.I.Host(P(27115));
             _streaming = true;                         // ten a second to every guest let in, for the guest to count
             // A raider that exists BEFORE either guest joins: they can only learn of it from the
             // catch-up a joining guest is sent (Hub.NetMySector). Far out, and gone at 9 s.
             var early = H.SpawnRaider(new Vector2(-6000, -6000));
             H.Yard.Credits = 1000;                     // for the guest's purchase request
             Character.Exp = 0; Character.Level = 1; Character.BossCleared.Clear();
-            Check(Net.I.Reachability == Net.Reach.Checking && Net.I.LanAddress.EndsWith(":27115"), "hosting starts at once; the router is asked in the background");
+            // ENGINE SLOTS: the host's own LAN address carries this run's shifted port, never the
+            // unshifted default -- proven at 3 slots at once by tools\rungs.ps1's end-of-batch proof.
+            Check(Net.I.Reachability == Net.Reach.Checking && Net.I.LanAddress.EndsWith(":" + P(27115)), $"hosting starts at once; the router is asked in the background; the LAN address carries this run's port ({Net.I.LanAddress})");
             await Wait(9.0);
             // this harness's network has no router and no internet (NoRouterNoInternet): it must
             // say so, and how to get friends in anyway
-            Check(Net.I.Reachability == Net.Reach.LanOnly && Net.I.LastStatus.Contains("forward UDP 27115") && Net.I.LastStatus.Contains("Tailscale"),
+            Check(Net.I.Reachability == Net.Reach.LanOnly && Net.I.LastStatus.Contains($"forward UDP {P(27115)}") && Net.I.LastStatus.Contains("Tailscale"),
                   $"no UPnP router: LAN hosting stands, and the status explains the fix");
             Check(Router.IsShared("100.72.1.5") && Router.IsShared("192.168.1.20") && !Router.IsShared("81.2.3.4"),
                   "carrier-grade and private addresses are recognised as unreachable from outside");
@@ -11089,14 +11098,14 @@ public partial class _Test : Node
             // the old handshake never managed: its refusal went out in the same breath as the
             // disconnect, and the disconnect threw it away.
             Net.PretendProtocol = Net.Protocol ^ 1;
-            Net.I.Join(HostAt(27115));
+            Net.I.Join(HostAt(P(27115)));
             await RealTime(() => !Net.I.Connecting, 8);
             Check(!Net.IsOnline && Net.I.LastStatus == $"That host is on a different build of the game (theirs {Net.Protocol:x8}, yours {Net.Protocol ^ 1:x8}): "
                                                         + "you both need the same release (Esc menu, bottom). Playing offline.",
                   $"a player on another build is refused, told both builds, and where to read its own ({Net.I.LastStatus})");
             Net.PretendProtocol = null;
             await Wait(0.3);
-            Net.I.Join(HostAt(27115));
+            Net.I.Join(HostAt(P(27115)));
             await Wait(1.2);
             Character.Name = "Third"; Character.Class = ShipClass.Battleship;
             // FIVE CHIPS AT PEAK 3 (level_walls check 15), written past its own window: one chip slot
@@ -11201,7 +11210,7 @@ public partial class _Test : Node
             await GuestLevelsAndPresses();
             // IT LEAVES, on purpose, by pressing HOST: a goodbye, so nothing to retry -- and the host keeps
             // no place for it (the host checks that goodbye got out: HOST used to cut a guest's off)
-            Net.I.Host(27116);
+            Net.I.Host(P(27116));
             await Wait(1.0);
             Check(Net.IsHost && Net.IsOnline && Net.LocalId == 1 && !Net.I.Reconnecting && !Net.I.CanReconnect && !Net.I.Connecting,
                   $"third player: pressing HOST is leaving on purpose -- hosting its own world now, nothing retried ({Net.I.LastStatus})");
@@ -11243,7 +11252,7 @@ public partial class _Test : Node
             (double, double, double)? ownThrottle = null;
             void ReadThrottle() { if ((Multiplayer.MultiplayerPeer as ENetMultiplayerPeer)?.GetPeer(1) is { } hostLink) ownThrottle = Throttle(hostLink); }
             Multiplayer.ConnectedToServer += ReadThrottle;
-            Net.I.Join(HostAt(27115));
+            Net.I.Join(HostAt(P(27115)));
             await Wait(1.2);
             Multiplayer.ConnectedToServer -= ReadThrottle;
             Character.Name = "Guesty"; Character.Main = new Color(1, 0, 0); Character.Class = ShipClass.Carrier;

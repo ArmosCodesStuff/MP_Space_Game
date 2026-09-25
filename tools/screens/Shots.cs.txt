@@ -9,6 +9,11 @@ using System.Reflection;
 using System.Threading.Tasks;
 public partial class _Shots : Node
 {
+    // ENGINE SLOTS (tools\rungs.ps1): this sweep can run concurrently with others from a different
+    // tree; the one port it binds (Net.I.Host(), below) must carry this run's shift, told the same
+    // way tools\smoketest\run.ps1 tells SmokeTest.cs.txt (--port-shift=N, read once).
+    static readonly int Shift = int.Parse(OS.GetCmdlineUserArgs().FirstOrDefault(a => a.StartsWith("port-shift="))?["port-shift=".Length..] ?? "0");
+    static int P(int port) => port + Shift;
     async Task W(double s) => await ToSignal(GetTree().CreateTimer(s), "timeout");
     async Task Snap(string name) { await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
         GetViewport().GetTexture().GetImage().SavePng($"/tmp/shots/{name}.png"); GD.Print("shot " + name); Lint(name); }
@@ -314,7 +319,8 @@ public partial class _Shots : Node
         {
             // never the real router: the game maps ports itself now, and a sweep must not open one
             Router.Fake = (1, 1); Net.PublicIpService = "http://127.0.0.1:1/";
-            Net.I.Host(); await W(0.5);
+            // base 27140, not 27015: P(27015) on slot n is the smoketest host's port on slot n-1; 27140+100k is in no smoketest band (bound, never asserted)
+            Net.I.Host(P(27140)); await W(0.5);
             var d = Net.Describe("", false, "203.0.113.7", 27015, "192.168.1.5:27015", "no router answered");   // the game's own words
             Net.I.Reachable(d.reach, d.address, d.message);
             var sm = H.GetTree().Root.FindChild("SessionMenu", true, false) as SessionMenu;

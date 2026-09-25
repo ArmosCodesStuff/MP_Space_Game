@@ -26,6 +26,11 @@ ap.add_argument('--http', type=int, default=19480)
 ap.add_argument('--path', default='0,0,0')              # one-way ms, jitter ms, loss %
 ap.add_argument('--life', type=float, default=1300)
 ap.add_argument('--relay', action='append', default=[])
+# engine slots (tools\rungs.ps1): the box runs for EVERY run, not just -Wan, so its own fixed local
+# ports (the STUN responder, the two silent UDP ports, the silent TCP port) must shift with the
+# caller's slot too, or two concurrent chains collide binding the same socket. --http already arrives
+# pre-shifted from run.ps1; --shift moves the rest.
+ap.add_argument('--shift', type=int, default=0)
 args = ap.parse_args()
 delay, jitter, loss = (float(x) for x in args.path.split(','))
 delay, jitter, loss = delay / 1000, jitter / 1000, loss / 100
@@ -79,12 +84,15 @@ def stun(sock, data, frm):
         pass
 
 
+stun_port = 3478 + args.shift
+silent_ports = (19482 + args.shift, 19483 + args.shift)
+tcp_port = 19481 + args.shift
 try:
-    readers[udp('127.0.41.1', 3478)] = ('stun', None)
+    readers[udp('127.0.41.1', stun_port)] = ('stun', None)
     stats['stun']['bound'] = True
 except OSError as e:
-    print(f'BOX: the STUN responder could not bind 127.0.41.1:3478 ({e})', flush=True)
-for port in (19482, 19483):
+    print(f'BOX: the STUN responder could not bind 127.0.41.1:{stun_port} ({e})', flush=True)
+for port in silent_ports:
     try:
         readers[udp('127.0.0.1', port)] = ('silent', port)
         stats['silent_udp'][str(port)] = 0
@@ -93,12 +101,12 @@ for port in (19482, 19483):
 held = []                                                 # the silent TCP port's connections, kept open and never answered
 try:
     tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    tcp.bind(('127.0.0.1', 19481))
+    tcp.bind(('127.0.0.1', tcp_port))
     tcp.listen(16)
     readers[tcp] = ('tcp', None)
     stats['silent_tcp']['bound'] = True
 except OSError as e:
-    print(f'BOX: the silent TCP port 127.0.0.1:19481 could not bind ({e})', flush=True)
+    print(f'BOX: the silent TCP port 127.0.0.1:{tcp_port} could not bind ({e})', flush=True)
 
 
 # ---- the pair proxy ----
