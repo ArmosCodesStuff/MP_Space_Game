@@ -13400,6 +13400,7 @@ public partial class _Test : Node
 
         await ItemsEchoChecks(yonder);
         await ItemsBoostLiftChecks();
+        await ItemsAnchorLiftChecks(yonder);
     }
 
     // THE ECHO REPEATS WHAT WAS WEIGHED, ONCE (Items.Repeats): each blow it stores was weighed at the
@@ -13576,19 +13577,24 @@ public partial class _Test : Node
               && NearI(crawl, 104 * 0.1),
               $"no stack takes a number to zero: a battleship paying top speed in four slots and three combat chips is -108%, held at the x0.1 floor ({crawl:0.0} u/s of 104); the worst hull on a battleship 0, on a dart -15% ({Worst(ShipClass.Battleship, "max_speed"):0.00})");
         // EVERY STAT A PART NAMES IS REAL on every hull it fits (a role on at least one of its rows),
-        // and no part changes a turret count
-        var unknown = new List<string>();
+        // and no part changes a turret count. An UP always is. A PRICE may find no row only where the
+        // hull has no such system at all (ledger_items R-D5): the battleship has no ability reach, so
+        // Salvo and Magazine Core are unpriced on it; the railgun and the blade aim with the nose, so
+        // Heavy Barrel's tracking price finds nothing on the sniper and the warrior. Exactly these four.
+        var unknown = new List<string>(); var unpriced = new List<string>();
         foreach (var it in drops.Where(i => i.Tier == 1))
             foreach (var c in ready.Where(c => Equipment.Fits(it, it.Slot, c)))
             {
                 var sheet = Equipment.SheetOf(c);
                 foreach (var key in it.Pct.Keys)
-                    if (!Items.IdsOf(key, c).Any(sheet.Contains)) unknown.Add($"{it.Line.Stem}/{Classes.NameOf(c)}:{key}");
+                    if (!Items.IdsOf(key, c).Any(sheet.Contains))
+                        (it.Line.Up.Any(u => u.key == key) ? unknown : unpriced).Add($"{it.Line.Stem}/{Classes.NameOf(c)}:{key}");
                 if (it.Add.Count > 0 && !it.Add.Keys.Any(sheet.Contains)) unknown.Add($"{it.Line.Stem}/{Classes.NameOf(c)}:+n");
             }
         bool noCounts = drops.All(i => !i.Pct.Keys.Concat(i.Add.Keys).Any(k => k is "main_count" or "pd_count" or "strike_range"));
-        Check(unknown.Count == 0 && noCounts,
-              $"every stat a part names is on every hull it fits, and no part changes a turret count ({unknown.Count}: {string.Join(", ", unknown.Take(12))})");
+        var unpricedWant = new[] { "heavy_barrel/SNIPER:@tracking", "heavy_barrel/WARRIOR:@tracking", "magazine_core/BATTLESHIP:@area", "salvo_core/BATTLESHIP:@area" };
+        Check(unknown.Count == 0 && noCounts && unpriced.OrderBy(x => x, StringComparer.Ordinal).SequenceEqual(unpricedWant),
+              $"every stat a part names is on every hull it fits, and no part changes a turret count ({unknown.Count}: {string.Join(", ", unknown.Take(12))}); a price finds no row only for Salvo / Magazine Core on the battleship and Heavy Barrel on the sniper and the warrior ({string.Join(", ", unpriced)})");
         var kit = Equipment.All.Where(i => i.Kit).ToList();
         var bsC = ShipClass.Battleship; var ddC = ShipClass.Destroyer;
             // A KIT PART FITS ONLY THE HULLS BORN WITH IT, by the SAME rule as every other part:
@@ -13623,6 +13629,86 @@ public partial class _Test : Node
         var words = Equipment.Describe(Equipment.ById("chip_combat_t1"), ShipClass.Carrier).ToList();
         Check(words.Any(w => w.StartsWith("Fighters")) && words.Any(w => w.StartsWith("Bombers")) && words.Any(w => w.StartsWith("Helm")) && !words.Any(w => w.StartsWith("Main guns")),
               $"a part's effects are named for the ship it is on: the Combat Chip on a carrier lifts its fighters and torpedoes and costs helm ({string.Join(" | ", words)})");
+    }
+
+    // THE ITEMS RECONCILED WITH THE BUILT KITS (ledger_items "LANE I RECONCILE", R-D1..R-D4): each role row
+    // the reconcile added, on the ship's own sheet, at T1 / T5 / T10 (P = 1, 1.4641, 2.357948), every figure
+    // a literal from the class's card and §3.3's lean -- a lift row's EXCESS moves (R-D1), never the whole x.
+    //   the railgun is the sniper's primary: Gunner Chip 120 -> 132 / 137.57 / 148.30; Rapid Action shortens
+    //     the charge 0.8 s and the reload 3.0 s together (/1.2, /1.29282, /1.47159) and pays range 2500 -> 1800;
+    //   Tactical Core lifts the Anchor's x2.5 to 2.875 / 3.049 / 3.384 and pays its x1.4 reach down to 1.288,
+    //     the railgun's own 120 untouched;
+    //   Field Core on the tender: the Overdrive field x1.5 -> 1.625 (T10 1.7947), the Repair field 2% -> 2.5% a
+    //     second, fields 500 -> 360 u; on the hauler Time on target 40 -> 50; on the bastion the Buster 180 -> 225;
+    //   Field Emitter on the tender: fields 500 -> 590 / 712.2 u, the Repair and Overdrive fields 8 -> 9.6 / 11.77 s;
+    //   Salvo Core: the destroyer's Lance run 3000 -> 2160 u; the carrier's gunships 2.5 -> 3.125 a shot;
+    //   Ace Core pays its reach on every light: the rod 1400 -> 1008 u, the Shadow step 900 -> 648 u, the EMP 300 -> 216 u.
+    void ItemsReconcileChecks()
+    {
+        ShipStats On(ShipClass c, string id)
+        {
+            var lo = Equipment.Default(c); var it = Equipment.ById(id);
+            lo[it.Slot == GearSlot.Chip ? Equipment.CoreSlots : Array.IndexOf(Equipment.Core, it.Slot)] = id;
+            return new ShipStats(c, Equipment.Bonuses(c, lo, 14, NoLevels));
+        }
+        var off = new List<string>();
+        void Want(ShipClass c, string id, string stat, double want, double tol = 1e-4)
+        {
+            double got = On(c, id)[stat];
+            if (!NearI(got, want, tol)) off.Add($"{id}/{Classes.NameOf(c)} {stat} {got:0.####} ({want})");
+        }
+        var sn = ShipClass.HeavySniper;
+        foreach (var (t, rail) in new[] { (1, 132.0), (5, 137.5692), (10, 148.2954) }) Want(sn, $"chip_gunner_t{t}", "rail_damage", rail);
+        Want(ShipClass.HeavyWarden, "chip_gunner_t1", "hunter_damage", 45); Want(ShipClass.HeavyWarden, "chip_gunner_t1", "main_damage", 24.75);
+        foreach (var (t, charge, reload) in new[] { (1, 0.666667, 2.5), (5, 0.618801, 2.320508), (10, 0.543630, 2.038612) })
+        {
+            Want(sn, $"rapid_action_t{t}", "rail_charge", charge); Want(sn, $"rapid_action_t{t}", "rail_reload", reload);
+            Want(sn, $"rapid_action_t{t}", "rail_range", 1800);
+        }
+        foreach (var (t, rate) in new[] { (1, 2.875), (5, 3.049038), (10, 3.384231) })
+        {
+            Want(sn, $"tactical_core_t{t}", "anchor_rate", rate); Want(sn, $"tactical_core_t{t}", "anchor_reach", 1.288);
+            Want(sn, $"tactical_core_t{t}", "rail_damage", 120);
+        }
+        var td = ShipClass.FreightTender;
+        foreach (var (t, od) in new[] { (1, 1.625), (5, 1.683013), (10, 1.794744) }) Want(td, $"field_core_t{t}", "overdrive_mult", od);
+        Want(td, "field_core_t1", "repair_share", 0.025, 1e-9); Want(td, "field_core_t1", "field_radius", 360);
+        Want(ShipClass.FreightHauler, "field_core_t1", "tot_damage", 50); Want(ShipClass.FreightHauler, "field_core_t10", "tot_damage", 63.5795);
+        Want(ShipClass.FreightBastion, "field_core_t1", "buster_damage", 225); Want(ShipClass.FreightBastion, "field_core_t5", "buster_damage", 245.8845);
+        foreach (var (t, r, s) in new[] { (1, 590.0, 9.6), (10, 712.2153, 11.77272) })
+        {
+            Want(td, $"field_emitter_t{t}", "field_radius", r, 1e-3); Want(td, $"field_emitter_t{t}", "repair_time", s); Want(td, $"field_emitter_t{t}", "overdrive_time", s);
+        }
+        Want(ShipClass.Destroyer, "salvo_core_t1", "lance_range", 2160); Want(ShipClass.Destroyer, "salvo_core_t10", "lance_range", 2160);
+        Want(ShipClass.Carrier, "salvo_core_t1", "gunship_damage", 3.125); Want(ShipClass.Carrier, "salvo_core_t1", "torpedo_damage", 75);
+        Want(ShipClass.LightDart, "ace_core_t1", "rod_range", 1008); Want(ShipClass.LightWraith, "ace_core_t5", "step_reach", 648);
+        Want(ShipClass.LightEcho, "ace_core_t10", "emp_range", 216);
+        Check(off.Count == 0,
+              $"the items reconciled with the built kits: the railgun is the sniper's primary (Gunner 132, Rapid Action charge 0.667 s + reload 2.5 s at 1800 u), Tactical Core lifts the Anchor's excess (x2.875, reach x1.288), Field Core the Overdrive's excess (x1.625), the Repair field, TOT and the Buster; Field Emitter the tender's fields; Salvo and Ace Core pay the Lance / rod / step / EMP reach ({off.Count} off: {string.Join(", ", off.Take(8))})");
+    }
+
+    // TACTICAL CORE ON A RUNNING ANCHOR (the interaction: an item's excess share x an ability's running lift).
+    // Three varied situations -- none, T1, T10, each at a VaryNear spot and VaryAngle heading: the anchored
+    // sniper's FireRate is the Anchor's x2.5 / x2.875 / x3.3842 and its ReachMult x1.4 / x1.288 / x1.288;
+    // and its 0.8 s charge takes 0.8 / that; weighed out again, both are x1. Read once the anchor shows, never on the press.
+    async Task ItemsAnchorLiftChecks(Vector2 yonder)
+    {
+        foreach (var (id, rate, reach) in new[] { ("", 2.5, 1.4), ("tactical_core_t1", 2.875, 1.288), ("tactical_core_t10", 3.384231, 1.288) })
+        {
+            var was = id == "" ? await WearI(ShipClass.HeavySniper) : await WearI(ShipClass.HeavySniper, id);
+            var sn = Me; bool demo = sn.Demo; sn.Demo = true; sn.AutopilotTo = null;
+            sn.Position = VaryNear(yonder, 300f); sn.Rotation = VaryAngle(); sn.Velocity = Vector2.Zero;
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await SniperAnchor(sn, true);
+            float onRate = sn.FireRate, onReach = sn.ReachMult; double onCharge = sn.Cadence("rail_charge");
+            await SniperAnchor(sn, false);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            float offRate = sn.FireRate, offReach = sn.ReachMult;
+            Check(NearI(onRate, rate, 1e-4) && NearI(onReach, reach, 1e-4) && NearI(onCharge, 0.8 / rate, 1e-4) && NearI(offRate, 1, 1e-6) && NearI(offReach, 1, 1e-6),
+                  $"the Anchor under {(id == "" ? "no part" : id)}: fire rate x{onRate:0.0000} (x{rate}), the 0.8 s charge {onCharge:0.0000} s, reach x{onReach:0.000} (x{reach}); weighed out x{offRate:0.00} / x{offReach:0.00} (x1)");
+            sn.Demo = demo;
+            await WornOffI(ShipClass.HeavySniper, was);
+        }
     }
 
     // EVERY LINE AT THREE TIERS (§3.3's "T1 -> T10" column): its headline at T1, T5 and T10, from the
@@ -16575,6 +16661,7 @@ public partial class _Test : Node
         // ── THE ITEMS (lane I): the law, the generator, the caps, every line at three tiers, the drops ──
         ItemsLawChecks();
         ItemsTableChecks();
+        ItemsReconcileChecks();
         ItemsLineChecks();
         ItemsLootChecks();
         ItemsParRowsChecks();

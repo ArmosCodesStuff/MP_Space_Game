@@ -327,3 +327,21 @@ Jobs (foundations first):
   through the E key), NEW ItemsFlareRiderGuestChecks (rung 5, the guest draws 7), REWRITTEN ItemsTableChecks'
   wears (Sniper 11) and Swarm Rack fit (Sniper yes, Warrior no).
 - items-J3 the record: CHANGES.md Handoff + Unreleased, DESIGN.md (role law), final POST (what the test phase owes).
+
+## items-J1 PRE -- tier opus
+Intent: R-D1..R-D5 -- role members may be `~id` (an excess); Roles rows per the audit; ItemsTableChecks' "every stat"
+check onto the R-D5 list; NEW ItemsReconcileChecks + ItemsAnchorLiftChecks. HEAD ad8d93183f206165fa9fe9f4b91d5da197eadd32. Hashes:
+  scripts/Items.cs 409dcc91cc3d9f81521a7f5ac16e503e415d5a4a
+  tools/smoketest/SmokeTest.cs.txt a94b5c6be0ea4eb7b61d6156df0e94b388b0f9dd
+## items-J1 POST
+Verdict: done. typecheck 0 errors; verify -Quick ALL CHECKS PASSED (0 warnings, UNUSED 0). Own diff read.
+Files: scripts/Items.cs (Roles: @primary + rail_damage; @primary_rate + rail_charge, rail_reload; @primary_range +
+rail_range; @output + gunship_damage, tot_damage, repair_share, buster_damage, ~overdrive_mult (was overdrive_mult),
+~anchor_rate (rail_damage out); @area + field_radius, emp_range, lance_range, ~anchor_reach, rod_range, step_reach;
+@duration + repair_time; Members() lets a role member be `~id`, IdsOf / Expand read it), SmokeTest.cs.txt.
+Checks (engine-unproven: rungs owed in the final test phase): NEW ItemsReconcileChecks (rung 3; sheet literals on
+sniper / warden / tender / hauler / bastion / DD / carrier / dart / wraith / echo at T1/T5/T10); NEW
+ItemsAnchorLiftChecks (rung 3, live: none / Tactical Core T1 / T10 on a running Anchor at VaryNear spots, FireRate
+x2.5 / x2.875 / x3.3842, the charge 0.8 / rate, reach x1.4 / x1.288, x1 after); REWRITTEN ItemsTableChecks "every stat
+a part names" (an up must find a row; a price may miss only the R-D5 four, asserted exactly).
+Next: items-J2 (the flare count).
