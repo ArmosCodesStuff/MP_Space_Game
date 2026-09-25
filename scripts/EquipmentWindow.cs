@@ -1,10 +1,12 @@
 using Godot;
 using System.Linq;
 
-// EQUIPMENT (I): the parts on the pilot's CURRENT ship -- five core slots and five chips -- beside
-// the HOLD: every part this pilot owns and has not fitted, for any class (bosses drop them; see
-// Loot). FIT puts a part from the hold on the ship and the part it replaces goes into the hold;
-// UNEQUIP takes a chip off into the hold. A core slot is never empty. Each class keeps its own
+// EQUIPMENT (I): the parts on the pilot's CURRENT ship -- five core slots and six chip slots, each
+// chip slot opened by the pilot's highest level (Unlocks) -- beside the HOLD: every part this pilot
+// owns and has not fitted, for any class (bosses drop them; see Loot). FIT puts a part from the
+// hold on the ship and the part it replaces goes into the hold; EQUIP puts a chip in the first open
+// empty slot (Equipment.ChipFit, which also says why not); UNEQUIP takes a chip off into the hold.
+// A core slot is never empty. Each class keeps its own
 // loadout; the hold is the pilot's. Only this pilot sees any of it: gear is per pilot, like the
 // loot it comes from.
 // It is the EQUIPMENT BASE's window. A click on the base opens it, and RECYCLER on its title line
@@ -17,8 +19,10 @@ public partial class EquipmentWindow : PanelContainer
     private VBoxContainer _ship, _hold;
     private Label _gate;                 // why the SALVAGE buttons are grey, when they are (on the foot line)
     private bool _served;                // what the equipment base's gate said at the last Rebuild
+    private int _peak = -1;              // Character.Peak at the last Rebuild: a level-up can open a
+                                          // chip slot while this window is open (AwardClear, mid-arena)
     // Both columns scroll, at a height that ends the window above the hull bar (930 px down a
-    // 1080 screen): a ship's ten parts, each with what it does, run to about 970 px on their own.
+    // 1080 screen): a ship's eleven parts, each with what it does, run past 970 px on their own.
     private const float ShipW = 500, HoldW = 400, ColH = 700;
 
     public override void _Ready()
@@ -68,21 +72,29 @@ public partial class EquipmentWindow : PanelContainer
     {
         var gate = Landmarks.Serves(Hub?.MyShip, Service.LevelGear);
         Ui.SetText(_gate, gate.Ok || Hub?.Yard == null ? "" : "Levelling is shut: " + gate.Why);
-        if (gate.Ok != _served) Rebuild();
+        if (gate.Ok != _served || Character.Peak != _peak) Rebuild();
     }
 
     private void Rebuild()
     {
         Ui.Clear(_ship); Ui.Clear(_hold);
         _served = Landmarks.Serves(Hub?.MyShip, Service.LevelGear).Ok;
+        _peak = Character.Peak;
         var cls = Character.Class; var l = Character.LoadoutFor(cls);
         _ship.AddChild(Ui.Heading($"{Classes.NameOf(cls)}  ·  core parts"));
         for (int k = 0; k < Equipment.CoreSlots; k++)
             _ship.AddChild(Ui.CardWrap(PartRow($"Slot_{Equipment.Core[k]}", Equipment.Core[k].ToString().ToUpperInvariant(), l[k], cls, Upgrade(l[k]))));
         _ship.AddChild(Ui.Heading("Chips"));
+        int open = Unlocks.Count(Opens.ChipSlot, Character.Peak);
         for (int k = 0; k < Equipment.ChipSlots; k++)
         {
             int slot = Equipment.CoreSlots + k;
+            // A SLOT THE PILOT'S LEVEL HAS NOT OPENED says the level that opens it, and has no button.
+            if (k >= open)
+            {
+                _ship.AddChild(Ui.CardWrap(PartRow($"Chip_{k}", $"CHIP {k + 1}  ·  {Unlocks.Locked(Unlocks.At(Opens.ChipSlot, k + 1))}", l[slot], cls, null)));
+                continue;
+            }
             var off = string.IsNullOrEmpty(l[slot]) ? null
                     : Ui.Btn("UNEQUIP", () => { Character.Stow(l[slot]); l[slot] = ""; Changed(); }, "Unequip");
             _ship.AddChild(Ui.CardWrap(PartRow($"Chip_{k}", $"CHIP {k + 1}", l[slot], cls, off ?? Upgrade(l[slot]))));
@@ -103,11 +115,14 @@ public partial class EquipmentWindow : PanelContainer
             Button fit = null;
             if (Equipment.Fits(it, it.Slot, cls))
             {
-                int free = System.Array.FindIndex(l, Equipment.CoreSlots, Equipment.ChipSlots, string.IsNullOrEmpty);
+                // A CHIP WITH NOWHERE TO GO greys its EQUIP and says why: no open empty slot (and the
+                // level that opens the next), or three of its kind already on.
+                var (free, why) = it.Slot == GearSlot.Chip ? Equipment.ChipFit(l, Character.Peak, it) : (0, null);
                 fit = it.Slot == GearSlot.Chip
                     ? Ui.Btn("EQUIP", () => FitChip(id), "Equip")
                     : Ui.Btn("FIT", () => FitCore(id), "Fit");
-                fit.Disabled = it.Slot == GearSlot.Chip && free < 0;
+                fit.Disabled = free < 0;
+                if (why != null) fit.TooltipText = why;
             }
             string what = !Equipment.Fits(it, it.Slot, cls) ? $"{it.Slot.ToString().ToUpperInvariant()}  ·  needs {Equipment.NeedsSaid(it)}"
                                                               : it.Slot.ToString().ToUpperInvariant();
@@ -173,12 +188,12 @@ public partial class EquipmentWindow : PanelContainer
         Character.Stow(l[k]); l[k] = id; Changed();
     }
 
-    // A chip from the hold into the first empty chip slot.
+    // A chip from the hold into the first open empty chip slot (Equipment.ChipFit).
     private void FitChip(string id)
     {
         var l = Character.LoadoutFor(Character.Class);
-        int free = System.Array.FindIndex(l, Equipment.CoreSlots, Equipment.ChipSlots, string.IsNullOrEmpty);
-        if (free < 0 || Equipment.ById(id)?.Slot != GearSlot.Chip || !Character.Unstow(id)) return;
+        int free = Equipment.ChipFit(l, Character.Peak, Equipment.ById(id)).slot;
+        if (free < 0 || !Character.Unstow(id)) return;
         l[free] = id; Changed();
     }
 

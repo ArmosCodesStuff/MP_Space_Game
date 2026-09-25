@@ -455,6 +455,19 @@ Recorded here so every chunk builds from the written word, not from memory.
   that the claimed purchases are affordable at the claimed level.
 - **Missions are host-authoritative**: party = everyone in the session; READY is a request the host
   records and broadcasts; WARP needs everyone ready; the portal opens after a 3 s bar.
+- **Level walls (`Unlocks.cs`, 2026-09-25)**: one table of what a pilot's level opens -- ability 1 at 1,
+  ability 2 at 3, ability 3 at 6, chip slots at 2/4/8/10/12/14 -- plus the base's boss-beaten rows
+  (Auto-sell, the lanes' blockades). **A wall reads the PEAK** (`Character.Peak`, the highest level ever
+  reached, on the identity), never the level: a refit costs a level and is the only class change, so
+  reading the level would lock again what a pilot had opened. **The host holds it**
+  (`PlayerShip.DoAbility`, `Equipment.Sanitize` at the ship's peak); the owner's press, the bar, K and
+  the equipment window only say it (`Unlocks.Locked`: `LOCKED · L3`).
+- **Trap: a class's list order IS its unlock order.** Abilities 1, 2 and 3 are the class's rows in
+  `ClassDef.Abilities` order, skipping `AbilityDef.Weapon` rows (a weapon's own actions) and the open
+  hotkeys -- reached by position, never by name. Reordering a class's list moves its walls; a new
+  weapon action without `Weapon = true` becomes a walled ability and shifts every one after it. Keys
+  never move with the walls (the Carrier's bar reads F E Q, the Warrior's E Q F). A walled row must
+  be a press: a held row is polled, and nothing on that path reads a wall (WallChecks asserts it).
 
 ## Launch limits and targeting rules
 

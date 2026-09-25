@@ -260,7 +260,7 @@ public partial class Yard : Node2D
         if (u == null || !Net.Sim) return false;
         int lv = Level(id);
         double cost = Economy.Cost(u, lv);
-        if (Economy.Maxed(u, lv) || Credits < cost || OwnerBoss < u.NeedsBoss) return false;
+        if (Economy.Maxed(u, lv) || Credits < cost || OwnerBoss < Unlocks.Boss(Opens.Economy, u.Id)) return false;
         Credits -= cost; _levels[id] = lv + 1;
         _invested[u.Tab] = Invested(u.Tab) + cost;                // what a rebuild in this category is 10% of
         SaveBase();                                               // a purchase is deliberate: keep it now

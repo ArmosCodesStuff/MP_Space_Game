@@ -126,7 +126,9 @@ public partial class StatsWindow : CanvasLayer
             var row = Ui.HBox(12, "Key_" + ab.Id);
             var info = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
             info.AddThemeConstantOverride("separation", 2);
-            info.AddChild(Ui.Lbl(ab.Name + (ab.Kind == AbilityKind.Hold ? "  (hold)" : ""), Ui.Body));
+            // a key behind a level wall stays bindable, and says the level that opens it (Unlocks)
+            string opens = Unlocks.LockedAt(Ship.Class, Ship.Peak, ab) is int at ? $"  ·  opens at level {at}" : "";
+            info.AddChild(Ui.Lbl(ab.Name + (ab.Kind == AbilityKind.Hold ? "  (hold)" : "") + opens, Ui.Body));
             var blurb = Ui.Lbl(ab.Blurb, Ui.Small, Ui.Dim);
             blurb.AutowrapMode = TextServer.AutowrapMode.WordSmart; blurb.CustomMinimumSize = new Vector2(360, 0);
             info.AddChild(blurb);
