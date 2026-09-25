@@ -103,3 +103,24 @@ A PRE with no POST is an interrupted job: compare the hashes, revert half-made e
 - Files: Turrets.cs, Deployed.cs, PlayerShip.cs (PaintOn / Painted, ticked with the statuses); SmokeTest.cs.txt
   (LaneASentryPreferChecks after LaneAPrismRayChecks).
 - Next: kits5-J5.
+
+## Handover 1: the first agent stops after kits5-J4 (context), at a job boundary
+
+Done: J1 (F12), J2-J3 (F11), J4 (F14 Prefer). Next is kits5-J5; no PRE written for it. What the next agent needs:
+- **J5 plan (sentry throw + recall).** PlayerShip: `DeployTurret(Vector2 cursor)` = recall the own turret within
+  `recall_pick` (60) of the cursor (free, never refused; its Hp/MaxHp pushed on a stow stack, reused by the next
+  throw), else throw: point = Position + (cursor - Position).LimitLength(deploy_reach 600), a host pending list
+  (point, deploy_flight 0.8 s left, hp, max) ticked beside `_paintLeft` (PlayerShip ~line 1026), then
+  `Hub.Drop(owner, at, hull, max)` (add the max param). Raise `Fx.Warn(new FxRaise { Id = Fx.AimZone, At, To = At,
+  Size = DeployedTurret.Radius, Time = flight })` at the throw: every peer marks the landing; no new RPC. In flight
+  it is no body (cannot be hit, cannot fire). `TurretsOut` counts the pending throws. Press reads `s.AimPoint` (D31).
+  Deploy row: Default Key.R, Refuse null when a recall target is under the cursor. DELETE Ab.Collect, CollectTurret,
+  NearestOwnTurret and the three `collect_range` rows (Ships.cs FreightHauler/Tender/Bastion, and their
+  `Abilities` lists); add deploy_reach / deploy_flight / recall_pick rows to the same three blocks.
+- **Harness callers J5 must rewrite (CLAUDE.md 6.3):** SmokeTest.cs.txt ~2804 (UseAbility deploy), ~9638-9670 (T drops
+  under the hull, "C over one picks it up", "NOT OVER ONE"; set `fr.Demo = true` + AimPoint, wait > 0.8 s before
+  counting H.Deployed), ~9838, ~10469, the ability sweep ~10586-10587 ("collect" row), ~5837/5843 (never-walled
+  weapon rows list includes "collect" and Ab.Collect: lane C's walls check), rung 5 ~13819-13867 ("the guest's C
+  picked one up") and ~14115-14152 (guest T / C). Guest presses: the guest's AimPoint reaches the host at 20 Hz.
+- Traps: SmokeTest.cs.txt is LF (edit in binary / newline=''); verify -Quick needs a 300 s+ timeout.
+- J6-J9 as the job list says. Raider.cs hunks still owed: F14 Call (J6), F19 Towed (J8), the latch gates (J9).
