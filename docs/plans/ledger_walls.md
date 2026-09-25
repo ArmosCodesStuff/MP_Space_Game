@@ -398,5 +398,36 @@ BasePanel.cs:120-129, Raids.cs:53 ask Unlocks. Grep the harness for NeedsBoss an
 - rung 3 owed: "at peak 2, chip slot 2 reads LOCKED · L4 on a fresh window"; "...and notices a wall
   crossed while it is still open: chip slot 2 drops LOCKED with no re-open".
 - rung 5 owed: none (a local UI read, not wire state).
-- commit: (fix 6) "Walls fix 6: the equipment window notices a wall crossed while it is open".
+- commit: 54da17b "Walls fix 6: the equipment window notices a wall crossed while it is open".
 - next: fix 7 (finding 7, split -- confirm before fixing).
+
+### Fix 7 PRE (finding 7, split verdict -- confirmed real before fixing)
+- model: sonnet
+- confirm: read scripts/Hints.cs (Card/Wants/Start) and scripts/Character.cs (Save :186, Load :311).
+  Save writes ALL of HintsSeen unfiltered (`c.SetValue("hints", "seen", string.Join(",",
+  HintsSeen...))`, no query). Load filters with `Hints.All.ContainsKey(h)` alone -- `Hints.All` is
+  the fixed dictionary; an unlock card's id (Unlock.Hint, e.g. "unlock_chipslot_1") is never a key
+  of it (Hints.Card checks `All` OR `Unlocks.Card`, D15). `Character.Class` is set at Load's :246,
+  before the HintsSeen loop at :311, so `Hints.Card(h)` (which reads `Character.Class`) is already
+  safe to call there. CONFIRMED REAL: a save/load round trip silently drops any unlock-card id ever
+  recorded.
+- intent: filter with `Hints.Card(h) != null` (the same query `Hints.Meet` gates on) instead of
+  `Hints.All.ContainsKey(h)`. Extend the existing tampered-file load test (SmokeTest.cs.txt :770-787,
+  which already proves Load's sanitisation of every other field the same way -- a hand-authored file,
+  since Save never filters) with an unlock id (`unlock_chipslot_1`) alongside the still-dropped
+  unknown one.
+- start: 54da17b87084d3266ed292d9c75f1dab8086cf84
+- files (hash-object at start):
+  - scripts/Character.cs b180d818de2622fb400a5a579a60963a0a9306c0
+  - tools/smoketest/SmokeTest.cs.txt b6d84933c74845f790654ac97b95667665122a56
+
+### Fix 7 POST
+- verdict: typecheck 0 errors, `verify.ps1 -Quick` ALL CHECKS PASSED.
+- files: scripts/Character.cs (Load's HintsSeen filter, :310-314), tools/smoketest/SmokeTest.cs.txt
+  (:770 seeds `unlock_chipslot_1` too, :783-787 asserts it survives alongside "flight" while
+  "no_such_hint" is still dropped).
+- rung 3 owed: the rewritten "hints: unknown ids dropped, an unlock card's id kept, the off switch
+  kept" check.
+- rung 5 owed: none (Character.Load is local; nothing on the wire changed).
+- commit: (fix 7) "Walls fix 7: an unlock card's id survives a save/load round trip".
+- next: prove the batch (rungs.ps1 quick,solo,solo,six,screens); update docs/CHANGES.md.

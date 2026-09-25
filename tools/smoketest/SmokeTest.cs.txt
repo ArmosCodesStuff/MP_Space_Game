@@ -767,7 +767,7 @@ public partial class _Test : Node
             bad.SetValue("gear_hold", "std_drive", 2); bad.SetValue("gear_hold", "chip_combat_1", -3);
             bad.SetValue("gear_hold", "basic_deflector", 0); bad.SetValue("gear_hold", "no_such_part", 1);
             bad.SetValue("loot", "unclaimed", "std_drive,no_such_part,cv_elite_3");
-            bad.SetValue("hints", "seen", "flight,no_such_hint"); bad.SetValue("hints", "off", true);
+            bad.SetValue("hints", "seen", "flight,no_such_hint,unlock_chipslot_1"); bad.SetValue("hints", "off", true);
             bad.SetValue("loot", "paid", string.Join(",", Enumerable.Range(1, 40)) + ",not_a_serial,40");
             bad.SetValue("base_levels", "miner_count", 99);
             bad.SetValue("gear_level", "bs_rapid_1", 99); bad.SetValue("gear_level", "no_such_part", 5);
@@ -780,8 +780,11 @@ public partial class _Test : Node
                   $"unclaimed loot keeps only real drops -- no kit, no unknown ids ({string.Join(",", Character.Unclaimed)})");
             Check(tl && Character.PaidKills.SequenceEqual(Enumerable.Range(9, 32).Select(i => (long)i)),
                   $"the kills paid: numbers only, each once, the last 32 kept ({Character.PaidKills.Count}: {Character.PaidKills.FirstOrDefault()}..{Character.PaidKills.LastOrDefault()})");
-            Check(tl && Character.HintsSeen.SetEquals(new[] { "flight" }) && Character.HintsOff,
-                  $"hints: unknown ids dropped, the off switch kept ({string.Join(",", Character.HintsSeen)}, off {Character.HintsOff})");
+            // an unlock card's id (Unlock.Hint) is no row of Hints.All (D15): it must survive the
+            // same load that drops a truly unknown id, or a wall crossed once is a card shown again
+            // every time this file is loaded.
+            Check(tl && Character.HintsSeen.SetEquals(new[] { "flight", "unlock_chipslot_1" }) && Character.HintsOff,
+                  $"hints: unknown ids dropped, an unlock card's id kept, the off switch kept ({string.Join(",", Character.HintsSeen)}, off {Character.HintsOff})");
             Check(tl && Character.BaseLevels.GetValueOrDefault("miner_count") == 4,
                   $"a base upgrade level is held to its cap: 99 miners' levels read as 4 (up to 5 miners) ({Character.BaseLevels.GetValueOrDefault("miner_count")})");
             // GEAR LEVELS OFF DISK, like a claim off the wire: parts this build knows, held to 40, a 0

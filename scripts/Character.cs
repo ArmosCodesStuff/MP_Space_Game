@@ -308,8 +308,11 @@ public static class Character
         foreach (var t in ((string)c.GetValue("loot", "paid", "")).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             if (long.TryParse(t, out var serial)) PayOnce(serial);
         HintsSeen.Clear();
+        // An unlock card's id (Unlock.Hint) is no row of Hints.All (D15): the same query Hints.Card
+        // uses is the one that keeps it, or a wall crossed on the class this file was flying gets
+        // dropped silently on every load.
         foreach (var h in ((string)c.GetValue("hints", "seen", "")).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            if (Hints.All.ContainsKey(h)) HintsSeen.Add(h);
+            if (Hints.Card(h) != null) HintsSeen.Add(h);
         HintsOff = (bool)c.GetValue("hints", "off", false);
         BossCleared.Clear();
         TourDone = (bool)c.GetValue("hints", "tour_done", false);
