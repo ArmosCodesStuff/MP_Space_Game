@@ -1052,3 +1052,17 @@ heredoc turns "\n" inside C# strings into real newlines: it broke SessionMenu on
 - files: tools/smoketest/SmokeTest.cs.txt 3d1f31df, ledger 4670d059.
 - checks planned: rung 5 -Wan guest "the watchdog drops the host 8 +/- 1 s into a blackhole", host "the
   watchdog drops the guest 8 +/- 1 s into a blackhole", both "back by the fresh invite after it lifts".
+
+#### R4 POST
+- verdict: done; typecheck 0 errors, `verify.ps1 -Quick` ALL CHECKS PASSED. engine-unproven: rung 5 -Wan owed
+  in the final test phase (default path, then WARSHIPS_WAN=150,40,5 for the rate check).
+- Harness: `R4GuestBlackhole` / `R4HostBlackhole` (after the paste guest's first return, -Wan only: the guest
+  posts `/box/blackhole?s=12` and its wall-clock start through the courier; each end's watchdog drop timed
+  from it, 7-9 s; back by invite 2 after it lifts; the live holder moves to invite 3 under -Wan), `R4Backlog`
+  (Net.Report's backlog + round-trip lines), `NetStream` keeps the longest wait between two. Printed under
+  -Wan, not asserted: the stream row's longest gap over the rate check's 12 s and the guest's and the host's
+  peak backlog per NetChannels row. The rate check is S1's (>= 8 a second), unchanged.
+- checks written (not run): rung 5 -Wan guest "into a 12 s blackhole, its watchdog lets the host go 8 +/- 1
+  s in", "back by the host's fresh invite once the blackhole lifted"; host "... lets the guest go 8 +/- 1 s
+  in", "the fresh invite, carried after the blackhole lifted, brings the guest back into its place".
+- next: R5 (packaging NOTES and the record; CHANGES in it, the lane's last job).

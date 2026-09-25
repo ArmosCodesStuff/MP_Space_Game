@@ -98,7 +98,13 @@ public partial class _Test : Node
         for (_streamClock += delta; _streamClock >= 0.1; _streamClock -= 0.1) Net.ToHeard(0, this, nameof(NetStream));
     }
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered, TransferChannel = StreamChannel)]
-    void NetStream() => _streamGot++;
+    void NetStream()
+    {
+        ulong now = Time.GetTicksMsec();
+        if (_streamLast > 0) _streamGap = Math.Max(_streamGap, now - _streamLast);
+        _streamLast = now; _streamGot++;
+    }
+    ulong _streamLast, _streamGap;                  // the longest wait between two, for -Wan's print (R4)
 
     // ── WEBRTC, R0: THE PLUGIN INSIDE WARSHIPS (docs/plans/network_webrtc.md §10.4 R0) ─────────────
     // Two WebRtcMultiplayerPeers in this one process, polled by hand: a host (server) and a guest
@@ -10257,6 +10263,57 @@ public partial class _Test : Node
               $"back offline: every invite hung up, the listener closed, nothing left running ({Net.I.Pending.Count} pending, port {Rendezvous.ListenPort})");
     }
 
+    // ── WEBRTC, R4: THE WATCHDOG THROUGH THE BOX (§3.6, §10.4 R4; -Wan only) ─────────────────────────────
+    // After the paste guest's return the box drops every datagram of the invite path for 12 s. Neither
+    // end is told: each hears nothing, and its watchdog (Link.QuietMs, 8 s) drops the other 8 +/- 1 s in --
+    // the guest reads §3.9's text, the host lets the guest go and makes it a fresh invite, which the
+    // courier carries once the blackhole lifts. The moment it began is the guest's, in wall-clock ms (the
+    // two processes share a clock, not a start), posted through the courier.
+    static long WallMs => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+    async Task R4GuestBlackhole()
+    {
+        long t0 = WallMs;
+        Box("POST", "/box/blackhole?s=12");
+        Post(CourierFile("blackhole", P(27115), 0), t0.ToString());
+        await RealTime(() => !Net.IsOnline, 12);
+        double lost = (WallMs - t0) / 1000.0;
+        Check(!Net.IsOnline && lost >= 7 && lost <= 9
+              && Net.I.LastStatus == "Lost the connection to HostPilot. Ask them for a new invite code: your place is held 90 s. Your own world keeps running.",
+              $"guest: into a 12 s blackhole, its watchdog lets the host go 8 +/- 1 s in, told to ask for a new invite ({lost:0.0} s; {Net.I.LastStatus})");
+        await RealTime(() => WallMs - t0 >= 12000, 6);
+        bool back = await R2cJoinByInvite(2, 0.5f, 3f, 20);
+        await Wait(0.5);
+        Check(back && Net.I.JoinedBy == "paste" && Me != null && Me.OwnerId == Net.LocalId && Me.Pilot == "Guesty",
+              $"guest: back by the host's fresh invite once the blackhole lifted (id {Net.LocalId})");
+    }
+    async Task<PlayerShip> R4HostBlackhole(PlayerShip g)
+    {
+        string f = CourierFile("blackhole", P(27115), 0);
+        if (!await RealTime(() => System.IO.File.Exists(f), 15)) { Check(false, "host: the guest posted its blackhole's start"); return null; }
+        long t0 = long.Parse(System.IO.File.ReadAllText(f));
+        int gid = g?.OwnerId ?? 0;
+        long droppedAt = 0;
+        void Heard(string s) { if (s == $"Player {gid} dropped.") droppedAt = WallMs; }
+        Net.I.Status += Heard;
+        await RealTime(() => droppedAt > 0, 12);
+        Net.I.Status -= Heard;
+        double lost = (droppedAt - t0) / 1000.0;
+        Check(droppedAt > 0 && lost >= 7 && lost <= 9 && !Multiplayer.GetPeers().Contains(gid),
+              $"host: into a 12 s blackhole, its watchdog lets the guest go 8 +/- 1 s in ({(droppedAt > 0 ? $"{lost:0.0} s" : "never")})");
+        await RealTime(() => WallMs - t0 >= 12000, 6);
+        bool posted = await R2cPostInvite(2);
+        bool took = await R2cTakeReply(2, byClipboard: false, 30);
+        await RealTime(() => H.Ships.Any(s => s.Pilot == "Guesty" && s.OwnerId != gid), 25);
+        await Wait(0.5);
+        var back = H.Ships.FirstOrDefault(s => s.Pilot == "Guesty" && s.OwnerId != gid);
+        Check(posted && took && back != null && ((System.Collections.IDictionary)Session.Places).Count == 0,
+              $"host: the fresh invite, carried after the blackhole lifted, brings the guest back into its place ({back?.OwnerId})");
+        return back;
+    }
+    // Net.Report's backlog and silence lines, for -Wan's print
+    static string R4Backlog() =>
+        string.Join("; ", Net.I.Report().Split('\n').Where(l => l.StartsWith("peak backlog by row") || l.StartsWith("round trip")));
+
     // ── WEBRTC, R3: WHAT THE PLAYER READS (§6), THE PANEL'S LIST, COPY NETWORK REPORT (§6.3) ──────────
     // Solo. Each §6 sentence whose path runs in one process, read literally: the listener moved off a taken
     // port; a reply whose connection never came up (its 12 s moved to now) and the fresh invite it brings;
@@ -10519,13 +10576,14 @@ public partial class _Test : Node
         Check(posted && took && g2 != null && cid.EndsWith("-guest") && Session.Tokens.ContainsKey(cid) && places.Count == 0 && Net.I.Pending.Count == 0
               && H.PartyIds.Contains(g2.OwnerId) && !H.PartyIds.Contains(gOld),
               $"host: the paste guest came back by the fresh invite into its held place, claimed with its rejoin token ({g2?.OwnerId}; {places.Count} held, {Net.I.Pending.Count} pending)");
+        if (Wan) g2 = await R4HostBlackhole(g2) ?? g2;
         // THE LIVE HOLDER: a new invite for the same pilot, whose old link this host still thinks is up
         int gMid = g2?.OwnerId ?? 0, again = 0;
         void Again(string s) { if (s.Contains("Send them this invite to come back")) again++; }
         Net.I.Status += Again;
         Net.I.Invite();
-        bool posted2 = await R2cPostInvite(2);
-        bool took2 = await R2cTakeReply(2, byClipboard: false, 20);
+        bool posted2 = await R2cPostInvite(Wan ? 3 : 2);
+        bool took2 = await R2cTakeReply(Wan ? 3 : 2, byClipboard: false, 20);
         ulong tTook = Time.GetTicksMsec();
         await RealTime(() => H.Ships.Any(s => s.Pilot == "Guesty" && s.OwnerId != gMid && s.OwnerId != gOld) && !Multiplayer.GetPeers().Contains(gMid), Wan ? 12 : 8);
         double handed = (Time.GetTicksMsec() - tTook) / 1000.0;
@@ -10553,16 +10611,18 @@ public partial class _Test : Node
         await Wait(0.5);
         Check(back && Net.I.JoinedBy == "paste" && Session.Rejoin.Length == 32 && Me != null && Me.OwnerId == Net.LocalId && Me.Pilot == "Guesty",
               $"guest: back in by the host's fresh invite, holding its rejoin token, flying its own ship ({Net.I.JoinedBy}; token {Session.Rejoin.Length} characters; id {Net.LocalId})");
+        if (Wan) await R4GuestBlackhole();
         // THE LIVE HOLDER: the next invite waits on the courier; this link goes silent without a word (the
         // process frozen: its peer orphaned, still up, never polled), and the pilot joins at once
-        string next = CourierFile("invite", P(27115), 2);
+        int holderN = Wan ? 3 : 2;
+        string next = CourierFile("invite", P(27115), holderN);
         await RealTime(() => System.IO.File.Exists(next), 15);
         var peerField = typeof(Net).GetField("_peer", BindingFlags.NonPublic | BindingFlags.Instance);
         var orphan = peerField.GetValue(Net.I) as WebRtcMultiplayerPeer;
         int midId = Net.LocalId;
         peerField.SetValue(Net.I, null);
         Net.I.GoOffline();
-        bool back2 = await R2cJoinByInvite(2, 0.05f, 0.3f, 5);
+        bool back2 = await R2cJoinByInvite(holderN, 0.05f, 0.3f, 5);
         await Wait(0.5);
         Check(back2 && orphan != null && Net.LocalId != midId && Me != null && Me.OwnerId == Net.LocalId && Me.Pilot == "Guesty",
               $"guest: back again while its old link still lived, under a new id (id {midId} -> {Net.LocalId})");
@@ -11543,6 +11603,7 @@ public partial class _Test : Node
                   $"a level a guest buys mid-session reaches the host's copy of its ship: top speed x{gTopNow:0.0000} (level 3: 1 + 0.25 x 1.15 = 1.2875; still level 2 would be 1.275)");
             // THE PASTE GUEST'S DROP AND RETURN (§3.9), then the live holder
             await R2cHostReturns();
+            if (Wan) GD.Print($"  wan: this host's {R4Backlog()}");
             heldD["ghost2"] = Ghost(424243, 60000);          // a place still held when the host leaves
             Net.I.GoOffline();   // drop the guest
             await Wait(2.0);
@@ -11899,7 +11960,7 @@ public partial class _Test : Node
             Check(heardFighters > 0, $"guest hears its fighters' beams as the fighter's own row, sent by index ({heardFighters} heard since it joined)");
             Check(mine != null && Math.Abs(mine.MaxHp - 248) < 1e-6 && Math.Abs(mine.Hp - 248) < 1e-6,
                   $"hull replicated from the host, which applied this pilot's own gear held to three of a kind (three of its four Armour Chips I: 200 x 1.24 = 248; {mine?.Hp:0})");
-            int streamed0 = _streamGot; ulong streamAt = Time.GetTicksMsec();
+            int streamed0 = _streamGot; ulong streamAt = Time.GetTicksMsec(); _streamGap = 0;
             await Wait(12.0);                      // strike done, bombers home and docked
             // THE HOST'S TEN A SECOND ARRIVE, over the 12 s just waited: nothing thrown away unsent. The
             // floor, from the link: 100 ms apart on a channel of its own, the simulated internet's jitter
@@ -11907,6 +11968,8 @@ public partial class _Test : Node
             // only its loss takes packets -- 2%, 5% on its worst day: 9.8 and 9.5 a second. Under 8 is a
             // fifth of them gone, which the link cannot do and a falling throttle does.
             double streamRate = (_streamGot - streamed0) / ((Time.GetTicksMsec() - streamAt) / 1000.0);
+            // PRINTED, NOT ASSERTED (§10.4 R4): no literal exists for them yet
+            if (Wan) GD.Print($"  wan: the stream (row {StreamChannel}) waited at most {_streamGap} ms between two over its 12 s; this guest's {R4Backlog()}");
             Check(streamRate >= 8,
                   $"guest: the host's unreliable stream, sent ten a second on a channel of its own, arrives at {streamRate:0.0} a second over 12 s -- at least 8, as the link loses at most 5% and every row is its own stream (a backlog that never drains is the one way under)");
             Check(pinWatch.Seen, "a guest's own ship is pinned when the host pins it (a raider's web works on guests too)");
