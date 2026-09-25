@@ -463,6 +463,18 @@ outstanding from the batch of 2026-09-23.)*
 
 ## Unreleased
 
+### verify's text step skips a binary by what it holds, not by its extension (2026-09-24, in the WarShips_Version_L fork)
+
+The text step skipped `.png`, `.ogg` and `.wav` by name, so the two vendored plugin DLLs (4 MB each)
+were read as text, and `-Quick` ran for 28 minutes without finishing on the millions of matches.
+A file with a NUL in its first 8000 bytes (git's own test) is now binary and skipped, whatever its
+extension; git's `w/-text` is not used because it also calls a lone carriage return binary, the very
+thing the step exists to catch. The step prints how many it skipped.
+
+**Checks:** `-Quick` with an untracked probe holding a form feed and a lone carriage return: text
+FAILED on exactly those two (`zz_ctrl_probe.txt:1 U+000C`, `U+000D`), 160 text files read, 148
+binary skipped, 69 s.
+
 ### The WebRTC plugin inside Warships: slice R0 (2026-09-25, in the WarShips_Version_L fork)
 
 **`scripts/Link.cs` is the one place that names WebRTC** (docs/plans/network_webrtc.md §7). The

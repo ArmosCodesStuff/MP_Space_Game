@@ -74,22 +74,32 @@ Step 'text' {
     # \f to a form feed, and tools\analyse\run.ps1 its \a and \r to a bell and a carriage return,
     # which split a comment in this file into a command. Tab and newline are text, and so is a
     # carriage return directly before a newline (PLAY.bat is CRLF, as a .bat should be). version/
-    # is generated, and an image or a sound is not text.
+    # is generated. A file with a NUL in its first 8000 bytes is binary (git's own test) and is not
+    # text, whatever its extension: a list of extensions let the vendored plugin DLLs in, and the
+    # millions of matches in 4 MB of machine code held this step for half an hour. Not git's
+    # w/-text, which also calls a lone carriage return binary and would skip the very file this
+    # step exists to catch.
     $env:Path += ';C:\Program Files\Git\cmd'
     $files = @(& git ls-files --cached --others --exclude-standard | Where-Object { $_ })
     $read = 0
+    $binary = 0
     $bad = @()
     foreach ($f in $files) {
-        if ($f -like 'version/*' -or $f -match '\.(png|ogg|wav)$' -or -not (Test-Path -LiteralPath $f)) { continue }
+        if ($f -like 'version/*' -or -not (Test-Path -LiteralPath $f)) { continue }
+        $path = Join-Path $PSScriptRoot $f
+        $head = New-Object byte[] 8000
+        $fs = [System.IO.File]::OpenRead($path)
+        try { $n = $fs.Read($head, 0, $head.Length) } finally { $fs.Dispose() }
+        if ([Array]::IndexOf($head, [byte]0, 0, $n) -ge 0) { $binary++; continue }
         $read++
-        $t = [System.IO.File]::ReadAllText((Join-Path $PSScriptRoot $f))
+        $t = [System.IO.File]::ReadAllText($path)
         foreach ($m in [regex]::Matches($t, '[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]|\r(?!\n)')) {
             $bad += ('{0}:{1} U+{2:X4}' -f $f, $t.Substring(0, $m.Index).Split("`n").Count, [int][char]$m.Value)
         }
     }
     $bad | ForEach-Object { Write-Host "    $_" }
     # NONE READ IS NOT CLEAN. A git that listed nothing would otherwise pass this with 0 of 0.
-    Write-Host ("  {0} text files read, {1} control characters" -f $read, $bad.Count)
+    Write-Host ("  {0} text files read, {1} binary skipped, {2} control characters" -f $read, $binary, $bad.Count)
     $read -gt 0 -and $bad.Count -eq 0
 }
 
