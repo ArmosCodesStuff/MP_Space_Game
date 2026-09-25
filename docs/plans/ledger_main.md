@@ -11,6 +11,9 @@ Engine outputs for the old-way batches: S = C:\Users\logan\AppData\Local\Temp\cl
   first-tick zero lead + pinned pilot under forced thrust drifting off the blast; hvL's stray blast passed "flight 10 s"), commit J6+J7, J7 POST
   corrected; K2: merge version-l (net R1); chain quick,solo,solo,six,screens; opus gate; haiku merge. Returns {kits, gate, merge}.
   merge=false: merge by hand. gate fail or red: one fix batch from its problems. (w79l6jmmg was stopped by the owner at ~2 h.)
+- wf_d333d7cd-747 / task w7j1zzr40, "lane-slots" (relaunch; worktree WarShips_wt_slots). S1 done at 985d4d8 (rungs.ps1 -Slot/-Slots,
+  per-tree lock, UTF-8 summary). Now: S2 harness --port-shift / P(), S3 docs, 3-chain proof, opus gate, haiku merge (net is in, so it may
+  merge itself). Returns {slots{slots=proven default}, gate, merge}. merge=false: merge by hand.
 
 ## Next
 1. Merge slots, kits, art into version-l (net merged: eb5b2cb, after the coordinator fixed gate 3's two comment defects in fa20b7f).
