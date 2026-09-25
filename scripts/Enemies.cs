@@ -27,7 +27,7 @@ public class EnemyDef : HullArt
     public double Hull = 25;
     public double Dps = 1.0;             // x -- the raider damage the whole game is scaled in
     public double ShotEvery = 1.0;       // 1 s: slower than a target's 0.52 s gap, so no shot is wasted
-    public float Cruise = 100f;          // under every capital ship's top speed (104 to 130)
+    public float Cruise = 100f;          // under the destroyer's 117 and every smaller hull's top; over the battleship's 88 and the carrier's 99 (F22), which cannot outrun it
     public float BoostMult = 5f;
     public double BoostTime = 3.0;
     public float Reach = 100f;           // how close it fights from; it holds station at 90% of it
@@ -47,7 +47,7 @@ public class EnemyDef : HullArt
     // fired the gunship's 500 u missile and could not be given its own.
     public float MissileRange = 500f;    // it throws one from within this
     public double MissileEvery = 12.0;   // seconds between them
-    public double MissileFlight = 10.0;  // seconds in the air (was Raider.MissileFlight, a shared const)
+    public double MissileFlight = 10.0;  // seconds in the air
     // WHAT THE BLAST DOES, before Strength. Only thrown at a pinned target (Raider.TickHeavy).
     public double MissileDamage = 35;
     public float BlastRadius = 90f;      // how wide the blast is where it lands
@@ -57,8 +57,7 @@ public class EnemyDef : HullArt
     public int Beam;
     // WHAT A LATCH APPLIES TO WHAT IT HOLDS (F20): a Pin-way row names the status its own hold
     // puts on the target (every one today is Pinned); a Standoff row names none -- it never
-    // latches onto anything, it only fires from range. Generalises what Raider's own latch used to
-    // hardcode as `Status.Pinned` for every Pin-way row alike.
+    // latches onto anything, it only fires from range. Raider's latch applies whatever this names.
     public Status? Cc;
     // BOUNTY, before Strength (F20; lane G pays it: not built here). 6 for a light, 18 for a heavy.
     public double Exp;

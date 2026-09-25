@@ -65,12 +65,11 @@ public static class Character
     public static readonly Dictionary<string, double> BaseStock = new();
     public static double BaseCredits;
     public static readonly Dictionary<string, int> BaseLevels = new();
-    // WHAT EACH PART HAS BEEN LEVELLED TO with salvage, by part id (Equipment.LevelOf). Beside the
-    // hold rather than inside it because a level belongs to the id, not to a copy: a pilot holding
-    // three Rapid Batteries has one level between them.
+    // WHAT EACH CORE SLOT HAS BEEN LEVELLED TO with salvage, by the slot's name (Equipment.LevelKey,
+    // LevelOf): per pilot, shared by every class it flies, whatever part sits in the slot.
     public static readonly Dictionary<string, int> GearLevel = new();
-    // PARTS THE RECYCLER MAY NOT TOUCH, by id -- the same id a level belongs to, because the hold
-    // counts parts by id and there is no "this copy" for a lock to be about.
+    // PARTS THE RECYCLER MAY NOT TOUCH, by id, because the hold counts parts by id and there is no
+    // "this copy" for a lock to be about.
     public static readonly HashSet<string> GearLocked = new();
     public static void ToggleGearLock(string id)
     {
@@ -322,13 +321,11 @@ public static class Character
         GearLevel.Clear(); GearLocked.Clear();
         foreach (var lockedId in ((string)c.GetValue("gear", "locked", "")).Split(',', StringSplitOptions.RemoveEmptyEntries))
             GearLocked.Add(lockedId);
-        // A file from before parts could be levelled has no section at all and every part reads 0.
-        // What is there is taken in like a claim off the wire (Equipment.SanitizeLevels: parts this
-        // build knows, 1-40), each id through Equipment.Migrated like every other part id here -- a
-        // rack line that moved to the destroyer keeps the level its pilot paid for.
+        // What is there is taken in like a claim off the wire (Equipment.SanitizeLevels: core slot
+        // names, 1-40); anything else in the section is left behind (saves are disregarded).
         if (c.HasSection("gear_level"))
             foreach (var (lid, lv) in Equipment.SanitizeLevels(c.GetSectionKeys("gear_level")
-                         .Select(gid => (Equipment.Migrated(gid), (int)c.GetValue("gear_level", gid, 0)))))
+                         .Select(gid => (gid, (int)c.GetValue("gear_level", gid, 0)))))
                 GearLevel[lid] = lv;
         if (c.HasSection("boss_cleared"))
             foreach (var k in c.GetSectionKeys("boss_cleared"))

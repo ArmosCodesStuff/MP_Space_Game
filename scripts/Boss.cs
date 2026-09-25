@@ -68,8 +68,7 @@ public class BossMove
     public float Spread;               // degrees between them, fanned about the aim
     public double Live, Tick;          // a beam's burn, and how often that burn is judged
     // A burn is judged at both ends and every Tick between: 3 s every 0.25 s is 13, the last AT 3 s.
-    // COUNTED, and the last one ends the burn. Timed, the last judgement and the burn's end fell on
-    // one instant, two accumulated clocks decided which came first, and a full burn was 200 or 250.
+    // COUNTED, and the last one ends the burn, so no two clocks race over which comes first.
     public int Judgements => Mathf.FloorToInt(Live / Tick + 1e-6) + 1;
     public double Flight;             // a thrown body's flight down its lane
     public float Turn;                 // a guided body's turn rate (rad/s)
@@ -112,7 +111,7 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
     public Hub Hub;
     public Missions.BossType Type;              // which boss: its name, its hull, its shape, its moves
     public string Title => Type.Name;           // what the arena's line calls it (IQuarry)
-    // hull and damage by level and party: S(L)(1 + 0.6(P-1)) and S(L)(1 + 0.2(P-1))
+    // hull and damage by level and party: HullScale(L)(1 + 0.6(P-1)) and DamageScale(L)(1 + 0.2(P-1)) (Par)
     public double HullMult = 1, DamageMult = 1;
     public double MaxHp => Type.Hull * HullMult;
     // ITS SHAPE IS ITS ROW'S, as a raider's is EnemyDef's: behaviour is code, geometry is data.
@@ -523,8 +522,8 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
             case MoveWay.Beam:
                 if ((s.Next -= delta) <= 0)
                 {   // judged every Tick, down the nose -- which has not moved since the wind-up began.
-                    // ADDED, not set: `= m.Tick` threw away the overshoot, so at 60 fps each judgement
-                    // came a frame late (16 frames, not 15) and a full burn was 12 of them, not 13.
+                    // ADDED, not set: the overshoot carries, so at 60 fps a judgement lands every 15
+                    // frames and a full burn is all 13 of them.
                     s.Next += m.Tick;
                     var (la, lb) = Segment(m.Id);
                     foreach (var p in _hittable)
@@ -591,9 +590,9 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
             float side = n > 1 ? (2f * k / (n - 1) - 1f) * m.EscortAngle : 0f;
             var dir = nose.Rotated(Mathf.DegToRad(side));
             var at = Position + dir * (m.EscortOut * HalfWidth);
-            var r = Hub.SpawnRaider(at, m.EscortKind, 0, Missions.S(Missions.Level));
+            var r = Hub.SpawnRaider(at, m.EscortKind, 0, Missions.Level);
             // the one launched to port flanks to port, the other to starboard
-            r?.Escort(target, dir, m.Windup, m.EscortHull * Missions.S(Missions.Level), side < 0 ? -Mathf.Pi / 2f : Mathf.Pi / 2f);
+            r?.Escort(target, dir, m.Windup, m.EscortHull * Par.CraftScale(Missions.Level), side < 0 ? -Mathf.Pi / 2f : Mathf.Pi / 2f);
             if (r != null) s.Escorts.Add(r);
             eta = System.Math.Max(eta, Raider.WebEta(at.DistanceTo(target.Position)));
         }

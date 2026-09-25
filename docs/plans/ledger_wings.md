@@ -124,3 +124,11 @@ Ships.cs (art's mounts, wings' removal of PdRing and Ab.Pd -- PD is passive); Sh
 removed for HullArt.Tint (the art lane made WingDef a HullArt; Sprites.Fit(Def) draws it), SmokeTest patrol check
 reads .Tint; SmokeTest (both fingerprint checks; 2.58x heavy + pack-art check; 680 u ring + PdReachOff; wings' 150
 beam + "once" charge); CHANGES.md both sides. typecheck 0 errors, verify -Quick ALL CHECKS PASSED. No engine run.
+
+## M2 PRE — merge version-l (5c9e4eb) into wt/wings, HEAD c22e732c1dd1cf5446cd7a2d227e0dd73fdaf096
+Conflicts: docs/CHANGES.md, scripts/Dealt.cs, tools/smoketest/SmokeTest.cs.txt.
+## M2 POST — typecheck 0 errors, quick green
+- CHANGES.md Handoff: wings entry kept; kits K2 entry dropped for version-l's newer K3 entry (same lane, superseded); slice 3, drives, curve, fields entries kept. Unreleased: both lanes' entries kept. Blank-line hunk: version-l's.
+- Dealt.cs: `Fighter` stays deleted (wings replaced it with row ids; no caller); version-l's `Base` kept: `Outpost, Base`.
+- SmokeTest.cs.txt: solo list keeps Wings* and lane A/B/fields calls; charge ram literal takes version-l's 29.8 (lane F cut; wings never touched it); six-role host keeps `WingsHostSortie` and the ramp-hold block.
+Next: merge into version-l.

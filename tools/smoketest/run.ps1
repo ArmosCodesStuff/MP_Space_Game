@@ -146,9 +146,12 @@ try {
   # a file path, and the run died parsing it as a regex.
   # SEED is kept: a failure must come back with the number that reproduces its geometry (-Seed n).
   $keepRe = 'PASS|FAIL|DONE|SEED |FLY|ISSUE|Exception|   at |ERROR: [^B]|^  [a-z]|Fatal error'
-  # Expected engine chatter, not failures: allocator notes, and Godot's own report that
-  # no UPnP router exists (the game falls back and says so).
-  $dropRe = 'RID alloc|PagedAlloc'
+  # EXPECTED ENGINE CHATTER, not failures: one named row per line the engine prints that a run expects.
+  # A new one is a row here, with its reason, never a widened pattern.
+  $expected = [ordered]@{
+    allocator = 'RID alloc|PagedAlloc'      # the allocator's own notes at exit
+  }
+  $dropRe = ($expected.Values | ForEach-Object { "($_)" }) -join '|'
 
   function Start-Run {
     param([string[]]$GodotArgs, [string]$Tag, [int]$TimeoutSec)
@@ -233,10 +236,10 @@ try {
   }
 
   if (-not $Solo -and -not $Fly) {
-    $host1 = Start-Run (@('--headless','--path',$W,'--','host') + $seedArg + $shiftArg)   'host'   120
+    $host1 = Start-Run (@('--headless','--path',$W,'--','host') + $gx + $seedArg + $shiftArg)   'host'   180
     Start-Sleep -Milliseconds 500
-    $g2 = Start-Run (@('--headless','--path',$W,'--','guest2') + $gx + $seedArg + $shiftArg) 'guest2' 120
-    $g1 = Start-Run (@('--headless','--path',$W,'--','guest') + $gx + $seedArg + $shiftArg)  'guest'  120
+    $g2 = Start-Run (@('--headless','--path',$W,'--','guest2') + $gx + $seedArg + $shiftArg) 'guest2' 180
+    $g1 = Start-Run (@('--headless','--path',$W,'--','guest') + $gx + $seedArg + $shiftArg)  'guest'  180
     $all += Complete-Run $g1    '[guest] '
     $all += Complete-Run $host1 '[host]  '
     $all += Complete-Run $g2    '[third] '

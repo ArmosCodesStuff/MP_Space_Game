@@ -130,6 +130,9 @@ public class ClassDef
     // follows from its sheet by that same rule (Equipment.Fits).
     public ItemDef[] Kit = Array.Empty<ItemDef>();
     public AbilityDef[] Abilities = Array.Empty<AbilityDef>();
+    // WHAT V DOES: one row of Drives.All (the warp on the capitals, the boost on the nine). Not in
+    // Abilities: Abilities.For appends it after them, so it has a slot and no level wall.
+    public DriveDef Drive;
     public string Hint = "";                 // the controls line's own part, before the common one
     public bool Has(Fit f) => (Fit & f) != 0;
 }
@@ -155,9 +158,10 @@ public static class Classes
         new() { Id = ShipClass.Battleship, Name = "BATTLESHIP", Ready = true, Targets = 3, Fit = Fit.Guns | Fit.Broadside | Fit.Pd,
             Blurb = "Four cursor-aimed main guns, a broadside of all four, two point-defence turrets.",
             Hint = "BATTLESHIP  ·  mouse aims the main guns",
+            Drive = Drives.Warp,
             Nums = new() {
                 ["hull"] = 300,
-                ["thrust"] = 56, ["reverse_thrust"] = 24, ["max_speed"] = 104, ["reverse_speed"] = 36,
+                ["thrust"] = 47, ["reverse_thrust"] = 20, ["max_speed"] = 88, ["reverse_speed"] = 30,
                 ["turn_radius"] = 107, ["turn_rate"] = 1.08,
                 ["main_count"] = 4, ["main_damage"] = 17.9, ["main_interval"] = 2.0, ["main_range"] = 1000, ["shell_speed"] = 650,
                 ["pd_count"] = 2,
@@ -183,6 +187,7 @@ public static class Classes
         new() { Id = ShipClass.Carrier, Name = "CARRIER", Ready = true, Targets = 3, Fit = Fit.Wing | Fit.Pd,
             Blurb = "No main gun: point defence, a fighter wing, torpedo bombers off its deck.",
             Hint = "CARRIER",
+            Drive = Drives.Warp,
             Nums = new() {
                 ["hull"] = 200,
                 ["thrust"] = ShipStats.CarrierTop / 2, ["reverse_thrust"] = ShipStats.CarrierTop * 5 / 24, ["max_speed"] = ShipStats.CarrierTop, ["reverse_speed"] = ShipStats.CarrierTop / 3,
@@ -211,9 +216,10 @@ public static class Classes
         new() { Id = ShipClass.Destroyer, Name = "DESTROYER", Ready = true, Targets = 3, Fit = Fit.Guns | Fit.Missiles | Fit.Pd,
             Blurb = "Fastest of the line. Two cursor-aimed main guns, missile bursts of three, two point-defence turrets.",
             Hint = "DESTROYER  ·  mouse aims the main guns",
+            Drive = Drives.Warp,
             Nums = new() {
                 ["hull"] = 250,
-                ["thrust"] = 70, ["reverse_thrust"] = 30, ["max_speed"] = 130, ["reverse_speed"] = 45,
+                ["thrust"] = 63, ["reverse_thrust"] = 27, ["max_speed"] = 117, ["reverse_speed"] = 40.5,
                 ["turn_radius"] = 107, ["turn_rate"] = 1.08,
                 ["main_count"] = 2, ["main_damage"] = 7.5, ["main_interval"] = 1.0, ["main_range"] = 720, ["shell_speed"] = 520,
                 ["pd_count"] = 2,
@@ -240,10 +246,11 @@ public static class Classes
         new() { Id = ShipClass.FreightHauler, Name = "FREIGHTER", Ready = true, Fit = Fit.Guns | Fit.Pd | Fit.Deploy,
             Blurb = "Toughest hull there is. One main gun, two point-defence turrets, three deployable turrets, and a bubble that soaks damage.",
             Hint = "FREIGHTER  ·  mouse aims the main gun",
+            Drive = Drives.Boost,
             Nums = new() {
                 ["hull"] = 400,
-                ["thrust"] = 45, ["reverse_thrust"] = 20, ["max_speed"] = 85, ["reverse_speed"] = 30,
-                ["turn_radius"] = 150, ["turn_rate"] = 0.85,
+                ["thrust"] = 63.5, ["reverse_thrust"] = 28.2, ["max_speed"] = 120, ["reverse_speed"] = 42.4,
+                ["turn_radius"] = 150, ["turn_rate"] = 0.85, ["strafe_speed"] = 60, ["strafe_thrust"] = 120,
                 ["main_count"] = 1, ["main_damage"] = 12, ["main_interval"] = 1.0, ["main_range"] = 800, ["shell_speed"] = 560,
                 ["pd_count"] = 2,
             },
@@ -278,10 +285,11 @@ public static class Classes
         new() { Id = ShipClass.FreightTender, Name = "TENDER", Ready = true, Fit = Fit.Guns | Fit.Pd | Fit.Deploy,
             Blurb = "One main gun, two point-defence turrets, three deployable turrets, and an overdrive that lifts everything's rate of fire.",
             Hint = "TENDER  ·  mouse aims the main gun",
+            Drive = Drives.Boost,
             Nums = new() {
                 ["hull"] = 400,
-                ["thrust"] = 45, ["reverse_thrust"] = 20, ["max_speed"] = 85, ["reverse_speed"] = 30,
-                ["turn_radius"] = 150, ["turn_rate"] = 0.85,
+                ["thrust"] = 63.5, ["reverse_thrust"] = 28.2, ["max_speed"] = 120, ["reverse_speed"] = 42.4,
+                ["turn_radius"] = 150, ["turn_rate"] = 0.85, ["strafe_speed"] = 60, ["strafe_thrust"] = 120,
                 ["main_count"] = 1, ["main_damage"] = 12, ["main_interval"] = 1.0, ["main_range"] = 800, ["shell_speed"] = 560,
                 ["pd_count"] = 2,
             },
@@ -314,10 +322,11 @@ public static class Classes
         new() { Id = ShipClass.FreightBastion, Name = "BASTION", Ready = true, Fit = Fit.Guns | Fit.Pd | Fit.Deploy,
             Blurb = "One main gun, two point-defence turrets, three deployable turrets, and a shockwave that throws what is near it clear, or holds a boss still.",
             Hint = "BASTION  ·  mouse aims the main gun",
+            Drive = Drives.Boost,
             Nums = new() {
                 ["hull"] = 400,
-                ["thrust"] = 45, ["reverse_thrust"] = 20, ["max_speed"] = 85, ["reverse_speed"] = 30,
-                ["turn_radius"] = 150, ["turn_rate"] = 0.85,
+                ["thrust"] = 63.5, ["reverse_thrust"] = 28.2, ["max_speed"] = 120, ["reverse_speed"] = 42.4,
+                ["turn_radius"] = 150, ["turn_rate"] = 0.85, ["strafe_speed"] = 60, ["strafe_thrust"] = 120,
                 ["main_count"] = 1, ["main_damage"] = 12, ["main_interval"] = 1.0, ["main_range"] = 800, ["shell_speed"] = 560,
                 ["pd_count"] = 2,
             },
@@ -355,10 +364,11 @@ public static class Classes
         new() { Id = ShipClass.HeavySniper, Name = "SNIPER", Ready = true, Fit = Fit.Guns,
             Blurb = "Fast. A light main gun, and a railgun: locked while it charges, then a straight blue line through everything on it.",
             Hint = "SNIPER  ·  mouse aims the main gun",
+            Drive = Drives.Boost,
             Nums = new() {
                 ["hull"] = 140,
                 ["thrust"] = 130, ["reverse_thrust"] = 60, ["max_speed"] = 190, ["reverse_speed"] = 70,
-                ["turn_radius"] = 55, ["turn_rate"] = 2.2,
+                ["turn_radius"] = 55, ["turn_rate"] = 2.2, ["strafe_speed"] = 95, ["strafe_thrust"] = 380,
                 ["main_count"] = 1, ["main_damage"] = 6, ["main_interval"] = 0.8, ["main_range"] = 900, ["shell_speed"] = 700,
             },
                 // 7.5 = 5% of the railgun's 150, what a level is worth on a battleship's shell
@@ -385,10 +395,11 @@ public static class Classes
         new() { Id = ShipClass.HeavyWarrior, Name = "WARRIOR", Ready = true, Fit = Fit.Guns,
             Blurb = "Fast. Two main guns, and a rush: a burst of speed at a fraction of the damage taken, ending in a stunning EMP.",
             Hint = "WARRIOR  ·  mouse aims the main guns",
+            Drive = Drives.Boost,
             Nums = new() {
                 ["hull"] = 140,
                 ["thrust"] = 130, ["reverse_thrust"] = 60, ["max_speed"] = 190, ["reverse_speed"] = 70,
-                ["turn_radius"] = 55, ["turn_rate"] = 2.2,
+                ["turn_radius"] = 55, ["turn_rate"] = 2.2, ["strafe_speed"] = 95, ["strafe_thrust"] = 380,
                 ["main_count"] = 2, ["main_damage"] = 9, ["main_interval"] = 0.7, ["main_range"] = 600, ["shell_speed"] = 520,
             },
                 // 3 = 5% of the EMP's 60
@@ -417,10 +428,11 @@ public static class Classes
         new() { Id = ShipClass.HeavyWarden, Name = "WARDEN", Ready = true, Fit = Fit.Guns | Fit.Pd,
             Blurb = "Fast. Point defence that hits ten times as hard as a warship's, a modest main gun, and hunter-seekers that each take a target of their own.",
             Hint = "WARDEN  ·  mouse aims the main gun",
+            Drive = Drives.Boost,
             Nums = new() {
                 ["hull"] = 140,
                 ["thrust"] = 130, ["reverse_thrust"] = 60, ["max_speed"] = 190, ["reverse_speed"] = 70,
-                ["turn_radius"] = 55, ["turn_rate"] = 2.2,
+                ["turn_radius"] = 55, ["turn_rate"] = 2.2, ["strafe_speed"] = 95, ["strafe_thrust"] = 380,
                 ["main_count"] = 1, ["main_damage"] = 12, ["main_interval"] = 0.6, ["main_range"] = 700, ["shell_speed"] = 600,
                 // ITS ONE MOUNT IS A GUN, NOT A NUISANCE. "Half efficiency, always on" was first read
             // as half a warship's damage PER SHOT: 0.25 every 0.5 s is 0.5 DPS, which is 50 seconds
@@ -460,10 +472,11 @@ public static class Classes
         new() { Id = ShipClass.LightDart, Name = "DART", Ready = true, Fit = Fit.Guns,
             Blurb = "Fastest thing with a pilot in it. A barrel roll nothing can hit, and a burst of speed and rate of fire out of it.",
             Hint = "DART  ·  mouse aims the main gun",
+            Drive = Drives.Boost,
             Nums = new() {
                 ["hull"] = 90,
                 ["thrust"] = 190, ["reverse_thrust"] = 90, ["max_speed"] = 260, ["reverse_speed"] = 95,
-                ["turn_radius"] = 35, ["turn_rate"] = 3.0,
+                ["turn_radius"] = 35, ["turn_rate"] = 3.0, ["strafe_speed"] = 130, ["strafe_thrust"] = 520,
                 ["main_count"] = 1, ["main_damage"] = 5, ["main_interval"] = 0.35, ["main_range"] = 500, ["shell_speed"] = 620,
             },
             Damage = new() { ["main_damage"] = 1 },
@@ -489,10 +502,11 @@ public static class Classes
         new() { Id = ShipClass.LightEcho, Name = "ECHO", Ready = true, Fit = Fit.Guns,
             Blurb = "Its echo remembers the damage it deals, then detonates the lot where the last shot landed.",
             Hint = "ECHO  ·  mouse aims the main gun",
+            Drive = Drives.Boost,
             Nums = new() {
                 ["hull"] = 90,
                 ["thrust"] = 190, ["reverse_thrust"] = 90, ["max_speed"] = 260, ["reverse_speed"] = 95,
-                ["turn_radius"] = 35, ["turn_rate"] = 3.0,
+                ["turn_radius"] = 35, ["turn_rate"] = 3.0, ["strafe_speed"] = 130, ["strafe_thrust"] = 520,
                 ["main_count"] = 1, ["main_damage"] = 5, ["main_interval"] = 0.35, ["main_range"] = 500, ["shell_speed"] = 620,
             },
                 // echo_share is NOT a weapon: the blast is a share of damage already dealt, so it
@@ -521,10 +535,11 @@ public static class Classes
         new() { Id = ShipClass.LightWraith, Name = "WRAITH", Ready = true, Fit = Fit.Guns,
             Blurb = "While its veil is up nothing hostile can pick it: whatever was coming for it goes elsewhere, or gives up.",
             Hint = "WRAITH  ·  mouse aims the main gun",
+            Drive = Drives.Boost,
             Nums = new() {
                 ["hull"] = 90,
                 ["thrust"] = 190, ["reverse_thrust"] = 90, ["max_speed"] = 260, ["reverse_speed"] = 95,
-                ["turn_radius"] = 35, ["turn_rate"] = 3.0,
+                ["turn_radius"] = 35, ["turn_rate"] = 3.0, ["strafe_speed"] = 130, ["strafe_thrust"] = 520,
                 ["main_count"] = 1, ["main_damage"] = 5, ["main_interval"] = 0.35, ["main_range"] = 500, ["shell_speed"] = 620,
             },
             Damage = new() { ["main_damage"] = 1 },

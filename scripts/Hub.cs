@@ -601,7 +601,7 @@ public partial class Hub : Node2D
         if ((SectorKind)s != Sector) { RpcId(who, nameof(NetSector), (int)Sector, Missions.Kind, Missions.Level); return; }
         // The place a pilot is owed goes first and is never metered: a reconnecting pilot's held
         // spot is delivered by whichever report first finds it in the host's world.
-        if (_placeFor.Remove(who, out var owed)) RpcId(who, nameof(NetPlace), owed.at, owed.rot);
+        if (_placeFor.Remove(who, out var owed)) { RpcId(who, nameof(NetPlace), owed.at, owed.rot); ShipOf(who)?.Relocated(); }
         // THE CATCH-UP, and only it, is rate-limited -- one ask, dozens of reliable packets. Half a
         // second: the guest's own repeats are at 1 s and 3 s (ReportSector).
         if (!Net.Metered(who, nameof(NetMySector), 0.5)) return;
@@ -729,7 +729,8 @@ public partial class Hub : Node2D
         if (h.World == _world && _ships.TryGetValue(peer, out var s) && IsInstanceValid(s))
         {
             s.Restore(h.Hp, h.Alive, h.Stasis);
-            if (PeerSector(peer) == Sector) RpcId(peer, nameof(NetPlace), h.Pos, h.Rot); else _placeFor[peer] = (h.Pos, h.Rot);
+            if (PeerSector(peer) == Sector) { RpcId(peer, nameof(NetPlace), h.Pos, h.Rot); s.Relocated(); }   // never a jump (Drives)
+            else _placeFor[peer] = (h.Pos, h.Rot);
         }
         foreach (var k in h.Owed) PayKill(k, h.OldPeer, peer);          // what it missed (a kill it did get is not paid again)
     }
@@ -1065,12 +1066,12 @@ public partial class Hub : Node2D
         foreach (var t in GetChildren().OfType<Shot>()) if (t.NetId == id) t.Intercept();
     }
 
-    // host: pick a level between 1 and the newest unlocked ON THIS OPERATION'S OWN LADDER. The
-    // level is per category (Missions.Level), so this never moves the other one.
+    // host: pick a level between 1 and Missions.SkipAhead past the newest unlocked ON THIS
+    // OPERATION'S OWN LADDER. The level is per category (Missions.Level), so this never moves the other one.
     public void SelectLevel(int level)
     {
         if (!Net.IsHost || Mission != MissionState.Idle) return;
-        Missions.Level = System.Math.Clamp(level, 1, Missions.Unlocked(Missions.Kind));
+        Missions.Level = System.Math.Clamp(level, 1, Missions.Top(Missions.Kind));
         BroadcastMission();
     }
 
@@ -1082,7 +1083,7 @@ public partial class Hub : Node2D
     {
         if (!Net.IsHost || Mission != MissionState.Idle) return;
         Missions.Kind = System.Math.Clamp(kind, 0, Missions.Kinds.Length - 1);
-        Missions.Level = System.Math.Clamp(Missions.Level, 1, Missions.Unlocked(Missions.Kind));
+        Missions.Level = System.Math.Clamp(Missions.Level, 1, Missions.Top(Missions.Kind));
         BroadcastMission();
     }
 
@@ -1151,7 +1152,7 @@ public partial class Hub : Node2D
     public const float RaidEdge = 4200f;
     private readonly Raids _raids;
     public Hub() { _raids = new Raids(this); }      // this world's director, built before _Ready
-    public int SpawnPatrol(Vector2 at, double scale = 1) => _raids.Patrol(at, scale);
+    public int SpawnPatrol(Vector2 at, double level = 1) => _raids.Patrol(at, level);
     public void HuntWave(Node2D quarry, int wave) => _raids.Hunt(quarry, wave);
     public void GarrisonWave(Vector2 at, int wave) => _raids.Garrison(Missions.Level, at, wave);
     public void CallOff(Node2D quarry) => _raids.CallOff(quarry);
@@ -1234,9 +1235,9 @@ public partial class Hub : Node2D
     // A raider is a row of Spawns.All too. `patrol` -- which squad it flew in with -- is the
     // host's own bookkeeping and is not on the wire, so it is set after the spawn, exactly as
     // Quarry and Agility are (Raids.Send).
-    public Raider SpawnRaider(Vector2 at, int kind = Enemies.Webifier, int patrol = 0, double scale = 1, double hullShare = 1)
+    public Raider SpawnRaider(Vector2 at, int kind = Enemies.Webifier, int patrol = 0, double level = 1, double hullShare = 1)
     {
-        if (Spawn(Spawns.Raider, at, kind, scale, hullShare) is not Raider r) return null;
+        if (Spawn(Spawns.Raider, at, kind, level, hullShare) is not Raider r) return null;
         r.Patrol = patrol;
         return r;
     }
@@ -1265,23 +1266,27 @@ public partial class Hub : Node2D
     // were read straight off Raider. The outposts answer a blockade with the same missile from the
     // other side (Lanes.cs), so WHOSE it is is a row of Missiles.All and its numbers are the
     // launcher's own spec. Nothing below names a raider or an outpost.
-    private readonly List<(Vector2 at, double left, int from, MissileSpec shot)> _blasts = new();
+    // EACH ONE HAS AN ID, in the one space every missile's id comes from (NetIds.Missile, as an
+    // interceptable shot's), sent with the launch: whatever must name one blast on every peer -- a
+    // flare pulling its landing mark aside (F14's NetDecoy) -- names it by that id.
+    private readonly List<(Vector2 at, double left, int from, MissileSpec shot, int id)> _blasts = new();
     public int BlastsPending => _blasts.Count;
     public void ThrowMissile(MissileSpec m, Vector2 from, Vector2 at, int fromId)
     {
         if (!Net.IsHost) return;
-        _blasts.Add((at, m.Flight, fromId, m));
+        int id = Combat.NextMissileId();
+        _blasts.Add((at, m.Flight, fromId, m, id));
         // the circle it marks, as every warning is marked: a row of Fx.All, on every peer -- red
         // for a threat, the friendly shape for one of ours
         Fx.Warn(new FxRaise { Id = Missiles.Of(m.Side).Mark, At = at, To = at, Size = m.Blast, Time = m.Flight });
-        ShowMissile(m.Side, from, at, m.Flight, m.Blast);
-        ToWorld(nameof(NetMissile), m.Side, from, at, m.Flight, m.Blast);
+        ShowMissile(m.Side, from, at, m.Flight, m.Blast, id);
+        ToWorld(nameof(NetMissile), m.Side, from, at, m.Flight, m.Blast, id);
     }
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetMissile(int side, Vector2 from, Vector2 at, double flight, float blast) =>
-        ShowMissile(side, from, at, Net.Arriving(flight), blast);
-    private void ShowMissile(int side, Vector2 from, Vector2 at, double flight, float blast) =>
-        AddChild(new MissileVisual { Side = side, From = from, To = at, Flight = flight, Blast = blast });
+    private void NetMissile(int side, Vector2 from, Vector2 at, double flight, float blast, int id) =>
+        ShowMissile(side, from, at, Net.Arriving(flight), blast, id);
+    private void ShowMissile(int side, Vector2 from, Vector2 at, double flight, float blast, int id) =>
+        AddChild(new MissileVisual { Side = side, From = from, To = at, Flight = flight, Blast = blast, NetId = id });
     private void TickBlasts(double delta)
     {
         for (int i = _blasts.Count - 1; i >= 0; i--)
@@ -1486,7 +1491,10 @@ public partial class Hub : Node2D
         if (Hints.Wants("raid") && !InArena && Raiders.Count > 0) Hints.Meet("raid");
         if (Hints.Wants("stasis") && !me.Alive) Hints.Meet("stasis");
         if (Hints.Wants("boss") && InArena && IsInstanceValid(Boss)) Hints.Meet("boss");
-        if (Hints.Wants("warp") && WarpAim() is { has: true } aim && aim.at.DistanceTo(me.Position) > Hints.WarpMeet) Hints.Meet("warp");
+        // the hull's own drive card (warp or boost) once something far off is picked; the slide's once a hostile is near
+        if (me.Drive is { } dv && Hints.Wants(dv.Id) && WarpAim() is { has: true } aim && aim.at.DistanceTo(me.Position) > Hints.WarpMeet) Hints.Meet(dv.Id);
+        if (Hints.Wants("strafe") && me.Stats["strafe_speed"] > 0
+            && Combat.Nearest(Combat.Hostiles, me.Position, h => h.Position, Hints.TargetMeet, Combat.Pickable) != null) Hints.Meet("strafe");
     }
 
     // Tab: ALWAYS the live hostile nearest your ship, at any range. No cycling --
@@ -1758,7 +1766,7 @@ public partial class Hub : Node2D
             else if (kk.Keycode == Key.B && !InArena) ToggleBase();
             else if (kk.Keycode == Key.L) TogglePilot();
             else if (kk.Keycode == Key.I) ToggleEquipment();
-            else if (kk.Keycode == Key.V) mine.StartWarp();            // warp: a fixed key, not a slot
+            else if (kk.Keycode == Key.V) mine.PressDrive();           // the drive (Drives.cs): a fixed key; a warp's release is read by the ship
             else
             {
                 // in stasis the only order is F: re-board once the ship is ready

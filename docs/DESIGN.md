@@ -125,6 +125,15 @@ away and respawns from `Net.Players`.
 **Offline is not a separate mode.** Single player is a host with no peers, so there is exactly one
 code path and offline can never drift from online.
 
+**A ramp (F1's Ramp, `AbilityDef.Ramp`) is owner-stepped: the one slot field the host does not
+speak for.** Its running total (`Sl(id).Own`) builds on the throttle and bleeds on the yaw, and
+only the owner's peer has either: on the host a guest's ship follows its reports (`RemoteFollow`),
+never `Steer`, so its yaw never moves and there is no helm to read. So `TickAbilities` steps a
+ramp only where `Mine`, and `ApplyHostState` keeps a ramp row's `Own` on the owner's own ship while
+it takes every other slot field from the host. Nothing the host decides reads it: the ramp lifts
+the owner's own top speed and thrust, and the host sees the result as the owner's replicated
+position and speed, as it sees any helm input.
+
 ### What the host must never take on trust (2026-09-22)
 
 Four rules, each of which was once missing, each now held in ONE place so the next thing that
@@ -543,12 +552,12 @@ rows (`Ab.*`). Nothing else in the game is touched.
 
 | | Hull | Length | Top speed | Main guns | Its F | PD turrets | Wing | Sprite |
 |---|---|---|---|---|---|---|---|---|
-| **Battleship** | 300 | 378 u | 104 u/s | 4, 17.9 a shell | broadside | 2 (slow, τ/3) | — | `battleship_hull.png` |
-| **Carrier** | 200 | 283.5 u | 116.48 u/s | — | bomber strike | 3 (fast, τ/1.2) | 3 fighters + 2 bombers | `carrier_player.png` |
-| **Destroyer** | 250 | 212.6 u | 130 u/s | 2, 7.5 a shell | missile burst | 2 (slow, τ/3) | — | `destroyer_hull.png` |
-| **Freighter** | 400 | 230 u | 85 u/s | 1, 12 a shell | bubble (400 soaked) | 2 | 3 deployable turrets | `freight_hauler_hull.png` |
-| **Tender** | 400 | 230 u | 85 u/s | 1, 12 a shell | overdrive (x2 fire) | 2 | 3 deployable turrets | `freight_tender_hull.png` |
-| **Bastion** | 400 | 230 u | 85 u/s | 1, 12 a shell | shockwave (1000 u) | 2 | 3 deployable turrets | `freight_bastion_hull.png` |
+| **Battleship** | 300 | 378 u | 88 u/s | 4, 17.9 a shell | broadside | 2 (slow, τ/3) | — | `battleship_hull.png` |
+| **Carrier** | 200 | 283.5 u | 99 u/s | — | bomber strike | 3 (fast, τ/1.2) | 3 fighters + 2 bombers | `carrier_player.png` |
+| **Destroyer** | 250 | 212.6 u | 117 u/s | 2, 7.5 a shell | missile burst | 2 (slow, τ/3) | — | `destroyer_hull.png` |
+| **Freighter** | 400 | 230 u | 120 u/s | 1, 12 a shell | bubble (400 soaked) | 2 | 3 deployable turrets | `freight_hauler_hull.png` |
+| **Tender** | 400 | 230 u | 120 u/s | 1, 12 a shell | overdrive (x2 fire) | 2 | 3 deployable turrets | `freight_tender_hull.png` |
+| **Bastion** | 400 | 230 u | 120 u/s | 1, 12 a shell | shockwave (1000 u) | 2 | 3 deployable turrets | `freight_bastion_hull.png` |
 | **Sniper** | 140 | 120 u | 190 u/s | 1, 6 a shell | railgun (150 at 2500 u) | — | — | `heavy_sniper_hull.png` |
 | **Warrior** | 140 | 120 u | 190 u/s | 2, 9 a shell | rush + EMP | — | — | `heavy_warrior_hull.png` |
 | **Warden** | 140 | 120 u | 190 u/s | 1, 12 a shell | 6 hunter-seekers | 1, always on | — | `heavy_warden_hull.png` |
@@ -579,6 +588,22 @@ and 25% larger: 378 u and a 43.875 u half-beam. The carrier is 25% smaller (283.
 25% smaller again (212.6 u). The hit capsule is the drawn hull. New ships spawn half the longest
 class below the pad (`Hub.SpawnClear`), so any class starts clear of the base.
 
+### V is the class's drive (Drives.cs, lane B, 2026-09-25)
+
+Every hull names one row of `Drives.All` (`ClassDef.Drive`); `Abilities.For` appends it after the
+class's own rows, so it has a slot on the wire and on the bar, sits on V (fixed: `Bind` refuses to
+move it), and no level wall or Resupply reaches it. The capitals WARP: the OWNER holds V, the charge
+is its own (1.0 s spool, then warp_rate to warp_safe + 900), it jumps on release and locks itself at
+once for any overshoot (`PlayerShip.Disabled` = the host's status OR that lock). The HOST prices what
+it sees between two reports (`Drives.Priced`): a fallen charge bit past the flight the hull could have
+made, and any snap over 600 u with no bit at all; only warp hulls. **Traps:** a relocation the host
+makes must call `PlayerShip.Relocated` (both `NetPlace` sends do), or a returning pilot is disabled for
+arriving; the smoke test's host roles move guests' warp hulls by hand, so they set
+`Drives.PriceSnaps = false` outside `LaneBHostDrives`. The nine BOOST on the ability path (one F1 lift
+on top, thrust and the slide). The slide (F24): Shift + A/D on a hull whose `strafe_speed` > 0,
+read from the stat, never the class; holds multiply after the lifted sum (`PlayerShip.StrafeTop`); the
+host reads a report's speed held to hypot(top, strafe) x 1.1 (`Drives.Clamp`).
+
 ### The class kits: the signed spec lives in docs/plans (2026-09-24)
 
 The twelve kits the class batch builds (one primary and three abilities a class, the capitals' warp,
@@ -594,6 +619,34 @@ before, and are NOT copied here:
 
 Numbers for the curve, bosses, raids, chips and items are `numbers_curve_raids_items.md`'s, not the
 kits'. Progress, decisions taken where the spec is silent, and the engine rungs owed: `docs/plans/ledger_kits.md`.
+
+**Stops: one rule for "how many bodies before it ends"** (slice 3). A flyer (`ShotDef.Stops`, and a
+shot's own `Shot.Stops`) and a line (`LineDef.Stops`, `Lines.cs`) both mean the same by it: 1 = the
+first body, n = the first n, 0 = everything on its path; each body is struck once. A piercing slug,
+the railgun, Time on target's lines and the prism's children are rows, never a new loop. Trap: a
+blow may end a body and remove it from the list being walked, so `Shot.Strike` asks for the next
+body afresh after each blow, and `Lines.Strike` picks every body before it deals the first.
+A line is aimed from a point at a point: an `AtTarget` row ends there (never past its Reach), any other runs its
+whole Reach through it. **A charged weapon reads its bands** (`Charge.cs`, `Charges.Of(ability id)`): the share of the full
+charge picks a multiplier and a line row; a ramp is a band flag, not code. The Sniper's active reload
+(6c) is the railgun's table rewritten, not a new path. Trap: a constant table is an ARRAY of rows, never a
+dictionary -- `Net.Plain` does not hash a dictionary field, so a build whose table differed would still be admitted.
+
+### Fields and one-raise effects (kits lane D, F9)
+
+- **A field is a row keyed by a slot id** (`Fields.All`), never a block in `_Draw`. The row names the
+  slot; the ability's own row does not know it has a field. A lane that names its slot differently from
+  `super` / `taunt` / `boost` edits that one row, and `FieldsLiveRowChecks` stops printing its NOTE.
+- **One raise, many pieces.** An effect that is several pieces (the torn chunk: debris, sparks, smoke,
+  scar) is ONE row on the wire with `With` naming the rest; each peer builds them from the same raise.
+  Anything random in them is a pure function of the raise (`Fx.Seed(anchor, at)`, `Fx.Tumble`), never
+  a random number drawn on the peer, or two peers draw two different chunks.
+- **A Loose piece reads its anchor once, then leaves it** (`FxNode.Settle`, deferred, to `Combat.World`),
+  so a hull killed under its chunk does not free it. Its companions are built in that same step, never
+  before, so a hull freed first leaves nothing behind. **Trap:** raise a tear BEFORE the hit it goes
+  with; the world finds the anchor among the living (`Combat.ById`), so a tear after a killing hit has
+  no hull to cut from.
+
 
 ### The helm: capital ships handle like naval ships
 

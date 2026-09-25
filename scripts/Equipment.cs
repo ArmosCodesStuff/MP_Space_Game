@@ -444,25 +444,30 @@ public static class Equipment
         return open < ChipSlots ? (-1, $"next chip slot opens at level {Unlocks.At(Opens.ChipSlot, open + 1)}") : (-1, "every chip slot is full");
     }
 
-    // ── LEVELLING A PART WITH SALVAGE ────────────────────────────────────────────────────────
-    // Salvage had nothing to buy but a refit, and a part was worth exactly what it rolled. A level
-    // adds 5% to what the part is FOR (ItemDef.Ups) and nothing to what it costs you, at 100
-    // salvage for the first and a quarter more each time, stopping at +200%.
-    //
-    // A LEVEL BELONGS TO THE PART ID, not to a copy: the hold has always stored counts by id and
-    // there is no instance id anywhere in the save or on the wire, so "this Rapid Battery II" is
-    // not a thing the game can say. Levelling one levels every one you own, which is also the
-    // reading that cannot lose a levelled part by scrapping the wrong copy.
-    public const int MaxLevel = 40;                 // 40 x 5% = +200%
-    public const double LevelStep = 0.05, LevelCost = 100, LevelGrowth = 1.25;
+    // ── SALVAGE LEVELS, ON THE SLOT ──────────────────────────────────────────────────────────
+    // REPLACED: a level per PART ID (+5% a level, 100 salvage and a quarter more each time), so a
+    // better part dropped threw away everything put into the old one. A level now lives on a CORE
+    // SLOT, per pilot, shared by every class that pilot flies: five ladders (Weapon, Engines, Shield,
+    // Hull, Utility), keyed by the slot's name. A level lifts what the part in that slot is FOR
+    // (ItemDef.Ups) by 3% and nothing it costs; a kit part has no ups and never moves. CHIP SLOTS
+    // TAKE NO LEVEL (numbers_curve_raids_items.md §8 R7): there is no chip ladder.
+    // THE PRICE: 500 salvage for the first, a tenth more each time (round(500 x 1.10^n)), 40 levels.
+    // THE CAP: a level is bought only up to the highest level cleared on any ladder + 1 (LevelCap),
+    // checked at purchase, so salvage cannot outrun the bosses; what was bought is never taken back.
+    public const int MaxLevel = 40;                 // 40 x 3% = +120%
+    public const double LevelStep = 0.03, LevelCost = 500, LevelGrowth = 1.10;
+    // A slot's key in a pilot's levels, or null for a slot that takes none (a chip).
+    public static string LevelKey(GearSlot s) => s == GearSlot.Chip ? null : s.ToString();
     // WHOSE LEVELS. A sheet is lifted by the levels it is GIVEN -- a ship's by its own pilot's
     // (PlayerShip.Levels, which came with that pilot's identity) -- never by the pilot at this
-    // keyboard. LevelOf is THIS pilot's, for what only this pilot sees: the window, the recycler,
-    // the price.
-    private static int LevelIn(IReadOnlyDictionary<string, int> levels, string id) =>
-        System.Math.Clamp(levels.GetValueOrDefault(id ?? "", 0), 0, MaxLevel);
-    public static int LevelOf(string id) => LevelIn(Character.GearLevel, id);
-    // A PILOT'S LEVELS MADE SAFE, as a copy: parts the game knows, each held to the ladder, a 0 left
+    // keyboard. LevelOf is THIS pilot's, for what only this pilot sees: the window, the price.
+    private static int LevelIn(IReadOnlyDictionary<string, int> levels, GearSlot s) =>
+        LevelKey(s) is { } k ? System.Math.Clamp(levels?.GetValueOrDefault(k, 0) ?? 0, 0, MaxLevel) : 0;
+    public static int LevelOf(GearSlot s) => LevelIn(Character.GearLevel, s);
+    public static int LevelCap => System.Math.Min(MaxLevel, Missions.HighestAnywhere() + 1);
+    // Held at the cap: the next level waits for a clear (the price still shows, greyed).
+    public static bool Capped(GearSlot s) => LevelOf(s) >= LevelCap;
+    // A PILOT'S LEVELS MADE SAFE, as a copy: core slots only, each held to the ladder, a 0 left
     // out. The one way levels are taken in -- a pilot's claim on the wire (Hub.NetIdentity), a file
     // on disk (Character.Load), and what a ship keeps of its pilot's (PlayerShip.SetEquipment). A
     // COPY, so a level bought later is a change the ship can see rather than an edit to a dictionary
@@ -471,15 +476,15 @@ public static class Equipment
     {
         var d = new Dictionary<string, int>();
         foreach (var (id, level) in claimed ?? Enumerable.Empty<(string, int)>())
-            if (ById(id) != null && level > 0) d[id] = System.Math.Min(level, MaxLevel);
+            if (Core.Any(c => LevelKey(c) == id) && level > 0) d[id] = System.Math.Min(level, MaxLevel);
         return d;
     }
-    // What the NEXT level costs, in salvage -- or -1 at the ceiling.
-    public static double NextLevelCost(string id) =>
-        LevelOf(id) >= MaxLevel ? -1 : System.Math.Round(LevelCost * System.Math.Pow(LevelGrowth, LevelOf(id)));
-    // Everything a part is for, lifted by its level in `levels`. A kit part has no ups and never moves.
+    // What the NEXT level of a slot costs, in salvage -- or -1 for a chip slot or at the ceiling.
+    public static double NextLevelCost(GearSlot s) =>
+        LevelKey(s) == null || LevelOf(s) >= MaxLevel ? -1 : System.Math.Round(LevelCost * System.Math.Pow(LevelGrowth, LevelOf(s)));
+    // Everything a part is for, lifted by its SLOT's level in `levels`.
     private static double Lifted(ItemDef i, string stat, double v, IReadOnlyDictionary<string, int> levels) =>
-        System.Array.IndexOf(i.Ups, stat) < 0 ? v : v * (1 + LevelStep * LevelIn(levels, i.Id));
+        System.Array.IndexOf(i.Ups, stat) < 0 ? v : v * (1 + LevelStep * LevelIn(levels, i.Slot));
 
     // What a loadout does to the sheet, summed per stat over its SANITISED parts, so a part in the
     // wrong slot, for another class, or in a chip slot `peak` has not opened changes nothing: the
