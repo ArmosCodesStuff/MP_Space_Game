@@ -3,27 +3,23 @@
 Engine outputs for the old-way batches: S = C:\Users\logan\AppData\Local\Temp\claude\C--Users-logan-Downloads-WarShips-Version-L\31bcb796-5d47-41e0-ad68-ba3af2cf375b\scratchpad
 (their summary.txt is UTF-16: read with powershell Get-Content). New batches write to %TEMP%\warships_rungs.
 
-## Running (BUILD PHASE: no engine anywhere until every planned lane is merged -- owner; all agents Opus 5.5)
-- wf_d96c8731-746 / task wplisflb9, "lane-kits-finish" (script workflows/scripts/lane-kits-finish.js): slice 4 (gate 2 failed on ONE: no guest-role check
-  carries a non-empty targets[]) fix -> gate 3 -> merge; then 6a, 6d (new worktrees) and 6b (wt_kits6b: Freighter + Bastion built at ffdcbc4,
-  the Tender waited on slice 4) side by side; then items RECONCILE and the FOLLOW-UPS batch (wt_follow) side by side. Serialized merges.
+## Running (BUILD PHASE COMPLETE 2026-09-25: every planned lane is merged into version-l at 1ff39a3; nothing has run in the engine)
+- fable-critique / task w2f27eojd: 3 Fable critics + a synthesis -> scratchpad/fable/REPORT.md, CLAUDE.md, process/*.md, MAP.md. When it
+  lands: report to the owner (SendUserFile REPORT.md), apply the "NOW" items (CLAUDE.md swap, test-phase.js edits), THEN launch the test phase.
+- slots proof (background PowerShell): two chains quick,solo at once from WarShips_wt_t0 / _t1 (tags tpslots_0/1). Both green = slots work;
+  a red is a rungs.ps1 / harness -Slot bug to fix before the test phase.
 
 ## Next
-1. When lane-kits-finish ends with every unit merged: launch Workflow({scriptPath: workflows/scripts/test-phase.js}) (written, not run: audit,
-   rounds of 5 chains on 4 slots + triage + fixes, frames by eye, net extras, bar, VERIFIED, push both, release; runner, merges, bar and
-   release on Sonnet high) AND arm the watchdog (agents.ps1 -Loop in the background). Else fix the row's unit first.
-2. (follow-ups now run inside lane-kits-finish.) Raider cruise 100 vs BB 88 / CV 99: note only, by design (capitals rely on warp).
-3. TEST PHASE, once everything is merged (owner 2026-09-25: 3+ engine checks per class ability / drive row, CLAUDE.md 6.7; first an
-   audit agent maps every ClassDef.Abilities and drive row to its checks and writes the missing ones): the slots proof, then quick,solo,solo,six,screens (+ six,six) across slots, fix low, then the bar
-   once, VERIFIED:, push version-l and main, release; frames to the owner (the art lane's Drake, Rusty, siege, player ships).
-4. Delete each lane's worktree once it is merged (walls, net, slots, art, test removed 2026-09-25; branches kept).
-Done: SLICE 4 3450da4 (gate 3 passed; wt_kits4 removed). 10:55: 6a at J7, 6b in its gate fix (J11), 6d at J5.
-  ITEMS 669c5a3, SLICE 5 a8a5e81, SLICE 6c ac2817d merged (6c risk: rung-5 guest joins at L2 but presses L3/L6
-  abilities -> raise its peak if they read LOCKED). WAVE 1 ALL MERGED: wings 9b05fd3, net2 23d5b29 (R2-R5), raids f2f398b (gate 3 passed); worktrees removed.
-  KITS SLICE 3 MERGED 25e27d0 (gate 1 failed, gate 2 passed; D24 shot rows land with their classes in 6a-6d, D27 no
-  Overcharge -- README ruling added). Wave: drives 8dcc845, fields, curve merged; wings, raids, net2 still running. Worktrees kits,
-  drives, fields, curve removed. KITS slices 1-2 MERGED a515479 (K4 9742789, K-merge b57862d with art + wave). ART MERGED (A5 7717267 passed gate 3's code; coordinator applied its one comment fix A6 761a2ad; quick art_mergeq green;
-  engine-unproven; Drake throw now nose 1300 u off = 200 u past gun reach, tell the owner if asked). Slots merged 25aefc1 (gate 2 passed at a22c187; its 2 notes applied in e104a5a). Engine-unproven: its proof opens the test phase.
+1. Launch Workflow({scriptPath: workflows/scripts/test-phase.js}) once the critique's NOW items are applied, and arm the watchdog
+   (agents.ps1 -Loop in the background). Its rows: audit -> rounds -> extras -> bar -> release. A stop: read the row, fix, resume with
+   args {attempt: 2}.
+2. After the release: frames to the owner (its framesForOwner), the owed one-machine / two-machine network checks (netOwed), then the
+   critique's "after this release" items.
+3. Delete each lane's worktree once merged (t0..t4 are the test phase's).
+Done: BUILD PHASE. Kits lane A slices 1-6 (6a d524c33, 6b bcab9c3, 6d 667be46, 6c ac2817d), items 669c5a3 + reconcile 1ff39a3,
+  follow-ups d9f2e82 (fingerprint tables, retarget lead, warp cooldown), drives, fields, wings, curve, raids, net2 (R2-R5), art, walls,
+  slots, net R1. Defaults the lanes took are in each ledger's "defaults" lines (6a: rip on a dummy = 10, no rip sound; 6d: Wraith numbers
+  derived from the power rows; items: 4 unpriced pairs). Backup: origin/backup/unverified.
 
 ## Owner questions
 - none open. Owner 2026-09-25: Fable orchestrates everything (they switch the model menu); a Fable critique + lean CLAUDE.md proposal is
