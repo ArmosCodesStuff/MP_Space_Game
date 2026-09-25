@@ -12,3 +12,5 @@ pressed E on the carrier (it leaned on the taunt lane's class). Fix: a guest's S
 fa1as_p1 (six@seed): curtain, suppress, grapnel green both sides; the guest then waited 80+ s in the pepper refit:
 hauled 250 u off TargetDummy1, its PD had the practice fighters in reach (combat for good). The grapnel lane now
 parks it at BasePos+(2600,2400) before returning.
+fa1as_p2: the same three host reds, and no guest line after grapnel: run.ps1 kills aguest at 150 s and its lanes
+through grapnel alone take 136 s (the list grew in the build phase, never run). Limits: aguest 480 (wan 600), ahost 240.
