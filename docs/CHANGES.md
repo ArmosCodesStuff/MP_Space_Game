@@ -467,6 +467,34 @@ outstanding from the batch of 2026-09-23.)*
 
 ## Unreleased
 
+### Level walls, job 3: the ability walls (2026-09-25, lane C, `wt/walls`)
+
+**A class's abilities 1, 2 and 3 open at pilot levels 1, 3 and 6** (`Unlocks.AbilityAt`), read from the
+pilot's peak. They are its rows in `ClassDef.Abilities` order, skipping the new `AbilityDef.Weapon` rows
+(guns, fire mode, point defence, the missile's reload, the wing's attack and recall, the sentries' deploy
+and collect) and the open hotkeys; keys keep their layout. **The host refuses a walled press**
+(`PlayerShip.DoAbility`, for the peak the pilot announced); the owner's press fails at once with
+`LOCKED · L3` (`UseAbility`, before a local press too); the bar draws a locked slot in the quiet box with
+`LOCKED · L3` beneath (`SlotState.Locked`); K adds "opens at level 3" to its row, still bindable. **Crossing
+a wall shows a card** written by the table for the class flown ("LEVEL 3 · Q · <ABILITY>" and its blurb;
+"LEVEL 4 · CHIP SLOT 2"), met in order by `AddExp` (`Unlocks.Crossed`, `Hints.Card`); the PILOT window
+names the next wall beside the points. The menu's battleship flies at peak 14. Today every class carries
+ONE walled ability, so nothing real is refused until lane A writes each kit's three in learn order.
+
+**Checks:** `WallChecks` (rung 3): the eight weapon rows; the index-to-level rule on real rows in three
+orders; all 12 classes open at level 1, every walled row a press; card ids, a chip card, `Crossed` and
+`Next` x battleship / warden / echo; check 3's three-a-class (PEND walls). `WallChecksLive` (rung 3, Solo):
+2600 EXP from level 1 queues LEVEL 2 · CHIP SLOT 1 x destroyer / warrior / carrier (ability 2's card PEND);
+the PILOT window's NEXT at 3 / 12 / 14; at level 1 a battleship, a hauler and an echo lock nothing, land
+their guns on a gunship 300-600 u off at a varied bearing and press ability 1 through `DoAbility`;
+checks 4 and 5 (the owner's LOCKED · L3, the host's gate at 5 / 6) PEND. The menu ship's peak 14. Rung 5
+(the third player, level 1 / peak 3): checks 13, 14 + 17 and 16 PEND. Shots: `6c_k_keys_walls`,
+`57b_walls_next_card` (new).
+
+**Known broken:** none known; compiles (rungs 1-2), rungs 3, 4 and 5 not yet run. The PEND checks (3, 4,
+5, 9's second card, 13, 14, 16, 17) have never run live: they first run when a class has a 2nd and 3rd
+walled ability, and their timing on the guest has not been proved.
+
 ### Level walls, job 2b: five old-truth checks job 2 missed (2026-09-25, lane C, `wt/walls`)
 
 Rung 3 at job 4's commit (seed 11400714819323464263) failed five checks that still asserted the five kit

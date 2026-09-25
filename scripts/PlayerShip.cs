@@ -456,6 +456,9 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     {
         var def = Abilities.Find(Class, id);
         if (def == null) return;                       // not an ability this class carries
+        // BEHIND A LEVEL WALL (Unlocks): the slot says the level that opens it, and nothing is asked --
+        // before a local press too, which the host would never see. The host holds the same wall.
+        if (Unlocks.LockedAt(Class, Peak, def) is int at) { Fail(id, Unlocks.Locked(at)); return; }
         // A LOCAL ability is the owner's own intent (the fire mode): it rides in the state report
         // rather than being asked for.
         if (def.Local) { def.Press?.Invoke(this, null); return; }
@@ -477,6 +480,8 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // it (AbilityDef.WhenWrecked -- reboard). The nine newest abilities each repeated `!Net.Sim ||
     // !Alive` in their own body and the seven oldest never did, so a guest in stasis could fire a
     // missile burst, switch on point defence and order a bomber strike out of its own wreck.
+    // An ability behind a level wall (Unlocks) is refused here too, for the peak this ship's pilot
+    // announced: a guest that skips its own refusal still presses nothing its level has not opened.
     // WHAT A COOLDOWN REALLY IS, once the pilot's COOLING points are in it: the sheet's share of
     // the row's seconds, never below a floor. Every ability that sets a cooldown reads it here
     // rather than each one multiplying for itself.
@@ -486,7 +491,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     private void DoAbility(string id, int targetId)
     {
         var def = Abilities.Find(Class, id);
-        if (def == null || !Net.Sim || (!Alive && !def.WhenWrecked)) return;
+        if (def == null || !Net.Sim || (!Alive && !def.WhenWrecked) || Unlocks.LockedAt(Class, Peak, def) != null) return;
         def.Press?.Invoke(this, targetId != 0 ? Combat.ById(targetId) : null);
     }
 

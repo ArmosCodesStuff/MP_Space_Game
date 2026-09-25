@@ -220,3 +220,65 @@ BasePanel.cs:120-129, Raids.cs:53 ask Unlocks. Grep the harness for NeedsBoss an
   ... 3 x 49 = 147"; "the gear: 246 drops ... a 22-part kit". Rungs 4/5 not yet run at all (may hold more).
 - commit: see git log ("Walls job 2b: five old-truth checks rewritten to the stock ship").
 - next: job 3 (no PRE yet).
+
+## Job 3 PRE (the ability walls; fresh agent, after job 2b)
+- intent: AbilityDef.Weapon (+ flags on Guns FireMode Pd Reload Attack Recall Deploy Collect) and SlotState.Locked; Unlocks: Walled,
+  AbilityAt(kit, def), LockedAt(class, peak, def), Locked(at), Nth, Crossed, Card, Next, Unlock.Hint; PlayerShip UseAbility
+  (LOCKED · L3 before Refuse and Local) + DoAbility's wall line; AbilityBar lock; K row "opens at level N"; Hints.Card
+  (unlock cards from the table); AddExp meets Crossed; Pilot window NEXT; chip row via Unlocks.Locked; the menu ship at Top.
+  Harness: WallChecks table proofs + WallChecksLive (Solo) + guest2 rung-5 presses (PEND until a 2nd walled ability);
+  Shots 6c_k_keys_walls, 57b_walls_next_card. D14: no IGated (see POST).
+- start: 932e7f9d8105a97f949b05a85359537022a9d7a8
+- files (hash-object at start):
+  - scripts/Abilities.cs 8807eee5b4bf1e263b8762db6cd76a68efacb427
+  - scripts/Unlocks.cs ccf62ed1b7042f33810f8a10d91c877e5f2481c0
+  - scripts/PlayerShip.cs 13af950a3d56f05fc6bc100a4e4d7355221b74d4
+  - scripts/AbilityBar.cs 6707b57c493ef01e85843ae1b1fda3d21761b793
+  - scripts/StatsWindow.cs c5834debd8b3c60d9fd0a456a7c0a6e8be412e50
+  - scripts/Hints.cs b689a3f8cad27fbd62746631722874ed96bdfe4a
+  - scripts/Progression.cs 780f3c9b67133bc48136fedd4aa578d628f45103
+  - scripts/PilotWindow.cs 81b69f416bcbdb552883755ce134c788c5e0c1e4
+  - scripts/EquipmentWindow.cs f3479e0522d832cb12541b39ab787734f102b70b
+  - scripts/MainMenu.cs aa3be5beae23e91642bf131068c3c9e0ce7cb636
+  - tools/smoketest/SmokeTest.cs.txt 294d3ec4db4979835f2f614348a21001e06e5602
+  - tools/screens/Shots.cs.txt 6a6ff2f47dc066e8c707e6074b1d39d37250cd0b
+  - docs/CHANGES.md 6aacd7b0319d3657d997860635c4f1ac875fe1aa
+  - docs/DESIGN.md 8d15c0e26f08e71e8b96c10151871587e72eea15
+
+## Job 3 POST
+- verdict: typecheck 0 errors; `verify.ps1 -Quick` ALL CHECKS PASSED (0 warnings, 0 analyser findings, UNUSED 0). Rungs 3/4/5 owed.
+- files: Abilities.cs (`AbilityDef.Weapon` + the flag on the 8 weapon rows, `SlotState.Locked`: lane A's file, nothing
+  else), Unlocks.cs (Walled, AbilityAt, LockedAt, Locked, Nth, Crossed, Card, Next, Unlock.Hint), PlayerShip.cs (UseAbility's
+  wall line before Local/Refuse, DoAbility's wall line, one comment: nothing else), AbilityBar.cs (StateOf, the locked
+  slot), StatsWindow.cs (K row "opens at level N"), Hints.cs (`Hints.Card`, two sentences, a duplicated comment removed),
+  Progression.cs (AddExp meets `Crossed`), PilotWindow.cs (NEXT beside the points), EquipmentWindow.cs (chip row via
+  `Unlocks.Locked`), MainMenu.cs (the demo at peak 14), SmokeTest.cs.txt, Shots.cs.txt, CHANGES.md, DESIGN.md, this ledger.
+- D14: no `IGated`. Two of the four readers are the pilot (static `Character`: the Pilot window, the cards), not a ship,
+  and PlayerShip's class line is lane A's; `Unlocks.LockedAt(ShipClass, int peak, AbilityDef)` serves all four.
+- D15: an unlock card is no row of `Hints.All`: `Hints.Card(id)` reads a fixed row or `Unlocks.Card(id, class)`, so the
+  words name the class flown (its key, its ability) and the table stays the one list. Ids `unlock_ability_2`,
+  `unlock_chipslot_1` (`Unlock.Hint`: stable under reordering, which a row index is not). A crossed row the class has
+  nothing behind (an ability 2 today) queues no card.
+- D16: the rung-5 wall checks are the THIRD player's (level 1, peak 3, battleship): 13 = ability 3 sent past its own
+  refusal (the spec's "level 1, ability 2", one wall up); 14 + 17 = ability 2 acts at level 1 because the host reads
+  the peak (17's refit is the same claim: level below the wall, peak above it); 16 = AddExp to level 6 and ability 3
+  pressed in the same frame, at the end of its session (identity and request share channel 0, reliable). Each is
+  judged on the pressing guest's own copy (the host's report); the other guest's view is not checked separately.
+  They sit inside the third's existing 3 s after joining (PEND spends nothing, so its timeline is unchanged today).
+- D17: check 3's gunship is 300-600 u off AND inside 0.9 x the gun's reach (the Echo reaches 500).
+- rung 3 owed (NEW): WallChecks "never walled: the guns, fire mode ..."; "walls by place in the list" x3; "all 12
+  classes at level 1 ..."; "every pilot row has a card of its own"; "<class>: the card for chip slot 2 ..." x3
+  (battleship, warden, echo); PEND line for check 3. WallChecksLive (Solo, after "2600 EXP from level 1"): "<class>:
+  2600 EXP from level 1 reaches level 3 and queues the chip slot 1 card first" x3 (destroyer, warrior, carrier) +
+  PEND x3; "the PILOT window names the next wall"; "<class> at level 1: nothing on the bar locked ..., its guns land
+  ..., ability 1 acts through the host's gate" x3 (battleship, hauler, echo); PEND x6 (checks 4, 5). MenuDiorama:
+  "...nobody's pilot, so it waits for no level: every wall open, peak 14". Two seeds.
+- rung 4 owed: frames `6c_k_keys_walls` (today = 5_k_keys at level 1: nothing locked yet) and `57b_walls_next_card`
+  (PILOT window with "NEXT  LEVEL 4 · CHIP SLOT 2" beside the points; card "LEVEL 2 · CHIP SLOT 1"); read by eye once;
+  LINT 0 (the NEXT label must not widen the PILOT window into anything). Sweep: 111 frames.
+- rung 5 owed: the third player prints "PEND walls" twice (GuestWalls, GuestLevelsAndPresses); nothing else changes.
+- owed at lane A's slice 6 (a class with abilities 2 and 3): every PEND above goes live -- run rung 3 then rung 5, and
+  the two mutants: drop DoAbility's wall line (check 5 at level 5 and check 13 must FAIL); drop the `displaced` line
+  in Character.Load (ChipChecks' files must FAIL).
+- commit: see git log ("Walls job 3: the ability walls")
+- next: lane C's jobs are done; the rungs above are the main session's.

@@ -116,6 +116,14 @@ public partial class _Shots : Node
             for (int k = 0; k < keep.Length; k++) cl[k] = keep[k];
             Character.Class = ShipClass.Battleship; P(H, "ApplyLocalIdentity"); await W(0.3);
         }
+        // THE ABILITY WALLS (Unlocks) at level 1: a walled key's row in K says the level that opens it, and
+        // the bar below draws it in the quiet box, LOCKED · L3 (once a class carries an ability 2 and 3)
+        {
+            int keepPeak = Character.Peak; Character.Peak = 1; P(H, "ApplyLocalIdentity"); await W(0.3);
+            Key(global::Godot.Key.K); await W(0.4); await Snap("6c_k_keys_walls");
+            Key(global::Godot.Key.K); await W(0.2);
+            Character.Peak = keepPeak; P(H, "ApplyLocalIdentity"); await W(0.3);
+        }
 
         Character.Class = ShipClass.Carrier; P(H, "ApplyLocalIdentity"); await W(0.2);
         me = H.GetNode<PlayerShip>("Ship_1");
@@ -374,6 +382,15 @@ public partial class _Shots : Node
             H.Hints.Meet("flight"); await W(0.5);
             await Snap("57_hint_card");
             Character.HintsOff = true; await W(0.1);
+        }
+        // ...and the walls' own: at peak 3 the PILOT window names the next wall (LEVEL 4 · CHIP SLOT 2), and
+        // the card a pilot is shown on crossing one (LEVEL 2 · CHIP SLOT 1) sits in its corner
+        {
+            int keepPeak = Character.Peak; Character.Peak = 3; P(H, "ApplyLocalIdentity");
+            Character.HintsOff = false; Character.HintsSeen.Remove("unlock_chipslot_1");
+            H.Hints.Meet("unlock_chipslot_1"); H.TogglePilot(); await W(0.5);
+            await Snap("57b_walls_next_card");
+            H.TogglePilot(); Character.HintsOff = true; Character.Peak = keepPeak; P(H, "ApplyLocalIdentity"); await W(0.2);
         }
         // a waypoint picked on the radar: its ring there, and the HUD naming it
         {

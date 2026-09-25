@@ -89,7 +89,7 @@ public partial class EquipmentWindow : PanelContainer
             // A SLOT THE PILOT'S LEVEL HAS NOT OPENED says the level that opens it, and has no button.
             if (k >= open)
             {
-                _ship.AddChild(Ui.CardWrap(PartRow($"Chip_{k}", $"CHIP {k + 1}  ·  LOCKED · L{Unlocks.At(Opens.ChipSlot, k + 1)}", l[slot], cls, null)));
+                _ship.AddChild(Ui.CardWrap(PartRow($"Chip_{k}", $"CHIP {k + 1}  ·  {Unlocks.Locked(Unlocks.At(Opens.ChipSlot, k + 1))}", l[slot], cls, null)));
                 continue;
             }
             var off = string.IsNullOrEmpty(l[slot]) ? null

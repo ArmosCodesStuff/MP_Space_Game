@@ -992,6 +992,7 @@ public partial class _Test : Node
               "the title screen flies a REAL battleship, not a picture of one");
         if (menu?.DemoShip == null) return;
         var ship = menu.DemoShip;
+        Check(ship.Peak == 14, $"...nobody's pilot, so it waits for no level: every wall open, peak 14 ({ship.Peak})");
         // The spec's numbers as literals, never the menu's own constants: a check that reads the
         // constant cannot catch the constant being wrong.
         Check(Math.Abs(ship.Stats["broadside_cooldown"] - 5) < 1e-9 && Math.Abs(ship.Stats["broadside_volleys"] - 3) < 1e-9
@@ -2036,6 +2037,57 @@ public partial class _Test : Node
                   $"with bounty boss {beaten} beaten the lanes' blockade clock {(runs ? "runs" : "waits for boss 1")}: 5 s -> {left:0.0} s in half a second");
         }
 
+        // THE ABILITY WALLS BY POSITION (D4/D5): a class's abilities 1, 2 and 3 are its rows in list order,
+        // skipping a weapon's own actions and the open hotkeys. The weapon rows are exactly these eight.
+        var weaponRows = typeof(Ab).GetFields(BindingFlags.Public | BindingFlags.Static)
+                                   .Select(f => f.GetValue(null)).OfType<AbilityDef>().Where(a => a.Weapon).Select(a => a.Id).OrderBy(x => x, StringComparer.Ordinal).ToArray();
+        Check(weaponRows.SequenceEqual(new[] { "attack", "collect", "deploy", "firemode", "guns", "pd", "recall", "reload" }),
+              $"never walled: the guns, fire mode, point defence, the missile's reload, the wing's attack and recall, the sentries' deploy and collect ({string.Join(",", weaponRows)})");
+        // ...and the rule, on real rows in three orders: weapon rows first, walled rows first, the two interleaved
+        foreach (var (kit, want) in new[] {
+            (new[] { Ab.Guns, Ab.FireMode, Ab.Broadside, Ab.Pd, Ab.Missile, Ab.Reload, Ab.Railgun }, new[] { 1, 1, 1, 1, 3, 1, 6 }),
+            (new[] { Ab.Attack, Ab.Recall, Ab.Bombers, Ab.Pd, Ab.Hunters, Ab.Bubble, Ab.Echo }, new[] { 1, 1, 1, 1, 3, 6, int.MaxValue }),
+            (new[] { Ab.Echo, Ab.Guns, Ab.Stealth, Ab.Deploy, Ab.Collect, Ab.Rush, Ab.FireMode }, new[] { 1, 1, 3, 1, 1, 6, 1 }) })
+        {
+            var got = kit.Select(a => Unlocks.AbilityAt(kit, a)).ToArray();
+            Check(got.SequenceEqual(want) && Unlocks.AbilityAt(kit, Ab.Reboard) == 1,
+                  $"walls by place in the list: {string.Join(", ", kit.Select(a => a.Id))} open at levels {string.Join(", ", want.Select(w => w == int.MaxValue ? "never" : w.ToString()))}; reboard, on no list, at 1 ({string.Join(", ", got.Select(g => g == int.MaxValue ? "never" : g.ToString()))})");
+        }
+        // EVERY FLYABLE CLASS at level 1: every weapon row and ability 1 open, and a walled row is always
+        // a press (a held row is polled, not pressed: nothing on that path reads a wall)
+        var flyable = Classes.All.Where(cd => cd.Ready).ToList();
+        var shutAt1 = flyable.SelectMany(cd => cd.Abilities.Where(a => Unlocks.LockedAt(cd.Id, 1, a) != null && a != Unlocks.Nth(cd.Id, 2) && a != Unlocks.Nth(cd.Id, 3))
+                                                           .Select(a => $"{cd.Id}.{a.Id}")).ToList();
+        var heldWalled = flyable.SelectMany(cd => cd.Abilities.Where(a => Unlocks.Walled(a) && a.Kind != AbilityKind.Press).Select(a => $"{cd.Id}.{a.Id}")).ToList();
+        Check(flyable.Count == 12 && shutAt1.Count == 0 && heldWalled.Count == 0 && flyable.All(cd => Unlocks.Nth(cd.Id, 1) != null),
+              $"all 12 classes at level 1: ability 1 and every weapon row open, and every walled row a press ({string.Join(",", shutAt1)}; held {string.Join(",", heldWalled)})");
+        // level_walls check 3: exactly three walled abilities a class, the Warrior learning lunge, whirlwind,
+        // prism and the Carrier bombers, gunships, supercarrier. PEND while the kits are one ability each.
+        var walledCount = flyable.ToDictionary(cd => cd.Id, cd => cd.Abilities.Count(Unlocks.Walled));
+        bool Learns(ShipClass c, params string[] names) => names.Select((nm, i) => Unlocks.Nth(c, i + 1)?.Name.Contains(nm, StringComparison.OrdinalIgnoreCase) == true).All(x => x);
+        if (walledCount.Values.Any(n => n < 1 || n > 3))
+            Check(false, $"every class carries one to three walled abilities: {string.Join(", ", walledCount.Where(kv => kv.Value < 1 || kv.Value > 3).Select(kv => $"{kv.Key} {kv.Value}"))}");
+        else if (walledCount.Values.All(n => n == 3))
+            Check(Learns(ShipClass.HeavyWarrior, "lunge", "whirlwind", "prism") && Learns(ShipClass.Carrier, "bomber", "gunship", "supercarrier"),
+                  $"every class learns three abilities in its list's order: the Warrior lunge, whirlwind, prism; the Carrier bombers, gunships, supercarrier ({string.Join(", ", Enumerable.Range(1, 3).Select(n => Unlocks.Nth(ShipClass.HeavyWarrior, n)?.Name))}; {string.Join(", ", Enumerable.Range(1, 3).Select(n => Unlocks.Nth(ShipClass.Carrier, n)?.Name))})");
+        else
+            GD.Print($"PEND walls: three walled abilities a class (level_walls check 3) -- {string.Join(", ", walledCount.Where(kv => kv.Value < 3).Select(kv => $"{kv.Key} {kv.Value}"))}");
+        // THE CARDS AND THE NEXT LINE, from the table: a pilot row's card id, a chip slot's card on three
+        // hulls, and what the PILOT window names next at levels 3, 12 and 14
+        var hintIds = Unlocks.All.Select(u => u.Hint).ToArray();
+        Check(hintIds.SequenceEqual(new[] { "unlock_ability_1", "unlock_chipslot_1", "unlock_ability_2", "unlock_chipslot_2", "unlock_ability_3",
+                                            "unlock_chipslot_3", "unlock_chipslot_4", "unlock_chipslot_5", "unlock_chipslot_6", null, null }),
+              $"every pilot row has a card of its own, the base's rows none ({string.Join(",", hintIds.Select(h => h ?? "-"))})");
+        foreach (var c in new[] { ShipClass.Battleship, ShipClass.HeavyWarden, ShipClass.LightEcho })
+        {
+            var card = Unlocks.Card("unlock_chipslot_2", c);
+            var crossed = Unlocks.Crossed(1, 2, c).Select(u => u.Hint).ToArray();
+            var next = new[] { 3, 12, 14 }.Select(p => Unlocks.Next(c, p)).ToArray();
+            Check(card?.Title == "LEVEL 4 · CHIP SLOT 2" && crossed.SequenceEqual(new[] { "unlock_chipslot_1" }) && Unlocks.Card("unlock_ability_1", c) != null
+                  && Unlocks.Card("no_such_row", c) == null && next.SequenceEqual(new[] { "LEVEL 4 · CHIP SLOT 2", "LEVEL 14 · CHIP SLOT 6", null }),
+                  $"{c}: the card for chip slot 2 reads LEVEL 4 · CHIP SLOT 2; level 1 to 2 crosses chip slot 1 alone; next at levels 3, 12, 14: chip slot 2, chip slot 6, nothing ({card?.Title}; {string.Join(",", crossed)}; {string.Join(" / ", next.Select(n => n ?? "-"))})");
+        }
+
         // THE PEAK (level_walls check 8, the pilot's half): a level up raises it, a refit never lowers
         // it, and it survives a save and a load. Three pilots: into ability 3, into chip slot 6, into ability 2.
         foreach (int from in new[] { 5, 13, 2 })
@@ -2062,6 +2114,138 @@ public partial class _Test : Node
             Character.Delete("peakfile");
         }
         Character.NewBlank();
+    }
+
+    // ── THE ABILITY WALLS IN THE WORLD (level_walls checks 3, 4, 5, 9 and the PILOT window's NEXT line) ──
+    // Run from the pilot's progression block, in the hub. Leaves the pilot as it found it: its class,
+    // level, EXP, points and peak, and its ship where it was. Checks 4 and 5 need a class's ability 2 or 3,
+    // so they print PEND walls until the kits carry them (lane A, slice 6).
+    string Sn(PlayerShip s, string id) { var t = Snap(s, id); return t[..t.LastIndexOf(" hp", StringComparison.Ordinal)]; }   // the hull is the gunship's business
+    async Task WallChecksLive()
+    {
+        var cls0 = Character.Class; int lv0 = Character.Level, exp0 = Character.Exp, pts0 = Character.Points, peak0 = Character.Peak;
+        var here0 = Me.Position; float rot0 = Me.Rotation;
+        var ids = Unlocks.All.Select(u => u.Hint).Where(h => h != null).ToArray();
+        var doAb = typeof(PlayerShip).GetMethod("DoAbility", BindingFlags.NonPublic | BindingFlags.Instance);
+        var spot = Hub.BasePos + new Vector2(2600, 2400);                  // clear of the belt, the wreck, the dummies and the lane
+        async Task At(ShipClass c, int peak)
+        {
+            Character.Class = c; Character.Peak = peak; H.PilotChanged(); await Wait(0.1);
+            foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+            var s = Me; s.Position = VaryNear(spot, 200f); s.Velocity = Vector2.Zero; s.Restore(s.MaxHp, true, 0);
+        }
+        Raider Mark(Vector2 at) { var m = H.SpawnRaider(at, Enemies.Gunship); m.Hp = 1e9; return m; }
+
+        // CHECK 9, THE CARDS: 2600 EXP from level 1 queues chip slot 1's card, then ability 2's naming this
+        // class's own key and ability (the Destroyer's Q, the Warrior's Q, the Carrier's E)
+        foreach (var (c, key) in new[] { (ShipClass.Destroyer, "Q"), (ShipClass.HeavyWarrior, "Q"), (ShipClass.Carrier, "E") })
+        {
+            await At(c, 1);
+            Character.Level = 1; Character.Exp = 0; Unmeet(ids);
+            Progression.AddExp(2600);
+            var q = HintQueue.Where(h => h.StartsWith("unlock_", StringComparison.Ordinal)).ToList();
+            var a2 = Unlocks.Nth(c, 2);
+            Check(Character.Level == 3 && Character.Peak == 3 && q.FirstOrDefault() == "unlock_chipslot_1" && Hints.Card(q[0])?.Title == "LEVEL 2 · CHIP SLOT 1"
+                  && q.Count == (a2 == null ? 1 : 2),
+                  $"{c}: 2600 EXP from level 1 reaches level 3 and queues the chip slot 1 card first: LEVEL 2 · CHIP SLOT 1 ({Character.Level}, peak {Character.Peak}; {string.Join(",", q)})");
+            if (a2 == null) GD.Print($"PEND walls: {c} has no ability 2 for its LEVEL 3 · {key} card (level_walls check 9)");
+            else Check(q.Count == 2 && q[1] == "unlock_ability_2" && Hints.Card(q[1])?.Title == $"LEVEL 3 · {key} · {a2.Name.ToUpperInvariant()}" && Hints.Card(q[1])?.Body == a2.Blurb,
+                       $"{c}: ...then ability 2's: LEVEL 3 · {key} · {a2.Name.ToUpperInvariant()}, with its blurb ({(q.Count > 1 ? Hints.Card(q[1])?.Title : "none")})");
+            Unmeet(ids);
+        }
+
+        // THE PILOT WINDOW'S NEXT LINE at levels 3, 12 and 14, drawn
+        Key(global::Godot.Key.L); await Wait(0.1);
+        var said = new List<string>();
+        foreach (int p in new[] { 3, 12, 14 })
+        {
+            Character.Peak = p; await Wait(0.05);
+            said.Add(Nodes<PilotWindow>().SelectMany(w => Nodes<Label>(w)).FirstOrDefault(l => l.Name == "Next")?.Text);
+        }
+        Key(global::Godot.Key.L); await Wait(0.1);
+        Check(said.SequenceEqual(new[] { "NEXT  LEVEL 4 · CHIP SLOT 2", "NEXT  LEVEL 14 · CHIP SLOT 6", "every wall open" }),
+              $"the PILOT window names the next wall: at level 3 chip slot 2, at 12 chip slot 6, at 14 nothing ({string.Join(" / ", said)})");
+
+        // CHECK 3, LIVE: at level 1, a capital, a freighter and a light press ability 1 through the host's gate
+        // (DoAbility) and it acts; nothing on the bar is locked; and Space on a gunship 300-600 u off, inside
+        // the gun's reach, at a varied bearing, lands
+        foreach (var c in new[] { ShipClass.Battleship, ShipClass.FreightHauler, ShipClass.LightEcho })
+        {
+            await At(c, 1);
+            var s = Me; var a1 = Unlocks.Nth(c, 1);
+            var shut = Abilities.For(c).Where(a => !a.Open && AbilityBar.StateOf(s, a.Id, null).Locked).Select(a => a.Id).ToList();
+            // the guns first: ability 1 after (a broadside would land on the gunship too)
+            float reach = Math.Min(600f, (float)s.Stats["main_range"] * 0.9f), bearing = VaryAngle(), dist = Vary(300f, reach);
+            var from = s.Position; var at = from + Vector2.Right.Rotated(bearing) * dist;
+            var mark = Mark(at); s.Rotation = bearing + Mathf.Pi / 2;
+            AimWorld(at); await Wait(0.5);
+            double hp0 = mark.Hp;
+            KeyDown(global::Godot.Key.Space);
+            for (int i = 0; i < 60 * 3 && mark.Hp >= hp0; i++)
+            {
+                mark.Position = at; s.Position = from; s.Velocity = Vector2.Zero; AimWorld(at);
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            }
+            KeyUp(global::Godot.Key.Space);
+            for (int i = 0; i < 90 && mark.Hp >= hp0; i++) { mark.Position = at; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            double dealt = hp0 - mark.Hp;
+            mark.TakeDamage(1e12); await Wait(0.1);
+            s.Sl(a1.Id).Cool = 0;
+            string b1 = Sn(s, a1.Id);
+            doAb.Invoke(s, new object[] { a1.Id, 0 });
+            await Wait(0.1);
+            string a1After = Sn(s, a1.Id);
+            Check(s.Peak == 1 && shut.Count == 0 && a1After != b1 && dealt > 0,
+                  $"{c} at level 1: nothing on the bar locked ({string.Join(",", shut)}), its guns land on a gunship {dist:0} u off ({dealt:0.0} dealt), and its {a1.Name} (ability 1) acts through the host's gate ({b1} -> {a1After})");
+        }
+
+        // CHECK 4, THE OWNER'S REFUSAL: ability 2 at level 2 says LOCKED · L3 and nothing moves; at 3 it acts
+        foreach (var c in new[] { ShipClass.Destroyer, ShipClass.HeavyWarden, ShipClass.LightEcho })
+        {
+            var a2 = Unlocks.Nth(c, 2);
+            if (a2 == null) { GD.Print($"PEND walls: {c} has no ability 2 to refuse at level 2 (level_walls check 4)"); continue; }
+            foreach (int p in new[] { 2, 3 })
+            {
+                await At(c, p);
+                var s = Me; var mark = Mark(VaryNear(s.Position, 300f)); H.SelectTarget(mark); await Wait(0.1);
+                s.Sl(a2.Id).Cool = 0;
+                string before = Sn(s, a2.Id);
+                s.UseAbility(a2.Id, mark.NetId); await Wait(0.3);
+                string after = Sn(s, a2.Id), note = s.FailNote(a2.Id);
+                if (p == 2)
+                    Check(note == "LOCKED · L3" && before == after && AbilityBar.StateOf(s, a2.Id, mark).Fail,
+                          $"{c} at level 2: {a2.Name} (ability 2) is refused with LOCKED · L3 and nothing moves ({note}; {before} -> {after})");
+                else
+                    Check(note == null && before != after, $"{c} at level 3: {a2.Name} acts ({note}; {before} -> {after})");
+                mark.TakeDamage(1e12);
+            }
+        }
+
+        // CHECK 5, THE HOST'S GATE: ability 3 delivered straight to DoAbility (a guest's request, past its own
+        // refusal) does nothing at level 5 and acts at 6
+        foreach (var c in new[] { ShipClass.Battleship, ShipClass.Destroyer, ShipClass.HeavyWarrior })
+        {
+            var a3 = Unlocks.Nth(c, 3);
+            if (a3 == null) { GD.Print($"PEND walls: {c} has no ability 3 for the host's gate at level 5 (level_walls check 5)"); continue; }
+            foreach (int p in new[] { 5, 6 })
+            {
+                await At(c, p);
+                var s = Me; var mark = Mark(VaryNear(s.Position, 300f)); H.SelectTarget(mark); await Wait(0.1);
+                s.Sl(a3.Id).Cool = 0;
+                string before = Sn(s, a3.Id);
+                doAb.Invoke(s, new object[] { a3.Id, mark.NetId }); await Wait(0.3);
+                string after = Sn(s, a3.Id);
+                Check(p == 5 ? before == after : before != after,
+                      $"{c} at level {p}: {a3.Name} (ability 3) sent straight to the host {(p == 5 ? "does nothing" : "acts")} ({before} -> {after})");
+                mark.TakeDamage(1e12);
+            }
+        }
+
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+        Character.Class = cls0; Character.Level = lv0; Character.Exp = exp0; Character.Points = pts0; Character.Peak = peak0;
+        H.PilotChanged(); await Wait(0.1);
+        var me = Me; me.Position = here0; me.Rotation = rot0; me.Velocity = Vector2.Zero; me.Restore(me.MaxHp, true, 0);
+        Character.Save();
     }
 
     // ── CHIP SLOTS AND KINDS (F15; level_walls checks 6, 6b and 7) ────────────────────────────────
@@ -4589,6 +4773,7 @@ public partial class _Test : Node
             int up = Progression.AddExp(2600);
             Check(Met("pilot"), "A LEVEL UP: met on the first level gained");
             Check(up == 2 && Character.Level == 3 && Character.Exp == 600 && Character.Points == 2, "2600 EXP from level 1: level 3, 600 over, 2 points");
+            await WallChecksLive();
             // the approved formula, in literal numbers (so the checks can fail)
             // THE ONE PLACE THE LEVEL'S SCALE IS PROVED AGAINST A LITERAL. 2.5% a level, not the
             // 10% it was: measured against the owner's target of a pilot on par after four boss
@@ -8900,6 +9085,53 @@ public partial class _Test : Node
               $"arena guest: the boss's super-move bar runs ({firstLeft:0.0} -> {boss.NextSuperIn:0.0} s, fill {firstFill:0.00} -> {boss.SuperFill:0.00})");
     }
 
+    // ── A GUEST AGAINST ITS OWN WALLS (level_walls checks 13, 14, 16, 17), played by the third player: a
+    // battleship at level 1 whose peak is 3. The host decides every press; this ship's slots show only
+    // what the host's report says, so what they show here is the host's word. PEND walls until its class
+    // carries an ability 2 and 3 (lane A, slice 6). Returns the game seconds it spent.
+    async Task<double> GuestWalls()
+    {
+        var me = Me; var open = Unlocks.Nth(me.Class, 2); var shut = Unlocks.Nth(me.Class, 3);
+        if (open == null || shut == null)
+        {
+            GD.Print($"PEND walls: the {me.Class} has no ability {(open == null ? 2 : 3)} yet (level_walls checks 13, 14 and 17: a guest's press past its own refusal, the peak on the wire)");
+            return 0;
+        }
+        double t0 = me.Clock;
+        // 13: ability 3 (level 6) sent past its own refusal, straight to the host: nothing comes back
+        string before = Sn(me, shut.Id);
+        Net.AskHost(me, "RequestAbility", shut.Id, 0);
+        await Wait(0.6);
+        string after = Sn(me, shut.Id);
+        Check(me.Peak == 3 && after == before,
+              $"third player at peak 3: its {shut.Name} (ability 3, level 6) sent past its own refusal is refused by the host -- nothing comes back ({before} -> {after})");
+        // 14 and 17: at level 1 with a peak of 3, ability 2 (level 3) acts -- the host reads the peak it was
+        // sent, not the level
+        string b2 = Sn(me, open.Id);
+        me.UseAbility(open.Id, 0);
+        double t1 = me.Clock; bool acted = false;
+        while (me.Clock - t1 < 0.8 && !acted) { await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); acted = Sn(me, open.Id) != b2; }
+        Check(Character.Level == 1 && acted && me.FailNote(open.Id) == null,
+              $"third player at level 1, peak 3: its {open.Name} (ability 2, level 3) acts on the host and comes back -- the wall reads the peak on the wire, not the level ({b2} -> {Sn(me, open.Id)}; {me.FailNote(open.Id)})");
+        return me.Clock - t0;
+    }
+
+    // 16: a level up and a press in the same frame. The identity (the new peak) and the request go on one
+    // reliable channel, in that order, so the host has the peak before the press: ability 3 acts.
+    async Task GuestLevelsAndPresses()
+    {
+        var me = Me; var a3 = me == null ? null : Unlocks.Nth(me.Class, 3);
+        if (a3 == null) { GD.Print("PEND walls: no ability 3 to press in the frame its level opens it (level_walls check 16)"); return; }
+        int peakBefore = me.Peak;
+        string before = Sn(me, a3.Id);
+        if (Character.Level < 6) Progression.AddExp((6 - Character.Level) * Progression.ExpToNext - Character.Exp);   // to level 6, exactly
+        me.UseAbility(a3.Id, 0);
+        double t0 = me.Clock; bool acted = false;
+        while (me.Clock - t0 < 1.0 && !acted) { await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); acted = Sn(me, a3.Id) != before; }
+        Check(peakBefore < 6 && Character.Peak == 6 && acted,
+              $"third player: levelled from peak {peakBefore} to 6 and {a3.Name} (ability 3) pressed in the same frame -- the identity reaches the host first, so it acts ({before} -> {Sn(me, a3.Id)})");
+    }
+
     async Task Mp(string role)
     {
         await Wait(0.1);
@@ -9129,7 +9361,10 @@ public partial class _Test : Node
             var tl = Character.LoadoutFor(ShipClass.Battleship);
             (tl[5], tl[6], tl[7], tl[8], tl[9]) = ("chip_armour_1", "chip_combat_1", "chip_combat_1", "chip_armour_1", "chip_engine_1");
             Priv(H, "ApplyLocalIdentity"); Priv(H, "SendIdentity", 0);
-            await Wait(3.0);
+            // ...and its presses against its own walls, inside the same 3 s (PEND: nothing spent)
+            await Wait(1.5);
+            double wallsTook = await GuestWalls();
+            await Wait(Math.Max(0.1, 1.5 - wallsTook));
             // A GUEST'S BROADSIDE, inside the 6 s this guest waits after joining (so everything the host
             // times against it -- the drop above all -- happens when it always did). F is a request: this
             // pilot never starts its own -- the host does, and
@@ -9213,6 +9448,7 @@ public partial class _Test : Node
             Priv(H, "NetKill", Missions.Bounty, 1, 3, lastPaid, new[] { "fr_flak_1", "fr_flak_2" }, Vector2.Zero);   // the kind leads now
             Check(lastPaid != 0 && Character.PaidKills.Contains(lastPaid) && Character.Exp == exp3 && Character.GearHold.Values.Sum() == 2,
                   $"third player: nor after a restart -- the kills it was paid for are on its file (exp {exp3} -> {Character.Exp}, {Character.GearHold.Values.Sum()} parts)");
+            await GuestLevelsAndPresses();
             // IT LEAVES, on purpose, by pressing HOST: a goodbye, so nothing to retry -- and the host keeps
             // no place for it (the host checks that goodbye got out: HOST used to cut a guest's off)
             Net.I.Host(27116);

@@ -160,7 +160,7 @@ public static class Progression
     public static int AddExp(int amount)
     {
         if (amount <= 0) return 0;
-        int gained = 0;
+        int gained = 0, was = Character.Peak;
         Character.Exp += amount;
         while (Character.Exp >= ExpToNext)
         {
@@ -169,6 +169,7 @@ public static class Progression
         }
         Character.Peak = Math.Max(Character.Peak, Character.Level);         // a refit never lowers it
         if (gained > 0) { Hub.I?.Hints?.Meet("pilot"); Hub.I?.PilotChanged(); }   // the new level goes out with the identity
+        foreach (var u in Unlocks.Crossed(was, Character.Peak, Character.Class)) Hub.I?.Hints?.Meet(u.Hint);   // each wall crossed: its card, in order
         Character.Save();
         return gained;
     }
