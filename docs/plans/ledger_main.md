@@ -1,4 +1,4 @@
-# Coordinator state -- last event 16:52: round 1 (attempt 4, 68ad42c) ran all 5 chains, triage running; a Fable code-read agent started.
+# Coordinator state -- last event 18:40: round 1 merges: items-tables 264d03a, arena-stall 5ec1c98 (ledger_test.md rows); the check group re-runs in wt_fix0.
 # Baseline reds: solo 41 fails + 1 throw at slot 0, 206 + 3 thrown lanes at slot 1, six ~240 + 3 lanes, screens 5 exc / LINT 2.
 Under 25 lines; Edit tool only; commit FIRST after every event; the hook re-injects it after a compact and cross-checks each `task <id>`.
 
