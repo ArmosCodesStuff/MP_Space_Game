@@ -309,3 +309,19 @@ fittings sweep's witness table ~13755, fitRows ~13797.
 - Not built: a rung-5 Supercarrier pair (lane E's WingsHostSortie / WingsGuestWatch already prove a host-sent patrol
   on a guest's carrier); a warp-return check (the patrol's leash back to the ring after a jump is lane E's Wing law).
 - Next: kits6a-J7 (DD row + director battery + Long Lance).
+
+## Handover 2: agent 2 stops after kits6a-J6 (context near the limit), at a job boundary
+- Done J2-J6 (Brace, CIWS, CV row, gunships, Supercarrier). Next: kits6a-J7 (DD row + director + Long Lance), then
+  J8 Suppress, J9 Grapnel, J10 Record. Doors a later job reuses: AbilityDef Time/Guard/CoolAfter + PlayerShip.RunFor
+  (a timed row: Suppress's 6 s window = RunFor + OnDealt), Engage (time + cooldown), Launch (sortie rows), the scoped
+  lift RateOn/DamageStat/DamageOn + PlayerShip.DamageOf.
+- J7 map of what the missile removal touches (3450da4 + this lane): PlayerShip.cs MissilesLoaded/Reloading/
+  CanFireMissile ~267, Sl("missile").N = missile_mag ~389 and ~444, StartReload ~665, BurstSides/BurstSplay/
+  FireMissile ~1052-1076; Stats.cs Fit.Missiles group 165-175, MissileDps 267-269, Dps.Missiles 330-334; Ships.cs DD
+  row (Fit.Missiles, missile_* Damage/Reach/Cycle, Dps.Missiles, kit parts' "missile_mag", Abilities Missile/Reload);
+  Abilities.cs Ab.Missile / Ab.Reload (~250-280); ActiveReload.cs 31/44/129-143 (read before deleting: may be the
+  railgun's own "reload" words); Items.cs:101 @output "missile_damage"; Sfx "missile_whoosh" (the torpedo also uses it:
+  keep). Harness: ~60 lines at SmokeTest.cs.txt 1564 1724 6106 6150 6386-6432 8014-8037 9420 9427 9858 11508 11586
+  11716-11812 (the DD missile block) 13746 13750 13991 (the sweep's "missile"/"reload" witnesses and fitRows'
+  Fit.Missiles row) 14452-14695 16624-16757 17802-17816 -- each REWRITTEN to the director / Lance truth (6.3), none
+  deleted without its replacement. Shots.cs.txt: 16 missile mentions (grep; the DD closeups at 471 / 690 / 802).
