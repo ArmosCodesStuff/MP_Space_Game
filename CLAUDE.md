@@ -224,7 +224,7 @@ tools\lanes.ps1                                          # state in one call: la
 tools\rungs.ps1 -Tree <checkout> -Tag <t> -Steps <chain> [-Slot n] [-Slots n]   # every engine run; lanes run side by side
 tools\smoketest\run.ps1 · tools\screens\run.ps1   # only through rungs.ps1; trust LINT: 0 for layout,
                                                   # read a frame only for new art
-tools\make_ships.ps1 · tools\finish_ships.ps1 · python tools\make_sounds.py
+tools\make_ships.ps1 · python tools\make_sounds.py
 python tools\map.py · tools\snapshot.ps1 · tools\manifest.ps1
 ```
 Godot is found by `tools\find-godot.ps1`. `-Update` regenerates map, snapshot and manifest, then checks

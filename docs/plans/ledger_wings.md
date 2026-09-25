@@ -116,3 +116,11 @@ WingsGunshipChecks (sent for 12 s, each run), WingsHostSortie (NEW: 2 gunships f
 carrier at a target 1100-1800 u off, on station, warped out), WingsGuestWatch (NEW: 2 gunships seen,
 every drawn frame 240 +- 40 u of the target, then gone; guest wait 30/45 -> 40/60 s).
 Owed in the test phase additionally: `six,six` for the gunship wire pair (host ~5 s longer).
+
+## MERGE version-l into wt/wings (2026-09-25)
+Conflicts resolved keeping both lanes: Boss.cs (art's Type.Size ring / Struck dash, through wings' Out(m));
+Enemies.cs (art's per-row TurretAft/TurretWidth + Nozzles, wings' Dps 1.29 x Barrels 2, Cc, Exp);
+Ships.cs (art's mounts, wings' removal of PdRing and Ab.Pd -- PD is passive); ShipClasses.cs: WingDef.Livery
+removed for HullArt.Tint (the art lane made WingDef a HullArt; Sprites.Fit(Def) draws it), SmokeTest patrol check
+reads .Tint; SmokeTest (both fingerprint checks; 2.58x heavy + pack-art check; 680 u ring + PdReachOff; wings' 150
+beam + "once" charge); CHANGES.md both sides. typecheck 0 errors, verify -Quick ALL CHECKS PASSED. No engine run.
