@@ -54,8 +54,8 @@ The cost is the context re-read on every turn and by every agent, not the output
    **Returns** are a verdict and a pointer: `status` (done / stopped_context / red / blocked), `head`,
    ≤10 lines of summary, `open`. Detail goes to the ledger.
 3. **Fan-outs.** Every lane gets ONE merge-gate reviewer (opus, read-only), once. A fan-out review (≤ 5
-   finders, each finding verified by ≤ 3 skeptics) only for authority, wire or save-format lanes. Any
-   fan-out (review, design, audit, research) is ≤ 5 agents, each on an angle you can name that no other
+   finders, each finding verified by ≤ 3 skeptics) only for authority, wire or save-format lanes. Every agent
+   has a task no other agent has (owner, 2026-09-25). Any fan-out (review, design, audit, research) is ≤ 5 agents, each on an angle you can name that no other
    one sees; duplicates only cost tokens. No critic stage for a mechanical plan.
 4. **Never paste a log.** Redirect it, grep the verdict and the failing lines. **Read slices**: grep, then
    an offset. `SmokeTest.cs.txt`, `Hub.cs`, `PlayerShip.cs`, `CHANGES.md`, `DESIGN.md` are never read
