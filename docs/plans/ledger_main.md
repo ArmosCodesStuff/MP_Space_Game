@@ -1,4 +1,4 @@
-# Coordinator state (CLAUDE.md section 4.6) -- updated 2026-09-25 (compact threshold now ~200k)
+# Coordinator state (CLAUDE.md section 4.6) -- updated 2026-09-25 (the owner compacts at will; the SessionStart hook re-injects this)
 
 Engine outputs for the running batches: S = C:\Users\logan\AppData\Local\Temp\claude\C--Users-logan-Downloads-WarShips-Version-L\31bcb796-5d47-41e0-ad68-ba3af2cf375b\scratchpad
 (tools\lanes.ps1 -Runs S). New batches write to %TEMP%\warships_rungs.

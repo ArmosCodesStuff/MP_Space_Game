@@ -1,6 +1,6 @@
 # lanes.ps1 [-Runs <dir>...] [-Last <n>] -- the coordinator's state in one read-only call (CLAUDE.md section 4):
-# every worktree's branch, head and newest ledger heading, then the newest engine chains' step lines.
-# Run first after a compact or at session start, with docs/plans/ledger_main.md, instead of re-reading files.
+# every worktree's branch, head and newest ledger heading, the newest engine chains' step lines, then
+# docs/plans/ledger_main.md. The SessionStart hook in .claude/settings.json runs it at every start and compact.
 param([string[]]$Runs = @(Join-Path $env:TEMP 'warships_rungs'), [int]$Last = 8)
 $root = Split-Path -Parent $PSScriptRoot
 git -C $root worktree list --porcelain | Select-String '^worktree ' | ForEach-Object {
@@ -18,3 +18,5 @@ Get-ChildItem $Runs -Directory -ErrorAction SilentlyContinue | Sort-Object LastW
     Where-Object { $_ -match '^(==|\d+ |ALL GREEN|STOPPED)' } | ForEach-Object { ($_ -replace '\s*\|.*$', '').Trim() })
   "{0} {1:HH:mm}: {2}" -f $_.Name, $_.LastWriteTime, ($lines -join ' / ')
 }
+"-- docs/plans/ledger_main.md"
+Get-Content (Join-Path $root 'docs\plans\ledger_main.md') -ErrorAction SilentlyContinue
