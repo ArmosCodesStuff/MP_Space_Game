@@ -2015,7 +2015,16 @@ public partial class _Test : Node
     // A refit, ANNOUNCED: PilotChanged applies it here and tells every peer, so a multiplayer
     // scenario can fly one of the nine and have the other side see which hull it is. Offline,
     // SendIdentity returns at once, so the solo callers are unchanged.
-    async Task SetClass(ShipClass c) { Character.Class = c; H.PilotChanged(); await Wait(0.1); }
+    // A GUEST REFITS AS AN HONEST PILOT DOES: only once Hub.MayRefit holds (P8; its InCombat is the host's figure). The host
+    // keeps the class a guest announces in a fight (Hub.Refit) while the guest's own ship takes it, so every press after
+    // it reached a copy of another class (a1-arena-stall: a destroyer's Q and E landed on a carrier the gunships kept in
+    // combat). Calm held 0.5 s and read again, so a packet late on either side never sits on the edge.
+    async Task SetClass(ShipClass c)
+    {
+        if (Net.IsOnline && !Net.IsHost && Character.Class != c)
+            for (int i = 0; i < 4; i++) { await RealTime(() => H.MayRefit, Wan ? 40 : 30); await Wait(0.5); if (H.MayRefit) break; }
+        Character.Class = c; H.PilotChanged(); await Wait(0.1);
+    }
     // R at a cursor: the sentry row reads the pilot's AimPoint as it is pressed (the host's copy of
     // its 20 Hz intent), so the press is set up the way the wire would set it.
     static void SentryAt(PlayerShip s, Vector2 cursor) { s.AimPoint = cursor; s.UseAbility("deploy", 0); }
@@ -10153,6 +10162,8 @@ public partial class _Test : Node
     // bar is gone here 6.5 s on.
     async Task LaneA6cCurtainGuestChecks()
     {
+        await SetClass(ShipClass.HeavyWarden);
+        await RealTime(() => Me.Class == ShipClass.HeavyWarden && Math.Abs(Me.MaxHp - 270) < 1e-6, Wan ? 20 : 10);
         var me = Me; me.AutopilotTo = null; bool demo = me.Demo; me.Demo = true;
         me.Velocity = Vector2.Zero;
         var at = me.Position; var dir = Vector2.Right.Rotated(VaryAngle()); float aimed = Vary(300f, 600f);
