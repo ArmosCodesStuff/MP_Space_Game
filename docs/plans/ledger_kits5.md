@@ -24,6 +24,9 @@ A PRE with no POST is an interrupted job: compare the hashes, revert half-made e
 - **D31** F14 throw point: the host reads the owner's `AimPoint` (20 Hz intent), as the guns do; F8's press
   payload point (slice 4) may replace it at 6b. Not edited here (slice 4 owns F8's payload).
 
+- **D32** The paint (PlayerShip.PaintOn / Painted) is host-only in slice 5: its one raiser is 6b's spotter hit, and
+  6b decides how a guest learns it (rung 5: guest sentries pick the same target id).
+
 ## Jobs (foundations before their users; each: PRE, edit + checks, typecheck + quick, POST, commit)
 
 - **kits5-J1 F12** Melee.cs (D29). Checks `LaneAMeleeArcChecks` (pure arc, 3 layouts; guard clamp 3 noses),
@@ -85,3 +88,18 @@ A PRE with no POST is an interrupted job: compare the hashes, revert half-made e
 - Files: Shots.cs, Prism.cs (header), Raider.cs, Boss.cs; SmokeTest.cs.txt (LaneAPrismReflectChecks, LaneAPrismRayChecks
   after LaneAPrismWalkChecks). Trap: both set Me.Demo = true for their run so the local cursor does not move the guard.
 - Next: kits5-J4.
+### kits5-J4 · PRE · F14a: the paint, ITurretHost.Prefer, the hold rule -- tier opus
+- Intent: PlayerShip.PaintOn / Painted (host, one target, timed; the spotter raises it in 6b); ITurretHost.Prefer (default
+  null; a sentry returns its owner's paint); Turret.Acquire takes the preferred first; the hold guard re-acquires when a
+  paint in reach is not its target, or the paint it followed lapses. Checks LaneASentryPreferChecks.
+- Files: scripts/Turrets.cs, scripts/Deployed.cs, scripts/PlayerShip.cs, SmokeTest.cs.txt, this ledger.
+- HEAD bf67b26ec7e2079c8e5842cae4bff0a033640f1d · Turrets.cs 7515dfde83a9f10c89d987f82cbc295f0191f580 · Deployed.cs b6c6b664bc52cdb1f3a4f3be61a782ab0c691214 · PlayerShip.cs 79d1250b543c03f6bc2bc4db169b90044233a737 · SmokeTest.cs.txt a39988874b3050b07e30f3c8e5d3ad6bf99c645a
+### kits5-J4 · POST
+- Verdict: compiles; typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final
+  test phase. ITurretHost.Prefer is a default interface member (null), so PD, CIWS, the hauler, lane guns and
+  emplacements are untouched; DeployedTurret.Prefer = its owner's Painted. Turret: Preferred() above every rank in
+  Acquire; the hold re-picks on a new paint in reach or the followed paint lapsing (_onPrefer). The paint is
+  host-only: a guest's sentry copies may track otherwise until 6b puts the paint on the wire (D32).
+- Files: Turrets.cs, Deployed.cs, PlayerShip.cs (PaintOn / Painted, ticked with the statuses); SmokeTest.cs.txt
+  (LaneASentryPreferChecks after LaneAPrismRayChecks).
+- Next: kits5-J5.

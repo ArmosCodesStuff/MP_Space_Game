@@ -4313,6 +4313,47 @@ public partial class _Test : Node
         pm.Demo = demo; pm.Position = yonder; pm.Velocity = Vector2.Zero;
     }
 
+    // ── F14 · THE PAINT FIRST (lane A slice 5, kits5-J4) ──────────────────────────────────────
+    // World (Turret.Acquire / the hold rule through DeployedTurret.Prefer): a freighter's sentry (650 u)
+    // 1800-2200 u from the pilot, a held gunship 540-630 u from it and a still seeker (a hulled one, so a
+    // shot does not bring it down) 200-400 u from it, at varied bearings, 3 runs (kits_v31 3.1's sentry
+    // lines). Unpainted it takes the seeker (rank 0). The gunship painted: it turns to it within 2 frames,
+    // though the seeker is nearer and outranks it. The paint lapsing: it goes back to the seeker although
+    // the gunship is still in reach.
+    async Task LaneASentryPreferChecks(Vector2 yonder)
+    {
+        var pm = Me;
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+        await Wait(0.2);
+        for (int run = 0; run < 3; run++)
+        {
+            pm.Position = yonder; pm.Velocity = Vector2.Zero;
+            var spot = yonder + Vector2.Right.Rotated(VaryAngle()) * Vary(1800f, 2200f);
+            var sentry = H.Drop(pm, spot, 1e9);
+            var gSpot = spot + Vector2.Right.Rotated(VaryAngle()) * Vary(540f, 630f);
+            var gun = H.SpawnRaider(gSpot, Enemies.Gunship); gun.Hp = 1e9; gun.ApplyStatus(Status.Disabled, 30);
+            var sSpot = spot + Vector2.Right.Rotated(VaryAngle()) * Vary(200f, 400f);
+            var seeker = Combat.Fire(Shots.Seeker, sSpot, Vector2.Right, 0.01f, 1e6f, 0, hull: 1e9);
+            async Task Frames(int n)
+            {
+                for (int i = 0; i < n; i++) { gun.Position = gSpot; seeker.GlobalPosition = sSpot; pm.Position = yonder; pm.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            }
+            await Frames(20);
+            bool onSeeker = ReferenceEquals(sentry.Aimed, seeker);
+            pm.PaintOn(gun, Vary(0.8f, 1.2f));
+            await Frames(2);
+            bool turned = ReferenceEquals(sentry.Aimed, gun);
+            Check(onSeeker && turned,
+                  $"a sentry on an unpainted seeker {sSpot.DistanceTo(spot):0} u off ({onSeeker}) turns to a paint raised on a gunship {gSpot.DistanceTo(spot):0} u off within 2 frames ({turned}): the paint beats a nearer seeker");
+            await Frames(90);
+            bool back = ReferenceEquals(sentry.Aimed, seeker) && pm.Painted == null && gun.Alive;
+            Check(back, $"...and when the paint lapses it goes back to the seeker, though the gunship is still in reach ({(sentry.Aimed as Node2D)?.Name})");
+            seeker.Intercept(); gun.TakeDamage(1e12); H.DeployedTaken(sentry);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        }
+        pm.Position = yonder; pm.Velocity = Vector2.Zero;
+    }
+
     // ── F12 · THE MELEE ARC AND THE GUARD CLAMP (lane A slice 5, kits5-J1) ─────────────────────
     // Pure (Melee.Pick, Melee.Guard): the blade's literals (160 u, ±55°, kits_v2 Warrior card) and the
     // whirlwind's (210 u, all round) from 3 varied spots and facings. A body well inside the wedge and one
@@ -10142,6 +10183,7 @@ public partial class _Test : Node
             await LaneAPrismWalkChecks(yonder);
             await LaneAPrismReflectChecks(yonder);
             await LaneAPrismRayChecks(yonder);
+            await LaneASentryPreferChecks(yonder);
             await LaneBHelmChecks(yonder);
             await LaneBStrafeChecks(yonder);
             await LaneBBoostChecks(yonder);
