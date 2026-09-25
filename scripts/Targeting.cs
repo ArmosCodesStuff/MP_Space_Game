@@ -62,6 +62,9 @@ public static class Targeting
     public static readonly TargetFilter Craft = new(require: Tag.Light | Tag.Heavy, forbid: Tag.Dummy);
     // RAIDING CRAFT a pilot's own trap takes (the tether mine, Zones.cs): a light or a heavy, never a boss
     // (whatever else it carries), a practice hulk, or anything in flight.
+    // WHAT AN EMP JAMS (the Echo's E): hostile craft, light and heavy, escorts included -- never a boss, a structure, a
+    // practice target, a missile or a hulled round
+    public static readonly TargetFilter Jammable = new(require: Tag.Light | Tag.Heavy, forbid: Tag.Boss | Tag.Structure | Tag.Dummy | Tag.Missile | Tag.Hulled);
     public static readonly TargetFilter Raiding = new(require: Tag.Light | Tag.Heavy, forbid: Tag.Boss | Tag.Dummy | Tag.Missile | Tag.Hulled);
     // WHAT A THROW MAY MOVE (a bastion's shockwave): nothing in flight, of either kind, and nothing
     // that holds a spot (a structure, a practice dummy). Every peer flies a body in flight from its

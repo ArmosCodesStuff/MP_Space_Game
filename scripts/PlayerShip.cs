@@ -1007,6 +1007,26 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         LetGoWebs();
     }
 
+    // THE EMP'S PRESS (host): its cooldown, the first pulse where it stands, and the second's point and time (the row's
+    // Expire fires it from Slot.At once emp_echo has run).
+    public void StartEmp()
+    {
+        ref var sl = ref Sl("emp");
+        if (!Net.Sim || !Alive || sl.Cool > 0) return;
+        sl.Cool = Cooling(Stats["emp_cooldown"]); sl.At = Position; sl.Left = Stats["emp_echo"];
+        Pulse(Position);
+    }
+    // ONE PULSE (host): every hostile craft within emp_range of `at` jammed for emp_jam (Targeting.Jammable; a status
+    // an OutGuards row spares is never put on what it spares). No damage.
+    public void Pulse(Vector2 at)
+    {
+        float reach = (float)Stats["emp_range"];
+        foreach (var h in new List<IHittable>(Targeting.Hittable(Combat.Hostiles, Targeting.Jammable)))
+            if (h.Position.DistanceTo(at) <= reach && h is IStatused st) st.ApplyStatus(Status.Jammed, Stats["emp_jam"]);
+        NoteCombat();
+        Fx.Raise(Fx.Emp, at, reach);
+    }
+
     public void GoDark()
     {
         if (Sl("stealth").Cool > 0) return;

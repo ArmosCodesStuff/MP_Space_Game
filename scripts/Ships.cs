@@ -576,8 +576,8 @@ public static class Classes
                 TurretTexScale = 0.65f / 5.5f, MainBarrel = 8.0f, PdBarrel = 3.6f },
             Abilities = new[] { Ab.Pepperbox, Ab.Rod, Ab.Ramjet, Ab.Slingshot } },
         new() { Id = ShipClass.LightEcho, Name = "ECHO", Ready = true, Fit = Fit.Guns,
-            Blurb = "Every round it fires comes again a moment later from where it was fired; its reverb stores what it deals and puts a third of it down at once.",
-            Hint = "ECHO  ·  mouse aims the repeater, every round echoes 0.6 s later  ·  F reverb  ·  Q rewind 8 s",
+            Blurb = "Every round it fires comes again a moment later from where it was fired. Its reverb stores what it deals and puts a third of it down at once; it can rewind eight seconds, hull and all, and jam every craft near it.",
+            Hint = "ECHO  ·  mouse aims the repeater, every round echoes 0.6 s later  ·  F reverb  ·  Q rewind 8 s  ·  E EMP",
             Drive = Drives.Boost,
             Nums = new() {
                 ["hull"] = 180,
@@ -611,6 +611,11 @@ public static class Classes
                 new() { Group = "Rewind", Id = "rewind_back",     Label = "Back",             Base = 8, Unit = "s", Dec = 1 },
                 new() { Group = "Rewind", Id = "rewind_every",    Label = "A mark every",     Base = 0.5, Unit = "s", Dec = 2 },
                 new() { Group = "Rewind", Id = "rewind_cooldown", Label = "Cooldown",         Base = 30, Unit = "s", Dec = 1, Inverse = true },
+                // EMP (kits_v2's card): 300 u, jammed 4 s, a second pulse 0.6 s later from the press point; 18 s
+                new() { Group = "EMP", Id = "emp_range",    Label = "Reach",         Base = 300, Unit = "u", Dec = 0 },
+                new() { Group = "EMP", Id = "emp_jam",      Label = "Jammed for",    Base = 4.0, Unit = "s", Dec = 1 },
+                new() { Group = "EMP", Id = "emp_echo",     Label = "Second pulse",  Base = 0.6, Unit = "s", Dec = 2 },
+                new() { Group = "EMP", Id = "emp_cooldown", Label = "Cooldown",      Base = 18, Unit = "s", Dec = 1, Inverse = true },
             },
             Art = new ClassArt {
                 // fighter_f (the pack, J5): one main on the centreline stands for the paired
@@ -618,7 +623,7 @@ public static class Classes
                 Texture = "res://light_echo_hull.png", Length = 70f, HalfWidth = 14.68f,
                 Mains = new Vector2[] { new(0.0f, -23.39f) },
                 TurretTexScale = 0.65f / 5.5f, MainBarrel = 8.0f, PdBarrel = 3.6f },
-            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Reverb, Ab.Rewind } },
+            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Reverb, Ab.Rewind, Ab.Emp } },
         new() { Id = ShipClass.LightWraith, Name = "WRAITH", Ready = true, Fit = Fit.Guns,
             Blurb = "While its veil is up nothing hostile can pick it: whatever was coming for it goes elsewhere, or gives up.",
             Hint = "WRAITH  ·  mouse aims the main gun",

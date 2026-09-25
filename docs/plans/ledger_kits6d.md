@@ -356,3 +356,41 @@ PlayerShip 9, Stats 2, Dealt 1, Fx 1, Items 3, SmokeTest 42; stealth_*|GoDark Pl
   LaneA6dRewindHostWatch/HostChecks (host hull back to its own log 8 s before, copy within 20 u) + LaneA6dRewindGuestChecks;
   sweep witness ["rewind"].
 - next: kits6d-J7 (EMP).
+
+## kits6d-J7 · PRE
+- tier opus; intent: EMP (DL4): Ab.Emp (E, ability 3), PlayerShip.Pulse (host: Jammed 4.0 s on Targeting.Jammable craft within 300 u, a second pulse 0.6 s later from the press point via the row's Expire; no damage; 18 s), OutGuard.HoldsAim (a jammed raider's turret stops tracking), Raider.FlagJam = 16 (the jam mark on the wire, drawn on every peer; DL11).
+- HEAD 1c009c06e1720eb9dae5b6ca8dc88c8d7f830523
+- scripts/PlayerShip.cs 6239712d0b56af2513363bea621622a7de275d07
+- scripts/Abilities.cs b1a56f9254ae14ad77e9a6c75db82e78575f3c76
+- scripts/Ships.cs f44ce6c454d92f04904c6ef3ec2d789eedb7c225
+- scripts/Statuses.cs c3330825b54d86acfda110584b74c27b4c18f124
+- scripts/Raider.cs 7be25c1f6814bb06c0c0b5cc99fbd1536a32cfbf
+- scripts/Targeting.cs 69a37580fc092a9879e713c690656f2a4639da3b
+- tools/smoketest/SmokeTest.cs.txt 81fa30d8bb5b5e62876b4de4dbd63bb825774b71
+- tools/screens/Shots.cs.txt fe2eeb57c1e3316c5013eaec6de94d0cff3efec1
+
+## kits6d-J7 · POST
+- verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final test phase.
+- built: Ab.Emp (E, ability 3; Press StartEmp: cool 18, first pulse, Slot.At = the press point, Left = emp_echo; Expire =
+  the second Pulse from Slot.At); PlayerShip.Pulse (Jammed emp_jam on Targeting.Jammable within emp_range; no damage;
+  Fx.Emp, reused); Targeting.Jammable (Light|Heavy, never Boss/Structure/Dummy/Missile/Hulled); OutGuard.HoldsAim +
+  StatusSet.HoldsAim (Jammed: Raider's turret stops tracking); Raider.FlagJam = 16 + JamMarked + a drawn jam mark
+  (**DL11**: the wire flag is the next free bit after FlagLock 8 and below the squad bits; another lane taking 16 collides
+  at merge -- renumber there). Rows emp_range 300 / emp_jam 4.0 / emp_echo 0.6 / emp_cooldown 18. Echo Blurb/Hint name all 3.
+- checks: LaneA6dEmpRowChecks, LaneA6dEmpChecks (6 kinds x 299/301 x3: jammed/free, 3.80 left at 0.8 s, jammed 4.4 / free
+  4.8, hulls untouched, cool 18, refused; the second pulse from the press point x3; 3 latched webs + a gunship x3: freed
+  <= 0.3 s, 0 struck and no seeker over 3.5 s, the turret's own rotation held); rung 5 LaneA6dEmpHostWatch/HostChecks +
+  LaneA6dEmpGuestChecks (the jam mark on the guest within 0.5 s, gone by 5.2 s); frame 76f_echo_emp (LaneA6dEmpFrames);
+  sweep witness ["emp"].
+- next: kits6d-J8 (Wraith row + scattergun + Backstab).
+
+## Handover 4: the fourth agent stops after kits6d-J7 (context), at a job boundary
+- The Echo is complete (J5-J7). Next: kits6d-J8 (the Wraith), then J9-J12 as listed.
+- Anchors as in Handover 3, now after the Echo's: solo calls after `await LaneA6dEmpChecks(yonder);`; host watches after
+  `empWatch`, host checks after `LaneA6dEmpHostChecks`, guest checks after `LaneA6dEmpGuestChecks();`; sweep witnesses after
+  `["emp"]`; frames after `await LaneA6dEmpFrames();` (methods before `LaneA6cBladeFrames`).
+- Doors from J5-J7 the Wraith may reuse: TurretSpec fields read by Turret.Shoot (a pellet spread is another field there),
+  Items.PrimaryShots (add "pellet"), Trail/Mark, LetGoWebs (Shadow step "a web drops"), Targeting filters, OutGuard rows.
+- Wraith today (Ships.cs `ShipClass.LightWraith, Name`): hull 90, LightCannon, Ab.Guns + Ab.FireMode + Ab.Stealth, rows
+  stealth_time/speed/rof/cooldown; PlayerShip.GoDark; Items @duration holds stealth_time; SmokeTest has ~4 stealth callers and
+  a `── WRAITH: five seconds nothing hostile can pick it ──` block after the Echo's in the ability tour.

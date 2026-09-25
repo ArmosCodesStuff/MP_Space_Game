@@ -8535,6 +8535,179 @@ public partial class _Test : Node
         me.Demo = demo; me.Velocity = Vector2.Zero;
     }
 
+    // ── SLICE 6d: THE ECHO'S EMP (kits_v2's card): every hostile craft within 300 u JAMMED 4.0 s (no strikes, no launches,
+    // the turret held, a web let go), a second pulse 0.6 s later from the press point refreshing it (4.6 s in all); a
+    // boss, a structure, a practice target and a missile immune; no damage; 18 s.
+    void LaneA6dEmpRowChecks()
+    {
+        var st = new ShipStats(ShipClass.LightEcho);
+        var kit = Classes.Of(ShipClass.LightEcho).Abilities.Select(a => a.Id).ToArray();
+        var f = Targeting.Jammable;
+        var jam = new StatusSet(); jam.Apply(Status.Jammed, 1);
+        var others = new StatusSet(); others.Apply(Status.Dazzled, 1); others.Apply(Status.Suppressed, 1);
+        Check(st["emp_range"] == 300 && st["emp_jam"] == 4.0 && st["emp_echo"] == 0.6 && st["emp_cooldown"] == 18 && Ab.Emp.Default == global::Godot.Key.E
+              && kit.SequenceEqual(new[] { "guns", "firemode", "reverb", "rewind", "emp" })
+              && f.Require == (Tag.Light | Tag.Heavy) && f.Forbid == (Tag.Boss | Tag.Structure | Tag.Dummy | Tag.Missile | Tag.Hulled)
+              && jam.HoldsAim && !others.HoldsAim && Raider.FlagJam == 16,
+              $"the EMP row: {st["emp_range"]:0} u (300), jammed {st["emp_jam"]:0.0} s (4.0), the second pulse {st["emp_echo"]:0.0} s on (0.6), {st["emp_cooldown"]:0} s (18), on E, learned third ({string.Join(",", kit)}); it jams light and heavy craft, never a boss, structure, dummy, missile or hulled round; Jammed alone holds the aim; the mark is wire bit 16");
+    }
+
+    async Task LaneA6dEmpChecks(Vector2 yonder)
+    {
+        await SetClass(ShipClass.LightEcho);
+        var ec = Me; bool demo = ec.Demo; ec.Demo = true; ec.AutopilotTo = null;
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        int[] kinds = { Enemies.Webifier, Enemies.Gunship, Enemies.Talon, Enemies.Pod, Enemies.Cross, Enemies.Lancerkin };
+        double Jam(Raider r) => r.Statuses.Left(Status.Jammed);
+
+        // 299 IN, 301 OUT, six kinds, no damage; the refresh at 0.6 s; jammed at 4.4 s, free at 4.8 s; 18 s, refused inside it
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f); ec.Position = at; ec.Velocity = Vector2.Zero; ec.Sl("emp").Cool = 0; ec.Sl("emp").Left = 0;
+            var inside = kinds.Select(k => HeldI(at + Vector2.Right.Rotated(VaryAngle()) * 299f, k)).ToList();
+            var outside = kinds.Select(k => HeldI(at + Vector2.Right.Rotated(VaryAngle()) * 301f, k)).ToList();
+            var hp0 = inside.Concat(outside).Select(r => r.Hp).ToArray();
+            await Frame();
+            ec.UseAbility("emp", 0);
+            double clock = 0, cool0 = ec.Sl("emp").Cool;
+            bool first = inside.All(r => Jam(r) > 3.9) && outside.All(r => Jam(r) == 0);
+            await Frame(); clock += GetProcessDeltaTime();
+            double c1 = ec.Sl("emp").Cool;
+            ec.UseAbility("emp", 0);
+            bool refused = c1 < cool0 && ec.Sl("emp").Cool == c1;
+            double at08 = -1; bool at44 = false, at48 = true;
+            while (clock < 4.8)
+            {
+                ec.Position = at; ec.Velocity = Vector2.Zero;
+                await Frame(); clock += GetProcessDeltaTime();
+                if (at08 < 0 && clock >= 0.8) at08 = inside.Min(Jam);
+                if (!at44 && clock >= 4.4) at44 = inside.All(r => r.Statuses.Has(Status.Jammed));
+            }
+            at48 = inside.All(r => !r.Statuses.Has(Status.Jammed));
+            bool unhurt = inside.Concat(outside).Select(r => r.Hp).SequenceEqual(hp0);
+            Check(first && Math.Abs(at08 - (4.0 - (0.8 - 0.6))) <= 0.06 && at44 && at48 && unhurt && outside.All(r => !r.Statuses.Has(Status.Jammed)) && Math.Abs(cool0 - 18) < 0.05 && refused,
+                  $"an EMP among six kinds at 299 u and six at 301: jammed {first} / free; 0.8 s on {at08:0.00} s left (3.80: the second pulse refreshed it); jammed at 4.4 s {at44}, free at 4.8 s {at48}; hulls untouched {unhurt}; cooling {cool0:0.0} (18), a second press refused {refused}");
+            foreach (var r in inside.Concat(outside)) r.TakeDamage(1e12);
+            await Wait(0.3);
+        }
+
+        // THE SECOND PULSE IS THE PRESS POINT'S: the Echo moved 400-500 u off at once; a craft arriving 250 u from the press
+        // point at 0.3 s is jammed by 0.8 s, one 250 u from where the Echo is now (past 300 of the press point) is not
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f); ec.Position = at; ec.Velocity = Vector2.Zero; ec.Sl("emp").Cool = 0; ec.Sl("emp").Left = 0;
+            await Frame();
+            ec.UseAbility("emp", 0);
+            var away = at + Vector2.Right.Rotated(VaryAngle()) * Vary(400f, 500f);
+            double clock = 0; Raider there = null, here = null;
+            while (clock < 0.8)
+            {
+                ec.Position = away; ec.Velocity = Vector2.Zero;
+                if (there == null && clock >= 0.3)
+                {
+                    var back = (at - away).Normalized();
+                    there = HeldI(at + back.Rotated(Vary(-1.2f, 1.2f)) * 250f, kinds[run % kinds.Length]);
+                    here = HeldI(away - back.Rotated(Vary(-1.0f, 1.0f)) * 250f, kinds[(run + 3) % kinds.Length]);
+                }
+                await Frame(); clock += GetProcessDeltaTime();
+            }
+            Check(there != null && Jam(there) > 3.7 && Jam(here) == 0 && here.Position.DistanceTo(at) > 300f,
+                  $"the second pulse from where it was pressed: a craft that came {there?.Position.DistanceTo(at):0} u from the press point is jammed ({Jam(there):0.00} s left), one {here?.Position.DistanceTo(ec.Position):0} u from the Echo {here?.Position.DistanceTo(at):0} u from the press point is not ({Jam(here):0.00})");
+            there?.TakeDamage(1e12); here?.TakeDamage(1e12);
+            await Wait(0.3);
+        }
+
+        // ON A WEB: three webifiers latched and a gunship on the Echo; the press lets every web go within 0.3 s, and over
+        // the next 3.5 s nothing strikes it, nothing is launched, and the gunship's turret stays where it was
+        var me = ec;
+        var turretField = typeof(Raider).GetField("_turret", BindingFlags.NonPublic | BindingFlags.Instance);
+        for (int run = 0; run < 3; run++)
+        {
+            foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+            await Wait(0.3);
+            var at = VaryNear(yonder, 300f); me.Position = at; me.Velocity = Vector2.Zero; me.Rotation = VaryAngle();
+            me.Sl("emp").Cool = 0; me.Sl("emp").Left = 0; me.Hp = me.MaxHp;
+            var webs = new List<Raider>();
+            for (int k = 0; k < 3; k++) { var w = H.SpawnRaider(at + Vector2.Right.Rotated(VaryAngle()) * Vary(200f, 280f)); w.Quarry = me; webs.Add(w); }
+            var gun = H.SpawnRaider(at + Vector2.Right.Rotated(VaryAngle()) * Vary(200f, 280f), Enemies.Gunship); gun.Quarry = me;
+            for (int i = 0; i < 60 * 6 && !webs.All(w => w.Latched); i++) { me.Position = at; me.Velocity = Vector2.Zero; await Frame(); }
+            bool latched = webs.All(w => w.Latched) && me.Pinned;
+            double Struck() => webs.Concat(new[] { gun }).Sum(w => me.DamageBySource.GetValueOrDefault($"raider:{w.NetId}"));
+            me.UseAbility("emp", 0);
+            double clock = 0, freedAt = -1;
+            while (freedAt < 0 && clock < 0.5) { me.Position = at; await Frame(); clock += GetProcessDeltaTime(); if (!me.Pinned && webs.All(w => !w.Latched)) freedAt = clock; }
+            double s0 = Struck(); var seekers0 = Nodes<Shot>().Where(x => x.Kind == Shots.Seeker).ToHashSet();
+            float aim0 = (turretField.GetValue(gun) as Node2D)?.Rotation ?? float.NaN;          // on its hull: a held turret keeps it
+            float circle = VaryAngle();
+            for (double t = 0; t < 3.5; t += GetProcessDeltaTime())
+            {   // the Echo swings round the gunship: a tracking turret would follow it
+                me.Position = gun.Position + Vector2.Right.Rotated(circle + (float)t * 0.8f) * 240f; me.Velocity = Vector2.Zero;
+                await Frame();
+            }
+            float aim1 = (turretField.GetValue(gun) as Node2D)?.Rotation ?? float.NaN;
+            bool launched = Nodes<Shot>().Any(x => x.Kind == Shots.Seeker && !seekers0.Contains(x));
+            Check(latched && freedAt >= 0 && freedAt <= 0.3 && Struck() == s0 && !launched && Mathf.Abs(Mathf.AngleDifference(aim0, aim1)) < 1e-3f,
+                  $"an EMP on three latched webs and a gunship: every web let go {freedAt:0.00} s on (0.3); in the next 3.5 s {Struck() - s0:0.0} struck (0), a launch {launched}, the gunship's turret moved {Mathf.RadToDeg(Mathf.AngleDifference(aim0, aim1)):0.00}° while the Echo went round it");
+            foreach (var r in webs) r.TakeDamage(1e12); gun.TakeDamage(1e12);
+            await Wait(0.3);
+        }
+        ec.Demo = demo; ec.Velocity = Vector2.Zero; ec.Position = yonder; ec.Sl("emp").Cool = 0;
+    }
+
+    // ── SLICE 6d, RUNG 5: A GUEST'S EMP. The host (LaneA6dEmpHostWatch) holds two craft 150-250 u off the guest's Echo; the
+    // guest presses its EMP: on the host both are Jammed, hulls untouched; on the guest (LaneA6dEmpGuestChecks) both
+    // carry the jam mark (Raider.FlagJam) within 0.5 s, and it is gone by 5.2 s.
+    sealed class LaneA6dEmpSeen { public bool Jammed, Unhurt, Done; public int Ids; public readonly List<Raider> Held = new(); }
+    LateSampler LaneA6dEmpHostWatch(LaneA6dEmpSeen seen)
+    {
+        var held = seen.Held; var hp0 = new List<double>();
+        var watch = new LateSampler { Probe = () =>
+        {
+            if (seen.Done || H.Ships.FirstOrDefault(s => !s.Mine) is not { Class: ShipClass.LightEcho, Alive: true } g || Math.Abs(g.MaxHp - 180) > 1e-6) return false;
+            if (g.Sl("rewind").Cool <= 0) return false;                               // after its rewind (LaneA6dRewindGuestChecks)
+            if (held.Count == 0)
+                for (int k = 0; k < 2; k++) { var r = HeldI(g.Position + Vector2.Right.Rotated(k * 2.5f + 0.3f) * (150f + 100f * k), k == 0 ? Enemies.Webifier : Enemies.Gunship); held.Add(r); hp0.Add(r.Hp); }
+            foreach (var r in held) r.Position = g.Position + (r.Position - g.Position).Normalized() * Mathf.Clamp(r.Position.DistanceTo(g.Position), 150f, 250f);
+            if (g.Sl("emp").Cool <= 0) return false;
+            seen.Jammed = held.All(r => r.Statuses.Has(Status.Jammed));
+            seen.Unhurt = held.Select(r => r.Hp).SequenceEqual(hp0);
+            seen.Ids = held.Count; seen.Done = true;
+            return true;
+        } };
+        AddChild(watch);
+        return watch;
+    }
+    async Task LaneA6dEmpHostChecks(LateSampler watch, LaneA6dEmpSeen seen)
+    {
+        await RealTime(() => seen.Done, Wan ? 90 : 60);
+        watch.QueueFree();
+        await Wait(6.5);                                                            // the guest reads the marks off for 5.6 s
+        foreach (var r in seen.Held) if (IsInstanceValid(r)) r.TakeDamage(1e12);
+        Check(seen.Done && seen.Ids == 2 && seen.Jammed && seen.Unhurt,
+              $"arena host: the guest Echo's EMP jams the {seen.Ids} craft held 150-250 u off it ({seen.Jammed}), their hulls untouched ({seen.Unhurt})");
+    }
+    async Task LaneA6dEmpGuestChecks()
+    {
+        var me = Me; me.AutopilotTo = null; bool demo = me.Demo; me.Demo = true;
+        me.Velocity = Vector2.Zero;
+        List<Raider> Near() => H.Raiders.Where(r => r.Position.DistanceTo(me.Position) <= 260f).ToList();
+        await RealTime(() => Near().Count >= 2, Wan ? 20 : 10);                     // the host's two craft, on this peer
+        me.Sl("emp").Cool = 0;
+        me.UseAbility("emp", 0);
+        double clock = 0, markedAt = -1; bool cleared = false;
+        while (clock < 5.6)
+        {
+            me.Velocity = Vector2.Zero;
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); clock += GetProcessDeltaTime();
+            var near = Near();
+            if (markedAt < 0 && near.Count >= 2 && near.All(r => r.JamMarked)) markedAt = clock;
+            if (clock >= 5.2 && !cleared) cleared = near.All(r => !r.JamMarked);
+        }
+        Check(markedAt >= 0 && markedAt <= 0.5 && cleared,
+              $"arena guest: its Echo's EMP puts the jam mark on the host's craft beside it {markedAt:0.00} s on (0.5), and it is gone by 5.2 s ({cleared})");
+        me.Demo = demo;
+    }
+
     // ── SLICE 6d, RUNG 5: A GUEST'S PEPPERBOX. The guest (LaneA6dPepperGuestChecks) flies a DART at rest, its cursor
     // on a varied point 400-600 u off the nose, and holds the trigger 2 s: its own world shows the host's darts
     // (cosmetic copies, Commanded onto ITS cursor) -- 12 +- 2 of them, each within 10° of the bearing to the cursor
@@ -14613,6 +14786,8 @@ public partial class _Test : Node
             await LaneA6dReverbChecks(yonder);
             LaneA6dRewindRowChecks();
             await LaneA6dRewindChecks(yonder);
+            LaneA6dEmpRowChecks();
+            await LaneA6dEmpChecks(yonder);
             await SetClass(ShipClass.HeavyWarrior);
             var wr = Me; wr.Position = yonder; wr.Velocity = Vector2.Zero; await Wait(0.2);
             // A SPEED LIFT LIFTS THE PUSH AS WELL AS THE TOP SPEED (PlayerShip.Steer). The water holds a
@@ -14992,6 +15167,7 @@ public partial class _Test : Node
                     ["slingshot"] = sp => sp.Sl("slingshot").Cool > sp.Stats["sling_cooldown"] - 0.1,
                     ["reverb"]    = sp => sp.Sl("reverb").Left > sp.Stats["reverb_time"] - 0.1,
                     ["rewind"]    = sp => sp.Sl("rewind").Cool > sp.Stats["rewind_cooldown"] - 0.1,
+                    ["emp"]       = sp => sp.Sl("emp").Cool > sp.Stats["emp_cooldown"] - 0.1,
                     ["stealth"]   = sp => sp.Statuses.Has(Status.Untargetable) && sp.Sl("stealth").Left > sp.Stats["stealth_time"] - 0.1,
                     ["anchor"]    = sp => sp.Sl("anchor").Left > sp.Stats["anchor_time"] - 0.1 && sp.Held == 0f,
                     ["tether"]    = sp => sp.Sl("tether").N == 1 && sp.Sl("tether").Cool > sp.Stats["tether_recharge"] - 0.1 && H.Laid.Any(z => z.OwnerId == sp.OwnerId),
@@ -18222,6 +18398,8 @@ public partial class _Test : Node
             var ramjetWatch = LaneA6dRamjetHostWatch(ramjetSeen);           // slice 6d: ...then lights its ramjet
             var rewindSeen = new LaneA6dRewindSeen();
             var rewindWatch = LaneA6dRewindHostWatch(rewindSeen);           // slice 6d: ...then flies an Echo and rewinds
+            var empSeen = new LaneA6dEmpSeen();
+            var empWatch = LaneA6dEmpHostWatch(empSeen);                    // slice 6d: ...then pulses its EMP beside two held craft
             await LaneBHostDrives();                                        // lane B: the drives across peers (its guest half: LaneBGuestDrives)
             await LaneA6cLungeHostChecks(lungeWatch, lungeSeen);
             await LaneA6cPrismHostChecks(prismWatch, prismSeen);
@@ -18243,6 +18421,7 @@ public partial class _Test : Node
             await LaneA6dRodHostChecks(rodWatch, rodSeen);                  // slice 6d: the guest's rod, priced on the host
             await LaneA6dRamjetHostChecks(ramjetWatch, ramjetSeen);         // slice 6d: the host's own copy of the guest's ramjet
             await LaneA6dRewindHostChecks(rewindWatch, rewindSeen);         // slice 6d: the guest's rewind, its hull from the host's own trail
+            await LaneA6dEmpHostChecks(empWatch, empSeen);                  // slice 6d: the guest's EMP jams the craft beside it
             await RealTime(() => H.Ships.FirstOrDefault(s => !s.Mine) is { Class: ShipClass.FreightHauler } gg
                                  && gg.Position.DistanceTo(mpSpot) < 60, Wan ? 25 : 15);
             var fg = H.Ships.FirstOrDefault(s => !s.Mine);
@@ -18535,6 +18714,7 @@ public partial class _Test : Node
             await LaneA6dRodGuestChecks();                                  // slice 6d: a guest's sprint and rod (its host half: LaneA6dRodHostChecks)
             await LaneA6dRamjetGuestChecks();                               // slice 6d: a guest's ramjet (its host half: LaneA6dRamjetHostChecks)
             await LaneA6dRewindGuestChecks();                               // slice 6d: a guest's rewind (its host half: LaneA6dRewindHostChecks)
+            await LaneA6dEmpGuestChecks();                                  // slice 6d: a guest's EMP, the jam marks on this peer (its host half: LaneA6dEmpHostChecks)
             // ── TWO OF THE NINE, IN A SESSION (the host's side is in the ahost branch) ──
             // A FREIGHTER: the class whose abilities MAKE things in the world. Every press below
             // is a request -- nothing here is made on this peer.

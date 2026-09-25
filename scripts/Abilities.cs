@@ -617,6 +617,18 @@ public static class Ab
         Show = (s, _) => Timed(s, "rewind", "rewind_cooldown", "READY"),
     };
 
+    // THE ECHO'S EMP (kits_v2's card): every hostile craft within 300 u JAMMED 4 s (no strikes, no launches, the turret
+    // held, a web let go), a second pulse 0.6 s later from where it was pressed refreshing it; no damage; 18 s
+    public static readonly AbilityDef Emp = new()
+    {
+        Id = "emp", Name = "EMP", Short = "EMP", Default = Key.E,
+        Blurb = "Jams every hostile craft within 300 u for four seconds: no shots, no missiles, and any web on a friend lets go. It pulses twice.",
+        Press = (s, _) => s.StartEmp(),
+        Expire = s => s.Pulse(s.Sl("emp").At),
+        Refuse = (s, _) => s.Sl("emp").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => Timed(s, "emp", "emp_cooldown", "READY"),
+    };
+
     public static readonly AbilityDef Stealth = new()
     {
         Id = "stealth", Name = "Stealth", Short = "STEALTH", Default = Key.F,
