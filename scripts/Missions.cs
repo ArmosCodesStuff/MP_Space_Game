@@ -53,6 +53,11 @@ public static class Missions
         public float HoldOff = 470f;
         public float CloseSpeed = 30f;      // ...at this, ponderously
         public float TurnRate = 0.3f;       // its native turn (rad/s)
+        // HOW MANY TIMES BossSize MADE THIS ROW -- 1 for a row that was never doubled. A move whose
+        // reach should keep pace with the hull (a Ring's shockwave; nothing else asked for this yet)
+        // reads it at use (Boss.cs), the same way Boss.cs reads Length and HalfWidth: the ROW carries
+        // the scale, never a second copy of the move table.
+        public float Size = 1f;
         public BossMove[] Moves;
     }
     // THE BOSSES ARE RED AND BLACK: the owner's swatch (mean RGB 172, 7, 2) multiplying the pack's
@@ -74,12 +79,12 @@ public static class Missions
         new() { Id = "silver_lancer", Name = "RUSTY BUCKET", Hull = 760,
                 Texture = "res://boss_raider.png", Tint = BossRed,
                 Nozzles = Nozzle.Scaled(BossSize, new(-30.30f, 178.81f, 39.21f), new(31.19f, 178.81f, 38.61f)),
-                Length = 360f * BossSize, HalfWidth = 70f * BossSize, Moves = Lancer.Moves },
+                Length = 360f * BossSize, HalfWidth = 70f * BossSize, Size = BossSize, Moves = Lancer.Moves },
         new() { Id = "drake_bastion", Name = "DRAKE BASTION", Hull = 700,
                 Texture = "res://boss_drake.png", Tint = BossRed,
                 Nozzles = Nozzle.Scaled(BossSize, new(-53.82f, 209.38f, 20.78f), new(-28.54f, 208.76f, 20.47f), new(-3.57f, 191.39f, 15.82f),
                                                   new(19.85f, 208.45f, 19.85f), new(50.25f, 208.45f, 22.33f)),
-                Length = 420f * BossSize, HalfWidth = 90f * BossSize, HoldOff = 440f,   // 650 u off the centre of its 420 u
+                Length = 420f * BossSize, HalfWidth = 90f * BossSize, HoldOff = 440f, Size = BossSize,   // 650 u off the centre of its 420 u
                 Moves = Drake.Moves },
     };
     // The boss of a level: every peer works it out from the replicated level alone.

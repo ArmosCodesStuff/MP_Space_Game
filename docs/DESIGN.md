@@ -224,7 +224,10 @@ levels once a second and ship and hauler state ten times a second; a guest's own
 
 - **Camera**: wheel zoom between `DefaultZoom / ZoomOutMax` (33% further out) and `× ZoomInMax`
   (1.5). **Y** frees it; arrows or the screen edge pan it, tethered to `ClassArt.CameraRange`
-  (5000 for a capital ship). All in `Hub.MoveCamera`.
+  (5000 for a capital ship). All in `Hub.MoveCamera`. A boss too big for that ceiling is framed by
+  `Hub.BossFramed` sliding the centre toward its far hull end instead of raising the ceiling (the
+  owner's open question, 2026-09-25) -- generic from the boss row's own `Length`, gated to actual
+  encounters, and capped so the ship never drifts past `BossPilotMargin` from the edge.
 - **Radar** (`Radar.cs`): local only, draws what this machine knows; size is `Settings.RadarSize`.
 - **Esc menu** (`EscMenu.cs`): the last Esc layer. Multiplayer cannot pause, so it locks the helm.
 - **Music** (`Music.cs`, an autoload): both loops always play; their levels cross-fade by mood,
@@ -745,7 +748,10 @@ under the base. A route or a range that moves must keep the 500.
   ram's lane (2 HW), the rock's hold (`Boss.FlankHold`: HW + body + gap), the escorts and the warp ring
   (in half-widths), and every stand-off (`HoldOff`, a warp's `Standoff`) measured from the NOSE, so a
   bigger hull stands no nearer the party. The boss spawns with its nose on `Hub.ArenaCentre`. What
-  does NOT scale: reaches, ranges and bodies (the beam's 70 u, the shockwave's 340 u ring, the rock).
+  does NOT scale: reaches, ranges and bodies (the beam's 70 u, the rock) -- except a Ring move's own
+  telegraph (`BossType.Size` x `Reach`, at use in `Boss.cs`): it is drawn round the hull itself, so the
+  Lancer's shockwave reaches 680 u (340 x 2), the owner's open question, 2026-09-25, resolved as a
+  default.
 - **Carrier**: the runway down the centre, the bays on the white either side of it, three sponsons a
   flank; point defence on the two middle sponsons and the stern block (the bow is where bombers lift
   off). **Battleship**: its four painted turrets are painted over from a clean stretch of its spine

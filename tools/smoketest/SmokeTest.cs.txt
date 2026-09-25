@@ -6773,7 +6773,7 @@ public partial class _Test : Node
             // -- an invisible line sweeping the arena. 2.2 s in, the pilot is moved clear to the
             // side (after five 50-hull ticks, which the damage check below counts on): a boss that
             // turns would now swing after it.
-            double liveT = 0; float liveRot0 = 0, liveTurn = 0; bool liveDrawn = false, sidestep = false;
+            double liveT = 0; float liveRot0 = 0, liveTurn = 0; bool liveDrawn = false, sidestep = false, rammedClear = false;
             async void Watch()
             {
                 while (Hub.InArena && GodotObject.IsInstanceValid(boss))
@@ -6787,6 +6787,14 @@ public partial class _Test : Node
                         if (liveT > 2.0 && Nodes<FxNode>(boss).Any(x => x.Id == Fx.WarnLane)) liveDrawn = true;
                         if (liveT > 2.2 && !sidestep) { sidestep = true; me2.Position += Vector2.Right.Rotated(boss.Rotation) * 400f; }
                     }
+                    // THE DOUBLED HULL RAMS FOR LONGER, NOT HARDER: at 720 u long and 1200 u/s the hull
+                    // takes 0.6 s to pass a fixed point -- longer than the 0.52 s a source is blocked for
+                    // -- so a pilot that never moves eats the 40 twice. Real play carries a hit pilot off
+                    // the line; this check does the same the instant the row's damage source lands once,
+                    // same as the beam's sidestep above, so what it proves is the row's 40, not however
+                    // many times a target that never moves would take it.
+                    if (Ramming() && !rammedClear && me2.DamageBySource.TryGetValue("boss:charge", out var ramDmg) && ramDmg > 0)
+                    { rammedClear = true; me2.Position += Vector2.Right.Rotated(boss.Rotation) * 400f; }
                     // The beam's place in the rhythm is where it COMMITS -- its escorts going out.
                     // Its red line comes later, when their web pins the pilot, so timing the rhythm
                     // off the telegraph would measure that wait, not the rhythm.
@@ -6945,8 +6953,8 @@ public partial class _Test : Node
                   "then small craft (by their tag, not their size), then everything else -- and a boss is never a PD target");
             FxNode ring = null;
             for (int i = 0; i < 60 * 18 && ring == null; i++) { ring = Nodes<FxNode>().FirstOrDefault(t => t.Id == Fx.WarnZone); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
-            Check(ring != null && ring.Radius == 340f && boss.S("wave").M.Reach == 340f && ring.Anchor == Fx.World,
-                  "the shockwave is telegraphed: a red zone 340 u across, on the ground, before it lands");
+            Check(ring != null && ring.Radius == 680f && boss.S("wave").M.Reach == 340f && ring.Anchor == Fx.World,
+                  "the shockwave is telegraphed: a red zone 680 u across (the row's 340, twice for the doubled hull), on the ground, before it lands");
             // without point defence, a pair of escorts reaches the pilot and pins it inside the charge
             for (int i = 0; i < 60 * 8 && Me.PdActive; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             boss.LaunchEscorts("beam", me2);
@@ -7043,7 +7051,7 @@ public partial class _Test : Node
                 { me2.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
                 double dkWaveHit = me2.DamageBySource.GetValueOrDefault("boss:wave") - dkWave0;
                 Check(Targeting.Hidden(me2) && boss.S("wave").Fired == dkWaves0 + 1 && Math.Abs(dkWaveHit - 45) < 1e-6,
-                      $"a pilot it cannot see, {me2.Position.DistanceTo(boss.S("wave").To):0} u inside its 340 u shockwave, still takes the whole 45 ({dkWaveHit:0})");
+                      $"a pilot it cannot see, {me2.Position.DistanceTo(boss.S("wave").To):0} u inside its 680 u shockwave, still takes the whole 45 ({dkWaveHit:0})");
 
                 // ...AND ITS MOVES STILL COME, AIMED WHERE IT LAST SAW ANYONE: not held back for want
                 // of a pilot in sight, and not aimed at the one it cannot see
@@ -7199,6 +7207,42 @@ public partial class _Test : Node
                       && dspr != null && dspr.Texture.ResourcePath.EndsWith("boss_drake.png") && Math.Abs(dspr.Texture.GetHeight() * dspr.Scale.Y - 840f) < 0.5f
                       && dspr.Modulate == new Color(0.67f, 0.03f, 0.01f),
                       $"level 2 is the Drake Bastion: 700 hull x the level's scale, 840 u long (twice its art), in the owner's red ({dk?.Type.Name}, {dk?.MaxHp:0}, {dspr?.Modulate})");
+                if (dk != null)
+                {
+                    // THE DRAKE'S WHOLE HULL FRAMES WITHOUT RAISING THE WHEEL'S CEILING -- the
+                    // owner's open question (b), 2026-09-25 (a first pass widened ZoomOutMax; the
+                    // owner overruled it in the ledger -- the wheel never goes past what it already
+                    // reached). Hub.BossFramed slides the CENTRE toward the boss's far end instead.
+                    // Proved from 3 approach angles (VaryAngle, never the one line the spawn uses),
+                    // the ship fixed at ArenaCentre and the boss placed HoldOff + half its length out
+                    // along each angle, nose on the ship, so every angle is a real hold-off.
+                    H.SetZoom(Hub.DefaultZoom / Hub.ZoomOutMax);
+                    var vp = H.GetViewport().GetVisibleRect().Size;
+                    Vector2 ScreenOf(Vector2 w) => H.GetViewport().GetCanvasTransform() * w;
+                    for (int a = 0; a < 3; a++)
+                    {
+                        float ang = VaryAngle();
+                        var dir = Vector2.Right.Rotated(ang);
+                        me3.Position = Hub.ArenaCentre; me3.Velocity = Vector2.Zero;
+                        dk.Rotation = ang + Mathf.Pi / 2f;
+                        dk.Position = Hub.ArenaCentre - dir * (dk.Length * 0.5f + dk.Type.HoldOff);
+                        await Wait(1.0);
+                        var sternOn = ScreenOf(dk.Position - dir * (dk.Length * 0.5f));
+                        var shipOn = ScreenOf(me3.Position);
+                        Check(sternOn.X >= 10f && sternOn.X <= vp.X - 10f && sternOn.Y >= 10f && sternOn.Y <= vp.Y - 10f
+                              && shipOn.X >= 10f && shipOn.X <= vp.X - 10f && shipOn.Y >= 10f && shipOn.Y <= vp.Y - 10f
+                              && Mathf.IsEqualApprox(H.ZoomLevel, Hub.DefaultZoom / Hub.ZoomOutMax),
+                              $"at {Mathf.RadToDeg(ang):0} degrees off the hold-off, the wheel's own ceiling ({H.ZoomLevel:0.000}) still frames the Drake's far end ({sternOn.X:0}, {sternOn.Y:0}) and the ship ({shipOn.X:0}, {shipOn.Y:0}) of {vp.X:0} x {vp.Y:0}");
+                    }
+                    H.SetZoom(Hub.DefaultZoom);
+                    // BACK TO THE SPAWN POSE before the checks below: the last angle left the boss
+                    // facing an arbitrary way, and its own tracking needs real time to turn back --
+                    // MAIN GUN below waits only 0.1 s for its shot, not the seconds a big turn takes,
+                    // so a stray rotation here reads there as a wrong DPS, not a camera bug.
+                    dk.Rotation = Mathf.Pi; dk.Position = Hub.ArenaCentre + new Vector2(0, -dk.Length * 0.5f);
+                    me3.Position = Hub.ArenaCentre + new Vector2(0, dk.Type.HoldOff); me3.Velocity = Vector2.Zero;
+                    await Wait(0.5);
+                }
                 if (dk != null)
                 {
                     // ITS CLOCKS: a throw every 30 s from 6 s, the shotgun every 15 s from 17 s -- 11 s after a

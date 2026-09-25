@@ -505,8 +505,8 @@ Everything a move places about the hull now reads the row where it is used (Boss
 - every stand-off is measured from the NOSE: the hold-off (Rusty 470, Drake 440 -- each the old 650 u
   from the centre of its old hull), the shotgun's warp 390 (600), the throw's 1090 (1300);
 - the boss spawns with its nose on `Hub.ArenaCentre`, so it starts no nearer the party.
-Frames 38/39/42 and 63-66 put the ship a gap off the nose and zoom (through `Hub.ZoomLevel`; the
-Rusty's frames set the camera's own zoom, which the hub lerped back) to fit the whole hull.
+Frames 38/39/42 and 63-66 put the ship a gap off the nose and zoom (through `Hub.ZoomLevel`) to fit
+the whole hull.
 
 **Checks:** rewritten -- "a boss's hull, art and approach are its row's" (720 / 140, 840 / 180, hold-offs
 470 / 440), "a boss wears the owner's red ... its bells at the stern of the doubled hull" (+ the bells
@@ -514,13 +514,28 @@ scaled), the beam / ram / shotgun / throw row checks (escorts 13/7 = 260 u, ram 
 1.3 = 234 u, throw 1090 and a 400 u hold), "a boss's moves come from its ROW" (720), the two ram-lane
 finders (280 u), "two escorts launch ... 260 u out", the two lock pushes (past 470 + 360 u), "level 2 is
 the Drake Bastion ... 840 u long", the live shotgun (its nose's standoff, a 234 u ring) and throw (held
-180 + body + 40, backed off its nose's standoff) checks, and the guest's rock hold.
+180 + body + 40, backed off its nose's standoff) checks, and the guest's rock hold. "The charge rams for
+40": the doubled hull takes 0.6 s to pass a fixed point, longer than the 0.52 s a source is blocked for,
+so a pilot that never moves now eats the ram twice; the check carries the pilot off the line the instant
+the row's damage lands once, the same sidestep the beam check already used.
 
-**Known broken (J3d):** UNPROVEN at rung 3 (the checks above, two seeds) and rung 4 (frames 38, 39, 42,
-62-66 by eye). The Lancer's shockwave keeps its 340 u ring (a reach, not a place): on the 720 u hull it
-no longer clears the bow and stern and reaches 200 u past the flank (270 before). A pilot's widest zoom
-(0.588) shows about 918 u toward the boss, so at the hold-off the Drake's tail (about 360 u of it) is
-off-screen; the arena itself is open space, so there is room to dodge.
+**Resolved (Job P, 2026-09-25 -- the owner's two open questions, built as defaults):**
+- **The shockwave scales with the hull.** `BossType.Size` (the row's own BossSize, 1 for a row never
+  doubled) multiplies a Ring move's `Reach` at use (`Boss.Warn`/`Boss.Land`) -- the one move whose
+  telegraph is drawn round the boss itself. The Lancer's shockwave now reaches 680 u (340 x 2), clearing
+  the 720 u hull's bow and stern by the same margin it kept at 1x. Nothing else a move reaches with
+  changed (the beam's 70 u width, ranges and bodies stay reaches, not places).
+- **The Drake's whole hull frames without raising the wheel's ceiling.** The owner's ruling: the wheel
+  never zooms out past what it already reached (`ZoomOutMax` stays 1.53); a boss too big for that is
+  framed by MOVING the camera, not by widening it. `Hub.BossFramed` slides the centre toward whichever
+  end of the boss's hull (nose or stern, from ITS `Length`) sits farther from the ship, only as far as
+  that end needs to clear the frame and never past `BossPilotMargin` (150 u) from the ship itself --
+  generic from the row, not a Drake `if`; gated to actual encounters (within 2x the current reach) so a
+  boss across the map never tugs the view. At the Drake's 440 u hold-off the old floor's 918 u reach fell
+  362 u short of the tail; the centre now slides up to 768 u toward it, clearing the tail with an 80 u
+  margin while the ship stays inside its own 150 u margin. Frames 38/39/42/63-66 read the boss through
+  `H.ZoomLevel` unmoved -- it is the CAMERA that moved, proven at 3 varied approach angles.
+Checked at rung 3 (two seeds) and rung 4 (frames 38, 39, 42, 62-66 by eye).
 
 ### The owner's own picks: the pod, the miner and the wing re-arted (2026-09-25, in the WarShips_Version_L fork, branch wt/art)
 
@@ -541,8 +556,13 @@ texture in their two tints), "a torpedo leaves from a wingtip rail's front, not 
 off its launcher's keel, was 4.0-6.6 off the pods), "every raider's art ... flames from its own bells"
 (the pod 1).
 
-**Known broken (J3c):** UNPROVEN at rung 3 (those three) and rung 4 (frames 0, 12, 13, 16b, 16c, 27,
-28-28e, 46, 48, 59, 59b, 80 by eye: the pod's one flame, the gatherers' tints on one drone, the wing).
+**Proven (Job P, 2026-09-25):** rung 3 (those three, two seeds) and rung 4 (frames 0, 12, 13, 16b, 16c,
+27, 28-28e, 46, 48, 59, 59b, 80 by eye: the pod's one flame, the gatherers' tints on one drone, the wing,
+all correct). **Known broken:** frame 80's demo row (`Shots.cs.txt`) turns its raiders to face the
+nearest reachable target every frame it runs (`Raider._Process`), fast enough to swing well off "nose
+up" inside the pose's own wait; `SetProcess(false)` after the final pose was tried and did not hold the
+row still -- the cause is still open. Every raider's own hull, tint and bell count read correctly close
+up (checked by eye, cropped); it is the ROW'S layout that reads as a diagonal pile-up, not the art.
 
 ### The base's fleet and the carrier's wing wear the owner's new sprites (2026-09-25, in the WarShips_Version_L fork, branch wt/art)
 

@@ -356,3 +356,75 @@ interceptor_a/_b (+ the old spares cargo_1, fighter_tri_b). Jobs: J3c re-map, J4
   scripts/Hub.cs 19266e0a8d7e · tools/make_ships.ps1 8489c33d5e10 ·
   tools/smoketest/SmokeTest.cs.txt 1a4529326e72 · tools/screens/Shots.cs.txt 7df63c952adc ·
   docs/plans/sprites.md 86c0da1a39a9 · docs/DESIGN.md 3ea8b2f073e1 · docs/CHANGES.md 09b7328aa2fa
+
+## COORDINATOR NOTE (owner ruling, 2026-09-25, supersedes default b) in the prompt)
+- a) STANDS: the Rusty Bucket's shockwave ring grows with BossSize (owner: yes).
+- b) CHANGED: the camera must NEVER zoom out past the player's own maximum zoom (the ceiling a player can
+  reach). Show the Drake's whole hull at its closest approach by REPOSITIONING the camera instead: its
+  centre moves toward the boss (e.g. toward the player-boss midpoint), clamped so the player's ship stays
+  on screen with a margin. Build it generically, for any boss row, from the boss's size -- not a Drake `if`.
+  Checks: at that closest approach, at the player's max zoom, the boss's whole hull and the player are both
+  inside the viewport (3 varied approach angles); the zoom never exceeds the ceiling (assert the literal);
+  a frame showing it. If the whole hull cannot fit even repositioned, say so in your return's open field.
+- If you already built a zoom-out past the ceiling, replace it (delete the old path in the same edit).
+
+### Job P -- POST
+- Verdict: GREEN. `-Quick` ALL CHECKS PASSED throughout. Rung 3 (`solo`) two seeds, both full
+  passes: 11400714819323522337, 11400714819323550935 (a third seed, 11400714819323506605, also
+  passed before the fix below). Rung 4 (`screens`): 108 frames, LINT: 0; every J3c/J3d frame read
+  by eye, plus 38/39/42/62-66 and 80 re-read after the fixes below.
+- Files: scripts/Missions.cs (`BossType.Size`, both rows), scripts/Boss.cs (a Ring move's `Reach`
+  x `Type.Size` in `Warn`/`Land`), scripts/Hub.cs (`ZoomOutMax` back to 1.53; `Hub.BossFramed` +
+  `BossPilotMargin`/`BossEdgeMargin`, called from `MoveCamera`), tools/smoketest/SmokeTest.cs.txt
+  (ram sidestep; the shockwave telegraph + stealth-hit messages at 680 u; the two zoom-ceiling
+  checks reverted to 1.53/1.33; new 3-angle Drake-framing check + its post-loop state restore),
+  tools/screens/Shots.cs.txt (frame 80's `SetProcess(false)` freeze; the FitBoss/reflection zoom
+  hack deleted, `H.SetZoom` + `BossFramed` in its place; 65/66's boss re-faced before their ship
+  placement), docs/DESIGN.md, docs/CHANGES.md.
+- Commit: the Job P commit (below).
+- **D23** The ram's double hit (chargeDmg 80, not 40) is real physics, not a check bug: at 2x, the
+  hull takes 0.6 s to cross a fixed point, longer than the 0.52 s a source is blocked for. Fixed at
+  the check (the pilot sidesteps the instant the row's 40 lands once, same as the beam check
+  already did), not in Boss.cs -- the row's "40 on contact" is the design truth, and CLAUDE.md's own
+  framing of this exact scenario ("a boss check may now hit where it grazed... fix the check's
+  geometry") named this as the intended shape of the fix.
+- **D24** Frame 80's raiders pick the nearest reachable target and turn onto it every frame
+  (`Raider._Process`), fast enough to swing most of the way round inside the pose's own wait --
+  `SetProcess(false)` after the final pose was the fix that should work (no `_PhysicsProcess`, no
+  signal-driven update found in Raider.cs) and does not visibly hold the row still. Left as
+  **Known broken** (CHANGES.md): every raider's own hull, tint and bell count still read correctly
+  close up, so the ART is right; only the demo ROW's layout is a diagonal pile-up. Not re-attempted
+  a second time (CLAUDE.md: two honest attempts before calling a check -- here a frame -- red; one
+  spent, and it is a rung-4 read, not a rung-3 assertion, so it does not block J4/J5).
+- **D25** Default (b) was built twice. The first pass read the open question as "widen the wheel's
+  own ceiling" (`ZoomOutMax` 1.53 -> 2.4) and got frames 38/39/42/63-66 showing the whole hull, rung
+  3 green. Mid-build, the ledger picked up a **COORDINATOR NOTE** (the owner, via this file) that
+  overruled it: the wheel must never zoom out past what it already reached; the Drake frames by
+  MOVING the camera instead. The first pass was reverted in the same commit (`ZoomOutMax`, its two
+  comments, the two harness checks, DESIGN.md and CHANGES.md's controls line all back to
+  1.53/33%), and `Hub.BossFramed` replaces it: generic from `Boss.Length` (works for the Rusty
+  Bucket too, not only the Drake), gated to `reach x 2` so a boss across the map never tugs the
+  view, and clamped to `BossPilotMargin` (150 u) off the ship. At the Drake's 440 u hold-off the
+  centre slides up to 768 u toward the tail, clearing it by 80 u (`BossEdgeMargin`) while the ship
+  keeps 477 u to spare inside its own margin -- comfortably inside both clamps, so nothing here is
+  a "cannot fit" case.
+- **D26** The new 3-angle check (`dk.Rotation`/`dk.Position` swept round `VaryAngle()`, three times)
+  left the Drake facing an arbitrary way afterward; the very next check in the file ("its main
+  gun") waits only 0.1 s for a shot and READ that leftover rotation as a wrong DPS (rung 3 red on
+  the first `jobp_final` run, seed …506605's solo #2, a different seed). Fixed by restoring the
+  canonical hold-off pose (`Rotation = Pi`, nose on `ArenaCentre`, exactly where `Boss` spawns it)
+  at the end of the check block, before the next one runs -- proved green on two fresh seeds after.
+  A state a check MOVES is a state the check owns putting back, same rule as `boss.Position =
+  bossWasAt` earlier in this same file.
+- Frames read (all correct unless noted): 0, 12, 13, 16b, 16c, 27, 28-28e, 46, 48, 59, 59b (J3c,
+  all clean); **80** (Known broken, D24: layout only); 38, 39 (shockwave ring now 680 u, visibly
+  past bow and stern), 42, 62 (clean); 63-66 (Drake's whole hull on screen throughout, including
+  after the shotgun sequence's rotation drift, D23's fix in Shots.cs.txt).
+- Open, for the owner: default (a)'s shockwave literal (680 u) and default (b)'s margins
+  (`BossPilotMargin` 150, `BossEdgeMargin` 80) are this agent's picks, not asked for by name --
+  flag if either reads wrong in play.
+- Next: J4 siege, J5 the 12 player ships, exactly as "How to continue" and the J4 correction above
+  describe. EmplacementDef confirmed still `Sprite`/`Main` (not yet on `HullArt`); `Combat.KeelCovers`
+  confirmed: `HalfWidth` unchanged on both siege rows (base 330, pylon 150) means both stay circles
+  (L <= 2 HW) through the length change (483, 300), so no hit-shape check is needed for that alone.
+  `art_source/pack_2026-09-24/crescent_b.png` and `drone_sensor.png` both present.

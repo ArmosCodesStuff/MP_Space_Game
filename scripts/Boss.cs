@@ -445,7 +445,11 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
                 Lane(m, Vector2.Zero, new Vector2(0, -m.Reach), onHull: true, width: HalfWidth * 2f);
                 break;
             case MoveWay.Ring:
-                Zone(s.To, m.Reach, m.Windup, m.Cue, m.Strike);
+                // A RING'S REACH GROWS WITH THE HULL (Type.Size, the owner's open question,
+                // 2026-09-25): the one move whose telegraph is drawn round the boss itself, so a
+                // bigger hull that kept the art's own reach would draw a ring the bow and stern
+                // now poke through. Everything else a move reaches with stays a reach, not a place.
+                Zone(s.To, m.Reach * Type.Size, m.Windup, m.Cue, m.Strike);
                 break;
             case MoveWay.Throw:
                 // THE LANE IS THE BODY, not a number beside it: Radius is what ThrownRock draws
@@ -489,8 +493,8 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
             case MoveWay.Beam: s.At = Phase.Firing; s.T = m.Live; s.Next = 0; break;
             case MoveWay.Dash: s.At = Phase.Firing; break;
             case MoveWay.Ring:
-                foreach (var p in _hittable)
-                    if (p.Position.DistanceTo(s.To) <= m.Reach + p.HitRadius) p.Hit(m.Damage * DamageMult, s.To, m.Source);
+                foreach (var p in _hittable)                              // the hit matches the drawn ring: Type.Size, same as Warn
+                    if (p.Position.DistanceTo(s.To) <= m.Reach * Type.Size + p.HitRadius) p.Hit(m.Damage * DamageMult, s.To, m.Source);
                 break;
             case MoveWay.Throw: s.At = Phase.Firing; break;
         }

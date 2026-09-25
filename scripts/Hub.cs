@@ -246,7 +246,8 @@ public partial class Hub : Node2D
     // it to the ship, keeping the zoom.
     // ZoomOutMax is how much FURTHER out than the default the wheel will go: 15% more of it than
     // it was (1.33), because a boss's reach grows with the level and a fight you cannot see the
-    // edges of is a fight fought on the minimap.
+    // edges of is a fight fought on the minimap. The wheel never goes past this ceiling -- a boss
+    // too big for it is framed by MOVING the camera, not by raising it (BossReach, below).
     public const float DefaultZoom = 0.9f, ZoomOutMax = 1.53f, ZoomInMax = 1.5f;
     public const float PanSpeed = 1400f, EdgeBand = 14f;
     public float ZoomLevel { get; private set; } = DefaultZoom;
@@ -1407,12 +1408,36 @@ public partial class Hub : Node2D
         AddChild(_creator);
     }
 
+    // A BOSS BIGGER THAN THE WHEEL'S WIDEST ZOOM CAN SHOW is framed by MOVING the centre toward it,
+    // not by raising the ceiling (the owner, 2026-09-25: the wheel never zooms out past what it
+    // already reaches). Generic for any boss row -- the far end of ITS hull, from ITS Length, never
+    // a Drake `if`. The centre slides toward whichever end (nose or stern) sits farther from the
+    // ship, only as far as that end needs and never past BossPilotMargin from the ship itself, so a
+    // boss too big even then (Length > 2 x reach, the two margins) stays a design question, not a
+    // camera bug -- and is gated to boss encounters (within 2 x reach) so a boss across the map
+    // never tugs the view.
+    private const float BossPilotMargin = 150f, BossEdgeMargin = 80f;
+    private Vector2 BossFramed(Vector2 anchor)
+    {
+        if (Boss is not { Alive: true } b) return anchor;
+        float reach = GetViewport().GetVisibleRect().Size.Y * 0.5f / ZoomLevel;
+        if (anchor.DistanceTo(b.Position) > reach * 2f) return anchor;
+        var half = Vector2.Up.Rotated(b.Rotation) * (b.Length * 0.5f);
+        var far = anchor.DistanceSquaredTo(b.Position + half) > anchor.DistanceSquaredTo(b.Position - half)
+                  ? b.Position + half : b.Position - half;
+        float need = anchor.DistanceTo(far) - (reach - BossEdgeMargin);
+        if (need <= 0f) return anchor;
+        float slide = Mathf.Min(need, reach - BossPilotMargin);
+        return slide <= 0f ? anchor : anchor + (far - anchor).Normalized() * slide;
+    }
+
     private void MoveCamera(PlayerShip me, float dt)
     {
         _cam.Zoom = _cam.Zoom.Lerp(new Vector2(ZoomLevel, ZoomLevel), Mathf.Clamp(10f * dt, 0f, 1f));
         var anchor = me.ViewPosition;                                  // the pod, while in stasis
         if (!FreeCamera)
         {
+            anchor = BossFramed(anchor);
             // follow smoothly -- but cut straight to the ship after a warp: panning 2000 u is disorienting
             if (_cam.Position.DistanceTo(anchor) > 1200f) _cam.Position = anchor;
             else _cam.Position = _cam.Position.Lerp(anchor, Mathf.Clamp(6f * dt, 0f, 1f));
