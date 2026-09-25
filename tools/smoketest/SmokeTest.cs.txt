@@ -1461,6 +1461,7 @@ public partial class _Test : Node
         ChipChecks();
         GearLevelChecks();
         BossScaleChecks();
+        CurveParChecks();
         BuildChecks();
         await RecyclerChecks();
 
@@ -3123,6 +3124,44 @@ public partial class _Test : Node
               && Math.Abs(Missions.Quicken(51) - Math.Pow(1.01, 50)) < 1e-9,
               $"a boss gains 1% a level on its wind-ups and its reach: x{Missions.Quicken(2):0.000} at level 2, x{Missions.Quicken(11):0.000} at 11, x{Missions.Quicken(51):0.000} at 51");
 
+    }
+
+    // ── THE CURVE (lane F): Par, the chip-free reference pilot's rows ──
+    // THE ONE PLACE PAR IS PROVED AGAINST LITERALS (numbers_curve_raids_items.md §1.3). Every other
+    // check reads Par rather than repeating a figure the item pass will re-literal.
+    void CurveParChecks()
+    {
+        bool at(int L, double h, double d, double c) =>
+            Math.Abs(Par.HullScale(L) - h) < 0.0006 && Math.Abs(Par.DamageScale(L) - d) < 0.0006 && Math.Abs(Par.CraftScale(L) - c) < 0.0006;
+        Check(at(1, 1, 1, 1) && at(10, 1.418, 1.636, 1.376) && at(20, 1.642, 2.004, 1.593) && at(40, 2.216, 3.131, 2.151) && at(80, 2.341, 3.259, 2.272),
+              $"Par: hull x{Par.HullScale(10):0.000} / x{Par.HullScale(20):0.000} / x{Par.HullScale(40):0.000}, damage x{Par.DamageScale(10):0.000} / x{Par.DamageScale(20):0.000} / x{Par.DamageScale(40):0.000}, craft x{Par.CraftScale(40):0.000} at L10 / 20 / 40 (1.418 / 1.642 / 2.216, 1.636 / 2.004 / 3.131, 2.151)");
+        // THE PLATEAU: flat past L40 (tiers stop at T10, the gate at g26), and never falling.
+        bool rising = Enumerable.Range(1, 79).All(L => Par.HullScale(L + 1) >= Par.HullScale(L) && Par.DamageScale(L + 1) >= Par.DamageScale(L) && Par.CraftScale(L + 1) >= Par.CraftScale(L));
+        bool whole = Enumerable.Range(0, Par.Rows.Length).All(i => Par.Rows[i].Level == i + 1) && Par.Rows.Length == 80;
+        Check(rising && whole && Par.HullScale(80) / Par.HullScale(40) <= 1.1 && Par.HullScale(200) == Par.HullScale(80) && Par.HullScale(0) == 1,
+              $"Par never falls, has a row for every level 1-80, and is flat past L40: x{Par.HullScale(80) / Par.HullScale(40):0.000} from L40 to L80, the same at L200, and x1 under L1");
+        // THE L1 ANCHOR: the Lancer's 60 s hull is 3222 (the fleet's walled L1 median), the Drake's x700/760.
+        Check(Math.Abs(Par.Rows[0].Boss - 3222) < 0.5 && Math.Abs(Par.Rows[0].Boss * 700 / 760 - 2968) < 0.5,
+              $"the Lancer's L1 hull on par's 60 s is 3222 and the Drake's 2968 ({Par.Rows[0].Boss:0}, {Par.Rows[0].Boss * 700 / 760:0})");
+        // TIME TO DIE holds at every level (a pilot who stops dodging): par's hull against the cut
+        // sheet x DamageScale, less the 0.5% a second it regenerates -- 31.0 s against the Lancer's 15.76,
+        // 42.0 s against the Drake's 12.19, at three varied levels anywhere on the table (fractional too).
+        for (int k = 0; k < 3; k++)
+        {
+            double L = Vary(1f, 80f), H = Par.DamageScale(L) * Par.Rows[0].Hull;
+            double lancer = H / (15.76 * Par.DamageScale(L) - 0.005 * H), drake = H / (12.19 * Par.DamageScale(L) - 0.005 * H);
+            Check(Math.Abs(lancer - 31.0) < 0.2 && Math.Abs(drake - 42.0) < 0.3,
+                  $"at L{L:0.0} par lives {lancer:0.0} s against the Lancer's sheet (31.0) and {drake:0.0} s against the Drake's (42.0)");
+        }
+        // A FRACTIONAL LEVEL is read between its two rows, and LevelAtHull is DamageScale's inverse,
+        // at three varied levels inside the rising part of the table (L1-40).
+        for (int k = 0; k < 3; k++)
+        {
+            double L = Vary(1.2f, 39.8f); int lo = (int)Math.Floor(L);
+            double t = L - lo, mid = Par.HullScale(lo) + (Par.HullScale(lo + 1) - Par.HullScale(lo)) * t;
+            Check(Math.Abs(Par.HullScale(L) - mid) < 1e-9 && Math.Abs(Par.LevelAtHull(Par.DamageScale(L)) - L) < 1e-6,
+                  $"L{L:0.00}: hull x{Par.HullScale(L):0.0000} between L{lo} and L{lo + 1}, and a hull x{Par.DamageScale(L):0.000} of par's L1 stands at L{Par.LevelAtHull(Par.DamageScale(L)):0.00}");
+        }
     }
 
     // ── THE RECYCLER: a hold turned back into salvage, and a lock so it cannot eat what you fly ──

@@ -35,3 +35,12 @@ A PRE with no POST is an interrupted job: compare hashes, revert half-made edits
 - J5 Salvage ladder on the slot: 500 x 1.10^n, +3% a level, cap; Equipment, Character, Yard,
   EquipmentWindow, RecyclerPanel; harness rewrites.
 - J6 CHANGES.md Unreleased + Handoff; final POST with what the test phase owes.
+
+## J1 PRE — tier opus
+Intent: Par.cs, the reference pilot's rows (numbers_v2.py, L1-80) and HullScale / CraftScale /
+DamageScale / LevelAtHull; the literal proof CurveParChecks. Files: scripts/Par.cs (new),
+tools/smoketest/SmokeTest.cs.txt. HEAD a02fc10. Hashes: SmokeTest 9949bb6009a1bf028fa1a6c78bb9facb92693c3a.
+## J1 POST
+Verdict: typecheck 0 errors, quick ALL CHECKS PASSED. Files: scripts/Par.cs, SmokeTest.cs.txt
+(CurveParChecks, called after BossScaleChecks). engine-unproven: rungs owed in the final test phase.
+Next: J2.
