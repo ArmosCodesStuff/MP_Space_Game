@@ -15,7 +15,8 @@ Engine outputs for the old-way batches: S = C:\Users\logan\AppData\Local\Temp\cl
    audit agent maps every ClassDef.Abilities and drive row to its checks and writes the missing ones): the slots proof, then quick,solo,solo,six,screens (+ six,six) across slots, fix low, then the bar
    once, VERIFIED:, push version-l and main, release; frames to the owner (the art lane's Drake, Rusty, siege, player ships).
 4. Delete each lane's worktree once it is merged (walls, net, slots, art, test removed 2026-09-25; branches kept).
-Done: ITEMS 669c5a3, SLICE 5 a8a5e81, SLICE 6c ac2817d merged (6c risk: rung-5 guest joins at L2 but presses L3/L6
+Done: SLICE 4 3450da4 (gate 3 passed; wt_kits4 removed). 10:55: 6a at J7, 6b in its gate fix (J11), 6d at J5.
+  ITEMS 669c5a3, SLICE 5 a8a5e81, SLICE 6c ac2817d merged (6c risk: rung-5 guest joins at L2 but presses L3/L6
   abilities -> raise its peak if they read LOCKED). WAVE 1 ALL MERGED: wings 9b05fd3, net2 23d5b29 (R2-R5), raids f2f398b (gate 3 passed); worktrees removed.
   KITS SLICE 3 MERGED 25e27d0 (gate 1 failed, gate 2 passed; D24 shot rows land with their classes in 6a-6d, D27 no
   Overcharge -- README ruling added). Wave: drives 8dcc845, fields, curve merged; wings, raids, net2 still running. Worktrees kits,
