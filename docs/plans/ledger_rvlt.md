@@ -20,3 +20,14 @@
 - HEAD 6765b7dd42dcbbe7f62fa0d52f494e400f3500d6
 - merged version-l 221749e clean (bd94560); typecheck 0, verify -Quick ALL CHECKS PASSED.
 - rvlt_a (quick,solo,six): quick green; solo 202 FAIL / 3 FAIL LANE (FieldsRipYard, WingsGunship, ItemsDoor: base) -- one red mine: LaneA6dPepperGearChecks (c) "top under 249.6" false premise (Items.Build prices as written at every tier: T10 top 249.6). Fixed 06142bf.
+- rvlt_b (solo@11400714819323306498 replay): 201 FAIL, every one also on the base trees (rvcap/rvfr/rvhv/rvnet); LaneA6dPepperGearChecks 3/3 PASS; LaneA6dSlipChecks boost 3/3 PASS; LaneA6dRodChecks webbed 3/3 PASS; ItemsReconcileChecks PASS. ItemsVenomLiftChecks NOT REACHED: it runs inside ItemsDoorChecks, which throws ObjectDisposedException at 0.7 s on every tree (base).
+- rvlt_c (six): 254 FAIL, 4/6 runs finished (base: the same on every tree). The only new red is LaneA6dSlingGuestChecks "+0.0%", downstream of the base red LaneA6dRamjetGuestChecks (a guest's ramjet builds +0.0% on every tree). The host checks (ramjet/sling/slip) and LaneA6dSlipGuestChecks are never reached (the arena host run does not finish; on base too).
+
+## POST J2: commit 06142bf (+ ledger); typecheck 0, verify -Quick ALL CHECKS PASSED
+- lt-R6d-1 applied (J1): code SkipYawFor(0.4); rung-5 checks blocked by base red (guest ramjet +0.0%; host run unfinished).
+- lt-R6d-2 applied (J1): solo boost block PASS x3; rung-5 pair not reached (base).
+- lt-R6d-3 applied, case (c) rewritten 06142bf: the price is as written at every tier, so T10's top is 249.6, the rod 328.43, pepper 7.5 x (1 + 0.08 x P(10)); PASS x3 on the seed replay.
+- lt-R6d-4 applied (J1): PASS x3.
+- lt-R6d-5 not applied: false premise (see POST J1).
+- lt-R6d-6 applied (J1): reconcile PASS; ItemsVenomLiftChecks unreached (ItemsDoorChecks throws on base).
+- base reds (not this lane): 3 thrown lanes FieldsRipYard/WingsGunship/ItemsDoor, the NaN ArithmeticException x994, warp 827/2427, a guest's ramjet +0.0%, arena host run unfinished.
