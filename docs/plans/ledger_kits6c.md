@@ -126,3 +126,19 @@ role or named frame), each from 3 varied situations (Vary / VaryAngle / VaryNear
 
 ## JOB 0 · POST
 - Worktree created from version-l a8a5e81. Spec read; job list above. No code touched. Next: kits6c-J1.
+
+## Handover 1: the first agent stops after JOB 0 (context spent reading the spec), at a job boundary
+Pointers for J1 on (a8a5e81 tree): Ships.cs heavies rows 370-475 (Sniper 370, Warrior 401, Warden 434; the
+HeavyCannon kit part 150); Abilities.cs Ab.Railgun 290, Ab.Rush 304, Ab.Hunters 315, Timed() 367, AbilityDef
+fields Hold / RateStat / SpeedStat / While / OnDealt 51-101; PlayerShip.cs Lifts / Held 139-192, Cadence 204,
+Outgoing 216 (the Taunt x1.5 row goes here), Slot 248, FitClass 352, DoAbility 589, ChargeRail / FireRail
+739-754 (Charges.At + Lines.Strike), StartRush / RushEmp 756-775, SeekerPrey / LaunchHunters 782-811,
+Disabled 887, Prismatic / GuardAngle 903-904, ApplyStatus 905, Incoming 1007, TickAbilities 1166, LocalFlight
+1246, Steer 1322, SendHostState 1447, _Draw 1533. Melee.cs (Pick / Guard / Nose / Strike, no rows yet),
+Prism.cs (GuardMax, Bands, Resolve, Catch, Walk), Decoys.cs + Hub.Flares, Squads.cs Call / CalledBy (146, 247),
+Statuses.cs enum 16-30 (Hardened 8 takes the applier's share), Fx.cs Fields rows 492-503 (	aunt field on slot
+"taunt", oost plume) and Fx.TauntRing = 10, Drives.cs:154-159 (ANCHORED = Held <= 0). Old-kit callers to
+delete in J1/J6/J11 (grep ush_|emp_damage|emp_range|emp_stun|Ab\.Rush|Ab\.Railgun|rail_cooldown|Dps\.Emp|Dps\.Railgun|heavy_main_gun|heavy_rush_drive|warrior_main_guns|heavy_railgun|HeavyCannon):
+Abilities 3, Items 3 (~100-104), PlayerShip 7, Ships 20, Stats 4 (~364-371), Statuses 1 (:53 rush_guard
+comment), SmokeTest.cs.txt 19 (~6459, 6899, 9483, 10768-10783, 11074, 11276 ...). Commit messages: write the file
+with [IO.File]::WriteAllText (PowerShell's utf8 adds a BOM to the subject).
