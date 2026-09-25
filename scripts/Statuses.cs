@@ -32,8 +32,8 @@ public enum Status
 // structure, a boss's move, or a boss's super (the moves its skinny bar counts down to).
 public enum OutKind { Gun, Move, Super }
 
-// WHAT A STATUS DOES TO WHAT ITS HOLDER DEALS, as a row: the "weaken what shoots" statuses were
-// to be three gates in three weapons, and are one table read by one door (StatusSet.Out). A NEW
+// WHAT A STATUS DOES TO WHAT ITS HOLDER DEALS, as a row: the "weaken what shoots" statuses are
+// one table read by one door (StatusSet.Out), never a gate in each weapon. A NEW
 // ROW: the status, what it multiplies each kind of blow by (1 lets it all through, 0 stops it),
 // whether it holds a launcher's throw (the clock keeps its zero; it throws at the lapse), and
 // the kinds of thing it never reaches at all (Spares: a boss is immune to Dazzled and Jammed, so
@@ -49,8 +49,7 @@ public struct OutGuard
 // WHAT A STATUS DOES TO A BLOW, as a row. PlayerShip.Guarded walks this table. THE SHARE COMES
 // FROM WHOEVER APPLIED THE STATUS (StatusSet.Apply's share: the warrior's rush gives its own
 // rush_guard row, a taunt gives 0.67), and the row's Share is only the default for an applier
-// that named none. It used to be a stat id read off the HIT hull's own sheet, so a hardening from
-// a second class could only ever be the warrior's figure or the default.
+// that named none, so a hardening from any class carries that class's own figure.
 // A NEW ROW: the status, and the share a blow is multiplied by when the applier named none.
 public struct StatusGuard
 {

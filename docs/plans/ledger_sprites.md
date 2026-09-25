@@ -1,0 +1,617 @@
+# Ledger: the SPRITES lane (worktree WarShips_wt_art, branch wt/art)
+
+Spec: `sprites.md` (defaults approved), `README.md` rulings, `kits_v31.md` §8 lane H. Jobs in order:
+1 enemies · 2 bosses · 3 fleet · 4 siege · 5 the 12 player ships (hull art only). Compile rungs only
+in this lane; the main session owes rungs 3 and 4 (listed at the end).
+
+## Decisions (where the spec is silent or the tree moved)
+
+- **D1** The pack stays where the owner put it, `art_source/pack_2026-09-24/` (README.md names that
+  path; sprites.md's `art_source/pack/` was a placeholder). `art_source/.gdignore` already covers it.
+- **D2** sprites.md's slices 0 (pipeline) and 1 (foundations) are not separate commits: each
+  foundation lands with the first job that uses it (the pipeline and `HullArt` with the enemies, and
+  each table moves onto `HullArt` in the job that re-arts it). A contract with no user would fail
+  `UNUSED ANYWHERE: 0`, and no engine run can prove a behaviour-neutral slice here anyway.
+- **D3** `HullArt` is a BASE CLASS the art-carrying rows derive from (EnemyDef, ...), holding
+  Texture, Length, Tint and Nozzles. The rows keep their `Texture = / Length = / Tint =` syntax and
+  every `Def.Length` reader is untouched, so the lanes editing Raider/Boss/Ships.cs in parallel meet
+  the fewest changed lines. Hit sizes stay each table's own rule (`HitShare`, `HalfWidth`, ...), so
+  `HalfWidth` is not on `HullArt` (hit sizes unchanged, README ruling).
+
+## Jobs
+
+### J1 enemies -- PRE
+- Intent: pipeline (`$Finished` rows in make_ships.ps1: finished art, turned, keel-trimmed; `-Single`
+  and the raider blocks deleted; preview of every finished row), `HullArt` + nozzle plumes, the 6
+  raider rows + the title Web re-arted (fighter_swept, frigate_b, fighter_tri_a, fighter_delta,
+  gunship_h, frigate_d, crescent_a), MenuFoe always tints, TargetDummy reads the webifier row.
+- Start: aa1e4f9285579087ac94f56cb9c02a9dea29700a
+- Files (hash-object, 12): tools/make_ships.ps1 956db8137ac5 · scripts/Sprites.cs f46ae01e9188 ·
+  scripts/Enemies.cs 9412635ea118 · scripts/Raider.cs 11393eb2aa45 · scripts/MenuFoe.cs 7e5b57f31db6 ·
+  scripts/TargetDummy.cs b3f71152fb37 · scripts/Plume.cs bb0295cb5eaf · enemy_light_fighter.png
+  f9eef8922055 · enemy_heavy_hull.png d1bb9f38d538 · enemy_talon_hull.png 21041294eefc ·
+  enemy_pod_hull.png 03829ddc6607 · enemy_cross_hull.png a68996ef3579 · enemy_lancerkin_hull.png
+  6f4272646697 · enemy_light_tier_2.png 3c36de7f947c · art_source/light_fighter.png d3390ac21a3a ·
+  art_source/heavy_fighter.png b7e1c6e6b321 · tools/smoketest/SmokeTest.cs.txt 00e6f1badf3c ·
+  tools/screens/Shots.cs.txt 809555bf44e0 · docs/DESIGN.md 8d15c0e26f08 · docs/CHANGES.md 3631a5f66e39
+
+### J1 enemies -- POST
+- Verdict: typecheck 0 errors; `-Quick` ALL CHECKS PASSED. Rungs 3/4 owed (below).
+- Files: tools/make_ships.ps1 ($Finished rows + Finished/CoverAxis/TrimOn; -Single & co and the
+  raider blocks deleted; preview draws finished rows with turrets and nozzle bars), scripts/Sprites.cs
+  (HullArt, Nozzle, Fit(HullArt)), Plume.cs (Width), Enemies.cs (EnemyDef : HullArt; nozzles;
+  per-row turret figures), Raider.cs (Fit(Def), DrawPlumes), MenuFoe.cs (always tints),
+  TargetDummy.cs (webifier row), 7 enemy PNGs, 2 drawings -> retired/art/, SmokeTest (2 checks),
+  Shots (frame 80 -> 80_every_enemy_hull), DESIGN.md Art, CHANGES.md.
+- Commit: the J1 commit (hash = J2's Start).
+- **D4** marks are placed in the NOSE-UP frame (px of the turned file, before the trim), not the
+  source frame: x is across and y along the hull, readable against the turned art.
+- **D5** Talon has 2 bells, not sprites.md's 3: the art (fighter_tri_a) shows two bells and a
+  centre spike; swept 2 and delta 2 (their centre lobes are a spine and a tail). Literals in the check.
+- **D6** Each Turret row names TurretAft/TurretWidth (the gunship's old figures stopped being
+  every row's default); the tool prints them from a `turret` mark and a `housing` edge mark.
+- **D7** Raider tints unchanged: the pack is LIGHTER than the old line art (mean L 0.57 vs 0.31
+  webifier), so reds read brighter; retune only if frames 48/80 say so.
+- Trap found: a run of make_ships rewrites the capitals' and turrets' PNGs with different bytes;
+  `git checkout` them after a run unless their block changed (written into DESIGN.md Art).
+- Next: J2 bosses.
+
+### J2 bosses -- PRE
+- Intent: BossType derives from HullArt (Sprite -> Texture, + Tint, + Nozzles listed); Rusty
+  Bucket frigate_a (nose Right, L 360, tint 0.33/0.25/0.26), Drake flagship (nose Right, L 420,
+  tint 0.52/0.35/0.29); HW 70 / 90 kept (the Drake's 310 stands); nozzles 2 / 5 listed, not drawn.
+- Start: e00ba7a80178ef40106c20cf520a9ed8b0ea2e58 (= J1's commit)
+- Files: tools/make_ships.ps1 5404844429ca · scripts/Missions.cs e1afdde80028 · scripts/Boss.cs
+  28201da9b48b · boss_raider.png d01762233989 · boss_drake.png a0a3e4624364 ·
+  tools/smoketest/SmokeTest.cs.txt 143c458d16de · tools/screens/Shots.cs.txt 21ca86be138b ·
+  docs/DESIGN.md 80fc0d91e800 · docs/CHANGES.md 9d9a30a43907
+
+### J2 bosses -- POST
+- Verdict: `-Quick` ALL CHECKS PASSED. Rungs 3/4 owed.
+- Files: make_ships.ps1 (2 rows), Missions.cs (BossType : HullArt; tints; nozzles), Boss.cs
+  (Fit(Type)), boss_raider.png, boss_drake.png, SmokeTest (Trimmed helper; 1 new check, 2 rewritten,
+  2 hand-made rows renamed), DESIGN.md, CHANGES.md.
+- Commit: the J2 commit (hash = J3's Start).
+- **D8** A boss's bells are listed on its row (2 / 5, the count check) but not drawn: bosses drew no
+  flame before and the spec does not ask for one.
+- **D9** Boss tints are sprites.md Q5's literals. On the new grey (mean L 0.65) they draw at ~0.65x
+  the old average colour, i.e. darker; the brighter alternative is in CHANGES Known broken.
+- Next: J3 fleet.
+
+## STOPPED after J2 (context past ~150k). J3-J5 go to a FRESH agent that reads this file.
+
+### How to continue (for the next agent; no transcript needed)
+- Tool: add rows to `$Finished` in tools/make_ships.ps1 (marks and nozzles in the NOSE-UP frame, D4),
+  run `powershell -ExecutionPolicy Bypass -File tools\make_ships.ps1 -Preview %TEMP%\p.png`, then
+  `git checkout -- battleship_hull.png carrier_player.png destroyer_hull.png turret_main.png turret_pd.png`
+  (the line-drawing trap) until J5 replaces those blocks. The finished rows rebuild byte-identical.
+- Nozzle candidates: a scratch stern-lobe finder (turn nose-up, per column the lowest alpha>0.5 px,
+  runs within ~6% of the tail) found every bell so far; confirm the count by eye on a stern crop
+  (centre lobes are often a spine or tail, not a bell: D5).
+- A table moves onto `HullArt` by deriving from it (D3): delete its own Texture/Length/Tint fields,
+  keep the row syntax, `Sprites.Fit(row)` tints, `row.DrawPlumes(ci, at, k, col, throttle, active, reach)`.
+- Harness helper `Trimmed(texture)` (SmokeTest top) is the trim test for any HullArt row.
+- J3 fleet per sprites.md §1/§2: hauler cargo_4 (Right? -- sprites.md: 90° CW, i.e. nose Left; L 200;
+  6 PodCentre + PodSize on its frames, PD (0, 8) re-seated, Extent re-measured, its 3 inline nozzles
+  -> 2 bells via DrawPlumes; Hauler.cs:301/:319 copies of Length/GetHeight go), miner drone_mining
+  (nose Left, L 40, tint 0.63/0.46/0.31, beam emitter off 0.45 L onto the scoop; harness anchor
+  `Gatherer.Length * 0.45f`), salvager drone_salvager (nose Right, L 40, tint 0.61/0.35/0.11),
+  couriers drone_economy (nose Left, NEW file courier.png, L 22 -> 30 on all 4 Lanes rows, Q6),
+  wing fighter interceptor_a (nose Left, L 17), bomber interceptor_b (nose Left, L 28.125, torpedo
+  point off 0.45 L onto the pods' front). Frames 7, 8, 12-16, 27, 28-28e, 46, 59, 59b + a NEW courier
+  close-up frame. Retire nothing from art_source (these had no drawings there).
+- J4 siege: crescent_b (none, L 560 -> 483, HW 330) and drone_sensor (none, L 220 -> 300, HW 150);
+  `EmplacementDef.Mounts` replaces `Guns`/`GunRing` (base 4 on the painted guns, pylon 1 at (0,0));
+  retire art_source/pirate_base.png + pirate_pylon.png; NEW siege frame; check "the base has 4
+  turrets on its Mounts, the pylon 1".
+- J5 player ships (lane H): 12 ClassArt rows per sprites.md §1 table, hit sizes (HalfWidth) unchanged,
+  BB mains on the 4 flanking twins (paint out the 6 painted twins' barrels: needs a Patch helper),
+  PD on the aft domes; delete the carrier/battleship/destroyer line blocks + Hull()/CutOut/Seed/
+  Dilate/Specks/Blank/Paper/Load if unused, retire their drawings, delete tools/finish_ships.ps1 and
+  art_unused/art_4x (Q9), edit CLAUDE.md §7 + docs/README.md:197-198 in the same commit. Harness
+  anchors: `EndsWith("battleship_hull.png")`, `x.Offset.Y > 150f`, `14.7f ... 36f`, `-110.06f`.
+  CAUTION: the kits lane (WarShips_wt_kits) edits ClassArt mounts (F7 arcs, F16 PD 2): touch only
+  Texture/Length-art/marks/nozzle lines, and say in the POST which mount literals moved.
+
+### QUEUED (owner ruling via the coordinator, 2026-09-25): J3b boss red, right after J3
+- The bosses are RED AND BLACK: the owner's swatch, mean RGB 172, 7, 2 = tint (0.67, 0.03, 0.01),
+  R 160-180, "I like this and black probably". Replaces sprites.md Q5's boss tints (D9) on the Rusty
+  Bucket and the Drake. If a pure multiply leaves the hull unreadable on space (art L ~0.57 -> reds
+  ~0.38), keep hue and black and lift the value only as far as the frame needs; record the choice as a
+  decision; the swatch literal stays in the check asserting the tint row. Rewrite every harness check /
+  Shots frame asserting the old boss tints in the same commit. One commit, own PRE/POST; rung 4 owes
+  frames 38, 42, 62-66. Then J4, J5.
+
+### J3 fleet -- PRE
+- Intent: 6 `$Finished` rows (cargo_4 hauler, drone_mining miner, drone_salvager salvager,
+  drone_economy courier.png NEW, interceptor_a wing fighter, interceptor_b bomber); GathererDef,
+  LaneDef, WingDef derive from HullArt; the Hauler's const/sprite/inline nozzles become a HullArt
+  row; pods, PD seat, Extents, the gatherer emitter and the bomber's launch point re-measured onto
+  the art; couriers L 22 -> 30 (Q6); gatherer tints (Q5). Turrets and outposts keep their art
+  (sprites.md "Keep their current art"; the outpost is not in the mapping).
+- Start: 274b8c52cc1050ec777b0615a2a8e7e7d8939aea
+- Files: tools/make_ships.ps1 9016f81d1e1d · scripts/Hauler.cs bbc72c9e989c · scripts/Gatherer.cs
+  353cb0d9493c · scripts/Lanes.cs 0125e73ad6c5 · scripts/ShipClasses.cs cee7908cf855 · hauler.png
+  60afbc3808f5 · miner.png 021073f18ae9 · salvager.png d252d80d523a · wing_fighter.png 0f19fee70330 ·
+  wing_bomber.png d0dd0bc86114 · courier.png (new) · tools/smoketest/SmokeTest.cs.txt f41305f68b4a ·
+  tools/screens/Shots.cs.txt 21ca86be138b · docs/DESIGN.md 998180e8cf2c · docs/CHANGES.md 3dc0c6bc85c0
+
+### J3 fleet -- POST
+- Verdict: typecheck 0 errors; `-Quick` ALL CHECKS PASSED. Rungs 3/4 owed (below).
+- Files: make_ships.ps1 (6 rows; the preview crosses every non-turret mark), Hauler.cs (`Hauler.Art`
+  row, const Length gone, pods/PD/HalfWidth off the art, DrawPlumes, `_fit`), Gatherer.cs
+  (GathererDef : HullArt + Emitter + HalfWidth; const Length gone), Lanes.cs (LaneDef : HullArt,
+  courier.png, L 30, CourierBells), ShipClasses.cs (WingDef : HullArt + Launch; torpedo from the
+  pods, alternating), hauler/miner/salvager/wing_fighter/wing_bomber.png, courier.png (new),
+  SmokeTest (2 new checks, 3 rewritten readers, 1 message, 1 comment), Shots (16b reads the row),
+  DESIGN.md (fleet art; the stale Fighter/Bomber bullets gone), CHANGES.md.
+- Commit: the J3 commit (hash = J3b's Start).
+- **D10** No new courier frame: 16b/16c (added after sprites.md was written) show a courier at zoom 3.
+- **D11** Gatherer/courier bells are their three stern thruster blocks (the same drawing in all three
+  drones); the miner's legs reach aft of them, so the fleet check asserts "aft of centre", not the
+  raiders' "aft of 0.4 L". Fighter 5 bells (sprites.md allowed 1; counted off the art, D5).
+- **D12** Hauler PD seated on the bow dome (0, -85.94): the only round turret-like seat on cargo_4;
+  its Extent half-width is the cargo frames' outer rails (40.94), not the engine wings (46.3).
+- **D13** Bomber `Launch` is the port pod's front (-5.30, -4.39); rounds alternate pods by Ammo parity.
+- **D14** Gatherer emitters: miner between its two scoops (0, -17.14), salvager in its claws' mouth
+  (0, -13.36); the unloading load leaves from the same point.
+- Lane overlap: ShipClasses.cs is lane E's (wings) -- touched: the WingDef header (derives from
+  HullArt, +Launch), the two rows (+Nozzles, +Launch lines, the comment), `Sprites.Fit(Def)` in Init,
+  the torpedo launch (2 lines), `_Draw`'s plume (1 line, `len` local gone). No seat of a class moved.
+- Rung 3 owed: new "the fleet wears the pack ..." and "a torpedo leaves from a pod's front ..."
+  (two seeds each); rewritten "two craft may share one pad" (Def.Length; the miner's Extent 12 ->
+  14.2 must stay under the courier's 16.9 u along the face), "salvager's beam is a narrow scan"
+  (Emitter), "turning on the way down, it clears the station" (Art.Length), "fighters 17 u, bombers
+  28.1 u", "a parked bomber sits at 65% on the white deck" (12 u now, was 18).
+- Rung 4 owed: 7, 8, 12-16, 16b, 16c, 27, 28-28e, 46, 59, 59b -- pods on the frames, PD on the bow
+  dome, flames on the bells (hauler 2, drones 3, fighter 5, bomber 2), gatherer tints, courier size.
+- Next: J3b boss red.
+
+### J3b boss red -- PRE
+- Intent: both boss rows wear the owner's swatch red (0.67, 0.03, 0.01) as one named colour in
+  Missions.cs; the two harness checks asserting the old tints rewritten to the swatch literal; DESIGN
+  and CHANGES (J2's reversed tint text and its Known broken alternative) brought to what is true.
+- Start: daa98516eef31182a14c54e0f0476e702358e67e
+- Files: scripts/Missions.cs 7f87c9aac007 · tools/smoketest/SmokeTest.cs.txt 665da2c3cfa1 ·
+  docs/DESIGN.md e31b47441acc · docs/CHANGES.md 5f4f47e9da77
+
+### J3b boss red -- POST
+- Verdict: `-Quick` ALL CHECKS PASSED. Rungs 3/4 owed.
+- Files: Missions.cs (private `BossRed` (0.67, 0.03, 0.01) on both rows), SmokeTest (2 checks
+  rewritten to the swatch literal, their messages "the owner's red"), DESIGN.md (Art bosses; the
+  Rusty line in the balance list), CHANGES.md (J3b entry; J2's reversed tint text and its 0.65x
+  Known-broken alternative deleted).
+- Commit: the J3b commit.
+- **D15** Pure multiply, no lift. Rendered on the game's space colour (11, 15, 24) with a scratch
+  tint tool: both hulls read, hull mean RGB 111, 5, 2, highlights near the swatch (R ~160-170) and
+  shadows black -- the "red and black" asked for. The lift that keeps the hue, (1.0, 0.045, 0.015),
+  puts the hull's MEAN at the swatch (166, 7, 2) but loses black; it is CHANGES' Known broken
+  fallback, one line (BossRed).
+- Rung 3 owed: "a boss wears the owner's red on the pack's grey art, trimmed, its bells listed";
+  "level 2 is the Drake Bastion ... in the owner's red" (two seeds each).
+- Rung 4 owed: 38, 42, 62-66 by eye -- is the red hull readable on space and under the arena's effects?
+
+## STOPPED after J3b (coordinator: the owner is re-picking the sprite mapping). J4 and J5 NOT started.
+- The J1-J3 mappings stay as built; the main session re-maps from the owner's picks (each is one
+  `$Finished` row + the row's Texture in its table; marks and nozzles re-measured by the tool).
+- J4/J5 notes above ("How to continue") still hold, with one correction for J4: the tree moved --
+  `EmplacementDef` now has ONE `Gun` on a mount at its centre (the base's cruise launcher), no
+  `Guns`/`GunRing`, and the base "carries NO GUNS" by design, so sprites.md's `Mounts[4]` is obsolete;
+  J4 is a re-art (Sprite -> HullArt Texture, Main -> Tint, L 560 -> 483 / 220 -> 300). Check
+  `Combat.KeelCovers` first: with L <= 2 HW both hulls are circles of HW, so the length change should
+  not move a hit shape. Lane F (curve) edits the siege rows' numbers in Emplacements.cs.
+
+## RESUMED 2026-09-25: the owner re-chose the mapping (binding). Carrier carrier_a (pirate-carrier
+spare carrier_b), Wraith fighter_unit_a, Pod drone_sensor (the pylon too), Miner drone_salvager (the
+salvager too), wing fighter fighter_delta, wing bomber fighter_g. Now unused: drone_mining,
+interceptor_a/_b (+ the old spares cargo_1, fighter_tri_b). Jobs: J3c re-map, J4 siege, J5 players.
+
+### QUEUED (coordinator, owner ruling 2026-09-25): J3d bosses TWICE AS BIG, right after J3c
+- Default 2x (owner said "2 or 3x"): Rusty Bucket L 360 -> 720, Drake 420 -> 840, the multiplier ONE
+  data value on the boss rows (3x = one number). HIT SIZE scales too (HW 70 -> 140, 90 -> 180): the
+  "hit sizes unchanged" rule no longer applies to bosses. Everything reading a boss's length or
+  half-width follows the row (nose beam/burn origin L/2, the Drake's throw/tractor/rock points, escort
+  places, arena spawn distance and stand-offs, boss bar, camera/frames). Rewrite every check/frame
+  asserting old boss sizes (the "310" literal: find what it measures, rewrite from the 2x literals,
+  never loosen). Arena too small for an 840 u Drake -> a decision + report, not a shrunk ruling.
+  Owes frames 38, 39, 42, 62-66 and the rung-3 boss checks. Then J4, J5.
+
+### J3c re-map -- PRE
+- Intent: the Pod row onto drone_sensor (Up), the miner onto the salvager's art (one `$Finished` row,
+  one file both gatherer rows load; miner.png/salvager.png deleted), wing fighter fighter_delta (Up),
+  bomber fighter_g (Right) with its torpedoes on fighter_g's own weapon points; bells counted off the
+  art; every check/frame asserting the old rows rewritten; sprites.md mapping tables to the picks.
+- Start: a73d26e5f15572b0c3a4e492b5ad17b779bdecdc
+- Files: tools/make_ships.ps1 09c21642629b · scripts/Enemies.cs 6fe7b4fe523e · scripts/Gatherer.cs
+  fb719ec94158 · scripts/ShipClasses.cs a8e655389a75 · enemy_pod_hull.png 3d1e12eeac69 · miner.png
+  34781fb6ffb1 · salvager.png cffc7ca41279 · wing_fighter.png 3add16dc0d2e · wing_bomber.png
+  68879b26df28 · gatherer.png (new) · tools/smoketest/SmokeTest.cs.txt 6b232c654031 ·
+  tools/screens/Shots.cs.txt c1bda594db98 · docs/plans/sprites.md 8fe86d01207e · docs/DESIGN.md
+  d2350aeb60b7 · docs/CHANGES.md 0fe396740a87
+
+### J3c re-map -- POST
+- Verdict: typecheck 0 errors; `-Quick` ALL CHECKS PASSED. Rungs 3/4 owed.
+- Files: make_ships.ps1 (Pod row drone_sensor; ONE gatherer row -> gatherer.png; wing rows
+  fighter_delta / fighter_g), Enemies.cs (Pod 1 bell), Gatherer.cs (Drone/DroneBells/ClawMouth/
+  DroneSpan shared by both rows), ShipClasses.cs (wing bells, Launch on the rails, `pod` -> `rail`,
+  the art comment), enemy_pod_hull/wing_fighter/wing_bomber.png, gatherer.png (new), miner.png +
+  salvager.png deleted, SmokeTest (3 checks rewritten), sprites.md (§1 picks + §2 rows), DESIGN.md,
+  CHANGES.md (J3c entry; J1/J3 entries brought to what is true now).
+- Commit: the J3c commit (hash = J3d's Start).
+- **D16** Pod bells: ONE, the stern vent box (x 111.5-148.5, aft rim y 241 of drone_sensor): the round
+  drone's eight pods are sensor lenses, not bells. The raider check asserts bells {2,2,2,1,2,2}.
+- **D17** Bomber torpedo points = fighter_g's WINGTIP RAILS' front (port (16.5, 232) nose-up px ->
+  (-8.48, -0.12) u), the art's longest, symmetric weapon points; the inner guns (+-40 px, 2.5 u) are
+  the alternative. Check bound 7.2-9.8 u (8.5 +- the old 1.3 u tolerance), not on an edge.
+- **D18** One pack file on two rows is ONE game file named for what both rows are (`gatherer.png`),
+  its marks shared by name; the pack's unused files (drone_mining, interceptor_a/_b, ...) stay in
+  art_source/pack (the owner's delivery, D1) -- "art nothing loads" meant the game's miner/salvager.png.
+- Parked bomber: fighter_g is 298 x 456 px -> 11.95 u across at 65% (was 12): the deck check holds.
+- Rung 3 owed: rewritten "the fleet wears the pack ..." (fighter 2 bells; one drone, two tints),
+  "a torpedo leaves from a wingtip rail's front, not the nose" (7.2-9.8 u), "every raider's art ...
+  flames from its own bells" (pod 1); unchanged but re-read: "two craft may share one pad" (miner
+  Extent 14.2 -> 11.2), "salvager's beam is a narrow scan", "a parked bomber sits at 65% ...".
+- Rung 4 owed: 0 (title foes), 12, 13, 16b, 16c, 27, 28-28e, 46, 48, 59, 59b, 80 -- the pod's one
+  flame at its vent, both gatherers as the claw drone in their tints, the fighter's 2 and the
+  bomber's 2 flames, torpedoes off the wingtips.
+- Next: J3d bosses 2x.
+
+### J3d bosses 2x -- PRE
+- Intent: `Missions.BossSize = 2` (the one number) on both boss rows: Length 720 / 840, HalfWidth
+  140 / 180, bells `Nozzle.Scaled`. Every hull-relative figure follows the row at use (Boss.cs): the
+  ram's lane = the hull's own beam (Width 0 -> 2 HW); the rock held HW + Radius + Offset (Offset the
+  40 u gap, was the whole 310); EscortOut and WarpRing in HALF-WIDTHS (13/7 and 1.3: 130 and 117 at
+  1x); stand-offs (HoldOff, a warp's Standoff) measured from the NOSE (+ L/2 at use; rows 470 / 440,
+  390, 1090 keep the 1x fight); the boss spawns with its nose on ArenaCentre. Shockwave 340 u NOT
+  scaled (a reach, not a place): flagged. Frames 38/39/42 and 63-66 place the ship off the nose and
+  zoom (ZoomLevel) to fit the hull. Harness: every boss-size literal rewritten to the 2x truth.
+- Start: e7f5a1c337f46a767086821bb61854515f1b2012
+- Files: scripts/Missions.cs e65a4d72251b · scripts/Sprites.cs 41b1b7ff5e0c · scripts/Boss.cs
+  fd5a56a1713d · scripts/Lancer.cs 08ac04023b42 · scripts/Drake.cs 15db8b36bfee · scripts/Hub.cs
+  b1e90e72868d · tools/make_ships.ps1 684959f04012 · tools/smoketest/SmokeTest.cs.txt aa9a7d98ad22 ·
+  tools/screens/Shots.cs.txt c1bda594db98 · docs/plans/sprites.md 948f934fb777 · docs/DESIGN.md
+  a66ea4812a9f · docs/CHANGES.md a071703d8ebc
+
+### J3d bosses 2x -- POST
+- Verdict: typecheck 0 errors; `-Quick` ALL CHECKS PASSED. Rungs 3/4 owed.
+- Files: Missions.cs (private const BossSize 2; rows x it; HoldOff from the nose: default 470, Drake
+  440), Sprites.cs (`Nozzle.Scaled`), Boss.cs (Approach/warp stand-offs + L/2; warp ring and escorts x
+  HalfWidth; ram lane 2 HW; `FlankHold`; Scaled no longer scales Offset), Lancer.cs (EscortOut 13/7,
+  ram Width gone), Drake.cs (Standoff 390 / 1090, WarpRing 1.3, Offset 40), Hub.cs (the boss's nose on
+  ArenaCentre), make_ships.ps1 (comment), SmokeTest (row checks, 2 ram-lane finders, escorts 260 u,
+  2 lock pushes, level-2 840, live shotgun/throw, guest rock hold), Shots (FitBoss zoom + ship off the
+  nose for 38/39/42 and 63-66), DESIGN.md, sprites.md, CHANGES.md.
+- Commit: the J3d commit (hash = J4's Start).
+- **D19** Stand-offs are measured from the NOSE (gap + L/2 at use), each row's gap chosen so the 1x
+  fight is unchanged (650 from the centre -> 470 / 440; 600 -> 390; 1300 -> 1090). Centre-measured,
+  the doubled Drake's shotgun would land its nose 180 u from the pilot and its 10-degree fan lines
+  ~31 u apart there (68 u at 1x): an undodgeable fan. The guns' Find (900 / 1100) still reach the
+  hold-off (830 / 860 from the centre).
+- **D20** Formation places scale with the hull (EscortOut 13/7 and WarpRing 1.3 HALF-WIDTHS: the row
+  comments said "HalfWidth + 60" and "HalfWidth x 1.3"; "+60" at 2x would put the 45-degree escorts
+  1.4 u off the flank, so the share keeps the formation's shape instead). The ram lane is the hull's
+  beam (Width 0, like the throw's body lane). The rock's hold is HW + body + a 40 u gap (FlankHold).
+- **D21** NOT scaled (reaches, not places): the beam's 70 u width, the shockwave's 340 u ring (now
+  under the 720 u hull's bow and stern: Known broken), ranges, bodies. The arena is open space (no
+  bounds), so there is room to dodge; but a pilot's widest zoom (0.588, ~918 u toward the boss) does
+  not show the Drake's whole hull at its hold-off -- the zoom-out limit is the owner's call.
+- **D22** The boss spawns with its NOSE on ArenaCentre (centre + L/2 north), so a bigger boss starts
+  no nearer the party (1179 u nose to the first ship's spawn).
+- Rung 3 owed (two seeds): the boss row checks (hull/art/approach 720/140 & 840/180, bells at the
+  stern, beam/ram/shotgun/throw rows, the mixed row 720), "two escorts ... 260 u out", the two lock
+  pushes, the ram-lane timing (280 u), "level 2 is the Drake Bastion ... 840 u", the live shotgun
+  (nose standoff 394, ring 234) and throw (hold 180 + 181.8 + 40), the guest's rock hold; and every
+  other boss-fight check (the capsule doubled: a shot that grazed past may now hit).
+- Rung 4 owed: 38, 39, 42, 62-66 -- the whole hull in frame (zoom ~0.47 / ~0.38), telegraphs.
+- Next: J4 siege.
+
+## STOPPED after J3d (context past ~150k). J4 and J5 go to a FRESH agent that reads this file.
+- Every "How to continue" note above still holds, with the owner's picks: J4's pylon is
+  `drone_sensor`, the SAME pack file as the Pod (J3c) -> ONE game file for both rows (D18): rename
+  `enemy_pod_hull.png` in the same edit to a name true of both (the art: e.g. `drone_sensor.png`),
+  one `$Finished` row, Enemies.cs Pod row + Emplacements.cs pylon row load it; `pirate_pylon.png`
+  and `pirate_base.png` deleted when nothing loads them. The Pod's bell is (-0.21, 23.27) at 52 u; the
+  pylon (L 300) lists its bell off the same art x 300/52 if emplacements draw none (check first).
+- J4 correction (above) stands: `EmplacementDef` has ONE `Gun` at its centre; no `Mounts`.
+- J5: Carrier `carrier_a` (90 deg CCW, MEDIUM confidence: look at the turned art before building),
+  Wraith `fighter_unit_a` (90 deg CCW); sprites.md §2's carrier figures were read off carrier_b and
+  must be re-measured. Kits lane: `ClassArt.PdRing` is gone on its branch -- do not use it; touch
+  only Texture/Length-art/marks/nozzle lines; list every seat moved in the POST.
+- Boss size is now `Missions.BossSize` (J3d): nothing in J4/J5 should read boss lengths.
+
+### OWED to the main session (nothing here has run above rung 2)
+- Rung 3 (`tools\smoketest\run.ps1 -Solo`, two seeds for the new checks):
+  - new "the title screen's foes wear their raider rows' tints, the Web on its own art"
+  - new "every raider's art is trimmed to its drawing and flames from its own two bells at the
+    stern; the gunship is drawn 136 u"
+  - new "a boss wears its tint on the pack's grey art, trimmed, its bells listed"
+  - rewritten "a boss's hull, art and approach are its row's" and "level 2 is the Drake Bastion"
+    (+ tint); the hand-made "post" and "mixed" boss rows (Texture)
+  - every existing raider/boss check (sizes, HitShare 0.4/0.3, gunship = 4 x webifier) should stay
+    green untouched: a red one there means the art or a row is wrong, not the check.
+- Rung 4 (`tools\screens\run.ps1`), read by eye: 0_main_menu (title foes + the Web's red crescent),
+  48_raiders_pinning, 49_heavy_waiting_missile, 50_base_defence, 53_raid_incoming,
+  80_every_enemy_hull (renamed from 80_new_enemies: all six rows; turrets on seats, a flame per
+  bell), 38/39 arena telegraphs, 42_boss_bar_chunk, 62_arena_loot, 63-66 Drake frames. Look for:
+  turrets on their painted seats, flames on the bells, tint brightness (raiders read BRIGHTER, D7;
+  bosses DARKER, D9).
+- J3 and J3b: the rung-3 checks and rung-4 frames each owes are listed in its POST above.
+
+## RESUMED 2026-09-25 (fresh agent): STEP 0 merge done, then Job P
+
+- STEP 0: merged `version-l` into `wt/art` (8 docs-only commits since aa1e4f9: CLAUDE.md,
+  docs/CHANGES.md, docs/DESIGN.md, docs/plans/README.md). Clean auto-merge, no conflicts. Merge
+  commit `ed2f24d`.
+
+### Job P (prove J3c+J3d, then the two owner-default builds) -- PRE
+- Intent: run quick,solo,solo,screens via the shared runner; fix every red per CLAUDE.md's three
+  traps (never loosen a literal); re-prove on two seeds; read by eye the J3c frames (0, 12, 13,
+  16b, 16c, 27, 28-28e, 46, 48, 59, 59b, 80) and J3d frames (38, 39, 42, 62-66); fix what is wrong.
+  Then build the two open-question defaults (each a check + frame): (a) Rusty Bucket shockwave
+  ring scales with BossSize; (b) camera zooms out far enough for the Drake's whole hull at closest
+  approach. Model tier: sonnet.
+- Start: ed2f24d40743471669f68b4217612ee340ab2439
+- Files (hash-object): scripts/Missions.cs fcef4d29ac5a · scripts/Sprites.cs 2617f82ebe1a ·
+  scripts/Boss.cs fcb2b18ecaad · scripts/Lancer.cs 56ba81ce8a4b · scripts/Drake.cs a066c4420492 ·
+  scripts/Hub.cs 19266e0a8d7e · tools/make_ships.ps1 8489c33d5e10 ·
+  tools/smoketest/SmokeTest.cs.txt 1a4529326e72 · tools/screens/Shots.cs.txt 7df63c952adc ·
+  docs/plans/sprites.md 86c0da1a39a9 · docs/DESIGN.md 3ea8b2f073e1 · docs/CHANGES.md 09b7328aa2fa
+
+## COORDINATOR NOTE (owner ruling, 2026-09-25, supersedes default b) in the prompt)
+- a) STANDS: the Rusty Bucket's shockwave ring grows with BossSize (owner: yes).
+- b) CHANGED: the camera must NEVER zoom out past the player's own maximum zoom (the ceiling a player can
+  reach). Show the Drake's whole hull at its closest approach by REPOSITIONING the camera instead: its
+  centre moves toward the boss (e.g. toward the player-boss midpoint), clamped so the player's ship stays
+  on screen with a margin. Build it generically, for any boss row, from the boss's size -- not a Drake `if`.
+  Checks: at that closest approach, at the player's max zoom, the boss's whole hull and the player are both
+  inside the viewport (3 varied approach angles); the zoom never exceeds the ceiling (assert the literal);
+  a frame showing it. If the whole hull cannot fit even repositioned, say so in your return's open field.
+- If you already built a zoom-out past the ceiling, replace it (delete the old path in the same edit).
+
+### Job P -- POST
+- Verdict: GREEN. `-Quick` ALL CHECKS PASSED throughout. Rung 3 (`solo`) two seeds, both full
+  passes: 11400714819323522337, 11400714819323550935 (a third seed, 11400714819323506605, also
+  passed before the fix below). Rung 4 (`screens`): 108 frames, LINT: 0; every J3c/J3d frame read
+  by eye, plus 38/39/42/62-66 and 80 re-read after the fixes below.
+- Files: scripts/Missions.cs (`BossType.Size`, both rows), scripts/Boss.cs (a Ring move's `Reach`
+  x `Type.Size` in `Warn`/`Land`), scripts/Hub.cs (`ZoomOutMax` back to 1.53; `Hub.BossFramed` +
+  `BossPilotMargin`/`BossEdgeMargin`, called from `MoveCamera`), tools/smoketest/SmokeTest.cs.txt
+  (ram sidestep; the shockwave telegraph + stealth-hit messages at 680 u; the two zoom-ceiling
+  checks reverted to 1.53/1.33; new 3-angle Drake-framing check + its post-loop state restore),
+  tools/screens/Shots.cs.txt (frame 80's `SetProcess(false)` freeze; the FitBoss/reflection zoom
+  hack deleted, `H.SetZoom` + `BossFramed` in its place; 65/66's boss re-faced before their ship
+  placement), docs/DESIGN.md, docs/CHANGES.md.
+- Commit: the Job P commit (below).
+- **D23** The ram's double hit (chargeDmg 80, not 40) was a GAME bug the doubled hull exposed: at 2x
+  the hull takes 0.6 s to cross a fixed point, longer than the 0.52 s a source is blocked for, so a
+  pilot left in the lane (webbed, say) took the row's 40 twice. Fixed in Boss.cs by A4 (merge gate
+  1): a dash strikes each ship once (`Slot.Struck`); the check's sidestep is gone and a held-still
+  pilot must take exactly 40.
+- **D24** Frame 80's raiders pick the nearest reachable target and turn onto it every frame
+  (`Raider._Process`), fast enough to swing most of the way round inside the pose's own wait --
+  `SetProcess(false)` after the final pose was the fix that should work (no `_PhysicsProcess`, no
+  signal-driven update found in Raider.cs) and does not visibly hold the row still. Left as
+  **Known broken** (CHANGES.md): every raider's own hull, tint and bell count still read correctly
+  close up, so the ART is right; only the demo ROW's layout is a diagonal pile-up. Not re-attempted
+  a second time (CLAUDE.md: two honest attempts before calling a check -- here a frame -- red; one
+  spent, and it is a rung-4 read, not a rung-3 assertion, so it does not block J4/J5).
+- **D25** Default (b) was built twice. The first pass read the open question as "widen the wheel's
+  own ceiling" (`ZoomOutMax` 1.53 -> 2.4) and got frames 38/39/42/63-66 showing the whole hull, rung
+  3 green. Mid-build, the ledger picked up a **COORDINATOR NOTE** (the owner, via this file) that
+  overruled it: the wheel must never zoom out past what it already reached; the Drake frames by
+  MOVING the camera instead. The first pass was reverted in the same commit (`ZoomOutMax`, its two
+  comments, the two harness checks, DESIGN.md and CHANGES.md's controls line all back to
+  1.53/33%), and `Hub.BossFramed` replaces it: generic from `Boss.Length` (works for the Rusty
+  Bucket too, not only the Drake), gated to `reach x 2` so a boss across the map never tugs the
+  view, and clamped to `BossPilotMargin` (150 u) off the ship. At the Drake's 440 u hold-off the
+  centre slides up to 768 u toward the tail, clearing it by 80 u (`BossEdgeMargin`) while the ship
+  keeps 477 u to spare inside its own margin -- comfortably inside both clamps, so nothing here is
+  a "cannot fit" case.
+- **D26** The new 3-angle check (`dk.Rotation`/`dk.Position` swept round `VaryAngle()`, three times)
+  left the Drake facing an arbitrary way afterward; the very next check in the file ("its main
+  gun") waits only 0.1 s for a shot and READ that leftover rotation as a wrong DPS (rung 3 red on
+  the first `jobp_final` run, seed …506605's solo #2, a different seed). Fixed by restoring the
+  canonical hold-off pose (`Rotation = Pi`, nose on `ArenaCentre`, exactly where `Boss` spawns it)
+  at the end of the check block, before the next one runs -- proved green on two fresh seeds after.
+  A state a check MOVES is a state the check owns putting back, same rule as `boss.Position =
+  bossWasAt` earlier in this same file.
+- Frames read (all correct unless noted): 0, 12, 13, 16b, 16c, 27, 28-28e, 46, 48, 59, 59b (J3c,
+  all clean); **80** (Known broken, D24: layout only); 38, 39 (shockwave ring now 680 u, visibly
+  past bow and stern), 42, 62 (clean); 63-66 (Drake's whole hull on screen throughout, including
+  after the shotgun sequence's rotation drift, D23's fix in Shots.cs.txt).
+- Open, for the owner: default (a)'s shockwave literal (680 u) and default (b)'s margins
+  (`BossPilotMargin` 150, `BossEdgeMargin` 80) are this agent's picks, not asked for by name --
+  flag if either reads wrong in play.
+- Next: J4 siege, J5 the 12 player ships, exactly as "How to continue" and the J4 correction above
+  describe. EmplacementDef confirmed still `Sprite`/`Main` (not yet on `HullArt`); `Combat.KeelCovers`
+  confirmed: `HalfWidth` unchanged on both siege rows (base 330, pylon 150) means both stay circles
+  (L <= 2 HW) through the length change (483, 300), so no hit-shape check is needed for that alone.
+  `art_source/pack_2026-09-24/crescent_b.png` and `drone_sensor.png` both present.
+
+### J4 siege -- PRE
+- Intent: re-art only (the Mounts idea is dead, per the correction above): `EmplacementDef : HullArt`
+  (Sprite->Texture, Main->Tint; HalfWidth and Trim stay its own). Base: crescent_b (no turn), Out
+  `pirate_base.png` (keeps the res:// path), L 560 -> 483. Pylon: NO new $Finished row -- shares the
+  Pod's own file, renamed `enemy_pod_hull.png` -> `drone_sensor.png` in the same edit (one output for
+  both rows, D18), L 220 -> 300; both HalfWidths (330/150) unchanged (Combat.KeelCovers: L <= 2 HW
+  stays true at the new lengths, no hit-shape check owed, confirmed in Job P's POST). Retire the 4 old
+  files (2 root game textures, 2 art_source hand-drawings) to retired/art/. One harness check (the
+  siege wears the pack, trimmed, at its new lengths, the pylon on the Pod's own file); one new frame
+  (the site, wide).
+- Model tier: sonnet (a named re-art from a ledger with literals already measured in sprites.md).
+- Start: fad1ee641f634c4e67dd5cd7161d8b62b1ea479e
+- Files (hash-object): tools/make_ships.ps1 8489c33d5e101062ca324321b53f586de1119e7e ·
+  scripts/Enemies.cs a32fd1683da178975638fc213f91b9c53945aa9e · scripts/Emplacements.cs
+  b7df20d31f3a20fe29da54ec15a665993d913661 · tools/smoketest/SmokeTest.cs.txt
+  7348908a1ccba07d4e382e6838727c386f9e51c2 · tools/screens/Shots.cs.txt
+  7a8457d12c400829a44a122caf50728110ca3940 · docs/plans/sprites.md
+  86c0da1a39a95c4f5305a97ff116c2404471b6ce · docs/DESIGN.md 80132c39f55e6ff95c6e17062448089c974fbfaf ·
+  docs/CHANGES.md 73af5b2f91924e9a068461723861f31b10de8c94 · art_source/pirate_base.png
+  2eca0859c24c36963bab6cad2ae140d06438f3c3 · art_source/pirate_pylon.png
+  edab7835dd1ed007af646218f2ec25399df0fd4c · pirate_base.png 7737470b2295199f3897092090101ccdce266edb ·
+  pirate_pylon.png 732d51c85f909a432b4a68d2e08036977ecc8485
+
+## COORDINATOR NOTE 2 (2026-09-25): summary.txt is UTF-16
+The runner (scratchpad rungs.ps1) writes summary.txt with PowerShell 5.1 Tee-Object, i.e. UTF-16LE with a BOM.
+A bash grep/cat or a bash poll loop on it NEVER matches "ALL GREEN" or "STOPPED" and waits forever. Read it with
+powershell Get-Content (it reads the BOM), or wait for the rungs.ps1 process itself to exit instead of polling the file.
+Kill any poll loop you left running on an earlier tag.
+
+## RESUMED 2026-09-25 (opus agent; the owner moved every agent to Opus 5.5). Found: HEAD fad1ee6, ~41
+uncommitted paths: J4's edits (no POST) and J5 started without a PRE.
+
+### J4 siege -- POST
+- Verdict: edits match the PRE's plan exactly (EmplacementDef : HullArt, base crescent_b 483 into
+  pirate_base.png, pylon on the Pod's file renamed enemy_pod_hull.png -> drone_sensor.png at 300,
+  HalfWidths 330/150, 3 old files retired to retired/art/ -- the base's game file keeps its path, so
+  3 not 4; Hub.cs's scope mark Main -> Tint followed). Rung evidence for this state: chain j4_1
+  (quick,solo,solo,screens ALL GREEN, seeds 11400714819323517975 / 11400714819323513398, 109 frames
+  LINT 0) ran after these edits; the lane's end chain re-proves.
+- Files now: Emplacements.cs 52f48a949a1c · Enemies.cs a538027ec52e · Hub.cs e823ee45ccb9 ·
+  Shots.cs.txt 801fe856380c (frame 67a_siege_site) · SmokeTest (check "the base wears crescent_b ...")
+  · make_ships.ps1 (drone_sensor Out, crescent_b row) · pirate_base.png · drone_sensor.png · docs.
+- Commit: ONE commit with J5 (make_ships.ps1, SmokeTest.cs.txt and the docs carry both jobs).
+- Checks: new "the base wears crescent_b at 483 u ... and the pylon the Pod's own art at 300 u".
+
+### J5 player ships -- PRE (written after the fact: a sonnet writer started it with no PRE)
+- Model tier: opus (owner, 2026-09-25). Plan: the J5 entry (~line 107).
+- Start: fad1ee641f634c4e67dd5cd7161d8b62b1ea479e
+- FOUND DONE (kept: matches the plan): 12 $Finished player rows in make_ships.ps1 (sources/turns per
+  sprites.md 1), BB Patches over the 6 painted twins, the line-drawing blocks and Blank/Dilate/CutOut/
+  Seed/Specks/Hull deleted (Load/Paper stay: the turret uses them), 12 PNGs regenerated, Ships.cs
+  mounts moved on BB (4 flanking twins, PD aft domes, k 1.9), carrier flank PD, DD (keel + flank
+  domes), Bastion main (stern ring), Echo main; tools/finish_ships.ps1 and art_unused/art_4x deleted;
+  battleship/carrier/destroyer drawings retired; CLAUDE.md + README.md command lines; DESIGN.md;
+  SmokeTest battleship + carrier checks rewritten.
+- Hashes found: Ships.cs 02335a00e9ec · make_ships.ps1 bc7191f6b8cb · SmokeTest c5c094412e62 ·
+  CLAUDE.md 84b724c0bba1 · README.md 0ae780ff31b3 · DESIGN.md bb5eec4126a3 · CHANGES.md ca715731cfca ·
+  sprites.md 16a38fd3d047 · battleship_hull a106f353da46 · carrier_player 4992a0049a85 · destroyer_hull
+  070317fe80ec · freight_hauler 115bb45fd1b5 · freight_tender 03676bbe746f · freight_bastion
+  d301cc7688c5 · heavy_sniper 822cad7158dd · heavy_warrior 5b068bb76ae5 · heavy_warden a181e2201bae ·
+  light_dart 4d719d3bcc39 · light_echo af1ec6dc2af0 · light_wraith 0005d7b9fe2d
+- TO FINISH: make_ships.ps1's stale header and its -Preview block (still reads the deleted $c/$b/$d
+  and the per-class turret params); Ships.cs's stale "line art" comment; a rerun of make_ships proving
+  the PNGs reproduce; every mount read against its art; a NEW check (all 12 classes wear trimmed pack
+  art at their lengths; the destroyer's mains on the keel); CHANGES.md J5 entry + Handoff.
+
+### J5 player ships -- POST
+- Verdict: typecheck 0 errors; `-Quick` ALL CHECKS PASSED. Rungs 3/4 in the end chain.
+- Kept (matched the plan): every edit listed in the PRE. Finished: make_ships.ps1's header and
+  -Preview (the deleted capitals' $c/$b/$d and turret params gone); Ships.cs's art comment; a rerun
+  of make_ships reproduced all 12 hulls + drone_sensor + pirate_base byte for byte (the turrets,
+  procedural, restored with git checkout per DESIGN's trap); CHANGES.md J5 entry, Handoff, the stale
+  line-art open questions.
+- Seats read against the art by eye (scratch overlay of every Mains/Pds + the carrier's bays and
+  runway): all on a painted feature; the carrier's bays sit on the white beside the runway.
+- Mount literals moved (kits lane, merge note): BB Mains (+-23.99,-74.28/-36.27), Pds (+-58.99,
+  71.73), TurretTexScale 1.9/5.5, MainBarrel 23.18, PdBarrel 10.45, PdRing 5.7; Carrier Pds[0..1]
+  (+-30.01,-0.21); DD Mains (0.20,-14.20/17.81), Pds (+-30.81,5.82); Bastion Mains (0,53.48); Echo
+  Mains (0,-23.39).
+- Commit: ONE commit with J4 (shared files). Checks: new "all 12 classes wear trimmed pack art, hit
+  half-beams unchanged, the destroyer's mains on its keel"; rewritten the battleship hull + seats
+  (mains' Y now asserted too) and the carrier sprite line.
+- Next: A3 merge version-l.
+
+### A3 merge version-l -- PRE
+- Tier opus. Intent: git merge version-l (47 commits: the net lane's WebRTC R1 -- Net.cs fingerprint,
+  Link/Rendezvous, SmokeTest, CLAUDE.md -- plus walls/unlocks; the kits lane is NOT merged there, so
+  ClassArt.PdRing stays). Resolve keeping both; every art table stays hashed by Net.Fingerprint.
+- Start: ff30f5df0a1d4bf2ab0c1e9c5fa0fa99c52434c4 · version-l 93b2c8c4135f7789999fa808fba8b738899bea2e
+
+### A3 merge version-l -- POST
+- Verdict: merged 93b2c8c. Conflicts: CHANGES.md (version-l's removal of the four-lanes block taken;
+  both Unreleased sides kept; a new art Handoff paragraph), CLAUDE.md (version-l's rewrite taken,
+  with the art lane's intent re-applied: tools\finish_ships.ps1 is deleted, so it leaves section 12).
+  Everything else merged clean. typecheck 0 errors; `-Quick` ALL CHECKS PASSED.
+- Fingerprint read: every art table is a Table row in a static readonly field (Classes.All's ClassArt,
+  Enemies.All, Missions.Bosses, Emplacements.All, Lanes.All, Hauler.Art, the gatherer and wing rows)
+  EXCEPT `Nozzle`: a positional `record struct` has no public fields, so `Gatherer.DroneBells` and
+  `Lanes.CourierBells` are NOT Plain and never enter Net.Fingerprint (inside a row they print through
+  ToString, so those stay hashed). Fixed next, job A3b.
+- Next: A3b.
+
+### A3b the bells enter the fingerprint; the Drake check asserts the move -- PRE
+- Tier opus. Intent: `Nozzle` becomes a readonly struct with public readonly X/Y/Bell fields (same
+  constructor, same reads), so StructRow sees it and `Gatherer.DroneBells`/`Lanes.CourierBells` are
+  hashed. New BuildCheck: one courier bell moved moves the fingerprint, put back it is the build's.
+  Camera ruling (NOTE 1) re-read against Hub.BossFramed: the wheel's ceiling is untouched (ZoomOutMax
+  1.53) and the centre slides toward the far end; the Drake check asserts the zoom and both ends on
+  screen but not the move itself -- it gains "the centre moved toward the boss" (rewritten check).
+- Start: 2f5d146cb82a6b33e551de4353b681bf98494af1
+- Files: scripts/Sprites.cs 2617f82ebe1a5a1a81ab3a7d696a6d3ee5f60c8b · tools/smoketest/SmokeTest.cs.txt 4a68b6f4dbc008bb75f47a59842f37206ff1c67c · docs/CHANGES.md cd6d758caeb919ef25616ade2187322643d3ae88
+
+### A3b -- POST
+- Verdict: typecheck 0 errors; `-Quick` ALL CHECKS PASSED. Camera ruling confirmed in code:
+  Hub.BossFramed moves the centre (clamped to BossPilotMargin off the ship), ZoomOutMax stays 1.53.
+- Files: scripts/Sprites.cs (Nozzle fields) · SmokeTest.cs.txt (BuildChecks + the Drake framing
+  check) · docs/CHANGES.md.
+- Checks: new "a bare bell table is part of the build's fingerprint"; rewritten "at N degrees off the
+  hold-off, the wheel's own ceiling still frames the Drake's far end ... the centre moved N u toward
+  the boss".
+- **engine-unproven: rungs 3-5 owed in the final test phase** (J4, J5, the merge and A3b; the lane's
+  final chain quick,solo,solo,six,screens, the new/rewritten checks on two seeds).
+- Next: none in this batch; the final test phase, then the merge gate.
+
+### A4 merge gate 1 fixes (six problems) -- PRE
+- Tier opus. Intent: (1) the ram strikes each hittable at most once per dash (Slot.Struck, cleared in
+  Aimed/Dash), the rammedClear sidestep goes, a held-still pilot takes exactly 40 from 3 lane spots;
+  CHANGES + D23 corrected. (2) a ring-reach check at Vary(420,600) from 3 bearings. (3) an Approach
+  check (3 bearings, Vary(1.3,1.8) x (HoldOff+L/2)) and the spawn position asserted on entry.
+  (4) Find measured from the hull (m.Find + Length/2), a just-inside/just-outside check from 3
+  bearings; CHANGES + DESIGN. (5) Ships.cs mount comments say what each mount IS. (6) CHANGES Known
+  broken on frame 80 matches D24.
+- Start: e72fe191b14c4e2ae4dcb9661c2f24b6d8d087a6
+- Files: scripts/Boss.cs 80eeedd5d82d · scripts/Ships.cs ded07e1c1678 · tools/smoketest/SmokeTest.cs.txt
+  1f5abe3ce996 · docs/CHANGES.md d54d43af4cbd · docs/DESIGN.md 0b1bcbc91001 · ledger 6324d3568335
+
+### A4 -- POST
+- Verdict: typecheck 0 errors; `-Quick` ALL CHECKS PASSED. **engine-unproven: rungs 3-5 owed in the
+  final test phase** (the lane's chain quick,solo,solo,six,screens; each new check on two seeds).
+- (1) Boss.cs: `Slot.Struck`, cleared in Aimed (Dash), a dash strikes each hittable once; the
+  rammedClear sidestep deleted; CHANGES + D23 rewritten. (2)(3)(4) one new block after the stealth
+  block (all clocks parked, boss put back after each): guns Find past the hull (3 bearings, in/out
+  20-60 u), the ring at 420-600 u (3 bearings, placed after the ring is drawn), the held-still ram
+  (3 spots 360-480 u down the lane, taken after the lane is drawn), the approach stop at HoldOff+L/2
+  (3 bearings, 1.3-1.8x); the spawn position asserted on arena entry. Find is `m.Find + Length/2`
+  (CHANGES, DESIGN). (5) Ships.cs's four mount comments say what each mount is. (6) The gate read D24
+  as "it works"; D24 says the freeze did NOT visibly hold. The contradiction was the Shots.cs.txt
+  comment claiming it held: that comment and CHANGES' Known broken now both match D24.
+- Files: scripts/Boss.cs, scripts/Ships.cs, tools/smoketest/SmokeTest.cs.txt,
+  tools/screens/Shots.cs.txt (comment only), docs/CHANGES.md, docs/DESIGN.md, this ledger.
+- Fail on e72fe19: "rams for 40, once" and "held still ... 40 once a pass" (80 there); "guns look
+  900 u past its hull" (1200-1240 u > 900 there). The ring, approach and spawn checks pass at
+  e72fe19 and fail without the code the gate named.
+- Next: the final test phase, then the merge gate again.
+
+### A5 merge gate 2 fixes (four) -- PRE
+- Tier opus. Intent: (1) the Drake's warp-back throw stands its NOSE 1300 u off its target (the row's
+  Standoff, already measured from the hull like HoldOff: 1090 -> 1300), 200 u past the gun's Find at
+  any BossSize and level; row check asserts Standoff 1300 = gun Find + 200; a new live check from 3
+  varied bearings: after the warp lands, target > gun Find + L/2 + 150 u from the centre, and no shell
+  at it in the next 2 s (the gun armed by hand, pilot held still), each throw then cancelled.
+  (2) SmokeTest ~9882 comment made true. (3) SmokeTest ~8437 ram comment + message: the tail stops
+  540 u down the lane, the hull covers the pilot to the end of the 0.75 s dash, past the 0.52 s gap.
+  (4) "within N u" -> "of its hull" in Lancer.cs:9, Drake.cs:8, Boss.cs:19 and the harness messages
+  ~7970 / ~8001. CHANGES + DESIGN (1090 -> 1300 nose, 1720 centre).
+- Start: 1f3a6aec152c94560cb44e57a764a46981939fc5
+- Files: scripts/Drake.cs a066c4420492 · scripts/Boss.cs ac0642de68bd · scripts/Lancer.cs 56ba81ce8a4b ·
+  tools/smoketest/SmokeTest.cs.txt 5d6866a3d401 · docs/CHANGES.md 76968d9673ed · docs/DESIGN.md
+  e45e7603d8df · ledger 3ee9a27d9a6b
+
+### A5 -- POST
+- Verdict: typecheck 0 errors; `-Quick` ALL CHECKS PASSED. **engine-unproven: rungs owed in the final
+  test phase** (the lane's chain quick,solo,solo,six,screens; the new check on two seeds).
+- (1) Drake.cs throw row Standoff 1090 -> 1300 (nose; the Standoff was already measured from the hull,
+  `Boss.Arm`: Standoff + L/2), 200 u past the gun's Find at any BossSize and level (both x Quicken).
+  Row check: Standoff == 1300 and Standoff - gun Find == 200. New live check after "thrown:": three
+  bearings from ArenaCentre, pilot 600-900 u out held still; after the warp lands (Winding) the pilot is
+  >= 150 u outside gun Find + L/2, the gun armed by hand at once draws nobody and no Slug appears for
+  2 s; each throw called off (At Idle, rock freed, warnings cleared), boss put back. Fails on 1f3a6ae
+  (margin -10 u, and the gun draws the pilot). (2) the guest's "ONE SHELL FIRST" comment. (3) the ram
+  comment + message (tail stops 540 u down the lane, the rest of the 0.75 s dash). (4) "of its hull"
+  in Lancer.cs, Drake.cs, Boss.cs and the two row-check messages. CHANGES + DESIGN: 1300 (1720).
+- Next: the final test phase, then the merge gate again.
+
+### A6 (coordinator) -- gate 3's one comment
+- Gate 3 passed the A5 code (the throw's Standoff 1300 from the hull, 200q u past Find at every level and BossSize) and failed one clause
+  in the ram check's comment ("under the nose as the dash starts"); replaced with the gate's own wording. Comment only; quick below.

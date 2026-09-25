@@ -156,3 +156,11 @@ x700/760, within 0.5); CurveBossRowChecks "with the boss rows reordered, the sie
 silver_lancer" (rows swapped in a try/finally, base 3222 / pylon 402.75 at three varied levels).
 engine-unproven: rungs owed in the final test phase (solo x2: both new checks; screens: 53 read once).
 Next: none (lane built; merge gate re-run).
+
+## M2 merge version-l into wt/curve (lane F merge) -- POST
+Conflicts resolved keeping both lanes: art's doubled boss/siege geometry, Texture/Tint, nozzles, hold-offs, escort
+EscortOut x HalfWidth, ram lane from the hull (no Width) + curve's Par hulls (3222 / 2968, siege on SiegeHull) and cut
+damages. Harness: art's checks re-literalled to the curve (boss hulls 3222/2968, ram 29.8, wave 33.5, Drake gun 4.72,
+Missions.S -> Par.HullScale/DamageScale/CraftScale, carrier top speed 1.2725); art's hitbox wave/ram checks moved to
+33.5 / 29.8 (combination fix). CurveParChecks.. and FieldsContractChecks.. both kept. typecheck 0 errors, -Quick green.
+Owed in the test phase: quick,solo,solo,six,screens.

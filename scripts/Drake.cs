@@ -7,14 +7,14 @@
 // the Lancer's own clocks, all damage x the level's and party's scale. EVERY MOVE BUT THE ROCK is
 // cut to x0.787 of its old row (numbers_curve_raids_items.md §1.2): with no chips a par pilot who
 // stops dodging lives 42 s at every level; the rock (250) is a super and is kept:
-//   MAIN GUN       always: a slow shell (220 u/s) every 2.5 s at the nearest ship within 1100 u,
+//   MAIN GUN       always: a slow shell (220 u/s) every 2.5 s at the nearest ship within 1100 u of its hull,
 //                  4.72 each (1.89 DPS) -- straight, and dodged by moving
 //   SCRAP SHOTGUN  every 15 s (the trident's cadence), from 17 s: it WARPS to range -- a ring
-//                  where it will land, 1 s -- 600 u from the nearest pilot, then a fan of seven red
+//                  where it will land, 1 s -- its nose 390 u from the nearest pilot, then a fan of seven red
 //                  lines for 1.875 s, then seven pieces of scrap down them at once -- the same
 //                  fixed fan every time, 10 degrees apart -- 14.76 each, each its own hit
 //   ASTEROID THROW every 30 s (the death beam's slot, from 6 s): it WARPS BACK -- a ring where it
-//                  will land, 1 s -- to 1300 u from its target; a big rock appears beside it and
+//                  will land, 1 s -- its nose 1300 u from its target; a big rock appears beside it and
 //                  its tractor beam takes hold; a red lane to the target for 7.5 s; then the rock
 //                  is hurled down it in 1.2 s -- slow to start, then very fast -- striking every
 //                  ship in the lane for 250, and breaking apart at the lane's end
@@ -38,19 +38,22 @@ public static class Drake
                 Every = 2.5, First = 2.0, Find = 1100f,
                 Damage = 4.72, Speed = 220f, Range = 1300f, Radius = 7f, Source = DamageSource.DrakeGun },
 
-        // THE SCRAP SHOTGUN: the warp opener first -- a ring 117 u across (was HalfWidth x 1.3)
-        // for 1 s, 600 u off the nearest pilot -- then seven red lines 1400 u long and 28 u wide
+        // THE SCRAP SHOTGUN: the warp opener first -- a ring of 1.3 half-widths (117 u on the 90 u
+        // hull it was built on) for 1 s, its nose 390 u off the nearest pilot (the old 600 u from
+        // the centre of the 420 u hull: measured from the hull, so a bigger one keeps the gap) --
+        // then seven red lines 1400 u long and 28 u wide
         // (was ScrapRadius x 2 + 10) for 1.875 s, then the seven pieces down them at once.
         new() { Id = "shotgun", Way = MoveWay.Shoot, Waits = MoveWait.Everything, Busy = true, Super = true,
                 Shot = Shots.Scrap, Every = 15, First = 17.0,
-                Warp = 1.0, Standoff = 600f, WarpRing = 117f, WarpSound = "drake_warp",
+                Warp = 1.0, Standoff = 390f, WarpRing = 1.3f, WarpSound = "drake_warp",
                 Windup = 1.875, Count = 7, Spread = 10f, Width = 28f,
                 Damage = 14.76, Speed = 480f, Range = 1400f, Radius = 9f,
                 Strike = "drake_scrap", Source = DamageSource.DrakeScrap },
 
-        // THE ASTEROID THROW: a 180 u body 310 u off the flank (HalfWidth + Radius + 40: 90 + 180
-        // + 40), down a lane 1800 u long held 7.5 s, then 1.2 s of flight. ThrownRock flies it and
-        // names the blow it deals.
+        // THE ASTEROID THROW: a 180 u body held 40 u clear of the flank (Boss.FlankHold: the hull's
+        // half-width + the body + this gap -- 180 + 180 + 40 = 400 u off the keel at twice the art),
+        // down a lane 1800 u long held 7.5 s, then 1.2 s of flight. ThrownRock flies it and names
+        // the blow it deals.
         //
         // NO WIDTH HERE. A thrown body's lane is the BODY'S OWN WIDTH and Boss.Warn works it out
         // (Radius x 2). Written down a second time it drifted: Boss.Scaled lifts Radius one
@@ -59,16 +62,19 @@ public static class Drake
         // body stood 42.7 u past each edge of its lane and a 180 u body stands 85.3 u past it.
         // A telegraph that under-reports the blow it telegraphs is the bug, not the row.
         // IT BACKS OFF BEFORE IT WINDS UP. An 1800 u lane thrown from inside the pilot's face is
-        // not a threat anyone can answer, so it warps to 1300 u first, on its own side of the pilot
-        // (the same Warp/Standoff the scrap shotgun uses, with the sense that falls out of a
-        // standoff longer than the range it closes to), and the throw is the ranged move it looks
-        // like.
+        // not a threat anyone can answer, so it warps its nose to 1300 u off first, on its own side
+        // of the pilot (the same Warp/Standoff the scrap shotgun uses, with the sense that falls out
+        // of a standoff longer than the range it closes to), and the throw is the ranged move it
+        // looks like. 1300 is 200 u past the main gun's Find (1100 u past the hull): the throw
+        // leaves nothing in the gun's reach, so it is silent through the throw. Standoff and Find
+        // are both measured from the hull and both grow with the level, so the margin holds at
+        // any BossSize and never shrinks.
         //
         // A LONG WARNING AND A QUICK ROCK: 7.5 s of red lane, then 1.2 s in the air.
         new() { Id = "throw", Way = MoveWay.Throw, Waits = MoveWait.Everything, Busy = true, Super = true,
                 Every = 30, First = 6.0, Windup = 7.5, Flight = 1.2,
-                Warp = 1.0, Standoff = 1300f, WarpRing = 117f, WarpSound = "drake_warp",
-                Damage = 250, Reach = 1800f, Radius = 180f, Offset = 310f,
+                Warp = 1.0, Standoff = 1300f, WarpRing = 1.3f, WarpSound = "drake_warp",
+                Damage = 250, Reach = 1800f, Radius = 180f, Offset = 40f,
                 Cue = "drake_tractor", Strike = "drake_throw" },
     };
 }

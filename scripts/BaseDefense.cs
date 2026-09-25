@@ -38,7 +38,7 @@ public partial class BaseDefense : Node2D
         {
             _laser = LaserTick;
             double hit = LaserDps * LaserTick;
-            close.TakeDamage(hit); LaserDealt += hit;
+            Dealt.Deal(close, hit, null, Dealt.Base); LaserDealt += hit;
             Combat.Flash(GlobalPosition, close.Position, Beam.Base);
         }
         if (aim != null && _missile <= 0)

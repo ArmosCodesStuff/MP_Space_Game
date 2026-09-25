@@ -479,6 +479,61 @@ revert or keep the half-made edits, then run the job again (CLAUDE.md §2b rule 
   every check J3-K2 added or rewrote.
 - Checkpoint: the merge commit. Next: the final test phase (coordinator).
 
+### K3 · PRE · gate 1's seven problems at 809313c
+- Intent: fix exactly the opus merge gate's seven: (1) the J7 DPS knife edge and the 6b one (clock from
+  the first frame HvLaser() grows; 150 frames / 2.0, 210 frames / 3.0); (2) Shots.cs.txt frame
+  49_heavy_waiting_missile pins hs2 and forces _missileCd 0, plus a new frame of a latched heavy firing
+  both barrels; (3) Lanes.GunDamage derived from Enemies.Of(Gunship).MissileDamage, the outpost check
+  rewritten to 35; (4) a Ramp row steps only where the helm is (Mine) and ApplyHostState keeps a Ramp
+  row's Own on the owner's ship (DESIGN.md says why), with a rung-3 wiring check (test-only Ramp row,
+  3 varied turn rates) and a rung-5 guest check; (5) BaseDefense and Shots.cs hostile hits go through
+  Dealt.Deal (new Dealt.Base), a behavioural check that the base's laser blow reaches OnDealt;
+  (6) the echo stores nothing after its Left ends / after Detonate (3 varied spots); (7) invariant C
+  history comments deleted in PlayerShip, Stats, Enemies, Raider, Statuses, Boss.
+- Build phase: no engine run; typecheck + verify -Quick only.
+- Model tier: opus (per task).
+- HEAD 809313c26f1eb356bde958be8fdee4b9b9611fff. Hashes: SmokeTest 9a49b88a · Shots.cs.txt 49ad2a6b ·
+  Lanes beab4a5c · PlayerShip 2a913835 · BaseDefense 371f2085 · Shots.cs 7e0371e1 · Dealt e3f8ce08 ·
+  Stats fdaff349 · Enemies caddc1c5 · Raider ae7dd1a1 · Statuses 011a71d4 · Boss 85c742d6 · DESIGN
+  bbdb416c · CHANGES f372759d · ledger_kits b82e5d64.
+
+### K3 · POST
+- Verdict: all seven fixed; rung 1 0 errors, rung 2 (verify -Quick) ALL CHECKS PASSED.
+  engine-unproven: rungs 3-5 owed in the final test phase.
+- (1) `LaneAHeavyRowsChecks` DPS: clock from the first frame HvLaser() grows, 150 frames / 2.0
+  (`hl0 > 0` asserted); 6b: clock from the first growth after the latch, 210 frames / 3.0.
+- (2) Shots.cs.txt: frame 49 pins hs2 (held every frame), forces `_missileCd` 0, snaps 12 frames
+  after the WarnZone ring; NEW frame `49b_heavy_both_barrels` (zoom 2.0, snapped on the frame a volley
+  lands on the pinned ship). Read by eye owed at rung 4.
+- (3) `Lanes.GunDamage => Enemies.Of(Enemies.Gunship).MissileDamage`; outpost check asserts 35.
+- (4) PlayerShip: a Ramp row steps only `&& Mine`; ApplyHostState keeps a Ramp row's Own when Mine
+  (rows[i-1].Ramp). DESIGN.md, the authority model, says why. Checks: rung 3
+  `LaneARampWiringChecks` (a test-only ramp row put IN PLACE of `open6` under that id, stats injected
+  into `_byId`; 3 runs, varied start speed = varied turn rate, A/D): +0.10/s straight from the first
+  frame it shows, SpeedMult = 1 + Own, SpeedAdd 60 into Steer's cap, a turn's per-frame sum
+  (0.10 - 0.20 x yaw share), and `ApplyHostReport` (a host packet with Own 0) leaves Own -- FAILS on
+  809313c (the packet zeroed it). Rung 5, guest branch before "the host closes the session": the
+  same row on the guest's carrier and the host's copy (host holds open6 Left 1e4 and marks N 4242
+  every frame via a LateSampler, freed before GoOffline); the guest counts reports landing on the
+  slot (>= 5 straight, >= 3 turning) and the ramp matches its own frames' sum -- on 809313c the
+  host's 10 Hz report zeroed it.
+- (5) BaseDefense laser: `Dealt.Deal(close, hit, null, Dealt.Base)`; Shots.Strike: one `Dealt.Deal(h,
+  Damage, IsInstanceValid(Source) ? Source : null, d.Id)`. rg: no TakeDamage on a hostile outside
+  Dealt. DEVIATION, noted: with `by` null no OnDealt can hear the base (no ship), so the door gained
+  `Dealt.Landed` (a static event: every blow, any dealer); the check (3 varied spots in 300 u)
+  asserts the "base" blows Landed hears sum to exactly LaserDealt's growth, > 0. Fails on 809313c
+  (no door, no event).
+- (6) `LaneADamageDoorChecks` echo block (LightEcho, 3 varied spots, a held heavy): stores the 40
+  dealt while running; the frame Left ends it detonates (DealtBy["echo"] grows) and Own is 0; two
+  25 hits after (immediately, and 30 frames later) grow DealtBy["shell"] by 50 and Own stays 0.
+- (7) History deleted: PlayerShip TickAbilities header, Stats FighterDuty, Enemies MissileFlight +
+  Cc, Raider missile header + the pin-gate comment, Statuses OutGuard + StatusGuard, Boss
+  Judgements + the beam's Next.
+- Files: SmokeTest.cs.txt, Shots.cs.txt, Lanes, PlayerShip, BaseDefense, Shots.cs, Dealt, Stats,
+  Enemies, Raider, Statuses, Boss, DESIGN, CHANGES, this ledger.
+- Checkpoint: commit "Kits lane A K3". Next: the final test phase (coordinator): quick,solo,solo,
+  six,six,screens -- two seeds for every check above.
+
 ## Engine rungs owed to the main session (run in the worktree, rebased, one engine at a time)
 
 | after | rung | seeds | look for (PASS lines) |
@@ -676,3 +731,22 @@ Other defects worth fixing now:
    lead (the jump filter), which is a sure miss on a pinned, forced-thrust target. Add a `Ready` flag to Lead and `&& _lead.Ready`
    at Raider.cs:352 only if the owner wants it, and give it its own check.
 Apply this before re-running the chain; the PRE that applies it says 'applies NOTE 2'.
+
+## K4 PRE -- tier opus, applies gate 2
+Intent: replace the outpost-guns comment in the freighter check (comment only). Files: tools/smoketest/SmokeTest.cs.txt
+HEAD 97f767ed4b85b4be33e61fbfb01768a5f85391a0; hash SmokeTest.cs.txt c4c55a50d63644cedaa02eec10c532fc4db3a322
+## K4 POST -- done. Comment replaced as gate 2 asked; typecheck 0 errors, quick ALL CHECKS PASSED. Checks: none (comment only).
+COORDINATOR DECISION -- Dealt.Landed (a static event on the damage door for blows with no ship behind them) is accepted.
+engine-unproven: rungs owed in the final test phase. Next: none (lane ready for merge).
+
+## K-merge PRE -- tier opus, merge version-l (ce7f48e) into wt/kits (9742789)
+Intent: sync kits with art (J1-J5) + wave lanes before merging kits into version-l. Build phase: typecheck + quick only.
+Conflicted: scripts/Boss.cs, scripts/Enemies.cs, scripts/Ships.cs, tools/smoketest/SmokeTest.cs.txt, docs/CHANGES.md.
+## K-merge POST -- done. typecheck 0 errors; verify -Quick ALL CHECKS PASSED.
+- Boss.cs: version-l's Ring reach x Type.Size and the dash's one-ram-a-pass (s.Struck) kept, each landing through kits' Out(m) (the outgoing door).
+- Enemies.cs: version-l's per-row TurretAft/TurretWidth (no defaults, off the art) and Nozzles on every row; kits' Barrels field, Dps 1.29 x 2 barrels, Cc and Exp on every row.
+- Ships.cs: version-l's J5 mount literals (BB, carrier, DD, Echo) with PdRing and Ab.Pd dropped (kits removed both, F16 passive PD).
+- SmokeTest.cs.txt: both fingerprint blocks (kits' tables + art's bell table); kits' 2.58x heavy check + art's raider-art block;
+  version-l's 680 u shockwave ring + kits' PdReachOff; kits' 150 beam check + version-l's charge-once message.
+- CHANGES.md: both sides (Handoff and Unreleased).
+engine-unproven: rungs owed in the final test phase. Checks: none new (merge).

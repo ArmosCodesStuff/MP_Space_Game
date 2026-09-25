@@ -39,10 +39,14 @@ public enum GatherKind { Miner, Salvager }
 public enum GatherSite { Rocks, Wreck }        // where it works (Yard.WorkSpot flies one of these)
 public enum GatherBeam { Shaft, Scan }         // what working looks like (Gatherer._Draw draws one)
 
-public class GathererDef
+// Its ART -- Texture, Length, Tint and its bells -- is the HullArt it derives from (Sprites.cs), plus
+// the two marks tools/make_ships.ps1 prints off the art: where its beam and its load leave the hull
+// (Emitter) and the span a raider holds off (HalfWidth).
+public class GathererDef : HullArt
 {
     public string Id, Name;          // "miner" / "Miner": its upgrade ids' prefix, and its label
-    public string Texture;
+    public Vector2 Emitter;          // the beam's (and the unloading load's) point, hull frame, world u
+    public float HalfWidth;          // half its drawn span, world u
     public string Tab;               // the BASE tab its five rows -- and its rebuild price -- are under
     public string Resource;          // the stock id it deposits into, AND its key under [base]
     public string Unit;              // what its hold and its beam are priced in ("ore", then "ore/s")
@@ -67,17 +71,28 @@ public class GathererDef
 
 public static class Gathering
 {
+    // THE DRONE EVERY GATHERER FLIES (the pack's drone_salvager, gatherer.png: the owner's pick for
+    // both, 2026-09-25), told apart by its row's Tint. Its marks as tools/make_ships.ps1 prints them:
+    // its three bells, the claws' mouth its beam and its load leave from, and its span at the claws.
+    // (Declared before All: a static field's initialiser runs in the order it is written.)
+    private const string Drone = "res://gatherer.png";
+    private static readonly Nozzle[] DroneBells = { new(-3.85f, 18.94f, 3.53f), new(0f, 19.86f, 4.38f), new(3.96f, 19.01f, 3.67f) };
+    private static readonly Vector2 ClawMouth = new(0f, -13.36f);
+    private const float DroneSpan = 11.24f;
+
     // The index IS the id on the wire: the fleet is built and reported in this order (Yard's
     // per-gatherer arrays line up by position). So APPEND ONLY.
     public static readonly GathererDef[] All =
     {
-        new() { Id = "miner", Name = "Miner", Texture = "res://miner.png", Tab = "MINERS",
+        new() { Id = "miner", Name = "Miner", Texture = Drone, Tab = "MINERS",
+                Length = 40f, Tint = new Color(0.63f, 0.46f, 0.31f), Emitter = ClawMouth, HalfWidth = DroneSpan, Nozzles = DroneBells,
                 Resource = "ore", Unit = "ore", Site = GatherSite.Rocks, Beam = GatherBeam.Shaft,
                 CargoTint = new Color(0.75f, 0.5f, 0.3f),
                 RateId = "mine_rate", RateName = "Mining beam", RateBlurb = "+10% mining speed",
                 Muster = new Vector2(-60, -300), MusterStep = new Vector2(30, 0) },
 
-        new() { Id = "salvager", Name = "Salvager", Texture = "res://salvager.png", Tab = "SALVAGERS",
+        new() { Id = "salvager", Name = "Salvager", Texture = Drone, Tab = "SALVAGERS",
+                Length = 40f, Tint = new Color(0.61f, 0.35f, 0.11f), Emitter = ClawMouth, HalfWidth = DroneSpan, Nozzles = DroneBells,
                 Resource = "salvage", Unit = "salvage", Site = GatherSite.Wreck, Beam = GatherBeam.Scan,
                 CargoTint = new Color(0.75f, 0.78f, 0.82f),
                 RateId = "salvage_rate", RateName = "Salvage beam", RateBlurb = "+10% salvage speed",
@@ -108,7 +123,7 @@ public partial class Gatherer : UtilityShip
     public override string Label => $"{Def.Name} {Index + 1}";
     public override bool InReach => State != St.Destroyed;
     public override bool Lost => State == St.Destroyed;
-    public override (float halfLength, float halfWidth) Extent => (20f, 12f);
+    public override (float halfLength, float halfWidth) Extent => (Def.Length * 0.5f, Def.HalfWidth);
     protected override float LostBlast => 30f;
     protected override float RebuiltBlast => 26f;
     protected override void OnLost()
@@ -118,7 +133,6 @@ public partial class Gatherer : UtilityShip
     }
     public Vector2 Velocity;
     public Vector2 BeamTo;                   // world point the beam works (host-chosen)
-    public const float Length = 40f;
     private const float Accel = 220f;
 
     private Sprite2D _sprite;
@@ -135,7 +149,7 @@ public partial class Gatherer : UtilityShip
     public override void _Ready()
     {
         Hull = MaxHull;
-        _sprite = Sprites.Fit(Def.Texture, Length);
+        _sprite = Sprites.Fit(Def);
         AddChild(_sprite);
         ZIndex = 1;
     }
@@ -212,7 +226,7 @@ public partial class Gatherer : UtilityShip
                 // No arm means it lost the one it was flying to. Arms[-1] would throw; ask again
                 // instead, and queue if none is free.
                 if (arm < 0) { State = Yard.RequestArm(this) >= 0 ? St.Docking : St.Queued; break; }
-                if (FlyTo(Yard.Arms[arm].Dock.Berth(Length), dt)) State = St.Unloading;
+                if (FlyTo(Yard.Arms[arm].Dock.Berth(Def.Length), dt)) State = St.Unloading;
                 break;
             }
             case St.Unloading:
@@ -221,7 +235,7 @@ public partial class Gatherer : UtilityShip
                 if (arm < 0) { State = St.Outbound; break; }        // arm taken away mid-unload: go back out
                 // onto its berth and nose in: the berth and the swing every craft on a dock uses
                 var dock = Yard.Arms[arm].Dock;
-                Position = Position.Lerp(dock.Berth(Length), Mathf.Clamp(8f * dt, 0f, 1f));
+                Position = Position.Lerp(dock.Berth(Def.Length), Mathf.Clamp(8f * dt, 0f, 1f));
                 Docks.NoseIn(this, dock, dt);
                 double amt = Math.Min(Cargo, Economy.UnloadRate * dt);
                 Cargo -= amt; Yard.Deposit(Def.Resource, amt);
@@ -247,7 +261,7 @@ public partial class Gatherer : UtilityShip
     private void Face(Vector2 at, float dt) =>
         Rotation = Mathf.LerpAngle(Rotation, Aim.Face(Position, at), Mathf.Clamp(6f * dt, 0f, 1f));
 
-    private Vector2 Nose() => ToGlobal(new Vector2(0, -Length * 0.45f));
+    private Vector2 Nose() => ToGlobal(Def.Emitter);
 
     // The salvager's scan: two forking arcs inside a narrow cone (about ±3 degrees),
     // the cone itself sweeping slowly side to side across the hull.
@@ -276,8 +290,8 @@ public partial class Gatherer : UtilityShip
 
     public override void _Draw()
     {
-        // a light yellow plume: utility ships ignore every player colour
-        Plume.Draw(this, new Vector2(0, Length * 0.5f), Vector2.Down, Length, Plume.Utility, Velocity.Length() / (float)Speed, Velocity.Length() > 2f);
+        // a light yellow flame out of each bell: utility ships ignore every player colour
+        Def.DrawPlumes(this, Vector2.Zero, 1f, Plume.Utility, Velocity.Length() / (float)Speed, Velocity.Length() > 2f);
         var inv = GlobalTransform.AffineInverse();
         if (Beaming && Def.Beam == GatherBeam.Shaft)
             // one shaft: a steady core with a soft glow that breathes
@@ -293,12 +307,12 @@ public partial class Gatherer : UtilityShip
             }
 
         if (State == St.Unloading && Cargo > 0)
-        {   // cargo dropping through the arm's open face
+        {   // cargo dropping out of its emitter through the arm's open face
             var col = Def.CargoTint;
             for (int k = 0; k < 4; k++)
             {
                 float f = (float)((_t * 1.6 + k / 4.0) % 1.0);
-                DrawRect(new Rect2(new Vector2(-2f, -Length * 0.45f - f * 26f), new Vector2(4f, 4f)), new Color(col.R, col.G, col.B, 1f - f));
+                DrawRect(new Rect2(Def.Emitter + new Vector2(-2f, -2f - f * 26f), new Vector2(4f, 4f)), new Color(col.R, col.G, col.B, 1f - f));
             }
         }
 

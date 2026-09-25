@@ -34,6 +34,10 @@ public enum FxShape
     Bar,       // a thick straight bar from A to B, fading: a railgun's line
     Lane,      // A WARNING: a wide straight lane from A to B -- a beam, a ram, a fan, a thrown rock
     Zone,      // A WARNING: a disc at A -- a shockwave, a warp in, a missile's blast
+    Debris,    // a chunk of the ANCHOR's own hull, cut at A, thrown toward To and tumbling to rest
+    Sparks,    // Count hot sparks sprayed from A toward To's side, over the first half second
+    Puffs,     // Count grey puffs left along the chunk's own path (the same seed as its Debris)
+    Scar,      // a dark jagged patch at A, in the anchor's own frame, so it turns with the hull
 }
 
 public class FxDef
@@ -50,6 +54,15 @@ public class FxDef
     // long. The row's Life is not used -- a warning lives its wind-up, its hold and one flash --
     // and its sounds are the raise's, because they are the move's.
     public bool Warn;
+    // THE TORN CHUNK'S KIND (Debris, Sparks, Puffs, Scar): rows raised WITH this one on every peer,
+    // from the one raise (so the wire carries one effect, not four); at most Cap of this row on one
+    // anchor, the oldest going; Loose, it READS its anchor (the hull art, where it went up, its
+    // heading) as it goes up, then leaves it for the world, so a hull that dies under it does not
+    // take it along; and how many pieces a spray has.
+    public int[] With;
+    public int Cap;
+    public bool Loose;
+    public int Count;
 }
 
 // ONE RAISE, whatever it is: which row, where, how big -- and, a warning only, how long the
@@ -71,7 +84,8 @@ public static class Fx
 {
     // The index IS the id on the wire (Hub.NetFx), so APPEND ONLY.
     public const int Burst = 0, Lost = 1, Rebuilt = 2, Wave = 3, Emp = 4, Echo = 5, Rail = 6,
-                     WarnLane = 7, WarnZone = 8, AimZone = 9;
+                     WarnLane = 7, WarnZone = 8, AimZone = 9, TauntRing = 10,
+                     Rip = 11, RipSparks = 12, RipSmoke = 13, Scar = 14;
     // WHAT A WARNING RIDES: the world itself, or the NetId of the hull it is drawn on. A beam's
     // and a dash's lane are drawn in the BOSS'S OWN FRAME and parented to it, so the line it drew
     // is the line it fires down however the hull turns; everything else is pinned to the ground
@@ -108,6 +122,18 @@ public static class Fx
         // nothing of yours is in danger from it, so it must not read red. Missiles.All names it,
         // and a second friendly telegraph is this row again.
         new() { Id = "aim_zone",  Shape = FxShape.Zone, Tint = Friendly, Warn = true },
+        // a warden's Taunt: its reach, flashed once on the press (the raise's Size is the reach)
+        new() { Id = "taunt_ring", Shape = FxShape.Ring, Tint = new(1f, 0.62f, 0.25f), Life = 0.8, Width = 3f, Fill = false },
+        // -- THE TORN CHUNK (the destroyer's grapnel at cast-off; kits_v3 3.2, kits_v31 3.3) --
+        // One raise (Fx.Tear): the chunk, cut from the anchor's own art at the hook and thrown at
+        // ChunkSpeed within ChunkSpread degrees of the line to the destroyer, spinning 3-6 rad/s, at
+        // rest in ChunkRest, fading over its last second; with it, 28 sparks from the wound (0.4-0.7 s
+        // each), 6 grey puffs along its path (1.2 s each) and a scar on the hull for 10 s (the last
+        // 3 fading), at most 3 on one anchor.
+        new() { Id = "rip",        Shape = FxShape.Debris, Tint = new(1f, 0.55f, 0.25f), Life = 3.0, Loose = true, With = new[] { RipSparks, RipSmoke, Scar } },
+        new() { Id = "rip_sparks", Shape = FxShape.Sparks, Tint = new(1f, 0.62f, 0.2f), Life = 1.2, Loose = true, Count = 28 },
+        new() { Id = "rip_smoke",  Shape = FxShape.Puffs,  Tint = new(0.55f, 0.55f, 0.58f), Life = 3.0, Loose = true, Count = 6 },
+        new() { Id = "scar",       Shape = FxShape.Scar,   Tint = new(0.10f, 0.07f, 0.06f), Life = 10.0, Cap = 3 },
     };
 
     public static FxDef Of(int id) => All[id >= 0 && id < All.Length ? id : Burst];
@@ -132,6 +158,52 @@ public static class Fx
     // sounds the move has. It takes the whole raise because it has seven things to say and they
     // read better named than counted -- and because that struct is what the wire carries.
     public static void Warn(FxRaise r) { if (Net.Sim) On?.Invoke(r); }
+
+    // TEAR A CHUNK OUT OF A HULL: the LOOK of it, raised once and drawn by every peer. `hook` is where
+    // on the hull (in the world), `toward` where the chunk is thrown (the destroyer). It rides the
+    // anchor's NetId, so every peer cuts it from the same art at the same spot of the same hull and
+    // tumbles it on the same seed. What the rip DEALS is its caller's hit (the damage door). A hull
+    // with no art of its own (a drawn practice dummy) still tears: a plain chunk, sized off its hit
+    // circle. Raise it BEFORE the hit it goes with: the world finds the anchor among the living
+    // (Combat.ById), so a tear raised after the hit that killed its hull has nothing to cut from.
+    public const float ChunkShare = 0.16f, ChunkSpeed = 260f, ChunkSpread = 25f, ChunkRest = 2f;
+    public static void Tear(IHittable anchor, Vector2 hook, Vector2 toward)
+    {
+        if (!Net.Sim || anchor is not Node2D n) return;
+        On?.Invoke(new FxRaise { Id = Rip, At = n.ToLocal(hook), To = toward, Size = ChunkShare * LengthOf(anchor), Anchor = anchor.NetId });
+    }
+    // how long a hull is, for its chunk: its art's length, else the width of its hit circle
+    public static float LengthOf(IHittable h) => h is Node n && HullLength(n) is > 0 and var l ? l : 2 * h.HitRadius;
+    // A HULL'S OWN ART: the longest Sprite2D directly under it (a turret's is shorter), and its length.
+    public static Sprite2D HullArt(Node n)
+    {
+        Sprite2D best = null;
+        foreach (var c in n.GetChildren())
+            if (c is Sprite2D s && s.Texture != null && (best == null || s.Texture.GetHeight() * s.Scale.Y > best.Texture.GetHeight() * best.Scale.Y)) best = s;
+        return best;
+    }
+    public static float HullLength(Node n) => HullArt(n) is { } s ? s.Texture.GetHeight() * s.Scale.Y : 0f;
+
+    // WHERE THE CHUNK IS, t seconds after it went up at `start`, and how far it has spun: a pure
+    // function of the raise (Seed of its anchor and its hook), so every peer draws the same chunk
+    // with nothing more on the wire. It leaves at ChunkSpeed and slows evenly to rest at ChunkRest.
+    public static int Seed(int anchor, Vector2 at) =>
+        unchecked(anchor * 73856093 ^ Mathf.RoundToInt(at.X * 8) * 19349663 ^ Mathf.RoundToInt(at.Y * 8) * 83492791);
+    public static float U(int seed, int k)
+    {
+        uint h = unchecked((uint)seed * 2654435761u ^ (uint)k * 40503u);
+        h ^= h >> 15; h = unchecked(h * 2246822519u); h ^= h >> 13; h = unchecked(h * 3266489917u); h ^= h >> 16;
+        return (h & 0xFFFFFF) / 16777216f;
+    }
+    public static (Vector2 At, float Spin) Tumble(int seed, Vector2 start, Vector2 toward, double t)
+    {
+        var line = toward - start;
+        var dir = (line.LengthSquared() > 1e-6f ? line.Normalized() : Vector2.Up).Rotated(Mathf.DegToRad((U(seed, 0) * 2 - 1) * ChunkSpread));
+        float rate = (3f + 3f * U(seed, 1)) * (U(seed, 2) < 0.5f ? -1f : 1f);
+        float k = (float)System.Math.Clamp(t, 0, ChunkRest);
+        float run = k - k * k / (2 * ChunkRest);           // v0 (1 - t / rest), integrated
+        return (start + dir * ChunkSpeed * run, rate * run);
+    }
 
     // EVERY NODE UP RIGHT NOW. A node puts itself in as it enters the tree and takes itself out
     // as it leaves, so a world that goes away empties this by itself: there is no list to clear
@@ -164,15 +236,46 @@ public partial class FxNode : Node2D
     public string Cue, Strike;              // the move's sounds, as it goes up and as it lands
     private double _t;
     private bool _struck;
+    // A LOOSE piece (Debris, Sparks, Puffs): where it went up in the world, the hook it was cut at in
+    // its anchor's frame, the anchor's heading then, and the seed every peer shares.
+    public Vector2 Start { get; private set; }
+    private Vector2 _at;
+    private float _rot0;
+    private int _seed;
+    public int Seed => _seed;
+    private Vector2[] _uv;
+    private Texture2D _tex;
     public double Elapsed => _t;
     public bool Warn => Fx.Of(Id).Warn;
     private FxDef D => Fx.Of(Id);
     private double Life => D.Warn ? Time + Hold + Fx.Flash : D.Life;
 
+    // In the live list while in the tree, so a Loose piece leaving its hull for the world stays in it.
+    public override void _EnterTree() => Fx.Entered(this);
     public override void _Ready()
     {
         ZIndex = 7; ZAsRelative = false;
-        Fx.Entered(this);
+        var d = D;
+        _at = Position;
+        _seed = Fx.Seed(Anchor, _at);
+        if (d.Cap > 0 && GetParent() is { } home)
+        {   // at most Cap on one anchor: the oldest goes
+            var same = new System.Collections.Generic.List<FxNode>();
+            foreach (var c in home.GetChildren()) if (c is FxNode f && f.Id == Id && !f.IsQueuedForDeletion()) same.Add(f);
+            same.Sort((a, b) => b.Elapsed.CompareTo(a.Elapsed));
+            for (int i = 0; i < same.Count - d.Cap; i++) same[i].QueueFree();
+        }
+        if (d.Loose)
+        {   // cut from the anchor's art here and now, then out into the world
+            if (d.Shape == FxShape.Debris && GetParent() is { } hull && Fx.HullArt(hull) is { } art) CutFrom(art);
+            var g = GlobalPosition;
+            _rot0 = GetParent() is Node2D p ? p.GlobalRotation : 0f;
+            TopLevel = true;
+            GlobalPosition = g; Start = g;
+            Rotation = d.Shape == FxShape.Debris ? _rot0 : 0f;
+        }
+        // its companions, and a Loose piece's move to the world: deferred, the parent is mid-AddChild
+        if (d.With != null || d.Loose) Callable.From(Settle).CallDeferred();
         // A warning's opening sound is the move's, an effect's is its row's; and a copy sent on to
         // a peer that arrived mid-warning has already missed it. GlobalPosition, not Position: a
         // warning that rides a hull is a child of it, and its Position is an offset from the
@@ -182,6 +285,43 @@ public partial class FxNode : Node2D
     }
     public override void _ExitTree() => Fx.Left(this);
 
+    // ONCE UP: its companions go up on its anchor from this very raise (each reads the hull as this
+    // did), and a Loose piece, its hull read, leaves it for the world -- nothing after _Ready reads the
+    // anchor again, and a hull killed within the chunk's 3 s would free it along with itself. Nothing
+    // is built before this runs, so a hull freed first frees this node and nothing is left over.
+    private void Settle()
+    {
+        if (!IsInstanceValid(this) || GetParent() is not { } hull) return;
+        var d = D;
+        if (d.With != null)
+            foreach (int w in d.With)
+                hull.AddChild(new FxNode { Id = w, Position = _at, To = To, Radius = Radius, Anchor = Anchor });
+        if (d.Loose && Combat.World is { } world && IsInstanceValid(world) && !world.IsQueuedForDeletion() && world != hull)
+            Reparent(world);
+    }
+
+    // THE CHUNK'S OUTLINE (a scrap shard's, scaled to the raise's Size) and where each corner sits
+    // on the anchor's texture, so the chunk shows the very plating it was torn from.
+    private Vector2[] Outline(float share)
+    {
+        var shard = Shot.Shards[Mathf.PosMod(_seed, Shot.Shards.Length)];
+        var o = new Vector2[shard.Length];
+        for (int i = 0; i < shard.Length; i++) o[i] = shard[i] * (Radius / 18f) * share;
+        return o;
+    }
+    private void CutFrom(Sprite2D art)
+    {
+        _tex = art.Texture;
+        var size = _tex.GetSize();
+        var o = Outline(1f);
+        _uv = new Vector2[o.Length];
+        for (int i = 0; i < o.Length; i++)
+        {
+            var local = (_at + o[i] - art.Position) / art.Scale;
+            _uv[i] = (art.Centered ? local + size / 2 : local) / size;
+        }
+    }
+
     public override void _Process(double delta)
     {
         _t += delta;
@@ -189,6 +329,11 @@ public partial class FxNode : Node2D
         {   // it lands: the move's own sound, once -- and never for a copy that arrived after it
             _struck = true;
             if (Time > 0 && Strike != null) Sfx.Special(Strike, GlobalPosition);
+        }
+        if (D.Shape == FxShape.Debris)
+        {
+            var (at, spin) = Fx.Tumble(_seed, Start, To, _t);
+            GlobalPosition = at; Rotation = _rot0 + spin;
         }
         if (_t >= Life) QueueFree();
         QueueRedraw();
@@ -257,6 +402,192 @@ public partial class FxNode : Node2D
                 if (!firing) DrawCircle(Vector2.Zero, Radius * k, new Color(c.R, c.G, c.B, 0.20f));   // it grows outward
                 DrawArc(Vector2.Zero, Radius, 0, Mathf.Tau, 72, edge, 3f);
                 break;
+            case FxShape.Debris:
+            {   // the plating itself, hot along the torn edge, fading over its last second
+                float a = (float)Mathf.Clamp(d.Life - _t, 0, 1);
+                var o = Outline(1f);
+                var cols = new Color[o.Length];
+                System.Array.Fill(cols, new Color(1f, 1f, 1f, a));
+                if (_tex != null) DrawPolygon(o, cols, _uv, _tex);
+                else DrawColoredPolygon(o, new Color(0.42f, 0.30f, 0.24f, a));
+                var loop = new Vector2[o.Length + 1]; o.CopyTo(loop, 0); loop[^1] = o[0];
+                DrawPolyline(loop, new Color(c.R, c.G, c.B, a * (1f - 0.7f * k)), 1.5f);
+                break;
+            }
+            case FxShape.Sparks:
+            {
+                float emit = 0.5f, toward = (To - Start).Angle();
+                for (int i = 0; i < d.Count; i++)
+                {
+                    float born = emit * i / d.Count, life = 0.4f + 0.3f * Fx.U(_seed, 10 + 3 * i);
+                    float age = (float)_t - born;
+                    if (age < 0 || age > life) continue;
+                    var dir = Vector2.Right.Rotated(toward + (Fx.U(_seed, 11 + 3 * i) - 0.5f) * 2.4f);
+                    var p = dir * (120f + 180f * Fx.U(_seed, 12 + 3 * i)) * age;
+                    DrawLine(p, p - dir * 7f, new Color(c.R, c.G, c.B, 1f - age / life), 1.6f);
+                }
+                break;
+            }
+            case FxShape.Puffs:
+                for (int i = 0; i < d.Count; i++)
+                {
+                    float born = 0.35f * i, age = (float)_t - born;
+                    if (age < 0 || age > 1.2f) continue;
+                    var p = Fx.Tumble(_seed, Start, To, born).At - Start;
+                    DrawCircle(p, Radius * (0.15f + 0.2f * age / 1.2f), new Color(c.R, c.G, c.B, 0.35f * (1f - age / 1.2f)));
+                }
+                break;
+            case FxShape.Scar:
+            {
+                float a = 0.85f * (float)Mathf.Clamp((d.Life - _t) / 3.0, 0, 1);
+                var o = Outline(1f);
+                DrawColoredPolygon(o, new Color(c.R, c.G, c.B, a));
+                var loop = new Vector2[o.Length + 1]; o.CopyTo(loop, 0); loop[^1] = o[0];
+                DrawPolyline(loop, new Color(0.45f, 0.22f, 0.1f, a * 0.8f), 1.2f);
+                break;
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// A FIELD: WHAT A SHIP DRAWS ROUND ITSELF WHILE ONE OF ITS SLOTS RUNS -- one row each (F9).
+//
+// PlayerShip._Draw drew the freighter's bubble as a block of its own, and every field the kits add
+// (the Supercarrier's patrol ring, the Taunt's shimmer, the boost's plume) was going to be another
+// block beside it, each reading its own slot by name. It replaced that block: the bubble is this
+// table's first row, and _Draw draws the table (Fields.Draw).
+//
+// A NEW FIELD IS A ROW: the SLOT it shows for (a class's ability row, or its drive's -- whatever
+// id PlayerShip.Sl knows it by), its LOOK, its RADIUS (a stat on the ship's sheet, else a share of
+// the hull's length), its tint; and, if it has them, the POOL it fades as it spends (the slot's Own
+// against a stat, and it is down once Own is spent) and a TAG (1 - a stat, written "−33%").
+// Slots are on the wire (PlayerShip's state report), so every peer draws the same field from the
+// same slot and a field needs no RPC. A ship that has no such slot draws nothing for the row.
+// ─────────────────────────────────────────────────────────────────────────────
+public enum FieldLook
+{
+    Ring,      // a soft disc and its edge: what it covers (the bubble)
+    Dashed,    // a dashed ring, turning slowly: a reach something patrols (the Supercarrier's patrol)
+    Shimmer,   // hex plates over the hull, pulsing, and the row's tag under it (the Taunt's guard)
+    Plume,     // a long hot plume out of the stern over the engine's own (a drive's boost)
+}
+
+public class FieldDef
+{
+    public string Id, Slot;
+    public FieldLook Look;
+    public string RadiusStat;               // the radius, from the ship's sheet; null: HullShare of its length
+    public float HullShare = 0.6f;
+    public Color Tint = new(0.55f, 0.85f, 1f);
+    public string PoolStat;                 // fades as the slot's Own is spent against this; down at 0
+    public string TagStat;                  // a tag under the hull: 1 - this stat, as a percentage off
+}
+
+// ONE FIELD UP RIGHT NOW: its row, its radius, how much of its pool is left (1 with no pool), its tag.
+public readonly record struct FieldUp(FieldDef Row, float Radius, float Left, string Tag);
+
+public static class Fields
+{
+    public static readonly FieldDef[] All =
+    {
+        // the freighter's bubble: a ring the size of what it covers, fading as its pool is spent, so
+        // everyone can see how much of it is left and who is inside it
+        new() { Id = "bubble", Slot = "bubble", Look = FieldLook.Ring, RadiusStat = "bubble_radius", PoolStat = "bubble_pool" },
+        // the Supercarrier: the ring its patrol wing fights inside, in the fighter's colour (kits_v3 §3.1)
+        new() { Id = "patrol", Slot = "super", Look = FieldLook.Dashed, RadiusStat = "patrol_range", Tint = Beam.Of(Beam.Fighter).Tint },
+        // the Taunt: a hex-plate shimmer over the hull and what it takes off every blow (kits_v3 §3.5)
+        new() { Id = "taunt", Slot = "taunt", Look = FieldLook.Shimmer, HullShare = 0.55f, TagStat = "taunt_guard", Tint = new(1f, 0.62f, 0.25f) },
+        // the boost (the nine's drive, kits_v31 §3.4): the engine burning hot while it runs
+        new() { Id = "boost", Slot = "boost", Look = FieldLook.Plume, HullShare = 1.8f, Tint = new(1f, 0.85f, 0.55f) },
+    };
+
+    public static FieldDef Of(string id) => System.Array.Find(All, f => f.Id == id);
+
+    // WHAT IS UP, from four readers, so the rule is provable with no ship at all: does the ship have
+    // the slot, the slot's Left and Own, a stat off its sheet, and its hull's length.
+    public static System.Collections.Generic.IEnumerable<FieldUp> Up(System.Func<string, bool> has,
+        System.Func<string, (double Left, double Own)> slot, System.Func<string, double> stat, float length)
+    {
+        foreach (var f in All)
+        {
+            if (!has(f.Slot)) continue;
+            var (left, own) = slot(f.Slot);
+            if (left <= 0) continue;
+            float share = 1f;
+            if (f.PoolStat != null)
+            {
+                if (own <= 0) continue;
+                share = (float)Mathf.Clamp(own / System.Math.Max(1, stat(f.PoolStat)), 0, 1);
+            }
+            float r = f.RadiusStat != null ? (float)stat(f.RadiusStat) : length * f.HullShare;
+            string tag = f.TagStat != null ? $"−{Mathf.RoundToInt((float)(1 - stat(f.TagStat)) * 100)}%" : null;
+            yield return new FieldUp(f, r, share, tag);
+        }
+    }
+
+    public static System.Collections.Generic.IEnumerable<FieldUp> Up(PlayerShip s)
+    {
+        var mine = Abilities.For(s.Class);
+        return Up(id => System.Array.Exists(mine, d => d.Id == id),
+                  id => { var sl = s.Sl(id); return (sl.Left, sl.Own); }, id => s.Stats[id], s.MyArt.Length);
+    }
+
+    // EVERY FIELD UP ON THIS SHIP, in its own frame (PlayerShip._Draw). The one switch on the look.
+    public static void Draw(PlayerShip s)
+    {
+        foreach (var f in Up(s))
+        {
+            var c = f.Row.Tint;
+            switch (f.Row.Look)
+            {
+                case FieldLook.Ring:
+                {
+                    var e = new Color(c.R, c.G, c.B, 0.15f + 0.35f * f.Left);
+                    s.DrawCircle(Vector2.Zero, f.Radius, e with { A = e.A * 0.25f });
+                    s.DrawArc(Vector2.Zero, f.Radius, 0, Mathf.Tau, 64, e, 2.5f);
+                    break;
+                }
+                case FieldLook.Dashed:
+                {   // world-steady: the dashes turn slowly against the ship's own turning
+                    const int Dashes = 48;
+                    float spin = (float)(Time.GetTicksMsec() / 1000.0 * 0.15) - s.Rotation;
+                    for (int i = 0; i < Dashes; i++)
+                    {
+                        float a0 = spin + Mathf.Tau * i / Dashes;
+                        s.DrawArc(Vector2.Zero, f.Radius, a0, a0 + Mathf.Tau / Dashes * 0.55f, 6, new Color(c.R, c.G, c.B, 0.7f), 2.5f);
+                    }
+                    break;
+                }
+                case FieldLook.Shimmer:
+                {   // hex plates inside the hull's own outline, a pulse running across them
+                    var art = s.MyArt;
+                    float hx = art.HalfWidth * 1.05f, hy = f.Radius, cell = System.Math.Max(8f, hx * 0.32f);
+                    float t = Time.GetTicksMsec() / 1000f;
+                    for (float y = -hy; y <= hy; y += cell * 0.87f)
+                        for (float x = -hx + ((int)((y + hy) / (cell * 0.87f)) % 2) * cell * 0.5f; x <= hx; x += cell)
+                        {
+                            if ((x * x) / (hx * hx) + (y * y) / (hy * hy) > 1f) continue;
+                            float glow = 0.25f + 0.25f * Mathf.Sin(t * 5f + y * 0.05f + x * 0.03f);
+                            var hex = new Vector2[7];
+                            for (int k = 0; k < 7; k++) hex[k] = new Vector2(x, y) + Vector2.Right.Rotated(Mathf.Tau * k / 6f + Mathf.Pi / 6f) * cell * 0.5f;
+                            s.DrawPolyline(hex, new Color(c.R, c.G, c.B, glow), 1.2f);
+                        }
+                    if (f.Tag != null)
+                    {   // upright under the hull, whatever the heading
+                        s.DrawSetTransform(Vector2.Zero, -s.Rotation, Vector2.One);
+                        Txt.Centre(s, ThemeDB.FallbackFont, new Vector2(0, art.Length * 0.5f + 22f), f.Tag, Txt.Size(14), c);
+                        s.DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
+                    }
+                    break;
+                }
+                case FieldLook.Plume:
+                {
+                    var art = s.MyArt;
+                    Plume.Draw(s, new Vector2(0, art.Length * 0.5f - art.EngineInset), Vector2.Down, f.Radius, c, 1f, true);
+                    break;
+                }
+            }
         }
     }
 }
