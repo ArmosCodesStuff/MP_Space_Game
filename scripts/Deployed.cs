@@ -10,14 +10,14 @@ using System.Collections.Generic;
 // station -- and a practice dummy only while nothing that can die is in reach (Targeting.Sentry).
 //
 // Its gun is its OWNER's sheet (deploy_damage, deploy_interval, deploy_range), read every tick --
-// so a level bought while three are out improves all three -- and its owner's overdrive doubles
+// so a level bought while three are out improves all three -- and an overdrive field its owner stands in lifts
 // their rate of fire with its own.
 //
 // HOST-OWNED. The host drops it, tells every guest (Hub.NetDeploy), and only the host's copy
 // deals damage or loses hull; a guest's copy tracks and draws. Raiders will go for it like any
 // other thing the base owns (Hub.RaiderTargets), which is the point of leaving one somewhere.
 // ─────────────────────────────────────────────────────────────────────────────
-public partial class DeployedTurret : Node2D, IRaidTarget, ITagged, ITurretHost
+public partial class DeployedTurret : Node2D, IRaidTarget, ITagged, ITurretHost, IMendable
 {
     public PlayerShip Ship;               // the pilot who dropped it; null on a guest whose ship has not arrived
     public int OwnerId;
@@ -62,6 +62,12 @@ public partial class DeployedTurret : Node2D, IRaidTarget, ITagged, ITurretHost
     public StatusSet Statuses => _status;
     public void ApplyStatus(Status s, double seconds, double share = double.NaN) { if (Net.Sim) _status.Apply(s, seconds, share); }
     public (float halfLength, float halfWidth) Extent => (Radius, Radius);
+    // ...and as a hull a friend may mend (Mend.Give, kits6b-J7)
+    bool IMendable.Mendable => Alive;
+    double IMendable.HullNow => Hp;
+    double IMendable.HullMax => MaxHp;
+    float IMendable.BodyRadius => Radius;
+    void IMendable.Mended(double d) => Hp += d;
     // what the scope and the HUD call it: its owner's, because three of them stand together
     public string Label => Ship != null ? $"{Ship.Pilot}'S TURRET" : "TURRET";
     // the host's word on its hull (Hub.NetHulls, the one hull clock for every kind that has one);
@@ -72,6 +78,7 @@ public partial class DeployedTurret : Node2D, IRaidTarget, ITagged, ITurretHost
     {
         if (!Net.Sim || !Alive) return;
         Popups.NoteImpact(this, Position);
+        d = PlayerShip.ThroughBubbles(Position, d);          // a bubble over it spends first (kits6b-J3)
         Hp -= d;
         if (Hp <= 0) (GetParent() as Hub)?.DeployedDown(this);
     }

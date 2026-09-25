@@ -59,6 +59,7 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused, ISquadMembe
     // ONE VOLLEY, every barrel at once (F20), on its level's damage scale: what each laser Strike carries
     public double Volley => Def.Dps * Def.Barrels * Def.ShotEvery * Par.DamageScale(Strength) * DamageShare;
     public float HitRadius => Length * Def.HitShare;
+    public Vector2? Facing => Vector2.Up.Rotated(Rotation);
     public bool Selectable => true;
 
     // The two the rest of the game names by hand -- the plain webifier and the plain gunship.
@@ -238,7 +239,7 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused, ISquadMembe
         _boosting = Squad.Posted(this) && Squad.Burning && Speed > Cruise + 1f;   // the burn, not a catch-up
         if (t == null) { QueueRedraw(); return; }
         bool pinned = t is IStatused st && st.Statuses.Has(Status.Pinned);
-        if (_turret != null) _turret.GlobalRotation = Aim.Face(Position, t.Position);        // its one turret tracks the target
+        if (_turret != null && !_status.HoldsAim) _turret.GlobalRotation = Aim.Face(Position, t.Position);   // its one turret tracks the target, unless jammed
         if (Latched)
         {
             // WHAT A LATCH APPLIES (F20): the row's own Cc -- a standoff row names none, at any level
@@ -292,15 +293,18 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused, ISquadMembe
 
     // WHAT A GUEST NEEDS TO DRAW IT, on the packet that already carries its position: the boost
     // (its plume), whether it LEADS its squad (link lines), whether it is COMMITTING (lock lines),
-    // and its squad's id in bits 8-23 (grouping). The bit values are literals the harness asserts.
-    public const int FlagBoost = 1, FlagLead = 4, FlagLock = 8, SquadShift = 8, SquadMask = 0xFFFF;
+    // and its squad's id in bits 8-23 (grouping), and whether it is JAMMED (the EMP's mark: the status itself is host-only).
+    // The bit values are literals the harness asserts.
+    public const int FlagBoost = 1, FlagLead = 4, FlagLock = 8, FlagJam = 16, SquadShift = 8, SquadMask = 0xFFFF;
     public int NetFlags => !Net.Sim ? _netFlags
                          : (Boosting ? FlagBoost : 0)
                          | (Squad != null && Squad.Members.Count > 1 && ReferenceEquals(Squad.Leader, this) ? FlagLead : 0)
                          | (Squad != null && Squad.Posted(this) && !Latched ? FlagLock : 0)
+                         | (_status.Has(Status.Jammed) ? FlagJam : 0)
                          | ((Squad?.Id ?? 0) & SquadMask) << SquadShift;
     public bool Leads => (NetFlags & FlagLead) != 0;
     public bool Locking => (NetFlags & FlagLock) != 0;
+    public bool JamMarked => (NetFlags & FlagJam) != 0;
     public int SquadId => (NetFlags >> SquadShift) & SquadMask;
     private int _netFlags;
     public void SetNet(Vector2 p, float rot, double hp, Vector2? tether, int flags)
@@ -327,6 +331,12 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused, ISquadMembe
         else if (!Leads && SquadId != 0 && SquadLead() is { } lead)
             DrawLine(Vector2.Zero, inv * lead.GlobalPosition, new Color(1f, 0.4f, 0.35f, 0.25f), 1f);   // in formation: a faint link to its lead
         // a flame out of every bell its art has (its row's Nozzles): the burn on the boost
+        if (JamMarked)
+        {   // JAMMED (the EMP): a broken blue ring and a crackle across the hull, on every peer
+            var jam = new Color(0.6f, 0.85f, 1f, 0.8f); float jr = HitRadius + 6f;
+            for (int i = 0; i < 6; i++) DrawArc(Vector2.Zero, jr, Mathf.Tau * i / 6f, Mathf.Tau * i / 6f + 0.6f, 5, jam, 1.5f);
+            DrawPolyline(new[] { new Vector2(-jr * 0.6f, -2f), new Vector2(-jr * 0.2f, 3f), new Vector2(jr * 0.2f, -3f), new Vector2(jr * 0.6f, 2f) }, jam, 1.2f);
+        }
         var flame = new Color(1f, 0.35f, 0.25f);
         if (Boosting) Def.DrawPlumes(this, Vector2.Zero, 1f, flame, 1f, true, 1.6f);
         else Def.DrawPlumes(this, Vector2.Zero, 1f, flame, 0.5f, Speed > 1f);

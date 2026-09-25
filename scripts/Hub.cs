@@ -1390,7 +1390,7 @@ public partial class Hub : Node2D
             var side = Missiles.Of(b.shot.Side);
             foreach (var t in side.Pool(this).ToList())
                 if (side.Prey.Hits(t) && Raider.Gap(b.at, t) <= b.shot.Blast)
-                    side.Land(t, b.shot.Damage, b.at, $"{side.Id}:{b.from}:missile");
+                    side.Land(t, b.shot.Damage, b.at, $"{side.Id}:{b.from}:missile", b.from);
         }
     }
 
@@ -1650,7 +1650,7 @@ public partial class Hub : Node2D
         if (Net.IsHost) _raids.Tick(delta);
         if (Net.IsHost) TickBlasts(delta);
         if (Net.IsHost) Decoys.Tick(this);
-        if (Net.IsHost) Zones.Tick(this);
+        if (Net.IsHost) Zones.Tick(this, delta);
         TickMission(delta);
         var me = MyShip;
         if (Music.I != null)

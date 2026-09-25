@@ -537,3 +537,26 @@ fittings sweep's witness table ~13755, fitRows ~13797.
   the siege's end); the base's own 15 s clock may put a lane up at the host's destroyer near a pylon (still on the
   base). The pull's +-0.05 s on the Lancer is read against a boss that moves.
 - Owed: rung 3 x2 the steady / no-rip / pull-on-anchor checks; rung 5 x2 LaneA6aGrapnelPartyRipChecks.
+
+## MERGE version-l (667be46, slices 6b/6c/6d, items, ...) into wt/kits6a -- PRE
+Base b04dcee. Intent: take version-l whole, keep every slice 6a behaviour; typecheck + quick green.
+## MERGE -- POST: done (typecheck 0 errors, verify -Quick ALL CHECKS PASSED)
+Conflicted files and how:
+- scripts/Abilities.cs: fields both (RateOn/DamageStat/DamageOn + ThrustStat/Forces; Time/Guard/CoolAfter/Sends/Bow/Hook
+  + Aura/Tick/Cuts); rows both (Brace, CIWS + Well). `AbilityDef.While` (6d deleted it as unused) restored: the CIWS uses it.
+  WIRE/ID CLASH: version-l's Tender took `Ab.Lance` / ability+slot id "lance" / Dealt.Lance "lance"; this lane's destroyer
+  Long Lance renamed to `Ab.LongLance`, id and slot "longlance", `Shots.LongLance` (row 4 kept, id "longlance"); stat ids
+  lance_* unchanged (no clash). Every lane caller and check renamed (Abilities, Dealt comment, Ships, Stats, Shots.cs.txt,
+  SmokeTest LaneA6a* + sweep row).
+- scripts/Fx.cs: Tot 16 / Venom 17 are version-l's; Chevron renumbered 16 -> 18 (appended); the Fx table check now 19 rows.
+- scripts/Shots.cs: consts: LongLance = 4 (the lane's replacement of the destroyer missile) + version-l's Spotter..Pellet 9-14.
+- scripts/Items.cs: roles union: version-l's renames (reverb, veil, pepper, rod, venom, sprint, ramjet) + lance_damage for
+  missile_damage + brace_time, ciws_time, suppress_window.
+- scripts/PlayerShip.cs: Lifts union (Thrust + scoped Rate/Damage via LiftStat(def, kind, on), While kept, Aura passes `on`);
+  Spec: version-l's Kind + lane's DamageOf("pd_damage"); RunFor/Afflict/Engage/Launch + Run/Forcing/Part/Snap/Slip both;
+  _ExitTree clears _marked and _doses.
+- tools/smoketest/SmokeTest.cs.txt: weapon rows (+pepperbox, -reload), kit tuples (lane's Lance/Deploy, version-l's
+  Reverb/Veil), chip hulls battleship 500 + echo 180, DPS: version-l's echo/freighter + lane's carrier, Fx 19 rows,
+  sweep (no missile magazine, no Evading, sweepMag dropped), firemode check merged, guest/host watch lists both.
+- docs/CHANGES.md (Handoff both, kits table: lane's capitals + version-l's freighters, Unreleased both; Chevron/LongLance
+  renumber noted; the While sentence corrected), docs/DESIGN.md (both sections; LongLance noted).

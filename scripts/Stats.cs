@@ -80,7 +80,7 @@ public class ShipStats
 
     public double this[string id] => _byId.TryGetValue(id, out var s) ? s.Value : 0;
     // A row with more shares added to its OWN bonus -- a running lift's (PlayerShip.Cadence) -- so
-    // a part's +100% rate and an overdrive's x2 are x3 together, as two parts are. 0 for a row this
+    // a part's +100% rate and a running x2 lift are x3 together, as two parts are. 0 for a row this
     // sheet has not got, as the indexer answers.
     public double With(string id, double shares) => _byId.TryGetValue(id, out var s) ? s.With(shares) : 0;
 
@@ -244,7 +244,8 @@ public class ShipStats
     }
 
     // ── derived figures: computed from the stats above, never stored ─────────
-    public double MainDpsPerBarrel => Def.Has(Fit.Guns) ? this["main_damage"] / this["main_interval"] : 0;
+    // every round of a volley counts (scatter_pellets: the Wraith's seven; 0 on every other sheet, one round)
+    public double MainDpsPerBarrel => Def.Has(Fit.Guns) ? this["main_damage"] * Math.Max(1, this["scatter_pellets"]) / this["main_interval"] : 0;
     public double MainDps          => MainDpsPerBarrel * this["main_count"];
     public double PdDpsPerTurret   => Def.Has(Fit.Pd) ? this["pd_damage"] / this["pd_interval"] : 0;
     // Passive, so what it deals while firing is what it sustains: there is no window to share.
@@ -306,7 +307,7 @@ public static class Dps
                   + $"= {s.BroadsideDamage:0.0} damage, every {s.BroadsideCycle:0.0} s",
     };
 
-    // THE LONG LANCE (Ab.Lance): one torpedo each cooldown, if it lands.
+    // THE LONG LANCE (Ab.LongLance): one torpedo each cooldown, if it lands.
     public static readonly DpsSource Lance = new()
     {
         Label = "Long Lance, averaged over its cooldown, if it lands",
@@ -352,6 +353,20 @@ public static class Dps
         Note = s => $"{s["blade_damage"]:0} to each body in its arc every {s["blade_interval"]:0.00} s",
     };
 
+    // THE DART'S PEPPERBOX at the sheet's price (x1 up to 260 u/s; the host prices each dart from its top speed)
+    public static readonly DpsSource Pepper = new()
+    {
+        Label = "Pepperbox, held", Rate = s => s["pepper_damage"] / s["pepper_interval"],
+        Note = s => $"{s["pepper_damage"]:0.0} a dart every {s["pepper_interval"]:0.000} s off two rails, up to x{s["pepper_cap"]:0.0} as the top speed climbs past {s["price_top"]:0} u/s",
+    };
+
+    // THE DART'S ROD at the sheet's price, averaged over its cooldown (the host prices each rod from the sprint's top)
+    public static readonly DpsSource Rod = new()
+    {
+        Label = "Rod from God, averaged over its cooldown", Rate = s => s["rod_damage"] / s["rod_cooldown"],
+        Note = s => $"{s["rod_damage"]:0} through everything on its line every {s["rod_cooldown"]:0.0} s, up to x{s["rod_cap"]:0.0} as the sprint's top speed climbs past {s["price_top"]:0} u/s",
+    };
+
     public static readonly DpsSource Hunters = new()
     {
         Label = "Hunter-seekers, averaged over their cooldown",
@@ -360,11 +375,35 @@ public static class Dps
                   + $"every {s["hunter_cooldown"]:0.0} s",
     };
 
-    public static readonly DpsSource Echo = new()
+    // THE WRAITH'S VEIL, averaged over its cooldown: the volley out of it at veil_break, once a cooldown (PlayerShip.Prime)
+    public static readonly DpsSource Veil = new()
     {
-        Label = "Echo, averaged over its cooldown",
-        Rate = s => s.MainDps * s["echo_share"] * s["echo_time"] / s["echo_cooldown"],
-        Note = s => $"it repeats {s["echo_share"]:0.00}× what you deal in {s["echo_time"]:0.0} s, every {s["echo_cooldown"]:0.0} s",
+        Label = "The volley out of the veil, averaged over its cooldown",
+        Rate = s => s.MainDpsPerBarrel * s["main_interval"] * (s["veil_break"] - 1) / s["veil_cooldown"],
+        Note = s => $"one volley at x{s["veil_break"]:0} every {s["veil_cooldown"]:0} s",
+    };
+
+    // THE WRAITH'S VENOM, averaged over its cooldown: ten doses held for the coat and the tail after it (DoseRows.Venom)
+    public static readonly DpsSource Venom = new()
+    {
+        Label = "Venom, averaged over its cooldown",
+        Rate = s => s["venom_cap"] * s["venom_dps"] * (s["venom_time"] + s["venom_last"]) / s["venom_cooldown"],
+        Note = s => $"up to {s["venom_cap"]:0} doses of {s["venom_dps"]:0.00}/s on a hull, for the {s["venom_time"]:0} s coat and {s["venom_last"]:0} s after, every {s["venom_cooldown"]:0} s",
+    };
+
+    // THE ECHO'S ROUNDS AGAIN (TurretSpec.RepeatShare): each main round's echo, a share of it
+    public static readonly DpsSource Repeat = new()
+    {
+        Label = "Echo rounds", Rate = s => s.MainDps * s["echo_share"],
+        Note = s => $"every round again at {s["echo_share"]:0.00}× of it, {s["echo_delay"]:0.00} s later from where it was fired",
+    };
+
+    // THE REVERB, averaged over its cooldown: its share of what the guns and their echoes deal through it at its rate
+    public static readonly DpsSource Reverb = new()
+    {
+        Label = "Reverb, averaged over its cooldown",
+        Rate = s => s.MainDps * (1 + s["echo_share"]) * s["reverb_rate"] * s["reverb_share"] * s["reverb_time"] / s["reverb_cooldown"],
+        Note = s => $"it puts down {s["reverb_share"]:0.00}× what you deal in {s["reverb_time"]:0.0} s at ×{s["reverb_rate"]:0.0} rate, every {s["reverb_cooldown"]:0.0} s",
     };
 }
 

@@ -514,6 +514,11 @@ public partial class _Shots : Node
         await LaneADecoyFrames();
         await LaneA6cBladeFrames();
         await LaneA6cPrismFrames();
+        await LaneA6dPepperFrames();
+        await LaneA6dRodFrames();
+        await LaneA6dEchoFrames();
+        await LaneA6dEmpFrames();
+        await LaneA6dWraithFrames();
         // hull: a damaged miner's bar; a lost salvager in the base menu, waiting to be rebuilt
         {
             var yd = H.Yard; var hs = H.GetNode<PlayerShip>("Ship_1");
@@ -732,7 +737,7 @@ public partial class _Shots : Node
             ms.Position = md.Position + new Vector2(0, 700); ms.Velocity = Vector2.Zero; ms.Rotation = 0f; await W(0.8);
             H.SelectTarget(md);
             var zp = typeof(Hub).GetProperty("ZoomLevel"); float z0 = (float)zp.GetValue(H); zp.SetValue(H, 1.4f);
-            ms.Sl("lance").Cool = 0; ms.UseAbility("lance", md.NetId); await W(0.9);
+            ms.Sl("longlance").Cool = 0; ms.UseAbility("longlance", md.NetId); await W(0.9);
             await Snap("43_lance_away");
             zp.SetValue(H, z0);
             var mt = H.GetChildren().OfType<Shot>().FirstOrDefault(x => x.Heavy);
@@ -967,7 +972,12 @@ public partial class _Shots : Node
             await W(0.9);                                       // the last throw has landed
             fship.Position = yard; fship.UseAbility("bubble", 0); await W(0.5);
             await Snap("79_freighter_turrets_and_bubble");
+            await LaneA6bTotFrame(hub, fship, yard);
+            await LaneA6bRedeployFrame(fship, yard);
             foreach (var t in hub.Deployed.ToList()) hub.DeployedTaken(t);
+            await LaneA6bMortarFrame(hub, yard);
+            await LaneA6bWellFrame(hub, yard);
+            await LaneA6bLanceFrames(hub, yard);
             await Class(ShipClass.Battleship); await W(0.3);
             await FieldsFrames(hub, yard);
 
@@ -1140,7 +1150,248 @@ public partial class _Shots : Node
         cam.Zoom = z0;
     }
 
+    // 6b (kits6b-J2) tot_lines: the freighter's Time on target -- a gunship 420 u above the yard painted,
+    // F, and four amber lines (the spotter's and its three sentries') converging on it in the one frame
+    async Task LaneA6bTotFrame(Hub hub, PlayerShip fship, Vector2 yard)
+    {
+        var mark = hub.SpawnRaider(yard + new Vector2(60, -420), Enemies.Gunship);
+        mark.Hp = 1e9; mark.ApplyStatus(Status.Disabled, 10);
+        fship.Position = yard; fship.Velocity = Vector2.Zero;
+        fship.PaintOn(mark, 5); fship.Sl("tot").Cool = 0;
+        fship.UseAbility("tot", 0);
+        await W(0.08); await Snap("79c_tot_lines");
+        mark.TakeDamage(1e12); await W(0.3);
+    }
+
+    // 6b (kits6b-J3) redeploy_ring: E folds the three sentries out and, 1.0 s later, they stand on the
+    // 150 u ring round the hull, 120 deg apart from the bow; the frame is their landing marks filling
+    // (0.6 s in), then the ring stood (1.2 s)
+    async Task LaneA6bRedeployFrame(PlayerShip fship, Vector2 yard)
+    {
+        fship.Position = yard; fship.Velocity = Vector2.Zero; fship.Rotation = 0f;
+        fship.Sl("redeploy").Cool = 0;
+        fship.UseAbility("redeploy", 0);
+        await W(0.6); await Snap("79d_redeploy_marks");
+        await W(0.6); await Snap("79e_redeploy_ring");
+    }
+
+    // 6b (kits6b-J4) mortar_circle: a bastion's siege mortar in the air -- the round climbing out of its
+    // aft mount toward a cursor 700 u ahead and the friendly 110 u landing circle filling there (0.7 s of
+    // its 1.4 s gone)
+    async Task LaneA6bMortarFrame(Hub hub, Vector2 yard)
+    {
+        Character.Class = ShipClass.FreightBastion; P(hub, "ApplyLocalIdentity"); await W(0.3);
+        var bs = hub.GetNode<PlayerShip>("Ship_1"); bs.Position = yard; bs.Velocity = Vector2.Zero; bs.Rotation = 0f;
+        await W(0.2);
+        var at = bs.LobPoint(yard + new Vector2(0, -700));
+        hub.ThrowMissile(new MissileSpec { Side = Missiles.Mortar, Damage = bs.Stats["main_damage"], Blast = (float)bs.Stats["mortar_blast"], Flight = bs.Stats["mortar_flight"] },
+                         bs.Position, at, bs.NetId);
+        await W(0.7); await Snap("79f_mortar_circle");
+        await W(1.0);
+    }
+
+    // 79g: the bastion's gravity well 500 u ahead, three held lights and a held gunship inside its 280 u
+    // ring being drawn in, and one light outside it left where it is. The well is a zone (Zones.All "well"):
+    // its disc with the pull's rings running in (ZoneNode._Draw).
+    async Task LaneA6bWellFrame(Hub hub, Vector2 yard)
+    {
+        var bs = hub.GetNode<PlayerShip>("Ship_1"); bs.Position = yard; bs.Velocity = Vector2.Zero; bs.Rotation = 0f;
+        var at = yard + new Vector2(0, -500);
+        var craft = new System.Collections.Generic.List<Raider>();
+        for (int i = 0; i < 3; i++) craft.Add(hub.SpawnRaider(at + Vector2.Up.Rotated(Mathf.Tau * i / 3f) * 240f));
+        craft.Add(hub.SpawnRaider(at + new Vector2(-170f, 170f), Enemies.Gunship));
+        craft.Add(hub.SpawnRaider(at + new Vector2(380f, 0f)));
+        foreach (var r in craft) { r.Hp = 1e9; r.ApplyStatus(Status.Disabled, 10); }
+        bs.Sl("well").Cool = 0; bs.AimPoint = at; bs.UseAbility("well", 0);
+        await W(0.6); await Snap("79g_gravity_well");
+        foreach (var z in hub.Laid.Where(z => z.Row == Zones.Well).ToList()) hub.Down(Spawns.Zone, z, burst: false, float.NaN);
+        foreach (var r in craft) hub.RaiderDown(r);
+        await W(0.3);
+    }
+
+    // 79h / 79i (kits6b-J7): the Tender's mending lance held on Space, the cursor on a held gunship 420 u
+    // ahead -- the red beam out of the main barrel onto it (79h_lance_burn); then a sentry of its own at 60 of
+    // 120 put on the line 220 u out -- the green beam stopping on the sentry (79i_lance_mend). Then its two
+    // fields (79j, 79k).
+    async Task LaneA6bLanceFrames(Hub hub, Vector2 yard)
+    {
+        Character.Class = ShipClass.FreightTender; P(hub, "ApplyLocalIdentity"); await W(0.3);
+        var td = hub.GetNode<PlayerShip>("Ship_1"); td.Position = yard; td.Velocity = Vector2.Zero; td.Rotation = 0f;
+        var at = yard + new Vector2(0, -420);
+        var foe = hub.SpawnRaider(at, Enemies.Gunship); foe.Hp = 1e9; foe.ApplyStatus(Status.Disabled, 12);
+        await W(0.3);
+        Input.ParseInputEvent(new InputEventMouseMotion { Position = GetViewport().GetFinalTransform() * (GetViewport().GetCanvasTransform() * at) });
+        await W(2.2);                                      // the barrel round onto the cursor at 90 deg/s
+        Input.ParseInputEvent(new InputEventKey { Keycode = global::Godot.Key.Space, PhysicalKeycode = global::Godot.Key.Space, Pressed = true });
+        await W(0.5); await Snap("79h_lance_burn");
+        var post = hub.Drop(td, yard + new Vector2(0, -220), 60, 120);
+        await W(0.4); await Snap("79i_lance_mend");
+        Input.ParseInputEvent(new InputEventKey { Keycode = global::Godot.Key.Space, PhysicalKeycode = global::Godot.Key.Space, Pressed = false });
+        if (post != null) hub.DeployedTaken(post);
+        hub.RaiderDown(foe);
+        await W(0.3);
+        // 79j / 79k (kits6b-J8): F, the overdrive field's amber 500 u ring round the tender; then Q, the repair
+        // field's green ring over it
+        td.Sl("overdrive").Cool = 0; td.UseAbility("overdrive", 0);
+        await W(0.4); await Snap("79j_overdrive_field");
+        td.Sl("repair").Cool = 0; td.UseAbility("repair", 0);
+        await W(0.4); await Snap("79k_repair_field");
+        td.Sl("overdrive").Left = 0; td.Sl("repair").Left = 0;
+        await W(0.2);
+    }
+
     // SLICE 6c: the Warrior's blade held (its 160 u, ±55° wedge and the sweep across it), then its whirlwind (the 210 u ring).
+    // SLICE 6d: the Dart's pepperbox held 0.45 s with the cursor 40° off the nose: the darts leave the two nose rails
+    // in turn and bend onto the cursor (76b).
+    async Task LaneA6dPepperFrames()
+    {
+        var cam = GetViewport().GetCamera2D(); var z0 = cam.Zoom;
+        H.ClearSelection();
+        Character.Class = ShipClass.LightDart; P(H, "ApplyLocalIdentity"); await W(0.4);
+        var ds = H.GetNode<PlayerShip>("Ship_1");
+        bool demo = ds.Demo; ds.Demo = true;
+        var at = new Vector2(-900, 1100); const float rot = 0.4f;
+        cam.Zoom = new Vector2(1.6f, 1.6f);
+        ds.Trigger = true;
+        for (double t = 0; t < 0.45; t += GetProcessDeltaTime())
+        {
+            ds.Position = at; ds.Rotation = rot; ds.Velocity = Vector2.Zero;
+            ds.AimPoint = at + Vector2.Up.Rotated(rot + Mathf.DegToRad(40f)) * 420f;
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        }
+        await Snap("76b_dart_pepperbox");
+        ds.Trigger = false; ds.Demo = demo;
+        await W(1.6);
+        Character.Class = ShipClass.Battleship; P(H, "ApplyLocalIdentity"); await W(0.4);
+        cam.Zoom = z0;
+    }
+
+    // SLICE 6d: the Dart sprinted 3 s from rest, and its rod 0.25 s after it left the nose, the hull kicked back to 30% (76c).
+    async Task LaneA6dRodFrames()
+    {
+        var cam = GetViewport().GetCamera2D(); var z0 = cam.Zoom;
+        H.ClearSelection();
+        Character.Class = ShipClass.LightDart; P(H, "ApplyLocalIdentity"); await W(0.4);
+        var ds = H.GetNode<PlayerShip>("Ship_1");
+        bool demo = ds.Demo; ds.Demo = true;
+        var at = new Vector2(-900, 1100); const float rot = 0.4f;
+        ds.Position = at; ds.Rotation = rot; ds.Velocity = Vector2.Zero; ds.Sl("rod").Cool = 0;
+        cam.Zoom = new Vector2(1.0f, 1.0f);
+        ds.UseAbility("rod", 0);
+        await W(3.25);
+        await Snap("76c_dart_sprint_rod");
+        ds.Demo = demo; ds.Velocity = Vector2.Zero;
+        await W(5.0);
+        Character.Class = ShipClass.Battleship; P(H, "ApplyLocalIdentity"); await W(0.4);
+        cam.Zoom = z0;
+    }
+
+    // SLICE 6d: the Echo firing while it slides sideways, each round's pale echo leaving where its round left 0.6 s
+    // before (76d), then the reverb's burst of 220 u where its last hit landed (76e).
+    async Task LaneA6dEchoFrames()
+    {
+        var cam = GetViewport().GetCamera2D(); var z0 = cam.Zoom;
+        H.ClearSelection();
+        Character.Class = ShipClass.LightEcho; P(H, "ApplyLocalIdentity"); await W(0.4);
+        var es = H.GetNode<PlayerShip>("Ship_1");
+        bool demo = es.Demo; es.Demo = true;
+        var at = new Vector2(-900, 1100); const float rot = 0.4f;
+        var aim = at + Vector2.Up.Rotated(rot) * 450f;
+        cam.Zoom = new Vector2(1.4f, 1.4f);
+        es.Position = at; es.Rotation = rot; es.Velocity = Vector2.Zero; es.AimPoint = aim;
+        await W(0.8);
+        es.Trigger = true;
+        for (double t = 0; t < 1.4; t += GetProcessDeltaTime())
+        {
+            es.Position = at + Vector2.Right.Rotated(rot) * (float)(t * 90); es.Rotation = rot; es.Velocity = Vector2.Zero; es.AimPoint = aim;
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        }
+        await Snap("76d_echo_repeater");
+        es.Trigger = false;
+        await W(1.2);
+        es.Sl("reverb").Cool = 0; es.UseAbility("reverb", 0); await W(0.1);
+        es.Sl("reverb").Own = 200; es.Sl("reverb").At = aim; es.Sl("reverb").Left = 0.05;
+        await W(0.2);
+        await Snap("76e_echo_reverb");
+        es.Demo = demo; es.Position = at; es.Velocity = Vector2.Zero; es.Sl("reverb").Cool = 0;
+        await W(0.8);
+        Character.Class = ShipClass.Battleship; P(H, "ApplyLocalIdentity"); await W(0.4);
+        cam.Zoom = z0;
+    }
+
+    // SLICE 6d: the Echo's EMP a moment after the press -- the ring of 300 u, and the jam marks on the three craft in it (76f).
+    async Task LaneA6dEmpFrames()
+    {
+        var cam = GetViewport().GetCamera2D(); var z0 = cam.Zoom;
+        H.ClearSelection();
+        Character.Class = ShipClass.LightEcho; P(H, "ApplyLocalIdentity"); await W(0.4);
+        var es = H.GetNode<PlayerShip>("Ship_1");
+        bool demo = es.Demo; es.Demo = true;
+        var at = new Vector2(-900, 1100);
+        es.Position = at; es.Rotation = 0.4f; es.Velocity = Vector2.Zero; es.Sl("emp").Cool = 0;
+        cam.Zoom = new Vector2(1.1f, 1.1f);
+        var craft = new[] { (Enemies.Webifier, new Vector2(180, -90)), (Enemies.Gunship, new Vector2(-160, -150)), (Enemies.Talon, new Vector2(40, 220)) }
+            .Select(c => { var r = H.SpawnRaider(at + c.Item2, c.Item1); r.Hp = 1e9; r.ApplyStatus(Status.Disabled, 30); return r; }).ToList();
+        await W(0.3);
+        es.UseAbility("emp", 0);
+        await W(0.15);
+        await Snap("76f_echo_emp");
+        foreach (var r in craft) r.TakeDamage(1e12);
+        es.Demo = demo; es.Sl("emp").Cool = 0;
+        await W(0.6);
+        Character.Class = ShipClass.Battleship; P(H, "ApplyLocalIdentity"); await W(0.4);
+        cam.Zoom = z0;
+    }
+
+    // SLICE 6d: the Wraith's scattergun a moment after a volley from behind a raider -- seven pellets fanned +-10 deg (78b);
+    // the veiled hull (78c); venom ticking on a gunship (78d).
+    async Task LaneA6dWraithFrames()
+    {
+        var cam = GetViewport().GetCamera2D(); var z0 = cam.Zoom;
+        H.ClearSelection();
+        Character.Class = ShipClass.LightWraith; P(H, "ApplyLocalIdentity"); await W(0.4);
+        var ws = H.GetNode<PlayerShip>("Ship_1");
+        bool demo = ws.Demo; ws.Demo = true;
+        var at = new Vector2(-900, 1100); const float rot = 0.4f;
+        var foeAt = at + Vector2.Up.Rotated(rot) * 240f;
+        var foe = H.SpawnRaider(foeAt, Enemies.Gunship); foe.Hp = 1e9; foe.ApplyStatus(Status.Disabled, 30); foe.Rotation = rot;
+        cam.Zoom = new Vector2(1.5f, 1.5f);
+        ws.Position = at; ws.Rotation = rot; ws.Velocity = Vector2.Zero; ws.AimPoint = foeAt;
+        await W(0.8);
+        ws.Trigger = true;
+        for (double t = 0; t < 0.12; t += GetProcessDeltaTime())
+        {
+            ws.Position = at; ws.Rotation = rot; ws.Velocity = Vector2.Zero; ws.AimPoint = foeAt; foe.Rotation = rot;
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        }
+        ws.Trigger = false;
+        await Snap("78b_wraith_scatter");
+        foe.TakeDamage(1e12);
+        // the veiled hull (78c): faded to PlayerShip.VeiledAlpha, shimmering, beside a raider that cannot pick it
+        await W(0.8);
+        ws.Sl("veil").Cool = 0; ws.UseAbility("veil", 0);
+        var near = H.SpawnRaider(at + new Vector2(170, -60), Enemies.Webifier); near.Hp = 1e9; near.ApplyStatus(Status.Disabled, 30);
+        await W(0.3);
+        ws.Position = at; ws.Rotation = rot; ws.Velocity = Vector2.Zero;
+        await Snap("78c_wraith_veil");
+        near.TakeDamage(1e12); ws.Unveil(); ws.Sl("veil").Cool = 0;
+        // venom (78d): two coated volleys into a held gunship, then its doses ticking (Fx venom on the hull, every peer)
+        var dosed = H.SpawnRaider(at + Vector2.Up.Rotated(rot) * 90f, Enemies.Gunship); dosed.Hp = 1e9; dosed.ApplyStatus(Status.Disabled, 30);
+        ws.Sl("venom").Cool = 0; ws.UseAbility("venom", 0);
+        ws.AimPoint = dosed.Position; await W(0.8);
+        ws.Trigger = true;
+        for (double t = 0; t < 0.9; t += GetProcessDeltaTime())
+        { ws.Position = at; ws.Rotation = rot; ws.Velocity = Vector2.Zero; ws.AimPoint = dosed.Position; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+        ws.Trigger = false;
+        await W(1.1);
+        await Snap("78d_wraith_venom");
+        dosed.TakeDamage(1e12); ws.Sl("venom").Cool = 0; ws.Sl("venom").Left = 0;
+        ws.Demo = demo; ws.Velocity = Vector2.Zero;
+        await W(0.8);
+        Character.Class = ShipClass.Battleship; P(H, "ApplyLocalIdentity"); await W(0.4);
+        cam.Zoom = z0;
+    }
+
     async Task LaneA6cBladeFrames()
     {
         var cam = GetViewport().GetCamera2D(); var z0 = cam.Zoom;
