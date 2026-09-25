@@ -1459,7 +1459,10 @@ public partial class Hub : Node2D
         if (Hints.Wants("raid") && !InArena && Raiders.Count > 0) Hints.Meet("raid");
         if (Hints.Wants("stasis") && !me.Alive) Hints.Meet("stasis");
         if (Hints.Wants("boss") && InArena && IsInstanceValid(Boss)) Hints.Meet("boss");
-        if (Hints.Wants("warp") && WarpAim() is { has: true } aim && aim.at.DistanceTo(me.Position) > Hints.WarpMeet) Hints.Meet("warp");
+        // the hull's own drive card (warp or boost) once something far off is picked; the slide's once a hostile is near
+        if (me.Drive is { } dv && Hints.Wants(dv.Id) && WarpAim() is { has: true } aim && aim.at.DistanceTo(me.Position) > Hints.WarpMeet) Hints.Meet(dv.Id);
+        if (Hints.Wants("strafe") && me.Stats["strafe_speed"] > 0
+            && Combat.Nearest(Combat.Hostiles, me.Position, h => h.Position, Hints.TargetMeet, Combat.Pickable) != null) Hints.Meet("strafe");
     }
 
     // Tab: ALWAYS the live hostile nearest your ship, at any range. No cycling --
@@ -1731,7 +1734,7 @@ public partial class Hub : Node2D
             else if (kk.Keycode == Key.B && !InArena) ToggleBase();
             else if (kk.Keycode == Key.L) TogglePilot();
             else if (kk.Keycode == Key.I) ToggleEquipment();
-            else if (kk.Keycode == Key.V) mine.StartWarp();            // warp: a fixed key, not a slot
+            else if (kk.Keycode == Key.V) mine.PressDrive();           // the drive (Drives.cs): a fixed key; a warp's release is read by the ship
             else
             {
                 // in stasis the only order is F: re-board once the ship is ready

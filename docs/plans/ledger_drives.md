@@ -75,3 +75,27 @@ Files: Stats.cs (strafe rows), Ships.cs (the nine's rows), Abilities.cs (Shift i
 method had landed between lane A's F20 comment and its method: the comment is back above its method).
 engine-unproven: rungs owed in the final test phase (solo x2). The boosted slide (195/142.5/90) is J3's.
 Next: J3.
+
+### J3 PRE · tier opus · F21 Drives (owner side)
+Intent: Drives.cs (warp Jump on BB/CV/DD, boost Surge on the nine; rows warp_safe/rate/cooldown and
+surge_time/cooldown/lift), ClassDef.Drive on every hull, For appends the drive row, the sheet adds the
+drive's rows, V presses the drive (Hub), the owner's hold/charge/landing/overshoot lock, the drive's
+slot + hull-bar readout, the range UI draw, MainMenu's dodge as a scripted hold, Hints rows warp /
+boost / strafe, the controls line, Bind keeps a fixed-key row on it; the warp block deleted, every
+caller fixed; checks LaneBWarpChecks / LaneBBoostChecks and the rewritten menu, hint, snap-flash and
+For-length checks. Host pricing and the clamp are J4.
+HEAD ae4bd1f. Drives.cs new · Ships.cs 8798ffa · Stats.cs f1dff0c · Abilities.cs 03823d4 · PlayerShip.cs
+8e614d5 · Hub.cs d10481a · HubNodes.cs 60c27d9 · MainMenu.cs d83b334 · Hints.cs 87bce0b · SmokeTest 69f5860.
+### J3 POST · green (typecheck 0, verify -Quick ALL CHECKS PASSED)
+Files: Drives.cs (new), Ships.cs (ClassDef.Drive x12), Stats.cs (drive rows), Abilities.cs (For, Bind's
+fixed-key line, controls line), PlayerShip (drive block replaces the warp block; Disabled = status or
+the owner's lock, read by Steer and PressHeld; ChargeHeld/ChargeReach/DriveLock/JumpFlash), Hub (V ->
+PressDrive; the drive's and strafe's cards), HubNodes (the drive's readout), MainMenu (the dodge is a
+held warp to 500 u, warp_cooldown 7 as a row override), Hints (warp / boost / strafe), SmokeTest
+(LaneBWarpChecks, LaneBBoostChecks; rewrote the menu hop, the dodge comment, Warping -> Charging, the
+hint card, the snap flash, the BB and DD bar sequences, For lengths +1: 7090, warrior 10, freighter 13),
+Shots.cs.txt (LaneBDriveFrames: 40, 40b, 41, 41b, 42, 42b). J5 (frames) is folded in here.
+Blurbs carry no digits (the harness's rule); the warp row pressed as an ability says HOLD V (Fly).
+Host pricing and the clamp (J4) were cut out of Drives.cs to keep UNUSED at 0 until J4 uses them.
+engine-unproven: rungs owed in the final test phase (solo x2, screens).
+Next: J4.

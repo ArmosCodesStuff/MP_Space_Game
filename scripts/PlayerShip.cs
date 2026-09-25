@@ -531,7 +531,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // guards itself: the press arrives from a guest's keyboard, so the host never trusts it.
     // DISABLED, a pilot presses nothing (the wreck's own reboard aside). Its point defence, its wing
     // and its turrets already out are not presses, and fight on.
-    private bool PressHeld(AbilityDef def) => _status.Has(Status.Disabled) && !def.WhenWrecked;
+    private bool PressHeld(AbilityDef def) => Disabled && !def.WhenWrecked;
     public void Reboard() { if (CanReboard) { Alive = true; Hp = MaxHp * ReboardHull; _stasis = 0; } }
     public void StartBroadside() { if (BroadsideReady) Sl("broadside").Left = Stats["broadside_windup"]; }
     public void StartReload()
@@ -780,68 +780,23 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         foreach (var w in _wings) if (w.Def.Parks && w.Armed) { w.Call(); _strikesOut++; }
     }
 
-    // ── WARP (V) -- every capital ship ─────────────────────────────────────────
-    // A fixed key and a hull cooldown, never an ability-bar slot. After a 3 s warm-up
-    // the ship jumps to the selected target or waypoint if it lies within 45 degrees of the bow
-    // (stopping short of it), otherwise 1200 u straight ahead. Movement is the
-    // owner's, so the owner jumps; everyone else sees the charge and a clean snap.
-    //
-    // THE DRIVE THROWS IT 1200 u AND NO FURTHER. An aimed jump used to arrive AT the target
-    // whatever the distance, so anything selected was one press away however far off it stood;
-    // now the aim decides the heading and the drive decides the reach.
-    public const double WarpWarmup = 3.0, WarpCooldown = 30.0;
-    // The standoff is the gap between the ship's NOSE and the target's circle. A capital ship is
-    // most of 400 u long, so 60 u of it put a battleship's bow through whatever it aimed at.
-    public const float WarpRange = 1200f, WarpCone = Mathf.Pi / 4f, WarpStandoff = 160f;
-    // A display ship jumps its own distance on its own clock (the title screen dodges an area
-    // shot, which wants a short hop and a short wait). Defaulted to the class numbers, so a real
-    // ship is unaffected -- these exist so the menu does not need a second warp implementation.
-    public double WarpEvery = WarpCooldown;
-    public float WarpHop = WarpRange;
-    private double _warpLeft = -1, _warpCd, _warpFlash;
-    private bool _remoteWarping;
-    public bool Warping => _warpLeft >= 0;
-    public double WarpWarmupLeft => Math.Max(0, _warpLeft);
-    public double WarpCooldownLeft => _warpCd;
-    private bool CanWarp => Alive && !Warping && _warpCd <= 0 && !_status.Has(Status.Disabled);
-
-    // V starts the charge; WHERE it goes is decided when it jumps, by the heading then --
-    // so a pilot can press V and swing onto a target while it charges.
-    public bool StartWarp()
-    {
-        if (!Mine || !CanWarp) return false;
-        _warpLeft = WarpWarmup;
-        return true;
-    }
-
-    // where a warp to `target` ends: on the line from here, just short of its hull
-    private static Vector2 WarpArrival(Vector2 from, Vector2 target, float targetRadius, float shipLength) =>
-        target - (target - from).Normalized() * (targetRadius + shipLength * 0.5f + WarpStandoff);
-
-    private void TickWarp(float dt)
-    {
-        if (_warpCd > 0) _warpCd = Math.Max(0, _warpCd - dt);
-        if (!Warping) return;
-        if (!Alive) { _warpLeft = -1; return; }
-        _warpLeft -= dt;
-        if (_warpLeft > 0) return;
-        // now: the target or waypoint if it lies within 45 degrees of the bow, else straight on
-        var bow = Vector2.Up.Rotated(Rotation);
-        var dest = Position + bow * WarpHop;
-        var aim = (GetParent() as Hub)?.WarpAim() ?? (false, Vector2.Zero, 0f);
-        if (aim.has && Mathf.Abs(bow.AngleTo(aim.at - Position)) <= WarpCone)
-        {
-            var step = WarpArrival(Position, aim.at, aim.radius, MyArt.Length) - Position;
-            // The aim gives the heading; the drive gives the reach. Further off than the hop and
-            // the jump ends where the drive runs out, on the line to it.
-            if (step.Length() > WarpHop) step = step.Normalized() * WarpHop;
-            // ...and never backwards: a target already nearer than the arrival standoff would put
-            // the arrival BEHIND the ship, which is not a jump toward anything.
-            if (step.Dot(bow) > 0) dest = Position + step;
-        }
-        Position = dest; Velocity = Vector2.Zero;
-        _warpLeft = -1; _warpCd = WarpEvery; _warpFlash = 0.6;
-    }
+    // ── THE DRIVE (V) -- the class's own row (Drives.cs) ───────────────────────────────────
+    // V presses the drive this hull names (ClassDef.Drive): the capitals hold it to warp, the nine
+    // tap it to boost. The drive's slot is in Abilities.For, so its cooldown and its time are on the
+    // wire like any ability's; the warp's charge is the owner's (it flies), in _drive beside it.
+    private readonly DriveRun _drive = new();
+    public DriveDef Drive => Drives.Of(Class);
+    // A DRIVER'S HOLD OF V -- the title screen's ship, or a check -- read with the pilot's own key.
+    public bool DriveHeld;
+    public bool PressDrive() => Drives.Press(this, _drive);
+    public bool Charging => _drive.Held >= 0;
+    public double ChargeHeld => _drive.Held;
+    public float ChargeReach => Drives.Reach(_drive.Held, Stats["warp_rate"], Stats["warp_safe"]);
+    public double DriveLock => _drive.Lock;
+    public double JumpFlash => _drive.Flash;
+    // DISABLED as this peer knows it: the host's status, or the owner's own lock after an overshoot,
+    // held until the host's bit arrives (a guest's jump reaches the host a report later).
+    public bool Disabled => _status.Has(Status.Disabled) || _drive.Lock > 0;
 
     // ── what is being done to it (Statuses): a raider's web today, and whatever a class's
     // ability puts on it next. The HOST decides; a guest is sent the bits and shows them.
@@ -1036,11 +991,11 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         // The HOST decides pinned. A guest used to count its own (never-set) timer down here and
         // overwrite the host's flag every frame, so a raider's web never held a guest at all.
         if (Net.Sim) _status.Tick(delta);
-        // the landing flash fades on every peer: it used to fade only on the owner's, and a
-        // remote ship's warp left it lit for good
-        _warpFlash = Math.Max(0, _warpFlash - dt);
+        // the drive's clocks run on every peer: the landing flash used to fade only on the owner's,
+        // and a remote ship's warp left it lit for good
+        Drives.Tick(_drive, delta);
         UpdatePod();
-        if (Mine) { TickWarp(dt); LocalFlight(dt); }
+        if (Mine) { Drives.TickOwner(this, _drive, DriveHeld || (!Demo && !Hub.ControlsLocked && Input.IsKeyPressed(Key.V)), delta); LocalFlight(dt); }
         else      RemoteFollow(dt);
 
         TickAbilities(delta);
@@ -1205,7 +1160,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         var pod = IsInstanceValid(_pod) ? _pod.Position : Position;
         float podRot = IsInstanceValid(_pod) ? _pod.Rotation : 0f;
         (GetParent() as Hub)?.SendShipState(Position.X, Position.Y, Velocity.X, Velocity.Y, Rotation,
-            AimPoint.X, AimPoint.Y, Trigger, Staggered, pod.X, pod.Y, podRot, Warping);
+            AimPoint.X, AimPoint.Y, Trigger, Staggered, pod.X, pod.Y, podRot, Charging);
     }
 
     // The pod exists exactly while the ship is in stasis: flown by its owner,
@@ -1241,7 +1196,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         // DISABLED: no thrust, no rudder, whatever is pressed, and the heading holds (below). HELD
         // (a running row's Hold, after the lifts): the thrust both ways, both caps and the rudder,
         // all by the one share.
-        bool disabled = _status.Has(Status.Disabled);
+        bool disabled = Disabled;
         if (disabled || Pinned) strafe = 0f;              // a web or Disabled: no slide, as no rudder
         if (disabled) { throttle = 0f; rudder = 0f; }
         float hold = Held;
@@ -1314,7 +1269,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         // guest carrier's fighters on the host.
         Velocity = _netAge < 0.5f ? _netVel : Vector2.Zero;
         // a warp is a jump, not a glide: snap across it (and flash where it lands)
-        if (Position.DistanceTo(_netPos) > 600f) { Position = _netPos; _warpFlash = 0.6; }
+        if (Position.DistanceTo(_netPos) > Drives.SnapAt) { Position = _netPos; _drive.Flash = Drives.FlashFor; }
         else Position = Position.Lerp(_netPos, Mathf.Clamp(12f * dt, 0f, 1f));
         Rotation = Mathf.LerpAngle(Rotation, _netRot, Mathf.Clamp(12f * dt, 0f, 1f));
     }
@@ -1334,7 +1289,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         Trigger = trigger;          // the host fires on this; a guest only draws
         Staggered = staggered;
         if (IsInstanceValid(_pod) && !_pod.Local) _pod.SetNet(new Vector2(podX, podY), podRot);
-        _remoteWarping = warping;
+        _drive.Remote = warping;
     }
 
     // The host's side of the conversation: hull, ability state, and the wing.
@@ -1415,22 +1370,8 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             DrawCircle(Vector2.Zero, BubbleRadius, c with { A = c.A * 0.25f });
             DrawArc(Vector2.Zero, BubbleRadius, 0, Mathf.Tau, 64, c, 2.5f);
         }
-        // warp: a charge building in the accent colour (lighting), then a flash where it lands
-        if (Warping || _remoteWarping)
-        {
-            float k = Mine ? 1f - (float)(_warpLeft / WarpWarmup) : 0.6f;
-            float pulse = 0.5f + 0.5f * Mathf.Sin(Time.GetTicksMsec() / (60f - 30f * k));
-            DrawSetTransform(Vector2.Zero, 0f, new Vector2(0.45f, 1f));
-            for (int i = 0; i < 3; i++)
-                DrawArc(Vector2.Zero, MyArt.Length * (0.55f + 0.08f * i) + 5f * pulse, 0, Mathf.Tau, 48,
-                        new Color(Accent.R, Accent.G, Accent.B, (0.25f + 0.5f * k) / (i + 1)), 2f);
-            DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
-        }
-        if (_warpFlash > 0)
-        {
-            float f = (float)(_warpFlash / 0.6);
-            DrawCircle(Vector2.Zero, MyArt.Length * (0.4f + 0.6f * (1f - f)), new Color(Accent.R, Accent.G, Accent.B, 0.35f * f));
-        }
+        // the drive: a warp's charge glow and landing flash on every peer, and the pilot's range (Drives.Draw)
+        Drives.Draw(this, _drive);
         // engine plumes at the stern, in the accent colour
         if (Alive)
             Plume.Draw(this, new Vector2(0, MyArt.Length * 0.5f - MyArt.EngineInset), Vector2.Down, MyArt.Length, Accent,

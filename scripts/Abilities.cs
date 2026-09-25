@@ -414,7 +414,7 @@ public static class Abilities
     public static AbilityDef[] For(ShipClass c)
     {
         if (_full.TryGetValue(c, out var f)) return f;
-        return _full[c] = Classes.Of(c).Abilities.Concat(Open).ToArray();
+        return _full[c] = Classes.Of(c).Abilities.Concat(Drives.RowOf(c)).Concat(Open).ToArray();   // then V's drive, then the open keys
     }
 
     // An ability by id: one of this class's, or one every class has (reboard).
@@ -429,7 +429,7 @@ public static class Abilities
 
     public static Key KeyFor(ShipClass c, string id)
     {
-        // a saved binding on a fixed key (V is warp now) is ignored: the default stands
+        // a saved binding on a fixed key is ignored: the default stands
         if (Settings.Keys.TryGetValue(SettingKey(c, id), out var k) && !Reserved.Contains((Key)k)) return (Key)k;
         foreach (var a in For(c)) if (a.Id == id) return a.Default;
         return Key.None;
@@ -447,6 +447,7 @@ public static class Abilities
     public static string Bind(ShipClass c, string id, Key k)
     {
         if (Reserved.Contains(k)) return $"{OS.GetKeycodeString(k)} is reserved for a fixed control.";
+        if (Reserved.Contains(KeyFor(c, id))) return $"{KeyName(KeyFor(c, id))} is a fixed control: it stays where it is.";   // the drive, on V
         var old = KeyFor(c, id);
         var clash = ByKey(c, k);
         if (clash != null && clash.Id != id) Settings.Keys[SettingKey(c, clash.Id)] = (int)old;
@@ -467,7 +468,7 @@ public static class Abilities
     // the fixed controls every class shares. Built ONCE per class -- the Hub asks for this every
     // frame to see whether the line changed, and concatenating it allocated a string each time
     // for text that only moves on a refit.
-    private const string CommonHint = "W ahead  ·  S astern  ·  A/D rudder  ·  left-click select  ·  Tab nearest enemy  ·  wheel zoom  ·  Y free camera  ·  K abilities & stats  ·  B base  ·  L pilot  ·  I equipment  ·  V warp  ·  Esc menu";
+    private const string CommonHint = "W ahead  ·  S astern  ·  A/D rudder  ·  left-click select  ·  Tab nearest enemy  ·  wheel zoom  ·  Y free camera  ·  K abilities & stats  ·  B base  ·  L pilot  ·  I equipment";
     private static readonly Dictionary<ShipClass, string> _hints = new();
 
     public static string ControlsHint(ShipClass c)
@@ -475,6 +476,7 @@ public static class Abilities
         if (_hints.TryGetValue(c, out var h)) return h;
         if (!Classes.Known(c)) return _hints[c] = "placeholder";      // not a class this build has
         string own = Classes.Of(c).Hint;
-        return _hints[c] = own.Length > 0 ? own + "  ·  " + CommonHint : CommonHint;
+        string drive = Drives.Of(c) is { } d ? "  ·  " + d.Controls : "";            // V, and Shift on a hull that slides
+        return _hints[c] = (own.Length > 0 ? own + "  ·  " : "") + CommonHint + drive + "  ·  Esc menu";
     }
 }

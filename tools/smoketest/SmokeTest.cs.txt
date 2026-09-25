@@ -1780,8 +1780,9 @@ public partial class _Test : Node
         // The spec's numbers as literals, never the menu's own constants: a check that reads the
         // constant cannot catch the constant being wrong.
         Check(Math.Abs(ship.Stats["broadside_cooldown"] - 5) < 1e-9 && Math.Abs(ship.Stats["broadside_volleys"] - 3) < 1e-9
-              && ship.Stats["missile_mag"] == 0 && Mathf.IsEqualApprox(ship.WarpHop, 500f),
-              $"the kit's three-volley broadside every 5 s, no missile, and a 500 u hop ({ship.Stats["broadside_volleys"]:0} volleys / {ship.Stats["broadside_cooldown"]:0} s / {ship.WarpHop:0} u)");
+              && ship.Stats["missile_mag"] == 0 && Mathf.IsEqualApprox(MainMenu.DodgeHop, 500f) && Math.Abs(ship.Stats["warp_cooldown"] - 7) < 1e-9
+              && ship.Drive == Drives.Warp,
+              $"the kit's three-volley broadside every 5 s, no missile, and a 500 u hop on the pilot's own warp, ready again in 7 s ({ship.Stats["broadside_volleys"]:0} volleys / {ship.Stats["broadside_cooldown"]:0} s / {MainMenu.DodgeHop:0} u / {ship.Stats["warp_cooldown"]:0} s)");
         // The ship has to be the SIZE it is in game. The menu had its own zoom for a while and the
         // battleship was half as big again on the title screen as it is the moment you press PLAY.
         // Compared with 0.9 as a literal rather than with Hub.DefaultZoom, so this also fails if
@@ -1815,7 +1816,7 @@ public partial class _Test : Node
             // MEASURED BETWEEN SHOTS, AND NOT IN A WARP. A pending area shot turns the bow AWAY from
             // the impact instead, and a dodge ends in a 500 u jump that outlives the shot it dodged
             // (Place does not cancel it), so a sample across either reads the scene's other business.
-            for (int i = 0; i < 60 * 20 && (menu.AreaShotIn >= 0 || ship.Warping); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            for (int i = 0; i < 60 * 20 && (menu.AreaShotIn >= 0 || ship.Charging); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             var turnFoe = menu.Target is { Alive: true } fighting ? fighting
                         : Combat.Nearest(menu.Foes.Where(f => f.Alive), menu.Station, f => f.GlobalPosition);
             if (turnFoe != null)
@@ -1831,7 +1832,7 @@ public partial class _Test : Node
                 // guards (the degrees-for-radians bug turned it at a sixtieth), and any frame spent
                 // coming round onto anything shows it: the fastest frame is the rate, whoever the foe.
                 float prevRot = ship.Rotation; int turnFrames = 0;
-                for (int i = 0; i < 45 && menu.AreaShotIn < 0 && !ship.Warping; i++)
+                for (int i = 0; i < 45 && menu.AreaShotIn < 0 && !ship.Charging; i++)
                 {
                     await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                     double dt = GetProcessDeltaTime();
@@ -1859,7 +1860,7 @@ public partial class _Test : Node
         // ship never got back on station between two area shots; the push used to keep whatever
         // heading the scene had, so this passed or failed on the draw. Well off home, never dead
         // astern (a knife edge: the short way round flips sign), in any direction off station.
-        for (int i = 0; i < 60 * 20 && (menu.AreaShotIn >= 0 || ship.Warping); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        for (int i = 0; i < 60 * 20 && (menu.AreaShotIn >= 0 || ship.Charging); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         var pushTo = menu.Station + Vector2.Right.Rotated(VaryAngle()) * 250f;
         float pushOff = Vary(2.3f, 3.0f) * (Rng.Randf() < 0.5f ? -1f : 1f);
         ship.Place(pushTo, Aim.Face(pushTo, menu.Station) + pushOff);
@@ -1873,8 +1874,8 @@ public partial class _Test : Node
         while (eight.TimeLeft > 0)
         {
             sawBroadside |= ship.BroadsideVolleysLeft > 0;
-            if (ship.Warping && !wasWarping) dodges++;
-            wasWarping = ship.Warping;
+            if (ship.Charging && !wasWarping) dodges++;
+            wasWarping = ship.Charging;
             drift1 = Math.Min(drift1, ship.Position.DistanceTo(menu.Station));
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         }
@@ -1887,8 +1888,8 @@ public partial class _Test : Node
         { sawBroadside |= ship.BroadsideVolleysLeft > 0; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
         Check(sawBroadside, "the title ship fires its broadside at the foes in reach");
 
-        // THE DODGE. An area shot lands in 8 s; it starts the jump with 4 to go and the warp takes
-        // 3, so it is clear ONE SECOND before impact. Each number is checked, not just the last.
+        // THE DODGE. An area shot lands in 8 s; it holds V until the charge reads 500 u (the 1.0 s
+        // spool, then 800 u/s: 1.6 s) and is clear a second before impact. Each number is checked.
         menu.ForceAreaShot();
         // Wait for the shot to actually be CALLED. Reading the countdown one frame after asking
         // for it read -1 (no shot yet) and every measurement below was taken from that -1.
@@ -1898,8 +1899,8 @@ public partial class _Test : Node
         var before = ship.Position;
         for (int i = 0; i < 60 * 12 && menu.AreaShotIn > 0; i++)
         {
-            if (startedAt < 0 && ship.Warping) startedAt = menu.AreaShotIn;
-            if (startedAt >= 0 && landedAt < 0 && !ship.Warping) landedAt = menu.AreaShotIn;
+            if (startedAt < 0 && ship.Charging) startedAt = menu.AreaShotIn;
+            if (startedAt >= 0 && landedAt < 0 && !ship.Charging) landedAt = menu.AreaShotIn;
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         }
         Check(Math.Abs(called - 8) < 0.2, $"the area shot is called 8 s before it lands ({called:0.0} s)");
@@ -3011,6 +3012,305 @@ public partial class _Test : Node
             var (acrossCap, turnedCap, _) = await Slide(dd, Vary(0f, 1f) < 0.5f ? global::Godot.Key.D : global::Godot.Key.A, 1.5);
             Check(Math.Abs(acrossCap) < 0.5f && dd.Position.DistanceTo(at) < 1f && Mathf.RadToDeg(turnedCap) > 8f,
                   $"F24: a destroyer (strafe_speed 0) with Shift + A/D pivots {Mathf.RadToDeg(turnedCap):0.0} deg and never slides ({acrossCap:0.00} u/s, {dd.Position.DistanceTo(at):0.00} u)");
+        }
+    }
+
+    // ── LANE B · F21 THE DRIVES (kits_v31 §3.4; kits_v3 §3.9) ─────────────────────────────────
+    // HOLD V ON A WARP HULL until its charge has run `held` seconds by ITS OWN clock (never the key's:
+    // the charge starts on the frame the press is taken), then let go. Returns the reach read on the
+    // last held frame, how far the hull went, and whether the release cancelled it. `during` runs every
+    // held frame (a check that swings the bow mid-charge).
+    async Task<(float reach, Vector2 moved, bool cancelled)> WarpHold(PlayerShip s, double held, Action during = null)
+    {
+        var at = s.Position;
+        KeyDown(global::Godot.Key.V);
+        for (int i = 0; i < 60 * 12 && !(s.Charging && s.ChargeHeld + GetProcessDeltaTime() >= held); i++)
+        {
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            during?.Invoke();
+        }
+        float reach = s.ChargeReach;
+        KeyUp(global::Godot.Key.V);
+        for (int i = 0; i < 10 && s.Charging; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        return (reach, s.Position - at, reach < 0);
+    }
+
+    // THE CAPITALS' WARP: hold to charge (1.0 s spool, then 800 u/s), safe to 2400 u, over by up to
+    // 900 u; release to jump along the bow or short of what the bow is on; an overshoot DISABLES the
+    // hull 2 s for every 300 u over; 20 s to recharge, from the jump. Literals from the ruling (kits_v31
+    // §3.4) and the v3 card; headings and spots seeded. `me` is the battleship.
+    async Task LaneBWarpChecks(PlayerShip me, TargetDummy d2w)
+    {
+        var home = me.Position;
+        void Ready(float rot) { me.Sl("warp").Cool = 0; me.Statuses.Clear(Status.Disabled); me.Velocity = Vector2.Zero; me.Rotation = rot; }
+        async Task Settle()
+        {   // an overshoot's lock and status run out by themselves (6 s at most)
+            for (int i = 0; i < 60 * 8 && me.Disabled; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            me.Velocity = Vector2.Zero;
+        }
+        Check(me.Class == ShipClass.Battleship && me.Drive == Drives.Warp, $"the battleship's V is the warp ({me.Drive?.Id})");
+        // the pure rules, by literal
+        Check(Drives.Reach(0.9, 800, 2400) < 0 && Mathf.IsEqualApprox(Drives.Reach(2.0, 800, 2400), 800f) && Mathf.IsEqualApprox(Drives.Reach(4.0, 800, 2400), 2400f)
+              && Mathf.IsEqualApprox(Drives.Reach(5.2, 800, 2400), 3300f) && Mathf.IsEqualApprox(Drives.Reach(8.0, 800, 2400), 3300f),
+              "the charge: nothing inside the 1.0 s spool, then 800 u/s -- 800 u at 2.0 s, 2400 at 4.0, stopping at 3300 (2400 + 900) at 5.2 s and after");
+        var overs = new[] { (-50.0, 0.0), (0.0, 0.0), (150.0, 1.0), (300.0, 2.0), (600.0, 4.0), (900.0, 6.0), (1300.0, 6.0) };
+        Check(overs.All(o => Math.Abs(Drives.DisabledFor(o.Item1) - o.Item2) < 1e-9),
+              "the price: {0, 150, 300, 600, 900} u over the safe limit is {0, 1, 2, 4, 6} s disabled, proportional, 6 s at most");
+
+        // HOLDS, each at a seeded spot and heading, nothing selected
+        foreach (var (held, want) in new[] { (0.9, -1f), (2.0, 800f), (4.0, 2400f), (5.2, 3300f), (6.0, 3300f) })
+        {
+            H.ClearSelection();
+            me.Position = VaryNear(home, 200f); Ready(VaryAngle()); await Wait(0.2);
+            var bow = Vector2.Up.Rotated(me.Rotation);
+            var (reach, moved, cancelled) = await WarpHold(me, held);
+            double cool = me.Sl("warp").Cool, off = me.Statuses.Left(Status.Disabled);
+            if (want < 0)
+                Check(cancelled && moved.Length() < 1f && cool == 0 && off == 0 && !me.Disabled,
+                      $"V held {held:0.0} s and released inside the 1.0 s spool: cancelled -- {moved.Length():0.0} u moved, no cooldown ({cool:0.0} s)");
+            else
+            {
+                double wantOff = want > 2400f ? 6.0 : 0.0;
+                Check(Math.Abs(moved.Length() - want) < 20f && Mathf.Abs(bow.AngleTo(moved)) < 0.02f && Math.Abs(cool - 20) < 0.2
+                      && Math.Abs(off - wantOff) < 0.15 && (me.DriveLock > 0) == (wantOff > 0) && me.Velocity.Length() < 1f,
+                      $"V held {held:0.0} s at {Mathf.RadToDeg(me.Rotation):0} deg: {moved.Length():0} u along the bow (want {want:0} ±20), stopped dead, 20 s to recharge ({cool:0.0}), disabled {off:0.0} s (want {wantOff:0})");
+            }
+            await Settle();
+        }
+
+        // THE OVERSHOOT: {-80, 150, 300, 600, 900} u past the ring -> {0, 1, 2, 4, 6} s, as the host (this
+        // ship's own) sets it, and as the drive's own rule reads what it really moved.
+        foreach (var (over, secs) in new[] { (-80.0, 0.0), (150.0, 1.0), (300.0, 2.0), (600.0, 4.0), (900.0, 6.0) })
+        {
+            H.ClearSelection();
+            me.Position = VaryNear(home, 200f); Ready(VaryAngle()); await Wait(0.2);
+            var (_, moved, _) = await WarpHold(me, 1.0 + (2400.0 + over) / 800.0);
+            double off = me.Statuses.Left(Status.Disabled), byRule = Drives.DisabledFor(moved.Length() - 2400.0);
+            Check(Math.Abs(off - secs) < 0.15 && Math.Abs(off - byRule) < 0.05,
+                  $"a jump {moved.Length() - 2400:0} u past the 2400 u ring lands disabled {off:0.00} s (want {secs:0} ±0.15; its own distance prices {byRule:0.00})");
+            if (secs >= 4.0)
+            {   // DISABLED: no thrust, no rudder, no ability, no warp
+                var at = me.Position; float rot = me.Rotation;
+                KeyDown(global::Godot.Key.W); KeyDown(global::Godot.Key.A);
+                await Wait(0.5);
+                KeyUp(global::Godot.Key.W); KeyUp(global::Godot.Key.A);
+                me.Sl("broadside").Cool = 0; me.UseAbility("broadside", 0);
+                me.Sl("warp").Cool = 0;
+                Key(global::Godot.Key.V); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                Check(me.Position.DistanceTo(at) < 1f && Mathf.Abs(Mathf.AngleDifference(rot, me.Rotation)) < 0.005f
+                      && me.FailNote("broadside") == "DISABLED" && me.BroadsideWindupLeft <= 0 && !me.Charging && me.FailNote("warp") == "DISABLED",
+                      $"disabled after the overshoot: W+A move it {me.Position.DistanceTo(at):0.00} u, the broadside says {me.FailNote("broadside")}, V says {me.FailNote("warp")}");
+            }
+            await Settle();
+        }
+
+        // THE COOLDOWN: V while it recharges starts nothing, and says why
+        H.ClearSelection();
+        me.Position = VaryNear(home, 200f); Ready(VaryAngle()); await Wait(0.2);
+        await WarpHold(me, 2.5);
+        var coolAt = me.Position;
+        Key(global::Godot.Key.V); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        Check(!me.Charging && me.FailNote("warp") == "COOLING" && me.Sl("warp").Cool > 19 && me.Position.DistanceTo(coolAt) < 0.5f,
+              $"V while the warp recharges starts nothing: {me.FailNote("warp")} ({me.Sl("warp").Cool:0.0} s left)");
+
+        // AIMED: a target within 45 degrees of the bow, from a seeded side of it
+        float std = d2w.HitRadius + Classes.Art(me.Class).Length * 0.5f + Drives.Standoff;
+        {
+            var dir = Vector2.Up.Rotated(VaryAngle());
+            me.Position = d2w.Position - dir * 1500f; Ready(Aim.Along(dir)); await Wait(0.3);
+            H.SelectTarget(d2w); await Wait(0.05);
+            var (reach, moved, _) = await WarpHold(me, 6.0);                          // held to the top: 3300 u of reach
+            Check(Math.Abs(me.Position.DistanceTo(d2w.Position) - std) < 20f && moved.Length() < reach - 500f && !me.Disabled,
+                  $"held at the top (3300 u) with a target 1500 u off the bow: it lands just short of it ({me.Position.DistanceTo(d2w.Position):0} u, want {std:0}), {moved.Length():0} u, shorter than the charge -- and no penalty ({me.Disabled})");
+            await Settle();
+        }
+        {
+            var dir = Vector2.Up.Rotated(VaryAngle());
+            me.Position = d2w.Position - dir * 3000f; Ready(Aim.Along(dir)); await Wait(0.3);
+            H.SelectTarget(d2w); await Wait(0.05);
+            var (_, moved, _) = await WarpHold(me, 3.5);                               // 2000 u of reach
+            Check(Math.Abs(moved.Length() - 2000f) < 20f && moved.Normalized().Dot(dir) > 0.999f && me.Position.DistanceTo(d2w.Position) > 900f,
+                  $"a target 3000 u ahead, 2000 u of charge: 2000 u toward it, not onto it ({moved.Length():0} u, {me.Position.DistanceTo(d2w.Position):0} u still to go)");
+        }
+        {   // a target behind: outside the cone, so straight ahead instead
+            var dir = Vector2.Up.Rotated(VaryAngle());
+            me.Position = d2w.Position + dir * 900f; Ready(Aim.Along(dir)); await Wait(0.3);
+            H.SelectTarget(d2w); await Wait(0.05);
+            var (_, moved, _) = await WarpHold(me, 3.0);
+            Check(Math.Abs(moved.Length() - 1600f) < 20f && moved.Normalized().Dot(dir) > 0.999f && H.Selected == d2w,
+                  $"a target behind (outside 45 degrees): 1600 u straight ahead instead ({moved.Length():0} u)");
+        }
+        {   // aimed when it JUMPS: charged facing away, swung onto the target mid-charge
+            var dir = Vector2.Up.Rotated(VaryAngle());
+            me.Position = d2w.Position + dir * 1100f; Ready(Aim.Along(dir)); await Wait(0.3);    // d2w dead astern
+            H.SelectTarget(d2w); await Wait(0.05);
+            bool swung = false;
+            await WarpHold(me, 4.0, () => { if (!swung && me.ChargeHeld >= 1.5) { me.Rotation = Aim.Along(-dir); swung = true; } });
+            Check(swung && Math.Abs(me.Position.DistanceTo(d2w.Position) - std) < 20f,
+                  $"charged facing away, turned onto the target mid-charge: it jumps to the target ({me.Position.DistanceTo(d2w.Position):0} u off, want {std:0})");
+        }
+        {   // ...or turned off it: straight on along the new heading
+            var dir = Vector2.Up.Rotated(VaryAngle());
+            me.Position = d2w.Position - dir * 1400f; Ready(Aim.Along(dir)); await Wait(0.3);
+            H.SelectTarget(d2w); await Wait(0.05);
+            var side = new Vector2(-dir.Y, dir.X); bool swung = false;
+            var (_, moved, _) = await WarpHold(me, 3.0, () => { if (!swung && me.ChargeHeld >= 1.5) { me.Rotation = Aim.Along(side); swung = true; } });
+            Check(swung && Math.Abs(moved.Length() - 1600f) < 20f && moved.Normalized().Dot(side) > 0.999f,
+                  $"charged facing the target, turned 90 degrees off it mid-charge: 1600 u along the new heading ({moved.Length():0} u, {moved.Normalized().Dot(side):0.000} along it)");
+        }
+        H.ClearSelection();
+
+        // WEBBED: a pinned capital charges and jumps, and the jump leaves the webbers' posts, so the
+        // web lets go -- timed from the frame it lands
+        {
+            me.Position = new Vector2(4000, 2500) + Vector2.Right.Rotated(VaryAngle()) * Vary(0f, 200f); Ready(VaryAngle()); await Wait(0.3);
+            var webs = new[] { 0f, 2.1f, 4.2f }.Select(a => H.SpawnRaider(me.Position + Vector2.Right.Rotated(a) * 300f)).ToList();
+            for (int i = 0; i < 60 * 10 && !me.Pinned; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            bool pinned = me.Pinned;
+            var at = me.Position;
+            KeyDown(global::Godot.Key.V);
+            for (int i = 0; i < 60 * 6 && !(me.Charging && me.ChargeHeld >= 2.5); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            KeyUp(global::Godot.Key.V);
+            for (int i = 0; i < 20 && me.Position.DistanceTo(at) < 500f; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            double free = 0; bool landed = me.Position.DistanceTo(at) > 500f;
+            for (int i = 0; i < 60 && me.Pinned; i++) { await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); free += GetProcessDeltaTime(); }
+            Check(pinned && landed && !me.Pinned && free < 0.3,
+                  $"webbed, a battleship charges and jumps anyway, and is free of the web {free:0.00} s after it lands (under 0.3; pinned first {pinned}, jumped {landed})");
+            foreach (var w in webs) if (GodotObject.IsInstanceValid(w)) w.TakeDamage(1e12);
+            await Settle();
+        }
+        me.Position = home; Ready(0f); await Wait(0.2);
+    }
+
+    // THE NINE'S BOOST, AND THE DRIVE TABLE ITSELF: every hull names one drive; the row sits after the
+    // class's own on the bar and on the wire, on V, never walled; the boost is +50% top speed, thrust
+    // and strafe for 3 s, 15 s from the press; refused ANCHORED (a hold of x0) and in stasis; allowed
+    // webbed, where the web's share of top is taken after the lift. Literals from the ruling.
+    async Task LaneBBoostChecks(Vector2 yonder)
+    {
+        bool Cap(ShipClass c) => c is ShipClass.Battleship or ShipClass.Carrier or ShipClass.Destroyer;
+        Check(Drives.All.Length == 2 && Classes.All.All(c => c.Drive == (Cap(c.Id) ? Drives.Warp : Drives.Boost)),
+              "every hull names one drive: the warp on the battleship, carrier and destroyer, the boost on the other nine");
+        Check(Classes.All.All(c => Abilities.For(c.Id).Length == c.Abilities.Length + 7 && Abilities.For(c.Id)[c.Abilities.Length] == c.Drive.Row
+                                   && !c.Abilities.Contains(c.Drive.Row) && Unlocks.LockedAt(c.Id, 1, c.Drive.Row) == null
+                                   && Abilities.KeyFor(c.Id, c.Drive.Id) == global::Godot.Key.V && Abilities.Bind(c.Id, c.Drive.Id, global::Godot.Key.G) != null),
+              "the drive's slot: after the class's own rows and before the six open keys, on V and fixed there, walled at no level");
+        bool N9(double a, double b) => Math.Abs(a - b) < 1e-9;
+        Check(Classes.All.All(c =>
+              {
+                  var st = new ShipStats(c.Id);
+                  return Cap(c.Id) ? N9(st["warp_safe"], 2400) && N9(st["warp_rate"], 800) && N9(st["warp_cooldown"], 20) && st["surge_lift"] == 0
+                                   : N9(st["surge_time"], 3) && N9(st["surge_cooldown"], 15) && N9(st["surge_lift"], 1.5) && st["warp_safe"] == 0;
+              }),
+              "the drives' rows on the sheet: warp 2400 u safe, 800 u/s, 20 s on the capitals; boost 3 s, 15 s, x1.5 on the nine; neither on the other");
+        Check(Abilities.ControlsHint(ShipClass.Battleship).Contains("V hold to warp") && !Abilities.ControlsHint(ShipClass.Battleship).Contains("Shift")
+              && Abilities.ControlsHint(ShipClass.LightDart).Contains("V boost") && Abilities.ControlsHint(ShipClass.LightDart).Contains("Shift + A/D strafe")
+              && Abilities.ControlsHint(ShipClass.LightDart).EndsWith("Esc menu"),
+              "the controls line names the hull's drive, and Shift only on a hull that slides");
+
+        // +50% ON A LIGHT, A HEAVY AND A FREIGHTER at seeded headings, flat out first; timed from the
+        // first frame the slot runs
+        foreach (var (cls, top, boosted, boostedSlide) in new[] { (ShipClass.LightDart, 260f, 390f, 195f), (ShipClass.HeavyWarden, 190f, 285f, 142.5f), (ShipClass.FreightHauler, 120f, 180f, 90f) })
+        {
+            await SetClass(cls);
+            var s = Me; s.AutopilotTo = null;
+            s.Position = VaryNear(yonder, 300f); s.Rotation = VaryAngle(); s.Velocity = Vector2.Zero; s.Sl("boost").Cool = 0; await Wait(0.3);
+            KeyDown(global::Godot.Key.W);
+            for (int i = 0; i < 60 * 10 && s.SpeedAhead < top - 0.5f; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            float before = s.SpeedAhead;
+            Key(global::Godot.Key.V);
+            for (int i = 0; i < 30 && s.Sl("boost").Left <= 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            double left0 = s.Sl("boost").Left, cool0 = s.Sl("boost").Cool;
+            var st = Abilities.Find(cls, "boost").State(s, null);
+            await Wait(2.6);
+            float fast = s.SpeedAhead;
+            await Wait(0.5);                                                            // 3.1 s after the first boosted frame
+            float after = s.SpeedAhead; double leftAfter = s.Sl("boost").Left;
+            KeyUp(global::Godot.Key.W);
+            Check(Math.Abs(before - top) < 1f && Math.Abs(left0 - 3) < 0.05 && Math.Abs(cool0 - 15) < 0.05 && Math.Abs(fast - boosted) < 4f
+                  && after <= top + 0.5f && leftAfter == 0 && st.Lit && st.Line.StartsWith("BOOST ") && st.Line.EndsWith(" s"),
+                  $"V on a {cls} at {Mathf.RadToDeg(s.Rotation):0} deg: {before:0} -> {fast:0} u/s (want {boosted:0}), back to {after:0} (top {top:0}) at 3.1 s; 3 s up, 15 s from the press ({left0:0.00} / {cool0:0.00}); its slot reads '{st.Line}'");
+            // the boosted slide, from rest
+            s.Velocity = Vector2.Zero; s.Sl("boost").Cool = 0; await Wait(0.2); s.Velocity = Vector2.Zero;
+            Key(global::Godot.Key.V);
+            for (int i = 0; i < 30 && s.Sl("boost").Left <= 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            bool starboard = Vary(0f, 1f) < 0.5f;
+            var (across, turned, _) = await Slide(s, starboard ? global::Godot.Key.D : global::Godot.Key.A, 1.0);
+            float signed = starboard ? across : -across;
+            Check(Math.Abs(signed - boostedSlide) < 3f && Mathf.RadToDeg(turned) < 0.5f,
+                  $"boosted, a {cls}'s Shift + {(starboard ? "D" : "A")} slide reaches {signed:0.0} u/s (want {boostedSlide:0.0} ±3), the nose held ({Mathf.RadToDeg(turned):0.00} deg)");
+            s.Sl("boost").Left = 0; s.Sl("boost").Cool = 0; s.Velocity = Vector2.Zero; await Wait(0.3);
+        }
+
+        // 15 s FROM THE PRESS: a second V is refused at 14.8 s and taken at 15.2 s (a light)
+        {
+            await SetClass(ShipClass.LightEcho);
+            var s = Me; s.AutopilotTo = null;
+            s.Position = VaryNear(yonder, 300f); s.Rotation = VaryAngle(); s.Velocity = Vector2.Zero; s.Sl("boost").Cool = 0; await Wait(0.3);
+            Key(global::Godot.Key.V);
+            for (int i = 0; i < 30 && s.Sl("boost").Left <= 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            var cooling = Abilities.Find(s.Class, "boost").State(s, null);
+            await Wait(3.5);
+            var coolingAfter = Abilities.Find(s.Class, "boost").State(s, null);
+            await Wait(14.8 - 3.5);
+            Key(global::Godot.Key.V); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            bool early = s.Sl("boost").Left > 0; string why = s.FailNote("boost");
+            await Wait(0.4);
+            Key(global::Godot.Key.V);
+            for (int i = 0; i < 30 && s.Sl("boost").Left <= 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(!early && why == "COOLING" && s.Sl("boost").Left > 0 && cooling.Lit && coolingAfter.Busy > 0 && coolingAfter.Line.StartsWith("BOOST ") && !coolingAfter.Lit,
+                  $"a second V is refused 14.8 s after the press ({why}) and taken at 15.2 s; the slot reads '{cooling.Line}' running and '{coolingAfter.Line}' cooling");
+            s.Sl("boost").Left = 0; s.Sl("boost").Cool = 0;
+
+            // WEBBED: the boost is allowed and does not break the web; the web's 20% is taken after the
+            // lift, so a boosted pinned hull holds 30% of its sheet top (260 -> 78 u/s), and it cannot slide
+            s.Velocity = Vector2.Zero; s.ApplyStatus(Status.Pinned, 6.0); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Key(global::Godot.Key.V);
+            for (int i = 0; i < 30 && s.Sl("boost").Left <= 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await Wait(1.5);
+            float pinnedFast = s.SpeedAhead; bool stillPinned = s.Pinned;
+            var (pinnedSlide, _, _) = await Slide(s, global::Godot.Key.D, 0.5);
+            s.Statuses.Clear(Status.Pinned);
+            Check(s.Sl("boost").Left > 0 && stillPinned && Math.Abs(pinnedFast - 78f) < 3f && Math.Abs(pinnedSlide) < 1f,
+                  $"webbed, V still boosts and the web holds: a pinned echo pushes {pinnedFast:0.0} u/s under forced thrust (30% of 260 = 78), and slides {pinnedSlide:0.00} u/s");
+            s.Sl("boost").Left = 0; s.Sl("boost").Cool = 0; s.Velocity = Vector2.Zero; await Wait(0.3);
+
+            // IN STASIS: nothing
+            s.TakeDamage(s.Hp + 1); await Wait(0.1);
+            Key(global::Godot.Key.V); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            bool deadBoost = s.Sl("boost").Left > 0;
+            typeof(PlayerShip).GetField("_stasis", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(s, 0.0);
+            s.UseAbility("reboard", 0); await Wait(0.1);
+            s.Restore(s.MaxHp, true, 0);
+            Check(!deadBoost && s.Alive, $"in stasis V boosts nothing ({deadBoost}); re-boarded, alive again");
+        }
+
+        // ANCHORED: a hull held at x0 (the sniper's railgun charge; the Anchor in 6c) is refused
+        {
+            await SetClass(ShipClass.HeavySniper);
+            var sn = Me; sn.AutopilotTo = null;
+            sn.Position = VaryNear(yonder, 300f); sn.Rotation = VaryAngle(); sn.Velocity = Vector2.Zero; await Wait(0.3);
+            sn.Sl("railgun").Left = 0; sn.Sl("railgun").Cool = 0; sn.Sl("boost").Cool = 0;
+            sn.UseAbility("railgun", 0);
+            for (int i = 0; i < 30 && sn.Sl("railgun").Left <= 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Key(global::Godot.Key.V); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(sn.Held == 0f && sn.Sl("boost").Left <= 0 && sn.FailNote("boost") == "ANCHORED",
+                  $"held at x0 (the railgun's charge), V is refused {sn.FailNote("boost")} and nothing runs");
+            sn.Sl("railgun").Left = 0.001;
+            for (int i = 0; i < 30 && sn.Sl("railgun").Left > 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            sn.Sl("railgun").Cool = 0; sn.Velocity = Vector2.Zero;
+        }
+
+        // THE CARDS: a hull meets its own drive's card (far off picked) and, if it slides, the strafe card
+        {
+            var s = Me;
+            Unmeet("boost", "strafe", "warp");
+            H.SelectWaypoint("FAR", s.Position + new Vector2(0, 1600), 200f); await Wait(0.1);
+            bool boostMet = Met("boost"), strafeEarly = Met("strafe");
+            var foe = H.SpawnRaider(s.Position + Vector2.Right.Rotated(VaryAngle()) * 350f); await Wait(0.1);
+            Check(boostMet && !Met("warp") && !strafeEarly && Met("strafe"),
+                  $"a sniper meets the BOOST card with a waypoint 1600 u off (not the warp's), and the STRAFE card with a hostile inside 500 u ({boostMet}, {strafeEarly} -> {Met("strafe")})");
+            foe.TakeDamage(1e12); H.ClearSelection();
         }
     }
 
@@ -4157,7 +4457,8 @@ public partial class _Test : Node
             typeof(Yard).GetField("_saveCd", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(H.Yard, 30.0);
             // the triggers: each system the first time a pilot meets it
             var me = Me; var hd1 = H.GetNode<TargetDummy>("TargetDummy1"); var here = me.Position;
-            Unmeet("target", "abilities", "tio", "warp", "stasis", "base");
+            string dv = Drives.Of(me.Class).Id;                     // the hull's own drive card (warp on a capital)
+            Unmeet("target", "abilities", "tio", dv, "stasis", "base");
             // west of dummy 1: every other target is more than 700 u from here
             me.Position = hd1.Position + new Vector2(-520, 0); me.Velocity = Vector2.Zero; await Wait(0.1);
             bool farT = Met("target");
@@ -4180,9 +4481,9 @@ public partial class _Test : Node
             Check(!farTio && nearTio && byOpen, $"THE TIO: met within 400 u of it, not at 450 -- or on opening it from anywhere ({farTio}, {nearTio}, {byOpen})");
             me.Position = here;
             H.SelectWaypoint("NEAR", here + new Vector2(0, 1450), 200f); await Wait(0.1);
-            bool nearWp = Met("warp");
+            bool nearWp = Met(dv);
             H.SelectWaypoint("FAR", here + new Vector2(0, 1550), 200f); await Wait(0.1);
-            Check(!nearWp && Met("warp"), "WARP: met with a target or waypoint more than 1500 u away: not at 1450, at 1550");
+            Check(!nearWp && Met(dv), $"{dv.ToUpper()}: the drive's card is met with a target or waypoint more than 1500 u away: not at 1450, at 1550");
             H.ClearSelection();
             me.TakeDamage(me.Hp + 1); await Wait(0.2);
             Check(Met("stasis"), "STASIS: met when the ship is shot down");
@@ -5052,7 +5353,7 @@ public partial class _Test : Node
 
         // ── THE BROADSIDE (F): the main turrets swing onto the cursor through a 0.5 s wind-up, then
         //    every main gun fires three volleys 0.25 s apart; a 14 s cooldown; the ship steers throughout ──
-        Check(Abilities.For(ShipClass.Battleship).Where(a => !a.Open).Select(a => a.Id).SequenceEqual(new[] { "guns", "firemode", "broadside" })
+        Check(Abilities.For(ShipClass.Battleship).Where(a => !a.Open).Select(a => a.Id).SequenceEqual(new[] { "guns", "firemode", "broadside", "warp" })
               && Abilities.KeyFor(ShipClass.Battleship, "broadside") == global::Godot.Key.F,
               "the battleship's bar: guns, fire mode, the BROADSIDE on F -- no missile, no reload, and no key for point defence, which is passive");
         Check(ship.Stats["broadside_volleys"] == 3 && ship.Stats["broadside_mult"] == 1.0 && ship.Stats["broadside_windup"] == 0.5
@@ -5140,56 +5441,12 @@ public partial class _Test : Node
             gs.Position = gKeep; gs.Velocity = Vector2.Zero; await Wait(0.5);
         }
 
-        // ── warp (V): every capital ship; a hull cooldown, not a slot ──
+        // ── the drive (V): a capital's warp -- Drives.cs, lane B's checks ──
         {
             var me = Me; var warpHome = me.Position; var d2w = H.GetNode<TargetDummy>("TargetDummy3");
-            void Ready() { typeof(PlayerShip).GetField("_warpCd", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(me, 0.0); me.Velocity = Vector2.Zero; me.Rotation = 0f; }
-            void Deselect() => H.ClearSelection();     // the selection is a SET now, and the Hub owns clearing it
-            Check(Abilities.For(me.Class).All(a => a.Id != "warp"), "warp takes no slot on the ability bar");
-            Ready(); Deselect(); var start = me.Position;
-            Key(global::Godot.Key.V); await Wait(0.2);
-            Check(me.Warping && me.Position.DistanceTo(start) < 20f, "V starts a 3 s warm-up; the ship holds until it jumps");
-            await Wait(PlayerShip.WarpWarmup);
-            var moved = me.Position - start;
-            Check(!me.Warping && Math.Abs(moved.Length() - 1200f) < 40f && Mathf.Abs(Vector2.Up.AngleTo(moved)) < 0.05f,
-                  $"nothing selected ahead: 1200 u straight ahead ({moved.Length():0} u)");
-            Check(Math.Abs(me.WarpCooldownLeft - PlayerShip.WarpCooldown) < 0.6 && PlayerShip.WarpCooldown == 30, "then a 30 s cooldown");
-            Key(global::Godot.Key.V); await Wait(0.1);
-            Check(!me.Warping, "V does nothing while it cools down");
-            // a target within 45 degrees of the bow: arrive just short of it
-            Ready(); me.Position = d2w.Position + new Vector2(0, 900); await Wait(0.3);
-            Click(Scr(d2w.Position)); await Wait(0.05);
-            Key(global::Godot.Key.V); await Wait(PlayerShip.WarpWarmup + 0.2);
-            float want = d2w.HitRadius + Classes.Art(me.Class).Length * 0.5f + PlayerShip.WarpStandoff;
-            double noseGap = me.Position.DistanceTo(d2w.Position) - d2w.HitRadius - Classes.Art(me.Class).Length * 0.5f;
-            Check(Math.Abs(me.Position.DistanceTo(d2w.Position) - want) < 20f && noseGap > 120,
-                  $"a target ahead: it warps to short of it, and a hull most of 400 u long stops with its NOSE {noseGap:0} u clear of the target's circle, not through it ({me.Position.DistanceTo(d2w.Position):0} u, wanted {want:0})");
-            // FURTHER OFF THAN THE DRIVE REACHES: the heading is the target's, the distance is the
-            // drive's. An aimed jump used to arrive whatever the distance, so anything selected was
-            // one press away however far off it stood.
-            Ready(); me.Position = d2w.Position + new Vector2(0, 3000); var far0 = me.Position; await Wait(0.3);
-            Click(Scr(d2w.Position)); await Wait(0.05);
-            Key(global::Godot.Key.V); await Wait(PlayerShip.WarpWarmup + 0.2);
-            var farMoved = me.Position - far0;
-            Check(Math.Abs(farMoved.Length() - 1200f) < 40f && farMoved.Y < 0 && me.Position.DistanceTo(d2w.Position) > 1700,
-                  $"a target 3000 u ahead: 1200 u toward it, not onto it ({farMoved.Length():0} u moved, {me.Position.DistanceTo(d2w.Position):0} u still to go)");
-            // a target behind: outside the cone, so straight ahead instead
-            Ready(); me.Position = d2w.Position + new Vector2(0, -900); var s3 = me.Position; await Wait(0.2);
-            Key(global::Godot.Key.V); await Wait(PlayerShip.WarpWarmup + 0.2);
-            Check(Math.Abs((me.Position - s3).Y + 1200f) < 40f && H.Selected == d2w, "a target behind (outside 45 degrees): straight ahead instead");
-            // aimed when it JUMPS, by the heading then: swing onto a target during the charge...
-            Ready(); me.Position = d2w.Position + new Vector2(0, -900); await Wait(0.2);          // facing north, d2 behind
-            Click(Scr(d2w.Position)); await Wait(0.05);
-            Key(global::Godot.Key.V); await Wait(1.0);
-            me.Rotation = Mathf.Pi; await Wait(PlayerShip.WarpWarmup - 1.0 + 0.2);                // now facing it
-            Check(Math.Abs(me.Position.DistanceTo(d2w.Position) - want) < 20f, "V pressed facing away, then turned onto the target: it warps to the target");
-            // ...or turn away from it, and it goes straight on along the new heading
-            Ready(); me.Position = d2w.Position + new Vector2(0, 1400); await Wait(0.2);           // facing north, d2 ahead
-            var s4 = me.Position;
-            Key(global::Godot.Key.V); await Wait(1.0);
-            me.Rotation = Mathf.Pi / 2f; await Wait(PlayerShip.WarpWarmup - 1.0 + 0.2);            // now facing east
-            var mv = me.Position - s4;
-            Check(Math.Abs(mv.X - 1200f) < 40f && Math.Abs(mv.Y) < 40f, $"V pressed facing the target, then turned east: 1200 u east ({mv.X:0}, {mv.Y:0})");
+            void Ready() { me.Sl("warp").Cool = 0; me.Statuses.Clear(Status.Disabled); me.Velocity = Vector2.Zero; me.Rotation = 0f; }
+            await LaneBWarpChecks(me, d2w);
+            Ready();
             // the radar: click a marker to select it -- an enemy as the target, a landmark as a waypoint
             // beside the base: every landmark it clicks below is within the radar's 3600 u reach from here
             Ready(); me.Position = Hub.BasePos + new Vector2(0, 300); me.Rotation = 0f; await Wait(0.6);
@@ -5221,8 +5478,9 @@ public partial class _Test : Node
             }
             Click(OnRadar(Hub.BasePos)); await Wait(0.05);
             me.Position = Hub.BasePos + new Vector2(0, 1500); me.Rotation = 0f; await Wait(0.2);    // the base dead ahead
-            Key(global::Godot.Key.V); await Wait(PlayerShip.WarpWarmup + 0.2);
-            float wantB = 260f + Classes.Art(me.Class).Length * 0.5f + PlayerShip.WarpStandoff;
+            me.Sl("warp").Cool = 0;
+            await WarpHold(me, 3.0);                                            // 1600 u of reach: past what the base is away
+            float wantB = 260f + Classes.Art(me.Class).Length * 0.5f + Drives.Standoff;
             Check(Math.Abs(me.Position.DistanceTo(Hub.BasePos) - wantB) < 20f, $"a warp to the waypoint lands just short of the base ({me.Position.DistanceTo(Hub.BasePos):0} u)");
             H.ClearSelection();
             Ready(); me.Position = warpHome;
@@ -5303,7 +5561,7 @@ public partial class _Test : Node
                   && Math.Abs(Classes.Art(ShipClass.Carrier).Length - 283.5f) < 1e-4 && Math.Abs(Classes.Art(ShipClass.Battleship).Length - 378f) < 1e-4,
                   "the destroyer 25% smaller than the carrier (212.625 u), the carrier 25% smaller than the battleship (283.5 of 378); a 27.8 u half-beam; two main turrets, two PD");
             Check(help.Text.StartsWith("DESTROYER") && help.Text.Contains("mouse aims the main guns"), "controls line is destroyer-specific");
-            Check(Abilities.For(ShipClass.Destroyer).Where(a => !a.Open).Select(a => a.Id).SequenceEqual(new[] { "guns", "firemode", "missile", "reload" })
+            Check(Abilities.For(ShipClass.Destroyer).Where(a => !a.Open).Select(a => a.Id).SequenceEqual(new[] { "guns", "firemode", "missile", "reload", "warp" })
                   && Abilities.KeyFor(ShipClass.Destroyer, "missile") == global::Godot.Key.F && Abilities.KeyFor(ShipClass.Destroyer, "reload") == global::Godot.Key.R,
                   "the destroyer's bar: guns, fire mode, the missile burst on F, reload on R -- its point defence is passive, with no key");
             var ddS = new ShipStats(ShipClass.Destroyer); var bsS0 = new ShipStats(ShipClass.Battleship); var cvS0 = new ShipStats(ShipClass.Carrier);
@@ -5996,7 +6254,7 @@ public partial class _Test : Node
             typeof(PlayerShip).GetField("_netVel", sf).SetValue(ghost, new Vector2(100, 0));
             ghost.Trigger = true;
             await Wait(0.1);
-            double Flash() => (double)typeof(PlayerShip).GetField("_warpFlash", sf).GetValue(ghost);
+            double Flash() => ghost.JumpFlash;
             double flash0 = Flash(); var at0 = ghost.Position;
             await Wait(2.0);
             Check(!ghost.Mine && flash0 > 0 && Flash() == 0, $"another player's warp: the flash where it lands, and then it fades ({flash0:0.00} -> {Flash():0.00})");
@@ -7222,7 +7480,7 @@ public partial class _Test : Node
                 int nMain = Nodes<Turret>(nc).Count(t => !t.PointDefense), nPd = Nodes<Turret>(nc).Count(t => t.PointDefense);
                 Check(nc.Class == cd.Id && Math.Abs(nc.MaxHp - sheet["hull"]) < 1e-6
                       && nMain == (int)sheet["main_count"] && nPd == (int)sheet["pd_count"]
-                      && Abilities.For(cd.Id).Length == cd.Abilities.Length + 6
+                      && Abilities.For(cd.Id).Length == cd.Abilities.Length + 7
                       && Classes.Art(cd.Id).Texture != null,
                       $"{cd.Name} flies: {sheet["hull"]:0} hull, {nMain} main and {nPd} PD mounts, {cd.Abilities.Length} abilities and six open slots");
             }
@@ -7768,6 +8026,7 @@ public partial class _Test : Node
             await LaneAHeavyRowsChecks(yonder);
             await LaneBHelmChecks(yonder);
             await LaneBStrafeChecks(yonder);
+            await LaneBBoostChecks(yonder);
 
             // ── WARRIOR: two and a half times its speed, half the damage, then the EMP ──
             await SetClass(ShipClass.HeavyWarrior);
@@ -10338,7 +10597,7 @@ public partial class _Test : Node
             var mpSpot = Hub.BasePos + new Vector2(2400, 2400);   // clear of the belt, the wreck, the dummies and the lane
             await SetClass(ShipClass.HeavyWarrior);
             var hw = Me; hw.AutopilotTo = null;
-            Check(hw.Class == ShipClass.HeavyWarrior && Math.Abs(hw.MaxHp - 140) < 1e-6 && Abilities.For(ShipClass.HeavyWarrior).Length == 9,
+            Check(hw.Class == ShipClass.HeavyWarrior && Math.Abs(hw.MaxHp - 140) < 1e-6 && Abilities.For(ShipClass.HeavyWarrior).Length == 10,
                   $"arena host: hosting as a WARRIOR -- its stock 140 hull, no chips, three abilities and six open slots ({hw.MaxHp:0})");
             await RealTime(() => H.Ships.FirstOrDefault(s => !s.Mine) is { Class: ShipClass.FreightHauler } gg
                                  && gg.Position.DistanceTo(mpSpot) < 60, Wan ? 25 : 15);
@@ -10616,7 +10875,7 @@ public partial class _Test : Node
             // later -- so this waits for the host to have refitted its copy too.
             await RealTime(() => Math.Abs(fgm.MaxHp - 400) < 1e-6, Wan ? 20 : 10);
             Check(fgm.Class == ShipClass.FreightHauler && Math.Abs(fgm.MaxHp - 400) < 1e-6
-                  && Abilities.For(ShipClass.FreightHauler).Length == 12,
+                  && Abilities.For(ShipClass.FreightHauler).Length == 13,
                   $"arena guest: flying a FREIGHTER in a session -- its stock 400 hull, no chips, and the host's word for it, six abilities and six open slots ({fgm.MaxHp:0})");
             // Watched from before the host does any of it: an effect lives well under a second and
             // a status bit is held for a packet, so neither survives a single sample.

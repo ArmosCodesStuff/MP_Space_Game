@@ -217,6 +217,8 @@ public class ShipStats
 
         // The class's OWN rows: whatever its abilities are made of (ClassDef.Rows).
         foreach (var r in Def.Rows) Add(r.Group, r.Id, r.Label, r.Base, r.Unit, r.Dec, r.Inverse);
+        // ...and its DRIVE's (Drives.cs): what V is made of, on the sheet so gear can move it.
+        if (Def.Drive != null) foreach (var r in Def.Drive.Rows) Add(r.Group, r.Id, r.Label, r.Base, r.Unit, r.Dec, r.Inverse);
 
         if (bonuses != null)
             foreach (var kv in bonuses)
