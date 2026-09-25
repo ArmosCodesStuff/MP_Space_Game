@@ -4,9 +4,6 @@ Engine outputs for the old-way batches: S = C:\Users\logan\AppData\Local\Temp\cl
 (their summary.txt is UTF-16: read with powershell Get-Content). New batches write to %TEMP%\warships_rungs.
 
 ## Running (BUILD PHASE: no engine anywhere until every planned lane is merged -- owner; all agents Opus 5.5)
-- wf_d703a267-73b / task w2aq1g0re, "lane-kits-a3to6": NOW SLICE 3 ONLY (WarShips_wt_kits; NOTE 4 there makes its slice-4 agent return
-  blocked). Slice 3 build (J8 F5 done, J9 Lines running) -> gate -> fix -> gate 2 -> merge "lane A slice 3". Its end row: expect slice 3
-  merged + a slice-4 "blocked (NOTE 4)" or "waiting" row: both fine. A slice 3 stop: fix it by hand/new batch.
 - wf_777978ea-8f6 / task wgzvia4p5, "lane-kits-parallel": slices 4 (after drives), 5 (after slice 3 + raids, fields, wings), 6a (after 4+5+curve), 6b/6c (after
   5+curve), 6d (after 3+4+curve), items (after curve), then items RECONCILE (after 6a-6d + items). Own worktrees wt_kits4.. / wt_items. Waits poll 10 h max.
   Returns 8 rows (merged / waiting / skipped / a stop): a stopped unit gets a fix batch; later units that skipped are relaunched then.
@@ -22,7 +19,9 @@ Engine outputs for the old-way batches: S = C:\Users\logan\AppData\Local\Temp\cl
    audit agent maps every ClassDef.Abilities and drive row to its checks and writes the missing ones): the slots proof, then quick,solo,solo,six,screens (+ six,six) across slots, fix low, then the bar
    once, VERIFIED:, push version-l and main, release; frames to the owner (the art lane's Drake, Rusty, siege, player ships).
 3. Delete each lane's worktree once it is merged (walls, net, slots, art, test removed 2026-09-25; branches kept).
-Done: KITS slices 1-2 MERGED a515479 (K4 9742789, K-merge b57862d with art + wave). ART MERGED (A5 7717267 passed gate 3's code; coordinator applied its one comment fix A6 761a2ad; quick art_mergeq green;
+Done: KITS SLICE 3 MERGED 25e27d0 (gate 1 failed, gate 2 passed; D24 shot rows land with their classes in 6a-6d, D27 no
+  Overcharge -- README ruling added). Wave: drives 8dcc845, fields, curve merged; wings, raids, net2 still running. Worktrees kits,
+  drives, fields, curve removed. KITS slices 1-2 MERGED a515479 (K4 9742789, K-merge b57862d with art + wave). ART MERGED (A5 7717267 passed gate 3's code; coordinator applied its one comment fix A6 761a2ad; quick art_mergeq green;
   engine-unproven; Drake throw now nose 1300 u off = 200 u past gun reach, tell the owner if asked). Slots merged 25aefc1 (gate 2 passed at a22c187; its 2 notes applied in e104a5a). Engine-unproven: its proof opens the test phase.
 
 ## Owner questions
