@@ -43,6 +43,12 @@ Drake is framed by moving the camera, never past the wheel's own zoom-out (owner
 the merge are engine-unproven: rungs 3-5 owed in the final test phase** (then `screens` for frames 63-67a).
 Ledger: `docs/plans/ledger_sprites.md`. Not merged to `version-l`, not pushed.
 
+**2026-09-25 (worktree `WarShips_wt_slots`, branch `wt/slots`): engine slots.** `tools\rungs.ps1 -Slot n
+-Slots n` runs several engine chains at once: slot 0 is the old lock and behaviour; slot n >= 1 gets its own
+TEMP/APPDATA/LOCALAPPDATA under `%TEMP%\warships_slot<n>` and a port shift of 100n through the harness's
+`P()`; one chain per tree (a per-tree lock); `summary.txt` is UTF-8. The proof and the default `-Slots` are
+in `docs/plans/ledger_slots.md`.
+
 **2026-09-25 (local session, worktree `WarShips_wt_net`, branch `wt/net`): WebRTC slice R1 is proved
 on the engine.** Commits 6eef84e, dba1847, 06db494 (J7-J9), 8760795 (J9b, rung 3 green on seeds
 11400714819323466726 and 11400714819323463562), 3e4df1b (J10, the rows end to end), e4cac19 (J9c, the
@@ -736,6 +742,18 @@ Compiles (typecheck 0 errors, `-Quick` below); rungs 3 and 4 not run in this lan
 their seats). The pack's grey is LIGHTER on average than the old line art (mean lightness under
 the drawing 0.57 against 0.31 on the webifier, 0.63 against 0.40 on the gunship), so the raider reds
 read brighter; the tints are unchanged until a frame says they read too light.
+
+### Engine slots: engine chains from different lanes run at once (2026-09-25, branch wt/slots)
+
+**`tools\rungs.ps1` takes `-Slot` (default auto) and `-Slots`**: auto takes the first free slot lock
+(slot 0 is `%TEMP%\warships_engine.lock`, unchanged, so older runners still interlock with it; slot n is
+`warships_engine_<n>.lock`), retrying every 15 s. Slot n >= 1 points TEMP, TMP, APPDATA and LOCALAPPDATA at
+`%TEMP%\warships_slot<n>\` (kept between runs) and passes `-Slot n` to the harnesses, which shift every port
+they bind, join or assert by 100n (`port-shift=` user arg, `P(port)` in `SmokeTest.cs.txt` and
+`Shots.cs.txt`; `wan.py --shift` for the box every run starts). `bar`, `wan` and trees whose smoketest has no
+`-Slot` take slot 0; `-Wan` refuses a non-zero slot. A per-tree lock keeps two chains off one checkout.
+`summary.txt` is UTF-8 (it was UTF-16LE, which grep never matched), and its first line names the slot.
+
 ### WebRTC slice R1: the reply window, the codes, the STUN walk, the box, the rows end to end (2026-09-25, branch wt/net)
 
 **`Link.ReplyWindowS` is 30 s** (R0's measurement, DESIGN.md), and every solo run holds one pair to it:
