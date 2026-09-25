@@ -108,6 +108,9 @@ Network and infrastructure
 Sprites
 - 34 sprites in `art_source/pack_2026-09-24/`; mapping in `sprites.md`; hit sizes unchanged; BB
   mains on the 4 flanking twins; enemies, bosses, fleet and siege first, player ships with their kits.
+- The BOSSES are RED AND BLACK (2026-09-25): the owner's swatch, mean RGB 172, 7, 2 = tint
+  (0.67, 0.03, 0.01), over the grey art so the shadows go black; value lifted only as far as a frame
+  needs to read against space.
 
 Testing (owner, standing)
 - Every change carries its check (CLAUDE.md §3). After the features: new Python scenario tools and
