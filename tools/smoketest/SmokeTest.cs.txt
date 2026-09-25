@@ -5957,6 +5957,103 @@ public partial class _Test : Node
         sn.Position = yonder; sn.Velocity = Vector2.Zero;
     }
 
+    // ── SLICE 6c: THE SNIPER'S FLARES THROUGH E (kits_v2's card and Proves; D51). The rows once (16 s, E, ability 3);
+    // then three varied runs (VaryNear spot, VaryAngle heading; runs 1 and 2 anchored first -- kits_v31 §7, the
+    // flares keep the Anchor, and kits_v2's "anchored, every flare is 180 u off the hull"): a seeker launched at the
+    // pilot 700-900 u off, E pressed 0-0.4 s later: the salvo stands on the hull, the first flare astern, the
+    // cooldown 16.0 s, E again refused COOLING with one salvo out, the Anchor still down; a raid missile marked on
+    // the pilot 0.7 s after the pop moves onto a flare; a held webifier 130-148 u out from a flare is DAZZLED;
+    // the seeker bursts on a flare; the pilot takes 0 from all of it.
+    async Task LaneA6cFlaresChecks(Vector2 yonder)
+    {
+        var st = new ShipStats(ShipClass.HeavySniper);
+        Check(st["flare_cooldown"] == 16 && Ab.Flares.Default == global::Godot.Key.E && Ab.Flares.Pops == Decoys.Of(Decoys.Flares)
+              && Abilities.For(ShipClass.HeavySniper).Take(4).SequenceEqual(new[] { Ab.Railgun, Ab.Anchor, Ab.Tether, Ab.Flares }) && Unlocks.Nth(ShipClass.HeavySniper, 3) == Ab.Flares,
+              $"the flares' rows: cooldown {st["flare_cooldown"]:0} s (16); E; the flares row; ability 3 {Unlocks.Nth(ShipClass.HeavySniper, 3)?.Name}");
+        await SetClass(ShipClass.HeavySniper);
+        var pm = Me; bool demo = pm.Demo; pm.Demo = true; pm.AutopilotTo = null;
+        var ekey = Abilities.KeyFor(ShipClass.HeavySniper, "flares");
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+        foreach (var sv in H.Salvos.ToList()) H.Down(Spawns.Decoy, sv, burst: false, float.NaN);
+        await Wait(0.3);
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f); float rot = VaryAngle();
+            pm.Position = at; pm.Velocity = Vector2.Zero; pm.Rotation = rot; pm.Hp = pm.MaxHp;
+            pm.Sl("flares").Cool = 0;
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            at = pm.Position; rot = pm.Rotation;                                   // re-taken after the wait
+            bool anchored = run > 0;
+            if (anchored) await SniperAnchor(pm, true);
+            double hp0 = pm.Hp, low = pm.Hp;
+            var from = at + Vector2.Right.Rotated(VaryAngle()) * Vary(700f, 900f);
+            var sk = Combat.Fire(Shots.Seeker, from, at - from, 135f, 4000f, 25, targetId: pm.NetId, turnRate: 2f, hull: 1e9);
+            async Task Frames(double seconds)
+            {
+                double t = pm.Clock + seconds;
+                do { pm.Position = at; pm.Rotation = rot; pm.Velocity = Vector2.Zero; low = Math.Min(low, pm.Hp); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+                while (pm.Clock < t);
+            }
+            await Frames(Vary(0f, 0.4f));
+            Key(ekey);
+            DecoySalvo salvo = null;
+            for (int i = 0; i < 10 && salvo == null; i++) { await Frames(0); salvo = H.Salvos.LastOrDefault(); }
+            double cool = pm.Sl("flares").Cool;
+            bool kept = !anchored || pm.Sl("anchor").Left > 0;
+            Key(ekey); await Frames(0); await Frames(0);
+            string again = pm.FailNote("flares"); int salvos = H.Salvos.Count;
+            var rest = salvo?.Resting ?? System.Array.Empty<Vector2>();
+            bool onHull = salvo != null && salvo.At.DistanceTo(at) < 1f && Math.Abs(Mathf.AngleDifference(salvo.Rot, rot)) < 0.01f
+                          && rest.Length == 6 && (rest[0] - at).Normalized().Dot(Vector2.Down.Rotated(rot)) > 0.999f && rest.All(p => Math.Abs(p.DistanceTo(at) - 180f) < 5f);
+            Check(onHull && Math.Abs(cool - 16.0) < 0.05 && again == "COOLING" && salvos == 1 && kept,
+                  $"flares run {run} at {Mathf.RadToDeg(rot):0} deg{(anchored ? ", anchored" : "")}: E pops 6 flares 180 u round the hull, the first astern ({onHull}); cooldown {cool:0.00} s (16.0); E again {again} (COOLING), {salvos} salvo out; the Anchor kept {kept}");
+
+            await Frames(0.7);
+            int k = (int)Vary(0f, 5.99f);
+            var outK = rest.Length == 6 ? (rest[k] - at).Normalized() : Vector2.Up;
+            var web = H.SpawnRaider((rest.Length == 6 ? rest[k] : at) + outK * Vary(130f, 148f)); web.Hp = 1e9; web.ApplyStatus(Status.Disabled, 30);
+            int m1 = H.ThrowMissile(new MissileSpec { Side = Missiles.Raid, Damage = 42, Blast = 90f, Flight = Vary(2f, 3f) },
+                                    at + Vector2.Right.Rotated(VaryAngle()) * 1500f, at, 0);
+            await Frames(0.1);
+            var markAt = H.Blasts.Where(b => b.id == m1).Select(b => b.at).DefaultIfEmpty(new Vector2(float.NaN, float.NaN)).First();
+            bool moved = rest.Any(p => p.DistanceTo(markAt) < 1f), dazzled = web.Statuses.Has(Status.Dazzled);
+            for (int i = 0; i < 60 * 6 && (sk.Alive || H.BlastsPending > 0); i++) await Frames(0);
+            bool lured = !sk.Alive && sk.DecoyPoint is { } lp && rest.Any(p => p.DistanceTo(lp) < 1f);
+            Check(moved && dazzled && lured && low >= hp0 - 1e-6,
+                  $"...a raid missile marked on the pilot moves onto a flare ({moved}); a held webifier {web.Position.DistanceTo(rest.Length == 6 ? rest[k] : at):0} u from one is dazzled ({dazzled}); the seeker from {from.DistanceTo(at):0} u bursts on a flare ({lured}); the pilot took {hp0 - low:0.0} (0)");
+            web.TakeDamage(1e12);
+            if (anchored) await SniperAnchor(pm, false);
+            foreach (var sv in H.Salvos.ToList()) H.Down(Spawns.Decoy, sv, burst: false, float.NaN);
+            pm.Sl("flares").Cool = 0;
+            await Wait(0.2);
+        }
+        pm.Demo = demo; pm.Position = yonder; pm.Velocity = Vector2.Zero; pm.Hp = pm.MaxHp;
+    }
+
+    // ── SLICE 6c, RUNG 5: A GUEST'S FLARES (kits_v31 §8's second-run list). The guest, still a Sniper, turned to a
+    // varied heading, presses E through the key: the host's salvo arrives here on its own hull (within 40 u of where
+    // it stands, the first flare astern of it), its slot takes the host's 16 s cooldown, and E again is refused
+    // COOLING; it waits the salvo out, so the arena's decoy check later reads the host's own salvo.
+    async Task LaneA6cFlaresGuestChecks()
+    {
+        var me = Me; me.AutopilotTo = null;
+        me.Velocity = Vector2.Zero; me.Rotation = VaryAngle();
+        me.Sl("flares").Cool = 0;
+        await Wait(0.6);
+        me.Velocity = Vector2.Zero;
+        var at = me.Position; float rot = me.Rotation;
+        Key(Abilities.KeyFor(ShipClass.HeavySniper, "flares"));
+        await RealTime(() => H.Salvos.Any(s => s.At.DistanceTo(at) < 40f) && me.Sl("flares").Cool > 0, Wan ? 6 : 3);
+        var salvo = H.Salvos.FirstOrDefault(s => s.At.DistanceTo(at) < 40f);
+        double cool = me.Sl("flares").Cool;
+        Key(Abilities.KeyFor(ShipClass.HeavySniper, "flares")); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        var said = me.FailNote("flares");
+        bool astern = salvo != null && (salvo.Resting[0] - salvo.At).Normalized().Dot(Vector2.Down.Rotated(rot)) > 0.98f;
+        Check(salvo != null && astern && cool > 14.5 && cool <= 16.0 + 1e-6 && said == "COOLING",
+              $"arena guest: its own E -- the host's salvo on its hull, {salvo?.At.DistanceTo(at):0.0} u off ({salvo != null}), the first flare astern ({astern}); the host's cooldown {cool:0.0} s (16, a report late); E again {said} (COOLING)");
+        await RealTime(() => H.Salvos.Count == 0, Wan ? 10 : 7);
+    }
+
     // ── SLICE 6c, RUNG 5: A GUEST'S ANCHOR (kits_v31 §7: the boost refused ANCHORED). The guest, right after its
     // active reload, presses F through the key: once the host's word lands on its slot its own helm is rooted --
     // W + Shift + A or D (varied) held a varied 0.8-1.4 s move it under 1 u -- and V is refused ANCHORED; F again
@@ -12168,6 +12265,7 @@ public partial class _Test : Node
             await LaneA6cAnchorChecks(yonder);
             LaneA6cZoneChecks();
             await LaneA6cTetherChecks(yonder);
+            await LaneA6cFlaresChecks(yonder);
             await SetClass(ShipClass.HeavyWarrior);
             var wr = Me; wr.Position = yonder; wr.Velocity = Vector2.Zero; await Wait(0.2);
             // A SPEED LIFT LIFTS THE PUSH AS WELL AS THE TOP SPEED (PlayerShip.Steer). The water holds a
@@ -16076,6 +16174,7 @@ public partial class _Test : Node
             await LaneA6cPrismGuestChecks();                                // slice 6c: a guest's prism stance (its host half: LaneA6cPrismHostChecks)
             await LaneA6cReloadGuestChecks();                               // slice 6c: a guest's active reload (its host half: LaneA6cReloadHostChecks)
             await LaneA6cAnchorGuestChecks();                               // slice 6c: a guest's Anchor, rooted by the host's word
+            await LaneA6cFlaresGuestChecks();                               // slice 6c: a guest's flares, the host's salvo on its hull
             // ── TWO OF THE NINE, IN A SESSION (the host's side is in the ahost branch) ──
             // A FREIGHTER: the class whose abilities MAKE things in the world. Every press below
             // is a request -- nothing here is made on this peer.

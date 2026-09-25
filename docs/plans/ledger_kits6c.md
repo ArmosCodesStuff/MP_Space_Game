@@ -487,3 +487,25 @@ break the bash tool; write the script with the Write tool), SmokeTest.cs.txt LF 
   NEW frame 73f_sniper_tether_mine (LaneA6cTetherFrames, after LaneA6cRailFrames). No guest check: the tether is not on
   kits_v31 §8's rung-5 list; the frame is its third check.
 - Next: kits6c-J10 Flares ability.
+
+## kits6c-J10 · PRE
+- tier opus. Intent: the Flares (D51) as a row: AbilityDef.Pops (a Decoys.All row popped round the hull, PlayerShip.Pop) +
+  AbilityDef.Cooldown (the stat a Pops press sets); Ab.Flares (E, flare_cooldown 16, only COOLING refuses); Sniper row flare_cooldown;
+  Abilities {Railgun, Anchor, Tether, Flares}; hint. Checks LaneA6cFlaresChecks (3 runs, runs 1-2 anchored: the salvo at the hull
+  through E, 16 s, COOLING, seeker lured, mark moved, webifier dazzled, the pilot takes 0, the Anchor kept), frame
+  73g_sniper_flares_key (LaneA6cFlaresFrames), rung 5 LaneA6cFlaresGuestChecks. HEAD 0c33841e8f027ca22af095025dbb6992e85edf44
+- scripts/Abilities.cs 3c85864b9d7ae08008dcd7f79878151056a24c5b
+- scripts/PlayerShip.cs e203a8eacc30d3d61ab290cd2292bb5b3df85a2d
+- scripts/Ships.cs 7cbbc6bb731a6090c4a3fb7a08e0143ab5c2ba3a
+- tools/smoketest/SmokeTest.cs.txt 0c5c83cfb875dd53dbcbe53cb3759e28c91bac1c
+- tools/screens/Shots.cs.txt 3e4158ca3c8c4857e767c0456fdb353400ab311b
+## kits6c-J10 · POST
+- Verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED, own diff read. engine-unproven: rungs owed in the final test phase.
+- Built: AbilityDef.Pops (a Decoys.All row) + AbilityDef.Cooldown (its stat); PlayerShip.Pop (host: the cooldown, then
+  Hub.Flares at the hull); Ab.Flares (E, only COOLING refuses, Keeps the Anchor through Stance.Keeps); Sniper row
+  flare_cooldown 16; Abilities {Railgun, Anchor, Tether, Flares} (ability 3 at L6); hint.
+- Checks: NEW LaneA6cFlaresChecks (3 runs, 1-2 anchored), NEW rung 5 LaneA6cFlaresGuestChecks (after the Anchor's; waits the
+  salvo out so LaneADecoyGuestChecks reads the host's own), NEW frame 73g_sniper_flares_key (LaneA6cFlaresFrames).
+- Risk (test phase): the guest joins at Character.Level 2; ability 3 opens at L6 -- LaneA6cPrismGuestChecks (J4) already
+  presses an ability 3 there, so both stand or fall on the guest's Peak. If LOCKED, raise the guest's peak for those two.
+- Next: kits6c-J11 Warden row + Proximity flak.

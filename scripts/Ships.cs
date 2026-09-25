@@ -369,7 +369,7 @@ public static class Classes
         // -- page 3: heavy fighters --------------------------------------------
         new() { Id = ShipClass.HeavySniper, Name = "SNIPER", Ready = true, Fit = Fit.None,
             Blurb = "Fast and far. A railgun with one round in the chamber: hold to charge, let go for a straight blue line through everything on it. Time a press while it reloads and the next round hits half again as hard.",
-            Hint = "SNIPER  ·  Space: hold to charge, release to fire  ·  Space in the white box while it reloads: next round x1.5  ·  F anchor  ·  Q tether mine astern",
+            Hint = "SNIPER  ·  Space: hold to charge, release to fire  ·  Space in the white box while it reloads: next round x1.5  ·  F anchor  ·  Q tether mine astern  ·  E flares",
             Drive = Drives.Boost,
             Nums = new() {
                 ["hull"] = 240,
@@ -407,12 +407,14 @@ public static class Classes
                 new() { Group = "Tether mine", Id = "tether_recharge", Label = "Recharge (each)", Base = 12, Unit = "s", Dec = 1, Inverse = true },
                 new() { Group = "Tether mine", Id = "tether_hold",     Label = "Holds",          Base = 3, Unit = "s", Dec = 1 },
                 new() { Group = "Tether mine", Id = "tether_most",     Label = "Out at once",    Base = 2, Dec = 0 },
+                // the Flares (kits_v2's card; the salvo itself is Decoys.All "flares"): 16 s
+                new() { Group = "Flares", Id = "flare_cooldown", Label = "Cooldown", Base = 16, Unit = "s", Dec = 1, Inverse = true },
             },
             Art = new ClassArt {
                 Texture = "res://heavy_sniper_hull.png", Length = 120f, HalfWidth = 30.03f,
                 Mains = new Vector2[] { new(0.0f, -24.0f) },
                 TurretTexScale = 1.18f / 5.5f, MainBarrel = 14.5f, PdBarrel = 6.5f },
-            Abilities = new[] { Ab.Railgun, Ab.Anchor, Ab.Tether } },
+            Abilities = new[] { Ab.Railgun, Ab.Anchor, Ab.Tether, Ab.Flares } },
         new() { Id = ShipClass.HeavyWarrior, Name = "WARRIOR", Ready = true, Fit = Fit.None,
             Blurb = "Fast and close. A blade that cuts everything in front of it, a dash, a spin, and a prism stance that splits light.",
             Hint = "WARRIOR  ·  Space swings the blade",

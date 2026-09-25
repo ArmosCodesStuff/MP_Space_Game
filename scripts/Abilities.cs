@@ -126,6 +126,10 @@ public class AbilityDef
     public string Charges, Recharge;
     // A ZONE IT LAYS (Zones.cs), at the stern: a row of Zones.All (PlayerShip.Lay). The tether mine.
     public ZoneDef Lays;
+    // A DECOY SALVO IT POPS round the hull (Decoys.cs): a row of Decoys.All (PlayerShip.Pop), and the stat id of
+    // the cooldown the press sets. The flares.
+    public DecoyDef Pops;
+    public string Cooldown;
 
     public SlotState State(PlayerShip s, IHittable selected) =>
         Show != null ? Show(s, selected) : new SlotState { Line = "READY" };
@@ -396,6 +400,19 @@ public static class Ab
             return new SlotState { Line = $"{left}/{max}", Lit = left > 0,
                                    Busy = left < max ? (float)(s.Sl("tether").Cool / s.Stats["tether_recharge"]) : 0f };
         },
+    };
+
+    // THE FLARES (the Sniper's E, kits_v2's card): six in a ring round the hull, burning 5 s where they stop
+    // (Decoys.All "flares": the lure, the mark and the dazzle are Decoys.Tick's). 16 s; only the cooldown refuses.
+    // It keeps the Anchor.
+    public static readonly AbilityDef Flares = new()
+    {
+        Id = "flares", Name = "Flares", Short = "FLARES", Default = Key.E,
+        Blurb = "Six flares in a ring 180 u out, burning 5 s: guided missiles turn onto them, landing marks slide onto them, and raiders near one are dazzled (no new web, no missile).",
+        Pops = Decoys.All[Decoys.Flares], Cooldown = "flare_cooldown",
+        Press = (s, _) => s.Pop("flares"),
+        Refuse = (s, _) => s.Sl("flares").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => Timed(s, "flares", "flare_cooldown", "READY"),
     };
 
     // THE LUNGE (the Warrior's E): 420 u along the nose in 0.3 s, 40 to each body on the way, half

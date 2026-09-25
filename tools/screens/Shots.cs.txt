@@ -828,6 +828,7 @@ public partial class _Shots : Node
                 await Snap("73b_sniper_rail_flash");
                 await LaneA6cRailFrames(rs, RailHold);
                 await LaneA6cTetherFrames(rs, RailHold);
+                await LaneA6cFlaresFrames(rs, RailHold);
                 rzp.SetValue(hub, rz0); await W(0.4);
             }
             // a freighter with its three turrets out, and the bubble up over them
@@ -1072,6 +1073,18 @@ public partial class _Shots : Node
         await Snap("73f_sniper_tether_mine");
         foreach (var z in H.Laid.ToList()) H.Down(Spawns.Zone, z, burst: false, float.NaN);
         rs.Sl("tether").N = 0; rs.Sl("tether").Cool = 0;
+    }
+
+    // SLICE 6c: the Sniper's flares through its own E (73g) -- snapped 0.8 s after the press, the six burning in
+    // their ring 180 u round the hull, the first astern. The same sniper and zoom as 73b.
+    async Task LaneA6cFlaresFrames(PlayerShip rs, System.Action hold)
+    {
+        hold(); rs.Sl("flares").Cool = 0;
+        rs.UseAbility("flares", 0);
+        for (int i = 0; i < 90 && (H.Salvos.Count == 0 || H.Salvos[H.Salvos.Count - 1].Age < 0.8); i++) { hold(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+        await Snap("73g_sniper_flares_key");
+        foreach (var sv in H.Salvos.ToList()) H.Down(Spawns.Decoy, sv, burst: false, float.NaN);
+        rs.Sl("flares").Cool = 0;
     }
 
     // SLICE 6c: the Warrior's prism stance -- the wedge on its guard (SQUARE bright, SLANT faint), then a

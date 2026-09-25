@@ -1335,6 +1335,17 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         Zones.Lay(hub, row, at, Rotation, OwnerId, Stats[row.HoldFor], (int)Stats[row.Most]);
     }
 
+    // A SALVO POPPED (AbilityDef.Pops: the flares), on the host: the row round the hull (Hub.Flares), its
+    // cooldown (AbilityDef.Cooldown) from the press.
+    public void Pop(string id)
+    {
+        var def = Abilities.Find(Class, id);
+        ref var sl = ref Sl(id);
+        if (def?.Pops is not { } row || def.Cooldown == null || !Net.Sim || sl.Cool > 0 || MyHub is not { } hub) return;
+        sl.Cool = Cooling(Stats[def.Cooldown]);
+        hub.Flares(Position, Rotation, Array.IndexOf(Decoys.All, row));
+    }
+
     public void Whirl()
     {
         ref var sl = ref Sl("whirlwind");
