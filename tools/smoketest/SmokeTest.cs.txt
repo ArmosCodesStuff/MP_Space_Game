@@ -2398,6 +2398,98 @@ public partial class _Test : Node
         }
     }
 
+    // ── LANE G (raids v2) READABILITY (§1e, N19's logic; the frames are Shots 49a/49b/49c): what every
+    // peer draws of a squad reads SquadSight -- the radar's "1+3" label and bracket, the victim's
+    // "GANK: GUNSHIP + 3 WEBIFIER" line, and each row's name under its hull for 3 s when the squad
+    // comes into view and again at its commit; plus the adds' EXP in the TIO line and the hints ──
+    async Task RaidsSightChecks()
+    {
+        var me = Me; var keepPos = me.Position; double keepMax = me.MaxHp;
+        double pdKeep = PdReachOff(me);
+        me.MaxHp = 5000; me.TakeDamage(-(me.MaxHp - me.Hp));
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        void Clear() { foreach (var r in H.Raiders.ToList()) H.RaiderDown(r); }
+        bool InView(Node2D n) => n.GetViewportRect().HasPoint(n.GetGlobalTransformWithCanvas().Origin);
+        List<Raider> MakeSquad(Vector2 at, float heading, params int[] kinds)
+        {
+            var sq = H.FormSquad(Squads.Gank, at, heading);
+            return kinds.Select((k, i) => H.SpawnRaider(at + new Vector2(70f * (i - (kinds.Length - 1) / 2f), 40f * (i % 2)).Rotated(heading), k, sq)).ToList();
+        }
+
+        // THE WORDS, by literal: the TIO line from the rows (L6 light 6, heavy 18 at PL 6 / 3, 9 at
+        // PL 12 / 3, 9 at L39 PL 78), and the two hints that now name the adds
+        Check(TioWindow.AddsLine(6, 6) == "Adds: 6 EXP a light, 18 a heavy, the first time they come."
+              && TioWindow.AddsLine(6, 12) == "Adds: 3 EXP a light, 9 a heavy, the first time they come."
+              && TioWindow.AddsLine(39, 78) == "Adds: 3 EXP a light, 9 a heavy, the first time they come.",
+              $"the TIO line names what the adds pay this pilot, from the rows ({TioWindow.AddsLine(6, 6)} | {TioWindow.AddsLine(6, 12)} | {TioWindow.AddsLine(39, 78)})");
+        Check(Hints.All["pilot"].Body.Contains("their adds the first time they come") && Hints.All["boss"].Body.Contains("kill the webifiers"),
+              "the pilot and boss hints name the adds: they pay EXP the first time they come, and their webs hold you for the beam");
+
+        // THE LABEL AND THE CREW by composition, three squads apart: H+3L, 2 lights, a heavy and 2 pods
+        {
+            me.Position = Hub.BasePos + new Vector2(Vary(5200f, 6200f), Vary(3800f, 4800f)); me.Velocity = Vector2.Zero;
+            var far = me.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(4400f, 5200f);
+            var a = MakeSquad(far, VaryAngle(), Enemies.Gunship, Enemies.Webifier, Enemies.Webifier, Enemies.Webifier);
+            var b = MakeSquad(far + new Vector2(0, 900f), VaryAngle(), Enemies.Talon, Enemies.Talon);
+            var c = MakeSquad(far - new Vector2(0, 900f), VaryAngle(), Enemies.Cross, Enemies.Pod, Enemies.Pod);
+            await Frame(); await Frame();
+            var groups = SquadSight.Groups(H.Raiders);
+            List<Raider> G(List<Raider> sq) => groups.FirstOrDefault(g => g.Contains(sq[0])) ?? new List<Raider>();
+            Check(groups.Count == 3 && SquadSight.Label(G(a)) == "1+3" && SquadSight.Label(G(b)) == "2" && SquadSight.Label(G(c)) == "1+2"
+                  && SquadSight.Crew(G(a)) == "GUNSHIP + 3 WEBIFIER" && SquadSight.Crew(G(b)) == "2 TALON" && SquadSight.Crew(G(c)) == "CROSS + 2 POD"
+                  && SquadSight.InFormation(G(a)) && SquadSight.InFormation(G(b)) && SquadSight.InFormation(G(c)),
+                  $"squads read by id and tag, not type: {groups.Count} squads, labels {SquadSight.Label(G(a))} / {SquadSight.Label(G(b))} / {SquadSight.Label(G(c))} (1+3 / 2 / 1+2), crews '{SquadSight.Crew(G(a))}' / '{SquadSight.Crew(G(b))}' / '{SquadSight.Crew(G(c))}', all in formation");
+            Clear(); await Wait(0.2);
+        }
+
+        // THE NAMES AND THE LINE on a live gank at this ship, still or moving, from a seeded bearing:
+        // named at the first frame the squad is in view and again at its commit; the victim's line
+        // through the burn, and none once every member holds its line
+        {
+            me.Position = Hub.BasePos + new Vector2(Vary(5200f, 6200f), Vary(3800f, 4800f)); me.Velocity = Vector2.Zero;
+            await Wait(0.5);                                        // the camera settles on the ship
+            bool moving = Vary(0f, 1f) < 0.5f; float course = VaryAngle();
+            var at = me.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(2600f, 3400f);
+            var ms = MakeSquad(at, Aim.Face(at, me.Position), Enemies.Gunship, Enemies.Webifier, Enemies.Webifier, Enemies.Webifier);
+            async Task Step() { if (moving && !me.Pinned) me.Velocity = Vector2.Up.Rotated(course) * 60f; await Frame(); }
+            double viewNames = -1, lockName = -1; float drop = -1; string burnLine = null, heldLine = "unread";
+            bool formedFirst = SquadSight.InFormation(ms), formedInBurn = true;
+            for (int f = 0; f < 60 * 30 && (viewNames < 0 || lockName < 0 || burnLine == null); f++)
+            {
+                if (viewNames < 0 && ms.Any(InView))
+                {   // the first frame the squad shows: every member named, the ones off the screen too
+                    await Step(); await Step();
+                    viewNames = ms.Min(r => r.NameLeft); drop = ms.Min(r => r.LabelDrop);
+                }
+                var locker = ms.FirstOrDefault(r => r.Locking);
+                if (lockName < 0 && locker != null)
+                {   // the member that committed, read again after the wait: named afresh
+                    await Step(); await Step();
+                    lockName = GodotObject.IsInstanceValid(locker) ? locker.NameLeft : 0;
+                }
+                if (burnLine == null && ms.Any(r => r.Locking))
+                {
+                    burnLine = SquadSight.GankLine(H.Raiders, H.Ships, me);
+                    formedInBurn = SquadSight.InFormation(ms);
+                }
+                await Step();
+            }
+            for (int f = 0; f < 60 * 12 && ms.Any(r => r.Locking); f++) await Step();
+            if (!ms.Any(r => r.Locking)) heldLine = SquadSight.GankLine(H.Raiders, H.Ships, me);
+            Check(viewNames > SquadSight.NameShow - 0.25 && Math.Abs(drop - 35f) < 1e-3,
+                  $"a squad coming into view is named, every member for {SquadSight.NameShow} s ({viewNames:0.00} s left two frames on), the range label dropped under the name ({drop})");
+            Check(lockName > SquadSight.NameShow - 0.25,
+                  $"and named again as it commits ({lockName:0.00} s left two frames on)");
+            Check(formedFirst && !formedInBurn && burnLine == "GANK: GUNSHIP + 3 WEBIFIER" && heldLine == null,
+                  $"the victim's HUD line through the burn: '{burnLine}' (GANK: GUNSHIP + 3 WEBIFIER); in formation before it {formedFirst}, not during {!formedInBurn}; once all hold their lines, none ('{heldLine}')");
+            Clear(); await Wait(0.3);
+        }
+        me.Statuses.Clear(Status.Pinned);
+        me.MaxHp = keepMax; me.TakeDamage(-(me.MaxHp - me.Hp));
+        me.Stats.SetBase("pd_range", pdKeep);
+        me.Position = keepPos; me.Velocity = Vector2.Zero;
+    }
+
     // POINT DEFENCE CANNOT BE SWITCHED OFF (F16), so a check that needs a hull's point defence out
     // of the way takes its reach to 0 for the while (test only) and gives the base back after.
     double PdReachOff(PlayerShip s)
@@ -7152,6 +7244,7 @@ public partial class _Test : Node
             pm.Position = keepP; pm.Velocity = Vector2.Zero; pm.TakeDamage(-(pm.MaxHp - pm.Hp));
         }
         await RaidsSquadChecks();
+        await RaidsSightChecks();
 
         // ── the base's own weapons: a 5 DPS laser at 300 u, a tracking 25-damage missile at 600 u -- raiders only ──
         {
@@ -11204,7 +11297,7 @@ public partial class _Test : Node
     async Task RaidsGuestAddsWire()
     {
         int lv0 = Character.Level, exp0 = Character.Exp;
-        bool squadSeen = false, beamOnWeb = false; int gained = 0;
+        bool squadSeen = false, beamOnWeb = false, labelOk = false, namesSeen = false; int gained = 0;
         // the beam's lanes on this peer: the first seen while webbed, the one that replaced it, the
         // most standing at once after the replacement, and strikes heard before the live lane's end
         FxNode firstLane = null, lastLane = null; double clock = 0, firstEnd = 0, lastEnd = 0;
@@ -11231,6 +11324,8 @@ public partial class _Test : Node
         {
             var two = H.Raiders.Where(r => r.SquadId != 0).GroupBy(r => r.SquadId).FirstOrDefault(g => g.Count() == 2);
             squadSeen |= two != null && two.Count(r => r.Leads) == 1;
+            labelOk |= two != null && SquadSight.Label(two.ToList()) == "2" && SquadSight.Groups(H.Raiders).Any(g => g.Count == 2);
+            namesSeen |= two != null && two.Any(r => r.NameLeft > 0);
             beamOnWeb |= Me != null && Me.Pinned && Nodes<FxNode>().Any(t => t.Id == Fx.WarnLane && Math.Abs(t.Radius - 70f) < 0.1f);
             if (!H.MissionWon && (Character.Level != lv0 || Character.Exp != exp0)) gained = Character.Exp - exp0 + 1000 * (Character.Level - lv0);
             Watch();
@@ -11243,6 +11338,7 @@ public partial class _Test : Node
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); clock += GetProcessDeltaTime();
         }
         Check(squadSeen, "arena guest: the adds' squad arrives on the wire as one -- both members under one squad id, exactly one of them its lead");
+        Check(labelOk && namesSeen, $"arena guest: drawn from the packet alone, the squad reads as one on the radar (label '2': {labelOk}) and its rows are named under their hulls ({namesSeen})");
         Check(beamOnWeb, "arena guest: webbed by an add, this ship sees the beam's lane go up at it (the host charged on an add's web)");
         Check(firstLane != null && lastLane != null && mostAfter == 1 && lastEnd > firstEnd + 0.5 && earlyStrikes == 0,
               $"arena guest: the host's stretched wind-up REPLACES this peer's lane -- one Radius-70 lane standing ({mostAfter}), ending at the stretched time ({firstEnd:0.00} -> {lastEnd:0.00} s), no strike heard before it ({earlyStrikes})");

@@ -96,6 +96,9 @@ public partial class HullHud : Control
         _panel.Draw(GetCanvasItem(), new Rect2(-8, -6, W + 16, H + 12));   // its panel
         _track.Draw(GetCanvasItem(), new Rect2(0, 0, W, H));
         Readouts(this, onFill: false);
+        // THE VICTIM'S LINE, over the bar: a squad on its burn at this ship names what it brings
+        if (SquadSight.GankLine(Hub.Raiders, Hub.Ships, Hub.MyShip) is { } gank)
+            Txt.D(this, ThemeDB.FallbackFont, new Vector2(0, -12), gank, HorizontalAlignment.Center, W, 15, Ui.Bad);
     }
 
     // Your own hull keeps its green-to-red reading -- it is the one number you glance at while

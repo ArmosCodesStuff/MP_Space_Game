@@ -972,8 +972,10 @@ bosses"); the numbers are `numbers_curve_raids_items.md` §2.
   hull 1 - k/slots; a wiped slot returns 30 s later with the same kinds. A first fill pays
   `EnemyDef.Exp x level / pilot level` (`Missions.ExpFor`, one formula with the boss kill) through the kill
   branch alone, to every pilot at its own level (`NetKillExp`, reliable).
-- **Not built here**: the radar diamond / bracket / rim chevron, the victim's "GANK:" HUD line and the name
-  labels (`raids_squads_adds.md` §1e) -- Radar.cs and the HUD are other lanes' files.
+- **What a squad looks like is read the same on every peer** (`SquadSight.cs`): a guest has no Squad, only
+  the raider packet (squad id in bits 8-23, the lead and lock bits, the line's end) and the kind's row, so
+  the radar's diamond / bracket / rim chevron, the victim's "GANK:" line and the names under the hulls are
+  all worked out from those, on the host as on a guest. A new enemy row needs nothing there.
 
 ## Traps that have already cost time
 
@@ -982,6 +984,9 @@ bosses"); the numbers are `numbers_curve_raids_items.md` §2.
   branch pays (`Hub.PayKill`). Paying from `RaiderDown` or the burst would pay a boss kill for every live add.
 - **A Garrison row must name its Mission.** `Waves.For` matches `WaveDef.Mission` against the brief's; a
   Garrison row with none would answer every mission, and a bounty's clock would draw the siege's rows.
+- **A warning replaced on one peer is replaced on none.** A stretched beam wind-up once freed its old lane
+  with a host-only `QueueFree` and raised a new one to everybody: each guest kept both, and the old one
+  struck early. Replacement lives in the one raise path (`Hub.AddFx`, run by the host and by `NetFx`).
 - **`Raids.Tick` must stay ahead of the raiders' `_Process`** (`Hub._Process` calls it first): a squad
   ticked after its members hands them last frame's target, posts and time on target.
 

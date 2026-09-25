@@ -37,9 +37,9 @@ history pick the work up from it alone. Update it in the same change as the code
 ## Handoff — read this first
 
 **2026-09-25 (worktree `WarShips_wt_raids`, branch `wt/raids`): lane G, raids v2 -- squads and a boss
-fight's adds, J1-J6 built; compiles, rung 2 green. engine-unproven: every rung 3-5 check below is owed in
-the final test phase** (solo x2, six x2 for the guest checks, screens for frames 49a/49b/49). Detail and the
-job list: `docs/plans/ledger_raids.md`.
+fight's adds, J1-J6 + the merge gate's fixes (GFa, GFb) built; compiles, rung 2 green. engine-unproven:
+every rung 3-5 check below is owed in the final test phase** (solo x2, six x2 for the guest checks, screens
+for frames 49a/49b/49c/49). Detail and the job list: `docs/plans/ledger_raids.md`.
 
 **2026-09-25 (worktree `WarShips_wt_kits`, branch `wt/kits`): kits lane A J1-J7 + K1 built and
 version-l merged in (K2); compiles, rung 2 green. engine-unproven: rungs 3-5 owed in the final test
@@ -535,16 +535,26 @@ take the boss's multipliers; a wiped slot returns in 30 s with the same kinds. *
 18 a heavy, x level / pilot level, nothing past twice the level) on a first fill only, through the kill
 branch alone, to every pilot by the reliable `NetKillExp`. **The beam** launches nothing, charges on ANY
 web (an add's included) or 5 s armed, and its wind-up never leaves a stripping pilot under 0.6 s (the
-live escape floor); beam damage and rate unchanged. Deleted: the escorts (`EscortsAt`, `LaunchEscorts`,
+live escape floor); a stretched wind-up REPLACES its lane on every peer (`Hub.AddFx`: a hull's warning
+raised again frees the one it had), so a guest no longer hears the strike at the old time. **Squads read
+the same on every peer** (`SquadSight.cs`, new, from the packet alone): the radar draws a heavy as a
+diamond (by `Tag.Heavy`), brackets a squad in formation and folds a squad wholly off the scope into one rim
+chevron labelled "1+3" (heavies + the rest); the victim's hull bar carries "GANK: GUNSHIP + 3 WEBIFIER"
+through the burn; each row's name shows under its hull for 3 s as its squad comes into view and again at
+its commit, with a web glyph on a row with a Cc. The TIO line says what the adds pay this pilot; the pilot
+and boss hints name the adds. Deleted: the escorts (`EscortsAt`, `LaunchEscorts`,
 `Raider.Escort`/`IsEscort`/shiver, the beam row's escort fields), `Raider.Patrol`/`Station`/`Circuit`/
 `Choose`/`Circle`/`Posts`, the heavy's edge wait, `Raider.HeavyReach`, Hub's garrison clock.
 Defaults taken (ledger_raids.md): Par.cs is not in this tree, so the floor reads a beam-row `StripDps`
-(0.7 x 57.6) against row hull; no `escort` doctrine; the radar/HUD/name-label readability (§1e) not built.
+(0.7 x 57.6) against row hull; no `escort` doctrine; "1+3" counts heavies + the rest; the victim is the
+ship nearest a lock line's end within its hit radius + 150 u.
 
 Checks: new RaidsFoundationChecks, RaidsSquadChecks (N1-N6, N9, N10, N17), RaidsAddsTableChecks (N11, N12,
-N14), RaidsArenaAddsChecks (N12 live, N13, N15, N16), RaidsHostAddsWire + RaidsGuestAddsWire (N18), raiders
-6b (N7, N8), the arena beam block (any-pin start, floor literals, live floor); frames 49a_squad_inbound,
-49b_squad_lock_lines, 49_heavy_astern_missile; rewritten: the escort checks, the mission wave clock, patrol
+N14), RaidsArenaAddsChecks (N12 live, N13, N15, N16), RaidsSightChecks (labels, crews, names on view and
+commit, the GANK line, TIO and hint text), RaidsHostAddsWire + RaidsGuestAddsWire (N18, the stretched lane
+replaced on the guest, the squad label and names on the guest), raiders 6b (N7, N8), the arena beam block
+(any-pin start, floor literals, live floor); frames 49a_squad_inbound, 49b_squad_lock_lines (now with the
+GANK line), 49c_squad_names_radar, 49_heavy_astern_missile; rewritten: the escort checks, the mission wave clock, patrol
 and raid squad ids, blockade Station/Circuit.
 
 **Known broken:** engine-unproven (rungs 3-5 owed).

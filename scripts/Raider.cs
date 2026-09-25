@@ -99,6 +99,27 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused, ISquadMembe
     private Vector2? _tether;                          // guests: where the web goes
     private Sprite2D _sprite;
 
+    // ITS ROW'S NAME under the hull, for SquadSight.NameShow s: when its squad enters this peer's
+    // view, and again as it commits -- with a web glyph when the row has a Cc. On every peer: it
+    // reads the packet's bits and this peer's own screen. The range to a selected raider drops
+    // below the name while it shows (LabelDrop).
+    private double _nameT;
+    private bool _inView, _wasLocking;
+    public double NameLeft => _nameT;
+    public float LabelDrop => _nameT > 0 ? 22f + 13f : 0f;
+    private void TickName(double delta)
+    {
+        _nameT = System.Math.Max(0, _nameT - delta);
+        bool inView = GetViewportRect().HasPoint(GetGlobalTransformWithCanvas().Origin), locking = Locking;
+        if (inView && !_inView && Hub != null)
+        {   // coming into view names its whole squad, the ones still off the screen with it
+            foreach (var r in Hub.Raiders)
+                if (ReferenceEquals(r, this) || (SquadId != 0 && r.SquadId == SquadId)) r._nameT = SquadSight.NameShow;
+        }
+        if (locking && !_wasLocking) _nameT = SquadSight.NameShow;
+        _inView = inView; _wasLocking = locking;
+    }
+
     public override void _Ready()
     {
         Hp = MaxHull;
@@ -166,6 +187,7 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused, ISquadMembe
     {
         float dt = (float)delta;
         _hullWatch.Tick(this, System.Math.Max(0, Hp), taken: false);
+        TickName(delta);
         if (!Net.Sim)
         {
             _net.Follow(this, dt);
@@ -293,6 +315,22 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused, ISquadMembe
         float plume = Heavy ? Length * 0.5f : Length;
         if (Boosting) Plume.Draw(this, new Vector2(0, Length * 0.5f), Vector2.Down, plume * 1.6f, new Color(1f, 0.35f, 0.25f), 1f, true);
         else Plume.Draw(this, new Vector2(0, Length * 0.5f), Vector2.Down, plume, new Color(1f, 0.35f, 0.25f), 0.5f, Speed > 1f);
+        if (_nameT > 0)
+        {   // upright whatever its heading, fading over its last half second
+            DrawSetTransform(Vector2.Zero, -GlobalRotation, Vector2.One);
+            var font = ThemeDB.FallbackFont; int px = Txt.Size(13);
+            var col = new Color(1f, 0.6f, 0.55f, 0.9f * (float)System.Math.Min(1.0, _nameT / 0.5));
+            var at = new Vector2(0, HitRadius + 22f);
+            Txt.Centre(this, font, at, Def.Name, px, col);
+            if (Pins)
+            {   // the web glyph: a small ring and its spokes, left of the name
+                float w = font.GetStringSize(Def.Name, HorizontalAlignment.Left, -1, px).X;
+                var g = at + new Vector2(-w * 0.5f - px * 0.7f, -px * 0.35f); float gr = px * 0.38f;
+                DrawArc(g, gr, 0, Mathf.Tau, 12, col, 1f);
+                for (int i = 0; i < 4; i++) DrawLine(g, g + Vector2.Right.Rotated(Mathf.Tau * i / 4f + 0.4f) * gr * 1.3f, col, 1f);
+            }
+            DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
+        }
     }
     // its squad's lead, as every peer sees it: the raider of the same squad id that says it leads
     public Raider SquadLead()

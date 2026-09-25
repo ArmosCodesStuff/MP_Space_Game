@@ -64,8 +64,10 @@ public partial class _Shots : Node
     object P(object o, string m, params object[] a) => o.GetType().GetMethod(m, BindingFlags.NonPublic | BindingFlags.Instance).Invoke(o, a);
 
     // ── LANE G (raids v2): a squad inbound in its vee (link lines to its lead), the same squad on
-    // its burn (dashed lock lines converging), and a heavy posted astern of a PINNED ship with its
-    // missile's red circle on the ship's predicted spot ──
+    // its burn (dashed lock lines converging, each row named again, the GANK line over the hull bar),
+    // a squad named under its hulls as it comes into view (a web glyph on the webifiers) with its
+    // radar bracket and heavy diamond while a second squad off the scope is one rim chevron "1+2",
+    // and a heavy posted astern of a PINNED ship with its missile's red circle on the predicted spot ──
     async Task RaidsFrames()
     {
         var s = H.GetNode<PlayerShip>("Ship_1"); var keep = s.Position;
@@ -80,6 +82,19 @@ public partial class _Shots : Node
         for (int i = 0; i < 60 * 12 && sq.Phase != SquadPhase.Commit; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         await W(0.6); await Snap("49b_squad_lock_lines");
         foreach (var r in H.Raiders.ToList()) H.RaiderDown(r);
+        await W(0.3);
+        zp.SetValue(H, 0.3f);
+        var near = s.Position + new Vector2(2500f, 0f); float across = Aim.Face(near, s.Position);
+        var sn = H.FormSquad(Squads.Gank, near, across);
+        H.SpawnRaider(near + new Vector2(0f, 60f).Rotated(across), Enemies.Gunship, sn);
+        for (int i = 0; i < 3; i++) { float k = i - 1f; H.SpawnRaider(near + new Vector2(60f * k, -40f + 30f * Mathf.Abs(k)).Rotated(across), Enemies.Webifier, sn); }
+        var off = s.Position + new Vector2(-3000f, -3800f);
+        var so = H.FormSquad(Squads.Gank, off, Aim.Face(off, s.Position));
+        H.SpawnRaider(off, Enemies.Cross, so);
+        for (int i = 0; i < 2; i++) H.SpawnRaider(off + new Vector2(70f * (i * 2 - 1), -50f), Enemies.Talon, so);
+        await W(0.5); await Snap("49c_squad_names_radar");
+        foreach (var r in H.Raiders.ToList()) H.RaiderDown(r);
+        zp.SetValue(H, 0.6f);
         await W(0.3);
         // a heavy astern of a pinned ship: its missile flies only now, at where the ship will be
         s.ApplyStatus(Status.Pinned, 12.0);

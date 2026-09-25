@@ -97,7 +97,8 @@ LevelStep text, Waves LevelStep text.
   the failed-mission raid (squad ids, 4200 u), blockade (Squad.Station/Circuit), hunts (gank doctrine).
 - rung 5 `six` x2: RaidsHostAddsWire (ahost) + RaidsGuestAddsWire (aguest), mission 1; watch the mission-1
   timing (host adds ~5 s before its kill; the guest waits 15 s for MissionWon).
-- rung 4 `screens`: 49a_squad_inbound, 49b_squad_lock_lines, 49_heavy_astern_missile (read by eye once), LINT: 0.
+- rung 4 `screens`: 49a_squad_inbound, 49b_squad_lock_lines (+ GANK line), 49c_squad_names_radar (names, web
+  glyph, radar bracket/diamond/chevron "1+2"), 49_heavy_astern_missile, 35_tio (the new Adds line), LINT: 0.
 - Risks to watch at rung 3: the Solo arena now holds its adds (Raids.Held) until RaidsArenaAddsChecks and
   frees them before the kill; the lane-A burn/out-door clears use RaiderDown.
 ## GATE FIX (opus merge gate, 2 findings) -- split GFa (wire) + GFb (readability), each PRE/POST/commit
@@ -122,3 +123,12 @@ HEAD 9ea4921. Files: Radar 0d2c845a, Raider 4c9845b0, HubNodes 60c27d97, Hints 8
 SmokeTest b85abba6, Shots f2abfe85, CHANGES de9bdb1c, DESIGN df04e865; SquadSight.cs new.
 Defaults: "1+3" = heavies + the rest by Tag.Heavy ("2" when no heavy); the victim = the ship nearest a lock
 line's end within its hit radius + 150 u; names start per squad (the first member to enter view shows all).
+## GFb POST -- done. typecheck 0 errors; quick ALL PASSED. SquadSight.cs new (Groups, InFormation, Label "1+3",
+Crew, Victim, GankLine); Radar: squads first (chevron + label off-scope, bracket in formation), Blip (diamond by
+Tag.Heavy); HullHud: the GANK line over the bar; Raider: NameLeft/LabelDrop, TickName (view entry names the
+squad, lock rise names the member), name + web glyph drawn upright; Hints pilot/boss; TioWindow.AddsLine.
+Checks new: RaidsSightChecks (solo: TIO literals 6/18, 3/9, 3/9; hints; labels 1+3/2/1+2 + crews; names on view
+entry and at commit, LabelDrop 35; "GANK: GUNSHIP + 3 WEBIFIER" in the burn, none once held); guest bits in
+RaidsGuestAddsWire (label "2", names seen). Frame new: 49c_squad_names_radar; 49b comment names the GANK line.
+CHANGES entry + Handoff, DESIGN (readability bullet, trap). engine-unproven: rungs owed (solo x2, six x2, screens).
+Not covered on the wire: the GANK line on a guest (the host's webs on the guest are lone raiders, no squad).

@@ -27,10 +27,10 @@ public partial class Hints : CanvasLayer
         ["multiplayer"] = ("MULTIPLAYER", "HOST THIS WORLD, then COPY ADDRESS for your friends. To join one, type their address and JOIN."),
         ["raid"]        = ("RAIDERS", "They come for your base after a failed mission, and for your hauler on an escort. The base's guns help; nothing else you own can fight back."),
         ["hauler"]      = ("THE HAULER", "DISPATCH sends it alone: past the portal it may be lost (EVASION lowers the risk). ESCORT flies it round the four outposts for five times the pay; keep the raiders off it."),
-        ["pilot"]       = ("A LEVEL UP", "L spends your points on rudder, hull, engines and weapons, and names what your next level opens. Bosses give EXP; a level's first clear gives more."),
+        ["pilot"]       = ("A LEVEL UP", "L spends your points on rudder, hull, engines and weapons, and names what your next level opens. Bosses give EXP, and so do their adds the first time they come; a level's first clear gives more."),
         ["warp"]        = ("WARP", "V charges for 3 s, then jumps toward your target or waypoint if the bow is on it, else straight ahead. 1200 u at most, 30 s to recharge."),
         ["stasis"]      = ("STASIS", "Your ship is held in stasis, not lost. Fly the escape pod clear; F re-boards when the ship is ready."),
-        ["boss"]        = ("THE BOSS", "Red shapes are its attacks, drawn before they land: get out of them. Beat it for EXP, a bounty and parts."),
+        ["boss"]        = ("THE BOSS", "Red shapes are its attacks, drawn before they land: get out of them. Its adds come in squads: a web holds you for its beam, so kill the webifiers. Beat it for EXP, a bounty and parts."),
     };
 
     // THE TOUR a first character is walked through, in this order (Tour.cs): the things a pilot
