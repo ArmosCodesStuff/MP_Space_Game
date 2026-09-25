@@ -336,3 +336,23 @@ interceptor_a/_b (+ the old spares cargo_1, fighter_tri_b). Jobs: J3c re-map, J4
   turrets on their painted seats, flames on the bells, tint brightness (raiders read BRIGHTER, D7;
   bosses DARKER, D9).
 - J3 and J3b: the rung-3 checks and rung-4 frames each owes are listed in its POST above.
+
+## RESUMED 2026-09-25 (fresh agent): STEP 0 merge done, then Job P
+
+- STEP 0: merged `version-l` into `wt/art` (8 docs-only commits since aa1e4f9: CLAUDE.md,
+  docs/CHANGES.md, docs/DESIGN.md, docs/plans/README.md). Clean auto-merge, no conflicts. Merge
+  commit `ed2f24d`.
+
+### Job P (prove J3c+J3d, then the two owner-default builds) -- PRE
+- Intent: run quick,solo,solo,screens via the shared runner; fix every red per CLAUDE.md's three
+  traps (never loosen a literal); re-prove on two seeds; read by eye the J3c frames (0, 12, 13,
+  16b, 16c, 27, 28-28e, 46, 48, 59, 59b, 80) and J3d frames (38, 39, 42, 62-66); fix what is wrong.
+  Then build the two open-question defaults (each a check + frame): (a) Rusty Bucket shockwave
+  ring scales with BossSize; (b) camera zooms out far enough for the Drake's whole hull at closest
+  approach. Model tier: sonnet.
+- Start: ed2f24d40743471669f68b4217612ee340ab2439
+- Files (hash-object): scripts/Missions.cs fcef4d29ac5a · scripts/Sprites.cs 2617f82ebe1a ·
+  scripts/Boss.cs fcb2b18ecaad · scripts/Lancer.cs 56ba81ce8a4b · scripts/Drake.cs a066c4420492 ·
+  scripts/Hub.cs 19266e0a8d7e · tools/make_ships.ps1 8489c33d5e10 ·
+  tools/smoketest/SmokeTest.cs.txt 1a4529326e72 · tools/screens/Shots.cs.txt 7df63c952adc ·
+  docs/plans/sprites.md 86c0da1a39a9 · docs/DESIGN.md 3ea8b2f073e1 · docs/CHANGES.md 09b7328aa2fa
