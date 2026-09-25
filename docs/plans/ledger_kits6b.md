@@ -122,3 +122,25 @@ Before every job: grep the harness for checks asserting the OLD truth of what it
   in the arena guest after its 450-hull check). Test phase owes: solo x2 (LaneA6bSpotterChecks, the rewritten five),
   six x2 (the paint wire pair).
 - Next: kits6b-J2 (TOT). Bubble moves F -> Q in J2 (TOT takes F): rewrite `KeyFor(... "bubble")` / "F" comments then.
+
+## Handover 1: the first agent stops after kits6b-J1 (context), at a job boundary
+
+Done: JOB 0, J1. Next is kits6b-J2; no PRE written for it. What the next agent needs (saves re-reading):
+- **Where things are.** Lines.cs (whole, 111 lines: rows Rail/PrismOut/PrismThrough, `Strike(row, by, from, to, damage)`
+  returns the drawn end; an AtTarget row ends at `to`). Fx row consts: Fx.cs ~line 86 (`Rail = 6` ...), Fields table
+  Fx.cs ~490 (`FieldDef` rows: bubble, patrol, taunt, boost; a new field is a row). Beam rows: Beam.cs. Dealt ids:
+  Dealt.cs. Sentries: `Hub.Deployed` (landed, `DeployedTurret.OwnerId`), throws in flight: PlayerShip `_throws`
+  (~line 619). The spotter muzzle: `_mains[0]` (PlayerShip's main Turret list; `Turret.S.Barrel`, GlobalPosition).
+  Abilities: Ab rows in Abilities.cs (Bubble / Overdrive / Shockwave rows all Default Key.F today; `Timed(...)` helper
+  for Show). Ships.cs rows: FreightHauler ~246, FreightTender ~290, FreightBastion ~330.
+- **Harness.** SmokeTest.cs.txt is LF. Helpers: `SetClass`, `Wait`, `Vary/VaryAngle/VaryNear` (~1136), `KeyDown/KeyUp`
+  (~67), `AimWorld` (~81), `SentryAt(ship, cursor)` (~2000), `H.Drop(owner, at, hull)`, `H.SpawnRaider(at, Enemies.X)`,
+  `Combat.Fire(Shots.Seeker, ...)`. Solo order: the LaneA* list ~line 11040 (LaneA6bSpotterChecks after
+  LaneASentryThrowChecks). Rung-5 anchors: arena host after "the guest refitted to a FREIGHTER and parked" (~14684,
+  LaneA6bPaintWireHost), arena guest after "flying a FREIGHTER in a session" (~14975, LaneA6bPaintWireGuest).
+  Tool quirk: a long python edit in a bash heredoc failed to parse once; write the python to the scratchpad and run it.
+- **Old-truth sites J2-J8 will meet** (grep before each job): bubble pressed as F (`fr.UseAbility("bubble"` ~5218,
+  ~10620, arena guest ~15030 "// F"); the Tender's overdrive x2 (~10694-10721, `KeyFor(FreightTender, "guns")`);
+  the Bastion's shockwave (~10680, ~10985); `Abilities.For(FreightHauler).Length == 10` (arena guest) grows with each
+  row added; the weaponRows / level-wall tables (~6895-6901) and the every-ability witness sweep (~11446: every row on
+  a bar needs a witness entry there); passive PD table (~2476) keeps 2 mounts on all three.
