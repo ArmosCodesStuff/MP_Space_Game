@@ -750,3 +750,62 @@ Conflicted: scripts/Boss.cs, scripts/Enemies.cs, scripts/Ships.cs, tools/smokete
   version-l's 680 u shockwave ring + kits' PdReachOff; kits' 150 beam check + version-l's charge-once message.
 - CHANGES.md: both sides (Handoff and Unreleased).
 engine-unproven: rungs owed in the final test phase. Checks: none new (merge).
+
+## COORDINATOR NOTE 3 (2026-09-25): three checks per ability (owner ruling; CLAUDE.md 6.7)
+Every ability or drive row this lane adds carries AT LEAST THREE distinct checks, each from 3 varied situations: (1) its effect
+asserting the spec's literals, (2) each interaction its kit or kits_v31 section 7 names, (3) a guest-role check where a guest sees it,
+or a named frame where it is drawn. One check at three spots is ONE check. Written now with the code, run in the final test phase.
+Every PRE that adds an ability says "applies NOTE 3" and lists its three checks.
+
+## SLICE 3 (F5, F23 Lines, F6, F7), a new agent from this ledger
+
+### 3-0 · STEP 0 · merge version-l
+- `git merge-base --is-ancestor version-l wt/kits` failed only because version-l holds the merge commit of this
+  lane (a515479, "Merge lane kits ... slices 1-2"). `git merge --ff-only version-l`: fast-forward b57862d ->
+  a515479, no content change, nothing to resolve. No commit of its own (a fast-forward makes none).
+
+### J0 (slice 3) · the job list
+Spec read: kits_v2 §5 (F5, F6, F7), kits_v3 §5, kits_v31 §6 (F5, F7, F23) and §8; README rulings (decision 9
+CLOSED: the Sniper's piece is the ACTIVE RELOAD, `sniper_active_reload.md` §0 and §7: "Overcharge's rows are
+never written", F7's Sniper bands become {0 s, x0.40} ramping to {full, x1.00}, and they land with the chamber
+in 6c).
+
+Decisions (the documented default, or the smallest reading of the spec; D4's rule: a row lands with its reader):
+- **D24** F5's nine shot rows (Pepper, Penetrator, Buster, Pellet, EchoRound, Flak, Spotter, Reflect,
+  SiegeMissile) and its two flags (`Decoyable`: 6c Flares / F14 NetDecoy; `Command`: 6d Pepperbox) land with
+  the classes that fire them. Slice 3's F5 is the Strike loop itself: a shot strikes each body ONCE and ends
+  after `Stops` bodies (0 = through everything; every row today is 1, unchanged). `Stops` is the same word and
+  meaning as a `Lines` row's (F23): one rule for "how many bodies before it ends", for a line and a flyer.
+  A shot's `Stops` is its firer's number (like Speed, Range, Radius), defaulting to its row's.
+- **D25** F23 `Lines.All` rows: `Id` (the weapon name its blows carry, DealtBy), `Width` and `Reach` (stat ids
+  on the firer's sheet, so gear and pilot points move them as today), `Stops`, `Fx` (the Fx row drawn along it),
+  `Beam` (the Beam row of its report). One row now, `rail` (rail_width / rail_range, Stops 0, Fx.Rail,
+  Beam.Rail): the railgun's literals unchanged (150, 3 s locked charge, 2500 x 14 u, 1 s cooldown). A line
+  that stops is drawn to the last body it struck. TOT (6b) and the prism's children (slice 5) are rows.
+- **D26** F6 = NetIds on predicted missiles, in the missiles' one id space (`NetIds.Missile`, the space the
+  interceptable shots use), so F14's `NetDecoy(netId, point)` finds a Shot or a blast by one id on every peer.
+  The id rides `Hub.NetMissile`; `MissileVisual.NetId` holds it on every peer. The mortar is a
+  `Missiles.All` row in 6b. The depth-charge row stays dropped.
+- **D27** F7 = charge bands as rows (`Charge.cs`: `ChargeBand` {At = share of the full charge, Mult, Line = a
+  `Lines` row, Ramp = the multiplier rises linearly from the band below}), one pure lookup `Charges.At`. The
+  railgun's table is one band {full, x1, rail line} (its locked charge always completes): same literals. The
+  Sniper's active-reload bands and numbers (120, 0.8 s, `rail_tap` 40%) are 6c's, with ActiveReload.cs.
+  NOT built (ruling): Overcharge (`rail_over_*`). `TurretSpec.While` / `ClassArt.Hidden` never existed in the
+  tree (grep): nothing to delete. `shell_turn` (6.0, v2 Dart card) lands with its only reader, the Pepper
+  row's Command steer, in 6d (invariant D: every row is read).
+
+Jobs (each: PRE, edit + its checks, typecheck + verify -Quick, POST, commit):
+- **J8 F5** Shot.Strike: struck-once set + `Stops` (ShotDef row default 1, Shot per-shot). Files Shots.cs,
+  SmokeTest (`LaneAShotStopsChecks`). Check: a shell down a held line of 3 gunships, 3 varied angles/spacings,
+  Stops 1 / 2 / 0: exactly the first 1 / 2 / 3 lose exactly its 10, each once.
+- **J9 F23** Lines.cs (`LineDef`, `Lines.All`, `Lines.Pick`, `Lines.Strike`); FireRail on it. Files Lines.cs
+  (new), PlayerShip.cs (FireRail), SmokeTest (`LaneALinesChecks`). Checks: pure Pick, 3 varied layouts x Stops
+  0/1/2 (order along the line, pool order shuffled, one body off the line); the rail row's table against its
+  literals (2500 x 14 u, through everything, Fx rail, Beam rail); the existing railgun checks (150 on the line,
+  DealtBy["rail"]) unchanged, now through Lines.
+- **J10 F6** NetIds on predicted missiles. Files Hub.cs (ThrowMissile, _blasts, NetMissile, ShowMissile),
+  Missiles.cs (MissileVisual.NetId), SmokeTest (`LaneAMissileIdsChecks` solo; `LaneAMissileIdsHost` /
+  `LaneAMissileIdsGuest` rung 5).
+- **J11 F7** Charge.cs + FireRail through the bands. Files Charge.cs (new), PlayerShip.cs, SmokeTest
+  (`LaneAChargeBandChecks`), docs/CHANGES.md (the slice's Unreleased + Handoff), docs/DESIGN.md (Lines/Stops
+  trap), this ledger.
