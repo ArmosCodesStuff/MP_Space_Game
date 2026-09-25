@@ -193,3 +193,30 @@ fittings sweep's witness table ~13755, fitRows ~13797.
   WarpHold ~3236 (s.DriveHeld / PressDrive / Charging / ChargeHeld); the solo call list for slice 6a sits just
   before "── WARRIOR: the blade (slice 6c) ──" (~13480); rung-5 guest calls ~17420 (LaneA6c*GuestChecks).
 - Edit SmokeTest.cs.txt with a python script from a file (LF, binary); bash heredocs with long C# fail here.
+
+### kits6a-J2 · PRE · Brace (A6a-2) -- tier opus (agent 2; no COORDINATOR NOTE in the tail)
+- Intent: a generic TIMED row foundation -- AbilityDef `Time` (stat id: how long it runs) and `Guard` (stat id: the
+  Hardened share it applies for that time), pressed through one door PlayerShip.RunFor(id) (Left = Time, Cool =
+  Cooling(Cooldown), Hardened at Guard) -- so Brace (and CIWS / Suppress after it) are rows, not methods. Ab.Brace
+  (Q, Hold 0.5, Guard brace_share 0.35, 3 s, 25 s from the press; refused COOLING only); BB rows brace_*; BB
+  Abilities = Guns, FireMode, Broadside, Brace. Items "@duration" gains brace_time.
+  Checks: NEW LaneA6aBraceChecks, LaneA6aBraceTauntChecks, LaneA6aBraceWarpChecks; the sweep's witness row "brace".
+- Files: scripts/Abilities.cs, scripts/Ships.cs, scripts/PlayerShip.cs, scripts/Items.cs, tools/smoketest/SmokeTest.cs.txt.
+- HEAD 2301512f0d293c28320336ba980609a187836a0d · Abilities.cs 88abfd0541f772b420ad08ad43d135fdf171d775 · Ships.cs
+  ba82e89025910c69d46ed1b6ba95d09fb02ce131 · PlayerShip.cs a99515249a16e6f89903cd9e328738ddf215c2da · Items.cs
+  c25c8da8e16f9297cbe1347682b81727e53dc633 · SmokeTest.cs.txt 9c965a24dfbf089b1392baa70c8818266155d428
+### kits6a-J2 · POST
+- Verdict: compiles; typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final
+  test phase.
+- Built: AbilityDef.Time / Guard + PlayerShip.RunFor (the timed-row door: Left, Cooldown from the press, Hardened at
+  Guard); Ab.Brace (Q) as a row; BB Rows brace_time 3 / brace_share 0.35 / brace_cooldown 25; BB bar Guns, FireMode,
+  Broadside, Brace; Items @duration + brace_time.
+- Ruling read (A6a-2 amended): kits_v31 §7's "WD Taunt's guard vs BB Brace" is a DESIGN split (v3 §5: deep-short vs
+  shallow-long), not a stack on one hull (neither class carries the other). StatusSet keeps ONE Hardened entry (longest
+  time, strongest share), so a 0.67 applied beside a Brace would read 0.35 for its whole time: noted, not changed.
+- Checks NEW: LaneA6aBraceChecks (rows; 3 runs still/ahead/turning: 250->87.5, 30->10.5, 12->4.2, whole before and
+  after, hold 0.5, <= 44 u/s, 25.0 s, COOLING, bar BRACED), LaneA6aBraceWarpChecks (3 runs: braced mid-charge, the
+  jump within 10% of ChargeReach, the guard still runs after it: 100 -> 35), LaneA6aBraceSplitChecks (the split
+  literals; 3 runs: 24 broadside shells while braced, a second guard 0.67/0.5/0.2 -> the stronger kept). The sweep's
+  witness row "brace". REWRITTEN: the battleship bar order line (+ "brace").
+- Owed at rung 3: all of the above. Next: kits6a-J3 (CIWS).

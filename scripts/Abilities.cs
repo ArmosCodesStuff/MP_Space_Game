@@ -145,6 +145,10 @@ public class AbilityDef
     // THE COOLDOWN A PRESS SETS (a stat id), for a row whose press spends through PlayerShip.Spend (Pops, Lays):
     // the flares, the curtain.
     public string Cooldown;
+    // A TIMED ROW (PlayerShip.RunFor): pressed, it runs Time seconds (a stat id) and its Cooldown starts from the
+    // press; while it runs its Hold, lifts and OnDealt apply as any row's. Guard (a stat id) is the share of every
+    // blow the hull takes meanwhile (Hardened at that share: two hardenings keep the stronger, D9). The Brace.
+    public string Time, Guard;
 
     public SlotState State(PlayerShip s, IHittable selected) =>
         Show != null ? Show(s, selected) : new SlotState { Line = "READY" };
@@ -355,6 +359,18 @@ public static class Ab
         Press = (s, _) => s.Shockwave(),
         Refuse = (s, _) => s.Sl("shockwave").Cool > 0 ? "CHARGING" : null,
         Show = (s, _) => Timed(s, "shockwave", "wave_cooldown", "READY"),
+    };
+
+    // THE BRACE (the Battleship's Q, v1): 3 s taking x0.35 of every blow at half the top speed; 25 s from the press.
+    // A timed row (RunFor): its guard runs through a warp jump, and the broadside and guns keep firing under it.
+    public static readonly AbilityDef Brace = new()
+    {
+        Id = "brace", Name = "Brace", Short = "BRACE", Default = Key.Q,
+        Blurb = "For 3 s the hull takes 35% of every blow, at half its top speed. The guns keep firing.",
+        Time = "brace_time", Guard = "brace_share", Cooldown = "brace_cooldown", Hold = 0.5,
+        Press = (s, _) => s.RunFor("brace"),
+        Refuse = (s, _) => s.Sl("brace").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => Timed(s, "brace", "brace_cooldown", "BRACED"),
     };
 
     // ── the heavy fighters ───────────────────────────────────────────────────

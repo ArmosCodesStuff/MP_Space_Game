@@ -4990,6 +4990,132 @@ public partial class _Test : Node
         }
     }
 
+    // ── SLICE 6a: THE BRACE (the Battleship's Q, v1: x0.35 taken for 3 s at half speed, 25 s from the press) ──
+    // Three varied runs (VaryNear spot, VaryAngle heading; still / full ahead from rest / turning): blows of 250, 30
+    // and 12 at VaryNear bearings -- whole before the press, x0.35 inside it (0.5-2.9 s after the frame the guard
+    // shows), whole again 3.1-3.4 s after; the hold 0.5 and a full-ahead hull under 44 u/s (88 x 0.5); the
+    // cooldown 25.0 from the press, and a second Q refused COOLING. The bar reads BRACED while it runs.
+    async Task LaneA6aBraceChecks(Vector2 yonder)
+    {
+        var bs = new ShipStats(ShipClass.Battleship);
+        Check(bs["brace_time"] == 3 && bs["brace_share"] == 0.35 && bs["brace_cooldown"] == 25 && Ab.Brace.Hold == 0.5
+              && Ab.Brace.Default == global::Godot.Key.Q && Unlocks.Nth(ShipClass.Battleship, 1) == Ab.Broadside
+              && Unlocks.Nth(ShipClass.Battleship, 2) == Ab.Brace && new ShipStats(ShipClass.Destroyer)["brace_share"] == 0,
+              $"the Brace's rows: {bs["brace_time"]:0} s (3), x{bs["brace_share"]:0.00} taken (0.35), hold x{Ab.Brace.Hold:0.0} (0.5), {bs["brace_cooldown"]:0} s (25); Q; the battleship's ability 2 ({Unlocks.Nth(ShipClass.Battleship, 2)?.Name})");
+        await SetClass(ShipClass.Battleship);
+        var s = Me; var q = Abilities.KeyFor(ShipClass.Battleship, "brace");
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        for (int run = 0; run < 3; run++)
+        {
+            s.Sl("brace").Left = 0; s.Sl("brace").Cool = 0; s.Statuses.Clear(Status.Hardened); s.Hp = s.MaxHp;
+            s.Position = VaryNear(yonder, 300f); s.Velocity = Vector2.Zero; s.Rotation = VaryAngle();
+            await Frame();
+            double Blow(double amt, string tag) { double h0 = s.Hp; s.Hit(amt, s.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(150f, 400f), $"brace_probe:{tag}{run}"); double took = h0 - s.Hp; s.Hp = s.MaxHp; return took; }
+            double pre = Blow(250, "pre");
+            if (run >= 1) KeyDown(global::Godot.Key.W);
+            if (run == 2) KeyDown(global::Godot.Key.D);
+            Key(q);
+            int frames = 0;
+            for (; frames < 6 && !s.Statuses.Has(Status.Hardened); frames++) await Frame();
+            double t0 = s.Clock, cool = s.Sl("brace").Cool;
+            string line = Abilities.Find(ShipClass.Battleship, "brace").State(s, null).Line;
+            async Task Until(double t) { while (s.Clock < t) await Frame(); }
+            await Until(t0 + Vary(0.5f, 1.2f));
+            double a = Blow(250, "a"), b = Blow(30, "b");
+            Key(q); await Frame(); await Frame();
+            string again = s.FailNote("brace");
+            await Until(t0 + Vary(2.5f, 2.9f));
+            double c = Blow(12, "c"), held = s.Held, speed = s.Velocity.Length();
+            await Until(t0 + Vary(3.1f, 3.4f));
+            double after = Blow(250, "after");
+            KeyUp(global::Godot.Key.W); KeyUp(global::Godot.Key.D); s.Velocity = Vector2.Zero;
+            Check(Math.Abs(pre - 250) < 1e-6 && frames <= 3 && Math.Abs(a - 87.5) < 1e-6 && Math.Abs(b - 10.5) < 1e-6 && Math.Abs(c - 4.2) < 1e-6
+                  && Math.Abs(after - 250) < 1e-6 && Math.Abs(held - 0.5) < 1e-6 && (run == 0 ? speed < 1 : speed > 30 && speed <= 44.5)
+                  && Math.Abs(cool - 25.0) < 0.1 && again == "COOLING" && line.StartsWith("BRACED"),
+                  $"brace run {run} ({(run == 0 ? "still" : run == 1 ? "full ahead" : "turning")}): 250 before takes {pre:0.0}; braced 250 -> {a:0.00} (87.5), 30 -> {b:0.00} (10.5), 12 -> {c:0.00} (4.2); after 3 s 250 -> {after:0.0}; "
+                  + $"hold {held:0.00} (0.5), {speed:0.0} u/s ({(run == 0 ? "0" : "<= 44")}); cooldown {cool:0.00} (25); Q again {again} (COOLING); the bar '{line}' (BRACED)");
+            s.Sl("brace").Cool = 0;
+            await Wait(0.2);
+        }
+    }
+
+    // ── SLICE 6a: THE BRACE AND THE WARP (kits_v31 §3.4: "the charge and the jump are unaffected, and the guard keeps
+    // running through a jump") -- three varied runs (VaryNear spot, VaryAngle heading, the brace pressed just before the
+    // charge or 0.05-0.6 s into it): the charge runs (Charging), the jump lands within 10% of ChargeReach taken the
+    // frame before the release, and on the far side the brace still runs and a 100 blow takes 35.
+    async Task LaneA6aBraceWarpChecks(Vector2 yonder)
+    {
+        await SetClass(ShipClass.Battleship);
+        var s = Me;
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        for (int run = 0; run < 3; run++)
+        {
+            s.Sl("brace").Left = 0; s.Sl("brace").Cool = 0; s.Sl("warp").Cool = 0; s.Statuses.Clear(Status.Hardened); s.Hp = s.MaxHp;
+            s.Position = VaryNear(yonder, 300f); s.Velocity = Vector2.Zero; s.Rotation = VaryAngle();
+            await Frame();
+            if (run == 0) { s.UseAbility("brace", 0); await Frame(); }
+            s.DriveHeld = true; s.PressDrive();
+            await Wait(Vary(0.05f, 0.6f));
+            if (run > 0) { s.UseAbility("brace", 0); await Frame(); }
+            bool braced = s.Statuses.Has(Status.Hardened), charging = s.Charging;
+            await Wait(Vary(0.3f, 0.6f));
+            float reach = s.ChargeReach; var from = s.Position;
+            s.DriveHeld = false;
+            float moved = 0;
+            for (int i = 0; i < 40 && moved < 50f; i++) { await Frame(); moved = s.Position.DistanceTo(from); }
+            await Frame();
+            double h0 = s.Hp; s.Hit(100, s.Position + Vector2.Right.Rotated(VaryAngle()) * 300f, $"brace_warp:{run}"); double took = h0 - s.Hp; s.Hp = s.MaxHp;
+            Check(braced && charging && reach > 50f && Math.Abs(moved - reach) <= reach * 0.1f + 10f && s.Sl("brace").Left > 0 && Math.Abs(took - 35) < 1e-6,
+                  $"brace + warp run {run}: braced {braced}, charging {charging}; the jump went {moved:0} u against a reach of {reach:0} (within 10%); after it the guard runs ({s.Sl("brace").Left:0.00} s left) and 100 takes {took:0.00} (35)");
+            for (int i = 0; i < 20 && s.Charging; i++) await Frame();
+            s.Sl("brace").Left = 0; s.Statuses.Clear(Status.Hardened); s.Sl("warp").Cool = 0;
+            await Wait(0.2);
+        }
+    }
+
+    // ── SLICE 6a: THE BRACE BESIDE THE OTHER GUARDS (kits_v3 §5, kept by kits_v31 §7: "WD Taunt's guard vs BB Brace --
+    // split by depth": Brace deep and short, x0.35 for 3 s at half speed; Taunt shallow and long, x0.67 for 6 s, no hold)
+    // and timed for a super: the rows keep the split, the broadside fires its whole 24 shells while braced, and a second
+    // guard on the same hull (D9: the stronger kept while both run) never weakens the Brace nor is weakened by it --
+    // three varied runs, the other guard (0.67, 0.5 or 0.2) applied before or after the press at a VaryNear spot.
+    async Task LaneA6aBraceSplitChecks(Vector2 yonder)
+    {
+        var bs = new ShipStats(ShipClass.Battleship); var wd = new ShipStats(ShipClass.HeavyWarden);
+        Check(bs["brace_share"] < wd["taunt_guard"] && bs["brace_time"] < wd["taunt_time"] && Ab.Brace.Hold == 0.5 && Ab.Taunt.Hold == 1
+              && wd["taunt_guard"] == 0.67 && wd["taunt_time"] == 6 && bs["brace_share"] == 0.35 && bs["brace_time"] == 3
+              && Abilities.Find(ShipClass.HeavyWarden, "brace") == null && Abilities.Find(ShipClass.Battleship, "taunt") == null,
+              $"the Brace and the Taunt split by depth: the Brace x{bs["brace_share"]:0.00} for {bs["brace_time"]:0} s at hold x{Ab.Brace.Hold:0.0}, the Taunt x{wd["taunt_guard"]:0.00} for {wd["taunt_time"]:0} s at no hold; neither class carries the other");
+        await SetClass(ShipClass.Battleship);
+        var s = Me; var fKey = Abilities.KeyFor(ShipClass.Battleship, "broadside");
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        var others = new[] { 0.67, 0.5, 0.2 };
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f); float rot = VaryAngle(), side = run % 2 == 0 ? 1f : -1f, b = Vary(70f, 110f);
+            s.Sl("brace").Left = 0; s.Sl("brace").Cool = 0; s.Sl("broadside").Cool = 0; s.Sl("broadside").Left = 0; s.Sl("broadside").N = 0;
+            s.Statuses.Clear(Status.Hardened); s.Hp = s.MaxHp;
+            Vector2 Aim() => s.Position + Vector2.Up.Rotated(s.Rotation).Rotated(side * Mathf.DegToRad(b)) * 700f;
+            for (int i = 0; i < 120; i++) { s.Position = at; s.Velocity = Vector2.Zero; s.Rotation = rot; AimWorld(Aim()); await Frame(); }
+            if (run != 1) s.ApplyStatus(Status.Hardened, 6, others[run]);
+            s.UseAbility("brace", 0); await Frame();
+            if (run == 1) s.ApplyStatus(Status.Hardened, 6, others[run]);
+            var seen = new System.Collections.Generic.HashSet<Shot>(Shells());
+            AimWorld(Aim()); Key(fKey);
+            int shells = 0; double took = -1;
+            for (int i = 0; i < 132; i++)
+            {
+                s.Position = at; s.Velocity = Vector2.Zero; s.Rotation = rot; AimWorld(Aim()); await Frame();
+                shells += Shells().Count(x => seen.Add(x));
+                if (i == 60) { double h0 = s.Hp; s.Hit(100, s.Position + Vector2.Right.Rotated(VaryAngle()) * 300f, $"brace_split:{run}"); took = h0 - s.Hp; s.Hp = s.MaxHp; }
+            }
+            double want = Math.Min(0.35, others[run]) * 100;
+            Check(shells == 24 && Math.Abs(took - want) < 1e-6,
+                  $"brace + broadside run {run}, a second guard x{others[run]:0.00} {(run == 1 ? "after" : "before")} the press: {shells} shells while braced (24), a 100 blow takes {took:0.00} ({want:0.00}: the stronger kept)");
+            s.Statuses.Clear(Status.Hardened); s.Sl("brace").Left = 0;
+            await Wait(0.2);
+        }
+    }
+
     async Task LaneA6cBladeChecks(Vector2 yonder)
     {
         var sh = new ShipStats(ShipClass.HeavyWarrior);
@@ -10925,7 +11051,7 @@ public partial class _Test : Node
 
         // ── THE BROADSIDE (F): the main turrets swing onto the cursor through a 0.5 s wind-up, then
         //    every main gun fires six volleys 0.25 s apart at x1.25; a 12 s cooldown; the ship steers throughout ──
-        Check(Abilities.For(ShipClass.Battleship).Where(a => !a.Open).Select(a => a.Id).SequenceEqual(new[] { "guns", "firemode", "broadside", "warp" })
+        Check(Abilities.For(ShipClass.Battleship).Where(a => !a.Open).Select(a => a.Id).SequenceEqual(new[] { "guns", "firemode", "broadside", "brace", "warp" })
               && Abilities.KeyFor(ShipClass.Battleship, "broadside") == global::Godot.Key.F,
               "the battleship's bar: guns, fire mode, the BROADSIDE on F -- no missile, no reload, and no key for point defence, which is passive");
         Check(ship.Stats["broadside_volleys"] == 6 && ship.Stats["broadside_mult"] == 1.25 && ship.Stats["broadside_windup"] == 0.5
@@ -13465,6 +13591,9 @@ public partial class _Test : Node
             // ── BATTLESHIP: the arcs and the broadside (slice 6a) ──
             await LaneA6aArcChecks(yonder);
             await LaneA6aBroadsideChecks(yonder);
+            await LaneA6aBraceChecks(yonder);
+            await LaneA6aBraceWarpChecks(yonder);
+            await LaneA6aBraceSplitChecks(yonder);
 
             // ── WARRIOR: the blade (slice 6c) ──
             await LaneA6cBladeChecks(yonder);
@@ -13885,6 +14014,7 @@ public partial class _Test : Node
                     ["tether"]    = sp => sp.Sl("tether").N == 1 && sp.Sl("tether").Cool > sp.Stats["tether_recharge"] - 0.1 && H.Laid.Any(z => z.OwnerId == sp.OwnerId),
                     ["flares"]    = sp => sp.Sl("flares").Cool > sp.Stats["flare_cooldown"] - 0.1 && H.Salvos.Any(sv2 => sv2.At.DistanceTo(sp.Position) < 5f),
                     ["taunt"]     = sp => sp.Sl("taunt").Left > sp.Stats["taunt_time"] - 0.1 && sp.Statuses.Has(Status.Hardened),
+                    ["brace"]     = sp => sp.Sl("brace").Left > sp.Stats["brace_time"] - 0.1 && sp.Statuses.Has(Status.Hardened) && Math.Abs(sp.Held - 0.5f) < 1e-3f,
                     ["curtain"]   = sp => sp.Sl("curtain").Cool > sp.Stats["curtain_cooldown"] - 0.1 && H.Laid.Any(z => z.OwnerId == sp.OwnerId && z.Row == Zones.Curtain),
                 };
                 var onBars = Classes.All.Where(cd2 => cd2.Ready).SelectMany(cd2 => cd2.Abilities)

@@ -181,6 +181,11 @@ public static class Classes
                 ItemDef.Own(GearSlot.Weapon, "bs_main_battery", "Mk I Main Battery", "the four main turrets", "broadside_mult"),
                 ItemDef.Own(GearSlot.Utility, "bs_broadside", "Broadside Battery", "every main gun, volley on volley", "broadside_mult"),
             },
+            Rows = new StatRow[] {
+                new() { Group = "Brace", Id = "brace_time",     Label = "Lasts",        Base = 3, Unit = "s", Dec = 1 },
+                new() { Group = "Brace", Id = "brace_share",    Label = "Damage taken", Base = 0.35, Unit = "x", Dec = 2 },
+                new() { Group = "Brace", Id = "brace_cooldown", Label = "Cooldown",     Base = 25, Unit = "s", Dec = 1, Inverse = true },
+            },
             Art = new ClassArt {
                 // battleship_bb05 (the pack, J5): 4 mains on the flanking twins (the two forward
                 // rows, both sides -- Q3's default), the barrels of all 6 painted twins patched
@@ -190,7 +195,7 @@ public static class Classes
                 Pds   = new Vector2[] { new(-58.99f, 71.73f), new(58.99f, 71.73f) },
                 MainBears = new Vector2[] { new(0f, 150f), new(0f, 150f), new(30f, 180f), new(30f, 180f) },
                 TurretTexScale = 1.9f / 5.5f, MainBarrel = 23.18f, PdBarrel = 10.45f },
-            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Broadside } },
+            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Broadside, Ab.Brace } },
 
         new() { Id = ShipClass.Carrier, Name = "CARRIER", Ready = true, Targets = 3, Fit = Fit.Wing | Fit.Pd,
             Blurb = "No main gun: point defence, a fighter wing, torpedo bombers off its deck.",

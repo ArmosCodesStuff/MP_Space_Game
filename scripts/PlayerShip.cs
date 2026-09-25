@@ -757,6 +757,18 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         return d;
     }
 
+    // A TIMED ROW'S PRESS (AbilityDef.Time), on the host: it runs its Time, its Cooldown from the press, and
+    // hardens the hull at its Guard share for that time. The row's Refuse holds a press while it cools.
+    public void RunFor(string id)
+    {
+        var def = Abilities.Find(Class, id);
+        ref var sl = ref Sl(id);
+        if (!Net.Sim || def?.Time == null || sl.Cool > 0) return;
+        sl.Left = Stats[def.Time];
+        if (def.Cooldown != null) sl.Cool = Cooling(Stats[def.Cooldown]);
+        if (def.Guard != null) _status.Apply(Status.Hardened, sl.Left, Stats[def.Guard]);
+    }
+
     public void StartOverdrive()
     {
         if (Sl("overdrive").Cool > 0) return;
