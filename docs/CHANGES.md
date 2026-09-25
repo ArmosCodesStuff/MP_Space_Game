@@ -468,6 +468,67 @@ outstanding from the batch of 2026-09-23.)*
 
 ## Unreleased
 
+### Class kits, lane A J7: heavy rows, F20 (2026-09-25, worktree wt/kits)
+
+Every heavy carries **two barrels** now (`EnemyDef.Barrels`), each doing 1.29 damage (`Dps`), so
+2.58 total on the gunship, the cross and the lancerkin alike (they carried 2.0 / 2.6 / 1.8 before,
+unequal for no reason the numbers ever gave). One `Strike` per volley carries `Dps x Barrels x
+ShotEvery x Strength` -- two separate Strikes, 0.52 s apart or not, would be eaten by the target's
+own hit gap and undercount -- drawn as that many flashes from barrel offsets either side of the
+turret. `EnemyDef.MissileFlight` (10 s) replaces the shared `Raider.MissileFlight` const (12 s,
+deleted): the Lancerkin's own point is standing further off than the gunship, so its flight need
+not match the gunship's any more than its range or its cadence do. `MissileDamage` 42 -> 35 (the
+signed-off number). **The missile throw only fires at a PINNED target now** -- before, a heavy
+waiting at the map's edge could already be lobbing missiles at a target that had never been pinned
+at all. `EnemyDef.Cc` (a `Status?`) is what a Pin-way row's latch applies to what it holds -- every
+light sets `Cc = Status.Pinned`, generalising what the shared latch code used to hardcode; a
+Standoff row (every heavy) leaves it null, since it never latches this way. `EnemyDef.Exp` (6 a
+light, 18 a heavy) is new data only -- lane G pays it, not built here.
+
+**Checks:** the ENEMY TABLE block (already the one place these literals lived) extended with
+`Barrels`, and a new paragraph proving 2.58 on every heavy, 35/10 on the missile, `Cc` and `Exp` all
+in that one place. New `LaneAHeavyRowsChecks`: from 3 varied spots, an unpinned target inside a
+gunship's 500 u missile reach draws nothing at all (a separate loop, run first, so no run's pin
+outlives into the next run's unpinned head); from 3 more varied spots, a pinned target's gunship
+lands 2.58 +- 0.15 DPS (both barrels) and its missile's flight is 10 s (read off the warning ring's
+own `.Time`) and lands 35. Every old-truth literal in the existing heavy-raider narrative and the
+Lancerkin-row-independence test rewritten to the new numbers; the narrative's missile sub-test now
+pins its target directly first, since the throw it used to test unpinned no longer happens.
+**Rungs:** 1 and 2 in the worktree; rung 3 proved together with J6 (below) on two seeds.
+
+**Known broken:** nothing known.
+
+### Class kits, lane A J6: F1's Add and Ramp (2026-09-25, worktree wt/kits)
+
+Two new kinds of lift, neither carried by a class yet (6d, the Dart's Ramjet, is the first). **Add**
+(`AbilityDef.SpeedAdd`, a stat id): a flat top speed on top of the lift's own multiplier, before the
+hold -- `PlayerShip.TopSpeed(sheet, lift, add, hold)`, pure and static, is the one place the
+arithmetic lives. **Ramp** (`AbilityDef.Ramp`, a new `RampSpec`: `Build`/`Cap`/`Bleed` stat ids + a
+condition): a lift whose size is a running total kept in the row's own slot (`Sl(id).Own`) -- builds
+while it runs and the condition holds, bleeds with the turn regardless, caps, and once the row stops
+running drains toward 0 at the cap's own rate a second (so a value at the ceiling empties in exactly
+1.0 s). `RampSpec.Step` is the one place ITS arithmetic lives too: pure, no ship, no Godot frame, so
+both are provable before any row exists to carry them -- proved here with the SAME numbers 6d's
+Ramjet will actually use (`ramjet_build 0.10 / ramjet_cap 0.50 / ramjet_bleed 0.20`, kits_v3 3.6).
+
+**Checks:** new `LaneARampChecks` (the pure step, varied by frame rate -- 1/30, 1/60, 1/144 s -- on
+a 260 u/s sheet: top after 1/3/5/7 s straight at full throttle 286/338/390/390, 1 s of full rudder
+390 -> 364, then released, ~0 by 9.0 s total) and `LaneASpeedAddChecks` (the pure formula, 3 varied
+tuples, one of them the plan's own 260 x 1.5 + 100 = 490). One bug found at rung 3 while proving
+this, in a J5 check, not in J6: see the note in J7's entry above (folded in since the same rung 3
+run touches SmokeTest.cs.txt's shared file). **Rungs:** 1 and 2 in the worktree; rung 3 proved
+together with J7 on two seeds (both jobs' checks were in the same file before either was first
+proved green, so one chain, tag `kits_j67a`, proves both and they land in one commit).
+
+**Fixed in passing (found by J6's own rung-3 run, in J5's check):** `LaneADamageDoorChecks`'s
+main-gun and point-defence sub-tests spawned their two targets at independent random angles with no
+guaranteed separation -- a stray main-gun shell could reach the point-defence target (or the
+reverse) on an unlucky draw, which J5's own two proving seeds never happened to hit. Fixed by
+running the two sub-tests one target at a time (the main-gun target is spawned, fired on and cleared
+before the point-defence target is ever spawned), removing the chance of it rather than dodging it.
+
+**Known broken:** nothing known.
+
 ### Class kits, lane A J5: the hostile damage door, F4 + F18 (2026-09-25, worktree wt/kits)
 
 One static function every player-side blow on a hostile now goes through: `Dealt.Deal(IHittable

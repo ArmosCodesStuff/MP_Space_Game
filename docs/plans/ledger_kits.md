@@ -318,6 +318,139 @@ revert or keep the half-made edits, then run the job again (CLAUDE.md §2b rule 
   (the Trigger/AimPoint fix above); CHANGES.md (Unreleased entry, this batch); this ledger (POST).
 - Checkpoint: the commit after this entry ("Kits lane A J5"). Next: J6 (F1 Add + Ramp, D18).
 
+### J6 · PRE · F1 Add + Ramp (D18)
+- Intent: `AbilityDef.SpeedAdd` (a stat id): a flat top speed added after the lift's own multiplier,
+  before the hold. `AbilityDef.Ramp` (new `RampSpec` class: `Build`/`Cap`/`Bleed` stat ids + a
+  `Condition`): a lift whose size is a running total kept in the row's own slot (`Sl(id).Own`) --
+  `+Build` a second while it runs and the condition holds, `-Bleed x (|yaw|/turn_rate)` a second
+  always while it runs, clamped `[0, Cap]`; once the row stops running (`Left <= 0`) it drains
+  toward 0 at `Cap` a second (so a full-cap value empties in exactly 1.0 s; less than full empties
+  sooner, same as CLAUDE.md's "0 by 9.0 s" reading -- a ceiling, not an exact instant). The step is
+  ONE pure static method (`RampSpec.Step`, no ship, no Godot frame) so it is provable before any row
+  uses it; `PlayerShip.TickAbilities` drives `Sl(id).Own` through it every frame (before the
+  `Left <= 0` continue, so the drain runs after the row stops), and `Lifts(rate: false)` folds the
+  running `Own` in as an already-scaled share (`1 + Own`) alongside `SpeedStat`. A new
+  `PlayerShip.TopSpeed(sheet, lift, add, hold)` (pure, static) is the one place `Add` lands, called
+  from `Steer`'s speed cap; a new private `SpeedAdds()` sums every running row's `SpeedAdd` stat, the
+  same shape as `Lifts`. No class row uses either yet (6d, the Dart's Ramjet); reverse-derived from
+  v3 §3.6's own future row (`ramjet_build 0.10 / ramjet_cap 0.50 / ramjet_bleed 0.20`) against its
+  literals, so `RampSpec.Step`'s math is proved with the SAME numbers 6d will actually use.
+- Checks: `LaneARampChecks` (pure `RampSpec.Step`, varied by dt 1/30, 1/60, 1/144 s: top after
+  {1,3,5,7} s straight at full throttle on a 260 sheet {286,338,390,390} +-3; 1 s of full-rudder-share
+  yaw 390 -> 364; then not holding, ~0 by 9.0 s total), `LaneASpeedAddChecks` (pure `TopSpeed`, 3
+  varied (sheet, lift, add, hold) tuples, one of them the spec's own 260 x 1.5 + 100 = 490).
+- Files: scripts/Abilities.cs (SpeedAdd, RampSpec + Step), scripts/PlayerShip.cs (TickAbilities,
+  Lifts, SpeedAdds, TopSpeed, Steer's one line), tools/smoketest/SmokeTest.cs.txt, docs/CHANGES.md,
+  this ledger.
+- Model tier: sonnet (writer continuing from a green J5).
+- Start: 6aeb9e9563da8d4a68f1294846ac350502d47454
+- Hashes: Abilities 9b12c608 · PlayerShip 6b560437 · SmokeTest e04a8af5 · CHANGES 9572df7c
+
+### J6 · POST
+- Verdict: NOT PROVEN. The prior writer's POST here claimed green off tag kits_j67a; that claim is
+  FALSE (see COORDINATOR NOTE 2) and is struck. Rung 1 and rung 2 green on the code as written.
+  RampSpec.Step's own math needed no fix -- every LaneARampChecks / LaneASpeedAddChecks assertion
+  (pure, no ship) passed on every rung-3 attempt seen so far, including the failing ones below; only
+  J7's own new check (`LaneAHeavyRowsChecks`) and, on the first attempt, a J5 knife edge, were red.
+  The J5 knife edge (mainTgt/pdTgt placed at independent random angles with no guaranteed separation,
+  letting a stray shell reach the wrong target) was fixed in the CHECK on the first attempt (mainTgt
+  spawned, fired on and cleared before pdTgt exists) and has not recurred since.
+- Files: Abilities.cs, PlayerShip.cs (as the PRE); SmokeTest.cs.txt (LaneARampChecks,
+  LaneASpeedAddChecks, their call, AND `LaneADamageDoorChecks`'s main-gun/PD isolation fix);
+  CHANGES.md; this ledger.
+- Checkpoint: shared with J7 (see J7's POST) -- SmokeTest.cs.txt had J7's code already written on top
+  before any rung-3 run finished (both jobs were mid-flight in the same working tree), so J6 and J7
+  land in ONE commit and are proven only together, by K1's chain. Next: J7's POST, then K1.
+
+### J7 · PRE · F20 (D19)
+- Intent: `EnemyDef.Barrels` (1; heavies 2) and `Dps` PER BARREL: heavies 1.29 (gunship 2.0, cross
+  2.6, lancerkin 1.8 today), so 2.58 total on every heavy alike. One `Strike` per volley carries
+  `Dps x Barrels x ShotEvery x Strength` (light and heavy Strike sites both, generalised rather than
+  special-cased for heavies alone); a heavy's turret draws that many flashes, from barrel offsets
+  either side of its centre, when `Barrels > 1`. `EnemyDef.MissileFlight` (10; replaces the shared
+  `Raider.MissileFlight` const -- deleted, every reader moved to `Def.MissileFlight`).
+  `MissileDamage` 42 -> 35 (the README's own ruling). The missile throw gains a pin gate: only while
+  its target is pinned (`Def.Missiles && pinned && ...`) -- before, a heavy waiting at the map's
+  edge could already lob missiles at a target that had never been pinned. `EnemyDef.Cc` (a
+  `Status?`): what a Pin-way row's latch applies to what it holds -- every light sets `Cc =
+  Status.Pinned` (what the shared latch code hardcoded before); a Standoff row (every heavy) leaves
+  it null, since it never latches this way. `EnemyDef.Exp` (double): 6 a light, 18 a heavy (lane G
+  pays it -- not built here). Raider.cs's shared `HeavyDps` reads `Dps * Barrels` now, so it still
+  answers the heavy's TOTAL dps to its one caller (a test).
+- Checks: the ENEMY TABLE block (SmokeTest, already the one place these literals lived) extended
+  with `Barrels`, and a new paragraph asserting 2.58 on every heavy, 35/10 on the missile, `Cc`
+  (Pinned on every light, null on every heavy) and `Exp` (6/18) all in that one place. New
+  `LaneAHeavyRowsChecks`: from 3 varied spots, an UNPINNED target inside a gunship's 500 u missile
+  reach draws nothing (a separate loop, run first, so no run's pin outlives into the next run's
+  unpinned head); then, separately, from 3 more varied spots, a PINNED target's gunship lands 2.58
+  +- 0.15 DPS (both barrels) and its missile's flight is 10 s (read off the warning ring's own
+  `.Time`, not a wall clock) and lands 35. Rewrote every old-truth literal the grep in kits_v2 3.6
+  named: the 6b heavy-raider block's "2 DPS" -> "2.58", its "12 s" flight/warning-ring assertions ->
+  "10 s", its "42-damage blast" -> "35-damage", and its missile sub-test now pins the target directly
+  first (the pin gate would otherwise silence it) instead of testing an unpinned throw that no longer
+  happens; the Lancerkin-row-independence test's `MissileDamage 42` -> `35` and gained a
+  `MissileFlight` column (8 s on the temporary override, 10 s the row's own) since that number is a
+  row now too, not a shared const.
+- Files: scripts/Enemies.cs (Barrels, MissileFlight, Cc, Exp, MissileDamage 42->35, Dps 2.0/2.6/1.8
+  -> 1.29 + Barrels=2), scripts/Raider.cs (HeavyDps, the door's Barrels term, the two-flash draw, the
+  missile's pin gate, Def.MissileFlight, Def.Cc), scripts/Missiles.cs (one stale comment),
+  tools/smoketest/SmokeTest.cs.txt (the ENEMY TABLE extension, the 6b block's literals, the
+  Lancerkin-independence test, new `LaneAHeavyRowsChecks` + its call), docs/CHANGES.md, this ledger.
+- Model tier: sonnet (writer continuing from a green rung 2; rung 3 shared with J6, see J6's POST).
+- Start: 6aeb9e9563da8d4a68f1294846ac350502d47454 (same as J6 -- both land in one commit; Enemies.cs,
+  Raider.cs and Missiles.cs were untouched at that commit, so their pre-J7 hash IS that commit's).
+
+### J7 · POST
+- Verdict: NOT PROVEN. The prior writer's POST here claimed green off tag kits_j67a; that is FALSE.
+  kits_j67a: quick and solo green, but `LaneAHeavyRowsChecks`' pinned-missile sub-test red on both
+  seeds ("...and it lands 35 (0)"), 10 problems in that run's summary. kits_j67b (3 problems) and
+  kits_j67c (killed mid-run, no verdict) followed, chasing the same red without a diagnosis. Diagnosed
+  in COORDINATOR NOTE 2 (fan-out, 5/5 agreed): the check, not the F20 code, is wrong -- hvM is forced
+  to throw on its first tick with a single Lead sample (zero velocity, so Predict aims at the pilot's
+  CURRENT position), and in kits_j67b the pilot was not held in place while Pinned forces thrust,
+  drifting it off the 90 u blast during the 10 s flight; separately, hvL's own stray blast (default
+  `_missileCd`, ready well before hvM's forced-0 one) can pass the "flight is 10 s" ring read (no
+  identity check on which raider's ring it is). J6 and J7 are proven ONLY by K1's chain (below), not
+  by kits_j67a/b/c.
+- Files: as the PRE, all touched.
+- Checkpoint: the commit after this entry ("Kits lane A J6+J7") lands both jobs, still unproven at
+  their own rung 3; K1 (below) applies COORDINATOR NOTE 2's fix and re-proves. Next: K1.
+
+### K1 · PRE · applies NOTE 2 -- the J7 check fix, and honest J6/J7 POSTs
+- Intent: apply COORDINATOR NOTE 2 exactly (5/5 diagnosers agreed the J7 CHECK is wrong, not the F20
+  code). The per-frame hold was already in the tree at start (kept). Still to do, in
+  `LaneAHeavyRowsChecks` (SmokeTest.cs.txt): (a) `hvL`'s `_missileCd` forced to 99.0 right after it
+  spawns, so its own stray blast cannot pass the missile sub-test's ring read; (b) the "flight is 10 s"
+  Check gains `&& ring.Position.DistanceTo(at) < 30f`, proving the ring read is hvM's, aimed at the
+  pinned pilot; (c) the unpinned loop (first `for (int run...)` block) holds both hv and pm in place
+  every frame of the 3 s wait and asserts `DistanceTo <= 500` each frame, folded into the Check;
+  (d) the new `pm.TakeDamage(-(pm.MaxHp - pm.Hp))` line (~2143) replaced with `pm.Hp = pm.MaxHp;`
+  (Incoming -> Guarded drops d <= 0, so the old line healed nothing; the four pre-existing lines
+  elsewhere are untouched, per the note). NOTE 2 item 4 (a `Ready` flag on `Lead` so a heavy never
+  throws its first-tick zero-lead miss) is a game-side follow-up, NOT built here -- recorded below.
+  Rewrite J6 and J7's POSTs to the truth (done above, this same edit). Nothing loosened: 35, 10 s, a
+  pinned target, 3 varied spots, unchanged.
+- Checks: no NEW check -- this rewrites `LaneAHeavyRowsChecks` (already J7's) to prove what it claims;
+  the rewritten assertions are the "flight is 10 s" ring-identity check and the unpinned-reach check,
+  both above.
+- Files: tools/smoketest/SmokeTest.cs.txt (LaneAHeavyRowsChecks only), docs/plans/ledger_kits.md
+  (J6/J7 POST rewrite, this entry).
+- Model tier: sonnet (per task; PRE tier, no escalation yet).
+- Start: 6aeb9e9563da8d4a68f1294846ac350502d47454, J6+J7 working tree (uncommitted).
+- Hashes (pre-edit, working tree): Abilities 21eff277 · Enemies caddc1c5 · Missiles 5fabd6a7 ·
+  PlayerShip 0e01154b · Raider ae7dd1a1 · SmokeTest 66b7219c · CHANGES 5cf9fa5e · ledger_kits (before
+  this rewrite) b7975875.
+
+### K1 · POST
+- Verdict: pending the chain (quick, solo, solo, tag kits_k1) run after this commit.
+- Follow-up recorded, not built here (NOTE 2 item 4): a heavy whose cooldown is ready throws on the
+  first frame after it (re)targets with a zero-lead (jump-filter) Predict, a sure miss on a pinned,
+  forced-thrust target. Fix: a `Ready` flag on `Lead`, set only once a second sample lands, gated at
+  Raider.cs:352 (`&& _lead.Ready`); needs its own check. Not this job's scope.
+- Files: as the PRE.
+- Checkpoint: commit "Kits lane A J6+J7" carries J6, J7 and K1 together (the working tree was never
+  split). Next: K2 (merge version-l).
+
 ## Engine rungs owed to the main session (run in the worktree, rebased, one engine at a time)
 
 | after | rung | seeds | look for (PASS lines) |
@@ -478,3 +611,40 @@ J3 with a PRE entry. Map of what J3 touches (found by J2's greps; line numbers a
 **Then slice 2** (§8): F4 + F17 + F18; F1 (+ Add, + Ramp; the hold half is in J2); F20 (2.58, with the
 raids' EnemyDef rows Cc, Exp; MissileFlight onto the row). Specs: kits_v2.md §5 (F17 OutGuards
 table, F18 deletes the echo arm in NoteDealt), kits_v3.md §5, kits_v31.md §6.
+
+## COORDINATOR NOTE 1 (2026-09-25): summary.txt is UTF-16
+The runner (scratchpad rungs.ps1) writes summary.txt with PowerShell 5.1 Tee-Object, i.e. UTF-16LE with a BOM.
+A bash grep/cat or a bash poll loop on it NEVER matches "ALL GREEN" or "STOPPED" and waits forever. Read it with
+powershell Get-Content (it reads the BOM), or wait for the rungs.ps1 process itself to exit instead of polling the file.
+Kill any poll loop you left running on an earlier tag.
+
+## COORDINATOR NOTE 2 (2026-09-25): the J7 red "...and it lands 35 (0)" -- diagnosed
+Cause: it is the check, not the J7 code. The missile works (the 6b "staying on the circle ... lands (35)" passes on the same
+`heavy:{id}:missile` key). hvM is spawned with `_missileCd` forced to 0 (SmokeTest ~2132), so it throws on its FIRST tick, when
+its Lead has a single sample: Missiles.cs:124 gives Velocity = 0 while `_has` is false, and Raider.cs:224 Watch -> :363 Predict
+aims at where the pilot is NOW. In j67b the pilot was not held, and Pinned forces thrust (PlayerShip.cs:1166, throttle 1 at
+PinSpeed 0.2), so it drove off the 90 u circle during the 10 s flight: 0 in 3 of 3 runs, on both seeds.
+Fix: (a) the per-frame hold `pm.Position = at; pm.Velocity = Vector2.Zero;` in the loops at ~2119/2121/2134/2138 is ALREADY in the
+tree (added after j67b), and chain kits_j67c tests it. Keep it. (b) A stale pick is still open. hvL (~2117) keeps the default
+`_missileCd = 2.0` (Raider.cs:133) and lives for latch time + 2 s at a pinned pilot inside 500 u, so it almost always throws.
+Its blast is still pending when hvM spawns, so the ~2134 loop exits with no frame waited, and "flight is 10 s" passes on hvL's
+ring (FirstOrDefault). Right after `var hvL = H.SpawnRaider(...)` add
+    typeof(Raider).GetField("_missileCd", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(hvL, 99.0);   // the laser sub-test's gunship throws nothing: the missile sub-test reads the only blast
+and make the flight check prove the ring is hvM's and was aimed at the pinned pilot:
+    old: Check(H.BlastsPending == 1 && ring != null && Math.Abs(ring.Time - 10) < 1e-6,
+    new: Check(H.BlastsPending == 1 && ring != null && Math.Abs(ring.Time - 10) < 1e-6 && ring.Position.DistanceTo(at) < 30f,
+Checks: rewritten "pinned, N u off: its missile's flight is 10 s" / "...and it lands 35". Nothing is loosened: 35, 10 s,
+a pinned target, 3 varied spots.
+Other defects worth fixing now:
+1. The unpinned loop (~2090-2099) is partly vacuous. The j67b log reads "unpinned, 698 u / 726 u inside a gunship's 500 u missile
+   reach": the unpinned heavy drives to the map's edge, so it may throw nothing only because it is out of range, and the distance is
+   read after the wait (a stale pick). Hold hv at its spawn spot (and pm at `at`) every frame of the 3 s wait, and assert that
+   Position.DistanceTo <= 500 on each frame.
+2. `pm.TakeDamage(-(pm.MaxHp - pm.Hp))` (~2143, and the same line at ~5270/5336/5420/5480) heals nothing: Incoming -> Guarded ->
+   `if (d <= 0) return` (PlayerShip.cs:916). Use `pm.Hp = pm.MaxHp;` in the new line at least; the older four are pre-existing.
+3. The J7 POST (line ~412) says "green ... (tag kits_j67a)". That is false: j67a had 10 problems, and j67b had 3. Rewrite the J6 and
+   J7 POSTs from the real summary before the commit that cites them.
+4. Game side (latent, not failing): a heavy whose cooldown is ready throws on the first frame after it (re)targets, with a zero
+   lead (the jump filter), which is a sure miss on a pinned, forced-thrust target. Add a `Ready` flag to Lead and `&& _lead.Ready`
+   at Raider.cs:352 only if the owner wants it, and give it its own check.
+Apply this before re-running the chain; the PRE that applies it says 'applies NOTE 2'.

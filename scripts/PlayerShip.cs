@@ -143,13 +143,33 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         _lifts.Clear();
         foreach (var def in Abilities.For(Class))
         {
+            ref var sl = ref Sl(def.Id);
             string stat = rate ? def.RateStat : def.SpeedStat;
-            if (stat == null || Sl(def.Id).Left <= 0) continue;
-            if (def.While != null && !def.While(this)) continue;
-            _lifts.Add(Stats[stat]);
+            if (stat != null && sl.Left > 0 && (def.While == null || def.While(this))) _lifts.Add(Stats[stat]);
+            // a RAMP's running total is already a share (F1, D18): 1 + it reads the same as any
+            // other lift's raw multiplier would, and it keeps lifting through its post-run drain,
+            // not only while Left > 0.
+            if (!rate && def.Ramp != null && sl.Own > 0) _lifts.Add(1 + sl.Own);
         }
         return LiftShares(_lifts);
     }
+    // EVERY RUNNING ROW'S FLAT SpeedAdd (F1's Add, D18), summed: added to the sheet's own top speed
+    // AFTER the lift's multiplier, in TopSpeed below.
+    private double SpeedAdds()
+    {
+        double sum = 0;
+        foreach (var def in Abilities.For(Class))
+        {
+            if (def.SpeedAdd == null || Sl(def.Id).Left <= 0) continue;
+            if (def.While != null && !def.While(this)) continue;
+            sum += Stats[def.SpeedAdd];
+        }
+        return sum;
+    }
+    // THE ONE PLACE Add's ARITHMETIC LIVES (D18): sheet x lift (SpeedMult, already Scale(shares))
+    // PLUS every running row's flat add, THEN the hold on the whole -- so a hold of x0 also zeroes
+    // what Add gave it. Pure and static, so it is provable before any row uses SpeedAdd.
+    public static float TopSpeed(float sheet, float lift, double add, float hold) => (float)((sheet * lift + add) * hold);
     // Lifts, as SHARES: each adds what it is worth over x1 (x2 is +1, x0.85 is -0.15), and the ship
     // takes Stat.Scale of the sum -- the sheet's own rule, on its own floor. A sheet with no such
     // row answers 0: that lifts nothing, rather than stopping the ship.
@@ -1052,6 +1072,18 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         {
             ref var sl = ref Sl(def.Id);
             if (sl.Cool > 0) sl.Cool = Math.Max(0, sl.Cool - delta);
+            // A RAMP's running total (F1, D18) steps every frame regardless of Left, so it keeps
+            // draining after the row stops -- Steer already ran this frame (LocalFlight, above),
+            // so _yawRate is this frame's, not last frame's.
+            if (def.Ramp is { } ramp)
+            {
+                bool holding = sl.Left > 0;
+                bool cond = holding && (ramp.Condition == null || ramp.Condition(this));
+                double turnRate = Stats["turn_rate"];
+                double yawShare = turnRate > 0 ? Math.Min(1, Math.Abs(_yawRate) / turnRate) : 0;
+                sl.Own = RampSpec.Step(sl.Own, Stats[ramp.Build], Stats[ramp.Cap], Stats[ramp.Bleed],
+                                       holding, cond, yawShare, delta);
+            }
             if (sl.Left <= 0) continue;
             sl.Left -= delta;
             if (sl.Left > 0) continue;
@@ -1200,8 +1232,10 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         if (throttle > 0) along += (float)Stats["thrust"] * lift * throttle * dt;
         else if (throttle < 0) along += (float)Stats["reverse_thrust"] * throttle * dt;
         along -= along * Mathf.Clamp((float)Stats["water_drag"] * dt, 0f, 1f);
+        // F1's Add lands on the CAP alone (TopSpeed), same as the lift itself does not touch astern.
+        float top = TopSpeed((float)Stats["max_speed"], lift, SpeedAdds(), hold);
         along = Mathf.Clamp(along, -(float)Stats["reverse_speed"] * hold,
-                            (float)Stats["max_speed"] * lift * hold * (Pinned ? StatusSet.PinSpeed : 1f));
+                            top * (Pinned ? StatusSet.PinSpeed : 1f));
         across *= Mathf.Exp(-(float)Stats["keel"] * dt);
 
         // turning circle: yaw rate = speed / radius, capped by the rudder; astern the

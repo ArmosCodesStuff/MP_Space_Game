@@ -82,8 +82,41 @@ public class AbilityDef
     // halves it; 1, the default, holds nothing. `While` narrows it the same way.
     public double Hold = 1;
 
+    // A FLAT TOP SPEED (F1's Add), on top of SpeedStat's multiplier, before the hold: the stat id
+    // this row's ship sheet names for it (PlayerShip.SpeedAdds sums every running row's, added in
+    // PlayerShip.TopSpeed -- see D18). No row uses it yet.
+    public string SpeedAdd;
+    // A LIFT WHOSE SIZE IS A RUNNING TOTAL (F1's Ramp, D18): builds while it runs and Condition
+    // holds, bleeds with the turn (whether or not Condition holds), caps, and drains once the row
+    // stops. See RampSpec below -- the row names three stat ids and a condition; the math is not
+    // its own. No row uses it yet (6d, the Dart's Ramjet).
+    public RampSpec Ramp;
+
     public SlotState State(PlayerShip s, IHittable selected) =>
         Show != null ? Show(s, selected) : new SlotState { Line = "READY" };
+}
+
+// F1'S RAMP: a lift that is a RUNNING TOTAL instead of a fixed multiplier -- the Dart's Ramjet
+// rewards flying straight and bleeds it into a turn. A row is nothing but three stat ids (how fast
+// it builds, its ceiling, how hard turning costs it) and a condition; the number itself lives in
+// the ship's own slot (PlayerShip.Sl(id).Own -- per-ability state is how it reaches the wire, same
+// as the echo's stored damage). Step is the ONE place the arithmetic lives: pure, no ship and no
+// Godot frame, so it is provable (LaneARampChecks) before any row exists to carry it.
+public class RampSpec
+{
+    public string Build, Cap, Bleed;          // stat ids: gain/second, ceiling, bleed/second at a full turn
+    public Func<PlayerShip, bool> Condition;  // gates Build only; null = always holds
+
+    // ADVANCES the running total by dt seconds. Holding (the row still running): +build a second
+    // while Condition holds (nothing, if it does not), minus bleed x yawShare a second regardless
+    // (yawShare is |yaw| / the hull's turn rate, 0..1) -- clamped to [0, cap]. Not holding (the row
+    // has stopped): drains toward 0 at cap a second, so a value at the ceiling empties in exactly
+    // 1.0 s and anything less empties sooner.
+    public static double Step(double own, double build, double cap, double bleed,
+                               bool holding, bool condHolds, double yawShare, double dt)
+        => holding
+            ? Math.Clamp(own + ((condHolds ? build : 0) - bleed * yawShare) * dt, 0, cap)
+            : Math.Max(0, own - cap * dt);
 }
 
 // THE CATALOGUE. Every ability in the game, once. A class's row (Ships.cs) lists the ones it

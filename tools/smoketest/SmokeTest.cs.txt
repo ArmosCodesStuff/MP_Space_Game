@@ -1778,6 +1778,10 @@ public partial class _Test : Node
             for (int i = 0; i < 30 && hv.Target != me; i++) { HoldPilot(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
             double hold = Vary(0.6f, 1.4f);
             var seen = Rings().ToHashSet();
+            // F20: the missile only throws at a PINNED target now -- pin the pilot directly (a
+            // heavy that closes in while pinned stays well inside its own 500 u missile reach, so
+            // the timing this checks is unaffected). Cleared after the run so it never outlives it.
+            me.ApplyStatus(Status.Pinned, 4.0);
             cdField.SetValue(hv, 0.0); hv.ApplyStatus(Status.Suppressed, hold);
             double t0 = me.Clock, lapsedAt = -1, thrownAt = -1;
             int lapse = -1, thrown = -1; bool whileHeld = false;
@@ -1792,6 +1796,7 @@ public partial class _Test : Node
             Check(lapse >= 0 && thrown >= lapse && thrown - lapse <= 2 && !whileHeld && lapsedAt >= hold - 0.05,
                   $"a Suppressed gunship {hv.Position.DistanceTo(me.Position):0} u off holds its missile, due, for its {hold:0.00} s -- lapsed at {lapsedAt:0.00} s, thrown at {thrownAt:0.00} s ({thrown - lapse} frames after; {(whileHeld ? "THROWN WHILE HELD" : "nothing while held")})");
             hv.TakeDamage(1e12);
+            me.Statuses.Clear(Status.Pinned);
             await Wait(0.2);
         }
         me.Stats.SetBase("pd_range", reach);
@@ -1901,25 +1906,44 @@ public partial class _Test : Node
             {
                 var at = VaryNear(yonder, 300f);
                 bs.Position = at; bs.Velocity = Vector2.Zero; bs.Rotation = VaryAngle();
-                var mainTgt = H.SpawnRaider(at + Vector2.Right.Rotated(VaryAngle()) * Vary(250f, 400f), Enemies.Gunship);
+                // ONE TARGET AT A TIME: a main-gun shell travels in a straight line to its aim
+                // point, so a light spawned at some independent random angle could sit in that
+                // line (or a PD tick could reach a heavy placed close enough) and take a stray
+                // hit credited to the OTHER weapon -- a knife edge in the geometry, not the door.
+                // Isolating each weapon's target removes the chance of it rather than dodging it.
+                var mainSpot = at + Vector2.Right.Rotated(VaryAngle()) * Vary(250f, 400f);
+                var mainTgt = H.SpawnRaider(mainSpot, Enemies.Gunship);
                 mainTgt.Hp = 1e9;                                        // a heavy: point defence never picks it
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                double mainHp0 = mainTgt.Hp, mainDealt0 = bs.DealtBy.GetValueOrDefault("shell");
+                // a real Space hold, not the field set directly: LocalFlight polls the keyboard
+                // itself every frame and would otherwise zero Trigger right back on the next one.
+                // HELD IN PLACE: unpinned, a heavy's own AI heads for the map's edge nearest its
+                // target (TickHeavy) -- at 700% boost that is well out of gun range inside a
+                // couple of seconds, which is the geometry this check hit, not the door.
+                AimWorld(mainTgt.Position); KeyDown(global::Godot.Key.Space);
+                for (int i = 0; i < 150; i++)
+                {
+                    mainTgt.Position = mainSpot;
+                    AimWorld(mainTgt.Position);
+                    await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                }
+                KeyUp(global::Godot.Key.Space);
+                double mainLost = mainHp0 - mainTgt.Hp, mainCredited = bs.DealtBy.GetValueOrDefault("shell") - mainDealt0;
+                Check(mainLost > 0 && Math.Abs(mainLost - mainCredited) < 1e-6,
+                      $"the BB's main guns, the pilot {at.DistanceTo(mainTgt.Position):0} u off: DealtBy[\"shell\"] grew {mainCredited:0.0}, the target lost {mainLost:0.0}");
+                mainTgt.TakeDamage(1e12);
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+
                 var pdTgt = H.SpawnRaider(at + Vector2.Right.Rotated(VaryAngle()) * Vary(150f, 250f), Enemies.Webifier);
                 pdTgt.Hp = 1e9;                                          // a light: point defence's alone here
                 await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-                double mainHp0 = mainTgt.Hp, mainDealt0 = bs.DealtBy.GetValueOrDefault("shell");
                 double pdHp0 = pdTgt.Hp, pdDealt0 = bs.DealtBy.GetValueOrDefault("pd");
-                // a real Space hold, not the field set directly: LocalFlight polls the keyboard
-                // itself every frame and would otherwise zero Trigger right back on the next one.
-                AimWorld(mainTgt.Position); KeyDown(global::Godot.Key.Space);
-                for (int i = 0; i < 150; i++) { AimWorld(mainTgt.Position); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
-                KeyUp(global::Godot.Key.Space);
-                double mainLost = mainHp0 - mainTgt.Hp, mainCredited = bs.DealtBy.GetValueOrDefault("shell") - mainDealt0;
+                for (int i = 0; i < 150; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                 double pdLost = pdHp0 - pdTgt.Hp, pdCredited = bs.DealtBy.GetValueOrDefault("pd") - pdDealt0;
-                Check(mainLost > 0 && Math.Abs(mainLost - mainCredited) < 1e-6,
-                      $"the BB's main guns, the pilot {at.DistanceTo(mainTgt.Position):0} u off: DealtBy[\"shell\"] grew {mainCredited:0.0}, the target lost {mainLost:0.0}");
                 Check(pdLost > 0 && Math.Abs(pdLost - pdCredited) < 1e-6,
                       $"the same BB's point defence, {at.DistanceTo(pdTgt.Position):0} u off: DealtBy[\"pd\"] grew {pdCredited:0.0}, the target lost {pdLost:0.0}");
-                mainTgt.TakeDamage(1e12); pdTgt.TakeDamage(1e12);
+                pdTgt.TakeDamage(1e12);
             }
         }
 
@@ -1992,6 +2016,146 @@ public partial class _Test : Node
                 wd.Sl("hunters").Cool = 0;
             }
         }
+    }
+
+    // F1'S RAMP (D18): the pure step, proved directly (RampSpec.Step) before any row carries it --
+    // v3 3.6's own future numbers for the Dart's Ramjet (build 0.10, cap 0.50, bleed 0.20) on a
+    // 260 u/s sheet, so the mechanism is proved with the SAME numbers 6d will actually use. Varied
+    // by frame rate (1/30, 1/60, 1/144 s: 30, 60 and 144 Hz), never by the literals asserted --
+    // proves the accumulation itself is frame-rate independent, not merely correct once.
+    void LaneARampChecks()
+    {
+        const double sheet = 260, build = 0.10, cap = 0.50, bleed = 0.20;
+        double[] marks = { 1, 3, 5, 7 };
+        double[] wantTop = { 286, 338, 390, 390 };
+        foreach (double dt in new[] { 1.0 / 30, 1.0 / 60, 1.0 / 144 })
+        {
+            double own = 0;
+            int stepsSoFar = 0;
+            for (int m = 0; m < marks.Length; m++)
+            {
+                int stepsTo = (int)Math.Round(marks[m] / dt);
+                for (; stepsSoFar < stepsTo; stepsSoFar++)
+                    own = RampSpec.Step(own, build, cap, bleed, holding: true, condHolds: true, yawShare: 0, dt);
+                double top = sheet * (1 + own);
+                Check(Math.Abs(top - wantTop[m]) < 3,
+                      $"at {1 / dt:0} Hz: the ramp after {marks[m]:0} s straight at full throttle -- top {top:0.0} u/s (want {wantTop[m]:0})");
+            }
+            // 1 s of full rudder: still running (holding), still at full throttle (condHolds), the
+            // yaw at the hull's own turn rate (yawShare 1) -- build and bleed both apply, net -0.10/s.
+            int turnSteps = (int)Math.Round(1.0 / dt);
+            for (int i = 0; i < turnSteps; i++)
+                own = RampSpec.Step(own, build, cap, bleed, holding: true, condHolds: true, yawShare: 1, dt);
+            double topTurned = sheet * (1 + own);
+            Check(Math.Abs(topTurned - 364) < 3,
+                  $"at {1 / dt:0} Hz: 1 s of full rudder bleeds the ramp -- top {topTurned:0.0} u/s (want 364)");
+            // released (not holding): drains toward 0 at cap a second, so a full second empties it
+            // whatever it started at -- 0 by 9.0 s of TOTAL elapsed (7 s straight + 1 s turning + this).
+            int drainSteps = (int)Math.Round(1.0 / dt);
+            for (int i = 0; i < drainSteps; i++)
+                own = RampSpec.Step(own, build, cap, bleed, holding: false, condHolds: false, yawShare: 0, dt);
+            Check(own < 1e-9,
+                  $"at {1 / dt:0} Hz: released, the ramp drains to {sheet * own:0.000} u/s of top within 1 s (0 by 9.0 s total)");
+        }
+    }
+
+    // F1'S ADD (D18): the pure formula, PlayerShip.TopSpeed -- sheet x lift (already Scale(shares))
+    // plus every running row's flat add, then the hold on the whole. Three varied tuples, one of
+    // them the plan's own literal (v31 3.4); the third proves the hold takes Add too, not just the
+    // lift.
+    void LaneASpeedAddChecks()
+    {
+        var cases = new (float sheet, float lift, double add, float hold, float want)[]
+        {
+            (260f, 1.5f, 100, 1f, 490f),
+            (200f, 1.2f, 50, 1f, 290f),
+            (300f, 1.0f, 60, 0.5f, 180f),
+        };
+        foreach (var (sheet, lift, add, hold, want) in cases)
+        {
+            float top = PlayerShip.TopSpeed(sheet, lift, add, hold);
+            Check(Math.Abs(top - want) < 1e-3,
+                  $"Add: {sheet:0} x {lift:0.00} + {add:0} = {top:0.0} at a hold of x{hold:0.00} (want {want:0})");
+        }
+    }
+
+    // F20's BEHAVIOUR, from 3 varied spots each (the numbers themselves are the ENEMY TABLE check,
+    // above -- this proves the game reads them). An unpinned target inside a gunship's 500 u
+    // missile reach draws nothing (the pin gate); THEN, separately, a pinned one: both barrels at
+    // once, 2.58 DPS, and a missile whose flight is 10 s and lands 35. The two are separate loops,
+    // never one run's pinned tail bleeding into the next run's "unpinned" head.
+    async Task LaneAHeavyRowsChecks(Vector2 yonder)
+    {
+        var pm = Me; var keep = pm.Position;
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f);
+            pm.Position = at; pm.Velocity = Vector2.Zero; pm.Rotation = VaryAngle();
+            var hvSpot = at + Vector2.Right.Rotated(VaryAngle()) * Vary(300f, 480f);
+            var hv = H.SpawnRaider(hvSpot, Enemies.Gunship);
+            typeof(Raider).GetField("_missileCd", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(hv, 0.0);
+            int blasts0 = H.BlastsPending;
+            bool inReach = true;
+            // HELD IN PLACE both sides: hv is re-pinned to its spawn spot and pm to `at` every frame,
+            // and the reach itself is asserted each frame -- a stale pick (taken once before the wait)
+            // would let an unpinned heavy drive off toward the map's edge and pass only because it fell
+            // out of range, not because the pin gate held it.
+            for (int i = 0; i < 60 * 3; i++)
+            {
+                pm.Position = at; pm.Velocity = Vector2.Zero;
+                hv.Position = hvSpot;
+                inReach &= hv.Position.DistanceTo(pm.Position) <= 500f;
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            }
+            Check(!pm.Pinned && H.BlastsPending == blasts0 && inReach,
+                  $"unpinned, {at.DistanceTo(hv.Position):0} u inside a gunship's 500 u missile reach: it throws nothing");
+            hv.TakeDamage(9999);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        }
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f);
+            pm.Position = at; pm.Velocity = Vector2.Zero; pm.Rotation = VaryAngle();
+            // pinned directly (as the door's own checks pin), so only the geometry varies here --
+            // the boost-and-close sequence that PRODUCES a pin is its own check (the 6b block). A
+            // fresh application per sub-test, each comfortably longer than that sub-test's own
+            // worst-case wait, so it never lapses mid-check; cleared at the end of the run so it
+            // never outlives this function either.
+            pm.ApplyStatus(Status.Pinned, 8.0);
+
+            // HELD IN PLACE: Pinned forces thrust (the web's ~20% creep), so an un-held pilot would
+            // drift off the spot every geometry below is measured from -- exactly the "a stale pick,
+            // re-taken after it -- the world moved" trap. pm.Position is reasserted every frame.
+            var hvL = H.SpawnRaider(at + Vector2.Right.Rotated(VaryAngle()) * Vary(100f, 130f), Enemies.Gunship);
+            typeof(Raider).GetField("_missileCd", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(hvL, 99.0);   // the laser sub-test's gunship throws nothing: the missile sub-test reads the only blast
+            double HvLaser() => pm.DamageBySource.Where(kv => kv.Key == $"raider:{hvL.NetId}").Sum(kv => kv.Value);
+            for (int i = 0; i < 60 * 4 && !hvL.Latched; i++) { pm.Position = at; pm.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            double hl0 = HvLaser();
+            for (int i = 0; i < 120; i++) { pm.Position = at; pm.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            double hdps = (HvLaser() - hl0) / 2.0;
+            Check(hvL.Latched && Math.Abs(hdps - 2.58) < 0.15,
+                  $"a gunship on a pinned pilot, {at.DistanceTo(hvL.Position):0} u off: {hdps:0.00} DPS (want 2.58, 2 barrels of 1.29)");
+            hvL.TakeDamage(9999);
+            pm.Position = at; pm.Velocity = Vector2.Zero;
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+
+            pm.ApplyStatus(Status.Pinned, 30.0);
+            var hvM = H.SpawnRaider(at + Vector2.Right.Rotated(VaryAngle()) * Vary(300f, 480f), Enemies.Gunship);
+            double HvMissile() => pm.DamageBySource.Where(kv => kv.Key == $"heavy:{hvM.NetId}:missile").Sum(kv => kv.Value);
+            typeof(Raider).GetField("_missileCd", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(hvM, 0.0);
+            double mm0 = HvMissile();
+            for (int i = 0; i < 60 * 13 && H.BlastsPending == 0; i++) { pm.Position = at; pm.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            var ring = Nodes<FxNode>().FirstOrDefault(t => t.Id == Fx.WarnZone && Math.Abs(t.Radius - Raider.BlastRadius) < 0.1f);
+            Check(H.BlastsPending == 1 && ring != null && Math.Abs(ring.Time - 10) < 1e-6 && ring.Position.DistanceTo(at) < 30f,
+                  $"pinned, {at.DistanceTo(hvM.Position):0} u off: its missile's flight is 10 s");
+            for (int i = 0; i < 60 * 12 && H.BlastsPending > 0; i++) { pm.Position = at; pm.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            Check(Math.Abs(HvMissile() - mm0 - 35) < 1e-6, $"...and it lands 35 ({HvMissile() - mm0:0})");
+            hvM.TakeDamage(9999);
+            pm.Statuses.Clear(Status.Pinned);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            pm.Hp = pm.MaxHp;
+        }
+        pm.Position = keep; pm.Velocity = Vector2.Zero;
     }
 
     // ── THE BUILD A PLAYER READS ──────────────────────────────────────────────────────────────
@@ -5191,8 +5355,8 @@ public partial class _Test : Node
             hm.Position = Hub.BasePos + new Vector2(2000, 0); hm.Velocity = Vector2.Zero; hm.Rotation = 0f; await Wait(0.3);
             var hv = H.SpawnRaider(Hub.BasePos + new Vector2(2600, 500), Enemies.Gunship);
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            Check(hv.Heavy && Math.Abs(hv.Length - 4 * Raider.LightLength) < 1e-3 && Math.Abs(Raider.HeavyDps - 2 * Raider.RaiderDps) < 1e-9 && Raider.RaiderDps == 1,
-                  "a heavy raider: four times a light's length, twice the raider damage (2 DPS)");
+            Check(hv.Heavy && Math.Abs(hv.Length - 4 * Raider.LightLength) < 1e-3 && Math.Abs(Raider.HeavyDps - 2.58 * Raider.RaiderDps) < 1e-9 && Raider.RaiderDps == 1,
+                  "a heavy raider: four times a light's length, 2.58x the raider damage (2 barrels of 1.29)");
             double HvLaser() => hm.DamageBySource.Where(kv => kv.Key == $"raider:{hv.NetId}").Sum(kv => kv.Value);
             double HvMissile() => hm.DamageBySource.Where(kv => kv.Key == $"heavy:{hv.NetId}:missile").Sum(kv => kv.Value);
             var edge = Raider.EdgeSpot(hm.Position);
@@ -5201,32 +5365,37 @@ public partial class _Test : Node
             float hvFacing = Mathf.RadToDeg(Mathf.Abs(Mathf.AngleDifference(hv.Rotation, (hm.Position - hv.Position).Angle() + Mathf.Pi / 2f)));
             Check(hv.Position.DistanceTo(edge) < 10f && Math.Abs(hv.Position.DistanceTo(Hub.BasePos) - 4200f) < 10f && hvFacing < 15f && HvLaser() == 0,
                   $"its target unpinned, it waits at the map's edge nearest it ({hv.Position.DistanceTo(Hub.BasePos):0} u from the base), facing it, laser silent");
-            // the missile: within 500 u of the heavy, at where the target will be in TWELVE s
+            // F20: the missile only throws at a PINNED target -- pin it directly (the door's own
+            // checks pin the same way) rather than waiting on the boost-and-close sequence below,
+            // which proves pinning itself.
+            hm.ApplyStatus(Status.Pinned, 60.0);
+            // the missile: within 500 u of the heavy, at where the target will be when its row's flight ends
             hm.Position = edge + (Hub.BasePos - edge).Normalized() * 420f; hm.Velocity = Vector2.Zero;
             for (int i = 0; i < 60 * 14 && H.BlastsPending == 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             var blastRing = Nodes<FxNode>().FirstOrDefault(t => t.Id == Fx.WarnZone && Math.Abs(t.Radius - Raider.BlastRadius) < 0.1f);
             Check(H.BlastsPending == 1 && blastRing != null && blastRing.Position.DistanceTo(hm.Position) < 6f
-                  && Math.Abs(blastRing.Time - 12) < 1e-6 && blastRing.Warn && blastRing.Anchor == Fx.World,
-                  "within 500 u it fires at where the target will be; a red circle -- a warning row of Fx.All, pinned to the ground -- marks it for 12 s, long enough to be somewhere else by then");
+                  && Math.Abs(blastRing.Time - 10) < 1e-6 && blastRing.Warn && blastRing.Anchor == Fx.World,
+                  "within 500 u a PINNED target draws it; a red circle -- a warning row of Fx.All, pinned to the ground -- marks it for 10 s, long enough to be somewhere else by then");
             double mm0 = HvMissile();
-            for (int i = 0; i < 60 * 15 && H.BlastsPending > 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            Check(Math.Abs(HvMissile() - mm0 - 42) < 1e-6, $"staying on the circle, the gunship row's 42-damage blast lands -- 40% harder than the 30 it was, for being 12 s in the air rather than 7 ({HvMissile() - mm0:0})");
+            for (int i = 0; i < 60 * 12 && H.BlastsPending > 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(Math.Abs(HvMissile() - mm0 - 35) < 1e-6, $"staying on the circle, the gunship row's 35-damage blast lands, 10 s in the air ({HvMissile() - mm0:0})");
             typeof(Raider).GetField("_missileCd", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(hv, 0.0);
             for (int i = 0; i < 60 * 3 && H.BlastsPending == 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             hm.Position += new Vector2(0, 300); hm.Velocity = Vector2.Zero;                         // off the circle
-            // ...and no SECOND missile while this one flies: the flight is 12 s and so is the
-            // cadence, so a 15 s wait would otherwise end with a fresh one still in the air.
+            // ...and no SECOND missile while this one flies: _missileCd is forced to 99 s so no
+            // natural cadence could throw a fresh one while this one is being dodged.
             typeof(Raider).GetField("_missileCd", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(hv, 99.0);
             double mm1 = HvMissile();
-            for (int i = 0; i < 60 * 15 && H.BlastsPending > 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            for (int i = 0; i < 60 * 12 && H.BlastsPending > 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(H.BlastsPending == 0 && HvMissile() == mm1, "moving off the circle dodges it");
             // anything out of place -- a wild speed, a broken number -- and it aims right at the target
             var pz = new Vector2(100, 200);
-            Check(Missiles.Predict(pz, new Vector2(10, 0), Raider.MissileFlight) == pz + new Vector2(120, 0)
-                  && Missiles.Predict(pz, new Vector2(5000, 0), Raider.MissileFlight) == pz
-                  && Missiles.Predict(pz, new Vector2(float.NaN, 0), Raider.MissileFlight) == pz
-                  && Missiles.Predict(pz, new Vector2(float.PositiveInfinity, 1), Raider.MissileFlight) == pz,
-                  "the missile leads a sane speed the whole 12 s of its flight -- 10 u/s carried 120 u -- and a wild speed, NaN or infinity aims at where the target is");
+            double gunFlight = Enemies.Of(Enemies.Gunship).MissileFlight;
+            Check(Missiles.Predict(pz, new Vector2(10, 0), gunFlight) == pz + new Vector2(100, 0)
+                  && Missiles.Predict(pz, new Vector2(5000, 0), gunFlight) == pz
+                  && Missiles.Predict(pz, new Vector2(float.NaN, 0), gunFlight) == pz
+                  && Missiles.Predict(pz, new Vector2(float.PositiveInfinity, 1), gunFlight) == pz,
+                  "the missile leads a sane speed the whole 10 s of its flight -- 10 u/s carried 100 u -- and a wild speed, NaN or infinity aims at where the target is");
             // live: 2700 u/s in 45 u steps (wild, yet under the 50 u jump filter) -- the circle must sit on the ship
             hm.Position = edge + (Hub.BasePos - edge).Normalized() * 400f; hm.Velocity = Vector2.Zero;
             typeof(Raider).GetField("_missileCd", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(hv, 0.12);
@@ -5241,7 +5410,7 @@ public partial class _Test : Node
             var wildRing = Nodes<FxNode>().LastOrDefault(t => t.Id == Fx.WarnZone && Math.Abs(t.Radius - Raider.BlastRadius) < 0.1f);
             Check(wildRing != null && wildRing.Position.DistanceTo(atFire) < 100f,
                   $"a target moving at a wild 2700 u/s: the circle sits on it, not 7 s ahead ({(wildRing == null ? -1 : wildRing.Position.DistanceTo(atFire)):0} u off)");
-            // pinned: it boosts at 700% until 300 u away, then closes at cruise and fires 2 DPS
+            // pinned: it boosts at 700% until 300 u away, then closes at cruise and fires 2.58 DPS (both barrels)
             hm.Position = Hub.BasePos + new Vector2(1900, 0); hm.Velocity = Vector2.Zero; hm.Rotation = 0f;
             var lights = new[] { H.SpawnRaider(hm.Position + new Vector2(0, -250)), H.SpawnRaider(hm.Position + new Vector2(250, 0)), H.SpawnRaider(hm.Position + new Vector2(-250, 0)) };
             for (int i = 0; i < 60 * 8 && !hm.Pinned; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
@@ -5257,11 +5426,12 @@ public partial class _Test : Node
             for (int i = 0; i < 60 * 8 && !hv.Latched; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             double hl0 = HvLaser(); await Wait(3.0);
             double hdps = (HvLaser() - hl0) / 3.0;
-            Check(hv.Latched && Raider.Gap(hv.Position, hm) <= Raider.HeavyReach && Math.Abs(hdps - 2) < 0.4,
-                  $"from 135 u off the hull its laser does 2 DPS ({hdps:0.00})");
+            Check(hv.Latched && Raider.Gap(hv.Position, hm) <= Raider.HeavyReach && Math.Abs(hdps - 2.58) < 0.4,
+                  $"from 135 u off the hull its laser does 2.58 DPS, both barrels at once ({hdps:0.00})");
             foreach (var r in H.Raiders.ToList()) r.TakeDamage(9999);
             await Wait(0.3);
             hm.Position = keepH; hm.Velocity = Vector2.Zero; hm.TakeDamage(-(hm.MaxHp - hm.Hp));
+            hm.Statuses.Clear(Status.Pinned);   // the missile sub-test's own pin (60 s) must not outlive this block
         }
 
         // ── raiders (6c): patrols -- 3 lights and 1 heavy; nothing within 2000 u, no target ──
@@ -5477,14 +5647,24 @@ public partial class _Test : Node
         {
             EnemyDef E(int k) => Enemies.Of(k);
             Check(Enemies.All.Length == 6
-                  && E(Enemies.Webifier).Hull == 25 && E(Enemies.Webifier).Dps == 1.0 && E(Enemies.Webifier).Reach == 100f
-                  && E(Enemies.Gunship).Hull == 100 && E(Enemies.Gunship).Dps == 2.0 && E(Enemies.Gunship).Reach == 150f,
-                  "the two the game is balanced on: a webifier of 25 hull and 1 x damage inside 100 u, a gunship of 100 and 2 x inside 150");
+                  && E(Enemies.Webifier).Hull == 25 && E(Enemies.Webifier).Dps == 1.0 && E(Enemies.Webifier).Barrels == 1 && E(Enemies.Webifier).Reach == 100f
+                  && E(Enemies.Gunship).Hull == 100 && E(Enemies.Gunship).Dps == 1.29 && E(Enemies.Gunship).Barrels == 2 && E(Enemies.Gunship).Reach == 150f,
+                  "the two the game is balanced on: a webifier of 25 hull and 1 x damage inside 100 u, a gunship of 100 and 2 barrels of 1.29x (2.58) inside 150");
             Check(E(Enemies.Talon).Hull == 18 && E(Enemies.Talon).Dps == 1.4 && E(Enemies.Talon).Cruise == 130f
                   && E(Enemies.Pod).Hull == 60 && E(Enemies.Pod).Dps == 0.7 && E(Enemies.Pod).Cruise == 78f
-                  && E(Enemies.Cross).Hull == 130 && E(Enemies.Cross).Dps == 2.6 && !E(Enemies.Cross).Missiles
-                  && E(Enemies.Lancerkin).Hull == 150 && E(Enemies.Lancerkin).Reach == 260f && E(Enemies.Lancerkin).Missiles,
-                  "and the owner's four: a talon (18 hull, 1.4 x, 130 u/s), a pod (60, 0.7, 78), a cross (130, 2.6, no missiles), a lancerkin (150, standing 260 u off, with them)");
+                  && E(Enemies.Cross).Hull == 130 && E(Enemies.Cross).Dps == 1.29 && E(Enemies.Cross).Barrels == 2 && !E(Enemies.Cross).Missiles
+                  && E(Enemies.Lancerkin).Hull == 150 && E(Enemies.Lancerkin).Dps == 1.29 && E(Enemies.Lancerkin).Barrels == 2
+                  && E(Enemies.Lancerkin).Reach == 260f && E(Enemies.Lancerkin).Missiles,
+                  "and the owner's four: a talon (18 hull, 1.4 x, 130 u/s), a pod (60, 0.7, 78), a cross (130, 2 barrels of 1.29, no missiles), a lancerkin (150, 2 barrels of 1.29, standing 260 u off, with them)");
+            // F20's own table, in one place: 2 barrels of 1.29 = 2.58 on every heavy; the missile
+            // 35 in 10 s; what a light's latch applies (Cc) and what a heavy's does not; the bounty
+            // (Exp; lane G pays it, not built here) -- 6 a light, 18 a heavy.
+            Check(new[] { Enemies.Gunship, Enemies.Cross, Enemies.Lancerkin }.All(k => Math.Abs(E(k).Dps * E(k).Barrels - 2.58) < 1e-9)
+                  && E(Enemies.Gunship).MissileDamage == 35 && E(Enemies.Gunship).MissileFlight == 10.0
+                  && E(Enemies.Lancerkin).MissileDamage == 35 && E(Enemies.Lancerkin).MissileFlight == 10.0
+                  && new[] { Enemies.Webifier, Enemies.Talon, Enemies.Pod }.All(k => E(k).Cc == Status.Pinned && E(k).Exp == 6)
+                  && new[] { Enemies.Gunship, Enemies.Cross, Enemies.Lancerkin }.All(k => E(k).Cc == null && E(k).Exp == 18),
+                  "every heavy: 2 barrels of 1.29 = 2.58; its missile 35 in 10 s. Every light's latch applies Pinned (Cc), a heavy's none. Bounty: 6 a light, 18 a heavy");
             Check(Enemies.OfWay(EnemyWay.Pin).Length == 3 && Enemies.OfWay(EnemyWay.Standoff).Length == 3
                   && Enemies.All.All(e => e.Texture != null && e.Texture.StartsWith("res://")),
                   "three that pin and three that stand off, each with its own hull drawn");
@@ -5496,15 +5676,16 @@ public partial class _Test : Node
             // row is put back before the Check, and no frame runs in between.
             {
                 var kin = E(Enemies.Lancerkin); var gun = E(Enemies.Gunship);
-                float keepRange = kin.MissileRange; double keepEvery = kin.MissileEvery, keepDamage = kin.MissileDamage;
-                kin.MissileRange = 900f; kin.MissileEvery = 5.0; kin.MissileDamage = 44;
-                bool apart = kin.MissileRange == 900f && kin.MissileEvery == 5.0 && kin.MissileDamage == 44
-                             && gun.MissileRange == 500f && gun.MissileEvery == 12.0 && gun.MissileDamage == 42;
-                kin.MissileRange = keepRange; kin.MissileEvery = keepEvery; kin.MissileDamage = keepDamage;
+                float keepRange = kin.MissileRange;
+                double keepEvery = kin.MissileEvery, keepDamage = kin.MissileDamage, keepFlight = kin.MissileFlight;
+                kin.MissileRange = 900f; kin.MissileEvery = 5.0; kin.MissileDamage = 44; kin.MissileFlight = 8.0;
+                bool apart = kin.MissileRange == 900f && kin.MissileEvery == 5.0 && kin.MissileDamage == 44 && kin.MissileFlight == 8.0
+                             && gun.MissileRange == 500f && gun.MissileEvery == 12.0 && gun.MissileDamage == 35 && gun.MissileFlight == 10.0;
+                kin.MissileRange = keepRange; kin.MissileEvery = keepEvery; kin.MissileDamage = keepDamage; kin.MissileFlight = keepFlight;
                 Check(apart && Enemies.All.Count(x => x.Missiles) == 2
-                      && kin.MissileRange == 500f && kin.MissileEvery == 12.0 && kin.MissileDamage == 42 && kin.BlastRadius == 90f
-                      && gun.BlastRadius == 90f && Math.Abs(Raider.MissileFlight - 12) < 1e-9,
-                      $"the missile is each row's own: 42 damage inside 500 u every 12 s in a 90 u blast, 12 s out -- and a lancerkin given 900 u / 5 s / 44 leaves the gunship's 500 u / 12 s / 42 exactly where they were (back at {kin.MissileRange:0} u)");
+                      && kin.MissileRange == 500f && kin.MissileEvery == 12.0 && kin.MissileDamage == 35 && kin.MissileFlight == 10.0
+                      && kin.BlastRadius == 90f && gun.BlastRadius == 90f,
+                      $"the missile is each row's own: 35 damage inside 500 u every 12 s, 10 s in the air, in a 90 u blast -- and a lancerkin given 900 u / 5 s / 44 / 8 s leaves the gunship's 500 u / 12 s / 35 / 10 s exactly where they were (back at {kin.MissileRange:0} u)");
             }
             // a wave draws from the table, so the kinds rotate rather than being written in
             var p1 = H.SpawnPatrol(Hub.BasePos + new Vector2(0, -3400));
@@ -6140,6 +6321,9 @@ public partial class _Test : Node
             await LaneAPdRepickChecks(yonder);
             await LaneAOutDoorChecks(yonder);
             await LaneADamageDoorChecks(yonder);
+            LaneARampChecks();
+            LaneASpeedAddChecks();
+            await LaneAHeavyRowsChecks(yonder);
 
             // ── WARRIOR: two and a half times its speed, half the damage, then the EMP ──
             await SetClass(ShipClass.HeavyWarrior);

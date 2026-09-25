@@ -12,13 +12,14 @@ using Godot;
 //   kept to 20% of its top speed, thrusting forward, unable to turn -- a soft lock.
 //   It fires a 1 DPS laser (the raider damage "x").
 //
-//   HEAVY: a snub-nosed gunship -- 4x a light's length, one turret. It waits at the MAP'S
-//   EDGE nearest its target, facing it, until the target is pinned; then it boosts at 700%
-//   until 300 u away, and closes at cruise to 135 u off the hull, astern, where it fires a
-//   short, hard laser: 2x the raider damage. Within its own row's missile reach (a gunship's
-//   500 u) it also fires a fat missile at where the target WILL be in 12 s (its speed carried
-//   forward; MissileFlight): a red circle marks the spot for all 12 s, and the blast lands there --
-//   move off the line and it misses.
+//   HEAVY: a snub-nosed gunship -- 4x a light's length, TWO barrels on its one turret (F20),
+//   drawn as two flashes from either side of it. It waits at the MAP'S EDGE nearest its target,
+//   facing it, until the target is pinned; then it boosts at 700% until 300 u away, and closes at
+//   cruise to 135 u off the hull, astern, where it fires a short, hard laser: both barrels at once,
+//   2.58x the raider damage. ONLY WHILE ITS TARGET IS PINNED, within its own row's missile reach
+//   (a gunship's 500 u) it also fires a fat missile at where the target WILL be when its row's
+//   flight ends (its speed carried forward; EnemyDef.MissileFlight): a red circle marks the spot
+//   for the whole flight, and the blast lands there -- move off the line and it misses.
 //
 // Targets: the nearest player ship, miner, salvager or hauler -- except a HUNTER, sent after
 // one quarry (the hauler on an escort), which goes for its quarry while it is there.
@@ -63,19 +64,14 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
     public static float LightLength => Enemies.Of(Enemies.Webifier).Length;      // twice a carrier fighter
     public static float HeavyLength => Enemies.Of(Enemies.Gunship).Length;
     public static double RaiderDps => Enemies.Of(Enemies.Webifier).Dps;          // x -- the game's damage unit
-    public static double HeavyDps => Enemies.Of(Enemies.Gunship).Dps;
+    public static double HeavyDps => Enemies.Of(Enemies.Gunship).Dps * Enemies.Of(Enemies.Gunship).Barrels;
     public static float HeavyReach => Enemies.Of(Enemies.Gunship).Reach;
     private const float HeavyBoostStop = 300f;          // boosting in, until this close, then at cruise
-    // THE MISSILE IS THE ROW'S: EnemyDef.MissileRange / MissileEvery / MissileDamage /
-    // BlastRadius, read through Def. These two are what the rest of the game names by hand, and
-    // both are the plain gunship's figures.
-    // TWELVE SECONDS IN THE AIR. It was seven; the owner asked for twelve and about 40% more
-    // damage with it, so the answer to a heavy's missile is to be somewhere else when it lands
-    // rather than to tank it. A longer flight is a LONGER GUESS, and Missiles.Predict leads by
-    // exactly the flight it is handed, so the figure lives here once and nowhere else.
+    // THE MISSILE IS THE ROW'S: EnemyDef.MissileRange / MissileEvery / MissileDamage / MissileFlight /
+    // BlastRadius, read through Def (F20: MissileFlight moved onto the row, from a shared const --
+    // the Lancerkin's own point is standing off further, so its flight need not match the gunship's).
     // HOW a predicted missile flies, telegraphs and lands is Missiles.cs, whosever it is: the
     // outposts throw the same one back (Lanes.cs), which is why none of it is in this file.
-    public const double MissileFlight = 12.0;
     public static float BlastRadius => Enemies.Of(Enemies.Gunship).BlastRadius;
     public const float PerimeterR = 1800f, Detect = 2000f, PatrolSpeed = 100f;
     public int Patrol;                                 // 0: on its own
@@ -269,12 +265,14 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
 
         if (Latched)
         {
-            (Target as IRaidTarget)?.ApplyStatus(Status.Pinned, 0.25);
+            // WHAT A LATCH APPLIES (F20): the row's own Cc, not a name hardcoded here -- a
+            // Standoff row (the heavies) never latches this way, so it never names one.
+            if (Def.Cc is { } cc) (Target as IRaidTarget)?.ApplyStatus(cc, 0.25);
             _shot -= delta;
             if (_shot <= 0)
             {
                 _shot = Def.ShotEvery;
-                Strike(Target, Def.Dps * Def.ShotEvery * Strength);
+                Strike(Target, Def.Dps * Def.Barrels * Def.ShotEvery * Strength);
                 Combat.Flash(Position, Target.Position, Def.Beam);
             }
         }
@@ -333,14 +331,25 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
             if (_shot <= 0)
             {
                 _shot = Def.ShotEvery;       // 1 s: slower than a target's 0.52 s invulnerability, so no shot is wasted
-                Strike(Target, Def.Dps * Def.ShotEvery * Strength);
-                Combat.Flash(ToGlobal(_turret?.Position ?? Vector2.Zero), Target.Position, Def.Beam);
+                // ONE Strike per volley carries every barrel's damage (F20): two separate Strikes,
+                // 0.52 s apart or not, would be eaten by the target's own hit gap and undercount.
+                Strike(Target, Def.Dps * Def.Barrels * Def.ShotEvery * Strength);
+                if (Def.Barrels > 1 && _turret != null)
+                {   // drawn as that many flashes, from barrel offsets either side of the turret's centre
+                    var side = Vector2.Right.Rotated(face) * (Length * Def.TurretWidth * 0.5f);
+                    var centre = ToGlobal(_turret.Position);
+                    Combat.Flash(centre + side, Target.Position, Def.Beam);
+                    Combat.Flash(centre - side, Target.Position, Def.Beam);
+                }
+                else Combat.Flash(ToGlobal(_turret?.Position ?? Vector2.Zero), Target.Position, Def.Beam);
             }
         }
         _missileCd -= delta;
         // HELD while a status holds its throw (StatusSet.HoldsThrow): the clock keeps its zero, and
-        // it throws the frame the status lapses
-        if (Def.Missiles && _missileCd <= 0 && !_status.HoldsThrow && Position.DistanceTo(Target.Position) <= Def.MissileRange)
+        // it throws the frame the status lapses. ONLY AT A PINNED TARGET (F20): before, a heavy
+        // waiting at the map's edge could already be lobbing missiles at a target that had never
+        // been pinned at all.
+        if (Def.Missiles && pinned && _missileCd <= 0 && !_status.HoldsThrow && Position.DistanceTo(Target.Position) <= Def.MissileRange)
         {   // at where it WILL be: its velocity carried the whole flight forward -- from ITS row's
             // reach, on its row's cadence, for its row's damage
             _missileCd = Def.MissileEvery;
@@ -350,8 +359,8 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
             // a blast that scaled with the level would be unavoidable rather than merely heavy.
             // (A boss's projectiles DO scale; that is Missions.Quicken, and it is a boss.)
             Hub.ThrowMissile(new MissileSpec { Side = Missiles.Raid, Damage = Def.MissileDamage,
-                                              Blast = Def.BlastRadius, Flight = MissileFlight },
-                             Position, Missiles.Predict(Target.Position, _lead.Velocity, MissileFlight), NetId);
+                                              Blast = Def.BlastRadius, Flight = Def.MissileFlight },
+                             Position, Missiles.Predict(Target.Position, _lead.Velocity, Def.MissileFlight), NetId);
         }
     }
 

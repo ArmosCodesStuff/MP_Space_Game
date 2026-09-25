@@ -13,7 +13,7 @@ using System.Linq;
 //             pair recomputed inline every frame
 //   Hub       a `_blasts` tuple whose third field was a RAIDER id, a blast resolved against
 //             Hub.RaiderTargets() and nothing else, landing through IRaidTarget.Hit and nothing
-//             else, at Raider.BlastRadius over Raider.MissileFlight
+//             else, at Raider.BlastRadius over the row's own MissileFlight
 //   HubNodes  HeavyMissileVisual, with the raiders' red painted into its _Draw
 // The outposts answer a blockade with the SAME missile from the other side (Lanes.cs), so WHOSE
 // it is is a row and the launcher's numbers are a struct. Nothing below this comment names a
