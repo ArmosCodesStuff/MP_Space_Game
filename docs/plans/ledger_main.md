@@ -16,8 +16,7 @@ Under 25 lines; Edit tool only; commit FIRST after every event; the hook re-inje
 
 ## Next (1 is the exact next call, copy-pasteable)
 1. Wait for task wu5xd3g1m; take its return as above (slots proved 16:40: random seeds on slot 3, box ports bound).
-2. After the release, in order (owner 17:20): two-machine test row; scenarios lane (table, scenarios.py, method-by-method conversion,
-   each row proved against its method before deletion; fable_code_read.md lists the methods); PlayerShip/Hub split proved by the rows; rest of fable_report lists.
+2. After the release, in order (owner 17:20, README next 8-9): two-machine test row; scenarios lane (row-by-row conversion); PlayerShip/Hub split; fable_report lists.
 
 ## Owner questions (one line each, with its default): none open (today's rulings: README, Agents).
 
