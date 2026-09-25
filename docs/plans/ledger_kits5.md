@@ -224,3 +224,21 @@ Done: J1 (F12), J2-J3 (F11), J4 (F14 Prefer). Next is kits5-J5; no PRE written f
   deploy sites, the ability sweep, the walls, the door's jammed row) + every beam/bolt/laser check (through Prism);
   rung 4: frame 43_lanea_flares_pull_a_mark; rung 5 six,six: the guest's R throw / recall, LaneADecoyHost/GuestChecks.
 - Decisions D28-D37 above. Raider.cs hunks this slice: J3 Strike ray, J6 Call/CalledBy, J8 Towed, J9 latch gate.
+
+### kits5 gate fix · PRE · the merge gate's four old-truth callers -- tier opus
+- Intent: (1) SmokeTest :10487 the shot-table check asserts 8 rows (+ the reflect row: not AtPlayers, unguided,
+  Sweep 6; Smoke still 4); (2) :11590 the wire-status check reads six wire statuses (total 10, wireable 6,
+  Parrying == 32, bits 63 round-trip through FromBits); (3) ProveReach "deploy_range" throws the sentry at the
+  pilot's own spot (SentryAt) and waits for the 0.8 s landing before taking it; (4) Shots.cs.txt frame
+  79_freighter_turrets_and_bubble throws each sentry at its own cursor spot from the yard and waits for the last
+  landing before the bubble and the snap.
+- Files: tools/smoketest/SmokeTest.cs.txt, tools/screens/Shots.cs.txt, this ledger.
+- HEAD 36d0cf839949fa110c81f743b13f83ceb06efc7c · SmokeTest.cs.txt 455ebd8f16344ec4a624f6e633ccf004412cfdd4 · Shots.cs.txt cf93f60b13d95cdc15b628e2042222a1bb6710dc
+### kits5 gate fix · POST
+- Verdict: compiles; typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final
+  test phase (rung 3 x2 for the three smoke checks; rung 4 + one read by eye of 79_freighter_turrets_and_bubble).
+- Rewritten (6.3): "eight kinds of shot" (8 rows, Reflect == 7, not AtPlayers, unguided, Sweep 6, no smoke; Smoke
+  count 4 kept); "six wire statuses and no seventh" (Parrying == 32, bits 63 round-trip, total 10, wireable 6);
+  ProveReach deploy_range (SentryAt at the pilot's own spot, polls up to 2 s for the landing); frame 79 (three
+  cursors 180 u apart, thrown from the yard, 0.9 s after the last throw before the bubble and the snap).
+- Files: SmokeTest.cs.txt, Shots.cs.txt, this ledger.

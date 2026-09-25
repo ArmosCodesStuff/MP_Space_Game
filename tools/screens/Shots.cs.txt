@@ -811,12 +811,18 @@ public partial class _Shots : Node
             // a freighter with its three turrets out, and the bubble up over them
             await Class(ShipClass.FreightHauler);
             await Frame(yard, 1.1f, hideShip: false);
+            // R throws a sentry to the cursor (it lands 0.8 s later): three throws from the yard spot,
+            // each to its own cursor 180 u from the last, so no press lands within recall_pick (60 u)
+            // of a sentry already out and recalls it instead.
             var fship = Me(); fship.Rotation = 0f;
+            fship.Position = yard; fship.Velocity = Vector2.Zero;
             for (int i = 0; i < 3; i++)
             {
-                fship.Sl("deploy").Cool = 0; fship.UseAbility("deploy", 0);
-                fship.Position = yard + new Vector2(-180 + 180 * i, 120); await W(0.25);
+                fship.Sl("deploy").Cool = 0;
+                fship.AimPoint = yard + new Vector2(-180 + 180 * i, 120); fship.UseAbility("deploy", 0);
+                await W(0.25);
             }
+            await W(0.9);                                       // the last throw has landed
             fship.Position = yard; fship.UseAbility("bubble", 0); await W(0.5);
             await Snap("79_freighter_turrets_and_bubble");
             foreach (var t in hub.Deployed.ToList()) hub.DeployedTaken(t);

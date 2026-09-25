@@ -10482,9 +10482,12 @@ public partial class _Test : Node
 
                 // ── EVERYTHING THAT FLIES IS ONE FLYER WITH A ROW ──
                 // Three classes (Shell, Slug, Torpedo) with one copy each of the same sweep,
-                // lifetime, cosmetic-copy rule and hit. Seven rows and one node now, and ONE launch
-                // on the wire where there were three.
-                Check(Shots.All.Length == 7
+                // lifetime, cosmetic-copy rule and hit. Eight rows and one node now, and ONE launch
+                // on the wire where there were three. The eighth is the round a prism turns back
+                // (Shots.Reflect): straight, unguided, at the base's enemies.
+                Check(Shots.All.Length == 8 && Shots.Reflect == 7
+                      && !Shots.Of(Shots.Reflect).AtPlayers && !Shots.Of(Shots.Reflect).Guided && Shots.Of(Shots.Reflect).Sweep == 6f
+                      && !Shots.Of(Shots.Reflect).Smoke
                       && !Shots.Of(Shots.Shell).AtPlayers && Shots.Of(Shots.Shell).Sweep == 6f && Shots.Of(Shots.Shell).Burst == 0
                       && Shots.Of(Shots.Slug).AtPlayers && Shots.Of(Shots.Scrap).AtPlayers
                       && Shots.Of(Shots.Slug).Burst == 0.25 && Shots.Of(Shots.Scrap).Look == ShotLook.Shard
@@ -10492,7 +10495,7 @@ public partial class _Test : Node
                       && Shots.Of(Shots.Seeker).Interceptable && !Shots.Of(Shots.Missile).Interceptable
                       && Shots.All.Count(x => x.Smoke) == 4
                       && Shots.All.Count(x => x.Tags == Tag.Hulled) == 1 && Shots.Of(Shots.Cruise).Tags == Tag.Hulled,
-                      "seven kinds of shot, each a row: a shell, a boss's slug and its scrap, a torpedo, a heavy missile, the seeker point defence exists for, and the cruise missile anything may shoot down");
+                      "eight kinds of shot, each a row: a shell, a boss's slug and its scrap, a torpedo, a heavy missile, the seeker point defence exists for, the cruise missile anything may shoot down, and the round a prism reflects (straight, unguided, sweep 6, at the base's enemies)");
                 // ── A BODY IN FLIGHT WITH A HULL OF ITS OWN (Tag.Hulled) ──
                 // A missile is point defence's alone: a shell passes through it, a blow skips it, Tab
                 // and a wing cannot have it, and one hit deletes it. A row that gives its body a hull
@@ -11467,12 +11470,18 @@ public partial class _Test : Node
                         case "deploy_range":
                         {
                             // A turret left standing picks its own target with the same component
-                            // point defence uses, so again it is the acquisition that stops.
+                            // point defence uses, so again it is the acquisition that stops. R throws
+                            // it to the cursor and it lands deploy_flight (0.8 s) later, so it is
+                            // thrown at the pilot's own spot and taken once it has landed.
                             pilot.Sl("deploy").Cool = 0;
-                            doAbility.Invoke(pilot, new object[] { "deploy", 0 });
-                            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-                            var standing = H.Deployed.LastOrDefault(tu3 => tu3.OwnerId == pilot.OwnerId);
-                            if (standing == null) { told = "T dropped nothing to measure the reach of"; break; }
+                            SentryAt(pilot, pilot.Position);
+                            DeployedTurret standing = null;
+                            for (int frame = 0; frame < 60 * 2 && standing == null; frame++)
+                            {
+                                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                                standing = H.Deployed.LastOrDefault(tu3 => tu3.OwnerId == pilot.OwnerId);
+                            }
+                            if (standing == null) { told = "R threw no sentry that landed within 2 s to measure the reach of"; break; }
                             var mountAt = standing.Position;
                             var mkIn = await Marker(mountAt + way * (float)(reach * Vary(0.60f, 0.90f)));
                             for (int frame = 0; frame < 8 && standing.Aimed == null; frame++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
@@ -11570,29 +11579,28 @@ public partial class _Test : Node
                 await Wait(0.6);
             }
 
-            {   // ── FIVE WIRE STATUSES, AND NO SIXTH THAT PACKS ─────────────────────
+            {   // ── SIX WIRE STATUSES, AND NO SEVENTH THAT PACKS ────────────────────
                 // Shielded was a row nothing set, read or implemented, and it still rode the
-                // wire in StatusSet.Bits. The values that remain ARE the wire format: 1 2 4 8 16.
-                // F17 added three MORE members (Suppressed/Dazzled/Jammed, 64/128/256) but they are
-                // host-only (StatusSet.HostOnly) and StatusSet.Bits masks them out, so the wire
-                // format itself is unchanged: still exactly 5 members pack into it. The trip wire
-                // below counts non-host-only members, not the enum's raw length, so a future
-                // host-only addition (never on the wire) does not re-break this check -- only a
-                // sixth WIRE status would.
+                // wire in StatusSet.Bits. The values that remain ARE the wire format: 1 2 4 8 16 32,
+                // the sixth being Parrying (a prism stance every peer draws). Suppressed, Dazzled and
+                // Jammed (64/128/256) are host-only (StatusSet.HostOnly) and StatusSet.Bits masks
+                // them out. The trip wire below counts non-host-only members, not the enum's raw
+                // length, so a future host-only addition (never on the wire) does not re-break this
+                // check -- only a seventh WIRE status would.
                 var put = new StatusSet();
                 put.Apply(Status.Pinned, 1); put.Apply(Status.Disabled, 1); put.Apply(Status.Untargetable, 1);
-                put.Apply(Status.Hardened, 1); put.Apply(Status.Evading, 1);
+                put.Apply(Status.Hardened, 1); put.Apply(Status.Evading, 1); put.Apply(Status.Parrying, 1);
                 int bits = put.Bits;
                 var got = new StatusSet(); got.FromBits(bits);
                 int total = System.Enum.GetValues(typeof(Status)).Length;
                 int wireable = System.Enum.GetValues(typeof(Status)).Cast<Status>()
                     .Count(s => s != Status.None && (StatusSet.HostOnly & s) == 0);
-                Check(bits == 31 && total == 9 && wireable == 5
+                Check(bits == 63 && total == 10 && wireable == 6
                       && (int)Status.Pinned == 1 && (int)Status.Disabled == 2 && (int)Status.Untargetable == 4
-                      && (int)Status.Hardened == 8 && (int)Status.Evading == 16
+                      && (int)Status.Hardened == 8 && (int)Status.Evading == 16 && (int)Status.Parrying == 32
                       && got.Has(Status.Pinned) && got.Has(Status.Disabled) && got.Has(Status.Untargetable)
-                      && got.Has(Status.Hardened) && got.Has(Status.Evading),
-                      $"five wire statuses and no sixth: 1 2 4 8 16 pack into {bits} and all five come back out of it ({total} statuses total, {total - 1 - wireable} host-only)");
+                      && got.Has(Status.Hardened) && got.Has(Status.Evading) && got.Has(Status.Parrying),
+                      $"six wire statuses and no seventh: 1 2 4 8 16 32 pack into {bits} and all six come back out of it ({total} statuses total, {total - 1 - wireable} host-only)");
             }
         }
 
