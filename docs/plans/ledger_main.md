@@ -1,4 +1,4 @@
-# Coordinator state -- last event 18:40: round 1 merges: items-tables 264d03a, arena-stall 5ec1c98 (ledger_test.md rows); the check group re-runs in wt_fix0.
+# Coordinator state -- last event 19:26: round 1 done (items-tables 264d03a, arena-stall 5ec1c98, check group merged; ledger_test.md rows); round 2: 5 groups (17 tasks) fixing, 4 in flight.
 # Baseline reds: solo 41 fails + 1 throw at slot 0, 206 + 3 thrown lanes at slot 1, six ~240 + 3 lanes, screens 5 exc / LINT 2.
 Under 25 lines; Edit tool only; commit FIRST after every event; the hook re-injects it after a compact and cross-checks each `task <id>`.
 
