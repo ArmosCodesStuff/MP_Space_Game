@@ -375,3 +375,22 @@ fittings sweep's witness table ~13755, fitRows ~13797.
   literals J1 / J4 had left.
 - Owed at rung 3: all three checks + the DD block; rung 4: the four DD frames; rung 5: the 458.2 / 540 / 527 lines.
 - Next: kits6a-J8 (Suppress). The DD's ability 2 and 3 walls log PEND until J8 / J9.
+
+## Handover 3: agent 3 stops after kits6a-J7 (context past ~150k), at a job boundary
+- Done J7 (87c85dc). Next: J8 Suppress, J9 Grapnel, J10 Record. No COORDINATOR NOTE seen.
+- J8 plan worked out (not started, nothing edited): Ab.Suppress (Q) = a timed row via RunFor (Time "suppress_window" 6,
+  Cooldown "suppress_cooldown" 20 from the press) whose OnDealt calls a NEW generic PlayerShip.Afflict(t, Status.Suppressed,
+  "suppress_time", Fx.Chevron) only when the weapon id == Shots.Of(Shots.Shell).Id ("shell"; the Lance's is "lance", PD's
+  Dealt.Pd). Afflict: host only, t is IStatused, ApplyStatus (Raider / Emplacement / Boss already check Reaches and read
+  StatusSet.OutGuards: Gun 0.5, Move 0.7, Super 1.0, HoldsThrow), and raise the mark only when the status was new or had
+  < suppress_time - 0.5 left (one raise, not one a shell). The chevron: FxShape.Chevron + Fx const Chevron = 16 + an
+  Fx.All row appended at the END (grey, Life 3.0, Cap 1: a re-raise replaces it) + Fx.Mark(id, IHittable) raising
+  {At 0, Size HitRadius, Anchor NetId} (Hub.AddFx parents it to the anchor); draw with DrawSetTransform(-GlobalRotation)
+  a grey chevron HitRadius + 12 u above the hull. DD Rows suppress_window 6 / suppress_time 3 / suppress_cooldown 20; DD
+  Abilities Guns, Lance, Suppress; Items @duration + suppress_window. Checks planned: LaneA6aSuppressChecks (3 targets:
+  Has at 2.9 s / not at 3.1 s after the last shell hit, target.Statuses.Out(1, Gun) 0.5 then 1.0, 20.0 s, COOLING),
+  LaneA6aSuppressWeaponChecks (Lance / PD / shell on a webifier: only the shell; a shell at 6.1 s applies nothing;
+  applied twice still x0.5), the literal table in one place (StatusSet with Suppressed: 1.0/1.25/9/18 x0.5, 3.6/45/6
+  x0.7, 50/250 x1.0), frame LaneA6aSuppressFrames (85d_dd_suppressed: the chevron), witness "suppress" in the sweep.
+- Harness notes: python edit scripts written to the scratchpad file first (bash heredocs holding long C# broke); every
+  tracked file is LF. typecheck ~20 s; verify -Quick > 2 min (run it with a 600 s timeout).
