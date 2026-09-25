@@ -108,7 +108,7 @@ public static class Fx
         new() { Id = "wave",    Shape = FxShape.Ring,  Tint = new(0.60f, 0.80f, 1f), Life = 0.9, Width = 3f },
         // a warrior's EMP: a hard pulse with spokes, close in
         new() { Id = "emp",     Shape = FxShape.Spokes, Tint = new(0.70f, 0.90f, 1f), Life = 0.5, Width = 2f, Spokes = 10 },
-        // an echo's detonation: everything it remembered, at once
+        // the reverb's blast (the Echo's F): everything it remembered, at once
         new() { Id = "reverb",  Shape = FxShape.Spokes, Tint = new(1f, 0.80f, 0.45f), Life = 0.7, Width = 2.5f, Spokes = 6 },
         // a sniper's railgun: the line it threw down
         new() { Id = "rail",    Shape = FxShape.Bar,   Tint = new(0.45f, 0.70f, 1f), Life = 0.35, Width = 7f, Fill = false },

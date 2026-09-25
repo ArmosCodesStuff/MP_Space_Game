@@ -514,3 +514,29 @@ PlayerShip 9, Stats 2, Dealt 1, Fx 1, Items 3, SmokeTest 42; stealth_*|GoDark Pl
   eye for the new art: the veil's fade, the venom flare, the pellet fan); rung 5 `six,six` -- the Pepperbox, Rod, Ramjet,
   Rewind, EMP and Step host/guest pairs.
 - SLICE 6d DONE: J1-J12 committed. Open: DL3 (the Wraith's numbers, owner), DL11 (FlagJam 16 at the merge), DL14.
+
+## kits6d-J13 · PRE (kits6d gate fix)
+- tier opus; intent: the opus merge gate's two findings. (1) the rod's recoil fires on the owner's own falling edge of its forcing row (LocalFlight), not from Elapsed, so a guest whose Left the host's packet zeroes first still keeps 30%; (2) delete Status.Evading + its Guards row, AbilityDef.While + its four readers, and name the reverb's blast in three comments; rewrite the harness's Evading checks (bit 16 kept unassigned).
+- HEAD 8ca33b117445612d47a6c743b29830e220697836
+- scripts/PlayerShip.cs bc1671fb28c31cfb7d2d2fd9bfea43f9abb0fe2f
+- scripts/Abilities.cs d0d58b7a01387f66f846f8c6e65d235b81199587
+- scripts/Statuses.cs 84731c95c3839b6f1a2299a5bc5598418bd8b684
+- scripts/Fx.cs dff544826bc7ad9d536f5a0d0c7b8b93cb94e851
+- tools/smoketest/SmokeTest.cs.txt 2c4b349fc7f01007f0df333d0687839a65086226
+- docs/CHANGES.md 436fac54a6a42912298851f526294eb719ad9fcd
+
+## kits6d-J13 · POST (kits6d gate fix)
+- verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final test phase.
+- (1) the rod's recoil: `PlayerShip.Forcing` (the running Forces row; `Forced` reads it) and `_forcedBy`; LocalFlight applies the
+  last helm frame's forcing row's Parting.Recoil the frame it stops running (owner, alive, still the class's row), whichever of
+  the countdown or ApplyHostState zeroed Left. `Recoil`/`_kick` and the rod's Elapsed hook deleted.
+- (2) deleted Status.Evading (bit 16 unassigned, said in the enum header) + its Guards row (the table's one row: Hardened 0.5);
+  AbilityDef.While + its four readers; the three comments name the reverb's blast; Guarded's "evasion first" comment gone.
+- checks: NEW LaneA6dRodRecoilChecks (rung 3, after LaneA6dRodChecks: Left zeroed 0.8-2.4 s in, not counted down -> 30% +-2
+  kept next frame, once; from rest / sliding sideways / boost lit, varied headings; fails on the old code: no Elapsed, no kick);
+  LaneA6dRodGuestChecks gains the recoil (after the rod, its sprint over, SpeedAhead <= 0.32 x peak; one varied heading: the
+  guest cannot reset its 12 s cooldown, so no loop -- default taken); REWRITTEN the guard-table check (the Evading row -> the
+  table is Hardened 0.5 alone, an Untargetable battleship takes 100 whole), the wire-status check (five wire statuses 1 2 4 8 32
+  pack into 47, 16 names nothing, total 10 -- the old total==10 was already stale with Unwebbed added), and the two sweep
+  status-clear lists (Evading dropped).
+- next: none; slice 6d ready for its re-gate.

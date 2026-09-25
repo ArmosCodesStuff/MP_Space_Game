@@ -154,7 +154,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         {
             ref var sl = ref Sl(def.Id);
             string stat = kind switch { Lift.Rate => def.RateStat, Lift.Speed => def.SpeedStat, Lift.Reach => def.ReachStat, Lift.Thrust => def.ThrustStat, _ => def.StrafeStat ?? def.SpeedStat };
-            if (stat != null && sl.Left > 0 && (def.While == null || def.While(this))) _lifts.Add(Stats[stat]);
+            if (stat != null && sl.Left > 0) _lifts.Add(Stats[stat]);
             // a RAMP's running total is already a share (F1, D18): 1 + it reads the same as any
             // other lift's raw multiplier would, and it keeps lifting through its post-run drain,
             // not only while Left > 0. It lifts the helm alone: speed and slide.
@@ -170,7 +170,6 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         foreach (var def in Abilities.For(Class))
         {
             if (def.SpeedAdd == null || Sl(def.Id).Left <= 0) continue;
-            if (def.While != null && !def.While(this)) continue;
             sum += Stats[def.SpeedAdd];
         }
         return sum;
@@ -192,7 +191,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         {
             double h = 1;
             foreach (var def in Abilities.For(Class))
-                if (def.Hold < 1 && Sl(def.Id).Left > 0 && (def.While == null || def.While(this))) h *= def.Hold;
+                if (def.Hold < 1 && Sl(def.Id).Left > 0) h *= def.Hold;
             return (float)h;
         }
     }
@@ -218,7 +217,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     public double HullLeft => MaxHp > 0 ? Hp / MaxHp : 1;
     private Items.Blow BlowOn(IHittable target, double d) => new(target, HullLeft, d, MaxHp);
     // A blow this ship deals, weighed (Dealt.Deal): its Dealt rows added, and the primary's ramp. A
-    // repeat (Items.Repeats: the echo's blast, a dose's tick) is what was already weighed, and passes as it is.
+    // repeat (Items.Repeats: the reverb's blast, a dose's tick) is what was already weighed, and passes as it is.
     public double Outgoing(IHittable target, double d, string weapon)
     {
         if (Array.IndexOf(Items.Repeats, weapon) >= 0) return d;        // weighed once, as each stored blow landed
@@ -310,7 +309,6 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         foreach (var def in Abilities.For(Class))
         {
             if (def.OnDealt == null || Sl(def.Id).Left <= 0) continue;
-            if (def.While != null && !def.While(this)) continue;
             def.OnDealt(this, target, d, weapon);
         }
     }
@@ -785,15 +783,17 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         sl.Left = Stats[time]; sl.Cool = Cooling(Stats[cool]);
     }
 
-    // WHILE A FORCING ROW RUNS (AbilityDef.Forces) the throttle is held open (LocalFlight): the sprint.
-    public bool Forced
+    // WHILE A FORCING ROW RUNS (AbilityDef.Forces) the throttle is held open (LocalFlight): the sprint. Forcing is
+    // that row, null when none runs.
+    public AbilityDef Forcing
     {
         get
         {
-            foreach (var def in Abilities.For(Class)) if (def.Forces && Sl(def.Id).Left > 0) return true;
-            return false;
+            foreach (var def in Abilities.For(Class)) if (def.Forces && Sl(def.Id).Left > 0) return def;
+            return null;
         }
     }
+    public bool Forced => Forcing != null;
 
     // THE TOP SPEED `def`'s run gave it, the moment the run is over: TopNow with the row's own flat add still in
     // (its Left is already 0 when its Expire runs). What a parting round is priced at.
@@ -807,14 +807,11 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         Bores.Launch(this, row, 0, Bores.DamageAt(this, row, TopOf(def)), id);
     }
 
-    // ITS RECOIL (every peer, from the row's Elapsed; the owner's flight is the one that moves): the hull keeps the
-    // Parting row's Recoil share of its speed -- from the owner's NEXT helm frame (LocalFlight), so the round, launched
-    // this frame (Expire runs after Elapsed), leaves with the speed the run ended at.
-    public void Recoil(string id)
-    {
-        if (Mine && Alive && Abilities.Find(Class, id) is { Parting.Recoil: { } keep }) _kick = (float)Stats[keep];
-    }
-    private float _kick;
+    // ITS RECOIL (the owner, LocalFlight): on the owner's own FALLING EDGE of a forcing row -- the helm frame its copy
+    // of the row stops running, whether its own countdown got there or the host's packet said so first -- the hull
+    // keeps the row's Parting Recoil share of its speed. The helm runs before TickAbilities, so on the host the round
+    // (Expire, the frame before) has already left with the speed the run ended at. The row forcing last helm frame:
+    private AbilityDef _forcedBy;
 
     // FLAT OUT AND KEEPING UP (a Ramp row's Condition, the Ramjet): the keel speed within `share` of the current top,
     // at full throttle. The owner reads its own throttle; the HOST'S copy of a guest's ship has no throttle to read, only
@@ -1313,8 +1310,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     }
 
     // WHAT THE STATUSES ON THIS SHIP LET THROUGH. Each status that changes a blow is a row of
-    // StatusSet.Guards (Statuses.cs), walked in the order written there -- evasion first, because
-    // it decides whether the blow happened at all, then the shares, then the bubbles. The share is
+    // StatusSet.Guards (Statuses.cs), walked in the order written there, then the bubbles. The share is
     // the one its APPLIER named (a taunt's taunt_guard 0.67) and the row's default where
     // none was named -- never a row read off this hull's own sheet.
     private double Guarded(double d)
@@ -1425,7 +1421,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // EVERY ABILITY THIS CLASS CARRIES, BY ITS OWN ROW. The cooldown runs down, a timer that is
     // up runs down, and on the frame it reaches zero the ROW says what happens: Elapsed on every
     // peer (the phase the bar must show at once), Expire on the host alone (what it resolves --
-    // the railgun's shot, the echo's blast, the magazine a reload refills). Every
+    // the railgun's shot, the reverb's blast, the magazine a reload refills). Every
     // peer counts down so a guest's bars move smoothly between host packets, and the next packet
     // corrects any drift. A timed ability is a row and nothing else: this loop is the only expiry.
     private void TickAbilities(double delta)
@@ -1788,7 +1784,10 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // ── the owner steers it: naval handling ──────────────────────────────────
     private void LocalFlight(float dt)
     {
-        if (_kick > 0) { if (Alive) Velocity *= _kick; _kick = 0; }   // a parting round's recoil (Recoil)
+        var forcing = Forcing;
+        if (forcing != _forcedBy && _forcedBy is { Parting.Recoil: { } keep } && Alive && Abilities.Find(Class, _forcedBy.Id) == _forcedBy)
+            Velocity *= (float)Stats[keep];                                          // a parting round's recoil (_forcedBy)
+        _forcedBy = forcing;
         if (!Alive)
         {   // in stasis the hull stays put; the pod flies (EscapePod reads the keys)
             Velocity = Vector2.Zero;
@@ -1814,7 +1813,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         else if (AutopilotTo is { } dest)
             (throttle, rudder) = Autopilot.Capital(Position, Rotation, Velocity, (float)Stats["max_speed"], dest, 60f);
         if (Pinned) { throttle = 1f; rudder = 0f; strafe = 0f; AutopilotTo = null; }   // forced thrust, no rudder, no slide
-        else if (Forced) { throttle = 1f; AutopilotTo = null; }                          // a sprint: forced thrust, the rudder free
+        else if (forcing != null) { throttle = 1f; AutopilotTo = null; }                 // a sprint: forced thrust, the rudder free
         _throttle = throttle;
         Thrusting = throttle != 0f;
         // A HELM MOVE (F8) flies the hull by its own law while it lasts; a dash carries the hull instead

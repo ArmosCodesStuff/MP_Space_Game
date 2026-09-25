@@ -7798,6 +7798,47 @@ public partial class _Test : Node
         dt.Demo = demo; dt.Velocity = Vector2.Zero; dt.Position = yonder; dt.Sl("rod").Cool = 0;
     }
 
+    // THE RECOIL ON THE OWNER'S OWN FALLING EDGE (kits6d-J13, the gate's fix): a sprint whose Left is zeroed from
+    // outside its countdown -- as a guest's is when the host's packet lands before its own countdown crosses zero
+    // (ApplyHostState) -- still keeps 30% of its speed on the next helm frame, and only once. Three situations: from
+    // rest, already sliding sideways, the boost lit; each at a varied heading and moment into the 3 s run.
+    async Task LaneA6dRodRecoilChecks(Vector2 yonder)
+    {
+        await SetClass(ShipClass.LightDart);
+        var dt = Me; bool demo = dt.Demo; dt.AutopilotTo = null; dt.Demo = true;
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        string boost = dt.Drive.Id;
+        for (int run = 0; run < 3; run++)
+        {
+            float rot = VaryAngle();
+            dt.Position = VaryNear(yonder, 300f); dt.Rotation = rot;
+            dt.Velocity = run == 1 ? Vector2.Right.Rotated(rot) * Vary(80f, 160f) : Vector2.Zero;
+            dt.Sl("rod").Cool = 0; dt.Sl("rod").Left = 0;
+            await Frame();
+            dt.UseAbility("rod", 0);
+            float cut = Vary(0.8f, 2.4f);
+            double clock = 0; bool forced = false;
+            while (clock < cut)
+            {
+                if (run == 2) dt.Sl(boost).Left = 1;
+                await Frame(); clock += GetProcessDeltaTime(); forced |= dt.Forced;
+            }
+            dt.Sl("rod").Left = 0;                              // the host's word, with no countdown crossing zero
+            float before = dt.Velocity.Length();
+            await Frame();
+            float after = dt.Velocity.Length();
+            await Frame();
+            float next = dt.Velocity.Length();
+            dt.Sl(boost).Left = 0;
+            float kept = before > 0 ? after / before : 0;
+            Check(forced && before > 150f && Math.Abs(kept - 0.30f) <= 0.02f && next >= after * 0.9f && !dt.Forced,
+                  $"a sprint {(run == 0 ? "from rest" : run == 1 ? "begun sliding sideways" : "with the boost lit")} whose Left is zeroed {cut:0.00} s in, not counted down: {kept * 100:0}% of its {before:0} u/s kept (30) on the next helm frame, and once ({next:0} after {after:0})");
+            dt.Velocity = Vector2.Zero;
+            await Wait(0.2);
+        }
+        dt.Demo = demo; dt.Velocity = Vector2.Zero; dt.Position = yonder; dt.Sl("rod").Cool = 0;
+    }
+
     // ── SLICE 6d, THE DART'S RAMJET (kits_v3 §3.6; v31 §3.4 and §7: the speed lifts add). Its rows; then from 3 varied
     // headings each: lit at the top with W held, the top {286, 338, 390, 390} +- 3 at {1, 3, 5, 7} s, a dart priced 11.25
     // at +50%, 0 by 9.0 s, 20 s from the press and a second press refused; a full turn for 1 s (timed from the first frame
@@ -9369,7 +9410,8 @@ public partial class _Test : Node
 
     // ── SLICE 6d, RUNG 5: A GUEST'S SPRINT AND ROD. The guest (LaneA6dRodGuestChecks), after its pepperbox, presses F
     // on a varied heading: its own copy is forced open within 0.5 s of the press (one round trip) and flies it past
-    // 300 u/s; its world shows the rod. The host (LaneA6dRodHostWatch) fires the rod from ITS copy of the guest's Dart,
+    // 300 u/s; its world shows the rod, and its own copy keeps at most 32% of its peak after (the recoil, on its own falling
+    // edge whichever of its countdown or the host's packet ends the run). The host (LaneA6dRodHostWatch) fires the rod from ITS copy of the guest's Dart,
     // priced at the sprint's 360 from its own lifts: 249.2 within 1%.
     sealed class LaneA6dRodSeen { public double Damage = -1; public bool Done; }
     LateSampler LaneA6dRodHostWatch(LaneA6dRodSeen seen)
@@ -9406,9 +9448,15 @@ public partial class _Test : Node
             peak = Mathf.Max(peak, me.SpeedAhead);
             sawRod = Nodes<Shot>().Any(x => x.Kind == Shots.Rod && !was.Contains(x));
         }
+        // ITS RECOIL, on its own copy: timed from the first frame its sprint reads over there (its own countdown or the
+        // host's packet, whichever got there first), two frames on it keeps no more than 32% of the peak
+        double tOver = 0;
+        while (sawRod && me.Forced && tOver < 1.0) { await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); tOver += GetProcessDeltaTime(); }
+        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        float kept = me.SpeedAhead; bool over = !me.Forced;
         me.Demo = demo; me.Velocity = Vector2.Zero;
-        Check(tForced >= 0 && tForced <= 0.5 && peak > 300f && sawRod,
-              $"arena guest: its sprint forced open {tForced:0.00} s after the press (within 0.5), flown to {peak:0} u/s (past 300), and the host's rod seen in its world ({sawRod})");
+        Check(tForced >= 0 && tForced <= 0.5 && peak > 300f && sawRod && over && kept <= 0.32f * peak,
+              $"arena guest: its sprint forced open {tForced:0.00} s after the press (within 0.5), flown to {peak:0} u/s (past 300), the host's rod seen in its world ({sawRod}), and after it {kept:0} u/s kept (at most 0.32 x the peak: {0.32f * peak:0}; its sprint over: {over})");
     }
 
     async Task LaneA4WreckChecks()
@@ -15375,6 +15423,7 @@ public partial class _Test : Node
             await LaneA6dPepperChecks(yonder);
             LaneA6dRodRowChecks();
             await LaneA6dRodChecks(yonder);
+            await LaneA6dRodRecoilChecks(yonder);
             LaneA6dRamjetRowChecks();
             await LaneA6dRamjetChecks(yonder);
             await LaneA6dSlingChecks(yonder);
@@ -15900,7 +15949,7 @@ public partial class _Test : Node
                         sweepShip.Sl(abil.Id).Own = 0; sweepShip.Sl(abil.Id).N = 0;
                     }
                     sweepShip.Sl("missile").N = (int)sweepShip.Stats["missile_mag"];
-                    foreach (var flag in new[] { Status.Disabled, Status.Evading, Status.Hardened, Status.Untargetable, Status.Parrying })
+                    foreach (var flag in new[] { Status.Disabled, Status.Hardened, Status.Untargetable, Status.Parrying })
                         sweepShip.Statuses.Clear(flag);
                     sweepShip.RecallWing();
                     sweepShip.Forget(sweepMark);
@@ -16252,7 +16301,7 @@ public partial class _Test : Node
                         await ProveReach(reachShip, cls, reachId);
                         reachShip.Position = VaryNear(afield, 700f); reachShip.Velocity = Vector2.Zero;
                     }
-                    foreach (var flag in new[] { Status.Disabled, Status.Evading, Status.Hardened, Status.Untargetable, Status.Parrying })
+                    foreach (var flag in new[] { Status.Disabled, Status.Hardened, Status.Untargetable, Status.Parrying })
                         reachShip.Statuses.Clear(flag);
                     reachShip.RecallWing();
                 }
@@ -16298,37 +16347,40 @@ public partial class _Test : Node
                       $"a 100 blow on a HARDENED battleship -- a class with no taunt_guard row -- lands for 50 ({hd0 - gd.Hp:0})");
                 await Wait(0.6);
                 await LaneAHardenedShareChecks(gd);
-                // and EVADING, the same table's other row, on a hull that cannot roll
-                gd.ApplyStatus(Status.Evading, 0.4); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                // and a status with NO row of that table (Untargetable, the Wraith's veil) scales nothing: the
+                // table's one row is Hardened at 0.5, so a veiled hull takes the 100 whole
+                gd.ApplyStatus(Status.Untargetable, 0.4); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                 double ev0 = gd.Hp;
-                gd.Hit(100, gd.Position + new Vector2(0, -200), "test:evadrow");
-                Check(!gd.Statuses.Has(Status.Hardened) && Math.Abs(gd.Hp - ev0) < 1e-6,
-                      $"and an EVADING one takes none of that 100 at all ({ev0 - gd.Hp:0})");
+                gd.Hit(100, gd.Position + new Vector2(0, -200), "test:norow");
+                Check(StatusSet.Guards.Length == 1 && StatusSet.Guards[0].Status == Status.Hardened && StatusSet.Guards[0].Share == 0.5
+                      && gd.Statuses.Has(Status.Untargetable) && !gd.Statuses.Has(Status.Hardened) && Math.Abs(ev0 - gd.Hp - 100) < 1e-6,
+                      $"the guard table's one row is Hardened at 0.5 ({StatusSet.Guards.Length} row(s)), and an UNTARGETABLE battleship -- no row of its own -- takes that 100 whole ({ev0 - gd.Hp:0})");
+                gd.Statuses.Clear(Status.Untargetable);
                 await Wait(0.6);
             }
 
-            {   // ── SIX WIRE STATUSES, AND NO SEVENTH THAT PACKS ────────────────────
-                // Shielded was a row nothing set, read or implemented, and it still rode the
-                // wire in StatusSet.Bits. The values that remain ARE the wire format: 1 2 4 8 16 32,
-                // the sixth being Parrying (a prism stance every peer draws). Suppressed, Dazzled and
-                // Jammed (64/128/256) are host-only (StatusSet.HostOnly) and StatusSet.Bits masks
-                // them out. The trip wire below counts non-host-only members, not the enum's raw
-                // length, so a future host-only addition (never on the wire) does not re-break this
-                // check -- only a seventh WIRE status would.
+            {   // ── FIVE WIRE STATUSES, BIT 16 UNASSIGNED, AND NO SIXTH THAT PACKS ────
+                // The values that remain ARE the wire format: 1 2 4 8 32, the fifth being Parrying (a
+                // prism stance every peer draws). 16 names nothing: a packet carrying it brings nothing
+                // back. Suppressed, Dazzled, Jammed and Unwebbed (64/128/256/512) are host-only
+                // (StatusSet.HostOnly) and StatusSet.Bits masks them out. The trip wire below counts
+                // non-host-only members, not the enum's raw length, so a future host-only addition
+                // (never on the wire) does not re-break this check -- only a sixth WIRE status would.
                 var put = new StatusSet();
                 put.Apply(Status.Pinned, 1); put.Apply(Status.Disabled, 1); put.Apply(Status.Untargetable, 1);
-                put.Apply(Status.Hardened, 1); put.Apply(Status.Evading, 1); put.Apply(Status.Parrying, 1);
+                put.Apply(Status.Hardened, 1); put.Apply(Status.Parrying, 1);
                 int bits = put.Bits;
                 var got = new StatusSet(); got.FromBits(bits);
+                var stray = new StatusSet(); stray.FromBits(16);
                 int total = System.Enum.GetValues(typeof(Status)).Length;
                 int wireable = System.Enum.GetValues(typeof(Status)).Cast<Status>()
                     .Count(s => s != Status.None && (StatusSet.HostOnly & s) == 0);
-                Check(bits == 63 && total == 10 && wireable == 6
+                Check(bits == 47 && total == 10 && wireable == 5 && !System.Enum.IsDefined(typeof(Status), 16) && stray.Bits == 0
                       && (int)Status.Pinned == 1 && (int)Status.Disabled == 2 && (int)Status.Untargetable == 4
-                      && (int)Status.Hardened == 8 && (int)Status.Evading == 16 && (int)Status.Parrying == 32
+                      && (int)Status.Hardened == 8 && (int)Status.Parrying == 32
                       && got.Has(Status.Pinned) && got.Has(Status.Disabled) && got.Has(Status.Untargetable)
-                      && got.Has(Status.Hardened) && got.Has(Status.Evading) && got.Has(Status.Parrying),
-                      $"six wire statuses and no seventh: 1 2 4 8 16 32 pack into {bits} and all six come back out of it ({total} statuses total, {total - 1 - wireable} host-only)");
+                      && got.Has(Status.Hardened) && got.Has(Status.Parrying),
+                      $"five wire statuses and no sixth: 1 2 4 8 32 pack into {bits} (47) and all five come back out of it; 16 names nothing ({stray.Bits} back from it) ({total} statuses total, {total - 1 - wireable} host-only)");
             }
         }
 

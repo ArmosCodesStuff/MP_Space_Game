@@ -112,10 +112,9 @@ public class AbilityDef
     // WHILE IT RUNS, what it lifts the REACH of the ship's weapons by (the anchor's x1.4), added like every
     // other lift (PlayerShip.ReachMult). A gun that reads it multiplies its own range row: the railgun.
     public string ReachStat;
-    public Func<PlayerShip, bool> While;
     // WHILE IT RUNS, what it HOLDS the helm to: a share taken after the lifts are summed
     // (PlayerShip.Held), so no speed lift moves a held hull. 0 roots it, heading included; 0.5
-    // halves it; 1, the default, holds nothing. `While` narrows it the same way.
+    // halves it; 1, the default, holds nothing.
     public double Hold = 1;
 
     // A MELEE ROW IT SWINGS (Melee.cs): a Hold row swings it while the trigger holds, a Press row while
@@ -154,7 +153,8 @@ public class AbilityDef
     public BoreSpec Bore;
     // A ROUND OF ITS OWN FIRED DOWN THE NOSE AS ITS RUN ENDS (Bores.cs; PlayerShip.Part from the row's Expire, host),
     // priced at the top speed the run gave (the row's own SpeedAdd still counted); its Recoil, if it names one, is
-    // the share of the hull's speed kept after (owner-side, from the row's Elapsed). The Rod from God.
+    // the share of the hull's speed kept after (the owner, on its own falling edge of a Forces row: PlayerShip._forcedBy).
+    // The Rod from God.
     public BoreSpec Parting;
     // A CHARGED ROW: it holds Charges (a stat id) presses; its slot's N counts those spent, and one comes back
     // every Recharge seconds (a stat id), one at a time (PlayerShip.Spend, and TickAbilities' Cool). The tether.
@@ -557,7 +557,6 @@ public static class Ab
         Parting = new BoreSpec { Shot = Shots.Rod, Damage = "rod_damage", Speed = "rod_speed", Range = "rod_range",
                                  PriceTop = "price_top", PriceCap = "rod_cap", Recoil = "rod_recoil" },
         Press = (s, _) => s.Run("rod", "sprint_time", "rod_cooldown"),
-        Elapsed = s => s.Recoil("rod"),
         Expire = s => s.Part("rod"),
         Refuse = (s, _) => s.Sl("rod").Left > 0 ? "SPRINTING" : s.Sl("rod").Cool > 0 ? "COOLING" : null,
         Show = (s, _) => Timed(s, "rod", "rod_cooldown", "SPRINT"),

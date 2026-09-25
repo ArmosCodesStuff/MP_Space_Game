@@ -37,10 +37,12 @@ history pick the work up from it alone. Update it in the same change as the code
 ## Handoff — read this first
 
 **2026-09-25 (worktree `WarShips_wt_kits6d`, branch `wt/kits6d`): kits lane A slice 6d, the lights (Dart, Echo, Wraith),
-built J1-J12. Compiles, rung 2 green; engine-unproven: every check is owed in the final test phase** -- rung 3 twice
-(LaneA6d Pepper, Rod, Ramjet, Sling, Slip, Repeater, Reverb, Rewind, Emp, Scatter, Backstab, Veil, Venom, Step checks and
-their Row checks; the rewritten walls, kit-carry, defaults, ability tour and sweep), rung 4 (frames 76b-76f, 78b-78d), rung 5
-`six,six` (the Pepperbox, Rod, Ramjet, Rewind, EMP and Shadow step guest pairs). Wire: Shots rows pepper 9 / rod 10 /
+built J1-J12, the merge gate's findings fixed in J13. Compiles, rung 2 green; engine-unproven: every check is owed in the
+final test phase** -- rung 3 twice (LaneA6d Pepper, Rod, RodRecoil, Ramjet, Sling, Slip, Repeater, Reverb, Rewind, Emp, Scatter, Backstab, Veil, Venom, Step checks and
+their Row checks; the rewritten walls, kit-carry, defaults, ability tour and sweep; the guard-table and five-wire-status
+checks), rung 4 (frames 76b-76f, 78b-78d), rung 5
+`six,six` (the Pepperbox, Rod -- now with its recoil --, Ramjet, Rewind, EMP and Shadow step guest pairs). Wire: Status
+bit 16 (Evading) is gone and unassigned; Shots rows pepper 9 / rod 10 /
 echo 11 / pellet 12, ShotLook Rod / Ghost, Fx.Venom 16, Raider.FlagJam 16 (DL11: renumber at the merge if another lane took
 it); the ability ids change (roll, echo, stealth gone; pepperbox, rod, ramjet, slingshot, reverb, rewind, emp, veil, venom,
 step), so the protocol fingerprint moves. Owner question with its default built: the Wraith's v1 numbers were never
@@ -642,7 +644,9 @@ firing drops it; 18 s); Q **Venom** (6 s coated: each landed pellet a dose, up t
 last; 22 s); E **Shadow step** (140 u behind the selected hostile within 900 u, nose on it, speed kept, webs let go;
 14 s). New mechanisms: `Bores.cs` (rounds down the nose), `Trails.cs` (a ship's recent past), `Doses.cs` (stacking damage
 over time), `TurretSpec.RepeatShare` / `Pellets`, `IHittable.Facing`, `AbilityDef.AtOnce` / `Forces` / `Parting` /
-`ThrustStat` / `OnFire`, `PlayerShip.Prime`.
+`ThrustStat` / `OnFire`, `PlayerShip.Prime`. The rod's recoil is the owner's own falling edge of its forcing row
+(`PlayerShip.Forcing`), so a guest keeps 30% whichever of its countdown or the host's packet ends the sprint. Gone with the
+barrel roll: `Status.Evading` (bit 16 now unassigned) and its guard row, and the unused `AbilityDef.While`.
 **Known broken:** engine-unproven (rungs 3-5 owed). The Wraith's numbers are a derived default, not a signed card (DL3).
 The Slingshot has no rung-5 pair (kits_v31 §8 does not list it; DL10). The kit-carry check was already stale on this
 branch after J1/J5 (the Echo could not wear its own gun); J8 fixed and rewrote it.
@@ -1040,7 +1044,7 @@ target, double d, ITurretHost by, string weapon)` (new `scripts/Dealt.cs`) does 
 then credits the shooter. `ITurretHost.NoteDealt` gains the target and a weapon id in place of a
 position; `PlayerShip.NoteDealt` keeps `NoteCombat`, adds `DealtBy[weapon]` (host: damage dealt, by
 weapon id) and runs **F18**: every RUNNING ability row's `AbilityDef.OnDealt(ship, target, d,
-weapon)` hears it (`Sl(id).Left > 0`, `While` narrows it). Weapon ids: a blow that already carries a
+weapon)` hears it (`Sl(id).Left > 0`). Weapon ids: a blow that already carries a
 row uses the row's own id ("shell", "torpedo", "cruise"); everything else names a `Dealt.*` const
 (Pd, Turret, Rail, Emp, Echo, Fighter, Outpost). Sites: the main-gun / PD turret tick (Turrets.cs), a
 shot's own Strike (Shots.cs), the railgun / EMP / echo blasts (PlayerShip.cs), the wing's fighter
