@@ -18,8 +18,7 @@ Under 25 lines; Edit tool only; commit FIRST after every event; the hook re-inje
 1. Wait for task wu5xd3g1m; take its return as above (slots proved 16:40: random seeds on slot 3, box ports bound).
 2. After the release: the two-machine test (NOTES.txt) as a ledger row; the fable_report_1/2 "after the release" lists, each a lane + retrospective.
 
-## Owner questions (one line each, with its default)
-- none open (today's rulings: README, Agents).
+## Owner questions (one line each, with its default): none open (today's rulings: README, Agents).
 
 ## Notes (merge risks, promised follow-ups; nothing done, nothing historical)
 - Cards' OPEN lines for triage: BB fire-mode key (spec R, built G); Tender numbers have no spec file; DD `longlance`; no grapnel_rip sound.
