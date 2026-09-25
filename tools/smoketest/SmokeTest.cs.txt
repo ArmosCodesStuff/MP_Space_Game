@@ -9300,7 +9300,7 @@ public partial class _Test : Node
         // PART 2 -- A STANDOFF HEAVY (cards/warden.md Taunt: "standoff heavies boost in at once instead of waiting at
         // range"). Three varied runs: a Gunship 600-900 u off at a bearing within 0.5 rad of a sentry 2400-2800 u off (its
         // Quarry), held there until its squad has committed on that sentry and 2.2-2.6 s have run (its first throw's
-        // clock is spent); Q -- within 3.0 s of the frame the guard shows a hostile missile is in flight at the Warden
+        // clock is spent); Q -- within 3.0 s of the frame the guard shows a raider missile is thrown at the Warden
         // although no web ever pins it, and on the frame its squad re-commits on the Warden that commit burns.
         for (int run = 0; run < 3; run++)
         {
@@ -9317,7 +9317,11 @@ public partial class _Test : Node
             for (int i = 0; i < 60 * 12 && !(g.Squad != null && g.Squad.Posted(g) && ReferenceEquals(g.Squad.Target, farS) && wd.Clock - t0 >= settle); i++)
             { Hold(); g.Position = gAt; await Frame(); }
             var sq = g.Squad;                                                      // taken after the wait
-            bool onSentry = sq != null && sq.Posted(g) && ReferenceEquals(sq.Target, farS) && !InFlight().Any(m => m.HostileFire && m.TargetId == wd.NetId);
+            // A RAIDER'S MISSILE IS A THROW (Hub.ThrowMissile): a blast predicted onto where the Warden will be, marked by the
+            // Raid row's warning circle there -- the held Warden's own spot
+            int Thrown() => Fx.Warnings.Count(fw => fw.Id == Missiles.Of(Missiles.Raid).Mark && fw.Position.DistanceTo(at) < 60f);
+            int thrown0 = Thrown();
+            bool onSentry = sq != null && sq.Posted(g) && ReferenceEquals(sq.Target, farS) && thrown0 == 0;
             float gOff = g.Position.DistanceTo(at);
             Key(qkey);
             int frames = 0;
@@ -9331,12 +9335,12 @@ public partial class _Test : Node
                 pinnedEver |= wd.Pinned;
                 sq = g.Squad;
                 if (burnt < 0 && sq != null && sq.Posted(g) && ReferenceEquals(sq.Target, wd)) burnt = sq.Burning ? 1 : 0;
-                if (!missile && InFlight().Any(m => m.HostileFire && m.TargetId == wd.NetId)) { missile = true; missileAt = wd.Clock - tp; }
+                if (!missile && Thrown() > thrown0) { missile = true; missileAt = wd.Clock - tp; }
             }
             Check(onSentry && frames <= 3 && missile && !pinnedEver && burnt == 1,
                   $"taunt standoff run {run}: a gunship {gOff:0} u off, committed on a sentry {farS.Position.DistanceTo(at):0} u off ({onSentry}); Q -- a missile at the Warden {(missile ? $"{missileAt:0.00} s" : "never")} after the guard (within 3.0 s), the Warden never pinned ({!pinnedEver}); the re-commit on the Warden burns ({(burnt < 0 ? "never re-committed" : (burnt == 1).ToString())})");
             g.TakeDamage(1e12); H.DeployedTaken(farS);
-            for (int i = 0; i < 60 * 4 && InFlight().Any(m => m.HostileFire); i++) { Hold(); await Frame(); }
+            for (int i = 0; i < 60 * 4 && Thrown() > 0; i++) { Hold(); await Frame(); }
             wd.Sl("taunt").Cool = 0;
             await Wait(0.2);
         }
@@ -18858,7 +18862,7 @@ public partial class _Test : Node
                 double pdTook = pdAt - pdMark.Hp;
                 Check(pdAt < pdHp0 && pdTook >= 3.5 - 1e-6 && pdTook <= 4.5 + 1e-6,
                       $"...and it fires on its own, with nothing pressed: {pdTook:0.0} in {pdSpan:0.00} s after its first shot landed (8 or 9 shots of 0.5 = 4.0-4.5, 1 DPS)");
-                pdMark.QueueFree(); await Wait(0.1);
+                pdMark.TakeDamage(1e12); await Wait(0.1);
             }
             var marks = new List<Raider>();
             for (int i = 0; i < 4; i++) { var m = H.SpawnRaider(yonder + new Vector2(300 + 60 * i, -200 + 90 * i)); m.Hp = 3000; marks.Add(m); }
