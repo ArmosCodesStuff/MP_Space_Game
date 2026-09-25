@@ -1300,10 +1300,39 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         _gunCd -= delta;
         for (int n = 0; _gunCd <= 0 && n < 32; n++)
         {
-            if (Staggered) { _mains[_nextBarrel % _mains.Count].Shoot(); _nextBarrel = (_nextBarrel + 1) % _mains.Count; }
-            else foreach (var m in _mains) m.Shoot();
+            FireOnce();
             _gunCd += step;
         }
+    }
+
+    // ONE ROUND OF THE PRIMARY, by the class's kind (ClassDef.Primary, D35): the one place a kind is read.
+    private void FireOnce()
+    {
+        switch (Stats.Def.Primary)
+        {
+            case Primary.Lob: Lob(); break;
+            default:
+                if (Staggered) { _mains[_nextBarrel % _mains.Count].Shoot(); _nextBarrel = (_nextBarrel + 1) % _mains.Count; }
+                else foreach (var m in _mains) m.Shoot();
+                break;
+        }
+    }
+
+    // A LOB (the Bastion's siege mortar): a predicted blast of the class's Missiles.All row thrown from
+    // the main mount onto the cursor -- clamped to mortar_min .. main_range on the cursor's bearing (the
+    // bow's, for a cursor on the hull) -- landing mortar_flight later, main_damage in mortar_blast.
+    public Vector2 LobPoint(Vector2 cursor)
+    {
+        var off = cursor - Position;
+        var dir = off.LengthSquared() > 1f ? off.Normalized() : Vector2.Up.Rotated(Rotation);
+        return Position + dir * Mathf.Clamp(off.Length(), (float)Stats["mortar_min"], (float)Stats["main_range"]);
+    }
+    private void Lob()
+    {
+        var from = _mains.Count > 0 ? _mains[0].GlobalPosition : Position;
+        MyHub?.ThrowMissile(new MissileSpec { Side = Stats.Def.LobSide, Damage = Stats["main_damage"],
+                                              Blast = (float)Stats["mortar_blast"], Flight = Stats["mortar_flight"] },
+                            from, LobPoint(AimPoint), NetId);
     }
 
     // ── the owner steers it: naval handling ──────────────────────────────────

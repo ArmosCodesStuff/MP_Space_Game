@@ -191,3 +191,27 @@ Done: JOB 0, J1. Next is kits6b-J2; no PRE written for it. What the next agent n
   79d_redeploy_marks / 79e_redeploy_ring (Shots.cs.txt LaneA6bRedeployFrame). The ally case of the bubble is the arena
   host's existing check (the host's hull inside the guest's bubble). Test phase owes: solo x2, screens.
 - Next: kits6b-J4 (Bastion mortar + the Lob primary).
+
+### kits6b-J4 · PRE · BA Siege mortar + the Lob primary (D35, D40) -- tier opus
+- Intent: ClassDef.Primary {Guns, Lob, Beam} (Beam's fire method lands in J7); FireControl's one shot dispatches on
+  it; PlayerShip.LobPoint(cursor) (clamped mortar_min 150 .. main_range 1100 on the cursor's bearing) and a Lob
+  throws Hub.ThrowMissile(Missiles.Mortar, appended index 2: friendly AimZone mark, the hostiles, Attackable,
+  credited Dealt.Mortar "mortar" to the pilot); MissileSide.Land gains the thrower's id. Bastion: hull 420, 58.75 /
+  2.35 s / 1100 u, mortar_min 150, mortar_flight 1.4, mortar_blast 110; FireMode, Fit.Deploy and every deploy_* /
+  recall_pick row out (D40); Abilities {Guns, Shockwave} until J5/J6. Items.PrimaryShots + "mortar".
+  Old truths: grep the harness for the Bastion's hull 400, its deploy rows, its firemode, its 12-damage gun.
+  Checks LaneA6bMortarChecks, frame mortar_circle.
+- Files: Ships.cs, PlayerShip.cs, Missiles.cs, Hub.cs, Dealt.cs, Items.cs, SmokeTest.cs.txt, Shots.cs.txt.
+- HEAD 43b09537c92861708c13879ca19b4fc0fb6f4cfe · Ships Player Missiles Hub Lanes Dealt Items Smoke Shots: 8336fbd 31355e4 c3a26d7 ab952ed 01e9085 768ab57 9059689 97ef5d7 0244884 
+### kits6b-J4 · POST
+- Verdict: compiles; typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final
+  test phase. enum Primary {Guns, Lob, Beam} + ClassDef.Primary / LobSide; FireControl -> FireOnce (the one switch
+  on the kind) -> Lob (PlayerShip.LobPoint clamps mortar_min..main_range); Missiles.Mortar = 2 (appended; Land now
+  takes the thrower's id, credited via Combat.PlayerById); Dealt.Mortar; Items.PrimaryShots + mortar. Bastion: hull
+  420, 58.75 / 2.35 / 1100, mortar_min 150 / flight 1.4 / blast 110; Fit.Deploy, FireMode, deploy_* rows, shell_speed
+  and Dps.Deployed out; Abilities {Guns, Shockwave} until J5/J6. Kept by default: the weapon-slot own item
+  CargoGun ("freight_main_gun") stays on all three (renaming a saved item id is a save-format change).
+- Old truths: the reach sweep's main_range gets a Lob arm (a Lob's reach is its clamp, not a shell's flight).
+- Checks written: LaneA6bMortarChecks (solo, after LaneA6bRedeployChecks), frame 79f_mortar_circle (LaneA6bMortarFrame).
+  Test phase owes: solo x2, screens.
+- Next: kits6b-J5 (Bunker buster + Shockwave holds structures, Shockwave -> Q).

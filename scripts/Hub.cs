@@ -1388,7 +1388,7 @@ public partial class Hub : Node2D
             var side = Missiles.Of(b.shot.Side);
             foreach (var t in side.Pool(this).ToList())
                 if (side.Prey.Hits(t) && Raider.Gap(b.at, t) <= b.shot.Blast)
-                    side.Land(t, b.shot.Damage, b.at, $"{side.Id}:{b.from}:missile");
+                    side.Land(t, b.shot.Damage, b.at, $"{side.Id}:{b.from}:missile", b.from);
         }
     }
 

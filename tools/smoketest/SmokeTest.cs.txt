@@ -4638,6 +4638,92 @@ public partial class _Test : Node
         fr.Position = yonder; fr.Velocity = Vector2.Zero;
     }
 
+    // ── 6b · THE BASTION'S SIEGE MORTAR (kits6b-J4, a Lob primary) ───────────────────────────────
+    // The sheet against the request once (58.75 every 2.35 s = 25 DPS, 150-1100 u, 1.4 s, 110 u, hull 420,
+    // no fire mode, no sentries). World, host, 3 runs at varied bearings and headings, Space held on a
+    // cursor 60-120 u off (lands at 150), 400-900 u off (at the cursor) and 1150-1400 u off (at 1100): the
+    // blast is marked on the cursor's bearing at that distance; it lands 1.4 s (+- 0.05) after the frame
+    // its mark shows; three lights bunched 10-60 u round the point take 58.75 each, a gunship whose centre
+    // is outside 110 u but whose bow, turned onto the point, is inside it takes 58.75, a light whose edge
+    // is 60-120 u beyond the blast nothing; the pilot is credited "mortar" for the four, and its own hull
+    // (the 150 u run lands on it) takes nothing.
+    async Task LaneA6bMortarChecks(Vector2 yonder)
+    {
+        await SetClass(ShipClass.FreightBastion);
+        var bn = Me; bn.AutopilotTo = null;
+        var sheet = new ShipStats(ShipClass.FreightBastion);
+        var cd = Classes.Of(ShipClass.FreightBastion);
+        Check(Math.Abs(sheet["main_damage"] - 58.75) < 1e-9 && Math.Abs(sheet["main_interval"] - 2.35) < 1e-9
+              && Math.Abs(sheet["main_range"] - 1100) < 1e-9 && Math.Abs(sheet["mortar_min"] - 150) < 1e-9
+              && Math.Abs(sheet["mortar_flight"] - 1.4) < 1e-9 && Math.Abs(sheet["mortar_blast"] - 110) < 1e-9
+              && Math.Abs(sheet["hull"] - 420) < 1e-9 && Math.Abs(sheet.SustainedDps - (25 + 2 * sheet["pd_damage"] / sheet["pd_interval"])) < 1e-6
+              && cd.Primary == Primary.Lob && cd.LobSide == Missiles.Mortar && !cd.Has(Fit.Deploy)
+              && Abilities.Find(ShipClass.FreightBastion, "firemode") == null && Abilities.Find(ShipClass.FreightBastion, "deploy") == null,
+              $"the bastion's mortar: 58.75 every 2.35 s (25 DPS) lobbed 150-1100 u, 1.4 s in the air, 110 u; hull 420; no fire mode, no sentries ({sheet["main_damage"]}/{sheet["main_interval"]}/{sheet["main_range"]}/{sheet["hull"]})");
+        var blows = new List<(IHittable t, double d, double at)>();
+        void Heard(IHittable t, double d, string w) { if (w == Dealt.Mortar) blows.Add((t, d, bn.Clock)); }
+        Dealt.Landed += Heard;
+        var bands = new[] { (60f, 120f), (400f, 900f), (1150f, 1400f) };
+        for (int run = 0; run < 3; run++)
+        {
+            foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+            await Wait(0.3);
+            var home = VaryNear(yonder, 200f); float rot = VaryAngle();
+            bn.Position = home; bn.Velocity = Vector2.Zero; bn.Rotation = rot; bn.Hp = bn.MaxHp;
+            var way = Vector2.Right.Rotated(VaryAngle());
+            float cursorD = Vary(bands[run].Item1, bands[run].Item2);
+            var cursor = home + way * cursorD;
+            float wantD = Mathf.Clamp(cursorD, 150f, 1100f);
+            var land = home + way * wantD;
+            var lights = new List<Raider>();
+            for (int i = 0; i < 3; i++)
+            {
+                var l = H.SpawnRaider(land + Vector2.Right.Rotated(VaryAngle()) * Vary(10f, 60f)); l.Hp = 1e9; l.ApplyStatus(Status.Disabled, 30); lights.Add(l);
+            }
+            var side = way.Orthogonal() * (run % 2 == 0 ? 1f : -1f);
+            var gunship = H.SpawnRaider(land + side.Rotated(Vary(-0.4f, 0.4f)) * 200f, Enemies.Gunship); gunship.Hp = 1e9; gunship.ApplyStatus(Status.Disabled, 30);
+            var outside = H.SpawnRaider(land - side * 400f, Enemies.Webifier); outside.Hp = 1e9; outside.ApplyStatus(Status.Disabled, 30);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            // the gunship bow-on to the point, its centre out past 110 u and its bow inside it
+            var gDir = (gunship.Position - land).Normalized();
+            gunship.Rotation = (-gDir).Angle() + Mathf.Pi / 2;
+            float gExt = land.DistanceTo(gunship.Position) - Raider.Gap(land, gunship);
+            var gSpot = land + gDir * (110f + gExt * Vary(0.3f, 0.7f));
+            var oDir = (outside.Position - land).Normalized();
+            float oExt = land.DistanceTo(outside.Position) - Raider.Gap(land, outside);
+            var oSpot = land + oDir * (110f + oExt + Vary(60f, 120f));
+            float gRot = gunship.Rotation;
+            void Hold() { bn.Position = home; bn.Velocity = Vector2.Zero; bn.Rotation = rot; gunship.Position = gSpot; gunship.Rotation = gRot; outside.Position = oSpot; }
+            Hold();
+            int pending0 = H.BlastsPending;
+            blows.Clear();
+            double credit0 = bn.DealtBy.GetValueOrDefault(Dealt.Mortar), hull0 = bn.Hp;
+            KeyDown(global::Godot.Key.Space);
+            for (int i = 0; i < 60 * 4 && H.BlastsPending == pending0; i++) { Hold(); AimWorld(cursor); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            KeyUp(global::Godot.Key.Space);
+            double marked = bn.Clock;
+            var thrown = H.Blasts.LastOrDefault();
+            bool placed = thrown.side == Missiles.Mortar && Math.Abs(thrown.at.DistanceTo(home) - wantD) < 1.5f && thrown.at.DistanceTo(land) < 1.5f
+                          && Nodes<FxNode>().Any(f => f.Id == Fx.AimZone && f.Position.DistanceTo(land) < 1.5f);
+            float gGap = Raider.Gap(land, gunship);
+            for (int i = 0; i < 60 * 3 && blows.Count == 0; i++) { Hold(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            double flew = blows.Count > 0 ? blows[0].at - marked : -1;
+            int onLights = lights.Count(l => blows.Count(b => ReferenceEquals(b.t, l) && Math.Abs(b.d - 58.75) < 1e-9) == 1);
+            bool gHit = blows.Count(b => ReferenceEquals(b.t, gunship) && Math.Abs(b.d - 58.75) < 1e-9) == 1;
+            bool oMissed = !blows.Any(b => ReferenceEquals(b.t, outside));
+            double credited = bn.DealtBy.GetValueOrDefault(Dealt.Mortar) - credit0;
+            Check(placed && Math.Abs(flew - 1.4) < 0.05 && onLights == 3 && gHit && gSpot.DistanceTo(land) > 110f && gGap < 110f && oMissed
+                  && Math.Abs(credited - 4 * 58.75) < 1e-6 && Math.Abs(bn.Hp - hull0) < 1e-9,
+                  $"mortar run {run}: a cursor {cursorD:0} u off lands the blast {thrown.at.DistanceTo(home):0} u out on its bearing ({placed}), {flew:0.00} s after its mark; 3 bunched lights take 58.75 each ({onLights}), a gunship {gSpot.DistanceTo(land):0} u off with its bow {gGap:0} u in takes it ({gHit}), a light past the blast nothing ({oMissed}); {credited:0.00} credited \"mortar\", its own hull untouched ({bn.Hp - hull0:0.0})");
+            foreach (var l in lights) l.TakeDamage(1e12);
+            gunship.TakeDamage(1e12); outside.TakeDamage(1e12);
+            await Wait(2.4);                                     // the reload before the next run's first round
+        }
+        Dealt.Landed -= Heard;
+        bn.Position = yonder; bn.Velocity = Vector2.Zero;
+    }
+
     // ── 6b · TIME ON TARGET ACROSS THE WIRE (kits6b-J2, rung 5; kits_v31 8's second run) ─────────
     // HOST: the guest's freighter (three sentries standing 0-600 u off it) paints the held gunship
     // 560-700 u off (host-varied spots); the guest presses F. Every line is the host's: the gunship
@@ -11373,6 +11459,7 @@ public partial class _Test : Node
             await LaneA6bTotChecks(yonder);
             await LaneA6bBubbleCoverChecks(yonder);
             await LaneA6bRedeployChecks(yonder);
+            await LaneA6bMortarChecks(yonder);
             await LaneARaiderCallChecks(yonder);
             await LaneADecoyChecks(yonder);
             await LaneATowChecks(yonder);
@@ -11945,6 +12032,26 @@ public partial class _Test : Node
                     bool proved = false; string told = "";
                     switch (stat)
                     {
+                        case "main_range" when cdef.Primary == Primary.Lob:
+                        {
+                            // A LOB'S REACH (kits6b-J4) is where its landing is clamped: a cursor 1.25-1.45
+                            // reaches out lands the blast AT the reach (PlayerShip.LobPoint), catching a mark
+                            // standing there, and a mark past the reach and the blast both on that bearing is
+                            // untouched. The blast is the pilot's own row and numbers; only its flight is the
+                            // harness's (0.25 s, not 1.4).
+                            var farCursor = pilot.Position + way * (float)(reach * Vary(1.25f, 1.45f));
+                            var lands = pilot.LobPoint(farCursor);
+                            var mkIn = await Marker(lands);
+                            var mkOut = await Marker(pilot.Position + way * (float)(reach + pilot.Stats["mortar_blast"] + Vary(80f, 200f)));
+                            double inWas = mkIn.Hp, outWas = mkOut.Hp;
+                            H.ThrowMissile(new MissileSpec { Side = cdef.LobSide, Damage = pilot.Stats["main_damage"], Blast = (float)pilot.Stats["mortar_blast"], Flight = 0.25 },
+                                           pilot.Position, lands, pilot.NetId);
+                            await Wait(0.45);
+                            proved = Math.Abs(pilot.Position.DistanceTo(lands) - reach) < 0.5 && mkIn.Hp < inWas && mkOut.Hp == outWas;
+                            told = $"a cursor {pilot.Position.DistanceTo(farCursor):0} u out lands the mortar at {pilot.Position.DistanceTo(lands):0} u ({inWas - mkIn.Hp:0.0} taken there) and nothing {pilot.Position.DistanceTo(mkOut.Position):0} u out ({outWas - mkOut.Hp:0.0})";
+                            Sink(mkIn); Sink(mkOut);
+                            break;
+                        }
                         case "main_range":
                         {
                             // The gun's OWN round, out of the ship's own spec, through Combat.Fire

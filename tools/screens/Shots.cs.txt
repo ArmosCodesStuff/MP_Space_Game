@@ -845,6 +845,7 @@ public partial class _Shots : Node
             await LaneA6bTotFrame(hub, fship, yard);
             await LaneA6bRedeployFrame(fship, yard);
             foreach (var t in hub.Deployed.ToList()) hub.DeployedTaken(t);
+            await LaneA6bMortarFrame(hub, yard);
             await Class(ShipClass.Battleship); await W(0.3);
             await FieldsFrames(hub, yard);
 
@@ -1040,6 +1041,21 @@ public partial class _Shots : Node
         fship.UseAbility("redeploy", 0);
         await W(0.6); await Snap("79d_redeploy_marks");
         await W(0.6); await Snap("79e_redeploy_ring");
+    }
+
+    // 6b (kits6b-J4) mortar_circle: a bastion's siege mortar in the air -- the round climbing out of its
+    // aft mount toward a cursor 700 u ahead and the friendly 110 u landing circle filling there (0.7 s of
+    // its 1.4 s gone)
+    async Task LaneA6bMortarFrame(Hub hub, Vector2 yard)
+    {
+        Character.Class = ShipClass.FreightBastion; P(hub, "ApplyLocalIdentity"); await W(0.3);
+        var bs = hub.GetNode<PlayerShip>("Ship_1"); bs.Position = yard; bs.Velocity = Vector2.Zero; bs.Rotation = 0f;
+        await W(0.2);
+        var at = bs.LobPoint(yard + new Vector2(0, -700));
+        hub.ThrowMissile(new MissileSpec { Side = Missiles.Mortar, Damage = bs.Stats["main_damage"], Blast = (float)bs.Stats["mortar_blast"], Flight = bs.Stats["mortar_flight"] },
+                         bs.Position, at, bs.NetId);
+        await W(0.7); await Snap("79f_mortar_circle");
+        await W(1.0);
     }
 
     async Task LaneBDriveFrames()
