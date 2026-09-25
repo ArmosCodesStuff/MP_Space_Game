@@ -60,6 +60,11 @@ Stat ids an item line lifts that the kits own (today's id where one exists; `?` 
 - A9 the Dart reads every top-speed lift (R6): no Light line or chip lifts `max_speed` except the Engine
   chip (+5%, the lever named in R6) and Burner Drive's boost excess.
 
+- A10 (J4) the primary's blows by weapon id, `Items.PrimaryShots` = shell, fighter: Spin-up Feed ramps only
+  these; each new primary of the nine adds its Dealt weapon id there.
+- A11 (J4) a CRAFT (Escort Hunter, Hunter Chip) is `Tag.Light | Tag.Fighter` and never `Tag.Boss`; Burst Feed's
+  window opens when the class's DRIVE row's run ends (`Drive.Row`, lane B), so it waits on no kit.
+
 ## Jobs (foundations first)
 
 - **J1** Foundation + rows: Items.cs (Hulls, Tiers, Roles, Lines, generator); ItemDef.Tier/Cat, Rarity
@@ -129,3 +134,39 @@ x0.1 floor holds it at 10.4 u/s); the spec prices each line alone, never the sta
 Next: J2 is now only the TIO line (done in J1) -> fold into J7; next job J3's content landed in ItemsLineChecks, so the
 next job is J4 (conditional doors), then J5 (guest-role check ItemsGuestChecks, ItemsParRowsChecks), J6 (frames beyond
 58: a crate's tier colour, the recycler list by tier), J7 (docs + final POST).
+
+## Step 0 (fresh agent, 2026-09-25): merged version-l 8dcc845 (lane B drives) into wt/items at 893b87b, clean;
+typecheck 0 errors. The drive rows (warp_safe, warp_rate, surge_*, strafe_thrust) are now on the sheets.
+
+## J4 PRE -- tier opus
+Intent: the conditional doors (I6). Items.Conditions: a row per conditional stat (id, label, door, ceiling,
+When), put on the sheet at x1 of every hull a conditional line fits; doors: Dealt (Dealt.Deal via
+Credit.Outgoing: craft, execute <35%, redline <50%, spin-up on the primary), Taken (Guarded: small hits
+<10% of hull, ceiling 40%), Tracking (PD turret onto craft), Kill (Dealt.Deal: every cooldown left),
+Web (ApplyStatus + the pinned top speed, ceiling 60%), AfterDrive (Cadence of @primary_rate for 4 s after
+the drive's run ends). IHittable.HullLeft (1 by default; IQuarry and Raider answer theirs).
+HEAD 893b87b. Hashes:
+  scripts/Items.cs f66dbe6678b5984823a7d9c3afc3a08f65e0fa41
+  scripts/Stats.cs eb1e7d677ea45d149db1fd8096f8fdfbdad80c89
+  scripts/Dealt.cs 4065547df26ef5773f2128be395cd7b42a275653
+  scripts/PlayerShip.cs ec25cb8e083a2c377347f69acd810956ff412ee1
+  scripts/Turrets.cs 2f876a91a3b1259af6b0fa4fe86110b74baad7b6
+  scripts/ShipClasses.cs 5c455e82cf7a880ad2dfc55ecd8413db75f58eec
+  scripts/Missions.cs c7b68c2ffca92855fed21c07ebcc3dbff30b9f1a
+  scripts/Raider.cs 5fd3a21aa59a8a69f451cdb5c5d530cc4c0c1a82
+  tools/smoketest/SmokeTest.cs.txt 80b5f7052899fcfe29c0bd06dfdeed8db66837a8
+## J4 POST
+Verdict: done. typecheck 0 errors; verify -Quick ALL CHECKS PASSED. Own diff read.
+Files: Items.cs (Door, Blow, Condition rows, RowsOf, ShareOf, Shares, SpinShare, PinnedSpeed, IsCraft, PrimaryShots),
+Stats.cs (condition rows on the sheet, group "Conditions"), Dealt.cs (Credit.Outgoing before the blow, NoteKill after
+a kill), PlayerShip.cs (Outgoing, NoteKill over every slot once, TrackingOn, HullLeft, WebCut in ApplyStatus and the
+pinned top, the small-hit cut first in Guarded, Burst Feed's 4 s window in Cadence for @primary_rate only),
+Turrets.cs (PD swing x Credit.TrackingOn(target)), IHittable.HullLeft (1 by default; IQuarry and Raider answer).
+Craft tracking lifts POINT DEFENCE only: the main guns follow the cursor and have no target (default, in open).
+Checks written (engine-unproven: rungs owed in the final test phase): NEW ItemsDoorChecks (rung 3): the rows'
+placement; Escort Hunter T5 x3 runs (136.60 / 100, tracking x1.366 / x1); interaction Escort Hunter + Hunter Chip
+add to +33%, chip alone +8%; Executioner T1 at 3 hull shares; Redline T10 at 3 own-hull shares; Ablative T1 small /
+big, T10 at its 40% ceiling; Reset Core T1 x3 (no kill keeps, a kill x0.75); Web Breaker T1 / T10 / none, pinned speed
+0.2 / 0.4 / 0.68 and the 60% ceiling; Burst Feed during / within 4 s / after; Spin-up ramp, cap 125, PD no ramp,
+new target and silence reset. Helpers WearI / WornOffI / HeldI.
+Next: J5 (ItemsGuestChecks in a guest role, ItemsParRowsChecks, chip budget), J6 (frames), J7 (docs, final POST).

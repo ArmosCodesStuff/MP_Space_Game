@@ -4707,6 +4707,203 @@ public partial class _Test : Node
     // proof of themselves.
     static bool NearI(double a, double b, double tol = 1e-6) => Math.Abs(a - b) < tol;
 
+    // THE PILOT WEARS `ids` on hull `c` with no salvage levels (so a share is the line's printed
+    // one); WornOffI puts back what it wore. A chip takes the first chip slot.
+    async Task<(string[] lo, Dictionary<string, int> lv)> WearI(ShipClass c, params string[] ids)
+    {
+        var lo = Character.LoadoutFor(c); var was = ((string[])lo.Clone(), new Dictionary<string, int>(Character.GearLevel));
+        Character.GearLevel.Clear();
+        int chip = Equipment.CoreSlots;
+        foreach (var id in ids)
+        {
+            var it = Equipment.ById(id);
+            if (it.Slot == GearSlot.Chip) lo[chip++] = id; else lo[Array.IndexOf(Equipment.Core, it.Slot)] = id;
+        }
+        await SetClass(c);
+        return was;
+    }
+    async Task WornOffI(ShipClass c, (string[] lo, Dictionary<string, int> lv) was)
+    {
+        Array.Copy(was.lo, Character.LoadoutFor(c), was.lo.Length);
+        Character.GearLevel.Clear(); foreach (var kv in was.lv) Character.GearLevel[kv.Key] = kv.Value;
+        H.PilotChanged(); await Wait(0.1);
+    }
+    // A raider held for the blow: a huge hull (or `share` of its own), disabled so it neither
+    // moves, webs nor fires.
+    Raider HeldI(Vector2 at, int kind, double share = 0)
+    {
+        var r = H.SpawnRaider(at, kind);
+        r.Hp = share > 0 ? r.MaxHull * share : 1e9;
+        r.ApplyStatus(Status.Disabled, 120);
+        return r;
+    }
+
+    // THE CONDITIONAL DOORS (I6, §3.3): each conditional line's row is x1 on the sheet of every hull
+    // it fits, and counts only in its situation, at its one door. Literals from §3.3: +25% at T1,
+    // +59% at T10 (x2.3579), Ablative 20% to its 40% ceiling, Web Breaker 25% to 60%, Burst Feed 20%
+    // for 4 s, Spin-up +5% a second to +25% after 5 s. Three varied situations each.
+    async Task ItemsDoorChecks(Vector2 yonder)
+    {
+        // THE ROWS: where they are, and x1 with nothing worn
+        var bsS = new ShipStats(ShipClass.Battleship); var dtS = new ShipStats(ShipClass.LightDart);
+        var haS = new ShipStats(ShipClass.FreightHauler); var wrS = new ShipStats(ShipClass.HeavyWarrior);
+        Check(bsS.All.Any(s => s.Id == "craft_damage") && bsS["craft_tracking"] == 1 && !bsS.All.Any(s => s.Id == "execute_damage")
+              && dtS["redline_damage"] == 1 && dtS["afterboost_rate"] == 1 && dtS["kill_reset"] == 1 && dtS["small_hit_cut"] == 1 && !dtS.All.Any(s => s.Id == "web_resist")
+              && haS["spinup_damage"] == 1 && haS["craft_damage"] == 1 && wrS["execute_damage"] == 1 && wrS["web_resist"] == 1 && !wrS.All.Any(s => s.Id == "redline_damage"),
+              "the condition rows sit at x1 on the hulls their lines fit: craft on every hull (the Hunter Chip), execute and web on a heavy, redline / burst / reset / ablative on a light, spin-up on a freighter");
+
+        // ESCORT HUNTER (T5 +36.6%, damage and tracking) against craft only: a light raider takes
+        // 136.6 of a 100 blow, a heavy 100; PD swings onto the light x1.366, onto the heavy x1
+        var was = await WearI(ShipClass.Battleship, "escort_hunter_t5");
+        for (int run = 0; run < 3; run++)
+        {
+            var bs = Me; bs.Position = VaryNear(yonder, 300f); bs.Velocity = Vector2.Zero;
+            var lt = HeldI(bs.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(250f, 600f), Enemies.Webifier);
+            var hv = HeldI(bs.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(250f, 600f), Enemies.Gunship);
+            double l0 = lt.Hp, h0 = hv.Hp;
+            Dealt.Deal(lt, 100, bs, "shell"); Dealt.Deal(hv, 100, bs, "pd");
+            double ld = l0 - lt.Hp, hd = h0 - hv.Hp;
+            float tl = bs.TrackingOn(lt), th = bs.TrackingOn(hv), tn = bs.TrackingOn(null);
+            Check(TagExt.Is(lt, Tag.Light) && NearI(ld, 136.6025, 1e-3) && NearI(hd, 100, 1e-9) && NearI(tl, 1.366025, 1e-5) && NearI(th, 1) && NearI(tn, 1),
+                  $"Escort Hunter T5 on a battleship, run {run}: a light raider {bs.Position.DistanceTo(lt.Position):0} u off takes {ld:0.00} of 100 (136.60), a heavy {hd:0.00} (100); tracking onto the light x{tl:0.000}, the heavy x{th:0.000}");
+            lt.TakeDamage(1e12); hv.TakeDamage(1e12);
+        }
+        await WornOffI(ShipClass.Battleship, was);
+
+        // INTERACTION: Escort Hunter T1 + Hunter Chip T1 against a craft ADD (+25% + 8% = x1.33, not
+        // x1.35), on a capital sheet; the chip alone on a freighter is x1.08, and a heavy target x1
+        {
+            var probe = HeldI(VaryNear(yonder, 400f), Enemies.Webifier); var heavy = HeldI(VaryNear(yonder, 400f), Enemies.Gunship);
+            var both = Equipment.Default(ShipClass.Battleship); both[0] = "escort_hunter_t1"; both[Equipment.CoreSlots] = "chip_hunter_t1";
+            var chipOnly = Equipment.Default(ShipClass.FreightTender); chipOnly[Equipment.CoreSlots] = "chip_hunter_t1";
+            var sBoth = new ShipStats(ShipClass.Battleship, Equipment.Bonuses(ShipClass.Battleship, both, 40, NoLevels));
+            var sChip = new ShipStats(ShipClass.FreightTender, Equipment.Bonuses(ShipClass.FreightTender, chipOnly, 40, NoLevels));
+            double a = Items.Shares(Items.Door.Dealt, sBoth, new Items.Blow(probe, 1, 100, 1000)), b = Items.Shares(Items.Door.Dealt, sChip, new Items.Blow(probe, 1, 100, 1000)),
+                   c = Items.Shares(Items.Door.Dealt, sBoth, new Items.Blow(heavy, 1, 100, 1000));
+            Check(NearI(a, 0.33) && NearI(b, 0.08) && NearI(c, 0),
+                  $"Escort Hunter T1 and the Hunter Chip T1 add against a craft: +{a * 100:0.##}% (33); the chip alone on a Tender +{b * 100:0.##}% (8); against a heavy +{c * 100:0.##}% (0)");
+            probe.TakeDamage(1e12); heavy.TakeDamage(1e12);
+        }
+
+        // EXECUTIONER T1 (+25%) on a Warrior: a target under 35% hull takes 1.25 of a 1 blow, over it 1
+        was = await WearI(ShipClass.HeavyWarrior, "executioner_t1");
+        foreach (var (lo, hi, want) in new[] { (0.08, 0.30, 1.25), (0.40, 0.95, 1.0), (0.15, 0.33, 1.25) })
+        {
+            var wr = Me; wr.Position = VaryNear(yonder, 300f); wr.Velocity = Vector2.Zero;
+            double frac = Vary((float)lo, (float)hi);
+            var t = HeldI(wr.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(200f, 500f), Enemies.Gunship, frac);
+            double h0 = t.Hp; Dealt.Deal(t, 1, wr, "shell"); double got = h0 - t.Hp;
+            Check(NearI(got, want, 1e-9), $"Executioner T1: a gunship at {frac * 100:0}% of its hull takes {got:0.000} of a 1 blow ({want})");
+            t.TakeDamage(1e12);
+        }
+        await WornOffI(ShipClass.HeavyWarrior, was);
+
+        // REDLINE T10 (+59%, x1.5895): own hull under 50% -> 158.95 of 100; over it 100
+        was = await WearI(ShipClass.LightDart, "redline_t10");
+        foreach (var (lo, hi, want, kind) in new[] { (0.10, 0.45, 158.9487, Enemies.Gunship), (0.55, 1.0, 100.0, Enemies.Gunship), (0.20, 0.40, 158.9487, Enemies.Webifier) })
+        {
+            var dt = Me; dt.Position = VaryNear(yonder, 300f); dt.Velocity = Vector2.Zero;
+            double frac = Vary((float)lo, (float)hi); dt.Hp = dt.MaxHp * frac;
+            var t = HeldI(dt.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(200f, 500f), kind);
+            double h0 = t.Hp; Dealt.Deal(t, 100, dt, "shell"); double got = h0 - t.Hp;
+            Check(NearI(got, want, 1e-3), $"Redline T10: at {frac * 100:0}% of its own hull the Dart deals {got:0.00} of 100 ({want:0.00})");
+            t.TakeDamage(1e12); dt.Hp = dt.MaxHp;
+        }
+        await WornOffI(ShipClass.LightDart, was);
+
+        // ABLATIVE SKIN: a hit under 10% of the hull is cut 20% at T1 and 40% at T10 (its ceiling:
+        // the row reads +47.2%); a hit over 10% lands whole
+        foreach (var (id, frac, cut) in new[] { ("ablative_skin_t1", Vary(0.02f, 0.08f), 0.20), ("ablative_skin_t1", Vary(0.12f, 0.30f), 0.0), ("ablative_skin_t10", Vary(0.02f, 0.08f), 0.40) })
+        {
+            was = await WearI(ShipClass.LightDart, id);
+            var dt = Me; dt.Hp = dt.MaxHp;
+            double blow = dt.MaxHp * frac, h0 = dt.Hp;
+            dt.Incoming(blow);
+            double got = h0 - dt.Hp;
+            Check(NearI(got, blow * (1 - cut), 1e-6), $"{id}: a {blow:0.0} hit ({frac * 100:0}% of the hull) lands {got:0.00} ({blow * (1 - cut):0.00}, cut {cut * 100:0}%)");
+            dt.Hp = dt.MaxHp;
+            await WornOffI(ShipClass.LightDart, was);
+        }
+
+        // RESET CORE T1: a kill takes 25% off every cooldown left; a blow that kills nothing, none
+        was = await WearI(ShipClass.LightEcho, "reset_core_t1");
+        for (int run = 0; run < 3; run++)
+        {
+            var ec = Me; ec.Position = VaryNear(yonder, 300f); ec.Velocity = Vector2.Zero;
+            var ids = Abilities.For(ec.Class).Select(d => d.Id).Distinct().ToArray();
+            double cool = Vary(6f, 14f);
+            foreach (var id in ids) ec.Sl(id).Cool = cool;
+            var live = HeldI(ec.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(200f, 500f), Enemies.Gunship);
+            Dealt.Deal(live, 5, ec, "shell");
+            bool kept = ids.All(id => NearI(ec.Sl(id).Cool, cool));
+            var doomed = HeldI(ec.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(200f, 500f), run == 1 ? Enemies.Webifier : Enemies.Gunship, 0.01);
+            Dealt.Deal(doomed, doomed.Hp + 5, ec, "shell");
+            bool cut = !doomed.Alive && ids.All(id => NearI(ec.Sl(id).Cool, cool * 0.75, 1e-6));
+            Check(kept && cut, $"Reset Core T1, run {run}: a blow that kills nothing leaves {ids.Length} cooldowns at {cool:0.00} s; a kill takes them to {cool * 0.75:0.00} s ({ec.Sl(ids[0]).Cool:0.00})");
+            foreach (var id in ids) ec.Sl(id).Cool = 0;
+            live.TakeDamage(1e12);
+        }
+        await WornOffI(ShipClass.LightEcho, was);
+
+        // WEB BREAKER: a web holds 25% shorter at T1, 58.9% at T10, whole with no breaker; the pinned
+        // top speed is 20% of top with no cut, 40% at a 25% cut, and the cut stops at 60% (68%)
+        foreach (var (id, cut) in new[] { ("web_breaker_t1", 0.25), ("web_breaker_t10", 0.589487), ("heavy_plating_t1", 0.0) })
+        {
+            was = await WearI(ShipClass.HeavyWarrior, id);
+            var wr = Me; double secs = Vary(2f, 6f);
+            wr.ApplyStatus(Status.Pinned, secs);
+            double held = wr.Statuses.Left(Status.Pinned);
+            Check(NearI(held, secs * (1 - cut), 1e-3), $"{id} on a Warrior: a {secs:0.00} s web holds {held:0.00} s ({secs * (1 - cut):0.00})");
+            wr.Statuses.Clear(Status.Pinned);
+            await WornOffI(ShipClass.HeavyWarrior, was);
+        }
+        var capS = new ShipStats(ShipClass.HeavyWarrior, new Dictionary<string, double> { ["web_resist"] = 0.9 });
+        double capped = Items.Shares(Items.Door.Web, capS, default);
+        Check(NearI(Items.PinnedSpeed(0.2f, 0), 0.2, 1e-6) && NearI(Items.PinnedSpeed(0.2f, 0.25), 0.4, 1e-6) && NearI(Items.PinnedSpeed(0.2f, 0.60), 0.68, 1e-6) && NearI(capped, 0.60),
+              $"a web's top speed: 20% of top with no cut, 40% at Web Breaker T1's 25%, 68% at the 60% ceiling; a +90% row is held to 60% ({capped:0.00})");
+
+        // BURST FEED T1: for 4 s after the boost ends the primary reloads x1.2 faster; not while the
+        // boost runs, not 4 s after. Timed from the frame the boost's run is seen to end.
+        was = await WearI(ShipClass.LightDart, "burst_feed_t1");
+        {
+            var dt = Me; string boost = dt.Drive.Id;
+            double c0 = dt.Stats["main_interval"];
+            dt.Sl(boost).Left = Vary(0.2f, 0.5f);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            double during = dt.Cadence("main_interval");
+            while (dt.Sl(boost).Left > 0) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await Wait(Vary(0.3f, 3.0f));
+            double after = dt.Cadence("main_interval");
+            await Wait(4.3);
+            double later = dt.Cadence("main_interval");
+            Check(NearI(during, c0, 1e-9) && NearI(after, c0 / 1.2, 1e-9) && NearI(later, c0, 1e-9),
+                  $"Burst Feed T1 on a Dart: the reload {c0:0.000} s while the boost runs ({during:0.000}), {after:0.000} within 4 s of its end ({c0 / 1.2:0.000}), {later:0.000} after");
+        }
+        await WornOffI(ShipClass.LightDart, was);
+
+        // SPIN-UP FEED T1: +5% a second on one target to +25% after 5 s, back to +0 on a new target or
+        // after 1 s of silence; a PD blow does not ramp
+        was = await WearI(ShipClass.FreightHauler, "spinup_feed_t1");
+        {
+            var ha = Me; ha.Position = VaryNear(yonder, 300f); ha.Velocity = Vector2.Zero;
+            var t = HeldI(ha.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(250f, 500f), Enemies.Gunship);
+            var u = HeldI(ha.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(250f, 500f), Enemies.Gunship);
+            double HitI(Raider r, string w) { double h = r.Hp; Dealt.Deal(r, 100, ha, w); return h - r.Hp; }
+            double first = HitI(t, "shell"), since = ha.Clock, until = since + Vary(1.5f, 3.5f);
+            while (ha.Clock < until) { HitI(t, "shell"); await Wait(0.4); }
+            double mid = HitI(t, "shell"), want = 100 * (1 + 0.25 * (ha.Clock - since) / 5);
+            double pd = HitI(t, "pd");
+            while (ha.Clock < since + 5.6) { HitI(t, "shell"); await Wait(0.4); }
+            double full = HitI(t, "shell"), other = HitI(u, "shell");
+            await Wait(Vary(1.3f, 2.0f));
+            double silence = HitI(u, "shell");
+            Check(NearI(first, 100) && NearI(mid, want, 0.05) && NearI(pd, 100) && NearI(full, 125, 1e-6) && NearI(other, 100) && NearI(silence, 100),
+                  $"Spin-up Feed T1 on a hauler: 100 on the first shell, {mid:0.00} after {until - since:0.0} s ({want:0.00}), a PD blow {pd:0.00}, {full:0.00} after 5 s (125), a new target {other:0.00}, after a silence {silence:0.00}");
+            t.TakeDamage(1e12); u.TakeDamage(1e12);
+        }
+        await WornOffI(ShipClass.FreightHauler, was);
+    }
+
     // THE LAW (§3.1): P(t), the five leans, the rider's +n, the scrap.
     void ItemsLawChecks()
     {
@@ -9055,6 +9252,7 @@ public partial class _Test : Node
             await LaneBStrafeChecks(yonder);
             await LaneBBoostChecks(yonder);
             await FieldsLiveRowChecks(yonder);
+            await ItemsDoorChecks(yonder);
 
             // ── WARRIOR: two and a half times its speed, half the damage, then the EMP ──
             await SetClass(ShipClass.HeavyWarrior);

@@ -48,6 +48,9 @@ public interface IHittable
     // Does a projectile at p (with pad for its own size) touch this? A circle by
     // default; a long ship answers with a capsule along its keel.
     bool Covers(Vector2 p, float pad) => p.DistanceTo(Position) <= HitRadius + pad;
+    // THE SHARE OF ITS HULL LEFT, 0..1 (Executioner's "under 35%"). A thing with no hull to speak of
+    // answers 1, so nothing executes it.
+    double HullLeft => 1;
     // A missile (Tag.Missile) can be shot down but is never SELECTED (click or Tab); a body in
     // flight with a hull of its own (Tag.Hulled) is picked like any hull.
     bool Selectable => true;

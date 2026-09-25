@@ -298,6 +298,70 @@ public static class Items
                 Up = U(("@reach", 0.06)) },
     };
 
+    // ── THE CONDITIONS (§3.1, I6): a line whose up counts only in a situation lifts a SHEET ROW AT x1
+    // (base 1; the line's share takes it to 1 + share), and the row is read at ONE door. A row fills
+    // in its id, label, door, the ceiling its share stops at (0: none) and, for a door that weighs a
+    // blow, When. Every row is on the sheet of every hull a conditional line naming it fits
+    // (RowsOf), so a hull with none of the gear reads x1 and every door is a no-op on it.
+    public enum Door { Dealt, Taken, Tracking, Kill, Web, AfterDrive, Spin }
+    public readonly record struct Blow(IHittable Target, double OwnLeft, double D, double OwnMax);
+    public sealed class Condition
+    {
+        public string Id, Label;
+        public Door Door;
+        public double Cap;                       // the share's ceiling; 0: none
+        public Func<Blow, bool> When;            // null: always, at its door
+    }
+
+    public const double ExecuteBelow = 0.35, RedlineBelow = 0.50, SmallHit = 0.10;
+    public const double AfterDriveSecs = 4, SpinSecs = 5, SpinDrop = 1;
+    // what a CRAFT is to Escort Hunter and the Hunter Chip: a small craft or a wing, never a boss
+    public static bool IsCraft(IHittable t) => t != null && TagExt.Is(t, Tag.Light | Tag.Fighter) && !TagExt.Is(t, Tag.Boss);
+    // THE PRIMARY'S BLOWS by weapon id (Dealt): what Spin-up Feed ramps. The kits' new primaries add
+    // their ids here (ITEM ASSUMPTIONS A10).
+    public static readonly string[] PrimaryShots = { "shell", Dealt.Fighter };
+
+    public static readonly Condition[] Conditions =
+    {
+        new() { Id = "craft_damage",    Label = "Damage against craft",       Door = Door.Dealt,    When = b => IsCraft(b.Target) },
+        new() { Id = "execute_damage",  Label = "Damage, target under 35%",   Door = Door.Dealt,    When = b => b.Target != null && b.Target.HullLeft < ExecuteBelow },
+        new() { Id = "redline_damage",  Label = "Damage, own hull under 50%", Door = Door.Dealt,    When = b => b.OwnLeft < RedlineBelow },
+        new() { Id = "craft_tracking",  Label = "Tracking onto craft",        Door = Door.Tracking, When = b => IsCraft(b.Target) },
+        new() { Id = "small_hit_cut",   Label = "Small hits cut",             Door = Door.Taken, Cap = 0.40, When = b => b.D < SmallHit * b.OwnMax },
+        new() { Id = "kill_reset",      Label = "Cooldowns off on a kill",    Door = Door.Kill },
+        new() { Id = "web_resist",      Label = "A web shorter and weaker",   Door = Door.Web,   Cap = 0.60 },
+        new() { Id = "afterboost_rate", Label = "Primary rate after a boost", Door = Door.AfterDrive },
+        new() { Id = "spinup_damage",   Label = "Primary ramp on one target", Door = Door.Spin },
+    };
+
+    // The condition rows on hull `c`'s sheet: every one a conditional line that fits it names.
+    public static IEnumerable<Condition> RowsOf(ShipClass c)
+    {
+        var cat = Hulls.Of(c);
+        var named = Lines.Where(l => l.Conditional && (l.Cat == null || l.Cat == cat)).SelectMany(l => l.Up).Select(u => u.key).ToHashSet();
+        return Conditions.Where(r => named.Contains(r.Id));
+    }
+
+    // One row's share on a sheet: what its gear lifted it by, at its ceiling; 0 on a sheet without it.
+    public static double ShareOf(ShipStats s, Condition r)
+    {
+        double v = s[r.Id];
+        double share = v > 1 ? v - 1 : 0;
+        return r.Cap > 0 ? Math.Min(r.Cap, share) : share;
+    }
+    // EVERY ROW AT A DOOR whose situation holds, ADDED (the share rule: buffs add).
+    public static double Shares(Door door, ShipStats s, in Blow b)
+    {
+        double sum = 0;
+        foreach (var r in Conditions)
+            if (r.Door == door && (r.When == null || r.When(b))) sum += ShareOf(s, r);
+        return sum;
+    }
+    // THE RAMP (Spin-up Feed): the share builds evenly to its whole over SpinSecs on one target.
+    public static double SpinShare(double share, double secsOn) => share * Math.Clamp(secsOn / SpinSecs, 0, 1);
+    // A WEB'S TOP SPEED under a cut of `cut`: the slow (1 - pin) shrinks by the cut.
+    public static float PinnedSpeed(float pin, double cut) => (float)(1 - (1 - pin) * (1 - Math.Clamp(cut, 0, 1)));
+
     public static string IdOf(string stem, int tier) => $"{stem}_t{tier}";
 
     // EVERY LINE AT EVERY TIER: the ups x P(t), the price as written, the rider's +n by Tiers.Plus.

@@ -196,7 +196,40 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // THE SECONDS BETWEEN SHOTS of the gun whose interval stat this is, at the rate this ship fires
     // at now: the one place a lift becomes time. (A broadside's volley gap and a missile burst's
     // refire are not a gun's reload, and no class that has them carries a rate row.)
-    public double Cadence(string intervalStat) => Stats.With(intervalStat, Lifts(rate: true));
+    // Burst Feed's window (Items.Door.AfterDrive) lifts the primary's reloads alone, for AfterDriveSecs
+    // after the drive's run ends.
+    public double Cadence(string intervalStat) => Stats.With(intervalStat, Lifts(rate: true)
+        + (_afterDrive > 0 && Items.IdsOf("@primary_rate", Class).Contains(intervalStat)
+            ? Items.Shares(Items.Door.AfterDrive, Stats, default) : 0));
+    private double _afterDrive;
+
+    // ── THE CONDITIONS THIS SHIP'S GEAR LIFTS (Items.Conditions), each at its one door ──
+    private IHittable _spinOn;                      // Spin-up Feed: the target, since when, and the last blow
+    private double _spinSince, _spinLast;
+    public double HullLeft => MaxHp > 0 ? Hp / MaxHp : 1;
+    private Items.Blow BlowOn(IHittable target, double d) => new(target, HullLeft, d, MaxHp);
+    // A blow this ship deals, weighed (Dealt.Deal): its Dealt rows added, and the primary's ramp.
+    public double Outgoing(IHittable target, double d, string weapon)
+    {
+        double share = Items.Shares(Items.Door.Dealt, Stats, BlowOn(target, d));
+        if (Array.IndexOf(Items.PrimaryShots, weapon) >= 0)
+        {
+            if (target != _spinOn || _clock - _spinLast > Items.SpinDrop) { _spinOn = target; _spinSince = _clock; }
+            _spinLast = _clock;
+            share += Items.SpinShare(Items.Shares(Items.Door.Spin, Stats, default), _clock - _spinSince);
+        }
+        return d * (1 + share);
+    }
+    // A kill this ship made: every ability cooldown left, less the Kill rows' share.
+    public void NoteKill()
+    {
+        double cut = Math.Min(1, Items.Shares(Items.Door.Kill, Stats, default));
+        if (cut <= 0) return;
+        for (int i = 1; i < _slots.Length; i++) _slots[i].Cool *= 1 - cut;          // every slot once; 0 is the spare
+    }
+    // How much faster a turret of this ship swings onto `t` (Turret.RotSpeed).
+    public float TrackingOn(IHittable t) => (float)(1 + Items.Shares(Items.Door.Tracking, Stats, BlowOn(t, 0)));
+    private double WebCut => Items.Shares(Items.Door.Web, Stats, default);
 
     // ── ABILITY SLOTS ────────────────────────────────────────────────────
     // The state of every ability this class carries, in the class's own order. Each ability
@@ -811,7 +844,12 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // Pinned holds the ship to StatusSet.PinSpeed of top speed, thrusting, unable to turn.
     private StatusSet _status;
     public StatusSet Statuses => _status;
-    public void ApplyStatus(Status s, double seconds, double share = double.NaN) { if (Net.Sim) _status.Apply(s, seconds, share); }
+    public void ApplyStatus(Status s, double seconds, double share = double.NaN)
+    {
+        if (!Net.Sim) return;
+        if (s == Status.Pinned) seconds *= 1 - WebCut;             // Web Breaker: a web holds shorter
+        _status.Apply(s, seconds, share);
+    }
     public bool Pinned => _status.Has(Status.Pinned);
 
     // A refused ability: its slot shows the reason, in red, for a moment.
@@ -937,6 +975,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // none was named -- never a row read off this hull's own sheet.
     private double Guarded(double d)
     {
+        d *= 1 - Math.Min(1, Items.Shares(Items.Door.Taken, Stats, BlowOn(null, d)));   // Ablative Skin: a small hit
         foreach (var g in StatusSet.Guards)
         {
             if (!_status.Has(g.Status)) continue;
@@ -1041,6 +1080,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // corrects any drift. A timed ability is a row and nothing else: this loop is the only expiry.
     private void TickAbilities(double delta)
     {
+        _afterDrive = Math.Max(0, _afterDrive - delta);
         foreach (var def in Abilities.For(Class))
         {
             ref var sl = ref Sl(def.Id);
@@ -1064,6 +1104,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             sl.Left -= delta;
             if (sl.Left > 0) continue;
             sl.Left = 0;
+            if (def == Drive?.Row) _afterDrive = Items.AfterDriveSecs;   // the drive's run is over: Burst Feed's window
             def.Elapsed?.Invoke(this);
             if (Net.Sim) def.Expire?.Invoke(this);
         }
@@ -1218,7 +1259,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         // F1's Add lands on the CAP alone (TopSpeed), same as the lift itself does not touch astern.
         float top = TopSpeed((float)Stats["max_speed"], lift, SpeedAdds(), hold);
         along = Mathf.Clamp(along, -(float)Stats["reverse_speed"] * hold,
-                            top * (Pinned ? StatusSet.PinSpeed : 1f));
+                            top * (Pinned ? Items.PinnedSpeed(StatusSet.PinSpeed, WebCut) : 1f));
         if (strafe != 0f)
             across = Mathf.MoveToward(across, strafe * StrafeTop((float)Stats["strafe_speed"], lift, hold),
                                       (float)Stats["strafe_thrust"] * lift * dt);

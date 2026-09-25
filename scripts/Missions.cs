@@ -32,6 +32,7 @@ public interface IQuarry : IHittable
     // such move, which is how the bar knows not to draw the skinny meter under the hull. A type
     // test would have done it and is exactly what this interface exists to avoid.
     double SuperFill { get; }
+    double IHittable.HullLeft => MaxHp > 0 ? Hp / MaxHp : 1;
 }
 
 public static class Missions

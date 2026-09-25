@@ -57,6 +57,7 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
     public double Agility = 1;
     private HullWatch _hullWatch;
     public double MaxHull => Def.Hull * Par.CraftScale(Strength) * HullShare;
+    public double HullLeft => MaxHull > 0 ? Hp / MaxHull : 1;
     // ONE VOLLEY, every barrel at once (F20), on its level's damage scale: what each laser Strike carries
     public double Volley => Def.Dps * Def.Barrels * Def.ShotEvery * Par.DamageScale(Strength);
     public float HitRadius => Length * Def.HitShare;
