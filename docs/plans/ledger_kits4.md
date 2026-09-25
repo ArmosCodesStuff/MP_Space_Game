@@ -142,3 +142,17 @@ A PRE with no POST is an interrupted job: compare the hashes, revert half-made e
 - **Rung 5 (`six`)**: nothing new; watch GuestWalls' "RequestAbility" by string (now 3 args). The payload's and the
   ward's guest checks land with their first rows (6b throw, 6a Grapnel), K4-8.
 - **Rung 4**: no frame (nothing drawn changed).
+
+### kits4-J5 · PRE · kits4 gate fix (the opus merge gate's four findings) -- tier opus
+- Intent: (1) F8 targets[]: AbilityDef.TakesTargets; UseAbility(id, target, picks) sends the picked NetIds for such a row;
+  RequestAbility/DoAbility carry `int[] targets`; the host cuts them at Classes.Of(Class).Targets, drops repeats and ids
+  Combat.ById does not find alive, and stores the rest in PlayerShip.Picked before Press. Hub's press passes its picks.
+  (2) HelmEnd.AnchorWarped: HelmRun.AnchorAt; Why ends the run when the anchor moved over Drives.SnapAt in a frame.
+  (3) HelmEnd.Wrecked: TickAbilities ends the run on a wreck (every peer; the owner's LocalFlight never reaches Fly).
+  (4) Checks: LaneA4WardChecks rewritten through PlayerShip.ApplyState (_drive.Clamped, _netVel by reflection);
+  LaneA4TargetsChecks; LaneA4AnchorWarpChecks; LaneA4WreckChecks; six-role LaneA4GuestPointPress / LaneA4HostPointCheck
+  (the aguest's bubble press lent TakesPoint: its cursor in the host copy's Sl("bubble").At). GuestWalls' by-string
+  RequestAbility and every doAbility/doAb Invoke moved to 4 args.
+- Files: scripts/HelmMoves.cs, scripts/PlayerShip.cs, scripts/Hub.cs, scripts/Abilities.cs, tools/smoketest/SmokeTest.cs.txt,
+  docs/CHANGES.md, docs/DESIGN.md, this ledger.
+- HEAD 43dedd3d8e479ac79433b4edea48d4337040c00e · HelmMoves.cs 51d41c884e82e744ec057fdd4e93193549654e1f · PlayerShip.cs 6b010d40b6ceffdf8e490de6ba24bf52a22ab30b · Hub.cs bb3d4f97e167719b852743c3c0fb7971669b7909 · Abilities.cs b74c5c69f181c591d4f0946f5d327374ed6a504d · SmokeTest.cs.txt 276ad25df64ddfdddc8fc29c3c7eac1c3cc04ee2 · CHANGES.md 113d5a3f64d36a6f6f84ece08a3d8c629df56ed0 · DESIGN.md 1b1f6313c2598f2d2fee16972426c7943632b348
