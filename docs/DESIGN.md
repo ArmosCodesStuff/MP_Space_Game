@@ -1332,6 +1332,14 @@ Each of these compiled clean and was wrong at runtime. The smoke test covers all
   "DTLS handshake failed", EOF). A guest holding an invite reaches the host before any reply is
   applied (SPIKE P2) and starts its handshake, so hanging up a pending invite does it whenever the
   timing lands. R0's pending-entry check never delivers its invite; a real guest will still print it.
+  The same trap is why a guest adds an invite's candidates only after its STUN walk (`Link.Gather`):
+  a walk remakes a connection whose row did not answer, and a guest that already knew the host's
+  addresses could be mid-handshake when it does.
+- **The codec is held to the plugin's own bytes.** A code carries only the five SDP values that vary
+  and the candidates; the far side rebuilds the other 12 lines from `Rendezvous.Sdp.Template`. A
+  plugin upgrade that changes or adds a line is refused by name when a code is made, and the solo run's
+  byte-for-byte check (the spike's bundles and the live pair's) fails on its first run, never in the
+  field.
 
 ## Smoke test
 

@@ -467,6 +467,51 @@ outstanding from the batch of 2026-09-23.)*
 
 ## Unreleased
 
+### WebRTC slice R1, first part: the reply window, the codes, the STUN walk, the box (2026-09-25, branch wt/net)
+
+**`Link.ReplyWindowS` is 30 s** (R0's measurement, DESIGN.md), and every solo run holds one pair to it:
+its host takes the reply 30 s after the guest made it and must connect within 2 s; the one-time
+measurement and `run.ps1 -ReplyWindow` are gone. **`scripts/Rendezvous.cs`** owns how two machines swap
+session descriptions (network_webrtc.md §4): the four records (invite, reply, knock, refuse) and their
+one codec, each ending in a 4-byte SHA-256 check; the plugin's 17-line SDP template, so a code carries
+the five values that vary and the candidates, and the far side rebuilds the rest byte for byte; the
+text a player pastes (`WSI`/`WSR` and Crockford base32, found anywhere in a copied message, case and
+I/L/O forgiven, only as many characters read as the record needs); the fit rule (400 characters; the
+/64 rule, then the rest, IPv6, LAN, overlay, server-reflexive last); the two rows (paste, address)
+and which text each claims; the clipboard seam. **`Link.cs`** gains the STUN rows (Google's, then
+Cloudflare's; mutable, so outside the fingerprint), `Config` (one row per connection), the walk
+(`Link.Gather`: a row unanswered in 2,000 ms is passed over, the connection made again with the same
+id, the answering row remembered, none answering leaves this PC's own addresses and a flag), `ChannelOf`,
+`Backlog`, `LinkMs`, `InviteLifeS`. **The box** (`tools/smoketest/wan.py`, rewritten): a STUN
+responder, silent ports, the pair proxy, a blackhole and stats, started by run.ps1 for every run; it
+also carries `-Wan`'s ENet relays until R2. Nothing in the session uses any of it yet: R2 switches.
+
+**Checks:** new in the solo role -- `Link.ReplyWindowS` is 30, and a reply taken 30 s late still
+connects within 2 s; every record kind round-trips; the wire values; the spike's bundles pack to the
+plan's 121 B/197 characters and 98 B/160; a name clips to 16 bytes at a character boundary; the
+spike's and the live pair's bundles come back byte for byte but the `o=` id; an unknown SDP line, a
+foundation over 255, a non-base64 credential and a non-sha-256 fingerprint are refused by name; a code
+reads back inside a Discord message, in lower case and with I/L/O, and one changed character does not;
+codes are the paste row's and addresses the address row's; 20 candidates fit 400 characters keeping
+srflx, overlay and LAN; two IPv6 on one /64 keep one; `Rendezvous.Clipboard` and `Link.Servers` stay out
+of the fingerprint; the STUN table's literals; the box is up; the walk over two silent rows seals at
+4,000 ms with host candidates and the flag, on a host's and a guest's peer; the next gather skips STUN
+in under 100 ms; a silent row then the box's responder stops at row 2 with a server-reflexive
+candidate; 20 gathers sealed by `Link.Sealed` hold their srflx, and 20 with no STUN hold every host
+candidate a second later holds; `ChannelOf`; `Backlog` on a 1 MB burst. Replaced: the reply-window
+measurement. `-Quick` green in the worktree; rung 3 not yet run.
+
+**Known broken (R1 so far):**
+- **Not run on the engine.** Every check above is compiled (rung 1-2) and unproven at rung 3.
+- **R1 is not finished:** the listener and dialer, the pending table, the paste row's clipboard
+  pickup, the courier and the pair-proxy check are still to come (docs/plans/ledger_webrtc.md, J10).
+- **Whether libjuice gathers a loopback-mapped server-reflexive candidate is unknown** (the box's
+  responder maps every request to 127.0.0.1). If it does not, the harness's `LoopbackSrflx` goes false
+  and two checks hold the timing and host candidates only (plan §10.4 R1's fallback).
+- **What libjuice writes after an IPv6 server-reflexive candidate is unread**; the codec writes
+  `raddr :: rport 0`. No network here has one, so no check can see it.
+- **The Linux runner (run.sh) does not start the box**, and has no plugin (R0).
+
 ### verify's text step skips a binary by what it holds, not by its extension (2026-09-24, in the WarShips_Version_L fork)
 
 The text step skipped `.png`, `.ogg` and `.wav` by name, so the two vendored plugin DLLs (4 MB each)

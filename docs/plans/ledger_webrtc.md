@@ -270,5 +270,108 @@ third-party infrastructure but the Google and Cloudflare STUN rows.
   - D16 · **`LoopbackSrflx` (harness, true)**: the plan's fallback as a switch. If rung 3 shows libjuice
     drops the box's loopback-mapped server-reflexive candidate, set it false and write it in DESIGN.md;
     the answering-row walk and the sealing rule then hold the timing and host candidates only.
-- checkpoint: the J9 commit
+- checkpoint: 06db494
 - next: J10
+
+#### J11a PRE (records for J7-J9, written early: the agent's context passed ~150k at J9)
+- intent: CHANGES Unreleased entry "WebRTC slice R1, first part" with Checks and an honest Known
+  broken; DESIGN traps (the guest's candidates after its walk; the codec held to the plugin's bytes);
+  this ledger's handoff below.
+- files: docs/CHANGES.md, docs/DESIGN.md, docs/plans/ledger_webrtc.md
+- from: 06db494f33757be51bf2484e10f547966dd17d9d
+- hashes: CHANGES.md 3631a5f66e39f19cadbab0fe47a8297093fa8f87; DESIGN.md
+  163ea4ac19477da8e39ccb834a951cea47ca696c; ledger 36ef1fcbca521bcf13532b30929b555a1ff4d2b5
+
+#### J11a POST
+- verdict: done (records only). The CHANGES Handoff is NOT touched: it is written when R1 ends (J11).
+- checkpoint: the J11a commit
+- next: a FRESH agent does J10, then J11, from the handoff below.
+
+### HANDOFF for the fresh agent (J10, J11)
+
+Read: this section, `scripts/Rendezvous.cs` (whole, ~420 lines), `scripts/Link.cs` (whole), the
+harness's R1 block (grep `WEBRTC, R1` in SmokeTest.cs.txt: `Codes()`, `Walks()`, `Box()`), plan §3.3 B,
+§4.1, §10.2, §10.4 R1 (the last three bullets). Environment rules as in this section's header; ALWAYS
+give .NET file calls absolute paths (`[IO.File]::ReadAllText` resolves a relative path against the
+process's directory, which is the MAIN checkout, not PowerShell's location: J8 read and rewrote the main
+checkout's SmokeTest.cs.txt that way, bytes unchanged, mtime touched).
+
+**J10 · the rows end to end** (files: scripts/Rendezvous.cs, scripts/Net.cs (only `DefaultPort`
+private -> public, for the listener's first port), tools/smoketest/SmokeTest.cs.txt). The contract
+this batch designed, so R2's Net drops in as the desk:
+- `Rendezvous.Guest`: uint, drawn once per process, a PROPERTY over a non-readonly private field
+  (`_guest ??= ...` in the getter). NEVER a static readonly: `Net.Fingerprint` folds every readonly
+  static of a Plain type into `Net.Protocol`, and a per-process value there would make every process a
+  different build (the `Game.Build` trap, BuildChecks). Add it to the mutability checks.
+- The pending table, in Rendezvous (Net holds one in R2): `enum Stage { Waiting, Linking }`,
+  `sealed class Entry { int Id; string Row; uint Guest; Stage Stage; }`, `sealed class Pending` (Add,
+  Remove, Find(id), OfGuest(guest), Count). Keep it minimal: R2 adds the connection, the name, `Made`.
+- `interface IHostDesk { Pending Pending; bool Full; Task<Record> Invite(Record knock); void
+  Hang(int id); void Replied(Record reply); void Refused(Record knock, Why why); }` and `interface
+  IGuestDesk { Record Knock(); Task<Record> Answer(Record invite); }`. `IRendezvousPath` gains
+  `void Open(IHostDesk)`, `void Close()`, `Task<Record> Start(string text, IGuestDesk)`.
+- Address row = the LISTENER (host) and the DIALER (guest). Listener: dual-stack TCP
+  (`IPv6Any`, `DualMode`), ports `Net.DefaultPort` .. +9, then 0 (OS-chosen), overridable for the
+  check; records length-prefixed (2 bytes big-endian), cap `WireMax`; 3 s read timeout; the accept loop
+  on a background task only moves bytes and hands each knock to the main thread by
+  `Callable.From(..).CallDeferred()` (skip when `Game.ShuttingDown`), answers come back by a
+  `TaskCompletionSource`. Checks IN ORDER (§3.3 B host 2): the build (`knock.Proto != Net.Protocol` ->
+  refuse `Why.Build` carrying the host's proto and build, and `desk.Refused`), the rate (20 knocks a
+  minute per remote address -> `Why.Rate`), one pending entry per guest (`desk.Hang` each old entry of
+  `Pending.OfGuest(knock.Guest)`), capacity (`desk.Full` -> `Why.Full`); then `await desk.Invite(knock)`,
+  send it, read the reply (3 s), `desk.Replied` on the main thread. `Close()` refuses a knock in flight
+  with `Why.Closed`. Dialer (`Address.Start`): `Net.ParseAddress`, `Net.DialAddress` for a name, TCP
+  connect, send `desk.Knock()`, read the invite or refuse; an invite -> `await desk.Answer(invite)`, send
+  it, close; return the host's record.
+- Paste row: `Start(text, desk)` = `Find(text, Kind.Invite)` -> `await desk.Answer(invite)` -> return
+  the invite (the UI shows `Encode(reply)`); `Open(desk)` arms the CLIPBOARD PICKUP (§15 Q1, owner
+  default YES): `Paste.Poll()` (R2's `Net._Process` calls it; the harness in R1) reads `Clipboard()` at
+  most every 500 ms, and hands a reply whose id is a Waiting entry, once per distinct text, to
+  `desk.Replied`; `Close()` disarms.
+- Harness (§10.4 R1 "rows end to end", "pair proxy"): a `_Test` desk implementing both interfaces
+  with a real `Rendezvous.Pending` and dummy invites/replies (`VaryRecord`). Checks: over an in-process
+  listener on a free port (OS-chosen: never 27015, the main checkout's runs use it), knock -> invite ->
+  reply reaches `desk.Replied` with the invite's id; a second knock from the same `guest` leaves one
+  pending entry (the first hung up through `desk.Hang`); `full`, `build` (a knock with
+  `Net.Protocol ^ 1`) and `rate` (a fresh listener, 21 knocks) refusals, each read by the dialer;
+  the paste row through the COURIER's files (`invite-{port}-{n}.txt`, `reply-...`, under
+  `ProjectSettings.GlobalizePath("res://")`), the reply picked up through the swapped
+  `Rendezvous.Clipboard` by `Paste.Poll` (a Discord-style wrapping). The COURIER (harness): unpacks a
+  code with the game's codec, keeps one IPv4 host candidate, replaces its address/port with
+  127.0.42.1:A (invite) or :B (reply) from `POST /box/pair`, registers
+  `POST /box/pair/{n}?host=127.0.0.1:{host's port}&guest=127.0.0.1:{guest's port}&seed={Seed}` (the
+  real endpoint is 127.0.0.1 and the candidate's port: libjuice binds one any-address socket; the box
+  self-test showed 127.0.42.1 -> 127.0.0.1 works), packs again. The PAIR-PROXY check: an in-process
+  pair whose bundles cross as courier-rewritten codes (Strip -> rewrite -> Encode -> Find ->
+  `Sdp.Build` and `Sdp.Line`) connects through the box, and `/box/stats` shows `to_host` and `to_guest`
+  above 0 for its pair; optionally a packet sent into `POST /box/blackhole?s=1` arrives after it lifts
+  and `blackholed` counted it. Fallback if libjuice will not use the proxy after two rung-3 attempts
+  (plan §10.2): CHANGES Known broken, and R4's watchdog uses `Net.DropBeatsFor(s)` instead.
+- Then `-Quick` green (poll for Godot first), commit with its `Checks:` line.
+
+**J11 · records**: CHANGES -- turn "R1, first part" into the R1 entry (J10's checks, Known broken
+updated), and the Handoff (R1 landed, the rungs below owed, next R2); DESIGN if J10 finds a trap; this
+ledger's POSTs and the final rungs list.
+
+### Rungs the main session owes for R1 (none run in this batch)
+
+Already owed for J7-J9 (committed 6eef84e, dba1847, 06db494), and the same list proves J10 once it lands:
+1. `verify.ps1 -Quick` in the worktree (green here at 06db494; re-run after J10).
+2. **Rung 3 twice, two seeds**: `tools\smoketest\run.ps1 -Solo -Seed <a>` and `-Seed <b>`. Look for
+   PASS on: "Link.ReplyWindowS is the 30 s R0 measured"; "a host that takes the reply 30 s after the
+   friend made it still connects"; "invite, reply, knock and refuse each come back"; "a record's first
+   byte is its kind"; "the spike's bundles pack to the plan's sizes"; "a name is carried as at most 16
+   bytes"; "the spike's offer and answer, through the codec and back"; "the live pair's offer and
+   answer, through the codec and back"; "an SDP line the template does not know"; "a candidate
+   foundation over 255"; "an ICE credential with a character outside base64"; "a fingerprint that is
+   not sha-256"; "a code reads back whole"; "a typed address is the address row's"; "the paste row walks
+   the STUN rows"; "20 candidates fit 400 characters"; "two IPv6 addresses on one /64";
+   "Rendezvous.Clipboard is mutable"; "Link.ChannelOf names the row"; "Link.Backlog reads a 1 MB burst";
+   "the STUN rows are Google's then Cloudflare's"; "Link.Servers is mutable"; "the box is up"; "with two
+   rows that never answer"; "after no row answered, the next gather"; "with row 1 silent and row 2 the
+   box's STUN responder"; "20 gathers against a STUN server that answers"; "20 gathers with no STUN";
+   and no ERROR line (the walks close each connection right after its check). If "row 2 ... server-
+   reflexive" and the answered sealing check fail with the box's `answered` count above 0, that is D16:
+   set `LoopbackSrflx` false, re-run rung 3, and write it in DESIGN.md.
+3. Optional, when convenient: one `run.ps1 -Wan` -- the ENet relays moved from two wan.py processes
+   into the box (`--relay`); rung 3 cannot see that path. R2's own `-Wan` run would also show it.
