@@ -22462,11 +22462,14 @@ public partial class _Test : Node
     }
 
     // ── THE SESSION FULL, ON THE WIRE (review net-RV9): the listener refuses a knock with Why.Full ──
-    // Host, once the invite guest's reply is taken: invites until full, "full" to the third player, whose
-    // typed-address knock is refused with this host's Say line; then every one of those invites hung up, "free".
+    // Host, once the invite guest is IN (its reply taken is not enough: every invite made copies its code to
+    // the clipboard, where the pickup may still be waiting for that reply): invites until full, "full" to the
+    // third player, whose typed-address knock is refused with this host's Say line; then every one of those
+    // invites hung up, "free".
     async Task R2FullKnockHost(Task courier)
     {
         await courier;
+        await RealTime(() => Multiplayer.GetPeers().Length >= 1 && Net.I.Pending.Count == 0, Wan ? 40 : 30);
         const string FullSaid = "guest2 Base knocked, but the session is full (8 players, counting invites not yet answered).";
         int heard = 0;
         void Heard(string s) { if (s == FullSaid) heard++; }
@@ -23699,7 +23702,7 @@ public partial class _Test : Node
             // ...and the third player's own join now waits on its knock on a full session (R2FullKnockHost), so
             // it is waited for too: here, with its identity, and both guests' answers to the welcome
             await RealTime(() => Nodes<PlayerShip>().Count() == 3 && Multiplayer.GetPeers().Length == 2 && Multiplayer.GetPeers().All(Net.Hears)
-                                 && Net.I.Players.Values.Any(p => p.Name == "Third" && p.Peak == 3), Wan ? 25 : 15);
+                                 && Net.I.Players.Values.Any(p => p.Name == "Third" && p.Peak == 3), Wan ? 45 : 35);
             await courier;
             await fullKnock;
             R2cRows();
@@ -23954,7 +23957,7 @@ public partial class _Test : Node
             // THEN A KNOCK ON A FULL SESSION (Why.Full): the host has invites out to 8, counted with its players;
             // the listener refuses the knock before any connection, and says so on both ends. Then it frees them.
             {
-                bool full = await RealTime(() => System.IO.File.Exists(CourierFile("full", P(27115), 0)), Wan ? 40 : 25);
+                bool full = await RealTime(() => System.IO.File.Exists(CourierFile("full", P(27115), 0)), Wan ? 60 : 45);
                 Net.I.Join(HostAt(P(27115)));
                 await RealTime(() => !Net.I.Connecting, 5);
                 await RealTime(() => Net.I.NetworkIdle, 3);
