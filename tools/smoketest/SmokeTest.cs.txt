@@ -3271,13 +3271,19 @@ public partial class _Test : Node
     // the charge starts on the frame the press is taken), then let go. Returns the reach read on the
     // last held frame, how far the hull went, and whether the release cancelled it. `during` runs every
     // held frame (a check that swings the bow mid-charge). `driver`: pressed and held as a driver does
-    // (PressDrive, DriveHeld) rather than by the key -- for a peer whose keys a focused box may take.
+    // (PressDrive, DriveHeld) rather than by the key -- for a peer whose keys a focused box may take;
+    // DriveHeld is a plain field TickOwner reads directly, so releasing it lands one frame later --
+    // but a raw key's release is a queued InputEventKey, which Input.IsKeyPressed(V) (what TickOwner
+    // reads for a real key hold) does not reflect for a full frame beyond that: two frames of charge
+    // still run after KeyUp before the drop is seen, not one, so the lookahead below must anticipate
+    // two frames for a key hold or every jump lands 2 frames -- ~27 u at 800 u/s -- long.
     async Task<(float reach, Vector2 moved, bool cancelled)> WarpHold(PlayerShip s, double held, Action during = null, bool driver = false)
     {
         var at = s.Position;
         if (driver) { s.DriveHeld = true; s.PressDrive(); }
         else KeyDown(global::Godot.Key.V);
-        for (int i = 0; i < 60 * 12 && !(s.Charging && s.ChargeHeld + GetProcessDeltaTime() >= held); i++)
+        double lookahead = (driver ? 1 : 2) * GetProcessDeltaTime();
+        for (int i = 0; i < 60 * 12 && !(s.Charging && s.ChargeHeld + lookahead >= held); i++)
         {
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             during?.Invoke();
@@ -3323,7 +3329,10 @@ public partial class _Test : Node
                       $"V held {held:0.0} s and released inside the 1.0 s spool: cancelled -- {moved.Length():0.0} u moved, no cooldown ({cool:0.0} s)");
             else
             {
-                double wantOff = want > 2400f ? 6.0 : 0.0;
+                // wantOff from the actual reach, never the nominal `want`: held=4.0 targets the safe
+                // cap itself, so a frame-quantized charge can land a few u past it (knife edge) even
+                // when `want` is not over -- the price the drive actually owes follows what it moved.
+                double wantOff = Drives.DisabledFor(Math.Max(0.0, moved.Length() - 2400.0));
                 Check(Math.Abs(moved.Length() - want) < 20f && Mathf.Abs(bow.AngleTo(moved)) < 0.02f && Math.Abs(cool - 20) < 0.2
                       && Math.Abs(off - wantOff) < 0.15 && (me.DriveLock > 0) == (wantOff > 0) && me.Velocity.Length() < 1f,
                       $"V held {held:0.0} s at {Mathf.RadToDeg(me.Rotation):0} deg: {moved.Length():0} u along the bow (want {want:0} ±20), stopped dead, 20 s to recharge ({cool:0.0}), disabled {off:0.0} s (want {wantOff:0})");
@@ -13572,14 +13581,18 @@ public partial class _Test : Node
         Check(hullGone && drawn && sprays == 2,
               $"a {what} killed 0.2 s after a tear leaves its chunk flying: at 1 s it is still drawn where its raise says, with its sparks and smoke (hull gone {hullGone}, chunk {drawn}, {sprays} sprays)");
     }
-    // THE YARD'S DUMMIES: three tears on three of them, the last one watched to the end, then the cap.
+    // THE YARD'S DUMMIES: three tears -- the two hulks (TargetDummy1, TargetDummy3, the spec's 14.72 u
+    // literal) and the first practice fighter (PracticeFighter1, row 4: a fighter, not a fourth hulk,
+    // so its chunk is sized off its OWN length, not the hulk literal) -- the last one watched to the end,
+    // then the cap.
     async Task FieldsRipYardChecks()
     {
-        var names = new[] { "TargetDummy1", "TargetDummy3", "TargetDummy4" };
+        var names = new[] { "TargetDummy1", "TargetDummy3", "PracticeFighter1" };
+        var sizes = new[] { 14.72f, 14.72f, float.NaN };
         float dummyLen = Fx.LengthOf(H.GetNode<TargetDummy>(names[0]));
         Check(Math.Abs(0.16f * dummyLen - 15f) < 0.3f, $"a dummy's chunk is the spec's 15 u: 0.16 of its {dummyLen:0.0} u is {0.16f * dummyLen:0.00} u");
         for (int i = 0; i < names.Length; i++)
-            await FieldsRipChecks(H.GetNode<TargetDummy>(names[i]), $"dummy {names[i][^1]}", 14.72f, timed: i == names.Length - 1);
+            await FieldsRipChecks(H.GetNode<TargetDummy>(names[i]), $"the {names[i]}", sizes[i], timed: i == names.Length - 1);
         await FieldsScarCapChecks(H.GetNode<TargetDummy>("TargetDummy1"));
     }
     // A GUEST SEES THE HOST'S TEAR (rung 5). The host tears a chunk from the boss's nose, at the
@@ -18432,7 +18445,13 @@ public partial class _Test : Node
         {
             var hm = Me; var keepH = hm.Position;
             hm.Position = Hub.BasePos + new Vector2(2000, 0); hm.Velocity = Vector2.Zero; hm.Rotation = 0f; await Wait(0.3);
-            float hvBearing = VaryAngle(), hvOut = Vary(2600f, 3400f);
+            // A FULL VaryAngle() COULD DOUBLE BACK: `hm` sits only 2000 u out, so a bearing pointed
+            // roughly at the base plus a 2600-3400 u throw could land the heavy on the BASE's side of
+            // it -- inside the base's own guns, taking the base (or whatever it hit first) as its
+            // target and dying there instead of cruising in on `hm` at all. Held within ~57 deg of
+            // straight out from the base, it always lands farther from the base than `hm` is.
+            var hmOutward = (hm.Position - Hub.BasePos).Normalized();
+            float hvBearing = hmOutward.Angle() + Vary(-1.0f, 1.0f), hvOut = Vary(2600f, 3400f);
             var hv = H.SpawnRaider(hm.Position + Vector2.Right.Rotated(hvBearing) * hvOut, Enemies.Gunship);
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(hv.Heavy && Math.Abs(hv.Length - 4 * Raider.LightLength) < 1e-3 && Math.Abs(Raider.HeavyDps - 2.58 * Raider.RaiderDps) < 1e-9 && Raider.RaiderDps == 1,
