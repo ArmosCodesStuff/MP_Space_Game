@@ -27,7 +27,10 @@ using System.Collections.Generic;
 //                 anchor so many radians a group, or the anchor itself
 //   Hold          the ring each squad holds with nothing to fight, round its OWN spot. 0 -- every
 //                 wave but a blockade -- is the base's perimeter, which is where they always went
-//   Crew          rows of (an enemy named outright OR a way to draw one, how many, where they sit)
+//   Crew          rows of (an enemy named outright OR a way to draw one, how many, where they sit,
+//                 and a Sweep that bends a line into a vee)
+//   Mission       a Garrison row: which mission kind it answers (null: any)
+//   Exp, FormFor  what a kill pays (x EnemyDef.Exp; 0 nothing), and seconds of form-up before commit
 //   HullShare     the share of its row's hull each of them is built with
 //   Strength      where its hull-and-damage multiplier comes from
 //   Agility       ...and its speed and turning
@@ -68,8 +71,17 @@ public readonly struct WaveCrew
     public readonly Func<WaveBrief, int> Count;    // how many of them this wave brings
     public readonly Vector2 At;                    // the line's centre, from the squad's spot
     public readonly Vector2 Step;                  // and how far apart they sit along it
-    public WaveCrew(int kind, EnemyWay way, int nth, Func<WaveBrief, int> count, Vector2 at, Vector2 step)
-        => (Kind, Way, Nth, Count, At, Step) = (kind, way, nth, count, at, step);
+    // ...and how far each one off the centre sits BACK (+Y, astern in the squad's frame) for every
+    // step out: 0 is a straight line, 30 a vee with its point forward (Squads.cs flies the shape)
+    public readonly float Sweep;
+    public WaveCrew(int kind, EnemyWay way, int nth, Func<WaveBrief, int> count, Vector2 at, Vector2 step, float sweep = 0f)
+        => (Kind, Way, Nth, Count, At, Step, Sweep) = (kind, way, nth, count, at, step, sweep);
+    // where the i-th of n sits, from its squad's spot, in the squad's own frame (-Y forward)
+    public Vector2 Slot(int i, int n)
+    {
+        float k = i - (n - 1) / 2f;
+        return At + Step * k + new Vector2(0f, Sweep * Mathf.Abs(k));
+    }
 }
 
 // WHAT A WAVE IS BUILT AGAINST: everything a row may ask about the moment it is sent.
@@ -83,6 +95,7 @@ public sealed class WaveBrief
     public Vector2 Origin;        // what the wave forms up around
     public Vector2 Anchor;        // the point a Fan is measured to, and a Spot sits on
     public Node2D Quarry;         // the one thing it hunts, or null for whatever it finds
+    public string Mission;        // the mission kind flying (Missions.Kinds[].Id), for a Garrison row
 }
 
 public sealed class WaveDef
@@ -101,7 +114,17 @@ public sealed class WaveDef
     // holding a place wants, so only a blockade fills this in.
     public float Hold;
     public WaveCrew[] Crew;
-    public double HullShare = 1;
+    // WHICH MISSION a Garrison row answers (Missions.Kinds[].Id); null answers any. Waves.For
+    // enforces it: without it a bounty's clock would have drawn the siege's rows.
+    public string Mission;
+    // WHAT A KILL OF ONE OF THEM PAYS, x its row's EnemyDef.Exp: 0 (every wave but a boss's adds)
+    // pays nothing. Paid on the first fill only (Raids: a refill's raiders are worth 0).
+    public double Exp;
+    // FORM-UP TIME: >0 spawns each squad this many seconds of its own pace outside its commit range
+    // (Squads.CommitAt), so it is seen coming; 0 is the row's own placement.
+    public double FormFor;
+    // the share of its row's hull each of them is built with (null: 1)
+    public Func<WaveBrief, double> HullShare;
     public Func<WaveBrief, double> Strength;      // null: x1
     public Func<WaveBrief, double> Agility;       // null: x1
 }
@@ -193,7 +216,7 @@ public static class Waves
         new() { Id = "hunt", Trigger = WaveTrigger.Hunt, When = b => b.Index % 2 == 0,
                 Squads = 1, SquadsPerPilot = 1,
                 Form = WaveForm.Fan, Turn = 0.35f, Alternate = true,
-                HullShare = HunterHull,
+                HullShare = _ => HunterHull,
                 Strength = b => ThreatStrength(b.Threat), Agility = b => ThreatAgility(b.Threat),
                 Crew = new[] { HuntPin } },
 
@@ -201,7 +224,7 @@ public static class Waves
         new() { Id = "hunt_heavy", Trigger = WaveTrigger.Hunt, When = b => b.Index % 2 == 1,
                 Squads = 1, SquadsPerPilot = 1,
                 Form = WaveForm.Fan, Turn = 0.35f, Alternate = true,
-                HullShare = HunterHull,
+                HullShare = _ => HunterHull,
                 Strength = b => ThreatStrength(b.Threat), Agility = b => ThreatAgility(b.Threat),
                 Crew = new[] { HuntPin, Draw(EnemyWay.Standoff, 0, _ => 1, new Vector2(0f, 90f), Vector2.Zero) } },
 
@@ -211,7 +234,7 @@ public static class Waves
         new() { Id = "hunt_mixed", Trigger = WaveTrigger.Hunt, When = b => b.Index % 2 == 0 && b.Index >= 6,
                 Squads = 1, SquadsPerPilot = 1,
                 Form = WaveForm.Fan, Turn = 0.35f, Alternate = true,
-                HullShare = HunterHull,
+                HullShare = _ => HunterHull,
                 Strength = b => ThreatStrength(b.Threat), Agility = b => ThreatAgility(b.Threat),
                 Crew = new[] { HuntPin, Draw(EnemyWay.Pin, 1, _ => 2, new Vector2(0f, -70f), new Vector2(40f, 0f)) } },
 
@@ -220,7 +243,7 @@ public static class Waves
         new() { Id = "hunt_twin", Trigger = WaveTrigger.Hunt, When = b => b.Index % 2 == 1 && b.Index >= 9,
                 Squads = 1, SquadsPerPilot = 1,
                 Form = WaveForm.Fan, Turn = 0.35f, Alternate = true,
-                HullShare = HunterHull,
+                HullShare = _ => HunterHull,
                 Strength = b => ThreatStrength(b.Threat), Agility = b => ThreatAgility(b.Threat),
                 Crew = new[] { HuntPin,
                                Draw(EnemyWay.Standoff, 0, _ => 1, new Vector2(-60f, 90f), Vector2.Zero),
@@ -231,14 +254,14 @@ public static class Waves
         // default 1, not Waves.HunterHull, and the strength is the mission's own level, not an
         // escort's threat. One squad, and one more for each pilot past the first, off a ring round
         // the thing being besieged.
-        new() { Id = "siege", Trigger = WaveTrigger.Garrison,
+        new() { Id = "siege", Trigger = WaveTrigger.Garrison, Mission = "siege",
                 Squads = 1, SquadsPerPilot = 1,
                 Form = WaveForm.Ring, Radius = GarrisonRing, Turn = 0.35f,
                 Strength = b => Missions.S(b.Level),
                 Crew = Patrol },
 
         // ...AND FROM THE THIRD WAVE ON a gunship comes with each squad.
-        new() { Id = "siege_heavy", Trigger = WaveTrigger.Garrison, When = b => b.Index >= 2,
+        new() { Id = "siege_heavy", Trigger = WaveTrigger.Garrison, Mission = "siege", When = b => b.Index >= 2,
                 Squads = 1, SquadsPerPilot = 1,
                 Form = WaveForm.Ring, Radius = GarrisonRing, Turn = 0.35f,
                 Strength = b => Missions.S(b.Level),
@@ -270,11 +293,13 @@ public static class Waves
     public const float GarrisonRing = 2600f;
 
     // THE ROW A TRIGGER MEANS RIGHT NOW: the LAST one that matches, so a row written under
-    // another takes over from it wherever its `When` says yes.
+    // another takes over from it wherever its `When` says yes -- and, for a row that names a
+    // Mission, only for that mission.
     public static WaveDef For(WaveTrigger trigger, WaveBrief b)
     {
         WaveDef found = null;
-        foreach (var d in All) if (d.Trigger == trigger && (d.When == null || d.When(b))) found = d;
+        foreach (var d in All)
+            if (d.Trigger == trigger && (d.Mission == null || d.Mission == b.Mission) && (d.When == null || d.When(b))) found = d;
         return found;
     }
 

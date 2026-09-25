@@ -50,6 +50,9 @@ public static class Missions
         public float CloseSpeed = 30f;      // ...at this, ponderously
         public float TurnRate = 0.3f;       // its native turn (rad/s)
         public BossMove[] Moves;
+        // ITS FIRST ADD SQUAD BRINGS AT LEAST THIS MANY PINNERS, from level 1 (Waves.Roster): the
+        // Rusty Bucket's two beam escorts became its squad wave 1 (owner, raids v2).
+        public int AddsFloor;
     }
     public static readonly BossType[] Bosses =
     {
@@ -59,7 +62,7 @@ public static class Missions
         // reason: it is named for the id on disk, not for the words on the screen.
         new() { Id = "silver_lancer", Name = "RUSTY BUCKET", Hull = 760,
                 Sprite = "res://boss_raider.png",          // raider red, a white skull on its centre
-                Length = 360f, HalfWidth = 70f, Moves = Lancer.Moves },
+                Length = 360f, HalfWidth = 70f, Moves = Lancer.Moves, AddsFloor = 2 },
         new() { Id = "drake_bastion", Name = "DRAKE BASTION", Hull = 700,
                 Sprite = "res://boss_drake.png",
                 Length = 420f, HalfWidth = 90f, Moves = Drake.Moves },
@@ -133,7 +136,9 @@ public static class Missions
                 Build = h => h.BuildBoss(),
                 Quarry = h => GodotObject.IsInstanceValid(h.Boss) ? h.Boss : null,
                 Won = h => { if (GodotObject.IsInstanceValid(h.Boss)) h.Boss.Downed(); },
-                CatchUp = (h, who) => { if (GodotObject.IsInstanceValid(h.Boss) && h.Boss.Alive) h.Boss.CatchUp(who); } },
+                CatchUp = (h, who) => { if (GodotObject.IsInstanceValid(h.Boss) && h.Boss.Alive) h.Boss.CatchUp(who); },
+                // its adds (Waves.All "bounty_adds"): slot 1 at once, a wiped slot back 30 s later
+                FirstWave = 0, WaveEvery = 30 },
 
         // A SIEGE -- the first entry of RAIDS: a pirate base behind four shield pylons, its
         // garrison arriving wave by wave (Waves.All: "siege") on the clock below. What a pirate
@@ -234,6 +239,9 @@ public static class Missions
     // ladder and the levels you have beaten do not care what level you were when you beat them.
     public const double ExpFloorShare = 0.5;
     public static bool WorthExp(int bossLevel, int pilotLevel) => bossLevel >= pilotLevel * ExpFloorShare;
-    public static int KillExpFor(int bossLevel, int pilotLevel) =>
-        !WorthExp(bossLevel, pilotLevel) ? 0 : (int)Math.Round(KillExp * (double)bossLevel / Math.Max(1, pilotLevel));
+    // WHAT A KILL IS WORTH TO ONE PILOT: `worth` x its level over the pilot's, nothing under half.
+    // The boss's kill and a boss-fight add's (EnemyDef.Exp x WaveDef.Exp, Hub.PayKill) are one formula.
+    public static int ExpFor(double worth, int level, int pilotLevel) =>
+        !WorthExp(level, pilotLevel) ? 0 : (int)Math.Round(worth * level / Math.Max(1, pilotLevel));
+    public static int KillExpFor(int bossLevel, int pilotLevel) => ExpFor(KillExp, bossLevel, pilotLevel);
 }

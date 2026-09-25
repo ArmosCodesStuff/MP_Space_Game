@@ -1462,6 +1462,7 @@ public partial class _Test : Node
         GearLevelChecks();
         BossScaleChecks();
         BuildChecks();
+        RaidsFoundationChecks();
         await RecyclerChecks();
 
         // Every class is touched first: Load() fills the loadout for ALL of them, so a character that
@@ -3962,6 +3963,49 @@ public partial class _Test : Node
             Character.Delete("chipfile");
         }
         Character.NewBlank();
+    }
+
+    // ── LANE G (raids v2): the foundations, by literal (raids_squads_adds.md §2b, §4a, N14) ──
+    void RaidsFoundationChecks()
+    {
+        // EXP BY LITERAL: an add at the boss's level pays its row's worth x level / pilot level,
+        // nothing under half -- the kill's own rule, one formula (Missions.ExpFor)
+        Check(Missions.ExpFor(18, 6, 6) == 18 && Missions.ExpFor(18, 6, 12) == 9 && Missions.ExpFor(18, 6, 13) == 0
+              && Missions.ExpFor(6, 6, 6) == 6 && Missions.ExpFor(6, 6, 12) == 3 && Missions.ExpFor(6, 6, 13) == 0
+              && Missions.ExpFor(18, 39, 39) == 18 && Missions.ExpFor(6, 39, 78) == 3 && Missions.ExpFor(18, 39, 79) == 0
+              && Missions.ExpFor(6, 9, 9) == 6 && Missions.KillExpFor(5, 10) == 150 && Missions.ExpFor(300, 5, 10) == 150,
+              $"an add pays EnemyDef.Exp x its level over the pilot's, and nothing past twice its level: L6 heavy 18 / 9 / 0 at PL 6 / 12 / 13 ({Missions.ExpFor(18, 6, 6)} / {Missions.ExpFor(18, 6, 12)} / {Missions.ExpFor(18, 6, 13)}); the boss kill is the same formula at 300");
+        Check(Enemies.OfWay(EnemyWay.Pin).All(k => Enemies.Of(k).Exp == 6) && Enemies.OfWay(EnemyWay.Standoff).All(k => Enemies.Of(k).Exp == 18),
+              "every light row is worth 6 and every heavy row 18");
+        // ROUTING (N14): a Garrison row answers its own mission; a bounty never draws a siege row
+        var siege0 = Waves.For(WaveTrigger.Garrison, new WaveBrief { Mission = "siege", Index = 0 });
+        var siege2 = Waves.For(WaveTrigger.Garrison, new WaveBrief { Mission = "siege", Index = 2 });
+        var bountyAny = Enumerable.Range(0, 6).Select(i => Waves.For(WaveTrigger.Garrison, new WaveBrief { Mission = "bounty", Index = i, Level = 1 + 7 * i }))
+                                  .Where(d => d != null).ToList();
+        Check(siege0?.Id == "siege" && siege2?.Id == "siege_heavy" && bountyAny.All(d => d.Mission == "bounty")
+              && Waves.All.Where(d => d.Trigger == WaveTrigger.Garrison).All(d => d.Mission != null),
+              $"a siege brief draws the siege rows ({siege0?.Id}, {siege2?.Id}); a bounty brief never does ({string.Join(",", bountyAny.Select(d => d.Id))}); every Garrison row names its mission");
+        // A JUMP IS SEEN (Lead.Jumped): >= 50 u in one frame, at three headings and sizes
+        bool jumpOk = true;
+        for (int k = 0; k < 3; k++)
+        {
+            var dir = Vector2.Right.Rotated(VaryAngle()); var p0 = new Vector2(Vary(-3000f, 3000f), Vary(-3000f, 3000f));
+            var lead = new Lead(); lead.Watch(p0, 1 / 60.0);
+            bool first = lead.Jumped;
+            lead.Watch(p0 + dir * Vary(5f, 45f), 1 / 60.0); bool walk = lead.Jumped;
+            lead.Watch(p0 + dir * Vary(300f, 1500f), 1 / 60.0); bool jump = lead.Jumped;
+            lead.Watch(p0 + dir * 1500f + dir * Vary(1f, 40f), 1 / 60.0); bool after = lead.Jumped;
+            jumpOk &= !first && !walk && jump && !after && lead.Velocity.Length() < Missiles.Wild;
+        }
+        Check(jumpOk, "a squad's tracker reads a jump (a warp, a Rewind) for exactly the frame it happens, never a walk or the first sight");
+        // THE VEE (WaveCrew.Sweep): point (0,-40), wings (+-60,-10) from Step (60,0) and Sweep 30
+        var vee = new WaveCrew(Waves.Drawn, EnemyWay.Pin, 0, _ => 3, new Vector2(0f, -40f), new Vector2(60f, 0f), 30f);
+        Check(vee.Slot(0, 3) == new Vector2(-60f, -10f) && vee.Slot(1, 3) == new Vector2(0f, -40f) && vee.Slot(2, 3) == new Vector2(60f, -10f)
+              && new WaveCrew(Waves.Drawn, EnemyWay.Pin, 0, _ => 1, new Vector2(0f, 60f), Vector2.Zero).Slot(0, 1) == new Vector2(0f, 60f),
+              $"a crew line with Sweep 30 is a vee, point forward: {vee.Slot(0, 3)} {vee.Slot(1, 3)} {vee.Slot(2, 3)}");
+        // THE RUSTY'S TWO BEAM ESCORTS ARE ITS SQUAD WAVE 1 (a row, not the beam's): 2 on the Rusty, none on the Drake
+        Check(Missions.Bosses.First(b => b.Id == "silver_lancer").AddsFloor == 2 && Missions.Bosses.First(b => b.Id == "drake_bastion").AddsFloor == 0,
+              "the Rusty Bucket's first add squad brings at least 2 pinners from level 1; the Drake's none");
     }
 
     async Task Solo()
@@ -9474,8 +9518,9 @@ public partial class _Test : Node
                 // Waves.All -- but at FULL hull and the mission's own strength: the escort halves
                 // its hunters (Waves.HunterHull), and none of that reaches here.
                 var siegeRow = Missions.KindOf(Missions.Siege);
-                Check(siegeRow.WaveEvery > 0 && Missions.KindOf(Missions.Bounty).WaveEvery == 0,
-                      $"the wave clock is the mission ROW's: a siege every {siegeRow.WaveEvery:0} s from {siegeRow.FirstWave:0} s, a bounty none");
+                var bountyRow = Missions.KindOf(Missions.Bounty);
+                Check(siegeRow.WaveEvery == 25 && siegeRow.FirstWave == 12 && bountyRow.FirstWave == 0 && bountyRow.WaveEvery == 30,
+                      $"the wave clock is the mission ROW's: a siege every {siegeRow.WaveEvery:0} s from {siegeRow.FirstWave:0} s; a bounty's adds from {bountyRow.FirstWave:0} s, a wiped slot back in {bountyRow.WaveEvery:0} s");
                 int raid0 = H.Raiders.Count;
                 H.GarrisonWave(Hub.ArenaCentre, 0); await Wait(0.3);
                 var wave = H.Raiders.Skip(raid0).ToList();

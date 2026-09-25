@@ -118,9 +118,13 @@ public struct Lead
     private Vector2 _last;
     private bool _has;
     public Vector2 Velocity { get; private set; }
+    // IT JUMPED this frame (a warp, a Rewind, a Shadow step): moved Missiles.Step or more. A squad
+    // re-forms on it (Squads.cs) rather than chasing a spot its posts no longer mean.
+    public bool Jumped { get; private set; }
     public void Watch(Vector2 at, double delta)
     {
         var moved = at - _last;
+        Jumped = _has && moved.Length() >= Missiles.Step;
         Velocity = _has && delta > 0 && moved.Length() < Missiles.Step ? moved / (float)delta : Vector2.Zero;
         _last = at; _has = true;
     }

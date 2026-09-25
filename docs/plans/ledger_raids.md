@@ -34,3 +34,9 @@ BUILD PHASE: no engine run. Per job: typecheck + verify -Quick + own diff read. 
 - J6 wire + look: flag bits, link/lock lines; guest checks (N18), frames (N19).
 - J7 record: CHANGES Unreleased + Handoff, DESIGN traps.
 
+## J1 PRE -- tier opus -- foundations (Lead.Jumped, Raider.Level/Worth, ExpFor, WaveDef fields, Mission routing, AddsFloor, bounty clock)
+HEAD 3576d7d. Files: Missiles.cs 5fabd6a7, Raider.cs ae7dd1a1, Missions.cs e1afdde8, Waves.cs 728a92f5, Raids.cs 580898db, SmokeTest.cs.txt 9949bb60.
+## J1 POST -- done. typecheck 0 errors, quick ALL PASSED. Files: Missiles, Missions, Waves, Raids, Raider, SmokeTest.
+Checks: RaidsFoundationChecks (ExpFor literals, light 6 / heavy 18, Garrison routing N14, Lead.Jumped x3, vee slots,
+AddsFloor 2/0); rewritten: the siege clock check (bounty 0/30, siege 12/25). Raider.Worth moved to J5 (unused till then).
+engine-unproven: rungs owed in the final test phase (solo x2).

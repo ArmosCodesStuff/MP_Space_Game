@@ -54,6 +54,8 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
     // Speed and turning, x: an escort's hunters fly a very little quicker the harder the escort
     // (Hub.ThreatAgility). The host flies every raider; guests follow where it says.
     public double Agility = 1;
+    // HOST-ONLY BOOKKEEPING, set at the spawn as Agility is (Raids.Send): the level it was sent at.
+    public int Level = 1;
     private HullWatch _hullWatch;
     public double MaxHull => Def.Hull * Strength * HullShare;
     public float HitRadius => Length * Def.HitShare;

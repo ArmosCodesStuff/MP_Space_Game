@@ -79,18 +79,21 @@ public sealed class Raids
     // the mission's level. It is the same builder an escort's hunters come from -- what differs is
     // the ROW (Waves.All: "siege"), which brings them at full hull.
     public void Garrison(int level, Vector2 at, int wave) =>
-        Send(WaveTrigger.Garrison, new WaveBrief { Pilots = _hub.PartySize, Index = wave, Level = level, Origin = at });
+        Send(WaveTrigger.Garrison, new WaveBrief { Pilots = _hub.PartySize, Index = wave, Level = level, Origin = at,
+                                                   Mission = Missions.KindOf(Missions.Kind).Id });
 
     public void Hunt(Node2D quarry, int wave)
     {
         if (quarry == null) return;
         var (level, toughness) = Waves.Standing(_hub.Ships);
+        // the BOSS ladder, said outright: an escort's threat has always been judged by how far up
+        // the bounties the base owner has got, and the raids climb a ladder of their own
+        double threat = Waves.EscortThreat((quarry as IRaidTarget)?.Payout ?? 0, level, toughness, Missions.HighestBeaten(Missions.Bounty), wave);
         Send(WaveTrigger.Hunt, new WaveBrief
         {
-            Pilots = _hub.PartySize, Index = wave, Level = Missions.Level, Quarry = quarry,
-            // the BOSS ladder, said outright: an escort's threat has always been judged by how
-            // far up the bounties the base owner has got, and the raids climb a ladder of their own
-            Threat = Waves.EscortThreat((quarry as IRaidTarget)?.Payout ?? 0, level, toughness, Missions.HighestBeaten(Missions.Bounty), wave),
+            // its level is its threat's: Missions.Level is the arena's, which a hunt at home never reads
+            Pilots = _hub.PartySize, Index = wave, Level = System.Math.Max(1, (int)threat), Quarry = quarry,
+            Threat = threat,
             Origin = Hub.BasePos, Anchor = Raider.EdgeSpot(quarry.Position),
         });
     }
@@ -127,9 +130,9 @@ public sealed class Raids
                 int n = c.Count(b), kind = Waves.KindOf(c, roll);
                 for (int i = 0; i < n; i++)
                 {
-                    var r = _hub.SpawnRaider(at + c.At + c.Step * (i - (n - 1) / 2f), kind, squad, strength, d.HullShare);
+                    var r = _hub.SpawnRaider(at + c.Slot(i, n), kind, squad, strength, d.HullShare?.Invoke(b) ?? 1);
                     if (r == null) continue;
-                    r.Quarry = b.Quarry; r.Agility = agility;
+                    r.Quarry = b.Quarry; r.Agility = agility; r.Level = b.Level;
                     // ...and WHERE IT WAITS with nothing to fight: its squad's own spot if the row
                     // named a ring to hold, the base's perimeter otherwise -- which is every other
                     // wave, unchanged.
