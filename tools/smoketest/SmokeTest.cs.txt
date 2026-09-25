@@ -13,6 +13,26 @@ public partial class _Test : Node
 {
     int fails = 0;
     void Check(bool ok, string what) { GD.Print((ok ? "PASS " : "FAIL ") + what); if (!ok) fails++; }
+    // A LANE THAT THROWS DOES NOT END ITS ROLE. Each lane call in a role body runs through Lane: a throw
+    // prints one FAIL LANE line (the runner's grep finds it) and the first two stack frames, the lane's
+    // name is kept, and the role goes on to its next lane. _Ready fails the role once at its end with
+    // every lane that threw; the first throw in a role is the likely cause of any after it.
+    static readonly List<string> _thrownLanes = new();
+    static async Task Lane(string name, Func<Task> body)
+    {
+        ulong t0 = Time.GetTicksMsec();
+        try { await body(); }
+        catch (Exception ex)
+        {
+            double took = (Time.GetTicksMsec() - t0) / 1000.0;
+            string first = (ex.Message ?? "").Split('\n')[0].TrimEnd('\r');
+            GD.Print($"FAIL LANE {name} threw {ex.GetType().Name}: {first} ({took:0.0} s)");
+            foreach (var frame in (ex.StackTrace ?? "").Split('\n').Where(f => f.Trim().Length > 0).Take(2)) GD.Print(frame.TrimEnd('\r'));
+            _thrownLanes.Add(name);
+            return;
+        }
+        GD.Print($"  lane {name} ok ({(Time.GetTicksMsec() - t0) / 1000.0:0.0} s)");
+    }
     async Task Wait(double s) => await ToSignal(GetTree().CreateTimer(s), "timeout");
     // A HULL TEXTURE TRIMMED TO ITS DRAWING (tools/make_ships.ps1): it fills 98.5% of its height
     // and reaches a side within 2 px, so a row's Length is the drawn hull, nose to tail.
@@ -1188,6 +1208,7 @@ public partial class _Test : Node
         // simply stopped, nothing called Quit, and the run idled to its time limit.
         try { if (role == "solo") await Solo(); else if (role == "fly") await Fly(); else if (role is "ahost" or "aguest") await ArenaMp(role); else await Mp(role); }
         catch (Exception ex) { Check(false, $"test threw: {ex.GetType().Name}: {ex.Message}"); GD.Print(ex.StackTrace); }
+        if (_thrownLanes.Count > 0) Check(false, $"{_thrownLanes.Count} lanes threw: {string.Join(", ", _thrownLanes)}");
         GD.Print($"  elapsed {Time.GetTicksMsec() / 1000.0:0.0} s");     // for sizing the runners' time limits
         GD.Print($"DONE {role} fails={fails}");
         // THE GAME'S OWN WAY OUT, not a bare Quit: what it waits for (sounds, the goodbye, the listener) is
@@ -15976,7 +15997,7 @@ public partial class _Test : Node
         Check(Math.Abs(onFile - loaded) < 1e-6 && hauler.Cargo == 300, $"a save counts what the hauler and the fleet are carrying, as if home ({onFile:0} of {loaded:0})");
         hauler.ResetToPad();
 
-        await LaneChecks();
+        await Lane("LaneChecks", () => LaneChecks());
 
         var t = Nodes<Turret>(ship).First();
         ship.Rotation = 1.3f; await Wait(0.05);
@@ -16203,7 +16224,7 @@ public partial class _Test : Node
         {
             var me = Me; var warpHome = me.Position; var d2w = H.GetNode<TargetDummy>("TargetDummy3");
             void Ready() { me.Sl("warp").Cool = 0; me.Statuses.Clear(Status.Disabled); me.Velocity = Vector2.Zero; me.Rotation = 0f; }
-            await LaneBWarpChecks(me, d2w);
+            await Lane("LaneBWarpChecks", () => LaneBWarpChecks(me, d2w));
             Ready();
             FollowWarpCooldownRuleChecks(me);
             Ready();
@@ -16940,8 +16961,8 @@ public partial class _Test : Node
             typeof(PlayerShip).GetField("_stasis", nf0).SetValue(Me, 0.0); Me.UseAbility("reboard", 0); await Wait(0.1);
             Check(hullBack && placed && heldStasis && Me.Alive, $"a returning pilot is put back: its hull, its place, or its stasis with the time it had left ({hullBack}, {placed}, {heldStasis})");
             Me.Place(backAt, backRot); Me.Hp = Me.MaxHp;
-            await R2SwitchChecks();
-            await R3WordsChecks();
+            await Lane("R2SwitchChecks", () => R2SwitchChecks());
+            await Lane("R3WordsChecks", () => R3WordsChecks());
 
             // ANOTHER PLAYER'S SHIP, as this peer draws it: owned by peer 2, so it only follows what
             // it is told. Three things went wrong over the internet. A warp's landing flash never
@@ -17342,7 +17363,7 @@ public partial class _Test : Node
             int up = Progression.AddExp(2600);
             Check(Met("pilot"), "A LEVEL UP: met on the first level gained");
             Check(up == 2 && Character.Level == 3 && Character.Exp == 600 && Character.Points == 2, "2600 EXP from level 1: level 3, 600 over, 2 points");
-            await WallChecksLive();
+            await Lane("WallChecksLive", () => WallChecksLive());
             // the approved formula, in literal numbers (so the checks can fail)
             // A MISSION'S LEVEL IS PAR'S SCALE (Par's literals are proved once, in CurveParChecks): hull on
             // the boss scale, damage on par's hull, credits on the hull -- at three varied levels.
@@ -17664,13 +17685,13 @@ public partial class _Test : Node
             var heavyP = pat.First(r => r.Heavy);
             Check(pat.Where(r => !r.Heavy).All(r => r.Target == pm) && heavyP.Target == pm,
                   "a ship within 2000 u: the lights go for it, and their heavy takes the same target");
-            await RangeChecks();                // something real to select, at a real distance
+            await Lane("RangeChecks", () => RangeChecks());                // something real to select, at a real distance
             ZoomChecks();
-            await SkyChecks();
-            await TourChecks();
-            await S2Checks();
-            await GateFixRefitChecks();
-            await GateFixJoinBoxChecks();
+            await Lane("SkyChecks", () => SkyChecks());
+            await Lane("TourChecks", () => TourChecks());
+            await Lane("S2Checks", () => S2Checks());
+            await Lane("GateFixRefitChecks", () => GateFixRefitChecks());
+            await Lane("GateFixJoinBoxChecks", () => GateFixJoinBoxChecks());
             // ── THREE AT ONCE, ON THE HULLS BIG ENOUGH TO HOLD THEM ──
             // How many a hull may hold is its class's row, so "capital ships only" is a number and
             // not a list of class names in an `if`. A light still holds one: picking a second
@@ -17710,8 +17731,8 @@ public partial class _Test : Node
             await Wait(0.3);
             pm.Position = keepP; pm.Velocity = Vector2.Zero; pm.TakeDamage(-(pm.MaxHp - pm.Hp));
         }
-        await RaidsSquadChecks();
-        await RaidsSightChecks();
+        await Lane("RaidsSquadChecks", () => RaidsSquadChecks());
+        await Lane("RaidsSightChecks", () => RaidsSightChecks());
 
         // ── the base's own weapons: a 5 DPS laser at 300 u, a tracking 25-damage missile at 600 u -- raiders only ──
         {
@@ -18154,10 +18175,10 @@ public partial class _Test : Node
             Check(fr.BubbleLeft == 0 && Math.Abs(fr.Hp - (hull0 - 50)) < 1e-6,
                   $"and when the pool is spent the rest lands on the hull ({fr.Hp:0} of {hull0:0})");
             FieldsContractChecks();
-            await FieldsBubbleChecks(fr, yonder);
+            await Lane("FieldsBubbleChecks", () => FieldsBubbleChecks(fr, yonder));
             FieldsRowChecks();
-            await FieldsTauntRingChecks(yonder);
-            await FieldsRipYardChecks();
+            await Lane("FieldsTauntRingChecks", () => FieldsTauntRingChecks(yonder));
+            await Lane("FieldsRipYardChecks", () => FieldsRipYardChecks());
 
             // ── A WRECK FIRES NOTHING, AND PRESSES NOTHING BUT REBOARD ──
             // Both halves are the HOST's rule, so both are poked the way a guest reaches them: the
@@ -18549,135 +18570,135 @@ public partial class _Test : Node
                   && Math.Abs(new ShipStats(ShipClass.HeavySniper)["rail_damage"] - 120) < 1e-9 && ActiveReload.Reloading(sn.Sl("railgun")),
                   $"let go, its railgun's whole {sn.Stats["rail_damage"]:0.0} lands {railAt:0} u away, on the line, and the chamber reloads ({dTgt.Total - dmg0:0.0})");
 
-            await LaneAHoldChecks(sn);
-            await LaneADisabledChecks(yonder);
-            await LaneAPassivePdChecks(yonder);
-            await LaneAPdRepickChecks(yonder);
-            await LaneAOutDoorChecks(yonder);
-            await LaneADamageDoorChecks(yonder);
+            await Lane("LaneAHoldChecks", () => LaneAHoldChecks(sn));
+            await Lane("LaneADisabledChecks", () => LaneADisabledChecks(yonder));
+            await Lane("LaneAPassivePdChecks", () => LaneAPassivePdChecks(yonder));
+            await Lane("LaneAPdRepickChecks", () => LaneAPdRepickChecks(yonder));
+            await Lane("LaneAOutDoorChecks", () => LaneAOutDoorChecks(yonder));
+            await Lane("LaneADamageDoorChecks", () => LaneADamageDoorChecks(yonder));
             LaneARampChecks();
-            await LaneARampWiringChecks(yonder);
+            await Lane("LaneARampWiringChecks", () => LaneARampWiringChecks(yonder));
             LaneASpeedAddChecks();
-            await LaneAHeavyRowsChecks(yonder);
+            await Lane("LaneAHeavyRowsChecks", () => LaneAHeavyRowsChecks(yonder));
             FollowLeadRetargetChecks();
-            await FollowHeavyRetargetLeadChecks(yonder);
+            await Lane("FollowHeavyRetargetLeadChecks", () => FollowHeavyRetargetLeadChecks(yonder));
             WingsRowsChecks();
-            await WingsPatrolChecks(yonder);
-            await WingsGunshipChecks(yonder);
-            await LaneAShotStopsChecks(yonder);
+            await Lane("WingsPatrolChecks", () => WingsPatrolChecks(yonder));
+            await Lane("WingsGunshipChecks", () => WingsGunshipChecks(yonder));
+            await Lane("LaneAShotStopsChecks", () => LaneAShotStopsChecks(yonder));
             LaneALinesChecks();
             LaneALinesAtTargetChecks();
-            await LaneAMissileIdsChecks(yonder);
+            await Lane("LaneAMissileIdsChecks", () => LaneAMissileIdsChecks(yonder));
             LaneAChargeBandChecks();
             LaneAChargeTableHashedChecks();
             FollowFingerprintCollectionChecks();
             LaneAMeleeArcChecks();
-            await LaneAMeleeStrikeChecks(yonder);
+            await Lane("LaneAMeleeStrikeChecks", () => LaneAMeleeStrikeChecks(yonder));
             LaneAPrismBandChecks();
             LaneAPrismResolveChecks();
-            await LaneAPrismSplitChecks(yonder);
-            await LaneAPrismWalkChecks(yonder);
-            await LaneAPrismReflectChecks(yonder);
-            await LaneAPrismRayChecks(yonder);
-            await LaneASentryPreferChecks(yonder);
-            await LaneASentryThrowChecks(yonder);
-            await LaneA6bSpotterChecks(yonder);
-            await LaneA6bTotChecks(yonder);
-            await LaneA6bBubbleCoverChecks(yonder);
-            await LaneA6bRedeployChecks(yonder);
-            await LaneA6bMortarChecks(yonder);
-            await LaneA6bBusterChecks(yonder);
-            await LaneA6bWellChecks(yonder);
-            await LaneA6bLanceChecks(yonder);
-            await LaneA6bOverdriveFieldChecks(yonder);
-            await LaneA6bRepairFieldChecks(yonder);
-            await LaneA6bResupplyChecks(yonder);
-            await LaneARaiderCallChecks(yonder);
-            await LaneADecoyChecks(yonder);
-            await LaneATowChecks(yonder);
-            await LaneALatchGateChecks(yonder);
-            await LaneBHelmChecks(yonder);
-            await LaneBStrafeChecks(yonder);
-            await LaneBBoostChecks(yonder);
-            await FieldsLiveRowChecks(yonder);
-            await LaneA4PayloadChecks(yonder);
-            await LaneA4TargetsChecks(yonder);
+            await Lane("LaneAPrismSplitChecks", () => LaneAPrismSplitChecks(yonder));
+            await Lane("LaneAPrismWalkChecks", () => LaneAPrismWalkChecks(yonder));
+            await Lane("LaneAPrismReflectChecks", () => LaneAPrismReflectChecks(yonder));
+            await Lane("LaneAPrismRayChecks", () => LaneAPrismRayChecks(yonder));
+            await Lane("LaneASentryPreferChecks", () => LaneASentryPreferChecks(yonder));
+            await Lane("LaneASentryThrowChecks", () => LaneASentryThrowChecks(yonder));
+            await Lane("LaneA6bSpotterChecks", () => LaneA6bSpotterChecks(yonder));
+            await Lane("LaneA6bTotChecks", () => LaneA6bTotChecks(yonder));
+            await Lane("LaneA6bBubbleCoverChecks", () => LaneA6bBubbleCoverChecks(yonder));
+            await Lane("LaneA6bRedeployChecks", () => LaneA6bRedeployChecks(yonder));
+            await Lane("LaneA6bMortarChecks", () => LaneA6bMortarChecks(yonder));
+            await Lane("LaneA6bBusterChecks", () => LaneA6bBusterChecks(yonder));
+            await Lane("LaneA6bWellChecks", () => LaneA6bWellChecks(yonder));
+            await Lane("LaneA6bLanceChecks", () => LaneA6bLanceChecks(yonder));
+            await Lane("LaneA6bOverdriveFieldChecks", () => LaneA6bOverdriveFieldChecks(yonder));
+            await Lane("LaneA6bRepairFieldChecks", () => LaneA6bRepairFieldChecks(yonder));
+            await Lane("LaneA6bResupplyChecks", () => LaneA6bResupplyChecks(yonder));
+            await Lane("LaneARaiderCallChecks", () => LaneARaiderCallChecks(yonder));
+            await Lane("LaneADecoyChecks", () => LaneADecoyChecks(yonder));
+            await Lane("LaneATowChecks", () => LaneATowChecks(yonder));
+            await Lane("LaneALatchGateChecks", () => LaneALatchGateChecks(yonder));
+            await Lane("LaneBHelmChecks", () => LaneBHelmChecks(yonder));
+            await Lane("LaneBStrafeChecks", () => LaneBStrafeChecks(yonder));
+            await Lane("LaneBBoostChecks", () => LaneBBoostChecks(yonder));
+            await Lane("FieldsLiveRowChecks", () => FieldsLiveRowChecks(yonder));
+            await Lane("LaneA4PayloadChecks", () => LaneA4PayloadChecks(yonder));
+            await Lane("LaneA4TargetsChecks", () => LaneA4TargetsChecks(yonder));
             LaneA4TetherChecks(yonder);
-            await LaneA4HelmLiveChecks(yonder);
-            await LaneA4AnchorWarpChecks();
-            await LaneA4WreckChecks();
-            await LaneA4WardChecks();
-            await LaneA4MendChecks();
-            await ItemsDoorChecks(yonder);
+            await Lane("LaneA4HelmLiveChecks", () => LaneA4HelmLiveChecks(yonder));
+            await Lane("LaneA4AnchorWarpChecks", () => LaneA4AnchorWarpChecks());
+            await Lane("LaneA4WreckChecks", () => LaneA4WreckChecks());
+            await Lane("LaneA4WardChecks", () => LaneA4WardChecks());
+            await Lane("LaneA4MendChecks", () => LaneA4MendChecks());
+            await Lane("ItemsDoorChecks", () => ItemsDoorChecks(yonder));
 
             // ── BATTLESHIP: the arcs and the broadside (slice 6a) ──
-            await LaneA6aArcChecks(yonder);
-            await LaneA6aBroadsideChecks(yonder);
-            await LaneA6aBraceChecks(yonder);
-            await LaneA6aBraceWarpChecks(yonder);
-            await LaneA6aBraceSplitChecks(yonder);
-            await LaneA6aCiwsChecks(yonder);
-            await LaneA6aCiwsDisableChecks(yonder);
-            await LaneA6aCiwsPreyChecks(yonder);
-            await LaneA6aCarrierRowChecks(yonder);
-            await LaneA6aGunshipChecks(yonder);
-            await LaneA6aGunshipFireChecks(yonder);
-            await LaneA6aSuperChecks(yonder);
-            await LaneA6aSuperMissileChecks(yonder);
-            await LaneA6aSuperWingsChecks(yonder);
-            await LaneA6aDirectorChecks(yonder);
-            await LaneA6aLanceChecks(yonder);
-            await LaneA6aLanceHitChecks(yonder);
-            await LaneA6aSuppressChecks(yonder);
-            await LaneA6aSuppressWeaponChecks(yonder);
-            await LaneA6aSuppressGunChecks(yonder);
-            await LaneA6aGrapnelPullChecks(yonder);
-            await LaneA6aGrapnelTowChecks(yonder);
+            await Lane("LaneA6aArcChecks", () => LaneA6aArcChecks(yonder));
+            await Lane("LaneA6aBroadsideChecks", () => LaneA6aBroadsideChecks(yonder));
+            await Lane("LaneA6aBraceChecks", () => LaneA6aBraceChecks(yonder));
+            await Lane("LaneA6aBraceWarpChecks", () => LaneA6aBraceWarpChecks(yonder));
+            await Lane("LaneA6aBraceSplitChecks", () => LaneA6aBraceSplitChecks(yonder));
+            await Lane("LaneA6aCiwsChecks", () => LaneA6aCiwsChecks(yonder));
+            await Lane("LaneA6aCiwsDisableChecks", () => LaneA6aCiwsDisableChecks(yonder));
+            await Lane("LaneA6aCiwsPreyChecks", () => LaneA6aCiwsPreyChecks(yonder));
+            await Lane("LaneA6aCarrierRowChecks", () => LaneA6aCarrierRowChecks(yonder));
+            await Lane("LaneA6aGunshipChecks", () => LaneA6aGunshipChecks(yonder));
+            await Lane("LaneA6aGunshipFireChecks", () => LaneA6aGunshipFireChecks(yonder));
+            await Lane("LaneA6aSuperChecks", () => LaneA6aSuperChecks(yonder));
+            await Lane("LaneA6aSuperMissileChecks", () => LaneA6aSuperMissileChecks(yonder));
+            await Lane("LaneA6aSuperWingsChecks", () => LaneA6aSuperWingsChecks(yonder));
+            await Lane("LaneA6aDirectorChecks", () => LaneA6aDirectorChecks(yonder));
+            await Lane("LaneA6aLanceChecks", () => LaneA6aLanceChecks(yonder));
+            await Lane("LaneA6aLanceHitChecks", () => LaneA6aLanceHitChecks(yonder));
+            await Lane("LaneA6aSuppressChecks", () => LaneA6aSuppressChecks(yonder));
+            await Lane("LaneA6aSuppressWeaponChecks", () => LaneA6aSuppressWeaponChecks(yonder));
+            await Lane("LaneA6aSuppressGunChecks", () => LaneA6aSuppressGunChecks(yonder));
+            await Lane("LaneA6aGrapnelPullChecks", () => LaneA6aGrapnelPullChecks(yonder));
+            await Lane("LaneA6aGrapnelTowChecks", () => LaneA6aGrapnelTowChecks(yonder));
 
             // ── WARRIOR: the blade (slice 6c) ──
-            await LaneA6cBladeChecks(yonder);
-            await LaneA6cLungeChecks(yonder);
-            await LaneA6cWhirlChecks(yonder);
-            await LaneA6cPrismStanceChecks(yonder);
+            await Lane("LaneA6cBladeChecks", () => LaneA6cBladeChecks(yonder));
+            await Lane("LaneA6cLungeChecks", () => LaneA6cLungeChecks(yonder));
+            await Lane("LaneA6cWhirlChecks", () => LaneA6cWhirlChecks(yonder));
+            await Lane("LaneA6cPrismStanceChecks", () => LaneA6cPrismStanceChecks(yonder));
             LaneA6cReloadJudgeChecks();
-            await LaneA6cReloadChecks(yonder);
-            await LaneA6cReloadBarChecks(yonder);
-            await LaneA6cAnchorChecks(yonder);
+            await Lane("LaneA6cReloadChecks", () => LaneA6cReloadChecks(yonder));
+            await Lane("LaneA6cReloadBarChecks", () => LaneA6cReloadBarChecks(yonder));
+            await Lane("LaneA6cAnchorChecks", () => LaneA6cAnchorChecks(yonder));
             LaneA6cZoneChecks();
-            await LaneA6cTetherChecks(yonder);
-            await LaneA6cFlaresChecks(yonder);
-            await LaneA6cFlakChecks(yonder);
-            await LaneA6cHunterPreyChecks(yonder);
-            await LaneA6cTauntChecks(yonder);
-            await LaneA6cTauntLatchChecks(yonder);
-            await LaneA6cTauntEmplacementChecks(yonder);
-            await LaneA6cCurtainChecks(yonder);
+            await Lane("LaneA6cTetherChecks", () => LaneA6cTetherChecks(yonder));
+            await Lane("LaneA6cFlaresChecks", () => LaneA6cFlaresChecks(yonder));
+            await Lane("LaneA6cFlakChecks", () => LaneA6cFlakChecks(yonder));
+            await Lane("LaneA6cHunterPreyChecks", () => LaneA6cHunterPreyChecks(yonder));
+            await Lane("LaneA6cTauntChecks", () => LaneA6cTauntChecks(yonder));
+            await Lane("LaneA6cTauntLatchChecks", () => LaneA6cTauntLatchChecks(yonder));
+            await Lane("LaneA6cTauntEmplacementChecks", () => LaneA6cTauntEmplacementChecks(yonder));
+            await Lane("LaneA6cCurtainChecks", () => LaneA6cCurtainChecks(yonder));
             // ── DART: the pepperbox (slice 6d) ──
             LaneA6dPepperRowChecks();
-            await LaneA6dPepperChecks(yonder);
+            await Lane("LaneA6dPepperChecks", () => LaneA6dPepperChecks(yonder));
             LaneA6dRodRowChecks();
-            await LaneA6dRodChecks(yonder);
-            await LaneA6dRodRecoilChecks(yonder);
+            await Lane("LaneA6dRodChecks", () => LaneA6dRodChecks(yonder));
+            await Lane("LaneA6dRodRecoilChecks", () => LaneA6dRodRecoilChecks(yonder));
             LaneA6dRamjetRowChecks();
-            await LaneA6dRamjetChecks(yonder);
-            await LaneA6dSlingChecks(yonder);
-            await LaneA6dSlipChecks(yonder);
+            await Lane("LaneA6dRamjetChecks", () => LaneA6dRamjetChecks(yonder));
+            await Lane("LaneA6dSlingChecks", () => LaneA6dSlingChecks(yonder));
+            await Lane("LaneA6dSlipChecks", () => LaneA6dSlipChecks(yonder));
             LaneA6dRepeaterRowChecks();
-            await LaneA6dRepeaterChecks(yonder);
-            await LaneA6dReverbChecks(yonder);
+            await Lane("LaneA6dRepeaterChecks", () => LaneA6dRepeaterChecks(yonder));
+            await Lane("LaneA6dReverbChecks", () => LaneA6dReverbChecks(yonder));
             LaneA6dRewindRowChecks();
-            await LaneA6dRewindChecks(yonder);
+            await Lane("LaneA6dRewindChecks", () => LaneA6dRewindChecks(yonder));
             LaneA6dEmpRowChecks();
-            await LaneA6dEmpChecks(yonder);
+            await Lane("LaneA6dEmpChecks", () => LaneA6dEmpChecks(yonder));
             LaneA6dScatterRowChecks();
-            await LaneA6dScatterChecks(yonder);
-            await LaneA6dBackstabChecks(yonder);
+            await Lane("LaneA6dScatterChecks", () => LaneA6dScatterChecks(yonder));
+            await Lane("LaneA6dBackstabChecks", () => LaneA6dBackstabChecks(yonder));
             LaneA6dVeilRowChecks();
-            await LaneA6dVeilChecks(yonder);
+            await Lane("LaneA6dVeilChecks", () => LaneA6dVeilChecks(yonder));
             LaneA6dVenomRowChecks();
-            await LaneA6dVenomChecks(yonder);
+            await Lane("LaneA6dVenomChecks", () => LaneA6dVenomChecks(yonder));
             LaneA6dStepRowChecks();
-            await LaneA6dStepChecks(yonder);
+            await Lane("LaneA6dStepChecks", () => LaneA6dStepChecks(yonder));
             await SetClass(ShipClass.HeavyWarrior);
             var wr = Me; wr.Position = yonder; wr.Velocity = Vector2.Zero; await Wait(0.2);
             // A SPEED LIFT LIFTS THE PUSH AS WELL AS THE TOP SPEED (PlayerShip.Steer). The water holds a
@@ -19642,7 +19663,7 @@ public partial class _Test : Node
                 Check(gd.Statuses.Has(Status.Hardened) && Math.Abs(hd0 - gd.Hp - 50) < 1e-6,
                       $"a 100 blow on a HARDENED battleship -- a class with no taunt_guard row -- lands for 50 ({hd0 - gd.Hp:0})");
                 await Wait(0.6);
-                await LaneAHardenedShareChecks(gd);
+                await Lane("LaneAHardenedShareChecks", () => LaneAHardenedShareChecks(gd));
                 // and a status with NO row of that table (Untargetable, the Wraith's veil) scales nothing: the
                 // table's one row is Hardened at 0.5, so a veiled hull takes the 100 whole
                 gd.ApplyStatus(Status.Untargetable, 0.4); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
@@ -20144,12 +20165,12 @@ public partial class _Test : Node
                 for (int i = 0; i < 60 * 6 && (boss.Locked || RamLine()); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                 me2.Position = boss.Position + new Vector2(0, 500); me2.Velocity = Vector2.Zero;
             }
-            await LaneABurnClockChecks(boss, me2);
-            await RaidsArenaAddsChecks(boss, me2);
-            await LaneAOutDoorBossChecks(boss, me2);
-            await LaneA6bBusterBossChecks(boss, me2);
-            await FieldsRipChecks(boss, "Lancer", boss.Type.Id == "silver_lancer" ? 57.6f : float.NaN, false);
-            await LaneA6aGrapnelRipChecks(boss, boss.Type.Id, boss.Type.Id == "silver_lancer" ? 57.6f : float.NaN);   // slice 6a: the pull and the rip, 0.01 x its hull + 10
+            await Lane("LaneABurnClockChecks", () => LaneABurnClockChecks(boss, me2));
+            await Lane("RaidsArenaAddsChecks", () => RaidsArenaAddsChecks(boss, me2));
+            await Lane("LaneAOutDoorBossChecks", () => LaneAOutDoorBossChecks(boss, me2));
+            await Lane("LaneA6bBusterBossChecks", () => LaneA6bBusterBossChecks(boss, me2));
+            await Lane("FieldsRipChecks", () => FieldsRipChecks(boss, "Lancer", boss.Type.Id == "silver_lancer" ? 57.6f : float.NaN, false));
+            await Lane("LaneA6aGrapnelRipChecks", () => LaneA6aGrapnelRipChecks(boss, boss.Type.Id, boss.Type.Id == "silver_lancer" ? 57.6f : float.NaN));   // slice 6a: the pull and the rip, 0.01 x its hull + 10
             // ── STEALTH STOPS THE BOSS CHOOSING, NEVER HITTING, AND NEVER STOPS THE FIGHT ──
             // Its pilots were ONE list, the seen one: a solo pilot who went dark emptied it and the
             // boss stopped closing, turning and counting every clock it had until the pilot came
@@ -20876,14 +20897,14 @@ public partial class _Test : Node
                       $"a siege wave is 3 pinners and a standoff at FULL hull, level 3 (hull x{siegeLv:0.00}) -- not the escort's half ({wave.Count} raiders, {wave.Count(r => r.Heavy)} heavy)");
                 foreach (var r in H.Raiders.ToList()) H.RaiderDown(r);
                 await Wait(0.2);
-                await LaneA6bSiegeChecks(pbase, pylons);
+                await Lane("LaneA6bSiegeChecks", () => LaneA6bSiegeChecks(pbase, pylons));
 
                 // THE SHIELD: the four pylons hold it up, and nothing touches the base until every
                 // one of them is down. All in one frame -- a dropped hull leaves H.Emplacements at
                 // the call, not at the frame's end.
                 // the pylon's torn chunk, while they stand; and one torn 0.2 s before it falls below
-                await FieldsRipChecks(pylons[0], "pylon", 35.2f, false);
-                await LaneA6aGrapnelRipChecks(pylons[0], "pylon", 35.2f);
+                await Lane("FieldsRipChecks", () => FieldsRipChecks(pylons[0], "pylon", 35.2f, false));
+                await Lane("LaneA6aGrapnelRipChecks", () => LaneA6aGrapnelRipChecks(pylons[0], "pylon", 35.2f));
                 var tornPylon = await FieldsTearAhead(pylons[2]);
                 double baseHp0 = pbase.Hp;
                 pbase.TakeDamage(500);
@@ -20894,7 +20915,7 @@ public partial class _Test : Node
                                && H.Emplacements.Count(e => e.Def.Id == Emplacements.Pylon) == 1;
                 Check(allFour && lastOne,
                       $"the base takes NOTHING while a pylon stands: 500 with four up and 500 with one, {baseHp0 - pbase.Hp:0} taken of 1000");
-                await FieldsRipOutlivesChecks(tornPylon, pylons[2], "pylon");
+                await Lane("FieldsRipOutlivesChecks", () => FieldsRipOutlivesChecks(tornPylon, pylons[2], "pylon"));
                 pylons[3].TakeDamage(pylons[3].MaxHp * 2);
                 pbase.TakeDamage(500);
                 Check(!pbase.Shielded && Math.Abs(baseHp0 - pbase.Hp - 500) < 1e-6
@@ -21144,9 +21165,9 @@ public partial class _Test : Node
                     // clock restarts as a warning goes up, round or no round
                     Check(spentLaneAt > 0 && lanes.Count > 0 && Math.Abs(lanes[0].t - spentLaneAt - gun.Interval) < 0.1,
                           $"the warning after one an EMP's hold spent goes up {gun.Interval:0} s after it, round or no round ({(lanes.Count > 0 && spentLaneAt > 0 ? $"{lanes[0].t - spentLaneAt:0.00} s" : "never")})");
-                    await LaneAOutDoorBaseChecks(pbase, bs);
-                    await FieldsRipChecks(pbase, "base", 89.6f, false);
-                    await LaneA6aGrapnelRipChecks(pbase, "base", 89.6f);
+                    await Lane("LaneAOutDoorBaseChecks", () => LaneAOutDoorBaseChecks(pbase, bs));
+                    await Lane("FieldsRipChecks", () => FieldsRipChecks(pbase, "base", 89.6f, false));
+                    await Lane("LaneA6aGrapnelRipChecks", () => LaneA6aGrapnelRipChecks(pbase, "base", 89.6f));
                     bs.Stats.SetBase("pd_range", bsReach);
                     if (classWas != ShipClass.Battleship) await SetClass(classWas);
                 }
@@ -21421,7 +21442,7 @@ public partial class _Test : Node
             Check(moved.Count == 0, $"...and no sound that is not a beam moved ({string.Join(",", moved)})");
         }
 
-        await WebRtcPairs();
+        await Lane("WebRtcPairs", () => WebRtcPairs());
         // leaks: leaving and re-entering the hub must not grow the orphan-node or object
         // counts (the first cycle warms caches; compare the next two against it)
         async Task Cycle()
@@ -21456,7 +21477,7 @@ public partial class _Test : Node
             Missions.Level = lv0;
             Check(lvSet == 7 && H != null && !Hub.InArena, $"a peer sent into a world is told the level with it, before the world is built ({lvSet})");
         }
-        await S2TripChecks();
+        await Lane("S2TripChecks", () => S2TripChecks());
         R2BeatChecks();
 
         // ── LAST, because it ends a session and that resets the fleet ────────────────────
@@ -22367,10 +22388,10 @@ public partial class _Test : Node
             var empWatch = LaneA6dEmpHostWatch(empSeen);                    // slice 6d: ...then pulses its EMP beside two held craft
             var stepSeen = new LaneA6dStepSeen();
             var stepWatch = LaneA6dStepHostWatch(stepSeen);                 // slice 6d: ...then flies a Wraith and shadow-steps onto a held gunship
-            await LaneBHostDrives();                                        // lane B: the drives across peers (its guest half: LaneBGuestDrives)
-            await LaneA6cLungeHostChecks(lungeWatch, lungeSeen);
-            await LaneA6cPrismHostChecks(prismWatch, prismSeen);
-            await LaneA6cReloadHostChecks(reloadWatch, reloadSeen);
+            await Lane("LaneBHostDrives", () => LaneBHostDrives());                                        // lane B: the drives across peers (its guest half: LaneBGuestDrives)
+            await Lane("LaneA6cLungeHostChecks", () => LaneA6cLungeHostChecks(lungeWatch, lungeSeen));
+            await Lane("LaneA6cPrismHostChecks", () => LaneA6cPrismHostChecks(prismWatch, prismSeen));
+            await Lane("LaneA6cReloadHostChecks", () => LaneA6cReloadHostChecks(reloadWatch, reloadSeen));
             // ── TWO OF THE NINE, IN A SESSION ─────────────────────────────────────
             // Everything the nine classes put on the wire had only ever flown alone: the status
             // bits, the slot array a class names itself, a turret dropped into the world, an
@@ -22384,13 +22405,13 @@ public partial class _Test : Node
             Check(hw.Class == ShipClass.HeavyWarrior && Math.Abs(hw.MaxHp - 300) < 1e-6
                   && Abilities.For(ShipClass.HeavyWarrior).Length == Classes.Of(ShipClass.HeavyWarrior).Abilities.Length + 7,
                   $"arena host: hosting as a WARRIOR -- its stock 300 hull, no chips, its own rows, the drive and six open slots ({hw.MaxHp:0})");
-            await LaneA6aSuppressHostChecks(suppressWatch, suppressSeen);  // the guest's Suppress comes before it parks as a freighter
-            await LaneA6dPepperHostChecks(pepperWatch, pepperSeen);          // slice 6d: the guest's pepperbox, before it refits to a freighter
-            await LaneA6dRodHostChecks(rodWatch, rodSeen);                  // slice 6d: the guest's rod, priced on the host
-            await LaneA6dRamjetHostChecks(ramjetWatch, ramjetSeen);         // slice 6d: the host's own copy of the guest's ramjet
-            await LaneA6dRewindHostChecks(rewindWatch, rewindSeen);         // slice 6d: the guest's rewind, its hull from the host's own trail
-            await LaneA6dEmpHostChecks(empWatch, empSeen);                  // slice 6d: the guest's EMP jams the craft beside it
-            await LaneA6dStepHostChecks(stepWatch, stepSeen);               // slice 6d: the guest's shadow step, counted and landed on the host
+            await Lane("LaneA6aSuppressHostChecks", () => LaneA6aSuppressHostChecks(suppressWatch, suppressSeen));  // the guest's Suppress comes before it parks as a freighter
+            await Lane("LaneA6dPepperHostChecks", () => LaneA6dPepperHostChecks(pepperWatch, pepperSeen));          // slice 6d: the guest's pepperbox, before it refits to a freighter
+            await Lane("LaneA6dRodHostChecks", () => LaneA6dRodHostChecks(rodWatch, rodSeen));                  // slice 6d: the guest's rod, priced on the host
+            await Lane("LaneA6dRamjetHostChecks", () => LaneA6dRamjetHostChecks(ramjetWatch, ramjetSeen));         // slice 6d: the host's own copy of the guest's ramjet
+            await Lane("LaneA6dRewindHostChecks", () => LaneA6dRewindHostChecks(rewindWatch, rewindSeen));         // slice 6d: the guest's rewind, its hull from the host's own trail
+            await Lane("LaneA6dEmpHostChecks", () => LaneA6dEmpHostChecks(empWatch, empSeen));                  // slice 6d: the guest's EMP jams the craft beside it
+            await Lane("LaneA6dStepHostChecks", () => LaneA6dStepHostChecks(stepWatch, stepSeen));               // slice 6d: the guest's shadow step, counted and landed on the host
             await RealTime(() => H.Ships.FirstOrDefault(s => !s.Mine) is { Class: ShipClass.FreightHauler } gg
                                  && gg.Position.DistanceTo(mpSpot) < 60, Wan ? 25 : 15);
             var fg = H.Ships.FirstOrDefault(s => !s.Mine);
@@ -22435,8 +22456,8 @@ public partial class _Test : Node
             hurtT.TakeDamage(45);
             Check(Math.Abs(hurtT.Hp - 75) < 1e-6 && Math.Abs(hurtT.MaxHp - 120) < 1e-6,
                   $"arena host: 45 into one of the guest's turrets leaves 75 of 120 ({hurtT.Hp:0})");
-            await LaneADecoyHostChecks(hw);
-            await LaneA6bTotHost(fg, paintGun);
+            await Lane("LaneADecoyHostChecks", () => LaneADecoyHostChecks(hw));
+            await Lane("LaneA6bTotHost", () => LaneA6bTotHost(fg, paintGun));
             // THE BUBBLE IS OVER SOMEBODY ELSE. The pool is the GUEST's and the blow lands on the
             // HOST's hull: PlayerShip.ThroughBubbles reads Combat.Players, and until now no check
             // had ever had two pilots in it.
@@ -22492,7 +22513,7 @@ public partial class _Test : Node
                       $"arena host: a sniper's railgun fired {railShip.Position.DistanceTo(railEar.Position):0} u from the guest, for it to hear");
                 await Wait(0.3);
             }
-            await LaneA6bFieldsHost();                                        // 6b: the tender's fields on the guest's destroyer (its guest half: LaneA6bFieldsGuest)
+            await Lane("LaneA6bFieldsHost", () => LaneA6bFieldsHost());                                        // 6b: the tender's fields on the guest's destroyer (its guest half: LaneA6bFieldsGuest)
             await SetClass(ShipClass.Battleship);                            // the hull the rest of this scenario flies
             await RealTime(() => H.Ships.FirstOrDefault(s => !s.Mine) is { Class: ShipClass.Destroyer }, Wan ? 20 : 12);
             await ToArena("arena host", "mission 1");
@@ -22523,14 +22544,14 @@ public partial class _Test : Node
                 Check(cruiseStood && !hostCruise.Alive && Shot.Intercepted == cruiseDown0 + 1,
                       $"arena host: a cruise missile at the guest stands half its {hostRound.Hull:0} hull and falls to the other half ({Shot.Intercepted - cruiseDown0} down)");
             }
-            await RaidsHostAddsWire(gship);
+            await Lane("RaidsHostAddsWire", () => RaidsHostAddsWire(gship));
             // Long enough for the guest to watch the super-move bar move, and no longer: this
             // scenario has a second arena visit after it, and a stay stretched to fit a whole beam
             // cycle pushed that off the end of every wait that follows. (Two of its four seconds are
             // the cruise missile's, above.)
             FieldsHostTears(H.Boss, gship);
             await Wait(2.0);
-            await S2HeldBossHost(H.Boss);
+            await Lane("S2HeldBossHost", () => S2HeldBossHost(H.Boss));
             // the host in stasis at the moment of the kill: a pilot shot down in the fight still
             // helped win it, and gets its own crates -- only its own
             int ahHold0 = Character.GearHold.Values.Sum();
@@ -22565,7 +22586,7 @@ public partial class _Test : Node
             await ToArena("arena host", "the siege");
             var sgBase = H.Emplacements.FirstOrDefault(e => e.Def.Id == Emplacements.Base);
             var sgSpot = Hub.ArenaCentre + new Vector2(0, 2200);             // the guest's spot, as a literal
-            await LaneA6aGrapnelPartyRipChecks();                            // slice 6a: the grapnel's rip on a pylon raised for two
+            await Lane("LaneA6aGrapnelPartyRipChecks", () => LaneA6aGrapnelPartyRipChecks());                            // slice 6a: the grapnel's rip on a pylon raised for two
             Me.Position = VaryNear(Hub.ArenaCentre + new Vector2(0, -5400), 300f); Me.Velocity = Vector2.Zero; Me.AutopilotTo = null;
             bool SgClear() { foreach (var r in H.Raiders.ToList()) H.RaiderDown(r); return true; }
             await RealTime(() => SgClear() && H.Ships.FirstOrDefault(s => !s.Mine) is { } sgAt && sgAt.Position.DistanceTo(sgSpot) < 60, Wan ? 15 : 8);
@@ -22636,7 +22657,7 @@ public partial class _Test : Node
             await RealTime(() => H.Ships.FirstOrDefault(s => !s.Mine) is { } back && Hub.PeerSector(back.OwnerId) == Hub.SectorKind.Arena
                                  && back.Position.DistanceTo(new Vector2(900, 300)) < 50, Wan ? 25 : 15);
             var ag2 = H.Ships.FirstOrDefault(s => !s.Mine);
-            await S2TurretRekeyed(s2Turret, agOld, ag2);
+            await Lane("S2TurretRekeyed", () => S2TurretRekeyed(s2Turret, agOld, ag2));
             Check(ag2 != null && Net.I.Players.TryGetValue(ag2.OwnerId, out var agInfo) && agInfo.CharacterId.Length > 0
                   && Session.Tokens.ContainsKey(agInfo.CharacterId),
                   "arena host: the guest back under a new id claimed its place with the rejoin token this host issued it (P10b)");
@@ -22682,24 +22703,24 @@ public partial class _Test : Node
             Net.I.Join(HostAt(Port));
             for (int i = 0; i < 60 * 10 && !(Net.IsOnline && Net.LocalId != 1); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(Net.IsOnline && Net.LocalId != 1 && Net.I.JoinedBy == "address", $"arena guest: joined, by the typed address ({Net.I.JoinedBy})");
-            await LaneBGuestDrives();                                       // lane B: the drives across peers (its host half: LaneBHostDrives)
-            await LaneA6cLungeGuestChecks();                                // slice 6c: a guest's lunge (its host half: LaneA6cLungeHostChecks)
-            await LaneA6cPrismGuestChecks();                                // slice 6c: a guest's prism stance (its host half: LaneA6cPrismHostChecks)
-            await LaneA6cReloadGuestChecks();                               // slice 6c: a guest's active reload (its host half: LaneA6cReloadHostChecks)
-            await LaneA6cAnchorGuestChecks();                               // slice 6c: a guest's Anchor, rooted by the host's word
-            await LaneA6cFlaresGuestChecks();                               // slice 6c: a guest's flares, the host's salvo on its hull
-            await ItemsFlareRiderGuestChecks();                             // lane I reconcile: Swarm Rack's seventh flare, drawn from the seed
-            await LaneA6cTauntGuestChecks();                                // slice 6c: a guest's taunt, the host's guard on its hull
-            await LaneA6aGunshipGuestChecks();                              // slice 6a: a guest's gunships, its picks with the press
-            await LaneA6cCurtainGuestChecks();                              // slice 6c: a guest's curtain, drawn where the host laid it
-            await LaneA6aSuppressGuestChecks();                             // slice 6a: a guest's Suppress (its host half: LaneA6aSuppressHostChecks)
-            await LaneA6aGrapnelGuestChecks();                              // slice 6a: a guest's grapnel on the dummy, the host's rip drawn here
-            await LaneA6dPepperGuestChecks();                               // slice 6d: a guest's pepperbox (its host half: LaneA6dPepperHostChecks)
-            await LaneA6dRodGuestChecks();                                  // slice 6d: a guest's sprint and rod (its host half: LaneA6dRodHostChecks)
-            await LaneA6dRamjetGuestChecks();                               // slice 6d: a guest's ramjet (its host half: LaneA6dRamjetHostChecks)
-            await LaneA6dRewindGuestChecks();                               // slice 6d: a guest's rewind (its host half: LaneA6dRewindHostChecks)
-            await LaneA6dEmpGuestChecks();                                  // slice 6d: a guest's EMP, the jam marks on this peer (its host half: LaneA6dEmpHostChecks)
-            await LaneA6dStepGuestChecks();                                 // slice 6d: a guest's shadow step (its host half: LaneA6dStepHostChecks)
+            await Lane("LaneBGuestDrives", () => LaneBGuestDrives());                                       // lane B: the drives across peers (its host half: LaneBHostDrives)
+            await Lane("LaneA6cLungeGuestChecks", () => LaneA6cLungeGuestChecks());                                // slice 6c: a guest's lunge (its host half: LaneA6cLungeHostChecks)
+            await Lane("LaneA6cPrismGuestChecks", () => LaneA6cPrismGuestChecks());                                // slice 6c: a guest's prism stance (its host half: LaneA6cPrismHostChecks)
+            await Lane("LaneA6cReloadGuestChecks", () => LaneA6cReloadGuestChecks());                               // slice 6c: a guest's active reload (its host half: LaneA6cReloadHostChecks)
+            await Lane("LaneA6cAnchorGuestChecks", () => LaneA6cAnchorGuestChecks());                               // slice 6c: a guest's Anchor, rooted by the host's word
+            await Lane("LaneA6cFlaresGuestChecks", () => LaneA6cFlaresGuestChecks());                               // slice 6c: a guest's flares, the host's salvo on its hull
+            await Lane("ItemsFlareRiderGuestChecks", () => ItemsFlareRiderGuestChecks());                             // lane I reconcile: Swarm Rack's seventh flare, drawn from the seed
+            await Lane("LaneA6cTauntGuestChecks", () => LaneA6cTauntGuestChecks());                                // slice 6c: a guest's taunt, the host's guard on its hull
+            await Lane("LaneA6aGunshipGuestChecks", () => LaneA6aGunshipGuestChecks());                              // slice 6a: a guest's gunships, its picks with the press
+            await Lane("LaneA6cCurtainGuestChecks", () => LaneA6cCurtainGuestChecks());                              // slice 6c: a guest's curtain, drawn where the host laid it
+            await Lane("LaneA6aSuppressGuestChecks", () => LaneA6aSuppressGuestChecks());                             // slice 6a: a guest's Suppress (its host half: LaneA6aSuppressHostChecks)
+            await Lane("LaneA6aGrapnelGuestChecks", () => LaneA6aGrapnelGuestChecks());                              // slice 6a: a guest's grapnel on the dummy, the host's rip drawn here
+            await Lane("LaneA6dPepperGuestChecks", () => LaneA6dPepperGuestChecks());                               // slice 6d: a guest's pepperbox (its host half: LaneA6dPepperHostChecks)
+            await Lane("LaneA6dRodGuestChecks", () => LaneA6dRodGuestChecks());                                  // slice 6d: a guest's sprint and rod (its host half: LaneA6dRodHostChecks)
+            await Lane("LaneA6dRamjetGuestChecks", () => LaneA6dRamjetGuestChecks());                               // slice 6d: a guest's ramjet (its host half: LaneA6dRamjetHostChecks)
+            await Lane("LaneA6dRewindGuestChecks", () => LaneA6dRewindGuestChecks());                               // slice 6d: a guest's rewind (its host half: LaneA6dRewindHostChecks)
+            await Lane("LaneA6dEmpGuestChecks", () => LaneA6dEmpGuestChecks());                                  // slice 6d: a guest's EMP, the jam marks on this peer (its host half: LaneA6dEmpHostChecks)
+            await Lane("LaneA6dStepGuestChecks", () => LaneA6dStepGuestChecks());                                 // slice 6d: a guest's shadow step (its host half: LaneA6dStepHostChecks)
             // ── TWO OF THE NINE, IN A SESSION (the host's side is in the ahost branch) ──
             // A FREIGHTER: the class whose abilities MAKE things in the world. Every press below
             // is a request -- nothing here is made on this peer.
@@ -22770,8 +22791,8 @@ public partial class _Test : Node
             var hurtHere = H.Deployed.FirstOrDefault(t => t.Hp < 119);
             Check(hurtHere != null && Math.Abs(hurtHere.Hp - 75) < 0.01 && Math.Abs(hurtHere.MaxHp - 120) < 1e-6,
                   $"arena guest: the 45 the host put into one of its turrets arrives -- {hurtHere?.Hp:0} of {hurtHere?.MaxHp:0}, and a bar to draw it");
-            await LaneADecoyGuestChecks();
-            await LaneA6bTotGuest(fgm);
+            await Lane("LaneADecoyGuestChecks", () => LaneADecoyGuestChecks());
+            await Lane("LaneA6bTotGuest", () => LaneA6bTotGuest(fgm));
             LaneA4GuestPointPress(fgm);                        // Q, its row lent TakesPoint and TakesTargets (lane A: its host half is LaneA4HostPointCheck)
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             bool ownBubble = fgm.BubbleUp;
@@ -22819,12 +22840,12 @@ public partial class _Test : Node
             await RealTime(() => Sfx.Played.GetValueOrDefault("rail") > railHeard0, Wan ? 20 : 12);
             Check(Sfx.Played.GetValueOrDefault("rail") > railHeard0,
                   $"arena guest: a railgun the host fired near this ship is heard here ({Sfx.Played.GetValueOrDefault("rail") - railHeard0} reports since joining)");
-            await LaneA6bFieldsGuest();                        // 6b: the host's tender beside this destroyer (its host half: LaneA6bFieldsHost)
+            await Lane("LaneA6bFieldsGuest", () => LaneA6bFieldsGuest());                        // 6b: the host's tender beside this destroyer (its host half: LaneA6bFieldsHost)
             await ToArena("arena guest", "mission 1");
             var s2Held = S2HeldBossGuest();
-            await GuestSeesTheFight();
-            await RaidsGuestAddsWire();
-            await FieldsGuestRipChecks(ripWatch);
+            await Lane("GuestSeesTheFight", () => GuestSeesTheFight());
+            await Lane("RaidsGuestAddsWire", () => RaidsGuestAddsWire());
+            await Lane("FieldsGuestRipChecks", () => FieldsGuestRipChecks(ripWatch));
             if (Wan) Check(Net.Arriving(1.5) < 1.45 && Net.Arriving(1.5) >= 0.6,
                            $"over the internet, a 1.5 s warning is shown a round trip short, so it ends when this pilot is judged ({Net.Arriving(1.5):0.00} s)");
             int agHold0 = Character.GearHold.Values.Sum();
@@ -23597,7 +23618,7 @@ public partial class _Test : Node
                   $"a level a guest buys mid-session reaches the host's copy of its ship: rudder limit x{gTopNow:0.0000} (level 3: 1 + 0.25 x 1.09 = 1.2725; still level 2 would be 1.265)");
             hostRampHold.QueueFree(); PutBackOpenRow(ShipClass.Carrier, hostRampKept);
             // THE PASTE GUEST'S DROP AND RETURN (§3.9), then the live holder
-            await R2cHostReturns();
+            await Lane("R2cHostReturns", () => R2cHostReturns());
             if (Wan) GD.Print($"  wan: this host's {R4Backlog()}");
             heldD["ghost2"] = Ghost(424243, 60000);          // a place still held when the host leaves
             Net.I.GoOffline();   // drop the guest
@@ -23742,7 +23763,7 @@ public partial class _Test : Node
             Check(lastPaid != 0 && Character.PaidKills.Contains(lastPaid) && Character.Exp == exp3
                   && Character.GearHold.Values.Sum() == 6 && HoldIds() == expectHold,
                   $"third player: nor after a restart -- the kills it was paid for are on its file, and the four over-cap chips come back to the hold (exp {exp3} -> {Character.Exp}, {Character.GearHold.Values.Sum()} parts, {HoldIds()})");
-            await GuestLevelsAndPresses();
+            await Lane("GuestLevelsAndPresses", () => GuestLevelsAndPresses());
             GateFixTokenCheck(tokenWatch);
             // IT LEAVES, on purpose, by pressing HOST: a goodbye, so nothing to retry -- and the host keeps
             // no place for it (the host checks that goodbye got out: HOST used to cut a guest's off)
@@ -23793,11 +23814,11 @@ public partial class _Test : Node
             var mine = Nodes<PlayerShip>().FirstOrDefault(s => s.Mine);
             Check(mine != null && mine.OwnerId == Net.LocalId && Net.LocalId != 1, $"guest owns its own ship (id {Net.LocalId})");
             Check(Nodes<PlayerShip>().Count() >= 2, $"guest sees the host ({Nodes<PlayerShip>().Count()} ships)");
-            await R2BeatGuest();
+            await Lane("R2BeatGuest", () => R2BeatGuest());
             for (int i = 0; i < 60 * 3 && !H.Raiders.Any(r => r.Position.DistanceTo(new Vector2(-6000, -6000)) < 2500); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(H.Raiders.Any(r => r.Position.DistanceTo(new Vector2(-6000, -6000)) < 2500),
                   "a raider that existed before this guest joined reached it (the catch-up a joining guest is sent)");
-            await LaneAMissileIdsGuest();
+            await Lane("LaneAMissileIdsGuest", () => LaneAMissileIdsGuest());
             // Watched at the END of every frame: the ship overwrote the host's pinned flag in its own
             // frame, so a check made at any earlier point would have seen the flag and passed.
             var pinWatch = new LateSampler { Probe = () => mine != null && GodotObject.IsInstanceValid(mine) && mine.Pinned };
@@ -24070,7 +24091,7 @@ public partial class _Test : Node
             var ships = Nodes<PlayerShip>().ToList();
             Check(ships.Count == 1 && ships[0].Mine && ships[0].Name == "Ship_1", "guest rebuilt to its own single ship");
             // BACK BY THE HOST'S FRESH INVITE, and then back again while its old link still lived
-            await R2cGuestReturns();
+            await Lane("R2cGuestReturns", () => R2cGuestReturns());
             // the host closes the session once this pilot is back the second time
             await RealTime(() => !Net.IsOnline, Wan ? 40 : 15);
             Check(!Net.IsOnline && Net.LocalId == 1 && Net.I.LastStatus.Contains("Host closed") && !Net.I.Reconnecting,
