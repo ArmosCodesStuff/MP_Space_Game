@@ -36,6 +36,17 @@ history pick the work up from it alone. Update it in the same change as the code
 
 ## Handoff — read this first
 
+**2026-09-25 (worktree `WarShips_wt_kits5`, branch `wt/kits5`): kits lane A slice 5 built -- F12 (`Melee.cs`),
+F11 (`Prism.cs`: bands, the split onto `Lines` rows, reflected rounds, rays), F14 (the paint and `ITurretHost.Prefer`;
+the sentry throw to the cursor and the recall, replacing Collect; `Raider.Call`; `Decoys.cs`: the flares spawn row,
+`Hub.NetDecoy`, point guidance, the dazzle), F19 (`Towing.cs`: tow and hurl), the Dazzled / Jammed latch gates.
+Compiles, rung 2 green; engine-unproven: every check is owed in the final test phase** -- rung 3 twice (the
+LaneAMelee*, LaneAPrism*, LaneASentry*, LaneARaiderCall, LaneADecoy, LaneATow, LaneALatchGate checks and every
+rewritten freighter, beam and door check), rung 4 (frame 43_lanea_flares_pull_a_mark), rung 5 `six,six` (the guest's
+R throw and recall, LaneADecoyHost/GuestChecks). The class keys that call these (Warrior, Sniper flares, Warden
+Taunt, the Grapnel) are slice 6's. Wire: Lines +2 rows, Shots.Reflect = 7, Status.Parrying, Spawns.Decoy = 3,
+NetIds.Decoy, Hub.NetDecoy (the protocol fingerprint moves). Detail and decisions D28-D37: `docs/plans/ledger_kits5.md`.
+
 **2026-09-25 (worktree `WarShips_wt_raids`, branch `wt/raids`): lane G, raids v2 -- squads and a boss
 fight's adds, J1-J6 + the merge gate's fixes (GFa, GFb) built; compiles, rung 2 green. engine-unproven:
 every rung 3-5 check below is owed in the final test phase** (solo x2, six x2 for the guest checks, screens
@@ -292,9 +303,9 @@ whenever the ship is alive, on every hull that mounts it.
 | Battleship | main guns | fire mode | broadside (3 volleys, 14 s cooldown) | point defence (passive) |
 | Destroyer | main guns | fire mode | missile burst (magazine of 3) | R reload (9 s), point defence (passive) |
 | Carrier | fighters: attack | — | bomber strike | R recall, point defence (passive) |
-| Freighter | main gun | fire mode | bubble (400 soaked, 8 s) | T deploy, C collect, point defence (passive) |
-| Tender | main gun | fire mode | overdrive (x2 rate of fire, 8 s) | T deploy, C collect, point defence (passive) |
-| Bastion | main gun | fire mode | shockwave (1000 u, or a boss held 3 s) | T deploy, C collect, point defence (passive) |
+| Freighter | main gun | fire mode | bubble (400 soaked, 8 s) | R sentry: throw to the cursor (600 u, 0.8 s) or recall one within 60 u, point defence (passive) |
+| Tender | main gun | fire mode | overdrive (x2 rate of fire, 8 s) | R sentry: throw to the cursor (600 u, 0.8 s) or recall one within 60 u, point defence (passive) |
+| Bastion | main gun | fire mode | shockwave (1000 u, or a boss held 3 s) | R sentry: throw to the cursor (600 u, 0.8 s) or recall one within 60 u, point defence (passive) |
 | Sniper | main gun | fire mode | railgun (3 s charge, locked, 150 at 2500 u) | |
 | Warrior | main guns | fire mode | rush (2.5 s, then an EMP) | |
 | Warden | main gun | fire mode | six hunter-seekers | point defence (passive), 10 DPS |
@@ -576,6 +587,25 @@ outstanding from the batch of 2026-09-23.)*
 ---
 
 ## Unreleased
+
+### Class kits, lane A slice 5: melee, the prism, owned bodies, tow and hurl (2026-09-25, worktree wt/kits5)
+
+**Melee** (`Melee.cs`): a wedge (reach, half-arc, Stops) struck through the damage door, and the guard clamp (±90°
+off the nose) the prism shares. **The prism** (`Prism.cs`): a pilot Parrying (a status on the wire) turns a blow
+that meets its guard -- square (≤15°) sends 0.75 back and 0.25 on, slant (≤60°) mirrors half and bends half;
+rounds of a Reflectable row come back as friendly Reflect rounds, rays (the raider laser, the boss bolt) and beams
+split onto two `Lines` rows. **The freighter's sentry**: R throws it to the cursor (up to 600 u, 0.8 s in flight,
+no body until it lands; its landing is marked); R with the cursor within 60 u of one recalls it, never refused, and
+the next throw lands with the hull it had. The C key's Collect is gone. A sentry takes its owner's paint first and
+lets go of what it holds for a new one. **Raider.Call**: a squad takes the caller as its target for so long, then
+picks again (its quarry first). **Decoys** (`Decoys.cs`): a flares salvo is one spawn (6 points at 180 u, 5 s); a
+hostile seeker within 500 u turns onto a flare and bursts there, a raid missile's mark within 300 u (with 1 s of
+flight left) moves onto one, and a raider within 150 u is DAZZLED until 4 s after it leaves -- a dazzled raider takes
+no new latch; a JAMMED one drops the one it holds. **Tow and hurl** (`Towing.cs`): a hooked craft is held 160 u off
+the bow, hauled up to 3 s and hurled 600 u/s up to 900 u; the first hostile it strikes and the craft each take 60
+(120 for a heavy). The keys that use these are slice 6's.
+**Known broken:** engine-unproven (rungs 3-5 owed). A guest's sentries do not see the paint yet (host-only until 6b).
+A pulled mark jumps to its flare rather than sliding (the slide is 6c's drawing).
 
 ### Raids v2, lane G: squads in formation and a boss fight's adds (2026-09-25, worktree wt/raids)
 

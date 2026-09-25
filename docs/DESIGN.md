@@ -591,7 +591,7 @@ saved per character; nothing grants them yet.
 **A class is asked what it is FITTED with, never "is it the battleship".** `Fit.Guns`
 (cursor-aimed main turrets), `Fit.Broadside`, `Fit.Missiles` (a magazine of bursts), `Fit.Wing`
 (fighters and bombers), `Fit.Pd` (point defence: passive, no key, firing whenever the ship is
-alive), `Fit.Deploy` (turrets it drops and collects). The stat sheet grows each group only for a class that carries it
+alive), `Fit.Deploy` (sentries it throws and recalls). The stat sheet grows each group only for a class that carries it
 (a row a class lacks reads 0), the ship builds the matching hardware from the same flag, and the K
 window prints the matching figures.
 
@@ -1098,6 +1098,25 @@ bosses"); the numbers are `numbers_curve_raids_items.md` §2.
   the raider packet (squad id in bits 8-23, the lead and lock bits, the line's end) and the kind's row, so
   the radar's diamond / bracket / rim chevron, the victim's "GANK:" line and the names under the hulls are
   all worked out from those, on the host as on a guest. A new enemy row needs nothing there.
+
+## Class kits, lane A slice 5: the mechanisms under the heavies' and freighters' keys (2026-09-25)
+
+The mechanisms only; the class rows and keys that press them are slice 6 (ledger_kits5.md D28).
+- **A call is the squad's** (`Squad.Call`): a squad fights as one, so a raider cannot be pulled out of it; the
+  override re-forms at once (a latched webber lets go), and the lapse re-picks with the quarry first. Taunt's x1.5
+  from the caller is a door row that reads `CalledBy` (6c).
+- **The sentry throw is a host pending list, not a body in flight** (`PlayerShip.DeployTurret`): it counts as out
+  (the 3-out cap sees it) and nothing can hit it until it lands through `Hub.Drop`. The landing mark is the
+  friendly `Fx.AimZone`, so no new RPC. A recall stows the hull it had; the next throw reuses it.
+- **A flare salvo is one spawn** (`Decoys.cs`, `Spawns.Decoy`): every peer derives the 6 points from the seed. Every
+  rule (lure, mark, dazzle) reads where the points come to rest, from the pop: a rule on the coasting points would
+  lure a seeker onto the hull at age 0 and chase a moving point with an RPC every frame. `Hub.NetDecoy` moves a shot
+  or a predicted blast by its id on every peer (its landing on the host, its missile and its circle everywhere).
+- **Tow and hurl own the craft before its AI** (`Towing.cs`, checked in `Raider` after the status tick and before
+  Disabled): a towed craft is off its post, so it neither webs nor fires, with no gate in the AI itself.
+- **The latch gates are OutGuards columns** (`BlocksLatch`, `DropsLatch`): Dazzled takes no new latch, Jammed takes
+  none and drops its own. Named so a row's default is "no effect". Raiders fire only while latched, so a
+  blocked latch is also a silent laser.
 
 ## Traps that have already cost time
 

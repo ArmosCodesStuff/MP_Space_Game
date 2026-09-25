@@ -228,7 +228,9 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused, ISquadMembe
             float top = Squad.Top(this), d = Position.DistanceTo(post);
             float step = Latched ? top : Mathf.Min(top, d / (float)System.Math.Max(Squad.Left, 1.0 / 60));
             Position = Position.MoveToward(post, step * dt);
-            Latched = Position.DistanceTo(post) < 12f && Gap(Position, t) <= Def.Reach;
+            // THE LATCH GATES (F17 rows): a status may refuse a new latch, or drop the one it holds
+            Latched = Position.DistanceTo(post) < 12f && Gap(Position, t) <= Def.Reach
+                      && (Latched ? !_status.DropsLatch : !_status.BlocksLatch);
             Rotation = Mathf.LerpAngle(Rotation, Aim.Face(Position, t.Position), Mathf.Clamp(8f * (float)Agility * dt, 0f, 1f));
         }
         Speed = dt > 0 ? from.DistanceTo(Position) / dt : 0f;

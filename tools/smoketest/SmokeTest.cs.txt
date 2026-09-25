@@ -2606,12 +2606,13 @@ public partial class _Test : Node
             for (int k = 0; k < 3; k++)
             {
                 var (st, share) = shares[(k + run) % 3];
+                // a jammed one has let go of its web as well (kits5-J9, the F17 latch columns); the others hold theirs
                 bool one = anchor[k] >= 0 && Math.Abs(blow0[k] - 1.0) < 1e-9 && Math.Abs(got[k] - 3 * share) < 1e-6
-                           && webs[k].Latched && webs[k].Statuses.Has(st);
+                           && webs[k].Latched == (st != Status.Jammed) && webs[k].Statuses.Has(st);
                 ok &= one;
                 said.Add($"{st} {webs[k].Position.DistanceTo(at):0} u off: {got[k]:0.00} (want {3 * share:0.0}{(one ? "" : $"; first blow {blow0[k]:0.00}, latched {webs[k].Latched}")})");
             }
-            Check(ok, $"a webifier's laser goes out through the door: three latched on a pilot, each after a blow of 1, land over their next 3 blows -- {string.Join("; ", said)}");
+            Check(ok, $"a webifier's laser goes out through the door: three latched on a pilot, each after a blow of 1, land over their next 3 blows (a jammed one lets go of its web too) -- {string.Join("; ", said)}");
             foreach (var w in webs) w.TakeDamage(1e12);
             await Wait(0.3);
         }
@@ -4733,6 +4734,84 @@ public partial class _Test : Node
             await Wait(0.2);
         }
         Dealt.Landed -= OnLanded;
+        pm.Demo = demo; pm.Position = yonder; pm.Velocity = Vector2.Zero; pm.Hp = pm.MaxHp;
+    }
+
+    // ── F17 · THE LATCH GATES (lane A slice 5, kits5-J9) ─────────────────────────────────────────
+    // The OutGuards rows are kits_v2's F17 table: Suppressed takes latches and keeps them, Dazzled takes no
+    // new one and keeps what it holds, Jammed takes none and drops the one it holds. World, host, a webifier
+    // hunting the pilot from 250-400 u at a varied bearing, 3 runs: (0) DAZZLED before it posts: in 4 s it
+    // never latches and the pilot is never Pinned; the dazzle cleared, it latches within 6 s. (1) the
+    // interaction with the flares (Decoys.cs): a salvo popped on the pilot as the webifier comes in -- its
+    // posts are inside a flare's 150 u -- and it never latches while they burn. (2) latched first, then
+    // DAZZLED: it keeps its web for 2 s; then JAMMED: it lets go within 2 frames and the pilot's Pinned lapses
+    // within 0.5 s, and it does not latch again while jammed.
+    async Task LaneALatchGateChecks(Vector2 yonder)
+    {
+        OutGuard Row(Status st) => StatusSet.OutGuards.First(g => g.Status == st);
+        Check(!Row(Status.Suppressed).BlocksLatch && !Row(Status.Suppressed).DropsLatch
+              && Row(Status.Dazzled).BlocksLatch && !Row(Status.Dazzled).DropsLatch
+              && Row(Status.Jammed).BlocksLatch && Row(Status.Jammed).DropsLatch,
+              "the latch columns of the F17 table: Suppressed takes and keeps a latch, Dazzled takes no new one and keeps its own, Jammed takes none and drops its own");
+        var pm = Me; bool demo = pm.Demo; pm.Demo = true;
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+        foreach (var sv in H.Salvos.ToList()) H.Down(Spawns.Decoy, sv, burst: false, float.NaN);
+        await Wait(0.3);
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f);
+            pm.Position = at; pm.Velocity = Vector2.Zero; pm.Rotation = VaryAngle(); pm.Hp = pm.MaxHp;
+            pm.Statuses.Clear(Status.Pinned);
+            var w = H.SpawnRaider(at + Vector2.Right.Rotated(VaryAngle()) * Vary(250f, 400f)); w.Quarry = pm; w.Hp = 1e9;
+            bool latched = false, pinned = false;
+            async Task Frames(double seconds, Func<bool> until = null)
+            {
+                double t = pm.Clock + seconds;
+                while (pm.Clock < t && !(until?.Invoke() ?? false))
+                {
+                    pm.Position = at; pm.Velocity = Vector2.Zero; latched |= w.Latched; pinned |= pm.Statuses.Has(Status.Pinned);
+                    await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                }
+            }
+            if (run == 0)
+            {
+                w.ApplyStatus(Status.Dazzled, 30);
+                await Frames(4.0);
+                bool blocked = !latched && !pinned;
+                w.Statuses.Clear(Status.Dazzled);
+                await Frames(6.0, () => w.Latched);
+                Check(blocked && w.Latched, $"a dazzled webifier never latches in 4 s and the pilot is never pinned ({blocked}); the dazzle cleared, it latches ({w.Latched})");
+            }
+            else if (run == 1)
+            {
+                H.Flares(pm.Position, pm.Rotation);
+                await Frames(4.2);
+                Check(!latched && !pinned && w.Statuses.Has(Status.Dazzled),
+                      $"flares popped on the pilot: the webifier posting on it is dazzled ({w.Statuses.Has(Status.Dazzled)}) and never latches while they burn ({!latched}); the pilot is never pinned ({!pinned})");
+            }
+            else
+            {
+                await Frames(6.0, () => w.Latched);
+                bool had = w.Latched;
+                w.ApplyStatus(Status.Dazzled, 30);
+                bool kept = true;
+                double t = pm.Clock + 2.0;
+                while (pm.Clock < t) { kept &= w.Latched; pm.Position = at; pm.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+                w.ApplyStatus(Status.Jammed, 30);
+                for (int i = 0; i < 2; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                bool dropped = !w.Latched;
+                await Frames(0.5);
+                bool freed = !pm.Statuses.Has(Status.Pinned);
+                latched = false;
+                await Frames(3.0);
+                Check(had && kept && dropped && freed && !latched,
+                      $"a webifier latched before it is dazzled keeps its web for 2 s ({had}, {kept}); jammed, it lets go within 2 frames ({dropped}), the pin lapses ({freed}) and it takes no new latch while jammed ({!latched})");
+            }
+            w.TakeDamage(1e12);
+            foreach (var sv in H.Salvos.ToList()) H.Down(Spawns.Decoy, sv, burst: false, float.NaN);
+            pm.Statuses.Clear(Status.Pinned);
+            await Wait(0.3);
+        }
         pm.Demo = demo; pm.Position = yonder; pm.Velocity = Vector2.Zero; pm.Hp = pm.MaxHp;
     }
 
@@ -10571,6 +10650,7 @@ public partial class _Test : Node
             await LaneARaiderCallChecks(yonder);
             await LaneADecoyChecks(yonder);
             await LaneATowChecks(yonder);
+            await LaneALatchGateChecks(yonder);
             await LaneBHelmChecks(yonder);
             await LaneBStrafeChecks(yonder);
             await LaneBBoostChecks(yonder);

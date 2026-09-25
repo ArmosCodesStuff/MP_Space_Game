@@ -202,3 +202,25 @@ Done: J1 (F12), J2-J3 (F11), J4 (F14 Prefer). Next is kits5-J5; no PRE written f
 - Files: Towing.cs (new), Raider.cs, Targeting.cs; SmokeTest.cs.txt (LaneATowChecks after LaneADecoyChecks). Dealt.cs untouched
   (the row's Id is the weapon id).
 - Next: kits5-J9.
+### kits5-J9 · PRE · the latch gates (Dazzled, Jammed), the record -- tier opus
+- Intent: OutGuard.BlocksLatch / DropsLatch (the ledger's NewLatch / KeepsLatch, named so a row's default is "no
+  effect"): Dazzled blocks a new latch, Jammed blocks it and drops a held one (kits_v2 F17 table); StatusSet reads
+  them; Raider's latch line gated (one hunk). Checks LaneALatchGateChecks (+ the flares x latch interaction).
+  CHANGES.md Unreleased + Handoff, DESIGN.md slice-5 section, final POST.
+- Files: scripts/Statuses.cs, scripts/Raider.cs, SmokeTest.cs.txt, docs/CHANGES.md, docs/DESIGN.md, this ledger.
+- HEAD 4b1882861736b19e33a71fc4e24b814e762a9fe8 · Statuses.cs 81ee9f1ff9e96a57c34cff7a1c9cb0ef58c963e2 · Raider.cs a1d8cdd0730a1cbec984be062c8c41e710a74aca · SmokeTest.cs.txt a916c3c1c453acc1eb31f417d2d2d11fb985e197 · CHANGES.md 0149ff62e9be99106a483e18eed5458e2c4141f4 · DESIGN.md a313778f0865dde72435f741d8664106ecee8fb6
+### kits5-J9 · POST
+- Verdict: compiles; typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final
+  test phase. OutGuard.BlocksLatch / DropsLatch (Dazzled blocks; Jammed blocks and drops); StatusSet.BlocksLatch /
+  DropsLatch / HoldsThrow share one Any(row); Raider's latch line gated (one hunk). CHANGES.md Handoff + Unreleased
+  (and the freighter key table), DESIGN.md slice-5 section (and Fit.Deploy's line).
+- Harness rewrite (6.3): the slice-2 door check's jammed webifier is now asserted to have LET GO (was: still latched).
+- Files: Statuses.cs, Raider.cs; SmokeTest.cs.txt (LaneALatchGateChecks after LaneATowChecks); CHANGES.md; DESIGN.md.
+
+## Slice 5 final POST
+- J1-J9 built and committed; typecheck + verify -Quick green at every job; NO engine run.
+- Owed in the test phase: rung 3 x2 (quick,solo,solo): LaneAMeleeArc/Strike, LaneAPrismBand/Resolve/Split/Walk/Reflect/Ray,
+  LaneASentryPrefer/Throw, LaneARaiderCall, LaneADecoy, LaneATow, LaneALatchGate + every rewritten check (freighter
+  deploy sites, the ability sweep, the walls, the door's jammed row) + every beam/bolt/laser check (through Prism);
+  rung 4: frame 43_lanea_flares_pull_a_mark; rung 5 six,six: the guest's R throw / recall, LaneADecoyHost/GuestChecks.
+- Decisions D28-D37 above. Raider.cs hunks this slice: J3 Strike ray, J6 Call/CalledBy, J8 Towed, J9 latch gate.

@@ -43,6 +43,8 @@ public struct OutGuard
     public Status Status;
     public double Gun, Move, Super;
     public bool HoldsThrow;
+    public bool BlocksLatch;      // a raider carrying it takes no NEW latch (kits_v2 F17: Dazzled, Jammed)
+    public bool DropsLatch;       // ...and lets go of the one it holds (Jammed)
     public Tag Spares;
 }
 
@@ -76,8 +78,8 @@ public struct StatusSet
     public static readonly OutGuard[] OutGuards =
     {
         new() { Status = Status.Suppressed, Gun = 0.5, Move = 0.7, Super = 1.0, HoldsThrow = true },
-        new() { Status = Status.Dazzled,    Gun = 1.0, Move = 1.0, Super = 1.0, HoldsThrow = true, Spares = Tag.Boss },
-        new() { Status = Status.Jammed,     Gun = 0.0, Move = 1.0, Super = 1.0, HoldsThrow = true, Spares = Tag.Boss },
+        new() { Status = Status.Dazzled,    Gun = 1.0, Move = 1.0, Super = 1.0, HoldsThrow = true, BlocksLatch = true, Spares = Tag.Boss },
+        new() { Status = Status.Jammed,     Gun = 0.0, Move = 1.0, Super = 1.0, HoldsThrow = true, BlocksLatch = true, DropsLatch = true, Spares = Tag.Boss },
     };
     // never on the wire: the host resolves them, and a guest has nothing that reads them
     public const Status HostOnly = Status.Suppressed | Status.Dazzled | Status.Jammed;
@@ -98,14 +100,16 @@ public struct StatusSet
         return d;
     }
     // ...and whether a launcher carrying them must hold its throw
-    public bool HoldsThrow
+    public bool HoldsThrow => Any(g => g.HoldsThrow);
+
+    // ...and whether a raider carrying them may take a new latch, or keep the one it has
+    public bool BlocksLatch => Any(g => g.BlocksLatch);
+    public bool DropsLatch => Any(g => g.DropsLatch);
+    private bool Any(System.Func<OutGuard, bool> row)
     {
-        get
-        {
-            if (_left == null) return false;
-            foreach (var g in OutGuards) if (g.HoldsThrow && Has(g.Status)) return true;
-            return false;
-        }
+        if (_left == null) return false;
+        foreach (var g in OutGuards) if (row(g) && Has(g.Status)) return true;
+        return false;
     }
 
     private Dictionary<Status, double> _left;
