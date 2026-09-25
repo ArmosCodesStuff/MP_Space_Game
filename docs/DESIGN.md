@@ -125,6 +125,15 @@ away and respawns from `Net.Players`.
 **Offline is not a separate mode.** Single player is a host with no peers, so there is exactly one
 code path and offline can never drift from online.
 
+**A ramp (F1's Ramp, `AbilityDef.Ramp`) is owner-stepped: the one slot field the host does not
+speak for.** Its running total (`Sl(id).Own`) builds on the throttle and bleeds on the yaw, and
+only the owner's peer has either: on the host a guest's ship follows its reports (`RemoteFollow`),
+never `Steer`, so its yaw never moves and there is no helm to read. So `TickAbilities` steps a
+ramp only where `Mine`, and `ApplyHostState` keeps a ramp row's `Own` on the owner's own ship while
+it takes every other slot field from the host. Nothing the host decides reads it: the ramp lifts
+the owner's own top speed and thrust, and the host sees the result as the owner's replicated
+position and speed, as it sees any helm input.
+
 ### What the host must never take on trust (2026-09-22)
 
 Four rules, each of which was once missing, each now held in ONE place so the next thing that
@@ -224,7 +233,10 @@ levels once a second and ship and hauler state ten times a second; a guest's own
 
 - **Camera**: wheel zoom between `DefaultZoom / ZoomOutMax` (33% further out) and `× ZoomInMax`
   (1.5). **Y** frees it; arrows or the screen edge pan it, tethered to `ClassArt.CameraRange`
-  (5000 for a capital ship). All in `Hub.MoveCamera`.
+  (5000 for a capital ship). All in `Hub.MoveCamera`. A boss too big for that ceiling is framed by
+  `Hub.BossFramed` sliding the centre toward its far hull end instead of raising the ceiling (the
+  owner's open question, 2026-09-25) -- generic from the boss row's own `Length`, gated to actual
+  encounters, and capped so the ship never drifts past `BossPilotMargin` from the edge.
 - **Radar** (`Radar.cs`): local only, draws what this machine knows; size is `Settings.RadarSize`.
 - **Esc menu** (`EscMenu.cs`): the last Esc layer. Multiplayer cannot pause, so it locks the helm.
 - **Music** (`Music.cs`, an autoload): both loops always play; their levels cross-fade by mood,
@@ -280,7 +292,8 @@ levels once a second and ship and hauler state ten times a second; a guest's own
 - **B (DONE; escorts 3 hull)**: the beam charges **6 s**; meanwhile the boss launches **2 light fighters, 45° to port and to
   starboard**, straight at the player, their boost lasting until they reach it (a pin to hold the pilot
   in the beam unless point defence — or, for a fighter pilot, their guns — kills them); live **3 s**,
-  **0.25 s ticks, 50** (half the old tick, twice as long); the boss **raider red with a white skull**.
+  **0.25 s ticks, 50** (half the old tick, twice as long); the boss the pack's `frigate_a` in the owner's
+  **red and black** (its skull went with its old art).
 - **C (DONE — carrier measured 19.07 DPS; guns 5.9 a shell; control 1080 u)**: **battleship total DPS = 1.25 × carrier's**; **carrier range = 1.5 × battleship's**; the
   battleship's main guns fire **shells at 520 u/s** (their own stat since gear came: a missile rack
   must not change the guns), **not tracking**.
@@ -422,8 +435,9 @@ Recorded here so every chunk builds from the written word, not from memory.
   silently retuned the other; the two are not the same fight and must be tuned apart, so each row now
   carries its own numbers and nothing multiplies across. The SCRAP SHOTGUN warps it to 600 u of the
   nearest pilot (a ring shows where, 1 s) and fires a fixed fan -- the same seven lines every time, so
-  it is learned, not rolled. The ASTEROID THROW warps it back to 1300 u of the pilot first (the same
-  ring, 1 s), then holds a 180 u rock in a tractor beam over a red lane for 7.5 s and hurls it: its path is fixed at the throw (the distance flown as the cube of the time
+  it is learned, not rolled. The ASTEROID THROW warps its nose back to 1300 u off the pilot first (the
+  same ring, 1 s) -- 200 u past its gun's Find, both measured from the hull, so it is silent through
+  the throw at any hull size -- then holds a 180 u rock in a tractor beam over a red lane for 7.5 s and hurls it: its path is fixed at the throw (the distance flown as the cube of the time
   -- slow, then very fast), so every peer flies the same rock from one event and a guest shortens only
   the hold.
   **A THROWN BODY'S LANE IS DERIVED FROM THE BODY, never written beside it.** `BossMove.Width` is left
@@ -509,8 +523,8 @@ Recorded here so every chunk builds from the written word, not from memory.
 - **Hull colour** is the hull. **Accent colour** is the turrets, engines and lighting: turrets,
   plumes on the player's ship and everything it launches, shields, PD arcs. Utility ships' engines
   are always light yellow (`Plume.Utility`). Missiles keep their smoke. The defaults are a **grey
-  hull (0.6, 0.6, 0.6) and a white accent**, the owner's; the hulls are grey line art that the hull
-  colour multiplies.
+  hull (0.6, 0.6, 0.6) and a white accent**, the owner's; the hulls are the pack's grey art (`Sprites.Fit`
+  by way of `ClassArt`, same as every other row) that the hull colour multiplies.
 - **Fighters** fly strafing runs: 3 shots, through the target by 1.2× its diameter, turn, repeat;
   they live inside the carrier when docked. **Bombers** park small on its deck, facing the bow.
 
@@ -770,41 +784,91 @@ under the base. A route or a range that moves must keep the 500.
 
 ### Art
 
-- **Every ship is the owner's line art**, made by `tools/make_ships.ps1` from the drawings in
-  `art_source/` (a `.gdignore` keeps Godot out): turned nose-up, made **exactly symmetrical** (the half
-  on one side of the line the drawing is most nearly symmetrical about, reflected), redrawn at twice its
-  final size, sharpened by its own enlargement's blur, cut out of its paper (a flood from the sheet's
-  edge that never comes within a pixel or two of ink, so a gap in an outline cannot let it into the
-  hull, then the light edge un-mixed from the white it was drawn on) and halved. Grey on transparent:
-  the hull colour tints a hull, the accent a turret, `Raider.HeavyTint`/`LightTint` a raider. It
-  prints every mount in world units; `PlayerShip.Art` and `Raider` carry them. The sprites it replaced
-  are in `retired/` (also ignored).
-- **Carrier**: the runway down the centre, the bays on the white either side of it, three sponsons a
-  flank; point defence on the two middle sponsons and the stern block (the bow is where bombers lift
-  off). **Battleship**: its four painted turrets are painted over from a clean stretch of its spine
-  (the spine's lines all run along it), and the four moving main turrets stand where they stood; point
-  defence on the stern quarters. **Destroyer**: main turrets on the fore spine and the central plate,
-  point defence on the stern quarters, the turrets at 0.8x. **Heavy raider**: the crescent-winged
-  fighter, its one turret on the spine behind the canopy; **light raider**: the small fighter.
+- **Every hull is made by `tools/make_ships.ps1`** from **the pack** (`art_source/pack_2026-09-24/`:
+  the owner's 34+ finished, shaded sprites; which entity wears which is `docs/plans/sprites.md`), the
+  ONLY source since the capitals' slice (J5) retired the last line drawings. Each `$Finished` row turns
+  one file nose-up by quarter turns (never mirrored: the lettering and the asymmetric hulls would
+  flip), patches out any painted gun under a moving turret (`Sheet.PatchColumns`, a clean strip of the
+  SAME housing tiled over the barrel -- player hulls only, Q4), trims it to the drawing with the keel
+  on the centre column, and writes it grey on transparent. Nothing is redrawn or resampled, so a rerun
+  gives the same pixels. It prints the row's marks (a turret, a housing's edge) and its **nozzles**
+  (each bell's aft rim and width) in world units, for the row in the game. Every hull row derives from
+  **`HullArt`** (Sprites.cs: Texture, Length, Tint, Nozzles) and draws one flame per bell; `ClassArt`
+  (`PlayerShip`'s twelve rows) carries the same Texture/Length plus its own `HalfWidth`, turret mounts
+  and scale (no Nozzles: a class's engine plume is one point, `EngineInset`, not a bell list). The
+  sprites every source replaced are in `retired/` (also ignored).
+- **Trap: a run of make_ships.ps1 rewrites EVERY file it makes.** The `$Finished` rows are pixel-stable
+  (no resampling), but `turret_main.png`/`turret_pd.png` are still drawn procedurally and do not come
+  out byte-identical on another machine (GDI+'s bicubic resize) -- `git checkout` them after a run
+  unless the turret-drawing block itself changed.
+- **Hit sizes never follow the art** -- but a boss's do. A raider is hit on its row's `HitShare` of its
+  Length, a class on its `HalfWidth`; the pack re-arted every raider with neither moving. The bosses
+  are `Missions.BossSize` (2, the owner's "2 or 3x") times their art's measure, Length, HalfWidth and
+  bells alike, and everything a move places about the hull reads the row at use: the nose (L/2), the
+  ram's lane (2 HW), the rock's hold (`Boss.FlankHold`: HW + body + gap), the escorts and the warp ring
+  (in half-widths), and every stand-off (`HoldOff`, a warp's `Standoff`) and every look (`Find`, taken as
+  `Find + L/2` from the centre) measured from the NOSE, so a bigger hull stands no nearer the party and
+  its guns reach as far past it (the owner: what is placed around a boss scales with it). A ram
+  (`MoveWay.Dash`) strikes each ship once a dash (`Boss.Slot.Struck`): a long hull is over a point for
+  longer than `PlayerShip.HitGap`, and without it a pilot left in the lane takes the row twice. The
+  boss spawns with its nose on `Hub.ArenaCentre`. What
+  does NOT scale: reaches, ranges and bodies (the beam's 70 u, the rock) -- except a Ring move's own
+  telegraph (`BossType.Size` x `Reach`, at use in `Boss.cs`): it is drawn round the hull itself, so the
+  Lancer's shockwave reaches 680 u (340 x 2), the owner's open question, 2026-09-25, resolved as a
+  default.
+- **The 12 player classes** (`Classes.All`, `Ships.cs`), the pack (J5), hit sizes (`HalfWidth`)
+  UNCHANGED throughout (Q1) -- the art moved, the collider and the shield did not. **Battleship**
+  (`battleship_bb05`): 6 painted twin housings down the spine; the 4 flanking ones (the two forward
+  rows, both sides) carry the real moving mains, their painted barrels patched clean, the aft flanking
+  pair patched too but left unarmed; the 3 centre (keel) turrets are decoration, untouched (Q3's
+  default); point defence on the aft domes. **Carrier** (`carrier_a`): point defence's two flank
+  turrets re-seated on the new hull; the third (stern) turret and the whole deck (`BayX`/`BayY`/
+  `BaySpacing`/`RunwayBow`/`EngineInset`) kept at today's figures -- the old and new hulls read close
+  enough in proportion that a bomber still parks and lifts off correctly proved, but this is the
+  LOWEST-confidence row here (re-measure if the owner sees it sit wrong). **Destroyer**
+  (`destroyer_dd22`): both main mounts moved onto the keel gun cluster near the bow, point defence
+  re-seated on the flank domes. **Freighter/Tender/Sniper/Warrior/Warden/Dart/Wraith**: today's mount
+  literals landed on a sensible feature of their new hull by eye (the freight ships' forward "claw" or
+  spotter mount, the fighters' prow or wing roots) and were left as they were -- only their `Texture`
+  moved. **Bastion** (`frigate_c`): its one main moved from the bow to the stern, onto the ring turret
+  its new art actually draws (today's forward mount had nothing there to sit on); point defence kept.
+  **Echo** (`fighter_f`): its one main moved forward a little, onto the paired barrels its new art
+  draws on both wings (the flavour text, "fires twice"; still one game mount, front and centre of the
+  pair). Every moved literal is one row's `Mains`/`Pds`, printed by the tool from a mark on the turned
+  art -- see the row's own comment in `tools/make_ships.ps1`.
+  **Raiders** (the pack): the webifier `fighter_swept`, the gunship `frigate_b` (its turret on its
+  painted twin), the talon `fighter_tri_a`, the pod `drone_sensor` (a round drone; its one bell the stern vent), the cross `gunship_h` (the gunship's
+  hull with the rack stripped; its turret on the clean aft deck), the lancerkin `frigate_d` (its turret
+  on the plate aft of its tubes), and the title screen's Web `crescent_a` in the webifier's red. Their
+  painted guns stay: too small to see under a turret. **Bosses** (the pack): the Rusty Bucket
+  `frigate_a`, the Drake Bastion `flagship`, both RED AND BLACK (the owner's ruling): the pack's grey
+  multiplied by the owner's swatch red (0.67, 0.03, 0.01), so highlights come out that red and shadows
+  black; a pure multiply, since the hull reads on space without a lift -- with their painted guns (a boss has no moving turret) and their
+  bells listed on the row (2 and 5; a boss draws no flame), at twice the art's size (above). **The fleet** (the pack): the hauler `cargo_4` (`Hauler.Art`; its
+  six painted cargo frames are the six pods, its point defence on the bow dome), the miner and the
+  salvager one drone, `drone_salvager` (`gatherer.png`, the owner's pick for both: told apart by the
+  row's tint, the average colour of the art each first replaced; the beam and the unloading load leave
+  from the row's `Emitter`, the claws' mouth), the lanes' couriers `drone_economy` (a file of their own,
+  `courier.png`, 30 u, in the stations' livery), the wing's fighter `fighter_delta` and bomber
+  `fighter_g` (its torpedoes leave from the front of its wingtip rails, one then the other:
+  `WingDef.Launch`). **One pack file on two rows is one game file**, named for what both rows are
+  (`gatherer.png`), never a copy per row. The hauler's
+  and the gatherers' `Extent` -- what a raider holds off, not a hit size -- is measured off the art.
 - **Turrets**: the owner's twin-barrelled turret is every main turret (`turret_main.png`, lifted out
   of its drawing by an outline, barrels up, the housing's centre the pivot); point defence is a
   smaller, round, single-barrelled turret in the same style, drawn by the tool (`turret_pd.png`). Each
   class mounts them at its own scale (`ClassArt.TurretTexScale`).
-- **Fighter** (`wing_fighter.png`) is the developer's black-and-purple fighter recoloured white:
-  brightness remapped so shading keeps its direction, the outer outline kept dark against space, and
-  the purple (the saturated pixels) taken to neutral with a faint cool cast on the canopy.
 - **Unused art** (21 carried-over sprites nothing references) lives in `art_unused/`, which has a
-  `.gdignore` so Godot never imports it. Kept deliberately, at the developer's request, and so is
-  `art_unused/art_4x/`: five hulls at twice and the two turrets at four times the resolution the
-  game loads. **Anything NOT under a `.gdignore` ships.** The export preset takes `all_resources`,
-  so every file Godot imports goes into the `.pck` whether or not anything loads it -- which is
-  how that art (13 MB of PNG, about 3 MB once imported) and 45 `.translation` files Godot made
-  out of `version/*.csv` rode in every release. `version/` has a `.gdignore` of its own for that
-  reason.
+  `.gdignore` so Godot never imports it. Kept deliberately, at the developer's request. **Anything NOT
+  under a `.gdignore` ships**, which is why `art_unused/art_4x/` -- five OLD line-art hulls at twice
+  and the two OLD turrets at four times the resolution the game loaded, all superseded by the pack --
+  was deleted rather than kept (Q9), along with `tools/finish_ships.ps1` (the line-art shading tool it
+  was made for; both commands dropped from CLAUDE.md and `docs/README.md`'s command lists in this
+  commit). The export preset takes `all_resources`, so every file Godot imports goes into the `.pck`
+  whether or not anything loads it -- which is how 45 `.translation` files Godot made out of
+  `version/*.csv` rode in every release. `version/` has a `.gdignore` of its own for that reason.
 - **Background** (`stars.png`): 1024 px, seamless (stars near an edge wrap), on a screen-space layer
   at −100. Client-side only.
-- **Bomber** (`wing_bomber.png`): the developer's small airframe, doubled in resolution, wings swept
-  forward by a smooth warp (the tail booms stretch to follow), radiation trefoil on the nose.
 - **Mount offsets are measured, not placed by eye**: the tool carries each mount through every step
   and prints it as `(pixel − size/2) × world-per-pixel`. They live in `PlayerShip.Art` with each
   turret's texture scale, barrel length (where shots start) and ring radius (where the PD arc sits).
@@ -1298,7 +1362,7 @@ Each of these compiled clean and was wrong at runtime. The smoke test covers all
   load-bearing needs both its update rate AND its interpolation revisited, not just its position.*
 - **A check can pass for the wrong reason when the setup makes it vacuous.** "The boss is locked in
   place" asserted zero drift, and a mutant that ignored the lock entirely still passed: inside its
-  650 u standoff the boss would not have closed anyway, so the assertion tested nothing but the
+  hold-off the boss would not have closed anyway, so the assertion tested nothing but the
   flag. Arrange the conditions under which the behaviour would actually differ, or the check is
   decoration. Sibling of the constant-comparison lesson above.
 - **A fallback that tidies up after itself makes the check blind.** `Character.Save` writes a temp

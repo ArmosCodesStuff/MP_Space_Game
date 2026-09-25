@@ -41,8 +41,8 @@ public enum Fit
     Deploy = 32,       // it drops turrets of its own and picks them up again (the freighters)
 }
 
-// Every hull is the owner's line art (tools/make_ships.ps1: symmetrical, grey, tinted here with
-// the hull colour), and every mount below is measured from it: the tool prints them. A turret at
+// Every hull is the owner's pack art (tools/make_ships.ps1: turned nose-up, trimmed, grey, tinted
+// here with the hull colour), and every mount below is measured from it: the tool prints them. A turret at
 // TurretTexScale 1/5.5 is 12 u across the housing, the muzzles 12.2 u from the pivot; point
 // defence 6 u across, the muzzle 5.5 u out. Each class mounts them at its own multiple of that.
 public class ClassArt
@@ -171,10 +171,13 @@ public static class Classes
                 ItemDef.Own(GearSlot.Utility, "bs_broadside", "Broadside Battery", "every main gun, volley on volley", "broadside_mult"),
             },
             Art = new ClassArt {
+                // battleship_bb05 (the pack, J5): 4 mains on the flanking twins (the two forward
+                // rows, both sides -- Q3's default), the barrels of all 6 painted twins patched
+                // clean (Q4); PD on the aft domes; the turret scale k measured off the art's own housing
                 Texture = "res://battleship_hull.png", Length = 378f, HalfWidth = 43.875f,
-                Mains = new Vector2[] { new(0f, -93.85f), new(0f, -7.56f), new(0f, 73.34f), new(0f, 122.15f) },
-                Pds   = new Vector2[] { new(-21.3f, 156.93f), new(21.3f, 156.93f) },
-                TurretTexScale = 2.5f / 5.5f, MainBarrel = 30.5f, PdBarrel = 13.75f },
+                Mains = new Vector2[] { new(-23.99f, -74.28f), new(23.99f, -74.28f), new(-23.99f, -36.27f), new(23.99f, -36.27f) },
+                Pds   = new Vector2[] { new(-58.99f, 71.73f), new(58.99f, 71.73f) },
+                TurretTexScale = 1.9f / 5.5f, MainBarrel = 23.18f, PdBarrel = 10.45f },
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Broadside } },
 
         new() { Id = ShipClass.Carrier, Name = "CARRIER", Ready = true, Targets = 3, Fit = Fit.Wing | Fit.Pd,
@@ -196,9 +199,12 @@ public static class Classes
                 ItemDef.Own(GearSlot.Utility, "cv_bomber_bay", "Bomber Bay", "the bomber wing", "bomber_count"),
             },
             Art = new ClassArt {
+                // carrier_a (the pack, J5): a PD pair on the flanks amidships and one on the stern
+                // centreline; the deck (Bay*/RunwayBow/EngineInset) is the bays abreast amidships,
+                // the runway run from the bow and the engines inset at the stern
                 Texture = "res://carrier_player.png", Length = 283.5f, HalfWidth = 40.02f,
                 BayX = 25.01f, BayY = 8.34f, BaySpacing = 46.69f, RunwayBow = 110.06f, EngineInset = 8f,
-                Pds = new Vector2[] { new(-46.39f, -29.75f), new(46.39f, -29.75f), new(0f, 134.22f) },
+                Pds = new Vector2[] { new(-30.01f, -0.21f), new(30.01f, -0.21f), new(0f, 134.22f) },
                 TurretTexScale = 1.9178f / 5.5f, PdBarrel = 10.51f },
             Abilities = new[] { Ab.Attack, Ab.Recall, Ab.Bombers } },
 
@@ -222,9 +228,11 @@ public static class Classes
                 ItemDef.Own(GearSlot.Utility, "dd_missile_rack", "Missile Rack", "the missile bursts and their magazine", "missile_mag"),
             },
             Art = new ClassArt {
+                // destroyer_dd22 (the pack, J5): both mains on the keel gun cluster near the bow,
+                // PD re-seated on the flank domes
                 Texture = "res://destroyer_hull.png", Length = 212.625f, HalfWidth = 27.8f,
-                Mains = new Vector2[] { new(0f, -57.31f), new(0f, 24.66f) },
-                Pds   = new Vector2[] { new(-13.39f, 68.16f), new(13.39f, 68.16f) },
+                Mains = new Vector2[] { new(0.20f, -14.20f), new(0.20f, 17.81f) },
+                Pds   = new Vector2[] { new(-30.81f, 5.82f), new(30.81f, 5.82f) },
                 TurretTexScale = 1.3085f / 5.5f, MainBarrel = 16.03f, PdBarrel = 7.2f },
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Missile, Ab.Reload } },
 
@@ -335,8 +343,10 @@ public static class Classes
                 new() { Group = "Shockwave", Id = "wave_cooldown", Label = "Cooldown",       Base = 30, Unit = "s", Dec = 1, Inverse = true },
             },
             Art = new ClassArt {
+                // frigate_c (the pack, J5): the main sits aft, on the ring turret the art draws at
+                // the stern, with the PD pair either side of it
                 Texture = "res://freight_bastion_hull.png", Length = 230f, HalfWidth = 49.34f,
-                Mains = new Vector2[] { new(0.0f, -50.6f) },
+                Mains = new Vector2[] { new(0.0f, 53.48f) },
                 Pds   = new Vector2[] { new(-27.1f, 64.4f), new(27.1f, 64.4f) },
                 TurretTexScale = 2.20f / 5.5f, MainBarrel = 27.0f, PdBarrel = 12.1f },
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Shockwave, Ab.Deploy, Ab.Collect } },
@@ -502,8 +512,10 @@ public static class Classes
                 new() { Group = "Echo", Id = "echo_cooldown", Label = "Cooldown",       Base = 15, Unit = "s", Dec = 1, Inverse = true },
             },
             Art = new ClassArt {
+                // fighter_f (the pack, J5): one main on the centreline stands for the paired
+                // barrels the art draws on both wings (the flavour, "fires twice")
                 Texture = "res://light_echo_hull.png", Length = 70f, HalfWidth = 14.68f,
-                Mains = new Vector2[] { new(0.0f, -10.5f) },
+                Mains = new Vector2[] { new(0.0f, -23.39f) },
                 TurretTexScale = 0.65f / 5.5f, MainBarrel = 8.0f, PdBarrel = 3.6f },
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Echo } },
         new() { Id = ShipClass.LightWraith, Name = "WRAITH", Ready = true, Fit = Fit.Guns,

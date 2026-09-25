@@ -17,12 +17,12 @@ using Godot;
 // ─────────────────────────────────────────────────────────────────────────────
 public enum EnemyWay { Pin, Standoff }
 
-public class EnemyDef
+// Its ART -- Texture, Length (nose to tail: every size below is a share of it), Tint and the
+// Nozzles -- is the HullArt it derives from (Sprites.cs).
+public class EnemyDef : HullArt
 {
     public string Id, Name;
-    public string Texture;
     public EnemyWay Way;
-    public float Length = 34f;
     public float HitShare = 0.4f;        // its hit radius, as a share of its length
     public double Hull = 25;
     public double Dps = 1.0;             // x -- the raider damage the whole game is scaled in
@@ -33,11 +33,9 @@ public class EnemyDef
     public float Reach = 100f;           // how close it fights from; it holds station at 90% of it
     public bool Turret;                  // a turret on its spine that tracks what it shoots
     // ITS MAIN TURRET, when Turret is set, as shares of its OWN length: the mount aft of centre,
-    // and how wide the housing is. These were the GUNSHIP's 19.5 u and 13 u, scaled inside Raider
-    // by Length / the gunship's length -- so every hull that mounted a turret reached into the
-    // gunship's row by name and none could be given a mount of its own.
-    public float TurretAft = 19.5f / 136f;
-    public float TurretWidth = 13f / 136f;
+    // and how wide the housing is -- both off its own art (tools/make_ships.ps1 prints the mount
+    // and the housing's edge), so every row that sets Turret names both.
+    public float TurretAft, TurretWidth;
     // HOW MANY GUNS FIRE TOGETHER (F20): one Strike per volley carries Barrels x Dps, so two heavy
     // barrels landing at once are not eaten by the target's own 0.52 s hit gap the way two separate
     // Strikes would be; drawn as that many flashes from barrel offsets either side of the turret's
@@ -49,19 +47,17 @@ public class EnemyDef
     // fired the gunship's 500 u missile and could not be given its own.
     public float MissileRange = 500f;    // it throws one from within this
     public double MissileEvery = 12.0;   // seconds between them
-    public double MissileFlight = 10.0;  // seconds in the air (was Raider.MissileFlight, a shared const)
+    public double MissileFlight = 10.0;  // seconds in the air
     // WHAT THE BLAST DOES, before Strength. Only thrown at a pinned target (Raider.TickHeavy).
     public double MissileDamage = 35;
     public float BlastRadius = 90f;      // how wide the blast is where it lands
-    public Color Tint;
     // WHAT ITS GUN IS SEEN AND HEARD AS: a row of Beam.All. A light fires from its nose and a heavy
     // from its turret, but what the shot looks and sounds like is the row's. EVERY ROW NAMES ONE:
     // row 0 is YOUR point defence, and an enemy that fell through to it would buzz like a friend.
     public int Beam;
     // WHAT A LATCH APPLIES TO WHAT IT HOLDS (F20): a Pin-way row names the status its own hold
     // puts on the target (every one today is Pinned); a Standoff row names none -- it never
-    // latches onto anything, it only fires from range. Generalises what Raider's own latch used to
-    // hardcode as `Status.Pinned` for every Pin-way row alike.
+    // latches onto anything, it only fires from range. Raider's latch applies whatever this names.
     public Status? Cc;
     // BOUNTY, before Strength (F20; lane G pays it: not built here). 6 for a light, 18 for a heavy.
     public double Exp;
@@ -72,7 +68,7 @@ public class EnemyDef
 
 public static class Enemies
 {
-    // The raiders' art is grey line art; these give it raider red, the heavier hulls darker.
+    // The raiders' art is grey; these give it raider red, the heavier hulls darker.
     // Shared with the title screen's raiders, so the enemy on the menu is the colour of the enemy
     // you meet.
     public static readonly Color LightTint = new(0.90f, 0.38f, 0.33f);
@@ -89,40 +85,48 @@ public static class Enemies
     {
         new() { Id = "webifier", Name = "Webifier", Way = EnemyWay.Pin,
                 Texture = "res://enemy_light_fighter.png", Tint = LightTint,
+                Nozzles = new Nozzle[] { new(-4.79f, 16.56f, 2.62f), new(4.79f, 16.56f, 2.62f) },
                 Length = 34f, Hull = 25, Dps = 1.0, Reach = 100f, Beam = Beam.LightRaider,
                 Cc = Status.Pinned, Exp = 6 },
 
         new() { Id = "gunship", Name = "Gunship", Way = EnemyWay.Standoff,
                 Texture = "res://enemy_heavy_hull.png", Tint = HeavyTint,
+                Nozzles = new Nozzle[] { new(-13.51f, 67.53f, 14.67f), new(12.34f, 67.53f, 14.67f) },
                 Length = 136f, HitShare = 0.3f, Hull = 100, Dps = 1.29, Barrels = 2, Reach = 150f,
-                BoostMult = 7f, Turret = true, Missiles = true, Beam = Beam.HeavyRaider, Exp = 18 },
+                BoostMult = 7f, Missiles = true, Beam = Beam.HeavyRaider, Exp = 18,
+                Turret = true, TurretAft = 20.96f / 136f, TurretWidth = 10.24f / 136f },   // on its painted twin
 
         // ── the owner's four new hulls ──────────────────────────────────────
         // A TALON is a webifier that gave up its armour for speed: it arrives first and holds on.
         new() { Id = "talon", Name = "Talon", Way = EnemyWay.Pin,
                 Texture = "res://enemy_talon_hull.png", Tint = TalonTint,
+                Nozzles = new Nozzle[] { new(-6.69f, 19.69f, 3.54f), new(6.54f, 19.69f, 3.54f) },
                 Length = 40f, Hull = 18, Dps = 1.4, Cruise = 130f, Reach = 90f, Beam = Beam.LightRaider,
                 Cc = Status.Pinned, Exp = 6 },
 
         // A POD is slow and hard to shift -- it webs from further out and takes a while to kill.
         new() { Id = "pod", Name = "Pod", Way = EnemyWay.Pin,
-                Texture = "res://enemy_pod_hull.png", Tint = PodTint,
+                Texture = "res://drone_sensor.png", Tint = PodTint,   // shared with the siege's pylon (D18)
+                Nozzles = new Nozzle[] { new(-0.21f, 23.27f, 7.76f) },               // its one stern vent
                 Length = 52f, HitShare = 0.45f, Hull = 60, Dps = 0.7, Cruise = 78f,
                 BoostMult = 3.5f, Reach = 130f, Beam = Beam.LightRaider, Cc = Status.Pinned, Exp = 6 },
 
         // A CROSS is a gunship with the missile racks stripped out and the gun wound up.
         new() { Id = "cross", Name = "Cross", Way = EnemyWay.Standoff,
                 Texture = "res://enemy_cross_hull.png", Tint = CrossTint,
+                Nozzles = new Nozzle[] { new(-10.64f, 59.60f, 12.44f), new(9.83f, 59.60f, 12.44f) },
                 Length = 120f, HitShare = 0.34f, Hull = 130, Dps = 1.29, Barrels = 2, ShotEvery = 0.8,
-                Reach = 140f, BoostMult = 6f, Turret = true, Beam = Beam.HeavyRaider, Exp = 18 },
+                Reach = 140f, BoostMult = 6f, Beam = Beam.HeavyRaider, Exp = 18,
+                Turret = true, TurretAft = 28.09f / 120f, TurretWidth = 12.04f / 120f },   // on the clean aft deck
 
-        // A LANCERKIN is built on the Silver Lancer's lines: it stands further off than any of
-        // them and throws the same predicted missile.
+        // A LANCERKIN is the slim missile boat, its tubes down its spine: it stands further off
+        // than any of them and throws the same predicted missile.
         new() { Id = "lancerkin", Name = "Lancerkin", Way = EnemyWay.Standoff,
                 Texture = "res://enemy_lancerkin_hull.png", Tint = KinTint,
+                Nozzles = new Nozzle[] { new(-11.46f, 74.54f, 13.66f), new(11.57f, 74.54f, 13.66f) },
                 Length = 150f, HitShare = 0.3f, Hull = 150, Dps = 1.29, Barrels = 2, ShotEvery = 1.2,
-                Reach = 260f, BoostMult = 5.5f, Turret = true, Missiles = true, Beam = Beam.HeavyRaider,
-                Exp = 18 },
+                Reach = 260f, BoostMult = 5.5f, Missiles = true, Beam = Beam.HeavyRaider, Exp = 18,
+                Turret = true, TurretAft = 37.50f / 150f, TurretWidth = 12.26f / 150f },   // on the plate aft of its tubes
     };
 
     public static EnemyDef Of(int kind) => All[kind >= 0 && kind < All.Length ? kind : Webifier];

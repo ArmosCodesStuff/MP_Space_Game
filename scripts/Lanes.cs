@@ -19,7 +19,8 @@ using System.Collections.Generic;
 //   Share            its share of the base's passive income. The four are a quarter each and add
 //                    up to one; five rows at 0.2 would be fifths, with no arithmetic changed here
 //                    or anywhere else -- the share is a FIELD, never a count.
-//   Texture/Tint/Length/Drones/Speed   the couriers that fly it
+//   Texture/Tint/Length/Nozzles   the couriers' art (the HullArt it derives from, Sprites.cs)
+//   Drones/Speed     how many couriers fly it, and how fast
 //   Dwell            how long each of them sits on a dock before it leaves
 //
 // WHERE THE INCOME IS CUT: Yard.Deposit, AND NOWHERE ELSE. Every unit the fleet ever delivers
@@ -62,14 +63,11 @@ using System.Collections.Generic;
 // what Targeting.Craft allows and nothing else: raiding craft, never a pilot, never the fleet,
 // never a dropped turret, never a practice dummy -- a filter, never a type test.
 // ─────────────────────────────────────────────────────────────────────────────
-public sealed class LaneDef
+public sealed class LaneDef : HullArt
 {
     public string Id;            // reached by id or row, never by type
     public int Outpost;          // which of Hub.Outposts is its far end
     public double Share;         // its share of the base's passive income
-    public string Texture;       // the courier's hull: a gatherer's, drawn small
-    public float Length;         // ...nose to tail
-    public Color Tint;           // ...in the stations' own livery
     public int Drones;           // how many fly it, spread evenly round the round trip
     public float Speed;          // u/s
     public double Dwell;         // seconds a courier sits on each dock before it leaves
@@ -78,15 +76,17 @@ public sealed class LaneDef
 public static class Lanes
 {
     // THE STATIONS' LIVERY: the pale blue the outposts are drawn on the scope in. The courier art
-    // is a gatherer's grey hull TINTED -- never a recoloured file, exactly as a raider's is.
+    // (the pack's drone_economy, courier.png) is grey and TINTED -- never a recoloured file, exactly
+    // as a raider's is -- and flies on its three bells, as tools/make_ships.ps1 prints them.
     public static readonly Color Livery = new(0.62f, 0.78f, 0.92f);
+    private static readonly Nozzle[] CourierBells = { new(-2.09f, 14.74f, 2.02f), new(0f, 14.87f, 2.11f), new(2.09f, 14.74f, 2.02f) };
 
     public static readonly LaneDef[] All =
     {
-        new() { Id = "se", Outpost = 0, Share = 0.25, Texture = "res://miner.png",    Length = 22f, Tint = Livery, Drones = 2, Speed = 320f, Dwell = 2.0 },
-        new() { Id = "ne", Outpost = 1, Share = 0.25, Texture = "res://salvager.png", Length = 22f, Tint = Livery, Drones = 2, Speed = 320f, Dwell = 2.0 },
-        new() { Id = "nw", Outpost = 2, Share = 0.25, Texture = "res://miner.png",    Length = 22f, Tint = Livery, Drones = 2, Speed = 320f, Dwell = 2.0 },
-        new() { Id = "sw", Outpost = 3, Share = 0.25, Texture = "res://salvager.png", Length = 22f, Tint = Livery, Drones = 2, Speed = 320f, Dwell = 2.0 },
+        new() { Id = "se", Outpost = 0, Share = 0.25, Texture = "res://courier.png", Length = 30f, Tint = Livery, Nozzles = CourierBells, Drones = 2, Speed = 320f, Dwell = 2.0 },
+        new() { Id = "ne", Outpost = 1, Share = 0.25, Texture = "res://courier.png", Length = 30f, Tint = Livery, Nozzles = CourierBells, Drones = 2, Speed = 320f, Dwell = 2.0 },
+        new() { Id = "nw", Outpost = 2, Share = 0.25, Texture = "res://courier.png", Length = 30f, Tint = Livery, Nozzles = CourierBells, Drones = 2, Speed = 320f, Dwell = 2.0 },
+        new() { Id = "sw", Outpost = 3, Share = 0.25, Texture = "res://courier.png", Length = 30f, Tint = Livery, Nozzles = CourierBells, Drones = 2, Speed = 320f, Dwell = 2.0 },
     };
 
     // ── where a blockade stands on a lane ────────────────────────────────────
@@ -107,7 +107,7 @@ public static class Lanes
     public const float  GunRange = 1200f;      // u -- it covers its own stand from the first day
     public const double GunRate = 6.0;         // missiles a MINUTE: one every 10 s
     public const float  GunSpeed = 300f;       // u/s -- the flight is the gap over this
-    public const double GunDamage = 42.0;      // what the blast does: the gunship's own figure
+    public static double GunDamage => Enemies.Of(Enemies.Gunship).MissileDamage;   // what the blast does: the gunship row's own missile
     public const float  GunBlast = 90f;        // ...and how wide it is where it lands
     public const double GunMinFlight = 0.6;    // never less than this in the air, however close
     public static readonly float GunTurn = Mathf.Tau / 6f;
@@ -212,8 +212,7 @@ public partial class Courier : Node2D
 
     public override void _Ready()
     {
-        var art = Sprites.Fit(Def.Texture, Def.Length);
-        art.Modulate = Def.Tint;                                    // grey art in the stations' livery
+        var art = Sprites.Fit(Def);                                 // grey art in the stations' livery
         AddChild(art);
         // over the stations it docks on (2), under the Yard's fleet (3 + 1): on a shared arm the
         // miner holding it is drawn over the courier beside it
@@ -250,8 +249,7 @@ public partial class Courier : Node2D
     }
 
     public override void _Draw() =>
-        Plume.Draw(this, new Vector2(0, Def.Length * 0.5f), Vector2.Down, Def.Length,
-                   Plume.Utility, Held || Docked ? 0f : 1f, !Held && !Docked);
+        Def.DrawPlumes(this, Vector2.Zero, 1f, Plume.Utility, Held || Docked ? 0f : 1f, !Held && !Docked);
 }
 
 // THE GUN AT A LANE'S FAR END — an outpost's answer to a blockade, and the late deterrent the
