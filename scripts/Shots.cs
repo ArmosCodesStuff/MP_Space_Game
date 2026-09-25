@@ -51,12 +51,18 @@ public class ShotDef
     // A DECOY MAY TURN IT (F14, Decoys.cs): a hostile guided row a burning point lures onto itself. The
     // siege's cruise missile never is.
     public bool Decoyable;
+    // A FUSED ROUND (the Warden's flak): it bursts once a hostile hull is within Fuse of it, or at the end of its
+    // range, and every hostile hull within Fuse of the burst takes it (Shot.Burst) -- x ResistShare on one that
+    // carries a Resists tag (a boss's x0.75). 0: it strikes what it touches, as every other row does.
+    public float Fuse;
+    public Tag Resists;
+    public double ResistShare = 1;
 }
 
 public static class Shots
 {
     // The index IS the id on the wire (Hub.NetShot), so APPEND ONLY.
-    public const int Shell = 0, Slug = 1, Scrap = 2, Torpedo = 3, Missile = 4, Seeker = 5, Cruise = 6, Reflect = 7;
+    public const int Shell = 0, Slug = 1, Scrap = 2, Torpedo = 3, Missile = 4, Seeker = 5, Cruise = 6, Reflect = 7, Flak = 8;
 
     public static readonly ShotDef[] All =
     {
@@ -85,6 +91,10 @@ public static class Shots
         // A ROUND A PRISM TURNED BACK (Shot.Strike): the enemy's own round, now the catcher's -- straight,
         // unguided, at the base's enemies. Its speed, damage and size are the caught round's.
         new() { Id = "reflect", AtPlayers = false, Pad = 3f, Sweep = 6f, Burst = 0.25, Look = ShotLook.Ball },
+        // THE WARDEN'S PROXIMITY FLAK (kits_v2's card): it bursts 70 u off a hostile hull (or at its range), and
+        // everything within 70 u of the burst takes the round; a boss x0.75
+        new() { Id = "flak", AtPlayers = false, Pad = 3f, Sweep = 6f, Look = ShotLook.Bullet,
+                Fuse = 70f, Resists = Tag.Boss, ResistShare = 0.75 },
     };
 
     public static ShotDef Of(int id) => All[id >= 0 && id < All.Length ? id : Shell];
@@ -223,9 +233,9 @@ public partial class Shot : Node2D, IHittable, ITagged
         GlobalPosition += Dir * step; _flown += step;
         if (d.Smoke) { _puffCd -= dt; if (_puffCd <= 0) { _puffCd += PuffEvery; _smoke.Add((GlobalPosition - Dir * 8f, 0f)); } }
 
-        Shots.Sweep(from, GlobalPosition, d.Sweep, p => Strike(p, d));
+        Shots.Sweep(from, GlobalPosition, d.Sweep, p => d.Fuse > 0 ? Fused(p, d) : Strike(p, d));
         if (!_spent && DecoyPoint is { } lure && GlobalPosition.DistanceTo(lure) <= _catch) Intercept();   // burst on the lure
-        if (!_spent && _flown >= Range) End();
+        if (!_spent && _flown >= Range) { if (d.Fuse > 0) Burst(GlobalPosition, d); else End(); }
         QueueRedraw();
     }
     // What a guided body steers for: its lure once it has one, else its target while it is seen.
@@ -265,6 +275,28 @@ public partial class Shot : Node2D, IHittable, ITagged
             }
         }
         return false;
+    }
+
+    // A FUSED ROUND (ShotDef.Fuse) at `p`: true once a hostile hull is within its fuse, and it has burst there.
+    private bool Fused(Vector2 p, ShotDef d)
+    {
+        foreach (var h in Combat.Hostiles)
+            if (Fuses(h, p, d)) { Burst(p, d); return true; }
+        return false;
+    }
+    private static bool Fuses(IHittable h, Vector2 p, ShotDef d)
+        => h != null && h.Alive && !TagExt.Is(h, Tag.Missile) && h.Covers(p, d.Fuse);
+    // THE BURST: every hostile hull within the fuse of `p` takes the round, x ResistShare where it carries the
+    // row's Resists tag, through the door (host); the flash is raised for every peer.
+    private void Burst(Vector2 p, ShotDef d)
+    {
+        GlobalPosition = p;
+        if (!Cosmetic && Net.Sim)
+            foreach (var h in new List<IHittable>(Combat.Hostiles))
+                if (Fuses(h, p, d))
+                    Dealt.Deal(h, Damage * (TagExt.Is(h, d.Resists) ? d.ResistShare : 1), IsInstanceValid(Source) ? Source : null, d.Id);
+        Fx.Raise(Fx.Burst, p, d.Fuse);
+        End();
     }
 
     // A ROUND CAUGHT ON A GUARD (Prism.cs): fired back from `p` as the catcher's own Reflect round --

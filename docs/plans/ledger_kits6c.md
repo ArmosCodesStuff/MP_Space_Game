@@ -509,3 +509,28 @@ break the bash tool; write the script with the Write tool), SmokeTest.cs.txt LF 
 - Risk (test phase): the guest joins at Character.Level 2; ability 3 opens at L6 -- LaneA6cPrismGuestChecks (J4) already
   presses an ability 3 there, so both stand or fall on the guest's Peak. If LOCKED, raise the guest's peak for those two.
 - Next: kits6c-J11 Warden row + Proximity flak.
+
+## kits6c-J11 · PRE
+- tier opus. Intent: the Warden row (D40, D43; D56 below): hull 270, the main gun fires ClassDef.Shot = the appended Shots row
+  flak (ShotDef.Fuse 70 u off a hostile's hull or at its range: every hostile within Fuse of the burst takes the round,
+  x ResistShare 0.75 on a Resists = Boss tag), 22.5 every 0.5 s (45 DPS), 700 u; the kit part renamed (id kept);
+  SeekerPrey ordered latched first, then nearest. Old truth (6.3): ChipChecks' warden 140 -> 270, the warden's sheet
+  DPS, and the ability sweep (witnesses anchor / tether / flares, a stance with a Release, the laid mines and salvos
+  put back). Checks LaneA6cFlakChecks, LaneA6cHunterPreyChecks. HEAD 919e1b8aed38f65f295166b81dcac498b346b714
+- scripts/Shots.cs 43f16380ff327ca82212d02de7a66ec73e61e0cd
+- scripts/Ships.cs bc23b9634fb8a6db43d934d51cf112d62b6c4908
+- scripts/PlayerShip.cs d19a239e05ca5c8e12d41a6ee91b2ee2c605f6b9
+- tools/smoketest/SmokeTest.cs.txt 0c4e5a294d10a20de2c2fa5847e100f75f8967b5
+## kits6c-J11 · POST
+- Verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED, own diff read. engine-unproven: rungs owed in the final test phase.
+- Built: ShotDef.Fuse / Resists / ResistShare + Shot.Fused / Burst (a fused round bursts 70 u off a hostile hull or at its
+  range; everything within the fuse takes it, x0.75 on Tag.Boss); Shots row flak = 8 (appended); ClassDef.Shot (Spec's Kind);
+  Warden hull 270, main 22.5 / 0.5 s / 700 u (45 DPS), Shot = Flak, level damage 1.125; the kit part heavy_main_gun renamed
+  "Mk I Flak Battery" (id kept: saves); SeekerPrey ordered latched first (ISquadMember.Latched), then nearest.
+- D56 (default): the Warden keeps its Guns + FireMode rows (Fit.Guns brings both, the fit sweep's rule; every one-mount
+  light keeps FireMode too); the primary IS the Guns row firing the class's Shot row. D42's "FireMode deleted" is not built.
+- Checks: NEW LaneA6cFlakChecks, NEW LaneA6cHunterPreyChecks. REWRITTEN (6.3): ChipChecks warden 140 -> 270; the warden's
+  SustainedDps 12/0.6 -> 22.5/0.5; the ability sweep: witnesses anchor / tether / flares (J8-J10's rows had none: the
+  coverage check would have failed), the second-press rule for a stance with a Release (the anchor's 0.3 s), laid mines and
+  salvos put back; the kit-part message.
+- Next: kits6c-J12 Taunt.

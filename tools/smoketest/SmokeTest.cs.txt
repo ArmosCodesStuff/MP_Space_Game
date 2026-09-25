@@ -6054,6 +6054,133 @@ public partial class _Test : Node
         await RealTime(() => H.Salvos.Count == 0, Wan ? 10 : 7);
     }
 
+    // ── SLICE 6c: THE WARDEN'S PROXIMITY FLAK (kits_v2's card; D43). The rows once: hull 270, 22.5 every 0.5 s (45 DPS
+    // on the sheet), 700 u, the class fires Shots.All "flak" (fuse 70 u, x0.75 on a Boss tag). Then three varied runs
+    // (VaryNear spot, VaryAngle bearing), each round the class's own spec through Combat.Fire (Turret.Shoot's call):
+    //   a gunship whose hull passes 62-69 u off the line takes 22.5 and the round goes no further; one 71-78 u off,
+    //   nearer along the line, takes 0; a round with nothing near bursts 700 u out (within one step);
+    //   a boss post's hull 30-60 u off the line takes 16.875 (22.5 x 0.75);
+    //   and through the key: Space held on a held gunship 300-450 u off deals 22.5 a burst, the fifth burst 2.0 s
+    //   after the first (timed from the first burst that lands).
+    async Task LaneA6cFlakChecks(Vector2 yonder)
+    {
+        var st = new ShipStats(ShipClass.HeavyWarden); var fk = Shots.Of(Shots.Flak);
+        Check(st["hull"] == 270 && st["main_damage"] == 22.5 && st["main_interval"] == 0.5 && st["main_range"] == 700 && Math.Abs(st["main_damage"] / st["main_interval"] - 45) < 1e-9
+              && Classes.Of(ShipClass.HeavyWarden).Shot == Shots.Flak && fk.Id == "flak" && fk.Fuse == 70f && fk.Resists == Tag.Boss && fk.ResistShare == 0.75,
+              $"the Warden's rows: hull {st["hull"]:0} (270), {st["main_damage"]:0.0} every {st["main_interval"]:0.0} s = {st["main_damage"] / st["main_interval"]:0} DPS (45), {st["main_range"]:0} u (700); flak fuse {fk.Fuse:0} u (70), x{fk.ResistShare:0.00} on a {fk.Resists} (0.75)");
+        await SetClass(ShipClass.HeavyWarden);
+        var wd = Me; bool demo = wd.Demo; wd.Demo = true; wd.AutopilotTo = null;
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+        await Wait(0.2);
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        Raider Held(Vector2 at) { var g = H.SpawnRaider(at, Enemies.Gunship); g.Hp = 1e9; g.ApplyStatus(Status.Disabled, 60); return g; }
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f);
+            wd.Position = at; wd.Velocity = Vector2.Zero; wd.Hp = wd.MaxHp;
+            await Frame();
+            at = wd.Position;                                                      // re-taken after the wait
+            void Still() { wd.Position = at; wd.Velocity = Vector2.Zero; wd.Hp = wd.MaxHp; }
+            var way = Vector2.Right.Rotated(VaryAngle()); var side = way.Orthogonal() * (Vary(0f, 1f) < 0.5f ? 1f : -1f);
+            var gun = wd.Spec(false);
+            // 1 -- the fuse: 62-69 u off the hull bursts, 71-78 u does not
+            var probe = Held(at + way * 5000f); float r0 = probe.HitRadius; probe.TakeDamage(1e12);
+            float offNear = Vary(71f, 78f), offFar = Vary(62f, 69f);
+            var passAt = at + way * Vary(200f, 280f) + side * (r0 + offNear);
+            var hitAt = at + way * Vary(450f, 560f) - side * (r0 + offFar);
+            var pass = Held(passAt); var hit = Held(hitAt);
+            await Frame();
+            double p0 = pass.Hp, h0 = hit.Hp;
+            var round = Combat.Fire(gun.Kind, at, way, gun.ShellSpeed, gun.Range, gun.Damage, source: wd);
+            Vector2 last = at;
+            for (int i = 0; i < 120 && GodotObject.IsInstanceValid(round) && round.Alive; i++) { last = round.GlobalPosition; Still(); pass.Position = passAt; hit.Position = hitAt; await Frame(); }
+            float burstAlong = (last - at).Dot(way);
+            Check(Math.Abs(h0 - hit.Hp - 22.5) < 1e-6 && p0 == pass.Hp && burstAlong < (hitAt - at).Dot(way) + 1f,
+                  $"flak run {run}: a gunship {offFar:0.0} u off the line takes {h0 - hit.Hp:0.00} (22.5), the round bursting {burstAlong:0} u out beside it; one {offNear:0.0} u off takes {p0 - pass.Hp:0.00} (0)");
+            pass.TakeDamage(1e12); hit.TakeDamage(1e12);
+
+            // 2 -- nothing near: it bursts at its 700 u
+            var lone = Combat.Fire(gun.Kind, at, way.Rotated(Vary(2.2f, 4.0f)), gun.ShellSpeed, gun.Range, gun.Damage, source: wd);
+            Vector2 lonely = at;
+            for (int i = 0; i < 150 && GodotObject.IsInstanceValid(lone) && lone.Alive; i++) { lonely = lone.GlobalPosition; Still(); await Frame(); }
+            float flew = lonely.DistanceTo(at);
+            // 3 -- a boss x0.75
+            var bt = Missions.Bosses[0];
+            float bossOff = Vary(30f, 60f);
+            var bossAt = at + way * Vary(380f, 480f) + side * (bt.HalfWidth + bossOff);
+            var post = new Boss { Hub = H, Position = bossAt, Rotation = Aim.Along(way),
+                                  Type = new Missions.BossType { Id = "post", Name = "POST", Hull = 100000, Texture = bt.Texture, Length = bt.Length, HalfWidth = bt.HalfWidth,
+                                                                 CloseSpeed = 0f, TurnRate = 0f, Moves = System.Array.Empty<BossMove>() } };
+            AddChild(post);
+            await Frame();
+            double b0 = post.Hp;
+            var atBoss = Combat.Fire(gun.Kind, at, way, gun.ShellSpeed, gun.Range, gun.Damage, source: wd);
+            for (int i = 0; i < 120 && GodotObject.IsInstanceValid(atBoss) && atBoss.Alive; i++) { Still(); post.Position = bossAt; post.Rotation = Aim.Along(way); await Frame(); }
+            double bossTook = b0 - post.Hp;
+            post.QueueFree();
+            Check(flew >= 700f - 1e-3f && flew < 700f + gun.ShellSpeed / 30f && Math.Abs(bossTook - 16.875) < 1e-6,
+                  $"...a round with nothing near bursts {flew:0} u out (700, within a step); a boss whose side lies about {bossOff:0} u off the line takes {bossTook:0.000} (16.875 = 22.5 x 0.75)");
+
+            // 4 -- through the key: 22.5 a burst, 0.5 s apart
+            var mark = Held(at + Vector2.Right.Rotated(VaryAngle()) * Vary(300f, 450f)); var markAt = mark.Position;
+            wd.AimPoint = markAt;
+            for (int i = 0; i < 90; i++) { Still(); mark.Position = markAt; wd.AimPoint = markAt; await Frame(); }   // the barrel swings on
+            var gunKey = Abilities.KeyFor(ShipClass.HeavyWarden, "guns");
+            double m0 = mark.Hp; var hits = new List<(double t, double took)>();
+            KeyDown(gunKey);
+            for (int i = 0; i < 60 * 5 && hits.Count < 5; i++)
+            {
+                Still(); mark.Position = markAt; wd.AimPoint = markAt;
+                await Frame();
+                if (mark.Hp < m0 - 1e-9) { hits.Add((wd.Clock, m0 - mark.Hp)); m0 = mark.Hp; }
+            }
+            KeyUp(gunKey);
+            double span = hits.Count == 5 ? hits[4].t - hits[0].t : -1;
+            Check(hits.Count == 5 && hits.All(h => Math.Abs(h.took - 22.5) < 1e-6) && Math.Abs(span - 2.0) < 0.05,
+                  $"...Space on a gunship {markAt.DistanceTo(at):0} u off: {hits.Count} bursts of {string.Join("/", hits.Select(h => h.took.ToString("0.0")))} (22.5 each), the fifth {span:0.00} s after the first (2.0: 45 DPS)");
+            mark.TakeDamage(1e12);
+            await Frame();
+        }
+        wd.Demo = demo; wd.Position = yonder; wd.Velocity = Vector2.Zero;
+    }
+
+    // ── SLICE 6c: THE HUNTERS' PREY ORDER (kits_v2's Warden card): raiders latched on a friendly hull (the Warden
+    // included) first, then the nearest. Three varied runs: a webifier 250-400 u off latches on the Warden; two held
+    // gunships stand nearer (120-200 u); the cell's prey reads the webifier first, then the gunships nearest first,
+    // and F puts two of the six on the webifier (6 over 3, the first on it).
+    async Task LaneA6cHunterPreyChecks(Vector2 yonder)
+    {
+        await SetClass(ShipClass.HeavyWarden);
+        var wd = Me; wd.AutopilotTo = null;
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+        await Wait(0.2);
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f);
+            wd.Position = at; wd.Velocity = Vector2.Zero; wd.Hp = wd.MaxHp; wd.Sl("hunters").Cool = 0;
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            at = wd.Position;                                                      // re-taken after the wait
+            var web = H.SpawnRaider(at + Vector2.Right.Rotated(VaryAngle()) * Vary(250f, 400f), Enemies.Webifier);
+            web.Hp = 1e9; web.Quarry = wd;
+            for (int i = 0; i < 60 * 8 && !web.Latched; i++) { wd.Position = at; wd.Velocity = Vector2.Zero; wd.Hp = wd.MaxHp; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            var gs = new[] { Vary(120f, 150f), Vary(160f, 200f) }.Select(d => { var g = H.SpawnRaider(at + Vector2.Right.Rotated(VaryAngle()) * d, Enemies.Gunship); g.Hp = 1e9; g.ApplyStatus(Status.Disabled, 30); return g; }).ToArray();
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            var prey = wd.SeekerPrey();                                           // taken after the wait
+            bool order = web.Latched && prey.Count == 3 && ReferenceEquals(prey[0], web)
+                         && prey[1].Position.DistanceTo(at) <= prey[2].Position.DistanceTo(at) && prey.Skip(1).All(p => gs.Contains(p));
+            wd.UseAbility("hunters", 0);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            var cell = InFlight().Where(t => !t.HostileFire && t.Source == wd).ToList();
+            int onWeb = cell.Count(t => t.TargetId == web.NetId);
+            Check(order && cell.Count == 6 && onWeb == 2,
+                  $"hunter prey run {run}: a webifier latched {web.Position.DistanceTo(at):0} u off ({web.Latched}) comes before gunships at {gs[0].Position.DistanceTo(at):0} / {gs[1].Position.DistanceTo(at):0} u, nearest next ({order}); F puts {onWeb} of {cell.Count} on it (2 of 6)");
+            web.TakeDamage(1e12); foreach (var g in gs) g.TakeDamage(1e12);
+            for (int i = 0; i < 60 * 4 && InFlight().Any(t => !t.HostileFire && t.Source == wd); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            wd.Sl("hunters").Cool = 0;
+        }
+        wd.Position = yonder; wd.Velocity = Vector2.Zero;
+    }
+
     // ── SLICE 6c, RUNG 5: A GUEST'S ANCHOR (kits_v31 §7: the boost refused ANCHORED). The guest, right after its
     // active reload, presses F through the key: once the host's word lands on its slot its own helm is rooted --
     // W + Shift + A or D (varied) held a varied 0.8-1.4 s move it under 1 u -- and V is refused ANCHORED; F again
@@ -7654,7 +7781,7 @@ public partial class _Test : Node
                   && !Equipment.Fits(Equipment.ById("freight_bubble"), GearSlot.Utility, ShipClass.FreightTender)
                   && !Equipment.Fits(Equipment.ById("bs_main_battery"), GearSlot.Weapon, ddC)
                   && saved[0] == "dd_main_battery" && saved[4] == "dd_missile_rack",
-                  $"a kit part fits the hulls born with it and no others: nineteen named by a class row -- one cargo gun on the three freighters, one light cannon on the sniper and the warden, one dart cannon on the three lights -- and the drive, the deflector and the frame on any hull; a battleship's mount saved on a destroyer comes back as the destroyer's own ({wrongHull.Count} wrong: {string.Join(", ", wrongHull)})");
+                  $"a kit part fits the hulls born with it and no others: nineteen named by a class row -- one cargo gun on the three freighters, one flak battery on the warden, one dart cannon on the three lights -- and the drive, the deflector and the frame on any hull; a battleship's mount saved on a destroyer comes back as the destroyer's own ({wrongHull.Count} wrong: {string.Join(", ", wrongHull)})");
         // a part for another category changes nothing, even named in the loadout
         var wrong = Equipment.Default(bsC); wrong[0] = "hot_barrel_t10";
         var kitB = Equipment.Bonuses(bsC, Equipment.Default(bsC), 14, NoLevels); var wrongB = Equipment.Bonuses(bsC, wrong, 14, NoLevels);
@@ -8296,10 +8423,10 @@ public partial class _Test : Node
     // ── CHIP SLOTS AND KINDS (F15; level_walls checks 6, 6b and 7) ────────────────────────────────
     // Six chip slots on every hull, opened by the pilot's highest level; at most 3 Combat and 3
     // Utility chips; a file never loses a chip it cannot fly. A capital, a heavy and a light, with
-    // their class rows' hulls as literals: battleship 300, warden 140, echo 90.
+    // their class rows' hulls as literals: battleship 300, warden 270, echo 90.
     void ChipChecks()
     {
-        var three = new[] { (c: ShipClass.Battleship, hull: 300.0), (c: ShipClass.HeavyWarden, hull: 140.0), (c: ShipClass.LightEcho, hull: 90.0) };
+        var three = new[] { (c: ShipClass.Battleship, hull: 300.0), (c: ShipClass.HeavyWarden, hull: 270.0), (c: ShipClass.LightEcho, hull: 90.0) };
         string[] With(ShipClass c, params string[] chips)
         {
             var l = Equipment.Default(c);
@@ -11985,11 +12112,11 @@ public partial class _Test : Node
                           && Math.Abs(snL.DamageLines.First(l => l.Label.StartsWith("Railgun")).Dps - 120 * 1.5 / 3.8) < 1e-6
                           && snL.DamageLines.Count() == 1 && !snL.DamageLines.Any(l => l.Label.Contains("Point defence")),
                           $"the sniper's total is its railgun: 180 (a perfect round, 120 x 1.5) every 3.8 s (the 3.0 s reload and the 0.8 s charge) = 47.4 DPS, and no point-defence line on a hull that mounts none ({snL.SustainedDps:0.00})");
-                    Check(Math.Abs(new ShipStats(ShipClass.HeavyWarden).SustainedDps - (12 / 0.6 + 6 * 45 / 14.0 + 5 / 0.5)) < 1e-6
+                    Check(Math.Abs(new ShipStats(ShipClass.HeavyWarden).SustainedDps - (22.5 / 0.5 + 6 * 45 / 14.0 + 5 / 0.5)) < 1e-6
                           && Math.Abs(new ShipStats(ShipClass.FreightHauler).SustainedDps - 50.0) < 1e-6
                           && Math.Abs(new ShipStats(ShipClass.HeavyWarrior).SustainedDps - 26 / 0.40) < 1e-6
                           && Math.Abs(new ShipStats(ShipClass.LightEcho).SustainedDps - (5 / 0.35 + (5 / 0.35) * 5 / 15.0)) < 1e-6,
-                          $"...and every other signature weapon counts too: the warden 20 + 19.29 + 10, the freighter's gun 12 + three dropped turrets 36 + its always-on point defence 2 = 50, the warrior's blade 26 every 0.40 s (65), the echo repeating five seconds of its own damage every 15");
+                          $"...and every other signature weapon counts too: the warden's flak 45 + 19.29 + 10, the freighter's gun 12 + three dropped turrets 36 + its always-on point defence 2 = 50, the warrior's blade 26 every 0.40 s (65), the echo repeating five seconds of its own damage every 15");
                     Check(Math.Abs(new ShipStats(ShipClass.Carrier).SustainedDps - (3 * (2.5 / 0.35) * (15.0 / 18.0) + 4 * 2 * 137.5 / 27.5 + 3 * 0.5 / 0.5)) < 1e-6
                           && Math.Abs(new ShipStats(ShipClass.Carrier).DamageLines.First(l => l.Label.StartsWith("Bomber")).Dps - 40.0) < 1e-6,
                           $"the carrier's torpedoes are in its total at last: 8 x 137.5 = 1100 over a 27.5 s run (20 s out and back, 1.5 s launching, 6 s rearming) = 40 DPS, beside 17.86 from the fighters and 3 from the point defence, always on ({new ShipStats(ShipClass.Carrier).SustainedDps:0.00})");
@@ -12266,6 +12393,8 @@ public partial class _Test : Node
             LaneA6cZoneChecks();
             await LaneA6cTetherChecks(yonder);
             await LaneA6cFlaresChecks(yonder);
+            await LaneA6cFlakChecks(yonder);
+            await LaneA6cHunterPreyChecks(yonder);
             await SetClass(ShipClass.HeavyWarrior);
             var wr = Me; wr.Position = yonder; wr.Velocity = Vector2.Zero; await Wait(0.2);
             // A SPEED LIFT LIFTS THE PUSH AS WELL AS THE TOP SPEED (PlayerShip.Steer). The water holds a
@@ -12663,6 +12792,9 @@ public partial class _Test : Node
                     ["roll"]      = sp => sp.Statuses.Has(Status.Evading) && sp.Sl("roll").Left > sp.Stats["roll_time"] + sp.Stats["boost_time"] - 0.1,
                     ["echo"]      = sp => sp.Sl("echo").Left > sp.Stats["echo_time"] - 0.1,
                     ["stealth"]   = sp => sp.Statuses.Has(Status.Untargetable) && sp.Sl("stealth").Left > sp.Stats["stealth_time"] - 0.1,
+                    ["anchor"]    = sp => sp.Sl("anchor").Left > sp.Stats["anchor_time"] - 0.1 && sp.Held == 0f,
+                    ["tether"]    = sp => sp.Sl("tether").N == 1 && sp.Sl("tether").Cool > sp.Stats["tether_recharge"] - 0.1 && H.Laid.Any(z => z.OwnerId == sp.OwnerId),
+                    ["flares"]    = sp => sp.Sl("flares").Cool > sp.Stats["flare_cooldown"] - 0.1 && H.Salvos.Any(sv2 => sv2.At.DistanceTo(sp.Position) < 5f),
                 };
                 var onBars = Classes.All.Where(cd2 => cd2.Ready).SelectMany(cd2 => cd2.Abilities)
                                         .Where(ab3 => !ab3.Open).Select(ab3 => ab3.Id).Distinct().ToList();
@@ -12752,7 +12884,10 @@ public partial class _Test : Node
                             doAbility.Invoke(sweepShip, new object[] { abil.Id, sweepMark.NetId });
                             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                             var slotNow = sweepShip.Sl(abil.Id);
-                            refusedAgain = abil.Stance != null
+                            // (a stance with a Release -- the anchor -- is let go over it: its time cut to the release, not to 0)
+                            refusedAgain = abil.Stance is { Release: { } rel }
+                                ? slotNow.Left > 0 && slotNow.Left <= sweepShip.Stats[rel] + 1e-9 && slotNow.Cool == 0
+                                : abil.Stance != null
                                 ? slotNow.Left == 0 && Math.Abs(slotNow.Cool - sweepShip.Stats[abil.Stance.Cooldown]) < 0.1
                                 : slotNow.Left <= slotWas.Left + 1e-9 && slotNow.Cool <= slotWas.Cool + 1e-9;
                         }
@@ -12783,6 +12918,8 @@ public partial class _Test : Node
                     sweepShip.Forget(sweepMark);
                     foreach (var standing in H.Deployed.ToList())
                         if (standing.OwnerId == sweepShip.OwnerId) H.DeployedTaken(standing);
+                    foreach (var laid in H.Laid.ToList()) H.Down(Spawns.Zone, laid, burst: false, float.NaN);
+                    foreach (var sweptSalvo in H.Salvos.ToList()) H.Down(Spawns.Decoy, sweptSalvo, burst: false, float.NaN);
                     Sink(sweepMark);
                     await Wait(0.1);
                 }

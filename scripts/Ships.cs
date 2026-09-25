@@ -130,6 +130,8 @@ public class ClassDef
     // follows from its sheet by that same rule (Equipment.Fits).
     public ItemDef[] Kit = Array.Empty<ItemDef>();
     public AbilityDef[] Abilities = Array.Empty<AbilityDef>();
+    // WHAT ITS MAIN GUNS FIRE: a row of Shots.All (PlayerShip.Spec). A shell, unless the class says (the Warden's flak).
+    public int Shot = Shots.Shell;
     // WHAT V DOES: one row of Drives.All (the warp on the capitals, the boost on the nine). Not in
     // Abilities: Abilities.For appends it after them, so it has a slot and no level wall.
     public DriveDef Drive;
@@ -147,8 +149,8 @@ public static class Classes
     // All is what fits them.
     private static readonly ItemDef CargoGun = ItemDef.Own(GearSlot.Weapon, "freight_main_gun", "Mk I Cargo Gun",
         "the freighter's single main turret", "bubble_pool", "overdrive_mult", "wave_range");
-    private static readonly ItemDef HeavyCannon = ItemDef.Own(GearSlot.Weapon, "heavy_main_gun", "Mk I Light Cannon",
-        "the single light turret", "hunter_count");
+    private static readonly ItemDef WardenFlak = ItemDef.Own(GearSlot.Weapon, "heavy_main_gun", "Mk I Flak Battery",
+        "the proximity flak", "hunter_count");
     private static readonly ItemDef LightCannon = ItemDef.Own(GearSlot.Weapon, "light_main_gun", "Mk I Dart Cannon",
         "the light's single turret", "roll_time", "echo_time", "stealth_time");
 
@@ -462,31 +464,33 @@ public static class Classes
             // the weapon row, then the three it learns in this order (the walls read it: kits_v31 §3.6)
             Abilities = new[] { Ab.Blade, Ab.Lunge, Ab.Whirlwind, Ab.PrismStance } },
         new() { Id = ShipClass.HeavyWarden, Name = "WARDEN", Ready = true, Fit = Fit.Guns | Fit.Pd,
-            Blurb = "Fast. Point defence that hits ten times as hard as a warship's, a modest main gun, and hunter-seekers that each take a target of their own.",
-            Hint = "WARDEN  ·  mouse aims the main gun",
+            Blurb = "Draws raiders in and shreds them. Proximity flak that bursts beside whatever comes near, point defence, and hunter-seekers that go first for whatever has a web on a friend.",
+            Hint = "WARDEN  ·  mouse aims the flak  ·  Space: fire",
+            Shot = Shots.Flak,
             Drive = Drives.Boost,
             Nums = new() {
-                ["hull"] = 140,
+                ["hull"] = 270,
                 ["thrust"] = 130, ["reverse_thrust"] = 60, ["max_speed"] = 190, ["reverse_speed"] = 70,
                 ["turn_radius"] = 55, ["turn_rate"] = 2.2, ["strafe_speed"] = 95, ["strafe_thrust"] = 380,
-                ["main_count"] = 1, ["main_damage"] = 12, ["main_interval"] = 0.6, ["main_range"] = 700, ["shell_speed"] = 600,
+                // THE PROXIMITY FLAK (kits_v2's card): 22.5 a burst every 0.5 s = 45 DPS, out to 700 u (Shots.All "flak")
+                ["main_count"] = 1, ["main_damage"] = 22.5, ["main_interval"] = 0.5, ["main_range"] = 700, ["shell_speed"] = 600,
                 // ITS ONE MOUNT IS A GUN, NOT A NUISANCE. "Half efficiency, always on" was first read
             // as half a warship's damage PER SHOT: 0.25 every 0.5 s is 0.5 DPS, which is 50 seconds
             // to kill one 25-hull light raider -- the class's whole reason for existing did
             // nothing a pilot could see. It is half by MOUNTS instead: one mount where a warship
             // carries two, firing the same 0.5 s cycle, at 5 a shot. 10 DPS, always, with nothing
-            // pressed -- and with its 20 DPS gun and 19.3 from the hunters that is the 50 the
+            // pressed -- and with its 45 DPS flak and 19.3 from the hunters it is well past the 50 the
             // whole game is tuned to.
             ["pd_count"] = 1, ["pd_damage"] = 5.0, ["pd_range"] = 420,
             },
-                // 2.25 = 5% of a hunter's 45 (pd_damage is left out on purpose: every class has that row,
-                // so naming it here would hand every ship in the game a chip-powered point-defence buff)
-            Damage = new() { ["main_damage"] = 1, ["hunter_damage"] = 2.25 },
+                // 1.125 = 5% of a flak burst's 22.5, 2.25 = 5% of a hunter's 45 (pd_damage is left out on purpose:
+                // every class has that row, so naming it here would hand every ship in the game a chip-powered point-defence buff)
+            Damage = new() { ["main_damage"] = 1.125, ["hunter_damage"] = 2.25 },
             Reach = new() { ["main_range"] = 1, ["hunter_range"] = 1, ["pd_range"] = 1 },
             Cycle = new() { ["main_interval"] = 1, ["pd_interval"] = 1 },
             Weapons = new[] { Dps.Main, Dps.Hunters, Dps.Pd },
             Kit = new[] {
-                HeavyCannon,
+                WardenFlak,
                 ItemDef.Own(GearSlot.Utility, "heavy_hunter_cells", "Hunter Cells", "the six hunter-seekers", "hunter_count"),
             },
             Rows = new StatRow[] {

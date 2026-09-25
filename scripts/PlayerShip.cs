@@ -308,6 +308,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             Range    = (float)(pd ? Stats["pd_range"] : Stats["main_range"]),
             Turn     = (float)(pd ? Stats["pd_turn"]  : Stats["main_turn"]),
             ShellSpeed = (float)Stats["shell_speed"],
+            Kind     = Stats.Def.Shot,                // what its main guns fire (ClassDef.Shot); point defence fires none
             Texture  = pd ? art.PdTurret : art.MainTurret,
             TexScale = art.TurretTexScale,
             Barrel   = pd ? art.PdBarrel : art.MainBarrel,
@@ -773,8 +774,9 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         ActiveReload.Spent(this, r);
     }
 
-    // Six missiles, each on a target of its own while there are targets to go round; what is left
-    // over goes at the nearest one.
+    // Six missiles, each on a target of its own while there are targets to go round, in the cell's PREY ORDER
+    // (kits_v2's Warden card): whatever has a web on a friendly hull first (ISquadMember.Latched -- a raider
+    // latches on nothing else), then the nearest; what is left over goes round again from the first.
     // WHAT THE CELL CAN SEE, in one place, because the slot has to say "NOTHING IN REACH" before
     // the press and the press has to find the same things afterwards. Targeting.Attackable, not
     // WingPrey: a seeker hits once and dies, so a practice dummy is a perfectly good target for it.
@@ -784,7 +786,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         var seen = new List<IHittable>();
         foreach (var h in Targeting.Choosable(Combat.Hostiles, Targeting.Attackable))
             if (Position.DistanceTo(h.Position) <= range) seen.Add(h);
-        return seen;
+        return seen.OrderBy(h => h is ISquadMember { Latched: true } ? 0 : 1).ThenBy(h => Position.DistanceTo(h.Position)).ToList();
     }
 
     public void LaunchHunters()
