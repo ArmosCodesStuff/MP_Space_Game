@@ -13557,14 +13557,18 @@ public partial class _Test : Node
         Check(hullGone && drawn && sprays == 2,
               $"a {what} killed 0.2 s after a tear leaves its chunk flying: at 1 s it is still drawn where its raise says, with its sparks and smoke (hull gone {hullGone}, chunk {drawn}, {sprays} sprays)");
     }
-    // THE YARD'S DUMMIES: three tears on three of them, the last one watched to the end, then the cap.
+    // THE YARD'S DUMMIES: three tears -- the two hulks (TargetDummy1, TargetDummy3, the spec's 14.72 u
+    // literal) and the first practice fighter (PracticeFighter1, row 4: a fighter, not a fourth hulk,
+    // so its chunk is sized off its OWN length, not the hulk literal) -- the last one watched to the end,
+    // then the cap.
     async Task FieldsRipYardChecks()
     {
-        var names = new[] { "TargetDummy1", "TargetDummy3", "TargetDummy4" };
+        var names = new[] { "TargetDummy1", "TargetDummy3", "PracticeFighter1" };
+        var sizes = new[] { 14.72f, 14.72f, float.NaN };
         float dummyLen = Fx.LengthOf(H.GetNode<TargetDummy>(names[0]));
         Check(Math.Abs(0.16f * dummyLen - 15f) < 0.3f, $"a dummy's chunk is the spec's 15 u: 0.16 of its {dummyLen:0.0} u is {0.16f * dummyLen:0.00} u");
         for (int i = 0; i < names.Length; i++)
-            await FieldsRipChecks(H.GetNode<TargetDummy>(names[i]), $"dummy {names[i][^1]}", 14.72f, timed: i == names.Length - 1);
+            await FieldsRipChecks(H.GetNode<TargetDummy>(names[i]), $"the {names[i]}", sizes[i], timed: i == names.Length - 1);
         await FieldsScarCapChecks(H.GetNode<TargetDummy>("TargetDummy1"));
     }
     // A GUEST SEES THE HOST'S TEAR (rung 5). The host tears a chunk from the boss's nose, at the
