@@ -67,7 +67,12 @@ explicit and binding.
    price (37% of that session's turns were wake-ups). Chain engine rungs into ONE background
    command that stops at the first red; start agents so they finish together; take a finished job
    in silence when nothing is actionable, and report once, when there is something the owner must
-   see or decide.
+   see or decide. **A batch wakes the main conversation ONCE (owner, 2026-09-25):** launch it as
+   one workflow that holds the whole chain -- build, the writer's own engine rungs, a fresh agent
+   from the ledger when one stops at ~150k, one escalation on a red, the merge gate -- with its
+   rules for a red written into the script, so the main conversation hears only "green" or
+   "stuck". Engine runs from agents go through one runner that waits for the engine to be free,
+   never a harness started directly.
 3. **One or two agents at a time, each on a BATCH (the default way to delegate).**
    - At most two agents run at once, never two writers in one checkout. A wider fan-out (a
      workflow) is only for large design, audit or research with genuinely different angles --
