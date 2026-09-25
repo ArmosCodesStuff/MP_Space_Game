@@ -740,3 +740,22 @@ S2 is not built (no ledger entry, no commit; P4's `Held` return still precedes B
   NOT written: the live-holder replacement at rung 5 (a guest back before the host notices its old
   link die) -- it needs the R2 watchdog's 8 s silence; R2's paste-guest return check owes it.
 - next: R2a.
+
+### HANDOFF for the fresh agent (R2a onward) -- this agent stopped at ~150k after S2b
+Read: this lane's section (JOB 0 list, S2a/S2b POSTs), the R1 HANDOFF above (the J10 contract: the
+Pending table, IHostDesk/IGuestDesk, the listener/dialer, the paste row, the courier), plan §3 (whole),
+§6, §7, §9, §10.3-10.5, §13's R2-R5 rows. Then Net.cs, Link.cs, Rendezvous.cs, SessionMenu.cs whole;
+Router.cs, typecheck/GodotStub.cs, tools/smoketest/run.ps1 by grep. Harness landmarks (SmokeTest.cs.txt,
+line numbers as of fea4cc7): header's `P()`/`NoRouterNoInternet` ~25-35 and `RouterScenarios` 60-120
+(both go in R2b with fakeigd; KEEP `P()` on every surviving port), `Drop(int)` ~155 (ENet body ->
+`Link.Hang` deferred, §3.8), the R1 blocks 326/584/730 (`Codes`, `Walks`, `Rows`, `Proxied`,
+`WebRtcPairs` ~1041), role dispatch ~1261, `ArenaMp` (ahost/aguest, address row) ~10270, `Mp`
+(host/guest/guest2) ~10970. The S2 methods sit just above `ArenaMp`.
+Facts this lane added that R2 must keep: `Net.Hang(peer)` is the one hang-up (OnAuth's refusal and the
+rejoin token's replacement use it) -- R2b rewrites its body to `Link.Hang(mp, peer)`; `Hub.NetIdentity`
+has a trailing `token` argument; `NetSector`/`NetMySector` carry a trip; the paste guest's return
+(plan §3.9) now needs its `Session.Rejoin` token, which it keeps across its drop, and the live-holder
+replacement check (S2b POST) is owed with R2's paste-guest drop.
+Env: typecheck and `verify.ps1 -Quick` only (no engine). Write `-Quick`'s output to a NEW log name each
+run (a previous log can stay locked). Python edits: write the script to the scratchpad and run it (a
+bash heredoc holding C# `$"..."` text failed to parse once); read/write with newline='' kept LF.
