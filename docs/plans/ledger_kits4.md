@@ -67,3 +67,29 @@ A PRE with no POST is an interrupted job: compare the hashes, revert half-made e
   "F8: a row that takes no point is pressed ...". Watch: every doAbility.Invoke sweep line (now 3 args) and
   "RequestAbility" for a shut ability (rung 5).
 - Checkpoint: the commit after this entry. Next: kits4-J2.
+
+### kits4-J2 · PRE · F8 helm moves: the tether (pull, then swing), owner run, host confirm, cast-off -- tier opus
+- Intent: K4-3/4/6. New scripts/HelmMoves.cs (HelmMove rows, HelmNums, HelmRun, HelmEnd; pure StopAt / Shortest /
+  LineFor / PullTime / TetherStep; owner Fly / Begin / CastOff; host Confirm / Release). PlayerShip: the run, one
+  branch at Steer's call in LocalFlight, BeginHelm / CastOff. Checks: LaneA4TetherChecks (pure) and
+  LaneA4HelmLiveChecks (a live DD on a dummy).
+- Files: scripts/HelmMoves.cs (new), scripts/PlayerShip.cs, tools/smoketest/SmokeTest.cs.txt, this ledger.
+- HEAD 509680a10c463adedaccac2f607f1fcb1983459e · PlayerShip.cs 6e53084b9cbe4a826620188b1ba89cca8837c59c · SmokeTest.cs.txt 559dcaf956eaac518cf9afc00ccbb42f9ea6d5ec
+- K4-8 (J1 follow-up): the payload's wire check (rung 5) lands with its first row, 6b's sentry throw ("a guest sees
+  the throw land on the host's spot"); until a row takes a point no host-decided state reads it.
+### kits4-J2 · POST
+- Verdict: compiles; typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final
+  test phase. New scripts/HelmMoves.cs: `HelmMove` rows (`All` = { `Tether` }), `HelmNums`, `HelmRun`, `HelmEnd`,
+  `HelmBody`; pure `StopAt / Shortest / LineFor / PullTime / Bow / TetherStep`; owner `Begin / Fly / End`; host
+  `Confirm / Release`; `ConfirmWithin` 0.5. The tether HOLDS its speed round the anchor (`HelmRun.Side`) rather than
+  reading it back off the velocity (that fed a 450 u/s pull's inward part into the slide, ~60 u/s a second).
+  PlayerShip: `_helm`, `Helm`, `BeginHelm`, `CastOff`; LocalFlight: `if (HelmMoves.Fly(...)) _yawRate = 0; else Steer(...)`.
+- Files: scripts/HelmMoves.cs (new), scripts/PlayerShip.cs, SmokeTest.cs.txt (NEW `GrapnelNums`, `TetherTop`, `BowOff`,
+  `LaneA4TetherChecks`, `LaneA4HelmLiveChecks`, called after LaneA4PayloadChecks).
+- Owed at rung 3 (`solo` x2): "F8: every helm move row ..."; 10 x "F8 tether: pulled from ..."; 3 x "... inside its N u
+  stop: no pull"; 3 x "F8 tether: 5 s round a ..."; 3 x "... held 5 s round a ...: the line stops at"; live: "F8 helm: a
+  press past 700 u is ..."; 3 x "a move the host never marks ..."; 3 x "a marked pull from ..."; 3 x "a second on A/D
+  swings ..."; 3 x "cast off by Pressed / Host / Time ..."; 3 x "Webbed / Disabled / Drive ends the move ...".
+  Traps to watch: the live checks use TargetDummy1 (46 u hull, stop 296 u) and the destroyer's `open6` slot as the
+  host's mark; a stray web from an earlier check's raider would end a run as Webbed.
+- Checkpoint: the commit after this entry. Next: kits4-J3.

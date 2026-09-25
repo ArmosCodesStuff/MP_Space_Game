@@ -4501,6 +4501,210 @@ public partial class _Test : Node
         Ready();
     }
 
+    // ── LANE A SLICE 4 · F8 THE TETHER (kits_v3 §3.2: the Grapnel's pull, then its swing) ─────────────
+    // The grapnel's numbers as its 6a rows will hold them: a 0.15 s bite, a 450 u/s pull to 250 u off the
+    // hull, the line never under 150 u off it nor over 700 u, W/S reel at 100 u/s, 5 s from the press.
+    static HelmNums GrapnelNums(string slot) =>
+        new() { Slot = slot, Bite = 0.15f, Pull = 450f, Stop = 250f, Clear = 150f, Reach = 700f, Reel = 100f, Time = 5 };
+    const float TetherTop = 117f;                             // the destroyer's top (kits_v31 §3.5)
+    static float BowOff(float rot, Vector2 from, Vector2 anchor) =>
+        Mathf.RadToDeg(Math.Abs(Mathf.AngleDifference(rot, HelmMoves.Bow(anchor - from))));
+
+    // Pure (HelmMoves.TetherStep, 60 frames a second): the pull onto five hulls, a press inside the stop,
+    // and the swing on A/D with W/S.
+    void LaneA4TetherChecks(Vector2 yonder)
+    {
+        var n = GrapnelNums("grapnel");
+        const float Dt = 1f / 60f;
+        Check(HelmMoves.All.Length > 0 && HelmMoves.All.All(m => m.Law != null && !string.IsNullOrEmpty(m.Id))
+              && HelmMoves.All.Select(m => m.Id).Distinct().Count() == HelmMoves.All.Length && HelmMoves.All.Contains(HelmMoves.Tether),
+              $"F8: every helm move row has an id of its own and a law ({string.Join(", ", HelmMoves.All.Select(m => m.Id))})");
+        float thrust = (float)new ShipStats(ShipClass.Destroyer)["thrust"];
+        // THE PULL: 250 u off each hull (the card's 320 / 340 / 400 / 580 / 296 u from the keel), in the bite
+        // plus the haul at 450 u/s, the bow on it; still, and sliding round it (the slide kept)
+        var anchors = new (string name, float r, float stop)[] { ("Lancer", 70f, 320f), ("Drake", 90f, 340f), ("pylon", 150f, 400f), ("base", 330f, 580f), ("dummy", 46f, 296f) };
+        foreach (var (name, r, stop) in anchors)
+            for (int k = 0; k < 2; k++)
+            {
+                var anchor = VaryNear(yonder, 500f); float ang = VaryAngle();
+                float d0 = k == 0 ? Vary(stop + 60f, stop + 100f) : Vary(685f, 698f);
+                float v0 = k == 1 ? Vary(20f, 60f) : 0f;
+                var b = new HelmBody { Pos = anchor + Vector2.Right.Rotated(ang) * d0, Rot = VaryAngle(),
+                                       Vel = Vector2.Right.Rotated(ang + Mathf.Pi / 2) * v0 };
+                float line = HelmMoves.LineFor(d0, r, n), side = float.NaN; bool pulling = d0 > HelmMoves.StopAt(r, n);
+                double t = 0, taut = -1; float bowWorst = 0;
+                for (int i = 0; i < 60 * 3 && pulling; i++)
+                {
+                    t += Dt;
+                    b = HelmMoves.TetherStep(b, anchor, r, n, ref line, ref pulling, ref side, t, 0f, 0f, TetherTop, thrust, Dt);
+                    if (t >= n.Bite) bowWorst = Math.Max(bowWorst, BowOff(b.Rot, b.Pos, anchor));
+                    if (!pulling) taut = t;
+                }
+                float off = b.Pos.DistanceTo(anchor) - r;
+                double want = 0.15 + (d0 - stop) / 450.0;
+                Check(Math.Abs(HelmMoves.StopAt(r, n) - stop) < 1e-3f && Math.Abs(off - 250f) <= 10f && Math.Abs(taut - want) <= 0.05
+                      && Math.Abs(HelmMoves.PullTime(d0, r, n) - want) < 1e-5 && bowWorst <= 5f
+                      && Math.Abs(b.Vel.Length() - v0) <= Math.Max(1f, 0.1f * v0),
+                      $"F8 tether: pulled from {d0:0} u at {Mathf.RadToDeg(ang):0} deg onto a {name} ({r:0} u hull){(k == 1 ? $", sliding {v0:0} u/s" : "")}: taut {off:0.0} u off its hull (250 ±10) at {taut:0.00} s (want {want:0.00} ±0.05), the bow within {bowWorst:0.0} deg, left with {b.Vel.Length():0.0} u/s round it (want {v0:0})");
+            }
+        // PRESSED INSIDE THE STOP: no pull; the swing keeps the line it has, and one under 150 u off the
+        // hull is let out to 150 -- a second of it brings the hull no nearer
+        foreach (var (name, r, stop) in new[] { anchors[0], anchors[2], anchors[4] })
+        {
+            var anchor = VaryNear(yonder, 500f); float ang = VaryAngle();
+            float d0 = name == "pylon" ? Vary(r + 60f, r + 130f) : Vary(r + 170f, stop - 20f);
+            var b = new HelmBody { Pos = anchor + Vector2.Right.Rotated(ang) * d0, Rot = VaryAngle() };
+            float line = HelmMoves.LineFor(d0, r, n), side = float.NaN; bool pulling = d0 > HelmMoves.StopAt(r, n);
+            bool pulled = pulling; float nearest = float.MaxValue; double t = 0;
+            for (int i = 0; i < 60; i++)
+            {
+                t += Dt;
+                b = HelmMoves.TetherStep(b, anchor, r, n, ref line, ref pulling, ref side, t, 0f, 0f, TetherTop, thrust, Dt);
+                nearest = Math.Min(nearest, b.Pos.DistanceTo(anchor));
+            }
+            float want = Math.Max(d0, r + 150f);
+            Check(!pulled && Math.Abs(line - want) < 1e-3f && nearest >= want - 0.5f,
+                  $"F8 tether: pressed {d0:0} u from a {name}'s keel, inside its {stop:0} u stop: no pull, the line {line:0.0} (want {want:0.0}), the nearest in a second {nearest:0.0} u");
+        }
+        // THE SWING: 5 s round a hull on A or D, with W (in), S (out) or neither for part of it: the line
+        // the reel's (100 u/s, held to 150 u off the hull and 700 u), the hull on it and the bow on the
+        // anchor every frame, and round at the destroyer's top, never past it
+        for (int k = 0; k < 3; k++)
+        {
+            var (name, r, _) = anchors[k * 2];
+            var anchor = VaryNear(yonder, 500f); float ang = VaryAngle();
+            float line = Vary(r + 250f, 550f), side = float.NaN; bool pulling = false;
+            var b = new HelmBody { Pos = anchor + Vector2.Right.Rotated(ang) * line, Rot = HelmMoves.Bow(-Vector2.Right.Rotated(ang)) };
+            float rudder = Vary(0f, 1f) < 0.5f ? -1f : 1f, reel = k == 0 ? 0f : k == 1 ? 1f : -1f;
+            int reelFrames = (int)(Vary(0.5f, 1.0f) * 60);
+            float line0 = line, drift = 0, bowWorst = 0, fastest = 0; double t = 0;
+            for (int i = 0; i < 300; i++)
+            {
+                t += Dt;
+                b = HelmMoves.TetherStep(b, anchor, r, n, ref line, ref pulling, ref side, t, i < reelFrames ? reel : 0f, rudder, TetherTop, thrust, Dt);
+                drift = Math.Max(drift, Math.Abs(b.Pos.DistanceTo(anchor) - line));
+                bowWorst = Math.Max(bowWorst, BowOff(b.Rot, b.Pos, anchor));
+                fastest = Math.Max(fastest, Math.Abs(side));
+            }
+            float wantLine = line0 - reel * 100f * reelFrames * Dt;
+            Check(drift <= 15f && bowWorst <= 5f && Math.Abs(line - wantLine) < 2.5f && Math.Abs(Math.Abs(side) - TetherTop) < 0.5f
+                  && fastest <= TetherTop + 1e-3f && Math.Sign(side) == Math.Sign(rudder) && Math.Abs(b.Vel.Length() - TetherTop) < 0.5f,
+                  $"F8 tether: 5 s round a {name} on {(rudder > 0 ? "D" : "A")}{(k == 0 ? "" : k == 1 ? ", W" : ", S")} for {reelFrames * Dt:0.00} s: the line {line0:0} -> {line:0.0} (want {wantLine:0.0}), off it by {drift:0.00} u at worst, the bow within {bowWorst:0.0} deg, round at {side:0.0} u/s (top {TetherTop:0})");
+        }
+        // AND THE LINE'S ENDS: W for the whole 5 s stops at 150 u off the hull, S at 700 u
+        foreach (float reel in new[] { 1f, -1f, 1f })
+        {
+            var (name, r, _) = anchors[(int)Vary(0f, 4.99f)];
+            var anchor = VaryNear(yonder, 500f); float ang = VaryAngle();
+            float line = Vary(r + 200f, 600f), side = float.NaN; bool pulling = false; double t = 0;
+            var b = new HelmBody { Pos = anchor + Vector2.Right.Rotated(ang) * line, Rot = HelmMoves.Bow(-Vector2.Right.Rotated(ang)) };
+            for (int i = 0; i < 300; i++) { t += Dt; b = HelmMoves.TetherStep(b, anchor, r, n, ref line, ref pulling, ref side, t, reel, 0f, TetherTop, thrust, Dt); }
+            float want = reel > 0 ? r + 150f : 700f;
+            Check(Math.Abs(line - want) < 1e-3f && Math.Abs(b.Pos.DistanceTo(anchor) - want) < 0.5f,
+                  $"F8 tether: {(reel > 0 ? "W" : "S")} held 5 s round a {name}: the line stops at {line:0.0} (want {want:0})");
+        }
+    }
+
+    // LIVE, on the destroyer round a practice dummy (46 u hull: the stop is 296 u from its keel): the owner
+    // casts off a move the host never marks after 0.5 s; a marked one pulls, swings, and casts off with
+    // its speed kept; a web, a disable or a warp charge ends it at once; the press's refusals.
+    async Task LaneA4HelmLiveChecks(Vector2 yonder)
+    {
+        await SetClass(ShipClass.Destroyer);
+        var dd = Me; dd.AutopilotTo = null;
+        var dummy = H.GetNode<TargetDummy>("TargetDummy1");
+        const string Mark = "open6";                           // a slot the destroyer has and nothing reads
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        void Place(float d, float v)
+        {
+            float a = VaryAngle();
+            dd.Statuses.Clear(Status.Pinned); dd.Statuses.Clear(Status.Disabled);
+            dd.Position = dummy.Position + Vector2.Right.Rotated(a) * d; dd.Rotation = VaryAngle();
+            dd.Velocity = Vector2.Right.Rotated(a + Mathf.Pi / 2) * v;
+            dd.Sl(Mark).Left = 0; dd.Sl(Mark).N = 0;
+        }
+        // THE PRESS'S REFUSALS: out of reach, webbed, nothing to hook
+        {
+            Place(Vary(705f, 800f), 0f);
+            string far = dd.BeginHelm(HelmMoves.Tether, dummy, GrapnelNums(Mark));
+            Place(Vary(350f, 650f), 0f); dd.ApplyStatus(Status.Pinned, 2.0);
+            string webbed = dd.BeginHelm(HelmMoves.Tether, dummy, GrapnelNums(Mark));
+            dd.Statuses.Clear(Status.Pinned);
+            string none = dd.BeginHelm(HelmMoves.Tether, null, GrapnelNums(Mark));
+            Check(far == "OUT OF RANGE" && webbed == "WEBBED" && none == "NO TARGET" && !dd.Helm.On,
+                  $"F8 helm: a press past 700 u is {far}, webbed {webbed}, with nothing selected {none}; none of them starts a move");
+        }
+        // UNMARKED: the owner casts off at 0.5 s (still, sliding, pressed inside the stop)
+        for (int k = 0; k < 3; k++)
+        {
+            Place(k == 2 ? Vary(220f, 280f) : Vary(400f, 690f), k == 1 ? Vary(30f, 60f) : 0f);
+            await Frame();
+            string why = dd.BeginHelm(HelmMoves.Tether, dummy, GrapnelNums(Mark));
+            for (int i = 0; i < 90 && dd.Helm.On; i++) await Frame();
+            Check(why == null && !dd.Helm.On && dd.Helm.Ended == HelmEnd.Unconfirmed && dd.Helm.T > 0.5 && dd.Helm.T < 0.56,
+                  $"F8 helm: a move the host never marks is cast off by its owner at {dd.Helm.T:0.00} s (0.5; {dd.Helm.Ended}, {(k == 1 ? "sliding" : k == 2 ? "pressed inside the stop" : "still")})");
+        }
+        // MARKED: the pull lands 250 u off the hull in its time, the swing holds its line on A or D, and
+        // the move ends by a second press, the host's release, or its own time -- the speed kept
+        for (int k = 0; k < 3; k++)
+        {
+            float d0 = Vary(400f, 690f);
+            Place(d0, 0f);
+            await Frame();
+            var n = GrapnelNums(Mark);
+            if (k == 2) n.Time = Vary(2.6f, 3.0f);
+            string why = dd.BeginHelm(HelmMoves.Tether, dummy, n);
+            HelmMoves.Confirm(dd, Mark, dummy, n.Time + 1);
+            for (int i = 0; i < 60 * 3 && dd.Helm.On && dd.Helm.Pulling; i++) await Frame();
+            double taut = dd.Helm.T, want = 0.15 + (d0 - 296f) / 450.0;
+            float off = dd.Position.DistanceTo(dummy.Position) - dummy.HitRadius;
+            float bow = BowOff(dd.Rotation, dd.Position, dummy.Position);
+            Check(why == null && dd.Helm.On && Math.Abs(off - 250f) <= 10f && Math.Abs(taut - want) <= 0.1 && bow <= 5f,
+                  $"F8 helm: a marked pull from {d0:0} u lands the destroyer {off:0.0} u off the dummy's hull (250 ±10) at {taut:0.00} s (want {want:0.00}), the bow within {bow:0.0} deg");
+            var key = Vary(0f, 1f) < 0.5f ? global::Godot.Key.A : global::Godot.Key.D;
+            float drift = 0, bowWorst = 0;
+            KeyDown(key);
+            for (int i = 0; i < 60 && dd.Helm.On; i++)
+            {
+                await Frame();
+                drift = Math.Max(drift, Math.Abs(dd.Position.DistanceTo(dummy.Position) - dd.Helm.Line));
+                bowWorst = Math.Max(bowWorst, BowOff(dd.Rotation, dd.Position, dummy.Position));
+            }
+            KeyUp(key);
+            Check(dd.Helm.On && drift <= 15f && bowWorst <= 5f && dd.Velocity.Length() > 20f,
+                  $"F8 helm: a second on {key} swings the destroyer round at {dd.Velocity.Length():0} u/s, off its line by {drift:0.0} u at worst (15), the bow within {bowWorst:0.0} deg (5)");
+            float v0 = dd.Velocity.Length();
+            var endWant = k == 0 ? HelmEnd.Pressed : k == 1 ? HelmEnd.Host : HelmEnd.Time;
+            if (k == 0) dd.CastOff();
+            else if (k == 1) HelmMoves.Release(dd, Mark);
+            else { for (int i = 0; i < 60 * 3 && dd.Helm.On; i++) { v0 = dd.Velocity.Length(); await Frame(); } }
+            for (int i = 0; i < 3 && dd.Helm.On; i++) await Frame();
+            await Frame();
+            float v1 = dd.Velocity.Length();
+            Check(!dd.Helm.On && dd.Helm.Ended == endWant && Math.Abs(v1 - v0) <= 0.05f * v0 && (k != 2 || Math.Abs(dd.Helm.T - n.Time) < 0.05),
+                  $"F8 helm: cast off by {endWant}{(k == 2 ? $" at {dd.Helm.T:0.00} s (want {n.Time:0.00})" : "")}, the destroyer keeps its speed: {v0:0.0} -> {v1:0.0} u/s (within 5%)");
+            dd.Velocity = Vector2.Zero;
+        }
+        // AT ONCE, whatever the mark: a web lands, the hull is disabled, V begins a warp charge
+        for (int k = 0; k < 3; k++)
+        {
+            Place(Vary(400f, 690f), 0f);
+            await Frame();
+            dd.BeginHelm(HelmMoves.Tether, dummy, GrapnelNums(Mark));
+            HelmMoves.Confirm(dd, Mark, dummy, 6);
+            await Wait(Vary(0.3f, 0.9f));
+            var want = k == 0 ? HelmEnd.Webbed : k == 1 ? HelmEnd.Disabled : HelmEnd.Drive;
+            if (k == 0) dd.ApplyStatus(Status.Pinned, 1.0);
+            else if (k == 1) dd.ApplyStatus(Status.Disabled, 1.0);
+            else { dd.Sl("warp").Cool = 0; dd.DriveHeld = true; dd.PressDrive(); }
+            await Frame(); await Frame();
+            if (k == 2) { dd.DriveHeld = false; for (int i = 0; i < 10 && dd.Charging; i++) await Frame(); }
+            Check(!dd.Helm.On && dd.Helm.Ended == want, $"F8 helm: {want} ends the move within two frames ({dd.Helm.Ended}, on {dd.Helm.On})");
+            dd.Statuses.Clear(Status.Pinned); dd.Statuses.Clear(Status.Disabled);
+            dd.Sl(Mark).Left = 0; dd.Sl("warp").Cool = 0; dd.Velocity = Vector2.Zero;
+        }
+    }
+
     // THE SAME ROWS ON A LIVE SHIP, for every class that owns the slot: its slot running draws the
     // field from its OWN sheet. A slot no class owns yet is another lane's ability still to merge
     // (lane E's Supercarrier, the Warden's Taunt, lane B's boost): said as a NOTE, never a pass.
@@ -9892,6 +10096,8 @@ public partial class _Test : Node
             await LaneBBoostChecks(yonder);
             await FieldsLiveRowChecks(yonder);
             await LaneA4PayloadChecks(yonder);
+            LaneA4TetherChecks(yonder);
+            await LaneA4HelmLiveChecks(yonder);
 
             // ── WARRIOR: two and a half times its speed, half the damage, then the EMP ──
             await SetClass(ShipClass.HeavyWarrior);

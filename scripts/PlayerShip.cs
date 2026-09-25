@@ -818,6 +818,13 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // wire like any ability's; the warp's charge is the owner's (it flies), in _drive beside it.
     private readonly DriveRun _drive = new();
     public DriveDef Drive => Drives.Of(Class);
+    // A HELM MOVE (F8, HelmMoves.cs): flight the owner flies under a move's law instead of the helm,
+    // started by an ability's press on the owner and marked by the host.
+    private readonly HelmRun _helm = new();
+    public HelmRun Helm => _helm;
+    public string BeginHelm(HelmMove m, IHittable anchor, HelmNums n) =>
+        Mine ? HelmMoves.Begin(this, _helm, m, anchor, n) : "NOT THE OWNER";
+    public void CastOff() => HelmMoves.End(this, _helm, HelmEnd.Pressed);
     // A DRIVER'S HOLD OF V -- the title screen's ship, or a check -- read with the pilot's own key.
     public bool DriveHeld;
     public bool PressDrive() => Drives.Press(this, _drive);
@@ -1178,7 +1185,9 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             (throttle, rudder) = Autopilot.Capital(Position, Rotation, Velocity, (float)Stats["max_speed"], dest, 60f);
         if (Pinned) { throttle = 1f; rudder = 0f; strafe = 0f; AutopilotTo = null; }   // forced thrust, no rudder, no slide
         Thrusting = throttle != 0f;
-        Steer(throttle, rudder, strafe, dt);
+        // A HELM MOVE (F8) flies the hull by its own law while it lasts; the helm, once it ends
+        if (HelmMoves.Fly(this, _helm, throttle, rudder, dt)) _yawRate = 0f;
+        else Steer(throttle, rudder, strafe, dt);
 
         // the main guns aim at the cursor; the hull does not follow it
         if (!Demo) Trigger = false;              // a display ship's driver owns the trigger
