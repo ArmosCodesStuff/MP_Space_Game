@@ -68,6 +68,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     private double _sweepAt;                     // the clock time the next sweep of _lastHitBy is due at
     public readonly System.Collections.Generic.Dictionary<string, double> DamageBySource = new();   // host: damage taken, by source
     public readonly System.Collections.Generic.Dictionary<string, double> DealtBy = new();           // host: damage dealt, by weapon id (Dealt.Deal)
+    public readonly System.Collections.Generic.Dictionary<string, double> MendedBy = new();          // host: hull healed on others, by source id (Mend.Give)
     private double _combatT;
     public bool InCombat => _combatT > 0;
     // SECONDS SINCE THE LAST BLOW, as far as the clock above can tell. It runs down from
@@ -558,7 +559,10 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // the host checks the sender owns this ship first. A client says "I pressed
     // missile at target 1000", never "I did 5 damage". The broadside aims at the owner's
     // cursor, which reaches the host with the rest of its intent (AimPoint), not in the request.
-    public void UseAbility(string id, int targetId)
+    // A row that TAKES A POINT (AbilityDef.TakesPoint, F8) sends the cursor IN the request: where it
+    // was when the key went down, not where the next report says it is. A row that TAKES TARGETS
+    // (AbilityDef.TakesTargets) sends `picks`, the NetIds the pilot has picked; any other sends none.
+    public void UseAbility(string id, int targetId, int[] picks = null)
     {
         var def = Abilities.Find(Class, id);
         if (def == null) return;                       // not an ability this class carries
@@ -572,14 +576,16 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         // The host checks again inside Press: this is a courtesy, never the guard.
         if (PressHeld(def)) { Fail(id, "DISABLED"); return; }
         if (def.Refuse?.Invoke(this, targetId != 0 ? Combat.ById(targetId) : null) is { } why) { Fail(id, why); return; }
-        if (Net.Sim) DoAbility(id, targetId);
-        else Net.AskHost(this, nameof(RequestAbility), id, targetId);
+        var point = def.TakesPoint ? AimPoint : Vector2.Zero;
+        var ids = def.TakesTargets && picks != null ? picks : System.Array.Empty<int>();
+        if (Net.Sim) DoAbility(id, targetId, point, ids);
+        else Net.AskHost(this, nameof(RequestAbility), id, targetId, point, ids);
     }
 
     [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void RequestAbility(string id, int targetId)
+    private void RequestAbility(string id, int targetId, Vector2 at, int[] targets)
     {
-        if (Net.FromPlayer(this, out int who) && who == OwnerId) DoAbility(id, targetId);
+        if (Net.FromPlayer(this, out int who) && who == OwnerId) DoAbility(id, targetId, at, targets);
     }
 
     // THE ACTIVE RELOAD'S TIMING PRESS (ActiveReload.Press): a guest's claim of how far through its
@@ -606,11 +612,20 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     public const double CoolFloor = 0.5;              // half the row's seconds, whatever is bought
     public double Cooling(double seconds) => seconds * System.Math.Max(CoolFloor, Stats["cooldown_share"]);
 
-    private void DoAbility(string id, int targetId)
+    // `at`: the press's point (F8), written into the row's own slot for a row that takes one; a point
+    // that is not a number (nothing an honest owner sends) presses nothing. `targets`: the pilot's
+    // picks (F8), for a row that takes them: Picked holds them for its Press.
+    private void DoAbility(string id, int targetId, Vector2 at, int[] targets)
     {
         var def = Abilities.Find(Class, id);
         if (def == null || !Net.Sim || (!Alive && !def.WhenWrecked) || PressHeld(def)
             || Unlocks.LockedAt(Class, Peak, def) != null) return;
+        if (def.TakesPoint)
+        {
+            if (!float.IsFinite(at.X) || !float.IsFinite(at.Y)) return;
+            Sl(id).At = at;
+        }
+        if (def.TakesTargets) Pick(targets);
         var target = targetId != 0 ? Combat.ById(targetId) : null;
         // ANY OTHER OF THE CLASS'S ABILITIES ends a running stance (the lunge and the whirlwind end the
         // prism's): read by the row's Stance, never by an id. The drive (V) and the weapon's own rows do not.
@@ -619,6 +634,19 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             foreach (var st in Abilities.For(Class))
                 if (st.Stance is { Keeps: false } && Sl(st.Id).Left > 0) EndStance(st.Id);
         def.Press?.Invoke(this, target);
+    }
+
+    // THE PICKS A PRESS CARRIED, as the host takes them: no more than the class may hold at once
+    // (ClassDef.Targets -- a claim past it is cut, in the order sent), each once, and only what
+    // Combat.ById finds alive (a dead or unknown id is dropped). A row that takes targets reads them here.
+    private readonly List<IHittable> _picked = new();
+    public IReadOnlyList<IHittable> Picked => _picked;
+    private void Pick(int[] ids)
+    {
+        _picked.Clear();
+        int cap = Classes.Known(Class) ? Classes.Of(Class).Targets : 1;
+        foreach (int nid in (ids ?? System.Array.Empty<int>()).Distinct().Take(cap))
+            if (Combat.ById(nid) is { Alive: true } h) _picked.Add(h);
     }
 
     // ── what the abilities do. The catalogue (Abilities.cs) points at these, and each one
@@ -878,6 +906,15 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // wire like any ability's; the warp's charge is the owner's (it flies), in _drive beside it.
     private readonly DriveRun _drive = new();
     public DriveDef Drive => Drives.Of(Class);
+    // A HELM MOVE (F8, HelmMoves.cs): flight the owner flies under a move's law instead of the helm,
+    // started by an ability's press on the owner and marked by the host.
+    private readonly HelmRun _helm = new();
+    public HelmRun Helm => _helm;
+    public string BeginHelm(HelmMove m, IHittable anchor, HelmNums n) =>
+        Mine ? HelmMoves.Begin(this, _helm, m, anchor, n) : "NOT THE OWNER";
+    public void CastOff() => HelmMoves.End(this, _helm, HelmEnd.Pressed);
+    // THE TOP A GUEST'S REPORT MAY CLAIM, on the host: its hull's, or a marked move's ward (F8).
+    public float ReportTop => Math.Max(TopNow, HelmMoves.Ward(this));
     // A DRIVER'S HOLD OF V -- the title screen's ship, or a check -- read with the pilot's own key.
     public bool DriveHeld;
     public bool PressDrive() => Drives.Press(this, _drive);
@@ -1171,6 +1208,9 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // corrects any drift. A timed ability is a row and nothing else: this loop is the only expiry.
     private void TickAbilities(double delta)
     {
+        // A WRECK ENDS ITS HELM MOVE (F8): the owner's flight stops at the wreck (LocalFlight), so the
+        // run's own end rules never see it -- left on, it would fly the re-boarded hull from where it lay.
+        if (!Alive) HelmMoves.End(this, _helm, HelmEnd.Wrecked);
         _afterDrive = Math.Max(0, _afterDrive - delta);
         foreach (var def in Abilities.For(Class))
         {
@@ -1535,7 +1575,10 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             (throttle, rudder) = Autopilot.Capital(Position, Rotation, Velocity, (float)Stats["max_speed"], dest, 60f);
         if (Pinned) { throttle = 1f; rudder = 0f; strafe = 0f; AutopilotTo = null; }   // forced thrust, no rudder, no slide
         Thrusting = throttle != 0f;
-        if (!DashCarry(dt)) Steer(throttle, rudder, strafe, dt);   // a dash carries the hull instead of the helm
+        // A HELM MOVE (F8) flies the hull by its own law while it lasts; a dash carries the hull instead
+        // of the helm; otherwise the helm steers
+        if (HelmMoves.Fly(this, _helm, throttle, rudder, dt)) _yawRate = 0f;
+        else if (!DashCarry(dt)) Steer(throttle, rudder, strafe, dt);
 
         // the main guns aim at the cursor; the hull does not follow it
         if (!Demo) Trigger = false;              // a display ship's driver owns the trigger
@@ -1696,9 +1739,9 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             // THIS WORLD: entering one drops every peer's sector until it reports again (Hub.EnterSector),
             // and a guest's last reports from the world it left can still land here: priced, they would
             // make its first report from the new spawn a snap, and a capital would arrive DISABLED.
-            if (Hub.PeerSector(OwnerId) == Hub.Sector) Drives.Priced(this, _drive, _netPos, warping, age, Drives.SpeedCap(TopNow, StrafeNow));
+            if (Hub.PeerSector(OwnerId) == Hub.Sector) Drives.Priced(this, _drive, _netPos, warping, age, Drives.SpeedCap(ReportTop, StrafeNow));
             else _drive.From = null;
-            _netVel = Drives.Clamp(_drive, _netVel, TopNow, StrafeNow);
+            _netVel = Drives.Clamp(_drive, _netVel, ReportTop, StrafeNow);
         }
     }
 

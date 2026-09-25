@@ -47,6 +47,17 @@ public class AbilityDef
     // Pressable while the hull is a wreck. One row has it (reboard, the escape pod's F); the gate
     // is PlayerShip.DoAbility, so a new ability is refused from stasis without saying anything.
     public bool WhenWrecked;
+    // THE PRESS CARRIES A POINT (F8's payload): the owner's cursor in the world rides WITH the press
+    // (PlayerShip.UseAbility -> RequestAbility), and the host writes it into this row's own slot
+    // (Sl(id).At) before Press runs. So a row reads where it was aimed from its slot -- never from a
+    // guest's AimPoint, which is a report behind the click. A point that is not a number presses
+    // nothing. A reach is the row's own: Abilities.Toward clamps a point onto it, on its bearing.
+    public bool TakesPoint;
+    // THE PRESS CARRIES THE PILOT'S PICKS (F8's payload: the gunships' 1-3 targets): the NetIds of what
+    // the owner has picked (Hub.Targets) ride WITH the press, and the host -- holding them to the class's
+    // own ClassDef.Targets, dropping repeats and anything not alive -- sets PlayerShip.Picked before
+    // Press runs. A row reads its targets there, never from a guest's selection, which is never sent.
+    public bool TakesTargets;
 
     public Action<PlayerShip, IHittable> Press;
     public Func<PlayerShip, IHittable, string> Refuse;
@@ -599,6 +610,15 @@ public static class Abilities
         foreach (var a in For(c)) if (a.Id == id) return a;
         foreach (var a in Ab.Universal) if (a.Id == id) return a;
         return null;
+    }
+
+    // A PRESSED POINT HELD TO A REACH (F8): the point itself if it lies within `reach` of `from`, else
+    // the point `reach` out on the same bearing. Pure; a row that takes a point (TakesPoint) and
+    // has a reach reads its slot's At through this.
+    public static Vector2 Toward(Vector2 from, Vector2 at, float reach)
+    {
+        var d = at - from;
+        return d.Length() <= reach ? at : from + d.Normalized() * reach;
     }
 
     private static string SettingKey(ShipClass c, string id) => $"{c}.{id}";

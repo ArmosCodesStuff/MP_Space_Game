@@ -644,6 +644,28 @@ charge picks a multiplier and a line row; a ramp is a band flag, not code. The S
 (6c) is the railgun's table rewritten, not a new path. Trap: a constant table is an ARRAY of rows, never a
 dictionary -- `Net.Plain` does not hash a dictionary field, so a build whose table differed would still be admitted.
 
+### Helm moves, wards, the press's point, Mend (kits lane A slice 4, F8 and F10)
+
+- **A move the owner flies is a row** (`HelmMoves.All`): its Law runs in LocalFlight INSTEAD of Steer while
+  the run lasts, so the helm itself is never special-cased. The END is never the row's: `Fly` decides it by
+  one rule list for every row (a web, Disabled, a warp charge, the anchor gone, the time, the host's mark).
+  Two ends live outside that list, each for a reason: a WRECK (`TickAbilities`: a wreck's LocalFlight never
+  reaches `Fly`, so a run left on would fly the re-boarded hull), and the anchor's WARP, checked first in
+  `Why` against its last position so the law never drags the hull across the jump. `HelmEnd` tells the
+  anchor's warp (`AnchorWarped`, no rip) from the ship's own (`Drive`, which rips).
+- **The host marks, the owner flies.** The owner starts at its press (no round trip under the hull); the
+  host's `Confirm` marks the move's slot, and a move with no mark in 0.5 s, or whose mark is gone, is cast
+  off by its owner. The mark also WARDS the ship: its reports may claim the move's speed (`ReportTop`).
+- **Trap: hold a speed round a point, never read it back off the velocity.** The velocity's inward part,
+  read against the next frame's turned tangent, feeds the sideways speed every frame (a 450 u/s pull added
+  ~60 u/s of slide a second). The tether keeps it in `HelmRun.Side`.
+- **A point rides with the press** (`TakesPoint`) into the row's own slot; a row never reads a guest's
+  AimPoint for where it was aimed (that is a report behind the click). **So do the picks**
+  (`TakesTargets`): the selection is a UI choice that never reaches the host except as a press's payload,
+  and the host, not the owner, holds it to `ClassDef.Targets` and the living (`PlayerShip.Picked`).
+- **Mend is the heal door**: host only, to MaxHp, credited only what landed. Regeneration is not a heal
+  one ship gives another and stays the hull's own.
+
 ### Fields and one-raise effects (kits lane D, F9)
 
 - **A field is a row keyed by a slot id** (`Fields.All`), never a block in `_Draw`. The row names the

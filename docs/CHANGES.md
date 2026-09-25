@@ -36,6 +36,16 @@ history pick the work up from it alone. Update it in the same change as the code
 
 ## Handoff — read this first
 
+**2026-09-25 (worktree `WarShips_wt_kits4`, branch `wt/kits4`): class kits lane A slice 4 -- F8 (the
+press's point, helm moves with the Grapnel's pull and swing, the host's mark and wards) and F10 (Mend)
+built, and the merge gate's four findings fixed (kits4-J5); compiles, rung 2 green. engine-unproven: rung
+3 (`solo` x2) owed for LaneA4PayloadChecks, LaneA4TargetsChecks, LaneA4TetherChecks, LaneA4HelmLiveChecks,
+LaneA4AnchorWarpChecks, LaneA4WreckChecks, LaneA4WardChecks (now through ApplyState) and LaneA4MendChecks;
+rung 5 (`six` x2) for the arena host's "the guest's F, its row taking a point, lands the guest's cursor";
+no frame.** Foundations only: no class, bar or sheet changes. `DoAbility` / `RequestAbility` take a point
+and the picks (`int[]`): a check that reaches them by reflection or by name passes `Vector2.Zero,
+System.Array.Empty<int>()`. Detail: `docs/plans/ledger_kits4.md`.
+
 **2026-09-25 (worktree `WarShips_wt_kits6c`, branch `wt/kits6c`): kits lane A slice 6c, the heavies, built J1-J13.
 Compiles, rung 2 green; engine-unproven: every check is owed in the final test phase** -- rung 3 twice (LaneA6cBlade,
 Lunge, Whirl, PrismStance, ReloadJudge, Reload, ReloadBar, Anchor, Zone, Tether, Flares, Flak, HunterPrey, Taunt,
@@ -604,6 +614,28 @@ outstanding from the batch of 2026-09-23.)*
 ---
 
 ## Unreleased
+
+### Class kits, lane A slice 4: helm moves, wards, the press's point, Mend -- F8, F10 (2026-09-25, worktree wt/kits4)
+
+Foundations for slice 6; nothing a pilot sees changes yet.
+- **The press's point** (`AbilityDef.TakesPoint`): a row that takes one sends the cursor with its press,
+  and the host puts it in the row's own slot before the row runs; a point that is not a number presses
+  nothing. `Abilities.Toward` holds a point to a reach on its bearing (the sentry throw's 600 u, 6b).
+- **The press's picks** (`AbilityDef.TakesTargets`): a row that takes them sends the pilot's picked
+  targets with its press (the gunships' 1-3, 6a); the host holds them to the class's own count
+  (`ClassDef.Targets`), each once, the living only, in `PlayerShip.Picked` before the row runs.
+- **Helm moves** (`HelmMoves.cs`): flight the owner flies under a move's law instead of the helm. The
+  first row is the tether (the Grapnel, 6a): a 0.15 s bite, a haul in at 450 u/s to 250 u off the anchor's
+  hull, then a swing on the line -- A/D round it at the hull's top, W/S reeling at 100 u/s between 150 u
+  off the hull and 700 u -- the bow on the anchor throughout. The host MARKS the move; the owner casts off
+  one not marked in 0.5 s, or when the mark goes, a web lands, it is disabled, V charges a warp, the anchor
+  is lost or warps (over 600 u in a frame: the hull is never dragged across), the hull is wrecked, or its
+  time is up, and keeps its speed.
+- **Wards**: while the mark runs, the host's speed clamp and jump pricing let the guest's reports claim
+  the move's speed, so a 450 u/s pull is not cut back or priced as a jump.
+- **Mend** (`Mend.cs`): the one door for a heal one ship gives another -- host only, to the hull's
+  maximum, nothing to a wreck; the healer is credited only what landed (`MendedBy`).
+**Rungs:** 1 and 2 green in the worktree; 3 owed (checks listed in the ledger).
 
 ### Class kits, lane A slice 6c: the heavies -- Warrior, Sniper, Warden (2026-09-25, worktree wt/kits6c)
 
