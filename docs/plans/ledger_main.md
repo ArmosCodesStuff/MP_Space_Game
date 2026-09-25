@@ -10,9 +10,8 @@ Under 25 lines; Edit tool only; commit FIRST after every event; the hook re-inje
   Watchdog Monitor (agents.ps1 -Minutes 30 every 10 min, 30-min timeout) re-armed at each expiry while it runs.
 
 ## Landed (verdict first; delete the row once its action is done)
-- Round 1 at 68ad42c (task ww2f2xd5l, STOPPED 16:08): both quick,six chains died at 15:39:45 with no verdict: their runners' launch
-  call was moved to the background and killed its children when it ended (tester.md rule added). Action: runner prompt fixed (launch
-  call returns at once); relaunch with args {attempt: 3, review: []}; dbg6_s2/s3 (six on slots 2+3 at once, foreground) proves the slots.
+- Round 1 (task ww2f2xd5l, stopped 16:08): both quick,six chains died at 15:39:45, killed with their runners' backgrounded launch call
+  (tester.md rule; runner prompt fixed; relaunched). Open: read dbg6_s2/s3 (six on slots 2+3 at once, bash bv19o1tv5) when it lands.
 
 ## Next (1 is the exact next call, copy-pasteable)
 1. Wait for task w00jjvfec (grouped fixes; launch-call rule for runners); take its return as above. Delete the Landed row once dbg6 is read.
