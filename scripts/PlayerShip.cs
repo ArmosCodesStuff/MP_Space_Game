@@ -338,6 +338,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         var art = MyArt;
         return new TurretSpec {
             Prey     = Targeting.PointDefence,        // what its PD takes: a main gun never picks
+            Weapon   = pd ? Dealt.Pd : null,          // what the door credits its PD's blows as
             Kind     = pd ? Shots.Shell : Stats.Def.Shot,   // the round its mains fire (ClassDef.Shot: the freighter's spotter, the Warden's flak)
             Damage   = pd ? Stats["pd_damage"]   : Stats["main_damage"],
             Interval = Cadence(pd ? "pd_interval" : "main_interval"),

@@ -33,6 +33,7 @@ public static class Dealt
         var pilot = by?.Credit;
         if (pilot != null) d = pilot.Outgoing(target, d, weapon);
         bool was = target.Alive;
+        if (!was) return;   // a blow on a corpse is nothing: no credit, no OnDealt, no Landed
         if (through > 0 && target is IShielded { Shielded: true } sh) sh.TakeThrough(d *= through);
         else target.TakeDamage(d);
         by?.NoteDealt(d, target, weapon);
