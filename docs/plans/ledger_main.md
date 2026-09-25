@@ -7,8 +7,9 @@ Engine outputs for the old-way batches: S = C:\Users\logan\AppData\Local\Temp\cl
 - wf_d703a267-73b / task w2aq1g0re, "lane-kits-a3to6": NOW SLICE 3 ONLY (WarShips_wt_kits; NOTE 4 there makes its slice-4 agent return
   blocked). Slice 3 build (J8 F5 done, J9 Lines running) -> gate -> fix -> gate 2 -> merge "lane A slice 3". Its end row: expect slice 3
   merged + a slice-4 "blocked (NOTE 4)" or "waiting" row: both fine. A slice 3 stop: fix it by hand/new batch.
-- (launching) "lane-kits-parallel": slices 4 (after drives), 5 (after slice 3 + raids, fields, wings), 6a (after 4+5+curve), 6b/6c (after
-  5+curve), 6d (after 3+4+curve), items (after curve), then items RECONCILE (after 6a-6d + items). Own worktrees wt_kits4.. / wt_items.
+- wf_777978ea-8f6 / task wgzvia4p5, "lane-kits-parallel": slices 4 (after drives), 5 (after slice 3 + raids, fields, wings), 6a (after 4+5+curve), 6b/6c (after
+  5+curve), 6d (after 3+4+curve), items (after curve), then items RECONCILE (after 6a-6d + items). Own worktrees wt_kits4.. / wt_items. Waits poll 10 h max.
+  Returns 8 rows (merged / waiting / skipped / a stop): a stopped unit gets a fix batch; later units that skipped are relaunched then.
 - wf_b63808ec-4ad / task wojzfsouf, "wave-1-build": six lanes in parallel, build only, each from base f168508 (= kits 809313c + version-l;
   branch wt/wave): drives (B: F21/F22/F24), fields (D: F9), wings (E: F13), curve (F: Par, boss rows, ladder), raids (G: Squads), net2
   (R2-R5 code; S2 first if missing). Worktrees WarShips_wt_<key>, ledgers ledger_<key>.md (net2: ledger_webrtc.md). Each: build, opus gate,
