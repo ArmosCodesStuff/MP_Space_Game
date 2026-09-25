@@ -354,3 +354,17 @@ Done: J2, J3, J4 (a3265f7, 43b0953, 19cfffa). Next is kits6b-J5; no PRE written.
   sweep B `main_range when Primary.Beam`; frames 79h_lance_burn, 79i_lance_mend (Shots.cs.txt LaneA6bLanceFrames).
   Test phase owes: solo x2, screens.
 - Next: kits6b-J8 (Overdrive field aura, Repair field, Resupply).
+
+### kits6b-J8 · PRE · TE Overdrive field, Repair field, Resupply (D38, D45) -- tier opus
+- Intent: AbilityDef.Aura (a running row's lifts reach every other live pilot within this stat of the ship:
+  PlayerShip.Lifts), AbilityDef.Tick (host, every frame it runs, handed min(frame, Left) so a field's total is its
+  time exactly), AbilityDef.Cuts (D45: a press takes this many seconds of cooling off every ClassDef.Abilities row
+  -- never the drive, never a row of the pressing row's id -- of every pilot in its Aura, the presser included,
+  through the same step TickAbilities cools by (PlayerShip.CoolBy: a charged row gets its charge back); refused
+  NOTHING COOLING and free when none is cooling). Ab.Overdrive -> the field (Aura field_radius); Ab.Repair (Q: 2%
+  of MAX a second to every friendly hull in 500 u, Mend "repair", 8 s, cd 30); Ab.Resupply (E: 8 s, cd 30). Fields
+  rows overdrive + repair (Ring, field_radius). Tender Abilities {Lance, Overdrive, Repair, Resupply}.
+  Checks LaneA6bOverdriveFieldChecks, LaneA6bRepairFieldChecks, LaneA6bResupplyChecks (solo, a mate pilot),
+  LaneA6bFieldsHost/Guest (rung 5), frames 79j_overdrive_field / 79k_repair_field, witnesses repair / resupply.
+- Files: Abilities.cs bd2d34a, PlayerShip.cs 72f5c56, Ships.cs 26d3ebe, Fx.cs 3bc4aa3, SmokeTest.cs.txt 17049fa,
+  Shots.cs.txt fa87369. HEAD 814b9d2f2498ac58ea30c13da96a732ddc8f945b.
