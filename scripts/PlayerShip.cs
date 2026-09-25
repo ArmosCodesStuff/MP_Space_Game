@@ -1392,15 +1392,8 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
 
     public override void _Draw()
     {
-        // THE BUBBLE (a freighter's): a ring the size of what it covers, fading as its pool is
-        // spent, so everyone can see how much of it is left and who is inside it.
-        if (BubbleUp)
-        {
-            float left = (float)Mathf.Clamp(BubbleLeft / Math.Max(1, Stats["bubble_pool"]), 0, 1);
-            var c = new Color(0.55f, 0.85f, 1f, 0.15f + 0.35f * left);
-            DrawCircle(Vector2.Zero, BubbleRadius, c with { A = c.A * 0.25f });
-            DrawArc(Vector2.Zero, BubbleRadius, 0, Mathf.Tau, 64, c, 2.5f);
-        }
+        // EVERY FIELD ITS SLOTS HAVE UP (the bubble, ...): one row each in Fields.All (Fx.cs)
+        Fields.Draw(this);
         // warp: a charge building in the accent colour (lighting), then a flash where it lands
         if (Warping || _remoteWarping)
         {

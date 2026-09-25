@@ -36,6 +36,12 @@ history pick the work up from it alone. Update it in the same change as the code
 
 ## Handoff — read this first
 
+**2026-09-25 (worktree `WarShips_wt_fields`, branch `wt/fields`): kits lane D (F9 fields, zones, marks)
+built, J1-J3; compiles, rung 2 green. engine-unproven: rungs 3-5 and the frames owed in the final test
+phase.** The field rows for the Supercarrier (`super`), the Taunt (`taunt`) and the boost (`boost`) wait
+for the lanes that build those slots; until then the harness prints `NOTE unbound field row` and the
+screens `shot skipped`. Detail: `docs/plans/ledger_fields.md` (J4 POST).
+
 **2026-09-25 (worktree `WarShips_wt_kits`, branch `wt/kits`): kits lane A J1-J7 + K1 built,
 version-l merged in (K2), and merge gate 1's seven problems fixed (K3); compiles, rung 2 green.
 engine-unproven: rungs 3-5 owed in the final test phase** (owner: build first, test once at the
@@ -522,6 +528,28 @@ outstanding from the batch of 2026-09-23.)*
 
 ## Unreleased
 
+### Class kits, lane D: fields and the torn chunk, F9 (2026-09-25, worktree wt/fields)
+
+**Fields are rows** (`Fields.All`, Fx.cs): what a ship draws round itself while one of its slots runs.
+A row names its slot, its look (Ring, Dashed, Shimmer, Plume), its radius (a stat, else a share of the
+hull's length), and optionally a pool it fades with and a tag. Slots are on the wire, so every peer
+draws the same field with no RPC. `PlayerShip._Draw`'s own bubble block is deleted: the bubble is the
+first row. New rows: the Supercarrier's dashed patrol ring at `patrol_range` in the fighter colour, the
+Taunt's hex shimmer with its `−33%` tag (from `taunt_guard`), the boost's hot plume; and an effect row
+`taunt_ring` for the Taunt's 1000 u flash. The Unmask panels were never built, so nothing is removed.
+**The torn chunk** (`Fx.Tear`): one raise, riding the anchor's NetId, Size 0.16 of the hull's length;
+every peer cuts the chunk from the anchor's own art at the hook and tumbles it on a seed from the raise
+(260 u/s within 25° of the line, at rest in 2 s, gone at 3 s), and the row's `With` brings 28 sparks,
+6 puffs of smoke and a scar the chunk's size (10 s, at most 3 on one hull). The chunk and its sprays read
+the hull as they go up, then leave it for the world, so a hull killed within 3 s keeps its chunk flying. The look only: the rip's damage (1% + 10) is
+the grapnel's hit, built with the grapnel (lane A, F8).
+
+**Checks:** FieldsContractChecks, FieldsBubbleChecks, FieldsGuestBubbleChecks, FieldsRowChecks,
+FieldsLiveRowChecks, FieldsTauntRingChecks, FieldsRipChecks (dummies, Lancer, base, pylon),
+FieldsScarCapChecks, FieldsRipOutlivesChecks (a pylon killed 0.2 s after a tear), FieldsGuestRipChecks; frames 81_patrol_ring, 82_taunt_shimmer, 83_boost_plume,
+83b_taunt_ring, 84_rip_chunk_and_scar, 84b_rip_on_boss. **Rungs:** 1 and 2 only.
+
+**Known broken:** unproven on the engine.
 ### Class kits, lane A K3: merge gate 1's fixes (2026-09-25, worktree wt/kits)
 
 A ramp row (F1's Ramp) is **owner-stepped**: only the peer at the helm steps its running total, and
