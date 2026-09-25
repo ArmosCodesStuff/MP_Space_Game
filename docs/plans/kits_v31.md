@@ -279,7 +279,7 @@ v3 §3.9 unchanged, on the capitals alone:
 | DART | Pepperbox | Any boost puts it at its x1.5 cap (11.25 a missile) for 3 s | counts (decision 14) |
 | DART | Slingshot | Snaps the whole velocity, strafe part included, onto the cursor bearing, keeping its size | none |
 | DART | Slipstream (x0.7 at ≥ 325 u/s) | A boost puts a Dart above 325 within 0.4 s. The host's clamp uses hypot(top, strafe) × 1.1 from its own lifts | clamp rule |
-| ECHO | Rewind | Position, heading and velocity go back **8 s** (owner, 2026-09-24). The boost's time left is not rewound, and the helm clamps a rewound speed to the current top | none |
+| ECHO | Rewind | Position, heading, velocity **and hull** go back **8 s** (owner, 2026-09-24): the ship snapshots them every 0.5 s into a ring of 16, and the Rewind takes the snapshot closest to 8 s ago (the oldest, with less history). The boost's time left is not rewound, and the helm clamps a rewound speed to the current top | none |
 | WRAITH | Veil (x1.35 top) | Additive: 1 + 0.35 + 0.5 = x1.85 = 481 u/s | none |
 | WRAITH | Backstab | Strafe holds a rear arc while the nose stays on the target | accepted |
 | TENDER | Resupply ("every ability still cooling") | **Never touches V.** The drive is not in `ClassDef.Abilities`, so the capitals' warp is not cut either | by list, not by `if` |
