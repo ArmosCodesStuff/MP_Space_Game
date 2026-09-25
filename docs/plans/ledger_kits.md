@@ -479,6 +479,61 @@ revert or keep the half-made edits, then run the job again (CLAUDE.md §2b rule 
   every check J3-K2 added or rewrote.
 - Checkpoint: the merge commit. Next: the final test phase (coordinator).
 
+### K3 · PRE · gate 1's seven problems at 809313c
+- Intent: fix exactly the opus merge gate's seven: (1) the J7 DPS knife edge and the 6b one (clock from
+  the first frame HvLaser() grows; 150 frames / 2.0, 210 frames / 3.0); (2) Shots.cs.txt frame
+  49_heavy_waiting_missile pins hs2 and forces _missileCd 0, plus a new frame of a latched heavy firing
+  both barrels; (3) Lanes.GunDamage derived from Enemies.Of(Gunship).MissileDamage, the outpost check
+  rewritten to 35; (4) a Ramp row steps only where the helm is (Mine) and ApplyHostState keeps a Ramp
+  row's Own on the owner's ship (DESIGN.md says why), with a rung-3 wiring check (test-only Ramp row,
+  3 varied turn rates) and a rung-5 guest check; (5) BaseDefense and Shots.cs hostile hits go through
+  Dealt.Deal (new Dealt.Base), a behavioural check that the base's laser blow reaches OnDealt;
+  (6) the echo stores nothing after its Left ends / after Detonate (3 varied spots); (7) invariant C
+  history comments deleted in PlayerShip, Stats, Enemies, Raider, Statuses, Boss.
+- Build phase: no engine run; typecheck + verify -Quick only.
+- Model tier: opus (per task).
+- HEAD 809313c26f1eb356bde958be8fdee4b9b9611fff. Hashes: SmokeTest 9a49b88a · Shots.cs.txt 49ad2a6b ·
+  Lanes beab4a5c · PlayerShip 2a913835 · BaseDefense 371f2085 · Shots.cs 7e0371e1 · Dealt e3f8ce08 ·
+  Stats fdaff349 · Enemies caddc1c5 · Raider ae7dd1a1 · Statuses 011a71d4 · Boss 85c742d6 · DESIGN
+  bbdb416c · CHANGES f372759d · ledger_kits b82e5d64.
+
+### K3 · POST
+- Verdict: all seven fixed; rung 1 0 errors, rung 2 (verify -Quick) ALL CHECKS PASSED.
+  engine-unproven: rungs 3-5 owed in the final test phase.
+- (1) `LaneAHeavyRowsChecks` DPS: clock from the first frame HvLaser() grows, 150 frames / 2.0
+  (`hl0 > 0` asserted); 6b: clock from the first growth after the latch, 210 frames / 3.0.
+- (2) Shots.cs.txt: frame 49 pins hs2 (held every frame), forces `_missileCd` 0, snaps 12 frames
+  after the WarnZone ring; NEW frame `49b_heavy_both_barrels` (zoom 2.0, snapped on the frame a volley
+  lands on the pinned ship). Read by eye owed at rung 4.
+- (3) `Lanes.GunDamage => Enemies.Of(Enemies.Gunship).MissileDamage`; outpost check asserts 35.
+- (4) PlayerShip: a Ramp row steps only `&& Mine`; ApplyHostState keeps a Ramp row's Own when Mine
+  (rows[i-1].Ramp). DESIGN.md, the authority model, says why. Checks: rung 3
+  `LaneARampWiringChecks` (a test-only ramp row put IN PLACE of `open6` under that id, stats injected
+  into `_byId`; 3 runs, varied start speed = varied turn rate, A/D): +0.10/s straight from the first
+  frame it shows, SpeedMult = 1 + Own, SpeedAdd 60 into Steer's cap, a turn's per-frame sum
+  (0.10 - 0.20 x yaw share), and `ApplyHostReport` (a host packet with Own 0) leaves Own -- FAILS on
+  809313c (the packet zeroed it). Rung 5, guest branch before "the host closes the session": the
+  same row on the guest's carrier and the host's copy (host holds open6 Left 1e4 and marks N 4242
+  every frame via a LateSampler, freed before GoOffline); the guest counts reports landing on the
+  slot (>= 5 straight, >= 3 turning) and the ramp matches its own frames' sum -- on 809313c the
+  host's 10 Hz report zeroed it.
+- (5) BaseDefense laser: `Dealt.Deal(close, hit, null, Dealt.Base)`; Shots.Strike: one `Dealt.Deal(h,
+  Damage, IsInstanceValid(Source) ? Source : null, d.Id)`. rg: no TakeDamage on a hostile outside
+  Dealt. DEVIATION, noted: with `by` null no OnDealt can hear the base (no ship), so the door gained
+  `Dealt.Landed` (a static event: every blow, any dealer); the check (3 varied spots in 300 u)
+  asserts the "base" blows Landed hears sum to exactly LaserDealt's growth, > 0. Fails on 809313c
+  (no door, no event).
+- (6) `LaneADamageDoorChecks` echo block (LightEcho, 3 varied spots, a held heavy): stores the 40
+  dealt while running; the frame Left ends it detonates (DealtBy["echo"] grows) and Own is 0; two
+  25 hits after (immediately, and 30 frames later) grow DealtBy["shell"] by 50 and Own stays 0.
+- (7) History deleted: PlayerShip TickAbilities header, Stats FighterDuty, Enemies MissileFlight +
+  Cc, Raider missile header + the pin-gate comment, Statuses OutGuard + StatusGuard, Boss
+  Judgements + the beam's Next.
+- Files: SmokeTest.cs.txt, Shots.cs.txt, Lanes, PlayerShip, BaseDefense, Shots.cs, Dealt, Stats,
+  Enemies, Raider, Statuses, Boss, DESIGN, CHANGES, this ledger.
+- Checkpoint: commit "Kits lane A K3". Next: the final test phase (coordinator): quick,solo,solo,
+  six,six,screens -- two seeds for every check above.
+
 ## Engine rungs owed to the main session (run in the worktree, rebased, one engine at a time)
 
 | after | rung | seeds | look for (PASS lines) |
@@ -676,3 +731,218 @@ Other defects worth fixing now:
    lead (the jump filter), which is a sure miss on a pinned, forced-thrust target. Add a `Ready` flag to Lead and `&& _lead.Ready`
    at Raider.cs:352 only if the owner wants it, and give it its own check.
 Apply this before re-running the chain; the PRE that applies it says 'applies NOTE 2'.
+
+## K4 PRE -- tier opus, applies gate 2
+Intent: replace the outpost-guns comment in the freighter check (comment only). Files: tools/smoketest/SmokeTest.cs.txt
+HEAD 97f767ed4b85b4be33e61fbfb01768a5f85391a0; hash SmokeTest.cs.txt c4c55a50d63644cedaa02eec10c532fc4db3a322
+## K4 POST -- done. Comment replaced as gate 2 asked; typecheck 0 errors, quick ALL CHECKS PASSED. Checks: none (comment only).
+COORDINATOR DECISION -- Dealt.Landed (a static event on the damage door for blows with no ship behind them) is accepted.
+engine-unproven: rungs owed in the final test phase. Next: none (lane ready for merge).
+
+## K-merge PRE -- tier opus, merge version-l (ce7f48e) into wt/kits (9742789)
+Intent: sync kits with art (J1-J5) + wave lanes before merging kits into version-l. Build phase: typecheck + quick only.
+Conflicted: scripts/Boss.cs, scripts/Enemies.cs, scripts/Ships.cs, tools/smoketest/SmokeTest.cs.txt, docs/CHANGES.md.
+## K-merge POST -- done. typecheck 0 errors; verify -Quick ALL CHECKS PASSED.
+- Boss.cs: version-l's Ring reach x Type.Size and the dash's one-ram-a-pass (s.Struck) kept, each landing through kits' Out(m) (the outgoing door).
+- Enemies.cs: version-l's per-row TurretAft/TurretWidth (no defaults, off the art) and Nozzles on every row; kits' Barrels field, Dps 1.29 x 2 barrels, Cc and Exp on every row.
+- Ships.cs: version-l's J5 mount literals (BB, carrier, DD, Echo) with PdRing and Ab.Pd dropped (kits removed both, F16 passive PD).
+- SmokeTest.cs.txt: both fingerprint blocks (kits' tables + art's bell table); kits' 2.58x heavy check + art's raider-art block;
+  version-l's 680 u shockwave ring + kits' PdReachOff; kits' 150 beam check + version-l's charge-once message.
+- CHANGES.md: both sides (Handoff and Unreleased).
+engine-unproven: rungs owed in the final test phase. Checks: none new (merge).
+
+## COORDINATOR NOTE 3 (2026-09-25): three checks per ability (owner ruling; CLAUDE.md 6.7)
+Every ability or drive row this lane adds carries AT LEAST THREE distinct checks, each from 3 varied situations: (1) its effect
+asserting the spec's literals, (2) each interaction its kit or kits_v31 section 7 names, (3) a guest-role check where a guest sees it,
+or a named frame where it is drawn. One check at three spots is ONE check. Written now with the code, run in the final test phase.
+Every PRE that adds an ability says "applies NOTE 3" and lists its three checks.
+
+## SLICE 3 (F5, F23 Lines, F6, F7), a new agent from this ledger
+
+### 3-0 · STEP 0 · merge version-l
+- `git merge-base --is-ancestor version-l wt/kits` failed only because version-l holds the merge commit of this
+  lane (a515479, "Merge lane kits ... slices 1-2"). `git merge --ff-only version-l`: fast-forward b57862d ->
+  a515479, no content change, nothing to resolve. No commit of its own (a fast-forward makes none).
+
+### J0 (slice 3) · the job list
+Spec read: kits_v2 §5 (F5, F6, F7), kits_v3 §5, kits_v31 §6 (F5, F7, F23) and §8; README rulings (decision 9
+CLOSED: the Sniper's piece is the ACTIVE RELOAD, `sniper_active_reload.md` §0 and §7: "Overcharge's rows are
+never written", F7's Sniper bands become {0 s, x0.40} ramping to {full, x1.00}, and they land with the chamber
+in 6c).
+
+Decisions (the documented default, or the smallest reading of the spec; D4's rule: a row lands with its reader):
+- **D24** F5's nine shot rows (Pepper, Penetrator, Buster, Pellet, EchoRound, Flak, Spotter, Reflect,
+  SiegeMissile) and its two flags (`Decoyable`: 6c Flares / F14 NetDecoy; `Command`: 6d Pepperbox) land with
+  the classes that fire them. Slice 3's F5 is the Strike loop itself: a shot strikes each body ONCE and ends
+  after `Stops` bodies (0 = through everything; every row today is 1, unchanged). `Stops` is the same word and
+  meaning as a `Lines` row's (F23): one rule for "how many bodies before it ends", for a line and a flyer.
+  A shot's `Stops` is its firer's number (like Speed, Range, Radius), defaulting to its row's.
+- **D25** F23 `Lines.All` rows: `Id` (the weapon name its blows carry, DealtBy), `Width` and `Reach` (stat ids
+  on the firer's sheet, so gear and pilot points move them as today), `Stops`, `Fx` (the Fx row drawn along it),
+  `Beam` (the Beam row of its report). One row now, `rail` (rail_width / rail_range, Stops 0, Fx.Rail,
+  Beam.Rail): the railgun's literals unchanged (150, 3 s locked charge, 2500 x 14 u, 1 s cooldown). A line
+  that stops is drawn to the last body it struck. TOT (6b) and the prism's children (slice 5) are rows.
+- **D26** F6 = NetIds on predicted missiles, in the missiles' one id space (`NetIds.Missile`, the space the
+  interceptable shots use), so F14's `NetDecoy(netId, point)` finds a Shot or a blast by one id on every peer.
+  The id rides `Hub.NetMissile`; `MissileVisual.NetId` holds it on every peer. The mortar is a
+  `Missiles.All` row in 6b. The depth-charge row stays dropped.
+- **D27** F7 = charge bands as rows (`Charge.cs`: `ChargeBand` {At = share of the full charge, Mult, Line = a
+  `Lines` row, Ramp = the multiplier rises linearly from the band below}), one pure lookup `Charges.At`. The
+  railgun's table is one band {full, x1, rail line} (its locked charge always completes): same literals. The
+  Sniper's active-reload bands and numbers (120, 0.8 s, `rail_tap` 40%) are 6c's, with ActiveReload.cs.
+  NOT built (ruling): Overcharge (`rail_over_*`). `TurretSpec.While` / `ClassArt.Hidden` never existed in the
+  tree (grep): nothing to delete. `shell_turn` (6.0, v2 Dart card) lands with its only reader, the Pepper
+  row's Command steer, in 6d (invariant D: every row is read).
+
+Jobs (each: PRE, edit + its checks, typecheck + verify -Quick, POST, commit):
+- **J8 F5** Shot.Strike: struck-once set + `Stops` (ShotDef row default 1, Shot per-shot). Files Shots.cs,
+  SmokeTest (`LaneAShotStopsChecks`). Check: a shell down a held line of 3 gunships, 3 varied angles/spacings,
+  Stops 1 / 2 / 0: exactly the first 1 / 2 / 3 lose exactly its 10, each once.
+- **J9 F23** Lines.cs (`LineDef`, `Lines.All`, `Lines.Pick`, `Lines.Strike`); FireRail on it. Files Lines.cs
+  (new), PlayerShip.cs (FireRail), SmokeTest (`LaneALinesChecks`). Checks: pure Pick, 3 varied layouts x Stops
+  0/1/2 (order along the line, pool order shuffled, one body off the line); the rail row's table against its
+  literals (2500 x 14 u, through everything, Fx rail, Beam rail); the existing railgun checks (150 on the line,
+  DealtBy["rail"]) unchanged, now through Lines.
+- **J10 F6** NetIds on predicted missiles. Files Hub.cs (ThrowMissile, _blasts, NetMissile, ShowMissile),
+  Missiles.cs (MissileVisual.NetId), SmokeTest (`LaneAMissileIdsChecks` solo; `LaneAMissileIdsHost` /
+  `LaneAMissileIdsGuest` rung 5).
+- **J11 F7** Charge.cs + FireRail through the bands. Files Charge.cs (new), PlayerShip.cs, SmokeTest
+  (`LaneAChargeBandChecks`), docs/CHANGES.md (the slice's Unreleased + Handoff), docs/DESIGN.md (Lines/Stops
+  trap), this ledger.
+
+### J8 · PRE · F5 Shot.Strike (D24) -- tier opus
+- Intent: Strike strikes each body once and ends after Stops bodies (0 = through all); ShotDef.Stops = 1 on
+  every row; Shot.Stops (per shot, null = the row's). Check LaneAShotStopsChecks.
+- Files: scripts/Shots.cs, tools/smoketest/SmokeTest.cs.txt, this ledger.
+- HEAD 94546fef83a3c6ec68c6c16ab350c79ab6253825 · Shots.cs 755e3eccae0a67db095e3b1ea97b99a8a8e68979 · SmokeTest.cs.txt 41b697f6eea4c4e29aad5b68c82c571e7aa8c9e6
+### J8 · POST
+- Verdict: compiles; typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final
+  test phase. Strike now asks `Touching` afresh after each blow (a blow may end a body and remove it from the
+  list being walked), strikes each body once (`_struck`), and ends after `Stops` bodies; every row keeps Stops 1,
+  so every existing shot's behaviour is unchanged.
+- Files: scripts/Shots.cs; SmokeTest.cs.txt (`LaneAShotStopsChecks`, called after LaneAHeavyRowsChecks).
+- Checkpoint: the commit after this entry. Next: J9 (F23 Lines).
+
+### J9 · PRE · F23 Lines (D25) -- tier opus
+- Intent: new scripts/Lines.cs (LineDef {Id, Width, Reach, Stops, Fx, Beam}, Lines.All with the rail row,
+  Lines.Pick (pure, ordered along the line), Lines.Strike (host)); PlayerShip.FireRail through Lines.Strike,
+  same literals. Checks: LaneALinesChecks.
+- Files: scripts/Lines.cs (new), scripts/PlayerShip.cs, tools/smoketest/SmokeTest.cs.txt, this ledger.
+- HEAD 7cf51d8af1fa55687b3e7ffec70d32d09fd76cce · PlayerShip.cs d45ff469157f5688f25c5fe71b922779317479d4 · SmokeTest.cs.txt 45ab12c583e338ba8af6db247d757b7ff4eb1f16
+
+## COORDINATOR NOTE 4 (2026-09-25): slice 3 is the LAST slice built in this worktree (owner: slices side by side)
+Slices 4, 5 and 6a-6d now build in their own worktrees (WarShips_wt_kits4, _kits5, _kits6a.._kits6d, ledgers ledger_kits4.md ...).
+Finish slice 3 here as planned (build, gate, fix, gate 2, merge). Any agent asked to START slice 4, 5 or 6 in this worktree: touch
+nothing, and return status blocked with open "NOTE 4: moved to parallel lanes".
+### J9 · POST
+- Verdict: compiles; typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final
+  test phase. FireRail is one call: `Lines.Strike(Lines.Rail, this, nose, heading, rail_damage)`, then its cooldown;
+  the hit test (DistToSegment <= half width + HitRadius), the door (Dealt.Rail), NoteImpact, Fx.Rail and
+  Beam.Rail are the row's. Bodies are now struck nearest first (the order was the list's); nothing reads it.
+- Files: scripts/Lines.cs (new), scripts/PlayerShip.cs (FireRail); SmokeTest.cs.txt (`LaneALinesChecks`).
+- Checkpoint: the commit after this entry. Next: J10 (F6).
+
+### J10 · PRE · F6 NetIds on predicted missiles (D26) -- tier opus
+- Intent: each thrown predicted missile takes an id from NetIds.Missile (Combat.NextMissileId); _blasts carries
+  it; Hub.NetMissile sends it; MissileVisual.NetId holds it on every peer. Checks: LaneAMissileIdsChecks (solo),
+  LaneAMissileIdsHost / LaneAMissileIdsGuest (rung 5).
+- Files: scripts/Hub.cs, scripts/Missiles.cs, tools/smoketest/SmokeTest.cs.txt, this ledger.
+- HEAD 3c514197ecf4412ac08b0892bd5e86f8babdfd2c · Hub.cs a6f66721660f653fef9a479de878c800aecef7be · Missiles.cs 5fabd6a7c4240dc9d7685ece0747c9739d718b0c · SmokeTest.cs.txt b710d2409a6b0afe6e23aebb17b8e5d006324436
+### J10 · POST
+- Verdict: compiles; typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final
+  test phase. A wire change: `Hub.NetMissile` gains `int id` (the protocol fingerprint moves with it, as for any
+  RPC change). Nothing reads the id yet but the checks; its reader is F14's NetDecoy (slice 5).
+- Files: scripts/Hub.cs (ThrowMissile, _blasts, NetMissile, ShowMissile), scripts/Missiles.cs (MissileVisual.NetId);
+  SmokeTest.cs.txt (`BlastIds`, `InMissileSpace`, `LaneAMissileIdsChecks` in solo after LaneALinesChecks;
+  `LaneAMissileIdsHost` after the host's "host sees 3 ships"; `LaneAMissileIdsGuest` after the guest's
+  "a raider that existed before this guest joined").
+- Checkpoint: the commit after this entry. Next: J11 (F7 charge bands, the slice's CHANGES).
+
+### J11 · PRE · F7 charge bands (D27), and the slice's record -- tier opus
+- Intent: new scripts/Charge.cs (ChargeBand {At, Mult, Line, Ramp}; Charges.All by weapon id; Charges.At pure);
+  FireRail fires the band its charge reached (the railgun's one band: from 0, x1, the rail line -- same
+  literals). CHANGES Unreleased + Handoff, DESIGN note. Checks: LaneAChargeBandChecks.
+- Files: scripts/Charge.cs (new), scripts/PlayerShip.cs, tools/smoketest/SmokeTest.cs.txt, docs/CHANGES.md,
+  docs/DESIGN.md, this ledger.
+- HEAD 73d8521711b07d622762dbfb7edc280162c5ab04 · PlayerShip.cs 8cd51c606dc36eed59f356b225171e10a0190a97 · SmokeTest.cs.txt 65a0d4a8a17ff2fea424d8c0148e170688e5d636 · CHANGES.md 42c7a617d9cde39b5999bbaf882f2782789d329e · DESIGN.md 6c8f17c86da41c846e0b2d44747b227b3799e941
+### J11 · POST
+- Verdict: compiles; typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final
+  test phase. FireRail reads its charge (1 - Left / rail_charge, >= 1 at the Expire) through
+  `Charges.All["railgun"]` (one band: from 0, x1, Lines.Rail) and fires that much of rail_damage down that line.
+- Files: scripts/Charge.cs (new), scripts/PlayerShip.cs (FireRail); SmokeTest.cs.txt (`LaneAChargeBandChecks`);
+  docs/CHANGES.md (Handoff + Unreleased for slice 3); docs/DESIGN.md (Stops, and the bands, under the kits
+  section); this ledger.
+- Checkpoint: the commit after this entry. Slice 3 is complete (J8-J11).
+
+**SLICE 3 · WHAT THE FINAL TEST PHASE OWES** (no engine was run in slice 3)
+- Rung 3 (`quick,solo,solo`, two seeds), all in solo after LaneAHeavyRowsChecks:
+  - NEW `LaneAShotStopsChecks` (9 lines "a shell with Stops 1/2/0 ... the first N lose 10 each, once");
+  - NEW `LaneALinesChecks` (3 x "a line ... Stops 0 strikes on0,on1,on2 ..."; "the railgun is a Lines row: 2500 x 14 u");
+  - NEW `LaneAMissileIdsChecks` ("three predicted missiles thrown at once: ... the same three ids"; "...and all three land");
+  - NEW `LaneAChargeBandChecks` (3 x "a charge N% of full ..."; 3 x "a charge held to N% of full ...");
+  - unchanged, now through Lines + Charges: "then its railgun's whole 150.0 lands ... on the line", the J5
+    "the railgun ... DealtBy[\"rail\"]" x3, the ability sweep's railgun row; every shell/slug/torpedo/seeker
+    check (Strike rewritten: struck-once + Stops 1) -- the PD, main-gun, torpedo, cruise-missile and siege lines.
+- Rung 5 (`six,six`): NEW host "host: three predicted missiles thrown for the guests, each with its own id" and
+  guest "guest: the host's three predicted missiles arrive each with its id ..."; NetMissile's signature changed,
+  so every guest line that sees a heavy's or an outpost's missile (the outpost blockade, the heavy's throw).
+- Rung 4: no frame owed (nothing drawn changed: the rail bar is the same row, same ends).
+- Traps to read first on a red: LaneAShotStopsChecks spawns 3 gunships per case (9 per run) and kills them;
+  LaneAMissileIdsHost's three 40 s missiles land at (-7000, 7000) +- 900 u with 0 damage.
+
+### J12 · PRE · slice 3 gate fix (the opus merge gate's two findings) -- tier opus
+- Intent: (1) `Charges.All` becomes an array of rows (`ChargeTable {Id, Bands}`) so Net.Fingerprint hashes
+  it; `Charges.Of(id)`; FireRail and LaneAChargeBandChecks read through it. (2) `Lines.Strike(row, by, from,
+  to, damage)`: a row with `AtTarget` (bool, beside the Stops count -- the gate's second option, so Stops keeps
+  ShotDef's meaning) ends its segment at `to`, clamped to Reach; any other runs the full Reach along from->to.
+  Pure `Lines.End` holds that rule. FireRail passes nose + heading x rail_range (same literals).
+  Checks: NEW LaneALinesAtTargetChecks (3 varied angles: a body just past `to` untouched on an AtTarget row,
+  struck on the rail row; a target past 1500 u clamps the TOT-shaped row); NEW LaneAChargeTableHashedChecks
+  (bug fix: Charges.All and Lines.All are fingerprint parts, and 3 varied band mutants move the hash).
+- Files: scripts/Charge.cs, scripts/Lines.cs, scripts/PlayerShip.cs, tools/smoketest/SmokeTest.cs.txt,
+  docs/CHANGES.md, docs/DESIGN.md, this ledger.
+- HEAD 786ff1f754db70a26d49421b9f5a959f348007ed · Charge.cs 9f16812f97a7cffb8b8560f3a626bbaa4ad4ef15 · Lines.cs cd475f56f702573a2a9e3849e73c59aebfa0e6ce · PlayerShip.cs f61459731696350a8e47f5d39f8e34cbde92d9a6 · SmokeTest.cs.txt 61622f5c8f9518d66c0b03cae9dd1ab7e694aea0 · CHANGES.md 204300cfb70638b5185e8ff3fa0e9ca106ebd766 · DESIGN.md 1679878515e55973d882e1f1d582a5e4994e4180
+### J12 · POST
+- Verdict: compiles; typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final
+  test phase. Gate finding 1: `Charges.All` is `ChargeTable[]` ({Id, Bands}), a fingerprint part row by row;
+  `Charges.Of(id)` (null for no table) is the one reader. Gate finding 2: `Lines.Strike(row, by, from, to, damage)`;
+  `LineDef.AtTarget` (bool beside the Stops count, the gate's second option -- Stops keeps ShotDef's meaning);
+  pure `Lines.End(d, reach, from, to)` is Strike's segment. FireRail aims at nose + heading x rail_range.
+  6b adds its `tot` row {Width 14 u stat, Reach 1500 u stat, Stops 0, AtTarget true}; no Lines.cs code change.
+- Files: scripts/Charge.cs, scripts/Lines.cs, scripts/PlayerShip.cs (FireRail); SmokeTest.cs.txt (NEW
+  `LaneALinesAtTargetChecks` after LaneALinesChecks, NEW `LaneAChargeTableHashedChecks` after
+  LaneAChargeBandChecks; the rail row check also asserts !AtTarget; LaneAChargeBandChecks reads Charges.Of);
+  docs/CHANGES.md (Handoff + slice 3 Unreleased), docs/DESIGN.md.
+- Owed at rung 3 (`quick,solo,solo`), besides slice 3's list above: 3 x "a 14 u x 1500 u line that stops at its
+  target ..."; "the build's fingerprint reads the charge bands and the lines row by row"; 3 x "a build whose
+  railgun band fires xN has another fingerprint ...". Trap: the latter mutates the railgun band's Mult in place
+  and restores it in a finally (synchronous, no frame between).
+- Checkpoint: the commit after this entry. Slice 3 is complete (J8-J12).
+
+## K-merge (slice 3) -- merge version-l 92b330b into wt/kits
+
+PRE: tier merge; intent: sync with version-l (art, curve, fields, wave lanes) before lane A slice 3 merges.
+HEAD 87ad2d2, MERGE_HEAD 92b330b. Conflicted files: docs/CHANGES.md, docs/DESIGN.md, tools/smoketest/SmokeTest.cs.txt.
+
+POST:
+- docs/CHANGES.md: Handoff -- both kept (kits slice 3 entry, then curve and fields entries); Unreleased -- both
+  kept (kits slice 3 section, then curve lane F and kits lane D fields sections).
+- docs/DESIGN.md: both kept (kits "Stops / Lines / charge bands" paragraph, then "Fields and one-raise effects").
+- tools/smoketest/SmokeTest.cs.txt: both kept in the lane A call list (LaneAShotStops .. LaneAChargeTableHashed,
+  then FieldsLiveRowChecks).
+- Auto-merged: Hub.cs, PlayerShip.cs, Shots.cs and the rest; no stale ClassArt.PdRing reference.
+- Verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED. Engine rungs owed in the test phase.
+
+
+## K-merge 2 (slice 3) -- merge version-l 8dcc845 (lane B drives merged) into wt/kits
+
+PRE: tier merge; version-l moved after K-merge (lane B: drives, helm, strafe); the merge into version-l conflicted,
+so aborted and step 1 redone. HEAD e551e4c, MERGE_HEAD 8dcc845. Conflicted: docs/CHANGES.md, tools/smoketest/SmokeTest.cs.txt.
+
+POST:
+- docs/CHANGES.md: Handoff -- both kept (kits slice 3, then lane B drives); Unreleased -- both kept (kits slice 3
+  section, then lane B drives/helm/strafe section).
+- tools/smoketest/SmokeTest.cs.txt: both kept in the call list (LaneAShotStops .. LaneAChargeTableHashed, then
+  LaneBHelm / LaneBStrafe / LaneBBoost, then FieldsLiveRowChecks).
+- Auto-merged: DESIGN.md, Hub.cs, PlayerShip.cs.
+- Verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED. Engine rungs owed in the test phase.

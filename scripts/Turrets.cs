@@ -188,6 +188,9 @@ public partial class Turret : Node2D
     // doubled up, and one on a light would let a missile through.
     public static int Rank(IHittable h) => TagExt.Is(h, Tag.Missile | Tag.Hulled) ? 0 : TagExt.Is(h, Tag.Light | Tag.Fighter) ? 1 : 2;
     private const int FallbackRank = 3;
+    // The whole order as one number, for anything that picks by it (a turret, the carrier's patrol):
+    // Rank, or below every rank when `prey` takes it only as a fallback.
+    public static int RankIn(TargetFilter prey, IHittable h) => prey.IsFallback(h) ? FallbackRank : Rank(h);
     private bool Claimed(IHittable h)
     {
         foreach (var t in Host.Siblings) if (t != this && t.Target == h) return true;
@@ -208,7 +211,7 @@ public partial class Turret : Node2D
             if (!spec.Prey.Chooses(h)) continue;
             float d = from.DistanceTo(h.Position);
             if (d > range) continue;
-            int p = spec.Prey.IsFallback(h) ? FallbackRank : Rank(h);
+            int p = RankIn(spec.Prey, h);
             if (bestAny == null || p < anyPri || (p == anyPri && d < anyDist)) { bestAny = h; anyPri = p; anyDist = d; }
             if (Claimed(h)) continue;
             if (bestFree == null || p < freePri || (p == freePri && d < freeDist)) { bestFree = h; freePri = p; freeDist = d; }

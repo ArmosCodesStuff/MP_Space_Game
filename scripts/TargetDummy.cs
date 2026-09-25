@@ -33,7 +33,7 @@ public partial class TargetDummy : Node2D, IHittable, ITagged
     public override void _Ready()
     {
         if (!Fighter) return;
-        _fighter = Sprites.Fit("res://enemy_light_fighter.png", Raider.LightLength);
+        _fighter = Sprites.Fit(Enemies.Of(Enemies.Webifier));   // the light raider's own row: its art at its length
         AddChild(_fighter);
     }
     public bool Alive => true;

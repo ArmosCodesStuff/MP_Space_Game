@@ -18,12 +18,12 @@ using System.Linq;
 //
 // A NEW ROW MUST FILL IN: its id, what a scope and the HUD call it, its HULL AT A LEVEL (a Func,
 // so a row may be measured against the level's boss or state a flat figure -- one field, one
-// path), its art and the length that art is drawn at, the two colours the grey art is tinted in at
-// draw time (the sprites are grey on transparent and are NEVER recoloured in the file, exactly as
-// a raider's are -- Raider._Ready), the row whose live ones hold ITS shield up (null: it has none),
-// and what it answers with: a TurretSpec on one mount at its centre, like every other gun in the
-// game -- its round any row of Shots.All, and a warning before each shot if the spec asks for one
-// (TurretSpec.Windup) -- or null, for a hull that is only something to be got through.
+// path), its art (HullArt: Texture, Length, Tint -- grey on transparent, NEVER recoloured in the
+// file, exactly as a raider's is -- Raider._Ready), its hit half-width, the row whose live ones
+// hold ITS shield up (null: it has none), and what it answers with: a TurretSpec on one mount at
+// its centre, like every other gun in the game -- its round any row of Shots.All, and a warning
+// before each shot if the spec asks for one (TurretSpec.Windup) -- or null, for a hull that is
+// only something to be got through.
 //
 // A NEW SITE is a Post[] -- a row of All, and where it stands from Hub.ArenaCentre -- plus the one
 // mission row that names it (Missions.Kinds[].Build). No code is edited for either.
@@ -33,14 +33,13 @@ using System.Linq;
 // it is "anything of the shielding row still standing", and a guest holds the same list the host
 // holds, so there is nothing to put on the wire for it.
 // ─────────────────────────────────────────────────────────────────────────────
-public sealed class EmplacementDef
+public sealed class EmplacementDef : HullArt
 {
     public string Id;                           // reached by id, never by type
     public string Label;                        // what the scope, the HUD and a target line call it
     public Func<int, double> Hull;              // its hull at level L, before Missions.HullMult
-    public string Sprite;
-    public float Length, HalfWidth;             // drawn nose to tail, and the hull's half width
-    public Color Main, Trim;                    // the grey art tinted, and what is drawn over it
+    public float HalfWidth;                     // the hull's half width (Texture/Length/Tint: HullArt)
+    public Color Trim;                          // what is drawn over the art (the health bar)
     public string Shields;                      // the row whose live ones hold its shield up
     // WHAT IT ANSWERS WITH, on one mount at its centre, before Missions.DamageMult (and a Hulled
     // round's hull before Missions.HullMult for one pilot) -- or null: it answers with nothing
@@ -58,12 +57,18 @@ public readonly struct Post
 public static class Emplacements
 {
     public const string Base = "pirate_base", Pylon = "pirate_pylon";
+    public const double PylonShare = 0.125;         // a pylon's hull, of the Lancer's row
+    // THE BOSS ROW A SIEGE IS SIZED ON, by id: the order of Missions.Bosses sets which boss holds a
+    // level, so a place in it is never read for this.
+    private const string SiegeRow = "silver_lancer";
+    private static double SiegeHull => Missions.Bosses.First(b => b.Id == SiegeRow).Hull;
 
     public static readonly EmplacementDef[] All =
     {
-        // THE PIRATE BASE. Twice the hull of the boss that holds the SAME LEVEL -- read off
-        // Missions.ForLevel, so there is one ladder and not a second one of its own -- and nothing
-        // may touch it while a pylon stands. It carries NO GUNS: a siege's damage is its garrison's
+        // THE PIRATE BASE. The hull of the LANCER'S ROW (SiegeRow, 3222 at level 1) on the
+        // level's own scale -- a row of its own, never the boss that holds the level (Lancer and
+        // Drake take turns, and the base would swing 8% between odd and even levels) -- and nothing may
+        // touch it while a pylon stands. It carries NO GUNS: a siege's damage is its garrison's
         // (Waves.All, "siege"), and what the base adds is one CRUISE MISSILE every 15 s at the
         // nearest pilot within 4500 u -- a red lane to that pilot 1.5 s ahead, a barrel quick enough
         // to come round from any bearing inside it (Turn x Windup > pi) so the round leaves down its
@@ -71,9 +76,9 @@ public static class Emplacements
         // can bring down (Tag.Hulled). 126 a missile is the base's share of a siege at the curve's
         // fit, 8.4 a second, over the 15 s between them; 30 hull is two seconds of a median main gun,
         // on the level's scale alone because it is fired at ONE pilot (Emplacement._hull).
-        new() { Id = Base, Label = "PIRATE BASE", Hull = l => 2 * Missions.ForLevel(l).Hull,
-                Sprite = "res://pirate_base.png", Length = 560f, HalfWidth = 330f,
-                Main = new Color(0.72f, 0.20f, 0.17f), Trim = new Color(0.08f, 0.08f, 0.10f),
+        new() { Id = Base, Label = "PIRATE BASE", Hull = _ => SiegeHull,
+                Texture = "res://pirate_base.png", Length = 483f, HalfWidth = 330f,
+                Tint = new Color(0.72f, 0.20f, 0.17f), Trim = new Color(0.08f, 0.08f, 0.10f),
                 Shields = Pylon,
                 Gun = new TurretSpec { Kind = Shots.Cruise, Damage = 126, Interval = 15, Range = 4500f,
                                        Turn = Mathf.Tau / 2.5f, ShellSpeed = 120f,
@@ -81,12 +86,12 @@ public static class Emplacements
                                        Texture = "res://turret_main.png", TexScale = 0.26f, Barrel = 34f,
                                        Tint = new Color(0.90f, 0.40f, 0.34f), Source = DamageSource.BaseMissile } },
 
-        // ITS FOUR SHIELD PYLONS. 400 hull to start, on the same ladder above that; nothing shields
+        // ITS FOUR SHIELD PYLONS. An eighth of the Lancer's row (403 at level 1), on the same scale; nothing shields
         // THEM, nothing ends the mission when one falls, and they answer with nothing -- they are
         // only what has to go first.
-        new() { Id = Pylon, Label = "SHIELD PYLON", Hull = _ => 400,
-                Sprite = "res://pirate_pylon.png", Length = 220f, HalfWidth = 150f,
-                Main = new Color(0.68f, 0.20f, 0.20f), Trim = new Color(0.08f, 0.08f, 0.10f) },
+        new() { Id = Pylon, Label = "SHIELD PYLON", Hull = _ => PylonShare * SiegeHull,
+                Texture = "res://drone_sensor.png", Length = 300f, HalfWidth = 150f,   // the Pod's own file (D18)
+                Tint = new Color(0.68f, 0.20f, 0.20f), Trim = new Color(0.08f, 0.08f, 0.10f) },
     };
 
     public static int RowOf(string id)
@@ -197,8 +202,7 @@ public partial class Emplacement : Node2D, IQuarry, ITagged, IStatused, ITurretH
         // A ROUND'S OWN HULL is sized for ONE pilot's guns, on the level's scale: it is fired at one
         // pilot, and a party's other guns are not all where it is going
         _hull = Missions.HullMult(Missions.Level, 1);
-        var art = Sprites.Fit(Def.Sprite, Def.Length);
-        art.Modulate = Def.Main;                         // grey art, tinted -- never recoloured in the file
+        var art = Sprites.Fit(Def);                       // grey art, tinted -- never recoloured in the file
         AddChild(art);
         if (Def.Shields != null)
         {
@@ -269,6 +273,6 @@ public partial class Emplacement : Node2D, IQuarry, ITagged, IStatused, ITurretH
         float w = Def.HalfWidth * 2f, f = (float)Mathf.Clamp(Hp / MaxHp, 0, 1);
         float y = -Def.Length * 0.5f - 20f;
         DrawRect(new Rect2(-Def.HalfWidth, y, w, 6f), Def.Trim with { A = 0.8f });
-        DrawRect(new Rect2(-Def.HalfWidth, y, w * f, 6f), Def.Main);
+        DrawRect(new Rect2(-Def.HalfWidth, y, w * f, 6f), Def.Tint);
     }
 }

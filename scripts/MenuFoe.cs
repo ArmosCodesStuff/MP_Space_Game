@@ -20,10 +20,10 @@ public partial class MenuFoe : Node2D, IHittable, ITagged
     // answered Tag.Light, so every point-defence turret on the title screen shot at a gunship,
     // which is the one thing Tag.Heavy exists to prevent. A new menu foe is a row.
     //
-    // Art: null wears the enemy row's own texture AND its raider red. The Web is the one row with
-    // art of its own -- enemy_light_tier_2.png, the tier-2 light art no EnemyDef names -- and a
-    // row with its own art wears that art's own colours, which is how the tether ship reads apart
-    // from the fighters making runs past the hull.
+    // Art: null wears the enemy row's own texture. The Web is the one row with art of its own --
+    // enemy_light_tier_2.png, the pack's crescent (tools/make_ships.ps1), which no EnemyDef names --
+    // and its shape is how the tether ship reads apart from the fighters making runs past the
+    // hull. Every row wears its enemy row's red, its own art too (grey, like every hull's).
     private struct FoeDef
     {
         public int Enemy;                 // the row of Enemies.All it is drawn from
@@ -88,9 +88,8 @@ public partial class MenuFoe : Node2D, IHittable, ITagged
     {
         _sprite = Sprites.Fit(_art, _length);          // exactly how Raider and PlayerShip do it
         // The raiders wear their row's red: untinted they drew in the art's bare grey and read as
-        // neutral hulls rather than as something shooting at you. A row with art of its own wears
-        // that art's own colours.
-        if (Def.Art == null) _sprite.Modulate = Enemies.Of(Def.Enemy).Tint;
+        // neutral hulls rather than as something shooting at you.
+        _sprite.Modulate = Enemies.Of(Def.Enemy).Tint;
         AddChild(_sprite);
     }
 

@@ -16,7 +16,8 @@ using System.Linq;
 // starting phase, wind-up, damage, reach, width, speed, turn, count, spread, the cue it plays,
 // whether it holds the hull still -- are the row's. Only the WAYS a move runs are behaviour, and
 // there are six, as there are two EnemyWays for the raiders:
-//   BOLT   an instant bolt of light at the nearest ship within Find
+//   BOLT   an instant bolt of light at the nearest ship within Find of its hull, Find + L/2
+//          from the centre
 //   SHOOT  Count bodies of Shot, fanned Spread degrees apart about the aim (a main gun is one)
 //   BEAM   a line down the nose for Windup, then Live seconds burning along it, judged every Tick
 //   DASH   a line down the nose for Windup, then the hull down it at Speed, Damage on contact
@@ -53,21 +54,21 @@ public class BossMove
     public bool Busy;                  // it holds the hull still while it runs (Boss.Locked)
     public bool Super;                 // the skinny bar under the hull counts down to it
     public double Damage;              // before the level's and the party's scale (DamageMult)
-    public float Find;                 // how far it looks for a target; 0: the whole arena
+    public float Find;                 // how far past its hull it looks for a target; 0: the whole arena
     public float Reach;                // how far the move itself carries: a beam, a dash, a lane
     public float Width;                // the warning's width, and a beam's own. A move whose
                                        // warning is as wide as the BODY it warns about leaves this
-                                       // 0 and Boss.Warn works it out instead (MoveWay.Throw).
+                                       // 0 and Boss.Warn works it out instead: a thrown body's own
+                                       // width (MoveWay.Throw), the hull's own beam (MoveWay.Dash).
     public float Speed, Range, Radius; // a dash's speed; a fired body's speed, flight and body
     public float Muzzle;               // how far ahead of the nose a fired body is born
-    public float Offset;               // how far off the flank a thrown body is held
+    public float Offset;               // the gap between the flank and a thrown body (FlankHold)
     public int Shot = Shots.Shell;     // which row of Shots.All a SHOOT move fires
     public int Count = 1;              // bodies in one firing
     public float Spread;               // degrees between them, fanned about the aim
     public double Live, Tick;          // a beam's burn, and how often that burn is judged
     // A burn is judged at both ends and every Tick between: 3 s every 0.25 s is 13, the last AT 3 s.
-    // COUNTED, and the last one ends the burn. Timed, the last judgement and the burn's end fell on
-    // one instant, two accumulated clocks decided which came first, and a full burn was 200 or 250.
+    // COUNTED, and the last one ends the burn, so no two clocks race over which comes first.
     public int Judgements => Mathf.FloorToInt(Live / Tick + 1e-6) + 1;
     public double Flight;             // a thrown body's flight down its lane
     public float Turn;                 // a guided body's turn rate (rad/s)
@@ -78,15 +79,16 @@ public class BossMove
     // point defence, a friend's note. (Not MoveWay.Beam -- that is a move that burns down a line
     // for Live seconds, and it is heard by its Cue and Strike.)
     public int Beam;
-    // THE ESCORT OPENER. Escorts light craft at +-EscortAngle, EscortOut off the hull, each with
+    // THE ESCORT OPENER. Escorts light craft at +-EscortAngle, EscortOut of the hull's HALF-WIDTHS
+    // out from its centre (so a bigger hull launches them as far clear of it), each with
     // EscortHull hull and boosting for the wind-up. The wind-up then starts on the PIN; with every
     // escort shot down, WebGrace past when their web was predicted to land; at the outside
     // WebSlack past that, and never later than ArmMax.
     public int Escorts, EscortKind;
     public float EscortAngle, EscortOut;
     public double EscortHull, WebGrace, WebSlack, ArmMax;
-    // THE WARP OPENER. A ring WarpRing across where it will land, Warp seconds, Standoff off the
-    // nearest pilot.
+    // THE WARP OPENER. A ring of WarpRing of the hull's HALF-WIDTHS where it will land, Warp
+    // seconds, its NOSE Standoff off the nearest pilot (measured from the hull, as HoldOff is).
     public double Warp;
     public float Standoff, WarpRing;
     public string WarpSound;
@@ -109,7 +111,7 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
     public Hub Hub;
     public Missions.BossType Type;              // which boss: its name, its hull, its shape, its moves
     public string Title => Type.Name;           // what the arena's line calls it (IQuarry)
-    // hull and damage by level and party: S(L)(1 + 0.6(P-1)) and S(L)(1 + 0.2(P-1))
+    // hull and damage by level and party: HullScale(L)(1 + 0.6(P-1)) and DamageScale(L)(1 + 0.2(P-1)) (Par)
     public double HullMult = 1, DamageMult = 1;
     public double MaxHp => Type.Hull * HullMult;
     // ITS SHAPE IS ITS ROW'S, as a raider's is EnemyDef's: behaviour is code, geometry is data.
@@ -151,6 +153,7 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
         public Vector2 From, To;           // a dash's end, a warp's landing, a ring's centre, a lane
         public PlayerShip Target;          // the pilot it chose, while it can see one (Sight)
         public Vector2 Spot;               // where it aims: that pilot, or where anyone was last seen
+        public readonly HashSet<PlayerShip> Struck = new();   // who a dash has already rammed, this dash
         public double Predict, Overdue, ArmedFor;   // an escort opener's clock
         public string Cause = "";                   // what ended the escorts' wait
         public readonly List<Raider> Escorts = new();
@@ -171,10 +174,8 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
         c.Windup /= q; c.Warp /= q; c.Flight /= q;
         c.Speed = (float)(c.Speed * q);
         c.Reach = (float)(c.Reach * q); c.Range = (float)(c.Range * q); c.Radius = (float)(c.Radius * q);
-        // ...and how far off the flank a thrown body is held goes with the body: it is a clearance
-        // (HalfWidth + Radius + a gap), so a rock that grows with the level and an offset that did
-        // not would end up drawn inside the hull holding it.
-        c.Offset = (float)(c.Offset * q);
+        // (where a thrown body is held goes with the body by construction: FlankHold is the hull's
+        // half-width, the body and a gap, so a rock that grows with the level stays clear of it)
         c.Turn = (float)(c.Turn * q);                   // a guided body comes round faster too
         c.Find = (float)(c.Find * q); c.Standoff = (float)(c.Standoff * q); c.EscortOut = (float)(c.EscortOut * q);
         return c;
@@ -227,7 +228,7 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
         // make the second boss of a session faster than the first. Done here, once, so not one of
         // the twenty-odd places that read a move has to know the level exists.
         _slots = Type.Moves.Select(m => new Slot { M = Scaled(m, Missions.Level), Due = m.First }).ToArray();
-        AddChild(Sprites.Fit(Type.Sprite, Length));
+        AddChild(Sprites.Fit(Type));
         ZIndex = 4;
         Combat.Hostiles.Add(this);
     }
@@ -324,7 +325,7 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
         if (_lastSeen is not { } centre) return;    // it has never seen anyone: it holds
         float want = Aim.Face(Position, centre);
         Rotation = Mathf.RotateToward(Rotation, want, Turning * dt);
-        if (Position.DistanceTo(centre) > Type.HoldOff) Position += (centre - Position).Normalized() * Type.CloseSpeed * dt;
+        if (Position.DistanceTo(centre) > Type.HoldOff + Length * 0.5f) Position += (centre - Position).Normalized() * Type.CloseSpeed * dt;
     }
 
     // -- THE SCHEDULER --------------------------------------------------------
@@ -360,7 +361,9 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
         var m = s.M;
         s.Due = m.Every; s.Fired++;
         if (m.Super) SuperGap = NextSuperHost;
-        s.Target = Combat.Nearest(_choosable, Position, p => p.Position, m.Find > 0 ? m.Find : float.MaxValue);
+        // Find is measured from the HULL, as HoldOff and Standoff are: what is placed round a boss
+        // scales with it, so a doubled hull reaches as far past its own nose as the row says.
+        s.Target = Combat.Nearest(_choosable, Position, p => p.Position, m.Find > 0 ? m.Find + Length * 0.5f : float.MaxValue);
         // WHAT IT AIMS AT: the pilot it chose -- or, with nobody in sight, where it last saw anyone,
         // so going dark is not a pause button. A move that looks only so far (Find) is a gun for
         // whoever is inside that reach, and waits for someone there; so does every move of a boss
@@ -378,10 +381,10 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
             return;
         }
         if (m.Warp > 0)
-        {   // A RING WHERE IT WILL LAND, Standoff off where it aims; the hull follows (Open)
-            s.To = s.Spot + (Position - s.Spot).Normalized() * m.Standoff;
+        {   // A RING WHERE IT WILL LAND, its nose Standoff off where it aims; the hull follows (Open)
+            s.To = s.Spot + (Position - s.Spot).Normalized() * (m.Standoff + Length * 0.5f);
             s.At = Phase.Opening; s.T = m.Warp;
-            Zone(s.To, m.WarpRing, m.Warp, null, m.WarpSound);
+            Zone(s.To, m.WarpRing * HalfWidth, m.Warp, null, m.WarpSound);
             return;
         }
         Aimed(s);
@@ -400,6 +403,7 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
             case MoveWay.Dash:
                 Rotation = Aim.Face(Position, s.Spot);
                 s.To = Aim.Nose(this, m.Reach);
+                s.Struck.Clear();
                 break;
             case MoveWay.Ring: s.To = Position; break;
             case MoveWay.Throw: Heave(s); break;
@@ -450,10 +454,15 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
                 Lane(m, new Vector2(0, -Length * 0.5f), new Vector2(0, -Length * 0.5f - m.Reach), onHull: true, hold: m.Live);
                 break;
             case MoveWay.Dash:
-                Lane(m, Vector2.Zero, new Vector2(0, -m.Reach), onHull: true);
+                // THE LANE IS THE HULL'S OWN BEAM: what the ram hits is what the hull covers (Burn)
+                Lane(m, Vector2.Zero, new Vector2(0, -m.Reach), onHull: true, width: HalfWidth * 2f);
                 break;
             case MoveWay.Ring:
-                Zone(s.To, m.Reach, m.Windup, m.Cue, m.Strike);
+                // A RING'S REACH GROWS WITH THE HULL (Type.Size, the owner's open question,
+                // 2026-09-25): the one move whose telegraph is drawn round the boss itself, so a
+                // bigger hull that kept the art's own reach would draw a ring the bow and stern
+                // now poke through. Everything else a move reaches with stays a reach, not a place.
+                Zone(s.To, m.Reach * Type.Size, m.Windup, m.Cue, m.Strike);
                 break;
             case MoveWay.Throw:
                 // THE LANE IS THE BODY, not a number beside it: Radius is what ThrownRock draws
@@ -497,8 +506,8 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
             case MoveWay.Beam: s.At = Phase.Firing; s.Left = m.Judgements; s.Next = 0; break;
             case MoveWay.Dash: s.At = Phase.Firing; break;
             case MoveWay.Ring:
-                foreach (var p in _hittable)
-                    if (p.Position.DistanceTo(s.To) <= m.Reach + p.HitRadius) p.Hit(Out(m), s.To, m.Source);
+                foreach (var p in _hittable)                              // the hit matches the drawn ring: Type.Size, same as Warn
+                    if (p.Position.DistanceTo(s.To) <= m.Reach * Type.Size + p.HitRadius) p.Hit(Out(m), s.To, m.Source);
                 break;
             case MoveWay.Throw: s.At = Phase.Firing; break;
         }
@@ -514,8 +523,8 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
             case MoveWay.Beam:
                 if ((s.Next -= delta) <= 0)
                 {   // judged every Tick, down the nose -- which has not moved since the wind-up began.
-                    // ADDED, not set: `= m.Tick` threw away the overshoot, so at 60 fps each judgement
-                    // came a frame late (16 frames, not 15) and a full burn was 12 of them, not 13.
+                    // ADDED, not set: the overshoot carries, so at 60 fps a judgement lands every 15
+                    // frames and a full burn is all 13 of them.
                     s.Next += m.Tick;
                     var (la, lb) = Segment(m.Id);
                     foreach (var p in _hittable)
@@ -525,8 +534,13 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
                 }
                 break;
             case MoveWay.Dash:
+                // ONE RAM A PASS: a hull longer than Speed x PlayerShip's hit gap is over a point
+                // for longer than a source is blocked (the 720 u Rusty: 0.6 s against 0.52 s), so
+                // the row's Damage is struck once per dash to each ship it covers, however long
+                // the hull takes to go by.
                 Position = Position.MoveToward(s.To, m.Speed * (float)delta);
-                foreach (var p in _hittable) if (Covers(p.Position, p.HitRadius)) p.Hit(Out(m), Position, m.Source);
+                foreach (var p in _hittable)
+                    if (Covers(p.Position, p.HitRadius) && s.Struck.Add(p)) p.Hit(Out(m), Position, m.Source);
                 if (Position.DistanceTo(s.To) < 1f) s.At = Phase.Idle;
                 break;
             case MoveWay.Throw:
@@ -551,7 +565,7 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
         return (nose, nose + Vector2.Up.Rotated(Rotation) * (S(id)?.M.Reach ?? 0f));
     }
 
-    // A MOVE'S ESCORTS: EscortAngle to port and to starboard of the nose, EscortOut off the hull,
+    // A MOVE'S ESCORTS: EscortAngle to port and to starboard of the nose, EscortOut half-widths out,
     // straight at the pilot, boosting for the whole wind-up and fragile on purpose (point defence
     // must be able to kill them inside it). Returns roughly how long until their web should land --
     // the wind-up's floor if they are all shot down first.
@@ -576,19 +590,22 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
         {
             float side = n > 1 ? (2f * k / (n - 1) - 1f) * m.EscortAngle : 0f;
             var dir = nose.Rotated(Mathf.DegToRad(side));
-            var at = Position + dir * m.EscortOut;
-            var r = Hub.SpawnRaider(at, m.EscortKind, 0, Missions.S(Missions.Level));
+            var at = Position + dir * (m.EscortOut * HalfWidth);
+            var r = Hub.SpawnRaider(at, m.EscortKind, 0, Missions.Level);
             // the one launched to port flanks to port, the other to starboard
-            r?.Escort(target, dir, m.Windup, m.EscortHull * Missions.S(Missions.Level), side < 0 ? -Mathf.Pi / 2f : Mathf.Pi / 2f);
+            r?.Escort(target, dir, m.Windup, m.EscortHull * Par.CraftScale(Missions.Level), side < 0 ? -Mathf.Pi / 2f : Mathf.Pi / 2f);
             if (r != null) s.Escorts.Add(r);
             eta = System.Math.Max(eta, Raider.WebEta(at.DistanceTo(target.Position)));
         }
         return eta;
     }
 
-    // A THROWN BODY: Offset off the flank toward where it aims, a lane Reach long, and the body
-    // itself -- the same one on every peer, from one event (ThrownRock). It names the blow it
+    // A THROWN BODY: held FlankHold off the keel toward where it aims, a lane Reach long, and the
+    // body itself -- the same one on every peer, from one event (ThrownRock). It names the blow it
     // deals, and strikes every live pilot in its lane, seen or not.
+    // Where it is held: the hull's half-width, the body, and the row's gap, so it clears the flank
+    // whatever the hull's size or the body's.
+    public float FlankHold(BossMove m) => HalfWidth + m.Radius + m.Offset;
     private ThrownRock _rock;
     public ThrownRock Rock => IsInstanceValid(_rock) ? _rock : null;
     private void Heave(Slot s)
@@ -596,7 +613,7 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
         var m = s.M;
         var side = Vector2.Right.Rotated(Rotation);
         if (side.Dot(s.Spot - Position) < 0) side = -side;                     // on the flank toward where it aims
-        s.From = Position + side * m.Offset;
+        s.From = Position + side * FlankHold(m);
         s.To = s.From + (s.Spot - s.From).Normalized() * m.Reach;
         int variant = s.Fired % 2;                                            // the two bodies ThrownRock draws
         _rock = new ThrownRock { Boss = this, From = s.From, To = s.To, Hold = m.Windup, Flight = m.Flight,

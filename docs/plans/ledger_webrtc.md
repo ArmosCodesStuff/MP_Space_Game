@@ -1151,3 +1151,16 @@ heredoc turns "\n" inside C# strings into real newlines: it broke SessionMenu on
 ## JOB gate 2 comments (PRE)
 - tier opus; intent: fix two stale Router comments (invariant C); files tools/smoketest/SmokeTest.cs.txt (07cbc10ddc980f0d94c04a41a9397bec5ef83dfd); HEAD feacfc45b50c0bf43572b7b2ffcea1d807befd9e
 - POST: done; two comments/message reworded (line 5699 is a home router, kept); typecheck 0 errors, quick green; no engine run.
+
+## JOB M3 merge version-l (PRE)
+- tier opus; intent: merge version-l 9b05fd3 (kits A slices 1-3, art, drives, fields, curve, wings) into wt/net2; HEAD c389b45
+- conflicted: tools/smoketest/SmokeTest.cs.txt, tools/smoketest/run.ps1, docs/CHANGES.md
+- POST: resolved.
+  - SmokeTest header: version-l's `Trimmed` helper kept; its old router-era HERMETIC NETWORK comment dropped (net2 rewrote it above HermeticNetwork).
+  - arena guest join: net2's JoinedBy == "address" check kept, plus version-l's `await LaneBGuestDrives()`.
+  - host mid-session level: version-l's curve literal 1.2725 (base 1.2875 was changed only there) + its hostRampHold cleanup, then net2's R2cHostReturns and the -Wan backlog print.
+  - guest before the drop: version-l's guest-flown ramp block (D18), then net2's "host DROPS this guest" comment.
+  - run.ps1: net2's $lim (205 under -Wan, else 180); version-l's side was the old literal 180.
+  - CHANGES.md: Handoff = net2's entry + every version-l entry (net2's stale kits K2 entry dropped: version-l's K3 entry supersedes it); Unreleased keeps both sides.
+  - Wire: no channel/enum collision (version-l changed no NetChannels; Beat = 12 stays net2's).
+  - typecheck 0 errors, quick ALL CHECKS PASSED; no engine run.

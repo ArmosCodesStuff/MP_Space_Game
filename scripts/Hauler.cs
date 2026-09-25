@@ -61,18 +61,27 @@ public partial class Hauler : UtilityShip, ITurretHost
     public double ShownCargo => Cargo * (1 - Delivered / Hub.Outposts.Length);
     public double T;                         // seconds in the current state
     public double LastSale;                  // credits paid on the last return
-    public const float Length = 200f;
+    // ITS ART (Sprites.cs HullArt): the pack's cargo_4, its two bells as tools/make_ships.ps1 prints them
+    public static readonly HullArt Art = new()
+    {
+        Texture = "res://hauler.png", Length = 200f,
+        Nozzles = new Nozzle[] { new(-20.00f, 99.06f, 15.63f), new(19.84f, 99.38f, 15.94f) },
+    };
+    // its span at the cargo frames' outer rails (make_ships' `side` mark): what a raider holds off
+    private const float HalfWidth = 40.94f;
     public const float East = Mathf.Pi / 2f, West = -Mathf.Pi / 2f;
     private const float Accel = 25f;
     private float _speed;
 
-    // the six painted pods, in the hull's own frame at flight size (nose up):
+    // the six pods are the six cargo frames painted on its hull, each the bay inside the frame's
+    // rails (make_ships' pod and podcorner marks), in the hull's own frame at flight size (nose up):
     // filled in pairs, front to back, port then starboard
     private static readonly Vector2[] PodCentre =
-        { new(-23.6f, -51.6f), new(23.6f, -51.6f), new(-23.6f, -6.0f), new(23.6f, -6.0f), new(-23.6f, 39.5f), new(23.6f, 39.5f) };
-    public static readonly Vector2 PodSize = new(21f, 43.4f);
+        { new(-28.75f, -25.16f), new(28.75f, -25.16f), new(-28.75f, 4.53f), new(28.75f, 4.53f), new(-28.75f, 33.91f), new(28.75f, 33.91f) };
+    private static readonly Vector2 PodSize = new(20f, 22.18f);
 
     private Sprite2D _sprite;
+    private Vector2 _fit;                    // the sprite's scale at flight size
     private Node2D _overlay;                 // drawn above the hull: pods, cargo motes, the sale
 
     // ── its own point defence (ITurretHost) ─────────────────────────────────
@@ -81,7 +90,7 @@ public partial class Hauler : UtilityShip, ITurretHost
     // Its damage is the yard's to buy (hauler_pd_damage); the rest of the gun is fixed.
     private Turret _pd;
     private readonly List<Turret> _pdMounts = new();
-    private static readonly Vector2 PdMount = new(0f, 8f);     // on the spine, just aft of centre
+    private static readonly Vector2 PdMount = new(0f, -85.94f);   // on the bow's round dome (make_ships' pd mark)
     public Node2D AsNode => this;
     public bool PdOnline => InReach && !Lost;
     public Vector2 AimAt => Position;                // it has no main guns
@@ -109,8 +118,8 @@ public partial class Hauler : UtilityShip, ITurretHost
 
     public override void _Ready()
     {
-        var tex = Assets.Load<Texture2D>("res://hauler.png");
-        _sprite = new Sprite2D { Texture = tex };
+        _sprite = Sprites.Fit(Art);
+        _fit = _sprite.Scale;
         AddChild(_sprite);
         _overlay = new Node2D();
         _overlay.Draw += DrawOverlay;
@@ -130,7 +139,7 @@ public partial class Hauler : UtilityShip, ITurretHost
     public override string Label => "Hauler";
     public override bool InReach => State is not (St.Destroyed or St.Away);
     public override bool Lost => State == St.Destroyed;
-    public override (float halfLength, float halfWidth) Extent => (Length * 0.5f * VisualScale, Length * 0.12f * VisualScale);
+    public override (float halfLength, float halfWidth) Extent => (Art.Length * 0.5f * VisualScale, HalfWidth * VisualScale);
     protected override float LostBlast => 70f;
     protected override float RebuiltBlast => 60f;
     protected override void OnLost() { _speed = 0; EndEscort(); Go(St.Destroyed); Effects(); }   // gone at once, its hunters with it
@@ -299,10 +308,9 @@ public partial class Hauler : UtilityShip, ITurretHost
             ? new Vector2(_rng.RandfRange(-1f, 1f), _rng.RandfRange(-1f, 1f)) * (0.5f + 2.5f * (float)Math.Min(1, T / Economy.HaulerCharge))
             : Vector2.Zero;
         float warp = State == St.Away ? 1f - (float)Math.Min(1, T / 0.35) : State == St.Arriving ? (float)Math.Min(1, T / 0.4) : 1f;
-        float k = Length / _sprite.Texture.GetHeight() * VisualScale;
-        _sprite.Scale = new Vector2(k * warp, k * (State == St.Away ? 1f + 2f * (1f - warp) : 1f));
+        _sprite.Scale = _fit * VisualScale * new Vector2(warp, State == St.Away ? 1f + 2f * (1f - warp) : 1f);
         _sprite.Modulate = State == St.Charging || State == St.Away || (State == St.Arriving && T < 0.6)
-            ? new Color(0.75f, 0.9f, 1.3f) : Colors.White;
+            ? new Color(0.75f, 0.9f, 1.3f) : Art.Tint;
     }
 
     public bool AuraOn => State == St.Charging;
@@ -312,12 +320,11 @@ public partial class Hauler : UtilityShip, ITurretHost
     public override void _Draw()
     {
         if (WarpedOut) return;
-        // three light-yellow plumes at its three nozzles (x = -17.7, 0, +17.7 u at full size)
+        // a light-yellow flame out of each of its bells (Art.Nozzles), at the size it is drawn
         float vs = VisualScale, thr = State is St.Departing or St.Escorting or St.Returning ? 1f : 0.2f;
-        foreach (float nx in new[] { -17.7f, 0f, 17.7f })
-            Plume.Draw(this, new Vector2(nx, Length * 0.5f) * vs, Vector2.Down, Length * 0.45f * vs, Plume.Utility, thr, thr > 0.5f);
+        Art.DrawPlumes(this, Vector2.Zero, vs, Plume.Utility, thr, thr > 0.5f);
         var tex = _sprite.Texture;
-        var size = tex.GetSize() * (Length / tex.GetHeight()) * VisualScale;
+        var size = tex.GetSize() * _fit * VisualScale;
         var drop = (new Vector2(10f, 16f) * (0.15f + Altitude)).Rotated(-Rotation);   // screen down-right, in the hull's frame
         DrawTextureRect(tex, new Rect2(drop - size / 2, size), false, new Color(0, 0, 0, 0.45f - 0.15f * Altitude));
 
@@ -328,7 +335,7 @@ public partial class Hauler : UtilityShip, ITurretHost
         DrawSetTransform(Vector2.Zero, 0f, new Vector2(0.45f, 1f));        // stretched along the hull
         for (int i = 0; i < 3; i++)
         {
-            float r = Length * (0.36f + 0.08f * i) + 6f * pulse;
+            float r = Art.Length * (0.36f + 0.08f * i) + 6f * pulse;
             DrawCircle(Vector2.Zero, r, new Color(0.35f, 0.65f, 1f, (0.20f + 0.15f * pulse) * aura / (i + 1)));
             DrawArc(Vector2.Zero, r, 0, Mathf.Tau, 48, new Color(0.7f, 0.9f, 1f, 0.9f * aura / (i + 1)), 3f);
         }

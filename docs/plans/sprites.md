@@ -50,12 +50,17 @@ Confirmed as the drafts had them:
 Rotation means the turn that points the nose up in the file. **Drawn width** is the full drawn width in world
 units: today's art at today's Length, then the new art at its final length.
 
+**The owner's picks, 2026-09-25** (binding; they replace this table's first draft on six rows): Carrier
+carrier_a, Wraith fighter_unit_a, Pod drone_sensor (the pylon's art too; the row tints tell them apart),
+Miner drone_salvager (the salvager's art too: one file, `gatherer.png`), wing fighter fighter_delta, wing
+bomber fighter_g. carrier_b is the pirate-carrier boss spare. ≈ widths on those rows are the untrimmed art's.
+
 ### Player classes (tinted by the pilot's Main)
 
 | entity | sprite | rotation | final L | drawn width (u) | why |
 |---|---|---|---|---|---|
 | Battleship | battleship_bb05 | 90° CW | 378 | 164 → 163 | Named for it. 6 painted twins; 4 of them seat the 4 mains, and two aft domes seat PD x2 |
-| Carrier | carrier_b | 90° CCW | 283.5 | 113 → 136 | A runway down the whole keel (≈ 39 × 232 u), a flank stack each side for PD x2, 2 engines |
+| Carrier | carrier_a | 90° CCW (medium confidence: checked against the art in its slice) | 283.5 | 113 → ≈ 138 | The owner's pick |
 | Destroyer | destroyer_dd22 | 90° CCW | 212.625 | 82 → 101 | Named for it. 2 keel mounts = the Director battery; VLS cells and racks aft = Long Lance and depth charges |
 | Freighter | cargo_2 | 90° CW | 230 | 176 → 125 | 4 detachable hex pods read as its sentries |
 | Tender | cargo_3 | 90° CW | 230 | 169 → 116 | The claw at the bow is where the mending lance comes from |
@@ -65,7 +70,7 @@ units: today's art at today's Length, then the new art at its final length.
 | Warden | fighter_e | 90° CW | 120 | 84 → 88 | A 2×5 grid of cell hatches for the hunters. Also the art for the v2 decoy |
 | Dart | fighter_unit_d | 90° CW | 70 | 49 → 40 | A spike ahead of a small, fast body: the rod |
 | Echo | fighter_f | 90° CW | 70 | 43 → 55 | Paired guns on both wings: "fires twice" |
-| Wraith | fighter_g | 90° CCW | 70 | 44 → 46 | Smooth and low-profile. Its engines decide the nose; its fins read as canards |
+| Wraith | fighter_unit_a | 90° CCW | 70 | 44 → ≈ 54 | The owner's pick |
 
 ### Enemies (row tint)
 
@@ -73,7 +78,7 @@ units: today's art at today's Length, then the new art at its final length.
 |---|---|---|---|---|---|
 | Webifier (also the target dummy, the title-screen lights and the Rusty escorts) | fighter_swept | none | 34 | 19 → 38 | The plainest small raider; its wingtip prongs read as web emitters |
 | Talon | fighter_tri_a | none | 40 | 23 → 31 | Three forward spikes |
-| Pod | fighter_delta | none | 52 | 35 → 58 | The heaviest-looking of the three small ones |
+| Pod | drone_sensor | none | 52 | 35 → 52 | The owner's pick: a round drone, one stern vent (its one bell) |
 | Gunship (also the title-screen heavies) | frigate_b | 90° CW | 136 | 96 → 63 | One painted twin plus a missile rack: its kit |
 | Cross | gunship_h | 90° CW | 120 | 104 → 63 | frigate_b's hull (IoU 0.80) with the rack stripped |
 | Lancerkin | frigate_d | 90° CW | 150 | 100 → 41 | The slim missile boat, 8 tubes on its spine |
@@ -83,10 +88,10 @@ units: today's art at today's Length, then the new art at its final length.
 
 | entity | sprite | rotation | final L | drawn width (u) | why |
 |---|---|---|---|---|---|
-| Rusty Bucket | frigate_a | 90° CCW | 360 | 174 → 190 | A rounded "bucket" bow, with turrets bolted on beside cargo |
-| Drake Bastion | flagship | 90° CCW | 420 | 191 → 217 | The largest and most detailed sprite |
+| Rusty Bucket | frigate_a | 90° CCW | 360 → **720** (2x, the owner, 2026-09-25) | 174 → 380 | A rounded "bucket" bow, with turrets bolted on beside cargo |
+| Drake Bastion | flagship | 90° CCW | 420 → **840** (2x) | 191 → 434 | The largest and most detailed sprite |
 
-### Siege (tinted `Main`)
+### Siege (`EmplacementDef : HullArt`, tinted)
 
 | entity | sprite | rotation | final L | drawn width (u) | why |
 |---|---|---|---|---|---|
@@ -98,11 +103,11 @@ units: today's art at today's Length, then the new art at its final length.
 | entity | sprite | rotation | final L | drawn width (u) | why |
 |---|---|---|---|---|---|
 | Hauler | cargo_4 | 90° CW | 200 | 71 → 93 | Exactly 6 cargo frames, 3 a side, for the code's 6 pods |
-| Miner | drone_mining | 90° CW | 40 | 27 → 29 | A drill-and-scoop crab |
+| Miner | drone_salvager | 90° CCW | 40 | 27 → 23 | The owner's pick: the salvager's drone in the miner's tint, its beam from the claws |
 | Salvager | drone_salvager | 90° CCW | 40 | 27 → 23 | A grab-claw bow |
 | Lane couriers (all 4 rows) | drone_economy | 90° CW | **22 → 30** (Q6) | 15 → 12 | A train of containers. It gets its own file; today's rows borrow the miner and salvager art |
-| Wing fighter | interceptor_a | 90° CW | 17 | 11 → 11 | Nose guns; the same airframe as the bomber |
-| Wing bomber | interceptor_b | 90° CW | 28.125 | 28 → 19 | Two 4-round torpedo pods |
+| Wing fighter | fighter_delta | none | 17 | 11 → 19 | The owner's pick: two bells |
+| Wing bomber | fighter_g | 90° CCW | 28.125 | 28 → 18 | The owner's pick: its torpedoes leave from its wingtip rails |
 
 ### Keep their current art
 
@@ -117,12 +122,12 @@ units: today's art at today's Length, then the new art at its final length.
 | sprite | rotation | note |
 |---|---|---|
 | heavy_fighter_hf01 | 90° CCW | The v2 carrier warp gunships, once they exist |
-| carrier_a | 90° CCW (medium confidence) | A future pirate-carrier boss; too close to carrier_b to use now |
+| carrier_b | 90° CCW | A future pirate-carrier boss (the owner's picks) |
 | cargo_1 | 90° CW | Reads as the hauler (IoU 0.84) |
-| fighter_unit_a | 90° CCW | A duplicate of hf01 (IoU 0.985) |
 | fighter_tri_b | none | A duplicate of tri_a (IoU 0.975) |
+| drone_mining, interceptor_a, interceptor_b | 90° CW | Unused since the owner's picks |
 
-**Count:** 12 + 7 + 2 + 2 + 6 = 29 used, plus 5 spare = **34**.
+**Count:** 27 distinct sprites used (drone_sensor and drone_salvager each on two rows), plus 7 unused = **34**.
 
 ---
 
@@ -140,7 +145,7 @@ values.
 | entity | marks to place | nozzles | waits for kit sign-off? |
 |---|---|---|---|
 | **Battleship** | 4 mains on the flanking twins, ≈ (±24, −74) and (±24, −36) (today: 4 on the spine). **Arcs** (F7). PD x2 on the aft domes ≈ (±59, +72) (today ±21, 157). k ≈ 1.9 from the twin housing (today 2.5). Paint out the 6 painted twins' barrels (Q4) | 4 | **yes**: the seats and arcs |
-| **Carrier** | PD x2 on the flank stacks ≈ (±30, 0) (today 3). **Deck:** runway on x = 0 (needs the keel mark), 6 bays (the gear allows 5 bombers) two abreast at ≈ ±12.5 u, 3 rows about 30 u apart, keeping the keel lane (±6 u) clear for the lift. `RunwayBow` ≈ 110-125. Landing point (0,0) is on the runway. `EngineInset` goes | 2 | yes, as a capital (PD 2 is already binding, F16) |
+| **Carrier** | (≈ figures read off carrier_b; carrier_a's are measured in its slice) PD x2 on the flank stacks ≈ (±30, 0) (today 3). **Deck:** runway on x = 0 (needs the keel mark), 6 bays (the gear allows 5 bombers) two abreast at ≈ ±12.5 u, 3 rows about 30 u apart, keeping the keel lane (±6 u) clear for the lift. `RunwayBow` ≈ 110-125. Landing point (0,0) is on the runway. `EngineInset` goes | 2 | yes, as a capital (PD 2 is already binding, F16) |
 | **Destroyer** | 2 mains on the keel mounts ≈ (0, −14) and (0, +18) (today −57 / +25). PD x2 on the flank domes ≈ (±31, +6). k from the twin housing | 3 | yes |
 | **Freighter** | 1 main? (spotter cannon) and PD x2. Where the sentries leave the hull | 3 | **yes**: the main count |
 | **Tender** | the lance's origin at the claw. PD x2 | 2 | yes |
@@ -149,15 +154,15 @@ values.
 | **Dart / Echo / Wraith** | Dart: a fixed nose mount. Echo and Wraith: 1 main each (kit) | 2 / 2 / 2 | yes |
 | **Gunship** | `TurretAft` ≈ +0.12 (today 0.143) and `TurretWidth` from its painted twin | 2 | no |
 | **Cross / Lancerkin** | `TurretAft` and `TurretWidth` on the clean deck (their art has no painted gun there) | 2 / 2 | no |
-| **Webifier / Talon / Pod** | none (`HitShare` unchanged) | 2 / 3 / 2 | no |
+| **Webifier / Talon / Pod** | none (`HitShare` unchanged) | 2 / 2 / 1 (built) | no |
 | **Title Web** | none. Its row tint now applies (the own-art-keeps-its-colours branch goes) | 2 nacelles | no |
-| **Rusty Bucket / Drake** | a **tint** (Q5). HW 70 and 90 kept, so the 310 literal stands. The nose stays at L/2 | 2 / 5 (listed; bosses draw no plume today) | no |
+| **Rusty Bucket / Drake** | a **tint** (the owner's red). **2x** (the owner's ruling, built as `Missions.BossSize`): HW 140 / 180, the hit size with it; the throw's hold follows the row (`Boss.FlankHold`, 400 u). The nose stays at L/2 | 2 / 5 (listed; bosses draw no plume today) | no |
 | **Pirate base** | `Mounts[4]` on the painted guns: horn roots ≈ (±332, −154) and canopy twins ≈ (±104, 0) (today a ring of r 210). L 483, HW 330 | 4 | no |
 | **Pylon** | `Mounts[1]` = (0,0) on the lens. L 300, HW 150 | 0 | no |
 | **Hauler** | 6 `PodCentre` plus `PodSize` on cargo_4's frames. PD (0, 8) re-seated. `Extent` share 0.12 → measured (≈ 0.2) | 2 (today 3, drawn inline) | no |
-| **Miner / Salvager** | the beam emitter (today 0.45 L) moves to the scoop or claw. `Extent` (20, 12) → measured | 3 / count at build | no |
+| **Miner / Salvager** | one drone: the beam emitter (today 0.45 L) moves to the claws' mouth. `Extent` (20, 12) → measured | 3 / 3 (built) | no |
 | **Couriers** | none | count at build | no |
-| **Wing fighter / bomber** | the bomber's torpedo point moves to the pods' front (today 0.45 L). The parked footprint is checked against the carrier's deck | 5 (can list 1 for the cluster) / 2 | no (the art); the deck waits for the carrier |
+| **Wing fighter / bomber** | the bomber's torpedo point moves to its wingtip rails' front (today 0.45 L). The parked footprint is checked against the carrier's deck | 2 / 2 (built) | no (the art); the deck waits for the carrier |
 
 Hit shapes:
 - the capsule, the shield ellipse, `HitRadius` and the raid `Extent` all follow `HalfWidth` (kept by default);
@@ -251,7 +256,9 @@ Slice 1, the foundations:
   `EmplacementDef.Main`) becomes `HullArt.Tint`, and `Gatherer.Length` moves onto the row;
 - `Sprites.Fit(HullArt)` replaces the 4 copies of `Length / GetHeight`;
 - `Plume` draws the nozzle list, which deletes `EngineInset` and the Hauler's inline array;
-- `EmplacementDef.Mounts` replaces `Guns` and `GunRing`;
+- **superseded (J4):** `EmplacementDef` keeps its ONE `Gun` at its centre -- the base carries no
+  guns of its own and a pylon answers with none, so there was never a `Guns`/`GunRing`/`Mounts` to
+  replace; J4 was a re-art only (Sprite -> Texture, Main -> Tint, L 560 -> 483 / 220 -> 300);
 - the Hauler's pods, PD and Extent, and the Gatherer's beam point and Extent, move to rows;
 - `TargetDummy` reads the webifier row;
 - `MenuFoe` always tints.
