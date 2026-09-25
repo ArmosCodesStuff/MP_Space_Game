@@ -325,3 +325,20 @@ fittings sweep's witness table ~13755, fitRows ~13797.
   11716-11812 (the DD missile block) 13746 13750 13991 (the sweep's "missile"/"reload" witnesses and fitRows'
   Fit.Missiles row) 14452-14695 16624-16757 17802-17816 -- each REWRITTEN to the director / Lance truth (6.3), none
   deleted without its replacement. Shots.cs.txt: 16 missile mentions (grep; the DD closeups at 471 / 690 / 802).
+
+### kits6a-J7 · PRE · DD row + director battery + Long Lance (A6a-7) -- tier opus (agent 3; no COORDINATOR NOTE in the tail)
+- Intent: DD Nums hull 395, turn 1.2, radius 95, main 2 x 11.25 / 0.5 s, 700 u, shells 760, main_turn 2.09, row
+  director_lead 1.2 (PlayerShip.Directed: the owner's aim leads a selected hostile within main_range x director_lead,
+  Lead + Missiles.Predict; rides the state report, no new wire). A BOW-SHOT row foundation: AbilityDef.Bow (a Shots.All
+  kind + damage / speed / range / cooldown stat ids) pressed through PlayerShip.FireAlong(id); Ab.Lance (F) = Bow on
+  Shots row 4, renamed in place "missile" -> "lance" (A6a-12: its one user leaves, the wire index stays, no append);
+  Dps.Lance. DELETED: Fit.Missiles, Ab.Missile, Ab.Reload, the DD's FireMode, PlayerShip missile / reload members,
+  BurstSides / FireMissile, Stats' Missile group + MissileDps + Dps.Missiles, LaunchTorpedo's heavy flag; Items @output
+  missile_damage -> lance_damage; kit parts Need lance_damage. DD bar: Guns, Lance.
+  Checks: NEW LaneA6aDirectorChecks, LaneA6aLanceChecks, LaneA6aLanceHitChecks; every harness line on the missiles /
+  reload / DD 250 hull rewritten (6.3); the sweep's witnesses "lance" and fitRows.
+- Files: scripts/Ships.cs, Abilities.cs, PlayerShip.cs, Stats.cs, Shots.cs, Combat.cs, Items.cs, Dealt.cs,
+  tools/smoketest/SmokeTest.cs.txt, tools/screens/Shots.cs.txt.
+- HEAD 8d2c8b8570aa2936a7a6820b06268122a9004b9a · Ships.cs f55ab21b · Abilities.cs c1453e69 · PlayerShip.cs 0307607f ·
+  Stats.cs 985dc811 · Shots.cs c44dd017 · Combat.cs b1c74172 · Items.cs 69ab6bab · Dealt.cs 055f7437 · SmokeTest.cs.txt
+  510f58d9 · Shots.cs.txt ba103b7f
