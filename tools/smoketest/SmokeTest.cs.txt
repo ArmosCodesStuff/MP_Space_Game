@@ -4612,7 +4612,8 @@ public partial class _Test : Node
     // shot does not bring it down) 200-400 u from it, at varied bearings, 3 runs (kits_v31 3.1's sentry
     // lines). Unpainted it takes the seeker (rank 0). The gunship painted: it turns to it within 2 frames,
     // though the seeker is nearer and outranks it. The paint lapsing: it goes back to the seeker although
-    // the gunship is still in reach.
+    // the gunship is still in reach. A gunship painted 700-780 u off (past the 650) does not take the gun;
+    // moved to 560-620 u, still painted, it does within 2 frames.
     async Task LaneASentryPreferChecks(Vector2 yonder)
     {
         await SetClass(ShipClass.FreightHauler);                 // the paint lives in the spotter's slot (kits6b D33)
@@ -4642,6 +4643,26 @@ public partial class _Test : Node
             await Frames(90);
             bool back = ReferenceEquals(sentry.Aimed, seeker) && pm.Painted == null && gun.Alive;
             Check(back, $"...and when the paint lapses it goes back to the seeker, though the gunship is still in reach ({(sentry.Aimed as Node2D)?.Name})");
+            // fr-R6b-5 THE PAINT ONLY WITHIN 650 u: a second held gunship painted 700-780 u off the sentry leaves
+            // the gun on the nearer unpainted seeker; moved to 560-620 u (the paint still on it) it takes the gun
+            // within 2 frames
+            var fSpot = spot + Vector2.Right.Rotated(VaryAngle()) * Vary(700f, 780f);
+            var far = H.SpawnRaider(fSpot, Enemies.Gunship); far.Hp = 1e9; far.ApplyStatus(Status.Disabled, 30);
+            async Task FarFrames(int n)
+            {
+                for (int i = 0; i < n; i++) { far.Position = fSpot; gun.Position = gSpot; seeker.GlobalPosition = sSpot; pm.Position = yonder; pm.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            }
+            await FarFrames(2);
+            pm.PaintOn(far, 5);
+            await FarFrames(2);
+            bool heldSeeker = ReferenceEquals(sentry.Aimed, seeker) && ReferenceEquals(pm.Painted, far);
+            float farWas = fSpot.DistanceTo(spot);
+            fSpot = spot + Vector2.Right.Rotated(VaryAngle()) * Vary(560f, 620f);
+            await FarFrames(2);
+            bool tookFar = ReferenceEquals(sentry.Aimed, far) && ReferenceEquals(pm.Painted, far);
+            Check(heldSeeker && tookFar,
+                  $"a gunship painted {farWas:0} u off the sentry (past its 650) leaves it on the seeker ({heldSeeker}); moved to {fSpot.DistanceTo(spot):0} u, still painted, it takes the gun within 2 frames ({tookFar})");
+            pm.PaintOn(null, 0); far.TakeDamage(1e12);
             seeker.Intercept(); gun.TakeDamage(1e12); H.DeployedTaken(sentry);
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         }
@@ -4720,12 +4741,14 @@ public partial class _Test : Node
     // The sheet against the request's literals once (40 a line, 14 u wide, guns join within 1500 u, cd
     // 16, F = ability 1: learned at level 1). World, host, 3 runs at varied bearings: a gunship 300-700 u
     // off, painted with 0.1-0.4 s of its 5 s left (age 4.6-4.9: fires). {0, 1, 3} landed sentries
-    // 1440-1490 u from it, from the far side; one more at 1510-1570 u (silent); in runs 0 and 1 a throw
+    // 1440-1490 u from it, 0.4-1.3 rad off the hull's bearing; two more on one ray 52-69 deg off the hull's side, 900-1100 u and
+    // 650-750 u out (the outer's line runs over the inner), and a battleship pilot on that ray 380-480 u out under
+    // both lines (allies never hit, fr-R6b-6); one more at 1510-1570 u (silent); in runs 0 and 1 a throw
     // still in flight toward it (silent: no gun until it lands); a light raider on the spotter's line
     // 35-65% of the way. The gunship MOVING straight on a varied heading at {0, 130, 260} u/s (kits_v31 3.1's
     // Proves line; the kits6b gate fix): moved every frame for 0.25 s along its line, arriving on its spot the
-    // frame of the press, so no sentry's range is on a knife edge. One press: the gunship takes {1, 2, 4} lines
-    // of exactly 40 -- 40 x (k + 1) in all, 160 with three sentries -- all inside that one call (the same tick); the light across the spotter's line 40; the pilot credited "tot" for
+    // frame of the press, so no sentry's range is on a knife edge. One press: the gunship takes {3, 4, 6} lines
+    // of exactly 40 -- 40 x (k + 3) in all, 240 with five sentries -- all inside that one call (the same tick); the light across the spotter's line 40; the pilot credited "tot" for
     // every one; no sentry of its own touched. A second press: COOLING, the clock at the sheet's 16
     // (the pilot's cooling share). The paint let lapse (0.05-0.15 s left, then 0.3 s): NO PAINT, nothing
     // lands, nothing cools.
@@ -4745,6 +4768,8 @@ public partial class _Test : Node
         Dealt.Landed += Heard;
         var ks = new[] { 0, 1, 3 };
         var speeds = new[] { 0f, 130f, 260f };
+        var mate = LaneA6bMate(ShipClass.Battleship, 5, yonder + new Vector2(0, 3400));   // fr-R6b-6: a pilot on a line
+        var mateAt = mate.Position;
         for (int run = 0; run < 3; run++)
         {
             foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
@@ -4760,15 +4785,24 @@ public partial class _Test : Node
             var mine = new List<DeployedTurret>();
             float back = dir.Angle() + Mathf.Pi;                  // the far side of the gunship from the hull
             for (int i = 0; i < ks[run]; i++)
-                mine.Add(H.Drop(fr, tSpot + Vector2.Right.Rotated(back + Vary(-1.3f, 1.3f)) * Vary(1440f, 1490f), 1e9));
+                mine.Add(H.Drop(fr, tSpot + Vector2.Right.Rotated(back + (i % 2 == 0 ? 1 : -1) * Vary(0.4f, 1.3f)) * Vary(1440f, 1490f), 1e9));
             mine.Add(H.Drop(fr, tSpot + Vector2.Right.Rotated(back + Vary(-1.3f, 1.3f)) * Vary(1510f, 1570f), 1e9));
+            // fr-R6b-6 ALLIES NEVER HIT: two more of its own sentries (guns: within 1500 u) on one ray from the gunship
+            // 52-69 deg off the hull's side, 900-1100 u and 650-750 u out, so the outer one's line runs over the inner
+            // one; a battleship pilot on the same ray 380-480 u out, under both lines
+            // (dropped after the in-flight throw below: a Drop passes the 3-out cap, a throw does not)
+            var ray = dir.Rotated((run % 2 == 0 ? 1 : -1) * Vary(0.9f, 1.2f));
+            var outerAt = tSpot + ray * Vary(900f, 1100f);
+            var innerAt = tSpot + ray * Vary(650f, 750f);
+            mateAt = tSpot + ray * Vary(380f, 480f);
+            double mateHp = mate.Hp;
             // the gunship on the move: straight along `heading` at speeds[run] u/s, 0.25 s back along its line to start,
             // its place each frame read off the clock, so it reaches tSpot on the frame of the press (the press follows
             // the last step with no frame between)
             var heading = Vector2.Right.Rotated(VaryAngle()) * speeds[run];
             for (int i = 0; i < 10; i++)
             {
-                gun.Position = tSpot - heading * 0.25f; fr.Position = home; fr.Velocity = Vector2.Zero; fr.Rotation = rot; fr.AimPoint = tSpot;
+                gun.Position = tSpot - heading * 0.25f; fr.Position = home; fr.Velocity = Vector2.Zero; fr.Rotation = rot; fr.AimPoint = tSpot; LaneA6bHold(mate, mateAt);
                 await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             }
             double moveEnd = fr.Clock + 0.25;
@@ -4776,10 +4810,10 @@ public partial class _Test : Node
             for (int i = 0; i < 120 && fr.Clock < moveEnd; i++, moveFrames++)
             {
                 gun.Position = tSpot - heading * (float)Math.Max(0, moveEnd - fr.Clock);
-                fr.Position = home; fr.Velocity = Vector2.Zero; fr.Rotation = rot; fr.AimPoint = tSpot;
+                fr.Position = home; fr.Velocity = Vector2.Zero; fr.Rotation = rot; fr.AimPoint = tSpot; LaneA6bHold(mate, mateAt);
                 await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             }
-            gun.Position = tSpot; fr.Position = home; fr.Velocity = Vector2.Zero; fr.Rotation = rot; fr.AimPoint = tSpot;
+            gun.Position = tSpot; LaneA6bHold(mate, mateAt); mateHp = mate.Hp; fr.Position = home; fr.Velocity = Vector2.Zero; fr.Rotation = rot; fr.AimPoint = tSpot;
             float travelled = gunFrom.DistanceTo(tSpot);
             bool moving = moveFrames >= 2 && Math.Abs(travelled - speeds[run] * 0.25f) < 0.5f;
             bool flying = false;
@@ -4790,6 +4824,7 @@ public partial class _Test : Node
                 fr.UseAbility("deploy", 0);
                 flying = fr.TurretsOut == out0 + 1 && H.Deployed.Count(t => t.OwnerId == fr.OwnerId) == mine.Count;
             }
+            mine.Add(H.Drop(fr, outerAt, 1e9)); mine.Add(H.Drop(fr, innerAt, 1e9));
             // the paint, stale but alive: 4.6-4.9 s of its 5 gone
             fr.PaintOn(gun, 5); fr.Sl(PlayerShip.PaintSlot).Left = Vary(0.1f, 0.4f);
             fr.Sl("tot").Cool = 0;
@@ -4802,13 +4837,14 @@ public partial class _Test : Node
             double credited = fr.DealtBy.GetValueOrDefault(Dealt.Tot) - credit0;
             double onGunAll = blows.Where(b => ReferenceEquals(b.t, gun)).Sum(b => b.d);
             bool mineWhole = mine.All(t => t.Hp >= 1e9 - 1e-6);
-            Check(onGun == ks[run] + 1 && each40 && Math.Abs(onGunAll - 40 * (ks[run] + 1)) < 1e-6 && moving
-                  && onCross == 1 && Math.Abs(credited - 40 * (ks[run] + 2)) < 1e-6 && mineWhole && (run == 2 || flying),
-                  $"time on target run {run}: the gunship moving at {speeds[run]:0} u/s ({moving}: {travelled:0} u over {moveFrames} frames) took {onGunAll:0} in all (want {40 * (ks[run] + 1)}); {ks[run]} sentries 1440-1490 u off, one 1510-1570 u off{(run < 2 ? ", one in flight" : "")} -- the painted gunship {tSpot.DistanceTo(home):0} u off takes {onGun} lines (want {ks[run] + 1}) of 40 ({each40}) in the one press, the light across the spotter's line {onCross} (want 1), {credited:0} credited \"tot\", its own sentries untouched ({mineWhole})");
+            bool mateWhole = Math.Abs(mate.Hp - mateHp) < 1e-9 && blows.All(b => !ReferenceEquals(b.t, mate) && !mine.Contains(b.t as DeployedTurret));
+            Check(onGun == ks[run] + 3 && each40 && Math.Abs(onGunAll - 40 * (ks[run] + 3)) < 1e-6 && moving
+                  && onCross == 1 && Math.Abs(credited - 40 * (ks[run] + 4)) < 1e-6 && mineWhole && mateWhole && (run == 2 || flying),
+                  $"time on target run {run}: the gunship moving at {speeds[run]:0} u/s ({moving}: {travelled:0} u over {moveFrames} frames) took {onGunAll:0} in all (want {40 * (ks[run] + 3)}); {ks[run]} sentries 1440-1490 u off, two on one ray 650-1100 u off, one 1510-1570 u off{(run < 2 ? ", one in flight" : "")} -- the painted gunship {tSpot.DistanceTo(home):0} u off takes {onGun} lines (want {ks[run] + 3}) of 40 ({each40}) in the one press, the light across the spotter's line {onCross} (want 1), {credited:0} credited \"tot\", its own sentries untouched though one lies under another's line ({mineWhole}), the battleship pilot under both lines untouched ({mate.Hp:0} of {mateHp:0}: {mateWhole})");
             fr.UseAbility("tot", 0);
             double cool = fr.Sl("tot").Cool;
             Check(fr.FailNote("tot") == "COOLING" && Math.Abs(cool - fr.Cooling(fr.Stats["tot_cooldown"])) < 0.05 && fr.Stats["tot_cooldown"] == 16
-                  && blows.Count == ks[run] + 2,
+                  && blows.Count == ks[run] + 4,
                   $"...a second press is refused COOLING ({fr.FailNote("tot")}), the clock at {cool:0.0} s of the sheet's 16, nothing more landing ({blows.Count})");
             fr.Sl("tot").Cool = 0;
             fr.Sl(PlayerShip.PaintSlot).Left = Vary(0.05f, 0.15f);
@@ -4821,6 +4857,7 @@ public partial class _Test : Node
             gun.TakeDamage(1e12); cross.TakeDamage(1e12);
         }
         Dealt.Landed -= Heard;
+        mate.QueueFree();
         foreach (var dp in H.Deployed.ToList()) H.DeployedTaken(dp);
         fr.Sl("deploy").Cool = 0; fr.Sl("tot").Cool = 0; fr.Demo = demo;
         fr.Position = yonder; fr.Velocity = Vector2.Zero;
@@ -5170,6 +5207,7 @@ public partial class _Test : Node
     // and its hull drops 90, where any other blow is stopped. (3) Q from 400-700 u off the base on three
     // axes: nothing that holds a spot moves (base, pylons), every one of them inside 980 u is HELD 3 s, none
     // past 1020 u is, and a light 300-600 u off is thrown clear. Every hull and hold is put back after.
+    // (1b) the DD's grapnel rip (1% of the pylon's maximum + 10) then F on three pylons: both add (fr-R6b-8).
     async Task LaneA6bSiegeChecks(Emplacement pbase, List<Emplacement> pylons)
     {
         var cls0 = Character.Class; var at0 = Me.Position; double max0 = Me.MaxHp;
@@ -5178,7 +5216,7 @@ public partial class _Test : Node
         var blows = new List<(IHittable t, double d)>();
         void Heard(IHittable t, double d, string w) { if (w == "buster") blows.Add((t, d)); }
         Dealt.Landed += Heard;
-        async Task<(List<(IHittable t, double d)> got, double took)> Bust(Emplacement at, Vector2 home)
+        async Task<(List<(IHittable t, double d)> got, double took)> Bust(Emplacement at, Vector2 home, System.Action before = null)
         {
             foreach (var r in H.Raiders.ToList()) H.RaiderDown(r);
             bs.Hp = bs.MaxHp;
@@ -5189,6 +5227,7 @@ public partial class _Test : Node
             Hold();
             double hp0 = at.Hp;
             blows.Clear();
+            before?.Invoke();
             bs.Sl("buster").Cool = 0;
             bs.AimPoint = at.Position; bs.UseAbility("buster", 0);
             for (int i = 0; i < 60 * 5 && blows.Count == 0; i++) { Hold(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
@@ -5204,6 +5243,18 @@ public partial class _Test : Node
             var (got, took) = await Bust(p, p.Position + outward * Vary(500f, 1000f));
             Check(got.Count == 1 && ReferenceEquals(got[0].t, p) && Math.Abs(got[0].d - 360) < 1e-9 && Math.Abs(took - 360) < 1e-6,
                   $"buster on pylon {run}: {string.Join("/", got.Select(x => $"{x.d:0}"))} landed, its hull down {took:0} (want 360: x2 on a structure)");
+        }
+        // fr-R6b-8 (b) DD RIP + BUNKER BUSTER ON ONE STRUCTURE (bastion.md Interactions: accepted, both add): the
+        // grapnel's rip (1% of the pylon's maximum hull + 10, through the damage door as the DD's cast-off lands it)
+        // and then the 360 buster, three pylons from varied spots: the hull drops by both, nothing taken off either
+        for (int run = 0; run < 3; run++)
+        {
+            var p = pylons[run];
+            var outward = (p.Position - pbase.Position).Normalized().Rotated(Vary(-0.6f, 0.6f));
+            double rip = 0.01 * p.MaxHp + 10;
+            var (got, took) = await Bust(p, p.Position + outward * Vary(500f, 1000f), () => Dealt.Deal(p, rip, bs, "grapnel"));
+            Check(got.Count == 1 && ReferenceEquals(got[0].t, p) && Math.Abs(got[0].d - 360) < 1e-9 && Math.Abs(took - (360 + rip)) < 1e-6,
+                  $"rip then buster on pylon {run}: the rip {rip:0.#} (1% of {p.MaxHp:0} + 10) and the buster {string.Join("/", got.Select(x => $"{x.d:0}"))}, its hull down {took:0.#} (want {360 + rip:0.#}: both add)");
         }
         for (int run = 0; run < 3; run++)
         {
@@ -5357,6 +5408,25 @@ public partial class _Test : Node
             float wDrag = wWas - w.Position.DistanceTo(wAt);
             Check(latched0 && stayed && LaneA6bWells().Count == 1 && wDrag < 10f,
                   $"well run {run}: a webifier latched on the hull ({latched0}) with the well {wWas:0} u off stays latched ({stayed}) and is not dragged ({wDrag:0.0} u toward it in 1 s; a loose light would come 200)");
+            // fr-R6b-8 (a) THE BASTION'S ANSWER TO A WEB (bastion.md Interactions): Q with the webber still latched throws
+            // it off -- unlatched the next frame, 900+ u from the hull -- and its hold on the hull (the row's Cc, 0.25 s a
+            // touch) is gone within 0.3 s of the frame it let go
+            LaneA6bWellsClear();
+            var cc = w.Def.Cc ?? Status.Pinned;
+            bool latched1 = w.Latched, heldBy = bn.Statuses.Has(cc);
+            bn.Sl("shockwave").Cool = 0;
+            bn.UseAbility("shockwave", 0);
+            Hold(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            bool off = !w.Latched; float thrownTo = w.Position.DistanceTo(bn.Position);
+            double tOff = bn.Clock, freeAfter = -1;
+            for (int i = 0; i < 60 && freeAfter < 0; i++)
+            {
+                if (!bn.Statuses.Has(cc)) freeAfter = bn.Clock - tOff;
+                else { Hold(); bn.Hp = bn.MaxHp; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            }
+            Check(latched1 && heldBy && off && thrownTo > 900f && freeAfter >= 0 && freeAfter <= 0.3,
+                  $"well run {run}: Q with the webifier latched ({latched1}, holding the hull {heldBy}) throws it off -- unlatched the next frame ({off}), {thrownTo:0} u from the hull (900+), its hold gone {freeAfter:0.00} s after (0.3)");
+            bn.Sl("shockwave").Cool = 0;
             w.TakeDamage(1e12);
             LaneA6bWellsClear();
             bn.Sl("well").Cool = 0;
@@ -5731,7 +5801,9 @@ public partial class _Test : Node
     //   drive's cooldown (5-15 s) is where it was; the sniper's anchor cooling 10-12 s ends 8 s less and its
     //   tether, both charges spent and 2-6 s from the first back, has one back and the next recharging
     //   (its tether_recharge); the battleship's broadside cooling 15-20 s is untouched. Resupply's own cooldown
-    //   is 30 and a second press is refused COOLING.
+    //   is 30 and a second press is refused COOLING. A second TENDER pilot 300-480 u off: with only its
+    //   resupply cooling, E is still NOTHING COOLING; pressed, its resupply is untouched (never Resupply
+    //   itself, on any pilot) and its overdrive ends 8 s less.
     async Task LaneA6bResupplyChecks(Vector2 yonder)
     {
         await SetClass(ShipClass.FreightTender);
@@ -5744,6 +5816,7 @@ public partial class _Test : Node
               $"resupply: {sheet["resupply_cut"]:0} s off every cooldown in {sheet["field_radius"]:0} u, every {sheet["resupply_cooldown"]:0} s; ability 3 on E, the walls reading {string.Join(", ", own)}");
         var sn = LaneA6bMate(ShipClass.HeavySniper, 2, yonder + new Vector2(0, 3000));
         var bb = LaneA6bMate(ShipClass.Battleship, 3, yonder + new Vector2(0, -3000));
+        var t2 = LaneA6bMate(ShipClass.FreightTender, 4, yonder + new Vector2(3000, 0));   // fr-R6b-7: a second tender in reach
         string drive = Drives.RowOf(ShipClass.FreightTender).Select(d => d.Id).FirstOrDefault();
         var row = Abilities.Find(ShipClass.FreightTender, "resupply");
         for (int run = 0; run < 3; run++)
@@ -5752,18 +5825,23 @@ public partial class _Test : Node
             var way = Vector2.Right.Rotated(VaryAngle());
             var snAt = home + way * Vary(300f, 480f);
             var bbAt = home + way.Rotated(Vary(1.5f, 3.0f)) * Vary(520f, 700f);
-            async Task Frame() { td.Position = home; td.Velocity = Vector2.Zero; LaneA6bHold(sn, snAt); LaneA6bHold(bb, bbAt); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
-            foreach (var p in new[] { td, sn, bb })
+            var t2At = home + way.Rotated(-Vary(1.0f, 2.0f)) * Vary(300f, 480f);
+            async Task Frame() { td.Position = home; td.Velocity = Vector2.Zero; LaneA6bHold(sn, snAt); LaneA6bHold(bb, bbAt); LaneA6bHold(t2, t2At); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            foreach (var p in new[] { td, sn, bb, t2 })
                 foreach (var ab in Abilities.For(p.Class)) { p.Sl(ab.Id).Cool = 0; p.Sl(ab.Id).Left = 0; p.Sl(ab.Id).N = 0; }
             await Frame(); await Frame();
+            double t2Only = Vary(12f, 18f);
+            t2.Sl("resupply").Cool = t2Only;                       // only ANOTHER tender's resupply cooling: still nothing to cut
             string nothing = row.Refuse(td, null);
             td.UseAbility("resupply", 0); await Frame();
-            bool free = nothing == "NOTHING COOLING" && td.Sl("resupply").Cool == 0;
+            bool free = nothing == "NOTHING COOLING" && td.Sl("resupply").Cool == 0 && t2.Sl("resupply").Cool > t2Only - 0.1;
             double od = Vary(10f, 20f), rp = Vary(1f, 7f), dv = Vary(5f, 15f), an = Vary(10f, 12f), te = Vary(2f, 6f), bs = Vary(15f, 20f);
             td.Sl("overdrive").Cool = od; td.Sl("repair").Cool = rp;
             if (drive != null) td.Sl(drive).Cool = dv;
             sn.Sl("anchor").Cool = an; sn.Sl("tether").N = 2; sn.Sl("tether").Cool = te;
             bb.Sl("broadside").Cool = bs;
+            double r2 = Vary(10f, 20f), od2 = Vary(10f, 20f);
+            t2.Sl("resupply").Cool = r2; t2.Sl("overdrive").Cool = od2;
             double c0 = td.Clock;
             td.UseAbility("resupply", 0);
             double el = td.Clock - c0;       // the press lands this frame, before any clock has run
@@ -5772,16 +5850,17 @@ public partial class _Test : Node
             bool his = Math.Abs(sn.Sl("anchor").Cool - (an - 8)) < 1e-6 && sn.Sl("tether").N == 1
                        && Math.Abs(sn.Sl("tether").Cool - sn.Cooling(sn.Stats["tether_recharge"])) < 1e-6;
             bool farOff = Math.Abs(bb.Sl("broadside").Cool - bs) < 1e-6;
+            bool other = Math.Abs(t2.Sl("resupply").Cool - r2) < 1e-6 && Math.Abs(t2.Sl("overdrive").Cool - (od2 - 8)) < 1e-6;
             bool spent = Math.Abs(td.Sl("resupply").Cool - td.Cooling(30)) < 1e-6 && row.Refuse(td, null) == "COOLING";
-            Check(free && mine && his && farOff && spent && el == 0 && drive != null,
+            Check(free && mine && his && farOff && other && spent && el == 0 && drive != null,
                   $"resupply run {run}: nothing cooling, E refused {nothing} and free ({free}); then its overdrive {od:0.0} -> {td.Sl("overdrive").Cool:0.0}, its repair {rp:0.0} -> {td.Sl("repair").Cool:0.0}, its drive ({drive}) {dv:0.0} untouched ({mine}); "
                   + $"the sniper {snAt.DistanceTo(home):0} u off: anchor {an:0.0} -> {sn.Sl("anchor").Cool:0.0}, tether a charge back ({sn.Sl("tether").N} spent, {sn.Sl("tether").Cool:0.0} s to the next) ({his}); "
-                  + $"the battleship {bbAt.DistanceTo(home):0} u off untouched ({farOff}); resupply cooling {td.Sl("resupply").Cool:0.0} and refused again ({spent})");
+                  + $"the battleship {bbAt.DistanceTo(home):0} u off untouched ({farOff}); a second tender {t2At.DistanceTo(home):0} u off: its resupply {r2:0.0} -> {t2.Sl("resupply").Cool:0.0} (never Resupply itself), its overdrive {od2:0.0} -> {t2.Sl("overdrive").Cool:0.0} ({other}); resupply cooling {td.Sl("resupply").Cool:0.0} and refused again ({spent})");
             await Frame();
         }
-        foreach (var p in new[] { td, sn, bb })
+        foreach (var p in new[] { td, sn, bb, t2 })
             foreach (var ab in Abilities.For(p.Class)) { p.Sl(ab.Id).Cool = 0; p.Sl(ab.Id).Left = 0; p.Sl(ab.Id).N = 0; }
-        sn.QueueFree(); bb.QueueFree();
+        sn.QueueFree(); bb.QueueFree(); t2.QueueFree();
         await Wait(0.1);
         td.Demo = demo; td.Position = yonder; td.Velocity = Vector2.Zero;
     }
@@ -5803,6 +5882,21 @@ public partial class _Test : Node
         g.Hp = g.MaxHp * Vary(0.5f, 0.6f);
         g.Sl(cut).Cool = Vary(18f, 22f);
         foreach (var id in new[] { "overdrive", "repair", "resupply" }) { te.Sl(id).Cool = 0; te.Sl(id).Left = 0; }
+        // fr-R6b-4 THE LANCE ON THE WIRE: a held gunship 300-420 u off the tender, on the side away from the guest;
+        // Space held with the cursor on it (the barrel at 90 deg/s) for 2.5 s: the tender's lance slot BURNS, its
+        // length the muzzle's distance to the gunship within the gunship's radius (the guest reads the same slot)
+        bool teDemo = te.Demo; te.Demo = true;
+        var tePos = te.Position;
+        var lanceAt = tePos + Vector2.Right.Rotated((tePos - g.Position).Angle() + Vary(-1.0f, 1.0f)) * Vary(300f, 420f);
+        var lanceGun = H.SpawnRaider(lanceAt, Enemies.Gunship); lanceGun.Hp = 1e9; lanceGun.ApplyStatus(Status.Disabled, 30);
+        te.AimPoint = lanceAt;
+        KeyDown(global::Godot.Key.Space);
+        for (double t0 = te.Clock; te.Clock - t0 < 2.5;)
+        { te.Position = tePos; te.Velocity = Vector2.Zero; lanceGun.Position = lanceAt; te.AimPoint = lanceAt; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+        var (lanceMuzzle, _) = te.MainBore;
+        float lanceGap = lanceMuzzle.DistanceTo(lanceAt);
+        Check(te.Sl("lance").N == PlayerShip.LanceBurn && Math.Abs(te.Sl("lance").Own - lanceGap) < lanceGun.HitRadius + 1f,
+              $"arena host: the tender's lance held on a gunship {lanceGap:0} u from its muzzle BURNS (N {te.Sl("lance").N}) and reaches {te.Sl("lance").Own:0} u (within its {lanceGun.HitRadius:0} u radius)");
         await Wait(Wan ? 2.0 : 1.0);                               // the cooldown in the guest's hands before it is cut
         double coolBefore = g.Sl(cut).Cool, hp0 = g.Hp, c0 = te.Clock;
         te.UseAbility("overdrive", 0); te.UseAbility("repair", 0); te.UseAbility("resupply", 0);
@@ -5814,6 +5908,8 @@ public partial class _Test : Node
         Check(Math.Abs(coolBefore - coolAfter - 8) < 1e-6 && Math.Abs(rate - 1.5f) < 1e-6 && gain >= 0.02 - 1e-3 && te.MendedBy.GetValueOrDefault("repair") > 0,
               $"arena host: the tender {apart:0} u from the guest's destroyer -- its {cut} cooldown {coolBefore:0.0} -> {coolAfter:0.0} s (8 off), its rate x{rate:0.##} (1.5), its hull +{gain * 100:0.00}% a second (2%)");
         foreach (var id in new[] { "overdrive", "repair" }) te.Sl(id).Left = 0;
+        KeyUp(global::Godot.Key.Space); te.Demo = teDemo;
+        lanceGun.TakeDamage(1e12);
     }
 
     // GUEST: this pilot's destroyer beside the host's tender. What it sees is the host's word: its ability's
@@ -5823,7 +5919,7 @@ public partial class _Test : Node
     async Task LaneA6bFieldsGuest()
     {
         string cut = Classes.Of(ShipClass.Destroyer).Abilities.Where(a => !a.Weapon).Select(a => a.Id).First();
-        bool sawCut = false, sawRings = false; double hpAt = -1, clockAt = 0, climb = 0, lastCool = -1, biggest = 0;
+        bool sawCut = false, sawRings = false, sawBeam = false; double hpAt = -1, clockAt = 0, climb = 0, lastCool = -1, biggest = 0;
         var watch = new LateSampler { Probe = () =>
         {
             var m = Me; if (m == null) return false;
@@ -5833,6 +5929,12 @@ public partial class _Test : Node
             var te = H.Ships.FirstOrDefault(s => !s.Mine && s.Class == ShipClass.FreightTender);
             if (te == null) return false;
             var up = Fields.Up(te).ToList();
+            // fr-R6b-4: the host's lance, drawn here from the tender's slot -- BURNING, and as long as the tender's
+            // copy is from a gunship copy (within its radius and the barrel's length)
+            var sl = te.Sl("lance");
+            if (sl.N == PlayerShip.LanceBurn && up.Any(f => f.Row.Id == "lance")
+                && H.Raiders.Any(r => Math.Abs(te.Position.DistanceTo(r.Position) - sl.Own) < r.HitRadius + te.MyArt.MainBarrel + 25f))
+                sawBeam = true;
             if (up.Any(f => f.Row.Id == "overdrive" && Math.Abs(f.Radius - 500f) < 1e-3) && up.Any(f => f.Row.Id == "repair" && Math.Abs(f.Radius - 500f) < 1e-3))
             {
                 sawRings = true;
@@ -5842,8 +5944,9 @@ public partial class _Test : Node
             return false;
         } };
         AddChild(watch);
-        await RealTime(() => sawCut && sawRings && climb >= 0.015, Wan ? 20 : 12);
+        await RealTime(() => sawCut && sawRings && sawBeam && climb >= 0.015, Wan ? 20 : 12);
         watch.QueueFree();
+        Check(sawBeam, "arena guest: the host's tender's lance is drawn here -- its slot BURNING, the lance row up, its length the tender copy's distance to a gunship copy");
         Check(sawCut && sawRings && climb >= 0.015,
               $"arena guest: beside the host's tender its {cut} cooldown fell {biggest:0.0} s in one step (8 cut), both 500 u rings drawn here ({sawRings}), and its hull climbed {climb * 100:0.00}% a second under the repair field (2%)");
     }
@@ -5898,14 +6001,104 @@ public partial class _Test : Node
               $"arena guest: time on target drawn here -- {ends.Count} lines (want 4), every one ending on the painted gunship's copy within 20 u ({allToPaint}), one from each of its 3 sentry copies ({fromPosts}) and one from its spotter ({fromHull}); the host's clock {cool:0.0} s of 16 in its slot");
     }
 
+    // ── fr-R6b-1 · THE PRESS'S POINT ACROSS THE WIRE (Buster and Well take a point, F8; rung 5) ─────
+    // HOST: the guest's BASTION presses F (the buster) and E (the well), its cursor moved 300+ u off the
+    // press's point the frame after each press. The first buster round of the guest's leaves along the point
+    // its press carried (its slot's At, within 0.05 rad) and the well is laid on it (within 10 u); the
+    // guest's reported cursor, read 0.3 s after each landed, is 250+ u off / 0.3+ rad off it.
+    async Task LaneA6bPointHost()
+    {
+        PlayerShip g = null; Shot bShot = null; ZoneNode wz = null;
+        Vector2 bDir = default, bFrom = default, bAt = default, wPos = default, wAt = default;
+        Vector2? bAim = null, wAim = null; ulong bMs = 0, wMs = 0;
+        var watch = new LateSampler { Probe = () =>
+        {
+            g ??= H.Ships.FirstOrDefault(s => !s.Mine && s.Class == ShipClass.FreightBastion);
+            if (g == null) return false;
+            ulong now = Time.GetTicksMsec();
+            if (bShot == null && Nodes<Shot>().FirstOrDefault(x => x.Kind == Shots.Buster && ReferenceEquals(x.Source, g)) is { } s)
+            { bShot = s; bDir = s.Dir; bFrom = s.Position; bAt = g.Sl("buster").At; bMs = now; }
+            if (wz == null && H.Laid.FirstOrDefault(z => z.OwnerId == g.OwnerId && z.Row == Zones.Well) is { } z)
+            { wz = z; wPos = z.Position; wAt = g.Sl("well").At; wMs = now; }
+            if (bShot != null && bAim == null && now - bMs >= 300) bAim = g.AimPoint;
+            if (wz != null && wAim == null && now - wMs >= 300) wAim = g.AimPoint;
+            return bAim != null && wAim != null;
+        } };
+        AddChild(watch);
+        await RealTime(() => bAim != null && wAim != null, Wan ? 40 : 25);
+        watch.QueueFree();
+        float bOn = bShot != null ? Mathf.Abs(bDir.AngleTo(bAt - bFrom)) : 9f, bOff = bAim is { } ba ? Mathf.Abs(bDir.AngleTo(ba - bFrom)) : 0f;
+        float wOn = wz != null ? wPos.DistanceTo(wAt) : 1e9f, wOff = wAim is { } wa ? wPos.DistanceTo(wa) : 0f;
+        Check(g != null && bOn < 0.05f && bOff > 0.3f,
+              $"arena host: the guest's buster left {bOn:0.000} rad off the point its press carried (0.05) and {bOff:0.00} rad off its reported cursor (more than 0.3)");
+        Check(g != null && wOn < 10f && wOff > 250f,
+              $"arena host: the guest's well was laid {wOn:0.0} u from the point its press carried (10) and {wOff:0} u from its reported cursor (more than 250)");
+        await Wait(0.3);
+    }
+
+    // GUEST: this pilot's BASTION. For F (the buster) then E (the well): the cursor held 300-500 u out on one
+    // side long enough for the host to have it, the press at a point 300-500 u out on the far side (a varied
+    // bearing), and the frame after the press the cursor moves 300-450 u out square to it; re-asked every
+    // 0.9 s until the host's word comes back. The host's buster round (its copy here) flies at the press's
+    // point (within 0.05 rad) and not at the moved cursor; the host's well (its copy here) lies within 10 u of it.
+    async Task LaneA6bPointGuest()
+    {
+        await SetClass(ShipClass.FreightBastion);
+        var bn = Me; bn.AutopilotTo = null; bn.Velocity = Vector2.Zero; bool demo = bn.Demo; bn.Demo = true;
+        var shots0 = Nodes<Shot>().Where(x => x.Kind == Shots.Buster).ToHashSet();
+        var zones0 = H.Laid.ToHashSet();
+        Shot seenShot = null; Vector2 shotDir = default, shotAt = default;
+        var watch = new LateSampler { Probe = () =>
+        {
+            if (seenShot == null && Nodes<Shot>().FirstOrDefault(x => x.Kind == Shots.Buster && !shots0.Contains(x)) is { } s)
+            { seenShot = s; shotDir = s.Dir; shotAt = s.Position; }
+            return seenShot != null;
+        } };
+        AddChild(watch);
+        async Task<(Vector2 press, Vector2 moved, bool got)> Aim(string id, System.Func<bool> landed)
+        {
+            Vector2 press = default, moved = default; double until = Time.GetTicksMsec() + (Wan ? 30000.0 : 20000.0);
+            while (!landed() && Time.GetTicksMsec() < until)
+            {
+                // the host took a press already (its clock is back in this slot): its word is on the way, the point kept
+                if (press != default && bn.Sl(id).Cool > 0) { await RealTime(landed, 3); continue; }
+                float bear = VaryAngle();
+                bn.AimPoint = bn.Position + Vector2.Right.Rotated(bear + Mathf.Pi + Vary(-0.4f, 0.4f)) * Vary(300f, 500f);
+                await Wait(0.3);
+                if (landed()) break;
+                press = bn.Position + Vector2.Right.Rotated(bear) * Vary(300f, 500f);
+                bn.AimPoint = press; bn.UseAbility(id, 0);
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                moved = bn.Position + Vector2.Right.Rotated(bear + Mathf.Pi / 2f + Vary(-0.3f, 0.3f)) * Vary(300f, 450f);
+                bn.AimPoint = moved;
+                await RealTime(landed, 0.9);
+            }
+            return (press, moved, landed());
+        }
+        var (bPress, bMoved, bGot) = await Aim("buster", () => seenShot != null);
+        watch.QueueFree();
+        await Wait(0.6);                                           // the moved cursor held while the host reads it
+        ZoneNode well = null;
+        var (wPress, wMoved, wGot) = await Aim("well", () => (well = H.Laid.FirstOrDefault(z => !zones0.Contains(z) && z.Row == Zones.Well)) != null);
+        var wellAt = well?.Position ?? Vector2.Zero;
+        await Wait(0.6);
+        float bOn = bGot ? Mathf.Abs(shotDir.AngleTo(bPress - shotAt)) : 9f, bOff = bGot ? Mathf.Abs(shotDir.AngleTo(bMoved - shotAt)) : 0f;
+        Check(bGot && bOn < 0.05f && bOff > 0.3f,
+              $"arena guest: its buster (the host's round, its copy here) flies {bOn:0.000} rad off the point its press carried (0.05), {bOff:0.00} rad off the cursor it moved to the frame after (more than 0.3)");
+        Check(wGot && wellAt.DistanceTo(wPress) < 10f && wellAt.DistanceTo(wMoved) > 250f,
+              $"arena guest: its well (the host's, its copy here) lies {wellAt.DistanceTo(wPress):0.0} u from the point its press carried (10), {wellAt.DistanceTo(wMoved):0} u from the moved cursor");
+        bn.Demo = demo;
+    }
+
     // ── F14 · THE SENTRY THROW AND RECALL (lane A slice 5, kits5-J5) ──────────────────────────
     // World, host (the deploy row through PlayerShip.DeployTurret), kits_v3 3.3's lines, 3 runs from
     // varied spots. Cursors 150-250 u, 560-595 u and 700-900 u off the hull at varied bearings: each
     // sentry lands within 10 u of its point (the 600 u clamp on the same bearing for the far one), 0.8
     // +- 0.05 s after the press, and is no body before (it counts as out; nothing stands). The landing
     // is marked (Fx.AimZone). A 4th throw with 3 out is refused (ALL OUT). A cursor 10-50 u from one
-    // recalls it inside the 6 s clock (never refused); a throw on open space inside the clock is refused
-    // (RELOADING). A cursor 65-90 u from every sentry throws a new one, and it lands with the hull the
+    // recalls it inside the 6 s clock (never refused): it leaves the world at once and flies home 0.8 s
+    // (+- 0.05, still out: a throw meanwhile is refused ALL OUT); a throw on open space inside the clock
+    // is then refused (RELOADING). A cursor 65-90 u from every sentry throws a new one, and it lands with the hull the
     // recalled one had (kept, not refilled). Nothing sits exactly on 60 u or 600 u.
     async Task LaneASentryThrowChecks(Vector2 yonder)
     {
@@ -5951,11 +6144,19 @@ public partial class _Test : Node
             back.Hp = hurt;
             fr.Sl("deploy").Cool = 6.0;
             SentryAt(fr, back.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(10f, 50f));
+            double r0 = fr.Clock;                                // the recall leaves the world in the press itself (host)
+            bool left = !H.Deployed.Contains(back), homeOut = fr.TurretsOut == 3;
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            bool recalled = !H.Deployed.Contains(back) && fr.TurretsOut == 2;
+            SentryAt(fr, home);                                  // open space while it flies home: still three out
+            string flyingNo = Abilities.Find(ShipClass.FreightHauler, "deploy").Refuse(fr, null);
+            bool flying = fr.TurretsOut == 3 && flyingNo == "ALL OUT" && !H.Deployed.Contains(back);
+            for (int i = 0; i < 120 && fr.TurretsOut == 3; i++)
+            { fr.Position = home; fr.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            double flewHome = fr.Clock - r0;
+            bool recalled = left && homeOut && flying && fr.TurretsOut == 2 && Math.Abs(flewHome - 0.8) < 0.05;
             SentryAt(fr, home);
             Check(recalled && fr.TurretsOut == 2 && fr.FailNote("deploy") == "RELOADING",
-                  $"R within 60 u of one recalls it inside the 6 s clock ({recalled}); R on open space inside the clock is refused, RELOADING ({fr.FailNote("deploy")})");
+                  $"R within 60 u of one recalls it inside the 6 s clock: it leaves at once ({left}), flies home still out (3 out {homeOut}, a throw meanwhile refused {flyingNo}; ALL OUT) and is stowed {flewHome:0.00} s after the press (0.8); R on open space inside the clock is refused, RELOADING ({fr.FailNote("deploy")})");
 
             // 65-90 u off one of the two left, on the side furthest from both
             var near = landed[1];
@@ -18309,8 +18510,10 @@ public partial class _Test : Node
                   && Math.Abs(new ShipStats(ShipClass.FreightHauler)["deploy_damage"] - 5) < 1e-9 && Math.Abs(new ShipStats(ShipClass.FreightHauler)["deploy_range"] - 650) < 1e-9,
                   $"a dropped turret fires its owner's sheet: {one.Spec(true).Damage:0.0} a shot every {one.Spec(true).Interval:0.00} s inside {one.Spec(true).Range:0} u, on {one.Hp:0} hull");
             fr.Sl("deploy").Cool = 6.0;                                          // reloading: a recall is still never refused
-            SentryAt(fr, one.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(10f, 50f)); await Wait(0.15);
-            Check(fr.TurretsOut == 2, $"R with the cursor on one recalls it, reloading or not ({fr.TurretsOut} left out)");
+            SentryAt(fr, one.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(10f, 50f));
+            bool recallGone = !H.Deployed.Contains(one) && fr.TurretsOut == 3;   // gone from the world, still out while it flies home
+            await Wait(0.95);                                                    // its 0.8 s flight back
+            Check(recallGone && fr.TurretsOut == 2, $"R with the cursor on one recalls it, reloading or not, and it is home 0.8 s later ({fr.TurretsOut} left out)");
             SentryAt(fr, yonder + new Vector2(0, -900)); await Wait(0.15);       // clear of all three
             Check(fr.TurretsOut == 2 && fr.FailNote("deploy") == "RELOADING", "and on open space inside the 6 s clock it refuses, saying why");
             fr.Sl("deploy").Cool = 0;
@@ -22680,6 +22883,10 @@ public partial class _Test : Node
             // world, and only the host may take it away again.
             await RealTime(() => H.Deployed.Count(t => t.OwnerId == fg.OwnerId) == 1, Wan ? 15 : 8);
             var t1 = H.Deployed.FirstOrDefault(t => t.OwnerId == fg.OwnerId);
+            // fr-R6b-1: the throw landed on the point its press carried, not on the guest's reported cursor --
+            // which moved 300+ u off it the frame after R (the guest half asserts the press's own spot)
+            Check(t1 != null && t1.Position.DistanceTo(fg.AimPoint) > 250f,
+                  $"arena host: the guest's sentry landed {t1?.Position.DistanceTo(fg.AimPoint):0} u from its reported cursor (more than 250: the press's point, not AimPoint)");
             Check(t1 != null && H.Deployed.Count == 1 && fg.TurretsOut == 1
                   && Math.Abs(t1.Hp - 120) < 1e-6
                   && Math.Abs(t1.Spec(true).Damage - fg.Stats["deploy_damage"]) < 1e-9
@@ -22743,6 +22950,7 @@ public partial class _Test : Node
             await RealTime(() => !hw.Statuses.Has(Status.Hardened), Wan ? 12 : 6);
             await Wait(0.4);
             foreach (var dpl in H.Deployed.ToList()) H.DeployedTaken(dpl);   // the world clear for the arena
+            await Lane("LaneA6bPointHost", () => LaneA6bPointHost());       // fr-R6b-1: the guest's buster and well on its press's point (its guest half: LaneA6bPointGuest)
             await Wait(0.3);
             // A SNIPER'S RAILGUN IS HEARD ON A GUEST. Its report is a flash of Beam.All (Beam.Rail),
             // sent to every peer through the one door every flash goes through; the guest counts it
@@ -23010,16 +23218,29 @@ public partial class _Test : Node
             // pressing T and looking a frame later: on a loopback the host's answer can beat that
             // frame, and a check that depends on losing a race is a check that hides a bug.
             bool ownDrop = H.Drop(fgm, fgm.Position, 120) != null || fgm.TurretsOut > 0;
-            // THE THROW'S POINT IS THE GUEST'S CURSOR, carried to the host in its 20 Hz intent (AimPoint):
-            // held still (Demo: no mouse) long enough for the host to have it before R goes down.
+            // THE THROW'S POINT RIDES THE PRESS (Ab.Deploy.TakesPoint, F8), never the 20 Hz intent (AimPoint):
+            // the cursor is held (Demo: no mouse) on one side of the hull long enough for the host to have it,
+            // jumps to the throw point for the frame R goes down, and the frame after moves 300+ u off it. The
+            // sentry lands on the press's point; the host's AimPoint (before or after) is 300+ u from it.
             bool fgmDemo = fgm.Demo; fgm.Demo = true;
-            var throwAt = fgm.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(250f, 500f);
-            fgm.AimPoint = throwAt; await Wait(0.3);
+            float throwBear = VaryAngle();
+            var throwAt = fgm.Position + Vector2.Right.Rotated(throwBear) * Vary(250f, 500f);
+            fgm.AimPoint = fgm.Position + Vector2.Right.Rotated(throwBear + Mathf.Pi + Vary(-0.4f, 0.4f)) * Vary(250f, 500f);
+            await Wait(0.3);
             SentryAt(fgm, throwAt);                            // R
-            await RealTime(() => H.Deployed.Count == 1, Wan ? 15 : 8);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            fgm.AimPoint = fgm.Position + Vector2.Right.Rotated(throwBear + Mathf.Pi / 2f + Vary(-0.3f, 0.3f)) * Vary(300f, 450f);
+            // fr-R6b-2: a guest's TurretsOut counts the throw IN FLIGHT (the host's count in the deploy slot):
+            // one out while nothing stands here yet
+            bool sawFlight = false;
+            var flightWatch = new LateSampler { Probe = () => sawFlight |= H.Deployed.Count == 0 && fgm.TurretsOut == 1 };
+            AddChild(flightWatch);
+            await RealTime(() => H.Deployed.Count == 1 && fgm.TurretsOut == 1, Wan ? 15 : 8);
+            flightWatch.QueueFree();
             Check(!ownDrop && H.Deployed.Count == 1 && H.Deployed[0].OwnerId == Net.LocalId && fgm.TurretsOut == 1
                   && Math.Abs(H.Deployed[0].Hp - 120) < 1e-6 && H.Deployed[0].Position.DistanceTo(throwAt) < 10f,
-                  $"arena guest: its R is the host's -- nothing made here ({ownDrop}), then a 120-hull sentry of its own lands on the host's spot, {H.Deployed.FirstOrDefault()?.Position.DistanceTo(throwAt):0} u off its cursor ({H.Deployed.Count} out)");
+                  $"arena guest: its R is the host's -- nothing made here ({ownDrop}), then a 120-hull sentry of its own lands on the PRESS's point, {H.Deployed.FirstOrDefault()?.Position.DistanceTo(throwAt):0} u off it though the cursor moved {fgm.AimPoint.DistanceTo(throwAt):0} u the frame after ({H.Deployed.Count} out)");
+            Check(sawFlight, "arena guest: while its sentry flies (0.8 s) its own TurretsOut reads 1 with none standing here -- the host's count in the deploy slot");
             await RealTime(() => H.Deployed.Count == 3, Wan ? 15 : 8);
             Check(H.Deployed.Count == 3 && H.Deployed.All(t => t.OwnerId == Net.LocalId),
                   $"arena guest: every turret the host put out for it stands here ({H.Deployed.Count})");
@@ -23064,6 +23285,7 @@ public partial class _Test : Node
                   $"arena guest: the host's EMP ring and the turret's burst both reached this peer, each drawn ONCE (emp {sawEmp}, burst {sawBurst}, most bursts at once {mostBursts})");
             fxWatch.QueueFree(); hardWatch.QueueFree();
             await RealTime(() => H.Deployed.Count == 0, Wan ? 15 : 8);
+            await Lane("LaneA6bPointGuest", () => LaneA6bPointGuest());                          // fr-R6b-1: a bastion's buster and well on the press's point (its host half: LaneA6bPointHost)
             await SetClass(ShipClass.Destroyer);               // back to the hull and the rack the rest of this scenario flies
             await Wait(0.5);
 
