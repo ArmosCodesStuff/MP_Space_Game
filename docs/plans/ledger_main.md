@@ -4,10 +4,9 @@ Engine outputs for the old-way batches: S = C:\Users\logan\AppData\Local\Temp\cl
 (their summary.txt is UTF-16: read with powershell Get-Content). New batches write to %TEMP%\warships_rungs.
 
 ## Running (BUILD PHASE: no engine anywhere until every planned lane is merged -- owner; all agents Opus 5.5)
-- wf_604b8361-142 / task wthoe9tj1, "lane-kits-fix" (no engine). Kits gate 1 (wydvp93f5, HEAD 809313c: K1+K2 done, net merged in) failed on
-  7: knife-edge DPS windows; screens frame 49 + a twin-barrel frame; outpost GunDamage 42 -> derive from the gunship row = 35 (COORDINATOR
-  DECISION); Ramp stepped on every peer (guest-flown Ramjet broken) -> owner-stepped; BaseDefense/Shots bypass Dealt.Deal; D17's echo check
-  unwritten; stale comments. Fix, gate 2, then merge (it merges version-l into the lane first if art got there first). merge=false: by hand.
+- kits: gate 2 (wthoe9tj1) passed K3 97f767e but for ONE comment (SmokeTest.cs.txt ~7268 "an outpost's 42 ... used to sit" -> gate's wording).
+  COORDINATOR DECISION: Dealt.Landed (static event on the damage door, for blows with no ship behind them) accepted. Next: a K4 comment fix,
+  merge version-l in (art conflicts: ClassArt.PdRing, Ships.cs mounts), quick, merge into version-l -- workflow launching.
 - wf_b63808ec-4ad / task wojzfsouf, "wave-1-build": six lanes in parallel, build only, each from base f168508 (= kits 809313c + version-l;
   branch wt/wave): drives (B: F21/F22/F24), fields (D: F9), wings (E: F13), curve (F: Par, boss rows, ladder), raids (G: Squads), net2
   (R2-R5 code; S2 first if missing). Worktrees WarShips_wt_<key>, ledgers ledger_<key>.md (net2: ledger_webrtc.md). Each: build, opus gate,
