@@ -1526,11 +1526,21 @@ public partial class _Test : Node
         {
             wd.Rotation = VaryAngle(); wd.Velocity = Vector2.Zero;
             var rudderKey = (run % 2 == 0) == portFirst ? global::Godot.Key.A : global::Godot.Key.D;
-            KeyDown(global::Godot.Key.W); KeyDown(rudderKey); await Wait(Vary(0.4f, 0.8f));
+            // THE YAW IT CARRIES IN, read off the hull, never off the keys: each frame's turn is taken
+            // from one frame's start to the next's -- across exactly one _process (a read begun after
+            // a Wait, which ends a frame, spans none, and read 0) -- for a seeded 0.4-0.8 s AND until
+            // it turns faster than 25 deg/s. Keys up and Disabled go on in the same breath, before
+            // its next frame: that frame is its first disabled one, with this yaw on it.
+            KeyDown(global::Godot.Key.W); KeyDown(rudderKey);
+            double turnFor = Vary(0.4f, 0.8f), turned0 = 0; float spin = 0;
+            for (int i = 0; i < 60 * 3 && (turned0 < turnFor || spin < Mathf.DegToRad(25f)); i++)
+            {
+                float r0 = wd.Rotation;
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                spin = Mathf.Abs(Mathf.AngleDifference(r0, wd.Rotation)) / (float)GetProcessDeltaTime();
+                turned0 += GetProcessDeltaTime();
+            }
             KeyUp(global::Godot.Key.W); KeyUp(rudderKey);
-            float r0 = wd.Rotation;
-            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            float spin = Mathf.Abs(Mathf.AngleDifference(r0, wd.Rotation)) / (float)GetProcessDeltaTime();   // the yaw it carries in, rad/s
             wd.Velocity = Vector2.Zero;
             var prey = H.SpawnRaider(VaryNear(wd.Position, 300f), Enemies.Webifier);
             prey.Hp = 9000; prey.ApplyStatus(Status.Disabled, 30);

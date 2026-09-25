@@ -468,6 +468,21 @@ outstanding from the batch of 2026-09-23.)*
 
 ## Unreleased
 
+### Class kits, lane A job 1c: the DISABLED warden's turn is read off the hull (2026-09-25, worktree wt/kits)
+
+Rung 3 at 606201f failed "a DISABLED warden at N deg, turning at 0 deg/s" on all three headings: the
+game held the heading (0.00 deg), but the check's own setup read the yaw the hull carried in as 0. It
+read the turn from just after a `Wait` (which resumes at the END of a frame) to the next frame's start
+(before any `_process`): across no frame of the hull at all. The rate is now read each frame from one
+frame's start to the next's, across exactly one `_process`, with W and the rudder held for a seeded
+0.4-0.8 s and until the hull turns faster than 25 deg/s; the keys come up and Disabled goes on before
+its next frame. The assertion (> 20 deg/s carried in, 0.00 deg turned) is unchanged.
+
+**Checks:** rewritten "a DISABLED warden at N deg, turning at N deg/s on A/D when it is disabled" (its
+setup only). **Rungs:** 2 in the worktree; rung 3 owed on two seeds.
+
+**Known broken:** nothing known; rung 3 has not run on this commit.
+
 ### Class kits, lane A J4: the outgoing door, F17 (2026-09-25, worktree wt/kits)
 
 Every hostile blow now leaves through one door: `StatusSet.Out(d, OutKind)` multiplies it by the
@@ -519,9 +534,11 @@ missile is taken over a light, none idle); rewritten "a DISABLED warden at N deg
 seeded 0.4-0.8 s of W and a seeded rudder when it is disabled: the carried yaw must not turn it);
 "three lights, 1 DPS each" (point defence out of reach for the window). "carrier PD: three turrets on
 three different LIGHT targets" unchanged: it is the spread's reproduction.
-**Rungs:** 1 and 2 in the worktree (ledger_kits.md J3b); rung 3 owed on two seeds.
+**Rungs:** 1 and 2 in the worktree (ledger_kits.md J3b); rung 3 at 606201f (seed
+11400714819323522083): the four fails above pass.
 
-**Known broken:** nothing known; rung 3 has not run on this commit.
+**Known broken:** at 606201f the rewritten "a DISABLED warden" check failed on its own setup, all three
+headings ("turning at 0 deg/s"; the warden turned 0.00 deg, as it should): fixed in job 1c.
 
 ### Class kits, lane A: point defence is passive (F16) (2026-09-25, worktree wt/kits)
 

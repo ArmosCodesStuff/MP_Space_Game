@@ -219,6 +219,25 @@ revert or keep the half-made edits, then run the job again (CLAUDE.md §2b rule 
   read across it is 0 (that is job 1c's cause).
 - Checkpoint: the commit after this entry ("Kits lane A J4"). Next: job 1c (coordinator), then J5.
 
+### J1c · PRE · kits job 1c: the DISABLED warden's "turning at 0 deg/s"
+- Intent: rung 3 at 606201f (seed 11400714819323522083): the three "a DISABLED warden" lines fail only
+  on their setup's `spin > 20 deg/s` (read 0). Cause (harness): `await Wait(x)` resumes at the END of a
+  frame, then `r0`, then `await ToSignal(ProcessFrame)` resumes at the START of the next, before any
+  `_process` -- the rate was read across no frame of the hull. Fix: hold W + the rudder, reading the
+  rate each frame across one `_process` (frame start to frame start), until a seeded 0.4-0.8 s have
+  passed AND it turns faster than 25 deg/s (the effect); keys up and Disabled in that same
+  continuation, so the hull's next frame is its first disabled one with that yaw on it. Assert > 20.
+- Files: tools/smoketest/SmokeTest.cs.txt (LaneADisabledChecks only), docs/CHANGES.md, this ledger.
+- Start: a538f55480b9bbd089013d63261081f2d55befa1
+- Hashes: SmokeTest f5b490ae · CHANGES 07410cc5
+
+### J1c · POST
+- Verdict: rung 2 (`verify.ps1 -Quick`) ALL CHECKS PASSED (0 errors, 0 warnings, UNUSED 0). No engine rung.
+- Files: SmokeTest (LaneADisabledChecks' setup: the rate read frame start to frame start while held,
+  until >= the seeded time and > 25 deg/s), CHANGES (1c entry; 1b's Known broken made true to the
+  606201f run), this ledger (J4 + J1c rows in the rungs table).
+- Checkpoint: the commit after this entry ("Kits lane A job 1c"). Next: J5 (F4 + F18).
+
 ## Engine rungs owed to the main session (run in the worktree, rebased, one engine at a time)
 
 | after | rung | seeds | look for (PASS lines) |
@@ -229,6 +248,8 @@ revert or keep the half-made edits, then run the job again (CLAUDE.md §2b rule 
 | J3 F16 | 4 (`tools\screens\run.ps1`) | - | LINT 0; read by eye: 4_hub_battleship (PD firing, no ring), 7_hub_carrier_strike, 23_bar_battleship_cooldown (renamed: no PD slot on the bar), one close-up (no ring round a PD mount) |
 | J3 F16 | 5 (`tools\smoketest\run.ps1`) | - | host "a guest's point defence fires on the host with nothing pressed"; guest "guest sees its own point defence fire with nothing pressed and no key for it"; unchanged neighbours "guest's bomber strike launched real torpedoes on the host", "the host's raiders reached this guest" |
 | J3b job 1b | 3 (`-Solo`) | 11400714819323522083 and one other | the four that failed: "carrier PD: three turrets on three different LIGHT targets -- never a plain dummy" · "three lights, 1 DPS each (3.0 +- 0.7)" · "a DISABLED warden at N deg, turning at N deg/s on A/D when it is disabled: ... turn it 0.00 deg" x3 (each turning > 20 deg/s) · new "BATTLESHIP / CARRIER / DESTROYER: a point-defence mount gives way to something free that betters what it holds" x3. Neighbours the re-pick could move: "with more turrets than light targets, the spare turret still never takes a plain dummy", "each battleship PD turret picks its own target", the 7 x passive-PD table lines, "a battleship's point defence picks a cruise missile ... before a light raider", "a turret left standing takes the small craft first", "a hunter called off while the fighters and point defence are on it", "pinned: A does not turn it" |
+| J4 F17 | 3 (`-Solo`) | two different seeds | new: "the outgoing door's table" · 3 x "a webifier's laser goes out through the door" (Suppressed 1.50 / Jammed 0.00 / Dazzled 3.00) · 3 x "a Suppressed gunship ... holds its missile" (0-2 frames after the lapse) · "Suppressed reaches a boss; Dazzled and Jammed ..." · 3 x "a Suppressed boss: its shockwave ... 31.5 ... beam ... 50 ... 45" · 3 x "a Suppressed base's launcher ... its round carries". Neighbours: the Lancer arena's stealth block (right after), the siege's "ONLY THE BASE DROPS" (after the base check), the WARRIOR block (after the door checks; 3 gunship blasts land 12 s later ~4500 u from base) |
+| J1c | 3 (`-Solo`) | 11400714819323522083 and one other | 3 x "a DISABLED warden at N deg, turning at N deg/s ...: ... turn it 0.00 deg" with N > 25 |
 
 ## Handover 3: slice 2's plan (the third agent read the spec and stopped at its context cap)
 
