@@ -58,6 +58,34 @@ public partial class _Shots : Node
             }
     }
     Hub H => GetTree().CurrentScene as Hub;
+
+    // ── FIELDS (lane D, F9): each kit field, drawn from its slot on a class that owns it ──
+    // 81 the Supercarrier's dashed 600 u patrol ring · 82 the Taunt's hex shimmer and its "−33%" tag ·
+    // 83 the boost's hot plume · 83b the Taunt's 1000 u flash. A slot no class owns yet (its ability
+    // is another lane's, still to merge) prints "shot skipped" rather than a frame of nothing.
+    async Task FieldsFrames(Hub hub, Vector2 yard)
+    {
+        var zp = typeof(Hub).GetProperty("ZoomLevel"); float z0 = (float)zp.GetValue(hub);
+        PlayerShip Me() => hub.GetNode<PlayerShip>("Ship_1");
+        foreach (var (row, name, zoom) in new[] { ("patrol", "81_patrol_ring", 0.45f), ("taunt", "82_taunt_shimmer", 1.6f), ("boost", "83_boost_plume", 1.6f) })
+        {
+            var def = Fields.Of(row);
+            var owner = System.Enum.GetValues<ShipClass>().Where(c => Abilities.For(c).Any(a => a.Id == def.Slot)).Cast<ShipClass?>().FirstOrDefault();
+            if (owner == null) { GD.Print($"shot skipped {name}: no class owns slot '{def.Slot}' yet"); continue; }
+            Character.Class = owner.Value; P(hub, "ApplyLocalIdentity"); await W(0.3);
+            var s = Me(); s.Visible = true; s.Position = yard; s.Velocity = Vector2.Zero; s.Rotation = 0.5f;
+            zp.SetValue(hub, zoom); await W(1.2);
+            s.Position = yard; s.Velocity = Vector2.Zero; s.Sl(def.Slot).Left = 5.0;
+            await W(0.3); await Snap(name);
+            s.Sl(def.Slot).Left = 0;
+        }
+        zp.SetValue(hub, 0.45f); await W(1.0);
+        Fx.Raise(Fx.TauntRing, Me().Position, 1000f);
+        await W(0.35); await Snap("83b_taunt_ring");
+        zp.SetValue(hub, z0); await W(0.4);
+        Character.Class = ShipClass.Battleship; P(hub, "ApplyLocalIdentity"); await W(0.3);
+    }
+
     System.Collections.Generic.IEnumerable<T> N<T>(Node n = null) where T : Node { n ??= GetTree().Root;
         foreach (var c in n.GetChildren()) { if (c is T t) yield return t; foreach (var x in N<T>(c)) yield return x; } }
     void Key(Key k) { Input.ParseInputEvent(new InputEventKey { Keycode = k, PhysicalKeycode = k, Pressed = true }); Input.ParseInputEvent(new InputEventKey { Keycode = k, PhysicalKeycode = k, Pressed = false }); }
@@ -684,6 +712,7 @@ public partial class _Shots : Node
             await Snap("79_freighter_turrets_and_bubble");
             foreach (var t in hub.Deployed.ToList()) hub.DeployedTaken(t);
             await Class(ShipClass.Battleship); await W(0.3);
+            await FieldsFrames(hub, yard);
 
             // ── THE FOUR NEW ENEMY HULLS, in a row ──
             var mob = new[] { Enemies.Talon, Enemies.Pod, Enemies.Cross, Enemies.Lancerkin };

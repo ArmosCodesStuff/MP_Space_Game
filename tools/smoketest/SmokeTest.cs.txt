@@ -3178,6 +3178,74 @@ public partial class _Test : Node
         }
         fr.Velocity = Vector2.Zero;
     }
+    // THE KITS' FIELD ROWS, by their literals and with no ship (their abilities are other lanes'):
+    // the Supercarrier's ring is its sheet's patrol_range (600 u stock, 648 u under a common
+    // Targeting Chip's +8%), the Taunt's tag reads its guard (0.67 is "−33%"), and the boost's plume
+    // is up exactly while its slot runs. Each from three seeded draws of what is left of the slot.
+    void FieldsRowChecks()
+    {
+        var want = new[] { ("patrol", "super"), ("taunt", "taunt"), ("boost", "boost") };
+        Check(want.All(w => Fields.Of(w.Item1)?.Slot == w.Item2),
+              $"fields: the kits' rows are there, each on its slot ({string.Join(", ", want.Select(w => $"{w.Item1}:{Fields.Of(w.Item1)?.Slot ?? "MISSING"}"))})");
+        foreach (var (reach, guard) in new[] { (600.0, 0.67), (648.0, 0.67), (600.0, 0.5) })
+        {
+            double left = Vary(0.5f, 19.5f);
+            float len = Vary(80f, 260f);
+            double Stat(string id) => id == "patrol_range" ? reach : id == "taunt_guard" ? guard : 0;
+            var up = Fields.Up(id => id != "bubble", id => (left, 0.0), Stat, len).ToDictionary(u => u.Row.Id);
+            string tag = guard == 0.67 ? "−33%" : "−50%";
+            Check(up.TryGetValue("patrol", out var pr) && Math.Abs(pr.Radius - reach) < 1e-3 && pr.Row.Look == FieldLook.Dashed,
+                  $"fields: the patrol ring is drawn at the carrier's patrol_range, {reach:0} u ({(up.ContainsKey("patrol") ? up["patrol"].Radius : -1):0})");
+            Check(up.TryGetValue("taunt", out var tg) && tg.Tag == tag && tg.Row.Look == FieldLook.Shimmer && Math.Abs(tg.Radius - len * 0.55f) < 1e-3,
+                  $"fields: the taunt shimmers over the hull and its tag reads {tag} for a guard of {guard} ({(up.ContainsKey("taunt") ? up["taunt"].Tag : "none")})");
+            Check(up.ContainsKey("boost") && up["boost"].Row.Look == FieldLook.Plume
+                  && !Fields.Up(id => id != "bubble", id => (0.0, 0.0), Stat, len).Any(),
+                  $"fields: the boost's plume burns while its slot runs ({left:0.0} s left) and none of the three is up once it is out");
+        }
+    }
+    // THE SAME ROWS ON A LIVE SHIP, for every class that owns the slot: its slot running draws the
+    // field from its OWN sheet. A slot no class owns yet is another lane's ability still to merge
+    // (lane E's Supercarrier, the Warden's Taunt, lane B's boost): said as a NOTE, never a pass.
+    async Task FieldsLiveRowChecks(Vector2 yonder)
+    {
+        foreach (var row in new[] { "patrol", "taunt", "boost" })
+        {
+            var def = Fields.Of(row);
+            var owners = Enum.GetValues<ShipClass>().Where(c => Abilities.For(c).Any(a => a.Id == def.Slot)).ToList();
+            if (owners.Count == 0) { GD.Print($"NOTE unbound field row {row}: no class owns slot '{def.Slot}' yet"); continue; }
+            foreach (var c in owners.Take(3))
+            {
+                await SetClass(c);
+                var s = Me; s.Position = VaryNear(yonder, 300f); s.Rotation = VaryAngle(); s.Velocity = Vector2.Zero;
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                s.Sl(def.Slot).Left = Vary(1.5f, 3f);
+                var f = Fields.Up(s).FirstOrDefault(u => u.Row.Id == row);
+                bool radiusOk = row != "patrol" || (Math.Abs(f.Radius - s.Stats["patrol_range"]) < 1e-3 && s.Stats["patrol_range"] >= 600 - 1e-6);
+                bool tagOk = row != "taunt" || f.Tag == $"−{Mathf.RoundToInt((float)(1 - s.Stats["taunt_guard"]) * 100)}%";
+                Check(f.Row != null && radiusOk && tagOk,
+                      $"fields: a live {c} with its '{def.Slot}' slot running draws the {row} field ({f.Radius:0} u{(f.Tag != null ? ", " + f.Tag : "")})");
+                s.Sl(def.Slot).Left = 0;
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                Check(!Fields.Up(s).Any(u => u.Row.Id == row), $"fields: ...and none once the {c}'s '{def.Slot}' slot is out");
+            }
+        }
+    }
+    // THE TAUNT'S FLASH IS AN EFFECT ROW: raised at three seeded spots with its 1000 u reach, one
+    // node each, that ring at that size, and gone after its 0.8 s.
+    async Task FieldsTauntRingChecks(Vector2 yonder)
+    {
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 600f);
+            Fx.Raise(Fx.TauntRing, at, 1000f);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            var n = Nodes<FxNode>().Where(x => x.Id == Fx.TauntRing).ToList();
+            Check(Fx.All[Fx.TauntRing].Id == "taunt_ring" && n.Count == 1 && Math.Abs(n[0].Radius - 1000f) < 1e-3 && n[0].GlobalPosition.DistanceTo(at) < 0.5f,
+                  $"fields: the taunt's ring goes up once, 1000 u round where it was pressed ({n.Count} up)");
+            await Wait(1.0);
+            Check(!Nodes<FxNode>().Any(x => x.Id == Fx.TauntRing), "fields: ...and is gone after its 0.8 s");
+        }
+    }
     // A GUEST DRAWS THE HOST'S BUBBLE: the same row, from the slot the host's report carried.
     void FieldsGuestBubbleChecks(PlayerShip fgm)
     {
@@ -7303,6 +7371,8 @@ public partial class _Test : Node
                   $"and when the pool is spent the rest lands on the hull ({fr.Hp:0} of {hull0:0})");
             FieldsContractChecks();
             await FieldsBubbleChecks(fr, yonder);
+            FieldsRowChecks();
+            await FieldsTauntRingChecks(yonder);
 
             // ── A WRECK FIRES NOTHING, AND PRESSES NOTHING BUT REBOARD ──
             // Both halves are the HOST's rule, so both are poked the way a guest reaches them: the
@@ -7694,6 +7764,7 @@ public partial class _Test : Node
             LaneARampChecks();
             LaneASpeedAddChecks();
             await LaneAHeavyRowsChecks(yonder);
+            await FieldsLiveRowChecks(yonder);
 
             // ── WARRIOR: two and a half times its speed, half the damage, then the EMP ──
             await SetClass(ShipClass.HeavyWarrior);

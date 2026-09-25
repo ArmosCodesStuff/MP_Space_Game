@@ -71,7 +71,7 @@ public static class Fx
 {
     // The index IS the id on the wire (Hub.NetFx), so APPEND ONLY.
     public const int Burst = 0, Lost = 1, Rebuilt = 2, Wave = 3, Emp = 4, Echo = 5, Rail = 6,
-                     WarnLane = 7, WarnZone = 8, AimZone = 9;
+                     WarnLane = 7, WarnZone = 8, AimZone = 9, TauntRing = 10;
     // WHAT A WARNING RIDES: the world itself, or the NetId of the hull it is drawn on. A beam's
     // and a dash's lane are drawn in the BOSS'S OWN FRAME and parented to it, so the line it drew
     // is the line it fires down however the hull turns; everything else is pinned to the ground
@@ -108,6 +108,8 @@ public static class Fx
         // nothing of yours is in danger from it, so it must not read red. Missiles.All names it,
         // and a second friendly telegraph is this row again.
         new() { Id = "aim_zone",  Shape = FxShape.Zone, Tint = Friendly, Warn = true },
+        // a warden's Taunt: its reach, flashed once on the press (the raise's Size is the reach)
+        new() { Id = "taunt_ring", Shape = FxShape.Ring, Tint = new(1f, 0.62f, 0.25f), Life = 0.8, Width = 3f, Fill = false },
     };
 
     public static FxDef Of(int id) => All[id >= 0 && id < All.Length ? id : Burst];
@@ -279,6 +281,9 @@ public partial class FxNode : Node2D
 public enum FieldLook
 {
     Ring,      // a soft disc and its edge: what it covers (the bubble)
+    Dashed,    // a dashed ring, turning slowly: a reach something patrols (the Supercarrier's patrol)
+    Shimmer,   // hex plates over the hull, pulsing, and the row's tag under it (the Taunt's guard)
+    Plume,     // a long hot plume out of the stern over the engine's own (a drive's boost)
 }
 
 public class FieldDef
@@ -302,6 +307,12 @@ public static class Fields
         // the freighter's bubble: a ring the size of what it covers, fading as its pool is spent, so
         // everyone can see how much of it is left and who is inside it
         new() { Id = "bubble", Slot = "bubble", Look = FieldLook.Ring, RadiusStat = "bubble_radius", PoolStat = "bubble_pool" },
+        // the Supercarrier: the ring its patrol wing fights inside, in the fighter's colour (kits_v3 §3.1)
+        new() { Id = "patrol", Slot = "super", Look = FieldLook.Dashed, RadiusStat = "patrol_range", Tint = Beam.Of(Beam.Fighter).Tint },
+        // the Taunt: a hex-plate shimmer over the hull and what it takes off every blow (kits_v3 §3.5)
+        new() { Id = "taunt", Slot = "taunt", Look = FieldLook.Shimmer, HullShare = 0.55f, TagStat = "taunt_guard", Tint = new(1f, 0.62f, 0.25f) },
+        // the boost (the nine's drive, kits_v31 §3.4): the engine burning hot while it runs
+        new() { Id = "boost", Slot = "boost", Look = FieldLook.Plume, HullShare = 1.8f, Tint = new(1f, 0.85f, 0.55f) },
     };
 
     public static FieldDef Of(string id) => System.Array.Find(All, f => f.Id == id);
@@ -348,6 +359,45 @@ public static class Fields
                     var e = new Color(c.R, c.G, c.B, 0.15f + 0.35f * f.Left);
                     s.DrawCircle(Vector2.Zero, f.Radius, e with { A = e.A * 0.25f });
                     s.DrawArc(Vector2.Zero, f.Radius, 0, Mathf.Tau, 64, e, 2.5f);
+                    break;
+                }
+                case FieldLook.Dashed:
+                {   // world-steady: the dashes turn slowly against the ship's own turning
+                    const int Dashes = 48;
+                    float spin = (float)(Time.GetTicksMsec() / 1000.0 * 0.15) - s.Rotation;
+                    for (int i = 0; i < Dashes; i++)
+                    {
+                        float a0 = spin + Mathf.Tau * i / Dashes;
+                        s.DrawArc(Vector2.Zero, f.Radius, a0, a0 + Mathf.Tau / Dashes * 0.55f, 6, new Color(c.R, c.G, c.B, 0.7f), 2.5f);
+                    }
+                    break;
+                }
+                case FieldLook.Shimmer:
+                {   // hex plates inside the hull's own outline, a pulse running across them
+                    var art = s.MyArt;
+                    float hx = art.HalfWidth * 1.05f, hy = f.Radius, cell = System.Math.Max(8f, hx * 0.32f);
+                    float t = Time.GetTicksMsec() / 1000f;
+                    for (float y = -hy; y <= hy; y += cell * 0.87f)
+                        for (float x = -hx + ((int)((y + hy) / (cell * 0.87f)) % 2) * cell * 0.5f; x <= hx; x += cell)
+                        {
+                            if ((x * x) / (hx * hx) + (y * y) / (hy * hy) > 1f) continue;
+                            float glow = 0.25f + 0.25f * Mathf.Sin(t * 5f + y * 0.05f + x * 0.03f);
+                            var hex = new Vector2[7];
+                            for (int k = 0; k < 7; k++) hex[k] = new Vector2(x, y) + Vector2.Right.Rotated(Mathf.Tau * k / 6f + Mathf.Pi / 6f) * cell * 0.5f;
+                            s.DrawPolyline(hex, new Color(c.R, c.G, c.B, glow), 1.2f);
+                        }
+                    if (f.Tag != null)
+                    {   // upright under the hull, whatever the heading
+                        s.DrawSetTransform(Vector2.Zero, -s.Rotation, Vector2.One);
+                        Txt.Centre(s, ThemeDB.FallbackFont, new Vector2(0, art.Length * 0.5f + 22f), f.Tag, Txt.Size(14), c);
+                        s.DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
+                    }
+                    break;
+                }
+                case FieldLook.Plume:
+                {
+                    var art = s.MyArt;
+                    Plume.Draw(s, new Vector2(0, art.Length * 0.5f - art.EngineInset), Vector2.Down, f.Radius, c, 1f, true);
                     break;
                 }
             }

@@ -36,3 +36,20 @@ files: scripts/Fx.cs (FieldLook, FieldDef, FieldUp, Fields), scripts/PlayerShip.
 (FieldsContractChecks + FieldsBubbleChecks after the solo bubble checks; FieldsGuestBubbleChecks after "arena guest: its bubble is the host's").
 owed: rung 3 x2 (contract + live bubble), rung 5 (guest bubble field); frame 79_freighter_turrets_and_bubble re-read by eye (same draw, now via the row).
 next: J2.
+
+## PRE J2 -- field rows: patrol ring, taunt shimmer + tag, boost plume; Fx row taunt_ring
+tier: opus. intent: FieldLook Dashed/Shimmer/Plume + 3 rows (D1 slot ids super/taunt/boost), Fx.TauntRing=10 row; checks FieldsRowChecks (pure), FieldsLiveRowChecks (NOTE when unbound), FieldsTauntRingChecks; frames 81_patrol_ring, 82_taunt_shimmer, 83_boost_plume, 83b_taunt_ring.
+files: scripts/Fx.cs, tools/smoketest/SmokeTest.cs.txt, tools/screens/Shots.cs.txt
+HEAD: e20b886ecfe1b2983e03f6a9aa885f45dd6e181c
+  scripts/Fx.cs d68f9e424568643ae1b68539b493b81e052837e0
+  tools/smoketest/SmokeTest.cs.txt 3cb15b0f1b15ed066d618a27b68a97b30b011e36
+  tools/screens/Shots.cs.txt 20b45d75d2da1b5f72b79798cbcf86619432b69f
+
+## POST J2
+verdict: compiles (typecheck 0; verify -Quick ALL CHECKS PASSED). engine-unproven: rungs owed in the final test phase.
+files: scripts/Fx.cs (FieldLook Dashed/Shimmer/Plume; rows patrol/taunt/boost; Fx.TauntRing = 10, row taunt_ring),
+SmokeTest.cs.txt (FieldsRowChecks + FieldsTauntRingChecks after FieldsBubbleChecks; FieldsLiveRowChecks after LaneAHeavyRowsChecks),
+Shots.cs.txt (FieldsFrames after frame 79: 81_patrol_ring, 82_taunt_shimmer, 83_boost_plume, 83b_taunt_ring).
+owed: rung 3 x2; rung 4 frames 81/82/83/83b by eye (81-83 print "shot skipped" until lanes E / A(Taunt) / B merge their slots);
+FieldsLiveRowChecks prints "NOTE unbound field row" until then -- after those merges the NOTE lines must be gone.
+next: J3.
