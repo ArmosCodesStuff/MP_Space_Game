@@ -390,12 +390,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         _wings.Insert(at, w);
         return true;
     }
-    private void RemoveWing(WingKind k)
-    {
-        int i = _wings.FindLastIndex(x => x.Kind == k);
-        var w = _wings[i]; _wings.RemoveAt(i);
-        if (IsInstanceValid(w)) w.QueueFree();
-    }
+    private void RemoveWing(WingKind k) => DropWing(_wings.FindLastIndex(x => x.Kind == k));
 
     public void SetClass(ShipClass c) { Class = c; FitClass(); }
 
@@ -1381,12 +1376,31 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         // What the bombers were sent at. It was host-only, so a guest's own BOMB slot read
         // "RETURNING" for the whole of every strike it ordered -- the one word its bar had for it.
         StrikeTarget = strikeTarget != 0 ? Combat.ById(strikeTarget) : null;
+        MatchSorties(wingPos, wingState);
         for (int i = 0; i < Math.Min(_wings.Count, wingPos.Length); i++)
         {
             _wings[i].SetNet(wingPos[i], wingRot[i]);
             _wings[i].SetNetState(wingState[i], wingRearm[i]);
         }
     }
+
+    // SORTIE CRAFT come and go on the host alone (Sortie), so a guest's list is brought to the
+    // host's report here: each state code carries its craft's row (Wing.RowCode), and a sortie craft
+    // the host reports is added at its place, one it no longer reports is dropped. The fitted craft
+    // are FitWings' on every peer, from the same sheet, and are left alone.
+    private void MatchSorties(Vector2[] pos, int[] state)
+    {
+        for (int i = 0; i < state.Length; i++)
+        {
+            int kind = state[i] / Wing.RowCode;
+            if (kind < 0 || kind >= Wings.All.Length || !Wings.All[kind].Sortie) continue;
+            while (i < _wings.Count && _wings[i].Def.Sortie && (int)_wings[i].Kind != kind) DropWing(i);
+            if ((i >= _wings.Count || (int)_wings[i].Kind != kind) && AddWing((WingKind)kind, Math.Min(i, _wings.Count)))
+                _wings[Math.Min(i, _wings.Count - 1)].Position = pos[i];
+        }
+        for (int i = _wings.Count - 1; i >= state.Length; i--) if (_wings[i].Def.Sortie) DropWing(i);
+    }
+    private void DropWing(int i) { var w = _wings[i]; _wings.RemoveAt(i); if (IsInstanceValid(w)) w.QueueFree(); }
 
     // Wings are parented to the world, not the ship, so they fly free of its
     // rotation. That means they do not leave with it: free them here, or a

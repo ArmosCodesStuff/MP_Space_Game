@@ -631,11 +631,15 @@ public partial class Wing : Node2D
     }
 
     // Replicated so a guest shows the same state: its ability bar, docked fighters hidden inside,
-    // a bomber's deck moves, and the signal light when anything lands or takes off.
-    public int StateCode => Def.Way switch { WingWay.Strafe => 100 + (int)_f, WingWay.Orbit => 200 + (int)_o, _ => (int)_b };
+    // a bomber's deck moves, and the signal light when anything lands or takes off. The thousands
+    // are the craft's ROW (Wings.All), so a guest can bring its list to the host's (PlayerShip
+    // MatchSorties); the rest is the state in its own machine.
+    public const int RowCode = 1000;
+    public int StateCode => (int)Kind * RowCode + Def.Way switch { WingWay.Strafe => 100 + (int)_f, WingWay.Orbit => 200 + (int)_o, _ => (int)_b };
     public void SetNetState(int code, double rearm)
     {
         if (Net.Sim) return;
+        code %= RowCode;
         if (code >= 200) { _o = (OSt)(code - 200); return; }
         if (code >= 100)
         {

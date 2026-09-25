@@ -64,3 +64,17 @@ rows, `patrol_range` on the CV Reach list, wing hits credited by row id (`Dealt.
 Checks written: WingsRowsChecks, WingsPatrolChecks, WingsGunshipChecks (solo, after
 LaneAHeavyRowsChecks), reach sweep case `patrol_range` + totals 14 / 32 (rewritten).
 Next: J2 (wire + livery frame).
+
+### J2 PRE (opus) -- wire + look (was J3 in the list; J1 took J2's machine)
+Intent: the wing report's state code carries the row (kind*1000 + state); a guest adds/drops
+sortie craft to the host's report; guest-role check (host sends a patrol on the guest's carrier
+and a seeker at it; the guest sees 2 x fighter_count craft and the seeker gone); frames
+10e_carrier_patrol / 10f_carrier_gunships. Files @ HEAD (ledger commit follows f2a7106):
+ShipClasses.cs 743245cb, PlayerShip.cs 4454da50, SmokeTest.cs.txt 5f27c473, Shots.cs.txt 20b45d75.
+### J2 POST: typecheck 0 errors, quick ALL CHECKS PASSED. Engine-unproven: rungs owed in the final test phase.
+Built: `Wing.RowCode` (state code = row * 1000 + state), `PlayerShip.MatchSorties` on the guest
+(adds / drops sortie craft to the host's report), `DropWing` (RemoveWing uses it).
+Checks written: guest role `WingsGuestWatch` (started beside pdWatch, awaited after the PD check),
+host `WingsHostSortie(g)` (started after the guest-PD block, awaited before the host's 15 s stay);
+frames `10e_carrier_patrol`, `10f_carrier_gunships` (`WingsFrames`, after 10d) in Shots.cs.txt.
+Next: J3 docs.

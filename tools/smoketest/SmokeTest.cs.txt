@@ -11103,6 +11103,70 @@ public partial class _Test : Node
               $"third player: levelled from peak {peakBefore} to 6 and {a3.Name} (ability 3) pressed in the same frame -- the identity reaches the host first, so it acts ({before} -> {Sn(me, a3.Id)})");
     }
 
+    // ── LANE E · WINGS ON THE WIRE (kits_v3 §3.1 rung 5; kits_v31 §3.2): the host sends a PATROL out on
+    // the guest's carrier -- host-decided, as the Supercarrier's press will be -- and, once three of
+    // them circle it, fires a seeker at that carrier from inside the ring, its point defence out of
+    // reach so the patrol is on trial. Host side: the seeker is taken and downed before it lands,
+    // credited "patrol". Started once the guest's point-defence check has had its flashes (3 s).
+    async Task WingsHostSortie(PlayerShip g)
+    {
+        await Wait(3.0);
+        if (g == null || !GodotObject.IsInstanceValid(g)) { Check(false, "host: a patrol on the guest's carrier -- no guest ship"); return; }
+        double pdWas = PdReachOff(g);
+        try
+        {
+            int sent = g.Sortie(WingKind.Patrol);
+            await RealTime(() => Nodes<Wing>().Count(w => w.Carrier == g && w.Kind == WingKind.Patrol && w.FighterPhase == "Circle") >= 3, 12);
+            var from = g.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(480f, 560f);
+            double c0 = g.DealtBy.GetValueOrDefault("patrol"); int down0 = Shot.Intercepted; double hull0 = g.Hp;
+            var sk = Combat.Fire(Shots.Seeker, from, g.Position - from, 135f, 4000f, 25, targetId: g.NetId, turnRate: 2f);
+            await RealTime(() => sk == null || !sk.Alive, 10);
+            Check(sent == (int)g.Stats["fighter_count"] && sk != null && !sk.Alive && Shot.Intercepted > down0 && g.Hp >= hull0
+                  && g.DealtBy.GetValueOrDefault("patrol") > c0,
+                  $"host: a patrol of {sent} sent on the guest's carrier takes a seeker fired at it from {from.DistanceTo(g.Position):0} u and downs it before it lands, credited \"patrol\" ({g.DealtBy.GetValueOrDefault("patrol") - c0:0.0})");
+            await Wait(1.0);                            // the MissileDown on its way to the guest
+        }
+        finally { g.Stats.SetBase("pd_range", pdWas); }
+    }
+
+    // ...and the guest's side, watched at the end of every frame from the moment it gives its
+    // orders: its own carrier's patrol craft as the host's report brings them (added to its list by
+    // their row in the state code, no new RPC), drawn and amber; the patrol and the fighters out
+    // together, 2 x fighter_count (6 on a stock carrier; this guest's hangar flies more); and the
+    // host's seeker at this carrier seen, then gone here too while still clear of the hull.
+    Func<Task> WingsGuestWatch(PlayerShip mine)
+    {
+        int patrolMost = 0, bothMost = 0; bool amber = true, gone = false; Shot seen = null; float lastD = -1f;
+        var livery = Wings.Of(WingKind.Patrol).Livery;
+        var watch = new LateSampler { Probe = () =>
+        {
+            if (mine == null || !GodotObject.IsInstanceValid(mine)) return false;
+            var mineW = Nodes<Wing>().Where(w => w.Carrier == mine).ToList();
+            var pat = mineW.Where(w => w.Kind == WingKind.Patrol && !w.Inside && w.Visible).ToList();
+            patrolMost = Math.Max(patrolMost, pat.Count);
+            bothMost = Math.Max(bothMost, pat.Count + mineW.Count(w => w.Kind == WingKind.Fighter && !w.Inside));
+            foreach (var w in pat) amber &= Nodes<Sprite2D>(w).First().Modulate == livery;
+            if (seen == null) seen = Nodes<Shot>().FirstOrDefault(s => s.Kind == Shots.Seeker && s.TargetId == mine.NetId && s.Alive);
+            else if (!gone)
+            {
+                if (GodotObject.IsInstanceValid(seen) && seen.Alive) lastD = seen.Position.DistanceTo(mine.Position);
+                else gone = true;
+            }
+            return false;
+        } };
+        AddChild(watch);
+        return async () =>
+        {
+            int want = mine == null ? -1 : (int)mine.Stats["fighter_count"];
+            await RealTime(() => patrolMost >= want && gone, Wan ? 45 : 30);
+            watch.QueueFree();
+            Check(want > 0 && patrolMost == want && bothMost == 2 * want && amber,
+                  $"guest: the patrol the host sent out on this carrier is here, {patrolMost} craft (its fighter_count, {want}), drawn in amber ({amber}); with the fighters, {bothMost} out at once (2 x {want})");
+            Check(seen != null && gone && lastD > 160f,
+                  $"guest: the host's seeker at this carrier is seen, and brought down here too, {lastD:0} u out -- clear of the hull, not landed");
+        };
+    }
+
     async Task Mp(string role)
     {
         await Wait(0.1);
@@ -11248,6 +11312,7 @@ public partial class _Test : Node
                 GetTree().CreateTimer(20.0).Timeout += () => { if (GodotObject.IsInstanceValid(gPrey) && gPrey.Alive) gPrey.TakeDamage(1e12); };
             }
             else Check(false, "a guest's point defence fires on the host: no guest ship");
+            var wingsHost = WingsHostSortie(g);         // runs beside what follows; awaited before the host stays up
             Check(InFlight().Any(x => !x.Cosmetic) || dummy.Total > 12, "guest's bomber strike launched real torpedoes on the host");
             // stay up while the guest watches its bombers come home and dock (it checks ~22 s in), and
             // send the hauler on an escort half way through for it to see
@@ -11303,6 +11368,7 @@ public partial class _Test : Node
             bool shut = !H.AllReady;
             await Wait(0.6);
             Check(shut && heldD.Count == 0 && H.AllReady, "a held pilot that was not READY keeps the portal shut -- until its place lapses");
+            await wingsHost;
             // Fifteen seconds at least (the guest watches its bombers dock and the escort hold), and then
             // until the third player has gone: over the simulated internet a hang-up can be lost, and
             // then it notices the drop only by its own timeout before it comes back, finishes and leaves.
@@ -11604,6 +11670,7 @@ public partial class _Test : Node
             bool sawPd = false;
             var pdWatch = new LateSampler { Probe = () => sawPd |= mine != null && GodotObject.IsInstanceValid(mine) && H != null && H.Flashes.Any(f => mine.PdTurrets.Any(t => f.a.DistanceTo(t.GlobalPosition) < 40f)) };
             AddChild(pdWatch);
+            var wingsSeen = WingsGuestWatch(mine);
             // WAITED FOR, NOT WINDOWED. The strike is the bombers' flight out to the target and then
             // their release, and over a simulated internet the press, the launch and every report
             // each cost a trip -- a fixed 4 s window opened 1 s after the key (timed from the input,
@@ -11653,6 +11720,7 @@ public partial class _Test : Node
             pdWatch.QueueFree();
             Check(sawPd && mine != null && mine.PdOnline && Abilities.Find(mine.Class, "pd") == null,
                   "guest sees its own point defence fire with nothing pressed and no key for it: the host's shot, flashed from this ship's mounts");
+            await wingsSeen();
             // a flash lives 0.1 s, so watch for one over two seconds rather than sampling once
             var flashes = (System.Collections.IList)H.GetType().GetField("_flashes", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(H);
             int seen = 0;
