@@ -135,6 +135,9 @@ Agents (owner, 2026-09-25)
   (tools/rungs.ps1 -Slots) make it safe; the limit was shared folders and ports, never the PC.
 
 Testing (owner, standing)
+- (2026-09-25) Once everything requested is built: 3+ tests IN THE ENGINE for every ability added through the class system (and
+  every drive row), on top of typecheck, verify, the smoke and screens runs and the bar; an audit maps each ability to its checks.
+  Everything clean in the engine and the cross-checks = push version-l AND main (permission given again) and release.
 - Every change carries its check (CLAUDE.md §6). After the features: new Python scenario tools and
   smoke tests covering every mechanic for every class, every ability, and interactions between
   heavies, bosses and lights for every weapon and platform.
